@@ -12,7 +12,7 @@ type User = {
   createdAt?: string;
 };
 
-const backendUrl = 'http://localhost:3001';
+const backendUrl = 'https://solar-crm-backend-38n0.onrender.com';
 
 export default function UsersPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
