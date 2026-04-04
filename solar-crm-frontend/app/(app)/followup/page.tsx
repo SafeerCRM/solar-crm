@@ -20,6 +20,11 @@ type FollowUp = {
   followUpDate: string;
   status: string;
   createdAt: string;
+  lead?: {
+    id: number;
+    name: string;
+    phone: string;
+  };
 };
 
 type User = {
@@ -200,6 +205,14 @@ export default function FollowupPage() {
       : `User ID: ${id}`;
   };
 
+  const getLeadLabel = (item: FollowUp) => {
+    if (item.lead?.name) {
+      return `${item.lead.name}${item.lead.phone ? ` (${item.lead.phone})` : ''}`;
+    }
+
+    return `Lead ID: ${item.leadId}`;
+  };
+
   return (
     <div className="p-6 space-y-6">
       {canCreateFollowup && (
@@ -255,11 +268,7 @@ export default function FollowupPage() {
               <option value="MISSED">MISSED</option>
             </select>
 
-            {message && (
-              <p className="text-sm">
-                {message}
-              </p>
-            )}
+            {message && <p className="text-sm">{message}</p>}
 
             <button
               type="submit"
@@ -272,31 +281,93 @@ export default function FollowupPage() {
         </div>
       )}
 
+      <div className="grid md:grid-cols-2 gap-6">
+        <div className="bg-white rounded-2xl shadow p-6">
+          <h2 className="text-2xl font-bold mb-4">Today Followups</h2>
+
+          {todayFollowups.length === 0 ? (
+            <p>No followups for today</p>
+          ) : (
+            <div className="space-y-3">
+              {todayFollowups.map((item) => (
+                <div key={item.id} className="border rounded-xl p-3">
+                  <p className="font-semibold">Lead: {getLeadLabel(item)}</p>
+                  <p>Status: {item.status}</p>
+                  <p>Type: {item.followUpType || '-'}</p>
+                  <p>Note: {item.note || item.remarks || '-'}</p>
+                  <p>Assigned To: {getUserName(item.assignedTo)}</p>
+                  <p>
+                    Date: {new Date(item.followUpDate).toLocaleString()}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white rounded-2xl shadow p-6">
+          <h2 className="text-2xl font-bold mb-4">Overdue Followups</h2>
+
+          {overdueFollowups.length === 0 ? (
+            <p>No overdue followups</p>
+          ) : (
+            <div className="space-y-3">
+              {overdueFollowups.map((item) => (
+                <div key={item.id} className="border rounded-xl p-3">
+                  <p className="font-semibold">Lead: {getLeadLabel(item)}</p>
+                  <p>Status: {item.status}</p>
+                  <p>Type: {item.followUpType || '-'}</p>
+                  <p>Note: {item.note || item.remarks || '-'}</p>
+                  <p>Assigned To: {getUserName(item.assignedTo)}</p>
+                  <p>
+                    Date: {new Date(item.followUpDate).toLocaleString()}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
       <div className="bg-white rounded-2xl shadow p-6">
         <h2 className="text-2xl font-bold mb-4">All Followups</h2>
 
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr>
-              <th className="border p-2 text-left">Lead ID</th>
-              <th className="border p-2 text-left">Type</th>
-              <th className="border p-2 text-left">Status</th>
-              <th className="border p-2 text-left">Assigned To</th>
-            </tr>
-          </thead>
-          <tbody>
-            {allFollowups.map((item) => (
-              <tr key={item.id}>
-                <td className="border p-2">{item.leadId}</td>
-                <td className="border p-2">{item.followUpType}</td>
-                <td className="border p-2">{item.status}</td>
-                <td className="border p-2">
-                  {getUserName(item.assignedTo)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        {allFollowups.length === 0 ? (
+          <p>No followups found</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr>
+                  <th className="border p-2 text-left">Lead</th>
+                  <th className="border p-2 text-left">Type</th>
+                  <th className="border p-2 text-left">Note</th>
+                  <th className="border p-2 text-left">Status</th>
+                  <th className="border p-2 text-left">Assigned To</th>
+                  <th className="border p-2 text-left">Followup Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allFollowups.map((item) => (
+                  <tr key={item.id}>
+                    <td className="border p-2">{getLeadLabel(item)}</td>
+                    <td className="border p-2">{item.followUpType || '-'}</td>
+                    <td className="border p-2">
+                      {item.note || item.remarks || '-'}
+                    </td>
+                    <td className="border p-2">{item.status}</td>
+                    <td className="border p-2">
+                      {getUserName(item.assignedTo)}
+                    </td>
+                    <td className="border p-2">
+                      {new Date(item.followUpDate).toLocaleString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

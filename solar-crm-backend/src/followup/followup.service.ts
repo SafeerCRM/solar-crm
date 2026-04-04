@@ -37,11 +37,13 @@ export class FollowupService {
     if (user?.role === 'TELECALLER') {
       return this.followUpRepository.find({
         where: { assignedTo: user.id },
+        relations: ['lead'],
         order: { followUpDate: 'ASC' },
       });
     }
 
     return this.followUpRepository.find({
+      relations: ['lead'],
       order: { followUpDate: 'ASC' },
     });
   }
@@ -59,6 +61,7 @@ export class FollowupService {
           assignedTo: user.id,
           followUpDate: Between(start, end),
         },
+        relations: ['lead'],
         order: { followUpDate: 'ASC' },
       });
     }
@@ -67,6 +70,7 @@ export class FollowupService {
       where: {
         followUpDate: Between(start, end),
       },
+      relations: ['lead'],
       order: { followUpDate: 'ASC' },
     });
   }
@@ -79,6 +83,7 @@ export class FollowupService {
           followUpDate: LessThan(new Date()),
           status: FollowUpStatus.PENDING,
         },
+        relations: ['lead'],
         order: { followUpDate: 'ASC' },
       });
     }
@@ -88,6 +93,7 @@ export class FollowupService {
         followUpDate: LessThan(new Date()),
         status: FollowUpStatus.PENDING,
       },
+      relations: ['lead'],
       order: { followUpDate: 'ASC' },
     });
   }
