@@ -16,7 +16,7 @@ export default function LeadDetailsPage() {
     try {
       const token = localStorage.getItem('token');
 
-      const res = await fetch('${process.env.NEXT_PUBLIC_API_BASE_URL}/leads', {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/leads`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },

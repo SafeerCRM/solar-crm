@@ -18,7 +18,7 @@ export default function CreateLeadPage() {
     try {
       const token = localStorage.getItem('token');
 
-      const res = await fetch('${process.env.NEXT_PUBLIC_API_BASE_URL}/leads', {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/leads`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
