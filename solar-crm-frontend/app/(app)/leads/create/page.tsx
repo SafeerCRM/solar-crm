@@ -6,6 +6,9 @@ import { FormEvent, useState } from 'react';
 export default function CreateLeadPage() {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [city, setCity] = useState('');
+  const [zone, setZone] = useState('');
   const [status, setStatus] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
@@ -27,6 +30,9 @@ export default function CreateLeadPage() {
         body: JSON.stringify({
           name,
           phone,
+          email,
+          city,
+          zone,
           status: status || 'NEW',
         }),
       });
@@ -94,6 +100,45 @@ export default function CreateLeadPage() {
               onChange={(e) => setPhone(e.target.value)}
               className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-800 outline-none focus:border-blue-500"
               required
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-gray-700">
+              Email
+            </label>
+            <input
+              type="email"
+              placeholder="Enter email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-800 outline-none focus:border-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-gray-700">
+              City
+            </label>
+            <input
+              type="text"
+              placeholder="Enter city"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-800 outline-none focus:border-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-gray-700">
+              Zone
+            </label>
+            <input
+              type="text"
+              placeholder="Enter zone"
+              value={zone}
+              onChange={(e) => setZone(e.target.value)}
+              className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-800 outline-none focus:border-blue-500"
             />
           </div>
 
