@@ -94,6 +94,10 @@ export class LeadsService {
       query.andWhere('lead.status = :status', { status: filters.status });
     }
 
+    if (filters?.city) {
+      query.andWhere('lead.city = :city', { city: filters.city });
+    }
+
     if (filters?.zone) {
       query.andWhere('lead.zone = :zone', { zone: filters.zone });
     }
