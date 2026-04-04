@@ -12,7 +12,7 @@ type User = {
   createdAt?: string;
 };
 
-const backendUrl = 'https://solar-crm-backend-38n0.onrender.com';
+const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 export default function UsersPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);

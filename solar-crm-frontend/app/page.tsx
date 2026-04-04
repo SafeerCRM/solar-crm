@@ -3,7 +3,7 @@
 import { FormEvent, useState } from 'react';
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || 'https://solar-crm-backend-38n0.onrender.com';
+  process.env.NEXT_PUBLIC_API_BASE_URL;
 
 export default function Home() {
   const [email, setEmail] = useState('');

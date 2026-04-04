@@ -49,14 +49,14 @@ export default function DashboardPage() {
         }
 
         const [summaryRes, performanceRes, hotLeadsRes] = await Promise.all([
-          axios.get('https://solar-crm-backend-38n0.onrender.com/dashboard/summary', {
+          axios.get('${process.env.NEXT_PUBLIC_API_BASE_URL}/dashboard/summary', {
             params,
             headers: getAuthHeaders(),
           }),
-          axios.get('https://solar-crm-backend-38n0.onrender.com/telecalling/performance', {
+          axios.get('${process.env.NEXT_PUBLIC_API_BASE_URL}/telecalling/performance', {
             headers: getAuthHeaders(),
           }),
-          axios.get('https://solar-crm-backend-38n0.onrender.com/leads/hot', {
+          axios.get('${process.env.NEXT_PUBLIC_API_BASE_URL}/leads/hot', {
             headers: getAuthHeaders(),
           }),
         ]);

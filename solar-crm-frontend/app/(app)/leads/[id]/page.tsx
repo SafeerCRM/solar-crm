@@ -16,7 +16,7 @@ export default function LeadDetailsPage() {
     try {
       const token = localStorage.getItem('token');
 
-      const res = await fetch('https://solar-crm-backend-38n0.onrender.com/leads', {
+      const res = await fetch('${process.env.NEXT_PUBLIC_API_BASE_URL}/leads', {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -40,7 +40,7 @@ export default function LeadDetailsPage() {
     try {
       const token = localStorage.getItem('token');
 
-      const res = await fetch(`https://solar-crm-backend-38n0.onrender.com/leads/${id}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/leads/${id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

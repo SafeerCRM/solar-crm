@@ -29,7 +29,7 @@ type CurrentUser = {
   role?: 'OWNER' | 'LEAD_MANAGER' | 'TELECALLER' | 'PROJECT_MANAGER';
 };
 
-const backendUrl = 'https://solar-crm-backend-38n0.onrender.com';
+const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 export default function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
