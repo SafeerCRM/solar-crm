@@ -1,5 +1,5 @@
 import axios from 'axios';
 
 export const api = axios.create({
-  baseURL: 'http://localhost:3001',
+  baseURL: 'https://solar-crm-backend-38n0.onrender.com',
 });
