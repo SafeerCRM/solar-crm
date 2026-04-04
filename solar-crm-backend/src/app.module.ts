@@ -23,14 +23,14 @@ import { VendorModule } from './vendor/vendor.module';
     }),
 
     TypeOrmModule.forRoot({
-      type: 'postgres',
-      url: process.env.DATABASE_URL,
-      ssl: {
-        rejectUnauthorized: false,
-      },
-      autoLoadEntities: true,
-      synchronize: true,
-    }),
+  type: 'postgres',
+  url: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false,
+  },
+  autoLoadEntities: true,
+  synchronize: process.env.NODE_ENV !== 'production',
+}),
 
     AuthModule,
     UsersModule,
