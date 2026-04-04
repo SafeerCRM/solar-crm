@@ -11,6 +11,7 @@ type Lead = {
   phone: string;
   email?: string;
   city?: string;
+  zone?: string;
   status?: string;
   assignedTo?: number | null;
 };
@@ -36,6 +37,8 @@ export default function LeadsPage() {
   const [assignableStaff, setAssignableStaff] = useState<StaffUser[]>([]);
   const [search, setSearch] = useState('');
   const [assignedTo, setAssignedTo] = useState('');
+  const [city, setCity] = useState('');
+  const [zone, setZone] = useState('');
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -89,6 +92,8 @@ export default function LeadsPage() {
       const params: any = {};
 
       if (search) params.search = search;
+      if (city) params.city = city;
+      if (zone) params.zone = zone;
 
       if ((isOwner || isLeadManager) && assignedTo) {
         params.assignedTo = assignedTo;
@@ -207,6 +212,25 @@ export default function LeadsPage() {
       : `User ID: ${assignedToValue}`;
   };
 
+  const clearFilters = async () => {
+    setSearch('');
+    setAssignedTo('');
+    setCity('');
+    setZone('');
+    setMessage('');
+
+    try {
+      const res = await axios.get(`${backendUrl}/leads`, {
+        headers: getAuthHeaders(),
+      });
+      setLeads(Array.isArray(res.data) ? res.data : []);
+    } catch (error) {
+      console.error('Failed to reset leads:', error);
+      setLeads([]);
+      setMessage('Failed to fetch leads');
+    }
+  };
+
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-4">
@@ -254,9 +278,7 @@ export default function LeadsPage() {
         </div>
       </div>
 
-      {message && (
-        <p className="mb-4 text-sm text-blue-700">{message}</p>
-      )}
+      {message && <p className="mb-4 text-sm text-blue-700">{message}</p>}
 
       <div className="flex gap-3 mb-4 flex-wrap">
         <input
@@ -264,7 +286,23 @@ export default function LeadsPage() {
           placeholder="Search by name, phone, email, city"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="border p-2 rounded w-full md:w-1/3"
+          className="border p-2 rounded w-full md:w-1/4"
+        />
+
+        <input
+          type="text"
+          placeholder="Filter by city"
+          value={city}
+          onChange={(e) => setCity(e.target.value)}
+          className="border p-2 rounded w-full md:w-1/5"
+        />
+
+        <input
+          type="text"
+          placeholder="Filter by zone"
+          value={zone}
+          onChange={(e) => setZone(e.target.value)}
+          className="border p-2 rounded w-full md:w-1/5"
         />
 
         {canAssign && (
@@ -288,6 +326,13 @@ export default function LeadsPage() {
         >
           Apply Filters
         </button>
+
+        <button
+          onClick={clearFilters}
+          className="bg-gray-500 text-white px-4 py-2 rounded"
+        >
+          Clear
+        </button>
       </div>
 
       {loading ? (
@@ -301,6 +346,7 @@ export default function LeadsPage() {
               <th className="border p-2">Phone</th>
               <th className="border p-2">Email</th>
               <th className="border p-2">City</th>
+              <th className="border p-2">Zone</th>
               <th className="border p-2">Status</th>
               <th className="border p-2">Assigned To</th>
               {canAssign && <th className="border p-2">Assign</th>}
@@ -310,10 +356,7 @@ export default function LeadsPage() {
           <tbody>
             {leads.length === 0 ? (
               <tr>
-                <td
-                  colSpan={canAssign ? 8 : 7}
-                  className="text-center p-4"
-                >
+                <td colSpan={canAssign ? 9 : 8} className="text-center p-4">
                   No leads found
                 </td>
               </tr>
@@ -325,6 +368,7 @@ export default function LeadsPage() {
                   <td className="border p-2">{lead.phone}</td>
                   <td className="border p-2">{lead.email || ''}</td>
                   <td className="border p-2">{lead.city || ''}</td>
+                  <td className="border p-2">{lead.zone || ''}</td>
                   <td className="border p-2">{lead.status || ''}</td>
                   <td className="border p-2">
                     {getAssignedLabel(lead.assignedTo)}
