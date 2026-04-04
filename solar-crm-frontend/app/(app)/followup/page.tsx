@@ -33,6 +33,7 @@ const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 export default function FollowupPage() {
   const [user, setUser] = useState<User | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [allFollowups, setAllFollowups] = useState<FollowUp[]>([]);
   const [todayFollowups, setTodayFollowups] = useState<FollowUp[]>([]);
@@ -74,8 +75,22 @@ export default function FollowupPage() {
     if (user) {
       fetchLeads();
       fetchFollowups();
+      fetchUsers();
     }
   }, [user]);
+
+  const fetchUsers = async () => {
+    try {
+      const res = await axios.get(`${backendUrl}/users`, {
+        headers: getAuthHeaders(),
+      });
+
+      setUsers(Array.isArray(res.data) ? res.data : []);
+    } catch (error) {
+      console.error('Failed to fetch users:', error);
+      setUsers([]);
+    }
+  };
 
   const fetchLeads = async () => {
     try {
@@ -175,6 +190,16 @@ export default function FollowupPage() {
     }
   };
 
+  const getUserName = (id?: number) => {
+    if (!id) return 'Available';
+
+    const found = users.find((u) => u.id === id);
+
+    return found
+      ? `${found.name}${found.role ? ` (${found.role})` : ''}`
+      : `User ID: ${id}`;
+  };
+
   return (
     <div className="p-6 space-y-6">
       {canCreateFollowup && (
@@ -196,14 +221,15 @@ export default function FollowupPage() {
             </select>
 
             <select
-  value={followUpType}
-  onChange={(e) => setFollowUpType(e.target.value)}
-  className="w-full rounded-xl border border-gray-400 px-4 py-3"
->
-  <option value="CALL">CALL</option>
-  <option value="CALLBACK">CALLBACK</option>
-  <option value="GENERAL">GENERAL</option>
-</select>
+              value={followUpType}
+              onChange={(e) => setFollowUpType(e.target.value)}
+              className="w-full rounded-xl border border-gray-400 px-4 py-3"
+            >
+              <option value="CALL">CALL</option>
+              <option value="CALLBACK">CALLBACK</option>
+              <option value="GENERAL">GENERAL</option>
+            </select>
+
             <input
               type="text"
               value={note}
@@ -230,13 +256,7 @@ export default function FollowupPage() {
             </select>
 
             {message && (
-              <p
-                className={`text-sm ${
-                  message.toLowerCase().includes('success')
-                    ? 'text-green-600'
-                    : 'text-red-600'
-                }`}
-              >
+              <p className="text-sm">
                 {message}
               </p>
             )}
@@ -252,89 +272,31 @@ export default function FollowupPage() {
         </div>
       )}
 
-      <div className="grid md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-2xl shadow p-6">
-          <h2 className="text-2xl font-bold mb-4">Today Followups</h2>
-
-          {todayFollowups.length === 0 ? (
-            <p>No followups for today</p>
-          ) : (
-            <div className="space-y-3">
-              {todayFollowups.map((item) => (
-                <div key={item.id} className="border rounded-xl p-3">
-                  <p className="font-semibold">Lead ID: {item.leadId}</p>
-                  <p>Status: {item.status}</p>
-                  <p>Type: {item.followUpType || '-'}</p>
-                  <p>Note: {item.note || item.remarks || '-'}</p>
-                  <p>
-                    Date: {new Date(item.followUpDate).toLocaleString()}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="bg-white rounded-2xl shadow p-6">
-          <h2 className="text-2xl font-bold mb-4">Overdue Followups</h2>
-
-          {overdueFollowups.length === 0 ? (
-            <p>No overdue followups</p>
-          ) : (
-            <div className="space-y-3">
-              {overdueFollowups.map((item) => (
-                <div key={item.id} className="border rounded-xl p-3">
-                  <p className="font-semibold">Lead ID: {item.leadId}</p>
-                  <p>Status: {item.status}</p>
-                  <p>Type: {item.followUpType || '-'}</p>
-                  <p>Note: {item.note || item.remarks || '-'}</p>
-                  <p>
-                    Date: {new Date(item.followUpDate).toLocaleString()}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
       <div className="bg-white rounded-2xl shadow p-6">
         <h2 className="text-2xl font-bold mb-4">All Followups</h2>
 
-        {allFollowups.length === 0 ? (
-          <p>No followups found</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr>
-                  <th className="border p-2 text-left">Lead ID</th>
-                  <th className="border p-2 text-left">Type</th>
-                  <th className="border p-2 text-left">Note</th>
-                  <th className="border p-2 text-left">Status</th>
-                  <th className="border p-2 text-left">Assigned To</th>
-                  <th className="border p-2 text-left">Followup Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {allFollowups.map((item) => (
-                  <tr key={item.id}>
-                    <td className="border p-2">{item.leadId}</td>
-                    <td className="border p-2">{item.followUpType || '-'}</td>
-                    <td className="border p-2">
-                      {item.note || item.remarks || '-'}
-                    </td>
-                    <td className="border p-2">{item.status}</td>
-                    <td className="border p-2">{item.assignedTo || '-'}</td>
-                    <td className="border p-2">
-                      {new Date(item.followUpDate).toLocaleString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr>
+              <th className="border p-2 text-left">Lead ID</th>
+              <th className="border p-2 text-left">Type</th>
+              <th className="border p-2 text-left">Status</th>
+              <th className="border p-2 text-left">Assigned To</th>
+            </tr>
+          </thead>
+          <tbody>
+            {allFollowups.map((item) => (
+              <tr key={item.id}>
+                <td className="border p-2">{item.leadId}</td>
+                <td className="border p-2">{item.followUpType}</td>
+                <td className="border p-2">{item.status}</td>
+                <td className="border p-2">
+                  {getUserName(item.assignedTo)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
