@@ -5,11 +5,15 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   app.enableCors({
-    origin: process.env.FRONTEND_URL || true,
+    origin: true,
     credentials: true,
   });
 
-  const port = Number(process.env.PORT) || 3001;
-  await app.listen(port, '0.0.0.0');
+  // ADD THIS
+  app.getHttpAdapter().get('/health', (req, res) => {
+    res.json({ status: 'ok' });
+  });
+
+  await app.listen(3001, '0.0.0.0');
 }
 bootstrap();
