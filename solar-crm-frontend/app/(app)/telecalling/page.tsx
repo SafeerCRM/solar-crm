@@ -27,7 +27,7 @@ type User = {
   id: number;
   name: string;
   email: string;
-  role: 'OWNER' | 'LEAD_MANAGER' | 'TELECALLER' | 'PROJECT_MANAGER';
+  roles: string[];
 };
 
 const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -46,6 +46,8 @@ export default function TelecallingPage() {
 
   const [reviewStatusMap, setReviewStatusMap] = useState<Record<number, string>>({});
   const [reviewNotesMap, setReviewNotesMap] = useState<Record<number, string>>({});
+
+  const userRoles = user?.roles || [];
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
@@ -76,8 +78,8 @@ export default function TelecallingPage() {
     try {
       const params: any = {};
 
-      if (user?.role === 'TELECALLER') {
-        params.assignedTo = user.id;
+      if (userRoles.includes('TELECALLER')) {
+        params.assignedTo = user?.id;
       }
 
       const res = await axios.get(`${backendUrl}/leads`, {
@@ -95,7 +97,7 @@ export default function TelecallingPage() {
   const fetchCalls = async () => {
     try {
       const endpoint =
-        user?.role === 'OWNER' || user?.role === 'PROJECT_MANAGER'
+        userRoles.includes('OWNER') || userRoles.includes('PROJECT_MANAGER')
           ? `${backendUrl}/telecalling/review-queue`
           : `${backendUrl}/telecalling`;
 
@@ -190,9 +192,13 @@ export default function TelecallingPage() {
     }
   };
 
-  const canReview = user?.role === 'OWNER' || user?.role === 'PROJECT_MANAGER';
+  const canReview =
+    userRoles.includes('OWNER') || userRoles.includes('PROJECT_MANAGER');
+
   const canLogCalls =
-    user?.role === 'TELECALLER' || user?.role === 'OWNER' || user?.role === 'LEAD_MANAGER';
+    userRoles.includes('TELECALLER') ||
+    userRoles.includes('OWNER') ||
+    userRoles.includes('LEAD_MANAGER');
 
   return (
     <div className="p-6">
@@ -247,7 +253,7 @@ export default function TelecallingPage() {
               type="text"
               value={recordingUrl}
               onChange={(e) => setRecordingUrl(e.target.value)}
-              placeholder="Recording URL (Google Drive / cloud link)"
+              placeholder="Recording URL"
               className="w-full rounded-xl border border-gray-400 px-4 py-3"
             />
 
@@ -311,25 +317,11 @@ export default function TelecallingPage() {
                     <td className="border p-2">{call.callNotes || '-'}</td>
                     <td className="border p-2">
                       {call.recordingUrl ? (
-                        <div className="flex gap-2 items-center">
-                          <a
-                            href={call.recordingUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-blue-600 underline"
-                          >
-                            Open
-                          </a>
-                          <button
-                            type="button"
-                            onClick={() => navigator.clipboard.writeText(call.recordingUrl || '')}
-                            className="text-xs bg-gray-200 px-2 py-1 rounded"
-                          >
-                            Copy
-                          </button>
-                        </div>
+                        <a href={call.recordingUrl} target="_blank">
+                          Open
+                        </a>
                       ) : (
-                        <span className="text-gray-400">No Recording</span>
+                        'No Recording'
                       )}
                     </td>
 
@@ -343,7 +335,6 @@ export default function TelecallingPage() {
                               [call.id]: e.target.value,
                             }))
                           }
-                          className="border rounded px-2 py-1"
                         >
                           <option value="PENDING">PENDING</option>
                           <option value="POTENTIAL">POTENTIAL</option>
@@ -351,14 +342,13 @@ export default function TelecallingPage() {
                           <option value="REJECTED">REJECTED</option>
                         </select>
                       ) : (
-                        call.reviewStatus || 'PENDING'
+                        call.reviewStatus
                       )}
                     </td>
 
                     <td className="border p-2">
                       {canReview ? (
                         <input
-                          type="text"
                           value={reviewNotesMap[call.id] || ''}
                           onChange={(e) =>
                             setReviewNotesMap((prev) => ({
@@ -366,20 +356,15 @@ export default function TelecallingPage() {
                               [call.id]: e.target.value,
                             }))
                           }
-                          className="border rounded px-2 py-1 w-full"
-                          placeholder="Manager review notes"
                         />
                       ) : (
-                        call.reviewNotes || '-'
+                        call.reviewNotes
                       )}
                     </td>
 
                     {canReview && (
                       <td className="border p-2">
-                        <button
-                          onClick={() => handleReviewSave(call.id)}
-                          className="bg-green-600 text-white px-3 py-1 rounded"
-                        >
+                        <button onClick={() => handleReviewSave(call.id)}>
                           Save
                         </button>
                       </td>
