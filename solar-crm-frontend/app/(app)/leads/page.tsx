@@ -22,14 +22,14 @@ type StaffUser = {
   id: number;
   name: string;
   email?: string;
-  role?: 'OWNER' | 'LEAD_MANAGER' | 'TELECALLER' | 'PROJECT_MANAGER';
+  roles?: string[];
 };
 
 type CurrentUser = {
   id: number;
   name: string;
   email?: string;
-  role?: 'OWNER' | 'LEAD_MANAGER' | 'TELECALLER' | 'PROJECT_MANAGER';
+  roles?: string[];
 };
 
 const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -48,10 +48,12 @@ export default function LeadsPage() {
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const isOwner = currentUser?.role === 'OWNER';
-  const isLeadManager = currentUser?.role === 'LEAD_MANAGER';
-  const isTelecaller = currentUser?.role === 'TELECALLER';
-  const isProjectManager = currentUser?.role === 'PROJECT_MANAGER';
+  const userRoles = currentUser?.roles || [];
+
+  const isOwner = userRoles.includes('OWNER');
+  const isLeadManager = userRoles.includes('LEAD_MANAGER');
+  const isTelecaller = userRoles.includes('TELECALLER');
+  const isProjectManager = userRoles.includes('PROJECT_MANAGER');
 
   const canAssign = isOwner || isLeadManager;
   const canImportExport =
@@ -110,7 +112,7 @@ export default function LeadsPage() {
 
       setLeads(Array.isArray(res.data) ? res.data : []);
     } catch (error) {
-      console.error('Failed to fetch leads:', error);
+      console.error(error);
       setLeads([]);
       setMessage('Failed to fetch leads');
     } finally {
@@ -126,13 +128,13 @@ export default function LeadsPage() {
 
       const allUsers = Array.isArray(res.data) ? res.data : [];
 
-      const telecallers = allUsers.filter(
-        (u: any) => u.role === 'TELECALLER'
+      const telecallers = allUsers.filter((u: any) =>
+        u.roles?.includes('TELECALLER')
       );
 
       setAssignableStaff(telecallers);
     } catch (error) {
-      console.error('Failed to fetch assignable staff:', error);
+      console.error(error);
       setAssignableStaff([]);
     }
   };
@@ -144,14 +146,13 @@ export default function LeadsPage() {
       await axios.patch(
         `${backendUrl}/leads/${leadId}/assign`,
         { assignedTo: userId },
-        { headers: getAuthHeaders() },
+        { headers: getAuthHeaders() }
       );
 
       setMessage('Lead assigned successfully');
       await fetchLeads();
-      await fetchAssignableStaff();
     } catch (error) {
-      console.error('Failed to assign lead:', error);
+      console.error(error);
       setMessage('Failed to assign lead');
     }
   };
@@ -168,19 +169,14 @@ export default function LeadsPage() {
       const a = document.createElement('a');
       a.href = url;
       a.download = 'leads.csv';
-      document.body.appendChild(a);
       a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
     } catch (error) {
-      console.error('Export failed:', error);
-      setMessage('Export CSV failed');
+      console.error(error);
+      setMessage('Export failed');
     }
   };
 
-  const handleImportCsv = async (
-    e: React.ChangeEvent<HTMLInputElement>,
-  ) => {
+  const handleImportCsv = async (e: any) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -195,221 +191,99 @@ export default function LeadsPage() {
         },
       });
 
-      setMessage('CSV imported successfully');
+      setMessage('Import successful');
       fetchLeads();
     } catch (error) {
-      console.error('Import failed:', error);
-      setMessage('Import CSV failed');
-    } finally {
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      console.error(error);
+      setMessage('Import failed');
     }
   };
 
-  const getAssignedLabel = (assignedToValue?: number | null) => {
-    if (!assignedToValue) return 'Available';
-
-    const staff = assignableStaff.find((u) => u.id === assignedToValue);
-    return staff
-      ? `${staff.name} (${staff.email}) [ID: ${staff.id}]`
-      : `User ID: ${assignedToValue}`;
-  };
-
-  const clearFilters = async () => {
-    setSearch('');
-    setPhone('');
-    setAssignedTo('');
-    setCity('');
-    setZone('');
-    setMessage('');
-
-    try {
-      const res = await axios.get(`${backendUrl}/leads`, {
-        headers: getAuthHeaders(),
-      });
-      setLeads(Array.isArray(res.data) ? res.data : []);
-    } catch (error) {
-      console.error('Failed to reset leads:', error);
-      setLeads([]);
-      setMessage('Failed to fetch leads');
-    }
+  const getAssignedLabel = (id?: number | null) => {
+    if (!id) return 'Available';
+    const user = assignableStaff.find((u) => u.id === id);
+    return user ? `${user.name}` : `User ID: ${id}`;
   };
 
   return (
     <div className="p-6">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h1 className="text-2xl font-semibold">Leads</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            {isOwner && 'Global control over all leads and assignments'}
-            {isLeadManager && 'Manage lead pool and assign staff'}
-            {isTelecaller && 'Visible: available leads + your assigned leads'}
-            {isProjectManager && 'Visible: qualified and project-stage pipeline'}
-          </p>
-        </div>
+      <h1 className="text-2xl font-semibold mb-4">Leads</h1>
 
-        <div className="flex gap-2">
-          {canCreateLead && (
-            <Link
-              href="/leads/create"
-              className="bg-green-600 text-white px-4 py-2 rounded"
-            >
-              Add Lead
-            </Link>
-          )}
-
-          {canImportExport && (
-            <button
-              onClick={handleExportCsv}
-              className="bg-gray-800 text-white px-4 py-2 rounded"
-            >
-              Export CSV
-            </button>
-          )}
-
-          {canImport && (
-            <label className="bg-blue-600 text-white px-4 py-2 rounded cursor-pointer">
-              Import CSV
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv"
-                onChange={handleImportCsv}
-                className="hidden"
-              />
-            </label>
-          )}
-        </div>
-      </div>
-
-      {message && <p className="mb-4 text-sm text-blue-700">{message}</p>}
-
-      <div className="flex gap-3 mb-4 flex-wrap">
-        <input
-          type="text"
-          placeholder="Search by name, phone, email, city"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="border p-2 rounded w-full md:w-1/4"
-        />
-
-        <input
-          type="text"
-          placeholder="Filter by mobile number"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          className="border p-2 rounded w-full md:w-1/5"
-        />
-
-        <input
-          type="text"
-          placeholder="Filter by city"
-          value={city}
-          onChange={(e) => setCity(e.target.value)}
-          className="border p-2 rounded w-full md:w-1/5"
-        />
-
-        <input
-          type="text"
-          placeholder="Filter by zone"
-          value={zone}
-          onChange={(e) => setZone(e.target.value)}
-          className="border p-2 rounded w-full md:w-1/5"
-        />
-
-        {canAssign && (
-          <select
-            value={assignedTo}
-            onChange={(e) => setAssignedTo(e.target.value)}
-            className="border p-2 rounded"
-          >
-            <option value="">All Assigned Users</option>
-            {assignableStaff.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name} ({u.email}) [ID: {u.id}]
-              </option>
-            ))}
-          </select>
+      <div className="flex gap-2 mb-4 flex-wrap">
+        {canCreateLead && (
+          <Link href="/leads/create" className="bg-green-600 text-white px-4 py-2 rounded">
+            Add Lead
+          </Link>
         )}
 
-        <button
-          onClick={fetchLeads}
-          className="bg-blue-600 text-white px-4 py-2 rounded"
-        >
-          Apply Filters
-        </button>
+        {canImportExport && (
+          <button onClick={handleExportCsv} className="bg-gray-800 text-white px-4 py-2 rounded">
+            Export CSV
+          </button>
+        )}
 
-        <button
-          onClick={clearFilters}
-          className="bg-gray-500 text-white px-4 py-2 rounded"
-        >
-          Clear
+        {canImport && (
+          <label className="bg-blue-600 text-white px-4 py-2 rounded cursor-pointer">
+            Import CSV
+            <input type="file" onChange={handleImportCsv} className="hidden" />
+          </label>
+        )}
+      </div>
+
+      <div className="flex gap-2 mb-4 flex-wrap">
+        <input placeholder="Search" value={search} onChange={(e) => setSearch(e.target.value)} className="border p-2 rounded" />
+        <input placeholder="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="border p-2 rounded" />
+        <input placeholder="City" value={city} onChange={(e) => setCity(e.target.value)} className="border p-2 rounded" />
+        <input placeholder="Zone" value={zone} onChange={(e) => setZone(e.target.value)} className="border p-2 rounded" />
+
+        <button onClick={fetchLeads} className="bg-blue-600 text-white px-4 py-2 rounded">
+          Apply
         </button>
       </div>
 
       {loading ? (
-        <p>Loading leads...</p>
+        <p>Loading...</p>
       ) : (
         <table className="w-full border">
           <thead>
-            <tr className="bg-gray-100">
-              <th className="border p-2">ID</th>
-              <th className="border p-2">Name</th>
-              <th className="border p-2">Phone</th>
-              <th className="border p-2">Email</th>
-              <th className="border p-2">City</th>
-              <th className="border p-2">Zone</th>
-              <th className="border p-2">Status</th>
-              <th className="border p-2">Created By</th>
-              <th className="border p-2">Assigned To</th>
-              {canAssign && <th className="border p-2">Assign</th>}
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Phone</th>
+              <th>City</th>
+              <th>Zone</th>
+              <th>Created By</th>
+              <th>Assigned</th>
+              {canAssign && <th>Assign</th>}
             </tr>
           </thead>
-
           <tbody>
-            {leads.length === 0 ? (
-              <tr>
-                <td colSpan={canAssign ? 10 : 9} className="text-center p-4">
-                  No leads found
-                </td>
-              </tr>
-            ) : (
-              leads.map((lead) => (
-                <tr key={lead.id}>
-                  <td className="border p-2">{lead.id}</td>
-                  <td className="border p-2">{lead.name}</td>
-                  <td className="border p-2">{lead.phone}</td>
-                  <td className="border p-2">{lead.email || ''}</td>
-                  <td className="border p-2">{lead.city || ''}</td>
-                  <td className="border p-2">{lead.zone || ''}</td>
-                  <td className="border p-2">{lead.status || ''}</td>
-                  <td className="border p-2">{lead.createdByName || 'N/A'}</td>
-                  <td className="border p-2">
-                    {getAssignedLabel(lead.assignedTo)}
-                  </td>
+            {leads.map((lead) => (
+              <tr key={lead.id}>
+                <td>{lead.id}</td>
+                <td>{lead.name}</td>
+                <td>{lead.phone}</td>
+                <td>{lead.city}</td>
+                <td>{lead.zone}</td>
+                <td>{lead.createdByName}</td>
+                <td>{getAssignedLabel(lead.assignedTo)}</td>
 
-                  {canAssign && (
-                    <td className="border p-2">
-                      <select
-                        value={lead.assignedTo ?? ''}
-                        onChange={(e) =>
-                          assignLead(lead.id, Number(e.target.value))
-                        }
-                        className="border p-1"
-                      >
-                        <option value="">Assign</option>
-                        {assignableStaff.map((u) => (
-                          <option key={u.id} value={u.id}>
-                            {u.name} ({u.email}) [ID: {u.id}]
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                  )}
-                </tr>
-              ))
-            )}
+                {canAssign && (
+                  <td>
+                    <select
+                      onChange={(e) => assignLead(lead.id, Number(e.target.value))}
+                    >
+                      <option value="">Assign</option>
+                      {assignableStaff.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.name}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                )}
+              </tr>
+            ))}
           </tbody>
         </table>
       )}

@@ -31,7 +31,7 @@ type User = {
   id: number;
   name: string;
   email: string;
-  role: 'OWNER' | 'LEAD_MANAGER' | 'TELECALLER' | 'PROJECT_MANAGER';
+  roles: string[];
 };
 
 const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -53,10 +53,12 @@ export default function FollowupPage() {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const userRoles = user?.roles || [];
+
   const canCreateFollowup =
-    user?.role === 'OWNER' ||
-    user?.role === 'LEAD_MANAGER' ||
-    user?.role === 'TELECALLER';
+    userRoles.includes('OWNER') ||
+    userRoles.includes('LEAD_MANAGER') ||
+    userRoles.includes('TELECALLER');
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
@@ -92,7 +94,7 @@ export default function FollowupPage() {
 
       setUsers(Array.isArray(res.data) ? res.data : []);
     } catch (error) {
-      console.error('Failed to fetch users:', error);
+      console.error(error);
       setUsers([]);
     }
   };
@@ -101,8 +103,8 @@ export default function FollowupPage() {
     try {
       const params: any = {};
 
-      if (user?.role === 'TELECALLER') {
-        params.assignedTo = user.id;
+      if (userRoles.includes('TELECALLER')) {
+        params.assignedTo = user?.id;
       }
 
       const res = await axios.get(`${backendUrl}/leads`, {
@@ -112,7 +114,7 @@ export default function FollowupPage() {
 
       setLeads(Array.isArray(res.data) ? res.data : []);
     } catch (error) {
-      console.error('Failed to fetch leads:', error);
+      console.error(error);
       setLeads([]);
     }
   };
@@ -135,7 +137,7 @@ export default function FollowupPage() {
       setTodayFollowups(Array.isArray(todayRes.data) ? todayRes.data : []);
       setOverdueFollowups(Array.isArray(overdueRes.data) ? overdueRes.data : []);
     } catch (error) {
-      console.error('Failed to fetch followups:', error);
+      console.error(error);
       setAllFollowups([]);
       setTodayFollowups([]);
       setOverdueFollowups([]);
@@ -147,227 +149,105 @@ export default function FollowupPage() {
     setMessage('');
 
     if (!user) {
-      setMessage('Unable to identify logged-in user');
+      setMessage('User not found');
       return;
     }
 
-    if (!leadId) {
-      setMessage('Please select a lead');
-      return;
-    }
-
-    if (!followUpDate) {
-      setMessage('Please select follow-up date');
+    if (!leadId || !followUpDate) {
+      setMessage('Please fill all required fields');
       return;
     }
 
     setLoading(true);
 
     try {
-      const payload = {
-        leadId: Number(leadId),
-        assignedTo: user.id,
-        followUpType,
-        note,
-        followUpDate: new Date(followUpDate).toISOString(),
-        status,
-      };
+      await axios.post(
+        `${backendUrl}/followup/create`,
+        {
+          leadId: Number(leadId),
+          assignedTo: user.id,
+          followUpType,
+          note,
+          followUpDate: new Date(followUpDate).toISOString(),
+          status,
+        },
+        { headers: getAuthHeaders() }
+      );
 
-      await axios.post(`${backendUrl}/followup/create`, payload, {
-        headers: getAuthHeaders(),
-      });
-
-      setMessage('Followup created successfully');
+      setMessage('Followup created');
       setLeadId('');
-      setFollowUpType('CALL');
       setNote('');
       setFollowUpDate('');
-      setStatus('PENDING');
-
-      await fetchFollowups();
+      fetchFollowups();
     } catch (error: any) {
-      console.error('Failed to create followup:', error);
-      setMessage(
-        error?.response?.data?.message || 'Failed to create followup'
-      );
+      setMessage(error?.response?.data?.message || 'Failed');
     } finally {
       setLoading(false);
     }
   };
 
   const getUserName = (id?: number) => {
-    if (!id) return 'Available';
-
     const found = users.find((u) => u.id === id);
-
-    return found
-      ? `${found.name}${found.role ? ` (${found.role})` : ''}`
-      : `User ID: ${id}`;
+    return found ? `${found.name} (${(found.roles || []).join(', ')})` : 'N/A';
   };
 
   const getLeadLabel = (item: FollowUp) => {
-    if (item.lead?.name) {
-      return `${item.lead.name}${item.lead.phone ? ` (${item.lead.phone})` : ''}`;
-    }
-
-    return `Lead ID: ${item.leadId}`;
+    return item.lead?.name
+      ? `${item.lead.name} (${item.lead.phone})`
+      : `Lead ID: ${item.leadId}`;
   };
 
   return (
     <div className="p-6 space-y-6">
       {canCreateFollowup && (
-        <div className="bg-white rounded-2xl shadow p-6">
-          <h1 className="text-2xl font-bold mb-6">Followup</h1>
+        <div className="bg-white p-6 rounded shadow">
+          <h2 className="text-xl mb-4">Create Followup</h2>
 
-          <form onSubmit={handleCreateFollowup} className="space-y-4">
+          <form onSubmit={handleCreateFollowup} className="space-y-3">
             <select
               value={leadId}
               onChange={(e) => setLeadId(e.target.value)}
-              className="w-full rounded-xl border border-gray-400 px-4 py-3"
+              className="border p-2 w-full"
             >
-              <option value="">Select lead</option>
-              {leads.map((lead) => (
-                <option key={lead.id} value={lead.id}>
-                  {lead.name} ({lead.phone})
+              <option value="">Select Lead</option>
+              {leads.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name} ({l.phone})
                 </option>
               ))}
             </select>
 
-            <select
-              value={followUpType}
-              onChange={(e) => setFollowUpType(e.target.value)}
-              className="w-full rounded-xl border border-gray-400 px-4 py-3"
-            >
-              <option value="CALL">CALL</option>
-              <option value="CALLBACK">CALLBACK</option>
-              <option value="GENERAL">GENERAL</option>
-            </select>
-
             <input
               type="text"
+              placeholder="Note"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Followup note"
-              className="w-full rounded-xl border border-gray-400 px-4 py-3"
+              className="border p-2 w-full"
             />
 
             <input
               type="datetime-local"
               value={followUpDate}
               onChange={(e) => setFollowUpDate(e.target.value)}
-              className="w-full rounded-xl border border-gray-400 px-4 py-3"
+              className="border p-2 w-full"
             />
 
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-              className="w-full rounded-xl border border-gray-400 px-4 py-3"
-            >
-              <option value="PENDING">PENDING</option>
-              <option value="COMPLETED">COMPLETED</option>
-              <option value="MISSED">MISSED</option>
-            </select>
-
-            {message && <p className="text-sm">{message}</p>}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="rounded-xl bg-blue-600 px-6 py-3 text-white font-semibold"
-            >
-              {loading ? 'Creating...' : 'Create Followup'}
+            <button className="bg-blue-600 text-white px-4 py-2">
+              Create
             </button>
           </form>
         </div>
       )}
 
-      <div className="grid md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-2xl shadow p-6">
-          <h2 className="text-2xl font-bold mb-4">Today Followups</h2>
-
-          {todayFollowups.length === 0 ? (
-            <p>No followups for today</p>
-          ) : (
-            <div className="space-y-3">
-              {todayFollowups.map((item) => (
-                <div key={item.id} className="border rounded-xl p-3">
-                  <p className="font-semibold">Lead: {getLeadLabel(item)}</p>
-                  <p>Status: {item.status}</p>
-                  <p>Type: {item.followUpType || '-'}</p>
-                  <p>Note: {item.note || item.remarks || '-'}</p>
-                  <p>Assigned To: {getUserName(item.assignedTo)}</p>
-                  <p>
-                    Date: {new Date(item.followUpDate).toLocaleString()}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="bg-white rounded-2xl shadow p-6">
-          <h2 className="text-2xl font-bold mb-4">Overdue Followups</h2>
-
-          {overdueFollowups.length === 0 ? (
-            <p>No overdue followups</p>
-          ) : (
-            <div className="space-y-3">
-              {overdueFollowups.map((item) => (
-                <div key={item.id} className="border rounded-xl p-3">
-                  <p className="font-semibold">Lead: {getLeadLabel(item)}</p>
-                  <p>Status: {item.status}</p>
-                  <p>Type: {item.followUpType || '-'}</p>
-                  <p>Note: {item.note || item.remarks || '-'}</p>
-                  <p>Assigned To: {getUserName(item.assignedTo)}</p>
-                  <p>
-                    Date: {new Date(item.followUpDate).toLocaleString()}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="bg-white rounded-2xl shadow p-6">
-        <h2 className="text-2xl font-bold mb-4">All Followups</h2>
-
-        {allFollowups.length === 0 ? (
-          <p>No followups found</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr>
-                  <th className="border p-2 text-left">Lead</th>
-                  <th className="border p-2 text-left">Type</th>
-                  <th className="border p-2 text-left">Note</th>
-                  <th className="border p-2 text-left">Status</th>
-                  <th className="border p-2 text-left">Assigned To</th>
-                  <th className="border p-2 text-left">Followup Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {allFollowups.map((item) => (
-                  <tr key={item.id}>
-                    <td className="border p-2">{getLeadLabel(item)}</td>
-                    <td className="border p-2">{item.followUpType || '-'}</td>
-                    <td className="border p-2">
-                      {item.note || item.remarks || '-'}
-                    </td>
-                    <td className="border p-2">{item.status}</td>
-                    <td className="border p-2">
-                      {getUserName(item.assignedTo)}
-                    </td>
-                    <td className="border p-2">
-                      {new Date(item.followUpDate).toLocaleString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      <div>
+        <h2 className="text-xl mb-2">All Followups</h2>
+        {allFollowups.map((f) => (
+          <div key={f.id} className="border p-3 mb-2">
+            <p>{getLeadLabel(f)}</p>
+            <p>{f.status}</p>
+            <p>{getUserName(f.assignedTo)}</p>
           </div>
-        )}
+        ))}
       </div>
     </div>
   );
