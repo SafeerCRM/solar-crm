@@ -5,7 +5,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, In, LessThan } from 'typeorm';
+import { Repository, Between, In } from 'typeorm';
+import * as XLSX from 'xlsx';
 import { CallLog, CallReviewStatus } from './call-log.entity';
 import { Lead, LeadStatus } from '../leads/lead.entity';
 import {
@@ -37,6 +38,56 @@ export class TelecallingService {
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
   ) {}
+
+  private getRoles(user: any): string[] {
+    if (Array.isArray(user?.roles)) {
+      return user.roles;
+    }
+    if (user?.role) {
+      return [user.role];
+    }
+    return [];
+  }
+
+  private hasAnyRole(user: any, allowedRoles: string[]): boolean {
+    const roles = this.getRoles(user);
+    return allowedRoles.some((role) => roles.includes(role));
+  }
+
+  private normalizeHeader(value: string): string {
+    return String(value || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[\s_.-]+/g, '');
+  }
+
+  private normalizePhone(value: any): string {
+    return String(value || '')
+      .trim()
+      .replace(/[^\d+]/g, '');
+  }
+
+  private getMappedValue(
+    row: Record<string, any>,
+    aliases: string[],
+  ): string {
+    const normalizedRow: Record<string, any> = {};
+
+    Object.keys(row || {}).forEach((key) => {
+      normalizedRow[this.normalizeHeader(key)] = row[key];
+    });
+
+    for (const alias of aliases) {
+      const normalizedAlias = this.normalizeHeader(alias);
+      const value = normalizedRow[normalizedAlias];
+
+      if (value !== undefined && value !== null && String(value).trim() !== '') {
+        return String(value).trim();
+      }
+    }
+
+    return '';
+  }
 
   // ---------------- Existing Lead-Based Telecalling ----------------
 
@@ -132,7 +183,7 @@ export class TelecallingService {
       select: ['leadId'],
     });
 
-    const calledLeadIds = logs.map((log) => log.leadId);
+    const calledLeadIds = logs.map((log) => log.leadId).filter(Boolean);
 
     if (calledLeadIds.length === 0) {
       return this.leadRepository.find({
@@ -237,7 +288,7 @@ export class TelecallingService {
       throw new NotFoundException('Lead not found');
     }
 
-    if (user?.role === 'TELECALLER') {
+    if (this.hasAnyRole(user, ['TELECALLER'])) {
       if (
         lead.assignedTo !== null &&
         lead.assignedTo !== undefined &&
@@ -249,7 +300,7 @@ export class TelecallingService {
       }
     }
 
-    if (user?.role === 'PROJECT_MANAGER') {
+    if (this.hasAnyRole(user, ['PROJECT_MANAGER'])) {
       const allowedStatuses = [
         LeadStatus.INTERESTED,
         LeadStatus.SITE_VISIT,
@@ -273,9 +324,9 @@ export class TelecallingService {
     data: { reviewStatus: CallReviewStatus; reviewNotes?: string },
     user: any,
   ) {
-    if (!(user?.role === 'OWNER' || user?.role === 'PROJECT_MANAGER')) {
+    if (!this.hasAnyRole(user, ['OWNER', 'PROJECT_MANAGER', 'TELECALLING_MANAGER'])) {
       throw new ForbiddenException(
-        'Only owner or project manager can review call recordings',
+        'Only owner, telecalling manager, or project manager can review call recordings',
       );
     }
 
@@ -294,9 +345,9 @@ export class TelecallingService {
   }
 
   async getReviewQueue(user: any) {
-    if (!(user?.role === 'OWNER' || user?.role === 'PROJECT_MANAGER')) {
+    if (!this.hasAnyRole(user, ['OWNER', 'PROJECT_MANAGER', 'TELECALLING_MANAGER'])) {
       throw new ForbiddenException(
-        'Only owner or project manager can access review queue',
+        'Only owner, telecalling manager, or project manager can access review queue',
       );
     }
 
@@ -320,92 +371,90 @@ export class TelecallingService {
 
   // ---------------- New Telecalling Contact Pool ----------------
 
-  async importContactsCsv(file: any, user: any) {
+  async importContacts(file: any, user: any) {
     if (!file) {
-      throw new BadRequestException('CSV file is required');
+      throw new BadRequestException('CSV or Excel file is required');
     }
 
-    if (!(user?.role === 'OWNER' || user?.role === 'LEAD_MANAGER')) {
+    if (!this.hasAnyRole(user, ['OWNER', 'TELECALLING_MANAGER'])) {
       throw new ForbiddenException(
-        'Only owner or lead manager can import telecalling contacts',
+        'Only owner or telecalling manager can import telecalling contacts',
       );
     }
 
-    const content = file.buffer.toString('utf-8').trim();
+    const fileName = String(file.originalname || '').toLowerCase();
+    const isCsv = fileName.endsWith('.csv');
+    const isXlsx = fileName.endsWith('.xlsx');
+    const isXls = fileName.endsWith('.xls');
 
-    if (!content) {
-      throw new BadRequestException('CSV file is empty');
+    if (!isCsv && !isXlsx && !isXls) {
+      throw new BadRequestException('Only CSV, XLSX, or XLS files are supported');
     }
 
-    const lines = content
-      .split(/\r?\n/)
-      .map((line: string) => line.trim())
-      .filter(Boolean);
+    let workbook: XLSX.WorkBook;
 
-    if (lines.length < 2) {
-      throw new BadRequestException(
-        'CSV must contain header row and at least one data row',
-      );
-    }
-
-    const parseCsvLine = (line: string): string[] => {
-      const values: string[] = [];
-      let current = '';
-      let insideQuotes = false;
-
-      for (let i = 0; i < line.length; i++) {
-        const char = line[i];
-        const nextChar = line[i + 1];
-
-        if (char === '"') {
-          if (insideQuotes && nextChar === '"') {
-            current += '"';
-            i++;
-          } else {
-            insideQuotes = !insideQuotes;
-          }
-        } else if (char === ',' && !insideQuotes) {
-          values.push(current.trim());
-          current = '';
-        } else {
-          current += char;
-        }
+    try {
+      if (isCsv) {
+        workbook = XLSX.read(file.buffer.toString('utf-8'), { type: 'string' });
+      } else {
+        workbook = XLSX.read(file.buffer, { type: 'buffer' });
       }
+    } catch {
+      throw new BadRequestException('Unable to read uploaded file');
+    }
 
-      values.push(current.trim());
-      return values;
-    };
+    const firstSheetName = workbook.SheetNames[0];
 
-    const headers = parseCsvLine(lines[0]).map((h) =>
-      h.replace(/^"|"$/g, '').trim(),
-    );
+    if (!firstSheetName) {
+      throw new BadRequestException('Uploaded file does not contain any sheet/data');
+    }
 
-    const normalizeValue = (value?: string) => {
-      if (!value) return '';
-      return value.replace(/^"|"$/g, '').trim();
-    };
+    const worksheet = workbook.Sheets[firstSheetName];
+    const rows = XLSX.utils.sheet_to_json<Record<string, any>>(worksheet, {
+      defval: '',
+    });
+
+    if (!rows.length) {
+      throw new BadRequestException('Uploaded file is empty');
+    }
 
     let importedCount = 0;
     let skippedCount = 0;
 
-    for (let i = 1; i < lines.length; i++) {
-      const rowValues = parseCsvLine(lines[i]);
-      const row: Record<string, string> = {};
+    for (const row of rows) {
+      const name = this.getMappedValue(row, [
+        'name',
+        'full_name',
+        'fullname',
+        'customer_name',
+        'customername',
+      ]);
 
-      headers.forEach((header, index) => {
-        row[header] = normalizeValue(rowValues[index]);
-      });
+      const phone = this.normalizePhone(
+        this.getMappedValue(row, [
+          'phone',
+          'phone_number',
+          'phonenumber',
+          'mobile',
+          'mobile_number',
+          'mobilenumber',
+          'contact_number',
+          'contactnumber',
+        ]),
+      );
 
-      const name = row.name || row.Name;
-      const phone = row.phone || row.mobile || row.Mobile || row['mobile number'];
-      const city = row.city || row.City;
-      const kNo = row.kNo || row['K.no.'] || row['KNo'] || row['kno'];
-      const source = row.source || row.Source;
+      const city = this.getMappedValue(row, [
+        'city',
+        'town',
+        'location',
+      ]);
 
-      if (!name || !phone) {
+      if (!phone) {
         skippedCount++;
         continue;
       }
+
+      const finalName = name || phone;
 
       const existing = await this.contactRepository.findOne({
         where: { phone },
@@ -417,11 +466,9 @@ export class TelecallingService {
       }
 
       const contact = this.contactRepository.create({
-        name,
+        name: finalName,
         phone,
         city: city || undefined,
-        kNo: kNo || undefined,
-        source: source || undefined,
         importedBy: user.id,
         importedByName: user.name,
         status: ContactStatus.NEW,
@@ -440,7 +487,7 @@ export class TelecallingService {
   }
 
   async getContacts(user: any) {
-    if (user?.role === 'TELECALLER') {
+    if (this.hasAnyRole(user, ['TELECALLER'])) {
       return this.contactRepository.find({
         where: { assignedTo: user.id },
         order: { createdAt: 'DESC' },
@@ -453,15 +500,9 @@ export class TelecallingService {
   }
 
   async assignContact(id: number, assignedTo: number, user: any) {
-    if (
-      !(
-        user?.role === 'OWNER' ||
-        user?.role === 'LEAD_MANAGER' ||
-        user?.role === 'PROJECT_MANAGER'
-      )
-    ) {
+    if (!this.hasAnyRole(user, ['OWNER', 'TELECALLING_MANAGER'])) {
       throw new ForbiddenException(
-        'Only manager/admin users can assign telecalling contacts',
+        'Only owner or telecalling manager can assign telecalling contacts',
       );
     }
 

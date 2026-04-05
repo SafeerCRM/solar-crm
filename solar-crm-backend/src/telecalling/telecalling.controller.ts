@@ -9,6 +9,7 @@ import {
   UploadedFile,
   UseGuards,
   UseInterceptors,
+  Query,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { TelecallingService } from './telecalling.service';
@@ -21,7 +22,12 @@ import { CallReviewStatus } from './call-log.entity';
 export class TelecallingController {
   constructor(private readonly telecallingService: TelecallingService) {}
 
-  // ---------- Existing lead-based routes ----------
+  private hasRole(user: any, role: string) {
+    if (Array.isArray(user?.roles)) {
+      return user.roles.includes(role);
+    }
+    return user?.role === role;
+  }
 
   @Post()
   create(@Body() data: any, @CurrentUser() user: any) {
@@ -35,7 +41,7 @@ export class TelecallingController {
 
   @Get()
   findAll(@CurrentUser() user: any) {
-    if (user?.role === 'TELECALLER') {
+    if (this.hasRole(user, 'TELECALLER')) {
       return this.telecallingService.getByTelecaller(user.id);
     }
 
@@ -67,7 +73,7 @@ export class TelecallingController {
 
   @Get('never-called')
   getNeverCalled(@CurrentUser() user: any) {
-    if (user?.role === 'TELECALLER') {
+    if (this.hasRole(user, 'TELECALLER')) {
       return this.telecallingService.getNeverCalledByTelecaller(user.id);
     }
 
@@ -75,8 +81,11 @@ export class TelecallingController {
   }
 
   @Get('status')
-  getByStatus(@Body('callStatus') callStatus: string, @CurrentUser() user: any) {
-    if (user?.role === 'TELECALLER') {
+  getByStatus(
+    @Query('callStatus') callStatus: string,
+    @CurrentUser() user: any,
+  ) {
+    if (this.hasRole(user, 'TELECALLER')) {
       return this.telecallingService.getByCallStatusAndTelecaller(
         callStatus,
         user.id,
@@ -88,7 +97,7 @@ export class TelecallingController {
 
   @Get('today-followups')
   getTodayFollowUps(@CurrentUser() user: any) {
-    if (user?.role === 'TELECALLER') {
+    if (this.hasRole(user, 'TELECALLER')) {
       return this.telecallingService.getTodayFollowUpsByTelecaller(user.id);
     }
 
@@ -103,12 +112,10 @@ export class TelecallingController {
     return this.telecallingService.findByLeadProtected(leadId, user);
   }
 
-  // ---------- New telecalling contacts/data pool routes ----------
-
   @Post('contacts/import')
   @UseInterceptors(FileInterceptor('file'))
   importContacts(@UploadedFile() file: any, @CurrentUser() user: any) {
-    return this.telecallingService.importContactsCsv(file, user);
+    return this.telecallingService.importContacts(file, user);
   }
 
   @Get('contacts')
