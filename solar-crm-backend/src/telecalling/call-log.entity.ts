@@ -2,61 +2,55 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  JoinColumn,
+  ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { Lead } from '../leads/lead.entity';
 
-export enum ContactStatus {
-  NEW = 'NEW',
-  CALLED = 'CALLED',
-  INTERESTED = 'INTERESTED',
-  REJECTED = 'REJECTED',
+export enum CallReviewStatus {
+  PENDING = 'PENDING',
+  POTENTIAL = 'POTENTIAL',
   CONVERTED = 'CONVERTED',
+  REJECTED = 'REJECTED',
 }
 
 @Entity()
-export class TelecallingContact {
+export class CallLog {
   @PrimaryGeneratedColumn()
   id: number;
 
   @Column()
-  name: string;
+  leadId: number;
 
-  @Column()
-  phone: string;
-
-  @Column({ nullable: true })
-  city: string;
+  @ManyToOne(() => Lead, (lead) => lead.callLogs, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'leadId' })
+  lead: Lead;
 
   @Column({ nullable: true })
-  kNo: string;
+  telecallerId: number;
+
+  @Column({ default: 'CONNECTED' })
+  callStatus: string;
+
+  @Column({ type: 'text', nullable: true })
+  callNotes: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  nextFollowUpDate: Date;
 
   @Column({ nullable: true })
-  source: string;
-
-  @Column({ nullable: true })
-  assignedTo: number;
-
-  @Column({ nullable: true })
-  assignedToName: string;
-
-  @Column({ nullable: true })
-  importedBy: number;
-
-  @Column({ nullable: true })
-  importedByName: string;
+  recordingUrl: string;
 
   @Column({
     type: 'enum',
-    enum: ContactStatus,
-    default: ContactStatus.NEW,
+    enum: CallReviewStatus,
+    default: CallReviewStatus.PENDING,
   })
-  status: ContactStatus;
+  reviewStatus: CallReviewStatus;
 
   @Column({ type: 'text', nullable: true })
-  remarks: string;
-
-  @Column({ default: false })
-  convertedToLead: boolean;
+  reviewNotes: string;
 
   @CreateDateColumn()
   createdAt: Date;
