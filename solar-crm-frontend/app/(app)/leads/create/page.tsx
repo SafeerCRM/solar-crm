@@ -3,6 +3,16 @@
 import Link from 'next/link';
 import { FormEvent, useState } from 'react';
 
+const CITY_OPTIONS = [
+  'Mumbai',
+  'Delhi',
+  'Pune',
+  'Bangalore',
+  'Hyderabad',
+];
+
+const ZONE_OPTIONS = ['North', 'South', 'East', 'West'];
+
 export default function CreateLeadPage() {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -116,30 +126,42 @@ export default function CreateLeadPage() {
             />
           </div>
 
+          {/* CITY DROPDOWN */}
           <div>
             <label className="mb-2 block text-sm font-medium text-gray-700">
               City
             </label>
-            <input
-              type="text"
-              placeholder="Enter city"
+            <select
               value={city}
               onChange={(e) => setCity(e.target.value)}
               className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-800 outline-none focus:border-blue-500"
-            />
+            >
+              <option value="">Select city</option>
+              {CITY_OPTIONS.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
           </div>
 
+          {/* ZONE DROPDOWN */}
           <div>
             <label className="mb-2 block text-sm font-medium text-gray-700">
               Zone
             </label>
-            <input
-              type="text"
-              placeholder="Enter zone"
+            <select
               value={zone}
               onChange={(e) => setZone(e.target.value)}
               className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-800 outline-none focus:border-blue-500"
-            />
+            >
+              <option value="">Select zone</option>
+              {ZONE_OPTIONS.map((z) => (
+                <option key={z} value={z}>
+                  {z}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
