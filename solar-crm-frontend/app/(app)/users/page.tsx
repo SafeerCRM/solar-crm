@@ -8,11 +8,21 @@ type User = {
   id: number;
   name: string;
   email: string;
-  role: 'OWNER' | 'LEAD_MANAGER' | 'TELECALLER' | 'PROJECT_MANAGER';
+  roles: string[];
   createdAt?: string;
 };
 
 const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+const allRoles = [
+  'OWNER',
+  'TELECALLING_MANAGER',
+  'LEAD_MANAGER',
+  'MEETING_MANAGER',
+  'PROJECT_MANAGER',
+  'CUSTOMER',
+  'TELECALLER',
+];
 
 export default function UsersPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -21,7 +31,7 @@ export default function UsersPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'OWNER' | 'LEAD_MANAGER' | 'TELECALLER' | 'PROJECT_MANAGER'>('TELECALLER');
+  const [roles, setRoles] = useState<string[]>([]);
 
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
@@ -39,7 +49,7 @@ export default function UsersPage() {
       const parsedUser = JSON.parse(storedUser);
       setCurrentUser(parsedUser);
 
-      if (parsedUser.role !== 'OWNER') {
+      if (!parsedUser.roles?.includes('OWNER')) {
         window.location.href = '/dashboard';
         return;
       }
@@ -50,7 +60,7 @@ export default function UsersPage() {
   }, []);
 
   useEffect(() => {
-    if (currentUser?.role === 'OWNER') {
+    if (currentUser?.roles?.includes('OWNER')) {
       fetchUsers();
     }
   }, [currentUser]);
@@ -69,12 +79,20 @@ export default function UsersPage() {
     }
   };
 
+  const toggleRole = (role: string) => {
+    setRoles((prev) =>
+      prev.includes(role)
+        ? prev.filter((r) => r !== role)
+        : [...prev, role]
+    );
+  };
+
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage('');
 
-    if (!name || !email || !password || !role) {
-      setMessage('Please fill all fields');
+    if (!name || !email || !password || roles.length === 0) {
+      setMessage('Please fill all fields and select at least one role');
       return;
     }
 
@@ -87,7 +105,7 @@ export default function UsersPage() {
           name,
           email,
           password,
-          role,
+          roles,
         },
         {
           headers: getAuthHeaders(),
@@ -98,7 +116,7 @@ export default function UsersPage() {
       setName('');
       setEmail('');
       setPassword('');
-      setRole('TELECALLER');
+      setRoles([]);
 
       await fetchUsers();
     } catch (error: any) {
@@ -115,6 +133,7 @@ export default function UsersPage() {
 
   return (
     <div className="p-6 space-y-6">
+      {/* CREATE USER */}
       <div className="bg-white rounded-2xl shadow p-6">
         <h1 className="text-2xl font-bold mb-6">Users Management</h1>
 
@@ -143,24 +162,27 @@ export default function UsersPage() {
             className="rounded-xl border border-gray-400 px-4 py-3"
           />
 
-          <select
-            value={role}
-            onChange={(e) =>
-              setRole(
-                e.target.value as
-                  | 'OWNER'
-                  | 'LEAD_MANAGER'
-                  | 'TELECALLER'
-                  | 'PROJECT_MANAGER'
-              )
-            }
-            className="rounded-xl border border-gray-400 px-4 py-3"
-          >
-            <option value="OWNER">OWNER</option>
-            <option value="LEAD_MANAGER">LEAD_MANAGER</option>
-            <option value="TELECALLER">TELECALLER</option>
-            <option value="PROJECT_MANAGER">PROJECT_MANAGER</option>
-          </select>
+          {/* MULTI ROLE SELECT */}
+          <div className="md:col-span-2">
+            <p className="mb-2 font-medium">Select Roles</p>
+
+            <div className="flex flex-wrap gap-2">
+              {allRoles.map((role) => (
+                <button
+                  type="button"
+                  key={role}
+                  onClick={() => toggleRole(role)}
+                  className={`px-3 py-2 rounded-xl border ${
+                    roles.includes(role)
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100'
+                  }`}
+                >
+                  {role}
+                </button>
+              ))}
+            </div>
+          </div>
 
           <div className="md:col-span-2">
             {message && (
@@ -186,6 +208,7 @@ export default function UsersPage() {
         </form>
       </div>
 
+      {/* USERS TABLE */}
       <div className="bg-white rounded-2xl shadow p-6">
         <h2 className="text-2xl font-bold mb-4">All Users</h2>
 
@@ -199,7 +222,7 @@ export default function UsersPage() {
                   <th className="border p-2 text-left">ID</th>
                   <th className="border p-2 text-left">Name</th>
                   <th className="border p-2 text-left">Email</th>
-                  <th className="border p-2 text-left">Role</th>
+                  <th className="border p-2 text-left">Roles</th>
                   <th className="border p-2 text-left">Created At</th>
                 </tr>
               </thead>
@@ -209,7 +232,9 @@ export default function UsersPage() {
                     <td className="border p-2">{user.id}</td>
                     <td className="border p-2">{user.name}</td>
                     <td className="border p-2">{user.email}</td>
-                    <td className="border p-2">{user.role}</td>
+                    <td className="border p-2">
+                      {user.roles?.join(', ') || '-'}
+                    </td>
                     <td className="border p-2">
                       {user.createdAt
                         ? new Date(user.createdAt).toLocaleString()
