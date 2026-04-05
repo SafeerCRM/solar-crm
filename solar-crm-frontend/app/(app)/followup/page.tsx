@@ -14,12 +14,8 @@ type FollowUp = {
   id: number;
   leadId: number;
   assignedTo?: number;
-  followUpType?: string;
-  note?: string;
-  remarks?: string;
   followUpDate: string;
   status: string;
-  createdAt: string;
   lead?: {
     id: number;
     name: string;
@@ -41,14 +37,10 @@ export default function FollowupPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [allFollowups, setAllFollowups] = useState<FollowUp[]>([]);
-  const [todayFollowups, setTodayFollowups] = useState<FollowUp[]>([]);
-  const [overdueFollowups, setOverdueFollowups] = useState<FollowUp[]>([]);
 
   const [leadId, setLeadId] = useState('');
-  const [followUpType, setFollowUpType] = useState('CALL');
   const [note, setNote] = useState('');
   const [followUpDate, setFollowUpDate] = useState('');
-  const [status, setStatus] = useState('PENDING');
 
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
@@ -70,8 +62,7 @@ export default function FollowupPage() {
     }
 
     try {
-      const parsedUser = JSON.parse(storedUser);
-      setUser(parsedUser);
+      setUser(JSON.parse(storedUser));
     } catch {
       localStorage.clear();
       window.location.href = '/';
@@ -82,19 +73,20 @@ export default function FollowupPage() {
     if (user) {
       fetchLeads();
       fetchFollowups();
-      fetchUsers();
+      fetchAssignableUsers();
     }
   }, [user]);
 
-  const fetchUsers = async () => {
+  // ✅ FIXED HERE
+  const fetchAssignableUsers = async () => {
     try {
-      const res = await axios.get(`${backendUrl}/users`, {
+      const res = await axios.get(`${backendUrl}/users/assignable-staff`, {
         headers: getAuthHeaders(),
       });
 
       setUsers(Array.isArray(res.data) ? res.data : []);
     } catch (error) {
-      console.error(error);
+      console.error('Assignable users fetch error:', error);
       setUsers([]);
     }
   };
@@ -121,26 +113,14 @@ export default function FollowupPage() {
 
   const fetchFollowups = async () => {
     try {
-      const [allRes, todayRes, overdueRes] = await Promise.all([
-        axios.get(`${backendUrl}/followup`, {
-          headers: getAuthHeaders(),
-        }),
-        axios.get(`${backendUrl}/followup/today`, {
-          headers: getAuthHeaders(),
-        }),
-        axios.get(`${backendUrl}/followup/overdue`, {
-          headers: getAuthHeaders(),
-        }),
-      ]);
+      const res = await axios.get(`${backendUrl}/followup`, {
+        headers: getAuthHeaders(),
+      });
 
-      setAllFollowups(Array.isArray(allRes.data) ? allRes.data : []);
-      setTodayFollowups(Array.isArray(todayRes.data) ? todayRes.data : []);
-      setOverdueFollowups(Array.isArray(overdueRes.data) ? overdueRes.data : []);
+      setAllFollowups(Array.isArray(res.data) ? res.data : []);
     } catch (error) {
       console.error(error);
       setAllFollowups([]);
-      setTodayFollowups([]);
-      setOverdueFollowups([]);
     }
   };
 
@@ -148,13 +128,10 @@ export default function FollowupPage() {
     e.preventDefault();
     setMessage('');
 
-    if (!user) {
-      setMessage('User not found');
-      return;
-    }
+    if (!user) return;
 
     if (!leadId || !followUpDate) {
-      setMessage('Please fill all required fields');
+      setMessage('Please fill required fields');
       return;
     }
 
@@ -166,10 +143,9 @@ export default function FollowupPage() {
         {
           leadId: Number(leadId),
           assignedTo: user.id,
-          followUpType,
           note,
           followUpDate: new Date(followUpDate).toISOString(),
-          status,
+          status: 'PENDING',
         },
         { headers: getAuthHeaders() }
       );
@@ -188,7 +164,7 @@ export default function FollowupPage() {
 
   const getUserName = (id?: number) => {
     const found = users.find((u) => u.id === id);
-    return found ? `${found.name} (${(found.roles || []).join(', ')})` : 'N/A';
+    return found ? `${found.name}` : 'N/A';
   };
 
   const getLeadLabel = (item: FollowUp) => {

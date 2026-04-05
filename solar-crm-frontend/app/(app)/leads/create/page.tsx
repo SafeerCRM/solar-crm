@@ -3,16 +3,6 @@
 import Link from 'next/link';
 import { FormEvent, useState } from 'react';
 
-const CITY_OPTIONS = [
-  'Mumbai',
-  'Delhi',
-  'Pune',
-  'Bangalore',
-  'Hyderabad',
-];
-
-const ZONE_OPTIONS = ['North', 'South', 'East', 'West'];
-
 export default function CreateLeadPage() {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -85,6 +75,8 @@ export default function CreateLeadPage() {
 
       <div className="rounded-2xl bg-white p-6 shadow">
         <form className="space-y-5" onSubmit={handleCreateLead}>
+          
+          {/* NAME */}
           <div>
             <label className="mb-2 block text-sm font-medium text-gray-700">
               Lead Name
@@ -94,11 +86,12 @@ export default function CreateLeadPage() {
               placeholder="Enter lead name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-800 outline-none focus:border-blue-500"
+              className="w-full rounded-xl border px-4 py-3"
               required
             />
           </div>
 
+          {/* PHONE */}
           <div>
             <label className="mb-2 block text-sm font-medium text-gray-700">
               Phone
@@ -108,11 +101,12 @@ export default function CreateLeadPage() {
               placeholder="Enter phone number"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-800 outline-none focus:border-blue-500"
+              className="w-full rounded-xl border px-4 py-3"
               required
             />
           </div>
 
+          {/* EMAIL */}
           <div>
             <label className="mb-2 block text-sm font-medium text-gray-700">
               Email
@@ -122,48 +116,39 @@ export default function CreateLeadPage() {
               placeholder="Enter email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-800 outline-none focus:border-blue-500"
+              className="w-full rounded-xl border px-4 py-3"
             />
           </div>
 
-          {/* CITY DROPDOWN */}
+          {/* CITY → MANUAL */}
           <div>
             <label className="mb-2 block text-sm font-medium text-gray-700">
               City
             </label>
-            <select
+            <input
+              type="text"
+              placeholder="Enter city manually"
               value={city}
               onChange={(e) => setCity(e.target.value)}
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-800 outline-none focus:border-blue-500"
-            >
-              <option value="">Select city</option>
-              {CITY_OPTIONS.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
+              className="w-full rounded-xl border px-4 py-3"
+            />
           </div>
 
-          {/* ZONE DROPDOWN */}
+          {/* ZONE → MANUAL */}
           <div>
             <label className="mb-2 block text-sm font-medium text-gray-700">
               Zone
             </label>
-            <select
+            <input
+              type="text"
+              placeholder="Enter zone manually"
               value={zone}
               onChange={(e) => setZone(e.target.value)}
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-800 outline-none focus:border-blue-500"
-            >
-              <option value="">Select zone</option>
-              {ZONE_OPTIONS.map((z) => (
-                <option key={z} value={z}>
-                  {z}
-                </option>
-              ))}
-            </select>
+              className="w-full rounded-xl border px-4 py-3"
+            />
           </div>
 
+          {/* STATUS */}
           <div>
             <label className="mb-2 block text-sm font-medium text-gray-700">
               Status
@@ -171,7 +156,7 @@ export default function CreateLeadPage() {
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value)}
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-800 outline-none focus:border-blue-500"
+              className="w-full rounded-xl border px-4 py-3"
             >
               <option value="">Select status</option>
               <option value="NEW">NEW</option>
@@ -186,21 +171,13 @@ export default function CreateLeadPage() {
           </div>
 
           {message && (
-            <p
-              className={`text-sm text-center ${
-                message.toLowerCase().includes('success')
-                  ? 'text-green-600'
-                  : 'text-red-600'
-              }`}
-            >
-              {message}
-            </p>
+            <p className="text-sm text-center text-red-600">{message}</p>
           )}
 
           <button
             type="submit"
             disabled={loading}
-            className="rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-70"
+            className="rounded-xl bg-blue-600 px-6 py-3 text-white"
           >
             {loading ? 'Creating...' : 'Create Lead'}
           </button>

@@ -96,10 +96,13 @@ export default function TelecallingPage() {
 
   const fetchCalls = async () => {
     try {
-      const endpoint =
-        userRoles.includes('OWNER') || userRoles.includes('PROJECT_MANAGER')
-          ? `${backendUrl}/telecalling/review-queue`
-          : `${backendUrl}/telecalling`;
+      const shouldUseReviewQueue =
+        userRoles.includes('TELECALLING_MANAGER') ||
+        userRoles.includes('PROJECT_MANAGER');
+
+      const endpoint = shouldUseReviewQueue
+        ? `${backendUrl}/telecalling/review-queue`
+        : `${backendUrl}/telecalling`;
 
       const res = await axios.get(endpoint, {
         headers: getAuthHeaders(),
@@ -181,7 +184,7 @@ export default function TelecallingPage() {
         },
         {
           headers: getAuthHeaders(),
-        },
+        }
       );
 
       setMessage('Review updated successfully');
@@ -193,23 +196,25 @@ export default function TelecallingPage() {
   };
 
   const canReview =
-    userRoles.includes('OWNER') || userRoles.includes('PROJECT_MANAGER');
+    userRoles.includes('TELECALLING_MANAGER') ||
+    userRoles.includes('PROJECT_MANAGER');
 
   const canLogCalls =
     userRoles.includes('TELECALLER') ||
     userRoles.includes('OWNER') ||
-    userRoles.includes('LEAD_MANAGER');
+    userRoles.includes('LEAD_MANAGER') ||
+    userRoles.includes('TELECALLING_MANAGER');
 
   return (
     <div className="p-6">
       {canLogCalls && (
-        <div className="bg-white rounded-2xl shadow p-6 mb-6">
-          <div className="flex items-center justify-between mb-6">
+        <div className="mb-6 rounded-2xl bg-white p-6 shadow">
+          <div className="mb-6 flex items-center justify-between">
             <h1 className="text-2xl font-bold">Telecalling</h1>
 
             <Link
               href="/telecalling/contacts"
-              className="rounded-xl bg-purple-600 px-4 py-2 text-white font-medium"
+              className="rounded-xl bg-purple-600 px-4 py-2 font-medium text-white"
             >
               Go to Contacts
             </Link>
@@ -279,7 +284,7 @@ export default function TelecallingPage() {
             <button
               type="submit"
               disabled={loading}
-              className="rounded-xl bg-blue-600 px-6 py-3 text-white font-semibold"
+              className="rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white"
             >
               {loading ? 'Saving...' : 'Log Call'}
             </button>
@@ -287,8 +292,8 @@ export default function TelecallingPage() {
         </div>
       )}
 
-      <div className="bg-white rounded-2xl shadow p-6">
-        <h2 className="text-2xl font-bold mb-4">
+      <div className="rounded-2xl bg-white p-6 shadow">
+        <h2 className="mb-4 text-2xl font-bold">
           {canReview ? 'Call Review Queue' : 'Call History'}
         </h2>
 
@@ -317,7 +322,7 @@ export default function TelecallingPage() {
                     <td className="border p-2">{call.callNotes || '-'}</td>
                     <td className="border p-2">
                       {call.recordingUrl ? (
-                        <a href={call.recordingUrl} target="_blank">
+                        <a href={call.recordingUrl} target="_blank" rel="noreferrer">
                           Open
                         </a>
                       ) : (
@@ -342,7 +347,7 @@ export default function TelecallingPage() {
                           <option value="REJECTED">REJECTED</option>
                         </select>
                       ) : (
-                        call.reviewStatus
+                        call.reviewStatus || '-'
                       )}
                     </td>
 
@@ -356,15 +361,19 @@ export default function TelecallingPage() {
                               [call.id]: e.target.value,
                             }))
                           }
+                          className="w-full rounded border px-2 py-1"
                         />
                       ) : (
-                        call.reviewNotes
+                        call.reviewNotes || '-'
                       )}
                     </td>
 
                     {canReview && (
                       <td className="border p-2">
-                        <button onClick={() => handleReviewSave(call.id)}>
+                        <button
+                          onClick={() => handleReviewSave(call.id)}
+                          className="rounded bg-blue-600 px-3 py-1 text-white"
+                        >
                           Save
                         </button>
                       </td>

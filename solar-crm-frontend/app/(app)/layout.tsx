@@ -10,6 +10,7 @@ const navItems = [
   { name: 'Telecalling', href: '/telecalling' },
   { name: 'Leads', href: '/leads' },
   { name: 'Followup', href: '/followup' },
+  { name: 'Meeting', href: '/meeting' },
 ];
 
 type CurrentUser = {
