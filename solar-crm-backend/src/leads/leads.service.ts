@@ -43,6 +43,10 @@ export class LeadsService {
     return Number(user?.id ?? user?.sub);
   }
 
+  private getCurrentUserName(user: any) {
+    return user?.name || user?.email || 'Unknown User';
+  }
+
   async create(data: Partial<Lead>, user: any) {
     const existing = await this.leadRepository.findOne({
       where: { phone: data.phone },
@@ -52,10 +56,20 @@ export class LeadsService {
       throw new BadRequestException('Lead with this phone already exists');
     }
 
-    let leadData: Partial<Lead> = data;
+    const currentUserId = this.getCurrentUserId(user);
+    const currentUserName = this.getCurrentUserName(user);
+
+    let leadData: Partial<Lead> = {
+      ...data,
+      createdBy: currentUserId,
+      createdByName: currentUserName,
+    };
 
     if (this.isTelecaller(user)) {
-      leadData = { ...data, assignedTo: this.getCurrentUserId(user) };
+      leadData = {
+        ...leadData,
+        assignedTo: currentUserId,
+      };
     }
 
     const lead = this.leadRepository.create(leadData);
@@ -92,6 +106,12 @@ export class LeadsService {
 
     if (filters?.status) {
       query.andWhere('lead.status = :status', { status: filters.status });
+    }
+
+    if (filters?.phone) {
+      query.andWhere('lead.phone ILIKE :phone', {
+        phone: `%${filters.phone}%`,
+      });
     }
 
     if (filters?.city) {
@@ -294,6 +314,8 @@ export class LeadsService {
       'source',
       'status',
       'assignedTo',
+      'createdBy',
+      'createdByName',
       'remarks',
       'nextFollowUpDate',
       'createdAt',
@@ -321,6 +343,8 @@ export class LeadsService {
         lead.source,
         lead.status,
         lead.assignedTo,
+        lead.createdBy,
+        lead.createdByName,
         lead.remarks,
         lead.nextFollowUpDate
           ? new Date(lead.nextFollowUpDate).toISOString()
@@ -444,6 +468,8 @@ export class LeadsService {
         source: row.source || undefined,
         status,
         assignedTo: row.assignedTo ? Number(row.assignedTo) : undefined,
+        createdBy: this.getCurrentUserId(user),
+        createdByName: this.getCurrentUserName(user),
         remarks: row.remarks || undefined,
         nextFollowUpDate: row.nextFollowUpDate
           ? new Date(row.nextFollowUpDate)

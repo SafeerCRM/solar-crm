@@ -65,6 +65,12 @@ export class Lead {
   @Column({ nullable: true })
   assignedTo: number;
 
+  @Column({ nullable: true })
+  createdBy: number;
+
+  @Column({ nullable: true })
+  createdByName: string;
+
   @Column({ nullable: true, type: 'text' })
   remarks: string;
 
