@@ -6,8 +6,9 @@ import { useEffect, useState } from 'react';
 
 const navItems = [
   { name: 'Dashboard', href: '/dashboard' },
-  { name: 'Leads', href: '/leads' },
+  { name: 'Users', href: '/users', roles: ['OWNER'] },
   { name: 'Telecalling', href: '/telecalling' },
+  { name: 'Leads', href: '/leads' },
   { name: 'Followup', href: '/followup' },
 ];
 
@@ -44,7 +45,7 @@ export default function AppLayout({
 
       {/* SIDEBAR */}
       <aside
-        className={`fixed z-40 h-full w-64 bg-white p-6 shadow transition-transform md:static md:translate-x-0 flex flex-col justify-between ${
+        className={`fixed z-40 flex h-full w-64 flex-col justify-between bg-white p-6 shadow transition-transform md:static md:translate-x-0 ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -53,7 +54,7 @@ export default function AppLayout({
           <div className="mb-6">
             <h2 className="text-xl font-bold text-gray-800">Solar CRM</h2>
 
-            {/* 🔥 USER DISPLAY */}
+            {/* USER DISPLAY */}
             {user && (
               <div className="mt-3 rounded-xl bg-gray-100 p-3">
                 <p className="font-semibold text-gray-800">{user.name}</p>
@@ -64,46 +65,37 @@ export default function AppLayout({
 
           {/* NAVIGATION */}
           <nav className="space-y-3">
-  {/* 🔥 USERS (OWNER ONLY) */}
-  {user?.role === 'OWNER' && (
-    <Link
-      href="/users"
-      onClick={() => setOpen(false)}
-      className={`block rounded-xl px-4 py-2 ${
-        pathname === '/users'
-          ? 'bg-blue-600 text-white'
-          : 'text-gray-700 hover:bg-gray-200'
-      }`}
-    >
-      Users
-    </Link>
-  )}
+            {navItems.map((item) => {
+              // 🔐 Role restriction (for Users)
+              if (item.roles && !item.roles.includes(user?.role)) {
+                return null;
+              }
 
-  {/* 🔹 OTHER NAV ITEMS */}
-  {navItems.map((item) => (
-    <Link
-      key={item.href}
-      href={item.href}
-      onClick={() => setOpen(false)}
-      className={`block rounded-xl px-4 py-2 ${
-        pathname === item.href
-          ? 'bg-blue-600 text-white'
-          : 'text-gray-700 hover:bg-gray-200'
-      }`}
-    >
-      {item.name}
-    </Link>
-  ))}
-</nav>
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setOpen(false)}
+                  className={`block rounded-xl px-4 py-2 ${
+                    pathname === item.href
+                      ? 'bg-blue-600 text-white'
+                      : 'text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {item.name}
+                </Link>
+              );
+            })}
+          </nav>
         </div>
 
-        {/* 🔥 LOGOUT BUTTON */}
+        {/* LOGOUT */}
         <button
           onClick={() => {
             localStorage.clear();
             window.location.href = '/';
           }}
-          className="mt-6 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-xl w-full"
+          className="mt-6 w-full rounded-xl bg-red-500 px-4 py-2 text-white hover:bg-red-600"
         >
           Logout
         </button>
