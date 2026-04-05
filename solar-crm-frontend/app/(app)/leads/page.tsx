@@ -14,6 +14,8 @@ type Lead = {
   zone?: string;
   status?: string;
   assignedTo?: number | null;
+  createdBy?: number;
+  createdByName?: string;
 };
 
 type StaffUser = {
@@ -36,6 +38,7 @@ export default function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [assignableStaff, setAssignableStaff] = useState<StaffUser[]>([]);
   const [search, setSearch] = useState('');
+  const [phone, setPhone] = useState('');
   const [assignedTo, setAssignedTo] = useState('');
   const [city, setCity] = useState('');
   const [zone, setZone] = useState('');
@@ -92,6 +95,7 @@ export default function LeadsPage() {
       const params: any = {};
 
       if (search) params.search = search;
+      if (phone) params.phone = phone;
       if (city) params.city = city;
       if (zone) params.zone = zone;
 
@@ -208,12 +212,13 @@ export default function LeadsPage() {
 
     const staff = assignableStaff.find((u) => u.id === assignedToValue);
     return staff
-      ? `${staff.name}${staff.role ? ` (${staff.role})` : ''}`
+      ? `${staff.name} (${staff.email}) [ID: ${staff.id}]`
       : `User ID: ${assignedToValue}`;
   };
 
   const clearFilters = async () => {
     setSearch('');
+    setPhone('');
     setAssignedTo('');
     setCity('');
     setZone('');
@@ -291,6 +296,14 @@ export default function LeadsPage() {
 
         <input
           type="text"
+          placeholder="Filter by mobile number"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          className="border p-2 rounded w-full md:w-1/5"
+        />
+
+        <input
+          type="text"
           placeholder="Filter by city"
           value={city}
           onChange={(e) => setCity(e.target.value)}
@@ -314,7 +327,7 @@ export default function LeadsPage() {
             <option value="">All Assigned Users</option>
             {assignableStaff.map((u) => (
               <option key={u.id} value={u.id}>
-                {u.name} {u.role ? `(${u.role})` : ''}
+                {u.name} ({u.email}) [ID: {u.id}]
               </option>
             ))}
           </select>
@@ -348,6 +361,7 @@ export default function LeadsPage() {
               <th className="border p-2">City</th>
               <th className="border p-2">Zone</th>
               <th className="border p-2">Status</th>
+              <th className="border p-2">Created By</th>
               <th className="border p-2">Assigned To</th>
               {canAssign && <th className="border p-2">Assign</th>}
             </tr>
@@ -356,7 +370,7 @@ export default function LeadsPage() {
           <tbody>
             {leads.length === 0 ? (
               <tr>
-                <td colSpan={canAssign ? 9 : 8} className="text-center p-4">
+                <td colSpan={canAssign ? 10 : 9} className="text-center p-4">
                   No leads found
                 </td>
               </tr>
@@ -370,6 +384,7 @@ export default function LeadsPage() {
                   <td className="border p-2">{lead.city || ''}</td>
                   <td className="border p-2">{lead.zone || ''}</td>
                   <td className="border p-2">{lead.status || ''}</td>
+                  <td className="border p-2">{lead.createdByName || 'N/A'}</td>
                   <td className="border p-2">
                     {getAssignedLabel(lead.assignedTo)}
                   </td>
@@ -386,7 +401,7 @@ export default function LeadsPage() {
                         <option value="">Assign</option>
                         {assignableStaff.map((u) => (
                           <option key={u.id} value={u.id}>
-                            {u.name} {u.role ? `(${u.role})` : ''}
+                            {u.name} ({u.email}) [ID: {u.id}]
                           </option>
                         ))}
                       </select>
