@@ -1,10 +1,11 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, In } from 'typeorm';
+import { Repository, Between, In, LessThan } from 'typeorm';
 import { CallLog, CallReviewStatus } from './call-log.entity';
 import { Lead, LeadStatus } from '../leads/lead.entity';
 import {
@@ -12,6 +13,11 @@ import {
   FollowUpStatus,
   FollowUpType,
 } from '../followup/follow-up.entity';
+import {
+  ContactStatus,
+  TelecallingContact,
+} from './telecalling-contact.entity';
+import { User } from '../users/user.entity';
 
 @Injectable()
 export class TelecallingService {
@@ -24,7 +30,15 @@ export class TelecallingService {
 
     @InjectRepository(FollowUp)
     private readonly followUpRepository: Repository<FollowUp>,
+
+    @InjectRepository(TelecallingContact)
+    private readonly contactRepository: Repository<TelecallingContact>,
+
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
   ) {}
+
+  // ---------------- Existing Lead-Based Telecalling ----------------
 
   async create(data: Partial<CallLog>) {
     const log = this.callLogRepository.create({
@@ -224,8 +238,14 @@ export class TelecallingService {
     }
 
     if (user?.role === 'TELECALLER') {
-      if (lead.assignedTo !== null && lead.assignedTo !== undefined && lead.assignedTo !== user.id) {
-        throw new ForbiddenException('You can only access your available or assigned leads');
+      if (
+        lead.assignedTo !== null &&
+        lead.assignedTo !== undefined &&
+        lead.assignedTo !== user.id
+      ) {
+        throw new ForbiddenException(
+          'You can only access your available or assigned leads',
+        );
       }
     }
 
@@ -239,7 +259,9 @@ export class TelecallingService {
       ];
 
       if (!allowedStatuses.includes(lead.status)) {
-        throw new ForbiddenException('You can only access qualified pipeline leads');
+        throw new ForbiddenException(
+          'You can only access qualified pipeline leads',
+        );
       }
     }
 
@@ -252,7 +274,9 @@ export class TelecallingService {
     user: any,
   ) {
     if (!(user?.role === 'OWNER' || user?.role === 'PROJECT_MANAGER')) {
-      throw new ForbiddenException('Only owner or project manager can review call recordings');
+      throw new ForbiddenException(
+        'Only owner or project manager can review call recordings',
+      );
     }
 
     const callLog = await this.callLogRepository.findOne({
@@ -271,14 +295,17 @@ export class TelecallingService {
 
   async getReviewQueue(user: any) {
     if (!(user?.role === 'OWNER' || user?.role === 'PROJECT_MANAGER')) {
-      throw new ForbiddenException('Only owner or project manager can access review queue');
+      throw new ForbiddenException(
+        'Only owner or project manager can access review queue',
+      );
     }
 
     return this.callLogRepository.find({
       order: { createdAt: 'DESC' },
     });
   }
-    async getPerformance() {
+
+  async getPerformance() {
     return this.callLogRepository
       .createQueryBuilder('call')
       .select('call.telecallerId', 'telecallerId')
@@ -289,5 +316,224 @@ export class TelecallingService {
       )
       .groupBy('call.telecallerId')
       .getRawMany();
+  }
+
+  // ---------------- New Telecalling Contact Pool ----------------
+
+  async importContactsCsv(file: any, user: any) {
+    if (!file) {
+      throw new BadRequestException('CSV file is required');
+    }
+
+    if (!(user?.role === 'OWNER' || user?.role === 'LEAD_MANAGER')) {
+      throw new ForbiddenException(
+        'Only owner or lead manager can import telecalling contacts',
+      );
+    }
+
+    const content = file.buffer.toString('utf-8').trim();
+
+    if (!content) {
+      throw new BadRequestException('CSV file is empty');
+    }
+
+    const lines = content
+      .split(/\r?\n/)
+      .map((line: string) => line.trim())
+      .filter(Boolean);
+
+    if (lines.length < 2) {
+      throw new BadRequestException(
+        'CSV must contain header row and at least one data row',
+      );
+    }
+
+    const parseCsvLine = (line: string): string[] => {
+      const values: string[] = [];
+      let current = '';
+      let insideQuotes = false;
+
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        const nextChar = line[i + 1];
+
+        if (char === '"') {
+          if (insideQuotes && nextChar === '"') {
+            current += '"';
+            i++;
+          } else {
+            insideQuotes = !insideQuotes;
+          }
+        } else if (char === ',' && !insideQuotes) {
+          values.push(current.trim());
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+
+      values.push(current.trim());
+      return values;
+    };
+
+    const headers = parseCsvLine(lines[0]).map((h) =>
+      h.replace(/^"|"$/g, '').trim(),
+    );
+
+    const normalizeValue = (value?: string) => {
+      if (!value) return '';
+      return value.replace(/^"|"$/g, '').trim();
+    };
+
+    let importedCount = 0;
+    let skippedCount = 0;
+
+    for (let i = 1; i < lines.length; i++) {
+      const rowValues = parseCsvLine(lines[i]);
+      const row: Record<string, string> = {};
+
+      headers.forEach((header, index) => {
+        row[header] = normalizeValue(rowValues[index]);
+      });
+
+      const name = row.name || row.Name;
+      const phone = row.phone || row.mobile || row.Mobile || row['mobile number'];
+      const city = row.city || row.City;
+      const kNo = row.kNo || row['K.no.'] || row['KNo'] || row['kno'];
+      const source = row.source || row.Source;
+
+      if (!name || !phone) {
+        skippedCount++;
+        continue;
+      }
+
+      const existing = await this.contactRepository.findOne({
+        where: { phone },
+      });
+
+      if (existing) {
+        skippedCount++;
+        continue;
+      }
+
+      const contact = this.contactRepository.create({
+        name,
+        phone,
+        city: city || undefined,
+        kNo: kNo || undefined,
+        source: source || undefined,
+        importedBy: user.id,
+        importedByName: user.name,
+        status: ContactStatus.NEW,
+        convertedToLead: false,
+      });
+
+      await this.contactRepository.save(contact);
+      importedCount++;
+    }
+
+    return {
+      message: 'Telecalling contacts imported successfully',
+      importedCount,
+      skippedCount,
+    };
+  }
+
+  async getContacts(user: any) {
+    if (user?.role === 'TELECALLER') {
+      return this.contactRepository.find({
+        where: { assignedTo: user.id },
+        order: { createdAt: 'DESC' },
+      });
+    }
+
+    return this.contactRepository.find({
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async assignContact(id: number, assignedTo: number, user: any) {
+    if (
+      !(
+        user?.role === 'OWNER' ||
+        user?.role === 'LEAD_MANAGER' ||
+        user?.role === 'PROJECT_MANAGER'
+      )
+    ) {
+      throw new ForbiddenException(
+        'Only manager/admin users can assign telecalling contacts',
+      );
+    }
+
+    const contact = await this.contactRepository.findOne({
+      where: { id },
+    });
+
+    if (!contact) {
+      throw new NotFoundException('Telecalling contact not found');
+    }
+
+    const assignedUser = await this.userRepository.findOne({
+      where: { id: assignedTo },
+    });
+
+    if (!assignedUser) {
+      throw new NotFoundException('Assigned user not found');
+    }
+
+    contact.assignedTo = assignedUser.id;
+    contact.assignedToName = assignedUser.name;
+
+    return this.contactRepository.save(contact);
+  }
+
+  async convertContactToLead(id: number, user: any) {
+    const contact = await this.contactRepository.findOne({
+      where: { id },
+    });
+
+    if (!contact) {
+      throw new NotFoundException('Telecalling contact not found');
+    }
+
+    if (contact.convertedToLead) {
+      throw new BadRequestException('This contact is already converted to lead');
+    }
+
+    const existingLead = await this.leadRepository.findOne({
+      where: { phone: contact.phone },
+    });
+
+    if (existingLead) {
+      throw new BadRequestException(
+        'Lead with this phone already exists in lead CRM',
+      );
+    }
+
+    const lead = this.leadRepository.create({
+      name: contact.name,
+      phone: contact.phone,
+      city: contact.city,
+      source: contact.source,
+      assignedTo: contact.assignedTo,
+      createdBy: user.id,
+      createdByName: user.name,
+      status: LeadStatus.NEW,
+    });
+
+    const savedLead = await this.leadRepository.save(lead);
+
+    contact.convertedToLead = true;
+    contact.status = ContactStatus.CONVERTED;
+    contact.remarks = contact.remarks
+      ? `${contact.remarks}\nConverted to lead by ${user.name}`
+      : `Converted to lead by ${user.name}`;
+
+    await this.contactRepository.save(contact);
+
+    return {
+      message: 'Contact converted to lead successfully',
+      lead: savedLead,
+    };
   }
 }

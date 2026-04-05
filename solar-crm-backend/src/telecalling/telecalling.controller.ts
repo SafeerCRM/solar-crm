@@ -6,9 +6,11 @@ import {
   ParseIntPipe,
   Patch,
   Post,
-  Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { TelecallingService } from './telecalling.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -19,12 +21,14 @@ import { CallReviewStatus } from './call-log.entity';
 export class TelecallingController {
   constructor(private readonly telecallingService: TelecallingService) {}
 
+  // ---------- Existing lead-based routes ----------
+
   @Post()
   create(@Body() data: any, @CurrentUser() user: any) {
-    const payload =
-      user?.role === 'TELECALLER'
-        ? { ...data, telecallerId: user.id }
-        : data;
+    const payload = {
+      ...data,
+      telecallerId: data.telecallerId ?? user?.id,
+    };
 
     return this.telecallingService.create(payload);
   }
@@ -37,7 +41,8 @@ export class TelecallingController {
 
     return this.telecallingService.findAll();
   }
-    @Get('performance')
+
+  @Get('performance')
   getPerformance() {
     return this.telecallingService.getPerformance();
   }
@@ -70,7 +75,7 @@ export class TelecallingController {
   }
 
   @Get('status')
-  getByCallStatus(@Query('callStatus') callStatus: string, @CurrentUser() user: any) {
+  getByStatus(@Body('callStatus') callStatus: string, @CurrentUser() user: any) {
     if (user?.role === 'TELECALLER') {
       return this.telecallingService.getByCallStatusAndTelecaller(
         callStatus,
@@ -96,5 +101,35 @@ export class TelecallingController {
     @CurrentUser() user: any,
   ) {
     return this.telecallingService.findByLeadProtected(leadId, user);
+  }
+
+  // ---------- New telecalling contacts/data pool routes ----------
+
+  @Post('contacts/import')
+  @UseInterceptors(FileInterceptor('file'))
+  importContacts(@UploadedFile() file: any, @CurrentUser() user: any) {
+    return this.telecallingService.importContactsCsv(file, user);
+  }
+
+  @Get('contacts')
+  getContacts(@CurrentUser() user: any) {
+    return this.telecallingService.getContacts(user);
+  }
+
+  @Patch('contacts/:id/assign')
+  assignContact(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('assignedTo') assignedTo: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.telecallingService.assignContact(id, Number(assignedTo), user);
+  }
+
+  @Post('contacts/:id/convert')
+  convertContactToLead(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.telecallingService.convertContactToLead(id, user);
   }
 }
