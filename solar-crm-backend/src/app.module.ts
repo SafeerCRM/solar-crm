@@ -15,6 +15,7 @@ import { MastersModule } from './masters/masters.module';
 import { ProjectModule } from './project/project.module';
 import { CalculatorModule } from './calculator/calculator.module';
 import { VendorModule } from './vendor/vendor.module';
+import { MeetingModule } from './meeting/meeting.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { VendorModule } from './vendor/vendor.module';
     ProjectModule,
     CalculatorModule,
     VendorModule,
+    MeetingModule,
   ],
   controllers: [AppController],
   providers: [AppService],
