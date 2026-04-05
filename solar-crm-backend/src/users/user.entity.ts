@@ -2,9 +2,12 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeor
 
 export enum UserRole {
   OWNER = 'OWNER',
+  TELECALLING_MANAGER = 'TELECALLING_MANAGER',
   LEAD_MANAGER = 'LEAD_MANAGER',
-  TELECALLER = 'TELECALLER',
+  MEETING_MANAGER = 'MEETING_MANAGER',
   PROJECT_MANAGER = 'PROJECT_MANAGER',
+  CUSTOMER = 'CUSTOMER',
+  TELECALLER = 'TELECALLER',
 }
 
 @Entity()
@@ -22,11 +25,10 @@ export class User {
   password: string;
 
   @Column({
-    type: 'enum',
-    enum: UserRole,
-    default: UserRole.TELECALLER,
+    type: 'simple-array',
+    nullable: true,
   })
-  role: UserRole;
+  roles: UserRole[];
 
   @CreateDateColumn()
   createdAt: Date;

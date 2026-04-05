@@ -1,6 +1,10 @@
-import { Injectable, BadRequestException, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository, Raw } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { User, UserRole } from './user.entity';
@@ -13,7 +17,19 @@ export class UsersService {
     private readonly jwtService: JwtService,
   ) {}
 
-  async createRole(data: Partial<User>) {
+  private normalizeRoles(inputRoles?: UserRole[] | string[]): UserRole[] {
+    const allowedRoles = Object.values(UserRole);
+
+    const roles = Array.isArray(inputRoles) ? inputRoles : [];
+
+    const cleanedRoles = roles
+      .map((role) => String(role).trim())
+      .filter((role) => allowedRoles.includes(role as UserRole)) as UserRole[];
+
+    return cleanedRoles.length > 0 ? [...new Set(cleanedRoles)] : [UserRole.TELECALLER];
+  }
+
+  async createRole(data: Partial<User> & { roles?: UserRole[] }) {
     const existing = await this.userRepository.findOne({
       where: { email: data.email },
     });
@@ -22,19 +38,23 @@ export class UsersService {
       throw new BadRequestException('User with this email already exists');
     }
 
-    const hashedPassword = await bcrypt.hash(data.password!, 10);
+    if (!data.password) {
+      throw new BadRequestException('Password is required');
+    }
+
+    const hashedPassword = await bcrypt.hash(data.password, 10);
 
     const user = this.userRepository.create({
       name: data.name,
       email: data.email,
       password: hashedPassword,
-      role: data.role || UserRole.TELECALLER,
+      roles: this.normalizeRoles(data.roles),
     });
 
     return this.userRepository.save(user);
   }
 
-  async create(data: Partial<User>) {
+  async create(data: Partial<User> & { roles?: UserRole[] }) {
     return this.createRole(data);
   }
 
@@ -56,7 +76,7 @@ export class UsersService {
     const payload = {
       sub: user.id,
       email: user.email,
-      role: user.role,
+      roles: user.roles || [],
       name: user.name,
     };
 
@@ -69,7 +89,7 @@ export class UsersService {
         id: user.id,
         name: user.name,
         email: user.email,
-        role: user.role,
+        roles: user.roles || [],
       },
     };
   }
@@ -77,28 +97,38 @@ export class UsersService {
   async findAssignableStaff() {
     return this.userRepository.find({
       where: {
-        role: In([
-          UserRole.LEAD_MANAGER,
-          UserRole.TELECALLER,
-          UserRole.PROJECT_MANAGER,
-        ]),
+        roles: Raw(
+          (alias) =>
+            `${alias} LIKE :telecaller OR ${alias} LIKE :leadManager OR ${alias} LIKE :projectManager OR ${alias} LIKE :meetingManager OR ${alias} LIKE :telecallingManager`,
+          {
+            telecaller: '%TELECALLER%',
+            leadManager: '%LEAD_MANAGER%',
+            projectManager: '%PROJECT_MANAGER%',
+            meetingManager: '%MEETING_MANAGER%',
+            telecallingManager: '%TELECALLING_MANAGER%',
+          },
+        ),
       },
-      select: ['id', 'name', 'email', 'role'],
+      select: ['id', 'name', 'email', 'roles'],
       order: { id: 'ASC' },
     });
   }
 
   async findTelecallers() {
     return this.userRepository.find({
-      where: { role: UserRole.TELECALLER },
-      select: ['id', 'name', 'email', 'role'],
+      where: {
+        roles: Raw((alias) => `${alias} LIKE :role`, {
+          role: '%TELECALLER%',
+        }),
+      },
+      select: ['id', 'name', 'email', 'roles'],
       order: { id: 'ASC' },
     });
   }
 
   async findAllUsers() {
     return this.userRepository.find({
-      select: ['id', 'name', 'email', 'role', 'createdAt'],
+      select: ['id', 'name', 'email', 'roles', 'createdAt'],
       order: { id: 'ASC' },
     });
   }

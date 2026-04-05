@@ -8,7 +8,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
-import { User } from './user.entity';
+import { User, UserRole } from './user.entity';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -18,12 +18,12 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post('create-role')
-  createRole(@Body() data: Partial<User>) {
+  createRole(@Body() data: Partial<User> & { roles?: UserRole[] }) {
     return this.usersService.createRole(data);
   }
 
   @Post('create')
-  create(@Body() data: Partial<User>) {
+  create(@Body() data: Partial<User> & { roles?: UserRole[] }) {
     return this.usersService.create(data);
   }
 
@@ -33,14 +33,14 @@ export class UsersController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER', 'LEAD_MANAGER')
+  @Roles('OWNER', 'LEAD_MANAGER', 'TELECALLING_MANAGER')
   @Get('assignable-staff')
   findAssignableStaff() {
     return this.usersService.findAssignableStaff();
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER', 'LEAD_MANAGER')
+  @Roles('OWNER', 'LEAD_MANAGER', 'TELECALLING_MANAGER')
   @Get('telecallers')
   findTelecallers() {
     return this.usersService.findTelecallers();
