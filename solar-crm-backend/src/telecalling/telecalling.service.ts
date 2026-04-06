@@ -425,7 +425,6 @@ export class TelecallingService {
       throw new BadRequestException('Uploaded file is empty');
     }
 
-    // Prepare normalized candidate rows
     const candidateRows = rows.map((row) => {
       const name = this.getMappedValue(row, [
         'name',
@@ -457,7 +456,6 @@ export class TelecallingService {
       };
     });
 
-    // Only keep rows with phone
     const validRows = candidateRows.filter((row) => !!row.phone);
 
     if (!validRows.length) {
@@ -466,12 +464,10 @@ export class TelecallingService {
       );
     }
 
-    // Collect all phones from uploaded file
     const uploadedPhones = Array.from(
       new Set(validRows.map((row) => row.phone).filter(Boolean)),
     );
 
-    // Bulk fetch existing phones from DB
     const existingContacts = await this.contactRepository.find({
       where: {
         phone: In(uploadedPhones),
@@ -491,13 +487,11 @@ export class TelecallingService {
         continue;
       }
 
-      // Skip duplicate inside same uploaded file
       if (seenInFile.has(row.phone)) {
         skippedCount++;
         continue;
       }
 
-      // Skip duplicate already in DB
       if (existingPhones.has(row.phone)) {
         skippedCount++;
         continue;
@@ -527,17 +521,35 @@ export class TelecallingService {
     };
   }
 
-  async getContacts(user: any) {
+  async getContacts(user: any, page = 1, limit = 50) {
+    const safePage = Number.isFinite(page) && page > 0 ? page : 1;
+    const safeLimit =
+      Number.isFinite(limit) && limit > 0
+        ? Math.min(limit, 200)
+        : 50;
+
+    const skip = (safePage - 1) * safeLimit;
+
+    const whereCondition: any = {};
+
     if (this.hasAnyRole(user, ['TELECALLER'])) {
-      return this.contactRepository.find({
-        where: { assignedTo: user.id },
-        order: { createdAt: 'DESC' },
-      });
+      whereCondition.assignedTo = user.id;
     }
 
-    return this.contactRepository.find({
+    const [data, total] = await this.contactRepository.findAndCount({
+      where: whereCondition,
       order: { createdAt: 'DESC' },
+      skip,
+      take: safeLimit,
     });
+
+    return {
+      data,
+      total,
+      page: safePage,
+      limit: safeLimit,
+      totalPages: Math.ceil(total / safeLimit),
+    };
   }
 
   async assignContact(id: number, assignedTo: number, user: any) {

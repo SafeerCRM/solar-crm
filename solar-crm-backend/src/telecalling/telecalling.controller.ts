@@ -119,8 +119,16 @@ export class TelecallingController {
   }
 
   @Get('contacts')
-  getContacts(@CurrentUser() user: any) {
-    return this.telecallingService.getContacts(user);
+  getContacts(
+    @CurrentUser() user: any,
+    @Query('page') page = '1',
+    @Query('limit') limit = '50',
+  ) {
+    return this.telecallingService.getContacts(
+      user,
+      Number(page),
+      Number(limit),
+    );
   }
 
   @Patch('contacts/:id/assign')
