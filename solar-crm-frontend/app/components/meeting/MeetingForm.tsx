@@ -8,7 +8,6 @@ type User = {
   id: number;
   name: string;
   email?: string;
-  roles?: string[];
 };
 
 export default function MeetingForm() {
@@ -16,6 +15,7 @@ export default function MeetingForm() {
   const searchParams = useSearchParams();
 
   const [users, setUsers] = useState<User[]>([]);
+  const [showMap, setShowMap] = useState(false);
 
   const [form, setForm] = useState({
     leadId: '',
@@ -34,37 +34,27 @@ export default function MeetingForm() {
     updatedBy: '',
   });
 
-  const [photo, setPhoto] = useState<File | null>(null);
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // ✅ FETCH USERS FOR DROPDOWN
+  // USERS
   useEffect(() => {
     fetchUsers();
   }, []);
 
   const fetchUsers = async () => {
-    try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/users/assignable-staff`,
-        {
-          headers: getAuthHeaders(),
-        }
-      );
-
-      const data = await res.json();
-      setUsers(data || []);
-    } catch (err) {
-      console.error('User fetch failed', err);
-    }
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_API_BASE_URL}/users/assignable-staff`,
+      { headers: getAuthHeaders() }
+    );
+    const data = await res.json();
+    setUsers(data || []);
   };
 
-  // ✅ PREFILL FROM LEADS
+  // PREFILL
   useEffect(() => {
     const user = localStorage.getItem('user');
-
     if (user) {
       const parsed = JSON.parse(user);
 
@@ -81,100 +71,98 @@ export default function MeetingForm() {
   }, []);
 
   const handleChange = (e: any) => {
-    setForm((prev) => ({
-      ...prev,
-      [e.target.name]: e.target.value,
-    }));
+    setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  // ✅ GPS + ADDRESS
+  // GPS BUTTON
   const handleGetLocation = async () => {
-    if (!navigator.geolocation) {
-      alert('Geolocation not supported');
-      return;
-    }
-
     navigator.geolocation.getCurrentPosition(async (position) => {
       const lat = position.coords.latitude;
       const lng = position.coords.longitude;
 
-      let address = '';
-
-      try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`
-        );
-        const data = await res.json();
-        address = data.display_name || '';
-      } catch {
-        address = 'Unable to fetch address';
-      }
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`
+      );
+      const data = await res.json();
 
       setForm((prev) => ({
         ...prev,
         gpsLatitude: String(lat),
         gpsLongitude: String(lng),
-        gpsAddress: address,
-        address: address || prev.address,
+        gpsAddress: data.display_name,
+        address: data.display_name,
       }));
     });
   };
 
-  // ✅ SUBMIT
+  // MAP PICKER INPUT
+  const handleManualCoordinates = async () => {
+    const input = prompt('Enter Latitude,Longitude');
+
+    if (!input) return;
+
+    const [lat, lng] = input.split(',');
+
+    if (!lat || !lng) {
+      alert('Invalid format. Use: lat,lng');
+      return;
+    }
+
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`
+    );
+    const data = await res.json();
+
+    setForm((prev) => ({
+      ...prev,
+      gpsLatitude: lat.trim(),
+      gpsLongitude: lng.trim(),
+      gpsAddress: data.display_name,
+      address: data.display_name,
+    }));
+  };
+
+  // SUBMIT
   const handleSubmit = async (e: any) => {
     e.preventDefault();
 
-    try {
-      setLoading(true);
-      setError('');
+    setLoading(true);
 
-      const payload = {
-        leadId: Number(form.leadId),
-        customerName: form.customerName,
-        mobile: form.mobile,
-        address: form.address,
-        scheduledAt: new Date(form.scheduledAt).toISOString(),
-        assignedTo: form.assignedTo
-          ? Number(form.assignedTo)
-          : undefined,
-        meetingType: form.meetingType,
-        status: form.status,
-        notes: form.notes || undefined,
-        gpsLatitude: form.gpsLatitude
-          ? Number(form.gpsLatitude)
-          : undefined,
-        gpsLongitude: form.gpsLongitude
-          ? Number(form.gpsLongitude)
-          : undefined,
-        gpsAddress: form.gpsAddress || undefined,
-        createdBy: Number(form.createdBy),
-        updatedBy: Number(form.updatedBy),
-      };
+    const payload = {
+      ...form,
+      leadId: Number(form.leadId),
+      assignedTo: form.assignedTo
+        ? Number(form.assignedTo)
+        : undefined,
+      gpsLatitude: form.gpsLatitude
+        ? Number(form.gpsLatitude)
+        : undefined,
+      gpsLongitude: form.gpsLongitude
+        ? Number(form.gpsLongitude)
+        : undefined,
+    };
 
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/meetings`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...getAuthHeaders(),
-          },
-          body: JSON.stringify(payload),
-        }
-      );
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_API_BASE_URL}/meetings`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify(payload),
+      }
+    );
 
-      if (!res.ok) throw new Error('Failed to create meeting');
-
-      setSuccess('Meeting created');
-
-      setTimeout(() => {
-        router.push('/meeting');
-      }, 800);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
+    if (!res.ok) {
+      setError('Failed');
       setLoading(false);
+      return;
     }
+
+    setSuccess('Meeting Created');
+
+    setTimeout(() => router.push('/meeting'), 800);
   };
 
   return (
@@ -183,92 +171,91 @@ export default function MeetingForm() {
 
       <div className="grid gap-4 md:grid-cols-2">
 
-        <div>
-          <label>Customer Name</label>
-          <input
-            name="customerName"
-            value={form.customerName}
-            onChange={handleChange}
-            className="w-full border p-2"
-          />
-        </div>
+        <input
+          name="customerName"
+          value={form.customerName}
+          onChange={handleChange}
+          placeholder="Customer Name"
+          className="border p-2"
+        />
 
-        <div>
-          <label>Mobile</label>
-          <input
-            name="mobile"
-            value={form.mobile}
-            onChange={handleChange}
-            className="w-full border p-2"
-          />
-        </div>
+        <input
+          name="mobile"
+          value={form.mobile}
+          onChange={handleChange}
+          placeholder="Mobile"
+          className="border p-2"
+        />
 
-        <div className="md:col-span-2">
-          <label>Meeting Address</label>
-          <input
-            name="address"
-            value={form.address}
-            onChange={handleChange}
-            className="w-full border p-2"
-          />
-        </div>
+        <input
+          name="address"
+          value={form.address}
+          onChange={handleChange}
+          placeholder="Meeting Address"
+          className="border p-2 md:col-span-2"
+        />
 
-        <div>
-          <label>Scheduled At</label>
-          <input
-            type="datetime-local"
-            name="scheduledAt"
-            value={form.scheduledAt}
-            onChange={handleChange}
-            className="w-full border p-2"
-          />
-        </div>
+        <input
+          type="datetime-local"
+          name="scheduledAt"
+          value={form.scheduledAt}
+          onChange={handleChange}
+          className="border p-2"
+        />
 
-        {/* ✅ DROPDOWN */}
-        <div>
-          <label>Assign To</label>
-          <select
-            name="assignedTo"
-            value={form.assignedTo}
-            onChange={handleChange}
-            className="w-full border p-2"
-          >
-            <option value="">Select User</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name} ({u.email})
-              </option>
-            ))}
-          </select>
-        </div>
+        <select
+          name="assignedTo"
+          value={form.assignedTo}
+          onChange={handleChange}
+          className="border p-2"
+        >
+          <option value="">Assign User</option>
+          {users.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.name}
+            </option>
+          ))}
+        </select>
 
-        <div className="md:col-span-2">
-          <button
-            type="button"
-            onClick={handleGetLocation}
-            className="bg-green-600 text-white px-4 py-2 rounded"
-          >
-            📍 Capture Current Location
-          </button>
-        </div>
+        {/* GPS */}
+        <button
+          type="button"
+          onClick={handleGetLocation}
+          className="bg-green-600 text-white px-4 py-2 rounded"
+        >
+          📍 Capture Current Location
+        </button>
+
+        {/* MAP PICKER */}
+        <button
+          type="button"
+          onClick={() => setShowMap(!showMap)}
+          className="bg-blue-600 text-white px-4 py-2 rounded"
+        >
+          🗺️ Open Map Picker
+        </button>
+
+        {showMap && (
+          <div className="md:col-span-2">
+            <iframe
+              src="https://maps.google.com/maps?q=India&z=5&output=embed"
+              className="w-full h-64 border"
+            />
+            <button
+              type="button"
+              onClick={handleManualCoordinates}
+              className="mt-2 bg-purple-600 text-white px-4 py-2 rounded"
+            >
+              Enter Coordinates
+            </button>
+          </div>
+        )}
 
         {form.gpsAddress && (
           <div className="md:col-span-2 text-sm text-gray-600">
             📍 {form.gpsAddress}
           </div>
         )}
-
-        <div className="md:col-span-2">
-          <label>Site Photo</label>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) =>
-              setPhoto(e.target.files?.[0] || null)
-            }
-            className="w-full border p-2"
-          />
-        </div>
 
         <button className="bg-blue-600 text-white py-2 rounded">
           {loading ? 'Saving...' : 'Create Meeting'}
