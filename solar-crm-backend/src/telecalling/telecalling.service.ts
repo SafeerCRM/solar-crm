@@ -481,6 +481,8 @@ export class TelecallingService {
     let importedCount = 0;
     let skippedCount = 0;
 
+    const contactsToInsert: Partial<TelecallingContact>[] = [];
+
     for (const row of validRows) {
       if (!row.phone) {
         skippedCount++;
@@ -499,7 +501,7 @@ export class TelecallingService {
 
       seenInFile.add(row.phone);
 
-      const contact = this.contactRepository.create({
+      contactsToInsert.push({
         name: row.name || row.phone,
         phone: row.phone,
         city: row.city,
@@ -508,9 +510,17 @@ export class TelecallingService {
         status: ContactStatus.NEW,
         convertedToLead: false,
       });
+    }
 
-      await this.contactRepository.save(contact);
-      importedCount++;
+    if (contactsToInsert.length > 0) {
+      await this.contactRepository
+        .createQueryBuilder()
+        .insert()
+        .into(TelecallingContact)
+        .values(contactsToInsert)
+        .execute();
+
+      importedCount = contactsToInsert.length;
     }
 
     return {
@@ -524,9 +534,7 @@ export class TelecallingService {
   async getContacts(user: any, page = 1, limit = 50) {
     const safePage = Number.isFinite(page) && page > 0 ? page : 1;
     const safeLimit =
-      Number.isFinite(limit) && limit > 0
-        ? Math.min(limit, 200)
-        : 50;
+      Number.isFinite(limit) && limit > 0 ? Math.min(limit, 200) : 50;
 
     const skip = (safePage - 1) * safeLimit;
 
