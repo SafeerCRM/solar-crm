@@ -19,16 +19,14 @@ export default function MeetingForm() {
     meetingType: 'SITE_VISIT',
     status: 'SCHEDULED',
     notes: '',
-    outcome: '',
-    nextAction: '',
-    managerRemarks: '',
-    siteObservation: '',
     gpsLatitude: '',
     gpsLongitude: '',
     gpsAddress: '',
     createdBy: '',
     updatedBy: '',
   });
+
+  const [photo, setPhoto] = useState<File | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -67,18 +65,36 @@ export default function MeetingForm() {
     }));
   };
 
-  const handleGetLocation = () => {
+  // ✅ GPS + ADDRESS AUTO-FILL
+  const handleGetLocation = async () => {
     if (!navigator.geolocation) {
       alert('Geolocation not supported');
       return;
     }
 
     navigator.geolocation.getCurrentPosition(
-      (position) => {
+      async (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+
+        let address = '';
+
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`
+          );
+          const data = await res.json();
+          address = data.display_name || '';
+        } catch {
+          address = 'Unable to fetch address';
+        }
+
         setForm((prev) => ({
           ...prev,
-          gpsLatitude: String(position.coords.latitude),
-          gpsLongitude: String(position.coords.longitude),
+          gpsLatitude: String(lat),
+          gpsLongitude: String(lng),
+          gpsAddress: address,
+          address: address || prev.address,
         }));
       },
       () => {
@@ -97,7 +113,6 @@ export default function MeetingForm() {
 
       const payload = {
         leadId: Number(form.leadId),
-        followupId: form.followupId ? Number(form.followupId) : undefined,
         customerName: form.customerName,
         mobile: form.mobile,
         address: form.address || undefined,
@@ -106,12 +121,12 @@ export default function MeetingForm() {
         meetingType: form.meetingType,
         status: form.status,
         notes: form.notes || undefined,
-        outcome: form.outcome || undefined,
-        nextAction: form.nextAction || undefined,
-        managerRemarks: form.managerRemarks || undefined,
-        siteObservation: form.siteObservation || undefined,
-        gpsLatitude: form.gpsLatitude ? Number(form.gpsLatitude) : undefined,
-        gpsLongitude: form.gpsLongitude ? Number(form.gpsLongitude) : undefined,
+        gpsLatitude: form.gpsLatitude
+          ? Number(form.gpsLatitude)
+          : undefined,
+        gpsLongitude: form.gpsLongitude
+          ? Number(form.gpsLongitude)
+          : undefined,
         gpsAddress: form.gpsAddress || undefined,
         createdBy: Number(form.createdBy),
         updatedBy: Number(form.updatedBy),
@@ -132,9 +147,7 @@ export default function MeetingForm() {
       if (!res.ok) {
         const errData = await res.json().catch(() => null);
         throw new Error(
-          Array.isArray(errData?.message)
-            ? errData.message.join(', ')
-            : errData?.message || 'Failed to create meeting'
+          errData?.message || 'Failed to create meeting'
         );
       }
 
@@ -154,7 +167,6 @@ export default function MeetingForm() {
     <form onSubmit={handleSubmit} className="rounded border bg-white p-6">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
 
-        {/* AUTO FILLED */}
         <input type="hidden" name="leadId" value={form.leadId} />
 
         <div>
@@ -177,8 +189,9 @@ export default function MeetingForm() {
           />
         </div>
 
+        {/* ✅ ADDRESS */}
         <div className="md:col-span-2">
-          <label>Address</label>
+          <label>Meeting Address</label>
           <input
             name="address"
             value={form.address}
@@ -209,37 +222,38 @@ export default function MeetingForm() {
           />
         </div>
 
-        {/* GPS */}
-        <div>
-          <label>GPS Latitude</label>
-          <input
-            name="gpsLatitude"
-            value={form.gpsLatitude}
-            onChange={handleChange}
-            className="w-full border p-2"
-          />
-        </div>
-
-        <div>
-          <label>GPS Longitude</label>
-          <input
-            name="gpsLongitude"
-            value={form.gpsLongitude}
-            onChange={handleChange}
-            className="w-full border p-2"
-          />
-        </div>
-
+        {/* ✅ GPS BUTTON */}
         <div className="md:col-span-2">
           <button
             type="button"
             onClick={handleGetLocation}
             className="bg-green-600 text-white px-4 py-2 rounded"
           >
-            Capture GPS
+            📍 Capture Current Location
           </button>
         </div>
 
+        {/* ✅ SHOW GPS ADDRESS */}
+        {form.gpsAddress && (
+          <div className="md:col-span-2 text-sm text-gray-600">
+            📍 {form.gpsAddress}
+          </div>
+        )}
+
+        {/* ✅ PHOTO UPLOAD */}
+        <div className="md:col-span-2">
+          <label>Site Photo</label>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) =>
+              setPhoto(e.target.files?.[0] || null)
+            }
+            className="w-full border p-2"
+          />
+        </div>
+
+        {/* SUBMIT */}
         <div className="md:col-span-2">
           <button
             type="submit"

@@ -12,7 +12,6 @@ type Contact = {
   name: string;
   phone: string;
   city?: string;
-  kNo?: string;
   assignedTo?: number;
   assignedToName?: string;
   importedByName?: string;
@@ -31,31 +30,29 @@ export default function TelecallingContactsPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
-  const [convertingId, setConvertingId] = useState<number | null>(null);
-  const [convertToggleMap, setConvertToggleMap] = useState<Record<number, boolean>>({});
+
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const limit = 50;
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     fetchContacts();
     fetchUsers();
-  }, []);
+  }, [page]);
 
+  // ✅ FIXED CONTACT FETCH (PAGINATION SUPPORT)
   const fetchContacts = async () => {
     setLoading(true);
     try {
-      const res = await axios.get(`${backendUrl}/telecalling/contacts`, {
-        headers: getAuthHeaders(),
-      });
+      const res = await axios.get(
+        `${backendUrl}/telecalling/contacts?page=${page}&limit=${limit}`,
+        { headers: getAuthHeaders() }
+      );
 
-      const data = Array.isArray(res.data) ? res.data : [];
-      setContacts(data);
-
-      const initialToggleMap: Record<number, boolean> = {};
-      data.forEach((contact: Contact) => {
-        initialToggleMap[contact.id] = false;
-      });
-      setConvertToggleMap(initialToggleMap);
+      setContacts(res.data.data || []);
+      setTotal(res.data.total || 0);
     } catch (err) {
       console.error(err);
       setMessage('Failed to fetch contacts');
@@ -88,7 +85,7 @@ export default function TelecallingContactsPage() {
     formData.append('file', file);
 
     try {
-      await axios.post(
+      const res = await axios.post(
         `${backendUrl}/telecalling/contacts/import`,
         formData,
         {
@@ -99,7 +96,11 @@ export default function TelecallingContactsPage() {
         }
       );
 
-      setMessage('Contacts imported successfully');
+      setMessage(
+        `Imported: ${res.data.importedCount}, Skipped: ${res.data.skippedCount}`
+      );
+
+      setPage(1);
       fetchContacts();
     } catch (err: any) {
       console.error(err);
@@ -117,7 +118,6 @@ export default function TelecallingContactsPage() {
         { headers: getAuthHeaders() }
       );
 
-      setMessage('Assigned successfully');
       fetchContacts();
     } catch (err) {
       console.error(err);
@@ -127,8 +127,6 @@ export default function TelecallingContactsPage() {
 
   const convertToLead = async (id: number) => {
     try {
-      setConvertingId(id);
-
       await axios.post(
         `${backendUrl}/telecalling/contacts/${id}/convert`,
         {},
@@ -140,39 +138,11 @@ export default function TelecallingContactsPage() {
     } catch (err) {
       console.error(err);
       setMessage('Conversion failed');
-      setConvertToggleMap((prev) => ({
-        ...prev,
-        [id]: false,
-      }));
-    } finally {
-      setConvertingId(null);
     }
   };
 
-  const handleConvertToggle = async (id: number, checked: boolean) => {
-    setConvertToggleMap((prev) => ({
-      ...prev,
-      [id]: checked,
-    }));
-
-    if (!checked) {
-      return;
-    }
-
-    const confirmConvert = window.confirm(
-      'Are you sure you want to convert this contact to lead?'
-    );
-
-    if (!confirmConvert) {
-      setConvertToggleMap((prev) => ({
-        ...prev,
-        [id]: false,
-      }));
-      return;
-    }
-
-    await convertToLead(id);
-  };
+  // Pagination calculations
+  const totalPages = Math.ceil(total / limit);
 
   return (
     <div className="p-6">
@@ -203,67 +173,86 @@ export default function TelecallingContactsPage() {
       {loading ? (
         <p>Loading...</p>
       ) : (
-        <table className="w-full border">
-          <thead>
-            <tr className="bg-gray-100">
-              <th className="border p-2">Name</th>
-              <th className="border p-2">Phone</th>
-              <th className="border p-2">City</th>
-              <th className="border p-2">K.No</th>
-              <th className="border p-2">Imported By</th>
-              <th className="border p-2">Assigned</th>
-              <th className="border p-2">Assign</th>
-              <th className="border p-2">Convert</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {contacts.map((c) => (
-              <tr key={c.id}>
-                <td className="border p-2">{c.name}</td>
-                <td className="border p-2">{c.phone}</td>
-                <td className="border p-2">{c.city || ''}</td>
-                <td className="border p-2">{c.kNo || ''}</td>
-                <td className="border p-2">{c.importedByName || ''}</td>
-                <td className="border p-2">{c.assignedToName || 'Unassigned'}</td>
-
-                <td className="border p-2">
-                  <select
-                    onChange={(e) => assignContact(c.id, Number(e.target.value))}
-                    className="border p-1"
-                    defaultValue=""
-                  >
-                    <option value="">Assign</option>
-                    {users.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.name} ({u.email})
-                      </option>
-                    ))}
-                  </select>
-                </td>
-
-                <td className="border p-2">
-                  {c.convertedToLead ? (
-                    <span className="font-medium text-green-600">Converted</span>
-                  ) : (
-                    <label className="inline-flex cursor-pointer items-center">
-                      <input
-                        type="checkbox"
-                        className="peer sr-only"
-                        checked={!!convertToggleMap[c.id]}
-                        disabled={convertingId === c.id}
-                        onChange={(e) =>
-                          handleConvertToggle(c.id, e.target.checked)
-                        }
-                      />
-                      <div className="peer relative h-6 w-11 rounded-full bg-gray-300 transition-all after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-green-600 peer-checked:after:translate-x-full peer-disabled:opacity-50" />
-                    </label>
-                  )}
-                </td>
+        <>
+          <table className="w-full border">
+            <thead>
+              <tr className="bg-gray-100">
+                <th className="border p-2">Name</th>
+                <th className="border p-2">Phone</th>
+                <th className="border p-2">City</th>
+                <th className="border p-2">Assigned</th>
+                <th className="border p-2">Assign</th>
+                <th className="border p-2">Convert</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+
+            <tbody>
+              {contacts.map((c) => (
+                <tr key={c.id}>
+                  <td className="border p-2">{c.name}</td>
+                  <td className="border p-2">{c.phone}</td>
+                  <td className="border p-2">{c.city || ''}</td>
+                  <td className="border p-2">
+                    {c.assignedToName || 'Unassigned'}
+                  </td>
+
+                  <td className="border p-2">
+                    <select
+                      onChange={(e) =>
+                        assignContact(c.id, Number(e.target.value))
+                      }
+                      className="border p-1"
+                      defaultValue=""
+                    >
+                      <option value="">Assign</option>
+                      {users.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.name}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+
+                  <td className="border p-2">
+                    {c.convertedToLead ? (
+                      <span className="text-green-600">Converted</span>
+                    ) : (
+                      <button
+                        onClick={() => convertToLead(c.id)}
+                        className="rounded bg-purple-600 px-3 py-1 text-white"
+                      >
+                        Convert
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* ✅ Pagination UI */}
+          <div className="mt-4 flex items-center justify-between">
+            <button
+              disabled={page === 1}
+              onClick={() => setPage(page - 1)}
+              className="rounded bg-gray-500 px-4 py-2 text-white disabled:opacity-50"
+            >
+              Previous
+            </button>
+
+            <span>
+              Page {page} / {totalPages || 1}
+            </span>
+
+            <button
+              disabled={page >= totalPages}
+              onClick={() => setPage(page + 1)}
+              className="rounded bg-gray-500 px-4 py-2 text-white disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
+        </>
       )}
     </div>
   );
