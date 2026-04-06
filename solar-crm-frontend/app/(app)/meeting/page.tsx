@@ -125,6 +125,19 @@ export default function MeetingPage() {
     }
   };
 
+  const getMapsUrl = (meeting: Meeting) => {
+    if (meeting.gpsLatitude && meeting.gpsLongitude) {
+      return `https://www.google.com/maps/search/?api=1&query=${meeting.gpsLatitude},${meeting.gpsLongitude}`;
+    }
+
+    const fallbackAddress = meeting.gpsAddress || meeting.address || '';
+    if (!fallbackAddress.trim()) return '';
+
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+      fallbackAddress
+    )}`;
+  };
+
   const saveComplete = async () => {
     if (!selectedMeeting) return;
 
@@ -279,7 +292,7 @@ export default function MeetingPage() {
               <th className="border p-2">Type</th>
               <th className="border p-2">Status</th>
               <th className="border p-2">Assigned</th>
-              <th className="border p-2">GPS</th>
+              <th className="border p-2">Location</th>
               <th className="border p-2">Remarks</th>
               <th className="border p-2">Actions</th>
             </tr>
@@ -299,85 +312,102 @@ export default function MeetingPage() {
                 </td>
               </tr>
             ) : (
-              meetings.map((m) => (
-                <tr key={m.id}>
-                  <td className="border p-2">
-                    <div className="font-medium">{m.customerName}</div>
-                    <div className="text-xs text-gray-500">Lead ID: {m.leadId}</div>
-                  </td>
+              meetings.map((m) => {
+                const mapsUrl = getMapsUrl(m);
 
-                  <td className="border p-2">{m.mobile}</td>
+                return (
+                  <tr key={m.id}>
+                    <td className="border p-2">
+                      <div className="font-medium">{m.customerName}</div>
+                      <div className="text-xs text-gray-500">Lead ID: {m.leadId}</div>
+                    </td>
 
-                  <td className="border p-2">
-                    {new Date(m.scheduledAt).toLocaleString()}
-                  </td>
+                    <td className="border p-2">{m.mobile}</td>
 
-                  <td className="border p-2">{m.meetingType}</td>
+                    <td className="border p-2">
+                      {new Date(m.scheduledAt).toLocaleString()}
+                    </td>
 
-                  <td className="border p-2">
-                    <span
-                      className={`rounded px-2 py-1 text-xs text-white ${statusBadgeClass(
-                        m.status
-                      )}`}
-                    >
-                      {m.status}
-                    </span>
-                  </td>
+                    <td className="border p-2">{m.meetingType}</td>
 
-                  <td className="border p-2">{m.assignedTo || 'Unassigned'}</td>
+                    <td className="border p-2">
+                      <span
+                        className={`rounded px-2 py-1 text-xs text-white ${statusBadgeClass(
+                          m.status
+                        )}`}
+                      >
+                        {m.status}
+                      </span>
+                    </td>
 
-                  <td className="border p-2">
-                    {m.gpsLatitude && m.gpsLongitude
-                      ? `${m.gpsLatitude}, ${m.gpsLongitude}`
-                      : m.gpsAddress || '-'}
-                  </td>
+                    <td className="border p-2">{m.assignedTo || 'Unassigned'}</td>
 
-                  <td className="border p-2">
-                    <div>{m.managerRemarks || '-'}</div>
-                    {m.notes ? (
-                      <div className="mt-1 text-xs text-gray-500">{m.notes}</div>
-                    ) : null}
-                  </td>
+                    <td className="border p-2">
+                      <div className="mb-2 text-xs text-gray-700">
+                        {m.gpsAddress || m.address || 'No address'}
+                      </div>
 
-                  <td className="border p-2">
-                    <div className="flex flex-wrap gap-2">
-                      {(m.status === 'SCHEDULED' || m.status === 'RESCHEDULED') && (
-                        <>
-                          <button
-                            onClick={() => openAction(m, 'COMPLETE')}
-                            className="rounded bg-green-600 px-2 py-1 text-white"
-                          >
-                            Complete
-                          </button>
-
-                          <button
-                            onClick={() => openAction(m, 'RESCHEDULE')}
-                            className="rounded bg-yellow-500 px-2 py-1 text-white"
-                          >
-                            Reschedule
-                          </button>
-
-                          <button
-                            onClick={() => openAction(m, 'CANCEL')}
-                            className="rounded bg-red-600 px-2 py-1 text-white"
-                          >
-                            Cancel
-                          </button>
-                        </>
-                      )}
-
-                      {m.status === 'COMPLETED' && (
-                        <button
-                          onClick={() => openAction(m, 'CONVERT')}
-                          className="rounded bg-purple-600 px-2 py-1 text-white"
+                      {mapsUrl ? (
+                        <a
+                          href={mapsUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-block rounded bg-green-600 px-3 py-1 text-white"
                         >
-                          Convert to Project
-                        </button>
+                          Navigate
+                        </a>
+                      ) : (
+                        <span className="text-xs text-gray-500">No location</span>
                       )}
-                    </div>
-                  </td>
-                </tr>
-              ))
+                    </td>
+
+                    <td className="border p-2">
+                      <div>{m.managerRemarks || '-'}</div>
+                      {m.notes ? (
+                        <div className="mt-1 text-xs text-gray-500">{m.notes}</div>
+                      ) : null}
+                    </td>
+
+                    <td className="border p-2">
+                      <div className="flex flex-wrap gap-2">
+                        {(m.status === 'SCHEDULED' || m.status === 'RESCHEDULED') && (
+                          <>
+                            <button
+                              onClick={() => openAction(m, 'COMPLETE')}
+                              className="rounded bg-green-600 px-2 py-1 text-white"
+                            >
+                              Complete
+                            </button>
+
+                            <button
+                              onClick={() => openAction(m, 'RESCHEDULE')}
+                              className="rounded bg-yellow-500 px-2 py-1 text-white"
+                            >
+                              Reschedule
+                            </button>
+
+                            <button
+                              onClick={() => openAction(m, 'CANCEL')}
+                              className="rounded bg-red-600 px-2 py-1 text-white"
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        )}
+
+                        {m.status === 'COMPLETED' && (
+                          <button
+                            onClick={() => openAction(m, 'CONVERT')}
+                            className="rounded bg-purple-600 px-2 py-1 text-white"
+                          >
+                            Convert to Project
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
