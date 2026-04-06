@@ -33,29 +33,40 @@ export default function TelecallingContactsPage() {
 
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const limit = 50;
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     fetchContacts();
-    fetchUsers();
   }, [page]);
 
-  // ✅ FIXED CONTACT FETCH (PAGINATION SUPPORT)
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
   const fetchContacts = async () => {
     setLoading(true);
+    setMessage('');
+
     try {
       const res = await axios.get(
         `${backendUrl}/telecalling/contacts?page=${page}&limit=${limit}`,
-        { headers: getAuthHeaders() }
+        {
+          headers: getAuthHeaders(),
+        }
       );
 
-      setContacts(res.data.data || []);
-      setTotal(res.data.total || 0);
+      setContacts(Array.isArray(res.data?.data) ? res.data.data : []);
+      setTotal(Number(res.data?.total || 0));
+      setTotalPages(Number(res.data?.totalPages || 1));
     } catch (err) {
       console.error(err);
       setMessage('Failed to fetch contacts');
+      setContacts([]);
+      setTotal(0);
+      setTotalPages(1);
     } finally {
       setLoading(false);
     }
@@ -67,8 +78,8 @@ export default function TelecallingContactsPage() {
         headers: getAuthHeaders(),
       });
 
-      const telecallers = res.data.filter((u: User) =>
-        u.roles?.includes('TELECALLER')
+      const telecallers = (Array.isArray(res.data) ? res.data : []).filter(
+        (u: User) => u.roles?.includes('TELECALLER')
       );
 
       setUsers(telecallers);
@@ -97,7 +108,7 @@ export default function TelecallingContactsPage() {
       );
 
       setMessage(
-        `Imported: ${res.data.importedCount}, Skipped: ${res.data.skippedCount}`
+        `Imported: ${res.data.importedCount || 0}, Skipped: ${res.data.skippedCount || 0}, Total Rows: ${res.data.totalRows || 0}`
       );
 
       setPage(1);
@@ -118,6 +129,7 @@ export default function TelecallingContactsPage() {
         { headers: getAuthHeaders() }
       );
 
+      setMessage('Assigned successfully');
       fetchContacts();
     } catch (err) {
       console.error(err);
@@ -135,20 +147,29 @@ export default function TelecallingContactsPage() {
 
       setMessage('Converted to lead');
       fetchContacts();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setMessage('Conversion failed');
+      setMessage(err?.response?.data?.message || 'Conversion failed');
     }
   };
 
-  // Pagination calculations
-  const totalPages = Math.ceil(total / limit);
+  const handlePrevious = () => {
+    if (page > 1) {
+      setPage((prev) => prev - 1);
+    }
+  };
+
+  const handleNext = () => {
+    if (page < totalPages) {
+      setPage((prev) => prev + 1);
+    }
+  };
 
   return (
     <div className="p-6">
       <h1 className="mb-4 text-2xl font-semibold">Telecalling Contacts</h1>
 
-      <div className="mb-4 flex gap-2">
+      <div className="mb-4 flex flex-wrap gap-2">
         <Link
           href="/telecalling"
           className="rounded bg-gray-500 px-4 py-2 text-white"
@@ -170,6 +191,10 @@ export default function TelecallingContactsPage() {
 
       {message && <p className="mb-3 text-blue-600">{message}</p>}
 
+      <div className="mb-4 rounded bg-gray-100 p-3 text-sm text-gray-700">
+        <strong>Total Contacts:</strong> {total} | <strong>Page:</strong> {page} / {totalPages}
+      </div>
+
       {loading ? (
         <p>Loading...</p>
       ) : (
@@ -187,66 +212,75 @@ export default function TelecallingContactsPage() {
             </thead>
 
             <tbody>
-              {contacts.map((c) => (
-                <tr key={c.id}>
-                  <td className="border p-2">{c.name}</td>
-                  <td className="border p-2">{c.phone}</td>
-                  <td className="border p-2">{c.city || ''}</td>
-                  <td className="border p-2">
-                    {c.assignedToName || 'Unassigned'}
-                  </td>
-
-                  <td className="border p-2">
-                    <select
-                      onChange={(e) =>
-                        assignContact(c.id, Number(e.target.value))
-                      }
-                      className="border p-1"
-                      defaultValue=""
-                    >
-                      <option value="">Assign</option>
-                      {users.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.name}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-
-                  <td className="border p-2">
-                    {c.convertedToLead ? (
-                      <span className="text-green-600">Converted</span>
-                    ) : (
-                      <button
-                        onClick={() => convertToLead(c.id)}
-                        className="rounded bg-purple-600 px-3 py-1 text-white"
-                      >
-                        Convert
-                      </button>
-                    )}
+              {contacts.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="border p-4 text-center">
+                    No contacts found
                   </td>
                 </tr>
-              ))}
+              ) : (
+                contacts.map((c) => (
+                  <tr key={c.id}>
+                    <td className="border p-2">{c.name}</td>
+                    <td className="border p-2">{c.phone}</td>
+                    <td className="border p-2">{c.city || ''}</td>
+                    <td className="border p-2">
+                      {c.assignedToName || 'Unassigned'}
+                    </td>
+
+                    <td className="border p-2">
+                      <select
+                        onChange={(e) =>
+                          assignContact(c.id, Number(e.target.value))
+                        }
+                        className="border p-1"
+                        defaultValue=""
+                      >
+                        <option value="">Assign</option>
+                        {users.map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.name} ({u.email})
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+
+                    <td className="border p-2">
+                      {c.convertedToLead ? (
+                        <span className="font-medium text-green-600">
+                          Converted
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => convertToLead(c.id)}
+                          className="rounded bg-purple-600 px-3 py-1 text-white"
+                        >
+                          Convert
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
 
-          {/* ✅ Pagination UI */}
           <div className="mt-4 flex items-center justify-between">
             <button
+              onClick={handlePrevious}
               disabled={page === 1}
-              onClick={() => setPage(page - 1)}
               className="rounded bg-gray-500 px-4 py-2 text-white disabled:opacity-50"
             >
               Previous
             </button>
 
-            <span>
-              Page {page} / {totalPages || 1}
+            <span className="text-sm text-gray-700">
+              Showing page {page} of {totalPages}
             </span>
 
             <button
+              onClick={handleNext}
               disabled={page >= totalPages}
-              onClick={() => setPage(page + 1)}
               className="rounded bg-gray-500 px-4 py-2 text-white disabled:opacity-50"
             >
               Next
