@@ -61,10 +61,17 @@ export class TelecallingService {
       .replace(/[\s_.-]+/g, '');
   }
 
+  /**
+   * Normalize phone for duplicate detection.
+   * Examples:
+   * +91 98765 43210 -> 9876543210
+   * 09876543210 -> 9876543210
+   * 98765-43210 -> 9876543210
+   */
   private normalizePhone(value: any): string {
-    return String(value || '')
-      .trim()
-      .replace(/[^\d+]/g, '');
+    const digits = String(value || '').replace(/\D/g, '');
+    if (!digits) return '';
+    return digits.slice(-10);
   }
 
   private getMappedValue(
@@ -418,10 +425,8 @@ export class TelecallingService {
       throw new BadRequestException('Uploaded file is empty');
     }
 
-    let importedCount = 0;
-    let skippedCount = 0;
-
-    for (const row of rows) {
+    // Prepare normalized candidate rows
+    const candidateRows = rows.map((row) => {
       const name = this.getMappedValue(row, [
         'name',
         'full_name',
@@ -443,32 +448,67 @@ export class TelecallingService {
         ]),
       );
 
-      const city = this.getMappedValue(row, [
-        'city',
-        'town',
-        'location',
-      ]);
+      const city = this.getMappedValue(row, ['city', 'town', 'location']);
 
-      if (!phone) {
-        skippedCount++;
-        continue;
-      }
-
-      const finalName = name || phone;
-
-      const existing = await this.contactRepository.findOne({
-        where: { phone },
-      });
-
-      if (existing) {
-        skippedCount++;
-        continue;
-      }
-
-      const contact = this.contactRepository.create({
-        name: finalName,
+      return {
+        name: name || phone,
         phone,
         city: city || undefined,
+      };
+    });
+
+    // Only keep rows with phone
+    const validRows = candidateRows.filter((row) => !!row.phone);
+
+    if (!validRows.length) {
+      throw new BadRequestException(
+        'No valid rows found. File must contain at least phone/mobile column values.',
+      );
+    }
+
+    // Collect all phones from uploaded file
+    const uploadedPhones = Array.from(
+      new Set(validRows.map((row) => row.phone).filter(Boolean)),
+    );
+
+    // Bulk fetch existing phones from DB
+    const existingContacts = await this.contactRepository.find({
+      where: {
+        phone: In(uploadedPhones),
+      },
+      select: ['phone'],
+    });
+
+    const existingPhones = new Set(existingContacts.map((c) => c.phone));
+    const seenInFile = new Set<string>();
+
+    let importedCount = 0;
+    let skippedCount = 0;
+
+    for (const row of validRows) {
+      if (!row.phone) {
+        skippedCount++;
+        continue;
+      }
+
+      // Skip duplicate inside same uploaded file
+      if (seenInFile.has(row.phone)) {
+        skippedCount++;
+        continue;
+      }
+
+      // Skip duplicate already in DB
+      if (existingPhones.has(row.phone)) {
+        skippedCount++;
+        continue;
+      }
+
+      seenInFile.add(row.phone);
+
+      const contact = this.contactRepository.create({
+        name: row.name || row.phone,
+        phone: row.phone,
+        city: row.city,
         importedBy: user.id,
         importedByName: user.name,
         status: ContactStatus.NEW,
@@ -483,6 +523,7 @@ export class TelecallingService {
       message: 'Telecalling contacts imported successfully',
       importedCount,
       skippedCount,
+      totalRows: rows.length,
     };
   }
 
@@ -541,8 +582,10 @@ export class TelecallingService {
       throw new BadRequestException('This contact is already converted to lead');
     }
 
+    const normalizedPhone = this.normalizePhone(contact.phone);
+
     const existingLead = await this.leadRepository.findOne({
-      where: { phone: contact.phone },
+      where: { phone: normalizedPhone },
     });
 
     if (existingLead) {
@@ -553,7 +596,7 @@ export class TelecallingService {
 
     const lead = this.leadRepository.create({
       name: contact.name,
-      phone: contact.phone,
+      phone: normalizedPhone,
       city: contact.city,
       source: contact.source,
       assignedTo: contact.assignedTo,
@@ -566,6 +609,7 @@ export class TelecallingService {
 
     contact.convertedToLead = true;
     contact.status = ContactStatus.CONVERTED;
+    contact.phone = normalizedPhone;
     contact.remarks = contact.remarks
       ? `${contact.remarks}\nConverted to lead by ${user.name}`
       : `Converted to lead by ${user.name}`;
