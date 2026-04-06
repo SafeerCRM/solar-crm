@@ -1,8 +1,9 @@
 'use client';
 
+import { Suspense } from 'react';
 import MeetingForm from '../../../components/meeting/MeetingForm';
 
-export default function CreateMeetingPage() {
+function CreateMeetingContent() {
   return (
     <div className="p-6">
       <div className="mb-6">
@@ -14,5 +15,13 @@ export default function CreateMeetingPage() {
 
       <MeetingForm />
     </div>
+  );
+}
+
+export default function CreateMeetingPage() {
+  return (
+    <Suspense fallback={<div className="p-6">Loading meeting form...</div>}>
+      <CreateMeetingContent />
+    </Suspense>
   );
 }
