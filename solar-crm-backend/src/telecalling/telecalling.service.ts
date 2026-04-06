@@ -61,13 +61,6 @@ export class TelecallingService {
       .replace(/[\s_.-]+/g, '');
   }
 
-  /**
-   * Normalize phone for duplicate detection.
-   * Examples:
-   * +91 98765 43210 -> 9876543210
-   * 09876543210 -> 9876543210
-   * 98765-43210 -> 9876543210
-   */
   private normalizePhone(value: any): string {
     const digits = String(value || '').replace(/\D/g, '');
     if (!digits) return '';
