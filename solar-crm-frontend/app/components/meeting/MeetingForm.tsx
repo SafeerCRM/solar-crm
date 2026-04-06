@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { getAuthHeaders } from '../../../lib/authHeaders';
 
 export default function MeetingForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [form, setForm] = useState({
     leadId: '',
@@ -33,9 +34,31 @@ export default function MeetingForm() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
-  ) => {
+  // ✅ AUTO-FILL FROM LEAD
+  useEffect(() => {
+    const leadId = searchParams.get('leadId');
+    const name = searchParams.get('name');
+    const phone = searchParams.get('phone');
+    const city = searchParams.get('city');
+
+    const user = localStorage.getItem('user');
+
+    if (user) {
+      const parsed = JSON.parse(user);
+
+      setForm((prev) => ({
+        ...prev,
+        leadId: leadId || '',
+        customerName: name || '',
+        mobile: phone || '',
+        address: city || '',
+        createdBy: String(parsed.id),
+        updatedBy: String(parsed.id),
+      }));
+    }
+  }, []);
+
+  const handleChange = (e: any) => {
     const { name, value } = e.target;
 
     setForm((prev) => ({
@@ -46,7 +69,7 @@ export default function MeetingForm() {
 
   const handleGetLocation = () => {
     if (!navigator.geolocation) {
-      alert('Geolocation is not supported by your browser');
+      alert('Geolocation not supported');
       return;
     }
 
@@ -59,12 +82,12 @@ export default function MeetingForm() {
         }));
       },
       () => {
-        alert('Unable to capture GPS location');
+        alert('Unable to capture GPS');
       }
     );
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: any) => {
     e.preventDefault();
 
     try {
@@ -90,8 +113,8 @@ export default function MeetingForm() {
         gpsLatitude: form.gpsLatitude ? Number(form.gpsLatitude) : undefined,
         gpsLongitude: form.gpsLongitude ? Number(form.gpsLongitude) : undefined,
         gpsAddress: form.gpsAddress || undefined,
-        createdBy: form.createdBy ? Number(form.createdBy) : undefined,
-        updatedBy: form.updatedBy ? Number(form.updatedBy) : undefined,
+        createdBy: Number(form.createdBy),
+        updatedBy: Number(form.updatedBy),
       };
 
       const res = await fetch(
@@ -130,173 +153,80 @@ export default function MeetingForm() {
   return (
     <form onSubmit={handleSubmit} className="rounded border bg-white p-6">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div>
-          <label className="mb-1 block text-sm font-medium">Lead ID *</label>
-          <input
-            type="number"
-            name="leadId"
-            value={form.leadId}
-            onChange={handleChange}
-            className="w-full rounded border px-3 py-2"
-            required
-          />
-        </div>
+
+        {/* AUTO FILLED */}
+        <input type="hidden" name="leadId" value={form.leadId} />
 
         <div>
-          <label className="mb-1 block text-sm font-medium">Followup ID</label>
+          <label>Customer Name *</label>
           <input
-            type="number"
-            name="followupId"
-            value={form.followupId}
-            onChange={handleChange}
-            className="w-full rounded border px-3 py-2"
-          />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium">Customer Name *</label>
-          <input
-            type="text"
             name="customerName"
             value={form.customerName}
             onChange={handleChange}
-            className="w-full rounded border px-3 py-2"
-            required
+            className="w-full border p-2"
           />
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium">Mobile *</label>
+          <label>Mobile *</label>
           <input
-            type="text"
             name="mobile"
             value={form.mobile}
             onChange={handleChange}
-            className="w-full rounded border px-3 py-2"
-            required
+            className="w-full border p-2"
           />
         </div>
 
         <div className="md:col-span-2">
-          <label className="mb-1 block text-sm font-medium">Address</label>
+          <label>Address</label>
           <input
-            type="text"
             name="address"
             value={form.address}
             onChange={handleChange}
-            className="w-full rounded border px-3 py-2"
+            className="w-full border p-2"
           />
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium">Scheduled At *</label>
+          <label>Scheduled At *</label>
           <input
             type="datetime-local"
             name="scheduledAt"
             value={form.scheduledAt}
             onChange={handleChange}
-            className="w-full rounded border px-3 py-2"
+            className="w-full border p-2"
             required
           />
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium">Assigned To</label>
+          <label>Assigned To (User ID)</label>
           <input
-            type="number"
             name="assignedTo"
             value={form.assignedTo}
             onChange={handleChange}
-            className="w-full rounded border px-3 py-2"
+            className="w-full border p-2"
           />
         </div>
 
+        {/* GPS */}
         <div>
-          <label className="mb-1 block text-sm font-medium">Meeting Type</label>
-          <select
-            name="meetingType"
-            value={form.meetingType}
-            onChange={handleChange}
-            className="w-full rounded border px-3 py-2"
-          >
-            <option value="SITE_VISIT">SITE_VISIT</option>
-            <option value="OFFICE_MEETING">OFFICE_MEETING</option>
-            <option value="PHONE_DISCUSSION">PHONE_DISCUSSION</option>
-            <option value="VIDEO_MEETING">VIDEO_MEETING</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium">Status</label>
-          <select
-            name="status"
-            value={form.status}
-            onChange={handleChange}
-            className="w-full rounded border px-3 py-2"
-          >
-            <option value="SCHEDULED">SCHEDULED</option>
-            <option value="COMPLETED">COMPLETED</option>
-            <option value="RESCHEDULED">RESCHEDULED</option>
-            <option value="CANCELLED">CANCELLED</option>
-            <option value="NO_SHOW">NO_SHOW</option>
-            <option value="CONVERTED_TO_PROJECT">CONVERTED_TO_PROJECT</option>
-          </select>
-        </div>
-
-        <div className="md:col-span-2">
-          <label className="mb-1 block text-sm font-medium">Notes</label>
-          <textarea
-            name="notes"
-            value={form.notes}
-            onChange={handleChange}
-            className="w-full rounded border px-3 py-2"
-            rows={3}
-          />
-        </div>
-
-        <div className="md:col-span-2">
-          <label className="mb-1 block text-sm font-medium">Manager Remarks</label>
-          <textarea
-            name="managerRemarks"
-            value={form.managerRemarks}
-            onChange={handleChange}
-            className="w-full rounded border px-3 py-2"
-            rows={3}
-          />
-        </div>
-
-        <div className="md:col-span-2">
-          <label className="mb-1 block text-sm font-medium">Site Observation</label>
-          <textarea
-            name="siteObservation"
-            value={form.siteObservation}
-            onChange={handleChange}
-            className="w-full rounded border px-3 py-2"
-            rows={3}
-          />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium">GPS Latitude</label>
+          <label>GPS Latitude</label>
           <input
-            type="number"
-            step="any"
             name="gpsLatitude"
             value={form.gpsLatitude}
             onChange={handleChange}
-            className="w-full rounded border px-3 py-2"
+            className="w-full border p-2"
           />
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium">GPS Longitude</label>
+          <label>GPS Longitude</label>
           <input
-            type="number"
-            step="any"
             name="gpsLongitude"
             value={form.gpsLongitude}
             onChange={handleChange}
-            className="w-full rounded border px-3 py-2"
+            className="w-full border p-2"
           />
         </div>
 
@@ -304,80 +234,24 @@ export default function MeetingForm() {
           <button
             type="button"
             onClick={handleGetLocation}
-            className="rounded bg-green-600 px-4 py-2 text-white hover:bg-green-700"
+            className="bg-green-600 text-white px-4 py-2 rounded"
           >
-            Capture Current GPS
+            Capture GPS
           </button>
         </div>
 
         <div className="md:col-span-2">
-          <label className="mb-1 block text-sm font-medium">GPS Address</label>
-          <input
-            type="text"
-            name="gpsAddress"
-            value={form.gpsAddress}
-            onChange={handleChange}
-            className="w-full rounded border px-3 py-2"
-            placeholder="Optional address / landmark"
-          />
+          <button
+            type="submit"
+            disabled={loading}
+            className="bg-blue-600 text-white px-6 py-2 rounded"
+          >
+            {loading ? 'Saving...' : 'Create Meeting'}
+          </button>
         </div>
 
-        <div>
-          <label className="mb-1 block text-sm font-medium">Outcome</label>
-          <input
-            type="text"
-            name="outcome"
-            value={form.outcome}
-            onChange={handleChange}
-            className="w-full rounded border px-3 py-2"
-          />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium">Next Action</label>
-          <input
-            type="text"
-            name="nextAction"
-            value={form.nextAction}
-            onChange={handleChange}
-            className="w-full rounded border px-3 py-2"
-          />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium">Created By</label>
-          <input
-            type="number"
-            name="createdBy"
-            value={form.createdBy}
-            onChange={handleChange}
-            className="w-full rounded border px-3 py-2"
-          />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium">Updated By</label>
-          <input
-            type="number"
-            name="updatedBy"
-            value={form.updatedBy}
-            onChange={handleChange}
-            className="w-full rounded border px-3 py-2"
-          />
-        </div>
-      </div>
-
-      {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
-      {success && <p className="mt-4 text-sm text-green-600">{success}</p>}
-
-      <div className="mt-6">
-        <button
-          type="submit"
-          disabled={loading}
-          className="rounded bg-blue-600 px-6 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
-        >
-          {loading ? 'Saving...' : 'Create Meeting'}
-        </button>
+        {error && <p className="text-red-600">{error}</p>}
+        {success && <p className="text-green-600">{success}</p>}
       </div>
     </form>
   );

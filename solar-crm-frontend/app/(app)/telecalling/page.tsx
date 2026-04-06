@@ -127,6 +127,22 @@ export default function TelecallingPage() {
     }
   };
 
+  const goToNextLead = () => {
+    if (!leadId || leads.length === 0) return;
+
+    const currentIndex = leads.findIndex((l) => l.id === Number(leadId));
+    const nextLead = leads[currentIndex + 1];
+
+    if (nextLead) {
+      setLeadId(String(nextLead.id));
+    } else {
+      setLeadId('');
+      setMessage('Call logged successfully. No more leads in queue.');
+    }
+  };
+
+  const selectedLead = leads.find((l) => l.id === Number(leadId));
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage('');
@@ -160,12 +176,12 @@ export default function TelecallingPage() {
       });
 
       setMessage('Call logged successfully');
-      setLeadId('');
       setCallStatus('CONNECTED');
       setCallNotes('');
       setNextFollowUpDate('');
       setRecordingUrl('');
       await fetchCalls();
+      goToNextLead();
     } catch (error: any) {
       console.error('Failed to log call:', error);
       setMessage(error?.response?.data?.message || 'Failed to log call');
@@ -221,18 +237,29 @@ export default function TelecallingPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <select
-              value={leadId}
-              onChange={(e) => setLeadId(e.target.value)}
-              className="w-full rounded-xl border border-gray-400 px-4 py-3"
-            >
-              <option value="">Select lead</option>
-              {leads.map((lead) => (
-                <option key={lead.id} value={lead.id}>
-                  {lead.name} ({lead.phone})
-                </option>
-              ))}
-            </select>
+            <div className="flex gap-2">
+              <select
+                value={leadId}
+                onChange={(e) => setLeadId(e.target.value)}
+                className="w-full rounded-xl border border-gray-400 px-4 py-3"
+              >
+                <option value="">Select lead</option>
+                {leads.map((lead) => (
+                  <option key={lead.id} value={lead.id}>
+                    {lead.name} ({lead.phone})
+                  </option>
+                ))}
+              </select>
+
+              {selectedLead?.phone && (
+                <a
+                  href={`tel:${selectedLead.phone}`}
+                  className="rounded-xl bg-green-600 px-4 py-3 font-semibold text-white"
+                >
+                  📞 Call
+                </a>
+              )}
+            </div>
 
             <select
               value={callStatus}
@@ -281,13 +308,23 @@ export default function TelecallingPage() {
               </p>
             )}
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white"
-            >
-              {loading ? 'Saving...' : 'Log Call'}
-            </button>
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                disabled={loading}
+                className="rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white"
+              >
+                {loading ? 'Saving...' : 'Log Call'}
+              </button>
+
+              <button
+                type="button"
+                onClick={goToNextLead}
+                className="rounded-xl bg-gray-700 px-6 py-3 font-semibold text-white"
+              >
+                Next Lead
+              </button>
+            </div>
           </form>
         </div>
       )}

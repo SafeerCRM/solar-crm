@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import Link from 'next/link';
+import { getAuthHeaders } from '@/lib/authHeaders';
 
 const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -12,11 +13,9 @@ type Contact = {
   phone: string;
   city?: string;
   kNo?: string;
-  source?: string;
   assignedTo?: number;
   assignedToName?: string;
   importedByName?: string;
-  status?: string;
   convertedToLead?: boolean;
 };
 
@@ -24,7 +23,7 @@ type User = {
   id: number;
   name: string;
   email?: string;
-  role?: string;
+  roles: string[];
 };
 
 export default function TelecallingContactsPage() {
@@ -32,6 +31,8 @@ export default function TelecallingContactsPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [convertingId, setConvertingId] = useState<number | null>(null);
+  const [convertToggleMap, setConvertToggleMap] = useState<Record<number, boolean>>({});
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -40,20 +41,21 @@ export default function TelecallingContactsPage() {
     fetchUsers();
   }, []);
 
-  const getHeaders = () => {
-    const token = localStorage.getItem('token');
-    return {
-      Authorization: `Bearer ${token}`,
-    };
-  };
-
   const fetchContacts = async () => {
     setLoading(true);
     try {
       const res = await axios.get(`${backendUrl}/telecalling/contacts`, {
-        headers: getHeaders(),
+        headers: getAuthHeaders(),
       });
-      setContacts(res.data || []);
+
+      const data = Array.isArray(res.data) ? res.data : [];
+      setContacts(data);
+
+      const initialToggleMap: Record<number, boolean> = {};
+      data.forEach((contact: Contact) => {
+        initialToggleMap[contact.id] = false;
+      });
+      setConvertToggleMap(initialToggleMap);
     } catch (err) {
       console.error(err);
       setMessage('Failed to fetch contacts');
@@ -64,12 +66,12 @@ export default function TelecallingContactsPage() {
 
   const fetchUsers = async () => {
     try {
-      const res = await axios.get(`${backendUrl}/users`, {
-        headers: getHeaders(),
+      const res = await axios.get(`${backendUrl}/users/assignable-staff`, {
+        headers: getAuthHeaders(),
       });
 
-      const telecallers = res.data.filter(
-        (u: User) => u.role === 'TELECALLER'
+      const telecallers = res.data.filter((u: User) =>
+        u.roles?.includes('TELECALLER')
       );
 
       setUsers(telecallers);
@@ -91,7 +93,7 @@ export default function TelecallingContactsPage() {
         formData,
         {
           headers: {
-            ...getHeaders(),
+            ...getAuthHeaders(),
             'Content-Type': 'multipart/form-data',
           },
         }
@@ -99,9 +101,9 @@ export default function TelecallingContactsPage() {
 
       setMessage('Contacts imported successfully');
       fetchContacts();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setMessage('Import failed');
+      setMessage(err?.response?.data?.message || 'Import failed');
     }
   };
 
@@ -112,7 +114,7 @@ export default function TelecallingContactsPage() {
       await axios.patch(
         `${backendUrl}/telecalling/contacts/${id}/assign`,
         { assignedTo: userId },
-        { headers: getHeaders() }
+        { headers: getAuthHeaders() }
       );
 
       setMessage('Assigned successfully');
@@ -125,10 +127,12 @@ export default function TelecallingContactsPage() {
 
   const convertToLead = async (id: number) => {
     try {
+      setConvertingId(id);
+
       await axios.post(
         `${backendUrl}/telecalling/contacts/${id}/convert`,
         {},
-        { headers: getHeaders() }
+        { headers: getAuthHeaders() }
       );
 
       setMessage('Converted to lead');
@@ -136,29 +140,58 @@ export default function TelecallingContactsPage() {
     } catch (err) {
       console.error(err);
       setMessage('Conversion failed');
+      setConvertToggleMap((prev) => ({
+        ...prev,
+        [id]: false,
+      }));
+    } finally {
+      setConvertingId(null);
     }
+  };
+
+  const handleConvertToggle = async (id: number, checked: boolean) => {
+    setConvertToggleMap((prev) => ({
+      ...prev,
+      [id]: checked,
+    }));
+
+    if (!checked) {
+      return;
+    }
+
+    const confirmConvert = window.confirm(
+      'Are you sure you want to convert this contact to lead?'
+    );
+
+    if (!confirmConvert) {
+      setConvertToggleMap((prev) => ({
+        ...prev,
+        [id]: false,
+      }));
+      return;
+    }
+
+    await convertToLead(id);
   };
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-semibold mb-4">
-        Telecalling Contacts
-      </h1>
+      <h1 className="mb-4 text-2xl font-semibold">Telecalling Contacts</h1>
 
-      <div className="flex gap-2 mb-4">
+      <div className="mb-4 flex gap-2">
         <Link
           href="/telecalling"
-          className="bg-gray-500 text-white px-4 py-2 rounded"
+          className="rounded bg-gray-500 px-4 py-2 text-white"
         >
           Back
         </Link>
 
-        <label className="bg-blue-600 text-white px-4 py-2 rounded cursor-pointer">
-          Import CSV
+        <label className="cursor-pointer rounded bg-blue-600 px-4 py-2 text-white">
+          Import CSV / Excel
           <input
             ref={fileInputRef}
             type="file"
-            accept=".csv"
+            accept=".csv,.xlsx,.xls"
             onChange={handleImport}
             className="hidden"
           />
@@ -191,19 +224,14 @@ export default function TelecallingContactsPage() {
                 <td className="border p-2">{c.phone}</td>
                 <td className="border p-2">{c.city || ''}</td>
                 <td className="border p-2">{c.kNo || ''}</td>
-                <td className="border p-2">
-                  {c.importedByName || ''}
-                </td>
-                <td className="border p-2">
-                  {c.assignedToName || 'Unassigned'}
-                </td>
+                <td className="border p-2">{c.importedByName || ''}</td>
+                <td className="border p-2">{c.assignedToName || 'Unassigned'}</td>
 
                 <td className="border p-2">
                   <select
-                    onChange={(e) =>
-                      assignContact(c.id, Number(e.target.value))
-                    }
+                    onChange={(e) => assignContact(c.id, Number(e.target.value))}
                     className="border p-1"
+                    defaultValue=""
                   >
                     <option value="">Assign</option>
                     {users.map((u) => (
@@ -216,16 +244,20 @@ export default function TelecallingContactsPage() {
 
                 <td className="border p-2">
                   {c.convertedToLead ? (
-                    <span className="text-green-600">
-                      Converted
-                    </span>
+                    <span className="font-medium text-green-600">Converted</span>
                   ) : (
-                    <button
-                      onClick={() => convertToLead(c.id)}
-                      className="bg-green-600 text-white px-3 py-1 rounded"
-                    >
-                      Convert
-                    </button>
+                    <label className="inline-flex cursor-pointer items-center">
+                      <input
+                        type="checkbox"
+                        className="peer sr-only"
+                        checked={!!convertToggleMap[c.id]}
+                        disabled={convertingId === c.id}
+                        onChange={(e) =>
+                          handleConvertToggle(c.id, e.target.checked)
+                        }
+                      />
+                      <div className="peer relative h-6 w-11 rounded-full bg-gray-300 transition-all after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-green-600 peer-checked:after:translate-x-full peer-disabled:opacity-50" />
+                    </label>
                   )}
                 </td>
               </tr>
