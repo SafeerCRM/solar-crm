@@ -258,6 +258,13 @@ export default function MeetingPage() {
     <div className="p-6">
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Meeting Dashboard</h1>
+
+        <a
+          href="/meeting/create"
+          className="rounded bg-blue-600 px-4 py-2 text-white"
+        >
+          + Create Meeting
+        </a>
       </div>
 
       {message && <p className="mb-4 text-sm text-blue-600">{message}</p>}
