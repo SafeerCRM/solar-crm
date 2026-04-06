@@ -36,6 +36,9 @@ export default function TelecallingContactsPage() {
   const [totalPages, setTotalPages] = useState(1);
   const limit = 50;
 
+  const [selectedConvertIds, setSelectedConvertIds] = useState<number[]>([]);
+  const [savingConvert, setSavingConvert] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -61,6 +64,7 @@ export default function TelecallingContactsPage() {
       setContacts(Array.isArray(res.data?.data) ? res.data.data : []);
       setTotal(Number(res.data?.total || 0));
       setTotalPages(Number(res.data?.totalPages || 1));
+      setSelectedConvertIds([]);
     } catch (err) {
       console.error(err);
       setMessage('Failed to fetch contacts');
@@ -137,32 +141,54 @@ export default function TelecallingContactsPage() {
     }
   };
 
-  const convertToLead = async (id: number) => {
+  const toggleConvertSelection = (id: number) => {
+    setSelectedConvertIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleSaveConversion = async () => {
+    if (selectedConvertIds.length === 0) {
+      setMessage('Please select at least one contact to convert');
+      return;
+    }
+
+    const confirmConvert = window.confirm(
+      `Convert ${selectedConvertIds.length} selected contact(s) to lead?`
+    );
+
+    if (!confirmConvert) return;
+
     try {
-      await axios.post(
-        `${backendUrl}/telecalling/contacts/${id}/convert`,
-        {},
-        { headers: getAuthHeaders() }
+      setSavingConvert(true);
+
+      await Promise.all(
+        selectedConvertIds.map((id) =>
+          axios.post(
+            `${backendUrl}/telecalling/contacts/${id}/convert`,
+            {},
+            { headers: getAuthHeaders() }
+          )
+        )
       );
 
-      setMessage('Converted to lead');
+      setMessage('Selected contacts converted successfully');
+      setSelectedConvertIds([]);
       fetchContacts();
     } catch (err: any) {
       console.error(err);
       setMessage(err?.response?.data?.message || 'Conversion failed');
+    } finally {
+      setSavingConvert(false);
     }
   };
 
   const handlePrevious = () => {
-    if (page > 1) {
-      setPage((prev) => prev - 1);
-    }
+    if (page > 1) setPage((prev) => prev - 1);
   };
 
   const handleNext = () => {
-    if (page < totalPages) {
-      setPage((prev) => prev + 1);
-    }
+    if (page < totalPages) setPage((prev) => prev + 1);
   };
 
   return (
@@ -187,6 +213,16 @@ export default function TelecallingContactsPage() {
             className="hidden"
           />
         </label>
+
+        <button
+          onClick={handleSaveConversion}
+          disabled={savingConvert || selectedConvertIds.length === 0}
+          className="rounded bg-purple-600 px-4 py-2 text-white disabled:opacity-50"
+        >
+          {savingConvert
+            ? 'Saving...'
+            : `Save Conversion${selectedConvertIds.length ? ` (${selectedConvertIds.length})` : ''}`}
+        </button>
       </div>
 
       {message && <p className="mb-3 text-blue-600">{message}</p>}
@@ -207,7 +243,7 @@ export default function TelecallingContactsPage() {
                 <th className="border p-2">City</th>
                 <th className="border p-2">Assigned</th>
                 <th className="border p-2">Assign</th>
-                <th className="border p-2">Convert</th>
+                <th className="border p-2">Convert Toggle</th>
               </tr>
             </thead>
 
@@ -251,12 +287,15 @@ export default function TelecallingContactsPage() {
                           Converted
                         </span>
                       ) : (
-                        <button
-                          onClick={() => convertToLead(c.id)}
-                          className="rounded bg-purple-600 px-3 py-1 text-white"
-                        >
-                          Convert
-                        </button>
+                        <label className="inline-flex cursor-pointer items-center">
+                          <input
+                            type="checkbox"
+                            checked={selectedConvertIds.includes(c.id)}
+                            onChange={() => toggleConvertSelection(c.id)}
+                            className="peer sr-only"
+                          />
+                          <div className="relative h-6 w-11 rounded-full bg-gray-300 transition-all after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-purple-600 peer-checked:after:translate-x-full" />
+                        </label>
                       )}
                     </td>
                   </tr>
