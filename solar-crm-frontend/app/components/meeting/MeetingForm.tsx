@@ -2,15 +2,23 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { getAuthHeaders } from '../../../lib/authHeaders';
+import { getAuthHeaders } from '@/lib/authHeaders';
+
+type User = {
+  id: number;
+  name: string;
+  email?: string;
+  roles?: string[];
+};
 
 export default function MeetingForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  const [users, setUsers] = useState<User[]>([]);
+
   const [form, setForm] = useState({
     leadId: '',
-    followupId: '',
     customerName: '',
     mobile: '',
     address: '',
@@ -32,13 +40,29 @@ export default function MeetingForm() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // ✅ AUTO-FILL FROM LEAD
+  // ✅ FETCH USERS FOR DROPDOWN
   useEffect(() => {
-    const leadId = searchParams.get('leadId');
-    const name = searchParams.get('name');
-    const phone = searchParams.get('phone');
-    const city = searchParams.get('city');
+    fetchUsers();
+  }, []);
 
+  const fetchUsers = async () => {
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/users/assignable-staff`,
+        {
+          headers: getAuthHeaders(),
+        }
+      );
+
+      const data = await res.json();
+      setUsers(data || []);
+    } catch (err) {
+      console.error('User fetch failed', err);
+    }
+  };
+
+  // ✅ PREFILL FROM LEADS
+  useEffect(() => {
     const user = localStorage.getItem('user');
 
     if (user) {
@@ -46,10 +70,10 @@ export default function MeetingForm() {
 
       setForm((prev) => ({
         ...prev,
-        leadId: leadId || '',
-        customerName: name || '',
-        mobile: phone || '',
-        address: city || '',
+        leadId: searchParams.get('leadId') || '',
+        customerName: searchParams.get('name') || '',
+        mobile: searchParams.get('phone') || '',
+        address: searchParams.get('city') || '',
         createdBy: String(parsed.id),
         updatedBy: String(parsed.id),
       }));
@@ -57,67 +81,62 @@ export default function MeetingForm() {
   }, []);
 
   const handleChange = (e: any) => {
-    const { name, value } = e.target;
-
     setForm((prev) => ({
       ...prev,
-      [name]: value,
+      [e.target.name]: e.target.value,
     }));
   };
 
-  // ✅ GPS + ADDRESS AUTO-FILL
+  // ✅ GPS + ADDRESS
   const handleGetLocation = async () => {
     if (!navigator.geolocation) {
       alert('Geolocation not supported');
       return;
     }
 
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const lat = position.coords.latitude;
-        const lng = position.coords.longitude;
+    navigator.geolocation.getCurrentPosition(async (position) => {
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
 
-        let address = '';
+      let address = '';
 
-        try {
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`
-          );
-          const data = await res.json();
-          address = data.display_name || '';
-        } catch {
-          address = 'Unable to fetch address';
-        }
-
-        setForm((prev) => ({
-          ...prev,
-          gpsLatitude: String(lat),
-          gpsLongitude: String(lng),
-          gpsAddress: address,
-          address: address || prev.address,
-        }));
-      },
-      () => {
-        alert('Unable to capture GPS');
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`
+        );
+        const data = await res.json();
+        address = data.display_name || '';
+      } catch {
+        address = 'Unable to fetch address';
       }
-    );
+
+      setForm((prev) => ({
+        ...prev,
+        gpsLatitude: String(lat),
+        gpsLongitude: String(lng),
+        gpsAddress: address,
+        address: address || prev.address,
+      }));
+    });
   };
 
+  // ✅ SUBMIT
   const handleSubmit = async (e: any) => {
     e.preventDefault();
 
     try {
       setLoading(true);
       setError('');
-      setSuccess('');
 
       const payload = {
         leadId: Number(form.leadId),
         customerName: form.customerName,
         mobile: form.mobile,
-        address: form.address || undefined,
+        address: form.address,
         scheduledAt: new Date(form.scheduledAt).toISOString(),
-        assignedTo: form.assignedTo ? Number(form.assignedTo) : undefined,
+        assignedTo: form.assignedTo
+          ? Number(form.assignedTo)
+          : undefined,
         meetingType: form.meetingType,
         status: form.status,
         notes: form.notes || undefined,
@@ -144,33 +163,28 @@ export default function MeetingForm() {
         }
       );
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        throw new Error(
-          errData?.message || 'Failed to create meeting'
-        );
-      }
+      if (!res.ok) throw new Error('Failed to create meeting');
 
-      setSuccess('Meeting created successfully');
+      setSuccess('Meeting created');
 
       setTimeout(() => {
         router.push('/meeting');
       }, 800);
     } catch (err: any) {
-      setError(err.message || 'Something went wrong');
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="rounded border bg-white p-6">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+    <form onSubmit={handleSubmit} className="bg-white p-6 rounded border">
+      <h2 className="mb-4 text-xl font-semibold">Create Meeting</h2>
 
-        <input type="hidden" name="leadId" value={form.leadId} />
+      <div className="grid gap-4 md:grid-cols-2">
 
         <div>
-          <label>Customer Name *</label>
+          <label>Customer Name</label>
           <input
             name="customerName"
             value={form.customerName}
@@ -180,7 +194,7 @@ export default function MeetingForm() {
         </div>
 
         <div>
-          <label>Mobile *</label>
+          <label>Mobile</label>
           <input
             name="mobile"
             value={form.mobile}
@@ -189,7 +203,6 @@ export default function MeetingForm() {
           />
         </div>
 
-        {/* ✅ ADDRESS */}
         <div className="md:col-span-2">
           <label>Meeting Address</label>
           <input
@@ -201,28 +214,34 @@ export default function MeetingForm() {
         </div>
 
         <div>
-          <label>Scheduled At *</label>
+          <label>Scheduled At</label>
           <input
             type="datetime-local"
             name="scheduledAt"
             value={form.scheduledAt}
             onChange={handleChange}
             className="w-full border p-2"
-            required
           />
         </div>
 
+        {/* ✅ DROPDOWN */}
         <div>
-          <label>Assigned To (User ID)</label>
-          <input
+          <label>Assign To</label>
+          <select
             name="assignedTo"
             value={form.assignedTo}
             onChange={handleChange}
             className="w-full border p-2"
-          />
+          >
+            <option value="">Select User</option>
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name} ({u.email})
+              </option>
+            ))}
+          </select>
         </div>
 
-        {/* ✅ GPS BUTTON */}
         <div className="md:col-span-2">
           <button
             type="button"
@@ -233,14 +252,12 @@ export default function MeetingForm() {
           </button>
         </div>
 
-        {/* ✅ SHOW GPS ADDRESS */}
         {form.gpsAddress && (
           <div className="md:col-span-2 text-sm text-gray-600">
             📍 {form.gpsAddress}
           </div>
         )}
 
-        {/* ✅ PHOTO UPLOAD */}
         <div className="md:col-span-2">
           <label>Site Photo</label>
           <input
@@ -253,16 +270,9 @@ export default function MeetingForm() {
           />
         </div>
 
-        {/* SUBMIT */}
-        <div className="md:col-span-2">
-          <button
-            type="submit"
-            disabled={loading}
-            className="bg-blue-600 text-white px-6 py-2 rounded"
-          >
-            {loading ? 'Saving...' : 'Create Meeting'}
-          </button>
-        </div>
+        <button className="bg-blue-600 text-white py-2 rounded">
+          {loading ? 'Saving...' : 'Create Meeting'}
+        </button>
 
         {error && <p className="text-red-600">{error}</p>}
         {success && <p className="text-green-600">{success}</p>}
