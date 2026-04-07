@@ -21,17 +21,48 @@ type User = {
   roles: string[];
 };
 
+type CurrentUser = {
+  id: number;
+  name: string;
+  email?: string;
+  roles?: string[];
+};
+
 const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 export default function LeadsPage() {
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [message, setMessage] = useState('');
 
+  const currentRoles = currentUser?.roles || [];
+  const canAssignLeads =
+    currentRoles.includes('OWNER') ||
+    currentRoles.includes('LEAD_MANAGER') ||
+    currentRoles.includes('TELECALLING_MANAGER');
+
+  useEffect(() => {
+    const storedUser = localStorage.getItem('user');
+
+    if (storedUser) {
+      try {
+        setCurrentUser(JSON.parse(storedUser));
+      } catch {
+        localStorage.clear();
+      }
+    }
+  }, []);
+
   useEffect(() => {
     fetchLeads();
-    fetchUsers();
   }, []);
+
+  useEffect(() => {
+    if (currentUser && canAssignLeads) {
+      fetchUsers();
+    }
+  }, [currentUser]);
 
   const fetchLeads = async () => {
     try {
@@ -154,23 +185,25 @@ export default function LeadsPage() {
                 </Link>
               </div>
 
-              <div className="mt-4">
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Assign Lead
-                </label>
-                <select
-                  onChange={(e) => assignLead(lead.id, Number(e.target.value))}
-                  className="w-full rounded border p-2 text-sm"
-                  defaultValue=""
-                >
-                  <option value="">Select user</option>
-                  {users.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {canAssignLeads && (
+                <div className="mt-4">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Assign Lead
+                  </label>
+                  <select
+                    onChange={(e) => assignLead(lead.id, Number(e.target.value))}
+                    className="w-full rounded border p-2 text-sm"
+                    defaultValue=""
+                  >
+                    <option value="">Select user</option>
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
           ))}
         </div>

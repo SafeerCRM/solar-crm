@@ -16,6 +16,7 @@ type FollowUp = {
   assignedTo?: number;
   followUpDate: string;
   status: string;
+  note?: string;
   lead?: {
     id: number;
     name: string;
@@ -52,6 +53,11 @@ export default function FollowupPage() {
     userRoles.includes('LEAD_MANAGER') ||
     userRoles.includes('TELECALLER');
 
+  const canFetchAssignableUsers =
+    userRoles.includes('OWNER') ||
+    userRoles.includes('LEAD_MANAGER') ||
+    userRoles.includes('TELECALLING_MANAGER');
+
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
     const token = localStorage.getItem('token');
@@ -73,11 +79,15 @@ export default function FollowupPage() {
     if (user) {
       fetchLeads();
       fetchFollowups();
-      fetchAssignableUsers();
+
+      if (canFetchAssignableUsers) {
+        fetchAssignableUsers();
+      } else {
+        setUsers([]);
+      }
     }
   }, [user]);
 
-  // ✅ FIXED HERE
   const fetchAssignableUsers = async () => {
     try {
       const res = await axios.get(`${backendUrl}/users/assignable-staff`, {
@@ -86,7 +96,7 @@ export default function FollowupPage() {
 
       setUsers(Array.isArray(res.data) ? res.data : []);
     } catch (error) {
-      console.error('Assignable users fetch error:', error);
+      console.error(error);
       setUsers([]);
     }
   };
@@ -150,7 +160,7 @@ export default function FollowupPage() {
         { headers: getAuthHeaders() }
       );
 
-      setMessage('Followup created');
+      setMessage('Followup created successfully');
       setLeadId('');
       setNote('');
       setFollowUpDate('');
@@ -164,26 +174,31 @@ export default function FollowupPage() {
 
   const getUserName = (id?: number) => {
     const found = users.find((u) => u.id === id);
-    return found ? `${found.name}` : 'N/A';
+    return found ? found.name : 'Unassigned';
   };
 
-  const getLeadLabel = (item: FollowUp) => {
-    return item.lead?.name
-      ? `${item.lead.name} (${item.lead.phone})`
-      : `Lead ID: ${item.leadId}`;
+  const formatDate = (date: string) => {
+    return new Date(date).toLocaleString();
+  };
+
+  const getStatusColor = (status: string) => {
+    if (status === 'PENDING') return 'bg-yellow-100 text-yellow-700';
+    if (status === 'COMPLETED') return 'bg-green-100 text-green-700';
+    if (status === 'CANCELLED') return 'bg-red-100 text-red-700';
+    return 'bg-gray-100 text-gray-700';
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6 p-6">
       {canCreateFollowup && (
-        <div className="bg-white p-6 rounded shadow">
-          <h2 className="text-xl mb-4">Create Followup</h2>
+        <div className="rounded-xl bg-white p-6 shadow">
+          <h2 className="mb-4 text-xl font-semibold">Create Followup</h2>
 
           <form onSubmit={handleCreateFollowup} className="space-y-3">
             <select
               value={leadId}
               onChange={(e) => setLeadId(e.target.value)}
-              className="border p-2 w-full"
+              className="w-full rounded border p-2"
             >
               <option value="">Select Lead</option>
               {leads.map((l) => (
@@ -198,32 +213,72 @@ export default function FollowupPage() {
               placeholder="Note"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              className="border p-2 w-full"
+              className="w-full rounded border p-2"
             />
 
             <input
               type="datetime-local"
               value={followUpDate}
               onChange={(e) => setFollowUpDate(e.target.value)}
-              className="border p-2 w-full"
+              className="w-full rounded border p-2"
             />
 
-            <button className="bg-blue-600 text-white px-4 py-2">
-              Create
+            <button className="rounded bg-blue-600 px-4 py-2 text-white">
+              {loading ? 'Creating...' : 'Create Followup'}
             </button>
           </form>
+
+          {message && <p className="mt-2 text-blue-600">{message}</p>}
         </div>
       )}
 
       <div>
-        <h2 className="text-xl mb-2">All Followups</h2>
-        {allFollowups.map((f) => (
-          <div key={f.id} className="border p-3 mb-2">
-            <p>{getLeadLabel(f)}</p>
-            <p>{f.status}</p>
-            <p>{getUserName(f.assignedTo)}</p>
+        <h2 className="mb-4 text-xl font-semibold">All Followups</h2>
+
+        {allFollowups.length === 0 ? (
+          <div className="rounded shadow bg-white p-6">No followups found</div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {allFollowups.map((f) => (
+              <div
+                key={f.id}
+                className="rounded-2xl bg-white p-5 shadow transition hover:shadow-md"
+              >
+                <h3 className="mb-2 text-lg font-semibold">
+                  {f.lead?.name || `Lead ID: ${f.leadId}`}
+                </h3>
+
+                <p className="mb-2 text-sm text-gray-600">
+                  {f.lead?.phone || ''}
+                </p>
+
+                <p className="mb-2 text-sm">
+                  <span className="font-medium">Follow-up Date:</span>{' '}
+                  {formatDate(f.followUpDate)}
+                </p>
+
+                <p className="mb-2 text-sm">
+                  <span className="font-medium">Assigned:</span>{' '}
+                  {getUserName(f.assignedTo)}
+                </p>
+
+                {f.note && (
+                  <p className="mb-2 text-sm text-gray-700">
+                    <span className="font-medium">Note:</span> {f.note}
+                  </p>
+                )}
+
+                <span
+                  className={`inline-block rounded-full px-3 py-1 text-xs ${getStatusColor(
+                    f.status
+                  )}`}
+                >
+                  {f.status}
+                </span>
+              </div>
+            ))}
           </div>
-        ))}
+        )}
       </div>
     </div>
   );
