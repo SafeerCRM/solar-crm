@@ -14,7 +14,6 @@ type Contact = {
   city?: string;
   assignedTo?: number;
   assignedToName?: string;
-  importedByName?: string;
   convertedToLead?: boolean;
 };
 
@@ -27,52 +26,38 @@ type User = {
 
 export default function TelecallingContactsPage() {
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [filteredContacts, setFilteredContacts] = useState<Contact[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [message, setMessage] = useState('');
-  const [loading, setLoading] = useState(false);
 
-  const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
-  const limit = 50;
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [selectedUser, setSelectedUser] = useState<number | null>(null);
 
-  const [selectedConvertIds, setSelectedConvertIds] = useState<number[]>([]);
-  const [savingConvert, setSavingConvert] = useState(false);
+  // 🔥 Filters
+  const [searchName, setSearchName] = useState('');
+  const [searchPhone, setSearchPhone] = useState('');
+  const [searchCity, setSearchCity] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     fetchContacts();
-  }, [page]);
-
-  useEffect(() => {
     fetchUsers();
   }, []);
 
   const fetchContacts = async () => {
-    setLoading(true);
-    setMessage('');
-
     try {
       const res = await axios.get(
-        `${backendUrl}/telecalling/contacts?page=${page}&limit=${limit}`,
-        {
-          headers: getAuthHeaders(),
-        }
+        `${backendUrl}/telecalling/contacts?page=1&limit=500`,
+        { headers: getAuthHeaders() }
       );
 
-      setContacts(Array.isArray(res.data?.data) ? res.data.data : []);
-      setTotal(Number(res.data?.total || 0));
-      setTotalPages(Number(res.data?.totalPages || 1));
-      setSelectedConvertIds([]);
+      const data = res.data?.data || [];
+      setContacts(data);
+      setFilteredContacts(data);
     } catch (err) {
       console.error(err);
       setMessage('Failed to fetch contacts');
-      setContacts([]);
-      setTotal(0);
-      setTotalPages(1);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -82,8 +67,8 @@ export default function TelecallingContactsPage() {
         headers: getAuthHeaders(),
       });
 
-      const telecallers = (Array.isArray(res.data) ? res.data : []).filter(
-        (u: User) => u.roles?.includes('TELECALLER')
+      const telecallers = res.data.filter((u: User) =>
+        u.roles.includes('TELECALLER')
       );
 
       setUsers(telecallers);
@@ -92,241 +77,147 @@ export default function TelecallingContactsPage() {
     }
   };
 
-  const handleImport = async (e: any) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // 🔥 FILTER LOGIC
+  useEffect(() => {
+    let filtered = contacts;
 
-    const formData = new FormData();
-    formData.append('file', file);
-
-    try {
-      const res = await axios.post(
-        `${backendUrl}/telecalling/contacts/import`,
-        formData,
-        {
-          headers: {
-            ...getAuthHeaders(),
-            'Content-Type': 'multipart/form-data',
-          },
-        }
+    if (searchName) {
+      filtered = filtered.filter((c) =>
+        c.name.toLowerCase().includes(searchName.toLowerCase())
       );
-
-      setMessage(
-        `Imported: ${res.data.importedCount || 0}, Skipped: ${res.data.skippedCount || 0}, Total Rows: ${res.data.totalRows || 0}`
-      );
-
-      setPage(1);
-      fetchContacts();
-    } catch (err: any) {
-      console.error(err);
-      setMessage(err?.response?.data?.message || 'Import failed');
     }
-  };
 
-  const assignContact = async (id: number, userId: number) => {
-    if (!userId) return;
-
-    try {
-      await axios.patch(
-        `${backendUrl}/telecalling/contacts/${id}/assign`,
-        { assignedTo: userId },
-        { headers: getAuthHeaders() }
+    if (searchPhone) {
+      filtered = filtered.filter((c) =>
+        c.phone.includes(searchPhone)
       );
-
-      setMessage('Assigned successfully');
-      fetchContacts();
-    } catch (err) {
-      console.error(err);
-      setMessage('Assignment failed');
     }
-  };
 
-  const toggleConvertSelection = (id: number) => {
-    setSelectedConvertIds((prev) =>
+    if (searchCity) {
+      filtered = filtered.filter((c) =>
+        (c.city || '').toLowerCase().includes(searchCity.toLowerCase())
+      );
+    }
+
+    setFilteredContacts(filtered);
+  }, [searchName, searchPhone, searchCity, contacts]);
+
+  // 🔥 MULTI SELECT
+  const toggleSelect = (id: number) => {
+    setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
   };
 
-  const handleSaveConversion = async () => {
-    if (selectedConvertIds.length === 0) {
-      setMessage('Please select at least one contact to convert');
+  // 🔥 BULK ASSIGN
+  const handleBulkAssign = async () => {
+    if (!selectedUser || selectedIds.length === 0) {
+      setMessage('Select contacts and user');
       return;
     }
 
-    const confirmConvert = window.confirm(
-      `Convert ${selectedConvertIds.length} selected contact(s) to lead?`
-    );
-
-    if (!confirmConvert) return;
-
     try {
-      setSavingConvert(true);
-
       await Promise.all(
-        selectedConvertIds.map((id) =>
-          axios.post(
-            `${backendUrl}/telecalling/contacts/${id}/convert`,
-            {},
+        selectedIds.map((id) =>
+          axios.patch(
+            `${backendUrl}/telecalling/contacts/${id}/assign`,
+            { assignedTo: selectedUser },
             { headers: getAuthHeaders() }
           )
         )
       );
 
-      setMessage('Selected contacts converted successfully');
-      setSelectedConvertIds([]);
+      setMessage('Contacts assigned successfully');
+      setSelectedIds([]);
       fetchContacts();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setMessage(err?.response?.data?.message || 'Conversion failed');
-    } finally {
-      setSavingConvert(false);
+      setMessage('Bulk assign failed');
     }
-  };
-
-  const handlePrevious = () => {
-    if (page > 1) setPage((prev) => prev - 1);
-  };
-
-  const handleNext = () => {
-    if (page < totalPages) setPage((prev) => prev + 1);
   };
 
   return (
     <div className="p-6">
       <h1 className="mb-4 text-2xl font-semibold">Telecalling Contacts</h1>
 
-      <div className="mb-4 flex flex-wrap gap-2">
-        <Link
-          href="/telecalling"
-          className="rounded bg-gray-500 px-4 py-2 text-white"
-        >
-          Back
-        </Link>
+      {/* 🔥 FILTERS */}
+      <div className="mb-4 grid gap-2 md:grid-cols-3">
+        <input
+          placeholder="Search Name"
+          value={searchName}
+          onChange={(e) => setSearchName(e.target.value)}
+          className="border p-2 rounded"
+        />
+        <input
+          placeholder="Search Phone"
+          value={searchPhone}
+          onChange={(e) => setSearchPhone(e.target.value)}
+          className="border p-2 rounded"
+        />
+        <input
+          placeholder="Search City"
+          value={searchCity}
+          onChange={(e) => setSearchCity(e.target.value)}
+          className="border p-2 rounded"
+        />
+      </div>
 
-        <label className="cursor-pointer rounded bg-blue-600 px-4 py-2 text-white">
-          Import CSV / Excel
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv,.xlsx,.xls"
-            onChange={handleImport}
-            className="hidden"
-          />
-        </label>
+      {/* 🔥 BULK ASSIGN */}
+      <div className="mb-4 flex gap-2">
+        <select
+          onChange={(e) => setSelectedUser(Number(e.target.value))}
+          className="border p-2"
+        >
+          <option value="">Select Telecaller</option>
+          {users.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.name}
+            </option>
+          ))}
+        </select>
 
         <button
-          onClick={handleSaveConversion}
-          disabled={savingConvert || selectedConvertIds.length === 0}
-          className="rounded bg-purple-600 px-4 py-2 text-white disabled:opacity-50"
+          onClick={handleBulkAssign}
+          className="bg-blue-600 text-white px-4 py-2 rounded"
         >
-          {savingConvert
-            ? 'Saving...'
-            : `Save Conversion${selectedConvertIds.length ? ` (${selectedConvertIds.length})` : ''}`}
+          Assign Selected ({selectedIds.length})
         </button>
       </div>
 
       {message && <p className="mb-3 text-blue-600">{message}</p>}
 
-      <div className="mb-4 rounded bg-gray-100 p-3 text-sm text-gray-700">
-        <strong>Total Contacts:</strong> {total} | <strong>Page:</strong> {page} / {totalPages}
-      </div>
+      <table className="w-full border">
+        <thead>
+          <tr className="bg-gray-100">
+            <th className="border p-2">Select</th>
+            <th className="border p-2">Name</th>
+            <th className="border p-2">Phone</th>
+            <th className="border p-2">City</th>
+            <th className="border p-2">Assigned</th>
+          </tr>
+        </thead>
 
-      {loading ? (
-        <p>Loading...</p>
-      ) : (
-        <>
-          <table className="w-full border">
-            <thead>
-              <tr className="bg-gray-100">
-                <th className="border p-2">Name</th>
-                <th className="border p-2">Phone</th>
-                <th className="border p-2">City</th>
-                <th className="border p-2">Assigned</th>
-                <th className="border p-2">Assign</th>
-                <th className="border p-2">Convert Toggle</th>
-              </tr>
-            </thead>
+        <tbody>
+          {filteredContacts.map((c) => (
+            <tr key={c.id}>
+              <td className="border p-2 text-center">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.includes(c.id)}
+                  onChange={() => toggleSelect(c.id)}
+                />
+              </td>
 
-            <tbody>
-              {contacts.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="border p-4 text-center">
-                    No contacts found
-                  </td>
-                </tr>
-              ) : (
-                contacts.map((c) => (
-                  <tr key={c.id}>
-                    <td className="border p-2">{c.name}</td>
-                    <td className="border p-2">{c.phone}</td>
-                    <td className="border p-2">{c.city || ''}</td>
-                    <td className="border p-2">
-                      {c.assignedToName || 'Unassigned'}
-                    </td>
-
-                    <td className="border p-2">
-                      <select
-                        onChange={(e) =>
-                          assignContact(c.id, Number(e.target.value))
-                        }
-                        className="border p-1"
-                        defaultValue=""
-                      >
-                        <option value="">Assign</option>
-                        {users.map((u) => (
-                          <option key={u.id} value={u.id}>
-                            {u.name} ({u.email})
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-
-                    <td className="border p-2">
-                      {c.convertedToLead ? (
-                        <span className="font-medium text-green-600">
-                          Converted
-                        </span>
-                      ) : (
-                        <label className="inline-flex cursor-pointer items-center">
-                          <input
-                            type="checkbox"
-                            checked={selectedConvertIds.includes(c.id)}
-                            onChange={() => toggleConvertSelection(c.id)}
-                            className="peer sr-only"
-                          />
-                          <div className="relative h-6 w-11 rounded-full bg-gray-300 transition-all after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-purple-600 peer-checked:after:translate-x-full" />
-                        </label>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-
-          <div className="mt-4 flex items-center justify-between">
-            <button
-              onClick={handlePrevious}
-              disabled={page === 1}
-              className="rounded bg-gray-500 px-4 py-2 text-white disabled:opacity-50"
-            >
-              Previous
-            </button>
-
-            <span className="text-sm text-gray-700">
-              Showing page {page} of {totalPages}
-            </span>
-
-            <button
-              onClick={handleNext}
-              disabled={page >= totalPages}
-              className="rounded bg-gray-500 px-4 py-2 text-white disabled:opacity-50"
-            >
-              Next
-            </button>
-          </div>
-        </>
-      )}
+              <td className="border p-2">{c.name}</td>
+              <td className="border p-2">{c.phone}</td>
+              <td className="border p-2">{c.city}</td>
+              <td className="border p-2">
+                {c.assignedToName || 'Unassigned'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

@@ -33,8 +33,13 @@ const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 export default function LeadsPage() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [filteredLeads, setFilteredLeads] = useState<Lead[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [message, setMessage] = useState('');
+
+  const [searchName, setSearchName] = useState('');
+  const [searchPhone, setSearchPhone] = useState('');
+  const [searchCity, setSearchCity] = useState('');
 
   const currentRoles = currentUser?.roles || [];
   const canAssignLeads =
@@ -64,16 +69,47 @@ export default function LeadsPage() {
     }
   }, [currentUser]);
 
+  useEffect(() => {
+    let filtered = leads;
+
+    if (searchName.trim()) {
+      filtered = filtered.filter((lead) =>
+        (lead.name || '').toLowerCase().includes(searchName.toLowerCase())
+      );
+    }
+
+    if (searchPhone.trim()) {
+      filtered = filtered.filter((lead) =>
+        (lead.phone || '').includes(searchPhone)
+      );
+    }
+
+    if (searchCity.trim()) {
+      filtered = filtered.filter((lead) => {
+        const city = (lead.city || '').toLowerCase();
+        const zone = (lead.zone || '').toLowerCase();
+        const query = searchCity.toLowerCase();
+
+        return city.includes(query) || zone.includes(query);
+      });
+    }
+
+    setFilteredLeads(filtered);
+  }, [searchName, searchPhone, searchCity, leads]);
+
   const fetchLeads = async () => {
     try {
       const res = await axios.get(`${backendUrl}/leads`, {
         headers: getAuthHeaders(),
       });
 
-      setLeads(Array.isArray(res.data) ? res.data : []);
+      const data = Array.isArray(res.data) ? res.data : [];
+      setLeads(data);
+      setFilteredLeads(data);
     } catch (err) {
       console.error(err);
       setLeads([]);
+      setFilteredLeads([]);
     }
   };
 
@@ -114,9 +150,15 @@ export default function LeadsPage() {
     return user ? user.name : `User ID: ${assignedTo}`;
   };
 
+  const clearFilters = () => {
+    setSearchName('');
+    setSearchPhone('');
+    setSearchCity('');
+  };
+
   return (
     <div className="p-6">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Leads</h1>
 
         <Link
@@ -127,15 +169,55 @@ export default function LeadsPage() {
         </Link>
       </div>
 
+      <div className="mb-4 grid gap-3 md:grid-cols-3">
+        <input
+          type="text"
+          placeholder="Search by name"
+          value={searchName}
+          onChange={(e) => setSearchName(e.target.value)}
+          className="rounded border p-2"
+        />
+
+        <input
+          type="text"
+          placeholder="Search by phone"
+          value={searchPhone}
+          onChange={(e) => setSearchPhone(e.target.value)}
+          className="rounded border p-2"
+        />
+
+        <input
+          type="text"
+          placeholder="Search by city / zone"
+          value={searchCity}
+          onChange={(e) => setSearchCity(e.target.value)}
+          className="rounded border p-2"
+        />
+      </div>
+
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded bg-gray-100 p-3 text-sm text-gray-700">
+        <div>
+          <strong>Total Leads:</strong> {leads.length} |{' '}
+          <strong>Filtered:</strong> {filteredLeads.length}
+        </div>
+
+        <button
+          onClick={clearFilters}
+          className="rounded bg-gray-500 px-3 py-1 text-white"
+        >
+          Clear Filters
+        </button>
+      </div>
+
       {message && <p className="mb-4 text-blue-600">{message}</p>}
 
-      {leads.length === 0 ? (
+      {filteredLeads.length === 0 ? (
         <div className="rounded-xl bg-white p-6 shadow">
           <p className="text-gray-600">No leads found</p>
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {leads.map((lead) => (
+          {filteredLeads.map((lead) => (
             <div
               key={lead.id}
               className="rounded-2xl bg-white p-5 shadow transition hover:shadow-md"
