@@ -14,27 +14,40 @@ export class FollowupService {
     private readonly followUpRepository: Repository<FollowUp>,
   ) {}
 
+  private getRoles(user: any): string[] {
+    if (Array.isArray(user?.roles)) {
+      return user.roles;
+    }
+    if (user?.role) {
+      return [user.role];
+    }
+    return [];
+  }
+
+  private hasRole(user: any, role: string): boolean {
+    return this.getRoles(user).includes(role);
+  }
+
   async create(data: Partial<FollowUp>, user: any) {
-    if (user?.role === 'PROJECT_MANAGER') {
+    if (this.hasRole(user, 'PROJECT_MANAGER')) {
       throw new ForbiddenException(
         'Project manager cannot create followups',
       );
     }
 
-    const followUpData =
-      user?.role === 'TELECALLER'
-        ? {
-            ...data,
-            assignedTo: user.id,
-          }
-        : data;
+    const followUpData = this.hasRole(user, 'TELECALLER')
+      ? {
+          ...data,
+          assignedTo: user.id,
+        }
+      : data;
 
     const followUp = this.followUpRepository.create(followUpData);
     return this.followUpRepository.save(followUp);
   }
 
   async findAll(user: any) {
-    if (user?.role === 'TELECALLER') {
+    if (this.hasRole(user, 'TELECALLER')) {
       return this.followUpRepository.find({
         where: { assignedTo: user.id },
         relations: ['lead'],
@@ -55,7 +68,7 @@ export class FollowupService {
     const end = new Date();
     end.setHours(23, 59, 59, 999);
 
-    if (user?.role === 'TELECALLER') {
+    if (this.hasRole(user, 'TELECALLER')) {
       return this.followUpRepository.find({
         where: {
           assignedTo: user.id,
@@ -76,7 +89,7 @@ export class FollowupService {
   }
 
   async findOverdue(user: any) {
-    if (user?.role === 'TELECALLER') {
+    if (this.hasRole(user, 'TELECALLER')) {
       return this.followUpRepository.find({
         where: {
           assignedTo: user.id,
@@ -98,6 +111,62 @@ export class FollowupService {
     });
   }
 
+  async findOne(id: number, user: any) {
+    const followUp = await this.followUpRepository.findOne({
+      where: { id },
+      relations: ['lead'],
+    });
+
+    if (!followUp) {
+      throw new NotFoundException('Follow-up not found');
+    }
+
+    if (
+      this.hasRole(user, 'TELECALLER') &&
+      followUp.assignedTo !== user.id
+    ) {
+      throw new ForbiddenException(
+        'You can only access your own followups',
+      );
+    }
+
+    return followUp;
+  }
+
+  async update(id: number, data: Partial<FollowUp>, user: any) {
+    const followUp = await this.followUpRepository.findOne({
+      where: { id },
+      relations: ['lead'],
+    });
+
+    if (!followUp) {
+      throw new NotFoundException('Follow-up not found');
+    }
+
+    if (
+      this.hasRole(user, 'TELECALLER') &&
+      followUp.assignedTo !== user.id
+    ) {
+      throw new ForbiddenException(
+        'You can only update your own followups',
+      );
+    }
+
+    if (data.note !== undefined) {
+      followUp.note = data.note;
+    }
+
+    if (data.followUpDate !== undefined) {
+      followUp.followUpDate = new Date(data.followUpDate);
+    }
+
+    if (data.status !== undefined) {
+      followUp.status = data.status;
+    }
+
+    return this.followUpRepository.save(followUp);
+  }
+
   async markCompleted(id: number, user: any) {
     const followUp = await this.followUpRepository.findOne({
       where: { id },
@@ -108,7 +177,7 @@ export class FollowupService {
     }
 
     if (
-      user?.role === 'TELECALLER' &&
+      this.hasRole(user, 'TELECALLER') &&
       followUp.assignedTo !== user.id
     ) {
       throw new ForbiddenException(

@@ -37,6 +37,23 @@ export class FollowupController {
     return this.followupService.findOverdue(user);
   }
 
+  @Get(':id')
+  findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.followupService.findOne(id, user);
+  }
+
+  @Patch(':id')
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: any,
+    @CurrentUser() user: any,
+  ) {
+    return this.followupService.update(id, body, user);
+  }
+
   @Patch(':id/complete')
   markCompleted(
     @Param('id', ParseIntPipe) id: number,
