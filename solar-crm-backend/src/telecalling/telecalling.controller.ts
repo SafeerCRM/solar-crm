@@ -131,6 +131,19 @@ export class TelecallingController {
     );
   }
 
+  @Patch('contacts/bulk-assign')
+  bulkAssignContacts(
+    @Body('contactIds') contactIds: number[],
+    @Body('assignedTo') assignedTo: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.telecallingService.bulkAssignContacts(
+      Array.isArray(contactIds) ? contactIds.map(Number) : [],
+      Number(assignedTo),
+      user,
+    );
+  }
+
   @Patch('contacts/:id/assign')
   assignContact(
     @Param('id', ParseIntPipe) id: number,

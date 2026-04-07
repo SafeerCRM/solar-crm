@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, In } from 'typeorm';
+import { Between, In, Repository } from 'typeorm';
 import * as XLSX from 'xlsx';
 import { CallLog, CallReviewStatus } from './call-log.entity';
 import { Lead, LeadStatus } from '../leads/lead.entity';
@@ -43,9 +43,11 @@ export class TelecallingService {
     if (Array.isArray(user?.roles)) {
       return user.roles;
     }
+
     if (user?.role) {
       return [user.role];
     }
+
     return [];
   }
 
@@ -81,15 +83,17 @@ export class TelecallingService {
       const normalizedAlias = this.normalizeHeader(alias);
       const value = normalizedRow[normalizedAlias];
 
-      if (value !== undefined && value !== null && String(value).trim() !== '') {
+      if (
+        value !== undefined &&
+        value !== null &&
+        String(value).trim() !== ''
+      ) {
         return String(value).trim();
       }
     }
 
     return '';
   }
-
-  // ---------------- Existing Lead-Based Telecalling ----------------
 
   async create(data: Partial<CallLog>) {
     const log = this.callLogRepository.create({
@@ -324,7 +328,13 @@ export class TelecallingService {
     data: { reviewStatus: CallReviewStatus; reviewNotes?: string },
     user: any,
   ) {
-    if (!this.hasAnyRole(user, ['OWNER', 'PROJECT_MANAGER', 'TELECALLING_MANAGER'])) {
+    if (
+      !this.hasAnyRole(user, [
+        'OWNER',
+        'PROJECT_MANAGER',
+        'TELECALLING_MANAGER',
+      ])
+    ) {
       throw new ForbiddenException(
         'Only owner, telecalling manager, or project manager can review call recordings',
       );
@@ -345,7 +355,13 @@ export class TelecallingService {
   }
 
   async getReviewQueue(user: any) {
-    if (!this.hasAnyRole(user, ['OWNER', 'PROJECT_MANAGER', 'TELECALLING_MANAGER'])) {
+    if (
+      !this.hasAnyRole(user, [
+        'OWNER',
+        'PROJECT_MANAGER',
+        'TELECALLING_MANAGER',
+      ])
+    ) {
       throw new ForbiddenException(
         'Only owner, telecalling manager, or project manager can access review queue',
       );
@@ -369,8 +385,6 @@ export class TelecallingService {
       .getRawMany();
   }
 
-  // ---------------- New Telecalling Contact Pool ----------------
-
   async importContacts(file: any, user: any) {
     if (!file) {
       throw new BadRequestException('CSV or Excel file is required');
@@ -388,7 +402,9 @@ export class TelecallingService {
     const isXls = fileName.endsWith('.xls');
 
     if (!isCsv && !isXlsx && !isXls) {
-      throw new BadRequestException('Only CSV, XLSX, or XLS files are supported');
+      throw new BadRequestException(
+        'Only CSV, XLSX, or XLS files are supported',
+      );
     }
 
     let workbook: XLSX.WorkBook;
@@ -406,7 +422,9 @@ export class TelecallingService {
     const firstSheetName = workbook.SheetNames[0];
 
     if (!firstSheetName) {
-      throw new BadRequestException('Uploaded file does not contain any sheet/data');
+      throw new BadRequestException(
+        'Uploaded file does not contain any sheet/data',
+      );
     }
 
     const worksheet = workbook.Sheets[firstSheetName];
@@ -432,6 +450,9 @@ export class TelecallingService {
           'phone',
           'phone_number',
           'phonenumber',
+          'phone no',
+          'phoneno',
+          'call',
           'mobile',
           'mobile_number',
           'mobilenumber',
@@ -453,7 +474,7 @@ export class TelecallingService {
 
     if (!validRows.length) {
       throw new BadRequestException(
-        'No valid rows found. File must contain at least phone/mobile column values.',
+        'No valid rows found. File must contain at least phone/mobile/call column values.',
       );
     }
 
@@ -461,20 +482,20 @@ export class TelecallingService {
       new Set(validRows.map((row) => row.phone).filter(Boolean)),
     );
 
-    const existingContacts = await this.contactRepository.find({
-      where: {
-        phone: In(uploadedPhones),
-      },
-      select: ['phone'],
-    });
+    const existingContacts = uploadedPhones.length
+      ? await this.contactRepository.find({
+          where: {
+            phone: In(uploadedPhones),
+          },
+          select: ['phone'],
+        })
+      : [];
 
     const existingPhones = new Set(existingContacts.map((c) => c.phone));
     const seenInFile = new Set<string>();
 
-    let importedCount = 0;
+    const toInsert: Partial<TelecallingContact>[] = [];
     let skippedCount = 0;
-
-    const contactsToInsert: Partial<TelecallingContact>[] = [];
 
     for (const row of validRows) {
       if (!row.phone) {
@@ -494,7 +515,7 @@ export class TelecallingService {
 
       seenInFile.add(row.phone);
 
-      contactsToInsert.push({
+      toInsert.push({
         name: row.name || row.phone,
         phone: row.phone,
         city: row.city,
@@ -505,29 +526,38 @@ export class TelecallingService {
       });
     }
 
-    if (contactsToInsert.length > 0) {
-      await this.contactRepository
-        .createQueryBuilder()
-        .insert()
-        .into(TelecallingContact)
-        .values(contactsToInsert)
-        .execute();
+    if (!toInsert.length) {
+      return {
+        message: 'No new contacts were imported',
+        importedCount: 0,
+        skippedCount,
+        totalRows: rows.length,
+      };
+    }
 
-      importedCount = contactsToInsert.length;
+    const chunkSize = 1000;
+
+    for (let i = 0; i < toInsert.length; i += chunkSize) {
+      const chunk = toInsert.slice(i, i + chunkSize);
+      await this.contactRepository.save(this.contactRepository.create(chunk));
     }
 
     return {
       message: 'Telecalling contacts imported successfully',
-      importedCount,
+      importedCount: toInsert.length,
       skippedCount,
       totalRows: rows.length,
     };
   }
 
   async getContacts(user: any, page = 1, limit = 50) {
-    const safePage = Number.isFinite(page) && page > 0 ? page : 1;
+    const safePage =
+      Number.isFinite(Number(page)) && Number(page) > 0 ? Number(page) : 1;
+
     const safeLimit =
-      Number.isFinite(limit) && limit > 0 ? Math.min(limit, 200) : 50;
+      Number.isFinite(Number(limit)) && Number(limit) > 0
+        ? Math.min(Number(limit), 200)
+        : 50;
 
     const skip = (safePage - 1) * safeLimit;
 
@@ -549,7 +579,7 @@ export class TelecallingService {
       total,
       page: safePage,
       limit: safeLimit,
-      totalPages: Math.ceil(total / safeLimit),
+      totalPages: Math.ceil(total / safeLimit) || 1,
     };
   }
 
@@ -580,6 +610,68 @@ export class TelecallingService {
     contact.assignedToName = assignedUser.name;
 
     return this.contactRepository.save(contact);
+  }
+
+  async bulkAssignContacts(
+    contactIds: number[],
+    assignedTo: number,
+    user: any,
+  ) {
+    if (!this.hasAnyRole(user, ['OWNER', 'TELECALLING_MANAGER'])) {
+      throw new ForbiddenException(
+        'Only owner or telecalling manager can bulk assign telecalling contacts',
+      );
+    }
+
+    if (!Array.isArray(contactIds) || contactIds.length === 0) {
+      throw new BadRequestException('Please select at least one contact');
+    }
+
+    if (!assignedTo || Number.isNaN(Number(assignedTo))) {
+      throw new BadRequestException('Assigned user is required');
+    }
+
+    const uniqueIds = Array.from(
+      new Set(
+        contactIds
+          .map((id) => Number(id))
+          .filter((id) => Number.isInteger(id) && id > 0),
+      ),
+    );
+
+    if (!uniqueIds.length) {
+      throw new BadRequestException('No valid contact ids provided');
+    }
+
+    const assignedUser = await this.userRepository.findOne({
+      where: { id: assignedTo },
+    });
+
+    if (!assignedUser) {
+      throw new NotFoundException('Assigned user not found');
+    }
+
+    const contacts = await this.contactRepository.find({
+      where: { id: In(uniqueIds) },
+    });
+
+    if (!contacts.length) {
+      throw new NotFoundException('No telecalling contacts found');
+    }
+
+    for (const contact of contacts) {
+      contact.assignedTo = assignedUser.id;
+      contact.assignedToName = assignedUser.name;
+    }
+
+    await this.contactRepository.save(contacts);
+
+    return {
+      message: 'Telecalling contacts assigned successfully',
+      assignedTo: assignedUser.id,
+      assignedToName: assignedUser.name,
+      updatedCount: contacts.length,
+    };
   }
 
   async convertContactToLead(id: number, user: any) {
