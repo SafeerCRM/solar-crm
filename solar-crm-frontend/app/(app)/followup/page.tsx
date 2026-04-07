@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { getAuthHeaders } from '@/lib/authHeaders';
+import { useRouter } from 'next/navigation';
 
 type Lead = {
   id: number;
@@ -34,6 +35,8 @@ type User = {
 const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 export default function FollowupPage() {
+  const router = useRouter();
+
   const [user, setUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -190,6 +193,7 @@ export default function FollowupPage() {
 
   return (
     <div className="space-y-6 p-6">
+      {/* CREATE FOLLOWUP */}
       {canCreateFollowup && (
         <div className="rounded-xl bg-white p-6 shadow">
           <h2 className="mb-4 text-xl font-semibold">Create Followup</h2>
@@ -232,6 +236,7 @@ export default function FollowupPage() {
         </div>
       )}
 
+      {/* FOLLOWUP CARDS */}
       <div>
         <h2 className="mb-4 text-xl font-semibold">All Followups</h2>
 
@@ -242,7 +247,8 @@ export default function FollowupPage() {
             {allFollowups.map((f) => (
               <div
                 key={f.id}
-                className="rounded-2xl bg-white p-5 shadow transition hover:shadow-md"
+                onClick={() => router.push(`/followup/${f.id}`)}
+                className="cursor-pointer rounded-2xl bg-white p-5 shadow transition hover:shadow-lg"
               >
                 <h3 className="mb-2 text-lg font-semibold">
                   {f.lead?.name || `Lead ID: ${f.leadId}`}
@@ -253,7 +259,7 @@ export default function FollowupPage() {
                 </p>
 
                 <p className="mb-2 text-sm">
-                  <span className="font-medium">Follow-up Date:</span>{' '}
+                  <span className="font-medium">Date:</span>{' '}
                   {formatDate(f.followUpDate)}
                 </p>
 
@@ -264,7 +270,7 @@ export default function FollowupPage() {
 
                 {f.note && (
                   <p className="mb-2 text-sm text-gray-700">
-                    <span className="font-medium">Note:</span> {f.note}
+                    {f.note}
                   </p>
                 )}
 
@@ -275,6 +281,12 @@ export default function FollowupPage() {
                 >
                   {f.status}
                 </span>
+
+                <div className="mt-3">
+                  <button className="text-blue-600 text-sm font-medium">
+                    Open →
+                  </button>
+                </div>
               </div>
             ))}
           </div>
