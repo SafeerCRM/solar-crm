@@ -50,6 +50,10 @@ export default function MeetingPage() {
     scheduledAt: '',
   });
 
+  const [searchName, setSearchName] = useState('');
+  const [searchPhone, setSearchPhone] = useState('');
+  const [searchLocation, setSearchLocation] = useState('');
+
   useEffect(() => {
     fetchMeetings();
   }, []);
@@ -68,6 +72,32 @@ export default function MeetingPage() {
       setLoading(false);
     }
   };
+
+  const filteredMeetings = useMemo(() => {
+    let data = meetings;
+
+    if (searchName.trim()) {
+      data = data.filter((m) =>
+        (m.customerName || '').toLowerCase().includes(searchName.toLowerCase())
+      );
+    }
+
+    if (searchPhone.trim()) {
+      data = data.filter((m) => (m.mobile || '').includes(searchPhone));
+    }
+
+    if (searchLocation.trim()) {
+      data = data.filter((m) => {
+        const address = (m.address || '').toLowerCase();
+        const gps = (m.gpsAddress || '').toLowerCase();
+        const query = searchLocation.toLowerCase();
+
+        return address.includes(query) || gps.includes(query);
+      });
+    }
+
+    return data;
+  }, [meetings, searchName, searchPhone, searchLocation]);
 
   const resetActionState = () => {
     setSelectedMeeting(null);
@@ -280,6 +310,49 @@ export default function MeetingPage() {
         </a>
       </div>
 
+      <div className="mb-4 grid gap-3 md:grid-cols-3">
+        <input
+          type="text"
+          placeholder="Search Customer Name"
+          value={searchName}
+          onChange={(e) => setSearchName(e.target.value)}
+          className="rounded border p-2"
+        />
+
+        <input
+          type="text"
+          placeholder="Search Mobile"
+          value={searchPhone}
+          onChange={(e) => setSearchPhone(e.target.value)}
+          className="rounded border p-2"
+        />
+
+        <input
+          type="text"
+          placeholder="Search Address / Location"
+          value={searchLocation}
+          onChange={(e) => setSearchLocation(e.target.value)}
+          className="rounded border p-2"
+        />
+      </div>
+
+      <div className="mb-4 flex justify-between text-sm text-gray-600">
+        <div>
+          Total: {meetings.length} | Filtered: {filteredMeetings.length}
+        </div>
+
+        <button
+          onClick={() => {
+            setSearchName('');
+            setSearchPhone('');
+            setSearchLocation('');
+          }}
+          className="text-blue-600"
+        >
+          Clear Filters
+        </button>
+      </div>
+
       {message && <p className="mb-4 text-sm text-blue-600">{message}</p>}
 
       <div className="overflow-x-auto rounded border bg-white">
@@ -305,14 +378,14 @@ export default function MeetingPage() {
                   Loading meetings...
                 </td>
               </tr>
-            ) : meetings.length === 0 ? (
+            ) : filteredMeetings.length === 0 ? (
               <tr>
                 <td colSpan={9} className="p-4 text-center">
                   No meetings found
                 </td>
               </tr>
             ) : (
-              meetings.map((m) => {
+              filteredMeetings.map((m) => {
                 const mapsUrl = getMapsUrl(m);
 
                 return (
