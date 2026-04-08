@@ -464,9 +464,9 @@ export class TelecallingService {
       const city = this.getMappedValue(row, ['city', 'town', 'location']);
 
       return {
-        name: name || phone,
+        name: (name || phone || '').trim(),
         phone,
-        city: city || undefined,
+        city: city ? String(city).trim() : undefined,
       };
     });
 
@@ -535,11 +535,11 @@ export class TelecallingService {
       };
     }
 
-    const chunkSize = 1000;
+    const chunkSize = 2000;
 
     for (let i = 0; i < toInsert.length; i += chunkSize) {
       const chunk = toInsert.slice(i, i + chunkSize);
-      await this.contactRepository.save(this.contactRepository.create(chunk));
+      await this.contactRepository.insert(chunk);
     }
 
     return {
@@ -651,26 +651,28 @@ export class TelecallingService {
       throw new NotFoundException('Assigned user not found');
     }
 
-    const contacts = await this.contactRepository.find({
-      where: { id: In(uniqueIds) },
-    });
+    const result = await this.contactRepository
+      .createQueryBuilder()
+      .update(TelecallingContact)
+      .set({
+        assignedTo: assignedUser.id,
+        assignedToName: assignedUser.name,
+      })
+      .where('id IN (:...ids)', { ids: uniqueIds })
+      .execute();
 
-    if (!contacts.length) {
+    const updatedCount = result.affected || 0;
+
+    if (!updatedCount) {
       throw new NotFoundException('No telecalling contacts found');
     }
-
-    for (const contact of contacts) {
-      contact.assignedTo = assignedUser.id;
-      contact.assignedToName = assignedUser.name;
-    }
-
-    await this.contactRepository.save(contacts);
 
     return {
       message: 'Telecalling contacts assigned successfully',
       assignedTo: assignedUser.id,
       assignedToName: assignedUser.name,
-      updatedCount: contacts.length,
+      requestedCount: uniqueIds.length,
+      updatedCount,
     };
   }
 
