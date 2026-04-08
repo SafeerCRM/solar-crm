@@ -19,13 +19,15 @@ type Contact = {
   assignedToName?: string;
   importedByName?: string;
   convertedToLead?: boolean;
+  isInStorage?: boolean;
 };
 
 type User = {
   id: number;
   name: string;
   email?: string;
-  roles: string[];
+  roles?: string[];
+  role?: string;
 };
 
 type ContactsResponse =
@@ -44,9 +46,13 @@ type ImportSummary = {
   totalRows: number;
 };
 
+type ViewMode = 'active' | 'storage';
+
 export default function TelecallingContactsPage() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<'success' | 'error' | 'info'>(
     'info'
@@ -55,11 +61,17 @@ export default function TelecallingContactsPage() {
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
   const [assigningBulk, setAssigningBulk] = useState(false);
+  const [assigningLatest, setAssigningLatest] = useState(false);
+  const [checkingFilteredCount, setCheckingFilteredCount] = useState(false);
   const [convertingId, setConvertingId] = useState<number | null>(null);
 
   const [convertToggleMap, setConvertToggleMap] = useState<Record<number, boolean>>({});
   const [selectedContactIds, setSelectedContactIds] = useState<number[]>([]);
   const [bulkAssignedTo, setBulkAssignedTo] = useState<string>('');
+  const [latestAssignedTo, setLatestAssignedTo] = useState<string>('');
+  const [assignLatestCount, setAssignLatestCount] = useState<string>('');
+  const [filteredStorageCount, setFilteredStorageCount] = useState<number | null>(null);
+  const [storageTotalCount, setStorageTotalCount] = useState<number | null>(null);
 
   const [page, setPage] = useState(1);
   const [limit] = useState(50);
@@ -71,13 +83,32 @@ export default function TelecallingContactsPage() {
 
   const [selectedImportFileName, setSelectedImportFileName] = useState('');
   const [importSummary, setImportSummary] = useState<ImportSummary | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('active');
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    fetchContacts(page);
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      try {
+        setCurrentUser(JSON.parse(storedUser));
+      } catch (error) {
+        console.error(error);
+      }
+    }
+  }, []);
+
+  const isOwnerOrTelecallingManager =
+    Array.isArray(currentUser?.roles)
+      ? currentUser?.roles?.includes('OWNER') ||
+        currentUser?.roles?.includes('TELECALLING_MANAGER')
+      : currentUser?.role === 'OWNER' ||
+        currentUser?.role === 'TELECALLING_MANAGER';
+
+  useEffect(() => {
+    fetchContacts(page, viewMode);
     fetchUsers();
-  }, [page]);
+  }, [page, viewMode]);
 
   const buildToggleMap = (data: Contact[]) => {
     const map: Record<number, boolean> = {};
@@ -95,13 +126,13 @@ export default function TelecallingContactsPage() {
     setMessageType(type);
   };
 
-  const fetchContacts = async (pageToLoad = 1) => {
+  const fetchContacts = async (pageToLoad = 1, mode: ViewMode = viewMode) => {
     setLoading(true);
     try {
       const res = await axios.get<ContactsResponse>(
         `${backendUrl}/telecalling/contacts`,
         {
-          params: { page: pageToLoad, limit },
+          params: { page: pageToLoad, limit, view: mode },
           headers: getAuthHeaders(),
         }
       );
@@ -120,9 +151,9 @@ export default function TelecallingContactsPage() {
       }
 
       setSelectedContactIds([]);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      showMessage('Failed to fetch contacts', 'error');
+      showMessage(err?.response?.data?.message || 'Failed to fetch contacts', 'error');
     } finally {
       setLoading(false);
     }
@@ -135,7 +166,10 @@ export default function TelecallingContactsPage() {
       });
 
       const telecallers = (Array.isArray(res.data) ? res.data : []).filter(
-        (u: User) => Array.isArray(u.roles) && u.roles.includes('TELECALLER')
+        (u: User) =>
+          Array.isArray(u.roles)
+            ? u.roles.includes('TELECALLER')
+            : u.role === 'TELECALLER'
       );
 
       setUsers(telecallers);
@@ -172,7 +206,7 @@ export default function TelecallingContactsPage() {
     try {
       setImporting(true);
       showMessage(
-        'Import started. Please wait and do not close this page until it finishes.',
+        'Import started. Contacts will go to Storage. Please wait until it finishes.',
         'info'
       );
 
@@ -198,12 +232,13 @@ export default function TelecallingContactsPage() {
       });
 
       showMessage(
-        `Import completed successfully. Imported: ${importedCount}, Skipped: ${skippedCount}, Total Rows: ${totalRows}`,
+        `Import completed successfully. Imported: ${importedCount}, Skipped: ${skippedCount}, Total Rows: ${totalRows}. Imported contacts are now available in Storage.`,
         'success'
       );
 
       setPage(1);
-      await fetchContacts(1);
+      setViewMode('storage');
+      await fetchContacts(1, 'storage');
     } catch (err: any) {
       console.error(err);
       setImportSummary(null);
@@ -233,8 +268,8 @@ export default function TelecallingContactsPage() {
         { headers: getAuthHeaders() }
       );
 
-      showMessage('Assigned successfully', 'success');
-      await fetchContacts(page);
+      showMessage('Assigned successfully. Contact moved from Storage to Active.', 'success');
+      await fetchContacts(page, viewMode);
     } catch (err: any) {
       console.error(err);
       showMessage(err?.response?.data?.message || 'Assignment failed', 'error');
@@ -270,12 +305,106 @@ export default function TelecallingContactsPage() {
       );
       setSelectedContactIds([]);
       setBulkAssignedTo('');
-      await fetchContacts(page);
+      await fetchContacts(page, viewMode);
+      if (viewMode === 'storage') {
+        await handleCheckFilteredStorageCount();
+      }
     } catch (err: any) {
       console.error(err);
       showMessage(err?.response?.data?.message || 'Bulk assign failed', 'error');
     } finally {
       setAssigningBulk(false);
+    }
+  };
+
+  const handleCheckFilteredStorageCount = async () => {
+    if (!cityFilter.trim()) {
+      showMessage(
+        'Please enter city / address / location filter first',
+        'error'
+      );
+      return;
+    }
+
+    try {
+      setCheckingFilteredCount(true);
+
+      const res = await axios.get(
+        `${backendUrl}/telecalling/contacts/filter-count`,
+        {
+          params: {
+            locationFilter: cityFilter,
+          },
+          headers: getAuthHeaders(),
+        }
+      );
+
+      setStorageTotalCount(Number(res.data?.totalCount || 0));
+      setFilteredStorageCount(Number(res.data?.filteredCount || 0));
+
+      showMessage('Filtered storage count loaded successfully', 'success');
+    } catch (err: any) {
+      console.error(err);
+      setStorageTotalCount(null);
+      setFilteredStorageCount(null);
+      showMessage(
+        err?.response?.data?.message || 'Failed to load filtered storage count',
+        'error'
+      );
+    } finally {
+      setCheckingFilteredCount(false);
+    }
+  };
+
+  const handleAssignLatest = async () => {
+    if (!cityFilter.trim()) {
+      showMessage(
+        'Please enter city / address / location filter first',
+        'error'
+      );
+      return;
+    }
+
+    if (!assignLatestCount || Number(assignLatestCount) <= 0) {
+      showMessage('Please enter a valid number of contacts to assign', 'error');
+      return;
+    }
+
+    if (!latestAssignedTo) {
+      showMessage('Please select a telecaller for latest assignment', 'error');
+      return;
+    }
+
+    try {
+      setAssigningLatest(true);
+
+      const res = await axios.patch(
+        `${backendUrl}/telecalling/contacts/assign-latest`,
+        {
+          locationFilter: cityFilter,
+          assignCount: Number(assignLatestCount),
+          assignedTo: Number(latestAssignedTo),
+        },
+        { headers: getAuthHeaders() }
+      );
+
+      showMessage(
+        `Assigned latest ${res.data?.updatedCount || 0} contact(s) successfully from filtered storage`,
+        'success'
+      );
+
+      await fetchContacts(page, viewMode);
+      await handleCheckFilteredStorageCount();
+      setAssignLatestCount('');
+      setLatestAssignedTo('');
+    } catch (err: any) {
+      console.error(err);
+      showMessage(
+        err?.response?.data?.message || 'Assign latest contacts failed',
+        'error'
+      );
+    } finally {
+      setAssigningLatest(false);
     }
   };
 
@@ -290,7 +419,7 @@ export default function TelecallingContactsPage() {
       );
 
       showMessage('Converted to lead', 'success');
-      await fetchContacts(page);
+      await fetchContacts(page, viewMode);
     } catch (err: any) {
       console.error(err);
       showMessage(err?.response?.data?.message || 'Conversion failed', 'error');
@@ -331,6 +460,9 @@ export default function TelecallingContactsPage() {
     setPhoneFilter('');
     setCityFilter('');
     setSelectedContactIds([]);
+    setFilteredStorageCount(null);
+    setStorageTotalCount(null);
+    setAssignLatestCount('');
   };
 
   const filteredContacts = useMemo(() => {
@@ -419,6 +551,42 @@ export default function TelecallingContactsPage() {
         </Link>
       </div>
 
+      {isOwnerOrTelecallingManager && (
+        <div className="mb-4 flex gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setViewMode('active');
+              setPage(1);
+              setSelectedContactIds([]);
+            }}
+            className={`rounded px-4 py-2 ${
+              viewMode === 'active'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-200 text-black'
+            }`}
+          >
+            Active Contacts
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setViewMode('storage');
+              setPage(1);
+              setSelectedContactIds([]);
+            }}
+            className={`rounded px-4 py-2 ${
+              viewMode === 'storage'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-200 text-black'
+            }`}
+          >
+            Storage
+          </button>
+        </div>
+      )}
+
       <div className="mb-5 rounded border bg-white p-4">
         <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
@@ -491,6 +659,13 @@ export default function TelecallingContactsPage() {
 
       {message && <div className={messageClassName}>{message}</div>}
 
+      <div className="mb-3 rounded border bg-gray-50 p-3 text-sm text-gray-700">
+        <span className="font-medium">Current View: </span>
+        {viewMode === 'storage'
+          ? 'Storage (warehouse contacts not yet active)'
+          : 'Active Contacts (working pool for telecalling)'}
+      </div>
+
       <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-4">
         <input
           type="text"
@@ -524,6 +699,71 @@ export default function TelecallingContactsPage() {
         </button>
       </div>
 
+      {isOwnerOrTelecallingManager && viewMode === 'storage' && (
+        <div className="mb-4 rounded border bg-white p-4">
+          <h2 className="mb-2 text-lg font-semibold">
+            Assign Latest Contacts from Filtered Storage
+          </h2>
+          <p className="mb-3 text-sm text-gray-600">
+            Use the city / address / location filter above, check how many contacts
+            are available in storage, then assign the latest N contacts to a telecaller.
+          </p>
+
+          <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center">
+            <button
+              type="button"
+              onClick={handleCheckFilteredStorageCount}
+              disabled={checkingFilteredCount}
+              className="rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50"
+            >
+              {checkingFilteredCount ? 'Checking...' : 'Check Filtered Storage Count'}
+            </button>
+
+            <div className="text-sm text-gray-700">
+              Total in storage: <span className="font-semibold">{storageTotalCount ?? '-'}</span>
+            </div>
+
+            <div className="text-sm text-gray-700">
+              Matching current location filter: <span className="font-semibold">{filteredStorageCount ?? '-'}</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <input
+              type="number"
+              min="1"
+              placeholder="Enter number of latest contacts to assign"
+              value={assignLatestCount}
+              onChange={(e) => setAssignLatestCount(e.target.value)}
+              className="rounded border p-2"
+            />
+
+            <select
+              value={latestAssignedTo}
+              onChange={(e) => setLatestAssignedTo(e.target.value)}
+              className="rounded border p-2"
+            >
+              <option value="">Select telecaller</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                  {u.email ? ` (${u.email})` : ''}
+                </option>
+              ))}
+            </select>
+
+            <button
+              type="button"
+              onClick={handleAssignLatest}
+              disabled={assigningLatest}
+              className="rounded bg-green-600 px-4 py-2 text-white disabled:opacity-50"
+            >
+              {assigningLatest ? 'Assigning...' : 'Assign Latest N'}
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="mb-4 rounded border p-3">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="flex flex-wrap items-center gap-2">
@@ -552,30 +792,32 @@ export default function TelecallingContactsPage() {
             </span>
           </div>
 
-          <div className="flex flex-col gap-2 md:flex-row md:items-center">
-            <select
-              value={bulkAssignedTo}
-              onChange={(e) => setBulkAssignedTo(e.target.value)}
-              className="rounded border p-2"
-            >
-              <option value="">Select telecaller to assign</option>
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name}
-                  {u.email ? ` (${u.email})` : ''}
-                </option>
-              ))}
-            </select>
+          {isOwnerOrTelecallingManager && (
+            <div className="flex flex-col gap-2 md:flex-row md:items-center">
+              <select
+                value={bulkAssignedTo}
+                onChange={(e) => setBulkAssignedTo(e.target.value)}
+                className="rounded border p-2"
+              >
+                <option value="">Select telecaller to assign</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}
+                    {u.email ? ` (${u.email})` : ''}
+                  </option>
+                ))}
+              </select>
 
-            <button
-              type="button"
-              onClick={handleBulkAssign}
-              disabled={assigningBulk || selectedContactIds.length === 0 || !bulkAssignedTo}
-              className="rounded bg-green-600 px-4 py-2 text-white disabled:opacity-50"
-            >
-              {assigningBulk ? 'Assigning...' : 'Assign Selected'}
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={handleBulkAssign}
+                disabled={assigningBulk || selectedContactIds.length === 0 || !bulkAssignedTo}
+                className="rounded bg-green-600 px-4 py-2 text-white disabled:opacity-50"
+              >
+                {assigningBulk ? 'Assigning...' : 'Assign Selected'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -626,23 +868,29 @@ export default function TelecallingContactsPage() {
                   <td className="border p-2">{c.assignedToName || 'Unassigned'}</td>
 
                   <td className="border p-2">
-                    <select
-                      onChange={(e) => assignSingleContact(c.id, Number(e.target.value))}
-                      className="border p-1"
-                      defaultValue=""
-                    >
-                      <option value="">Assign</option>
-                      {users.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.name}
-                          {u.email ? ` (${u.email})` : ''}
-                        </option>
-                      ))}
-                    </select>
+                    {isOwnerOrTelecallingManager ? (
+                      <select
+                        onChange={(e) => assignSingleContact(c.id, Number(e.target.value))}
+                        className="border p-1"
+                        defaultValue=""
+                      >
+                        <option value="">Assign</option>
+                        {users.map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.name}
+                            {u.email ? ` (${u.email})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="text-gray-500">-</span>
+                    )}
                   </td>
 
                   <td className="border p-2">
-                    {c.convertedToLead ? (
+                    {viewMode === 'storage' ? (
+                      <span className="text-gray-500">Storage</span>
+                    ) : c.convertedToLead ? (
                       <span className="font-medium text-green-600">Converted</span>
                     ) : (
                       <label className="inline-flex cursor-pointer items-center gap-2">
