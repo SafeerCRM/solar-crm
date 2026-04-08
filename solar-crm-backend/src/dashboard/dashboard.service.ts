@@ -4,6 +4,7 @@ import { Repository, Between, LessThan } from 'typeorm';
 import { Lead, LeadStatus } from '../leads/lead.entity';
 import { CallLog } from '../telecalling/call-log.entity';
 import { FollowUp, FollowUpStatus } from '../followup/follow-up.entity';
+import { TelecallingContact } from '../telecalling/telecalling-contact.entity';
 
 @Injectable()
 export class DashboardService {
@@ -16,21 +17,18 @@ export class DashboardService {
 
     @InjectRepository(FollowUp)
     private readonly followUpRepository: Repository<FollowUp>,
+
+    @InjectRepository(TelecallingContact)
+    private readonly telecallingContactRepository: Repository<TelecallingContact>,
   ) {}
 
   async getSummary(assignedTo?: number, role?: string) {
     const isTelecaller = role === 'TELECALLER';
     const isProjectManager = role === 'PROJECT_MANAGER';
 
-    const leadWhere = isTelecaller
-      ? { assignedTo }
-      : {};
-    const callWhere = isTelecaller
-      ? { telecallerId: assignedTo }
-      : {};
-    const followupWhereBase = isTelecaller
-      ? { assignedTo }
-      : {};
+    const leadWhere = isTelecaller ? { assignedTo } : {};
+    const callWhere = isTelecaller ? { telecallerId: assignedTo } : {};
+    const followupWhereBase = isTelecaller ? { assignedTo } : {};
 
     let totalLeads = 0;
     let newLeads = 0;
@@ -162,6 +160,51 @@ export class DashboardService {
       callbackCount,
       todayFollowUps,
       overdueFollowUps,
+    };
+  }
+
+  async getContactsSummary(cityFilter?: string, assignedTo?: number, role?: string) {
+    const isTelecaller = role === 'TELECALLER';
+
+    const baseWhere = isTelecaller ? { assignedTo } : {};
+
+    const totalContacts = await this.telecallingContactRepository.count({
+      where: baseWhere,
+    });
+
+    const normalizedFilter = String(cityFilter || '').trim().toLowerCase();
+
+    if (!normalizedFilter) {
+      return {
+        totalContacts,
+        filteredContacts: totalContacts,
+      };
+    }
+
+    const contacts = await this.telecallingContactRepository.find({
+      where: baseWhere,
+      select: [
+        'id',
+        'city',
+        'assignedTo',
+      ] as any,
+    });
+
+    const filteredContacts = contacts.filter((contact: any) => {
+      const city = String(contact?.city || '').toLowerCase();
+      const address = String(contact?.address || '').toLowerCase();
+      const location = String(contact?.location || '').toLowerCase();
+
+      return (
+        city.includes(normalizedFilter) ||
+        address.includes(normalizedFilter) ||
+        location.includes(normalizedFilter)
+      );
+    }).length;
+
+    return {
+      totalContacts,
+      filteredContacts,
     };
   }
 }

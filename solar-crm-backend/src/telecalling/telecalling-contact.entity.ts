@@ -3,13 +3,11 @@ import {
   CreateDateColumn,
   Entity,
   PrimaryGeneratedColumn,
+  UpdateDateColumn,
 } from 'typeorm';
 
 export enum ContactStatus {
   NEW = 'NEW',
-  CALLED = 'CALLED',
-  INTERESTED = 'INTERESTED',
-  REJECTED = 'REJECTED',
   CONVERTED = 'CONVERTED',
 }
 
@@ -18,7 +16,7 @@ export class TelecallingContact {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
+  @Column({ nullable: true })
   name: string;
 
   @Column()
@@ -28,10 +26,13 @@ export class TelecallingContact {
   city: string;
 
   @Column({ nullable: true })
-  kNo: string;
+  address: string;
 
   @Column({ nullable: true })
-  source: string;
+  location: string;
+
+  @Column({ nullable: true })
+  kNo: string;
 
   @Column({ nullable: true })
   assignedTo: number;
@@ -52,12 +53,18 @@ export class TelecallingContact {
   })
   status: ContactStatus;
 
-  @Column({ type: 'text', nullable: true })
-  remarks: string;
-
   @Column({ default: false })
   convertedToLead: boolean;
 
+  @Column({ default: true })
+  isInStorage: boolean;
+
+  @Column({ nullable: true, type: 'text' })
+  remarks: string;
+
   @CreateDateColumn()
   createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
 }

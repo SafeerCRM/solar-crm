@@ -123,11 +123,39 @@ export class TelecallingController {
     @CurrentUser() user: any,
     @Query('page') page = '1',
     @Query('limit') limit = '50',
+    @Query('view') view = 'active',
   ) {
     return this.telecallingService.getContacts(
       user,
       Number(page),
       Number(limit),
+      String(view || 'active'),
+    );
+  }
+
+  @Get('contacts/filter-count')
+  getFilteredContactsCount(
+    @Query('locationFilter') locationFilter = '',
+    @CurrentUser() user: any,
+  ) {
+    return this.telecallingService.getFilteredContactsCount(
+      String(locationFilter || ''),
+      user,
+    );
+  }
+
+  @Patch('contacts/assign-latest')
+  assignLatestContactsByFilter(
+    @Body('locationFilter') locationFilter: string,
+    @Body('assignCount') assignCount: number,
+    @Body('assignedTo') assignedTo: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.telecallingService.assignLatestContactsByFilter(
+      String(locationFilter || ''),
+      Number(assignCount),
+      Number(assignedTo),
+      user,
     );
   }
 

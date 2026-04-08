@@ -95,6 +95,28 @@ export class TelecallingService {
     return '';
   }
 
+  private matchesLocationFilter(
+    contact: Partial<TelecallingContact> & {
+      address?: string;
+      location?: string;
+    },
+    normalizedFilter: string,
+  ): boolean {
+    if (!normalizedFilter) {
+      return true;
+    }
+
+    const city = String(contact?.city || '').toLowerCase();
+    const address = String((contact as any)?.address || '').toLowerCase();
+    const location = String((contact as any)?.location || '').toLowerCase();
+
+    return (
+      city.includes(normalizedFilter) ||
+      address.includes(normalizedFilter) ||
+      location.includes(normalizedFilter)
+    );
+  }
+
   async create(data: Partial<CallLog>) {
     const log = this.callLogRepository.create({
       ...data,
@@ -523,6 +545,7 @@ export class TelecallingService {
         importedByName: user.name,
         status: ContactStatus.NEW,
         convertedToLead: false,
+        isInStorage: true,
       });
     }
 
@@ -550,7 +573,7 @@ export class TelecallingService {
     };
   }
 
-  async getContacts(user: any, page = 1, limit = 50) {
+  async getContacts(user: any, page = 1, limit = 50, view = 'active') {
     const safePage =
       Number.isFinite(Number(page)) && Number(page) > 0 ? Number(page) : 1;
 
@@ -560,11 +583,23 @@ export class TelecallingService {
         : 50;
 
     const skip = (safePage - 1) * safeLimit;
+    const normalizedView = String(view || 'active').toLowerCase();
 
     const whereCondition: any = {};
 
     if (this.hasAnyRole(user, ['TELECALLER'])) {
       whereCondition.assignedTo = user.id;
+      whereCondition.isInStorage = false;
+    } else if (normalizedView === 'storage') {
+      if (!this.hasAnyRole(user, ['OWNER', 'TELECALLING_MANAGER'])) {
+        throw new ForbiddenException(
+          'Only owner or telecalling manager can view storage contacts',
+        );
+      }
+
+      whereCondition.isInStorage = true;
+    } else {
+      whereCondition.isInStorage = false;
     }
 
     const [data, total] = await this.contactRepository.findAndCount({
@@ -580,6 +615,32 @@ export class TelecallingService {
       page: safePage,
       limit: safeLimit,
       totalPages: Math.ceil(total / safeLimit) || 1,
+    };
+  }
+
+  async getFilteredContactsCount(locationFilter: string, user: any) {
+    if (!this.hasAnyRole(user, ['OWNER', 'TELECALLING_MANAGER'])) {
+      throw new ForbiddenException(
+        'Only owner or telecalling manager can view filtered storage count',
+      );
+    }
+
+    const normalizedFilter = String(locationFilter || '').trim().toLowerCase();
+
+    const contacts = await this.contactRepository.find({
+      where: {
+        isInStorage: true,
+      },
+      order: { createdAt: 'DESC' },
+    });
+
+    const filteredCount = contacts.filter((contact: any) =>
+      this.matchesLocationFilter(contact, normalizedFilter),
+    ).length;
+
+    return {
+      totalCount: contacts.length,
+      filteredCount,
     };
   }
 
@@ -608,8 +669,93 @@ export class TelecallingService {
 
     contact.assignedTo = assignedUser.id;
     contact.assignedToName = assignedUser.name;
+    contact.isInStorage = false;
 
     return this.contactRepository.save(contact);
+  }
+
+  async assignLatestContactsByFilter(
+    locationFilter: string,
+    assignCount: number,
+    assignedTo: number,
+    user: any,
+  ) {
+    if (!this.hasAnyRole(user, ['OWNER', 'TELECALLING_MANAGER'])) {
+      throw new ForbiddenException(
+        'Only owner or telecalling manager can assign latest contacts from storage',
+      );
+    }
+
+    const normalizedFilter = String(locationFilter || '').trim().toLowerCase();
+
+    if (!normalizedFilter) {
+      throw new BadRequestException(
+        'City / address / location filter is required',
+      );
+    }
+
+    if (!assignCount || Number.isNaN(Number(assignCount)) || assignCount <= 0) {
+      throw new BadRequestException('Valid assign count is required');
+    }
+
+    if (!assignedTo || Number.isNaN(Number(assignedTo))) {
+      throw new BadRequestException('Assigned user is required');
+    }
+
+    const assignedUser = await this.userRepository.findOne({
+      where: { id: assignedTo },
+    });
+
+    if (!assignedUser) {
+      throw new NotFoundException('Assigned user not found');
+    }
+
+    const contacts = await this.contactRepository.find({
+      where: {
+        isInStorage: true,
+      },
+      order: { createdAt: 'DESC' },
+    });
+
+    const filteredContacts = contacts.filter((contact: any) =>
+      this.matchesLocationFilter(contact, normalizedFilter),
+    );
+
+    if (!filteredContacts.length) {
+      throw new NotFoundException(
+        'No contacts found for the given city / address / location filter',
+      );
+    }
+
+    const selectedContacts = filteredContacts.slice(0, Number(assignCount));
+
+    if (!selectedContacts.length) {
+      throw new NotFoundException('No contacts available to assign');
+    }
+
+    const ids = selectedContacts.map((contact) => contact.id);
+
+    const result = await this.contactRepository
+      .createQueryBuilder()
+      .update(TelecallingContact)
+      .set({
+        assignedTo: assignedUser.id,
+        assignedToName: assignedUser.name,
+        isInStorage: false,
+      })
+      .where('id IN (:...ids)', { ids })
+      .execute();
+
+    const updatedCount = result.affected || 0;
+
+    return {
+      message: 'Latest filtered contacts assigned successfully',
+      assignedTo: assignedUser.id,
+      assignedToName: assignedUser.name,
+      requestedCount: Number(assignCount),
+      matchedCount: filteredContacts.length,
+      updatedCount,
+    };
   }
 
   async bulkAssignContacts(
@@ -657,6 +803,7 @@ export class TelecallingService {
       .set({
         assignedTo: assignedUser.id,
         assignedToName: assignedUser.name,
+        isInStorage: false,
       })
       .where('id IN (:...ids)', { ids: uniqueIds })
       .execute();
@@ -705,7 +852,6 @@ export class TelecallingService {
       name: contact.name,
       phone: normalizedPhone,
       city: contact.city,
-      source: contact.source,
       assignedTo: contact.assignedTo,
       createdBy: user.id,
       createdByName: user.name,

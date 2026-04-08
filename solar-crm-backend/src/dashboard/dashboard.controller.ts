@@ -9,7 +9,10 @@ export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
   @Get('summary')
-  getSummary(@Query('assignedTo') assignedTo?: string, @CurrentUser() user?: any) {
+  getSummary(
+    @Query('assignedTo') assignedTo?: string,
+    @CurrentUser() user?: any,
+  ) {
     if (user?.role === 'TELECALLER') {
       return this.dashboardService.getSummary(user.id, user.role);
     }
@@ -22,5 +25,17 @@ export class DashboardController {
       assignedTo ? Number(assignedTo) : undefined,
       user?.role,
     );
+  }
+
+  @Get('contacts-summary')
+  getContactsSummary(
+    @Query('city') city?: string,
+    @CurrentUser() user?: any,
+  ) {
+    if (user?.role === 'TELECALLER') {
+      return this.dashboardService.getContactsSummary(city, user.id, user.role);
+    }
+
+    return this.dashboardService.getContactsSummary(city, undefined, user?.role);
   }
 }
