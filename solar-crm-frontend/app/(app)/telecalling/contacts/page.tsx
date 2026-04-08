@@ -38,14 +38,25 @@ type ContactsResponse =
       totalPages?: number;
     };
 
+type ImportSummary = {
+  importedCount: number;
+  skippedCount: number;
+  totalRows: number;
+};
+
 export default function TelecallingContactsPage() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [message, setMessage] = useState('');
+  const [messageType, setMessageType] = useState<'success' | 'error' | 'info'>(
+    'info'
+  );
+
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
   const [assigningBulk, setAssigningBulk] = useState(false);
   const [convertingId, setConvertingId] = useState<number | null>(null);
+
   const [convertToggleMap, setConvertToggleMap] = useState<Record<number, boolean>>({});
   const [selectedContactIds, setSelectedContactIds] = useState<number[]>([]);
   const [bulkAssignedTo, setBulkAssignedTo] = useState<string>('');
@@ -57,6 +68,9 @@ export default function TelecallingContactsPage() {
   const [nameFilter, setNameFilter] = useState('');
   const [phoneFilter, setPhoneFilter] = useState('');
   const [cityFilter, setCityFilter] = useState('');
+
+  const [selectedImportFileName, setSelectedImportFileName] = useState('');
+  const [importSummary, setImportSummary] = useState<ImportSummary | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -71,6 +85,14 @@ export default function TelecallingContactsPage() {
       map[contact.id] = false;
     });
     setConvertToggleMap(map);
+  };
+
+  const showMessage = (
+    text: string,
+    type: 'success' | 'error' | 'info' = 'info'
+  ) => {
+    setMessage(text);
+    setMessageType(type);
   };
 
   const fetchContacts = async (pageToLoad = 1) => {
@@ -100,7 +122,7 @@ export default function TelecallingContactsPage() {
       setSelectedContactIds([]);
     } catch (err) {
       console.error(err);
-      setMessage('Failed to fetch contacts');
+      showMessage('Failed to fetch contacts', 'error');
     } finally {
       setLoading(false);
     }
@@ -132,9 +154,15 @@ export default function TelecallingContactsPage() {
       fileName.endsWith('.xlsx') ||
       fileName.endsWith('.xls');
 
+    setSelectedImportFileName(file.name);
+    setImportSummary(null);
+
     if (!isAllowed) {
-      setMessage('Please upload only CSV, XLSX, or XLS file');
-      e.target.value = '';
+      showMessage('Please upload only CSV, XLSX, or XLS file', 'error');
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      setSelectedImportFileName('');
       return;
     }
 
@@ -143,7 +171,10 @@ export default function TelecallingContactsPage() {
 
     try {
       setImporting(true);
-      setMessage('Import in progress...');
+      showMessage(
+        'Import started. Please wait and do not close this page until it finishes.',
+        'info'
+      );
 
       const res = await axios.post(
         `${backendUrl}/telecalling/contacts/import`,
@@ -156,24 +187,39 @@ export default function TelecallingContactsPage() {
         }
       );
 
-      const importedCount = res.data?.importedCount || 0;
-      const skippedCount = res.data?.skippedCount || 0;
-      const totalRows = res.data?.totalRows || 0;
+      const importedCount = Number(res.data?.importedCount || 0);
+      const skippedCount = Number(res.data?.skippedCount || 0);
+      const totalRows = Number(res.data?.totalRows || 0);
 
-      setMessage(
-        `Import completed. Imported: ${importedCount}, Skipped: ${skippedCount}, Total Rows: ${totalRows}`
+      setImportSummary({
+        importedCount,
+        skippedCount,
+        totalRows,
+      });
+
+      showMessage(
+        `Import completed successfully. Imported: ${importedCount}, Skipped: ${skippedCount}, Total Rows: ${totalRows}`,
+        'success'
       );
 
       setPage(1);
       await fetchContacts(1);
     } catch (err: any) {
       console.error(err);
-      setMessage(err?.response?.data?.message || 'Import failed');
+      setImportSummary(null);
+      showMessage(
+        err?.response?.data?.message ||
+          'Import failed. Please check file format and required columns.',
+        'error'
+      );
     } finally {
       setImporting(false);
+
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
+
+      setSelectedImportFileName('');
     }
   };
 
@@ -187,22 +233,22 @@ export default function TelecallingContactsPage() {
         { headers: getAuthHeaders() }
       );
 
-      setMessage('Assigned successfully');
+      showMessage('Assigned successfully', 'success');
       await fetchContacts(page);
     } catch (err: any) {
       console.error(err);
-      setMessage(err?.response?.data?.message || 'Assignment failed');
+      showMessage(err?.response?.data?.message || 'Assignment failed', 'error');
     }
   };
 
   const handleBulkAssign = async () => {
     if (!bulkAssignedTo) {
-      setMessage('Please select a telecaller for bulk assign');
+      showMessage('Please select a telecaller for bulk assign', 'error');
       return;
     }
 
     if (selectedContactIds.length === 0) {
-      setMessage('Please select at least one contact');
+      showMessage('Please select at least one contact', 'error');
       return;
     }
 
@@ -218,16 +264,16 @@ export default function TelecallingContactsPage() {
         { headers: getAuthHeaders() }
       );
 
-      setMessage(`Assigned ${selectedContactIds.length} selected contact(s) successfully`);
+      showMessage(
+        `Assigned ${selectedContactIds.length} selected contact(s) successfully`,
+        'success'
+      );
       setSelectedContactIds([]);
       setBulkAssignedTo('');
       await fetchContacts(page);
     } catch (err: any) {
       console.error(err);
-      setMessage(
-        err?.response?.data?.message ||
-          'Bulk assign failed. If this gives 404, backend bulk-assign endpoint is missing.'
-      );
+      showMessage(err?.response?.data?.message || 'Bulk assign failed', 'error');
     } finally {
       setAssigningBulk(false);
     }
@@ -243,11 +289,11 @@ export default function TelecallingContactsPage() {
         { headers: getAuthHeaders() }
       );
 
-      setMessage('Converted to lead');
+      showMessage('Converted to lead', 'success');
       await fetchContacts(page);
     } catch (err: any) {
       console.error(err);
-      setMessage(err?.response?.data?.message || 'Conversion failed');
+      showMessage(err?.response?.data?.message || 'Conversion failed', 'error');
       setConvertToggleMap((prev) => ({
         ...prev,
         [id]: false,
@@ -353,6 +399,13 @@ export default function TelecallingContactsPage() {
     if (page < totalPages) setPage((prev) => prev + 1);
   };
 
+  const messageClassName =
+    messageType === 'success'
+      ? 'mb-3 rounded border border-green-300 bg-green-50 px-3 py-2 text-green-700'
+      : messageType === 'error'
+      ? 'mb-3 rounded border border-red-300 bg-red-50 px-3 py-2 text-red-700'
+      : 'mb-3 rounded border border-blue-300 bg-blue-50 px-3 py-2 text-blue-700';
+
   return (
     <div className="p-6">
       <h1 className="mb-4 text-2xl font-semibold">Telecalling Contacts</h1>
@@ -364,21 +417,79 @@ export default function TelecallingContactsPage() {
         >
           Back
         </Link>
-
-        <label className="cursor-pointer rounded bg-blue-600 px-4 py-2 text-white">
-          {importing ? 'Importing...' : 'Import CSV / Excel'}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv,.xlsx,.xls"
-            onChange={handleImport}
-            className="hidden"
-            disabled={importing}
-          />
-        </label>
       </div>
 
-      {message && <p className="mb-3 text-blue-600">{message}</p>}
+      <div className="mb-5 rounded border bg-white p-4">
+        <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">Import Contacts</h2>
+            <p className="text-sm text-gray-600">
+              Upload CSV or Excel file with contact data for telecalling.
+            </p>
+          </div>
+
+          <label className="inline-flex cursor-pointer items-center rounded bg-blue-600 px-4 py-2 text-white">
+            {importing ? 'Importing...' : 'Choose CSV / Excel File'}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,.xlsx,.xls"
+              onChange={handleImport}
+              className="hidden"
+              disabled={importing}
+            />
+          </label>
+        </div>
+
+        <div className="mb-3 rounded bg-gray-50 p-3 text-sm text-gray-700">
+          <p className="font-medium">Required columns</p>
+          <p>Name, Phone / Call / Phone Number, City</p>
+          <p className="mt-2 font-medium">Accepted formats</p>
+          <p>.csv, .xlsx, .xls</p>
+        </div>
+
+        {selectedImportFileName && (
+          <div className="mb-3 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+            Selected file: <span className="font-medium">{selectedImportFileName}</span>
+          </div>
+        )}
+
+        {importing && (
+          <div className="mb-3 rounded border border-blue-200 bg-blue-50 p-3">
+            <p className="font-medium text-blue-700">Import in progress...</p>
+            <p className="mt-1 text-sm text-blue-700">
+              Large files may take some time. Please do not refresh or close this page.
+            </p>
+          </div>
+        )}
+
+        {importSummary && (
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div className="rounded border bg-green-50 p-3">
+              <p className="text-sm text-gray-600">Imported</p>
+              <p className="text-xl font-semibold text-green-700">
+                {importSummary.importedCount}
+              </p>
+            </div>
+
+            <div className="rounded border bg-yellow-50 p-3">
+              <p className="text-sm text-gray-600">Skipped</p>
+              <p className="text-xl font-semibold text-yellow-700">
+                {importSummary.skippedCount}
+              </p>
+            </div>
+
+            <div className="rounded border bg-blue-50 p-3">
+              <p className="text-sm text-gray-600">Total Rows</p>
+              <p className="text-xl font-semibold text-blue-700">
+                {importSummary.totalRows}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {message && <div className={messageClassName}>{message}</div>}
 
       <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-4">
         <input
