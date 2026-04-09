@@ -19,6 +19,8 @@ import {
   TelecallingContact,
 } from './telecalling-contact.entity';
 import { User } from '../users/user.entity';
+import { ContactCallHistory } from './contact-call-history.entity';
+import { ContactNote } from './contact-note.entity';
 
 @Injectable()
 export class TelecallingService {
@@ -37,6 +39,12 @@ export class TelecallingService {
 
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+
+    @InjectRepository(ContactCallHistory)
+    private readonly contactCallHistoryRepository: Repository<ContactCallHistory>,
+
+    @InjectRepository(ContactNote)
+    private readonly contactNoteRepository: Repository<ContactNote>,
   ) {}
 
   private getRoles(user: any): string[] {
@@ -115,6 +123,37 @@ export class TelecallingService {
       address.includes(normalizedFilter) ||
       location.includes(normalizedFilter)
     );
+  }
+
+  private async getAccessibleContact(id: number, user: any) {
+    const contact = await this.contactRepository.findOne({
+      where: { id },
+    });
+
+    if (!contact) {
+      throw new NotFoundException('Telecalling contact not found');
+    }
+
+    const isOwnerOrTelecallingManager = this.hasAnyRole(user, [
+      'OWNER',
+      'TELECALLING_MANAGER',
+    ]);
+
+    if (isOwnerOrTelecallingManager) {
+      return contact;
+    }
+
+    if (this.hasAnyRole(user, ['TELECALLER'])) {
+      if (contact.assignedTo !== user.id) {
+        throw new ForbiddenException(
+          'You can only access your assigned contacts',
+        );
+      }
+
+      return contact;
+    }
+
+    throw new ForbiddenException('You do not have access to this contact');
   }
 
   async create(data: Partial<CallLog>) {
@@ -616,6 +655,193 @@ export class TelecallingService {
       limit: safeLimit,
       totalPages: Math.ceil(total / safeLimit) || 1,
     };
+  }
+
+  async getContactById(id: number, user: any) {
+    return this.getAccessibleContact(id, user);
+  }
+
+  async getContactWorkHistory(id: number, user: any) {
+    const contact = await this.getAccessibleContact(id, user);
+
+    const [notes, callHistory] = await Promise.all([
+      this.contactNoteRepository.find({
+        where: { contactId: id },
+        order: { createdAt: 'DESC' },
+      }),
+      this.contactCallHistoryRepository.find({
+        where: { contactId: id },
+        order: { createdAt: 'DESC' },
+      }),
+    ]);
+
+    const timeline: Array<{
+      type: 'CONTACT_CREATED' | 'CONTACT_NOTE' | 'CONTACT_CALL';
+      timestamp: Date;
+      title: string;
+      description: string;
+      noteId?: number;
+      callHistoryId?: number;
+      meta?: Record<string, any>;
+    }> = [];
+
+    timeline.push({
+      type: 'CONTACT_CREATED',
+      timestamp: contact.createdAt,
+      title: 'Contact Created',
+      description: `Contact imported by ${contact.importedByName || 'Unknown User'}`,
+      meta: {
+        importedBy: contact.importedByName || '-',
+        assignedTo: contact.assignedToName || '-',
+        status: contact.status,
+        convertedToLead: contact.convertedToLead ? 'YES' : 'NO',
+      },
+    });
+
+    for (const note of notes) {
+      timeline.push({
+        type: 'CONTACT_NOTE',
+        timestamp: note.updatedAt || note.createdAt,
+        title: `Note by ${note.createdByName || 'Unknown User'}`,
+        description: note.note,
+        noteId: note.id,
+        meta: {
+          createdBy: note.createdByName || '-',
+          createdAt: note.createdAt,
+          updatedAt: note.updatedAt,
+        },
+      });
+    }
+
+    for (const call of callHistory) {
+      timeline.push({
+        type: 'CONTACT_CALL',
+        timestamp: call.updatedAt || call.createdAt,
+        title: `Call ${call.callStatus || 'CONNECTED'}`,
+        description: call.notes || 'Call entry recorded',
+        callHistoryId: call.id,
+        meta: {
+          calledBy: call.calledByName || '-',
+          callStatus: call.callStatus || '-',
+          nextFollowUpDate: call.nextFollowUpDate || null,
+          createdAt: call.createdAt,
+          updatedAt: call.updatedAt,
+        },
+      });
+    }
+
+    timeline.sort(
+      (a, b) =>
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+    );
+
+    return {
+      contact,
+      timeline,
+    };
+  }
+
+  async addContactNote(id: number, note: string, user: any) {
+    const contact = await this.getAccessibleContact(id, user);
+
+    if (!note || !String(note).trim()) {
+      throw new BadRequestException('Note is required');
+    }
+
+    const item = this.contactNoteRepository.create({
+      contactId: contact.id,
+      note: String(note).trim(),
+      createdBy: user.id,
+      createdByName: user.name,
+    });
+
+    return this.contactNoteRepository.save(item);
+  }
+
+  async updateContactNote(
+    id: number,
+    noteId: number,
+    note: string,
+    user: any,
+  ) {
+    await this.getAccessibleContact(id, user);
+
+    if (!note || !String(note).trim()) {
+      throw new BadRequestException('Note is required');
+    }
+
+    const existingNote = await this.contactNoteRepository.findOne({
+      where: { id: noteId, contactId: id },
+    });
+
+    if (!existingNote) {
+      throw new NotFoundException('Contact note not found');
+    }
+
+    existingNote.note = String(note).trim();
+    return this.contactNoteRepository.save(existingNote);
+  }
+
+  async addContactCallHistory(
+    id: number,
+    body: {
+      callStatus?: string;
+      notes?: string;
+      nextFollowUpDate?: string;
+    },
+    user: any,
+  ) {
+    const contact = await this.getAccessibleContact(id, user);
+
+    const item = this.contactCallHistoryRepository.create({
+      contactId: contact.id,
+      calledBy: user.id,
+      calledByName: user.name,
+      callStatus: body.callStatus || 'CONNECTED',
+      notes: body.notes || '',
+      nextFollowUpDate: body.nextFollowUpDate
+        ? new Date(body.nextFollowUpDate)
+        : undefined,
+    });
+
+    return this.contactCallHistoryRepository.save(item);
+  }
+
+  async updateContactCallHistory(
+    id: number,
+    historyId: number,
+    body: {
+      callStatus?: string;
+      notes?: string;
+      nextFollowUpDate?: string;
+    },
+    user: any,
+  ) {
+    await this.getAccessibleContact(id, user);
+
+    const existingHistory = await this.contactCallHistoryRepository.findOne({
+      where: { id: historyId, contactId: id },
+    });
+
+    if (!existingHistory) {
+      throw new NotFoundException('Contact call history not found');
+    }
+
+    if (body.callStatus !== undefined) {
+      existingHistory.callStatus = body.callStatus || 'CONNECTED';
+    }
+
+    if (body.notes !== undefined) {
+      existingHistory.notes = body.notes || '';
+    }
+
+    if (body.nextFollowUpDate !== undefined) {
+      existingHistory.nextFollowUpDate = body.nextFollowUpDate
+        ? new Date(body.nextFollowUpDate)
+        : undefined;
+    }
+
+    return this.contactCallHistoryRepository.save(existingHistory);
   }
 
   async getFilteredContactsCount(locationFilter: string, user: any) {

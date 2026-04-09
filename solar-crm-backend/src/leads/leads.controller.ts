@@ -34,7 +34,8 @@ export class LeadsController {
   findAll(@Query() query: any, @CurrentUser() user: any) {
     return this.leadsService.findAll(query, user);
   }
-    @Get('hot')
+
+  @Get('hot')
   getHotLeads() {
     return this.leadsService.getHotLeads();
   }
@@ -62,6 +63,33 @@ export class LeadsController {
     @CurrentUser() user: any,
   ) {
     return this.leadsService.findByAssignedUser(userId, user);
+  }
+
+  @Get(':id/history')
+  getLeadHistory(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.leadsService.getLeadHistory(id, user);
+  }
+
+  @Post(':id/notes')
+  addLeadNote(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('note') note: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.leadsService.addLeadNote(id, note, user);
+  }
+
+  @Patch(':id/notes/:noteId')
+  updateLeadNote(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('noteId', ParseIntPipe) noteId: number,
+    @Body('note') note: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.leadsService.updateLeadNote(id, noteId, note, user);
   }
 
   @Get(':id')

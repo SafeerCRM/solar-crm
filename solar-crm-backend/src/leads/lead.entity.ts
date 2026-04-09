@@ -77,6 +77,9 @@ export class Lead {
   @Column({ type: 'timestamp', nullable: true })
   nextFollowUpDate: Date;
 
+  @Column({ type: 'int', nullable: true, default: 15 })
+  potentialPercentage: number;
+
   @CreateDateColumn()
   createdAt: Date;
 

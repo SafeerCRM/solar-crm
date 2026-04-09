@@ -7,6 +7,8 @@ import { Lead } from '../leads/lead.entity';
 import { FollowUp } from '../followup/follow-up.entity';
 import { TelecallingContact } from './telecalling-contact.entity';
 import { User } from '../users/user.entity';
+import { ContactCallHistory } from './contact-call-history.entity';
+import { ContactNote } from './contact-note.entity';
 
 @Module({
   imports: [
@@ -16,6 +18,8 @@ import { User } from '../users/user.entity';
       FollowUp,
       TelecallingContact,
       User,
+      ContactCallHistory,
+      ContactNote,
     ]),
   ],
   controllers: [TelecallingController],

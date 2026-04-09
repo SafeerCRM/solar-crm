@@ -133,6 +133,75 @@ export class TelecallingController {
     );
   }
 
+  @Get('contacts/:id')
+  getContactById(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.telecallingService.getContactById(id, user);
+  }
+
+  @Get('contacts/:id/work-history')
+  getContactWorkHistory(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.telecallingService.getContactWorkHistory(id, user);
+  }
+
+  @Post('contacts/:id/call-history')
+  addContactCallHistory(
+    @Param('id', ParseIntPipe) id: number,
+    @Body()
+    body: {
+      callStatus?: string;
+      notes?: string;
+      nextFollowUpDate?: string;
+    },
+    @CurrentUser() user: any,
+  ) {
+    return this.telecallingService.addContactCallHistory(id, body, user);
+  }
+
+  @Patch('contacts/:id/call-history/:historyId')
+  updateContactCallHistory(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('historyId', ParseIntPipe) historyId: number,
+    @Body()
+    body: {
+      callStatus?: string;
+      notes?: string;
+      nextFollowUpDate?: string;
+    },
+    @CurrentUser() user: any,
+  ) {
+    return this.telecallingService.updateContactCallHistory(
+      id,
+      historyId,
+      body,
+      user,
+    );
+  }
+
+  @Post('contacts/:id/notes')
+  addContactNote(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('note') note: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.telecallingService.addContactNote(id, note, user);
+  }
+
+  @Patch('contacts/:id/notes/:noteId')
+  updateContactNote(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('noteId', ParseIntPipe) noteId: number,
+    @Body('note') note: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.telecallingService.updateContactNote(id, noteId, note, user);
+  }
+
   @Get('contacts/filter-count')
   getFilteredContactsCount(
     @Query('locationFilter') locationFilter = '',

@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   ParseIntPipe,
+  Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -51,6 +52,16 @@ export class UsersController {
   @Get()
   findAllUsers() {
     return this.usersService.findAllUsers();
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER')
+  @Patch(':id/password')
+  updateUserPassword(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('password') password: string,
+  ) {
+    return this.usersService.updateUserPassword(id, password);
   }
 
   @UseGuards(JwtAuthGuard)

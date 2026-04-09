@@ -12,6 +12,8 @@ import {
   FollowUpStatus,
   FollowUpType,
 } from '../followup/follow-up.entity';
+import { CallLog } from '../telecalling/call-log.entity';
+import { LeadNote } from './lead-note.entity';
 
 @Injectable()
 export class LeadsService {
@@ -21,6 +23,12 @@ export class LeadsService {
 
     @InjectRepository(FollowUp)
     private readonly followUpRepository: Repository<FollowUp>,
+
+    @InjectRepository(CallLog)
+    private readonly callLogRepository: Repository<CallLog>,
+
+    @InjectRepository(LeadNote)
+    private readonly leadNoteRepository: Repository<LeadNote>,
   ) {}
 
   private isOwner(user: any) {
@@ -39,12 +47,97 @@ export class LeadsService {
     return user?.role === 'PROJECT_MANAGER';
   }
 
+  private getRoles(user: any): string[] {
+    if (Array.isArray(user?.roles)) {
+      return user.roles;
+    }
+    if (user?.role) {
+      return [user.role];
+    }
+    return [];
+  }
+
+  private hasAnyRole(user: any, roles: string[]) {
+    const currentRoles = this.getRoles(user);
+    return roles.some((role) => currentRoles.includes(role));
+  }
+
   private getCurrentUserId(user: any) {
     return Number(user?.id ?? user?.sub);
   }
 
   private getCurrentUserName(user: any) {
     return user?.name || user?.email || 'Unknown User';
+  }
+
+  private normalizePotentialPercentage(value: any) {
+    const numericValue = Number(value);
+
+    if (Number.isNaN(numericValue)) {
+      return undefined;
+    }
+
+    const allowedValues = [15, 50, 75];
+
+    if (!allowedValues.includes(numericValue)) {
+      throw new BadRequestException(
+        'Potential percentage must be one of 15, 50, or 75',
+      );
+    }
+
+    return numericValue;
+  }
+
+  private async getAccessibleLead(id: number, user: any) {
+    const lead = await this.leadRepository.findOne({
+      where: { id },
+    });
+
+    if (!lead) {
+      throw new NotFoundException('Lead not found');
+    }
+
+    const currentUserId = this.getCurrentUserId(user);
+    const roles = this.getRoles(user);
+
+    const canAccess =
+      roles.includes('OWNER') ||
+      roles.includes('LEAD_MANAGER') ||
+      roles.includes('MEETING_MANAGER') ||
+      lead.createdBy === currentUserId ||
+      lead.assignedTo === currentUserId;
+
+    if (!canAccess) {
+      if (this.isTelecaller(user)) {
+        if (
+          lead.assignedTo !== null &&
+          lead.assignedTo !== undefined &&
+          lead.assignedTo !== currentUserId
+        ) {
+          throw new ForbiddenException(
+            'You can only access your available or assigned leads',
+          );
+        }
+      } else if (this.isProjectManager(user)) {
+        const allowedStatuses = [
+          LeadStatus.INTERESTED,
+          LeadStatus.SITE_VISIT,
+          LeadStatus.QUOTATION,
+          LeadStatus.NEGOTIATION,
+          LeadStatus.WON,
+        ];
+
+        if (!allowedStatuses.includes(lead.status)) {
+          throw new ForbiddenException(
+            'You can only access qualified pipeline leads',
+          );
+        }
+      } else {
+        throw new ForbiddenException('You do not have access to this lead');
+      }
+    }
+
+    return lead;
   }
 
   async create(data: Partial<Lead>, user: any) {
@@ -63,6 +156,11 @@ export class LeadsService {
       ...data,
       createdBy: currentUserId,
       createdByName: currentUserName,
+      potentialPercentage:
+        data.potentialPercentage !== undefined &&
+        data.potentialPercentage !== null
+          ? this.normalizePotentialPercentage(data.potentialPercentage)
+          : 15,
     };
 
     if (this.isTelecaller(user)) {
@@ -126,6 +224,12 @@ export class LeadsService {
       query.andWhere('lead.region = :region', { region: filters.region });
     }
 
+    if (filters?.potentialPercentage) {
+      query.andWhere('lead.potentialPercentage = :potentialPercentage', {
+        potentialPercentage: Number(filters.potentialPercentage),
+      });
+    }
+
     if (filters?.search) {
       query.andWhere(
         `(lead.name ILIKE :search OR lead.phone ILIKE :search OR lead.email ILIKE :search OR lead.city ILIKE :search)`,
@@ -137,45 +241,156 @@ export class LeadsService {
   }
 
   async findOne(id: number, user: any) {
-    const lead = await this.leadRepository.findOne({
-      where: { id },
+    return this.getAccessibleLead(id, user);
+  }
+
+  async getLeadHistory(id: number, user: any) {
+    const lead = await this.getAccessibleLead(id, user);
+
+    const [callLogs, followUps, notes] = await Promise.all([
+      this.callLogRepository.find({
+        where: { leadId: id },
+        order: { createdAt: 'DESC' },
+      }),
+      this.followUpRepository.find({
+        where: { leadId: id },
+        order: { createdAt: 'DESC' },
+      }),
+      this.leadNoteRepository.find({
+        where: { leadId: id },
+        order: { createdAt: 'DESC' },
+      }),
+    ]);
+
+    const timeline: Array<{
+      type: 'LEAD_CREATED' | 'CALL_LOG' | 'FOLLOWUP' | 'NOTE';
+      timestamp: Date;
+      title: string;
+      description: string;
+      meta?: Record<string, any>;
+      noteId?: number;
+    }> = [];
+
+    timeline.push({
+      type: 'LEAD_CREATED',
+      timestamp: lead.createdAt,
+      title: 'Lead Created',
+      description: `Lead created by ${lead.createdByName || 'Unknown User'}`,
+      meta: {
+        leadOwner: lead.createdByName || '-',
+        currentStatus: lead.status,
+        potentialPercentage: lead.potentialPercentage || 15,
+        currentRemarks: lead.remarks || '',
+      },
     });
 
-    if (!lead) {
-      throw new NotFoundException('Lead not found');
+    for (const call of callLogs) {
+      timeline.push({
+        type: 'CALL_LOG',
+        timestamp: call.createdAt,
+        title: `Call ${call.callStatus || ''}`.trim(),
+        description: call.callNotes || 'Call log recorded',
+        meta: {
+          telecallerId: call.telecallerId,
+          reviewStatus: call.reviewStatus,
+          nextFollowUpDate: call.nextFollowUpDate || null,
+        },
+      });
     }
 
-    const currentUserId = this.getCurrentUserId(user);
-
-    if (this.isTelecaller(user)) {
-      if (
-        lead.assignedTo !== null &&
-        lead.assignedTo !== undefined &&
-        lead.assignedTo !== currentUserId
-      ) {
-        throw new ForbiddenException(
-          'You can only access your available or assigned leads',
-        );
-      }
+    for (const followUp of followUps) {
+      timeline.push({
+        type: 'FOLLOWUP',
+        timestamp: followUp.createdAt,
+        title: `Follow-up ${followUp.status || ''}`.trim(),
+        description:
+          followUp.note || followUp.remarks || 'Follow-up activity recorded',
+        meta: {
+          followUpType: followUp.followUpType,
+          followUpDate: followUp.followUpDate,
+          assignedTo: followUp.assignedTo,
+        },
+      });
     }
 
-    if (this.isProjectManager(user)) {
-      const allowedStatuses = [
-        LeadStatus.INTERESTED,
-        LeadStatus.SITE_VISIT,
-        LeadStatus.QUOTATION,
-        LeadStatus.NEGOTIATION,
-        LeadStatus.WON,
-      ];
-
-      if (!allowedStatuses.includes(lead.status)) {
-        throw new ForbiddenException(
-          'You can only access qualified pipeline leads',
-        );
-      }
+    for (const note of notes) {
+      timeline.push({
+        type: 'NOTE',
+        timestamp: note.updatedAt || note.createdAt,
+        title: `Note by ${note.createdByName || 'Unknown User'}`,
+        description: note.note,
+        noteId: note.id,
+        meta: {
+          createdBy: note.createdByName || '-',
+          createdAt: note.createdAt,
+          updatedAt: note.updatedAt,
+        },
+      });
     }
 
-    return lead;
+    timeline.sort(
+      (a, b) =>
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+    );
+
+    return {
+      lead: {
+        id: lead.id,
+        name: lead.name,
+        phone: lead.phone,
+        city: lead.city,
+        zone: lead.zone,
+        status: lead.status,
+        potentialPercentage: lead.potentialPercentage || 15,
+        leadOwnerName: lead.createdByName || '-',
+        assignedTo: lead.assignedTo,
+        remarks: lead.remarks || '',
+        createdAt: lead.createdAt,
+        updatedAt: lead.updatedAt,
+      },
+      timeline,
+    };
+  }
+
+  async addLeadNote(id: number, note: string, user: any) {
+    const lead = await this.getAccessibleLead(id, user);
+
+    if (!note || !String(note).trim()) {
+      throw new BadRequestException('Note is required');
+    }
+
+    const item = this.leadNoteRepository.create({
+      leadId: lead.id,
+      note: String(note).trim(),
+      createdBy: this.getCurrentUserId(user),
+      createdByName: this.getCurrentUserName(user),
+    });
+
+    return this.leadNoteRepository.save(item);
+  }
+
+  async updateLeadNote(
+    id: number,
+    noteId: number,
+    note: string,
+    user: any,
+  ) {
+    await this.getAccessibleLead(id, user);
+
+    if (!note || !String(note).trim()) {
+      throw new BadRequestException('Note is required');
+    }
+
+    const existingNote = await this.leadNoteRepository.findOne({
+      where: { id: noteId, leadId: id },
+    });
+
+    if (!existingNote) {
+      throw new NotFoundException('Lead note not found');
+    }
+
+    existingNote.note = String(note).trim();
+    return this.leadNoteRepository.save(existingNote);
   }
 
   async findByAssignedUser(userId: number, user: any) {
@@ -208,6 +423,12 @@ export class LeadsService {
 
     const currentUserId = this.getCurrentUserId(user);
 
+    if (data.potentialPercentage !== undefined) {
+      data.potentialPercentage = this.normalizePotentialPercentage(
+        data.potentialPercentage,
+      );
+    }
+
     if (this.isTelecaller(user)) {
       if (
         lead.assignedTo !== null &&
@@ -233,6 +454,7 @@ export class LeadsService {
         status: data.status,
         remarks: data.remarks,
         nextFollowUpDate: data.nextFollowUpDate,
+        potentialPercentage: data.potentialPercentage,
       };
 
       Object.assign(lead, allowedFields);
@@ -316,6 +538,7 @@ export class LeadsService {
       'assignedTo',
       'createdBy',
       'createdByName',
+      'potentialPercentage',
       'remarks',
       'nextFollowUpDate',
       'createdAt',
@@ -345,6 +568,7 @@ export class LeadsService {
         lead.assignedTo,
         lead.createdBy,
         lead.createdByName,
+        lead.potentialPercentage,
         lead.remarks,
         lead.nextFollowUpDate
           ? new Date(lead.nextFollowUpDate).toISOString()
@@ -470,6 +694,9 @@ export class LeadsService {
         assignedTo: row.assignedTo ? Number(row.assignedTo) : undefined,
         createdBy: this.getCurrentUserId(user),
         createdByName: this.getCurrentUserName(user),
+        potentialPercentage: row.potentialPercentage
+          ? this.normalizePotentialPercentage(row.potentialPercentage)
+          : 15,
         remarks: row.remarks || undefined,
         nextFollowUpDate: row.nextFollowUpDate
           ? new Date(row.nextFollowUpDate)

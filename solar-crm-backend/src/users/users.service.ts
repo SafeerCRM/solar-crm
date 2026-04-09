@@ -2,6 +2,7 @@ import {
   Injectable,
   BadRequestException,
   UnauthorizedException,
+  NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Raw } from 'typeorm';
@@ -131,6 +132,29 @@ export class UsersService {
       select: ['id', 'name', 'email', 'roles', 'createdAt'],
       order: { id: 'ASC' },
     });
+  }
+
+  async updateUserPassword(id: number, password: string) {
+    const user = await this.userRepository.findOne({
+      where: { id },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (!password || String(password).trim().length < 4) {
+      throw new BadRequestException(
+        'Password is required and must be at least 4 characters',
+      );
+    }
+
+    user.password = await bcrypt.hash(String(password).trim(), 10);
+    await this.userRepository.save(user);
+
+    return {
+      message: 'Password updated successfully',
+    };
   }
 
   async findById(id: number) {
