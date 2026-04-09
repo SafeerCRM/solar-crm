@@ -53,6 +53,8 @@ export default function MeetingPage() {
   const [searchName, setSearchName] = useState('');
   const [searchPhone, setSearchPhone] = useState('');
   const [searchLocation, setSearchLocation] = useState('');
+  const [convertSliderValue, setConvertSliderValue] = useState(0);
+  const [convertingProject, setConvertingProject] = useState(false);
 
   useEffect(() => {
     fetchMeetings();
@@ -102,6 +104,7 @@ export default function MeetingPage() {
   const resetActionState = () => {
     setSelectedMeeting(null);
     setActionType(null);
+    setConvertSliderValue(0);
     setForm({
       outcome: '',
       notes: '',
@@ -115,6 +118,7 @@ export default function MeetingPage() {
   const openAction = (meeting: Meeting, type: ActionType) => {
     setSelectedMeeting(meeting);
     setActionType(type);
+    setConvertSliderValue(0);
     setForm({
       outcome: meeting.outcome || '',
       notes: meeting.notes || '',
@@ -261,6 +265,8 @@ export default function MeetingPage() {
     if (!selectedMeeting) return;
 
     try {
+      setConvertingProject(true);
+
       await axios.patch(
         `${backendUrl}/meetings/${selectedMeeting.id}`,
         {
@@ -279,7 +285,23 @@ export default function MeetingPage() {
     } catch (err) {
       console.error(err);
       setMessage('Failed to convert meeting to project');
+      setConvertSliderValue(0);
+    } finally {
+      setConvertingProject(false);
     }
+  };
+
+  const handleConvertSliderChange = async (value: number) => {
+    setConvertSliderValue(value);
+
+    if (value >= 100 && !convertingProject) {
+      await convertToProject();
+    }
+  };
+
+  const resetConvertSlider = () => {
+    if (convertingProject) return;
+    setConvertSliderValue(0);
   };
 
   const actionTitle = useMemo(() => {
@@ -473,7 +495,7 @@ export default function MeetingPage() {
                             onClick={() => openAction(m, 'CONVERT')}
                             className="rounded bg-purple-600 px-2 py-1 text-white"
                           >
-                            Convert to Project
+                            Open Convert
                           </button>
                         )}
                       </div>
@@ -689,7 +711,7 @@ export default function MeetingPage() {
             <div className="grid grid-cols-1 gap-4">
               <div className="text-sm text-gray-700">
                 This meeting will remain in the system and be marked as converted to
-                project. The next backend step can later create a real project record.
+                project. Drag fully to commit conversion.
               </div>
 
               <div>
@@ -714,13 +736,34 @@ export default function MeetingPage() {
                 />
               </div>
 
+              <div className="max-w-md">
+                <p className="mb-2 text-sm font-medium text-gray-700">
+                  Drag to convert to project
+                </p>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={convertSliderValue}
+                  onChange={(e) =>
+                    handleConvertSliderChange(Number(e.target.value))
+                  }
+                  onMouseUp={resetConvertSlider}
+                  onTouchEnd={resetConvertSlider}
+                  disabled={convertingProject}
+                  className="w-full"
+                />
+                <div className="mt-1 flex items-center justify-between text-xs text-gray-500">
+                  <span>Drag</span>
+                  <span>
+                    {convertingProject ? 'Converting...' : `${convertSliderValue}%`}
+                  </span>
+                  <span>Project</span>
+                </div>
+              </div>
+
               <div className="flex gap-2">
-                <button
-                  onClick={convertToProject}
-                  className="rounded bg-purple-600 px-4 py-2 text-white"
-                >
-                  Confirm Convert to Project
-                </button>
                 <button
                   onClick={resetActionState}
                   className="rounded bg-gray-500 px-4 py-2 text-white"

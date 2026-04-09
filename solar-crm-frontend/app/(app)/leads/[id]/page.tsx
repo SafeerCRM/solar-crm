@@ -1,144 +1,414 @@
 'use client';
 
-import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import axios from 'axios';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import { getAuthHeaders } from '@/lib/authHeaders';
 
-export default function LeadDetailsPage() {
+type LeadSummary = {
+  id: number;
+  name: string;
+  phone: string;
+  city?: string;
+  zone?: string;
+  status?: string;
+  potentialPercentage?: number;
+  leadOwnerName?: string;
+  assignedTo?: number | null;
+  remarks?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+type TimelineItem = {
+  type: 'LEAD_CREATED' | 'CALL_LOG' | 'FOLLOWUP' | 'NOTE';
+  timestamp: string;
+  title: string;
+  description: string;
+  meta?: Record<string, any>;
+  noteId?: number;
+};
+
+type LeadHistoryResponse = {
+  lead: LeadSummary;
+  timeline: TimelineItem[];
+};
+
+const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+export default function LeadHistoryPage() {
   const params = useParams();
-  const router = useRouter();
-  const id = params.id;
+  const id = params?.id;
 
-  const [lead, setLead] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<LeadHistoryResponse | null>(null);
   const [message, setMessage] = useState('');
-
-  const fetchLead = async () => {
-    try {
-      const token = localStorage.getItem('token');
-
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/leads`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const data = await res.json();
-      const foundLead = data.find((item: any) => String(item.id) === String(id));
-      setLead(foundLead);
-    } catch (error) {
-      console.error('Error fetching lead:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [noteText, setNoteText] = useState('');
+  const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
+  const [editingText, setEditingText] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [updatingPotential, setUpdatingPotential] = useState(false);
 
   useEffect(() => {
-    fetchLead();
-  }, []);
+    if (id) {
+      fetchHistory();
+    }
+  }, [id]);
 
-  const handleUpdate = async () => {
+  const fetchHistory = async () => {
     try {
-      const token = localStorage.getItem('token');
-
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/leads/${id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          name: lead.name,
-          phone: lead.phone,
-          status: lead.status,
-        }),
+      const res = await axios.get(`${backendUrl}/leads/${id}/history`, {
+        headers: getAuthHeaders(),
       });
 
-      if (!res.ok) {
-        setMessage('Update failed');
-        return;
-      }
-
-      setMessage('Updated successfully');
-    } catch (error) {
-      setMessage('Error updating lead');
+      setData(res.data);
+    } catch (error: any) {
+      console.error(error);
+      setMessage(error?.response?.data?.message || 'Failed to load lead history');
+      setData(null);
     }
   };
 
-  if (loading) {
-    return <p>Loading...</p>;
+  const addNote = async () => {
+    if (!noteText.trim()) {
+      setMessage('Please enter a note');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setMessage('');
+
+      await axios.post(
+        `${backendUrl}/leads/${id}/notes`,
+        { note: noteText },
+        { headers: getAuthHeaders() }
+      );
+
+      setNoteText('');
+      setMessage('Note added successfully');
+      fetchHistory();
+    } catch (error: any) {
+      console.error(error);
+      setMessage(error?.response?.data?.message || 'Failed to add note');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateNote = async () => {
+    if (!editingNoteId || !editingText.trim()) {
+      setMessage('Please enter a note');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setMessage('');
+
+      await axios.patch(
+        `${backendUrl}/leads/${id}/notes/${editingNoteId}`,
+        { note: editingText },
+        { headers: getAuthHeaders() }
+      );
+
+      setEditingNoteId(null);
+      setEditingText('');
+      setMessage('Note updated successfully');
+      fetchHistory();
+    } catch (error: any) {
+      console.error(error);
+      setMessage(error?.response?.data?.message || 'Failed to update note');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updatePotential = async (potentialPercentage: number) => {
+    if (!data?.lead?.id) return;
+
+    try {
+      setUpdatingPotential(true);
+      setMessage('');
+
+      await axios.patch(
+        `${backendUrl}/leads/${data.lead.id}`,
+        { potentialPercentage },
+        { headers: getAuthHeaders() }
+      );
+
+      setMessage('Lead potential updated successfully');
+      fetchHistory();
+    } catch (error: any) {
+      console.error(error);
+      setMessage(
+        error?.response?.data?.message || 'Failed to update lead potential'
+      );
+    } finally {
+      setUpdatingPotential(false);
+    }
+  };
+
+  const getPotentialMeta = (value?: number | null) => {
+    const potential = Number(value || 15);
+
+    if (potential === 75) {
+      return {
+        label: 'High Potential (75%)',
+        className: 'bg-green-100 text-green-700',
+      };
+    }
+
+    if (potential === 50) {
+      return {
+        label: 'Likely (50%)',
+        className: 'bg-yellow-100 text-yellow-700',
+      };
+    }
+
+    return {
+      label: 'Not Likely (15%)',
+      className: 'bg-red-100 text-red-700',
+    };
+  };
+
+  const getTypeBadge = (type: string) => {
+    if (type === 'CALL_LOG') {
+      return 'bg-blue-100 text-blue-700';
+    }
+
+    if (type === 'FOLLOWUP') {
+      return 'bg-purple-100 text-purple-700';
+    }
+
+    if (type === 'NOTE') {
+      return 'bg-orange-100 text-orange-700';
+    }
+
+    return 'bg-gray-100 text-gray-700';
+  };
+
+  if (!data) {
+    return (
+      <div className="p-6">
+        <div className="mb-6 flex justify-between">
+          <h1 className="text-2xl font-semibold">Lead History</h1>
+          <Link
+            href="/leads"
+            className="rounded bg-gray-500 px-4 py-2 text-white"
+          >
+            Back
+          </Link>
+        </div>
+
+        {message ? (
+          <div className="rounded bg-red-50 p-4 text-red-700">{message}</div>
+        ) : (
+          <div>Loading...</div>
+        )}
+      </div>
+    );
   }
 
-  if (!lead) {
-    return <p>Lead not found</p>;
-  }
+  const potentialMeta = getPotentialMeta(data.lead.potentialPercentage);
 
   return (
-    <div className="max-w-3xl">
-      <div className="mb-6 flex items-center justify-between rounded-2xl bg-white p-6 shadow">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Lead Details</h1>
-          <p className="mt-1 text-gray-500">View and update lead information</p>
-        </div>
+    <div className="p-6">
+      <div className="mb-6 flex justify-between">
+        <h1 className="text-2xl font-semibold">Lead History</h1>
 
-        <button
-          onClick={() => router.push('/leads')}
-          className="rounded-xl bg-gray-200 px-4 py-2 font-medium text-gray-700 hover:bg-gray-300"
+        <Link
+          href="/leads"
+          className="rounded bg-gray-500 px-4 py-2 text-white"
         >
           Back
-        </button>
+        </Link>
       </div>
 
-      <div className="rounded-2xl bg-white p-6 shadow space-y-5">
-        <div>
-          <label className="mb-2 block text-sm font-medium text-gray-700">
-            Name
-          </label>
-          <input
-            value={lead.name || ''}
-            onChange={(e) => setLead({ ...lead, name: e.target.value })}
-            className="w-full rounded-xl border border-gray-300 px-4 py-3"
-          />
+      <div className="mb-6 rounded-2xl bg-white p-6 shadow">
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-semibold">{data.lead.name}</h2>
+            <p className="text-sm text-gray-500">Lead ID: {data.lead.id}</p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <a
+              href={`tel:${data.lead.phone}`}
+              className="rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white"
+            >
+              📞 Call
+            </a>
+
+            <Link
+              href={`/meeting/create?leadId=${data.lead.id}&name=${encodeURIComponent(
+                data.lead.name || ''
+              )}&phone=${encodeURIComponent(
+                data.lead.phone || ''
+              )}&city=${encodeURIComponent(data.lead.city || '')}`}
+              className="rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white"
+            >
+              Schedule Meeting
+            </Link>
+          </div>
         </div>
 
-        <div>
-          <label className="mb-2 block text-sm font-medium text-gray-700">
-            Phone
-          </label>
-          <input
-            value={lead.phone || ''}
-            onChange={(e) => setLead({ ...lead, phone: e.target.value })}
-            className="w-full rounded-xl border border-gray-300 px-4 py-3"
-          />
-        </div>
-
-        <div>
-          <label className="mb-2 block text-sm font-medium text-gray-700">
-            Status
-          </label>
+        <div className="mb-4 flex flex-wrap items-center gap-3">
           <select
-            value={lead.status || 'NEW'}
-            onChange={(e) => setLead({ ...lead, status: e.target.value })}
-            className="w-full rounded-xl border border-gray-300 px-4 py-3"
+            value={Number(data.lead.potentialPercentage || 15)}
+            onChange={(e) => updatePotential(Number(e.target.value))}
+            disabled={updatingPotential}
+            className="rounded border px-3 py-2 text-sm"
           >
-            <option value="NEW">NEW</option>
-            <option value="CONTACTED">CONTACTED</option>
-            <option value="INTERESTED">INTERESTED</option>
-            <option value="SITE_VISIT">SITE_VISIT</option>
-            <option value="QUOTATION">QUOTATION</option>
-            <option value="NEGOTIATION">NEGOTIATION</option>
-            <option value="WON">WON</option>
-            <option value="LOST">LOST</option>
+            <option value={15}>Not Likely (15%)</option>
+            <option value={50}>Likely (50%)</option>
+            <option value={75}>High Potential (75%)</option>
           </select>
+
+          <span
+            className={`inline-block rounded-full px-3 py-2 text-xs font-medium ${potentialMeta.className}`}
+          >
+            {updatingPotential ? 'Updating...' : potentialMeta.label}
+          </span>
         </div>
 
-        {message && <p className="text-green-600">{message}</p>}
+        <div className="grid gap-3 text-sm text-gray-700 md:grid-cols-2">
+          <p>
+            <span className="font-medium">Phone:</span> {data.lead.phone}
+          </p>
+          <p>
+            <span className="font-medium">City:</span> {data.lead.city || '-'}
+          </p>
+          <p>
+            <span className="font-medium">Zone:</span> {data.lead.zone || '-'}
+          </p>
+          <p>
+            <span className="font-medium">Status:</span> {data.lead.status || '-'}
+          </p>
+          <p>
+            <span className="font-medium">Lead Owner:</span>{' '}
+            {data.lead.leadOwnerName || '-'}
+          </p>
+          <p>
+            <span className="font-medium">Current Remarks:</span>{' '}
+            {data.lead.remarks || '-'}
+          </p>
+        </div>
+      </div>
+
+      <div className="mb-6 rounded-2xl bg-white p-6 shadow">
+        <h2 className="mb-4 text-xl font-semibold">Notes</h2>
+
+        <textarea
+          value={noteText}
+          onChange={(e) => setNoteText(e.target.value)}
+          className="mb-3 w-full rounded border p-3"
+          rows={4}
+          placeholder="Enter working note for this lead"
+        />
 
         <button
-          onClick={handleUpdate}
-          className="rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white hover:bg-blue-700"
+          onClick={addNote}
+          disabled={saving}
+          className="rounded bg-blue-600 px-4 py-2 text-white"
         >
-          Update Lead
+          {saving ? 'Saving...' : 'Add Note'}
         </button>
+
+        {message && <p className="mt-3 text-blue-600">{message}</p>}
+      </div>
+
+      <div className="rounded-2xl bg-white p-6 shadow">
+        <h2 className="mb-4 text-xl font-semibold">Timeline</h2>
+
+        {data.timeline.length === 0 ? (
+          <p className="text-gray-600">No history available</p>
+        ) : (
+          <div className="space-y-4">
+            {data.timeline.map((item, index) => (
+              <div
+                key={`${item.type}-${item.timestamp}-${index}`}
+                className="rounded-xl border p-4"
+              >
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-medium ${getTypeBadge(
+                      item.type
+                    )}`}
+                  >
+                    {item.type.replace('_', ' ')}
+                  </span>
+
+                  <span className="text-xs text-gray-500">
+                    {new Date(item.timestamp).toLocaleString()}
+                  </span>
+                </div>
+
+                <h3 className="font-semibold text-gray-800">{item.title}</h3>
+
+                {item.type === 'NOTE' && item.noteId === editingNoteId ? (
+                  <div className="mt-3">
+                    <textarea
+                      value={editingText}
+                      onChange={(e) => setEditingText(e.target.value)}
+                      className="mb-2 w-full rounded border p-3"
+                      rows={4}
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={updateNote}
+                        disabled={saving}
+                        className="rounded bg-black px-4 py-2 text-white"
+                      >
+                        {saving ? 'Saving...' : 'Update Note'}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEditingNoteId(null);
+                          setEditingText('');
+                        }}
+                        className="rounded bg-gray-400 px-4 py-2 text-white"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <p className="mt-1 text-sm text-gray-700">{item.description}</p>
+
+                    {item.type === 'NOTE' && item.noteId ? (
+                      <div className="mt-3">
+                        <button
+                          onClick={() => {
+                            setEditingNoteId(item.noteId || null);
+                            setEditingText(item.description || '');
+                          }}
+                          className="rounded bg-orange-500 px-3 py-2 text-sm text-white"
+                        >
+                          Edit Note
+                        </button>
+                      </div>
+                    ) : null}
+                  </>
+                )}
+
+                {item.meta && (
+                  <div className="mt-3 rounded bg-gray-50 p-3 text-xs text-gray-600">
+                    {Object.entries(item.meta).map(([key, value]) => (
+                      <p key={key}>
+                        <span className="font-medium">{key}:</span>{' '}
+                        {value === null || value === undefined || value === ''
+                          ? '-'
+                          : String(value)}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -13,6 +13,7 @@ type Lead = {
   zone?: string;
   createdByName?: string;
   assignedTo?: number | null;
+  potentialPercentage?: number | null;
 };
 
 type User = {
@@ -40,6 +41,7 @@ export default function LeadsPage() {
   const [searchName, setSearchName] = useState('');
   const [searchPhone, setSearchPhone] = useState('');
   const [searchCity, setSearchCity] = useState('');
+  const [potentialFilter, setPotentialFilter] = useState('');
 
   const currentRoles = currentUser?.roles || [];
   const canAssignLeads =
@@ -94,8 +96,14 @@ export default function LeadsPage() {
       });
     }
 
+    if (potentialFilter) {
+      filtered = filtered.filter(
+        (lead) => Number(lead.potentialPercentage || 15) === Number(potentialFilter)
+      );
+    }
+
     setFilteredLeads(filtered);
-  }, [searchName, searchPhone, searchCity, leads]);
+  }, [searchName, searchPhone, searchCity, potentialFilter, leads]);
 
   const fetchLeads = async () => {
     try {
@@ -144,6 +152,22 @@ export default function LeadsPage() {
     }
   };
 
+  const updatePotential = async (leadId: number, potentialPercentage: number) => {
+    try {
+      await axios.patch(
+        `${backendUrl}/leads/${leadId}`,
+        { potentialPercentage },
+        { headers: getAuthHeaders() }
+      );
+
+      setMessage('Lead potential updated successfully');
+      fetchLeads();
+    } catch (err) {
+      console.error(err);
+      setMessage('Potential update failed');
+    }
+  };
+
   const getAssignedName = (assignedTo?: number | null) => {
     if (!assignedTo) return 'Unassigned';
     const user = users.find((u) => u.id === assignedTo);
@@ -154,6 +178,30 @@ export default function LeadsPage() {
     setSearchName('');
     setSearchPhone('');
     setSearchCity('');
+    setPotentialFilter('');
+  };
+
+  const getPotentialMeta = (value?: number | null) => {
+    const potential = Number(value || 15);
+
+    if (potential === 75) {
+      return {
+        label: 'High Potential (75%)',
+        className: 'bg-green-100 text-green-700',
+      };
+    }
+
+    if (potential === 50) {
+      return {
+        label: 'Likely (50%)',
+        className: 'bg-yellow-100 text-yellow-700',
+      };
+    }
+
+    return {
+      label: 'Not Likely (15%)',
+      className: 'bg-red-100 text-red-700',
+    };
   };
 
   return (
@@ -169,7 +217,7 @@ export default function LeadsPage() {
         </Link>
       </div>
 
-      <div className="mb-4 grid gap-3 md:grid-cols-3">
+      <div className="mb-4 grid gap-3 md:grid-cols-4">
         <input
           type="text"
           placeholder="Search by name"
@@ -193,6 +241,17 @@ export default function LeadsPage() {
           onChange={(e) => setSearchCity(e.target.value)}
           className="rounded border p-2"
         />
+
+        <select
+          value={potentialFilter}
+          onChange={(e) => setPotentialFilter(e.target.value)}
+          className="rounded border p-2"
+        >
+          <option value="">Filter by potential</option>
+          <option value="15">Not Likely (15%)</option>
+          <option value="50">Likely (50%)</option>
+          <option value="75">High Potential (75%)</option>
+        </select>
       </div>
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded bg-gray-100 p-3 text-sm text-gray-700">
@@ -217,77 +276,113 @@ export default function LeadsPage() {
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {filteredLeads.map((lead) => (
-            <div
-              key={lead.id}
-              className="rounded-2xl bg-white p-5 shadow transition hover:shadow-md"
-            >
-              <div className="mb-3 flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-800">
-                    {lead.name}
-                  </h2>
-                  <p className="text-sm text-gray-500">Lead ID: {lead.id}</p>
+          {filteredLeads.map((lead) => {
+            const potentialMeta = getPotentialMeta(lead.potentialPercentage);
+
+            return (
+              <div
+                key={lead.id}
+                className="rounded-2xl bg-white p-5 shadow transition hover:shadow-md"
+              >
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-800">
+                      {lead.name}
+                    </h2>
+                    <p className="text-sm text-gray-500">Lead ID: {lead.id}</p>
+                  </div>
+
+                  <a
+                    href={`tel:${lead.phone}`}
+                    className="rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white"
+                  >
+                    📞 Call
+                  </a>
                 </div>
 
-                <a
-                  href={`tel:${lead.phone}`}
-                  className="rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white"
-                >
-                  📞 Call
-                </a>
-              </div>
+                <div className="mb-3">
+                  <span
+                    className={`inline-block rounded-full px-3 py-1 text-xs font-medium ${potentialMeta.className}`}
+                  >
+                    {potentialMeta.label}
+                  </span>
+                </div>
 
-              <div className="space-y-2 text-sm text-gray-700">
-                <p>
-                  <span className="font-medium">Phone:</span> {lead.phone}
-                </p>
-                <p>
-                  <span className="font-medium">City:</span> {lead.city || '-'}
-                </p>
-                <p>
-                  <span className="font-medium">Zone:</span> {lead.zone || '-'}
-                </p>
-                <p>
-                  <span className="font-medium">Created By:</span>{' '}
-                  {lead.createdByName || '-'}
-                </p>
-                <p>
-                  <span className="font-medium">Assigned:</span>{' '}
-                  {getAssignedName(lead.assignedTo)}
-                </p>
-              </div>
+                <div className="space-y-2 text-sm text-gray-700">
+                  <p>
+                    <span className="font-medium">Phone:</span> {lead.phone}
+                  </p>
+                  <p>
+                    <span className="font-medium">City:</span> {lead.city || '-'}
+                  </p>
+                  <p>
+                    <span className="font-medium">Zone:</span> {lead.zone || '-'}
+                  </p>
+                  <p>
+                    <span className="font-medium">Lead Owner:</span>{' '}
+                    {lead.createdByName || '-'}
+                  </p>
+                  <p>
+                    <span className="font-medium">Assigned:</span>{' '}
+                    {getAssignedName(lead.assignedTo)}
+                  </p>
+                </div>
 
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Link
-                  href={`/meeting/create?leadId=${lead.id}&name=${lead.name}&phone=${lead.phone}&city=${lead.city || ''}`}
-                  className="rounded bg-purple-600 px-3 py-2 text-sm text-white"
-                >
-                  Schedule Meeting
-                </Link>
-              </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Link
+                    href={`/meeting/create?leadId=${lead.id}&name=${lead.name}&phone=${lead.phone}&city=${lead.city || ''}`}
+                    className="rounded bg-purple-600 px-3 py-2 text-sm text-white"
+                  >
+                    Schedule Meeting
+                  </Link>
 
-              {canAssignLeads && (
+                  <Link
+                    href={`/leads/${lead.id}`}
+                    className="rounded bg-gray-700 px-3 py-2 text-sm text-white"
+                  >
+                    View History
+                  </Link>
+                </div>
+
                 <div className="mt-4">
                   <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Assign Lead
+                    Lead Potential
                   </label>
                   <select
-                    onChange={(e) => assignLead(lead.id, Number(e.target.value))}
+                    onChange={(e) =>
+                      updatePotential(lead.id, Number(e.target.value))
+                    }
                     className="w-full rounded border p-2 text-sm"
-                    defaultValue=""
+                    value={String(lead.potentialPercentage || 15)}
                   >
-                    <option value="">Select user</option>
-                    {users.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.name}
-                      </option>
-                    ))}
+                    <option value="15">Not Likely (15%)</option>
+                    <option value="50">Likely (50%)</option>
+                    <option value="75">High Potential (75%)</option>
                   </select>
                 </div>
-              )}
-            </div>
-          ))}
+
+                {canAssignLeads && (
+                  <div className="mt-4">
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Assign Lead
+                    </label>
+                    <select
+                      onChange={(e) => assignLead(lead.id, Number(e.target.value))}
+                      className="w-full rounded border p-2 text-sm"
+                      defaultValue=""
+                    >
+                      <option value="">Select user</option>
+                      {users.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

@@ -65,7 +65,6 @@ export default function TelecallingContactsPage() {
   const [checkingFilteredCount, setCheckingFilteredCount] = useState(false);
   const [convertingId, setConvertingId] = useState<number | null>(null);
 
-  const [convertToggleMap, setConvertToggleMap] = useState<Record<number, boolean>>({});
   const [selectedContactIds, setSelectedContactIds] = useState<number[]>([]);
   const [bulkAssignedTo, setBulkAssignedTo] = useState<string>('');
   const [latestAssignedTo, setLatestAssignedTo] = useState<string>('');
@@ -84,6 +83,8 @@ export default function TelecallingContactsPage() {
   const [selectedImportFileName, setSelectedImportFileName] = useState('');
   const [importSummary, setImportSummary] = useState<ImportSummary | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('active');
+
+  const [convertSliderMap, setConvertSliderMap] = useState<Record<number, number>>({});
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -105,17 +106,29 @@ export default function TelecallingContactsPage() {
       : currentUser?.role === 'OWNER' ||
         currentUser?.role === 'TELECALLING_MANAGER';
 
+  const isTelecaller =
+    Array.isArray(currentUser?.roles)
+      ? currentUser?.roles?.includes('TELECALLER')
+      : currentUser?.role === 'TELECALLER';
+
   useEffect(() => {
     fetchContacts(page, viewMode);
-    fetchUsers();
   }, [page, viewMode]);
 
-  const buildToggleMap = (data: Contact[]) => {
-    const map: Record<number, boolean> = {};
+  useEffect(() => {
+    if (isOwnerOrTelecallingManager) {
+      fetchUsers();
+    } else {
+      setUsers([]);
+    }
+  }, [isOwnerOrTelecallingManager]);
+
+  const buildSliderMap = (data: Contact[]) => {
+    const map: Record<number, number> = {};
     data.forEach((contact) => {
-      map[contact.id] = false;
+      map[contact.id] = 0;
     });
-    setConvertToggleMap(map);
+    setConvertSliderMap(map);
   };
 
   const showMessage = (
@@ -142,12 +155,12 @@ export default function TelecallingContactsPage() {
       if (Array.isArray(responseData)) {
         setContacts(responseData);
         setTotalPages(1);
-        buildToggleMap(responseData);
+        buildSliderMap(responseData);
       } else {
         const list = Array.isArray(responseData?.data) ? responseData.data : [];
         setContacts(list);
         setTotalPages(responseData?.totalPages || 1);
-        buildToggleMap(list);
+        buildSliderMap(list);
       }
 
       setSelectedContactIds([]);
@@ -173,8 +186,15 @@ export default function TelecallingContactsPage() {
       );
 
       setUsers(telecallers);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      if (err?.response?.status !== 403) {
+        showMessage(
+          err?.response?.data?.message || 'Failed to fetch users',
+          'error'
+        );
+      }
+      setUsers([]);
     }
   };
 
@@ -419,40 +439,41 @@ export default function TelecallingContactsPage() {
       );
 
       showMessage('Converted to lead', 'success');
+      setConvertSliderMap((prev) => ({
+        ...prev,
+        [id]: 0,
+      }));
       await fetchContacts(page, viewMode);
     } catch (err: any) {
       console.error(err);
       showMessage(err?.response?.data?.message || 'Conversion failed', 'error');
-      setConvertToggleMap((prev) => ({
+      setConvertSliderMap((prev) => ({
         ...prev,
-        [id]: false,
+        [id]: 0,
       }));
     } finally {
       setConvertingId(null);
     }
   };
 
-  const handleConvertToggle = async (id: number, checked: boolean) => {
-    setConvertToggleMap((prev) => ({
+  const handleConvertSliderChange = async (id: number, value: number) => {
+    setConvertSliderMap((prev) => ({
       ...prev,
-      [id]: checked,
+      [id]: value,
     }));
 
-    if (!checked) return;
-
-    const confirmConvert = window.confirm(
-      'Are you sure you want to convert this contact to lead?'
-    );
-
-    if (!confirmConvert) {
-      setConvertToggleMap((prev) => ({
-        ...prev,
-        [id]: false,
-      }));
-      return;
+    if (value >= 100 && convertingId !== id) {
+      await convertToLead(id);
     }
+  };
 
-    await convertToLead(id);
+  const resetConvertSlider = (id: number, isAlreadyConverted?: boolean) => {
+    if (isAlreadyConverted || convertingId === id) return;
+
+    setConvertSliderMap((prev) => ({
+      ...prev,
+      [id]: 0,
+    }));
   };
 
   const handleClearFilters = () => {
@@ -845,6 +866,7 @@ export default function TelecallingContactsPage() {
                 <th className="border p-2">Imported By</th>
                 <th className="border p-2">Assigned</th>
                 <th className="border p-2">Assign</th>
+                <th className="border p-2">Open</th>
                 <th className="border p-2">Convert</th>
               </tr>
             </thead>
@@ -888,20 +910,52 @@ export default function TelecallingContactsPage() {
                   </td>
 
                   <td className="border p-2">
+                    {(viewMode === 'active' || isTelecaller) ? (
+                      <Link
+                        href={`/telecalling/contacts/${c.id}`}
+                        className="rounded bg-blue-600 px-3 py-2 text-sm text-white"
+                      >
+                        Open
+                      </Link>
+                    ) : (
+                      <span className="text-gray-500">-</span>
+                    )}
+                  </td>
+
+                  <td className="border p-2 min-w-[220px]">
                     {viewMode === 'storage' ? (
                       <span className="text-gray-500">Storage</span>
                     ) : c.convertedToLead ? (
                       <span className="font-medium text-green-600">Converted</span>
                     ) : (
-                      <label className="inline-flex cursor-pointer items-center gap-2">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-xs text-gray-600">
+                          Drag to convert
+                        </span>
                         <input
-                          type="checkbox"
-                          checked={!!convertToggleMap[c.id]}
-                          onChange={(e) => handleConvertToggle(c.id, e.target.checked)}
+                          type="range"
+                          min={0}
+                          max={100}
+                          step={1}
+                          value={convertSliderMap[c.id] || 0}
+                          onChange={(e) =>
+                            handleConvertSliderChange(c.id, Number(e.target.value))
+                          }
+                          onMouseUp={() => resetConvertSlider(c.id, c.convertedToLead)}
+                          onTouchEnd={() => resetConvertSlider(c.id, c.convertedToLead)}
                           disabled={convertingId === c.id}
+                          className="w-full"
                         />
-                        <span>{convertingId === c.id ? 'Saving...' : 'Convert'}</span>
-                      </label>
+                        <div className="flex items-center justify-between text-xs text-gray-500">
+                          <span>Drag</span>
+                          <span>
+                            {convertingId === c.id
+                              ? 'Converting...'
+                              : `${convertSliderMap[c.id] || 0}%`}
+                          </span>
+                          <span>Convert</span>
+                        </div>
+                      </div>
                     )}
                   </td>
                 </tr>
@@ -909,7 +963,7 @@ export default function TelecallingContactsPage() {
 
               {filteredContacts.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="border p-4 text-center text-gray-500">
+                  <td colSpan={10} className="border p-4 text-center text-gray-500">
                     No contacts found
                   </td>
                 </tr>

@@ -33,8 +33,13 @@ export default function UsersPage() {
   const [password, setPassword] = useState('');
   const [roles, setRoles] = useState<string[]>([]);
 
+  const [showCreatePassword, setShowCreatePassword] = useState(false);
+  const [resetPasswordMap, setResetPasswordMap] = useState<Record<number, string>>({});
+  const [showResetPasswordMap, setShowResetPasswordMap] = useState<Record<number, boolean>>({});
+
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [passwordUpdatingId, setPasswordUpdatingId] = useState<number | null>(null);
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
@@ -127,13 +132,43 @@ export default function UsersPage() {
     }
   };
 
+  const handlePasswordChange = async (userId: number) => {
+    const newPassword = resetPasswordMap[userId];
+
+    if (!newPassword || newPassword.trim().length < 4) {
+      setMessage('New password must be at least 4 characters');
+      return;
+    }
+
+    try {
+      setPasswordUpdatingId(userId);
+      setMessage('');
+
+      await axios.patch(
+        `${backendUrl}/users/${userId}/password`,
+        { password: newPassword },
+        { headers: getAuthHeaders() }
+      );
+
+      setMessage('Password updated successfully');
+      setResetPasswordMap((prev) => ({
+        ...prev,
+        [userId]: '',
+      }));
+    } catch (error: any) {
+      console.error('Failed to update password:', error);
+      setMessage(error?.response?.data?.message || 'Failed to update password');
+    } finally {
+      setPasswordUpdatingId(null);
+    }
+  };
+
   if (!currentUser) {
     return <div className="p-6">Loading users...</div>;
   }
 
   return (
     <div className="p-6 space-y-6">
-      {/* CREATE USER */}
       <div className="bg-white rounded-2xl shadow p-6">
         <h1 className="text-2xl font-bold mb-6">Users Management</h1>
 
@@ -154,15 +189,23 @@ export default function UsersPage() {
             className="rounded-xl border border-gray-400 px-4 py-3"
           />
 
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="rounded-xl border border-gray-400 px-4 py-3"
-          />
+          <div className="relative">
+            <input
+              type={showCreatePassword ? 'text' : 'password'}
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full rounded-xl border border-gray-400 px-4 py-3 pr-20"
+            />
+            <button
+              type="button"
+              onClick={() => setShowCreatePassword((prev) => !prev)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 rounded bg-gray-200 px-3 py-1 text-xs"
+            >
+              {showCreatePassword ? 'Hide' : 'Show'}
+            </button>
+          </div>
 
-          {/* MULTI ROLE SELECT */}
           <div className="md:col-span-2">
             <p className="mb-2 font-medium">Select Roles</p>
 
@@ -208,7 +251,6 @@ export default function UsersPage() {
         </form>
       </div>
 
-      {/* USERS TABLE */}
       <div className="bg-white rounded-2xl shadow p-6">
         <h2 className="text-2xl font-bold mb-4">All Users</h2>
 
@@ -224,6 +266,7 @@ export default function UsersPage() {
                   <th className="border p-2 text-left">Email</th>
                   <th className="border p-2 text-left">Roles</th>
                   <th className="border p-2 text-left">Created At</th>
+                  <th className="border p-2 text-left">Change Password</th>
                 </tr>
               </thead>
               <tbody>
@@ -239,6 +282,47 @@ export default function UsersPage() {
                       {user.createdAt
                         ? new Date(user.createdAt).toLocaleString()
                         : '-'}
+                    </td>
+                    <td className="border p-2 min-w-[260px]">
+                      <div className="flex flex-col gap-2">
+                        <div className="relative">
+                          <input
+                            type={showResetPasswordMap[user.id] ? 'text' : 'password'}
+                            placeholder="New password"
+                            value={resetPasswordMap[user.id] || ''}
+                            onChange={(e) =>
+                              setResetPasswordMap((prev) => ({
+                                ...prev,
+                                [user.id]: e.target.value,
+                              }))
+                            }
+                            className="w-full rounded border px-3 py-2 pr-20"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setShowResetPasswordMap((prev) => ({
+                                ...prev,
+                                [user.id]: !prev[user.id],
+                              }))
+                            }
+                            className="absolute right-2 top-1/2 -translate-y-1/2 rounded bg-gray-200 px-3 py-1 text-xs"
+                          >
+                            {showResetPasswordMap[user.id] ? 'Hide' : 'Show'}
+                          </button>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handlePasswordChange(user.id)}
+                          disabled={passwordUpdatingId === user.id}
+                          className="rounded bg-black px-4 py-2 text-white"
+                        >
+                          {passwordUpdatingId === user.id
+                            ? 'Updating...'
+                            : 'Update Password'}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
