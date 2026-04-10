@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { Capacitor } from '@capacitor/core';
+import { App as CapacitorApp } from '@capacitor/app';
 import { getAuthHeaders } from '@/lib/authHeaders';
 
 const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -159,22 +161,74 @@ export default function TelecallingContactsPage() {
   }, [isOwnerOrTelecallingManager]);
 
   useEffect(() => {
-    const handleFocus = () => {
-      if (lastCalledContact && quickCallModal.contact && !quickCallModal.isOpen) {
-        setQuickCallModal((prev) => ({
+    const openQuickCallModalAfterReturn = () => {
+      setQuickCallModal((prev) => {
+        if (!lastCalledContact || prev.isOpen) {
+          return prev;
+        }
+
+        return {
           ...prev,
           isOpen: true,
-          contact: lastCalledContact,
-        }));
-      }
+          contact: prev.contact ?? lastCalledContact,
+        };
+      });
     };
 
-    window.addEventListener('focus', handleFocus);
+    const cleanups: Array<() => void | Promise<void>> = [];
+
+    if (typeof window !== 'undefined') {
+      if (Capacitor.isNativePlatform()) {
+        let isCancelled = false;
+
+        const setupNativeListeners = async () => {
+          try {
+            const stateHandle = await CapacitorApp.addListener(
+              'appStateChange',
+              ({ isActive }) => {
+                if (!isCancelled && isActive) {
+                  openQuickCallModalAfterReturn();
+                }
+              },
+            );
+
+            const resumeHandle = await CapacitorApp.addListener('resume', () => {
+              if (!isCancelled) {
+                openQuickCallModalAfterReturn();
+              }
+            });
+
+            cleanups.push(() => stateHandle.remove());
+            cleanups.push(() => resumeHandle.remove());
+          } catch (error) {
+            console.error('Failed to attach Capacitor app listeners', error);
+          }
+        };
+
+        void setupNativeListeners();
+
+        return () => {
+          isCancelled = true;
+          cleanups.forEach((cleanup) => {
+            void cleanup();
+          });
+        };
+      }
+
+      const handleFocus = () => {
+        openQuickCallModalAfterReturn();
+      };
+
+      window.addEventListener('focus', handleFocus);
+      cleanups.push(() => window.removeEventListener('focus', handleFocus));
+    }
 
     return () => {
-      window.removeEventListener('focus', handleFocus);
+      cleanups.forEach((cleanup) => {
+        void cleanup();
+      });
     };
-  }, [lastCalledContact, quickCallModal.contact, quickCallModal.isOpen]);
+  }, [lastCalledContact]);
 
   useEffect(() => {
     setPage(1);
@@ -238,7 +292,7 @@ export default function TelecallingContactsPage() {
       });
 
       if (typeof window !== 'undefined') {
-        window.open(`tel:${contact.phone}`, '_self');
+        window.location.href = `tel:${contact.phone}`;
       }
 
       showMessage(
@@ -1235,6 +1289,7 @@ export default function TelecallingContactsPage() {
                         <span className="text-sm font-medium text-gray-700">
                           Drag to convert
                         </span>
+
                         <input
                           type="range"
                           min={0}
@@ -1249,6 +1304,7 @@ export default function TelecallingContactsPage() {
                           disabled={convertingId === c.id}
                           className="h-4 w-full cursor-pointer accent-blue-600"
                         />
+
                         <div className="flex items-center justify-between text-sm text-gray-500">
                           <span>Drag</span>
                           <span>
