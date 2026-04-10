@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Solar CRM</string>
+    <string name="title_activity_main">Solar CRM</string>
+    <string name="package_name">com.solarcrm.app</string>
+    <string name="custom_url_scheme">com.solarcrm.app</string>
+</resources>

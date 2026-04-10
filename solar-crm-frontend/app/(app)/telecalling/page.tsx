@@ -1,23 +1,60 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { getAuthHeaders } from '@/lib/authHeaders';
 
 type Lead = {
   id: number;
   name: string;
   phone: string;
+  city?: string;
+};
+
+type ContactSummary = {
+  id: number;
+  name: string;
+  phone: string;
+  city?: string;
+  address?: string;
+  location?: string;
+  convertedToLead?: boolean;
+};
+
+type WorkHistoryItem = {
+  type: 'CONTACT_CREATED' | 'CONTACT_NOTE' | 'CONTACT_CALL';
+  timestamp: string;
+  title: string;
+  description: string;
+  noteId?: number;
+  callHistoryId?: number;
+  meta?: Record<string, any>;
+};
+
+type ContactWorkHistoryResponse = {
+  contact: ContactSummary;
+  timeline: WorkHistoryItem[];
+};
+
+type LatestContactCallInfo = {
+  callStatus?: string;
+  notes?: string;
+  nextFollowUpDate?: string;
+  updatedAt?: string;
 };
 
 type CallLog = {
   id: number;
-  leadId: number;
+  leadId?: number | null;
+  contactId?: number | null;
   callStatus: string;
   callNotes?: string;
   nextFollowUpDate?: string;
   recordingUrl?: string;
+  providerName?: string;
+  disposition?: string;
   reviewStatus?: 'PENDING' | 'POTENTIAL' | 'CONVERTED' | 'REJECTED';
   reviewNotes?: string;
   createdAt: string;
@@ -30,12 +67,31 @@ type User = {
   roles: string[];
 };
 
+type EnrichedCallRow = CallLog & {
+  displayName: string;
+  displayPhone: string;
+  displayCity: string;
+  rowType: 'LEAD' | 'CONTACT' | 'UNKNOWN';
+  personKey: string;
+  effectiveStatus: string;
+  effectiveNotes: string;
+  effectiveNextFollowUpDate?: string;
+  effectiveTimestamp: string;
+};
+
 const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 export default function TelecallingPage() {
+  const router = useRouter();
+
   const [user, setUser] = useState<User | null>(null);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [calls, setCalls] = useState<CallLog[]>([]);
+  const [contactMap, setContactMap] = useState<Record<number, ContactSummary>>({});
+  const [contactLatestCallMap, setContactLatestCallMap] = useState<
+    Record<number, LatestContactCallInfo>
+  >({});
+
   const [leadId, setLeadId] = useState('');
   const [callStatus, setCallStatus] = useState('CONNECTED');
   const [callNotes, setCallNotes] = useState('');
@@ -46,6 +102,10 @@ export default function TelecallingPage() {
 
   const [reviewStatusMap, setReviewStatusMap] = useState<Record<number, string>>({});
   const [reviewNotesMap, setReviewNotesMap] = useState<Record<number, string>>({});
+
+  const [nameFilter, setNameFilter] = useState('');
+  const [phoneFilter, setPhoneFilter] = useState('');
+  const [cityFilter, setCityFilter] = useState('');
 
   const userRoles = user?.roles || [];
 
@@ -73,6 +133,15 @@ export default function TelecallingPage() {
       fetchCalls();
     }
   }, [user]);
+
+  useEffect(() => {
+    if (calls.length > 0) {
+      fetchContactDataAndLatestHistory();
+    } else {
+      setContactMap({});
+      setContactLatestCallMap({});
+    }
+  }, [calls]);
 
   const fetchLeads = async () => {
     try {
@@ -124,6 +193,80 @@ export default function TelecallingPage() {
     } catch (error) {
       console.error('Failed to fetch calls:', error);
       setCalls([]);
+    }
+  };
+
+  const fetchContactDataAndLatestHistory = async () => {
+    try {
+      const uniqueContactIds = Array.from(
+        new Set(
+          calls
+            .map((call) => call.contactId)
+            .filter((id): id is number => typeof id === 'number' && id > 0)
+        )
+      );
+
+      if (uniqueContactIds.length === 0) {
+        setContactMap({});
+        setContactLatestCallMap({});
+        return;
+      }
+
+      const results = await Promise.all(
+        uniqueContactIds.map(async (id) => {
+          try {
+            const res = await axios.get<ContactWorkHistoryResponse>(
+              `${backendUrl}/telecalling/contacts/${id}/work-history`,
+              {
+                headers: getAuthHeaders(),
+              }
+            );
+
+            return res.data;
+          } catch (error) {
+            console.error(`Failed to fetch contact work history for ${id}:`, error);
+            return null;
+          }
+        })
+      );
+
+      const nextContactMap: Record<number, ContactSummary> = {};
+      const nextLatestMap: Record<number, LatestContactCallInfo> = {};
+
+      results.forEach((item) => {
+        if (!item?.contact?.id) return;
+
+        nextContactMap[item.contact.id] = item.contact;
+
+        const latestContactCall = (item.timeline || [])
+          .filter((entry) => entry.type === 'CONTACT_CALL')
+          .sort(
+            (a, b) =>
+              new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+          )[0];
+
+        if (latestContactCall) {
+          nextLatestMap[item.contact.id] = {
+            callStatus: String(
+              latestContactCall.meta?.callStatus || latestContactCall.title || ''
+            )
+              .replace(/^Call\s+/i, '')
+              .trim(),
+            notes: latestContactCall.description || '',
+            nextFollowUpDate: latestContactCall.meta?.nextFollowUpDate
+              ? String(latestContactCall.meta.nextFollowUpDate)
+              : undefined,
+            updatedAt: latestContactCall.timestamp,
+          };
+        }
+      });
+
+      setContactMap(nextContactMap);
+      setContactLatestCallMap(nextLatestMap);
+    } catch (error) {
+      console.error('Failed to fetch contact summaries/latest history:', error);
+      setContactMap({});
+      setContactLatestCallMap({});
     }
   };
 
@@ -211,6 +354,29 @@ export default function TelecallingPage() {
     }
   };
 
+  const handleCallback = (row: EnrichedCallRow) => {
+    if (!row.displayPhone || row.displayPhone === '-') {
+      setMessage('Phone not available for callback');
+      return;
+    }
+
+    if (row.leadId) {
+      setLeadId(String(row.leadId));
+      setCallStatus('CALLBACK');
+      setCallNotes(row.effectiveNotes || '');
+    }
+
+    if (typeof window !== 'undefined') {
+      window.open(`tel:${row.displayPhone}`, '_self');
+    }
+  };
+
+  const clearFilters = () => {
+    setNameFilter('');
+    setPhoneFilter('');
+    setCityFilter('');
+  };
+
   const canReview =
     userRoles.includes('TELECALLING_MANAGER') ||
     userRoles.includes('PROJECT_MANAGER');
@@ -220,6 +386,96 @@ export default function TelecallingPage() {
     userRoles.includes('OWNER') ||
     userRoles.includes('LEAD_MANAGER') ||
     userRoles.includes('TELECALLING_MANAGER');
+
+  const enrichedCalls = useMemo<EnrichedCallRow[]>(() => {
+    return calls.map((call) => {
+      if (call.leadId) {
+        const lead = leads.find((item) => item.id === call.leadId);
+
+        return {
+          ...call,
+          displayName: lead?.name || `Lead #${call.leadId}`,
+          displayPhone: lead?.phone || '-',
+          displayCity: lead?.city || '-',
+          rowType: 'LEAD',
+          personKey: `lead-${call.leadId}`,
+          effectiveStatus: call.disposition || call.callStatus,
+          effectiveNotes: call.callNotes || '',
+          effectiveNextFollowUpDate: call.nextFollowUpDate,
+          effectiveTimestamp: call.createdAt,
+        };
+      }
+
+      if (call.contactId) {
+        const contact = contactMap[call.contactId];
+        const latestContactCall = contactLatestCallMap[call.contactId];
+
+        return {
+          ...call,
+          displayName: contact?.name || `Contact #${call.contactId}`,
+          displayPhone: contact?.phone || '-',
+          displayCity: contact?.city || contact?.address || contact?.location || '-',
+          rowType: 'CONTACT',
+          personKey: `contact-${call.contactId}`,
+          effectiveStatus:
+            latestContactCall?.callStatus || call.disposition || call.callStatus,
+          effectiveNotes: latestContactCall?.notes || call.callNotes || '',
+          effectiveNextFollowUpDate:
+            latestContactCall?.nextFollowUpDate || call.nextFollowUpDate,
+          effectiveTimestamp: latestContactCall?.updatedAt || call.createdAt,
+        };
+      }
+
+      return {
+        ...call,
+        displayName: '-',
+        displayPhone: '-',
+        displayCity: '-',
+        rowType: 'UNKNOWN',
+        personKey: `unknown-${call.id}`,
+        effectiveStatus: call.disposition || call.callStatus,
+        effectiveNotes: call.callNotes || '',
+        effectiveNextFollowUpDate: call.nextFollowUpDate,
+        effectiveTimestamp: call.createdAt,
+      };
+    });
+  }, [calls, leads, contactMap, contactLatestCallMap]);
+
+  const latestOnlyCalls = useMemo(() => {
+    const sorted = [...enrichedCalls].sort(
+      (a, b) =>
+        new Date(b.effectiveTimestamp).getTime() -
+        new Date(a.effectiveTimestamp).getTime()
+    );
+
+    const latestMap = new Map<string, EnrichedCallRow>();
+
+    for (const row of sorted) {
+      if (!latestMap.has(row.personKey)) {
+        latestMap.set(row.personKey, row);
+      }
+    }
+
+    return Array.from(latestMap.values());
+  }, [enrichedCalls]);
+
+  const filteredCalls = useMemo(() => {
+    return latestOnlyCalls.filter((call) => {
+      const matchesName =
+        !nameFilter.trim() ||
+        call.displayName.toLowerCase().includes(nameFilter.trim().toLowerCase());
+
+      const matchesPhone =
+        !phoneFilter.trim() ||
+        call.displayPhone.toLowerCase().includes(phoneFilter.trim().toLowerCase());
+
+      const matchesCity =
+        !cityFilter.trim() ||
+        call.displayCity.toLowerCase().includes(cityFilter.trim().toLowerCase());
+
+      return matchesName && matchesPhone && matchesCity;
+    });
+  }, [latestOnlyCalls, nameFilter, phoneFilter, cityFilter]);
 
   return (
     <div className="p-6">
@@ -299,7 +555,8 @@ export default function TelecallingPage() {
             {message && (
               <p
                 className={`text-sm ${
-                  message.toLowerCase().includes('success')
+                  message.toLowerCase().includes('success') ||
+                  message.toLowerCase().includes('successfully')
                     ? 'text-green-600'
                     : 'text-red-600'
                 }`}
@@ -330,41 +587,128 @@ export default function TelecallingPage() {
       )}
 
       <div className="rounded-2xl bg-white p-6 shadow">
-        <h2 className="mb-4 text-2xl font-bold">
-          {canReview ? 'Call Review Queue' : 'Call History'}
-        </h2>
+        <div className="mb-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <h2 className="text-2xl font-bold">
+            {canReview ? 'Call Review Queue' : 'Call History'}
+          </h2>
 
-        {calls.length === 0 ? (
+          <div className="grid w-full gap-2 md:max-w-4xl md:grid-cols-4">
+            <input
+              type="text"
+              value={nameFilter}
+              onChange={(e) => setNameFilter(e.target.value)}
+              placeholder="Search by name"
+              className="rounded-xl border border-gray-300 px-3 py-2"
+            />
+
+            <input
+              type="text"
+              value={phoneFilter}
+              onChange={(e) => setPhoneFilter(e.target.value)}
+              placeholder="Search by phone"
+              className="rounded-xl border border-gray-300 px-3 py-2"
+            />
+
+            <input
+              type="text"
+              value={cityFilter}
+              onChange={(e) => setCityFilter(e.target.value)}
+              placeholder="Search by city"
+              className="rounded-xl border border-gray-300 px-3 py-2"
+            />
+
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="rounded-xl bg-gray-200 px-4 py-2 font-medium text-gray-700"
+            >
+              Clear Filters
+            </button>
+          </div>
+        </div>
+
+        {filteredCalls.length === 0 ? (
           <p>No calls found</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-sm">
               <thead>
                 <tr>
-                  <th className="border p-2 text-left">Lead ID</th>
-                  <th className="border p-2 text-left">Status</th>
-                  <th className="border p-2 text-left">Notes</th>
+                  <th className="border p-2 text-left">Lead / Contact</th>
+                  <th className="border p-2 text-left">Phone</th>
+                  <th className="border p-2 text-left">City</th>
+                  <th className="border p-2 text-left">Latest Status</th>
+                  <th className="border p-2 text-left">Latest Notes</th>
                   <th className="border p-2 text-left">Recording</th>
+                  <th className="border p-2 text-left">Next Follow-up</th>
+                  <th className="border p-2 text-left">Actions</th>
                   <th className="border p-2 text-left">Review Status</th>
                   <th className="border p-2 text-left">Review Notes</th>
-                  {canReview && <th className="border p-2 text-left">Action</th>}
-                  <th className="border p-2 text-left">Created At</th>
+                  {canReview && <th className="border p-2 text-left">Save</th>}
+                  <th className="border p-2 text-left">Updated At</th>
                 </tr>
               </thead>
               <tbody>
-                {calls.map((call) => (
-                  <tr key={call.id}>
-                    <td className="border p-2">{call.leadId}</td>
-                    <td className="border p-2">{call.callStatus}</td>
-                    <td className="border p-2">{call.callNotes || '-'}</td>
+                {filteredCalls.map((call) => (
+                  <tr key={call.personKey}>
+                    <td className="border p-2">{call.displayName}</td>
+                    <td className="border p-2">{call.displayPhone}</td>
+                    <td className="border p-2">{call.displayCity}</td>
+                    <td className="border p-2">{call.effectiveStatus}</td>
+                    <td className="border p-2">{call.effectiveNotes || '-'}</td>
+
                     <td className="border p-2">
                       {call.recordingUrl ? (
-                        <a href={call.recordingUrl} target="_blank" rel="noreferrer">
+                        <a
+                          href={call.recordingUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-blue-600 underline"
+                        >
                           Open
                         </a>
                       ) : (
                         'No Recording'
                       )}
+                    </td>
+
+                    <td className="border p-2">
+                      {call.effectiveNextFollowUpDate
+                        ? new Date(call.effectiveNextFollowUpDate).toLocaleString()
+                        : '-'}
+                    </td>
+
+                    <td className="border p-2">
+                      <div className="flex flex-wrap gap-2">
+                        {call.displayPhone !== '-' && (
+                          <button
+                            type="button"
+                            onClick={() => handleCallback(call)}
+                            className="rounded bg-green-600 px-3 py-1 text-white"
+                          >
+                            Callback
+                          </button>
+                        )}
+
+                        {call.rowType === 'CONTACT' && call.contactId && (
+                          <button
+                            type="button"
+                            onClick={() => router.push(`/telecalling/contacts/${call.contactId}`)}
+                            className="rounded bg-purple-600 px-3 py-1 text-white"
+                          >
+                            Open Contact
+                          </button>
+                        )}
+
+                        {call.rowType === 'LEAD' && call.leadId && (
+                          <Link
+                            href={`/leads/${call.leadId}`}
+                            className="rounded bg-blue-600 px-3 py-1 text-white"
+                          >
+                            Open Lead
+                          </Link>
+                        )}
+                      </div>
                     </td>
 
                     <td className="border p-2">
@@ -377,6 +721,7 @@ export default function TelecallingPage() {
                               [call.id]: e.target.value,
                             }))
                           }
+                          className="rounded border px-2 py-1"
                         >
                           <option value="PENDING">PENDING</option>
                           <option value="POTENTIAL">POTENTIAL</option>
@@ -417,7 +762,7 @@ export default function TelecallingPage() {
                     )}
 
                     <td className="border p-2">
-                      {new Date(call.createdAt).toLocaleString()}
+                      {new Date(call.effectiveTimestamp).toLocaleString()}
                     </td>
                   </tr>
                 ))}

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { getAuthHeaders } from '@/lib/authHeaders';
 
 const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -20,6 +21,7 @@ type Contact = {
   importedByName?: string;
   convertedToLead?: boolean;
   isInStorage?: boolean;
+  remarks?: string;
 };
 
 type User = {
@@ -48,14 +50,39 @@ type ImportSummary = {
 
 type ViewMode = 'active' | 'storage';
 
+type QuickCallDisposition =
+  | 'INTERESTED'
+  | 'NOT_INTERESTED'
+  | 'CALLBACK'
+  | 'CONNECTED'
+  | 'CNR'
+  | 'PROPOSAL_SENT';
+
+type QuickCallModalState = {
+  isOpen: boolean;
+  contact: Contact | null;
+  callLogId?: number;
+};
+
 export default function TelecallingContactsPage() {
+  const router = useRouter();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
+  const [quickCallModal, setQuickCallModal] = useState<QuickCallModalState>({
+    isOpen: false,
+    contact: null,
+  });
+  const [lastCalledContact, setLastCalledContact] = useState<Contact | null>(null);
+  const [quickCallSubmitting, setQuickCallSubmitting] = useState(false);
+  const [quickCallNotes, setQuickCallNotes] = useState('');
+  const [quickCallNextFollowUpDate, setQuickCallNextFollowUpDate] = useState('');
+  const [quickCallRecordingUrl, setQuickCallRecordingUrl] = useState('');
+
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<'success' | 'error' | 'info'>(
-    'info'
+    'info',
   );
 
   const [loading, setLoading] = useState(false);
@@ -69,8 +96,8 @@ export default function TelecallingContactsPage() {
   const [bulkAssignedTo, setBulkAssignedTo] = useState<string>('');
   const [latestAssignedTo, setLatestAssignedTo] = useState<string>('');
   const [assignLatestCount, setAssignLatestCount] = useState<string>('');
-  const [filteredStorageCount, setFilteredStorageCount] = useState<number | null>(null);
-  const [storageTotalCount, setStorageTotalCount] = useState<number | null>(null);
+  const [filteredCount, setFilteredCount] = useState<number | null>(null);
+  const [totalViewCount, setTotalViewCount] = useState<number | null>(null);
 
   const [page, setPage] = useState(1);
   const [limit] = useState(50);
@@ -79,12 +106,16 @@ export default function TelecallingContactsPage() {
   const [nameFilter, setNameFilter] = useState('');
   const [phoneFilter, setPhoneFilter] = useState('');
   const [cityFilter, setCityFilter] = useState('');
+  const [citySearch, setCitySearch] = useState('');
+  const [cityOptions, setCityOptions] = useState<string[]>([]);
 
   const [selectedImportFileName, setSelectedImportFileName] = useState('');
   const [importSummary, setImportSummary] = useState<ImportSummary | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('active');
 
-  const [convertSliderMap, setConvertSliderMap] = useState<Record<number, number>>({});
+  const [convertSliderMap, setConvertSliderMap] = useState<Record<number, number>>(
+    {},
+  );
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -112,8 +143,12 @@ export default function TelecallingContactsPage() {
       : currentUser?.role === 'TELECALLER';
 
   useEffect(() => {
-    fetchContacts(page, viewMode);
-  }, [page, viewMode]);
+    fetchCityOptions();
+  }, []);
+
+  useEffect(() => {
+    fetchContacts(page, viewMode, cityFilter);
+  }, [page, viewMode, cityFilter]);
 
   useEffect(() => {
     if (isOwnerOrTelecallingManager) {
@@ -122,6 +157,34 @@ export default function TelecallingContactsPage() {
       setUsers([]);
     }
   }, [isOwnerOrTelecallingManager]);
+
+  useEffect(() => {
+    const handleFocus = () => {
+      if (lastCalledContact && quickCallModal.contact && !quickCallModal.isOpen) {
+        setQuickCallModal((prev) => ({
+          ...prev,
+          isOpen: true,
+          contact: lastCalledContact,
+        }));
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [lastCalledContact, quickCallModal.contact, quickCallModal.isOpen]);
+
+  useEffect(() => {
+    setPage(1);
+    setSelectedContactIds([]);
+    setFilteredCount(null);
+    setTotalViewCount(null);
+    setAssignLatestCount('');
+    setBulkAssignedTo('');
+    setLatestAssignedTo('');
+  }, [viewMode]);
 
   const buildSliderMap = (data: Contact[]) => {
     const map: Record<number, number> = {};
@@ -133,21 +196,136 @@ export default function TelecallingContactsPage() {
 
   const showMessage = (
     text: string,
-    type: 'success' | 'error' | 'info' = 'info'
+    type: 'success' | 'error' | 'info' = 'info',
   ) => {
     setMessage(text);
     setMessageType(type);
   };
 
-  const fetchContacts = async (pageToLoad = 1, mode: ViewMode = viewMode) => {
+  const resetQuickCallModal = () => {
+    setQuickCallModal({
+      isOpen: false,
+      contact: null,
+      callLogId: undefined,
+    });
+    setLastCalledContact(null);
+    setQuickCallNotes('');
+    setQuickCallNextFollowUpDate('');
+    setQuickCallRecordingUrl('');
+    setQuickCallSubmitting(false);
+  };
+
+  const startQuickCall = async (contact: Contact) => {
+    try {
+      setQuickCallSubmitting(true);
+
+      const res = await axios.post(
+        `${backendUrl}/telecalling/contacts/${contact.id}/quick-call/start`,
+        {
+          providerName: 'TEL_LINK',
+          receiverNumber: contact.phone,
+        },
+        { headers: getAuthHeaders() },
+      );
+
+      const callLogId = Number(res.data?.callLog?.id || 0) || undefined;
+
+      setLastCalledContact(contact);
+      setQuickCallModal({
+        isOpen: false,
+        contact,
+        callLogId,
+      });
+
+      if (typeof window !== 'undefined') {
+        window.open(`tel:${contact.phone}`, '_self');
+      }
+
+      showMessage(
+        `Call opened for ${contact.name}. After returning, choose the call outcome.`,
+        'info',
+      );
+    } catch (err: any) {
+      console.error(err);
+      showMessage(
+        err?.response?.data?.message || 'Failed to start quick call',
+        'error',
+      );
+    } finally {
+      setQuickCallSubmitting(false);
+    }
+  };
+
+  const completeQuickCall = async (disposition: QuickCallDisposition) => {
+    if (!quickCallModal.contact) {
+      showMessage('No contact selected for quick call', 'error');
+      return;
+    }
+
+    try {
+      setQuickCallSubmitting(true);
+
+      const res = await axios.post(
+        `${backendUrl}/telecalling/contacts/${quickCallModal.contact.id}/quick-call/complete`,
+        {
+          callLogId: quickCallModal.callLogId,
+          callStatus: disposition,
+          disposition,
+          callNotes: quickCallNotes,
+          nextFollowUpDate: quickCallNextFollowUpDate
+            ? new Date(quickCallNextFollowUpDate).toISOString()
+            : undefined,
+          recordingUrl: quickCallRecordingUrl || undefined,
+          providerName: 'TEL_LINK',
+          receiverNumber: quickCallModal.contact.phone,
+        },
+        { headers: getAuthHeaders() },
+      );
+
+      const serverMessage =
+        res.data?.message ||
+        (disposition === 'INTERESTED'
+          ? 'Call saved as interested'
+          : 'Call saved successfully');
+
+      showMessage(serverMessage, 'success');
+
+      const contactId = quickCallModal.contact.id;
+      resetQuickCallModal();
+      await fetchContacts(page, viewMode, cityFilter);
+
+      if (disposition === 'INTERESTED') {
+        router.push(`/telecalling/contacts/${contactId}`);
+      }
+    } catch (err: any) {
+      console.error(err);
+      showMessage(
+        err?.response?.data?.message || 'Failed to save quick call outcome',
+        'error',
+      );
+    } finally {
+      setQuickCallSubmitting(false);
+    }
+  };
+
+  const fetchContacts = async (
+    pageToLoad = 1,
+    mode: ViewMode = viewMode,
+    locationFilter = cityFilter,
+  ) => {
     setLoading(true);
     try {
       const res = await axios.get<ContactsResponse>(
         `${backendUrl}/telecalling/contacts`,
         {
-          params: { page: pageToLoad, limit, view: mode },
+          params: {
+            page: pageToLoad,
+            limit,
+            view: mode,
+            locationFilter: locationFilter || undefined,
+          },
           headers: getAuthHeaders(),
-        }
+        },
       );
 
       const responseData = res.data;
@@ -166,9 +344,25 @@ export default function TelecallingContactsPage() {
       setSelectedContactIds([]);
     } catch (err: any) {
       console.error(err);
-      showMessage(err?.response?.data?.message || 'Failed to fetch contacts', 'error');
+      showMessage(
+        err?.response?.data?.message || 'Failed to fetch contacts',
+        'error',
+      );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchCityOptions = async () => {
+    try {
+      const res = await axios.get(`${backendUrl}/telecalling/contacts/filter-options`, {
+        headers: getAuthHeaders(),
+      });
+
+      setCityOptions(Array.isArray(res.data) ? res.data : []);
+    } catch (err: any) {
+      console.error(err);
+      setCityOptions([]);
     }
   };
 
@@ -182,7 +376,7 @@ export default function TelecallingContactsPage() {
         (u: User) =>
           Array.isArray(u.roles)
             ? u.roles.includes('TELECALLER')
-            : u.role === 'TELECALLER'
+            : u.role === 'TELECALLER',
       );
 
       setUsers(telecallers);
@@ -191,7 +385,7 @@ export default function TelecallingContactsPage() {
       if (err?.response?.status !== 403) {
         showMessage(
           err?.response?.data?.message || 'Failed to fetch users',
-          'error'
+          'error',
         );
       }
       setUsers([]);
@@ -227,7 +421,7 @@ export default function TelecallingContactsPage() {
       setImporting(true);
       showMessage(
         'Import started. Contacts will go to Storage. Please wait until it finishes.',
-        'info'
+        'info',
       );
 
       const res = await axios.post(
@@ -238,7 +432,7 @@ export default function TelecallingContactsPage() {
             ...getAuthHeaders(),
             'Content-Type': 'multipart/form-data',
           },
-        }
+        },
       );
 
       const importedCount = Number(res.data?.importedCount || 0);
@@ -253,19 +447,20 @@ export default function TelecallingContactsPage() {
 
       showMessage(
         `Import completed successfully. Imported: ${importedCount}, Skipped: ${skippedCount}, Total Rows: ${totalRows}. Imported contacts are now available in Storage.`,
-        'success'
+        'success',
       );
 
+      await fetchCityOptions();
       setPage(1);
       setViewMode('storage');
-      await fetchContacts(1, 'storage');
+      await fetchContacts(1, 'storage', cityFilter);
     } catch (err: any) {
       console.error(err);
       setImportSummary(null);
       showMessage(
         err?.response?.data?.message ||
           'Import failed. Please check file format and required columns.',
-        'error'
+        'error',
       );
     } finally {
       setImporting(false);
@@ -285,11 +480,17 @@ export default function TelecallingContactsPage() {
       await axios.patch(
         `${backendUrl}/telecalling/contacts/${id}/assign`,
         { assignedTo: userId },
-        { headers: getAuthHeaders() }
+        { headers: getAuthHeaders() },
       );
 
-      showMessage('Assigned successfully. Contact moved from Storage to Active.', 'success');
-      await fetchContacts(page, viewMode);
+      showMessage(
+        viewMode === 'storage'
+          ? 'Assigned successfully. Contact moved from Storage to Active.'
+          : 'Assigned successfully.',
+        'success',
+      );
+      await fetchContacts(page, viewMode, cityFilter);
+      await handleCheckFilteredCount(false);
     } catch (err: any) {
       console.error(err);
       showMessage(err?.response?.data?.message || 'Assignment failed', 'error');
@@ -316,19 +517,17 @@ export default function TelecallingContactsPage() {
           contactIds: selectedContactIds,
           assignedTo: Number(bulkAssignedTo),
         },
-        { headers: getAuthHeaders() }
+        { headers: getAuthHeaders() },
       );
 
       showMessage(
         `Assigned ${selectedContactIds.length} selected contact(s) successfully`,
-        'success'
+        'success',
       );
       setSelectedContactIds([]);
       setBulkAssignedTo('');
-      await fetchContacts(page, viewMode);
-      if (viewMode === 'storage') {
-        await handleCheckFilteredStorageCount();
-      }
+      await fetchContacts(page, viewMode, cityFilter);
+      await handleCheckFilteredCount(false);
     } catch (err: any) {
       console.error(err);
       showMessage(err?.response?.data?.message || 'Bulk assign failed', 'error');
@@ -337,15 +536,7 @@ export default function TelecallingContactsPage() {
     }
   };
 
-  const handleCheckFilteredStorageCount = async () => {
-    if (!cityFilter.trim()) {
-      showMessage(
-        'Please enter city / address / location filter first',
-        'error'
-      );
-      return;
-    }
-
+  const handleCheckFilteredCount = async (showSuccess = true) => {
     try {
       setCheckingFilteredCount(true);
 
@@ -353,23 +544,32 @@ export default function TelecallingContactsPage() {
         `${backendUrl}/telecalling/contacts/filter-count`,
         {
           params: {
-            locationFilter: cityFilter,
+            locationFilter: cityFilter || undefined,
+            view: viewMode,
           },
           headers: getAuthHeaders(),
-        }
+        },
       );
 
-      setStorageTotalCount(Number(res.data?.totalCount || 0));
-      setFilteredStorageCount(Number(res.data?.filteredCount || 0));
+      setTotalViewCount(Number(res.data?.totalCount || 0));
+      setFilteredCount(Number(res.data?.filteredCount || 0));
 
-      showMessage('Filtered storage count loaded successfully', 'success');
+      setPage(1);
+      await fetchContacts(1, viewMode, cityFilter);
+
+      if (showSuccess) {
+        showMessage(
+          `Filtered ${viewMode === 'storage' ? 'storage' : 'active'} count loaded and matching contacts shown successfully`,
+          'success',
+        );
+      }
     } catch (err: any) {
       console.error(err);
-      setStorageTotalCount(null);
-      setFilteredStorageCount(null);
+      setTotalViewCount(null);
+      setFilteredCount(null);
       showMessage(
-        err?.response?.data?.message || 'Failed to load filtered storage count',
-        'error'
+        err?.response?.data?.message || 'Failed to load filtered contact count',
+        'error',
       );
     } finally {
       setCheckingFilteredCount(false);
@@ -378,10 +578,7 @@ export default function TelecallingContactsPage() {
 
   const handleAssignLatest = async () => {
     if (!cityFilter.trim()) {
-      showMessage(
-        'Please enter city / address / location filter first',
-        'error'
-      );
+      showMessage('Please select or type city / area / location first', 'error');
       return;
     }
 
@@ -391,7 +588,7 @@ export default function TelecallingContactsPage() {
     }
 
     if (!latestAssignedTo) {
-      showMessage('Please select a telecaller for latest assignment', 'error');
+      showMessage('Please select a telecaller for assignment', 'error');
       return;
     }
 
@@ -404,24 +601,27 @@ export default function TelecallingContactsPage() {
           locationFilter: cityFilter,
           assignCount: Number(assignLatestCount),
           assignedTo: Number(latestAssignedTo),
+          view: viewMode,
         },
-        { headers: getAuthHeaders() }
+        { headers: getAuthHeaders() },
       );
 
       showMessage(
-        `Assigned latest ${res.data?.updatedCount || 0} contact(s) successfully from filtered storage`,
-        'success'
+        viewMode === 'storage'
+          ? `Assigned latest ${res.data?.updatedCount || 0} filtered storage contact(s) successfully`
+          : `Reassigned latest ${res.data?.updatedCount || 0} filtered active contact(s) successfully`,
+        'success',
       );
 
-      await fetchContacts(page, viewMode);
-      await handleCheckFilteredStorageCount();
+      await fetchContacts(page, viewMode, cityFilter);
+      await handleCheckFilteredCount(false);
       setAssignLatestCount('');
       setLatestAssignedTo('');
     } catch (err: any) {
       console.error(err);
       showMessage(
-        err?.response?.data?.message || 'Assign latest contacts failed',
-        'error'
+        err?.response?.data?.message || 'Assign filtered contacts failed',
+        'error',
       );
     } finally {
       setAssigningLatest(false);
@@ -435,7 +635,7 @@ export default function TelecallingContactsPage() {
       await axios.post(
         `${backendUrl}/telecalling/contacts/${id}/convert`,
         {},
-        { headers: getAuthHeaders() }
+        { headers: getAuthHeaders() },
       );
 
       showMessage('Converted to lead', 'success');
@@ -443,7 +643,7 @@ export default function TelecallingContactsPage() {
         ...prev,
         [id]: 0,
       }));
-      await fetchContacts(page, viewMode);
+      await fetchContacts(page, viewMode, cityFilter);
     } catch (err: any) {
       console.error(err);
       showMessage(err?.response?.data?.message || 'Conversion failed', 'error');
@@ -480,39 +680,55 @@ export default function TelecallingContactsPage() {
     setNameFilter('');
     setPhoneFilter('');
     setCityFilter('');
+    setCitySearch('');
     setSelectedContactIds([]);
-    setFilteredStorageCount(null);
-    setStorageTotalCount(null);
+    setFilteredCount(null);
+    setTotalViewCount(null);
     setAssignLatestCount('');
+    setPage(1);
   };
+
+  const visibleCityOptions = useMemo(() => {
+    const normalizedSearch = citySearch.trim().toLowerCase();
+    if (!normalizedSearch) {
+      return cityOptions;
+    }
+
+    return cityOptions.filter((option) =>
+      option.toLowerCase().includes(normalizedSearch),
+    );
+  }, [cityOptions, citySearch]);
 
   const filteredContacts = useMemo(() => {
     return contacts.filter((contact) => {
       const matchesName =
         !nameFilter.trim() ||
-        (contact.name || '').toLowerCase().includes(nameFilter.trim().toLowerCase());
+        (contact.name || '')
+          .toLowerCase()
+          .includes(nameFilter.trim().toLowerCase());
 
       const matchesPhone =
         !phoneFilter.trim() ||
-        (contact.phone || '').toLowerCase().includes(phoneFilter.trim().toLowerCase());
+        (contact.phone || '')
+          .toLowerCase()
+          .includes(phoneFilter.trim().toLowerCase());
 
-      const cityText = contact.city || contact.address || contact.location || '';
-
-      const matchesCity =
-        !cityFilter.trim() ||
-        cityText.toLowerCase().includes(cityFilter.trim().toLowerCase());
-
-      return matchesName && matchesPhone && matchesCity;
+      return matchesName && matchesPhone;
     });
-  }, [contacts, nameFilter, phoneFilter, cityFilter]);
+  }, [contacts, nameFilter, phoneFilter]);
 
-  const filteredIds = useMemo(() => filteredContacts.map((c) => c.id), [filteredContacts]);
+  const filteredIds = useMemo(
+    () => filteredContacts.map((c) => c.id),
+    [filteredContacts],
+  );
 
   const allFilteredSelected =
-    filteredIds.length > 0 && filteredIds.every((id) => selectedContactIds.includes(id));
+    filteredIds.length > 0 &&
+    filteredIds.every((id) => selectedContactIds.includes(id));
 
   const someFilteredSelected =
-    filteredIds.some((id) => selectedContactIds.includes(id)) && !allFilteredSelected;
+    filteredIds.some((id) => selectedContactIds.includes(id)) &&
+    !allFilteredSelected;
 
   const toggleSingleSelection = (id: number, checked: boolean) => {
     setSelectedContactIds((prev) => {
@@ -558,6 +774,28 @@ export default function TelecallingContactsPage() {
       : messageType === 'error'
       ? 'mb-3 rounded border border-red-300 bg-red-50 px-3 py-2 text-red-700'
       : 'mb-3 rounded border border-blue-300 bg-blue-50 px-3 py-2 text-blue-700';
+
+  const viewLabel = viewMode === 'storage' ? 'Storage Contacts' : 'Active Contacts';
+  const countButtonLabel =
+    viewMode === 'storage'
+      ? 'Check Filtered Storage Count'
+      : 'Check Filtered Active Count';
+  const totalLabel =
+    viewMode === 'storage' ? 'Total in storage' : 'Total active contacts';
+  const filteredLabel =
+    viewMode === 'storage'
+      ? 'Matching filtered storage'
+      : 'Matching filtered active';
+  const assignSectionTitle =
+    viewMode === 'storage'
+      ? 'Assign Filtered Storage Contacts'
+      : 'Assign Filtered Active Contacts';
+  const assignSectionDescription =
+    viewMode === 'storage'
+      ? 'Use city / area / location tools below, check matching count, then assign any number of filtered storage contacts to a telecaller.'
+      : 'Use city / area / location tools below, check matching count, then reassign any number of filtered active contacts to a telecaller.';
+  const assignButtonLabel =
+    viewMode === 'storage' ? 'Assign Filtered N' : 'Reassign Filtered N';
 
   return (
     <div className="p-6">
@@ -639,7 +877,8 @@ export default function TelecallingContactsPage() {
 
         {selectedImportFileName && (
           <div className="mb-3 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
-            Selected file: <span className="font-medium">{selectedImportFileName}</span>
+            Selected file:{' '}
+            <span className="font-medium">{selectedImportFileName}</span>
           </div>
         )}
 
@@ -647,7 +886,8 @@ export default function TelecallingContactsPage() {
           <div className="mb-3 rounded border border-blue-200 bg-blue-50 p-3">
             <p className="font-medium text-blue-700">Import in progress...</p>
             <p className="mt-1 text-sm text-blue-700">
-              Large files may take some time. Please do not refresh or close this page.
+              Large files may take some time. Please do not refresh or close this
+              page.
             </p>
           </div>
         )}
@@ -687,65 +927,101 @@ export default function TelecallingContactsPage() {
           : 'Active Contacts (working pool for telecalling)'}
       </div>
 
-      <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-4">
-        <input
-          type="text"
-          placeholder="Search by name"
-          value={nameFilter}
-          onChange={(e) => setNameFilter(e.target.value)}
-          className="rounded border p-2"
-        />
+      <div className="mb-4 rounded border bg-white p-4">
+        <h2 className="mb-3 text-lg font-semibold">{viewLabel} Filters</h2>
 
-        <input
-          type="text"
-          placeholder="Search by phone"
-          value={phoneFilter}
-          onChange={(e) => setPhoneFilter(e.target.value)}
-          className="rounded border p-2"
-        />
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
+          <input
+            type="text"
+            placeholder="Search by name"
+            value={nameFilter}
+            onChange={(e) => setNameFilter(e.target.value)}
+            className="rounded border p-2"
+          />
 
-        <input
-          type="text"
-          placeholder="Search by city / address / location"
-          value={cityFilter}
-          onChange={(e) => setCityFilter(e.target.value)}
-          className="rounded border p-2"
-        />
+          <input
+            type="text"
+            placeholder="Search by phone"
+            value={phoneFilter}
+            onChange={(e) => setPhoneFilter(e.target.value)}
+            className="rounded border p-2"
+          />
 
-        <button
-          onClick={handleClearFilters}
-          className="rounded bg-gray-200 px-4 py-2"
-        >
-          Clear Filters
-        </button>
+          <input
+            type="text"
+            placeholder="Type to search city / area / location options"
+            value={citySearch}
+            onChange={(e) => setCitySearch(e.target.value)}
+            className="rounded border p-2"
+          />
+
+          <select
+            value={cityFilter}
+            onChange={(e) => {
+              setCityFilter(e.target.value);
+              setPage(1);
+              setCitySearch('');
+            }}
+            onFocus={() => setCitySearch('')}
+            className="rounded border p-2"
+          >
+            <option value="">Select city / area / location</option>
+            {visibleCityOptions.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+
+          <button
+            onClick={handleClearFilters}
+            className="rounded bg-gray-200 px-4 py-2"
+          >
+            Clear Filters
+          </button>
+        </div>
+
+        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+          <input
+            type="text"
+            placeholder="Or type city / area / location manually and use count / assign tools"
+            value={cityFilter}
+            onChange={(e) => {
+              setCityFilter(e.target.value);
+              setPage(1);
+            }}
+            className="rounded border p-2"
+          />
+
+          <button
+            type="button"
+            onClick={() => handleCheckFilteredCount(true)}
+            disabled={checkingFilteredCount}
+            className="rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50"
+          >
+            {checkingFilteredCount ? 'Checking...' : countButtonLabel}
+          </button>
+        </div>
       </div>
 
-      {isOwnerOrTelecallingManager && viewMode === 'storage' && (
+      {isOwnerOrTelecallingManager && (
         <div className="mb-4 rounded border bg-white p-4">
-          <h2 className="mb-2 text-lg font-semibold">
-            Assign Latest Contacts from Filtered Storage
-          </h2>
-          <p className="mb-3 text-sm text-gray-600">
-            Use the city / address / location filter above, check how many contacts
-            are available in storage, then assign the latest N contacts to a telecaller.
-          </p>
+          <h2 className="mb-2 text-lg font-semibold">{assignSectionTitle}</h2>
+          <p className="mb-3 text-sm text-gray-600">{assignSectionDescription}</p>
 
           <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center">
-            <button
-              type="button"
-              onClick={handleCheckFilteredStorageCount}
-              disabled={checkingFilteredCount}
-              className="rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50"
-            >
-              {checkingFilteredCount ? 'Checking...' : 'Check Filtered Storage Count'}
-            </button>
-
             <div className="text-sm text-gray-700">
-              Total in storage: <span className="font-semibold">{storageTotalCount ?? '-'}</span>
+              {totalLabel}:{' '}
+              <span className="font-semibold">{totalViewCount ?? '-'}</span>
             </div>
 
             <div className="text-sm text-gray-700">
-              Matching current location filter: <span className="font-semibold">{filteredStorageCount ?? '-'}</span>
+              {filteredLabel}:{' '}
+              <span className="font-semibold">{filteredCount ?? '-'}</span>
+            </div>
+
+            <div className="text-sm text-gray-700">
+              Visible after filter: <span className="font-semibold">{filteredContacts.length}</span>
             </div>
           </div>
 
@@ -753,7 +1029,7 @@ export default function TelecallingContactsPage() {
             <input
               type="number"
               min="1"
-              placeholder="Enter number of latest contacts to assign"
+              placeholder="Enter number of filtered contacts to assign"
               value={assignLatestCount}
               onChange={(e) => setAssignLatestCount(e.target.value)}
               className="rounded border p-2"
@@ -779,7 +1055,7 @@ export default function TelecallingContactsPage() {
               disabled={assigningLatest}
               className="rounded bg-green-600 px-4 py-2 text-white disabled:opacity-50"
             >
-              {assigningLatest ? 'Assigning...' : 'Assign Latest N'}
+              {assigningLatest ? 'Assigning...' : assignButtonLabel}
             </button>
           </div>
         </div>
@@ -832,7 +1108,11 @@ export default function TelecallingContactsPage() {
               <button
                 type="button"
                 onClick={handleBulkAssign}
-                disabled={assigningBulk || selectedContactIds.length === 0 || !bulkAssignedTo}
+                disabled={
+                  assigningBulk ||
+                  selectedContactIds.length === 0 ||
+                  !bulkAssignedTo
+                }
                 className="rounded bg-green-600 px-4 py-2 text-white disabled:opacity-50"
               >
                 {assigningBulk ? 'Assigning...' : 'Assign Selected'}
@@ -866,6 +1146,7 @@ export default function TelecallingContactsPage() {
                 <th className="border p-2">Imported By</th>
                 <th className="border p-2">Assigned</th>
                 <th className="border p-2">Assign</th>
+                <th className="border p-2">Quick Call</th>
                 <th className="border p-2">Open</th>
                 <th className="border p-2">Convert</th>
               </tr>
@@ -884,7 +1165,9 @@ export default function TelecallingContactsPage() {
 
                   <td className="border p-2">{c.name}</td>
                   <td className="border p-2">{c.phone}</td>
-                  <td className="border p-2">{c.city || c.address || c.location || ''}</td>
+                  <td className="border p-2">
+                    {c.city || c.address || c.location || ''}
+                  </td>
                   <td className="border p-2">{c.kNo || ''}</td>
                   <td className="border p-2">{c.importedByName || ''}</td>
                   <td className="border p-2">{c.assignedToName || 'Unassigned'}</td>
@@ -892,7 +1175,9 @@ export default function TelecallingContactsPage() {
                   <td className="border p-2">
                     {isOwnerOrTelecallingManager ? (
                       <select
-                        onChange={(e) => assignSingleContact(c.id, Number(e.target.value))}
+                        onChange={(e) =>
+                          assignSingleContact(c.id, Number(e.target.value))
+                        }
                         className="border p-1"
                         defaultValue=""
                       >
@@ -904,6 +1189,24 @@ export default function TelecallingContactsPage() {
                           </option>
                         ))}
                       </select>
+                    ) : (
+                      <span className="text-gray-500">-</span>
+                    )}
+                  </td>
+
+                  <td className="border p-2">
+                    {viewMode === 'active' && c.phone ? (
+                      <button
+                        type="button"
+                        onClick={() => startQuickCall(c)}
+                        disabled={quickCallSubmitting}
+                        className="rounded bg-green-600 px-3 py-2 text-sm text-white disabled:opacity-50"
+                      >
+                        {quickCallSubmitting &&
+                        quickCallModal.contact?.id === c.id
+                          ? 'Calling...'
+                          : 'Call Now'}
+                      </button>
                     ) : (
                       <span className="text-gray-500">-</span>
                     )}
@@ -922,14 +1225,14 @@ export default function TelecallingContactsPage() {
                     )}
                   </td>
 
-                  <td className="border p-2 min-w-[220px]">
+                  <td className="border p-2 min-w-[260px]">
                     {viewMode === 'storage' ? (
                       <span className="text-gray-500">Storage</span>
                     ) : c.convertedToLead ? (
                       <span className="font-medium text-green-600">Converted</span>
                     ) : (
-                      <div className="flex flex-col gap-1">
-                        <span className="text-xs text-gray-600">
+                      <div className="flex flex-col gap-2">
+                        <span className="text-sm font-medium text-gray-700">
                           Drag to convert
                         </span>
                         <input
@@ -944,9 +1247,9 @@ export default function TelecallingContactsPage() {
                           onMouseUp={() => resetConvertSlider(c.id, c.convertedToLead)}
                           onTouchEnd={() => resetConvertSlider(c.id, c.convertedToLead)}
                           disabled={convertingId === c.id}
-                          className="w-full"
+                          className="h-4 w-full cursor-pointer accent-blue-600"
                         />
-                        <div className="flex items-center justify-between text-xs text-gray-500">
+                        <div className="flex items-center justify-between text-sm text-gray-500">
                           <span>Drag</span>
                           <span>
                             {convertingId === c.id
@@ -963,7 +1266,10 @@ export default function TelecallingContactsPage() {
 
               {filteredContacts.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="border p-4 text-center text-gray-500">
+                  <td
+                    colSpan={11}
+                    className="border p-4 text-center text-gray-500"
+                  >
                     No contacts found
                   </td>
                 </tr>
@@ -993,6 +1299,107 @@ export default function TelecallingContactsPage() {
             </button>
           </div>
         </>
+      )}
+
+      {quickCallModal.isOpen && quickCallModal.contact && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold">Quick Call Outcome</h2>
+                <p className="text-sm text-gray-600">
+                  {quickCallModal.contact.name} ({quickCallModal.contact.phone})
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={resetQuickCallModal}
+                className="rounded bg-gray-200 px-3 py-1 text-sm text-gray-700"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <textarea
+                value={quickCallNotes}
+                onChange={(e) => setQuickCallNotes(e.target.value)}
+                rows={4}
+                placeholder="Quick call notes"
+                className="rounded border p-3 md:col-span-2"
+              />
+
+              <input
+                type="datetime-local"
+                value={quickCallNextFollowUpDate}
+                onChange={(e) => setQuickCallNextFollowUpDate(e.target.value)}
+                className="rounded border p-3"
+              />
+
+              <input
+                type="text"
+                value={quickCallRecordingUrl}
+                onChange={(e) => setQuickCallRecordingUrl(e.target.value)}
+                placeholder="Recording URL (optional for now)"
+                className="rounded border p-3"
+              />
+            </div>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              <button
+                type="button"
+                onClick={() => completeQuickCall('INTERESTED')}
+                disabled={quickCallSubmitting}
+                className="rounded bg-green-600 px-4 py-3 font-medium text-white disabled:opacity-50"
+              >
+                {quickCallSubmitting ? 'Saving...' : 'Interested'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => completeQuickCall('NOT_INTERESTED')}
+                disabled={quickCallSubmitting}
+                className="rounded bg-red-600 px-4 py-3 font-medium text-white disabled:opacity-50"
+              >
+                {quickCallSubmitting ? 'Saving...' : 'Not Interested'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => completeQuickCall('CALLBACK')}
+                disabled={quickCallSubmitting}
+                className="rounded bg-yellow-600 px-4 py-3 font-medium text-white disabled:opacity-50"
+              >
+                {quickCallSubmitting ? 'Saving...' : 'Callback'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => completeQuickCall('CNR')}
+                disabled={quickCallSubmitting}
+                className="rounded bg-gray-800 px-4 py-3 font-medium text-white disabled:opacity-50"
+              >
+                {quickCallSubmitting ? 'Saving...' : 'CNR / No Response'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => completeQuickCall('PROPOSAL_SENT')}
+                disabled={quickCallSubmitting}
+                className="rounded bg-blue-700 px-4 py-3 font-medium text-white disabled:opacity-50"
+              >
+                {quickCallSubmitting ? 'Saving...' : 'Proposal Sent'}
+              </button>
+            </div>
+
+            <p className="mt-4 text-xs text-gray-500">
+              Interested will open the contact detail page so the telecaller can
+              continue notes, follow-up, and lead conversion. Other outcomes will
+              save the call and keep the contact safely in the system for future work.
+            </p>
+          </div>
+        </div>
       )}
     </div>
   );
