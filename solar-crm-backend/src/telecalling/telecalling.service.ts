@@ -7,7 +7,12 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, In, Repository } from 'typeorm';
 import * as XLSX from 'xlsx';
-import { CallLog, CallReviewStatus } from './call-log.entity';
+import {
+  CallDirection,
+  CallLog,
+  CallProvider,
+  CallReviewStatus,
+} from './call-log.entity';
 import { Lead, LeadStatus } from '../leads/lead.entity';
 import {
   FollowUp,
@@ -48,14 +53,8 @@ export class TelecallingService {
   ) {}
 
   private getRoles(user: any): string[] {
-    if (Array.isArray(user?.roles)) {
-      return user.roles;
-    }
-
-    if (user?.role) {
-      return [user.role];
-    }
-
+    if (Array.isArray(user?.roles)) return user.roles;
+    if (user?.role) return [user.role];
     return [];
   }
 
@@ -103,26 +102,48 @@ export class TelecallingService {
     return '';
   }
 
-  private matchesLocationFilter(
+  private getContactLocationLabel(
     contact: Partial<TelecallingContact> & {
       address?: string;
       location?: string;
     },
-    normalizedFilter: string,
-  ): boolean {
-    if (!normalizedFilter) {
-      return true;
+  ): string {
+    return String(
+      contact?.city ||
+        (contact as any)?.address ||
+        (contact as any)?.location ||
+        '',
+    ).trim();
+  }
+
+  private normalizeCallStatus(value?: string): string {
+    const normalized = String(value || '').trim().toUpperCase();
+    return normalized || 'CONNECTED';
+  }
+
+  private applyViewRestrictionsToContactQuery(
+    qb: any,
+    user: any,
+    normalizedView: string,
+  ) {
+    if (this.hasAnyRole(user, ['TELECALLER'])) {
+      qb.where('contact.assignedTo = :assignedTo', { assignedTo: user.id });
+      qb.andWhere('contact.isInStorage = :isInStorage', { isInStorage: false });
+      return;
     }
 
-    const city = String(contact?.city || '').toLowerCase();
-    const address = String((contact as any)?.address || '').toLowerCase();
-    const location = String((contact as any)?.location || '').toLowerCase();
+    if (normalizedView === 'storage') {
+      if (!this.hasAnyRole(user, ['OWNER', 'TELECALLING_MANAGER'])) {
+        throw new ForbiddenException(
+          'Only owner or telecalling manager can view storage contacts',
+        );
+      }
 
-    return (
-      city.includes(normalizedFilter) ||
-      address.includes(normalizedFilter) ||
-      location.includes(normalizedFilter)
-    );
+      qb.where('contact.isInStorage = :isInStorage', { isInStorage: true });
+      return;
+    }
+
+    qb.where('contact.isInStorage = :isInStorage', { isInStorage: false });
   }
 
   private async getAccessibleContact(id: number, user: any) {
@@ -134,12 +155,7 @@ export class TelecallingService {
       throw new NotFoundException('Telecalling contact not found');
     }
 
-    const isOwnerOrTelecallingManager = this.hasAnyRole(user, [
-      'OWNER',
-      'TELECALLING_MANAGER',
-    ]);
-
-    if (isOwnerOrTelecallingManager) {
+    if (this.hasAnyRole(user, ['OWNER', 'TELECALLING_MANAGER'])) {
       return contact;
     }
 
@@ -149,7 +165,6 @@ export class TelecallingService {
           'You can only access your assigned contacts',
         );
       }
-
       return contact;
     }
 
@@ -159,7 +174,11 @@ export class TelecallingService {
   async create(data: Partial<CallLog>) {
     const log = this.callLogRepository.create({
       ...data,
-      reviewStatus: CallReviewStatus.PENDING,
+      callStatus: this.normalizeCallStatus(data.callStatus),
+      reviewStatus: data.reviewStatus || CallReviewStatus.PENDING,
+      providerName: data.providerName || CallProvider.MANUAL,
+      callDirection: data.callDirection || CallDirection.OUTBOUND,
+      disposition: data.disposition || data.callStatus || undefined,
     });
 
     const savedLog = await this.callLogRepository.save(log);
@@ -183,7 +202,8 @@ export class TelecallingService {
     } else if (
       data.callStatus === 'CALLBACK' ||
       data.callStatus === 'CONNECTED' ||
-      data.callStatus === 'CNR'
+      data.callStatus === 'CNR' ||
+      data.callStatus === 'PROPOSAL_SENT'
     ) {
       lead.status = LeadStatus.CONTACTED;
     }
@@ -522,12 +542,16 @@ export class TelecallingService {
         ]),
       );
 
-      const city = this.getMappedValue(row, ['city', 'town', 'location']);
+      const city = this.getMappedValue(row, ['city', 'town', 'area', 'district']);
+      const address = this.getMappedValue(row, ['address', 'full_address']);
+      const location = this.getMappedValue(row, ['location', 'site_location', 'place']);
 
       return {
         name: (name || phone || '').trim(),
         phone,
         city: city ? String(city).trim() : undefined,
+        address: address ? String(address).trim() : undefined,
+        location: location ? String(location).trim() : undefined,
       };
     });
 
@@ -580,6 +604,8 @@ export class TelecallingService {
         name: row.name || row.phone,
         phone: row.phone,
         city: row.city,
+        address: row.address,
+        location: row.location,
         importedBy: user.id,
         importedByName: user.name,
         status: ContactStatus.NEW,
@@ -612,7 +638,13 @@ export class TelecallingService {
     };
   }
 
-  async getContacts(user: any, page = 1, limit = 50, view = 'active') {
+  async getContacts(
+    user: any,
+    page = 1,
+    limit = 50,
+    view = 'active',
+    locationFilter = '',
+  ) {
     const safePage =
       Number.isFinite(Number(page)) && Number(page) > 0 ? Number(page) : 1;
 
@@ -623,30 +655,28 @@ export class TelecallingService {
 
     const skip = (safePage - 1) * safeLimit;
     const normalizedView = String(view || 'active').toLowerCase();
+    const normalizedFilter = String(locationFilter || '').trim().toLowerCase();
 
-    const whereCondition: any = {};
+    const qb = this.contactRepository
+      .createQueryBuilder('contact')
+      .orderBy('contact.createdAt', 'DESC')
+      .skip(skip)
+      .take(safeLimit);
 
-    if (this.hasAnyRole(user, ['TELECALLER'])) {
-      whereCondition.assignedTo = user.id;
-      whereCondition.isInStorage = false;
-    } else if (normalizedView === 'storage') {
-      if (!this.hasAnyRole(user, ['OWNER', 'TELECALLING_MANAGER'])) {
-        throw new ForbiddenException(
-          'Only owner or telecalling manager can view storage contacts',
-        );
-      }
+    this.applyViewRestrictionsToContactQuery(qb, user, normalizedView);
 
-      whereCondition.isInStorage = true;
-    } else {
-      whereCondition.isInStorage = false;
+    if (normalizedFilter) {
+      qb.andWhere(
+        `(
+          LOWER(COALESCE(contact.city, '')) LIKE :filter
+          OR LOWER(COALESCE(contact.address, '')) LIKE :filter
+          OR LOWER(COALESCE(contact.location, '')) LIKE :filter
+        )`,
+        { filter: `%${normalizedFilter}%` },
+      );
     }
 
-    const [data, total] = await this.contactRepository.findAndCount({
-      where: whereCondition,
-      order: { createdAt: 'DESC' },
-      skip,
-      take: safeLimit,
-    });
+    const [data, total] = await qb.getManyAndCount();
 
     return {
       data,
@@ -654,6 +684,82 @@ export class TelecallingService {
       page: safePage,
       limit: safeLimit,
       totalPages: Math.ceil(total / safeLimit) || 1,
+    };
+  }
+
+  async getContactFilterOptions(user: any) {
+    const qb = this.contactRepository
+      .createQueryBuilder('contact')
+      .select(['contact.city', 'contact.address', 'contact.location'])
+      .orderBy('contact.createdAt', 'DESC');
+
+    if (this.hasAnyRole(user, ['TELECALLER'])) {
+      qb.where('contact.assignedTo = :assignedTo', { assignedTo: user.id });
+      qb.andWhere('contact.isInStorage = :isInStorage', { isInStorage: false });
+    }
+
+    const contacts = await qb.getMany();
+    const uniqueValues = new Set<string>();
+
+    for (const contact of contacts) {
+      const label = this.getContactLocationLabel(contact);
+      if (label) {
+        uniqueValues.add(label);
+      }
+    }
+
+    return Array.from(uniqueValues).sort((a, b) => a.localeCompare(b));
+  }
+
+  async getFilteredContactsCount(
+    locationFilter: string,
+    view: string,
+    user: any,
+  ) {
+    if (!this.hasAnyRole(user, ['OWNER', 'TELECALLING_MANAGER'])) {
+      throw new ForbiddenException(
+        'Only owner or telecalling manager can view filtered contact count',
+      );
+    }
+
+    const normalizedView = String(view || 'active').toLowerCase();
+    const normalizedFilter = String(locationFilter || '').trim().toLowerCase();
+
+    const qb = this.contactRepository
+      .createQueryBuilder('contact')
+      .orderBy('contact.createdAt', 'DESC');
+
+    this.applyViewRestrictionsToContactQuery(qb, user, normalizedView);
+
+    const totalCount = await qb.getCount();
+
+    if (!normalizedFilter) {
+      return {
+        totalCount,
+        filteredCount: totalCount,
+      };
+    }
+
+    const filteredQb = this.contactRepository
+      .createQueryBuilder('contact')
+      .orderBy('contact.createdAt', 'DESC');
+
+    this.applyViewRestrictionsToContactQuery(filteredQb, user, normalizedView);
+
+    filteredQb.andWhere(
+      `(
+        LOWER(COALESCE(contact.city, '')) LIKE :filter
+        OR LOWER(COALESCE(contact.address, '')) LIKE :filter
+        OR LOWER(COALESCE(contact.location, '')) LIKE :filter
+      )`,
+      { filter: `%${normalizedFilter}%` },
+    );
+
+    const filteredCount = await filteredQb.getCount();
+
+    return {
+      totalCount,
+      filteredCount,
     };
   }
 
@@ -844,29 +950,168 @@ export class TelecallingService {
     return this.contactCallHistoryRepository.save(existingHistory);
   }
 
-  async getFilteredContactsCount(locationFilter: string, user: any) {
-    if (!this.hasAnyRole(user, ['OWNER', 'TELECALLING_MANAGER'])) {
-      throw new ForbiddenException(
-        'Only owner or telecalling manager can view filtered storage count',
-      );
-    }
+  async startQuickContactCall(
+    id: number,
+    body: {
+      providerName?: CallProvider | string;
+      callerNumber?: string;
+      receiverNumber?: string;
+      providerCallId?: string;
+      notes?: string;
+    },
+    user: any,
+  ) {
+    const contact = await this.getAccessibleContact(id, user);
 
-    const normalizedFilter = String(locationFilter || '').trim().toLowerCase();
+    const providerName = String(
+      body?.providerName || CallProvider.TEL_LINK,
+    ).toUpperCase() as CallProvider;
 
-    const contacts = await this.contactRepository.find({
-      where: {
-        isInStorage: true,
-      },
-      order: { createdAt: 'DESC' },
+    const log = this.callLogRepository.create({
+      contactId: contact.id,
+      telecallerId: user.id,
+      callStatus: 'INITIATED',
+      disposition: 'INITIATED',
+      callNotes: body?.notes || '',
+      providerName,
+      providerCallId: body?.providerCallId || undefined,
+      callDirection: CallDirection.OUTBOUND,
+      callerNumber: body?.callerNumber || undefined,
+      receiverNumber: body?.receiverNumber || contact.phone || undefined,
+      reviewStatus: CallReviewStatus.PENDING,
     });
 
-    const filteredCount = contacts.filter((contact: any) =>
-      this.matchesLocationFilter(contact, normalizedFilter),
-    ).length;
+    const savedLog = await this.callLogRepository.save(log);
 
     return {
-      totalCount: contacts.length,
-      filteredCount,
+      message: 'Quick call started successfully',
+      callLog: savedLog,
+      contact: {
+        id: contact.id,
+        name: contact.name,
+        phone: contact.phone,
+      },
+    };
+  }
+
+  async completeQuickContactCall(
+    id: number,
+    body: {
+      callLogId?: number;
+      callStatus?: string;
+      disposition?: string;
+      callNotes?: string;
+      nextFollowUpDate?: string;
+      recordingUrl?: string;
+      providerName?: CallProvider | string;
+      providerCallId?: string;
+      durationInSeconds?: number;
+      callerNumber?: string;
+      receiverNumber?: string;
+    },
+    user: any,
+  ) {
+    const contact = await this.getAccessibleContact(id, user);
+
+    const normalizedStatus = this.normalizeCallStatus(
+      body.callStatus || body.disposition || 'CONNECTED',
+    );
+
+    let callLog: CallLog | null = null;
+
+    if (body.callLogId) {
+      callLog = await this.callLogRepository.findOne({
+        where: {
+          id: Number(body.callLogId),
+          contactId: contact.id,
+        },
+      });
+    }
+
+    if (!callLog) {
+      callLog = this.callLogRepository.create({
+        contactId: contact.id,
+        telecallerId: user.id,
+        providerName: CallProvider.TEL_LINK,
+        callDirection: CallDirection.OUTBOUND,
+        reviewStatus: CallReviewStatus.PENDING,
+      });
+    }
+
+    callLog.callStatus = normalizedStatus;
+    callLog.disposition = String(
+      body.disposition || body.callStatus || normalizedStatus,
+    ).toUpperCase();
+    callLog.callNotes = body.callNotes || '';
+    callLog.nextFollowUpDate = body.nextFollowUpDate
+      ? new Date(body.nextFollowUpDate)
+      : undefined;
+    callLog.recordingUrl = body.recordingUrl || undefined;
+    callLog.providerName = String(
+      body.providerName || callLog.providerName || CallProvider.TEL_LINK,
+    ).toUpperCase() as CallProvider;
+    callLog.providerCallId =
+      body.providerCallId || callLog.providerCallId || undefined;
+    callLog.durationInSeconds =
+      body.durationInSeconds !== undefined && body.durationInSeconds !== null
+        ? Number(body.durationInSeconds)
+        : callLog.durationInSeconds || undefined;
+    callLog.callerNumber =
+      body.callerNumber || callLog.callerNumber || undefined;
+    callLog.receiverNumber =
+      body.receiverNumber || callLog.receiverNumber || contact.phone || undefined;
+    callLog.providerUpdatedAt = new Date();
+
+    const savedLog = await this.callLogRepository.save(callLog);
+
+    const historyItem = this.contactCallHistoryRepository.create({
+      contactId: contact.id,
+      calledBy: user.id,
+      calledByName: user.name,
+      callStatus: normalizedStatus,
+      notes: body.callNotes || '',
+      nextFollowUpDate: body.nextFollowUpDate
+        ? new Date(body.nextFollowUpDate)
+        : undefined,
+    });
+
+    await this.contactCallHistoryRepository.save(historyItem);
+
+    const existingRemarks = String(contact.remarks || '').trim();
+    const summaryNote =
+      normalizedStatus === 'INTERESTED'
+        ? `Quick call marked interested by ${user.name}`
+        : normalizedStatus === 'NOT_INTERESTED'
+        ? `Quick call marked not interested by ${user.name}`
+        : normalizedStatus === 'PROPOSAL_SENT'
+        ? `Quick call marked proposal sent by ${user.name}`
+        : `Quick call updated by ${user.name} (${normalizedStatus})`;
+
+    contact.remarks = existingRemarks
+      ? `${existingRemarks}\n${summaryNote}`
+      : summaryNote;
+
+    await this.contactRepository.save(contact);
+
+    return {
+      message:
+        normalizedStatus === 'INTERESTED'
+          ? 'Call saved. Open contact for notes, follow-up, and lead conversion.'
+          : normalizedStatus === 'NOT_INTERESTED'
+          ? 'Call saved as not interested. Contact remains available for future follow-up.'
+          : normalizedStatus === 'PROPOSAL_SENT'
+          ? 'Call saved as proposal sent. Contact remains available for further action.'
+          : 'Quick call completed successfully',
+      callLog: savedLog,
+      contact: {
+        id: contact.id,
+        name: contact.name,
+        phone: contact.phone,
+        assignedTo: contact.assignedTo,
+        assignedToName: contact.assignedToName,
+      },
+      nextAction:
+        normalizedStatus === 'INTERESTED' ? 'OPEN_CONTACT' : 'STAY_ON_LIST',
     };
   }
 
@@ -904,15 +1149,17 @@ export class TelecallingService {
     locationFilter: string,
     assignCount: number,
     assignedTo: number,
+    view: string,
     user: any,
   ) {
     if (!this.hasAnyRole(user, ['OWNER', 'TELECALLING_MANAGER'])) {
       throw new ForbiddenException(
-        'Only owner or telecalling manager can assign latest contacts from storage',
+        'Only owner or telecalling manager can assign filtered contacts',
       );
     }
 
     const normalizedFilter = String(locationFilter || '').trim().toLowerCase();
+    const normalizedView = String(view || 'active').toLowerCase();
 
     if (!normalizedFilter) {
       throw new BadRequestException(
@@ -936,24 +1183,30 @@ export class TelecallingService {
       throw new NotFoundException('Assigned user not found');
     }
 
-    const contacts = await this.contactRepository.find({
-      where: {
-        isInStorage: true,
-      },
-      order: { createdAt: 'DESC' },
-    });
+    const qb = this.contactRepository
+      .createQueryBuilder('contact')
+      .orderBy('contact.createdAt', 'DESC');
 
-    const filteredContacts = contacts.filter((contact: any) =>
-      this.matchesLocationFilter(contact, normalizedFilter),
+    this.applyViewRestrictionsToContactQuery(qb, user, normalizedView);
+
+    qb.andWhere(
+      `(
+        LOWER(COALESCE(contact.city, '')) LIKE :filter
+        OR LOWER(COALESCE(contact.address, '')) LIKE :filter
+        OR LOWER(COALESCE(contact.location, '')) LIKE :filter
+      )`,
+      { filter: `%${normalizedFilter}%` },
     );
 
-    if (!filteredContacts.length) {
+    const contacts = await qb.getMany();
+
+    if (!contacts.length) {
       throw new NotFoundException(
         'No contacts found for the given city / address / location filter',
       );
     }
 
-    const selectedContacts = filteredContacts.slice(0, Number(assignCount));
+    const selectedContacts = contacts.slice(0, Number(assignCount));
 
     if (!selectedContacts.length) {
       throw new NotFoundException('No contacts available to assign');
@@ -961,26 +1214,35 @@ export class TelecallingService {
 
     const ids = selectedContacts.map((contact) => contact.id);
 
+    const updatePayload: Partial<TelecallingContact> = {
+      assignedTo: assignedUser.id,
+      assignedToName: assignedUser.name,
+    };
+
+    if (normalizedView === 'storage') {
+      updatePayload.isInStorage = false;
+    }
+
     const result = await this.contactRepository
       .createQueryBuilder()
       .update(TelecallingContact)
-      .set({
-        assignedTo: assignedUser.id,
-        assignedToName: assignedUser.name,
-        isInStorage: false,
-      })
+      .set(updatePayload)
       .where('id IN (:...ids)', { ids })
       .execute();
 
     const updatedCount = result.affected || 0;
 
     return {
-      message: 'Latest filtered contacts assigned successfully',
+      message:
+        normalizedView === 'storage'
+          ? 'Latest filtered storage contacts assigned successfully'
+          : 'Latest filtered active contacts reassigned successfully',
       assignedTo: assignedUser.id,
       assignedToName: assignedUser.name,
       requestedCount: Number(assignCount),
-      matchedCount: filteredContacts.length,
+      matchedCount: contacts.length,
       updatedCount,
+      view: normalizedView,
     };
   }
 

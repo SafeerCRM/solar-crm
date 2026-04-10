@@ -124,21 +124,63 @@ export class TelecallingController {
     @Query('page') page = '1',
     @Query('limit') limit = '50',
     @Query('view') view = 'active',
+    @Query('locationFilter') locationFilter = '',
   ) {
     return this.telecallingService.getContacts(
       user,
       Number(page),
       Number(limit),
       String(view || 'active'),
+      String(locationFilter || ''),
     );
   }
 
-  @Get('contacts/:id')
-  getContactById(
-    @Param('id', ParseIntPipe) id: number,
+  @Get('contacts/filter-options')
+  getContactFilterOptions(@CurrentUser() user: any) {
+    return this.telecallingService.getContactFilterOptions(user);
+  }
+
+  @Get('contacts/filter-count')
+  getFilteredContactsCount(
+    @Query('locationFilter') locationFilter = '',
+    @Query('view') view = 'active',
     @CurrentUser() user: any,
   ) {
-    return this.telecallingService.getContactById(id, user);
+    return this.telecallingService.getFilteredContactsCount(
+      String(locationFilter || ''),
+      String(view || 'active'),
+      user,
+    );
+  }
+
+  @Patch('contacts/assign-latest')
+  assignLatestContactsByFilter(
+    @Body('locationFilter') locationFilter: string,
+    @Body('assignCount') assignCount: number,
+    @Body('assignedTo') assignedTo: number,
+    @Body('view') view: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.telecallingService.assignLatestContactsByFilter(
+      String(locationFilter || ''),
+      Number(assignCount),
+      Number(assignedTo),
+      String(view || 'active'),
+      user,
+    );
+  }
+
+  @Patch('contacts/bulk-assign')
+  bulkAssignContacts(
+    @Body('contactIds') contactIds: number[],
+    @Body('assignedTo') assignedTo: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.telecallingService.bulkAssignContacts(
+      Array.isArray(contactIds) ? contactIds.map(Number) : [],
+      Number(assignedTo),
+      user,
+    );
   }
 
   @Get('contacts/:id/work-history')
@@ -202,43 +244,42 @@ export class TelecallingController {
     return this.telecallingService.updateContactNote(id, noteId, note, user);
   }
 
-  @Get('contacts/filter-count')
-  getFilteredContactsCount(
-    @Query('locationFilter') locationFilter = '',
+  @Post('contacts/:id/quick-call/start')
+  startQuickContactCall(
+    @Param('id', ParseIntPipe) id: number,
+    @Body()
+    body: {
+      providerName?: string;
+      callerNumber?: string;
+      receiverNumber?: string;
+      providerCallId?: string;
+      notes?: string;
+    },
     @CurrentUser() user: any,
   ) {
-    return this.telecallingService.getFilteredContactsCount(
-      String(locationFilter || ''),
-      user,
-    );
+    return this.telecallingService.startQuickContactCall(id, body, user);
   }
 
-  @Patch('contacts/assign-latest')
-  assignLatestContactsByFilter(
-    @Body('locationFilter') locationFilter: string,
-    @Body('assignCount') assignCount: number,
-    @Body('assignedTo') assignedTo: number,
+  @Post('contacts/:id/quick-call/complete')
+  completeQuickContactCall(
+    @Param('id', ParseIntPipe) id: number,
+    @Body()
+    body: {
+      callLogId?: number;
+      callStatus?: string;
+      disposition?: string;
+      callNotes?: string;
+      nextFollowUpDate?: string;
+      recordingUrl?: string;
+      providerName?: string;
+      providerCallId?: string;
+      durationInSeconds?: number;
+      callerNumber?: string;
+      receiverNumber?: string;
+    },
     @CurrentUser() user: any,
   ) {
-    return this.telecallingService.assignLatestContactsByFilter(
-      String(locationFilter || ''),
-      Number(assignCount),
-      Number(assignedTo),
-      user,
-    );
-  }
-
-  @Patch('contacts/bulk-assign')
-  bulkAssignContacts(
-    @Body('contactIds') contactIds: number[],
-    @Body('assignedTo') assignedTo: number,
-    @CurrentUser() user: any,
-  ) {
-    return this.telecallingService.bulkAssignContacts(
-      Array.isArray(contactIds) ? contactIds.map(Number) : [],
-      Number(assignedTo),
-      user,
-    );
+    return this.telecallingService.completeQuickContactCall(id, body, user);
   }
 
   @Patch('contacts/:id/assign')
@@ -256,5 +297,13 @@ export class TelecallingController {
     @CurrentUser() user: any,
   ) {
     return this.telecallingService.convertContactToLead(id, user);
+  }
+
+  @Get('contacts/:id')
+  getContactById(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.telecallingService.getContactById(id, user);
   }
 }
