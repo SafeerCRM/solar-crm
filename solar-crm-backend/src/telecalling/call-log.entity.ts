@@ -80,6 +80,15 @@ export class CallLog {
   @Column({ type: 'text', nullable: true })
   reviewNotes?: string | null;
 
+  @Column({ type: 'int', nullable: true })
+  reviewAssignedTo?: number | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  reviewAssignedToName?: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  leadPotential?: string | null;
+
   @Column({
     type: 'enum',
     enum: CallDirection,

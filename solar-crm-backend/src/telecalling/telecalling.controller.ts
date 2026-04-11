@@ -276,6 +276,7 @@ export class TelecallingController {
       durationInSeconds?: number;
       callerNumber?: string;
       receiverNumber?: string;
+      leadPotential?: string;
     },
     @CurrentUser() user: any,
   ) {
@@ -289,6 +290,19 @@ export class TelecallingController {
     @CurrentUser() user: any,
   ) {
     return this.telecallingService.assignContact(id, Number(assignedTo), user);
+  }
+
+  @Patch('contacts/:id/assign-review')
+  assignContactForReview(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('assignedTo') assignedTo: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.telecallingService.assignContactForReview(
+      id,
+      Number(assignedTo),
+      user,
+    );
   }
 
   @Post('contacts/:id/convert')

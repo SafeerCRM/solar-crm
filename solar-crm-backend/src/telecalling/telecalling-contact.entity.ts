@@ -46,6 +46,12 @@ export class TelecallingContact {
   @Column({ nullable: true })
   importedByName: string;
 
+  @Column({ nullable: true })
+  reviewAssignedTo: number;
+
+  @Column({ nullable: true })
+  reviewAssignedToName: string;
+
   @Column({
     type: 'enum',
     enum: ContactStatus,

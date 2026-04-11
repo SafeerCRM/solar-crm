@@ -36,8 +36,8 @@ export class LeadsController {
   }
 
   @Get('hot')
-  getHotLeads() {
-    return this.leadsService.getHotLeads();
+  getHotLeads(@CurrentUser() user: any) {
+    return this.leadsService.getHotLeads(user);
   }
 
   @Get('export')

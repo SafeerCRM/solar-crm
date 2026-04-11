@@ -3,6 +3,7 @@ import {
   BadRequestException,
   UnauthorizedException,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Raw } from 'typeorm';
@@ -20,14 +21,15 @@ export class UsersService {
 
   private normalizeRoles(inputRoles?: UserRole[] | string[]): UserRole[] {
     const allowedRoles = Object.values(UserRole);
-
     const roles = Array.isArray(inputRoles) ? inputRoles : [];
 
     const cleanedRoles = roles
       .map((role) => String(role).trim())
       .filter((role) => allowedRoles.includes(role as UserRole)) as UserRole[];
 
-    return cleanedRoles.length > 0 ? [...new Set(cleanedRoles)] : [UserRole.TELECALLER];
+    return cleanedRoles.length > 0
+      ? [...new Set(cleanedRoles)]
+      : [UserRole.TELECALLER];
   }
 
   async createRole(data: Partial<User> & { roles?: UserRole[] }) {
@@ -86,6 +88,7 @@ export class UsersService {
     return {
       message: 'Login successful',
       access_token,
+      token: access_token,
       user: {
         id: user.id,
         name: user.name,
@@ -100,9 +103,15 @@ export class UsersService {
       where: {
         roles: Raw(
           (alias) =>
-            `${alias} LIKE :telecaller OR ${alias} LIKE :leadManager OR ${alias} LIKE :projectManager OR ${alias} LIKE :meetingManager OR ${alias} LIKE :telecallingManager`,
+            `${alias} LIKE :telecaller
+             OR ${alias} LIKE :telecallingAssistant
+             OR ${alias} LIKE :leadManager
+             OR ${alias} LIKE :projectManager
+             OR ${alias} LIKE :meetingManager
+             OR ${alias} LIKE :telecallingManager`,
           {
             telecaller: '%TELECALLER%',
+            telecallingAssistant: '%TELECALLING_ASSISTANT%',
             leadManager: '%LEAD_MANAGER%',
             projectManager: '%PROJECT_MANAGER%',
             meetingManager: '%MEETING_MANAGER%',
@@ -115,12 +124,29 @@ export class UsersService {
     });
   }
 
-  async findTelecallers() {
+  async findTelecallingAssistants() {
     return this.userRepository.find({
       where: {
         roles: Raw((alias) => `${alias} LIKE :role`, {
-          role: '%TELECALLER%',
+          role: '%TELECALLING_ASSISTANT%',
         }),
+      },
+      select: ['id', 'name', 'email', 'roles'],
+      order: { id: 'ASC' },
+    });
+  }
+
+  async findTelecallers() {
+    return this.userRepository.find({
+      where: {
+        roles: Raw(
+          (alias) =>
+            `${alias} LIKE :telecaller OR ${alias} LIKE :telecallingAssistant`,
+          {
+            telecaller: '%TELECALLER%',
+            telecallingAssistant: '%TELECALLING_ASSISTANT%',
+          },
+        ),
       },
       select: ['id', 'name', 'email', 'roles'],
       order: { id: 'ASC' },
@@ -154,6 +180,83 @@ export class UsersService {
 
     return {
       message: 'Password updated successfully',
+    };
+  }
+
+  async updateUserRoles(
+    id: number,
+    roles: UserRole[] | string[],
+    currentUser: any,
+  ) {
+    const currentUserRoles: string[] = Array.isArray(currentUser?.roles)
+      ? currentUser.roles
+      : [];
+
+    if (!currentUserRoles.includes(UserRole.OWNER)) {
+      throw new ForbiddenException('Only owner can update user roles');
+    }
+
+    const user = await this.userRepository.findOne({
+      where: { id },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const normalizedRoles = this.normalizeRoles(roles);
+
+    if (!normalizedRoles.length) {
+      throw new BadRequestException('At least one valid role is required');
+    }
+
+    const targetIsOwner = Array.isArray(user.roles)
+      ? user.roles.includes(UserRole.OWNER)
+      : false;
+
+    if (targetIsOwner && !normalizedRoles.includes(UserRole.OWNER)) {
+      throw new BadRequestException('OWNER role cannot be removed from owner user');
+    }
+
+    user.roles = normalizedRoles;
+    await this.userRepository.save(user);
+
+    return {
+      message: 'User roles updated successfully',
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        roles: user.roles || [],
+      },
+    };
+  }
+
+  async deleteUser(id: number, currentUser: any) {
+    const currentUserRoles: string[] = Array.isArray(currentUser?.roles)
+      ? currentUser.roles
+      : [];
+
+    if (!currentUserRoles.includes(UserRole.OWNER)) {
+      throw new ForbiddenException('Only owner can delete users');
+    }
+
+    const user = await this.userRepository.findOne({
+      where: { id },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.roles?.includes(UserRole.OWNER)) {
+      throw new BadRequestException('Owner user cannot be deleted');
+    }
+
+    await this.userRepository.delete(id);
+
+    return {
+      message: 'User deleted successfully',
     };
   }
 

@@ -14,6 +14,7 @@ import {
 } from '../followup/follow-up.entity';
 import { CallLog } from '../telecalling/call-log.entity';
 import { LeadNote } from './lead-note.entity';
+import { UserRole } from '../users/user.entity';
 
 @Injectable()
 export class LeadsService {
@@ -31,35 +32,66 @@ export class LeadsService {
     private readonly leadNoteRepository: Repository<LeadNote>,
   ) {}
 
-  private isOwner(user: any) {
-    return user?.role === 'OWNER';
-  }
-
-  private isLeadManager(user: any) {
-    return user?.role === 'LEAD_MANAGER';
-  }
-
-  private isTelecaller(user: any) {
-    return user?.role === 'TELECALLER';
-  }
-
-  private isProjectManager(user: any) {
-    return user?.role === 'PROJECT_MANAGER';
-  }
-
   private getRoles(user: any): string[] {
     if (Array.isArray(user?.roles)) {
       return user.roles;
     }
+
     if (user?.role) {
       return [user.role];
     }
+
     return [];
   }
 
   private hasAnyRole(user: any, roles: string[]) {
     const currentRoles = this.getRoles(user);
     return roles.some((role) => currentRoles.includes(role));
+  }
+
+  private isOwner(user: any) {
+    return this.hasAnyRole(user, [UserRole.OWNER]);
+  }
+
+  private isLeadManager(user: any) {
+    return this.hasAnyRole(user, [UserRole.LEAD_MANAGER]);
+  }
+
+  private isTelecaller(user: any) {
+    return this.hasAnyRole(user, [UserRole.TELECALLER]);
+  }
+
+  private isLeadExecutive(user: any) {
+    return this.hasAnyRole(user, [UserRole.LEAD_EXECUTIVE]);
+  }
+
+  private isMeetingManager(user: any) {
+    return this.hasAnyRole(user, [UserRole.MEETING_MANAGER]);
+  }
+
+  private isProjectManager(user: any) {
+    return this.hasAnyRole(user, [UserRole.PROJECT_MANAGER]);
+  }
+
+  private isProjectExecutive(user: any) {
+    return this.hasAnyRole(user, [UserRole.PROJECT_EXECUTIVE]);
+  }
+
+  private isMarketingHead(user: any) {
+    return this.hasAnyRole(user, [UserRole.MARKETING_HEAD]);
+  }
+
+  private isTelecallingManager(user: any) {
+    return this.hasAnyRole(user, [UserRole.TELECALLING_MANAGER]);
+  }
+
+  private isOwnOnlyLeadRole(user: any) {
+    return this.hasAnyRole(user, [
+      UserRole.TELECALLER,
+      UserRole.LEAD_EXECUTIVE,
+      UserRole.MEETING_MANAGER,
+      UserRole.PROJECT_EXECUTIVE,
+    ]);
   }
 
   private getCurrentUserId(user: any) {
@@ -88,6 +120,16 @@ export class LeadsService {
     return numericValue;
   }
 
+  private getProjectPipelineStatuses() {
+    return [
+      LeadStatus.INTERESTED,
+      LeadStatus.SITE_VISIT,
+      LeadStatus.QUOTATION,
+      LeadStatus.NEGOTIATION,
+      LeadStatus.WON,
+    ];
+  }
+
   private async getAccessibleLead(id: number, user: any) {
     const lead = await this.leadRepository.findOne({
       where: { id },
@@ -98,46 +140,54 @@ export class LeadsService {
     }
 
     const currentUserId = this.getCurrentUserId(user);
-    const roles = this.getRoles(user);
 
-    const canAccess =
-      roles.includes('OWNER') ||
-      roles.includes('LEAD_MANAGER') ||
-      roles.includes('MEETING_MANAGER') ||
+    const canAccessDirectly =
+      this.isOwner(user) ||
+      this.isLeadManager(user) ||
+      this.isMarketingHead(user) ||
+      this.isTelecallingManager(user) ||
       lead.createdBy === currentUserId ||
       lead.assignedTo === currentUserId;
 
-    if (!canAccess) {
-      if (this.isTelecaller(user)) {
-        if (
-          lead.assignedTo !== null &&
-          lead.assignedTo !== undefined &&
-          lead.assignedTo !== currentUserId
-        ) {
-          throw new ForbiddenException(
-            'You can only access your available or assigned leads',
-          );
-        }
-      } else if (this.isProjectManager(user)) {
-        const allowedStatuses = [
-          LeadStatus.INTERESTED,
-          LeadStatus.SITE_VISIT,
-          LeadStatus.QUOTATION,
-          LeadStatus.NEGOTIATION,
-          LeadStatus.WON,
-        ];
-
-        if (!allowedStatuses.includes(lead.status)) {
-          throw new ForbiddenException(
-            'You can only access qualified pipeline leads',
-          );
-        }
-      } else {
-        throw new ForbiddenException('You do not have access to this lead');
-      }
+    if (canAccessDirectly) {
+      return lead;
     }
 
-    return lead;
+    if (this.isTelecaller(user) || this.isLeadExecutive(user)) {
+      if (
+        lead.assignedTo !== null &&
+        lead.assignedTo !== undefined &&
+        lead.assignedTo !== currentUserId
+      ) {
+        throw new ForbiddenException(
+          'You can only access your available or assigned leads',
+        );
+      }
+
+      return lead;
+    }
+
+    if (this.isMeetingManager(user) || this.isProjectExecutive(user)) {
+      if (lead.assignedTo !== currentUserId && lead.createdBy !== currentUserId) {
+        throw new ForbiddenException('You can only access your own related leads');
+      }
+
+      return lead;
+    }
+
+    if (this.isProjectManager(user)) {
+      const allowedStatuses = this.getProjectPipelineStatuses();
+
+      if (!allowedStatuses.includes(lead.status)) {
+        throw new ForbiddenException(
+          'You can only access qualified pipeline leads',
+        );
+      }
+
+      return lead;
+    }
+
+    throw new ForbiddenException('You do not have access to this lead');
   }
 
   async create(data: Partial<Lead>, user: any) {
@@ -163,7 +213,7 @@ export class LeadsService {
           : 15,
     };
 
-    if (this.isTelecaller(user)) {
+    if (this.isTelecaller(user) || this.isLeadExecutive(user)) {
       leadData = {
         ...leadData,
         assignedTo: currentUserId,
@@ -178,23 +228,25 @@ export class LeadsService {
     const query = this.leadRepository.createQueryBuilder('lead');
     const currentUserId = this.getCurrentUserId(user);
 
-    if (this.isTelecaller(user)) {
+    if (this.isTelecaller(user) || this.isLeadExecutive(user)) {
       query.andWhere(
         '(lead.assignedTo = :assignedTo OR lead.assignedTo IS NULL)',
         { assignedTo: currentUserId },
       );
+    } else if (this.isMeetingManager(user) || this.isProjectExecutive(user)) {
+      query.andWhere(
+        '(lead.assignedTo = :currentUserId OR lead.createdBy = :currentUserId)',
+        { currentUserId },
+      );
     } else if (this.isProjectManager(user)) {
       query.andWhere('lead.status IN (:...statuses)', {
-        statuses: [
-          LeadStatus.INTERESTED,
-          LeadStatus.SITE_VISIT,
-          LeadStatus.QUOTATION,
-          LeadStatus.NEGOTIATION,
-          LeadStatus.WON,
-        ],
+        statuses: this.getProjectPipelineStatuses(),
       });
     } else if (
-      (this.isOwner(user) || this.isLeadManager(user)) &&
+      (this.isOwner(user) ||
+        this.isLeadManager(user) ||
+        this.isMarketingHead(user) ||
+        this.isTelecallingManager(user)) &&
       filters?.assignedTo
     ) {
       query.andWhere('lead.assignedTo = :assignedTo', {
@@ -396,8 +448,17 @@ export class LeadsService {
   async findByAssignedUser(userId: number, user: any) {
     const currentUserId = this.getCurrentUserId(user);
 
-    if (this.isTelecaller(user) && currentUserId !== userId) {
+    if (
+      (this.isTelecaller(user) || this.isLeadExecutive(user)) &&
+      currentUserId !== userId
+    ) {
       throw new ForbiddenException('You can only access your assigned leads');
+    }
+
+    if (this.isMeetingManager(user) || this.isProjectExecutive(user)) {
+      if (currentUserId !== userId) {
+        throw new ForbiddenException('You can only access your own related leads');
+      }
     }
 
     if (this.isProjectManager(user)) {
@@ -421,6 +482,8 @@ export class LeadsService {
       throw new NotFoundException('Lead not found');
     }
 
+    await this.getAccessibleLead(id, user);
+
     const currentUserId = this.getCurrentUserId(user);
 
     if (data.potentialPercentage !== undefined) {
@@ -429,7 +492,7 @@ export class LeadsService {
       );
     }
 
-    if (this.isTelecaller(user)) {
+    if (this.isTelecaller(user) || this.isLeadExecutive(user)) {
       if (
         lead.assignedTo !== null &&
         lead.assignedTo !== undefined &&
@@ -446,6 +509,12 @@ export class LeadsService {
 
       if (!lead.assignedTo) {
         lead.assignedTo = currentUserId;
+      }
+    }
+
+    if (this.isMeetingManager(user) || this.isProjectExecutive(user)) {
+      if (data.assignedTo !== undefined) {
+        delete data.assignedTo;
       }
     }
 
@@ -497,22 +566,24 @@ export class LeadsService {
     let leads: Lead[];
     const currentUserId = this.getCurrentUserId(user);
 
-    if (this.isTelecaller(user)) {
+    if (this.isTelecaller(user) || this.isLeadExecutive(user)) {
       leads = await this.leadRepository.find({
         where: [{ assignedTo: currentUserId }, { assignedTo: null as any }],
+        order: { createdAt: 'DESC' },
+      });
+    } else if (this.isMeetingManager(user) || this.isProjectExecutive(user)) {
+      leads = await this.leadRepository.find({
+        where: [
+          { assignedTo: currentUserId },
+          { createdBy: currentUserId },
+        ],
         order: { createdAt: 'DESC' },
       });
     } else if (this.isProjectManager(user)) {
       leads = await this.leadRepository
         .createQueryBuilder('lead')
         .where('lead.status IN (:...statuses)', {
-          statuses: [
-            LeadStatus.INTERESTED,
-            LeadStatus.SITE_VISIT,
-            LeadStatus.QUOTATION,
-            LeadStatus.NEGOTIATION,
-            LeadStatus.WON,
-          ],
+          statuses: this.getProjectPipelineStatuses(),
         })
         .orderBy('lead.createdAt', 'DESC')
         .getMany();
@@ -715,14 +786,33 @@ export class LeadsService {
     };
   }
 
-  async getHotLeads() {
-    return this.leadRepository.find({
-      where: [
-        { status: LeadStatus.INTERESTED },
-        { status: LeadStatus.CONTACTED },
-      ],
-      order: { updatedAt: 'DESC' },
-      take: 10,
+  async getHotLeads(user: any) {
+    const query = this.leadRepository.createQueryBuilder('lead');
+
+    query.andWhere('lead.status IN (:...statuses)', {
+      statuses: [LeadStatus.INTERESTED, LeadStatus.CONTACTED],
     });
+
+    const currentUserId = this.getCurrentUserId(user);
+
+    if (this.isTelecaller(user) || this.isLeadExecutive(user)) {
+      query.andWhere(
+        '(lead.assignedTo = :assignedTo OR lead.assignedTo IS NULL)',
+        {
+          assignedTo: currentUserId,
+        },
+      );
+    } else if (this.isMeetingManager(user) || this.isProjectExecutive(user)) {
+      query.andWhere(
+        '(lead.assignedTo = :currentUserId OR lead.createdBy = :currentUserId)',
+        { currentUserId },
+      );
+    } else if (this.isProjectManager(user)) {
+      query.andWhere('lead.status IN (:...projectStatuses)', {
+        projectStatuses: this.getProjectPipelineStatuses(),
+      });
+    }
+
+    return query.orderBy('lead.updatedAt', 'DESC').take(10).getMany();
   }
 }

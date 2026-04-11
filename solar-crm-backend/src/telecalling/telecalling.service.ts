@@ -26,6 +26,7 @@ import {
 import { User } from '../users/user.entity';
 import { ContactCallHistory } from './contact-call-history.entity';
 import { ContactNote } from './contact-note.entity';
+import { UserRole } from '../users/user.entity';
 
 @Injectable()
 export class TelecallingService {
@@ -63,6 +64,13 @@ export class TelecallingService {
     return allowedRoles.some((role) => roles.includes(role));
   }
 
+  private hasRole(user: any, role: string): boolean {
+    if (Array.isArray(user?.roles)) {
+      return user.roles.includes(role);
+    }
+    return user?.role === role;
+  }
+
   private normalizeHeader(value: string): string {
     return String(value || '')
       .trim()
@@ -74,6 +82,17 @@ export class TelecallingService {
     const digits = String(value || '').replace(/\D/g, '');
     if (!digits) return '';
     return digits.slice(-10);
+  }
+
+  private normalizeLeadPotential(value?: string): string | undefined {
+    const normalized = String(value || '').trim().toUpperCase();
+    if (!normalized) return undefined;
+
+    if (normalized === 'LOW' || normalized === 'MEDIUM' || normalized === 'HIGH') {
+      return normalized;
+    }
+
+    return undefined;
   }
 
   private getMappedValue(
@@ -159,6 +178,15 @@ export class TelecallingService {
       return contact;
     }
 
+    if (this.hasAnyRole(user, ['TELECALLING_ASSISTANT' as any])) {
+      if (contact.reviewAssignedTo !== user.id) {
+        throw new ForbiddenException(
+          'You can only access your assigned review contacts',
+        );
+      }
+      return contact;
+    }
+
     if (this.hasAnyRole(user, ['TELECALLER'])) {
       if (contact.assignedTo !== user.id) {
         throw new ForbiddenException(
@@ -179,6 +207,7 @@ export class TelecallingService {
       providerName: data.providerName || CallProvider.MANUAL,
       callDirection: data.callDirection || CallDirection.OUTBOUND,
       disposition: data.disposition || data.callStatus || undefined,
+      leadPotential: this.normalizeLeadPotential((data as any).leadPotential),
     });
 
     const savedLog = await this.callLogRepository.save(log);
@@ -414,10 +443,11 @@ export class TelecallingService {
         'OWNER',
         'PROJECT_MANAGER',
         'TELECALLING_MANAGER',
+        'TELECALLING_ASSISTANT' as any,
       ])
     ) {
       throw new ForbiddenException(
-        'Only owner, telecalling manager, or project manager can review call recordings',
+        'Only owner, telecalling manager, project manager, or telecalling assistant can review call recordings',
       );
     }
 
@@ -429,6 +459,12 @@ export class TelecallingService {
       throw new NotFoundException('Call log not found');
     }
 
+    if (this.hasRole(user, 'TELECALLING_ASSISTANT' as any)) {
+      if (callLog.reviewAssignedTo !== user.id) {
+        throw new ForbiddenException('You can only review assigned calls');
+      }
+    }
+
     callLog.reviewStatus = data.reviewStatus;
     callLog.reviewNotes = data.reviewNotes || '';
 
@@ -436,6 +472,15 @@ export class TelecallingService {
   }
 
   async getReviewQueue(user: any) {
+    if (this.hasRole(user, 'TELECALLING_ASSISTANT' as any)) {
+      return this.callLogRepository.find({
+        where: {
+          reviewAssignedTo: user.id,
+        },
+        order: { createdAt: 'DESC' },
+      });
+    }
+
     if (
       !this.hasAnyRole(user, [
         'OWNER',
@@ -444,7 +489,7 @@ export class TelecallingService {
       ])
     ) {
       throw new ForbiddenException(
-        'Only owner, telecalling manager, or project manager can access review queue',
+        'Only owner, telecalling manager, project manager, or assigned assistant can access review queue',
       );
     }
 
@@ -698,6 +743,13 @@ export class TelecallingService {
       qb.andWhere('contact.isInStorage = :isInStorage', { isInStorage: false });
     }
 
+    if (this.hasAnyRole(user, ['TELECALLING_ASSISTANT' as any])) {
+      qb.where('contact.reviewAssignedTo = :reviewAssignedTo', {
+        reviewAssignedTo: user.id,
+      });
+      qb.andWhere('contact.isInStorage = :isInStorage', { isInStorage: false });
+    }
+
     const contacts = await qb.getMany();
     const uniqueValues = new Set<string>();
 
@@ -716,9 +768,15 @@ export class TelecallingService {
     view: string,
     user: any,
   ) {
-    if (!this.hasAnyRole(user, ['OWNER', 'TELECALLING_MANAGER'])) {
+    if (
+      !this.hasAnyRole(user, [
+        'OWNER',
+        'TELECALLING_MANAGER',
+        'TELECALLING_ASSISTANT' as any,
+      ])
+    ) {
       throw new ForbiddenException(
-        'Only owner or telecalling manager can view filtered contact count',
+        'Only owner, telecalling manager, or telecalling assistant can view filtered contact count',
       );
     }
 
@@ -729,7 +787,14 @@ export class TelecallingService {
       .createQueryBuilder('contact')
       .orderBy('contact.createdAt', 'DESC');
 
-    this.applyViewRestrictionsToContactQuery(qb, user, normalizedView);
+    if (this.hasAnyRole(user, ['TELECALLING_ASSISTANT' as any])) {
+      qb.where('contact.reviewAssignedTo = :reviewAssignedTo', {
+        reviewAssignedTo: user.id,
+      });
+      qb.andWhere('contact.isInStorage = :isInStorage', { isInStorage: false });
+    } else {
+      this.applyViewRestrictionsToContactQuery(qb, user, normalizedView);
+    }
 
     const totalCount = await qb.getCount();
 
@@ -744,7 +809,16 @@ export class TelecallingService {
       .createQueryBuilder('contact')
       .orderBy('contact.createdAt', 'DESC');
 
-    this.applyViewRestrictionsToContactQuery(filteredQb, user, normalizedView);
+    if (this.hasAnyRole(user, ['TELECALLING_ASSISTANT' as any])) {
+      filteredQb.where('contact.reviewAssignedTo = :reviewAssignedTo', {
+        reviewAssignedTo: user.id,
+      });
+      filteredQb.andWhere('contact.isInStorage = :isInStorage', {
+        isInStorage: false,
+      });
+    } else {
+      this.applyViewRestrictionsToContactQuery(filteredQb, user, normalizedView);
+    }
 
     filteredQb.andWhere(
       `(
@@ -770,7 +844,7 @@ export class TelecallingService {
   async getContactWorkHistory(id: number, user: any) {
     const contact = await this.getAccessibleContact(id, user);
 
-    const [notes, callHistory] = await Promise.all([
+    const [notesRaw, callHistoryRaw] = await Promise.all([
       this.contactNoteRepository.find({
         where: { contactId: id },
         order: { createdAt: 'DESC' },
@@ -780,6 +854,9 @@ export class TelecallingService {
         order: { createdAt: 'DESC' },
       }),
     ]);
+
+    const notes = Array.isArray(notesRaw) ? notesRaw : [];
+    const callHistory = Array.isArray(callHistoryRaw) ? callHistoryRaw : [];
 
     const timeline: Array<{
       type: 'CONTACT_CREATED' | 'CONTACT_NOTE' | 'CONTACT_CALL';
@@ -793,23 +870,26 @@ export class TelecallingService {
 
     timeline.push({
       type: 'CONTACT_CREATED',
-      timestamp: contact.createdAt,
+      timestamp: contact?.createdAt || new Date(),
       title: 'Contact Created',
-      description: `Contact imported by ${contact.importedByName || 'Unknown User'}`,
+      description: `Contact imported by ${contact?.importedByName || 'Unknown User'}`,
       meta: {
-        importedBy: contact.importedByName || '-',
-        assignedTo: contact.assignedToName || '-',
-        status: contact.status,
-        convertedToLead: contact.convertedToLead ? 'YES' : 'NO',
+        importedBy: contact?.importedByName || '-',
+        assignedTo: contact?.assignedToName || '-',
+        reviewAssignedTo: contact?.reviewAssignedToName || '-',
+        status: contact?.status || '-',
+        convertedToLead: contact?.convertedToLead ? 'YES' : 'NO',
       },
     });
 
     for (const note of notes) {
+      if (!note) continue;
+
       timeline.push({
         type: 'CONTACT_NOTE',
-        timestamp: note.updatedAt || note.createdAt,
+        timestamp: note.updatedAt || note.createdAt || new Date(),
         title: `Note by ${note.createdByName || 'Unknown User'}`,
-        description: note.note,
+        description: note.note || '',
         noteId: note.id,
         meta: {
           createdBy: note.createdByName || '-',
@@ -820,9 +900,11 @@ export class TelecallingService {
     }
 
     for (const call of callHistory) {
+      if (!call) continue;
+
       timeline.push({
         type: 'CONTACT_CALL',
-        timestamp: call.updatedAt || call.createdAt,
+        timestamp: call.updatedAt || call.createdAt || new Date(),
         title: `Call ${call.callStatus || 'CONNECTED'}`,
         description: call.notes || 'Call entry recorded',
         callHistoryId: call.id,
@@ -979,6 +1061,8 @@ export class TelecallingService {
       callerNumber: body?.callerNumber || undefined,
       receiverNumber: body?.receiverNumber || contact.phone || undefined,
       reviewStatus: CallReviewStatus.PENDING,
+      reviewAssignedTo: contact.reviewAssignedTo || undefined,
+      reviewAssignedToName: contact.reviewAssignedToName || undefined,
     });
 
     const savedLog = await this.callLogRepository.save(log);
@@ -1008,6 +1092,7 @@ export class TelecallingService {
       durationInSeconds?: number;
       callerNumber?: string;
       receiverNumber?: string;
+      leadPotential?: string;
     },
     user: any,
   ) {
@@ -1061,6 +1146,9 @@ export class TelecallingService {
     callLog.receiverNumber =
       body.receiverNumber || callLog.receiverNumber || contact.phone || undefined;
     callLog.providerUpdatedAt = new Date();
+    callLog.reviewAssignedTo = contact.reviewAssignedTo || undefined;
+    callLog.reviewAssignedToName = contact.reviewAssignedToName || undefined;
+    callLog.leadPotential = this.normalizeLeadPotential(body.leadPotential);
 
     const savedLog = await this.callLogRepository.save(callLog);
 
@@ -1109,6 +1197,8 @@ export class TelecallingService {
         phone: contact.phone,
         assignedTo: contact.assignedTo,
         assignedToName: contact.assignedToName,
+        reviewAssignedTo: contact.reviewAssignedTo,
+        reviewAssignedToName: contact.reviewAssignedToName,
       },
       nextAction:
         normalizedStatus === 'INTERESTED' ? 'OPEN_CONTACT' : 'STAY_ON_LIST',
@@ -1143,6 +1233,70 @@ export class TelecallingService {
     contact.isInStorage = false;
 
     return this.contactRepository.save(contact);
+  }
+
+  async assignContactForReview(
+    contactId: number,
+    assignedTo: number,
+    user: any,
+  ) {
+    if (!this.hasAnyRole(user, ['OWNER', 'TELECALLING_MANAGER', 'TELECALLER'])) {
+      throw new ForbiddenException(
+        'Only owner, telecalling manager, or telecaller can assign for assistant review',
+      );
+    }
+
+    const contact = await this.contactRepository.findOne({
+      where: { id: contactId },
+    });
+
+    if (!contact) {
+      throw new NotFoundException('Contact not found');
+    }
+
+    if (this.hasRole(user, 'TELECALLER') && contact.assignedTo !== user.id) {
+      throw new ForbiddenException(
+        'You can only assign your own active contact for assistant review',
+      );
+    }
+
+    const assignedUser = await this.userRepository.findOne({
+      where: { id: assignedTo },
+    });
+
+    if (!assignedUser) {
+      throw new NotFoundException('User not found');
+    }
+
+    const targetRoles: UserRole[] = Array.isArray(assignedUser.roles)
+  ? (assignedUser.roles as UserRole[])
+  : [];
+    if (!targetRoles.includes('TELECALLING_ASSISTANT' as any)) {
+      throw new BadRequestException(
+        'Selected user must have TELECALLING_ASSISTANT role',
+      );
+    }
+
+    contact.reviewAssignedTo = assignedUser.id;
+    contact.reviewAssignedToName = assignedUser.name;
+    await this.contactRepository.save(contact);
+
+    const latestCall = await this.callLogRepository.findOne({
+      where: { contactId },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (latestCall) {
+      latestCall.reviewAssignedTo = assignedUser.id;
+      latestCall.reviewAssignedToName = assignedUser.name;
+      await this.callLogRepository.save(latestCall);
+    }
+
+    return {
+      message: 'Assigned to telecalling assistant successfully',
+      reviewAssignedTo: assignedUser.id,
+      reviewAssignedToName: assignedUser.name,
+    };
   }
 
   async assignLatestContactsByFilter(
@@ -1318,6 +1472,12 @@ export class TelecallingService {
 
     if (!contact) {
       throw new NotFoundException('Telecalling contact not found');
+    }
+
+    if (this.hasRole(user, 'TELECALLING_ASSISTANT' as any)) {
+      if (contact.reviewAssignedTo !== user.id) {
+        throw new ForbiddenException('Not allowed to convert this contact');
+      }
     }
 
     if (contact.convertedToLead) {

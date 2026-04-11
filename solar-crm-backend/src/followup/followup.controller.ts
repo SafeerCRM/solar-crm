@@ -61,4 +61,12 @@ export class FollowupController {
   ) {
     return this.followupService.markCompleted(id, user);
   }
+
+  @Get(':id/convert-to-meeting')
+  getConvertToMeetingData(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.followupService.getConvertToMeetingData(id, user);
+  }
 }

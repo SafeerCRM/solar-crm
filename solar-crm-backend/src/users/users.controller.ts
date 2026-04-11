@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
@@ -13,6 +14,7 @@ import { User, UserRole } from './user.entity';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
+import { CurrentUser } from '../auth/current-user.decorator';
 
 @Controller('users')
 export class UsersController {
@@ -41,6 +43,13 @@ export class UsersController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER', 'TELECALLING_MANAGER', 'TELECALLER')
+  @Get('telecalling-assistants')
+  findTelecallingAssistants() {
+    return this.usersService.findTelecallingAssistants();
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER', 'LEAD_MANAGER', 'TELECALLING_MANAGER')
   @Get('telecallers')
   findTelecallers() {
@@ -62,6 +71,27 @@ export class UsersController {
     @Body('password') password: string,
   ) {
     return this.usersService.updateUserPassword(id, password);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER')
+  @Patch(':id/roles')
+  updateUserRoles(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('roles') roles: UserRole[],
+    @CurrentUser() user: any,
+  ) {
+    return this.usersService.updateUserRoles(id, roles, user);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER')
+  @Delete(':id')
+  deleteUser(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.usersService.deleteUser(id, user);
   }
 
   @UseGuards(JwtAuthGuard)

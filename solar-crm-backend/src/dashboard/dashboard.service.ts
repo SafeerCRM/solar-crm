@@ -5,6 +5,7 @@ import { Lead, LeadStatus } from '../leads/lead.entity';
 import { CallLog } from '../telecalling/call-log.entity';
 import { FollowUp, FollowUpStatus } from '../followup/follow-up.entity';
 import { TelecallingContact } from '../telecalling/telecalling-contact.entity';
+import { UserRole } from '../users/user.entity';
 
 @Injectable()
 export class DashboardService {
@@ -22,13 +23,30 @@ export class DashboardService {
     private readonly telecallingContactRepository: Repository<TelecallingContact>,
   ) {}
 
-  async getSummary(assignedTo?: number, role?: string) {
-    const isTelecaller = role === 'TELECALLER';
-    const isProjectManager = role === 'PROJECT_MANAGER';
+  private hasAnyRole(userRoles: string[] = [], rolesToCheck: UserRole[]): boolean {
+    return rolesToCheck.some((role) => userRoles.includes(role));
+  }
 
-    const leadWhere = isTelecaller ? { assignedTo } : {};
-    const callWhere = isTelecaller ? { telecallerId: assignedTo } : {};
-    const followupWhereBase = isTelecaller ? { assignedTo } : {};
+  private isOwnOnlyRole(userRoles: string[] = []): boolean {
+    return this.hasAnyRole(userRoles, [
+      UserRole.TELECALLER,
+      UserRole.LEAD_EXECUTIVE,
+      UserRole.MEETING_MANAGER,
+      UserRole.PROJECT_EXECUTIVE,
+    ]);
+  }
+
+  private isProjectManagerRole(userRoles: string[] = []): boolean {
+    return userRoles.includes(UserRole.PROJECT_MANAGER);
+  }
+
+  async getSummary(assignedTo?: number, userRoles: string[] = []) {
+    const isOwnOnly = this.isOwnOnlyRole(userRoles);
+    const isProjectManager = this.isProjectManagerRole(userRoles);
+
+    const leadWhere = isOwnOnly && assignedTo ? { assignedTo } : {};
+    const callWhere = isOwnOnly && assignedTo ? { telecallerId: assignedTo } : {};
+    const followupWhereBase = isOwnOnly && assignedTo ? { assignedTo } : {};
 
     let totalLeads = 0;
     let newLeads = 0;
@@ -98,7 +116,7 @@ export class DashboardService {
 
       const calledLeadIds = allCallLogs.map((log) => log.leadId);
 
-      if (isTelecaller) {
+      if (isOwnOnly && assignedTo) {
         const visibleLeads = await this.leadRepository
           .createQueryBuilder('lead')
           .where('(lead.assignedTo = :assignedTo OR lead.assignedTo IS NULL)', {
@@ -163,10 +181,14 @@ export class DashboardService {
     };
   }
 
-  async getContactsSummary(cityFilter?: string, assignedTo?: number, role?: string) {
-    const isTelecaller = role === 'TELECALLER';
+  async getContactsSummary(
+    cityFilter?: string,
+    assignedTo?: number,
+    userRoles: string[] = [],
+  ) {
+    const isOwnOnly = this.isOwnOnlyRole(userRoles);
 
-    const baseWhere = isTelecaller ? { assignedTo } : {};
+    const baseWhere = isOwnOnly && assignedTo ? { assignedTo } : {};
 
     const totalContacts = await this.telecallingContactRepository.count({
       where: baseWhere,
@@ -183,11 +205,7 @@ export class DashboardService {
 
     const contacts = await this.telecallingContactRepository.find({
       where: baseWhere,
-      select: [
-        'id',
-        'city',
-        'assignedTo',
-      ] as any,
+      select: ['id', 'city'] as any,
     });
 
     const filteredContacts = contacts.filter((contact: any) => {
