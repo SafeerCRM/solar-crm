@@ -19,12 +19,14 @@ export default function MeetingForm() {
 
   const [form, setForm] = useState({
     leadId: '',
+    followupId: '',
     customerName: '',
     mobile: '',
     address: '',
     scheduledAt: '',
     assignedTo: '',
     meetingType: 'SITE_VISIT',
+    meetingCategory: 'COMPANY_MEETING',
     status: 'SCHEDULED',
     notes: '',
     gpsLatitude: '',
@@ -32,6 +34,12 @@ export default function MeetingForm() {
     gpsAddress: '',
     createdBy: '',
     updatedBy: '',
+
+    panelGivenToCustomerKw: '',
+    inverterCapacityKw: '',
+    structureKw: '',
+    proposedSystemKw: '',
+    meetingCount: '',
   });
 
   const [photo, setPhoto] = useState<File | null>(null);
@@ -41,6 +49,8 @@ export default function MeetingForm() {
   const [locationLoading, setLocationLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  const [leadOwnerName, setLeadOwnerName] = useState('');
 
   useEffect(() => {
     fetchUsers();
@@ -68,12 +78,19 @@ export default function MeetingForm() {
     if (user) {
       const parsed = JSON.parse(user);
 
+      const assignedToFromQuery = searchParams.get('assignedTo') || '';
+      const leadOwnerFromQuery = searchParams.get('leadOwnerName') || '';
+
+      setLeadOwnerName(leadOwnerFromQuery);
+
       setForm((prev) => ({
         ...prev,
         leadId: searchParams.get('leadId') || '',
+        followupId: searchParams.get('followupId') || '',
         customerName: searchParams.get('name') || '',
         mobile: searchParams.get('phone') || '',
         address: searchParams.get('city') || '',
+        assignedTo: assignedToFromQuery,
         createdBy: String(parsed.id),
         updatedBy: String(parsed.id),
       }));
@@ -156,14 +173,23 @@ export default function MeetingForm() {
       setError('');
       setSuccess('');
 
+      const selectedAssignedUser = users.find(
+        (u) => String(u.id) === String(form.assignedTo)
+      );
+
       const payload = {
         leadId: form.leadId ? Number(form.leadId) : undefined,
+        followupId: form.followupId ? Number(form.followupId) : undefined,
         customerName: form.customerName,
         mobile: form.mobile,
         address: form.address || undefined,
         scheduledAt: new Date(form.scheduledAt).toISOString(),
         assignedTo: form.assignedTo ? Number(form.assignedTo) : undefined,
+        assignedToName: selectedAssignedUser
+          ? `${selectedAssignedUser.name} (${selectedAssignedUser.id})`
+          : undefined,
         meetingType: form.meetingType,
+        meetingCategory: form.meetingCategory,
         status: form.status,
         notes: form.notes || undefined,
         gpsLatitude: form.gpsLatitude ? Number(form.gpsLatitude) : undefined,
@@ -171,6 +197,20 @@ export default function MeetingForm() {
         gpsAddress: form.gpsAddress || undefined,
         createdBy: Number(form.createdBy),
         updatedBy: Number(form.updatedBy),
+        createdByName: leadOwnerName || undefined,
+
+        panelGivenToCustomerKw: form.panelGivenToCustomerKw
+          ? Number(form.panelGivenToCustomerKw)
+          : undefined,
+        inverterCapacityKw: form.inverterCapacityKw
+          ? Number(form.inverterCapacityKw)
+          : undefined,
+        structureKw: form.structureKw ? Number(form.structureKw) : undefined,
+        proposedSystemKw: form.proposedSystemKw
+          ? Number(form.proposedSystemKw)
+          : undefined,
+        meetingCount: form.meetingCount ? Number(form.meetingCount) : undefined,
+
         siteObservation: photo ? `Photo selected: ${photo.name}` : undefined,
       };
 
@@ -213,6 +253,15 @@ export default function MeetingForm() {
 
       <div className="grid gap-4 md:grid-cols-2">
         <input type="hidden" name="leadId" value={form.leadId} />
+        <input type="hidden" name="followupId" value={form.followupId} />
+
+        {leadOwnerName ? (
+          <div className="md:col-span-2 rounded bg-gray-50 p-3 text-sm text-gray-700">
+            <div>
+              <span className="font-medium">Lead Owner:</span> {leadOwnerName}
+            </div>
+          </div>
+        ) : null}
 
         <div>
           <label className="mb-1 block text-sm font-medium">Customer Name</label>
@@ -268,10 +317,99 @@ export default function MeetingForm() {
             <option value="">Select User</option>
             {users.map((u) => (
               <option key={u.id} value={u.id}>
-                {u.name} ({u.email})
+                {u.name} ({u.id}){u.email ? ` - ${u.email}` : ''}
               </option>
             ))}
           </select>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium">Meeting Type</label>
+          <select
+            name="meetingType"
+            value={form.meetingType}
+            onChange={handleChange}
+            className="w-full rounded border p-2"
+          >
+            <option value="SITE_VISIT">Site Visit</option>
+            <option value="OFFICE_MEETING">Office Meeting</option>
+            <option value="PHONE_DISCUSSION">Phone Discussion</option>
+            <option value="VIDEO_MEETING">Video Meeting</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium">Meeting Category</label>
+          <select
+            name="meetingCategory"
+            value={form.meetingCategory}
+            onChange={handleChange}
+            className="w-full rounded border p-2"
+          >
+            <option value="COMPANY_MEETING">Company Meeting</option>
+            <option value="SELF_MEETING">Self Meeting</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium">
+            Panel Given To Customer (kW)
+          </label>
+          <input
+            name="panelGivenToCustomerKw"
+            value={form.panelGivenToCustomerKw}
+            onChange={handleChange}
+            className="w-full rounded border p-2"
+            placeholder="e.g. 5"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium">
+            Inverter Capacity (kW)
+          </label>
+          <input
+            name="inverterCapacityKw"
+            value={form.inverterCapacityKw}
+            onChange={handleChange}
+            className="w-full rounded border p-2"
+            placeholder="e.g. 5"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium">Structure (kW)</label>
+          <input
+            name="structureKw"
+            value={form.structureKw}
+            onChange={handleChange}
+            className="w-full rounded border p-2"
+            placeholder="e.g. 5"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium">
+            Proposed System / Rate (kW)
+          </label>
+          <input
+            name="proposedSystemKw"
+            value={form.proposedSystemKw}
+            onChange={handleChange}
+            className="w-full rounded border p-2"
+            placeholder="e.g. 5"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium">Meeting Count</label>
+          <input
+            name="meetingCount"
+            value={form.meetingCount}
+            onChange={handleChange}
+            className="w-full rounded border p-2"
+            placeholder="e.g. 1"
+          />
         </div>
 
         <div className="md:col-span-2 flex flex-wrap gap-3">

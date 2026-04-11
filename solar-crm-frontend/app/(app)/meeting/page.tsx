@@ -1,11 +1,13 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { getAuthHeaders } from '@/lib/authHeaders';
 
 type Meeting = {
   id: number;
+  meetingGroupId?: number | null;
   leadId: number;
   followupId?: number | null;
   customerName: string;
@@ -13,9 +15,12 @@ type Meeting = {
   address?: string | null;
   scheduledAt: string;
   assignedTo?: number | null;
+  assignedToName?: string | null;
   meetingType: string;
+  meetingCategory?: string | null;
   status: string;
   notes?: string | null;
+  reason?: string | null;
   outcome?: string | null;
   nextAction?: string | null;
   managerRemarks?: string | null;
@@ -23,38 +28,35 @@ type Meeting = {
   gpsLatitude?: number | null;
   gpsLongitude?: number | null;
   gpsAddress?: string | null;
+  panelGivenToCustomerKw?: number | null;
+  inverterCapacityKw?: number | null;
+  structureKw?: number | null;
+  proposedSystemKw?: number | null;
+  meetingCount?: number | null;
+  convertToProject?: boolean | null;
   createdBy?: number | null;
+  createdByName?: string | null;
   updatedBy?: number | null;
+  updatedByName?: string | null;
   createdAt: string;
   updatedAt: string;
 };
 
 const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
-type ActionType = 'COMPLETE' | 'CANCEL' | 'RESCHEDULE' | 'CONVERT' | null;
-
 export default function MeetingPage() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
-  const [actionType, setActionType] = useState<ActionType>(null);
-
-  const [form, setForm] = useState({
-    outcome: '',
-    notes: '',
-    nextAction: '',
-    managerRemarks: '',
-    siteObservation: '',
-    scheduledAt: '',
-  });
-
   const [searchName, setSearchName] = useState('');
   const [searchPhone, setSearchPhone] = useState('');
   const [searchLocation, setSearchLocation] = useState('');
-  const [convertSliderValue, setConvertSliderValue] = useState(0);
-  const [convertingProject, setConvertingProject] = useState(false);
+
+  const [meetingManagerName, setMeetingManagerName] = useState('');
+  const [meetingManagerId, setMeetingManagerId] = useState('');
+  const [meetingCategory, setMeetingCategory] = useState('');
+  const [month, setMonth] = useState('');
 
   useEffect(() => {
     fetchMeetings();
@@ -63,9 +65,31 @@ export default function MeetingPage() {
   const fetchMeetings = async () => {
     try {
       setLoading(true);
+      setMessage('');
+
+      const params: Record<string, string> = {};
+
+      if (meetingManagerName.trim()) {
+        params.assignedToName = meetingManagerName.trim();
+      }
+
+      if (meetingManagerId.trim()) {
+        params.assignedTo = meetingManagerId.trim();
+      }
+
+      if (meetingCategory.trim()) {
+        params.meetingCategory = meetingCategory.trim();
+      }
+
+      if (month.trim()) {
+        params.month = month.trim();
+      }
+
       const res = await axios.get(`${backendUrl}/meetings`, {
         headers: getAuthHeaders(),
+        params,
       });
+
       setMeetings(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error(err);
@@ -101,47 +125,6 @@ export default function MeetingPage() {
     return data;
   }, [meetings, searchName, searchPhone, searchLocation]);
 
-  const resetActionState = () => {
-    setSelectedMeeting(null);
-    setActionType(null);
-    setConvertSliderValue(0);
-    setForm({
-      outcome: '',
-      notes: '',
-      nextAction: '',
-      managerRemarks: '',
-      siteObservation: '',
-      scheduledAt: '',
-    });
-  };
-
-  const openAction = (meeting: Meeting, type: ActionType) => {
-    setSelectedMeeting(meeting);
-    setActionType(type);
-    setConvertSliderValue(0);
-    setForm({
-      outcome: meeting.outcome || '',
-      notes: meeting.notes || '',
-      nextAction: meeting.nextAction || '',
-      managerRemarks: meeting.managerRemarks || '',
-      siteObservation: meeting.siteObservation || '',
-      scheduledAt: meeting.scheduledAt
-        ? new Date(meeting.scheduledAt).toISOString().slice(0, 16)
-        : '',
-    });
-    setMessage('');
-  };
-
-  const handleFieldChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => {
-    const { name, value } = e.target;
-    setForm((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
   const statusBadgeClass = (status: string) => {
     switch (status) {
       case 'COMPLETED':
@@ -152,6 +135,8 @@ export default function MeetingPage() {
         return 'bg-yellow-500';
       case 'CONVERTED_TO_PROJECT':
         return 'bg-purple-600';
+      case 'ON_HOLD':
+        return 'bg-orange-600';
       case 'NO_SHOW':
         return 'bg-gray-600';
       default:
@@ -172,164 +157,36 @@ export default function MeetingPage() {
     )}`;
   };
 
-  const saveComplete = async () => {
-    if (!selectedMeeting) return;
-
-    try {
-      await axios.patch(
-        `${backendUrl}/meetings/${selectedMeeting.id}`,
-        {
-          status: 'COMPLETED',
-          outcome: form.outcome || 'Completed meeting',
-          notes: form.notes || undefined,
-          nextAction: form.nextAction || undefined,
-          managerRemarks: form.managerRemarks || undefined,
-          siteObservation: form.siteObservation || undefined,
-        },
-        { headers: getAuthHeaders() }
-      );
-
-      setMessage('Meeting marked as COMPLETED');
-      resetActionState();
-      fetchMeetings();
-    } catch (err) {
-      console.error(err);
-      setMessage('Failed to complete meeting');
-    }
+  const clearFilters = () => {
+    setSearchName('');
+    setSearchPhone('');
+    setSearchLocation('');
+    setMeetingManagerName('');
+    setMeetingManagerId('');
+    setMeetingCategory('');
+    setMonth('');
   };
-
-  const saveCancel = async () => {
-    if (!selectedMeeting) return;
-
-    if (!form.managerRemarks.trim()) {
-      setMessage('Please enter cancellation reason');
-      return;
-    }
-
-    try {
-      await axios.patch(
-        `${backendUrl}/meetings/${selectedMeeting.id}`,
-        {
-          status: 'CANCELLED',
-          managerRemarks: form.managerRemarks,
-          notes: form.notes || undefined,
-        },
-        { headers: getAuthHeaders() }
-      );
-
-      setMessage('Meeting marked as CANCELLED');
-      resetActionState();
-      fetchMeetings();
-    } catch (err) {
-      console.error(err);
-      setMessage('Failed to cancel meeting');
-    }
-  };
-
-  const saveReschedule = async () => {
-    if (!selectedMeeting) return;
-
-    if (!form.scheduledAt) {
-      setMessage('Please choose new date and time');
-      return;
-    }
-
-    if (!form.managerRemarks.trim()) {
-      setMessage('Please enter reschedule reason');
-      return;
-    }
-
-    try {
-      await axios.patch(
-        `${backendUrl}/meetings/${selectedMeeting.id}`,
-        {
-          status: 'RESCHEDULED',
-          scheduledAt: new Date(form.scheduledAt).toISOString(),
-          managerRemarks: form.managerRemarks,
-          notes: form.notes || undefined,
-          nextAction: form.nextAction || undefined,
-        },
-        { headers: getAuthHeaders() }
-      );
-
-      setMessage('Meeting rescheduled successfully');
-      resetActionState();
-      fetchMeetings();
-    } catch (err) {
-      console.error(err);
-      setMessage('Failed to reschedule meeting');
-    }
-  };
-
-  const convertToProject = async () => {
-    if (!selectedMeeting) return;
-
-    try {
-      setConvertingProject(true);
-
-      await axios.patch(
-        `${backendUrl}/meetings/${selectedMeeting.id}`,
-        {
-          status: 'CONVERTED_TO_PROJECT',
-          nextAction: form.nextAction || 'Converted to project',
-          notes: form.notes || undefined,
-        },
-        { headers: getAuthHeaders() }
-      );
-
-      setMessage(
-        'Meeting marked as CONVERTED_TO_PROJECT. Next backend step is real project creation.'
-      );
-      resetActionState();
-      fetchMeetings();
-    } catch (err) {
-      console.error(err);
-      setMessage('Failed to convert meeting to project');
-      setConvertSliderValue(0);
-    } finally {
-      setConvertingProject(false);
-    }
-  };
-
-  const handleConvertSliderChange = async (value: number) => {
-    setConvertSliderValue(value);
-
-    if (value >= 100 && !convertingProject) {
-      await convertToProject();
-    }
-  };
-
-  const resetConvertSlider = () => {
-    if (convertingProject) return;
-    setConvertSliderValue(0);
-  };
-
-  const actionTitle = useMemo(() => {
-    switch (actionType) {
-      case 'COMPLETE':
-        return 'Complete Meeting';
-      case 'CANCEL':
-        return 'Cancel Meeting';
-      case 'RESCHEDULE':
-        return 'Reschedule Meeting';
-      case 'CONVERT':
-        return 'Convert Meeting to Project';
-      default:
-        return '';
-    }
-  }, [actionType]);
 
   return (
     <div className="p-6">
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Meeting Dashboard</h1>
 
-        <a
-          href="/meeting/create"
-          className="rounded bg-blue-600 px-4 py-2 text-white"
-        >
-          + Create Meeting
-        </a>
+        <div className="flex gap-2">
+          <button
+            onClick={fetchMeetings}
+            className="rounded bg-blue-600 px-4 py-2 text-white"
+          >
+            Refresh
+          </button>
+
+          <Link
+            href="/meeting/create"
+            className="rounded bg-blue-600 px-4 py-2 text-white"
+          >
+            + Create Meeting
+          </Link>
+        </div>
       </div>
 
       <div className="mb-4 grid gap-3 md:grid-cols-3">
@@ -358,21 +215,61 @@ export default function MeetingPage() {
         />
       </div>
 
-      <div className="mb-4 flex justify-between text-sm text-gray-600">
+      <div className="mb-4 grid gap-3 md:grid-cols-4">
+        <input
+          type="text"
+          placeholder="Meeting Manager Name"
+          value={meetingManagerName}
+          onChange={(e) => setMeetingManagerName(e.target.value)}
+          className="rounded border p-2"
+        />
+
+        <input
+          type="text"
+          placeholder="Meeting Manager ID"
+          value={meetingManagerId}
+          onChange={(e) => setMeetingManagerId(e.target.value)}
+          className="rounded border p-2"
+        />
+
+        <select
+          value={meetingCategory}
+          onChange={(e) => setMeetingCategory(e.target.value)}
+          className="rounded border p-2"
+        >
+          <option value="">Meeting Category</option>
+          <option value="COMPANY_MEETING">Company Meeting</option>
+          <option value="SELF_MEETING">Self Meeting</option>
+        </select>
+
+        <input
+          type="month"
+          value={month}
+          onChange={(e) => setMonth(e.target.value)}
+          className="rounded border p-2"
+        />
+      </div>
+
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-sm text-gray-600">
         <div>
           Total: {meetings.length} | Filtered: {filteredMeetings.length}
         </div>
 
-        <button
-          onClick={() => {
-            setSearchName('');
-            setSearchPhone('');
-            setSearchLocation('');
-          }}
-          className="text-blue-600"
-        >
-          Clear Filters
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={fetchMeetings}
+            className="rounded bg-gray-200 px-3 py-2 text-sm"
+          >
+            Apply Filters
+          </button>
+
+          <button
+            onClick={clearFilters}
+            className="text-blue-600"
+          >
+            Clear Filters
+          </button>
+        </div>
       </div>
 
       {message && <p className="mb-4 text-sm text-blue-600">{message}</p>}
@@ -385,24 +282,26 @@ export default function MeetingPage() {
               <th className="border p-2">Mobile</th>
               <th className="border p-2">Scheduled</th>
               <th className="border p-2">Type</th>
+              <th className="border p-2">Category</th>
               <th className="border p-2">Status</th>
-              <th className="border p-2">Assigned</th>
+              <th className="border p-2">Assigned To</th>
+              <th className="border p-2">Created By</th>
               <th className="border p-2">Location</th>
-              <th className="border p-2">Remarks</th>
-              <th className="border p-2">Actions</th>
+              <th className="border p-2">Progress</th>
+              <th className="border p-2">Action</th>
             </tr>
           </thead>
 
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={9} className="p-4 text-center">
+                <td colSpan={11} className="p-4 text-center">
                   Loading meetings...
                 </td>
               </tr>
             ) : filteredMeetings.length === 0 ? (
               <tr>
-                <td colSpan={9} className="p-4 text-center">
+                <td colSpan={11} className="p-4 text-center">
                   No meetings found
                 </td>
               </tr>
@@ -426,6 +325,10 @@ export default function MeetingPage() {
                     <td className="border p-2">{m.meetingType}</td>
 
                     <td className="border p-2">
+                      {m.meetingCategory || '-'}
+                    </td>
+
+                    <td className="border p-2">
                       <span
                         className={`rounded px-2 py-1 text-xs text-white ${statusBadgeClass(
                           m.status
@@ -435,7 +338,13 @@ export default function MeetingPage() {
                       </span>
                     </td>
 
-                    <td className="border p-2">{m.assignedTo || 'Unassigned'}</td>
+                    <td className="border p-2">
+                      {m.assignedToName || m.assignedTo || 'Unassigned'}
+                    </td>
+
+                    <td className="border p-2">
+                      {m.createdByName || m.createdBy || '-'}
+                    </td>
 
                     <td className="border p-2">
                       <div className="mb-2 text-xs text-gray-700">
@@ -457,48 +366,23 @@ export default function MeetingPage() {
                     </td>
 
                     <td className="border p-2">
-                      <div>{m.managerRemarks || '-'}</div>
-                      {m.notes ? (
-                        <div className="mt-1 text-xs text-gray-500">{m.notes}</div>
-                      ) : null}
+                      <div className="text-xs text-gray-700">
+                        <div>
+                          <strong>Meeting Count:</strong> {m.meetingCount || '-'}
+                        </div>
+                        <div>
+                          <strong>Next Action:</strong> {m.nextAction || '-'}
+                        </div>
+                      </div>
                     </td>
 
                     <td className="border p-2">
-                      <div className="flex flex-wrap gap-2">
-                        {(m.status === 'SCHEDULED' || m.status === 'RESCHEDULED') && (
-                          <>
-                            <button
-                              onClick={() => openAction(m, 'COMPLETE')}
-                              className="rounded bg-green-600 px-2 py-1 text-white"
-                            >
-                              Complete
-                            </button>
-
-                            <button
-                              onClick={() => openAction(m, 'RESCHEDULE')}
-                              className="rounded bg-yellow-500 px-2 py-1 text-white"
-                            >
-                              Reschedule
-                            </button>
-
-                            <button
-                              onClick={() => openAction(m, 'CANCEL')}
-                              className="rounded bg-red-600 px-2 py-1 text-white"
-                            >
-                              Cancel
-                            </button>
-                          </>
-                        )}
-
-                        {m.status === 'COMPLETED' && (
-                          <button
-                            onClick={() => openAction(m, 'CONVERT')}
-                            className="rounded bg-purple-600 px-2 py-1 text-white"
-                          >
-                            Open Convert
-                          </button>
-                        )}
-                      </div>
+                      <Link
+                        href={`/meeting/${m.id}`}
+                        className="rounded bg-purple-600 px-3 py-2 text-white"
+                      >
+                        Open
+                      </Link>
                     </td>
                   </tr>
                 );
@@ -507,274 +391,6 @@ export default function MeetingPage() {
           </tbody>
         </table>
       </div>
-
-      {selectedMeeting && actionType && (
-        <div className="mt-6 rounded border bg-white p-6">
-          <h2 className="mb-4 text-xl font-semibold">{actionTitle}</h2>
-
-          <div className="mb-4 text-sm text-gray-700">
-            <div>
-              <strong>Customer:</strong> {selectedMeeting.customerName}
-            </div>
-            <div>
-              <strong>Mobile:</strong> {selectedMeeting.mobile}
-            </div>
-          </div>
-
-          {actionType === 'COMPLETE' && (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-sm font-medium">Outcome *</label>
-                <input
-                  name="outcome"
-                  value={form.outcome}
-                  onChange={handleFieldChange}
-                  className="w-full rounded border px-3 py-2"
-                  placeholder="Interested / Site visited / Positive discussion"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium">Next Action</label>
-                <input
-                  name="nextAction"
-                  value={form.nextAction}
-                  onChange={handleFieldChange}
-                  className="w-full rounded border px-3 py-2"
-                  placeholder="Prepare quotation / Convert to project later"
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="mb-1 block text-sm font-medium">Manager Remarks</label>
-                <textarea
-                  name="managerRemarks"
-                  value={form.managerRemarks}
-                  onChange={handleFieldChange}
-                  className="w-full rounded border px-3 py-2"
-                  rows={3}
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="mb-1 block text-sm font-medium">Site Observation</label>
-                <textarea
-                  name="siteObservation"
-                  value={form.siteObservation}
-                  onChange={handleFieldChange}
-                  className="w-full rounded border px-3 py-2"
-                  rows={3}
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="mb-1 block text-sm font-medium">Notes</label>
-                <textarea
-                  name="notes"
-                  value={form.notes}
-                  onChange={handleFieldChange}
-                  className="w-full rounded border px-3 py-2"
-                  rows={3}
-                />
-              </div>
-
-              <div className="md:col-span-2 flex gap-2">
-                <button
-                  onClick={saveComplete}
-                  className="rounded bg-green-600 px-4 py-2 text-white"
-                >
-                  Save Completed Meeting
-                </button>
-                <button
-                  onClick={resetActionState}
-                  className="rounded bg-gray-500 px-4 py-2 text-white"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          )}
-
-          {actionType === 'CANCEL' && (
-            <div className="grid grid-cols-1 gap-4">
-              <div>
-                <label className="mb-1 block text-sm font-medium">
-                  Cancellation Reason *
-                </label>
-                <textarea
-                  name="managerRemarks"
-                  value={form.managerRemarks}
-                  onChange={handleFieldChange}
-                  className="w-full rounded border px-3 py-2"
-                  rows={4}
-                  placeholder="Customer unavailable / Client postponed / Not interested / Wrong timing"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium">Additional Notes</label>
-                <textarea
-                  name="notes"
-                  value={form.notes}
-                  onChange={handleFieldChange}
-                  className="w-full rounded border px-3 py-2"
-                  rows={3}
-                />
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  onClick={saveCancel}
-                  className="rounded bg-red-600 px-4 py-2 text-white"
-                >
-                  Save Cancelled Meeting
-                </button>
-                <button
-                  onClick={resetActionState}
-                  className="rounded bg-gray-500 px-4 py-2 text-white"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          )}
-
-          {actionType === 'RESCHEDULE' && (
-            <div className="grid grid-cols-1 gap-4">
-              <div>
-                <label className="mb-1 block text-sm font-medium">
-                  New Scheduled Date & Time *
-                </label>
-                <input
-                  type="datetime-local"
-                  name="scheduledAt"
-                  value={form.scheduledAt}
-                  onChange={handleFieldChange}
-                  className="w-full rounded border px-3 py-2"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium">
-                  Reschedule Reason *
-                </label>
-                <textarea
-                  name="managerRemarks"
-                  value={form.managerRemarks}
-                  onChange={handleFieldChange}
-                  className="w-full rounded border px-3 py-2"
-                  rows={3}
-                  placeholder="Customer asked for different date / Manager unavailable / Site closed"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium">Notes</label>
-                <textarea
-                  name="notes"
-                  value={form.notes}
-                  onChange={handleFieldChange}
-                  className="w-full rounded border px-3 py-2"
-                  rows={3}
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium">Next Action</label>
-                <input
-                  name="nextAction"
-                  value={form.nextAction}
-                  onChange={handleFieldChange}
-                  className="w-full rounded border px-3 py-2"
-                  placeholder="Reconfirm before visit"
-                />
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  onClick={saveReschedule}
-                  className="rounded bg-yellow-500 px-4 py-2 text-white"
-                >
-                  Save Rescheduled Meeting
-                </button>
-                <button
-                  onClick={resetActionState}
-                  className="rounded bg-gray-500 px-4 py-2 text-white"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          )}
-
-          {actionType === 'CONVERT' && (
-            <div className="grid grid-cols-1 gap-4">
-              <div className="text-sm text-gray-700">
-                This meeting will remain in the system and be marked as converted to
-                project. Drag fully to commit conversion.
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium">Next Action</label>
-                <input
-                  name="nextAction"
-                  value={form.nextAction}
-                  onChange={handleFieldChange}
-                  className="w-full rounded border px-3 py-2"
-                  placeholder="Project handover to project manager"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium">Notes</label>
-                <textarea
-                  name="notes"
-                  value={form.notes}
-                  onChange={handleFieldChange}
-                  className="w-full rounded border px-3 py-2"
-                  rows={3}
-                />
-              </div>
-
-              <div className="max-w-md">
-                <p className="mb-2 text-sm font-medium text-gray-700">
-                  Drag to convert to project
-                </p>
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  step={1}
-                  value={convertSliderValue}
-                  onChange={(e) =>
-                    handleConvertSliderChange(Number(e.target.value))
-                  }
-                  onMouseUp={resetConvertSlider}
-                  onTouchEnd={resetConvertSlider}
-                  disabled={convertingProject}
-                  className="w-full"
-                />
-                <div className="mt-1 flex items-center justify-between text-xs text-gray-500">
-                  <span>Drag</span>
-                  <span>
-                    {convertingProject ? 'Converting...' : `${convertSliderValue}%`}
-                  </span>
-                  <span>Project</span>
-                </div>
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  onClick={resetActionState}
-                  className="rounded bg-gray-500 px-4 py-2 text-white"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }

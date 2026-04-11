@@ -24,6 +24,8 @@ type Contact = {
   convertedToLead?: boolean;
   isInStorage?: boolean;
   remarks?: string;
+  reviewAssignedTo?: number;
+  reviewAssignedToName?: string;
 };
 
 type User = {
@@ -138,11 +140,6 @@ export default function TelecallingContactsPage() {
         currentUser?.roles?.includes('TELECALLING_MANAGER')
       : currentUser?.role === 'OWNER' ||
         currentUser?.role === 'TELECALLING_MANAGER';
-
-  const isTelecaller =
-    Array.isArray(currentUser?.roles)
-      ? currentUser?.roles?.includes('TELECALLER')
-      : currentUser?.role === 'TELECALLER';
 
   useEffect(() => {
     fetchCityOptions();
@@ -1200,9 +1197,14 @@ export default function TelecallingContactsPage() {
                 <th className="border p-2">Imported By</th>
                 <th className="border p-2">Assigned</th>
                 <th className="border p-2">Assign</th>
-                <th className="border p-2">Quick Call</th>
-                <th className="border p-2">Open</th>
-                <th className="border p-2">Convert</th>
+
+                {viewMode === 'active' && (
+                  <>
+                    <th className="border p-2">Quick Call</th>
+                    <th className="border p-2">Open</th>
+                    <th className="border p-2">Convert</th>
+                  </>
+                )}
               </tr>
             </thead>
 
@@ -1248,82 +1250,86 @@ export default function TelecallingContactsPage() {
                     )}
                   </td>
 
-                  <td className="border p-2">
-                    {viewMode === 'active' && c.phone ? (
-                      <button
-                        type="button"
-                        onClick={() => startQuickCall(c)}
-                        disabled={quickCallSubmitting}
-                        className="rounded bg-green-600 px-3 py-2 text-sm text-white disabled:opacity-50"
-                      >
-                        {quickCallSubmitting &&
-                        quickCallModal.contact?.id === c.id
-                          ? 'Calling...'
-                          : 'Call Now'}
-                      </button>
-                    ) : (
-                      <span className="text-gray-500">-</span>
-                    )}
-                  </td>
+                  {viewMode === 'active' && (
+                    <>
+                      <td className="border p-2">
+                        {c.phone ? (
+                          <button
+                            type="button"
+                            onClick={() => startQuickCall(c)}
+                            disabled={quickCallSubmitting}
+                            className="rounded bg-green-600 px-3 py-2 text-sm text-white disabled:opacity-50"
+                          >
+                            {quickCallSubmitting &&
+                            quickCallModal.contact?.id === c.id
+                              ? 'Calling...'
+                              : 'Call Now'}
+                          </button>
+                        ) : (
+                          <span className="text-gray-500">-</span>
+                        )}
+                      </td>
 
-                  <td className="border p-2">
-                    {(viewMode === 'active' || isTelecaller) ? (
-                      <Link
-                        href={`/telecalling/contacts/${c.id}`}
-                        className="rounded bg-blue-600 px-3 py-2 text-sm text-white"
-                      >
-                        Open
-                      </Link>
-                    ) : (
-                      <span className="text-gray-500">-</span>
-                    )}
-                  </td>
+                      <td className="border p-2">
+                        <Link
+                          href={`/telecalling/contacts/${c.id}`}
+                          className="rounded bg-blue-600 px-3 py-2 text-sm text-white"
+                        >
+                          Open
+                        </Link>
+                      </td>
 
-                  <td className="border p-2 min-w-[260px]">
-                    {viewMode === 'storage' ? (
-                      <span className="text-gray-500">Storage</span>
-                    ) : c.convertedToLead ? (
-                      <span className="font-medium text-green-600">Converted</span>
-                    ) : (
-                      <div className="flex flex-col gap-2">
-                        <span className="text-sm font-medium text-gray-700">
-                          Drag to convert
-                        </span>
-
-                        <input
-                          type="range"
-                          min={0}
-                          max={100}
-                          step={1}
-                          value={convertSliderMap[c.id] || 0}
-                          onChange={(e) =>
-                            handleConvertSliderChange(c.id, Number(e.target.value))
-                          }
-                          onMouseUp={() => resetConvertSlider(c.id, c.convertedToLead)}
-                          onTouchEnd={() => resetConvertSlider(c.id, c.convertedToLead)}
-                          disabled={convertingId === c.id}
-                          className="h-4 w-full cursor-pointer accent-blue-600"
-                        />
-
-                        <div className="flex items-center justify-between text-sm text-gray-500">
-                          <span>Drag</span>
-                          <span>
-                            {convertingId === c.id
-                              ? 'Converting...'
-                              : `${convertSliderMap[c.id] || 0}%`}
+                      <td className="border p-2 min-w-[260px]">
+                        {c.convertedToLead ? (
+                          <span className="font-medium text-green-600">
+                            Converted
                           </span>
-                          <span>Convert</span>
-                        </div>
-                      </div>
-                    )}
-                  </td>
+                        ) : (
+                          <div className="flex flex-col gap-2">
+                            <span className="text-sm font-medium text-gray-700">
+                              Drag to convert
+                            </span>
+
+                            <input
+                              type="range"
+                              min={0}
+                              max={100}
+                              step={1}
+                              value={convertSliderMap[c.id] || 0}
+                              onChange={(e) =>
+                                handleConvertSliderChange(c.id, Number(e.target.value))
+                              }
+                              onMouseUp={() =>
+                                resetConvertSlider(c.id, c.convertedToLead)
+                              }
+                              onTouchEnd={() =>
+                                resetConvertSlider(c.id, c.convertedToLead)
+                              }
+                              disabled={convertingId === c.id}
+                              className="h-4 w-full cursor-pointer accent-blue-600"
+                            />
+
+                            <div className="flex items-center justify-between text-sm text-gray-500">
+                              <span>Drag</span>
+                              <span>
+                                {convertingId === c.id
+                                  ? 'Converting...'
+                                  : `${convertSliderMap[c.id] || 0}%`}
+                              </span>
+                              <span>Convert</span>
+                            </div>
+                          </div>
+                        )}
+                      </td>
+                    </>
+                  )}
                 </tr>
               ))}
 
               {filteredContacts.length === 0 && (
                 <tr>
                   <td
-                    colSpan={11}
+                    colSpan={viewMode === 'active' ? 11 : 8}
                     className="border p-4 text-center text-gray-500"
                   >
                     No contacts found

@@ -21,6 +21,8 @@ type ContactSummary = {
   address?: string;
   location?: string;
   convertedToLead?: boolean;
+  reviewAssignedTo?: number;
+  reviewAssignedToName?: string;
 };
 
 type WorkHistoryItem = {
@@ -57,14 +59,18 @@ type CallLog = {
   disposition?: string;
   reviewStatus?: 'PENDING' | 'POTENTIAL' | 'CONVERTED' | 'REJECTED';
   reviewNotes?: string;
+  reviewAssignedTo?: number | null;
+  reviewAssignedToName?: string | null;
+  leadPotential?: 'LOW' | 'MEDIUM' | 'HIGH' | string | null;
   createdAt: string;
 };
 
 type User = {
   id: number;
   name: string;
-  email: string;
-  roles: string[];
+  email?: string;
+  roles?: string[] | null;
+  role?: string | null;
 };
 
 type EnrichedCallRow = CallLog & {
@@ -77,6 +83,8 @@ type EnrichedCallRow = CallLog & {
   effectiveNotes: string;
   effectiveNextFollowUpDate?: string;
   effectiveTimestamp: string;
+  reviewAssignedLabel: string;
+  isConvertedToLead: boolean;
 };
 
 const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -91,14 +99,25 @@ export default function TelecallingPage() {
   const [contactLatestCallMap, setContactLatestCallMap] = useState<
     Record<number, LatestContactCallInfo>
   >({});
+  const [assistants, setAssistants] = useState<User[]>([]);
+  const [assignAssistantMap, setAssignAssistantMap] = useState<Record<number, string>>(
+    {},
+  );
+  const [assigningAssistantId, setAssigningAssistantId] = useState<number | null>(
+    null,
+  );
 
   const [leadId, setLeadId] = useState('');
   const [callStatus, setCallStatus] = useState('CONNECTED');
   const [callNotes, setCallNotes] = useState('');
   const [nextFollowUpDate, setNextFollowUpDate] = useState('');
   const [recordingUrl, setRecordingUrl] = useState('');
+  const [leadPotential, setLeadPotential] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [convertingContactId, setConvertingContactId] = useState<number | null>(
+    null,
+  );
 
   const [reviewStatusMap, setReviewStatusMap] = useState<Record<number, string>>({});
   const [reviewNotesMap, setReviewNotesMap] = useState<Record<number, string>>({});
@@ -106,12 +125,39 @@ export default function TelecallingPage() {
   const [nameFilter, setNameFilter] = useState('');
   const [phoneFilter, setPhoneFilter] = useState('');
   const [cityFilter, setCityFilter] = useState('');
+  const [sortOrder, setSortOrder] = useState<'NEWEST' | 'OLDEST'>('NEWEST');
+  const [leadPotentialFilter, setLeadPotentialFilter] = useState('');
+  const [callResultFilter, setCallResultFilter] = useState('');
 
-  const userRoles = user?.roles || [];
+  const userRoles = useMemo(() => {
+    if (Array.isArray(user?.roles)) return user.roles;
+    if (user?.role) return [user.role];
+    return [];
+  }, [user]);
+
+  const isAssistant = userRoles.includes('TELECALLING_ASSISTANT');
+  const isTelecaller = userRoles.includes('TELECALLER');
+  const isOwner = userRoles.includes('OWNER');
+  const isTelecallingManager = userRoles.includes('TELECALLING_MANAGER');
+
+  const canReview =
+    isTelecallingManager ||
+    userRoles.includes('PROJECT_MANAGER') ||
+    isAssistant ||
+    isOwner;
+
+  const canLogCalls =
+    isTelecaller ||
+    isOwner ||
+    userRoles.includes('LEAD_MANAGER') ||
+    isTelecallingManager;
+
+  const canAssignAssistant = isOwner || isTelecallingManager || isTelecaller;
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
-    const token = localStorage.getItem('token');
+    const token =
+      localStorage.getItem('token') || localStorage.getItem('access_token');
 
     if (!storedUser || !token) {
       window.location.href = '/';
@@ -128,18 +174,33 @@ export default function TelecallingPage() {
   }, []);
 
   useEffect(() => {
-    if (user) {
-      fetchLeads();
-      fetchCalls();
+    if (!user) return;
+
+    fetchLeads();
+    fetchCalls();
+
+    if (canAssignAssistant) {
+      fetchAssistants();
+    } else {
+      setAssistants([]);
     }
-  }, [user]);
+  }, [user, canAssignAssistant]);
 
   useEffect(() => {
     if (calls.length > 0) {
       fetchContactDataAndLatestHistory();
+
+      const initialAssignMap: Record<number, string> = {};
+      calls.forEach((call) => {
+        initialAssignMap[call.id] = call.reviewAssignedTo
+          ? String(call.reviewAssignedTo)
+          : '';
+      });
+      setAssignAssistantMap(initialAssignMap);
     } else {
       setContactMap({});
       setContactLatestCallMap({});
+      setAssignAssistantMap({});
     }
   }, [calls]);
 
@@ -147,8 +208,8 @@ export default function TelecallingPage() {
     try {
       const params: any = {};
 
-      if (userRoles.includes('TELECALLER')) {
-        params.assignedTo = user?.id;
+      if (isTelecaller && user?.id) {
+        params.assignedTo = user.id;
       }
 
       const res = await axios.get(`${backendUrl}/leads`, {
@@ -166,8 +227,10 @@ export default function TelecallingPage() {
   const fetchCalls = async () => {
     try {
       const shouldUseReviewQueue =
-        userRoles.includes('TELECALLING_MANAGER') ||
-        userRoles.includes('PROJECT_MANAGER');
+        isTelecallingManager ||
+        userRoles.includes('PROJECT_MANAGER') ||
+        isAssistant ||
+        isOwner;
 
       const endpoint = shouldUseReviewQueue
         ? `${backendUrl}/telecalling/review-queue`
@@ -196,14 +259,27 @@ export default function TelecallingPage() {
     }
   };
 
+  const fetchAssistants = async () => {
+    try {
+      const res = await axios.get(`${backendUrl}/users/telecalling-assistants`, {
+        headers: getAuthHeaders(),
+      });
+
+      setAssistants(Array.isArray(res.data) ? res.data : []);
+    } catch (error) {
+      console.error('Failed to fetch assistants:', error);
+      setAssistants([]);
+    }
+  };
+
   const fetchContactDataAndLatestHistory = async () => {
     try {
       const uniqueContactIds = Array.from(
         new Set(
           calls
             .map((call) => call.contactId)
-            .filter((id): id is number => typeof id === 'number' && id > 0)
-        )
+            .filter((id): id is number => typeof id === 'number' && id > 0),
+        ),
       );
 
       if (uniqueContactIds.length === 0) {
@@ -219,15 +295,14 @@ export default function TelecallingPage() {
               `${backendUrl}/telecalling/contacts/${id}/work-history`,
               {
                 headers: getAuthHeaders(),
-              }
+              },
             );
-
             return res.data;
           } catch (error) {
             console.error(`Failed to fetch contact work history for ${id}:`, error);
             return null;
           }
-        })
+        }),
       );
 
       const nextContactMap: Record<number, ContactSummary> = {};
@@ -242,13 +317,13 @@ export default function TelecallingPage() {
           .filter((entry) => entry.type === 'CONTACT_CALL')
           .sort(
             (a, b) =>
-              new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+              new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
           )[0];
 
         if (latestContactCall) {
           nextLatestMap[item.contact.id] = {
             callStatus: String(
-              latestContactCall.meta?.callStatus || latestContactCall.title || ''
+              latestContactCall.meta?.callStatus || latestContactCall.title || '',
             )
               .replace(/^Call\s+/i, '')
               .trim(),
@@ -308,6 +383,7 @@ export default function TelecallingPage() {
         callStatus,
         callNotes,
         recordingUrl,
+        leadPotential: leadPotential || undefined,
       };
 
       if (nextFollowUpDate) {
@@ -323,6 +399,7 @@ export default function TelecallingPage() {
       setCallNotes('');
       setNextFollowUpDate('');
       setRecordingUrl('');
+      setLeadPotential('');
       await fetchCalls();
       goToNextLead();
     } catch (error: any) {
@@ -343,7 +420,7 @@ export default function TelecallingPage() {
         },
         {
           headers: getAuthHeaders(),
-        }
+        },
       );
 
       setMessage('Review updated successfully');
@@ -351,6 +428,38 @@ export default function TelecallingPage() {
     } catch (error: any) {
       console.error('Failed to update review:', error);
       setMessage(error?.response?.data?.message || 'Failed to update review');
+    }
+  };
+
+  const handleAssignAssistant = async (call: EnrichedCallRow) => {
+    const assistantId = assignAssistantMap[call.id];
+
+    if (!assistantId) {
+      setMessage('Please select telecalling assistant first');
+      return;
+    }
+
+    if (!call.contactId) {
+      setMessage('Assistant assignment is available only for contact-based history');
+      return;
+    }
+
+    try {
+      setAssigningAssistantId(call.id);
+
+      await axios.patch(
+        `${backendUrl}/telecalling/contacts/${call.contactId}/assign-review`,
+        { assignedTo: Number(assistantId) },
+        { headers: getAuthHeaders() },
+      );
+
+      setMessage('Telecalling assistant assigned successfully');
+      await fetchCalls();
+    } catch (error: any) {
+      console.error('Failed to assign assistant:', error);
+      setMessage(error?.response?.data?.message || 'Failed to assign assistant');
+    } finally {
+      setAssigningAssistantId(null);
     }
   };
 
@@ -364,6 +473,7 @@ export default function TelecallingPage() {
       setLeadId(String(row.leadId));
       setCallStatus('CALLBACK');
       setCallNotes(row.effectiveNotes || '');
+      setLeadPotential(row.leadPotential || '');
     }
 
     if (typeof window !== 'undefined') {
@@ -371,21 +481,37 @@ export default function TelecallingPage() {
     }
   };
 
+  const handleConvertAssignedContactToLead = async (contactId?: number | null) => {
+    if (!contactId) {
+      setMessage('Contact not found for conversion');
+      return;
+    }
+
+    try {
+      setConvertingContactId(contactId);
+      await axios.post(
+        `${backendUrl}/telecalling/contacts/${contactId}/convert`,
+        {},
+        { headers: getAuthHeaders() },
+      );
+      setMessage('Contact converted to lead successfully');
+      await fetchCalls();
+    } catch (error: any) {
+      console.error('Failed to convert contact to lead:', error);
+      setMessage(error?.response?.data?.message || 'Failed to convert contact');
+    } finally {
+      setConvertingContactId(null);
+    }
+  };
+
   const clearFilters = () => {
     setNameFilter('');
     setPhoneFilter('');
     setCityFilter('');
+    setSortOrder('NEWEST');
+    setLeadPotentialFilter('');
+    setCallResultFilter('');
   };
-
-  const canReview =
-    userRoles.includes('TELECALLING_MANAGER') ||
-    userRoles.includes('PROJECT_MANAGER');
-
-  const canLogCalls =
-    userRoles.includes('TELECALLER') ||
-    userRoles.includes('OWNER') ||
-    userRoles.includes('LEAD_MANAGER') ||
-    userRoles.includes('TELECALLING_MANAGER');
 
   const enrichedCalls = useMemo<EnrichedCallRow[]>(() => {
     return calls.map((call) => {
@@ -403,6 +529,8 @@ export default function TelecallingPage() {
           effectiveNotes: call.callNotes || '',
           effectiveNextFollowUpDate: call.nextFollowUpDate,
           effectiveTimestamp: call.createdAt,
+          reviewAssignedLabel: call.reviewAssignedToName || '-',
+          isConvertedToLead: true,
         };
       }
 
@@ -423,6 +551,9 @@ export default function TelecallingPage() {
           effectiveNextFollowUpDate:
             latestContactCall?.nextFollowUpDate || call.nextFollowUpDate,
           effectiveTimestamp: latestContactCall?.updatedAt || call.createdAt,
+          reviewAssignedLabel:
+            call.reviewAssignedToName || contact?.reviewAssignedToName || '-',
+          isConvertedToLead: Boolean(contact?.convertedToLead),
         };
       }
 
@@ -437,6 +568,8 @@ export default function TelecallingPage() {
         effectiveNotes: call.callNotes || '',
         effectiveNextFollowUpDate: call.nextFollowUpDate,
         effectiveTimestamp: call.createdAt,
+        reviewAssignedLabel: call.reviewAssignedToName || '-',
+        isConvertedToLead: false,
       };
     });
   }, [calls, leads, contactMap, contactLatestCallMap]);
@@ -445,7 +578,7 @@ export default function TelecallingPage() {
     const sorted = [...enrichedCalls].sort(
       (a, b) =>
         new Date(b.effectiveTimestamp).getTime() -
-        new Date(a.effectiveTimestamp).getTime()
+        new Date(a.effectiveTimestamp).getTime(),
     );
 
     const latestMap = new Map<string, EnrichedCallRow>();
@@ -460,7 +593,7 @@ export default function TelecallingPage() {
   }, [enrichedCalls]);
 
   const filteredCalls = useMemo(() => {
-    return latestOnlyCalls.filter((call) => {
+    const base = latestOnlyCalls.filter((call) => {
       const matchesName =
         !nameFilter.trim() ||
         call.displayName.toLowerCase().includes(nameFilter.trim().toLowerCase());
@@ -473,27 +606,57 @@ export default function TelecallingPage() {
         !cityFilter.trim() ||
         call.displayCity.toLowerCase().includes(cityFilter.trim().toLowerCase());
 
-      return matchesName && matchesPhone && matchesCity;
+      const matchesLeadPotential =
+        !leadPotentialFilter ||
+        String(call.leadPotential || '').toUpperCase() ===
+          leadPotentialFilter.toUpperCase();
+
+      const matchesCallResult =
+        !callResultFilter ||
+        String(call.effectiveStatus || '').toUpperCase() ===
+          callResultFilter.toUpperCase();
+
+      return (
+        matchesName &&
+        matchesPhone &&
+        matchesCity &&
+        matchesLeadPotential &&
+        matchesCallResult
+      );
     });
-  }, [latestOnlyCalls, nameFilter, phoneFilter, cityFilter]);
+
+    return base.sort((a, b) => {
+      const aTime = new Date(a.effectiveTimestamp).getTime();
+      const bTime = new Date(b.effectiveTimestamp).getTime();
+      return sortOrder === 'NEWEST' ? bTime - aTime : aTime - bTime;
+    });
+  }, [
+    latestOnlyCalls,
+    nameFilter,
+    phoneFilter,
+    cityFilter,
+    sortOrder,
+    leadPotentialFilter,
+    callResultFilter,
+  ]);
 
   return (
-    <div className="p-6">
-      {canLogCalls && (
-        <div className="mb-6 rounded-2xl bg-white p-6 shadow">
-          <div className="mb-6 flex items-center justify-between">
+    <div className="p-4 md:p-6">
+      {canLogCalls && !isAssistant && (
+        <div className="mb-6 rounded-2xl bg-white p-4 shadow md:p-6">
+          <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <h1 className="text-2xl font-bold">Telecalling</h1>
 
             <Link
               href="/telecalling/contacts"
-              className="rounded-xl bg-purple-600 px-4 py-2 font-medium text-white"
+              className="rounded-xl bg-purple-600 px-4 py-2 text-center font-medium text-white"
             >
               Go to Contacts
             </Link>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 md:flex-row">
               <select
                 value={leadId}
                 onChange={(e) => setLeadId(e.target.value)}
@@ -510,24 +673,38 @@ export default function TelecallingPage() {
               {selectedLead?.phone && (
                 <a
                   href={`tel:${selectedLead.phone}`}
-                  className="rounded-xl bg-green-600 px-4 py-3 font-semibold text-white"
+                  className="rounded-xl bg-green-600 px-4 py-3 text-center font-semibold text-white"
                 >
                   📞 Call
                 </a>
               )}
             </div>
 
-            <select
-              value={callStatus}
-              onChange={(e) => setCallStatus(e.target.value)}
-              className="w-full rounded-xl border border-gray-400 px-4 py-3"
-            >
-              <option value="CONNECTED">CONNECTED</option>
-              <option value="CALLBACK">CALLBACK</option>
-              <option value="INTERESTED">INTERESTED</option>
-              <option value="NOT_INTERESTED">NOT_INTERESTED</option>
-              <option value="CNR">CNR</option>
-            </select>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <select
+                value={callStatus}
+                onChange={(e) => setCallStatus(e.target.value)}
+                className="w-full rounded-xl border border-gray-400 px-4 py-3"
+              >
+                <option value="CONNECTED">CONNECTED</option>
+                <option value="CALLBACK">CALLBACK</option>
+                <option value="INTERESTED">INTERESTED</option>
+                <option value="NOT_INTERESTED">NOT_INTERESTED</option>
+                <option value="CNR">CNR</option>
+                <option value="PROPOSAL_SENT">PROPOSAL_SENT</option>
+              </select>
+
+              <select
+                value={leadPotential}
+                onChange={(e) => setLeadPotential(e.target.value)}
+                className="w-full rounded-xl border border-gray-400 px-4 py-3"
+              >
+                <option value="">Select lead potential</option>
+                <option value="LOW">LOW</option>
+                <option value="MEDIUM">MEDIUM</option>
+                <option value="HIGH">HIGH</option>
+              </select>
+            </div>
 
             <input
               type="text"
@@ -565,7 +742,7 @@ export default function TelecallingPage() {
               </p>
             )}
 
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 md:flex-row">
               <button
                 type="submit"
                 disabled={loading}
@@ -586,13 +763,17 @@ export default function TelecallingPage() {
         </div>
       )}
 
-      <div className="rounded-2xl bg-white p-6 shadow">
-        <div className="mb-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <div className="rounded-2xl bg-white p-4 shadow md:p-6">
+        <div className="mb-4 flex flex-col gap-4">
           <h2 className="text-2xl font-bold">
-            {canReview ? 'Call Review Queue' : 'Call History'}
+            {isAssistant
+              ? 'Assigned Review Queue'
+              : canReview
+              ? 'Call Review Queue'
+              : 'Call History'}
           </h2>
 
-          <div className="grid w-full gap-2 md:max-w-4xl md:grid-cols-4">
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-6">
             <input
               type="text"
               value={nameFilter}
@@ -613,162 +794,468 @@ export default function TelecallingPage() {
               type="text"
               value={cityFilter}
               onChange={(e) => setCityFilter(e.target.value)}
-              placeholder="Search by city"
+              placeholder="Search by city/area/location"
               className="rounded-xl border border-gray-300 px-3 py-2"
             />
 
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="rounded-xl bg-gray-200 px-4 py-2 font-medium text-gray-700"
+            <select
+              value={callResultFilter}
+              onChange={(e) => setCallResultFilter(e.target.value)}
+              className="rounded-xl border border-gray-300 px-3 py-2"
             >
-              Clear Filters
-            </button>
+              <option value="">All Results</option>
+              <option value="INTERESTED">INTERESTED</option>
+              <option value="NOT_INTERESTED">NOT_INTERESTED</option>
+              <option value="CNR">CNR</option>
+              <option value="CALLBACK">CALLBACK</option>
+              <option value="PROPOSAL_SENT">PROPOSAL_SENT</option>
+              <option value="CONNECTED">CONNECTED</option>
+              <option value="NO_RESPONSE">NO_RESPONSE</option>
+            </select>
+
+            <select
+              value={sortOrder}
+              onChange={(e) =>
+                setSortOrder(e.target.value as 'NEWEST' | 'OLDEST')
+              }
+              className="rounded-xl border border-gray-300 px-3 py-2"
+            >
+              <option value="NEWEST">Newest First</option>
+              <option value="OLDEST">Oldest First</option>
+            </select>
+
+            <select
+              value={leadPotentialFilter}
+              onChange={(e) => setLeadPotentialFilter(e.target.value)}
+              className="rounded-xl border border-gray-300 px-3 py-2"
+            >
+              <option value="">All Potentials</option>
+              <option value="LOW">LOW</option>
+              <option value="MEDIUM">MEDIUM</option>
+              <option value="HIGH">HIGH</option>
+            </select>
           </div>
         </div>
+
+        <div className="mb-4">
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="rounded-xl bg-gray-200 px-4 py-2 font-medium text-gray-700"
+          >
+            Clear Filters
+          </button>
+        </div>
+
+        {message && <p className="mb-4 text-sm text-blue-600">{message}</p>}
 
         {filteredCalls.length === 0 ? (
           <p>No calls found</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr>
-                  <th className="border p-2 text-left">Lead / Contact</th>
-                  <th className="border p-2 text-left">Phone</th>
-                  <th className="border p-2 text-left">City</th>
-                  <th className="border p-2 text-left">Latest Status</th>
-                  <th className="border p-2 text-left">Latest Notes</th>
-                  <th className="border p-2 text-left">Recording</th>
-                  <th className="border p-2 text-left">Next Follow-up</th>
-                  <th className="border p-2 text-left">Actions</th>
-                  <th className="border p-2 text-left">Review Status</th>
-                  <th className="border p-2 text-left">Review Notes</th>
-                  {canReview && <th className="border p-2 text-left">Save</th>}
-                  <th className="border p-2 text-left">Updated At</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredCalls.map((call) => (
-                  <tr key={call.personKey}>
-                    <td className="border p-2">{call.displayName}</td>
-                    <td className="border p-2">{call.displayPhone}</td>
-                    <td className="border p-2">{call.displayCity}</td>
-                    <td className="border p-2">{call.effectiveStatus}</td>
-                    <td className="border p-2">{call.effectiveNotes || '-'}</td>
+          <>
+            <div className="space-y-4 md:hidden">
+              {filteredCalls.map((call) => (
+                <div
+                  key={call.personKey}
+                  className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"
+                >
+                  <div className="mb-3 flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        {call.displayName}
+                      </h3>
+                      <p className="text-sm text-gray-600">{call.displayPhone}</p>
+                      <p className="text-sm text-gray-500">{call.displayCity}</p>
+                    </div>
 
-                    <td className="border p-2">
-                      {call.recordingUrl ? (
-                        <a
-                          href={call.recordingUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-blue-600 underline"
-                        >
-                          Open
-                        </a>
-                      ) : (
-                        'No Recording'
-                      )}
-                    </td>
+                    <div className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
+                      {call.effectiveStatus || '-'}
+                    </div>
+                  </div>
 
-                    <td className="border p-2">
-                      {call.effectiveNextFollowUpDate
-                        ? new Date(call.effectiveNextFollowUpDate).toLocaleString()
-                        : '-'}
-                    </td>
+                  <div className="mb-3 grid grid-cols-2 gap-2 text-sm">
+                    <div className="rounded-xl bg-gray-50 p-3">
+                      <p className="text-xs text-gray-500">Potential</p>
+                      <p className="font-medium">{call.leadPotential || '-'}</p>
+                    </div>
 
-                    <td className="border p-2">
-                      <div className="flex flex-wrap gap-2">
-                        {call.displayPhone !== '-' && (
-                          <button
-                            type="button"
-                            onClick={() => handleCallback(call)}
-                            className="rounded bg-green-600 px-3 py-1 text-white"
-                          >
-                            Callback
-                          </button>
-                        )}
+                    <div className="rounded-xl bg-gray-50 p-3">
+                      <p className="text-xs text-gray-500">Assistant</p>
+                      <p className="font-medium">{call.reviewAssignedLabel || '-'}</p>
+                    </div>
 
-                        {call.rowType === 'CONTACT' && call.contactId && (
-                          <button
-                            type="button"
-                            onClick={() => router.push(`/telecalling/contacts/${call.contactId}`)}
-                            className="rounded bg-purple-600 px-3 py-1 text-white"
-                          >
-                            Open Contact
-                          </button>
-                        )}
+                    <div className="rounded-xl bg-gray-50 p-3 col-span-2">
+                      <p className="text-xs text-gray-500">Latest Notes</p>
+                      <p className="font-medium">{call.effectiveNotes || '-'}</p>
+                    </div>
 
-                        {call.rowType === 'LEAD' && call.leadId && (
-                          <Link
-                            href={`/leads/${call.leadId}`}
-                            className="rounded bg-blue-600 px-3 py-1 text-white"
-                          >
-                            Open Lead
-                          </Link>
-                        )}
-                      </div>
-                    </td>
+                    <div className="rounded-xl bg-gray-50 p-3">
+                      <p className="text-xs text-gray-500">Next Follow-up</p>
+                      <p className="font-medium">
+                        {call.effectiveNextFollowUpDate
+                          ? new Date(call.effectiveNextFollowUpDate).toLocaleString()
+                          : '-'}
+                      </p>
+                    </div>
 
-                    <td className="border p-2">
-                      {canReview ? (
+                    <div className="rounded-xl bg-gray-50 p-3">
+                      <p className="text-xs text-gray-500">Updated</p>
+                      <p className="font-medium">
+                        {new Date(call.effectiveTimestamp).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+
+                  {canAssignAssistant && call.rowType === 'CONTACT' && call.contactId && (
+                    <div className="mb-3 rounded-xl border border-indigo-100 bg-indigo-50 p-3">
+                      <p className="mb-2 text-sm font-medium text-indigo-800">
+                        Assign to Telecalling Assistant
+                      </p>
+                      <div className="flex flex-col gap-2">
                         <select
-                          value={reviewStatusMap[call.id] || 'PENDING'}
+                          value={assignAssistantMap[call.id] || ''}
                           onChange={(e) =>
-                            setReviewStatusMap((prev) => ({
+                            setAssignAssistantMap((prev) => ({
                               ...prev,
                               [call.id]: e.target.value,
                             }))
                           }
-                          className="rounded border px-2 py-1"
+                          className="rounded-xl border px-3 py-2"
                         >
-                          <option value="PENDING">PENDING</option>
-                          <option value="POTENTIAL">POTENTIAL</option>
-                          <option value="CONVERTED">CONVERTED</option>
-                          <option value="REJECTED">REJECTED</option>
+                          <option value="">Select assistant</option>
+                          {assistants.map((assistant) => (
+                            <option key={assistant.id} value={assistant.id}>
+                              {assistant.name}
+                              {assistant.email ? ` (${assistant.email})` : ''}
+                            </option>
+                          ))}
                         </select>
-                      ) : (
-                        call.reviewStatus || '-'
-                      )}
-                    </td>
 
-                    <td className="border p-2">
-                      {canReview ? (
-                        <input
-                          value={reviewNotesMap[call.id] || ''}
-                          onChange={(e) =>
-                            setReviewNotesMap((prev) => ({
-                              ...prev,
-                              [call.id]: e.target.value,
-                            }))
-                          }
-                          className="w-full rounded border px-2 py-1"
-                        />
-                      ) : (
-                        call.reviewNotes || '-'
-                      )}
-                    </td>
-
-                    {canReview && (
-                      <td className="border p-2">
                         <button
-                          onClick={() => handleReviewSave(call.id)}
-                          className="rounded bg-blue-600 px-3 py-1 text-white"
+                          type="button"
+                          onClick={() => handleAssignAssistant(call)}
+                          disabled={assigningAssistantId === call.id}
+                          className="rounded-xl bg-indigo-600 px-4 py-2 text-white"
                         >
-                          Save
+                          {assigningAssistantId === call.id
+                            ? 'Assigning...'
+                            : 'Assign Assistant'}
                         </button>
-                      </td>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="mb-3 flex flex-wrap gap-2">
+                    {!isAssistant && call.displayPhone !== '-' && (
+                      <button
+                        type="button"
+                        onClick={() => handleCallback(call)}
+                        className="rounded-xl bg-green-600 px-4 py-2 text-white"
+                      >
+                        Callback
+                      </button>
                     )}
 
-                    <td className="border p-2">
-                      {new Date(call.effectiveTimestamp).toLocaleString()}
-                    </td>
+                    {call.rowType === 'CONTACT' && call.contactId && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          router.push(`/telecalling/contacts/${call.contactId}`)
+                        }
+                        className="rounded-xl bg-purple-600 px-4 py-2 text-white"
+                      >
+                        Open Contact
+                      </button>
+                    )}
+
+                    {call.rowType === 'LEAD' && call.leadId && (
+                      <Link
+                        href={`/leads/${call.leadId}`}
+                        className="rounded-xl bg-blue-600 px-4 py-2 text-white"
+                      >
+                        Open Lead
+                      </Link>
+                    )}
+
+                    {isAssistant && call.rowType === 'CONTACT' && call.contactId && !call.isConvertedToLead && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleConvertAssignedContactToLead(call.contactId)
+                        }
+                        disabled={convertingContactId === call.contactId}
+                        className="rounded-xl bg-blue-600 px-4 py-2 text-white"
+                      >
+                        {convertingContactId === call.contactId
+                          ? 'Converting...'
+                          : 'Convert to Lead'}
+                      </button>
+                    )}
+
+                    {call.recordingUrl && (
+                      <a
+                        href={call.recordingUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-xl bg-gray-800 px-4 py-2 text-white"
+                      >
+                        Recording
+                      </a>
+                    )}
+                  </div>
+
+                  {canReview && (
+                    <div className="space-y-2 rounded-xl bg-gray-50 p-3">
+                      <select
+                        value={reviewStatusMap[call.id] || 'PENDING'}
+                        onChange={(e) =>
+                          setReviewStatusMap((prev) => ({
+                            ...prev,
+                            [call.id]: e.target.value,
+                          }))
+                        }
+                        className="w-full rounded-xl border px-3 py-2"
+                      >
+                        <option value="PENDING">PENDING</option>
+                        <option value="POTENTIAL">POTENTIAL</option>
+                        <option value="CONVERTED">CONVERTED</option>
+                        <option value="REJECTED">REJECTED</option>
+                      </select>
+
+                      <input
+                        value={reviewNotesMap[call.id] || ''}
+                        onChange={(e) =>
+                          setReviewNotesMap((prev) => ({
+                            ...prev,
+                            [call.id]: e.target.value,
+                          }))
+                        }
+                        className="w-full rounded-xl border px-3 py-2"
+                        placeholder="Review notes"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() => handleReviewSave(call.id)}
+                        className="w-full rounded-xl bg-blue-600 px-4 py-2 text-white"
+                      >
+                        Save Review
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr>
+                    <th className="border p-2 text-left">Lead / Contact</th>
+                    <th className="border p-2 text-left">Phone</th>
+                    <th className="border p-2 text-left">City</th>
+                    <th className="border p-2 text-left">Latest Status</th>
+                    <th className="border p-2 text-left">Potential</th>
+                    <th className="border p-2 text-left">Latest Notes</th>
+                    <th className="border p-2 text-left">Recording</th>
+                    <th className="border p-2 text-left">Next Follow-up</th>
+                    <th className="border p-2 text-left">Assistant</th>
+                    {canAssignAssistant && (
+                      <th className="border p-2 text-left">Assign Assistant</th>
+                    )}
+                    <th className="border p-2 text-left">Actions</th>
+                    {canReview && (
+                      <>
+                        <th className="border p-2 text-left">Review Status</th>
+                        <th className="border p-2 text-left">Review Notes</th>
+                        <th className="border p-2 text-left">Save</th>
+                      </>
+                    )}
+                    <th className="border p-2 text-left">Updated At</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {filteredCalls.map((call) => (
+                    <tr key={call.personKey}>
+                      <td className="border p-2">{call.displayName}</td>
+                      <td className="border p-2">{call.displayPhone}</td>
+                      <td className="border p-2">{call.displayCity}</td>
+                      <td className="border p-2">{call.effectiveStatus}</td>
+                      <td className="border p-2">{call.leadPotential || '-'}</td>
+                      <td className="border p-2">{call.effectiveNotes || '-'}</td>
+
+                      <td className="border p-2">
+                        {call.recordingUrl ? (
+                          <a
+                            href={call.recordingUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-blue-600 underline"
+                          >
+                            Open
+                          </a>
+                        ) : (
+                          'No Recording'
+                        )}
+                      </td>
+
+                      <td className="border p-2">
+                        {call.effectiveNextFollowUpDate
+                          ? new Date(call.effectiveNextFollowUpDate).toLocaleString()
+                          : '-'}
+                      </td>
+
+                      <td className="border p-2">{call.reviewAssignedLabel}</td>
+
+                      {canAssignAssistant && (
+                        <td className="border p-2 min-w-[260px]">
+                          {call.rowType === 'CONTACT' && call.contactId ? (
+                            <div className="flex flex-col gap-2">
+                              <div className="flex gap-2">
+                                <select
+                                  value={assignAssistantMap[call.id] || ''}
+                                  onChange={(e) =>
+                                    setAssignAssistantMap((prev) => ({
+                                      ...prev,
+                                      [call.id]: e.target.value,
+                                    }))
+                                  }
+                                  className="rounded border px-2 py-1"
+                                >
+                                  <option value="">Select assistant</option>
+                                  {assistants.map((assistant) => (
+                                    <option key={assistant.id} value={assistant.id}>
+                                      {assistant.name}
+                                      {assistant.email
+                                        ? ` (${assistant.email})`
+                                        : ''}
+                                    </option>
+                                  ))}
+                                </select>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleAssignAssistant(call)}
+                                  disabled={assigningAssistantId === call.id}
+                                  className="rounded bg-indigo-600 px-3 py-1 text-white"
+                                >
+                                  {assigningAssistantId === call.id
+                                    ? 'Assigning...'
+                                    : 'Assign'}
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            '-'
+                          )}
+                        </td>
+                      )}
+
+                      <td className="border p-2">
+                        <div className="flex flex-wrap gap-2">
+                          {!isAssistant && call.displayPhone !== '-' && (
+                            <button
+                              type="button"
+                              onClick={() => handleCallback(call)}
+                              className="rounded bg-green-600 px-3 py-1 text-white"
+                            >
+                              Callback
+                            </button>
+                          )}
+
+                          {call.rowType === 'CONTACT' && call.contactId && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  router.push(`/telecalling/contacts/${call.contactId}`)
+                                }
+                                className="rounded bg-purple-600 px-3 py-1 text-white"
+                              >
+                                Open Contact
+                              </button>
+
+                              {isAssistant && !call.isConvertedToLead && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleConvertAssignedContactToLead(call.contactId)
+                                  }
+                                  disabled={convertingContactId === call.contactId}
+                                  className="rounded bg-blue-600 px-3 py-1 text-white"
+                                >
+                                  {convertingContactId === call.contactId
+                                    ? 'Converting...'
+                                    : 'Convert to Lead'}
+                                </button>
+                              )}
+                            </>
+                          )}
+
+                          {call.rowType === 'LEAD' && call.leadId && (
+                            <Link
+                              href={`/leads/${call.leadId}`}
+                              className="rounded bg-blue-600 px-3 py-1 text-white"
+                            >
+                              Open Lead
+                            </Link>
+                          )}
+                        </div>
+                      </td>
+
+                      {canReview && (
+                        <>
+                          <td className="border p-2">
+                            <select
+                              value={reviewStatusMap[call.id] || 'PENDING'}
+                              onChange={(e) =>
+                                setReviewStatusMap((prev) => ({
+                                  ...prev,
+                                  [call.id]: e.target.value,
+                                }))
+                              }
+                              className="rounded border px-2 py-1"
+                            >
+                              <option value="PENDING">PENDING</option>
+                              <option value="POTENTIAL">POTENTIAL</option>
+                              <option value="CONVERTED">CONVERTED</option>
+                              <option value="REJECTED">REJECTED</option>
+                            </select>
+                          </td>
+
+                          <td className="border p-2">
+                            <input
+                              value={reviewNotesMap[call.id] || ''}
+                              onChange={(e) =>
+                                setReviewNotesMap((prev) => ({
+                                  ...prev,
+                                  [call.id]: e.target.value,
+                                }))
+                              }
+                              className="w-full rounded border px-2 py-1"
+                            />
+                          </td>
+
+                          <td className="border p-2">
+                            <button
+                              onClick={() => handleReviewSave(call.id)}
+                              className="rounded bg-blue-600 px-3 py-1 text-white"
+                            >
+                              Save
+                            </button>
+                          </td>
+                        </>
+                      )}
+
+                      <td className="border p-2">
+                        {new Date(call.effectiveTimestamp).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </div>

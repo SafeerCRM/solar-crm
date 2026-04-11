@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -19,6 +19,8 @@ type Contact = {
   importedByName?: string;
   convertedToLead?: boolean;
   remarks?: string;
+  reviewAssignedTo?: number;
+  reviewAssignedToName?: string;
 };
 
 type WorkHistoryItem = {
@@ -36,6 +38,14 @@ type WorkHistoryResponse = {
   timeline: WorkHistoryItem[];
 };
 
+type User = {
+  id: number;
+  name: string;
+  email?: string;
+  roles?: string[];
+  role?: string;
+};
+
 const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 export default function TelecallingContactDetailPage() {
@@ -44,6 +54,11 @@ export default function TelecallingContactDetailPage() {
 
   const [data, setData] = useState<WorkHistoryResponse | null>(null);
   const [message, setMessage] = useState('');
+
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [assistants, setAssistants] = useState<User[]>([]);
+  const [selectedAssistantId, setSelectedAssistantId] = useState('');
+  const [assigningAssistant, setAssigningAssistant] = useState(false);
 
   const [noteText, setNoteText] = useState('');
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
@@ -63,23 +78,122 @@ export default function TelecallingContactDetailPage() {
   const [convertSliderValue, setConvertSliderValue] = useState(0);
 
   useEffect(() => {
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      try {
+        setCurrentUser(JSON.parse(storedUser));
+      } catch (error) {
+        console.error(error);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     if (id) {
       fetchHistory();
     }
   }, [id]);
 
+  useEffect(() => {
+    if (currentUser) {
+      const roles = Array.isArray(currentUser.roles)
+        ? currentUser.roles
+        : currentUser.role
+        ? [currentUser.role]
+        : [];
+
+      const canAssignAssistant =
+        roles.includes('OWNER') ||
+        roles.includes('TELECALLING_MANAGER') ||
+        roles.includes('TELECALLER');
+
+      if (canAssignAssistant) {
+        fetchAssistants();
+      } else {
+        setAssistants([]);
+      }
+    }
+  }, [currentUser]);
+
+  const canAssignAssistant = useMemo(() => {
+    const roles = Array.isArray(currentUser?.roles)
+      ? currentUser!.roles
+      : currentUser?.role
+      ? [currentUser.role]
+      : [];
+
+    return (
+      roles.includes('OWNER') ||
+      roles.includes('TELECALLING_MANAGER') ||
+      roles.includes('TELECALLER')
+    );
+  }, [currentUser]);
+
+  const fetchAssistants = async () => {
+    try {
+      const res = await axios.get(
+        `${backendUrl}/users/telecalling-assistants`,
+        {
+          headers: getAuthHeaders(),
+        },
+      );
+
+      setAssistants(Array.isArray(res.data) ? res.data : []);
+    } catch (error: any) {
+      console.error(error);
+      setAssistants([]);
+    }
+  };
+
   const fetchHistory = async () => {
     try {
-      const res = await axios.get(`${backendUrl}/telecalling/contacts/${id}/work-history`, {
-        headers: getAuthHeaders(),
-      });
+      const res = await axios.get(
+        `${backendUrl}/telecalling/contacts/${id}/work-history`,
+        {
+          headers: getAuthHeaders(),
+        },
+      );
 
       setData(res.data);
       setConvertSliderValue(0);
+
+      const reviewAssignedTo = res.data?.contact?.reviewAssignedTo;
+      setSelectedAssistantId(reviewAssignedTo ? String(reviewAssignedTo) : '');
     } catch (error: any) {
       console.error(error);
       setMessage(error?.response?.data?.message || 'Failed to load contact details');
       setData(null);
+    }
+  };
+
+  const assignToAssistant = async () => {
+    if (!selectedAssistantId) {
+      setMessage('Please select telecalling assistant');
+      return;
+    }
+
+    try {
+      setAssigningAssistant(true);
+      setMessage('');
+
+      await axios.patch(
+        `${backendUrl}/telecalling/contacts/${id}/assign-review`,
+        {
+          assignedTo: Number(selectedAssistantId),
+        },
+        { headers: getAuthHeaders() },
+      );
+
+      setMessage('Assigned to telecalling assistant successfully');
+      await fetchHistory();
+    } catch (error: any) {
+      console.error(error);
+      setMessage(
+        error?.response?.data?.message ||
+          'Failed to assign telecalling assistant',
+      );
+    } finally {
+      setAssigningAssistant(false);
     }
   };
 
@@ -96,7 +210,7 @@ export default function TelecallingContactDetailPage() {
       await axios.post(
         `${backendUrl}/telecalling/contacts/${id}/notes`,
         { note: noteText },
-        { headers: getAuthHeaders() }
+        { headers: getAuthHeaders() },
       );
 
       setNoteText('');
@@ -123,7 +237,7 @@ export default function TelecallingContactDetailPage() {
       await axios.patch(
         `${backendUrl}/telecalling/contacts/${id}/notes/${editingNoteId}`,
         { note: editingNoteText },
-        { headers: getAuthHeaders() }
+        { headers: getAuthHeaders() },
       );
 
       setEditingNoteId(null);
@@ -152,7 +266,7 @@ export default function TelecallingContactDetailPage() {
             ? new Date(nextFollowUpDate).toISOString()
             : undefined,
         },
-        { headers: getAuthHeaders() }
+        { headers: getAuthHeaders() },
       );
 
       setCallStatus('CONNECTED');
@@ -187,7 +301,7 @@ export default function TelecallingContactDetailPage() {
             ? new Date(editingNextFollowUpDate).toISOString()
             : undefined,
         },
-        { headers: getAuthHeaders() }
+        { headers: getAuthHeaders() },
       );
 
       setEditingCallId(null);
@@ -212,7 +326,7 @@ export default function TelecallingContactDetailPage() {
       await axios.post(
         `${backendUrl}/telecalling/contacts/${id}/convert`,
         {},
-        { headers: getAuthHeaders() }
+        { headers: getAuthHeaders() },
       );
 
       setMessage('Contact converted to lead successfully');
@@ -310,12 +424,54 @@ export default function TelecallingContactDetailPage() {
             <span className="font-medium">Location:</span> {data.contact.location || '-'}
           </p>
           <p>
-            <span className="font-medium">Assigned To:</span> {data.contact.assignedToName || '-'}
+            <span className="font-medium">Assigned To:</span>{' '}
+            {data.contact.assignedToName || '-'}
           </p>
           <p>
-            <span className="font-medium">Imported By:</span> {data.contact.importedByName || '-'}
+            <span className="font-medium">Imported By:</span>{' '}
+            {data.contact.importedByName || '-'}
+          </p>
+          <p className="md:col-span-2">
+            <span className="font-medium">Telecalling Assistant:</span>{' '}
+            {data.contact.reviewAssignedToName || 'Not assigned'}
           </p>
         </div>
+
+        {canAssignAssistant && (
+          <div className="mt-5 rounded border bg-indigo-50 p-4">
+            <h3 className="mb-3 font-semibold text-indigo-800">
+              Assign to Telecalling Assistant
+            </h3>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              <select
+                value={selectedAssistantId}
+                onChange={(e) => setSelectedAssistantId(e.target.value)}
+                className="rounded border p-2"
+              >
+                <option value="">Select assistant</option>
+                {assistants.map((assistant) => (
+                  <option key={assistant.id} value={assistant.id}>
+                    {assistant.name}
+                    {assistant.email ? ` (${assistant.email})` : ''}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                onClick={assignToAssistant}
+                disabled={assigningAssistant}
+                className="rounded bg-indigo-600 px-4 py-2 text-white"
+              >
+                {assigningAssistant ? 'Assigning...' : 'Assign Assistant'}
+              </button>
+            </div>
+
+            <p className="mt-2 text-sm text-gray-600">
+              Use this after call activity when you want assistant review.
+            </p>
+          </div>
+        )}
 
         <div className="mt-5 rounded border bg-gray-50 p-4">
           {data.contact.convertedToLead ? (
@@ -427,7 +583,7 @@ export default function TelecallingContactDetailPage() {
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                   <span
                     className={`rounded-full px-3 py-1 text-xs font-medium ${getTypeBadge(
-                      item.type
+                      item.type,
                     )}`}
                   >
                     {item.type.replace('_', ' ')}
@@ -541,7 +697,7 @@ export default function TelecallingContactDetailPage() {
                           onClick={() => {
                             setEditingCallId(item.callHistoryId || null);
                             setEditingCallStatus(
-                              String(item.meta?.callStatus || 'CONNECTED')
+                              String(item.meta?.callStatus || 'CONNECTED'),
                             );
                             setEditingCallNotes(item.description || '');
                             setEditingNextFollowUpDate(
@@ -549,7 +705,7 @@ export default function TelecallingContactDetailPage() {
                                 ? new Date(item.meta.nextFollowUpDate)
                                     .toISOString()
                                     .slice(0, 16)
-                                : ''
+                                : '',
                             );
                           }}
                           className="rounded bg-blue-600 px-3 py-2 text-sm text-white"

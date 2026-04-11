@@ -22,6 +22,9 @@ type FollowUp = {
     id: number;
     name: string;
     phone: string;
+    city?: string;
+    assignedTo?: number;
+    createdByName?: string;
   };
 };
 
@@ -48,13 +51,16 @@ export default function FollowupPage() {
 
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [convertingId, setConvertingId] = useState<number | null>(null);
 
   const userRoles = user?.roles || [];
 
   const canCreateFollowup =
     userRoles.includes('OWNER') ||
     userRoles.includes('LEAD_MANAGER') ||
-    userRoles.includes('TELECALLER');
+    userRoles.includes('TELECALLER') ||
+    userRoles.includes('LEAD_EXECUTIVE') ||
+    userRoles.includes('MEETING_MANAGER');
 
   const canFetchAssignableUsers =
     userRoles.includes('OWNER') ||
@@ -89,6 +95,7 @@ export default function FollowupPage() {
         setUsers([]);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   const fetchAssignableUsers = async () => {
@@ -175,9 +182,47 @@ export default function FollowupPage() {
     }
   };
 
+  const handleConvertToMeeting = async (followupId: number) => {
+    try {
+      setConvertingId(followupId);
+      setMessage('');
+
+      const res = await axios.get(
+        `${backendUrl}/followup/${followupId}/convert-to-meeting`,
+        {
+          headers: getAuthHeaders(),
+        }
+      );
+
+      const data = res.data || {};
+      const lead = data.lead || {};
+
+      const params = new URLSearchParams();
+
+      if (data.leadId) params.set('leadId', String(data.leadId));
+      if (data.followupId) params.set('followupId', String(data.followupId));
+      if (lead.name) params.set('name', String(lead.name));
+      if (lead.phone) params.set('phone', String(lead.phone));
+      if (lead.city) params.set('city', String(lead.city));
+      if (lead.assignedTo) params.set('assignedTo', String(lead.assignedTo));
+      if (lead.createdByName) {
+        params.set('leadOwnerName', String(lead.createdByName));
+      }
+
+      router.push(`/meeting/create?${params.toString()}`);
+    } catch (error: any) {
+      console.error(error);
+      setMessage(
+        error?.response?.data?.message || 'Failed to open convert to meeting'
+      );
+    } finally {
+      setConvertingId(null);
+    }
+  };
+
   const getUserName = (id?: number) => {
     const found = users.find((u) => u.id === id);
-    return found ? found.name : 'Unassigned';
+    return found ? `${found.name} (${found.id})` : 'Unassigned';
   };
 
   const formatDate = (date: string) => {
@@ -193,7 +238,6 @@ export default function FollowupPage() {
 
   return (
     <div className="space-y-6 p-6">
-      {/* CREATE FOLLOWUP */}
       {canCreateFollowup && (
         <div className="rounded-xl bg-white p-6 shadow">
           <h2 className="mb-4 text-xl font-semibold">Create Followup</h2>
@@ -236,55 +280,71 @@ export default function FollowupPage() {
         </div>
       )}
 
-      {/* FOLLOWUP CARDS */}
       <div>
         <h2 className="mb-4 text-xl font-semibold">All Followups</h2>
 
         {allFollowups.length === 0 ? (
-          <div className="rounded shadow bg-white p-6">No followups found</div>
+          <div className="rounded bg-white p-6 shadow">No followups found</div>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {allFollowups.map((f) => (
               <div
                 key={f.id}
-                onClick={() => router.push(`/followup/${f.id}`)}
-                className="cursor-pointer rounded-2xl bg-white p-5 shadow transition hover:shadow-lg"
+                className="rounded-2xl bg-white p-5 shadow transition hover:shadow-lg"
               >
-                <h3 className="mb-2 text-lg font-semibold">
-                  {f.lead?.name || `Lead ID: ${f.leadId}`}
-                </h3>
-
-                <p className="mb-2 text-sm text-gray-600">
-                  {f.lead?.phone || ''}
-                </p>
-
-                <p className="mb-2 text-sm">
-                  <span className="font-medium">Date:</span>{' '}
-                  {formatDate(f.followUpDate)}
-                </p>
-
-                <p className="mb-2 text-sm">
-                  <span className="font-medium">Assigned:</span>{' '}
-                  {getUserName(f.assignedTo)}
-                </p>
-
-                {f.note && (
-                  <p className="mb-2 text-sm text-gray-700">
-                    {f.note}
-                  </p>
-                )}
-
-                <span
-                  className={`inline-block rounded-full px-3 py-1 text-xs ${getStatusColor(
-                    f.status
-                  )}`}
+                <div
+                  onClick={() => router.push(`/followup/${f.id}`)}
+                  className="cursor-pointer"
                 >
-                  {f.status}
-                </span>
+                  <h3 className="mb-2 text-lg font-semibold">
+                    {f.lead?.name || `Lead ID: ${f.leadId}`}
+                  </h3>
 
-                <div className="mt-3">
-                  <button className="text-blue-600 text-sm font-medium">
-                    Open →
+                  <p className="mb-2 text-sm text-gray-600">
+                    {f.lead?.phone || ''}
+                  </p>
+
+                  <p className="mb-2 text-sm">
+                    <span className="font-medium">Date:</span>{' '}
+                    {formatDate(f.followUpDate)}
+                  </p>
+
+                  <p className="mb-2 text-sm">
+                    <span className="font-medium">Assigned:</span>{' '}
+                    {getUserName(f.assignedTo)}
+                  </p>
+
+                  {f.note && (
+                    <p className="mb-2 text-sm text-gray-700">
+                      {f.note}
+                    </p>
+                  )}
+
+                  <span
+                    className={`inline-block rounded-full px-3 py-1 text-xs ${getStatusColor(
+                      f.status
+                    )}`}
+                  >
+                    {f.status}
+                  </span>
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    onClick={() => router.push(`/followup/${f.id}`)}
+                    className="rounded bg-blue-600 px-3 py-2 text-sm text-white"
+                  >
+                    Open
+                  </button>
+
+                  <button
+                    onClick={() => handleConvertToMeeting(f.id)}
+                    disabled={convertingId === f.id}
+                    className="rounded bg-purple-600 px-3 py-2 text-sm text-white"
+                  >
+                    {convertingId === f.id
+                      ? 'Opening...'
+                      : 'Convert to Meeting'}
                   </button>
                 </div>
               </div>
