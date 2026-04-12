@@ -122,7 +122,16 @@ export default function TelecallingContactsPage() {
     {},
   );
 
+  const [isAutoCalling, setIsAutoCalling] = useState(false);
+  const [autoCallQueue, setAutoCallQueue] = useState<Contact[]>([]);
+  const [autoCallIndex, setAutoCallIndex] = useState(0);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [autoCallCompleted, setAutoCallCompleted] = useState(false);
+  const [autoCallWaitingForSubmit, setAutoCallWaitingForSubmit] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const autoNextTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
@@ -238,6 +247,17 @@ export default function TelecallingContactsPage() {
     setLatestAssignedTo('');
   }, [viewMode]);
 
+  useEffect(() => {
+    return () => {
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+      }
+      if (autoNextTimeoutRef.current) {
+        clearTimeout(autoNextTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const buildSliderMap = (data: Contact[]) => {
     const map: Record<number, number> = {};
     data.forEach((contact) => {
@@ -254,13 +274,43 @@ export default function TelecallingContactsPage() {
     setMessageType(type);
   };
 
-  const resetQuickCallModal = () => {
+  const clearAutoCallTimers = () => {
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
+
+    if (autoNextTimeoutRef.current) {
+      clearTimeout(autoNextTimeoutRef.current);
+      autoNextTimeoutRef.current = null;
+    }
+  };
+
+  const stopAutoCall = (showStopMessage = true) => {
+    clearAutoCallTimers();
+    setIsAutoCalling(false);
+    setAutoCallQueue([]);
+    setAutoCallIndex(0);
+    setCountdown(null);
+    setAutoCallWaitingForSubmit(false);
+    setAutoCallCompleted(false);
+
+    if (showStopMessage) {
+      showMessage('Auto call stopped.', 'info');
+    }
+  };
+
+  const resetQuickCallModal = (preserveLastCalledContact = false) => {
     setQuickCallModal({
       isOpen: false,
       contact: null,
       callLogId: undefined,
     });
-    setLastCalledContact(null);
+
+    if (!preserveLastCalledContact) {
+      setLastCalledContact(null);
+    }
+
     setQuickCallNotes('');
     setQuickCallNextFollowUpDate('');
     setQuickCallRecordingUrl('');
@@ -332,9 +382,107 @@ export default function TelecallingContactsPage() {
         err?.response?.data?.message || 'Failed to start quick call',
         'error',
       );
+      throw err;
     } finally {
       setQuickCallSubmitting(false);
     }
+  };
+
+  const startCountdownAndTriggerNext = (nextContact: Contact) => {
+    clearAutoCallTimers();
+    setCountdown(3);
+
+    countdownIntervalRef.current = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev === null) return null;
+
+        if (prev <= 1) {
+          if (countdownIntervalRef.current) {
+            clearInterval(countdownIntervalRef.current);
+            countdownIntervalRef.current = null;
+          }
+          return null;
+        }
+
+        return prev - 1;
+      });
+    }, 1000);
+
+    autoNextTimeoutRef.current = setTimeout(async () => {
+      try {
+        await startQuickCall(nextContact);
+        setAutoCallWaitingForSubmit(true);
+      } catch (error) {
+        console.error('Auto next call failed', error);
+
+        const nextIndex = autoCallIndex + 1;
+        const fallbackIndex = nextIndex + 1;
+
+        if (fallbackIndex < autoCallQueue.length) {
+          setAutoCallIndex(fallbackIndex);
+          startCountdownAndTriggerNext(autoCallQueue[fallbackIndex]);
+        } else {
+          clearAutoCallTimers();
+          setIsAutoCalling(false);
+          setAutoCallWaitingForSubmit(false);
+          setCountdown(null);
+          setAutoCallCompleted(true);
+          showMessage('Auto call completed for all queued contacts.', 'success');
+        }
+      }
+    }, 3000);
+  };
+
+  const startAutoCall = async (queue: Contact[]) => {
+    if (viewMode !== 'active') {
+      showMessage('Auto call works only in Active Contacts view.', 'error');
+      return;
+    }
+
+    const validQueue = queue.filter((contact) => !!contact.phone?.trim());
+
+    if (validQueue.length === 0) {
+      showMessage('No filtered contacts with phone number available for auto call.', 'error');
+      return;
+    }
+
+    clearAutoCallTimers();
+    setIsAutoCalling(true);
+    setAutoCallCompleted(false);
+    setAutoCallQueue(validQueue);
+    setAutoCallIndex(0);
+    setCountdown(null);
+    setAutoCallWaitingForSubmit(false);
+
+    try {
+      await startQuickCall(validQueue[0]);
+      setAutoCallWaitingForSubmit(true);
+      showMessage(
+        `Auto call started for ${validQueue.length} contact(s).`,
+        'success',
+      );
+    } catch (error) {
+      console.error('Failed to start auto call', error);
+      stopAutoCall(false);
+      showMessage('Failed to start auto call.', 'error');
+    }
+  };
+
+  const handleQuickCallModalClose = () => {
+    if (isAutoCalling) {
+      const shouldStop = window.confirm(
+        'Auto Call is running. Closing this popup will stop auto call. Do you want to continue?',
+      );
+
+      if (!shouldStop) {
+        return;
+      }
+
+      stopAutoCall(false);
+      showMessage('Auto call stopped because the quick call popup was closed.', 'info');
+    }
+
+    resetQuickCallModal();
   };
 
   const completeQuickCall = async (disposition: QuickCallDisposition) => {
@@ -371,12 +519,37 @@ export default function TelecallingContactsPage() {
 
       showMessage(serverMessage, 'success');
 
-      const contactId = quickCallModal.contact.id;
-      resetQuickCallModal();
+      const completedContactId = quickCallModal.contact.id;
+      const nextIndex = autoCallIndex + 1;
+      const shouldContinueAutoCall = isAutoCalling;
+      const hasNextAutoCall = shouldContinueAutoCall && nextIndex < autoCallQueue.length;
+
+      resetQuickCallModal(shouldContinueAutoCall);
+      setAutoCallWaitingForSubmit(false);
       await fetchContacts(page, viewMode, cityFilter);
 
+      if (shouldContinueAutoCall) {
+        if (hasNextAutoCall) {
+          setAutoCallIndex(nextIndex);
+          showMessage(
+            `Call saved. Next auto call starts in 3 seconds.`,
+            'info',
+          );
+          startCountdownAndTriggerNext(autoCallQueue[nextIndex]);
+        } else {
+          clearAutoCallTimers();
+          setIsAutoCalling(false);
+          setCountdown(null);
+          setAutoCallWaitingForSubmit(false);
+          setAutoCallCompleted(true);
+          setLastCalledContact(null);
+          showMessage('Auto call completed for all queued contacts.', 'success');
+        }
+        return;
+      }
+
       if (disposition === 'INTERESTED') {
-        router.push(`/telecalling/contacts/${contactId}`);
+        router.push(`/telecalling/contacts/${completedContactId}`);
       }
     } catch (err: any) {
       console.error(err);
@@ -803,6 +976,11 @@ export default function TelecallingContactsPage() {
     [filteredContacts],
   );
 
+  const autoCallableContacts = useMemo(() => {
+    if (viewMode !== 'active') return [];
+    return filteredContacts.filter((contact) => !!contact.phone?.trim());
+  }, [filteredContacts, viewMode]);
+
   const allFilteredSelected =
     filteredIds.length > 0 &&
     filteredIds.every((id) => selectedContactIds.includes(id));
@@ -1085,6 +1263,75 @@ export default function TelecallingContactsPage() {
         </div>
       </div>
 
+      {viewMode === 'active' && (
+        <div className="mb-4 rounded border bg-white p-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold">Auto Call System</h2>
+              <p className="text-sm text-gray-600">
+                Auto call uses the currently visible filtered active contacts with phone numbers.
+              </p>
+            </div>
+
+            {!isAutoCalling ? (
+              <button
+                type="button"
+                onClick={() => startAutoCall(autoCallableContacts)}
+                disabled={quickCallSubmitting || autoCallableContacts.length === 0}
+                className="rounded bg-green-600 px-4 py-2 text-white disabled:opacity-50"
+              >
+                Auto Call
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => stopAutoCall(true)}
+                className="rounded bg-red-600 px-4 py-2 text-white"
+              >
+                Stop Auto Call
+              </button>
+            )}
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-4 text-sm text-gray-700">
+            <span>
+              Filtered callable contacts:{' '}
+              <span className="font-semibold">{autoCallableContacts.length}</span>
+            </span>
+
+            {isAutoCalling && (
+              <>
+                <span>
+                  Current position:{' '}
+                  <span className="font-semibold">
+                    {Math.min(autoCallIndex + 1, autoCallQueue.length)} / {autoCallQueue.length}
+                  </span>
+                </span>
+
+                {countdown !== null && (
+                  <span>
+                    Next call in:{' '}
+                    <span className="font-semibold">{countdown}s</span>
+                  </span>
+                )}
+
+                {autoCallWaitingForSubmit && (
+                  <span className="font-semibold text-blue-700">
+                    Waiting for call outcome submit
+                  </span>
+                )}
+              </>
+            )}
+          </div>
+
+          {autoCallCompleted && !isAutoCalling && (
+            <div className="mt-3 rounded border border-green-300 bg-green-50 px-3 py-2 text-sm text-green-700">
+              Auto call completed for all queued contacts.
+            </div>
+          )}
+        </div>
+      )}
+
       {isOwnerOrTelecallingManager && (
         <div className="mb-4 rounded border bg-white p-4">
           <h2 className="mb-2 text-lg font-semibold">{assignSectionTitle}</h2>
@@ -1287,7 +1534,7 @@ export default function TelecallingContactsPage() {
                           <button
                             type="button"
                             onClick={() => startQuickCall(c)}
-                            disabled={quickCallSubmitting}
+                            disabled={quickCallSubmitting || isAutoCalling}
                             className="rounded bg-green-600 px-3 py-2 text-sm text-white disabled:opacity-50"
                           >
                             {quickCallSubmitting &&
@@ -1402,11 +1649,16 @@ export default function TelecallingContactsPage() {
                 <p className="text-sm text-gray-600">
                   {quickCallModal.contact.name} ({quickCallModal.contact.phone})
                 </p>
+                {isAutoCalling && (
+                  <p className="mt-1 text-xs font-medium text-blue-700">
+                    Auto Call running: {Math.min(autoCallIndex + 1, autoCallQueue.length)} / {autoCallQueue.length}
+                  </p>
+                )}
               </div>
 
               <button
                 type="button"
-                onClick={resetQuickCallModal}
+                onClick={handleQuickCallModalClose}
                 className="rounded bg-gray-200 px-3 py-1 text-sm text-gray-700"
               >
                 Close
@@ -1490,6 +1742,12 @@ export default function TelecallingContactsPage() {
               continue notes, follow-up, and lead conversion. Other outcomes will
               save the call and keep the contact safely in the system for future work.
             </p>
+
+            {isAutoCalling && (
+              <p className="mt-2 text-xs text-blue-700">
+                In Auto Call mode, after saving this outcome the next call will begin automatically.
+              </p>
+            )}
           </div>
         </div>
       )}

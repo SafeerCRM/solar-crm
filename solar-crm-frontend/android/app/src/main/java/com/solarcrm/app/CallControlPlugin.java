@@ -4,7 +4,6 @@ import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
-import android.widget.Toast;
 
 import androidx.core.content.ContextCompat;
 
@@ -71,11 +70,6 @@ public class CallControlPlugin extends Plugin {
             return;
         }
 
-        Toast.makeText(
-                getContext(),
-                "Native plugin call running",
-                Toast.LENGTH_SHORT
-        ).show();
 
         Intent intent = new Intent(Intent.ACTION_CALL);
         intent.setData(Uri.parse("tel:" + number));
