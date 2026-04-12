@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { getAuthHeaders } from '@/lib/authHeaders';
+import { CallControl } from '@/lib/callControl';
 
 const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -288,8 +289,37 @@ export default function TelecallingContactsPage() {
         callLogId,
       });
 
+      const isNative =
+        typeof window !== 'undefined' &&
+        !!(window as any).Capacitor &&
+        !!(window as any).Capacitor.isNativePlatform &&
+        (window as any).Capacitor.isNativePlatform();
+
       if (typeof window !== 'undefined') {
-        window.location.href = `tel:${contact.phone}`;
+        if (isNative) {
+          try {
+            const plugin =
+              (window as any).Capacitor?.Plugins?.CallControl || CallControl;
+
+            if (!plugin || typeof plugin.placeCall !== 'function') {
+              throw new Error('CallControl plugin not found');
+            }
+
+            showMessage('Trying native direct call...', 'info');
+
+            await plugin.placeCall({
+              number: contact.phone,
+            });
+
+            showMessage('Native direct call started', 'success');
+          } catch (err: any) {
+            console.error('Native call failed:', err);
+            showMessage(err?.message || 'Native call failed', 'error');
+            return;
+          }
+        } else {
+          window.location.href = `tel:${contact.phone}`;
+        }
       }
 
       showMessage(
