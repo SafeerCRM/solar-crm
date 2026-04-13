@@ -135,6 +135,19 @@ export class TelecallingController {
     );
   }
 
+  @Get('contacts/all-ids')
+  getAllContactIdsForAutoCall(
+    @CurrentUser() user: any,
+    @Query('view') view = 'active',
+    @Query('locationFilter') locationFilter = '',
+  ) {
+    return this.telecallingService.getAllContactIdsForAutoCall(
+      user,
+      String(view || 'active'),
+      String(locationFilter || ''),
+    );
+  }
+
   @Get('contacts/filter-options')
   getContactFilterOptions(@CurrentUser() user: any) {
     return this.telecallingService.getContactFilterOptions(user);
@@ -182,8 +195,7 @@ export class TelecallingController {
       user,
     );
   }
-
-  @Get('contacts/:id/work-history')
+    @Get('contacts/:id/work-history')
   getContactWorkHistory(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() user: any,

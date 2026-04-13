@@ -26,6 +26,9 @@ export class TelecallingContact {
   city: string;
 
   @Column({ nullable: true })
+  zone: string;
+
+  @Column({ nullable: true })
   address: string;
 
   @Column({ nullable: true })

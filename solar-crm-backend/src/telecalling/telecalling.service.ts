@@ -588,16 +588,25 @@ export class TelecallingService {
       );
 
       const city = this.getMappedValue(row, ['city', 'town', 'area', 'district']);
-      const address = this.getMappedValue(row, ['address', 'full_address']);
-      const location = this.getMappedValue(row, ['location', 'site_location', 'place']);
+
+const zone = this.getMappedValue(row, [
+  'zone',
+  'region',
+  'area_zone',
+  'zone_name',
+]);
+
+const address = this.getMappedValue(row, ['address', 'full_address']);
+const location = this.getMappedValue(row, ['location', 'site_location', 'place']);
 
       return {
-        name: (name || phone || '').trim(),
-        phone,
-        city: city ? String(city).trim() : undefined,
-        address: address ? String(address).trim() : undefined,
-        location: location ? String(location).trim() : undefined,
-      };
+  name: (name || phone || '').trim(),
+  phone,
+  city: city ? String(city).trim() : undefined,
+  zone: zone ? String(zone).trim() : undefined,
+  address: address ? String(address).trim() : undefined,
+  location: location ? String(location).trim() : undefined,
+};
     });
 
     const validRows = candidateRows.filter((row) => !!row.phone);
@@ -731,6 +740,48 @@ export class TelecallingService {
       totalPages: Math.ceil(total / safeLimit) || 1,
     };
   }
+
+  async getAllContactIdsForAutoCall(
+  user: any,
+  view: string,
+  locationFilter: string,
+) {
+  const normalizedView = String(view || 'active').toLowerCase();
+  const normalizedFilter = String(locationFilter || '').trim().toLowerCase();
+
+  const qb = this.contactRepository
+    .createQueryBuilder('contact')
+    .orderBy('contact.createdAt', 'DESC');
+
+  // reuse existing restriction logic
+  this.applyViewRestrictionsToContactQuery(qb, user, normalizedView);
+
+  if (normalizedFilter) {
+    qb.andWhere(
+      `(
+        LOWER(COALESCE(contact.city, '')) LIKE :filter
+        OR LOWER(COALESCE(contact.zone, '')) LIKE :filter
+        OR LOWER(COALESCE(contact.address, '')) LIKE :filter
+        OR LOWER(COALESCE(contact.location, '')) LIKE :filter
+      )`,
+      { filter: `%${normalizedFilter}%` },
+    );
+  }
+
+  const contacts = await qb
+    .select([
+      'contact.id',
+      'contact.name',
+      'contact.phone',
+      'contact.city',
+      'contact.zone',
+      'contact.address',
+      'contact.location',
+    ])
+    .getMany();
+
+  return contacts.filter((c) => !!String(c.phone || '').trim());
+}
 
   async getContactFilterOptions(user: any) {
     const qb = this.contactRepository

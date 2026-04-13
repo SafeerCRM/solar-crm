@@ -30,6 +30,11 @@ export class DashboardController {
   @Get('summary')
   getSummary(
     @Query('assignedTo') assignedTo?: string,
+    @Query('zone') zone?: string,
+    @Query('city') city?: string,
+    @Query('fromDate') fromDate?: string,
+    @Query('toDate') toDate?: string,
+    @Query('month') month?: string,
     @CurrentUser() user?: any,
   ) {
     const userRoles = this.getUserRoles(user);
@@ -41,23 +46,31 @@ export class DashboardController {
       UserRole.PROJECT_EXECUTIVE,
     ];
 
-    if (this.hasAnyRole(userRoles, ownOnlyRoles)) {
-      return this.dashboardService.getSummary(user.id, userRoles);
-    }
-
-    if (userRoles.includes(UserRole.PROJECT_MANAGER)) {
-      return this.dashboardService.getSummary(undefined, userRoles);
-    }
+    const effectiveAssignedTo = this.hasAnyRole(userRoles, ownOnlyRoles)
+      ? user?.id
+      : assignedTo
+      ? Number(assignedTo)
+      : undefined;
 
     return this.dashboardService.getSummary(
-      assignedTo ? Number(assignedTo) : undefined,
+      {
+        assignedTo: effectiveAssignedTo,
+        zone,
+        city,
+        fromDate,
+        toDate,
+        month,
+      },
       userRoles,
+      user?.id,
     );
   }
 
   @Get('contacts-summary')
   getContactsSummary(
     @Query('city') city?: string,
+    @Query('zone') zone?: string,
+    @Query('assignedTo') assignedTo?: string,
     @CurrentUser() user?: any,
   ) {
     const userRoles = this.getUserRoles(user);
@@ -69,10 +82,59 @@ export class DashboardController {
       UserRole.PROJECT_EXECUTIVE,
     ];
 
-    if (this.hasAnyRole(userRoles, ownOnlyRoles)) {
-      return this.dashboardService.getContactsSummary(city, user.id, userRoles);
-    }
+    const effectiveAssignedTo = this.hasAnyRole(userRoles, ownOnlyRoles)
+      ? user?.id
+      : assignedTo
+      ? Number(assignedTo)
+      : undefined;
 
-    return this.dashboardService.getContactsSummary(city, undefined, userRoles);
+    return this.dashboardService.getContactsSummary(
+      {
+        city,
+        zone,
+        assignedTo: effectiveAssignedTo,
+      },
+      userRoles,
+      user?.id,
+    );
+  }
+
+  @Get('charts')
+  getCharts(
+    @Query('assignedTo') assignedTo?: string,
+    @Query('zone') zone?: string,
+    @Query('city') city?: string,
+    @Query('fromDate') fromDate?: string,
+    @Query('toDate') toDate?: string,
+    @Query('month') month?: string,
+    @CurrentUser() user?: any,
+  ) {
+    const userRoles = this.getUserRoles(user);
+
+    const ownOnlyRoles = [
+      UserRole.TELECALLER,
+      UserRole.LEAD_EXECUTIVE,
+      UserRole.MEETING_MANAGER,
+      UserRole.PROJECT_EXECUTIVE,
+    ];
+
+    const effectiveAssignedTo = this.hasAnyRole(userRoles, ownOnlyRoles)
+      ? user?.id
+      : assignedTo
+      ? Number(assignedTo)
+      : undefined;
+
+    return this.dashboardService.getCharts(
+      {
+        assignedTo: effectiveAssignedTo,
+        zone,
+        city,
+        fromDate,
+        toDate,
+        month,
+      },
+      userRoles,
+      user?.id,
+    );
   }
 }
