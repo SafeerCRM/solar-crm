@@ -28,11 +28,14 @@ import { ContactCallHistory } from './contact-call-history.entity';
 import { ContactNote } from './contact-note.entity';
 import { UserRole } from '../users/user.entity';
 
+
 @Injectable()
 export class TelecallingService {
   constructor(
     @InjectRepository(CallLog)
     private readonly callLogRepository: Repository<CallLog>,
+    @InjectRepository(TelecallingContact)
+private readonly telecallingContactRepository: Repository<TelecallingContact>,
 
     @InjectRepository(Lead)
     private readonly leadRepository: Repository<Lead>,
@@ -1573,4 +1576,61 @@ const location = this.getMappedValue(row, ['location', 'site_location', 'place']
       lead: savedLead,
     };
   }
+  async transferContacts(body: {
+  fromUserId: number;
+  toUserId: number;
+  count?: number;
+  city?: string;
+}) {
+  const { fromUserId, toUserId, count, city } = body;
+
+  if (!fromUserId || !toUserId) {
+    return { message: 'Both users are required' };
+  }
+
+  const toUser = await this.userRepository.findOne({
+    where: { id: toUserId },
+  });
+
+  if (!toUser) {
+    return { message: 'Target user not found' };
+  }
+
+  const query = this.telecallingContactRepository
+    .createQueryBuilder('contact')
+    .where('contact.assignedTo = :fromUserId', { fromUserId })
+    .andWhere('contact.isInStorage = false');
+
+  if (city) {
+    query.andWhere(
+      `(LOWER(contact.city) LIKE :city OR LOWER(contact.zone) LIKE :city OR LOWER(contact.location) LIKE :city)`,
+      { city: `%${city.toLowerCase()}%` },
+    );
+  }
+
+  query.orderBy('contact.createdAt', 'DESC');
+
+  if (count && count > 0) {
+    query.take(count);
+  }
+
+  const contacts = await query.getMany();
+
+  if (!contacts.length) {
+    return { message: 'No contacts found for selected filter' };
+  }
+
+  await this.telecallingContactRepository.update(
+    contacts.map((c) => c.id),
+    {
+      assignedTo: toUserId,
+      assignedToName: toUser.name,
+    },
+  );
+
+  return {
+    message: `Transferred ${contacts.length} filtered contacts`,
+    count: contacts.length,
+  };
+}
 }

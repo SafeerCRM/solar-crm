@@ -332,4 +332,16 @@ export class TelecallingController {
   ) {
     return this.telecallingService.getContactById(id, user);
   }
+  @Patch('transfer-contacts')
+transferContacts(
+  @Body()
+  body: {
+  fromUserId: number;
+  toUserId: number;
+  count?: number;
+  city?: string;
+},
+) {
+  return this.telecallingService.transferContacts(body);
+}
 }
