@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import Link from 'next/link';
 import { Capacitor } from '@capacitor/core';
+import { App as CapacitorApp } from '@capacitor/app';
 import { getAuthHeaders } from '@/lib/authHeaders';
 import { CallControl } from '@/lib/callControl';
 
@@ -48,6 +49,20 @@ type ContactsResponse =
 
 type ViewMode = 'active' | 'storage';
 
+type QuickCallDisposition =
+  | 'INTERESTED'
+  | 'NOT_INTERESTED'
+  | 'CALLBACK'
+  | 'CONNECTED'
+  | 'CNR'
+  | 'PROPOSAL_SENT';
+
+type QuickCallModalState = {
+  isOpen: boolean;
+  contact: Contact | null;
+  callLogId?: number;
+};
+
 const getUserRoles = (user: User | null): string[] => {
   if (!user) return [];
   if (Array.isArray(user.roles)) return user.roles;
@@ -84,6 +99,16 @@ export default function TelecallingContactsPage() {
   const [autoCallQueue, setAutoCallQueue] = useState<Contact[]>([]);
   const [autoCallIndex, setAutoCallIndex] = useState(0);
   const [countdown, setCountdown] = useState(0);
+
+  const [quickCallModal, setQuickCallModal] = useState<QuickCallModalState>({
+    isOpen: false,
+    contact: null,
+  });
+  const [lastCalledContact, setLastCalledContact] = useState<Contact | null>(null);
+  const [quickCallSubmitting, setQuickCallSubmitting] = useState(false);
+  const [quickCallNotes, setQuickCallNotes] = useState('');
+  const [quickCallNextFollowUpDate, setQuickCallNextFollowUpDate] = useState('');
+  const [quickCallRecordingUrl, setQuickCallRecordingUrl] = useState('');
 
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const resumeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -192,6 +217,74 @@ export default function TelecallingContactsPage() {
     };
   }, []);
 
+  useEffect(() => {
+    const openQuickCallModalAfterReturn = () => {
+      setQuickCallModal((prev) => {
+        if (!lastCalledContact || prev.isOpen) return prev;
+
+        return {
+          ...prev,
+          isOpen: true,
+          contact: prev.contact ?? lastCalledContact,
+        };
+      });
+    };
+
+    const cleanups: Array<() => void | Promise<void>> = [];
+
+    if (typeof window !== 'undefined') {
+      if (Capacitor.isNativePlatform()) {
+        let isCancelled = false;
+
+        const setupNativeListeners = async () => {
+          try {
+            const stateHandle = await CapacitorApp.addListener(
+              'appStateChange',
+              ({ isActive }) => {
+                if (!isCancelled && isActive) {
+                  openQuickCallModalAfterReturn();
+                }
+              },
+            );
+
+            const resumeHandle = await CapacitorApp.addListener('resume', () => {
+              if (!isCancelled) {
+                openQuickCallModalAfterReturn();
+              }
+            });
+
+            cleanups.push(() => stateHandle.remove());
+            cleanups.push(() => resumeHandle.remove());
+          } catch (error) {
+            console.error('Failed to attach app listeners', error);
+          }
+        };
+
+        void setupNativeListeners();
+
+        return () => {
+          isCancelled = true;
+          cleanups.forEach((cleanup) => {
+            void cleanup();
+          });
+        };
+      }
+
+      const handleFocus = () => {
+        openQuickCallModalAfterReturn();
+      };
+
+      window.addEventListener('focus', handleFocus);
+      cleanups.push(() => window.removeEventListener('focus', handleFocus));
+    }
+
+    return () => {
+      cleanups.forEach((cleanup) => {
+        void cleanup();
+      });
+    };
+  }, [lastCalledContact]);
+
   const filteredContacts = useMemo(() => {
     return contacts.filter((c) => {
       return (
@@ -216,10 +309,9 @@ export default function TelecallingContactsPage() {
 
   const activeAutoContact =
     isAutoCalling && autoCallQueue.length > 0 ? autoCallQueue[autoCallIndex] : null;
-
-  const startQuickCall = async (contact: Contact) => {
+      const startQuickCall = async (contact: Contact) => {
     try {
-      await axios.post(
+      const res = await axios.post(
         `${backendUrl}/telecalling/contacts/${contact.id}/quick-call/start`,
         {
           providerName: 'TEL_LINK',
@@ -227,6 +319,15 @@ export default function TelecallingContactsPage() {
         },
         { headers: getAuthHeaders() },
       );
+
+      const callLogId = Number(res.data?.callLog?.id || 0) || undefined;
+
+      setLastCalledContact(contact);
+      setQuickCallModal({
+        isOpen: false,
+        contact,
+        callLogId,
+      });
 
       if (Capacitor.isNativePlatform()) {
         const plugin = (window as any).Capacitor?.Plugins?.CallControl || CallControl;
@@ -241,7 +342,8 @@ export default function TelecallingContactsPage() {
       setMessage('Failed to start call');
     }
   };
-    const startCountdownThenCall = (nextContact: Contact) => {
+
+  const startCountdownThenCall = (nextContact: Contact) => {
     clearAutoTimers();
     setCountdown(3);
 
@@ -330,7 +432,71 @@ export default function TelecallingContactsPage() {
     await callNextContact();
   };
 
-  const assignSelectedContacts = async () => {
+  const resetQuickCallModal = () => {
+    setQuickCallModal({
+      isOpen: false,
+      contact: null,
+      callLogId: undefined,
+    });
+    setLastCalledContact(null);
+    setQuickCallNotes('');
+    setQuickCallNextFollowUpDate('');
+    setQuickCallRecordingUrl('');
+    setQuickCallSubmitting(false);
+  };
+
+  const handleQuickCallModalClose = () => {
+    if (isAutoCalling) {
+      setMessage('Auto call paused until you resume or skip.');
+      setIsPaused(true);
+      clearAutoTimers();
+      setCountdown(0);
+    }
+
+    resetQuickCallModal();
+  };
+
+  const completeQuickCall = async (disposition: QuickCallDisposition) => {
+    if (!quickCallModal.contact) {
+      setMessage('No contact selected for quick call');
+      return;
+    }
+
+    try {
+      setQuickCallSubmitting(true);
+
+      await axios.post(
+        `${backendUrl}/telecalling/contacts/${quickCallModal.contact.id}/quick-call/complete`,
+        {
+          callLogId: quickCallModal.callLogId,
+          callStatus: disposition,
+          disposition,
+          callNotes: quickCallNotes,
+          nextFollowUpDate: quickCallNextFollowUpDate
+            ? new Date(quickCallNextFollowUpDate).toISOString()
+            : undefined,
+          recordingUrl: quickCallRecordingUrl || undefined,
+          providerName: 'TEL_LINK',
+          receiverNumber: quickCallModal.contact.phone,
+        },
+        { headers: getAuthHeaders() },
+      );
+
+      setMessage(`Call saved as ${disposition.replaceAll('_', ' ')}`);
+      resetQuickCallModal();
+      await fetchContacts();
+
+      if (isAutoCalling && !isPaused) {
+        await callNextContact();
+      }
+    } catch (err) {
+      console.error(err);
+      setMessage('Failed to save quick call outcome');
+    } finally {
+      setQuickCallSubmitting(false);
+    }
+  };
+    const assignSelectedContacts = async () => {
     try {
       if (!bulkAssignedTo || selectedContactIds.length === 0) return;
 
@@ -437,7 +603,8 @@ export default function TelecallingContactsPage() {
     }
     selectAllVisible();
   };
-    return (
+
+  return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 p-4">
       <div className="mx-auto max-w-6xl space-y-4">
         <div className="overflow-hidden rounded-3xl bg-white shadow">
@@ -474,26 +641,10 @@ export default function TelecallingContactsPage() {
           </div>
 
           <div className="grid grid-cols-2 gap-3 p-4 md:grid-cols-4">
-            <StatCard
-              title="Visible Contacts"
-              value={filteredContacts.length}
-              tone="blue"
-            />
-            <StatCard
-              title="Selected"
-              value={selectedContactIds.length}
-              tone="green"
-            />
-            <StatCard
-              title="Current Page"
-              value={page}
-              tone="purple"
-            />
-            <StatCard
-              title="Total Pages"
-              value={totalPages}
-              tone="orange"
-            />
+            <StatCard title="Visible Contacts" value={filteredContacts.length} tone="blue" />
+            <StatCard title="Selected" value={selectedContactIds.length} tone="green" />
+            <StatCard title="Current Page" value={page} tone="purple" />
+            <StatCard title="Total Pages" value={totalPages} tone="orange" />
           </div>
         </div>
 
@@ -501,9 +652,7 @@ export default function TelecallingContactsPage() {
           <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700 shadow-sm">
             {message}
           </div>
-        ) : null}
-
-        <div className="rounded-3xl bg-white p-4 shadow">
+        ) : null}        <div className="rounded-3xl bg-white p-4 shadow">
           <div className="mb-3 flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold text-gray-900">Filters & Controls</h2>
@@ -575,7 +724,8 @@ export default function TelecallingContactsPage() {
               </button>
             )}
           </div>
-                    <div className="mt-4 flex flex-wrap gap-2">
+
+          <div className="mt-4 flex flex-wrap gap-2">
             <button
               onClick={toggleAllVisible}
               className="rounded-2xl bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700"
@@ -810,6 +960,110 @@ export default function TelecallingContactsPage() {
             Next
           </button>
         </div>
+
+        {quickCallModal.isOpen && quickCallModal.contact && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="w-full max-w-xl rounded-3xl bg-white p-5 shadow-2xl">
+              <div className="mb-4 flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-semibold">Quick Call Outcome</h2>
+                  <p className="text-sm text-gray-600">
+                    {quickCallModal.contact.name} ({quickCallModal.contact.phone})
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleQuickCallModalClose}
+                  className="rounded-xl bg-gray-100 px-3 py-2 text-sm text-gray-700"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <textarea
+                  value={quickCallNotes}
+                  onChange={(e) => setQuickCallNotes(e.target.value)}
+                  rows={4}
+                  placeholder="Quick call notes"
+                  className="rounded-2xl border border-gray-200 p-3 md:col-span-2"
+                />
+
+                <input
+                  type="datetime-local"
+                  value={quickCallNextFollowUpDate}
+                  onChange={(e) => setQuickCallNextFollowUpDate(e.target.value)}
+                  className="rounded-2xl border border-gray-200 p-3"
+                />
+
+                <input
+                  type="text"
+                  value={quickCallRecordingUrl}
+                  onChange={(e) => setQuickCallRecordingUrl(e.target.value)}
+                  placeholder="Recording URL"
+                  className="rounded-2xl border border-gray-200 p-3"
+                />
+              </div>
+
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <button
+                  type="button"
+                  onClick={() => completeQuickCall('INTERESTED')}
+                  disabled={quickCallSubmitting}
+                  className="rounded-2xl bg-green-600 px-4 py-3 font-medium text-white disabled:opacity-50"
+                >
+                  Interested
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => completeQuickCall('NOT_INTERESTED')}
+                  disabled={quickCallSubmitting}
+                  className="rounded-2xl bg-red-600 px-4 py-3 font-medium text-white disabled:opacity-50"
+                >
+                  Not Interested
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => completeQuickCall('CALLBACK')}
+                  disabled={quickCallSubmitting}
+                  className="rounded-2xl bg-yellow-500 px-4 py-3 font-medium text-white disabled:opacity-50"
+                >
+                  Callback
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => completeQuickCall('CONNECTED')}
+                  disabled={quickCallSubmitting}
+                  className="rounded-2xl bg-blue-600 px-4 py-3 font-medium text-white disabled:opacity-50"
+                >
+                  Connected
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => completeQuickCall('CNR')}
+                  disabled={quickCallSubmitting}
+                  className="rounded-2xl bg-gray-700 px-4 py-3 font-medium text-white disabled:opacity-50"
+                >
+                  CNR
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => completeQuickCall('PROPOSAL_SENT')}
+                  disabled={quickCallSubmitting}
+                  className="rounded-2xl bg-purple-600 px-4 py-3 font-medium text-white disabled:opacity-50"
+                >
+                  Proposal Sent
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
