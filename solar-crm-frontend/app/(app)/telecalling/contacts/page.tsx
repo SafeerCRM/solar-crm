@@ -84,10 +84,16 @@ export default function TelecallingContactsPage() {
   const [selectedContactIds, setSelectedContactIds] = useState<number[]>([]);
   const [bulkAssignedTo, setBulkAssignedTo] = useState<string>('');
   const [assignLatestCount, setAssignLatestCount] = useState('');
+  // 🔥 TRANSFER STATES
+  const [transferFromUser, setTransferFromUser] = useState('');
+  const [transferToUser, setTransferToUser] = useState('');
+  const [transferCount, setTransferCount] = useState('');
+  const [transferring, setTransferring] = useState(false);
 
   const [page, setPage] = useState(1);
   const [limit] = useState(50);
   const [totalPages, setTotalPages] = useState(1);
+  const [totalContacts, setTotalContacts] = useState(0);
 
   const [nameFilter, setNameFilter] = useState('');
   const [phoneFilter, setPhoneFilter] = useState('');
@@ -186,12 +192,14 @@ export default function TelecallingContactsPage() {
       const responseData = res.data;
 
       if (Array.isArray(responseData)) {
-        setContacts(responseData);
-        setTotalPages(1);
-      } else {
-        setContacts(Array.isArray(responseData?.data) ? responseData.data : []);
-        setTotalPages(responseData?.totalPages || 1);
-      }
+  setContacts(responseData);
+  setTotalPages(1);
+  setTotalContacts(responseData.length);
+} else {
+  setContacts(Array.isArray(responseData?.data) ? responseData.data : []);
+  setTotalPages(responseData?.totalPages || 1);
+  setTotalContacts(responseData?.total || 0);
+}
     } catch (err) {
       console.error(err);
       setContacts([]);
@@ -554,6 +562,42 @@ export default function TelecallingContactsPage() {
     }
   };
 
+  // 🔥 TRANSFER CONTACTS FUNCTION
+const transferContacts = async () => {
+  try {
+    if (!transferFromUser || !transferToUser) {
+      setMessage('Select both telecallers');
+      return;
+    }
+
+    setTransferring(true);
+
+    const res = await axios.patch(
+      `${backendUrl}/telecalling/transfer-contacts`,
+      {
+        fromUserId: Number(transferFromUser),
+        toUserId: Number(transferToUser),
+        count: transferCount ? Number(transferCount) : undefined,
+        city: cityFilter || undefined,
+      },
+      { headers: getAuthHeaders() },
+    );
+
+    setMessage(res.data?.message || 'Contacts transferred successfully');
+
+    setTransferFromUser('');
+    setTransferToUser('');
+    setTransferCount('');
+
+    await fetchContacts();
+  } catch (err) {
+    console.error(err);
+    setMessage('Transfer failed');
+  } finally {
+    setTransferring(false);
+  }
+};
+
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -642,7 +686,7 @@ export default function TelecallingContactsPage() {
 
           <div className="grid grid-cols-2 gap-3 p-4 md:grid-cols-4">
             <StatCard title="Visible Contacts" value={filteredContacts.length} tone="blue" />
-            <StatCard title="Selected" value={selectedContactIds.length} tone="green" />
+            <StatCard title="Filtered Total" value={totalContacts} tone="green" />
             <StatCard title="Current Page" value={page} tone="purple" />
             <StatCard title="Total Pages" value={totalPages} tone="orange" />
           </div>
@@ -819,6 +863,58 @@ export default function TelecallingContactsPage() {
                 </div>
               </div>
             </div>
+
+            <div className="rounded-3xl bg-white p-4 shadow">
+  <h3 className="mb-3 text-lg font-semibold text-gray-900">
+    Transfer Contacts Between Telecallers
+  </h3>
+<p className="text-sm text-gray-500 mb-3">
+    Current filter: {cityFilter || 'All'}
+  </p>
+
+  <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+    <select
+      value={transferFromUser}
+      onChange={(e) => setTransferFromUser(e.target.value)}
+      className="rounded-2xl border border-gray-200 bg-gray-50 p-3"
+    >
+      <option value="">From Telecaller</option>
+      {users.map((u) => (
+        <option key={u.id} value={u.id}>
+          {u.id} - {u.name}
+        </option>
+      ))}
+    </select>
+
+    <select
+      value={transferToUser}
+      onChange={(e) => setTransferToUser(e.target.value)}
+      className="rounded-2xl border border-gray-200 bg-gray-50 p-3"
+    >
+      <option value="">To Telecaller</option>
+      {users.map((u) => (
+        <option key={u.id} value={u.id}>
+          {u.id} - {u.name}
+        </option>
+      ))}
+    </select>
+
+    <input
+      value={transferCount}
+      onChange={(e) => setTransferCount(e.target.value)}
+      placeholder="Number of contacts (optional)"
+      className="rounded-2xl border border-gray-200 bg-gray-50 p-3"
+    />
+
+    <button
+      onClick={transferContacts}
+      disabled={transferring}
+      className="rounded-2xl bg-purple-600 px-4 py-3 font-medium text-white disabled:opacity-50"
+    >
+      {transferring ? 'Transferring...' : 'Transfer'}
+    </button>
+  </div>
+</div>
 
             {viewMode === 'storage' && (
               <div className="rounded-3xl bg-white p-4 shadow">
