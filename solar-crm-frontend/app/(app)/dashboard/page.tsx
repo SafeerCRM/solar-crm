@@ -1,7 +1,22 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
+import {
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  LineChart,
+  Line,
+} from 'recharts';
 import { getAuthHeaders } from '@/lib/authHeaders';
 
 type Summary = {
@@ -12,6 +27,8 @@ type Summary = {
   callbackCount: number;
   todayFollowUps: number;
   overdueFollowUps: number;
+  totalContacts: number;
+  calledContacts: number;
 };
 
 type ContactsSummary = {
@@ -32,68 +49,191 @@ type HotLead = {
   status: string;
 };
 
+type ChartPoint = {
+  label: string;
+  value: number;
+};
+
+type DashboardCharts = {
+  contactsByZone: ChartPoint[];
+  contactsByCity: ChartPoint[];
+  contactsByTelecaller: ChartPoint[];
+  calledContactsByStatus: ChartPoint[];
+  calledContactsByMonth: ChartPoint[];
+};
+
+type StoredUser = {
+  id: number;
+  name?: string;
+  role?: string;
+  roles?: string[];
+};
+
+type TelecallerOption = {
+  id: number;
+  name: string;
+  email?: string;
+};
+
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+const PIE_COLORS = [
+  '#2563eb',
+  '#16a34a',
+  '#dc2626',
+  '#ca8a04',
+  '#7c3aed',
+  '#0891b2',
+  '#ea580c',
+  '#db2777',
+];
 
 export default function DashboardPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [contactsSummary, setContactsSummary] = useState<ContactsSummary | null>(null);
   const [performance, setPerformance] = useState<PerformanceItem[]>([]);
   const [hotLeads, setHotLeads] = useState<HotLead[]>([]);
+  const [charts, setCharts] = useState<DashboardCharts | null>(null);
+  const [telecallers, setTelecallers] = useState<TelecallerOption[]>([]);
+
+  const [zoneFilter, setZoneFilter] = useState('');
   const [cityFilter, setCityFilter] = useState('');
+  const [telecallerFilter, setTelecallerFilter] = useState('');
+  const [monthFilter, setMonthFilter] = useState('');
+  const [fromDateFilter, setFromDateFilter] = useState('');
+  const [toDateFilter, setToDateFilter] = useState('');
+
+  const [dashboardLoading, setDashboardLoading] = useState(false);
   const [contactsLoading, setContactsLoading] = useState(false);
 
+  const [currentUser, setCurrentUser] = useState<StoredUser | null>(null);
+
   useEffect(() => {
-    fetchDashboardData();
-    fetchContactsSummary('');
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      try {
+        setCurrentUser(JSON.parse(storedUser));
+      } catch (error) {
+        console.error('Failed to parse stored user:', error);
+      }
+    }
   }, []);
+
+  const userRoles = useMemo(() => {
+    if (Array.isArray(currentUser?.roles)) return currentUser.roles;
+    if (currentUser?.role) return [currentUser.role];
+    return [];
+  }, [currentUser]);
+
+  const isTelecaller = userRoles.includes('TELECALLER');
+  const canChooseTelecaller =
+    userRoles.includes('OWNER') || userRoles.includes('TELECALLING_MANAGER');
+
+  const buildParams = () => {
+    const params: Record<string, string | number> = {};
+
+    if (isTelecaller && currentUser?.id) {
+      params.assignedTo = currentUser.id;
+    } else if (telecallerFilter.trim()) {
+      params.assignedTo = telecallerFilter.trim();
+    }
+
+    if (zoneFilter.trim()) params.zone = zoneFilter.trim();
+    if (cityFilter.trim()) params.city = cityFilter.trim();
+    if (monthFilter.trim()) params.month = monthFilter.trim();
+    if (fromDateFilter.trim()) params.fromDate = fromDateFilter.trim();
+    if (toDateFilter.trim()) params.toDate = toDateFilter.trim();
+
+    return params;
+  };
+    const fetchTelecallers = async () => {
+    try {
+      if (!canChooseTelecaller) {
+        setTelecallers([]);
+        return;
+      }
+
+      const res = await axios.get(`${apiBaseUrl}/users/telecallers`, {
+        headers: getAuthHeaders(),
+      });
+
+      setTelecallers(Array.isArray(res.data) ? res.data : []);
+    } catch (error) {
+      console.error('Failed to fetch telecallers:', error);
+      setTelecallers([]);
+    }
+  };
 
   const fetchDashboardData = async () => {
     try {
-      const storedUser = localStorage.getItem('user');
-      let user = null;
+      setDashboardLoading(true);
 
-      if (storedUser) {
-        user = JSON.parse(storedUser);
+      const params = buildParams();
+
+      const [summaryRes, performanceRes, hotLeadsRes, chartsRes] =
+        await Promise.allSettled([
+          axios.get(`${apiBaseUrl}/dashboard/summary`, {
+            params,
+            headers: getAuthHeaders(),
+          }),
+          axios.get(`${apiBaseUrl}/telecalling/performance`, {
+            headers: getAuthHeaders(),
+          }),
+          axios.get(`${apiBaseUrl}/leads/hot`, {
+            headers: getAuthHeaders(),
+          }),
+          axios.get(`${apiBaseUrl}/dashboard/charts`, {
+            params,
+            headers: getAuthHeaders(),
+          }),
+        ]);
+
+      if (summaryRes.status === 'fulfilled') {
+        setSummary(summaryRes.value.data);
+      } else {
+        setSummary(null);
       }
 
-      const params: any = {};
-
-      if (user?.role === 'TELECALLER') {
-        params.assignedTo = user.id;
+      if (performanceRes.status === 'fulfilled') {
+        setPerformance(
+          Array.isArray(performanceRes.value.data) ? performanceRes.value.data : [],
+        );
+      } else {
+        setPerformance([]);
       }
 
-      const [summaryRes, performanceRes, hotLeadsRes] = await Promise.all([
-        axios.get(`${apiBaseUrl}/dashboard/summary`, {
-          params,
-          headers: getAuthHeaders(),
-        }),
-        axios.get(`${apiBaseUrl}/telecalling/performance`, {
-          headers: getAuthHeaders(),
-        }),
-        axios.get(`${apiBaseUrl}/leads/hot`, {
-          headers: getAuthHeaders(),
-        }),
-      ]);
+      if (hotLeadsRes.status === 'fulfilled') {
+        setHotLeads(
+          Array.isArray(hotLeadsRes.value.data) ? hotLeadsRes.value.data : [],
+        );
+      } else {
+        setHotLeads([]);
+      }
 
-      setSummary(summaryRes.data);
-      setPerformance(Array.isArray(performanceRes.data) ? performanceRes.data : []);
-      setHotLeads(Array.isArray(hotLeadsRes.data) ? hotLeadsRes.data : []);
+      if (chartsRes.status === 'fulfilled') {
+        setCharts(chartsRes.value.data || null);
+      } else {
+        setCharts(null);
+      }
     } catch (error) {
       console.error('Dashboard error:', error);
       setSummary(null);
       setPerformance([]);
       setHotLeads([]);
+      setCharts(null);
+    } finally {
+      setDashboardLoading(false);
     }
   };
 
-  const fetchContactsSummary = async (filterValue: string) => {
+  const fetchContactsSummary = async () => {
     try {
       setContactsLoading(true);
 
+      const params = buildParams();
+
       const res = await axios.get(`${apiBaseUrl}/dashboard/contacts-summary`, {
-        params: {
-          city: filterValue || undefined,
-        },
+        params,
         headers: getAuthHeaders(),
       });
 
@@ -106,86 +246,212 @@ export default function DashboardPage() {
     }
   };
 
-  const handleApplyContactFilter = async () => {
-    await fetchContactsSummary(cityFilter);
+  useEffect(() => {
+    if (!currentUser) return;
+    fetchTelecallers();
+    fetchDashboardData();
+    fetchContactsSummary();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser, canChooseTelecaller]);
+
+  const handleApplyFilters = async () => {
+    await Promise.all([fetchDashboardData(), fetchContactsSummary()]);
   };
 
-  const handleClearContactFilter = async () => {
+  const handleClearFilters = async () => {
+    setZoneFilter('');
     setCityFilter('');
-    await fetchContactsSummary('');
-  };
+    setTelecallerFilter('');
+    setMonthFilter('');
+    setFromDateFilter('');
+    setToDateFilter('');
 
-  if (!summary) {
-    return <div className="p-6">Loading dashboard...</div>;
-  }
+    setTimeout(() => {
+      fetchDashboardData();
+      fetchContactsSummary();
+    }, 0);
+  };
 
   const conversionPercentage =
-    summary.totalLeads > 0
+    summary && summary.totalLeads > 0
       ? Math.round((summary.interestedLeads / summary.totalLeads) * 100)
       : 0;
 
-  return (
-    <div className="space-y-6 p-6">
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-        <Card title="Total Leads" value={summary.totalLeads} />
-        <Card title="New Leads" value={summary.newLeads} />
-        <Card title="Interested Leads" value={summary.interestedLeads} />
-        <Card title="Never Called" value={summary.neverCalledCount} />
-        <Card title="Callbacks" value={summary.callbackCount} />
-        <Card title="Today Follow-ups" value={summary.todayFollowUps} />
-        <Card title="Overdue Follow-ups" value={summary.overdueFollowUps} />
+  if (!summary && dashboardLoading) {
+    return <div className="p-4 md:p-6">Loading dashboard...</div>;
+  }
 
-        <div className="rounded-xl bg-green-500 p-4 text-white shadow">
+  return (
+    <div className="space-y-6 bg-gray-50 p-4 md:p-6">
+      <div className="rounded-2xl bg-white p-4 shadow md:p-6">
+        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-sm text-gray-500">
+            Zone-wise, city-wise, telecaller-wise analytics
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3 lg:grid-cols-6">
+          <input
+            type="text"
+            placeholder="Zone"
+            value={zoneFilter}
+            onChange={(e) => setZoneFilter(e.target.value)}
+            className="rounded-xl border border-gray-300 px-3 py-2"
+          />
+
+          <input
+            type="text"
+            placeholder="City / district / area / location"
+            value={cityFilter}
+            onChange={(e) => setCityFilter(e.target.value)}
+            className="rounded-xl border border-gray-300 px-3 py-2"
+          />
+
+          <input
+            type="month"
+            value={monthFilter}
+            onChange={(e) => setMonthFilter(e.target.value)}
+            className="rounded-xl border border-gray-300 px-3 py-2"
+          />
+
+          <input
+            type="date"
+            value={fromDateFilter}
+            onChange={(e) => setFromDateFilter(e.target.value)}
+            className="rounded-xl border border-gray-300 px-3 py-2"
+          />
+
+          <input
+            type="date"
+            value={toDateFilter}
+            onChange={(e) => setToDateFilter(e.target.value)}
+            className="rounded-xl border border-gray-300 px-3 py-2"
+          />
+
+          {canChooseTelecaller ? (
+            <select
+              value={telecallerFilter}
+              onChange={(e) => setTelecallerFilter(e.target.value)}
+              className="rounded-xl border border-gray-300 px-3 py-2"
+            >
+              <option value="">All Telecallers</option>
+              {telecallers.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.id} - {item.name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type="text"
+              value={currentUser?.name || 'My data only'}
+              disabled
+              className="rounded-xl border border-gray-300 bg-gray-100 px-3 py-2"
+            />
+          )}
+        </div>
+
+        <div className="mt-4 flex flex-col gap-2 md:flex-row">
+          <button
+            onClick={handleApplyFilters}
+            className="rounded-xl bg-blue-600 px-4 py-2 font-medium text-white"
+          >
+            Apply Filters
+          </button>
+
+          <button
+            onClick={handleClearFilters}
+            className="rounded-xl bg-gray-200 px-4 py-2 font-medium text-gray-800"
+          >
+            Clear Filters
+          </button>
+        </div>
+      </div>
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
+        <ColorCard title="Total Leads" value={summary?.totalLeads || 0} bg="bg-blue-500" />
+        <ColorCard title="New Leads" value={summary?.newLeads || 0} bg="bg-cyan-500" />
+        <ColorCard
+          title="Interested Leads"
+          value={summary?.interestedLeads || 0}
+          bg="bg-green-500"
+        />
+        <ColorCard
+          title="Never Called"
+          value={summary?.neverCalledCount || 0}
+          bg="bg-orange-500"
+        />
+        <ColorCard
+          title="Callbacks"
+          value={summary?.callbackCount || 0}
+          bg="bg-yellow-500"
+        />
+        <ColorCard
+          title="Today Follow-ups"
+          value={summary?.todayFollowUps || 0}
+          bg="bg-indigo-500"
+        />
+        <ColorCard
+          title="Overdue Follow-ups"
+          value={summary?.overdueFollowUps || 0}
+          bg="bg-red-500"
+        />
+        <ColorCard
+          title="Total Contacts"
+          value={summary?.totalContacts || 0}
+          bg="bg-purple-500"
+        />
+        <ColorCard
+          title="Called Contacts"
+          value={summary?.calledContacts || 0}
+          bg="bg-pink-500"
+        />
+
+        <div className="rounded-xl bg-emerald-500 p-4 text-white shadow">
           <h2 className="text-sm">Conversion %</h2>
           <p className="text-2xl font-bold">{conversionPercentage}%</p>
         </div>
-
-        <div className="rounded-xl bg-red-500 p-4 text-white shadow">
-          <h2 className="text-sm">Leakage Risk</h2>
-          <p className="text-2xl font-bold">{summary.overdueFollowUps}</p>
-        </div>
       </div>
 
-      <div className="rounded-xl bg-white p-6 shadow">
+      <div className="rounded-2xl bg-white p-4 shadow md:p-6">
         <h2 className="mb-4 text-xl font-bold">📂 Contacts Overview</h2>
 
-        <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-4">
-          <input
-            type="text"
-            placeholder="Filter by city / address / location"
-            value={cityFilter}
-            onChange={(e) => setCityFilter(e.target.value)}
-            className="rounded border p-2 md:col-span-2"
-          />
-
-          <button
-            onClick={handleApplyContactFilter}
-            className="rounded bg-blue-600 px-4 py-2 text-white"
-            disabled={contactsLoading}
-          >
-            {contactsLoading ? 'Applying...' : 'Apply Filter'}
-          </button>
-
-          <button
-            onClick={handleClearContactFilter}
-            className="rounded bg-gray-200 px-4 py-2"
-            disabled={contactsLoading}
-          >
-            Clear Filter
-          </button>
-        </div>
-
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Card
+          <SimpleCard
             title="Total Contacts Added Till Date"
             value={contactsSummary?.totalContacts || 0}
           />
-          <Card
+          <SimpleCard
             title="Filtered Contacts"
             value={contactsSummary?.filteredContacts || 0}
           />
         </div>
+
+        {contactsLoading && (
+          <p className="mt-3 text-sm text-gray-500">Updating contact summary...</p>
+        )}
       </div>
+
+      {charts && (
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+          <PieChartCard title="📍 Contacts by Zone" data={charts.contactsByZone} />
+          <BarChartCard title="🏙️ Contacts by City" data={charts.contactsByCity} />
+          <BarChartCard
+            title="👤 Contacts by Telecaller"
+            data={charts.contactsByTelecaller}
+          />
+          <PieChartCard
+            title="📞 Called Contacts by Status"
+            data={charts.calledContactsByStatus}
+          />
+          <div className="xl:col-span-2">
+            <LineChartCard
+              title="📅 Calls by Month"
+              data={charts.calledContactsByMonth}
+            />
+          </div>
+        </div>
+      )}
 
       <div>
         <h2 className="mb-2 text-xl font-bold">📞 Telecaller Performance</h2>
@@ -211,9 +477,7 @@ export default function DashboardPage() {
         <h2 className="mb-2 text-xl font-bold">🔥 Hot Leads</h2>
 
         {hotLeads.length === 0 ? (
-          <div className="rounded-xl bg-white p-4 shadow">
-            No hot leads yet
-          </div>
+          <div className="rounded-xl bg-white p-4 shadow">No hot leads yet</div>
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {hotLeads.map((lead) => (
@@ -231,20 +495,144 @@ export default function DashboardPage() {
         <h2 className="mb-4 text-xl font-bold">📊 Lead Funnel</h2>
 
         <div className="space-y-2">
-          <p>New → {summary.newLeads}</p>
-          <p>Interested → {summary.interestedLeads}</p>
-          <p>Callbacks → {summary.callbackCount}</p>
+          <p>New → {summary?.newLeads || 0}</p>
+          <p>Interested → {summary?.interestedLeads || 0}</p>
+          <p>Callbacks → {summary?.callbackCount || 0}</p>
+          <p>Called Contacts → {summary?.calledContacts || 0}</p>
         </div>
       </div>
     </div>
   );
 }
-
-function Card({ title, value }: { title: string; value: number }) {
+function SimpleCard({ title, value }: { title: string; value: number }) {
   return (
     <div className="rounded-xl bg-white p-4 shadow">
       <h2 className="text-sm text-gray-500">{title}</h2>
       <p className="text-2xl font-bold">{value}</p>
+    </div>
+  );
+}
+
+function ColorCard({
+  title,
+  value,
+  bg,
+}: {
+  title: string;
+  value: number;
+  bg: string;
+}) {
+  return (
+    <div className={`rounded-xl p-4 text-white shadow ${bg}`}>
+      <h2 className="text-sm">{title}</h2>
+      <p className="text-2xl font-bold">{value}</p>
+    </div>
+  );
+}
+
+function PieChartCard({
+  title,
+  data,
+}: {
+  title: string;
+  data: ChartPoint[];
+}) {
+  return (
+    <div className="rounded-2xl bg-white p-4 shadow md:p-6">
+      <h2 className="mb-4 text-lg font-bold">{title}</h2>
+
+      {data.length === 0 ? (
+        <div className="text-sm text-gray-500">No data available</div>
+      ) : (
+        <div className="h-80 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={data}
+                dataKey="value"
+                nameKey="label"
+                outerRadius={110}
+                innerRadius={55}
+                label
+              >
+                {data.map((_, index) => (
+                  <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip />
+              <Legend />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BarChartCard({
+  title,
+  data,
+}: {
+  title: string;
+  data: ChartPoint[];
+}) {
+  return (
+    <div className="rounded-2xl bg-white p-4 shadow md:p-6">
+      <h2 className="mb-4 text-lg font-bold">{title}</h2>
+
+      {data.length === 0 ? (
+        <div className="text-sm text-gray-500">No data available</div>
+      ) : (
+        <div className="h-80 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 40 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="label" angle={-20} textAnchor="end" interval={0} height={60} />
+              <YAxis />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="value" fill="#2563eb" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LineChartCard({
+  title,
+  data,
+}: {
+  title: string;
+  data: ChartPoint[];
+}) {
+  return (
+    <div className="rounded-2xl bg-white p-4 shadow md:p-6">
+      <h2 className="mb-4 text-lg font-bold">{title}</h2>
+
+      {data.length === 0 ? (
+        <div className="text-sm text-gray-500">No data available</div>
+      ) : (
+        <div className="h-80 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="label" />
+              <YAxis />
+              <Tooltip />
+              <Legend />
+              <Line
+                type="monotone"
+                dataKey="value"
+                stroke="#16a34a"
+                strokeWidth={3}
+                dot={{ r: 4 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
     </div>
   );
 }

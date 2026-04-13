@@ -273,77 +273,94 @@ export default function TelecallingPage() {
   };
 
   const fetchContactDataAndLatestHistory = async () => {
-    try {
-      const uniqueContactIds = Array.from(
-        new Set(
-          calls
-            .map((call) => call.contactId)
-            .filter((id): id is number => typeof id === 'number' && id > 0),
-        ),
-      );
+  try {
+    const uniqueContactIds = Array.from(
+      new Set(
+        calls
+          .map((call) => call.contactId)
+          .filter((id): id is number => typeof id === 'number' && id > 0),
+      ),
+    );
 
-      if (uniqueContactIds.length === 0) {
-        setContactMap({});
-        setContactLatestCallMap({});
-        return;
-      }
-
-      const results = await Promise.all(
-        uniqueContactIds.map(async (id) => {
-          try {
-            const res = await axios.get<ContactWorkHistoryResponse>(
-              `${backendUrl}/telecalling/contacts/${id}/work-history`,
-              {
-                headers: getAuthHeaders(),
-              },
-            );
-            return res.data;
-          } catch (error) {
-            console.error(`Failed to fetch contact work history for ${id}:`, error);
-            return null;
-          }
-        }),
-      );
-
-      const nextContactMap: Record<number, ContactSummary> = {};
-      const nextLatestMap: Record<number, LatestContactCallInfo> = {};
-
-      results.forEach((item) => {
-        if (!item?.contact?.id) return;
-
-        nextContactMap[item.contact.id] = item.contact;
-
-        const latestContactCall = (item.timeline || [])
-          .filter((entry) => entry.type === 'CONTACT_CALL')
-          .sort(
-            (a, b) =>
-              new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-          )[0];
-
-        if (latestContactCall) {
-          nextLatestMap[item.contact.id] = {
-            callStatus: String(
-              latestContactCall.meta?.callStatus || latestContactCall.title || '',
-            )
-              .replace(/^Call\s+/i, '')
-              .trim(),
-            notes: latestContactCall.description || '',
-            nextFollowUpDate: latestContactCall.meta?.nextFollowUpDate
-              ? String(latestContactCall.meta.nextFollowUpDate)
-              : undefined,
-            updatedAt: latestContactCall.timestamp,
-          };
-        }
-      });
-
-      setContactMap(nextContactMap);
-      setContactLatestCallMap(nextLatestMap);
-    } catch (error) {
-      console.error('Failed to fetch contact summaries/latest history:', error);
+    if (uniqueContactIds.length === 0) {
       setContactMap({});
       setContactLatestCallMap({});
+      return;
     }
-  };
+
+    const results = await Promise.all(
+      uniqueContactIds.map(async (id) => {
+        try {
+          const relatedCall = calls.find((call) => call.contactId === id);
+
+          if (isTelecaller && user?.id) {
+            const assignedToMe =
+              relatedCall?.reviewAssignedTo === user.id ||
+              relatedCall?.reviewAssignedTo == null;
+
+            if (!assignedToMe) {
+              return null;
+            }
+          }
+
+          const res = await axios.get<ContactWorkHistoryResponse>(
+            `${backendUrl}/telecalling/contacts/${id}/work-history`,
+            {
+              headers: getAuthHeaders(),
+            },
+          );
+
+          return res.data;
+        } catch (error: any) {
+          if (error?.response?.status === 403) {
+            return null;
+          }
+
+          console.error(`Failed to fetch contact work history for ${id}:`, error);
+          return null;
+        }
+      }),
+    );
+
+    const nextContactMap: Record<number, ContactSummary> = {};
+    const nextLatestMap: Record<number, LatestContactCallInfo> = {};
+
+    results.forEach((item) => {
+      if (!item?.contact?.id) return;
+
+      nextContactMap[item.contact.id] = item.contact;
+
+      const latestContactCall = (item.timeline || [])
+        .filter((entry) => entry.type === 'CONTACT_CALL')
+        .sort(
+          (a, b) =>
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+        )[0];
+
+      if (latestContactCall) {
+        nextLatestMap[item.contact.id] = {
+          callStatus: String(
+            latestContactCall.meta?.callStatus || latestContactCall.title || '',
+          )
+            .replace(/^Call\s+/i, '')
+            .trim(),
+          notes: latestContactCall.description || '',
+          nextFollowUpDate: latestContactCall.meta?.nextFollowUpDate
+            ? String(latestContactCall.meta.nextFollowUpDate)
+            : undefined,
+          updatedAt: latestContactCall.timestamp,
+        };
+      }
+    });
+
+    setContactMap(nextContactMap);
+    setContactLatestCallMap(nextLatestMap);
+  } catch (error) {
+    console.error('Failed to fetch contact summaries/latest history:', error);
+    setContactMap({});
+    setContactLatestCallMap({});
+  }
+};
 
   const goToNextLead = () => {
     if (!leadId || leads.length === 0) return;
