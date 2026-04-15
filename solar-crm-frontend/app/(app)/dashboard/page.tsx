@@ -272,10 +272,15 @@ export default function DashboardPage() {
     }, 0);
   };
 
-  const conversionPercentage =
+    const conversionPercentage =
     summary && summary.totalLeads > 0
       ? Math.round((summary.interestedLeads / summary.totalLeads) * 100)
       : 0;
+
+  const getTelecallerName = (id: string) => {
+    const found = telecallers.find((t) => String(t.id) === String(id));
+    return found ? found.name : `User ${id}`;
+  };
 
   if (!summary && dashboardLoading) {
     return <div className="p-4 md:p-6">Loading dashboard...</div>;
@@ -336,9 +341,9 @@ export default function DashboardPage() {
               className="rounded-xl border border-gray-300 px-3 py-2"
             >
               <option value="">All Telecallers</option>
-              {telecallers.map((item) => (
+                            {telecallers.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.id} - {item.name}
+                  {item.name}
                 </option>
               ))}
             </select>
@@ -462,9 +467,9 @@ export default function DashboardPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            {performance.map((p) => (
+                        {performance.map((p) => (
               <div key={p.telecallerId} className="rounded-xl bg-white p-4 shadow">
-                <p className="font-semibold">User ID: {p.telecallerId}</p>
+                <p className="font-semibold">{getTelecallerName(p.telecallerId)}</p>
                 <p>Total Calls: {p.totalCalls}</p>
                 <p>Interested: {p.interested}</p>
               </div>

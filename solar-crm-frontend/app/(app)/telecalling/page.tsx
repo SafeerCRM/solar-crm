@@ -1,6 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import dayjs, { Dayjs } from 'dayjs';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
 import axios from 'axios';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -187,22 +192,41 @@ export default function TelecallingPage() {
   }, [user, canAssignAssistant]);
 
   useEffect(() => {
-    if (calls.length > 0) {
-      fetchContactDataAndLatestHistory();
+  if (calls.length > 0) {
+    const hasHistoryFilter =
+      !!nameFilter.trim() ||
+      !!phoneFilter.trim() ||
+      !!cityFilter.trim() ||
+      !!leadPotentialFilter ||
+      !!callResultFilter;
 
-      const initialAssignMap: Record<number, string> = {};
-      calls.forEach((call) => {
-        initialAssignMap[call.id] = call.reviewAssignedTo
-          ? String(call.reviewAssignedTo)
-          : '';
-      });
-      setAssignAssistantMap(initialAssignMap);
+    if (hasHistoryFilter) {
+      fetchContactDataAndLatestHistory();
     } else {
       setContactMap({});
       setContactLatestCallMap({});
-      setAssignAssistantMap({});
     }
-  }, [calls]);
+
+    const initialAssignMap: Record<number, string> = {};
+    calls.forEach((call) => {
+      initialAssignMap[call.id] = call.reviewAssignedTo
+        ? String(call.reviewAssignedTo)
+        : '';
+    });
+    setAssignAssistantMap(initialAssignMap);
+  } else {
+    setContactMap({});
+    setContactLatestCallMap({});
+    setAssignAssistantMap({});
+  }
+}, [
+  calls,
+  nameFilter,
+  phoneFilter,
+  cityFilter,
+  leadPotentialFilter,
+  callResultFilter,
+]);
 
   const fetchLeads = async () => {
     try {
@@ -274,19 +298,81 @@ export default function TelecallingPage() {
 
   const fetchContactDataAndLatestHistory = async () => {
   try {
-    const uniqueContactIds = Array.from(
-      new Set(
-        calls
-          .map((call) => call.contactId)
-          .filter((id): id is number => typeof id === 'number' && id > 0),
-      ),
-    );
+   // 🔥 Only fetch history when filter is applied
+const hasHistoryFilter =
+  !!nameFilter.trim() ||
+  !!phoneFilter.trim() ||
+  !!cityFilter.trim() ||
+  !!leadPotentialFilter ||
+  !!callResultFilter;
 
-    if (uniqueContactIds.length === 0) {
-      setContactMap({});
-      setContactLatestCallMap({});
-      return;
-    }
+if (!hasHistoryFilter) {
+  setMessage('Apply filter to load contact history');
+  setContactMap({});
+  setContactLatestCallMap({});
+  return;
+}
+
+const filteredCalls = calls.filter((call) => {
+  const contactId = call.contactId;
+  if (!contactId) return false;
+
+  const contact = contactMap[contactId];
+
+  const displayName = String(contact?.name || '').toLowerCase();
+  const displayPhone = String(contact?.phone || '').toLowerCase();
+  const displayCity = String(
+    contact?.city || contact?.address || contact?.location || '',
+  ).toLowerCase();
+
+  const effectiveStatus = String(
+    call.disposition || call.callStatus || '',
+  ).toUpperCase();
+
+  const effectiveLeadPotential = String(call.leadPotential || '').toUpperCase();
+
+  const matchesName =
+    !nameFilter.trim() ||
+    displayName.includes(nameFilter.trim().toLowerCase());
+
+  const matchesPhone =
+    !phoneFilter.trim() ||
+    displayPhone.includes(phoneFilter.trim().toLowerCase());
+
+  const matchesCity =
+    !cityFilter.trim() ||
+    displayCity.includes(cityFilter.trim().toLowerCase());
+
+  const matchesLeadPotential =
+    !leadPotentialFilter ||
+    effectiveLeadPotential === leadPotentialFilter.toUpperCase();
+
+  const matchesCallResult =
+    !callResultFilter ||
+    effectiveStatus === callResultFilter.toUpperCase();
+
+  return (
+    matchesName &&
+    matchesPhone &&
+    matchesCity &&
+    matchesLeadPotential &&
+    matchesCallResult
+  );
+});
+
+const uniqueContactIds = Array.from(
+  new Set(
+    filteredCalls
+      .map((call) => call.contactId)
+      .filter((id): id is number => typeof id === 'number' && id > 0),
+  ),
+);
+
+if (uniqueContactIds.length === 0) {
+  setContactMap({});
+  setContactLatestCallMap({});
+  return;
+}
 
     const results = await Promise.all(
       uniqueContactIds.map(async (id) => {
@@ -377,6 +463,39 @@ export default function TelecallingPage() {
   };
 
   const selectedLead = leads.find((l) => l.id === Number(leadId));
+  const followUpDateValue = nextFollowUpDate ? dayjs(nextFollowUpDate) : null;
+const followUpTimeValue = nextFollowUpDate ? dayjs(nextFollowUpDate) : null;
+
+const updateFollowUpDatePart = (newDate: Dayjs | null) => {
+  if (!newDate) {
+    setNextFollowUpDate('');
+    return;
+  }
+
+  const base = nextFollowUpDate ? dayjs(nextFollowUpDate) : dayjs();
+  const merged = newDate
+    .hour(base.hour())
+    .minute(base.minute())
+    .second(0)
+    .millisecond(0);
+
+  setNextFollowUpDate(merged.format('YYYY-MM-DDTHH:mm'));
+};
+
+const updateFollowUpTimePart = (newTime: Dayjs | null) => {
+  if (!newTime) {
+    return;
+  }
+
+  const base = nextFollowUpDate ? dayjs(nextFollowUpDate) : dayjs();
+  const merged = base
+    .hour(newTime.hour())
+    .minute(newTime.minute())
+    .second(0)
+    .millisecond(0);
+
+  setNextFollowUpDate(merged.format('YYYY-MM-DDTHH:mm'));
+};
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -739,12 +858,34 @@ export default function TelecallingPage() {
               className="w-full rounded-xl border border-gray-400 px-4 py-3"
             />
 
-            <input
-              type="datetime-local"
-              value={nextFollowUpDate}
-              onChange={(e) => setNextFollowUpDate(e.target.value)}
-              className="w-full rounded-xl border border-gray-400 px-4 py-3"
-            />
+            <LocalizationProvider dateAdapter={AdapterDayjs}>
+  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+    <DatePicker
+      label="Follow-up Date"
+      value={followUpDateValue}
+      onChange={updateFollowUpDatePart}
+      slotProps={{
+        textField: {
+          fullWidth: true,
+          className: 'w-full',
+        },
+      }}
+    />
+
+    <MobileTimePicker
+      label="Follow-up Time"
+      value={followUpTimeValue}
+      onChange={updateFollowUpTimePart}
+      ampm
+      slotProps={{
+        textField: {
+          fullWidth: true,
+          className: 'w-full',
+        },
+      }}
+    />
+  </div>
+</LocalizationProvider>
 
             {message && (
               <p

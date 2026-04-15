@@ -7,6 +7,11 @@ import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { getAuthHeaders } from '@/lib/authHeaders';
 import { CallControl } from '@/lib/callControl';
+import dayjs, { Dayjs } from 'dayjs';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
 
 const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -87,6 +92,8 @@ export default function TelecallingContactsPage() {
   // 🔥 TRANSFER STATES
   const [transferFromUser, setTransferFromUser] = useState('');
   const [transferToUser, setTransferToUser] = useState('');
+  const [fromUserCount, setFromUserCount] = useState<number | null>(null);
+  const [toUserCount, setToUserCount] = useState<number | null>(null);
   const [transferCount, setTransferCount] = useState('');
   const [transferring, setTransferring] = useState(false);
 
@@ -317,6 +324,42 @@ export default function TelecallingContactsPage() {
 
   const activeAutoContact =
     isAutoCalling && autoCallQueue.length > 0 ? autoCallQueue[autoCallIndex] : null;
+    const quickCallDateValue = quickCallNextFollowUpDate
+  ? dayjs(quickCallNextFollowUpDate)
+  : null;
+
+const quickCallTimeValue = quickCallNextFollowUpDate
+  ? dayjs(quickCallNextFollowUpDate)
+  : null;
+
+const updateQuickCallDatePart = (newDate: Dayjs | null) => {
+  if (!newDate) {
+    setQuickCallNextFollowUpDate('');
+    return;
+  }
+
+  const base = quickCallNextFollowUpDate ? dayjs(quickCallNextFollowUpDate) : dayjs();
+  const merged = newDate
+    .hour(base.hour())
+    .minute(base.minute())
+    .second(0)
+    .millisecond(0);
+
+  setQuickCallNextFollowUpDate(merged.format('YYYY-MM-DDTHH:mm'));
+};
+
+const updateQuickCallTimePart = (newTime: Dayjs | null) => {
+  if (!newTime) return;
+
+  const base = quickCallNextFollowUpDate ? dayjs(quickCallNextFollowUpDate) : dayjs();
+  const merged = base
+    .hour(newTime.hour())
+    .minute(newTime.minute())
+    .second(0)
+    .millisecond(0);
+
+  setQuickCallNextFollowUpDate(merged.format('YYYY-MM-DDTHH:mm'));
+};
       const startQuickCall = async (contact: Contact) => {
     try {
       const res = await axios.post(
@@ -376,19 +419,26 @@ export default function TelecallingContactsPage() {
   };
 
   const callNextContact = async () => {
-    if (isPaused) return;
+  if (isPaused) return;
 
-    const nextIndex = autoCallIndex + 1;
+  setAutoCallIndex((prevIndex) => {
+    const nextIndex = prevIndex + 1;
 
     if (nextIndex >= autoCallQueue.length) {
       stopAutoCall();
       setMessage('Auto call completed.');
-      return;
+      return prevIndex;
     }
 
-    setAutoCallIndex(nextIndex);
-    await startCountdownThenCall(autoCallQueue[nextIndex]);
-  };
+    const nextContact = autoCallQueue[nextIndex];
+
+    if (nextContact) {
+      startCountdownThenCall(nextContact);
+    }
+
+    return nextIndex;
+  });
+};
 
   const startAutoCall = async () => {
     try {
@@ -561,6 +611,29 @@ export default function TelecallingContactsPage() {
       setAssigningLatest(false);
     }
   };
+
+const fetchUserContactCount = async (
+  userId: string,
+  type: 'from' | 'to'
+) => {
+  try {
+    if (!userId) {
+      if (type === 'from') setFromUserCount(null);
+      if (type === 'to') setToUserCount(null);
+      return;
+    }
+
+    const res = await axios.get(
+      `${backendUrl}/telecalling/telecaller-contact-count/${userId}`,
+      { headers: getAuthHeaders() }
+    );
+
+    if (type === 'from') setFromUserCount(res.data?.count || 0);
+    if (type === 'to') setToUserCount(res.data?.count || 0);
+  } catch (err) {
+    console.error(err);
+  }
+};
 
   // 🔥 TRANSFER CONTACTS FUNCTION
 const transferContacts = async () => {
@@ -873,31 +946,55 @@ const transferContacts = async () => {
   </p>
 
   <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-    <select
-      value={transferFromUser}
-      onChange={(e) => setTransferFromUser(e.target.value)}
-      className="rounded-2xl border border-gray-200 bg-gray-50 p-3"
-    >
-      <option value="">From Telecaller</option>
-      {users.map((u) => (
-        <option key={u.id} value={u.id}>
-          {u.id} - {u.name}
-        </option>
-      ))}
-    </select>
+    <div>
+  <select
+    value={transferFromUser}
+    onChange={(e) => {
+      const value = e.target.value;
+      setTransferFromUser(value);
+      fetchUserContactCount(value, 'from');
+    }}
+    className="w-full rounded-2xl border border-gray-200 bg-gray-50 p-3"
+  >
+    <option value="">From Telecaller</option>
+    {users.map((u) => (
+      <option key={u.id} value={u.id}>
+        {u.id} - {u.name}
+      </option>
+    ))}
+  </select>
 
-    <select
-      value={transferToUser}
-      onChange={(e) => setTransferToUser(e.target.value)}
-      className="rounded-2xl border border-gray-200 bg-gray-50 p-3"
-    >
-      <option value="">To Telecaller</option>
-      {users.map((u) => (
-        <option key={u.id} value={u.id}>
-          {u.id} - {u.name}
-        </option>
-      ))}
-    </select>
+  {fromUserCount !== null && (
+    <p className="mt-1 text-xs text-gray-500">
+      Contacts: {fromUserCount}
+    </p>
+  )}
+</div>
+
+    <div>
+  <select
+    value={transferToUser}
+    onChange={(e) => {
+      const value = e.target.value;
+      setTransferToUser(value);
+      fetchUserContactCount(value, 'to');
+    }}
+    className="w-full rounded-2xl border border-gray-200 bg-gray-50 p-3"
+  >
+    <option value="">To Telecaller</option>
+    {users.map((u) => (
+      <option key={u.id} value={u.id}>
+        {u.id} - {u.name}
+      </option>
+    ))}
+  </select>
+
+  {toUserCount !== null && (
+    <p className="mt-1 text-xs text-gray-500">
+      Contacts: {toUserCount}
+    </p>
+  )}
+</div>
 
     <input
       value={transferCount}
@@ -1086,12 +1183,32 @@ const transferContacts = async () => {
                   className="rounded-2xl border border-gray-200 p-3 md:col-span-2"
                 />
 
-                <input
-                  type="datetime-local"
-                  value={quickCallNextFollowUpDate}
-                  onChange={(e) => setQuickCallNextFollowUpDate(e.target.value)}
-                  className="rounded-2xl border border-gray-200 p-3"
-                />
+                <LocalizationProvider dateAdapter={AdapterDayjs}>
+  <div className="grid gap-3 md:col-span-2 md:grid-cols-2">
+    <DatePicker
+      label="Follow-up Date"
+      value={quickCallDateValue}
+      onChange={updateQuickCallDatePart}
+      slotProps={{
+        textField: {
+          fullWidth: true,
+        },
+      }}
+    />
+
+    <MobileTimePicker
+      label="Follow-up Time"
+      value={quickCallTimeValue}
+      onChange={updateQuickCallTimePart}
+      ampm
+      slotProps={{
+        textField: {
+          fullWidth: true,
+        },
+      }}
+    />
+  </div>
+</LocalizationProvider>
 
                 <input
                   type="text"

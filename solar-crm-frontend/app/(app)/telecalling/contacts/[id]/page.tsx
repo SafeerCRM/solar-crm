@@ -1,6 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import dayjs, { Dayjs } from 'dayjs';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
 import axios from 'axios';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -56,9 +61,11 @@ export default function TelecallingContactDetailPage() {
   const [message, setMessage] = useState('');
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [assistants, setAssistants] = useState<User[]>([]);
-  const [selectedAssistantId, setSelectedAssistantId] = useState('');
-  const [assigningAssistant, setAssigningAssistant] = useState(false);
+ const [assistants, setAssistants] = useState<User[]>([]);
+ const [meetingManagers, setMeetingManagers] = useState<User[]>([]);
+ const [selectedAssistantId, setSelectedAssistantId] = useState('');
+ const [selectedMeetingManagerId, setSelectedMeetingManagerId] = useState('');
+ const [assigningAssistant, setAssigningAssistant] = useState(false);
 
   const [noteText, setNoteText] = useState('');
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
@@ -75,7 +82,28 @@ export default function TelecallingContactDetailPage() {
 
   const [loading, setLoading] = useState(false);
   const [converting, setConverting] = useState(false);
-  const [convertSliderValue, setConvertSliderValue] = useState(0);
+  
+
+  const [user, setUser] = useState<any>(null);
+  const [leadSlider, setLeadSlider] = useState(0);
+  const [meetingSlider, setMeetingSlider] = useState(0);
+  const [pendingLeadSave, setPendingLeadSave] = useState(false);
+  const [pendingMeetingSave, setPendingMeetingSave] = useState(false);
+  const [flashMessage, setFlashMessage] = useState('');
+
+useEffect(() => {
+  const storedUser = localStorage.getItem('user');
+  if (storedUser) {
+    try {
+      setUser(JSON.parse(storedUser));
+    } catch (e) {
+      console.error('Failed to parse user');
+    }
+  }
+}, []);
+
+const roles = user?.roles || [];
+const isTelecaller = roles.includes('TELECALLER');
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
@@ -95,25 +123,37 @@ export default function TelecallingContactDetailPage() {
   }, [id]);
 
   useEffect(() => {
-    if (currentUser) {
-      const roles = Array.isArray(currentUser.roles)
-        ? currentUser.roles
-        : currentUser.role
-        ? [currentUser.role]
-        : [];
+  if (currentUser) {
+    const roles = Array.isArray(currentUser.roles)
+      ? currentUser.roles
+      : currentUser.role
+      ? [currentUser.role]
+      : [];
 
-      const canAssignAssistant =
-        roles.includes('OWNER') ||
-        roles.includes('TELECALLING_MANAGER') ||
-        roles.includes('TELECALLER');
+    const canAssignAssistant =
+      roles.includes('OWNER') ||
+      roles.includes('TELECALLING_MANAGER') ||
+      roles.includes('TELECALLER');
 
-      if (canAssignAssistant) {
-        fetchAssistants();
-      } else {
-        setAssistants([]);
-      }
+    if (canAssignAssistant) {
+      fetchAssistants();
+      fetchMeetingManagers();
+    } else {
+      setAssistants([]);
+      setMeetingManagers([]);
     }
-  }, [currentUser]);
+  }
+}, [currentUser]);
+
+useEffect(() => {
+  if (!flashMessage) return;
+
+  const timer = setTimeout(() => {
+    setFlashMessage('');
+  }, 2500);
+
+  return () => clearTimeout(timer);
+}, [flashMessage]);
 
   const canAssignAssistant = useMemo(() => {
     const roles = Array.isArray(currentUser?.roles)
@@ -145,6 +185,22 @@ export default function TelecallingContactDetailPage() {
     }
   };
 
+  const fetchMeetingManagers = async () => {
+  try {
+    const res = await axios.get(
+      `${backendUrl}/users/meeting-managers`,
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+
+    setMeetingManagers(Array.isArray(res.data) ? res.data : []);
+  } catch (error: any) {
+    console.error(error);
+    setMeetingManagers([]);
+  }
+};
+
   const fetchHistory = async () => {
     try {
       const res = await axios.get(
@@ -155,10 +211,10 @@ export default function TelecallingContactDetailPage() {
       );
 
       setData(res.data);
-      setConvertSliderValue(0);
+setSelectedMeetingManagerId('');
 
-      const reviewAssignedTo = res.data?.contact?.reviewAssignedTo;
-      setSelectedAssistantId(reviewAssignedTo ? String(reviewAssignedTo) : '');
+const reviewAssignedTo = res.data?.contact?.reviewAssignedTo;
+setSelectedAssistantId(reviewAssignedTo ? String(reviewAssignedTo) : '');
     } catch (error: any) {
       console.error(error);
       setMessage(error?.response?.data?.message || 'Failed to load contact details');
@@ -318,40 +374,76 @@ export default function TelecallingContactDetailPage() {
     }
   };
 
-  const convertToLead = async () => {
-    try {
-      setConverting(true);
-      setMessage('');
+  const addCallDateValue = nextFollowUpDate ? dayjs(nextFollowUpDate) : null;
+  const addCallTimeValue = nextFollowUpDate ? dayjs(nextFollowUpDate) : null;
 
-      await axios.post(
-        `${backendUrl}/telecalling/contacts/${id}/convert`,
-        {},
-        { headers: getAuthHeaders() },
-      );
+  const editCallDateValue = editingNextFollowUpDate
+    ? dayjs(editingNextFollowUpDate)
+    : null;
+  const editCallTimeValue = editingNextFollowUpDate
+    ? dayjs(editingNextFollowUpDate)
+    : null;
 
-      setMessage('Contact converted to lead successfully');
-      setConvertSliderValue(0);
-      fetchHistory();
-    } catch (error: any) {
-      console.error(error);
-      setMessage(error?.response?.data?.message || 'Failed to convert contact');
-      setConvertSliderValue(0);
-    } finally {
-      setConverting(false);
+  const updateAddCallDatePart = (newDate: Dayjs | null) => {
+    if (!newDate) {
+      setNextFollowUpDate('');
+      return;
     }
+
+    const base = nextFollowUpDate ? dayjs(nextFollowUpDate) : dayjs();
+    const merged = newDate
+      .hour(base.hour())
+      .minute(base.minute())
+      .second(0)
+      .millisecond(0);
+
+    setNextFollowUpDate(merged.format('YYYY-MM-DDTHH:mm'));
   };
 
-  const handleConvertSliderChange = async (value: number) => {
-    setConvertSliderValue(value);
+  const updateAddCallTimePart = (newTime: Dayjs | null) => {
+    if (!newTime) return;
 
-    if (value >= 100 && !converting && !data?.contact?.convertedToLead) {
-      await convertToLead();
-    }
+    const base = nextFollowUpDate ? dayjs(nextFollowUpDate) : dayjs();
+    const merged = base
+      .hour(newTime.hour())
+      .minute(newTime.minute())
+      .second(0)
+      .millisecond(0);
+
+    setNextFollowUpDate(merged.format('YYYY-MM-DDTHH:mm'));
   };
 
-  const resetConvertSlider = () => {
-    if (converting || data?.contact?.convertedToLead) return;
-    setConvertSliderValue(0);
+  const updateEditCallDatePart = (newDate: Dayjs | null) => {
+    if (!newDate) {
+      setEditingNextFollowUpDate('');
+      return;
+    }
+
+    const base = editingNextFollowUpDate
+      ? dayjs(editingNextFollowUpDate)
+      : dayjs();
+    const merged = newDate
+      .hour(base.hour())
+      .minute(base.minute())
+      .second(0)
+      .millisecond(0);
+
+    setEditingNextFollowUpDate(merged.format('YYYY-MM-DDTHH:mm'));
+  };
+
+  const updateEditCallTimePart = (newTime: Dayjs | null) => {
+    if (!newTime) return;
+
+    const base = editingNextFollowUpDate
+      ? dayjs(editingNextFollowUpDate)
+      : dayjs();
+    const merged = base
+      .hour(newTime.hour())
+      .minute(newTime.minute())
+      .second(0)
+      .millisecond(0);
+
+    setEditingNextFollowUpDate(merged.format('YYYY-MM-DDTHH:mm'));
   };
 
   const getTypeBadge = (type: string) => {
@@ -473,37 +565,167 @@ export default function TelecallingContactDetailPage() {
           </div>
         )}
 
-        <div className="mt-5 rounded border bg-gray-50 p-4">
-          {data.contact.convertedToLead ? (
-            <div className="font-medium text-green-700">
-              This contact has already been converted to lead.
-            </div>
-          ) : (
-            <div className="max-w-md">
-              <p className="mb-2 text-sm font-medium text-gray-700">
-                Drag to convert to lead
-              </p>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                step={1}
-                value={convertSliderValue}
-                onChange={(e) => handleConvertSliderChange(Number(e.target.value))}
-                onMouseUp={resetConvertSlider}
-                onTouchEnd={resetConvertSlider}
-                disabled={converting}
-                className="w-full"
-              />
-              <div className="mt-1 flex items-center justify-between text-xs text-gray-500">
-                <span>Drag</span>
-                <span>{converting ? 'Converting...' : `${convertSliderValue}%`}</span>
-                <span>Convert</span>
-              </div>
-            </div>
-          )}
-        </div>
+                        {/* ===== CONVERT TO LEAD ===== */}
+{!isTelecaller && (
+  <div className="mt-6 rounded border bg-blue-50 p-4">
+    <div className="max-w-md space-y-3">
+      <p className="text-sm font-semibold text-blue-800">
+        Convert to Lead
+      </p>
+
+      <input
+        type="range"
+        min="0"
+        max="100"
+        value={leadSlider}
+        onChange={(e) => {
+          const value = Number(e.target.value);
+          setLeadSlider(value);
+          setPendingLeadSave(value === 100);
+        }}
+        className="w-full"
+      />
+
+      <div className="flex justify-between text-xs text-gray-500">
+        <span>Drag</span>
+        <span>{leadSlider}%</span>
+        <span>Convert</span>
       </div>
+
+      {pendingLeadSave && (
+        <div className="flex gap-3">
+          <button
+            onClick={async () => {
+  try {
+    setMessage('');
+    await axios.post(
+      `${backendUrl}/telecalling/contacts/${id}/convert`,
+      {},
+      { headers: getAuthHeaders() }
+    );
+
+    setFlashMessage('Converted to lead successfully');
+    setLeadSlider(0);
+    setPendingLeadSave(false);
+
+    setTimeout(() => {
+      fetchHistory();
+    }, 300);
+  } catch (err: any) {
+  console.error(err);
+  setMessage(
+    err?.response?.data?.message || 'Failed to convert to lead'
+  );
+}
+}}
+            className="rounded bg-blue-600 px-4 py-2 text-white"
+          >
+            Save
+          </button>
+
+          <button
+            onClick={() => {
+              setLeadSlider(0);
+              setPendingLeadSave(false);
+            }}
+            className="rounded bg-gray-300 px-4 py-2"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+    </div>
+  </div>
+)}
+
+{/* ===== CONVERT TO MEETING ===== */}
+<div className="mt-8 rounded border bg-gray-50 p-4">
+  <div className="max-w-md space-y-3">
+    <p className="text-sm font-semibold text-gray-800">
+      Convert to Meeting
+    </p>
+
+    <select
+      value={selectedMeetingManagerId}
+      onChange={(e) => setSelectedMeetingManagerId(e.target.value)}
+      className="w-full rounded border p-2"
+    >
+      <option value="">Select meeting manager</option>
+      {meetingManagers.map((m) => (
+        <option key={m.id} value={m.id}>
+          {m.name}
+        </option>
+      ))}
+    </select>
+
+    <input
+      type="range"
+      min="0"
+      max="100"
+      value={meetingSlider}
+      onChange={(e) => {
+        const value = Number(e.target.value);
+        setMeetingSlider(value);
+        setPendingMeetingSave(value === 100);
+      }}
+      className="w-full"
+    />
+
+    <div className="flex justify-between text-xs text-gray-500">
+      <span>Drag</span>
+      <span>{meetingSlider}%</span>
+      <span>Convert</span>
+    </div>
+
+    {pendingMeetingSave && (
+      <div className="flex gap-3">
+        <button
+          onClick={async () => {
+            try {
+              await axios.post(
+                `${backendUrl}/telecalling/contacts/${id}/convert-to-meeting`,
+                {
+                  meetingManagerId: Number(selectedMeetingManagerId),
+                },
+                { headers: getAuthHeaders() }
+              );
+
+              setFlashMessage('Converted to meeting successfully');
+              setMeetingSlider(0);
+              setPendingMeetingSave(false);
+              fetchHistory();
+            } catch (err: any) {
+              setMessage('Failed to convert to meeting');
+            }
+          }}
+          className="rounded bg-green-600 px-4 py-2 text-white"
+        >
+          Save
+        </button>
+
+        <button
+          onClick={() => {
+            setMeetingSlider(0);
+            setPendingMeetingSave(false);
+          }}
+          className="rounded bg-gray-300 px-4 py-2"
+        >
+          Cancel
+        </button>
+      </div>
+    )}
+  </div>
+</div>
+
+</div>
+
+     {flashMessage && (
+        <div className="mb-4 rounded-lg bg-green-100 px-4 py-3 text-sm font-medium text-green-800 shadow">
+          {flashMessage}
+        </div>
+      )}
+
+      {message && <p className="mb-4 text-blue-600">{message}</p>}
 
       <div className="mb-6 rounded-2xl bg-white p-6 shadow">
         <h2 className="mb-4 text-xl font-semibold">Add Note</h2>
@@ -541,13 +763,32 @@ export default function TelecallingContactDetailPage() {
             <option value="NO_RESPONSE">NO_RESPONSE</option>
           </select>
 
-          <input
-            type="datetime-local"
-            value={nextFollowUpDate}
-            onChange={(e) => setNextFollowUpDate(e.target.value)}
-            className="rounded border p-2"
-          />
+                    <LocalizationProvider dateAdapter={AdapterDayjs}>
+            <div className="grid gap-3 md:grid-cols-2">
+              <DatePicker
+                label="Follow-up Date"
+                value={addCallDateValue}
+                onChange={updateAddCallDatePart}
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                  },
+                }}
+              />
 
+              <MobileTimePicker
+                label="Follow-up Time"
+                value={addCallTimeValue}
+                onChange={updateAddCallTimePart}
+                ampm
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                  },
+                }}
+              />
+            </div>
+          </LocalizationProvider>
           <button
             onClick={addCallHistory}
             disabled={loading}
@@ -566,7 +807,6 @@ export default function TelecallingContactDetailPage() {
         />
       </div>
 
-      {message && <p className="mb-4 text-blue-600">{message}</p>}
 
       <div className="rounded-2xl bg-white p-6 shadow">
         <h2 className="mb-4 text-xl font-semibold">Work History</h2>
@@ -638,12 +878,32 @@ export default function TelecallingContactDetailPage() {
                         <option value="NO_RESPONSE">NO_RESPONSE</option>
                       </select>
 
-                      <input
-                        type="datetime-local"
-                        value={editingNextFollowUpDate}
-                        onChange={(e) => setEditingNextFollowUpDate(e.target.value)}
-                        className="rounded border p-2"
-                      />
+                                            <LocalizationProvider dateAdapter={AdapterDayjs}>
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <DatePicker
+                            label="Follow-up Date"
+                            value={editCallDateValue}
+                            onChange={updateEditCallDatePart}
+                            slotProps={{
+                              textField: {
+                                fullWidth: true,
+                              },
+                            }}
+                          />
+
+                          <MobileTimePicker
+                            label="Follow-up Time"
+                            value={editCallTimeValue}
+                            onChange={updateEditCallTimePart}
+                            ampm
+                            slotProps={{
+                              textField: {
+                                fullWidth: true,
+                              },
+                            }}
+                          />
+                        </div>
+                      </LocalizationProvider>
 
                       <button
                         onClick={updateCallHistory}
