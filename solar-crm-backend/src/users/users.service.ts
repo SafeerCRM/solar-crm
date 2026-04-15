@@ -136,6 +136,18 @@ export class UsersService {
     });
   }
 
+  async findMeetingManagers() {
+  return this.userRepository.find({
+    where: {
+      roles: Raw((alias) => `${alias} LIKE :role`, {
+        role: '%MEETING_MANAGER%',
+      }),
+    },
+    select: ['id', 'name', 'email', 'roles'],
+    order: { id: 'ASC' },
+  });
+}
+
   async findTelecallers() {
     return this.userRepository.find({
       where: {

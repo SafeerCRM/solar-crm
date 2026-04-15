@@ -4,7 +4,10 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
+import { Lead } from '../leads/lead.entity';
 
 export enum MeetingStatus {
   SCHEDULED = 'SCHEDULED',
@@ -47,6 +50,10 @@ export class Meeting {
 
   @Column()
   mobile: string;
+
+  @ManyToOne(() => Lead)
+@JoinColumn({ name: 'leadId' })  // 🔥 CRITICAL
+lead: Lead;
 
   @Column({ type: 'text', nullable: true })
   address?: string;

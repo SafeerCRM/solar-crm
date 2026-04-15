@@ -9,11 +9,13 @@ import { TelecallingContact } from './telecalling-contact.entity';
 import { User } from '../users/user.entity';
 import { ContactCallHistory } from './contact-call-history.entity';
 import { ContactNote } from './contact-note.entity';
+import { Meeting } from '../meeting/meeting.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([
       CallLog,
+      Meeting,
       Lead,
       FollowUp,
       TelecallingContact,

@@ -325,6 +325,26 @@ export class TelecallingController {
     return this.telecallingService.convertContactToLead(id, user);
   }
 
+  @Post('contacts/:id/convert-to-meeting')
+convertContactToMeeting(
+  @Param('id', ParseIntPipe) id: number,
+  @Body('meetingManagerId') meetingManagerId: number,
+  @CurrentUser() user: any,
+) {
+  return this.telecallingService.convertContactToMeeting(
+    id,
+    Number(meetingManagerId),
+    user,
+  );
+}
+
+@Get('telecaller-contact-count/:userId')
+getTelecallerContactCount(
+  @Param('userId', ParseIntPipe) userId: number,
+) {
+  return this.telecallingService.getTelecallerContactCount(userId);
+}
+
   @Get('contacts/:id')
   getContactById(
     @Param('id', ParseIntPipe) id: number,

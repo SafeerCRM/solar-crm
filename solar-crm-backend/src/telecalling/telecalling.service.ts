@@ -27,6 +27,7 @@ import { User } from '../users/user.entity';
 import { ContactCallHistory } from './contact-call-history.entity';
 import { ContactNote } from './contact-note.entity';
 import { UserRole } from '../users/user.entity';
+import { Meeting } from '../meeting/meeting.entity';
 
 
 @Injectable()
@@ -36,6 +37,8 @@ export class TelecallingService {
     private readonly callLogRepository: Repository<CallLog>,
     @InjectRepository(TelecallingContact)
 private readonly telecallingContactRepository: Repository<TelecallingContact>,
+@InjectRepository(Meeting)
+private readonly meetingRepository: Repository<Meeting>,
 
     @InjectRepository(Lead)
     private readonly leadRepository: Repository<Lead>,
@@ -1369,11 +1372,7 @@ const location = this.getMappedValue(row, ['location', 'site_location', 'place']
     const normalizedFilter = String(locationFilter || '').trim().toLowerCase();
     const normalizedView = String(view || 'active').toLowerCase();
 
-    if (!normalizedFilter) {
-      throw new BadRequestException(
-        'City / address / location filter is required',
-      );
-    }
+    
 
     if (!assignCount || Number.isNaN(Number(assignCount)) || assignCount <= 0) {
       throw new BadRequestException('Valid assign count is required');
@@ -1392,19 +1391,23 @@ const location = this.getMappedValue(row, ['location', 'site_location', 'place']
     }
 
     const qb = this.contactRepository
-      .createQueryBuilder('contact')
-      .orderBy('contact.createdAt', 'DESC');
+  .createQueryBuilder('contact')
+  .where('contact.isInStorage = true') // ✅ REQUIRED
+  .orderBy('contact.createdAt', 'DESC');
 
-    this.applyViewRestrictionsToContactQuery(qb, user, normalizedView);
+this.applyViewRestrictionsToContactQuery(qb, user, normalizedView);
 
-    qb.andWhere(
-      `(
-        LOWER(COALESCE(contact.city, '')) LIKE :filter
-        OR LOWER(COALESCE(contact.address, '')) LIKE :filter
-        OR LOWER(COALESCE(contact.location, '')) LIKE :filter
-      )`,
-      { filter: `%${normalizedFilter}%` },
-    );
+if (normalizedFilter) {
+  qb.andWhere(
+    `(
+      LOWER(COALESCE(contact.city, '')) LIKE :filter
+      OR LOWER(COALESCE(contact.zone, '')) LIKE :filter
+      OR LOWER(COALESCE(contact.address, '')) LIKE :filter
+      OR LOWER(COALESCE(contact.location, '')) LIKE :filter
+    )`,
+    { filter: `%${normalizedFilter}%` },
+  );
+}
 
     const contacts = await qb.getMany();
 
@@ -1576,6 +1579,144 @@ const location = this.getMappedValue(row, ['location', 'site_location', 'place']
       lead: savedLead,
     };
   }
+
+  async convertContactToMeeting(
+  id: number,
+  meetingManagerId: number,
+  user: any,
+) {
+  const contact = await this.contactRepository.findOne({
+    where: { id },
+  });
+
+  if (!contact) {
+    throw new NotFoundException('Telecalling contact not found');
+  }
+
+  if (this.hasRole(user, 'TELECALLING_ASSISTANT' as any)) {
+    if (contact.reviewAssignedTo !== user.id) {
+      throw new ForbiddenException('Not allowed to convert this contact');
+    }
+  }
+
+  if (!meetingManagerId || Number.isNaN(Number(meetingManagerId))) {
+    throw new BadRequestException('Meeting manager is required');
+  }
+
+  const meetingManager = await this.userRepository.findOne({
+    where: { id: meetingManagerId },
+  });
+
+  if (!meetingManager) {
+    throw new NotFoundException('Meeting manager not found');
+  }
+
+  const managerRoles: UserRole[] = Array.isArray(meetingManager.roles)
+    ? (meetingManager.roles as UserRole[])
+    : [];
+
+  if (!managerRoles.includes(UserRole.MEETING_MANAGER)) {
+    throw new BadRequestException(
+      'Selected user must have MEETING_MANAGER role',
+    );
+  }
+
+   const normalizedPhone = this.normalizePhone(contact.phone);
+
+  let lead = await this.leadRepository.findOne({
+  where: { phone: normalizedPhone },
+});
+
+if (!lead) {
+  const createdLead = await this.leadRepository.save({
+    name: contact.name,
+    phone: normalizedPhone,
+    city: contact.city || '',
+    address: contact.address || contact.location || contact.city || '',
+    source: 'TELECALLING',
+    assignedTo: meetingManager.id,
+    createdBy: user.id,
+    createdByName: user.name,
+    status: LeadStatus.NEW,
+  } as any);
+
+  lead = createdLead;
+} else {
+  lead.assignedTo = meetingManager.id;
+  lead.remarks = lead.remarks
+    ? `${lead.remarks}\nMeeting reassigned by ${user.name}`
+    : `Meeting reassigned by ${user.name}`;
+
+  const updatedLead = await this.leadRepository.save(lead);
+  lead = updatedLead;
+}
+
+if (!lead) {
+  throw new BadRequestException('Unable to create or load lead');
+}
+
+  let existingMeeting = await this.meetingRepository
+    .createQueryBuilder('meeting')
+    .leftJoinAndSelect('meeting.lead', 'lead')
+    .where('lead.id = :leadId', { leadId: lead.id })
+    .orderBy('meeting.createdAt', 'DESC')
+    .getOne();
+
+  if (existingMeeting) {
+    existingMeeting.assignedTo = meetingManager.id;
+    existingMeeting.assignedToName = meetingManager.name;
+    existingMeeting.notes = `Reassigned from telecalling contact by ${user.name}`;
+    existingMeeting.scheduledAt = new Date();
+
+    await this.meetingRepository.save(existingMeeting);
+  } else {
+    await this.meetingRepository.save({
+      lead: { id: lead.id },
+      customerName: contact.name || 'Unknown',
+      mobile: normalizedPhone,
+      address: contact.address || contact.location || contact.city || '',
+      assignedTo: meetingManager.id,
+      assignedToName: meetingManager.name,
+      meetingCategory: 'COMPANY_MEETING',
+      status: 'SCHEDULED',
+      notes: `Converted from telecalling contact by ${user.name}`,
+      scheduledAt: new Date(),
+      createdBy: user.id,
+      createdByName: user.name,
+    } as any);
+  }
+
+  contact.convertedToLead = true;
+  contact.status = ContactStatus.CONVERTED;
+  contact.phone = normalizedPhone;
+  contact.remarks = contact.remarks
+    ? `${contact.remarks}\nConverted/reassigned to meeting by ${user.name}`
+    : `Converted/reassigned to meeting by ${user.name}`;
+
+  await this.contactRepository.save(contact);
+
+  return {
+    message: existingMeeting
+      ? 'Meeting reassigned successfully'
+      : 'Contact converted to meeting successfully',
+    meetingManagerId: meetingManager.id,
+    meetingManagerName: meetingManager.name,
+    leadId: lead.id,
+  };
+}
+
+/* ✅ ADD THIS METHOD ABOVE transferContacts */
+async getTelecallerContactCount(userId: number) {
+  const count = await this.telecallingContactRepository.count({
+    where: {
+      assignedTo: userId,
+      isInStorage: false,
+    },
+  });
+
+  return { count };
+}
+
   async transferContacts(body: {
   fromUserId: number;
   toUserId: number;
