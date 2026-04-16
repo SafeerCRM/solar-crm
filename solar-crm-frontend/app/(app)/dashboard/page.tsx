@@ -77,6 +77,14 @@ type TelecallerOption = {
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
+const getTodayDateString = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const PIE_COLORS = [
   '#2563eb',
   '#16a34a',
@@ -118,6 +126,16 @@ export default function DashboardPage() {
       }
     }
   }, []);
+
+    useEffect(() => {
+    if (!currentUser) return;
+
+    if (!monthFilter && !fromDateFilter && !toDateFilter) {
+      const today = getTodayDateString();
+      setFromDateFilter(today);
+      setToDateFilter(today);
+    }
+  }, [currentUser, monthFilter, fromDateFilter, toDateFilter]);
 
   const userRoles = useMemo(() => {
     if (Array.isArray(currentUser?.roles)) return currentUser.roles;
@@ -176,9 +194,9 @@ export default function DashboardPage() {
             params,
             headers: getAuthHeaders(),
           }),
-          axios.get(`${apiBaseUrl}/telecalling/performance`, {
-            headers: getAuthHeaders(),
-          }),
+                    axios.get(`${apiBaseUrl}/telecalling/performance`, {
+  headers: getAuthHeaders(),
+}),
           axios.get(`${apiBaseUrl}/leads/hot`, {
             headers: getAuthHeaders(),
           }),
@@ -254,17 +272,46 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser, canChooseTelecaller]);
 
+    useEffect(() => {
+    if (!currentUser) return;
+
+    const now = new Date();
+    const nextMidnight = new Date(now);
+    nextMidnight.setHours(24, 0, 5, 0);
+
+    const timeoutMs = nextMidnight.getTime() - now.getTime();
+
+    const timer = window.setTimeout(() => {
+      const today = getTodayDateString();
+
+      // Only auto-roll the dashboard forward when it is in single-day mode.
+      if (!monthFilter && fromDateFilter && toDateFilter && fromDateFilter === toDateFilter) {
+        setFromDateFilter(today);
+        setToDateFilter(today);
+
+        setTimeout(() => {
+          fetchDashboardData();
+          fetchContactsSummary();
+        }, 0);
+      }
+    }, timeoutMs);
+
+    return () => window.clearTimeout(timer);
+  }, [currentUser, monthFilter, fromDateFilter, toDateFilter]);
+
   const handleApplyFilters = async () => {
     await Promise.all([fetchDashboardData(), fetchContactsSummary()]);
   };
 
-  const handleClearFilters = async () => {
+    const handleClearFilters = async () => {
+    const today = getTodayDateString();
+
     setZoneFilter('');
     setCityFilter('');
     setTelecallerFilter('');
     setMonthFilter('');
-    setFromDateFilter('');
-    setToDateFilter('');
+    setFromDateFilter(today);
+    setToDateFilter(today);
 
     setTimeout(() => {
       fetchDashboardData();

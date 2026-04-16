@@ -781,6 +781,7 @@ setSelectedAssistantId(reviewAssignedTo ? String(reviewAssignedTo) : '');
                 value={addCallTimeValue}
                 onChange={updateAddCallTimePart}
                 ampm
+                ampmInClock
                 slotProps={{
                   textField: {
                     fullWidth: true,
@@ -896,6 +897,7 @@ setSelectedAssistantId(reviewAssignedTo ? String(reviewAssignedTo) : '');
                             value={editCallTimeValue}
                             onChange={updateEditCallTimePart}
                             ampm
+                            ampmInClock
                             slotProps={{
                               textField: {
                                 fullWidth: true,

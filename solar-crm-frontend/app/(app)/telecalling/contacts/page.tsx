@@ -112,6 +112,7 @@ export default function TelecallingContactsPage() {
   const [autoCallQueue, setAutoCallQueue] = useState<Contact[]>([]);
   const [autoCallIndex, setAutoCallIndex] = useState(0);
   const [countdown, setCountdown] = useState(0);
+  const [processedAutoCallIds, setProcessedAutoCallIds] = useState<number[]>([]);
 
   const [quickCallModal, setQuickCallModal] = useState<QuickCallModalState>({
     isOpen: false,
@@ -119,6 +120,8 @@ export default function TelecallingContactsPage() {
   });
   const [lastCalledContact, setLastCalledContact] = useState<Contact | null>(null);
   const [quickCallSubmitting, setQuickCallSubmitting] = useState(false);
+  const [callInitiated, setCallInitiated] = useState(false);
+  const [hasLeftAppForCall, setHasLeftAppForCall] = useState(false);
   const [quickCallNotes, setQuickCallNotes] = useState('');
   const [quickCallNextFollowUpDate, setQuickCallNextFollowUpDate] = useState('');
   const [quickCallRecordingUrl, setQuickCallRecordingUrl] = useState('');
@@ -152,13 +155,14 @@ export default function TelecallingContactsPage() {
     }
   };
 
-  const stopAutoCall = () => {
+    const stopAutoCall = () => {
     clearAutoTimers();
     setIsAutoCalling(false);
     setIsPaused(false);
     setAutoCallQueue([]);
     setAutoCallIndex(0);
     setCountdown(0);
+    setProcessedAutoCallIds([]);
     setMessage('Auto call stopped.');
   };
 
@@ -232,10 +236,12 @@ export default function TelecallingContactsPage() {
     };
   }, []);
 
-  useEffect(() => {
+    useEffect(() => {
     const openQuickCallModalAfterReturn = () => {
+      if (!callInitiated || !hasLeftAppForCall || !lastCalledContact) return;
+
       setQuickCallModal((prev) => {
-        if (!lastCalledContact || prev.isOpen) return prev;
+        if (prev.isOpen) return prev;
 
         return {
           ...prev,
@@ -243,6 +249,9 @@ export default function TelecallingContactsPage() {
           contact: prev.contact ?? lastCalledContact,
         };
       });
+
+      setCallInitiated(false);
+      setHasLeftAppForCall(false);
     };
 
     const cleanups: Array<() => void | Promise<void>> = [];
@@ -256,7 +265,13 @@ export default function TelecallingContactsPage() {
             const stateHandle = await CapacitorApp.addListener(
               'appStateChange',
               ({ isActive }) => {
-                if (!isCancelled && isActive) {
+                if (isCancelled) return;
+
+                if (!isActive && callInitiated) {
+                  setHasLeftAppForCall(true);
+                }
+
+                if (isActive) {
                   openQuickCallModalAfterReturn();
                 }
               },
@@ -285,11 +300,20 @@ export default function TelecallingContactsPage() {
         };
       }
 
+      const handleBlur = () => {
+        if (callInitiated) {
+          setHasLeftAppForCall(true);
+        }
+      };
+
       const handleFocus = () => {
         openQuickCallModalAfterReturn();
       };
 
+      window.addEventListener('blur', handleBlur);
       window.addEventListener('focus', handleFocus);
+
+      cleanups.push(() => window.removeEventListener('blur', handleBlur));
       cleanups.push(() => window.removeEventListener('focus', handleFocus));
     }
 
@@ -298,7 +322,7 @@ export default function TelecallingContactsPage() {
         void cleanup();
       });
     };
-  }, [lastCalledContact]);
+  }, [lastCalledContact, callInitiated, hasLeftAppForCall]);
 
   const filteredContacts = useMemo(() => {
     return contacts.filter((c) => {
@@ -360,7 +384,7 @@ const updateQuickCallTimePart = (newTime: Dayjs | null) => {
 
   setQuickCallNextFollowUpDate(merged.format('YYYY-MM-DDTHH:mm'));
 };
-      const startQuickCall = async (contact: Contact) => {
+        const startQuickCall = async (contact: Contact) => {
     try {
       const res = await axios.post(
         `${backendUrl}/telecalling/contacts/${contact.id}/quick-call/start`,
@@ -380,6 +404,9 @@ const updateQuickCallTimePart = (newTime: Dayjs | null) => {
         callLogId,
       });
 
+      setCallInitiated(true);
+      setHasLeftAppForCall(false);
+
       if (Capacitor.isNativePlatform()) {
         const plugin = (window as any).Capacitor?.Plugins?.CallControl || CallControl;
         await plugin.placeCall({ number: contact.phone });
@@ -391,14 +418,16 @@ const updateQuickCallTimePart = (newTime: Dayjs | null) => {
     } catch (err) {
       console.error(err);
       setMessage('Failed to start call');
+      setCallInitiated(false);
+      setHasLeftAppForCall(false);
     }
   };
 
-  const startCountdownThenCall = (nextContact: Contact) => {
+    const startCountdownThenCall = (nextContact: Contact) => {
     clearAutoTimers();
-    setCountdown(3);
+    setCountdown(6);
 
-    let time = 3;
+    let time = 6;
 
     countdownIntervalRef.current = setInterval(() => {
       time -= 1;
@@ -415,33 +444,45 @@ const updateQuickCallTimePart = (newTime: Dayjs | null) => {
     resumeTimeoutRef.current = setTimeout(async () => {
       if (isPaused) return;
       await startQuickCall(nextContact);
-    }, 3000);
+    }, 6000);
   };
 
-  const callNextContact = async () => {
-  if (isPaused) return;
+    const callNextContact = async () => {
+    if (isPaused) return;
 
-  setAutoCallIndex((prevIndex) => {
-    const nextIndex = prevIndex + 1;
+    setAutoCallIndex((prevIndex) => {
+      let nextIndex = prevIndex + 1;
 
-    if (nextIndex >= autoCallQueue.length) {
-      stopAutoCall();
-      setMessage('Auto call completed.');
-      return prevIndex;
-    }
+      while (
+        nextIndex < autoCallQueue.length &&
+        processedAutoCallIds.includes(autoCallQueue[nextIndex]?.id)
+      ) {
+        nextIndex += 1;
+      }
 
-    const nextContact = autoCallQueue[nextIndex];
+      if (nextIndex >= autoCallQueue.length) {
+        stopAutoCall();
+        setMessage('Auto call completed.');
+        return prevIndex;
+      }
 
-    if (nextContact) {
-      startCountdownThenCall(nextContact);
-    }
+      const nextContact = autoCallQueue[nextIndex];
 
-    return nextIndex;
-  });
-};
+      if (nextContact) {
+        startCountdownThenCall(nextContact);
+      }
 
-  const startAutoCall = async () => {
+      return nextIndex;
+    });
+  };
+
+    const startAutoCall = async () => {
     try {
+      if (isAutoCalling) {
+        setMessage('Auto call is already running.');
+        return;
+      }
+
       const res = await axios.get(`${backendUrl}/telecalling/contacts/all-ids`, {
         params: {
           view: viewMode,
@@ -458,13 +499,16 @@ const updateQuickCallTimePart = (newTime: Dayjs | null) => {
         return;
       }
 
+      const firstContact = validQueue[0];
+
       setIsAutoCalling(true);
       setIsPaused(false);
       setAutoCallQueue(validQueue);
       setAutoCallIndex(0);
       setCountdown(0);
+      setProcessedAutoCallIds(firstContact?.id ? [firstContact.id] : []);
 
-      await startQuickCall(validQueue[0]);
+      await startQuickCall(firstContact);
     } catch (err) {
       console.error(err);
       setMessage('Failed to start auto call.');
@@ -484,13 +528,22 @@ const updateQuickCallTimePart = (newTime: Dayjs | null) => {
     await callNextContact();
   };
 
-  const skipCurrentContact = async () => {
+    const skipCurrentContact = async () => {
     clearAutoTimers();
     setCountdown(0);
+
+    const currentContact = autoCallQueue[autoCallIndex];
+    if (currentContact?.id) {
+      setProcessedAutoCallIds((prev) => {
+        if (prev.includes(currentContact.id)) return prev;
+        return [...prev, currentContact.id];
+      });
+    }
+
     await callNextContact();
   };
 
-  const resetQuickCallModal = () => {
+   const resetQuickCallModal = () => {
     setQuickCallModal({
       isOpen: false,
       contact: null,
@@ -501,6 +554,8 @@ const updateQuickCallTimePart = (newTime: Dayjs | null) => {
     setQuickCallNextFollowUpDate('');
     setQuickCallRecordingUrl('');
     setQuickCallSubmitting(false);
+    setCallInitiated(false);
+    setHasLeftAppForCall(false);
   };
 
   const handleQuickCallModalClose = () => {
@@ -539,6 +594,13 @@ const updateQuickCallTimePart = (newTime: Dayjs | null) => {
         },
         { headers: getAuthHeaders() },
       );
+
+            if (quickCallModal.contact?.id) {
+        setProcessedAutoCallIds((prev) => {
+          if (prev.includes(quickCallModal.contact!.id)) return prev;
+          return [...prev, quickCallModal.contact!.id];
+        });
+      }
 
       setMessage(`Call saved as ${disposition.replaceAll('_', ' ')}`);
       resetQuickCallModal();
@@ -1201,6 +1263,7 @@ const transferContacts = async () => {
       value={quickCallTimeValue}
       onChange={updateQuickCallTimePart}
       ampm
+      ampmInClock
       slotProps={{
         textField: {
           fullWidth: true,

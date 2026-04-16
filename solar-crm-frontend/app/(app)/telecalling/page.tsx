@@ -50,6 +50,12 @@ type LatestContactCallInfo = {
   notes?: string;
   nextFollowUpDate?: string;
   updatedAt?: string;
+  recordingUrl?: string;
+};
+
+type LatestContactSummaryResponseItem = {
+  contact: ContactSummary;
+  latestCall?: LatestContactCallInfo;
 };
 
 type CallLog = {
@@ -296,157 +302,90 @@ export default function TelecallingPage() {
     }
   };
 
-  const fetchContactDataAndLatestHistory = async () => {
-  try {
-   // 🔥 Only fetch history when filter is applied
-const hasHistoryFilter =
-  !!nameFilter.trim() ||
-  !!phoneFilter.trim() ||
-  !!cityFilter.trim() ||
-  !!leadPotentialFilter ||
-  !!callResultFilter;
+    const fetchContactDataAndLatestHistory = async () => {
+    try {
+      const hasHistoryFilter =
+        !!nameFilter.trim() ||
+        !!phoneFilter.trim() ||
+        !!cityFilter.trim() ||
+        !!leadPotentialFilter ||
+        !!callResultFilter;
 
-if (!hasHistoryFilter) {
-  setMessage('Apply filter to load contact history');
-  setContactMap({});
-  setContactLatestCallMap({});
-  return;
-}
-
-const filteredCalls = calls.filter((call) => {
-  const contactId = call.contactId;
-  if (!contactId) return false;
-
-  const contact = contactMap[contactId];
-
-  const displayName = String(contact?.name || '').toLowerCase();
-  const displayPhone = String(contact?.phone || '').toLowerCase();
-  const displayCity = String(
-    contact?.city || contact?.address || contact?.location || '',
-  ).toLowerCase();
-
-  const effectiveStatus = String(
-    call.disposition || call.callStatus || '',
-  ).toUpperCase();
-
-  const effectiveLeadPotential = String(call.leadPotential || '').toUpperCase();
-
-  const matchesName =
-    !nameFilter.trim() ||
-    displayName.includes(nameFilter.trim().toLowerCase());
-
-  const matchesPhone =
-    !phoneFilter.trim() ||
-    displayPhone.includes(phoneFilter.trim().toLowerCase());
-
-  const matchesCity =
-    !cityFilter.trim() ||
-    displayCity.includes(cityFilter.trim().toLowerCase());
-
-  const matchesLeadPotential =
-    !leadPotentialFilter ||
-    effectiveLeadPotential === leadPotentialFilter.toUpperCase();
-
-  const matchesCallResult =
-    !callResultFilter ||
-    effectiveStatus === callResultFilter.toUpperCase();
-
-  return (
-    matchesName &&
-    matchesPhone &&
-    matchesCity &&
-    matchesLeadPotential &&
-    matchesCallResult
-  );
-});
-
-const uniqueContactIds = Array.from(
-  new Set(
-    filteredCalls
-      .map((call) => call.contactId)
-      .filter((id): id is number => typeof id === 'number' && id > 0),
-  ),
-);
-
-if (uniqueContactIds.length === 0) {
-  setContactMap({});
-  setContactLatestCallMap({});
-  return;
-}
-
-    const results = await Promise.all(
-      uniqueContactIds.map(async (id) => {
-        try {
-          const relatedCall = calls.find((call) => call.contactId === id);
-
-          if (isTelecaller && user?.id) {
-            const assignedToMe =
-              relatedCall?.reviewAssignedTo === user.id ||
-              relatedCall?.reviewAssignedTo == null;
-
-            if (!assignedToMe) {
-              return null;
-            }
-          }
-
-          const res = await axios.get<ContactWorkHistoryResponse>(
-            `${backendUrl}/telecalling/contacts/${id}/work-history`,
-            {
-              headers: getAuthHeaders(),
-            },
-          );
-
-          return res.data;
-        } catch (error: any) {
-          if (error?.response?.status === 403) {
-            return null;
-          }
-
-          console.error(`Failed to fetch contact work history for ${id}:`, error);
-          return null;
-        }
-      }),
-    );
-
-    const nextContactMap: Record<number, ContactSummary> = {};
-    const nextLatestMap: Record<number, LatestContactCallInfo> = {};
-
-    results.forEach((item) => {
-      if (!item?.contact?.id) return;
-
-      nextContactMap[item.contact.id] = item.contact;
-
-      const latestContactCall = (item.timeline || [])
-        .filter((entry) => entry.type === 'CONTACT_CALL')
-        .sort(
-          (a, b) =>
-            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-        )[0];
-
-      if (latestContactCall) {
-        nextLatestMap[item.contact.id] = {
-          callStatus: String(
-            latestContactCall.meta?.callStatus || latestContactCall.title || '',
-          )
-            .replace(/^Call\s+/i, '')
-            .trim(),
-          notes: latestContactCall.description || '',
-          nextFollowUpDate: latestContactCall.meta?.nextFollowUpDate
-            ? String(latestContactCall.meta.nextFollowUpDate)
-            : undefined,
-          updatedAt: latestContactCall.timestamp,
-        };
+      if (!hasHistoryFilter) {
+        setMessage('Apply filter to load contact history');
+        setContactMap({});
+        setContactLatestCallMap({});
+        return;
       }
-    });
 
-    setContactMap(nextContactMap);
-    setContactLatestCallMap(nextLatestMap);
-  } catch (error) {
-    console.error('Failed to fetch contact summaries/latest history:', error);
-    setContactMap({});
-    setContactLatestCallMap({});
-  }
-};
+      const filteredCalls = calls.filter((call) => {
+        const contactId = call.contactId;
+        if (!contactId) return false;
+
+        const effectiveStatus = String(
+          call.disposition || call.callStatus || '',
+        ).toUpperCase();
+
+        const effectiveLeadPotential = String(call.leadPotential || '').toUpperCase();
+
+        const matchesLeadPotential =
+          !leadPotentialFilter ||
+          effectiveLeadPotential === leadPotentialFilter.toUpperCase();
+
+        const matchesCallResult =
+          !callResultFilter ||
+          effectiveStatus === callResultFilter.toUpperCase();
+
+        return matchesLeadPotential && matchesCallResult;
+      });
+
+      const uniqueContactIds = Array.from(
+        new Set(
+          filteredCalls
+            .map((call) => call.contactId)
+            .filter((id): id is number => typeof id === 'number' && id > 0),
+        ),
+      );
+
+      if (uniqueContactIds.length === 0) {
+        setContactMap({});
+        setContactLatestCallMap({});
+        return;
+      }
+
+      const res = await axios.post<LatestContactSummaryResponseItem[]>(
+        `${backendUrl}/telecalling/contacts/latest-summary`,
+        { contactIds: uniqueContactIds },
+        { headers: getAuthHeaders() },
+      );
+
+      const rows = Array.isArray(res.data) ? res.data : [];
+
+      const nextContactMap: Record<number, ContactSummary> = {};
+      const nextLatestMap: Record<number, LatestContactCallInfo> = {};
+
+      rows.forEach((item) => {
+        if (!item?.contact?.id) return;
+
+        nextContactMap[item.contact.id] = item.contact;
+
+        nextLatestMap[item.contact.id] = {
+          callStatus: item.latestCall?.callStatus || '',
+          notes: item.latestCall?.notes || '',
+          nextFollowUpDate: item.latestCall?.nextFollowUpDate,
+          updatedAt: item.latestCall?.updatedAt,
+          recordingUrl: item.latestCall?.recordingUrl,
+        };
+      });
+
+      setContactMap(nextContactMap);
+      setContactLatestCallMap(nextLatestMap);
+    } catch (error) {
+      console.error('Failed to fetch contact summaries/latest history:', error);
+      setContactMap({});
+      setContactLatestCallMap({});
+    }
+  };
 
   const goToNextLead = () => {
     if (!leadId || leads.length === 0) return;
@@ -687,6 +626,7 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
           effectiveNextFollowUpDate:
             latestContactCall?.nextFollowUpDate || call.nextFollowUpDate,
           effectiveTimestamp: latestContactCall?.updatedAt || call.createdAt,
+         recordingUrl: latestContactCall?.recordingUrl || call.recordingUrl,
           reviewAssignedLabel:
             call.reviewAssignedToName || contact?.reviewAssignedToName || '-',
           isConvertedToLead: Boolean(contact?.convertedToLead),
@@ -777,10 +717,10 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
   ]);
 
   return (
-    <div className="p-4 md:p-6">
+    <div className="overflow-x-hidden p-4 md:p-6">
       {canLogCalls && !isAssistant && (
         <div className="mb-6 rounded-2xl bg-white p-4 shadow md:p-6">
-          <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between overflow-hidden">
             <h1 className="text-2xl font-bold">Telecalling</h1>
 
             <Link
@@ -873,17 +813,52 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
     />
 
     <MobileTimePicker
-      label="Follow-up Time"
-      value={followUpTimeValue}
-      onChange={updateFollowUpTimePart}
-      ampm
-      slotProps={{
-        textField: {
-          fullWidth: true,
-          className: 'w-full',
-        },
-      }}
-    />
+  label="Follow-up Time"
+  value={followUpTimeValue}
+  onChange={updateFollowUpTimePart}
+  ampm
+  ampmInClock
+  slotProps={{
+    textField: {
+      fullWidth: true,
+      className: 'w-full',
+    },
+  }}
+/>
+
+    <div className="mt-2 flex items-center gap-2">
+  <button
+    type="button"
+    className={`px-3 py-1 rounded-lg border ${
+      followUpTimeValue && followUpTimeValue.hour() < 12
+        ? 'bg-blue-600 text-white'
+        : 'bg-white'
+    }`}
+    onClick={() => {
+      if (!followUpTimeValue) return;
+      updateFollowUpTimePart(followUpTimeValue.hour(followUpTimeValue.hour() % 12));
+    }}
+  >
+    AM
+  </button>
+
+  <button
+    type="button"
+    className={`px-3 py-1 rounded-lg border ${
+      followUpTimeValue && followUpTimeValue.hour() >= 12
+        ? 'bg-blue-600 text-white'
+        : 'bg-white'
+    }`}
+    onClick={() => {
+      if (!followUpTimeValue) return;
+      updateFollowUpTimePart(
+        followUpTimeValue.hour((followUpTimeValue.hour() % 12) + 12)
+      );
+    }}
+  >
+    PM
+  </button>
+</div>
   </div>
 </LocalizationProvider>
 
@@ -931,7 +906,7 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
               : 'Call History'}
           </h2>
 
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-6">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-6">
             <input
               type="text"
               value={nameFilter}
@@ -1011,19 +986,19 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
           <p>No calls found</p>
         ) : (
           <>
-            <div className="space-y-4 md:hidden">
+            <div className="space-y-4 overflow-x-hidden md:hidden">
               {filteredCalls.map((call) => (
                 <div
-                  key={call.personKey}
-                  className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"
-                >
-                  <div className="mb-3 flex items-start justify-between gap-3">
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900">
+  key={call.personKey}
+  className="w-full max-w-full overflow-hidden rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"
+>
+                  <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="break-words text-lg font-semibold text-gray-900">
                         {call.displayName}
                       </h3>
-                      <p className="text-sm text-gray-600">{call.displayPhone}</p>
-                      <p className="text-sm text-gray-500">{call.displayCity}</p>
+                      <p className="break-all text-sm text-gray-600">{call.displayPhone}</p>
+                      <p className="break-words text-sm text-gray-500">{call.displayCity}</p>
                     </div>
 
                     <div className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
@@ -1042,9 +1017,9 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
                       <p className="font-medium">{call.reviewAssignedLabel || '-'}</p>
                     </div>
 
-                    <div className="rounded-xl bg-gray-50 p-3 col-span-2">
+                    <div className="col-span-2 rounded-xl bg-gray-50 p-3 overflow-hidden">
                       <p className="text-xs text-gray-500">Latest Notes</p>
-                      <p className="font-medium">{call.effectiveNotes || '-'}</p>
+                      <p className="break-words font-medium">{call.effectiveNotes || '-'}</p>
                     </div>
 
                     <div className="rounded-xl bg-gray-50 p-3">
@@ -1103,12 +1078,12 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
                     </div>
                   )}
 
-                  <div className="mb-3 flex flex-wrap gap-2">
+                  <div className="mb-3 flex flex-wrap gap-2 overflow-hidden">
                     {!isAssistant && call.displayPhone !== '-' && (
                       <button
                         type="button"
                         onClick={() => handleCallback(call)}
-                        className="rounded-xl bg-green-600 px-4 py-2 text-white"
+                        className="w-full rounded-xl bg-green-600 px-4 py-2 text-white sm:w-auto"
                       >
                         Callback
                       </button>
@@ -1120,7 +1095,7 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
                         onClick={() =>
                           router.push(`/telecalling/contacts/${call.contactId}`)
                         }
-                        className="rounded-xl bg-purple-600 px-4 py-2 text-white"
+                        className="w-full rounded-xl bg-purple-600 px-4 py-2 text-white sm:w-auto"
                       >
                         Open Contact
                       </button>
@@ -1129,7 +1104,7 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
                     {call.rowType === 'LEAD' && call.leadId && (
                       <Link
                         href={`/leads/${call.leadId}`}
-                        className="rounded-xl bg-blue-600 px-4 py-2 text-white"
+                        className="w-full rounded-xl bg-blue-600 px-4 py-2 text-white sm:w-auto"
                       >
                         Open Lead
                       </Link>
@@ -1155,7 +1130,7 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
                         href={call.recordingUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="rounded-xl bg-gray-800 px-4 py-2 text-white"
+                        className="w-full rounded-xl bg-gray-800 px-4 py-2 text-white sm:w-auto"
                       >
                         Recording
                       </a>
@@ -1163,7 +1138,7 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
                   </div>
 
                   {canReview && (
-                    <div className="space-y-2 rounded-xl bg-gray-50 p-3">
+                    <div className="space-y-2 overflow-hidden rounded-xl bg-gray-50 p-3">
                       <select
                         value={reviewStatusMap[call.id] || 'PENDING'}
                         onChange={(e) =>
@@ -1205,7 +1180,7 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
               ))}
             </div>
 
-            <div className="hidden overflow-x-auto md:block">
+            <div className="hidden overflow-x-auto lg:block">
               <table className="w-full border-collapse text-sm">
                 <thead>
                   <tr>
@@ -1235,12 +1210,12 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
                 <tbody>
                   {filteredCalls.map((call) => (
                     <tr key={call.personKey}>
-                      <td className="border p-2">{call.displayName}</td>
-                      <td className="border p-2">{call.displayPhone}</td>
-                      <td className="border p-2">{call.displayCity}</td>
+                      <td className="border p-2 break-words">{call.displayName}</td>
+                      <td className="border p-2 break-all">{call.displayPhone}</td>
+                      <td className="border p-2 break-words">{call.displayCity}</td>
                       <td className="border p-2">{call.effectiveStatus}</td>
                       <td className="border p-2">{call.leadPotential || '-'}</td>
-                      <td className="border p-2">{call.effectiveNotes || '-'}</td>
+                      <td className="border p-2 break-words">{call.effectiveNotes || '-'}</td>
 
                       <td className="border p-2">
                         {call.recordingUrl ? (
