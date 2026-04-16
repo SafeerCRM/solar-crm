@@ -243,8 +243,8 @@ private readonly meetingRepository: Repository<Meeting>,
       lead.status = LeadStatus.CONTACTED;
     }
 
-    if (data.nextFollowUpDate) {
-      lead.nextFollowUpDate = data.nextFollowUpDate;
+    if (lead.nextFollowUpDate) {
+      lead.nextFollowUpDate = lead.nextFollowUpDate;
     }
 
     if (data.callNotes) {
@@ -698,7 +698,7 @@ const location = this.getMappedValue(row, ['location', 'site_location', 'place']
     };
   }
 
-  async getContacts(
+    async getContacts(
     user: any,
     page = 1,
     limit = 50,
@@ -729,10 +729,24 @@ const location = this.getMappedValue(row, ['location', 'site_location', 'place']
       qb.andWhere(
         `(
           LOWER(COALESCE(contact.city, '')) LIKE :filter
+          OR LOWER(COALESCE(contact.zone, '')) LIKE :filter
           OR LOWER(COALESCE(contact.address, '')) LIKE :filter
           OR LOWER(COALESCE(contact.location, '')) LIKE :filter
         )`,
         { filter: `%${normalizedFilter}%` },
+      );
+    }
+
+    // For active view only, exclude contacts that already have any saved outcome.
+    // Keep contacts that only have INITIATED logs, because they are not completed yet.
+    if (normalizedView !== 'storage') {
+      qb.andWhere(
+        `contact.id NOT IN (
+          SELECT DISTINCT cl."contactId"
+          FROM call_log cl
+          WHERE cl."contactId" IS NOT NULL
+            AND UPPER(COALESCE(cl."callStatus", '')) <> 'INITIATED'
+        )`,
       );
     }
 
@@ -747,47 +761,58 @@ const location = this.getMappedValue(row, ['location', 'site_location', 'place']
     };
   }
 
-  async getAllContactIdsForAutoCall(
-  user: any,
-  view: string,
-  locationFilter: string,
-) {
-  const normalizedView = String(view || 'active').toLowerCase();
-  const normalizedFilter = String(locationFilter || '').trim().toLowerCase();
+    async getAllContactIdsForAutoCall(
+    user: any,
+    view: string,
+    locationFilter: string,
+  ) {
+    const normalizedView = String(view || 'active').toLowerCase();
+    const normalizedFilter = String(locationFilter || '').trim().toLowerCase();
 
-  const qb = this.contactRepository
-    .createQueryBuilder('contact')
-    .orderBy('contact.createdAt', 'DESC');
+    const qb = this.contactRepository
+      .createQueryBuilder('contact')
+      .orderBy('contact.createdAt', 'DESC');
 
-  // reuse existing restriction logic
-  this.applyViewRestrictionsToContactQuery(qb, user, normalizedView);
+    this.applyViewRestrictionsToContactQuery(qb, user, normalizedView);
 
-  if (normalizedFilter) {
+    if (normalizedFilter) {
+      qb.andWhere(
+        `(
+          LOWER(COALESCE(contact.city, '')) LIKE :filter
+          OR LOWER(COALESCE(contact.zone, '')) LIKE :filter
+          OR LOWER(COALESCE(contact.address, '')) LIKE :filter
+          OR LOWER(COALESCE(contact.location, '')) LIKE :filter
+        )`,
+        { filter: `%${normalizedFilter}%` },
+      );
+    }
+
+    // Exclude contacts that already have any completed/saved quick call outcome.
+    // We keep contacts that only have INITIATED logs, because client asked to remove
+    // from autocall queue only after a saved outcome.
     qb.andWhere(
-      `(
-        LOWER(COALESCE(contact.city, '')) LIKE :filter
-        OR LOWER(COALESCE(contact.zone, '')) LIKE :filter
-        OR LOWER(COALESCE(contact.address, '')) LIKE :filter
-        OR LOWER(COALESCE(contact.location, '')) LIKE :filter
+      `contact.id NOT IN (
+        SELECT DISTINCT cl."contactId"
+        FROM call_log cl
+        WHERE cl."contactId" IS NOT NULL
+          AND UPPER(COALESCE(cl."callStatus", '')) <> 'INITIATED'
       )`,
-      { filter: `%${normalizedFilter}%` },
     );
+
+    const contacts = await qb
+      .select([
+        'contact.id',
+        'contact.name',
+        'contact.phone',
+        'contact.city',
+        'contact.zone',
+        'contact.address',
+        'contact.location',
+      ])
+      .getMany();
+
+    return contacts.filter((c) => !!String(c.phone || '').trim());
   }
-
-  const contacts = await qb
-    .select([
-      'contact.id',
-      'contact.name',
-      'contact.phone',
-      'contact.city',
-      'contact.zone',
-      'contact.address',
-      'contact.location',
-    ])
-    .getMany();
-
-  return contacts.filter((c) => !!String(c.phone || '').trim());
-}
 
   async getContactFilterOptions(user: any) {
     const qb = this.contactRepository
@@ -896,6 +921,125 @@ const location = this.getMappedValue(row, ['location', 'site_location', 'place']
 
   async getContactById(id: number, user: any) {
     return this.getAccessibleContact(id, user);
+  }
+
+    async getLatestContactSummaries(contactIds: number[], user: any) {
+    const uniqueIds = Array.from(
+      new Set(
+        (Array.isArray(contactIds) ? contactIds : [])
+          .map((id) => Number(id))
+          .filter((id) => Number.isInteger(id) && id > 0),
+      ),
+    );
+
+    if (!uniqueIds.length) {
+      return [];
+    }
+
+    const contactQb = this.contactRepository
+      .createQueryBuilder('contact')
+      .where('contact.id IN (:...ids)', { ids: uniqueIds });
+
+    if (this.hasAnyRole(user, ['OWNER', 'TELECALLING_MANAGER', 'PROJECT_MANAGER'])) {
+      // full access for these roles
+    } else if (this.hasAnyRole(user, ['TELECALLING_ASSISTANT' as any])) {
+      contactQb.andWhere('contact.reviewAssignedTo = :reviewAssignedTo', {
+        reviewAssignedTo: user.id,
+      });
+    } else if (this.hasAnyRole(user, ['TELECALLER'])) {
+      contactQb.andWhere('contact.assignedTo = :assignedTo', {
+        assignedTo: user.id,
+      });
+    } else {
+      throw new ForbiddenException('You do not have access to contact summaries');
+    }
+
+    const contacts = await contactQb.getMany();
+
+    if (!contacts.length) {
+      return [];
+    }
+
+    const accessibleIds = contacts.map((contact) => contact.id);
+
+    const latestCallHistoryRows = await this.contactCallHistoryRepository
+      .createQueryBuilder('history')
+      .where('history.contactId IN (:...ids)', { ids: accessibleIds })
+      .orderBy('history.contactId', 'ASC')
+      .addOrderBy('history.updatedAt', 'DESC')
+      .addOrderBy('history.createdAt', 'DESC')
+      .getMany();
+
+    const latestHistoryMap = new Map<number, ContactCallHistory>();
+
+    for (const row of latestCallHistoryRows) {
+      if (!latestHistoryMap.has(row.contactId)) {
+        latestHistoryMap.set(row.contactId, row);
+      }
+    }
+
+    const latestCallLogRows = await this.callLogRepository
+      .createQueryBuilder('call')
+      .where('call.contactId IN (:...ids)', { ids: accessibleIds })
+      .andWhere(`UPPER(COALESCE(call.callStatus, '')) <> 'INITIATED'`)
+      .orderBy('call.contactId', 'ASC')
+      .addOrderBy('call.providerUpdatedAt', 'DESC')
+      .addOrderBy('call.createdAt', 'DESC')
+      .getMany();
+
+    const latestCallLogMap = new Map<number, CallLog>();
+
+    for (const row of latestCallLogRows) {
+      if (!row.contactId) continue;
+      if (!latestCallLogMap.has(row.contactId)) {
+        latestCallLogMap.set(row.contactId, row);
+      }
+    }
+
+    return contacts.map((contact) => {
+      const latestHistory = latestHistoryMap.get(contact.id);
+      const latestCallLog = latestCallLogMap.get(contact.id);
+
+      return {
+        contact: {
+          id: contact.id,
+          name: contact.name,
+          phone: contact.phone,
+          city: contact.city,
+          address: contact.address,
+          location: contact.location,
+          convertedToLead: contact.convertedToLead,
+          reviewAssignedTo: contact.reviewAssignedTo,
+          reviewAssignedToName: contact.reviewAssignedToName,
+        },
+        latestCall: {
+          callStatus:
+            latestHistory?.callStatus ||
+            latestCallLog?.disposition ||
+            latestCallLog?.callStatus ||
+            '',
+          notes:
+            latestHistory?.notes ||
+            latestCallLog?.callNotes ||
+            '',
+          nextFollowUpDate: latestHistory?.nextFollowUpDate
+            ? latestHistory.nextFollowUpDate.toISOString()
+            : latestCallLog?.nextFollowUpDate
+            ? new Date(latestCallLog.nextFollowUpDate).toISOString()
+            : undefined,
+          updatedAt: latestHistory?.updatedAt
+            ? latestHistory.updatedAt.toISOString()
+            : latestHistory?.createdAt
+            ? latestHistory.createdAt.toISOString()
+            : latestCallLog?.providerUpdatedAt
+            ? new Date(latestCallLog.providerUpdatedAt).toISOString()
+            : latestCallLog?.createdAt
+            ? new Date(latestCallLog.createdAt).toISOString()
+            : undefined,
+          recordingUrl: latestCallLog?.recordingUrl || undefined,
+        },
+      };
+    });
   }
 
   async getContactWorkHistory(id: number, user: any) {
@@ -1221,6 +1365,45 @@ const location = this.getMappedValue(row, ['location', 'site_location', 'place']
     });
 
     await this.contactCallHistoryRepository.save(historyItem);
+
+    // ✅ CREATE FOLLOWUP IF REMINDER EXISTS
+// ✅ CREATE FOLLOWUP IF REMINDER EXISTS
+if (body.nextFollowUpDate) {
+  try {
+    let leadId: number | undefined;
+
+    const normalizedPhone = this.normalizePhone(contact.phone);
+
+    if (normalizedPhone) {
+      const lead = await this.leadRepository.findOne({
+        where: { phone: normalizedPhone },
+      });
+
+      if (lead) {
+        leadId = lead.id;
+      }
+    }
+
+    if (leadId) {
+      const followUp = this.followUpRepository.create({
+        leadId,
+        assignedTo: user?.id,
+        followUpType:
+          normalizedStatus === 'CALLBACK'
+            ? FollowUpType.CALLBACK
+            : FollowUpType.CALL,
+        note:
+          body.callNotes || 'Follow-up created from telecalling reminder',
+        followUpDate: new Date(body.nextFollowUpDate),
+        status: FollowUpStatus.PENDING,
+      });
+
+      await this.followUpRepository.save(followUp);
+    }
+  } catch (err) {
+    console.error('Followup creation failed:', err);
+  }
+}
 
     const existingRemarks = String(contact.remarks || '').trim();
     const summaryNote =

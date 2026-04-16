@@ -195,6 +195,18 @@ export class TelecallingController {
       user,
     );
   }
+
+     @Post('contacts/latest-summary')
+  getLatestContactSummaries(
+    @Body('contactIds') contactIds: number[],
+    @CurrentUser() user: any,
+  ) {
+    return this.telecallingService.getLatestContactSummaries(
+      Array.isArray(contactIds) ? contactIds.map(Number) : [],
+      user,
+    );
+  }
+
     @Get('contacts/:id/work-history')
   getContactWorkHistory(
     @Param('id', ParseIntPipe) id: number,

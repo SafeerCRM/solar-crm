@@ -51,7 +51,7 @@ export class DashboardService {
     return String(value || '').trim().toLowerCase();
   }
 
-  private getDateRange(filters: DashboardFilters) {
+    private getDateRange(filters: DashboardFilters) {
     if (filters.month) {
       const [year, month] = String(filters.month).split('-').map(Number);
       if (year && month) {
@@ -63,17 +63,23 @@ export class DashboardService {
 
     if (filters.fromDate || filters.toDate) {
       const start = filters.fromDate
-        ? new Date(`${filters.fromDate}T00:00:00.000Z`)
-        : new Date('2000-01-01T00:00:00.000Z');
+        ? new Date(`${filters.fromDate}T00:00:00`)
+        : new Date('2000-01-01T00:00:00');
 
       const end = filters.toDate
-        ? new Date(`${filters.toDate}T23:59:59.999Z`)
+        ? new Date(`${filters.toDate}T23:59:59.999`)
         : new Date();
 
       return { start, end };
     }
 
-    return null;
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
+
+    return { start, end };
   }
 
   private applyContactFilters(
@@ -136,7 +142,49 @@ export class DashboardService {
 
     return qb;
   }
-    async getSummary(
+
+    private applyLeadFilters(
+    qb: SelectQueryBuilder<Lead>,
+    filters: DashboardFilters,
+  ) {
+    if (filters.assignedTo) {
+      qb.andWhere('lead.assignedTo = :assignedTo', {
+        assignedTo: filters.assignedTo,
+      });
+    }
+
+    const dateRange = this.getDateRange(filters);
+    if (dateRange) {
+      qb.andWhere('lead.createdAt BETWEEN :start AND :end', {
+        start: dateRange.start,
+        end: dateRange.end,
+      });
+    }
+
+    return qb;
+  }
+
+  private applyFollowUpFilters(
+    qb: SelectQueryBuilder<FollowUp>,
+    filters: DashboardFilters,
+  ) {
+    if (filters.assignedTo) {
+      qb.andWhere('followUp.assignedTo = :assignedTo', {
+        assignedTo: filters.assignedTo,
+      });
+    }
+
+    const dateRange = this.getDateRange(filters);
+    if (dateRange) {
+      qb.andWhere('followUp.followUpDate BETWEEN :start AND :end', {
+        start: dateRange.start,
+        end: dateRange.end,
+      });
+    }
+
+    return qb;
+  }
+      async getSummary(
     filters: DashboardFilters = {},
     userRoles: string[] = [],
     currentUserId?: number,
@@ -150,117 +198,99 @@ export class DashboardService {
       assignedTo: effectiveAssignedTo,
     };
 
-    const leadWhere =
-      effectiveAssignedTo && isOwnOnly
-        ? { assignedTo: effectiveAssignedTo }
-        : effectiveAssignedTo
-        ? { assignedTo: effectiveAssignedTo }
-        : {};
+    const dateRange = this.getDateRange(effectiveFilters);
 
-    const callWhere =
-      effectiveAssignedTo && isOwnOnly
-        ? { telecallerId: effectiveAssignedTo }
-        : effectiveAssignedTo
-        ? { telecallerId: effectiveAssignedTo }
-        : {};
+    const totalLeadsQb = this.leadRepository
+      .createQueryBuilder('lead')
+      .where('1=1');
+    this.applyLeadFilters(totalLeadsQb, effectiveFilters);
+    const totalLeads = await totalLeadsQb.getCount();
 
-    const followupWhereBase =
-      effectiveAssignedTo && isOwnOnly
-        ? { assignedTo: effectiveAssignedTo }
-        : effectiveAssignedTo
-        ? { assignedTo: effectiveAssignedTo }
-        : {};
+    const newLeadsQb = this.leadRepository
+      .createQueryBuilder('lead')
+      .where('lead.status = :status', { status: LeadStatus.NEW });
+    this.applyLeadFilters(newLeadsQb, effectiveFilters);
+    const newLeads = await newLeadsQb.getCount();
 
-    const totalLeads = await this.leadRepository.count({
-      where: leadWhere,
-    });
+    const interestedLeadsQb = this.leadRepository
+      .createQueryBuilder('lead')
+      .where('lead.status = :status', { status: LeadStatus.INTERESTED });
+    this.applyLeadFilters(interestedLeadsQb, effectiveFilters);
+    const interestedLeads = await interestedLeadsQb.getCount();
 
-    const newLeads = await this.leadRepository.count({
-      where: {
-        ...leadWhere,
-        status: LeadStatus.NEW,
-      },
-    });
+    const callbackQb = this.callLogRepository
+      .createQueryBuilder('call')
+      .where('call.callStatus = :status', { status: 'CALLBACK' });
+    this.applyCallFilters(callbackQb, effectiveFilters);
+    const callbackCount = await callbackQb.getCount();
 
-    const interestedLeads = await this.leadRepository.count({
-      where: {
-        ...leadWhere,
-        status: LeadStatus.INTERESTED,
-      },
-    });
+    const neverCalledQb = this.leadRepository
+      .createQueryBuilder('lead')
+      .where('1=1');
+    this.applyLeadFilters(neverCalledQb, effectiveFilters);
 
-    const callbackCount = await this.callLogRepository.count({
-      where: {
-        ...callWhere,
-        callStatus: 'CALLBACK',
-      },
-    });
+    const subParams: Record<string, any> = {};
+    let notExistsSql = `
+      NOT EXISTS (
+        SELECT 1
+        FROM call_log call
+        WHERE call."leadId" = lead.id
+    `;
 
-    const allCallLogs = await this.callLogRepository.find({
-      where: callWhere,
-      select: ['leadId'],
-    });
-
-    const calledLeadIds = allCallLogs.map((log) => log.leadId).filter(Boolean);
-
-    let neverCalledCount = 0;
-
-    if (calledLeadIds.length === 0) {
-      neverCalledCount = await this.leadRepository.count({
-        where: leadWhere,
-      });
-    } else {
-      const qb = this.leadRepository.createQueryBuilder('lead');
-
-      if (effectiveAssignedTo) {
-        qb.where('lead.assignedTo = :assignedTo', {
-          assignedTo: effectiveAssignedTo,
-        });
-        qb.andWhere('lead.id NOT IN (:...ids)', { ids: calledLeadIds });
-      } else {
-        qb.where('lead.id NOT IN (:...ids)', { ids: calledLeadIds });
-      }
-
-      neverCalledCount = await qb.getCount();
+    if (effectiveAssignedTo) {
+      notExistsSql += ` AND call."telecallerId" = :neverCalledAssignedTo`;
+      subParams.neverCalledAssignedTo = effectiveAssignedTo;
     }
 
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
+    if (dateRange) {
+      notExistsSql += ` AND call."createdAt" BETWEEN :neverCalledStart AND :neverCalledEnd`;
+      subParams.neverCalledStart = dateRange.start;
+      subParams.neverCalledEnd = dateRange.end;
+    }
 
-    const end = new Date();
-    end.setHours(23, 59, 59, 999);
+    notExistsSql += `)`;
 
-    const todayFollowUps = await this.followUpRepository.count({
-      where: {
-        ...followupWhereBase,
-        followUpDate: Between(start, end),
-        status: FollowUpStatus.PENDING,
-      },
-    });
+    neverCalledQb.andWhere(notExistsSql, subParams);
+    const neverCalledCount = await neverCalledQb.getCount();
 
-    const overdueFollowUps = await this.followUpRepository.count({
-      where: {
-        ...followupWhereBase,
-        followUpDate: LessThan(new Date()),
-        status: FollowUpStatus.PENDING,
-      },
-    });
+    const pendingFollowUpsQb = this.followUpRepository
+      .createQueryBuilder('followUp')
+      .where('followUp.status = :status', { status: FollowUpStatus.PENDING });
+    this.applyFollowUpFilters(pendingFollowUpsQb, effectiveFilters);
+    const todayFollowUps = await pendingFollowUpsQb.getCount();
+
+    const overdueFollowUpsQb = this.followUpRepository
+      .createQueryBuilder('followUp')
+      .where('followUp.status = :status', { status: FollowUpStatus.PENDING });
+
+    if (effectiveAssignedTo) {
+      overdueFollowUpsQb.andWhere('followUp.assignedTo = :assignedTo', {
+        assignedTo: effectiveAssignedTo,
+      });
+    }
+
+    if (dateRange) {
+      overdueFollowUpsQb.andWhere('followUp.followUpDate < :overdueBefore', {
+        overdueBefore: dateRange.start,
+      });
+    }
+
+    const overdueFollowUps = await overdueFollowUpsQb.getCount();
 
     const contactsQb = this.telecallingContactRepository
       .createQueryBuilder('contact')
       .where('1=1');
 
     this.applyContactFilters(contactsQb, effectiveFilters);
-
     const totalContacts = await contactsQb.getCount();
 
     const calledContactsQb = this.callLogRepository
       .createQueryBuilder('call')
       .select('COUNT(DISTINCT call.contactId)', 'count')
-      .where('call.contactId IS NOT NULL');
+      .where('call.contactId IS NOT NULL')
+      .andWhere(`UPPER(COALESCE(call.callStatus, '')) <> 'INITIATED'`);
 
     this.applyCallFilters(calledContactsQb, effectiveFilters);
-
     const calledContactsRaw = await calledContactsQb.getRawOne();
     const calledContacts = Number(calledContactsRaw?.count || 0);
 
@@ -277,12 +307,8 @@ export class DashboardService {
     };
   }
 
-  async getContactsSummary(
-    filters: {
-      city?: string;
-      zone?: string;
-      assignedTo?: number;
-    } = {},
+    async getContactsSummary(
+    filters: DashboardFilters = {},
     userRoles: string[] = [],
     currentUserId?: number,
   ) {
@@ -291,8 +317,7 @@ export class DashboardService {
       isOwnOnly && currentUserId ? currentUserId : filters.assignedTo;
 
     const effectiveFilters: DashboardFilters = {
-      city: filters.city,
-      zone: filters.zone,
+      ...filters,
       assignedTo: effectiveAssignedTo,
     };
 
@@ -313,13 +338,44 @@ export class DashboardService {
       .where('1=1');
 
     this.applyContactFilters(filteredQb, effectiveFilters);
-
     const filteredContacts = await filteredQb.getCount();
 
     return {
       totalContacts,
       filteredContacts,
     };
+  }
+
+    async getPerformance(
+    filters: DashboardFilters = {},
+    userRoles: string[] = [],
+    currentUserId?: number,
+  ) {
+    const isOwnOnly = this.isOwnOnlyRole(userRoles);
+    const effectiveAssignedTo =
+      isOwnOnly && currentUserId ? currentUserId : filters.assignedTo;
+
+    const effectiveFilters: DashboardFilters = {
+      ...filters,
+      assignedTo: effectiveAssignedTo,
+    };
+
+    const qb = this.callLogRepository
+      .createQueryBuilder('call')
+      .select('call.telecallerId', 'telecallerId')
+      .addSelect('COUNT(*)', 'totalCalls')
+      .addSelect(
+        `SUM(CASE WHEN call.callStatus = 'INTERESTED' THEN 1 ELSE 0 END)`,
+        'interested',
+      )
+      .where('call.telecallerId IS NOT NULL')
+      .andWhere(`UPPER(COALESCE(call.callStatus, '')) <> 'INITIATED'`);
+
+    this.applyCallFilters(qb, effectiveFilters);
+
+    qb.groupBy('call.telecallerId').orderBy('COUNT(*)', 'DESC');
+
+    return qb.getRawMany();
   }
     async getCharts(
     filters: DashboardFilters = {},
