@@ -4,6 +4,11 @@ import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { getAuthHeaders } from '@/lib/authHeaders';
 import { useRouter } from 'next/navigation';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
+import dayjs, { Dayjs } from 'dayjs';
 
 type Lead = {
   id: number;
@@ -158,7 +163,7 @@ export default function FollowupPage() {
     setLoading(true);
 
     try {
-      await axios.post(
+            await axios.post(
         `${backendUrl}/followup/create`,
         {
           leadId: Number(leadId),
@@ -166,6 +171,8 @@ export default function FollowupPage() {
           note,
           followUpDate: new Date(followUpDate).toISOString(),
           status: 'PENDING',
+          sourceModule: 'FOLLOWUP',
+          sourceStage: 'MANUAL',
         },
         { headers: getAuthHeaders() }
       );
@@ -229,6 +236,40 @@ export default function FollowupPage() {
     return new Date(date).toLocaleString();
   };
 
+    const followUpDateValue = followUpDate ? dayjs(followUpDate) : null;
+  const followUpTimeValue = followUpDate ? dayjs(followUpDate) : null;
+
+  const updateFollowUpDatePart = (newDate: Dayjs | null) => {
+    if (!newDate) {
+      setFollowUpDate('');
+      return;
+    }
+
+    const base = followUpDate ? dayjs(followUpDate) : dayjs();
+    const merged = newDate
+      .hour(base.hour())
+      .minute(base.minute())
+      .second(0)
+      .millisecond(0);
+
+    setFollowUpDate(merged.format('YYYY-MM-DDTHH:mm'));
+  };
+
+  const updateFollowUpTimePart = (newTime: Dayjs | null) => {
+    if (!newTime) {
+      return;
+    }
+
+    const base = followUpDate ? dayjs(followUpDate) : dayjs();
+    const merged = base
+      .hour(newTime.hour())
+      .minute(newTime.minute())
+      .second(0)
+      .millisecond(0);
+
+    setFollowUpDate(merged.format('YYYY-MM-DDTHH:mm'));
+  };
+
   const getStatusColor = (status: string) => {
     if (status === 'PENDING') return 'bg-yellow-100 text-yellow-700';
     if (status === 'COMPLETED') return 'bg-green-100 text-green-700';
@@ -264,12 +305,33 @@ export default function FollowupPage() {
               className="w-full rounded border p-2"
             />
 
-            <input
-              type="datetime-local"
-              value={followUpDate}
-              onChange={(e) => setFollowUpDate(e.target.value)}
-              className="w-full rounded border p-2"
-            />
+            <LocalizationProvider dateAdapter={AdapterDayjs}>
+  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+    <DatePicker
+      label="Follow-up Date"
+      value={followUpDateValue}
+      onChange={updateFollowUpDatePart}
+      slotProps={{
+        textField: {
+          fullWidth: true,
+        },
+      }}
+    />
+
+    <MobileTimePicker
+      label="Follow-up Time"
+      value={followUpTimeValue}
+      onChange={updateFollowUpTimePart}
+      ampm
+      ampmInClock
+      slotProps={{
+        textField: {
+          fullWidth: true,
+        },
+      }}
+    />
+  </div>
+</LocalizationProvider>
 
             <button className="rounded bg-blue-600 px-4 py-2 text-white">
               {loading ? 'Creating...' : 'Create Followup'}

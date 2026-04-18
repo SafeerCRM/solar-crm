@@ -425,9 +425,9 @@ const updateQuickCallTimePart = (newTime: Dayjs | null) => {
 
     const startCountdownThenCall = (nextContact: Contact) => {
     clearAutoTimers();
-    setCountdown(6);
+    setCountdown(3);
 
-    let time = 6;
+    let time = 3;
 
     countdownIntervalRef.current = setInterval(() => {
       time -= 1;
@@ -444,7 +444,7 @@ const updateQuickCallTimePart = (newTime: Dayjs | null) => {
     resumeTimeoutRef.current = setTimeout(async () => {
       if (isPaused) return;
       await startQuickCall(nextContact);
-    }, 6000);
+    }, 3000);
   };
 
     const callNextContact = async () => {

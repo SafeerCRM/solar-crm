@@ -164,22 +164,8 @@ export default function DashboardPage() {
 
     return params;
   };
-    const fetchTelecallers = async () => {
-    try {
-      if (!canChooseTelecaller) {
-        setTelecallers([]);
-        return;
-      }
-
-      const res = await axios.get(`${apiBaseUrl}/users/telecallers`, {
-        headers: getAuthHeaders(),
-      });
-
-      setTelecallers(Array.isArray(res.data) ? res.data : []);
-    } catch (error) {
-      console.error('Failed to fetch telecallers:', error);
-      setTelecallers([]);
-    }
+        const fetchTelecallers = async () => {
+    setTelecallers([]);
   };
 
   const fetchDashboardData = async () => {
@@ -194,7 +180,7 @@ export default function DashboardPage() {
             params,
             headers: getAuthHeaders(),
           }),
-                    axios.get(`${apiBaseUrl}/telecalling/performance`, {
+                    axios.get(`${apiBaseUrl}/telecalling/performance/today`, {
   headers: getAuthHeaders(),
 }),
           axios.get(`${apiBaseUrl}/leads/hot`, {
@@ -275,6 +261,17 @@ export default function DashboardPage() {
     useEffect(() => {
     if (!currentUser) return;
 
+    const interval = window.setInterval(() => {
+      fetchDashboardData();
+    }, 5 * 60 * 1000);
+
+    return () => window.clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser]);
+
+    useEffect(() => {
+    if (!currentUser) return;
+
     const now = new Date();
     const nextMidnight = new Date(now);
     nextMidnight.setHours(24, 0, 5, 0);
@@ -324,9 +321,8 @@ export default function DashboardPage() {
       ? Math.round((summary.interestedLeads / summary.totalLeads) * 100)
       : 0;
 
-  const getTelecallerName = (id: string) => {
-    const found = telecallers.find((t) => String(t.id) === String(id));
-    return found ? found.name : `User ${id}`;
+    const getTelecallerName = (item: any) => {
+    return item?.telecallerName || `User ${item?.telecallerId || ''}`;
   };
 
   if (!summary && dashboardLoading) {
@@ -516,7 +512,7 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                         {performance.map((p) => (
               <div key={p.telecallerId} className="rounded-xl bg-white p-4 shadow">
-                <p className="font-semibold">{getTelecallerName(p.telecallerId)}</p>
+                <p className="font-semibold">{getTelecallerName(p)}</p>
                 <p>Total Calls: {p.totalCalls}</p>
                 <p>Interested: {p.interested}</p>
               </div>

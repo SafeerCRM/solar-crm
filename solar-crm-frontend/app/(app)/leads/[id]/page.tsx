@@ -48,6 +48,9 @@ export default function LeadHistoryPage() {
   const [editingText, setEditingText] = useState('');
   const [saving, setSaving] = useState(false);
   const [updatingPotential, setUpdatingPotential] = useState(false);
+  const [followUpNote, setFollowUpNote] = useState('');
+  const [followUpDate, setFollowUpDate] = useState('');
+  const [creatingFollowUp, setCreatingFollowUp] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -146,6 +149,42 @@ export default function LeadHistoryPage() {
       );
     } finally {
       setUpdatingPotential(false);
+    }
+  };
+
+    const createFollowUp = async () => {
+    if (!data?.lead?.id || !followUpDate) {
+      setMessage('Please choose follow-up date');
+      return;
+    }
+
+    try {
+      setCreatingFollowUp(true);
+      setMessage('');
+
+      await axios.post(
+        `${backendUrl}/followup/create`,
+        {
+          leadId: data.lead.id,
+          assignedTo: data.lead.assignedTo,
+          note: followUpNote,
+          followUpDate: new Date(followUpDate).toISOString(),
+          status: 'PENDING',
+          sourceModule: 'LEAD',
+          sourceStage: 'LEAD_PAGE',
+        },
+        { headers: getAuthHeaders() }
+      );
+
+      setFollowUpNote('');
+      setFollowUpDate('');
+      setMessage('Followup created successfully');
+      fetchHistory();
+    } catch (error: any) {
+      console.error(error);
+      setMessage(error?.response?.data?.message || 'Failed to create followup');
+    } finally {
+      setCreatingFollowUp(false);
     }
   };
 
@@ -293,6 +332,35 @@ export default function LeadHistoryPage() {
             <span className="font-medium">Current Remarks:</span>{' '}
             {data.lead.remarks || '-'}
           </p>
+        </div>
+      </div>
+
+      <div className="mb-6 rounded-2xl bg-white p-6 shadow">
+        <h2 className="mb-4 text-xl font-semibold">Create Followup</h2>
+
+        <div className="space-y-3">
+          <textarea
+            value={followUpNote}
+            onChange={(e) => setFollowUpNote(e.target.value)}
+            className="w-full rounded border p-3"
+            rows={3}
+            placeholder="Enter follow-up note"
+          />
+
+          <input
+            type="datetime-local"
+            value={followUpDate}
+            onChange={(e) => setFollowUpDate(e.target.value)}
+            className="w-full rounded border p-3"
+          />
+
+          <button
+            onClick={createFollowUp}
+            disabled={creatingFollowUp}
+            className="rounded bg-purple-600 px-4 py-2 text-white"
+          >
+            {creatingFollowUp ? 'Creating...' : 'Create Followup'}
+          </button>
         </div>
       </div>
 
