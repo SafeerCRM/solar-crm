@@ -33,8 +33,20 @@ export class FollowUp {
   @JoinColumn({ name: 'leadId' })
   lead: Lead;
 
-  @Column({ nullable: true })
+    @Column({ nullable: true })
   assignedTo: number;
+
+  @Column({ nullable: true })
+  createdBy: number;
+
+  @Column({ nullable: true })
+  createdByName: string;
+
+  @Column({ nullable: true })
+  sourceModule: string;
+
+  @Column({ nullable: true })
+  sourceStage: string;
 
   @Column({
     type: 'enum',

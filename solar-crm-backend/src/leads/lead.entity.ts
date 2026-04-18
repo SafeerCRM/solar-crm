@@ -65,11 +65,17 @@ export class Lead {
   @Column({ nullable: true })
   assignedTo: number;
 
-  @Column({ nullable: true })
+    @Column({ nullable: true })
   createdBy: number;
 
   @Column({ nullable: true })
   createdByName: string;
+
+  @Column({ nullable: true })
+  originTelecallerId: number;
+
+  @Column({ nullable: true })
+  originTelecallerName: string;
 
   @Column({ nullable: true, type: 'text' })
   remarks: string;

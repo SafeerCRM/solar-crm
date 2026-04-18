@@ -243,8 +243,8 @@ private readonly meetingRepository: Repository<Meeting>,
       lead.status = LeadStatus.CONTACTED;
     }
 
-    if (lead.nextFollowUpDate) {
-      lead.nextFollowUpDate = lead.nextFollowUpDate;
+        if (data.nextFollowUpDate) {
+      lead.nextFollowUpDate = data.nextFollowUpDate;
     }
 
     if (data.callNotes) {
@@ -257,25 +257,30 @@ private readonly meetingRepository: Repository<Meeting>,
 
     await this.leadRepository.save(lead);
 
-    if (
-      (data.callStatus === 'CALLBACK' || data.callStatus === 'INTERESTED') &&
-      data.telecallerId
-    ) {
+        if (data.nextFollowUpDate && data.telecallerId) {
       const followUp = this.followUpRepository.create({
         leadId: data.leadId,
         assignedTo: data.telecallerId,
+        createdBy: data.telecallerId,
+        createdByName: data.telecallerId
+          ? `User ${data.telecallerId}`
+          : 'Unknown User',
+        sourceModule: 'TELECALLING',
+        sourceStage: 'LEAD_CALL',
         followUpType:
-          data.callStatus === 'INTERESTED'
+          data.callStatus === 'CALLBACK'
+            ? FollowUpType.CALLBACK
+            : data.callStatus === 'INTERESTED'
             ? FollowUpType.CALL
-            : FollowUpType.CALLBACK,
+            : FollowUpType.GENERAL,
         note:
           data.callNotes ||
           (data.callStatus === 'INTERESTED'
             ? 'Interested follow-up created from telecalling'
-            : 'Callback follow-up created from telecalling'),
-        followUpDate:
-          data.nextFollowUpDate ||
-          new Date(Date.now() + 24 * 60 * 60 * 1000),
+            : data.callStatus === 'CALLBACK'
+            ? 'Callback follow-up created from telecalling'
+            : 'Follow-up created from telecalling reminder'),
+        followUpDate: data.nextFollowUpDate,
         status: FollowUpStatus.PENDING,
       });
 
@@ -516,6 +521,83 @@ private readonly meetingRepository: Repository<Meeting>,
       .groupBy('call.telecallerId')
       .getRawMany();
   }
+        async getTodayPerformance() {
+    const todayIndia = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+
+    const calls = await this.callLogRepository.find({
+      where: {},
+      order: { createdAt: 'DESC' },
+    });
+
+    const filteredCalls = calls.filter((call) => {
+      if (!call.telecallerId) return false;
+
+      const status = String(call.callStatus || '').toUpperCase();
+      if (!status || status === 'INITIATED') return false;
+
+      const createdAt = call.createdAt ? new Date(call.createdAt) : null;
+      if (!createdAt || Number.isNaN(createdAt.getTime())) return false;
+
+      const callDateIndia = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(createdAt);
+
+      return callDateIndia === todayIndia;
+    });
+
+    if (!filteredCalls.length) {
+      return [];
+    }
+
+    const telecallerIds = Array.from(
+      new Set(filteredCalls.map((call) => Number(call.telecallerId)).filter(Boolean)),
+    );
+
+    const users = telecallerIds.length
+      ? await this.userRepository.find({
+          where: { id: In(telecallerIds) },
+          select: ['id', 'name'],
+        })
+      : [];
+
+    const userMap = new Map(users.map((user) => [Number(user.id), user.name]));
+
+    const grouped = new Map<
+      number,
+      { telecallerId: string; telecallerName: string; totalCalls: string; interested: string }
+    >();
+
+    for (const call of filteredCalls) {
+      const telecallerId = Number(call.telecallerId);
+      const existing = grouped.get(telecallerId) || {
+        telecallerId: String(telecallerId),
+        telecallerName: userMap.get(telecallerId) || `User ${telecallerId}`,
+        totalCalls: '0',
+        interested: '0',
+      };
+
+      existing.totalCalls = String(Number(existing.totalCalls) + 1);
+
+      if (String(call.callStatus || '').toUpperCase() === 'INTERESTED') {
+        existing.interested = String(Number(existing.interested) + 1);
+      }
+
+      grouped.set(telecallerId, existing);
+    }
+
+    return Array.from(grouped.values()).sort(
+      (a, b) => Number(b.totalCalls) - Number(a.totalCalls),
+    );
+  }
+
 
   async importContacts(file: any, user: any) {
     if (!file) {
@@ -1368,42 +1450,54 @@ const location = this.getMappedValue(row, ['location', 'site_location', 'place']
 
     // ✅ CREATE FOLLOWUP IF REMINDER EXISTS
 // ✅ CREATE FOLLOWUP IF REMINDER EXISTS
-if (body.nextFollowUpDate) {
-  try {
-    let leadId: number | undefined;
+    // ✅ CREATE FOLLOWUP IF REMINDER EXISTS
+    if (body.nextFollowUpDate) {
+      try {
+        let lead = await this.leadRepository.findOne({
+          where: { phone: this.normalizePhone(contact.phone) },
+        });
 
-    const normalizedPhone = this.normalizePhone(contact.phone);
+        if (!lead) {
+          lead = await this.leadRepository.save({
+            name: contact.name,
+            phone: this.normalizePhone(contact.phone),
+            city: contact.city || '',
+            address: contact.address || contact.location || contact.city || '',
+            source: 'TELECALLING',
+            assignedTo: contact.assignedTo || user.id,
+            createdBy: user.id,
+            createdByName: user.name,
+            originTelecallerId: contact.assignedTo,
+            originTelecallerName:
+              contact.assignedToName || `User ${contact.assignedTo || ''}`,
+            status: LeadStatus.NEW,
+          } as any);
+        }
 
-    if (normalizedPhone) {
-      const lead = await this.leadRepository.findOne({
-        where: { phone: normalizedPhone },
-      });
+        const followUp = this.followUpRepository.create({
+          leadId: lead!.id,
+          assignedTo: user?.id,
+          createdBy: user?.id,
+          createdByName: user?.name || user?.email || 'Unknown User',
+          sourceModule: 'TELECALLING',
+          sourceStage: 'QUICK_CALL',
+          followUpType:
+            normalizedStatus === 'CALLBACK'
+              ? FollowUpType.CALLBACK
+              : normalizedStatus === 'INTERESTED'
+              ? FollowUpType.CALL
+              : FollowUpType.GENERAL,
+          note:
+            body.callNotes || 'Follow-up created from telecalling reminder',
+          followUpDate: new Date(body.nextFollowUpDate),
+          status: FollowUpStatus.PENDING,
+        });
 
-      if (lead) {
-        leadId = lead.id;
+        await this.followUpRepository.save(followUp);
+      } catch (err) {
+        console.error('Followup creation failed:', err);
       }
     }
-
-    if (leadId) {
-      const followUp = this.followUpRepository.create({
-        leadId,
-        assignedTo: user?.id,
-        followUpType:
-          normalizedStatus === 'CALLBACK'
-            ? FollowUpType.CALLBACK
-            : FollowUpType.CALL,
-        note:
-          body.callNotes || 'Follow-up created from telecalling reminder',
-        followUpDate: new Date(body.nextFollowUpDate),
-        status: FollowUpStatus.PENDING,
-      });
-
-      await this.followUpRepository.save(followUp);
-    }
-  } catch (err) {
-    console.error('Followup creation failed:', err);
-  }
-}
 
     const existingRemarks = String(contact.remarks || '').trim();
     const summaryNote =
@@ -1736,13 +1830,16 @@ if (normalizedFilter) {
       );
     }
 
-    const lead = this.leadRepository.create({
+        const lead = this.leadRepository.create({
       name: contact.name,
       phone: normalizedPhone,
       city: contact.city,
       assignedTo: contact.assignedTo,
       createdBy: user.id,
       createdByName: user.name,
+      originTelecallerId: contact.assignedTo,
+      originTelecallerName:
+        contact.assignedToName || `User ${contact.assignedTo || ''}`,
       status: LeadStatus.NEW,
     });
 
@@ -1820,12 +1917,22 @@ if (!lead) {
     assignedTo: meetingManager.id,
     createdBy: user.id,
     createdByName: user.name,
+    originTelecallerId: contact.assignedTo,
+    originTelecallerName:
+      contact.assignedToName || `User ${contact.assignedTo || ''}`,
     status: LeadStatus.NEW,
   } as any);
 
   lead = createdLead;
 } else {
   lead.assignedTo = meetingManager.id;
+
+    if (!lead.originTelecallerId) {
+    lead.originTelecallerId = contact.assignedTo;
+    lead.originTelecallerName =
+      contact.assignedToName || `User ${contact.assignedTo || ''}`;
+  }
+
   lead.remarks = lead.remarks
     ? `${lead.remarks}\nMeeting reassigned by ${user.name}`
     : `Meeting reassigned by ${user.name}`;

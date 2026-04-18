@@ -53,6 +53,11 @@ export class TelecallingController {
     return this.telecallingService.getPerformance();
   }
 
+  @Get('performance/today')
+getTodayPerformance() {
+  return this.telecallingService.getTodayPerformance();
+}
+
   @Get('review-queue')
   getReviewQueue(@CurrentUser() user: any) {
     return this.telecallingService.getReviewQueue(user);

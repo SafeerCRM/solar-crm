@@ -202,10 +202,19 @@ export class LeadsService {
     const currentUserId = this.getCurrentUserId(user);
     const currentUserName = this.getCurrentUserName(user);
 
-    let leadData: Partial<Lead> = {
+        let leadData: Partial<Lead> = {
       ...data,
       createdBy: currentUserId,
       createdByName: currentUserName,
+      originTelecallerId:
+        (data as any).originTelecallerId !== undefined &&
+        (data as any).originTelecallerId !== null
+          ? Number((data as any).originTelecallerId)
+          : this.isTelecaller(user)
+          ? currentUserId
+          : undefined,
+      originTelecallerName:
+        (data as any).originTelecallerName || (this.isTelecaller(user) ? currentUserName : undefined),
       potentialPercentage:
         data.potentialPercentage !== undefined &&
         data.potentialPercentage !== null
@@ -485,6 +494,7 @@ export class LeadsService {
     await this.getAccessibleLead(id, user);
 
     const currentUserId = this.getCurrentUserId(user);
+    const currentUserName = this.getCurrentUserName(user);
 
     if (data.potentialPercentage !== undefined) {
       data.potentialPercentage = this.normalizePotentialPercentage(
@@ -533,10 +543,14 @@ export class LeadsService {
 
     const updatedLead = await this.leadRepository.save(lead);
 
-    if (data.nextFollowUpDate && updatedLead.assignedTo) {
+        if (data.nextFollowUpDate && updatedLead.assignedTo) {
       const followUp = this.followUpRepository.create({
         leadId: updatedLead.id,
         assignedTo: updatedLead.assignedTo,
+        createdBy: currentUserId,
+        createdByName: currentUserName,
+        sourceModule: 'LEAD',
+        sourceStage: 'LEAD_UPDATE',
         followUpType: FollowUpType.GENERAL,
         note: updatedLead.remarks || 'Follow-up created from lead update',
         followUpDate: data.nextFollowUpDate,

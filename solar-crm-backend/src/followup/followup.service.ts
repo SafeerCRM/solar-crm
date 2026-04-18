@@ -110,10 +110,23 @@ export class FollowupService {
       throw new ForbiddenException('Project manager cannot access followups');
     }
 
-    if (this.isOwnAssignedOnlyRole(user)) {
-      if (followUp.assignedTo !== currentUserId) {
+        if (this.isOwnAssignedOnlyRole(user)) {
+      const isAssignedToUser = followUp.assignedTo === currentUserId;
+      const isCreatedByUser = followUp.createdBy === currentUserId;
+      const isLeadAssignedToUser = followUp.lead?.assignedTo === currentUserId;
+      const isLeadCreatedByUser = followUp.lead?.createdBy === currentUserId;
+      const isLeadOriginTelecaller =
+        followUp.lead?.originTelecallerId === currentUserId;
+
+      if (
+        !isAssignedToUser &&
+        !isCreatedByUser &&
+        !isLeadAssignedToUser &&
+        !isLeadCreatedByUser &&
+        !isLeadOriginTelecaller
+      ) {
         throw new ForbiddenException(
-          'You can only access your own followups',
+          'You can only access your own or related followups',
         );
       }
 
@@ -123,7 +136,7 @@ export class FollowupService {
     return followUp;
   }
 
-  async create(data: Partial<FollowUp>, user: any) {
+    async create(data: Partial<FollowUp>, user: any) {
     if (this.isProjectManager(user)) {
       throw new ForbiddenException(
         'Project manager cannot create followups',
@@ -131,13 +144,24 @@ export class FollowupService {
     }
 
     const currentUserId = this.getCurrentUserId(user);
+    const currentUserName = user?.name || user?.email || 'Unknown User';
 
     const followUpData = this.isOwnAssignedOnlyRole(user)
       ? {
           ...data,
-          assignedTo: currentUserId,
+          assignedTo: data.assignedTo ?? currentUserId,
+          createdBy: currentUserId,
+          createdByName: currentUserName,
+          sourceModule: data.sourceModule || 'FOLLOWUP',
+          sourceStage: data.sourceStage || 'MANUAL',
         }
-      : data;
+      : {
+          ...data,
+          createdBy: currentUserId,
+          createdByName: currentUserName,
+          sourceModule: data.sourceModule || 'FOLLOWUP',
+          sourceStage: data.sourceStage || 'MANUAL',
+        };
 
     const followUp = this.followUpRepository.create(followUpData);
     return this.followUpRepository.save(followUp);
@@ -148,12 +172,19 @@ export class FollowupService {
       return [];
     }
 
-    if (this.isOwnAssignedOnlyRole(user)) {
-      return this.followUpRepository.find({
-        where: { assignedTo: this.getCurrentUserId(user) },
-        relations: ['lead'],
-        order: { followUpDate: 'ASC' },
-      });
+        if (this.isOwnAssignedOnlyRole(user)) {
+      const currentUserId = this.getCurrentUserId(user);
+
+      return this.followUpRepository
+        .createQueryBuilder('followUp')
+        .leftJoinAndSelect('followUp.lead', 'lead')
+        .where('followUp.assignedTo = :currentUserId', { currentUserId })
+        .orWhere('followUp.createdBy = :currentUserId', { currentUserId })
+        .orWhere('lead.assignedTo = :currentUserId', { currentUserId })
+        .orWhere('lead.createdBy = :currentUserId', { currentUserId })
+        .orWhere('lead.originTelecallerId = :currentUserId', { currentUserId })
+        .orderBy('followUp.followUpDate', 'ASC')
+        .getMany();
     }
 
     return this.followUpRepository.find({
@@ -173,15 +204,19 @@ export class FollowupService {
       return [];
     }
 
-    if (this.isOwnAssignedOnlyRole(user)) {
-      return this.followUpRepository.find({
-        where: {
-          assignedTo: this.getCurrentUserId(user),
-          followUpDate: Between(start, end),
-        },
-        relations: ['lead'],
-        order: { followUpDate: 'ASC' },
-      });
+        if (this.isOwnAssignedOnlyRole(user)) {
+      const currentUserId = this.getCurrentUserId(user);
+
+      return this.followUpRepository
+        .createQueryBuilder('followUp')
+        .leftJoinAndSelect('followUp.lead', 'lead')
+        .where('followUp.followUpDate BETWEEN :start AND :end', { start, end })
+        .andWhere(
+          '(followUp.assignedTo = :currentUserId OR followUp.createdBy = :currentUserId OR lead.assignedTo = :currentUserId OR lead.createdBy = :currentUserId OR lead.originTelecallerId = :currentUserId)',
+          { currentUserId },
+        )
+        .orderBy('followUp.followUpDate', 'ASC')
+        .getMany();
     }
 
     return this.followUpRepository.find({
@@ -198,16 +233,22 @@ export class FollowupService {
       return [];
     }
 
-    if (this.isOwnAssignedOnlyRole(user)) {
-      return this.followUpRepository.find({
-        where: {
-          assignedTo: this.getCurrentUserId(user),
-          followUpDate: LessThan(new Date()),
+        if (this.isOwnAssignedOnlyRole(user)) {
+      const currentUserId = this.getCurrentUserId(user);
+
+      return this.followUpRepository
+        .createQueryBuilder('followUp')
+        .leftJoinAndSelect('followUp.lead', 'lead')
+        .where('followUp.followUpDate < :now', { now: new Date() })
+        .andWhere('followUp.status = :status', {
           status: FollowUpStatus.PENDING,
-        },
-        relations: ['lead'],
-        order: { followUpDate: 'ASC' },
-      });
+        })
+        .andWhere(
+          '(followUp.assignedTo = :currentUserId OR followUp.createdBy = :currentUserId OR lead.assignedTo = :currentUserId OR lead.createdBy = :currentUserId OR lead.originTelecallerId = :currentUserId)',
+          { currentUserId },
+        )
+        .orderBy('followUp.followUpDate', 'ASC')
+        .getMany();
     }
 
     return this.followUpRepository.find({
