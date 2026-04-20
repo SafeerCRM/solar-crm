@@ -11,6 +11,7 @@ import {
 import { FollowupService } from './followup.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { Query } from '@nestjs/common';
 
 @UseGuards(JwtAuthGuard)
 @Controller('followup')
@@ -36,7 +37,13 @@ export class FollowupController {
   findOverdue(@CurrentUser() user: any) {
     return this.followupService.findOverdue(user);
   }
-
+@Get('by-date')
+findByDate(
+  @Query('date') date: string,
+  @CurrentUser() user: any,
+) {
+  return this.followupService.findByDate(date, user);
+}
   @Get(':id')
   findOne(
     @Param('id', ParseIntPipe) id: number,

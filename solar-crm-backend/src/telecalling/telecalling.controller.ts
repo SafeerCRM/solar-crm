@@ -59,9 +59,26 @@ getTodayPerformance() {
 }
 
   @Get('review-queue')
-  getReviewQueue(@CurrentUser() user: any) {
-    return this.telecallingService.getReviewQueue(user);
-  }
+getReviewQueue(
+  @Query('page') page = 1,
+  @Query('limit') limit = 50,
+  @Query('name') name = '',
+  @Query('phone') phone = '',
+  @Query('city') city = '',
+  @Query('callResult') callResult = '',
+  @Query('leadPotential') leadPotential = '',
+  @CurrentUser() user: any,
+) {
+  return this.telecallingService.getReviewQueue(user, {
+    page: Number(page),
+    limit: Number(limit),
+    name: String(name || ''),
+    phone: String(phone || ''),
+    city: String(city || ''),
+    callResult: String(callResult || ''),
+    leadPotential: String(leadPotential || ''),
+  });
+}
 
   @Patch(':id/review')
   reviewCall(

@@ -483,44 +483,116 @@ private readonly meetingRepository: Repository<Meeting>,
     return this.callLogRepository.save(callLog);
   }
 
-    async getReviewQueue(user: any) {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 30);
+   async getReviewQueue(
+  user: any,
+  filters: {
+    page?: number;
+    limit?: number;
+    name?: string;
+    phone?: string;
+    city?: string;
+    callResult?: string;
+    leadPotential?: string;
+  } = {},
+) {
+  const page = Number(filters.page) > 0 ? Number(filters.page) : 1;
+  const limit =
+    Number(filters.limit) > 0 ? Math.min(Number(filters.limit), 100) : 50;
 
-    const now = new Date();
-    const limit = 50;
+  const skip = (page - 1) * limit;
 
-    if (this.hasRole(user, 'TELECALLING_ASSISTANT' as any)) {
-      return this.callLogRepository.find({
-        where: {
-          reviewAssignedTo: user.id,
-          createdAt: Between(cutoff, now),
-        },
-        order: { createdAt: 'DESC' },
-        take: limit,
-      });
-    }
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 30);
 
-    if (
-      !this.hasAnyRole(user, [
-        'OWNER',
-        'PROJECT_MANAGER',
-        'TELECALLING_MANAGER',
-      ])
-    ) {
-      throw new ForbiddenException(
-        'Only owner, telecalling manager, project manager, or assigned assistant can access review queue',
-      );
-    }
+  const now = new Date();
 
-    return this.callLogRepository.find({
-      where: {
-        createdAt: Between(cutoff, now),
-      },
-      order: { createdAt: 'DESC' },
-      take: limit,
+  const qb = this.callLogRepository
+    .createQueryBuilder('call')
+    .leftJoinAndSelect('call.lead', 'lead')
+    .leftJoin(TelecallingContact, 'contact', 'contact.id = call.contactId')
+    .where('call.createdAt BETWEEN :cutoff AND :now', { cutoff, now })
+    .andWhere(`UPPER(COALESCE(call.callStatus, '')) <> 'INITIATED'`)
+    .orderBy('call.createdAt', 'DESC');
+
+  if (this.hasRole(user, 'TELECALLING_ASSISTANT' as any)) {
+    qb.andWhere('call.reviewAssignedTo = :reviewAssignedTo', {
+      reviewAssignedTo: user.id,
+    });
+  } else if (
+    !this.hasAnyRole(user, [
+      'OWNER',
+      'PROJECT_MANAGER',
+      'TELECALLING_MANAGER',
+    ])
+  ) {
+    throw new ForbiddenException(
+      'Only owner, telecalling manager, project manager, or assistant can access',
+    );
+  }
+
+  const normalizedName = String(filters.name || '').trim().toLowerCase();
+  const normalizedPhone = String(filters.phone || '').trim().toLowerCase();
+  const normalizedCity = String(filters.city || '').trim().toLowerCase();
+  const normalizedCallResult = String(filters.callResult || '').trim().toUpperCase();
+  const normalizedLeadPotential = String(filters.leadPotential || '')
+    .trim()
+    .toUpperCase();
+
+  if (normalizedCallResult) {
+    qb.andWhere(
+      `(UPPER(COALESCE(call.disposition, '')) = :callResult OR UPPER(COALESCE(call.callStatus, '')) = :callResult)`,
+      { callResult: normalizedCallResult },
+    );
+  }
+
+  if (normalizedLeadPotential) {
+    qb.andWhere('UPPER(COALESCE(call.leadPotential, \'\')) = :leadPotential', {
+      leadPotential: normalizedLeadPotential,
     });
   }
+
+  if (normalizedName) {
+    qb.andWhere(
+      `(
+        LOWER(COALESCE(lead.name, '')) LIKE :name
+        OR LOWER(COALESCE(contact.name, '')) LIKE :name
+      )`,
+      { name: `%${normalizedName}%` },
+    );
+  }
+
+  if (normalizedPhone) {
+    qb.andWhere(
+      `(
+        LOWER(COALESCE(lead.phone, '')) LIKE :phone
+        OR LOWER(COALESCE(contact.phone, '')) LIKE :phone
+      )`,
+      { phone: `%${normalizedPhone}%` },
+    );
+  }
+
+  if (normalizedCity) {
+    qb.andWhere(
+      `(
+        LOWER(COALESCE(lead.city, '')) LIKE :city
+        OR LOWER(COALESCE(contact.city, '')) LIKE :city
+        OR LOWER(COALESCE(contact.address, '')) LIKE :city
+        OR LOWER(COALESCE(contact.location, '')) LIKE :city
+      )`,
+      { city: `%${normalizedCity}%` },
+    );
+  }
+
+  const [data, total] = await qb.skip(skip).take(limit).getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
+}
 
   async getPerformance() {
     return this.callLogRepository

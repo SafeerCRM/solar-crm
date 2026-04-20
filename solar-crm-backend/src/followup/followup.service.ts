@@ -315,4 +315,39 @@ export class FollowupService {
         : null,
     };
   }
+async findByDate(date: string, user: any) {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+
+  const end = new Date(date);
+  end.setHours(23, 59, 59, 999);
+
+  if (this.isProjectManager(user)) {
+    return [];
+  }
+
+  if (this.isOwnAssignedOnlyRole(user)) {
+    const currentUserId = this.getCurrentUserId(user);
+
+    return this.followUpRepository
+      .createQueryBuilder('followUp')
+      .leftJoinAndSelect('followUp.lead', 'lead')
+      .where('followUp.followUpDate BETWEEN :start AND :end', { start, end })
+      .andWhere(
+        '(followUp.assignedTo = :currentUserId OR followUp.createdBy = :currentUserId OR lead.assignedTo = :currentUserId OR lead.createdBy = :currentUserId OR lead.originTelecallerId = :currentUserId)',
+        { currentUserId },
+      )
+      .orderBy('followUp.followUpDate', 'ASC')
+      .getMany();
+  }
+
+  return this.followUpRepository.find({
+    where: {
+      followUpDate: Between(start, end),
+    },
+    relations: ['lead'],
+    order: { followUpDate: 'ASC' },
+  });
+}
+
 }
