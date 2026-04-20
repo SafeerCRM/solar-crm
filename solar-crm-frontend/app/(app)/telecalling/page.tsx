@@ -139,6 +139,10 @@ export default function TelecallingPage() {
   const [sortOrder, setSortOrder] = useState<'NEWEST' | 'OLDEST'>('NEWEST');
   const [leadPotentialFilter, setLeadPotentialFilter] = useState('');
   const [callResultFilter, setCallResultFilter] = useState('');
+  const [page, setPage] = useState(1);
+const [limit] = useState(50);
+const [total, setTotal] = useState(0);
+const [totalPages, setTotalPages] = useState(1);
 
   const userRoles = useMemo(() => {
     if (Array.isArray(user?.roles)) return user.roles;
@@ -188,18 +192,39 @@ try {
 }
   }, []);
 
-  useEffect(() => {
-    if (!user) return;
+ useEffect(() => {
+  if (!user) return;
 
-    fetchLeads();
-    fetchCalls();
+  fetchLeads();
+  fetchCalls(1);
 
-    if (canAssignAssistant) {
-      fetchAssistants();
-    } else {
-      setAssistants([]);
-    }
-  }, [user, canAssignAssistant]);
+  if (canAssignAssistant) {
+    fetchAssistants();
+  } else {
+    setAssistants([]);
+  }
+}, [user, canAssignAssistant]);
+
+useEffect(() => {
+  if (!user) return;
+
+  const shouldUseReviewQueue =
+    isTelecallingManager ||
+    userRoles.includes('PROJECT_MANAGER') ||
+    isAssistant ||
+    isOwner;
+
+  if (!shouldUseReviewQueue) return;
+
+  fetchCalls(1);
+}, [
+  nameFilter,
+  phoneFilter,
+  cityFilter,
+  leadPotentialFilter,
+  callResultFilter,
+  user,
+]);
 
   useEffect(() => {
   if (calls.length > 0) {
@@ -258,40 +283,56 @@ try {
     }
   };
 
-  const fetchCalls = async () => {
-    try {
-      const shouldUseReviewQueue =
-        isTelecallingManager ||
-        userRoles.includes('PROJECT_MANAGER') ||
-        isAssistant ||
-        isOwner;
+  const fetchCalls = async (pageNumber = 1) => {
+  try {
+    const shouldUseReviewQueue =
+      isTelecallingManager ||
+      userRoles.includes('PROJECT_MANAGER') ||
+      isAssistant ||
+      isOwner;
 
-      const endpoint = shouldUseReviewQueue
-        ? `${backendUrl}/telecalling/review-queue`
-        : `${backendUrl}/telecalling`;
+    if (shouldUseReviewQueue) {
+      const params = {
+        page: pageNumber,
+        limit,
+        name: nameFilter.trim(),
+        phone: phoneFilter.trim(),
+        city: cityFilter.trim(),
+        callResult: callResultFilter,
+        leadPotential: leadPotentialFilter,
+      };
 
-      const res = await axios.get(endpoint, {
+      const res = await axios.get(`${backendUrl}/telecalling/review-queue`, {
+        params,
         headers: getAuthHeaders(),
       });
 
-      const data = Array.isArray(res.data) ? res.data : [];
-      setCalls(data);
+      const responseData = res.data || {};
+      const rows = Array.isArray(responseData.data) ? responseData.data : [];
 
-      const initialStatusMap: Record<number, string> = {};
-      const initialNotesMap: Record<number, string> = {};
-
-      data.forEach((call: CallLog) => {
-        initialStatusMap[call.id] = call.reviewStatus || 'PENDING';
-        initialNotesMap[call.id] = call.reviewNotes || '';
-      });
-
-      setReviewStatusMap(initialStatusMap);
-      setReviewNotesMap(initialNotesMap);
-    } catch (error) {
-      console.error('Failed to fetch calls:', error);
-      setCalls([]);
+      setCalls(rows);
+      setTotal(Number(responseData.total || 0));
+      setTotalPages(Number(responseData.totalPages || 1));
+      setPage(Number(responseData.page || pageNumber));
+      return;
     }
-  };
+
+    const res = await axios.get(`${backendUrl}/telecalling`, {
+      headers: getAuthHeaders(),
+    });
+
+    const data = Array.isArray(res.data) ? res.data : [];
+    setCalls(data);
+    setTotal(data.length);
+    setTotalPages(1);
+    setPage(1);
+  } catch (error) {
+    console.error('Failed to fetch calls:', error);
+    setCalls([]);
+    setTotal(0);
+    setTotalPages(1);
+  }
+};
 
   const fetchAssistants = async () => {
     try {
@@ -479,7 +520,7 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
       setNextFollowUpDate('');
       setRecordingUrl('');
       setLeadPotential('');
-      await fetchCalls();
+      await fetchCalls(1);
       goToNextLead();
     } catch (error: any) {
       console.error('Failed to log call:', error);
@@ -503,7 +544,7 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
       );
 
       setMessage('Review updated successfully');
-      await fetchCalls();
+      await fetchCalls(1);
     } catch (error: any) {
       console.error('Failed to update review:', error);
       setMessage(error?.response?.data?.message || 'Failed to update review');
@@ -533,7 +574,7 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
       );
 
       setMessage('Telecalling assistant assigned successfully');
-      await fetchCalls();
+      await fetchCalls(1);
     } catch (error: any) {
       console.error('Failed to assign assistant:', error);
       setMessage(error?.response?.data?.message || 'Failed to assign assistant');
@@ -574,7 +615,7 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
         { headers: getAuthHeaders() },
       );
       setMessage('Contact converted to lead successfully');
-      await fetchCalls();
+      await fetchCalls(1);
     } catch (error: any) {
       console.error('Failed to convert contact to lead:', error);
       setMessage(error?.response?.data?.message || 'Failed to convert contact');
@@ -584,13 +625,14 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
   };
 
   const clearFilters = () => {
-    setNameFilter('');
-    setPhoneFilter('');
-    setCityFilter('');
-    setSortOrder('NEWEST');
-    setLeadPotentialFilter('');
-    setCallResultFilter('');
-  };
+  setNameFilter('');
+  setPhoneFilter('');
+  setCityFilter('');
+  setSortOrder('NEWEST');
+  setLeadPotentialFilter('');
+  setCallResultFilter('');
+  setPage(1);
+};
 
   const enrichedCalls = useMemo<EnrichedCallRow[]>(() => {
     return calls.map((call) => {
@@ -673,52 +715,14 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
   }, [enrichedCalls]);
 
   const filteredCalls = useMemo(() => {
-    const base = latestOnlyCalls.filter((call) => {
-      const matchesName =
-        !nameFilter.trim() ||
-        call.displayName.toLowerCase().includes(nameFilter.trim().toLowerCase());
+  const base = [...latestOnlyCalls];
 
-      const matchesPhone =
-        !phoneFilter.trim() ||
-        call.displayPhone.toLowerCase().includes(phoneFilter.trim().toLowerCase());
-
-      const matchesCity =
-        !cityFilter.trim() ||
-        call.displayCity.toLowerCase().includes(cityFilter.trim().toLowerCase());
-
-      const matchesLeadPotential =
-        !leadPotentialFilter ||
-        String(call.leadPotential || '').toUpperCase() ===
-          leadPotentialFilter.toUpperCase();
-
-      const matchesCallResult =
-        !callResultFilter ||
-        String(call.effectiveStatus || '').toUpperCase() ===
-          callResultFilter.toUpperCase();
-
-      return (
-        matchesName &&
-        matchesPhone &&
-        matchesCity &&
-        matchesLeadPotential &&
-        matchesCallResult
-      );
-    });
-
-    return base.sort((a, b) => {
-      const aTime = new Date(a.effectiveTimestamp).getTime();
-      const bTime = new Date(b.effectiveTimestamp).getTime();
-      return sortOrder === 'NEWEST' ? bTime - aTime : aTime - bTime;
-    });
-  }, [
-    latestOnlyCalls,
-    nameFilter,
-    phoneFilter,
-    cityFilter,
-    sortOrder,
-    leadPotentialFilter,
-    callResultFilter,
-  ]);
+  return base.sort((a, b) => {
+    const aTime = new Date(a.effectiveTimestamp).getTime();
+    const bTime = new Date(b.effectiveTimestamp).getTime();
+    return sortOrder === 'NEWEST' ? bTime - aTime : aTime - bTime;
+  });
+}, [latestOnlyCalls, sortOrder]);
 
   return (
     <div className="overflow-x-hidden p-4 md:p-6">
@@ -974,15 +978,19 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
           </div>
         </div>
 
-        <div className="mb-4">
-          <button
-            type="button"
-            onClick={clearFilters}
-            className="rounded-xl bg-gray-200 px-4 py-2 font-medium text-gray-700"
-          >
-            Clear Filters
-          </button>
-        </div>
+        <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+  <button
+    type="button"
+    onClick={clearFilters}
+    className="rounded-xl bg-gray-200 px-4 py-2 font-medium text-gray-700"
+  >
+    Clear Filters
+  </button>
+
+  <p className="text-sm text-gray-600">
+    Total Records: <span className="font-semibold">{total}</span>
+  </p>
+</div>
 
         {message && <p className="mb-4 text-sm text-blue-600">{message}</p>}
 
@@ -1392,6 +1400,32 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
                 </tbody>
               </table>
             </div>
+{totalPages > 1 && (
+  <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+    <button
+      type="button"
+      disabled={page === 1}
+      onClick={() => fetchCalls(page - 1)}
+      className="rounded-xl bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 disabled:opacity-50"
+    >
+      Previous
+    </button>
+
+    <span className="text-sm font-medium text-gray-700">
+      Page {page} of {totalPages}
+    </span>
+
+    <button
+      type="button"
+      disabled={page === totalPages}
+      onClick={() => fetchCalls(page + 1)}
+      className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+    >
+      Next
+    </button>
+  </div>
+)}
+
           </>
         )}
       </div>

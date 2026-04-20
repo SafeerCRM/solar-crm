@@ -9,6 +9,7 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
 import dayjs, { Dayjs } from 'dayjs';
+import { DateCalendar } from '@mui/x-date-pickers/DateCalendar';
 
 type Lead = {
   id: number;
@@ -57,6 +58,11 @@ export default function FollowupPage() {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [convertingId, setConvertingId] = useState<number | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Dayjs | null>(null);
+const [selectedFollowups, setSelectedFollowups] = useState<FollowUp[]>([]);
+const [nameFilter, setNameFilter] = useState('');
+const [phoneFilter, setPhoneFilter] = useState('');
+const [cityFilter, setCityFilter] = useState('');
 
   const userRoles = user?.roles || [];
 
@@ -148,6 +154,75 @@ export default function FollowupPage() {
       setAllFollowups([]);
     }
   };
+ const handleDateClick = async (date: Dayjs | null) => {
+  if (!date) return;
+
+  setSelectedDate(date);
+
+  const formatted = date.format('YYYY-MM-DD');
+
+  try {
+    const res = await axios.get(
+      `${backendUrl}/followup/by-date`,
+      {
+        params: { date: formatted },
+        headers: getAuthHeaders(),
+      }
+    );
+
+    setSelectedFollowups(res.data || []);
+  } catch (error) {
+    console.error(error);
+    setSelectedFollowups([]);
+  }
+};
+
+  const getFollowupsByDate = () => {
+  const map: Record<string, number> = {};
+
+  allFollowups.forEach((f) => {
+    const date = f.followUpDate.split('T')[0];
+    map[date] = (map[date] || 0) + 1;
+  });
+
+  return map;
+};
+
+const followupCountMap = getFollowupsByDate();
+
+const todayKey = dayjs().format('YYYY-MM-DD');
+
+const todayFollowupsCount = allFollowups.filter((f) => {
+  const dateKey = dayjs(f.followUpDate).format('YYYY-MM-DD');
+  return dateKey === todayKey && String(f.status).toUpperCase() === 'PENDING';
+}).length;
+
+const overdueFollowupsCount = allFollowups.filter((f) => {
+  return (
+    dayjs(f.followUpDate).isBefore(dayjs(), 'day') &&
+    String(f.status).toUpperCase() === 'PENDING'
+  );
+}).length;
+
+const getSelectedFollowupRowColor = (f: FollowUp) => {
+  const status = String(f.status || '').toUpperCase();
+
+  if (status === 'COMPLETED') {
+    return 'border-green-200 bg-green-50';
+  }
+
+  const followupDay = dayjs(f.followUpDate);
+
+  if (status === 'PENDING' && followupDay.isBefore(dayjs(), 'day')) {
+    return 'border-red-200 bg-red-50';
+  }
+
+  if (status === 'PENDING' && followupDay.isSame(dayjs(), 'day')) {
+    return 'border-yellow-200 bg-yellow-50';
+  }
+
+  return 'border-gray-200 bg-white';
+};
 
   const handleCreateFollowup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -276,6 +351,39 @@ export default function FollowupPage() {
     if (status === 'CANCELLED') return 'bg-red-100 text-red-700';
     return 'bg-gray-100 text-gray-700';
   };
+  const filteredAllFollowups = allFollowups.filter((f) => {
+  const name = String(f.lead?.name || '').toLowerCase();
+  const phone = String(f.lead?.phone || '').toLowerCase();
+  const city = String(f.lead?.city || '').toLowerCase();
+
+  const matchesName =
+    !nameFilter.trim() || name.includes(nameFilter.trim().toLowerCase());
+
+  const matchesPhone =
+    !phoneFilter.trim() || phone.includes(phoneFilter.trim().toLowerCase());
+
+  const matchesCity =
+    !cityFilter.trim() || city.includes(cityFilter.trim().toLowerCase());
+
+  return matchesName && matchesPhone && matchesCity;
+});
+
+const filteredSelectedFollowups = selectedFollowups.filter((f) => {
+  const name = String(f.lead?.name || '').toLowerCase();
+  const phone = String(f.lead?.phone || '').toLowerCase();
+  const city = String(f.lead?.city || '').toLowerCase();
+
+  const matchesName =
+    !nameFilter.trim() || name.includes(nameFilter.trim().toLowerCase());
+
+  const matchesPhone =
+    !phoneFilter.trim() || phone.includes(phoneFilter.trim().toLowerCase());
+
+  const matchesCity =
+    !cityFilter.trim() || city.includes(cityFilter.trim().toLowerCase());
+
+  return matchesName && matchesPhone && matchesCity;
+});
 
   return (
     <div className="space-y-6 p-6">
@@ -341,15 +449,159 @@ export default function FollowupPage() {
           {message && <p className="mt-2 text-blue-600">{message}</p>}
         </div>
       )}
+<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+  <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4 shadow-sm">
+    <p className="text-sm font-medium text-yellow-800">Today Followups</p>
+    <p className="mt-1 text-2xl font-bold text-yellow-900">
+      {todayFollowupsCount}
+    </p>
+  </div>
+
+  <div className="rounded-xl border border-red-200 bg-red-50 p-4 shadow-sm">
+    <p className="text-sm font-medium text-red-800">Overdue Followups</p>
+    <p className="mt-1 text-2xl font-bold text-red-900">
+      {overdueFollowupsCount}
+    </p>
+  </div>
+</div>
+
+<div className="rounded-xl bg-white p-4 shadow">
+  <h2 className="mb-4 text-lg font-semibold">
+  Followup Calendar ({dayjs().format('MMMM YYYY')})
+</h2>
+
+  <LocalizationProvider dateAdapter={AdapterDayjs}>
+  <DateCalendar
+    value={selectedDate}
+    onChange={(newValue) => handleDateClick(newValue)}
+    sx={{
+      '& .MuiPickersDay-root': {
+        position: 'relative',
+      },
+    }}
+  />
+</LocalizationProvider>
+<div className="rounded-xl bg-white p-4 shadow">
+  <h3 className="mb-3 font-semibold">Followup Summary</h3>
+
+  <div className="grid grid-cols-2 gap-2 text-sm">
+    {Object.entries(followupCountMap).slice(0, 6).map(([date, count]) => (
+      <div key={date} className="flex justify-between border-b pb-1">
+        <span>{dayjs(date).format('DD MMM')}</span>
+        <span className="font-semibold text-blue-600">{count}</span>
+      </div>
+    ))}
+  </div>
+</div>
+</div>
+<div className="rounded-xl bg-white p-4 shadow">
+  <h2 className="mb-4 text-lg font-semibold">Search Followups</h2>
+
+  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+    <input
+      type="text"
+      placeholder="Search by name"
+      value={nameFilter}
+      onChange={(e) => setNameFilter(e.target.value)}
+      className="w-full rounded-lg border border-gray-300 p-2 focus:border-blue-500 focus:outline-none"
+    />
+
+    <input
+      type="text"
+      placeholder="Search by phone"
+      value={phoneFilter}
+      onChange={(e) => setPhoneFilter(e.target.value)}
+      className="w-full rounded-lg border border-gray-300 p-2 focus:border-blue-500 focus:outline-none"
+    />
+
+    <input
+      type="text"
+      placeholder="Search by city"
+      value={cityFilter}
+      onChange={(e) => setCityFilter(e.target.value)}
+      className="w-full rounded-lg border border-gray-300 p-2 focus:border-blue-500 focus:outline-none"
+    />
+  </div>
+
+  <div className="mt-3">
+    <button
+      type="button"
+      onClick={() => {
+        setNameFilter('');
+        setPhoneFilter('');
+        setCityFilter('');
+      }}
+      className="rounded bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700"
+    >
+      Clear Search
+    </button>
+  </div>
+  {(nameFilter || phoneFilter || cityFilter) && (
+  <p className="mt-2 text-sm text-gray-600">
+    Filters applied:
+    {nameFilter && ` Name: "${nameFilter}"`}
+    {phoneFilter && ` Phone: "${phoneFilter}"`}
+    {cityFilter && ` City: "${cityFilter}"`}
+  </p>
+)}
+</div>
+
+{selectedDate && (
+  <div className="rounded-xl bg-white p-4 shadow">
+    <h3 className="mb-3 font-semibold">
+  Followups on {selectedDate?.format('DD MMMM YYYY')}
+  {selectedFollowups.length > 0 && (
+    <span className="ml-2 text-sm font-normal text-gray-500">
+      ({selectedFollowups.length} items)
+    </span>
+  )}
+</h3>
+
+    {filteredSelectedFollowups.length === 0 ? (
+      <p>No followups for this date</p>
+    ) : (
+      filteredSelectedFollowups.map((f) => (
+  <div
+    key={f.id}
+    className={`mb-2 rounded-xl border p-3 ${getSelectedFollowupRowColor(f)}`}
+  >
+    <p className="font-medium">
+      {f.lead?.name || `Lead ${f.leadId}`}
+    </p>
+
+    <p className="text-sm text-gray-600">
+      {f.lead?.phone || ''}
+    </p>
+
+    <p className="mt-1 text-sm text-gray-700">
+      {formatDate(f.followUpDate)}
+    </p>
+
+    {f.note && (
+      <p className="mt-1 text-sm text-gray-700">{f.note}</p>
+    )}
+
+    <span className={`mt-2 inline-block rounded-full px-3 py-1 text-xs ${getStatusColor(f.status)}`}>
+      {f.status}
+    </span>
+  </div>
+))
+    )}
+  </div>
+)}
 
       <div>
-        <h2 className="mb-4 text-xl font-semibold">All Followups</h2>
+        <h2 className="mb-4 text-xl font-semibold">
+  All Followups ({filteredAllFollowups.length})
+</h2>
 
-        {allFollowups.length === 0 ? (
-          <div className="rounded bg-white p-6 shadow">No followups found</div>
+        {filteredAllFollowups.length === 0 ? (
+          <div className="rounded bg-white p-6 shadow">
+  No followups found for the applied filters
+</div>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {allFollowups.map((f) => (
+            {filteredAllFollowups.map((f) => (
               <div
                 key={f.id}
                 className="rounded-2xl bg-white p-5 shadow transition hover:shadow-lg"
