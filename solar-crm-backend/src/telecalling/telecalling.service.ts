@@ -28,6 +28,7 @@ import { ContactCallHistory } from './contact-call-history.entity';
 import { ContactNote } from './contact-note.entity';
 import { UserRole } from '../users/user.entity';
 import { Meeting } from '../meeting/meeting.entity';
+import { Cron } from '@nestjs/schedule';
 
 
 @Injectable()
@@ -482,13 +483,21 @@ private readonly meetingRepository: Repository<Meeting>,
     return this.callLogRepository.save(callLog);
   }
 
-  async getReviewQueue(user: any) {
+    async getReviewQueue(user: any) {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 30);
+
+    const now = new Date();
+    const limit = 50;
+
     if (this.hasRole(user, 'TELECALLING_ASSISTANT' as any)) {
       return this.callLogRepository.find({
         where: {
           reviewAssignedTo: user.id,
+          createdAt: Between(cutoff, now),
         },
         order: { createdAt: 'DESC' },
+        take: limit,
       });
     }
 
@@ -505,7 +514,11 @@ private readonly meetingRepository: Repository<Meeting>,
     }
 
     return this.callLogRepository.find({
+      where: {
+        createdAt: Between(cutoff, now),
+      },
       order: { createdAt: 'DESC' },
+      take: limit,
     });
   }
 
@@ -2064,4 +2077,25 @@ async getTelecallerContactCount(userId: number) {
     count: contacts.length,
   };
 }
+
+@Cron('0 3 * * *') // runs daily at 3 AM
+  async cleanupOldCallLogs() {
+    try {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 30);
+
+      const result = await this.callLogRepository
+        .createQueryBuilder()
+        .delete()
+        .where('createdAt < :cutoff', { cutoff })
+        .execute();
+
+      console.log(
+        `🧹 Cleanup: deleted ${result.affected || 0} old call logs`,
+      );
+    } catch (error) {
+      console.error('Cleanup failed:', error);
+    }
+  }
 }
+

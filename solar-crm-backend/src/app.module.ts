@@ -16,6 +16,7 @@ import { ProjectModule } from './project/project.module';
 import { CalculatorModule } from './calculator/calculator.module';
 import { VendorModule } from './vendor/vendor.module';
 import { MeetingModule } from './meeting/meeting.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -32,7 +33,7 @@ import { MeetingModule } from './meeting/meeting.module';
   autoLoadEntities: true,
   synchronize: process.env.NODE_ENV !== 'production',
 }),
-
+    ScheduleModule.forRoot(),
     AuthModule,
     UsersModule,
     LeadsModule,
