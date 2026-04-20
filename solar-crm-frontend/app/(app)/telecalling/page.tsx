@@ -170,18 +170,22 @@ export default function TelecallingPage() {
     const token =
       localStorage.getItem('token') || localStorage.getItem('access_token');
 
-    if (!storedUser || !token) {
-      window.location.href = '/';
+    if (!token) {
+  window.location.href = '/';
       return;
     }
 
-    try {
-      const parsedUser = JSON.parse(storedUser);
-      setUser(parsedUser);
-    } catch {
-      localStorage.clear();
-      window.location.href = '/';
-    }
+    if (!storedUser) {
+  return;
+}
+
+try {
+  const parsedUser = JSON.parse(storedUser);
+  setUser(parsedUser);
+} catch {
+  localStorage.clear();
+  window.location.href = '/';
+}
   }, []);
 
   useEffect(() => {
