@@ -347,11 +347,82 @@ private readonly meetingRepository: Repository<Meeting>,
     });
   }
 
-  async getByTelecaller(telecallerId: number) {
-    return this.callLogRepository.find({
-      where: { telecallerId },
-      order: { createdAt: 'DESC' },
-    });
+    async getByTelecaller(
+    telecallerId: number,
+    filters: {
+      page?: number;
+      limit?: number;
+      name?: string;
+      phone?: string;
+      city?: string;
+      callResult?: string;
+      leadPotential?: string;
+    } = {},
+  ) {
+    const page = Number(filters.page) > 0 ? Number(filters.page) : 1;
+    const limit =
+      Number(filters.limit) > 0 ? Math.min(Number(filters.limit), 100) : 50;
+
+    const skip = (page - 1) * limit;
+
+    const normalizedName = String(filters.name || '').trim().toLowerCase();
+    const normalizedPhone = String(filters.phone || '').trim().toLowerCase();
+    const normalizedCity = String(filters.city || '').trim().toLowerCase();
+    const normalizedCallResult = String(filters.callResult || '').trim().toUpperCase();
+    const normalizedLeadPotential = String(filters.leadPotential || '')
+      .trim()
+      .toUpperCase();
+
+    const qb = this.callLogRepository
+      .createQueryBuilder('call')
+      .leftJoinAndSelect('call.lead', 'lead')
+      .where('call.telecallerId = :telecallerId', { telecallerId })
+      .orderBy('call.createdAt', 'DESC');
+
+    if (normalizedCallResult) {
+      qb.andWhere(
+        `(UPPER(COALESCE(call.disposition, '')) = :callResult OR UPPER(COALESCE(call.callStatus, '')) = :callResult)`,
+        { callResult: normalizedCallResult },
+      );
+    }
+
+    if (normalizedLeadPotential) {
+      qb.andWhere(`UPPER(COALESCE(call.leadPotential, '')) = :leadPotential`, {
+        leadPotential: normalizedLeadPotential,
+      });
+    }
+
+    if (normalizedName) {
+      qb.andWhere(`LOWER(COALESCE(lead.name, '')) LIKE :name`, {
+        name: `%${normalizedName}%`,
+      });
+    }
+
+    if (normalizedPhone) {
+      qb.andWhere(`LOWER(COALESCE(lead.phone, '')) LIKE :phone`, {
+        phone: `%${normalizedPhone}%`,
+      });
+    }
+
+    if (normalizedCity) {
+      qb.andWhere(
+        `(
+          LOWER(COALESCE(lead.city, '')) LIKE :city
+          OR LOWER(COALESCE(lead.zone, '')) LIKE :city
+        )`,
+        { city: `%${normalizedCity}%` },
+      );
+    }
+
+    const [data, total] = await qb.skip(skip).take(limit).getManyAndCount();
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit) || 1,
+    };
   }
 
   async getNeverCalledByTelecaller(telecallerId: number) {
@@ -491,6 +562,7 @@ private readonly meetingRepository: Repository<Meeting>,
     name?: string;
     phone?: string;
     city?: string;
+        telecallerName?: string;
     callResult?: string;
     leadPotential?: string;
   } = {},
@@ -507,11 +579,13 @@ private readonly meetingRepository: Repository<Meeting>,
   const now = new Date();
 
   const qb = this.callLogRepository
-    .createQueryBuilder('call')
-    .leftJoinAndSelect('call.lead', 'lead')
-    .leftJoin(TelecallingContact, 'contact', 'contact.id = call.contactId')
+  .createQueryBuilder('call')
+  .leftJoinAndSelect('call.lead', 'lead')
+  .leftJoinAndSelect(TelecallingContact, 'contact', 'contact.id = call.contactId')
+  .leftJoin(User, 'telecaller', 'telecaller.id = call.telecallerId') // ✅ NEW
     .where('call.createdAt BETWEEN :cutoff AND :now', { cutoff, now })
     .andWhere(`UPPER(COALESCE(call.callStatus, '')) <> 'INITIATED'`)
+    .andWhere('(contact.convertedToLead IS NULL OR contact.convertedToLead = false)')
     .orderBy('call.createdAt', 'DESC');
 
   if (this.hasRole(user, 'TELECALLING_ASSISTANT' as any)) {
@@ -533,6 +607,7 @@ private readonly meetingRepository: Repository<Meeting>,
   const normalizedName = String(filters.name || '').trim().toLowerCase();
   const normalizedPhone = String(filters.phone || '').trim().toLowerCase();
   const normalizedCity = String(filters.city || '').trim().toLowerCase();
+    const normalizedTelecallerName = String(filters.telecallerName || '').trim().toLowerCase();
   const normalizedCallResult = String(filters.callResult || '').trim().toUpperCase();
   const normalizedLeadPotential = String(filters.leadPotential || '')
     .trim()
@@ -583,7 +658,62 @@ private readonly meetingRepository: Repository<Meeting>,
     );
   }
 
-  const [data, total] = await qb.skip(skip).take(limit).getManyAndCount();
+    if (normalizedTelecallerName) {
+
+    const telecallerRows = await this.userRepository
+      .createQueryBuilder('user')
+      .select(['user.id', 'user.name'])
+      .where(`LOWER(COALESCE(user.name, '')) LIKE :telecallerName`, {
+        telecallerName: `%${normalizedTelecallerName}%`,
+      })
+      .getMany();
+
+    const telecallerIds = telecallerRows.map((user) => Number(user.id)).filter(Boolean);
+
+    if (!telecallerIds.length) {
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit,
+        totalPages: 1,
+      };
+    }
+
+    qb.andWhere('call.telecallerId IN (:...telecallerIds)', {
+      telecallerIds,
+    });
+  }
+
+    const [rows, total] = await qb.skip(skip).take(limit).getManyAndCount();
+
+  const telecallerIds = Array.from(
+    new Set(
+      rows
+        .map((call: any) => Number(call.telecallerId))
+        .filter((id) => Number.isInteger(id) && id > 0),
+    ),
+  );
+
+  const telecallers = telecallerIds.length
+    ? await this.userRepository.find({
+        where: { id: In(telecallerIds) },
+        select: ['id', 'name'],
+      })
+    : [];
+
+  const telecallerMap = new Map(
+    telecallers.map((user) => [Number(user.id), user.name]),
+  );
+
+  const data = rows.map((call: any) => ({
+    ...call,
+    telecallerName: call.telecallerId
+      ? telecallerMap.get(Number(call.telecallerId)) || `User ${call.telecallerId}`
+      : '',
+    assignedDate: call.createdAt,
+    contactAssignedToName: call.contact?.assignedToName || '',
+  }));
 
   return {
     data,
@@ -2168,6 +2298,29 @@ async getTelecallerContactCount(userId: number) {
     } catch (error) {
       console.error('Cleanup failed:', error);
     }
+  }
+
+    async updateContactName(id: number, name: string, user: any) {
+    if (!name || !name.trim()) {
+      throw new BadRequestException('Name is required');
+    }
+
+    const contact = await this.getAccessibleContact(id, user);
+
+    contact.name = name.trim();
+
+    await this.contactRepository.save(contact);
+
+    await this.leadRepository
+      .createQueryBuilder()
+      .update(Lead)
+      .set({ name: name.trim() })
+      .where('phone = :phone', { phone: this.normalizePhone(contact.phone) })
+      .execute();
+
+    return {
+      message: 'Contact name updated successfully',
+    };
   }
 }
 

@@ -4,15 +4,19 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThan, Between } from 'typeorm';
+import { Repository, LessThan, Between, In } from 'typeorm';
 import { FollowUp, FollowUpStatus } from './follow-up.entity';
+import { Lead } from '../leads/lead.entity';
 import { UserRole } from '../users/user.entity';
 
 @Injectable()
 export class FollowupService {
-  constructor(
+    constructor(
     @InjectRepository(FollowUp)
     private readonly followUpRepository: Repository<FollowUp>,
+
+    @InjectRepository(Lead)
+    private readonly leadRepository: Repository<Lead>,
   ) {}
 
   private getRoles(user: any): string[] {
@@ -292,6 +296,104 @@ export class FollowupService {
 
     followUp.status = FollowUpStatus.COMPLETED;
     return this.followUpRepository.save(followUp);
+  }
+
+    async assignFiltered(
+      body: {
+    assignedTo: number;
+    leadPotential?: string;
+    city?: string;
+    zone?: string;
+    limit?: number;
+  },
+    user: any,
+  ) {
+    if (!this.isOwner(user) && !this.isLeadManager(user) && !this.isTelecallingManager(user)) {
+      throw new ForbiddenException(
+        'Only owner, lead manager, or telecalling manager can bulk assign followups',
+      );
+    }
+
+    const assignedTo = Number(body.assignedTo);
+    const limit = Number(body.limit) > 0 ? Number(body.limit) : null;
+
+    if (!assignedTo || Number.isNaN(assignedTo)) {
+            throw new ForbiddenException('Valid lead manager is required');
+    }
+
+    const leadPotential = String(body.leadPotential || '').trim().toUpperCase();
+    const city = String(body.city || '').trim().toLowerCase();
+    const zone = String(body.zone || '').trim().toLowerCase();
+
+    const qb = this.followUpRepository
+      .createQueryBuilder('followUp')
+      .leftJoinAndSelect('followUp.lead', 'lead')
+      .where('followUp.status = :status', { status: FollowUpStatus.PENDING });
+
+    if (leadPotential) {
+      qb.andWhere(`UPPER(COALESCE(lead.potential, '')) = :leadPotential`, {
+        leadPotential,
+      });
+    }
+
+    if (city) {
+      qb.andWhere(`LOWER(COALESCE(lead.city, '')) LIKE :city`, {
+        city: `%${city}%`,
+      });
+    }
+
+    if (zone) {
+      qb.andWhere(`LOWER(COALESCE(lead.zone, '')) LIKE :zone`, {
+        zone: `%${zone}%`,
+      });
+    }
+
+    let matchedFollowups = await qb
+  .orderBy('followUp.followUpDate', 'ASC') // oldest first
+  .getMany();
+
+if (limit && matchedFollowups.length > limit) {
+  matchedFollowups = matchedFollowups.slice(0, limit);
+}
+
+    if (!matchedFollowups.length) {
+      return {
+        message: 'No followups found for selected filters',
+        updatedFollowups: 0,
+        updatedLeads: 0,
+      };
+    }
+
+    const followupIds = matchedFollowups.map((f) => f.id);
+    const leadIds = Array.from(
+      new Set(
+        matchedFollowups
+          .map((f) => Number(f.leadId))
+          .filter((id) => Number.isInteger(id) && id > 0),
+      ),
+    );
+
+    await this.followUpRepository
+      .createQueryBuilder()
+      .update(FollowUp)
+      .set({ assignedTo })
+      .where('id IN (:...ids)', { ids: followupIds })
+      .execute();
+
+    if (leadIds.length) {
+      await this.leadRepository
+        .createQueryBuilder()
+        .update(Lead)
+        .set({ assignedTo })
+        .where('id IN (:...ids)', { ids: leadIds })
+        .execute();
+    }
+
+    return {
+      message: 'Filtered followups assigned successfully',
+      updatedFollowups: followupIds.length,
+      updatedLeads: leadIds.length,
+    };
   }
 
   async getConvertToMeetingData(id: number, user: any) {

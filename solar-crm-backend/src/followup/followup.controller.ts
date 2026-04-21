@@ -51,7 +51,20 @@ findByDate(
   ) {
     return this.followupService.findOne(id, user);
   }
-
+@Patch('assign-filtered')
+  assignFiltered(
+    @Body()
+    body: {
+      assignedTo: number;
+      leadPotential?: string;
+      city?: string;
+      zone?: string;
+      limit?: number;
+    },
+    @CurrentUser() user: any,
+  ) {
+    return this.followupService.assignFiltered(body, user);
+  }
   @Patch(':id')
   update(
     @Param('id', ParseIntPipe) id: number,

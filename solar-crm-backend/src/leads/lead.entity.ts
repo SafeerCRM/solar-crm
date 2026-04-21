@@ -9,6 +9,12 @@ import {
 import { CallLog } from '../telecalling/call-log.entity';
 import { FollowUp } from '../followup/follow-up.entity';
 
+export enum LeadPotential {
+  LOW = 'LOW',
+  MEDIUM = 'MEDIUM',
+  HIGH = 'HIGH',
+}
+
 export enum LeadStatus {
   NEW = 'NEW',
   CONTACTED = 'CONTACTED',
@@ -30,6 +36,13 @@ export class Lead {
 
   @Column()
   phone: string;
+
+  @Column({
+  type: 'enum',
+  enum: LeadPotential,
+  default: LeadPotential.MEDIUM,
+})
+potential: LeadPotential;
 
   @Column({ nullable: true })
   alternatePhone: string;

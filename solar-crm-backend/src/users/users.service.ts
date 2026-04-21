@@ -147,6 +147,17 @@ export class UsersService {
     order: { id: 'ASC' },
   });
 }
+  async findLeadManagers() {
+    return this.userRepository.find({
+      where: {
+        roles: Raw((alias) => `${alias} LIKE :role`, {
+          role: '%LEAD_MANAGER%',
+        }),
+      },
+      select: ['id', 'name', 'email', 'roles'],
+      order: { id: 'ASC' },
+    });
+  }
 
   async findTelecallers() {
     return this.userRepository.find({

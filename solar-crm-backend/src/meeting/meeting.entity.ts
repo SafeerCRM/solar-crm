@@ -39,8 +39,8 @@ export class Meeting {
   @Column({ nullable: true })
   meetingGroupId?: number;
 
-  @Column()
-  leadId: number;
+  @Column({ nullable: true })
+  leadId?: number;
 
   @Column({ nullable: true })
   followupId?: number;
@@ -51,9 +51,9 @@ export class Meeting {
   @Column()
   mobile: string;
 
-  @ManyToOne(() => Lead)
-@JoinColumn({ name: 'leadId' })  // 🔥 CRITICAL
-lead: Lead;
+  @ManyToOne(() => Lead, { nullable: true })
+  @JoinColumn({ name: 'leadId' })
+  lead?: Lead;
 
   @Column({ type: 'text', nullable: true })
   address?: string;

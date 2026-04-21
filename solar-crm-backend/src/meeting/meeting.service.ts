@@ -270,7 +270,7 @@ export class MeetingService {
     return this.meetingRepository.save(version);
   }
 
-  async create(createMeetingDto: CreateMeetingDto, user: any): Promise<Meeting> {
+    async create(createMeetingDto: CreateMeetingDto, user: any): Promise<Meeting> {
     const currentUserId = this.getCurrentUserId(user);
     const currentUserName = this.getCurrentUserName(user);
 
@@ -284,14 +284,37 @@ export class MeetingService {
         ? currentUserName
         : (createMeetingDto as any).assignedToName;
 
-    const existingMeetingCount = await this.meetingRepository.count({
-      where: { leadId: (createMeetingDto as any).leadId },
-    });
+    let existingMeetingCount = 0;
+
+    if (
+      (createMeetingDto as any).leadId !== undefined &&
+      (createMeetingDto as any).leadId !== null &&
+      (createMeetingDto as any).leadId !== ''
+    ) {
+      existingMeetingCount = await this.meetingRepository.count({
+        where: { leadId: Number((createMeetingDto as any).leadId) },
+      });
+    }
 
     const meetingData: Partial<Meeting> = {
       ...(createMeetingDto as any),
+      leadId:
+        (createMeetingDto as any).leadId !== undefined &&
+        (createMeetingDto as any).leadId !== null &&
+        (createMeetingDto as any).leadId !== ''
+          ? Number((createMeetingDto as any).leadId)
+          : undefined,
+      followupId:
+        (createMeetingDto as any).followupId !== undefined &&
+        (createMeetingDto as any).followupId !== null &&
+        (createMeetingDto as any).followupId !== ''
+          ? Number((createMeetingDto as any).followupId)
+          : undefined,
       scheduledAt: new Date((createMeetingDto as any).scheduledAt),
-      assignedTo,
+      assignedTo:
+        assignedTo !== undefined && assignedTo !== null && assignedTo !== ''
+          ? Number(assignedTo)
+          : undefined,
       assignedToName,
       meetingCategory:
         (createMeetingDto as any).meetingCategory ||
@@ -309,7 +332,11 @@ export class MeetingService {
         (createMeetingDto as any).proposedSystemKw,
       ),
       meetingCount:
-        (createMeetingDto as any).meetingCount || existingMeetingCount + 1,
+        (createMeetingDto as any).meetingCount !== undefined &&
+        (createMeetingDto as any).meetingCount !== null &&
+        (createMeetingDto as any).meetingCount !== ''
+          ? Number((createMeetingDto as any).meetingCount)
+          : existingMeetingCount + 1,
       convertToProject: Boolean((createMeetingDto as any).convertToProject),
       createdBy: currentUserId,
       createdByName: currentUserName,

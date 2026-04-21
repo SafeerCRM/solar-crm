@@ -39,10 +39,27 @@ export class TelecallingController {
     return this.telecallingService.create(payload);
   }
 
-  @Get()
-  findAll(@CurrentUser() user: any) {
+    @Get()
+  findAll(
+    @CurrentUser() user: any,
+    @Query('page') page = 1,
+    @Query('limit') limit = 50,
+    @Query('name') name = '',
+    @Query('phone') phone = '',
+    @Query('city') city = '',
+    @Query('callResult') callResult = '',
+    @Query('leadPotential') leadPotential = '',
+  ) {
     if (this.hasRole(user, 'TELECALLER')) {
-      return this.telecallingService.getByTelecaller(user.id);
+      return this.telecallingService.getByTelecaller(user.id, {
+        page: Number(page),
+        limit: Number(limit),
+        name: String(name || ''),
+        phone: String(phone || ''),
+        city: String(city || ''),
+        callResult: String(callResult || ''),
+        leadPotential: String(leadPotential || ''),
+      });
     }
 
     return this.telecallingService.findAll();
@@ -65,6 +82,7 @@ getReviewQueue(
   @Query('name') name = '',
   @Query('phone') phone = '',
   @Query('city') city = '',
+    @Query('telecallerName') telecallerName = '',
   @Query('callResult') callResult = '',
   @Query('leadPotential') leadPotential = '',
   @CurrentUser() user: any,
@@ -75,6 +93,7 @@ getReviewQueue(
     name: String(name || ''),
     phone: String(phone || ''),
     city: String(city || ''),
+        telecallerName: String(telecallerName || ''),
     callResult: String(callResult || ''),
     leadPotential: String(leadPotential || ''),
   });
@@ -386,6 +405,15 @@ getTelecallerContactCount(
   ) {
     return this.telecallingService.getContactById(id, user);
   }
+  @Patch('contacts/:id/update-name')
+  updateContactName(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('name') name: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.telecallingService.updateContactName(id, name, user);
+  }
+
   @Patch('transfer-contacts')
 transferContacts(
   @Body()

@@ -5,11 +5,12 @@ import {
   IsOptional,
   IsString,
 } from 'class-validator';
-import { MeetingStatus, MeetingType } from '../meeting.entity';
+import { MeetingCategory, MeetingStatus, MeetingType } from '../meeting.entity';
 
 export class CreateMeetingDto {
+  @IsOptional()
   @IsNumber()
-  leadId: number;
+  leadId?: number;
 
   @IsOptional()
   @IsNumber()
@@ -33,8 +34,16 @@ export class CreateMeetingDto {
   assignedTo?: number;
 
   @IsOptional()
+  @IsString()
+  assignedToName?: string;
+
+  @IsOptional()
   @IsEnum(MeetingType)
   meetingType?: MeetingType;
+
+  @IsOptional()
+  @IsEnum(MeetingCategory)
+  meetingCategory?: MeetingCategory;
 
   @IsOptional()
   @IsEnum(MeetingStatus)
@@ -43,6 +52,10 @@ export class CreateMeetingDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsString()
+  reason?: string;
 
   @IsOptional()
   @IsString()
@@ -74,9 +87,27 @@ export class CreateMeetingDto {
 
   @IsOptional()
   @IsNumber()
-  createdBy?: number;
+  panelGivenToCustomerKw?: number;
 
   @IsOptional()
   @IsNumber()
+  inverterCapacityKw?: number;
+
+  @IsOptional()
+  @IsNumber()
+  structureKw?: number;
+
+  @IsOptional()
+  @IsNumber()
+  proposedSystemKw?: number;
+
+  @IsOptional()
+  @IsNumber()
+  meetingCount?: number;
+
+  @IsOptional()
+  createdBy?: number;
+
+  @IsOptional()
   updatedBy?: number;
 }
