@@ -14,6 +14,7 @@ type Lead = {
   createdByName?: string;
   assignedTo?: number | null;
   potentialPercentage?: number | null;
+  status?: string;
 };
 
 type User = {
@@ -37,6 +38,10 @@ export default function LeadsPage() {
   const [filteredLeads, setFilteredLeads] = useState<Lead[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [message, setMessage] = useState('');
+    const [pendingLeadEdits, setPendingLeadEdits] = useState<
+    Record<number, { potentialPercentage: number; status: string }>
+  >({});
+  const [savingLeadId, setSavingLeadId] = useState<number | null>(null);
 
   const [searchName, setSearchName] = useState('');
   const [searchPhone, setSearchPhone] = useState('');
@@ -179,6 +184,87 @@ export default function LeadsPage() {
     setSearchPhone('');
     setSearchCity('');
     setPotentialFilter('');
+  };
+
+    const LEAD_STAGES = [
+    'NEW',
+    'CONTACTED',
+    'INTERESTED',
+    'SITE_VISIT',
+    'QUOTATION',
+    'NEGOTIATION',
+    'WON',
+    'LOST',
+  ];
+
+  const getLeadStatusLabel = (value?: number | null) => {
+    const potential = Number(value || 15);
+
+    if (potential === 75) return 'HIGH';
+    if (potential === 50) return 'MEDIUM';
+    return 'LOW';
+  };
+
+  const setPendingPotential = (lead: Lead, potentialPercentage: number) => {
+    setPendingLeadEdits((prev) => ({
+      ...prev,
+      [lead.id]: {
+        potentialPercentage,
+        status: prev[lead.id]?.status || lead.status || 'NEW',
+      },
+    }));
+  };
+
+  const setPendingStage = (lead: Lead, status: string) => {
+    setPendingLeadEdits((prev) => ({
+      ...prev,
+      [lead.id]: {
+        potentialPercentage:
+          prev[lead.id]?.potentialPercentage ??
+          Number(lead.potentialPercentage || 15),
+        status,
+      },
+    }));
+  };
+
+  const saveLeadChanges = async (lead: Lead) => {
+    const pending = pendingLeadEdits[lead.id];
+    if (!pending) return;
+
+    try {
+      setSavingLeadId(lead.id);
+
+      await axios.patch(
+        `${backendUrl}/leads/${lead.id}`,
+        {
+          potentialPercentage: pending.potentialPercentage,
+          status: pending.status,
+        },
+        { headers: getAuthHeaders() }
+      );
+
+      setMessage('Lead updated successfully');
+      setPendingLeadEdits((prev) => {
+        const next = { ...prev };
+        delete next[lead.id];
+        return next;
+      });
+
+      await fetchLeads();
+    } catch (err) {
+      console.error(err);
+      setMessage('Lead update failed');
+    } finally {
+      setSavingLeadId(null);
+    }
+  };
+
+  const cancelLeadChanges = (leadId: number) => {
+    setPendingLeadEdits((prev) => {
+      const next = { ...prev };
+      delete next[leadId];
+      return next;
+    });
   };
 
   const getPotentialMeta = (value?: number | null) => {
@@ -326,6 +412,10 @@ export default function LeadsPage() {
                     <span className="font-medium">Assigned:</span>{' '}
                     {getAssignedName(lead.assignedTo)}
                   </p>
+                                    <p>
+                    <span className="font-medium">Current Stage:</span>{' '}
+                    {(pendingLeadEdits[lead.id]?.status || lead.status || 'NEW').replace('_', ' ')}
+                  </p>
                 </div>
 
                 <div className="mt-4 flex flex-wrap gap-2">
@@ -344,21 +434,106 @@ export default function LeadsPage() {
                   </Link>
                 </div>
 
-                <div className="mt-4">
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Lead Potential
-                  </label>
-                  <select
-                    onChange={(e) =>
-                      updatePotential(lead.id, Number(e.target.value))
-                    }
-                    className="w-full rounded border p-2 text-sm"
-                    value={String(lead.potentialPercentage || 15)}
-                  >
-                    <option value="15">Not Likely (15%)</option>
-                    <option value="50">Likely (50%)</option>
-                    <option value="75">High Potential (75%)</option>
-                  </select>
+                                <div className="mt-4 space-y-4">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-gray-700">
+                      Lead Status
+                    </label>
+
+                    <div className="flex gap-2">
+                      {[15, 50, 75].map((value) => {
+                        const pending = pendingLeadEdits[lead.id];
+                        const currentValue =
+                          pending?.potentialPercentage ??
+                          Number(lead.potentialPercentage || 15);
+
+                        const isActive = currentValue === value;
+
+                        const label =
+                          value === 75
+                            ? 'HIGH'
+                            : value === 50
+                            ? 'MEDIUM'
+                            : 'LOW';
+
+                        return (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() => setPendingPotential(lead, value)}
+                            className={`flex-1 rounded-xl px-3 py-2 text-sm font-medium transition ${
+                              isActive
+                                ? value === 75
+                                  ? 'bg-green-600 text-white'
+                                  : value === 50
+                                  ? 'bg-yellow-500 text-white'
+                                  : 'bg-red-500 text-white'
+                                : 'bg-gray-100 text-gray-600'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-gray-700">
+                      Lead Stage
+                    </label>
+
+                    <div className="flex gap-2 overflow-x-auto pb-1">
+                      {LEAD_STAGES.map((stage) => {
+                        const pending = pendingLeadEdits[lead.id];
+                        const currentStage = pending?.status || lead.status || 'NEW';
+                        const isActive = currentStage === stage;
+
+                        return (
+                          <button
+                            key={stage}
+                            type="button"
+                            onClick={() => setPendingStage(lead, stage)}
+                            className={`whitespace-nowrap rounded-full px-3 py-2 text-xs font-medium transition ${
+                              isActive
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-gray-100 text-gray-700'
+                            }`}
+                          >
+                            {stage.replace('_', ' ')}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {pendingLeadEdits[lead.id] && (
+                    <div className="rounded-xl border border-blue-100 bg-blue-50 p-3">
+                      <p className="mb-2 text-sm font-medium text-blue-800">
+                        Pending changes ready to save
+                      </p>
+
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => saveLeadChanges(lead)}
+                          disabled={savingLeadId === lead.id}
+                          className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white"
+                        >
+                          {savingLeadId === lead.id ? 'Saving...' : 'Save Changes'}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => cancelLeadChanges(lead.id)}
+                          disabled={savingLeadId === lead.id}
+                          className="rounded-xl bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {canAssignLeads && (

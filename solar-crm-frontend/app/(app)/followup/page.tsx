@@ -15,6 +15,9 @@ type Lead = {
   id: number;
   name: string;
   phone: string;
+  city?: string;
+  zone?: string;
+  potential?: string;
 };
 
 type FollowUp = {
@@ -24,11 +27,13 @@ type FollowUp = {
   followUpDate: string;
   status: string;
   note?: string;
-  lead?: {
+    lead?: {
     id: number;
     name: string;
     phone: string;
     city?: string;
+    zone?: string;
+    potential?: string;
     assignedTo?: number;
     createdByName?: string;
   };
@@ -63,6 +68,11 @@ const [selectedFollowups, setSelectedFollowups] = useState<FollowUp[]>([]);
 const [nameFilter, setNameFilter] = useState('');
 const [phoneFilter, setPhoneFilter] = useState('');
 const [cityFilter, setCityFilter] = useState('');
+const [potentialFilter, setPotentialFilter] = useState('');
+const [zoneFilter, setZoneFilter] = useState('');
+const [bulkAssignedTo, setBulkAssignedTo] = useState('');
+const [assignLimit, setAssignLimit] = useState('');
+const [assigningFiltered, setAssigningFiltered] = useState(false);
 
   const userRoles = user?.roles || [];
 
@@ -301,6 +311,46 @@ const getSelectedFollowupRowColor = (f: FollowUp) => {
       setConvertingId(null);
     }
   };
+const leadManagers = users.filter((u) =>
+  Array.isArray(u.roles) && u.roles.includes('LEAD_MANAGER')
+);
+  const handleAssignFiltered = async () => {
+    if (!bulkAssignedTo) {
+      setMessage('Please select lead manager');
+      return;
+    }
+
+    try {
+      setAssigningFiltered(true);
+      setMessage('');
+
+      const res = await axios.patch(
+        `${backendUrl}/followup/assign-filtered`,
+        {
+          assignedTo: Number(bulkAssignedTo),
+leadPotential: potentialFilter || undefined,
+city: cityFilter || undefined,
+zone: zoneFilter || undefined,
+limit: assignLimit ? Number(assignLimit) : undefined,
+        },
+        { headers: getAuthHeaders() },
+      );
+
+      setMessage(res.data?.message || 'Filtered followups assigned successfully');
+      await fetchFollowups();
+
+      if (selectedDate) {
+        await handleDateClick(selectedDate);
+      }
+    } catch (error: any) {
+      console.error(error);
+      setMessage(
+        error?.response?.data?.message || 'Failed to assign filtered followups',
+      );
+    } finally {
+      setAssigningFiltered(false);
+    }
+  };
 
   const getUserName = (id?: number) => {
     const found = users.find((u) => u.id === id);
@@ -355,6 +405,8 @@ const getSelectedFollowupRowColor = (f: FollowUp) => {
   const name = String(f.lead?.name || '').toLowerCase();
   const phone = String(f.lead?.phone || '').toLowerCase();
   const city = String(f.lead?.city || '').toLowerCase();
+  const zone = String(f.lead?.zone || '').toLowerCase();
+  const potential = String(f.lead?.potential || '').toUpperCase();
 
   const matchesName =
     !nameFilter.trim() || name.includes(nameFilter.trim().toLowerCase());
@@ -365,13 +417,27 @@ const getSelectedFollowupRowColor = (f: FollowUp) => {
   const matchesCity =
     !cityFilter.trim() || city.includes(cityFilter.trim().toLowerCase());
 
-  return matchesName && matchesPhone && matchesCity;
+  const matchesZone =
+    !zoneFilter.trim() || zone.includes(zoneFilter.trim().toLowerCase());
+
+  const matchesPotential =
+    !potentialFilter || potential === potentialFilter.toUpperCase();
+
+  return (
+    matchesName &&
+    matchesPhone &&
+    matchesCity &&
+    matchesZone &&
+    matchesPotential
+  );
 });
 
 const filteredSelectedFollowups = selectedFollowups.filter((f) => {
   const name = String(f.lead?.name || '').toLowerCase();
   const phone = String(f.lead?.phone || '').toLowerCase();
   const city = String(f.lead?.city || '').toLowerCase();
+  const zone = String(f.lead?.zone || '').toLowerCase();
+  const potential = String(f.lead?.potential || '').toUpperCase();
 
   const matchesName =
     !nameFilter.trim() || name.includes(nameFilter.trim().toLowerCase());
@@ -382,7 +448,19 @@ const filteredSelectedFollowups = selectedFollowups.filter((f) => {
   const matchesCity =
     !cityFilter.trim() || city.includes(cityFilter.trim().toLowerCase());
 
-  return matchesName && matchesPhone && matchesCity;
+  const matchesZone =
+    !zoneFilter.trim() || zone.includes(zoneFilter.trim().toLowerCase());
+
+  const matchesPotential =
+    !potentialFilter || potential === potentialFilter.toUpperCase();
+
+  return (
+    matchesName &&
+    matchesPhone &&
+    matchesCity &&
+    matchesZone &&
+    matchesPotential
+  );
 });
 
   return (
@@ -497,7 +575,7 @@ const filteredSelectedFollowups = selectedFollowups.filter((f) => {
 <div className="rounded-xl bg-white p-4 shadow">
   <h2 className="mb-4 text-lg font-semibold">Search Followups</h2>
 
-  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+  <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
     <input
       type="text"
       placeholder="Search by name"
@@ -523,25 +601,83 @@ const filteredSelectedFollowups = selectedFollowups.filter((f) => {
     />
   </div>
 
-  <div className="mt-3">
+      <select
+      value={potentialFilter}
+      onChange={(e) => setPotentialFilter(e.target.value)}
+      className="w-full rounded-lg border border-gray-300 p-2 focus:border-blue-500 focus:outline-none"
+    >
+      <option value="">All Potential</option>
+      <option value="LOW">LOW</option>
+      <option value="MEDIUM">MEDIUM</option>
+      <option value="HIGH">HIGH</option>
+    </select>
+
+    <input
+      type="text"
+      placeholder="Search by zone"
+      value={zoneFilter}
+      onChange={(e) => setZoneFilter(e.target.value)}
+      className="w-full rounded-lg border border-gray-300 p-2 focus:border-blue-500 focus:outline-none"
+    />
+
+    <div className="mt-3 flex flex-col gap-3 md:flex-row md:items-center">
     <button
       type="button"
       onClick={() => {
         setNameFilter('');
         setPhoneFilter('');
         setCityFilter('');
+        setPotentialFilter('');
+        setZoneFilter('');
       }}
       className="rounded bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700"
     >
       Clear Search
     </button>
+
+    <select
+      value={bulkAssignedTo}
+      onChange={(e) => setBulkAssignedTo(e.target.value)}
+      className="rounded-lg border border-gray-300 p-2"
+    >
+      <option value="">Select Lead Manager</option>
+      {leadManagers.map((u) => (
+        <option key={u.id} value={u.id}>
+          {u.name} ({u.email})
+        </option>
+      ))}
+    </select>
+
+    <input
+  type="number"
+  placeholder="Number to assign"
+  value={assignLimit}
+  onChange={(e) => setAssignLimit(e.target.value)}
+  className="rounded-lg border border-gray-300 p-2"
+  min={1}
+/>
+
+    <button
+  type="button"
+  onClick={handleAssignFiltered}
+  disabled={assigningFiltered}
+  className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
+>
+  {assigningFiltered
+    ? 'Assigning...'
+    : assignLimit
+    ? `Assign ${assignLimit} Followups`
+    : 'Assign All Filtered'}
+</button>
   </div>
-  {(nameFilter || phoneFilter || cityFilter) && (
+    {(nameFilter || phoneFilter || cityFilter || potentialFilter || zoneFilter) && (
   <p className="mt-2 text-sm text-gray-600">
     Filters applied:
     {nameFilter && ` Name: "${nameFilter}"`}
     {phoneFilter && ` Phone: "${phoneFilter}"`}
     {cityFilter && ` City: "${cityFilter}"`}
+    {potentialFilter && ` Potential: "${potentialFilter}"`}
+    {zoneFilter && ` Zone: "${zoneFilter}"`}
   </p>
 )}
 </div>

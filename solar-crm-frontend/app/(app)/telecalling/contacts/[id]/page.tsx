@@ -8,7 +8,7 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
 import axios from 'axios';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { getAuthHeaders } from '@/lib/authHeaders';
 
 type Contact = {
@@ -56,15 +56,24 @@ const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 export default function TelecallingContactDetailPage() {
   const params = useParams();
   const id = params?.id;
+  const searchParams = useSearchParams();
+  const backHref =
+  searchParams?.get('from') === 'review-queue'
+    ? '/telecalling'
+    : '/telecalling/contacts';
 
   const [data, setData] = useState<WorkHistoryResponse | null>(null);
   const [message, setMessage] = useState('');
+    const [editingName, setEditingName] = useState(false);
+  const [editingNameValue, setEditingNameValue] = useState('');
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
  const [assistants, setAssistants] = useState<User[]>([]);
  const [meetingManagers, setMeetingManagers] = useState<User[]>([]);
  const [selectedAssistantId, setSelectedAssistantId] = useState('');
  const [selectedMeetingManagerId, setSelectedMeetingManagerId] = useState('');
+ const [leadManagers, setLeadManagers] = useState<User[]>([]);
+const [selectedLeadManagerId, setSelectedLeadManagerId] = useState('');
  const [assigningAssistant, setAssigningAssistant] = useState(false);
 
   const [noteText, setNoteText] = useState('');
@@ -130,18 +139,21 @@ const isTelecaller = roles.includes('TELECALLER');
       ? [currentUser.role]
       : [];
 
-    const canAssignAssistant =
+       const canLoadAssignmentLists =
       roles.includes('OWNER') ||
       roles.includes('TELECALLING_MANAGER') ||
-      roles.includes('TELECALLER');
+      roles.includes('TELECALLER') ||
+      roles.includes('TELECALLING_ASSISTANT');
 
-    if (canAssignAssistant) {
-      fetchAssistants();
-      fetchMeetingManagers();
-    } else {
-      setAssistants([]);
-      setMeetingManagers([]);
-    }
+        if (canLoadAssignmentLists) {
+  fetchAssistants();
+  fetchMeetingManagers();
+  fetchLeadManagers();
+} else {
+  setAssistants([]);
+  setMeetingManagers([]);
+  setLeadManagers([]);
+}
   }
 }, [currentUser]);
 
@@ -201,6 +213,22 @@ useEffect(() => {
   }
 };
 
+const fetchLeadManagers = async () => {
+  try {
+    const res = await axios.get(
+      `${backendUrl}/users/lead-managers`,
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+
+    setLeadManagers(Array.isArray(res.data) ? res.data : []);
+  } catch (error: any) {
+    console.error(error);
+    setLeadManagers([]);
+  }
+};
+
   const fetchHistory = async () => {
     try {
       const res = await axios.get(
@@ -212,6 +240,7 @@ useEffect(() => {
 
       setData(res.data);
 setSelectedMeetingManagerId('');
+setSelectedLeadManagerId('');
 
 const reviewAssignedTo = res.data?.contact?.reviewAssignedTo;
 setSelectedAssistantId(reviewAssignedTo ? String(reviewAssignedTo) : '');
@@ -219,6 +248,34 @@ setSelectedAssistantId(reviewAssignedTo ? String(reviewAssignedTo) : '');
       console.error(error);
       setMessage(error?.response?.data?.message || 'Failed to load contact details');
       setData(null);
+    }
+  };
+
+    const handleSaveName = async () => {
+    if (!editingNameValue.trim()) {
+      setMessage('Name cannot be empty');
+      return;
+    }
+
+    try {
+      setMessage('');
+
+      await axios.patch(
+        `${backendUrl}/telecalling/contacts/${id}/update-name`,
+        { name: editingNameValue },
+        { headers: getAuthHeaders() }
+      );
+
+      setEditingName(false);
+      setEditingNameValue('');
+      setFlashMessage('Name updated successfully');
+
+      fetchHistory();
+    } catch (err: any) {
+      console.error(err);
+      setMessage(
+        err?.response?.data?.message || 'Failed to update name'
+      );
     }
   };
 
@@ -458,7 +515,7 @@ setSelectedAssistantId(reviewAssignedTo ? String(reviewAssignedTo) : '');
         <div className="mb-6 flex justify-between">
           <h1 className="text-2xl font-semibold">Contact Detail</h1>
           <Link
-            href="/telecalling/contacts"
+            href={backHref}
             className="rounded bg-gray-500 px-4 py-2 text-white"
           >
             Back
@@ -480,7 +537,7 @@ setSelectedAssistantId(reviewAssignedTo ? String(reviewAssignedTo) : '');
         <h1 className="text-2xl font-semibold">Contact Detail</h1>
 
         <Link
-          href="/telecalling/contacts"
+          href={backHref}
           className="rounded bg-gray-500 px-4 py-2 text-white"
         >
           Back
@@ -489,8 +546,48 @@ setSelectedAssistantId(reviewAssignedTo ? String(reviewAssignedTo) : '');
 
       <div className="mb-6 rounded-2xl bg-white p-6 shadow">
         <div className="mb-3 flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-xl font-semibold">{data.contact.name}</h2>
+                    <div>
+            {editingName ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  value={editingNameValue}
+                  onChange={(e) => setEditingNameValue(e.target.value)}
+                  className="rounded border px-3 py-2 text-sm"
+                />
+
+                <button
+                  onClick={handleSaveName}
+                  className="rounded bg-blue-600 px-3 py-2 text-sm text-white"
+                >
+                  Save
+                </button>
+
+                <button
+                  onClick={() => {
+                    setEditingName(false);
+                    setEditingNameValue('');
+                  }}
+                  className="rounded bg-gray-300 px-3 py-2 text-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-xl font-semibold">{data.contact.name}</h2>
+
+                <button
+                  onClick={() => {
+                    setEditingName(true);
+                    setEditingNameValue(data.contact.name || '');
+                  }}
+                  className="rounded-full bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700"
+                >
+                  ✏️ Edit
+                </button>
+              </div>
+            )}
+
             <p className="text-sm text-gray-500">Contact ID: {data.contact.id}</p>
           </div>
 
@@ -572,7 +669,19 @@ setSelectedAssistantId(reviewAssignedTo ? String(reviewAssignedTo) : '');
       <p className="text-sm font-semibold text-blue-800">
         Convert to Lead
       </p>
-
+<select
+  value={selectedLeadManagerId}
+  onChange={(e) => setSelectedLeadManagerId(e.target.value)}
+  className="w-full rounded border p-2"
+>
+  <option value="">Select lead manager</option>
+  {leadManagers.map((manager) => (
+    <option key={manager.id} value={manager.id}>
+      {manager.name}
+      {manager.email ? ` (${manager.email})` : ''}
+    </option>
+  ))}
+</select>
       <input
         type="range"
         min="0"
@@ -596,11 +705,19 @@ setSelectedAssistantId(reviewAssignedTo ? String(reviewAssignedTo) : '');
         <div className="flex gap-3">
           <button
             onClick={async () => {
+  if (!selectedLeadManagerId) {
+    setMessage('Please select lead manager');
+    return;
+  }
+
   try {
     setMessage('');
+
     await axios.post(
       `${backendUrl}/telecalling/contacts/${id}/convert`,
-      {},
+      {
+        assignedTo: Number(selectedLeadManagerId),
+      },
       { headers: getAuthHeaders() }
     );
 
@@ -609,14 +726,18 @@ setSelectedAssistantId(reviewAssignedTo ? String(reviewAssignedTo) : '');
     setPendingLeadSave(false);
 
     setTimeout(() => {
-      fetchHistory();
+      if (searchParams?.get('from') === 'review-queue') {
+        window.location.href = '/telecalling';
+      } else {
+        fetchHistory();
+      }
     }, 300);
   } catch (err: any) {
-  console.error(err);
-  setMessage(
-    err?.response?.data?.message || 'Failed to convert to lead'
-  );
-}
+    console.error(err);
+    setMessage(
+      err?.response?.data?.message || 'Failed to convert to lead'
+    );
+  }
 }}
             className="rounded bg-blue-600 px-4 py-2 text-white"
           >

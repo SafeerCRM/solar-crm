@@ -6,6 +6,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
+import { DateCalendar } from '@mui/x-date-pickers/DateCalendar';
 import axios from 'axios';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -72,6 +73,8 @@ type CallLog = {
   reviewNotes?: string;
   reviewAssignedTo?: number | null;
   reviewAssignedToName?: string | null;
+    telecallerName?: string;
+  assignedDate?: string;
   leadPotential?: 'LOW' | 'MEDIUM' | 'HIGH' | string | null;
   createdAt: string;
 };
@@ -136,6 +139,7 @@ export default function TelecallingPage() {
   const [nameFilter, setNameFilter] = useState('');
   const [phoneFilter, setPhoneFilter] = useState('');
   const [cityFilter, setCityFilter] = useState('');
+    const [telecallerNameFilter, setTelecallerNameFilter] = useState('');
   const [sortOrder, setSortOrder] = useState<'NEWEST' | 'OLDEST'>('NEWEST');
   const [leadPotentialFilter, setLeadPotentialFilter] = useState('');
   const [callResultFilter, setCallResultFilter] = useState('');
@@ -143,6 +147,7 @@ export default function TelecallingPage() {
 const [limit] = useState(50);
 const [total, setTotal] = useState(0);
 const [totalPages, setTotalPages] = useState(1);
+  const [selectedReminderDate, setSelectedReminderDate] = useState<Dayjs | null>(null);
 
   const userRoles = useMemo(() => {
     if (Array.isArray(user?.roles)) return user.roles;
@@ -208,19 +213,21 @@ try {
 useEffect(() => {
   if (!user) return;
 
-  const shouldUseReviewQueue =
+  const shouldRefetchWithFilters =
     isTelecallingManager ||
     userRoles.includes('PROJECT_MANAGER') ||
     isAssistant ||
-    isOwner;
+    isOwner ||
+    isTelecaller;
 
-  if (!shouldUseReviewQueue) return;
+  if (!shouldRefetchWithFilters) return;
 
   fetchCalls(1);
 }, [
   nameFilter,
   phoneFilter,
   cityFilter,
+  telecallerNameFilter,
   leadPotentialFilter,
   callResultFilter,
   user,
@@ -298,6 +305,7 @@ useEffect(() => {
         name: nameFilter.trim(),
         phone: phoneFilter.trim(),
         city: cityFilter.trim(),
+                telecallerName: telecallerNameFilter.trim(),
         callResult: callResultFilter,
         leadPotential: leadPotentialFilter,
       };
@@ -317,15 +325,28 @@ useEffect(() => {
       return;
     }
 
-    const res = await axios.get(`${backendUrl}/telecalling`, {
-      headers: getAuthHeaders(),
-    });
+    const params = {
+  page: pageNumber,
+  limit,
+  name: nameFilter.trim(),
+  phone: phoneFilter.trim(),
+  city: cityFilter.trim(),
+  callResult: callResultFilter,
+  leadPotential: leadPotentialFilter,
+};
 
-    const data = Array.isArray(res.data) ? res.data : [];
-    setCalls(data);
-    setTotal(data.length);
-    setTotalPages(1);
-    setPage(1);
+const res = await axios.get(`${backendUrl}/telecalling`, {
+  params,
+  headers: getAuthHeaders(),
+});
+
+const responseData = res.data || {};
+const data = Array.isArray(responseData.data) ? responseData.data : [];
+
+setCalls(data);
+setTotal(Number(responseData.total || 0));
+setTotalPages(Number(responseData.totalPages || 1));
+setPage(Number(responseData.page || pageNumber));
   } catch (error) {
     console.error('Failed to fetch calls:', error);
     setCalls([]);
@@ -628,9 +649,11 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
   setNameFilter('');
   setPhoneFilter('');
   setCityFilter('');
+    setTelecallerNameFilter('');
   setSortOrder('NEWEST');
   setLeadPotentialFilter('');
   setCallResultFilter('');
+    setSelectedReminderDate(null);
   setPage(1);
 };
 
@@ -723,6 +746,41 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
     return sortOrder === 'NEWEST' ? bTime - aTime : aTime - bTime;
   });
 }, [latestOnlyCalls, sortOrder]);
+
+  const reminderCalendarCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+
+    filteredCalls.forEach((call) => {
+      if (!call.effectiveNextFollowUpDate) return;
+
+      const key = dayjs(call.effectiveNextFollowUpDate).format('YYYY-MM-DD');
+      counts[key] = (counts[key] || 0) + 1;
+    });
+
+    return counts;
+  }, [filteredCalls]);
+
+  const calendarFilteredCalls = useMemo(() => {
+    if (!selectedReminderDate) return filteredCalls;
+
+    const selectedKey = selectedReminderDate.format('YYYY-MM-DD');
+
+    return filteredCalls.filter((call) => {
+      if (!call.effectiveNextFollowUpDate) return false;
+      return dayjs(call.effectiveNextFollowUpDate).format('YYYY-MM-DD') === selectedKey;
+    });
+  }, [filteredCalls, selectedReminderDate]);
+
+  const selectedReminderDateCalls = useMemo(() => {
+    if (!selectedReminderDate) return [];
+
+    const selectedKey = selectedReminderDate.format('YYYY-MM-DD');
+
+    return filteredCalls.filter((call) => {
+      if (!call.effectiveNextFollowUpDate) return false;
+      return dayjs(call.effectiveNextFollowUpDate).format('YYYY-MM-DD') === selectedKey;
+    });
+  }, [filteredCalls, selectedReminderDate]);
 
   return (
     <div className="overflow-x-hidden p-4 md:p-6">
@@ -938,6 +996,14 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
               placeholder="Search by city/area/location"
               className="rounded-xl border border-gray-300 px-3 py-2"
             />
+            
+
+            <input
+  placeholder="Search by telecaller"
+  value={telecallerNameFilter}
+  onChange={(e) => setTelecallerNameFilter(e.target.value)}
+  className="rounded-2xl border border-gray-200 bg-gray-50 p-3 outline-none transition focus:border-blue-500 focus:bg-white"
+/>
 
             <select
               value={callResultFilter}
@@ -994,12 +1060,89 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
 
         {message && <p className="mb-4 text-sm text-blue-600">{message}</p>}
 
-        {filteredCalls.length === 0 ? (
+                <div className="mb-6 rounded-2xl border border-blue-100 bg-blue-50 p-4">
+          <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-blue-900">Reminder Calendar</h3>
+              <p className="text-sm text-blue-700">
+                Click a date to filter review queue by next follow-up reminders
+              </p>
+            </div>
+
+            {selectedReminderDate && (
+              <button
+                type="button"
+                onClick={() => setSelectedReminderDate(null)}
+                className="rounded-xl bg-white px-4 py-2 text-sm font-medium text-blue-700 border border-blue-200"
+              >
+                Clear Selected Date
+              </button>
+            )}
+          </div>
+
+          <LocalizationProvider dateAdapter={AdapterDayjs}>
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-[380px_1fr]">
+              <div className="rounded-2xl bg-white p-3 shadow-sm">
+                <DateCalendar
+  value={selectedReminderDate}
+  onChange={(newValue) => setSelectedReminderDate(newValue)}
+/>
+              </div>
+
+              <div className="rounded-2xl bg-white p-4 shadow-sm">
+                <h4 className="mb-3 text-base font-semibold text-gray-900">
+                  {selectedReminderDate
+                    ? `Reminders for ${selectedReminderDate.format('DD MMM YYYY')}`
+                    : 'Select a date to view reminders'}
+                </h4>
+
+                {!selectedReminderDate ? (
+                  <p className="text-sm text-gray-500">
+                    Dates with reminder counts are highlighted on the calendar.
+                  </p>
+                ) : selectedReminderDateCalls.length === 0 ? (
+                  <p className="text-sm text-gray-500">
+                    No review queue reminders on this date.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {selectedReminderDateCalls.map((call) => (
+                      <div
+                        key={`reminder-${call.personKey}`}
+                        className="rounded-xl border border-gray-200 bg-gray-50 p-3"
+                      >
+                        <div className="flex flex-col gap-1">
+                          <p className="font-medium text-gray-900">
+                            {call.displayName} ({call.displayPhone})
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            {call.displayCity || '-'}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            Status: {call.effectiveStatus || '-'}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            Reminder:{' '}
+                            {call.effectiveNextFollowUpDate
+                              ? new Date(call.effectiveNextFollowUpDate).toLocaleString()
+                              : '-'}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </LocalizationProvider>
+        </div>
+
+                {calendarFilteredCalls.length === 0 ? (
           <p>No calls found</p>
         ) : (
           <>
             <div className="space-y-4 overflow-x-hidden md:hidden">
-              {filteredCalls.map((call) => (
+                            {calendarFilteredCalls.map((call) => (
                 <div
   key={call.personKey}
   className="w-full max-w-full overflow-hidden rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"
@@ -1105,8 +1248,8 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
                       <button
                         type="button"
                         onClick={() =>
-                          router.push(`/telecalling/contacts/${call.contactId}`)
-                        }
+  router.push(`/telecalling/contacts/${call.contactId}?from=review-queue`)
+}
                         className="w-full rounded-xl bg-purple-600 px-4 py-2 text-white sm:w-auto"
                       >
                         Open Contact
@@ -1199,6 +1342,8 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
                     <th className="border p-2 text-left">Lead / Contact</th>
                     <th className="border p-2 text-left">Phone</th>
                     <th className="border p-2 text-left">City</th>
+                    <th className="border p-2">Telecaller</th>
+                    <th className="border p-2">Assigned Date</th>
                     <th className="border p-2 text-left">Latest Status</th>
                     <th className="border p-2 text-left">Potential</th>
                     <th className="border p-2 text-left">Latest Notes</th>
@@ -1220,11 +1365,20 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredCalls.map((call) => (
+                                {calendarFilteredCalls.map((call) => (
                     <tr key={call.personKey}>
                       <td className="border p-2 break-words">{call.displayName}</td>
                       <td className="border p-2 break-all">{call.displayPhone}</td>
                       <td className="border p-2 break-words">{call.displayCity}</td>
+                      <td className="border p-2 break-words">
+  {(call as any).telecallerName || '-'}
+</td>
+
+<td className="border p-2">
+  {(call as any).assignedDate
+    ? new Date((call as any).assignedDate).toLocaleString()
+    : '-'}
+</td>
                       <td className="border p-2">{call.effectiveStatus}</td>
                       <td className="border p-2">{call.leadPotential || '-'}</td>
                       <td className="border p-2 break-words">{call.effectiveNotes || '-'}</td>
@@ -1313,8 +1467,8 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
                               <button
                                 type="button"
                                 onClick={() =>
-                                  router.push(`/telecalling/contacts/${call.contactId}`)
-                                }
+  router.push(`/telecalling/contacts/${call.contactId}?from=review-queue`)
+}
                                 className="rounded bg-purple-600 px-3 py-1 text-white"
                               >
                                 Open Contact

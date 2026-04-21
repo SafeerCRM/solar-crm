@@ -31,6 +31,9 @@ const allRoles = [
 export default function UsersPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[]>([]);
+  const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
+const [search, setSearch] = useState('');
+const [roleFilter, setRoleFilter] = useState('');
   const [editingRoles, setEditingRoles] = useState<Record<number, string[]>>({});
 
   const [name, setName] = useState('');
@@ -79,6 +82,25 @@ export default function UsersPage() {
     }
   }, [currentUser]);
 
+  useEffect(() => {
+  let temp = [...users];
+
+  if (search) {
+    temp = temp.filter((user) =>
+      user.name?.toLowerCase().includes(search.toLowerCase()) ||
+      user.email?.toLowerCase().includes(search.toLowerCase())
+    );
+  }
+
+  if (roleFilter) {
+    temp = temp.filter((user) =>
+      user.roles?.includes(roleFilter)
+    );
+  }
+
+  setFilteredUsers(temp);
+}, [search, roleFilter, users]);
+
   const fetchUsers = async () => {
     try {
       const res = await axios.get(`${backendUrl}/users`, {
@@ -87,6 +109,7 @@ export default function UsersPage() {
 
       const data = Array.isArray(res.data) ? res.data : [];
       setUsers(data);
+      setFilteredUsers(data);
 
       const roleMap: Record<number, string[]> = {};
       data.forEach((u: User) => {
@@ -320,6 +343,29 @@ export default function UsersPage() {
       <div className="rounded-2xl bg-white p-6 shadow">
         <h2 className="mb-4 text-2xl font-bold">All Users</h2>
 
+        <div className="mb-4 flex flex-col gap-3 md:flex-row">
+  <input
+    type="text"
+    placeholder="Search by name or email..."
+    value={search}
+    onChange={(e) => setSearch(e.target.value)}
+    className="w-full rounded-xl border px-4 py-3 md:w-1/2"
+  />
+
+  <select
+    value={roleFilter}
+    onChange={(e) => setRoleFilter(e.target.value)}
+    className="w-full rounded-xl border px-4 py-3 md:w-1/4"
+  >
+    <option value="">All Roles</option>
+    {allRoles.map((role) => (
+      <option key={role} value={role}>
+        {role}
+      </option>
+    ))}
+  </select>
+</div>
+
         <div className="overflow-x-auto">
           <table className="w-full border text-sm">
             <thead>
@@ -333,7 +379,7 @@ export default function UsersPage() {
             </thead>
 
             <tbody>
-              {users.map((user) => {
+              {filteredUsers.map((user) => {
                 const safeRoles = editingRoles[user.id] || [];
                 const originalRoles = Array.isArray(user.roles) ? user.roles : [];
                 const isOwnerUser = originalRoles.includes('OWNER');
@@ -429,7 +475,7 @@ export default function UsersPage() {
                 );
               })}
 
-              {users.length === 0 && (
+              {filteredUsers.length === 0 && (
                 <tr>
                   <td colSpan={5} className="border p-4 text-center text-gray-500">
                     No users found

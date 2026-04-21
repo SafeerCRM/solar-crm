@@ -10,6 +10,7 @@ export default function CreateLeadPage() {
   const [city, setCity] = useState('');
   const [zone, setZone] = useState('');
   const [status, setStatus] = useState('');
+  const [potential, setPotential] = useState('MEDIUM');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -28,13 +29,14 @@ export default function CreateLeadPage() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          name,
-          phone,
-          email,
-          city,
-          zone,
-          status: status || 'NEW',
-        }),
+  name,
+  phone,
+  email,
+  city,
+  zone,
+  status: status || 'NEW',
+  potential,
+}),
       });
 
       const data = await res.json();
@@ -168,6 +170,34 @@ export default function CreateLeadPage() {
               <option value="WON">WON</option>
               <option value="LOST">LOST</option>
             </select>
+          </div>
+
+                    {/* POTENTIAL */}
+          <div>
+            <label className="mb-2 block text-sm font-medium text-gray-700">
+              Lead Potential
+            </label>
+
+            <div className="flex gap-2">
+              {['LOW', 'MEDIUM', 'HIGH'].map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setPotential(value)}
+                  className={`flex-1 rounded-xl px-4 py-3 text-sm font-medium ${
+                    potential === value
+                      ? value === 'HIGH'
+                        ? 'bg-green-600 text-white'
+                        : value === 'MEDIUM'
+                        ? 'bg-yellow-500 text-white'
+                        : 'bg-red-600 text-white'
+                      : 'bg-gray-100 text-gray-700'
+                  }`}
+                >
+                  {value}
+                </button>
+              ))}
+            </div>
           </div>
 
           {message && (
