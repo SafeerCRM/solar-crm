@@ -2,7 +2,11 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
+import dayjs, { Dayjs } from 'dayjs';
 import axios from 'axios';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { DateCalendar } from '@mui/x-date-pickers/DateCalendar';
 import { getAuthHeaders } from '@/lib/authHeaders';
 
 type Meeting = {
@@ -47,7 +51,11 @@ const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 export default function MeetingPage() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [message, setMessage] = useState('');
+  const [editingMeetingId, setEditingMeetingId] = useState<number | null>(null);
+const [editingCustomerName, setEditingCustomerName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Dayjs | null>(dayjs());
 
   const [searchName, setSearchName] = useState('');
   const [searchPhone, setSearchPhone] = useState('');
@@ -59,8 +67,9 @@ export default function MeetingPage() {
   const [month, setMonth] = useState('');
 
   useEffect(() => {
-    fetchMeetings();
-  }, []);
+  setMounted(true);
+  fetchMeetings();
+}, []);
 
   const fetchMeetings = async () => {
     try {
@@ -125,6 +134,14 @@ export default function MeetingPage() {
     return data;
   }, [meetings, searchName, searchPhone, searchLocation]);
 
+  const meetingsBySelectedDate = useMemo(() => {
+  if (!selectedDate) return [];
+
+  return filteredMeetings.filter((m) => {
+    return dayjs(m.scheduledAt).isSame(selectedDate, 'day');
+  });
+}, [filteredMeetings, selectedDate]);
+
   const statusBadgeClass = (status: string) => {
     switch (status) {
       case 'COMPLETED':
@@ -156,6 +173,24 @@ export default function MeetingPage() {
       fallbackAddress
     )}`;
   };
+
+const updateMeetingName = async (meetingId: number) => {
+  try {
+    await axios.patch(
+      `${backendUrl}/meetings/${meetingId}`,
+      { customerName: editingCustomerName },
+      { headers: getAuthHeaders() }
+    );
+
+    setMessage('Meeting name updated');
+    setEditingMeetingId(null);
+    setEditingCustomerName('');
+    await fetchMeetings();
+  } catch (err) {
+    console.error(err);
+    setMessage('Failed to update meeting name');
+  }
+};
 
   const clearFilters = () => {
     setSearchName('');
@@ -274,6 +309,58 @@ export default function MeetingPage() {
 
       {message && <p className="mb-4 text-sm text-blue-600">{message}</p>}
 
+      <div className="mb-6 rounded-2xl bg-white p-4 shadow md:p-6">
+  <h2 className="mb-4 text-lg font-semibold">Meeting Calendar</h2>
+
+  <div className="grid grid-cols-1 gap-6 md:grid-cols-[350px_1fr]">
+    
+    {/* LEFT: Calendar */}
+    <div className="rounded-xl bg-gray-50 p-3">
+      {mounted && (
+  <LocalizationProvider dateAdapter={AdapterDayjs}>
+    <DateCalendar
+      value={selectedDate}
+      onChange={(newValue) => setSelectedDate(newValue)}
+    />
+  </LocalizationProvider>
+)}
+    </div>
+
+    {/* RIGHT: Meetings of selected date */}
+    <div>
+      <h3 className="mb-3 text-sm font-medium text-gray-600">
+        Meetings on selected date: {meetingsBySelectedDate.length}
+      </h3>
+
+      {meetingsBySelectedDate.length === 0 ? (
+        <p className="text-sm text-gray-500">No meetings</p>
+      ) : (
+        <div className="grid gap-3">
+          {meetingsBySelectedDate.map((m) => (
+            <div
+              key={`calendar-${m.id}`}
+              className="rounded-xl border p-3"
+            >
+              <div className="font-medium">{m.customerName}</div>
+              <div className="text-sm text-gray-600">{m.mobile}</div>
+              <div className="text-xs text-gray-500">
+                {new Date(m.scheduledAt).toLocaleString()}
+              </div>
+
+              <Link
+                href={`/meeting/${m.id}`}
+                className="mt-2 inline-block rounded bg-blue-600 px-3 py-1 text-white text-sm"
+              >
+                Open
+              </Link>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  </div>
+</div>
+
       <div className="overflow-x-auto rounded border bg-white">
         <table className="w-full text-sm">
           <thead className="bg-gray-100">
@@ -312,7 +399,40 @@ export default function MeetingPage() {
                 return (
                   <tr key={m.id}>
                     <td className="border p-2">
-                      <div className="font-medium">{m.customerName}</div>
+                      {editingMeetingId === m.id ? (
+  <div className="flex gap-2">
+    <input
+      value={editingCustomerName}
+      onChange={(e) => setEditingCustomerName(e.target.value)}
+      className="rounded border px-2 py-1 text-sm"
+    />
+    <button
+      onClick={() => updateMeetingName(m.id)}
+      className="rounded bg-green-600 px-2 text-white text-sm"
+    >
+      Save
+    </button>
+    <button
+      onClick={() => setEditingMeetingId(null)}
+      className="rounded bg-gray-400 px-2 text-white text-sm"
+    >
+      Cancel
+    </button>
+  </div>
+) : (
+  <div className="flex items-center gap-2">
+    <span className="font-medium">{m.customerName}</span>
+    <button
+      onClick={() => {
+        setEditingMeetingId(m.id);
+        setEditingCustomerName(m.customerName);
+      }}
+      className="text-blue-600 text-xs"
+    >
+      ✏️
+    </button>
+  </div>
+)}
                       <div className="text-xs text-gray-500">Lead ID: {m.leadId}</div>
                     </td>
 

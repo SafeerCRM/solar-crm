@@ -10,6 +10,7 @@ export function getAuthHeaders(): Record<string, string> {
     sessionStorage.getItem('access_token');
 
   if (!token) {
+    console.warn('⚠️ No auth token found');
     return {};
   }
 

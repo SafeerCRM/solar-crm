@@ -783,10 +783,10 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
   }, [filteredCalls, selectedReminderDate]);
 
   return (
-    <div className="overflow-x-hidden p-4 md:p-6">
+    <div className="max-w-full overflow-x-hidden p-3 md:p-6">
       {canLogCalls && !isAssistant && (
-        <div className="mb-6 rounded-2xl bg-white p-4 shadow md:p-6">
-          <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between overflow-hidden">
+                <div className="mb-6 max-w-full overflow-hidden rounded-2xl bg-white p-4 shadow md:p-6">
+                    <div className="mb-6 flex flex-col gap-3 overflow-hidden md:flex-row md:items-center md:justify-between">
             <h1 className="text-2xl font-bold">Telecalling</h1>
 
             <Link
@@ -813,9 +813,9 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
               </select>
 
               {selectedLead?.phone && (
-                <a
+                                <a
                   href={`tel:${selectedLead.phone}`}
-                  className="rounded-xl bg-green-600 px-4 py-3 text-center font-semibold text-white"
+                  className="w-full rounded-xl bg-green-600 px-4 py-3 text-center font-semibold text-white md:w-auto"
                 >
                   📞 Call
                 </a>
@@ -865,7 +865,7 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
             />
 
             <LocalizationProvider dateAdapter={AdapterDayjs}>
-  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 max-w-full">
     <DatePicker
       label="Follow-up Date"
       value={followUpDateValue}
@@ -892,10 +892,10 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
   }}
 />
 
-    <div className="mt-2 flex items-center gap-2">
+        <div className="mt-2 flex flex-wrap items-center gap-2">
   <button
     type="button"
-    className={`px-3 py-1 rounded-lg border ${
+    className={`min-w-[72px] px-3 py-1 rounded-lg border ${
       followUpTimeValue && followUpTimeValue.hour() < 12
         ? 'bg-blue-600 text-white'
         : 'bg-white'
@@ -910,7 +910,7 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
 
   <button
     type="button"
-    className={`px-3 py-1 rounded-lg border ${
+    className={`min-w-[72px] px-3 py-1 rounded-lg border ${
       followUpTimeValue && followUpTimeValue.hour() >= 12
         ? 'bg-blue-600 text-white'
         : 'bg-white'
@@ -945,7 +945,7 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
               <button
                 type="submit"
                 disabled={loading}
-                className="rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white"
+                className="w-full rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white md:w-auto"
               >
                 {loading ? 'Saving...' : 'Log Call'}
               </button>
@@ -953,7 +953,7 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
               <button
                 type="button"
                 onClick={goToNextLead}
-                className="rounded-xl bg-gray-700 px-6 py-3 font-semibold text-white"
+                className="w-full rounded-xl bg-gray-700 px-6 py-3 font-semibold text-white md:w-auto"
               >
                 Next Lead
               </button>
@@ -962,8 +962,8 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
         </div>
       )}
 
-      <div className="rounded-2xl bg-white p-4 shadow md:p-6">
-        <div className="mb-4 flex flex-col gap-4">
+            <div className="max-w-full overflow-hidden rounded-2xl bg-white p-4 shadow md:p-6">
+                <div className="mb-4 min-w-0 overflow-hidden flex flex-col gap-4">
           <h2 className="text-2xl font-bold">
             {isAssistant
               ? 'Assigned Review Queue'
@@ -972,7 +972,7 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
               : 'Call History'}
           </h2>
 
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-6">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-6">
             <input
               type="text"
               value={nameFilter}
@@ -1002,7 +1002,7 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
   placeholder="Search by telecaller"
   value={telecallerNameFilter}
   onChange={(e) => setTelecallerNameFilter(e.target.value)}
-  className="rounded-2xl border border-gray-200 bg-gray-50 p-3 outline-none transition focus:border-blue-500 focus:bg-white"
+    className="w-full rounded-xl border border-gray-300 px-3 py-2"
 />
 
             <select
@@ -1081,15 +1081,25 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
           </div>
 
           <LocalizationProvider dateAdapter={AdapterDayjs}>
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-[380px_1fr]">
-              <div className="rounded-2xl bg-white p-3 shadow-sm">
-                <DateCalendar
-  value={selectedReminderDate}
-  onChange={(newValue) => setSelectedReminderDate(newValue)}
-/>
+                                    <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[380px_minmax(0,1fr)]">
+                            <div className="min-w-0 overflow-hidden rounded-2xl bg-white p-3 shadow-sm">
+                                <DateCalendar
+                  value={selectedReminderDate}
+                  onChange={(newValue) => setSelectedReminderDate(newValue)}
+                  sx={{
+                    width: '100%',
+                    maxWidth: '100%',
+                    '& .MuiDayCalendar-header': {
+                      justifyContent: 'space-between',
+                    },
+                    '& .MuiPickersSlideTransition-root': {
+                      minHeight: 220,
+                    },
+                  }}
+                />
               </div>
 
-              <div className="rounded-2xl bg-white p-4 shadow-sm">
+                            <div className="min-w-0 overflow-hidden rounded-2xl bg-white p-4 shadow-sm">
                 <h4 className="mb-3 text-base font-semibold text-gray-900">
                   {selectedReminderDate
                     ? `Reminders for ${selectedReminderDate.format('DD MMM YYYY')}`
@@ -1107,9 +1117,9 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
                 ) : (
                   <div className="space-y-3">
                     {selectedReminderDateCalls.map((call) => (
-                      <div
+                                            <div
                         key={`reminder-${call.personKey}`}
-                        className="rounded-xl border border-gray-200 bg-gray-50 p-3"
+                        className="min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-gray-50 p-3"
                       >
                         <div className="flex flex-col gap-1">
                           <p className="font-medium text-gray-900">
@@ -1143,17 +1153,17 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
           <>
             <div className="space-y-4 overflow-x-hidden md:hidden">
                             {calendarFilteredCalls.map((call) => (
-                <div
-  key={call.personKey}
-  className="w-full max-w-full overflow-hidden rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"
->
-                  <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+                                <div
+                  key={call.personKey}
+                  className="w-full min-w-0 max-w-full overflow-hidden rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"
+                >
+                                    <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
                     <div className="min-w-0 flex-1">
                       <h3 className="break-words text-lg font-semibold text-gray-900">
                         {call.displayName}
                       </h3>
                       <p className="break-all text-sm text-gray-600">{call.displayPhone}</p>
-                      <p className="break-words text-sm text-gray-500">{call.displayCity}</p>
+                                            <p className="break-words text-sm text-gray-500">{call.displayCity || '-'}</p>
                     </div>
 
                     <div className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
@@ -1233,7 +1243,7 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
                     </div>
                   )}
 
-                  <div className="mb-3 flex flex-wrap gap-2 overflow-hidden">
+                                    <div className="mb-3 flex flex-col gap-2 overflow-hidden sm:flex-row sm:flex-wrap">
                     {!isAssistant && call.displayPhone !== '-' && (
                       <button
                         type="button"
@@ -1272,7 +1282,7 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
                           handleConvertAssignedContactToLead(call.contactId)
                         }
                         disabled={convertingContactId === call.contactId}
-                        className="rounded-xl bg-blue-600 px-4 py-2 text-white"
+                        className="w-full rounded-xl bg-blue-600 px-4 py-2 text-white sm:w-auto"
                       >
                         {convertingContactId === call.contactId
                           ? 'Converting...'
@@ -1379,8 +1389,8 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
     ? new Date((call as any).assignedDate).toLocaleString()
     : '-'}
 </td>
-                      <td className="border p-2">{call.effectiveStatus}</td>
-                      <td className="border p-2">{call.leadPotential || '-'}</td>
+                      <td className="border p-2 break-words">{call.effectiveStatus}</td>
+<td className="border p-2 break-words">{call.leadPotential || '-'}</td>
                       <td className="border p-2 break-words">{call.effectiveNotes || '-'}</td>
 
                       <td className="border p-2">
@@ -1555,12 +1565,12 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
               </table>
             </div>
 {totalPages > 1 && (
-  <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+    <div className="mt-4 flex flex-col items-stretch justify-center gap-2 sm:flex-row sm:flex-wrap sm:items-center">
     <button
       type="button"
       disabled={page === 1}
       onClick={() => fetchCalls(page - 1)}
-      className="rounded-xl bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 disabled:opacity-50"
+      className="w-full rounded-xl bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 disabled:opacity-50 sm:w-auto"
     >
       Previous
     </button>
@@ -1573,7 +1583,7 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
       type="button"
       disabled={page === totalPages}
       onClick={() => fetchCalls(page + 1)}
-      className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+      className="w-full rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 sm:w-auto"
     >
       Next
     </button>

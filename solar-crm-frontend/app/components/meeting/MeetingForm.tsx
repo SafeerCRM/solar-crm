@@ -39,6 +39,7 @@ export default function MeetingForm() {
     inverterCapacityKw: '',
     structureKw: '',
     proposedSystemKw: '',
+     electricityBill: '',
     meetingCount: '',
   });
 
@@ -173,6 +174,14 @@ export default function MeetingForm() {
       setError('');
       setSuccess('');
 
+            const tokenCheck =
+        localStorage.getItem('token') ||
+        localStorage.getItem('access_token') ||
+        sessionStorage.getItem('token') ||
+        sessionStorage.getItem('access_token');
+
+      console.log('Token before meeting submit:', tokenCheck);
+
       const selectedAssignedUser = users.find(
         (u) => String(u.id) === String(form.assignedTo)
       );
@@ -209,6 +218,9 @@ export default function MeetingForm() {
         proposedSystemKw: form.proposedSystemKw
           ? Number(form.proposedSystemKw)
           : undefined,
+                  electricityBill: form.electricityBill
+          ? Number(form.electricityBill)
+          : undefined,
         meetingCount: form.meetingCount ? Number(form.meetingCount) : undefined,
 
         siteObservation: photo ? `Photo selected: ${photo.name}` : undefined,
@@ -219,9 +231,9 @@ export default function MeetingForm() {
         {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
-            ...getAuthHeaders(),
-          },
+  ...getAuthHeaders(),
+  'Content-Type': 'application/json',
+},
           body: JSON.stringify(payload),
         }
       );
@@ -398,6 +410,19 @@ export default function MeetingForm() {
             onChange={handleChange}
             className="w-full rounded border p-2"
             placeholder="e.g. 5"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium">
+            Electricity Bill (INR)
+          </label>
+          <input
+            name="electricityBill"
+            value={form.electricityBill}
+            onChange={handleChange}
+            className="w-full rounded border p-2"
+            placeholder="e.g. 2500"
           />
         </div>
 

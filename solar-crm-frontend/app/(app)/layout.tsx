@@ -9,6 +9,7 @@ const navItems = [
   { name: 'Users', href: '/users', roles: ['OWNER'] },
   { name: 'Telecalling', href: '/telecalling' },
   { name: 'Leads', href: '/leads' },
+  { name: 'Archived Leads', href: '/leads/archived' },
   { name: 'Followup', href: '/followup' },
   { name: 'Meeting', href: '/meeting' },
 ];
@@ -44,16 +45,25 @@ export default function AppLayout({
   const userRoles = user?.roles || [];
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
-      <button
+        <div className="min-h-screen bg-gray-100 md:flex">
+            <button
         onClick={() => setOpen(!open)}
-        className="fixed left-4 top-4 z-50 rounded-xl bg-blue-600 px-3 py-2 text-white md:hidden"
+        className="fixed left-3 top-3 z-50 rounded-xl bg-blue-600 px-3 py-2 text-white shadow md:hidden"
       >
         ☰
       </button>
 
-      <aside
-        className={`fixed z-40 flex h-full w-64 flex-col justify-between bg-white p-6 shadow transition-transform md:static md:translate-x-0 ${
+      {open && (
+        <button
+          type="button"
+          aria-label="Close menu"
+          onClick={() => setOpen(false)}
+          className="fixed inset-0 z-30 bg-black/30 md:hidden"
+        />
+      )}
+
+            <aside
+        className={`fixed left-0 top-0 z-40 flex h-full w-64 flex-col justify-between bg-white p-6 shadow transition-transform md:static md:translate-x-0 ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -106,7 +116,7 @@ export default function AppLayout({
         </button>
       </aside>
 
-      <main className="flex-1 p-4 md:p-8">{children}</main>
+            <main className="min-w-0 flex-1 px-3 pb-4 pt-20 md:p-8">{children}</main>
     </div>
   );
 }

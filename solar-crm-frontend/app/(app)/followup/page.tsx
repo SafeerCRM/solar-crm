@@ -326,12 +326,14 @@ const leadManagers = users.filter((u) =>
 
       const res = await axios.patch(
         `${backendUrl}/followup/assign-filtered`,
-        {
+                {
           assignedTo: Number(bulkAssignedTo),
-leadPotential: potentialFilter || undefined,
-city: cityFilter || undefined,
-zone: zoneFilter || undefined,
-limit: assignLimit ? Number(assignLimit) : undefined,
+          name: nameFilter || undefined,
+          phone: phoneFilter || undefined,
+          leadPotential: potentialFilter || undefined,
+          city: cityFilter || undefined,
+          zone: zoneFilter || undefined,
+          limit: assignLimit ? Number(assignLimit) : undefined,
         },
         { headers: getAuthHeaders() },
       );

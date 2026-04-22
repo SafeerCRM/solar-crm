@@ -10,6 +10,7 @@ export default function CreateLeadPage() {
   const [city, setCity] = useState('');
   const [zone, setZone] = useState('');
   const [status, setStatus] = useState('');
+  const [electricityBill, setElectricityBill] = useState('');
   const [potential, setPotential] = useState('MEDIUM');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
@@ -35,6 +36,7 @@ export default function CreateLeadPage() {
   city,
   zone,
   status: status || 'NEW',
+  electricityBill: electricityBill ? Number(electricityBill) : undefined,
   potential,
 }),
       });
@@ -170,6 +172,20 @@ export default function CreateLeadPage() {
               <option value="WON">WON</option>
               <option value="LOST">LOST</option>
             </select>
+          </div>
+
+                    {/* ELECTRICITY BILL */}
+          <div>
+            <label className="mb-2 block text-sm font-medium text-gray-700">
+              Electricity Bill (INR)
+            </label>
+            <input
+              type="number"
+              placeholder="Enter electricity bill amount"
+              value={electricityBill}
+              onChange={(e) => setElectricityBill(e.target.value)}
+              className="w-full rounded-xl border px-4 py-3"
+            />
           </div>
 
                     {/* POTENTIAL */}
