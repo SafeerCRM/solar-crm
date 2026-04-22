@@ -65,6 +65,9 @@ potential: LeadPotential;
   @Column({ nullable: true })
   region: string;
 
+    @Column({ default: false })
+  isArchived: boolean;
+
   @Column({ nullable: true })
   source: string;
 
@@ -98,6 +101,9 @@ potential: LeadPotential;
 
   @Column({ type: 'int', nullable: true, default: 15 })
   potentialPercentage: number;
+
+    @Column({ type: 'float', nullable: true })
+  electricityBill?: number;
 
   @CreateDateColumn()
   createdAt: Date;

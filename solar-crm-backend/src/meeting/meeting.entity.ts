@@ -127,6 +127,9 @@ export class Meeting {
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
   proposedSystemKw?: number;
 
+    @Column({ type: 'float', nullable: true })
+  electricityBill?: number;
+
   @Column({ nullable: true })
   meetingCount?: number;
 

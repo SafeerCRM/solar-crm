@@ -288,7 +288,18 @@ export class FollowupService {
       delete data.assignedTo;
     }
 
-    return this.followUpRepository.save(followUp);
+        const updatedFollowUp = await this.followUpRepository.save(followUp);
+
+    if (data.followUpDate !== undefined) {
+      await this.leadRepository
+        .createQueryBuilder()
+        .update(Lead)
+        .set({ nextFollowUpDate: followUp.followUpDate })
+        .where('id = :leadId', { leadId: followUp.leadId })
+        .execute();
+    }
+
+    return updatedFollowUp;
   }
 
   async markCompleted(id: number, user: any) {
@@ -299,15 +310,17 @@ export class FollowupService {
   }
 
     async assignFiltered(
-      body: {
+  body: {
     assignedTo: number;
+    name?: string;
+    phone?: string;
     leadPotential?: string;
     city?: string;
     zone?: string;
     limit?: number;
   },
-    user: any,
-  ) {
+  user: any,
+) {
     if (!this.isOwner(user) && !this.isLeadManager(user) && !this.isTelecallingManager(user)) {
       throw new ForbiddenException(
         'Only owner, lead manager, or telecalling manager can bulk assign followups',
@@ -321,6 +334,8 @@ export class FollowupService {
             throw new ForbiddenException('Valid lead manager is required');
     }
 
+        const name = String(body.name || '').trim().toLowerCase();
+    const phone = String(body.phone || '').trim().toLowerCase();
     const leadPotential = String(body.leadPotential || '').trim().toUpperCase();
     const city = String(body.city || '').trim().toLowerCase();
     const zone = String(body.zone || '').trim().toLowerCase();
@@ -329,6 +344,18 @@ export class FollowupService {
       .createQueryBuilder('followUp')
       .leftJoinAndSelect('followUp.lead', 'lead')
       .where('followUp.status = :status', { status: FollowUpStatus.PENDING });
+
+        if (name) {
+      qb.andWhere(`LOWER(COALESCE(lead.name, '')) LIKE :name`, {
+        name: `%${name}%`,
+      });
+    }
+
+    if (phone) {
+      qb.andWhere(`LOWER(COALESCE(lead.phone, '')) LIKE :phone`, {
+        phone: `%${phone}%`,
+      });
+    }
 
     if (leadPotential) {
       qb.andWhere(`UPPER(COALESCE(lead.potential, '')) = :leadPotential`, {

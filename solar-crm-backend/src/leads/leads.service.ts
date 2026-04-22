@@ -235,6 +235,7 @@ export class LeadsService {
 
   async findAll(filters: any, user: any) {
     const query = this.leadRepository.createQueryBuilder('lead');
+        query.andWhere('COALESCE(lead.isArchived, false) = false');
     const currentUserId = this.getCurrentUserId(user);
 
     if (this.isTelecaller(user) || this.isLeadExecutive(user)) {
@@ -251,17 +252,12 @@ export class LeadsService {
       query.andWhere('lead.status IN (:...statuses)', {
         statuses: this.getProjectPipelineStatuses(),
       });
-    } else if (
-      (this.isOwner(user) ||
-        this.isLeadManager(user) ||
-        this.isMarketingHead(user) ||
-        this.isTelecallingManager(user)) &&
-      filters?.assignedTo
-    ) {
-      query.andWhere('lead.assignedTo = :assignedTo', {
-        assignedTo: Number(filters.assignedTo),
-      });
-    }
+    } else if (this.isLeadManager(user)) {
+  query.andWhere(
+    '(lead.assignedTo = :currentUserId OR lead.createdBy = :currentUserId)',
+    { currentUserId }
+  );
+}
 
     if (filters?.status) {
       query.andWhere('lead.status = :status', { status: filters.status });
@@ -829,4 +825,157 @@ export class LeadsService {
 
     return query.orderBy('lead.updatedAt', 'DESC').take(10).getMany();
   }
+
+    async quickCall(
+    id: number,
+    body: {
+      callStatus?: string;
+      callNotes?: string;
+      nextFollowUpDate?: string;
+      leadPotential?: string;
+    },
+    user: any,
+  ) {
+    const lead = await this.getAccessibleLead(id, user);
+
+    const currentUserId = this.getCurrentUserId(user);
+    const currentUserName = this.getCurrentUserName(user);
+
+    const callStatus = String(body.callStatus || 'CONNECTED').trim().toUpperCase();
+    const callNotes = String(body.callNotes || '').trim();
+    const leadPotential = String(body.leadPotential || '').trim().toUpperCase() || undefined;
+
+    const nextFollowUpDate = body.nextFollowUpDate
+      ? new Date(body.nextFollowUpDate)
+      : undefined;
+
+    const callLog = this.callLogRepository.create({
+      leadId: lead.id,
+      telecallerId: currentUserId,
+      callStatus,
+      callNotes: callNotes || undefined,
+      nextFollowUpDate,
+      providerName: 'MANUAL' as any,
+      callDirection: 'OUTBOUND' as any,
+      disposition: callStatus,
+      leadPotential,
+      receiverNumber: lead.phone || undefined,
+    });
+
+    await this.callLogRepository.save(callLog);
+
+    if (callStatus === 'INTERESTED') {
+      lead.status = LeadStatus.INTERESTED;
+    } else if (callStatus === 'NOT_INTERESTED') {
+      lead.status = LeadStatus.LOST;
+    } else if (
+      callStatus === 'CALLBACK' ||
+      callStatus === 'CONNECTED' ||
+      callStatus === 'CNR' ||
+      callStatus === 'PROPOSAL_SENT'
+    ) {
+      lead.status = LeadStatus.CONTACTED;
+    }
+
+    if (callNotes) {
+      lead.remarks = callNotes;
+    }
+
+    if (nextFollowUpDate) {
+      lead.nextFollowUpDate = nextFollowUpDate;
+    }
+
+    if (leadPotential) {
+      if (leadPotential === 'HIGH') {
+        lead.potentialPercentage = 75;
+      } else if (leadPotential === 'MEDIUM') {
+        lead.potentialPercentage = 50;
+      } else if (leadPotential === 'LOW') {
+        lead.potentialPercentage = 15;
+      }
+    }
+
+    if (!lead.assignedTo) {
+      lead.assignedTo = currentUserId;
+    }
+
+    await this.leadRepository.save(lead);
+
+    if (nextFollowUpDate && lead.assignedTo) {
+      const followUp = this.followUpRepository.create({
+        leadId: lead.id,
+        assignedTo: lead.assignedTo,
+        createdBy: currentUserId,
+        createdByName: currentUserName,
+        sourceModule: 'LEAD',
+        sourceStage: 'QUICK_CALL',
+        followUpType:
+          callStatus === 'CALLBACK'
+            ? FollowUpType.CALLBACK
+            : callStatus === 'INTERESTED'
+            ? FollowUpType.CALL
+            : FollowUpType.GENERAL,
+        note:
+          callNotes ||
+          (callStatus === 'INTERESTED'
+            ? 'Interested follow-up created from lead quick call'
+            : callStatus === 'CALLBACK'
+            ? 'Callback follow-up created from lead quick call'
+            : 'Follow-up created from lead quick call'),
+        followUpDate: nextFollowUpDate,
+        status: FollowUpStatus.PENDING,
+      });
+
+      await this.followUpRepository.save(followUp);
+    }
+
+    return {
+      message: 'Lead quick call saved successfully',
+    };
+  }
+
+    async archiveLead(id: number, user: any) {
+    const lead = await this.getAccessibleLead(id, user);
+
+    if (!this.isOwner(user) && !this.isLeadManager(user)) {
+      throw new ForbiddenException('Not allowed to archive lead');
+    }
+
+    lead.isArchived = true;
+
+    await this.leadRepository.save(lead);
+
+    return { message: 'Lead archived successfully' };
+  }
+async getArchivedLeads(user: any) {
+  const currentUserId = this.getCurrentUserId(user);
+
+  const query = this.leadRepository
+    .createQueryBuilder('lead')
+    .where('COALESCE(lead.isArchived, false) = true');
+
+  if (this.isLeadManager(user)) {
+    query.andWhere(
+      '(lead.assignedTo = :currentUserId OR lead.createdBy = :currentUserId)',
+      { currentUserId }
+    );
+  }
+
+  return query.orderBy('lead.createdAt', 'DESC').getMany();
+}
+
+async restoreLead(id: number, user: any) {
+  const lead = await this.getAccessibleLead(id, user);
+
+  if (!this.isOwner(user) && !this.isLeadManager(user)) {
+    throw new ForbiddenException('Not allowed to restore lead');
+  }
+
+  lead.isArchived = false;
+
+  await this.leadRepository.save(lead);
+
+  return { message: 'Lead restored successfully' };
+}
+
 }

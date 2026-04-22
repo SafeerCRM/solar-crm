@@ -29,6 +29,10 @@ export class LeadsController {
   create(@Body() data: Partial<Lead>, @CurrentUser() user: any) {
     return this.leadsService.create(data, user);
   }
+@Get('archived')
+getArchivedLeads(@CurrentUser() user: any) {
+  return this.leadsService.getArchivedLeads(user);
+}
 
   @Get()
   findAll(@Query() query: any, @CurrentUser() user: any) {
@@ -105,9 +109,30 @@ export class LeadsController {
   ) {
     return this.leadsService.update(id, data, user);
   }
-
+  @Post(':id/quick-call')
+  quickCall(
+    @Param('id', ParseIntPipe) id: number,
+    @Body()
+    body: {
+      callStatus?: string;
+      callNotes?: string;
+      nextFollowUpDate?: string;
+      leadPotential?: string;
+    },
+    @CurrentUser() user: any,
+  ) {
+    return this.leadsService.quickCall(id, body, user);
+  }
   @UseGuards(RolesGuard)
   @Roles('OWNER', 'LEAD_MANAGER')
+  @Patch(':id/archive')
+  archiveLead(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.leadsService.archiveLead(id, user);
+  }
+
   @Patch(':id/assign')
   assignLead(
     @Param('id', ParseIntPipe) id: number,
