@@ -48,6 +48,24 @@ type DetailResponse = {
   history: Meeting[];
 };
 
+type CalculatorResult = {
+  id: number;
+  meetingId?: number | null;
+  leadId?: number | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  customerCity?: string | null;
+  panelCost?: number | string;
+  ongridCost?: number | string;
+  structureCost?: number | string;
+  electricalCost?: number | string;
+  transportationCost?: number | string;
+  marginAmount?: number | string;
+  batteryCost?: number | string;
+  totalProjectCost?: number | string;
+  createdAt: string;
+};
+
 type ActionOption = '' | 'COMPLETED' | 'CANCELLED' | 'ON_HOLD' | 'RESCHEDULED';
 
 const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -65,6 +83,7 @@ export default function MeetingDetailPage() {
 
   const [latestMeeting, setLatestMeeting] = useState<Meeting | null>(null);
   const [history, setHistory] = useState<Meeting[]>([]);
+  const [calculators, setCalculators] = useState<CalculatorResult[]>([]);
 
   const [selectedAction, setSelectedAction] = useState<ActionOption>('');
   const [convertSliderValue, setConvertSliderValue] = useState(0);
@@ -158,10 +177,29 @@ export default function MeetingDetailPage() {
     }
   };
 
+  const fetchCalculators = async () => {
+  if (!meetingId) return;
+
+  try {
+    const res = await axios.get<CalculatorResult[]>(
+      `${backendUrl}/calculator/meeting/${meetingId}`,
+      {
+        headers: getAuthHeaders(),
+      }
+    );
+
+    setCalculators(Array.isArray(res.data) ? res.data : []);
+  } catch (err) {
+    console.error(err);
+    setCalculators([]);
+  }
+};
+
   useEffect(() => {
-    fetchDetail();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [meetingId]);
+  fetchDetail();
+  fetchCalculators();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [meetingId]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -172,6 +210,15 @@ export default function MeetingDetailPage() {
       [name]: value,
     }));
   };
+
+  const formatCurrency = (value: number | string | undefined | null) => {
+  const num = Number(value || 0);
+
+  return num.toLocaleString('en-IN', {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  });
+};
 
   const statusBadgeClass = (status: string) => {
     switch (status) {
@@ -380,20 +427,36 @@ export default function MeetingDetailPage() {
           </p>
         </div>
 
-        <div className="flex gap-2">
-          <Link
-            href="/meeting"
-            className="rounded bg-gray-600 px-4 py-2 text-white"
-          >
-            Back
-          </Link>
-          <button
-            onClick={() => router.refresh()}
-            className="rounded bg-blue-600 px-4 py-2 text-white"
-          >
-            Refresh
-          </button>
-        </div>
+        <div className="flex flex-wrap gap-2">
+  <Link
+    href="/meeting"
+    className="rounded bg-gray-600 px-4 py-2 text-white"
+  >
+    Back
+  </Link>
+
+  <Link
+    href={`/calculator?meetingId=${latestMeeting.id}&leadId=${latestMeeting.leadId}&name=${encodeURIComponent(
+      latestMeeting.customerName || ''
+    )}&phone=${encodeURIComponent(latestMeeting.mobile || '')}&city=${encodeURIComponent(
+      latestMeeting.gpsAddress || latestMeeting.address || ''
+    )}&electricityBill=${latestMeeting.panelGivenToCustomerKw || 0}`}
+    className="rounded bg-orange-600 px-4 py-2 text-white"
+  >
+    Open New Calculator
+  </Link>
+
+  <button
+    onClick={() => {
+      router.refresh();
+      fetchDetail();
+      fetchCalculators();
+    }}
+    className="rounded bg-blue-600 px-4 py-2 text-white"
+  >
+    Refresh
+  </button>
+</div>
       </div>
 
       {(message || error) && (
@@ -677,6 +740,99 @@ export default function MeetingDetailPage() {
           </div>
         </div>
       </div>
+
+      <div className="mb-6 rounded border bg-white p-6">
+  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h2 className="text-xl font-semibold">Saved Calculators</h2>
+      <p className="text-sm text-gray-600">
+        Previous calculator results linked with this meeting
+      </p>
+    </div>
+
+    <Link
+      href={`/calculator?meetingId=${latestMeeting.id}&leadId=${latestMeeting.leadId}&name=${encodeURIComponent(
+        latestMeeting.customerName || ''
+      )}&phone=${encodeURIComponent(latestMeeting.mobile || '')}&city=${encodeURIComponent(
+        latestMeeting.gpsAddress || latestMeeting.address || ''
+      )}&electricityBill=${latestMeeting.panelGivenToCustomerKw || 0}`}
+      className="rounded bg-orange-600 px-4 py-2 text-white"
+    >
+      + New Calculator
+    </Link>
+  </div>
+
+  {calculators.length === 0 ? (
+    <p className="text-sm text-gray-500">No saved calculators found</p>
+  ) : (
+    <div className="grid gap-4 md:grid-cols-2">
+      {calculators.map((calculator) => (
+        <div key={calculator.id} className="rounded-2xl border bg-gray-50 p-4">
+          <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="font-semibold text-gray-900">
+                Calculator #{calculator.id}
+              </h3>
+              <p className="text-sm text-gray-600">
+                {new Date(calculator.createdAt).toLocaleString()}
+              </p>
+            </div>
+
+            <span className="rounded-full bg-green-100 px-3 py-1 text-sm font-semibold text-green-700">
+              ₹ {formatCurrency(calculator.totalProjectCost)}
+            </span>
+          </div>
+
+          <div className="grid gap-2 text-sm text-gray-700">
+            <div className="flex justify-between gap-3">
+              <span>Panel Cost</span>
+              <strong>₹ {formatCurrency(calculator.panelCost)}</strong>
+            </div>
+
+            <div className="flex justify-between gap-3">
+              <span>Ongrid Cost</span>
+              <strong>₹ {formatCurrency(calculator.ongridCost)}</strong>
+            </div>
+
+            <div className="flex justify-between gap-3">
+              <span>Structure Cost</span>
+              <strong>₹ {formatCurrency(calculator.structureCost)}</strong>
+            </div>
+
+            <div className="flex justify-between gap-3">
+              <span>Electrical Cost</span>
+              <strong>₹ {formatCurrency(calculator.electricalCost)}</strong>
+            </div>
+
+            <div className="flex justify-between gap-3">
+              <span>Transportation</span>
+              <strong>₹ {formatCurrency(calculator.transportationCost)}</strong>
+            </div>
+
+            <div className="mt-3 border-t pt-3">
+              <div className="flex justify-between gap-3 text-base">
+                <span className="font-semibold">Total Project Cost</span>
+                <strong className="text-green-700">
+                  ₹ {formatCurrency(calculator.totalProjectCost)}
+                </strong>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="rounded bg-purple-600 px-3 py-2 text-sm text-white"
+              disabled
+            >
+              Generate Proposal Soon
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  )}
+</div>
 
       <div className="rounded border bg-white p-6">
         <h2 className="mb-4 text-xl font-semibold">Meeting History</h2>

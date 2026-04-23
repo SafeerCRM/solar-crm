@@ -12,6 +12,7 @@ const navItems = [
   { name: 'Archived Leads', href: '/leads/archived' },
   { name: 'Followup', href: '/followup' },
   { name: 'Meeting', href: '/meeting' },
+  { name: 'Calculator', href: '/calculator' },
 ];
 
 type CurrentUser = {

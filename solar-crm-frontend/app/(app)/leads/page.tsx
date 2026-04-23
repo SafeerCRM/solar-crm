@@ -61,6 +61,10 @@ export default function LeadsPage() {
   const [filteredLeads, setFilteredLeads] = useState<Lead[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [message, setMessage] = useState('');
+    const [bulkAssignedTo, setBulkAssignedTo] = useState('');
+  const [bulkAssigning, setBulkAssigning] = useState(false);
+  const [importingLeads, setImportingLeads] = useState(false);
+  const leadImportInputRef = useRef<HTMLInputElement | null>(null);
   const [editingLeadId, setEditingLeadId] = useState<number | null>(null);
 const [editingLeadName, setEditingLeadName] = useState('');
     const [pendingLeadEdits, setPendingLeadEdits] = useState<
@@ -305,6 +309,42 @@ const [editingLeadName, setEditingLeadName] = useState('');
     }
   };
 
+    const handleImportLeads = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setImportingLeads(true);
+      setMessage('');
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await axios.post(`${backendUrl}/leads/import`, formData, {
+        headers: {
+          ...getAuthHeaders(),
+        },
+      });
+
+      setMessage(
+        res?.data?.message || 'Lead import completed successfully'
+      );
+
+      if (leadImportInputRef.current) {
+        leadImportInputRef.current.value = '';
+      }
+
+      await fetchLeads();
+    } catch (err: any) {
+      console.error(err);
+      setMessage(err?.response?.data?.message || 'Lead import failed');
+    } finally {
+      setImportingLeads(false);
+    }
+  };
+
   const assignLead = async (leadId: number, userId: number) => {
     if (!userId) return;
 
@@ -320,6 +360,47 @@ const [editingLeadName, setEditingLeadName] = useState('');
     } catch (err) {
       console.error(err);
       setMessage('Assignment failed');
+    }
+  };
+
+    const handleAssignFilteredLeads = async () => {
+    if (!bulkAssignedTo) {
+      setMessage('Please select a lead manager first');
+      return;
+    }
+
+    if (!filteredLeads.length) {
+      setMessage('No filtered leads available');
+      return;
+    }
+
+    try {
+      setBulkAssigning(true);
+      setMessage('');
+
+      const leadIds = filteredLeads
+        .map((lead) => Number(lead.id))
+        .filter(Boolean);
+
+      const res = await axios.patch(
+        `${backendUrl}/leads/assign-bulk`,
+        {
+          leadIds,
+          assignedTo: Number(bulkAssignedTo),
+        },
+        { headers: getAuthHeaders() }
+      );
+
+      setMessage(
+        res?.data?.message || 'Filtered leads assigned successfully'
+      );
+
+      await fetchLeads();
+    } catch (err: any) {
+      console.error(err);
+      setMessage(err?.response?.data?.message || 'Bulk assignment failed');
+    } finally {
+      setBulkAssigning(false);
     }
   };
 
@@ -790,13 +871,33 @@ const [editingLeadName, setEditingLeadName] = useState('');
                   <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <h1 className="text-2xl font-semibold">Leads</h1>
 
-        <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2">
           <Link
             href="/leads/create"
             className="rounded bg-blue-600 px-4 py-2 text-white"
           >
             + Add Lead
           </Link>
+
+          {canAssignLeads && (
+            <>
+              <input
+                ref={leadImportInputRef}
+                type="file"
+                accept=".csv"
+                onChange={handleImportLeads}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => leadImportInputRef.current?.click()}
+                disabled={importingLeads}
+                className="rounded bg-purple-600 px-4 py-2 text-white"
+              >
+                {importingLeads ? 'Importing...' : 'Import Leads'}
+              </button>
+            </>
+          )}
 
           {!isAutoCalling ? (
             <button
@@ -855,18 +956,48 @@ const [editingLeadName, setEditingLeadName] = useState('');
         </select>
       </div>
 
-            <div className="mb-4 flex flex-col gap-3 rounded bg-gray-100 p-3 text-sm text-gray-700 md:flex-row md:items-center md:justify-between">
-        <div>
-          <strong>Total Leads:</strong> {leads.length} |{' '}
-          <strong>Filtered:</strong> {filteredLeads.length}
+                  <div className="mb-4 flex flex-col gap-3 rounded bg-gray-100 p-3 text-sm text-gray-700">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <strong>Total Leads:</strong> {leads.length} |{' '}
+            <strong>Filtered:</strong> {filteredLeads.length}
+          </div>
+
+          <button
+            onClick={clearFilters}
+            className="rounded bg-gray-500 px-3 py-1 text-white"
+          >
+            Clear Filters
+          </button>
         </div>
 
-        <button
-          onClick={clearFilters}
-          className="rounded bg-gray-500 px-3 py-1 text-white"
-        >
-          Clear Filters
-        </button>
+        {canAssignLeads && (
+          <div className="flex flex-col gap-2 md:flex-row md:items-center">
+            <select
+              value={bulkAssignedTo}
+              onChange={(e) => setBulkAssignedTo(e.target.value)}
+              className="rounded border p-2 text-sm md:min-w-[220px]"
+            >
+              <option value="">Select lead manager</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
+            </select>
+
+            <button
+              type="button"
+              onClick={handleAssignFilteredLeads}
+              disabled={bulkAssigning || filteredLeads.length === 0}
+              className="rounded bg-indigo-600 px-4 py-2 text-white disabled:opacity-50"
+            >
+              {bulkAssigning
+                ? 'Assigning...'
+                : `Assign Filtered Leads (${filteredLeads.length})`}
+            </button>
+          </div>
+        )}
       </div>
 
       {message && <p className="mb-4 text-blue-600">{message}</p>}

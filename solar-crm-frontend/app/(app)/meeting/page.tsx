@@ -361,156 +361,156 @@ const updateMeetingName = async (meetingId: number) => {
   </div>
 </div>
 
-      <div className="overflow-x-auto rounded border bg-white">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="border p-2">Customer</th>
-              <th className="border p-2">Mobile</th>
-              <th className="border p-2">Scheduled</th>
-              <th className="border p-2">Type</th>
-              <th className="border p-2">Category</th>
-              <th className="border p-2">Status</th>
-              <th className="border p-2">Assigned To</th>
-              <th className="border p-2">Created By</th>
-              <th className="border p-2">Location</th>
-              <th className="border p-2">Progress</th>
-              <th className="border p-2">Action</th>
-            </tr>
-          </thead>
-
-          <tbody>
             {loading ? (
-              <tr>
-                <td colSpan={11} className="p-4 text-center">
-                  Loading meetings...
-                </td>
-              </tr>
-            ) : filteredMeetings.length === 0 ? (
-              <tr>
-                <td colSpan={11} className="p-4 text-center">
-                  No meetings found
-                </td>
-              </tr>
-            ) : (
-              filteredMeetings.map((m) => {
-                const mapsUrl = getMapsUrl(m);
+        <div className="rounded-2xl bg-white p-6 text-center shadow">
+          Loading meetings...
+        </div>
+      ) : filteredMeetings.length === 0 ? (
+        <div className="rounded-2xl bg-white p-6 text-center shadow">
+          No meetings found
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {filteredMeetings.map((m) => {
+            const mapsUrl = getMapsUrl(m);
 
-                return (
-                  <tr key={m.id}>
-                    <td className="border p-2">
-                      {editingMeetingId === m.id ? (
-  <div className="flex gap-2">
-    <input
-      value={editingCustomerName}
-      onChange={(e) => setEditingCustomerName(e.target.value)}
-      className="rounded border px-2 py-1 text-sm"
-    />
-    <button
-      onClick={() => updateMeetingName(m.id)}
-      className="rounded bg-green-600 px-2 text-white text-sm"
-    >
-      Save
-    </button>
-    <button
-      onClick={() => setEditingMeetingId(null)}
-      className="rounded bg-gray-400 px-2 text-white text-sm"
-    >
-      Cancel
-    </button>
-  </div>
-) : (
-  <div className="flex items-center gap-2">
-    <span className="font-medium">{m.customerName}</span>
-    <button
-      onClick={() => {
-        setEditingMeetingId(m.id);
-        setEditingCustomerName(m.customerName);
-      }}
-      className="text-blue-600 text-xs"
-    >
-      ✏️
-    </button>
-  </div>
-)}
-                      <div className="text-xs text-gray-500">Lead ID: {m.leadId}</div>
-                    </td>
-
-                    <td className="border p-2">{m.mobile}</td>
-
-                    <td className="border p-2">
-                      {new Date(m.scheduledAt).toLocaleString()}
-                    </td>
-
-                    <td className="border p-2">{m.meetingType}</td>
-
-                    <td className="border p-2">
-                      {m.meetingCategory || '-'}
-                    </td>
-
-                    <td className="border p-2">
-                      <span
-                        className={`rounded px-2 py-1 text-xs text-white ${statusBadgeClass(
-                          m.status
-                        )}`}
-                      >
-                        {m.status}
-                      </span>
-                    </td>
-
-                    <td className="border p-2">
-                      {m.assignedToName || m.assignedTo || 'Unassigned'}
-                    </td>
-
-                    <td className="border p-2">
-                      {m.createdByName || m.createdBy || '-'}
-                    </td>
-
-                    <td className="border p-2">
-                      <div className="mb-2 text-xs text-gray-700">
-                        {m.gpsAddress || m.address || 'No address'}
-                      </div>
-
-                      {mapsUrl ? (
-                        <a
-                          href={mapsUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-block rounded bg-green-600 px-3 py-1 text-white"
+            return (
+              <div
+                key={m.id}
+                className="rounded-2xl bg-white p-5 shadow transition hover:shadow-md"
+              >
+                <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    {editingMeetingId === m.id ? (
+                      <div className="flex gap-2">
+                        <input
+                          value={editingCustomerName}
+                          onChange={(e) => setEditingCustomerName(e.target.value)}
+                          className="rounded border px-2 py-1 text-sm"
+                        />
+                        <button
+                          onClick={() => updateMeetingName(m.id)}
+                          className="rounded bg-green-600 px-2 text-sm text-white"
                         >
-                          Navigate
-                        </a>
-                      ) : (
-                        <span className="text-xs text-gray-500">No location</span>
-                      )}
-                    </td>
-
-                    <td className="border p-2">
-                      <div className="text-xs text-gray-700">
-                        <div>
-                          <strong>Meeting Count:</strong> {m.meetingCount || '-'}
-                        </div>
-                        <div>
-                          <strong>Next Action:</strong> {m.nextAction || '-'}
-                        </div>
+                          Save
+                        </button>
+                        <button
+                          onClick={() => setEditingMeetingId(null)}
+                          className="rounded bg-gray-400 px-2 text-sm text-white"
+                        >
+                          Cancel
+                        </button>
                       </div>
-                    </td>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <h2 className="break-words text-lg font-semibold text-gray-800">
+                          {m.customerName || 'No Name'}
+                        </h2>
+                        <button
+                          onClick={() => {
+                            setEditingMeetingId(m.id);
+                            setEditingCustomerName(m.customerName);
+                          }}
+                          className="text-sm text-blue-600"
+                        >
+                          ✏️
+                        </button>
+                      </div>
+                    )}
 
-                    <td className="border p-2">
-                      <Link
-                        href={`/meeting/${m.id}`}
-                        className="rounded bg-purple-600 px-3 py-2 text-white"
-                      >
-                        Open
-                      </Link>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+                    <p className="text-sm text-gray-500">Lead ID: {m.leadId}</p>
+                    <p className="text-sm text-gray-500">Meeting ID: {m.id}</p>
+                  </div>
+
+                  <span
+                    className={`inline-block rounded-full px-3 py-1 text-xs font-medium text-white ${statusBadgeClass(
+                      m.status
+                    )}`}
+                  >
+                    {m.status}
+                  </span>
+                </div>
+
+                <div className="space-y-2 text-sm text-gray-700">
+                  <p>
+                    <span className="font-medium">Mobile:</span> {m.mobile || '-'}
+                  </p>
+
+                  <p>
+                    <span className="font-medium">Scheduled:</span>{' '}
+                    {m.scheduledAt ? new Date(m.scheduledAt).toLocaleString() : '-'}
+                  </p>
+
+                  <p>
+                    <span className="font-medium">Type:</span> {m.meetingType || '-'}
+                  </p>
+
+                  <p>
+                    <span className="font-medium">Category:</span>{' '}
+                    {m.meetingCategory || '-'}
+                  </p>
+
+                  <p>
+                    <span className="font-medium">Assigned To:</span>{' '}
+                    {m.assignedToName || m.assignedTo || 'Unassigned'}
+                  </p>
+
+                  <p>
+                    <span className="font-medium">Created By:</span>{' '}
+                    {m.createdByName || m.createdBy || '-'}
+                  </p>
+
+                  <p className="break-words">
+                    <span className="font-medium">Location:</span>{' '}
+                    {m.gpsAddress || m.address || 'No address'}
+                  </p>
+
+                  <p>
+                    <span className="font-medium">Meeting Count:</span>{' '}
+                    {m.meetingCount || '-'}
+                  </p>
+
+                  <p className="break-words">
+                    <span className="font-medium">Next Action:</span>{' '}
+                    {m.nextAction || '-'}
+                  </p>
+                </div>
+
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                  <Link
+                    href={`/meeting/${m.id}`}
+                    className="w-full rounded bg-purple-600 px-3 py-2 text-center text-sm text-white sm:w-auto"
+                  >
+                    Open
+                  </Link>
+
+                  <Link
+                    href={`/calculator?meetingId=${m.id}&leadId=${m.leadId}&name=${encodeURIComponent(
+                      m.customerName || ''
+                    )}&phone=${encodeURIComponent(m.mobile || '')}&city=${encodeURIComponent(
+                      m.gpsAddress || m.address || ''
+                    )}&electricityBill=${m.panelGivenToCustomerKw || 0}`}
+                    className="w-full rounded bg-orange-600 px-3 py-2 text-center text-sm text-white sm:w-auto"
+                  >
+                    Calculator
+                  </Link>
+
+                  {mapsUrl ? (
+                    <a
+                      href={mapsUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="w-full rounded bg-green-600 px-3 py-2 text-center text-sm text-white sm:w-auto"
+                    >
+                      Navigate
+                    </a>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
