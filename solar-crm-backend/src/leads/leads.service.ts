@@ -572,6 +572,29 @@ export class LeadsService {
     return this.leadRepository.save(lead);
   }
 
+  async assignBulk(body: { leadIds: number[]; assignedTo: number }) {
+    const leadIds = Array.isArray(body?.leadIds)
+      ? body.leadIds.map(Number).filter((id) => Number.isFinite(id) && id > 0)
+      : [];
+
+    const assignedTo = Number(body?.assignedTo);
+
+    if (!leadIds.length) {
+      throw new BadRequestException('No leads selected for bulk assignment');
+    }
+
+    if (!assignedTo || Number.isNaN(assignedTo)) {
+      throw new BadRequestException('Assigned user is required');
+    }
+
+    await this.leadRepository.update(leadIds, { assignedTo });
+
+    return {
+      message: `Assigned ${leadIds.length} leads successfully`,
+      count: leadIds.length,
+    };
+  }
+
   async exportCsv(user: any) {
     let leads: Lead[];
     const currentUserId = this.getCurrentUserId(user);

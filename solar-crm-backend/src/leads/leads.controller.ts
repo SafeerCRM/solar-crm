@@ -133,6 +133,27 @@ getArchivedLeads(@CurrentUser() user: any) {
     return this.leadsService.archiveLead(id, user);
   }
 
+  @Patch(':id/restore')
+restoreLead(
+  @Param('id', ParseIntPipe) id: number,
+  @CurrentUser() user: any,
+) {
+  return this.leadsService.restoreLead(id, user);
+}
+
+  @UseGuards(RolesGuard)
+  @Roles('OWNER', 'LEAD_MANAGER', 'TELECALLING_MANAGER')
+  @Patch('assign-bulk')
+  assignBulk(
+    @Body()
+    body: {
+      leadIds: number[];
+      assignedTo: number;
+    },
+  ) {
+    return this.leadsService.assignBulk(body);
+  }
+
   @Patch(':id/assign')
   assignLead(
     @Param('id', ParseIntPipe) id: number,
