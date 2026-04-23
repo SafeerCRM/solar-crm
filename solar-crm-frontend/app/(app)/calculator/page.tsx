@@ -1,9 +1,10 @@
 'use client';
 
+import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import CalculatorForm from '@/app/components/meeting/calculator/CalculatorForm';
 
-export default function CalculatorPage() {
+function CalculatorPageContent() {
   const searchParams = useSearchParams();
 
   const initialData = {
@@ -26,5 +27,13 @@ export default function CalculatorPage() {
 
       <CalculatorForm initialData={initialData} />
     </div>
+  );
+}
+
+export default function CalculatorPage() {
+  return (
+    <Suspense fallback={<div className="p-6">Loading calculator...</div>}>
+      <CalculatorPageContent />
+    </Suspense>
   );
 }
