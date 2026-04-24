@@ -25,6 +25,48 @@ import { CurrentUser } from '../auth/current-user.decorator';
 export class LeadsController {
   constructor(private readonly leadsService: LeadsService) {}
 
+  @UseGuards(RolesGuard)
+@Roles('OWNER')
+@Get('storage-list')
+getLeadStorage(@Query() query: any) {
+  return this.leadsService.getLeadStorage(query);
+}
+
+@UseGuards(RolesGuard)
+@Roles('OWNER')
+@Get('storage-filtered-ids')
+getLeadStorageFilteredIds(@Query() query: any) {
+  return this.leadsService.getLeadStorageFilteredIds(query);
+}
+
+@UseGuards(RolesGuard)
+@Roles('OWNER')
+@Patch('storage-assign')
+assignStorageLeads(
+  @Body()
+  body: {
+    contactIds: number[];
+    assignedTo: number;
+  },
+  @CurrentUser() user: any,
+) {
+  return this.leadsService.assignStorageLeads(body, user);
+}
+
+@UseGuards(RolesGuard)
+@Roles('OWNER')
+@Post('storage-convert')
+convertStorageToLeads(
+  @Body()
+  body: {
+    contactIds: number[];
+    assignedTo?: number;
+  },
+  @CurrentUser() user: any,
+) {
+  return this.leadsService.convertStorageToLeads(body, user);
+}
+
   @Post()
   create(@Body() data: Partial<Lead>, @CurrentUser() user: any) {
     return this.leadsService.create(data, user);
@@ -54,7 +96,7 @@ getArchivedLeads(@CurrentUser() user: any) {
   }
 
   @UseGuards(RolesGuard)
-  @Roles('OWNER', 'LEAD_MANAGER')
+  @Roles('OWNER')
   @Post('import')
   @UseInterceptors(FileInterceptor('file'))
   importCsv(@UploadedFile() file: any, @CurrentUser() user: any) {
@@ -142,7 +184,7 @@ restoreLead(
 }
 
   @UseGuards(RolesGuard)
-  @Roles('OWNER', 'LEAD_MANAGER', 'TELECALLING_MANAGER')
+  @Roles('OWNER')
   @Patch('assign-bulk')
   assignBulk(
     @Body()

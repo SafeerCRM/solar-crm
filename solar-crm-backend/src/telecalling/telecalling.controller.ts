@@ -29,6 +29,21 @@ export class TelecallingController {
     return user?.role === role;
   }
 
+  @Post('recordings/upload')
+@UseInterceptors(FileInterceptor('file'))
+uploadCallRecording(
+  @UploadedFile() file: any,
+  @Body()
+  body: {
+    contactId?: string;
+    callLogId?: string;
+    historyId?: string;
+  },
+  @CurrentUser() user: any,
+) {
+  return this.telecallingService.uploadCallRecording(file, body, user);
+}
+
   @Post()
   create(@Body() data: any, @CurrentUser() user: any) {
     const payload = {

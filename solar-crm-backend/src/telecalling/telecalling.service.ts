@@ -29,6 +29,8 @@ import { ContactNote } from './contact-note.entity';
 import { UserRole } from '../users/user.entity';
 import { Meeting } from '../meeting/meeting.entity';
 import { Cron } from '@nestjs/schedule';
+import { createClient } from '@supabase/supabase-js';
+import { randomUUID } from 'crypto';
 
 
 @Injectable()
@@ -205,6 +207,86 @@ private readonly meetingRepository: Repository<Meeting>,
 
     throw new ForbiddenException('You do not have access to this contact');
   }
+
+  async uploadCallRecording(
+  file: any,
+  body: {
+    contactId?: string;
+    callLogId?: string;
+    historyId?: string;
+  },
+  user: any,
+) {
+  if (!file) {
+    throw new BadRequestException('Recording file is required');
+  }
+
+  const mimeType = String(file.mimetype || '');
+
+  if (!mimeType.startsWith('audio/')) {
+    throw new BadRequestException('Only audio files are allowed');
+  }
+
+  const maxSize = 15 * 1024 * 1024; // 15 MB
+
+  if (file.size > maxSize) {
+    throw new BadRequestException('Recording file must be less than 15 MB');
+  }
+
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const bucket = process.env.SUPABASE_CALL_RECORDINGS_BUCKET || 'call-recordings';
+
+  if (!supabaseUrl || !serviceKey) {
+    throw new BadRequestException('Supabase storage is not configured');
+  }
+
+  if (body?.contactId) {
+    await this.getAccessibleContact(Number(body.contactId), user);
+  }
+
+  const supabase = createClient(supabaseUrl, serviceKey);
+
+  const originalName = String(file.originalname || 'recording');
+  const extension =
+    originalName.includes('.')
+      ? originalName.split('.').pop()
+      : mimeType.split('/')[1] || 'audio';
+
+  const safeExtension = String(extension || 'audio').replace(/[^a-zA-Z0-9]/g, '');
+
+  const filePath = `recordings/user-${user?.id || 'unknown'}/${Date.now()}-${randomUUID()}.${safeExtension}`;
+
+  const uploadResult = await supabase.storage.from(bucket).upload(filePath, file.buffer, {
+    contentType: mimeType,
+    upsert: false,
+  });
+
+  if (uploadResult.error) {
+    throw new BadRequestException(uploadResult.error.message);
+  }
+
+  const publicUrlResult = supabase.storage.from(bucket).getPublicUrl(filePath);
+  const recordingUrl = publicUrlResult.data.publicUrl;
+
+  if (body?.callLogId) {
+    await this.callLogRepository.update(Number(body.callLogId), {
+      recordingUrl,
+    });
+  }
+
+  if (body?.historyId) {
+    await this.contactCallHistoryRepository.update(Number(body.historyId), {
+      recordingUrl,
+    } as any);
+  }
+
+  return {
+    message: 'Recording uploaded successfully',
+    recordingUrl,
+    filePath,
+  };
+}
 
   async create(data: Partial<CallLog>) {
     const log = this.callLogRepository.create({
@@ -1333,7 +1415,10 @@ const location = this.getMappedValue(row, ['location', 'site_location', 'place']
             : latestCallLog?.createdAt
             ? new Date(latestCallLog.createdAt).toISOString()
             : undefined,
-          recordingUrl: latestCallLog?.recordingUrl || undefined,
+          rrecordingUrl:
+  (latestHistory as any)?.recordingUrl ||
+  latestCallLog?.recordingUrl ||
+  undefined,
         },
       };
     });
@@ -1371,13 +1456,7 @@ const location = this.getMappedValue(row, ['location', 'site_location', 'place']
       timestamp: contact?.createdAt || new Date(),
       title: 'Contact Created',
       description: `Contact imported by ${contact?.importedByName || 'Unknown User'}`,
-      meta: {
-        importedBy: contact?.importedByName || '-',
-        assignedTo: contact?.assignedToName || '-',
-        reviewAssignedTo: contact?.reviewAssignedToName || '-',
-        status: contact?.status || '-',
-        convertedToLead: contact?.convertedToLead ? 'YES' : 'NO',
-      },
+      
     });
 
     for (const note of notes) {
@@ -1407,12 +1486,13 @@ const location = this.getMappedValue(row, ['location', 'site_location', 'place']
         description: call.notes || 'Call entry recorded',
         callHistoryId: call.id,
         meta: {
-          calledBy: call.calledByName || '-',
-          callStatus: call.callStatus || '-',
-          nextFollowUpDate: call.nextFollowUpDate || null,
-          createdAt: call.createdAt,
-          updatedAt: call.updatedAt,
-        },
+  calledBy: call.calledByName || '-',
+  callStatus: call.callStatus || '-',
+  recordingUrl: (call as any).recordingUrl || null,
+  nextFollowUpDate: call.nextFollowUpDate || null,
+  createdAt: call.createdAt,
+  updatedAt: call.updatedAt,
+},
       });
     }
 
@@ -1471,10 +1551,11 @@ const location = this.getMappedValue(row, ['location', 'site_location', 'place']
   async addContactCallHistory(
     id: number,
     body: {
-      callStatus?: string;
-      notes?: string;
-      nextFollowUpDate?: string;
-    },
+  callStatus?: string;
+  notes?: string;
+  recordingUrl?: string;
+  nextFollowUpDate?: string;
+},
     user: any,
   ) {
     const contact = await this.getAccessibleContact(id, user);
@@ -1485,10 +1566,11 @@ const location = this.getMappedValue(row, ['location', 'site_location', 'place']
       calledByName: user.name,
       callStatus: body.callStatus || 'CONNECTED',
       notes: body.notes || '',
+      recordingUrl: body.recordingUrl || undefined,
       nextFollowUpDate: body.nextFollowUpDate
         ? new Date(body.nextFollowUpDate)
         : undefined,
-    });
+    } as any);
 
     return this.contactCallHistoryRepository.save(item);
   }
@@ -1656,10 +1738,11 @@ const location = this.getMappedValue(row, ['location', 'site_location', 'place']
       calledByName: user.name,
       callStatus: normalizedStatus,
       notes: body.callNotes || '',
+      recordingUrl: body.recordingUrl || undefined,
       nextFollowUpDate: body.nextFollowUpDate
         ? new Date(body.nextFollowUpDate)
         : undefined,
-    });
+    } as any);
 
     await this.contactCallHistoryRepository.save(historyItem);
 
