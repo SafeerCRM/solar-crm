@@ -125,6 +125,8 @@ export default function TelecallingContactsPage() {
   const [quickCallNotes, setQuickCallNotes] = useState('');
   const [quickCallNextFollowUpDate, setQuickCallNextFollowUpDate] = useState('');
   const [quickCallRecordingUrl, setQuickCallRecordingUrl] = useState('');
+  const [quickCallRecordingFile, setQuickCallRecordingFile] = useState<File | null>(null);
+const [uploadingQuickCallRecording, setUploadingQuickCallRecording] = useState(false);
 
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const resumeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -553,6 +555,8 @@ const updateQuickCallTimePart = (newTime: Dayjs | null) => {
     setQuickCallNotes('');
     setQuickCallNextFollowUpDate('');
     setQuickCallRecordingUrl('');
+    setQuickCallRecordingFile(null);
+setUploadingQuickCallRecording(false);
     setQuickCallSubmitting(false);
     setCallInitiated(false);
     setHasLeftAppForCall(false);
@@ -569,6 +573,44 @@ const updateQuickCallTimePart = (newTime: Dayjs | null) => {
     resetQuickCallModal();
   };
 
+  const uploadQuickCallRecording = async () => {
+  if (!quickCallRecordingFile || !quickCallModal.contact) return '';
+
+  try {
+    setUploadingQuickCallRecording(true);
+
+    const formData = new FormData();
+    formData.append('file', quickCallRecordingFile);
+    formData.append('contactId', String(quickCallModal.contact.id));
+
+    if (quickCallModal.callLogId) {
+      formData.append('callLogId', String(quickCallModal.callLogId));
+    }
+
+    const res = await fetch(`${backendUrl}/telecalling/recordings/upload`, {
+      method: 'POST',
+      headers: {
+        Authorization: getAuthHeaders().Authorization,
+      },
+      body: formData,
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data?.message || 'Recording upload failed');
+    }
+
+    return data.recordingUrl || '';
+  } catch (err: any) {
+    console.error(err);
+    setMessage(err?.message || 'Recording upload failed');
+    return '';
+  } finally {
+    setUploadingQuickCallRecording(false);
+  }
+};
+
   const completeQuickCall = async (disposition: QuickCallDisposition) => {
     if (!quickCallModal.contact) {
       setMessage('No contact selected for quick call');
@@ -576,9 +618,19 @@ const updateQuickCallTimePart = (newTime: Dayjs | null) => {
     }
 
     try {
-      setQuickCallSubmitting(true);
+  setQuickCallSubmitting(true);
 
-      await axios.post(
+  let finalRecordingUrl = quickCallRecordingUrl;
+
+  if (quickCallRecordingFile) {
+    const uploadedUrl = await uploadQuickCallRecording();
+
+    if (uploadedUrl) {
+      finalRecordingUrl = uploadedUrl;
+    }
+  }
+
+  await axios.post(
         `${backendUrl}/telecalling/contacts/${quickCallModal.contact.id}/quick-call/complete`,
         {
           callLogId: quickCallModal.callLogId,
@@ -588,7 +640,7 @@ const updateQuickCallTimePart = (newTime: Dayjs | null) => {
           nextFollowUpDate: quickCallNextFollowUpDate
             ? new Date(quickCallNextFollowUpDate).toISOString()
             : undefined,
-          recordingUrl: quickCallRecordingUrl || undefined,
+          recordingUrl: finalRecordingUrl || undefined,
           providerName: 'TEL_LINK',
           receiverNumber: quickCallModal.contact.phone,
         },
@@ -1280,6 +1332,34 @@ const transferContacts = async () => {
                   placeholder="Recording URL"
                   className="rounded-2xl border border-gray-200 p-3"
                 />
+
+                <div className="rounded-2xl border border-dashed border-gray-300 p-3 md:col-span-2">
+  <label className="mb-2 block text-sm font-medium text-gray-700">
+    Upload Call Recording
+  </label>
+
+  <input
+    type="file"
+    accept="audio/*"
+    onChange={(e) => {
+      const file = e.target.files?.[0];
+      setQuickCallRecordingFile(file || null);
+    }}
+    className="w-full text-sm"
+  />
+
+  {quickCallRecordingFile && (
+    <p className="mt-2 text-xs text-gray-600">
+      Selected: {quickCallRecordingFile.name}
+    </p>
+  )}
+
+  {uploadingQuickCallRecording && (
+    <p className="mt-2 text-xs text-blue-600">
+      Uploading recording...
+    </p>
+  )}
+</div>
               </div>
 
               <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

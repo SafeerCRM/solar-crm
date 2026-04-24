@@ -126,6 +126,8 @@ export default function TelecallingPage() {
   const [callNotes, setCallNotes] = useState('');
   const [nextFollowUpDate, setNextFollowUpDate] = useState('');
   const [recordingUrl, setRecordingUrl] = useState('');
+  const [recordingFile, setRecordingFile] = useState<File | null>(null);
+const [uploadingRecording, setUploadingRecording] = useState(false);
   const [leadPotential, setLeadPotential] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
@@ -144,6 +146,7 @@ export default function TelecallingPage() {
   const [leadPotentialFilter, setLeadPotentialFilter] = useState('');
   const [callResultFilter, setCallResultFilter] = useState('');
   const [page, setPage] = useState(1);
+  const [mounted, setMounted] = useState(false);
 const [limit] = useState(50);
 const [total, setTotal] = useState(0);
 const [totalPages, setTotalPages] = useState(1);
@@ -196,6 +199,10 @@ try {
   window.location.href = '/';
 }
   }, []);
+
+  useEffect(() => {
+  setMounted(true);
+}, []);
 
  useEffect(() => {
   if (!user) return;
@@ -502,6 +509,39 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
   setNextFollowUpDate(merged.format('YYYY-MM-DDTHH:mm'));
 };
 
+const handleUploadRecording = async () => {
+  if (!recordingFile) return '';
+
+  try {
+    setUploadingRecording(true);
+
+    const formData = new FormData();
+    formData.append('file', recordingFile);
+
+    const res = await fetch(`${backendUrl}/telecalling/recordings/upload`, {
+      method: 'POST',
+      headers: {
+        Authorization: getAuthHeaders().Authorization,
+      },
+      body: formData,
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data?.message || 'Recording upload failed');
+    }
+
+    return data.recordingUrl || '';
+  } catch (err: any) {
+    console.error(err);
+    setMessage(err?.message || 'Recording upload failed');
+    return '';
+  } finally {
+    setUploadingRecording(false);
+  }
+};
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage('');
@@ -519,13 +559,23 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
     setLoading(true);
 
     try {
-      const payload: any = {
-        leadId: Number(leadId),
-        callStatus,
-        callNotes,
-        recordingUrl,
-        leadPotential: leadPotential || undefined,
-      };
+      let finalRecordingUrl = recordingUrl;
+
+if (recordingFile) {
+  const uploadedUrl = await handleUploadRecording();
+
+  if (uploadedUrl) {
+    finalRecordingUrl = uploadedUrl;
+  }
+}
+
+const payload: any = {
+  leadId: Number(leadId),
+  callStatus,
+  callNotes,
+  recordingUrl: finalRecordingUrl,
+  leadPotential: leadPotential || undefined,
+};
 
       if (nextFollowUpDate) {
         payload.nextFollowUpDate = new Date(nextFollowUpDate).toISOString();
@@ -540,6 +590,7 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
       setCallNotes('');
       setNextFollowUpDate('');
       setRecordingUrl('');
+      setRecordingFile(null);
       setLeadPotential('');
       await fetchCalls(1);
       goToNextLead();
@@ -864,6 +915,34 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
               className="w-full rounded-xl border border-gray-400 px-4 py-3"
             />
 
+            <div className="rounded-xl border border-dashed border-gray-300 p-3">
+  <label className="mb-2 block text-sm font-medium text-gray-700">
+    Upload Call Recording
+  </label>
+
+  <input
+    type="file"
+    accept="audio/*"
+    onChange={(e) => {
+      const file = e.target.files?.[0];
+      setRecordingFile(file || null);
+    }}
+    className="w-full text-sm"
+  />
+
+  {recordingFile && (
+    <p className="mt-2 text-xs text-gray-600">
+      Selected: {recordingFile.name}
+    </p>
+  )}
+
+  {uploadingRecording && (
+    <p className="mt-2 text-xs text-blue-600">
+      Uploading recording...
+    </p>
+  )}
+</div>
+
             <LocalizationProvider dateAdapter={AdapterDayjs}>
     <div className="grid grid-cols-1 gap-3 md:grid-cols-2 max-w-full">
     <DatePicker
@@ -1083,20 +1162,22 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
           <LocalizationProvider dateAdapter={AdapterDayjs}>
                                     <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[380px_minmax(0,1fr)]">
                             <div className="min-w-0 overflow-hidden rounded-2xl bg-white p-3 shadow-sm">
-                                <DateCalendar
-                  value={selectedReminderDate}
-                  onChange={(newValue) => setSelectedReminderDate(newValue)}
-                  sx={{
-                    width: '100%',
-                    maxWidth: '100%',
-                    '& .MuiDayCalendar-header': {
-                      justifyContent: 'space-between',
-                    },
-                    '& .MuiPickersSlideTransition-root': {
-                      minHeight: 220,
-                    },
-                  }}
-                />
+                                {mounted && (
+  <DateCalendar
+    value={selectedReminderDate}
+    onChange={(newValue) => setSelectedReminderDate(newValue)}
+    sx={{
+      width: '100%',
+      maxWidth: '100%',
+      '& .MuiDayCalendar-header': {
+        justifyContent: 'space-between',
+      },
+      '& .MuiPickersSlideTransition-root': {
+        minHeight: 220,
+      },
+    }}
+  />
+)}
               </div>
 
                             <div className="min-w-0 overflow-hidden rounded-2xl bg-white p-4 shadow-sm">
@@ -1185,6 +1266,13 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
                     <div className="col-span-2 rounded-xl bg-gray-50 p-3 overflow-hidden">
                       <p className="text-xs text-gray-500">Latest Notes</p>
                       <p className="break-words font-medium">{call.effectiveNotes || '-'}</p>
+                      {call.recordingUrl && (
+  <audio
+    controls
+    src={call.recordingUrl}
+    className="mt-3 w-full"
+  />
+)}
                     </div>
 
                     <div className="rounded-xl bg-gray-50 p-3">
@@ -1393,20 +1481,22 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
 <td className="border p-2 break-words">{call.leadPotential || '-'}</td>
                       <td className="border p-2 break-words">{call.effectiveNotes || '-'}</td>
 
-                      <td className="border p-2">
-                        {call.recordingUrl ? (
-                          <a
-                            href={call.recordingUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-blue-600 underline"
-                          >
-                            Open
-                          </a>
-                        ) : (
-                          'No Recording'
-                        )}
-                      </td>
+                      <td className="border p-2 min-w-[260px]">
+  {call.recordingUrl ? (
+    <div className="rounded-xl border border-green-200 bg-green-50 p-2">
+      <p className="mb-1 text-xs font-semibold text-green-700">
+        Call Recording
+      </p>
+      <audio
+        controls
+        src={call.recordingUrl}
+        className="w-full"
+      />
+    </div>
+  ) : (
+    <span className="text-xs text-gray-400">No recording uploaded</span>
+  )}
+</td>
 
                       <td className="border p-2">
                         {call.effectiveNextFollowUpDate

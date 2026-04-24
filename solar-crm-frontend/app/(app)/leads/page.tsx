@@ -60,6 +60,11 @@ export default function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [filteredLeads, setFilteredLeads] = useState<Lead[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [leadPage, setLeadPage] = useState(1);
+const [leadLimit] = useState(50);
+const [leadTotal, setLeadTotal] = useState(0);
+const [leadTotalPages, setLeadTotalPages] = useState(1);
+const [loadingLeads, setLoadingLeads] = useState(false);
   const [message, setMessage] = useState('');
     const [bulkAssignedTo, setBulkAssignedTo] = useState('');
   const [bulkAssigning, setBulkAssigning] = useState(false);
@@ -100,11 +105,26 @@ const [editingLeadName, setEditingLeadName] = useState('');
   const [searchCity, setSearchCity] = useState('');
   const [potentialFilter, setPotentialFilter] = useState('');
 
+  const [showStorage, setShowStorage] = useState(false);
+const [storageLeads, setStorageLeads] = useState<any[]>([]);
+const [storageTotal, setStorageTotal] = useState(0);
+const [storagePage, setStoragePage] = useState(1);
+const [storageTotalPages, setStorageTotalPages] = useState(1);
+const [loadingStorage, setLoadingStorage] = useState(false);
+const [selectedStorageIds, setSelectedStorageIds] = useState<number[]>([]);
+const [storageAssignedTo, setStorageAssignedTo] = useState('');
+const [convertingStorage, setConvertingStorage] = useState(false);
+const [selectingFilteredStorage, setSelectingFilteredStorage] = useState(false);
+
+const [storageSearchName, setStorageSearchName] = useState('');
+const [storageSearchPhone, setStorageSearchPhone] = useState('');
+const [storageSearchCity, setStorageSearchCity] = useState('');
+const [storagePotentialFilter, setStoragePotentialFilter] = useState('');
+
   const currentRoles = currentUser?.roles || [];
-  const canAssignLeads =
-    currentRoles.includes('OWNER') ||
-    currentRoles.includes('LEAD_MANAGER') ||
-    currentRoles.includes('TELECALLING_MANAGER');
+const isOwner = currentRoles.includes('OWNER');
+
+const canAssignLeads = isOwner;
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
@@ -123,8 +143,9 @@ const [editingLeadName, setEditingLeadName] = useState('');
 }, []);
 
   useEffect(() => {
-    fetchLeads();
-  }, []);
+  fetchLeads(1);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
   useEffect(() => {
     return () => {
       clearAutoTimers();
@@ -280,21 +301,44 @@ const [editingLeadName, setEditingLeadName] = useState('');
     setFilteredLeads(filtered);
   }, [searchName, searchPhone, searchCity, potentialFilter, leads]);
 
-  const fetchLeads = async () => {
-    try {
-      const res = await axios.get(`${backendUrl}/leads`, {
-        headers: getAuthHeaders(),
-      });
+  const fetchLeads = async (pageNumber = 1) => {
+  try {
+    setLoadingLeads(true);
 
-      const data = Array.isArray(res.data) ? res.data : [];
-      setLeads(data);
-      setFilteredLeads(data);
-    } catch (err) {
-      console.error(err);
-      setLeads([]);
-      setFilteredLeads([]);
-    }
-  };
+    const res = await axios.get(`${backendUrl}/leads`, {
+      headers: getAuthHeaders(),
+      params: {
+        page: pageNumber,
+        limit: leadLimit,
+        search: searchName || undefined,
+        phone: searchPhone || undefined,
+        city: searchCity || undefined,
+        potentialPercentage: potentialFilter || undefined,
+      },
+    });
+
+    const responseData = res.data || {};
+    const data = Array.isArray(responseData.data)
+      ? responseData.data
+      : Array.isArray(responseData)
+      ? responseData
+      : [];
+
+    setLeads(data);
+    setFilteredLeads(data);
+    setLeadTotal(Number(responseData.total || data.length));
+    setLeadPage(Number(responseData.page || pageNumber));
+    setLeadTotalPages(Number(responseData.totalPages || 1));
+  } catch (err) {
+    console.error(err);
+    setLeads([]);
+    setFilteredLeads([]);
+    setLeadTotal(0);
+    setLeadTotalPages(1);
+  } finally {
+    setLoadingLeads(false);
+  }
+};
 
   const fetchUsers = async () => {
     try {
@@ -308,6 +352,35 @@ const [editingLeadName, setEditingLeadName] = useState('');
       setUsers([]);
     }
   };
+
+  const fetchStorageLeads = async (page = 1) => {
+  try {
+    setLoadingStorage(true);
+
+    const res = await axios.get(`${backendUrl}/leads/storage-list`, {
+      headers: getAuthHeaders(),
+      params: {
+  page,
+  limit: 50,
+  name: storageSearchName || undefined,
+  phone: storageSearchPhone || undefined,
+  city: storageSearchCity || undefined,
+  leadPotential: storagePotentialFilter || undefined,
+},
+    });
+
+    setStorageLeads(Array.isArray(res.data?.data) ? res.data.data : []);
+    setStorageTotal(Number(res.data?.total || 0));
+    setStoragePage(Number(res.data?.page || page));
+    setStorageTotalPages(Number(res.data?.totalPages || 1));
+  } catch (err: any) {
+    console.error(err);
+    setMessage(err?.response?.data?.message || 'Failed to fetch storage leads');
+    setStorageLeads([]);
+  } finally {
+    setLoadingStorage(false);
+  }
+};
 
     const handleImportLeads = async (
     e: React.ChangeEvent<HTMLInputElement>
@@ -329,9 +402,12 @@ const [editingLeadName, setEditingLeadName] = useState('');
       });
 
       setMessage(
-        res?.data?.message || 'Lead import completed successfully'
-      );
-
+  `${res?.data?.message || 'Lead import completed'} Imported: ${
+    res?.data?.importedCount || 0
+  }, Skipped: ${res?.data?.skippedCount || 0}, Duplicates: ${
+    res?.data?.duplicateCount || 0
+  }`
+);
       if (leadImportInputRef.current) {
         leadImportInputRef.current.value = '';
       }
@@ -404,6 +480,109 @@ const [editingLeadName, setEditingLeadName] = useState('');
     }
   };
 
+  const handleConvertStorageToLeads = async () => {
+  if (!selectedStorageIds.length) {
+    setMessage('Please select storage leads first');
+    return;
+  }
+
+  if (!storageAssignedTo) {
+    setMessage('Please select a lead manager first');
+    return;
+  }
+
+  try {
+    setConvertingStorage(true);
+    setMessage('');
+
+    const res = await axios.post(
+      `${backendUrl}/leads/storage-convert`,
+      {
+        contactIds: selectedStorageIds,
+        assignedTo: Number(storageAssignedTo),
+      },
+      { headers: getAuthHeaders() }
+    );
+
+    setMessage(res?.data?.message || 'Storage leads converted successfully');
+    setSelectedStorageIds([]);
+    await fetchStorageLeads(storagePage);
+    await fetchLeads();
+  } catch (err: any) {
+    console.error(err);
+    setMessage(err?.response?.data?.message || 'Failed to convert storage leads');
+  } finally {
+    setConvertingStorage(false);
+  }
+};
+
+const handleAssignStorageLeads = async () => {
+  try {
+    if (!selectedStorageIds.length) {
+      setMessage('Select storage leads first');
+      return;
+    }
+
+    if (!storageAssignedTo) {
+      setMessage('Select lead manager');
+      return;
+    }
+
+    setMessage('Assigning storage leads...');
+
+    await axios.patch(
+      `${backendUrl}/leads/storage-assign`,
+      {
+        contactIds: selectedStorageIds,
+        assignedTo: storageAssignedTo,
+      },
+      { headers: getAuthHeaders() }
+    );
+
+    setMessage(
+      `${selectedStorageIds.length} storage leads assigned successfully`
+    );
+
+    fetchStorageLeads(storagePage);
+  } catch (err: any) {
+    console.error(err);
+    setMessage(
+      err?.response?.data?.message || 'Failed to assign storage leads'
+    );
+  }
+};
+
+const handleSelectAllFilteredStorage = async () => {
+  try {
+    setSelectingFilteredStorage(true);
+    setMessage('');
+
+    const res = await axios.get(`${backendUrl}/leads/storage-filtered-ids`, {
+      headers: getAuthHeaders(),
+      params: {
+        name: storageSearchName || undefined,
+        phone: storageSearchPhone || undefined,
+        city: storageSearchCity || undefined,
+        leadPotential: storagePotentialFilter || undefined,
+      },
+    });
+
+    const ids = Array.isArray(res.data?.ids)
+      ? res.data.ids.map(Number).filter(Boolean)
+      : [];
+
+    setSelectedStorageIds(ids);
+    setMessage(`Selected ${ids.length} filtered storage leads`);
+  } catch (err: any) {
+    console.error(err);
+    setMessage(
+      err?.response?.data?.message || 'Failed to select filtered storage leads'
+    );
+  } finally {
+    setSelectingFilteredStorage(false);
+  }
+};
+
   const updateLeadName = async (leadId: number) => {
   try {
     await axios.patch(
@@ -463,12 +642,14 @@ const [editingLeadName, setEditingLeadName] = useState('');
   };
 
     const clearFilters = () => {
-    setSearchName('');
-    setSearchPhone('');
-    setSearchCity('');
-    setPotentialFilter('');
-    setSelectedCalendarDate(null);
-  };
+  setSearchName('');
+  setSearchPhone('');
+  setSearchCity('');
+  setPotentialFilter('');
+  setSelectedCalendarDate(null);
+  setLeadPage(1);
+  setTimeout(() => fetchLeads(1), 0);
+};
 
     const LEAD_STAGES = [
     'NEW',
@@ -884,7 +1065,7 @@ const [editingLeadName, setEditingLeadName] = useState('');
               <input
                 ref={leadImportInputRef}
                 type="file"
-                accept=".csv"
+                accept=".csv,.xlsx,.xls"
                 onChange={handleImportLeads}
                 className="hidden"
               />
@@ -898,6 +1079,23 @@ const [editingLeadName, setEditingLeadName] = useState('');
               </button>
             </>
           )}
+
+          {isOwner && (
+  <button
+    type="button"
+    onClick={() => {
+      const nextValue = !showStorage;
+      setShowStorage(nextValue);
+
+      if (nextValue) {
+        fetchStorageLeads(1);
+      }
+    }}
+    className="rounded bg-gray-700 px-4 py-2 text-white"
+  >
+    {showStorage ? 'Hide Storage' : 'Show Storage'}
+  </button>
+)}
 
           {!isAutoCalling ? (
             <button
@@ -959,16 +1157,26 @@ const [editingLeadName, setEditingLeadName] = useState('');
                   <div className="mb-4 flex flex-col gap-3 rounded bg-gray-100 p-3 text-sm text-gray-700">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <strong>Total Leads:</strong> {leads.length} |{' '}
-            <strong>Filtered:</strong> {filteredLeads.length}
+            <strong>Total Leads:</strong> {leadTotal} |{' '}
+<strong>Current Page:</strong> {filteredLeads.length}
           </div>
 
-          <button
-            onClick={clearFilters}
-            className="rounded bg-gray-500 px-3 py-1 text-white"
-          >
-            Clear Filters
-          </button>
+          <div className="flex flex-wrap gap-2">
+  <button
+    type="button"
+    onClick={() => fetchLeads(1)}
+    className="rounded bg-indigo-600 px-3 py-1 text-white"
+  >
+    Apply Lead Filters
+  </button>
+
+  <button
+    onClick={clearFilters}
+    className="rounded bg-gray-500 px-3 py-1 text-white"
+  >
+    Clear Filters
+  </button>
+</div>
         </div>
 
         {canAssignLeads && (
@@ -979,11 +1187,13 @@ const [editingLeadName, setEditingLeadName] = useState('');
               className="rounded border p-2 text-sm md:min-w-[220px]"
             >
               <option value="">Select lead manager</option>
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name}
-                </option>
-              ))}
+              {users
+  .filter((u) => (u.roles || []).includes('LEAD_MANAGER'))
+  .map((u) => (
+    <option key={u.id} value={u.id}>
+      {u.name}
+    </option>
+  ))}
             </select>
 
             <button
@@ -1169,7 +1379,286 @@ const [editingLeadName, setEditingLeadName] = useState('');
         </div>
       )}
 
-      {filteredLeads.length === 0 ? (
+      {showStorage && isOwner && (
+  <div className="mb-6 rounded-2xl bg-white p-4 shadow">
+    <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div>
+        <h2 className="text-xl font-semibold">Lead Storage</h2>
+        <p className="text-sm text-gray-600">
+          Imported data is stored here before assigning and converting to active leads.
+        </p>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => fetchStorageLeads(1)}
+        className="rounded bg-blue-600 px-4 py-2 text-white"
+      >
+        Refresh Storage
+      </button>
+    </div>
+
+    <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-4">
+      <input
+        type="text"
+        placeholder="Search storage by name"
+        value={storageSearchName}
+        onChange={(e) => setStorageSearchName(e.target.value)}
+        className="rounded border p-2"
+      />
+
+      <input
+        type="text"
+        placeholder="Search storage by phone"
+        value={storageSearchPhone}
+        onChange={(e) => setStorageSearchPhone(e.target.value)}
+        className="rounded border p-2"
+      />
+
+      <input
+        type="text"
+        placeholder="Search storage by city / zone / location"
+        value={storageSearchCity}
+        onChange={(e) => setStorageSearchCity(e.target.value)}
+        className="rounded border p-2"
+      />
+      <select
+  value={storagePotentialFilter}
+  onChange={(e) => setStoragePotentialFilter(e.target.value)}
+  className="rounded border p-2"
+>
+  <option value="">Lead Potential</option>
+  <option value="LOW">Low</option>
+  <option value="MEDIUM">Medium</option>
+  <option value="HIGH">High</option>
+</select>
+    </div>
+
+    <div className="mb-4 flex flex-col gap-3 rounded bg-gray-100 p-3 text-sm md:flex-row md:items-center md:justify-between">
+      <div>
+        <strong>Storage Total:</strong> {storageTotal} |{' '}
+        <strong>Selected:</strong> {selectedStorageIds.length}
+      </div>
+
+      <div className="flex flex-col gap-2 md:flex-row md:items-center">
+        <button
+          type="button"
+          onClick={() => {
+            setStorageSearchName('');
+setStorageSearchPhone('');
+setStorageSearchCity('');
+setStoragePotentialFilter('');
+setSelectedStorageIds([]);
+fetchStorageLeads(1);
+          }}
+          className="rounded bg-gray-500 px-3 py-2 text-white"
+        >
+          Clear Storage Filters
+        </button>
+
+        <button
+          type="button"
+          onClick={() => fetchStorageLeads(1)}
+          className="rounded bg-indigo-600 px-3 py-2 text-white"
+        >
+          Apply Storage Filters
+        </button>
+      </div>
+    </div>
+
+    <div className="mb-4 flex flex-col gap-3 rounded border bg-blue-50 p-3 md:flex-row md:items-center">
+      <select
+        value={storageAssignedTo}
+        onChange={(e) => setStorageAssignedTo(e.target.value)}
+        className="rounded border p-2 text-sm md:min-w-[220px]"
+      >
+        <option value="">Select lead manager</option>
+        {users
+          .filter((u) => (u.roles || []).includes('LEAD_MANAGER'))
+          .map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.name}
+            </option>
+          ))}
+      </select>
+<button
+  type="button"
+  onClick={handleAssignStorageLeads}
+  disabled={!selectedStorageIds.length || !storageAssignedTo}
+  className="rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50"
+>
+  Assign Selected ({selectedStorageIds.length})
+</button>
+      <button
+        type="button"
+        onClick={handleConvertStorageToLeads}
+        disabled={convertingStorage || selectedStorageIds.length === 0}
+        className="rounded bg-green-600 px-4 py-2 text-white disabled:opacity-50"
+      >
+        {convertingStorage
+          ? 'Converting...'
+          : `Convert Selected (${selectedStorageIds.length})`}
+      </button>
+
+      <button
+        type="button"
+        onClick={() => {
+          const currentPageIds = storageLeads.map((item) => Number(item.id));
+
+          const allSelected = currentPageIds.every((id) =>
+            selectedStorageIds.includes(id)
+          );
+
+          if (allSelected) {
+            setSelectedStorageIds((prev) =>
+              prev.filter((id) => !currentPageIds.includes(id))
+            );
+          } else {
+            setSelectedStorageIds((prev) => {
+              const next = new Set(prev);
+              currentPageIds.forEach((id) => next.add(id));
+              return Array.from(next);
+            });
+          }
+        }}
+        className="rounded bg-orange-600 px-4 py-2 text-white"
+      >
+        Select / Unselect Current Page
+      </button>
+
+      <button
+  type="button"
+  onClick={handleSelectAllFilteredStorage}
+  disabled={selectingFilteredStorage || storageTotal === 0}
+  className="rounded bg-purple-600 px-4 py-2 text-white disabled:opacity-50"
+>
+  {selectingFilteredStorage
+    ? 'Selecting...'
+    : `Select All Filtered (${storageTotal})`}
+</button>
+
+<button
+  type="button"
+  onClick={() => setSelectedStorageIds([])}
+  disabled={selectedStorageIds.length === 0}
+  className="rounded bg-red-500 px-4 py-2 text-white disabled:opacity-50"
+>
+  Clear Selection
+</button>
+    </div>
+
+    {loadingStorage ? (
+      <div className="rounded-xl bg-gray-50 p-6 text-center">
+        Loading storage leads...
+      </div>
+    ) : storageLeads.length === 0 ? (
+      <div className="rounded-xl bg-gray-50 p-6 text-center text-gray-600">
+        No storage leads found
+      </div>
+    ) : (
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {storageLeads.map((item) => {
+          const isSelected = selectedStorageIds.includes(item.id);
+
+          return (
+            <div
+              key={item.id}
+              className={`rounded-2xl border bg-white p-4 shadow-sm ${
+                isSelected ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
+              }`}
+            >
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-800">
+                    {item.name || 'No Name'}
+                  </h3>
+                  <p className="text-sm text-gray-500">Storage ID: {item.id}</p>
+                </div>
+
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  onChange={() => {
+                    setSelectedStorageIds((prev) =>
+                      prev.includes(item.id)
+                        ? prev.filter((id) => id !== item.id)
+                        : [...prev, item.id]
+                    );
+                  }}
+                  className="h-5 w-5"
+                />
+              </div>
+
+              <div className="space-y-2 text-sm text-gray-700">
+                <p>
+                  <span className="font-medium">Phone:</span>{' '}
+                  {item.phone || '-'}
+                </p>
+
+                <p>
+                  <span className="font-medium">City:</span>{' '}
+                  {item.city || '-'}
+                </p>
+
+                <p>
+                  <span className="font-medium">Zone:</span>{' '}
+                  {item.zone || '-'}
+                </p>
+
+                <p>
+  <span className="font-medium">Lead Potential:</span>{' '}
+  {item.leadPotential || 'LOW'}
+</p>
+
+                <p className="break-words">
+                  <span className="font-medium">Address:</span>{' '}
+                  {item.address || item.location || '-'}
+                </p>
+
+                <p>
+                  <span className="font-medium">Imported By:</span>{' '}
+                  {item.importedByName || item.importedBy || '-'}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    )}
+
+    <div className="mt-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+      <button
+        type="button"
+        onClick={() => fetchStorageLeads(Math.max(storagePage - 1, 1))}
+        disabled={storagePage <= 1 || loadingStorage}
+        className="rounded bg-gray-200 px-4 py-2 text-gray-700 disabled:opacity-50"
+      >
+        Previous
+      </button>
+
+      <div className="text-center text-sm text-gray-600">
+        Page {storagePage} of {storageTotalPages}
+      </div>
+
+      <button
+        type="button"
+        onClick={() =>
+          fetchStorageLeads(Math.min(storagePage + 1, storageTotalPages))
+        }
+        disabled={storagePage >= storageTotalPages || loadingStorage}
+        className="rounded bg-gray-200 px-4 py-2 text-gray-700 disabled:opacity-50"
+      >
+        Next
+      </button>
+    </div>
+  </div>
+)}
+
+      {loadingLeads ? (
+  <div className="rounded-xl bg-white p-6 shadow">
+    <p className="text-gray-600">Loading leads...</p>
+  </div>
+) : filteredLeads.length === 0 ? (
         <div className="rounded-xl bg-white p-6 shadow">
           <p className="text-gray-600">No leads found</p>
         </div>
@@ -1414,11 +1903,13 @@ const [editingLeadName, setEditingLeadName] = useState('');
                       defaultValue=""
                     >
                       <option value="">Select user</option>
-                      {users.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.name}
-                        </option>
-                      ))}
+                      {users
+  .filter((u) => (u.roles || []).includes('LEAD_MANAGER'))
+  .map((u) => (
+    <option key={u.id} value={u.id}>
+      {u.name}
+    </option>
+  ))}
                     </select>
                   </div>
                 )}
@@ -1427,6 +1918,32 @@ const [editingLeadName, setEditingLeadName] = useState('');
           })}
         </div>
       )}
+{!loadingLeads && leadTotalPages > 1 && (
+  <div className="mt-6 flex flex-col gap-2 rounded-xl bg-white p-4 shadow md:flex-row md:items-center md:justify-between">
+    <button
+      type="button"
+      onClick={() => fetchLeads(Math.max(leadPage - 1, 1))}
+      disabled={leadPage <= 1}
+      className="rounded bg-gray-200 px-4 py-2 text-gray-700 disabled:opacity-50"
+    >
+      Previous
+    </button>
+
+    <div className="text-center text-sm text-gray-600">
+      Page {leadPage} of {leadTotalPages} | Total {leadTotal}
+    </div>
+
+    <button
+      type="button"
+      onClick={() => fetchLeads(Math.min(leadPage + 1, leadTotalPages))}
+      disabled={leadPage >= leadTotalPages}
+      className="rounded bg-gray-200 px-4 py-2 text-gray-700 disabled:opacity-50"
+    >
+      Next
+    </button>
+  </div>
+)}
+
       {quickLeadCallModal.isOpen && quickLeadCallModal.lead && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
                     <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white p-4 shadow-2xl md:p-5">

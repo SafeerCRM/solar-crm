@@ -82,6 +82,8 @@ const [selectedLeadManagerId, setSelectedLeadManagerId] = useState('');
 
   const [callStatus, setCallStatus] = useState('CONNECTED');
   const [callNotes, setCallNotes] = useState('');
+  const [callRecordingFile, setCallRecordingFile] = useState<File | null>(null);
+const [uploadingCallRecording, setUploadingCallRecording] = useState(false);
   const [nextFollowUpDate, setNextFollowUpDate] = useState('');
 
   const [editingCallId, setEditingCallId] = useState<number | null>(null);
@@ -365,26 +367,71 @@ setSelectedAssistantId(reviewAssignedTo ? String(reviewAssignedTo) : '');
     }
   };
 
+  const uploadCallRecording = async () => {
+  if (!callRecordingFile) return '';
+
+  try {
+    setUploadingCallRecording(true);
+
+    const formData = new FormData();
+    formData.append('file', callRecordingFile);
+    formData.append('contactId', String(id));
+
+    const res = await fetch(`${backendUrl}/telecalling/recordings/upload`, {
+      method: 'POST',
+      headers: {
+        Authorization: getAuthHeaders().Authorization,
+      },
+      body: formData,
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data?.message || 'Upload failed');
+    }
+
+    return data.recordingUrl;
+  } catch (err: any) {
+    console.error(err);
+    setMessage(err?.message || 'Recording upload failed');
+    return '';
+  } finally {
+    setUploadingCallRecording(false);
+  }
+};
+
   const addCallHistory = async () => {
     try {
       setLoading(true);
       setMessage('');
 
-      await axios.post(
-        `${backendUrl}/telecalling/contacts/${id}/call-history`,
-        {
-          callStatus,
-          notes: callNotes,
-          nextFollowUpDate: nextFollowUpDate
-            ? new Date(nextFollowUpDate).toISOString()
-            : undefined,
-        },
-        { headers: getAuthHeaders() },
-      );
+      let finalRecordingUrl = '';
+
+if (callRecordingFile) {
+  const uploadedUrl = await uploadCallRecording();
+  if (uploadedUrl) {
+    finalRecordingUrl = uploadedUrl;
+  }
+}
+
+await axios.post(
+  `${backendUrl}/telecalling/contacts/${id}/call-history`,
+  {
+    callStatus,
+    notes: callNotes,
+    recordingUrl: finalRecordingUrl,
+    nextFollowUpDate: nextFollowUpDate
+      ? new Date(nextFollowUpDate).toISOString()
+      : undefined,
+  },
+  { headers: getAuthHeaders() },
+);
 
       setCallStatus('CONNECTED');
       setCallNotes('');
       setNextFollowUpDate('');
+      setCallRecordingFile(null);
       setMessage('Call history added successfully');
       fetchHistory();
     } catch (error: any) {
@@ -632,7 +679,7 @@ setSelectedAssistantId(reviewAssignedTo ? String(reviewAssignedTo) : '');
               Assign to Telecalling Assistant
             </h3>
 
-            <div className="grid gap-3 md:grid-cols-3">
+            <div className="flex flex-col gap-3 md:grid md:grid-cols-3">
               <select
                 value={selectedAssistantId}
                 onChange={(e) => setSelectedAssistantId(e.target.value)}
@@ -650,7 +697,7 @@ setSelectedAssistantId(reviewAssignedTo ? String(reviewAssignedTo) : '');
               <button
                 onClick={assignToAssistant}
                 disabled={assigningAssistant}
-                className="rounded bg-indigo-600 px-4 py-2 text-white"
+                className="w-full md:w-auto rounded bg-indigo-600 px-4 py-2 text-white"
               >
                 {assigningAssistant ? 'Assigning...' : 'Assign Assistant'}
               </button>
@@ -927,6 +974,34 @@ setSelectedAssistantId(reviewAssignedTo ? String(reviewAssignedTo) : '');
           rows={4}
           placeholder="Enter call notes"
         />
+
+        <div className="mt-3 rounded border border-dashed border-gray-300 p-3">
+  <label className="mb-2 block text-sm font-medium text-gray-700">
+    Upload Call Recording
+  </label>
+
+  <input
+    type="file"
+    accept="audio/*"
+    onChange={(e) => {
+      const file = e.target.files?.[0];
+      setCallRecordingFile(file || null);
+    }}
+    className="w-full text-sm"
+  />
+
+  {callRecordingFile && (
+    <p className="mt-2 text-xs text-gray-600">
+      Selected: {callRecordingFile.name}
+    </p>
+  )}
+
+  {uploadingCallRecording && (
+    <p className="mt-2 text-xs text-blue-600">
+      Uploading recording...
+    </p>
+  )}
+</div>
       </div>
 
 
@@ -1059,6 +1134,14 @@ setSelectedAssistantId(reviewAssignedTo ? String(reviewAssignedTo) : '');
                 ) : (
                   <>
                     <p className="mt-1 text-sm text-gray-700">{item.description}</p>
+
+                    {item.type === 'CONTACT_CALL' && item.meta?.recordingUrl && (
+  <audio
+    controls
+    src={String(item.meta.recordingUrl)}
+    className="mt-3 w-full"
+  />
+)}
 
                     {item.type === 'CONTACT_NOTE' && item.noteId ? (
                       <div className="mt-3">
