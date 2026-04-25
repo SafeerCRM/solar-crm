@@ -135,7 +135,15 @@ function Section({ title, children }: any) {
   );
 }
 
-function Input({ label, value, onChange }: any) {
+function Input({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number | string | undefined;
+  onChange: (value: string) => void;
+}) {
   return (
     <div>
       <label className="text-sm text-gray-600">{label}</label>
