@@ -42,6 +42,15 @@ type PerformanceItem = {
   interested: string;
 };
 
+type MeetingManagerAnalyticsItem = {
+  managerId: number | null;
+  managerName: string;
+  totalMeetings: number;
+  companyMeetings: number;
+  selfMeetings: number;
+  convertedMeetings: number;
+};
+
 type HotLead = {
   id: number;
   name: string;
@@ -100,6 +109,7 @@ export default function DashboardPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [contactsSummary, setContactsSummary] = useState<ContactsSummary | null>(null);
   const [performance, setPerformance] = useState<PerformanceItem[]>([]);
+  const [meetingAnalytics, setMeetingAnalytics] = useState<MeetingManagerAnalyticsItem[]>([]);
   const [hotLeads, setHotLeads] = useState<HotLead[]>([]);
   const [charts, setCharts] = useState<DashboardCharts | null>(null);
   const [telecallers, setTelecallers] = useState<TelecallerOption[]>([]);
@@ -174,23 +184,26 @@ export default function DashboardPage() {
 
       const params = buildParams();
 
-      const [summaryRes, performanceRes, hotLeadsRes, chartsRes] =
-        await Promise.allSettled([
-          axios.get(`${apiBaseUrl}/dashboard/summary`, {
-            params,
-            headers: getAuthHeaders(),
-          }),
-                    axios.get(`${apiBaseUrl}/telecalling/performance/today`, {
-  headers: getAuthHeaders(),
-}),
-          axios.get(`${apiBaseUrl}/leads/hot`, {
-            headers: getAuthHeaders(),
-          }),
-          axios.get(`${apiBaseUrl}/dashboard/charts`, {
-            params,
-            headers: getAuthHeaders(),
-          }),
-        ]);
+      const [summaryRes, performanceRes, hotLeadsRes, chartsRes, meetingAnalyticsRes] =
+  await Promise.allSettled([
+    axios.get(`${apiBaseUrl}/dashboard/summary`, {
+      params,
+      headers: getAuthHeaders(),
+    }),
+    axios.get(`${apiBaseUrl}/telecalling/performance/today`, {
+      headers: getAuthHeaders(),
+    }),
+    axios.get(`${apiBaseUrl}/leads/hot`, {
+      headers: getAuthHeaders(),
+    }),
+    axios.get(`${apiBaseUrl}/dashboard/charts`, {
+      params,
+      headers: getAuthHeaders(),
+    }),
+    axios.get(`${apiBaseUrl}/dashboard/meeting-manager-analytics`, {
+      headers: getAuthHeaders(),
+    }),
+  ]);
 
       if (summaryRes.status === 'fulfilled') {
         setSummary(summaryRes.value.data);
@@ -219,6 +232,16 @@ export default function DashboardPage() {
       } else {
         setCharts(null);
       }
+ if (meetingAnalyticsRes.status === 'fulfilled') {
+  setMeetingAnalytics(
+    Array.isArray(meetingAnalyticsRes.value.data)
+      ? meetingAnalyticsRes.value.data
+      : [],
+  );
+} else {
+  setMeetingAnalytics([]);
+}
+
     } catch (error) {
       console.error('Dashboard error:', error);
       setSummary(null);
@@ -474,6 +497,55 @@ export default function DashboardPage() {
             value={contactsSummary?.filteredContacts || 0}
           />
         </div>
+
+        {userRoles.includes('OWNER') && (
+  <div className="rounded-2xl bg-white p-4 shadow md:p-6">
+    <h2 className="mb-4 text-xl font-bold">📅 Meeting Manager Analytics</h2>
+
+    {meetingAnalytics.length === 0 ? (
+      <div className="text-sm text-gray-500">
+        No meeting manager analytics available
+      </div>
+    ) : (
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {meetingAnalytics.map((item) => (
+          <div
+            key={`${item.managerId || 'unassigned'}-${item.managerName}`}
+            className="rounded-xl border bg-gray-50 p-4"
+          >
+            <p className="mb-2 font-semibold text-gray-900">
+              {item.managerName}
+            </p>
+
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div className="rounded bg-white p-2">
+                <p className="text-gray-500">Total</p>
+                <p className="text-lg font-bold">{item.totalMeetings}</p>
+              </div>
+
+              <div className="rounded bg-white p-2">
+                <p className="text-gray-500">Converted</p>
+                <p className="text-lg font-bold text-green-600">
+                  {item.convertedMeetings}
+                </p>
+              </div>
+
+              <div className="rounded bg-white p-2">
+                <p className="text-gray-500">Company</p>
+                <p className="text-lg font-bold">{item.companyMeetings}</p>
+              </div>
+
+              <div className="rounded bg-white p-2">
+                <p className="text-gray-500">Self</p>
+                <p className="text-lg font-bold">{item.selfMeetings}</p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    )}
+  </div>
+)}
 
         {contactsLoading && (
           <p className="mt-3 text-sm text-gray-500">Updating contact summary...</p>

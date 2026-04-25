@@ -13,6 +13,7 @@ const navItems = [
   { name: 'Followup', href: '/followup' },
   { name: 'Meeting', href: '/meeting' },
   { name: 'Calculator', href: '/calculator' },
+  { name: 'Calculator Settings', href: '/calculator/settings', roles: ['OWNER'] },
 ];
 
 type CurrentUser = {

@@ -1339,14 +1339,15 @@ const transferContacts = async () => {
   </label>
 
   <input
-    type="file"
-    accept="audio/*"
-    onChange={(e) => {
-      const file = e.target.files?.[0];
-      setQuickCallRecordingFile(file || null);
-    }}
-    className="w-full text-sm"
-  />
+  type="file"
+  accept="audio/*"
+  capture="microphone"
+  onChange={(e) => {
+    if (e.target.files?.[0]) {
+      setQuickCallRecordingFile(e.target.files[0]);
+    }
+  }}
+/>
 
   {quickCallRecordingFile && (
     <p className="mt-2 text-xs text-gray-600">

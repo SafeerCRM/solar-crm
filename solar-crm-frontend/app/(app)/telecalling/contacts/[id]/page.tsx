@@ -1135,14 +1135,21 @@ await axios.post(
                   <>
                     <p className="mt-1 text-sm text-gray-700">{item.description}</p>
 
-                    {item.type === 'CONTACT_CALL' && item.meta?.recordingUrl && (
-  <audio
-    controls
-    src={String(item.meta.recordingUrl)}
-    className="mt-3 w-full"
-  />
-)}
+                    
 
+                    {item.type === 'CONTACT_CALL' && item.meta?.recordingUrl && (
+      <div className="mt-3 rounded-xl border border-green-200 bg-green-50 p-3">
+        <p className="mb-2 text-xs font-semibold text-green-700">
+          Call Recording
+        </p>
+
+        <audio
+          controls
+          src={String(item.meta.recordingUrl)}
+          className="w-full"
+        />
+      </div>
+    )}
                     {item.type === 'CONTACT_NOTE' && item.noteId ? (
                       <div className="mt-3">
                         <button

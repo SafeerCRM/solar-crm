@@ -29,6 +29,8 @@ type Meeting = {
   gpsLatitude?: number | null;
   gpsLongitude?: number | null;
   gpsAddress?: string | null;
+  gpsPhotoUrl?: string | null;
+audioUrl?: string | null;
   panelGivenToCustomerKw?: number | null;
   inverterCapacityKw?: number | null;
   structureKw?: number | null;
@@ -86,6 +88,8 @@ export default function MeetingDetailPage() {
   const [calculators, setCalculators] = useState<CalculatorResult[]>([]);
 
   const [selectedAction, setSelectedAction] = useState<ActionOption>('');
+  const [reschedulePhotoFile, setReschedulePhotoFile] = useState<File | null>(null);
+const [rescheduleAudioFile, setRescheduleAudioFile] = useState<File | null>(null);
   const [convertSliderValue, setConvertSliderValue] = useState(0);
   const [convertingProject, setConvertingProject] = useState(false);
 
@@ -305,51 +309,102 @@ export default function MeetingDetailPage() {
     }
   };
 
+  const uploadMeetingProof = async (file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const res = await fetch(`${backendUrl}/meetings/proof/upload`, {
+    method: 'POST',
+    headers: {
+      Authorization: getAuthHeaders().Authorization,
+    },
+    body: formData,
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(data?.message || 'Proof upload failed');
+  }
+
+  return data.fileUrl || '';
+};
+
   const applyAction = async () => {
-    if (!latestMeeting || !selectedAction) return;
+  if (!latestMeeting || !selectedAction) return;
 
-    if (selectedAction === 'CANCELLED' && !form.reason.trim()) {
-      setError('Please enter reason for cancelled action');
-      return;
+  if (selectedAction === 'CANCELLED' && !form.reason.trim()) {
+    setError('Please enter reason for cancelled action');
+    return;
+  }
+
+  if (selectedAction === 'RESCHEDULED' && !form.scheduledAt) {
+    setError('Please select new scheduled time for rescheduled action');
+    return;
+  }
+
+  if (
+    selectedAction === 'RESCHEDULED' &&
+    !reschedulePhotoFile &&
+    !rescheduleAudioFile
+  ) {
+    setError('Please attach GPS photo or audio recording before rescheduling');
+    return;
+  }
+
+  try {
+    setSavingAction(true);
+    setError('');
+    setMessage('');
+
+    let gpsPhotoUrl = '';
+    let audioUrl = '';
+
+    if (selectedAction === 'RESCHEDULED') {
+      if (reschedulePhotoFile) {
+        gpsPhotoUrl = await uploadMeetingProof(reschedulePhotoFile);
+      }
+
+      if (rescheduleAudioFile) {
+        audioUrl = await uploadMeetingProof(rescheduleAudioFile);
+      }
     }
 
-    if (selectedAction === 'RESCHEDULED' && !form.scheduledAt) {
-      setError('Please select new scheduled time for rescheduled action');
-      return;
-    }
+    await axios.patch(
+      `${backendUrl}/meetings/${latestMeeting.id}/action`,
+      {
+        status: selectedAction,
+        newScheduledAt:
+          selectedAction === 'RESCHEDULED'
+            ? new Date(form.scheduledAt).toISOString()
+            : undefined,
+        gpsPhotoUrl: gpsPhotoUrl || undefined,
+        audioUrl: audioUrl || undefined,
+        reason: form.reason || undefined,
+        outcome: form.outcome || undefined,
+        nextAction: form.nextAction || undefined,
+        managerRemarks: form.managerRemarks || undefined,
+        notes: form.notes || undefined,
+      },
+      {
+        headers: getAuthHeaders(),
+      }
+    );
 
-    try {
-      setSavingAction(true);
-      setError('');
-      setMessage('');
-
-      await axios.patch(
-        `${backendUrl}/meetings/${latestMeeting.id}/action`,
-        {
-          status: selectedAction,
-          reason: form.reason || undefined,
-          outcome: form.outcome || undefined,
-          nextAction: form.nextAction || undefined,
-          managerRemarks: form.managerRemarks || undefined,
-          notes: form.notes || undefined,
-        },
-        {
-          headers: getAuthHeaders(),
-        }
-      );
-
-      setMessage(`Meeting action ${selectedAction} saved successfully`);
-      setSelectedAction('');
-      await fetchDetail();
-    } catch (err: any) {
-      console.error(err);
-      setError(
-        err?.response?.data?.message || err?.message || 'Failed to save action'
-      );
-    } finally {
-      setSavingAction(false);
-    }
-  };
+    setMessage(`Meeting action ${selectedAction} saved successfully`);
+    setSelectedAction('');
+    setReschedulePhotoFile(null);
+    setRescheduleAudioFile(null);
+    await fetchDetail();
+  } catch (err: any) {
+    console.error(err);
+    setError(
+      err?.response?.data?.message || err?.message || 'Failed to save action'
+    );
+  } finally {
+    setSavingAction(false);
+  }
+};
 
   const convertToProject = async () => {
     if (!latestMeeting) return;
@@ -660,6 +715,33 @@ export default function MeetingDetailPage() {
             />
           </div>
 
+          {latestMeeting.audioUrl && (
+  <div className="md:col-span-2 rounded-xl border bg-gray-50 p-4">
+    <p className="mb-2 text-sm font-semibold text-gray-800">
+      Meeting Audio Recording
+    </p>
+
+    <audio controls className="w-full">
+      <source src={latestMeeting.audioUrl} />
+      Your browser does not support audio playback.
+    </audio>
+  </div>
+)}
+
+{latestMeeting.gpsPhotoUrl && (
+  <div className="md:col-span-2 rounded-xl border bg-gray-50 p-4">
+    <p className="mb-2 text-sm font-semibold text-gray-800">
+      GPS / Site Photo
+    </p>
+
+    <img
+      src={latestMeeting.gpsPhotoUrl}
+      alt="Meeting proof"
+      className="max-h-80 w-full rounded-lg border object-contain"
+    />
+  </div>
+)}
+
           <div className="md:col-span-2 flex flex-wrap gap-3">
             <button
               onClick={saveDetails}
@@ -702,6 +784,59 @@ export default function MeetingDetailPage() {
               <option value="RESCHEDULED">Rescheduled</option>
             </select>
           </div>
+
+          {selectedAction === 'RESCHEDULED' && (
+  <div className="md:col-span-2 rounded-xl border border-yellow-200 bg-yellow-50 p-4">
+    <h3 className="mb-3 font-semibold text-yellow-900">
+      Reschedule Proof Required
+    </h3>
+
+    <p className="mb-3 text-sm text-yellow-800">
+      Attach GPS/site photo or audio recording before saving reschedule.
+    </p>
+
+    <div className="grid gap-4 md:grid-cols-2">
+      <div>
+        <label className="mb-1 block text-sm font-medium">
+          GPS / Site Photo
+        </label>
+        <input
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={(e) =>
+            setReschedulePhotoFile(e.target.files?.[0] || null)
+          }
+          className="w-full rounded border bg-white p-2"
+        />
+        {reschedulePhotoFile && (
+          <p className="mt-1 text-xs text-green-700">
+            Selected: {reschedulePhotoFile.name}
+          </p>
+        )}
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium">
+          Audio Recording
+        </label>
+        <input
+          type="file"
+          accept="audio/*"
+          onChange={(e) =>
+            setRescheduleAudioFile(e.target.files?.[0] || null)
+          }
+          className="w-full rounded border bg-white p-2"
+        />
+        {rescheduleAudioFile && (
+          <p className="mt-1 text-xs text-green-700">
+            Selected: {rescheduleAudioFile.name}
+          </p>
+        )}
+      </div>
+    </div>
+  </div>
+)}
 
           <div className="flex items-end">
             <button
