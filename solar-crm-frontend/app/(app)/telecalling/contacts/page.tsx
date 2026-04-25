@@ -1341,7 +1341,7 @@ const transferContacts = async () => {
   <input
   type="file"
   accept="audio/*"
-  capture="microphone"
+  capture
   onChange={(e) => {
     if (e.target.files?.[0]) {
       setQuickCallRecordingFile(e.target.files[0]);
