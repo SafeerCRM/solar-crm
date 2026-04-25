@@ -37,7 +37,7 @@ export class ProjectService {
   }
 
   async createWithCalculation(data: any) {
-    const calculation = this.calculatorService.calculateProjectCost(data);
+    const calculation = await this.calculatorService.calculateProjectCost(data);
 
     const project = this.projectRepository.create({
       leadId: data.leadId,

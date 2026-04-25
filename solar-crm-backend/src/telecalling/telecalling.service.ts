@@ -269,17 +269,58 @@ private readonly meetingRepository: Repository<Meeting>,
   const publicUrlResult = supabase.storage.from(bucket).getPublicUrl(filePath);
   const recordingUrl = publicUrlResult.data.publicUrl;
 
-  if (body?.callLogId) {
-    await this.callLogRepository.update(Number(body.callLogId), {
-      recordingUrl,
-    });
-  }
+  await this.contactCallHistoryRepository.query(`
+  ALTER TABLE public.contact_call_history
+  ADD COLUMN IF NOT EXISTS "recordingUrl" text
+`);
 
-  if (body?.historyId) {
-    await this.contactCallHistoryRepository.update(Number(body.historyId), {
-      recordingUrl,
-    } as any);
+  // 1. Update CallLog
+if (body?.callLogId) {
+  await this.callLogRepository.update(Number(body.callLogId), {
+    recordingUrl,
+  });
+}
+
+// 2. ALSO CREATE OR UPDATE ContactCallHistory
+if (body?.contactId) {
+  const latestHistory = await this.contactCallHistoryRepository.findOne({
+    where: { contactId: Number(body.contactId) },
+    order: { createdAt: 'DESC' },
+  });
+
+  if (latestHistory) {
+  await this.contactCallHistoryRepository.query(
+    `UPDATE contact_call_history SET "recordingUrl" = $1 WHERE id = $2`,
+    [recordingUrl, latestHistory.id],
+  );
+} else {
+    const newHistory = new ContactCallHistory();
+
+newHistory.contactId = Number(body.contactId);
+newHistory.calledBy = user.id;
+newHistory.calledByName = user.name;
+newHistory.callStatus = 'CONNECTED';
+newHistory.notes = '';
+const savedHistory = await this.contactCallHistoryRepository.save(newHistory);
+
+await this.contactCallHistoryRepository.query(
+  `UPDATE contact_call_history SET "recordingUrl" = $1 WHERE id = $2`,
+  [recordingUrl, savedHistory.id],
+);
   }
+}
+
+// ✅ 3. ADD THIS BLOCK HERE (IMPORTANT)
+const latestCallLog = await this.callLogRepository.findOne({
+  where: { contactId: Number(body.contactId) },
+  order: { createdAt: 'DESC' },
+});
+
+if (latestCallLog) {
+  await this.callLogRepository.update(latestCallLog.id, {
+    recordingUrl,
+  });
+}
 
   return {
     message: 'Recording uploaded successfully',
@@ -1415,7 +1456,7 @@ const location = this.getMappedValue(row, ['location', 'site_location', 'place']
             : latestCallLog?.createdAt
             ? new Date(latestCallLog.createdAt).toISOString()
             : undefined,
-          rrecordingUrl:
+          recordingUrl:
   (latestHistory as any)?.recordingUrl ||
   latestCallLog?.recordingUrl ||
   undefined,
@@ -1549,31 +1590,47 @@ const location = this.getMappedValue(row, ['location', 'site_location', 'place']
   }
 
   async addContactCallHistory(
-    id: number,
-    body: {
-  callStatus?: string;
-  notes?: string;
-  recordingUrl?: string;
-  nextFollowUpDate?: string;
-},
-    user: any,
-  ) {
-    const contact = await this.getAccessibleContact(id, user);
+  id: number,
+  body: {
+    callStatus?: string;
+    notes?: string;
+    recordingUrl?: string;
+    nextFollowUpDate?: string;
+  },
+  user: any,
+) {
+  const contact = await this.getAccessibleContact(id, user);
 
-    const item = this.contactCallHistoryRepository.create({
-      contactId: contact.id,
-      calledBy: user.id,
-      calledByName: user.name,
-      callStatus: body.callStatus || 'CONNECTED',
-      notes: body.notes || '',
-      recordingUrl: body.recordingUrl || undefined,
-      nextFollowUpDate: body.nextFollowUpDate
-        ? new Date(body.nextFollowUpDate)
-        : undefined,
-    } as any);
+  const item = new ContactCallHistory();
 
-    return this.contactCallHistoryRepository.save(item);
+  item.contactId = contact.id;
+  item.calledBy = user.id;
+  item.calledByName = user.name;
+  item.callStatus = body.callStatus || 'CONNECTED';
+  item.notes = body.notes || '';
+  (item as any).recordingUrl = body.recordingUrl || undefined;
+  item.nextFollowUpDate = body.nextFollowUpDate
+    ? new Date(body.nextFollowUpDate)
+    : null;
+
+  const savedItem = await this.contactCallHistoryRepository.save(item);
+
+  // ✅ IMPORTANT: UPDATE LATEST CALL LOG
+  if (body.recordingUrl) {
+    const latestCallLog = await this.callLogRepository.findOne({
+      where: { contactId: contact.id },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (latestCallLog) {
+      await this.callLogRepository.update(latestCallLog.id, {
+        recordingUrl: body.recordingUrl,
+      });
+    }
   }
+
+  return savedItem;
+}
 
   async updateContactCallHistory(
     id: number,

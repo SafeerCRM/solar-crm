@@ -1,10 +1,13 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { createClient } from '@supabase/supabase-js';
+import { randomUUID } from 'crypto';
 import {
   Meeting,
   MeetingCategory,
@@ -236,6 +239,15 @@ export class MeetingService {
           ? updates.gpsLongitude
           : baseMeeting.gpsLongitude,
       gpsAddress: updates.gpsAddress ?? baseMeeting.gpsAddress,
+      gpsPhotoUrl:
+  (updates as any).gpsPhotoUrl !== undefined
+    ? (updates as any).gpsPhotoUrl
+    : (baseMeeting as any).gpsPhotoUrl,
+
+audioUrl:
+  (updates as any).audioUrl !== undefined
+    ? (updates as any).audioUrl
+    : (baseMeeting as any).audioUrl,
       panelGivenToCustomerKw:
         updates.panelGivenToCustomerKw !== undefined
           ? updates.panelGivenToCustomerKw
@@ -269,6 +281,60 @@ export class MeetingService {
 
     return this.meetingRepository.save(version);
   }
+
+  async uploadMeetingProof(file: any, user: any) {
+  if (!file) {
+    throw new BadRequestException('Proof file is required');
+  }
+
+  const mimeType = String(file.mimetype || '');
+
+  const isImage = mimeType.startsWith('image/');
+  const isAudio = mimeType.startsWith('audio/');
+
+  if (!isImage && !isAudio) {
+    throw new BadRequestException('Only image or audio files are allowed');
+  }
+
+  const maxSize = 20 * 1024 * 1024;
+
+  if (file.size > maxSize) {
+    throw new BadRequestException('Proof file must be less than 20 MB');
+  }
+
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const bucket =
+    process.env.SUPABASE_CALL_RECORDINGS_BUCKET || 'call-recordings';
+
+  if (!supabaseUrl || !serviceKey) {
+    throw new BadRequestException('Supabase storage is not configured');
+  }
+
+  const supabase = createClient(supabaseUrl, serviceKey);
+
+  const extension = file.originalname.split('.').pop();
+
+  const filePath = `meeting-proofs/user-${user?.id}/${Date.now()}.${extension}`;
+
+  const uploadResult = await supabase.storage
+    .from(bucket)
+    .upload(filePath, file.buffer, {
+      contentType: mimeType,
+    });
+
+  if (uploadResult.error) {
+    throw new BadRequestException(uploadResult.error.message);
+  }
+
+  const publicUrl = supabase.storage
+    .from(bucket)
+    .getPublicUrl(filePath).data.publicUrl;
+
+  return {
+    fileUrl: publicUrl,
+  };
+}
 
     async create(createMeetingDto: CreateMeetingDto, user: any): Promise<Meeting> {
     const currentUserId = this.getCurrentUserId(user);
@@ -529,37 +595,76 @@ export class MeetingService {
   }
 
   async applyAction(
-    id: number,
-    actionData: {
-      status: MeetingStatus | string;
-      reason?: string;
-      outcome?: string;
-      nextAction?: string;
-      managerRemarks?: string;
-      notes?: string;
-      convertToProject?: boolean;
-    },
-    user: any,
-  ): Promise<Meeting> {
-    const existingMeeting = await this.getAccessibleMeeting(id, user);
+  id: number,
+  actionData: {
+    status: MeetingStatus | string;
+    reason?: string;
+    outcome?: string;
+    nextAction?: string;
+    managerRemarks?: string;
+    notes?: string;
+    convertToProject?: boolean;
+    newScheduledAt?: string;
+    gpsPhotoUrl?: string;
+    audioUrl?: string;
+  },
+  user: any,
+): Promise<Meeting> {
+  const existingMeeting = await this.getAccessibleMeeting(id, user);
 
-    return this.buildMeetingVersion(
-      existingMeeting,
-      {
-        status: actionData.status as MeetingStatus,
-        reason: actionData.reason,
-        outcome: actionData.outcome,
-        nextAction: actionData.nextAction,
-        managerRemarks: actionData.managerRemarks,
-        notes: actionData.notes ?? existingMeeting.notes,
-        convertToProject:
-          actionData.convertToProject !== undefined
-            ? Boolean(actionData.convertToProject)
-            : existingMeeting.convertToProject,
-      },
-      user,
-    );
+  if (actionData.status === MeetingStatus.RESCHEDULED) {
+    if (!actionData.newScheduledAt) {
+      throw new BadRequestException(
+        'New scheduled date/time is required for rescheduling',
+      );
+    }
+
+    if (!actionData.gpsPhotoUrl && !actionData.audioUrl) {
+      throw new BadRequestException(
+        'GPS photo or audio recording is required for rescheduling',
+      );
+    }
+
+    existingMeeting.status = MeetingStatus.RESCHEDULED;
+
+existingMeeting.scheduledAt = new Date(actionData.newScheduledAt);
+
+existingMeeting.reason = actionData.reason || existingMeeting.reason;
+existingMeeting.outcome = actionData.outcome || existingMeeting.outcome;
+existingMeeting.nextAction = actionData.nextAction || existingMeeting.nextAction;
+existingMeeting.managerRemarks =
+  actionData.managerRemarks || existingMeeting.managerRemarks;
+existingMeeting.notes = actionData.notes ?? existingMeeting.notes;
+
+(existingMeeting as any).gpsPhotoUrl =
+  actionData.gpsPhotoUrl || (existingMeeting as any).gpsPhotoUrl;
+
+(existingMeeting as any).audioUrl =
+  actionData.audioUrl || (existingMeeting as any).audioUrl;
+
+existingMeeting.updatedBy = this.getCurrentUserId(user);
+existingMeeting.updatedByName = this.getCurrentUserName(user);
+
+return this.meetingRepository.save(existingMeeting);
   }
+
+  return this.buildMeetingVersion(
+    existingMeeting,
+    {
+      status: actionData.status as MeetingStatus,
+      reason: actionData.reason,
+      outcome: actionData.outcome,
+      nextAction: actionData.nextAction,
+      managerRemarks: actionData.managerRemarks,
+      notes: actionData.notes ?? existingMeeting.notes,
+      convertToProject:
+        actionData.convertToProject !== undefined
+          ? Boolean(actionData.convertToProject)
+          : existingMeeting.convertToProject,
+    },
+    user,
+  );
+}
 
   async updateStatus(
     id: number,

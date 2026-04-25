@@ -115,6 +115,12 @@ export class Meeting {
   @Column({ type: 'text', nullable: true })
   gpsAddress?: string;
 
+  @Column({ type: 'text', nullable: true })
+gpsPhotoUrl?: string;
+
+@Column({ type: 'text', nullable: true })
+audioUrl?: string;
+
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
   panelGivenToCustomerKw?: number;
 

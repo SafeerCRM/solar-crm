@@ -8,6 +8,7 @@ import { Lead } from '../leads/lead.entity';
 import { CallLog } from '../telecalling/call-log.entity';
 import { FollowUp } from '../followup/follow-up.entity';
 import { TelecallingContact } from '../telecalling/telecalling-contact.entity';
+import { Meeting } from '../meeting/meeting.entity'; // ✅ IMPORTANT
 
 @Module({
   imports: [
@@ -15,7 +16,8 @@ import { TelecallingContact } from '../telecalling/telecalling-contact.entity';
       Lead,
       CallLog,
       FollowUp,
-      TelecallingContact, // ✅ THIS WAS MISSING
+      TelecallingContact,
+      Meeting, // ✅ MUST BE HERE
     ]),
   ],
   controllers: [DashboardController],

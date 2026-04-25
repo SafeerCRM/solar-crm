@@ -6,6 +6,7 @@ import { CallLog } from '../telecalling/call-log.entity';
 import { FollowUp, FollowUpStatus } from '../followup/follow-up.entity';
 import { TelecallingContact } from '../telecalling/telecalling-contact.entity';
 import { UserRole } from '../users/user.entity';
+import { Meeting, MeetingCategory, MeetingStatus } from '../meeting/meeting.entity';
 
 
 type DashboardFilters = {
@@ -30,9 +31,11 @@ export class DashboardService {
     private readonly followUpRepository: Repository<FollowUp>,
 
     @InjectRepository(TelecallingContact)
-    private readonly telecallingContactRepository: Repository<TelecallingContact>,
+private readonly telecallingContactRepository: Repository<TelecallingContact>,
 
-  ) {}
+@InjectRepository(Meeting)
+private readonly meetingRepository: Repository<Meeting>,
+) {}
 
   private hasAnyRole(userRoles: string[] = [], rolesToCheck: UserRole[]): boolean {
     return rolesToCheck.some((role) => userRoles.includes(role));
@@ -495,4 +498,43 @@ export class DashboardService {
       })),
     };
   }
+
+  async getMeetingManagerAnalytics() {
+  const qb = this.meetingRepository
+    .createQueryBuilder('meeting')
+    .select('meeting.assignedTo', 'managerId')
+    .addSelect('COALESCE(meeting.assignedToName, \'Unassigned\')', 'managerName')
+    .addSelect('COUNT(*)', 'totalMeetings')
+    .addSelect(
+      `SUM(CASE WHEN meeting."meetingCategory" = :company THEN 1 ELSE 0 END)`,
+      'companyMeetings',
+    )
+    .addSelect(
+      `SUM(CASE WHEN meeting."meetingCategory" = :self THEN 1 ELSE 0 END)`,
+      'selfMeetings',
+    )
+    .addSelect(
+      `SUM(CASE WHEN meeting.status = :converted THEN 1 ELSE 0 END)`,
+      'convertedMeetings',
+    )
+    .setParameters({
+      company: MeetingCategory.COMPANY_MEETING,
+      self: MeetingCategory.SELF_MEETING,
+      converted: MeetingStatus.CONVERTED_TO_PROJECT,
+    })
+    .groupBy('meeting.assignedTo')
+    .addGroupBy('meeting.assignedToName')
+    .orderBy('COUNT(*)', 'DESC');
+
+  const rows = await qb.getRawMany();
+
+  return rows.map((row) => ({
+    managerId: row.managerId ? Number(row.managerId) : null,
+    managerName: row.managerName,
+    totalMeetings: Number(row.totalMeetings || 0),
+    companyMeetings: Number(row.companyMeetings || 0),
+    selfMeetings: Number(row.selfMeetings || 0),
+    convertedMeetings: Number(row.convertedMeetings || 0),
+  }));
+}
 }

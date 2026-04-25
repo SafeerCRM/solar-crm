@@ -66,11 +66,14 @@ export class DashboardController {
     );
   }
 
-  @Get('contacts-summary')
+    @Get('contacts-summary')
   getContactsSummary(
     @Query('city') city?: string,
     @Query('zone') zone?: string,
     @Query('assignedTo') assignedTo?: string,
+    @Query('fromDate') fromDate?: string,
+    @Query('toDate') toDate?: string,
+    @Query('month') month?: string,
     @CurrentUser() user?: any,
   ) {
     const userRoles = this.getUserRoles(user);
@@ -93,11 +96,64 @@ export class DashboardController {
         city,
         zone,
         assignedTo: effectiveAssignedTo,
+        fromDate,
+        toDate,
+        month,
       },
       userRoles,
       user?.id,
     );
   }
+
+    @Get('performance')
+  getPerformance(
+    @Query('assignedTo') assignedTo?: string,
+    @Query('zone') zone?: string,
+    @Query('city') city?: string,
+    @Query('fromDate') fromDate?: string,
+    @Query('toDate') toDate?: string,
+    @Query('month') month?: string,
+    @CurrentUser() user?: any,
+  ) {
+    const userRoles = this.getUserRoles(user);
+
+    const ownOnlyRoles = [
+      UserRole.TELECALLER,
+      UserRole.LEAD_EXECUTIVE,
+      UserRole.MEETING_MANAGER,
+      UserRole.PROJECT_EXECUTIVE,
+    ];
+
+    const effectiveAssignedTo = this.hasAnyRole(userRoles, ownOnlyRoles)
+      ? user?.id
+      : assignedTo
+      ? Number(assignedTo)
+      : undefined;
+
+    return this.dashboardService.getPerformance(
+      {
+        assignedTo: effectiveAssignedTo,
+        zone,
+        city,
+        fromDate,
+        toDate,
+        month,
+      },
+      userRoles,
+      user?.id,
+    );
+  }
+
+  @Get('meeting-manager-analytics')
+getMeetingManagerAnalytics(@CurrentUser() user?: any) {
+  const userRoles = this.getUserRoles(user);
+
+  if (!userRoles.includes(UserRole.OWNER)) {
+    return [];
+  }
+
+  return this.dashboardService.getMeetingManagerAnalytics();
+}
 
   @Get('charts')
   getCharts(

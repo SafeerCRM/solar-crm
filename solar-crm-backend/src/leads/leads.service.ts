@@ -742,23 +742,33 @@ export class LeadsService {
       .trim()
       .toLowerCase()
       .replace(/\s+/g, ' ');
+      const normalizePhone = (phone: any) => {
+  return String(phone || '')
+    .replace(/\D/g, '')
+    .slice(-10);
+};
 
   if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
-    const XLSX = await import('xlsx');
+  const XLSX = await import('xlsx');
 
-    const workbook = XLSX.read(file.buffer, { type: 'buffer' });
-    const sheetName = workbook.SheetNames[0];
+  const workbook = XLSX.read(file.buffer, { type: 'buffer' });
 
-    if (!sheetName) {
-      throw new BadRequestException('Excel file has no sheets');
-    }
+  if (!workbook.SheetNames.length) {
+    throw new BadRequestException('Excel file has no sheets');
+  }
 
+  const allRows: Record<string, any>[] = [];
+
+  for (const sheetName of workbook.SheetNames) {
     const sheet = workbook.Sheets[sheetName];
+
+    if (!sheet) continue;
+
     const rawRows = XLSX.utils.sheet_to_json(sheet, {
       defval: '',
     }) as Record<string, any>[];
 
-    rows = rawRows.map((row) => {
+    const normalizedRows = rawRows.map((row) => {
       const normalizedRow: Record<string, any> = {};
 
       Object.keys(row).forEach((key) => {
@@ -767,7 +777,12 @@ export class LeadsService {
 
       return normalizedRow;
     });
-  } else {
+
+    allRows.push(...normalizedRows);
+  }
+
+  rows = allRows;
+} else {
     const content = file.buffer.toString('utf-8').trim();
 
     if (!content) {
@@ -872,14 +887,16 @@ export class LeadsService {
       'lead name',
     ]);
 
-    const phone = getValue(row, [
-      'phone',
-      'mobile',
-      'mobile number',
-      'contact',
-      'contact number',
-      'phone number',
-    ]);
+    const rawPhone = getValue(row, [
+  'phone',
+  'mobile',
+  'mobile number',
+  'contact',
+  'contact number',
+  'phone number',
+]);
+
+const phone = normalizePhone(rawPhone);
 
     const alternatePhone = getValue(row, [
       'alternate phone',
@@ -1008,9 +1025,14 @@ export class LeadsService {
     );
 
   if (storageItems.length > 0) {
-    const saved = await this.leadStorageRepository.save(storageItems);
-    importedCount = saved.length;
+  const chunkSize = 1000;
+
+  for (let i = 0; i < storageItems.length; i += chunkSize) {
+    const chunk = storageItems.slice(i, i + chunkSize);
+    await this.leadStorageRepository.insert(chunk);
+    importedCount += chunk.length;
   }
+}
 
   return {
     message: 'File import completed. Imported data is available in Lead Storage.',

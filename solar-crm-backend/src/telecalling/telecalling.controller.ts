@@ -272,18 +272,19 @@ getReviewQueue(
   }
 
   @Post('contacts/:id/call-history')
-  addContactCallHistory(
-    @Param('id', ParseIntPipe) id: number,
-    @Body()
-    body: {
-      callStatus?: string;
-      notes?: string;
-      nextFollowUpDate?: string;
-    },
-    @CurrentUser() user: any,
-  ) {
-    return this.telecallingService.addContactCallHistory(id, body, user);
-  }
+addContactCallHistory(
+  @Param('id', ParseIntPipe) id: number,
+  @Body()
+  body: {
+    callStatus?: string;
+    notes?: string;
+    recordingUrl?: string;
+    nextFollowUpDate?: string;
+  },
+  @CurrentUser() user: any,
+) {
+  return this.telecallingService.addContactCallHistory(id, body, user);
+}
 
   @Patch('contacts/:id/call-history/:historyId')
   updateContactCallHistory(

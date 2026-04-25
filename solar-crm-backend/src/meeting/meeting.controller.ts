@@ -8,18 +8,30 @@ import {
   Patch,
   Post,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { MeetingService } from './meeting.service';
 import { CreateMeetingDto } from './dto/create-meeting.dto';
 import { UpdateMeetingDto } from './dto/update-meeting.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @UseGuards(JwtAuthGuard)
 @Controller('meetings')
 export class MeetingController {
   constructor(private readonly meetingService: MeetingService) {}
+
+  @Post('proof/upload')
+@UseInterceptors(FileInterceptor('file'))
+uploadMeetingProof(
+  @UploadedFile() file: any,
+  @CurrentUser() user: any,
+) {
+  return this.meetingService.uploadMeetingProof(file, user);
+}
 
   @Post()
   create(
