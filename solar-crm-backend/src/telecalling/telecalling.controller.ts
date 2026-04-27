@@ -387,12 +387,18 @@ addContactCallHistory(
   }
 
   @Post('contacts/:id/convert')
-  convertContactToLead(
-    @Param('id', ParseIntPipe) id: number,
-    @CurrentUser() user: any,
-  ) {
-    return this.telecallingService.convertContactToLead(id, user);
-  }
+convertContactToLead(
+  @Param('id', ParseIntPipe) id: number,
+  @Body('leadManagerId') leadManagerId: number,
+  @Body('assignedTo') assignedTo: number,
+  @CurrentUser() user: any,
+) {
+  return this.telecallingService.convertContactToLead(
+    id,
+    Number(leadManagerId || assignedTo),
+    user,
+  );
+}
 
   @Post('contacts/:id/convert-to-meeting')
 convertContactToMeeting(

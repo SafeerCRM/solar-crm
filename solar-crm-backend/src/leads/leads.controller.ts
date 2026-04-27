@@ -86,6 +86,11 @@ getArchivedLeads(@CurrentUser() user: any) {
     return this.leadsService.getHotLeads(user);
   }
 
+  @Get('autocall')
+getLeadsForAutoCall(@CurrentUser() user: any) {
+  return this.leadsService.getLeadsForAutoCall(user);
+}
+
   @Get('export')
   async exportCsv(@Res() res: any, @CurrentUser() user: any) {
     const csv = await this.leadsService.exportCsv(user);
@@ -127,6 +132,34 @@ getArchivedLeads(@CurrentUser() user: any) {
   ) {
     return this.leadsService.addLeadNote(id, note, user);
   }
+
+  @Patch('storage/assign-latest')
+assignStorageLeadsByCount(
+  @Body('assignCount') assignCount: number,
+  @Body('assignedTo') assignedTo: number,
+  @Body('filters') filters: any,
+  @CurrentUser() user: any,
+) {
+  return this.leadsService.assignStorageLeadsByCount(
+    Number(assignCount),
+    Number(assignedTo),
+    filters || {},
+    user,
+  );
+}
+
+  @Patch('assign-latest')
+assignLeadsByCount(
+  @Body('assignCount') assignCount: number,
+  @Body('assignedTo') assignedTo: number,
+  @CurrentUser() user: any,
+) {
+  return this.leadsService.assignLeadsByCount(
+    Number(assignCount),
+    Number(assignedTo),
+    user,
+  );
+}
 
   @Patch(':id/notes/:noteId')
   updateLeadNote(

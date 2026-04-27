@@ -17,12 +17,16 @@ import { CallLog } from '../telecalling/call-log.entity';
 import { LeadNote } from './lead-note.entity';
 import { UserRole } from '../users/user.entity';
 import * as XLSX from 'xlsx';
+import { User } from '../users/user.entity';
 
 @Injectable()
 export class LeadsService {
   constructor(
   @InjectRepository(Lead)
   private readonly leadRepository: Repository<Lead>,
+
+  @InjectRepository(User)
+  private readonly userRepository: Repository<User>,
 
   @InjectRepository(FollowUp)
   private readonly followUpRepository: Repository<FollowUp>,
@@ -1071,6 +1075,206 @@ const phone = normalizePhone(rawPhone);
 
     return query.orderBy('lead.updatedAt', 'DESC').take(10).getMany();
   }
+
+  async getLeadsForAutoCall(user: any) {
+  const currentUserId = this.getCurrentUserId(user);
+
+  const calledLeads = await this.callLogRepository.find({
+    select: ['leadId'],
+    where: { telecallerId: currentUserId },
+  });
+
+  const calledIds = calledLeads
+    .map((c) => c.leadId)
+    .filter((id) => !!id);
+
+  const qb = this.leadRepository.createQueryBuilder('lead');
+
+  qb.where('COALESCE(lead.isArchived, false) = false');
+
+  // ✅ IMPORTANT: respect role visibility
+  if (this.isTelecaller(user) || this.isLeadExecutive(user)) {
+    qb.andWhere(
+      '(lead.assignedTo = :currentUserId OR lead.originTelecallerId = :currentUserId)',
+      { currentUserId },
+    );
+  } else if (this.isLeadManager(user)) {
+    qb.andWhere('lead.assignedTo = :currentUserId', { currentUserId });
+  } else if (this.isMeetingManager(user) || this.isProjectExecutive(user)) {
+    qb.andWhere(
+      '(lead.assignedTo = :currentUserId OR lead.createdBy = :currentUserId)',
+      { currentUserId },
+    );
+  } else if (this.isProjectManager(user)) {
+    qb.andWhere('lead.status IN (:...statuses)', {
+      statuses: this.getProjectPipelineStatuses(),
+    });
+  }
+
+  // ✅ exclude already called leads for this user
+  if (calledIds.length) {
+    qb.andWhere('lead.id NOT IN (:...calledIds)', { calledIds });
+  }
+
+  qb.orderBy('lead.createdAt', 'DESC');
+
+  return qb.getMany();
+}
+
+async assignLeadsByCount(
+  assignCount: number,
+  assignedTo: number,
+  user: any,
+) {
+  if (!assignCount || assignCount <= 0) {
+    throw new BadRequestException('Invalid assign count');
+  }
+
+  if (!assignedTo) {
+    throw new BadRequestException('Lead manager is required');
+  }
+
+  const manager = await this.userRepository.findOne({
+    where: { id: assignedTo },
+  });
+
+  if (!manager) {
+    throw new NotFoundException('Lead manager not found');
+  }
+
+  if (!manager.roles?.includes(UserRole.LEAD_MANAGER)) {
+    throw new BadRequestException('User must be a lead manager');
+  }
+
+  const qb = this.leadRepository.createQueryBuilder('lead');
+
+  qb.where('COALESCE(lead.isArchived, false) = false');
+  qb.andWhere('lead.assignedTo IS NULL');
+
+  qb.orderBy('lead.createdAt', 'ASC');
+  qb.take(assignCount);
+
+  const leads = await qb.getMany();
+
+  if (!leads.length) {
+    return { message: 'No unassigned leads available' };
+  }
+
+  const ids = leads.map((l) => l.id);
+
+  await this.leadRepository
+    .createQueryBuilder()
+    .update()
+    .set({ assignedTo })
+    .whereInIds(ids)
+    .execute();
+
+  return {
+    message: `Assigned ${ids.length} leads successfully`,
+    assignedTo,
+  };
+}
+
+async assignStorageLeadsByCount(
+  assignCount: number,
+  assignedTo: number,
+  filters: any,
+  user: any,
+) {
+  if (!assignCount || assignCount <= 0) {
+    throw new BadRequestException('Invalid assign count');
+  }
+
+  if (!assignedTo) {
+    throw new BadRequestException('Lead manager is required');
+  }
+
+  const manager = await this.userRepository.findOne({
+    where: { id: assignedTo },
+  });
+
+  if (!manager) {
+    throw new NotFoundException('Lead manager not found');
+  }
+
+  if (!manager.roles?.includes(UserRole.LEAD_MANAGER)) {
+    throw new BadRequestException('User must be a lead manager');
+  }
+
+  const qb = this.leadStorageRepository.createQueryBuilder('storage');
+
+  // ONLY UNCONVERTED STORAGE
+  qb.where('storage.isConverted = false');
+
+  // APPLY FILTERS
+  if (filters?.city) {
+    qb.andWhere('LOWER(storage.city) LIKE :city', {
+      city: `%${filters.city.toLowerCase()}%`,
+    });
+  }
+
+  if (filters?.potential) {
+    qb.andWhere('storage.leadPotential = :potential', {
+      potential: filters.potential.toUpperCase(),
+    });
+  }
+
+  qb.orderBy('storage.createdAt', 'ASC');
+  qb.take(assignCount);
+
+  const storageLeads = await qb.getMany();
+
+  if (!storageLeads.length) {
+    return { message: 'No storage leads available for selected filter' };
+  }
+
+  // CHECK EXISTING LEADS (avoid duplicates)
+  const phones = storageLeads.map((s) => s.phone);
+
+  const existingLeads = await this.leadRepository.find({
+    where: { phone: In(phones) },
+  });
+
+  const existingPhoneSet = new Set(existingLeads.map((l) => l.phone));
+
+  const newLeads = storageLeads.filter(
+    (s) => !existingPhoneSet.has(s.phone),
+  );
+
+  if (!newLeads.length) {
+    return { message: 'All selected storage leads already exist in leads' };
+  }
+
+  // CREATE LEADS
+  const leadEntities = newLeads.map((s) =>
+    this.leadRepository.create({
+      name: s.name,
+      phone: s.phone,
+      city: s.city,
+      zone: s.zone,
+      address: s.address,
+      source: 'STORAGE_IMPORT',
+      assignedTo,
+      createdBy: this.getCurrentUserId(user),
+      createdByName: this.getCurrentUserName(user),
+      status: LeadStatus.NEW,
+    }),
+  );
+
+  await this.leadRepository.save(leadEntities);
+
+  // MARK STORAGE AS CONVERTED
+  const ids = newLeads.map((s) => s.id);
+
+  await this.leadStorageRepository.update(ids, {
+    isConverted: true,
+  });
+
+  return {
+    message: `Assigned ${leadEntities.length} storage leads successfully`,
+    assignedTo,
+  };
+}
 
     async quickCall(
     id: number,

@@ -7,11 +7,13 @@ import { FollowUp } from '../followup/follow-up.entity';
 import { CallLog } from '../telecalling/call-log.entity';
 import { LeadNote } from './lead-note.entity';
 import { LeadStorage } from './lead-storage.entity';
+import { User } from '../users/user.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([
       Lead,
+      User,
       FollowUp,
       CallLog,
       LeadNote,

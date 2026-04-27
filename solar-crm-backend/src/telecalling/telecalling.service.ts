@@ -150,29 +150,41 @@ private readonly meetingRepository: Repository<Meeting>,
   }
 
   private applyViewRestrictionsToContactQuery(
-    qb: any,
-    user: any,
-    normalizedView: string,
-  ) {
-    if (this.hasAnyRole(user, ['TELECALLER'])) {
-      qb.where('contact.assignedTo = :assignedTo', { assignedTo: user.id });
-      qb.andWhere('contact.isInStorage = :isInStorage', { isInStorage: false });
-      return;
-    }
-
-    if (normalizedView === 'storage') {
-      if (!this.hasAnyRole(user, ['OWNER', 'TELECALLING_MANAGER'])) {
-        throw new ForbiddenException(
-          'Only owner or telecalling manager can view storage contacts',
-        );
-      }
-
-      qb.where('contact.isInStorage = :isInStorage', { isInStorage: true });
-      return;
-    }
-
-    qb.where('contact.isInStorage = :isInStorage', { isInStorage: false });
+  qb: any,
+  user: any,
+  normalizedView: string,
+) {
+  // ✅ TELECALLER → only assigned active contacts
+  if (this.hasAnyRole(user, ['TELECALLER'])) {
+    qb.where('contact.assignedTo = :assignedTo', { assignedTo: user.id });
+    qb.andWhere('contact.isInStorage = false');
+    return;
   }
+
+  // ✅ TELECALLING ASSISTANT → only review assigned contacts
+  if (this.hasAnyRole(user, ['TELECALLING_ASSISTANT' as any])) {
+    qb.where('contact.reviewAssignedTo = :reviewAssignedTo', {
+      reviewAssignedTo: user.id,
+    });
+    qb.andWhere('contact.isInStorage = false');
+    return;
+  }
+
+  // ✅ STORAGE VIEW
+  if (normalizedView === 'storage') {
+    if (!this.hasAnyRole(user, ['OWNER', 'TELECALLING_MANAGER'])) {
+      throw new ForbiddenException(
+        'Only owner or telecalling manager can view storage contacts',
+      );
+    }
+
+    qb.where('contact.isInStorage = true');
+    return;
+  }
+
+  // ✅ DEFAULT ACTIVE
+  qb.where('contact.isInStorage = false');
+}
 
   private async getAccessibleContact(id: number, user: any) {
     const contact = await this.contactRepository.findOne({
@@ -227,7 +239,7 @@ private readonly meetingRepository: Repository<Meeting>,
     throw new BadRequestException('Only audio files are allowed');
   }
 
-  const maxSize = 15 * 1024 * 1024; // 15 MB
+  const maxSize = 15 * 1024 * 1024;
 
   if (file.size > maxSize) {
     throw new BadRequestException('Recording file must be less than 15 MB');
@@ -235,32 +247,41 @@ private readonly meetingRepository: Repository<Meeting>,
 
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const bucket = process.env.SUPABASE_CALL_RECORDINGS_BUCKET || 'call-recordings';
+  const bucket =
+    process.env.SUPABASE_CALL_RECORDINGS_BUCKET || 'call-recordings';
 
   if (!supabaseUrl || !serviceKey) {
     throw new BadRequestException('Supabase storage is not configured');
   }
 
-  if (body?.contactId) {
-    await this.getAccessibleContact(Number(body.contactId), user);
+  const contactId = body?.contactId ? Number(body.contactId) : undefined;
+  const callLogId = body?.callLogId ? Number(body.callLogId) : undefined;
+  const historyId = body?.historyId ? Number(body.historyId) : undefined;
+
+  if (contactId) {
+    await this.getAccessibleContact(contactId, user);
   }
 
   const supabase = createClient(supabaseUrl, serviceKey);
 
   const originalName = String(file.originalname || 'recording');
-  const extension =
-    originalName.includes('.')
-      ? originalName.split('.').pop()
-      : mimeType.split('/')[1] || 'audio';
+  const extension = originalName.includes('.')
+    ? originalName.split('.').pop()
+    : mimeType.split('/')[1] || 'audio';
 
-  const safeExtension = String(extension || 'audio').replace(/[^a-zA-Z0-9]/g, '');
+  const safeExtension = String(extension || 'audio').replace(
+    /[^a-zA-Z0-9]/g,
+    '',
+  );
 
   const filePath = `recordings/user-${user?.id || 'unknown'}/${Date.now()}-${randomUUID()}.${safeExtension}`;
 
-  const uploadResult = await supabase.storage.from(bucket).upload(filePath, file.buffer, {
-    contentType: mimeType,
-    upsert: false,
-  });
+  const uploadResult = await supabase.storage
+    .from(bucket)
+    .upload(filePath, file.buffer, {
+      contentType: mimeType,
+      upsert: false,
+    });
 
   if (uploadResult.error) {
     throw new BadRequestException(uploadResult.error.message);
@@ -270,57 +291,67 @@ private readonly meetingRepository: Repository<Meeting>,
   const recordingUrl = publicUrlResult.data.publicUrl;
 
   await this.contactCallHistoryRepository.query(`
-  ALTER TABLE public.contact_call_history
-  ADD COLUMN IF NOT EXISTS "recordingUrl" text
-`);
+    ALTER TABLE public.contact_call_history
+    ADD COLUMN IF NOT EXISTS "recordingUrl" text
+  `);
 
-  // 1. Update CallLog
-if (body?.callLogId) {
-  await this.callLogRepository.update(Number(body.callLogId), {
-    recordingUrl,
-  });
-}
+  let targetHistory: ContactCallHistory | null = null;
 
-// 2. ALSO CREATE OR UPDATE ContactCallHistory
-if (body?.contactId) {
-  const latestHistory = await this.contactCallHistoryRepository.findOne({
-    where: { contactId: Number(body.contactId) },
-    order: { createdAt: 'DESC' },
-  });
+  if (historyId) {
+    targetHistory = await this.contactCallHistoryRepository.findOne({
+      where: { id: historyId },
+    });
+  }
 
-  if (latestHistory) {
-  await this.contactCallHistoryRepository.query(
-    `UPDATE contact_call_history SET "recordingUrl" = $1 WHERE id = $2`,
-    [recordingUrl, latestHistory.id],
-  );
-} else {
+  if (!targetHistory && contactId) {
+    targetHistory = await this.contactCallHistoryRepository.findOne({
+      where: { contactId },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  if (targetHistory) {
+    await this.contactCallHistoryRepository.query(
+      `UPDATE contact_call_history SET "recordingUrl" = $1 WHERE id = $2`,
+      [recordingUrl, targetHistory.id],
+    );
+  } else if (contactId) {
     const newHistory = new ContactCallHistory();
 
-newHistory.contactId = Number(body.contactId);
-newHistory.calledBy = user.id;
-newHistory.calledByName = user.name;
-newHistory.callStatus = 'CONNECTED';
-newHistory.notes = '';
-const savedHistory = await this.contactCallHistoryRepository.save(newHistory);
+    newHistory.contactId = contactId;
+    newHistory.calledBy = user.id;
+    newHistory.calledByName = user.name;
+    newHistory.callStatus = 'CONNECTED';
+    newHistory.notes = '';
 
-await this.contactCallHistoryRepository.query(
-  `UPDATE contact_call_history SET "recordingUrl" = $1 WHERE id = $2`,
-  [recordingUrl, savedHistory.id],
-);
+    const savedHistory = await this.contactCallHistoryRepository.save(
+      newHistory,
+    );
+
+    await this.contactCallHistoryRepository.query(
+      `UPDATE contact_call_history SET "recordingUrl" = $1 WHERE id = $2`,
+      [recordingUrl, savedHistory.id],
+    );
   }
-}
 
-// ✅ 3. ADD THIS BLOCK HERE (IMPORTANT)
-const latestCallLog = await this.callLogRepository.findOne({
-  where: { contactId: Number(body.contactId) },
-  order: { createdAt: 'DESC' },
-});
+  if (callLogId) {
+    await this.callLogRepository.update(callLogId, {
+      recordingUrl,
+    });
+  }
 
-if (latestCallLog) {
-  await this.callLogRepository.update(latestCallLog.id, {
-    recordingUrl,
-  });
-}
+  if (contactId) {
+    const latestCallLog = await this.callLogRepository.findOne({
+      where: { contactId },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (latestCallLog) {
+      await this.callLogRepository.update(latestCallLog.id, {
+        recordingUrl,
+      });
+    }
+  }
 
   return {
     message: 'Recording uploaded successfully',
@@ -830,13 +861,19 @@ if (latestCallLog) {
   );
 
   const data = rows.map((call: any) => ({
-    ...call,
-    telecallerName: call.telecallerId
-      ? telecallerMap.get(Number(call.telecallerId)) || `User ${call.telecallerId}`
-      : '',
-    assignedDate: call.createdAt,
-    contactAssignedToName: call.contact?.assignedToName || '',
-  }));
+  ...call,
+  telecallerName: call.telecallerId
+    ? telecallerMap.get(Number(call.telecallerId)) || `User ${call.telecallerId}`
+    : '',
+  assignedDate: call.createdAt,
+  contactAssignedToName: call.contact?.assignedToName || '',
+
+  // ✅ ALWAYS RETURN LATEST RECORDING
+  recordingUrl:
+    call.recordingUrl ||
+    call.contact?.recordingUrl ||
+    null,
+}));
 
   return {
     data,
@@ -2154,66 +2191,90 @@ if (normalizedFilter) {
     };
   }
 
-  async convertContactToLead(id: number, user: any) {
-    const contact = await this.contactRepository.findOne({
-      where: { id },
-    });
+  async convertContactToLead(id: number, leadManagerId: number, user: any) {
+  const contact = await this.contactRepository.findOne({
+    where: { id },
+  });
 
-    if (!contact) {
-      throw new NotFoundException('Telecalling contact not found');
-    }
-
-    if (this.hasRole(user, 'TELECALLING_ASSISTANT' as any)) {
-      if (contact.reviewAssignedTo !== user.id) {
-        throw new ForbiddenException('Not allowed to convert this contact');
-      }
-    }
-
-    if (contact.convertedToLead) {
-      throw new BadRequestException('This contact is already converted to lead');
-    }
-
-    const normalizedPhone = this.normalizePhone(contact.phone);
-
-    const existingLead = await this.leadRepository.findOne({
-      where: { phone: normalizedPhone },
-    });
-
-    if (existingLead) {
-      throw new BadRequestException(
-        'Lead with this phone already exists in lead CRM',
-      );
-    }
-
-        const lead = this.leadRepository.create({
-      name: contact.name,
-      phone: normalizedPhone,
-      city: contact.city,
-      assignedTo: contact.assignedTo,
-      createdBy: user.id,
-      createdByName: user.name,
-      originTelecallerId: contact.assignedTo,
-      originTelecallerName:
-        contact.assignedToName || `User ${contact.assignedTo || ''}`,
-      status: LeadStatus.NEW,
-    });
-
-    const savedLead = await this.leadRepository.save(lead);
-
-    contact.convertedToLead = true;
-    contact.status = ContactStatus.CONVERTED;
-    contact.phone = normalizedPhone;
-    contact.remarks = contact.remarks
-      ? `${contact.remarks}\nConverted to lead by ${user.name}`
-      : `Converted to lead by ${user.name}`;
-
-    await this.contactRepository.save(contact);
-
-    return {
-      message: 'Contact converted to lead successfully',
-      lead: savedLead,
-    };
+  if (!contact) {
+    throw new NotFoundException('Telecalling contact not found');
   }
+
+  if (this.hasRole(user, 'TELECALLING_ASSISTANT' as any)) {
+    if (contact.reviewAssignedTo !== user.id) {
+      throw new ForbiddenException('Not allowed to convert this contact');
+    }
+  }
+
+  if (!leadManagerId || Number.isNaN(Number(leadManagerId))) {
+    throw new BadRequestException('Lead manager is required');
+  }
+
+  const leadManager = await this.userRepository.findOne({
+    where: { id: Number(leadManagerId) },
+  });
+
+  if (!leadManager) {
+    throw new NotFoundException('Lead manager not found');
+  }
+
+  const managerRoles: UserRole[] = Array.isArray(leadManager.roles)
+    ? (leadManager.roles as UserRole[])
+    : [];
+
+  if (!managerRoles.includes(UserRole.LEAD_MANAGER)) {
+    throw new BadRequestException('Selected user must have LEAD_MANAGER role');
+  }
+
+  if (contact.convertedToLead) {
+    throw new BadRequestException('This contact is already converted to lead');
+  }
+
+  const normalizedPhone = this.normalizePhone(contact.phone);
+
+  const existingLead = await this.leadRepository.findOne({
+    where: { phone: normalizedPhone },
+  });
+
+  if (existingLead) {
+    throw new BadRequestException(
+      'Lead with this phone already exists in lead CRM',
+    );
+  }
+
+  const lead = this.leadRepository.create({
+    name: contact.name,
+    phone: normalizedPhone,
+    city: contact.city,
+    address: contact.address || contact.location || contact.city || '',
+    source: 'TELECALLING',
+    assignedTo: leadManager.id,
+    createdBy: user.id,
+    createdByName: user.name,
+    originTelecallerId: contact.assignedTo,
+    originTelecallerName:
+      contact.assignedToName || `User ${contact.assignedTo || ''}`,
+    status: LeadStatus.NEW,
+  } as any);
+
+  const savedLead = await this.leadRepository.save(lead);
+
+  contact.convertedToLead = true;
+  contact.status = ContactStatus.CONVERTED;
+  contact.phone = normalizedPhone;
+  contact.remarks = contact.remarks
+    ? `${contact.remarks}\nConverted to lead by ${user.name} and assigned to ${leadManager.name}`
+    : `Converted to lead by ${user.name} and assigned to ${leadManager.name}`;
+
+  await this.contactRepository.save(contact);
+
+  return {
+    message: 'Contact converted to lead successfully',
+    lead: savedLead,
+    assignedTo: leadManager.id,
+    assignedToName: leadManager.name,
+  };
+}
 
   async convertContactToMeeting(
   id: number,
