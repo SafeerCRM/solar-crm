@@ -68,6 +68,9 @@ const [loadingLeads, setLoadingLeads] = useState(false);
   const [message, setMessage] = useState('');
     const [bulkAssignedTo, setBulkAssignedTo] = useState('');
   const [bulkAssigning, setBulkAssigning] = useState(false);
+  const [assignCount, setAssignCount] = useState('');
+const [selectedManagerId, setSelectedManagerId] = useState('');
+const [assigningByCount, setAssigningByCount] = useState(false);
   const [importingLeads, setImportingLeads] = useState(false);
   const leadImportInputRef = useRef<HTMLInputElement | null>(null);
   const [editingLeadId, setEditingLeadId] = useState<number | null>(null);
@@ -480,6 +483,49 @@ const canAssignLeads = isOwner;
     }
   };
 
+  const handleStorageAssign = async () => {
+  if (!assignCount || Number(assignCount) <= 0) {
+    setMessage('Enter valid count');
+    return;
+  }
+
+  if (!selectedManagerId) {
+    setMessage('Select lead manager');
+    return;
+  }
+
+  try {
+    setAssigningByCount(true);
+    setMessage('');
+
+    const res = await axios.patch(
+      `${backendUrl}/leads/storage/assign-latest`,
+      {
+        assignCount: Number(assignCount),
+        assignedTo: Number(selectedManagerId),
+        filters: {
+  city: searchCity || undefined,
+  zone: undefined,
+  potential: potentialFilter || undefined,
+},
+      },
+      { headers: getAuthHeaders() }
+    );
+
+    setMessage(res.data?.message || 'Assigned successfully');
+
+    setAssignCount('');
+    setSelectedManagerId('');
+
+    fetchLeads(1);
+  } catch (err: any) {
+    console.error(err);
+    setMessage(err?.response?.data?.message || 'Assignment failed');
+  } finally {
+    setAssigningByCount(false);
+  }
+};
+
   const handleConvertStorageToLeads = async () => {
   if (!selectedStorageIds.length) {
     setMessage('Please select storage leads first');
@@ -843,31 +889,47 @@ const handleSelectAllFilteredStorage = async () => {
   };
 
   const startLeadQuickCall = async (lead: Lead) => {
-    try {
-      setLastCalledLead(lead);
-      setQuickLeadCallModal({
-        isOpen: false,
-        lead,
+  try {
+    setLastCalledLead(lead);
+    setQuickLeadCallModal({
+      isOpen: false,
+      lead,
+    });
+
+    setCallInitiated(true);
+    setHasLeftAppForCall(false);
+
+    if (Capacitor.isNativePlatform()) {
+      const plugin = (window as any).Capacitor?.Plugins?.CallControl || CallControl;
+      await plugin.placeCall({ number: lead.phone });
+    } else {
+      window.location.href = `tel:${lead.phone}`;
+    }
+
+    setMessage(`Calling ${lead.name || lead.phone}`);
+
+    // ✅ Fallback: if app/browser does not trigger focus/resume,
+    // still show outcome popup after a few seconds.
+    window.setTimeout(() => {
+      setQuickLeadCallModal((prev) => {
+        if (prev.isOpen) return prev;
+
+        return {
+          isOpen: true,
+          lead,
+        };
       });
 
-      setCallInitiated(true);
-      setHasLeftAppForCall(false);
-
-      if (Capacitor.isNativePlatform()) {
-        const plugin = (window as any).Capacitor?.Plugins?.CallControl || CallControl;
-        await plugin.placeCall({ number: lead.phone });
-      } else {
-        window.location.href = `tel:${lead.phone}`;
-      }
-
-      setMessage(`Calling ${lead.name || lead.phone}`);
-    } catch (err) {
-      console.error(err);
-      setMessage('Failed to start lead call');
       setCallInitiated(false);
       setHasLeftAppForCall(false);
-    }
-  };
+    }, 5000);
+  } catch (err) {
+    console.error(err);
+    setMessage('Failed to start lead call');
+    setCallInitiated(false);
+    setHasLeftAppForCall(false);
+  }
+};
 
   const startCountdownThenCallLead = (nextLead: Lead) => {
     clearAutoTimers();
@@ -923,34 +985,42 @@ const handleSelectAllFilteredStorage = async () => {
   };
 
   const startLeadAutoCall = async () => {
-    try {
-      if (isAutoCalling) {
-        setMessage('Lead auto call is already running.');
-        return;
-      }
-
-      const validQueue = filteredLeads.filter((lead) => !!String(lead.phone || '').trim());
-
-      if (!validQueue.length) {
-        setMessage('No filtered leads available for auto call.');
-        return;
-      }
-
-      const firstLead = validQueue[0];
-
-      setIsAutoCalling(true);
-      setIsPaused(false);
-      setAutoCallQueue(validQueue);
-      setAutoCallIndex(0);
-      setCountdown(0);
-      setProcessedAutoCallIds(firstLead?.id ? [firstLead.id] : []);
-
-      await startLeadQuickCall(firstLead);
-    } catch (err) {
-      console.error(err);
-      setMessage('Failed to start lead auto call.');
+  try {
+    if (isAutoCalling) {
+      setMessage('Lead auto call is already running.');
+      return;
     }
-  };
+
+    const res = await axios.get(`${backendUrl}/leads/autocall`, {
+      headers: getAuthHeaders(),
+    });
+
+    const backendQueue = Array.isArray(res.data) ? res.data : [];
+
+    const validQueue = backendQueue.filter((lead: Lead) =>
+      !!String(lead.phone || '').trim()
+    );
+
+    if (!validQueue.length) {
+      setMessage('No pending leads available for auto call.');
+      return;
+    }
+
+    const firstLead = validQueue[0];
+
+    setIsAutoCalling(true);
+    setIsPaused(false);
+    setAutoCallQueue(validQueue);
+    setAutoCallIndex(0);
+    setCountdown(0);
+    setProcessedAutoCallIds(firstLead?.id ? [firstLead.id] : []);
+
+    await startLeadQuickCall(firstLead);
+  } catch (err: any) {
+    console.error(err);
+    setMessage(err?.response?.data?.message || 'Failed to start lead auto call.');
+  }
+};
 
   const pauseLeadAutoCall = () => {
     clearAutoTimers();
@@ -1180,34 +1250,98 @@ const handleSelectAllFilteredStorage = async () => {
         </div>
 
         {canAssignLeads && (
-          <div className="flex flex-col gap-2 md:flex-row md:items-center">
-            <select
-              value={bulkAssignedTo}
-              onChange={(e) => setBulkAssignedTo(e.target.value)}
-              className="rounded border p-2 text-sm md:min-w-[220px]"
-            >
-              <option value="">Select lead manager</option>
-              {users
-  .filter((u) => (u.roles || []).includes('LEAD_MANAGER'))
-  .map((u) => (
-    <option key={u.id} value={u.id}>
-      {u.name}
-    </option>
-  ))}
-            </select>
+  <div className="rounded border bg-white p-3">
+    <h3 className="mb-2 font-semibold text-gray-800">
+      Assign Leads by Count
+    </h3>
 
-            <button
-              type="button"
-              onClick={handleAssignFilteredLeads}
-              disabled={bulkAssigning || filteredLeads.length === 0}
-              className="rounded bg-indigo-600 px-4 py-2 text-white disabled:opacity-50"
-            >
-              {bulkAssigning
-                ? 'Assigning...'
-                : `Assign Filtered Leads (${filteredLeads.length})`}
-            </button>
-          </div>
-        )}
+    <div className="flex flex-col gap-2 md:flex-row md:items-center">
+      <input
+        type="number"
+        min="1"
+        placeholder="Number of leads"
+        value={assignCount}
+        onChange={(e) => setAssignCount(e.target.value)}
+        className="rounded border p-2 text-sm md:w-48"
+      />
+
+      <select
+        value={selectedManagerId}
+        onChange={(e) => setSelectedManagerId(e.target.value)}
+        className="rounded border p-2 text-sm md:min-w-[220px]"
+      >
+        <option value="">Select lead manager</option>
+        {users
+          .filter((u) => (u.roles || []).includes('LEAD_MANAGER'))
+          .map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.name}
+            </option>
+          ))}
+      </select>
+
+      <button
+        type="button"
+        onClick={handleStorageAssign}
+        disabled={assigningByCount}
+        className="rounded bg-green-600 px-4 py-2 text-white disabled:opacity-50"
+      >
+        {assigningByCount ? 'Assigning...' : 'Assign Leads'}
+      </button>
+    </div>
+
+    <p className="mt-2 text-xs text-gray-500">
+      This assigns oldest unassigned leads first. Already assigned leads are not changed.
+    </p>
+  </div>
+)}
+
+        {canAssignLeads && (
+  <div className="bg-white p-4 rounded shadow mb-4">
+    <h2 className="text-lg font-semibold mb-2">
+      Bulk Assign from Storage
+    </h2>
+
+    <div className="flex flex-col gap-2 md:flex-row md:items-center">
+
+      <input
+        type="number"
+        placeholder="Number of leads"
+        value={assignCount}
+        onChange={(e) => setAssignCount(e.target.value)}
+        className="border p-2 rounded"
+      />
+
+      <select
+        value={selectedManagerId}
+        onChange={(e) => setSelectedManagerId(e.target.value)}
+        className="border p-2 rounded"
+      >
+        <option value="">Select Lead Manager</option>
+        {users
+          .filter((u) => (u.roles || []).includes('LEAD_MANAGER'))
+          .map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.name}
+            </option>
+          ))}
+      </select>
+
+      <button
+        onClick={handleStorageAssign}
+        disabled={assigningByCount}
+        className="bg-green-600 text-white px-4 py-2 rounded"
+      >
+        {assigningByCount ? 'Assigning...' : 'Assign Leads'}
+      </button>
+
+    </div>
+
+    <p className="text-xs text-gray-500 mt-2">
+      Assigns only unassigned (storage) leads based on current filters.
+    </p>
+  </div>
+)}
       </div>
 
       {message && <p className="mb-4 text-blue-600">{message}</p>}

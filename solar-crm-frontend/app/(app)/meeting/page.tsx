@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import dayjs, { Dayjs } from 'dayjs';
 import axios from 'axios';
+import { Capacitor } from '@capacitor/core';
+import { CallControl } from '@/lib/callControl';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { DateCalendar } from '@mui/x-date-pickers/DateCalendar';
@@ -173,6 +175,27 @@ const [editingCustomerName, setEditingCustomerName] = useState('');
       fallbackAddress
     )}`;
   };
+
+  const handleCall = async (phone?: string | null) => {
+  const number = String(phone || '').trim();
+
+  if (!number) {
+    alert('No mobile number available');
+    return;
+  }
+
+  try {
+    if (Capacitor.isNativePlatform()) {
+      const plugin = (window as any).Capacitor?.Plugins?.CallControl || CallControl;
+      await plugin.placeCall({ number });
+    } else {
+      window.location.href = `tel:${number}`;
+    }
+  } catch (err) {
+    console.error(err);
+    alert('Failed to start call');
+  }
+};
 
 const updateMeetingName = async (meetingId: number) => {
   try {
@@ -483,6 +506,14 @@ const updateMeetingName = async (meetingId: number) => {
                   >
                     Open
                   </Link>
+
+                  <button
+  type="button"
+  onClick={() => handleCall(m.mobile)}
+  className="w-full rounded bg-green-700 px-3 py-2 text-center text-sm text-white sm:w-auto"
+>
+  📞 Call
+</button>
 
                   <Link
                     href={`/calculator?meetingId=${m.id}&leadId=${m.leadId}&name=${encodeURIComponent(

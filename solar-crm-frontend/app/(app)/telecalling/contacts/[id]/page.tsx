@@ -763,8 +763,8 @@ await axios.post(
     await axios.post(
       `${backendUrl}/telecalling/contacts/${id}/convert`,
       {
-        assignedTo: Number(selectedLeadManagerId),
-      },
+  leadManagerId: Number(selectedLeadManagerId),
+},
       { headers: getAuthHeaders() }
     );
 

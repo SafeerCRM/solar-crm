@@ -681,11 +681,9 @@ const payload: any = {
 
     try {
       setConvertingContactId(contactId);
-      await axios.post(
-        `${backendUrl}/telecalling/contacts/${contactId}/convert`,
-        {},
-        { headers: getAuthHeaders() },
-      );
+      setMessage('Please open contact detail and select Lead Manager before converting.');
+router.push(`/telecalling/contacts/${contactId}?from=review-queue`);
+return;
       setMessage('Contact converted to lead successfully');
       await fetchCalls(1);
     } catch (error: any) {

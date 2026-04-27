@@ -5,6 +5,8 @@ import axios from 'axios';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getAuthHeaders } from '@/lib/authHeaders';
+import { Capacitor } from '@capacitor/core';
+import { CallControl } from '@/lib/callControl';
 
 type Meeting = {
   id: number;
@@ -258,6 +260,27 @@ const [rescheduleAudioFile, setRescheduleAudioFile] = useState<File | null>(null
     )}`;
   }, [latestMeeting]);
 
+  const handleCall = async (phone?: string | null) => {
+  const number = String(phone || '').trim();
+
+  if (!number) {
+    alert('No mobile number available');
+    return;
+  }
+
+  try {
+    if (Capacitor.isNativePlatform()) {
+      const plugin = (window as any).Capacitor?.Plugins?.CallControl || CallControl;
+      await plugin.placeCall({ number });
+    } else {
+      window.location.href = `tel:${number}`;
+    }
+  } catch (err) {
+    console.error(err);
+    alert('Failed to start call');
+  }
+};
+
   const saveDetails = async () => {
     if (!latestMeeting) return;
 
@@ -489,6 +512,14 @@ const [rescheduleAudioFile, setRescheduleAudioFile] = useState<File | null>(null
   >
     Back
   </Link>
+
+  <button
+  type="button"
+  onClick={() => handleCall(latestMeeting.mobile)}
+  className="rounded bg-green-700 px-4 py-2 text-white"
+>
+  📞 Call
+</button>
 
   <Link
     href={`/calculator?meetingId=${latestMeeting.id}&leadId=${latestMeeting.leadId}&name=${encodeURIComponent(
