@@ -281,26 +281,35 @@ useEffect(() => {
 ]);
 
   const fetchLeads = async () => {
-    try {
-      const params: any = {};
+  if (loading) return;   // ✅ prevent duplicate calls
 
-      if (isTelecaller && user?.id) {
-        params.assignedTo = user.id;
-      }
+  setLoading(true);
 
-      const res = await axios.get(`${backendUrl}/leads`, {
-        params,
-        headers: getAuthHeaders(),
-      });
+  try {
+    const params: any = {};
 
-      setLeads(Array.isArray(res.data) ? res.data : []);
-    } catch (error) {
-      console.error('Failed to fetch leads:', error);
-      setLeads([]);
+    if (isTelecaller && user?.id) {
+      params.assignedTo = user.id;
     }
-  };
+
+    const res = await axios.get(`${backendUrl}/leads`, {
+      params,
+      headers: getAuthHeaders(),
+    });
+
+    setLeads(Array.isArray(res.data) ? res.data : []);
+  } catch (error) {
+    console.error('Failed to fetch leads:', error);
+    setLeads([]);
+  }
+
+  setLoading(false);
+};
 
   const fetchCalls = async (pageNumber = 1) => {
+
+    if (loading) return;
+setLoading(true);
   try {
     const shouldUseReviewQueue =
       isTelecallingManager ||
@@ -363,6 +372,7 @@ setPage(Number(responseData.page || pageNumber));
     setTotal(0);
     setTotalPages(1);
   }
+  setLoading(false);
 };
 
   const fetchAssistants = async () => {

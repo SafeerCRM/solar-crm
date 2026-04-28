@@ -179,6 +179,7 @@ export default function DashboardPage() {
   };
 
   const fetchDashboardData = async () => {
+    if (dashboardLoading) return; 
     try {
       setDashboardLoading(true);
 
@@ -254,6 +255,7 @@ export default function DashboardPage() {
   };
 
   const fetchContactsSummary = async () => {
+    if (contactsLoading) return;
     try {
       setContactsLoading(true);
 

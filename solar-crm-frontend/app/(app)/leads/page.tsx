@@ -305,6 +305,7 @@ const canAssignLeads = isOwner;
   }, [searchName, searchPhone, searchCity, potentialFilter, leads]);
 
   const fetchLeads = async (pageNumber = 1) => {
+    if (loadingLeads) return;
   try {
     setLoadingLeads(true);
 
@@ -985,11 +986,10 @@ const handleSelectAllFilteredStorage = async () => {
   };
 
   const startLeadAutoCall = async () => {
-  try {
-    if (isAutoCalling) {
-      setMessage('Lead auto call is already running.');
-      return;
-    }
+  if (isAutoCalling) {
+    setMessage('Lead auto call already running');
+    return;
+  }
 
     const res = await axios.get(`${backendUrl}/leads/autocall`, {
       headers: getAuthHeaders(),
@@ -1171,6 +1171,7 @@ const handleSelectAllFilteredStorage = async () => {
             <button
               type="button"
               onClick={startLeadAutoCall}
+disabled={isAutoCalling}
               className="rounded bg-green-600 px-4 py-2 text-white"
             >
               Start AutoCall
