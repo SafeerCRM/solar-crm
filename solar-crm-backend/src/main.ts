@@ -1,8 +1,16 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { rateLimit } from 'express-rate-limit';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  app.use(
+  rateLimit({
+    windowMs: 60 * 1000,
+    max: 120,
+  }),
+);
 
   app.enableCors({
     origin: true,
@@ -27,15 +35,6 @@ async function bootstrap() {
 
     next();
   });
-
-  import * as rateLimit from 'express-rate-limit';
-
-app.use(
-  rateLimit({
-    windowMs: 60 * 1000,
-    max: 120,
-  }),
-);
 
   // ✅ EXISTING CODE
   const PORT = process.env.PORT || 3001;
