@@ -342,19 +342,22 @@ export class LeadsService {
     const lead = await this.getAccessibleLead(id, user);
 
     const [callLogs, followUps, notes] = await Promise.all([
-      this.callLogRepository.find({
-        where: { leadId: id },
-        order: { createdAt: 'DESC' },
-      }),
-      this.followUpRepository.find({
-        where: { leadId: id },
-        order: { createdAt: 'DESC' },
-      }),
-      this.leadNoteRepository.find({
-        where: { leadId: id },
-        order: { createdAt: 'DESC' },
-      }),
-    ]);
+  this.callLogRepository.find({
+    where: { leadId: id },
+    order: { createdAt: 'DESC' },
+    take: 50,
+  }),
+  this.followUpRepository.find({
+    where: { leadId: id },
+    order: { createdAt: 'DESC' },
+    take: 50,
+  }),
+  this.leadNoteRepository.find({
+    where: { leadId: id },
+    order: { createdAt: 'DESC' },
+    take: 50,
+  }),
+]);
 
     const timeline: Array<{
       type: 'LEAD_CREATED' | 'CALL_LOG' | 'FOLLOWUP' | 'NOTE';
@@ -644,6 +647,7 @@ export class LeadsService {
       leads = await this.leadRepository.find({
         where: [{ assignedTo: currentUserId }, { assignedTo: null as any }],
         order: { createdAt: 'DESC' },
+        take: 5000,
       });
     } else if (this.isMeetingManager(user) || this.isProjectExecutive(user)) {
       leads = await this.leadRepository.find({
@@ -652,18 +656,21 @@ export class LeadsService {
           { createdBy: currentUserId },
         ],
         order: { createdAt: 'DESC' },
+        take: 5000,
       });
     } else if (this.isProjectManager(user)) {
       leads = await this.leadRepository
-        .createQueryBuilder('lead')
-        .where('lead.status IN (:...statuses)', {
-          statuses: this.getProjectPipelineStatuses(),
-        })
-        .orderBy('lead.createdAt', 'DESC')
-        .getMany();
+  .createQueryBuilder('lead')
+  .where('lead.status IN (:...statuses)', {
+    statuses: this.getProjectPipelineStatuses(),
+  })
+  .orderBy('lead.createdAt', 'DESC')
+  .take(5000)
+  .getMany();
     } else {
       leads = await this.leadRepository.find({
         order: { createdAt: 'DESC' },
+        take: 5000,
       });
     }
 
@@ -1080,9 +1087,10 @@ const phone = normalizePhone(rawPhone);
   const currentUserId = this.getCurrentUserId(user);
 
   const calledLeads = await this.callLogRepository.find({
-    select: ['leadId'],
-    where: { telecallerId: currentUserId },
-  });
+  select: ['leadId'],
+  where: { telecallerId: currentUserId },
+  take: 1000,
+});
 
   const calledIds = calledLeads
     .map((c) => c.leadId)
@@ -1118,7 +1126,7 @@ const phone = normalizePhone(rawPhone);
 
   qb.orderBy('lead.createdAt', 'DESC');
 
-  return qb.getMany();
+  return qb.take(300).getMany();
 }
 
 async assignLeadsByCount(
@@ -1152,7 +1160,7 @@ async assignLeadsByCount(
   qb.andWhere('lead.assignedTo IS NULL');
 
   qb.orderBy('lead.createdAt', 'ASC');
-  qb.take(assignCount);
+  qb.take(Math.min(assignCount, 1000));
 
   const leads = await qb.getMany();
 
@@ -1220,7 +1228,7 @@ async assignStorageLeadsByCount(
   }
 
   qb.orderBy('storage.createdAt', 'ASC');
-  qb.take(assignCount);
+  qb.take(Math.min(assignCount, 1000));
 
   const storageLeads = await qb.getMany();
 
@@ -1518,9 +1526,10 @@ async getLeadStorageFilteredIds(query: any) {
   }
 
   const rows = await qb
-    .select('storage.id', 'id')
-    .orderBy('storage.createdAt', 'DESC')
-    .getRawMany();
+  .select('storage.id', 'id')
+  .orderBy('storage.createdAt', 'DESC')
+  .take(2000)
+  .getRawMany();
 
   const ids = rows
     .map((row) => Number(row.id))
