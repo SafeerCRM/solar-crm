@@ -991,6 +991,7 @@ const handleSelectAllFilteredStorage = async () => {
     return;
   }
 
+  try {
     const res = await axios.get(`${backendUrl}/leads/autocall`, {
       headers: getAuthHeaders(),
     });
