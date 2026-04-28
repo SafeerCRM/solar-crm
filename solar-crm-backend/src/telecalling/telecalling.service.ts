@@ -734,8 +734,15 @@ private readonly meetingRepository: Repository<Meeting>,
 
   const qb = this.callLogRepository
   .createQueryBuilder('call')
-  .leftJoinAndSelect('call.lead', 'lead')
-  .leftJoinAndSelect(TelecallingContact, 'contact', 'contact.id = call.contactId')
+  .leftJoin('call.lead', 'lead')
+.addSelect(['lead.id', 'lead.name', 'lead.phone', 'lead.city'])
+  .leftJoin(TelecallingContact, 'contact', 'contact.id = call.contactId')
+.addSelect([
+  'contact.id',
+  'contact.name',
+  'contact.phone',
+  'contact.city'
+])
   .leftJoin(User, 'telecaller', 'telecaller.id = call.telecallerId') // ✅ NEW
     .where('call.createdAt BETWEEN :cutoff AND :now', { cutoff, now })
     .andWhere(`UPPER(COALESCE(call.callStatus, '')) <> 'INITIATED'`)
@@ -896,82 +903,27 @@ private readonly meetingRepository: Repository<Meeting>,
       .groupBy('call.telecallerId')
       .getRawMany();
   }
-        async getTodayPerformance() {
-    const todayIndia = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Kolkata',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).format(new Date());
+       async getTodayPerformance() {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
 
-    const calls = await this.callLogRepository.find({
-      where: {},
-      order: { createdAt: 'DESC' },
-    });
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
 
-    const filteredCalls = calls.filter((call) => {
-      if (!call.telecallerId) return false;
+  const data = await this.callLogRepository
+    .createQueryBuilder('call')
+    .select('call.telecallerId', 'telecallerId')
+    .addSelect('COUNT(*)', 'totalCalls')
+    .addSelect(
+      `SUM(CASE WHEN call.callStatus = 'INTERESTED' THEN 1 ELSE 0 END)`,
+      'interested'
+    )
+    .where('call.createdAt BETWEEN :start AND :end', { start, end })
+    .groupBy('call.telecallerId')
+    .getRawMany();
 
-      const status = String(call.callStatus || '').toUpperCase();
-      if (!status || status === 'INITIATED') return false;
-
-      const createdAt = call.createdAt ? new Date(call.createdAt) : null;
-      if (!createdAt || Number.isNaN(createdAt.getTime())) return false;
-
-      const callDateIndia = new Intl.DateTimeFormat('en-CA', {
-        timeZone: 'Asia/Kolkata',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-      }).format(createdAt);
-
-      return callDateIndia === todayIndia;
-    });
-
-    if (!filteredCalls.length) {
-      return [];
-    }
-
-    const telecallerIds = Array.from(
-      new Set(filteredCalls.map((call) => Number(call.telecallerId)).filter(Boolean)),
-    );
-
-    const users = telecallerIds.length
-      ? await this.userRepository.find({
-          where: { id: In(telecallerIds) },
-          select: ['id', 'name'],
-        })
-      : [];
-
-    const userMap = new Map(users.map((user) => [Number(user.id), user.name]));
-
-    const grouped = new Map<
-      number,
-      { telecallerId: string; telecallerName: string; totalCalls: string; interested: string }
-    >();
-
-    for (const call of filteredCalls) {
-      const telecallerId = Number(call.telecallerId);
-      const existing = grouped.get(telecallerId) || {
-        telecallerId: String(telecallerId),
-        telecallerName: userMap.get(telecallerId) || `User ${telecallerId}`,
-        totalCalls: '0',
-        interested: '0',
-      };
-
-      existing.totalCalls = String(Number(existing.totalCalls) + 1);
-
-      if (String(call.callStatus || '').toUpperCase() === 'INTERESTED') {
-        existing.interested = String(Number(existing.interested) + 1);
-      }
-
-      grouped.set(telecallerId, existing);
-    }
-
-    return Array.from(grouped.values()).sort(
-      (a, b) => Number(b.totalCalls) - Number(a.totalCalls),
-    );
-  }
+  return data;
+}
 
 
   async importContacts(file: any, user: any) {
@@ -1257,16 +1209,17 @@ const location = this.getMappedValue(row, ['location', 'site_location', 'place']
     );
 
     const contacts = await qb
-      .select([
-        'contact.id',
-        'contact.name',
-        'contact.phone',
-        'contact.city',
-        'contact.zone',
-        'contact.address',
-        'contact.location',
-      ])
-      .getMany();
+  .select([
+    'contact.id',
+    'contact.name',
+    'contact.phone',
+    'contact.city',
+    'contact.zone',
+    'contact.address',
+    'contact.location',
+  ])
+  .take(500) // 🔥 LIMIT ADDED
+  .getMany();
 
     return contacts.filter((c) => !!String(c.phone || '').trim());
   }
@@ -2078,7 +2031,9 @@ if (normalizedFilter) {
   );
 }
 
-    const contacts = await qb.getMany();
+    const selectedContacts = await qb
+  .take(Number(assignCount))
+  .getMany();
 
     if (!contacts.length) {
       throw new NotFoundException(
@@ -2086,7 +2041,9 @@ if (normalizedFilter) {
       );
     }
 
-    const selectedContacts = contacts.slice(0, Number(assignCount));
+    const selectedContacts = await qb
+  .take(Number(assignCount))
+  .getMany();
 
     if (!selectedContacts.length) {
       throw new NotFoundException('No contacts available to assign');
