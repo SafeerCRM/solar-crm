@@ -2035,15 +2035,11 @@ if (normalizedFilter) {
   .take(Number(assignCount))
   .getMany();
 
-    if (!contacts.length) {
-      throw new NotFoundException(
-        'No contacts found for the given city / address / location filter',
-      );
-    }
-
-    const selectedContacts = await qb
-  .take(Number(assignCount))
-  .getMany();
+if (!selectedContacts.length) {
+  throw new NotFoundException(
+    'No contacts available for the given filter',
+  );
+}
 
     if (!selectedContacts.length) {
       throw new NotFoundException('No contacts available to assign');
@@ -2077,7 +2073,7 @@ if (normalizedFilter) {
       assignedTo: assignedUser.id,
       assignedToName: assignedUser.name,
       requestedCount: Number(assignCount),
-      matchedCount: contacts.length,
+      matchedCount: selectedContacts.length,
       updatedCount,
       view: normalizedView,
     };
