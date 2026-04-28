@@ -229,7 +229,11 @@ useEffect(() => {
 
   if (!shouldRefetchWithFilters) return;
 
-  fetchCalls(1);
+  const timer = setTimeout(() => {
+    fetchCalls(1);
+  }, 500); // debounce
+
+  return () => clearTimeout(timer);
 }, [
   nameFilter,
   phoneFilter,
@@ -237,7 +241,6 @@ useEffect(() => {
   telecallerNameFilter,
   leadPotentialFilter,
   callResultFilter,
-  user,
 ]);
 
   useEffect(() => {
@@ -249,9 +252,9 @@ useEffect(() => {
       !!leadPotentialFilter ||
       !!callResultFilter;
 
-    if (hasHistoryFilter) {
-      fetchContactDataAndLatestHistory();
-    } else {
+    if (hasHistoryFilter && calls.length < 100) {
+  fetchContactDataAndLatestHistory();
+} else {
       setContactMap({});
       setContactLatestCallMap({});
     }
