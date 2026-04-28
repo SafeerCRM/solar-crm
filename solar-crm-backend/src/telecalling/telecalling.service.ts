@@ -280,7 +280,7 @@ private readonly meetingRepository: Repository<Meeting>,
     .from(bucket)
     .upload(filePath, file.buffer, {
       contentType: mimeType,
-      upsert: false,
+      upsert: true,
     });
 
   if (uploadResult.error) {
@@ -912,7 +912,9 @@ private readonly meetingRepository: Repository<Meeting>,
 
   const data = await this.callLogRepository
     .createQueryBuilder('call')
+    .leftJoin(User, 'user', 'user.id = call.telecallerId') // ✅ ADD
     .select('call.telecallerId', 'telecallerId')
+    .addSelect('user.name', 'telecallerName') // ✅ ADD
     .addSelect('COUNT(*)', 'totalCalls')
     .addSelect(
       `SUM(CASE WHEN call.callStatus = 'INTERESTED' THEN 1 ELSE 0 END)`,
@@ -920,6 +922,7 @@ private readonly meetingRepository: Repository<Meeting>,
     )
     .where('call.createdAt BETWEEN :start AND :end', { start, end })
     .groupBy('call.telecallerId')
+    .addGroupBy('user.name') // ✅ IMPORTANT
     .getRawMany();
 
   return data;
