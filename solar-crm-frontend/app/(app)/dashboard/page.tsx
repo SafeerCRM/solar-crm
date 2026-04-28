@@ -36,6 +36,15 @@ type ContactsSummary = {
   filteredContacts: number;
 };
 
+type OwnerSummary = {
+  callsToday: number;
+  interestedToday: number;
+  leadsToday: number;
+  meetingsToday: number;
+  siteVisitsToday: number;
+  totalMeetings: number;
+};
+
 type PerformanceItem = {
   telecallerId: string;
   totalCalls: string;
@@ -107,8 +116,9 @@ const PIE_COLORS = [
 
 export default function DashboardPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
-  const [contactsSummary, setContactsSummary] = useState<ContactsSummary | null>(null);
-  const [performance, setPerformance] = useState<PerformanceItem[]>([]);
+const [contactsSummary, setContactsSummary] = useState<ContactsSummary | null>(null);
+const [ownerSummary, setOwnerSummary] = useState<OwnerSummary | null>(null);
+const [performance, setPerformance] = useState<PerformanceItem[]>([]);
   const [meetingAnalytics, setMeetingAnalytics] = useState<MeetingManagerAnalyticsItem[]>([]);
   const [hotLeads, setHotLeads] = useState<HotLead[]>([]);
   const [charts, setCharts] = useState<DashboardCharts | null>(null);
@@ -254,6 +264,24 @@ export default function DashboardPage() {
     }
   };
 
+  const fetchOwnerSummary = async () => {
+  if (!userRoles.includes('OWNER')) {
+    setOwnerSummary(null);
+    return;
+  }
+
+  try {
+    const res = await axios.get(`${apiBaseUrl}/dashboard/owner-summary`, {
+      headers: getAuthHeaders(),
+    });
+
+    setOwnerSummary(res.data || null);
+  } catch (error) {
+    console.error('Owner summary error:', error);
+    setOwnerSummary(null);
+  }
+};
+
   const fetchContactsSummary = async () => {
     if (contactsLoading) return;
     try {
@@ -276,12 +304,17 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    if (!currentUser) return;
-    fetchTelecallers();
-    fetchDashboardData();
-    fetchContactsSummary();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser, canChooseTelecaller]);
+  if (!currentUser) return;
+  fetchTelecallers();
+  fetchDashboardData();
+  fetchContactsSummary();
+
+  if (userRoles.includes('OWNER')) {
+    fetchOwnerSummary();
+  }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [currentUser, canChooseTelecaller]);
 
     useEffect(() => {
     if (!currentUser) return;
@@ -356,6 +389,16 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6 bg-gray-50 p-4 md:p-6">
+      {ownerSummary && userRoles.includes('OWNER') && (
+  <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
+    <SimpleCard title="Today Calls" value={ownerSummary.callsToday || 0} />
+    <SimpleCard title="Today Interested" value={ownerSummary.interestedToday || 0} />
+    <SimpleCard title="Today Leads" value={ownerSummary.leadsToday || 0} />
+    <SimpleCard title="Today Meetings" value={ownerSummary.meetingsToday || 0} />
+    <SimpleCard title="Today Site Visits" value={ownerSummary.siteVisitsToday || 0} />
+    <SimpleCard title="Total Meetings" value={ownerSummary.totalMeetings || 0} />
+  </div>
+)}
       <div className="rounded-2xl bg-white p-4 shadow md:p-6">
         <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>

@@ -5,15 +5,79 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 const navItems = [
-  { name: 'Dashboard', href: '/dashboard' },
+  {
+    name: 'Dashboard',
+    href: '/dashboard',
+    roles: [
+      'OWNER',
+      'TELECALLING_MANAGER',
+      'LEAD_MANAGER',
+      'MEETING_MANAGER',
+      'PROJECT_MANAGER',
+      'TELECALLER',
+      'LEAD_EXECUTIVE',
+      'PROJECT_EXECUTIVE',
+    ],
+  },
   { name: 'Users', href: '/users', roles: ['OWNER'] },
-  { name: 'Telecalling', href: '/telecalling' },
-  { name: 'Leads', href: '/leads' },
-  { name: 'Archived Leads', href: '/leads/archived' },
-  { name: 'Followup', href: '/followup' },
-  { name: 'Meeting', href: '/meeting' },
-  { name: 'Calculator', href: '/calculator' },
-  { name: 'Calculator Settings', href: '/calculator/settings', roles: ['OWNER'] },
+
+  {
+    name: 'Telecalling',
+    href: '/telecalling',
+    roles: ['OWNER', 'TELECALLING_MANAGER', 'TELECALLER', 'TELECALLING_ASSISTANT'],
+  },
+
+  {
+    name: 'Leads',
+    href: '/leads',
+    roles: ['OWNER', 'LEAD_MANAGER', 'TELECALLER', 'LEAD_EXECUTIVE'],
+  },
+
+  {
+    name: 'Archived Leads',
+    href: '/leads/archived',
+    roles: ['OWNER', 'LEAD_MANAGER'],
+  },
+
+  {
+    name: 'Followup',
+    href: '/followup',
+    roles: [
+      'OWNER',
+      'TELECALLING_MANAGER',
+      'LEAD_MANAGER',
+      'MEETING_MANAGER',
+      'TELECALLER',
+      'LEAD_EXECUTIVE',
+      'PROJECT_EXECUTIVE',
+    ],
+  },
+
+  {
+    name: 'Meeting',
+    href: '/meeting',
+    roles: [
+      'OWNER',
+      'LEAD_MANAGER',
+      'MEETING_MANAGER',
+      'PROJECT_MANAGER',
+      'PROJECT_EXECUTIVE',
+      'TELECALLER',
+      'LEAD_EXECUTIVE',
+    ],
+  },
+
+  {
+    name: 'Calculator',
+    href: '/calculator',
+    roles: ['OWNER', 'LEAD_MANAGER', 'TELECALLER', 'MEETING_MANAGER', 'PROJECT_MANAGER'],
+  },
+
+  {
+    name: 'Calculator Settings',
+    href: '/calculator/settings',
+    roles: ['OWNER'],
+  },
 ];
 
 type CurrentUser = {
