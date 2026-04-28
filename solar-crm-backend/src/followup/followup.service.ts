@@ -75,7 +75,6 @@ export class FollowupService {
   private isBroadAccessRole(user: any): boolean {
     return (
       this.isOwner(user) ||
-      this.isLeadManager(user) ||
       this.isTelecallingManager(user) ||
       this.isMarketingHead(user)
     );
@@ -87,6 +86,7 @@ export class FollowupService {
       UserRole.LEAD_EXECUTIVE,
       UserRole.MEETING_MANAGER,
       UserRole.PROJECT_EXECUTIVE,
+      UserRole.LEAD_MANAGER,
     ]);
   }
 

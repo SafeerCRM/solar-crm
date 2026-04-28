@@ -280,7 +280,7 @@ private readonly meetingRepository: Repository<Meeting>,
     .from(bucket)
     .upload(filePath, file.buffer, {
       contentType: mimeType,
-      upsert: true,
+      upsert: false,
     });
 
   if (uploadResult.error) {
@@ -290,67 +290,17 @@ private readonly meetingRepository: Repository<Meeting>,
   const publicUrlResult = supabase.storage.from(bucket).getPublicUrl(filePath);
   const recordingUrl = publicUrlResult.data.publicUrl;
 
-  await this.contactCallHistoryRepository.query(`
-    ALTER TABLE public.contact_call_history
-    ADD COLUMN IF NOT EXISTS "recordingUrl" text
-  `);
-
-  let targetHistory: ContactCallHistory | null = null;
-
-  if (historyId) {
-    targetHistory = await this.contactCallHistoryRepository.findOne({
-      where: { id: historyId },
-    });
-  }
-
-  if (!targetHistory && contactId) {
-    targetHistory = await this.contactCallHistoryRepository.findOne({
-      where: { contactId },
-      order: { createdAt: 'DESC' },
-    });
-  }
-
-  if (targetHistory) {
-    await this.contactCallHistoryRepository.query(
-      `UPDATE contact_call_history SET "recordingUrl" = $1 WHERE id = $2`,
-      [recordingUrl, targetHistory.id],
-    );
-  } else if (contactId) {
-    const newHistory = new ContactCallHistory();
-
-    newHistory.contactId = contactId;
-    newHistory.calledBy = user.id;
-    newHistory.calledByName = user.name;
-    newHistory.callStatus = 'CONNECTED';
-    newHistory.notes = '';
-
-    const savedHistory = await this.contactCallHistoryRepository.save(
-      newHistory,
-    );
-
-    await this.contactCallHistoryRepository.query(
-      `UPDATE contact_call_history SET "recordingUrl" = $1 WHERE id = $2`,
-      [recordingUrl, savedHistory.id],
-    );
-  }
-
   if (callLogId) {
     await this.callLogRepository.update(callLogId, {
       recordingUrl,
     });
   }
 
-  if (contactId) {
-    const latestCallLog = await this.callLogRepository.findOne({
-      where: { contactId },
-      order: { createdAt: 'DESC' },
-    });
-
-    if (latestCallLog) {
-      await this.callLogRepository.update(latestCallLog.id, {
-        recordingUrl,
-      });
-    }
+  if (historyId) {
+    await this.contactCallHistoryRepository.query(
+      `UPDATE contact_call_history SET "recordingUrl" = $1 WHERE id = $2`,
+      [recordingUrl, historyId],
+    );
   }
 
   return {

@@ -88,8 +88,6 @@ export class MeetingService {
   private isBroadMeetingAccessRole(user: any): boolean {
     return (
       this.isOwner(user) ||
-      this.isLeadManager(user) ||
-      this.isTelecallingManager(user) ||
       this.isMarketingHead(user) ||
       this.isProjectManager(user)
     );
@@ -101,6 +99,7 @@ export class MeetingService {
       UserRole.PROJECT_EXECUTIVE,
       UserRole.TELECALLER,
       UserRole.LEAD_EXECUTIVE,
+      UserRole.LEAD_MANAGER,
     ]);
   }
 
@@ -119,21 +118,30 @@ export class MeetingService {
   }
 
   private applyRoleVisibility(qb: any, user: any) {
-    if (this.isBroadMeetingAccessRole(user)) {
-      return qb;
-    }
+  const currentUserId = this.getCurrentUserId(user);
 
-    if (this.isOwnMeetingRole(user)) {
-      const currentUserId = this.getCurrentUserId(user);
-
-      qb.andWhere(
-        '(meeting.assignedTo = :currentUserId OR meeting.createdBy = :currentUserId)',
-        { currentUserId },
-      );
-    }
-
+  // ✅ Lead Manager must see only meetings created by him or assigned to him
+  if (this.isLeadManager(user)) {
+    qb.andWhere(
+      '(meeting.assignedTo = :currentUserId OR meeting.createdBy = :currentUserId)',
+      { currentUserId },
+    );
     return qb;
   }
+
+  if (this.isBroadMeetingAccessRole(user)) {
+    return qb;
+  }
+
+  if (this.isOwnMeetingRole(user)) {
+    qb.andWhere(
+      '(meeting.assignedTo = :currentUserId OR meeting.createdBy = :currentUserId)',
+      { currentUserId },
+    );
+  }
+
+  return qb;
+}
 
   private getMeetingGroupKey(meeting: Meeting): number {
     return meeting.meetingGroupId || meeting.id;
