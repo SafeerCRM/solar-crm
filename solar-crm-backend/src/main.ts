@@ -28,6 +28,15 @@ async function bootstrap() {
     next();
   });
 
+  import * as rateLimit from 'express-rate-limit';
+
+app.use(
+  rateLimit({
+    windowMs: 60 * 1000,
+    max: 120,
+  }),
+);
+
   // ✅ EXISTING CODE
   const PORT = process.env.PORT || 3001;
 
