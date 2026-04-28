@@ -854,11 +854,17 @@ private readonly meetingRepository: Repository<Meeting>,
       .getRawMany();
   }
        async getTodayPerformance() {
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
+  const now = new Date();
 
-  const end = new Date();
-  end.setHours(23, 59, 59, 999);
+const indiaDate = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Kolkata',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+}).format(now);
+
+const start = new Date(`${indiaDate}T00:00:00+05:30`);
+const end = new Date(`${indiaDate}T23:59:59.999+05:30`);
 
   const data = await this.callLogRepository
     .createQueryBuilder('call')

@@ -20,6 +20,9 @@ type DashboardFilters = {
 
 @Injectable()
 export class DashboardService {
+  private ownerSummaryCache: any = null;
+  private ownerSummaryCacheAt = 0;
+
   constructor(
     @InjectRepository(Lead)
     private readonly leadRepository: Repository<Lead>,
@@ -538,12 +541,23 @@ private readonly meetingRepository: Repository<Meeting>,
   }));
 }
 async getOwnerSummary() {
-  // TODAY RANGE
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
+  const nowMs = Date.now();
 
-  const end = new Date();
-  end.setHours(23, 59, 59, 999);
+if (this.ownerSummaryCache && nowMs - this.ownerSummaryCacheAt < 30000) {
+  return this.ownerSummaryCache;
+}
+  // TODAY RANGE
+  const now = new Date();
+
+const indiaDate = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Kolkata',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+}).format(now);
+
+const start = new Date(`${indiaDate}T00:00:00+05:30`);
+const end = new Date(`${indiaDate}T23:59:59.999+05:30`);
 
   // CALLS TODAY
   const callsToday = await this.callLogRepository
@@ -581,14 +595,19 @@ async getOwnerSummary() {
   // TOTAL MEETINGS
   const totalMeetings = await this.meetingRepository.count();
 
-  return {
-    callsToday,
-    interestedToday,
-    leadsToday,
-    meetingsToday,
-    siteVisitsToday,
-    totalMeetings,
-  };
+  const result = {
+  callsToday,
+  interestedToday,
+  leadsToday,
+  meetingsToday,
+  siteVisitsToday,
+  totalMeetings,
+};
+
+this.ownerSummaryCache = result;
+this.ownerSummaryCacheAt = Date.now();
+
+return result;
 }
 
 }
