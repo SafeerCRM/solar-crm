@@ -433,7 +433,7 @@ await axios.post(
       setNextFollowUpDate('');
       setCallRecordingFile(null);
       setMessage('Call history added successfully');
-      fetchHistory();
+      await fetchHistory();
     } catch (error: any) {
       console.error(error);
       setMessage(error?.response?.data?.message || 'Failed to add call history');
