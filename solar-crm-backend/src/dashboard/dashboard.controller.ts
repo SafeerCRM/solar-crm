@@ -144,6 +144,17 @@ export class DashboardController {
     );
   }
 
+  @Get('owner-summary')
+getOwnerSummary(@CurrentUser() user?: any) {
+  const userRoles = this.getUserRoles(user);
+
+  if (!userRoles.includes(UserRole.OWNER)) {
+    return [];
+  }
+
+  return this.dashboardService.getOwnerSummary();
+}
+
   @Get('meeting-manager-analytics')
 getMeetingManagerAnalytics(@CurrentUser() user?: any) {
   const userRoles = this.getUserRoles(user);

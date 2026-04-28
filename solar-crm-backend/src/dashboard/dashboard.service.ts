@@ -537,4 +537,58 @@ private readonly meetingRepository: Repository<Meeting>,
     convertedMeetings: Number(row.convertedMeetings || 0),
   }));
 }
+async getOwnerSummary() {
+  // TODAY RANGE
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
+
+  // CALLS TODAY
+  const callsToday = await this.callLogRepository
+    .createQueryBuilder('call')
+    .where('call.createdAt BETWEEN :start AND :end', { start, end })
+    .andWhere(`UPPER(COALESCE(call.callStatus, '')) <> 'INITIATED'`)
+    .getCount();
+
+  // INTERESTED TODAY
+  const interestedToday = await this.callLogRepository
+    .createQueryBuilder('call')
+    .where('call.createdAt BETWEEN :start AND :end', { start, end })
+    .andWhere(`call.callStatus = 'INTERESTED'`)
+    .getCount();
+
+  // LEADS TODAY
+  const leadsToday = await this.leadRepository
+    .createQueryBuilder('lead')
+    .where('lead.createdAt BETWEEN :start AND :end', { start, end })
+    .getCount();
+
+  // MEETINGS TODAY
+  const meetingsToday = await this.meetingRepository
+    .createQueryBuilder('meeting')
+    .where('meeting.scheduledAt BETWEEN :start AND :end', { start, end })
+    .getCount();
+
+  // SITE VISITS TODAY
+  const siteVisitsToday = await this.meetingRepository
+    .createQueryBuilder('meeting')
+    .where('meeting.scheduledAt BETWEEN :start AND :end', { start, end })
+    .andWhere('meeting.meetingType = :type', { type: 'SITE_VISIT' })
+    .getCount();
+
+  // TOTAL MEETINGS
+  const totalMeetings = await this.meetingRepository.count();
+
+  return {
+    callsToday,
+    interestedToday,
+    leadsToday,
+    meetingsToday,
+    siteVisitsToday,
+    totalMeetings,
+  };
+}
+
 }
