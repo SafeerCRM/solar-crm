@@ -220,7 +220,10 @@ try {
 }, [user, canAssignAssistant]);
 
 useEffect(() => {
-  if (!user || !isFilterApplied) return;
+  if (!user) return;
+
+  // Do not load automatically before first Apply click
+  if (!isFilterApplied) return;
 
   const timer = setTimeout(() => {
     fetchCalls(1);
@@ -1141,9 +1144,9 @@ return;
   <button
   type="button"
   onClick={() => {
-    setIsFilterApplied(true);
-    fetchCalls(1);
-  }}
+  setIsFilterApplied(true);
+  setPage(1);
+}}
   className="rounded-xl bg-blue-600 px-4 py-2 font-medium text-white"
 >
   Apply Filters
