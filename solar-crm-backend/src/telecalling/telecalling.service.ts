@@ -479,10 +479,20 @@ private readonly meetingRepository: Repository<Meeting>,
       .toUpperCase();
 
     const qb = this.callLogRepository
-      .createQueryBuilder('call')
-      .leftJoinAndSelect('call.lead', 'lead')
-      .where('call.telecallerId = :telecallerId', { telecallerId })
-      .orderBy('call.createdAt', 'DESC');
+  .createQueryBuilder('call')
+  .leftJoinAndSelect('call.lead', 'lead')
+  .leftJoin(TelecallingContact, 'contact', 'contact.id = call.contactId')
+  .addSelect([
+    'contact.id',
+    'contact.name',
+    'contact.phone',
+    'contact.city',
+    'contact.zone',
+    'contact.address',
+    'contact.location',
+  ])
+  .where('call.telecallerId = :telecallerId', { telecallerId })
+  .orderBy('call.createdAt', 'DESC');
 
     if (normalizedCallResult) {
       qb.andWhere(
@@ -498,26 +508,38 @@ private readonly meetingRepository: Repository<Meeting>,
     }
 
     if (normalizedName) {
-      qb.andWhere(`LOWER(COALESCE(lead.name, '')) LIKE :name`, {
-        name: `%${normalizedName}%`,
-      });
-    }
+  qb.andWhere(
+    `(
+      LOWER(COALESCE(lead.name, '')) LIKE :name
+      OR LOWER(COALESCE(contact.name, '')) LIKE :name
+    )`,
+    { name: `%${normalizedName}%` },
+  );
+}
 
     if (normalizedPhone) {
-      qb.andWhere(`LOWER(COALESCE(lead.phone, '')) LIKE :phone`, {
-        phone: `%${normalizedPhone}%`,
-      });
-    }
+  qb.andWhere(
+    `(
+      LOWER(COALESCE(lead.phone, '')) LIKE :phone
+      OR LOWER(COALESCE(contact.phone, '')) LIKE :phone
+    )`,
+    { phone: `%${normalizedPhone}%` },
+  );
+}
 
     if (normalizedCity) {
-      qb.andWhere(
-        `(
-          LOWER(COALESCE(lead.city, '')) LIKE :city
-          OR LOWER(COALESCE(lead.zone, '')) LIKE :city
-        )`,
-        { city: `%${normalizedCity}%` },
-      );
-    }
+  qb.andWhere(
+    `(
+      LOWER(COALESCE(lead.city, '')) LIKE :city
+      OR LOWER(COALESCE(lead.zone, '')) LIKE :city
+      OR LOWER(COALESCE(contact.city, '')) LIKE :city
+      OR LOWER(COALESCE(contact.zone, '')) LIKE :city
+      OR LOWER(COALESCE(contact.address, '')) LIKE :city
+      OR LOWER(COALESCE(contact.location, '')) LIKE :city
+    )`,
+    { city: `%${normalizedCity}%` },
+  );
+}
 
     const rawCalls = await qb.getMany();
 
