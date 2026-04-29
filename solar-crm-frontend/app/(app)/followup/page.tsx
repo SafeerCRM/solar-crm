@@ -55,6 +55,9 @@ export default function FollowupPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [allFollowups, setAllFollowups] = useState<FollowUp[]>([]);
+  const [followupPage, setFollowupPage] = useState(1);
+const [followupTotal, setFollowupTotal] = useState(0);
+const followupLimit = 50;
 
   const [leadId, setLeadId] = useState('');
   const [note, setNote] = useState('');
@@ -106,18 +109,18 @@ const [assigningFiltered, setAssigningFiltered] = useState(false);
   }, []);
 
   useEffect(() => {
-    if (user) {
-      fetchLeads();
-      fetchFollowups();
+  if (user) {
+    fetchLeads();
+    fetchFollowups(followupPage);
 
-      if (canFetchAssignableUsers) {
-        fetchAssignableUsers();
-      } else {
-        setUsers([]);
-      }
+    if (canFetchAssignableUsers) {
+      fetchAssignableUsers();
+    } else {
+      setUsers([]);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [user, followupPage]);
 
   const fetchAssignableUsers = async () => {
     try {
@@ -152,18 +155,24 @@ const [assigningFiltered, setAssigningFiltered] = useState(false);
     }
   };
 
-  const fetchFollowups = async () => {
-    try {
-      const res = await axios.get(`${backendUrl}/followup`, {
-        headers: getAuthHeaders(),
-      });
+  const fetchFollowups = async (pageNumber = followupPage) => {
+  try {
+    const res = await axios.get(`${backendUrl}/followup`, {
+      params: {
+        page: pageNumber,
+        limit: followupLimit,
+      },
+      headers: getAuthHeaders(),
+    });
 
-      setAllFollowups(Array.isArray(res.data) ? res.data : []);
-    } catch (error) {
-      console.error(error);
-      setAllFollowups([]);
-    }
-  };
+    setAllFollowups(Array.isArray(res.data?.data) ? res.data.data : []);
+    setFollowupTotal(Number(res.data?.total || 0));
+  } catch (error) {
+    console.error(error);
+    setAllFollowups([]);
+    setFollowupTotal(0);
+  }
+};
  const handleDateClick = async (date: Dayjs | null) => {
   if (!date) return;
 
@@ -266,7 +275,8 @@ const getSelectedFollowupRowColor = (f: FollowUp) => {
       setLeadId('');
       setNote('');
       setFollowUpDate('');
-      fetchFollowups();
+      setFollowupPage(1);
+fetchFollowups(1);
     } catch (error: any) {
       setMessage(error?.response?.data?.message || 'Failed');
     } finally {
@@ -339,7 +349,8 @@ const leadManagers = users.filter((u) =>
       );
 
       setMessage(res.data?.message || 'Filtered followups assigned successfully');
-      await fetchFollowups();
+      setFollowupPage(1);
+await fetchFollowups(1);
 
       if (selectedDate) {
         await handleDateClick(selectedDate);
@@ -730,7 +741,7 @@ const filteredSelectedFollowups = selectedFollowups.filter((f) => {
 
       <div>
         <h2 className="mb-4 text-xl font-semibold">
-  All Followups ({filteredAllFollowups.length})
+  All Followups ({filteredAllFollowups.length} of {followupTotal})
 </h2>
 
         {filteredAllFollowups.length === 0 ? (
@@ -804,6 +815,33 @@ const filteredSelectedFollowups = selectedFollowups.filter((f) => {
           </div>
         )}
       </div>
+      <div className="mt-4 flex items-center justify-between rounded-xl bg-white p-4 shadow">
+  <button
+    type="button"
+    onClick={() => setFollowupPage((p) => Math.max(1, p - 1))}
+    disabled={followupPage <= 1}
+    className="rounded bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 disabled:opacity-50"
+  >
+    Previous
+  </button>
+
+  <span className="text-sm font-medium text-gray-700">
+    Page {followupPage} of {Math.ceil(followupTotal / followupLimit) || 1}
+  </span>
+
+  <button
+    type="button"
+    onClick={() =>
+      setFollowupPage((p) =>
+        p >= Math.ceil(followupTotal / followupLimit) ? p : p + 1,
+      )
+    }
+    disabled={followupPage >= Math.ceil(followupTotal / followupLimit)}
+    className="rounded bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 disabled:opacity-50"
+  >
+    Next
+  </button>
+</div>
     </div>
   );
 }
