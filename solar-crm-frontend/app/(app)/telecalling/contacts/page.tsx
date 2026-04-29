@@ -387,6 +387,9 @@ const updateQuickCallTimePart = (newTime: Dayjs | null) => {
   setQuickCallNextFollowUpDate(merged.format('YYYY-MM-DDTHH:mm'));
 };
         const startQuickCall = async (contact: Contact) => {
+  if (callInitiated || quickCallModal.isOpen) {
+    return;
+  }
     try {
       const res = await axios.post(
         `${backendUrl}/telecalling/contacts/${contact.id}/quick-call/start`,
@@ -427,9 +430,9 @@ const updateQuickCallTimePart = (newTime: Dayjs | null) => {
 
     const startCountdownThenCall = (nextContact: Contact) => {
     clearAutoTimers();
-    setCountdown(3);
+    setCountdown(4);
 
-    let time = 3;
+    let time = 4;
 
     countdownIntervalRef.current = setInterval(() => {
       time -= 1;
@@ -446,7 +449,7 @@ const updateQuickCallTimePart = (newTime: Dayjs | null) => {
     resumeTimeoutRef.current = setTimeout(async () => {
       if (isPaused) return;
       await startQuickCall(nextContact);
-    }, 3000);
+    }, 4000);
   };
 
     const callNextContact = async () => {
@@ -1222,11 +1225,15 @@ const transferContacts = async () => {
 
                 <div className="flex flex-wrap gap-2 p-4 pt-0">
                   <button
-                    onClick={() => startQuickCall(c)}
-                    className="rounded-2xl bg-blue-600 px-4 py-2 text-sm font-medium text-white"
-                  >
-                    Call
-                  </button>
+  onClick={() => {
+    if (callInitiated || quickCallModal.isOpen) return;
+    startQuickCall(c);
+  }}
+  disabled={callInitiated || quickCallModal.isOpen}
+  className="rounded-2xl bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+>
+  Call
+</button>
 
                   <Link
                     href={`/telecalling/contacts/${c.id}`}
