@@ -153,6 +153,17 @@ const [total, setTotal] = useState(0);
 const [totalPages, setTotalPages] = useState(1);
   const [selectedReminderDate, setSelectedReminderDate] = useState<Dayjs | null>(null);
 
+  const hasAnyFilter = () => {
+  return (
+    nameFilter.trim() ||
+    phoneFilter.trim() ||
+    cityFilter.trim() ||
+    telecallerNameFilter.trim() ||
+    leadPotentialFilter.trim() ||
+    callResultFilter.trim()
+  );
+};
+
   const userRoles = useMemo(() => {
     if (Array.isArray(user?.roles)) return user.roles;
     if (user?.role) return [user.role];
@@ -224,6 +235,7 @@ useEffect(() => {
 
   // Do not load automatically before first Apply click
   if (!isFilterApplied) return;
+  if (!hasAnyFilter()) return;
 
   const timer = setTimeout(() => {
     fetchCalls(1);
@@ -1144,10 +1156,15 @@ return;
   <button
   type="button"
   onClick={() => {
-  setIsFilterApplied(true);
-  setPage(1);
-}}
-  className="rounded-xl bg-blue-600 px-4 py-2 font-medium text-white"
+    setIsFilterApplied(true);
+    setPage(1);
+  }}
+  disabled={!hasAnyFilter()}
+  className={`rounded-xl px-4 py-2 font-medium text-white ${
+    hasAnyFilter()
+      ? 'bg-blue-600'
+      : 'bg-gray-400 cursor-not-allowed'
+  }`}
 >
   Apply Filters
 </button>
