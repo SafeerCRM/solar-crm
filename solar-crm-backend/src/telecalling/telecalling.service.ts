@@ -164,17 +164,23 @@ private readonly meetingRepository: Repository<Meeting>,
   // ✅ TELECALLER → only assigned active contacts
   if (this.hasAnyRole(user, ['TELECALLER'])) {
     qb.where('contact.assignedTo = :assignedTo', { assignedTo: user.id });
-    qb.andWhere('contact.isInStorage = false');
-    return;
+qb.andWhere('contact.isInStorage = false');
+qb.andWhere(`COALESCE(contact.stage, 'TELECALLING') = :stage`, {
+  stage: 'TELECALLING',
+});
+return;
   }
 
   // ✅ TELECALLING ASSISTANT → only review assigned contacts
   if (this.hasAnyRole(user, ['TELECALLING_ASSISTANT' as any])) {
     qb.where('contact.reviewAssignedTo = :reviewAssignedTo', {
-      reviewAssignedTo: user.id,
-    });
-    qb.andWhere('contact.isInStorage = false');
-    return;
+  reviewAssignedTo: user.id,
+});
+qb.andWhere('contact.isInStorage = false');
+qb.andWhere(`COALESCE(contact.stage, 'TELECALLING') = :stage`, {
+  stage: 'REVIEW',
+});
+return;
   }
 
   // ✅ STORAGE VIEW
@@ -191,6 +197,9 @@ private readonly meetingRepository: Repository<Meeting>,
 
   // ✅ DEFAULT ACTIVE
   qb.where('contact.isInStorage = false');
+qb.andWhere(`COALESCE(contact.stage, 'TELECALLING') = :stage`, {
+  stage: 'TELECALLING',
+});
 }
 
   private async getAccessibleContact(id: number, user: any) {
@@ -1191,13 +1200,13 @@ const location = this.getMappedValue(row, ['location', 'site_location', 'place']
     // Keep contacts that only have INITIATED logs, because they are not completed yet.
     if (normalizedView !== 'storage') {
       qb.andWhere(
-        `contact.id NOT IN (
-          SELECT DISTINCT cl."contactId"
-          FROM call_log cl
-          WHERE cl."contactId" IS NOT NULL
-            AND UPPER(COALESCE(cl."callStatus", '')) <> 'INITIATED'
-        )`,
-      );
+  `NOT EXISTS (
+    SELECT 1
+    FROM call_log cl
+    WHERE cl."contactId" = contact.id
+      AND UPPER(COALESCE(cl."callStatus", '')) <> 'INITIATED'
+  )`,
+);
     }
 
     const [data, total] = await qb.getManyAndCount();
