@@ -9,7 +9,7 @@ export function setupAxiosInterceptor() {
       const status = error?.response?.status;
 
       if (status === 401) {
-        console.warn('401 Unauthorized detected');
+  console.warn('401 detected, but NOT logging out immediately');
 
         const token =
           localStorage.getItem('token') ||
@@ -17,10 +17,11 @@ export function setupAxiosInterceptor() {
 
         // ✅ ONLY logout if token is actually missing
         if (!token && !isRedirecting) {
-          isRedirecting = true;
-          localStorage.clear();
-          window.location.href = '/';
-        }
+  console.warn('Token missing → logging out');
+  isRedirecting = true;
+  localStorage.clear();
+  window.location.href = '/';
+}
       }
 
       return Promise.reject(error);
