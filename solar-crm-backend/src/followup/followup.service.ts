@@ -171,31 +171,50 @@ export class FollowupService {
     return this.followUpRepository.save(followUp);
   }
 
-  async findAll(user: any) {
-    if (this.isProjectManager(user)) {
-      return [];
-    }
-
-        if (this.isOwnAssignedOnlyRole(user)) {
-      const currentUserId = this.getCurrentUserId(user);
-
-      return this.followUpRepository
-        .createQueryBuilder('followUp')
-        .leftJoinAndSelect('followUp.lead', 'lead')
-        .where('followUp.assignedTo = :currentUserId', { currentUserId })
-        .orWhere('followUp.createdBy = :currentUserId', { currentUserId })
-        .orWhere('lead.assignedTo = :currentUserId', { currentUserId })
-        .orWhere('lead.createdBy = :currentUserId', { currentUserId })
-        .orWhere('lead.originTelecallerId = :currentUserId', { currentUserId })
-        .orderBy('followUp.followUpDate', 'ASC')
-        .getMany();
-    }
-
-    return this.followUpRepository.find({
-      relations: ['lead'],
-      order: { followUpDate: 'ASC' },
-    });
+  async findAll(user: any, page = 1, limit = 50) {
+  if (this.isProjectManager(user)) {
+    return { data: [], total: 0, page, limit };
   }
+
+  const skip = (page - 1) * limit;
+
+  if (this.isOwnAssignedOnlyRole(user)) {
+    const currentUserId = this.getCurrentUserId(user);
+
+    const qb = this.followUpRepository
+      .createQueryBuilder('followUp')
+      .leftJoinAndSelect('followUp.lead', 'lead')
+      .where('followUp.assignedTo = :currentUserId', { currentUserId })
+      .orWhere('followUp.createdBy = :currentUserId', { currentUserId })
+      .orWhere('lead.assignedTo = :currentUserId', { currentUserId })
+      .orWhere('lead.createdBy = :currentUserId', { currentUserId })
+      .orWhere('lead.originTelecallerId = :currentUserId', { currentUserId })
+      .orderBy('followUp.followUpDate', 'ASC');
+
+    const [data, total] = await qb.skip(skip).take(limit).getManyAndCount();
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+    };
+  }
+
+  const [data, total] = await this.followUpRepository.findAndCount({
+    relations: ['lead'],
+    order: { followUpDate: 'ASC' },
+    skip,
+    take: limit,
+  });
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+  };
+}
 
   async findToday(user: any) {
     const start = new Date();

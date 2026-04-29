@@ -24,9 +24,17 @@ export class FollowupController {
   }
 
   @Get()
-  findAll(@CurrentUser() user: any) {
-    return this.followupService.findAll(user);
-  }
+findAll(
+  @Query('page') page: string,
+  @Query('limit') limit: string,
+  @CurrentUser() user: any,
+) {
+  return this.followupService.findAll(
+    user,
+    Number(page) || 1,
+    Number(limit) || 50,
+  );
+}
 
   @Get('today')
   findToday(@CurrentUser() user: any) {
