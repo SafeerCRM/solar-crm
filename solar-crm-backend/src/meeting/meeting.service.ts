@@ -429,7 +429,15 @@ audioUrl:
     return meeting;
   }
 
-  async findAll(query: any, user: any): Promise<Meeting[]> {
+  async findAll(query: any, user: any): Promise<{
+  data: Meeting[];
+  total: number;
+  page: number;
+  limit: number;
+}> {
+    const page = Number(query.page) || 1;
+const limit = Number(query.limit) || 50;
+const skip = (page - 1) * limit;
     const qb = this.meetingRepository.createQueryBuilder('meeting');
 
     this.applyRoleVisibility(qb, user);
@@ -508,16 +516,26 @@ audioUrl:
 
     qb.orderBy('meeting.scheduledAt', 'DESC').addOrderBy('meeting.updatedAt', 'DESC');
 
-    const meetings = await qb.getMany();
+    const [meetings, total] = await qb
+  .skip(skip)
+  .take(limit)
+  .getManyAndCount();
 
     const includeHistory = String(query.includeHistory || 'false') === 'true';
     const latestOnly = String(query.latestOnly || 'true') !== 'false';
 
-    if (includeHistory || !latestOnly) {
-      return meetings;
-    }
+    let finalData = meetings;
 
-    return this.pickLatestMeetings(meetings);
+if (!includeHistory && latestOnly) {
+  finalData = this.pickLatestMeetings(meetings);
+}
+
+return {
+  data: finalData,
+  total,
+  page,
+  limit,
+};
   }
 
   async findOne(id: number, user: any): Promise<Meeting> {
