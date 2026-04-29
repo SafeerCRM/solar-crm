@@ -492,7 +492,10 @@ private readonly meetingRepository: Repository<Meeting>,
     'contact.location',
   ])
   .where('call.telecallerId = :telecallerId', { telecallerId })
-  .orderBy('call.createdAt', 'DESC');
+.andWhere(`COALESCE(contact.stage, 'TELECALLING') = :stage`, {
+  stage: 'TELECALLING',
+})
+.orderBy('call.createdAt', 'DESC');
 
     if (normalizedCallResult) {
       qb.andWhere(
@@ -741,9 +744,12 @@ return {
 ])
   .leftJoin(User, 'telecaller', 'telecaller.id = call.telecallerId') // ✅ NEW
     .where('call.createdAt BETWEEN :cutoff AND :now', { cutoff, now })
-    .andWhere(`UPPER(COALESCE(call.callStatus, '')) <> 'INITIATED'`)
-    .andWhere('(contact.convertedToLead IS NULL OR contact.convertedToLead = false)')
-    .orderBy('call.createdAt', 'DESC');
+.andWhere(`UPPER(COALESCE(call.callStatus, '')) <> 'INITIATED'`)
+.andWhere('(contact.convertedToLead IS NULL OR contact.convertedToLead = false)')
+.andWhere(`COALESCE(contact.stage, 'TELECALLING') = :stage`, {
+  stage: 'REVIEW',
+})
+.orderBy('call.createdAt', 'DESC');
 
   if (this.hasRole(user, 'TELECALLING_ASSISTANT' as any)) {
     qb.andWhere('call.reviewAssignedTo = :reviewAssignedTo', {
