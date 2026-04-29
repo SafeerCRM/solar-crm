@@ -69,6 +69,28 @@ export class MeetingService {
     return this.hasAnyRole(user, [UserRole.MEETING_MANAGER]);
   }
 
+  private canModifyMeeting(meeting: Meeting, user: any): boolean {
+  const currentUserId = this.getCurrentUserId(user);
+
+  if (this.isOwner(user)) {
+    return true;
+  }
+
+  if (this.isMeetingManager(user) && meeting.assignedTo === currentUserId) {
+    return true;
+  }
+
+  return false;
+}
+
+private assertCanModifyMeeting(meeting: Meeting, user: any) {
+  if (!this.canModifyMeeting(meeting, user)) {
+    throw new ForbiddenException(
+      'You can view this meeting, but only the assigned meeting manager or owner can modify it',
+    );
+  }
+}
+
   private isProjectManager(user: any): boolean {
     return this.hasAnyRole(user, [UserRole.PROJECT_MANAGER]);
   }
@@ -566,7 +588,9 @@ return {
   ): Promise<Meeting> {
     const existingMeeting = await this.getAccessibleMeeting(id, user);
 
-    const currentUserId = this.getCurrentUserId(user);
+this.assertCanModifyMeeting(existingMeeting, user);
+
+const currentUserId = this.getCurrentUserId(user);
 
     let assignedTo = (updateMeetingDto as any).assignedTo;
     let assignedToName = (updateMeetingDto as any).assignedToName;
@@ -638,7 +662,9 @@ return {
 ): Promise<Meeting> {
   const existingMeeting = await this.getAccessibleMeeting(id, user);
 
-  if (actionData.status === MeetingStatus.RESCHEDULED) {
+this.assertCanModifyMeeting(existingMeeting, user);
+
+if (actionData.status === MeetingStatus.RESCHEDULED) {
     if (!actionData.newScheduledAt) {
       throw new BadRequestException(
         'New scheduled date/time is required for rescheduling',
@@ -723,9 +749,11 @@ return this.meetingRepository.save(existingMeeting);
   }
 
   async remove(id: number, user: any): Promise<{ message: string }> {
-    await this.getAccessibleMeeting(id, user);
+    const existingMeeting = await this.getAccessibleMeeting(id, user);
 
-    await this.meetingRepository.delete(id);
+this.assertCanModifyMeeting(existingMeeting, user);
+
+await this.meetingRepository.delete(id);
 
     return {
       message: `Meeting with ID ${id} deleted successfully`,
