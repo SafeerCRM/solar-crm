@@ -1738,19 +1738,28 @@ const location = this.getMappedValue(row, ['location', 'site_location', 'place']
 
     const savedLog = await this.callLogRepository.save(callLog);
 
-    const historyItem = this.contactCallHistoryRepository.create({
-      contactId: contact.id,
-      calledBy: user.id,
-      calledByName: user.name,
-      callStatus: normalizedStatus,
-      notes: body.callNotes || '',
-      recordingUrl: body.recordingUrl || undefined,
-      nextFollowUpDate: body.nextFollowUpDate
-        ? new Date(body.nextFollowUpDate)
-        : undefined,
-    } as any);
+const historyItem = this.contactCallHistoryRepository.create({
+  contactId: contact.id,
+  calledBy: user.id,
+  calledByName: user.name,
+  callStatus: normalizedStatus,
+  notes: body.callNotes || '',
+  recordingUrl: body.recordingUrl || undefined,
+  nextFollowUpDate: body.nextFollowUpDate
+    ? new Date(body.nextFollowUpDate)
+    : undefined,
+} as any);
 
-    await this.contactCallHistoryRepository.save(historyItem);
+// 🚀 PARALLEL EXECUTION
+await Promise.all([
+  this.contactCallHistoryRepository.save(historyItem),
+
+  this.contactRepository.update(contact.id, {
+    remarks: contact.remarks
+      ? `${contact.remarks}\nQuick call updated by ${user.name} (${normalizedStatus})`
+      : `Quick call updated by ${user.name} (${normalizedStatus})`,
+  }),
+]);
 
     // ✅ CREATE FOLLOWUP IF REMINDER EXISTS
 // ✅ CREATE FOLLOWUP IF REMINDER EXISTS
@@ -1804,20 +1813,23 @@ const location = this.getMappedValue(row, ['location', 'site_location', 'place']
     }
 
     const existingRemarks = String(contact.remarks || '').trim();
-    const summaryNote =
-      normalizedStatus === 'INTERESTED'
-        ? `Quick call marked interested by ${user.name}`
-        : normalizedStatus === 'NOT_INTERESTED'
-        ? `Quick call marked not interested by ${user.name}`
-        : normalizedStatus === 'PROPOSAL_SENT'
-        ? `Quick call marked proposal sent by ${user.name}`
-        : `Quick call updated by ${user.name} (${normalizedStatus})`;
+const summaryNote =
+  normalizedStatus === 'INTERESTED'
+    ? `Quick call marked interested by ${user.name}`
+    : normalizedStatus === 'NOT_INTERESTED'
+    ? `Quick call marked not interested by ${user.name}`
+    : normalizedStatus === 'PROPOSAL_SENT'
+    ? `Quick call marked proposal sent by ${user.name}`
+    : `Quick call updated by ${user.name} (${normalizedStatus})`;
 
-    contact.remarks = existingRemarks
-      ? `${existingRemarks}\n${summaryNote}`
-      : summaryNote;
+const updatedRemarks = existingRemarks
+  ? `${existingRemarks}\n${summaryNote}`
+  : summaryNote;
 
-    await this.contactRepository.save(contact);
+// 🚀 FAST UPDATE (no full entity save)
+await this.contactRepository.update(contact.id, {
+  remarks: updatedRemarks,
+});
 
     return {
       message:
