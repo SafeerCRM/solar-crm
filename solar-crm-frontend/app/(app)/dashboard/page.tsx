@@ -167,23 +167,34 @@ const [performance, setPerformance] = useState<PerformanceItem[]>([]);
   const canChooseTelecaller =
     userRoles.includes('OWNER') || userRoles.includes('TELECALLING_MANAGER');
 
+    const shouldUseOwnDataByDefault =
+  userRoles.includes('TELECALLER') ||
+  userRoles.includes('LEAD_EXECUTIVE') ||
+  userRoles.includes('MEETING_MANAGER') ||
+  userRoles.includes('PROJECT_EXECUTIVE');
+
+const isOwnerDefaultView =
+  userRoles.includes('OWNER') && !telecallerFilter;
+
   const buildParams = () => {
-    const params: Record<string, string | number> = {};
+  const params: Record<string, string | number> = {};
 
-    if (isTelecaller && currentUser?.id) {
-      params.assignedTo = currentUser.id;
-    } else if (telecallerFilter.trim()) {
-      params.assignedTo = telecallerFilter.trim();
-    }
+  if (telecallerFilter === 'ALL') {
+    // User intentionally selected all data
+  } else if (telecallerFilter.trim()) {
+    params.assignedTo = telecallerFilter.trim();
+  } else if (shouldUseOwnDataByDefault && currentUser?.id) {
+    params.assignedTo = currentUser.id;
+  }
 
-    if (zoneFilter.trim()) params.zone = zoneFilter.trim();
-    if (cityFilter.trim()) params.city = cityFilter.trim();
-    if (monthFilter.trim()) params.month = monthFilter.trim();
-    if (fromDateFilter.trim()) params.fromDate = fromDateFilter.trim();
-    if (toDateFilter.trim()) params.toDate = toDateFilter.trim();
+  if (zoneFilter.trim()) params.zone = zoneFilter.trim();
+  if (cityFilter.trim()) params.city = cityFilter.trim();
+  if (monthFilter.trim()) params.month = monthFilter.trim();
+  if (fromDateFilter.trim()) params.fromDate = fromDateFilter.trim();
+  if (toDateFilter.trim()) params.toDate = toDateFilter.trim();
 
-    return params;
-  };
+  return params;
+};
         const fetchTelecallers = async () => {
     setTelecallers([]);
   };
@@ -305,16 +316,22 @@ const [performance, setPerformance] = useState<PerformanceItem[]>([]);
 
   useEffect(() => {
   if (!currentUser) return;
-  fetchTelecallers();
-  fetchDashboardData();
-  fetchContactsSummary();
 
-  if (userRoles.includes('OWNER')) {
-    fetchOwnerSummary();
-  }
+  setTelecallerFilter('');
+
+  fetchTelecallers();
+
+  setTimeout(() => {
+    fetchDashboardData();
+    fetchContactsSummary();
+
+    if (userRoles.includes('OWNER')) {
+      fetchOwnerSummary();
+    }
+  }, 0);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [currentUser, canChooseTelecaller]);
+}, [currentUser?.id]);
 
     useEffect(() => {
     if (!currentUser) return;
@@ -451,7 +468,8 @@ const [performance, setPerformance] = useState<PerformanceItem[]>([]);
               onChange={(e) => setTelecallerFilter(e.target.value)}
               className="rounded-xl border border-gray-300 px-3 py-2"
             >
-              <option value="">All Telecallers</option>
+              <option value="">Default View</option>
+<option value="ALL">All Telecallers</option>
                             {telecallers.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.name}
