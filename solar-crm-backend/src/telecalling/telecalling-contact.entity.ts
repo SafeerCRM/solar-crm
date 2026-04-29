@@ -40,6 +40,12 @@ export class TelecallingContact {
   @Column({ nullable: true })
   assignedTo: number;
 
+  @Column({
+  type: 'varchar',
+  default: 'TELECALLING',
+})
+stage: string;
+
   @Column({ nullable: true })
   assignedToName: string;
 
