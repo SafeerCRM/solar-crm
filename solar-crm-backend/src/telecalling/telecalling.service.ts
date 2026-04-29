@@ -149,6 +149,13 @@ private readonly meetingRepository: Repository<Meeting>,
     return normalized || 'CONNECTED';
   }
 
+  private isStageProgressionValid(current: string | undefined, next: string): boolean {
+  const order = ['TELECALLING', 'REVIEW', 'LEAD', 'MEETING', 'PROJECT'];
+  const currentStage = current || 'TELECALLING';
+
+  return order.indexOf(next) >= order.indexOf(currentStage);
+}
+
   private applyViewRestrictionsToContactQuery(
   qb: any,
   user: any,
@@ -2004,7 +2011,12 @@ await this.contactRepository.update(contact.id, {
 
     contact.reviewAssignedTo = assignedUser.id;
 contact.reviewAssignedToName = assignedUser.name;
-(contact as any).stage = 'REVIEW';
+
+if (this.isStageProgressionValid((contact as any).stage, 'REVIEW')) {
+  (contact as any).stage = 'REVIEW';
+}
+
+console.log(`Stage change check: contact ${contact.id} → ${(contact as any).stage}`);
 
 await this.contactRepository.save(contact);
 
@@ -2263,7 +2275,12 @@ if (!selectedContacts.length) {
   contact.convertedToLead = true;
 contact.status = ContactStatus.CONVERTED;
 contact.phone = normalizedPhone;
-(contact as any).stage = 'LEAD';
+
+if (this.isStageProgressionValid((contact as any).stage, 'LEAD')) {
+  (contact as any).stage = 'LEAD';
+}
+
+console.log(`Stage change check: contact ${contact.id} → ${(contact as any).stage}`);
   contact.remarks = contact.remarks
     ? `${contact.remarks}\nConverted to lead by ${user.name} and assigned to ${leadManager.name}`
     : `Converted to lead by ${user.name} and assigned to ${leadManager.name}`;
@@ -2397,7 +2414,12 @@ if (!lead) {
   contact.convertedToLead = true;
 contact.status = ContactStatus.CONVERTED;
 contact.phone = normalizedPhone;
-(contact as any).stage = 'MEETING';
+
+if (this.isStageProgressionValid((contact as any).stage, 'MEETING')) {
+  (contact as any).stage = 'MEETING';
+}
+
+console.log(`Stage change check: contact ${contact.id} → ${(contact as any).stage}`);
   contact.remarks = contact.remarks
     ? `${contact.remarks}\nConverted/reassigned to meeting by ${user.name}`
     : `Converted/reassigned to meeting by ${user.name}`;
