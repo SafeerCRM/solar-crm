@@ -216,6 +216,43 @@ try {
   setMounted(true);
 }, []);
 
+useEffect(() => {
+  const saved = localStorage.getItem('telecallingFilters');
+  if (!saved) return;
+
+  try {
+    const parsed = JSON.parse(saved);
+
+    setNameFilter(parsed.nameFilter || '');
+    setPhoneFilter(parsed.phoneFilter || '');
+    setCityFilter(parsed.cityFilter || '');
+    setTelecallerNameFilter(parsed.telecallerNameFilter || '');
+    setLeadPotentialFilter(parsed.leadPotentialFilter || '');
+    setCallResultFilter(parsed.callResultFilter || '');
+  } catch {}
+}, []);
+
+useEffect(() => {
+  localStorage.setItem(
+    'telecallingFilters',
+    JSON.stringify({
+      nameFilter,
+      phoneFilter,
+      cityFilter,
+      telecallerNameFilter,
+      leadPotentialFilter,
+      callResultFilter,
+    }),
+  );
+}, [
+  nameFilter,
+  phoneFilter,
+  cityFilter,
+  telecallerNameFilter,
+  leadPotentialFilter,
+  callResultFilter,
+]);
+
  useEffect(() => {
   if (!user) return;
 
@@ -250,6 +287,17 @@ useEffect(() => {
   leadPotentialFilter,
   callResultFilter,
   isFilterApplied,
+]);
+
+useEffect(() => {
+  setPage(1);
+}, [
+  nameFilter,
+  phoneFilter,
+  cityFilter,
+  telecallerNameFilter,
+  leadPotentialFilter,
+  callResultFilter,
 ]);
 
   useEffect(() => {
