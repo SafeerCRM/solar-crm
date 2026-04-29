@@ -133,6 +133,7 @@ const [performance, setPerformance] = useState<PerformanceItem[]>([]);
 
   const [dashboardLoading, setDashboardLoading] = useState(false);
   const [contactsLoading, setContactsLoading] = useState(false);
+  const [isFilterApplied, setIsFilterApplied] = useState(false);
 
   const [currentUser, setCurrentUser] = useState<StoredUser | null>(null);
 
@@ -321,17 +322,23 @@ const isOwnerDefaultView =
 
   fetchTelecallers();
 
-  setTimeout(() => {
-    fetchDashboardData();
-    fetchContactsSummary();
-
-    if (userRoles.includes('OWNER')) {
-      fetchOwnerSummary();
-    }
-  }, 0);
+  // do not auto fetch, wait for user action
+setIsFilterApplied(false);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [currentUser?.id]);
+
+useEffect(() => {
+  if (!currentUser) return;
+  if (!isFilterApplied) return;
+
+  fetchDashboardData();
+  fetchContactsSummary();
+
+  if (userRoles.includes('OWNER')) {
+    fetchOwnerSummary();
+  }
+}, [isFilterApplied]);
 
     useEffect(() => {
     if (!currentUser) return;
@@ -371,9 +378,9 @@ const isOwnerDefaultView =
     return () => window.clearTimeout(timer);
   }, [currentUser, monthFilter, fromDateFilter, toDateFilter]);
 
-  const handleApplyFilters = async () => {
-    await Promise.all([fetchDashboardData(), fetchContactsSummary()]);
-  };
+  const handleApplyFilters = () => {
+  setIsFilterApplied(true);
+};
 
     const handleClearFilters = async () => {
     const today = getTodayDateString();
@@ -385,10 +392,7 @@ const isOwnerDefaultView =
     setFromDateFilter(today);
     setToDateFilter(today);
 
-    setTimeout(() => {
-      fetchDashboardData();
-      fetchContactsSummary();
-    }, 0);
+    setIsFilterApplied(true);
   };
 
     const conversionPercentage =
