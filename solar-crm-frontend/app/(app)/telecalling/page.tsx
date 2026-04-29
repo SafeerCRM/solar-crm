@@ -146,6 +146,7 @@ const [uploadingRecording, setUploadingRecording] = useState(false);
   const [leadPotentialFilter, setLeadPotentialFilter] = useState('');
   const [callResultFilter, setCallResultFilter] = useState('');
   const [page, setPage] = useState(1);
+  const [isFilterApplied, setIsFilterApplied] = useState(false);
   const [mounted, setMounted] = useState(false);
 const [limit] = useState(50);
 const [total, setTotal] = useState(0);
@@ -208,7 +209,8 @@ try {
   if (!user) return;
 
   fetchLeads();
-  fetchCalls(1);
+
+  // ❌ removed auto fetchCalls
 
   if (canAssignAssistant) {
     fetchAssistants();
@@ -218,20 +220,11 @@ try {
 }, [user, canAssignAssistant]);
 
 useEffect(() => {
-  if (!user) return;
-
-  const shouldRefetchWithFilters =
-    isTelecallingManager ||
-    userRoles.includes('PROJECT_MANAGER') ||
-    isAssistant ||
-    isOwner ||
-    isTelecaller;
-
-  if (!shouldRefetchWithFilters) return;
+  if (!user || !isFilterApplied) return;
 
   const timer = setTimeout(() => {
     fetchCalls(1);
-  }, 500); // debounce
+  }, 500);
 
   return () => clearTimeout(timer);
 }, [
@@ -241,6 +234,7 @@ useEffect(() => {
   telecallerNameFilter,
   leadPotentialFilter,
   callResultFilter,
+  isFilterApplied,
 ]);
 
   useEffect(() => {
@@ -717,6 +711,7 @@ return;
   setCallResultFilter('');
     setSelectedReminderDate(null);
   setPage(1);
+  setIsFilterApplied(false);
 };
 
   const enrichedCalls = useMemo<EnrichedCallRow[]>(() => {
@@ -1143,6 +1138,17 @@ return;
     Clear Filters
   </button>
 
+  <button
+  type="button"
+  onClick={() => {
+    setIsFilterApplied(true);
+    fetchCalls(1);
+  }}
+  className="rounded-xl bg-blue-600 px-4 py-2 font-medium text-white"
+>
+  Apply Filters
+</button>
+
   <p className="text-sm text-gray-600">
     Total Records: <span className="font-semibold">{total}</span>
   </p>
@@ -1239,8 +1245,10 @@ return;
           </LocalizationProvider>
         </div>
 
-                {calendarFilteredCalls.length === 0 ? (
-          <p>No calls found</p>
+                {!isFilterApplied ? (
+  <p>Apply filters to load data</p>
+) : calendarFilteredCalls.length === 0 ? (
+  <p>No calls found</p>
         ) : (
           <>
             <div className="space-y-4 overflow-x-hidden md:hidden">
