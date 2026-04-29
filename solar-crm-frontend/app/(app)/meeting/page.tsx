@@ -52,6 +52,9 @@ const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 export default function MeetingPage() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [meetingPage, setMeetingPage] = useState(1);
+const [meetingTotal, setMeetingTotal] = useState(0);
+const meetingLimit = 50;
   const [message, setMessage] = useState('');
   const [editingMeetingId, setEditingMeetingId] = useState<number | null>(null);
 const [editingCustomerName, setEditingCustomerName] = useState('');
@@ -70,45 +73,52 @@ const [editingCustomerName, setEditingCustomerName] = useState('');
 
   useEffect(() => {
   setMounted(true);
-  fetchMeetings();
-}, []);
+  fetchMeetings(meetingPage);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [meetingPage]);
 
-  const fetchMeetings = async () => {
-    try {
-      setLoading(true);
-      setMessage('');
+  const fetchMeetings = async (pageNumber = meetingPage) => {
+  try {
+    setLoading(true);
+    setMessage('');
 
-      const params: Record<string, string> = {};
+    const params: Record<string, string | number> = {
+      page: pageNumber,
+      limit: meetingLimit,
+    };
 
-      if (meetingManagerName.trim()) {
-        params.assignedToName = meetingManagerName.trim();
-      }
-
-      if (meetingManagerId.trim()) {
-        params.assignedTo = meetingManagerId.trim();
-      }
-
-      if (meetingCategory.trim()) {
-        params.meetingCategory = meetingCategory.trim();
-      }
-
-      if (month.trim()) {
-        params.month = month.trim();
-      }
-
-      const res = await axios.get(`${backendUrl}/meetings`, {
-        headers: getAuthHeaders(),
-        params,
-      });
-
-      setMeetings(Array.isArray(res.data) ? res.data : []);
-    } catch (err) {
-      console.error(err);
-      setMessage('Failed to fetch meetings');
-    } finally {
-      setLoading(false);
+    if (meetingManagerName.trim()) {
+      params.assignedToName = meetingManagerName.trim();
     }
-  };
+
+    if (meetingManagerId.trim()) {
+      params.assignedTo = meetingManagerId.trim();
+    }
+
+    if (meetingCategory.trim()) {
+      params.meetingCategory = meetingCategory.trim();
+    }
+
+    if (month.trim()) {
+      params.month = month.trim();
+    }
+
+    const res = await axios.get(`${backendUrl}/meetings`, {
+      headers: getAuthHeaders(),
+      params,
+    });
+
+    setMeetings(Array.isArray(res.data?.data) ? res.data.data : []);
+    setMeetingTotal(Number(res.data?.total || 0));
+  } catch (err) {
+    console.error(err);
+    setMessage('Failed to fetch meetings');
+    setMeetings([]);
+    setMeetingTotal(0);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const filteredMeetings = useMemo(() => {
     let data = meetings;
@@ -232,7 +242,7 @@ const updateMeetingName = async (meetingId: number) => {
 
         <div className="flex gap-2">
           <button
-            onClick={fetchMeetings}
+            onClick={() => fetchMeetings(meetingPage)}
             className="rounded bg-blue-600 px-4 py-2 text-white"
           >
             Refresh
@@ -310,16 +320,19 @@ const updateMeetingName = async (meetingId: number) => {
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-sm text-gray-600">
         <div>
-          Total: {meetings.length} | Filtered: {filteredMeetings.length}
+          Total: {meetingTotal} | This Page: {meetings.length} | Filtered: {filteredMeetings.length}
         </div>
 
         <div className="flex gap-2">
           <button
-            onClick={fetchMeetings}
-            className="rounded bg-gray-200 px-3 py-2 text-sm"
-          >
-            Apply Filters
-          </button>
+  onClick={() => {
+    setMeetingPage(1);
+    fetchMeetings(1);
+  }}
+  className="rounded bg-gray-200 px-3 py-2 text-sm"
+>
+  Apply Filters
+</button>
 
           <button
             onClick={clearFilters}
@@ -540,8 +553,36 @@ const updateMeetingName = async (meetingId: number) => {
               </div>
             );
           })}
-        </div>
+                </div>
       )}
+
+      <div className="mt-4 flex items-center justify-between rounded-xl bg-white p-4 shadow">
+        <button
+          type="button"
+          onClick={() => setMeetingPage((p) => Math.max(1, p - 1))}
+          disabled={meetingPage <= 1}
+          className="rounded bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 disabled:opacity-50"
+        >
+          Previous
+        </button>
+
+        <span className="text-sm font-medium text-gray-700">
+          Page {meetingPage} of {Math.ceil(meetingTotal / meetingLimit) || 1}
+        </span>
+
+        <button
+          type="button"
+          onClick={() =>
+            setMeetingPage((p) =>
+              p >= Math.ceil(meetingTotal / meetingLimit) ? p : p + 1,
+            )
+          }
+          disabled={meetingPage >= Math.ceil(meetingTotal / meetingLimit)}
+          className="rounded bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 disabled:opacity-50"
+        >
+          Next
+        </button>
+      </div>
     </div>
   );
 }
