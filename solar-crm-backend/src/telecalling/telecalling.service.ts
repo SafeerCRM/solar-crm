@@ -396,10 +396,11 @@ private readonly meetingRepository: Repository<Meeting>,
   }
 
   async findAll() {
-    return this.callLogRepository.find({
-      order: { createdAt: 'DESC' },
-    });
-  }
+  return this.callLogRepository.find({
+    order: { createdAt: 'DESC' },
+    take: 100, // 🔥 safety limit
+  });
+}
 
   async findByLead(leadId: number) {
     return this.callLogRepository.find({
@@ -518,15 +519,38 @@ private readonly meetingRepository: Repository<Meeting>,
       );
     }
 
-    const [data, total] = await qb.skip(skip).take(limit).getManyAndCount();
+    const rawCalls = await qb.getMany();
 
-    return {
-      data,
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit) || 1,
-    };
+// 🔥 LIMIT TO 3 PER CONTACT
+const map = new Map<number, any[]>();
+
+for (const call of rawCalls) {
+  if (!call.contactId) continue;
+
+  if (!map.has(call.contactId)) {
+    map.set(call.contactId, []);
+  }
+
+  const arr = map.get(call.contactId)!;
+
+  if (arr.length < 3) {
+    arr.push(call);
+  }
+}
+
+const limitedCalls = Array.from(map.values()).flat();
+
+// ✅ Manual pagination AFTER limiting
+const total = limitedCalls.length;
+const paginated = limitedCalls.slice(skip, skip + limit);
+
+return {
+  data: paginated,
+  total,
+  page,
+  limit,
+  totalPages: Math.ceil(total / limit) || 1,
+};
   }
 
   async getNeverCalledByTelecaller(telecallerId: number) {
@@ -796,7 +820,30 @@ private readonly meetingRepository: Repository<Meeting>,
     });
   }
 
-    const [rows, total] = await qb.skip(skip).take(limit).getManyAndCount();
+    const rawRows = await qb.getMany();
+
+// 🔥 LIMIT TO 3 PER CONTACT
+const map = new Map<number, any[]>();
+
+for (const row of rawRows) {
+  if (!row.contactId) continue;
+
+  if (!map.has(row.contactId)) {
+    map.set(row.contactId, []);
+  }
+
+  const arr = map.get(row.contactId)!;
+
+  if (arr.length < 3) {
+    arr.push(row);
+  }
+}
+
+const limitedRows = Array.from(map.values()).flat();
+
+// ✅ Manual pagination
+const total = limitedRows.length;
+const rows = limitedRows.slice(skip, skip + limit);
 
   const telecallerIds = Array.from(
     new Set(
