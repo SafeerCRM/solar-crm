@@ -1997,8 +1997,10 @@ await this.contactRepository.update(contact.id, {
     }
 
     contact.reviewAssignedTo = assignedUser.id;
-    contact.reviewAssignedToName = assignedUser.name;
-    await this.contactRepository.save(contact);
+contact.reviewAssignedToName = assignedUser.name;
+(contact as any).stage = 'REVIEW';
+
+await this.contactRepository.save(contact);
 
     const latestCall = await this.callLogRepository.findOne({
       where: { contactId },
@@ -2253,8 +2255,9 @@ if (!selectedContacts.length) {
   const savedLead = await this.leadRepository.save(lead);
 
   contact.convertedToLead = true;
-  contact.status = ContactStatus.CONVERTED;
-  contact.phone = normalizedPhone;
+contact.status = ContactStatus.CONVERTED;
+contact.phone = normalizedPhone;
+(contact as any).stage = 'LEAD';
   contact.remarks = contact.remarks
     ? `${contact.remarks}\nConverted to lead by ${user.name} and assigned to ${leadManager.name}`
     : `Converted to lead by ${user.name} and assigned to ${leadManager.name}`;
@@ -2386,8 +2389,9 @@ if (!lead) {
   }
 
   contact.convertedToLead = true;
-  contact.status = ContactStatus.CONVERTED;
-  contact.phone = normalizedPhone;
+contact.status = ContactStatus.CONVERTED;
+contact.phone = normalizedPhone;
+(contact as any).stage = 'MEETING';
   contact.remarks = contact.remarks
     ? `${contact.remarks}\nConverted/reassigned to meeting by ${user.name}`
     : `Converted/reassigned to meeting by ${user.name}`;
