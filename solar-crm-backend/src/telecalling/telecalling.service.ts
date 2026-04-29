@@ -1206,13 +1206,13 @@ const location = this.getMappedValue(row, ['location', 'site_location', 'place']
     // We keep contacts that only have INITIATED logs, because client asked to remove
     // from autocall queue only after a saved outcome.
     qb.andWhere(
-      `contact.id NOT IN (
-        SELECT DISTINCT cl."contactId"
-        FROM call_log cl
-        WHERE cl."contactId" IS NOT NULL
-          AND UPPER(COALESCE(cl."callStatus", '')) <> 'INITIATED'
-      )`,
-    );
+  `NOT EXISTS (
+    SELECT 1
+    FROM call_log cl
+    WHERE cl."contactId" = contact.id
+      AND UPPER(COALESCE(cl."callStatus", '')) <> 'INITIATED'
+  )`,
+);
 
     const contacts = await qb
   .select([
@@ -1224,7 +1224,7 @@ const location = this.getMappedValue(row, ['location', 'site_location', 'place']
     'contact.address',
     'contact.location',
   ])
-  .take(500) // 🔥 LIMIT ADDED
+  .take(200) // 🔥 LIMIT ADDED
   .getMany();
 
     return contacts.filter((c) => !!String(c.phone || '').trim());
