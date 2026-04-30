@@ -1852,15 +1852,7 @@ const historyItem = this.contactCallHistoryRepository.create({
 } as any);
 
 // 🚀 PARALLEL EXECUTION
-await Promise.all([
-  this.contactCallHistoryRepository.save(historyItem),
-
-  this.contactRepository.update(contact.id, {
-    remarks: contact.remarks
-      ? `${contact.remarks}\nQuick call updated by ${user.name} (${normalizedStatus})`
-      : `Quick call updated by ${user.name} (${normalizedStatus})`,
-  }),
-]);
+await this.contactCallHistoryRepository.save(historyItem);
 
     // ✅ CREATE FOLLOWUP IF REMINDER EXISTS
 // ✅ CREATE FOLLOWUP IF REMINDER EXISTS
@@ -2355,51 +2347,51 @@ console.log(`Stage change check: contact ${contact.id} → ${(contact as any).st
     );
   }
 
-   const normalizedPhone = this.normalizePhone(contact.phone);
+  const normalizedPhone = this.normalizePhone(contact.phone);
 
   let lead = await this.leadRepository.findOne({
-  where: { phone: normalizedPhone },
-});
+    where: { phone: normalizedPhone },
+  });
 
-if (!lead) {
-  const createdLead = await this.leadRepository.save({
-    name: contact.name,
-    phone: normalizedPhone,
-    city: contact.city || '',
-    address: contact.address || contact.location || contact.city || '',
-    source: 'TELECALLING',
-    assignedTo: meetingManager.id,
-    createdBy: user.id,
-    createdByName: user.name,
-    originTelecallerId: contact.assignedTo,
-    originTelecallerName:
-      contact.assignedToName || `User ${contact.assignedTo || ''}`,
-    status: LeadStatus.NEW,
-  } as any);
+  if (!lead) {
+    lead = await this.leadRepository.save({
+      name: contact.name,
+      phone: normalizedPhone,
+      city: contact.city || '',
+      address: contact.address || contact.location || contact.city || '',
+      source: 'TELECALLING',
+      assignedTo: meetingManager.id,
+      createdBy: user.id,
+      createdByName: user.name,
+      originTelecallerId: contact.assignedTo,
+      originTelecallerName:
+        contact.assignedToName || `User ${contact.assignedTo || ''}`,
+      status: LeadStatus.NEW,
+    } as any);
+  } else {
+    const updatedLeadRemarks = lead.remarks
+      ? `${lead.remarks}\nMeeting reassigned by ${user.name}`
+      : `Meeting reassigned by ${user.name}`;
 
-  lead = createdLead;
-} else {
-  lead.assignedTo = meetingManager.id;
+    await this.leadRepository.update(lead.id, {
+      assignedTo: meetingManager.id,
+      originTelecallerId: lead.originTelecallerId || contact.assignedTo,
+      originTelecallerName:
+        lead.originTelecallerName ||
+        contact.assignedToName ||
+        `User ${contact.assignedTo || ''}`,
+      remarks: updatedLeadRemarks,
+    } as any);
 
-    if (!lead.originTelecallerId) {
-    lead.originTelecallerId = contact.assignedTo;
-    lead.originTelecallerName =
-      contact.assignedToName || `User ${contact.assignedTo || ''}`;
+    lead.assignedTo = meetingManager.id;
+    lead.remarks = updatedLeadRemarks;
   }
 
-  lead.remarks = lead.remarks
-    ? `${lead.remarks}\nMeeting reassigned by ${user.name}`
-    : `Meeting reassigned by ${user.name}`;
+  if (!lead) {
+    throw new BadRequestException('Unable to create or load lead');
+  }
 
-  const updatedLead = await this.leadRepository.save(lead);
-  lead = updatedLead;
-}
-
-if (!lead) {
-  throw new BadRequestException('Unable to create or load lead');
-}
-
-  let existingMeeting = await this.meetingRepository
+  const existingMeeting = await this.meetingRepository
     .createQueryBuilder('meeting')
     .leftJoinAndSelect('meeting.lead', 'lead')
     .where('lead.id = :leadId', { leadId: lead.id })
@@ -2407,12 +2399,12 @@ if (!lead) {
     .getOne();
 
   if (existingMeeting) {
-    existingMeeting.assignedTo = meetingManager.id;
-    existingMeeting.assignedToName = meetingManager.name;
-    existingMeeting.notes = `Reassigned from telecalling contact by ${user.name}`;
-    existingMeeting.scheduledAt = new Date();
-
-    await this.meetingRepository.save(existingMeeting);
+    await this.meetingRepository.update(existingMeeting.id, {
+      assignedTo: meetingManager.id,
+      assignedToName: meetingManager.name,
+      notes: `Reassigned from telecalling contact by ${user.name}`,
+      scheduledAt: new Date(),
+    } as any);
   } else {
     await this.meetingRepository.save({
       lead: { id: lead.id },
@@ -2430,20 +2422,26 @@ if (!lead) {
     } as any);
   }
 
-  contact.convertedToLead = true;
-contact.status = ContactStatus.CONVERTED;
-contact.phone = normalizedPhone;
+  const nextStage = this.isStageProgressionValid(
+    (contact as any).stage,
+    'MEETING',
+  )
+    ? 'MEETING'
+    : (contact as any).stage;
 
-if (this.isStageProgressionValid((contact as any).stage, 'MEETING')) {
-  (contact as any).stage = 'MEETING';
-}
+  console.log(`Stage change check: contact ${contact.id} → ${nextStage}`);
 
-console.log(`Stage change check: contact ${contact.id} → ${(contact as any).stage}`);
-  contact.remarks = contact.remarks
+  const updatedContactRemarks = contact.remarks
     ? `${contact.remarks}\nConverted/reassigned to meeting by ${user.name}`
     : `Converted/reassigned to meeting by ${user.name}`;
 
-  await this.contactRepository.save(contact);
+  await this.contactRepository.update(contact.id, {
+    convertedToLead: true,
+    status: ContactStatus.CONVERTED,
+    phone: normalizedPhone,
+    stage: nextStage,
+    remarks: updatedContactRemarks,
+  } as any);
 
   return {
     message: existingMeeting
