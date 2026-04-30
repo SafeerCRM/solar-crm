@@ -122,6 +122,11 @@ const [performance, setPerformance] = useState<PerformanceItem[]>([]);
   const [meetingAnalytics, setMeetingAnalytics] = useState<MeetingManagerAnalyticsItem[]>([]);
   const [hotLeads, setHotLeads] = useState<HotLead[]>([]);
   const [charts, setCharts] = useState<DashboardCharts | null>(null);
+  const [contactCountLoading, setContactCountLoading] = useState(false);
+const [contactCounts, setContactCounts] = useState<{
+  active?: number;
+  storage?: number;
+} | null>(null);
   const [telecallers, setTelecallers] = useState<TelecallerOption[]>([]);
 
   const [zoneFilter, setZoneFilter] = useState('');
@@ -276,6 +281,32 @@ const isOwnerDefaultView =
     }
   };
 
+  const fetchContactCounts = async () => {
+  try {
+    setContactCountLoading(true);
+
+    const [activeRes, storageRes] = await Promise.all([
+      axios.get(`${apiBaseUrl}/telecalling/contacts/filter-count`, {
+        params: { view: 'active' },
+        headers: getAuthHeaders(),
+      }),
+      axios.get(`${apiBaseUrl}/telecalling/contacts/filter-count`, {
+        params: { view: 'storage' },
+        headers: getAuthHeaders(),
+      }),
+    ]);
+
+    setContactCounts({
+      active: activeRes.data?.totalCount || 0,
+      storage: storageRes.data?.totalCount || 0,
+    });
+  } catch (error) {
+    console.error('Contact count error:', error);
+  } finally {
+    setContactCountLoading(false);
+  }
+};
+
   const fetchOwnerSummary = async () => {
   if (!userRoles.includes('OWNER')) {
     setOwnerSummary(null);
@@ -421,14 +452,38 @@ useEffect(() => {
   </div>
 )}
       <div className="rounded-2xl bg-white p-4 shadow md:p-6">
-        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-sm text-gray-500">
-            Zone-wise, city-wise, telecaller-wise analytics
-          </p>
-        </div>
+  <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <div>
+      <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+      <p className="text-sm text-gray-500">
+        Zone-wise, city-wise, telecaller-wise analytics
+      </p>
+    </div>
 
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3 lg:grid-cols-6">
+    {(userRoles.includes('OWNER') ||
+      userRoles.includes('TELECALLING_MANAGER') ||
+      userRoles.includes('TELECALLING_ASSISTANT')) && (
+      <button
+        onClick={fetchContactCounts}
+        className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white"
+      >
+        {contactCountLoading ? 'Loading...' : 'Show Contact Count'}
+      </button>
+    )}
+  </div>
+
+  {contactCounts && (
+    <div className="mb-4 rounded-xl bg-indigo-50 p-3 text-sm text-gray-800">
+      <p>
+        📞 Active Contacts: <b>{contactCounts.active}</b>
+      </p>
+      <p>
+        📦 Storage Contacts: <b>{contactCounts.storage}</b>
+      </p>
+    </div>
+  )}
+
+  <div className="grid grid-cols-1 gap-3 md:grid-cols-3 lg:grid-cols-6">
           <input
             type="text"
             placeholder="Zone"

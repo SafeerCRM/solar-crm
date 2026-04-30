@@ -131,6 +131,10 @@ const [uploadingQuickCallRecording, setUploadingQuickCallRecording] = useState(f
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const resumeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const callInitiatedRef = useRef(false);
+const quickCallModalOpenRef = useRef(false);
+const quickCallSubmittingRef = useRef(false);
+const isPausedRef = useRef(false);
 
   const roles = getUserRoles(currentUser);
   const isOwnerOrTelecallingManager =
@@ -237,6 +241,13 @@ const [uploadingQuickCallRecording, setUploadingQuickCallRecording] = useState(f
       clearAutoTimers();
     };
   }, []);
+
+  useEffect(() => {
+  callInitiatedRef.current = callInitiated;
+  quickCallModalOpenRef.current = quickCallModal.isOpen;
+  quickCallSubmittingRef.current = quickCallSubmitting;
+  isPausedRef.current = isPaused;
+}, [callInitiated, quickCallModal.isOpen, quickCallSubmitting, isPaused]);
 
     useEffect(() => {
     const openQuickCallModalAfterReturn = () => {
@@ -386,100 +397,109 @@ const updateQuickCallTimePart = (newTime: Dayjs | null) => {
 
   setQuickCallNextFollowUpDate(merged.format('YYYY-MM-DDTHH:mm'));
 };
-        const startQuickCall = async (contact: Contact) => {
-  if (callInitiated || quickCallModal.isOpen) {
-    return;
+        const startQuickCall = async (contact: Contact): Promise<boolean> => {
+  if (
+    callInitiatedRef.current ||
+    quickCallModalOpenRef.current ||
+    quickCallSubmittingRef.current
+  ) {
+    return false;
   }
-    try {
-      const res = await axios.post(
-        `${backendUrl}/telecalling/contacts/${contact.id}/quick-call/start`,
-        {
-          providerName: 'TEL_LINK',
-          receiverNumber: contact.phone,
-        },
-        { headers: getAuthHeaders() },
-      );
 
-      const callLogId = Number(res.data?.callLog?.id || 0) || undefined;
+  callInitiatedRef.current = true;
 
-      setLastCalledContact(contact);
-      setQuickCallModal({
-        isOpen: false,
-        contact,
-        callLogId,
-      });
+  try {
+    const res = await axios.post(
+      `${backendUrl}/telecalling/contacts/${contact.id}/quick-call/start`,
+      {
+        providerName: 'TEL_LINK',
+        receiverNumber: contact.phone,
+      },
+      { headers: getAuthHeaders() },
+    );
 
-      setCallInitiated(true);
-      setHasLeftAppForCall(false);
+    const callLogId = Number(res.data?.callLog?.id || 0) || undefined;
 
-      if (Capacitor.isNativePlatform()) {
-        const plugin = (window as any).Capacitor?.Plugins?.CallControl || CallControl;
-        await plugin.placeCall({ number: contact.phone });
-      } else {
-        window.location.href = `tel:${contact.phone}`;
-      }
+    setLastCalledContact(contact);
+    setQuickCallModal({
+      isOpen: false,
+      contact,
+      callLogId,
+    });
 
-      setMessage(`Calling ${contact.name || contact.phone}`);
-    } catch (err) {
-      console.error(err);
-      setMessage('Failed to start call');
-      setCallInitiated(false);
-      setHasLeftAppForCall(false);
+    setCallInitiated(true);
+    setHasLeftAppForCall(false);
+
+    if (Capacitor.isNativePlatform()) {
+      const plugin = (window as any).Capacitor?.Plugins?.CallControl || CallControl;
+      await plugin.placeCall({ number: contact.phone });
+    } else {
+      window.location.href = `tel:${contact.phone}`;
     }
-  };
 
-    const startCountdownThenCall = (nextContact: Contact) => {
-    clearAutoTimers();
-    setCountdown(4);
+    setMessage(`Calling ${contact.name || contact.phone}`);
+    return true;
+  } catch (err) {
+    console.error(err);
+    setMessage('Failed to start call');
+    callInitiatedRef.current = false;
+    setCallInitiated(false);
+    setHasLeftAppForCall(false);
+    return false;
+  }
+};
 
-    let time = 4;
+    const startCountdownThenCall = (nextContact: Contact, nextIndex: number) => {
+  clearAutoTimers();
+  setCountdown(3);
 
-    countdownIntervalRef.current = setInterval(() => {
-      time -= 1;
-      setCountdown(time);
+  let time = 3;
 
-      if (time <= 0) {
-        if (countdownIntervalRef.current) {
-          clearInterval(countdownIntervalRef.current);
-          countdownIntervalRef.current = null;
-        }
-      }
-    }, 1000);
+  countdownIntervalRef.current = setInterval(() => {
+    time -= 1;
+    setCountdown(time);
 
-    resumeTimeoutRef.current = setTimeout(async () => {
-      if (isPaused) return;
-      await startQuickCall(nextContact);
-    }, 4000);
-  };
+    if (time <= 0 && countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
+  }, 1000);
+
+  resumeTimeoutRef.current = setTimeout(async () => {
+    if (isPausedRef.current) return;
+
+    const started = await startQuickCall(nextContact);
+
+    if (started) {
+      setAutoCallIndex(nextIndex);
+    }
+  }, 3000);
+};
 
     const callNextContact = async () => {
-    if (isPaused) return;
+  if (isPausedRef.current) return;
 
-    setAutoCallIndex((prevIndex) => {
-      let nextIndex = prevIndex + 1;
+  let nextIndex = autoCallIndex + 1;
 
-      while (
-        nextIndex < autoCallQueue.length &&
-        processedAutoCallIds.includes(autoCallQueue[nextIndex]?.id)
-      ) {
-        nextIndex += 1;
-      }
+  while (
+    nextIndex < autoCallQueue.length &&
+    processedAutoCallIds.includes(autoCallQueue[nextIndex]?.id)
+  ) {
+    nextIndex += 1;
+  }
 
-      if (nextIndex >= autoCallQueue.length) {
-        stopAutoCall();
-        setMessage('Auto call completed.');
-        return prevIndex;
-      }
+  if (nextIndex >= autoCallQueue.length) {
+    stopAutoCall();
+    setMessage('Auto call completed.');
+    return;
+  }
 
-      const nextContact = autoCallQueue[nextIndex];
+  const nextContact = autoCallQueue[nextIndex];
 
-      if (nextContact) {
-        startCountdownThenCall(nextContact);
-      }
-
-      return nextIndex;
-    });
-  };
+  if (nextContact) {
+    startCountdownThenCall(nextContact, nextIndex);
+  }
+};
 
     const startAutoCall = async () => {
     try {
@@ -658,12 +678,12 @@ setUploadingQuickCallRecording(false);
       }
 
       setMessage(`Call saved as ${disposition.replaceAll('_', ' ')}`);
-      resetQuickCallModal();
-      await fetchContacts();
+resetQuickCallModal();
+await fetchContacts();
 
-      if (isAutoCalling && !isPaused) {
-        await callNextContact();
-      }
+if (isAutoCalling && !isPausedRef.current) {
+  await callNextContact();
+}
     } catch (err) {
       console.error(err);
       setMessage('Failed to save quick call outcome');
