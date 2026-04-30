@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 
 export default function CreateLeadPage() {
   const [name, setName] = useState('');
@@ -12,8 +12,34 @@ export default function CreateLeadPage() {
   const [status, setStatus] = useState('');
   const [electricityBill, setElectricityBill] = useState('');
   const [potential, setPotential] = useState('MEDIUM');
-  const [message, setMessage] = useState('');
-  const [loading, setLoading] = useState(false);
+const [leadManagers, setLeadManagers] = useState<any[]>([]);
+const [assignedTo, setAssignedTo] = useState('');
+const [message, setMessage] = useState('');
+const [loading, setLoading] = useState(false);
+
+const fetchLeadManagers = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_API_BASE_URL}/users/lead-managers`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+
+    const data = await res.json();
+    setLeadManagers(Array.isArray(data) ? data : []);
+  } catch (err) {
+    console.error('Failed to load lead managers', err);
+  }
+};
+
+useEffect(() => {
+  fetchLeadManagers();
+}, []);
 
   const handleCreateLead = async (e: FormEvent) => {
     e.preventDefault();
@@ -38,6 +64,7 @@ export default function CreateLeadPage() {
   status: status || 'NEW',
   electricityBill: electricityBill ? Number(electricityBill) : undefined,
   potential,
+  assignedTo: assignedTo ? Number(assignedTo) : undefined,
 }),
       });
 
@@ -151,6 +178,26 @@ export default function CreateLeadPage() {
               className="w-full rounded-xl border px-4 py-3"
             />
           </div>
+
+          {/* ASSIGN TO LEAD MANAGER */}
+<div>
+  <label className="mb-2 block text-sm font-medium text-gray-700">
+    Assign to Lead Manager
+  </label>
+
+  <select
+    value={assignedTo}
+    onChange={(e) => setAssignedTo(e.target.value)}
+    className="w-full rounded-xl border px-4 py-3"
+  >
+    <option value="">Select Lead Manager</option>
+    {leadManagers.map((u) => (
+      <option key={u.id} value={u.id}>
+        {u.name}
+      </option>
+    ))}
+  </select>
+</div>
 
           {/* STATUS */}
           <div>
