@@ -33,6 +33,12 @@ type Meeting = {
   gpsAddress?: string | null;
   gpsPhotoUrl?: string | null;
 audioUrl?: string | null;
+  solarMiterName?: string | null;
+  solarMiterPhone?: string | null;
+  solarMiterPayout?: number | null;
+  solarMiterAadharFrontUrl?: string | null;
+  solarMiterAadharBackUrl?: string | null;
+  solarMiterBankProofUrl?: string | null;
   panelGivenToCustomerKw?: number | null;
   inverterCapacityKw?: number | null;
   structureKw?: number | null;
@@ -770,6 +776,61 @@ const [rescheduleAudioFile, setRescheduleAudioFile] = useState<File | null>(null
       alt="Meeting proof"
       className="max-h-80 w-full rounded-lg border object-contain"
     />
+  </div>
+)}
+
+{latestMeeting.meetingCategory === 'SOLARMITER' && (
+  <div className="md:col-span-2 rounded-xl border bg-yellow-50 p-4">
+    <h3 className="mb-3 text-lg font-semibold text-yellow-900">
+      SOLARMITER Details
+    </h3>
+
+    <div className="grid gap-3 text-sm text-gray-800 md:grid-cols-2">
+      <div>
+        <strong>Name:</strong> {latestMeeting.solarMiterName || '-'}
+      </div>
+      <div>
+        <strong>Phone:</strong> {latestMeeting.solarMiterPhone || '-'}
+      </div>
+      <div>
+        <strong>Payout:</strong>{' '}
+        {latestMeeting.solarMiterPayout
+          ? `₹ ${latestMeeting.solarMiterPayout}`
+          : '-'}
+      </div>
+    </div>
+
+    <div className="mt-4 grid gap-4 md:grid-cols-3">
+      {latestMeeting.solarMiterAadharFrontUrl && (
+        <div>
+          <p className="mb-1 text-sm font-medium">Aadhar Front</p>
+          <img
+            src={latestMeeting.solarMiterAadharFrontUrl}
+            className="h-40 w-full rounded border object-contain"
+          />
+        </div>
+      )}
+
+      {latestMeeting.solarMiterAadharBackUrl && (
+        <div>
+          <p className="mb-1 text-sm font-medium">Aadhar Back</p>
+          <img
+            src={latestMeeting.solarMiterAadharBackUrl}
+            className="h-40 w-full rounded border object-contain"
+          />
+        </div>
+      )}
+
+      {latestMeeting.solarMiterBankProofUrl && (
+        <div>
+          <p className="mb-1 text-sm font-medium">Bank Proof</p>
+          <img
+            src={latestMeeting.solarMiterBankProofUrl}
+            className="h-40 w-full rounded border object-contain"
+          />
+        </div>
+      )}
+    </div>
   </div>
 )}
 

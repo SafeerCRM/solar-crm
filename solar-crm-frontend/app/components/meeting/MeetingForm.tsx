@@ -45,6 +45,9 @@ export default function MeetingForm() {
 
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState('');
+  const [solarMiterAadharFront, setSolarMiterAadharFront] = useState<File | null>(null);
+const [solarMiterAadharBack, setSolarMiterAadharBack] = useState<File | null>(null);
+const [solarMiterBankProof, setSolarMiterBankProof] = useState<File | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [locationLoading, setLocationLoading] = useState(false);
@@ -106,6 +109,30 @@ export default function MeetingForm() {
       [e.target.name]: e.target.value,
     }));
   };
+
+  const uploadMeetingProof = async (file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const res = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}/meetings/proof/upload`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: getAuthHeaders().Authorization,
+      },
+      body: formData,
+    },
+  );
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(data?.message || 'Failed to upload proof');
+  }
+
+  return data.fileUrl as string;
+};
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0] || null;
@@ -182,6 +209,20 @@ export default function MeetingForm() {
 
       console.log('Token before meeting submit:', tokenCheck);
 
+      let solarMiterAadharFrontUrl: string | undefined;
+let solarMiterAadharBackUrl: string | undefined;
+let solarMiterBankProofUrl: string | undefined;
+
+if (form.meetingCategory === 'SOLARMITER') {
+  if (!solarMiterAadharFront || !solarMiterAadharBack || !solarMiterBankProof) {
+    throw new Error('Aadhar front, Aadhar back, and bank proof are required for SOLARMITER');
+  }
+
+  solarMiterAadharFrontUrl = await uploadMeetingProof(solarMiterAadharFront);
+  solarMiterAadharBackUrl = await uploadMeetingProof(solarMiterAadharBack);
+  solarMiterBankProofUrl = await uploadMeetingProof(solarMiterBankProof);
+}
+
       const selectedAssignedUser = users.find(
         (u) => String(u.id) === String(form.assignedTo)
       );
@@ -224,6 +265,15 @@ export default function MeetingForm() {
         meetingCount: form.meetingCount ? Number(form.meetingCount) : undefined,
 
         siteObservation: photo ? `Photo selected: ${photo.name}` : undefined,
+
+solarMiterName: (form as any).solarMiterName || undefined,
+solarMiterPhone: (form as any).solarMiterPhone || undefined,
+solarMiterPayout: (form as any).solarMiterPayout
+  ? Number((form as any).solarMiterPayout)
+  : undefined,
+solarMiterAadharFrontUrl,
+solarMiterAadharBackUrl,
+solarMiterBankProofUrl,
       };
 
       const res = await fetch(
@@ -353,14 +403,21 @@ export default function MeetingForm() {
         <div>
           <label className="mb-1 block text-sm font-medium">Meeting Category</label>
           <select
-            name="meetingCategory"
-            value={form.meetingCategory}
-            onChange={handleChange}
-            className="w-full rounded border p-2"
-          >
-            <option value="COMPANY_MEETING">Company Meeting</option>
-            <option value="SELF_MEETING">Self Meeting</option>
-          </select>
+  name="meetingCategory"
+  value={form.meetingCategory}
+  onChange={handleChange}
+  className="w-full rounded border p-2"
+>
+  <option value="COMPANY_MEETING">Company Meeting</option>
+  <option value="SELF_MEETING">Self Meeting</option>
+
+  {(localStorage.getItem('user') &&
+    JSON.parse(localStorage.getItem('user') || '{}')?.roles?.some((r: string) =>
+      ['OWNER', 'MARKETING_HEAD', 'MEETING_MANAGER'].includes(r)
+    )) && (
+    <option value="SOLARMITER">SOLARMITER</option>
+  )}
+</select>
         </div>
 
         <div>
@@ -485,6 +542,59 @@ export default function MeetingForm() {
             />
           </div>
         )}
+
+        {form.meetingCategory === 'SOLARMITER' && (
+  <div className="md:col-span-2 rounded border bg-yellow-50 p-4">
+    <h3 className="mb-3 font-semibold">SOLARMITER Details</h3>
+
+    <input
+      name="solarMiterName"
+      placeholder="SOLARMITER Name"
+      onChange={handleChange}
+      className="mb-2 w-full rounded border p-2"
+    />
+
+    <input
+      name="solarMiterPhone"
+      placeholder="SOLARMITER Phone"
+      onChange={handleChange}
+      className="mb-2 w-full rounded border p-2"
+    />
+
+    <input
+      name="solarMiterPayout"
+      placeholder="Payout"
+      onChange={handleChange}
+      className="mb-2 w-full rounded border p-2"
+    />
+
+    <label className="mb-1 block text-sm font-medium">Aadhar Front</label>
+<input
+  type="file"
+  accept="image/*"
+  onChange={(e) => setSolarMiterAadharFront(e.target.files?.[0] || null)}
+  className="mb-2 w-full rounded border p-2"
+/>
+
+<label className="mb-1 block text-sm font-medium">Aadhar Back</label>
+<input
+  type="file"
+  accept="image/*"
+  onChange={(e) => setSolarMiterAadharBack(e.target.files?.[0] || null)}
+  className="mb-2 w-full rounded border p-2"
+/>
+
+<label className="mb-1 block text-sm font-medium">
+  Bank Proof / Cheque / Passbook
+</label>
+<input
+  type="file"
+  accept="image/*"
+  onChange={(e) => setSolarMiterBankProof(e.target.files?.[0] || null)}
+  className="w-full rounded border p-2"
+/>
+  </div>
+)}
 
         <div className="md:col-span-2">
           <label className="mb-1 block text-sm font-medium">Notes</label>

@@ -308,6 +308,7 @@ const updateMeetingName = async (meetingId: number) => {
           <option value="">Meeting Category</option>
           <option value="COMPANY_MEETING">Company Meeting</option>
           <option value="SELF_MEETING">Self Meeting</option>
+          <option value="SOLARMITER">SOLARMITER</option>
         </select>
 
         <input
@@ -482,9 +483,15 @@ const updateMeetingName = async (meetingId: number) => {
                   </p>
 
                   <p>
-                    <span className="font-medium">Category:</span>{' '}
-                    {m.meetingCategory || '-'}
-                  </p>
+  <span className="font-medium">Category:</span>{' '}
+  {m.meetingCategory === 'SOLARMITER' ? (
+    <span className="rounded-full bg-yellow-500 px-3 py-1 text-xs font-semibold text-white">
+      SOLARMITER
+    </span>
+  ) : (
+    m.meetingCategory || '-'
+  )}
+</p>
 
                   <p>
                     <span className="font-medium">Assigned To:</span>{' '}
