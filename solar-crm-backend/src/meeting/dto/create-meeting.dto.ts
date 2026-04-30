@@ -110,4 +110,28 @@ export class CreateMeetingDto {
 
   @IsOptional()
   updatedBy?: number;
+
+  @IsOptional()
+@IsString()
+solarMiterName?: string;
+
+@IsOptional()
+@IsString()
+solarMiterPhone?: string;
+
+@IsOptional()
+@IsNumber()
+solarMiterPayout?: number;
+
+@IsOptional()
+@IsString()
+solarMiterAadharFrontUrl?: string;
+
+@IsOptional()
+@IsString()
+solarMiterAadharBackUrl?: string;
+
+@IsOptional()
+@IsString()
+solarMiterBankProofUrl?: string;
 }

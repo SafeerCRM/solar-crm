@@ -29,6 +29,7 @@ export enum MeetingType {
 export enum MeetingCategory {
   COMPANY_MEETING = 'COMPANY_MEETING',
   SELF_MEETING = 'SELF_MEETING',
+  SOLARMITER = 'SOLARMITER',
 }
 
 @Entity('meetings')
@@ -153,6 +154,24 @@ audioUrl?: string;
 
   @Column({ type: 'text', nullable: true })
   updatedByName?: string;
+
+  @Column({ type: 'text', nullable: true })
+solarMiterName?: string;
+
+@Column({ type: 'text', nullable: true })
+solarMiterPhone?: string;
+
+@Column({ type: 'float', nullable: true })
+solarMiterPayout?: number;
+
+@Column({ type: 'text', nullable: true })
+solarMiterAadharFrontUrl?: string;
+
+@Column({ type: 'text', nullable: true })
+solarMiterAadharBackUrl?: string;
+
+@Column({ type: 'text', nullable: true })
+solarMiterBankProofUrl?: string;
 
   @CreateDateColumn()
   createdAt: Date;
