@@ -1209,15 +1209,23 @@ const location = this.getMappedValue(row, ['location', 'site_location', 'place']
 );
     }
 
-    const [data, total] = await qb.getManyAndCount();
+    const data = await qb.getMany();
 
-    return {
-      data,
-      total,
-      page: safePage,
-      limit: safeLimit,
-      totalPages: Math.ceil(total / safeLimit) || 1,
-    };
+let total = 0;
+
+if (safePage === 1) {
+  total = data.length < safeLimit ? data.length : safeLimit + 1;
+} else {
+  total = skip + data.length;
+}
+
+return {
+  data,
+  total,
+  page: safePage,
+  limit: safeLimit,
+  totalPages: data.length < safeLimit ? safePage : safePage + 1,
+};
   }
 
     async getAllContactIdsForAutoCall(
@@ -1258,7 +1266,9 @@ const location = this.getMappedValue(row, ['location', 'site_location', 'place']
   )`,
 );
 
-    const contacts = await qb
+    qb.andWhere(`COALESCE(contact.phone, '') <> ''`);
+
+const contacts = await qb
   .select([
     'contact.id',
     'contact.name',
@@ -1268,10 +1278,10 @@ const location = this.getMappedValue(row, ['location', 'site_location', 'place']
     'contact.address',
     'contact.location',
   ])
-  .take(200) // 🔥 LIMIT ADDED
+  .take(150)
   .getMany();
 
-    return contacts.filter((c) => !!String(c.phone || '').trim());
+return contacts;
   }
 
   async getContactFilterOptions(user: any) {
