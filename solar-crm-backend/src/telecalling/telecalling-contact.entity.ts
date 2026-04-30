@@ -69,6 +69,9 @@ stage: string;
   status: ContactStatus;
 
   @Column({ default: false })
+hasCalled: boolean;
+
+  @Column({ default: false })
   convertedToLead: boolean;
 
   @Column({ default: true })

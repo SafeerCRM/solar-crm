@@ -165,7 +165,7 @@ private readonly meetingRepository: Repository<Meeting>,
   if (this.hasAnyRole(user, ['TELECALLER'])) {
     qb.where('contact.assignedTo = :assignedTo', { assignedTo: user.id });
 qb.andWhere('contact.isInStorage = false');
-qb.andWhere(`COALESCE(contact.stage, 'TELECALLING') = :stage`, {
+qb.andWhere(`contact.stage = :stage`, {
   stage: 'TELECALLING',
 });
 return;
@@ -177,7 +177,7 @@ return;
   reviewAssignedTo: user.id,
 });
 qb.andWhere('contact.isInStorage = false');
-qb.andWhere(`COALESCE(contact.stage, 'TELECALLING') = :stage`, {
+qb.andWhere(`contact.stage = :stage`, {
   stage: 'REVIEW',
 });
 return;
@@ -1199,14 +1199,7 @@ const location = this.getMappedValue(row, ['location', 'site_location', 'place']
     // For active view only, exclude contacts that already have any saved outcome.
     // Keep contacts that only have INITIATED logs, because they are not completed yet.
     if (normalizedView !== 'storage') {
-      qb.andWhere(
-  `NOT EXISTS (
-    SELECT 1
-    FROM call_log cl
-    WHERE cl."contactId" = contact.id
-      AND UPPER(COALESCE(cl."callStatus", '')) <> 'INITIATED'
-  )`,
-);
+      qb.andWhere('contact.hasCalled = false');
     }
 
     const data = await qb.getMany();
@@ -1257,14 +1250,7 @@ return {
     // Exclude contacts that already have any completed/saved quick call outcome.
     // We keep contacts that only have INITIATED logs, because client asked to remove
     // from autocall queue only after a saved outcome.
-    qb.andWhere(
-  `NOT EXISTS (
-    SELECT 1
-    FROM call_log cl
-    WHERE cl."contactId" = contact.id
-      AND UPPER(COALESCE(cl."callStatus", '')) <> 'INITIATED'
-  )`,
-);
+    qb.andWhere('contact.hasCalled = false');
 
     qb.andWhere(`COALESCE(contact.phone, '') <> ''`);
 
@@ -1520,13 +1506,32 @@ return contacts;
 
     const [notesRaw, callHistoryRaw] = await Promise.all([
       this.contactNoteRepository.find({
-        where: { contactId: id },
-        order: { createdAt: 'DESC' },
-      }),
-      this.contactCallHistoryRepository.find({
-        where: { contactId: id },
-        order: { createdAt: 'DESC' },
-      }),
+  where: { contactId: id },
+  select: {
+    id: true,
+    contactId: true,
+    note: true,
+    createdByName: true,
+    createdAt: true,
+    updatedAt: true,
+  },
+  order: { createdAt: 'DESC' },
+}),
+this.contactCallHistoryRepository.find({
+  where: { contactId: id },
+  select: {
+    id: true,
+    contactId: true,
+    calledByName: true,
+    callStatus: true,
+    notes: true,
+    recordingUrl: true,
+    nextFollowUpDate: true,
+    createdAt: true,
+    updatedAt: true,
+  } as any,
+  order: { createdAt: 'DESC' },
+}),
     ]);
 
     const notes = Array.isArray(notesRaw) ? notesRaw : [];
@@ -1922,7 +1927,8 @@ const updatedRemarks = existingRemarks
 // 🚀 FAST UPDATE (no full entity save)
 await this.contactRepository.update(contact.id, {
   remarks: updatedRemarks,
-});
+  hasCalled: true,
+} as any);
 
     return {
       message:
@@ -2050,105 +2056,102 @@ await this.contactRepository.save(contact);
   }
 
   async assignLatestContactsByFilter(
-    locationFilter: string,
-    assignCount: number,
-    assignedTo: number,
-    view: string,
-    user: any,
-  ) {
-    if (!this.hasAnyRole(user, ['OWNER', 'TELECALLING_MANAGER'])) {
-      throw new ForbiddenException(
-        'Only owner or telecalling manager can assign filtered contacts',
-      );
-    }
-
-    const normalizedFilter = String(locationFilter || '').trim().toLowerCase();
-    const normalizedView = String(view || 'active').toLowerCase();
-
-    
-
-    if (!assignCount || Number.isNaN(Number(assignCount)) || assignCount <= 0) {
-      throw new BadRequestException('Valid assign count is required');
-    }
-
-    if (!assignedTo || Number.isNaN(Number(assignedTo))) {
-      throw new BadRequestException('Assigned user is required');
-    }
-
-    const assignedUser = await this.userRepository.findOne({
-      where: { id: assignedTo },
-    });
-
-    if (!assignedUser) {
-      throw new NotFoundException('Assigned user not found');
-    }
-
-    const qb = this.contactRepository
-  .createQueryBuilder('contact')
-  .where('contact.isInStorage = true') // ✅ REQUIRED
-  .orderBy('contact.createdAt', 'DESC');
-
-this.applyViewRestrictionsToContactQuery(qb, user, normalizedView);
-
-if (normalizedFilter) {
-  qb.andWhere(
-    `(
-      LOWER(COALESCE(contact.city, '')) LIKE :filter
-      OR LOWER(COALESCE(contact.zone, '')) LIKE :filter
-      OR LOWER(COALESCE(contact.address, '')) LIKE :filter
-      OR LOWER(COALESCE(contact.location, '')) LIKE :filter
-    )`,
-    { filter: `%${normalizedFilter}%` },
-  );
-}
-
-    const selectedContacts = await qb
-  .take(Number(assignCount))
-  .getMany();
-
-if (!selectedContacts.length) {
-  throw new NotFoundException(
-    'No contacts available for the given filter',
-  );
-}
-
-    if (!selectedContacts.length) {
-      throw new NotFoundException('No contacts available to assign');
-    }
-
-    const ids = selectedContacts.map((contact) => contact.id);
-
-    const updatePayload: Partial<TelecallingContact> = {
-      assignedTo: assignedUser.id,
-      assignedToName: assignedUser.name,
-    };
-
-    if (normalizedView === 'storage') {
-      updatePayload.isInStorage = false;
-    }
-
-    const result = await this.contactRepository
-      .createQueryBuilder()
-      .update(TelecallingContact)
-      .set(updatePayload)
-      .where('id IN (:...ids)', { ids })
-      .execute();
-
-    const updatedCount = result.affected || 0;
-
-    return {
-      message:
-        normalizedView === 'storage'
-          ? 'Latest filtered storage contacts assigned successfully'
-          : 'Latest filtered active contacts reassigned successfully',
-      assignedTo: assignedUser.id,
-      assignedToName: assignedUser.name,
-      requestedCount: Number(assignCount),
-      matchedCount: selectedContacts.length,
-      updatedCount,
-      view: normalizedView,
-    };
+  locationFilter: string,
+  assignCount: number,
+  assignedTo: number,
+  view: string,
+  user: any,
+) {
+  if (!this.hasAnyRole(user, ['OWNER', 'TELECALLING_MANAGER'])) {
+    throw new ForbiddenException(
+      'Only owner or telecalling manager can assign filtered contacts',
+    );
   }
+
+  const normalizedFilter = String(locationFilter || '').trim().toLowerCase();
+  const normalizedView = String(view || 'active').toLowerCase();
+  const safeAssignCount = Number(assignCount);
+
+  if (!safeAssignCount || Number.isNaN(safeAssignCount) || safeAssignCount <= 0) {
+    throw new BadRequestException('Valid assign count is required');
+  }
+
+  if (!assignedTo || Number.isNaN(Number(assignedTo))) {
+    throw new BadRequestException('Assigned user is required');
+  }
+
+  const assignedUser = await this.userRepository.findOne({
+    where: { id: Number(assignedTo) },
+  });
+
+  if (!assignedUser) {
+    throw new NotFoundException('Assigned user not found');
+  }
+
+  const qb = this.contactRepository
+    .createQueryBuilder('contact')
+    .select('contact.id', 'id')
+    .orderBy('contact.createdAt', 'DESC')
+    .take(safeAssignCount);
+
+  this.applyViewRestrictionsToContactQuery(qb, user, normalizedView);
+
+  if (normalizedFilter) {
+    qb.andWhere(
+      `(
+        LOWER(COALESCE(contact.city, '')) LIKE :filter
+        OR LOWER(COALESCE(contact.zone, '')) LIKE :filter
+        OR LOWER(COALESCE(contact.address, '')) LIKE :filter
+        OR LOWER(COALESCE(contact.location, '')) LIKE :filter
+      )`,
+      { filter: `%${normalizedFilter}%` },
+    );
+  }
+
+  if (normalizedView !== 'storage') {
+    qb.andWhere('contact.hasCalled = false');
+  }
+
+  const selectedRows = await qb.getRawMany();
+  const ids = selectedRows
+    .map((row: any) => Number(row.id))
+    .filter((id: number) => Number.isInteger(id) && id > 0);
+
+  if (!ids.length) {
+    throw new NotFoundException('No contacts available for the given filter');
+  }
+
+  const updatePayload: Partial<TelecallingContact> = {
+    assignedTo: assignedUser.id,
+    assignedToName: assignedUser.name,
+  };
+
+  if (normalizedView === 'storage') {
+    updatePayload.isInStorage = false;
+  }
+
+  const result = await this.contactRepository
+    .createQueryBuilder()
+    .update(TelecallingContact)
+    .set(updatePayload)
+    .where('id IN (:...ids)', { ids })
+    .execute();
+
+  const updatedCount = result.affected || 0;
+
+  return {
+    message:
+      normalizedView === 'storage'
+        ? 'Latest filtered storage contacts assigned successfully'
+        : 'Latest filtered active contacts reassigned successfully',
+    assignedTo: assignedUser.id,
+    assignedToName: assignedUser.name,
+    requestedCount: safeAssignCount,
+    matchedCount: ids.length,
+    updatedCount,
+    view: normalizedView,
+  };
+}
 
   async bulkAssignContacts(
     contactIds: number[],
