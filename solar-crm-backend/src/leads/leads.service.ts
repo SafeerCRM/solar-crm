@@ -232,11 +232,14 @@ export class LeadsService {
     };
 
     if (this.isTelecaller(user) || this.isLeadExecutive(user)) {
-      leadData = {
-        ...leadData,
-        assignedTo: currentUserId,
-      };
-    }
+  leadData = {
+    ...leadData,
+    assignedTo:
+      data.assignedTo !== undefined && data.assignedTo !== null
+        ? Number(data.assignedTo)
+        : currentUserId,
+  };
+}
 
     const lead = this.leadRepository.create(leadData);
     return this.leadRepository.save(lead);
