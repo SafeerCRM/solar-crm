@@ -250,6 +250,80 @@ export class LeadsService {
     return this.leadRepository.save(lead);
   }
 
+  async getLeadManagerLeadCount(userId: number, user: any) {
+  if (!this.isOwner(user)) {
+    throw new ForbiddenException('Only owner can view lead manager count');
+  }
+
+  const count = await this.leadRepository.count({
+    where: {
+      assignedTo: Number(userId),
+      isArchived: false,
+    },
+  });
+
+  return { count };
+}
+
+async transferLeadsBetweenManagers(
+  fromUserId: number,
+  toUserId: number,
+  count: number | undefined,
+  user: any,
+) {
+  if (!this.isOwner(user)) {
+    throw new ForbiddenException('Only owner can transfer leads');
+  }
+
+  if (!fromUserId || !toUserId) {
+    throw new BadRequestException('From and To lead managers are required');
+  }
+
+  if (Number(fromUserId) === Number(toUserId)) {
+    throw new BadRequestException('From and To lead manager cannot be same');
+  }
+
+  const toUser = await this.userRepository.findOne({
+    where: { id: Number(toUserId) },
+  });
+
+  if (!toUser) {
+    throw new NotFoundException('Target lead manager not found');
+  }
+
+  const qb = this.leadRepository
+    .createQueryBuilder('lead')
+    .where('lead.assignedTo = :fromUserId', { fromUserId: Number(fromUserId) })
+    .andWhere('COALESCE(lead.isArchived, false) = false')
+    .orderBy('lead.createdAt', 'DESC');
+
+  if (count && Number(count) > 0) {
+    qb.take(Number(count));
+  }
+
+  const leadsToTransfer = await qb.getMany();
+
+  if (!leadsToTransfer.length) {
+    throw new NotFoundException('No leads available to transfer');
+  }
+
+  const ids = leadsToTransfer.map((lead) => lead.id);
+
+  const result = await this.leadRepository
+    .createQueryBuilder()
+    .update()
+    .set({
+  assignedTo: Number(toUserId),
+})
+    .where('id IN (:...ids)', { ids })
+    .execute();
+
+  return {
+    message: `Transferred ${result.affected || 0} leads successfully`,
+    transferredCount: result.affected || 0,
+  };
+}
+
   async findAll(filters: any, user: any) {
   const page = Math.max(Number(filters?.page || 1), 1);
   const limit = Math.min(Math.max(Number(filters?.limit || 50), 1), 200);

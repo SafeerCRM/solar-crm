@@ -19,6 +19,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { Req } from '@nestjs/common';
 
 @UseGuards(JwtAuthGuard)
 @Controller('leads')
@@ -76,6 +77,11 @@ getArchivedLeads(@CurrentUser() user: any) {
   return this.leadsService.getArchivedLeads(user);
 }
 
+@Get('lead-manager-count/:id')
+getLeadManagerLeadCount(@Param('id') id: string, @Req() req: any) {
+  return this.leadsService.getLeadManagerLeadCount(Number(id), req.user);
+}
+
   @Get()
   findAll(@Query() query: any, @CurrentUser() user: any) {
     return this.leadsService.findAll(query, user);
@@ -89,6 +95,16 @@ getArchivedLeads(@CurrentUser() user: any) {
   @Get('autocall')
 getLeadsForAutoCall(@CurrentUser() user: any) {
   return this.leadsService.getLeadsForAutoCall(user);
+}
+
+@Patch('transfer-leads')
+transferLeadsBetweenManagers(@Body() body: any, @Req() req: any) {
+  return this.leadsService.transferLeadsBetweenManagers(
+    Number(body.fromUserId),
+    Number(body.toUserId),
+    body.count ? Number(body.count) : undefined,
+    req.user,
+  );
 }
 
   @Get('export')
