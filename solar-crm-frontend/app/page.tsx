@@ -65,10 +65,7 @@ export default function Home() {
     <main className="min-h-screen bg-gradient-to-br from-slate-100 to-blue-100 flex items-center justify-center px-4">
       <div className="grid w-full max-w-5xl overflow-hidden rounded-3xl bg-white shadow-2xl md:grid-cols-2">
         <div className="hidden md:flex flex-col justify-center bg-blue-700 p-10 text-white">
-          <h1 className="text-4xl font-extrabold leading-tight tracking-wide text-yellow-300">
-  Aditya Solars
-</h1>
-<p className="mt-2 text-xl font-semibold text-white">Solar CRM</p>
+          <h1 className="text-4xl font-bold leading-tight">Solar CRM</h1>
           <p className="mt-4 text-blue-100 text-lg">
             Manage leads, followups, projects, vendors, and performance from one
             place.
