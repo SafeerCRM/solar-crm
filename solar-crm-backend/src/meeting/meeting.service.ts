@@ -61,6 +61,10 @@ export class MeetingService {
     return this.hasAnyRole(user, [UserRole.TELECALLING_MANAGER]);
   }
 
+  private isTelecallingAssistant(user: any): boolean {
+  return this.hasAnyRole(user, ['TELECALLING_ASSISTANT' as any]);
+}
+
   private isMarketingHead(user: any): boolean {
     return this.hasAnyRole(user, [UserRole.MARKETING_HEAD]);
   }
@@ -116,14 +120,16 @@ private assertCanModifyMeeting(meeting: Meeting, user: any) {
   }
 
   private isOwnMeetingRole(user: any): boolean {
-    return this.hasAnyRole(user, [
+  return (
+    this.hasAnyRole(user, [
       UserRole.MEETING_MANAGER,
       UserRole.PROJECT_EXECUTIVE,
       UserRole.TELECALLER,
       UserRole.LEAD_EXECUTIVE,
       UserRole.LEAD_MANAGER,
-    ]);
-  }
+    ]) || this.isTelecallingAssistant(user)
+  );
+}
 
   private normalizeDecimal(value: any): number | undefined {
     if (value === undefined || value === null || value === '') {

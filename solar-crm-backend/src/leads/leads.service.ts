@@ -90,6 +90,10 @@ export class LeadsService {
     return this.hasAnyRole(user, [UserRole.MARKETING_HEAD]);
   }
 
+  private isTelecallingAssistant(user: any) {
+  return this.hasAnyRole(user, ['TELECALLING_ASSISTANT' as any]);
+}
+
   private isTelecallingManager(user: any) {
     return this.hasAnyRole(user, [UserRole.TELECALLING_MANAGER]);
   }
@@ -151,12 +155,13 @@ export class LeadsService {
     const currentUserId = this.getCurrentUserId(user);
 
     const canAccessDirectly =
-      this.isOwner(user) ||
-      this.isLeadManager(user) ||
-      this.isMarketingHead(user) ||
-      this.isTelecallingManager(user) ||
-      lead.createdBy === currentUserId ||
-      lead.assignedTo === currentUserId;
+  this.isOwner(user) ||
+  this.isLeadManager(user) ||
+  this.isMarketingHead(user) ||
+  this.isTelecallingManager(user) ||
+  lead.createdBy === currentUserId ||
+  lead.assignedTo === currentUserId ||
+  lead.originTelecallerId === currentUserId;
 
     if (canAccessDirectly) {
       return lead;
@@ -256,12 +261,21 @@ export class LeadsService {
 
   const currentUserId = this.getCurrentUserId(user);
 
-  if (this.isTelecaller(user) || this.isLeadExecutive(user)) {
-    query.andWhere(
-      '(lead.assignedTo = :assignedTo OR lead.assignedTo IS NULL)',
-      { assignedTo: currentUserId },
-    );
-  } else if (this.isMeetingManager(user) || this.isProjectExecutive(user)) {
+  if (this.isTelecaller(user)) {
+  query.andWhere(
+    `(
+      lead.originTelecallerId = :currentUserId
+      OR lead.createdBy = :currentUserId
+      OR lead.assignedTo = :currentUserId
+    )`,
+    { currentUserId },
+  );
+} else if (this.isLeadExecutive(user)) {
+  query.andWhere(
+    '(lead.assignedTo = :assignedTo OR lead.assignedTo IS NULL)',
+    { assignedTo: currentUserId },
+  );
+} else if (this.isMeetingManager(user) || this.isProjectExecutive(user)) {
     query.andWhere(
       '(lead.assignedTo = :currentUserId OR lead.createdBy = :currentUserId)',
       { currentUserId },
@@ -276,6 +290,12 @@ export class LeadsService {
       { currentUserId },
     );
   }
+
+  else if (this.isTelecallingAssistant(user)) {
+  query.andWhere('lead.createdBy = :currentUserId', {
+    currentUserId,
+  });
+}
 
   if (filters?.status) {
     query.andWhere('lead.status = :status', { status: filters.status });
