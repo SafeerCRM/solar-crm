@@ -177,8 +177,8 @@ return;
   reviewAssignedTo: user.id,
 });
 qb.andWhere('contact.isInStorage = false');
-qb.andWhere(`COALESCE(contact.stage, 'TELECALLING') IN (:...stages)`, {
-  stages: ['REVIEW', 'TELECALLING'],
+qb.andWhere(`COALESCE(contact.stage, 'TELECALLING') = :stage`, {
+  stage: 'REVIEW',
 });
 return;
   }
@@ -2125,8 +2125,7 @@ await this.contactRepository.save(contact);
 
   const updatePayload: Partial<TelecallingContact> = {
   assignedTo: assignedUser.id,
-  assignedToName: assignedUser.name,
-  stage: 'REVIEW', // 🔥 IMPORTANT FIX
+  assignedToName: assignedUser.name, // 🔥 IMPORTANT FIX
 };
 
   if (normalizedView === 'storage') {
