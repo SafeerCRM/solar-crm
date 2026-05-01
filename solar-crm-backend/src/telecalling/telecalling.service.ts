@@ -1198,9 +1198,12 @@ const location = this.getMappedValue(row, ['location', 'site_location', 'place']
 
     // For active view only, exclude contacts that already have any saved outcome.
     // Keep contacts that only have INITIATED logs, because they are not completed yet.
-    if (normalizedView !== 'storage') {
-      qb.andWhere('contact.hasCalled = false');
-    }
+    if (
+  normalizedView !== 'storage' &&
+  !this.hasAnyRole(user, ['TELECALLING_ASSISTANT' as any])
+) {
+  qb.andWhere('contact.hasCalled = false');
+}
 
     const data = await qb.getMany();
 
