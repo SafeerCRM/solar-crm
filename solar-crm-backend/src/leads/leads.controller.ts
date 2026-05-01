@@ -100,11 +100,12 @@ getLeadsForAutoCall(@CurrentUser() user: any) {
 @Patch('transfer-leads')
 transferLeadsBetweenManagers(@Body() body: any, @Req() req: any) {
   return this.leadsService.transferLeadsBetweenManagers(
-    Number(body.fromUserId),
-    Number(body.toUserId),
-    body.count ? Number(body.count) : undefined,
-    req.user,
-  );
+  Number(body.fromUserId),
+  Number(body.toUserId),
+  body.count ? Number(body.count) : undefined,
+  req.user,
+  body.filters,
+);
 }
 
   @Get('export')

@@ -270,6 +270,10 @@ async transferLeadsBetweenManagers(
   toUserId: number,
   count: number | undefined,
   user: any,
+  filters?: {
+    city?: string;
+    potentialPercentage?: number;
+  },
 ) {
   if (!this.isOwner(user)) {
     throw new ForbiddenException('Only owner can transfer leads');
@@ -296,6 +300,23 @@ async transferLeadsBetweenManagers(
     .where('lead.assignedTo = :fromUserId', { fromUserId: Number(fromUserId) })
     .andWhere('COALESCE(lead.isArchived, false) = false')
     .orderBy('lead.createdAt', 'DESC');
+
+    const cityFilter = String(filters?.city || '').trim();
+const potentialPercentage = Number(filters?.potentialPercentage || 0);
+
+if (cityFilter) {
+  qb.andWhere(
+    `(LOWER(TRIM(lead.city)) = LOWER(TRIM(:cityExact))
+      OR LOWER(TRIM(lead.zone)) = LOWER(TRIM(:cityExact)))`,
+    { cityExact: cityFilter }
+  );
+}
+
+if (potentialPercentage > 0) {
+  qb.andWhere('lead.potentialPercentage = :potentialPercentage', {
+    potentialPercentage,
+  });
+}
 
   if (count && Number(count) > 0) {
     qb.take(Number(count));
