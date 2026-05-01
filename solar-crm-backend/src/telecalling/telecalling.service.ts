@@ -1525,11 +1525,10 @@ this.contactCallHistoryRepository.find({
     calledByName: true,
     callStatus: true,
     notes: true,
-    recordingUrl: true,
     nextFollowUpDate: true,
     createdAt: true,
     updatedAt: true,
-  } as any,
+  },
   order: { createdAt: 'DESC' },
 }),
     ]);
