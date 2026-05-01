@@ -28,10 +28,10 @@ const navItems = [
   },
 
   {
-    name: 'Leads',
-    href: '/leads',
-    roles: ['OWNER', 'LEAD_MANAGER', 'TELECALLER', 'LEAD_EXECUTIVE'],
-  },
+  name: 'Leads',
+  href: '/leads',
+  roles: ['OWNER', 'LEAD_MANAGER', 'TELECALLER', 'LEAD_EXECUTIVE', 'TELECALLING_ASSISTANT'],
+},
 
   {
     name: 'Archived Leads',
@@ -50,22 +50,24 @@ const navItems = [
       'TELECALLER',
       'LEAD_EXECUTIVE',
       'PROJECT_EXECUTIVE',
+      'TELECALLING_ASSISTANT',
     ],
   },
 
   {
-    name: 'Meeting',
-    href: '/meeting',
-    roles: [
-      'OWNER',
-      'LEAD_MANAGER',
-      'MEETING_MANAGER',
-      'PROJECT_MANAGER',
-      'PROJECT_EXECUTIVE',
-      'TELECALLER',
-      'LEAD_EXECUTIVE',
-    ],
-  },
+  name: 'Meeting',
+  href: '/meeting',
+  roles: [
+    'OWNER',
+    'LEAD_MANAGER',
+    'MEETING_MANAGER',
+    'PROJECT_MANAGER',
+    'PROJECT_EXECUTIVE',
+    'TELECALLER',
+    'LEAD_EXECUTIVE',
+    'TELECALLING_ASSISTANT',
+  ],
+},
 
   {
     name: 'Calculator',

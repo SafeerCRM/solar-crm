@@ -63,7 +63,7 @@ const [solarMiterBankProof, setSolarMiterBankProof] = useState<File | null>(null
   const fetchUsers = async () => {
     try {
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/users/assignable-staff`,
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/users/meeting-managers`,
         {
           headers: getAuthHeaders(),
         }
