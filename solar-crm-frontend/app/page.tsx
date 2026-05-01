@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -10,6 +10,20 @@ export default function Home() {
   const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+  const token =
+    localStorage.getItem('token') ||
+    localStorage.getItem('access_token') ||
+    sessionStorage.getItem('token') ||
+    sessionStorage.getItem('access_token');
+
+  const user = localStorage.getItem('user');
+
+  if (token && user) {
+    window.location.href = '/dashboard';
+  }
+}, []);
 
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
@@ -51,7 +65,10 @@ export default function Home() {
     <main className="min-h-screen bg-gradient-to-br from-slate-100 to-blue-100 flex items-center justify-center px-4">
       <div className="grid w-full max-w-5xl overflow-hidden rounded-3xl bg-white shadow-2xl md:grid-cols-2">
         <div className="hidden md:flex flex-col justify-center bg-blue-700 p-10 text-white">
-          <h1 className="text-4xl font-bold leading-tight">Solar CRM</h1>
+          <h1 className="text-4xl font-extrabold leading-tight tracking-wide text-yellow-300">
+  Aditya Solars
+</h1>
+<p className="mt-2 text-xl font-semibold text-white">Solar CRM</p>
           <p className="mt-4 text-blue-100 text-lg">
             Manage leads, followups, projects, vendors, and performance from one
             place.
