@@ -395,10 +395,11 @@ setLoading(true);
       const rows = Array.isArray(responseData.data) ? responseData.data : [];
 
       setCalls(rows);
-      setTotal(Number(responseData.total || 0));
-      setTotalPages(Number(responseData.totalPages || 1));
-      setPage(Number(responseData.page || pageNumber));
-      return;
+setTotal(Number(responseData.total || 0));
+setTotalPages(Number(responseData.totalPages || 1));
+setPage(Number(responseData.page || pageNumber));
+setLoading(false);
+return;
     }
 
     const params = {
@@ -809,13 +810,12 @@ return;
           displayCity: contact?.city || contact?.address || contact?.location || '-',
           rowType: 'CONTACT',
           personKey: `contact-${call.contactId}`,
-          effectiveStatus:
-            latestContactCall?.callStatus || call.disposition || call.callStatus,
-          effectiveNotes: latestContactCall?.notes || call.callNotes || '',
-          effectiveNextFollowUpDate:
-            latestContactCall?.nextFollowUpDate || call.nextFollowUpDate,
-          effectiveTimestamp: latestContactCall?.updatedAt || call.createdAt,
-         recordingUrl: latestContactCall?.recordingUrl || call.recordingUrl,
+          effectiveStatus: call.disposition || call.callStatus,
+effectiveNotes: call.callNotes || latestContactCall?.notes || '',
+effectiveNextFollowUpDate:
+  call.nextFollowUpDate || latestContactCall?.nextFollowUpDate,
+effectiveTimestamp: call.createdAt,
+recordingUrl: call.recordingUrl || latestContactCall?.recordingUrl,
           reviewAssignedLabel:
             call.reviewAssignedToName || contact?.reviewAssignedToName || '-',
           isConvertedToLead: Boolean(contact?.convertedToLead),
