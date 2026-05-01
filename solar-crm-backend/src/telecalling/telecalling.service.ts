@@ -2121,9 +2121,10 @@ await this.contactRepository.save(contact);
   }
 
   const updatePayload: Partial<TelecallingContact> = {
-    assignedTo: assignedUser.id,
-    assignedToName: assignedUser.name,
-  };
+  assignedTo: assignedUser.id,
+  assignedToName: assignedUser.name,
+  stage: 'REVIEW', // 🔥 IMPORTANT FIX
+};
 
   if (normalizedView === 'storage') {
     updatePayload.isInStorage = false;
