@@ -159,8 +159,8 @@ const [solarMiterBankProof, setSolarMiterBankProof] = useState<File | null>(null
 
       const position = await Geolocation.getCurrentPosition({
         enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 0,
+        timeout: 30000,
+        maximumAge: 10000,
       });
 
       lat = position.coords.latitude;
@@ -175,7 +175,7 @@ const [solarMiterBankProof, setSolarMiterBankProof] = useState<File | null>(null
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, {
           enableHighAccuracy: true,
-          timeout: 15000,
+          timeout: 30000,
           maximumAge: 0,
         });
       });
