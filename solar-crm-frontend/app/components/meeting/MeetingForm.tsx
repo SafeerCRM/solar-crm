@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getAuthHeaders } from '@/lib/authHeaders';
+import { Capacitor } from '@capacitor/core';
+import { Geolocation } from '@capacitor/geolocation';
 
 type User = {
   id: number;
@@ -146,52 +148,68 @@ const [solarMiterBankProof, setSolarMiterBankProof] = useState<File | null>(null
   };
 
   const handleGetLocation = async () => {
-    if (!navigator.geolocation) {
-      alert('Geolocation not supported on this device/browser');
-      return;
-    }
+  setLocationLoading(true);
 
-    setLocationLoading(true);
+  try {
+    let lat = 0;
+    let lng = 0;
 
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const lat = position.coords.latitude;
-        const lng = position.coords.longitude;
+    if (Capacitor.isNativePlatform()) {
+      await Geolocation.requestPermissions();
 
-        let address = '';
-
-        try {
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`
-          );
-          const data = await res.json();
-          address = data.display_name || '';
-        } catch (err) {
-          console.error('Reverse geocoding failed', err);
-        }
-
-        setForm((prev) => ({
-          ...prev,
-          gpsLatitude: String(lat),
-          gpsLongitude: String(lng),
-          gpsAddress: address,
-          address: address || prev.address,
-        }));
-
-        setLocationLoading(false);
-      },
-      (err) => {
-        console.error(err);
-        alert('Unable to capture location');
-        setLocationLoading(false);
-      },
-      {
+      const position = await Geolocation.getCurrentPosition({
         enableHighAccuracy: true,
         timeout: 15000,
         maximumAge: 0,
+      });
+
+      lat = position.coords.latitude;
+      lng = position.coords.longitude;
+    } else {
+      if (!navigator.geolocation) {
+        alert('Geolocation not supported on this device/browser');
+        setLocationLoading(false);
+        return;
       }
-    );
-  };
+
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 0,
+        });
+      });
+
+      lat = position.coords.latitude;
+      lng = position.coords.longitude;
+    }
+
+    let address = '';
+
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`
+      );
+      const data = await res.json();
+      address = data.display_name || '';
+    } catch (err) {
+      console.error('Reverse geocoding failed', err);
+    }
+
+    setForm((prev) => ({
+      ...prev,
+      gpsLatitude: String(lat),
+      gpsLongitude: String(lng),
+      gpsAddress: address,
+      address: address || prev.address,
+    }));
+  } catch (err: any) {
+    console.error('Location capture failed:', err);
+    alert(err?.message || 'Unable to capture location');
+  } finally {
+    setLocationLoading(false);
+  }
+};
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

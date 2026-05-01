@@ -123,6 +123,14 @@ const [storageSearchName, setStorageSearchName] = useState('');
 const [storageSearchPhone, setStorageSearchPhone] = useState('');
 const [storageSearchCity, setStorageSearchCity] = useState('');
 const [storagePotentialFilter, setStoragePotentialFilter] = useState('');
+const [transferFromManager, setTransferFromManager] = useState('');
+const [transferToManager, setTransferToManager] = useState('');
+const [fromManagerCount, setFromManagerCount] = useState<number | null>(null);
+const [toManagerCount, setToManagerCount] = useState<number | null>(null);
+const [transferLeadCount, setTransferLeadCount] = useState('');
+const [transferringLeads, setTransferringLeads] = useState(false);
+const [transferCityFilter, setTransferCityFilter] = useState('');
+const [transferPotentialFilter, setTransferPotentialFilter] = useState('');
 
   const currentRoles = currentUser?.roles || [];
 const isOwner = currentRoles.includes('OWNER');
@@ -483,6 +491,75 @@ const canAssignLeads = isOwner;
       setBulkAssigning(false);
     }
   };
+
+  const fetchLeadManagerCount = async (
+  userId: string,
+  type: 'from' | 'to'
+) => {
+  try {
+    if (!userId) {
+      if (type === 'from') setFromManagerCount(null);
+      if (type === 'to') setToManagerCount(null);
+      return;
+    }
+
+    const res = await axios.get(
+      `${backendUrl}/leads/lead-manager-count/${userId}`,
+      { headers: getAuthHeaders() }
+    );
+
+    if (type === 'from') setFromManagerCount(res.data?.count || 0);
+    if (type === 'to') setToManagerCount(res.data?.count || 0);
+  } catch (err) {
+    console.error(err);
+    setMessage('Failed to fetch lead manager count');
+  }
+};
+
+const transferLeadsBetweenManagers = async () => {
+  try {
+    if (!transferFromManager || !transferToManager) {
+      setMessage('Select both lead managers');
+      return;
+    }
+
+    setTransferringLeads(true);
+    setMessage('');
+
+    const res = await axios.patch(
+      `${backendUrl}/leads/transfer-leads`,
+      {
+        fromUserId: Number(transferFromManager),
+        toUserId: Number(transferToManager),
+        count: transferLeadCount ? Number(transferLeadCount) : undefined,
+filters: {
+  city: transferCityFilter || undefined,
+  potentialPercentage: transferPotentialFilter
+    ? Number(transferPotentialFilter)
+    : undefined,
+},
+      },
+      { headers: getAuthHeaders() }
+    );
+
+    setMessage(res.data?.message || 'Leads transferred successfully');
+
+    setTransferFromManager('');
+    setTransferToManager('');
+    setTransferLeadCount('');
+    setFromManagerCount(null);
+    setToManagerCount(null);
+    setTransferCityFilter('');
+setTransferPotentialFilter('');
+
+    await fetchLeads(1);
+  } catch (err: any) {
+    console.error(err);
+    setMessage(err?.response?.data?.message || 'Lead transfer failed');
+  } finally {
+    setTransferringLeads(false);
+  }
+};
 
   const handleStorageAssign = async () => {
   if (!assignCount || Number(assignCount) <= 0) {
@@ -1344,6 +1421,112 @@ disabled={isAutoCalling}
     </p>
   </div>
 )}
+
+{canAssignLeads && (
+  <div className="rounded border bg-white p-4 shadow">
+    <h2 className="mb-2 text-lg font-semibold">
+      Transfer Leads Between Lead Managers
+    </h2>
+
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-6">
+      <div>
+        <select
+          value={transferFromManager}
+          onChange={(e) => {
+            const value = e.target.value;
+            setTransferFromManager(value);
+            fetchLeadManagerCount(value, 'from');
+          }}
+          className="w-full rounded border p-2"
+        >
+          <option value="">From Lead Manager</option>
+          {users
+            .filter((u) => (u.roles || []).includes('LEAD_MANAGER'))
+            .map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
+            ))}
+        </select>
+
+        {fromManagerCount !== null && (
+          <p className="mt-1 text-xs text-gray-500">
+            Current leads: {fromManagerCount}
+          </p>
+        )}
+      </div>
+
+      <div>
+        <select
+          value={transferToManager}
+          onChange={(e) => {
+            const value = e.target.value;
+            setTransferToManager(value);
+            fetchLeadManagerCount(value, 'to');
+          }}
+          className="w-full rounded border p-2"
+        >
+          <option value="">To Lead Manager</option>
+          {users
+            .filter((u) => (u.roles || []).includes('LEAD_MANAGER'))
+            .map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
+            ))}
+        </select>
+
+        {toManagerCount !== null && (
+          <p className="mt-1 text-xs text-gray-500">
+            Current leads: {toManagerCount}
+          </p>
+        )}
+      </div>
+
+      <input
+  type="text"
+  value={transferCityFilter}
+  onChange={(e) => setTransferCityFilter(e.target.value)}
+  placeholder="City / Zone filter (optional)"
+  className="rounded border p-2"
+/>
+
+<select
+  value={transferPotentialFilter}
+  onChange={(e) => setTransferPotentialFilter(e.target.value)}
+  className="rounded border p-2"
+>
+  <option value="">Potential filter (optional)</option>
+  <option value="15">LOW / Not Likely</option>
+  <option value="50">MEDIUM / Likely</option>
+  <option value="75">HIGH Potential</option>
+</select>
+
+      <input
+        type="number"
+        min="1"
+        value={transferLeadCount}
+        onChange={(e) => setTransferLeadCount(e.target.value)}
+        placeholder="Number of leads (optional)"
+        className="rounded border p-2"
+      />
+
+      <button
+        type="button"
+        onClick={transferLeadsBetweenManagers}
+        disabled={transferringLeads}
+        className="rounded bg-purple-600 px-4 py-2 text-white disabled:opacity-50"
+      >
+        {transferringLeads ? 'Transferring...' : 'Transfer Leads'}
+      </button>
+    </div>
+
+    <p className="mt-2 text-xs text-gray-500">
+      Transfers latest active, non-archived leads. Created By and original telecaller history are not changed.
+    </p>
+  </div>
+)}
+
       </div>
 
       {message && <p className="mb-4 text-blue-600">{message}</p>}
