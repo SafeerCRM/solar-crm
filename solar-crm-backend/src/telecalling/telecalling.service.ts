@@ -177,8 +177,8 @@ return;
   reviewAssignedTo: user.id,
 });
 qb.andWhere('contact.isInStorage = false');
-qb.andWhere(`contact.stage = :stage`, {
-  stage: 'REVIEW',
+qb.andWhere(`COALESCE(contact.stage, 'TELECALLING') IN (:...stages)`, {
+  stages: ['REVIEW', 'TELECALLING'],
 });
 return;
   }
