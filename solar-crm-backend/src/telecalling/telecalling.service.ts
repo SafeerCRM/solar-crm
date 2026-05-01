@@ -2220,7 +2220,12 @@ await this.contactRepository.save(contact);
     };
   }
 
-  async convertContactToLead(id: number, leadManagerId: number, user: any) {
+  async convertContactToLead(
+  id: number,
+  leadManagerId: number,
+  potentialPercentage: number,
+  user: any,
+) {
   const contact = await this.contactRepository.findOne({
     where: { id },
   });
@@ -2284,6 +2289,7 @@ await this.contactRepository.save(contact);
     originTelecallerName:
       contact.assignedToName || `User ${contact.assignedTo || ''}`,
     status: LeadStatus.NEW,
+    potentialPercentage: potentialPercentage || 50,
   } as any);
 
   const savedLead = await this.leadRepository.save(lead);

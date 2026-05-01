@@ -391,11 +391,13 @@ convertContactToLead(
   @Param('id', ParseIntPipe) id: number,
   @Body('leadManagerId') leadManagerId: number,
   @Body('assignedTo') assignedTo: number,
+  @Body('potentialPercentage') potentialPercentage: number,
   @CurrentUser() user: any,
 ) {
   return this.telecallingService.convertContactToLead(
     id,
     Number(leadManagerId || assignedTo),
+    Number(potentialPercentage || 50),
     user,
   );
 }
