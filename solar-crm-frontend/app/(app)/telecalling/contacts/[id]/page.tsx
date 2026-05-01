@@ -74,6 +74,7 @@ export default function TelecallingContactDetailPage() {
  const [selectedMeetingManagerId, setSelectedMeetingManagerId] = useState('');
  const [leadManagers, setLeadManagers] = useState<User[]>([]);
 const [selectedLeadManagerId, setSelectedLeadManagerId] = useState('');
+const [leadPotential, setLeadPotential] = useState('50'); // default MEDIUM
  const [assigningAssistant, setAssigningAssistant] = useState(false);
 
   const [noteText, setNoteText] = useState('');
@@ -721,6 +722,7 @@ await axios.post(
   onChange={(e) => setSelectedLeadManagerId(e.target.value)}
   className="w-full rounded border p-2"
 >
+  
   <option value="">Select lead manager</option>
   {leadManagers.map((manager) => (
     <option key={manager.id} value={manager.id}>
@@ -729,6 +731,17 @@ await axios.post(
     </option>
   ))}
 </select>
+
+<select
+  value={leadPotential}
+  onChange={(e) => setLeadPotential(e.target.value)}
+  className="w-full rounded border p-2"
+>
+  <option value="15">LOW / Not Likely</option>
+  <option value="50">MEDIUM / Likely</option>
+  <option value="75">HIGH Potential</option>
+</select>
+
       <input
         type="range"
         min="0"
@@ -761,10 +774,11 @@ await axios.post(
     setMessage('');
 
     await axios.post(
-      `${backendUrl}/telecalling/contacts/${id}/convert`,
-      {
-  leadManagerId: Number(selectedLeadManagerId),
-},
+  `${backendUrl}/telecalling/contacts/${id}/convert`,
+  {
+    leadManagerId: Number(selectedLeadManagerId),
+    potentialPercentage: Number(leadPotential),
+  },
       { headers: getAuthHeaders() }
     );
 
