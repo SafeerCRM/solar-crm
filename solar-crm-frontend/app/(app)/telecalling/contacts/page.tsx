@@ -127,6 +127,8 @@ export default function TelecallingContactsPage() {
   const [quickCallRecordingUrl, setQuickCallRecordingUrl] = useState('');
   const [quickCallRecordingFile, setQuickCallRecordingFile] = useState<File | null>(null);
 const [uploadingQuickCallRecording, setUploadingQuickCallRecording] = useState(false);
+const [myContactCount, setMyContactCount] = useState<number | null>(null);
+const [loadingMyCount, setLoadingMyCount] = useState(false);
 
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const resumeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -498,6 +500,26 @@ const updateQuickCallTimePart = (newTime: Dayjs | null) => {
 
   if (nextContact) {
     startCountdownThenCall(nextContact, nextIndex);
+  }
+};
+
+const fetchMyContactCount = async () => {
+  try {
+    if (!currentUser?.id) return;
+
+    setLoadingMyCount(true);
+
+    const res = await axios.get(
+      `${backendUrl}/telecalling/telecaller-contact-count/${currentUser.id}`,
+      { headers: getAuthHeaders() }
+    );
+
+    setMyContactCount(res.data?.count || 0);
+  } catch (err) {
+    console.error(err);
+    setMessage('Failed to fetch contact count');
+  } finally {
+    setLoadingMyCount(false);
   }
 };
 
@@ -980,24 +1002,41 @@ const transferContacts = async () => {
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
-            <button
-              onClick={toggleAllVisible}
-              className="rounded-2xl bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700"
-            >
-              {allVisibleSelected ? 'Unselect Visible' : 'Select Visible'}
-            </button>
+  <button
+    onClick={toggleAllVisible}
+    className="rounded-2xl bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700"
+  >
+    {allVisibleSelected ? 'Unselect Visible' : 'Select Visible'}
+  </button>
 
-            <button
-              onClick={clearSelected}
-              className="rounded-2xl bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700"
-            >
-              Clear Selected
-            </button>
+  <button
+    onClick={clearSelected}
+    className="rounded-2xl bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700"
+  >
+    Clear Selected
+  </button>
 
-            <Badge text={`Visible: ${filteredContacts.length}`} />
-            <Badge text={`Selected Visible: ${selectedVisibleCount}`} />
-            <Badge text={`Total Selected: ${selectedContactIds.length}`} />
-          </div>
+  <Badge text={`Visible: ${filteredContacts.length}`} />
+  <Badge text={`Selected Visible: ${selectedVisibleCount}`} />
+  <Badge text={`Total Selected: ${selectedContactIds.length}`} />
+</div>
+
+{roles.includes('TELECALLER') && (
+  <div className="mt-3 rounded-2xl bg-indigo-50 p-3">
+    <button
+      onClick={fetchMyContactCount}
+      className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white"
+    >
+      {loadingMyCount ? 'Loading...' : 'Show My Active Contacts Count'}
+    </button>
+
+    {myContactCount !== null && (
+      <p className="mt-2 text-sm text-gray-700">
+        📞 Active Contacts: <b>{myContactCount}</b>
+      </p>
+    )}
+  </div>
+)}
 
           {isAutoCalling && (
             <div className="mt-4 rounded-2xl border border-green-200 bg-green-50 p-4">
