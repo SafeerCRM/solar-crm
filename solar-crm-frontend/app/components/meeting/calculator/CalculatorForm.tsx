@@ -79,6 +79,16 @@ export default function CalculatorForm({
   const [saving, setSaving] = useState(false);
   const [calculating, setCalculating] = useState(false);
   const [totalCost, setTotalCost] = useState(0);
+  const [panelOptions, setPanelOptions] = useState<any[]>([]);
+const [selectedPanelOptionId, setSelectedPanelOptionId] = useState<number | null>(null);
+
+const [structureOptions, setStructureOptions] = useState<any[]>([]);
+const [selectedStructureOptionId, setSelectedStructureOptionId] = useState<number | null>(null);
+
+const [availableArea, setAvailableArea] = useState(0);
+const [requiredArea, setRequiredArea] = useState(0);
+const [areaError, setAreaError] = useState('');
+const [calculatorSettings, setCalculatorSettings] = useState<any>({});
 
   const [values, setValues] = useState<CalculatorValues>({
     meetingId: initialData?.meetingId || '',
@@ -171,12 +181,110 @@ export default function CalculatorForm({
   };
 
   useEffect(() => {
+  fetchPanelOptions();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [values.panelCategory, values.panelType]);
+
+useEffect(() => {
+  fetchStructureOptions();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [values.structureType]);
+
+useEffect(() => {
+  const selectedPanel = panelOptions.find(
+    (p) => Number(p.id) === Number(selectedPanelOptionId)
+  );
+
+  if (!selectedPanel) {
+    setRequiredArea(0);
+    return;
+  }
+
+  const watt = Number(selectedPanel.capacityWatt || 0);
+  const panels = Number(values.numberOfPanels || 0);
+
+  const projectKw = (panels * watt) / 1000;
+  const sqftPerKw = Number(calculatorSettings.structureSqftPerKw || 40); // temporary, later from owner settings
+
+  setRequiredArea(projectKw * sqftPerKw);
+}, [
+  panelOptions,
+  selectedPanelOptionId,
+  values.numberOfPanels,
+  calculatorSettings.structureSqftPerKw,
+]);
+
+useEffect(() => {
+  if (!requiredArea || !availableArea) {
+    setAreaError('');
+    return;
+  }
+
+  if (Number(availableArea) < Number(requiredArea)) {
+    setAreaError(
+      `Required area is ${requiredArea.toFixed(
+        2
+      )} sqft but available is ${availableArea} sqft`
+    );
+  } else {
+    setAreaError('');
+  }
+}, [availableArea, requiredArea]);
+
+  useEffect(() => {
     const timer = setTimeout(() => {
       calculateTotalFromBackend();
     }, 400);
 
     return () => clearTimeout(timer);
   }, [values]);
+
+  useEffect(() => {
+  fetchCalculatorSettings();
+}, []);
+
+  const fetchCalculatorSettings = async () => {
+  try {
+    const res = await axios.get(`${backendUrl}/calculator/settings`, {
+      headers: getAuthHeaders(),
+    });
+
+    setCalculatorSettings(res.data || {});
+  } catch (err) {
+    console.error(err);
+  }
+};
+
+  const fetchPanelOptions = async () => {
+  try {
+    const res = await axios.get(`${backendUrl}/calculator/panel-options`, {
+      params: {
+        category: values.panelCategory,
+        type: values.panelType,
+      },
+      headers: getAuthHeaders(),
+    });
+
+    setPanelOptions(res.data || []);
+  } catch (err) {
+    console.error(err);
+  }
+};
+
+const fetchStructureOptions = async () => {
+  try {
+    const res = await axios.get(`${backendUrl}/calculator/structure-options`, {
+      params: {
+        type: values.structureType,
+      },
+      headers: getAuthHeaders(),
+    });
+
+    setStructureOptions(res.data || []);
+  } catch (err) {
+    console.error(err);
+  }
+};
 
   const handleResetCalculator = () => {
     setValues({
@@ -454,6 +562,35 @@ export default function CalculatorForm({
               placeholder="Enter watt per panel"
             />
           </div>
+<div>
+  <label className={labelClassName}>Select Panel</label>
+
+  <select
+    value={selectedPanelOptionId || ''}
+    onChange={(e) => {
+      const id = Number(e.target.value);
+      setSelectedPanelOptionId(id);
+
+      const selected = panelOptions.find((p) => Number(p.id) === id);
+
+      if (selected) {
+        setValues((prev) => ({
+          ...prev,
+          wattPerPanel: Number(selected.capacityWatt || 0),
+        }));
+      }
+    }}
+    className={inputClassName}
+  >
+    <option value="">Select panel</option>
+    {panelOptions.map((opt) => (
+      <option key={opt.id} value={opt.id}>
+        {opt.brandName} - {opt.capacityWatt}W
+      </option>
+    ))}
+  </select>
+</div>
+
         </div>
       </CalculatorSection>
 
@@ -496,7 +633,34 @@ export default function CalculatorForm({
         </div>
       </CalculatorSection>
 
-      <CalculatorSection title="3. Structure">
+      <CalculatorSection title="3. Area">
+  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+    <div>
+      <label className={labelClassName}>Available Roof Area (sqft)</label>
+
+      <input
+        type="number"
+        value={availableArea}
+        onChange={(e) => setAvailableArea(Number(e.target.value))}
+        className={inputClassName}
+        placeholder="Enter available roof area"
+      />
+    </div>
+
+    <div className="rounded-xl bg-gray-50 p-4 text-sm text-gray-700">
+      Required Area:{' '}
+      <b>{requiredArea ? requiredArea.toFixed(2) : '0'} sqft</b>
+    </div>
+  </div>
+
+  {areaError && (
+    <div className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">
+      {areaError}
+    </div>
+  )}
+</CalculatorSection>
+
+      <CalculatorSection title="4. Structure">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
             <label className={labelClassName}>Structure Type</label>
@@ -514,6 +678,37 @@ export default function CalculatorForm({
               <option value="Tin-shade">Tin-shade</option>
             </select>
           </div>
+
+          <div>
+  <label className={labelClassName}>Select Structure</label>
+
+  <select
+    value={selectedStructureOptionId || ''}
+    onChange={(e) => {
+      const id = Number(e.target.value);
+      setSelectedStructureOptionId(id);
+
+      const selected = structureOptions.find((opt) => Number(opt.id) === id);
+
+      if (selected) {
+        setValues((prev) => ({
+          ...prev,
+          structureWatt: Number(selected.capacityKw || 0),
+          structureQuantity: 1,
+        }));
+      }
+    }}
+    className={inputClassName}
+  >
+    <option value="">Select structure</option>
+
+    {structureOptions.map((opt) => (
+      <option key={opt.id} value={opt.id}>
+        {opt.structureType} - {opt.capacityKw} kW
+      </option>
+    ))}
+  </select>
+</div>
 
           <div>
             <label className={labelClassName}>Watt</label>

@@ -10,6 +10,12 @@ export default function CalculatorSettingsPage() {
   const [settings, setSettings] = useState<any>({});
   const [panelOptions, setPanelOptions] = useState<any[]>([]);
   const [ongridOptions, setOngridOptions] = useState<any[]>([]);
+  const [structureOptions, setStructureOptions] = useState<any[]>([]);
+const [structureForm, setStructureForm] = useState({
+  structureType: 'Rooftop',
+  capacityKw: '',
+  ratePerKw: '',
+});
 const [ongridForm, setOngridForm] = useState({
   phaseType: '1 Phase',
   brandName: '',
@@ -46,6 +52,7 @@ const [panelForm, setPanelForm] = useState({
   fetchSettings();
   fetchPanelOptions();
   fetchOngridOptions();
+  fetchStructureOptions();
 }, []);
 
   // handle change
@@ -67,6 +74,21 @@ const [panelForm, setPanelForm] = useState({
     });
 
     setPanelOptions(res.data || []);
+  } catch (err) {
+    console.error(err);
+  }
+};
+
+const fetchStructureOptions = async () => {
+  try {
+    const res = await axios.get(`${backendUrl}/calculator/structure-options`, {
+      params: {
+        type: 'Rooftop',
+      },
+      headers: getAuthHeaders(),
+    });
+
+    setStructureOptions(res.data || []);
   } catch (err) {
     console.error(err);
   }
@@ -179,6 +201,49 @@ const deletePanelOption = async (id: number) => {
   }
 };
 
+const createStructureOption = async () => {
+  try {
+    await axios.post(
+      `${backendUrl}/calculator/structure-options`,
+      {
+        structureType: structureForm.structureType,
+        capacityKw: Number(structureForm.capacityKw),
+        ratePerKw: Number(structureForm.ratePerKw),
+      },
+      { headers: getAuthHeaders() }
+    );
+
+    alert('Structure option added');
+
+    setStructureForm({
+      structureType: 'Rooftop',
+      capacityKw: '',
+      ratePerKw: '',
+    });
+
+    fetchStructureOptions();
+  } catch (err) {
+    console.error(err);
+    alert('Failed');
+  }
+};
+
+const deleteStructureOption = async (id: number) => {
+  if (!confirm('Delete this option?')) return;
+
+  try {
+    await axios.delete(
+      `${backendUrl}/calculator/structure-options/${id}`,
+      { headers: getAuthHeaders() }
+    );
+
+    fetchStructureOptions();
+  } catch (err) {
+    console.error(err);
+    alert('Delete failed');
+  }
+};
+
   // save
   const handleSave = async () => {
     try {
@@ -217,6 +282,11 @@ const deletePanelOption = async (id: number) => {
         <Input label="Structure Rate" value={settings.structureRate} onChange={(v) => handleChange('structureRate', v)} />
         <Input label="Electrical Rate" value={settings.electricalRate} onChange={(v) => handleChange('electricalRate', v)} />
         <Input label="Transport Rate Per KM" value={settings.transportRatePerKm} onChange={(v) => handleChange('transportRatePerKm', v)} />
+        <Input
+  label="Structure Sqft per kW"
+  value={settings.structureSqftPerKw}
+  onChange={(v) => handleChange('structureSqftPerKw', v)}
+/>
       </Section>
 
       {/* ADVANCED */}
@@ -397,6 +467,69 @@ const deletePanelOption = async (id: number) => {
 
         <button
           onClick={() => deleteOngridOption(opt.id)}
+          className="text-red-600"
+        >
+          Delete
+        </button>
+      </div>
+    ))}
+  </div>
+</Section>
+
+<Section title="Structure Options">
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+    <select
+      value={structureForm.structureType}
+      onChange={(e) =>
+        setStructureForm({ ...structureForm, structureType: e.target.value })
+      }
+      className="border p-2 rounded"
+    >
+      <option value="Rooftop">Rooftop</option>
+      <option value="Tin Shade">Tin Shade</option>
+    </select>
+
+    <input
+      type="number"
+      placeholder="Capacity (kW)"
+      value={structureForm.capacityKw}
+      onChange={(e) =>
+        setStructureForm({ ...structureForm, capacityKw: e.target.value })
+      }
+      className="border p-2 rounded"
+    />
+
+    <input
+      type="number"
+      placeholder="Rate per kW"
+      value={structureForm.ratePerKw}
+      onChange={(e) =>
+        setStructureForm({ ...structureForm, ratePerKw: e.target.value })
+      }
+      className="border p-2 rounded"
+    />
+
+    <button
+      onClick={createStructureOption}
+      className="bg-green-600 text-white px-4 py-2 rounded"
+    >
+      Add Structure Option
+    </button>
+  </div>
+
+  <div className="mt-4 space-y-2">
+    {structureOptions.map((opt) => (
+      <div
+        key={opt.id}
+        className="flex justify-between items-center border p-2 rounded"
+      >
+        <span>
+          {opt.structureType} | {opt.capacityKw} kW | ₹{opt.ratePerKw}/kW
+        </span>
+
+        <button
+          onClick={() => deleteStructureOption(opt.id)}
           className="text-red-600"
         >
           Delete
