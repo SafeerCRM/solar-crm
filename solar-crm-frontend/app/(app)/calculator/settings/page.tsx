@@ -9,6 +9,13 @@ export default function CalculatorSettingsPage() {
 
   const [settings, setSettings] = useState<any>({});
   const [panelOptions, setPanelOptions] = useState<any[]>([]);
+  const [ongridOptions, setOngridOptions] = useState<any[]>([]);
+const [ongridForm, setOngridForm] = useState({
+  phaseType: '1 Phase',
+  brandName: '',
+  capacity: '',
+  rate: '',
+});
 const [panelForm, setPanelForm] = useState({
   panelCategory: 'DCR',
   panelType: 'P Type',
@@ -38,6 +45,7 @@ const [panelForm, setPanelForm] = useState({
   useEffect(() => {
   fetchSettings();
   fetchPanelOptions();
+  fetchOngridOptions();
 }, []);
 
   // handle change
@@ -61,6 +69,66 @@ const [panelForm, setPanelForm] = useState({
     setPanelOptions(res.data || []);
   } catch (err) {
     console.error(err);
+  }
+};
+
+const fetchOngridOptions = async () => {
+  try {
+    const res = await axios.get(`${backendUrl}/calculator/ongrid-options`, {
+      params: {
+        phase: '1 Phase',
+      },
+      headers: getAuthHeaders(),
+    });
+
+    setOngridOptions(res.data || []);
+  } catch (err) {
+    console.error(err);
+  }
+};
+
+const createOngridOption = async () => {
+  try {
+    await axios.post(
+      `${backendUrl}/calculator/ongrid-options`,
+      {
+        phaseType: ongridForm.phaseType,
+        brandName: ongridForm.brandName,
+        capacity: Number(ongridForm.capacity),
+        rate: Number(ongridForm.rate),
+      },
+      { headers: getAuthHeaders() }
+    );
+
+    alert('Ongrid option added');
+
+    setOngridForm({
+      phaseType: '1 Phase',
+      brandName: '',
+      capacity: '',
+      rate: '',
+    });
+
+    fetchOngridOptions();
+  } catch (err) {
+    console.error(err);
+    alert('Failed to add');
+  }
+};
+
+const deleteOngridOption = async (id: number) => {
+  if (!confirm('Delete this option?')) return;
+
+  try {
+    await axios.delete(
+      `${backendUrl}/calculator/ongrid-options/${id}`,
+      { headers: getAuthHeaders() }
+    );
+
+    fetchOngridOptions();
+  } catch (err) {
+    console.error(err);
+    alert('Delete failed');
   }
 };
 
@@ -257,6 +325,78 @@ const deletePanelOption = async (id: number) => {
 
         <button
           onClick={() => deletePanelOption(opt.id)}
+          className="text-red-600"
+        >
+          Delete
+        </button>
+      </div>
+    ))}
+  </div>
+</Section>
+
+<Section title="Ongrid Converter Options">
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+    <select
+      value={ongridForm.phaseType}
+      onChange={(e) =>
+        setOngridForm({ ...ongridForm, phaseType: e.target.value })
+      }
+      className="border p-2 rounded"
+    >
+      <option value="1 Phase">1 Phase</option>
+      <option value="3 Phase">3 Phase</option>
+    </select>
+
+    <input
+      placeholder="Brand"
+      value={ongridForm.brandName}
+      onChange={(e) =>
+        setOngridForm({ ...ongridForm, brandName: e.target.value })
+      }
+      className="border p-2 rounded"
+    />
+
+    <input
+      type="number"
+      placeholder="Capacity (kW)"
+      value={ongridForm.capacity}
+      onChange={(e) =>
+        setOngridForm({ ...ongridForm, capacity: e.target.value })
+      }
+      className="border p-2 rounded"
+    />
+
+    <input
+      type="number"
+      placeholder="Rate"
+      value={ongridForm.rate}
+      onChange={(e) =>
+        setOngridForm({ ...ongridForm, rate: e.target.value })
+      }
+      className="border p-2 rounded"
+    />
+
+    <button
+      onClick={createOngridOption}
+      className="bg-green-600 text-white px-4 py-2 rounded"
+    >
+      Add Ongrid Option
+    </button>
+  </div>
+
+  <div className="mt-4 space-y-2">
+    {ongridOptions.map((opt) => (
+      <div
+        key={opt.id}
+        className="flex justify-between items-center border p-2 rounded"
+      >
+        <span>
+          {opt.phaseType} | {opt.brandName} | {opt.capacity} kW | ₹{opt.rate}
+        </span>
+
+        <button
+          onClick={() => deleteOngridOption(opt.id)}
           className="text-red-600"
         >
           Delete
