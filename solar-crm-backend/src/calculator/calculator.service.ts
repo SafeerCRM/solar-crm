@@ -5,6 +5,7 @@ import { Calculator } from './calculator.entity';
 import { CreateCalculatorDto } from './dto/create-calculator.dto';
 import { CalculatorSetting } from './calculator-setting.entity';
 import { CalculatorPanelOption } from './calculator-panel-option.entity';
+import { CalculatorOngridOption } from './calculator-ongrid-option.entity';
 
 @Injectable()
 export class CalculatorService {
@@ -15,6 +16,8 @@ export class CalculatorService {
 private readonly calculatorSettingRepository: Repository<CalculatorSetting>,
 @InjectRepository(CalculatorPanelOption)
 private readonly panelOptionRepository: Repository<CalculatorPanelOption>,
+@InjectRepository(CalculatorOngridOption)
+private readonly ongridOptionRepository: Repository<CalculatorOngridOption>,
   ) {}
 
 async calculateProjectCost(data: any) {
@@ -87,6 +90,64 @@ async calculateProjectCost(data: any) {
   return {
     totalProjectCost,
   };
+}
+
+
+async getOngridOptions(phase: string) {
+  return this.ongridOptionRepository.find({
+    where: {
+      phaseType: phase as '1 Phase' | '3 Phase',
+      isActive: true,
+    },
+    order: {
+      capacity: 'ASC',
+    },
+  });
+}
+
+async createOngridOption(data: any) {
+  const option = this.ongridOptionRepository.create({
+    phaseType: data.phaseType,
+    brandName: String(data.brandName || '').trim(),
+    capacity: Number(data.capacity || 0),
+    rate: Number(data.rate || 0),
+    isActive: data.isActive !== false,
+  });
+
+  return this.ongridOptionRepository.save(option);
+}
+
+async updateOngridOption(id: number, data: any) {
+  const option = await this.ongridOptionRepository.findOne({
+    where: { id },
+  });
+
+  if (!option) {
+    throw new Error('Ongrid option not found');
+  }
+
+  Object.assign(option, {
+    phaseType: data.phaseType ?? option.phaseType,
+    brandName:
+      data.brandName !== undefined
+        ? String(data.brandName || '').trim()
+        : option.brandName,
+    capacity:
+      data.capacity !== undefined
+        ? Number(data.capacity || 0)
+        : option.capacity,
+    rate: data.rate !== undefined ? Number(data.rate || 0) : option.rate,
+    isActive:
+      data.isActive !== undefined ? Boolean(data.isActive) : option.isActive,
+  });
+
+  return this.ongridOptionRepository.save(option);
+}
+
+async deleteOngridOption(id: number) {
+  await this.ongridOptionRepository.delete(id);
+
+  return { message: 'Deleted successfully' };
 }
 
   async create(dto: CreateCalculatorDto, userId?: number) {

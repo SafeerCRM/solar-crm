@@ -66,6 +66,39 @@ getPanelOptions(
   );
 }
 
+@Get('ongrid-options')
+getOngridOptions(@Req() req: any) {
+  const phase = String(req.query.phase || '1 Phase');
+
+  return this.calculatorService.getOngridOptions(
+    phase as '1 Phase' | '3 Phase',
+  );
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Post('ongrid-options')
+createOngridOption(@Body() body: any) {
+  return this.calculatorService.createOngridOption(body);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Patch('ongrid-options/:id')
+updateOngridOption(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+) {
+  return this.calculatorService.updateOngridOption(id, body);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Delete('ongrid-options/:id')
+deleteOngridOption(@Param('id', ParseIntPipe) id: number) {
+  return this.calculatorService.deleteOngridOption(id);
+}
+
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('OWNER')
 @Post('panel-options')

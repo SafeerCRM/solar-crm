@@ -5,12 +5,14 @@ import { CalculatorService } from './calculator.service';
 import { CalculatorController } from './calculator.controller';
 import { CalculatorSetting } from './calculator-setting.entity';
 import { CalculatorPanelOption } from './calculator-panel-option.entity';
+import { CalculatorOngridOption } from './calculator-ongrid-option.entity';
 
 @Module({
   imports: [TypeOrmModule.forFeature([
   Calculator,
   CalculatorSetting,
   CalculatorPanelOption,
+  CalculatorOngridOption,
 ])],
   controllers: [CalculatorController],
   providers: [CalculatorService],
