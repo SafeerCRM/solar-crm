@@ -50,7 +50,15 @@ export class UsersController {
   }
 
     @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER', 'TELECALLING_MANAGER', 'TELECALLER', 'TELECALLING_ASSISTANT')
+  @Roles(
+  'OWNER',
+  'TELECALLING_MANAGER',
+  'TELECALLER',
+  'TELECALLING_ASSISTANT',
+  'LEAD_MANAGER',
+  'MEETING_MANAGER',
+  'MARKETING_HEAD',
+)
   @Get('meeting-managers')
   findMeetingManagers() {
     return this.usersService.findMeetingManagers();
