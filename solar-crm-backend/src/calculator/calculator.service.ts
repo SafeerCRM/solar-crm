@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { Calculator } from './calculator.entity';
 import { CreateCalculatorDto } from './dto/create-calculator.dto';
 import { CalculatorSetting } from './calculator-setting.entity';
+import { CalculatorPanelOption } from './calculator-panel-option.entity';
 
 @Injectable()
 export class CalculatorService {
@@ -12,6 +13,8 @@ export class CalculatorService {
     private readonly calculatorRepository: Repository<Calculator>,
     @InjectRepository(CalculatorSetting)
 private readonly calculatorSettingRepository: Repository<CalculatorSetting>,
+@InjectRepository(CalculatorPanelOption)
+private readonly panelOptionRepository: Repository<CalculatorPanelOption>,
   ) {}
 
 async calculateProjectCost(data: any) {
@@ -124,6 +127,79 @@ async calculateProjectCost(data: any) {
   }
 
   return settings;
+}
+
+async getPanelOptions(
+  category: 'DCR' | 'NONDCR',
+  type: 'P Type' | 'N Type',
+) {
+  return this.panelOptionRepository.find({
+    where: {
+      panelCategory: category,
+      panelType: type,
+      isActive: true,
+    },
+    order: {
+      capacityWatt: 'ASC',
+    },
+  });
+}
+
+async createPanelOption(data: any) {
+  const option = this.panelOptionRepository.create({
+    panelCategory: data.panelCategory,
+    panelType: data.panelType,
+    brandName: String(data.brandName || '').trim(),
+    capacityWatt: Number(data.capacityWatt || 0),
+    rate: Number(data.rate || 0),
+    isActive: data.isActive !== false,
+  });
+
+  return this.panelOptionRepository.save(option);
+}
+
+async updatePanelOption(id: number, data: any) {
+  const option = await this.panelOptionRepository.findOne({
+    where: { id },
+  });
+
+  if (!option) {
+    throw new Error('Panel option not found');
+  }
+
+  Object.assign(option, {
+    panelCategory: data.panelCategory ?? option.panelCategory,
+    panelType: data.panelType ?? option.panelType,
+    brandName:
+      data.brandName !== undefined
+        ? String(data.brandName || '').trim()
+        : option.brandName,
+    capacityWatt:
+      data.capacityWatt !== undefined
+        ? Number(data.capacityWatt || 0)
+        : option.capacityWatt,
+    rate: data.rate !== undefined ? Number(data.rate || 0) : option.rate,
+    isActive:
+      data.isActive !== undefined ? Boolean(data.isActive) : option.isActive,
+  });
+
+  return this.panelOptionRepository.save(option);
+}
+
+async deletePanelOption(id: number) {
+  const option = await this.panelOptionRepository.findOne({
+    where: { id },
+  });
+
+  if (!option) {
+    throw new Error('Panel option not found');
+  }
+
+  await this.panelOptionRepository.delete(id);
+
+  return {
+    message: 'Panel option deleted successfully',
+  };
 }
 
 async updateSettings(data: any) {

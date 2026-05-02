@@ -8,6 +8,7 @@ import {
   Post,
   Req,
   UseGuards,
+  Delete,
 } from '@nestjs/common';
 import { CalculatorService } from './calculator.service';
 import { CreateCalculatorDto } from './dto/create-calculator.dto';
@@ -51,6 +52,43 @@ export class CalculatorController {
   ) {
     return this.calculatorService.findByMeetingId(meetingId);
   }
+
+  @Get('panel-options')
+getPanelOptions(
+  @Req() req: any,
+) {
+  const category = String(req.query?.category || 'DCR').toUpperCase();
+  const type = String(req.query?.type || 'P Type');
+
+  return this.calculatorService.getPanelOptions(
+    category as 'DCR' | 'NONDCR',
+    type as 'P Type' | 'N Type',
+  );
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Post('panel-options')
+createPanelOption(@Body() body: any) {
+  return this.calculatorService.createPanelOption(body);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Patch('panel-options/:id')
+updatePanelOption(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+) {
+  return this.calculatorService.updatePanelOption(id, body);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Delete('panel-options/:id')
+deletePanelOption(@Param('id', ParseIntPipe) id: number) {
+  return this.calculatorService.deletePanelOption(id);
+}
 
   @Get()
   async findAll() {
