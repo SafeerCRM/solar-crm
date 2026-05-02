@@ -16,6 +16,11 @@ const [structureForm, setStructureForm] = useState({
   capacityKw: '',
   ratePerKw: '',
 });
+const [electricalOptions, setElectricalOptions] = useState<any[]>([]);
+const [electricalForm, setElectricalForm] = useState({
+  capacityKw: '',
+  rate: '',
+});
 const [ongridForm, setOngridForm] = useState({
   phaseType: '1 Phase',
   brandName: '',
@@ -53,6 +58,7 @@ const [panelForm, setPanelForm] = useState({
   fetchPanelOptions();
   fetchOngridOptions();
   fetchStructureOptions();
+  fetchElectricalOptions();
 }, []);
 
   // handle change
@@ -89,6 +95,18 @@ const fetchStructureOptions = async () => {
     });
 
     setStructureOptions(res.data || []);
+  } catch (err) {
+    console.error(err);
+  }
+};
+
+const fetchElectricalOptions = async () => {
+  try {
+    const res = await axios.get(`${backendUrl}/calculator/electrical-options`, {
+      headers: getAuthHeaders(),
+    });
+
+    setElectricalOptions(res.data || []);
   } catch (err) {
     console.error(err);
   }
@@ -238,6 +256,46 @@ const deleteStructureOption = async (id: number) => {
     );
 
     fetchStructureOptions();
+  } catch (err) {
+    console.error(err);
+    alert('Delete failed');
+  }
+};
+
+const createElectricalOption = async () => {
+  try {
+    await axios.post(
+      `${backendUrl}/calculator/electrical-options`,
+      {
+        capacityKw: Number(electricalForm.capacityKw),
+        rate: Number(electricalForm.rate),
+      },
+      { headers: getAuthHeaders() }
+    );
+
+    alert('Electrical option added');
+
+    setElectricalForm({
+      capacityKw: '',
+      rate: '',
+    });
+
+    fetchElectricalOptions();
+  } catch (err) {
+    console.error(err);
+    alert('Failed to add electrical option');
+  }
+};
+
+const deleteElectricalOption = async (id: number) => {
+  if (!confirm('Delete this option?')) return;
+
+  try {
+    await axios.delete(`${backendUrl}/calculator/electrical-options/${id}`, {
+      headers: getAuthHeaders(),
+    });
+
+    fetchElectricalOptions();
   } catch (err) {
     console.error(err);
     alert('Delete failed');
@@ -530,6 +588,63 @@ const deleteStructureOption = async (id: number) => {
 
         <button
           onClick={() => deleteStructureOption(opt.id)}
+          className="text-red-600"
+        >
+          Delete
+        </button>
+      </div>
+    ))}
+  </div>
+</Section>
+
+<Section title="Electrical Options">
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <input
+      type="number"
+      placeholder="Capacity (kW)"
+      value={electricalForm.capacityKw}
+      onChange={(e) =>
+        setElectricalForm({
+          ...electricalForm,
+          capacityKw: e.target.value,
+        })
+      }
+      className="border p-2 rounded"
+    />
+
+    <input
+      type="number"
+      placeholder="Rate"
+      value={electricalForm.rate}
+      onChange={(e) =>
+        setElectricalForm({
+          ...electricalForm,
+          rate: e.target.value,
+        })
+      }
+      className="border p-2 rounded"
+    />
+
+    <button
+      onClick={createElectricalOption}
+      className="bg-green-600 text-white px-4 py-2 rounded"
+    >
+      Add Electrical Option
+    </button>
+  </div>
+
+  <div className="mt-4 space-y-2">
+    {electricalOptions.map((opt) => (
+      <div
+        key={opt.id}
+        className="flex justify-between items-center border p-2 rounded"
+      >
+        <span>
+          {opt.capacityKw} kW | ₹{opt.rate}
+        </span>
+
+        <button
+          onClick={() => deleteElectricalOption(opt.id)}
           className="text-red-600"
         >
           Delete
