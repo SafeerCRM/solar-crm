@@ -89,6 +89,9 @@ const [availableArea, setAvailableArea] = useState(0);
 const [requiredArea, setRequiredArea] = useState(0);
 const [areaError, setAreaError] = useState('');
 const [calculatorSettings, setCalculatorSettings] = useState<any>({});
+const [ongridOptions, setOngridOptions] = useState<any[]>([]);
+const [selectedOngridOptionId, setSelectedOngridOptionId] = useState<number | null>(null);
+const [ongridPhase, setOngridPhase] = useState('1 Phase');
 
   const [values, setValues] = useState<CalculatorValues>({
     meetingId: initialData?.meetingId || '',
@@ -243,6 +246,11 @@ useEffect(() => {
   fetchCalculatorSettings();
 }, []);
 
+useEffect(() => {
+  fetchOngridOptions();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [ongridPhase]);
+
   const fetchCalculatorSettings = async () => {
   try {
     const res = await axios.get(`${backendUrl}/calculator/settings`, {
@@ -250,6 +258,21 @@ useEffect(() => {
     });
 
     setCalculatorSettings(res.data || {});
+  } catch (err) {
+    console.error(err);
+  }
+};
+
+const fetchOngridOptions = async () => {
+  try {
+    const res = await axios.get(`${backendUrl}/calculator/ongrid-options`, {
+      params: {
+        phase: ongridPhase,
+      },
+      headers: getAuthHeaders(),
+    });
+
+    setOngridOptions(res.data || []);
   } catch (err) {
     console.error(err);
   }
@@ -552,16 +575,17 @@ const fetchStructureOptions = async () => {
             />
           </div>
 
-          <div>
-            <label className={labelClassName}>Watt Per Panel</label>
-            <input
-              type="number"
-              value={values.wattPerPanel}
-              onChange={(e) => setNumberValue('wattPerPanel', e.target.value)}
-              className={inputClassName}
-              placeholder="Enter watt per panel"
-            />
-          </div>
+          {/* OLD FIELD DISABLED (replaced by dropdown) */}
+<div className="opacity-50 pointer-events-none">
+  <label className={labelClassName}>Watt Per Panel (Auto)</label>
+  <input
+    type="number"
+    value={values.wattPerPanel}
+    readOnly
+    className={inputClassName}
+  />
+</div>
+
 <div>
   <label className={labelClassName}>Select Panel</label>
 
@@ -595,43 +619,88 @@ const fetchStructureOptions = async () => {
       </CalculatorSection>
 
       <CalculatorSection title="2. Ongrid Converter">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div>
-            <label className={labelClassName}>Brand</label>
-            <input
-              type="text"
-              value={values.ongridBrand}
-              onChange={(e) => setTextValue('ongridBrand', e.target.value)}
-              className={inputClassName}
-              placeholder="Enter brand"
-            />
-          </div>
+  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+    <div>
+      <label className={labelClassName}>Phase</label>
+      <select
+        value={ongridPhase}
+        onChange={(e) => {
+          setOngridPhase(e.target.value);
+          setSelectedOngridOptionId(null);
+          setValues((prev) => ({
+            ...prev,
+            ongridBrand: '',
+            ongridWatt: 0,
+          }));
+        }}
+        className={inputClassName}
+      >
+        <option value="1 Phase">1 Phase</option>
+        <option value="3 Phase">3 Phase</option>
+      </select>
+    </div>
 
-          <div>
-            <label className={labelClassName}>Watt</label>
-            <input
-              type="number"
-              value={values.ongridWatt}
-              onChange={(e) => setNumberValue('ongridWatt', e.target.value)}
-              className={inputClassName}
-              placeholder="Enter watt"
-            />
-          </div>
+    <div>
+      <label className={labelClassName}>Select Ongrid Converter</label>
+      <select
+        value={selectedOngridOptionId || ''}
+        onChange={(e) => {
+          const id = Number(e.target.value);
+          setSelectedOngridOptionId(id);
 
-          <div>
-            <label className={labelClassName}>Quantity</label>
-            <input
-              type="number"
-              value={values.ongridQuantity}
-              onChange={(e) =>
-                setNumberValue('ongridQuantity', e.target.value)
-              }
-              className={inputClassName}
-              placeholder="Enter quantity"
-            />
-          </div>
-        </div>
-      </CalculatorSection>
+          const selected = ongridOptions.find((opt) => Number(opt.id) === id);
+
+          if (selected) {
+            setValues((prev) => ({
+              ...prev,
+              ongridBrand: selected.brandName,
+              ongridWatt: Number(selected.capacity || 0),
+            }));
+          }
+        }}
+        className={inputClassName}
+      >
+        <option value="">Select converter</option>
+        {ongridOptions.map((opt) => (
+          <option key={opt.id} value={opt.id}>
+            {opt.brandName} - {opt.capacity} kW
+          </option>
+        ))}
+      </select>
+    </div>
+
+    <div className="opacity-50 pointer-events-none">
+      <label className={labelClassName}>Selected Brand (Auto)</label>
+      <input
+        type="text"
+        value={values.ongridBrand}
+        readOnly
+        className={inputClassName}
+      />
+    </div>
+
+    <div className="opacity-50 pointer-events-none">
+      <label className={labelClassName}>Selected Capacity kW (Auto)</label>
+      <input
+        type="number"
+        value={values.ongridWatt}
+        readOnly
+        className={inputClassName}
+      />
+    </div>
+
+    <div>
+      <label className={labelClassName}>Quantity</label>
+      <input
+        type="number"
+        value={values.ongridQuantity}
+        onChange={(e) => setNumberValue('ongridQuantity', e.target.value)}
+        className={inputClassName}
+        placeholder="Enter quantity"
+      />
+    </div>
+  </div>
+</CalculatorSection>
 
       <CalculatorSection title="3. Area">
   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -710,29 +779,16 @@ const fetchStructureOptions = async () => {
   </select>
 </div>
 
-          <div>
-            <label className={labelClassName}>Watt</label>
-            <input
-              type="number"
-              value={values.structureWatt}
-              onChange={(e) => setNumberValue('structureWatt', e.target.value)}
-              className={inputClassName}
-              placeholder="Enter watt"
-            />
-          </div>
-
-          <div>
-            <label className={labelClassName}>Quantity</label>
-            <input
-              type="number"
-              value={values.structureQuantity}
-              onChange={(e) =>
-                setNumberValue('structureQuantity', e.target.value)
-              }
-              className={inputClassName}
-              placeholder="Enter quantity"
-            />
-          </div>
+          {/* OLD STRUCTURE INPUTS DISABLED */}
+<div className="opacity-50 pointer-events-none">
+  <label className={labelClassName}>Structure Capacity (Auto)</label>
+  <input
+    type="number"
+    value={values.structureWatt}
+    readOnly
+    className={inputClassName}
+  />
+</div>
         </div>
       </CalculatorSection>
 
