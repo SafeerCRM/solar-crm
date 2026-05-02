@@ -6,6 +6,7 @@ import { CreateCalculatorDto } from './dto/create-calculator.dto';
 import { CalculatorSetting } from './calculator-setting.entity';
 import { CalculatorPanelOption } from './calculator-panel-option.entity';
 import { CalculatorOngridOption } from './calculator-ongrid-option.entity';
+import { CalculatorStructureOption } from './calculator-structure-option.entity';
 
 @Injectable()
 export class CalculatorService {
@@ -18,6 +19,8 @@ private readonly calculatorSettingRepository: Repository<CalculatorSetting>,
 private readonly panelOptionRepository: Repository<CalculatorPanelOption>,
 @InjectRepository(CalculatorOngridOption)
 private readonly ongridOptionRepository: Repository<CalculatorOngridOption>,
+@InjectRepository(CalculatorStructureOption)
+private readonly structureOptionRepository: Repository<CalculatorStructureOption>,
   ) {}
 
 async calculateProjectCost(data: any) {
@@ -90,6 +93,61 @@ async calculateProjectCost(data: any) {
   return {
     totalProjectCost,
   };
+}
+
+async getStructureOptions(type: string) {
+  return this.structureOptionRepository.find({
+    where: {
+      structureType: type as 'Rooftop' | 'Tin Shade',
+      isActive: true,
+    },
+    order: {
+      capacityKw: 'ASC',
+    },
+  });
+}
+
+async createStructureOption(data: any) {
+  const option = this.structureOptionRepository.create({
+    structureType: data.structureType,
+    capacityKw: Number(data.capacityKw || 0),
+    ratePerKw: Number(data.ratePerKw || 0),
+    isActive: data.isActive !== false,
+  });
+
+  return this.structureOptionRepository.save(option);
+}
+
+async updateStructureOption(id: number, data: any) {
+  const option = await this.structureOptionRepository.findOne({
+    where: { id },
+  });
+
+  if (!option) {
+    throw new Error('Structure option not found');
+  }
+
+  Object.assign(option, {
+    structureType: data.structureType ?? option.structureType,
+    capacityKw:
+      data.capacityKw !== undefined
+        ? Number(data.capacityKw)
+        : option.capacityKw,
+    ratePerKw:
+      data.ratePerKw !== undefined
+        ? Number(data.ratePerKw)
+        : option.ratePerKw,
+    isActive:
+      data.isActive !== undefined ? Boolean(data.isActive) : option.isActive,
+  });
+
+  return this.structureOptionRepository.save(option);
+}
+
+async deleteStructureOption(id: number) {
+  await this.structureOptionRepository.delete(id);
+
+  return { message: 'Deleted successfully' };
 }
 
 
@@ -271,6 +329,9 @@ async updateSettings(data: any) {
     gstMultiplier: Number(data?.gstMultiplier ?? settings.gstMultiplier),
     ongridRate: Number(data?.ongridRate ?? settings.ongridRate),
     structureRate: Number(data?.structureRate ?? settings.structureRate),
+    structureSqftPerKw: Number(
+  data?.structureSqftPerKw ?? settings.structureSqftPerKw,
+),
     electricalRate: Number(data?.electricalRate ?? settings.electricalRate),
     transportRatePerKm: Number(
       data?.transportRatePerKm ?? settings.transportRatePerKm,

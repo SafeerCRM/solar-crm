@@ -6,6 +6,7 @@ import { CalculatorController } from './calculator.controller';
 import { CalculatorSetting } from './calculator-setting.entity';
 import { CalculatorPanelOption } from './calculator-panel-option.entity';
 import { CalculatorOngridOption } from './calculator-ongrid-option.entity';
+import { CalculatorStructureOption } from './calculator-structure-option.entity';
 
 @Module({
   imports: [TypeOrmModule.forFeature([
@@ -13,6 +14,7 @@ import { CalculatorOngridOption } from './calculator-ongrid-option.entity';
   CalculatorSetting,
   CalculatorPanelOption,
   CalculatorOngridOption,
+  CalculatorStructureOption,
 ])],
   controllers: [CalculatorController],
   providers: [CalculatorService],

@@ -72,4 +72,7 @@ earthingCost: number;
 
 @Column({ type: 'float', default: 0 })
 lightningArrestorCost: number;
+
+@Column({ type: 'float', default: 40 })
+structureSqftPerKw: number;
 }
