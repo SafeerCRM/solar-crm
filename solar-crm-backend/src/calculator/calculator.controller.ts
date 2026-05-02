@@ -66,6 +66,11 @@ getPanelOptions(
   );
 }
 
+@Get('electrical-options')
+getElectricalOptions() {
+  return this.calculatorService.getElectricalOptions();
+}
+
 @Get('structure-options')
 getStructureOptions(@Req() req: any) {
   const type = String(req.query.type || 'Rooftop');
@@ -97,6 +102,30 @@ updateStructureOption(
 @Delete('structure-options/:id')
 deleteStructureOption(@Param('id', ParseIntPipe) id: number) {
   return this.calculatorService.deleteStructureOption(id);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Post('electrical-options')
+createElectricalOption(@Body() body: any) {
+  return this.calculatorService.createElectricalOption(body);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Patch('electrical-options/:id')
+updateElectricalOption(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+) {
+  return this.calculatorService.updateElectricalOption(id, body);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Delete('electrical-options/:id')
+deleteElectricalOption(@Param('id', ParseIntPipe) id: number) {
+  return this.calculatorService.deleteElectricalOption(id);
 }
 
 @Get('ongrid-options')

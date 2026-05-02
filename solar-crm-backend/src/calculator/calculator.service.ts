@@ -7,6 +7,7 @@ import { CalculatorSetting } from './calculator-setting.entity';
 import { CalculatorPanelOption } from './calculator-panel-option.entity';
 import { CalculatorOngridOption } from './calculator-ongrid-option.entity';
 import { CalculatorStructureOption } from './calculator-structure-option.entity';
+import { CalculatorElectricalOption } from './calculator-electrical-option.entity';
 
 @Injectable()
 export class CalculatorService {
@@ -21,6 +22,8 @@ private readonly panelOptionRepository: Repository<CalculatorPanelOption>,
 private readonly ongridOptionRepository: Repository<CalculatorOngridOption>,
 @InjectRepository(CalculatorStructureOption)
 private readonly structureOptionRepository: Repository<CalculatorStructureOption>,
+@InjectRepository(CalculatorElectricalOption)
+private readonly electricalOptionRepository: Repository<CalculatorElectricalOption>,
   ) {}
 
 async calculateProjectCost(data: any) {
@@ -93,6 +96,55 @@ async calculateProjectCost(data: any) {
   return {
     totalProjectCost,
   };
+}
+
+async getElectricalOptions() {
+  return this.electricalOptionRepository.find({
+    where: {
+      isActive: true,
+    },
+    order: {
+      capacityKw: 'ASC',
+    },
+  });
+}
+
+async createElectricalOption(data: any) {
+  const option = this.electricalOptionRepository.create({
+    capacityKw: Number(data.capacityKw || 0),
+    rate: Number(data.rate || 0),
+    isActive: data.isActive !== false,
+  });
+
+  return this.electricalOptionRepository.save(option);
+}
+
+async updateElectricalOption(id: number, data: any) {
+  const option = await this.electricalOptionRepository.findOne({
+    where: { id },
+  });
+
+  if (!option) {
+    throw new Error('Electrical option not found');
+  }
+
+  Object.assign(option, {
+    capacityKw:
+      data.capacityKw !== undefined
+        ? Number(data.capacityKw)
+        : option.capacityKw,
+    rate: data.rate !== undefined ? Number(data.rate) : option.rate,
+    isActive:
+      data.isActive !== undefined ? Boolean(data.isActive) : option.isActive,
+  });
+
+  return this.electricalOptionRepository.save(option);
+}
+
+async deleteElectricalOption(id: number) {
+  await this.electricalOptionRepository.delete(id);
+
+  return { message: 'Deleted successfully' };
 }
 
 async getStructureOptions(type: string) {
