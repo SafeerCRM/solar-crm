@@ -73,11 +73,8 @@ getElectricalOptions() {
 
 @Get('structure-options')
 getStructureOptions(@Req() req: any) {
-  const type = String(req.query.type || 'Rooftop');
-
-  return this.calculatorService.getStructureOptions(
-    type as 'Rooftop' | 'Tin Shade',
-  );
+  const type = req.query?.type ? String(req.query.type) : undefined;
+  return this.calculatorService.getStructureOptions(type);
 }
 
 @UseGuards(JwtAuthGuard, RolesGuard)

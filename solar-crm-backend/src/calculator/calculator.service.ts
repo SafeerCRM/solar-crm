@@ -147,13 +147,19 @@ async deleteElectricalOption(id: number) {
   return { message: 'Deleted successfully' };
 }
 
-async getStructureOptions(type: string) {
+async getStructureOptions(type?: string) {
+  const where: any = {
+    isActive: true,
+  };
+
+  if (type) {
+    where.structureType = type as 'Rooftop' | 'Tin Shade';
+  }
+
   return this.structureOptionRepository.find({
-    where: {
-      structureType: type as 'Rooftop' | 'Tin Shade',
-      isActive: true,
-    },
+    where,
     order: {
+      structureType: 'ASC',
       capacityKw: 'ASC',
     },
   });

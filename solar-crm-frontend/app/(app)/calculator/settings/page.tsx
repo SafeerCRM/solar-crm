@@ -88,11 +88,8 @@ const [panelForm, setPanelForm] = useState({
 const fetchStructureOptions = async () => {
   try {
     const res = await axios.get(`${backendUrl}/calculator/structure-options`, {
-      params: {
-        type: 'Rooftop',
-      },
-      headers: getAuthHeaders(),
-    });
+  headers: getAuthHeaders(),
+});
 
     setStructureOptions(res.data || []);
   } catch (err) {

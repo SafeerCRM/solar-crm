@@ -33,7 +33,7 @@ type CalculatorValues = {
   ongridWatt: number;
   ongridQuantity: number;
 
-  structureType: 'Rooftop' | 'Tin-shade';
+  structureType: 'Rooftop' | 'Tin Shade';
   structureWatt: number;
   structureQuantity: number;
 
@@ -738,13 +738,13 @@ const fetchStructureOptions = async () => {
               onChange={(e) =>
                 setTextValue(
                   'structureType',
-                  e.target.value as 'Rooftop' | 'Tin-shade'
+                  e.target.value as 'Rooftop' | 'Tin Shade'
                 )
               }
               className={inputClassName}
             >
               <option value="Rooftop">Rooftop</option>
-              <option value="Tin-shade">Tin-shade</option>
+              <option value="Tin Shade">Tin Shade</option>
             </select>
           </div>
 
