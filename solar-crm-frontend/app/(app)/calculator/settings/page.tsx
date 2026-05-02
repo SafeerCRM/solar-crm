@@ -8,6 +8,14 @@ export default function CalculatorSettingsPage() {
   const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
   const [settings, setSettings] = useState<any>({});
+  const [panelOptions, setPanelOptions] = useState<any[]>([]);
+const [panelForm, setPanelForm] = useState({
+  panelCategory: 'DCR',
+  panelType: 'P Type',
+  brandName: '',
+  capacityWatt: '',
+  rate: '',
+});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -28,8 +36,9 @@ export default function CalculatorSettingsPage() {
   };
 
   useEffect(() => {
-    fetchSettings();
-  }, []);
+  fetchSettings();
+  fetchPanelOptions();
+}, []);
 
   // handle change
   const handleChange = (key: string, value: string) => {
@@ -38,6 +47,69 @@ export default function CalculatorSettingsPage() {
       [key]: Number(value),
     }));
   };
+
+  const fetchPanelOptions = async () => {
+  try {
+    const res = await axios.get(`${backendUrl}/calculator/panel-options`, {
+      params: {
+        category: 'DCR',
+        type: 'P Type',
+      },
+      headers: getAuthHeaders(),
+    });
+
+    setPanelOptions(res.data || []);
+  } catch (err) {
+    console.error(err);
+  }
+};
+
+const createPanelOption = async () => {
+  try {
+    await axios.post(
+      `${backendUrl}/calculator/panel-options`,
+      {
+        panelCategory: panelForm.panelCategory,
+        panelType: panelForm.panelType,
+        brandName: panelForm.brandName,
+        capacityWatt: Number(panelForm.capacityWatt),
+        rate: Number(panelForm.rate),
+      },
+      { headers: getAuthHeaders() }
+    );
+
+    alert('Panel option added');
+
+    setPanelForm({
+      panelCategory: 'DCR',
+      panelType: 'P Type',
+      brandName: '',
+      capacityWatt: '',
+      rate: '',
+    });
+
+    fetchPanelOptions();
+  } catch (err) {
+    console.error(err);
+    alert('Failed to add panel option');
+  }
+};
+
+const deletePanelOption = async (id: number) => {
+  if (!confirm('Delete this option?')) return;
+
+  try {
+    await axios.delete(
+      `${backendUrl}/calculator/panel-options/${id}`,
+      { headers: getAuthHeaders() }
+    );
+
+    fetchPanelOptions();
+  } catch (err) {
+    console.error(err);
+    alert('Delete failed');
+  }
+};
 
   // save
   const handleSave = async () => {
@@ -110,6 +182,90 @@ export default function CalculatorSettingsPage() {
         <Input label="Earthing Cost" value={settings.earthingCost} onChange={(v) => handleChange('earthingCost', v)} />
         <Input label="Lightning Arrestor Cost" value={settings.lightningArrestorCost} onChange={(v) => handleChange('lightningArrestorCost', v)} />
       </Section>
+
+<Section title="Panel Options (Dynamic)">
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+    <select
+      value={panelForm.panelCategory}
+      onChange={(e) =>
+        setPanelForm({ ...panelForm, panelCategory: e.target.value })
+      }
+      className="border p-2 rounded"
+    >
+      <option value="DCR">DCR</option>
+      <option value="NONDCR">NONDCR</option>
+    </select>
+
+    <select
+      value={panelForm.panelType}
+      onChange={(e) =>
+        setPanelForm({ ...panelForm, panelType: e.target.value })
+      }
+      className="border p-2 rounded"
+    >
+      <option value="P Type">P Type</option>
+      <option value="N Type">N Type</option>
+    </select>
+
+    <input
+      placeholder="Brand"
+      value={panelForm.brandName}
+      onChange={(e) =>
+        setPanelForm({ ...panelForm, brandName: e.target.value })
+      }
+      className="border p-2 rounded"
+    />
+
+    <input
+      type="number"
+      placeholder="Capacity (Watt)"
+      value={panelForm.capacityWatt}
+      onChange={(e) =>
+        setPanelForm({ ...panelForm, capacityWatt: e.target.value })
+      }
+      className="border p-2 rounded"
+    />
+
+    <input
+      type="number"
+      placeholder="Rate per Watt"
+      value={panelForm.rate}
+      onChange={(e) =>
+        setPanelForm({ ...panelForm, rate: e.target.value })
+      }
+      className="border p-2 rounded"
+    />
+
+    <button
+      onClick={createPanelOption}
+      className="bg-green-600 text-white px-4 py-2 rounded"
+    >
+      Add Panel Option
+    </button>
+  </div>
+
+  <div className="mt-4 space-y-2">
+    {panelOptions.map((opt) => (
+      <div
+        key={opt.id}
+        className="flex justify-between items-center border p-2 rounded"
+      >
+        <span>
+          {opt.panelCategory} | {opt.panelType} | {opt.brandName} | {opt.capacityWatt}W | ₹{opt.rate}
+        </span>
+
+        <button
+          onClick={() => deletePanelOption(opt.id)}
+          className="text-red-600"
+        >
+          Delete
+        </button>
+      </div>
+    ))}
+  </div>
+</Section>
+
 
       <button
         onClick={handleSave}
