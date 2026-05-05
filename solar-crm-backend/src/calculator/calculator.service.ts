@@ -212,7 +212,8 @@ const appliedDiscount =
 
 const discountAdjusted = requestedDiscount > maxAllowedDiscount;
 
-  const baseCostBeforeMargin =
+// ✅ Base cost (without margin)
+const baseCostBeforeMargin =
   panelCost +
   ongridCost +
   structureCost +
@@ -233,9 +234,15 @@ const discountAdjusted = requestedDiscount > maxAllowedDiscount;
   Number(settings.earthingCost || 0) +
   Number(settings.lightningArrestorCost || 0);
 
-const totalProjectCost = baseCostBeforeMargin + Number(marginAmount || 0);
+// ✅ Add margin
+const totalProjectCost =
+  baseCostBeforeMargin + Number(marginAmount || 0);
 
-  return {
+// ✅ APPLY DISCOUNT (THIS WAS MISSING)
+const finalCost = Math.max(totalProjectCost - appliedDiscount, 0);
+
+// ✅ RETURN
+return {
   baseCostBeforeMargin,
   marginAmount,
   totalProjectCost,
@@ -246,6 +253,7 @@ const totalProjectCost = baseCostBeforeMargin + Number(marginAmount || 0);
   appliedDiscount,
   discountAdjusted,
   finalCost,
+};
 
   breakdown: {
       panelCost,
