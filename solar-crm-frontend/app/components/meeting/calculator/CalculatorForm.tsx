@@ -307,8 +307,15 @@ if (nextDiscountAdjusted) {
     const data = res.data || [];
     setBatteryOptions(data);
 
-    const types = Array.from(new Set(data.map((b: any) => b.type)));
-    setBatteryTypes(types);
+    const types: string[] = Array.from(
+  new Set(
+    data
+      .map((b: any) => String(b.type || '').trim())
+      .filter(Boolean)
+  )
+);
+
+setBatteryTypes(types);
 
   } catch (err) {
     console.error(err);
