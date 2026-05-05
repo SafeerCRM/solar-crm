@@ -936,7 +936,7 @@ onWheel={preventNumberWheelChange}
   <div>
     <label className={labelClassName}>Select Structure</label>
     <select
-      value={selectedStructureOptionId}
+      value={selectedStructureOptionId || ''}
       onChange={(e) => {
         const selected = structureOptions.find(
           (s) => Number(s.id) === Number(e.target.value)
