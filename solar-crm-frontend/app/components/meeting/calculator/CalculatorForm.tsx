@@ -138,7 +138,7 @@ const [selectedHybridOptionId, setSelectedHybridOptionId] = useState<number | nu
 
     ongridBrand: '',
     ongridWatt: 0,
-    ongridQuantity: 0,
+    ongridQuantity: 1,
 
     structureType: '',
     structureWatt: 0,
@@ -155,7 +155,7 @@ const [selectedHybridOptionId, setSelectedHybridOptionId] = useState<number | nu
 
     hybridType: '',
     hybridPhase: 'Single Phase',
-    hybridQuantity: 0,
+    hybridQuantity: 1,
 
     batteryType: '',
     batteryStrength: '',
@@ -475,7 +475,7 @@ const handleGenerateProposal = async () => {
 
       ongridBrand: '',
       ongridWatt: 0,
-      ongridQuantity: 0,
+      ongridQuantity: 1,
 
       structureType: '',
       structureWatt: 0,
@@ -492,7 +492,7 @@ const handleGenerateProposal = async () => {
 
       hybridType: '',
       hybridPhase: 'Single Phase',
-      hybridQuantity: 0,
+      hybridQuantity: 1,
 
       batteryType: '',
       batteryStrength: '',
@@ -825,6 +825,7 @@ onWheel={preventNumberWheelChange}
                     ...prev,
                     ongridBrand: selected.brandName,
                     ongridWatt: Number(selected.capacity || 0),
+                    ongridQuantity: prev.ongridQuantity || 1,
                   }));
                 }
               }}
@@ -1151,6 +1152,7 @@ onWheel={preventNumberWheelChange}
             setValues((prev) => ({
               ...prev,
               hybridType: selected.brandName,
+              hybridQuantity: prev.hybridQuantity || 1,
             }));
           }
         }}
