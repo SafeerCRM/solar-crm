@@ -102,6 +102,7 @@ const [finalCost, setFinalCost] = useState(0);
   const [electricalOptions, setElectricalOptions] = useState<any[]>([]);
 const [selectedElectricalOptionId, setSelectedElectricalOptionId] = useState<number | null>(null);
   const [selectedStructureOptionId, setSelectedStructureOptionId] = useState<number | null>(null);
+  const [structureTypes, setStructureTypes] = useState<string[]>([]);
 
   const [availableArea, setAvailableArea] = useState(0);
   const [requiredArea, setRequiredArea] = useState(0);
@@ -438,7 +439,21 @@ const handleGenerateProposal = async () => {
       headers: getAuthHeaders(),
     });
 
-    setStructureOptions(res.data || []);
+    const data = res.data || [];
+
+    setStructureOptions(data);
+
+    // ✅ Build unique structure types
+    const types: string[] = Array.from(
+      new Set(
+        data
+          .map((s: any) => String(s.structureType || '').trim())
+          .filter(Boolean)
+      )
+    );
+
+    setStructureTypes(types);
+
   } catch (err) {
     console.error(err);
   }
@@ -890,65 +905,96 @@ onWheel={preventNumberWheelChange}
 
       <CalculatorSection title="4. Structure">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div>
-            <label className={labelClassName}>Structure Type</label>
-            <select
-              value={values.structureType}
-              onChange={(e) =>
-                setTextValue(
-                  'structureType',
-                  e.target.value as 'Rooftop' | 'Tin Shade'
-                )
-              }
-              className={inputClassName}
-            >
-              <option value="Rooftop">Rooftop</option>
-              <option value="Tin Shade">Tin Shade</option>
-            </select>
-          </div>
 
-          <div>
-            <label className={labelClassName}>Select Structure</label>
+  {/* Structure Type */}
+  <div>
+    <label className={labelClassName}>Structure Type</label>
+    <select
+      value={values.structureType || ''}
+      onChange={(e) => {
+        const selectedType = e.target.value;
 
-            <select
-              value={selectedStructureOptionId || ''}
-              onChange={(e) => {
-                const id = Number(e.target.value);
-                setSelectedStructureOptionId(id);
+        setValues((prev) => ({
+          ...prev,
+          structureType: selectedType,
+          structureOptionId: undefined,
+          structureWatt: 0,
+        }));
+      }}
+      className={inputClassName}
+    >
+      <option value="">Select Type</option>
+      {structureTypes.map((type) => (
+        <option key={type} value={type}>
+          {type}
+        </option>
+      ))}
+    </select>
+  </div>
 
-                const selected = structureOptions.find((opt) => Number(opt.id) === id);
+  {/* Capacity Dropdown */}
+  <div>
+    <label className={labelClassName}>Select Structure</label>
+    <select
+      value={selectedStructureOptionId}
+      onChange={(e) => {
+        const selected = structureOptions.find(
+          (s) => Number(s.id) === Number(e.target.value)
+        );
 
-                if (selected) {
-                  setValues((prev) => ({
-  ...prev,
-  structureType: selected.structureType || '',
-  structureWatt: Number(selected.capacityKw || 0),
-  structureQuantity: 1,
-}));
-                }
-              }}
-              className={inputClassName}
-            >
-              <option value="">Select structure</option>
+        setSelectedStructureOptionId(Number(e.target.value));
 
-              {structureOptions.map((opt) => (
-                <option key={opt.id} value={opt.id}>
-                  {opt.structureType} - {opt.capacityKw} kW
-                </option>
-              ))}
-            </select>
-          </div>
+        if (selected) {
+          setValues((prev) => ({
+            ...prev,
+            structureOptionId: selected.id,
+            structureWatt: Number(selected.capacityKw || 0),
+          }));
+        }
+      }}
+      className={inputClassName}
+      disabled={!values.structureType}
+    >
+      <option value="">Select Capacity</option>
 
-          <div className="opacity-50 pointer-events-none">
-            <label className={labelClassName}>Structure Capacity (Auto)</label>
-            <input
-              type="number"
-              value={values.structureWatt}
-              readOnly
-              className={inputClassName}
-            />
-          </div>
-        </div>
+      {structureOptions
+        .filter(
+          (s) => s.structureType === values.structureType
+        )
+        .map((opt) => (
+          <option key={opt.id} value={opt.id}>
+            {opt.capacityKw} kW
+          </option>
+        ))}
+    </select>
+  </div>
+
+  {/* Auto Capacity */}
+  <div>
+    <label className={labelClassName}>Structure Capacity (Auto)</label>
+    <input
+      type="number"
+      value={values.structureWatt || 0}
+      readOnly
+      className={`${inputClassName} bg-gray-100`}
+    />
+  </div>
+
+  {/* Quantity */}
+  <div>
+    <label className={labelClassName}>Quantity</label>
+    <input
+      type="number"
+      min="0"
+      value={values.structureQuantity || 0}
+      onChange={(e) =>
+        setNumberValue('structureQuantity', Number(e.target.value))
+      }
+      className={inputClassName}
+    />
+  </div>
+
+</div>
       </CalculatorSection>
 
       <CalculatorSection title="5. Electrical Items">
