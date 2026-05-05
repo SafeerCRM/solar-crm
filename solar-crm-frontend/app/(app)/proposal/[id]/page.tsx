@@ -213,29 +213,30 @@ export default function ProposalPage() {
         {/* Actions */}
         <div className="mt-6 flex flex-col gap-3 md:flex-row print:hidden">
           <button
-  onClick={() => {
-    const proposalUrl = window.location.href;
-    const isAndroid = /Android/i.test(navigator.userAgent);
-    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-
-    if (isAndroid) {
-      window.location.href = `intent://${proposalUrl.replace(
-        /^https?:\/\//,
-        ''
-      )}#Intent;scheme=https;package=com.android.chrome;end`;
-      return;
-    }
-
-    if (isMobile) {
-      window.open(proposalUrl, '_blank');
-      return;
-    }
-
-    window.print();
-  }}
+  onClick={() => window.print()}
   className="rounded-xl bg-blue-600 px-5 py-3 text-white"
 >
   Print / Save as PDF
+</button>
+
+<a
+  href={`intent://${window.location.href.replace(
+    /^https?:\/\//,
+    ''
+  )}#Intent;scheme=https;package=com.android.chrome;end`}
+  className="rounded-xl bg-orange-600 px-5 py-3 text-center text-white"
+>
+  Open in Chrome for PDF
+</a>
+
+<button
+  onClick={async () => {
+    await navigator.clipboard.writeText(window.location.href);
+    alert('Proposal link copied. Open Chrome and paste the link.');
+  }}
+  className="rounded-xl bg-gray-700 px-5 py-3 text-white"
+>
+  Copy Proposal Link
 </button>
 
           <a
