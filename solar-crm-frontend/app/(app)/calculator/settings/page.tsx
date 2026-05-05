@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import axios from 'axios';
 import { getAuthHeaders } from '@/lib/authHeaders';
 
@@ -11,57 +12,91 @@ export default function CalculatorSettingsPage() {
   const [panelOptions, setPanelOptions] = useState<any[]>([]);
   const [ongridOptions, setOngridOptions] = useState<any[]>([]);
   const [structureOptions, setStructureOptions] = useState<any[]>([]);
-const [structureForm, setStructureForm] = useState({
-  structureType: 'Rooftop',
-  capacityKw: '',
-  ratePerKw: '',
-});
-const [electricalOptions, setElectricalOptions] = useState<any[]>([]);
-const [electricalForm, setElectricalForm] = useState({
-  capacityKw: '',
-  rate: '',
-});
-const [ongridForm, setOngridForm] = useState({
-  phaseType: '1 Phase',
-  brandName: '',
-  capacity: '',
-  rate: '',
-});
-const [panelForm, setPanelForm] = useState({
-  panelCategory: 'DCR',
-  panelType: 'P Type',
-  brandName: '',
-  capacityWatt: '',
-  rate: '',
-});
+  const [electricalOptions, setElectricalOptions] = useState<any[]>([]);
+
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // fetch settings
   const fetchSettings = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(
-        `${backendUrl}/calculator/settings`,
-        { headers: getAuthHeaders() }
-      );
+
+      const res = await axios.get(`${backendUrl}/calculator/settings`, {
+        headers: getAuthHeaders(),
+      });
+
       setSettings(res.data);
     } catch (err) {
       console.error(err);
+      alert('Failed to load calculator settings');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-  fetchSettings();
-  fetchPanelOptions();
-  fetchOngridOptions();
-  fetchStructureOptions();
-  fetchElectricalOptions();
-}, []);
+  const fetchPanelOptions = async () => {
+    try {
+      const res = await axios.get(`${backendUrl}/calculator/panel-options`, {
+        params: {
+          category: 'DCR',
+          type: 'P Type',
+        },
+        headers: getAuthHeaders(),
+      });
 
-  // handle change
+      setPanelOptions(res.data || []);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchOngridOptions = async () => {
+    try {
+      const res = await axios.get(`${backendUrl}/calculator/ongrid-options`, {
+        params: {
+          phase: '1 Phase',
+        },
+        headers: getAuthHeaders(),
+      });
+
+      setOngridOptions(res.data || []);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchStructureOptions = async () => {
+    try {
+      const res = await axios.get(`${backendUrl}/calculator/structure-options`, {
+        headers: getAuthHeaders(),
+      });
+
+      setStructureOptions(res.data || []);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchElectricalOptions = async () => {
+    try {
+      const res = await axios.get(`${backendUrl}/calculator/electrical-options`, {
+        headers: getAuthHeaders(),
+      });
+
+      setElectricalOptions(res.data || []);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    fetchSettings();
+    fetchPanelOptions();
+    fetchOngridOptions();
+    fetchStructureOptions();
+    fetchElectricalOptions();
+  }, []);
+
   const handleChange = (key: string, value: string) => {
     setSettings((prev: any) => ({
       ...prev,
@@ -69,246 +104,13 @@ const [panelForm, setPanelForm] = useState({
     }));
   };
 
-  const fetchPanelOptions = async () => {
-  try {
-    const res = await axios.get(`${backendUrl}/calculator/panel-options`, {
-      params: {
-        category: 'DCR',
-        type: 'P Type',
-      },
-      headers: getAuthHeaders(),
-    });
-
-    setPanelOptions(res.data || []);
-  } catch (err) {
-    console.error(err);
-  }
-};
-
-const fetchStructureOptions = async () => {
-  try {
-    const res = await axios.get(`${backendUrl}/calculator/structure-options`, {
-  headers: getAuthHeaders(),
-});
-
-    setStructureOptions(res.data || []);
-  } catch (err) {
-    console.error(err);
-  }
-};
-
-const fetchElectricalOptions = async () => {
-  try {
-    const res = await axios.get(`${backendUrl}/calculator/electrical-options`, {
-      headers: getAuthHeaders(),
-    });
-
-    setElectricalOptions(res.data || []);
-  } catch (err) {
-    console.error(err);
-  }
-};
-
-const fetchOngridOptions = async () => {
-  try {
-    const res = await axios.get(`${backendUrl}/calculator/ongrid-options`, {
-      params: {
-        phase: '1 Phase',
-      },
-      headers: getAuthHeaders(),
-    });
-
-    setOngridOptions(res.data || []);
-  } catch (err) {
-    console.error(err);
-  }
-};
-
-const createOngridOption = async () => {
-  try {
-    await axios.post(
-      `${backendUrl}/calculator/ongrid-options`,
-      {
-        phaseType: ongridForm.phaseType,
-        brandName: ongridForm.brandName,
-        capacity: Number(ongridForm.capacity),
-        rate: Number(ongridForm.rate),
-      },
-      { headers: getAuthHeaders() }
-    );
-
-    alert('Ongrid option added');
-
-    setOngridForm({
-      phaseType: '1 Phase',
-      brandName: '',
-      capacity: '',
-      rate: '',
-    });
-
-    fetchOngridOptions();
-  } catch (err) {
-    console.error(err);
-    alert('Failed to add');
-  }
-};
-
-const deleteOngridOption = async (id: number) => {
-  if (!confirm('Delete this option?')) return;
-
-  try {
-    await axios.delete(
-      `${backendUrl}/calculator/ongrid-options/${id}`,
-      { headers: getAuthHeaders() }
-    );
-
-    fetchOngridOptions();
-  } catch (err) {
-    console.error(err);
-    alert('Delete failed');
-  }
-};
-
-const createPanelOption = async () => {
-  try {
-    await axios.post(
-      `${backendUrl}/calculator/panel-options`,
-      {
-        panelCategory: panelForm.panelCategory,
-        panelType: panelForm.panelType,
-        brandName: panelForm.brandName,
-        capacityWatt: Number(panelForm.capacityWatt),
-        rate: Number(panelForm.rate),
-      },
-      { headers: getAuthHeaders() }
-    );
-
-    alert('Panel option added');
-
-    setPanelForm({
-      panelCategory: 'DCR',
-      panelType: 'P Type',
-      brandName: '',
-      capacityWatt: '',
-      rate: '',
-    });
-
-    fetchPanelOptions();
-  } catch (err) {
-    console.error(err);
-    alert('Failed to add panel option');
-  }
-};
-
-const deletePanelOption = async (id: number) => {
-  if (!confirm('Delete this option?')) return;
-
-  try {
-    await axios.delete(
-      `${backendUrl}/calculator/panel-options/${id}`,
-      { headers: getAuthHeaders() }
-    );
-
-    fetchPanelOptions();
-  } catch (err) {
-    console.error(err);
-    alert('Delete failed');
-  }
-};
-
-const createStructureOption = async () => {
-  try {
-    await axios.post(
-      `${backendUrl}/calculator/structure-options`,
-      {
-        structureType: structureForm.structureType,
-        capacityKw: Number(structureForm.capacityKw),
-        ratePerKw: Number(structureForm.ratePerKw),
-      },
-      { headers: getAuthHeaders() }
-    );
-
-    alert('Structure option added');
-
-    setStructureForm({
-      structureType: 'Rooftop',
-      capacityKw: '',
-      ratePerKw: '',
-    });
-
-    fetchStructureOptions();
-  } catch (err) {
-    console.error(err);
-    alert('Failed');
-  }
-};
-
-const deleteStructureOption = async (id: number) => {
-  if (!confirm('Delete this option?')) return;
-
-  try {
-    await axios.delete(
-      `${backendUrl}/calculator/structure-options/${id}`,
-      { headers: getAuthHeaders() }
-    );
-
-    fetchStructureOptions();
-  } catch (err) {
-    console.error(err);
-    alert('Delete failed');
-  }
-};
-
-const createElectricalOption = async () => {
-  try {
-    await axios.post(
-      `${backendUrl}/calculator/electrical-options`,
-      {
-        capacityKw: Number(electricalForm.capacityKw),
-        rate: Number(electricalForm.rate),
-      },
-      { headers: getAuthHeaders() }
-    );
-
-    alert('Electrical option added');
-
-    setElectricalForm({
-      capacityKw: '',
-      rate: '',
-    });
-
-    fetchElectricalOptions();
-  } catch (err) {
-    console.error(err);
-    alert('Failed to add electrical option');
-  }
-};
-
-const deleteElectricalOption = async (id: number) => {
-  if (!confirm('Delete this option?')) return;
-
-  try {
-    await axios.delete(`${backendUrl}/calculator/electrical-options/${id}`, {
-      headers: getAuthHeaders(),
-    });
-
-    fetchElectricalOptions();
-  } catch (err) {
-    console.error(err);
-    alert('Delete failed');
-  }
-};
-
-  // save
   const handleSave = async () => {
     try {
       setSaving(true);
 
-      await axios.patch(
-        `${backendUrl}/calculator/settings`,
-        settings,
-        { headers: getAuthHeaders() }
-      );
+      await axios.patch(`${backendUrl}/calculator/settings`, settings, {
+        headers: getAuthHeaders(),
+      });
 
       alert('Settings saved successfully');
     } catch (err) {
@@ -325,40 +127,28 @@ const deleteElectricalOption = async (id: number) => {
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-semibold">Calculator Settings</h1>
 
-      {/* PANEL */}
-      <Section title="Panel">
+      <Section title="Main Rate Settings">
         <Input label="Rate Per Watt" value={settings.ratePerWatt} onChange={(v) => handleChange('ratePerWatt', v)} />
         <Input label="GST Multiplier" value={settings.gstMultiplier} onChange={(v) => handleChange('gstMultiplier', v)} />
-      </Section>
-
-      {/* CORE */}
-      <Section title="Core Rates">
         <Input label="Ongrid Rate" value={settings.ongridRate} onChange={(v) => handleChange('ongridRate', v)} />
         <Input label="Structure Rate" value={settings.structureRate} onChange={(v) => handleChange('structureRate', v)} />
         <Input label="Electrical Rate" value={settings.electricalRate} onChange={(v) => handleChange('electricalRate', v)} />
         <Input label="Transport Rate Per KM" value={settings.transportRatePerKm} onChange={(v) => handleChange('transportRatePerKm', v)} />
-        <Input
-  label="Structure Sqft per kW"
-  value={settings.structureSqftPerKw}
-  onChange={(v) => handleChange('structureSqftPerKw', v)}
-/>
+        <Input label="Structure Sqft per kW" value={settings.structureSqftPerKw} onChange={(v) => handleChange('structureSqftPerKw', v)} />
       </Section>
 
-      {/* ADVANCED */}
-      <Section title="Advanced">
+      <Section title="Advanced Rates">
         <Input label="Hybrid Rate" value={settings.hybridRate} onChange={(v) => handleChange('hybridRate', v)} />
         <Input label="Battery Rate" value={settings.batteryRate} onChange={(v) => handleChange('batteryRate', v)} />
         <Input label="Celronic Rate" value={settings.celronicRate} onChange={(v) => handleChange('celronicRate', v)} />
         <Input label="Tata Rate" value={settings.tataRate} onChange={(v) => handleChange('tataRate', v)} />
       </Section>
 
-      {/* FIXED */}
       <Section title="Fixed Costs">
         <Input label="Margin Amount" value={settings.marginAmount} onChange={(v) => handleChange('marginAmount', v)} />
         <Input label="Electricity Department Cost" value={settings.electricityDepartmentCost} onChange={(v) => handleChange('electricityDepartmentCost', v)} />
       </Section>
 
-      {/* OTHER */}
       <Section title="Other Charges">
         <Input label="Net Metering" value={settings.netMeteringCost} onChange={(v) => handleChange('netMeteringCost', v)} />
         <Input label="Installation Charges" value={settings.installationCharges} onChange={(v) => handleChange('installationCharges', v)} />
@@ -366,7 +156,6 @@ const deleteElectricalOption = async (id: number) => {
         <Input label="Government Fees" value={settings.governmentFees} onChange={(v) => handleChange('governmentFees', v)} />
       </Section>
 
-      {/* BOS */}
       <Section title="Electrical / BOS">
         <Input label="Wiring Cost" value={settings.wiringCost} onChange={(v) => handleChange('wiringCost', v)} />
         <Input label="MCB Cost" value={settings.mcbCost} onChange={(v) => handleChange('mcbCost', v)} />
@@ -376,281 +165,78 @@ const deleteElectricalOption = async (id: number) => {
         <Input label="Lightning Arrestor Cost" value={settings.lightningArrestorCost} onChange={(v) => handleChange('lightningArrestorCost', v)} />
       </Section>
 
-<Section title="Panel Options (Dynamic)">
-  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-    <select
-      value={panelForm.panelCategory}
-      onChange={(e) =>
-        setPanelForm({ ...panelForm, panelCategory: e.target.value })
-      }
-      className="border p-2 rounded"
-    >
-      <option value="DCR">DCR</option>
-      <option value="NONDCR">NONDCR</option>
-    </select>
+      <Section title="Dynamic Calculator Option Management">
+        <ManageCard
+          title="Panel Options"
+          count={panelOptions.length}
+          description="Manage DCR / NON-DCR, P Type / N Type, brand, watt and rate."
+          href="/calculator/settings/panels"
+        />
 
-    <select
-      value={panelForm.panelType}
-      onChange={(e) =>
-        setPanelForm({ ...panelForm, panelType: e.target.value })
-      }
-      className="border p-2 rounded"
-    >
-      <option value="P Type">P Type</option>
-      <option value="N Type">N Type</option>
-    </select>
+        <ManageCard
+          title="Ongrid Converter Options"
+          count={ongridOptions.length}
+          description="Manage phase, brand, inverter capacity and rate."
+          href="/calculator/settings/ongrid"
+        />
 
-    <input
-      placeholder="Brand"
-      value={panelForm.brandName}
-      onChange={(e) =>
-        setPanelForm({ ...panelForm, brandName: e.target.value })
-      }
-      className="border p-2 rounded"
-    />
+        <ManageCard
+          title="Structure Options"
+          count={structureOptions.length}
+          description="Manage Rooftop / Tin Shade, capacity and rate per kW."
+          href="/calculator/settings/structures"
+        />
 
-    <input
-      type="number"
-      placeholder="Capacity (Watt)"
-      value={panelForm.capacityWatt}
-      onChange={(e) =>
-        setPanelForm({ ...panelForm, capacityWatt: e.target.value })
-      }
-      className="border p-2 rounded"
-    />
+        <ManageCard
+          title="Electrical Options"
+          count={electricalOptions.length}
+          description="Manage electrical capacity and rate."
+          href="/calculator/settings/electrical"
+        />
+      </Section>
 
-    <input
-      type="number"
-      placeholder="Rate per Watt"
-      value={panelForm.rate}
-      onChange={(e) =>
-        setPanelForm({ ...panelForm, rate: e.target.value })
-      }
-      className="border p-2 rounded"
-    />
+      <ManageCard
+  title="Margin Options"
+  count={0} // we will fix this later
+  description="Manage capacity-based margin slabs."
+  href="/calculator/settings/margin"
+/>
 
-    <button
-      onClick={createPanelOption}
-      className="bg-green-600 text-white px-4 py-2 rounded"
-    >
-      Add Panel Option
-    </button>
-  </div>
+<ManageCard
+  title="Hybrid Converter Options"
+  count={0}
+  description="Manage hybrid inverter options (phase, brand, capacity, rate)."
+  href="/calculator/settings/hybrid"
+/>
 
-  <div className="mt-4 space-y-2">
-    {panelOptions.map((opt) => (
-      <div
-        key={opt.id}
-        className="flex justify-between items-center border p-2 rounded"
-      >
-        <span>
-          {opt.panelCategory} | {opt.panelType} | {opt.brandName} | {opt.capacityWatt}W | ₹{opt.rate}
-        </span>
+<ManageCard
+  title="Battery Options"
+  count={0}
+  description="Manage battery type, brand, capacity and rate."
+  href="/calculator/settings/battery"
+/>
 
-        <button
-          onClick={() => deletePanelOption(opt.id)}
-          className="text-red-600"
-        >
-          Delete
-        </button>
-      </div>
-    ))}
-  </div>
-</Section>
+<ManageCard
+  title="Kit Options"
+  count={0}
+  description="Manage kit brands, capacity and rate."
+  href="/calculator/settings/kit"
+/>
 
-<Section title="Ongrid Converter Options">
-  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+<ManageCard
+  title="Expected Profit"
+  count={0}
+  description="Manage profit slabs based on capacity."
+  href="/calculator/settings/expected-profit"
+/>
 
-    <select
-      value={ongridForm.phaseType}
-      onChange={(e) =>
-        setOngridForm({ ...ongridForm, phaseType: e.target.value })
-      }
-      className="border p-2 rounded"
-    >
-      <option value="1 Phase">1 Phase</option>
-      <option value="3 Phase">3 Phase</option>
-    </select>
-
-    <input
-      placeholder="Brand"
-      value={ongridForm.brandName}
-      onChange={(e) =>
-        setOngridForm({ ...ongridForm, brandName: e.target.value })
-      }
-      className="border p-2 rounded"
-    />
-
-    <input
-      type="number"
-      placeholder="Capacity (kW)"
-      value={ongridForm.capacity}
-      onChange={(e) =>
-        setOngridForm({ ...ongridForm, capacity: e.target.value })
-      }
-      className="border p-2 rounded"
-    />
-
-    <input
-      type="number"
-      placeholder="Rate"
-      value={ongridForm.rate}
-      onChange={(e) =>
-        setOngridForm({ ...ongridForm, rate: e.target.value })
-      }
-      className="border p-2 rounded"
-    />
-
-    <button
-      onClick={createOngridOption}
-      className="bg-green-600 text-white px-4 py-2 rounded"
-    >
-      Add Ongrid Option
-    </button>
-  </div>
-
-  <div className="mt-4 space-y-2">
-    {ongridOptions.map((opt) => (
-      <div
-        key={opt.id}
-        className="flex justify-between items-center border p-2 rounded"
-      >
-        <span>
-          {opt.phaseType} | {opt.brandName} | {opt.capacity} kW | ₹{opt.rate}
-        </span>
-
-        <button
-          onClick={() => deleteOngridOption(opt.id)}
-          className="text-red-600"
-        >
-          Delete
-        </button>
-      </div>
-    ))}
-  </div>
-</Section>
-
-<Section title="Structure Options">
-  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-    <select
-      value={structureForm.structureType}
-      onChange={(e) =>
-        setStructureForm({ ...structureForm, structureType: e.target.value })
-      }
-      className="border p-2 rounded"
-    >
-      <option value="Rooftop">Rooftop</option>
-      <option value="Tin Shade">Tin Shade</option>
-    </select>
-
-    <input
-      type="number"
-      placeholder="Capacity (kW)"
-      value={structureForm.capacityKw}
-      onChange={(e) =>
-        setStructureForm({ ...structureForm, capacityKw: e.target.value })
-      }
-      className="border p-2 rounded"
-    />
-
-    <input
-      type="number"
-      placeholder="Rate per kW"
-      value={structureForm.ratePerKw}
-      onChange={(e) =>
-        setStructureForm({ ...structureForm, ratePerKw: e.target.value })
-      }
-      className="border p-2 rounded"
-    />
-
-    <button
-      onClick={createStructureOption}
-      className="bg-green-600 text-white px-4 py-2 rounded"
-    >
-      Add Structure Option
-    </button>
-  </div>
-
-  <div className="mt-4 space-y-2">
-    {structureOptions.map((opt) => (
-      <div
-        key={opt.id}
-        className="flex justify-between items-center border p-2 rounded"
-      >
-        <span>
-          {opt.structureType} | {opt.capacityKw} kW | ₹{opt.ratePerKw}/kW
-        </span>
-
-        <button
-          onClick={() => deleteStructureOption(opt.id)}
-          className="text-red-600"
-        >
-          Delete
-        </button>
-      </div>
-    ))}
-  </div>
-</Section>
-
-<Section title="Electrical Options">
-  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-    <input
-      type="number"
-      placeholder="Capacity (kW)"
-      value={electricalForm.capacityKw}
-      onChange={(e) =>
-        setElectricalForm({
-          ...electricalForm,
-          capacityKw: e.target.value,
-        })
-      }
-      className="border p-2 rounded"
-    />
-
-    <input
-      type="number"
-      placeholder="Rate"
-      value={electricalForm.rate}
-      onChange={(e) =>
-        setElectricalForm({
-          ...electricalForm,
-          rate: e.target.value,
-        })
-      }
-      className="border p-2 rounded"
-    />
-
-    <button
-      onClick={createElectricalOption}
-      className="bg-green-600 text-white px-4 py-2 rounded"
-    >
-      Add Electrical Option
-    </button>
-  </div>
-
-  <div className="mt-4 space-y-2">
-    {electricalOptions.map((opt) => (
-      <div
-        key={opt.id}
-        className="flex justify-between items-center border p-2 rounded"
-      >
-        <span>
-          {opt.capacityKw} kW | ₹{opt.rate}
-        </span>
-
-        <button
-          onClick={() => deleteElectricalOption(opt.id)}
-          className="text-red-600"
-        >
-          Delete
-        </button>
-      </div>
-    ))}
-  </div>
-</Section>
-
+<ManageCard
+  title="Discount Rules"
+  count={0}
+  description="Manage maximum discount limits by role and project capacity."
+  href="/calculator/settings/discount"
+/>
 
       <button
         onClick={handleSave}
@@ -663,15 +249,48 @@ const deleteElectricalOption = async (id: number) => {
   );
 }
 
-/* UI helpers */
-
 function Section({ title, children }: any) {
   return (
     <div className="bg-white p-5 rounded-2xl shadow space-y-4">
       <h2 className="text-lg font-semibold">{title}</h2>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {children}
       </div>
+    </div>
+  );
+}
+
+function ManageCard({
+  title,
+  count,
+  description,
+  href,
+}: {
+  title: string;
+  count: number;
+  description: string;
+  href: string;
+}) {
+  return (
+    <div className="border rounded-xl p-4 bg-gray-50 flex flex-col justify-between gap-4">
+      <div>
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="font-semibold text-base">{title}</h3>
+          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
+            {count} saved
+          </span>
+        </div>
+
+        <p className="text-sm text-gray-600 mt-2">{description}</p>
+      </div>
+
+      <Link
+        href={href}
+        className="inline-flex justify-center bg-blue-600 text-white px-4 py-2 rounded-lg text-sm"
+      >
+        Manage
+      </Link>
     </div>
   );
 }
@@ -688,6 +307,7 @@ function Input({
   return (
     <div>
       <label className="text-sm text-gray-600">{label}</label>
+
       <input
         type="number"
         value={value || 0}
