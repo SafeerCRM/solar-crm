@@ -9,6 +9,7 @@ import { CallLog } from '../telecalling/call-log.entity';
 import { FollowUp } from '../followup/follow-up.entity';
 import { TelecallingContact } from '../telecalling/telecalling-contact.entity';
 import { Meeting } from '../meeting/meeting.entity'; // ✅ IMPORTANT
+import { User } from '../users/user.entity';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { Meeting } from '../meeting/meeting.entity'; // ✅ IMPORTANT
       FollowUp,
       TelecallingContact,
       Meeting, // ✅ MUST BE HERE
+      User,
     ]),
   ],
   controllers: [DashboardController],

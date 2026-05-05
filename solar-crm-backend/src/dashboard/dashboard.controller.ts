@@ -166,6 +166,17 @@ getMeetingManagerAnalytics(@CurrentUser() user?: any) {
   return this.dashboardService.getMeetingManagerAnalytics();
 }
 
+@Get('lead-manager-analytics')
+getLeadManagerAnalytics(@CurrentUser() user?: any) {
+  const userRoles = this.getUserRoles(user);
+
+  if (!userRoles.includes(UserRole.OWNER)) {
+    return [];
+  }
+
+  return this.dashboardService.getLeadManagerAnalytics();
+}
+
   @Get('charts')
   getCharts(
     @Query('assignedTo') assignedTo?: string,

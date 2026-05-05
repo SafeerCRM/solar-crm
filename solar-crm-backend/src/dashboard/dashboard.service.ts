@@ -1,12 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, LessThan, SelectQueryBuilder } from 'typeorm';
-import { Lead, LeadStatus } from '../leads/lead.entity';
+import { Lead, LeadStatus, LeadPotential } from '../leads/lead.entity';
 import { CallLog } from '../telecalling/call-log.entity';
 import { FollowUp, FollowUpStatus } from '../followup/follow-up.entity';
 import { TelecallingContact } from '../telecalling/telecalling-contact.entity';
 import { UserRole } from '../users/user.entity';
 import { Meeting, MeetingCategory, MeetingStatus } from '../meeting/meeting.entity';
+import { User } from '../users/user.entity';
 
 
 type DashboardFilters = {
@@ -35,6 +36,9 @@ export class DashboardService {
 
     @InjectRepository(TelecallingContact)
 private readonly telecallingContactRepository: Repository<TelecallingContact>,
+
+@InjectRepository(User)
+private readonly userRepository: Repository<User>,
 
 @InjectRepository(Meeting)
 private readonly meetingRepository: Repository<Meeting>,
@@ -503,43 +507,141 @@ private readonly meetingRepository: Repository<Meeting>,
   }
 
   async getMeetingManagerAnalytics() {
-  const qb = this.meetingRepository
-    .createQueryBuilder('meeting')
-    .select('meeting.assignedTo', 'managerId')
-    .addSelect('COALESCE(meeting.assignedToName, \'Unassigned\')', 'managerName')
-    .addSelect('COUNT(*)', 'totalMeetings')
-    .addSelect(
-      `SUM(CASE WHEN meeting."meetingCategory" = :company THEN 1 ELSE 0 END)`,
-      'companyMeetings',
-    )
-    .addSelect(
-      `SUM(CASE WHEN meeting."meetingCategory" = :self THEN 1 ELSE 0 END)`,
-      'selfMeetings',
-    )
-    .addSelect(
-      `SUM(CASE WHEN meeting.status = :converted THEN 1 ELSE 0 END)`,
-      'convertedMeetings',
-    )
-    .setParameters({
-      company: MeetingCategory.COMPANY_MEETING,
-      self: MeetingCategory.SELF_MEETING,
-      converted: MeetingStatus.CONVERTED_TO_PROJECT,
-    })
-    .groupBy('meeting.assignedTo')
-    .addGroupBy('meeting.assignedToName')
-    .orderBy('COUNT(*)', 'DESC');
+  const meetingManagers = await this.userRepository.find();
 
-  const rows = await qb.getRawMany();
+  const filteredManagers = meetingManagers.filter(
+    (u: any) =>
+      Array.isArray(u.roles) &&
+      u.roles.includes(UserRole.MEETING_MANAGER),
+  );
 
-  return rows.map((row) => ({
-    managerId: row.managerId ? Number(row.managerId) : null,
-    managerName: row.managerName,
-    totalMeetings: Number(row.totalMeetings || 0),
-    companyMeetings: Number(row.companyMeetings || 0),
-    selfMeetings: Number(row.selfMeetings || 0),
-    convertedMeetings: Number(row.convertedMeetings || 0),
-  }));
+  const result: any[] = [];
+
+  for (const manager of filteredManagers) {
+    const totalMeetings = await this.meetingRepository.count({
+      where: {
+        assignedTo: manager.id,
+      },
+    });
+
+    const companyMeetings = await this.meetingRepository.count({
+      where: {
+        assignedTo: manager.id,
+        meetingCategory: MeetingCategory.COMPANY_MEETING,
+      },
+    });
+
+    const selfMeetings = await this.meetingRepository.count({
+      where: {
+        assignedTo: manager.id,
+        meetingCategory: MeetingCategory.SELF_MEETING,
+      },
+    });
+
+    const convertedMeetings = await this.meetingRepository.count({
+      where: {
+        assignedTo: manager.id,
+        convertToProject: true,
+      },
+    });
+
+    result.push({
+      managerId: manager.id,
+      managerName: manager.name,
+
+      totalMeetings,
+      companyMeetings,
+      selfMeetings,
+      convertedMeetings,
+    });
+  }
+
+  return result;
 }
+
+async getLeadManagerAnalytics() {
+  const now = new Date();
+
+  const indiaDate = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now);
+
+  const start = new Date(`${indiaDate}T00:00:00+05:30`);
+  const end = new Date(`${indiaDate}T23:59:59.999+05:30`);
+
+  const leadManagers = await this.userRepository.find();
+
+  const filteredManagers = leadManagers.filter(
+    (u: any) =>
+      Array.isArray(u.roles) &&
+      u.roles.includes(UserRole.LEAD_MANAGER),
+  );
+
+  const result: any[] = [];
+
+  for (const manager of filteredManagers) {
+    const totalLeads = await this.leadRepository.count({
+      where: {
+        assignedTo: manager.id,
+      },
+    });
+
+    const todayLeads = await this.leadRepository.count({
+      where: {
+        assignedTo: manager.id,
+        createdAt: Between(start, end),
+      },
+    });
+
+    const convertedToMeetingToday =
+      await this.meetingRepository.count({
+        where: {
+          createdBy: manager.id,
+          createdAt: Between(start, end),
+        },
+      });
+
+    const lowPotential = await this.leadRepository.count({
+      where: {
+        assignedTo: manager.id,
+        potential: LeadPotential.LOW,
+      },
+    });
+
+    const mediumPotential = await this.leadRepository.count({
+      where: {
+        assignedTo: manager.id,
+        potential: LeadPotential.MEDIUM,
+      },
+    });
+
+    const highPotential = await this.leadRepository.count({
+      where: {
+        assignedTo: manager.id,
+        potential: LeadPotential.HIGH,
+      },
+    });
+
+    result.push({
+      managerId: manager.id,
+      managerName: manager.name,
+
+      totalLeads,
+      todayLeads,
+      convertedToMeetingToday,
+
+      lowPotential,
+      mediumPotential,
+      highPotential,
+    });
+  }
+
+  return result;
+}
+
 async getOwnerSummary() {
   const nowMs = Date.now();
 
