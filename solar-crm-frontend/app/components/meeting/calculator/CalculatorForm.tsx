@@ -144,7 +144,7 @@ const [selectedHybridOptionId, setSelectedHybridOptionId] = useState<number | nu
 
     structureType: '',
     structureWatt: 0,
-    structureQuantity: 0,
+    structureQuantity: 1,
 
     electricalItemName: '',
     electricalWatt: 0,
@@ -483,7 +483,7 @@ const handleGenerateProposal = async () => {
 
       structureType: '',
       structureWatt: 0,
-      structureQuantity: 0,
+      structureQuantity: 1,
 
       electricalItemName: '',
       electricalWatt: 0,
@@ -956,6 +956,7 @@ onWheel={preventNumberWheelChange}
             ...prev,
             structureOptionId: selected.id,
             structureWatt: Number(selected.capacityKw || 0),
+            structureQuantity: prev.structureQuantity || 1,
           }));
         }
       }}
