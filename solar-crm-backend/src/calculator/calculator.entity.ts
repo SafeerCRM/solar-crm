@@ -178,4 +178,39 @@ export class Calculator {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  // ===== SELECTED OPTION IDS (IMPORTANT FOR TRACKING) =====
+
+@Column({ type: 'int', nullable: true })
+panelOptionId?: number | null;
+
+@Column({ type: 'int', nullable: true })
+ongridOptionId?: number | null;
+
+@Column({ type: 'int', nullable: true })
+structureOptionId?: number | null;
+
+@Column({ type: 'int', nullable: true })
+electricalOptionId?: number | null;
+
+@Column({ type: 'int', nullable: true })
+hybridOptionId?: number | null;
+
+@Column({ type: 'int', nullable: true })
+batteryOptionId?: number | null;
+
+@Column({ type: 'int', nullable: true })
+kitOptionId?: number | null;
+
+@Column({ type: 'decimal', precision: 12, scale: 2, nullable: true })
+expectedProfit?: number;
+
+@Column({ type: 'decimal', precision: 12, scale: 2, nullable: true })
+discountAmount?: number;
+
+@Column({ type: 'decimal', precision: 12, scale: 2, nullable: true })
+appliedDiscount?: number;
+
+@Column({ type: 'decimal', precision: 12, scale: 2, nullable: true })
+finalCost?: number;
 }

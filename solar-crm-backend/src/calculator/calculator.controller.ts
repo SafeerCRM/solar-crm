@@ -28,9 +28,9 @@ export class CalculatorController {
   }
 
   @Post('calculate')
-  async calculate(@Body() body: any) {
-    return this.calculatorService.calculateProjectCost(body);
-  }
+async calculate(@Body() body: any, @Req() req: any) {
+  return this.calculatorService.calculateProjectCost(body, req.user);
+}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
@@ -64,6 +64,181 @@ getPanelOptions(
     category as 'DCR' | 'NONDCR',
     type as 'P Type' | 'N Type',
   );
+}
+
+@Get('discount-options')
+getDiscountOptions() {
+  return this.calculatorService.getDiscountOptions();
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Post('discount-options')
+createDiscountOption(@Body() body: any) {
+  return this.calculatorService.createDiscountOption(body);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Patch('discount-options/:id')
+updateDiscountOption(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+) {
+  return this.calculatorService.updateDiscountOption(id, body);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Delete('discount-options/:id')
+deleteDiscountOption(@Param('id', ParseIntPipe) id: number) {
+  return this.calculatorService.deleteDiscountOption(id);
+}
+
+@Get('expected-profit-options')
+getExpectedProfitOptions() {
+  return this.calculatorService.getExpectedProfitOptions();
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Post('expected-profit-options')
+createExpectedProfitOption(@Body() body: any) {
+  return this.calculatorService.createExpectedProfitOption(body);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Patch('expected-profit-options/:id')
+updateExpectedProfitOption(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+) {
+  return this.calculatorService.updateExpectedProfitOption(id, body);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Delete('expected-profit-options/:id')
+deleteExpectedProfitOption(@Param('id', ParseIntPipe) id: number) {
+  return this.calculatorService.deleteExpectedProfitOption(id);
+}
+
+@Get('kit-options')
+getKitOptions() {
+  return this.calculatorService.getKitOptions();
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Post('kit-options')
+createKitOption(@Body() body: any) {
+  return this.calculatorService.createKitOption(body);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Patch('kit-options/:id')
+updateKitOption(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+) {
+  return this.calculatorService.updateKitOption(id, body);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Delete('kit-options/:id')
+deleteKitOption(@Param('id', ParseIntPipe) id: number) {
+  return this.calculatorService.deleteKitOption(id);
+}
+
+@Get('battery-options')
+getBatteryOptions(@Req() req: any) {
+  const type = req.query?.type ? String(req.query.type) : undefined;
+  return this.calculatorService.getBatteryOptions(type);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Post('battery-options')
+createBatteryOption(@Body() body: any) {
+  return this.calculatorService.createBatteryOption(body);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Patch('battery-options/:id')
+updateBatteryOption(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+) {
+  return this.calculatorService.updateBatteryOption(id, body);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Delete('battery-options/:id')
+deleteBatteryOption(@Param('id', ParseIntPipe) id: number) {
+  return this.calculatorService.deleteBatteryOption(id);
+}
+
+@Get('hybrid-options')
+getHybridOptions(@Req() req: any) {
+  const phase = String(req.query.phase || 'Single Phase');
+  return this.calculatorService.getHybridOptions(phase);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Post('hybrid-options')
+createHybridOption(@Body() body: any) {
+  return this.calculatorService.createHybridOption(body);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Patch('hybrid-options/:id')
+updateHybridOption(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+) {
+  return this.calculatorService.updateHybridOption(id, body);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Delete('hybrid-options/:id')
+deleteHybridOption(@Param('id', ParseIntPipe) id: number) {
+  return this.calculatorService.deleteHybridOption(id);
+}
+
+@UseGuards()
+@Get('margin-options')
+getMarginOptions() {
+  console.log('✅ margin-options route hit');
+  return this.calculatorService.getMarginOptions();
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Post('margin-options')
+createMarginOption(@Body() body: any) {
+  return this.calculatorService.createMarginOption(body);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Patch('margin-options/:id')
+updateMarginOption(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
+  return this.calculatorService.updateMarginOption(id, body);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Delete('margin-options/:id')
+deleteMarginOption(@Param('id', ParseIntPipe) id: number) {
+  return this.calculatorService.deleteMarginOption(id);
 }
 
 @Get('electrical-options')
@@ -189,6 +364,7 @@ deletePanelOption(@Param('id', ParseIntPipe) id: number) {
 
   @Get(':id')
   async findOne(@Param('id', ParseIntPipe) id: number) {
+    console.log('❌ findOne route hit with id:', id);
     return this.calculatorService.findOne(id);
   }
 }

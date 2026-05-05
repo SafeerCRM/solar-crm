@@ -8,6 +8,12 @@ import { CalculatorPanelOption } from './calculator-panel-option.entity';
 import { CalculatorOngridOption } from './calculator-ongrid-option.entity';
 import { CalculatorStructureOption } from './calculator-structure-option.entity';
 import { CalculatorElectricalOption } from './calculator-electrical-option.entity';
+import { CalculatorMarginOption } from './calculator-margin-option.entity';
+import { CalculatorHybridOption } from './calculator-hybrid-option.entity';
+import { CalculatorBatteryOption } from './calculator-battery-option.entity';
+import { CalculatorKitOption } from './calculator-kit-option.entity';
+import { CalculatorExpectedProfit } from './calculator-expected-profit.entity';
+import { CalculatorDiscountOption } from './calculator-discount-option.entity';
 
 @Module({
   imports: [TypeOrmModule.forFeature([
@@ -17,6 +23,12 @@ import { CalculatorElectricalOption } from './calculator-electrical-option.entit
   CalculatorOngridOption,
   CalculatorStructureOption,
   CalculatorElectricalOption,
+  CalculatorMarginOption,
+  CalculatorHybridOption,
+  CalculatorBatteryOption,
+  CalculatorKitOption,
+  CalculatorExpectedProfit,
+  CalculatorDiscountOption,
 ])],
   controllers: [CalculatorController],
   providers: [CalculatorService],

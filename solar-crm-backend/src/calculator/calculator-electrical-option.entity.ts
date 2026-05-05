@@ -11,6 +11,9 @@ export class CalculatorElectricalOption {
   @PrimaryGeneratedColumn()
   id: number;
 
+  @Column({ type: 'varchar', length: 100, nullable: true })
+itemName?: string;
+
   @Column({ type: 'float' })
   capacityKw: number;
 

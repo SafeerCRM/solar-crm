@@ -8,6 +8,12 @@ import { CalculatorPanelOption } from './calculator-panel-option.entity';
 import { CalculatorOngridOption } from './calculator-ongrid-option.entity';
 import { CalculatorStructureOption } from './calculator-structure-option.entity';
 import { CalculatorElectricalOption } from './calculator-electrical-option.entity';
+import { CalculatorMarginOption } from './calculator-margin-option.entity';
+import { CalculatorHybridOption } from './calculator-hybrid-option.entity';
+import { CalculatorBatteryOption } from './calculator-battery-option.entity';
+import { CalculatorKitOption } from './calculator-kit-option.entity';
+import { CalculatorExpectedProfit } from './calculator-expected-profit.entity';
+import { CalculatorDiscountOption } from './calculator-discount-option.entity';
 
 @Injectable()
 export class CalculatorService {
@@ -24,78 +30,469 @@ private readonly ongridOptionRepository: Repository<CalculatorOngridOption>,
 private readonly structureOptionRepository: Repository<CalculatorStructureOption>,
 @InjectRepository(CalculatorElectricalOption)
 private readonly electricalOptionRepository: Repository<CalculatorElectricalOption>,
+@InjectRepository(CalculatorMarginOption)
+private readonly marginOptionRepository: Repository<CalculatorMarginOption>,
+@InjectRepository(CalculatorHybridOption)
+private readonly hybridOptionRepository: Repository<CalculatorHybridOption>,
+@InjectRepository(CalculatorBatteryOption)
+private readonly batteryOptionRepository: Repository<CalculatorBatteryOption>,
+@InjectRepository(CalculatorKitOption)
+private readonly kitOptionRepository: Repository<CalculatorKitOption>,
+@InjectRepository(CalculatorExpectedProfit)
+private readonly expectedProfitRepository: Repository<CalculatorExpectedProfit>,
+@InjectRepository(CalculatorDiscountOption)
+private readonly discountOptionRepository: Repository<CalculatorDiscountOption>,
   ) {}
+private getHighestCalculatorRole(roles: string[] = []) {
+  const priority = [
+    'OWNER',
+    'MARKETING_HEAD',
+    'PROJECT_MANAGER',
+    'MEETING_MANAGER',
+    'LEAD_MANAGER',
+    'TELECALLING_MANAGER',
+    'PROJECT_EXECUTIVE',
+    'LEAD_EXECUTIVE',
+    'TELECALLING_ASSISTANT',
+    'TELECALLER',
+  ];
 
-async calculateProjectCost(data: any) {
+  for (const role of priority) {
+    if (roles.includes(role)) {
+      return role;
+    }
+  }
+
+  return roles[0] || 'TELECALLER';
+}
+
+
+async calculateProjectCost(data: any, user?: any) {
   const settings = await this.getSettings();
+
+  // ===== SELECTED OPTIONS =====
+  const panelOption = data?.panelOptionId
+    ? await this.panelOptionRepository.findOne({
+        where: { id: Number(data.panelOptionId) },
+      })
+    : null;
+
+  const ongridOption = data?.ongridOptionId
+    ? await this.ongridOptionRepository.findOne({
+        where: { id: Number(data.ongridOptionId) },
+      })
+    : null;
+
+  const structureOption = data?.structureOptionId
+    ? await this.structureOptionRepository.findOne({
+        where: { id: Number(data.structureOptionId) },
+      })
+    : null;
+
+  const electricalOption = data?.electricalOptionId
+    ? await this.electricalOptionRepository.findOne({
+        where: { id: Number(data.electricalOptionId) },
+      })
+    : null;
+
+  const hybridOption = data?.hybridOptionId
+    ? await this.hybridOptionRepository.findOne({
+        where: { id: Number(data.hybridOptionId) },
+      })
+    : null;
+
+  const batteryOption = data?.batteryOptionId
+    ? await this.batteryOptionRepository.findOne({
+        where: { id: Number(data.batteryOptionId) },
+      })
+    : null;
+
+  const kitOption = data?.kitOptionId
+    ? await this.kitOptionRepository.findOne({
+        where: { id: Number(data.kitOptionId) },
+      })
+    : null;
 
   const numberOfPanels = Number(data?.numberOfPanels || 0);
   const wattPerPanel = Number(data?.wattPerPanel || 0);
 
+  // ===== RATES WITH SAFE FALLBACK =====
+  const panelRate = Number(panelOption?.rate ?? settings.ratePerWatt ?? 0);
+  const ongridRate = Number(ongridOption?.rate ?? settings.ongridRate ?? 0);
+  const structureRate = Number(
+    structureOption?.ratePerKw ?? settings.structureRate ?? 0,
+  );
+  const electricalRate = Number(
+    electricalOption?.rate ?? settings.electricalRate ?? 0,
+  );
+  const hybridRate = Number(hybridOption?.rate ?? settings.hybridRate ?? 0);
+  const batteryRate = Number(batteryOption?.rate ?? settings.batteryRate ?? 0);
+  const kitRate = Number(kitOption?.rate ?? settings.tataRate ?? 0);
+
+  // ===== COSTS =====
   const panelCost =
-    settings.ratePerWatt *
-    settings.gstMultiplier *
+    panelRate *
+    Number(settings.gstMultiplier || 1) *
     numberOfPanels *
     wattPerPanel;
 
-  const ongridCost =
-    Number(data?.ongridQuantity || 0) * settings.ongridRate;
+  const ongridCost = Number(data?.ongridQuantity || 0) * ongridRate;
 
   const structureCost =
-    Number(data?.structureQuantity || 0) * settings.structureRate;
+    Number(data?.structureQuantity || 0) * structureRate;
 
   const electricalCost =
-    Number(data?.electricalQuantity || 0) * settings.electricalRate;
-
-  const marginAmount = settings.marginAmount;
+    Number(data?.electricalQuantity || 0) * electricalRate;
 
   const transportationCost =
-    Number(data?.distanceKm || 0) * settings.transportRatePerKm;
+    Number(data?.distanceKm || 0) *
+    Number(settings.transportRatePerKm || 0);
 
-  const hybridCost =
-    Number(data?.hybridQuantity || 0) * settings.hybridRate;
+  const hybridCost = Number(data?.hybridQuantity || 0) * hybridRate;
 
-  const batteryCost =
-    Number(data?.batteryQuantity || 0) * settings.batteryRate;
+  const batteryCost = Number(data?.batteryQuantity || 0) * batteryRate;
 
-  const celronicCost =
-    Number(data?.celronicQuantity || 0) * settings.celronicRate;
+  const tataCost = Number(data?.tataQuantity || 0) * kitRate;
 
-  const tataCost =
-    Number(data?.tataQuantity || 0) * settings.tataRate;
+  // ===== MARGIN =====
+  const marginCapacityKw = Number(data?.marginWatt || 0);
+  const marginOptions = await this.getMarginOptions();
 
-  const electricityDepartmentCost = settings.electricityDepartmentCost;
+  let marginAmount = 0;
+
+  for (const option of marginOptions) {
+    if (marginCapacityKw >= Number(option.capacityKw || 0)) {
+      marginAmount = Number(option.marginAmount || 0);
+    }
+  }
+
+  const electricityDepartmentCost = Number(
+    settings.electricityDepartmentCost || 0,
+  );
+
+  // ===== EXPECTED PROFIT =====
+const projectCapacityKw =
+  (Number(data?.numberOfPanels || 0) * Number(data?.wattPerPanel || 0)) / 1000;
+
+  const requiredArea =
+  projectCapacityKw * Number(settings.structureSqftPerKw || 0);
+
+const expectedProfitOptions = await this.getExpectedProfitOptions();
+
+let expectedProfit = 0;
+
+for (const option of expectedProfitOptions) {
+  if (projectCapacityKw >= Number(option.capacityKw || 0)) {
+    expectedProfit = Number(option.profitAmount || 0);
+  }
+}
+
+// ===== DISCOUNT AUTO LIMIT =====
+const requestedDiscount = Number(data?.discountAmount || 0);
+const userRoles = Array.isArray(user?.roles) ? user.roles : [];
+const highestRole = this.getHighestCalculatorRole(userRoles);
+
+const discountOptions = await this.getDiscountOptions();
+
+let maxAllowedDiscount = 0;
+
+for (const option of discountOptions) {
+  if (
+    option.role === highestRole &&
+    projectCapacityKw >= Number(option.capacityKw || 0)
+  ) {
+    maxAllowedDiscount = Number(option.discountAmount || 0);
+  }
+}
+
+const appliedDiscount =
+  requestedDiscount > maxAllowedDiscount
+    ? maxAllowedDiscount
+    : requestedDiscount;
+
+const discountAdjusted = requestedDiscount > maxAllowedDiscount;
 
   const totalProjectCost =
-  panelCost +
-  ongridCost +
-  structureCost +
-  electricalCost +
-  marginAmount +
-  transportationCost +
-  hybridCost +
-  batteryCost +
-  celronicCost +
-  tataCost +
-  electricityDepartmentCost +
+    panelCost +
+    ongridCost +
+    structureCost +
+    electricalCost +
+    marginAmount +
+    transportationCost +
+    hybridCost +
+    batteryCost +
+    tataCost +
+    electricityDepartmentCost +
+    Number(settings.netMeteringCost || 0) +
+    Number(settings.installationCharges || 0) +
+    Number(settings.labourCharges || 0) +
+    Number(settings.governmentFees || 0) +
+    Number(settings.wiringCost || 0) +
+    Number(settings.mcbCost || 0) +
+    Number(settings.dbBoxCost || 0) +
+    Number(settings.cablesCost || 0) +
+    Number(settings.earthingCost || 0) +
+    Number(settings.lightningArrestorCost || 0);
 
-  // --- OTHER CHARGES ---
-  settings.netMeteringCost +
-  settings.installationCharges +
-  settings.labourCharges +
-  settings.governmentFees +
-
-  // --- BOS ---
-  settings.wiringCost +
-  settings.mcbCost +
-  settings.dbBoxCost +
-  settings.cablesCost +
-  settings.earthingCost +
-  settings.lightningArrestorCost;
+    const finalCost = Math.max(totalProjectCost - appliedDiscount, 0);
 
   return {
-    totalProjectCost,
+  totalProjectCost,
+  expectedProfit,
+  requiredArea,
+  projectCapacityKw,
+  maxAllowedDiscount,
+  appliedDiscount,
+  discountAdjusted,
+  finalCost,
+
+  breakdown: {
+      panelCost,
+      ongridCost,
+      structureCost,
+      electricalCost,
+      marginAmount,
+      transportationCost,
+      hybridCost,
+      batteryCost,
+      tataCost,
+      electricityDepartmentCost,
+    },
   };
+}
+
+async getDiscountOptions() {
+  return this.discountOptionRepository.find({
+    order: { capacityKw: 'ASC' },
+  });
+}
+
+async createDiscountOption(data: any) {
+  const option = this.discountOptionRepository.create({
+    role: data.role,
+    capacityKw: Number(data.capacityKw || 0),
+    discountAmount: Number(data.discountAmount || 0),
+  });
+
+  return this.discountOptionRepository.save(option);
+}
+
+async updateDiscountOption(id: number, data: any) {
+  const option = await this.discountOptionRepository.findOne({ where: { id } });
+
+  if (!option) throw new Error('Discount option not found');
+
+  Object.assign(option, {
+    role: data.role ?? option.role,
+    capacityKw:
+      data.capacityKw !== undefined
+        ? Number(data.capacityKw)
+        : option.capacityKw,
+    discountAmount:
+      data.discountAmount !== undefined
+        ? Number(data.discountAmount)
+        : option.discountAmount,
+  });
+
+  return this.discountOptionRepository.save(option);
+}
+
+async deleteDiscountOption(id: number) {
+  await this.discountOptionRepository.delete(id);
+  return { message: 'Deleted successfully' };
+}
+
+async getExpectedProfitOptions() {
+  return this.expectedProfitRepository.find({
+    order: { capacityKw: 'ASC' },
+  });
+}
+
+async createExpectedProfitOption(data: any) {
+  const option = this.expectedProfitRepository.create({
+    capacityKw: Number(data.capacityKw || 0),
+    profitAmount: Number(data.profitAmount || 0),
+  });
+
+  return this.expectedProfitRepository.save(option);
+}
+
+async updateExpectedProfitOption(id: number, data: any) {
+  const option = await this.expectedProfitRepository.findOne({ where: { id } });
+
+  if (!option) throw new Error('Expected profit option not found');
+
+  Object.assign(option, {
+    capacityKw:
+      data.capacityKw !== undefined
+        ? Number(data.capacityKw)
+        : option.capacityKw,
+    profitAmount:
+      data.profitAmount !== undefined
+        ? Number(data.profitAmount)
+        : option.profitAmount,
+  });
+
+  return this.expectedProfitRepository.save(option);
+}
+
+async deleteExpectedProfitOption(id: number) {
+  await this.expectedProfitRepository.delete(id);
+  return { message: 'Deleted successfully' };
+}
+
+async getKitOptions() {
+  return this.kitOptionRepository.find({
+    order: { capacity: 'ASC' },
+  });
+}
+
+async createKitOption(data: any) {
+  const option = this.kitOptionRepository.create({
+    brandName: data.brandName,
+    capacity: Number(data.capacity || 0),
+    rate: Number(data.rate || 0),
+  });
+
+  return this.kitOptionRepository.save(option);
+}
+
+async updateKitOption(id: number, data: any) {
+  const option = await this.kitOptionRepository.findOne({ where: { id } });
+
+  if (!option) throw new Error('Kit option not found');
+
+  Object.assign(option, {
+    brandName: data.brandName ?? option.brandName,
+    capacity:
+      data.capacity !== undefined ? Number(data.capacity) : option.capacity,
+    rate: data.rate !== undefined ? Number(data.rate) : option.rate,
+  });
+
+  return this.kitOptionRepository.save(option);
+}
+
+async deleteKitOption(id: number) {
+  await this.kitOptionRepository.delete(id);
+  return { message: 'Deleted successfully' };
+}
+
+async getBatteryOptions(type?: string) {
+  return this.batteryOptionRepository.find({
+    where: type ? { type } : {},
+    order: { capacity: 'ASC' },
+  });
+}
+
+async createBatteryOption(data: any) {
+  const option = this.batteryOptionRepository.create({
+    type: data.type,
+    brandName: data.brandName,
+    capacity: Number(data.capacity || 0),
+    rate: Number(data.rate || 0),
+  });
+
+  return this.batteryOptionRepository.save(option);
+}
+
+async updateBatteryOption(id: number, data: any) {
+  const option = await this.batteryOptionRepository.findOne({ where: { id } });
+
+  if (!option) throw new Error('Battery option not found');
+
+  Object.assign(option, {
+    type: data.type ?? option.type,
+    brandName: data.brandName ?? option.brandName,
+    capacity:
+      data.capacity !== undefined ? Number(data.capacity) : option.capacity,
+    rate: data.rate !== undefined ? Number(data.rate) : option.rate,
+  });
+
+  return this.batteryOptionRepository.save(option);
+}
+
+async deleteBatteryOption(id: number) {
+  await this.batteryOptionRepository.delete(id);
+  return { message: 'Deleted successfully' };
+}
+
+async getHybridOptions(phase?: string) {
+  return this.hybridOptionRepository.find({
+    where: phase ? { phase } : {},
+    order: { capacity: 'ASC' },
+  });
+}
+
+async createHybridOption(data: any) {
+  const option = this.hybridOptionRepository.create({
+    phase: data.phase,
+    brandName: data.brandName,
+    capacity: Number(data.capacity || 0),
+    rate: Number(data.rate || 0),
+  });
+
+  return this.hybridOptionRepository.save(option);
+}
+
+async updateHybridOption(id: number, data: any) {
+  const option = await this.hybridOptionRepository.findOne({ where: { id } });
+
+  if (!option) throw new Error('Hybrid option not found');
+
+  Object.assign(option, {
+    phase: data.phase ?? option.phase,
+    brandName: data.brandName ?? option.brandName,
+    capacity:
+      data.capacity !== undefined ? Number(data.capacity) : option.capacity,
+    rate: data.rate !== undefined ? Number(data.rate) : option.rate,
+  });
+
+  return this.hybridOptionRepository.save(option);
+}
+
+async deleteHybridOption(id: number) {
+  await this.hybridOptionRepository.delete(id);
+  return { message: 'Deleted successfully' };
+}
+
+async getMarginOptions() {
+  return this.marginOptionRepository.find({
+    order: { capacityKw: 'ASC' },
+  });
+}
+
+async createMarginOption(data: any) {
+  const option = this.marginOptionRepository.create({
+    capacityKw: Number(data.capacityKw || 0),
+    marginAmount: Number(data.marginAmount || 0),
+    isActive: data.isActive !== false,
+  });
+
+  return this.marginOptionRepository.save(option);
+}
+
+async updateMarginOption(id: number, data: any) {
+  const option = await this.marginOptionRepository.findOne({ where: { id } });
+
+  if (!option) throw new Error('Margin option not found');
+
+  Object.assign(option, {
+    capacityKw:
+      data.capacityKw !== undefined
+        ? Number(data.capacityKw)
+        : option.capacityKw,
+    marginAmount:
+      data.marginAmount !== undefined
+        ? Number(data.marginAmount)
+        : option.marginAmount,
+  });
+
+  return this.marginOptionRepository.save(option);
+}
+
+async deleteMarginOption(id: number) {
+  await this.marginOptionRepository.delete(id);
+  return { message: 'Deleted successfully' };
 }
 
 async getElectricalOptions() {
@@ -111,6 +508,7 @@ async getElectricalOptions() {
 
 async createElectricalOption(data: any) {
   const option = this.electricalOptionRepository.create({
+    itemName: String(data.itemName || '').trim(),
     capacityKw: Number(data.capacityKw || 0),
     rate: Number(data.rate || 0),
     isActive: data.isActive !== false,
@@ -129,7 +527,11 @@ async updateElectricalOption(id: number, data: any) {
   }
 
   Object.assign(option, {
-    capacityKw:
+  itemName:
+    data.itemName !== undefined
+      ? String(data.itemName || '').trim()
+      : option.itemName,
+  capacityKw:
       data.capacityKw !== undefined
         ? Number(data.capacityKw)
         : option.capacityKw,

@@ -212,4 +212,48 @@ export class CreateCalculatorDto {
   @IsOptional()
   @IsNumber()
   totalProjectCost?: number;
+
+  @IsOptional()
+@IsNumber()
+panelOptionId?: number;
+
+@IsOptional()
+@IsNumber()
+ongridOptionId?: number;
+
+@IsOptional()
+@IsNumber()
+structureOptionId?: number;
+
+@IsOptional()
+@IsNumber()
+electricalOptionId?: number;
+
+@IsOptional()
+@IsNumber()
+hybridOptionId?: number;
+
+@IsOptional()
+@IsNumber()
+batteryOptionId?: number;
+
+@IsOptional()
+@IsNumber()
+kitOptionId?: number;
+
+@IsOptional()
+@IsNumber()
+expectedProfit?: number;
+
+@IsOptional()
+@IsNumber()
+discountAmount?: number;
+
+@IsOptional()
+@IsNumber()
+appliedDiscount?: number;
+
+@IsOptional()
+@IsNumber()
+finalCost?: number;
 }
