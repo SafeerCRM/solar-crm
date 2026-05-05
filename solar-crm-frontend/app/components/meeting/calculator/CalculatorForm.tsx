@@ -1386,17 +1386,6 @@ onWheel={preventNumberWheelChange}
 
   <div>
     <p className="text-sm font-medium text-green-800">
-      Margin Added
-    </p>
-    <p className="text-xl font-bold text-green-900">
-      ₹ {formatCurrency(marginAmount)}
-    </p>
-  </div>
-
-  <hr className="border-green-300" />
-
-  <div>
-    <p className="text-sm font-medium text-green-800">
       Laagat After Margin
     </p>
     <p className="text-2xl font-bold text-green-900">
