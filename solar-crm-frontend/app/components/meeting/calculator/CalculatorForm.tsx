@@ -1377,7 +1377,7 @@ onWheel={preventNumberWheelChange}
           <div className="rounded-2xl bg-green-100 px-5 py-4 space-y-3">
   <div>
     <p className="text-sm font-medium text-green-800">
-      Laagat Before Margin
+      Laagat 
     </p>
     <p className="text-xl font-bold text-green-900">
       ₹ {formatCurrency(baseCostBeforeMargin)}
@@ -1386,7 +1386,7 @@ onWheel={preventNumberWheelChange}
 
   <div>
     <p className="text-sm font-medium text-green-800">
-      Laagat After Margin
+      Project Cost
     </p>
     <p className="text-2xl font-bold text-green-900">
       ₹ {formatCurrency(totalCost)}
