@@ -33,7 +33,7 @@ type CalculatorValues = {
   ongridWatt: number;
   ongridQuantity: number;
 
-  structureType: 'Rooftop' | 'Tin Shade';
+  structureType: string;
   structureWatt: number;
   structureQuantity: number;
 
@@ -140,7 +140,7 @@ const [selectedHybridOptionId, setSelectedHybridOptionId] = useState<number | nu
     ongridWatt: 0,
     ongridQuantity: 0,
 
-    structureType: 'Rooftop',
+    structureType: '',
     structureWatt: 0,
     structureQuantity: 0,
 
@@ -477,7 +477,7 @@ const handleGenerateProposal = async () => {
       ongridWatt: 0,
       ongridQuantity: 0,
 
-      structureType: 'Rooftop',
+      structureType: '',
       structureWatt: 0,
       structureQuantity: 0,
 
