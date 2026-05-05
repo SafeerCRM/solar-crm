@@ -212,31 +212,32 @@ const appliedDiscount =
 
 const discountAdjusted = requestedDiscount > maxAllowedDiscount;
 
-  const totalProjectCost =
-    panelCost +
-    ongridCost +
-    structureCost +
-    electricalCost +
-    marginAmount +
-    transportationCost +
-    hybridCost +
-    batteryCost +
-    tataCost +
-    electricityDepartmentCost +
-    Number(settings.netMeteringCost || 0) +
-    Number(settings.installationCharges || 0) +
-    Number(settings.labourCharges || 0) +
-    Number(settings.governmentFees || 0) +
-    Number(settings.wiringCost || 0) +
-    Number(settings.mcbCost || 0) +
-    Number(settings.dbBoxCost || 0) +
-    Number(settings.cablesCost || 0) +
-    Number(settings.earthingCost || 0) +
-    Number(settings.lightningArrestorCost || 0);
+  const baseCostBeforeMargin =
+  panelCost +
+  ongridCost +
+  structureCost +
+  electricalCost +
+  transportationCost +
+  hybridCost +
+  batteryCost +
+  tataCost +
+  electricityDepartmentCost +
+  Number(settings.netMeteringCost || 0) +
+  Number(settings.installationCharges || 0) +
+  Number(settings.labourCharges || 0) +
+  Number(settings.governmentFees || 0) +
+  Number(settings.wiringCost || 0) +
+  Number(settings.mcbCost || 0) +
+  Number(settings.dbBoxCost || 0) +
+  Number(settings.cablesCost || 0) +
+  Number(settings.earthingCost || 0) +
+  Number(settings.lightningArrestorCost || 0);
 
-    const finalCost = Math.max(totalProjectCost - appliedDiscount, 0);
+const totalProjectCost = baseCostBeforeMargin + Number(marginAmount || 0);
 
   return {
+  baseCostBeforeMargin,
+  marginAmount,
   totalProjectCost,
   expectedProfit,
   requiredArea,
