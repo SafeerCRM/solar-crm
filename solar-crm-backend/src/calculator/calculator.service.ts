@@ -238,10 +238,10 @@ const baseCostBeforeMargin =
 const totalProjectCost =
   baseCostBeforeMargin + Number(marginAmount || 0);
 
-// ✅ APPLY DISCOUNT (THIS WAS MISSING)
+// ✅ Apply discount
 const finalCost = Math.max(totalProjectCost - appliedDiscount, 0);
 
-// ✅ RETURN
+// ✅ Final return
 return {
   baseCostBeforeMargin,
   marginAmount,
@@ -253,22 +253,20 @@ return {
   appliedDiscount,
   discountAdjusted,
   finalCost,
-};
 
   breakdown: {
-      panelCost,
-      ongridCost,
-      structureCost,
-      electricalCost,
-      marginAmount,
-      transportationCost,
-      hybridCost,
-      batteryCost,
-      tataCost,
-      electricityDepartmentCost,
-    },
-  };
-}
+    panelCost,
+    ongridCost,
+    structureCost,
+    electricalCost,
+    marginAmount,
+    transportationCost,
+    hybridCost,
+    batteryCost,
+    tataCost,
+    electricityDepartmentCost,
+  },
+};
 
 async getDiscountOptions() {
   return this.discountOptionRepository.find({
