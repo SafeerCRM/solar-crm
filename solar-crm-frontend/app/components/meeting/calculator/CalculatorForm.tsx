@@ -84,6 +84,8 @@ export default function CalculatorForm({
   const [saving, setSaving] = useState(false);
   const [calculating, setCalculating] = useState(false);
   const [totalCost, setTotalCost] = useState(0);
+  const [baseCostBeforeMargin, setBaseCostBeforeMargin] = useState(0);
+const [marginAmount, setMarginAmount] = useState(0);
   const [expectedProfit, setExpectedProfit] = useState(0);
 const [showExpectedProfit, setShowExpectedProfit] = useState(false);
 const [discountAmount, setDiscountAmount] = useState(0);
@@ -214,6 +216,8 @@ discountAmount: discountAmount,
       );
 
       setTotalCost(Number(response.data?.totalProjectCost || 0));
+      setBaseCostBeforeMargin(Number(response.data?.baseCostBeforeMargin || 0));
+setMarginAmount(Number(response.data?.marginAmount || 0));
       setRequiredArea(Number(response.data?.requiredArea || 0));
       setExpectedProfit(Number(response.data?.expectedProfit || 0));
       const nextAppliedDiscount = Number(response.data?.appliedDiscount || 0);
@@ -510,6 +514,8 @@ const handleGenerateProposal = async () => {
     setSelectedOngridOptionId(null);
     setSelectedStructureOptionId(null);
     setTotalCost(0);
+    setBaseCostBeforeMargin(0);
+setMarginAmount(0);
     setRequiredArea(0);
 setAreaError('');
     setSaveMessage('');
@@ -1368,11 +1374,35 @@ onWheel={preventNumberWheelChange}
         <div className="rounded-2xl bg-white p-5 shadow space-y-4">
           <h2 className="text-lg font-semibold">Financial Summary</h2>
 
-          <div className="rounded-2xl bg-green-100 px-5 py-4">
-  <p className="text-sm font-medium text-green-800">Laagat</p>
-  <p className="text-2xl font-bold text-green-900">
-    ₹ {formatCurrency(totalCost)}
-  </p>
+          <div className="rounded-2xl bg-green-100 px-5 py-4 space-y-3">
+  <div>
+    <p className="text-sm font-medium text-green-800">
+      Laagat Before Margin
+    </p>
+    <p className="text-xl font-bold text-green-900">
+      ₹ {formatCurrency(baseCostBeforeMargin)}
+    </p>
+  </div>
+
+  <div>
+    <p className="text-sm font-medium text-green-800">
+      Margin Added
+    </p>
+    <p className="text-xl font-bold text-green-900">
+      ₹ {formatCurrency(marginAmount)}
+    </p>
+  </div>
+
+  <hr className="border-green-300" />
+
+  <div>
+    <p className="text-sm font-medium text-green-800">
+      Laagat After Margin
+    </p>
+    <p className="text-2xl font-bold text-green-900">
+      ₹ {formatCurrency(totalCost)}
+    </p>
+  </div>
 
   {calculating && (
     <p className="mt-2 text-sm text-green-700">Calculating...</p>
