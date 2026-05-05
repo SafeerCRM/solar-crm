@@ -213,11 +213,30 @@ export default function ProposalPage() {
         {/* Actions */}
         <div className="mt-6 flex flex-col gap-3 md:flex-row print:hidden">
           <button
-            onClick={() => window.print()}
-            className="rounded-xl bg-blue-600 px-5 py-3 text-white"
-          >
-            Download / Print PDF
-          </button>
+  onClick={() => {
+    const proposalUrl = window.location.href;
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+    if (isAndroid) {
+      window.location.href = `intent://${proposalUrl.replace(
+        /^https?:\/\//,
+        ''
+      )}#Intent;scheme=https;package=com.android.chrome;end`;
+      return;
+    }
+
+    if (isMobile) {
+      window.open(proposalUrl, '_blank');
+      return;
+    }
+
+    window.print();
+  }}
+  className="rounded-xl bg-blue-600 px-5 py-3 text-white"
+>
+  Print / Save as PDF
+</button>
 
           <a
             href={`https://wa.me/${whatsappPhone}?text=${whatsappMessage}`}
