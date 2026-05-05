@@ -865,7 +865,7 @@ onWheel={preventNumberWheelChange}
               type="number"
               value={values.ongridQuantity}
               onChange={(e) => setNumberValue('ongridQuantity', e.target.value)}
-              min={0}
+              min={1}
 onWheel={preventNumberWheelChange}
               className={inputClassName}
               placeholder="Enter quantity"
@@ -988,7 +988,7 @@ onWheel={preventNumberWheelChange}
       min="0"
       value={values.structureQuantity || 0}
       onChange={(e) =>
-        setNumberValue('structureQuantity', Number(e.target.value))
+        setNumberValue('structureQuantity', e.target.value)
       }
       className={inputClassName}
     />
@@ -1183,7 +1183,7 @@ onWheel={preventNumberWheelChange}
         onChange={(e) =>
           setNumberValue('hybridQuantity', e.target.value)
         }
-        min={0}
+        min={1}
 onWheel={preventNumberWheelChange}
         className={inputClassName}
         placeholder="Enter quantity"
