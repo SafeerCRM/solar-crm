@@ -60,6 +60,20 @@ type MeetingManagerAnalyticsItem = {
   convertedMeetings: number;
 };
 
+type LeadManagerAnalyticsItem = {
+  managerId: number | null;
+  managerName: string;
+
+  totalLeads: number;
+  todayLeads: number;
+
+  convertedToMeetingToday: number;
+
+  lowPotential: number;
+  mediumPotential: number;
+  highPotential: number;
+};
+
 type HotLead = {
   id: number;
   name: string;
@@ -120,6 +134,8 @@ const [contactsSummary, setContactsSummary] = useState<ContactsSummary | null>(n
 const [ownerSummary, setOwnerSummary] = useState<OwnerSummary | null>(null);
 const [performance, setPerformance] = useState<PerformanceItem[]>([]);
   const [meetingAnalytics, setMeetingAnalytics] = useState<MeetingManagerAnalyticsItem[]>([]);
+  const [leadManagerAnalytics, setLeadManagerAnalytics] =
+  useState<LeadManagerAnalyticsItem[]>([]);
   const [hotLeads, setHotLeads] = useState<HotLead[]>([]);
   const [charts, setCharts] = useState<DashboardCharts | null>(null);
   const [contactCountLoading, setContactCountLoading] = useState(false);
@@ -212,26 +228,40 @@ const isOwnerDefaultView =
 
       const params = buildParams();
 
-      const [summaryRes, performanceRes, hotLeadsRes, chartsRes, meetingAnalyticsRes] =
-  await Promise.allSettled([
-    axios.get(`${apiBaseUrl}/dashboard/summary`, {
-      params,
-      headers: getAuthHeaders(),
-    }),
-    axios.get(`${apiBaseUrl}/telecalling/performance/today`, {
-      headers: getAuthHeaders(),
-    }),
-    axios.get(`${apiBaseUrl}/leads/hot`, {
-      headers: getAuthHeaders(),
-    }),
-    axios.get(`${apiBaseUrl}/dashboard/charts`, {
-      params,
-      headers: getAuthHeaders(),
-    }),
-    axios.get(`${apiBaseUrl}/dashboard/meeting-manager-analytics`, {
-      headers: getAuthHeaders(),
-    }),
-  ]);
+      const [
+  summaryRes,
+  performanceRes,
+  hotLeadsRes,
+  chartsRes,
+  meetingAnalyticsRes,
+  leadManagerAnalyticsRes,
+] = await Promise.allSettled([
+  axios.get(`${apiBaseUrl}/dashboard/summary`, {
+    params,
+    headers: getAuthHeaders(),
+  }),
+
+  axios.get(`${apiBaseUrl}/telecalling/performance/today`, {
+    headers: getAuthHeaders(),
+  }),
+
+  axios.get(`${apiBaseUrl}/leads/hot`, {
+    headers: getAuthHeaders(),
+  }),
+
+  axios.get(`${apiBaseUrl}/dashboard/charts`, {
+    params,
+    headers: getAuthHeaders(),
+  }),
+
+  axios.get(`${apiBaseUrl}/dashboard/meeting-manager-analytics`, {
+    headers: getAuthHeaders(),
+  }),
+
+  axios.get(`${apiBaseUrl}/dashboard/lead-manager-analytics`, {
+    headers: getAuthHeaders(),
+  }),
+]);
 
       if (summaryRes.status === 'fulfilled') {
         setSummary(summaryRes.value.data);
@@ -268,6 +298,16 @@ const isOwnerDefaultView =
   );
 } else {
   setMeetingAnalytics([]);
+}
+
+if (leadManagerAnalyticsRes.status === 'fulfilled') {
+  setLeadManagerAnalytics(
+    Array.isArray(leadManagerAnalyticsRes.value.data)
+      ? leadManagerAnalyticsRes.value.data
+      : [],
+  );
+} else {
+  setLeadManagerAnalytics([]);
 }
 
     } catch (error) {
@@ -376,7 +416,7 @@ useEffect(() => {
 
     const interval = window.setInterval(() => {
       fetchDashboardData();
-    }, 5 * 60 * 1000);
+    }, 15 * 60 * 1000);
 
     return () => window.clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -668,6 +708,79 @@ useEffect(() => {
     )}
   </div>
 )}
+
+
+{userRoles.includes('OWNER') && (
+  <div className="rounded-2xl bg-white p-4 shadow md:p-6">
+    <h2 className="mb-4 text-xl font-bold">
+      📊 Lead Manager Analytics
+    </h2>
+
+    {leadManagerAnalytics.length === 0 ? (
+      <div className="text-sm text-gray-500">
+        No lead manager analytics available
+      </div>
+    ) : (
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {leadManagerAnalytics.map((item) => (
+          <div
+            key={`${item.managerId || 'unassigned'}-${item.managerName}`}
+            className="rounded-xl border bg-gray-50 p-4"
+          >
+            <p className="mb-2 font-semibold text-gray-900">
+              {item.managerName}
+            </p>
+
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div className="rounded bg-white p-2">
+                <p className="text-gray-500">Total Leads</p>
+                <p className="text-lg font-bold">
+                  {item.totalLeads}
+                </p>
+              </div>
+
+              <div className="rounded bg-white p-2">
+                <p className="text-gray-500">Today Leads</p>
+                <p className="text-lg font-bold text-blue-600">
+                  {item.todayLeads}
+                </p>
+              </div>
+
+              <div className="rounded bg-white p-2">
+                <p className="text-gray-500">Meeting Converted</p>
+                <p className="text-lg font-bold text-green-600">
+                  {item.convertedToMeetingToday}
+                </p>
+              </div>
+
+              <div className="rounded bg-white p-2">
+                <p className="text-gray-500">HIGH</p>
+                <p className="text-lg font-bold text-emerald-600">
+                  {item.highPotential}
+                </p>
+              </div>
+
+              <div className="rounded bg-white p-2">
+                <p className="text-gray-500">MEDIUM</p>
+                <p className="text-lg font-bold text-yellow-600">
+                  {item.mediumPotential}
+                </p>
+              </div>
+
+              <div className="rounded bg-white p-2">
+                <p className="text-gray-500">LOW</p>
+                <p className="text-lg font-bold text-red-600">
+                  {item.lowPotential}
+                </p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    )}
+  </div>
+)}
+
 
         {contactsLoading && (
           <p className="mt-3 text-sm text-gray-500">Updating contact summary...</p>
