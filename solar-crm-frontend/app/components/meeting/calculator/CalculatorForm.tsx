@@ -240,9 +240,9 @@ if (nextDiscountAdjusted) {
   }, [values.panelCategory, values.panelType]);
 
   useEffect(() => {
-    fetchStructureOptions();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [values.structureType]);
+  fetchStructureOptions();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
 
   useEffect(() => {
     if (!requiredArea || !availableArea) {
@@ -433,19 +433,16 @@ const handleGenerateProposal = async () => {
   };
 
   const fetchStructureOptions = async () => {
-    try {
-      const res = await axios.get(`${backendUrl}/calculator/structure-options`, {
-        params: {
-          type: values.structureType,
-        },
-        headers: getAuthHeaders(),
-      });
+  try {
+    const res = await axios.get(`${backendUrl}/calculator/structure-options`, {
+      headers: getAuthHeaders(),
+    });
 
-      setStructureOptions(res.data || []);
-    } catch (err) {
-      console.error(err);
-    }
-  };
+    setStructureOptions(res.data || []);
+  } catch (err) {
+    console.error(err);
+  }
+};
 
   const handleResetCalculator = () => {
     setValues({
@@ -923,10 +920,11 @@ onWheel={preventNumberWheelChange}
 
                 if (selected) {
                   setValues((prev) => ({
-                    ...prev,
-                    structureWatt: Number(selected.capacityKw || 0),
-                    structureQuantity: 1,
-                  }));
+  ...prev,
+  structureType: selected.structureType || '',
+  structureWatt: Number(selected.capacityKw || 0),
+  structureQuantity: 1,
+}));
                 }
               }}
               className={inputClassName}
