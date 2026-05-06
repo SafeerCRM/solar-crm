@@ -136,23 +136,38 @@ async calculateProjectCost(data: any, user?: any) {
     numberOfPanels *
     wattPerPanel;
 
-  const ongridCost = Number(data?.ongridQuantity || 0) * ongridRate;
+  const ongridCapacityKw = Number(ongridOption?.capacity || data?.ongridWatt || 0);
+const structureCapacityKw = Number(
+  structureOption?.capacityKw || data?.structureWatt || 0,
+);
+const electricalCapacityKw = Number(
+  electricalOption?.capacityKw || data?.electricalWatt || 0,
+);
+const hybridCapacityKw = Number(hybridOption?.capacity || 0);
+const batteryCapacity = Number(batteryOption?.capacity || 0);
+const kitCapacity = Number(kitOption?.capacity || 0);
 
-  const structureCost =
-    Number(data?.structureQuantity || 0) * structureRate;
+const ongridCost =
+  ongridCapacityKw * ongridRate * Number(data?.ongridQuantity || 0);
 
-  const electricalCost =
-    Number(data?.electricalQuantity || 0) * electricalRate;
+const structureCost =
+  structureCapacityKw * structureRate * Number(data?.structureQuantity || 0);
 
-  const transportationCost =
-    Number(data?.distanceKm || 0) *
-    Number(settings.transportRatePerKm || 0);
+const electricalCost =
+  electricalCapacityKw * electricalRate * Number(data?.electricalQuantity || 0);
 
-  const hybridCost = Number(data?.hybridQuantity || 0) * hybridRate;
+const transportationCost =
+  Number(data?.distanceKm || 0) *
+  Number(settings.transportRatePerKm || 0);
 
-  const batteryCost = Number(data?.batteryQuantity || 0) * batteryRate;
+const hybridCost =
+  hybridCapacityKw * hybridRate * Number(data?.hybridQuantity || 0);
 
-  const tataCost = Number(data?.tataQuantity || 0) * kitRate;
+const batteryCost =
+  batteryCapacity * batteryRate * Number(data?.batteryQuantity || 0);
+
+const tataCost =
+  kitCapacity * kitRate * Number(data?.tataQuantity || 0);
 
   // ===== MARGIN =====
   const marginCapacityKw = Number(data?.marginWatt || 0);
