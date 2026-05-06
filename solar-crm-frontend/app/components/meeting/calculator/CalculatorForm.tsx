@@ -194,14 +194,14 @@ const [selectedHybridOptionId, setSelectedHybridOptionId] = useState<number | nu
         {
           numberOfPanels: values.numberOfPanels,
           wattPerPanel: values.wattPerPanel,
-          ongridQuantity: values.ongridQuantity,
-          structureQuantity: values.structureQuantity,
-          electricalQuantity: values.electricalQuantity,
+          ongridQuantity: 1,
+          structureQuantity: 1,
+          electricalQuantity: 1,
           distanceKm: values.distanceKm,
-          hybridQuantity: values.hybridQuantity,
-          batteryQuantity: values.batteryQuantity,
-          celronicQuantity: values.celronicQuantity,
-          tataQuantity: values.tataQuantity,
+          hybridQuantity: 1,
+          batteryQuantity: 1,
+          celronicQuantity: 1,
+          tataQuantity: 1,
           marginWatt: values.marginWatt,
           panelOptionId: selectedPanelOptionId,
 ongridOptionId: selectedOngridOptionId,
@@ -544,15 +544,15 @@ setAreaError('');
 
         ongridBrand: values.ongridBrand,
         ongridWatt: values.ongridWatt,
-        ongridQuantity: values.ongridQuantity,
+        ongridQuantity: 1,
 
         structureType: values.structureType,
         structureWatt: values.structureWatt,
-        structureQuantity: values.structureQuantity,
+        structureQuantity: 1,
 
         electricalItemName: values.electricalItemName,
         electricalWatt: values.electricalWatt,
-        electricalQuantity: values.electricalQuantity,
+        electricalQuantity: 1,
 
         marginWatt: values.marginWatt,
 
@@ -561,18 +561,18 @@ setAreaError('');
 
         hybridType: values.hybridType,
         hybridPhase: values.hybridPhase,
-        hybridQuantity: values.hybridQuantity,
+        hybridQuantity: 1,
 
         batteryType: values.batteryType,
         batteryStrength: values.batteryStrength,
-        batteryQuantity: values.batteryQuantity,
+        batteryQuantity: 1,
 
         celronicType: values.celronicType,
-        celronicQuantity: values.celronicQuantity,
+        celronicQuantity: 1,
 
         tataPanelQuantity: values.tataPanelQuantity,
         tataPanelStrengthWatt: values.tataPanelStrengthWatt,
-        tataQuantity: values.tataQuantity,
+        tataQuantity: 1,
 
         totalProjectCost: totalCost,
 

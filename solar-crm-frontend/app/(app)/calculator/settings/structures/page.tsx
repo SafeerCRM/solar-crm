@@ -207,7 +207,7 @@ export default function StructureSettingsPage() {
 
           <input
             type="number"
-            placeholder="Rate per kW"
+            placeholder="Rate"
             value={form.ratePerKw}
             onChange={(e) => setForm({ ...form, ratePerKw: e.target.value })}
             className="border p-2 rounded"
