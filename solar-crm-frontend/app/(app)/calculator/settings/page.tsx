@@ -128,41 +128,10 @@ export default function CalculatorSettingsPage() {
       <h1 className="text-2xl font-semibold">Calculator Settings</h1>
 
       <Section title="Main Rate Settings">
-        <Input label="Rate Per Watt" value={settings.ratePerWatt} onChange={(v) => handleChange('ratePerWatt', v)} />
+        <Input label="Fallback Panel Rate Per Watt" value={settings.ratePerWatt} onChange={(v) => handleChange('ratePerWatt', v)} />
         <Input label="GST Multiplier" value={settings.gstMultiplier} onChange={(v) => handleChange('gstMultiplier', v)} />
-        <Input label="Ongrid Rate" value={settings.ongridRate} onChange={(v) => handleChange('ongridRate', v)} />
-        <Input label="Structure Rate" value={settings.structureRate} onChange={(v) => handleChange('structureRate', v)} />
-        <Input label="Electrical Rate" value={settings.electricalRate} onChange={(v) => handleChange('electricalRate', v)} />
         <Input label="Transport Rate Per KM" value={settings.transportRatePerKm} onChange={(v) => handleChange('transportRatePerKm', v)} />
         <Input label="Structure Sqft per kW" value={settings.structureSqftPerKw} onChange={(v) => handleChange('structureSqftPerKw', v)} />
-      </Section>
-
-      <Section title="Advanced Rates">
-        <Input label="Hybrid Rate" value={settings.hybridRate} onChange={(v) => handleChange('hybridRate', v)} />
-        <Input label="Battery Rate" value={settings.batteryRate} onChange={(v) => handleChange('batteryRate', v)} />
-        <Input label="Celronic Rate" value={settings.celronicRate} onChange={(v) => handleChange('celronicRate', v)} />
-        <Input label="Tata Rate" value={settings.tataRate} onChange={(v) => handleChange('tataRate', v)} />
-      </Section>
-
-      <Section title="Fixed Costs">
-        <Input label="Margin Amount" value={settings.marginAmount} onChange={(v) => handleChange('marginAmount', v)} />
-        <Input label="Electricity Department Cost" value={settings.electricityDepartmentCost} onChange={(v) => handleChange('electricityDepartmentCost', v)} />
-      </Section>
-
-      <Section title="Other Charges">
-        <Input label="Net Metering" value={settings.netMeteringCost} onChange={(v) => handleChange('netMeteringCost', v)} />
-        <Input label="Installation Charges" value={settings.installationCharges} onChange={(v) => handleChange('installationCharges', v)} />
-        <Input label="Labour Charges" value={settings.labourCharges} onChange={(v) => handleChange('labourCharges', v)} />
-        <Input label="Government Fees" value={settings.governmentFees} onChange={(v) => handleChange('governmentFees', v)} />
-      </Section>
-
-      <Section title="Electrical / BOS">
-        <Input label="Wiring Cost" value={settings.wiringCost} onChange={(v) => handleChange('wiringCost', v)} />
-        <Input label="MCB Cost" value={settings.mcbCost} onChange={(v) => handleChange('mcbCost', v)} />
-        <Input label="DB Box Cost" value={settings.dbBoxCost} onChange={(v) => handleChange('dbBoxCost', v)} />
-        <Input label="Cables Cost" value={settings.cablesCost} onChange={(v) => handleChange('cablesCost', v)} />
-        <Input label="Earthing Cost" value={settings.earthingCost} onChange={(v) => handleChange('earthingCost', v)} />
-        <Input label="Lightning Arrestor Cost" value={settings.lightningArrestorCost} onChange={(v) => handleChange('lightningArrestorCost', v)} />
       </Section>
 
 

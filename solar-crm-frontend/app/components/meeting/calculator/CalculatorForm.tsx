@@ -148,7 +148,7 @@ const [selectedHybridOptionId, setSelectedHybridOptionId] = useState<number | nu
 
     electricalItemName: '',
     electricalWatt: 0,
-    electricalQuantity: 0,
+    electricalQuantity: 1,
 
     marginWatt: 0,
 
@@ -161,14 +161,14 @@ const [selectedHybridOptionId, setSelectedHybridOptionId] = useState<number | nu
 
     batteryType: '',
     batteryStrength: '',
-    batteryQuantity: 0,
+    batteryQuantity: 1,
 
     celronicType: '',
-    celronicQuantity: 0,
+    celronicQuantity: 1,
 
     tataPanelQuantity: 0,
     tataPanelStrengthWatt: 0,
-    tataQuantity: 0,
+    tataQuantity: 1,
   });
 
   const setNumberValue = (key: keyof CalculatorValues, value: string) => {
@@ -487,7 +487,7 @@ const handleGenerateProposal = async () => {
 
       electricalItemName: '',
       electricalWatt: 0,
-      electricalQuantity: 0,
+      electricalQuantity: 1,
 
       marginWatt: 0,
 
@@ -500,14 +500,14 @@ const handleGenerateProposal = async () => {
 
       batteryType: '',
       batteryStrength: '',
-      batteryQuantity: 0,
+      batteryQuantity: 1,
 
       celronicType: '',
-      celronicQuantity: 0,
+      celronicQuantity: 1,
 
       tataPanelQuantity: 0,
       tataPanelStrengthWatt: 0,
-      tataQuantity: 0,
+      tataQuantity: 1,
     });
 
     setSelectedPanelOptionId(null);
@@ -866,18 +866,7 @@ onWheel={preventNumberWheelChange}
             />
           </div>
 
-          <div>
-            <label className={labelClassName}>Quantity</label>
-            <input
-              type="number"
-              value={values.ongridQuantity}
-              onChange={(e) => setNumberValue('ongridQuantity', e.target.value)}
-              min={1}
-onWheel={preventNumberWheelChange}
-              className={inputClassName}
-              placeholder="Enter quantity"
-            />
-          </div>
+          
         </div>
       </CalculatorSection>
 
@@ -989,18 +978,7 @@ onWheel={preventNumberWheelChange}
   </div>
 
   {/* Quantity */}
-  <div>
-    <label className={labelClassName}>Quantity</label>
-    <input
-      type="number"
-      min="0"
-      value={values.structureQuantity || 0}
-      onChange={(e) =>
-        setNumberValue('structureQuantity', e.target.value)
-      }
-      className={inputClassName}
-    />
-  </div>
+  
 
 </div>
       </CalculatorSection>
@@ -1059,20 +1037,6 @@ electricalWatt: Number(selected.capacityKw || 0),
       />
     </div>
 
-    <div>
-      <label className={labelClassName}>Quantity</label>
-      <input
-        type="number"
-        value={values.electricalQuantity}
-        onChange={(e) =>
-          setNumberValue('electricalQuantity', e.target.value)
-        }
-        min={0}
-onWheel={preventNumberWheelChange}
-        className={inputClassName}
-        placeholder="Enter quantity"
-      />
-    </div>
 
   </div>
 </CalculatorSection>
@@ -1184,20 +1148,6 @@ onWheel={preventNumberWheelChange}
       />
     </div>
 
-    <div>
-      <label className={labelClassName}>Quantity</label>
-      <input
-        type="number"
-        value={values.hybridQuantity}
-        onChange={(e) =>
-          setNumberValue('hybridQuantity', e.target.value)
-        }
-        min={1}
-onWheel={preventNumberWheelChange}
-        className={inputClassName}
-        placeholder="Enter quantity"
-      />
-    </div>
 
   </div>
 </CalculatorSection>
@@ -1275,20 +1225,6 @@ onWheel={preventNumberWheelChange}
     </div>
 
     {/* Quantity */}
-    <div>
-      <label className={labelClassName}>Quantity</label>
-      <input
-        type="number"
-        value={values.batteryQuantity}
-        onChange={(e) =>
-          setNumberValue('batteryQuantity', e.target.value)
-        }
-        min={0}
-onWheel={preventNumberWheelChange}
-        className={inputClassName}
-        placeholder="Enter quantity"
-      />
-    </div>
 
   </div>
 </CalculatorSection>
@@ -1339,20 +1275,6 @@ onWheel={preventNumberWheelChange}
     </div>
 
     {/* Quantity */}
-    <div>
-      <label className={labelClassName}>Quantity</label>
-      <input
-        type="number"
-        value={values.tataQuantity}
-        onChange={(e) =>
-          setNumberValue('tataQuantity', e.target.value)
-        }
-        min={0}
-onWheel={preventNumberWheelChange}
-        className={inputClassName}
-        placeholder="Enter quantity"
-      />
-    </div>
 
   </div>
 </CalculatorSection>
