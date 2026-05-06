@@ -958,10 +958,12 @@ onWheel={preventNumberWheelChange}
       <option value="">Select Capacity</option>
 
       {structureOptions
-        .filter(
-          (s) => s.structureType === values.structureType
-        )
-        .map((opt) => (
+  .filter(
+    (s) =>
+      String(s.structureType || '').trim().toLowerCase() ===
+      String(values.structureType || '').trim().toLowerCase()
+  )
+  .map((opt) => (
           <option key={opt.id} value={opt.id}>
             {opt.capacityKw} kW
           </option>
