@@ -213,42 +213,63 @@ export default function ProposalPage() {
         {/* Actions */}
         <div className="mt-6 flex flex-col gap-3 md:flex-row print:hidden">
   <button
-  onClick={async () => {
-    const proposalUrl = window.location.href;
-    const title = 'Solar Proposal';
-    const text = `Solar Proposal for ${proposal.customerName || 'Customer'}`;
+    onClick={async () => {
+      const proposalUrl = window.location.href;
+      const title = 'Solar Proposal';
+      const text = `Solar Proposal for ${proposal.customerName || 'Customer'}`;
 
-    try {
-      const { Share } = await import('@capacitor/share');
+      try {
+        const { Share } = await import('@capacitor/share');
 
-      await Share.share({
-        title,
-        text,
-        url: proposalUrl,
-        dialogTitle: 'Share Proposal',
-      });
+        await Share.share({
+          title,
+          text,
+          url: proposalUrl,
+          dialogTitle: 'Share Proposal',
+        });
 
-      return;
-    } catch (err) {
-      console.error('Capacitor share failed:', err);
-    }
+        return;
+      } catch (err) {
+        console.error('Capacitor share failed:', err);
+      }
 
-    if (navigator.share) {
-      await navigator.share({
-        title,
-        text,
-        url: proposalUrl,
-      });
-      return;
-    }
+      if (navigator.share) {
+        await navigator.share({
+          title,
+          text,
+          url: proposalUrl,
+        });
+        return;
+      }
 
-    await navigator.clipboard.writeText(proposalUrl);
-    alert('Proposal link copied');
-  }}
-  className="rounded-xl bg-green-600 px-5 py-3 text-white"
->
-  Share Proposal
-</button>
+      await navigator.clipboard.writeText(proposalUrl);
+      alert('Proposal link copied');
+    }}
+    className="rounded-xl bg-green-600 px-5 py-3 text-white"
+  >
+    Share Proposal
+  </button>
+
+  {proposal.publicToken && (
+    <a
+      href={`${backendUrl}/proposals/public/${proposal.publicToken}/pdf`}
+      target="_blank"
+      rel="noreferrer"
+      className="rounded-xl bg-blue-600 px-5 py-3 text-center text-white"
+    >
+      Download PDF
+    </a>
+  )}
+
+  <button
+    onClick={async () => {
+      await navigator.clipboard.writeText(window.location.href);
+      alert('Proposal link copied');
+    }}
+    className="rounded-xl bg-gray-700 px-5 py-3 text-white"
+  >
+    Copy Proposal Link
+  </button>
 </div>
       </div>
     </div>
