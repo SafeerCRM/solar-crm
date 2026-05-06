@@ -213,35 +213,42 @@ export default function ProposalPage() {
         {/* Actions */}
         <div className="mt-6 flex flex-col gap-3 md:flex-row print:hidden">
   <button
-    onClick={async () => {
-      const proposalUrl = window.location.href;
+  onClick={async () => {
+    const proposalUrl = window.location.href;
+    const title = 'Solar Proposal';
+    const text = `Solar Proposal for ${proposal.customerName || 'Customer'}`;
 
-      if (navigator.share) {
-        await navigator.share({
-          title: 'Solar Proposal',
-          text: `Solar Proposal for ${proposal.customerName || 'Customer'}`,
-          url: proposalUrl,
-        });
-        return;
-      }
+    try {
+      const { Share } = await import('@capacitor/share');
 
-      await navigator.clipboard.writeText(proposalUrl);
-      alert('Proposal link copied');
-    }}
-    className="rounded-xl bg-green-600 px-5 py-3 text-white"
-  >
-    Share Proposal
-  </button>
+      await Share.share({
+        title,
+        text,
+        url: proposalUrl,
+        dialogTitle: 'Share Proposal',
+      });
 
-  <button
-    onClick={async () => {
-      await navigator.clipboard.writeText(window.location.href);
-      alert('Proposal link copied');
-    }}
-    className="rounded-xl bg-gray-700 px-5 py-3 text-white"
-  >
-    Copy Proposal Link
-  </button>
+      return;
+    } catch (err) {
+      console.error('Capacitor share failed:', err);
+    }
+
+    if (navigator.share) {
+      await navigator.share({
+        title,
+        text,
+        url: proposalUrl,
+      });
+      return;
+    }
+
+    await navigator.clipboard.writeText(proposalUrl);
+    alert('Proposal link copied');
+  }}
+  className="rounded-xl bg-green-600 px-5 py-3 text-white"
+>
+  Share Proposal
+</button>
 </div>
       </div>
     </div>
