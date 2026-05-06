@@ -148,26 +148,22 @@ const batteryCapacity = Number(batteryOption?.capacity || 0);
 const kitCapacity = Number(kitOption?.capacity || 0);
 
 const ongridCost =
-  ongridCapacityKw * ongridRate * Number(data?.ongridQuantity || 0);
+  ongridRate * Number(data?.ongridQuantity || 1);
 
 const structureCost =
-  structureCapacityKw * structureRate * Number(data?.structureQuantity || 0);
+  structureRate * Number(data?.structureQuantity || 1);
 
 const electricalCost =
-  electricalCapacityKw * electricalRate * Number(data?.electricalQuantity || 0);
-
-const transportationCost =
-  Number(data?.distanceKm || 0) *
-  Number(settings.transportRatePerKm || 0);
+  electricalRate * Number(data?.electricalQuantity || 1);
 
 const hybridCost =
-  hybridCapacityKw * hybridRate * Number(data?.hybridQuantity || 0);
+  hybridRate * Number(data?.hybridQuantity || 1);
 
 const batteryCost =
-  batteryCapacity * batteryRate * Number(data?.batteryQuantity || 0);
+  batteryRate * Number(data?.batteryQuantity || 1);
 
 const tataCost =
-  kitCapacity * kitRate * Number(data?.tataQuantity || 0);
+  kitRate * Number(data?.tataQuantity || 1);
 
   // ===== MARGIN =====
   const marginCapacityKw = Number(data?.marginWatt || 0);
