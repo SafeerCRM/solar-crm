@@ -349,7 +349,7 @@ export default function StructureSettingsPage() {
                     <div className="text-sm">
                       <div className="font-medium">{opt.structureType}</div>
                       <div className="text-gray-600">
-                        {opt.capacityKw} kW | ₹{opt.ratePerKw} per kW
+                        {opt.capacityKw} kW | ₹{opt.ratePerKw} 
                       </div>
                     </div>
 
