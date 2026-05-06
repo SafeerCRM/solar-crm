@@ -212,42 +212,39 @@ export default function ProposalPage() {
 
         {/* Actions */}
         <div className="mt-6 flex flex-col gap-3 md:flex-row print:hidden">
-          <button
-  onClick={() => window.print()}
-  className="rounded-xl bg-blue-600 px-5 py-3 text-white"
->
-  Print / Save as PDF
-</button>
+  <a
+    href={`${backendUrl}/proposals/public/${proposal.publicToken}/pdf`}
+    target="_blank"
+    rel="noreferrer"
+    className="rounded-xl bg-blue-600 px-5 py-3 text-center text-white"
+  >
+    Download PDF
+  </a>
 
-<a
-  href={`intent://${window.location.href.replace(
-    /^https?:\/\//,
-    ''
-  )}#Intent;scheme=https;package=com.android.chrome;end`}
-  className="rounded-xl bg-orange-600 px-5 py-3 text-center text-white"
->
-  Open in Chrome for PDF
-</a>
+  <button
+    onClick={async () => {
+      await navigator.clipboard.writeText(
+        `${backendUrl}/proposals/public/${proposal.publicToken}/pdf`
+      );
 
-<button
-  onClick={async () => {
-    await navigator.clipboard.writeText(window.location.href);
-    alert('Proposal link copied. Open Chrome and paste the link.');
-  }}
-  className="rounded-xl bg-gray-700 px-5 py-3 text-white"
->
-  Copy Proposal Link
-</button>
+      alert('PDF link copied');
+    }}
+    className="rounded-xl bg-gray-700 px-5 py-3 text-white"
+  >
+    Copy PDF Link
+  </button>
 
-          <a
-            href={`https://wa.me/${whatsappPhone}?text=${whatsappMessage}`}
-            target="_blank"
-            rel="noreferrer"
-            className="rounded-xl bg-green-600 px-5 py-3 text-center text-white"
-          >
-            Send on WhatsApp
-          </a>
-        </div>
+  <a
+    href={`https://wa.me/${whatsappPhone}?text=${encodeURIComponent(
+      `Your Solar Proposal PDF:\n\n${backendUrl}/proposals/public/${proposal.publicToken}/pdf`
+    )}`}
+    target="_blank"
+    rel="noreferrer"
+    className="rounded-xl bg-green-600 px-5 py-3 text-center text-white"
+  >
+    Send PDF Link on WhatsApp
+  </a>
+</div>
       </div>
     </div>
   );
