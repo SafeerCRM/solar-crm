@@ -1,5 +1,7 @@
 import { Controller, Post, Body, Req, Get, Param, ParseIntPipe } from '@nestjs/common';
 import { ProposalService } from './proposal.service';
+import { Res } from '@nestjs/common';
+import type { Response } from 'express';
 
 @Controller('proposals')
 export class ProposalController {
@@ -18,8 +20,20 @@ createFromCalculator(
   return this.proposalService.createFromCalculator(calculatorId, req.user);
 }
 
+@Get('public/:token/pdf')
+generatePdf(
+  @Param('token') token: string,
+  @Res() res: Response,
+) {
+  return this.proposalService.generateProposalPdf(
+    token,
+    res,
+  );
+}
+
   @Get(':id')
   getById(@Param('id') id: string) {
     return this.proposalService.getProposalById(Number(id));
   }
+  
 }

@@ -37,4 +37,7 @@ export class Proposal {
 
   @CreateDateColumn()
   createdAt: Date;
+
+  @Column({ type: 'varchar', length: 100, nullable: true, unique: true })
+publicToken?: string;
 }

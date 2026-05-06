@@ -3,6 +3,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Proposal } from './proposal.entity';
 import { Repository } from 'typeorm';
 import { Calculator } from '../calculator/calculator.entity';
+import { randomBytes } from 'crypto';
+import PDFDocument = require('pdfkit');
+import { Response } from 'express';
 
 @Injectable()
 export class ProposalService {
@@ -20,11 +23,11 @@ private readonly calculatorRepo: Repository<Calculator>,
 
   async createProposal(data: any, user: any) {
     const proposal = this.proposalRepo.create({
-      ...data,
-      proposalNumber: this.generateProposalNumber(),
-      createdBy: user?.id,
-    });
-
+  ...data,
+  proposalNumber: this.generateProposalNumber(),
+  publicToken: this.generatePublicToken(),
+  createdBy: user?.id,
+} as Partial<Proposal>) as Proposal;
     return this.proposalRepo.save(proposal);
   }
 
@@ -69,9 +72,150 @@ private readonly calculatorRepo: Repository<Calculator>,
   customerCity: calculator.customerCity || null,
   finalCost: Number(calculator.finalCost || calculator.totalProjectCost || 0),
   proposalNumber: this.generateProposalNumber(),
+  publicToken: this.generatePublicToken(),
   createdBy: user?.id || user?.userId || null,
-} as Proposal);
+} as Partial<Proposal>) as Proposal;
 
   return this.proposalRepo.save(proposal);
 }
+
+async generateProposalPdf(
+  publicToken: string,
+  res: Response,
+) {
+  const proposal = await this.proposalRepo.findOne({
+    where: { publicToken },
+  });
+
+  if (!proposal) {
+    throw new Error('Proposal not found');
+  }
+
+  const doc = new PDFDocument({
+    margin: 40,
+    size: 'A4',
+  });
+
+  const fileName = `${proposal.proposalNumber}.pdf`;
+
+  res.setHeader(
+    'Content-Disposition',
+    `inline; filename="${fileName}"`,
+  );
+
+  res.setHeader('Content-Type', 'application/pdf');
+
+  doc.pipe(res);
+
+  // =========================
+  // HEADER
+  // =========================
+  doc
+    .fontSize(24)
+    .fillColor('#0f172a')
+    .text('SOLAR PROPOSAL', {
+      align: 'center',
+    });
+
+  doc.moveDown();
+
+  doc
+    .fontSize(12)
+    .fillColor('#111827')
+    .text(`Proposal No: ${proposal.proposalNumber}`);
+
+  doc.text(
+    `Date: ${new Date(
+      proposal.createdAt,
+    ).toLocaleDateString('en-IN')}`,
+  );
+
+  doc.moveDown();
+
+  // =========================
+  // CUSTOMER DETAILS
+  // =========================
+  doc
+    .fontSize(18)
+    .fillColor('#2563eb')
+    .text('Customer Details');
+
+  doc.moveDown(0.5);
+
+  doc
+    .fontSize(12)
+    .fillColor('#111827')
+    .text(`Name: ${proposal.customerName || '-'}`);
+
+  doc.text(`Phone: ${proposal.customerPhone || '-'}`);
+
+  doc.text(`City: ${proposal.customerCity || '-'}`);
+
+  doc.moveDown();
+
+  // =========================
+  // COST
+  // =========================
+  doc
+    .fontSize(18)
+    .fillColor('#16a34a')
+    .text('Project Cost');
+
+  doc.moveDown(0.5);
+
+  doc
+    .fontSize(24)
+    .fillColor('#111827')
+    .text(
+      `₹ ${Number(
+        proposal.finalCost || 0,
+      ).toLocaleString('en-IN')}`,
+    );
+
+  doc.moveDown();
+
+  // =========================
+  // TERMS
+  // =========================
+  doc
+    .fontSize(16)
+    .fillColor('#2563eb')
+    .text('Terms & Conditions');
+
+  doc.moveDown(0.5);
+
+  doc
+    .fontSize(11)
+    .fillColor('#111827')
+    .text(
+      '• Prices are subject to site inspection.',
+    );
+
+  doc.text(
+    '• Net metering depends on local DISCOM approval.',
+  );
+
+  doc.text(
+    '• Installation timeline may vary by site conditions.',
+  );
+
+  doc.moveDown(2);
+
+  // =========================
+  // FOOTER
+  // =========================
+  doc
+    .fontSize(14)
+    .fillColor('#0f172a')
+    .text('Thank you for choosing our solar solutions.', {
+      align: 'center',
+    });
+
+  doc.end();
+}
+
+generatePublicToken() {
+  return randomBytes(24).toString('hex');
+}
+
 }
