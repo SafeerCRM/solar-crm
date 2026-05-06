@@ -156,6 +156,10 @@ const structureCost =
 const electricalCost =
   electricalRate * Number(data?.electricalQuantity || 1);
 
+  const transportationCost =
+  Number(data?.distanceKm || 0) *
+  Number(settings.transportRatePerKm || 0);
+
 const hybridCost =
   hybridRate * Number(data?.hybridQuantity || 1);
 
