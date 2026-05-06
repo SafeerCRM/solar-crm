@@ -329,10 +329,13 @@ setBatteryTypes(types);
 
 const handleGenerateProposal = async () => {
   try {
-    if (!values.meetingId && !values.leadId) {
-      alert('Please link this calculator to a meeting or lead before generating proposal');
-      return;
-    }
+    if (
+  !values.customerName.trim() ||
+  !values.customerPhone.trim()
+) {
+  alert('Please enter customer name and phone before generating proposal');
+  return;
+}
 
     // You already save calculator before this, so ensure you have a calculatorId.
     // If you have it from save response, use that. If not, use last saved calculator id logic.
