@@ -212,38 +212,36 @@ export default function ProposalPage() {
 
         {/* Actions */}
         <div className="mt-6 flex flex-col gap-3 md:flex-row print:hidden">
-  <a
-    href={`${backendUrl}/proposals/public/${proposal.publicToken}/pdf`}
-    target="_blank"
-    rel="noreferrer"
-    className="rounded-xl bg-blue-600 px-5 py-3 text-center text-white"
+  <button
+    onClick={async () => {
+      const proposalUrl = window.location.href;
+
+      if (navigator.share) {
+        await navigator.share({
+          title: 'Solar Proposal',
+          text: `Solar Proposal for ${proposal.customerName || 'Customer'}`,
+          url: proposalUrl,
+        });
+        return;
+      }
+
+      await navigator.clipboard.writeText(proposalUrl);
+      alert('Proposal link copied');
+    }}
+    className="rounded-xl bg-green-600 px-5 py-3 text-white"
   >
-    Download PDF
-  </a>
+    Share Proposal
+  </button>
 
   <button
     onClick={async () => {
-      await navigator.clipboard.writeText(
-        `${backendUrl}/proposals/public/${proposal.publicToken}/pdf`
-      );
-
-      alert('PDF link copied');
+      await navigator.clipboard.writeText(window.location.href);
+      alert('Proposal link copied');
     }}
     className="rounded-xl bg-gray-700 px-5 py-3 text-white"
   >
-    Copy PDF Link
+    Copy Proposal Link
   </button>
-
-  <a
-    href={`https://wa.me/${whatsappPhone}?text=${encodeURIComponent(
-      `Your Solar Proposal PDF:\n\n${backendUrl}/proposals/public/${proposal.publicToken}/pdf`
-    )}`}
-    target="_blank"
-    rel="noreferrer"
-    className="rounded-xl bg-green-600 px-5 py-3 text-center text-white"
-  >
-    Send PDF Link on WhatsApp
-  </a>
 </div>
       </div>
     </div>
