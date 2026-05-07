@@ -304,6 +304,9 @@ export default function ProposalPage() {
           <div className="border-2 border-[#ff7900] p-8 text-center">
             <p className="text-xl font-bold uppercase">Final Offered Project Cost</p>
             <p className="mt-4 text-5xl font-black">₹ {finalCost}</p>
+            <p className="text-lg font-semibold text-orange-700 mt-2">
+  + DISCOM EXPENDITURE
+</p>
             <p className="mt-2 text-lg">Customer-safe final pricing only</p>
           </div>
 
@@ -335,7 +338,7 @@ export default function ProposalPage() {
           </div>
 
           <div className="mt-10 bg-[#ff7900] p-4 text-center text-lg font-bold text-white">
-            ADITYA SOLARS | adityasolar2112@gmail.com | 8306170662, 9887634474
+            ADITYA SOLARS | adityasolarsraj01@gmail.com | 8306170662, 9887634474
           </div>
         </PdfPage>
       </div>
@@ -395,14 +398,13 @@ function PdfPage({ children }: { children: React.ReactNode }) {
 
 function PdfHeader() {
   return (
-    <div className="mb-8 grid grid-cols-[1fr_260px] items-center bg-[#ff7900] p-5 text-white">
-      <div>
-        <p className="text-lg font-bold tracking-[0.25em]">⭐ ROOFTOP SOLAR PV SYSTEM ⭐</p>
-        <h1 className="mt-2 text-5xl font-black">ADITYA SOLARS</h1>
-        <p className="text-lg font-semibold">Professional Solar Proposal Document</p>
-      </div>
-      <img src={img('aditya-logo.jpg')} className="h-[105px] w-full bg-white object-contain p-2" />
-    </div>
+    <div className="mb-8 overflow-hidden border-4 border-[#ff7900] bg-white">
+  <img
+    src={img('aditya-logo.jpg')}
+    alt="Aditya Solars"
+    className="w-full object-cover"
+  />
+</div>
   );
 }
 
