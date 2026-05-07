@@ -165,17 +165,27 @@ export default function ProposalPage() {
         const { Share } = await import('@capacitor/share');
 
         const saved = await Filesystem.writeFile({
-          path: fileName,
-          data: base64,
-          directory: Directory.Cache,
-        });
+  path: fileName,
+  data: base64,
+  directory: Directory.Documents,
+  recursive: true,
+});
 
-        await Share.share({
-          title: 'Aditya Solars Proposal',
-          text: `Solar Proposal for ${proposal.customerName || 'Customer'}`,
-          url: saved.uri,
-          dialogTitle: 'Share Proposal PDF',
-        });
+if (share) {
+  await Share.share({
+    title: 'Aditya Solars Proposal',
+    text: `Solar Proposal for ${proposal.customerName || 'Customer'}`,
+    url: saved.uri,
+    dialogTitle: 'Share Proposal PDF',
+  });
+} else {
+  const { FileOpener } = await import('@capacitor-community/file-opener');
+
+  await FileOpener.open({
+    filePath: saved.uri,
+    contentType: 'application/pdf',
+  });
+}
       } catch {
         pdf.save(fileName);
       }
