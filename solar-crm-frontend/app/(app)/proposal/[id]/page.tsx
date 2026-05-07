@@ -1,37 +1,47 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { useParams } from 'next/navigation';
 import { getAuthHeaders } from '@/lib/authHeaders';
 
+type ProductItem = {
+  id: string;
+  name: string;
+  image: string;
+  description: string;
+  remarks: string;
+};
+
 type EditableProposal = {
   preparedBy: string;
-  kindAttn: string;
   customerAddress: string;
   companyIntro: string;
-  offerLetter: string;
   subsidyNote: string;
   terms: string;
   paymentTerms: string;
   bankDetails: string;
   closingNote: string;
+  products: ProductItem[];
 };
+
+const img = (name: string) => `/proposal-assets/${name}`;
 
 export default function ProposalPage() {
   const { id } = useParams();
   const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+  const proposalRef = useRef<HTMLDivElement | null>(null);
 
   const [proposal, setProposal] = useState<any>(null);
   const [editable, setEditable] = useState<EditableProposal | null>(null);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
 
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat('en-IN').format(Number(value || 0));
 
-  const cleanPhoneForWhatsApp = (phone: string) => {
-    const digits = String(phone || '').replace(/\D/g, '');
-    return digits.length === 10 ? `91${digits}` : digits;
-  };
+  useEffect(() => {
+    document.title = 'Aditya Solars Proposal';
+  }, []);
 
   useEffect(() => {
     const fetchProposal = async () => {
@@ -39,7 +49,6 @@ export default function ProposalPage() {
         const res = await axios.get(`${backendUrl}/proposals/${id}`, {
           headers: getAuthHeaders(),
         });
-
         setProposal(res.data);
       } catch (err) {
         console.error(err);
@@ -54,402 +63,558 @@ export default function ProposalPage() {
 
     setEditable({
       preparedBy: 'RAJKUMAR JI',
-      kindAttn: '',
       customerAddress: proposal.customerCity || '',
       companyIntro:
-        'Aditya Solars is working professionally in the solar industry for the last 5 years with 4 MW capacity solar projects in Rajasthan. We have installed more than 870 projects, from big industrial projects to small domestic on-grid projects. We have our own team for installation and also provide maintenance services to our customers.',
-      offerLetter:
-        'With reference to our discussion and based on the inputs received, we are pleased to submit our most competitive offer for the design, supply, installation, testing and commissioning of an On-Grid Solar Power System. The key objective is to provide an economically viable, efficient and durable electrical energy generation system.',
+        'Aditya Solar is working most professionally in Solar Industry from last 5 years with 10 MW Capacity solar project in Rajasthan. We are one of the largest organizations with highest growth rate in last Five years. We have installed more than 3000 projects. We have installed big industry projects to small domestic on grid projects. We have our team for Installation of Projects. We also provide Maintenance services to our customer.',
       subsidyNote:
-        'Subsidy depends upon Government Rules. Aditya Solars is responsible for completing the subsidy process after 100% payment. Subsidy file will be submitted on PM Surya Ghar Portal.',
+        'Subsidy depends upon Government Rules. Aditya Solars will assist in PM Surya Ghar subsidy process after payment completion.',
       terms:
-        '1. Project offer cost is valid only for the next 10 days. After that, price may vary with time.\n2. During running project, if project is cancelled by customer after purpose signed of company, then 15% of total project cost has to be paid by customer.\n3. Customer cannot change payment conditions of company.\n4. Project completion time period depends upon market conditions and material availability.\n5. Finance facility available.\n6. Payment deposited in company account will be considered in case of legal dispute.\n7. Physical damage is covered only in solar insurance.',
+        '• Project Offer Cost Only For Next 10 Days After Price May Vary With Time.\n\n• During Running Project If Project Cancelled By Customer After Purpose Signed of Company Then 15% of Total Project Cost Has to Pay By Customer.\n\n• Customer Can’t Change Payment Conditions of Company.\n\n• Company Project Completion Time Period Depends Upon marketing Conditions or on Material Availability.\n\n• Finance Facility Available.\n\n• Payment in Company Account Deposited will be considered in case of Legal Dispute.\n\n• Physical damage covered only in solar insurance.\n\n• Only electronic transfers or deposits made directly into the official bank account of Aditya Solars will be acknowledged.',
       paymentTerms:
-        '1. 20% Advance for Structure.\n2. 70% for Panel & Inverter after Structure completion.\n3. 10% after generation starts within 3 days.',
+        '1. 20% Advance for Structure.\n2. 70% + For Panel & Inverter After Structure completed.\n3. 10% After Generation Start Within 3 days.',
       bankDetails:
-        'Account Holder: ADITYA SOLARS\nBank Name: ICICI\nAccount Number: 687005603181\nIFSC Code: ICIC0006870\nBranch Address: Aerodrome Circle Branch\nGSTIN: 08CVFPM5354P1ZV',
-      closingNote: 'Regards,\nADITYA SOLARS',
+        'Account Holder Name: ADITYA SOLARS\nBank Name: ICICI BANK\nAccount Number: 687005603181\nIFSC Code: ICIC0006870\nAddress: Aerodrome Circle Branch\nGSTIN: 08CVFPM5354P1ZV',
+      closingNote:
+        'Thanks & Regards\nADITYA SOLARS\nRajkumar Meena - 8306170662',
+      products: [
+        {
+          id: '1',
+          name: 'Solar Module Monoperc Halfcut Bifacial',
+          image: img('solar-module.jpg'),
+          description:
+            'MONOPERC / Halfcut / Bifacial / TOPCON Solar Modules with 12 years product warranty and 30 years performance warranty.',
+          remarks: 'As per selected system',
+        },
+        {
+          id: '2',
+          name: 'Solar Inverter',
+          image: img('solar-inverter.jpg'),
+          description:
+            '1PH / 3PH On-Grid Inverter with product warranty. Brand and capacity as per selected system configuration.',
+          remarks: 'As per capacity',
+        },
+        {
+          id: '3',
+          name: 'Module Mounting Structure',
+          image: img('gi-structure.jpg'),
+          description:
+            'Galvanized Iron Structure 40×60×2 mm / 40×40×2 mm. Rooftop pipes in galvanized C-channel structure.',
+          remarks: 'Site specific',
+        },
+        {
+          id: '4',
+          name: 'ACDB + DCDB',
+          image: img('acdb-dcdb.jpg'),
+          description:
+            'AC Distribution Box and DC Distribution Box with protection system and surge protection devices.',
+          remarks: 'Included',
+        },
+        {
+          id: '5',
+          name: 'Earthing Wire',
+          image: img('earthing-wire.jpg'),
+          description: 'Copper 40 sq mm earthing wire. Maximum length 90 m.',
+          remarks: 'Included',
+        },
+        {
+          id: '6',
+          name: 'DC Cable and AC Cable',
+          image: img('dc-ac-cable.jpg'),
+          description:
+            'Reputed brand DC and AC cable such as Havells / Polycab / KEI as per project requirement.',
+          remarks: 'Included',
+        },
+        {
+          id: '7',
+          name: 'AC Cable',
+          image: img('ac-cable.jpg'),
+          description:
+            '4 sqmm / 6 sqmm AC cable from reputed brand. Maximum length as per site requirement.',
+          remarks: 'Included',
+        },
+        {
+          id: '8',
+          name: 'Earthing Rods',
+          image: img('earthing-rods.jpg'),
+          description: '1 meter Truepower / reputed brand earthing rods.',
+          remarks: 'Included',
+        },
+        {
+          id: '9',
+          name: 'Lightning Arrester',
+          image: img('lightning-arrester.jpg'),
+          description:
+            'Copper lightning arrester with required accessories for safety protection.',
+          remarks: 'Included',
+        },
+        {
+          id: '10',
+          name: 'Solar Meter',
+          image: img('solar-meter.jpg'),
+          description: 'Avon / HPL solar meter with warranty as per DISCOM rules.',
+          remarks: 'As per DISCOM',
+        },
+        {
+          id: '11',
+          name: 'Civil Foundation',
+          image: img('civil-foundation.jpg'),
+          description:
+            '8 inch cement concrete civil foundation for RCC / ground mounted system, wherever required.',
+          remarks: 'If required',
+        },
+        {
+          id: '12',
+          name: 'DC Connectors',
+          image: img('dc-connectors.jpg'),
+          description: 'MC4 type reputed brand DC connectors for string connection.',
+          remarks: 'Included',
+        },
+        {
+          id: '13',
+          name: 'Anchor Fasteners',
+          image: img('anchor-fasteners.jpg'),
+          description: 'Heavy wedge anchor fasteners for RCC mounting and structure fixing.',
+          remarks: 'Included',
+        },
+      ],
     });
   }, [proposal, editable]);
 
-  const updateEditable = (key: keyof EditableProposal, value: string) => {
-    setEditable((prev) => (prev ? { ...prev, [key]: value } : prev));
-  };
-
   if (!proposal || !editable) {
-    return <div className="p-6">Loading proposal...</div>;
+    return <div className="p-6">Loading Proposal...</div>;
   }
 
   const calculator = proposal.calculator || {};
-
   const projectCapacityKw =
-    (Number(calculator.numberOfPanels || 0) *
-      Number(calculator.wattPerPanel || 0)) /
+    (Number(calculator.numberOfPanels || 0) * Number(calculator.wattPerPanel || 0)) /
     1000;
 
-  const customerName = proposal.customerName || 'Customer';
   const proposalDate = proposal.createdAt
     ? new Date(proposal.createdAt).toLocaleDateString('en-IN')
     : '-';
 
-  const proposalUrl =
-    typeof window !== 'undefined' ? window.location.href : '';
+  const updateField = (field: keyof EditableProposal, value: string) => {
+    setEditable((prev) => (prev ? { ...prev, [field]: value } : prev));
+  };
 
-  const whatsappPhone = cleanPhoneForWhatsApp(proposal.customerPhone);
+  const updateProduct = (id: string, field: keyof ProductItem, value: string) => {
+    setEditable((prev) =>
+      prev
+        ? {
+            ...prev,
+            products: prev.products.map((item) =>
+              item.id === id ? { ...item, [field]: value } : item,
+            ),
+          }
+        : prev,
+    );
+  };
 
-  const productItems = [
-    {
-      title: 'Solar Module',
-      tag: 'MONOPERC / Halfcut / Bifacial / TOPCON',
-      value:
-        calculator.numberOfPanels && calculator.wattPerPanel
-          ? `${calculator.numberOfPanels} Panels × ${calculator.wattPerPanel}W`
-          : 'As per selected system',
-      description:
-        'Solar modules with 12 years product warranty and 30 years linear performance warranty.',
-      icon: '☀️',
-    },
-    {
-      title: 'Solar Inverter',
-      tag: 'On-Grid Converter',
-      value: calculator.ongridBrand
-        ? `${calculator.ongridBrand} - ${calculator.ongridWatt || 0} kW`
-        : 'As per selected converter',
-      description:
-        '1PH / 3PH solar inverter with 10 years product warranty.',
-      icon: '⚡',
-    },
-    {
-      title: 'Mounting Structure',
-      tag: 'Galvanized Iron Structure',
-      value: calculator.structureType
-        ? `${calculator.structureType} - ${calculator.structureWatt || 0} kW`
-        : 'As per site requirement',
-      description:
-        'GI structure with 40×60×2 mm / 40×40×2 mm sections. Rooftop pipes or galvanized C-channel structure as per site.',
-      icon: '🏗️',
-    },
-    {
-      title: 'Electrical / BOS',
-      tag: 'ACDB + DCDB + Cables',
-      value: calculator.electricalItemName || 'As per requirement',
-      description:
-        'ACDB, DCDB, SPD, reputed brand AC/DC cables, connectors, earthing and required protection system.',
-      icon: '🔌',
-    },
-    {
-      title: 'Earthing & Lightning Protection',
-      tag: 'Safety Protection',
-      value: 'As per requirement',
-      description:
-        'Earthing rods, copper earthing wire, lightning arrester and safety accessories from reputed brands.',
-      icon: '🛡️',
-    },
-    {
-      title: 'Solar Meter & Net Metering',
-      tag: 'Metering System',
-      value: 'As per DISCOM rules',
-      description:
-        'Solar energy meter and net metering support subject to local DISCOM approval and government rules.',
-      icon: '📟',
-    },
-  ];
+  const generatePdf = async (shareAfterGenerate = false) => {
+    if (!proposalRef.current) return;
 
-  const handleShare = async () => {
-    const title = 'Solar Proposal';
-    const text = `Solar Proposal for ${customerName}`;
+    setGeneratingPdf(true);
 
     try {
-      const { Share } = await import('@capacitor/share');
+      const html2canvas = (await import('html2canvas')).default;
+      const jsPDF = (await import('jspdf')).default;
 
-      await Share.share({
-        title,
-        text,
-        url: proposalUrl,
-        dialogTitle: 'Share Proposal',
-      });
+      const target = proposalRef.current;
 
-      return;
+const canvas = await html2canvas(target, {
+  scale: 2,
+  useCORS: true,
+  allowTaint: true,
+  backgroundColor: '#ffffff',
+  ignoreElements: (element) => {
+    return element.classList?.contains('no-pdf');
+  },
+  onclone: (clonedDoc) => {
+    const clonedTarget = clonedDoc.querySelector('[data-pdf-root="true"]') as HTMLElement | null;
+
+    if (clonedTarget) {
+      clonedTarget.style.backgroundColor = '#ffffff';
+      clonedTarget.style.color = '#111827';
+    }
+
+    clonedDoc.querySelectorAll('*').forEach((el) => {
+      const node = el as HTMLElement;
+
+      node.style.boxShadow = 'none';
+      node.style.textShadow = 'none';
+
+      const color = window.getComputedStyle(node).color;
+      const backgroundColor = window.getComputedStyle(node).backgroundColor;
+      const borderColor = window.getComputedStyle(node).borderColor;
+
+      if (color.includes('lab') || color.includes('oklch')) {
+        node.style.color = '#111827';
+      }
+
+      if (backgroundColor.includes('lab') || backgroundColor.includes('oklch')) {
+        node.style.backgroundColor = '#ffffff';
+      }
+
+      if (borderColor.includes('lab') || borderColor.includes('oklch')) {
+        node.style.borderColor = '#f97316';
+      }
+    });
+  },
+});
+
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      const pdf = new jsPDF('p', 'mm', 'a4');
+
+      const pageWidth = 210;
+      const pageHeight = 297;
+      const imgWidth = pageWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      const fileName = `Aditya-Solars-Proposal-${proposal.customerName || id}.pdf`;
+
+      if (!shareAfterGenerate) {
+        pdf.save(fileName);
+        return;
+      }
+
+      const base64 = pdf.output('datauristring').split(',')[1];
+
+      try {
+        const { Filesystem, Directory } = await import('@capacitor/filesystem');
+        const { Share } = await import('@capacitor/share');
+
+        const savedFile = await Filesystem.writeFile({
+          path: fileName,
+          data: base64,
+          directory: Directory.Cache,
+        });
+
+        await Share.share({
+          title: 'Aditya Solars Proposal',
+          text: `Solar Proposal for ${proposal.customerName || 'Customer'}`,
+          url: savedFile.uri,
+          dialogTitle: 'Share Proposal PDF',
+        });
+      } catch (nativeErr) {
+        console.error(nativeErr);
+        pdf.save(fileName);
+        alert('PDF downloaded. Share it from your device downloads/files.');
+      }
     } catch (err) {
-      console.error('Capacitor share failed:', err);
+      console.error(err);
+      alert('PDF generation failed. Please try again.');
+    } finally {
+      setGeneratingPdf(false);
     }
-
-    if (navigator.share) {
-      await navigator.share({ title, text, url: proposalUrl });
-      return;
-    }
-
-    await navigator.clipboard.writeText(proposalUrl);
-    alert('Proposal link copied');
   };
 
   return (
-    <div className="min-h-screen bg-orange-50 p-4 text-slate-900 md:p-8 print:bg-white print:p-0">
-      <div className="mx-auto max-w-5xl space-y-6 print:max-w-none">
-        <div className="flex flex-col gap-3 rounded-2xl bg-white p-4 shadow print:hidden md:flex-row">
-          <button
-            onClick={handleShare}
-            className="rounded-xl bg-green-600 px-5 py-3 text-white"
-          >
-            Share Proposal
-          </button>
+    <div className="min-h-screen bg-[#fff3e3] p-4 print:bg-white print:p-0">
+      <style jsx global>{`
+        @page {
+          size: A4;
+          margin: 8mm;
+        }
 
-          <button
-            onClick={() => window.print()}
-            className="rounded-xl bg-blue-600 px-5 py-3 text-white"
-          >
-            Print / Save PDF
-          </button>
+        @media print {
+          body {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
 
-          <button
-            onClick={async () => {
-              await navigator.clipboard.writeText(proposalUrl);
-              alert('Proposal link copied');
-            }}
-            className="rounded-xl bg-slate-700 px-5 py-3 text-white"
-          >
-            Copy Proposal Link
-          </button>
-        </div>
+          .no-print {
+            display: none !important;
+          }
 
-        <ProposalPageShell>
-          <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-orange-500 via-amber-400 to-yellow-300 text-white shadow-xl print:rounded-none">
-            <div className="grid gap-6 p-8 md:grid-cols-[1.2fr_0.8fr] md:p-10">
+          textarea,
+          input {
+            border: none !important;
+            background: transparent !important;
+            resize: none !important;
+            overflow: visible !important;
+          }
+        }
+      `}</style>
+
+      <div className="no-print mx-auto mb-5 flex max-w-6xl flex-wrap gap-3 rounded-xl bg-white p-4 shadow">
+        <button
+          onClick={() => generatePdf(false)}
+          disabled={generatingPdf}
+          className="rounded-lg bg-[#ff7a00] px-5 py-3 font-semibold text-white disabled:opacity-60"
+        >
+          {generatingPdf ? 'Generating PDF...' : 'Download Exact PDF'}
+        </button>
+
+        <button
+          onClick={() => generatePdf(true)}
+          disabled={generatingPdf}
+          className="rounded-lg bg-green-600 px-5 py-3 font-semibold text-white disabled:opacity-60"
+        >
+          Share PDF
+        </button>
+
+        <button
+          onClick={() => window.print()}
+          className="rounded-lg bg-blue-600 px-5 py-3 font-semibold text-white"
+        >
+          Browser Print
+        </button>
+      </div>
+
+      <div
+  ref={proposalRef}
+  data-pdf-root="true"
+  className="mx-auto max-w-[210mm] bg-white p-7 shadow-2xl print:shadow-none"
+>
+        <div className="border-2 border-[#ff7a00]">
+          <div className="bg-[#ff7a00] px-5 py-4 text-white">
+            <div className="grid grid-cols-[1fr_230px] items-center gap-4">
               <div>
-                <div className="mb-6 inline-flex rounded-full bg-white/20 px-4 py-2 text-sm font-semibold">
+                <p className="text-sm font-bold tracking-[0.25em]">
                   ⭐ ROOFTOP SOLAR PV SYSTEM ⭐
-                </div>
-
-                <h1 className="text-4xl font-black tracking-tight md:text-5xl">
-                  ADITYA SOLARS
-                </h1>
-
-                <p className="mt-3 max-w-2xl text-lg text-white/95">
-                  Smart solar solutions for reliable savings, clean energy and
-                  long-term performance.
                 </p>
-
-                <div className="mt-8 grid gap-3 text-sm md:grid-cols-2">
-                  <InfoPill label="Proposal No" value={proposal.proposalNumber} />
-                  <InfoPill label="Date" value={proposalDate} />
-                  <InfoPill label="Prepared For" value={customerName} />
-                  <InfoPill label="System Capacity" value={projectCapacityKw ? `${projectCapacityKw.toFixed(2)} kW` : '-'} />
-                </div>
+                <h1 className="mt-2 text-4xl font-black">ADITYA SOLARS</h1>
+                <p className="mt-1 text-sm font-semibold">
+                  Professional Solar Proposal Document
+                </p>
               </div>
 
-              <div className="rounded-3xl bg-white/20 p-6 backdrop-blur">
-                <div className="rounded-2xl bg-white p-5 text-slate-900">
-                  <p className="text-sm font-semibold text-orange-600">
-                    Customer Proposal
-                  </p>
-                  <h2 className="mt-2 text-2xl font-bold">{customerName}</h2>
-                  <p className="mt-2 text-sm text-slate-600">
-                    Phone: {proposal.customerPhone || '-'}
-                  </p>
-                  <p className="text-sm text-slate-600">
-                    City: {proposal.customerCity || '-'}
-                  </p>
-
-                  <div className="mt-5 rounded-2xl bg-green-50 p-4 text-center">
-                    <p className="text-sm font-semibold text-green-700">
-                      Final Offered Cost
-                    </p>
-                    <p className="mt-1 text-3xl font-black text-green-800">
-                      ₹ {formatCurrency(proposal.finalCost)}
-                    </p>
-                  </div>
-                </div>
+              <div className="flex justify-end">
+                <img
+                  src={img('aditya-logo.jpg')}
+                  className="h-24 w-[220px] bg-white object-contain p-2"
+                  alt="Aditya Solars Logo"
+                />
               </div>
             </div>
-          </section>
+          </div>
 
-          <EditableBlock title="Prepared Details">
-            <div className="grid gap-4 md:grid-cols-3">
-              <TextInput
-                label="Prepared By"
-                value={editable.preparedBy}
-                onChange={(v) => updateEditable('preparedBy', v)}
-              />
-              <TextInput
-                label="Kind Attn."
-                value={editable.kindAttn}
-                onChange={(v) => updateEditable('kindAttn', v)}
-              />
-              <TextInput
-                label="Customer Address"
-                value={editable.customerAddress}
-                onChange={(v) => updateEditable('customerAddress', v)}
-              />
-            </div>
-          </EditableBlock>
+          <div className="grid grid-cols-2 gap-5 border-b border-orange-300 p-5">
+            <table className="w-full border-collapse text-sm">
+              <tbody>
+                <InfoRow label="Proposal No" value={proposal.proposalNumber || String(id)} />
+                <InfoRow label="Date" value={proposalDate} />
+                <InfoRow label="Prepared For" value={proposal.customerName || '-'} />
+                <EditableRow
+                  label="Prepared By"
+                  value={editable.preparedBy}
+                  onChange={(v) => updateField('preparedBy', v)}
+                />
+              </tbody>
+            </table>
 
-          <Section title="About Aditya Solars" badge="Company Profile">
+            <img
+              src={img('on-grid-system.jpg')}
+              className="h-[210px] w-full border border-orange-300 object-contain p-2"
+              alt="On Grid System"
+            />
+          </div>
+
+          <DocSection title="Customer Details">
+            <table className="w-full border-collapse text-sm">
+              <tbody>
+                <InfoRow label="Customer Name" value={proposal.customerName || '-'} />
+                <InfoRow label="Phone" value={proposal.customerPhone || '-'} />
+                <EditableRow
+                  label="Address"
+                  value={editable.customerAddress}
+                  onChange={(v) => updateField('customerAddress', v)}
+                />
+                <InfoRow
+                  label="System Capacity"
+                  value={projectCapacityKw ? `${projectCapacityKw.toFixed(2)} kW` : '-'}
+                />
+              </tbody>
+            </table>
+          </DocSection>
+
+          <DocSection title="Company Profile">
             <EditableTextarea
               value={editable.companyIntro}
-              onChange={(v) => updateEditable('companyIntro', v)}
+              rows={6}
+              onChange={(v) => updateField('companyIntro', v)}
             />
 
-            <div className="mt-6 grid gap-4 md:grid-cols-4">
-              <HighlightCard title="870+" subtitle="Projects Installed" />
-              <HighlightCard title="5+" subtitle="Years Experience" />
-              <HighlightCard title="4 MW" subtitle="Solar Projects" />
-              <HighlightCard title="Rajasthan" subtitle="Service Coverage" />
+            <div className="mt-4 grid grid-cols-4 gap-3 text-center">
+              <StatBox value="3000+" label="Projects" />
+              <StatBox value="5+" label="Years" />
+              <StatBox value="10 MW" label="Capacity" />
+              <StatBox value="35+" label="Branches" />
             </div>
-          </Section>
+          </DocSection>
 
-          <Section title="Offer Letter" badge="Supply of Solar On-Grid Power Plant">
-            <EditableTextarea
-              value={editable.offerLetter}
-              onChange={(v) => updateEditable('offerLetter', v)}
-            />
-          </Section>
-
-          <Section title="System Configuration" badge="Project Items">
-            <div className="grid gap-4 md:grid-cols-2">
-              {productItems.map((item) => (
-                <div
-                  key={item.title}
-                  className="rounded-2xl border border-orange-100 bg-white p-5 shadow-sm"
-                >
-                  <div className="flex gap-4">
-                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-100 text-3xl">
-                      {item.icon}
-                    </div>
-
-                    <div className="flex-1">
-                      <p className="text-xs font-bold uppercase tracking-wide text-orange-600">
-                        {item.tag}
-                      </p>
-                      <h3 className="text-lg font-bold text-slate-900">
-                        {item.title}
-                      </h3>
-                      <p className="mt-1 text-sm font-semibold text-slate-700">
-                        {item.value}
-                      </p>
-                    </div>
-                  </div>
-
-                  <textarea
-                    value={item.description}
-                    readOnly
-                    className="mt-4 min-h-[90px] w-full rounded-xl border border-orange-100 bg-orange-50 p-3 text-sm text-slate-700 outline-none"
-                  />
-                </div>
-              ))}
-            </div>
-          </Section>
-
-          <Section title="Expected Generation & Benefits" badge="Solar Savings">
-            <div className="grid gap-4 md:grid-cols-4">
-              <BenefitCard title="1 kW Generation" value="4–5 units/day" />
-              <BenefitCard title="Monthly Units" value="100–150 units" />
-              <BenefitCard title="Yearly Units" value="Approx. 1400 units/kW" />
-              <BenefitCard title="Finance" value="Facility Available" />
-            </div>
-          </Section>
-
-          <Section title="Commercial Offer" badge="Customer Safe Summary">
-            <div className="rounded-3xl bg-gradient-to-r from-green-600 to-emerald-500 p-6 text-center text-white">
-              <p className="text-sm font-semibold uppercase tracking-wide">
-                Final Offered Project Cost
-              </p>
-              <p className="mt-2 text-4xl font-black">
-                ₹ {formatCurrency(proposal.finalCost)}
-              </p>
-              <p className="mt-3 text-sm text-white/90">
-                Price is based on selected system configuration and site
-                feasibility.
-              </p>
-            </div>
-
-            <div className="mt-5">
-              <EditableTextarea
-                value={editable.subsidyNote}
-                onChange={(v) => updateEditable('subsidyNote', v)}
-              />
-            </div>
-          </Section>
-
-          <Section title="Terms & Conditions" badge="Company Policy">
-            <EditableTextarea
-              value={editable.terms}
-              onChange={(v) => updateEditable('terms', v)}
-              rows={8}
-            />
-          </Section>
-
-          <Section title="Payment Terms" badge="Payment Schedule">
-            <EditableTextarea
-              value={editable.paymentTerms}
-              onChange={(v) => updateEditable('paymentTerms', v)}
-            />
-          </Section>
-
-          <Section title="Bank Details" badge="Company Account">
-            <EditableTextarea
-              value={editable.bankDetails}
-              onChange={(v) => updateEditable('bankDetails', v)}
-              rows={7}
-            />
-          </Section>
-
-          <section className="rounded-3xl bg-slate-900 p-8 text-white">
-            <div className="grid gap-6 md:grid-cols-2">
+          <DocSection title="Office & Rajasthan Presence">
+            <div className="grid grid-cols-2 gap-5">
               <div>
-                <h2 className="text-2xl font-black">Thank You</h2>
-                <EditableTextarea
-                  value={editable.closingNote}
-                  onChange={(v) => updateEditable('closingNote', v)}
-                  className="mt-4 border-white/20 bg-white/10 text-white"
+                <h3 className="mb-2 bg-[#ffb000] px-3 py-2 text-center font-black text-slate-900">
+                  Head Office
+                </h3>
+                <img
+                  src={img('head-office.jpg')}
+                  className="h-[390px] w-full border border-orange-300 object-contain p-2"
+                  alt="Head Office"
                 />
               </div>
 
-              <div className="text-sm text-white/80 md:text-right">
-                <p className="text-lg font-bold text-white">ADITYA SOLARS</p>
-                <p>Email: adityasolar2112@gmail.com</p>
-                <p>Email: rajkumarmeena10680@gmail.com</p>
-                <p>Phone: 8306170662, 9887634474</p>
-                <p>Phone: 8233406788, 7014908486</p>
+              <div>
+                <h3 className="mb-2 bg-[#ffb000] px-3 py-2 text-center font-black text-slate-900">
+                  Rajasthan Branches
+                </h3>
+                <img
+                  src={img('rajasthan-branches.jpg')}
+                  className="h-[390px] w-full border border-orange-300 object-contain p-2"
+                  alt="Rajasthan Branches"
+                />
               </div>
             </div>
-          </section>
-        </ProposalPageShell>
+          </DocSection>
+
+          <DocSection title="System Configuration">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="bg-[#ffb000] text-slate-900">
+                  <th className="border border-orange-500 px-2 py-2">S.No</th>
+                  <th className="border border-orange-500 px-2 py-2">Item Name</th>
+                  <th className="border border-orange-500 px-2 py-2">Photo</th>
+                  <th className="border border-orange-500 px-2 py-2">
+                    Description / Specification
+                  </th>
+                  <th className="border border-orange-500 px-2 py-2">Remarks</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {editable.products.map((item, index) => (
+                  <tr key={item.id}>
+                    <td className="border border-orange-300 px-2 py-3 text-center font-bold">
+                      {index + 1}
+                    </td>
+
+                    <td className="border border-orange-300 px-2 py-3 font-bold">
+                      {item.name}
+                    </td>
+
+                    <td className="border border-orange-300 px-2 py-3">
+                      <img
+                        src={item.image}
+                        className="mx-auto h-[105px] w-[135px] object-contain"
+                        alt={item.name}
+                      />
+                    </td>
+
+                    <td className="border border-orange-300 p-2">
+                      <EditableTextarea
+                        value={item.description}
+                        rows={5}
+                        small
+                        onChange={(v) => updateProduct(item.id, 'description', v)}
+                      />
+                    </td>
+
+                    <td className="border border-orange-300 p-2">
+                      <EditableTextarea
+                        value={item.remarks}
+                        rows={4}
+                        small
+                        onChange={(v) => updateProduct(item.id, 'remarks', v)}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </DocSection>
+
+          <DocSection title="Commercial Offer">
+            <div className="border border-green-500 bg-green-50 p-5 text-center">
+              <p className="text-sm font-bold uppercase text-green-700">
+                Final Offered Project Cost
+              </p>
+              <p className="mt-2 text-4xl font-black text-green-800">
+                ₹ {formatCurrency(proposal.finalCost)}
+              </p>
+              <p className="mt-2 text-sm font-semibold text-green-700">
+                Customer-safe final pricing only
+              </p>
+            </div>
+
+            <div className="mt-4">
+              <EditableTextarea
+                value={editable.subsidyNote}
+                rows={4}
+                onChange={(v) => updateField('subsidyNote', v)}
+              />
+            </div>
+          </DocSection>
+
+          <DocSection title="Terms & Conditions">
+            <EditableTextarea
+              value={editable.terms}
+              rows={12}
+              onChange={(v) => updateField('terms', v)}
+            />
+          </DocSection>
+
+          <div className="grid grid-cols-2 gap-5 border-t border-orange-300 p-5">
+            <div>
+              <SectionHeading title="Payment Terms" />
+              <EditableTextarea
+                value={editable.paymentTerms}
+                rows={8}
+                onChange={(v) => updateField('paymentTerms', v)}
+              />
+            </div>
+
+            <div>
+              <SectionHeading title="Bank Details" />
+              <EditableTextarea
+                value={editable.bankDetails}
+                rows={8}
+                onChange={(v) => updateField('bankDetails', v)}
+              />
+            </div>
+          </div>
+
+          <DocSection title="Signature / Closing">
+            <div className="grid grid-cols-2 gap-5">
+              <EditableTextarea
+                value={editable.closingNote}
+                rows={7}
+                onChange={(v) => updateField('closingNote', v)}
+              />
+
+              <div className="flex flex-col justify-end border border-orange-300 p-5 text-center">
+                <p className="text-xl font-black text-slate-900">ADITYA SOLARS</p>
+                <p className="mt-8 border-t border-slate-500 pt-2 font-semibold">
+                  Authorized Signature
+                </p>
+              </div>
+            </div>
+          </DocSection>
+
+          <div className="bg-[#ff7a00] px-6 py-4 text-center text-sm font-semibold text-white">
+            ADITYA SOLARS | adityasolar2112@gmail.com | 8306170662, 9887634474
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-function ProposalPageShell({ children }: { children: React.ReactNode }) {
-  return (
-    <main className="space-y-6 rounded-3xl bg-white p-4 shadow-xl md:p-6 print:rounded-none print:p-0 print:shadow-none">
-      {children}
-    </main>
-  );
-}
-
-function Section({
-  title,
-  badge,
-  children,
-}: {
-  title: string;
-  badge: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm print:break-inside-avoid">
-      <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-        <h2 className="text-2xl font-black text-slate-900">{title}</h2>
-        <span className="rounded-full bg-orange-100 px-4 py-1 text-xs font-bold uppercase tracking-wide text-orange-700">
-          {badge}
-        </span>
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function EditableBlock({
+function DocSection({
   title,
   children,
 }: {
@@ -457,32 +622,17 @@ function EditableBlock({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-3xl bg-amber-50 p-5 print:break-inside-avoid">
-      <h2 className="mb-4 text-lg font-bold text-slate-900">{title}</h2>
-      {children}
+    <section className="border-t border-orange-300 p-5">
+      <SectionHeading title={title} />
+      <div className="mt-4">{children}</div>
     </section>
   );
 }
 
-function TextInput({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
+function SectionHeading({ title }: { title: string }) {
   return (
-    <div>
-      <label className="mb-1 block text-xs font-bold uppercase text-slate-500">
-        {label}
-      </label>
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-xl border border-orange-200 bg-white p-3 text-sm outline-none focus:border-orange-500"
-      />
+    <div className="border-l-8 border-[#ff7a00] bg-[#fff0dd] px-4 py-3">
+      <h2 className="text-xl font-black text-[#d94d00]">{title}</h2>
     </div>
   );
 }
@@ -490,47 +640,67 @@ function TextInput({
 function EditableTextarea({
   value,
   onChange,
-  rows = 5,
-  className = '',
+  rows,
+  small = false,
 }: {
   value: string;
-  onChange: (value: string) => void;
-  rows?: number;
-  className?: string;
+  onChange: (v: string) => void;
+  rows: number;
+  small?: boolean;
 }) {
   return (
     <textarea
       value={value}
       rows={rows}
       onChange={(e) => onChange(e.target.value)}
-      className={`w-full rounded-2xl border border-orange-200 bg-orange-50 p-4 text-sm leading-6 text-slate-700 outline-none focus:border-orange-500 print:border-none print:bg-white ${className}`}
+      className={`w-full resize-none overflow-hidden border border-orange-200 bg-[#fffaf3] p-3 outline-none ${
+        small ? 'text-xs leading-5' : 'text-sm leading-7'
+      }`}
     />
   );
 }
 
-function InfoPill({ label, value }: { label: string; value: string }) {
+function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl bg-white/20 p-4">
-      <p className="text-xs uppercase tracking-wide text-white/80">{label}</p>
-      <p className="mt-1 font-bold text-white">{value}</p>
-    </div>
+    <tr>
+      <td className="border border-orange-300 bg-[#fff0dd] px-3 py-3 font-bold">
+        {label}
+      </td>
+      <td className="border border-orange-300 px-3 py-3">{value}</td>
+    </tr>
   );
 }
 
-function HighlightCard({ title, subtitle }: { title: string; subtitle: string }) {
+function EditableRow({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
   return (
-    <div className="rounded-2xl bg-gradient-to-br from-orange-100 to-yellow-50 p-4 text-center">
-      <p className="text-2xl font-black text-orange-700">{title}</p>
-      <p className="mt-1 text-xs font-semibold text-slate-600">{subtitle}</p>
-    </div>
+    <tr>
+      <td className="border border-orange-300 bg-[#fff0dd] px-3 py-3 font-bold">
+        {label}
+      </td>
+      <td className="border border-orange-300 px-3 py-3">
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full bg-transparent outline-none"
+        />
+      </td>
+    </tr>
   );
 }
 
-function BenefitCard({ title, value }: { title: string; value: string }) {
+function StatBox({ value, label }: { value: string; label: string }) {
   return (
-    <div className="rounded-2xl border border-green-100 bg-green-50 p-4 text-center">
-      <p className="text-sm font-semibold text-green-700">{title}</p>
-      <p className="mt-2 text-lg font-black text-green-900">{value}</p>
+    <div className="border border-orange-300 bg-[#fff0dd] p-3">
+      <p className="text-2xl font-black text-[#d94d00]">{value}</p>
+      <p className="text-xs font-semibold text-slate-700">{label}</p>
     </div>
   );
 }
