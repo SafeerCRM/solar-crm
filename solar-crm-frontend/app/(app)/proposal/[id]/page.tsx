@@ -134,17 +134,46 @@ export default function ProposalPage() {
 
       for (let i = 0; i < pages.length; i++) {
         const canvas = await html2canvas(pages[i], {
-          scale: 2,
-          useCORS: true,
-          backgroundColor: '#ffffff',
-          onclone: (doc) => {
-            doc.querySelectorAll('*').forEach((el) => {
-              const node = el as HTMLElement;
-              node.style.boxShadow = 'none';
-              node.style.textShadow = 'none';
-            });
-          },
-        });
+  scale: 2,
+  useCORS: true,
+  allowTaint: true,
+  backgroundColor: '#ffffff',
+  logging: false,
+  onclone: (doc) => {
+    const style = doc.createElement('style');
+    style.innerHTML = `
+      * {
+        color: #111827 !important;
+        border-color: #f97316 !important;
+        box-shadow: none !important;
+        text-shadow: none !important;
+      }
+
+      .pdf-page {
+        background: #ffffff !important;
+      }
+
+      .pdf-orange {
+        background: #ff7900 !important;
+        color: #ffffff !important;
+      }
+
+      .pdf-light-orange {
+        background: #fff0dc !important;
+      }
+
+      .pdf-soft {
+        background: #fffaf3 !important;
+      }
+
+      .pdf-green {
+        background: #ecfdf5 !important;
+        border-color: #16a34a !important;
+      }
+    `;
+    doc.head.appendChild(style);
+  },
+});
 
         const data = canvas.toDataURL('image/jpeg', 0.96);
         if (i > 0) pdf.addPage();
@@ -311,7 +340,7 @@ if (share) {
 
         <PdfPage>
           <Section title="Commercial Offer" />
-          <div className="border-2 border-[#ff7900] p-8 text-center">
+          <div className="pdf-green border-2 border-[#ff7900] p-8 text-center">
             <p className="text-xl font-bold uppercase">Final Offered Project Cost</p>
             <p className="mt-4 text-5xl font-black">₹ {finalCost}</p>
             <p className="text-lg font-semibold text-orange-700 mt-2">
@@ -420,7 +449,7 @@ function PdfHeader() {
 
 function Section({ title }: { title: string }) {
   return (
-    <div className="my-5 border-l-[10px] border-[#ff7900] bg-[#fff0dc] px-4 py-3">
+    <div className="my-5 border-l-[10px] border-[#ff7900] pdf-light-orange bg-[#fff0dc] px-4 py-3">
       <h2 className="text-2xl font-black text-[#d94d00]">{title}</h2>
     </div>
   );
@@ -432,7 +461,7 @@ function Row({ label, value }: { label: string; value: string }) {
 
 function Stat({ value, label }: { value: string; label: string }) {
   return (
-    <div className="border-2 border-[#e98225] bg-[#fff0dc] p-4 text-center">
+    <div className="border-2 border-[#e98225] pdf-light-orange bg-[#fff0dc] p-4 text-center">
       <p className="text-3xl font-black text-[#d94d00]">{value}</p>
       <p className="text-sm font-bold">{label}</p>
     </div>
