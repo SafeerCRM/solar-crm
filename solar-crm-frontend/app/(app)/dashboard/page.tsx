@@ -74,6 +74,19 @@ type LeadManagerAnalyticsItem = {
   highPotential: number;
 };
 
+type TelecallingAssistantAnalyticsItem = {
+  assistantId: number | null;
+  assistantName: string;
+
+  reviewedToday: number;
+  convertedToday: number;
+  leadsCreatedToday: number;
+
+  lowPotentialConverted: number;
+  mediumPotentialConverted: number;
+  highPotentialConverted: number;
+};
+
 type HotLead = {
   id: number;
   name: string;
@@ -136,6 +149,10 @@ const [performance, setPerformance] = useState<PerformanceItem[]>([]);
   const [meetingAnalytics, setMeetingAnalytics] = useState<MeetingManagerAnalyticsItem[]>([]);
   const [leadManagerAnalytics, setLeadManagerAnalytics] =
   useState<LeadManagerAnalyticsItem[]>([]);
+  const [
+  telecallingAssistantAnalytics,
+  setTelecallingAssistantAnalytics,
+] = useState<TelecallingAssistantAnalyticsItem[]>([]);
   const [hotLeads, setHotLeads] = useState<HotLead[]>([]);
   const [charts, setCharts] = useState<DashboardCharts | null>(null);
   const [contactCountLoading, setContactCountLoading] = useState(false);
@@ -235,6 +252,7 @@ const isOwnerDefaultView =
   chartsRes,
   meetingAnalyticsRes,
   leadManagerAnalyticsRes,
+  telecallingAssistantAnalyticsRes,
 ] = await Promise.allSettled([
   axios.get(`${apiBaseUrl}/dashboard/summary`, {
     params,
@@ -261,6 +279,13 @@ const isOwnerDefaultView =
   axios.get(`${apiBaseUrl}/dashboard/lead-manager-analytics`, {
     headers: getAuthHeaders(),
   }),
+
+  axios.get(
+  `${apiBaseUrl}/dashboard/telecalling-assistant-analytics`,
+  {
+    headers: getAuthHeaders(),
+  },
+),
 ]);
 
       if (summaryRes.status === 'fulfilled') {
@@ -308,6 +333,16 @@ if (leadManagerAnalyticsRes.status === 'fulfilled') {
   );
 } else {
   setLeadManagerAnalytics([]);
+}
+
+if (telecallingAssistantAnalyticsRes.status === 'fulfilled') {
+  setTelecallingAssistantAnalytics(
+    Array.isArray(telecallingAssistantAnalyticsRes.value.data)
+      ? telecallingAssistantAnalyticsRes.value.data
+      : [],
+  );
+} else {
+  setTelecallingAssistantAnalytics([]);
 }
 
     } catch (error) {
@@ -771,6 +806,78 @@ useEffect(() => {
                 <p className="text-gray-500">LOW</p>
                 <p className="text-lg font-bold text-red-600">
                   {item.lowPotential}
+                </p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    )}
+  </div>
+)}
+
+{(userRoles.includes('OWNER') ||
+  userRoles.includes('TELECALLING_MANAGER')) && (
+  <div className="rounded-2xl bg-white p-4 shadow md:p-6">
+    <h2 className="mb-4 text-xl font-bold">
+      ☎️ Telecalling Assistant Analytics
+    </h2>
+
+    {telecallingAssistantAnalytics.length === 0 ? (
+      <div className="text-sm text-gray-500">
+        No telecalling assistant analytics available
+      </div>
+    ) : (
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {telecallingAssistantAnalytics.map((item) => (
+          <div
+            key={`${item.assistantId || 'unassigned'}-${item.assistantName}`}
+            className="rounded-xl border bg-gray-50 p-4"
+          >
+            <p className="mb-2 font-semibold text-gray-900">
+              {item.assistantName}
+            </p>
+
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div className="rounded bg-white p-2">
+                <p className="text-gray-500">Reviewed</p>
+                <p className="text-lg font-bold">
+                  {item.reviewedToday}
+                </p>
+              </div>
+
+              <div className="rounded bg-white p-2">
+                <p className="text-gray-500">Converted</p>
+                <p className="text-lg font-bold text-green-600">
+                  {item.convertedToday}
+                </p>
+              </div>
+
+              <div className="rounded bg-white p-2">
+                <p className="text-gray-500">Leads Created</p>
+                <p className="text-lg font-bold text-blue-600">
+                  {item.leadsCreatedToday}
+                </p>
+              </div>
+
+              <div className="rounded bg-white p-2">
+                <p className="text-gray-500">HIGH</p>
+                <p className="text-lg font-bold text-emerald-600">
+                  {item.highPotentialConverted}
+                </p>
+              </div>
+
+              <div className="rounded bg-white p-2">
+                <p className="text-gray-500">MEDIUM</p>
+                <p className="text-lg font-bold text-yellow-600">
+                  {item.mediumPotentialConverted}
+                </p>
+              </div>
+
+              <div className="rounded bg-white p-2">
+                <p className="text-gray-500">LOW</p>
+                <p className="text-lg font-bold text-red-600">
+                  {item.lowPotentialConverted}
                 </p>
               </div>
             </div>
