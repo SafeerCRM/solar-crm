@@ -180,7 +180,9 @@ export default function ProposalPage() {
         pdf.addImage(data, 'JPEG', 0, 0, 210, 297);
       }
 
-      const fileName = `Aditya-Solars-Proposal-${proposal.customerName || id}.pdf`;
+      const fileName = `Aditya-Solars-Proposal-${
+  proposal.customerPhone || id
+}.pdf`;
 
       if (!share) {
         pdf.save(fileName);
