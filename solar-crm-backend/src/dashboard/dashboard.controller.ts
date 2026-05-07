@@ -177,6 +177,20 @@ getLeadManagerAnalytics(@CurrentUser() user?: any) {
   return this.dashboardService.getLeadManagerAnalytics();
 }
 
+@Get('telecalling-assistant-analytics')
+getTelecallingAssistantAnalytics(@CurrentUser() user?: any) {
+  const userRoles = this.getUserRoles(user);
+
+  if (
+    !userRoles.includes(UserRole.OWNER) &&
+    !userRoles.includes(UserRole.TELECALLING_MANAGER)
+  ) {
+    return [];
+  }
+
+  return this.dashboardService.getTelecallingAssistantAnalytics();
+}
+
   @Get('charts')
   getCharts(
     @Query('assignedTo') assignedTo?: string,

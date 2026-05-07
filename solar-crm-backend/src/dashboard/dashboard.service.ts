@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, LessThan, SelectQueryBuilder } from 'typeorm';
 import { Lead, LeadStatus, LeadPotential } from '../leads/lead.entity';
-import { CallLog } from '../telecalling/call-log.entity';
+import { CallLog, CallReviewStatus } from '../telecalling/call-log.entity';
 import { FollowUp, FollowUpStatus } from '../followup/follow-up.entity';
 import { TelecallingContact } from '../telecalling/telecalling-contact.entity';
 import { UserRole } from '../users/user.entity';
@@ -60,6 +60,22 @@ private readonly meetingRepository: Repository<Meeting>,
   private normalizeText(value?: string): string {
     return String(value || '').trim().toLowerCase();
   }
+
+  private getTodayIndiaRange() {
+  const now = new Date();
+
+  const indiaDate = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now);
+
+  const start = new Date(`${indiaDate}T00:00:00+05:30`);
+  const end = new Date(`${indiaDate}T23:59:59.999+05:30`);
+
+  return { start, end };
+}
 
     private getDateRange(filters: DashboardFilters) {
     if (filters.month) {
@@ -507,6 +523,8 @@ private readonly meetingRepository: Repository<Meeting>,
   }
 
   async getMeetingManagerAnalytics() {
+  const { start, end } = this.getTodayIndiaRange();
+
   const meetingManagers = await this.userRepository.find();
 
   const filteredManagers = meetingManagers.filter(
@@ -524,24 +542,57 @@ private readonly meetingRepository: Repository<Meeting>,
       },
     });
 
-    const companyMeetings = await this.meetingRepository.count({
+    const todayMeetings = await this.meetingRepository.count({
+      where: {
+        assignedTo: manager.id,
+        scheduledAt: Between(start, end),
+      },
+    });
+
+    const companyMeetingsToday = await this.meetingRepository.count({
       where: {
         assignedTo: manager.id,
         meetingCategory: MeetingCategory.COMPANY_MEETING,
+        scheduledAt: Between(start, end),
       },
     });
 
-    const selfMeetings = await this.meetingRepository.count({
+    const selfMeetingsToday = await this.meetingRepository.count({
       where: {
         assignedTo: manager.id,
         meetingCategory: MeetingCategory.SELF_MEETING,
+        scheduledAt: Between(start, end),
       },
     });
 
-    const convertedMeetings = await this.meetingRepository.count({
+    const siteVisitsToday = await this.meetingRepository.count({
+      where: {
+        assignedTo: manager.id,
+        meetingType: 'SITE_VISIT' as any,
+        scheduledAt: Between(start, end),
+      },
+    });
+
+    const meetingFormsCreatedToday = await this.meetingRepository.count({
+      where: {
+        createdBy: manager.id,
+        createdAt: Between(start, end),
+      },
+    });
+
+    const completedMeetingsToday = await this.meetingRepository.count({
+      where: {
+        assignedTo: manager.id,
+        status: MeetingStatus.COMPLETED,
+        updatedAt: Between(start, end),
+      },
+    });
+
+    const convertedMeetingsToday = await this.meetingRepository.count({
       where: {
         assignedTo: manager.id,
         convertToProject: true,
+        updatedAt: Between(start, end),
       },
     });
 
@@ -549,10 +600,22 @@ private readonly meetingRepository: Repository<Meeting>,
       managerId: manager.id,
       managerName: manager.name,
 
+      // existing-safe
       totalMeetings,
-      companyMeetings,
-      selfMeetings,
-      convertedMeetings,
+
+      // today figures
+      todayMeetings,
+      companyMeetingsToday,
+      selfMeetingsToday,
+      siteVisitsToday,
+      meetingFormsCreatedToday,
+      completedMeetingsToday,
+      convertedMeetingsToday,
+
+      // old names kept for frontend safety
+      companyMeetings: companyMeetingsToday,
+      selfMeetings: selfMeetingsToday,
+      convertedMeetings: convertedMeetingsToday,
     });
   }
 
@@ -560,17 +623,7 @@ private readonly meetingRepository: Repository<Meeting>,
 }
 
 async getLeadManagerAnalytics() {
-  const now = new Date();
-
-  const indiaDate = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Kolkata',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(now);
-
-  const start = new Date(`${indiaDate}T00:00:00+05:30`);
-  const end = new Date(`${indiaDate}T23:59:59.999+05:30`);
+  const { start, end } = this.getTodayIndiaRange();
 
   const leadManagers = await this.userRepository.find();
 
@@ -596,13 +649,29 @@ async getLeadManagerAnalytics() {
       },
     });
 
-    const convertedToMeetingToday =
-      await this.meetingRepository.count({
-        where: {
-          createdBy: manager.id,
-          createdAt: Between(start, end),
-        },
-      });
+    const callsToday = await this.callLogRepository.count({
+      where: {
+        telecallerId: manager.id,
+        createdAt: Between(start, end),
+      },
+    });
+
+    const meetingsScheduledToday = await this.meetingRepository.count({
+      where: {
+        createdBy: manager.id,
+        createdAt: Between(start, end),
+      },
+    });
+
+    const meetingsCompletedToday = await this.meetingRepository.count({
+      where: {
+        createdBy: manager.id,
+        status: MeetingStatus.COMPLETED,
+        updatedAt: Between(start, end),
+      },
+    });
+
+    const convertedToMeetingToday = meetingsScheduledToday;
 
     const lowPotential = await this.leadRepository.count({
       where: {
@@ -631,11 +700,104 @@ async getLeadManagerAnalytics() {
 
       totalLeads,
       todayLeads,
+
+      callsToday,
+      meetingsScheduledToday,
+      meetingsCompletedToday,
       convertedToMeetingToday,
 
       lowPotential,
       mediumPotential,
       highPotential,
+    });
+  }
+
+  return result;
+}
+
+async getTelecallingAssistantAnalytics() {
+  const { start, end } = this.getTodayIndiaRange();
+
+  const users = await this.userRepository.find();
+
+  const assistants = users.filter(
+    (u: any) =>
+      Array.isArray(u.roles) &&
+      u.roles.includes(UserRole.TELECALLING_ASSISTANT),
+  );
+
+  const result: any[] = [];
+
+  for (const assistant of assistants) {
+    const reviewedToday = await this.callLogRepository.count({
+      where: {
+        reviewAssignedTo: assistant.id,
+        createdAt: Between(start, end),
+      },
+    });
+
+    const convertedToday = await this.callLogRepository.count({
+      where: {
+        reviewAssignedTo: assistant.id,
+        reviewStatus: CallReviewStatus.CONVERTED,
+        createdAt: Between(start, end),
+      },
+    });
+
+    const lowPotentialConverted = await this.callLogRepository
+      .createQueryBuilder('call')
+      .where('call.reviewAssignedTo = :assistantId', {
+        assistantId: assistant.id,
+      })
+      .andWhere('call.reviewStatus = :status', {
+        status: CallReviewStatus.CONVERTED,
+      })
+      .andWhere('call.createdAt BETWEEN :start AND :end', { start, end })
+      .andWhere(`UPPER(COALESCE(call.leadPotential, '')) = 'LOW'`)
+      .getCount();
+
+    const mediumPotentialConverted = await this.callLogRepository
+      .createQueryBuilder('call')
+      .where('call.reviewAssignedTo = :assistantId', {
+        assistantId: assistant.id,
+      })
+      .andWhere('call.reviewStatus = :status', {
+        status: CallReviewStatus.CONVERTED,
+      })
+      .andWhere('call.createdAt BETWEEN :start AND :end', { start, end })
+      .andWhere(`UPPER(COALESCE(call.leadPotential, '')) = 'MEDIUM'`)
+      .getCount();
+
+    const highPotentialConverted = await this.callLogRepository
+      .createQueryBuilder('call')
+      .where('call.reviewAssignedTo = :assistantId', {
+        assistantId: assistant.id,
+      })
+      .andWhere('call.reviewStatus = :status', {
+        status: CallReviewStatus.CONVERTED,
+      })
+      .andWhere('call.createdAt BETWEEN :start AND :end', { start, end })
+      .andWhere(`UPPER(COALESCE(call.leadPotential, '')) = 'HIGH'`)
+      .getCount();
+
+    const leadsCreatedToday = await this.leadRepository.count({
+      where: {
+        createdBy: assistant.id,
+        createdAt: Between(start, end),
+      },
+    });
+
+    result.push({
+      assistantId: assistant.id,
+      assistantName: assistant.name,
+
+      reviewedToday,
+      convertedToday,
+      leadsCreatedToday,
+
+      lowPotentialConverted,
+      mediumPotentialConverted,
+      highPotentialConverted,
     });
   }
 
