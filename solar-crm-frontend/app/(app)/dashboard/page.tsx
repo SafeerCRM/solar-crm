@@ -47,14 +47,25 @@ type OwnerSummary = {
 
 type PerformanceItem = {
   telecallerId: string;
+  telecallerName?: string;
   totalCalls: string;
   interested: string;
+  meetingsScheduledToday?: string;
 };
 
 type MeetingManagerAnalyticsItem = {
   managerId: number | null;
   managerName: string;
   totalMeetings: number;
+  todayMeetings?: number;
+  companyMeetingsToday?: number;
+  selfMeetingsToday?: number;
+  siteVisitsToday?: number;
+  companySiteVisitsToday?: number;
+  selfSiteVisitsToday?: number;
+  meetingFormsCreatedToday?: number;
+  completedMeetingsToday?: number;
+  convertedMeetingsToday?: number;
   companyMeetings: number;
   selfMeetings: number;
   convertedMeetings: number;
@@ -72,6 +83,10 @@ type LeadManagerAnalyticsItem = {
   lowPotential: number;
   mediumPotential: number;
   highPotential: number;
+
+  callsToday?: number;
+meetingsScheduledToday?: number;
+meetingsCompletedToday?: number;
 };
 
 type TelecallingAssistantAnalyticsItem = {
@@ -85,6 +100,7 @@ type TelecallingAssistantAnalyticsItem = {
   lowPotentialConverted: number;
   mediumPotentialConverted: number;
   highPotentialConverted: number;
+  meetingsScheduledToday?: number;
 };
 
 type HotLead = {
@@ -736,6 +752,28 @@ useEffect(() => {
                 <p className="text-gray-500">Self</p>
                 <p className="text-lg font-bold">{item.selfMeetings}</p>
               </div>
+               <div className="rounded bg-white p-2">
+  <p className="text-gray-500">Site Visits Today</p>
+  <p className="text-lg font-bold text-blue-600">
+    {item.siteVisitsToday || 0}
+  </p>
+</div>
+
+<div className="rounded bg-white p-2">
+  <p className="text-gray-500">Company Site Visits</p>
+  <p className="text-lg font-bold text-indigo-600">
+    {item.companySiteVisitsToday || 0}
+  </p>
+</div>
+
+<div className="rounded bg-white p-2">
+  <p className="text-gray-500">Self Site Visits</p>
+  <p className="text-lg font-bold text-purple-600">
+    {item.selfSiteVisitsToday || 0}
+  </p>
+</div>
+
+
             </div>
           </div>
         ))}
@@ -780,6 +818,20 @@ useEffect(() => {
                   {item.todayLeads}
                 </p>
               </div>
+
+              <div className="rounded bg-white p-2">
+  <p className="text-gray-500">Calls Today</p>
+  <p className="text-lg font-bold text-indigo-600">
+    {item.callsToday || 0}
+  </p>
+</div>
+
+<div className="rounded bg-white p-2">
+  <p className="text-gray-500">Meetings Scheduled</p>
+  <p className="text-lg font-bold text-green-600">
+    {item.meetingsScheduledToday || 0}
+  </p>
+</div>
 
               <div className="rounded bg-white p-2">
                 <p className="text-gray-500">Meeting Converted</p>
@@ -861,6 +913,13 @@ useEffect(() => {
               </div>
 
               <div className="rounded bg-white p-2">
+  <p className="text-gray-500">Meetings Scheduled</p>
+  <p className="text-lg font-bold text-green-600">
+    {item.meetingsScheduledToday || 0}
+  </p>
+</div>
+
+              <div className="rounded bg-white p-2">
                 <p className="text-gray-500">HIGH</p>
                 <p className="text-lg font-bold text-emerald-600">
                   {item.highPotentialConverted}
@@ -927,8 +986,9 @@ useEffect(() => {
                         {performance.map((p) => (
               <div key={p.telecallerId} className="rounded-xl bg-white p-4 shadow">
                 <p className="font-semibold">{getTelecallerName(p)}</p>
-                <p>Total Calls: {p.totalCalls}</p>
-                <p>Interested: {p.interested}</p>
+                <p>Total Calls Today: {p.totalCalls}</p>
+<p>Interested Today: {p.interested}</p>
+<p>Meetings Scheduled Today: {p.meetingsScheduledToday || 0}</p>
               </div>
             ))}
           </div>
