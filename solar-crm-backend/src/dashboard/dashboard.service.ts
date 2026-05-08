@@ -570,31 +570,47 @@ private readonly meetingRepository: Repository<Meeting>,
       },
     });
 
-    const siteVisitsToday = await this.meetingRepository.count({
-  where: {
-    assignedTo: manager.id,
+    const siteVisitsTodayRaw = await this.meetingRepository
+  .createQueryBuilder('meeting')
+  .select('COUNT(DISTINCT COALESCE(meeting.meetingGroupId, meeting.id))', 'count')
+  .where('meeting.assignedTo = :managerId', { managerId: manager.id })
+  .andWhere('meeting.meetingType = :meetingType', {
     meetingType: MeetingType.SITE_VISIT,
-    updatedAt: Between(start, end),
-  },
-});
+  })
+  .andWhere('meeting.updatedAt BETWEEN :start AND :end', { start, end })
+  .getRawOne();
 
-const companySiteVisitsToday = await this.meetingRepository.count({
-  where: {
-    assignedTo: manager.id,
-    meetingType: MeetingType.SITE_VISIT,
-    meetingCategory: MeetingCategory.COMPANY_MEETING,
-    updatedAt: Between(start, end),
-  },
-});
+const siteVisitsToday = Number(siteVisitsTodayRaw?.count || 0);
 
-const selfSiteVisitsToday = await this.meetingRepository.count({
-  where: {
-    assignedTo: manager.id,
+const companySiteVisitsTodayRaw = await this.meetingRepository
+  .createQueryBuilder('meeting')
+  .select('COUNT(DISTINCT COALESCE(meeting.meetingGroupId, meeting.id))', 'count')
+  .where('meeting.assignedTo = :managerId', { managerId: manager.id })
+  .andWhere('meeting.meetingType = :meetingType', {
     meetingType: MeetingType.SITE_VISIT,
-    meetingCategory: MeetingCategory.SELF_MEETING,
-    updatedAt: Between(start, end),
-  },
-});
+  })
+  .andWhere('meeting.meetingCategory = :category', {
+    category: MeetingCategory.COMPANY_MEETING,
+  })
+  .andWhere('meeting.updatedAt BETWEEN :start AND :end', { start, end })
+  .getRawOne();
+
+const companySiteVisitsToday = Number(companySiteVisitsTodayRaw?.count || 0);
+
+const selfSiteVisitsTodayRaw = await this.meetingRepository
+  .createQueryBuilder('meeting')
+  .select('COUNT(DISTINCT COALESCE(meeting.meetingGroupId, meeting.id))', 'count')
+  .where('meeting.assignedTo = :managerId', { managerId: manager.id })
+  .andWhere('meeting.meetingType = :meetingType', {
+    meetingType: MeetingType.SITE_VISIT,
+  })
+  .andWhere('meeting.meetingCategory = :category', {
+    category: MeetingCategory.SELF_MEETING,
+  })
+  .andWhere('meeting.updatedAt BETWEEN :start AND :end', { start, end })
+  .getRawOne();
+
+const selfSiteVisitsToday = Number(selfSiteVisitsTodayRaw?.count || 0);
 
     const meetingFormsCreatedToday = await this.meetingRepository.count({
       where: {
@@ -769,41 +785,29 @@ async getTelecallingAssistantAnalytics() {
       },
     });
 
-    const lowPotentialConverted = await this.callLogRepository
-      .createQueryBuilder('call')
-      .where('call.reviewAssignedTo = :assistantId', {
-        assistantId: assistant.id,
-      })
-      .andWhere('call.reviewStatus = :status', {
-        status: CallReviewStatus.CONVERTED,
-      })
-      .andWhere('call.createdAt BETWEEN :start AND :end', { start, end })
-      .andWhere(`UPPER(COALESCE(call.leadPotential, '')) = 'LOW'`)
-      .getCount();
+    const lowPotentialConverted = await this.leadRepository.count({
+  where: {
+    createdBy: assistant.id,
+    potential: LeadPotential.LOW,
+    createdAt: Between(start, end),
+  },
+});
 
-    const mediumPotentialConverted = await this.callLogRepository
-      .createQueryBuilder('call')
-      .where('call.reviewAssignedTo = :assistantId', {
-        assistantId: assistant.id,
-      })
-      .andWhere('call.reviewStatus = :status', {
-        status: CallReviewStatus.CONVERTED,
-      })
-      .andWhere('call.createdAt BETWEEN :start AND :end', { start, end })
-      .andWhere(`UPPER(COALESCE(call.leadPotential, '')) = 'MEDIUM'`)
-      .getCount();
+const mediumPotentialConverted = await this.leadRepository.count({
+  where: {
+    createdBy: assistant.id,
+    potential: LeadPotential.MEDIUM,
+    createdAt: Between(start, end),
+  },
+});
 
-    const highPotentialConverted = await this.callLogRepository
-      .createQueryBuilder('call')
-      .where('call.reviewAssignedTo = :assistantId', {
-        assistantId: assistant.id,
-      })
-      .andWhere('call.reviewStatus = :status', {
-        status: CallReviewStatus.CONVERTED,
-      })
-      .andWhere('call.createdAt BETWEEN :start AND :end', { start, end })
-      .andWhere(`UPPER(COALESCE(call.leadPotential, '')) = 'HIGH'`)
-      .getCount();
+const highPotentialConverted = await this.leadRepository.count({
+  where: {
+    createdBy: assistant.id,
+    potential: LeadPotential.HIGH,
+    createdAt: Between(start, end),
+  },
+});
 
     const leadsCreatedToday = await this.leadRepository.count({
       where: {
