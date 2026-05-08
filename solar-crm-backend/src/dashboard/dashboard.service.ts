@@ -6,7 +6,12 @@ import { CallLog, CallReviewStatus } from '../telecalling/call-log.entity';
 import { FollowUp, FollowUpStatus } from '../followup/follow-up.entity';
 import { TelecallingContact } from '../telecalling/telecalling-contact.entity';
 import { UserRole } from '../users/user.entity';
-import { Meeting, MeetingCategory, MeetingStatus } from '../meeting/meeting.entity';
+import {
+  Meeting,
+  MeetingCategory,
+  MeetingStatus,
+  MeetingType,
+} from '../meeting/meeting.entity';
 import { User } from '../users/user.entity';
 
 
@@ -566,12 +571,30 @@ private readonly meetingRepository: Repository<Meeting>,
     });
 
     const siteVisitsToday = await this.meetingRepository.count({
-      where: {
-        assignedTo: manager.id,
-        meetingType: 'SITE_VISIT' as any,
-        scheduledAt: Between(start, end),
-      },
-    });
+  where: {
+    assignedTo: manager.id,
+    meetingType: MeetingType.SITE_VISIT,
+    updatedAt: Between(start, end),
+  },
+});
+
+const companySiteVisitsToday = await this.meetingRepository.count({
+  where: {
+    assignedTo: manager.id,
+    meetingType: MeetingType.SITE_VISIT,
+    meetingCategory: MeetingCategory.COMPANY_MEETING,
+    updatedAt: Between(start, end),
+  },
+});
+
+const selfSiteVisitsToday = await this.meetingRepository.count({
+  where: {
+    assignedTo: manager.id,
+    meetingType: MeetingType.SITE_VISIT,
+    meetingCategory: MeetingCategory.SELF_MEETING,
+    updatedAt: Between(start, end),
+  },
+});
 
     const meetingFormsCreatedToday = await this.meetingRepository.count({
       where: {
@@ -608,6 +631,8 @@ private readonly meetingRepository: Repository<Meeting>,
       companyMeetingsToday,
       selfMeetingsToday,
       siteVisitsToday,
+      companySiteVisitsToday,
+      selfSiteVisitsToday,
       meetingFormsCreatedToday,
       completedMeetingsToday,
       convertedMeetingsToday,
@@ -657,11 +682,11 @@ async getLeadManagerAnalytics() {
     });
 
     const meetingsScheduledToday = await this.meetingRepository.count({
-      where: {
-        createdBy: manager.id,
-        createdAt: Between(start, end),
-      },
-    });
+  where: {
+    createdBy: manager.id,
+    updatedAt: Between(start, end),
+  },
+});
 
     const meetingsCompletedToday = await this.meetingRepository.count({
       where: {
@@ -787,6 +812,13 @@ async getTelecallingAssistantAnalytics() {
       },
     });
 
+    const meetingsScheduledToday = await this.meetingRepository.count({
+  where: {
+    createdBy: assistant.id,
+    updatedAt: Between(start, end),
+  },
+});
+
     result.push({
       assistantId: assistant.id,
       assistantName: assistant.name,
@@ -794,6 +826,7 @@ async getTelecallingAssistantAnalytics() {
       reviewedToday,
       convertedToday,
       leadsCreatedToday,
+      meetingsScheduledToday,
 
       lowPotentialConverted,
       mediumPotentialConverted,
@@ -850,11 +883,13 @@ const end = new Date(`${indiaDate}T23:59:59.999+05:30`);
     .getCount();
 
   // SITE VISITS TODAY
-  const siteVisitsToday = await this.meetingRepository
-    .createQueryBuilder('meeting')
-    .where('meeting.scheduledAt BETWEEN :start AND :end', { start, end })
-    .andWhere('meeting.meetingType = :type', { type: 'SITE_VISIT' })
-    .getCount();
+const siteVisitsToday = await this.meetingRepository
+  .createQueryBuilder('meeting')
+  .where('meeting.updatedAt BETWEEN :start AND :end', { start, end })
+  .andWhere('meeting.meetingType = :type', {
+    type: MeetingType.SITE_VISIT,
+  })
+  .getCount();
 
   // TOTAL MEETINGS
   const totalMeetings = await this.meetingRepository.count();
