@@ -1,0 +1,912 @@
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, Between, LessThan, SelectQueryBuilder } from 'typeorm';
+import { Lead, LeadStatus, LeadPotential } from '../leads/lead.entity';
+import { CallLog, CallReviewStatus } from '../telecalling/call-log.entity';
+import { FollowUp, FollowUpStatus } from '../followup/follow-up.entity';
+import { TelecallingContact } from '../telecalling/telecalling-contact.entity';
+import { UserRole } from '../users/user.entity';
+import {
+  Meeting,
+  MeetingCategory,
+  MeetingStatus,
+  MeetingType,
+} from '../meeting/meeting.entity';
+import { User } from '../users/user.entity';
+
+
+type DashboardFilters = {
+  assignedTo?: number;
+  zone?: string;
+  city?: string;
+  fromDate?: string;
+  toDate?: string;
+  month?: string;
+};
+
+@Injectable()
+export class DashboardService {
+  private ownerSummaryCache: any = null;
+  private ownerSummaryCacheAt = 0;
+
+  constructor(
+    @InjectRepository(Lead)
+    private readonly leadRepository: Repository<Lead>,
+
+    @InjectRepository(CallLog)
+    private readonly callLogRepository: Repository<CallLog>,
+
+    @InjectRepository(FollowUp)
+    private readonly followUpRepository: Repository<FollowUp>,
+
+    @InjectRepository(TelecallingContact)
+private readonly telecallingContactRepository: Repository<TelecallingContact>,
+
+@InjectRepository(User)
+private readonly userRepository: Repository<User>,
+
+@InjectRepository(Meeting)
+private readonly meetingRepository: Repository<Meeting>,
+) {}
+
+  private hasAnyRole(userRoles: string[] = [], rolesToCheck: UserRole[]): boolean {
+    return rolesToCheck.some((role) => userRoles.includes(role));
+  }
+
+  private isOwnOnlyRole(userRoles: string[] = []): boolean {
+    return this.hasAnyRole(userRoles, [
+      UserRole.TELECALLER,
+      UserRole.LEAD_EXECUTIVE,
+      UserRole.MEETING_MANAGER,
+      UserRole.PROJECT_EXECUTIVE,
+    ]);
+  }
+
+  private normalizeText(value?: string): string {
+    return String(value || '').trim().toLowerCase();
+  }
+
+  private getTodayIndiaRange() {
+  const now = new Date();
+
+  const indiaDate = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now);
+
+  const start = new Date(`${indiaDate}T00:00:00+05:30`);
+  const end = new Date(`${indiaDate}T23:59:59.999+05:30`);
+
+  return { start, end };
+}
+
+    private getDateRange(filters: DashboardFilters) {
+    if (filters.month) {
+      const [year, month] = String(filters.month).split('-').map(Number);
+      if (year && month) {
+        const start = new Date(year, month - 1, 1, 0, 0, 0, 0);
+        const end = new Date(year, month, 0, 23, 59, 59, 999);
+        return { start, end };
+      }
+    }
+
+    if (filters.fromDate || filters.toDate) {
+      const start = filters.fromDate
+        ? new Date(`${filters.fromDate}T00:00:00`)
+        : new Date('2000-01-01T00:00:00');
+
+      const end = filters.toDate
+        ? new Date(`${filters.toDate}T23:59:59.999`)
+        : new Date();
+
+      return { start, end };
+    }
+
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
+
+    return { start, end };
+  }
+
+  private applyContactFilters(
+    qb: SelectQueryBuilder<TelecallingContact>,
+    filters: DashboardFilters,
+  ) {
+    if (filters.assignedTo) {
+      qb.andWhere('contact.assignedTo = :assignedTo', {
+        assignedTo: filters.assignedTo,
+      });
+    }
+
+    const zone = this.normalizeText(filters.zone);
+    if (zone) {
+      qb.andWhere('LOWER(COALESCE(contact.zone, \'\')) LIKE :zone', {
+        zone: `%${zone}%`,
+      });
+    }
+
+    const city = this.normalizeText(filters.city);
+    if (city) {
+      qb.andWhere(
+        `(
+          LOWER(COALESCE(contact.city, '')) LIKE :city
+          OR LOWER(COALESCE(contact.address, '')) LIKE :city
+          OR LOWER(COALESCE(contact.location, '')) LIKE :city
+        )`,
+        { city: `%${city}%` },
+      );
+    }
+
+    const dateRange = this.getDateRange(filters);
+    if (dateRange) {
+      qb.andWhere('contact.createdAt BETWEEN :start AND :end', {
+        start: dateRange.start,
+        end: dateRange.end,
+      });
+    }
+
+    return qb;
+  }
+
+  private applyCallFilters(
+    qb: SelectQueryBuilder<CallLog>,
+    filters: DashboardFilters,
+  ) {
+    if (filters.assignedTo) {
+      qb.andWhere('call.telecallerId = :assignedTo', {
+        assignedTo: filters.assignedTo,
+      });
+    }
+
+    const dateRange = this.getDateRange(filters);
+    if (dateRange) {
+      qb.andWhere('call.createdAt BETWEEN :start AND :end', {
+        start: dateRange.start,
+        end: dateRange.end,
+      });
+    }
+
+    return qb;
+  }
+
+    private applyLeadFilters(
+    qb: SelectQueryBuilder<Lead>,
+    filters: DashboardFilters,
+  ) {
+    if (filters.assignedTo) {
+      qb.andWhere('lead.assignedTo = :assignedTo', {
+        assignedTo: filters.assignedTo,
+      });
+    }
+
+    const dateRange = this.getDateRange(filters);
+    if (dateRange) {
+      qb.andWhere('lead.createdAt BETWEEN :start AND :end', {
+        start: dateRange.start,
+        end: dateRange.end,
+      });
+    }
+
+    return qb;
+  }
+
+  private applyFollowUpFilters(
+    qb: SelectQueryBuilder<FollowUp>,
+    filters: DashboardFilters,
+  ) {
+    if (filters.assignedTo) {
+      qb.andWhere('followUp.assignedTo = :assignedTo', {
+        assignedTo: filters.assignedTo,
+      });
+    }
+
+    const dateRange = this.getDateRange(filters);
+    if (dateRange) {
+      qb.andWhere('followUp.followUpDate BETWEEN :start AND :end', {
+        start: dateRange.start,
+        end: dateRange.end,
+      });
+    }
+
+    return qb;
+  }
+      async getSummary(
+    filters: DashboardFilters = {},
+    userRoles: string[] = [],
+    currentUserId?: number,
+  ) {
+    const isOwnOnly = this.isOwnOnlyRole(userRoles);
+    const effectiveAssignedTo =
+      isOwnOnly && currentUserId ? currentUserId : filters.assignedTo;
+
+    const effectiveFilters: DashboardFilters = {
+      ...filters,
+      assignedTo: effectiveAssignedTo,
+    };
+
+    const dateRange = this.getDateRange(effectiveFilters);
+
+    const totalLeadsQb = this.leadRepository
+      .createQueryBuilder('lead')
+      .where('1=1');
+    this.applyLeadFilters(totalLeadsQb, effectiveFilters);
+    const totalLeads = await totalLeadsQb.getCount();
+
+    const newLeadsQb = this.leadRepository
+      .createQueryBuilder('lead')
+      .where('lead.status = :status', { status: LeadStatus.NEW });
+    this.applyLeadFilters(newLeadsQb, effectiveFilters);
+    const newLeads = await newLeadsQb.getCount();
+
+    const interestedLeadsQb = this.leadRepository
+      .createQueryBuilder('lead')
+      .where('lead.status = :status', { status: LeadStatus.INTERESTED });
+    this.applyLeadFilters(interestedLeadsQb, effectiveFilters);
+    const interestedLeads = await interestedLeadsQb.getCount();
+
+    const callbackQb = this.callLogRepository
+      .createQueryBuilder('call')
+      .where('call.callStatus = :status', { status: 'CALLBACK' });
+    this.applyCallFilters(callbackQb, effectiveFilters);
+    const callbackCount = await callbackQb.getCount();
+
+    const neverCalledQb = this.leadRepository
+      .createQueryBuilder('lead')
+      .where('1=1');
+    this.applyLeadFilters(neverCalledQb, effectiveFilters);
+
+    const subParams: Record<string, any> = {};
+    let notExistsSql = `
+      NOT EXISTS (
+        SELECT 1
+        FROM call_log call
+        WHERE call."leadId" = lead.id
+    `;
+
+    if (effectiveAssignedTo) {
+      notExistsSql += ` AND call."telecallerId" = :neverCalledAssignedTo`;
+      subParams.neverCalledAssignedTo = effectiveAssignedTo;
+    }
+
+    if (dateRange) {
+      notExistsSql += ` AND call."createdAt" BETWEEN :neverCalledStart AND :neverCalledEnd`;
+      subParams.neverCalledStart = dateRange.start;
+      subParams.neverCalledEnd = dateRange.end;
+    }
+
+    notExistsSql += `)`;
+
+    neverCalledQb.andWhere(notExistsSql, subParams);
+    const neverCalledCount = await neverCalledQb.getCount();
+
+    const pendingFollowUpsQb = this.followUpRepository
+      .createQueryBuilder('followUp')
+      .where('followUp.status = :status', { status: FollowUpStatus.PENDING });
+    this.applyFollowUpFilters(pendingFollowUpsQb, effectiveFilters);
+    const todayFollowUps = await pendingFollowUpsQb.getCount();
+
+    const overdueFollowUpsQb = this.followUpRepository
+      .createQueryBuilder('followUp')
+      .where('followUp.status = :status', { status: FollowUpStatus.PENDING });
+
+    if (effectiveAssignedTo) {
+      overdueFollowUpsQb.andWhere('followUp.assignedTo = :assignedTo', {
+        assignedTo: effectiveAssignedTo,
+      });
+    }
+
+    if (dateRange) {
+      overdueFollowUpsQb.andWhere('followUp.followUpDate < :overdueBefore', {
+        overdueBefore: dateRange.start,
+      });
+    }
+
+    const overdueFollowUps = await overdueFollowUpsQb.getCount();
+
+    const contactsQb = this.telecallingContactRepository
+      .createQueryBuilder('contact')
+      .where('1=1');
+
+    this.applyContactFilters(contactsQb, effectiveFilters);
+    const totalContacts = await contactsQb.getCount();
+
+    const calledContactsQb = this.callLogRepository
+      .createQueryBuilder('call')
+      .select('COUNT(DISTINCT call.contactId)', 'count')
+      .where('call.contactId IS NOT NULL')
+      .andWhere(`UPPER(COALESCE(call.callStatus, '')) <> 'INITIATED'`);
+
+    this.applyCallFilters(calledContactsQb, effectiveFilters);
+    const calledContactsRaw = await calledContactsQb.getRawOne();
+    const calledContacts = Number(calledContactsRaw?.count || 0);
+
+    return {
+      totalLeads,
+      newLeads,
+      interestedLeads,
+      neverCalledCount,
+      callbackCount,
+      todayFollowUps,
+      overdueFollowUps,
+      totalContacts,
+      calledContacts,
+    };
+  }
+
+    async getContactsSummary(
+    filters: DashboardFilters = {},
+    userRoles: string[] = [],
+    currentUserId?: number,
+  ) {
+    const isOwnOnly = this.isOwnOnlyRole(userRoles);
+    const effectiveAssignedTo =
+      isOwnOnly && currentUserId ? currentUserId : filters.assignedTo;
+
+    const effectiveFilters: DashboardFilters = {
+      ...filters,
+      assignedTo: effectiveAssignedTo,
+    };
+
+    const totalQb = this.telecallingContactRepository
+      .createQueryBuilder('contact')
+      .where('1=1');
+
+    if (effectiveAssignedTo) {
+      totalQb.andWhere('contact.assignedTo = :assignedTo', {
+        assignedTo: effectiveAssignedTo,
+      });
+    }
+
+    const totalContacts = await totalQb.getCount();
+
+    const filteredQb = this.telecallingContactRepository
+      .createQueryBuilder('contact')
+      .where('1=1');
+
+    this.applyContactFilters(filteredQb, effectiveFilters);
+    const filteredContacts = await filteredQb.getCount();
+
+    return {
+      totalContacts,
+      filteredContacts,
+    };
+  }
+
+    async getPerformance(
+    filters: DashboardFilters = {},
+    userRoles: string[] = [],
+    currentUserId?: number,
+  ) {
+    const isOwnOnly = this.isOwnOnlyRole(userRoles);
+    const effectiveAssignedTo =
+      isOwnOnly && currentUserId ? currentUserId : filters.assignedTo;
+
+    const effectiveFilters: DashboardFilters = {
+      ...filters,
+      assignedTo: effectiveAssignedTo,
+    };
+
+    const qb = this.callLogRepository
+      .createQueryBuilder('call')
+      .select('call.telecallerId', 'telecallerId')
+      .addSelect('COUNT(*)', 'totalCalls')
+      .addSelect(
+        `SUM(CASE WHEN call.callStatus = 'INTERESTED' THEN 1 ELSE 0 END)`,
+        'interested',
+      )
+      .where('call.telecallerId IS NOT NULL')
+      .andWhere(`UPPER(COALESCE(call.callStatus, '')) <> 'INITIATED'`);
+
+    this.applyCallFilters(qb, effectiveFilters);
+
+    qb.groupBy('call.telecallerId').orderBy('COUNT(*)', 'DESC');
+
+    return qb.getRawMany();
+  }
+    async getCharts(
+    filters: DashboardFilters = {},
+    userRoles: string[] = [],
+    currentUserId?: number,
+  ) {
+    const isOwnOnly = this.isOwnOnlyRole(userRoles);
+    const effectiveAssignedTo =
+      isOwnOnly && currentUserId ? currentUserId : filters.assignedTo;
+
+    const effectiveFilters: DashboardFilters = {
+      ...filters,
+      assignedTo: effectiveAssignedTo,
+    };
+
+    const contactsBaseQb = this.telecallingContactRepository
+      .createQueryBuilder('contact')
+      .where('1=1');
+
+    this.applyContactFilters(contactsBaseQb, effectiveFilters);
+
+    const contactsByZoneRaw = await contactsBaseQb
+      .clone()
+      .select('COALESCE(contact.zone, \'Unassigned Zone\')', 'label')
+      .addSelect('COUNT(*)', 'value')
+      .groupBy('contact.zone')
+      .orderBy('value', 'DESC')
+      .getRawMany();
+
+    const contactsByCityRaw = await contactsBaseQb
+      .clone()
+      .select('COALESCE(contact.city, \'Unknown City\')', 'label')
+      .addSelect('COUNT(*)', 'value')
+      .groupBy('contact.city')
+      .orderBy('value', 'DESC')
+      .getRawMany();
+
+    const callsBaseQb = this.callLogRepository
+      .createQueryBuilder('call')
+      .where('call.contactId IS NOT NULL');
+
+    this.applyCallFilters(callsBaseQb, effectiveFilters);
+
+    const calledContactsByStatusRaw = await callsBaseQb
+      .clone()
+      .select('COALESCE(call.callStatus, \'UNKNOWN\')', 'label')
+      .addSelect('COUNT(*)', 'value')
+      .groupBy('call.callStatus')
+      .orderBy('value', 'DESC')
+      .getRawMany();
+
+    const calledContactsByMonthRaw = await callsBaseQb
+      .clone()
+      .select(`TO_CHAR(call.createdAt, 'YYYY-MM')`, 'label')
+      .addSelect('COUNT(*)', 'value')
+      .groupBy(`TO_CHAR(call.createdAt, 'YYYY-MM')`)
+      .orderBy(`TO_CHAR(call.createdAt, 'YYYY-MM')`, 'ASC')
+      .getRawMany();
+
+    let contactsByTelecaller: Array<{ label: string; value: number }> = [];
+
+    const telecallerRows = await this.telecallingContactRepository
+      .createQueryBuilder('contact')
+      .select('contact.assignedTo', 'assignedTo')
+      .addSelect('COALESCE(contact.assignedToName, \'Unassigned\')', 'label')
+      .addSelect('COUNT(*)', 'value')
+      .where('1=1')
+      .andWhere(
+        effectiveAssignedTo
+          ? 'contact.assignedTo = :assignedTo'
+          : '1=1',
+        effectiveAssignedTo ? { assignedTo: effectiveAssignedTo } : {},
+      )
+      .andWhere(
+        this.normalizeText(effectiveFilters.zone)
+          ? 'LOWER(COALESCE(contact.zone, \'\')) LIKE :zone'
+          : '1=1',
+        this.normalizeText(effectiveFilters.zone)
+          ? { zone: `%${this.normalizeText(effectiveFilters.zone)}%` }
+          : {},
+      )
+      .andWhere(
+        this.normalizeText(effectiveFilters.city)
+          ? `(LOWER(COALESCE(contact.city, '')) LIKE :city OR LOWER(COALESCE(contact.address, '')) LIKE :city OR LOWER(COALESCE(contact.location, '')) LIKE :city)`
+          : '1=1',
+        this.normalizeText(effectiveFilters.city)
+          ? { city: `%${this.normalizeText(effectiveFilters.city)}%` }
+          : {},
+      )
+      .groupBy('contact.assignedTo')
+      .addGroupBy('contact.assignedToName')
+      .orderBy('value', 'DESC')
+      .getRawMany();
+
+    contactsByTelecaller = telecallerRows.map((row) => ({
+      label: row.label,
+      value: Number(row.value || 0),
+    }));
+
+    return {
+      contactsByZone: contactsByZoneRaw.map((row) => ({
+        label: row.label,
+        value: Number(row.value || 0),
+      })),
+      contactsByCity: contactsByCityRaw.map((row) => ({
+        label: row.label,
+        value: Number(row.value || 0),
+      })),
+      contactsByTelecaller,
+      calledContactsByStatus: calledContactsByStatusRaw.map((row) => ({
+        label: row.label,
+        value: Number(row.value || 0),
+      })),
+      calledContactsByMonth: calledContactsByMonthRaw.map((row) => ({
+        label: row.label,
+        value: Number(row.value || 0),
+      })),
+    };
+  }
+
+  async getMeetingManagerAnalytics() {
+  const { start, end } = this.getTodayIndiaRange();
+
+  const meetingManagers = await this.userRepository.find();
+
+  const filteredManagers = meetingManagers.filter(
+    (u: any) =>
+      Array.isArray(u.roles) &&
+      u.roles.includes(UserRole.MEETING_MANAGER),
+  );
+
+  const result: any[] = [];
+
+  for (const manager of filteredManagers) {
+    const totalMeetings = await this.meetingRepository.count({
+      where: {
+        assignedTo: manager.id,
+      },
+    });
+
+    const todayMeetings = await this.meetingRepository.count({
+      where: {
+        assignedTo: manager.id,
+        scheduledAt: Between(start, end),
+      },
+    });
+
+    const companyMeetingsToday = await this.meetingRepository.count({
+      where: {
+        assignedTo: manager.id,
+        meetingCategory: MeetingCategory.COMPANY_MEETING,
+        scheduledAt: Between(start, end),
+      },
+    });
+
+    const selfMeetingsToday = await this.meetingRepository.count({
+      where: {
+        assignedTo: manager.id,
+        meetingCategory: MeetingCategory.SELF_MEETING,
+        scheduledAt: Between(start, end),
+      },
+    });
+
+    const siteVisitsToday = await this.meetingRepository.count({
+  where: {
+    assignedTo: manager.id,
+    meetingType: MeetingType.SITE_VISIT,
+    updatedAt: Between(start, end),
+  },
+});
+
+const companySiteVisitsToday = await this.meetingRepository.count({
+  where: {
+    assignedTo: manager.id,
+    meetingType: MeetingType.SITE_VISIT,
+    meetingCategory: MeetingCategory.COMPANY_MEETING,
+    updatedAt: Between(start, end),
+  },
+});
+
+const selfSiteVisitsToday = await this.meetingRepository.count({
+  where: {
+    assignedTo: manager.id,
+    meetingType: MeetingType.SITE_VISIT,
+    meetingCategory: MeetingCategory.SELF_MEETING,
+    updatedAt: Between(start, end),
+  },
+});
+
+    const meetingFormsCreatedToday = await this.meetingRepository.count({
+      where: {
+        createdBy: manager.id,
+        createdAt: Between(start, end),
+      },
+    });
+
+    const completedMeetingsToday = await this.meetingRepository.count({
+      where: {
+        assignedTo: manager.id,
+        status: MeetingStatus.COMPLETED,
+        updatedAt: Between(start, end),
+      },
+    });
+
+    const convertedMeetingsToday = await this.meetingRepository.count({
+      where: {
+        assignedTo: manager.id,
+        convertToProject: true,
+        updatedAt: Between(start, end),
+      },
+    });
+
+    result.push({
+      managerId: manager.id,
+      managerName: manager.name,
+
+      // existing-safe
+      totalMeetings,
+
+      // today figures
+      todayMeetings,
+      companyMeetingsToday,
+      selfMeetingsToday,
+      siteVisitsToday,
+      companySiteVisitsToday,
+      selfSiteVisitsToday,
+      meetingFormsCreatedToday,
+      completedMeetingsToday,
+      convertedMeetingsToday,
+
+      // old names kept for frontend safety
+      companyMeetings: companyMeetingsToday,
+      selfMeetings: selfMeetingsToday,
+      convertedMeetings: convertedMeetingsToday,
+    });
+  }
+
+  return result;
+}
+
+async getLeadManagerAnalytics() {
+  const { start, end } = this.getTodayIndiaRange();
+
+  const leadManagers = await this.userRepository.find();
+
+  const filteredManagers = leadManagers.filter(
+    (u: any) =>
+      Array.isArray(u.roles) &&
+      u.roles.includes(UserRole.LEAD_MANAGER),
+  );
+
+  const result: any[] = [];
+
+  for (const manager of filteredManagers) {
+    const totalLeads = await this.leadRepository.count({
+      where: {
+        assignedTo: manager.id,
+      },
+    });
+
+    const todayLeads = await this.leadRepository.count({
+      where: {
+        assignedTo: manager.id,
+        createdAt: Between(start, end),
+      },
+    });
+
+    const callsToday = await this.callLogRepository.count({
+      where: {
+        telecallerId: manager.id,
+        createdAt: Between(start, end),
+      },
+    });
+
+    const meetingsScheduledToday = await this.meetingRepository.count({
+  where: {
+    createdBy: manager.id,
+    updatedAt: Between(start, end),
+  },
+});
+
+    const meetingsCompletedToday = await this.meetingRepository.count({
+      where: {
+        createdBy: manager.id,
+        status: MeetingStatus.COMPLETED,
+        updatedAt: Between(start, end),
+      },
+    });
+
+    const convertedToMeetingToday = meetingsScheduledToday;
+
+    const lowPotential = await this.leadRepository.count({
+      where: {
+        assignedTo: manager.id,
+        potential: LeadPotential.LOW,
+      },
+    });
+
+    const mediumPotential = await this.leadRepository.count({
+      where: {
+        assignedTo: manager.id,
+        potential: LeadPotential.MEDIUM,
+      },
+    });
+
+    const highPotential = await this.leadRepository.count({
+      where: {
+        assignedTo: manager.id,
+        potential: LeadPotential.HIGH,
+      },
+    });
+
+    result.push({
+      managerId: manager.id,
+      managerName: manager.name,
+
+      totalLeads,
+      todayLeads,
+
+      callsToday,
+      meetingsScheduledToday,
+      meetingsCompletedToday,
+      convertedToMeetingToday,
+
+      lowPotential,
+      mediumPotential,
+      highPotential,
+    });
+  }
+
+  return result;
+}
+
+async getTelecallingAssistantAnalytics() {
+  const { start, end } = this.getTodayIndiaRange();
+
+  const users = await this.userRepository.find();
+
+  const assistants = users.filter(
+    (u: any) =>
+      Array.isArray(u.roles) &&
+      u.roles.includes(UserRole.TELECALLING_ASSISTANT),
+  );
+
+  const result: any[] = [];
+
+  for (const assistant of assistants) {
+    const reviewedToday = await this.callLogRepository.count({
+      where: {
+        reviewAssignedTo: assistant.id,
+        createdAt: Between(start, end),
+      },
+    });
+
+    const convertedToday = await this.callLogRepository.count({
+      where: {
+        reviewAssignedTo: assistant.id,
+        reviewStatus: CallReviewStatus.CONVERTED,
+        createdAt: Between(start, end),
+      },
+    });
+
+    const lowPotentialConverted = await this.callLogRepository
+      .createQueryBuilder('call')
+      .where('call.reviewAssignedTo = :assistantId', {
+        assistantId: assistant.id,
+      })
+      .andWhere('call.reviewStatus = :status', {
+        status: CallReviewStatus.CONVERTED,
+      })
+      .andWhere('call.createdAt BETWEEN :start AND :end', { start, end })
+      .andWhere(`UPPER(COALESCE(call.leadPotential, '')) = 'LOW'`)
+      .getCount();
+
+    const mediumPotentialConverted = await this.callLogRepository
+      .createQueryBuilder('call')
+      .where('call.reviewAssignedTo = :assistantId', {
+        assistantId: assistant.id,
+      })
+      .andWhere('call.reviewStatus = :status', {
+        status: CallReviewStatus.CONVERTED,
+      })
+      .andWhere('call.createdAt BETWEEN :start AND :end', { start, end })
+      .andWhere(`UPPER(COALESCE(call.leadPotential, '')) = 'MEDIUM'`)
+      .getCount();
+
+    const highPotentialConverted = await this.callLogRepository
+      .createQueryBuilder('call')
+      .where('call.reviewAssignedTo = :assistantId', {
+        assistantId: assistant.id,
+      })
+      .andWhere('call.reviewStatus = :status', {
+        status: CallReviewStatus.CONVERTED,
+      })
+      .andWhere('call.createdAt BETWEEN :start AND :end', { start, end })
+      .andWhere(`UPPER(COALESCE(call.leadPotential, '')) = 'HIGH'`)
+      .getCount();
+
+    const leadsCreatedToday = await this.leadRepository.count({
+      where: {
+        createdBy: assistant.id,
+        createdAt: Between(start, end),
+      },
+    });
+
+    const meetingsScheduledToday = await this.meetingRepository.count({
+  where: {
+    createdBy: assistant.id,
+    updatedAt: Between(start, end),
+  },
+});
+
+    result.push({
+      assistantId: assistant.id,
+      assistantName: assistant.name,
+
+      reviewedToday,
+      convertedToday,
+      leadsCreatedToday,
+      meetingsScheduledToday,
+
+      lowPotentialConverted,
+      mediumPotentialConverted,
+      highPotentialConverted,
+    });
+  }
+
+  return result;
+}
+
+async getOwnerSummary() {
+  const nowMs = Date.now();
+
+if (this.ownerSummaryCache && nowMs - this.ownerSummaryCacheAt < 30000) {
+  return this.ownerSummaryCache;
+}
+  // TODAY RANGE
+  const now = new Date();
+
+const indiaDate = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Kolkata',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+}).format(now);
+
+const start = new Date(`${indiaDate}T00:00:00+05:30`);
+const end = new Date(`${indiaDate}T23:59:59.999+05:30`);
+
+  // CALLS TODAY
+  const callsToday = await this.callLogRepository
+    .createQueryBuilder('call')
+    .where('call.createdAt BETWEEN :start AND :end', { start, end })
+    .andWhere(`UPPER(COALESCE(call.callStatus, '')) <> 'INITIATED'`)
+    .getCount();
+
+  // INTERESTED TODAY
+  const interestedToday = await this.callLogRepository
+    .createQueryBuilder('call')
+    .where('call.createdAt BETWEEN :start AND :end', { start, end })
+    .andWhere(`call.callStatus = 'INTERESTED'`)
+    .getCount();
+
+  // LEADS TODAY
+  const leadsToday = await this.leadRepository
+    .createQueryBuilder('lead')
+    .where('lead.createdAt BETWEEN :start AND :end', { start, end })
+    .getCount();
+
+  // MEETINGS TODAY
+  const meetingsToday = await this.meetingRepository
+    .createQueryBuilder('meeting')
+    .where('meeting.scheduledAt BETWEEN :start AND :end', { start, end })
+    .getCount();
+
+  /// SITE VISITS TODAY
+const siteVisitsToday = await this.meetingRepository
+  .createQueryBuilder('meeting')
+  .where('meeting.updatedAt BETWEEN :start AND :end', { start, end })
+  .andWhere('meeting.meetingType = :type', {
+    type: MeetingType.SITE_VISIT,
+  })
+  .getCount();
+
+  // TOTAL MEETINGS
+  const totalMeetings = await this.meetingRepository.count();
+
+  const result = {
+  callsToday,
+  interestedToday,
+  leadsToday,
+  meetingsToday,
+  siteVisitsToday,
+  totalMeetings,
+};
+
+this.ownerSummaryCache = result;
+this.ownerSummaryCacheAt = Date.now();
+
+return result;
+}
+
+}

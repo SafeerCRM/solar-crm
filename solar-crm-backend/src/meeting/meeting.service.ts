@@ -73,12 +73,19 @@ export class MeetingService {
     return this.hasAnyRole(user, [UserRole.MEETING_MANAGER]);
   }
 
+  private isMeetingAssistant(user: any): boolean {
+  return this.hasAnyRole(user, [UserRole.MEETING_ASSISTANT]);
+}
+
   private canModifyMeeting(meeting: Meeting, user: any): boolean {
   const currentUserId = this.getCurrentUserId(user);
 
   if (this.isOwner(user)) {
     return true;
   }
+  if (this.isMeetingAssistant(user)) {
+  return true;
+}
 
   if (this.isMeetingManager(user) && meeting.assignedTo === currentUserId) {
     return true;
@@ -113,10 +120,11 @@ private assertCanModifyMeeting(meeting: Meeting, user: any) {
 
   private isBroadMeetingAccessRole(user: any): boolean {
     return (
-      this.isOwner(user) ||
-      this.isMarketingHead(user) ||
-      this.isProjectManager(user)
-    );
+  this.isOwner(user) ||
+  this.isMarketingHead(user) ||
+  this.isProjectManager(user) ||
+  this.isMeetingAssistant(user)
+);
   }
 
   private isOwnMeetingRole(user: any): boolean {
