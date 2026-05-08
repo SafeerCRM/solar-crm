@@ -17,6 +17,7 @@ const navItems = [
       'TELECALLER',
       'LEAD_EXECUTIVE',
       'PROJECT_EXECUTIVE',
+      'MEETING_ASSISTANT',
     ],
   },
   { name: 'Users', href: '/users', roles: ['OWNER'] },
@@ -66,13 +67,14 @@ const navItems = [
     'TELECALLER',
     'LEAD_EXECUTIVE',
     'TELECALLING_ASSISTANT',
+    'MEETING_ASSISTANT',
   ],
 },
 
   {
     name: 'Calculator',
     href: '/calculator',
-    roles: ['OWNER', 'LEAD_MANAGER', 'TELECALLER', 'MEETING_MANAGER', 'PROJECT_MANAGER'],
+    roles: ['OWNER', 'LEAD_MANAGER', 'TELECALLER', 'MEETING_MANAGER', 'MEETING_ASSISTANT', 'PROJECT_MANAGER'],
   },
 
   {
