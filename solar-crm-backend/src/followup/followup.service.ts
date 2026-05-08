@@ -64,6 +64,10 @@ export class FollowupService {
     return this.hasAnyRole(user, [UserRole.MEETING_MANAGER]);
   }
 
+  private isMeetingAssistant(user: any): boolean {
+  return this.hasAnyRole(user, [UserRole.MEETING_ASSISTANT]);
+}
+
   private isProjectManager(user: any): boolean {
     return this.hasAnyRole(user, [UserRole.PROJECT_MANAGER]);
   }
@@ -109,6 +113,16 @@ export class FollowupService {
     if (this.isBroadAccessRole(user)) {
       return followUp;
     }
+
+    if (this.isMeetingAssistant(user)) {
+  if (String(followUp.sourceModule || '').toUpperCase() !== 'MEETING') {
+    throw new ForbiddenException(
+      'Meeting assistant can access only meeting-related followups',
+    );
+  }
+
+  return followUp;
+}
 
     if (this.isProjectManager(user)) {
       throw new ForbiddenException('Project manager cannot access followups');
@@ -176,6 +190,27 @@ export class FollowupService {
     return { data: [], total: 0, page, limit };
   }
 
+  if (this.isMeetingAssistant(user)) {
+  const skip = (page - 1) * limit;
+
+  const [data, total] = await this.followUpRepository.findAndCount({
+    where: {
+      sourceModule: 'MEETING',
+    },
+    relations: ['lead'],
+    order: { followUpDate: 'ASC' },
+    skip,
+    take: limit,
+  });
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+  };
+}
+
   const skip = (page - 1) * limit;
 
   if (this.isOwnAssignedOnlyRole(user)) {
@@ -227,6 +262,17 @@ export class FollowupService {
       return [];
     }
 
+    if (this.isMeetingAssistant(user)) {
+  return this.followUpRepository.find({
+    where: {
+      sourceModule: 'MEETING',
+      followUpDate: Between(start, end),
+    },
+    relations: ['lead'],
+    order: { followUpDate: 'ASC' },
+  });
+}
+
         if (this.isOwnAssignedOnlyRole(user)) {
       const currentUserId = this.getCurrentUserId(user);
 
@@ -255,6 +301,18 @@ export class FollowupService {
     if (this.isProjectManager(user)) {
       return [];
     }
+
+    if (this.isMeetingAssistant(user)) {
+  return this.followUpRepository.find({
+    where: {
+      sourceModule: 'MEETING',
+      followUpDate: LessThan(new Date()),
+      status: FollowUpStatus.PENDING,
+    },
+    relations: ['lead'],
+    order: { followUpDate: 'ASC' },
+  });
+}
 
         if (this.isOwnAssignedOnlyRole(user)) {
       const currentUserId = this.getCurrentUserId(user);
