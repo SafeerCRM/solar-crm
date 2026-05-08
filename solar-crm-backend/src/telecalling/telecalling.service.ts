@@ -967,6 +967,15 @@ const end = new Date(`${indiaDate}T23:59:59.999+05:30`);
       `SUM(CASE WHEN call.callStatus = 'INTERESTED' THEN 1 ELSE 0 END)`,
       'interested'
     )
+
+    .addSelect((subQuery) => {
+  return subQuery
+    .select('COUNT(*)')
+    .from(Meeting, 'meeting')
+    .where('meeting.createdBy = call.telecallerId')
+    .andWhere('meeting.updatedAt BETWEEN :start AND :end');
+}, 'meetingsScheduledToday')
+
     .where('call.createdAt BETWEEN :start AND :end', { start, end })
     .groupBy('call.telecallerId')
     .addGroupBy('user.name') // ✅ IMPORTANT
