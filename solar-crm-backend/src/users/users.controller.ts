@@ -57,6 +57,7 @@ export class UsersController {
   'TELECALLING_ASSISTANT',
   'LEAD_MANAGER',
   'MEETING_MANAGER',
+  'MEETING_ASSISTANT',
   'MARKETING_HEAD',
 )
   @Get('meeting-managers')
