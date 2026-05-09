@@ -6,6 +6,13 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { getAuthHeaders } from '@/lib/authHeaders';
 
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
+
+import dayjs, { Dayjs } from 'dayjs';
+
 type FollowUp = {
   id: number;
   leadId: number;
@@ -49,12 +56,14 @@ export default function FollowupDetailPage() {
       });
 
       const data = res.data;
+
       setFollowup(data);
       setNote(data.note || '');
       setStatus(data.status || 'PENDING');
+
       setFollowUpDate(
         data.followUpDate
-          ? new Date(data.followUpDate).toISOString().slice(0, 16)
+          ? dayjs(data.followUpDate).format('YYYY-MM-DDTHH:mm')
           : ''
       );
     } catch (error: any) {
@@ -103,7 +112,6 @@ export default function FollowupDetailPage() {
     }
   };
 
-  // 🔥 NEW: Convert to Lead
   const handleConvertToLead = async () => {
     if (!followup?.lead) return;
 
@@ -130,6 +138,40 @@ export default function FollowupDetailPage() {
     }
   };
 
+  const followUpDateValue = followUpDate ? dayjs(followUpDate) : null;
+  const followUpTimeValue = followUpDate ? dayjs(followUpDate) : null;
+
+  const updateFollowUpDatePart = (newDate: Dayjs | null) => {
+    if (!newDate) {
+      setFollowUpDate('');
+      return;
+    }
+
+    const base = followUpDate ? dayjs(followUpDate) : dayjs();
+
+    const merged = newDate
+      .hour(base.hour())
+      .minute(base.minute())
+      .second(0)
+      .millisecond(0);
+
+    setFollowUpDate(merged.format('YYYY-MM-DDTHH:mm'));
+  };
+
+  const updateFollowUpTimePart = (newTime: Dayjs | null) => {
+    if (!newTime) return;
+
+    const base = followUpDate ? dayjs(followUpDate) : dayjs();
+
+    const merged = base
+      .hour(newTime.hour())
+      .minute(newTime.minute())
+      .second(0)
+      .millisecond(0);
+
+    setFollowUpDate(merged.format('YYYY-MM-DDTHH:mm'));
+  };
+
   if (!followup) {
     return <div className="p-6">Loading...</div>;
   }
@@ -154,7 +196,7 @@ export default function FollowupDetailPage() {
 
         <p className="text-gray-600">{followup.lead?.phone}</p>
 
-        <div className="mt-4 flex gap-2">
+        <div className="mt-4 flex flex-wrap gap-2">
           <a
             href={`tel:${followup.lead?.phone}`}
             className="rounded bg-green-600 px-4 py-2 text-white"
@@ -169,7 +211,6 @@ export default function FollowupDetailPage() {
             Complete
           </button>
 
-          {/* 🔥 Convert Button */}
           {!converted && (
             <button
               onClick={handleConvertToLead}
@@ -180,38 +221,61 @@ export default function FollowupDetailPage() {
           )}
         </div>
 
-        <div className="mt-4 space-y-3">
+        <div className="mt-4 space-y-4">
           <select
             value={status}
             onChange={(e) =>
               setStatus(e.target.value as 'PENDING' | 'COMPLETED' | 'MISSED')
             }
-            className="w-full border p-2"
+            className="w-full rounded border p-2"
           >
             <option value="PENDING">PENDING</option>
             <option value="COMPLETED">COMPLETED</option>
             <option value="MISSED">MISSED</option>
           </select>
 
-          <input
-            type="datetime-local"
-            value={followUpDate}
-            onChange={(e) => setFollowUpDate(e.target.value)}
-            className="w-full border p-2"
-          />
+          <LocalizationProvider dateAdapter={AdapterDayjs}>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <DatePicker
+                label="Follow-up Date"
+                value={followUpDateValue}
+                onChange={updateFollowUpDatePart}
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                  },
+                }}
+              />
+
+              <MobileTimePicker
+                label="Follow-up Time"
+                value={followUpTimeValue}
+                onChange={updateFollowUpTimePart}
+                ampm
+                ampmInClock
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                  },
+                }}
+              />
+            </div>
+          </LocalizationProvider>
 
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            className="w-full border p-2"
+            className="w-full rounded border p-2"
             rows={4}
+            placeholder="Enter note..."
           />
 
           <button
             onClick={handleSave}
+            disabled={loading}
             className="rounded bg-black px-4 py-2 text-white"
           >
-            Save
+            {loading ? 'Saving...' : 'Save'}
           </button>
         </div>
 

@@ -55,6 +55,10 @@ export default function FollowupPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [allFollowups, setAllFollowups] = useState<FollowUp[]>([]);
+  const [overdueFollowups, setOverdueFollowups] = useState<FollowUp[]>([]);
+const [overdueTotal, setOverdueTotal] = useState(0);
+const [overduePage, setOverduePage] = useState(1);
+const overdueLimit = 20;
   const [followupPage, setFollowupPage] = useState(1);
 const [followupTotal, setFollowupTotal] = useState(0);
 const followupLimit = 50;
@@ -112,6 +116,7 @@ const [assigningFiltered, setAssigningFiltered] = useState(false);
   if (user) {
     fetchLeads();
     fetchFollowups(followupPage);
+    fetchOverdueFollowups(overduePage);
 
     if (canFetchAssignableUsers) {
       fetchAssignableUsers();
@@ -120,7 +125,7 @@ const [assigningFiltered, setAssigningFiltered] = useState(false);
     }
   }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [user, followupPage]);
+}, [user, followupPage, overduePage]);
 
   const fetchAssignableUsers = async () => {
     try {
@@ -173,6 +178,26 @@ const [assigningFiltered, setAssigningFiltered] = useState(false);
     setFollowupTotal(0);
   }
 };
+
+const fetchOverdueFollowups = async (pageNumber = overduePage) => {
+  try {
+    const res = await axios.get(`${backendUrl}/followup/overdue`, {
+      params: {
+        page: pageNumber,
+        limit: overdueLimit,
+      },
+      headers: getAuthHeaders(),
+    });
+
+    setOverdueFollowups(Array.isArray(res.data?.data) ? res.data.data : []);
+    setOverdueTotal(Number(res.data?.total || 0));
+  } catch (error) {
+    console.error(error);
+    setOverdueFollowups([]);
+    setOverdueTotal(0);
+  }
+};
+
  const handleDateClick = async (date: Dayjs | null) => {
   if (!date) return;
 
@@ -553,6 +578,105 @@ const filteredSelectedFollowups = selectedFollowups.filter((f) => {
     <p className="mt-1 text-2xl font-bold text-red-900">
       {overdueFollowupsCount}
     </p>
+  </div>
+</div>
+
+<div className="rounded-xl border border-red-200 bg-white p-4 shadow">
+  <div className="mb-3 flex items-center justify-between">
+    <h2 className="text-lg font-semibold text-red-700">
+      Overdue Followups List
+    </h2>
+    <span className="rounded-full bg-red-100 px-3 py-1 text-sm font-semibold text-red-700">
+      {overdueTotal}
+    </span>
+  </div>
+
+  {overdueFollowups.length === 0 ? (
+    <p className="text-sm text-gray-500">No overdue followups found</p>
+  ) : (
+    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      {overdueFollowups.map((f) => (
+        <div
+          key={f.id}
+          className="rounded-xl border border-red-100 bg-red-50 p-3"
+        >
+          <p className="font-semibold text-gray-900">
+            {f.lead?.name || `Lead ${f.leadId}`}
+          </p>
+
+          <p className="text-sm text-gray-700">
+            {f.lead?.phone || ''}
+          </p>
+
+          <p className="text-sm text-gray-700">
+            {f.lead?.city || ''} {f.lead?.zone ? `• ${f.lead.zone}` : ''}
+          </p>
+
+          <p className="mt-1 text-sm font-medium text-red-700">
+            Due: {formatDate(f.followUpDate)}
+          </p>
+
+          {f.lead?.potential && (
+            <p className="text-sm text-gray-700">
+              Potential: {f.lead.potential}
+            </p>
+          )}
+
+          {f.note && (
+            <p className="mt-1 text-sm text-gray-700">
+              {f.note}
+            </p>
+          )}
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => router.push(`/followup/${f.id}`)}
+              className="rounded bg-blue-600 px-3 py-2 text-sm text-white"
+            >
+              Open
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleConvertToMeeting(f.id)}
+              disabled={convertingId === f.id}
+              className="rounded bg-purple-600 px-3 py-2 text-sm text-white"
+            >
+              {convertingId === f.id ? 'Opening...' : 'Convert to Meeting'}
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  )}
+
+  <div className="mt-4 flex items-center justify-between">
+    <button
+      type="button"
+      onClick={() => setOverduePage((p) => Math.max(1, p - 1))}
+      disabled={overduePage <= 1}
+      className="rounded bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 disabled:opacity-50"
+    >
+      Previous
+    </button>
+
+    <span className="text-sm font-medium text-gray-700">
+      Page {overduePage} of {Math.ceil(overdueTotal / overdueLimit) || 1}
+    </span>
+
+    <button
+      type="button"
+      onClick={() =>
+        setOverduePage((p) =>
+          p >= Math.ceil(overdueTotal / overdueLimit) ? p : p + 1,
+        )
+      }
+      disabled={overduePage >= Math.ceil(overdueTotal / overdueLimit)}
+      className="rounded bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 disabled:opacity-50"
+    >
+      Next
+    </button>
   </div>
 </div>
 
