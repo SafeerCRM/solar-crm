@@ -48,6 +48,13 @@ type Meeting = {
   updatedAt: string;
 };
 
+type User = {
+  id: number;
+  name: string;
+  email?: string;
+  roles?: string[];
+};
+
 const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 export default function MeetingPage() {
@@ -60,20 +67,43 @@ const meetingLimit = 50;
 const [editingCustomerName, setEditingCustomerName] = useState('');
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [currentUserRoles, setCurrentUserRoles] = useState<string[]>([]);
   const [selectedDate, setSelectedDate] = useState<Dayjs | null>(dayjs());
 
   const [searchName, setSearchName] = useState('');
   const [searchPhone, setSearchPhone] = useState('');
   const [searchLocation, setSearchLocation] = useState('');
 
-  const [meetingManagerName, setMeetingManagerName] = useState('');
-  const [meetingManagerId, setMeetingManagerId] = useState('');
-  const [meetingCategory, setMeetingCategory] = useState('');
-  const [month, setMonth] = useState('');
+ const [meetingManagerName, setMeetingManagerName] = useState('');
+const [meetingManagerId, setMeetingManagerId] = useState('');
+const [meetingManagers, setMeetingManagers] = useState<User[]>([]);
+const [meetingCategory, setMeetingCategory] = useState('');
+const [meetingStatus, setMeetingStatus] = useState('');
+const [month, setMonth] = useState('');
+const [isAutoCalling, setIsAutoCalling] = useState(false);
+const [isAutoCallPaused, setIsAutoCallPaused] = useState(false);
+const [autoCallIndex, setAutoCallIndex] = useState(0);
+const [calledMeetingIds, setCalledMeetingIds] = useState<number[]>([]);
 
   useEffect(() => {
   setMounted(true);
+
+  const storedUser = localStorage.getItem('user');
+
+  if (storedUser) {
+    try {
+      const parsed = JSON.parse(storedUser);
+      setCurrentUserRoles(
+        Array.isArray(parsed?.roles) ? parsed.roles : [],
+      );
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
   fetchMeetings(meetingPage);
+  fetchMeetingManagers();
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [meetingPage]);
 
@@ -99,6 +129,10 @@ const [editingCustomerName, setEditingCustomerName] = useState('');
       params.meetingCategory = meetingCategory.trim();
     }
 
+    if (meetingStatus.trim()) {
+  params.status = meetingStatus.trim();
+}
+
     if (month.trim()) {
       params.month = month.trim();
     }
@@ -117,6 +151,19 @@ const [editingCustomerName, setEditingCustomerName] = useState('');
     setMeetingTotal(0);
   } finally {
     setLoading(false);
+  }
+};
+
+const fetchMeetingManagers = async () => {
+  try {
+    const res = await axios.get(`${backendUrl}/users/meeting-managers`, {
+      headers: getAuthHeaders(),
+    });
+
+    setMeetingManagers(Array.isArray(res.data) ? res.data : []);
+  } catch (err) {
+    console.error('Failed to fetch meeting managers:', err);
+    setMeetingManagers([]);
   }
 };
 
@@ -225,6 +272,58 @@ const updateMeetingName = async (meetingId: number) => {
   }
 };
 
+const isMeetingAssistant =
+  currentUserRoles.includes('MEETING_ASSISTANT');
+
+  const startMeetingAutoCall = async () => {
+  if (filteredMeetings.length === 0) {
+    alert('No meetings available for autocall');
+    return;
+  }
+
+  setIsAutoCalling(true);
+  setIsAutoCallPaused(false);
+
+  for (let i = autoCallIndex; i < filteredMeetings.length; i++) {
+    if (isAutoCallPaused) {
+      break;
+    }
+
+    const meeting = filteredMeetings[i];
+
+    if (calledMeetingIds.includes(meeting.id)) {
+      continue;
+    }
+
+    setAutoCallIndex(i);
+    setCalledMeetingIds((prev) =>
+      prev.includes(meeting.id) ? prev : [...prev, meeting.id],
+    );
+
+    try {
+      await handleCall(meeting.mobile);
+    } catch (err) {
+      console.error(err);
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 6000));
+  }
+
+  setIsAutoCalling(false);
+};
+
+const pauseMeetingAutoCall = () => {
+  setIsAutoCallPaused(true);
+  setIsAutoCalling(false);
+};
+
+const stopMeetingAutoCall = () => {
+  setIsAutoCalling(false);
+  setIsAutoCallPaused(false);
+  setAutoCallIndex(0);
+  setCalledMeetingIds([]);
+};
+
   const clearFilters = () => {
     setSearchName('');
     setSearchPhone('');
@@ -232,6 +331,7 @@ const updateMeetingName = async (meetingId: number) => {
     setMeetingManagerName('');
     setMeetingManagerId('');
     setMeetingCategory('');
+    setMeetingStatus('');
     setMonth('');
   };
 
@@ -247,6 +347,33 @@ const updateMeetingName = async (meetingId: number) => {
           >
             Refresh
           </button>
+
+          {isMeetingAssistant && (
+  <>
+    {!isAutoCalling ? (
+      <button
+        onClick={startMeetingAutoCall}
+        className="rounded bg-green-700 px-4 py-2 text-white"
+      >
+        ▶ Start Autocall
+      </button>
+    ) : (
+      <button
+        onClick={pauseMeetingAutoCall}
+        className="rounded bg-yellow-600 px-4 py-2 text-white"
+      >
+        ⏸ Pause
+      </button>
+    )}
+
+    <button
+      onClick={stopMeetingAutoCall}
+      className="rounded bg-red-600 px-4 py-2 text-white"
+    >
+      ⏹ Stop
+    </button>
+  </>
+)}
 
           <Link
             href="/meeting/create"
@@ -284,21 +411,39 @@ const updateMeetingName = async (meetingId: number) => {
       </div>
 
       <div className="mb-4 grid gap-3 md:grid-cols-4">
-        <input
-          type="text"
-          placeholder="Meeting Manager Name"
-          value={meetingManagerName}
-          onChange={(e) => setMeetingManagerName(e.target.value)}
-          className="rounded border p-2"
-        />
+  <select
+    value={meetingManagerId}
+    onChange={(e) => {
+      setMeetingManagerId(e.target.value);
+      const selected = meetingManagers.find(
+        (manager) => String(manager.id) === e.target.value,
+      );
+      setMeetingManagerName(selected?.name || '');
+    }}
+    className="rounded border p-2"
+  >
+    <option value="">All Meeting Managers</option>
+    {meetingManagers.map((manager) => (
+      <option key={manager.id} value={manager.id}>
+        {manager.name} ({manager.id})
+      </option>
+    ))}
+  </select>
 
-        <input
-          type="text"
-          placeholder="Meeting Manager ID"
-          value={meetingManagerId}
-          onChange={(e) => setMeetingManagerId(e.target.value)}
-          className="rounded border p-2"
-        />
+  <select
+    value={meetingStatus}
+    onChange={(e) => setMeetingStatus(e.target.value)}
+    className="rounded border p-2"
+  >
+    <option value="">All Status</option>
+    <option value="SCHEDULED">Scheduled</option>
+    <option value="COMPLETED">Completed</option>
+    <option value="RESCHEDULED">Rescheduled</option>
+    <option value="CANCELLED">Cancelled</option>
+    <option value="ON_HOLD">On Hold</option>
+    <option value="NO_SHOW">No Show</option>
+    <option value="CONVERTED_TO_PROJECT">Converted To Project</option>
+  </select>
 
         <select
           value={meetingCategory}

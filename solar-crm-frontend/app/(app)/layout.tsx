@@ -48,6 +48,7 @@ const navItems = [
       'TELECALLING_MANAGER',
       'LEAD_MANAGER',
       'MEETING_MANAGER',
+      'MEETING_ASSISTANT',
       'TELECALLER',
       'LEAD_EXECUTIVE',
       'PROJECT_EXECUTIVE',
