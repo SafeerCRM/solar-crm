@@ -604,6 +604,19 @@ return {
 
 this.assertCanModifyMeeting(existingMeeting, user);
 
+const hasContext =
+  !!String(updateMeetingDto.notes || '').trim() ||
+  !!String(updateMeetingDto.managerRemarks || '').trim() ||
+  !!String((updateMeetingDto as any).siteObservation || '').trim() ||
+  !!String((updateMeetingDto as any).reason || '').trim() ||
+  !!String((updateMeetingDto as any).outcome || '').trim();
+
+if (!hasContext) {
+  throw new BadRequestException(
+    'Please add notes, remarks, observation, reason, or outcome before saving details',
+  );
+}
+
 const currentUserId = this.getCurrentUserId(user);
 
     let assignedTo = (updateMeetingDto as any).assignedTo;
