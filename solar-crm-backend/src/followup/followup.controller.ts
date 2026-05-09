@@ -42,9 +42,18 @@ findAll(
   }
 
   @Get('overdue')
-  findOverdue(@CurrentUser() user: any) {
-    return this.followupService.findOverdue(user);
-  }
+findOverdue(
+  @Query('page') page: string,
+  @Query('limit') limit: string,
+  @CurrentUser() user: any,
+) {
+  return this.followupService.findOverdue(
+    user,
+    Number(page) || 1,
+    Number(limit) || 20,
+  );
+}
+
 @Get('by-date')
 findByDate(
   @Query('date') date: string,

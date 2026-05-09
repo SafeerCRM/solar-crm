@@ -297,50 +297,49 @@ export class FollowupService {
     });
   }
 
-  async findOverdue(user: any) {
-    if (this.isProjectManager(user)) {
-      return [];
-    }
-
-    if (this.isMeetingAssistant(user)) {
-  return this.followUpRepository.find({
-    where: {
-      sourceModule: 'MEETING',
-      followUpDate: LessThan(new Date()),
-      status: FollowUpStatus.PENDING,
-    },
-    relations: ['lead'],
-    order: { followUpDate: 'ASC' },
-  });
-}
-
-        if (this.isOwnAssignedOnlyRole(user)) {
-      const currentUserId = this.getCurrentUserId(user);
-
-      return this.followUpRepository
-        .createQueryBuilder('followUp')
-        .leftJoinAndSelect('followUp.lead', 'lead')
-        .where('followUp.followUpDate < :now', { now: new Date() })
-        .andWhere('followUp.status = :status', {
-          status: FollowUpStatus.PENDING,
-        })
-        .andWhere(
-          '(followUp.assignedTo = :currentUserId OR followUp.createdBy = :currentUserId OR lead.assignedTo = :currentUserId OR lead.createdBy = :currentUserId OR lead.originTelecallerId = :currentUserId)',
-          { currentUserId },
-        )
-        .orderBy('followUp.followUpDate', 'ASC')
-        .getMany();
-    }
-
-    return this.followUpRepository.find({
-      where: {
-        followUpDate: LessThan(new Date()),
-        status: FollowUpStatus.PENDING,
-      },
-      relations: ['lead'],
-      order: { followUpDate: 'ASC' },
-    });
+  async findOverdue(user: any, page = 1, limit = 20) {
+  if (this.isProjectManager(user)) {
+    return { data: [], total: 0, page, limit };
   }
+
+  const safePage = Number(page) > 0 ? Number(page) : 1;
+  const safeLimit = Number(limit) > 0 ? Math.min(Number(limit), 50) : 20;
+  const skip = (safePage - 1) * safeLimit;
+
+  const qb = this.followUpRepository
+    .createQueryBuilder('followUp')
+    .leftJoinAndSelect('followUp.lead', 'lead')
+    .where('followUp.followUpDate < :now', { now: new Date() })
+    .andWhere('followUp.status = :status', {
+      status: FollowUpStatus.PENDING,
+    });
+
+  if (this.isMeetingAssistant(user)) {
+    qb.andWhere('followUp.sourceModule = :sourceModule', {
+      sourceModule: 'MEETING',
+    });
+  } else if (this.isOwnAssignedOnlyRole(user)) {
+    const currentUserId = this.getCurrentUserId(user);
+
+    qb.andWhere(
+      '(followUp.assignedTo = :currentUserId OR followUp.createdBy = :currentUserId OR lead.assignedTo = :currentUserId OR lead.createdBy = :currentUserId OR lead.originTelecallerId = :currentUserId)',
+      { currentUserId },
+    );
+  }
+
+  const [data, total] = await qb
+    .orderBy('followUp.followUpDate', 'ASC')
+    .skip(skip)
+    .take(safeLimit)
+    .getManyAndCount();
+
+  return {
+    data,
+    total,
+    page: safePage,
+    limit: safeLimit,
+  };
+}
 
   async findOne(id: number, user: any) {
     return this.getAccessibleFollowUp(id, user);
