@@ -977,7 +977,10 @@ const end = new Date(`${indiaDate}T23:59:59.999+05:30`);
 }, 'meetingsScheduledToday')
 
     .where('call.createdAt BETWEEN :start AND :end', { start, end })
-    .groupBy('call.telecallerId')
+.andWhere(`user.roles LIKE :telecallerRole`, {
+  telecallerRole: '%TELECALLER%',
+})
+.groupBy('call.telecallerId')
     .addGroupBy('user.name') // ✅ IMPORTANT
     .getRawMany();
 
