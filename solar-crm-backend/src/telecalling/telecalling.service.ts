@@ -2292,6 +2292,8 @@ await this.contactRepository.save(contact);
     );
   }
 
+  const latestContext = await this.getLatestContactContext(contact.id);
+
   const lead = this.leadRepository.create({
     name: contact.name,
     phone: normalizedPhone,
@@ -2306,6 +2308,7 @@ await this.contactRepository.save(contact);
       contact.assignedToName || `User ${contact.assignedTo || ''}`,
     status: LeadStatus.NEW,
     potentialPercentage: potentialPercentage || 50,
+    remarks: latestContext || undefined,
   } as any);
 
   const savedLead = await this.leadRepository.save(lead);
@@ -2376,6 +2379,8 @@ console.log(`Stage change check: contact ${contact.id} → ${(contact as any).st
 
   const normalizedPhone = this.normalizePhone(contact.phone);
 
+  const latestContext = await this.getLatestContactContext(contact.id);
+
   let lead = await this.leadRepository.findOne({
     where: { phone: normalizedPhone },
   });
@@ -2429,7 +2434,9 @@ console.log(`Stage change check: contact ${contact.id} → ${(contact as any).st
     await this.meetingRepository.update(existingMeeting.id, {
       assignedTo: meetingManager.id,
       assignedToName: meetingManager.name,
-      notes: `Reassigned from telecalling contact by ${user.name}`,
+      notes: latestContext
+  ? `Reassigned from telecalling contact by ${user.name}\n\nLatest Context:\n${latestContext}`
+  : `Reassigned from telecalling contact by ${user.name}`,
       scheduledAt: new Date(),
     } as any);
   } else {
@@ -2442,7 +2449,9 @@ console.log(`Stage change check: contact ${contact.id} → ${(contact as any).st
       assignedToName: meetingManager.name,
       meetingCategory: 'COMPANY_MEETING',
       status: 'SCHEDULED',
-      notes: `Converted from telecalling contact by ${user.name}`,
+      notes: latestContext
+  ? `Converted from telecalling contact by ${user.name}\n\nLatest Context:\n${latestContext}`
+  : `Converted from telecalling contact by ${user.name}`,
       scheduledAt: new Date(),
       createdBy: user.id,
       createdByName: user.name,
@@ -2592,5 +2601,27 @@ async getTelecallerContactCount(userId: number) {
       message: 'Contact name updated successfully',
     };
   }
+
+  private async getLatestContactContext(contactId: number): Promise<string> {
+  const latestNote = await this.contactNoteRepository.findOne({
+    where: { contactId },
+    order: { createdAt: 'DESC' },
+  });
+
+  if (latestNote?.note?.trim()) {
+    return latestNote.note.trim();
+  }
+
+  const latestCallHistory = await this.contactCallHistoryRepository.findOne({
+    where: { contactId },
+    order: { createdAt: 'DESC' },
+  });
+
+  if (latestCallHistory?.notes?.trim()) {
+    return latestCallHistory.notes.trim();
+  }
+
+  return '';
+}
 }
 
