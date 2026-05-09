@@ -661,22 +661,36 @@ const currentUserId = this.getCurrentUserId(user);
   async applyAction(
   id: number,
   actionData: {
-    status: MeetingStatus | string;
-    reason?: string;
-    outcome?: string;
-    nextAction?: string;
-    managerRemarks?: string;
-    notes?: string;
-    convertToProject?: boolean;
-    newScheduledAt?: string;
-    gpsPhotoUrl?: string;
-    audioUrl?: string;
-  },
+  status: MeetingStatus | string;
+  reason?: string;
+  outcome?: string;
+  nextAction?: string;
+  managerRemarks?: string;
+  notes?: string;
+  siteObservation?: string;
+  convertToProject?: boolean;
+  newScheduledAt?: string;
+  gpsPhotoUrl?: string;
+  audioUrl?: string;
+},
   user: any,
 ): Promise<Meeting> {
   const existingMeeting = await this.getAccessibleMeeting(id, user);
 
 this.assertCanModifyMeeting(existingMeeting, user);
+
+const hasContext =
+  !!String(actionData.notes || '').trim() ||
+  !!String(actionData.managerRemarks || '').trim() ||
+  !!String(actionData.siteObservation || '').trim() ||
+  !!String(actionData.reason || '').trim() ||
+  !!String(actionData.outcome || '').trim();
+
+if (!hasContext) {
+  throw new BadRequestException(
+    'Please add notes, remarks, observation, reason, or outcome before saving action',
+  );
+}
 
 if (actionData.status === MeetingStatus.RESCHEDULED) {
     if (!actionData.newScheduledAt) {

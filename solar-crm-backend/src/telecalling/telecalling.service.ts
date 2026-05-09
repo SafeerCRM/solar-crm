@@ -1670,6 +1670,10 @@ this.contactCallHistoryRepository.find({
 ) {
   const contact = await this.getAccessibleContact(id, user);
 
+  if (!body.notes || !String(body.notes).trim()) {
+  throw new BadRequestException('Call notes are required');
+}
+
   const item = new ContactCallHistory();
 
   item.contactId = contact.id;
