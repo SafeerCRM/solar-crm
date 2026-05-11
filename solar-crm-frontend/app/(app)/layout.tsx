@@ -73,10 +73,22 @@ const navItems = [
 },
 
   {
-    name: 'Calculator',
-    href: '/calculator',
-    roles: ['OWNER', 'LEAD_MANAGER', 'TELECALLER', 'MEETING_MANAGER', 'MEETING_ASSISTANT', 'PROJECT_MANAGER'],
-  },
+  name: 'Calculator',
+  href: '/calculator',
+  roles: [
+    'OWNER',
+    'TELECALLING_MANAGER',
+    'TELECALLING_ASSISTANT',
+    'LEAD_MANAGER',
+    'LEAD_EXECUTIVE',
+    'MARKETING_HEAD',
+    'MEETING_MANAGER',
+    'MEETING_ASSISTANT',
+    'PROJECT_MANAGER',
+    'PROJECT_EXECUTIVE',
+    'TELECALLER',
+  ],
+},
 
   {
     name: 'Calculator Settings',
