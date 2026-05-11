@@ -1767,11 +1767,28 @@ this.contactCallHistoryRepository.find({
 
   const savedItem = await this.contactCallHistoryRepository.save(item);
 
-  await this.contactRepository.update(contact.id, {
-  status: item.callStatus as any,
+  const contactUpdatePayload: any = {
   remarks: item.notes,
   hasCalled: true,
-} as any);
+};
+
+if (
+  [
+    'NEW',
+    'CONTACTED',
+    'INTERESTED',
+    'NOT_INTERESTED',
+    'CALLBACK',
+    'CNR',
+    'NO_RESPONSE',
+    'PROPOSAL_SENT',
+    'CONVERTED',
+  ].includes(String(item.callStatus || '').toUpperCase())
+) {
+  contactUpdatePayload.status = String(item.callStatus || '').toUpperCase();
+}
+
+await this.contactRepository.update(contact.id, contactUpdatePayload);
 
   // ✅ IMPORTANT: UPDATE LATEST CALL LOG
   if (body.recordingUrl) {
@@ -1826,11 +1843,28 @@ this.contactCallHistoryRepository.find({
 
     const savedHistory = await this.contactCallHistoryRepository.save(existingHistory);
 
-await this.contactRepository.update(id, {
-  status: savedHistory.callStatus as any,
+const contactUpdatePayload: any = {
   remarks: savedHistory.notes,
   hasCalled: true,
-} as any);
+};
+
+if (
+  [
+    'NEW',
+    'CONTACTED',
+    'INTERESTED',
+    'NOT_INTERESTED',
+    'CALLBACK',
+    'CNR',
+    'NO_RESPONSE',
+    'PROPOSAL_SENT',
+    'CONVERTED',
+  ].includes(String(savedHistory.callStatus || '').toUpperCase())
+) {
+  contactUpdatePayload.status = String(savedHistory.callStatus || '').toUpperCase();
+}
+
+await this.contactRepository.update(id, contactUpdatePayload);
 
 return savedHistory;
   }
