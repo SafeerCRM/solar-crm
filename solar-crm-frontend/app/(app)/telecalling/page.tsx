@@ -820,7 +820,8 @@ return;
           displayCity: contact?.city || contact?.address || contact?.location || '-',
           rowType: 'CONTACT',
           personKey: `contact-${call.contactId}`,
-          effectiveStatus: call.disposition || call.callStatus,
+          effectiveStatus:
+  latestContactCall?.callStatus || call.disposition || call.callStatus,
 effectiveNotes: call.callNotes || latestContactCall?.notes || '',
 effectiveNextFollowUpDate:
   call.nextFollowUpDate || latestContactCall?.nextFollowUpDate,
