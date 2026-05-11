@@ -426,24 +426,22 @@ qb.andWhere(`COALESCE(contact.stage, 'TELECALLING') = :stage`, {
   }
 
   async getNeverCalled() {
-    const logs = await this.callLogRepository.find({
-      select: ['leadId'],
-    });
+  return this.leadRepository
+    .createQueryBuilder('lead')
+    .where((qb) => {
+      const subQuery = qb
+        .subQuery()
+        .select('1')
+        .from(CallLog, 'call')
+        .where('call.leadId = lead.id')
+        .getQuery();
 
-    const calledLeadIds = logs.map((log) => log.leadId).filter(Boolean);
-
-    if (calledLeadIds.length === 0) {
-      return this.leadRepository.find({
-        order: { createdAt: 'DESC' },
-      });
-    }
-
-    return this.leadRepository
-      .createQueryBuilder('lead')
-      .where('lead.id NOT IN (:...ids)', { ids: calledLeadIds })
-      .orderBy('lead.createdAt', 'DESC')
-      .getMany();
-  }
+      return `NOT EXISTS ${subQuery}`;
+    })
+    .orderBy('lead.createdAt', 'DESC')
+    .take(100)
+    .getMany();
+}
 
   async getByCallStatus(callStatus: string) {
     return this.callLogRepository.find({
@@ -1252,7 +1250,6 @@ async getCnrRecallContacts(
 
   const skip = (safePage - 1) * safeLimit;
   const normalizedFilter = String(locationFilter || '').trim().toLowerCase();
-  const callLogTable = this.callLogRepository.metadata.tableName;
 
   const qb = this.contactRepository
     .createQueryBuilder('contact')
@@ -1283,21 +1280,19 @@ async getCnrRecallContacts(
     );
   }
 
-  qb.andWhere(`
-    contact.id IN (
-      SELECT latest."contactId"
-      FROM (
-        SELECT DISTINCT ON ("contactId")
-          "contactId",
-          UPPER(COALESCE("disposition", "callStatus", '')) AS latest_status
-        FROM ${callLogTable}
-        WHERE "contactId" IS NOT NULL
-          AND UPPER(COALESCE("callStatus", '')) <> 'INITIATED'
-        ORDER BY "contactId", "createdAt" DESC
-      ) latest
-      WHERE latest.latest_status = 'CNR'
-    )
-  `);
+  qb.andWhere((subQb) => {
+    const latestStatusSubQuery = subQb
+      .subQuery()
+      .select(`UPPER(COALESCE(call."disposition", call."callStatus", ''))`)
+      .from(CallLog, 'call')
+      .where('call."contactId" = contact.id')
+      .andWhere(`UPPER(COALESCE(call."callStatus", '')) <> 'INITIATED'`)
+      .orderBy('call."createdAt"', 'DESC')
+      .limit(1)
+      .getQuery();
+
+    return `${latestStatusSubQuery} = 'CNR'`;
+  });
 
   const [data, total] = await qb
     .orderBy('contact.updatedAt', 'DESC')
