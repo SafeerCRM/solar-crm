@@ -382,7 +382,7 @@ setLoading(true);
         phone: phoneFilter.trim(),
         city: cityFilter.trim(),
                 telecallerName: telecallerNameFilter.trim(),
-        callResult: callResultFilter,
+        callResult: '',
         leadPotential: leadPotentialFilter,
       };
 
@@ -408,7 +408,7 @@ return;
   name: nameFilter.trim(),
   phone: phoneFilter.trim(),
   city: cityFilter.trim(),
-  callResult: callResultFilter,
+  callResult: '',
   leadPotential: leadPotentialFilter,
 };
 
@@ -466,16 +466,6 @@ setPage(Number(responseData.page || pageNumber));
   const contactId = call.contactId;
   if (!contactId) return false;
 
-  const latestCall =
-    contactLatestCallMap[contactId];
-
-  const latestStatus = String(
-    latestCall?.callStatus ||
-      call.disposition ||
-      call.callStatus ||
-      '',
-  ).toUpperCase();
-
   const effectiveLeadPotential = String(
     call.leadPotential || '',
   ).toUpperCase();
@@ -484,11 +474,7 @@ setPage(Number(responseData.page || pageNumber));
     !leadPotentialFilter ||
     effectiveLeadPotential === leadPotentialFilter.toUpperCase();
 
-  const matchesCallResult =
-    !callResultFilter ||
-    latestStatus === callResultFilter.toUpperCase();
-
-  return matchesLeadPotential && matchesCallResult;
+  return matchesLeadPotential;
 });
 
       const uniqueContactIds = Array.from(
@@ -869,14 +855,21 @@ recordingUrl: call.recordingUrl || latestContactCall?.recordingUrl,
   }, [enrichedCalls]);
 
   const filteredCalls = useMemo(() => {
-  const base = [...latestOnlyCalls];
+  const base = latestOnlyCalls.filter((call) => {
+    if (!callResultFilter) return true;
+
+    return (
+      String(call.effectiveStatus || '').toUpperCase() ===
+      callResultFilter.toUpperCase()
+    );
+  });
 
   return base.sort((a, b) => {
     const aTime = new Date(a.effectiveTimestamp).getTime();
     const bTime = new Date(b.effectiveTimestamp).getTime();
     return sortOrder === 'NEWEST' ? bTime - aTime : aTime - bTime;
   });
-}, [latestOnlyCalls, sortOrder]);
+}, [latestOnlyCalls, sortOrder, callResultFilter]);
 
   const reminderCalendarCounts = useMemo(() => {
     const counts: Record<string, number> = {};
