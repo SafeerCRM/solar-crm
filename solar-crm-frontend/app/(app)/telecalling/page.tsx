@@ -463,25 +463,33 @@ setPage(Number(responseData.page || pageNumber));
       }
 
       const filteredCalls = calls.filter((call) => {
-        const contactId = call.contactId;
-        if (!contactId) return false;
+  const contactId = call.contactId;
+  if (!contactId) return false;
 
-        const effectiveStatus = String(
-          call.disposition || call.callStatus || '',
-        ).toUpperCase();
+  const latestCall =
+    contactLatestCallMap[contactId];
 
-        const effectiveLeadPotential = String(call.leadPotential || '').toUpperCase();
+  const latestStatus = String(
+    latestCall?.callStatus ||
+      call.disposition ||
+      call.callStatus ||
+      '',
+  ).toUpperCase();
 
-        const matchesLeadPotential =
-          !leadPotentialFilter ||
-          effectiveLeadPotential === leadPotentialFilter.toUpperCase();
+  const effectiveLeadPotential = String(
+    call.leadPotential || '',
+  ).toUpperCase();
 
-        const matchesCallResult =
-          !callResultFilter ||
-          effectiveStatus === callResultFilter.toUpperCase();
+  const matchesLeadPotential =
+    !leadPotentialFilter ||
+    effectiveLeadPotential === leadPotentialFilter.toUpperCase();
 
-        return matchesLeadPotential && matchesCallResult;
-      });
+  const matchesCallResult =
+    !callResultFilter ||
+    latestStatus === callResultFilter.toUpperCase();
+
+  return matchesLeadPotential && matchesCallResult;
+});
 
       const uniqueContactIds = Array.from(
         new Set(
