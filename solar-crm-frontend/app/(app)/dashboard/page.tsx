@@ -711,7 +711,8 @@ useEffect(() => {
           />
         </div>
 
-        {userRoles.includes('OWNER') && (
+        {(userRoles.includes('OWNER') ||
+  userRoles.includes('MARKETING_HEAD')) && (
   <div className="rounded-2xl bg-white p-4 shadow md:p-6">
     <h2 className="mb-4 text-xl font-bold">📅 Meeting Manager Analytics</h2>
 
@@ -783,7 +784,8 @@ useEffect(() => {
 )}
 
 
-{userRoles.includes('OWNER') && (
+{(userRoles.includes('OWNER') ||
+  userRoles.includes('MARKETING_HEAD')) && (
   <div className="rounded-2xl bg-white p-4 shadow md:p-6">
     <h2 className="mb-4 text-xl font-bold">
       📊 Lead Manager Analytics
