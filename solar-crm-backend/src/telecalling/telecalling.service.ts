@@ -1788,7 +1788,10 @@ if (
   contactUpdatePayload.status = String(item.callStatus || '').toUpperCase();
 }
 
-await this.contactRepository.update(contact.id, contactUpdatePayload);
+await this.contactRepository.update(contact.id, {
+  remarks: item.notes,
+  hasCalled: true,
+} as any);
 
   // ✅ IMPORTANT: UPDATE LATEST CALL LOG
   if (body.recordingUrl) {
@@ -1864,7 +1867,10 @@ if (
   contactUpdatePayload.status = String(savedHistory.callStatus || '').toUpperCase();
 }
 
-await this.contactRepository.update(id, contactUpdatePayload);
+await this.contactRepository.update(id, {
+  remarks: savedHistory.notes,
+  hasCalled: true,
+} as any);
 
 return savedHistory;
   }
