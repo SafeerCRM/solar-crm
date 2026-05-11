@@ -159,9 +159,12 @@ getOwnerSummary(@CurrentUser() user?: any) {
 getMeetingManagerAnalytics(@CurrentUser() user?: any) {
   const userRoles = this.getUserRoles(user);
 
-  if (!userRoles.includes(UserRole.OWNER)) {
-    return [];
-  }
+  if (
+  !userRoles.includes(UserRole.OWNER) &&
+  !userRoles.includes(UserRole.MARKETING_HEAD)
+) {
+  return [];
+}
 
   return this.dashboardService.getMeetingManagerAnalytics();
 }
@@ -170,9 +173,12 @@ getMeetingManagerAnalytics(@CurrentUser() user?: any) {
 getLeadManagerAnalytics(@CurrentUser() user?: any) {
   const userRoles = this.getUserRoles(user);
 
-  if (!userRoles.includes(UserRole.OWNER)) {
-    return [];
-  }
+  if (
+  !userRoles.includes(UserRole.OWNER) &&
+  !userRoles.includes(UserRole.MARKETING_HEAD)
+) {
+  return [];
+}
 
   return this.dashboardService.getLeadManagerAnalytics();
 }
