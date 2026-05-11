@@ -1236,6 +1236,85 @@ return {
 };
   }
 
+async getCnrRecallContacts(
+  user: any,
+  page = 1,
+  limit = 50,
+  locationFilter = '',
+) {
+  const safePage =
+    Number.isFinite(Number(page)) && Number(page) > 0 ? Number(page) : 1;
+
+  const safeLimit =
+    Number.isFinite(Number(limit)) && Number(limit) > 0
+      ? Math.min(Number(limit), 100)
+      : 50;
+
+  const skip = (safePage - 1) * safeLimit;
+  const normalizedFilter = String(locationFilter || '').trim().toLowerCase();
+  const callLogTable = this.callLogRepository.metadata.tableName;
+
+  const qb = this.contactRepository
+    .createQueryBuilder('contact')
+    .where('contact.isInStorage = false')
+    .andWhere(`COALESCE(contact.stage, 'TELECALLING') = :stage`, {
+      stage: 'TELECALLING',
+    });
+
+  if (this.hasAnyRole(user, ['TELECALLER'])) {
+    qb.andWhere('contact.assignedTo = :assignedTo', {
+      assignedTo: user.id,
+    });
+  } else if (!this.hasAnyRole(user, ['OWNER', 'TELECALLING_MANAGER'])) {
+    throw new ForbiddenException(
+      'Only owner, telecalling manager, or telecaller can access CNR recall queue',
+    );
+  }
+
+  if (normalizedFilter) {
+    qb.andWhere(
+      `(
+        LOWER(COALESCE(contact.city, '')) LIKE :filter
+        OR LOWER(COALESCE(contact.zone, '')) LIKE :filter
+        OR LOWER(COALESCE(contact.address, '')) LIKE :filter
+        OR LOWER(COALESCE(contact.location, '')) LIKE :filter
+      )`,
+      { filter: `%${normalizedFilter}%` },
+    );
+  }
+
+  qb.andWhere(`
+    contact.id IN (
+      SELECT latest."contactId"
+      FROM (
+        SELECT DISTINCT ON ("contactId")
+          "contactId",
+          UPPER(COALESCE("disposition", "callStatus", '')) AS latest_status
+        FROM ${callLogTable}
+        WHERE "contactId" IS NOT NULL
+          AND UPPER(COALESCE("callStatus", '')) <> 'INITIATED'
+        ORDER BY "contactId", "createdAt" DESC
+      ) latest
+      WHERE latest.latest_status = 'CNR'
+    )
+  `);
+
+  const [data, total] = await qb
+    .orderBy('contact.updatedAt', 'DESC')
+    .skip(skip)
+    .take(safeLimit)
+    .getManyAndCount();
+
+  return {
+    data,
+    total,
+    page: safePage,
+    limit: safeLimit,
+    totalPages: Math.ceil(total / safeLimit) || 1,
+  };
+}
+
+
     async getAllContactIdsForAutoCall(
     user: any,
     view: string,
@@ -1688,6 +1767,12 @@ this.contactCallHistoryRepository.find({
 
   const savedItem = await this.contactCallHistoryRepository.save(item);
 
+  await this.contactRepository.update(contact.id, {
+  status: item.callStatus as any,
+  remarks: item.notes,
+  hasCalled: true,
+} as any);
+
   // ✅ IMPORTANT: UPDATE LATEST CALL LOG
   if (body.recordingUrl) {
     const latestCallLog = await this.callLogRepository.findOne({
@@ -1739,7 +1824,15 @@ this.contactCallHistoryRepository.find({
         : undefined;
     }
 
-    return this.contactCallHistoryRepository.save(existingHistory);
+    const savedHistory = await this.contactCallHistoryRepository.save(existingHistory);
+
+await this.contactRepository.update(id, {
+  status: savedHistory.callStatus as any,
+  remarks: savedHistory.notes,
+  hasCalled: true,
+} as any);
+
+return savedHistory;
   }
 
   async startQuickContactCall(
