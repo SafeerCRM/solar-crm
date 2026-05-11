@@ -106,6 +106,7 @@ export default function TelecallingContactsPage() {
   const [phoneFilter, setPhoneFilter] = useState('');
   const [cityFilter, setCityFilter] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('active');
+  const [showCnrRecall, setShowCnrRecall] = useState(false);
 
   const [isAutoCalling, setIsAutoCalling] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -196,7 +197,9 @@ const isPausedRef = useRef(false);
     setLoading(true);
     try {
       const res = await axios.get<ContactsResponse>(
-        `${backendUrl}/telecalling/contacts`,
+        showCnrRecall
+  ? `${backendUrl}/telecalling/contacts/cnr-recall`
+  : `${backendUrl}/telecalling/contacts`,
         {
           params: {
             page,
@@ -231,7 +234,7 @@ const isPausedRef = useRef(false);
   useEffect(() => {
     fetchContacts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, viewMode, cityFilter]);
+  }, [page, viewMode, cityFilter, showCnrRecall]);
 
   useEffect(() => {
     fetchUsers();
@@ -978,27 +981,45 @@ const transferContacts = async () => {
             </select>
 
             <button
+  type="button"
+  onClick={() => {
+    setShowCnrRecall((prev) => !prev);
+    setPage(1);
+    setSelectedContactIds([]);
+  }}
+  className={`rounded px-4 py-2 text-white ${
+    showCnrRecall ? 'bg-red-700' : 'bg-gray-700'
+  }`}
+>
+  {showCnrRecall ? 'Exit CNR Recall Queue' : 'CNR Recall Queue'}
+</button>
+
+            <button
               onClick={fetchContacts}
               className="rounded-2xl bg-blue-600 px-4 py-3 font-medium text-white"
             >
               Apply
             </button>
 
-            {!isAutoCalling ? (
-              <button
-                onClick={startAutoCall}
-                className="rounded-2xl bg-green-600 px-4 py-3 font-medium text-white"
-              >
-                Start Auto Call
-              </button>
-            ) : (
-              <button
-                onClick={stopAutoCall}
-                className="rounded-2xl bg-red-600 px-4 py-3 font-medium text-white"
-              >
-                Stop
-              </button>
-            )}
+            {!showCnrRecall && (
+  <>
+    {!isAutoCalling ? (
+      <button
+        onClick={startAutoCall}
+        className="rounded-2xl bg-green-600 px-4 py-3 font-medium text-white"
+      >
+        Start Auto Call
+      </button>
+    ) : (
+      <button
+        onClick={stopAutoCall}
+        className="rounded-2xl bg-red-600 px-4 py-3 font-medium text-white"
+      >
+        Stop
+      </button>
+    )}
+  </>
+)}
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
