@@ -515,7 +515,7 @@ qb.andWhere(`COALESCE(contact.stage, 'TELECALLING') = :stage`, {
 
     if (normalizedCallResult) {
   qb.andWhere(
-    `UPPER(COALESCE(contact.status::text, call.disposition, call.callStatus, '')) = :callResult`,
+    `(UPPER(COALESCE(call.disposition, '')) = :callResult OR UPPER(COALESCE(call.callStatus, '')) = :callResult)`,
     { callResult: normalizedCallResult },
   );
 }
@@ -794,7 +794,7 @@ return {
 
   if (normalizedCallResult) {
   qb.andWhere(
-    `UPPER(COALESCE(contact.status::text, call.disposition, call.callStatus, '')) = :callResult`,
+    `(UPPER(COALESCE(call.disposition, '')) = :callResult OR UPPER(COALESCE(call.callStatus, '')) = :callResult)`,
     { callResult: normalizedCallResult },
   );
 }
