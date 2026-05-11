@@ -811,7 +811,8 @@ return;
 effectiveNotes: call.callNotes || latestContactCall?.notes || '',
 effectiveNextFollowUpDate:
   call.nextFollowUpDate || latestContactCall?.nextFollowUpDate,
-effectiveTimestamp: call.createdAt,
+effectiveTimestamp:
+  latestContactCall?.updatedAt || call.createdAt,
 recordingUrl: call.recordingUrl || latestContactCall?.recordingUrl,
           reviewAssignedLabel:
             call.reviewAssignedToName || contact?.reviewAssignedToName || '-',
