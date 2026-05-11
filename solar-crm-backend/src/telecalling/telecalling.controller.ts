@@ -174,6 +174,22 @@ getReviewQueue(
     return this.telecallingService.importContacts(file, user);
   }
 
+@Get('contacts/cnr-recall')
+getCnrRecallContacts(
+  @CurrentUser() user: any,
+  @Query('page') page = '1',
+  @Query('limit') limit = '50',
+  @Query('locationFilter') locationFilter = '',
+) {
+  return this.telecallingService.getCnrRecallContacts(
+    user,
+    Number(page),
+    Number(limit),
+    String(locationFilter || ''),
+  );
+}
+
+
   @Get('contacts')
   getContacts(
     @CurrentUser() user: any,
