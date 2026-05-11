@@ -925,7 +925,7 @@ await axios.post(
           disabled={loading}
           className="rounded bg-blue-600 px-4 py-2 text-white"
         >
-          {loading ? 'Saving...' : 'Add Note'}
+          {loading ? 'Saving...' : 'Add Note Only'}
         </button>
       </div>
 
@@ -944,6 +944,8 @@ await axios.post(
             <option value="INTERESTED">INTERESTED</option>
             <option value="NO_RESPONSE">NO_RESPONSE</option>
           </select>
+
+    
 
                     <LocalizationProvider dateAdapter={AdapterDayjs}>
             <div className="grid gap-3 md:grid-cols-2">
@@ -977,9 +979,15 @@ await axios.post(
             disabled={loading}
             className="rounded bg-black px-4 py-2 text-white"
           >
-            {loading ? 'Saving...' : 'Add Call Entry'}
+            {loading ? 'Saving...' : 'Save Call Status + Note'}
           </button>
         </div>
+
+        <p className="mt-2 text-xs text-gray-500">
+  To update latest status, choose status and click
+  “Save Call Status + Note”.
+  “Add Note Only” will not change status.
+</p>
 
         <textarea
           value={callNotes}
