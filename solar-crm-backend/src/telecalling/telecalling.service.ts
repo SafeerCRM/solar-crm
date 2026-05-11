@@ -514,11 +514,11 @@ qb.andWhere(`COALESCE(contact.stage, 'TELECALLING') = :stage`, {
 .orderBy('call.createdAt', 'DESC');
 
     if (normalizedCallResult) {
-      qb.andWhere(
-        `(UPPER(COALESCE(call.disposition, '')) = :callResult OR UPPER(COALESCE(call.callStatus, '')) = :callResult)`,
-        { callResult: normalizedCallResult },
-      );
-    }
+  qb.andWhere(
+    `UPPER(COALESCE(contact.status, call.disposition, call.callStatus, '')) = :callResult`,
+    { callResult: normalizedCallResult },
+  );
+}
 
     if (normalizedLeadPotential) {
       qb.andWhere(`UPPER(COALESCE(call.leadPotential, '')) = :leadPotential`, {
@@ -793,11 +793,11 @@ return {
     .toUpperCase();
 
   if (normalizedCallResult) {
-    qb.andWhere(
-      `(UPPER(COALESCE(call.disposition, '')) = :callResult OR UPPER(COALESCE(call.callStatus, '')) = :callResult)`,
-      { callResult: normalizedCallResult },
-    );
-  }
+  qb.andWhere(
+    `UPPER(COALESCE(contact.status, call.disposition, call.callStatus, '')) = :callResult`,
+    { callResult: normalizedCallResult },
+  );
+}
 
   if (normalizedLeadPotential) {
     qb.andWhere('UPPER(COALESCE(call.leadPotential, \'\')) = :leadPotential', {
