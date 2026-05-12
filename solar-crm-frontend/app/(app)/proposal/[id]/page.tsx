@@ -54,6 +54,8 @@ export default function ProposalPage() {
   useEffect(() => {
     if (!proposal || editable) return;
 
+    const calculator = proposal.calculator || {};
+
     setEditable({
       preparedBy: 'RAJKUMAR JI',
       customerAddress: proposal.customerCity || '',
@@ -70,8 +72,27 @@ export default function ProposalPage() {
       closingNote:
         'Thanks & Regards\nADITYA SOLARS\nRajkumar Meena - 8306170662',
       products: [
-        ['Solar Module Monoperc Halfcut Bifacial', 'solar-module.jpg', 'MONOPERC / Halfcut / Bifacial / TOPCON Solar Modules with 12 years product warranty and 30 years performance warranty.', 'As per selected system'],
-        ['Solar Inverter', 'solar-inverter.jpg', '1PH / 3PH On-Grid Inverter with product warranty. Brand and capacity as per selected system configuration.', 'As per capacity'],
+        [
+  'Solar Module Monoperc Halfcut Bifacial',
+  'solar-module.jpg',
+  'MONOPERC / Halfcut / Bifacial / TOPCON Solar Modules with 12 years product warranty and 30 years performance warranty.',
+  [
+    calculator.panelCategory ? `Category: ${calculator.panelCategory}` : '',
+    calculator.panelType ? `Type: ${calculator.panelType}` : '',
+    Number(calculator.numberOfPanels || 0) > 0 ? `Panels: ${calculator.numberOfPanels}` : '',
+    Number(calculator.wattPerPanel || 0) > 0 ? `Watt: ${calculator.wattPerPanel} W` : '',
+  ].filter(Boolean).join('\n') || 'As per selected system',
+],
+[
+  'Solar Inverter',
+  'solar-inverter.jpg',
+  '1PH / 3PH On-Grid Inverter with product warranty. Brand and capacity as per selected system configuration.',
+  [
+    calculator.ongridBrand ? `Brand: ${calculator.ongridBrand}` : '',
+    Number(calculator.ongridWatt || 0) > 0 ? `Capacity: ${calculator.ongridWatt} W` : '',
+    Number(calculator.ongridQuantity || 0) > 0 ? `Qty: ${calculator.ongridQuantity}` : '',
+  ].filter(Boolean).join('\n') || 'As per capacity',
+],
         ['Module Mounting Structure', 'gi-structure.jpg', 'Galvanized Iron Structure 40×60×2 mm / 40×40×2 mm. Rooftop pipes in galvanized C-channel structure.', 'Site specific'],
         ['ACDB + DCDB', 'acdb-dcdb.jpg', 'AC Distribution Box and DC Distribution Box with protection system and surge protection devices.', 'Included'],
         ['Earthing Wire', 'earthing-wire.jpg', 'Copper 4 sq mm earthing wire. Maximum length 90 m.', 'Included'],
