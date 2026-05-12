@@ -4,9 +4,12 @@ import { Proposal } from './proposal.entity';
 import { ProposalService } from './proposal.service';
 import { ProposalController } from './proposal.controller';
 import { Calculator } from '../calculator/calculator.entity';
+import { CalculatorPanelOption } from '../calculator/calculator-panel-option.entity';
+import { CalculatorOngridOption } from '../calculator/calculator-ongrid-option.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Proposal, Calculator])],
+  imports: [TypeOrmModule.forFeature([Proposal, Calculator, CalculatorPanelOption,
+CalculatorOngridOption,])],
   providers: [ProposalService],
   controllers: [ProposalController],
 })

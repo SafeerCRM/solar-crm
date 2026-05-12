@@ -3,6 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Proposal } from './proposal.entity';
 import { Repository } from 'typeorm';
 import { Calculator } from '../calculator/calculator.entity';
+import { CalculatorPanelOption } from '../calculator/calculator-panel-option.entity';
+import { CalculatorOngridOption } from '../calculator/calculator-ongrid-option.entity';
 import { randomBytes } from 'crypto';
 import PDFDocument = require('pdfkit');
 import { Response } from 'express';
@@ -14,6 +16,11 @@ export class ProposalService {
     private readonly proposalRepo: Repository<Proposal>,
     @InjectRepository(Calculator)
 private readonly calculatorRepo: Repository<Calculator>,
+@InjectRepository(CalculatorPanelOption)
+private readonly panelOptionRepo: Repository<CalculatorPanelOption>,
+
+@InjectRepository(CalculatorOngridOption)
+private readonly ongridOptionRepo: Repository<CalculatorOngridOption>,
   ) {}
 
   generateProposalNumber() {
@@ -46,6 +53,38 @@ private readonly calculatorRepo: Repository<Calculator>,
     calculator = await this.calculatorRepo.findOne({
       where: { id: proposal.calculatorId },
     });
+
+    if (calculator) {
+      const panelOption = calculator.panelOptionId
+        ? await this.panelOptionRepo.findOne({
+            where: {
+              id: Number(calculator.panelOptionId),
+            },
+          })
+        : null;
+
+      const ongridOption = calculator.ongridOptionId
+        ? await this.ongridOptionRepo.findOne({
+            where: {
+              id: Number(calculator.ongridOptionId),
+            },
+          })
+        : null;
+
+      calculator = {
+        ...calculator,
+
+        panelDisplayName: panelOption
+          ? `${panelOption.brandName} - ${panelOption.capacityWatt}W`
+          : null,
+
+        ongridDisplayName: ongridOption
+          ? `${ongridOption.brandName} - ${ongridOption.capacity}kW`
+          : null,
+
+        ongridPhase: ongridOption?.phaseType || null,
+      };
+    }
   }
 
   return {
