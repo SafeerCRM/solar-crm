@@ -530,6 +530,10 @@ private readonly meetingRepository: Repository<Meeting>,
   async getMeetingManagerAnalytics() {
   const { start, end } = this.getTodayIndiaRange();
 
+  const now = new Date();
+const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
   const meetingManagers = await this.userRepository.find();
 
   const filteredManagers = meetingManagers.filter(
@@ -542,10 +546,11 @@ private readonly meetingRepository: Repository<Meeting>,
 
   for (const manager of filteredManagers) {
     const totalMeetings = await this.meetingRepository.count({
-      where: {
-        assignedTo: manager.id,
-      },
-    });
+  where: {
+    assignedTo: manager.id,
+    scheduledAt: Between(monthStart, monthEnd),
+  },
+});
 
     const todayMeetings = await this.meetingRepository.count({
       where: {
@@ -573,7 +578,7 @@ private readonly meetingRepository: Repository<Meeting>,
     const siteVisitsTodayRaw = await this.meetingRepository
   .createQueryBuilder('meeting')
   .select('COUNT(DISTINCT COALESCE(meeting.meetingGroupId, meeting.id))', 'count')
-  .where('meeting.assignedTo = :managerId', { managerId: manager.id })
+  .where('meeting.updatedBy = :managerId', { managerId: manager.id })
   .andWhere('meeting.meetingType = :meetingType', {
     meetingType: MeetingType.SITE_VISIT,
   })
@@ -585,7 +590,7 @@ const siteVisitsToday = Number(siteVisitsTodayRaw?.count || 0);
 const companySiteVisitsTodayRaw = await this.meetingRepository
   .createQueryBuilder('meeting')
   .select('COUNT(DISTINCT COALESCE(meeting.meetingGroupId, meeting.id))', 'count')
-  .where('meeting.assignedTo = :managerId', { managerId: manager.id })
+  .where('meeting.updatedBy = :managerId', { managerId: manager.id })
   .andWhere('meeting.meetingType = :meetingType', {
     meetingType: MeetingType.SITE_VISIT,
   })
@@ -600,7 +605,7 @@ const companySiteVisitsToday = Number(companySiteVisitsTodayRaw?.count || 0);
 const selfSiteVisitsTodayRaw = await this.meetingRepository
   .createQueryBuilder('meeting')
   .select('COUNT(DISTINCT COALESCE(meeting.meetingGroupId, meeting.id))', 'count')
-  .where('meeting.assignedTo = :managerId', { managerId: manager.id })
+  .where('meeting.updatedBy = :managerId', { managerId: manager.id })
   .andWhere('meeting.meetingType = :meetingType', {
     meetingType: MeetingType.SITE_VISIT,
   })
@@ -618,6 +623,30 @@ const selfSiteVisitsToday = Number(selfSiteVisitsTodayRaw?.count || 0);
         createdAt: Between(start, end),
       },
     });
+
+    const companyMeetingsCreatedToday = await this.meetingRepository.count({
+  where: {
+    createdBy: manager.id,
+    meetingCategory: MeetingCategory.COMPANY_MEETING,
+    createdAt: Between(start, end),
+  },
+});
+
+const selfMeetingsCreatedToday = await this.meetingRepository.count({
+  where: {
+    createdBy: manager.id,
+    meetingCategory: MeetingCategory.SELF_MEETING,
+    createdAt: Between(start, end),
+  },
+});
+
+const solarMiterMeetingsCreatedToday = await this.meetingRepository.count({
+  where: {
+    createdBy: manager.id,
+    meetingCategory: MeetingCategory.SOLARMITER,
+    createdAt: Between(start, end),
+  },
+});
 
     const completedMeetingsToday = await this.meetingRepository.count({
       where: {
@@ -654,6 +683,9 @@ const convertedMeetingsToday = Number(convertedMeetingsTodayRaw?.count || 0);
       meetingFormsCreatedToday,
       completedMeetingsToday,
       convertedMeetingsToday,
+      companyMeetingsCreatedToday,
+selfMeetingsCreatedToday,
+solarMiterMeetingsCreatedToday,
 
       // old names kept for frontend safety
       companyMeetings: companyMeetingsToday,
