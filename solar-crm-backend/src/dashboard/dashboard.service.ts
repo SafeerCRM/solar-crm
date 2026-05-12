@@ -545,12 +545,20 @@ const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 
   const result: any[] = [];
 
   for (const manager of filteredManagers) {
-    const totalMeetings = await this.meetingRepository.count({
-  where: {
-    assignedTo: manager.id,
-    scheduledAt: Between(monthStart, monthEnd),
-  },
-});
+    const totalMeetingsRaw = await this.meetingRepository
+  .createQueryBuilder('meeting')
+  .select(
+    'COUNT(DISTINCT COALESCE(meeting.meetingGroupId, meeting.id))',
+    'count',
+  )
+  .where('meeting.assignedTo = :managerId', { managerId: manager.id })
+  .andWhere('meeting.scheduledAt BETWEEN :monthStart AND :monthEnd', {
+    monthStart,
+    monthEnd,
+  })
+  .getRawOne();
+
+const totalMeetings = Number(totalMeetingsRaw?.count || 0);
 
     const todayMeetings = await this.meetingRepository.count({
       where: {
