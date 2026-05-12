@@ -77,21 +77,33 @@ export default function ProposalPage() {
   'solar-module.jpg',
   'MONOPERC / Halfcut / Bifacial / TOPCON Solar Modules with 12 years product warranty and 30 years performance warranty.',
   [
-    calculator.panelCategory ? `Category: ${calculator.panelCategory}` : '',
-    calculator.panelType ? `Type: ${calculator.panelType}` : '',
-    Number(calculator.numberOfPanels || 0) > 0 ? `Panels: ${calculator.numberOfPanels}` : '',
-    Number(calculator.wattPerPanel || 0) > 0 ? `Watt: ${calculator.wattPerPanel} W` : '',
-  ].filter(Boolean).join('\n') || 'As per selected system',
+  calculator.panelCategory ? `Category: ${calculator.panelCategory}` : '',
+  calculator.panelType ? `Type: ${calculator.panelType}` : '',
+  calculator.panelDisplayName
+    ? `Panel: ${calculator.panelDisplayName}`
+    : Number(calculator.wattPerPanel || 0) > 0
+      ? `Panel: ${calculator.wattPerPanel}W`
+      : '',
+  Number(calculator.numberOfPanels || 0) > 0
+    ? `Panels: ${calculator.numberOfPanels}`
+    : '',
+].filter(Boolean).join('\n') || 'As per selected system'
 ],
 [
   'Solar Inverter',
   'solar-inverter.jpg',
-  '1PH / 3PH On-Grid Inverter with product warranty. Brand and capacity as per selected system configuration.',
+  '1PH / 3PH On-Grid Inverter with product warranty and 10 years replacement warranty. Brand and capacity as per selected system configuration.',
   [
-    calculator.ongridBrand ? `Brand: ${calculator.ongridBrand}` : '',
-    Number(calculator.ongridWatt || 0) > 0 ? `Capacity: ${calculator.ongridWatt} W` : '',
-    Number(calculator.ongridQuantity || 0) > 0 ? `Qty: ${calculator.ongridQuantity}` : '',
-  ].filter(Boolean).join('\n') || 'As per capacity',
+  calculator.ongridPhase ? `Phase: ${calculator.ongridPhase}` : '',
+  calculator.ongridDisplayName
+    ? `Inverter: ${calculator.ongridDisplayName}`
+    : calculator.ongridBrand
+      ? `Inverter: ${calculator.ongridBrand}`
+      : '',
+  Number(calculator.ongridQuantity || 0) > 0
+    ? `Qty: ${calculator.ongridQuantity}`
+    : '',
+].filter(Boolean).join('\n') || 'As per capacity'
 ],
         ['Module Mounting Structure', 'gi-structure.jpg', 'Galvanized Iron Structure 40×60×2 mm / 40×40×2 mm. Rooftop pipes in galvanized C-channel structure.', 'Site specific'],
         ['ACDB + DCDB', 'acdb-dcdb.jpg', 'AC Distribution Box and DC Distribution Box with protection system and surge protection devices.', 'Included'],
