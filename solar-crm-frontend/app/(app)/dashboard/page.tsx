@@ -69,6 +69,9 @@ type MeetingManagerAnalyticsItem = {
   companyMeetings: number;
   selfMeetings: number;
   convertedMeetings: number;
+  companyMeetingsCreatedToday?: number;
+selfMeetingsCreatedToday?: number;
+solarMiterMeetingsCreatedToday?: number;
 };
 
 type LeadManagerAnalyticsItem = {
@@ -733,12 +736,12 @@ useEffect(() => {
 
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div className="rounded bg-white p-2">
-                <p className="text-gray-500">Total</p>
+                <p className="text-gray-500">Current Month Total</p>
                 <p className="text-lg font-bold">{item.totalMeetings}</p>
               </div>
 
               <div className="rounded bg-white p-2">
-                <p className="text-gray-500">Converted</p>
+                <p className="text-gray-500">Converted to Project</p>
                 <p className="text-lg font-bold text-green-600">
                   {item.convertedMeetings}
                 </p>
@@ -771,6 +774,27 @@ useEffect(() => {
   <p className="text-gray-500">Self Site Visits</p>
   <p className="text-lg font-bold text-purple-600">
     {item.selfSiteVisitsToday || 0}
+  </p>
+</div>
+
+<div className="rounded bg-white p-2">
+  <p className="text-gray-500">Company Created Today</p>
+  <p className="text-lg font-bold text-indigo-600">
+    {item.companyMeetingsCreatedToday || 0}
+  </p>
+</div>
+
+<div className="rounded bg-white p-2">
+  <p className="text-gray-500">Self Created Today</p>
+  <p className="text-lg font-bold text-purple-600">
+    {item.selfMeetingsCreatedToday || 0}
+  </p>
+</div>
+
+<div className="rounded bg-white p-2">
+  <p className="text-gray-500">SolarMiter Created Today</p>
+  <p className="text-lg font-bold text-orange-600">
+    {item.solarMiterMeetingsCreatedToday || 0}
   </p>
 </div>
 

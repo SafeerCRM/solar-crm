@@ -12,6 +12,7 @@ const navItems = [
       'OWNER',
       'TELECALLING_MANAGER',
       'LEAD_MANAGER',
+      'MARKETING_HEAD',
       'MEETING_MANAGER',
       'PROJECT_MANAGER',
       'TELECALLER',
@@ -47,6 +48,7 @@ const navItems = [
       'OWNER',
       'TELECALLING_MANAGER',
       'LEAD_MANAGER',
+      'MARKETING_HEAD',
       'MEETING_MANAGER',
       'MEETING_ASSISTANT',
       'TELECALLER',
@@ -62,6 +64,7 @@ const navItems = [
   roles: [
     'OWNER',
     'LEAD_MANAGER',
+    'MARKETING_HEAD',
     'MEETING_MANAGER',
     'PROJECT_MANAGER',
     'PROJECT_EXECUTIVE',
@@ -69,6 +72,19 @@ const navItems = [
     'LEAD_EXECUTIVE',
     'TELECALLING_ASSISTANT',
     'MEETING_ASSISTANT',
+  ],
+},
+
+{
+  name: 'Project',
+  href: '/project',
+  roles: [
+    'OWNER',
+    'MARKETING_HEAD',
+    'MEETING_MANAGER',
+    'MEETING_ASSISTANT',
+    'PROJECT_MANAGER',
+    'PROJECT_EXECUTIVE',
   ],
 },
 
