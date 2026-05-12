@@ -21,8 +21,8 @@ export default function CreateProjectPage() {
     aadhaarLinkedMobile: '',
 
     panelBrand: '',
-    dcrPanelCount: 0,
-    nonDcrPanelCount: 0,
+    dcrPanelCount: '',
+    nonDcrPanelCount: '',
 
     converterBrand: '',
     converterCapacity: '',
@@ -34,20 +34,20 @@ export default function CreateProjectPage() {
 
     projectType: 'CASH',
 
-    marginMoney: 0,
-    loanAmount: 0,
+    marginMoney: '',
+    loanAmount: '',
 
     subsidyType: 'NATIONAL',
 
-    projectCost: 0,
+    projectCost: '',
 
     discomName: '',
 
     discomExpenditureType: 'EXCLUDING',
-    discomExpenditureAmount: 0,
+    discomExpenditureAmount: '',
 
-    expectedLagat: 0,
-    expectedProfit: 0,
+    expectedLagat: '',
+    expectedProfit: '',
 
     remarks: '',
   });
