@@ -1033,34 +1033,49 @@ const handleSelectAllFilteredStorage = async () => {
     }, 3000);
   };
 
-  const callNextLead = async () => {
-    if (isPaused) return;
+  const callNextLead = async (forceResume = false) => {
+  if (isPaused && !forceResume) return;
 
-    setAutoCallIndex((prevIndex) => {
-      let nextIndex = prevIndex + 1;
+  const processedSet = new Set(processedAutoCallIds);
 
-      while (
-        nextIndex < autoCallQueue.length &&
-        processedAutoCallIds.includes(autoCallQueue[nextIndex]?.id)
-      ) {
-        nextIndex += 1;
-      }
+  let nextIndex = autoCallIndex + 1;
 
-      if (nextIndex >= autoCallQueue.length) {
-        stopAutoCall();
-        setMessage('Lead auto call completed.');
-        return prevIndex;
-      }
+  while (
+    nextIndex < autoCallQueue.length &&
+    processedSet.has(autoCallQueue[nextIndex]?.id)
+  ) {
+    nextIndex += 1;
+  }
 
-      const nextLead = autoCallQueue[nextIndex];
+  if (nextIndex >= autoCallQueue.length) {
+    clearAutoTimers();
+    setIsAutoCalling(false);
+    setIsPaused(false);
+    setAutoCallQueue([]);
+    setAutoCallIndex(0);
+    setCountdown(0);
+    setProcessedAutoCallIds([]);
+    setMessage('Lead auto call completed.');
+    return;
+  }
 
-      if (nextLead) {
-        startCountdownThenCallLead(nextLead);
-      }
+  const nextLead = autoCallQueue[nextIndex];
 
-      return nextIndex;
-    });
-  };
+  if (!nextLead?.id) {
+    setMessage('Invalid lead found in auto call queue. Moving next.');
+    setAutoCallIndex(nextIndex);
+    return;
+  }
+
+  setAutoCallIndex(nextIndex);
+
+  setProcessedAutoCallIds((prev) => {
+    if (prev.includes(nextLead.id)) return prev;
+    return [...prev, nextLead.id];
+  });
+
+  startCountdownThenCallLead(nextLead);
+};
 
   const startLeadAutoCall = async () => {
   if (isAutoCalling) {
@@ -1108,10 +1123,21 @@ const handleSelectAllFilteredStorage = async () => {
   };
 
   const resumeLeadAutoCall = async () => {
-    setIsPaused(false);
-    setMessage('Lead auto call resumed.');
-    await callNextLead();
-  };
+  if (!isAutoCalling) {
+    setMessage('Lead auto call is not running.');
+    return;
+  }
+
+  if (!autoCallQueue.length) {
+    setMessage('No lead auto call queue available.');
+    return;
+  }
+
+  setIsPaused(false);
+  setMessage('Lead auto call resumed.');
+
+  await callNextLead(true);
+};
 
   const skipCurrentLead = async () => {
     clearAutoTimers();
