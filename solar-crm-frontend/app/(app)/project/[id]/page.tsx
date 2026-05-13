@@ -128,6 +128,75 @@ const [documentRemarks, setDocumentRemarks] =
   }
 };
 
+const uploadDocument = async () => {
+  if (!selectedFile || !projectId) {
+    alert('Please select a file');
+    return;
+  }
+
+  try {
+    setUploading(true);
+
+    const token = localStorage.getItem('token');
+
+    const formData = new FormData();
+
+    formData.append('file', selectedFile);
+
+    formData.append(
+      'projectId',
+      String(projectId),
+    );
+
+    formData.append(
+      'documentType',
+      documentType,
+    );
+
+    formData.append(
+      'department',
+      department,
+    );
+
+    formData.append(
+      'remarks',
+      documentRemarks,
+    );
+
+    const res = await axios.post(
+      `${API_BASE_URL}/project/documents/upload`,
+      formData,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type':
+            'multipart/form-data',
+        },
+      },
+    );
+
+    alert(
+      res?.data?.message ||
+        'Document uploaded successfully',
+    );
+
+    setSelectedFile(null);
+
+    setDocumentRemarks('');
+
+    fetchDocuments();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to upload document',
+    );
+  } finally {
+    setUploading(false);
+  }
+};
+
   useEffect(() => {
   if (projectId) {
     fetchProject();
@@ -240,6 +309,119 @@ const [documentRemarks, setDocumentRemarks] =
         <h2 className="mb-2 text-lg font-bold text-gray-800">Remarks</h2>
         <p className="text-sm text-gray-700">{project.remarks || 'No remarks'}</p>
       </div>
+
+<div className="mt-6 rounded-2xl bg-white p-5 shadow">
+  <h2 className="text-xl font-bold text-gray-800">
+    Project Documents
+  </h2>
+
+  <div className="mt-4 grid gap-3 md:grid-cols-2">
+    <select
+      value={department}
+      onChange={(e) =>
+        setDepartment(e.target.value)
+      }
+      className="rounded-xl border p-3"
+    >
+      <option value="PROJECT_CREATION">
+        Project Creation
+      </option>
+
+      <option value="LOAN_DEPARTMENT">
+        Loan Department
+      </option>
+
+      <option value="PROJECT_MANAGEMENT">
+        Project Management
+      </option>
+
+      <option value="SUBSIDY_DEPARTMENT">
+        Subsidy Department
+      </option>
+
+      <option value="ELECTRICITY_DEPARTMENT">
+        Electricity Department
+      </option>
+    </select>
+
+    <input
+      type="text"
+      placeholder="Document Type"
+      value={documentType}
+      onChange={(e) =>
+        setDocumentType(e.target.value)
+      }
+      className="rounded-xl border p-3"
+    />
+  </div>
+
+  <textarea
+    placeholder="Remarks"
+    value={documentRemarks}
+    onChange={(e) =>
+      setDocumentRemarks(e.target.value)
+    }
+    className="mt-3 w-full rounded-xl border p-3"
+  />
+
+  <input
+    type="file"
+    accept=".pdf,.jpg,.jpeg,.png,.webp"
+    onChange={(e) =>
+      setSelectedFile(
+        e.target.files?.[0] || null,
+      )
+    }
+    className="mt-3 w-full rounded-xl border p-3"
+  />
+
+  <button
+    onClick={uploadDocument}
+    disabled={uploading}
+    className="mt-4 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+  >
+    {uploading
+      ? 'Uploading...'
+      : 'Upload Document'}
+  </button>
+
+  <div className="mt-6 space-y-3">
+    {documents.map((doc) => (
+      <div
+        key={doc.id}
+        className="rounded-xl border p-4"
+      >
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="font-semibold text-gray-800">
+              {doc.documentType || 'Document'}
+            </p>
+
+            <p className="text-sm text-gray-500">
+              {doc.department}
+            </p>
+
+            {doc.remarks && (
+              <p className="mt-1 text-sm text-gray-600">
+                {doc.remarks}
+              </p>
+            )}
+          </div>
+
+          <a
+            href={doc.fileUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-xl bg-green-600 px-4 py-2 text-center text-sm font-semibold text-white hover:bg-green-700"
+          >
+            View / Download
+          </a>
+        </div>
+      </div>
+    ))}
+  </div>
+</div>
+
     </div>
   );
 }
