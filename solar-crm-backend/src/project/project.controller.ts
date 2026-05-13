@@ -59,6 +59,32 @@ deleteProjectDocument(
   );
 }
 
+@Post('material-master')
+createMaterialMaster(@Body() body: any) {
+  return this.projectService.createMaterialMaster(body);
+}
+
+@Get('material-master')
+getMaterialMasters() {
+  return this.projectService.getMaterialMasters();
+}
+
+@Patch('material-master/:id')
+updateMaterialMaster(
+  @Param('id') id: string,
+  @Body() body: any,
+) {
+  return this.projectService.updateMaterialMaster(
+    Number(id),
+    body,
+  );
+}
+
+@Patch('material-master/:id/delete')
+deleteMaterialMaster(@Param('id') id: string) {
+  return this.projectService.deleteMaterialMaster(Number(id));
+}
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.projectService.findOne(Number(id));

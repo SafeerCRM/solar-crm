@@ -21,6 +21,7 @@ import {
 import { CalculatorService } from '../calculator/calculator.service';
 import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
+import { ProjectMaterialMaster } from './project-material-master.entity';
 
 @Injectable()
 export class ProjectService {
@@ -35,6 +36,9 @@ export class ProjectService {
     private readonly projectCommentRepository: Repository<ProjectComment>,
 
     private readonly calculatorService: CalculatorService,
+
+    @InjectRepository(ProjectMaterialMaster)
+private readonly projectMaterialMasterRepository: Repository<ProjectMaterialMaster>,
   ) {}
 
   async create(data: Partial<Project>) {
@@ -442,6 +446,73 @@ project.marketingHeadApprovedBy =
 
     return this.projectRepository.save(project);
   }
+
+  async createMaterialMaster(data: Partial<ProjectMaterialMaster>) {
+  if (!data.name || !String(data.name).trim()) {
+    throw new BadRequestException('Material name is required');
+  }
+
+  const item = this.projectMaterialMasterRepository.create({
+    name: String(data.name).trim(),
+    category: data.category || '',
+    unit: data.unit || '',
+    brand: data.brand || '',
+    rate: Number(data.rate || 0),
+    gstPercent: Number(data.gstPercent || 0),
+    remarks: data.remarks || '',
+    isActive: data.isActive !== false,
+  });
+
+  return this.projectMaterialMasterRepository.save(item);
+}
+
+async getMaterialMasters() {
+  return this.projectMaterialMasterRepository.find({
+    order: {
+      createdAt: 'DESC',
+    },
+  });
+}
+
+async updateMaterialMaster(id: number, data: Partial<ProjectMaterialMaster>) {
+  const item = await this.projectMaterialMasterRepository.findOne({
+    where: { id },
+  });
+
+  if (!item) {
+    throw new NotFoundException('Material item not found');
+  }
+
+  Object.assign(item, {
+    ...data,
+    rate:
+      data.rate !== undefined
+        ? Number(data.rate || 0)
+        : item.rate,
+    gstPercent:
+      data.gstPercent !== undefined
+        ? Number(data.gstPercent || 0)
+        : item.gstPercent,
+  });
+
+  return this.projectMaterialMasterRepository.save(item);
+}
+
+async deleteMaterialMaster(id: number) {
+  const item = await this.projectMaterialMasterRepository.findOne({
+    where: { id },
+  });
+
+  if (!item) {
+    throw new NotFoundException('Material item not found');
+  }
+
+  await this.projectMaterialMasterRepository.delete(id);
+
+  return {
+    message: 'Material item deleted successfully',
+  };
+}
 
   async ownerApproval(
     id: number,

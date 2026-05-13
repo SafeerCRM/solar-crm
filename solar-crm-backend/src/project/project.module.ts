@@ -6,11 +6,13 @@ import { ProjectComment } from './project-comment.entity';
 import { ProjectService } from './project.service';
 import { ProjectController } from './project.controller';
 import { CalculatorModule } from '../calculator/calculator.module';
+import { ProjectMaterialMaster } from './project-material-master.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Project, ProjectDocument, ProjectComment]),
     CalculatorModule,
+    ProjectMaterialMaster,
   ],
   controllers: [ProjectController],
   providers: [ProjectService],
