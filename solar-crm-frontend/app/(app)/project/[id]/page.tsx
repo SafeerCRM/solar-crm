@@ -55,6 +55,41 @@ type ProjectDocument = {
   createdAt?: string;
 };
 
+type MaterialMaster = {
+  id: number;
+  name: string;
+  category?: string;
+  unit?: string;
+  brand?: string;
+  rate?: number;
+  gstPercent?: number;
+};
+
+type MaterialRequestRow = {
+  materialId: string;
+  materialName: string;
+  category: string;
+  unit: string;
+  brand: string;
+  rate: string;
+  quantity: string;
+  gstPercent: string;
+  totalAmount: number;
+  remarks: string;
+};
+
+type MaterialRequest = {
+  id: number;
+  title?: string;
+  remarks?: string;
+  requestedByName?: string;
+  requestedByRole?: string;
+  totalAmount?: number;
+  status?: string;
+  createdAt?: string;
+  items?: MaterialRequestRow[];
+};
+
 function money(value?: number) {
   return `₹${Number(value || 0).toLocaleString('en-IN')}`;
 }
@@ -92,6 +127,13 @@ const [documentRemarks, setDocumentRemarks] =
 
   const [activeTab, setActiveTab] =
   useState('PROJECT_CREATION');
+
+  const [materials, setMaterials] = useState<MaterialMaster[]>([]);
+const [materialRequests, setMaterialRequests] = useState<MaterialRequest[]>([]);
+const [materialRequestTitle, setMaterialRequestTitle] = useState('');
+const [materialRequestRemarks, setMaterialRequestRemarks] = useState('');
+const [materialRows, setMaterialRows] = useState<MaterialRequestRow[]>([]);
+const [submittingMaterialRequest, setSubmittingMaterialRequest] = useState(false);
 
   const fetchProject = async () => {
     try {
@@ -244,11 +286,139 @@ const deleteDocument = async (
   }
 };
 
+const fetchMaterials = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(`${API_BASE_URL}/project/material-master`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+
+    setMaterials(res.data || []);
+  } catch (error) {
+    console.error('Failed to load materials:', error);
+  }
+};
+
+const fetchMaterialRequests = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/${projectId}/material-requests`,
+      {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      },
+    );
+
+    setMaterialRequests(res.data || []);
+  } catch (error) {
+    console.error('Failed to load material requests:', error);
+  }
+};
+
+const addMaterialRow = () => {
+  setMaterialRows([
+    ...materialRows,
+    {
+      materialId: '',
+      materialName: '',
+      category: '',
+      unit: '',
+      brand: '',
+      rate: '',
+      quantity: '',
+      gstPercent: '',
+      totalAmount: 0,
+      remarks: '',
+    },
+  ]);
+};
+
+const updateMaterialRow = (
+  index: number,
+  field: keyof MaterialRequestRow,
+  value: string,
+) => {
+  const updated = [...materialRows];
+  const row = { ...updated[index], [field]: value };
+
+  if (field === 'materialId') {
+    const selected = materials.find((item) => String(item.id) === value);
+
+    if (selected) {
+      row.materialId = String(selected.id);
+      row.materialName = selected.name || '';
+      row.category = selected.category || '';
+      row.unit = selected.unit || '';
+      row.brand = selected.brand || '';
+      row.rate = String(selected.rate || 0);
+      row.gstPercent = String(selected.gstPercent || 0);
+    }
+  }
+
+  const rate = Number(row.rate || 0);
+  const quantity = Number(row.quantity || 0);
+  const gstPercent = Number(row.gstPercent || 0);
+  const baseAmount = rate * quantity;
+  const gstAmount = (baseAmount * gstPercent) / 100;
+
+  row.totalAmount = baseAmount + gstAmount;
+
+  updated[index] = row;
+  setMaterialRows(updated);
+};
+
+const removeMaterialRow = (index: number) => {
+  setMaterialRows(materialRows.filter((_, rowIndex) => rowIndex !== index));
+};
+
+const submitMaterialRequest = async () => {
+  if (!materialRows.length) {
+    alert('Please add at least one material');
+    return;
+  }
+
+  try {
+    setSubmittingMaterialRequest(true);
+
+    const token = localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/material-request`,
+      {
+        projectId,
+        title: materialRequestTitle,
+        remarks: materialRequestRemarks,
+        items: materialRows,
+      },
+      {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      },
+    );
+
+    alert('Material request submitted successfully');
+
+    setMaterialRequestTitle('');
+    setMaterialRequestRemarks('');
+    setMaterialRows([]);
+
+    fetchMaterialRequests();
+  } catch (error: any) {
+    console.error(error);
+    alert(error?.response?.data?.message || 'Failed to submit material request');
+  } finally {
+    setSubmittingMaterialRequest(false);
+  }
+};
+
   useEffect(() => {
   if (projectId) {
-    fetchProject();
-    fetchDocuments();
-  }
+  fetchProject();
+  fetchDocuments();
+  fetchMaterials();
+  fetchMaterialRequests();
+}
 }, [projectId]);
 
   if (loading) {
@@ -395,11 +565,333 @@ const deleteDocument = async (
 )}
 
 {activeTab === 'PROJECT_MANAGEMENT' && (
-  <div className="rounded-2xl bg-white p-6 shadow">
-    <h2 className="text-xl font-bold text-gray-800">Project Management</h2>
-    <p className="mt-3 text-gray-600">
-      Installation and execution workflow will appear here.
-    </p>
+  <div className="space-y-5">
+    <div className="rounded-2xl bg-white p-6 shadow">
+      <h2 className="text-2xl font-bold text-gray-800">
+        Material Request
+      </h2>
+
+      <div className="mt-5 grid gap-3 md:grid-cols-2">
+        <input
+          placeholder="Request Title"
+          value={materialRequestTitle}
+          onChange={(e) =>
+            setMaterialRequestTitle(
+              e.target.value,
+            )
+          }
+          className="rounded-xl border p-3"
+        />
+
+        <input
+          placeholder="Remarks"
+          value={materialRequestRemarks}
+          onChange={(e) =>
+            setMaterialRequestRemarks(
+              e.target.value,
+            )
+          }
+          className="rounded-xl border p-3"
+        />
+      </div>
+
+      <div className="mt-5 space-y-4">
+        {materialRows.map(
+          (row, index) => (
+            <div
+              key={index}
+              className="rounded-2xl border p-4"
+            >
+              <div className="grid gap-3 md:grid-cols-3">
+                <select
+                  value={row.materialId}
+                  onChange={(e) =>
+                    updateMaterialRow(
+                      index,
+                      'materialId',
+                      e.target.value,
+                    )
+                  }
+                  className="rounded-xl border p-3"
+                >
+                  <option value="">
+                    Select Material
+                  </option>
+
+                  {materials.map(
+                    (item) => (
+                      <option
+                        key={item.id}
+                        value={item.id}
+                      >
+                        {item.name}
+                      </option>
+                    ),
+                  )}
+                </select>
+
+                <input
+                  type="number"
+                  placeholder="Quantity"
+                  value={row.quantity}
+                  onChange={(e) =>
+                    updateMaterialRow(
+                      index,
+                      'quantity',
+                      e.target.value,
+                    )
+                  }
+                  className="rounded-xl border p-3"
+                />
+
+                <input
+                  type="number"
+                  placeholder="Rate"
+                  value={row.rate}
+                  onChange={(e) =>
+                    updateMaterialRow(
+                      index,
+                      'rate',
+                      e.target.value,
+                    )
+                  }
+                  className="rounded-xl border p-3"
+                />
+
+                <input
+                  type="number"
+                  placeholder="GST %"
+                  value={row.gstPercent}
+                  onChange={(e) =>
+                    updateMaterialRow(
+                      index,
+                      'gstPercent',
+                      e.target.value,
+                    )
+                  }
+                  className="rounded-xl border p-3"
+                />
+
+                <input
+                  placeholder="Remarks"
+                  value={row.remarks}
+                  onChange={(e) =>
+                    updateMaterialRow(
+                      index,
+                      'remarks',
+                      e.target.value,
+                    )
+                  }
+                  className="rounded-xl border p-3"
+                />
+
+                <div className="flex items-center justify-between rounded-xl bg-gray-100 px-4 py-3">
+                  <span className="font-semibold text-gray-700">
+                    ₹
+                    {Number(
+                      row.totalAmount || 0,
+                    ).toLocaleString(
+                      'en-IN',
+                    )}
+                  </span>
+
+                  <button
+                    onClick={() =>
+                      removeMaterialRow(
+                        index,
+                      )
+                    }
+                    className="rounded-lg bg-red-600 px-3 py-1 text-sm font-semibold text-white hover:bg-red-700"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            </div>
+          ),
+        )}
+      </div>
+
+      <div className="mt-5 flex flex-wrap gap-3">
+        <button
+          onClick={addMaterialRow}
+          className="rounded-xl bg-gray-800 px-5 py-3 font-semibold text-white hover:bg-black"
+        >
+          + Add Material
+        </button>
+
+        <button
+          onClick={
+            submitMaterialRequest
+          }
+          disabled={
+            submittingMaterialRequest
+          }
+          className="rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+        >
+          {submittingMaterialRequest
+            ? 'Submitting...'
+            : 'Submit Request'}
+        </button>
+      </div>
+    </div>
+
+    <div className="rounded-2xl bg-white p-6 shadow">
+      <h2 className="text-2xl font-bold text-gray-800">
+        Material Request History
+      </h2>
+
+      <div className="mt-5 space-y-4">
+        {materialRequests.length ===
+        0 ? (
+          <p className="text-sm text-gray-500">
+            No material requests found
+          </p>
+        ) : (
+          materialRequests.map(
+            (request) => (
+              <div
+                key={request.id}
+                className="rounded-2xl border p-5"
+              >
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-800">
+                      {request.title ||
+                        'Material Request'}
+                    </h3>
+
+                    <p className="mt-1 text-sm text-gray-500">
+                      {request.requestedByName ||
+                        '-'}{' '}
+                      |{' '}
+                      {request.requestedByRole ||
+                        '-'}
+                    </p>
+
+                    <p className="mt-1 text-sm text-gray-500">
+                      {request.createdAt
+                        ? new Date(
+                            request.createdAt,
+                          ).toLocaleString()
+                        : '-'}
+                    </p>
+
+                    {request.remarks && (
+                      <p className="mt-2 text-sm text-gray-700">
+                        {
+                          request.remarks
+                        }
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="text-right">
+                    <p className="text-sm font-semibold text-blue-700">
+                      {
+                        request.status
+                      }
+                    </p>
+
+                    <p className="mt-2 text-lg font-bold text-green-700">
+                      ₹
+                      {Number(
+                        request.totalAmount ||
+                          0,
+                      ).toLocaleString(
+                        'en-IN',
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-5 overflow-x-auto">
+                  <table className="min-w-full border text-sm">
+                    <thead className="bg-gray-100">
+                      <tr>
+                        <th className="border px-3 py-2 text-left">
+                          Material
+                        </th>
+
+                        <th className="border px-3 py-2 text-left">
+                          Qty
+                        </th>
+
+                        <th className="border px-3 py-2 text-left">
+                          Rate
+                        </th>
+
+                        <th className="border px-3 py-2 text-left">
+                          GST
+                        </th>
+
+                        <th className="border px-3 py-2 text-left">
+                          Total
+                        </th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {request.items?.map(
+                        (
+                          item,
+                          itemIndex,
+                        ) => (
+                          <tr
+                            key={
+                              itemIndex
+                            }
+                          >
+                            <td className="border px-3 py-2">
+                              {
+                                item.materialName
+                              }
+                            </td>
+
+                            <td className="border px-3 py-2">
+                              {
+                                item.quantity
+                              }
+                            </td>
+
+                            <td className="border px-3 py-2">
+                              ₹
+                              {Number(
+                                item.rate ||
+                                  0,
+                              ).toLocaleString(
+                                'en-IN',
+                              )}
+                            </td>
+
+                            <td className="border px-3 py-2">
+                              {
+                                item.gstPercent
+                              }
+                              %
+                            </td>
+
+                            <td className="border px-3 py-2 font-semibold text-green-700">
+                              ₹
+                              {Number(
+                                item.totalAmount ||
+                                  0,
+                              ).toLocaleString(
+                                'en-IN',
+                              )}
+                            </td>
+                          </tr>
+                        ),
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ),
+          )
+        )}
+      </div>
+    </div>
   </div>
 )}
 
