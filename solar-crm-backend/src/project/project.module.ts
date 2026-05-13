@@ -10,9 +10,8 @@ import { ProjectMaterialMaster } from './project-material-master.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Project, ProjectDocument, ProjectComment]),
+    TypeOrmModule.forFeature([Project, ProjectDocument, ProjectComment, ProjectMaterialMaster]),
     CalculatorModule,
-    ProjectMaterialMaster,
   ],
   controllers: [ProjectController],
   providers: [ProjectService],

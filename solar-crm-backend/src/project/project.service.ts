@@ -35,10 +35,11 @@ export class ProjectService {
     @InjectRepository(ProjectComment)
     private readonly projectCommentRepository: Repository<ProjectComment>,
 
-    private readonly calculatorService: CalculatorService,
-
     @InjectRepository(ProjectMaterialMaster)
 private readonly projectMaterialMasterRepository: Repository<ProjectMaterialMaster>,
+
+    private readonly calculatorService: CalculatorService,
+
   ) {}
 
   async create(data: Partial<Project>) {
