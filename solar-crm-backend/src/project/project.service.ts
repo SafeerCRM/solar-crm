@@ -300,6 +300,88 @@ async getProjectDocuments(projectId: number) {
     return this.projectDocumentRepository.save(document);
   }
 
+  async deleteProjectDocument(
+  id: number,
+  user: any,
+) {
+  const document =
+    await this.projectDocumentRepository.findOne({
+      where: { id },
+    });
+
+  if (!document) {
+    throw new NotFoundException(
+      'Project document not found',
+    );
+  }
+
+  const userRoles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  const isOwner =
+    userRoles.includes('OWNER');
+
+  const isUploader =
+    Number(document.uploadedBy) ===
+    Number(user?.id);
+
+  if (!isOwner && !isUploader) {
+    throw new BadRequestException(
+      'You are not allowed to delete this document',
+    );
+  }
+
+  try {
+    const supabaseUrl =
+      process.env.SUPABASE_URL;
+
+    const serviceKey =
+      process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    const bucket =
+      process.env
+        .SUPABASE_PROJECT_DOCUMENTS_BUCKET ||
+      'project-documents';
+
+    if (supabaseUrl && serviceKey) {
+      const supabase = createClient(
+        supabaseUrl,
+        serviceKey,
+      );
+
+      const fileUrl =
+        document.fileUrl || '';
+
+      const splitText =
+        `/storage/v1/object/public/${bucket}/`;
+
+      const filePath =
+        fileUrl.includes(splitText)
+          ? fileUrl.split(splitText)[1]
+          : '';
+
+      if (filePath) {
+        await supabase.storage
+          .from(bucket)
+          .remove([filePath]);
+      }
+    }
+  } catch (error) {
+    console.error(
+      'Failed to delete file from storage:',
+      error,
+    );
+  }
+
+  await this.projectDocumentRepository.delete(id);
+
+  return {
+    message:
+      'Project document deleted successfully',
+  };
+}
+
   async addComment(data: Partial<ProjectComment>) {
     const project = await this.projectRepository.findOne({
       where: {

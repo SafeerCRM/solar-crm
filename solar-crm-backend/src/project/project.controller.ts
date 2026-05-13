@@ -48,6 +48,17 @@ getProjectDocuments(@Param('id') id: string) {
   );
 }
 
+@Patch('documents/:id/delete')
+deleteProjectDocument(
+  @Param('id') id: string,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.deleteProjectDocument(
+    Number(id),
+    user,
+  );
+}
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.projectService.findOne(Number(id));
