@@ -79,7 +79,8 @@ export default function ProjectDetailPage() {
 
 const [uploading, setUploading] = useState(false);
 
-const [selectedFile, setSelectedFile] = useState<File | null>(null);
+const [selectedFiles, setSelectedFiles] =
+  useState<File[]>([]);
 
 const [documentType, setDocumentType] = useState('OTHER');
 
@@ -129,7 +130,7 @@ const [documentRemarks, setDocumentRemarks] =
 };
 
 const uploadDocument = async () => {
-  if (!selectedFile || !projectId) {
+  if (!selectedFiles.length || !projectId) {
     alert('Please select a file');
     return;
   }
@@ -141,7 +142,9 @@ const uploadDocument = async () => {
 
     const formData = new FormData();
 
-    formData.append('file', selectedFile);
+    selectedFiles.forEach((file) => {
+  formData.append('files', file);
+});
 
     formData.append(
       'projectId',
@@ -180,7 +183,7 @@ const uploadDocument = async () => {
         'Document uploaded successfully',
     );
 
-    setSelectedFile(null);
+    setSelectedFiles([]);
 
     setDocumentRemarks('');
 
@@ -365,15 +368,16 @@ const uploadDocument = async () => {
   />
 
   <input
-    type="file"
-    accept=".pdf,.jpg,.jpeg,.png,.webp"
-    onChange={(e) =>
-      setSelectedFile(
-        e.target.files?.[0] || null,
-      )
-    }
-    className="mt-3 w-full rounded-xl border p-3"
-  />
+  type="file"
+  multiple
+  accept=".pdf,.jpg,.jpeg,.png,.webp"
+  onChange={(e) =>
+    setSelectedFiles(
+      Array.from(e.target.files || []),
+    )
+  }
+  className="mt-3 w-full rounded-xl border p-3"
+/>
 
   <button
     onClick={uploadDocument}
