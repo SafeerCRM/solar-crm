@@ -90,6 +90,9 @@ const [department, setDepartment] =
 const [documentRemarks, setDocumentRemarks] =
   useState('');
 
+  const [activeTab, setActiveTab] =
+  useState('PROJECT_CREATION');
+
   const fetchProject = async () => {
     try {
       setLoading(true);
@@ -280,6 +283,32 @@ const deleteDocument = async (
         </div>
       </div>
 
+      <div className="flex flex-wrap gap-2">
+  {[
+    { key: 'PROJECT_CREATION', label: 'Project Creation' },
+    { key: 'LOAN_DEPARTMENT', label: 'Loan Department' },
+    { key: 'PROJECT_MANAGEMENT', label: 'Project Management' },
+    { key: 'SUBSIDY_DEPARTMENT', label: 'Subsidy Department' },
+    { key: 'ELECTRICITY_DEPARTMENT', label: 'Electricity Department' },
+    { key: 'PAYMENT_COLLECTION', label: 'Payment Collection' },
+    { key: 'DOCUMENTS', label: 'Documents' },
+  ].map((tab) => (
+    <button
+      key={tab.key}
+      onClick={() => setActiveTab(tab.key)}
+      className={`rounded-xl px-4 py-2 text-sm font-semibold ${
+        activeTab === tab.key
+          ? 'bg-blue-600 text-white'
+          : 'border bg-white text-gray-700'
+      }`}
+    >
+      {tab.label}
+    </button>
+  ))}
+</div>
+
+    {activeTab === 'PROJECT_CREATION' && (
+  <>
       <div className="rounded-2xl bg-white p-5 shadow">
         <h2 className="mb-4 text-lg font-bold text-gray-800">Customer Details</h2>
         <div className="grid gap-3 md:grid-cols-3">
@@ -353,7 +382,55 @@ const deleteDocument = async (
         <h2 className="mb-2 text-lg font-bold text-gray-800">Remarks</h2>
         <p className="text-sm text-gray-700">{project.remarks || 'No remarks'}</p>
       </div>
+        </>
+)}
 
+      {activeTab === 'LOAN_DEPARTMENT' && (
+  <div className="rounded-2xl bg-white p-6 shadow">
+    <h2 className="text-xl font-bold text-gray-800">Loan Department</h2>
+    <p className="mt-3 text-gray-600">
+      Loan workflow section will be added here.
+    </p>
+  </div>
+)}
+
+{activeTab === 'PROJECT_MANAGEMENT' && (
+  <div className="rounded-2xl bg-white p-6 shadow">
+    <h2 className="text-xl font-bold text-gray-800">Project Management</h2>
+    <p className="mt-3 text-gray-600">
+      Installation and execution workflow will appear here.
+    </p>
+  </div>
+)}
+
+{activeTab === 'SUBSIDY_DEPARTMENT' && (
+  <div className="rounded-2xl bg-white p-6 shadow">
+    <h2 className="text-xl font-bold text-gray-800">Subsidy Department</h2>
+    <p className="mt-3 text-gray-600">
+      Subsidy process workflow will appear here.
+    </p>
+  </div>
+)}
+
+{activeTab === 'ELECTRICITY_DEPARTMENT' && (
+  <div className="rounded-2xl bg-white p-6 shadow">
+    <h2 className="text-xl font-bold text-gray-800">Electricity Department</h2>
+    <p className="mt-3 text-gray-600">
+      DISCOM and net meter workflow will appear here.
+    </p>
+  </div>
+)}
+
+{activeTab === 'PAYMENT_COLLECTION' && (
+  <div className="rounded-2xl bg-white p-6 shadow">
+    <h2 className="text-xl font-bold text-gray-800">Payment Collection</h2>
+    <p className="mt-3 text-gray-600">
+      Payment tracking workflow will appear here.
+    </p>
+  </div>
+)}
+
+{activeTab === 'DOCUMENTS' && (
 <div className="mt-6 rounded-2xl bg-white p-5 shadow">
   <h2 className="text-xl font-bold text-gray-800">
     Project Documents
@@ -475,6 +552,7 @@ const deleteDocument = async (
     ))}
   </div>
 </div>
+)}
 
     </div>
   );
