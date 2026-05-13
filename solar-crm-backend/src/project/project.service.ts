@@ -22,6 +22,8 @@ import { CalculatorService } from '../calculator/calculator.service';
 import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
 import { ProjectMaterialMaster } from './project-material-master.entity';
+import { ProjectMaterialRequest } from './project-material-request.entity';
+import { ProjectMaterialRequestItem } from './project-material-request-item.entity';
 
 @Injectable()
 export class ProjectService {
@@ -37,6 +39,12 @@ export class ProjectService {
 
     @InjectRepository(ProjectMaterialMaster)
 private readonly projectMaterialMasterRepository: Repository<ProjectMaterialMaster>,
+
+@InjectRepository(ProjectMaterialRequest)
+private readonly projectMaterialRequestRepository: Repository<ProjectMaterialRequest>,
+
+@InjectRepository(ProjectMaterialRequestItem)
+private readonly projectMaterialRequestItemRepository: Repository<ProjectMaterialRequestItem>,
 
     private readonly calculatorService: CalculatorService,
 
@@ -513,6 +521,136 @@ async deleteMaterialMaster(id: number) {
   return {
     message: 'Material item deleted successfully',
   };
+}
+
+async createMaterialRequest(
+  body: any,
+  user: any,
+) {
+  const items = Array.isArray(body?.items)
+    ? body.items
+    : [];
+
+  if (!body?.projectId) {
+    throw new BadRequestException(
+      'Project ID is required',
+    );
+  }
+
+  if (items.length === 0) {
+    throw new BadRequestException(
+      'At least one material item is required',
+    );
+  }
+
+  let totalAmount = 0;
+
+  for (const item of items) {
+    totalAmount += Number(
+      item.totalAmount || 0,
+    );
+  }
+
+  const request =
+    this.projectMaterialRequestRepository.create({
+      projectId: Number(body.projectId),
+      title: body.title || '',
+      remarks: body.remarks || '',
+      requestedBy: user?.id || null,
+      requestedByName:
+        user?.name || '',
+      requestedByRole:
+        Array.isArray(user?.roles)
+          ? user.roles.join(', ')
+          : '',
+      totalAmount,
+    });
+
+  const savedRequest =
+    await this.projectMaterialRequestRepository.save(
+      request,
+    );
+
+  const requestItems = items.map(
+    (item: any) =>
+      this.projectMaterialRequestItemRepository.create(
+        {
+          requestId: savedRequest.id,
+          projectId: Number(
+            body.projectId,
+          ),
+          materialId:
+            item.materialId || null,
+          materialName:
+            item.materialName || '',
+          category:
+            item.category || '',
+          unit: item.unit || '',
+          brand: item.brand || '',
+          rate: Number(
+            item.rate || 0,
+          ),
+          quantity: Number(
+            item.quantity || 0,
+          ),
+          gstPercent: Number(
+            item.gstPercent || 0,
+          ),
+          totalAmount: Number(
+            item.totalAmount || 0,
+          ),
+          remarks:
+            item.remarks || '',
+        },
+      ),
+  );
+
+  await this.projectMaterialRequestItemRepository.save(
+    requestItems,
+  );
+
+  return {
+    message:
+      'Material request created successfully',
+    request: savedRequest,
+  };
+}
+
+async getProjectMaterialRequests(
+  projectId: number,
+) {
+  const requests =
+    await this.projectMaterialRequestRepository.find(
+      {
+        where: { projectId },
+        order: {
+          createdAt: 'DESC',
+        },
+      },
+    );
+
+  const finalData: any[] = [];
+
+  for (const request of requests) {
+    const items =
+      await this.projectMaterialRequestItemRepository.find(
+        {
+          where: {
+            requestId: request.id,
+          },
+          order: {
+            createdAt: 'ASC',
+          },
+        },
+      );
+
+    finalData.push({
+      ...request,
+      items,
+    });
+  }
+
+  return finalData;
 }
 
   async ownerApproval(

@@ -85,6 +85,26 @@ deleteMaterialMaster(@Param('id') id: string) {
   return this.projectService.deleteMaterialMaster(Number(id));
 }
 
+@Post('material-request')
+createMaterialRequest(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.createMaterialRequest(
+    body,
+    user,
+  );
+}
+
+@Get(':id/material-requests')
+getProjectMaterialRequests(
+  @Param('id') id: string,
+) {
+  return this.projectService.getProjectMaterialRequests(
+    Number(id),
+  );
+}
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.projectService.findOne(Number(id));

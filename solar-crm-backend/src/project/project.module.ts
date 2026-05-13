@@ -7,10 +7,13 @@ import { ProjectService } from './project.service';
 import { ProjectController } from './project.controller';
 import { CalculatorModule } from '../calculator/calculator.module';
 import { ProjectMaterialMaster } from './project-material-master.entity';
+import { ProjectMaterialRequest } from './project-material-request.entity';
+import { ProjectMaterialRequestItem } from './project-material-request-item.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Project, ProjectDocument, ProjectComment, ProjectMaterialMaster]),
+    TypeOrmModule.forFeature([Project, ProjectDocument, ProjectComment, ProjectMaterialMaster, ProjectMaterialRequest,
+ProjectMaterialRequestItem]),
     CalculatorModule,
   ],
   controllers: [ProjectController],
