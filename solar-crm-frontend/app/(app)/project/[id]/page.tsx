@@ -200,6 +200,47 @@ const uploadDocument = async () => {
   }
 };
 
+const deleteDocument = async (
+  id: number,
+) => {
+  const confirmDelete = window.confirm(
+    'Delete this document?',
+  );
+
+  if (!confirmDelete) {
+    return;
+  }
+
+  try {
+    const token = localStorage.getItem(
+      'token',
+    );
+
+    await axios.patch(
+      `${API_BASE_URL}/project/documents/${id}/delete`,
+      {},
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Document deleted successfully');
+
+    fetchDocuments();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to delete document',
+    );
+  }
+};
+
   useEffect(() => {
   if (projectId) {
     fetchProject();
@@ -395,7 +436,7 @@ const uploadDocument = async () => {
         key={doc.id}
         className="rounded-xl border p-4"
       >
-        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="font-semibold text-gray-800">
               {doc.documentType || 'Document'}
@@ -420,6 +461,15 @@ const uploadDocument = async () => {
           >
             View / Download
           </a>
+
+          <button
+  onClick={() =>
+    deleteDocument(doc.id)
+  }
+  className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+>
+  Delete
+</button>
         </div>
       </div>
     ))}
