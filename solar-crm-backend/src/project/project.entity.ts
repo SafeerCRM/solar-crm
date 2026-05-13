@@ -76,6 +76,9 @@ export class Project {
   city: string;
 
   @Column({ nullable: true })
+branchName: string;
+
+  @Column({ nullable: true })
   electricityKNumber: string;
 
   @Column({ nullable: true })
