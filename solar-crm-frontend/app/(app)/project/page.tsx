@@ -12,6 +12,7 @@ type Project = {
   customerPhone?: string;
   city?: string;
   zone?: string;
+  branchName?: string;
   projectType?: string;
   projectCost?: number;
   netAmount?: number;
@@ -84,7 +85,7 @@ export default function ProjectPage() {
                     #{project.id} - {project.customerName || 'Unnamed Customer'}
                   </h2>
                   <p className="text-sm text-gray-500">
-                    {project.customerPhone || 'No phone'} | {project.city || 'No city'} |{' '}
+                    {project.customerPhone || 'No phone'} | {project.branchName || 'No branch'} | {project.city || 'No city'} |{' '}
                     {project.zone || 'No zone'}
                   </p>
                 </div>

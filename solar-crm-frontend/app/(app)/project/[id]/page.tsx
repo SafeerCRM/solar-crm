@@ -13,6 +13,7 @@ type Project = {
   customerPhone?: string;
   city?: string;
   zone?: string;
+  branchName?: string;
   electricityKNumber?: string;
   customerGmail?: string;
   aadhaarLinkedMobile?: string;
@@ -486,6 +487,7 @@ const submitMaterialRequest = async () => {
           <Field label="Phone" value={project.customerPhone} />
           <Field label="City" value={project.city} />
           <Field label="Zone" value={project.zone} />
+          <Field label="Branch" value={project.branchName} />
           <Field label="Electricity K Number" value={project.electricityKNumber} />
           <Field label="Gmail" value={project.customerGmail} />
           <Field label="Aadhaar Linked Mobile" value={project.aadhaarLinkedMobile} />

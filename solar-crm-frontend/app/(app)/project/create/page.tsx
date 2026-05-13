@@ -19,6 +19,7 @@ export default function CreateProjectPage() {
     electricityKNumber: '',
     customerGmail: '',
     aadhaarLinkedMobile: '',
+    branchName: '',
 
     panelBrand: '',
     dcrPanelCount: '',
@@ -138,6 +139,14 @@ export default function CreateProjectPage() {
             onChange={handleChange}
             className="rounded-xl border p-3"
           />
+
+          <input
+  name="branchName"
+  placeholder="Branch Name"
+  value={form.branchName}
+  onChange={handleChange}
+  className="rounded-xl border p-3"
+/>
 
           <input
             name="electricityKNumber"
