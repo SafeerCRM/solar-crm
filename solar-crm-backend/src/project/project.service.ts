@@ -6,7 +6,7 @@ import {
 
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { MoreThan, Repository } from 'typeorm';
+import { In, MoreThan, Repository } from 'typeorm';
 
 import { Project } from './project.entity';
 import { ProjectDocument } from './project-document.entity';
@@ -761,13 +761,53 @@ async deleteBranch(id: number) {
 }
 
 async getPurchaseOrders() {
-  return this.projectMaterialRequestItemRepository.find({
-    where: {
-      pendingQuantity: MoreThan(0),
-    },
-    order: {
-      createdAt: 'DESC',
-    },
+  const items =
+    await this.projectMaterialRequestItemRepository.find({
+      where: {
+        pendingQuantity: MoreThan(0),
+      },
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+
+  const projectIds = Array.from(
+    new Set(
+      items
+        .map((item) => Number(item.projectId))
+        .filter(Boolean),
+    ),
+  );
+
+  const projects = projectIds.length
+    ? await this.projectRepository.find({
+        where: {
+          id: In(projectIds),
+        },
+      })
+    : [];
+
+  const projectMap = new Map(
+    projects.map((project) => [
+      Number(project.id),
+      project,
+    ]),
+  );
+
+  return items.map((item) => {
+    const project = projectMap.get(
+      Number(item.projectId),
+    );
+
+    return {
+      ...item,
+      projectCustomerName:
+        project?.customerName || '',
+      projectBranchName:
+        project?.branchName || '',
+      projectCity: project?.city || '',
+      projectZone: project?.zone || '',
+    };
   });
 }
 
