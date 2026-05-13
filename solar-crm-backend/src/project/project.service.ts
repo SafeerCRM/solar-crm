@@ -247,6 +247,24 @@ async uploadProjectDocument(file: any, body: any, user: any) {
   };
 }
 
+async uploadProjectDocuments(files: any[], body: any, user: any) {
+  if (!Array.isArray(files) || files.length === 0) {
+    throw new BadRequestException('At least one document file is required');
+  }
+
+  const uploadedDocuments: ProjectDocument[] = [];
+
+  for (const file of files) {
+    const result = await this.uploadProjectDocument(file, body, user);
+    uploadedDocuments.push(result.document);
+  }
+
+  return {
+    message: `${uploadedDocuments.length} document(s) uploaded successfully`,
+    documents: uploadedDocuments,
+  };
+}
+
 async getProjectDocuments(projectId: number) {
   const project = await this.projectRepository.findOne({
     where: { id: projectId },

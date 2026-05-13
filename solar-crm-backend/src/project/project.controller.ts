@@ -5,13 +5,15 @@ import {
   Patch,
   Body,
   Param,
-  UploadedFile,
+  UploadedFiles,
 UseGuards,
 UseInterceptors,
 } from '@nestjs/common';
 
 import { ProjectService } from './project.service';
-import { FileInterceptor } from '@nestjs/platform-express';
+import {
+  FilesInterceptor,
+} from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 
@@ -52,13 +54,19 @@ getProjectDocuments(@Param('id') id: string) {
   }
 
   @Post('documents/upload')
-@UseInterceptors(FileInterceptor('file'))
+@UseInterceptors(
+  FilesInterceptor('files', 20),
+)
 uploadProjectDocument(
-  @UploadedFile() file: any,
+  @UploadedFiles() files: any[],
   @Body() body: any,
   @CurrentUser() user: any,
 ) {
-  return this.projectService.uploadProjectDocument(file, body, user);
+  return this.projectService.uploadProjectDocuments(
+  files,
+  body,
+  user,
+);
 }
 
   @Patch(':id')
