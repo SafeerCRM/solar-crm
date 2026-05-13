@@ -25,6 +25,9 @@ export default function PurchaseOrdersPage() {
   const [items, setItems] = useState<PurchaseItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [buyQty, setBuyQty] = useState<Record<number, string>>({});
+  const [projectFilter, setProjectFilter] = useState('');
+const [materialFilter, setMaterialFilter] = useState('');
+const [statusFilter, setStatusFilter] = useState('');
 
   const fetchPurchaseOrders = async () => {
     try {
@@ -48,6 +51,24 @@ export default function PurchaseOrdersPage() {
   useEffect(() => {
     fetchPurchaseOrders();
   }, []);
+
+  const filteredItems = items.filter((item) => {
+  const matchesProject = projectFilter
+    ? String(item.projectId).includes(projectFilter)
+    : true;
+
+  const matchesMaterial = materialFilter
+    ? String(item.materialName || '')
+        .toLowerCase()
+        .includes(materialFilter.toLowerCase())
+    : true;
+
+  const matchesStatus = statusFilter
+    ? String(item.purchaseStatus || '') === statusFilter
+    : true;
+
+  return matchesProject && matchesMaterial && matchesStatus;
+});
 
   const buyItem = async (item: PurchaseItem, fullBuy = false) => {
     const quantity = fullBuy
@@ -101,15 +122,41 @@ export default function PurchaseOrdersPage() {
       </div>
 
       <div className="rounded-2xl bg-white p-5 shadow">
+        <div className="mb-5 grid gap-3 md:grid-cols-3">
+  <input
+    placeholder="Filter by Project ID"
+    value={projectFilter}
+    onChange={(e) => setProjectFilter(e.target.value)}
+    className="rounded-xl border p-3"
+  />
+
+  <input
+    placeholder="Filter by Material Name"
+    value={materialFilter}
+    onChange={(e) => setMaterialFilter(e.target.value)}
+    className="rounded-xl border p-3"
+  />
+
+  <select
+    value={statusFilter}
+    onChange={(e) => setStatusFilter(e.target.value)}
+    className="rounded-xl border p-3"
+  >
+    <option value="">All Status</option>
+    <option value="PENDING">Pending</option>
+    <option value="PARTIALLY_PURCHASED">Partially Purchased</option>
+    <option value="PURCHASED">Purchased</option>
+  </select>
+</div>
         {loading ? (
           <p>Loading...</p>
-        ) : items.length === 0 ? (
+        ) : filteredItems.length === 0? (
           <p className="text-sm text-gray-500">
             No pending purchase items found.
           </p>
         ) : (
           <div className="space-y-4">
-            {items.map((item) => (
+            {filteredItems.map((item) => (
               <div key={item.id} className="rounded-2xl border p-4">
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                   <div>
