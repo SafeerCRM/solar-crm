@@ -121,6 +121,12 @@ const navItems = [
   href: '/project/material-settings',
   roles: ['OWNER'],
 },
+
+{
+  name: 'Branch Settings',
+  href: '/project/branch-settings',
+  roles: ['OWNER'],
+},
 ];
 
 type CurrentUser = {

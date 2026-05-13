@@ -1,15 +1,22 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useRouter } from 'next/navigation';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
+type Branch = {
+  id: number;
+  name: string;
+};
+
 export default function CreateProjectPage() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(false);
+
+  const [branches, setBranches] = useState<Branch[]>([]);
 
   const [form, setForm] = useState({
     customerName: '',
@@ -61,6 +68,24 @@ export default function CreateProjectPage() {
       [e.target.name]: e.target.value,
     });
   };
+
+  const fetchBranches = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(`${API_BASE_URL}/project/branch`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+
+    setBranches(res.data || []);
+  } catch (error) {
+    console.error('Failed to load branches', error);
+  }
+};
+
+useEffect(() => {
+  fetchBranches();
+}, []);
 
   const handleSubmit = async () => {
     try {
@@ -140,13 +165,20 @@ export default function CreateProjectPage() {
             className="rounded-xl border p-3"
           />
 
-          <input
+          <select
   name="branchName"
-  placeholder="Branch Name"
   value={form.branchName}
   onChange={handleChange}
   className="rounded-xl border p-3"
-/>
+>
+  <option value="">Select Branch</option>
+
+  {branches.map((branch) => (
+    <option key={branch.id} value={branch.name}>
+      {branch.name}
+    </option>
+  ))}
+</select>
 
           <input
             name="electricityKNumber"
