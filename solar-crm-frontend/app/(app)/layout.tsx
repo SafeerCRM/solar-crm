@@ -123,6 +123,12 @@ const navItems = [
 },
 
 {
+  name: 'Purchase Orders',
+  href: '/project/purchase-orders',
+  roles: ['OWNER', 'PROJECT_MANAGER'],
+},
+
+{
   name: 'Branch Settings',
   href: '/project/branch-settings',
   roles: ['OWNER'],
