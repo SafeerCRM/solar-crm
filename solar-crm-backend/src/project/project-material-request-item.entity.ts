@@ -5,6 +5,12 @@ import {
   CreateDateColumn,
 } from 'typeorm';
 
+export enum ProjectMaterialPurchaseStatus {
+  PENDING = 'PENDING',
+  PARTIALLY_PURCHASED = 'PARTIALLY_PURCHASED',
+  PURCHASED = 'PURCHASED',
+}
+
 @Entity()
 export class ProjectMaterialRequestItem {
   @PrimaryGeneratedColumn()
@@ -36,6 +42,28 @@ export class ProjectMaterialRequestItem {
 
   @Column({ type: 'float', default: 0 })
   quantity: number;
+
+  @Column({ type: 'float', default: 0 })
+purchasedQuantity: number;
+
+@Column({ type: 'float', default: 0 })
+pendingQuantity: number;
+
+@Column({
+  type: 'enum',
+  enum: ProjectMaterialPurchaseStatus,
+  default: ProjectMaterialPurchaseStatus.PENDING,
+})
+purchaseStatus: ProjectMaterialPurchaseStatus;
+
+@Column({ type: 'timestamp', nullable: true })
+purchasedAt: Date;
+
+@Column({ nullable: true })
+purchasedBy: number;
+
+@Column({ nullable: true })
+purchasedByName: string;
 
   @Column({ type: 'float', default: 0 })
   gstPercent: number;

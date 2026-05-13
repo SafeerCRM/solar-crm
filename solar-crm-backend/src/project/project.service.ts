@@ -6,7 +6,7 @@ import {
 
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { Repository } from 'typeorm';
+import { MoreThan, Repository } from 'typeorm';
 
 import { Project } from './project.entity';
 import { ProjectDocument } from './project-document.entity';
@@ -597,6 +597,11 @@ async createMaterialRequest(
           quantity: Number(
             item.quantity || 0,
           ),
+
+          purchasedQuantity: 0,
+pendingQuantity: Number(
+  item.quantity || 0,
+),
           gstPercent: Number(
             item.gstPercent || 0,
           ),
@@ -753,5 +758,77 @@ async deleteBranch(id: number) {
     message:
       'Branch deleted successfully',
   };
+}
+
+async getPurchaseOrders() {
+  return this.projectMaterialRequestItemRepository.find({
+    where: {
+      pendingQuantity: MoreThan(0),
+    },
+    order: {
+      createdAt: 'DESC',
+    },
+  });
+}
+
+async buyMaterialRequestItem(
+  itemId: number,
+  body: any,
+  user: any,
+) {
+  const item =
+    await this.projectMaterialRequestItemRepository.findOne({
+      where: { id: itemId },
+    });
+
+  if (!item) {
+    throw new NotFoundException(
+      'Material request item not found',
+    );
+  }
+
+  const buyQuantity = Number(body?.quantity || 0);
+
+  if (!buyQuantity || buyQuantity <= 0) {
+    throw new BadRequestException(
+      'Valid buy quantity is required',
+    );
+  }
+
+  if (buyQuantity > Number(item.pendingQuantity || 0)) {
+    throw new BadRequestException(
+      'Buy quantity cannot be greater than pending quantity',
+    );
+  }
+
+  const newPurchasedQuantity =
+    Number(item.purchasedQuantity || 0) +
+    buyQuantity;
+
+  const newPendingQuantity =
+    Number(item.pendingQuantity || 0) -
+    buyQuantity;
+
+  item.purchasedQuantity =
+    newPurchasedQuantity;
+
+  item.pendingQuantity =
+    newPendingQuantity;
+
+  item.purchaseStatus =
+    newPendingQuantity <= 0
+      ? 'PURCHASED' as any
+      : 'PARTIALLY_PURCHASED' as any;
+
+  item.purchasedAt = new Date();
+
+  item.purchasedBy = user?.id || null;
+
+  item.purchasedByName =
+    user?.name || user?.email || '';
+
+  return this.projectMaterialRequestItemRepository.save(
+    item,
+  );
 }
 }

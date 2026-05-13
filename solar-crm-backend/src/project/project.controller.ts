@@ -126,6 +126,24 @@ deleteBranch(
   );
 }
 
+@Get('purchase-orders')
+getPurchaseOrders() {
+  return this.projectService.getPurchaseOrders();
+}
+
+@Patch('material-request-item/:id/buy')
+buyMaterialRequestItem(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.buyMaterialRequestItem(
+    Number(id),
+    body,
+    user,
+  );
+}
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.projectService.findOne(Number(id));
