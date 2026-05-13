@@ -115,6 +115,12 @@ const navItems = [
     href: '/calculator/settings',
     roles: ['OWNER'],
   },
+
+  {
+  name: 'Material Settings',
+  href: '/project/material-settings',
+  roles: ['OWNER'],
+},
 ];
 
 type CurrentUser = {

@@ -1,0 +1,337 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import axios from 'axios';
+
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL;
+
+type MaterialItem = {
+  id: number;
+  name: string;
+  category?: string;
+  unit?: string;
+  brand?: string;
+  rate?: number;
+  gstPercent?: number;
+  remarks?: string;
+  isActive?: boolean;
+};
+
+export default function MaterialSettingsPage() {
+  const [items, setItems] = useState<
+    MaterialItem[]
+  >([]);
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const [form, setForm] = useState({
+    name: '',
+    category: '',
+    unit: '',
+    brand: '',
+    rate: '',
+    gstPercent: '',
+    remarks: '',
+  });
+
+  const fetchItems = async () => {
+    try {
+      setLoading(true);
+
+      const token =
+        localStorage.getItem('token');
+
+      const res = await axios.get(
+        `${API_BASE_URL}/project/material-master`,
+        {
+          headers: token
+            ? {
+                Authorization: `Bearer ${token}`,
+              }
+            : {},
+        },
+      );
+
+      setItems(res.data || []);
+    } catch (error) {
+      console.error(error);
+      alert('Failed to load materials');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchItems();
+  }, []);
+
+  const createItem = async () => {
+    if (!form.name.trim()) {
+      alert('Material name required');
+      return;
+    }
+
+    try {
+      const token =
+        localStorage.getItem('token');
+
+      await axios.post(
+        `${API_BASE_URL}/project/material-master`,
+        {
+          ...form,
+          rate: Number(form.rate || 0),
+          gstPercent: Number(
+            form.gstPercent || 0,
+          ),
+        },
+        {
+          headers: token
+            ? {
+                Authorization: `Bearer ${token}`,
+              }
+            : {},
+        },
+      );
+
+      alert('Material added');
+
+      setForm({
+        name: '',
+        category: '',
+        unit: '',
+        brand: '',
+        rate: '',
+        gstPercent: '',
+        remarks: '',
+      });
+
+      fetchItems();
+    } catch (error: any) {
+      console.error(error);
+
+      alert(
+        error?.response?.data?.message ||
+          'Failed to create material',
+      );
+    }
+  };
+
+  const deleteItem = async (
+    id: number,
+  ) => {
+    const confirmed =
+      window.confirm(
+        'Delete this material?',
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      const token =
+        localStorage.getItem('token');
+
+      await axios.patch(
+        `${API_BASE_URL}/project/material-master/${id}/delete`,
+        {},
+        {
+          headers: token
+            ? {
+                Authorization: `Bearer ${token}`,
+              }
+            : {},
+        },
+      );
+
+      alert('Material deleted');
+
+      fetchItems();
+    } catch (error: any) {
+      console.error(error);
+
+      alert(
+        error?.response?.data?.message ||
+          'Failed to delete material',
+      );
+    }
+  };
+
+  return (
+    <div className="mx-auto max-w-7xl space-y-5">
+      <div className="rounded-2xl bg-white p-5 shadow">
+        <h1 className="text-2xl font-bold text-gray-800">
+          Project Material Settings
+        </h1>
+
+        <p className="mt-2 text-sm text-gray-500">
+          Manage project material master list
+        </p>
+      </div>
+
+      <div className="rounded-2xl bg-white p-5 shadow">
+        <h2 className="mb-4 text-lg font-bold">
+          Add Material
+        </h2>
+
+        <div className="grid gap-3 md:grid-cols-3">
+          <input
+            placeholder="Material Name"
+            value={form.name}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                name: e.target.value,
+              })
+            }
+            className="rounded-xl border p-3"
+          />
+
+          <input
+            placeholder="Category"
+            value={form.category}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                category: e.target.value,
+              })
+            }
+            className="rounded-xl border p-3"
+          />
+
+          <input
+            placeholder="Unit"
+            value={form.unit}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                unit: e.target.value,
+              })
+            }
+            className="rounded-xl border p-3"
+          />
+
+          <input
+            placeholder="Brand"
+            value={form.brand}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                brand: e.target.value,
+              })
+            }
+            className="rounded-xl border p-3"
+          />
+
+          <input
+            type="number"
+            placeholder="Rate"
+            value={form.rate}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                rate: e.target.value,
+              })
+            }
+            className="rounded-xl border p-3"
+          />
+
+          <input
+            type="number"
+            placeholder="GST %"
+            value={form.gstPercent}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                gstPercent: e.target.value,
+              })
+            }
+            className="rounded-xl border p-3"
+          />
+        </div>
+
+        <textarea
+          placeholder="Remarks"
+          value={form.remarks}
+          onChange={(e) =>
+            setForm({
+              ...form,
+              remarks: e.target.value,
+            })
+          }
+          className="mt-3 w-full rounded-xl border p-3"
+        />
+
+        <button
+          onClick={createItem}
+          className="mt-4 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700"
+        >
+          Add Material
+        </button>
+      </div>
+
+      <div className="rounded-2xl bg-white p-5 shadow">
+        <h2 className="mb-4 text-lg font-bold">
+          Material List
+        </h2>
+
+        {loading ? (
+          <p>Loading...</p>
+        ) : items.length === 0 ? (
+          <p className="text-sm text-gray-500">
+            No materials added yet
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {items.map((item) => (
+              <div
+                key={item.id}
+                className="rounded-xl border p-4"
+              >
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="font-bold text-gray-800">
+                      {item.name}
+                    </p>
+
+                    <p className="text-sm text-gray-500">
+                      {item.category || '-'} |{' '}
+                      {item.brand || '-'} |{' '}
+                      {item.unit || '-'}
+                    </p>
+
+                    <p className="mt-1 text-sm font-semibold text-green-700">
+                      ₹
+                      {Number(
+                        item.rate || 0,
+                      ).toLocaleString(
+                        'en-IN',
+                      )}
+                    </p>
+
+                    {item.remarks && (
+                      <p className="mt-1 text-sm text-gray-600">
+                        {item.remarks}
+                      </p>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={() =>
+                      deleteItem(item.id)
+                    }
+                    className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
