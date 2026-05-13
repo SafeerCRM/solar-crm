@@ -18,6 +18,10 @@ type PurchaseItem = {
   pendingQuantity?: number;
   totalAmount?: number;
   purchaseStatus?: string;
+  projectCustomerName?: string;
+projectBranchName?: string;
+projectCity?: string;
+projectZone?: string;
   createdAt?: string;
 };
 
@@ -28,6 +32,7 @@ export default function PurchaseOrdersPage() {
   const [projectFilter, setProjectFilter] = useState('');
 const [materialFilter, setMaterialFilter] = useState('');
 const [statusFilter, setStatusFilter] = useState('');
+const [branchFilter, setBranchFilter] = useState('');
 
   const fetchPurchaseOrders = async () => {
     try {
@@ -63,11 +68,22 @@ const [statusFilter, setStatusFilter] = useState('');
         .includes(materialFilter.toLowerCase())
     : true;
 
+    const matchesBranch = branchFilter
+  ? String(item.projectBranchName || '')
+      .toLowerCase()
+      .includes(branchFilter.toLowerCase())
+  : true;
+
   const matchesStatus = statusFilter
     ? String(item.purchaseStatus || '') === statusFilter
     : true;
 
-  return matchesProject && matchesMaterial && matchesStatus;
+  return (
+  matchesProject &&
+  matchesMaterial &&
+  matchesBranch &&
+  matchesStatus
+);
 });
 
   const buyItem = async (item: PurchaseItem, fullBuy = false) => {
@@ -122,7 +138,7 @@ const [statusFilter, setStatusFilter] = useState('');
       </div>
 
       <div className="rounded-2xl bg-white p-5 shadow">
-        <div className="mb-5 grid gap-3 md:grid-cols-3">
+        <div className="mb-5 grid gap-3 md:grid-cols-4">
   <input
     placeholder="Filter by Project ID"
     value={projectFilter}
@@ -136,6 +152,13 @@ const [statusFilter, setStatusFilter] = useState('');
     onChange={(e) => setMaterialFilter(e.target.value)}
     className="rounded-xl border p-3"
   />
+
+  <input
+  placeholder="Filter by Branch"
+  value={branchFilter}
+  onChange={(e) => setBranchFilter(e.target.value)}
+  className="rounded-xl border p-3"
+/>
 
   <select
     value={statusFilter}
@@ -165,9 +188,18 @@ const [statusFilter, setStatusFilter] = useState('');
                     </h2>
 
                     <p className="mt-1 text-sm text-gray-500">
-                      Project #{item.projectId} | {item.category || '-'} |{' '}
-                      {item.brand || '-'} | {item.unit || '-'}
-                    </p>
+  Project #{item.projectId} |{' '}
+  {item.projectCustomerName || '-'} |{' '}
+  {item.projectBranchName || '-'} |{' '}
+  {item.projectCity || '-'} |{' '}
+  {item.projectZone || '-'}
+</p>
+
+<p className="mt-1 text-sm text-gray-500">
+  {item.category || '-'} |{' '}
+  {item.brand || '-'} |{' '}
+  {item.unit || '-'}
+</p>
 
                     <p className="mt-2 text-sm text-gray-700">
                       Requested: <b>{item.quantity || 0}</b> | Purchased:{' '}
