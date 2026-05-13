@@ -105,6 +105,27 @@ getProjectMaterialRequests(
   );
 }
 
+@Post('branch')
+createBranch(@Body() body: any) {
+  return this.projectService.createBranch(
+    body,
+  );
+}
+
+@Get('branch')
+getBranches() {
+  return this.projectService.getBranches();
+}
+
+@Patch('branch/:id/delete')
+deleteBranch(
+  @Param('id') id: string,
+) {
+  return this.projectService.deleteBranch(
+    Number(id),
+  );
+}
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.projectService.findOne(Number(id));

@@ -24,6 +24,7 @@ import { randomUUID } from 'crypto';
 import { ProjectMaterialMaster } from './project-material-master.entity';
 import { ProjectMaterialRequest } from './project-material-request.entity';
 import { ProjectMaterialRequestItem } from './project-material-request-item.entity';
+import { ProjectBranch } from './project-branch.entity';
 
 @Injectable()
 export class ProjectService {
@@ -45,6 +46,9 @@ private readonly projectMaterialRequestRepository: Repository<ProjectMaterialReq
 
 @InjectRepository(ProjectMaterialRequestItem)
 private readonly projectMaterialRequestItemRepository: Repository<ProjectMaterialRequestItem>,
+
+@InjectRepository(ProjectBranch)
+private readonly projectBranchRepository: Repository<ProjectBranch>,
 
     private readonly calculatorService: CalculatorService,
 
@@ -694,4 +698,60 @@ project.ownerApprovedBy =
 
     return this.projectRepository.save(project);
   }
+
+  async createBranch(data: any) {
+  if (!data?.name?.trim()) {
+    throw new BadRequestException(
+      'Branch name is required',
+    );
+  }
+
+  const branch =
+    this.projectBranchRepository.create({
+      name: data.name.trim(),
+      code: data.code || '',
+      city: data.city || '',
+      address: data.address || '',
+      isActive: data.isActive !== false,
+    });
+
+  return this.projectBranchRepository.save(
+    branch,
+  );
+}
+
+async getBranches() {
+  return this.projectBranchRepository.find({
+    where: {
+      isActive: true,
+    },
+    order: {
+      createdAt: 'DESC',
+    },
+  });
+}
+
+async deleteBranch(id: number) {
+  const branch =
+    await this.projectBranchRepository.findOne(
+      {
+        where: { id },
+      },
+    );
+
+  if (!branch) {
+    throw new NotFoundException(
+      'Branch not found',
+    );
+  }
+
+  await this.projectBranchRepository.delete(
+    id,
+  );
+
+  return {
+    message:
+      'Branch deleted successfully',
+  };
+}
 }
