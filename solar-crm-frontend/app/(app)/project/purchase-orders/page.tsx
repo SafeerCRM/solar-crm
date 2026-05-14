@@ -88,6 +88,36 @@ const [branchFilter, setBranchFilter] = useState('');
 );
 });
 
+const getCategoryPendingSummary = (keyword: string) => {
+  const matchedItems = filteredItems.filter((item) =>
+    String(item.category || item.materialName || '')
+      .toLowerCase()
+      .includes(keyword.toLowerCase()),
+  );
+
+  const pendingQuantity = matchedItems.reduce(
+    (sum, item) => sum + Number(item.pendingQuantity || 0),
+    0,
+  );
+
+  const pendingAmount = matchedItems.reduce(
+    (sum, item) =>
+      sum +
+      Number(item.pendingQuantity || 0) *
+        Number(item.rate || 0),
+    0,
+  );
+
+  return {
+    pendingQuantity,
+    pendingAmount,
+  };
+};
+
+const panelSummary = getCategoryPendingSummary('panel');
+const structureSummary = getCategoryPendingSummary('structure');
+const inverterSummary = getCategoryPendingSummary('inverter');
+
 const totalPendingItems = filteredItems.length;
 
 const totalPendingQuantity = filteredItems.reduce(
@@ -233,6 +263,59 @@ const partiallyPurchasedCount =
     <p className="mt-1 text-2xl font-bold text-yellow-700">
       {partiallyPurchasedCount}
     </p>
+  </div>
+</div>
+
+<div className="mb-5 rounded-2xl border p-4">
+  <h2 className="mb-4 text-lg font-bold text-gray-800">
+    Critical Procurement Summary
+  </h2>
+
+  <div className="grid gap-3 md:grid-cols-3">
+    <div className="rounded-xl bg-gray-50 p-4">
+      <p className="text-sm text-gray-500">
+        Panels Pending
+      </p>
+      <p className="mt-1 text-2xl font-bold text-gray-800">
+        {panelSummary.pendingQuantity}
+      </p>
+      <p className="mt-1 text-sm font-semibold text-green-700">
+        ₹
+        {panelSummary.pendingAmount.toLocaleString(
+          'en-IN',
+        )}
+      </p>
+    </div>
+
+    <div className="rounded-xl bg-gray-50 p-4">
+      <p className="text-sm text-gray-500">
+        Structure Pending
+      </p>
+      <p className="mt-1 text-2xl font-bold text-gray-800">
+        {structureSummary.pendingQuantity}
+      </p>
+      <p className="mt-1 text-sm font-semibold text-green-700">
+        ₹
+        {structureSummary.pendingAmount.toLocaleString(
+          'en-IN',
+        )}
+      </p>
+    </div>
+
+    <div className="rounded-xl bg-gray-50 p-4">
+      <p className="text-sm text-gray-500">
+        Inverters Pending
+      </p>
+      <p className="mt-1 text-2xl font-bold text-gray-800">
+        {inverterSummary.pendingQuantity}
+      </p>
+      <p className="mt-1 text-sm font-semibold text-green-700">
+        ₹
+        {inverterSummary.pendingAmount.toLocaleString(
+          'en-IN',
+        )}
+      </p>
+    </div>
   </div>
 </div>
 
