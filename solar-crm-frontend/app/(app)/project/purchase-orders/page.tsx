@@ -33,60 +33,65 @@ export default function PurchaseOrdersPage() {
 const [materialFilter, setMaterialFilter] = useState('');
 const [statusFilter, setStatusFilter] = useState('');
 const [branchFilter, setBranchFilter] = useState('');
+const [page, setPage] = useState(1);
+const [totalPages, setTotalPages] = useState(1);
+
+const [summary, setSummary] = useState({
+  totalPendingItems: 0,
+  totalPendingQuantity: 0,
+  totalPendingAmount: 0,
+  partiallyPurchasedCount: 0,
+});
 
   const fetchPurchaseOrders = async () => {
-    try {
-      setLoading(true);
+  try {
+    setLoading(true);
 
-      const token = localStorage.getItem('token');
+    const token = localStorage.getItem('token');
 
-      const res = await axios.get(`${API_BASE_URL}/project/purchase-orders`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
+    const res = await axios.get(
+      `${API_BASE_URL}/project/purchase-orders`,
+      {
+        params: {
+          page,
+          limit: 20,
+          search: `${projectFilter} ${materialFilter}`.trim(),
+          status: statusFilter,
+          branch: branchFilter,
+        },
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
 
-      setItems(res.data || []);
-    } catch (error) {
-      console.error(error);
-      alert('Failed to load purchase orders');
-    } finally {
-      setLoading(false);
-    }
-  };
+    setItems(res.data?.data || []);
+
+    setSummary(
+      res.data?.summary || {
+        totalPendingItems: 0,
+        totalPendingQuantity: 0,
+        totalPendingAmount: 0,
+        partiallyPurchasedCount: 0,
+      },
+    );
+
+    setTotalPages(res.data?.totalPages || 1);
+  } catch (error) {
+    console.error(error);
+    alert('Failed to load purchase orders');
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
-    fetchPurchaseOrders();
-  }, []);
+  fetchPurchaseOrders();
+}, [page, projectFilter, materialFilter, statusFilter, branchFilter]);
 
-  const filteredItems = items.filter((item) => {
-  const matchesProject = projectFilter
-  ? `${item.projectId} ${item.projectCustomerName || ''}`
-      .toLowerCase()
-      .includes(projectFilter.toLowerCase())
-  : true;
-
-  const matchesMaterial = materialFilter
-    ? String(item.materialName || '')
-        .toLowerCase()
-        .includes(materialFilter.toLowerCase())
-    : true;
-
-    const matchesBranch = branchFilter
-  ? String(item.projectBranchName || '')
-      .toLowerCase()
-      .includes(branchFilter.toLowerCase())
-  : true;
-
-  const matchesStatus = statusFilter
-    ? String(item.purchaseStatus || '') === statusFilter
-    : true;
-
-  return (
-  matchesProject &&
-  matchesMaterial &&
-  matchesBranch &&
-  matchesStatus
-);
-});
+  const filteredItems = items;
 
 const getCategoryPendingSummary = (keyword: string) => {
   const matchedItems = filteredItems.filter((item) =>
@@ -230,27 +235,39 @@ const partiallyPurchasedCount =
   <input
     placeholder="Filter by Project ID / Customer Name"
     value={projectFilter}
-    onChange={(e) => setProjectFilter(e.target.value)}
+    onChange={(e) => {
+  setProjectFilter(e.target.value);
+  setPage(1);
+}}
     className="rounded-xl border p-3"
   />
 
   <input
     placeholder="Filter by Material Name"
     value={materialFilter}
-    onChange={(e) => setMaterialFilter(e.target.value)}
+    onChange={(e) => {
+  setMaterialFilter(e.target.value);
+  setPage(1);
+}}
     className="rounded-xl border p-3"
   />
 
   <input
   placeholder="Filter by Branch"
   value={branchFilter}
-  onChange={(e) => setBranchFilter(e.target.value)}
+  onChange={(e) => {
+  setBranchFilter(e.target.value);
+  setPage(1);
+}}
   className="rounded-xl border p-3"
 />
 
   <select
     value={statusFilter}
-    onChange={(e) => setStatusFilter(e.target.value)}
+    onChange={(e) => {
+  setStatusFilter(e.target.value);
+  setPage(1);
+}}
     className="rounded-xl border p-3"
   >
     <option value="">All Status</option>
@@ -266,7 +283,7 @@ const partiallyPurchasedCount =
       Pending Items
     </p>
     <p className="mt-1 text-2xl font-bold text-gray-800">
-      {totalPendingItems}
+      {summary.totalPendingItems}
     </p>
   </div>
 
@@ -275,7 +292,7 @@ const partiallyPurchasedCount =
       Pending Quantity
     </p>
     <p className="mt-1 text-2xl font-bold text-gray-800">
-      {totalPendingQuantity}
+      {summary.totalPendingQuantity}
     </p>
   </div>
 
@@ -285,9 +302,9 @@ const partiallyPurchasedCount =
     </p>
     <p className="mt-1 text-2xl font-bold text-green-700">
       ₹
-      {Number(totalPendingAmount).toLocaleString(
-        'en-IN',
-      )}
+      {Number(summary.totalPendingAmount).toLocaleString(
+  'en-IN',
+)}
     </p>
   </div>
 
@@ -296,7 +313,7 @@ const partiallyPurchasedCount =
       Partial Purchases
     </p>
     <p className="mt-1 text-2xl font-bold text-yellow-700">
-      {partiallyPurchasedCount}
+      {summary.partiallyPurchasedCount}
     </p>
   </div>
 </div>
@@ -493,6 +510,37 @@ const partiallyPurchasedCount =
             ))}
           </div>
         )}
+
+      <div className="mt-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+  <p className="text-sm text-gray-600">
+    Page {page} of {totalPages}
+  </p>
+
+  <div className="flex gap-2">
+    <button
+      onClick={() =>
+        setPage((prev) => Math.max(prev - 1, 1))
+      }
+      disabled={page <= 1}
+      className="rounded-xl bg-gray-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+    >
+      Previous
+    </button>
+
+    <button
+      onClick={() =>
+        setPage((prev) =>
+          Math.min(prev + 1, totalPages),
+        )
+      }
+      disabled={page >= totalPages}
+      className="rounded-xl bg-gray-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+    >
+      Next
+    </button>
+  </div>
+</div>
+
       </div>
     </div>
   );
