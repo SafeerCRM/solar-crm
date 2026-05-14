@@ -28,6 +28,19 @@ import { ProjectBranch } from './project-branch.entity';
 
 @Injectable()
 export class ProjectService {
+
+  private toNumberOrZero(value: any): number {
+  if (value === '' || value === null || value === undefined) {
+    return 0;
+  }
+
+  const num = Number(value);
+
+  return Number.isFinite(num)
+    ? num
+    : 0;
+}
+
   constructor(
     @InjectRepository(Project)
     private readonly projectRepository: Repository<Project>,
@@ -72,8 +85,54 @@ private readonly projectBranchRepository: Repository<ProjectBranch>,
       );
     }
 
+    const payload: any = {
+  ...data,
+
+  dcrPanelCount: this.toNumberOrZero(
+    (data as any).dcrPanelCount,
+  ),
+
+  nonDcrPanelCount: this.toNumberOrZero(
+    (data as any).nonDcrPanelCount,
+  ),
+
+  marginMoney: this.toNumberOrZero(
+    (data as any).marginMoney,
+  ),
+
+  loanAmount: this.toNumberOrZero(
+    (data as any).loanAmount,
+  ),
+
+  projectCost: this.toNumberOrZero(
+    (data as any).projectCost,
+  ),
+
+  subsidy: this.toNumberOrZero(
+    (data as any).subsidy,
+  ),
+
+  netAmount: this.toNumberOrZero(
+    (data as any).netAmount,
+  ),
+
+  discomExpenditureAmount:
+    this.toNumberOrZero(
+      (data as any)
+        .discomExpenditureAmount,
+    ),
+
+  expectedLagat: this.toNumberOrZero(
+    (data as any).expectedLagat,
+  ),
+
+  expectedProfit: this.toNumberOrZero(
+    (data as any).expectedProfit,
+  ),
+};
+
     const project = this.projectRepository.create({
-      ...data,
+      ...payload,
       status: ProjectStatus.PENDING_APPROVAL,
       marketingHeadApprovalStatus: ProjectApprovalStatus.PENDING,
       ownerApprovalStatus: ProjectApprovalStatus.PENDING,
