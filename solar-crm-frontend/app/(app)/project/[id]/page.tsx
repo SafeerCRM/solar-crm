@@ -458,7 +458,7 @@ const submitMaterialRequest = async () => {
   {[
     { key: 'PROJECT_CREATION', label: 'Project Creation' },
     { key: 'LOAN_DEPARTMENT', label: 'Loan Department' },
-    { key: 'PROJECT_MANAGEMENT', label: 'Project Management' },
+    { key: 'PROJECT_MANAGEMENT', label: 'Material Requirement' },
     { key: 'SUBSIDY_DEPARTMENT', label: 'Subsidy Department' },
     { key: 'ELECTRICITY_DEPARTMENT', label: 'Electricity Department' },
     { key: 'PAYMENT_COLLECTION', label: 'Payment Collection' },

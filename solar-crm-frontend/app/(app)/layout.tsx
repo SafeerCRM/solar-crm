@@ -184,7 +184,7 @@ export default function AppLayout({
       )}
 
             <aside
-        className={`fixed left-0 top-0 z-40 flex h-full w-64 flex-col justify-between bg-white p-6 shadow transition-transform md:static md:translate-x-0 ${
+        className={`fixed left-0 top-0 z-40 flex h-screen w-64 flex-col justify-between overflow-y-auto bg-white p-6 shadow transition-transform md:static md:translate-x-0 ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >

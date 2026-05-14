@@ -59,8 +59,10 @@ const [branchFilter, setBranchFilter] = useState('');
 
   const filteredItems = items.filter((item) => {
   const matchesProject = projectFilter
-    ? String(item.projectId).includes(projectFilter)
-    : true;
+  ? `${item.projectId} ${item.projectCustomerName || ''}`
+      .toLowerCase()
+      .includes(projectFilter.toLowerCase())
+  : true;
 
   const matchesMaterial = materialFilter
     ? String(item.materialName || '')
@@ -140,7 +142,7 @@ const [branchFilter, setBranchFilter] = useState('');
       <div className="rounded-2xl bg-white p-5 shadow">
         <div className="mb-5 grid gap-3 md:grid-cols-4">
   <input
-    placeholder="Filter by Project ID"
+    placeholder="Filter by Project ID / Customer Name"
     value={projectFilter}
     onChange={(e) => setProjectFilter(e.target.value)}
     className="rounded-xl border p-3"
