@@ -487,37 +487,46 @@ async getProjectDocuments(projectId: number) {
   }
 
   async marketingHeadApproval(
-    id: number,
-    body: {
-      status: ProjectApprovalStatus;
-      note?: string;
-      approvedBy?: number;
-    },
-  ) {
-    const project = await this.projectRepository.findOne({
-      where: { id },
-    });
+  id: number,
+  body: {
+    status?: ProjectApprovalStatus;
+    approvalStatus?: ProjectApprovalStatus;
+    note?: string;
+    approvedBy?: number;
+  },
+) {
+  const project = await this.projectRepository.findOne({
+    where: { id },
+  });
 
-    if (!project) {
-      throw new NotFoundException('Project not found');
-    }
-
-    project.marketingHeadApprovalStatus = body.status;
-
-    project.marketingHeadApprovalNote =
-  body.note || '';
-
-project.marketingHeadApprovedBy =
-  body.approvedBy || 0;
-
-    project.marketingHeadApprovedAt = new Date();
-
-    if (body.status === ProjectApprovalStatus.REJECTED) {
-      project.status = ProjectStatus.REJECTED;
-    }
-
-    return this.projectRepository.save(project);
+  if (!project) {
+    throw new NotFoundException('Project not found');
   }
+
+  const approvalStatus =
+    body.approvalStatus || body.status;
+
+  if (!approvalStatus) {
+    throw new BadRequestException('Approval status is required');
+  }
+
+  project.marketingHeadApprovalStatus =
+    approvalStatus;
+
+  project.marketingHeadApprovalNote =
+    body.note || '';
+
+  project.marketingHeadApprovedBy =
+    body.approvedBy || 0;
+
+  project.marketingHeadApprovedAt = new Date();
+
+  if (approvalStatus === ProjectApprovalStatus.REJECTED) {
+    project.status = ProjectStatus.REJECTED;
+  }
+
+  return this.projectRepository.save(project);
+}
 
   async createMaterialMaster(data: Partial<ProjectMaterialMaster>) {
   if (!data.name || !String(data.name).trim()) {
@@ -722,46 +731,54 @@ async getProjectMaterialRequests(
 }
 
   async ownerApproval(
-    id: number,
-    body: {
-      status: ProjectApprovalStatus;
-      note?: string;
-      approvedBy?: number;
-    },
-  ) {
-    const project = await this.projectRepository.findOne({
-      where: { id },
-    });
+  id: number,
+  body: {
+    status?: ProjectApprovalStatus;
+    approvalStatus?: ProjectApprovalStatus;
+    note?: string;
+    approvedBy?: number;
+  },
+) {
+  const project = await this.projectRepository.findOne({
+    where: { id },
+  });
 
-    if (!project) {
-      throw new NotFoundException('Project not found');
-    }
-
-    project.ownerApprovalStatus = body.status;
-
-    project.ownerApprovalNote =
-  body.note || '';
-
-project.ownerApprovedBy =
-  body.approvedBy || 0;
-
-    project.ownerApprovedAt = new Date();
-
-    if (body.status === ProjectApprovalStatus.REJECTED) {
-      project.status = ProjectStatus.REJECTED;
-    }
-
-    if (body.status === ProjectApprovalStatus.APPROVED) {
-      if (project.projectType === ProjectType.LOAN) {
-        project.status = ProjectStatus.LOAN_PROCESS;
-      } else {
-        project.status =
-          ProjectStatus.PROJECT_MANAGEMENT;
-      }
-    }
-
-    return this.projectRepository.save(project);
+  if (!project) {
+    throw new NotFoundException('Project not found');
   }
+
+  const approvalStatus =
+    body.approvalStatus || body.status;
+
+  if (!approvalStatus) {
+    throw new BadRequestException('Approval status is required');
+  }
+
+  project.ownerApprovalStatus = approvalStatus;
+
+  project.ownerApprovalNote =
+    body.note || '';
+
+  project.ownerApprovedBy =
+    body.approvedBy || 0;
+
+  project.ownerApprovedAt = new Date();
+
+  if (approvalStatus === ProjectApprovalStatus.REJECTED) {
+    project.status = ProjectStatus.REJECTED;
+  }
+
+  if (approvalStatus === ProjectApprovalStatus.APPROVED) {
+    if (project.projectType === ProjectType.LOAN) {
+      project.status = ProjectStatus.LOAN_PROCESS;
+    } else {
+      project.status =
+        ProjectStatus.PROJECT_MANAGEMENT;
+    }
+  }
+
+  return this.projectRepository.save(project);
+}
 
   async createBranch(data: any) {
   if (!data?.name?.trim()) {
