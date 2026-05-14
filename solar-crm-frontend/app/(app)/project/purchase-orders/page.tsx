@@ -88,6 +88,27 @@ const [branchFilter, setBranchFilter] = useState('');
 );
 });
 
+const totalPendingItems = filteredItems.length;
+
+const totalPendingQuantity = filteredItems.reduce(
+  (sum, item) => sum + Number(item.pendingQuantity || 0),
+  0,
+);
+
+const totalPendingAmount = filteredItems.reduce(
+  (sum, item) =>
+    sum +
+    Number(item.pendingQuantity || 0) *
+      Number(item.rate || 0),
+  0,
+);
+
+const partiallyPurchasedCount =
+  filteredItems.filter(
+    (item) =>
+      item.purchaseStatus === 'PARTIALLY_PURCHASED',
+  ).length;
+
   const buyItem = async (item: PurchaseItem, fullBuy = false) => {
     const quantity = fullBuy
       ? Number(item.pendingQuantity || 0)
@@ -173,6 +194,48 @@ const [branchFilter, setBranchFilter] = useState('');
     <option value="PURCHASED">Purchased</option>
   </select>
 </div>
+
+<div className="mb-5 grid gap-3 md:grid-cols-4">
+  <div className="rounded-xl bg-gray-50 p-4">
+    <p className="text-sm text-gray-500">
+      Pending Items
+    </p>
+    <p className="mt-1 text-2xl font-bold text-gray-800">
+      {totalPendingItems}
+    </p>
+  </div>
+
+  <div className="rounded-xl bg-gray-50 p-4">
+    <p className="text-sm text-gray-500">
+      Pending Quantity
+    </p>
+    <p className="mt-1 text-2xl font-bold text-gray-800">
+      {totalPendingQuantity}
+    </p>
+  </div>
+
+  <div className="rounded-xl bg-gray-50 p-4">
+    <p className="text-sm text-gray-500">
+      Pending Amount
+    </p>
+    <p className="mt-1 text-2xl font-bold text-green-700">
+      ₹
+      {Number(totalPendingAmount).toLocaleString(
+        'en-IN',
+      )}
+    </p>
+  </div>
+
+  <div className="rounded-xl bg-gray-50 p-4">
+    <p className="text-sm text-gray-500">
+      Partial Purchases
+    </p>
+    <p className="mt-1 text-2xl font-bold text-yellow-700">
+      {partiallyPurchasedCount}
+    </p>
+  </div>
+</div>
+
         {loading ? (
           <p>Loading...</p>
         ) : filteredItems.length === 0? (
