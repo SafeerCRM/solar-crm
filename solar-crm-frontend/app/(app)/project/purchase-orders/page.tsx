@@ -118,6 +118,41 @@ const panelSummary = getCategoryPendingSummary('panel');
 const structureSummary = getCategoryPendingSummary('structure');
 const inverterSummary = getCategoryPendingSummary('inverter');
 
+const projectWiseSummary = Object.values(
+  filteredItems.reduce((acc: any, item) => {
+    const key = String(item.projectId);
+
+    if (!acc[key]) {
+      acc[key] = {
+        projectId: item.projectId,
+        customerName: item.projectCustomerName || '-',
+        branchName: item.projectBranchName || '-',
+        city: item.projectCity || '-',
+        pendingItems: 0,
+        pendingQuantity: 0,
+        pendingAmount: 0,
+        materials: [] as string[],
+      };
+    }
+
+    acc[key].pendingItems += 1;
+
+    acc[key].pendingQuantity += Number(
+      item.pendingQuantity || 0,
+    );
+
+    acc[key].pendingAmount +=
+      Number(item.pendingQuantity || 0) *
+      Number(item.rate || 0);
+
+    if (item.materialName) {
+      acc[key].materials.push(item.materialName);
+    }
+
+    return acc;
+  }, {}),
+);
+
 const totalPendingItems = filteredItems.length;
 
 const totalPendingQuantity = filteredItems.reduce(
@@ -317,6 +352,63 @@ const partiallyPurchasedCount =
       </p>
     </div>
   </div>
+</div>
+
+<div className="mb-5 rounded-2xl border p-4">
+  <h2 className="mb-4 text-lg font-bold text-gray-800">
+    Project-wise Purchase Summary
+  </h2>
+
+  {projectWiseSummary.length === 0 ? (
+    <p className="text-sm text-gray-500">
+      No project-wise pending summary found.
+    </p>
+  ) : (
+    <div className="space-y-3">
+      {projectWiseSummary.map((project: any) => (
+        <div
+          key={project.projectId}
+          className="rounded-xl bg-gray-50 p-4"
+        >
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p className="font-bold text-gray-800">
+                Project #{project.projectId} - {project.customerName}
+              </p>
+
+              <p className="mt-1 text-sm text-gray-500">
+                {project.branchName} | {project.city}
+              </p>
+
+              <p className="mt-2 text-sm text-gray-600">
+                Materials:{' '}
+                {Array.from(new Set(project.materials))
+                  .slice(0, 5)
+                  .join(', ')}
+              </p>
+            </div>
+
+            <div className="text-left md:text-right">
+              <p className="text-sm text-gray-500">
+                Pending Items: {project.pendingItems}
+              </p>
+
+              <p className="text-sm text-gray-500">
+                Pending Qty: {project.pendingQuantity}
+              </p>
+
+              <p className="text-lg font-bold text-green-700">
+                ₹
+                {Number(
+                  project.pendingAmount || 0,
+                ).toLocaleString('en-IN')}
+              </p>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )}
 </div>
 
         {loading ? (
