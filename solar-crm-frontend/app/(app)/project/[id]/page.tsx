@@ -129,6 +129,10 @@ const [documentRemarks, setDocumentRemarks] =
   const [activeTab, setActiveTab] =
   useState('PROJECT_CREATION');
 
+  const [marketingHeadNote, setMarketingHeadNote] = useState('');
+const [ownerNote, setOwnerNote] = useState('');
+const [approvalLoading, setApprovalLoading] = useState(false);
+
   const [materials, setMaterials] = useState<MaterialMaster[]>([]);
 const [materialRequests, setMaterialRequests] = useState<MaterialRequest[]>([]);
 const [materialRequestTitle, setMaterialRequestTitle] = useState('');
@@ -413,6 +417,57 @@ const submitMaterialRequest = async () => {
   }
 };
 
+const submitApproval = async (
+  type: 'marketing-head' | 'owner',
+  approvalStatus: 'APPROVED' | 'REJECTED',
+) => {
+  try {
+    setApprovalLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    const note =
+      type === 'marketing-head'
+        ? marketingHeadNote
+        : ownerNote;
+
+    await axios.patch(
+      `${API_BASE_URL}/project/${projectId}/${type}-approval`,
+      {
+        approvalStatus,
+        note,
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert(
+      approvalStatus === 'APPROVED'
+        ? 'Project approved successfully'
+        : 'Project rejected successfully',
+    );
+
+    setMarketingHeadNote('');
+    setOwnerNote('');
+
+    fetchProject();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to update approval',
+    );
+  } finally {
+    setApprovalLoading(false);
+  }
+};
+
   useEffect(() => {
   if (projectId) {
   fetchProject();
@@ -548,6 +603,97 @@ const submitMaterialRequest = async () => {
             </p>
           </div>
         </div>
+
+       <div className="mt-5 grid gap-4 md:grid-cols-2">
+  <div className="rounded-xl border p-4">
+    <h3 className="font-bold text-gray-800">
+      Marketing Head Action
+    </h3>
+
+    <textarea
+      placeholder="Approval / rejection note"
+      value={marketingHeadNote}
+      onChange={(e) =>
+        setMarketingHeadNote(e.target.value)
+      }
+      className="mt-3 w-full rounded-xl border p-3"
+      rows={3}
+    />
+
+    <div className="mt-3 flex gap-2">
+      <button
+        onClick={() =>
+          submitApproval(
+            'marketing-head',
+            'APPROVED',
+          )
+        }
+        disabled={approvalLoading}
+        className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+      >
+        Approve
+      </button>
+
+      <button
+        onClick={() =>
+          submitApproval(
+            'marketing-head',
+            'REJECTED',
+          )
+        }
+        disabled={approvalLoading}
+        className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+      >
+        Reject
+      </button>
+    </div>
+  </div>
+
+  <div className="rounded-xl border p-4">
+    <h3 className="font-bold text-gray-800">
+      Owner Action
+    </h3>
+
+    <textarea
+      placeholder="Approval / rejection note"
+      value={ownerNote}
+      onChange={(e) =>
+        setOwnerNote(e.target.value)
+      }
+      className="mt-3 w-full rounded-xl border p-3"
+      rows={3}
+    />
+
+    <div className="mt-3 flex gap-2">
+      <button
+        onClick={() =>
+          submitApproval(
+            'owner',
+            'APPROVED',
+          )
+        }
+        disabled={approvalLoading}
+        className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+      >
+        Approve
+      </button>
+
+      <button
+        onClick={() =>
+          submitApproval(
+            'owner',
+            'REJECTED',
+          )
+        }
+        disabled={approvalLoading}
+        className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+      >
+        Reject
+      </button>
+    </div>
+  </div>
+</div>
+
       </div>
 
       <div className="rounded-2xl bg-white p-5 shadow">
