@@ -819,8 +819,37 @@ async deleteBranch(id: number) {
   };
 }
 
-async getPurchaseOrders() {
-  const items =
+async getPurchaseOrders(filters: {
+  page?: number;
+  limit?: number;
+  search?: string;
+  status?: string;
+  branch?: string;
+}) {
+  const page =
+    Number(filters.page) > 0
+      ? Number(filters.page)
+      : 1;
+
+  const limit =
+    Number(filters.limit) > 0
+      ? Math.min(Number(filters.limit), 100)
+      : 20;
+
+  const skip = (page - 1) * limit;
+
+  const search = String(filters.search || '')
+    .trim()
+    .toLowerCase();
+
+  const status = String(filters.status || '')
+    .trim();
+
+  const branch = String(filters.branch || '')
+    .trim()
+    .toLowerCase();
+
+  const allPendingItems =
     await this.projectMaterialRequestItemRepository.find({
       where: {
         pendingQuantity: MoreThan(0),
@@ -832,7 +861,7 @@ async getPurchaseOrders() {
 
   const projectIds = Array.from(
     new Set(
-      items
+      allPendingItems
         .map((item) => Number(item.projectId))
         .filter(Boolean),
     ),
@@ -853,7 +882,7 @@ async getPurchaseOrders() {
     ]),
   );
 
-  return items.map((item) => {
+  const enrichedItems = allPendingItems.map((item) => {
     const project = projectMap.get(
       Number(item.projectId),
     );
@@ -864,10 +893,82 @@ async getPurchaseOrders() {
         project?.customerName || '',
       projectBranchName:
         project?.branchName || '',
-      projectCity: project?.city || '',
-      projectZone: project?.zone || '',
+      projectCity:
+        project?.city || '',
+      projectZone:
+        project?.zone || '',
     };
   });
+
+  const filteredItems = enrichedItems.filter((item: any) => {
+    const matchesSearch = search
+      ? `${item.projectId} ${item.projectCustomerName || ''} ${item.materialName || ''}`
+          .toLowerCase()
+          .includes(search)
+      : true;
+
+    const matchesStatus = status
+      ? String(item.purchaseStatus || '') === status
+      : true;
+
+    const matchesBranch = branch
+      ? String(item.projectBranchName || '')
+          .toLowerCase()
+          .includes(branch)
+      : true;
+
+    return (
+      matchesSearch &&
+      matchesStatus &&
+      matchesBranch
+    );
+  });
+
+  const total = filteredItems.length;
+
+  const paginatedItems = filteredItems.slice(
+    skip,
+    skip + limit,
+  );
+
+  const totalPendingItems = filteredItems.length;
+
+  const totalPendingQuantity =
+    filteredItems.reduce(
+      (sum: number, item: any) =>
+        sum + Number(item.pendingQuantity || 0),
+      0,
+    );
+
+  const totalPendingAmount =
+    filteredItems.reduce(
+      (sum: number, item: any) =>
+        sum +
+        Number(item.pendingQuantity || 0) *
+          Number(item.rate || 0),
+      0,
+    );
+
+  const partiallyPurchasedCount =
+    filteredItems.filter(
+      (item: any) =>
+        item.purchaseStatus ===
+        'PARTIALLY_PURCHASED',
+    ).length;
+
+  return {
+    data: paginatedItems,
+    summary: {
+      totalPendingItems,
+      totalPendingQuantity,
+      totalPendingAmount,
+      partiallyPurchasedCount,
+    },
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
 }
 
 async buyMaterialRequestItem(

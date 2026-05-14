@@ -8,6 +8,7 @@ import {
   UploadedFiles,
 UseGuards,
 UseInterceptors,
+Query,
 } from '@nestjs/common';
 
 import { ProjectService } from './project.service';
@@ -127,8 +128,20 @@ deleteBranch(
 }
 
 @Get('purchase-orders')
-getPurchaseOrders() {
-  return this.projectService.getPurchaseOrders();
+getPurchaseOrders(
+  @Query('page') page?: string,
+  @Query('limit') limit?: string,
+  @Query('search') search?: string,
+  @Query('status') status?: string,
+  @Query('branch') branch?: string,
+) {
+  return this.projectService.getPurchaseOrders({
+    page: Number(page || 1),
+    limit: Number(limit || 20),
+    search: search || '',
+    status: status || '',
+    branch: branch || '',
+  });
 }
 
 @Patch('material-request-item/:id/buy')
