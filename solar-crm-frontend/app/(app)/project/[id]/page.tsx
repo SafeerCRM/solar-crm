@@ -91,6 +91,16 @@ type MaterialRequest = {
   items?: MaterialRequestRow[];
 };
 
+type ProjectComment = {
+  id: number;
+  projectId: number;
+  department?: string;
+  comment?: string;
+  createdByName?: string;
+  createdByRole?: string;
+  createdAt?: string;
+};
+
 function money(value?: number) {
   return `₹${Number(value || 0).toLocaleString('en-IN')}`;
 }
@@ -154,6 +164,10 @@ const [loanForm, setLoanForm] = useState({
 });
 
 const [loanLoading, setLoanLoading] = useState(false);
+
+const [loanComments, setLoanComments] = useState<ProjectComment[]>([]);
+const [loanCommentText, setLoanCommentText] = useState('');
+const [loanCommentLoading, setLoanCommentLoading] = useState(false);
 
   const fetchProject = async () => {
     try {
@@ -560,6 +574,71 @@ const saveLoanDetail = async () => {
   }
 };
 
+const fetchLoanComments = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/${projectId}/comments`,
+      {
+        params: {
+          department: 'LOAN',
+        },
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setLoanComments(res.data || []);
+  } catch (error) {
+    console.error('Failed to load loan comments:', error);
+  }
+};
+
+const submitLoanComment = async () => {
+  if (!loanCommentText.trim()) {
+    alert('Please write a comment');
+    return;
+  }
+
+  try {
+    setLoanCommentLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/comment`,
+      {
+        projectId: Number(projectId),
+        department: 'LOAN',
+        comment: loanCommentText.trim(),
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setLoanCommentText('');
+    fetchLoanComments();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to add loan comment',
+    );
+  } finally {
+    setLoanCommentLoading(false);
+  }
+};
+
   useEffect(() => {
   if (projectId) {
   fetchProject();
@@ -567,6 +646,7 @@ const saveLoanDetail = async () => {
   fetchDocuments();
   fetchMaterials();
   fetchMaterialRequests();
+  fetchLoanComments();
 }
 }, [projectId]);
 
@@ -1317,6 +1397,60 @@ const saveLoanDetail = async () => {
         ? 'Saving...'
         : 'Save Loan Detail'}
     </button>
+
+    <div className="mt-8 rounded-2xl border p-4">
+  <h3 className="text-lg font-bold text-gray-800">
+    Loan Comments / Follow-up History
+  </h3>
+
+  <textarea
+    placeholder="Write loan follow-up comment..."
+    value={loanCommentText}
+    onChange={(e) =>
+      setLoanCommentText(e.target.value)
+    }
+    className="mt-4 w-full rounded-xl border p-3"
+    rows={3}
+  />
+
+  <button
+    onClick={submitLoanComment}
+    disabled={loanCommentLoading}
+    className="mt-3 rounded-xl bg-gray-800 px-5 py-3 font-semibold text-white hover:bg-black disabled:opacity-50"
+  >
+    {loanCommentLoading
+      ? 'Saving Comment...'
+      : 'Add Comment'}
+  </button>
+
+  <div className="mt-5 space-y-3">
+    {loanComments.length === 0 ? (
+      <p className="text-sm text-gray-500">
+        No loan comments yet.
+      </p>
+    ) : (
+      loanComments.map((comment) => (
+        <div
+          key={comment.id}
+          className="rounded-xl bg-gray-50 p-4"
+        >
+          <p className="text-sm text-gray-800">
+            {comment.comment || '-'}
+          </p>
+
+          <p className="mt-2 text-xs text-gray-500">
+            {comment.createdByName || 'Unknown'} |{' '}
+            {comment.createdByRole || '-'} |{' '}
+            {comment.createdAt
+              ? new Date(comment.createdAt).toLocaleString()
+              : '-'}
+          </p>
+        </div>
+      ))
+    )}
+  </div>
+</div>
+
   </div>
 )}
 
