@@ -648,6 +648,22 @@ const selfMeetingsCreatedToday = await this.meetingRepository.count({
   },
 });
 
+const companyMeetingsCreatedThisMonth = await this.meetingRepository.count({
+  where: {
+    createdBy: manager.id,
+    meetingCategory: MeetingCategory.COMPANY_MEETING,
+    createdAt: Between(monthStart, monthEnd),
+  },
+});
+
+const selfMeetingsCreatedThisMonth = await this.meetingRepository.count({
+  where: {
+    createdBy: manager.id,
+    meetingCategory: MeetingCategory.SELF_MEETING,
+    createdAt: Between(monthStart, monthEnd),
+  },
+});
+
 const solarMiterMeetingsCreatedToday = await this.meetingRepository.count({
   where: {
     createdBy: manager.id,
@@ -694,6 +710,8 @@ const convertedMeetingsToday = Number(convertedMeetingsTodayRaw?.count || 0);
       companyMeetingsCreatedToday,
 selfMeetingsCreatedToday,
 solarMiterMeetingsCreatedToday,
+companyMeetingsCreatedThisMonth,
+selfMeetingsCreatedThisMonth,
 
       // old names kept for frontend safety
       companyMeetings: companyMeetingsToday,
