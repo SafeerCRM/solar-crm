@@ -26,6 +26,7 @@ import { ProjectMaterialRequest } from './project-material-request.entity';
 import { ProjectMaterialRequestItem } from './project-material-request-item.entity';
 import { ProjectBranch } from './project-branch.entity';
 import { ProjectLoanDetail } from './project-loan-detail.entity';
+import { ProjectSubsidyDetail } from './project-subsidy-detail.entity';
 
 @Injectable()
 export class ProjectService {
@@ -66,6 +67,9 @@ private readonly projectBranchRepository: Repository<ProjectBranch>,
 
 @InjectRepository(ProjectLoanDetail)
 private readonly projectLoanDetailRepository: Repository<ProjectLoanDetail>,
+
+@InjectRepository(ProjectSubsidyDetail)
+private readonly projectSubsidyDetailRepository: Repository<ProjectSubsidyDetail>,
 
     private readonly calculatorService: CalculatorService,
 
@@ -1139,5 +1143,87 @@ async saveProjectLoanDetail(
   });
 
   return this.projectLoanDetailRepository.save(detail);
+}
+
+async getProjectSubsidyDetail(projectId: number) {
+  const project = await this.projectRepository.findOne({
+    where: { id: projectId },
+  });
+
+  if (!project) {
+    throw new NotFoundException('Project not found');
+  }
+
+  const detail =
+    await this.projectSubsidyDetailRepository.findOne({
+      where: { projectId },
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+
+  return detail || null;
+}
+
+async saveProjectSubsidyDetail(
+  projectId: number,
+  body: any,
+  user: any,
+) {
+  const project = await this.projectRepository.findOne({
+    where: { id: projectId },
+  });
+
+  if (!project) {
+    throw new NotFoundException('Project not found');
+  }
+
+  let detail =
+    await this.projectSubsidyDetailRepository.findOne({
+      where: { projectId },
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+
+  if (!detail) {
+    detail = this.projectSubsidyDetailRepository.create({
+      projectId,
+    });
+  }
+
+  Object.assign(detail, {
+    status: body.status || detail.status,
+    dcrCertificateReady:
+      body.dcrCertificateReady === true ||
+      body.dcrCertificateReady === 'true',
+    panelWarrantyReceived:
+      body.panelWarrantyReceived === true ||
+      body.panelWarrantyReceived === 'true',
+    inverterWarrantyReceived:
+      body.inverterWarrantyReceived === true ||
+      body.inverterWarrantyReceived === 'true',
+    vendorAgreementReady:
+      body.vendorAgreementReady === true ||
+      body.vendorAgreementReady === 'true',
+    wcrReady:
+      body.wcrReady === true ||
+      body.wcrReady === 'true',
+    portalSubmissionDate: body.portalSubmissionDate
+      ? new Date(body.portalSubmissionDate)
+      : null,
+    subsidyRequestedDate: body.subsidyRequestedDate
+      ? new Date(body.subsidyRequestedDate)
+      : null,
+    subsidyDisbursedDate: body.subsidyDisbursedDate
+      ? new Date(body.subsidyDisbursedDate)
+      : null,
+    subsidyAmount: this.toNumberOrZero(body.subsidyAmount),
+    remarks: body.remarks || '',
+    updatedBy: user?.id || null,
+    updatedByName: user?.name || user?.email || '',
+  });
+
+  return this.projectSubsidyDetailRepository.save(detail);
 }
 }

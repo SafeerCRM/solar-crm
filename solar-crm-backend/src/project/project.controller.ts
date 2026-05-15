@@ -175,6 +175,24 @@ saveProjectLoanDetail(
   );
 }
 
+@Get(':id/subsidy-detail')
+getProjectSubsidyDetail(@Param('id') id: string) {
+  return this.projectService.getProjectSubsidyDetail(Number(id));
+}
+
+@Post(':id/subsidy-detail')
+saveProjectSubsidyDetail(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.saveProjectSubsidyDetail(
+    Number(id),
+    body,
+    user,
+  );
+}
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.projectService.findOne(Number(id));
