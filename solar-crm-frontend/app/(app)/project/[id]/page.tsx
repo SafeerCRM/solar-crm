@@ -187,6 +187,25 @@ const [subsidyForm, setSubsidyForm] = useState({
 
 const [subsidyLoading, setSubsidyLoading] = useState(false);
 
+const [electricityDetail, setElectricityDetail] =
+  useState<any>(null);
+
+const [electricityForm, setElectricityForm] =
+  useState({
+    discomName: '',
+    status: 'DOCUMENT_PENDING',
+    fileSubmissionDate: '',
+    siteVisitDate: '',
+    demandDepositDate: '',
+    demandDepositAmount: '',
+    meterTestingDate: '',
+    netMeterInstallationDate: '',
+    remarks: '',
+  });
+
+const [electricityLoading, setElectricityLoading] =
+  useState(false);
+
   const fetchProject = async () => {
     try {
       setLoading(true);
@@ -730,6 +749,105 @@ const saveSubsidyDetail = async () => {
   }
 };
 
+const fetchElectricityDetail = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/${projectId}/electricity-detail`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    if (res.data) {
+      setElectricityDetail(res.data);
+
+      setElectricityForm({
+        discomName: res.data.discomName || '',
+        status:
+          res.data.status ||
+          'DOCUMENT_PENDING',
+
+        fileSubmissionDate:
+          res.data.fileSubmissionDate?.split(
+            'T',
+          )[0] || '',
+
+        siteVisitDate:
+          res.data.siteVisitDate?.split(
+            'T',
+          )[0] || '',
+
+        demandDepositDate:
+          res.data.demandDepositDate?.split(
+            'T',
+          )[0] || '',
+
+        demandDepositAmount: String(
+          res.data.demandDepositAmount || '',
+        ),
+
+        meterTestingDate:
+          res.data.meterTestingDate?.split(
+            'T',
+          )[0] || '',
+
+        netMeterInstallationDate:
+          res.data.netMeterInstallationDate?.split(
+            'T',
+          )[0] || '',
+
+        remarks: res.data.remarks || '',
+      });
+    }
+  } catch (error) {
+    console.error(
+      'Failed to load electricity detail:',
+      error,
+    );
+  }
+};
+
+const saveElectricityDetail = async () => {
+  try {
+    setElectricityLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/${projectId}/electricity-detail`,
+      electricityForm,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert(
+      'Electricity detail saved successfully',
+    );
+
+    fetchElectricityDetail();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to save electricity detail',
+    );
+  } finally {
+    setElectricityLoading(false);
+  }
+};
+
   useEffect(() => {
   if (projectId) {
   fetchProject();
@@ -739,6 +857,7 @@ const saveSubsidyDetail = async () => {
   fetchMaterialRequests();
   fetchLoanComments();
   fetchSubsidyDetail();
+  fetchElectricityDetail();
 }
 }, [projectId]);
 
@@ -1691,11 +1810,215 @@ const saveSubsidyDetail = async () => {
 )}
 
 {activeTab === 'ELECTRICITY_DEPARTMENT' && (
-  <div className="rounded-2xl bg-white p-6 shadow">
-    <h2 className="text-xl font-bold text-gray-800">Electricity Department</h2>
-    <p className="mt-3 text-gray-600">
-      DISCOM and net meter workflow will appear here.
-    </p>
+  <div className="rounded-2xl bg-white p-5 shadow">
+    <h2 className="text-xl font-bold text-gray-800">
+      Electricity Department
+    </h2>
+
+    <div className="mt-5 grid gap-4 md:grid-cols-2">
+      <input
+        type="text"
+        placeholder="DISCOM Name"
+        value={electricityForm.discomName}
+        onChange={(e) =>
+          setElectricityForm({
+            ...electricityForm,
+            discomName: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
+
+      <select
+        value={electricityForm.status}
+        onChange={(e) =>
+          setElectricityForm({
+            ...electricityForm,
+            status: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      >
+        <option value="DOCUMENT_PENDING">
+          Document Pending
+        </option>
+
+        <option value="FILE_SUBMITTED">
+          File Submitted
+        </option>
+
+        <option value="SITE_VISIT_DONE">
+          Site Visit Done
+        </option>
+
+        <option value="DEMAND_DEPOSITED">
+          Demand Deposited
+        </option>
+
+        <option value="METER_TESTING_DONE">
+          Meter Testing Done
+        </option>
+
+        <option value="NET_METER_INSTALLED">
+          Net Meter Installed
+        </option>
+
+        <option value="CONNECTION_ACTIVE">
+          Connection Active
+        </option>
+
+        <option value="REJECTED">
+          Rejected
+        </option>
+      </select>
+
+      <div>
+        <p className="mb-1 text-sm font-semibold text-gray-700">
+          File Submission Date
+        </p>
+
+        <input
+          type="date"
+          value={
+            electricityForm.fileSubmissionDate
+          }
+          onChange={(e) =>
+            setElectricityForm({
+              ...electricityForm,
+              fileSubmissionDate:
+                e.target.value,
+            })
+          }
+          className="w-full rounded-xl border p-3"
+        />
+      </div>
+
+      <div>
+        <p className="mb-1 text-sm font-semibold text-gray-700">
+          Site Visit Date
+        </p>
+
+        <input
+          type="date"
+          value={electricityForm.siteVisitDate}
+          onChange={(e) =>
+            setElectricityForm({
+              ...electricityForm,
+              siteVisitDate: e.target.value,
+            })
+          }
+          className="w-full rounded-xl border p-3"
+        />
+      </div>
+
+      <div>
+        <p className="mb-1 text-sm font-semibold text-gray-700">
+          Demand Deposit Date
+        </p>
+
+        <input
+          type="date"
+          value={
+            electricityForm.demandDepositDate
+          }
+          onChange={(e) =>
+            setElectricityForm({
+              ...electricityForm,
+              demandDepositDate:
+                e.target.value,
+            })
+          }
+          className="w-full rounded-xl border p-3"
+        />
+      </div>
+
+      <div>
+        <p className="mb-1 text-sm font-semibold text-gray-700">
+          Demand Deposit Amount
+        </p>
+
+        <input
+          type="number"
+          placeholder="Demand Deposit Amount"
+          value={
+            electricityForm.demandDepositAmount
+          }
+          onChange={(e) =>
+            setElectricityForm({
+              ...electricityForm,
+              demandDepositAmount:
+                e.target.value,
+            })
+          }
+          className="w-full rounded-xl border p-3"
+        />
+      </div>
+
+      <div>
+        <p className="mb-1 text-sm font-semibold text-gray-700">
+          Meter Testing Date
+        </p>
+
+        <input
+          type="date"
+          value={
+            electricityForm.meterTestingDate
+          }
+          onChange={(e) =>
+            setElectricityForm({
+              ...electricityForm,
+              meterTestingDate:
+                e.target.value,
+            })
+          }
+          className="w-full rounded-xl border p-3"
+        />
+      </div>
+
+      <div>
+        <p className="mb-1 text-sm font-semibold text-gray-700">
+          Net Meter Installation Date
+        </p>
+
+        <input
+          type="date"
+          value={
+            electricityForm.netMeterInstallationDate
+          }
+          onChange={(e) =>
+            setElectricityForm({
+              ...electricityForm,
+              netMeterInstallationDate:
+                e.target.value,
+            })
+          }
+          className="w-full rounded-xl border p-3"
+        />
+      </div>
+    </div>
+
+    <textarea
+      placeholder="Electricity Department Remarks"
+      value={electricityForm.remarks}
+      onChange={(e) =>
+        setElectricityForm({
+          ...electricityForm,
+          remarks: e.target.value,
+        })
+      }
+      className="mt-4 w-full rounded-xl border p-3"
+      rows={4}
+    />
+
+    <button
+      onClick={saveElectricityDetail}
+      disabled={electricityLoading}
+      className="mt-4 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+    >
+      {electricityLoading
+        ? 'Saving...'
+        : 'Save Electricity Detail'}
+    </button>
   </div>
 )}
 
