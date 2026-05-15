@@ -1204,21 +1204,11 @@ const phone = normalizePhone(rawPhone);
   async getLeadsForAutoCall(user: any) {
   const currentUserId = this.getCurrentUserId(user);
 
-  const calledLeads = await this.callLogRepository.find({
-  select: ['leadId'],
-  where: { telecallerId: currentUserId },
-  take: 1000,
-});
-
-  const calledIds = calledLeads
-    .map((c) => c.leadId)
-    .filter((id) => !!id);
-
   const qb = this.leadRepository.createQueryBuilder('lead');
 
   qb.where('COALESCE(lead.isArchived, false) = false');
 
-  // ✅ IMPORTANT: respect role visibility
+  // ✅ Respect role visibility
   if (this.isTelecaller(user) || this.isLeadExecutive(user)) {
     qb.andWhere(
       '(lead.assignedTo = :currentUserId OR lead.originTelecallerId = :currentUserId)',
@@ -1237,10 +1227,18 @@ const phone = normalizePhone(rawPhone);
     });
   }
 
-  // ✅ exclude already called leads for this user
-  if (calledIds.length) {
-    qb.andWhere('lead.id NOT IN (:...calledIds)', { calledIds });
-  }
+  // ✅ Strong repeat prevention:
+  // Exclude every lead that already has a saved call log by this user.
+  // No 1000-limit. No frontend memory dependency.
+  const alreadyCalledSubQuery = this.callLogRepository
+    .createQueryBuilder('callLog')
+    .select('1')
+    .where('callLog.leadId = lead.id')
+    .andWhere('callLog.telecallerId = :currentUserId')
+    .andWhere('callLog.leadId IS NOT NULL')
+    .getQuery();
+
+  qb.andWhere(`NOT EXISTS (${alreadyCalledSubQuery})`, { currentUserId });
 
   qb.orderBy('lead.createdAt', 'DESC');
 

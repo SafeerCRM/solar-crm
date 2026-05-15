@@ -93,7 +93,11 @@ getLeadManagerLeadCount(@Param('id') id: string, @Req() req: any) {
   }
 
   @Get('autocall')
-getLeadsForAutoCall(@CurrentUser() user: any) {
+getLeadsForAutoCall(@CurrentUser() user: any, @Res({ passthrough: true }) res: any) {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+
   return this.leadsService.getLeadsForAutoCall(user);
 }
 
