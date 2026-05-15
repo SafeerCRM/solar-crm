@@ -139,6 +139,21 @@ const [materialRequestTitle, setMaterialRequestTitle] = useState('');
 const [materialRequestRemarks, setMaterialRequestRemarks] = useState('');
 const [materialRows, setMaterialRows] = useState<MaterialRequestRow[]>([]);
 const [submittingMaterialRequest, setSubmittingMaterialRequest] = useState(false);
+const [loanDetail, setLoanDetail] = useState<any>(null);
+
+const [loanForm, setLoanForm] = useState({
+  loanType: '',
+  bankName: '',
+  applicationNumber: '',
+  marginMoney: '',
+  sanctionAmount: '',
+  firstEmiDisbursementAmount: '',
+  firstEmiDisbursementDate: '',
+  status: 'DOCUMENT_PENDING',
+  remarks: '',
+});
+
+const [loanLoading, setLoanLoading] = useState(false);
 
   const fetchProject = async () => {
     try {
@@ -468,9 +483,87 @@ const submitApproval = async (
   }
 };
 
+const fetchLoanDetail = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/${projectId}/loan-detail`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    if (res.data) {
+      setLoanDetail(res.data);
+
+      setLoanForm({
+        loanType: res.data.loanType || '',
+        bankName: res.data.bankName || '',
+        applicationNumber:
+          res.data.applicationNumber || '',
+        marginMoney:
+          String(res.data.marginMoney || ''),
+        sanctionAmount:
+          String(res.data.sanctionAmount || ''),
+        firstEmiDisbursementAmount: String(
+          res.data.firstEmiDisbursementAmount || '',
+        ),
+        firstEmiDisbursementDate:
+          res.data.firstEmiDisbursementDate
+            ?.split('T')[0] || '',
+        status:
+          res.data.status ||
+          'DOCUMENT_PENDING',
+        remarks: res.data.remarks || '',
+      });
+    }
+  } catch (error) {
+    console.error(error);
+  }
+};
+
+const saveLoanDetail = async () => {
+  try {
+    setLoanLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/${projectId}/loan-detail`,
+      loanForm,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Loan detail saved successfully');
+
+    fetchLoanDetail();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to save loan detail',
+    );
+  } finally {
+    setLoanLoading(false);
+  }
+};
+
   useEffect(() => {
   if (projectId) {
   fetchProject();
+  fetchLoanDetail();
   fetchDocuments();
   fetchMaterials();
   fetchMaterialRequests();
@@ -1040,6 +1133,190 @@ const submitApproval = async (
         )}
       </div>
     </div>
+  </div>
+)}
+
+{activeTab === 'LOAN_DEPARTMENT' && (
+  <div className="rounded-2xl bg-white p-5 shadow">
+    <h2 className="text-xl font-bold text-gray-800">
+      Loan Department
+    </h2>
+
+    <div className="mt-5 grid gap-4 md:grid-cols-2">
+      <select
+        value={loanForm.loanType}
+        onChange={(e) =>
+          setLoanForm({
+            ...loanForm,
+            loanType: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      >
+        <option value="">Select Loan Type</option>
+
+        <option value="SUBSIDY_LOAN">
+          Subsidy Loan
+        </option>
+
+        <option value="PRIVATE_LOAN">
+          Private Loan
+        </option>
+      </select>
+
+      <input
+        type="text"
+        placeholder="Bank Name"
+        value={loanForm.bankName}
+        onChange={(e) =>
+          setLoanForm({
+            ...loanForm,
+            bankName: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
+
+      <input
+        type="text"
+        placeholder="Application Number"
+        value={loanForm.applicationNumber}
+        onChange={(e) =>
+          setLoanForm({
+            ...loanForm,
+            applicationNumber: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
+
+      <input
+        type="number"
+        placeholder="Margin Money"
+        value={loanForm.marginMoney}
+        onChange={(e) =>
+          setLoanForm({
+            ...loanForm,
+            marginMoney: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
+
+      <input
+        type="number"
+        placeholder="Sanction Amount"
+        value={loanForm.sanctionAmount}
+        onChange={(e) =>
+          setLoanForm({
+            ...loanForm,
+            sanctionAmount: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
+
+      <input
+        type="number"
+        placeholder="First EMI Disbursement Amount"
+        value={
+          loanForm.firstEmiDisbursementAmount
+        }
+        onChange={(e) =>
+          setLoanForm({
+            ...loanForm,
+            firstEmiDisbursementAmount:
+              e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
+
+      <input
+        type="date"
+        value={
+          loanForm.firstEmiDisbursementDate
+        }
+        onChange={(e) =>
+          setLoanForm({
+            ...loanForm,
+            firstEmiDisbursementDate:
+              e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
+
+      <select
+        value={loanForm.status}
+        onChange={(e) =>
+          setLoanForm({
+            ...loanForm,
+            status: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      >
+        <option value="DOCUMENT_PENDING">
+          Document Pending
+        </option>
+
+        <option value="DOCUMENT_COMPLETED">
+          Document Completed
+        </option>
+
+        <option value="REGISTRATION_COMPLETED">
+          Registration Completed
+        </option>
+
+        <option value="IN_PRINCIPAL_GENERATED">
+          In Principal Generated
+        </option>
+
+        <option value="QUOTATION_SUBMITTED">
+          Quotation Submitted
+        </option>
+
+        <option value="BANK_VISITED">
+          Bank Visited
+        </option>
+
+        <option value="LOAN_DISBURSED">
+          Loan Disbursed
+        </option>
+
+        <option value="FILE_REJECTED">
+          File Rejected
+        </option>
+
+        <option value="LOAN_REAPPLY">
+          Loan Reapply
+        </option>
+      </select>
+    </div>
+
+    <textarea
+      placeholder="Loan Remarks"
+      value={loanForm.remarks}
+      onChange={(e) =>
+        setLoanForm({
+          ...loanForm,
+          remarks: e.target.value,
+        })
+      }
+      className="mt-4 w-full rounded-xl border p-3"
+      rows={4}
+    />
+
+    <button
+      onClick={saveLoanDetail}
+      disabled={loanLoading}
+      className="mt-4 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+    >
+      {loanLoading
+        ? 'Saving...'
+        : 'Save Loan Detail'}
+    </button>
   </div>
 )}
 
