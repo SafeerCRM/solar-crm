@@ -1585,41 +1585,59 @@ const saveSubsidyDetail = async () => {
         className="rounded-xl border p-3"
       />
 
-      <input
-        type="date"
-        value={subsidyForm.portalSubmissionDate}
-        onChange={(e) =>
-          setSubsidyForm({
-            ...subsidyForm,
-            portalSubmissionDate: e.target.value,
-          })
-        }
-        className="rounded-xl border p-3"
-      />
+      <div>
+  <p className="mb-1 text-sm font-semibold text-gray-700">
+    Portal Submission Date
+  </p>
 
-      <input
-        type="date"
-        value={subsidyForm.subsidyRequestedDate}
-        onChange={(e) =>
-          setSubsidyForm({
-            ...subsidyForm,
-            subsidyRequestedDate: e.target.value,
-          })
-        }
-        className="rounded-xl border p-3"
-      />
+  <input
+    type="date"
+    value={subsidyForm.portalSubmissionDate}
+    onChange={(e) =>
+      setSubsidyForm({
+        ...subsidyForm,
+        portalSubmissionDate: e.target.value,
+      })
+    }
+    className="w-full rounded-xl border p-3"
+  />
+</div>
 
-      <input
-        type="date"
-        value={subsidyForm.subsidyDisbursedDate}
-        onChange={(e) =>
-          setSubsidyForm({
-            ...subsidyForm,
-            subsidyDisbursedDate: e.target.value,
-          })
-        }
-        className="rounded-xl border p-3"
-      />
+      <div>
+  <p className="mb-1 text-sm font-semibold text-gray-700">
+    Subsidy Requested Date
+  </p>
+
+  <input
+    type="date"
+    value={subsidyForm.subsidyRequestedDate}
+    onChange={(e) =>
+      setSubsidyForm({
+        ...subsidyForm,
+        subsidyRequestedDate: e.target.value,
+      })
+    }
+    className="w-full rounded-xl border p-3"
+  />
+</div>
+
+      <div>
+  <p className="mb-1 text-sm font-semibold text-gray-700">
+    Subsidy Disbursed Date
+  </p>
+
+  <input
+    type="date"
+    value={subsidyForm.subsidyDisbursedDate}
+    onChange={(e) =>
+      setSubsidyForm({
+        ...subsidyForm,
+        subsidyDisbursedDate: e.target.value,
+      })
+    }
+    className="w-full rounded-xl border p-3"
+  />
+</div>
     </div>
 
     <div className="mt-5 grid gap-3 md:grid-cols-2">
