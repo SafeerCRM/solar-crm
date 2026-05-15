@@ -1085,8 +1085,15 @@ const handleSelectAllFilteredStorage = async () => {
 
   try {
     const res = await axios.get(`${backendUrl}/leads/autocall`, {
-      headers: getAuthHeaders(),
-    });
+  headers: {
+    ...getAuthHeaders(),
+    'Cache-Control': 'no-cache',
+    Pragma: 'no-cache',
+  },
+  params: {
+    t: Date.now(),
+  },
+});
 
     const backendQueue = Array.isArray(res.data) ? res.data : [];
 
