@@ -72,6 +72,8 @@ type MeetingManagerAnalyticsItem = {
   companyMeetingsCreatedToday?: number;
 selfMeetingsCreatedToday?: number;
 solarMiterMeetingsCreatedToday?: number;
+companyMeetingsCreatedThisMonth?: number;
+selfMeetingsCreatedThisMonth?: number;
 };
 
 type LeadManagerAnalyticsItem = {
@@ -736,65 +738,79 @@ useEffect(() => {
 
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div className="rounded bg-white p-2">
-                <p className="text-gray-500">Current Month Total</p>
+                <p className="text-gray-500">Meetings Scheduled This Month</p>
                 <p className="text-lg font-bold">{item.totalMeetings}</p>
               </div>
 
               <div className="rounded bg-white p-2">
-                <p className="text-gray-500">Converted to Project</p>
+                <p className="text-gray-500">Projects Converted Today</p>
                 <p className="text-lg font-bold text-green-600">
                   {item.convertedMeetings}
                 </p>
               </div>
 
               <div className="rounded bg-white p-2">
-                <p className="text-gray-500">Company</p>
+                <p className="text-gray-500">Company Meetings Scheduled Today</p>
                 <p className="text-lg font-bold">{item.companyMeetings}</p>
               </div>
 
               <div className="rounded bg-white p-2">
-                <p className="text-gray-500">Self</p>
+                <p className="text-gray-500">Self Meetings Scheduled Today</p>
                 <p className="text-lg font-bold">{item.selfMeetings}</p>
               </div>
                <div className="rounded bg-white p-2">
-  <p className="text-gray-500">Site Visits Today</p>
+  <p className="text-gray-500">Site Visits Updated Today</p>
   <p className="text-lg font-bold text-blue-600">
     {item.siteVisitsToday || 0}
   </p>
 </div>
 
 <div className="rounded bg-white p-2">
-  <p className="text-gray-500">Company Site Visits</p>
+  <p className="text-gray-500">Company Site Visits Updated Today</p>
   <p className="text-lg font-bold text-indigo-600">
     {item.companySiteVisitsToday || 0}
   </p>
 </div>
 
 <div className="rounded bg-white p-2">
-  <p className="text-gray-500">Self Site Visits</p>
+  <p className="text-gray-500">Self Site Visits Updated Today</p>
   <p className="text-lg font-bold text-purple-600">
     {item.selfSiteVisitsToday || 0}
   </p>
 </div>
 
 <div className="rounded bg-white p-2">
-  <p className="text-gray-500">Company Created Today</p>
+  <p className="text-gray-500">Company Meetings Created Today</p>
   <p className="text-lg font-bold text-indigo-600">
     {item.companyMeetingsCreatedToday || 0}
   </p>
 </div>
 
 <div className="rounded bg-white p-2">
-  <p className="text-gray-500">Self Created Today</p>
+  <p className="text-gray-500">Self Meetings Created Today</p>
   <p className="text-lg font-bold text-purple-600">
     {item.selfMeetingsCreatedToday || 0}
   </p>
 </div>
 
 <div className="rounded bg-white p-2">
-  <p className="text-gray-500">SolarMiter Created Today</p>
+  <p className="text-gray-500">SolarMiter Meetings Created Today</p>
   <p className="text-lg font-bold text-orange-600">
     {item.solarMiterMeetingsCreatedToday || 0}
+  </p>
+</div>
+
+<div className="rounded bg-white p-2">
+  <p className="text-gray-500">Company Meetings Created This Month</p>
+  <p className="text-lg font-bold text-indigo-700">
+    {item.companyMeetingsCreatedThisMonth || 0}
+  </p>
+</div>
+
+<div className="rounded bg-white p-2">
+  <p className="text-gray-500">Self Meetings Created This Month</p>
+  <p className="text-lg font-bold text-purple-700">
+    {item.selfMeetingsCreatedThisMonth || 0}
   </p>
 </div>
 
