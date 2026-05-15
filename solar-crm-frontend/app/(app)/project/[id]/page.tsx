@@ -169,6 +169,24 @@ const [loanComments, setLoanComments] = useState<ProjectComment[]>([]);
 const [loanCommentText, setLoanCommentText] = useState('');
 const [loanCommentLoading, setLoanCommentLoading] = useState(false);
 
+const [subsidyDetail, setSubsidyDetail] = useState<any>(null);
+
+const [subsidyForm, setSubsidyForm] = useState({
+  status: 'DOCUMENT_PENDING',
+  dcrCertificateReady: false,
+  panelWarrantyReceived: false,
+  inverterWarrantyReceived: false,
+  vendorAgreementReady: false,
+  wcrReady: false,
+  portalSubmissionDate: '',
+  subsidyRequestedDate: '',
+  subsidyDisbursedDate: '',
+  subsidyAmount: '',
+  remarks: '',
+});
+
+const [subsidyLoading, setSubsidyLoading] = useState(false);
+
   const fetchProject = async () => {
     try {
       setLoading(true);
@@ -639,6 +657,79 @@ const submitLoanComment = async () => {
   }
 };
 
+const fetchSubsidyDetail = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/${projectId}/subsidy-detail`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    if (res.data) {
+      setSubsidyDetail(res.data);
+
+      setSubsidyForm({
+        status: res.data.status || 'DOCUMENT_PENDING',
+        dcrCertificateReady: !!res.data.dcrCertificateReady,
+        panelWarrantyReceived: !!res.data.panelWarrantyReceived,
+        inverterWarrantyReceived: !!res.data.inverterWarrantyReceived,
+        vendorAgreementReady: !!res.data.vendorAgreementReady,
+        wcrReady: !!res.data.wcrReady,
+        portalSubmissionDate:
+          res.data.portalSubmissionDate?.split('T')[0] || '',
+        subsidyRequestedDate:
+          res.data.subsidyRequestedDate?.split('T')[0] || '',
+        subsidyDisbursedDate:
+          res.data.subsidyDisbursedDate?.split('T')[0] || '',
+        subsidyAmount: String(res.data.subsidyAmount || ''),
+        remarks: res.data.remarks || '',
+      });
+    }
+  } catch (error) {
+    console.error('Failed to load subsidy detail:', error);
+  }
+};
+
+const saveSubsidyDetail = async () => {
+  try {
+    setSubsidyLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/${projectId}/subsidy-detail`,
+      subsidyForm,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Subsidy detail saved successfully');
+
+    fetchSubsidyDetail();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to save subsidy detail',
+    );
+  } finally {
+    setSubsidyLoading(false);
+  }
+};
+
   useEffect(() => {
   if (projectId) {
   fetchProject();
@@ -647,6 +738,7 @@ const submitLoanComment = async () => {
   fetchMaterials();
   fetchMaterialRequests();
   fetchLoanComments();
+  fetchSubsidyDetail();
 }
 }, [projectId]);
 
@@ -1455,11 +1547,128 @@ const submitLoanComment = async () => {
 )}
 
 {activeTab === 'SUBSIDY_DEPARTMENT' && (
-  <div className="rounded-2xl bg-white p-6 shadow">
-    <h2 className="text-xl font-bold text-gray-800">Subsidy Department</h2>
-    <p className="mt-3 text-gray-600">
-      Subsidy process workflow will appear here.
-    </p>
+  <div className="rounded-2xl bg-white p-5 shadow">
+    <h2 className="text-xl font-bold text-gray-800">
+      Subsidy Department
+    </h2>
+
+    <div className="mt-5 grid gap-4 md:grid-cols-2">
+      <select
+        value={subsidyForm.status}
+        onChange={(e) =>
+          setSubsidyForm({
+            ...subsidyForm,
+            status: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      >
+        <option value="DOCUMENT_PENDING">Document Pending</option>
+        <option value="PLANT_IMAGES_RECEIVED">Plant Images Received</option>
+        <option value="DCR_CERTIFICATE_READY">DCR Certificate Ready</option>
+        <option value="SUBMISSION_DONE">Submission Done</option>
+        <option value="SUBSIDY_REQUESTED">Subsidy Requested</option>
+        <option value="SUBSIDY_DISBURSED">Subsidy Disbursed</option>
+        <option value="REJECTED">Rejected</option>
+      </select>
+
+      <input
+        type="number"
+        placeholder="Subsidy Amount"
+        value={subsidyForm.subsidyAmount}
+        onChange={(e) =>
+          setSubsidyForm({
+            ...subsidyForm,
+            subsidyAmount: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
+
+      <input
+        type="date"
+        value={subsidyForm.portalSubmissionDate}
+        onChange={(e) =>
+          setSubsidyForm({
+            ...subsidyForm,
+            portalSubmissionDate: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
+
+      <input
+        type="date"
+        value={subsidyForm.subsidyRequestedDate}
+        onChange={(e) =>
+          setSubsidyForm({
+            ...subsidyForm,
+            subsidyRequestedDate: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
+
+      <input
+        type="date"
+        value={subsidyForm.subsidyDisbursedDate}
+        onChange={(e) =>
+          setSubsidyForm({
+            ...subsidyForm,
+            subsidyDisbursedDate: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
+    </div>
+
+    <div className="mt-5 grid gap-3 md:grid-cols-2">
+      {[
+        ['dcrCertificateReady', 'DCR Certificate Ready'],
+        ['panelWarrantyReceived', 'Panel Warranty Received'],
+        ['inverterWarrantyReceived', 'Inverter Warranty Received'],
+        ['vendorAgreementReady', 'Vendor Agreement Ready'],
+        ['wcrReady', 'WCR Ready'],
+      ].map(([key, label]) => (
+        <label
+          key={key}
+          className="flex items-center gap-3 rounded-xl border p-3 text-sm font-semibold text-gray-700"
+        >
+          <input
+            type="checkbox"
+            checked={(subsidyForm as any)[key]}
+            onChange={(e) =>
+              setSubsidyForm({
+                ...subsidyForm,
+                [key]: e.target.checked,
+              })
+            }
+          />
+          {label}
+        </label>
+      ))}
+    </div>
+
+    <textarea
+      placeholder="Subsidy Remarks"
+      value={subsidyForm.remarks}
+      onChange={(e) =>
+        setSubsidyForm({
+          ...subsidyForm,
+          remarks: e.target.value,
+        })
+      }
+      className="mt-4 w-full rounded-xl border p-3"
+      rows={4}
+    />
+
+    <button
+      onClick={saveSubsidyDetail}
+      disabled={subsidyLoading}
+      className="mt-4 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+    >
+      {subsidyLoading ? 'Saving...' : 'Save Subsidy Detail'}
+    </button>
   </div>
 )}
 
