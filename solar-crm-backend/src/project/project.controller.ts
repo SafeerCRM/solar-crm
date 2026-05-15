@@ -157,6 +157,24 @@ buyMaterialRequestItem(
   );
 }
 
+@Get(':id/loan-detail')
+getProjectLoanDetail(@Param('id') id: string) {
+  return this.projectService.getProjectLoanDetail(Number(id));
+}
+
+@Post(':id/loan-detail')
+saveProjectLoanDetail(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.saveProjectLoanDetail(
+    Number(id),
+    body,
+    user,
+  );
+}
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.projectService.findOne(Number(id));

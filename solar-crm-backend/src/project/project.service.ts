@@ -25,6 +25,7 @@ import { ProjectMaterialMaster } from './project-material-master.entity';
 import { ProjectMaterialRequest } from './project-material-request.entity';
 import { ProjectMaterialRequestItem } from './project-material-request-item.entity';
 import { ProjectBranch } from './project-branch.entity';
+import { ProjectLoanDetail } from './project-loan-detail.entity';
 
 @Injectable()
 export class ProjectService {
@@ -62,6 +63,9 @@ private readonly projectMaterialRequestItemRepository: Repository<ProjectMateria
 
 @InjectRepository(ProjectBranch)
 private readonly projectBranchRepository: Repository<ProjectBranch>,
+
+@InjectRepository(ProjectLoanDetail)
+private readonly projectLoanDetailRepository: Repository<ProjectLoanDetail>,
 
     private readonly calculatorService: CalculatorService,
 
@@ -1047,5 +1051,73 @@ async buyMaterialRequestItem(
   return this.projectMaterialRequestItemRepository.save(
     item,
   );
+}
+
+async getProjectLoanDetail(projectId: number) {
+  const project = await this.projectRepository.findOne({
+    where: { id: projectId },
+  });
+
+  if (!project) {
+    throw new NotFoundException('Project not found');
+  }
+
+  const detail =
+    await this.projectLoanDetailRepository.findOne({
+      where: { projectId },
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+
+  return detail || null;
+}
+
+async saveProjectLoanDetail(
+  projectId: number,
+  body: any,
+  user: any,
+) {
+  const project = await this.projectRepository.findOne({
+    where: { id: projectId },
+  });
+
+  if (!project) {
+    throw new NotFoundException('Project not found');
+  }
+
+  let detail =
+    await this.projectLoanDetailRepository.findOne({
+      where: { projectId },
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+
+  if (!detail) {
+    detail = this.projectLoanDetailRepository.create({
+      projectId,
+    });
+  }
+
+  Object.assign(detail, {
+    loanType: body.loanType || detail.loanType || null,
+    bankName: body.bankName || '',
+    applicationNumber: body.applicationNumber || '',
+    marginMoney: this.toNumberOrZero(body.marginMoney),
+    sanctionAmount: this.toNumberOrZero(body.sanctionAmount),
+    firstEmiDisbursementAmount: this.toNumberOrZero(
+      body.firstEmiDisbursementAmount,
+    ),
+    firstEmiDisbursementDate: body.firstEmiDisbursementDate
+      ? new Date(body.firstEmiDisbursementDate)
+      : null,
+    status: body.status || detail.status,
+    remarks: body.remarks || '',
+    updatedBy: user?.id || null,
+    updatedByName: user?.name || user?.email || '',
+  });
+
+  return this.projectLoanDetailRepository.save(detail);
 }
 }
