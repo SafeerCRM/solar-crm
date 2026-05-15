@@ -36,6 +36,9 @@ department: ProjectCommentDepartment;
   createdBy: number;
 
   @Column({ nullable: true })
+createdByName: string;
+
+  @Column({ nullable: true })
   createdByRole: string;
 
   @Column({ default: false })
