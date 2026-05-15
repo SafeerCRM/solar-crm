@@ -462,7 +462,10 @@ async getProjectDocuments(projectId: number) {
   };
 }
 
-  async addComment(data: Partial<ProjectComment>) {
+  async addComment(
+  data: Partial<ProjectComment>,
+  user?: any,
+) {
   const project = await this.projectRepository.findOne({
     where: {
       id: Number(data.projectId),
@@ -474,11 +477,16 @@ async getProjectDocuments(projectId: number) {
   }
 
   const comment =
-    this.projectCommentRepository.create({
-      ...data,
-      department:
-        (data as any).department || 'GENERAL',
-    });
+  this.projectCommentRepository.create({
+    ...data,
+    department:
+      (data as any).department || 'GENERAL',
+    createdBy: user?.id || null,
+    createdByName: user?.name || user?.email || '',
+    createdByRole: Array.isArray(user?.roles)
+      ? user.roles.join(', ')
+      : '',
+  });
 
   return this.projectCommentRepository.save(comment);
 }

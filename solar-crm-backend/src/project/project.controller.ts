@@ -213,9 +213,12 @@ uploadProjectDocument(
   }
 
   @Post('comment')
-  addComment(@Body() body: any) {
-    return this.projectService.addComment(body);
-  }
+addComment(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.addComment(body, user);
+}
 
   @Get(':id/comments')
 getComments(
