@@ -27,6 +27,7 @@ import { ProjectMaterialRequestItem } from './project-material-request-item.enti
 import { ProjectBranch } from './project-branch.entity';
 import { ProjectLoanDetail } from './project-loan-detail.entity';
 import { ProjectSubsidyDetail } from './project-subsidy-detail.entity';
+import { ProjectElectricityDetail } from './project-electricity-detail.entity';
 
 @Injectable()
 export class ProjectService {
@@ -70,6 +71,9 @@ private readonly projectLoanDetailRepository: Repository<ProjectLoanDetail>,
 
 @InjectRepository(ProjectSubsidyDetail)
 private readonly projectSubsidyDetailRepository: Repository<ProjectSubsidyDetail>,
+
+@InjectRepository(ProjectElectricityDetail)
+private readonly projectElectricityDetailRepository: Repository<ProjectElectricityDetail>,
 
     private readonly calculatorService: CalculatorService,
 
@@ -1225,5 +1229,86 @@ async saveProjectSubsidyDetail(
   });
 
   return this.projectSubsidyDetailRepository.save(detail);
+}
+
+async getProjectElectricityDetail(projectId: number) {
+  const project = await this.projectRepository.findOne({
+    where: { id: projectId },
+  });
+
+  if (!project) {
+    throw new NotFoundException('Project not found');
+  }
+
+  const detail =
+    await this.projectElectricityDetailRepository.findOne({
+      where: { projectId },
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+
+  return detail || null;
+}
+
+async saveProjectElectricityDetail(
+  projectId: number,
+  body: any,
+  user: any,
+) {
+  const project = await this.projectRepository.findOne({
+    where: { id: projectId },
+  });
+
+  if (!project) {
+    throw new NotFoundException('Project not found');
+  }
+
+  let detail =
+    await this.projectElectricityDetailRepository.findOne({
+      where: { projectId },
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+
+  if (!detail) {
+    detail =
+      this.projectElectricityDetailRepository.create({
+        projectId,
+      });
+  }
+
+  Object.assign(detail, {
+    discomName: body.discomName || '',
+    status: body.status || detail.status,
+    fileSubmissionDate: body.fileSubmissionDate
+      ? new Date(body.fileSubmissionDate)
+      : null,
+    siteVisitDate: body.siteVisitDate
+      ? new Date(body.siteVisitDate)
+      : null,
+    demandDepositDate: body.demandDepositDate
+      ? new Date(body.demandDepositDate)
+      : null,
+    demandDepositAmount: this.toNumberOrZero(
+      body.demandDepositAmount,
+    ),
+    meterTestingDate: body.meterTestingDate
+      ? new Date(body.meterTestingDate)
+      : null,
+    netMeterInstallationDate:
+      body.netMeterInstallationDate
+        ? new Date(body.netMeterInstallationDate)
+        : null,
+    remarks: body.remarks || '',
+    updatedBy: user?.id || null,
+    updatedByName:
+      user?.name || user?.email || '',
+  });
+
+  return this.projectElectricityDetailRepository.save(
+    detail,
+  );
 }
 }

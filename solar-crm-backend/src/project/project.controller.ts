@@ -193,6 +193,28 @@ saveProjectSubsidyDetail(
   );
 }
 
+@Get(':id/electricity-detail')
+getProjectElectricityDetail(
+  @Param('id') id: string,
+) {
+  return this.projectService.getProjectElectricityDetail(
+    Number(id),
+  );
+}
+
+@Post(':id/electricity-detail')
+saveProjectElectricityDetail(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.saveProjectElectricityDetail(
+    Number(id),
+    body,
+    user,
+  );
+}
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.projectService.findOne(Number(id));

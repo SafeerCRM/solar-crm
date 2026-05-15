@@ -12,11 +12,12 @@ import { ProjectMaterialRequestItem } from './project-material-request-item.enti
 import { ProjectBranch } from './project-branch.entity';
 import { ProjectLoanDetail } from './project-loan-detail.entity';
 import { ProjectSubsidyDetail } from './project-subsidy-detail.entity';
+import { ProjectElectricityDetail } from './project-electricity-detail.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Project, ProjectDocument, ProjectComment, ProjectMaterialMaster, ProjectMaterialRequest,
-ProjectMaterialRequestItem, ProjectBranch, ProjectLoanDetail, ProjectSubsidyDetail]),
+ProjectMaterialRequestItem, ProjectBranch, ProjectLoanDetail, ProjectSubsidyDetail, ProjectElectricityDetail]),
     CalculatorModule,
   ],
   controllers: [ProjectController],
