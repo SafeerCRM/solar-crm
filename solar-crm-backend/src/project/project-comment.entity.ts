@@ -5,6 +5,15 @@ import {
   CreateDateColumn,
 } from 'typeorm';
 
+export enum ProjectCommentDepartment {
+  GENERAL = 'GENERAL',
+  LOAN = 'LOAN',
+  SUBSIDY = 'SUBSIDY',
+  ELECTRICITY = 'ELECTRICITY',
+  PROJECT = 'PROJECT',
+  PAYMENT = 'PAYMENT',
+}
+
 @Entity()
 export class ProjectComment {
   @PrimaryGeneratedColumn()
@@ -12,6 +21,13 @@ export class ProjectComment {
 
   @Column()
   projectId: number;
+
+  @Column({
+  type: 'enum',
+  enum: ProjectCommentDepartment,
+  default: ProjectCommentDepartment.GENERAL,
+})
+department: ProjectCommentDepartment;
 
   @Column({ type: 'text' })
   comment: string;

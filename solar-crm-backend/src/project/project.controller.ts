@@ -218,13 +218,15 @@ uploadProjectDocument(
   }
 
   @Get(':id/comments')
-  getProjectComments(
-    @Param('id') id: string,
-  ) {
-    return this.projectService.getProjectComments(
-      Number(id),
-    );
-  }
+getComments(
+  @Param('id') id: string,
+  @Query('department') department?: string,
+) {
+  return this.projectService.getProjectComments(
+    Number(id),
+    department,
+  );
+}
 
   @Patch(':id/marketing-head-approval')
   marketingHeadApproval(

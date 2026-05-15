@@ -463,32 +463,44 @@ async getProjectDocuments(projectId: number) {
 }
 
   async addComment(data: Partial<ProjectComment>) {
-    const project = await this.projectRepository.findOne({
-      where: {
-        id: Number(data.projectId),
-      },
-    });
+  const project = await this.projectRepository.findOne({
+    where: {
+      id: Number(data.projectId),
+    },
+  });
 
-    if (!project) {
-      throw new NotFoundException('Project not found');
-    }
-
-    const comment =
-      this.projectCommentRepository.create(data);
-
-    return this.projectCommentRepository.save(comment);
+  if (!project) {
+    throw new NotFoundException('Project not found');
   }
 
-  async getProjectComments(projectId: number) {
-    return this.projectCommentRepository.find({
-      where: {
-        projectId,
-      },
-      order: {
-        createdAt: 'DESC',
-      },
+  const comment =
+    this.projectCommentRepository.create({
+      ...data,
+      department:
+        (data as any).department || 'GENERAL',
     });
-  }
+
+  return this.projectCommentRepository.save(comment);
+}
+
+async getProjectComments(
+  projectId: number,
+  department?: string,
+) {
+  return this.projectCommentRepository.find({
+    where: department
+      ? {
+          projectId,
+          department: department as any,
+        }
+      : {
+          projectId,
+        },
+    order: {
+      createdAt: 'DESC',
+    },
+  });
+}
 
   async marketingHeadApproval(
   id: number,
