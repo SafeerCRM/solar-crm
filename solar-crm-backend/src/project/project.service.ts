@@ -219,6 +219,7 @@ projectOwnerRole: Array.isArray(user?.roles)
   search?: string;
   status?: string;
   branch?: string;
+  owner?: string;
 }) {
   const page =
     Number(filters?.page) > 0
@@ -267,6 +268,15 @@ projectOwnerRole: Array.isArray(user?.roles)
       },
     );
   }
+
+  if (filters?.owner) {
+  query.andWhere(
+    'CAST(project.projectOwnerId AS TEXT) = :owner',
+    {
+      owner: filters.owner,
+    },
+  );
+}
 
   query.orderBy('project.createdAt', 'DESC');
 
@@ -544,6 +554,24 @@ async getProjectDocuments(projectId: number) {
     message:
       'Project document deleted successfully',
   };
+}
+
+async getProjectOwners() {
+  const rows = await this.projectRepository
+    .createQueryBuilder('project')
+    .select([
+      'project.projectOwnerId AS "projectOwnerId"',
+      'project.projectOwnerName AS "projectOwnerName"',
+      'project.projectOwnerRole AS "projectOwnerRole"',
+    ])
+    .where('project.projectOwnerId IS NOT NULL')
+    .groupBy('project.projectOwnerId')
+    .addGroupBy('project.projectOwnerName')
+    .addGroupBy('project.projectOwnerRole')
+    .orderBy('project.projectOwnerName', 'ASC')
+    .getRawMany();
+
+  return rows;
 }
 
   async addComment(

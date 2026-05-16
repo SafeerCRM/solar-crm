@@ -50,6 +50,7 @@ findAll(
   @Query('search') search?: string,
   @Query('status') status?: string,
   @Query('branch') branch?: string,
+  @Query('owner') owner?: string,
 ) {
   return this.projectService.findAll({
     page: Number(page || 1),
@@ -57,6 +58,7 @@ findAll(
     search: search || '',
     status: status || '',
     branch: branch || '',
+    owner: owner || '',
   });
 }
 
@@ -231,6 +233,11 @@ saveProjectElectricityDetail(
     body,
     user,
   );
+}
+
+@Get('owners/list')
+getProjectOwners() {
+  return this.projectService.getProjectOwners();
 }
 
   @Get(':id')
