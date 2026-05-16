@@ -14,6 +14,8 @@ type Project = {
   city?: string;
   zone?: string;
   branchName?: string;
+  projectOwnerName?: string;
+projectOwnerRole?: string;
   electricityKNumber?: string;
   customerGmail?: string;
   aadhaarLinkedMobile?: string;
@@ -927,6 +929,15 @@ const saveElectricityDetail = async () => {
           <Field label="City" value={project.city} />
           <Field label="Zone" value={project.zone} />
           <Field label="Branch" value={project.branchName} />
+          <Field
+  label="Project Owner"
+  value={project.projectOwnerName || 'Not Assigned'}
+/>
+
+<Field
+  label="Owner Role"
+  value={project.projectOwnerRole || '-'}
+/>
           <Field label="Electricity K Number" value={project.electricityKNumber} />
           <Field label="Gmail" value={project.customerGmail} />
           <Field label="Aadhaar Linked Mobile" value={project.aadhaarLinkedMobile} />

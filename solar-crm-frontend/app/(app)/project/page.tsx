@@ -13,6 +13,8 @@ type Project = {
   city?: string;
   zone?: string;
   branchName?: string;
+  projectOwnerName?: string;
+projectOwnerRole?: string;
   projectType?: string;
   projectCost?: number;
   netAmount?: number;
@@ -146,9 +148,18 @@ setTotalPages(res.data?.totalPages || 1);
                     #{project.id} - {project.customerName || 'Unnamed Customer'}
                   </h2>
                   <p className="text-sm text-gray-500">
-                    {project.customerPhone || 'No phone'} | {project.branchName || 'No branch'} | {project.city || 'No city'} |{' '}
-                    {project.zone || 'No zone'}
-                  </p>
+  {project.customerPhone || 'No phone'} |{' '}
+  {project.branchName || 'No branch'} |{' '}
+  {project.city || 'No city'} |{' '}
+  {project.zone || 'No zone'}
+</p>
+
+<p className="mt-1 text-sm text-blue-700">
+  Project Owner:{' '}
+  <span className="font-semibold">
+    {project.projectOwnerName || 'Not Assigned'}
+  </span>
+</p>
                 </div>
 
                 <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
