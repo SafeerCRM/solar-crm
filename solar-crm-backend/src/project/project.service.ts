@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 
 import { InjectRepository } from '@nestjs/typeorm';
@@ -213,14 +214,17 @@ projectOwnerRole: Array.isArray(user?.roles)
     };
   }
 
-  async findAll(filters?: {
-  page?: number;
-  limit?: number;
-  search?: string;
-  status?: string;
-  branch?: string;
-  owner?: string;
-}) {
+  async findAll(
+  filters?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    status?: string;
+    branch?: string;
+    owner?: string;
+  },
+  user?: any,
+) {
   const page =
     Number(filters?.page) > 0
       ? Number(filters?.page)
@@ -237,6 +241,28 @@ projectOwnerRole: Array.isArray(user?.roles)
     this.projectRepository.createQueryBuilder(
       'project',
     );
+
+    const currentUserId = Number(
+  user?.id || user?.sub,
+);
+
+const roles = Array.isArray(user?.roles)
+  ? user.roles
+  : [];
+
+const canViewAll =
+  roles.includes('OWNER') ||
+  roles.includes('MARKETING_HEAD') ||
+  roles.includes('PROJECT_MANAGER');
+
+if (!canViewAll) {
+  query.andWhere(
+    'project.projectOwnerId = :currentUserId',
+    {
+      currentUserId,
+    },
+  );
+}
 
   if (filters?.search) {
     query.andWhere(
@@ -295,7 +321,7 @@ projectOwnerRole: Array.isArray(user?.roles)
   };
 }
 
-  async findOne(id: number) {
+  async findOne(id: number, user?: any) {
     const project = await this.projectRepository.findOne({
       where: { id },
     });
@@ -303,6 +329,29 @@ projectOwnerRole: Array.isArray(user?.roles)
     if (!project) {
       throw new NotFoundException('Project not found');
     }
+
+    const currentUserId = Number(
+  user?.id || user?.sub,
+);
+
+const roles = Array.isArray(user?.roles)
+  ? user.roles
+  : [];
+
+const canViewAll =
+  roles.includes('OWNER') ||
+  roles.includes('MARKETING_HEAD') ||
+  roles.includes('PROJECT_MANAGER');
+
+if (
+  !canViewAll &&
+  Number(project.projectOwnerId) !==
+    currentUserId
+) {
+  throw new ForbiddenException(
+    'You can only access your own projects',
+  );
+}
 
     return project;
   }

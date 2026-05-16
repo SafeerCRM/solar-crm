@@ -50,16 +50,20 @@ findAll(
   @Query('search') search?: string,
   @Query('status') status?: string,
   @Query('branch') branch?: string,
-  @Query('owner') owner?: string,
+  @Query('owner') owner: string = '',
+@CurrentUser() user?: any,
 ) {
-  return this.projectService.findAll({
+  return this.projectService.findAll(
+  {
     page: Number(page || 1),
     limit: Number(limit || 20),
     search: search || '',
     status: status || '',
     branch: branch || '',
     owner: owner || '',
-  });
+  },
+  user,
+);
 }
 
   @Get(':id/documents')
@@ -243,8 +247,14 @@ getProjectOwners() {
 }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.projectService.findOne(Number(id));
+  findOne(
+  @Param('id') id: string,
+  @CurrentUser() user: any,
+){
+    return this.projectService.findOne(
+  Number(id),
+  user,
+);
   }
 
   @Post('documents/upload')
