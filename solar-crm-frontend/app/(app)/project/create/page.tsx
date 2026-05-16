@@ -264,13 +264,17 @@ useEffect(() => {
             <option value="3PH">3 PH</option>
           </select>
 
-          <input
-            name="structureType"
-            placeholder="Structure Type"
-            value={form.structureType}
-            onChange={handleChange}
-            className="rounded-xl border p-3"
-          />
+          <select
+  name="structureType"
+  value={form.structureType}
+  onChange={handleChange}
+  className="rounded-xl border p-3"
+>
+  <option value="">Select Structure Type</option>
+  <option value="ROOFTOP_PIPES">Rooftop Pipes</option>
+  <option value="ROOFTOP_C_CHANNEL">Rooftop C Channel</option>
+  <option value="TIN_SHADE">Tin Shade</option>
+</select>
 
           <input
             name="structureCapacityKw"
