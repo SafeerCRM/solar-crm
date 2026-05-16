@@ -79,7 +79,10 @@ private readonly projectElectricityDetailRepository: Repository<ProjectElectrici
 
   ) {}
 
-  async create(data: Partial<Project>) {
+  async create(
+  data: Partial<Project>,
+  user?: any,
+) {
     if (!data.customerName) {
       throw new BadRequestException('Customer name is required');
     }
@@ -99,6 +102,15 @@ private readonly projectElectricityDetailRepository: Repository<ProjectElectrici
 
     const payload: any = {
   ...data,
+
+  projectOwnerId: user?.id || null,
+
+projectOwnerName:
+  user?.name || user?.email || '',
+
+projectOwnerRole: Array.isArray(user?.roles)
+  ? user.roles.join(', ')
+  : '',
 
   dcrPanelCount: this.toNumberOrZero(
     (data as any).dcrPanelCount,

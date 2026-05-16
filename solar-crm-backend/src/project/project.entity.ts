@@ -64,6 +64,15 @@ export class Project {
   createdBy: number;
 
   @Column({ nullable: true })
+projectOwnerId: number;
+
+@Column({ nullable: true })
+projectOwnerName: string;
+
+@Column({ nullable: true })
+projectOwnerRole: string;
+
+  @Column({ nullable: true })
   customerName: string;
 
   @Column({ nullable: true })

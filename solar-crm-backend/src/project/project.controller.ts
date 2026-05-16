@@ -26,9 +26,15 @@ export class ProjectController {
   ) {}
 
   @Post('create')
-  create(@Body() body: any) {
-    return this.projectService.create(body);
-  }
+create(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.create(
+    body,
+    user,
+  );
+}
 
   @Post('create-with-calculation')
   createWithCalculation(@Body() body: any) {
