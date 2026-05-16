@@ -20,9 +20,18 @@ type PurchaseItem = {
   purchaseStatus?: string;
   projectCustomerName?: string;
 projectBranchName?: string;
+projectOwnerId?: number;
+projectOwnerName?: string;
+projectOwnerRole?: string;
 projectCity?: string;
 projectZone?: string;
   createdAt?: string;
+};
+
+type ProjectOwner = {
+  projectOwnerId: number;
+  projectOwnerName?: string;
+  projectOwnerRole?: string;
 };
 
 export default function PurchaseOrdersPage() {
@@ -33,6 +42,8 @@ export default function PurchaseOrdersPage() {
 const [materialFilter, setMaterialFilter] = useState('');
 const [statusFilter, setStatusFilter] = useState('');
 const [branchFilter, setBranchFilter] = useState('');
+const [ownerFilter, setOwnerFilter] = useState('');
+const [projectOwners, setProjectOwners] = useState<ProjectOwner[]>([]);
 const [page, setPage] = useState(1);
 const [totalPages, setTotalPages] = useState(1);
 
@@ -58,6 +69,7 @@ const [summary, setSummary] = useState({
           search: `${projectFilter} ${materialFilter}`.trim(),
           status: statusFilter,
           branch: branchFilter,
+          owner: ownerFilter,
         },
         headers: token
           ? {
@@ -87,9 +99,34 @@ const [summary, setSummary] = useState({
   }
 };
 
+const fetchProjectOwners = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/owners/list`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setProjectOwners(res.data || []);
+  } catch (error) {
+    console.error('Failed to load project owners:', error);
+  }
+};
+
   useEffect(() => {
   fetchPurchaseOrders();
-}, [page, projectFilter, materialFilter, statusFilter, branchFilter]);
+}, [page, projectFilter, materialFilter, statusFilter, branchFilter, ownerFilter]);
+
+useEffect(() => {
+  fetchProjectOwners();
+}, []);
 
   const filteredItems = items;
 
@@ -231,7 +268,7 @@ const partiallyPurchasedCount =
       </div>
 
       <div className="rounded-2xl bg-white p-5 shadow">
-        <div className="mb-5 grid gap-3 md:grid-cols-4">
+        <div className="mb-5 grid gap-3 md:grid-cols-5">
   <input
     placeholder="Filter by Project ID / Customer Name"
     value={projectFilter}
@@ -261,6 +298,29 @@ const partiallyPurchasedCount =
 }}
   className="rounded-xl border p-3"
 />
+
+<select
+  value={ownerFilter}
+  onChange={(e) => {
+    setOwnerFilter(e.target.value);
+    setPage(1);
+  }}
+  className="rounded-xl border p-3"
+>
+  <option value="">All Project Owners</option>
+
+  {projectOwners.map((owner) => (
+    <option
+      key={owner.projectOwnerId}
+      value={owner.projectOwnerId}
+    >
+      {owner.projectOwnerName || 'Unnamed Owner'}
+      {owner.projectOwnerRole
+        ? ` (${owner.projectOwnerRole})`
+        : ''}
+    </option>
+  ))}
+</select>
 
   <select
     value={statusFilter}
@@ -450,6 +510,13 @@ const partiallyPurchasedCount =
   {item.projectBranchName || '-'} |{' '}
   {item.projectCity || '-'} |{' '}
   {item.projectZone || '-'}
+</p>
+
+<p className="mt-1 text-sm text-blue-700">
+  Project Owner:{' '}
+  <span className="font-semibold">
+    {item.projectOwnerName || 'Not Assigned'}
+  </span>
 </p>
 
 <p className="mt-1 text-sm text-gray-500">
