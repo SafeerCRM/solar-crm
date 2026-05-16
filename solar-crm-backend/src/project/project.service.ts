@@ -201,13 +201,77 @@ private readonly projectElectricityDetailRepository: Repository<ProjectElectrici
     };
   }
 
-  async findAll() {
-    return this.projectRepository.find({
-      order: {
-        createdAt: 'DESC',
+  async findAll(filters?: {
+  page?: number;
+  limit?: number;
+  search?: string;
+  status?: string;
+  branch?: string;
+}) {
+  const page =
+    Number(filters?.page) > 0
+      ? Number(filters?.page)
+      : 1;
+
+  const limit =
+    Number(filters?.limit) > 0
+      ? Math.min(Number(filters?.limit), 100)
+      : 20;
+
+  const skip = (page - 1) * limit;
+
+  const query =
+    this.projectRepository.createQueryBuilder(
+      'project',
+    );
+
+  if (filters?.search) {
+    query.andWhere(
+      `
+      LOWER(project.customerName) LIKE :search
+      OR LOWER(project.customerPhone) LIKE :search
+      OR CAST(project.id AS TEXT) LIKE :search
+      `,
+      {
+        search: `%${filters.search.toLowerCase()}%`,
       },
-    });
+    );
   }
+
+  if (filters?.status) {
+    query.andWhere(
+      'project.status = :status',
+      {
+        status: filters.status,
+      },
+    );
+  }
+
+  if (filters?.branch) {
+    query.andWhere(
+      'LOWER(project.branchName) LIKE :branch',
+      {
+        branch: `%${filters.branch.toLowerCase()}%`,
+      },
+    );
+  }
+
+  query.orderBy('project.createdAt', 'DESC');
+
+  query.skip(skip).take(limit);
+
+  const [data, total] =
+    await query.getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages:
+      Math.ceil(total / limit) || 1,
+  };
+}
 
   async findOne(id: number) {
     const project = await this.projectRepository.findOne({

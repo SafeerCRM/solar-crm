@@ -38,9 +38,21 @@ export class ProjectController {
   }
 
   @Get()
-  findAll() {
-    return this.projectService.findAll();
-  }
+findAll(
+  @Query('page') page?: string,
+  @Query('limit') limit?: string,
+  @Query('search') search?: string,
+  @Query('status') status?: string,
+  @Query('branch') branch?: string,
+) {
+  return this.projectService.findAll({
+    page: Number(page || 1),
+    limit: Number(limit || 20),
+    search: search || '',
+    status: status || '',
+    branch: branch || '',
+  });
+}
 
   @Get(':id/documents')
 getProjectDocuments(@Param('id') id: string) {
