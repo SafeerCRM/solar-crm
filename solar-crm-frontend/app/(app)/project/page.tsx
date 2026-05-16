@@ -24,6 +24,12 @@ projectOwnerRole?: string;
   createdAt?: string;
 };
 
+type ProjectOwner = {
+  projectOwnerId: number;
+  projectOwnerName?: string;
+  projectOwnerRole?: string;
+};
+
 export default function ProjectPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,6 +39,8 @@ const [totalPages, setTotalPages] = useState(1);
 const [search, setSearch] = useState('');
 const [statusFilter, setStatusFilter] = useState('');
 const [branchFilter, setBranchFilter] = useState('');
+const [ownerFilter, setOwnerFilter] = useState('');
+const [projectOwners, setProjectOwners] = useState<ProjectOwner[]>([]);
 
   const fetchProjects = async () => {
     try {
@@ -46,6 +54,7 @@ const [branchFilter, setBranchFilter] = useState('');
     search,
     status: statusFilter,
     branch: branchFilter,
+    owner: ownerFilter,
   },
   headers: token
     ? {
@@ -64,9 +73,34 @@ setTotalPages(res.data?.totalPages || 1);
     }
   };
 
+  const fetchProjectOwners = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/owners/list`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setProjectOwners(res.data || []);
+  } catch (error) {
+    console.error('Failed to load project owners:', error);
+  }
+};
+
   useEffect(() => {
   fetchProjects();
-}, [page, search, statusFilter, branchFilter]);
+}, [page, search, statusFilter, branchFilter, ownerFilter]);
+
+useEffect(() => {
+  fetchProjectOwners();
+}, []);
 
   return (
     <div className="mx-auto max-w-7xl space-y-4">
@@ -90,7 +124,7 @@ setTotalPages(res.data?.totalPages || 1);
 </div>
 
 <div className="rounded-2xl bg-white p-5 shadow">
-  <div className="grid gap-3 md:grid-cols-3">
+  <div className="grid gap-3 md:grid-cols-4">
     <input
       placeholder="Search by name, phone, or Project ID"
       value={search}
@@ -110,6 +144,29 @@ setTotalPages(res.data?.totalPages || 1);
       }}
       className="rounded-xl border p-3"
     />
+
+    <select
+  value={ownerFilter}
+  onChange={(e) => {
+    setOwnerFilter(e.target.value);
+    setPage(1);
+  }}
+  className="rounded-xl border p-3"
+>
+  <option value="">All Project Owners</option>
+
+  {projectOwners.map((owner) => (
+    <option
+      key={owner.projectOwnerId}
+      value={owner.projectOwnerId}
+    >
+      {owner.projectOwnerName || 'Unnamed Owner'}
+      {owner.projectOwnerRole
+        ? ` (${owner.projectOwnerRole})`
+        : ''}
+    </option>
+  ))}
+</select>
 
     <select
       value={statusFilter}
