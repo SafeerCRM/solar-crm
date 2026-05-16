@@ -25,6 +25,12 @@ type Project = {
 export default function ProjectPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+const [totalPages, setTotalPages] = useState(1);
+
+const [search, setSearch] = useState('');
+const [statusFilter, setStatusFilter] = useState('');
+const [branchFilter, setBranchFilter] = useState('');
 
   const fetchProjects = async () => {
     try {
@@ -32,10 +38,22 @@ export default function ProjectPage() {
       const token = localStorage.getItem('token');
 
       const res = await axios.get(`${API_BASE_URL}/project`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
+  params: {
+    page,
+    limit: 20,
+    search,
+    status: statusFilter,
+    branch: branchFilter,
+  },
+  headers: token
+    ? {
+        Authorization: `Bearer ${token}`,
+      }
+    : {},
+});
 
-      setProjects(res.data || []);
+setProjects(res.data?.data || []);
+setTotalPages(res.data?.totalPages || 1);
     } catch (error) {
       console.error('Failed to load projects:', error);
       alert('Failed to load projects');
@@ -45,8 +63,8 @@ export default function ProjectPage() {
   };
 
   useEffect(() => {
-    fetchProjects();
-  }, []);
+  fetchProjects();
+}, [page, search, statusFilter, branchFilter]);
 
   return (
     <div className="mx-auto max-w-7xl space-y-4">
@@ -66,6 +84,49 @@ export default function ProjectPage() {
     >
       + Create Project
     </Link>
+  </div>
+</div>
+
+<div className="rounded-2xl bg-white p-5 shadow">
+  <div className="grid gap-3 md:grid-cols-3">
+    <input
+      placeholder="Search by name, phone, or Project ID"
+      value={search}
+      onChange={(e) => {
+        setSearch(e.target.value);
+        setPage(1);
+      }}
+      className="rounded-xl border p-3"
+    />
+
+    <input
+      placeholder="Filter by Branch"
+      value={branchFilter}
+      onChange={(e) => {
+        setBranchFilter(e.target.value);
+        setPage(1);
+      }}
+      className="rounded-xl border p-3"
+    />
+
+    <select
+      value={statusFilter}
+      onChange={(e) => {
+        setStatusFilter(e.target.value);
+        setPage(1);
+      }}
+      className="rounded-xl border p-3"
+    >
+      <option value="">All Status</option>
+      <option value="PENDING_APPROVAL">Pending Approval</option>
+      <option value="APPROVED">Approved</option>
+      <option value="REJECTED">Rejected</option>
+      <option value="LOAN_PROCESS">Loan Process</option>
+      <option value="PROJECT_MANAGEMENT">Project Management</option>
+      <option value="SUBSIDY_PROCESS">Subsidy Process</option>
+      <option value="ELECTRICITY_PROCESS">Electricity Process</option>
+      <option value="COMPLETED">Completed</option>
+    </select>
   </div>
 </div>
 
@@ -153,6 +214,31 @@ export default function ProjectPage() {
           ))}
         </div>
       )}
+
+    <div className="mt-5 flex flex-col gap-3 rounded-2xl bg-white p-4 shadow md:flex-row md:items-center md:justify-between">
+  <p className="text-sm text-gray-600">
+    Page {page} of {totalPages}
+  </p>
+
+  <div className="flex gap-2">
+    <button
+      onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
+      disabled={page <= 1}
+      className="rounded-xl bg-gray-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+    >
+      Previous
+    </button>
+
+    <button
+      onClick={() => setPage((prev) => Math.min(prev + 1, totalPages))}
+      disabled={page >= totalPages}
+      className="rounded-xl bg-gray-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+    >
+      Next
+    </button>
+  </div>
+</div>
+
     </div>
   );
 }
