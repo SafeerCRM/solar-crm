@@ -154,6 +154,7 @@ getPurchaseOrders(
   @Query('search') search?: string,
   @Query('status') status?: string,
   @Query('branch') branch?: string,
+  @Query('owner') owner?: string,
 ) {
   return this.projectService.getPurchaseOrders({
     page: Number(page || 1),
@@ -161,6 +162,7 @@ getPurchaseOrders(
     search: search || '',
     status: status || '',
     branch: branch || '',
+    owner: owner || '',
   });
 }
 

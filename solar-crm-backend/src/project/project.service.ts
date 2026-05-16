@@ -978,6 +978,7 @@ async getPurchaseOrders(filters: {
   search?: string;
   status?: string;
   branch?: string;
+  owner?: string;
 }) {
   const page =
     Number(filters.page) > 0
@@ -1001,6 +1002,9 @@ async getPurchaseOrders(filters: {
   const branch = String(filters.branch || '')
     .trim()
     .toLowerCase();
+
+    const owner = String(filters.owner || '')
+  .trim();
 
   const allPendingItems =
     await this.projectMaterialRequestItemRepository.find({
@@ -1041,16 +1045,22 @@ async getPurchaseOrders(filters: {
     );
 
     return {
-      ...item,
-      projectCustomerName:
-        project?.customerName || '',
-      projectBranchName:
-        project?.branchName || '',
-      projectCity:
-        project?.city || '',
-      projectZone:
-        project?.zone || '',
-    };
+  ...item,
+  projectCustomerName:
+    project?.customerName || '',
+  projectBranchName:
+    project?.branchName || '',
+  projectCity:
+    project?.city || '',
+  projectZone:
+    project?.zone || '',
+  projectOwnerId:
+    project?.projectOwnerId || null,
+  projectOwnerName:
+    project?.projectOwnerName || '',
+  projectOwnerRole:
+    project?.projectOwnerRole || '',
+};
   });
 
   const filteredItems = enrichedItems.filter((item: any) => {
@@ -1070,11 +1080,16 @@ async getPurchaseOrders(filters: {
           .includes(branch)
       : true;
 
+      const matchesOwner = owner
+  ? String(item.projectOwnerId || '') === owner
+  : true;
+
     return (
-      matchesSearch &&
-      matchesStatus &&
-      matchesBranch
-    );
+  matchesSearch &&
+  matchesStatus &&
+  matchesBranch &&
+  matchesOwner
+);
   });
 
   const total = filteredItems.length;
