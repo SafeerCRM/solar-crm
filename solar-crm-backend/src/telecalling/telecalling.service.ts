@@ -513,17 +513,7 @@ qb.andWhere(`COALESCE(contact.stage, 'TELECALLING') = :stage`, {
 
     if (normalizedCallResult) {
   qb.andWhere(
-    `(
-      UPPER(COALESCE(call.disposition, '')) = :callResult
-      OR UPPER(COALESCE(call.callStatus, '')) = :callResult
-      OR (
-        SELECT UPPER(COALESCE(history."callStatus", ''))
-        FROM contact_call_history history
-        WHERE history."contactId" = contact.id
-        ORDER BY history."updatedAt" DESC NULLS LAST, history."createdAt" DESC
-        LIMIT 1
-      ) = :callResult
-    )`,
+    `(UPPER(COALESCE(call.disposition, '')) = :callResult OR UPPER(COALESCE(call.callStatus, '')) = :callResult)`,
     { callResult: normalizedCallResult },
   );
 }
@@ -802,17 +792,7 @@ return {
 
   if (normalizedCallResult) {
   qb.andWhere(
-    `(
-      UPPER(COALESCE(call.disposition, '')) = :callResult
-      OR UPPER(COALESCE(call.callStatus, '')) = :callResult
-      OR (
-        SELECT UPPER(COALESCE(history."callStatus", ''))
-        FROM contact_call_history history
-        WHERE history."contactId" = contact.id
-        ORDER BY history."updatedAt" DESC NULLS LAST, history."createdAt" DESC
-        LIMIT 1
-      ) = :callResult
-    )`,
+    `(UPPER(COALESCE(call.disposition, '')) = :callResult OR UPPER(COALESCE(call.callStatus, '')) = :callResult)`,
     { callResult: normalizedCallResult },
   );
 }
