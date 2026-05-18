@@ -14,6 +14,7 @@ type MaterialItem = {
   brand?: string;
   rate?: number;
   gstPercent?: number;
+  expectedMargin?: number;
   remarks?: string;
   isActive?: boolean;
 };
@@ -26,6 +27,9 @@ export default function MaterialSettingsPage() {
   const [loading, setLoading] =
     useState(false);
 
+    const [editingId, setEditingId] =
+  useState<number | null>(null);
+
   const [form, setForm] = useState({
     name: '',
     category: '',
@@ -33,6 +37,7 @@ export default function MaterialSettingsPage() {
     brand: '',
     rate: '',
     gstPercent: '',
+    expectedMargin: '',
     remarks: '',
   });
 
@@ -67,25 +72,40 @@ export default function MaterialSettingsPage() {
     fetchItems();
   }, []);
 
-  const createItem = async () => {
-    if (!form.name.trim()) {
-      alert('Material name required');
-      return;
-    }
+  const saveItem = async () => {
+  if (!form.name.trim()) {
+    alert('Material name required');
+    return;
+  }
 
-    try {
-      const token =
-        localStorage.getItem('token');
+  try {
+    const token = localStorage.getItem('token');
 
+    const payload = {
+      ...form,
+      rate: Number(form.rate || 0),
+      gstPercent: Number(form.gstPercent || 0),
+      expectedMargin: Number(form.expectedMargin || 0),
+    };
+
+    if (editingId) {
+      await axios.patch(
+        `${API_BASE_URL}/project/material-master/${editingId}`,
+        payload,
+        {
+          headers: token
+            ? {
+                Authorization: `Bearer ${token}`,
+              }
+            : {},
+        },
+      );
+
+      alert('Material updated');
+    } else {
       await axios.post(
         `${API_BASE_URL}/project/material-master`,
-        {
-          ...form,
-          rate: Number(form.rate || 0),
-          gstPercent: Number(
-            form.gstPercent || 0,
-          ),
-        },
+        payload,
         {
           headers: token
             ? {
@@ -96,27 +116,66 @@ export default function MaterialSettingsPage() {
       );
 
       alert('Material added');
-
-      setForm({
-        name: '',
-        category: '',
-        unit: '',
-        brand: '',
-        rate: '',
-        gstPercent: '',
-        remarks: '',
-      });
-
-      fetchItems();
-    } catch (error: any) {
-      console.error(error);
-
-      alert(
-        error?.response?.data?.message ||
-          'Failed to create material',
-      );
     }
-  };
+
+    setForm({
+      name: '',
+      category: '',
+      unit: '',
+      brand: '',
+      rate: '',
+      gstPercent: '',
+      expectedMargin: '',
+      remarks: '',
+    });
+
+    setEditingId(null);
+
+    fetchItems();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to save material',
+    );
+  }
+};
+
+const startEdit = (item: MaterialItem) => {
+  setEditingId(item.id);
+
+  setForm({
+    name: item.name || '',
+    category: item.category || '',
+    unit: item.unit || '',
+    brand: item.brand || '',
+    rate: String(item.rate || ''),
+    gstPercent: String(item.gstPercent || ''),
+    expectedMargin: String(item.expectedMargin || ''),
+    remarks: item.remarks || '',
+  });
+
+  window.scrollTo({
+    top: 0,
+    behavior: 'smooth',
+  });
+};
+
+const cancelEdit = () => {
+  setEditingId(null);
+
+  setForm({
+    name: '',
+    category: '',
+    unit: '',
+    brand: '',
+    rate: '',
+    gstPercent: '',
+    expectedMargin: '',
+    remarks: '',
+  });
+};
 
   const deleteItem = async (
     id: number,
@@ -250,6 +309,19 @@ export default function MaterialSettingsPage() {
             }
             className="rounded-xl border p-3"
           />
+
+          <input
+  type="number"
+  placeholder="Expected Margin"
+  value={form.expectedMargin}
+  onChange={(e) =>
+    setForm({
+      ...form,
+      expectedMargin: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+/>
         </div>
 
         <textarea
@@ -265,11 +337,20 @@ export default function MaterialSettingsPage() {
         />
 
         <button
-          onClick={createItem}
+          onClick={saveItem}
           className="mt-4 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700"
         >
-          Add Material
+          {editingId ? 'Update Material' : 'Add Material'}
         </button>
+
+        {editingId && (
+  <button
+    onClick={cancelEdit}
+    className="ml-3 mt-4 rounded-xl bg-gray-600 px-5 py-3 font-semibold text-white hover:bg-gray-700"
+  >
+    Cancel Edit
+  </button>
+)}
       </div>
 
       <div className="rounded-2xl bg-white p-5 shadow">
@@ -311,6 +392,38 @@ export default function MaterialSettingsPage() {
                       )}
                     </p>
 
+                    <p className="mt-1 text-sm text-gray-700">
+  GST: {Number(item.gstPercent || 0)}%
+</p>
+
+<p className="mt-1 text-sm text-blue-700">
+  Cost with GST: ₹
+  {(
+    Number(item.rate || 0) +
+    (Number(item.rate || 0) *
+      Number(item.gstPercent || 0)) /
+      100
+  ).toLocaleString('en-IN')}
+</p>
+
+<p className="mt-1 text-sm text-purple-700">
+  Expected Margin: ₹
+  {Number(item.expectedMargin || 0).toLocaleString(
+    'en-IN',
+  )}
+</p>
+
+<p className="mt-1 text-sm font-bold text-green-700">
+  Recommended Selling Price: ₹
+  {(
+    Number(item.rate || 0) +
+    (Number(item.rate || 0) *
+      Number(item.gstPercent || 0)) /
+      100 +
+    Number(item.expectedMargin || 0)
+  ).toLocaleString('en-IN')}
+</p>
+
                     {item.remarks && (
                       <p className="mt-1 text-sm text-gray-600">
                         {item.remarks}
@@ -318,14 +431,21 @@ export default function MaterialSettingsPage() {
                     )}
                   </div>
 
-                  <button
-                    onClick={() =>
-                      deleteItem(item.id)
-                    }
-                    className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
-                  >
-                    Delete
-                  </button>
+                  <div className="flex gap-2">
+  <button
+    onClick={() => startEdit(item)}
+    className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+  >
+    Edit
+  </button>
+
+  <button
+    onClick={() => deleteItem(item.id)}
+    className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+  >
+    Delete
+  </button>
+</div>
                 </div>
               </div>
             ))}
