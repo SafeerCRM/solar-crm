@@ -720,6 +720,7 @@ const currentUserId = this.getCurrentUserId(user);
       customerPhone: meeting.mobile || '',
       city: '',
       zone: '',
+      projectType: 'CASH' as any,
       remarks:
         meeting.notes ||
         meeting.managerRemarks ||
