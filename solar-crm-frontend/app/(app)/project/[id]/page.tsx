@@ -364,6 +364,9 @@ const fetchMaterials = async () => {
     const token = localStorage.getItem('token');
 
     const res = await axios.get(`${API_BASE_URL}/project/material-master`, {
+  params: {
+    activeOnly: true,
+  },
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
 
