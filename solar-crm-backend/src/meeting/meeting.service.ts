@@ -3,6 +3,8 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -16,13 +18,17 @@ import {
 import { CreateMeetingDto } from './dto/create-meeting.dto';
 import { UpdateMeetingDto } from './dto/update-meeting.dto';
 import { UserRole } from '../users/user.entity';
+import { ProjectService } from '../project/project.service';
 
 @Injectable()
 export class MeetingService {
   constructor(
-    @InjectRepository(Meeting)
-    private readonly meetingRepository: Repository<Meeting>,
-  ) {}
+  @InjectRepository(Meeting)
+  private readonly meetingRepository: Repository<Meeting>,
+
+  @Inject(forwardRef(() => ProjectService))
+  private readonly projectService: ProjectService,
+) {}
 
   private getRoles(user: any): string[] {
     if (Array.isArray(user?.roles)) {
@@ -671,6 +677,60 @@ const currentUserId = this.getCurrentUserId(user);
     return version;
   }
 
+  private async createProjectFromMeetingIfNeeded(
+  meeting: Meeting,
+  user: any,
+) {
+  if (!meeting.convertToProject) {
+    return null;
+  }
+
+  const existingProjects =
+    await this.projectService.findAll(
+      {
+        page: 1,
+        limit: 1,
+        search: '',
+        status: '',
+        branch: '',
+        owner: '',
+      },
+      {
+        ...user,
+        roles: ['OWNER'],
+      },
+    );
+
+  const alreadyCreated =
+    existingProjects.data.find(
+      (project: any) =>
+        Number(project.meetingId) ===
+        Number(meeting.id),
+    );
+
+  if (alreadyCreated) {
+    return alreadyCreated;
+  }
+
+  return this.projectService.create(
+    {
+      meetingId: meeting.id,
+      leadId: meeting.leadId || undefined,
+      customerName: meeting.customerName || '',
+      customerPhone: meeting.mobile || '',
+      city: '',
+      zone: '',
+      remarks:
+        meeting.notes ||
+        meeting.managerRemarks ||
+        meeting.siteObservation ||
+        '',
+      status: 'PENDING_APPROVAL' as any,
+    },
+    user,
+  );
+}
+
   async applyAction(
   id: number,
   actionData: {
@@ -741,7 +801,8 @@ existingMeeting.updatedByName = this.getCurrentUserName(user);
 return this.meetingRepository.save(existingMeeting);
   }
 
-  return this.buildMeetingVersion(
+  const updatedMeeting =
+  await this.buildMeetingVersion(
     existingMeeting,
     {
       status: actionData.status as MeetingStatus,
@@ -749,7 +810,9 @@ return this.meetingRepository.save(existingMeeting);
       outcome: actionData.outcome,
       nextAction: actionData.nextAction,
       managerRemarks: actionData.managerRemarks,
-      notes: actionData.notes ?? existingMeeting.notes,
+      notes:
+        actionData.notes ??
+        existingMeeting.notes,
       convertToProject:
         actionData.convertToProject !== undefined
           ? Boolean(actionData.convertToProject)
@@ -757,6 +820,13 @@ return this.meetingRepository.save(existingMeeting);
     },
     user,
   );
+
+await this.createProjectFromMeetingIfNeeded(
+  updatedMeeting,
+  user,
+);
+
+return updatedMeeting;
 }
 
   async updateStatus(
