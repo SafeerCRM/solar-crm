@@ -62,6 +62,20 @@ uploadMeetingProof(
     return this.meetingService.findOne(id, user);
   }
 
+  @Patch(':id/reassign')
+reassignMeeting(
+  @Param('id', ParseIntPipe) id: number,
+  @Body()
+  body: {
+    assignedTo: number;
+    assignedToName: string;
+    scope?: 'single' | 'group';
+  },
+  @CurrentUser() user: any,
+) {
+  return this.meetingService.reassignMeeting(id, body, user);
+}
+
   @Patch(':id')
   update(
     @Param('id', ParseIntPipe) id: number,

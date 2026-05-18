@@ -601,6 +601,78 @@ return {
     };
   }
 
+  async reassignMeeting(
+  id: number,
+  body: {
+    assignedTo: number;
+    assignedToName: string;
+    scope?: 'single' | 'group';
+  },
+  user: any,
+) {
+  if (!this.isOwner(user) && !this.isMarketingHead(user)) {
+    throw new ForbiddenException(
+      'Only owner or marketing head can reassign meetings',
+    );
+  }
+
+  const meeting = await this.getAccessibleMeeting(id, user);
+
+  const assignedTo = Number(body.assignedTo);
+  const assignedToName = String(body.assignedToName || '').trim();
+
+  if (!assignedTo || Number.isNaN(assignedTo)) {
+    throw new BadRequestException('Valid meeting manager is required');
+  }
+
+  if (!assignedToName) {
+    throw new BadRequestException('Meeting manager name is required');
+  }
+
+  const currentUserId = this.getCurrentUserId(user);
+  const currentUserName = this.getCurrentUserName(user);
+
+  const scope = body.scope === 'single' ? 'single' : 'group';
+
+  if (scope === 'single') {
+    await this.meetingRepository.update(meeting.id, {
+      assignedTo,
+      assignedToName,
+      updatedBy: currentUserId,
+      updatedByName: currentUserName,
+    });
+
+    return {
+      message: 'Meeting reassigned successfully',
+      scope,
+      assignedTo,
+      assignedToName,
+    };
+  }
+
+  const groupId = meeting.meetingGroupId || meeting.id;
+
+  await this.meetingRepository
+    .createQueryBuilder()
+    .update(Meeting)
+    .set({
+      assignedTo,
+      assignedToName,
+      updatedBy: currentUserId,
+      updatedByName: currentUserName,
+    })
+    .where('meetingGroupId = :groupId OR id = :groupId', { groupId })
+    .execute();
+
+  return {
+    message: 'Meeting group reassigned successfully',
+    scope,
+    groupId,
+    assignedTo,
+    assignedToName,
+  };
+}
+
   async update(
     id: number,
     updateMeetingDto: UpdateMeetingDto,
