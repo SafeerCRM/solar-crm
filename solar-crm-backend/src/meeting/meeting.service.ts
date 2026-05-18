@@ -822,10 +822,8 @@ return this.meetingRepository.save(existingMeeting);
     user,
   );
 
-await this.createProjectFromMeetingIfNeeded(
-  updatedMeeting,
-  user,
-);
+// Project creation is handled from frontend project create form
+// after meeting prefill, so incomplete projects are not created here.
 
 return updatedMeeting;
 }
