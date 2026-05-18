@@ -266,6 +266,15 @@ router.push(`/project/${createdProjectId}`);
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">
+        <input
+  type="hidden"
+  value={form.meetingId || ''}
+/>
+
+<input
+  type="hidden"
+  value={form.leadId || ''}
+/>
       <div className="rounded-2xl bg-white p-5 shadow">
         <h1 className="text-2xl font-bold text-gray-800">
           Create Project
@@ -276,9 +285,16 @@ router.push(`/project/${createdProjectId}`);
         </p>
 
         {meetingId && (
-  <p className="mt-2 rounded-xl bg-blue-50 p-3 text-sm font-semibold text-blue-700">
-    This project is being created from Meeting #{meetingId}. Please verify details and upload required documents before submitting.
-  </p>
+  <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+    <p className="text-sm font-semibold text-blue-700">
+      Project is being created from Meeting #{meetingId}
+    </p>
+
+    <p className="mt-1 text-sm text-blue-600">
+      Customer details and notes were prefilled automatically.
+      Please verify remaining project details before submission.
+    </p>
+  </div>
 )}
       </div>
 
@@ -293,7 +309,11 @@ router.push(`/project/${createdProjectId}`);
             placeholder="Customer Name"
             value={form.customerName}
             onChange={handleChange}
-            className="rounded-xl border p-3"
+            className={`rounded-xl border p-3 ${
+  meetingId
+    ? 'border-blue-300 bg-blue-50'
+    : ''
+}`}
           />
 
           <input
@@ -301,7 +321,11 @@ router.push(`/project/${createdProjectId}`);
             placeholder="Customer Phone"
             value={form.customerPhone}
             onChange={handleChange}
-            className="rounded-xl border p-3"
+            className={`rounded-xl border p-3 ${
+  meetingId
+    ? 'border-blue-300 bg-blue-50'
+    : ''
+}`}
           />
 
           <input
