@@ -436,42 +436,56 @@ const [rescheduleAudioFile, setRescheduleAudioFile] = useState<File | null>(null
 };
 
   const convertToProject = async () => {
-    if (!latestMeeting) return;
+  if (!latestMeeting) return;
 
-    try {
-      setConvertingProject(true);
-      setError('');
-      setMessage('');
+  const confirmed = window.confirm(
+    'Convert this meeting to project? You will be taken to the Project Create form to complete details and upload required documents.',
+  );
 
-      await axios.patch(
-        `${backendUrl}/meetings/${latestMeeting.id}/action`,
-        {
-          status: 'CONVERTED_TO_PROJECT',
-          reason: form.reason || undefined,
-          outcome: form.outcome || undefined,
-          nextAction: form.nextAction || 'Converted to project',
-          managerRemarks: form.managerRemarks || undefined,
-          notes: form.notes || undefined,
-          convertToProject: true,
-        },
-        {
-          headers: getAuthHeaders(),
-        }
-      );
+  if (!confirmed) {
+    setConvertSliderValue(0);
+    return;
+  }
 
-      setConvertSliderValue(0);
-      setMessage('Meeting converted to project status successfully');
-      await fetchDetail();
-    } catch (err: any) {
-      console.error(err);
-      setError(
-        err?.response?.data?.message || err?.message || 'Failed to convert to project'
-      );
-      setConvertSliderValue(0);
-    } finally {
-      setConvertingProject(false);
-    }
-  };
+  try {
+    setConvertingProject(true);
+    setError('');
+    setMessage('');
+
+    await axios.patch(
+      `${backendUrl}/meetings/${latestMeeting.id}/action`,
+      {
+        status: 'CONVERTED_TO_PROJECT',
+        reason: form.reason || undefined,
+        outcome: form.outcome || undefined,
+        nextAction:
+          form.nextAction ||
+          'Ready for project creation',
+        managerRemarks:
+          form.managerRemarks || undefined,
+        notes: form.notes || undefined,
+        convertToProject: true,
+      },
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+
+    setConvertSliderValue(0);
+
+    window.location.href = `/project/create?meetingId=${latestMeeting.id}`;
+  } catch (err: any) {
+    console.error(err);
+    setError(
+      err?.response?.data?.message ||
+        err?.message ||
+        'Failed to start project conversion',
+    );
+    setConvertSliderValue(0);
+  } finally {
+    setConvertingProject(false);
+  }
+};
 
   const handleConvertSliderChange = async (value: number) => {
     setConvertSliderValue(value);
