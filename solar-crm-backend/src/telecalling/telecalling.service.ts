@@ -1788,19 +1788,23 @@ await this.contactRepository.update(contact.id, {
   hasCalled: true,
 } as any);
 
-  // ✅ IMPORTANT: UPDATE LATEST CALL LOG
-  if (body.recordingUrl) {
-    const latestCallLog = await this.callLogRepository.findOne({
-      where: { contactId: contact.id },
-      order: { createdAt: 'DESC' },
-    });
+  // ✅ Keep latest call_log synced with contact call history.
+// This makes status filters fast and consistent with displayed status.
+const latestCallLog = await this.callLogRepository.findOne({
+  where: { contactId: contact.id },
+  order: { createdAt: 'DESC' },
+});
 
-    if (latestCallLog) {
-      await this.callLogRepository.update(latestCallLog.id, {
-        recordingUrl: body.recordingUrl,
-      });
-    }
-  }
+if (latestCallLog) {
+  await this.callLogRepository.update(latestCallLog.id, {
+    callStatus: savedItem.callStatus,
+    disposition: savedItem.callStatus,
+    callNotes: savedItem.notes,
+    nextFollowUpDate: savedItem.nextFollowUpDate || null,
+    recordingUrl: body.recordingUrl || latestCallLog.recordingUrl || null,
+    providerUpdatedAt: new Date(),
+  });
+}
 
   return savedItem;
 }
@@ -1866,6 +1870,23 @@ await this.contactRepository.update(id, {
   remarks: savedHistory.notes,
   hasCalled: true,
 } as any);
+
+// ✅ Keep latest call_log synced with edited contact call history.
+// This keeps status filters matching what is displayed.
+const latestCallLog = await this.callLogRepository.findOne({
+  where: { contactId: id },
+  order: { createdAt: 'DESC' },
+});
+
+if (latestCallLog) {
+  await this.callLogRepository.update(latestCallLog.id, {
+    callStatus: savedHistory.callStatus,
+    disposition: savedHistory.callStatus,
+    callNotes: savedHistory.notes,
+    nextFollowUpDate: savedHistory.nextFollowUpDate || null,
+    providerUpdatedAt: new Date(),
+  });
+}
 
 return savedHistory;
   }
