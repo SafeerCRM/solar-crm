@@ -382,7 +382,7 @@ setLoading(true);
         phone: phoneFilter.trim(),
         city: cityFilter.trim(),
                 telecallerName: telecallerNameFilter.trim(),
-        callResult: '',
+        callResult: callResultFilter,
         leadPotential: leadPotentialFilter,
       };
 
@@ -408,7 +408,7 @@ return;
   name: nameFilter.trim(),
   phone: phoneFilter.trim(),
   city: cityFilter.trim(),
-  callResult: '',
+  callResult: callResultFilter,
   leadPotential: leadPotentialFilter,
 };
 
