@@ -29,6 +29,9 @@ export class ProjectMaterialMaster {
   @Column({ type: 'float', default: 0 })
   gstPercent: number;
 
+  @Column({ type: 'float', default: 0 })
+expectedMargin: number;
+
   @Column({ type: 'text', nullable: true })
   remarks: string;
 

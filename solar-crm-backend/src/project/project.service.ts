@@ -725,6 +725,7 @@ async getProjectComments(
     brand: data.brand || '',
     rate: Number(data.rate || 0),
     gstPercent: Number(data.gstPercent || 0),
+    expectedMargin: Number((data as any).expectedMargin || 0),
     remarks: data.remarks || '',
     isActive: data.isActive !== false,
   });
@@ -759,6 +760,11 @@ async updateMaterialMaster(id: number, data: Partial<ProjectMaterialMaster>) {
       data.gstPercent !== undefined
         ? Number(data.gstPercent || 0)
         : item.gstPercent,
+
+        expectedMargin:
+  (data as any).expectedMargin !== undefined
+    ? Number((data as any).expectedMargin || 0)
+    : (item as any).expectedMargin,
   });
 
   return this.projectMaterialMasterRepository.save(item);
