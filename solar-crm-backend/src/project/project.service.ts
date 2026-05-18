@@ -771,18 +771,48 @@ async updateMaterialMaster(id: number, data: Partial<ProjectMaterialMaster>) {
 }
 
 async deleteMaterialMaster(id: number) {
-  const item = await this.projectMaterialMasterRepository.findOne({
-    where: { id },
-  });
+  const item =
+    await this.projectMaterialMasterRepository.findOne({
+      where: { id },
+    });
 
   if (!item) {
-    throw new NotFoundException('Material item not found');
+    throw new NotFoundException(
+      'Material item not found',
+    );
   }
 
-  await this.projectMaterialMasterRepository.delete(id);
+  item.isActive = false;
+
+  await this.projectMaterialMasterRepository.save(
+    item,
+  );
 
   return {
-    message: 'Material item deleted successfully',
+    message: 'Material item disabled successfully',
+  };
+}
+
+async enableMaterialMaster(id: number) {
+  const item =
+    await this.projectMaterialMasterRepository.findOne({
+      where: { id },
+    });
+
+  if (!item) {
+    throw new NotFoundException(
+      'Material item not found',
+    );
+  }
+
+  item.isActive = true;
+
+  await this.projectMaterialMasterRepository.save(
+    item,
+  );
+
+  return {
+    message: 'Material item enabled successfully',
   };
 }
 

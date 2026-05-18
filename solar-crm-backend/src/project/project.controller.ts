@@ -110,6 +110,13 @@ deleteMaterialMaster(@Param('id') id: string) {
   return this.projectService.deleteMaterialMaster(Number(id));
 }
 
+@Patch('material-master/:id/enable')
+enableMaterialMaster(@Param('id') id: string) {
+  return this.projectService.enableMaterialMaster(
+    Number(id),
+  );
+}
+
 @Post('material-request')
 createMaterialRequest(
   @Body() body: any,
