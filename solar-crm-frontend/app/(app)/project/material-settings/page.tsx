@@ -177,12 +177,14 @@ const cancelEdit = () => {
   });
 };
 
-  const deleteItem = async (
-    id: number,
+  const toggleMaterialStatus = async (
+    item: MaterialItem,
   ) => {
     const confirmed =
       window.confirm(
-        'Delete this material?',
+        item.isActive
+  ? 'Disable this material?'
+  : 'Enable this material?',
       );
 
     if (!confirmed) {
@@ -194,7 +196,9 @@ const cancelEdit = () => {
         localStorage.getItem('token');
 
       await axios.patch(
-        `${API_BASE_URL}/project/material-master/${id}/delete`,
+        `${API_BASE_URL}/project/material-master/${item.id}/${
+  item.isActive ? 'delete' : 'enable'
+}`,
         {},
         {
           headers: token
@@ -205,7 +209,11 @@ const cancelEdit = () => {
         },
       );
 
-      alert('Material deleted');
+      alert(
+  item.isActive
+    ? 'Material disabled'
+    : 'Material enabled',
+);
 
       fetchItems();
     } catch (error: any) {
@@ -369,13 +377,27 @@ const cancelEdit = () => {
             {items.map((item) => (
               <div
                 key={item.id}
-                className="rounded-xl border p-4"
+                className={`rounded-xl border p-4 ${
+  item.isActive
+    ? 'bg-white'
+    : 'bg-gray-100 opacity-70'
+}`}
               >
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                   <div>
                     <p className="font-bold text-gray-800">
-                      {item.name}
-                    </p>
+  {item.name}
+
+  <span
+    className={`ml-2 rounded-full px-2 py-1 text-xs font-semibold ${
+      item.isActive
+        ? 'bg-green-100 text-green-700'
+        : 'bg-red-100 text-red-700'
+    }`}
+  >
+    {item.isActive ? 'ACTIVE' : 'DISABLED'}
+  </span>
+</p>
 
                     <p className="text-sm text-gray-500">
                       {item.category || '-'} |{' '}
@@ -440,11 +462,15 @@ const cancelEdit = () => {
   </button>
 
   <button
-    onClick={() => deleteItem(item.id)}
-    className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
-  >
-    Delete
-  </button>
+  onClick={() => toggleMaterialStatus(item)}
+  className={`rounded-xl px-4 py-2 text-sm font-semibold text-white ${
+    item.isActive
+      ? 'bg-red-600 hover:bg-red-700'
+      : 'bg-green-600 hover:bg-green-700'
+  }`}
+>
+  {item.isActive ? 'Disable' : 'Enable'}
+</button>
 </div>
                 </div>
               </div>
