@@ -20,6 +20,7 @@ type Branch = {
 export default function CreateProjectPage() {
   const router = useRouter();
 
+  const [meetingId, setMeetingId] = useState('');
   const [loading, setLoading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 const [documentType, setDocumentType] = useState('');
@@ -37,6 +38,8 @@ const [pendingDocuments, setPendingDocuments] = useState<PendingDocument[]>([]);
     customerGmail: '',
     aadhaarLinkedMobile: '',
     branchName: '',
+    meetingId: '',
+    leadId: '',
 
     panelBrand: '',
     dcrPanelCount: '',
@@ -120,6 +123,45 @@ const addPendingDocument = () => {
   setDocumentType('');
   setSelectedFiles([]);
   setDocumentRemarks('');
+};
+
+const fetchMeetingPrefill = async () => {
+  if (!meetingId) return;
+
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/meetings/${meetingId}/detail`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    const meeting =
+      res.data?.latestMeeting || res.data;
+
+    if (!meeting) return;
+
+    setForm((prev) => ({
+      ...prev,
+      meetingId: String(meeting.id || meetingId),
+      leadId: meeting.leadId ? String(meeting.leadId) : '',
+      customerName: meeting.customerName || prev.customerName,
+      customerPhone: meeting.mobile || prev.customerPhone,
+      remarks:
+        meeting.notes ||
+        meeting.managerRemarks ||
+        meeting.siteObservation ||
+        prev.remarks,
+    }));
+  } catch (error) {
+    console.error('Failed to prefill meeting:', error);
+  }
 };
 
   const handleSubmit = async () => {
@@ -213,6 +255,15 @@ router.push(`/project/${createdProjectId}`);
     }
   };
 
+  useEffect(() => {
+  const params = new URLSearchParams(window.location.search);
+  setMeetingId(params.get('meetingId') || '');
+}, []);
+
+  useEffect(() => {
+  fetchMeetingPrefill();
+}, [meetingId]);
+
   return (
     <div className="mx-auto max-w-7xl space-y-5">
       <div className="rounded-2xl bg-white p-5 shadow">
@@ -223,6 +274,12 @@ router.push(`/project/${createdProjectId}`);
         <p className="mt-1 text-sm text-gray-500">
           Fill project order details carefully before submitting for approval.
         </p>
+
+        {meetingId && (
+  <p className="mt-2 rounded-xl bg-blue-50 p-3 text-sm font-semibold text-blue-700">
+    This project is being created from Meeting #{meetingId}. Please verify details and upload required documents before submitting.
+  </p>
+)}
       </div>
 
       <div className="rounded-2xl bg-white p-5 shadow">
