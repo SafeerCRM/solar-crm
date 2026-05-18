@@ -16,6 +16,8 @@ export default function CreateProjectPage() {
 
   const [loading, setLoading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploadedDocumentTypes, setUploadedDocumentTypes] =
+  useState<string[]>([]);
 const [documentType, setDocumentType] = useState('PROJECT_CREATION');
 const [documentRemarks, setDocumentRemarks] = useState('');
 
@@ -97,7 +99,30 @@ useEffect(() => {
       const token = localStorage.getItem('token');
 
       if (!selectedFiles.length) {
-  alert('Please upload at least one project document before submitting');
+  alert(
+    'Please upload at least one project document before submitting',
+  );
+  return;
+}
+
+const requiredDocuments = [
+  'AADHAAR',
+  'ELECTRICITY_BILL',
+];
+
+const missingDocuments =
+  requiredDocuments.filter(
+    (doc) =>
+      !uploadedDocumentTypes.includes(doc),
+  );
+
+if (missingDocuments.length > 0) {
+  alert(
+    `Please upload required documents: ${missingDocuments.join(
+      ', ',
+    )}`,
+  );
+
   return;
 }
 
@@ -466,22 +491,83 @@ router.push(`/project/${createdProjectId}`);
     Upload required documents before submitting project for approval.
   </p>
 
+  <div className="mt-3 rounded-xl bg-yellow-50 p-4 text-sm text-yellow-800">
+  <p className="font-semibold">
+    Mandatory Documents:
+  </p>
+
+  <ul className="mt-2 list-disc pl-5">
+    <li>Aadhaar Card</li>
+    <li>Electricity Bill</li>
+  </ul>
+</div>
+
   <div className="grid gap-3 md:grid-cols-2">
-    <input
-      type="text"
-      placeholder="Document Type"
-      value={documentType}
-      onChange={(e) => setDocumentType(e.target.value)}
-      className="rounded-xl border p-3"
-    />
+    <select
+  value={documentType}
+  onChange={(e) =>
+    setDocumentType(e.target.value)
+  }
+  className="rounded-xl border p-3"
+>
+  <option value="">
+    Select Document Type
+  </option>
+
+  <option value="AADHAAR">
+    Aadhaar Card
+  </option>
+
+  <option value="ELECTRICITY_BILL">
+    Electricity Bill
+  </option>
+
+  <option value="CUSTOMER_PHOTO">
+    Customer Photo
+  </option>
+
+  <option value="SITE_PHOTO">
+    Site Photo
+  </option>
+
+  <option value="BANK_DOCUMENT">
+    Bank Document
+  </option>
+
+  <option value="LOAN_DOCUMENT">
+    Loan Document
+  </option>
+
+  <option value="PROPERTY_DOCUMENT">
+    Property Document
+  </option>
+
+  <option value="OTHER">
+    Other
+  </option>
+</select>
 
     <input
       type="file"
       multiple
       accept=".pdf,.jpg,.jpeg,.png,.webp"
-      onChange={(e) =>
-        setSelectedFiles(Array.from(e.target.files || []))
-      }
+      onChange={(e) => {
+  setSelectedFiles(
+    Array.from(e.target.files || []),
+  );
+
+  if (
+    documentType &&
+    !uploadedDocumentTypes.includes(
+      documentType,
+    )
+  ) {
+    setUploadedDocumentTypes([
+      ...uploadedDocumentTypes,
+      documentType,
+    ]);
+  }
+}}
       className="rounded-xl border p-3"
     />
   </div>
