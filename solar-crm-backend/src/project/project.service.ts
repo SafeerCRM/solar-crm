@@ -733,8 +733,13 @@ async getProjectComments(
   return this.projectMaterialMasterRepository.save(item);
 }
 
-async getMaterialMasters() {
+async getMaterialMasters(activeOnly = false) {
   return this.projectMaterialMasterRepository.find({
+    where: activeOnly
+      ? {
+          isActive: true,
+        }
+      : {},
     order: {
       createdAt: 'DESC',
     },

@@ -90,8 +90,12 @@ createMaterialMaster(@Body() body: any) {
 }
 
 @Get('material-master')
-getMaterialMasters() {
-  return this.projectService.getMaterialMasters();
+getMaterialMasters(
+  @Query('activeOnly') activeOnly?: string,
+) {
+  return this.projectService.getMaterialMasters(
+    activeOnly === 'true',
+  );
 }
 
 @Patch('material-master/:id')
