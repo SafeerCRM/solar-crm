@@ -6,6 +6,12 @@ import { useRouter } from 'next/navigation';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
+type PendingDocument = {
+  documentType: string;
+  files: File[];
+  remarks: string;
+};
+
 type Branch = {
   id: number;
   name: string;
@@ -16,10 +22,9 @@ export default function CreateProjectPage() {
 
   const [loading, setLoading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [uploadedDocumentTypes, setUploadedDocumentTypes] =
-  useState<string[]>([]);
-const [documentType, setDocumentType] = useState('PROJECT_CREATION');
+const [documentType, setDocumentType] = useState('');
 const [documentRemarks, setDocumentRemarks] = useState('');
+const [pendingDocuments, setPendingDocuments] = useState<PendingDocument[]>([]);
 
   const [branches, setBranches] = useState<Branch[]>([]);
 
@@ -92,29 +97,56 @@ useEffect(() => {
   fetchBranches();
 }, []);
 
+const addPendingDocument = () => {
+  if (!documentType) {
+    alert('Please select document type');
+    return;
+  }
+
+  if (!selectedFiles.length) {
+    alert('Please select files');
+    return;
+  }
+
+  setPendingDocuments([
+    ...pendingDocuments,
+    {
+      documentType,
+      files: selectedFiles,
+      remarks: documentRemarks,
+    },
+  ]);
+
+  setDocumentType('');
+  setSelectedFiles([]);
+  setDocumentRemarks('');
+};
+
   const handleSubmit = async () => {
     try {
       setLoading(true);
 
       const token = localStorage.getItem('token');
 
-      if (!selectedFiles.length) {
+      if (!pendingDocuments.length) {
   alert(
-    'Please upload at least one project document before submitting',
+    'Please add required project documents before submitting',
   );
   return;
 }
+
+const uploadedDocumentTypes = pendingDocuments.map(
+  (doc) => doc.documentType,
+);
 
 const requiredDocuments = [
   'AADHAAR',
   'ELECTRICITY_BILL',
 ];
 
-const missingDocuments =
-  requiredDocuments.filter(
-    (doc) =>
-      !uploadedDocumentTypes.includes(doc),
-  );
+const missingDocuments = requiredDocuments.filter(
+  (doc) => !uploadedDocumentTypes.includes(doc),
+);
 
 if (missingDocuments.length > 0) {
   alert(
@@ -122,7 +154,6 @@ if (missingDocuments.length > 0) {
       ', ',
     )}`,
   );
-
   return;
 }
 
@@ -144,27 +175,29 @@ if (!createdProjectId) {
   throw new Error('Project created but project ID was not returned');
 }
 
-const formData = new FormData();
+for (const pendingDoc of pendingDocuments) {
+  const formData = new FormData();
 
-selectedFiles.forEach((file) => {
-  formData.append('files', file);
-});
+  pendingDoc.files.forEach((file) => {
+    formData.append('files', file);
+  });
 
-formData.append('projectId', String(createdProjectId));
-formData.append('department', 'PROJECT_CREATION');
-formData.append('documentType', documentType);
-formData.append('remarks', documentRemarks);
+  formData.append('projectId', String(createdProjectId));
+  formData.append('department', 'PROJECT_CREATION');
+  formData.append('documentType', pendingDoc.documentType);
+  formData.append('remarks', pendingDoc.remarks);
 
-await axios.post(
-  `${API_BASE_URL}/project/documents/upload`,
-  formData,
-  {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'multipart/form-data',
+  await axios.post(
+    `${API_BASE_URL}/project/documents/upload`,
+    formData,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'multipart/form-data',
+      },
     },
-  },
-);
+  );
+}
 
 alert('Project created and documents uploaded successfully');
 
@@ -548,28 +581,25 @@ router.push(`/project/${createdProjectId}`);
 </select>
 
     <input
-      type="file"
-      multiple
-      accept=".pdf,.jpg,.jpeg,.png,.webp"
-      onChange={(e) => {
-  setSelectedFiles(
-    Array.from(e.target.files || []),
-  );
-
-  if (
-    documentType &&
-    !uploadedDocumentTypes.includes(
-      documentType,
+  type="file"
+  multiple
+  accept=".pdf,.jpg,.jpeg,.png,.webp"
+  onChange={(e) =>
+    setSelectedFiles(
+      Array.from(e.target.files || []),
     )
-  ) {
-    setUploadedDocumentTypes([
-      ...uploadedDocumentTypes,
-      documentType,
-    ]);
   }
-}}
-      className="rounded-xl border p-3"
-    />
+  className="rounded-xl border p-3"
+/>
+
+<button
+  type="button"
+  onClick={addPendingDocument}
+  className="rounded-xl bg-gray-800 px-4 py-3 text-sm font-semibold text-white hover:bg-black"
+>
+  Add Document
+</button>
+
   </div>
 
   <textarea
@@ -580,19 +610,44 @@ router.push(`/project/${createdProjectId}`);
     className="mt-3 w-full rounded-xl border p-3"
   />
 
-  {selectedFiles.length > 0 && (
-    <div className="mt-3 rounded-xl bg-gray-50 p-3">
-      <p className="text-sm font-semibold text-gray-700">
-        Selected files:
-      </p>
+  {pendingDocuments.length > 0 && (
+  <div className="mt-4 rounded-xl bg-gray-50 p-4">
+    <p className="text-sm font-semibold text-gray-700">
+      Added documents:
+    </p>
 
-      <ul className="mt-2 list-disc pl-5 text-sm text-gray-600">
-        {selectedFiles.map((file) => (
-          <li key={file.name}>{file.name}</li>
-        ))}
-      </ul>
+    <div className="mt-3 space-y-2">
+      {pendingDocuments.map((doc, index) => (
+        <div
+          key={`${doc.documentType}-${index}`}
+          className="rounded-lg border bg-white p-3 text-sm"
+        >
+          <p className="font-semibold text-gray-800">
+            {doc.documentType}
+          </p>
+
+          <p className="text-gray-500">
+            {doc.files.length} file(s)
+          </p>
+
+          <button
+            type="button"
+            onClick={() =>
+              setPendingDocuments(
+                pendingDocuments.filter(
+                  (_, docIndex) => docIndex !== index,
+                ),
+              )
+            }
+            className="mt-2 text-xs font-semibold text-red-600"
+          >
+            Remove
+          </button>
+        </div>
+      ))}
     </div>
-  )}
+  </div>
+)}
 </div>
 
       <div className="pb-10">
