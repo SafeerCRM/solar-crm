@@ -24,6 +24,10 @@ export default function MaterialSettingsPage() {
     MaterialItem[]
   >([]);
 
+  const [searchText, setSearchText] = useState('');
+const [categoryFilter, setCategoryFilter] = useState('');
+const [statusFilter, setStatusFilter] = useState('');
+
   const [loading, setLoading] =
     useState(false);
 
@@ -247,6 +251,34 @@ const cancelEdit = () => {
   userRoles.includes('OWNER') ||
   userRoles.includes('PROJECT_MANAGER');
 
+  const categoryOptions = Array.from(
+  new Set(
+    items
+      .map((item) => item.category || '')
+      .filter(Boolean),
+  ),
+);
+
+const filteredItems = items.filter((item) => {
+  const matchesSearch = searchText
+    ? `${item.name || ''} ${item.brand || ''}`
+        .toLowerCase()
+        .includes(searchText.toLowerCase())
+    : true;
+
+  const matchesCategory = categoryFilter
+    ? item.category === categoryFilter
+    : true;
+
+  const matchesStatus = statusFilter
+    ? statusFilter === 'ACTIVE'
+      ? item.isActive !== false
+      : item.isActive === false
+    : true;
+
+  return matchesSearch && matchesCategory && matchesStatus;
+});
+
   return (
     <div className="mx-auto max-w-7xl space-y-5">
       <div className="rounded-2xl bg-white p-5 shadow">
@@ -395,15 +427,48 @@ const cancelEdit = () => {
           Material List
         </h2>
 
+        <div className="mb-4 grid gap-3 md:grid-cols-3">
+  <input
+    placeholder="Search material or brand"
+    value={searchText}
+    onChange={(e) => setSearchText(e.target.value)}
+    className="rounded-xl border p-3"
+  />
+
+  <select
+    value={categoryFilter}
+    onChange={(e) => setCategoryFilter(e.target.value)}
+    className="rounded-xl border p-3"
+  >
+    <option value="">All Categories</option>
+
+    {categoryOptions.map((category) => (
+      <option key={category} value={category}>
+        {category}
+      </option>
+    ))}
+  </select>
+
+  <select
+    value={statusFilter}
+    onChange={(e) => setStatusFilter(e.target.value)}
+    className="rounded-xl border p-3"
+  >
+    <option value="">All Status</option>
+    <option value="ACTIVE">Active</option>
+    <option value="DISABLED">Disabled</option>
+  </select>
+</div>
+
         {loading ? (
           <p>Loading...</p>
-        ) : items.length === 0 ? (
+        ) : filteredItems.length === 0 ? (
           <p className="text-sm text-gray-500">
             No materials added yet
           </p>
         ) : (
           <div className="space-y-3">
-            {items.map((item) => (
+            {filteredItems.map((item) => (
               <div
                 key={item.id}
                 className={`rounded-xl border p-4 ${
