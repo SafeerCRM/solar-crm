@@ -15,6 +15,9 @@ export default function CreateProjectPage() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+const [documentType, setDocumentType] = useState('PROJECT_CREATION');
+const [documentRemarks, setDocumentRemarks] = useState('');
 
   const [branches, setBranches] = useState<Branch[]>([]);
 
@@ -93,17 +96,54 @@ useEffect(() => {
 
       const token = localStorage.getItem('token');
 
-      await axios.post(`${API_BASE_URL}/project/create`, form, {
-        headers: token
-          ? {
-              Authorization: `Bearer ${token}`,
-            }
-          : {},
-      });
+      if (!selectedFiles.length) {
+  alert('Please upload at least one project document before submitting');
+  return;
+}
 
-      alert('Project created successfully');
+const projectRes = await axios.post(
+  `${API_BASE_URL}/project/create`,
+  form,
+  {
+    headers: token
+      ? {
+          Authorization: `Bearer ${token}`,
+        }
+      : {},
+  },
+);
 
-      router.push('/project');
+const createdProjectId = projectRes.data?.id;
+
+if (!createdProjectId) {
+  throw new Error('Project created but project ID was not returned');
+}
+
+const formData = new FormData();
+
+selectedFiles.forEach((file) => {
+  formData.append('files', file);
+});
+
+formData.append('projectId', String(createdProjectId));
+formData.append('department', 'PROJECT_CREATION');
+formData.append('documentType', documentType);
+formData.append('remarks', documentRemarks);
+
+await axios.post(
+  `${API_BASE_URL}/project/documents/upload`,
+  formData,
+  {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'multipart/form-data',
+    },
+  },
+);
+
+alert('Project created and documents uploaded successfully');
+
+router.push(`/project/${createdProjectId}`);
     } catch (error: any) {
       console.error(error);
 
@@ -416,6 +456,58 @@ useEffect(() => {
           className="w-full rounded-xl border p-3"
         />
       </div>
+
+      <div className="rounded-2xl bg-white p-5 shadow">
+  <h2 className="mb-4 text-lg font-bold text-gray-800">
+    Project Documents
+  </h2>
+
+  <p className="mb-4 text-sm text-gray-500">
+    Upload required documents before submitting project for approval.
+  </p>
+
+  <div className="grid gap-3 md:grid-cols-2">
+    <input
+      type="text"
+      placeholder="Document Type"
+      value={documentType}
+      onChange={(e) => setDocumentType(e.target.value)}
+      className="rounded-xl border p-3"
+    />
+
+    <input
+      type="file"
+      multiple
+      accept=".pdf,.jpg,.jpeg,.png,.webp"
+      onChange={(e) =>
+        setSelectedFiles(Array.from(e.target.files || []))
+      }
+      className="rounded-xl border p-3"
+    />
+  </div>
+
+  <textarea
+    placeholder="Document remarks"
+    value={documentRemarks}
+    onChange={(e) => setDocumentRemarks(e.target.value)}
+    rows={3}
+    className="mt-3 w-full rounded-xl border p-3"
+  />
+
+  {selectedFiles.length > 0 && (
+    <div className="mt-3 rounded-xl bg-gray-50 p-3">
+      <p className="text-sm font-semibold text-gray-700">
+        Selected files:
+      </p>
+
+      <ul className="mt-2 list-disc pl-5 text-sm text-gray-600">
+        {selectedFiles.map((file) => (
+          <li key={file.name}>{file.name}</li>
+        ))}
+      </ul>
+    </div>
+  )}
+</div>
 
       <div className="pb-10">
         <button
