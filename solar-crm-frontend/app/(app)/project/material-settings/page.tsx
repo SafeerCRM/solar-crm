@@ -27,6 +27,9 @@ export default function MaterialSettingsPage() {
   const [loading, setLoading] =
     useState(false);
 
+    const [userRoles, setUserRoles] =
+  useState<string[]>([]);
+
     const [editingId, setEditingId] =
   useState<number | null>(null);
 
@@ -69,8 +72,22 @@ export default function MaterialSettingsPage() {
   };
 
   useEffect(() => {
-    fetchItems();
-  }, []);
+  fetchItems();
+
+  try {
+    const storedUser =
+      localStorage.getItem('user');
+
+    if (storedUser) {
+      const parsed =
+        JSON.parse(storedUser);
+
+      setUserRoles(parsed?.roles || []);
+    }
+  } catch (error) {
+    console.error(error);
+  }
+}, []);
 
   const saveItem = async () => {
   if (!form.name.trim()) {
@@ -226,6 +243,10 @@ const cancelEdit = () => {
     }
   };
 
+  const canManageMaterials =
+  userRoles.includes('OWNER') ||
+  userRoles.includes('PROJECT_MANAGER');
+
   return (
     <div className="mx-auto max-w-7xl space-y-5">
       <div className="rounded-2xl bg-white p-5 shadow">
@@ -236,9 +257,16 @@ const cancelEdit = () => {
         <p className="mt-2 text-sm text-gray-500">
           Manage project material master list
         </p>
+
+        {!canManageMaterials && (
+  <div className="mt-4 rounded-xl bg-blue-50 p-4 text-sm text-blue-700">
+    You have view-only access to material pricing and trading calculations.
+  </div>
+)}
       </div>
 
-      <div className="rounded-2xl bg-white p-5 shadow">
+      {canManageMaterials && (
+  <div className="rounded-2xl bg-white p-5 shadow">
         <h2 className="mb-4 text-lg font-bold">
           Add Material
         </h2>
@@ -360,6 +388,7 @@ const cancelEdit = () => {
   </button>
 )}
       </div>
+      )}
 
       <div className="rounded-2xl bg-white p-5 shadow">
         <h2 className="mb-4 text-lg font-bold">
@@ -453,7 +482,8 @@ const cancelEdit = () => {
                     )}
                   </div>
 
-                  <div className="flex gap-2">
+                  {canManageMaterials && (
+  <div className="flex gap-2">
   <button
     onClick={() => startEdit(item)}
     className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
@@ -472,6 +502,7 @@ const cancelEdit = () => {
   {item.isActive ? 'Disable' : 'Enable'}
 </button>
 </div>
+)}
                 </div>
               </div>
             ))}
