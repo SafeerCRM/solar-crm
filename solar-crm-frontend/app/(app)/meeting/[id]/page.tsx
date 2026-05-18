@@ -76,6 +76,13 @@ type CalculatorResult = {
   createdAt: string;
 };
 
+type User = {
+  id: number;
+  name: string;
+  email?: string;
+  roles?: string[];
+};
+
 type ActionOption = '' | 'COMPLETED' | 'CANCELLED' | 'ON_HOLD' | 'RESCHEDULED';
 
 const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -94,6 +101,12 @@ export default function MeetingDetailPage() {
   const [latestMeeting, setLatestMeeting] = useState<Meeting | null>(null);
   const [history, setHistory] = useState<Meeting[]>([]);
   const [calculators, setCalculators] = useState<CalculatorResult[]>([]);
+
+  const [currentUserRoles, setCurrentUserRoles] = useState<string[]>([]);
+const [meetingManagers, setMeetingManagers] = useState<User[]>([]);
+const [reassignManagerId, setReassignManagerId] = useState('');
+const [reassignScope, setReassignScope] = useState<'single' | 'group'>('group');
+const [reassigning, setReassigning] = useState(false);
 
   const [selectedAction, setSelectedAction] = useState<ActionOption>('');
   const [reschedulePhotoFile, setReschedulePhotoFile] = useState<File | null>(null);
@@ -207,9 +220,37 @@ const [rescheduleAudioFile, setRescheduleAudioFile] = useState<File | null>(null
   }
 };
 
+const canReassignMeeting =
+  currentUserRoles.includes('OWNER') ||
+  currentUserRoles.includes('MARKETING_HEAD');
+
+const fetchMeetingManagers = async () => {
+  try {
+    const res = await axios.get(`${backendUrl}/users/meeting-managers`, {
+      headers: getAuthHeaders(),
+    });
+
+    setMeetingManagers(Array.isArray(res.data) ? res.data : []);
+  } catch (err) {
+    console.error('Failed to fetch meeting managers:', err);
+    setMeetingManagers([]);
+  }
+};
+
   useEffect(() => {
+  const storedUser = localStorage.getItem('user');
+
+  if (storedUser) {
+    try {
+      const parsed = JSON.parse(storedUser);
+      setCurrentUserRoles(Array.isArray(parsed?.roles) ? parsed.roles : []);
+    } catch {}
+  }
+
   fetchDetail();
   fetchCalculators();
+  fetchMeetingManagers();
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [meetingId]);
 
@@ -284,6 +325,51 @@ const [rescheduleAudioFile, setRescheduleAudioFile] = useState<File | null>(null
   } catch (err) {
     console.error(err);
     alert('Failed to start call');
+  }
+};
+
+const reassignMeeting = async () => {
+  if (!latestMeeting) return;
+
+  const selectedManager = meetingManagers.find(
+    (manager) => String(manager.id) === reassignManagerId,
+  );
+
+  if (!selectedManager) {
+    setError('Please select meeting manager');
+    return;
+  }
+
+  try {
+    setReassigning(true);
+    setError('');
+    setMessage('');
+
+    await axios.patch(
+      `${backendUrl}/meetings/${latestMeeting.id}/reassign`,
+      {
+        assignedTo: selectedManager.id,
+        assignedToName: selectedManager.name,
+        scope: reassignScope,
+      },
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+
+    setMessage('Meeting reassigned successfully');
+    setReassignManagerId('');
+    setReassignScope('group');
+    await fetchDetail();
+  } catch (err: any) {
+    console.error(err);
+    setError(
+      err?.response?.data?.message ||
+        err?.message ||
+        'Failed to reassign meeting',
+    );
+  } finally {
+    setReassigning(false);
   }
 };
 
@@ -571,6 +657,52 @@ const [rescheduleAudioFile, setRescheduleAudioFile] = useState<File | null>(null
           {error ? <p className="text-red-600">{error}</p> : null}
         </div>
       )}
+
+      {canReassignMeeting && (
+  <div className="mb-6 rounded border bg-white p-6">
+    <h2 className="mb-4 text-xl font-semibold">Reassign Meeting Manager</h2>
+
+    <div className="grid gap-4 md:grid-cols-3">
+      <select
+        value={reassignManagerId}
+        onChange={(e) => setReassignManagerId(e.target.value)}
+        className="rounded border p-2"
+      >
+        <option value="">Select Meeting Manager</option>
+        {meetingManagers.map((manager) => (
+          <option key={manager.id} value={manager.id}>
+            {manager.name} ({manager.id})
+          </option>
+        ))}
+      </select>
+
+      <select
+        value={reassignScope}
+        onChange={(e) =>
+          setReassignScope(e.target.value as 'single' | 'group')
+        }
+        className="rounded border p-2"
+      >
+        <option value="group">Entire Meeting History / Group</option>
+        <option value="single">Only This Meeting Record</option>
+      </select>
+
+      <button
+        type="button"
+        onClick={reassignMeeting}
+        disabled={reassigning || !reassignManagerId}
+        className="rounded bg-purple-600 px-4 py-2 text-white disabled:opacity-50"
+      >
+        {reassigning ? 'Reassigning...' : 'Reassign'}
+      </button>
+    </div>
+
+    <p className="mt-2 text-xs text-gray-500">
+      Use group reassignment when the meeting has reschedule/history records.
+      Use single reassignment only when you want to transfer only this selected record.
+    </p>
+  </div>
+)}
 
       <div className="mb-6 rounded border bg-white p-6">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
