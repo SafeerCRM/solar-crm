@@ -918,8 +918,16 @@ const fetchExecutionActivities = async () => {
       },
     );
 
-    (res.data || []).forEach((activity: ExecutionActivity) => {
-  fetchExecutionProofs(activity.id);
+    const activities = Array.isArray(res.data)
+  ? res.data
+  : [];
+
+setExecutionActivities(activities);
+
+activities.forEach((activity: ExecutionActivity) => {
+  if (activity?.id) {
+    fetchExecutionProofs(activity.id);
+  }
 });
   } catch (error) {
     console.error('Failed to load execution activities:', error);
