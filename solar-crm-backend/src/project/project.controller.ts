@@ -290,6 +290,26 @@ updateExecutionActivity(
   );
 }
 
+@Post('execution-proof')
+uploadExecutionProof(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.uploadExecutionProof(
+    body,
+    user,
+  );
+}
+
+@Get('execution-activity/:id/proofs')
+getExecutionActivityProofs(
+  @Param('id') id: string,
+) {
+  return this.projectService.getExecutionActivityProofs(
+    Number(id),
+  );
+}
+
   @Get(':id')
   findOne(
   @Param('id') id: string,

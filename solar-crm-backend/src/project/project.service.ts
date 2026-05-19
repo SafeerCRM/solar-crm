@@ -34,6 +34,7 @@ import {
   ProjectExecutionActivityStatus,
   ProjectExecutionActivityType,
 } from './project-execution-activity.entity';
+import { ProjectExecutionProof } from './project-execution-proof.entity';
 
 @Injectable()
 export class ProjectService {
@@ -83,6 +84,9 @@ private readonly projectElectricityDetailRepository: Repository<ProjectElectrici
 
 @InjectRepository(ProjectExecutionActivity)
 private readonly projectExecutionActivityRepository: Repository<ProjectExecutionActivity>,
+
+@InjectRepository(ProjectExecutionProof)
+private readonly projectExecutionProofRepository: Repository<ProjectExecutionProof>,
 
     private readonly calculatorService: CalculatorService,
 
@@ -1087,6 +1091,63 @@ async updateExecutionActivity(
   return this.projectExecutionActivityRepository.save(
     activity,
   );
+}
+
+async uploadExecutionProof(
+  data: {
+    activityId: number;
+    projectId: number;
+    fileUrl: string;
+    latitude?: string;
+    longitude?: string;
+  },
+  user: any,
+) {
+  if (!data.activityId) {
+    throw new BadRequestException(
+      'Activity ID is required',
+    );
+  }
+
+  if (!data.projectId) {
+    throw new BadRequestException(
+      'Project ID is required',
+    );
+  }
+
+  if (!data.fileUrl) {
+    throw new BadRequestException(
+      'File URL is required',
+    );
+  }
+
+  const proof =
+    this.projectExecutionProofRepository.create({
+      activityId: Number(data.activityId),
+      projectId: Number(data.projectId),
+      fileUrl: data.fileUrl,
+      latitude: data.latitude || '',
+      longitude: data.longitude || '',
+      uploadedBy: user?.id || null,
+      uploadedByName: user?.name || '',
+    });
+
+  return this.projectExecutionProofRepository.save(
+    proof,
+  );
+}
+
+async getExecutionActivityProofs(
+  activityId: number,
+) {
+  return this.projectExecutionProofRepository.find({
+    where: {
+      activityId,
+    },
+    order: {
+      createdAt: 'DESC',
+    },
+  });
 }
 
   async ownerApproval(
