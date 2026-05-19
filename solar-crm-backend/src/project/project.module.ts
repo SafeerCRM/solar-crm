@@ -13,11 +13,12 @@ import { ProjectBranch } from './project-branch.entity';
 import { ProjectLoanDetail } from './project-loan-detail.entity';
 import { ProjectSubsidyDetail } from './project-subsidy-detail.entity';
 import { ProjectElectricityDetail } from './project-electricity-detail.entity';
+import { ProjectExecutionActivity } from './project-execution-activity.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Project, ProjectDocument, ProjectComment, ProjectMaterialMaster, ProjectMaterialRequest,
-ProjectMaterialRequestItem, ProjectBranch, ProjectLoanDetail, ProjectSubsidyDetail, ProjectElectricityDetail]),
+ProjectMaterialRequestItem, ProjectBranch, ProjectLoanDetail, ProjectSubsidyDetail, ProjectElectricityDetail, ProjectExecutionActivity]),
     CalculatorModule,
   ],
   controllers: [ProjectController],
