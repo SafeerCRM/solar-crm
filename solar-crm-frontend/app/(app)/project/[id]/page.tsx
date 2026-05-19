@@ -252,6 +252,9 @@ const [executionLoading, setExecutionLoading] =
   const [executionProofs, setExecutionProofs] =
   useState<Record<number, ExecutionProof[]>>({});
 
+  const [updatingExecutionId, setUpdatingExecutionId] =
+  useState<number | null>(null);
+
 const [proofFiles, setProofFiles] =
   useState<Record<number, File[]>>({});
 
@@ -1062,6 +1065,52 @@ const uploadExecutionProofs = async (
   }
 };
 
+const updateExecutionActivityStatus = async (
+  activity: ExecutionActivity,
+  status: string,
+) => {
+  try {
+    setUpdatingExecutionId(activity.id);
+
+    const token = localStorage.getItem('token');
+
+    const payload: any = {
+      status,
+    };
+
+    if (status === 'COMPLETED') {
+      payload.completedDate = new Date()
+        .toISOString()
+        .split('T')[0];
+    }
+
+    await axios.patch(
+      `${API_BASE_URL}/project/execution-activity/${activity.id}`,
+      payload,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Execution activity updated');
+
+    fetchExecutionActivities();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to update execution activity',
+    );
+  } finally {
+    setUpdatingExecutionId(null);
+  }
+};
+
   useEffect(() => {
   if (projectId) {
   fetchProject();
@@ -1776,7 +1825,15 @@ const uploadExecutionProofs = async (
           executionActivities.map((activity) => (
             <div
               key={activity.id}
-              className="rounded-xl border p-4"
+              className={`rounded-xl border p-4 ${
+  activity.status === 'OVERDUE'
+    ? 'border-red-300 bg-red-50'
+    : activity.status === 'COMPLETED'
+      ? 'border-green-300 bg-green-50'
+      : activity.status === 'IN_PROGRESS'
+        ? 'border-yellow-300 bg-yellow-50'
+        : 'bg-white'
+}`}
             >
               <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                 <div>
@@ -1805,6 +1862,24 @@ const uploadExecutionProofs = async (
                       {new Date(activity.inspectionDeadline).toLocaleDateString('en-IN')}
                     </p>
                   )}
+
+                  {activity.status === 'OVERDUE' &&
+  activity.inspectionDeadline && (
+    <p className="mt-1 text-sm font-semibold text-red-700">
+      Overdue by{' '}
+      {Math.max(
+        1,
+        Math.floor(
+          (Date.now() -
+            new Date(
+              activity.inspectionDeadline,
+            ).getTime()) /
+            (1000 * 60 * 60 * 24),
+        ),
+      )}{' '}
+      day(s)
+    </p>
+  )}
 
                   {activity.remarks && (
                     <p className="mt-2 text-sm text-gray-700">
@@ -1865,9 +1940,59 @@ const uploadExecutionProofs = async (
     ))}
   </div>
 </div>
+
+<div className="mt-4 flex flex-wrap gap-2">
+  <button
+    onClick={() =>
+      updateExecutionActivityStatus(
+        activity,
+        'IN_PROGRESS',
+      )
+    }
+    disabled={updatingExecutionId === activity.id}
+    className="rounded-xl bg-yellow-500 px-4 py-2 text-sm font-semibold text-white hover:bg-yellow-600 disabled:opacity-50"
+  >
+    In Progress
+  </button>
+
+  <button
+    onClick={() =>
+      updateExecutionActivityStatus(
+        activity,
+        'COMPLETED',
+      )
+    }
+    disabled={updatingExecutionId === activity.id}
+    className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+  >
+    Complete
+  </button>
+
+  <button
+    onClick={() =>
+      updateExecutionActivityStatus(
+        activity,
+        'CANCELLED',
+      )
+    }
+    disabled={updatingExecutionId === activity.id}
+    className="rounded-xl bg-gray-700 px-4 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-50"
+  >
+    Cancel
+  </button>
+</div>
+
                 </div>
 
-                <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
+                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
+  activity.status === 'OVERDUE'
+    ? 'bg-red-100 text-red-700'
+    : activity.status === 'COMPLETED'
+      ? 'bg-green-100 text-green-700'
+      : activity.status === 'IN_PROGRESS'
+        ? 'bg-yellow-100 text-yellow-700'
+        : 'bg-blue-100 text-blue-700'
+}`}>
                   {activity.status || 'PENDING'}
                 </span>
               </div>
