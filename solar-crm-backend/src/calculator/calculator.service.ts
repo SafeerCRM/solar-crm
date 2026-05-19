@@ -711,11 +711,41 @@ async deleteOngridOption(id: number) {
   }
 
   async findByMeetingId(meetingId: number) {
-    return this.calculatorRepository.find({
-      where: { meetingId },
-      order: { createdAt: 'DESC' },
+  const calculators = await this.calculatorRepository.find({
+    where: { meetingId },
+    order: { createdAt: 'DESC' },
+  });
+
+  const enrichedCalculators: any[] = [];
+
+  for (const calculator of calculators) {
+    const recalculated = await this.calculateProjectCost(
+      {
+        ...calculator,
+        discountAmount:
+          Number((calculator as any).discountAmount || 0),
+      },
+    );
+
+    enrichedCalculators.push({
+      ...calculator,
+      baseCostBeforeMargin:
+        recalculated.baseCostBeforeMargin,
+      marginAmount:
+        recalculated.marginAmount,
+      totalProjectCost:
+        recalculated.totalProjectCost,
+      expectedProfit:
+        recalculated.expectedProfit,
+      appliedDiscount:
+        recalculated.appliedDiscount,
+      finalCost:
+        recalculated.finalCost,
     });
   }
+
+  return enrichedCalculators;
+}
   async getSettings() {
   let settings = await this.calculatorSettingRepository.findOne({
     where: { id: 1 },
