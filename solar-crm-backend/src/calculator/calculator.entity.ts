@@ -168,6 +168,9 @@ export class Calculator {
   electricityDepartmentCost: number;
 
   @Column({ type: 'decimal', precision: 16, scale: 2, default: 0 })
+baseCostBeforeMargin: number;
+
+  @Column({ type: 'decimal', precision: 16, scale: 2, default: 0 })
   totalProjectCost: number;
 
   @Column({ type: 'int', nullable: true })

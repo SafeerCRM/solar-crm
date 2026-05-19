@@ -209,6 +209,8 @@ export class CreateCalculatorDto {
   @IsNumber()
   electricityDepartmentCost?: number;
 
+  baseCostBeforeMargin?: number;
+
   @IsOptional()
   @IsNumber()
   totalProjectCost?: number;
