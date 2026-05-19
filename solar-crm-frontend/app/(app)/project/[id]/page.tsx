@@ -119,6 +119,17 @@ type ExecutionActivity = {
   createdAt?: string;
 };
 
+type ExecutionProof = {
+  id: number;
+  activityId: number;
+  projectId: number;
+  fileUrl?: string;
+  latitude?: string;
+  longitude?: string;
+  uploadedByName?: string;
+  createdAt?: string;
+};
+
 function money(value?: number) {
   return `₹${Number(value || 0).toLocaleString('en-IN')}`;
 }
@@ -237,6 +248,15 @@ const [executionForm, setExecutionForm] = useState({
 
 const [executionLoading, setExecutionLoading] =
   useState(false);
+
+  const [executionProofs, setExecutionProofs] =
+  useState<Record<number, ExecutionProof[]>>({});
+
+const [proofFiles, setProofFiles] =
+  useState<Record<number, File[]>>({});
+
+const [proofUploadingId, setProofUploadingId] =
+  useState<number | null>(null);
 
   const fetchProject = async () => {
     try {
@@ -898,7 +918,9 @@ const fetchExecutionActivities = async () => {
       },
     );
 
-    setExecutionActivities(res.data || []);
+    (res.data || []).forEach((activity: ExecutionActivity) => {
+  fetchExecutionProofs(activity.id);
+});
   } catch (error) {
     console.error('Failed to load execution activities:', error);
   }
@@ -950,6 +972,85 @@ const createExecutionActivity = async () => {
     );
   } finally {
     setExecutionLoading(false);
+  }
+};
+
+const fetchExecutionProofs = async (activityId: number) => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/execution-activity/${activityId}/proofs`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setExecutionProofs((prev) => ({
+      ...prev,
+      [activityId]: res.data || [],
+    }));
+  } catch (error) {
+    console.error('Failed to load execution proofs:', error);
+  }
+};
+
+const uploadExecutionProofs = async (
+  activity: ExecutionActivity,
+) => {
+  const files = proofFiles[activity.id] || [];
+
+  if (!files.length) {
+    alert('Please select proof photos');
+    return;
+  }
+
+  try {
+    setProofUploadingId(activity.id);
+
+    const token = localStorage.getItem('token');
+
+    const formData = new FormData();
+
+    files.forEach((file) => {
+      formData.append('files', file);
+    });
+
+    formData.append('activityId', String(activity.id));
+    formData.append('projectId', String(projectId));
+
+    await axios.post(
+      `${API_BASE_URL}/project/execution-proof/upload`,
+      formData,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data',
+        },
+      },
+    );
+
+    alert('Execution proof uploaded');
+
+    setProofFiles((prev) => ({
+      ...prev,
+      [activity.id]: [],
+    }));
+
+    fetchExecutionProofs(activity.id);
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to upload execution proof',
+    );
+  } finally {
+    setProofUploadingId(null);
   }
 };
 
@@ -1702,6 +1803,60 @@ const createExecutionActivity = async () => {
                       {activity.remarks}
                     </p>
                   )}
+
+                  <div className="mt-4 rounded-xl bg-gray-50 p-3">
+  <p className="text-sm font-semibold text-gray-700">
+    GPS / Site Proof Photos
+  </p>
+
+  <input
+    type="file"
+    multiple
+    accept="image/*"
+    onChange={(e) =>
+      setProofFiles((prev) => ({
+        ...prev,
+        [activity.id]: Array.from(e.target.files || []),
+      }))
+    }
+    className="mt-3 w-full rounded-xl border bg-white p-3"
+  />
+
+  <button
+    onClick={() => uploadExecutionProofs(activity)}
+    disabled={proofUploadingId === activity.id}
+    className="mt-3 rounded-xl bg-gray-800 px-4 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-50"
+  >
+    {proofUploadingId === activity.id
+      ? 'Uploading...'
+      : 'Upload Proof Photos'}
+  </button>
+
+  <div className="mt-4 grid gap-3 md:grid-cols-3">
+    {(executionProofs[activity.id] || []).map((proof) => (
+      <a
+        key={proof.id}
+        href={proof.fileUrl}
+        target="_blank"
+        rel="noreferrer"
+        className="block overflow-hidden rounded-xl border bg-white"
+      >
+        <img
+          src={proof.fileUrl}
+          alt="Execution proof"
+          className="h-40 w-full object-cover"
+        />
+
+        <p className="p-2 text-xs text-gray-500">
+          {proof.uploadedByName || 'Uploaded'} |{' '}
+          {proof.createdAt
+            ? new Date(proof.createdAt).toLocaleString()
+            : '-'}
+        </p>
+      </a>
+    ))}
+  </div>
+</div>
                 </div>
 
                 <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
