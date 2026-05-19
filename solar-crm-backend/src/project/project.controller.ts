@@ -325,8 +325,10 @@ uploadExecutionProofFiles(
 }
 
 @Get('execution-calendar')
-getExecutionCalendarActivities() {
-  return this.projectService.getExecutionCalendarActivities();
+getExecutionCalendarActivities(
+  @CurrentUser() user: any,
+) {
+  return this.projectService.getExecutionCalendarActivities(user);
 }
 
   @Get(':id')

@@ -1290,16 +1290,40 @@ async refreshExecutionOverdueStatuses() {
   }
 }
 
-async getExecutionCalendarActivities() {
+async getExecutionCalendarActivities(user?: any) {
   await this.refreshExecutionOverdueStatuses();
 
-  const activities =
-    await this.projectExecutionActivityRepository.find({
-      order: {
-        scheduledDate: 'ASC',
-        createdAt: 'DESC',
-      },
-    });
+  const currentUserId = Number(user?.id || user?.sub);
+
+const roles = Array.isArray(user?.roles)
+  ? user.roles
+  : [];
+
+const canViewAll =
+  roles.includes('OWNER') ||
+  roles.includes('MARKETING_HEAD') ||
+  roles.includes('PROJECT_MANAGER');
+
+  const activityQuery =
+  this.projectExecutionActivityRepository.createQueryBuilder('activity');
+
+if (!canViewAll) {
+  activityQuery
+    .innerJoin(
+      'project',
+      'project',
+      'project.id = activity.projectId',
+    )
+    .andWhere(
+      'project.projectOwnerId = :currentUserId',
+      { currentUserId },
+    );
+}
+
+const activities = await activityQuery
+  .orderBy('activity.scheduledDate', 'ASC')
+  .addOrderBy('activity.createdAt', 'DESC')
+  .getMany();
 
   const projectIds = [
     ...new Set(
