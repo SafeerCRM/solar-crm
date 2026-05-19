@@ -153,6 +153,9 @@ branchName: string;
   projectSize: string;
 
   @Column({ nullable: true, default: 0 })
+finalCost: number;
+
+  @Column({ nullable: true, default: 0 })
   projectCost: number;
 
   @Column({ nullable: true, default: 0 })

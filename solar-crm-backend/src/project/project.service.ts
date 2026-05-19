@@ -129,6 +129,10 @@ projectOwnerRole: Array.isArray(user?.roles)
     (data as any).loanAmount,
   ),
 
+  finalCost: this.toNumberOrZero(
+  (data as any).finalCost,
+),
+
   projectCost: this.toNumberOrZero(
     (data as any).projectCost,
   ),
