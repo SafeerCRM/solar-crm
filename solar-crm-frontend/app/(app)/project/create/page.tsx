@@ -94,6 +94,8 @@ const [pendingDocuments, setPendingDocuments] = useState<PendingDocument[]>([]);
     const calculators = Array.isArray(res.data) ? res.data : [];
     const latestCalculator = calculators[0];
 
+    console.log('LATEST CALCULATOR:', latestCalculator);
+
     if (!latestCalculator) return;
 
     const totalProjectCost = Number(
@@ -120,10 +122,59 @@ const [pendingDocuments, setPendingDocuments] = useState<PendingDocument[]>([]);
       customerPhone: latestCalculator.customerPhone || prev.customerPhone,
       city: latestCalculator.customerCity || prev.city,
 
-      projectCost: String(totalProjectCost),
-      expectedLagat: String(expectedLagat),
-      marginMoney: String(marginAmount),
-      expectedProfit: String(Number(latestCalculator.expectedProfit || 0)),
+      projectCost: String(
+  latestCalculator.finalCost ||
+    latestCalculator.totalProjectCost ||
+    '',
+),
+
+expectedLagat: String(
+  latestCalculator.totalProjectCost || '',
+),
+
+marginMoney: String(
+  latestCalculator.marginAmount || '',
+),
+
+expectedProfit: String(
+  latestCalculator.expectedProfit || '',
+),
+
+panelBrand: [
+  latestCalculator.panelCategory,
+  latestCalculator.panelType,
+  latestCalculator.wattPerPanel
+    ? `${latestCalculator.wattPerPanel}W`
+    : '',
+]
+  .filter(Boolean)
+  .join(' | '),
+
+dcrPanelCount:
+  latestCalculator.panelCategory === 'DCR'
+    ? String(latestCalculator.numberOfPanels || '')
+    : '',
+
+nonDcrPanelCount:
+  latestCalculator.panelCategory === 'NON_DCR'
+    ? String(latestCalculator.numberOfPanels || '')
+    : '',
+
+converterBrand: String(
+  latestCalculator.ongridBrand || '',
+),
+
+converterCapacity: latestCalculator.ongridWatt
+  ? `${latestCalculator.ongridWatt} kW`
+  : '',
+
+structureType: String(
+  latestCalculator.structureType || '',
+),
+
+structureCapacityKw: latestCalculator.structureWatt
+  ? `${latestCalculator.structureWatt} kW`
+  : '',
 
       remarks: prev.remarks
         ? prev.remarks
