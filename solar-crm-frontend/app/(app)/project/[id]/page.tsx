@@ -103,6 +103,22 @@ type ProjectComment = {
   createdAt?: string;
 };
 
+type ExecutionActivity = {
+  id: number;
+  projectId: number;
+  activityType?: string;
+  status?: string;
+  scheduledDate?: string;
+  completedDate?: string;
+  inspectionDeadline?: string;
+  proofRequired?: boolean;
+  remarks?: string;
+  assignedToName?: string;
+  createdByName?: string;
+  updatedByName?: string;
+  createdAt?: string;
+};
+
 function money(value?: number) {
   return `₹${Number(value || 0).toLocaleString('en-IN')}`;
 }
@@ -206,6 +222,20 @@ const [electricityForm, setElectricityForm] =
   });
 
 const [electricityLoading, setElectricityLoading] =
+  useState(false);
+
+  const [executionActivities, setExecutionActivities] =
+  useState<ExecutionActivity[]>([]);
+
+const [executionForm, setExecutionForm] = useState({
+  activityType: '',
+  status: 'PENDING',
+  scheduledDate: '',
+  completedDate: '',
+  remarks: '',
+});
+
+const [executionLoading, setExecutionLoading] =
   useState(false);
 
   const fetchProject = async () => {
@@ -853,6 +883,76 @@ const saveElectricityDetail = async () => {
   }
 };
 
+const fetchExecutionActivities = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/${projectId}/execution-activities`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setExecutionActivities(res.data || []);
+  } catch (error) {
+    console.error('Failed to load execution activities:', error);
+  }
+};
+
+const createExecutionActivity = async () => {
+  if (!executionForm.activityType) {
+    alert('Please select activity type');
+    return;
+  }
+
+  try {
+    setExecutionLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/execution-activity`,
+      {
+        projectId: Number(projectId),
+        ...executionForm,
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Execution activity added');
+
+    setExecutionForm({
+      activityType: '',
+      status: 'PENDING',
+      scheduledDate: '',
+      completedDate: '',
+      remarks: '',
+    });
+
+    fetchExecutionActivities();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to add execution activity',
+    );
+  } finally {
+    setExecutionLoading(false);
+  }
+};
+
   useEffect(() => {
   if (projectId) {
   fetchProject();
@@ -863,6 +963,7 @@ const saveElectricityDetail = async () => {
   fetchLoanComments();
   fetchSubsidyDetail();
   fetchElectricityDetail();
+  fetchExecutionActivities();
 }
 }, [projectId]);
 
@@ -903,6 +1004,7 @@ const saveElectricityDetail = async () => {
     { key: 'PROJECT_CREATION', label: 'Project Creation' },
     { key: 'LOAN_DEPARTMENT', label: 'Loan Department' },
     { key: 'PROJECT_MANAGEMENT', label: 'Material Requirement' },
+    { key: 'PROJECT_EXECUTION', label: 'Project Execution' },
     { key: 'SUBSIDY_DEPARTMENT', label: 'Subsidy Department' },
     { key: 'ELECTRICITY_DEPARTMENT', label: 'Electricity Department' },
     { key: 'PAYMENT_COLLECTION', label: 'Payment Collection' },
@@ -1435,6 +1537,179 @@ const saveElectricityDetail = async () => {
               </div>
             ),
           )
+        )}
+      </div>
+    </div>
+  </div>
+)}
+
+{activeTab === 'PROJECT_EXECUTION' && (
+  <div className="space-y-5">
+    <div className="rounded-2xl bg-white p-5 shadow">
+      <h2 className="text-xl font-bold text-gray-800">
+        Project Execution
+      </h2>
+
+      <p className="mt-2 text-sm text-gray-500">
+        Track site execution, inspections, deadlines, and project work progress.
+      </p>
+
+      <div className="mt-5 grid gap-3 md:grid-cols-2">
+        <select
+          value={executionForm.activityType}
+          onChange={(e) =>
+            setExecutionForm({
+              ...executionForm,
+              activityType: e.target.value,
+            })
+          }
+          className="rounded-xl border p-3"
+        >
+          <option value="">Select Activity</option>
+          <option value="STRUCTURE_WORK">Structure Work</option>
+          <option value="STRUCTURE_INSPECTION">Structure Inspection</option>
+          <option value="PILLAR_WORK">Pillar Work</option>
+          <option value="PILLAR_INSPECTION">Pillar Inspection</option>
+          <option value="PANEL_INSTALLED">Panel Installed</option>
+          <option value="INVERTER_INSTALLED">Inverter Installed</option>
+          <option value="EARTHING_PACKING">Earthing / Packing</option>
+          <option value="GENERATION_STARTED">Generation Started</option>
+          <option value="GENERATION_INSPECTION">Generation Inspection</option>
+          <option value="INVOICE_FILE_GIVEN">Invoice File Given</option>
+          <option value="NON_DCR_PENDING">Non-DCR Pending</option>
+        </select>
+
+        <select
+          value={executionForm.status}
+          onChange={(e) =>
+            setExecutionForm({
+              ...executionForm,
+              status: e.target.value,
+            })
+          }
+          className="rounded-xl border p-3"
+        >
+          <option value="PENDING">Pending</option>
+          <option value="IN_PROGRESS">In Progress</option>
+          <option value="COMPLETED">Completed</option>
+          <option value="OVERDUE">Overdue</option>
+          <option value="CANCELLED">Cancelled</option>
+        </select>
+
+        <div>
+          <p className="mb-1 text-sm font-semibold text-gray-700">
+            Scheduled Date
+          </p>
+          <input
+            type="date"
+            value={executionForm.scheduledDate}
+            onChange={(e) =>
+              setExecutionForm({
+                ...executionForm,
+                scheduledDate: e.target.value,
+              })
+            }
+            className="w-full rounded-xl border p-3"
+          />
+        </div>
+
+        <div>
+          <p className="mb-1 text-sm font-semibold text-gray-700">
+            Completed Date
+          </p>
+          <input
+            type="date"
+            value={executionForm.completedDate}
+            onChange={(e) =>
+              setExecutionForm({
+                ...executionForm,
+                completedDate: e.target.value,
+              })
+            }
+            className="w-full rounded-xl border p-3"
+          />
+        </div>
+      </div>
+
+      <textarea
+        placeholder="Execution remarks"
+        value={executionForm.remarks}
+        onChange={(e) =>
+          setExecutionForm({
+            ...executionForm,
+            remarks: e.target.value,
+          })
+        }
+        className="mt-3 w-full rounded-xl border p-3"
+        rows={3}
+      />
+
+      <button
+        onClick={createExecutionActivity}
+        disabled={executionLoading}
+        className="mt-4 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+      >
+        {executionLoading ? 'Saving...' : 'Add Execution Activity'}
+      </button>
+    </div>
+
+    <div className="rounded-2xl bg-white p-5 shadow">
+      <h2 className="text-xl font-bold text-gray-800">
+        Execution Timeline
+      </h2>
+
+      <div className="mt-5 space-y-3">
+        {executionActivities.length === 0 ? (
+          <p className="text-sm text-gray-500">
+            No execution activities yet.
+          </p>
+        ) : (
+          executionActivities.map((activity) => (
+            <div
+              key={activity.id}
+              className="rounded-xl border p-4"
+            >
+              <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <p className="font-bold text-gray-800">
+                    {activity.activityType}
+                  </p>
+
+                  <p className="mt-1 text-sm text-gray-500">
+                    Status: {activity.status || '-'}
+                  </p>
+
+                  <p className="mt-1 text-sm text-gray-500">
+                    Scheduled:{' '}
+                    {activity.scheduledDate
+                      ? new Date(activity.scheduledDate).toLocaleDateString('en-IN')
+                      : '-'}{' '}
+                    | Completed:{' '}
+                    {activity.completedDate
+                      ? new Date(activity.completedDate).toLocaleDateString('en-IN')
+                      : '-'}
+                  </p>
+
+                  {activity.inspectionDeadline && (
+                    <p className="mt-1 text-sm font-semibold text-red-700">
+                      Inspection Deadline:{' '}
+                      {new Date(activity.inspectionDeadline).toLocaleDateString('en-IN')}
+                    </p>
+                  )}
+
+                  {activity.remarks && (
+                    <p className="mt-2 text-sm text-gray-700">
+                      {activity.remarks}
+                    </p>
+                  )}
+                </div>
+
+                <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
+                  {activity.status || 'PENDING'}
+                </span>
+              </div>
+            </div>
+          ))
         )}
       </div>
     </div>
