@@ -21,6 +21,7 @@ export default function CreateProjectPage() {
   const router = useRouter();
 
   const [meetingId, setMeetingId] = useState('');
+  const [meetingIdFromUrl, setMeetingIdFromUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 const [documentType, setDocumentType] = useState('');
@@ -30,6 +31,8 @@ const [pendingDocuments, setPendingDocuments] = useState<PendingDocument[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
 
   const [form, setForm] = useState({
+    meetingId: '',
+    leadId: '',
     customerName: '',
     customerPhone: '',
     city: '',
@@ -38,8 +41,6 @@ const [pendingDocuments, setPendingDocuments] = useState<PendingDocument[]>([]);
     customerGmail: '',
     aadhaarLinkedMobile: '',
     branchName: '',
-    meetingId: '',
-    leadId: '',
 
     panelBrand: '',
     dcrPanelCount: '',
@@ -72,6 +73,71 @@ const [pendingDocuments, setPendingDocuments] = useState<PendingDocument[]>([]);
 
     remarks: '',
   });
+
+  const fetchLatestCalculatorForMeeting = async () => {
+  if (!meetingIdFromUrl) return;
+
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/calculator/meeting/${meetingIdFromUrl}`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    const calculators = Array.isArray(res.data) ? res.data : [];
+    const latestCalculator = calculators[0];
+
+    if (!latestCalculator) return;
+
+    const totalProjectCost = Number(
+      latestCalculator.finalCost ||
+        latestCalculator.totalProjectCost ||
+        0,
+    );
+
+    const marginAmount = Number(latestCalculator.marginAmount || 0);
+
+    const expectedLagat = Number(
+      latestCalculator.baseCostBeforeMargin ||
+        totalProjectCost - marginAmount ||
+        0,
+    );
+
+    setForm((prev) => ({
+      ...prev,
+      meetingId: String(meetingIdFromUrl),
+      leadId: latestCalculator.leadId
+        ? String(latestCalculator.leadId)
+        : prev.leadId,
+      customerName: latestCalculator.customerName || prev.customerName,
+      customerPhone: latestCalculator.customerPhone || prev.customerPhone,
+      city: latestCalculator.customerCity || prev.city,
+
+      projectCost: String(totalProjectCost),
+      expectedLagat: String(expectedLagat),
+      marginMoney: String(marginAmount),
+      expectedProfit: String(Number(latestCalculator.expectedProfit || 0)),
+
+      remarks: prev.remarks
+        ? prev.remarks
+        : `Project created from Meeting ${meetingIdFromUrl} using latest calculator #${latestCalculator.id}`,
+    }));
+  } catch (error) {
+    console.error('Failed to fetch latest calculator for meeting:', error);
+  }
+};
+
+useEffect(() => {
+  fetchLatestCalculatorForMeeting();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [meetingIdFromUrl]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -257,7 +323,10 @@ router.push(`/project/${createdProjectId}`);
 
   useEffect(() => {
   const params = new URLSearchParams(window.location.search);
-  setMeetingId(params.get('meetingId') || '');
+  const id = params.get('meetingId') || '';
+
+  setMeetingId(id);
+  setMeetingIdFromUrl(id);
 }, []);
 
   useEffect(() => {
