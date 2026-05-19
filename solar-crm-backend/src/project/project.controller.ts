@@ -257,6 +257,39 @@ getProjectOwners() {
   return this.projectService.getProjectOwners();
 }
 
+@Post('execution-activity')
+createExecutionActivity(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.createExecutionActivity(
+    body,
+    user,
+  );
+}
+
+@Get(':id/execution-activities')
+getProjectExecutionActivities(
+  @Param('id') id: string,
+) {
+  return this.projectService.getProjectExecutionActivities(
+    Number(id),
+  );
+}
+
+@Patch('execution-activity/:id')
+updateExecutionActivity(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.updateExecutionActivity(
+    Number(id),
+    body,
+    user,
+  );
+}
+
   @Get(':id')
   findOne(
   @Param('id') id: string,

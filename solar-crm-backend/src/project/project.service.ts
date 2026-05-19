@@ -29,6 +29,11 @@ import { ProjectBranch } from './project-branch.entity';
 import { ProjectLoanDetail } from './project-loan-detail.entity';
 import { ProjectSubsidyDetail } from './project-subsidy-detail.entity';
 import { ProjectElectricityDetail } from './project-electricity-detail.entity';
+import {
+  ProjectExecutionActivity,
+  ProjectExecutionActivityStatus,
+  ProjectExecutionActivityType,
+} from './project-execution-activity.entity';
 
 @Injectable()
 export class ProjectService {
@@ -75,6 +80,9 @@ private readonly projectSubsidyDetailRepository: Repository<ProjectSubsidyDetail
 
 @InjectRepository(ProjectElectricityDetail)
 private readonly projectElectricityDetailRepository: Repository<ProjectElectricityDetail>,
+
+@InjectRepository(ProjectExecutionActivity)
+private readonly projectExecutionActivityRepository: Repository<ProjectExecutionActivity>,
 
     private readonly calculatorService: CalculatorService,
 
@@ -958,6 +966,127 @@ async getProjectMaterialRequests(
   }
 
   return finalData;
+}
+
+async createExecutionActivity(
+  data: Partial<ProjectExecutionActivity>,
+  user: any,
+) {
+  if (!data.projectId) {
+    throw new BadRequestException(
+      'Project ID is required',
+    );
+  }
+
+  if (!data.activityType) {
+    throw new BadRequestException(
+      'Activity type is required',
+    );
+  }
+
+  let inspectionDeadline: Date | null = null;
+
+  if (
+    data.activityType ===
+      ProjectExecutionActivityType.STRUCTURE_INSPECTION ||
+    data.activityType ===
+      ProjectExecutionActivityType.PILLAR_INSPECTION
+  ) {
+    inspectionDeadline = new Date();
+
+    inspectionDeadline.setDate(
+      inspectionDeadline.getDate() + 1,
+    );
+  }
+
+  if (
+    data.activityType ===
+    ProjectExecutionActivityType.GENERATION_INSPECTION
+  ) {
+    inspectionDeadline = new Date();
+
+    inspectionDeadline.setDate(
+      inspectionDeadline.getDate() + 3,
+    );
+  }
+
+  const activity =
+    this.projectExecutionActivityRepository.create({
+      projectId: Number(data.projectId),
+
+      activityType:
+        data.activityType as ProjectExecutionActivityType,
+
+      status:
+        (data.status as ProjectExecutionActivityStatus) ||
+        ProjectExecutionActivityStatus.PENDING,
+
+      scheduledDate: data.scheduledDate
+        ? new Date(data.scheduledDate)
+        : null,
+
+      completedDate: data.completedDate
+        ? new Date(data.completedDate)
+        : null,
+
+      inspectionDeadline,
+
+      proofRequired:
+        data.proofRequired === true,
+
+      remarks: data.remarks || '',
+
+      assignedTo: data.assignedTo || null,
+      assignedToName:
+        data.assignedToName || '',
+
+      createdBy: user?.id || null,
+      createdByName: user?.name || '',
+    } as Partial<ProjectExecutionActivity>);
+
+  return this.projectExecutionActivityRepository.save(
+    activity,
+  );
+}
+
+async getProjectExecutionActivities(
+  projectId: number,
+) {
+  return this.projectExecutionActivityRepository.find({
+    where: {
+      projectId,
+    },
+    order: {
+      createdAt: 'DESC',
+    },
+  });
+}
+
+async updateExecutionActivity(
+  id: number,
+  data: Partial<ProjectExecutionActivity>,
+  user: any,
+) {
+  const activity =
+    await this.projectExecutionActivityRepository.findOne({
+      where: { id },
+    });
+
+  if (!activity) {
+    throw new NotFoundException(
+      'Execution activity not found',
+    );
+  }
+
+  Object.assign(activity, {
+    ...data,
+    updatedBy: user?.id || null,
+    updatedByName: user?.name || '',
+  });
+
+  return this.projectExecutionActivityRepository.save(
+    activity,
+  );
 }
 
   async ownerApproval(
