@@ -310,6 +310,20 @@ getExecutionActivityProofs(
   );
 }
 
+@Post('execution-proof/upload')
+@UseInterceptors(FilesInterceptor('files', 10))
+uploadExecutionProofFiles(
+  @UploadedFiles() files: any[],
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.uploadExecutionProofFiles(
+    files,
+    body,
+    user,
+  );
+}
+
   @Get(':id')
   findOne(
   @Param('id') id: string,

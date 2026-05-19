@@ -1137,6 +1137,85 @@ async uploadExecutionProof(
   );
 }
 
+async uploadExecutionProofFiles(
+  files: any[],
+  body: any,
+  user: any,
+) {
+  if (!files || files.length === 0) {
+    throw new BadRequestException('Proof photos are required');
+  }
+
+  if (!body.activityId) {
+    throw new BadRequestException('Activity ID is required');
+  }
+
+  if (!body.projectId) {
+    throw new BadRequestException('Project ID is required');
+  }
+
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const bucket =
+    process.env.SUPABASE_PROJECT_DOCUMENTS_BUCKET ||
+    'project-documents';
+
+  if (!supabaseUrl || !serviceKey) {
+    throw new BadRequestException('Supabase storage is not configured');
+  }
+
+  const supabase = createClient(supabaseUrl, serviceKey);
+
+  const uploadedProofs: ProjectExecutionProof[] = [];
+
+  for (const file of files) {
+    const mimeType = String(file.mimetype || '');
+
+    if (!mimeType.startsWith('image/')) {
+      throw new BadRequestException('Only image files are allowed');
+    }
+
+    const extension =
+      file.originalname.split('.').pop() || 'jpg';
+
+    const filePath = `execution-proofs/project-${body.projectId}/activity-${body.activityId}/${Date.now()}-${randomUUID()}.${extension}`;
+
+    const uploadResult = await supabase.storage
+      .from(bucket)
+      .upload(filePath, file.buffer, {
+        contentType: mimeType,
+      });
+
+    if (uploadResult.error) {
+      throw new BadRequestException(uploadResult.error.message);
+    }
+
+    const fileUrl = supabase.storage
+      .from(bucket)
+      .getPublicUrl(filePath).data.publicUrl;
+
+    const proof =
+      this.projectExecutionProofRepository.create({
+        activityId: Number(body.activityId),
+        projectId: Number(body.projectId),
+        fileUrl,
+        latitude: body.latitude || '',
+        longitude: body.longitude || '',
+        uploadedBy: user?.id || null,
+        uploadedByName: user?.name || user?.email || '',
+      });
+
+    uploadedProofs.push(
+      await this.projectExecutionProofRepository.save(proof),
+    );
+  }
+
+  return {
+    message: 'Execution proof uploaded successfully',
+    data: uploadedProofs,
+  };
+}
+
 async getExecutionActivityProofs(
   activityId: number,
 ) {
