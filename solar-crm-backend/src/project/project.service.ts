@@ -1056,6 +1056,7 @@ async createExecutionActivity(
 async getProjectExecutionActivities(
   projectId: number,
 ) {
+  await this.refreshExecutionOverdueStatuses();
   return this.projectExecutionActivityRepository.find({
     where: {
       projectId,
@@ -1081,6 +1082,36 @@ async updateExecutionActivity(
       'Execution activity not found',
     );
   }
+
+  const inspectionTypes = [
+  ProjectExecutionActivityType.STRUCTURE_INSPECTION,
+  ProjectExecutionActivityType.PILLAR_INSPECTION,
+  ProjectExecutionActivityType.GENERATION_INSPECTION,
+];
+
+const targetStatus =
+  data.status as ProjectExecutionActivityStatus;
+
+if (
+  inspectionTypes.includes(
+    activity.activityType as ProjectExecutionActivityType,
+  ) &&
+  targetStatus ===
+    ProjectExecutionActivityStatus.COMPLETED
+) {
+  const proofCount =
+    await this.projectExecutionProofRepository.count({
+      where: {
+        activityId: activity.id,
+      },
+    });
+
+  if (proofCount === 0) {
+    throw new BadRequestException(
+      'GPS/site proof photos are required before completing inspection',
+    );
+  }
+}
 
   Object.assign(activity, {
     ...data,
@@ -1227,6 +1258,36 @@ async getExecutionActivityProofs(
       createdAt: 'DESC',
     },
   });
+}
+
+async refreshExecutionOverdueStatuses() {
+  const now = new Date();
+
+  const overdueActivities =
+    await this.projectExecutionActivityRepository
+      .createQueryBuilder('activity')
+      .where('activity.inspectionDeadline IS NOT NULL')
+      .andWhere('activity.inspectionDeadline < :now', {
+        now,
+      })
+      .andWhere('activity.status != :completed', {
+        completed:
+          ProjectExecutionActivityStatus.COMPLETED,
+      })
+      .andWhere('activity.status != :cancelled', {
+        cancelled:
+          ProjectExecutionActivityStatus.CANCELLED,
+      })
+      .getMany();
+
+  for (const activity of overdueActivities) {
+    activity.status =
+      ProjectExecutionActivityStatus.OVERDUE;
+
+    await this.projectExecutionActivityRepository.save(
+      activity,
+    );
+  }
 }
 
   async ownerApproval(
