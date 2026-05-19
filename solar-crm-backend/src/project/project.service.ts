@@ -1290,6 +1290,52 @@ async refreshExecutionOverdueStatuses() {
   }
 }
 
+async getExecutionCalendarActivities() {
+  await this.refreshExecutionOverdueStatuses();
+
+  const activities =
+    await this.projectExecutionActivityRepository.find({
+      order: {
+        scheduledDate: 'ASC',
+        createdAt: 'DESC',
+      },
+    });
+
+  const projectIds = [
+    ...new Set(
+      activities.map((item) => item.projectId),
+    ),
+  ];
+
+  const projects =
+    projectIds.length > 0
+      ? await this.projectRepository.findByIds(
+          projectIds,
+        )
+      : [];
+
+  return activities.map((activity) => {
+    const project = projects.find(
+      (item) =>
+        item.id === activity.projectId,
+    );
+
+    return {
+      ...activity,
+      project: project
+        ? {
+            customerName:
+              project.customerName || '',
+            branchName:
+              project.branchName || '',
+            projectOwnerName:
+              project.projectOwnerName || '',
+          }
+        : null,
+    };
+  });
+}
+
   async ownerApproval(
   id: number,
   body: {

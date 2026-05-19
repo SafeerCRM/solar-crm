@@ -324,6 +324,11 @@ uploadExecutionProofFiles(
   );
 }
 
+@Get('execution-calendar')
+getExecutionCalendarActivities() {
+  return this.projectService.getExecutionCalendarActivities();
+}
+
   @Get(':id')
   findOne(
   @Param('id') id: string,
