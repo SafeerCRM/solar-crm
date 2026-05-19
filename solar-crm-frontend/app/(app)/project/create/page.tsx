@@ -63,6 +63,8 @@ const [pendingDocuments, setPendingDocuments] = useState<PendingDocument[]>([]);
 
     projectCost: '',
 
+    finalCost: '',
+
     discomName: '',
 
     discomExpenditureType: 'EXCLUDING',
@@ -122,15 +124,10 @@ const [pendingDocuments, setPendingDocuments] = useState<PendingDocument[]>([]);
       customerPhone: latestCalculator.customerPhone || prev.customerPhone,
       city: latestCalculator.customerCity || prev.city,
 
-      projectCost: String(
-  latestCalculator.finalCost ||
-    latestCalculator.totalProjectCost ||
-    '',
-),
+      projectCost: String(latestCalculator.totalProjectCost || ''),
+finalCost: String(latestCalculator.finalCost || ''),
 
-expectedLagat: String(
-  latestCalculator.totalProjectCost || '',
-),
+expectedLagat: String(latestCalculator.baseCostBeforeMargin || ''),
 
 marginMoney: String(
   latestCalculator.marginAmount || '',
@@ -595,7 +592,7 @@ router.push(`/project/${createdProjectId}`);
 
       <div className="rounded-2xl bg-white p-5 shadow">
         <h2 className="mb-4 text-lg font-bold text-gray-800">
-          Project Finance Details
+          Calculator Financial Summary / Project Finance Details
         </h2>
 
         <div className="grid gap-4 md:grid-cols-3">
@@ -651,6 +648,15 @@ router.push(`/project/${createdProjectId}`);
             onChange={handleChange}
             className="rounded-xl border p-3"
           />
+
+          <input
+  type="number"
+  name="finalCost"
+  placeholder="Final Cost After Discount"
+  value={form.finalCost}
+  onChange={handleChange}
+  className="rounded-xl border p-3"
+/>
 
           <input
             name="discomName"
