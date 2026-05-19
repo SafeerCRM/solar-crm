@@ -36,6 +36,18 @@ export default function ExecutionCalendarPage() {
   const [statusFilter, setStatusFilter] =
     useState('');
 
+    const [branchFilter, setBranchFilter] =
+  useState('');
+
+const [customerFilter, setCustomerFilter] =
+  useState('');
+
+const [ownerFilter, setOwnerFilter] =
+  useState('');
+
+const [overdueOnly, setOverdueOnly] =
+  useState(false);
+
   const fetchActivities = async () => {
     try {
       setLoading(true);
@@ -73,6 +85,26 @@ export default function ExecutionCalendarPage() {
     fetchActivities();
   }, []);
 
+  const branchOptions = Array.from(
+  new Set(
+    activities
+      .map((activity) =>
+        activity.project?.branchName || '',
+      )
+      .filter(Boolean),
+  ),
+);
+
+const ownerOptions = Array.from(
+  new Set(
+    activities
+      .map((activity) =>
+        activity.project?.projectOwnerName || '',
+      )
+      .filter(Boolean),
+  ),
+);
+
   const filteredActivities =
     activities.filter((activity) => {
       const matchesDate = dateFilter
@@ -85,7 +117,32 @@ export default function ExecutionCalendarPage() {
         ? activity.status === statusFilter
         : true;
 
-      return matchesDate && matchesStatus;
+        const matchesBranch = branchFilter
+  ? activity.project?.branchName === branchFilter
+  : true;
+
+const matchesCustomer = customerFilter
+  ? String(activity.project?.customerName || '')
+      .toLowerCase()
+      .includes(customerFilter.toLowerCase())
+  : true;
+
+const matchesOwner = ownerFilter
+  ? activity.project?.projectOwnerName === ownerFilter
+  : true;
+
+const matchesOverdue = overdueOnly
+  ? activity.status === 'OVERDUE'
+  : true;
+
+      return (
+  matchesDate &&
+  matchesStatus &&
+  matchesBranch &&
+  matchesCustomer &&
+  matchesOwner &&
+  matchesOverdue
+);
     });
 
   return (
@@ -102,7 +159,7 @@ export default function ExecutionCalendarPage() {
       </div>
 
       <div className="rounded-2xl bg-white p-5 shadow">
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid gap-3 md:grid-cols-3">
           <div>
             <p className="mb-1 text-sm font-semibold text-gray-700">
               Scheduled Date
@@ -155,6 +212,77 @@ export default function ExecutionCalendarPage() {
               </option>
             </select>
           </div>
+
+          <div>
+  <p className="mb-1 text-sm font-semibold text-gray-700">
+    Branch
+  </p>
+
+  <select
+    value={branchFilter}
+    onChange={(e) =>
+      setBranchFilter(e.target.value)
+    }
+    className="w-full rounded-xl border p-3"
+  >
+    <option value="">All Branches</option>
+
+    {branchOptions.map((branch) => (
+      <option key={branch} value={branch}>
+        {branch}
+      </option>
+    ))}
+  </select>
+</div>
+
+<div>
+  <p className="mb-1 text-sm font-semibold text-gray-700">
+    Customer Name
+  </p>
+
+  <input
+    placeholder="Search customer"
+    value={customerFilter}
+    onChange={(e) =>
+      setCustomerFilter(e.target.value)
+    }
+    className="w-full rounded-xl border p-3"
+  />
+</div>
+
+<div>
+  <p className="mb-1 text-sm font-semibold text-gray-700">
+    Project Owner
+  </p>
+
+  <select
+    value={ownerFilter}
+    onChange={(e) =>
+      setOwnerFilter(e.target.value)
+    }
+    className="w-full rounded-xl border p-3"
+  >
+    <option value="">All Owners</option>
+
+    {ownerOptions.map((owner) => (
+      <option key={owner} value={owner}>
+        {owner}
+      </option>
+    ))}
+  </select>
+</div>
+
+<label className="flex items-center gap-3 rounded-xl border p-3 text-sm font-semibold text-gray-700">
+  <input
+    type="checkbox"
+    checked={overdueOnly}
+    onChange={(e) =>
+      setOverdueOnly(e.target.checked)
+    }
+  />
+
+  Show overdue only
+</label>
         </div>
       </div>
 
