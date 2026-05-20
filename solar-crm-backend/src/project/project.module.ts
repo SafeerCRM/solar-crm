@@ -17,11 +17,12 @@ import { ProjectExecutionActivity } from './project-execution-activity.entity';
 import { ProjectExecutionProof } from './project-execution-proof.entity';
 import { ProjectExecutionReminder } from './project-execution-reminder.entity';
 import { ProjectExecutionReminderUserState } from './project-execution-reminder-user-state.entity';
+import { ProjectPaymentInstallment } from './project-payment-installment.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Project, ProjectDocument, ProjectComment, ProjectMaterialMaster, ProjectMaterialRequest,
-ProjectMaterialRequestItem, ProjectBranch, ProjectLoanDetail, ProjectSubsidyDetail, ProjectElectricityDetail, ProjectExecutionActivity, ProjectExecutionProof, ProjectExecutionReminder, ProjectExecutionReminderUserState]),
+ProjectMaterialRequestItem, ProjectBranch, ProjectLoanDetail, ProjectSubsidyDetail, ProjectElectricityDetail, ProjectExecutionActivity, ProjectExecutionProof, ProjectExecutionReminder, ProjectExecutionReminderUserState, ProjectPaymentInstallment]),
     CalculatorModule,
   ],
   controllers: [ProjectController],
