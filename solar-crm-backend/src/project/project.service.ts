@@ -1395,13 +1395,18 @@ private getComputedPaymentStatus(
     return status;
   }
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const todayIndia = new Date().toLocaleDateString('en-CA', {
+    timeZone: 'Asia/Kolkata',
+  });
 
-  const due = new Date(dueDate);
-  due.setHours(0, 0, 0, 0);
+  const dueIndia =
+    dueDate instanceof Date
+      ? dueDate.toLocaleDateString('en-CA', {
+          timeZone: 'Asia/Kolkata',
+        })
+      : String(dueDate).split('T')[0];
 
-  if (due < today) {
+  if (dueIndia < todayIndia) {
     return ProjectPaymentInstallmentStatus.OVERDUE;
   }
 
