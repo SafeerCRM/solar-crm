@@ -32,6 +32,9 @@ export default function ProjectRemindersPage() {
   const [items, setItems] = useState<ReminderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [filter, setFilter] = useState<
+  'ALL' | 'OVERDUE_INSPECTION' | 'TODAY_WORK' | 'UPCOMING_DEADLINE'
+>('ALL');
 
   const fetchReminders = async () => {
     try {
@@ -64,6 +67,11 @@ export default function ProjectRemindersPage() {
   useEffect(() => {
     fetchReminders();
   }, []);
+
+  const filteredItems =
+  filter === 'ALL'
+    ? items
+    : items.filter((item) => item.reminderType === filter);
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-6">
@@ -135,17 +143,43 @@ export default function ProjectRemindersPage() {
               </button>
             </div>
 
-            {items.length === 0 ? (
-              <div className="rounded-xl bg-gray-50 p-4 text-sm text-gray-500">
-                No active reminders found.
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {items.map((item) => (
-                  <ReminderListItem key={item.id} item={item} />
-                ))}
-              </div>
-            )}
+            <div className="mb-4 flex flex-wrap gap-2">
+  <FilterButton
+    label="All"
+    active={filter === 'ALL'}
+    onClick={() => setFilter('ALL')}
+  />
+
+  <FilterButton
+    label="Overdue"
+    active={filter === 'OVERDUE_INSPECTION'}
+    onClick={() => setFilter('OVERDUE_INSPECTION')}
+  />
+
+  <FilterButton
+    label="Today"
+    active={filter === 'TODAY_WORK'}
+    onClick={() => setFilter('TODAY_WORK')}
+  />
+
+  <FilterButton
+    label="Upcoming"
+    active={filter === 'UPCOMING_DEADLINE'}
+    onClick={() => setFilter('UPCOMING_DEADLINE')}
+  />
+</div>
+
+{filteredItems.length === 0 ? (
+  <div className="rounded-xl bg-gray-50 p-4 text-sm text-gray-500">
+    No reminders found for selected filter.
+  </div>
+) : (
+  <div className="space-y-3">
+    {filteredItems.map((item) => (
+      <ReminderListItem key={item.id} item={item} />
+    ))}
+  </div>
+)}
           </div>
         </>
       )}
@@ -277,4 +311,27 @@ function formatDate(value?: string | null) {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function FilterButton({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+        active
+          ? 'bg-blue-600 text-white'
+          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+      }`}
+    >
+      {label}
+    </button>
+  );
 }
