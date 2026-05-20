@@ -83,7 +83,7 @@ export default function ProjectRemindersPage() {
 
   try {
     await axios.post(
-      `${apiBaseUrl}/project/execution-reminders/${activityId}/dismiss`,
+      `${apiBaseUrl}/project/execution-reminders/${activityId}/dismiss-user`,
       {},
       {
         headers: getAuthHeaders(),
@@ -97,6 +97,20 @@ export default function ProjectRemindersPage() {
       error?.response?.data?.message ||
         'Failed to dismiss reminder.',
     );
+  }
+};
+
+const markReminderAsRead = async (activityId: number) => {
+  try {
+    await axios.post(
+      `${apiBaseUrl}/project/execution-reminders/${activityId}/read`,
+      {},
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+  } catch (error) {
+    console.error('Mark reminder as read error:', error);
   }
 };
 
@@ -216,6 +230,7 @@ export default function ProjectRemindersPage() {
   key={item.id}
   item={item}
   onDismiss={dismissReminder}
+onRead={markReminderAsRead}
 />
     ))}
   </div>
@@ -257,9 +272,11 @@ function ReminderCard({
 function ReminderListItem({
   item,
   onDismiss,
+onRead,
 }: {
   item: ReminderItem;
   onDismiss: (activityId: number) => void;
+  onRead: (activityId: number) => void;
 }) {
   const badge = getReminderBadge(item.reminderType);
   const mainDate = item.inspectionDeadline || item.scheduledDate;
@@ -311,11 +328,12 @@ function ReminderListItem({
 
         <div className="flex flex-col gap-2">
   <Link
-    href={`/project/${item.projectId}`}
-    className="rounded-xl bg-blue-600 px-4 py-2 text-center text-sm font-medium text-white"
-  >
-    Open Project
-  </Link>
+  href={`/project/${item.projectId}`}
+  onClick={() => onRead(item.id)}
+  className="rounded-xl bg-blue-600 px-4 py-2 text-center text-sm font-medium text-white"
+>
+  Open Project
+</Link>
 
   <button
     type="button"

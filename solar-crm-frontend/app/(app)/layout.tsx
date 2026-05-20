@@ -232,13 +232,13 @@ export default function AppLayout({
   const fetchReminderCount = async () => {
     try {
       const res = await axios.get(
-        `${apiBaseUrl}/project/execution-reminders/summary`,
+        `${apiBaseUrl}/project/execution-reminders/unread-count`,
         {
           headers: getAuthHeaders(),
         },
       );
 
-      setReminderCount(res.data?.totalPendingReminders || 0);
+      setReminderCount(res.data?.unreadCount || 0);
     } catch (error) {
       console.error('Reminder count error:', error);
       setReminderCount(0);
