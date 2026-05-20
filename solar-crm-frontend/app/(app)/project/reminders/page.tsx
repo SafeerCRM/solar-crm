@@ -74,6 +74,32 @@ export default function ProjectRemindersPage() {
     }
   };
 
+  const dismissReminder = async (activityId: number) => {
+  const confirmed = window.confirm(
+    'Are you sure you want to dismiss this reminder?',
+  );
+
+  if (!confirmed) return;
+
+  try {
+    await axios.post(
+      `${apiBaseUrl}/project/execution-reminders/${activityId}/dismiss`,
+      {},
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+
+    await fetchReminders();
+  } catch (error: any) {
+    console.error('Dismiss reminder error:', error);
+    alert(
+      error?.response?.data?.message ||
+        'Failed to dismiss reminder.',
+    );
+  }
+};
+
   useEffect(() => {
     fetchReminders();
   }, []);
@@ -186,7 +212,11 @@ export default function ProjectRemindersPage() {
 ) : (
   <div className="space-y-3">
     {filteredItems.map((item) => (
-      <ReminderListItem key={item.id} item={item} />
+      <ReminderListItem
+  key={item.id}
+  item={item}
+  onDismiss={dismissReminder}
+/>
     ))}
   </div>
 )}
@@ -224,7 +254,13 @@ function ReminderCard({
   );
 }
 
-function ReminderListItem({ item }: { item: ReminderItem }) {
+function ReminderListItem({
+  item,
+  onDismiss,
+}: {
+  item: ReminderItem;
+  onDismiss: (activityId: number) => void;
+}) {
   const badge = getReminderBadge(item.reminderType);
   const mainDate = item.inspectionDeadline || item.scheduledDate;
 
@@ -273,12 +309,22 @@ function ReminderListItem({ item }: { item: ReminderItem }) {
           )}
         </div>
 
-        <Link
-          href={`/project/${item.projectId}`}
-          className="rounded-xl bg-blue-600 px-4 py-2 text-center text-sm font-medium text-white"
-        >
-          Open Project
-        </Link>
+        <div className="flex flex-col gap-2">
+  <Link
+    href={`/project/${item.projectId}`}
+    className="rounded-xl bg-blue-600 px-4 py-2 text-center text-sm font-medium text-white"
+  >
+    Open Project
+  </Link>
+
+  <button
+    type="button"
+    onClick={() => onDismiss(item.id)}
+    className="rounded-xl bg-gray-200 px-4 py-2 text-center text-sm font-medium text-gray-800"
+  >
+    Dismiss
+  </button>
+</div>
       </div>
     </div>
   );
