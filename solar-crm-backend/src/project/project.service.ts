@@ -1290,40 +1290,115 @@ async refreshExecutionOverdueStatuses() {
   }
 }
 
-async getExecutionCalendarActivities(user?: any) {
+async getExecutionCalendarActivities(
+  user?: any,
+  filters?: {
+    page?: number;
+    limit?: number;
+    date?: string;
+    status?: string;
+    branch?: string;
+    customer?: string;
+    owner?: string;
+    overdueOnly?: string;
+  },
+) {
   await this.refreshExecutionOverdueStatuses();
+
+  const page =
+    Number(filters?.page) > 0
+      ? Number(filters?.page)
+      : 1;
+
+  const limit =
+    Number(filters?.limit) > 0
+      ? Math.min(Number(filters?.limit), 100)
+      : 20;
+
+  const skip = (page - 1) * limit;
 
   const currentUserId = Number(user?.id || user?.sub);
 
-const roles = Array.isArray(user?.roles)
-  ? user.roles
-  : [];
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
 
-const canViewAll =
-  roles.includes('OWNER') ||
-  roles.includes('MARKETING_HEAD') ||
-  roles.includes('PROJECT_MANAGER');
+  const canViewAll =
+    roles.includes('OWNER') ||
+    roles.includes('MARKETING_HEAD') ||
+    roles.includes('PROJECT_MANAGER');
 
-  const activityQuery =
-  this.projectExecutionActivityRepository.createQueryBuilder('activity');
+  const query =
+    this.projectExecutionActivityRepository
+      .createQueryBuilder('activity')
+      .innerJoin(
+        'project',
+        'project',
+        'project.id = activity.projectId',
+      );
 
-if (!canViewAll) {
-  activityQuery
-    .innerJoin(
-      'project',
-      'project',
-      'project.id = activity.projectId',
-    )
-    .andWhere(
+  if (!canViewAll) {
+    query.andWhere(
       'project.projectOwnerId = :currentUserId',
       { currentUserId },
     );
-}
+  }
 
-const activities = await activityQuery
-  .orderBy('activity.scheduledDate', 'ASC')
-  .addOrderBy('activity.createdAt', 'DESC')
-  .getMany();
+  if (filters?.date) {
+    query.andWhere(
+      `DATE(activity.scheduledDate) = :date`,
+      { date: filters.date },
+    );
+  }
+
+  if (filters?.status) {
+    query.andWhere(
+      'activity.status = :status',
+      { status: filters.status },
+    );
+  }
+
+  if (filters?.branch) {
+    query.andWhere(
+      'LOWER(project.branchName) LIKE :branch',
+      {
+        branch: `%${filters.branch.toLowerCase()}%`,
+      },
+    );
+  }
+
+  if (filters?.customer) {
+    query.andWhere(
+      'LOWER(project.customerName) LIKE :customer',
+      {
+        customer: `%${filters.customer.toLowerCase()}%`,
+      },
+    );
+  }
+
+  if (filters?.owner) {
+    query.andWhere(
+      'LOWER(project.projectOwnerName) LIKE :owner',
+      {
+        owner: `%${filters.owner.toLowerCase()}%`,
+      },
+    );
+  }
+
+  if (filters?.overdueOnly === 'true') {
+    query.andWhere('activity.status = :overdue', {
+      overdue: ProjectExecutionActivityStatus.OVERDUE,
+    });
+  }
+
+  query
+    .orderBy('activity.scheduledDate', 'ASC')
+    .addOrderBy('activity.createdAt', 'DESC')
+    .skip(skip)
+    .take(limit);
+
+  const [activities, total] =
+    await query.getManyAndCount();
 
   const projectIds = [
     ...new Set(
@@ -1338,26 +1413,32 @@ const activities = await activityQuery
         )
       : [];
 
-  return activities.map((activity) => {
+  const data = activities.map((activity) => {
     const project = projects.find(
-      (item) =>
-        item.id === activity.projectId,
+      (item) => item.id === activity.projectId,
     );
 
     return {
       ...activity,
       project: project
         ? {
-            customerName:
-              project.customerName || '',
-            branchName:
-              project.branchName || '',
+            customerName: project.customerName || '',
+            branchName: project.branchName || '',
             projectOwnerName:
               project.projectOwnerName || '',
           }
         : null,
     };
   });
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages:
+      Math.ceil(total / limit) || 1,
+  };
 }
 
   async ownerApproval(

@@ -327,8 +327,28 @@ uploadExecutionProofFiles(
 @Get('execution-calendar')
 getExecutionCalendarActivities(
   @CurrentUser() user: any,
+  @Query('page') page?: string,
+  @Query('limit') limit?: string,
+  @Query('date') date?: string,
+  @Query('status') status?: string,
+  @Query('branch') branch?: string,
+  @Query('customer') customer?: string,
+  @Query('owner') owner?: string,
+  @Query('overdueOnly') overdueOnly?: string,
 ) {
-  return this.projectService.getExecutionCalendarActivities(user);
+  return this.projectService.getExecutionCalendarActivities(
+    user,
+    {
+      page: Number(page || 1),
+      limit: Number(limit || 20),
+      date: date || '',
+      status: status || '',
+      branch: branch || '',
+      customer: customer || '',
+      owner: owner || '',
+      overdueOnly: overdueOnly || '',
+    },
+  );
 }
 
   @Get(':id')
