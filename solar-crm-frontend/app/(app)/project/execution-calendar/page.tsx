@@ -48,42 +48,57 @@ const [ownerFilter, setOwnerFilter] =
 const [overdueOnly, setOverdueOnly] =
   useState(false);
 
+  const [page, setPage] = useState(1);
+const [totalPages, setTotalPages] = useState(1);
+
   const fetchActivities = async () => {
-    try {
-      setLoading(true);
+  try {
+    setLoading(true);
 
-      const token =
-        localStorage.getItem('token');
+    const token = localStorage.getItem('token');
 
-      const res = await axios.get(
-        `${API_BASE_URL}/project/execution-calendar`,
-        {
-          headers: token
-            ? {
-                Authorization: `Bearer ${token}`,
-              }
-            : {},
+    const res = await axios.get(
+      `${API_BASE_URL}/project/execution-calendar`,
+      {
+        params: {
+          page,
+          limit: 20,
+          date: dateFilter,
+          status: statusFilter,
+          branch: branchFilter,
+          customer: customerFilter,
+          owner: ownerFilter,
+          overdueOnly: overdueOnly ? 'true' : '',
         },
-      );
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
 
-      setActivities(
-        Array.isArray(res.data)
-          ? res.data
-          : [],
-      );
-    } catch (error) {
-      console.error(error);
-      alert(
-        'Failed to load execution calendar',
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+    setActivities(res.data?.data || []);
+    setTotalPages(res.data?.totalPages || 1);
+  } catch (error) {
+    console.error(error);
+    alert('Failed to load execution calendar');
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
-    fetchActivities();
-  }, []);
+  fetchActivities();
+}, [
+  page,
+  dateFilter,
+  statusFilter,
+  branchFilter,
+  customerFilter,
+  ownerFilter,
+  overdueOnly,
+]);
 
   const branchOptions = Array.from(
   new Set(
@@ -104,46 +119,6 @@ const ownerOptions = Array.from(
       .filter(Boolean),
   ),
 );
-
-  const filteredActivities =
-    activities.filter((activity) => {
-      const matchesDate = dateFilter
-        ? activity.scheduledDate?.startsWith(
-            dateFilter,
-          )
-        : true;
-
-      const matchesStatus = statusFilter
-        ? activity.status === statusFilter
-        : true;
-
-        const matchesBranch = branchFilter
-  ? activity.project?.branchName === branchFilter
-  : true;
-
-const matchesCustomer = customerFilter
-  ? String(activity.project?.customerName || '')
-      .toLowerCase()
-      .includes(customerFilter.toLowerCase())
-  : true;
-
-const matchesOwner = ownerFilter
-  ? activity.project?.projectOwnerName === ownerFilter
-  : true;
-
-const matchesOverdue = overdueOnly
-  ? activity.status === 'OVERDUE'
-  : true;
-
-      return (
-  matchesDate &&
-  matchesStatus &&
-  matchesBranch &&
-  matchesCustomer &&
-  matchesOwner &&
-  matchesOverdue
-);
-    });
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">
@@ -168,9 +143,10 @@ const matchesOverdue = overdueOnly
             <input
               type="date"
               value={dateFilter}
-              onChange={(e) =>
+              onChange={(e) => {
                 setDateFilter(e.target.value)
-              }
+                setPage(1);
+              }}
               className="w-full rounded-xl border p-3"
             />
           </div>
@@ -182,9 +158,10 @@ const matchesOverdue = overdueOnly
 
             <select
               value={statusFilter}
-              onChange={(e) =>
+              onChange={(e) => {
                 setStatusFilter(e.target.value)
-              }
+                setPage(1);
+              }}
               className="w-full rounded-xl border p-3"
             >
               <option value="">
@@ -220,9 +197,10 @@ const matchesOverdue = overdueOnly
 
   <select
     value={branchFilter}
-    onChange={(e) =>
+    onChange={(e) => {
       setBranchFilter(e.target.value)
-    }
+      setPage(1);
+    }}
     className="w-full rounded-xl border p-3"
   >
     <option value="">All Branches</option>
@@ -243,9 +221,10 @@ const matchesOverdue = overdueOnly
   <input
     placeholder="Search customer"
     value={customerFilter}
-    onChange={(e) =>
+    onChange={(e) => {
       setCustomerFilter(e.target.value)
-    }
+      setPage(1);
+    }}
     className="w-full rounded-xl border p-3"
   />
 </div>
@@ -257,9 +236,10 @@ const matchesOverdue = overdueOnly
 
   <select
     value={ownerFilter}
-    onChange={(e) =>
+    onChange={(e) => {
       setOwnerFilter(e.target.value)
-    }
+      setPage(1);
+    }}
     className="w-full rounded-xl border p-3"
   >
     <option value="">All Owners</option>
@@ -276,9 +256,10 @@ const matchesOverdue = overdueOnly
   <input
     type="checkbox"
     checked={overdueOnly}
-    onChange={(e) =>
+    onChange={(e) => {
       setOverdueOnly(e.target.checked)
-    }
+      setPage(1);
+    }}
   />
 
   Show overdue only
@@ -291,12 +272,12 @@ const matchesOverdue = overdueOnly
           <div className="rounded-2xl bg-white p-5 shadow">
             Loading...
           </div>
-        ) : filteredActivities.length === 0 ? (
+        ) : activities.length === 0 ? (
           <div className="rounded-2xl bg-white p-5 shadow text-sm text-gray-500">
             No execution activities found.
           </div>
         ) : (
-          filteredActivities.map(
+          activities.map(
             (activity) => (
               <div
                 key={activity.id}
@@ -389,6 +370,38 @@ const matchesOverdue = overdueOnly
           )
         )}
       </div>
+
+      <div className="rounded-2xl bg-white p-4 shadow">
+  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <p className="text-sm text-gray-600">
+      Page {page} of {totalPages}
+    </p>
+
+    <div className="flex gap-2">
+      <button
+        onClick={() =>
+          setPage((prev) => Math.max(prev - 1, 1))
+        }
+        disabled={page <= 1}
+        className="rounded-xl bg-gray-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+      >
+        Previous
+      </button>
+
+      <button
+        onClick={() =>
+          setPage((prev) =>
+            Math.min(prev + 1, totalPages),
+          )
+        }
+        disabled={page >= totalPages}
+        className="rounded-xl bg-gray-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+      >
+        Next
+      </button>
+    </div>
+  </div>
+</div>
     </div>
   );
 }
