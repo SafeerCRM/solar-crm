@@ -3,6 +3,10 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import axios from 'axios';
+import { getAuthHeaders } from '@/lib/authHeaders';
+
+const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 const navItems = [
   {
@@ -187,6 +191,7 @@ export default function AppLayout({
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [user, setUser] = useState<CurrentUser | null>(null);
+  const [reminderCount, setReminderCount] = useState(0);
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
@@ -201,6 +206,51 @@ export default function AppLayout({
   }, []);
 
   const userRoles = user?.roles || [];
+
+  useEffect(() => {
+  if (!user) return;
+
+  const allowedRoles = [
+    'OWNER',
+    'MARKETING_HEAD',
+    'PROJECT_MANAGER',
+    'MEETING_MANAGER',
+    'PROJECT_EXECUTIVE',
+    'LEAD_MANAGER',
+    'LEAD_EXECUTIVE',
+    'TELECALLER',
+    'TELECALLING_ASSISTANT',
+    'TELECALLING_MANAGER',
+  ];
+
+  const canSeeReminders = userRoles.some((role) =>
+    allowedRoles.includes(role),
+  );
+
+  if (!canSeeReminders) return;
+
+  const fetchReminderCount = async () => {
+    try {
+      const res = await axios.get(
+        `${apiBaseUrl}/project/execution-reminders/summary`,
+        {
+          headers: getAuthHeaders(),
+        },
+      );
+
+      setReminderCount(res.data?.totalPendingReminders || 0);
+    } catch (error) {
+      console.error('Reminder count error:', error);
+      setReminderCount(0);
+    }
+  };
+
+  fetchReminderCount();
+
+  const interval = window.setInterval(fetchReminderCount, 5 * 60 * 1000);
+
+  return () => window.clearInterval(interval);
+}, [user, userRoles]);
 
   return (
         <div className="min-h-screen bg-gray-100 md:flex">
@@ -256,7 +306,15 @@ export default function AppLayout({
                       : 'text-gray-700 hover:bg-gray-200'
                   }`}
                 >
-                  {item.name}
+                  <span className="flex items-center justify-between gap-2">
+  <span>{item.name}</span>
+
+  {item.href === '/project/reminders' && reminderCount > 0 && (
+    <span className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white">
+      {reminderCount}
+    </span>
+  )}
+</span>
                 </Link>
               );
             })}
