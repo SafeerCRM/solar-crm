@@ -247,7 +247,7 @@ export default function AppLayout({
 
   fetchReminderCount();
 
-  const interval = window.setInterval(fetchReminderCount, 5 * 60 * 1000);
+  const interval = window.setInterval(fetchReminderCount, 15 * 60 * 1000);
 
   return () => window.clearInterval(interval);
 }, [user, userRoles]);

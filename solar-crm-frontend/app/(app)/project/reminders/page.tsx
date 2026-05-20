@@ -33,6 +33,8 @@ type ReminderItem = {
   projectOwnerName: string | null;
   projectStatus: string | null;
   projectSerial: string | null;
+  userReminderStatus: 'UNREAD' | 'READ' | 'DISMISSED';
+  userReadAt: string | null;
 };
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -272,7 +274,7 @@ function ReminderCard({
 function ReminderListItem({
   item,
   onDismiss,
-onRead,
+  onRead,
 }: {
   item: ReminderItem;
   onDismiss: (activityId: number) => void;
@@ -280,9 +282,16 @@ onRead,
 }) {
   const badge = getReminderBadge(item.reminderType);
   const mainDate = item.inspectionDeadline || item.scheduledDate;
+  const isUnread = item.userReminderStatus !== 'READ';
 
   return (
-    <div className="rounded-xl border bg-gray-50 p-4">
+    <div
+      className={`rounded-xl border p-4 ${
+        isUnread
+          ? 'border-blue-300 bg-blue-50 shadow'
+          : 'border-gray-200 bg-gray-50'
+      }`}
+    >
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0 flex-1">
           <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -290,6 +299,16 @@ onRead,
               className={`rounded-full px-3 py-1 text-xs font-semibold ${badge.className}`}
             >
               {badge.label}
+            </span>
+
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                isUnread
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-200 text-gray-700'
+              }`}
+            >
+              {isUnread ? 'Unread' : 'Seen'}
             </span>
 
             <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-700">
@@ -319,6 +338,12 @@ onRead,
             <InfoLine label="Due/Scheduled" value={formatDate(mainDate)} />
           </div>
 
+          {item.userReadAt && (
+            <p className="mt-2 text-xs text-gray-500">
+              Seen at: {formatDate(item.userReadAt)}
+            </p>
+          )}
+
           {item.remarks && (
             <p className="mt-3 rounded-lg bg-white p-2 text-sm text-gray-500">
               Remarks: {item.remarks}
@@ -327,22 +352,32 @@ onRead,
         </div>
 
         <div className="flex flex-col gap-2">
-  <Link
-  href={`/project/${item.projectId}`}
-  onClick={() => onRead(item.id)}
-  className="rounded-xl bg-blue-600 px-4 py-2 text-center text-sm font-medium text-white"
->
-  Open Project
-</Link>
+          <Link
+            href={`/project/${item.projectId}`}
+            onClick={() => onRead(item.id)}
+            className="rounded-xl bg-blue-600 px-4 py-2 text-center text-sm font-medium text-white"
+          >
+            Open Project
+          </Link>
 
-  <button
-    type="button"
-    onClick={() => onDismiss(item.id)}
-    className="rounded-xl bg-gray-200 px-4 py-2 text-center text-sm font-medium text-gray-800"
-  >
-    Dismiss
-  </button>
-</div>
+          {isUnread && (
+            <button
+              type="button"
+              onClick={() => onRead(item.id)}
+              className="rounded-xl bg-green-600 px-4 py-2 text-center text-sm font-medium text-white"
+            >
+              Mark Seen
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => onDismiss(item.id)}
+            className="rounded-xl bg-gray-200 px-4 py-2 text-center text-sm font-medium text-gray-800"
+          >
+            Dismiss
+          </button>
+        </div>
       </div>
     </div>
   );
