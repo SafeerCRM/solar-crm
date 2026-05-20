@@ -1714,6 +1714,152 @@ async dismissExecutionReminder(activityId: number, currentUser: any) {
   return this.projectExecutionReminderRepository.save(reminder);
 }
 
+async getUnreadReminderCount(currentUser: any) {
+  const userId = currentUser?.id || currentUser?.userId;
+  const roles = currentUser?.roles || [];
+
+  const canSeeAll =
+    roles.includes('OWNER') ||
+    roles.includes('MARKETING_HEAD') ||
+    roles.includes('PROJECT_MANAGER');
+
+  const activityQuery = this.projectExecutionActivityRepository
+    .createQueryBuilder('activity');
+
+  if (!canSeeAll) {
+    activityQuery.andWhere(
+      '(activity.assignedTo = :userId OR activity.createdBy = :userId)',
+      { userId },
+    );
+  }
+
+  const activities = await activityQuery.getMany();
+
+  const activeActivities = activities.filter(
+    (activity) =>
+      activity.status !== ProjectExecutionActivityStatus.COMPLETED &&
+      activity.status !== ProjectExecutionActivityStatus.CANCELLED,
+  );
+
+  const userStates =
+    await this.projectExecutionReminderUserStateRepository.find({
+      where: {
+        userId,
+      },
+    });
+
+  const hiddenActivityIds = new Set(
+    userStates
+      .filter(
+        (item) =>
+          item.status ===
+            ProjectExecutionReminderUserStateStatus.READ ||
+          item.status ===
+            ProjectExecutionReminderUserStateStatus.DISMISSED,
+      )
+      .map((item) => item.activityId),
+  );
+
+  const unreadActivities = activeActivities.filter(
+    (activity) => !hiddenActivityIds.has(activity.id),
+  );
+
+  return {
+    unreadCount: unreadActivities.length,
+  };
+}
+
+async markReminderAsRead(activityId: number, currentUser: any) {
+  const userId = currentUser?.id || currentUser?.userId;
+  const userName =
+    currentUser?.name || currentUser?.email || 'Unknown User';
+
+  const activity =
+    await this.projectExecutionActivityRepository.findOne({
+      where: { id: activityId },
+    });
+
+  if (!activity) {
+    throw new NotFoundException('Execution activity not found');
+  }
+
+  let state =
+    await this.projectExecutionReminderUserStateRepository.findOne({
+      where: {
+        activityId,
+        userId,
+      },
+    });
+
+  if (!state) {
+    state =
+      this.projectExecutionReminderUserStateRepository.create({
+        activityId,
+        projectId: activity.projectId,
+        userId,
+        userName,
+        status:
+          ProjectExecutionReminderUserStateStatus.READ,
+        readAt: new Date(),
+      });
+  } else {
+    state.status =
+      ProjectExecutionReminderUserStateStatus.READ;
+    state.readAt = new Date();
+  }
+
+  return this.projectExecutionReminderUserStateRepository.save(
+    state,
+  );
+}
+
+async dismissReminderForUser(
+  activityId: number,
+  currentUser: any,
+) {
+  const userId = currentUser?.id || currentUser?.userId;
+  const userName =
+    currentUser?.name || currentUser?.email || 'Unknown User';
+
+  const activity =
+    await this.projectExecutionActivityRepository.findOne({
+      where: { id: activityId },
+    });
+
+  if (!activity) {
+    throw new NotFoundException('Execution activity not found');
+  }
+
+  let state =
+    await this.projectExecutionReminderUserStateRepository.findOne({
+      where: {
+        activityId,
+        userId,
+      },
+    });
+
+  if (!state) {
+    state =
+      this.projectExecutionReminderUserStateRepository.create({
+        activityId,
+        projectId: activity.projectId,
+        userId,
+        userName,
+        status:
+          ProjectExecutionReminderUserStateStatus.DISMISSED,
+        dismissedAt: new Date(),
+      });
+  } else {
+    state.status =
+      ProjectExecutionReminderUserStateStatus.DISMISSED;
+    state.dismissedAt = new Date();
+  }
+
+  return this.projectExecutionReminderUserStateRepository.save(
+    state,
+  );
+}
+
   async ownerApproval(
   id: number,
   body: {

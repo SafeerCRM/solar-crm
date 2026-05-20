@@ -371,6 +371,33 @@ async dismissExecutionReminder(
   return this.projectService.dismissExecutionReminder(activityId, req.user);
 }
 
+@Get('execution-reminders/unread-count')
+async getUnreadReminderCount(@Req() req: any) {
+  return this.projectService.getUnreadReminderCount(req.user);
+}
+
+@Post('execution-reminders/:activityId/read')
+async markReminderAsRead(
+  @Param('activityId', ParseIntPipe) activityId: number,
+  @Req() req: any,
+) {
+  return this.projectService.markReminderAsRead(
+    activityId,
+    req.user,
+  );
+}
+
+@Post('execution-reminders/:activityId/dismiss-user')
+async dismissReminderForUser(
+  @Param('activityId', ParseIntPipe) activityId: number,
+  @Req() req: any,
+) {
+  return this.projectService.dismissReminderForUser(
+    activityId,
+    req.user,
+  );
+}
+
   @Get(':id')
   findOne(
   @Param('id') id: string,
