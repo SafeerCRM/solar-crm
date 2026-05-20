@@ -23,6 +23,16 @@ type ReminderItem = {
   assignedTo: number | null;
   assignedToName: string | null;
   remarks: string | null;
+
+  customerName: string | null;
+  customerPhone: string | null;
+  city: string | null;
+  zone: string | null;
+  branchName: string | null;
+  projectOwnerId: number | null;
+  projectOwnerName: string | null;
+  projectStatus: string | null;
+  projectSerial: string | null;
 };
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -221,7 +231,7 @@ function ReminderListItem({ item }: { item: ReminderItem }) {
   return (
     <div className="rounded-xl border bg-gray-50 p-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div>
+        <div className="min-w-0 flex-1">
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <span
               className={`rounded-full px-3 py-1 text-xs font-semibold ${badge.className}`}
@@ -236,23 +246,28 @@ function ReminderListItem({ item }: { item: ReminderItem }) {
             <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-700">
               {item.status}
             </span>
+
+            {item.projectStatus && (
+              <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-700">
+                Project: {item.projectStatus}
+              </span>
+            )}
           </div>
 
-          <p className="text-sm text-gray-600">
-            Project ID: <b>{item.projectId}</b>
-          </p>
-
-          <p className="text-sm text-gray-600">
-            Due/Scheduled: <b>{formatDate(mainDate)}</b>
-          </p>
-
-          <p className="text-sm text-gray-600">
-            Assigned To:{' '}
-            <b>{item.assignedToName || item.assignedTo || 'Not assigned'}</b>
-          </p>
+          <div className="grid grid-cols-1 gap-3 text-sm text-gray-700 md:grid-cols-2 xl:grid-cols-3">
+            <InfoLine label="Customer" value={item.customerName || 'Not added'} />
+            <InfoLine label="Phone" value={item.customerPhone || 'Not added'} />
+            <InfoLine label="Project Serial" value={item.projectSerial || `#${item.projectId}`} />
+            <InfoLine label="Project Owner" value={item.projectOwnerName || 'Not assigned'} />
+            <InfoLine label="Assigned To" value={item.assignedToName || item.assignedTo || 'Not assigned'} />
+            <InfoLine label="Branch" value={item.branchName || 'Not added'} />
+            <InfoLine label="City" value={item.city || 'Not added'} />
+            <InfoLine label="Zone" value={item.zone || 'Not added'} />
+            <InfoLine label="Due/Scheduled" value={formatDate(mainDate)} />
+          </div>
 
           {item.remarks && (
-            <p className="mt-2 text-sm text-gray-500">
+            <p className="mt-3 rounded-lg bg-white p-2 text-sm text-gray-500">
               Remarks: {item.remarks}
             </p>
           )}
@@ -311,6 +326,21 @@ function formatDate(value?: string | null) {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function InfoLine({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | number;
+}) {
+  return (
+    <div className="rounded-lg bg-white p-2">
+      <p className="text-xs text-gray-500">{label}</p>
+      <p className="truncate font-semibold text-gray-900">{value}</p>
+    </div>
+  );
 }
 
 function FilterButton({
