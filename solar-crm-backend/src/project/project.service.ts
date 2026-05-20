@@ -1579,11 +1579,24 @@ async getExecutionReminderList(currentUser: any) {
 
   const rows = await activityQuery.getRawMany();
 
-  const activeRows = rows.filter(
-    (activity) =>
-      activity.status !== ProjectExecutionActivityStatus.COMPLETED &&
-      activity.status !== ProjectExecutionActivityStatus.CANCELLED,
-  );
+  const dismissedReminderRows =
+  await this.projectExecutionReminderRepository.find({
+    where: {
+      status: ProjectExecutionReminderStatus.DISMISSED,
+    },
+    select: ['activityId'],
+  });
+
+const dismissedActivityIds = new Set(
+  dismissedReminderRows.map((item) => item.activityId),
+);
+
+const activeRows = rows.filter(
+  (activity) =>
+    activity.status !== ProjectExecutionActivityStatus.COMPLETED &&
+    activity.status !== ProjectExecutionActivityStatus.CANCELLED &&
+    !dismissedActivityIds.has(Number(activity.id)),
+);
 
   return activeRows
     .map((activity) => {
