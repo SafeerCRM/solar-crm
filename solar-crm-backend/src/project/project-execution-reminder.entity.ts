@@ -43,22 +43,22 @@ export class ProjectExecutionReminder {
   status: ProjectExecutionReminderStatus;
 
   @Column({ type: 'date', nullable: true })
-  reminderDate: string | null;
+reminderDate: string;
 
   @Column({ type: 'timestamp', nullable: true })
-  sentAt: Date | null;
+sentAt: Date;
 
   @Column({ type: 'timestamp', nullable: true })
-  dismissedAt: Date | null;
+dismissedAt: Date;
 
   @Column({ type: 'text', nullable: true })
-  message: string | null;
+message: string;
 
-  @Column({ nullable: true })
-  createdBy: number | null;
+  @Column({ type: 'int', nullable: true })
+createdBy: number;
 
-  @Column({ nullable: true })
-  createdByName: string | null;
+  @Column({ type: 'text', nullable: true })
+createdByName: string;
 
   @CreateDateColumn()
   createdAt: Date;
