@@ -41,6 +41,11 @@ import {
   ProjectExecutionReminderType,
 } from './project-execution-reminder.entity';
 
+import {
+  ProjectExecutionReminderUserState,
+  ProjectExecutionReminderUserStateStatus,
+} from './project-execution-reminder-user-state.entity';
+
 @Injectable()
 export class ProjectService {
 
@@ -95,6 +100,9 @@ private readonly projectExecutionProofRepository: Repository<ProjectExecutionPro
 
 @InjectRepository(ProjectExecutionReminder)
 private readonly projectExecutionReminderRepository: Repository<ProjectExecutionReminder>,
+
+@InjectRepository(ProjectExecutionReminderUserState)
+private readonly projectExecutionReminderUserStateRepository: Repository<ProjectExecutionReminderUserState>,
 
     private readonly calculatorService: CalculatorService,
 
