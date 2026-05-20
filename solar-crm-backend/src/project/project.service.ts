@@ -1278,6 +1278,90 @@ async createPaymentInstallment(
   );
 }
 
+async receivePaymentInstallment(
+  installmentId: number,
+  body: any,
+  currentUser: any,
+) {
+  const installment =
+    await this.projectPaymentInstallmentRepository.findOne({
+      where: {
+        id: installmentId,
+      },
+    });
+
+  if (!installment) {
+    throw new NotFoundException('Payment installment not found');
+  }
+
+  if (
+    installment.status ===
+    ProjectPaymentInstallmentStatus.CANCELLED
+  ) {
+    throw new BadRequestException(
+      'Cancelled installment cannot receive payment',
+    );
+  }
+
+  const receivedAmount = Number(body?.receivedAmount || 0);
+
+  if (!receivedAmount || receivedAmount <= 0) {
+    throw new BadRequestException(
+      'Valid received amount is required',
+    );
+  }
+
+  const currentPaid = Number(installment.paidAmount || 0);
+  const totalAmount = Number(installment.amount || 0);
+
+  const newPaidAmount = currentPaid + receivedAmount;
+
+  if (newPaidAmount > totalAmount) {
+    throw new BadRequestException(
+      'Received amount cannot exceed pending amount',
+    );
+  }
+
+  const newPendingAmount = totalAmount - newPaidAmount;
+
+  installment.paidAmount = newPaidAmount;
+  installment.pendingAmount = newPendingAmount;
+
+  installment.paymentMode =
+    body?.paymentMode || installment.paymentMode || null;
+
+  installment.transactionId =
+    body?.transactionId ||
+    installment.transactionId ||
+    null;
+
+  installment.remarks =
+    body?.remarks || installment.remarks || null;
+
+  installment.collectedBy =
+    currentUser?.id || currentUser?.userId || null;
+
+  installment.collectedByName =
+    currentUser?.name || null;
+
+  installment.paidDate = new Date();
+
+  if (newPendingAmount <= 0) {
+    installment.status =
+      ProjectPaymentInstallmentStatus.PAID;
+  } else if (newPaidAmount > 0) {
+    installment.status =
+      ProjectPaymentInstallmentStatus.PARTIAL;
+  } else {
+    installment.status =
+      ProjectPaymentInstallmentStatus.PENDING;
+  }
+
+  return this.projectPaymentInstallmentRepository.save(
+    installment,
+  );
+}
+
 async createExecutionActivity(
   data: Partial<ProjectExecutionActivity>,
   user: any,

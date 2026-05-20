@@ -422,6 +422,22 @@ async createPaymentInstallment(
   );
 }
 
+@Post('payment-collection/installments/:installmentId/receive')
+async receivePaymentInstallment(
+  @Param('installmentId', ParseIntPipe)
+  installmentId: number,
+
+  @Body() body: any,
+
+  @Req() req: any,
+) {
+  return this.projectService.receivePaymentInstallment(
+    installmentId,
+    body,
+    req.user,
+  );
+}
+
   @Get(':id')
   findOne(
   @Param('id') id: string,
