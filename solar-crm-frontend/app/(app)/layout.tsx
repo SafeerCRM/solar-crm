@@ -183,6 +183,16 @@ type CurrentUser = {
   roles?: string[];
 };
 
+type ReminderPreviewItem = {
+  id: number;
+  projectId: number;
+  activityType: string;
+  reminderType: 'OVERDUE_INSPECTION' | 'TODAY_WORK' | 'UPCOMING_DEADLINE';
+  customerName: string | null;
+  projectSerial: string | null;
+  userReminderStatus: 'UNREAD' | 'READ' | 'DISMISSED';
+};
+
 export default function AppLayout({
   children,
 }: {
@@ -192,6 +202,8 @@ export default function AppLayout({
   const [open, setOpen] = useState(false);
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [reminderCount, setReminderCount] = useState(0);
+  const [reminderPreview, setReminderPreview] = useState<ReminderPreviewItem[]>([]);
+const [bellOpen, setBellOpen] = useState(false);
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
@@ -230,20 +242,34 @@ export default function AppLayout({
   if (!canSeeReminders) return;
 
   const fetchReminderCount = async () => {
-    try {
-      const res = await axios.get(
-        `${apiBaseUrl}/project/execution-reminders/unread-count`,
-        {
-          headers: getAuthHeaders(),
-        },
-      );
+  try {
+    const [countRes, listRes] = await Promise.all([
+      axios.get(`${apiBaseUrl}/project/execution-reminders/unread-count`, {
+        headers: getAuthHeaders(),
+      }),
+      axios.get(`${apiBaseUrl}/project/execution-reminders`, {
+        headers: getAuthHeaders(),
+      }),
+    ]);
 
-      setReminderCount(res.data?.unreadCount || 0);
-    } catch (error) {
-      console.error('Reminder count error:', error);
-      setReminderCount(0);
-    }
-  };
+    setReminderCount(countRes.data?.unreadCount || 0);
+
+    const list = Array.isArray(listRes.data) ? listRes.data : [];
+
+    const unreadOnly = list
+      .filter(
+        (item: ReminderPreviewItem) =>
+          item.userReminderStatus !== 'READ',
+      )
+      .slice(0, 5);
+
+    setReminderPreview(unreadOnly);
+  } catch (error) {
+    console.error('Reminder count error:', error);
+    setReminderCount(0);
+    setReminderPreview([]);
+  }
+};
 
   fetchReminderCount();
 
@@ -260,6 +286,61 @@ export default function AppLayout({
       >
         ☰
       </button>
+
+      <div className="fixed right-3 top-3 z-50">
+  <button
+    type="button"
+    onClick={() => setBellOpen((prev) => !prev)}
+    className="relative rounded-xl bg-white px-3 py-2 text-lg shadow"
+  >
+    🔔
+    {reminderCount > 0 && (
+      <span className="absolute -right-1 -top-1 rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white">
+        {reminderCount}
+      </span>
+    )}
+  </button>
+
+  {bellOpen && (
+    <div className="mt-2 w-80 rounded-2xl bg-white p-4 shadow-xl">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="font-bold text-gray-900">Notifications</h3>
+        <Link
+          href="/project/reminders"
+          onClick={() => setBellOpen(false)}
+          className="text-xs font-medium text-blue-600"
+        >
+          View all
+        </Link>
+      </div>
+
+      {reminderPreview.length === 0 ? (
+        <p className="text-sm text-gray-500">No unread reminders</p>
+      ) : (
+        <div className="space-y-2">
+          {reminderPreview.map((item) => (
+            <Link
+              key={item.id}
+              href="/project/reminders"
+              onClick={() => setBellOpen(false)}
+              className="block rounded-xl bg-blue-50 p-3 text-sm hover:bg-blue-100"
+            >
+              <p className="font-semibold text-gray-900">
+                {formatReminderPreviewType(item.reminderType)}
+              </p>
+              <p className="text-xs text-gray-600">
+                {formatActivityType(item.activityType)}
+              </p>
+              <p className="text-xs text-gray-500">
+                {item.customerName || item.projectSerial || `Project #${item.projectId}`}
+              </p>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  )}
+</div>
 
       {open && (
         <button
@@ -335,4 +416,19 @@ export default function AppLayout({
             <main className="min-w-0 flex-1 px-3 pb-4 pt-20 md:p-8">{children}</main>
     </div>
   );
+}
+
+function formatActivityType(value: string) {
+  return value
+    .replaceAll('_', ' ')
+    .toLowerCase()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function formatReminderPreviewType(
+  value: 'OVERDUE_INSPECTION' | 'TODAY_WORK' | 'UPCOMING_DEADLINE',
+) {
+  if (value === 'OVERDUE_INSPECTION') return 'Overdue Reminder';
+  if (value === 'TODAY_WORK') return 'Today’s Work';
+  return 'Upcoming Deadline';
 }
