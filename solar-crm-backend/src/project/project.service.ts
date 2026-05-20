@@ -1451,31 +1451,25 @@ async getExecutionReminderSummary(currentUser: any) {
   const nextSevenDays = new Date(today);
   nextSevenDays.setDate(nextSevenDays.getDate() + 7);
 
-  const inspectionTypes = [
-    ProjectExecutionActivityType.STRUCTURE_INSPECTION,
-    ProjectExecutionActivityType.PILLAR_INSPECTION,
-    ProjectExecutionActivityType.GENERATION_INSPECTION,
-  ];
-
   const roles = currentUser?.roles || [];
-const userId = currentUser?.id || currentUser?.userId;
+  const userId = currentUser?.id || currentUser?.userId;
 
-const canSeeAll =
-  roles.includes('OWNER') ||
-  roles.includes('MARKETING_HEAD') ||
-  roles.includes('PROJECT_MANAGER');
+  const canSeeAll =
+    roles.includes('OWNER') ||
+    roles.includes('MARKETING_HEAD') ||
+    roles.includes('PROJECT_MANAGER');
 
-const activityQuery = this.projectExecutionActivityRepository
-  .createQueryBuilder('activity');
+  const activityQuery = this.projectExecutionActivityRepository
+    .createQueryBuilder('activity');
 
-if (!canSeeAll) {
-  activityQuery.andWhere(
-    '(activity.assignedTo = :userId OR activity.createdBy = :userId)',
-    { userId },
-  );
-}
+  if (!canSeeAll) {
+    activityQuery.andWhere(
+      '(activity.assignedTo = :userId OR activity.createdBy = :userId)',
+      { userId },
+    );
+  }
 
-const activities = await activityQuery.getMany();
+  const activities = await activityQuery.getMany();
 
   const activeActivities = activities.filter(
     (activity) =>
@@ -1483,9 +1477,7 @@ const activities = await activityQuery.getMany();
       activity.status !== ProjectExecutionActivityStatus.CANCELLED,
   );
 
-  const overdueInspections = activeActivities.filter((activity) => {
-    if (!inspectionTypes.includes(activity.activityType)) return false;
-
+  const overdueActivities = activeActivities.filter((activity) => {
     const dateToCheck = activity.inspectionDeadline || activity.scheduledDate;
     if (!dateToCheck) return false;
 
@@ -1516,11 +1508,11 @@ const activities = await activityQuery.getMany();
   });
 
   return {
-    overdueInspections: overdueInspections.length,
+    overdueInspections: overdueActivities.length,
     todaysExecutionWork: todaysExecutionWork.length,
     upcomingDeadlines: upcomingDeadlines.length,
     totalPendingReminders:
-      overdueInspections.length +
+      overdueActivities.length +
       todaysExecutionWork.length +
       upcomingDeadlines.length,
   };
@@ -1535,12 +1527,6 @@ async getExecutionReminderList(currentUser: any) {
 
   const nextSevenDays = new Date(today);
   nextSevenDays.setDate(nextSevenDays.getDate() + 7);
-
-  const inspectionTypes = [
-    ProjectExecutionActivityType.STRUCTURE_INSPECTION,
-    ProjectExecutionActivityType.PILLAR_INSPECTION,
-    ProjectExecutionActivityType.GENERATION_INSPECTION,
-  ];
 
   const roles = currentUser?.roles || [];
   const userId = currentUser?.id || currentUser?.userId;
@@ -1578,13 +1564,13 @@ async getExecutionReminderList(currentUser: any) {
       const checkDate = new Date(dateToCheck);
       checkDate.setHours(0, 0, 0, 0);
 
-      let reminderType: 'OVERDUE_INSPECTION' | 'TODAY_WORK' | 'UPCOMING_DEADLINE' | null =
-        null;
+      let reminderType:
+        | 'OVERDUE_INSPECTION'
+        | 'TODAY_WORK'
+        | 'UPCOMING_DEADLINE'
+        | null = null;
 
-      if (
-        inspectionTypes.includes(activity.activityType) &&
-        checkDate < today
-      ) {
+      if (checkDate < today) {
         reminderType = 'OVERDUE_INSPECTION';
       } else if (checkDate.getTime() === today.getTime()) {
         reminderType = 'TODAY_WORK';
