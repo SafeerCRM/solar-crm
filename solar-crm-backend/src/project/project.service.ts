@@ -51,6 +51,11 @@ import {
   ProjectPaymentInstallmentStatus,
 } from './project-payment-installment.entity';
 
+import {
+  ProjectPaymentReminderUserState,
+  ProjectPaymentReminderUserStateStatus,
+} from './project-payment-reminder-user-state.entity';
+
 @Injectable()
 export class ProjectService {
 
@@ -111,6 +116,9 @@ private readonly projectExecutionReminderUserStateRepository: Repository<Project
 
 @InjectRepository(ProjectPaymentInstallment)
 private readonly projectPaymentInstallmentRepository: Repository<ProjectPaymentInstallment>,
+
+@InjectRepository(ProjectPaymentReminderUserState)
+private readonly projectPaymentReminderUserStateRepository: Repository<ProjectPaymentReminderUserState>,
 
     private readonly calculatorService: CalculatorService,
 
