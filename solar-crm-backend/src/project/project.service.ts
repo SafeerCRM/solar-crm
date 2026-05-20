@@ -1441,6 +1441,91 @@ async getExecutionCalendarActivities(
   };
 }
 
+async getExecutionReminderSummary(currentUser: any) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const nextSevenDays = new Date(today);
+  nextSevenDays.setDate(nextSevenDays.getDate() + 7);
+
+  const inspectionTypes = [
+    ProjectExecutionActivityType.STRUCTURE_INSPECTION,
+    ProjectExecutionActivityType.PILLAR_INSPECTION,
+    ProjectExecutionActivityType.GENERATION_INSPECTION,
+  ];
+
+  const roles = currentUser?.roles || [];
+const userId = currentUser?.id || currentUser?.userId;
+
+const canSeeAll =
+  roles.includes('OWNER') ||
+  roles.includes('MARKETING_HEAD') ||
+  roles.includes('PROJECT_MANAGER');
+
+const activityQuery = this.projectExecutionActivityRepository
+  .createQueryBuilder('activity');
+
+if (!canSeeAll) {
+  activityQuery.andWhere(
+    '(activity.assignedTo = :userId OR activity.createdBy = :userId)',
+    { userId },
+  );
+}
+
+const activities = await activityQuery.getMany();
+
+  const activeActivities = activities.filter(
+    (activity) =>
+      activity.status !== ProjectExecutionActivityStatus.COMPLETED &&
+      activity.status !== ProjectExecutionActivityStatus.CANCELLED,
+  );
+
+  const overdueInspections = activeActivities.filter((activity) => {
+    if (!inspectionTypes.includes(activity.activityType)) return false;
+
+    const dateToCheck = activity.inspectionDeadline || activity.scheduledDate;
+    if (!dateToCheck) return false;
+
+    const checkDate = new Date(dateToCheck);
+    checkDate.setHours(0, 0, 0, 0);
+
+    return checkDate < today;
+  });
+
+  const todaysExecutionWork = activeActivities.filter((activity) => {
+    const dateToCheck = activity.scheduledDate || activity.inspectionDeadline;
+    if (!dateToCheck) return false;
+
+    const checkDate = new Date(dateToCheck);
+    checkDate.setHours(0, 0, 0, 0);
+
+    return checkDate.getTime() === today.getTime();
+  });
+
+  const upcomingDeadlines = activeActivities.filter((activity) => {
+    const dateToCheck = activity.inspectionDeadline || activity.scheduledDate;
+    if (!dateToCheck) return false;
+
+    const checkDate = new Date(dateToCheck);
+    checkDate.setHours(0, 0, 0, 0);
+
+    return checkDate >= tomorrow && checkDate <= nextSevenDays;
+  });
+
+  return {
+    overdueInspections: overdueInspections.length,
+    todaysExecutionWork: todaysExecutionWork.length,
+    upcomingDeadlines: upcomingDeadlines.length,
+    totalPendingReminders:
+      overdueInspections.length +
+      todaysExecutionWork.length +
+      upcomingDeadlines.length,
+  };
+}
+
   async ownerApproval(
   id: number,
   body: {

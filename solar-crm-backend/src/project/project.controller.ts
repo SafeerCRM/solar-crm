@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Req,
   Post,
   Patch,
   Body,
@@ -349,6 +350,11 @@ getExecutionCalendarActivities(
       overdueOnly: overdueOnly || '',
     },
   );
+}
+
+@Get('execution-reminders/summary')
+async getExecutionReminderSummary(@Req() req: any) {
+  return this.projectService.getExecutionReminderSummary(req.user);
 }
 
   @Get(':id')

@@ -15,11 +15,12 @@ import { ProjectSubsidyDetail } from './project-subsidy-detail.entity';
 import { ProjectElectricityDetail } from './project-electricity-detail.entity';
 import { ProjectExecutionActivity } from './project-execution-activity.entity';
 import { ProjectExecutionProof } from './project-execution-proof.entity';
+import { ProjectExecutionReminder } from './project-execution-reminder.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Project, ProjectDocument, ProjectComment, ProjectMaterialMaster, ProjectMaterialRequest,
-ProjectMaterialRequestItem, ProjectBranch, ProjectLoanDetail, ProjectSubsidyDetail, ProjectElectricityDetail, ProjectExecutionActivity, ProjectExecutionProof]),
+ProjectMaterialRequestItem, ProjectBranch, ProjectLoanDetail, ProjectSubsidyDetail, ProjectElectricityDetail, ProjectExecutionActivity, ProjectExecutionProof, ProjectExecutionReminder]),
     CalculatorModule,
   ],
   controllers: [ProjectController],
