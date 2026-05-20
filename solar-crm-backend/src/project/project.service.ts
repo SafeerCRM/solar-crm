@@ -1715,54 +1715,9 @@ async dismissExecutionReminder(activityId: number, currentUser: any) {
 }
 
 async getUnreadReminderCount(currentUser: any) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-
-  const nextSevenDays = new Date(today);
-  nextSevenDays.setDate(nextSevenDays.getDate() + 7);
+  const reminderList = await this.getExecutionReminderList(currentUser);
 
   const userId = currentUser?.id || currentUser?.userId;
-  const roles = currentUser?.roles || [];
-
-  const canSeeAll =
-    roles.includes('OWNER') ||
-    roles.includes('MARKETING_HEAD') ||
-    roles.includes('PROJECT_MANAGER');
-
-  const activityQuery = this.projectExecutionActivityRepository
-    .createQueryBuilder('activity');
-
-  if (!canSeeAll) {
-    activityQuery.andWhere(
-      '(activity.assignedTo = :userId OR activity.createdBy = :userId)',
-      { userId },
-    );
-  }
-
-  const activities = await activityQuery.getMany();
-
-  const activeActivities = activities.filter(
-    (activity) =>
-      activity.status !== ProjectExecutionActivityStatus.COMPLETED &&
-      activity.status !== ProjectExecutionActivityStatus.CANCELLED,
-  );
-
-  const reminderEligibleActivities = activeActivities.filter((activity) => {
-    const dateToCheck = activity.inspectionDeadline || activity.scheduledDate;
-    if (!dateToCheck) return false;
-
-    const checkDate = new Date(dateToCheck);
-    checkDate.setHours(0, 0, 0, 0);
-
-    const isOverdue = checkDate < today;
-    const isToday = checkDate.getTime() === today.getTime();
-    const isUpcoming = checkDate >= tomorrow && checkDate <= nextSevenDays;
-
-    return isOverdue || isToday || isUpcoming;
-  });
 
   const userStates =
     await this.projectExecutionReminderUserStateRepository.find({
@@ -1771,7 +1726,7 @@ async getUnreadReminderCount(currentUser: any) {
       },
     });
 
-  const readOrHiddenActivityIds = new Set(
+  const readOrDismissedActivityIds = new Set(
     userStates
       .filter(
         (item) =>
@@ -1781,12 +1736,12 @@ async getUnreadReminderCount(currentUser: any) {
       .map((item) => item.activityId),
   );
 
-  const unreadActivities = reminderEligibleActivities.filter(
-    (activity) => !readOrHiddenActivityIds.has(activity.id),
-  );
+  const unreadCount = reminderList.filter((item: any) => {
+    return !readOrDismissedActivityIds.has(Number(item.id));
+  }).length;
 
   return {
-    unreadCount: unreadActivities.length,
+    unreadCount,
   };
 }
 
