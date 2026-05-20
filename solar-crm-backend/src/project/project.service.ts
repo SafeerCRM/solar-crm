@@ -1526,6 +1526,90 @@ const activities = await activityQuery.getMany();
   };
 }
 
+async getExecutionReminderList(currentUser: any) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const nextSevenDays = new Date(today);
+  nextSevenDays.setDate(nextSevenDays.getDate() + 7);
+
+  const inspectionTypes = [
+    ProjectExecutionActivityType.STRUCTURE_INSPECTION,
+    ProjectExecutionActivityType.PILLAR_INSPECTION,
+    ProjectExecutionActivityType.GENERATION_INSPECTION,
+  ];
+
+  const roles = currentUser?.roles || [];
+  const userId = currentUser?.id || currentUser?.userId;
+
+  const canSeeAll =
+    roles.includes('OWNER') ||
+    roles.includes('MARKETING_HEAD') ||
+    roles.includes('PROJECT_MANAGER');
+
+  const activityQuery = this.projectExecutionActivityRepository
+    .createQueryBuilder('activity')
+    .orderBy('activity.inspectionDeadline', 'ASC')
+    .addOrderBy('activity.scheduledDate', 'ASC');
+
+  if (!canSeeAll) {
+    activityQuery.andWhere(
+      '(activity.assignedTo = :userId OR activity.createdBy = :userId)',
+      { userId },
+    );
+  }
+
+  const activities = await activityQuery.getMany();
+
+  const activeActivities = activities.filter(
+    (activity) =>
+      activity.status !== ProjectExecutionActivityStatus.COMPLETED &&
+      activity.status !== ProjectExecutionActivityStatus.CANCELLED,
+  );
+
+  return activeActivities
+    .map((activity) => {
+      const dateToCheck = activity.inspectionDeadline || activity.scheduledDate;
+      if (!dateToCheck) return null;
+
+      const checkDate = new Date(dateToCheck);
+      checkDate.setHours(0, 0, 0, 0);
+
+      let reminderType: 'OVERDUE_INSPECTION' | 'TODAY_WORK' | 'UPCOMING_DEADLINE' | null =
+        null;
+
+      if (
+        inspectionTypes.includes(activity.activityType) &&
+        checkDate < today
+      ) {
+        reminderType = 'OVERDUE_INSPECTION';
+      } else if (checkDate.getTime() === today.getTime()) {
+        reminderType = 'TODAY_WORK';
+      } else if (checkDate >= tomorrow && checkDate <= nextSevenDays) {
+        reminderType = 'UPCOMING_DEADLINE';
+      }
+
+      if (!reminderType) return null;
+
+      return {
+        id: activity.id,
+        projectId: activity.projectId,
+        activityType: activity.activityType,
+        status: activity.status,
+        reminderType,
+        scheduledDate: activity.scheduledDate,
+        inspectionDeadline: activity.inspectionDeadline,
+        assignedTo: activity.assignedTo,
+        assignedToName: activity.assignedToName,
+        remarks: activity.remarks,
+      };
+    })
+    .filter(Boolean);
+}
+
   async ownerApproval(
   id: number,
   body: {

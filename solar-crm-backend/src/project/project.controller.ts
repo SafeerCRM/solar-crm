@@ -357,6 +357,11 @@ async getExecutionReminderSummary(@Req() req: any) {
   return this.projectService.getExecutionReminderSummary(req.user);
 }
 
+@Get('execution-reminders')
+async getExecutionReminderList(@Req() req: any) {
+  return this.projectService.getExecutionReminderList(req.user);
+}
+
   @Get(':id')
   findOne(
   @Param('id') id: string,
