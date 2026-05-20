@@ -130,6 +130,30 @@ type ExecutionProof = {
   createdAt?: string;
 };
 
+type PaymentInstallment = {
+  id: number;
+  projectId: number;
+
+  label?: string;
+
+  amount?: number;
+  paidAmount?: number;
+  pendingAmount?: number;
+
+  dueDate?: string;
+  paidDate?: string;
+
+  status?: string;
+
+  paymentMode?: string;
+  transactionId?: string;
+  remarks?: string;
+
+  collectedByName?: string;
+
+  createdAt?: string;
+};
+
 function money(value?: number) {
   return `₹${Number(value || 0).toLocaleString('en-IN')}`;
 }
@@ -260,6 +284,19 @@ const [proofFiles, setProofFiles] =
 
 const [proofUploadingId, setProofUploadingId] =
   useState<number | null>(null);
+
+  const [paymentInstallments, setPaymentInstallments] =
+  useState<PaymentInstallment[]>([]);
+
+const [paymentLoading, setPaymentLoading] =
+  useState(false);
+
+const [paymentForm, setPaymentForm] = useState({
+  label: 'FIRST_PAYMENT',
+  amount: '',
+  dueDate: '',
+  remarks: '',
+});
 
   const fetchProject = async () => {
     try {
@@ -937,6 +974,81 @@ activities.forEach((activity: ExecutionActivity) => {
   }
 };
 
+const fetchPaymentInstallments = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/payment-collection`,
+      {
+        params: {
+          projectId,
+          limit: 100,
+        },
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setPaymentInstallments(res.data?.data || []);
+  } catch (error) {
+    console.error(
+      'Failed to load payment installments:',
+      error,
+    );
+  }
+};
+
+const createPaymentInstallment = async () => {
+  if (!paymentForm.amount) {
+    alert('Please enter amount');
+    return;
+  }
+
+  try {
+    setPaymentLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/${projectId}/payment-installment`,
+      {
+        ...paymentForm,
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Payment installment added');
+
+    setPaymentForm({
+      label: 'FIRST_PAYMENT',
+      amount: '',
+      dueDate: '',
+      remarks: '',
+    });
+
+    fetchPaymentInstallments();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to add payment installment',
+    );
+  } finally {
+    setPaymentLoading(false);
+  }
+};
+
 const createExecutionActivity = async () => {
   if (!executionForm.activityType) {
     alert('Please select activity type');
@@ -1122,6 +1234,7 @@ const updateExecutionActivityStatus = async (
   fetchSubsidyDetail();
   fetchElectricityDetail();
   fetchExecutionActivities();
+  fetchPaymentInstallments();
 }
 }, [projectId]);
 
@@ -2600,11 +2713,241 @@ const updateExecutionActivityStatus = async (
 )}
 
 {activeTab === 'PAYMENT_COLLECTION' && (
-  <div className="rounded-2xl bg-white p-6 shadow">
-    <h2 className="text-xl font-bold text-gray-800">Payment Collection</h2>
-    <p className="mt-3 text-gray-600">
-      Payment tracking workflow will appear here.
-    </p>
+  <div className="space-y-5">
+    <div className="grid gap-4 md:grid-cols-3">
+      <div className="rounded-2xl bg-green-50 p-5 shadow">
+        <p className="text-sm text-gray-500">
+          Total Paid
+        </p>
+
+        <p className="mt-2 text-2xl font-bold text-green-700">
+          ₹
+          {paymentInstallments
+            .reduce(
+              (sum, item) =>
+                sum +
+                Number(item.paidAmount || 0),
+              0,
+            )
+            .toLocaleString('en-IN')}
+        </p>
+      </div>
+
+      <div className="rounded-2xl bg-red-50 p-5 shadow">
+        <p className="text-sm text-gray-500">
+          Total Pending
+        </p>
+
+        <p className="mt-2 text-2xl font-bold text-red-700">
+          ₹
+          {paymentInstallments
+            .reduce(
+              (sum, item) =>
+                sum +
+                Number(
+                  item.pendingAmount || 0,
+                ),
+              0,
+            )
+            .toLocaleString('en-IN')}
+        </p>
+      </div>
+
+      <div className="rounded-2xl bg-blue-50 p-5 shadow">
+        <p className="text-sm text-gray-500">
+          Total Installments
+        </p>
+
+        <p className="mt-2 text-2xl font-bold text-blue-700">
+          {paymentInstallments.length}
+        </p>
+      </div>
+    </div>
+
+    <div className="rounded-2xl bg-white p-5 shadow">
+      <h2 className="text-xl font-bold text-gray-800">
+        Add Payment Installment
+      </h2>
+
+      <div className="mt-5 grid gap-4 md:grid-cols-2">
+        <select
+          value={paymentForm.label}
+          onChange={(e) =>
+            setPaymentForm({
+              ...paymentForm,
+              label: e.target.value,
+            })
+          }
+          className="rounded-xl border p-3"
+        >
+          <option value="FIRST_PAYMENT">
+            First Payment
+          </option>
+
+          <option value="SECOND_PAYMENT">
+            Second Payment
+          </option>
+
+          <option value="THIRD_PAYMENT">
+            Third Payment
+          </option>
+
+          <option value="FOURTH_PAYMENT">
+            Fourth Payment
+          </option>
+
+          <option value="EXTRA_PAYMENT">
+            Extra Payment
+          </option>
+        </select>
+
+        <input
+          type="number"
+          placeholder="Amount"
+          value={paymentForm.amount}
+          onChange={(e) =>
+            setPaymentForm({
+              ...paymentForm,
+              amount: e.target.value,
+            })
+          }
+          className="rounded-xl border p-3"
+        />
+
+        <input
+          type="date"
+          value={paymentForm.dueDate}
+          onChange={(e) =>
+            setPaymentForm({
+              ...paymentForm,
+              dueDate: e.target.value,
+            })
+          }
+          className="rounded-xl border p-3"
+        />
+      </div>
+
+      <textarea
+        placeholder="Remarks"
+        value={paymentForm.remarks}
+        onChange={(e) =>
+          setPaymentForm({
+            ...paymentForm,
+            remarks: e.target.value,
+          })
+        }
+        className="mt-4 w-full rounded-xl border p-3"
+        rows={3}
+      />
+
+      <button
+        onClick={createPaymentInstallment}
+        disabled={paymentLoading}
+        className="mt-4 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+      >
+        {paymentLoading
+          ? 'Saving...'
+          : 'Add Installment'}
+      </button>
+    </div>
+
+    <div className="rounded-2xl bg-white p-5 shadow">
+      <h2 className="text-xl font-bold text-gray-800">
+        Payment History
+      </h2>
+
+      <div className="mt-5 space-y-3">
+        {paymentInstallments.length === 0 ? (
+          <p className="text-sm text-gray-500">
+            No payment installments found.
+          </p>
+        ) : (
+          paymentInstallments.map((item) => (
+            <div
+              key={item.id}
+              className="rounded-2xl border p-4"
+            >
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <p className="font-bold text-gray-800">
+                    {item.label
+                      ?.replaceAll('_', ' ')
+                      .toLowerCase()
+                      .replace(
+                        /\b\w/g,
+                        (c) =>
+                          c.toUpperCase(),
+                      )}
+                  </p>
+
+                  <p className="mt-1 text-sm text-gray-500">
+                    Due Date:{' '}
+                    {item.dueDate
+                      ? new Date(
+                          item.dueDate,
+                        ).toLocaleDateString(
+                          'en-IN',
+                        )
+                      : '-'}
+                  </p>
+
+                  {item.remarks && (
+                    <p className="mt-2 text-sm text-gray-700">
+                      {item.remarks}
+                    </p>
+                  )}
+                </div>
+
+                <div className="text-right">
+                  <p className="text-lg font-bold text-gray-800">
+                    ₹
+                    {Number(
+                      item.amount || 0,
+                    ).toLocaleString(
+                      'en-IN',
+                    )}
+                  </p>
+
+                  <p className="mt-1 text-sm text-green-700">
+                    Paid: ₹
+                    {Number(
+                      item.paidAmount || 0,
+                    ).toLocaleString(
+                      'en-IN',
+                    )}
+                  </p>
+
+                  <p className="mt-1 text-sm text-red-700">
+                    Pending: ₹
+                    {Number(
+                      item.pendingAmount || 0,
+                    ).toLocaleString(
+                      'en-IN',
+                    )}
+                  </p>
+
+                  <span
+                    className={`mt-2 inline-block rounded-full px-3 py-1 text-xs font-semibold ${
+                      item.status === 'PAID'
+                        ? 'bg-green-100 text-green-700'
+                        : item.status ===
+                            'OVERDUE'
+                          ? 'bg-red-100 text-red-700'
+                          : item.status ===
+                              'PARTIAL'
+                            ? 'bg-yellow-100 text-yellow-700'
+                            : 'bg-blue-100 text-blue-700'
+                    }`}
+                  >
+                    {item.status || 'PENDING'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
   </div>
 )}
 
