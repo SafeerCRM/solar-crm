@@ -1219,7 +1219,11 @@ async getPaymentCollectionList(query: any, currentUser: any) {
       pendingAmount: Number(row.pendingAmount || 0),
       dueDate: row.dueDate,
       paidDate: row.paidDate,
-      status: row.status,
+      status: this.getComputedPaymentStatus(
+  row.status,
+  row.dueDate,
+  Number(row.pendingAmount || 0),
+),
       paymentMode: row.paymentMode,
       transactionId: row.transactionId,
       remarks: row.remarks,
@@ -1372,6 +1376,36 @@ async receivePaymentInstallment(
   return this.projectPaymentInstallmentRepository.save(
     installment,
   );
+}
+
+private getComputedPaymentStatus(
+  status: string,
+  dueDate: string | Date | null,
+  pendingAmount: number,
+) {
+  if (status === ProjectPaymentInstallmentStatus.PAID) {
+    return ProjectPaymentInstallmentStatus.PAID;
+  }
+
+  if (status === ProjectPaymentInstallmentStatus.CANCELLED) {
+    return ProjectPaymentInstallmentStatus.CANCELLED;
+  }
+
+  if (!dueDate || pendingAmount <= 0) {
+    return status;
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const due = new Date(dueDate);
+  due.setHours(0, 0, 0, 0);
+
+  if (due < today) {
+    return ProjectPaymentInstallmentStatus.OVERDUE;
+  }
+
+  return status;
 }
 
 async createExecutionActivity(
