@@ -406,6 +406,22 @@ async getPaymentCollectionList(
   return this.projectService.getPaymentCollectionList(query, req.user);
 }
 
+@Post(':projectId/payment-installment')
+async createPaymentInstallment(
+  @Param('projectId', ParseIntPipe)
+  projectId: number,
+
+  @Body() body: any,
+
+  @Req() req: any,
+) {
+  return this.projectService.createPaymentInstallment(
+    projectId,
+    body,
+    req.user,
+  );
+}
+
   @Get(':id')
   findOne(
   @Param('id') id: string,

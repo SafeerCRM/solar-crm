@@ -1232,6 +1232,52 @@ async getPaymentCollectionList(query: any, currentUser: any) {
   };
 }
 
+async createPaymentInstallment(
+  projectId: number,
+  body: any,
+  currentUser: any,
+) {
+  const project = await this.projectRepository.findOne({
+    where: {
+      id: projectId,
+    },
+  });
+
+  if (!project) {
+    throw new NotFoundException('Project not found');
+  }
+
+  const amount = Number(body?.amount || 0);
+
+  if (!amount || amount <= 0) {
+    throw new BadRequestException(
+      'Valid amount is required',
+    );
+  }
+
+  const installment =
+    this.projectPaymentInstallmentRepository.create({
+      projectId,
+      label: body?.label || 'FIRST_PAYMENT',
+      amount,
+      paidAmount: 0,
+      pendingAmount: amount,
+      dueDate: body?.dueDate || null,
+      remarks: body?.remarks || null,
+      status: ProjectPaymentInstallmentStatus.PENDING,
+      createdBy:
+        currentUser?.id ||
+        currentUser?.userId ||
+        null,
+      createdByName:
+        currentUser?.name || null,
+    });
+
+  return this.projectPaymentInstallmentRepository.save(
+    installment,
+  );
+}
+
 async createExecutionActivity(
   data: Partial<ProjectExecutionActivity>,
   user: any,
