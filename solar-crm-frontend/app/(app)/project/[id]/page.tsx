@@ -298,6 +298,17 @@ const [paymentForm, setPaymentForm] = useState({
   remarks: '',
 });
 
+const [receivingPaymentId, setReceivingPaymentId] =
+  useState<number | null>(null);
+
+const [receivePaymentForms, setReceivePaymentForms] =
+  useState<Record<number, {
+    receivedAmount: string;
+    paymentMode: string;
+    transactionId: string;
+    remarks: string;
+  }>>({});
+
   const fetchProject = async () => {
     try {
       setLoading(true);
@@ -1046,6 +1057,73 @@ const createPaymentInstallment = async () => {
     );
   } finally {
     setPaymentLoading(false);
+  }
+};
+
+const updateReceivePaymentForm = (
+  installmentId: number,
+  field: 'receivedAmount' | 'paymentMode' | 'transactionId' | 'remarks',
+  value: string,
+) => {
+  setReceivePaymentForms((prev) => ({
+    ...prev,
+    [installmentId]: {
+      receivedAmount: prev[installmentId]?.receivedAmount || '',
+      paymentMode: prev[installmentId]?.paymentMode || '',
+      transactionId: prev[installmentId]?.transactionId || '',
+      remarks: prev[installmentId]?.remarks || '',
+      [field]: value,
+    },
+  }));
+};
+
+const receivePayment = async (installmentId: number) => {
+  const form = receivePaymentForms[installmentId];
+
+  if (!form?.receivedAmount) {
+    alert('Please enter received amount');
+    return;
+  }
+
+  try {
+    setReceivingPaymentId(installmentId);
+
+    const token = localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/payment-collection/installments/${installmentId}/receive`,
+      form,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Payment received successfully');
+
+    setReceivePaymentForms((prev) => ({
+      ...prev,
+      [installmentId]: {
+        receivedAmount: '',
+        paymentMode: '',
+        transactionId: '',
+        remarks: '',
+      },
+    }));
+
+    fetchPaymentInstallments();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to receive payment',
+    );
+  } finally {
+    setReceivingPaymentId(null);
   }
 };
 
@@ -2941,6 +3019,96 @@ const updateExecutionActivityStatus = async (
                   >
                     {item.status || 'PENDING'}
                   </span>
+
+                  {item.status !== 'PAID' && item.status !== 'CANCELLED' && (
+  <div className="mt-4 rounded-xl bg-gray-50 p-3 text-left">
+    <p className="text-sm font-semibold text-gray-700">
+      Receive Payment
+    </p>
+
+    <div className="mt-3 grid gap-3">
+      <input
+        type="number"
+        placeholder="Received Amount"
+        value={
+          receivePaymentForms[item.id]?.receivedAmount || ''
+        }
+        onChange={(e) =>
+          updateReceivePaymentForm(
+            item.id,
+            'receivedAmount',
+            e.target.value,
+          )
+        }
+        className="rounded-xl border p-3"
+      />
+
+      <select
+        value={
+          receivePaymentForms[item.id]?.paymentMode || ''
+        }
+        onChange={(e) =>
+          updateReceivePaymentForm(
+            item.id,
+            'paymentMode',
+            e.target.value,
+          )
+        }
+        className="rounded-xl border p-3"
+      >
+        <option value="">Payment Mode</option>
+        <option value="CASH">Cash</option>
+        <option value="UPI">UPI</option>
+        <option value="BANK_TRANSFER">
+          Bank Transfer
+        </option>
+        <option value="CHEQUE">Cheque</option>
+        <option value="OTHER">Other</option>
+      </select>
+
+      <input
+        placeholder="Transaction ID / Reference"
+        value={
+          receivePaymentForms[item.id]?.transactionId || ''
+        }
+        onChange={(e) =>
+          updateReceivePaymentForm(
+            item.id,
+            'transactionId',
+            e.target.value,
+          )
+        }
+        className="rounded-xl border p-3"
+      />
+
+      <textarea
+        placeholder="Payment remarks"
+        value={
+          receivePaymentForms[item.id]?.remarks || ''
+        }
+        onChange={(e) =>
+          updateReceivePaymentForm(
+            item.id,
+            'remarks',
+            e.target.value,
+          )
+        }
+        className="rounded-xl border p-3"
+        rows={2}
+      />
+
+      <button
+        onClick={() => receivePayment(item.id)}
+        disabled={receivingPaymentId === item.id}
+        className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+      >
+        {receivingPaymentId === item.id
+          ? 'Saving...'
+          : 'Receive Payment'}
+      </button>
+    </div>
+  </div>
+)}
                 </div>
               </div>
             </div>
