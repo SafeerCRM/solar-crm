@@ -1715,6 +1715,15 @@ async dismissExecutionReminder(activityId: number, currentUser: any) {
 }
 
 async getUnreadReminderCount(currentUser: any) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const nextSevenDays = new Date(today);
+  nextSevenDays.setDate(nextSevenDays.getDate() + 7);
+
   const userId = currentUser?.id || currentUser?.userId;
   const roles = currentUser?.roles || [];
 
@@ -1741,6 +1750,20 @@ async getUnreadReminderCount(currentUser: any) {
       activity.status !== ProjectExecutionActivityStatus.CANCELLED,
   );
 
+  const reminderEligibleActivities = activeActivities.filter((activity) => {
+    const dateToCheck = activity.inspectionDeadline || activity.scheduledDate;
+    if (!dateToCheck) return false;
+
+    const checkDate = new Date(dateToCheck);
+    checkDate.setHours(0, 0, 0, 0);
+
+    const isOverdue = checkDate < today;
+    const isToday = checkDate.getTime() === today.getTime();
+    const isUpcoming = checkDate >= tomorrow && checkDate <= nextSevenDays;
+
+    return isOverdue || isToday || isUpcoming;
+  });
+
   const userStates =
     await this.projectExecutionReminderUserStateRepository.find({
       where: {
@@ -1748,20 +1771,18 @@ async getUnreadReminderCount(currentUser: any) {
       },
     });
 
-  const hiddenActivityIds = new Set(
+  const readOrHiddenActivityIds = new Set(
     userStates
       .filter(
         (item) =>
-          item.status ===
-            ProjectExecutionReminderUserStateStatus.READ ||
-          item.status ===
-            ProjectExecutionReminderUserStateStatus.DISMISSED,
+          item.status === ProjectExecutionReminderUserStateStatus.READ ||
+          item.status === ProjectExecutionReminderUserStateStatus.DISMISSED,
       )
       .map((item) => item.activityId),
   );
 
-  const unreadActivities = activeActivities.filter(
-    (activity) => !hiddenActivityIds.has(activity.id),
+  const unreadActivities = reminderEligibleActivities.filter(
+    (activity) => !readOrHiddenActivityIds.has(activity.id),
   );
 
   return {
