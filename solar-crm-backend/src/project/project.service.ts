@@ -197,11 +197,21 @@ projectOwnerRole: Array.isArray(user?.roles)
 };
 
     const project = this.projectRepository.create({
-      ...payload,
-      status: ProjectStatus.PENDING_APPROVAL,
-      marketingHeadApprovalStatus: ProjectApprovalStatus.PENDING,
-      ownerApprovalStatus: ProjectApprovalStatus.PENDING,
-    });
+  ...payload,
+
+  leadId: payload?.leadId ? Number(payload.leadId) : undefined,
+meetingId: payload?.meetingId ? Number(payload.meetingId) : undefined,
+proposalId: payload?.proposalId ? Number(payload.proposalId) : undefined,
+vendorId: payload?.vendorId ? Number(payload.vendorId) : undefined,
+
+projectOwnerId: payload?.projectOwnerId
+  ? Number(payload.projectOwnerId)
+  : undefined,
+
+  status: ProjectStatus.PENDING_APPROVAL,
+  marketingHeadApprovalStatus: ProjectApprovalStatus.PENDING,
+  ownerApprovalStatus: ProjectApprovalStatus.PENDING,
+});
 
     return this.projectRepository.save(project);
   }
@@ -210,8 +220,8 @@ projectOwnerRole: Array.isArray(user?.roles)
     const calculation =
       await this.calculatorService.calculateProjectCost(data);
 
-    const project = this.projectRepository.create({
-      leadId: data.leadId,
+    const projectData: Partial<Project> = {
+      leadId: data?.leadId ? Number(data.leadId) : undefined,
 
       customerName: data.customerName,
       customerPhone: data.customerPhone,
@@ -233,13 +243,15 @@ projectOwnerRole: Array.isArray(user?.roles)
 
       status: ProjectStatus.PENDING_APPROVAL,
 
-      vendorId: data?.vendorId || null,
+      vendorId: data?.vendorId ? Number(data.vendorId) : undefined,
 
       paymentStatus: data?.paymentStatus || 'PENDING',
 
       remarks:
         data?.remarks || 'Project created using calculator',
-    });
+    };
+
+const project = this.projectRepository.create(projectData);
 
     const savedProject =
       await this.projectRepository.save(project);
