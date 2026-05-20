@@ -46,6 +46,11 @@ import {
   ProjectExecutionReminderUserStateStatus,
 } from './project-execution-reminder-user-state.entity';
 
+import {
+  ProjectPaymentInstallment,
+  ProjectPaymentInstallmentStatus,
+} from './project-payment-installment.entity';
+
 @Injectable()
 export class ProjectService {
 
@@ -103,6 +108,9 @@ private readonly projectExecutionReminderRepository: Repository<ProjectExecution
 
 @InjectRepository(ProjectExecutionReminderUserState)
 private readonly projectExecutionReminderUserStateRepository: Repository<ProjectExecutionReminderUserState>,
+
+@InjectRepository(ProjectPaymentInstallment)
+private readonly projectPaymentInstallmentRepository: Repository<ProjectPaymentInstallment>,
 
     private readonly calculatorService: CalculatorService,
 
@@ -986,6 +994,242 @@ async getProjectMaterialRequests(
   }
 
   return finalData;
+}
+
+async getPaymentCollectionList(query: any, currentUser: any) {
+  const {
+    branch,
+    projectOwnerId,
+    customerName,
+    fromDate,
+    toDate,
+    month,
+    status,
+    pendingOnly,
+    page = 1,
+    limit = 50,
+  } = query;
+
+  const pageNumber = Math.max(Number(page) || 1, 1);
+  const limitNumber = Math.min(Math.max(Number(limit) || 50, 1), 100);
+  const skip = (pageNumber - 1) * limitNumber;
+
+  const roles = currentUser?.roles || [];
+  const userId = currentUser?.id || currentUser?.userId;
+
+  const canSeeAll =
+    roles.includes('OWNER') ||
+    roles.includes('MARKETING_HEAD') ||
+    roles.includes('PROJECT_MANAGER') ||
+    roles.includes('PAYMENT_COLLECTION_EXECUTIVE');
+
+  const qb = this.projectPaymentInstallmentRepository
+    .createQueryBuilder('payment')
+    .leftJoin(Project, 'project', 'project.id = payment.projectId')
+    .select([
+      'payment.id AS "id"',
+      'payment.projectId AS "projectId"',
+      'payment.label AS "label"',
+      'payment.amount AS "amount"',
+      'payment.paidAmount AS "paidAmount"',
+      'payment.pendingAmount AS "pendingAmount"',
+      'payment.dueDate AS "dueDate"',
+      'payment.paidDate AS "paidDate"',
+      'payment.status AS "status"',
+      'payment.paymentMode AS "paymentMode"',
+      'payment.transactionId AS "transactionId"',
+      'payment.remarks AS "remarks"',
+      'payment.collectedBy AS "collectedBy"',
+      'payment.collectedByName AS "collectedByName"',
+      'project.customerName AS "customerName"',
+      'project.customerPhone AS "customerPhone"',
+      'project.branchName AS "branchName"',
+      'project.projectOwnerId AS "projectOwnerId"',
+      'project.projectOwnerName AS "projectOwnerName"',
+      'project.projectSerial AS "projectSerial"',
+      'project.finalCost AS "finalCost"',
+      'project.status AS "projectStatus"',
+    ])
+    .orderBy('payment.dueDate', 'ASC')
+    .addOrderBy('payment.id', 'DESC')
+    .offset(skip)
+    .limit(limitNumber);
+
+  if (!canSeeAll) {
+    qb.andWhere('project.projectOwnerId = :userId', { userId });
+  }
+
+  if (branch?.trim()) {
+    qb.andWhere('LOWER(project.branchName) LIKE LOWER(:branch)', {
+      branch: `%${branch.trim()}%`,
+    });
+  }
+
+  if (projectOwnerId) {
+    qb.andWhere('project.projectOwnerId = :projectOwnerId', {
+      projectOwnerId: Number(projectOwnerId),
+    });
+  }
+
+  if (customerName?.trim()) {
+    qb.andWhere('LOWER(project.customerName) LIKE LOWER(:customerName)', {
+      customerName: `%${customerName.trim()}%`,
+    });
+  }
+
+  if (status?.trim()) {
+    qb.andWhere('payment.status = :status', {
+      status: status.trim(),
+    });
+  }
+
+  if (pendingOnly === 'true') {
+    qb.andWhere('payment.pendingAmount > 0');
+    qb.andWhere('payment.status IN (:...pendingStatuses)', {
+      pendingStatuses: [
+        ProjectPaymentInstallmentStatus.PENDING,
+        ProjectPaymentInstallmentStatus.PARTIAL,
+        ProjectPaymentInstallmentStatus.OVERDUE,
+      ],
+    });
+  }
+
+  if (month?.trim()) {
+    const [year, monthNumber] = month.trim().split('-').map(Number);
+
+    if (year && monthNumber) {
+      const startDate = new Date(year, monthNumber - 1, 1);
+      const endDate = new Date(year, monthNumber, 1);
+
+      qb.andWhere('payment.dueDate >= :monthStart', {
+        monthStart: startDate,
+      });
+      qb.andWhere('payment.dueDate < :monthEnd', {
+        monthEnd: endDate,
+      });
+    }
+  } else {
+    if (fromDate?.trim()) {
+      qb.andWhere('payment.dueDate >= :fromDate', {
+        fromDate: fromDate.trim(),
+      });
+    }
+
+    if (toDate?.trim()) {
+      qb.andWhere('payment.dueDate <= :toDate', {
+        toDate: toDate.trim(),
+      });
+    }
+  }
+
+  const rows = await qb.getRawMany();
+
+  const countQb = this.projectPaymentInstallmentRepository
+    .createQueryBuilder('payment')
+    .leftJoin(Project, 'project', 'project.id = payment.projectId');
+
+  if (!canSeeAll) {
+    countQb.andWhere('project.projectOwnerId = :userId', { userId });
+  }
+
+  if (branch?.trim()) {
+    countQb.andWhere('LOWER(project.branchName) LIKE LOWER(:branch)', {
+      branch: `%${branch.trim()}%`,
+    });
+  }
+
+  if (projectOwnerId) {
+    countQb.andWhere('project.projectOwnerId = :projectOwnerId', {
+      projectOwnerId: Number(projectOwnerId),
+    });
+  }
+
+  if (customerName?.trim()) {
+    countQb.andWhere('LOWER(project.customerName) LIKE LOWER(:customerName)', {
+      customerName: `%${customerName.trim()}%`,
+    });
+  }
+
+  if (status?.trim()) {
+    countQb.andWhere('payment.status = :status', {
+      status: status.trim(),
+    });
+  }
+
+  if (pendingOnly === 'true') {
+    countQb.andWhere('payment.pendingAmount > 0');
+    countQb.andWhere('payment.status IN (:...pendingStatuses)', {
+      pendingStatuses: [
+        ProjectPaymentInstallmentStatus.PENDING,
+        ProjectPaymentInstallmentStatus.PARTIAL,
+        ProjectPaymentInstallmentStatus.OVERDUE,
+      ],
+    });
+  }
+
+  if (month?.trim()) {
+    const [year, monthNumber] = month.trim().split('-').map(Number);
+
+    if (year && monthNumber) {
+      const startDate = new Date(year, monthNumber - 1, 1);
+      const endDate = new Date(year, monthNumber, 1);
+
+      countQb.andWhere('payment.dueDate >= :monthStart', {
+        monthStart: startDate,
+      });
+      countQb.andWhere('payment.dueDate < :monthEnd', {
+        monthEnd: endDate,
+      });
+    }
+  } else {
+    if (fromDate?.trim()) {
+      countQb.andWhere('payment.dueDate >= :fromDate', {
+        fromDate: fromDate.trim(),
+      });
+    }
+
+    if (toDate?.trim()) {
+      countQb.andWhere('payment.dueDate <= :toDate', {
+        toDate: toDate.trim(),
+      });
+    }
+  }
+
+  const total = await countQb.getCount();
+
+  return {
+    data: rows.map((row) => ({
+      id: Number(row.id),
+      projectId: Number(row.projectId),
+      label: row.label,
+      amount: Number(row.amount || 0),
+      paidAmount: Number(row.paidAmount || 0),
+      pendingAmount: Number(row.pendingAmount || 0),
+      dueDate: row.dueDate,
+      paidDate: row.paidDate,
+      status: row.status,
+      paymentMode: row.paymentMode,
+      transactionId: row.transactionId,
+      remarks: row.remarks,
+      collectedBy: row.collectedBy ? Number(row.collectedBy) : null,
+      collectedByName: row.collectedByName,
+
+      customerName: row.customerName,
+      customerPhone: row.customerPhone,
+      branchName: row.branchName,
+      projectOwnerId: row.projectOwnerId ? Number(row.projectOwnerId) : null,
+      projectOwnerName: row.projectOwnerName,
+      projectSerial: row.projectSerial,
+      finalCost: Number(row.finalCost || 0),
+      projectStatus: row.projectStatus,
+    })),
+    pagination: {
+      page: pageNumber,
+      limit: limitNumber,
+      total,
+      totalPages: Math.ceil(total / limitNumber),
+    },
+  };
 }
 
 async createExecutionActivity(

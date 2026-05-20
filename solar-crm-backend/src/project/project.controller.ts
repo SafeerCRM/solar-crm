@@ -398,6 +398,14 @@ async dismissReminderForUser(
   );
 }
 
+@Get('payment-collection')
+async getPaymentCollectionList(
+  @Query() query: any,
+  @Req() req: any,
+) {
+  return this.projectService.getPaymentCollectionList(query, req.user);
+}
+
   @Get(':id')
   findOne(
   @Param('id') id: string,
