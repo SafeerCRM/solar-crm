@@ -1606,11 +1606,9 @@ async getExecutionReminderList(currentUser: any) {
     .leftJoin(
       ProjectExecutionReminderUserState,
       'userState',
-      'userState.activityId = activity.id AND userState.userId = :userId AND userState.status = :userDismissedStatus',
+      'userState.activityId = activity.id AND userState.userId = :userId',
       {
         userId,
-        userDismissedStatus:
-          ProjectExecutionReminderUserStateStatus.DISMISSED,
       },
     )
     .select([
@@ -1632,6 +1630,8 @@ async getExecutionReminderList(currentUser: any) {
       'project.projectOwnerName AS "projectOwnerName"',
       'project.status AS "projectStatus"',
       'project.projectSerial AS "projectSerial"',
+      'userState.status AS "userReminderStatus"',
+      'userState.readAt AS "userReadAt"',
     ])
     .where('activity.status NOT IN (:...excludedStatuses)', {
       excludedStatuses: [
@@ -1649,7 +1649,12 @@ async getExecutionReminderList(currentUser: any) {
       },
     )
     .andWhere('globalReminder.id IS NULL')
-    .andWhere('userState.id IS NULL')
+    .andWhere(
+      '(userState.id IS NULL OR userState.status != :userDismissedStatus)',
+      {
+        userDismissedStatus: ProjectExecutionReminderUserStateStatus.DISMISSED,
+      },
+    )
     .orderBy('COALESCE(activity.inspectionDeadline, activity.scheduledDate)', 'ASC');
 
   if (!canSeeAll) {
@@ -1708,6 +1713,9 @@ async getExecutionReminderList(currentUser: any) {
         projectOwnerName: activity.projectOwnerName || null,
         projectStatus: activity.projectStatus || null,
         projectSerial: activity.projectSerial || null,
+
+        userReminderStatus: activity.userReminderStatus || 'UNREAD',
+        userReadAt: activity.userReadAt || null,
       };
     })
     .filter(Boolean);
