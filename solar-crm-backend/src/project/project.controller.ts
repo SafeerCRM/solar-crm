@@ -438,6 +438,38 @@ async receivePaymentInstallment(
   );
 }
 
+@Get('payment-reminders')
+async getPaymentReminderList(@Req() req: any) {
+  return this.projectService.getPaymentReminderList(req.user);
+}
+
+@Get('payment-reminders/unread-count')
+async getUnreadPaymentReminderCount(@Req() req: any) {
+  return this.projectService.getUnreadPaymentReminderCount(req.user);
+}
+
+@Post('payment-reminders/:installmentId/read')
+async markPaymentReminderAsRead(
+  @Param('installmentId', ParseIntPipe) installmentId: number,
+  @Req() req: any,
+) {
+  return this.projectService.markPaymentReminderAsRead(
+    installmentId,
+    req.user,
+  );
+}
+
+@Post('payment-reminders/:installmentId/dismiss')
+async dismissPaymentReminderForUser(
+  @Param('installmentId', ParseIntPipe) installmentId: number,
+  @Req() req: any,
+) {
+  return this.projectService.dismissPaymentReminderForUser(
+    installmentId,
+    req.user,
+  );
+}
+
   @Get(':id')
   findOne(
   @Param('id') id: string,

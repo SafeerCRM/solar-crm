@@ -1421,6 +1421,231 @@ private getComputedPaymentStatus(
   return status;
 }
 
+async getPaymentReminderList(currentUser: any) {
+  const todayIndia = new Date().toLocaleDateString('en-CA', {
+    timeZone: 'Asia/Kolkata',
+  });
+
+  const today = new Date(`${todayIndia}T00:00:00`);
+  const reminderWindowEnd = new Date(today);
+  reminderWindowEnd.setDate(reminderWindowEnd.getDate() + 8);
+
+  const roles = currentUser?.roles || [];
+  const userId = currentUser?.id || currentUser?.userId;
+
+  const canSeeAll =
+    roles.includes('OWNER') ||
+    roles.includes('MARKETING_HEAD') ||
+    roles.includes('PROJECT_MANAGER') ||
+    roles.includes('PAYMENT_COLLECTION_EXECUTIVE');
+
+  const qb = this.projectPaymentInstallmentRepository
+    .createQueryBuilder('payment')
+    .leftJoin(Project, 'project', 'project.id = payment.projectId')
+    .leftJoin(
+      ProjectPaymentReminderUserState,
+      'userState',
+      'userState.installmentId = payment.id AND userState.userId = :userId',
+      { userId },
+    )
+    .select([
+      'payment.id AS "id"',
+      'payment.projectId AS "projectId"',
+      'payment.label AS "label"',
+      'payment.amount AS "amount"',
+      'payment.paidAmount AS "paidAmount"',
+      'payment.pendingAmount AS "pendingAmount"',
+      'payment.dueDate AS "dueDate"',
+      'payment.status AS "status"',
+      'project.customerName AS "customerName"',
+      'project.customerPhone AS "customerPhone"',
+      'project.branchName AS "branchName"',
+      'project.projectOwnerId AS "projectOwnerId"',
+      'project.projectOwnerName AS "projectOwnerName"',
+      'project.projectSerial AS "projectSerial"',
+      'userState.status AS "userReminderStatus"',
+      'userState.readAt AS "userReadAt"',
+    ])
+    .where('payment.pendingAmount > 0')
+    .andWhere('payment.status != :paidStatus', {
+      paidStatus: ProjectPaymentInstallmentStatus.PAID,
+    })
+    .andWhere('payment.status != :cancelledStatus', {
+      cancelledStatus: ProjectPaymentInstallmentStatus.CANCELLED,
+    })
+    .andWhere('payment.dueDate IS NOT NULL')
+    .andWhere('payment.dueDate < :windowEnd', {
+      windowEnd: reminderWindowEnd,
+    })
+    .andWhere(
+      '(userState.id IS NULL OR userState.status != :dismissedStatus)',
+      {
+        dismissedStatus:
+          ProjectPaymentReminderUserStateStatus.DISMISSED,
+      },
+    )
+    .orderBy('payment.dueDate', 'ASC')
+    .addOrderBy('payment.id', 'DESC');
+
+  if (!canSeeAll) {
+    qb.andWhere('project.projectOwnerId = :userId', { userId });
+  }
+
+  const rows = await qb.getRawMany();
+
+  return rows
+    .map((row) => {
+      const dueDate = row.dueDate
+        ? String(row.dueDate).split('T')[0]
+        : null;
+
+      if (!dueDate) return null;
+
+      let reminderType:
+        | 'PAYMENT_OVERDUE'
+        | 'PAYMENT_DUE_TODAY'
+        | 'PAYMENT_UPCOMING'
+        | null = null;
+
+      if (dueDate < todayIndia) {
+        reminderType = 'PAYMENT_OVERDUE';
+      } else if (dueDate === todayIndia) {
+        reminderType = 'PAYMENT_DUE_TODAY';
+      } else if (dueDate > todayIndia) {
+        reminderType = 'PAYMENT_UPCOMING';
+      }
+
+      if (!reminderType) return null;
+
+      return {
+        id: Number(row.id),
+        projectId: Number(row.projectId),
+        label: row.label,
+        amount: Number(row.amount || 0),
+        paidAmount: Number(row.paidAmount || 0),
+        pendingAmount: Number(row.pendingAmount || 0),
+        dueDate: row.dueDate,
+        status: this.getComputedPaymentStatus(
+          row.status,
+          row.dueDate,
+          Number(row.pendingAmount || 0),
+        ),
+        reminderType,
+
+        customerName: row.customerName || null,
+        customerPhone: row.customerPhone || null,
+        branchName: row.branchName || null,
+        projectOwnerId: row.projectOwnerId
+          ? Number(row.projectOwnerId)
+          : null,
+        projectOwnerName: row.projectOwnerName || null,
+        projectSerial: row.projectSerial || null,
+
+        userReminderStatus: row.userReminderStatus || 'UNREAD',
+        userReadAt: row.userReadAt || null,
+      };
+    })
+    .filter(Boolean);
+}
+
+async getUnreadPaymentReminderCount(currentUser: any) {
+  const list = await this.getPaymentReminderList(currentUser);
+
+  const unreadCount = list.filter((item: any) => {
+    return item.userReminderStatus !== 'READ';
+  }).length;
+
+  return {
+    unreadCount,
+  };
+}
+
+async markPaymentReminderAsRead(
+  installmentId: number,
+  currentUser: any,
+) {
+  const userId = currentUser?.id || currentUser?.userId;
+  const userName =
+    currentUser?.name || currentUser?.email || 'Unknown User';
+
+  const installment =
+    await this.projectPaymentInstallmentRepository.findOne({
+      where: { id: installmentId },
+    });
+
+  if (!installment) {
+    throw new NotFoundException('Payment installment not found');
+  }
+
+  let state =
+    await this.projectPaymentReminderUserStateRepository.findOne({
+      where: {
+        installmentId,
+        userId,
+      },
+    });
+
+  if (!state) {
+    state =
+      this.projectPaymentReminderUserStateRepository.create({
+        installmentId,
+        projectId: installment.projectId,
+        userId,
+        userName,
+        status: ProjectPaymentReminderUserStateStatus.READ,
+        readAt: new Date(),
+      });
+  } else {
+    state.status = ProjectPaymentReminderUserStateStatus.READ;
+    state.readAt = new Date();
+  }
+
+  return this.projectPaymentReminderUserStateRepository.save(state);
+}
+
+async dismissPaymentReminderForUser(
+  installmentId: number,
+  currentUser: any,
+) {
+  const userId = currentUser?.id || currentUser?.userId;
+  const userName =
+    currentUser?.name || currentUser?.email || 'Unknown User';
+
+  const installment =
+    await this.projectPaymentInstallmentRepository.findOne({
+      where: { id: installmentId },
+    });
+
+  if (!installment) {
+    throw new NotFoundException('Payment installment not found');
+  }
+
+  let state =
+    await this.projectPaymentReminderUserStateRepository.findOne({
+      where: {
+        installmentId,
+        userId,
+      },
+    });
+
+  if (!state) {
+    state =
+      this.projectPaymentReminderUserStateRepository.create({
+        installmentId,
+        projectId: installment.projectId,
+        userId,
+        userName,
+        status: ProjectPaymentReminderUserStateStatus.DISMISSED,
+        dismissedAt: new Date(),
+      });
+  } else {
+    state.status = ProjectPaymentReminderUserStateStatus.DISMISSED;
+    state.dismissedAt = new Date();
+  }
+
+  return this.projectPaymentReminderUserStateRepository.save(state);
+}
+
 async createExecutionActivity(
   data: Partial<ProjectExecutionActivity>,
   user: any,
