@@ -1479,10 +1479,23 @@ async getExecutionReminderSummary(currentUser: any) {
 
   const activities = await activityQuery.getMany();
 
+  const dismissedReminderRows =
+    await this.projectExecutionReminderRepository.find({
+      where: {
+        status: ProjectExecutionReminderStatus.DISMISSED,
+      },
+      select: ['activityId'],
+    });
+
+  const dismissedActivityIds = new Set(
+    dismissedReminderRows.map((item) => item.activityId),
+  );
+
   const activeActivities = activities.filter(
     (activity) =>
       activity.status !== ProjectExecutionActivityStatus.COMPLETED &&
-      activity.status !== ProjectExecutionActivityStatus.CANCELLED,
+      activity.status !== ProjectExecutionActivityStatus.CANCELLED &&
+      !dismissedActivityIds.has(activity.id),
   );
 
   const overdueActivities = activeActivities.filter((activity) => {
