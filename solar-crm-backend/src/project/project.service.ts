@@ -1467,6 +1467,9 @@ async getExecutionReminderSummary(currentUser: any) {
   const nextSevenDays = new Date(today);
   nextSevenDays.setDate(nextSevenDays.getDate() + 7);
 
+  const reminderWindowEnd = new Date(today);
+  reminderWindowEnd.setDate(reminderWindowEnd.getDate() + 8);
+
   const roles = currentUser?.roles || [];
   const userId = currentUser?.id || currentUser?.userId;
 
@@ -1476,7 +1479,47 @@ async getExecutionReminderSummary(currentUser: any) {
     roles.includes('PROJECT_MANAGER');
 
   const activityQuery = this.projectExecutionActivityRepository
-    .createQueryBuilder('activity');
+    .createQueryBuilder('activity')
+    .leftJoin(
+      ProjectExecutionReminder,
+      'globalReminder',
+      'globalReminder.activityId = activity.id AND globalReminder.status = :globalDismissedStatus',
+      {
+        globalDismissedStatus: ProjectExecutionReminderStatus.DISMISSED,
+      },
+    )
+    .leftJoin(
+      ProjectExecutionReminderUserState,
+      'userState',
+      'userState.activityId = activity.id AND userState.userId = :userId AND userState.status = :userDismissedStatus',
+      {
+        userId,
+        userDismissedStatus:
+          ProjectExecutionReminderUserStateStatus.DISMISSED,
+      },
+    )
+    .select([
+      'activity.id AS "id"',
+      'activity.scheduledDate AS "scheduledDate"',
+      'activity.inspectionDeadline AS "inspectionDeadline"',
+    ])
+    .where('activity.status NOT IN (:...excludedStatuses)', {
+      excludedStatuses: [
+        ProjectExecutionActivityStatus.COMPLETED,
+        ProjectExecutionActivityStatus.CANCELLED,
+      ],
+    })
+    .andWhere(
+      'COALESCE(activity.inspectionDeadline, activity.scheduledDate) IS NOT NULL',
+    )
+    .andWhere(
+      'COALESCE(activity.inspectionDeadline, activity.scheduledDate) < :reminderWindowEnd',
+      {
+        reminderWindowEnd,
+      },
+    )
+    .andWhere('globalReminder.id IS NULL')
+    .andWhere('userState.id IS NULL');
 
   if (!canSeeAll) {
     activityQuery.andWhere(
@@ -1485,28 +1528,9 @@ async getExecutionReminderSummary(currentUser: any) {
     );
   }
 
-  const activities = await activityQuery.getMany();
+  const rows = await activityQuery.getRawMany();
 
-  const dismissedReminderRows =
-    await this.projectExecutionReminderRepository.find({
-      where: {
-        status: ProjectExecutionReminderStatus.DISMISSED,
-      },
-      select: ['activityId'],
-    });
-
-  const dismissedActivityIds = new Set(
-    dismissedReminderRows.map((item) => item.activityId),
-  );
-
-  const activeActivities = activities.filter(
-    (activity) =>
-      activity.status !== ProjectExecutionActivityStatus.COMPLETED &&
-      activity.status !== ProjectExecutionActivityStatus.CANCELLED &&
-      !dismissedActivityIds.has(activity.id),
-  );
-
-  const overdueActivities = activeActivities.filter((activity) => {
+  const overdueActivities = rows.filter((activity) => {
     const dateToCheck = activity.inspectionDeadline || activity.scheduledDate;
     if (!dateToCheck) return false;
 
@@ -1516,7 +1540,7 @@ async getExecutionReminderSummary(currentUser: any) {
     return checkDate < today;
   });
 
-  const todaysExecutionWork = activeActivities.filter((activity) => {
+  const todaysExecutionWork = rows.filter((activity) => {
     const dateToCheck = activity.scheduledDate || activity.inspectionDeadline;
     if (!dateToCheck) return false;
 
@@ -1526,7 +1550,7 @@ async getExecutionReminderSummary(currentUser: any) {
     return checkDate.getTime() === today.getTime();
   });
 
-  const upcomingDeadlines = activeActivities.filter((activity) => {
+  const upcomingDeadlines = rows.filter((activity) => {
     const dateToCheck = activity.inspectionDeadline || activity.scheduledDate;
     if (!dateToCheck) return false;
 
@@ -1557,6 +1581,9 @@ async getExecutionReminderList(currentUser: any) {
   const nextSevenDays = new Date(today);
   nextSevenDays.setDate(nextSevenDays.getDate() + 7);
 
+  const reminderWindowEnd = new Date(today);
+  reminderWindowEnd.setDate(reminderWindowEnd.getDate() + 8);
+
   const roles = currentUser?.roles || [];
   const userId = currentUser?.id || currentUser?.userId;
 
@@ -1568,6 +1595,24 @@ async getExecutionReminderList(currentUser: any) {
   const activityQuery = this.projectExecutionActivityRepository
     .createQueryBuilder('activity')
     .leftJoin(Project, 'project', 'project.id = activity.projectId')
+    .leftJoin(
+      ProjectExecutionReminder,
+      'globalReminder',
+      'globalReminder.activityId = activity.id AND globalReminder.status = :globalDismissedStatus',
+      {
+        globalDismissedStatus: ProjectExecutionReminderStatus.DISMISSED,
+      },
+    )
+    .leftJoin(
+      ProjectExecutionReminderUserState,
+      'userState',
+      'userState.activityId = activity.id AND userState.userId = :userId AND userState.status = :userDismissedStatus',
+      {
+        userId,
+        userDismissedStatus:
+          ProjectExecutionReminderUserStateStatus.DISMISSED,
+      },
+    )
     .select([
       'activity.id AS "id"',
       'activity.projectId AS "projectId"',
@@ -1588,8 +1633,24 @@ async getExecutionReminderList(currentUser: any) {
       'project.status AS "projectStatus"',
       'project.projectSerial AS "projectSerial"',
     ])
-    .orderBy('activity.inspectionDeadline', 'ASC')
-    .addOrderBy('activity.scheduledDate', 'ASC');
+    .where('activity.status NOT IN (:...excludedStatuses)', {
+      excludedStatuses: [
+        ProjectExecutionActivityStatus.COMPLETED,
+        ProjectExecutionActivityStatus.CANCELLED,
+      ],
+    })
+    .andWhere(
+      'COALESCE(activity.inspectionDeadline, activity.scheduledDate) IS NOT NULL',
+    )
+    .andWhere(
+      'COALESCE(activity.inspectionDeadline, activity.scheduledDate) < :reminderWindowEnd',
+      {
+        reminderWindowEnd,
+      },
+    )
+    .andWhere('globalReminder.id IS NULL')
+    .andWhere('userState.id IS NULL')
+    .orderBy('COALESCE(activity.inspectionDeadline, activity.scheduledDate)', 'ASC');
 
   if (!canSeeAll) {
     activityQuery.andWhere(
@@ -1600,26 +1661,7 @@ async getExecutionReminderList(currentUser: any) {
 
   const rows = await activityQuery.getRawMany();
 
-  const dismissedReminderRows =
-  await this.projectExecutionReminderRepository.find({
-    where: {
-      status: ProjectExecutionReminderStatus.DISMISSED,
-    },
-    select: ['activityId'],
-  });
-
-const dismissedActivityIds = new Set(
-  dismissedReminderRows.map((item) => item.activityId),
-);
-
-const activeRows = rows.filter(
-  (activity) =>
-    activity.status !== ProjectExecutionActivityStatus.COMPLETED &&
-    activity.status !== ProjectExecutionActivityStatus.CANCELLED &&
-    !dismissedActivityIds.has(Number(activity.id)),
-);
-
-  return activeRows
+  return rows
     .map((activity) => {
       const dateToCheck = activity.inspectionDeadline || activity.scheduledDate;
       if (!dateToCheck) return null;
