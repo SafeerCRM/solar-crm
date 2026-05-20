@@ -1538,6 +1538,27 @@ async getExecutionReminderList(currentUser: any) {
 
   const activityQuery = this.projectExecutionActivityRepository
     .createQueryBuilder('activity')
+    .leftJoin(Project, 'project', 'project.id = activity.projectId')
+    .select([
+      'activity.id AS "id"',
+      'activity.projectId AS "projectId"',
+      'activity.activityType AS "activityType"',
+      'activity.status AS "status"',
+      'activity.scheduledDate AS "scheduledDate"',
+      'activity.inspectionDeadline AS "inspectionDeadline"',
+      'activity.assignedTo AS "assignedTo"',
+      'activity.assignedToName AS "assignedToName"',
+      'activity.remarks AS "remarks"',
+      'project.customerName AS "customerName"',
+      'project.customerPhone AS "customerPhone"',
+      'project.city AS "city"',
+      'project.zone AS "zone"',
+      'project.branchName AS "branchName"',
+      'project.projectOwnerId AS "projectOwnerId"',
+      'project.projectOwnerName AS "projectOwnerName"',
+      'project.status AS "projectStatus"',
+      'project.projectSerial AS "projectSerial"',
+    ])
     .orderBy('activity.inspectionDeadline', 'ASC')
     .addOrderBy('activity.scheduledDate', 'ASC');
 
@@ -1548,15 +1569,15 @@ async getExecutionReminderList(currentUser: any) {
     );
   }
 
-  const activities = await activityQuery.getMany();
+  const rows = await activityQuery.getRawMany();
 
-  const activeActivities = activities.filter(
+  const activeRows = rows.filter(
     (activity) =>
       activity.status !== ProjectExecutionActivityStatus.COMPLETED &&
       activity.status !== ProjectExecutionActivityStatus.CANCELLED,
   );
 
-  return activeActivities
+  return activeRows
     .map((activity) => {
       const dateToCheck = activity.inspectionDeadline || activity.scheduledDate;
       if (!dateToCheck) return null;
@@ -1581,16 +1602,28 @@ async getExecutionReminderList(currentUser: any) {
       if (!reminderType) return null;
 
       return {
-        id: activity.id,
-        projectId: activity.projectId,
+        id: Number(activity.id),
+        projectId: Number(activity.projectId),
         activityType: activity.activityType,
         status: activity.status,
         reminderType,
         scheduledDate: activity.scheduledDate,
         inspectionDeadline: activity.inspectionDeadline,
-        assignedTo: activity.assignedTo,
-        assignedToName: activity.assignedToName,
-        remarks: activity.remarks,
+        assignedTo: activity.assignedTo ? Number(activity.assignedTo) : null,
+        assignedToName: activity.assignedToName || null,
+        remarks: activity.remarks || null,
+
+        customerName: activity.customerName || null,
+        customerPhone: activity.customerPhone || null,
+        city: activity.city || null,
+        zone: activity.zone || null,
+        branchName: activity.branchName || null,
+        projectOwnerId: activity.projectOwnerId
+          ? Number(activity.projectOwnerId)
+          : null,
+        projectOwnerName: activity.projectOwnerName || null,
+        projectStatus: activity.projectStatus || null,
+        projectSerial: activity.projectSerial || null,
       };
     })
     .filter(Boolean);
