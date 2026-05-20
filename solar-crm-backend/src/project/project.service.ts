@@ -35,6 +35,11 @@ import {
   ProjectExecutionActivityType,
 } from './project-execution-activity.entity';
 import { ProjectExecutionProof } from './project-execution-proof.entity';
+import {
+  ProjectExecutionReminder,
+  ProjectExecutionReminderStatus,
+  ProjectExecutionReminderType,
+} from './project-execution-reminder.entity';
 
 @Injectable()
 export class ProjectService {
@@ -87,6 +92,9 @@ private readonly projectExecutionActivityRepository: Repository<ProjectExecution
 
 @InjectRepository(ProjectExecutionProof)
 private readonly projectExecutionProofRepository: Repository<ProjectExecutionProof>,
+
+@InjectRepository(ProjectExecutionReminder)
+private readonly projectExecutionReminderRepository: Repository<ProjectExecutionReminder>,
 
     private readonly calculatorService: CalculatorService,
 
@@ -1627,6 +1635,49 @@ async getExecutionReminderList(currentUser: any) {
       };
     })
     .filter(Boolean);
+}
+
+async dismissExecutionReminder(activityId: number, currentUser: any) {
+  const userId = currentUser?.id || currentUser?.userId;
+  const userName = currentUser?.name || currentUser?.email || 'Unknown User';
+
+  const activity = await this.projectExecutionActivityRepository.findOne({
+    where: { id: activityId },
+  });
+
+  if (!activity) {
+    throw new NotFoundException('Execution activity not found');
+  }
+
+  const existingReminder =
+    await this.projectExecutionReminderRepository.findOne({
+      where: {
+        activityId: activity.id,
+      },
+    });
+
+  if (existingReminder) {
+    existingReminder.status = ProjectExecutionReminderStatus.DISMISSED;
+    existingReminder.dismissedAt = new Date();
+    existingReminder.createdBy = userId;
+    existingReminder.createdByName = userName;
+
+    return this.projectExecutionReminderRepository.save(existingReminder);
+  }
+
+  const reminder = this.projectExecutionReminderRepository.create({
+    projectId: activity.projectId,
+    activityId: activity.id,
+    type: ProjectExecutionReminderType.OVERDUE_INSPECTION,
+    status: ProjectExecutionReminderStatus.DISMISSED,
+    reminderDate: new Date().toISOString().slice(0, 10),
+    dismissedAt: new Date(),
+    message: `Reminder dismissed for ${activity.activityType}`,
+    createdBy: userId,
+    createdByName: userName,
+  });
+
+  return this.projectExecutionReminderRepository.save(reminder);
 }
 
   async ownerApproval(

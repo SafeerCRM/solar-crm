@@ -10,6 +10,7 @@ import {
 UseGuards,
 UseInterceptors,
 Query,
+ParseIntPipe,
 } from '@nestjs/common';
 
 import { ProjectService } from './project.service';
@@ -360,6 +361,14 @@ async getExecutionReminderSummary(@Req() req: any) {
 @Get('execution-reminders')
 async getExecutionReminderList(@Req() req: any) {
   return this.projectService.getExecutionReminderList(req.user);
+}
+
+@Post('execution-reminders/:activityId/dismiss')
+async dismissExecutionReminder(
+  @Param('activityId', ParseIntPipe) activityId: number,
+  @Req() req: any,
+) {
+  return this.projectService.dismissExecutionReminder(activityId, req.user);
 }
 
   @Get(':id')
