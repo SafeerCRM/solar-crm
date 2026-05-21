@@ -1018,17 +1018,18 @@ async getProjectMaterialRequests(
 
 async getPaymentCollectionList(query: any, currentUser: any) {
   const {
-    branch,
-    projectOwnerId,
-    customerName,
-    fromDate,
-    toDate,
-    month,
-    status,
-    pendingOnly,
-    page = 1,
-    limit = 50,
-  } = query;
+  projectId,
+  branch,
+  projectOwnerId,
+  customerName,
+  fromDate,
+  toDate,
+  month,
+  status,
+  pendingOnly,
+  page = 1,
+  limit = 50,
+} = query;
 
   const pageNumber = Math.max(Number(page) || 1, 1);
   const limitNumber = Math.min(Math.max(Number(limit) || 50, 1), 100);
@@ -1078,6 +1079,12 @@ async getPaymentCollectionList(query: any, currentUser: any) {
   if (!canSeeAll) {
     qb.andWhere('project.projectOwnerId = :userId', { userId });
   }
+
+  if (projectId) {
+  qb.andWhere('payment.projectId = :projectId', {
+    projectId: Number(projectId),
+  });
+}
 
   if (branch?.trim()) {
     qb.andWhere('LOWER(project.branchName) LIKE LOWER(:branch)', {
@@ -1151,6 +1158,12 @@ async getPaymentCollectionList(query: any, currentUser: any) {
   if (!canSeeAll) {
     countQb.andWhere('project.projectOwnerId = :userId', { userId });
   }
+
+  if (projectId) {
+  countQb.andWhere('payment.projectId = :projectId', {
+    projectId: Number(projectId),
+  });
+}
 
   if (branch?.trim()) {
     countQb.andWhere('LOWER(project.branchName) LIKE LOWER(:branch)', {
