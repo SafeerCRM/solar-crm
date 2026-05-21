@@ -2121,6 +2121,8 @@ async getExecutionCalendarActivities(
         'project.id = activity.projectId',
       );
 
+      query.where('project.isHidden = false');
+
   if (!canViewAll) {
     query.andWhere(
       'project.projectOwnerId = :currentUserId',
@@ -2247,7 +2249,8 @@ async getExecutionReminderSummary(currentUser: any) {
     roles.includes('PROJECT_MANAGER');
 
   const activityQuery = this.projectExecutionActivityRepository
-    .createQueryBuilder('activity')
+  .createQueryBuilder('activity')
+  .innerJoin(Project, 'project', 'project.id = activity.projectId')
     .leftJoin(
       ProjectExecutionReminder,
       'globalReminder',
@@ -2277,6 +2280,8 @@ async getExecutionReminderSummary(currentUser: any) {
         ProjectExecutionActivityStatus.CANCELLED,
       ],
     })
+
+    .andWhere('project.isHidden = false')
     .andWhere(
       'COALESCE(activity.inspectionDeadline, activity.scheduledDate) IS NOT NULL',
     )
@@ -2814,12 +2819,13 @@ async getPurchaseOrders(filters: {
   );
 
   const projects = projectIds.length
-    ? await this.projectRepository.find({
-        where: {
-          id: In(projectIds),
-        },
-      })
-    : [];
+  ? await this.projectRepository.find({
+      where: {
+        id: In(projectIds),
+        isHidden: false,
+      } as any,
+    })
+  : [];
 
   const projectMap = new Map(
     projects.map((project) => [
@@ -2828,7 +2834,8 @@ async getPurchaseOrders(filters: {
     ]),
   );
 
-  const enrichedItems = allPendingItems.map((item) => {
+  const enrichedItems = allPendingItems
+  .map((item) => {
     const project = projectMap.get(
       Number(item.projectId),
     );
@@ -2850,7 +2857,8 @@ async getPurchaseOrders(filters: {
   projectOwnerRole:
     project?.projectOwnerRole || '',
 };
-  });
+  })
+  .filter((item: any) => item.projectCustomerName);
 
   const filteredItems = enrichedItems.filter((item: any) => {
     const matchesSearch = search
