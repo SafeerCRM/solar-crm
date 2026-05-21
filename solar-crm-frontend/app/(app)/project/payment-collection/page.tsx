@@ -59,10 +59,10 @@ const [projectOwners, setProjectOwners] = useState<ProjectOwnerOption[]>([]);
   const fetchFilterOptions = async () => {
   try {
     const [branchRes, ownerRes] = await Promise.all([
-      axios.get(`${API_BASE_URL}/project/branches`, {
+      axios.get(`${API_BASE_URL}/project/branch`, {
         headers: getAuthHeaders(),
       }),
-      axios.get(`${API_BASE_URL}/project/project-owners`, {
+      axios.get(`${API_BASE_URL}/project/owners/list`, {
         headers: getAuthHeaders(),
       }),
     ]);
