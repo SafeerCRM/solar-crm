@@ -470,6 +470,19 @@ async dismissPaymentReminderForUser(
   );
 }
 
+@Patch('payment-collection/installments/:installmentId/hide')
+async hidePaymentInstallment(
+  @Param('installmentId', ParseIntPipe) installmentId: number,
+  @Body() body: any,
+  @Req() req: any,
+) {
+  return this.projectService.hidePaymentInstallment(
+    installmentId,
+    body,
+    req.user,
+  );
+}
+
   @Get(':id')
   findOne(
   @Param('id') id: string,

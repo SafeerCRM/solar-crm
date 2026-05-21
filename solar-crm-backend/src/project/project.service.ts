@@ -1076,6 +1076,8 @@ async getPaymentCollectionList(query: any, currentUser: any) {
     .offset(skip)
     .limit(limitNumber);
 
+    qb.where('payment.isHidden = false');
+
   if (!canSeeAll) {
     qb.andWhere('project.projectOwnerId = :userId', { userId });
   }
@@ -1164,6 +1166,8 @@ async getPaymentCollectionList(query: any, currentUser: any) {
   const countQb = this.projectPaymentInstallmentRepository
     .createQueryBuilder('payment')
     .leftJoin(Project, 'project', 'project.id = payment.projectId');
+
+    countQb.where('payment.isHidden = false');
 
   if (!canSeeAll) {
     countQb.andWhere('project.projectOwnerId = :userId', { userId });
@@ -1677,6 +1681,42 @@ async dismissPaymentReminderForUser(
   }
 
   return this.projectPaymentReminderUserStateRepository.save(state);
+}
+
+async hidePaymentInstallment(
+  installmentId: number,
+  body: any,
+  currentUser: any,
+) {
+  const roles = currentUser?.roles || [];
+
+  const canHide =
+    roles.includes('OWNER') ||
+    roles.includes('MARKETING_HEAD') ||
+    roles.includes('PROJECT_MANAGER');
+
+  if (!canHide) {
+    throw new ForbiddenException(
+      'You are not allowed to hide payment entries',
+    );
+  }
+
+  const installment =
+    await this.projectPaymentInstallmentRepository.findOne({
+      where: { id: installmentId },
+    });
+
+  if (!installment) {
+    throw new NotFoundException('Payment installment not found');
+  }
+
+  installment.isHidden = true;
+  installment.hiddenAt = new Date();
+  installment.hiddenBy = currentUser?.id || currentUser?.userId || null;
+  installment.hiddenByName = currentUser?.name || currentUser?.email || '';
+  installment.hiddenReason = body?.reason || 'Hidden by user';
+
+  return this.projectPaymentInstallmentRepository.save(installment);
 }
 
 async createExecutionActivity(

@@ -82,6 +82,21 @@ export class ProjectPaymentInstallment {
   @Column({ type: 'text', nullable: true })
   createdByName: string;
 
+ @Column({ type: 'boolean', default: false })
+isHidden: boolean;
+
+@Column({ type: 'timestamp', nullable: true })
+hiddenAt: Date;
+
+@Column({ type: 'int', nullable: true })
+hiddenBy: number;
+
+@Column({ type: 'text', nullable: true })
+hiddenByName: string;
+
+@Column({ type: 'text', nullable: true })
+hiddenReason: string;
+
   @CreateDateColumn()
   createdAt: Date;
 
