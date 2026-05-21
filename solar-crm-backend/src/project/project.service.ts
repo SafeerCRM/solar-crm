@@ -1099,10 +1099,20 @@ async getPaymentCollectionList(query: any, currentUser: any) {
   }
 
   if (customerName?.trim()) {
-    qb.andWhere('LOWER(project.customerName) LIKE LOWER(:customerName)', {
-      customerName: `%${customerName.trim()}%`,
-    });
-  }
+  const searchText = customerName.trim();
+
+  qb.andWhere(
+    `(
+      LOWER(project.customerName) LIKE LOWER(:search)
+      OR LOWER(project.customerPhone) LIKE LOWER(:search)
+      OR LOWER(project.projectSerial) LIKE LOWER(:search)
+      OR CAST(project.id AS TEXT) LIKE :search
+    )`,
+    {
+      search: `%${searchText}%`,
+    },
+  );
+}
 
   if (status?.trim()) {
     qb.andWhere('payment.status = :status', {
@@ -1178,10 +1188,20 @@ async getPaymentCollectionList(query: any, currentUser: any) {
   }
 
   if (customerName?.trim()) {
-    countQb.andWhere('LOWER(project.customerName) LIKE LOWER(:customerName)', {
-      customerName: `%${customerName.trim()}%`,
-    });
-  }
+  const searchText = customerName.trim();
+
+  countQb.andWhere(
+    `(
+      LOWER(project.customerName) LIKE LOWER(:search)
+      OR LOWER(project.customerPhone) LIKE LOWER(:search)
+      OR LOWER(project.projectSerial) LIKE LOWER(:search)
+      OR CAST(project.id AS TEXT) LIKE :search
+    )`,
+    {
+      search: `%${searchText}%`,
+    },
+  );
+}
 
   if (status?.trim()) {
     countQb.andWhere('payment.status = :status', {
