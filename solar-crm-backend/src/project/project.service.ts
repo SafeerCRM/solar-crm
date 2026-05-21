@@ -2858,7 +2858,7 @@ async getPurchaseOrders(filters: {
     project?.projectOwnerRole || '',
 };
   })
-  .filter((item: any) => item.projectCustomerName);
+  .filter((item: any) => item.projectId && projectMap.has(Number(item.projectId)));
 
   const filteredItems = enrichedItems.filter((item: any) => {
     const matchesSearch = search
