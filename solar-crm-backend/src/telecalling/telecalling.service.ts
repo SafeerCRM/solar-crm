@@ -2185,6 +2185,15 @@ if (!cleanNote) {
   );
 }
 
+await this.contactNoteRepository.save(
+  this.contactNoteRepository.create({
+    contactId: contact.id,
+    note: cleanNote,
+    createdBy: user.id,
+    createdByName: user.name || user.email || 'Unknown User',
+  } as any),
+);
+
     const assignedUser = await this.userRepository.findOne({
       where: { id: assignedTo },
     });
@@ -2625,9 +2634,7 @@ const finalMeetingNotes = latestContext
     await this.meetingRepository.update(existingMeeting.id, {
       assignedTo: meetingManager.id,
       assignedToName: meetingManager.name,
-      notes: latestContext
-  ? `Reassigned from telecalling contact by ${user.name}\n\nLatest Context:\n${latestContext}`
-  : `Reassigned from telecalling contact by ${user.name}`,
+      notes: `Reassigned from telecalling contact by ${user.name}\n\nLatest Context:\n${finalMeetingNotes}`,
       scheduledAt: new Date(),
     } as any);
   } else {
@@ -2640,9 +2647,7 @@ const finalMeetingNotes = latestContext
       assignedToName: meetingManager.name,
       meetingCategory: 'COMPANY_MEETING',
       status: 'SCHEDULED',
-      notes: latestContext
-  ? `Converted from telecalling contact by ${user.name}\n\nLatest Context:\n${latestContext}`
-  : `Converted from telecalling contact by ${user.name}`,
+      notes: `Converted from telecalling contact by ${user.name}\n\nLatest Context:\n${finalMeetingNotes}`,
       scheduledAt: new Date(),
       createdBy: user.id,
       createdByName: user.name,
@@ -2669,6 +2674,15 @@ const finalMeetingNotes = latestContext
     stage: nextStage,
     remarks: updatedContactRemarks,
   } as any);
+
+  await this.contactNoteRepository.save(
+  this.contactNoteRepository.create({
+    contactId: contact.id,
+    note: cleanNote,
+    createdBy: user.id,
+    createdByName: user.name || user.email || 'Unknown User',
+  } as any),
+);
 
   return {
     message: existingMeeting
