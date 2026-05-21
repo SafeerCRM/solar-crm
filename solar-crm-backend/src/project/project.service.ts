@@ -2074,6 +2074,49 @@ async refreshExecutionOverdueStatuses() {
   }
 }
 
+async completeProject(
+  id: number,
+  body: any,
+  currentUser: any,
+) {
+  const roles = currentUser?.roles || [];
+
+  const canComplete =
+    roles.includes('OWNER') ||
+    roles.includes('MARKETING_HEAD') ||
+    roles.includes('PROJECT_MANAGER');
+
+  if (!canComplete) {
+    throw new ForbiddenException(
+      'You are not allowed to complete projects',
+    );
+  }
+
+  const project = await this.projectRepository.findOne({
+    where: { id },
+  });
+
+  if (!project) {
+    throw new NotFoundException('Project not found');
+  }
+
+  project.status = ProjectStatus.COMPLETED;
+
+  project.actualCompletionDate = body?.actualCompletionDate
+    ? new Date(body.actualCompletionDate)
+    : new Date();
+
+  const completionNote = body?.completionNote?.trim();
+
+  if (completionNote) {
+    project.remarks = project.remarks
+      ? `${project.remarks}\n\n[PROJECT COMPLETED]\n${completionNote}`
+      : `[PROJECT COMPLETED]\n${completionNote}`;
+  }
+
+  return this.projectRepository.save(project);
+}
+
 async getExecutionCalendarActivities(
   user?: any,
   filters?: {

@@ -492,6 +492,19 @@ hideProject(
   return this.projectService.hideProject(id, body, user);
 }
 
+@Patch(':id/complete')
+completeProject(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.completeProject(
+    id,
+    body,
+    user,
+  );
+}
+
   @Get(':id')
   findOne(
   @Param('id') id: string,
