@@ -248,26 +248,50 @@ const [bellOpen, setBellOpen] = useState(false);
 
   const fetchReminderCount = async () => {
   try {
-    const [executionCountRes, paymentCountRes, executionListRes, paymentListRes] =
-      await Promise.all([
-        axios.get(`${apiBaseUrl}/project/execution-reminders/unread-count`, {
-          headers: getAuthHeaders(),
-        }),
-        axios.get(`${apiBaseUrl}/project/payment-reminders/unread-count`, {
-          headers: getAuthHeaders(),
-        }),
-        axios.get(`${apiBaseUrl}/project/execution-reminders`, {
-          headers: getAuthHeaders(),
-        }),
-        axios.get(`${apiBaseUrl}/project/payment-reminders`, {
-          headers: getAuthHeaders(),
-        }),
-      ]);
+    const [
+  executionCountRes,
+  paymentCountRes,
+  approvalCountRes,
+  purchaseCountRes,
+  executionListRes,
+  paymentListRes,
+  approvalListRes,
+  purchaseListRes,
+] = await Promise.all([
+  axios.get(`${apiBaseUrl}/project/execution-reminders/unread-count`, {
+    headers: getAuthHeaders(),
+  }),
+  axios.get(`${apiBaseUrl}/project/payment-reminders/unread-count`, {
+    headers: getAuthHeaders(),
+  }),
+  axios.get(`${apiBaseUrl}/project/approval-reminders/unread-count`, {
+    headers: getAuthHeaders(),
+  }),
+  axios.get(`${apiBaseUrl}/project/purchase-reminders/unread-count`, {
+  headers: getAuthHeaders(),
+}),
+  axios.get(`${apiBaseUrl}/project/execution-reminders`, {
+    headers: getAuthHeaders(),
+  }),
+  axios.get(`${apiBaseUrl}/project/payment-reminders`, {
+    headers: getAuthHeaders(),
+  }),
+  axios.get(`${apiBaseUrl}/project/approval-reminders`, {
+    headers: getAuthHeaders(),
+  }),
+  axios.get(`${apiBaseUrl}/project/purchase-reminders`, {
+  headers: getAuthHeaders(),
+}),
+]);
 
     const executionCount = executionCountRes.data?.unreadCount || 0;
-    const paymentCount = paymentCountRes.data?.unreadCount || 0;
+const paymentCount = paymentCountRes.data?.unreadCount || 0;
+const approvalCount = approvalCountRes.data?.unreadCount || 0;
+const purchaseCount = purchaseCountRes.data?.unreadCount || 0;
 
-    setReminderCount(executionCount + paymentCount);
+setReminderCount(
+  executionCount + paymentCount + approvalCount + purchaseCount,
+);
 
     const executionList = Array.isArray(executionListRes.data)
       ? executionListRes.data
@@ -276,6 +300,14 @@ const [bellOpen, setBellOpen] = useState(false);
     const paymentList = Array.isArray(paymentListRes.data)
       ? paymentListRes.data
       : [];
+
+      const approvalList = Array.isArray(approvalListRes.data)
+  ? approvalListRes.data
+  : [];
+
+  const purchaseList = Array.isArray(purchaseListRes.data)
+  ? purchaseListRes.data
+  : [];
 
     const executionUnread = executionList
       .filter((item: any) => item.userReminderStatus !== 'READ')
@@ -299,7 +331,36 @@ const [bellOpen, setBellOpen] = useState(false);
         projectId: item.projectId,
       }));
 
-    setReminderPreview([...executionUnread, ...paymentUnread].slice(0, 5));
+      const approvalUnread = approvalList
+  .filter((item: any) => item.userReminderStatus !== 'READ')
+  .map((item: any) => ({
+    id: `approval-${item.id}`,
+    href: '/project/reminders',
+    title: item.reminderType,
+    subtitle: item.subtitle || 'Project approval pending',
+    customerName: item.customerName,
+    projectId: item.projectId,
+  }));
+
+  const purchaseUnread = purchaseList
+  .filter((item: any) => item.userReminderStatus !== 'READ')
+  .map((item: any) => ({
+    id: `purchase-${item.id}`,
+    href: '/project/reminders',
+    title: item.reminderType,
+    subtitle: item.materialName || 'Purchase pending',
+    customerName: item.customerName,
+    projectId: item.projectId,
+  }));
+
+    setReminderPreview(
+  [
+    ...executionUnread,
+    ...paymentUnread,
+    ...approvalUnread,
+    ...purchaseUnread,
+  ].slice(0, 5),
+);
   } catch (error) {
     console.error('Reminder count error:', error);
     setReminderCount(0);

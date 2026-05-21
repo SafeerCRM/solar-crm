@@ -37,6 +37,69 @@ type ReminderItem = {
   userReadAt: string | null;
 };
 
+type ApprovalReminderItem = {
+  id: number;
+  projectId: number;
+
+  reminderType:
+    | 'MARKETING_APPROVAL_PENDING'
+    | 'OWNER_APPROVAL_PENDING'
+    | 'PROJECT_APPROVAL_PENDING';
+
+  title: string;
+  subtitle: string;
+
+  customerName: string | null;
+  customerPhone: string | null;
+  branchName: string | null;
+
+  projectOwnerId: number | null;
+  projectOwnerName: string | null;
+
+  projectSerial: string | null;
+  projectStatus: string | null;
+
+  marketingHeadApprovalStatus: string | null;
+  ownerApprovalStatus: string | null;
+
+  createdAt: string;
+
+  userReminderStatus: 'UNREAD' | 'READ';
+};
+
+type PurchaseReminderItem = {
+  id: number;
+  projectId: number;
+
+  reminderType:
+    | 'PURCHASE_PENDING'
+    | 'PARTIAL_PURCHASE_PENDING';
+
+  materialName: string | null;
+  category: string | null;
+  brand: string | null;
+
+  quantity: number;
+  purchasedQuantity: number;
+  pendingQuantity: number;
+
+  purchaseStatus: string | null;
+
+  customerName: string | null;
+  customerPhone: string | null;
+
+  branchName: string | null;
+
+  projectOwnerId: number | null;
+  projectOwnerName: string | null;
+
+  projectSerial: string | null;
+
+  createdAt: string;
+
+  userReminderStatus: 'UNREAD' | 'READ';
+};
+
 type PaymentReminderItem = {
   id: number;
   projectId: number;
@@ -64,12 +127,16 @@ export default function ProjectRemindersPage() {
   const [summary, setSummary] = useState<ReminderSummary | null>(null);
   const [items, setItems] = useState<ReminderItem[]>([]);
   const [paymentItems, setPaymentItems] = useState<PaymentReminderItem[]>([]);
+  const [approvalItems, setApprovalItems] = useState<ApprovalReminderItem[]>([]);
+  const [purchaseItems, setPurchaseItems] = useState<PurchaseReminderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [filter, setFilter] = useState<
   | 'ALL'
   | 'EXECUTION'
   | 'PAYMENT'
+  | 'APPROVAL'
+  | 'PURCHASE'
   | 'OVERDUE'
   | 'TODAY'
   | 'UPCOMING'
@@ -80,26 +147,56 @@ export default function ProjectRemindersPage() {
     setLoading(true);
     setMessage('');
 
-    const [summaryRes, listRes, paymentRes] = await Promise.all([
-      axios.get(`${apiBaseUrl}/project/execution-reminders/summary`, {
-        headers: getAuthHeaders(),
-      }),
-      axios.get(`${apiBaseUrl}/project/execution-reminders`, {
-        headers: getAuthHeaders(),
-      }),
-      axios.get(`${apiBaseUrl}/project/payment-reminders`, {
-        headers: getAuthHeaders(),
-      }),
-    ]);
+    const [
+  summaryRes,
+  listRes,
+  paymentRes,
+  approvalRes,
+  purchaseRes,
+] = await Promise.all([
+  axios.get(`${apiBaseUrl}/project/execution-reminders/summary`, {
+    headers: getAuthHeaders(),
+  }),
+
+  axios.get(`${apiBaseUrl}/project/execution-reminders`, {
+    headers: getAuthHeaders(),
+  }),
+
+  axios.get(`${apiBaseUrl}/project/payment-reminders`, {
+    headers: getAuthHeaders(),
+  }),
+
+  axios.get(`${apiBaseUrl}/project/approval-reminders`, {
+    headers: getAuthHeaders(),
+  }),
+
+  axios.get(`${apiBaseUrl}/project/purchase-reminders`, {
+  headers: getAuthHeaders(),
+}),
+]);
 
     setSummary(summaryRes.data || null);
     setItems(Array.isArray(listRes.data) ? listRes.data : []);
     setPaymentItems(Array.isArray(paymentRes.data) ? paymentRes.data : []);
+    setApprovalItems(
+  Array.isArray(approvalRes.data)
+    ? approvalRes.data
+    : [],
+);
+
+setPurchaseItems(
+  Array.isArray(purchaseRes.data)
+    ? purchaseRes.data
+    : [],
+);
+
   } catch (error: any) {
     console.error('Reminder error:', error);
     setSummary(null);
     setItems([]);
     setPaymentItems([]);
+    setApprovalItems([]);
+    setPurchaseItems([]);
     setMessage(
       error?.response?.data?.message || 'Failed to load reminders.',
     );
@@ -216,8 +313,40 @@ const filteredPaymentItems = paymentItems.filter((item) => {
   return true;
 });
 
+const filteredApprovalItems = approvalItems.filter((item) => {
+  if (filter === 'ALL' || filter === 'APPROVAL') return true;
+
+  if (
+    filter === 'OVERDUE' ||
+    filter === 'TODAY' ||
+    filter === 'UPCOMING'
+  ) {
+    return false;
+  }
+
+  return false;
+});
+
+const filteredPurchaseItems = purchaseItems.filter((item) => {
+  if (filter === 'ALL' || filter === 'PURCHASE')
+    return true;
+
+  if (
+    filter === 'OVERDUE' ||
+    filter === 'TODAY' ||
+    filter === 'UPCOMING'
+  ) {
+    return false;
+  }
+
+  return false;
+});
+
 const totalVisibleReminders =
-  filteredExecutionItems.length + filteredPaymentItems.length;
+  filteredExecutionItems.length +
+  filteredPaymentItems.length +
+  filteredApprovalItems.length +
+  filteredPurchaseItems.length;
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-6">
@@ -270,6 +399,20 @@ const totalVisibleReminders =
             />
 
             <ReminderCard
+  title="Approval Pending"
+  value={approvalItems.length}
+  description="Projects waiting for approvals"
+  tone="amber"
+/>
+
+<ReminderCard
+  title="Purchase Pending"
+  value={purchaseItems.length}
+  description="Pending procurement and partial purchases"
+  tone="purple"
+/>
+
+            <ReminderCard
   title="Payment Reminders"
   value={paymentItems.length}
   description="Due, overdue, and upcoming payment reminders"
@@ -300,6 +443,16 @@ const totalVisibleReminders =
   <FilterButton label="All" active={filter === 'ALL'} onClick={() => setFilter('ALL')} />
   <FilterButton label="Execution" active={filter === 'EXECUTION'} onClick={() => setFilter('EXECUTION')} />
   <FilterButton label="Payment" active={filter === 'PAYMENT'} onClick={() => setFilter('PAYMENT')} />
+    <FilterButton
+  label="Approval"
+  active={filter === 'APPROVAL'}
+  onClick={() => setFilter('APPROVAL')}
+/>
+<FilterButton
+  label="Purchase"
+  active={filter === 'PURCHASE'}
+  onClick={() => setFilter('PURCHASE')}
+/>
   <FilterButton label="Overdue" active={filter === 'OVERDUE'} onClick={() => setFilter('OVERDUE')} />
   <FilterButton label="Today" active={filter === 'TODAY'} onClick={() => setFilter('TODAY')} />
   <FilterButton label="Upcoming" active={filter === 'UPCOMING'} onClick={() => setFilter('UPCOMING')} />
@@ -319,6 +472,20 @@ const totalVisibleReminders =
         onRead={markReminderAsRead}
       />
     ))}
+
+    {filteredApprovalItems.map((item) => (
+  <ApprovalReminderListItem
+    key={`approval-${item.id}`}
+    item={item}
+  />
+))}
+
+{filteredPurchaseItems.map((item) => (
+  <PurchaseReminderListItem
+    key={`purchase-${item.id}`}
+    item={item}
+  />
+))}
 
     {filteredPaymentItems.map((item) => (
       <PaymentReminderListItem
@@ -477,6 +644,172 @@ function ReminderListItem({
   );
 }
 
+function ApprovalReminderListItem({
+  item,
+}: {
+  item: ApprovalReminderItem;
+}) {
+  const badge = getApprovalReminderBadge(
+    item.reminderType,
+  );
+
+  return (
+    <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 shadow">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${badge.className}`}
+            >
+              {badge.label}
+            </span>
+
+            <span className="rounded-full bg-amber-600 px-3 py-1 text-xs font-semibold text-white">
+              Pending
+            </span>
+
+            {item.projectStatus && (
+              <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-700">
+                Project: {item.projectStatus}
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 text-sm text-gray-700 md:grid-cols-2 xl:grid-cols-3">
+            <InfoLine
+              label="Customer"
+              value={item.customerName || 'Not added'}
+            />
+
+            <InfoLine
+              label="Phone"
+              value={item.customerPhone || 'Not added'}
+            />
+
+            <InfoLine
+              label="Project Serial"
+              value={
+                item.projectSerial ||
+                `#${item.projectId}`
+              }
+            />
+
+            <InfoLine
+              label="Project Owner"
+              value={
+                item.projectOwnerName ||
+                'Not assigned'
+              }
+            />
+
+            <InfoLine
+              label="Branch"
+              value={item.branchName || 'Not added'}
+            />
+
+            <InfoLine
+              label="Created"
+              value={formatDate(item.createdAt)}
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Link
+            href={`/project/${item.projectId}`}
+            className="rounded-xl bg-blue-600 px-4 py-2 text-center text-sm font-medium text-white"
+          >
+            Open Project
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PurchaseReminderListItem({
+  item,
+}: {
+  item: PurchaseReminderItem;
+}) {
+  const badge = getPurchaseReminderBadge(
+    item.reminderType,
+  );
+
+  return (
+    <div className="rounded-xl border border-purple-300 bg-purple-50 p-4 shadow">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${badge.className}`}
+            >
+              {badge.label}
+            </span>
+
+            <span className="rounded-full bg-purple-600 px-3 py-1 text-xs font-semibold text-white">
+              Pending
+            </span>
+
+            {item.purchaseStatus && (
+              <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-700">
+                {item.purchaseStatus}
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 text-sm text-gray-700 md:grid-cols-2 xl:grid-cols-3">
+            <InfoLine
+              label="Customer"
+              value={item.customerName || 'Not added'}
+            />
+
+            <InfoLine
+              label="Material"
+              value={item.materialName || 'Not added'}
+            />
+
+            <InfoLine
+              label="Project Serial"
+              value={
+                item.projectSerial ||
+                `#${item.projectId}`
+              }
+            />
+
+            <InfoLine
+              label="Project Owner"
+              value={
+                item.projectOwnerName ||
+                'Not assigned'
+              }
+            />
+
+            <InfoLine
+              label="Pending Qty"
+              value={item.pendingQuantity}
+            />
+
+            <InfoLine
+              label="Branch"
+              value={item.branchName || 'Not added'}
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Link
+            href={`/project/${item.projectId}`}
+            className="rounded-xl bg-blue-600 px-4 py-2 text-center text-sm font-medium text-white"
+          >
+            Open Project
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PaymentReminderListItem({
   item,
   onDismiss,
@@ -590,6 +923,45 @@ function getReminderBadge(type: ReminderItem['reminderType']) {
   return {
     label: 'Upcoming Deadline',
     className: 'bg-amber-100 text-amber-700',
+  };
+}
+
+function getPurchaseReminderBadge(
+  type: PurchaseReminderItem['reminderType'],
+) {
+  if (type === 'PARTIAL_PURCHASE_PENDING') {
+    return {
+      label: 'Partial Purchase Pending',
+      className: 'bg-amber-100 text-amber-700',
+    };
+  }
+
+  return {
+    label: 'Purchase Pending',
+    className: 'bg-purple-100 text-purple-700',
+  };
+}
+
+function getApprovalReminderBadge(
+  type: ApprovalReminderItem['reminderType'],
+) {
+  if (type === 'MARKETING_APPROVAL_PENDING') {
+    return {
+      label: 'Marketing Approval Pending',
+      className: 'bg-amber-100 text-amber-700',
+    };
+  }
+
+  if (type === 'OWNER_APPROVAL_PENDING') {
+    return {
+      label: 'Owner Approval Pending',
+      className: 'bg-red-100 text-red-700',
+    };
+  }
+
+  return {
+    label: 'Project Approval Pending',
+    className: 'bg-blue-100 text-blue-700',
   };
 }
 
