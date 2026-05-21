@@ -170,6 +170,12 @@ const navItems = [
 },
 
 {
+  name: 'Payment Collection',
+  href: '/project/payment-collection',
+  roles: ['OWNER', 'MARKETING_HEAD', 'PROJECT_MANAGER'],
+},
+
+{
   name: 'Branch Settings',
   href: '/project/branch-settings',
   roles: ['OWNER'],
