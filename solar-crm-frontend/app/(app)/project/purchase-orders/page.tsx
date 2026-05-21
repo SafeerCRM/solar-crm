@@ -257,7 +257,7 @@ const partiallyPurchasedCount =
   };
 
   return (
-    <div className="mx-auto max-w-7xl space-y-5">
+    <div className="mx-auto min-w-0 max-w-7xl space-y-4 overflow-x-hidden px-2 pb-4 md:px-0">
       <div className="rounded-2xl bg-white p-5 shadow">
         <h1 className="text-2xl font-bold text-gray-800">
           Purchase Orders
@@ -268,7 +268,7 @@ const partiallyPurchasedCount =
       </div>
 
       <div className="rounded-2xl bg-white p-5 shadow">
-        <div className="mb-5 grid gap-3 md:grid-cols-5">
+        <div className="mb-5 grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
   <input
     placeholder="Filter by Project ID / Customer Name"
     value={projectFilter}
@@ -337,7 +337,7 @@ const partiallyPurchasedCount =
   </select>
 </div>
 
-<div className="mb-5 grid gap-3 md:grid-cols-4">
+<div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
   <div className="rounded-xl bg-gray-50 p-4">
     <p className="text-sm text-gray-500">
       Pending Items
@@ -383,7 +383,7 @@ const partiallyPurchasedCount =
     Critical Procurement Summary
   </h2>
 
-  <div className="grid gap-3 md:grid-cols-3">
+  <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
     <div className="rounded-xl bg-gray-50 p-4">
       <p className="text-sm text-gray-500">
         Panels Pending
@@ -497,14 +497,17 @@ const partiallyPurchasedCount =
         ) : (
           <div className="space-y-4">
             {filteredItems.map((item) => (
-              <div key={item.id} className="rounded-2xl border p-4">
+              <div
+  key={item.id}
+  className="min-w-0 overflow-hidden rounded-2xl border p-3 md:p-4"
+>
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                   <div>
-                    <h2 className="text-lg font-bold text-gray-800">
+                    <h2 className="break-words text-lg font-bold text-gray-800">
                       {item.materialName}
                     </h2>
 
-                    <p className="mt-1 text-sm text-gray-500">
+                    <p className="mt-1 break-words text-sm text-gray-500">
   Project #{item.projectId} |{' '}
   {item.projectCustomerName || '-'} |{' '}
   {item.projectBranchName || '-'} |{' '}
@@ -542,7 +545,7 @@ const partiallyPurchasedCount =
                     </p>
                   </div>
 
-                  <div className="w-full space-y-2 md:w-72">
+                  <div className="min-w-0 w-full space-y-2 md:w-72">
                     <input
                       type="number"
                       placeholder="Partial buy quantity"
@@ -556,7 +559,7 @@ const partiallyPurchasedCount =
                       className="w-full rounded-xl border p-3"
                     />
 
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                       <button
                         onClick={() => buyItem(item, false)}
                         className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
@@ -578,7 +581,7 @@ const partiallyPurchasedCount =
           </div>
         )}
 
-      <div className="mt-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div className="mt-6 flex flex-col gap-3 overflow-hidden md:flex-row md:items-center md:justify-between">
   <p className="text-sm text-gray-600">
     Page {page} of {totalPages}
   </p>
