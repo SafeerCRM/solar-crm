@@ -81,6 +81,10 @@ const [leadPotential, setLeadPotential] = useState('50'); // default MEDIUM
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [editingNoteText, setEditingNoteText] = useState('');
 
+  const [assistantAssignNote, setAssistantAssignNote] = useState('');
+const [leadConvertNote, setLeadConvertNote] = useState('');
+const [meetingConvertNote, setMeetingConvertNote] = useState('');
+
   const [callStatus, setCallStatus] = useState('CONNECTED');
   const [callNotes, setCallNotes] = useState('');
   const [callRecordingFile, setCallRecordingFile] = useState<File | null>(null);
@@ -283,35 +287,42 @@ setSelectedAssistantId(reviewAssignedTo ? String(reviewAssignedTo) : '');
   };
 
   const assignToAssistant = async () => {
-    if (!selectedAssistantId) {
-      setMessage('Please select telecalling assistant');
-      return;
-    }
+  if (!selectedAssistantId) {
+    setMessage('Please select telecalling assistant');
+    return;
+  }
 
-    try {
-      setAssigningAssistant(true);
-      setMessage('');
+  if (!assistantAssignNote.trim()) {
+    setMessage('Please enter note before assigning to telecalling assistant');
+    return;
+  }
 
-      await axios.patch(
-        `${backendUrl}/telecalling/contacts/${id}/assign-review`,
-        {
-          assignedTo: Number(selectedAssistantId),
-        },
-        { headers: getAuthHeaders() },
-      );
+  try {
+    setAssigningAssistant(true);
+    setMessage('');
 
-      setMessage('Assigned to telecalling assistant successfully');
-      await fetchHistory();
-    } catch (error: any) {
-      console.error(error);
-      setMessage(
-        error?.response?.data?.message ||
-          'Failed to assign telecalling assistant',
-      );
-    } finally {
-      setAssigningAssistant(false);
-    }
-  };
+    await axios.patch(
+      `${backendUrl}/telecalling/contacts/${id}/assign-review`,
+      {
+        assignedTo: Number(selectedAssistantId),
+        note: assistantAssignNote.trim(),
+      },
+      { headers: getAuthHeaders() },
+    );
+
+    setAssistantAssignNote('');
+    setMessage('Assigned to telecalling assistant successfully');
+    await fetchHistory();
+  } catch (error: any) {
+    console.error(error);
+    setMessage(
+      error?.response?.data?.message ||
+        'Failed to assign telecalling assistant',
+    );
+  } finally {
+    setAssigningAssistant(false);
+  }
+};
 
   const addNote = async () => {
     if (!noteText.trim()) {
@@ -695,6 +706,14 @@ await axios.post(
                 ))}
               </select>
 
+              <textarea
+  value={assistantAssignNote}
+  onChange={(e) => setAssistantAssignNote(e.target.value)}
+  className="rounded border p-2 md:col-span-3"
+  rows={3}
+  placeholder="Enter mandatory note before sending this contact for assistant review"
+/>
+
               <button
                 onClick={assignToAssistant}
                 disabled={assigningAssistant}
@@ -742,6 +761,14 @@ await axios.post(
   <option value="75">HIGH Potential</option>
 </select>
 
+<textarea
+  value={leadConvertNote}
+  onChange={(e) => setLeadConvertNote(e.target.value)}
+  className="w-full rounded border p-2"
+  rows={3}
+  placeholder="Enter mandatory note before converting this contact to lead"
+/>
+
       <input
         type="range"
         min="0"
@@ -765,10 +792,15 @@ await axios.post(
         <div className="flex gap-3">
           <button
             onClick={async () => {
-  if (!selectedLeadManagerId) {
-    setMessage('Please select lead manager');
-    return;
-  }
+              if (!selectedLeadManagerId) {
+  setMessage('Please select lead manager');
+  return;
+}
+
+if (!leadConvertNote.trim()) {
+  setMessage('Please enter note before converting contact to lead');
+  return;
+}
 
   try {
     setMessage('');
@@ -776,15 +808,17 @@ await axios.post(
     await axios.post(
   `${backendUrl}/telecalling/contacts/${id}/convert`,
   {
-    leadManagerId: Number(selectedLeadManagerId),
-    potentialPercentage: Number(leadPotential),
-  },
+  leadManagerId: Number(selectedLeadManagerId),
+  potentialPercentage: Number(leadPotential),
+  note: leadConvertNote.trim(),
+},
       { headers: getAuthHeaders() }
     );
 
     setFlashMessage('Converted to lead successfully');
     setLeadSlider(0);
     setPendingLeadSave(false);
+    setLeadConvertNote('');
 
     setTimeout(() => {
       if (searchParams?.get('from') === 'review-queue') {
@@ -840,6 +874,14 @@ await axios.post(
       ))}
     </select>
 
+    <textarea
+  value={meetingConvertNote}
+  onChange={(e) => setMeetingConvertNote(e.target.value)}
+  className="w-full rounded border p-2"
+  rows={3}
+  placeholder="Enter mandatory note before converting this contact to meeting"
+/>
+
     <input
       type="range"
       min="0"
@@ -863,18 +905,30 @@ await axios.post(
       <div className="flex gap-3">
         <button
           onClick={async () => {
+            if (!selectedMeetingManagerId) {
+  setMessage('Please select meeting manager');
+  return;
+}
+
+if (!meetingConvertNote.trim()) {
+  setMessage('Please enter note before converting contact to meeting');
+  return;
+}
             try {
               await axios.post(
                 `${backendUrl}/telecalling/contacts/${id}/convert-to-meeting`,
                 {
-                  meetingManagerId: Number(selectedMeetingManagerId),
+                 meetingManagerId: Number(selectedMeetingManagerId),
+                 note: meetingConvertNote.trim(),
                 },
+
                 { headers: getAuthHeaders() }
               );
 
               setFlashMessage('Converted to meeting successfully');
               setMeetingSlider(0);
               setPendingMeetingSave(false);
+              setMeetingConvertNote('');
               fetchHistory();
             } catch (err: any) {
               setMessage('Failed to convert to meeting');
