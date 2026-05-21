@@ -279,6 +279,10 @@ const [executionLoading, setExecutionLoading] =
   const [updatingExecutionId, setUpdatingExecutionId] =
   useState<number | null>(null);
 
+  const [completionDate, setCompletionDate] = useState('');
+const [completionNote, setCompletionNote] = useState('');
+const [completionLoading, setCompletionLoading] = useState(false);
+
 const [proofFiles, setProofFiles] =
   useState<Record<number, File[]>>({});
 
@@ -637,6 +641,51 @@ const submitApproval = async (
     );
   } finally {
     setApprovalLoading(false);
+  }
+};
+
+const completeProject = async () => {
+  const confirmed = window.confirm(
+    'Mark this project as completed?',
+  );
+
+  if (!confirmed) return;
+
+  try {
+    setCompletionLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/${projectId}/complete`,
+      {
+        actualCompletionDate: completionDate || undefined,
+        completionNote,
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Project marked as completed');
+
+    setCompletionDate('');
+    setCompletionNote('');
+
+    fetchProject();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to complete project',
+    );
+  } finally {
+    setCompletionLoading(false);
   }
 };
 
@@ -1588,6 +1637,42 @@ const updateExecutionActivityStatus = async (
 </div>
 
       </div>
+
+      <div className="rounded-2xl bg-white p-5 shadow">
+  <h2 className="text-lg font-bold text-gray-800">
+    Complete Project
+  </h2>
+
+  <p className="mt-1 text-sm text-gray-500">
+    Use this for record correction when a project has already been completed.
+  </p>
+
+  <div className="mt-4 grid gap-3 md:grid-cols-2">
+    <input
+      type="date"
+      value={completionDate}
+      onChange={(e) => setCompletionDate(e.target.value)}
+      className="rounded-xl border p-3"
+    />
+
+    <input
+      placeholder="Completion note"
+      value={completionNote}
+      onChange={(e) => setCompletionNote(e.target.value)}
+      className="rounded-xl border p-3"
+    />
+  </div>
+
+  <button
+    onClick={completeProject}
+    disabled={completionLoading}
+    className="mt-4 rounded-xl bg-green-600 px-5 py-3 font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+  >
+    {completionLoading
+      ? 'Completing...'
+      : 'Mark Project Completed'}
+  </button>
+</div>
 
       <div className="rounded-2xl bg-white p-5 shadow">
         <h2 className="mb-2 text-lg font-bold text-gray-800">Remarks</h2>
