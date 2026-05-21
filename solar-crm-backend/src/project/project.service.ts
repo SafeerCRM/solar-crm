@@ -1080,6 +1080,8 @@ async getPaymentCollectionList(query: any, currentUser: any) {
 
     qb.where('payment.isHidden = false');
 
+    qb.andWhere('project.isHidden = false');
+
   if (!canSeeAll) {
     qb.andWhere('project.projectOwnerId = :userId', { userId });
   }
@@ -1170,6 +1172,8 @@ async getPaymentCollectionList(query: any, currentUser: any) {
     .leftJoin(Project, 'project', 'project.id = payment.projectId');
 
     countQb.where('payment.isHidden = false');
+
+    countQb.andWhere('project.isHidden = false');
 
   if (!canSeeAll) {
     countQb.andWhere('project.projectOwnerId = :userId', { userId });
@@ -1507,6 +1511,7 @@ async getPaymentReminderList(currentUser: any) {
     ])
     .where('payment.pendingAmount > 0')
 .andWhere('payment.isHidden = false')
+.andWhere('project.isHidden = false')
     .andWhere('payment.status != :paidStatus', {
       paidStatus: ProjectPaymentInstallmentStatus.PAID,
     })
@@ -2402,6 +2407,7 @@ async getExecutionReminderList(currentUser: any) {
         ProjectExecutionActivityStatus.CANCELLED,
       ],
     })
+    .andWhere('project.isHidden = false')
     .andWhere(
       'COALESCE(activity.inspectionDeadline, activity.scheduledDate) IS NOT NULL',
     )
