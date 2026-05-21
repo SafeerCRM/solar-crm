@@ -62,7 +62,7 @@ const [projectOwners, setProjectOwners] = useState<ProjectOwnerOption[]>([]);
       axios.get(`${API_BASE_URL}/project/branches`, {
         headers: getAuthHeaders(),
       }),
-      axios.get(`${API_BASE_URL}/users/project-owners`, {
+      axios.get(`${API_BASE_URL}/project/project-owners`, {
         headers: getAuthHeaders(),
       }),
     ]);
