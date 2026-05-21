@@ -390,17 +390,19 @@ addContactCallHistory(
   }
 
   @Patch('contacts/:id/assign-review')
-  assignContactForReview(
-    @Param('id', ParseIntPipe) id: number,
-    @Body('assignedTo') assignedTo: number,
-    @CurrentUser() user: any,
-  ) {
-    return this.telecallingService.assignContactForReview(
-      id,
-      Number(assignedTo),
-      user,
-    );
-  }
+assignContactForReview(
+  @Param('id', ParseIntPipe) id: number,
+  @Body('assignedTo') assignedTo: number,
+  @Body('note') note: string,
+  @CurrentUser() user: any,
+) {
+  return this.telecallingService.assignContactForReview(
+    id,
+    Number(assignedTo),
+    user,
+    note,
+  );
+}
 
   @Post('contacts/:id/convert')
 convertContactToLead(
@@ -408,6 +410,7 @@ convertContactToLead(
   @Body('leadManagerId') leadManagerId: number,
   @Body('assignedTo') assignedTo: number,
   @Body('potentialPercentage') potentialPercentage: number,
+  @Body('note') note: string,
   @CurrentUser() user: any,
 ) {
   return this.telecallingService.convertContactToLead(
@@ -415,6 +418,7 @@ convertContactToLead(
     Number(leadManagerId || assignedTo),
     Number(potentialPercentage || 50),
     user,
+    note,
   );
 }
 
@@ -422,12 +426,14 @@ convertContactToLead(
 convertContactToMeeting(
   @Param('id', ParseIntPipe) id: number,
   @Body('meetingManagerId') meetingManagerId: number,
+  @Body('note') note: string,
   @CurrentUser() user: any,
 ) {
   return this.telecallingService.convertContactToMeeting(
     id,
     Number(meetingManagerId),
     user,
+    note,
   );
 }
 

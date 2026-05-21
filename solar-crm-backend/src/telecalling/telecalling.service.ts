@@ -2152,10 +2152,11 @@ await this.contactRepository.update(contact.id, {
   }
 
   async assignContactForReview(
-    contactId: number,
-    assignedTo: number,
-    user: any,
-  ) {
+  id: number,
+  assignedTo: number,
+  user: any,
+  note?: string,
+) {
     if (!this.hasAnyRole(user, ['OWNER', 'TELECALLING_MANAGER', 'TELECALLER'])) {
       throw new ForbiddenException(
         'Only owner, telecalling manager, or telecaller can assign for assistant review',
@@ -2163,7 +2164,7 @@ await this.contactRepository.update(contact.id, {
     }
 
     const contact = await this.contactRepository.findOne({
-      where: { id: contactId },
+      where: { id },
     });
 
     if (!contact) {
@@ -2175,6 +2176,14 @@ await this.contactRepository.update(contact.id, {
         'You can only assign your own active contact for assistant review',
       );
     }
+
+    const cleanNote = String(note || '').trim();
+
+if (!cleanNote) {
+  throw new BadRequestException(
+    'Note is required before assigning contact to telecalling assistant',
+  );
+}
 
     const assignedUser = await this.userRepository.findOne({
       where: { id: assignedTo },
@@ -2205,7 +2214,7 @@ console.log(`Stage change check: contact ${contact.id} → ${(contact as any).st
 await this.contactRepository.save(contact);
 
     const latestCall = await this.callLogRepository.findOne({
-      where: { contactId },
+      where: { contactId: id },
       order: { createdAt: 'DESC' },
     });
 
@@ -2385,11 +2394,12 @@ await this.contactRepository.save(contact);
     };
   }
 
-  async convertContactToLead(
+ async convertContactToLead(
   id: number,
   leadManagerId: number,
   potentialPercentage: number,
   user: any,
+  note?: string,
 ) {
   const contact = await this.contactRepository.findOne({
     where: { id },
@@ -2404,6 +2414,14 @@ await this.contactRepository.save(contact);
       throw new ForbiddenException('Not allowed to convert this contact');
     }
   }
+
+  const cleanNote = String(note || '').trim();
+
+if (!cleanNote) {
+  throw new BadRequestException(
+    'Note is required before converting contact to lead',
+  );
+}
 
   if (!leadManagerId || Number.isNaN(Number(leadManagerId))) {
     throw new BadRequestException('Lead manager is required');
@@ -2442,6 +2460,9 @@ await this.contactRepository.save(contact);
   }
 
   const latestContext = await this.getLatestContactContext(contact.id);
+const finalLeadRemarks = latestContext
+  ? `${latestContext}\n${cleanNote}`
+  : cleanNote;
 
   const lead = this.leadRepository.create({
     name: contact.name,
@@ -2457,7 +2478,7 @@ await this.contactRepository.save(contact);
       contact.assignedToName || `User ${contact.assignedTo || ''}`,
     status: LeadStatus.NEW,
     potentialPercentage: potentialPercentage || 50,
-    remarks: latestContext || undefined,
+    remarks: finalLeadRemarks,
   } as any);
 
   const savedLead = await this.leadRepository.save(lead);
@@ -2475,6 +2496,15 @@ console.log(`Stage change check: contact ${contact.id} → ${(contact as any).st
     ? `${contact.remarks}\nConverted to lead by ${user.name} and assigned to ${leadManager.name}`
     : `Converted to lead by ${user.name} and assigned to ${leadManager.name}`;
 
+    await this.contactNoteRepository.save(
+  this.contactNoteRepository.create({
+    contactId: contact.id,
+    note: cleanNote,
+    createdBy: user.id,
+    createdByName: user.name || user.email || 'Unknown User',
+  } as any),
+);
+
   await this.contactRepository.save(contact);
 
   return {
@@ -2489,6 +2519,7 @@ console.log(`Stage change check: contact ${contact.id} → ${(contact as any).st
   id: number,
   meetingManagerId: number,
   user: any,
+  note?: string,
 ) {
   const contact = await this.contactRepository.findOne({
     where: { id },
@@ -2503,6 +2534,14 @@ console.log(`Stage change check: contact ${contact.id} → ${(contact as any).st
       throw new ForbiddenException('Not allowed to convert this contact');
     }
   }
+
+  const cleanNote = String(note || '').trim();
+
+if (!cleanNote) {
+  throw new BadRequestException(
+    'Note is required before converting contact to meeting',
+  );
+}
 
   if (!meetingManagerId || Number.isNaN(Number(meetingManagerId))) {
     throw new BadRequestException('Meeting manager is required');
@@ -2529,6 +2568,9 @@ console.log(`Stage change check: contact ${contact.id} → ${(contact as any).st
   const normalizedPhone = this.normalizePhone(contact.phone);
 
   const latestContext = await this.getLatestContactContext(contact.id);
+const finalMeetingNotes = latestContext
+  ? `${latestContext}\n${cleanNote}`
+  : cleanNote;
 
   let lead = await this.leadRepository.findOne({
     where: { phone: normalizedPhone },
