@@ -30,18 +30,58 @@ type PaymentRow = {
   projectStatus?: string;
 };
 
+type BranchOption = {
+  id?: number;
+  name?: string;
+  branchName?: string;
+};
+
+type ProjectOwnerOption = {
+  id: number;
+  name: string;
+};
+
 export default function PaymentCollectionPage() {
   const [rows, setRows] = useState<PaymentRow[]>([]);
+  const [branches, setBranches] = useState<BranchOption[]>([]);
+const [projectOwners, setProjectOwners] = useState<ProjectOwnerOption[]>([]);
   const [loading, setLoading] = useState(false);
 
   const [branch, setBranch] = useState('');
-  const [customerName, setCustomerName] = useState('');
+  const [search, setSearch] = useState('');
   const [projectOwnerId, setProjectOwnerId] = useState('');
   const [month, setMonth] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [status, setStatus] = useState('');
   const [pendingOnly, setPendingOnly] = useState(false);
+
+  const fetchFilterOptions = async () => {
+  try {
+    const [branchRes, ownerRes] = await Promise.all([
+      axios.get(`${API_BASE_URL}/project/branches`, {
+        headers: getAuthHeaders(),
+      }),
+      axios.get(`${API_BASE_URL}/users/project-owners`, {
+        headers: getAuthHeaders(),
+      }),
+    ]);
+
+    setBranches(
+      Array.isArray(branchRes.data)
+        ? branchRes.data
+        : [],
+    );
+
+    setProjectOwners(
+      Array.isArray(ownerRes.data)
+        ? ownerRes.data
+        : [],
+    );
+  } catch (error) {
+    console.error('Failed to load filter options:', error);
+  }
+};
 
   const fetchPayments = async () => {
     try {
@@ -50,7 +90,7 @@ export default function PaymentCollectionPage() {
       const res = await axios.get(`${API_BASE_URL}/project/payment-collection`, {
         params: {
           branch,
-          customerName,
+          customerName: search,
           projectOwnerId,
           month,
           fromDate,
@@ -73,6 +113,7 @@ export default function PaymentCollectionPage() {
 
   useEffect(() => {
     fetchPayments();
+    fetchFilterOptions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -82,7 +123,7 @@ export default function PaymentCollectionPage() {
 
   const clearFilters = () => {
     setBranch('');
-    setCustomerName('');
+    setSearch('');
     setProjectOwnerId('');
     setMonth('');
     setFromDate('');
@@ -114,26 +155,43 @@ export default function PaymentCollectionPage() {
         <h2 className="text-lg font-bold text-gray-800">Filters</h2>
 
         <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-4">
-          <input
-            placeholder="Branch"
-            value={branch}
-            onChange={(e) => setBranch(e.target.value)}
-            className="rounded-xl border p-3"
-          />
+          <select
+  value={branch}
+  onChange={(e) => setBranch(e.target.value)}
+  className="rounded-xl border p-3"
+>
+  <option value="">All Branches</option>
+
+  {branches.map((item, index) => (
+    <option
+      key={index}
+      value={item.branchName || item.name || ''}
+    >
+      {item.branchName || item.name}
+    </option>
+  ))}
+</select>
 
           <input
-            placeholder="Customer name"
-            value={customerName}
-            onChange={(e) => setCustomerName(e.target.value)}
-            className="rounded-xl border p-3"
-          />
+  placeholder="Search customer / phone / project serial"
+  value={search}
+  onChange={(e) => setSearch(e.target.value)}
+  className="rounded-xl border p-3"
+/>
 
-          <input
-            placeholder="Project Owner ID"
-            value={projectOwnerId}
-            onChange={(e) => setProjectOwnerId(e.target.value)}
-            className="rounded-xl border p-3"
-          />
+          <select
+  value={projectOwnerId}
+  onChange={(e) => setProjectOwnerId(e.target.value)}
+  className="rounded-xl border p-3"
+>
+  <option value="">All Project Owners</option>
+
+  {projectOwners.map((owner) => (
+    <option key={owner.id} value={owner.id}>
+      {owner.name}
+    </option>
+  ))}
+</select>
 
           <input
             type="month"
