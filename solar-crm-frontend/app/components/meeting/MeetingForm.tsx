@@ -219,6 +219,12 @@ const [solarMiterBankProof, setSolarMiterBankProof] = useState<File | null>(null
       setError('');
       setSuccess('');
 
+      if (!form.notes?.trim()) {
+  setError('Please enter meeting notes');
+  setLoading(false);
+  return;
+}
+
             const tokenCheck =
         localStorage.getItem('token') ||
         localStorage.getItem('access_token') ||
