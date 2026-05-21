@@ -1127,6 +1127,50 @@ const receivePayment = async (installmentId: number) => {
   }
 };
 
+const hidePaymentInstallment = async (installmentId: number) => {
+  const reason = window.prompt(
+    'Why do you want to hide this payment entry?',
+    'Test / duplicate entry',
+  );
+
+  if (reason === null) return;
+
+  const confirmed = window.confirm(
+    'This payment entry will be hidden from reports and reminders. Continue?',
+  );
+
+  if (!confirmed) return;
+
+  try {
+    const token = localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/payment-collection/installments/${installmentId}/hide`,
+      {
+        reason,
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Payment entry hidden successfully');
+
+    fetchPaymentInstallments();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to hide payment entry',
+    );
+  }
+};
+
 const createExecutionActivity = async () => {
   if (!executionForm.activityType) {
     alert('Please select activity type');
@@ -3107,6 +3151,14 @@ const updateExecutionActivityStatus = async (
           : 'Receive Payment'}
       </button>
     </div>
+
+    <button
+  type="button"
+  onClick={() => hidePaymentInstallment(item.id)}
+  className="mt-3 rounded-xl bg-red-100 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-200"
+>
+  Hide Entry
+</button>
   </div>
 )}
                 </div>
