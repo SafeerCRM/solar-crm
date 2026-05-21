@@ -1504,6 +1504,7 @@ async getPaymentReminderList(currentUser: any) {
       'userState.readAt AS "userReadAt"',
     ])
     .where('payment.pendingAmount > 0')
+.andWhere('payment.isHidden = false')
     .andWhere('payment.status != :paidStatus', {
       paidStatus: ProjectPaymentInstallmentStatus.PAID,
     })
