@@ -190,13 +190,12 @@ type CurrentUser = {
 };
 
 type ReminderPreviewItem = {
-  id: number;
-  projectId: number;
-  activityType: string;
-  reminderType: 'OVERDUE_INSPECTION' | 'TODAY_WORK' | 'UPCOMING_DEADLINE';
-  customerName: string | null;
-  projectSerial: string | null;
-  userReminderStatus: 'UNREAD' | 'READ' | 'DISMISSED';
+  id: string;
+  href: string;
+  title: string;
+  subtitle: string;
+  customerName?: string | null;
+  projectId?: number;
 };
 
 export default function AppLayout({
@@ -249,27 +248,58 @@ const [bellOpen, setBellOpen] = useState(false);
 
   const fetchReminderCount = async () => {
   try {
-    const [countRes, listRes] = await Promise.all([
-      axios.get(`${apiBaseUrl}/project/execution-reminders/unread-count`, {
-        headers: getAuthHeaders(),
-      }),
-      axios.get(`${apiBaseUrl}/project/execution-reminders`, {
-        headers: getAuthHeaders(),
-      }),
-    ]);
+    const [executionCountRes, paymentCountRes, executionListRes, paymentListRes] =
+      await Promise.all([
+        axios.get(`${apiBaseUrl}/project/execution-reminders/unread-count`, {
+          headers: getAuthHeaders(),
+        }),
+        axios.get(`${apiBaseUrl}/project/payment-reminders/unread-count`, {
+          headers: getAuthHeaders(),
+        }),
+        axios.get(`${apiBaseUrl}/project/execution-reminders`, {
+          headers: getAuthHeaders(),
+        }),
+        axios.get(`${apiBaseUrl}/project/payment-reminders`, {
+          headers: getAuthHeaders(),
+        }),
+      ]);
 
-    setReminderCount(countRes.data?.unreadCount || 0);
+    const executionCount = executionCountRes.data?.unreadCount || 0;
+    const paymentCount = paymentCountRes.data?.unreadCount || 0;
 
-    const list = Array.isArray(listRes.data) ? listRes.data : [];
+    setReminderCount(executionCount + paymentCount);
 
-    const unreadOnly = list
-      .filter(
-        (item: ReminderPreviewItem) =>
-          item.userReminderStatus !== 'READ',
-      )
-      .slice(0, 5);
+    const executionList = Array.isArray(executionListRes.data)
+      ? executionListRes.data
+      : [];
 
-    setReminderPreview(unreadOnly);
+    const paymentList = Array.isArray(paymentListRes.data)
+      ? paymentListRes.data
+      : [];
+
+    const executionUnread = executionList
+      .filter((item: any) => item.userReminderStatus !== 'READ')
+      .map((item: any) => ({
+        id: `execution-${item.id}`,
+        href: '/project/reminders',
+        title: item.reminderType,
+        subtitle: item.activityType,
+        customerName: item.customerName,
+        projectId: item.projectId,
+      }));
+
+    const paymentUnread = paymentList
+      .filter((item: any) => item.userReminderStatus !== 'READ')
+      .map((item: any) => ({
+        id: `payment-${item.id}`,
+        href: '/project/reminders',
+        title: item.reminderType,
+        subtitle: item.label,
+        customerName: item.customerName,
+        projectId: item.projectId,
+      }));
+
+    setReminderPreview([...executionUnread, ...paymentUnread].slice(0, 5));
   } catch (error) {
     console.error('Reminder count error:', error);
     setReminderCount(0);
@@ -332,14 +362,14 @@ const [bellOpen, setBellOpen] = useState(false);
               className="block rounded-xl bg-blue-50 p-3 text-sm hover:bg-blue-100"
             >
               <p className="font-semibold text-gray-900">
-                {formatReminderPreviewType(item.reminderType)}
-              </p>
-              <p className="text-xs text-gray-600">
-                {formatActivityType(item.activityType)}
-              </p>
+  {item.title}
+</p>
+<p className="text-xs text-gray-600">
+  {formatActivityType(item.subtitle)}
+</p>
               <p className="text-xs text-gray-500">
-                {item.customerName || item.projectSerial || `Project #${item.projectId}`}
-              </p>
+  {item.customerName || `Project #${item.projectId}`}
+</p>
             </Link>
           ))}
         </div>
