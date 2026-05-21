@@ -136,7 +136,7 @@ const [projectOwners, setProjectOwners] = useState<ProjectOwnerOption[]>([]);
   };
 
   return (
-    <div className="space-y-6 bg-gray-50 p-4 md:p-6">
+    <div className="min-w-0 space-y-4 overflow-x-hidden bg-gray-50 p-3 md:p-6">
       <div className="rounded-2xl bg-white p-5 shadow">
         <h1 className="text-2xl font-bold text-gray-900">
           💰 Payment Collection
@@ -155,7 +155,7 @@ const [projectOwners, setProjectOwners] = useState<ProjectOwnerOption[]>([]);
       <div className="rounded-2xl bg-white p-5 shadow">
         <h2 className="text-lg font-bold text-gray-800">Filters</h2>
 
-        <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-4">
+        <div className="mt-4 grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
           <select
   value={branch}
   onChange={(e) => setBranch(e.target.value)}
@@ -277,7 +277,7 @@ const [projectOwners, setProjectOwners] = useState<ProjectOwnerOption[]>([]);
         ) : (
           <div className="space-y-4">
             {rows.map((item) => (
-              <div key={item.id} className="rounded-2xl border p-4">
+              <div key={item.id} className="min-w-0 rounded-2xl border p-3 md:p-4">
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                   <div className="min-w-0 flex-1">
                     <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -314,7 +314,7 @@ const [projectOwners, setProjectOwners] = useState<ProjectOwnerOption[]>([]);
                     )}
                   </div>
 
-                  <div className="min-w-[180px] rounded-xl bg-gray-50 p-4 text-right">
+                  <div className="w-full rounded-xl bg-gray-50 p-4 text-left md:w-[180px] md:text-right">
                     <p className="text-sm text-gray-500">Amount</p>
                     <p className="text-lg font-bold text-gray-900">{money(item.amount)}</p>
 
