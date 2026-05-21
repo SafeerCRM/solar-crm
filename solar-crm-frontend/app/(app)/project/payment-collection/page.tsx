@@ -37,8 +37,9 @@ type BranchOption = {
 };
 
 type ProjectOwnerOption = {
-  id: number;
-  name: string;
+  projectOwnerId: number;
+  projectOwnerName: string;
+  projectOwnerRole?: string;
 };
 
 export default function PaymentCollectionPage() {
@@ -187,10 +188,14 @@ const [projectOwners, setProjectOwners] = useState<ProjectOwnerOption[]>([]);
   <option value="">All Project Owners</option>
 
   {projectOwners.map((owner) => (
-    <option key={owner.id} value={owner.id}>
-      {owner.name}
-    </option>
-  ))}
+  <option
+    key={owner.projectOwnerId}
+    value={owner.projectOwnerId}
+  >
+    {owner.projectOwnerName}
+    {owner.projectOwnerRole ? ` (${owner.projectOwnerRole})` : ''}
+  </option>
+))}
 </select>
 
           <input
