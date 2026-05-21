@@ -438,6 +438,34 @@ async receivePaymentInstallment(
   );
 }
 
+@Get('approval-reminders')
+async getApprovalReminderList(@Req() req: any) {
+  return this.projectService.getApprovalReminderList(req.user);
+}
+
+@Get('approval-reminders/unread-count')
+async getUnreadApprovalReminderCount(@Req() req: any) {
+  return this.projectService.getUnreadApprovalReminderCount(req.user);
+}
+
+@Get('purchase-reminders')
+async getPurchaseReminderList(
+  @Req() req: any,
+) {
+  return this.projectService.getPurchaseReminderList(
+    req.user,
+  );
+}
+
+@Get('purchase-reminders/unread-count')
+async getUnreadPurchaseReminderCount(
+  @Req() req: any,
+) {
+  return this.projectService.getUnreadPurchaseReminderCount(
+    req.user,
+  );
+}
+
 @Get('payment-reminders')
 async getPaymentReminderList(@Req() req: any) {
   return this.projectService.getPaymentReminderList(req.user);

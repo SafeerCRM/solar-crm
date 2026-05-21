@@ -1593,6 +1593,262 @@ async getPaymentReminderList(currentUser: any) {
     .filter(Boolean);
 }
 
+async getApprovalReminderList(currentUser: any) {
+  const roles = Array.isArray(currentUser?.roles)
+    ? currentUser.roles
+    : [];
+
+  const userId = currentUser?.id || currentUser?.userId;
+
+  const canSeeApprovalReminders =
+    roles.includes('OWNER') ||
+    roles.includes('MARKETING_HEAD') ||
+    roles.includes('PROJECT_MANAGER');
+
+  if (!canSeeApprovalReminders) {
+    return [];
+  }
+
+  const qb = this.projectRepository
+    .createQueryBuilder('project')
+    .select([
+      'project.id AS "projectId"',
+      'project.customerName AS "customerName"',
+      'project.customerPhone AS "customerPhone"',
+      'project.branchName AS "branchName"',
+      'project.projectOwnerId AS "projectOwnerId"',
+      'project.projectOwnerName AS "projectOwnerName"',
+      'project.projectSerial AS "projectSerial"',
+      'project.status AS "projectStatus"',
+      'project.marketingHeadApprovalStatus AS "marketingHeadApprovalStatus"',
+      'project.ownerApprovalStatus AS "ownerApprovalStatus"',
+      'project.createdAt AS "createdAt"',
+    ])
+    .where('project.isHidden = false')
+    .andWhere('project.status = :pendingApprovalStatus', {
+      pendingApprovalStatus: ProjectStatus.PENDING_APPROVAL,
+    })
+    .andWhere(
+      `(
+        project.marketingHeadApprovalStatus = :pendingStatus
+        OR project.ownerApprovalStatus = :pendingStatus
+      )`,
+      {
+        pendingStatus: ProjectApprovalStatus.PENDING,
+      },
+    )
+    .orderBy('project.createdAt', 'ASC')
+    .limit(100);
+
+  const rows = await qb.getRawMany();
+
+  return rows
+    .map((row) => {
+      const marketingPending =
+        row.marketingHeadApprovalStatus ===
+        ProjectApprovalStatus.PENDING;
+
+      const ownerPending =
+        row.ownerApprovalStatus ===
+        ProjectApprovalStatus.PENDING;
+
+      let reminderType = '';
+
+      if (roles.includes('MARKETING_HEAD') && marketingPending) {
+        reminderType = 'MARKETING_APPROVAL_PENDING';
+      } else if (roles.includes('OWNER') && ownerPending) {
+        reminderType = 'OWNER_APPROVAL_PENDING';
+      } else if (roles.includes('PROJECT_MANAGER')) {
+        if (marketingPending && ownerPending) {
+          reminderType = 'PROJECT_APPROVAL_PENDING';
+        } else if (marketingPending) {
+          reminderType = 'MARKETING_APPROVAL_PENDING';
+        } else if (ownerPending) {
+          reminderType = 'OWNER_APPROVAL_PENDING';
+        }
+      } else if (roles.includes('OWNER') && marketingPending) {
+        reminderType = 'MARKETING_APPROVAL_PENDING';
+      }
+
+      if (!reminderType) {
+        return null;
+      }
+
+      return {
+        id: Number(row.projectId),
+        projectId: Number(row.projectId),
+        reminderType,
+        title: reminderType,
+        subtitle: row.projectSerial
+          ? `Project ${row.projectSerial}`
+          : `Project #${row.projectId}`,
+        customerName: row.customerName || null,
+        customerPhone: row.customerPhone || null,
+        branchName: row.branchName || null,
+        projectOwnerId: row.projectOwnerId
+          ? Number(row.projectOwnerId)
+          : null,
+        projectOwnerName: row.projectOwnerName || null,
+        projectSerial: row.projectSerial || null,
+        projectStatus: row.projectStatus || null,
+        marketingHeadApprovalStatus:
+          row.marketingHeadApprovalStatus || null,
+        ownerApprovalStatus:
+          row.ownerApprovalStatus || null,
+        createdAt: row.createdAt,
+        userReminderStatus: 'UNREAD',
+      };
+    })
+    .filter(Boolean);
+}
+
+async getPurchaseReminderList(currentUser: any) {
+  const roles = Array.isArray(currentUser?.roles)
+    ? currentUser.roles
+    : [];
+
+  const userId =
+    currentUser?.id || currentUser?.userId;
+
+  const canSeeAll =
+    roles.includes('OWNER') ||
+    roles.includes('PROJECT_MANAGER') ||
+    roles.includes('MARKETING_HEAD');
+
+  const qb =
+    this.projectMaterialRequestItemRepository
+      .createQueryBuilder('item')
+
+      .leftJoin(
+        Project,
+        'project',
+        'project.id = item.projectId',
+      )
+
+      .select([
+        'item.id AS "id"',
+        'item.projectId AS "projectId"',
+        'item.materialName AS "materialName"',
+        'item.category AS "category"',
+        'item.brand AS "brand"',
+        'item.quantity AS "quantity"',
+        'item.purchasedQuantity AS "purchasedQuantity"',
+        'item.pendingQuantity AS "pendingQuantity"',
+        'item.purchaseStatus AS "purchaseStatus"',
+        'item.createdAt AS "createdAt"',
+
+        'project.customerName AS "customerName"',
+        'project.customerPhone AS "customerPhone"',
+        'project.branchName AS "branchName"',
+        'project.projectOwnerId AS "projectOwnerId"',
+        'project.projectOwnerName AS "projectOwnerName"',
+        'project.projectSerial AS "projectSerial"',
+      ])
+
+      .where('item.pendingQuantity > 0')
+
+      .andWhere('project.isHidden = false')
+
+      .orderBy('item.createdAt', 'ASC')
+
+      .limit(50);
+
+  if (!canSeeAll) {
+    qb.andWhere(
+      'project.projectOwnerId = :userId',
+      {
+        userId,
+      },
+    );
+  }
+
+  const rows = await qb.getRawMany();
+
+  return rows.map((row) => {
+    const reminderType =
+      row.purchaseStatus ===
+      'PARTIALLY_PURCHASED'
+        ? 'PARTIAL_PURCHASE_PENDING'
+        : 'PURCHASE_PENDING';
+
+    return {
+      id: Number(row.id),
+      projectId: Number(row.projectId),
+
+      reminderType,
+
+      materialName:
+        row.materialName || null,
+
+      category:
+        row.category || null,
+
+      brand:
+        row.brand || null,
+
+      quantity: Number(
+        row.quantity || 0,
+      ),
+
+      purchasedQuantity: Number(
+        row.purchasedQuantity || 0,
+      ),
+
+      pendingQuantity: Number(
+        row.pendingQuantity || 0,
+      ),
+
+      purchaseStatus:
+        row.purchaseStatus || null,
+
+      customerName:
+        row.customerName || null,
+
+      customerPhone:
+        row.customerPhone || null,
+
+      branchName:
+        row.branchName || null,
+
+      projectOwnerId:
+        row.projectOwnerId
+          ? Number(row.projectOwnerId)
+          : null,
+
+      projectOwnerName:
+        row.projectOwnerName || null,
+
+      projectSerial:
+        row.projectSerial || null,
+
+      userReminderStatus: 'UNREAD',
+
+      createdAt: row.createdAt,
+    };
+  });
+}
+
+async getUnreadPurchaseReminderCount(
+  currentUser: any,
+) {
+  const list =
+    await this.getPurchaseReminderList(
+      currentUser,
+    );
+
+  return {
+    unreadCount: list.length,
+  };
+}
+
+async getUnreadApprovalReminderCount(currentUser: any) {
+  const list = await this.getApprovalReminderList(currentUser);
+
+  return {
+    unreadCount: list.length,
+  };
+}
+
 async getUnreadPaymentReminderCount(currentUser: any) {
   const list = await this.getPaymentReminderList(currentUser);
 
