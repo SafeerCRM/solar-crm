@@ -483,6 +483,15 @@ async hidePaymentInstallment(
   );
 }
 
+@Patch(':id/hide')
+hideProject(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.hideProject(id, body, user);
+}
+
   @Get(':id')
   findOne(
   @Param('id') id: string,

@@ -302,6 +302,8 @@ const project = this.projectRepository.create(projectData);
       'project',
     );
 
+    query.where('project.isHidden = false');
+
     const currentUserId = Number(
   user?.id || user?.sub,
 );
@@ -1718,6 +1720,35 @@ async hidePaymentInstallment(
   installment.hiddenReason = body?.reason || 'Hidden by user';
 
   return this.projectPaymentInstallmentRepository.save(installment);
+}
+
+async hideProject(id: number, body: any, user: any) {
+  const roles = Array.isArray(user?.roles) ? user.roles : [];
+
+  const canHide =
+    roles.includes('OWNER') ||
+    roles.includes('MARKETING_HEAD') ||
+    roles.includes('PROJECT_MANAGER');
+
+  if (!canHide) {
+    throw new ForbiddenException('You are not allowed to hide projects');
+  }
+
+  const project = await this.projectRepository.findOne({
+    where: { id },
+  });
+
+  if (!project) {
+    throw new NotFoundException('Project not found');
+  }
+
+  project.isHidden = true;
+  project.hiddenAt = new Date();
+  project.hiddenBy = user?.id || user?.userId || null;
+  project.hiddenByName = user?.name || user?.email || '';
+  project.hiddenReason = body?.reason || 'Hidden by user';
+
+  return this.projectRepository.save(project);
 }
 
 async createExecutionActivity(

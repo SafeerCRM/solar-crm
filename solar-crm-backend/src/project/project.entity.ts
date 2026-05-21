@@ -240,6 +240,21 @@ finalCost: number;
   @Column({ nullable: true, type: 'text' })
   remarks: string;
 
+  @Column({ type: 'boolean', default: false })
+isHidden: boolean;
+
+@Column({ type: 'timestamp', nullable: true })
+hiddenAt: Date;
+
+@Column({ nullable: true })
+hiddenBy: number;
+
+@Column({ nullable: true })
+hiddenByName: string;
+
+@Column({ type: 'text', nullable: true })
+hiddenReason: string;
+
   @CreateDateColumn()
   createdAt: Date;
 
