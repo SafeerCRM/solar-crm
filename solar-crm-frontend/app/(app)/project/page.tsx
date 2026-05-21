@@ -94,6 +94,46 @@ setTotalPages(res.data?.totalPages || 1);
   }
 };
 
+const hideProject = async (projectId: number) => {
+  const reason = window.prompt(
+    'Why do you want to hide this project?',
+    'Test / duplicate project',
+  );
+
+  if (reason === null) return;
+
+  const confirmed = window.confirm(
+    'This project will be hidden from project list, reports, payment collection, reminders and purchase orders. Continue?',
+  );
+
+  if (!confirmed) return;
+
+  try {
+    const token = localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/${projectId}/hide`,
+      { reason },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Project hidden successfully');
+    fetchProjects();
+  } catch (error: any) {
+    console.error(error);
+    alert(
+      error?.response?.data?.message ||
+        'Failed to hide project',
+    );
+  }
+};
+
   useEffect(() => {
   fetchProjects();
 }, [page, search, statusFilter, branchFilter, ownerFilter]);
@@ -103,7 +143,7 @@ useEffect(() => {
 }, []);
 
   return (
-    <div className="mx-auto max-w-7xl space-y-4">
+    <div className="mx-auto min-w-0 max-w-7xl space-y-4 overflow-x-hidden px-2 pb-4 md:px-0">
       <div className="rounded-2xl bg-white p-4 shadow">
   <h1 className="text-2xl font-bold text-gray-800">
     Project Department
@@ -124,7 +164,7 @@ useEffect(() => {
 </div>
 
 <div className="rounded-2xl bg-white p-5 shadow">
-  <div className="grid gap-3 md:grid-cols-4">
+  <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
     <input
       placeholder="Search by name, phone, or Project ID"
       value={search}
@@ -198,13 +238,16 @@ useEffect(() => {
       ) : (
         <div className="grid gap-4">
           {projects.map((project) => (
-            <div key={project.id} className="rounded-2xl bg-white p-4 shadow">
+            <div
+  key={project.id}
+  className="min-w-0 overflow-hidden rounded-2xl bg-white p-3 shadow md:p-4"
+>
               <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                 <div>
-                  <h2 className="text-lg font-bold text-gray-800">
+                  <h2 className="break-words text-lg font-bold text-gray-800">
                     #{project.id} - {project.customerName || 'Unnamed Customer'}
                   </h2>
-                  <p className="text-sm text-gray-500">
+                  <p className="break-words text-sm text-gray-500">
   {project.customerPhone || 'No phone'} |{' '}
   {project.branchName || 'No branch'} |{' '}
   {project.city || 'No city'} |{' '}
@@ -224,7 +267,7 @@ useEffect(() => {
                 </span>
               </div>
 
-              <div className="mt-4 grid gap-3 text-sm md:grid-cols-4">
+              <div className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
                 <div className="rounded-xl bg-gray-50 p-3">
                   <p className="text-gray-500">Project Type</p>
                   <p className="font-semibold text-gray-800">{project.projectType || '-'}</p>
@@ -270,13 +313,21 @@ useEffect(() => {
   </div>
 </div>
 
-<div className="mt-4">
+<div className="mt-4 flex flex-col gap-2 sm:flex-row">
   <Link
     href={`/project/${project.id}`}
-    className="inline-block rounded-xl bg-gray-800 px-4 py-2 text-sm font-semibold text-white hover:bg-black"
+    className="inline-block rounded-xl bg-gray-800 px-4 py-2 text-center text-sm font-semibold text-white hover:bg-black"
   >
     View Details
   </Link>
+
+  <button
+    type="button"
+    onClick={() => hideProject(project.id)}
+    className="rounded-xl bg-red-100 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-200"
+  >
+    Hide Project
+  </button>
 </div>
             </div>
           ))}
@@ -288,7 +339,7 @@ useEffect(() => {
     Page {page} of {totalPages}
   </p>
 
-  <div className="flex gap-2">
+  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
     <button
       onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
       disabled={page <= 1}
