@@ -10,7 +10,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, MoreThan, Repository } from 'typeorm';
 
 import { Project } from './project.entity';
-import { ProjectDocument } from './project-document.entity';
+import {
+  ProjectDocument,
+  ProjectDocumentType,
+} from './project-document.entity';
 import { ProjectComment } from './project-comment.entity';
 
 import {
@@ -26,9 +29,18 @@ import { ProjectMaterialMaster } from './project-material-master.entity';
 import { ProjectMaterialRequest } from './project-material-request.entity';
 import { ProjectMaterialRequestItem } from './project-material-request-item.entity';
 import { ProjectBranch } from './project-branch.entity';
-import { ProjectLoanDetail } from './project-loan-detail.entity';
-import { ProjectSubsidyDetail } from './project-subsidy-detail.entity';
-import { ProjectElectricityDetail } from './project-electricity-detail.entity';
+import {
+  ProjectLoanDetail,
+  ProjectLoanStatus,
+} from './project-loan-detail.entity';
+import {
+  ProjectSubsidyDetail,
+  ProjectSubsidyStatus,
+} from './project-subsidy-detail.entity';
+import {
+  ProjectElectricityDetail,
+  ProjectElectricityStatus,
+} from './project-electricity-detail.entity';
 import {
   ProjectExecutionActivity,
   ProjectExecutionActivityStatus,
@@ -1878,6 +1890,27 @@ const stateMap =
   });
 }
 
+private getRequiredProjectDocumentTypes(project: Project) {
+  const baseDocuments = [
+    ProjectDocumentType.AADHAAR_CARD,
+    ProjectDocumentType.PAN_CARD,
+    ProjectDocumentType.ELECTRICITY_BILL,
+    ProjectDocumentType.CLIENT_GPS_PHOTO,
+    ProjectDocumentType.ROOF_GPS_PHOTO,
+  ];
+
+  const loanDocuments =
+    project.projectType === ProjectType.LOAN
+      ? [
+          ProjectDocumentType.CANCEL_CHEQUE,
+          ProjectDocumentType.BANK_DIARY,
+          ProjectDocumentType.JAN_SAMARTH_DOCUMENT,
+        ]
+      : [];
+
+  return [...baseDocuments, ...loanDocuments];
+}
+
 private async getUnifiedReminderStateMap(
   currentUser: any,
   reminderSource: string,
@@ -2061,6 +2094,872 @@ async dismissUnifiedReminderForUser(
   return this.projectReminderUserStateRepository.save(
     state,
   );
+}
+
+async getDocumentReminderList(currentUser: any) {
+  const roles = Array.isArray(currentUser?.roles)
+    ? currentUser.roles
+    : [];
+
+  const userId =
+    currentUser?.id || currentUser?.userId;
+
+  const canSeeAll =
+    roles.includes('OWNER') ||
+    roles.includes('MARKETING_HEAD') ||
+    roles.includes('PROJECT_MANAGER');
+
+  const projectQuery =
+    this.projectRepository
+      .createQueryBuilder('project')
+      .select([
+        'project.id',
+        'project.customerName',
+        'project.customerPhone',
+        'project.branchName',
+        'project.projectOwnerId',
+        'project.projectOwnerName',
+        'project.projectSerial',
+        'project.projectType',
+        'project.status',
+        'project.createdAt',
+      ])
+      .where('project.isHidden = false')
+      .andWhere('project.status != :completedStatus', {
+        completedStatus: ProjectStatus.COMPLETED,
+      })
+      .andWhere('project.status != :rejectedStatus', {
+        rejectedStatus: ProjectStatus.REJECTED,
+      })
+      .orderBy('project.createdAt', 'ASC')
+      .limit(50);
+
+  if (!canSeeAll) {
+    projectQuery.andWhere(
+      'project.projectOwnerId = :userId',
+      {
+        userId,
+      },
+    );
+  }
+
+  const projects = await projectQuery.getMany();
+
+  if (projects.length === 0) {
+    return [];
+  }
+
+  const projectIds = projects.map((project) => project.id);
+
+  const uploadedDocuments =
+    await this.projectDocumentRepository.find({
+      where: {
+        projectId: In(projectIds),
+      },
+      select: {
+        id: true,
+        projectId: true,
+        documentType: true,
+      },
+    });
+
+  const uploadedMap: Record<string, Set<string>> = {};
+
+  for (const doc of uploadedDocuments) {
+    const key = String(doc.projectId);
+
+    if (!uploadedMap[key]) {
+      uploadedMap[key] = new Set<string>();
+    }
+
+    uploadedMap[key].add(String(doc.documentType));
+  }
+
+  const reminders: any[] = [];
+
+  for (const project of projects) {
+    const requiredDocumentTypes =
+      this.getRequiredProjectDocumentTypes(project);
+
+    const uploadedTypes =
+      uploadedMap[String(project.id)] || new Set<string>();
+
+    const missingDocuments =
+      requiredDocumentTypes.filter(
+        (documentType) =>
+          !uploadedTypes.has(String(documentType)),
+      );
+
+    if (missingDocuments.length === 0) {
+      continue;
+    }
+
+    reminders.push({
+      id: Number(project.id),
+      projectId: Number(project.id),
+      reminderType: 'DOCUMENT_PENDING',
+      missingDocumentTypes: missingDocuments,
+      missingCount: missingDocuments.length,
+
+      customerName: project.customerName || null,
+      customerPhone: project.customerPhone || null,
+      branchName: project.branchName || null,
+      projectOwnerId: project.projectOwnerId
+        ? Number(project.projectOwnerId)
+        : null,
+      projectOwnerName: project.projectOwnerName || null,
+      projectSerial: project.projectSerial || null,
+      projectType: project.projectType || null,
+      projectStatus: project.status || null,
+      createdAt: project.createdAt,
+      userReminderStatus: 'UNREAD',
+    });
+  }
+
+  const reminderIds = reminders.map((item) =>
+    Number(item.projectId),
+  );
+
+  const stateMap =
+    await this.getUnifiedReminderStateMap(
+      currentUser,
+      'DOCUMENT',
+      reminderIds,
+    );
+
+  return reminders
+    .map((item) => ({
+      ...item,
+      userReminderStatus:
+        stateMap[String(item.projectId)]?.status ||
+        'UNREAD',
+    }))
+    .filter((item) => {
+      return (
+        item.userReminderStatus !==
+        ProjectReminderUserStateStatus.DISMISSED
+      );
+    });
+}
+
+async getUnreadDocumentReminderCount(currentUser: any) {
+  const list =
+    await this.getDocumentReminderList(currentUser);
+
+  const unreadCount = list.filter((item: any) => {
+    return item.userReminderStatus !== 'READ';
+  }).length;
+
+  return {
+    unreadCount,
+  };
+}
+
+async getLoanReminderList(currentUser: any) {
+  const roles = Array.isArray(currentUser?.roles)
+    ? currentUser.roles
+    : [];
+
+  const userId =
+    currentUser?.id || currentUser?.userId;
+
+  const canSeeAll =
+    roles.includes('OWNER') ||
+    roles.includes('MARKETING_HEAD') ||
+    roles.includes('PROJECT_MANAGER') ||
+    roles.includes('LOAN_MANAGER');
+
+  const qb =
+    this.projectLoanDetailRepository
+      .createQueryBuilder('loan')
+      .leftJoin(
+        Project,
+        'project',
+        'project.id = loan.projectId',
+      )
+      .select([
+        'loan.id AS "id"',
+        'loan.projectId AS "projectId"',
+        'loan.loanType AS "loanType"',
+        'loan.bankName AS "bankName"',
+        'loan.applicationNumber AS "applicationNumber"',
+        'loan.marginMoney AS "marginMoney"',
+        'loan.sanctionAmount AS "sanctionAmount"',
+        'loan.firstEmiDisbursementAmount AS "firstEmiDisbursementAmount"',
+        'loan.firstEmiDisbursementDate AS "firstEmiDisbursementDate"',
+        'loan.status AS "loanStatus"',
+        'loan.remarks AS "remarks"',
+        'loan.updatedAt AS "updatedAt"',
+
+        'project.customerName AS "customerName"',
+        'project.customerPhone AS "customerPhone"',
+        'project.branchName AS "branchName"',
+        'project.projectOwnerId AS "projectOwnerId"',
+        'project.projectOwnerName AS "projectOwnerName"',
+        'project.projectSerial AS "projectSerial"',
+        'project.projectType AS "projectType"',
+        'project.status AS "projectStatus"',
+      ])
+      .where('project.isHidden = false')
+      .andWhere('project.projectType = :loanProjectType', {
+        loanProjectType: ProjectType.LOAN,
+      })
+      .andWhere('project.status != :completedStatus', {
+        completedStatus: ProjectStatus.COMPLETED,
+      })
+      .andWhere('project.status != :rejectedStatus', {
+        rejectedStatus: ProjectStatus.REJECTED,
+      })
+      .andWhere('loan.status NOT IN (:...excludedLoanStatuses)', {
+        excludedLoanStatuses: [
+          ProjectLoanStatus.LOAN_DISBURSED,
+          ProjectLoanStatus.FILE_REJECTED,
+        ],
+      })
+      .orderBy('loan.updatedAt', 'ASC')
+      .limit(50);
+
+  if (!canSeeAll) {
+    qb.andWhere('project.projectOwnerId = :userId', {
+      userId,
+    });
+  }
+
+  const rows = await qb.getRawMany();
+
+  const reminderIds = rows.map((row) =>
+    Number(row.id),
+  );
+
+  const stateMap =
+    await this.getUnifiedReminderStateMap(
+      currentUser,
+      'LOAN',
+      reminderIds,
+    );
+
+  return rows
+    .map((row) => {
+      let reminderType = 'LOAN_PROCESS_PENDING';
+
+      if (
+        row.loanStatus ===
+        ProjectLoanStatus.DOCUMENT_PENDING
+      ) {
+        reminderType = 'LOAN_DOCUMENT_PENDING';
+      } else if (
+        row.loanStatus ===
+          ProjectLoanStatus.IN_PRINCIPAL_GENERATED ||
+        row.loanStatus ===
+          ProjectLoanStatus.QUOTATION_SUBMITTED ||
+        row.loanStatus ===
+          ProjectLoanStatus.BANK_VISITED
+      ) {
+        reminderType = 'LOAN_DISBURSEMENT_PENDING';
+      }
+
+      return {
+        id: Number(row.id),
+        projectId: Number(row.projectId),
+
+        reminderType,
+
+        loanType: row.loanType || null,
+        bankName: row.bankName || null,
+        applicationNumber:
+          row.applicationNumber || null,
+
+        marginMoney: Number(row.marginMoney || 0),
+        sanctionAmount: Number(
+          row.sanctionAmount || 0,
+        ),
+        firstEmiDisbursementAmount: Number(
+          row.firstEmiDisbursementAmount || 0,
+        ),
+        firstEmiDisbursementDate:
+          row.firstEmiDisbursementDate || null,
+
+        loanStatus: row.loanStatus || null,
+        remarks: row.remarks || null,
+        updatedAt: row.updatedAt,
+
+        customerName: row.customerName || null,
+        customerPhone: row.customerPhone || null,
+        branchName: row.branchName || null,
+
+        projectOwnerId: row.projectOwnerId
+          ? Number(row.projectOwnerId)
+          : null,
+
+        projectOwnerName:
+          row.projectOwnerName || null,
+
+        projectSerial:
+          row.projectSerial || null,
+
+        projectType:
+          row.projectType || null,
+
+        projectStatus:
+          row.projectStatus || null,
+
+        userReminderStatus:
+          stateMap[String(row.id)]?.status ||
+          'UNREAD',
+      };
+    })
+    .filter((item) => {
+      return (
+        item.userReminderStatus !==
+        ProjectReminderUserStateStatus.DISMISSED
+      );
+    });
+}
+
+async getUnreadLoanReminderCount(currentUser: any) {
+  const list =
+    await this.getLoanReminderList(currentUser);
+
+  const unreadCount = list.filter((item: any) => {
+    return item.userReminderStatus !== 'READ';
+  }).length;
+
+  return {
+    unreadCount,
+  };
+}
+
+async getSubsidyReminderList(currentUser: any) {
+  const roles = Array.isArray(currentUser?.roles)
+    ? currentUser.roles
+    : [];
+
+  const userId =
+    currentUser?.id || currentUser?.userId;
+
+  const canSeeAll =
+    roles.includes('OWNER') ||
+    roles.includes('MARKETING_HEAD') ||
+    roles.includes('PROJECT_MANAGER') ||
+    roles.includes('SUBSIDY_MANAGER');
+
+  const qb =
+    this.projectSubsidyDetailRepository
+      .createQueryBuilder('subsidy')
+      .leftJoin(
+        Project,
+        'project',
+        'project.id = subsidy.projectId',
+      )
+      .select([
+        'subsidy.id AS "id"',
+        'subsidy.projectId AS "projectId"',
+        'subsidy.status AS "subsidyStatus"',
+        'subsidy.dcrCertificateReady AS "dcrCertificateReady"',
+        'subsidy.panelWarrantyReceived AS "panelWarrantyReceived"',
+        'subsidy.inverterWarrantyReceived AS "inverterWarrantyReceived"',
+        'subsidy.vendorAgreementReady AS "vendorAgreementReady"',
+        'subsidy.wcrReady AS "wcrReady"',
+        'subsidy.portalSubmissionDate AS "portalSubmissionDate"',
+        'subsidy.subsidyRequestedDate AS "subsidyRequestedDate"',
+        'subsidy.subsidyDisbursedDate AS "subsidyDisbursedDate"',
+        'subsidy.subsidyAmount AS "subsidyAmount"',
+        'subsidy.remarks AS "remarks"',
+        'subsidy.updatedAt AS "updatedAt"',
+
+        'project.customerName AS "customerName"',
+        'project.customerPhone AS "customerPhone"',
+        'project.branchName AS "branchName"',
+        'project.projectOwnerId AS "projectOwnerId"',
+        'project.projectOwnerName AS "projectOwnerName"',
+        'project.projectSerial AS "projectSerial"',
+        'project.projectType AS "projectType"',
+        'project.status AS "projectStatus"',
+      ])
+      .where('project.isHidden = false')
+      .andWhere('project.status != :completedStatus', {
+        completedStatus: ProjectStatus.COMPLETED,
+      })
+      .andWhere('project.status != :rejectedStatus', {
+        rejectedStatus: ProjectStatus.REJECTED,
+      })
+      .andWhere('subsidy.status NOT IN (:...excludedSubsidyStatuses)', {
+        excludedSubsidyStatuses: [
+          ProjectSubsidyStatus.SUBSIDY_DISBURSED,
+          ProjectSubsidyStatus.REJECTED,
+        ],
+      })
+      .orderBy('subsidy.updatedAt', 'ASC')
+      .limit(50);
+
+  if (!canSeeAll) {
+    qb.andWhere('project.projectOwnerId = :userId', {
+      userId,
+    });
+  }
+
+  const rows = await qb.getRawMany();
+
+  const reminderIds = rows.map((row) =>
+    Number(row.id),
+  );
+
+  const stateMap =
+    await this.getUnifiedReminderStateMap(
+      currentUser,
+      'SUBSIDY',
+      reminderIds,
+    );
+
+  return rows
+    .map((row) => {
+      let reminderType = 'SUBSIDY_PROCESS_PENDING';
+
+      if (
+        row.subsidyStatus ===
+        ProjectSubsidyStatus.DOCUMENT_PENDING
+      ) {
+        reminderType = 'SUBSIDY_DOCUMENT_PENDING';
+      } else if (
+        row.subsidyStatus ===
+          ProjectSubsidyStatus.SUBMISSION_DONE ||
+        row.subsidyStatus ===
+          ProjectSubsidyStatus.SUBSIDY_REQUESTED
+      ) {
+        reminderType = 'SUBSIDY_REQUEST_PENDING';
+      }
+
+      return {
+        id: Number(row.id),
+        projectId: Number(row.projectId),
+
+        reminderType,
+
+        subsidyStatus: row.subsidyStatus || null,
+
+        dcrCertificateReady:
+          row.dcrCertificateReady === true,
+
+        panelWarrantyReceived:
+          row.panelWarrantyReceived === true,
+
+        inverterWarrantyReceived:
+          row.inverterWarrantyReceived === true,
+
+        vendorAgreementReady:
+          row.vendorAgreementReady === true,
+
+        wcrReady:
+          row.wcrReady === true,
+
+        portalSubmissionDate:
+          row.portalSubmissionDate || null,
+
+        subsidyRequestedDate:
+          row.subsidyRequestedDate || null,
+
+        subsidyDisbursedDate:
+          row.subsidyDisbursedDate || null,
+
+        subsidyAmount: Number(row.subsidyAmount || 0),
+
+        remarks: row.remarks || null,
+
+        updatedAt: row.updatedAt,
+
+        customerName: row.customerName || null,
+        customerPhone: row.customerPhone || null,
+        branchName: row.branchName || null,
+
+        projectOwnerId: row.projectOwnerId
+          ? Number(row.projectOwnerId)
+          : null,
+
+        projectOwnerName:
+          row.projectOwnerName || null,
+
+        projectSerial:
+          row.projectSerial || null,
+
+        projectType:
+          row.projectType || null,
+
+        projectStatus:
+          row.projectStatus || null,
+
+        userReminderStatus:
+          stateMap[String(row.id)]?.status ||
+          'UNREAD',
+      };
+    })
+    .filter((item) => {
+      return (
+        item.userReminderStatus !==
+        ProjectReminderUserStateStatus.DISMISSED
+      );
+    });
+}
+
+async getUnreadSubsidyReminderCount(currentUser: any) {
+  const list =
+    await this.getSubsidyReminderList(currentUser);
+
+  const unreadCount = list.filter((item: any) => {
+    return item.userReminderStatus !== 'READ';
+  }).length;
+
+  return {
+    unreadCount,
+  };
+}
+
+async getElectricityReminderList(currentUser: any) {
+  const roles = Array.isArray(currentUser?.roles)
+    ? currentUser.roles
+    : [];
+
+  const userId =
+    currentUser?.id || currentUser?.userId;
+
+  const canSeeAll =
+    roles.includes('OWNER') ||
+    roles.includes('MARKETING_HEAD') ||
+    roles.includes('PROJECT_MANAGER') ||
+    roles.includes('ELECTRICITY_MANAGER');
+
+  const qb =
+    this.projectElectricityDetailRepository
+      .createQueryBuilder('electricity')
+      .leftJoin(
+        Project,
+        'project',
+        'project.id = electricity.projectId',
+      )
+      .select([
+        'electricity.id AS "id"',
+        'electricity.projectId AS "projectId"',
+        'electricity.discomName AS "discomName"',
+        'electricity.status AS "electricityStatus"',
+        'electricity.fileSubmissionDate AS "fileSubmissionDate"',
+        'electricity.siteVisitDate AS "siteVisitDate"',
+        'electricity.demandDepositDate AS "demandDepositDate"',
+        'electricity.demandDepositAmount AS "demandDepositAmount"',
+        'electricity.meterTestingDate AS "meterTestingDate"',
+        'electricity.netMeterInstallationDate AS "netMeterInstallationDate"',
+        'electricity.remarks AS "remarks"',
+        'electricity.updatedAt AS "updatedAt"',
+
+        'project.customerName AS "customerName"',
+        'project.customerPhone AS "customerPhone"',
+        'project.branchName AS "branchName"',
+        'project.projectOwnerId AS "projectOwnerId"',
+        'project.projectOwnerName AS "projectOwnerName"',
+        'project.projectSerial AS "projectSerial"',
+        'project.projectType AS "projectType"',
+        'project.status AS "projectStatus"',
+      ])
+      .where('project.isHidden = false')
+      .andWhere('project.status != :completedStatus', {
+        completedStatus: ProjectStatus.COMPLETED,
+      })
+      .andWhere('project.status != :rejectedStatus', {
+        rejectedStatus: ProjectStatus.REJECTED,
+      })
+      .andWhere('electricity.status NOT IN (:...excludedElectricityStatuses)', {
+        excludedElectricityStatuses: [
+          ProjectElectricityStatus.CONNECTION_ACTIVE,
+          ProjectElectricityStatus.REJECTED,
+        ],
+      })
+      .orderBy('electricity.updatedAt', 'ASC')
+      .limit(50);
+
+  if (!canSeeAll) {
+    qb.andWhere('project.projectOwnerId = :userId', {
+      userId,
+    });
+  }
+
+  const rows = await qb.getRawMany();
+
+  const reminderIds = rows.map((row) =>
+    Number(row.id),
+  );
+
+  const stateMap =
+    await this.getUnifiedReminderStateMap(
+      currentUser,
+      'ELECTRICITY',
+      reminderIds,
+    );
+
+  return rows
+    .map((row) => {
+      let reminderType = 'DISCOM_PROCESS_PENDING';
+
+      if (
+        row.electricityStatus ===
+        ProjectElectricityStatus.DOCUMENT_PENDING
+      ) {
+        reminderType = 'ELECTRICITY_DOCUMENT_PENDING';
+      } else if (
+        row.electricityStatus ===
+          ProjectElectricityStatus.METER_TESTING_DONE
+      ) {
+        reminderType = 'NET_METER_PENDING';
+      } else if (
+        row.electricityStatus ===
+          ProjectElectricityStatus.NET_METER_INSTALLED
+      ) {
+        reminderType = 'CONNECTION_PENDING';
+      }
+
+      return {
+        id: Number(row.id),
+        projectId: Number(row.projectId),
+
+        reminderType,
+
+        discomName: row.discomName || null,
+        electricityStatus:
+          row.electricityStatus || null,
+
+        fileSubmissionDate:
+          row.fileSubmissionDate || null,
+
+        siteVisitDate:
+          row.siteVisitDate || null,
+
+        demandDepositDate:
+          row.demandDepositDate || null,
+
+        demandDepositAmount: Number(
+          row.demandDepositAmount || 0,
+        ),
+
+        meterTestingDate:
+          row.meterTestingDate || null,
+
+        netMeterInstallationDate:
+          row.netMeterInstallationDate || null,
+
+        remarks: row.remarks || null,
+        updatedAt: row.updatedAt,
+
+        customerName: row.customerName || null,
+        customerPhone: row.customerPhone || null,
+        branchName: row.branchName || null,
+
+        projectOwnerId: row.projectOwnerId
+          ? Number(row.projectOwnerId)
+          : null,
+
+        projectOwnerName:
+          row.projectOwnerName || null,
+
+        projectSerial:
+          row.projectSerial || null,
+
+        projectType:
+          row.projectType || null,
+
+        projectStatus:
+          row.projectStatus || null,
+
+        userReminderStatus:
+          stateMap[String(row.id)]?.status ||
+          'UNREAD',
+      };
+    })
+    .filter((item) => {
+      return (
+        item.userReminderStatus !==
+        ProjectReminderUserStateStatus.DISMISSED
+      );
+    });
+}
+
+async getUnreadElectricityReminderCount(currentUser: any) {
+  const list =
+    await this.getElectricityReminderList(currentUser);
+
+  const unreadCount = list.filter((item: any) => {
+    return item.userReminderStatus !== 'READ';
+  }).length;
+
+  return {
+    unreadCount,
+  };
+}
+
+async getFinalClosureReminderList(currentUser: any) {
+  const roles = Array.isArray(currentUser?.roles)
+    ? currentUser.roles
+    : [];
+
+  const userId =
+    currentUser?.id || currentUser?.userId;
+
+  const canSeeAll =
+    roles.includes('OWNER') ||
+    roles.includes('MARKETING_HEAD') ||
+    roles.includes('PROJECT_MANAGER');
+
+  const todayIndia = new Date().toLocaleDateString('en-CA', {
+    timeZone: 'Asia/Kolkata',
+  });
+
+  const qb =
+    this.projectRepository
+      .createQueryBuilder('project')
+      .select([
+        'project.id AS "id"',
+        'project.customerName AS "customerName"',
+        'project.customerPhone AS "customerPhone"',
+        'project.branchName AS "branchName"',
+        'project.projectOwnerId AS "projectOwnerId"',
+        'project.projectOwnerName AS "projectOwnerName"',
+        'project.projectSerial AS "projectSerial"',
+        'project.projectType AS "projectType"',
+        'project.status AS "projectStatus"',
+        'project.paymentStatus AS "paymentStatus"',
+        'project.expectedCompletionDate AS "expectedCompletionDate"',
+        'project.actualCompletionDate AS "actualCompletionDate"',
+        'project.updatedAt AS "updatedAt"',
+        'project.createdAt AS "createdAt"',
+      ])
+      .where('project.isHidden = false')
+      .andWhere('project.status != :completedStatus', {
+        completedStatus: ProjectStatus.COMPLETED,
+      })
+      .andWhere('project.status != :rejectedStatus', {
+        rejectedStatus: ProjectStatus.REJECTED,
+      })
+      .andWhere(
+        `(
+          project.expectedCompletionDate IS NOT NULL
+          OR project.status IN (:...closureStatuses)
+          OR project.paymentStatus IS NOT NULL
+        )`,
+        {
+          closureStatuses: [
+            ProjectStatus.PROJECT_MANAGEMENT,
+            ProjectStatus.SUBSIDY_PROCESS,
+            ProjectStatus.ELECTRICITY_PROCESS,
+          ],
+        },
+      )
+      .orderBy('project.expectedCompletionDate', 'ASC')
+      .addOrderBy('project.updatedAt', 'ASC')
+      .limit(50);
+
+  if (!canSeeAll) {
+    qb.andWhere('project.projectOwnerId = :userId', {
+      userId,
+    });
+  }
+
+  const rows = await qb.getRawMany();
+
+  const reminderIds = rows.map((row) =>
+    Number(row.id),
+  );
+
+  const stateMap =
+    await this.getUnifiedReminderStateMap(
+      currentUser,
+      'FINAL_CLOSURE',
+      reminderIds,
+    );
+
+  return rows
+    .map((row) => {
+      const expectedDate = row.expectedCompletionDate
+        ? String(row.expectedCompletionDate).split('T')[0]
+        : null;
+
+      let reminderType = 'FINAL_STATUS_UPDATE_PENDING';
+
+      if (expectedDate && expectedDate < todayIndia) {
+        reminderType = 'PROJECT_OVERDUE';
+      } else if (
+        row.paymentStatus &&
+        String(row.paymentStatus).toUpperCase() !== 'PAID' &&
+        String(row.paymentStatus).toUpperCase() !== 'COMPLETED'
+      ) {
+        reminderType = 'PAYMENT_CLOSURE_PENDING';
+      } else if (
+        [
+          ProjectStatus.PROJECT_MANAGEMENT,
+          ProjectStatus.SUBSIDY_PROCESS,
+          ProjectStatus.ELECTRICITY_PROCESS,
+        ].includes(row.projectStatus)
+      ) {
+        reminderType = 'PROJECT_COMPLETION_PENDING';
+      }
+
+      return {
+        id: Number(row.id),
+        projectId: Number(row.id),
+
+        reminderType,
+
+        customerName: row.customerName || null,
+        customerPhone: row.customerPhone || null,
+        branchName: row.branchName || null,
+
+        projectOwnerId: row.projectOwnerId
+          ? Number(row.projectOwnerId)
+          : null,
+
+        projectOwnerName:
+          row.projectOwnerName || null,
+
+        projectSerial:
+          row.projectSerial || null,
+
+        projectType:
+          row.projectType || null,
+
+        projectStatus:
+          row.projectStatus || null,
+
+        paymentStatus:
+          row.paymentStatus || null,
+
+        expectedCompletionDate:
+          row.expectedCompletionDate || null,
+
+        actualCompletionDate:
+          row.actualCompletionDate || null,
+
+        updatedAt: row.updatedAt,
+        createdAt: row.createdAt,
+
+        userReminderStatus:
+          stateMap[String(row.id)]?.status ||
+          'UNREAD',
+      };
+    })
+    .filter((item) => {
+      return (
+        item.userReminderStatus !==
+        ProjectReminderUserStateStatus.DISMISSED
+      );
+    });
+}
+
+async getUnreadFinalClosureReminderCount(currentUser: any) {
+  const list =
+    await this.getFinalClosureReminderList(currentUser);
+
+  const unreadCount = list.filter((item: any) => {
+    return item.userReminderStatus !== 'READ';
+  }).length;
+
+  return {
+    unreadCount,
+  };
 }
 
 async getUnreadPurchaseReminderCount(

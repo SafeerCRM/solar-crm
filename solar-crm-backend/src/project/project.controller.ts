@@ -466,6 +466,96 @@ async getUnreadPurchaseReminderCount(
   );
 }
 
+@Get('document-reminders')
+async getDocumentReminderList(
+  @Req() req: any,
+) {
+  return this.projectService.getDocumentReminderList(
+    req.user,
+  );
+}
+
+@Get('document-reminders/unread-count')
+async getUnreadDocumentReminderCount(
+  @Req() req: any,
+) {
+  return this.projectService.getUnreadDocumentReminderCount(
+    req.user,
+  );
+}
+
+@Get('loan-reminders')
+async getLoanReminderList(
+  @Req() req: any,
+) {
+  return this.projectService.getLoanReminderList(
+    req.user,
+  );
+}
+
+@Get('loan-reminders/unread-count')
+async getUnreadLoanReminderCount(
+  @Req() req: any,
+) {
+  return this.projectService.getUnreadLoanReminderCount(
+    req.user,
+  );
+}
+
+@Get('subsidy-reminders')
+async getSubsidyReminderList(
+  @Req() req: any,
+) {
+  return this.projectService.getSubsidyReminderList(
+    req.user,
+  );
+}
+
+@Get('subsidy-reminders/unread-count')
+async getUnreadSubsidyReminderCount(
+  @Req() req: any,
+) {
+  return this.projectService.getUnreadSubsidyReminderCount(
+    req.user,
+  );
+}
+
+@Get('electricity-reminders')
+async getElectricityReminderList(
+  @Req() req: any,
+) {
+  return this.projectService.getElectricityReminderList(
+    req.user,
+  );
+}
+
+@Get('electricity-reminders/unread-count')
+async getUnreadElectricityReminderCount(
+  @Req() req: any,
+) {
+  return this.projectService.getUnreadElectricityReminderCount(
+    req.user,
+  );
+}
+
+@Get('final-closure-reminders')
+async getFinalClosureReminderList(
+  @Req() req: any,
+) {
+  return this.projectService.getFinalClosureReminderList(
+    req.user,
+  );
+}
+
+@Get('final-closure-reminders/unread-count')
+async getUnreadFinalClosureReminderCount(
+  @Req() req: any,
+) {
+  return this.projectService.getUnreadFinalClosureReminderCount(
+    req.user,
+  );
+}
+
 @Post('reminders/mark-read')
 async markUnifiedReminderAsRead(
   @Body() body: any,
