@@ -313,6 +313,31 @@ const [paymentForm, setPaymentForm] = useState({
 const [receivingPaymentId, setReceivingPaymentId] =
   useState<number | null>(null);
 
+  const [showEditModal, setShowEditModal] =
+  useState(false);
+
+const [editLoading, setEditLoading] =
+  useState(false);
+
+const [editForm, setEditForm] = useState({
+  customerName: '',
+  customerPhone: '',
+  city: '',
+  zone: '',
+  branchName: '',
+  electricityKNumber: '',
+  customerGmail: '',
+  aadhaarLinkedMobile: '',
+  panelBrand: '',
+  converterBrand: '',
+  converterCapacity: '',
+  converterPhase: '',
+  structureType: '',
+  buildingHeight: '',
+  discomName: '',
+  remarks: '',
+});
+
 const [receivePaymentForms, setReceivePaymentForms] =
   useState<Record<number, {
     receivedAmount: string;
@@ -649,6 +674,77 @@ const submitApproval = async (
     );
   } finally {
     setApprovalLoading(false);
+  }
+};
+
+const openEditProject = () => {
+  if (!project) return;
+
+  setEditForm({
+    customerName: project.customerName || '',
+    customerPhone: project.customerPhone || '',
+    city: project.city || '',
+    zone: project.zone || '',
+    branchName: project.branchName || '',
+    electricityKNumber:
+      project.electricityKNumber || '',
+    customerGmail:
+      project.customerGmail || '',
+    aadhaarLinkedMobile:
+      project.aadhaarLinkedMobile || '',
+    panelBrand: project.panelBrand || '',
+    converterBrand:
+      project.converterBrand || '',
+    converterCapacity:
+      project.converterCapacity || '',
+    converterPhase:
+      project.converterPhase || '',
+    structureType:
+      project.structureType || '',
+    buildingHeight:
+      project.buildingHeight || '',
+    discomName:
+      project.discomName || '',
+    remarks: project.remarks || '',
+  });
+
+  setShowEditModal(true);
+};
+
+const saveEditProject = async () => {
+  if (!project?.id) return;
+
+  try {
+    setEditLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/${project.id}`,
+      editForm,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Project updated successfully');
+
+    setShowEditModal(false);
+
+    fetchProject();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to update project',
+    );
+  } finally {
+    setEditLoading(false);
   }
 };
 
@@ -1472,6 +1568,12 @@ const canMarketingApprove = hasRole([
 
 const canOwnerApprove = hasRole(['OWNER']);
 
+const canEditProject = hasRole([
+  'OWNER',
+  'MARKETING_HEAD',
+  'PROJECT_MANAGER',
+]);
+
 const canCompleteProject = hasRole([
   'OWNER',
   'MARKETING_HEAD',
@@ -1558,6 +1660,15 @@ const canManageMaterial = hasRole([
           <span className="rounded-full bg-blue-100 px-4 py-2 text-sm font-semibold text-blue-700">
             {project.status || 'UNKNOWN'}
           </span>
+
+          {canEditProject && (
+  <button
+    onClick={openEditProject}
+    className="rounded-xl bg-gray-800 px-4 py-2 text-sm font-semibold text-white hover:bg-black"
+  >
+    Edit Project
+  </button>
+)}
         </div>
       </div>
 
@@ -1585,6 +1696,259 @@ const canManageMaterial = hasRole([
     </button>
   ))}
 </div>
+
+{showEditModal && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+    <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
+
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-gray-800">
+          Edit Project
+        </h2>
+
+        <button
+          onClick={() =>
+            setShowEditModal(false)
+          }
+          className="rounded-xl bg-gray-200 px-4 py-2 text-sm font-semibold hover:bg-gray-300"
+        >
+          Close
+        </button>
+      </div>
+
+      <div className="mt-6 grid gap-4 md:grid-cols-2">
+
+        <input
+          placeholder="Customer Name"
+          value={editForm.customerName}
+          onChange={(e) =>
+            setEditForm({
+              ...editForm,
+              customerName: e.target.value,
+            })
+          }
+          className="rounded-xl border p-3"
+        />
+
+        <input
+          placeholder="Customer Phone"
+          value={editForm.customerPhone}
+          onChange={(e) =>
+            setEditForm({
+              ...editForm,
+              customerPhone: e.target.value,
+            })
+          }
+          className="rounded-xl border p-3"
+        />
+
+        <input
+          placeholder="City"
+          value={editForm.city}
+          onChange={(e) =>
+            setEditForm({
+              ...editForm,
+              city: e.target.value,
+            })
+          }
+          className="rounded-xl border p-3"
+        />
+
+        <input
+          placeholder="Zone"
+          value={editForm.zone}
+          onChange={(e) =>
+            setEditForm({
+              ...editForm,
+              zone: e.target.value,
+            })
+          }
+          className="rounded-xl border p-3"
+        />
+
+        <input
+          placeholder="Branch Name"
+          value={editForm.branchName}
+          onChange={(e) =>
+            setEditForm({
+              ...editForm,
+              branchName: e.target.value,
+            })
+          }
+          className="rounded-xl border p-3"
+        />
+
+        <input
+          placeholder="Electricity K Number"
+          value={editForm.electricityKNumber}
+          onChange={(e) =>
+            setEditForm({
+              ...editForm,
+              electricityKNumber:
+                e.target.value,
+            })
+          }
+          className="rounded-xl border p-3"
+        />
+
+        <input
+          placeholder="Customer Gmail"
+          value={editForm.customerGmail}
+          onChange={(e) =>
+            setEditForm({
+              ...editForm,
+              customerGmail:
+                e.target.value,
+            })
+          }
+          className="rounded-xl border p-3"
+        />
+
+        <input
+          placeholder="Aadhaar Linked Mobile"
+          value={
+            editForm.aadhaarLinkedMobile
+          }
+          onChange={(e) =>
+            setEditForm({
+              ...editForm,
+              aadhaarLinkedMobile:
+                e.target.value,
+            })
+          }
+          className="rounded-xl border p-3"
+        />
+
+        <input
+          placeholder="Panel Brand"
+          value={editForm.panelBrand}
+          onChange={(e) =>
+            setEditForm({
+              ...editForm,
+              panelBrand:
+                e.target.value,
+            })
+          }
+          className="rounded-xl border p-3"
+        />
+
+        <input
+          placeholder="Converter Brand"
+          value={editForm.converterBrand}
+          onChange={(e) =>
+            setEditForm({
+              ...editForm,
+              converterBrand:
+                e.target.value,
+            })
+          }
+          className="rounded-xl border p-3"
+        />
+
+        <input
+          placeholder="Converter Capacity"
+          value={
+            editForm.converterCapacity
+          }
+          onChange={(e) =>
+            setEditForm({
+              ...editForm,
+              converterCapacity:
+                e.target.value,
+            })
+          }
+          className="rounded-xl border p-3"
+        />
+
+        <input
+          placeholder="Converter Phase"
+          value={editForm.converterPhase}
+          onChange={(e) =>
+            setEditForm({
+              ...editForm,
+              converterPhase:
+                e.target.value,
+            })
+          }
+          className="rounded-xl border p-3"
+        />
+
+        <input
+          placeholder="Structure Type"
+          value={editForm.structureType}
+          onChange={(e) =>
+            setEditForm({
+              ...editForm,
+              structureType:
+                e.target.value,
+            })
+          }
+          className="rounded-xl border p-3"
+        />
+
+        <input
+          placeholder="Building Height"
+          value={editForm.buildingHeight}
+          onChange={(e) =>
+            setEditForm({
+              ...editForm,
+              buildingHeight:
+                e.target.value,
+            })
+          }
+          className="rounded-xl border p-3"
+        />
+
+        <input
+          placeholder="DISCOM Name"
+          value={editForm.discomName}
+          onChange={(e) =>
+            setEditForm({
+              ...editForm,
+              discomName:
+                e.target.value,
+            })
+          }
+          className="rounded-xl border p-3"
+        />
+      </div>
+
+      <textarea
+        placeholder="Remarks"
+        value={editForm.remarks}
+        onChange={(e) =>
+          setEditForm({
+            ...editForm,
+            remarks: e.target.value,
+          })
+        }
+        className="mt-4 w-full rounded-xl border p-3"
+        rows={4}
+      />
+
+      <div className="mt-5 flex justify-end gap-3">
+        <button
+          onClick={() =>
+            setShowEditModal(false)
+          }
+          className="rounded-xl bg-gray-200 px-5 py-3 font-semibold hover:bg-gray-300"
+        >
+          Cancel
+        </button>
+
+        <button
+  onClick={saveEditProject}
+  disabled={editLoading}
+  className="rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+>
+  {editLoading
+    ? 'Saving...'
+    : 'Save Project'}
+</button>
+      </div>
+    </div>
+  </div>
+)}
 
     {activeTab === 'PROJECT_CREATION' && (
   <>
