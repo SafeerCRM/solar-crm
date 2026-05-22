@@ -129,6 +129,7 @@ export default function ProjectRemindersPage() {
   const [paymentItems, setPaymentItems] = useState<PaymentReminderItem[]>([]);
   const [approvalItems, setApprovalItems] = useState<ApprovalReminderItem[]>([]);
   const [purchaseItems, setPurchaseItems] = useState<PurchaseReminderItem[]>([]);
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [filter, setFilter] = useState<
@@ -202,6 +203,56 @@ setPurchaseItems(
     );
   } finally {
     setLoading(false);
+  }
+};
+
+const markUnifiedReminderAsRead = async (body: {
+  reminderSource: string;
+  reminderType: string;
+  referenceId: number;
+  projectId?: number;
+}) => {
+  try {
+    setActionLoadingId(`${body.reminderSource}-${body.referenceId}-READ`);
+
+    await axios.post(
+      `${apiBaseUrl}/project/reminders/mark-read`,
+      body,
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+
+    await fetchReminders();
+  } catch (error) {
+    console.error('Mark unified reminder read error:', error);
+  } finally {
+    setActionLoadingId(null);
+  }
+};
+
+const dismissUnifiedReminder = async (body: {
+  reminderSource: string;
+  reminderType: string;
+  referenceId: number;
+  projectId?: number;
+}) => {
+  try {
+    setActionLoadingId(`${body.reminderSource}-${body.referenceId}-DISMISS`);
+
+    await axios.post(
+      `${apiBaseUrl}/project/reminders/dismiss`,
+      body,
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+
+    await fetchReminders();
+  } catch (error) {
+    console.error('Dismiss unified reminder error:', error);
+  } finally {
+    setActionLoadingId(null);
   }
 };
 
@@ -475,16 +526,22 @@ const totalVisibleReminders =
 
     {filteredApprovalItems.map((item) => (
   <ApprovalReminderListItem
-    key={`approval-${item.id}`}
-    item={item}
-  />
+  key={`approval-${item.id}`}
+  item={item}
+  onMarkRead={markUnifiedReminderAsRead}
+onDismiss={dismissUnifiedReminder}
+  actionLoadingId={actionLoadingId}
+/>
 ))}
 
 {filteredPurchaseItems.map((item) => (
   <PurchaseReminderListItem
-    key={`purchase-${item.id}`}
-    item={item}
-  />
+  key={`purchase-${item.id}`}
+  item={item}
+  onMarkRead={markUnifiedReminderAsRead}
+onDismiss={dismissUnifiedReminder}
+  actionLoadingId={actionLoadingId}
+/>
 ))}
 
     {filteredPaymentItems.map((item) => (
@@ -646,8 +703,17 @@ function ReminderListItem({
 
 function ApprovalReminderListItem({
   item,
+  onMarkRead,
+  onDismiss,
+  actionLoadingId,
 }: {
   item: ApprovalReminderItem;
+
+  onMarkRead: any;
+
+  onDismiss: any;
+
+  actionLoadingId: string | null;
 }) {
   const badge = getApprovalReminderBadge(
     item.reminderType,
@@ -715,13 +781,51 @@ function ApprovalReminderListItem({
         </div>
 
         <div className="flex flex-col gap-2">
-          <Link
-            href={`/project/${item.projectId}`}
-            className="rounded-xl bg-blue-600 px-4 py-2 text-center text-sm font-medium text-white"
-          >
-            Open Project
-          </Link>
-        </div>
+  {item.userReminderStatus !== 'READ' && (
+    <button
+      onClick={() =>
+        onMarkRead({
+          reminderSource: 'APPROVAL',
+          reminderType: item.reminderType,
+          referenceId: item.projectId,
+          projectId: item.projectId,
+        })
+      }
+      disabled={
+        actionLoadingId ===
+        `APPROVAL-${item.projectId}-READ`
+      }
+      className="rounded-xl bg-green-600 px-4 py-2 text-sm font-medium text-white"
+    >
+      Mark Seen
+    </button>
+  )}
+
+  <button
+    onClick={() =>
+      onDismiss({
+        reminderSource: 'APPROVAL',
+        reminderType: item.reminderType,
+        referenceId: item.projectId,
+        projectId: item.projectId,
+      })
+    }
+    disabled={
+      actionLoadingId ===
+      `APPROVAL-${item.projectId}-DISMISS`
+    }
+    className="rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white"
+  >
+    Dismiss
+  </button>
+
+  <Link
+    href={`/project/${item.projectId}`}
+    className="rounded-xl bg-blue-600 px-4 py-2 text-center text-sm font-medium text-white"
+  >
+    Open Project
+  </Link>
+</div>
       </div>
     </div>
   );
@@ -729,8 +833,17 @@ function ApprovalReminderListItem({
 
 function PurchaseReminderListItem({
   item,
+  onMarkRead,
+  onDismiss,
+  actionLoadingId,
 }: {
   item: PurchaseReminderItem;
+
+  onMarkRead: any;
+
+  onDismiss: any;
+
+  actionLoadingId: string | null;
 }) {
   const badge = getPurchaseReminderBadge(
     item.reminderType,
@@ -798,13 +911,51 @@ function PurchaseReminderListItem({
         </div>
 
         <div className="flex flex-col gap-2">
-          <Link
-            href={`/project/${item.projectId}`}
-            className="rounded-xl bg-blue-600 px-4 py-2 text-center text-sm font-medium text-white"
-          >
-            Open Project
-          </Link>
-        </div>
+  {item.userReminderStatus !== 'READ' && (
+    <button
+      onClick={() =>
+        onMarkRead({
+          reminderSource: 'PURCHASE',
+          reminderType: item.reminderType,
+          referenceId: item.id,
+          projectId: item.projectId,
+        })
+      }
+      disabled={
+        actionLoadingId ===
+        `PURCHASE-${item.id}-READ`
+      }
+      className="rounded-xl bg-green-600 px-4 py-2 text-sm font-medium text-white"
+    >
+      Mark Seen
+    </button>
+  )}
+
+  <button
+    onClick={() =>
+      onDismiss({
+        reminderSource: 'PURCHASE',
+        reminderType: item.reminderType,
+        referenceId: item.id,
+        projectId: item.projectId,
+      })
+    }
+    disabled={
+      actionLoadingId ===
+      `PURCHASE-${item.id}-DISMISS`
+    }
+    className="rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white"
+  >
+    Dismiss
+  </button>
+
+  <Link
+    href={`/project/${item.projectId}`}
+    className="rounded-xl bg-blue-600 px-4 py-2 text-center text-sm font-medium text-white"
+  >
+    Open Project
+  </Link>
+</div>
       </div>
     </div>
   );
