@@ -191,6 +191,22 @@ finalCost: number;
   status: ProjectStatus;
 
   @Column({
+  type: 'enum',
+  enum: ProjectApprovalStatus,
+  default: ProjectApprovalStatus.PENDING,
+})
+projectManagerApprovalStatus: ProjectApprovalStatus;
+
+@Column({ nullable: true, type: 'text' })
+projectManagerApprovalNote: string;
+
+@Column({ nullable: true })
+projectManagerApprovedBy: number;
+
+@Column({ type: 'timestamp', nullable: true })
+projectManagerApprovedAt: Date;
+
+  @Column({
     type: 'enum',
     enum: ProjectApprovalStatus,
     default: ProjectApprovalStatus.PENDING,

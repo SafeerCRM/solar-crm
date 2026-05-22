@@ -753,6 +753,41 @@ async getProjectComments(
   });
 }
 
+async projectManagerApproval(
+  id: number,
+  body: any,
+  user: any,
+) {
+  const project = await this.projectRepository.findOne({
+    where: { id },
+  });
+
+  if (!project) {
+    throw new Error('Project not found');
+  }
+
+  project.projectManagerApprovalStatus =
+    body?.status || 'PENDING';
+
+  project.projectManagerApprovalNote =
+    body?.note || null;
+
+  project.projectManagerApprovedBy =
+    user?.id || user?.userId || null;
+
+  project.projectManagerApprovedAt =
+    new Date();
+
+  if (
+    body?.status === 'APPROVED' &&
+    project.status === 'PENDING_APPROVAL'
+  ) {
+    project.status = ProjectStatus.PROJECT_MANAGEMENT;
+  }
+
+  return this.projectRepository.save(project);
+}
+
   async marketingHeadApproval(
   id: number,
   body: {
@@ -1640,8 +1675,9 @@ async getApprovalReminderList(currentUser: any) {
       'project.projectOwnerName AS "projectOwnerName"',
       'project.projectSerial AS "projectSerial"',
       'project.status AS "projectStatus"',
-      'project.marketingHeadApprovalStatus AS "marketingHeadApprovalStatus"',
-      'project.ownerApprovalStatus AS "ownerApprovalStatus"',
+      'project.projectManagerApprovalStatus AS "projectManagerApprovalStatus"',
+'project.marketingHeadApprovalStatus AS "marketingHeadApprovalStatus"',
+'project.ownerApprovalStatus AS "ownerApprovalStatus"',
       'project.createdAt AS "createdAt"',
     ])
     .where('project.isHidden = false')
@@ -1649,10 +1685,11 @@ async getApprovalReminderList(currentUser: any) {
       pendingApprovalStatus: ProjectStatus.PENDING_APPROVAL,
     })
     .andWhere(
-      `(
-        project.marketingHeadApprovalStatus = :pendingStatus
-        OR project.ownerApprovalStatus = :pendingStatus
-      )`,
+  `(
+    project.projectManagerApprovalStatus = :pendingStatus
+    OR project.marketingHeadApprovalStatus = :pendingStatus
+    OR project.ownerApprovalStatus = :pendingStatus
+  )`,
       {
         pendingStatus: ProjectApprovalStatus.PENDING,
       },
@@ -1675,6 +1712,11 @@ const stateMap =
 
   return rows
     .map((row) => {
+      const projectManagerPending =
+  row.projectManagerApprovalStatus ===
+  ProjectApprovalStatus.PENDING;
+
+
       const marketingPending =
         row.marketingHeadApprovalStatus ===
         ProjectApprovalStatus.PENDING;
@@ -1690,13 +1732,15 @@ const stateMap =
       } else if (roles.includes('OWNER') && ownerPending) {
         reminderType = 'OWNER_APPROVAL_PENDING';
       } else if (roles.includes('PROJECT_MANAGER')) {
-        if (marketingPending && ownerPending) {
-          reminderType = 'PROJECT_APPROVAL_PENDING';
-        } else if (marketingPending) {
-          reminderType = 'MARKETING_APPROVAL_PENDING';
-        } else if (ownerPending) {
-          reminderType = 'OWNER_APPROVAL_PENDING';
-        }
+        if (projectManagerPending) {
+  reminderType = 'PROJECT_MANAGER_APPROVAL_PENDING';
+} else if (marketingPending && ownerPending) {
+  reminderType = 'PROJECT_APPROVAL_PENDING';
+} else if (marketingPending) {
+  reminderType = 'MARKETING_APPROVAL_PENDING';
+} else if (ownerPending) {
+  reminderType = 'OWNER_APPROVAL_PENDING';
+}
       } else if (roles.includes('OWNER') && marketingPending) {
         reminderType = 'MARKETING_APPROVAL_PENDING';
       }
@@ -1722,10 +1766,12 @@ const stateMap =
         projectOwnerName: row.projectOwnerName || null,
         projectSerial: row.projectSerial || null,
         projectStatus: row.projectStatus || null,
-        marketingHeadApprovalStatus:
-          row.marketingHeadApprovalStatus || null,
-        ownerApprovalStatus:
-          row.ownerApprovalStatus || null,
+        projectManagerApprovalStatus:
+  row.projectManagerApprovalStatus || null,
+marketingHeadApprovalStatus:
+  row.marketingHeadApprovalStatus || null,
+ownerApprovalStatus:
+  row.ownerApprovalStatus || null,
         createdAt: row.createdAt,
         userReminderStatus:
   stateMap[String(row.projectId)]

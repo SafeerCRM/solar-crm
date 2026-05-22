@@ -753,6 +753,24 @@ getComments(
   );
 }
 
+@Roles(
+  'OWNER',
+  'MARKETING_HEAD',
+  'PROJECT_MANAGER',
+)
+@Patch(':id/project-manager-approval')
+projectManagerApproval(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.projectManagerApproval(
+    Number(id),
+    body,
+    user,
+  );
+}
+
 @Roles('OWNER', 'MARKETING_HEAD')
 
   @Patch(':id/marketing-head-approval')
