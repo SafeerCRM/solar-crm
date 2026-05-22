@@ -718,16 +718,23 @@ uploadProjectDocument(
 );
 }
 
-  @Patch(':id')
-  update(
-    @Param('id') id: string,
-    @Body() body: any,
-  ) {
-    return this.projectService.update(
-      Number(id),
-      body,
-    );
-  }
+  @Roles(
+  'OWNER',
+  'MARKETING_HEAD',
+  'PROJECT_MANAGER',
+)
+@Patch(':id')
+update(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.update(
+    Number(id),
+    body,
+    user,
+  );
+}
 
   @Post('document')
   addDocument(@Body() body: any) {

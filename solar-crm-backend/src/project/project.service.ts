@@ -438,19 +438,139 @@ if (
     return project;
   }
 
-  async update(id: number, data: Partial<Project>) {
-    const project = await this.projectRepository.findOne({
-      where: { id },
-    });
+  async update(
+  id: number,
+  data: Partial<Project>,
+  user?: any,
+) {
+  const project = await this.projectRepository.findOne({
+    where: { id },
+  });
 
-    if (!project) {
-      throw new NotFoundException('Project not found');
-    }
-
-    Object.assign(project, data);
-
-    return this.projectRepository.save(project);
+  if (!project) {
+    throw new NotFoundException('Project not found');
   }
+
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  const isOwner = roles.includes('OWNER');
+  const isMarketingHead = roles.includes('MARKETING_HEAD');
+  const isProjectManager = roles.includes('PROJECT_MANAGER');
+
+  const editableFieldsForOwner = [
+    'customerName',
+    'customerPhone',
+    'city',
+    'zone',
+    'branchName',
+    'projectOwnerId',
+    'projectOwnerName',
+    'projectOwnerRole',
+    'electricityKNumber',
+    'customerGmail',
+    'aadhaarLinkedMobile',
+    'panelBrand',
+    'dcrPanelCount',
+    'nonDcrPanelCount',
+    'converterBrand',
+    'converterCapacity',
+    'converterPhase',
+    'structureType',
+    'structureCapacityKw',
+    'buildingHeight',
+    'projectType',
+    'marginMoney',
+    'loanAmount',
+    'subsidyType',
+    'projectCost',
+    'discomName',
+    'discomExpenditureType',
+    'discomExpenditureAmount',
+    'expectedLagat',
+    'expectedProfit',
+    'status',
+    'paymentStatus',
+    'startDate',
+    'expectedCompletionDate',
+    'actualCompletionDate',
+    'remarks',
+  ];
+
+  const editableFieldsForMarketingHead = [
+    'customerName',
+    'customerPhone',
+    'city',
+    'zone',
+    'branchName',
+    'projectOwnerId',
+    'projectOwnerName',
+    'projectOwnerRole',
+    'electricityKNumber',
+    'customerGmail',
+    'aadhaarLinkedMobile',
+    'panelBrand',
+    'dcrPanelCount',
+    'nonDcrPanelCount',
+    'converterBrand',
+    'converterCapacity',
+    'converterPhase',
+    'structureType',
+    'structureCapacityKw',
+    'buildingHeight',
+    'projectType',
+    'subsidyType',
+    'discomName',
+    'discomExpenditureType',
+    'discomExpenditureAmount',
+    'startDate',
+    'expectedCompletionDate',
+    'remarks',
+  ];
+
+  const editableFieldsForProjectManager = [
+    'branchName',
+    'projectOwnerId',
+    'projectOwnerName',
+    'projectOwnerRole',
+    'panelBrand',
+    'dcrPanelCount',
+    'nonDcrPanelCount',
+    'converterBrand',
+    'converterCapacity',
+    'converterPhase',
+    'structureType',
+    'structureCapacityKw',
+    'buildingHeight',
+    'discomName',
+    'startDate',
+    'expectedCompletionDate',
+    'remarks',
+  ];
+
+  let allowedFields: string[] = [];
+
+  if (isOwner) {
+    allowedFields = editableFieldsForOwner;
+  } else if (isMarketingHead) {
+    allowedFields = editableFieldsForMarketingHead;
+  } else if (isProjectManager) {
+    allowedFields = editableFieldsForProjectManager;
+  }
+
+  const safeData: Partial<Project> = {};
+
+  for (const key of allowedFields) {
+    if (Object.prototype.hasOwnProperty.call(data, key)) {
+      (safeData as any)[key] = (data as any)[key];
+    }
+  }
+
+  Object.assign(project, safeData);
+
+  return this.projectRepository.save(project);
+}
 
 async uploadProjectDocument(file: any, body: any, user: any) {
   if (!file) {
