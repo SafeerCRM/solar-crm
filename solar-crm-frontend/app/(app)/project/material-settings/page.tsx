@@ -17,6 +17,10 @@ type MaterialItem = {
   expectedMargin?: number;
   remarks?: string;
   isActive?: boolean;
+    hsnCode?: string;
+  vendorPreferredName?: string;
+  marginType?: 'AMOUNT' | 'PERCENT';
+  sellingRate?: number;
 };
 
 export default function MaterialSettingsPage() {
@@ -46,6 +50,10 @@ const [statusFilter, setStatusFilter] = useState('');
     gstPercent: '',
     expectedMargin: '',
     remarks: '',
+        hsnCode: '',
+    vendorPreferredName: '',
+    marginType: 'AMOUNT',
+    sellingRate: '',
   });
 
   const fetchItems = async () => {
@@ -103,11 +111,16 @@ const [statusFilter, setStatusFilter] = useState('');
     const token = localStorage.getItem('token');
 
     const payload = {
-      ...form,
-      rate: Number(form.rate || 0),
-      gstPercent: Number(form.gstPercent || 0),
-      expectedMargin: Number(form.expectedMargin || 0),
-    };
+  ...form,
+  rate: Number(form.rate || 0),
+  gstPercent: Number(form.gstPercent || 0),
+  expectedMargin: Number(form.expectedMargin || 0),
+  sellingRate: Number(form.sellingRate || 0),
+  marginType:
+    form.marginType === 'PERCENT'
+      ? 'PERCENT'
+      : 'AMOUNT',
+};
 
     if (editingId) {
       await axios.patch(
@@ -140,15 +153,19 @@ const [statusFilter, setStatusFilter] = useState('');
     }
 
     setForm({
-      name: '',
-      category: '',
-      unit: '',
-      brand: '',
-      rate: '',
-      gstPercent: '',
-      expectedMargin: '',
-      remarks: '',
-    });
+  name: '',
+  category: '',
+  unit: '',
+  brand: '',
+  hsnCode: '',
+  vendorPreferredName: '',
+  rate: '',
+  gstPercent: '',
+  marginType: 'AMOUNT',
+  expectedMargin: '',
+  sellingRate: '',
+  remarks: '',
+});
 
     setEditingId(null);
 
@@ -167,15 +184,22 @@ const startEdit = (item: MaterialItem) => {
   setEditingId(item.id);
 
   setForm({
-    name: item.name || '',
-    category: item.category || '',
-    unit: item.unit || '',
-    brand: item.brand || '',
-    rate: String(item.rate || ''),
-    gstPercent: String(item.gstPercent || ''),
-    expectedMargin: String(item.expectedMargin || ''),
-    remarks: item.remarks || '',
-  });
+  name: item.name || '',
+  category: item.category || '',
+  unit: item.unit || '',
+  brand: item.brand || '',
+  hsnCode: item.hsnCode || '',
+  vendorPreferredName: item.vendorPreferredName || '',
+  rate: String(item.rate || ''),
+  gstPercent: String(item.gstPercent || ''),
+  marginType:
+    item.marginType === 'PERCENT'
+      ? 'PERCENT'
+      : 'AMOUNT',
+  expectedMargin: String(item.expectedMargin || ''),
+  sellingRate: String(item.sellingRate || ''),
+  remarks: item.remarks || '',
+});
 
   window.scrollTo({
     top: 0,
@@ -187,15 +211,19 @@ const cancelEdit = () => {
   setEditingId(null);
 
   setForm({
-    name: '',
-    category: '',
-    unit: '',
-    brand: '',
-    rate: '',
-    gstPercent: '',
-    expectedMargin: '',
-    remarks: '',
-  });
+  name: '',
+  category: '',
+  unit: '',
+  brand: '',
+  hsnCode: '',
+  vendorPreferredName: '',
+  rate: '',
+  gstPercent: '',
+  marginType: 'AMOUNT',
+  expectedMargin: '',
+  sellingRate: '',
+  remarks: '',
+});
 };
 
   const toggleMaterialStatus = async (
@@ -353,6 +381,30 @@ const filteredItems = items.filter((item) => {
           />
 
           <input
+  placeholder="HSN Code"
+  value={form.hsnCode}
+  onChange={(e) =>
+    setForm({
+      ...form,
+      hsnCode: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+/>
+
+<input
+  placeholder="Preferred Vendor"
+  value={form.vendorPreferredName}
+  onChange={(e) =>
+    setForm({
+      ...form,
+      vendorPreferredName: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+/>
+
+          <input
             type="number"
             placeholder="Rate"
             value={form.rate}
@@ -377,6 +429,33 @@ const filteredItems = items.filter((item) => {
             }
             className="rounded-xl border p-3"
           />
+
+          <select
+  value={form.marginType}
+  onChange={(e) =>
+    setForm({
+      ...form,
+      marginType: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+>
+  <option value="AMOUNT">Margin Amount</option>
+  <option value="PERCENT">Margin Percent</option>
+</select>
+
+<input
+  type="number"
+  placeholder="Selling Rate Override"
+  value={form.sellingRate}
+  onChange={(e) =>
+    setForm({
+      ...form,
+      sellingRate: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+/>
 
           <input
   type="number"
@@ -499,6 +578,11 @@ const filteredItems = items.filter((item) => {
                       {item.unit || '-'}
                     </p>
 
+                    <p className="text-sm text-gray-500">
+  HSN: {item.hsnCode || '-'} | Vendor:{' '}
+  {item.vendorPreferredName || '-'}
+</p>
+
                     <p className="mt-1 text-sm font-semibold text-green-700">
                       ₹
                       {Number(
@@ -523,21 +607,29 @@ const filteredItems = items.filter((item) => {
 </p>
 
 <p className="mt-1 text-sm text-purple-700">
-  Expected Margin: ₹
-  {Number(item.expectedMargin || 0).toLocaleString(
-    'en-IN',
-  )}
+  Expected Margin:{' '}
+{item.marginType === 'PERCENT'
+  ? `${Number(item.expectedMargin || 0)}%`
+  : `₹${Number(item.expectedMargin || 0).toLocaleString(
+      'en-IN',
+    )}`}
 </p>
 
 <p className="mt-1 text-sm font-bold text-green-700">
   Recommended Selling Price: ₹
-  {(
-    Number(item.rate || 0) +
-    (Number(item.rate || 0) *
-      Number(item.gstPercent || 0)) /
-      100 +
-    Number(item.expectedMargin || 0)
-  ).toLocaleString('en-IN')}
+{Number(
+  item.sellingRate && item.sellingRate > 0
+    ? item.sellingRate
+    : Number(item.rate || 0) +
+        (Number(item.rate || 0) *
+          Number(item.gstPercent || 0)) /
+          100 +
+        (item.marginType === 'PERCENT'
+          ? (Number(item.rate || 0) *
+              Number(item.expectedMargin || 0)) /
+            100
+          : Number(item.expectedMargin || 0)),
+).toLocaleString('en-IN')}
 </p>
 
                     {item.remarks && (

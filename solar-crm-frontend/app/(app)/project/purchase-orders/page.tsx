@@ -26,12 +26,20 @@ projectOwnerRole?: string;
 projectCity?: string;
 projectZone?: string;
   createdAt?: string;
+    materialId?: number;
+  gstPercent?: number;
 };
 
 type ProjectOwner = {
   projectOwnerId: number;
   projectOwnerName?: string;
   projectOwnerRole?: string;
+};
+
+type VendorItem = {
+  id: number;
+  vendorName: string;
+  isActive?: boolean;
 };
 
 export default function PurchaseOrdersPage() {
@@ -46,6 +54,11 @@ const [ownerFilter, setOwnerFilter] = useState('');
 const [projectOwners, setProjectOwners] = useState<ProjectOwner[]>([]);
 const [page, setPage] = useState(1);
 const [totalPages, setTotalPages] = useState(1);
+
+const [vendors, setVendors] = useState<VendorItem[]>([]);
+const [selectedVendorId, setSelectedVendorId] = useState('');
+const [selectedItemIds, setSelectedItemIds] = useState<Record<number, boolean>>({});
+const [generatingPo, setGeneratingPo] = useState(false);
 
 const [summary, setSummary] = useState({
   totalPendingItems: 0,
@@ -120,12 +133,37 @@ const fetchProjectOwners = async () => {
   }
 };
 
+const fetchVendors = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/vendor`,
+      {
+        params: {
+          activeOnly: true,
+        },
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setVendors(res.data || []);
+  } catch (error) {
+    console.error('Failed to load vendors:', error);
+  }
+};
+
   useEffect(() => {
   fetchPurchaseOrders();
 }, [page, projectFilter, materialFilter, statusFilter, branchFilter, ownerFilter]);
 
 useEffect(() => {
   fetchProjectOwners();
+  fetchVendors();
 }, []);
 
   const filteredItems = items;
@@ -216,6 +254,19 @@ const partiallyPurchasedCount =
       item.purchaseStatus === 'PARTIALLY_PURCHASED',
   ).length;
 
+  const selectedItems = filteredItems.filter(
+  (item) => selectedItemIds[item.id],
+);
+
+const selectedProjectIds = Array.from(
+  new Set(selectedItems.map((item) => item.projectId)),
+);
+
+const canGeneratePo =
+  selectedItems.length > 0 &&
+  selectedVendorId &&
+  selectedProjectIds.length === 1;
+
   const buyItem = async (item: PurchaseItem, fullBuy = false) => {
     const quantity = fullBuy
       ? Number(item.pendingQuantity || 0)
@@ -255,6 +306,78 @@ const partiallyPurchasedCount =
       alert(error?.response?.data?.message || 'Failed to update purchase');
     }
   };
+
+  const generatePurchaseOrder = async () => {
+  if (!selectedVendorId) {
+    alert('Please select vendor');
+    return;
+  }
+
+  if (!selectedItems.length) {
+    alert('Please select at least one item');
+    return;
+  }
+
+  if (selectedProjectIds.length !== 1) {
+    alert('Please select items from only one project for one PO');
+    return;
+  }
+
+  const confirmed = window.confirm(
+    'Generate purchase order snapshot for selected items?',
+  );
+
+  if (!confirmed) return;
+
+  try {
+    setGeneratingPo(true);
+
+    const token = localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/purchase-order`,
+      {
+        projectId: selectedProjectIds[0],
+        vendorId: Number(selectedVendorId),
+        items: selectedItems.map((item) => ({
+          materialRequestItemId: item.id,
+          materialId: item.materialId || null,
+          materialName: item.materialName,
+          category: item.category || '',
+          brand: item.brand || '',
+          unit: item.unit || '',
+          purchaseRate: Number(item.rate || 0),
+          gstPercent: Number(item.gstPercent || 0),
+          quantity: Number(item.pendingQuantity || 0),
+          remarks: '',
+        })),
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Purchase order generated successfully');
+
+    setSelectedItemIds({});
+    setSelectedVendorId('');
+
+    fetchPurchaseOrders();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to generate purchase order',
+    );
+  } finally {
+    setGeneratingPo(false);
+  }
+};
 
   return (
     <div className="mx-auto min-w-0 max-w-7xl space-y-4 overflow-x-hidden px-2 pb-4 md:px-0">
@@ -376,6 +499,51 @@ const partiallyPurchasedCount =
       {summary.partiallyPurchasedCount}
     </p>
   </div>
+</div>
+
+<div className="mb-5 rounded-2xl border bg-blue-50 p-4">
+  <h2 className="text-lg font-bold text-gray-800">
+    Generate Commercial Purchase Order
+  </h2>
+
+  <p className="mt-1 text-sm text-gray-600">
+    Select pending items from one project, choose vendor, then generate PO snapshot.
+  </p>
+
+  <div className="mt-4 grid gap-3 md:grid-cols-3">
+    <select
+      value={selectedVendorId}
+      onChange={(e) => setSelectedVendorId(e.target.value)}
+      className="rounded-xl border p-3"
+    >
+      <option value="">Select Vendor</option>
+
+      {vendors.map((vendor) => (
+        <option key={vendor.id} value={vendor.id}>
+          {vendor.vendorName}
+        </option>
+      ))}
+    </select>
+
+    <div className="rounded-xl bg-white p-3 text-sm">
+      Selected Items:{' '}
+      <b>{selectedItems.length}</b>
+    </div>
+
+    <button
+      onClick={generatePurchaseOrder}
+      disabled={!canGeneratePo || generatingPo}
+      className="rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white disabled:opacity-50"
+    >
+      {generatingPo ? 'Generating...' : 'Generate PO'}
+    </button>
+  </div>
+
+  {selectedItems.length > 0 && selectedProjectIds.length > 1 && (
+    <p className="mt-3 text-sm font-semibold text-red-600">
+      Please select items from only one project for one PO.
+    </p>
+  )}
 </div>
 
 <div className="mb-5 rounded-2xl border p-4">
@@ -503,6 +671,21 @@ const partiallyPurchasedCount =
 >
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                   <div>
+
+                 <label className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-700">
+  <input
+    type="checkbox"
+    checked={!!selectedItemIds[item.id]}
+    onChange={(e) =>
+      setSelectedItemIds({
+        ...selectedItemIds,
+        [item.id]: e.target.checked,
+      })
+    }
+  />
+  Select for PO
+</label>
+
                     <h2 className="break-words text-lg font-bold text-gray-800">
                       {item.materialName}
                     </h2>
