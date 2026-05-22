@@ -265,6 +265,21 @@ getPurchasableMaterialRequestItems(
   );
 }
 
+@Get('generated-purchase-orders')
+getGeneratedPurchaseOrders(
+  @Query('page') page?: string,
+  @Query('limit') limit?: string,
+  @Query('search') search?: string,
+  @Query('status') status?: string,
+) {
+  return this.projectService.getGeneratedPurchaseOrders({
+    page: Number(page || 1),
+    limit: Number(limit || 20),
+    search: search || '',
+    status: status || '',
+  });
+}
+
 @Roles('OWNER', 'PROJECT_MANAGER')
 
 @Patch('material-request-item/:id/buy')

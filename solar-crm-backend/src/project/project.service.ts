@@ -5050,6 +5050,70 @@ async getPurchaseOrderById(id: number) {
   };
 }
 
+async getGeneratedPurchaseOrders(filters?: {
+  page?: number;
+  limit?: number;
+  search?: string;
+  status?: string;
+}) {
+  const page =
+    Number(filters?.page) > 0
+      ? Number(filters?.page)
+      : 1;
+
+  const limit =
+    Number(filters?.limit) > 0
+      ? Math.min(Number(filters?.limit), 100)
+      : 20;
+
+  const skip = (page - 1) * limit;
+
+  const query =
+    this.projectPurchaseOrderRepository.createQueryBuilder(
+      'po',
+    );
+
+  if (filters?.search) {
+    query.andWhere(
+      `
+      LOWER(po."vendorName") LIKE :search
+      OR LOWER(po."poNumber") LIKE :search
+      `,
+      {
+        search: `%${filters.search.toLowerCase()}%`,
+      },
+    );
+  }
+
+  if (filters?.status) {
+    query.andWhere(
+      'po.status = :status',
+      {
+        status: filters.status,
+      },
+    );
+  }
+
+  query.orderBy(
+    'po.createdAt',
+    'DESC',
+  );
+
+  query.skip(skip).take(limit);
+
+  const [data, total] =
+    await query.getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages:
+      Math.ceil(total / limit) || 1,
+  };
+}
+
 async getPurchasableMaterialRequestItems(
   projectId?: number,
 ) {
