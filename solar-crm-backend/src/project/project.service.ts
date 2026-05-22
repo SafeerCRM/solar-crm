@@ -73,6 +73,8 @@ import {
   ProjectReminderUserStateStatus,
 } from './project-reminder-user-state.entity';
 
+import { ProjectEditHistory } from './project-edit-history.entity';
+
 @Injectable()
 export class ProjectService {
 
@@ -139,6 +141,9 @@ private readonly projectPaymentReminderUserStateRepository: Repository<ProjectPa
 
 @InjectRepository(ProjectReminderUserState)
 private readonly projectReminderUserStateRepository: Repository<ProjectReminderUserState>,
+
+@InjectRepository(ProjectEditHistory)
+private readonly projectEditHistoryRepository: Repository<ProjectEditHistory>,
 
     private readonly calculatorService: CalculatorService,
 
@@ -438,6 +443,18 @@ if (
     return project;
   }
 
+  async getProjectEditHistory(projectId: number) {
+  return this.projectEditHistoryRepository.find({
+    where: {
+      projectId,
+    },
+    order: {
+      createdAt: 'DESC',
+    },
+    take: 100,
+  });
+}
+
   async update(
   id: number,
   data: Partial<Project>,
@@ -567,9 +584,52 @@ if (
     }
   }
 
-  Object.assign(project, safeData);
+  const historyRows: Partial<ProjectEditHistory>[] = [];
 
-  return this.projectRepository.save(project);
+for (const key of Object.keys(safeData)) {
+  const oldValue = (project as any)[key];
+  const newValue = (safeData as any)[key];
+
+  const normalizedOld =
+    oldValue === null || oldValue === undefined
+      ? ''
+      : String(oldValue);
+
+  const normalizedNew =
+    newValue === null || newValue === undefined
+      ? ''
+      : String(newValue);
+
+  if (normalizedOld !== normalizedNew) {
+    historyRows.push({
+      projectId: project.id,
+      fieldName: key,
+      oldValue: normalizedOld,
+      newValue: normalizedNew,
+      changedBy:
+        user?.id || user?.userId || null,
+      changedByName:
+        user?.name || null,
+      changedByRole:
+        Array.isArray(user?.roles)
+          ? user.roles.join(', ')
+          : '',
+    });
+  }
+}
+
+Object.assign(project, safeData);
+
+const updatedProject =
+  await this.projectRepository.save(project);
+
+if (historyRows.length > 0) {
+  await this.projectEditHistoryRepository.save(
+    historyRows,
+  );
+}
+
+return updatedProject;
 }
 
 async uploadProjectDocument(file: any, body: any, user: any) {

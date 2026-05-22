@@ -20,11 +20,12 @@ import { ProjectExecutionReminderUserState } from './project-execution-reminder-
 import { ProjectPaymentInstallment } from './project-payment-installment.entity';
 import { ProjectPaymentReminderUserState } from './project-payment-reminder-user-state.entity';
 import { ProjectReminderUserState } from './project-reminder-user-state.entity';
+import { ProjectEditHistory } from './project-edit-history.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Project, ProjectDocument, ProjectComment, ProjectMaterialMaster, ProjectMaterialRequest,
-ProjectMaterialRequestItem, ProjectBranch, ProjectLoanDetail, ProjectSubsidyDetail, ProjectElectricityDetail, ProjectExecutionActivity, ProjectExecutionProof, ProjectExecutionReminder, ProjectExecutionReminderUserState, ProjectPaymentInstallment, ProjectPaymentReminderUserState, ProjectReminderUserState,]),
+ProjectMaterialRequestItem, ProjectBranch, ProjectLoanDetail, ProjectSubsidyDetail, ProjectElectricityDetail, ProjectExecutionActivity, ProjectExecutionProof, ProjectExecutionReminder, ProjectExecutionReminderUserState, ProjectPaymentInstallment, ProjectPaymentReminderUserState, ProjectReminderUserState, ProjectEditHistory,]),
     CalculatorModule,
   ],
   controllers: [ProjectController],

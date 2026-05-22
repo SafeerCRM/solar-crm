@@ -691,6 +691,13 @@ completeProject(
   );
 }
 
+@Get(':id/edit-history')
+getProjectEditHistory(
+  @Param('id', ParseIntPipe) id: number,
+) {
+  return this.projectService.getProjectEditHistory(id);
+}
+
   @Get(':id')
   findOne(
   @Param('id') id: string,
