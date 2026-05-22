@@ -19,8 +19,10 @@ import {
 } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('project')
 export class ProjectController {
   constructor(
@@ -123,6 +125,14 @@ enableMaterialMaster(@Param('id') id: string) {
   );
 }
 
+@Roles(
+  'OWNER',
+  'MARKETING_HEAD',
+  'PROJECT_MANAGER',
+  'PROJECT_EXECUTIVE',
+  'MEETING_MANAGER',
+)
+
 @Post('material-request')
 createMaterialRequest(
   @Body() body: any,
@@ -183,6 +193,8 @@ getPurchaseOrders(
   });
 }
 
+@Roles('OWNER', 'PROJECT_MANAGER')
+
 @Patch('material-request-item/:id/buy')
 buyMaterialRequestItem(
   @Param('id') id: string,
@@ -201,6 +213,8 @@ getProjectLoanDetail(@Param('id') id: string) {
   return this.projectService.getProjectLoanDetail(Number(id));
 }
 
+@Roles('OWNER', 'MARKETING_HEAD', 'PROJECT_MANAGER', 'LOAN_MANAGER')
+
 @Post(':id/loan-detail')
 saveProjectLoanDetail(
   @Param('id') id: string,
@@ -218,6 +232,8 @@ saveProjectLoanDetail(
 getProjectSubsidyDetail(@Param('id') id: string) {
   return this.projectService.getProjectSubsidyDetail(Number(id));
 }
+
+@Roles('OWNER', 'MARKETING_HEAD', 'PROJECT_MANAGER', 'SUBSIDY_MANAGER')
 
 @Post(':id/subsidy-detail')
 saveProjectSubsidyDetail(
@@ -240,6 +256,8 @@ getProjectElectricityDetail(
     Number(id),
   );
 }
+
+@Roles('OWNER', 'MARKETING_HEAD', 'PROJECT_MANAGER', 'ELECTRICITY_MANAGER')
 
 @Post(':id/electricity-detail')
 saveProjectElectricityDetail(
@@ -406,6 +424,15 @@ async getPaymentCollectionList(
   return this.projectService.getPaymentCollectionList(query, req.user);
 }
 
+@Roles(
+  'OWNER',
+  'MARKETING_HEAD',
+  'PROJECT_MANAGER',
+  'PAYMENT_COLLECTION_EXECUTIVE',
+  'PAYMENT_MANAGER',
+  'ACCOUNT_MANAGER',
+)
+
 @Post(':projectId/payment-installment')
 async createPaymentInstallment(
   @Param('projectId', ParseIntPipe)
@@ -421,6 +448,15 @@ async createPaymentInstallment(
     req.user,
   );
 }
+
+@Roles(
+  'OWNER',
+  'MARKETING_HEAD',
+  'PROJECT_MANAGER',
+  'PAYMENT_COLLECTION_EXECUTIVE',
+  'PAYMENT_MANAGER',
+  'ACCOUNT_MANAGER',
+)
 
 @Post('payment-collection/installments/:installmentId/receive')
 async receivePaymentInstallment(
@@ -610,6 +646,14 @@ async dismissPaymentReminderForUser(
   );
 }
 
+@Roles(
+  'OWNER',
+  'MARKETING_HEAD',
+  'PROJECT_MANAGER',
+  'PAYMENT_MANAGER',
+  'ACCOUNT_MANAGER',
+)
+
 @Patch('payment-collection/installments/:installmentId/hide')
 async hidePaymentInstallment(
   @Param('installmentId', ParseIntPipe) installmentId: number,
@@ -631,6 +675,8 @@ hideProject(
 ) {
   return this.projectService.hideProject(id, body, user);
 }
+
+@Roles('OWNER', 'MARKETING_HEAD', 'PROJECT_MANAGER')
 
 @Patch(':id/complete')
 completeProject(
@@ -707,6 +753,8 @@ getComments(
   );
 }
 
+@Roles('OWNER', 'MARKETING_HEAD')
+
   @Patch(':id/marketing-head-approval')
   marketingHeadApproval(
     @Param('id') id: string,
@@ -717,6 +765,8 @@ getComments(
       body,
     );
   }
+
+  @Roles('OWNER')
 
   @Patch(':id/owner-approval')
   ownerApproval(
