@@ -173,6 +173,7 @@ export default function ProjectDetailPage() {
 
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
+  const [currentUserRoles, setCurrentUserRoles] = useState<string[]>([]);
 
   const [documents, setDocuments] = useState<ProjectDocument[]>([]);
 
@@ -1394,6 +1395,75 @@ const updateExecutionActivityStatus = async (
   }
 };
 
+useEffect(() => {
+  const storedUser = localStorage.getItem('user');
+
+  if (storedUser) {
+    try {
+      const parsedUser = JSON.parse(storedUser);
+      setCurrentUserRoles(
+        Array.isArray(parsedUser?.roles)
+          ? parsedUser.roles
+          : [],
+      );
+    } catch {
+      setCurrentUserRoles([]);
+    }
+  }
+}, []);
+
+const hasRole = (allowedRoles: string[]) => {
+  return currentUserRoles.some((role) =>
+    allowedRoles.includes(role),
+  );
+};
+
+const canMarketingApprove = hasRole([
+  'OWNER',
+  'MARKETING_HEAD',
+]);
+
+const canOwnerApprove = hasRole(['OWNER']);
+
+const canCompleteProject = hasRole([
+  'OWNER',
+  'MARKETING_HEAD',
+  'PROJECT_MANAGER',
+]);
+
+const canManageLoan = hasRole([
+  'OWNER',
+  'MARKETING_HEAD',
+  'PROJECT_MANAGER',
+  'LOAN_MANAGER',
+]);
+
+const canManageSubsidy = hasRole([
+  'OWNER',
+  'MARKETING_HEAD',
+  'PROJECT_MANAGER',
+  'SUBSIDY_MANAGER',
+]);
+
+const canManageElectricity = hasRole([
+  'OWNER',
+  'MARKETING_HEAD',
+  'PROJECT_MANAGER',
+  'ELECTRICITY_MANAGER',
+]);
+
+const canManagePayment = hasRole([
+  'OWNER',
+  'MARKETING_HEAD',
+  'PROJECT_MANAGER',
+  'PAYMENT_COLLECTION_EXECUTIVE',
+]);
+
+const canManageMaterial = hasRole([
+  'OWNER',
+  'PROJECT_MANAGER',
+]);
+
   useEffect(() => {
   if (projectId) {
   fetchProject();
@@ -1547,6 +1617,8 @@ const updateExecutionActivityStatus = async (
         </div>
 
        <div className="mt-5 grid gap-4 md:grid-cols-2">
+
+        {canMarketingApprove && (
   <div className="rounded-xl border p-4">
     <h3 className="font-bold text-gray-800">
       Marketing Head Action
@@ -1590,7 +1662,9 @@ const updateExecutionActivityStatus = async (
       </button>
     </div>
   </div>
+  )}
 
+{canOwnerApprove && (
   <div className="rounded-xl border p-4">
     <h3 className="font-bold text-gray-800">
       Owner Action
@@ -1634,10 +1708,11 @@ const updateExecutionActivityStatus = async (
       </button>
     </div>
   </div>
+  )}
 </div>
 
       </div>
-
+{canCompleteProject && (
       <div className="rounded-2xl bg-white p-5 shadow">
   <h2 className="text-lg font-bold text-gray-800">
     Complete Project
@@ -1673,21 +1748,13 @@ const updateExecutionActivityStatus = async (
       : 'Mark Project Completed'}
   </button>
 </div>
+)}
 
       <div className="rounded-2xl bg-white p-5 shadow">
         <h2 className="mb-2 text-lg font-bold text-gray-800">Remarks</h2>
         <p className="text-sm text-gray-700">{project.remarks || 'No remarks'}</p>
       </div>
         </>
-)}
-
-      {activeTab === 'LOAN_DEPARTMENT' && (
-  <div className="rounded-2xl bg-white p-6 shadow">
-    <h2 className="text-xl font-bold text-gray-800">Loan Department</h2>
-    <p className="mt-3 text-gray-600">
-      Loan workflow section will be added here.
-    </p>
-  </div>
 )}
 
 {activeTab === 'PROJECT_MANAGEMENT' && (
@@ -1846,6 +1913,7 @@ const updateExecutionActivityStatus = async (
           + Add Material
         </button>
 
+{canManageMaterial && (
         <button
           onClick={
             submitMaterialRequest
@@ -1859,6 +1927,7 @@ const updateExecutionActivityStatus = async (
             ? 'Submitting...'
             : 'Submit Request'}
         </button>
+)}
       </div>
     </div>
 
@@ -2496,6 +2565,7 @@ const updateExecutionActivityStatus = async (
       rows={4}
     />
 
+{canManageLoan && (
     <button
       onClick={saveLoanDetail}
       disabled={loanLoading}
@@ -2505,6 +2575,7 @@ const updateExecutionActivityStatus = async (
         ? 'Saving...'
         : 'Save Loan Detail'}
     </button>
+)}
 
     <div className="mt-8 rounded-2xl border p-4">
   <h3 className="text-lg font-bold text-gray-800">
@@ -2521,6 +2592,7 @@ const updateExecutionActivityStatus = async (
     rows={3}
   />
 
+{canManageLoan && (
   <button
     onClick={submitLoanComment}
     disabled={loanCommentLoading}
@@ -2530,6 +2602,7 @@ const updateExecutionActivityStatus = async (
       ? 'Saving Comment...'
       : 'Add Comment'}
   </button>
+)}
 
   <div className="mt-5 space-y-3">
     {loanComments.length === 0 ? (
@@ -2696,6 +2769,7 @@ const updateExecutionActivityStatus = async (
       rows={4}
     />
 
+{canManageSubsidy && (
     <button
       onClick={saveSubsidyDetail}
       disabled={subsidyLoading}
@@ -2703,6 +2777,7 @@ const updateExecutionActivityStatus = async (
     >
       {subsidyLoading ? 'Saving...' : 'Save Subsidy Detail'}
     </button>
+)}
   </div>
 )}
 
@@ -2907,6 +2982,7 @@ const updateExecutionActivityStatus = async (
       rows={4}
     />
 
+{canManageElectricity && (
     <button
       onClick={saveElectricityDetail}
       disabled={electricityLoading}
@@ -2916,6 +2992,7 @@ const updateExecutionActivityStatus = async (
         ? 'Saving...'
         : 'Save Electricity Detail'}
     </button>
+)}
   </div>
 )}
 
@@ -3047,6 +3124,7 @@ const updateExecutionActivityStatus = async (
         rows={3}
       />
 
+{canManagePayment && (
       <button
         onClick={createPaymentInstallment}
         disabled={paymentLoading}
@@ -3056,6 +3134,7 @@ const updateExecutionActivityStatus = async (
           ? 'Saving...'
           : 'Add Installment'}
       </button>
+)}
     </div>
 
     <div className="rounded-2xl bg-white p-5 shadow">
@@ -3226,6 +3305,7 @@ const updateExecutionActivityStatus = async (
         rows={2}
       />
 
+{canManagePayment && (
       <button
         onClick={() => receivePayment(item.id)}
         disabled={receivingPaymentId === item.id}
@@ -3235,8 +3315,10 @@ const updateExecutionActivityStatus = async (
           ? 'Saving...'
           : 'Receive Payment'}
       </button>
+)}
     </div>
 
+{canManagePayment && (
     <button
   type="button"
   onClick={() => hidePaymentInstallment(item.id)}
@@ -3244,6 +3326,7 @@ const updateExecutionActivityStatus = async (
 >
   Hide Entry
 </button>
+)}
   </div>
 )}
                 </div>
