@@ -67,6 +67,212 @@ type ApprovalReminderItem = {
   userReminderStatus: 'UNREAD' | 'READ';
 };
 
+type FinalClosureReminderItem = {
+  id: number;
+  projectId: number;
+
+  reminderType:
+    | 'PROJECT_COMPLETION_PENDING'
+    | 'PROJECT_OVERDUE'
+    | 'PAYMENT_CLOSURE_PENDING'
+    | 'FINAL_STATUS_UPDATE_PENDING';
+
+  customerName: string | null;
+  customerPhone: string | null;
+
+  branchName: string | null;
+
+  projectOwnerId: number | null;
+  projectOwnerName: string | null;
+
+  projectSerial: string | null;
+
+  projectType: string | null;
+
+  projectStatus: string | null;
+
+  paymentStatus: string | null;
+
+  expectedCompletionDate: string | null;
+
+  actualCompletionDate: string | null;
+
+  updatedAt: string;
+
+  createdAt: string;
+
+  userReminderStatus:
+    | 'UNREAD'
+    | 'READ'
+    | 'DISMISSED';
+};
+
+type ElectricityReminderItem = {
+  id: number;
+  projectId: number;
+
+  reminderType:
+    | 'ELECTRICITY_DOCUMENT_PENDING'
+    | 'DISCOM_PROCESS_PENDING'
+    | 'NET_METER_PENDING'
+    | 'CONNECTION_PENDING';
+
+  discomName: string | null;
+
+  electricityStatus: string | null;
+
+  fileSubmissionDate: string | null;
+  siteVisitDate: string | null;
+
+  demandDepositDate: string | null;
+  demandDepositAmount: number;
+
+  meterTestingDate: string | null;
+  netMeterInstallationDate: string | null;
+
+  remarks: string | null;
+
+  updatedAt: string;
+
+  customerName: string | null;
+  customerPhone: string | null;
+
+  branchName: string | null;
+
+  projectOwnerId: number | null;
+  projectOwnerName: string | null;
+
+  projectSerial: string | null;
+
+  projectType: string | null;
+  projectStatus: string | null;
+
+  userReminderStatus:
+    | 'UNREAD'
+    | 'READ'
+    | 'DISMISSED';
+};
+
+type SubsidyReminderItem = {
+  id: number;
+  projectId: number;
+
+  reminderType:
+    | 'SUBSIDY_DOCUMENT_PENDING'
+    | 'SUBSIDY_PROCESS_PENDING'
+    | 'SUBSIDY_REQUEST_PENDING';
+
+  subsidyStatus: string | null;
+
+  dcrCertificateReady: boolean;
+  panelWarrantyReceived: boolean;
+  inverterWarrantyReceived: boolean;
+  vendorAgreementReady: boolean;
+  wcrReady: boolean;
+
+  portalSubmissionDate: string | null;
+  subsidyRequestedDate: string | null;
+  subsidyDisbursedDate: string | null;
+
+  subsidyAmount: number;
+
+  remarks: string | null;
+
+  updatedAt: string;
+
+  customerName: string | null;
+  customerPhone: string | null;
+
+  branchName: string | null;
+
+  projectOwnerId: number | null;
+  projectOwnerName: string | null;
+
+  projectSerial: string | null;
+
+  projectType: string | null;
+  projectStatus: string | null;
+
+  userReminderStatus:
+    | 'UNREAD'
+    | 'READ'
+    | 'DISMISSED';
+};
+
+type LoanReminderItem = {
+  id: number;
+  projectId: number;
+
+  reminderType:
+    | 'LOAN_DOCUMENT_PENDING'
+    | 'LOAN_PROCESS_PENDING'
+    | 'LOAN_DISBURSEMENT_PENDING';
+
+  loanType: string | null;
+  bankName: string | null;
+  applicationNumber: string | null;
+
+  marginMoney: number;
+  sanctionAmount: number;
+
+  firstEmiDisbursementAmount: number;
+  firstEmiDisbursementDate: string | null;
+
+  loanStatus: string | null;
+
+  remarks: string | null;
+
+  updatedAt: string;
+
+  customerName: string | null;
+  customerPhone: string | null;
+
+  branchName: string | null;
+
+  projectOwnerId: number | null;
+  projectOwnerName: string | null;
+
+  projectSerial: string | null;
+
+  projectType: string | null;
+  projectStatus: string | null;
+
+  userReminderStatus:
+    | 'UNREAD'
+    | 'READ'
+    | 'DISMISSED';
+};
+
+type DocumentReminderItem = {
+  id: number;
+  projectId: number;
+
+  reminderType: 'DOCUMENT_PENDING';
+
+  missingDocumentTypes: string[];
+  missingCount: number;
+
+  customerName: string | null;
+  customerPhone: string | null;
+
+  branchName: string | null;
+
+  projectOwnerId: number | null;
+  projectOwnerName: string | null;
+
+  projectSerial: string | null;
+
+  projectType: string | null;
+  projectStatus: string | null;
+
+  createdAt: string;
+
+  userReminderStatus:
+    | 'UNREAD'
+    | 'READ'
+    | 'DISMISSED';
+};
+
 type PurchaseReminderItem = {
   id: number;
   projectId: number;
@@ -129,6 +335,11 @@ export default function ProjectRemindersPage() {
   const [paymentItems, setPaymentItems] = useState<PaymentReminderItem[]>([]);
   const [approvalItems, setApprovalItems] = useState<ApprovalReminderItem[]>([]);
   const [purchaseItems, setPurchaseItems] = useState<PurchaseReminderItem[]>([]);
+  const [documentItems, setDocumentItems] = useState<DocumentReminderItem[]>([]);
+  const [loanItems, setLoanItems] = useState<LoanReminderItem[]>([]);
+  const [subsidyItems, setSubsidyItems] = useState<SubsidyReminderItem[]>([]);
+  const [electricityItems, setElectricityItems] = useState<ElectricityReminderItem[]>([]);
+  const [finalClosureItems, setFinalClosureItems] = useState<FinalClosureReminderItem[]>([]);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
@@ -138,6 +349,11 @@ export default function ProjectRemindersPage() {
   | 'PAYMENT'
   | 'APPROVAL'
   | 'PURCHASE'
+  | 'DOCUMENT'
+  | 'LOAN'
+  | 'SUBSIDY'
+  | 'ELECTRICITY'
+  | 'FINAL_CLOSURE'
   | 'OVERDUE'
   | 'TODAY'
   | 'UPCOMING'
@@ -154,6 +370,11 @@ export default function ProjectRemindersPage() {
   paymentRes,
   approvalRes,
   purchaseRes,
+  documentRes,
+  loanRes,
+  subsidyRes,
+  electricityRes,
+  finalClosureRes,
 ] = await Promise.all([
   axios.get(`${apiBaseUrl}/project/execution-reminders/summary`, {
     headers: getAuthHeaders(),
@@ -174,6 +395,26 @@ export default function ProjectRemindersPage() {
   axios.get(`${apiBaseUrl}/project/purchase-reminders`, {
   headers: getAuthHeaders(),
 }),
+
+axios.get(`${apiBaseUrl}/project/document-reminders`, {
+  headers: getAuthHeaders(),
+}),
+
+axios.get(`${apiBaseUrl}/project/loan-reminders`, {
+  headers: getAuthHeaders(),
+}),
+
+axios.get(`${apiBaseUrl}/project/subsidy-reminders`, {
+  headers: getAuthHeaders(),
+}),
+
+axios.get(`${apiBaseUrl}/project/electricity-reminders`, {
+  headers: getAuthHeaders(),
+}),
+
+axios.get(`${apiBaseUrl}/project/final-closure-reminders`, {
+  headers: getAuthHeaders(),
+}),
 ]);
 
     setSummary(summaryRes.data || null);
@@ -191,6 +432,36 @@ setPurchaseItems(
     : [],
 );
 
+setDocumentItems(
+  Array.isArray(documentRes.data)
+    ? documentRes.data
+    : [],
+);
+
+setLoanItems(
+  Array.isArray(loanRes.data)
+    ? loanRes.data
+    : [],
+);
+
+setSubsidyItems(
+  Array.isArray(subsidyRes.data)
+    ? subsidyRes.data
+    : [],
+);
+
+setElectricityItems(
+  Array.isArray(electricityRes.data)
+    ? electricityRes.data
+    : [],
+);
+
+setFinalClosureItems(
+  Array.isArray(finalClosureRes.data)
+    ? finalClosureRes.data
+    : [],
+);
+
   } catch (error: any) {
     console.error('Reminder error:', error);
     setSummary(null);
@@ -198,6 +469,11 @@ setPurchaseItems(
     setPaymentItems([]);
     setApprovalItems([]);
     setPurchaseItems([]);
+    setDocumentItems([]);
+    setLoanItems([]);
+    setSubsidyItems([]);
+    setElectricityItems([]);
+    setFinalClosureItems([]);
     setMessage(
       error?.response?.data?.message || 'Failed to load reminders.',
     );
@@ -393,11 +669,101 @@ const filteredPurchaseItems = purchaseItems.filter((item) => {
   return false;
 });
 
+const filteredDocumentItems = documentItems.filter((item) => {
+  if (filter === 'ALL' || filter === 'DOCUMENT')
+    return true;
+
+  if (
+    filter === 'OVERDUE' ||
+    filter === 'TODAY' ||
+    filter === 'UPCOMING'
+  ) {
+    return false;
+  }
+
+  return false;
+});
+
+const filteredLoanItems = loanItems.filter((item) => {
+  if (filter === 'ALL' || filter === 'LOAN')
+    return true;
+
+  if (
+    filter === 'OVERDUE' ||
+    filter === 'TODAY' ||
+    filter === 'UPCOMING'
+  ) {
+    return false;
+  }
+
+  return false;
+});
+
+const filteredSubsidyItems = subsidyItems.filter((item) => {
+  if (filter === 'ALL' || filter === 'SUBSIDY')
+    return true;
+
+  if (
+    filter === 'OVERDUE' ||
+    filter === 'TODAY' ||
+    filter === 'UPCOMING'
+  ) {
+    return false;
+  }
+
+  return false;
+});
+
+const filteredElectricityItems = electricityItems.filter((item) => {
+  if (filter === 'ALL' || filter === 'ELECTRICITY')
+    return true;
+
+  if (
+    filter === 'OVERDUE' ||
+    filter === 'TODAY' ||
+    filter === 'UPCOMING'
+  ) {
+    return false;
+  }
+
+  return false;
+});
+
+const filteredFinalClosureItems =
+  finalClosureItems.filter((item) => {
+    if (
+      filter === 'ALL' ||
+      filter === 'FINAL_CLOSURE'
+    )
+      return true;
+
+    if (
+      filter === 'OVERDUE' &&
+      item.reminderType === 'PROJECT_OVERDUE'
+    ) {
+      return true;
+    }
+
+    if (
+      filter === 'TODAY' ||
+      filter === 'UPCOMING'
+    ) {
+      return false;
+    }
+
+    return false;
+  });
+
 const totalVisibleReminders =
   filteredExecutionItems.length +
   filteredPaymentItems.length +
   filteredApprovalItems.length +
-  filteredPurchaseItems.length;
+  filteredPurchaseItems.length +
+  filteredDocumentItems.length +
+  filteredLoanItems.length +
+  filteredSubsidyItems.length +
+  filteredElectricityItems.length +
+  filteredFinalClosureItems.length;
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-6">
@@ -463,6 +829,41 @@ const totalVisibleReminders =
   tone="purple"
 />
 
+<ReminderCard
+  title="Document Pending"
+  value={documentItems.length}
+  description="Projects with missing mandatory documents"
+  tone="red"
+/>
+
+<ReminderCard
+  title="Loan Pending"
+  value={loanItems.length}
+  description="Loan process and disbursement reminders"
+  tone="blue"
+/>
+
+<ReminderCard
+  title="Subsidy Pending"
+  value={subsidyItems.length}
+  description="Subsidy process and request reminders"
+  tone="amber"
+/>
+
+<ReminderCard
+  title="Electricity Pending"
+  value={electricityItems.length}
+  description="DISCOM and net meter reminders"
+  tone="purple"
+/>
+
+<ReminderCard
+  title="Final Closure"
+  value={finalClosureItems.length}
+  description="Project completion and closure reminders"
+  tone="green"
+/>
+
             <ReminderCard
   title="Payment Reminders"
   value={paymentItems.length}
@@ -504,6 +905,36 @@ const totalVisibleReminders =
   active={filter === 'PURCHASE'}
   onClick={() => setFilter('PURCHASE')}
 />
+
+<FilterButton
+  label="Document"
+  active={filter === 'DOCUMENT'}
+  onClick={() => setFilter('DOCUMENT')}
+/>
+
+<FilterButton
+  label="Loan"
+  active={filter === 'LOAN'}
+  onClick={() => setFilter('LOAN')}
+/>
+
+<FilterButton
+  label="Subsidy"
+  active={filter === 'SUBSIDY'}
+  onClick={() => setFilter('SUBSIDY')}
+/>
+
+<FilterButton
+  label="Electricity"
+  active={filter === 'ELECTRICITY'}
+  onClick={() => setFilter('ELECTRICITY')}
+/>
+
+<FilterButton
+  label="Final Closure"
+  active={filter === 'FINAL_CLOSURE'}
+  onClick={() => setFilter('FINAL_CLOSURE')}
+/>
   <FilterButton label="Overdue" active={filter === 'OVERDUE'} onClick={() => setFilter('OVERDUE')} />
   <FilterButton label="Today" active={filter === 'TODAY'} onClick={() => setFilter('TODAY')} />
   <FilterButton label="Upcoming" active={filter === 'UPCOMING'} onClick={() => setFilter('UPCOMING')} />
@@ -532,6 +963,56 @@ const totalVisibleReminders =
 onDismiss={dismissUnifiedReminder}
   actionLoadingId={actionLoadingId}
 />
+))}
+
+{filteredFinalClosureItems.map((item) => (
+  <FinalClosureReminderListItem
+    key={`final-closure-${item.id}`}
+    item={item}
+    onMarkRead={markUnifiedReminderAsRead}
+    onDismiss={dismissUnifiedReminder}
+    actionLoadingId={actionLoadingId}
+  />
+))}
+
+{filteredElectricityItems.map((item) => (
+  <ElectricityReminderListItem
+    key={`electricity-${item.id}`}
+    item={item}
+    onMarkRead={markUnifiedReminderAsRead}
+    onDismiss={dismissUnifiedReminder}
+    actionLoadingId={actionLoadingId}
+  />
+))}
+
+{filteredSubsidyItems.map((item) => (
+  <SubsidyReminderListItem
+    key={`subsidy-${item.id}`}
+    item={item}
+    onMarkRead={markUnifiedReminderAsRead}
+    onDismiss={dismissUnifiedReminder}
+    actionLoadingId={actionLoadingId}
+  />
+))}
+
+{filteredLoanItems.map((item) => (
+  <LoanReminderListItem
+    key={`loan-${item.id}`}
+    item={item}
+    onMarkRead={markUnifiedReminderAsRead}
+    onDismiss={dismissUnifiedReminder}
+    actionLoadingId={actionLoadingId}
+  />
+))}
+
+{filteredDocumentItems.map((item) => (
+  <DocumentReminderListItem
+    key={`document-${item.id}`}
+    item={item}
+    onMarkRead={markUnifiedReminderAsRead}
+    onDismiss={dismissUnifiedReminder}
+    actionLoadingId={actionLoadingId}
+  />
 ))}
 
 {filteredPurchaseItems.map((item) => (
@@ -831,6 +1312,758 @@ function ApprovalReminderListItem({
   );
 }
 
+function FinalClosureReminderListItem({
+  item,
+  onMarkRead,
+  onDismiss,
+  actionLoadingId,
+}: {
+  item: FinalClosureReminderItem;
+
+  onMarkRead: any;
+
+  onDismiss: any;
+
+  actionLoadingId: string | null;
+}) {
+  const badge =
+    getFinalClosureReminderBadge(item.reminderType);
+
+  return (
+    <div className="rounded-xl border border-green-300 bg-green-50 p-4 shadow">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${badge.className}`}
+            >
+              {badge.label}
+            </span>
+
+            {item.projectStatus && (
+              <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-700">
+                {formatActivityType(item.projectStatus)}
+              </span>
+            )}
+
+            {item.paymentStatus && (
+              <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-700">
+                Payment: {item.paymentStatus}
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 text-sm text-gray-700 md:grid-cols-2 xl:grid-cols-3">
+            <InfoLine
+              label="Customer"
+              value={item.customerName || 'Not added'}
+            />
+
+            <InfoLine
+              label="Phone"
+              value={item.customerPhone || 'Not added'}
+            />
+
+            <InfoLine
+              label="Project Serial"
+              value={
+                item.projectSerial ||
+                `#${item.projectId}`
+              }
+            />
+
+            <InfoLine
+              label="Project Type"
+              value={item.projectType || 'Not added'}
+            />
+
+            <InfoLine
+              label="Project Owner"
+              value={
+                item.projectOwnerName ||
+                'Not assigned'
+              }
+            />
+
+            <InfoLine
+              label="Branch"
+              value={item.branchName || 'Not added'}
+            />
+
+            <InfoLine
+              label="Expected Completion"
+              value={
+                item.expectedCompletionDate
+                  ? new Date(
+                      item.expectedCompletionDate,
+                    ).toLocaleDateString('en-IN')
+                  : 'Not added'
+              }
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          {item.userReminderStatus !== 'READ' && (
+            <button
+              onClick={() =>
+                onMarkRead({
+                  reminderSource: 'FINAL_CLOSURE',
+                  reminderType: item.reminderType,
+                  referenceId: item.id,
+                  projectId: item.projectId,
+                })
+              }
+              disabled={
+                actionLoadingId ===
+                `FINAL_CLOSURE-${item.id}-READ`
+              }
+              className="rounded-xl bg-green-600 px-4 py-2 text-sm font-medium text-white"
+            >
+              Mark Seen
+            </button>
+          )}
+
+          <button
+            onClick={() =>
+              onDismiss({
+                reminderSource: 'FINAL_CLOSURE',
+                reminderType: item.reminderType,
+                referenceId: item.id,
+                projectId: item.projectId,
+              })
+            }
+            disabled={
+              actionLoadingId ===
+              `FINAL_CLOSURE-${item.id}-DISMISS`
+            }
+            className="rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white"
+          >
+            Dismiss
+          </button>
+
+          <Link
+            href={`/project/${item.projectId}`}
+            className="rounded-xl bg-blue-600 px-4 py-2 text-center text-sm font-medium text-white"
+          >
+            Open Project
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ElectricityReminderListItem({
+  item,
+  onMarkRead,
+  onDismiss,
+  actionLoadingId,
+}: {
+  item: ElectricityReminderItem;
+
+  onMarkRead: any;
+
+  onDismiss: any;
+
+  actionLoadingId: string | null;
+}) {
+  const badge =
+    getElectricityReminderBadge(item.reminderType);
+
+  return (
+    <div className="rounded-xl border border-purple-300 bg-purple-50 p-4 shadow">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${badge.className}`}
+            >
+              {badge.label}
+            </span>
+
+            {item.electricityStatus && (
+              <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-700">
+                {formatActivityType(item.electricityStatus)}
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 text-sm text-gray-700 md:grid-cols-2 xl:grid-cols-3">
+            <InfoLine
+              label="Customer"
+              value={item.customerName || 'Not added'}
+            />
+
+            <InfoLine
+              label="Phone"
+              value={item.customerPhone || 'Not added'}
+            />
+
+            <InfoLine
+              label="Project Serial"
+              value={
+                item.projectSerial ||
+                `#${item.projectId}`
+              }
+            />
+
+            <InfoLine
+              label="DISCOM"
+              value={item.discomName || 'Not added'}
+            />
+
+            <InfoLine
+              label="Demand Amount"
+              value={`₹${Number(
+                item.demandDepositAmount || 0,
+              ).toLocaleString('en-IN')}`}
+            />
+
+            <InfoLine
+              label="Project Owner"
+              value={
+                item.projectOwnerName ||
+                'Not assigned'
+              }
+            />
+
+            <InfoLine
+              label="Branch"
+              value={item.branchName || 'Not added'}
+            />
+          </div>
+
+          {item.remarks && (
+            <div className="mt-3 rounded-lg bg-white p-3">
+              <p className="mb-1 text-xs font-semibold text-gray-500">
+                Remarks
+              </p>
+
+              <p className="text-sm text-gray-700">
+                {item.remarks}
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-2">
+          {item.userReminderStatus !== 'READ' && (
+            <button
+              onClick={() =>
+                onMarkRead({
+                  reminderSource: 'ELECTRICITY',
+                  reminderType: item.reminderType,
+                  referenceId: item.id,
+                  projectId: item.projectId,
+                })
+              }
+              disabled={
+                actionLoadingId ===
+                `ELECTRICITY-${item.id}-READ`
+              }
+              className="rounded-xl bg-green-600 px-4 py-2 text-sm font-medium text-white"
+            >
+              Mark Seen
+            </button>
+          )}
+
+          <button
+            onClick={() =>
+              onDismiss({
+                reminderSource: 'ELECTRICITY',
+                reminderType: item.reminderType,
+                referenceId: item.id,
+                projectId: item.projectId,
+              })
+            }
+            disabled={
+              actionLoadingId ===
+              `ELECTRICITY-${item.id}-DISMISS`
+            }
+            className="rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white"
+          >
+            Dismiss
+          </button>
+
+          <Link
+            href={`/project/${item.projectId}`}
+            className="rounded-xl bg-blue-600 px-4 py-2 text-center text-sm font-medium text-white"
+          >
+            Open Project
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SubsidyReminderListItem({
+  item,
+  onMarkRead,
+  onDismiss,
+  actionLoadingId,
+}: {
+  item: SubsidyReminderItem;
+
+  onMarkRead: any;
+
+  onDismiss: any;
+
+  actionLoadingId: string | null;
+}) {
+  const badge =
+    getSubsidyReminderBadge(item.reminderType);
+
+  return (
+    <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 shadow">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${badge.className}`}
+            >
+              {badge.label}
+            </span>
+
+            {item.subsidyStatus && (
+              <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-700">
+                {formatActivityType(item.subsidyStatus)}
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 text-sm text-gray-700 md:grid-cols-2 xl:grid-cols-3">
+            <InfoLine
+              label="Customer"
+              value={item.customerName || 'Not added'}
+            />
+
+            <InfoLine
+              label="Phone"
+              value={item.customerPhone || 'Not added'}
+            />
+
+            <InfoLine
+              label="Project Serial"
+              value={
+                item.projectSerial ||
+                `#${item.projectId}`
+              }
+            />
+
+            <InfoLine
+              label="Subsidy Amount"
+              value={`₹${Number(
+                item.subsidyAmount || 0,
+              ).toLocaleString('en-IN')}`}
+            />
+
+            <InfoLine
+              label="Project Owner"
+              value={
+                item.projectOwnerName ||
+                'Not assigned'
+              }
+            />
+
+            <InfoLine
+              label="Branch"
+              value={item.branchName || 'Not added'}
+            />
+          </div>
+
+          <div className="mt-3 rounded-lg bg-white p-3">
+            <p className="mb-2 text-xs font-semibold text-gray-500">
+              Subsidy Document Readiness
+            </p>
+
+            <div className="flex flex-wrap gap-2">
+              <StatusChip
+                label="DCR"
+                ready={item.dcrCertificateReady}
+              />
+              <StatusChip
+                label="Panel Warranty"
+                ready={item.panelWarrantyReceived}
+              />
+              <StatusChip
+                label="Inverter Warranty"
+                ready={item.inverterWarrantyReceived}
+              />
+              <StatusChip
+                label="Vendor Agreement"
+                ready={item.vendorAgreementReady}
+              />
+              <StatusChip
+                label="WCR"
+                ready={item.wcrReady}
+              />
+            </div>
+          </div>
+
+          {item.remarks && (
+            <div className="mt-3 rounded-lg bg-white p-3">
+              <p className="mb-1 text-xs font-semibold text-gray-500">
+                Remarks
+              </p>
+
+              <p className="text-sm text-gray-700">
+                {item.remarks}
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-2">
+          {item.userReminderStatus !== 'READ' && (
+            <button
+              onClick={() =>
+                onMarkRead({
+                  reminderSource: 'SUBSIDY',
+                  reminderType: item.reminderType,
+                  referenceId: item.id,
+                  projectId: item.projectId,
+                })
+              }
+              disabled={
+                actionLoadingId ===
+                `SUBSIDY-${item.id}-READ`
+              }
+              className="rounded-xl bg-green-600 px-4 py-2 text-sm font-medium text-white"
+            >
+              Mark Seen
+            </button>
+          )}
+
+          <button
+            onClick={() =>
+              onDismiss({
+                reminderSource: 'SUBSIDY',
+                reminderType: item.reminderType,
+                referenceId: item.id,
+                projectId: item.projectId,
+              })
+            }
+            disabled={
+              actionLoadingId ===
+              `SUBSIDY-${item.id}-DISMISS`
+            }
+            className="rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white"
+          >
+            Dismiss
+          </button>
+
+          <Link
+            href={`/project/${item.projectId}`}
+            className="rounded-xl bg-blue-600 px-4 py-2 text-center text-sm font-medium text-white"
+          >
+            Open Project
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LoanReminderListItem({
+  item,
+  onMarkRead,
+  onDismiss,
+  actionLoadingId,
+}: {
+  item: LoanReminderItem;
+
+  onMarkRead: any;
+
+  onDismiss: any;
+
+  actionLoadingId: string | null;
+}) {
+  const badge =
+    getLoanReminderBadge(item.reminderType);
+
+  return (
+    <div className="rounded-xl border border-blue-300 bg-blue-50 p-4 shadow">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${badge.className}`}
+            >
+              {badge.label}
+            </span>
+
+            {item.loanStatus && (
+              <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-700">
+                {formatActivityType(item.loanStatus)}
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 text-sm text-gray-700 md:grid-cols-2 xl:grid-cols-3">
+            <InfoLine
+              label="Customer"
+              value={item.customerName || 'Not added'}
+            />
+
+            <InfoLine
+              label="Phone"
+              value={item.customerPhone || 'Not added'}
+            />
+
+            <InfoLine
+              label="Project Serial"
+              value={
+                item.projectSerial ||
+                `#${item.projectId}`
+              }
+            />
+
+            <InfoLine
+              label="Loan Type"
+              value={item.loanType || 'Not added'}
+            />
+
+            <InfoLine
+              label="Bank"
+              value={item.bankName || 'Not added'}
+            />
+
+            <InfoLine
+              label="Application"
+              value={
+                item.applicationNumber ||
+                'Not added'
+              }
+            />
+
+            <InfoLine
+              label="Sanction Amount"
+              value={`₹${Number(
+                item.sanctionAmount || 0,
+              ).toLocaleString('en-IN')}`}
+            />
+
+            <InfoLine
+              label="Project Owner"
+              value={
+                item.projectOwnerName ||
+                'Not assigned'
+              }
+            />
+
+            <InfoLine
+              label="Branch"
+              value={item.branchName || 'Not added'}
+            />
+          </div>
+
+          {item.remarks && (
+            <div className="mt-3 rounded-lg bg-white p-3">
+              <p className="mb-1 text-xs font-semibold text-gray-500">
+                Remarks
+              </p>
+
+              <p className="text-sm text-gray-700">
+                {item.remarks}
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-2">
+          {item.userReminderStatus !== 'READ' && (
+            <button
+              onClick={() =>
+                onMarkRead({
+                  reminderSource: 'LOAN',
+                  reminderType: item.reminderType,
+                  referenceId: item.id,
+                  projectId: item.projectId,
+                })
+              }
+              disabled={
+                actionLoadingId ===
+                `LOAN-${item.id}-READ`
+              }
+              className="rounded-xl bg-green-600 px-4 py-2 text-sm font-medium text-white"
+            >
+              Mark Seen
+            </button>
+          )}
+
+          <button
+            onClick={() =>
+              onDismiss({
+                reminderSource: 'LOAN',
+                reminderType: item.reminderType,
+                referenceId: item.id,
+                projectId: item.projectId,
+              })
+            }
+            disabled={
+              actionLoadingId ===
+              `LOAN-${item.id}-DISMISS`
+            }
+            className="rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white"
+          >
+            Dismiss
+          </button>
+
+          <Link
+            href={`/project/${item.projectId}`}
+            className="rounded-xl bg-blue-600 px-4 py-2 text-center text-sm font-medium text-white"
+          >
+            Open Project
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DocumentReminderListItem({
+  item,
+  onMarkRead,
+  onDismiss,
+  actionLoadingId,
+}: {
+  item: DocumentReminderItem;
+
+  onMarkRead: any;
+
+  onDismiss: any;
+
+  actionLoadingId: string | null;
+}) {
+  return (
+    <div className="rounded-xl border border-red-300 bg-red-50 p-4 shadow">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
+              Document Pending
+            </span>
+
+            <span className="rounded-full bg-red-600 px-3 py-1 text-xs font-semibold text-white">
+              {item.missingCount} Missing
+            </span>
+
+            {item.projectStatus && (
+              <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-700">
+                Project: {item.projectStatus}
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 text-sm text-gray-700 md:grid-cols-2 xl:grid-cols-3">
+            <InfoLine
+              label="Customer"
+              value={item.customerName || 'Not added'}
+            />
+
+            <InfoLine
+              label="Phone"
+              value={item.customerPhone || 'Not added'}
+            />
+
+            <InfoLine
+              label="Project Serial"
+              value={
+                item.projectSerial ||
+                `#${item.projectId}`
+              }
+            />
+
+            <InfoLine
+              label="Project Owner"
+              value={
+                item.projectOwnerName ||
+                'Not assigned'
+              }
+            />
+
+            <InfoLine
+              label="Project Type"
+              value={item.projectType || 'Not added'}
+            />
+
+            <InfoLine
+              label="Branch"
+              value={item.branchName || 'Not added'}
+            />
+          </div>
+
+          <div className="mt-3 rounded-lg bg-white p-3">
+            <p className="mb-2 text-xs font-semibold text-gray-500">
+              Missing Documents
+            </p>
+
+            <div className="flex flex-wrap gap-2">
+              {item.missingDocumentTypes.map((doc) => (
+                <span
+                  key={doc}
+                  className="rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-700"
+                >
+                  {formatActivityType(doc)}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          {item.userReminderStatus !== 'READ' && (
+            <button
+              onClick={() =>
+                onMarkRead({
+                  reminderSource: 'DOCUMENT',
+                  reminderType: item.reminderType,
+                  referenceId: item.projectId,
+                  projectId: item.projectId,
+                })
+              }
+              disabled={
+                actionLoadingId ===
+                `DOCUMENT-${item.projectId}-READ`
+              }
+              className="rounded-xl bg-green-600 px-4 py-2 text-sm font-medium text-white"
+            >
+              Mark Seen
+            </button>
+          )}
+
+          <button
+            onClick={() =>
+              onDismiss({
+                reminderSource: 'DOCUMENT',
+                reminderType: item.reminderType,
+                referenceId: item.projectId,
+                projectId: item.projectId,
+              })
+            }
+            disabled={
+              actionLoadingId ===
+              `DOCUMENT-${item.projectId}-DISMISS`
+            }
+            className="rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white"
+          >
+            Dismiss
+          </button>
+
+          <Link
+            href={`/project/${item.projectId}`}
+            className="rounded-xl bg-blue-600 px-4 py-2 text-center text-sm font-medium text-white"
+          >
+            Open Project
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PurchaseReminderListItem({
   item,
   onMarkRead,
@@ -1077,6 +2310,112 @@ function getReminderBadge(type: ReminderItem['reminderType']) {
   };
 }
 
+function getFinalClosureReminderBadge(
+  type: FinalClosureReminderItem['reminderType'],
+) {
+  if (type === 'PROJECT_OVERDUE') {
+    return {
+      label: 'Project Overdue',
+      className: 'bg-red-100 text-red-700',
+    };
+  }
+
+  if (type === 'PAYMENT_CLOSURE_PENDING') {
+    return {
+      label: 'Payment Closure Pending',
+      className: 'bg-amber-100 text-amber-700',
+    };
+  }
+
+  if (type === 'PROJECT_COMPLETION_PENDING') {
+    return {
+      label: 'Project Completion Pending',
+      className: 'bg-blue-100 text-blue-700',
+    };
+  }
+
+  return {
+    label: 'Final Status Update Pending',
+    className: 'bg-green-100 text-green-700',
+  };
+}
+
+function getElectricityReminderBadge(
+  type: ElectricityReminderItem['reminderType'],
+) {
+  if (type === 'ELECTRICITY_DOCUMENT_PENDING') {
+    return {
+      label: 'Electricity Document Pending',
+      className: 'bg-red-100 text-red-700',
+    };
+  }
+
+  if (type === 'NET_METER_PENDING') {
+    return {
+      label: 'Net Meter Pending',
+      className: 'bg-amber-100 text-amber-700',
+    };
+  }
+
+  if (type === 'CONNECTION_PENDING') {
+    return {
+      label: 'Connection Pending',
+      className: 'bg-green-100 text-green-700',
+    };
+  }
+
+  return {
+    label: 'DISCOM Process Pending',
+    className: 'bg-purple-100 text-purple-700',
+  };
+}
+
+function getSubsidyReminderBadge(
+  type: SubsidyReminderItem['reminderType'],
+) {
+  if (type === 'SUBSIDY_DOCUMENT_PENDING') {
+    return {
+      label: 'Subsidy Document Pending',
+      className: 'bg-red-100 text-red-700',
+    };
+  }
+
+  if (type === 'SUBSIDY_REQUEST_PENDING') {
+    return {
+      label: 'Subsidy Request Pending',
+      className: 'bg-amber-100 text-amber-700',
+    };
+  }
+
+  return {
+    label: 'Subsidy Process Pending',
+    className: 'bg-blue-100 text-blue-700',
+  };
+}
+
+function getLoanReminderBadge(
+  type: LoanReminderItem['reminderType'],
+) {
+  if (type === 'LOAN_DOCUMENT_PENDING') {
+    return {
+      label: 'Loan Document Pending',
+      className: 'bg-red-100 text-red-700',
+    };
+  }
+
+  if (type === 'LOAN_DISBURSEMENT_PENDING') {
+    return {
+      label: 'Loan Disbursement Pending',
+      className: 'bg-amber-100 text-amber-700',
+    };
+  }
+
+  return {
+    label: 'Loan Process Pending',
+    className: 'bg-blue-100 text-blue-700',
+  };
+}
+
 function getPurchaseReminderBadge(
   type: PurchaseReminderItem['reminderType'],
 ) {
@@ -1158,6 +2497,26 @@ function formatDate(value?: string | null) {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function StatusChip({
+  label,
+  ready,
+}: {
+  label: string;
+  ready: boolean;
+}) {
+  return (
+    <span
+      className={`rounded-full px-3 py-1 text-xs font-medium ${
+        ready
+          ? 'bg-green-100 text-green-700'
+          : 'bg-red-100 text-red-700'
+      }`}
+    >
+      {label}: {ready ? 'Ready' : 'Pending'}
+    </span>
+  );
 }
 
 function InfoLine({
