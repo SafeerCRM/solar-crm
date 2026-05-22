@@ -56,6 +56,11 @@ import {
   ProjectPaymentReminderUserStateStatus,
 } from './project-payment-reminder-user-state.entity';
 
+import {
+  ProjectReminderUserState,
+  ProjectReminderUserStateStatus,
+} from './project-reminder-user-state.entity';
+
 @Injectable()
 export class ProjectService {
 
@@ -119,6 +124,9 @@ private readonly projectPaymentInstallmentRepository: Repository<ProjectPaymentI
 
 @InjectRepository(ProjectPaymentReminderUserState)
 private readonly projectPaymentReminderUserStateRepository: Repository<ProjectPaymentReminderUserState>,
+
+@InjectRepository(ProjectReminderUserState)
+private readonly projectReminderUserStateRepository: Repository<ProjectReminderUserState>,
 
     private readonly calculatorService: CalculatorService,
 
@@ -1642,6 +1650,17 @@ async getApprovalReminderList(currentUser: any) {
 
   const rows = await qb.getRawMany();
 
+const reminderIds = rows.map((row) =>
+  Number(row.projectId),
+);
+
+const stateMap =
+  await this.getUnifiedReminderStateMap(
+    currentUser,
+    'APPROVAL',
+    reminderIds,
+  );
+
   return rows
     .map((row) => {
       const marketingPending =
@@ -1696,10 +1715,19 @@ async getApprovalReminderList(currentUser: any) {
         ownerApprovalStatus:
           row.ownerApprovalStatus || null,
         createdAt: row.createdAt,
-        userReminderStatus: 'UNREAD',
+        userReminderStatus:
+  stateMap[String(row.projectId)]
+    ?.status || 'UNREAD',
       };
     })
-    .filter(Boolean);
+    .filter((item) => {
+  if (!item) return false;
+
+  return (
+    item.userReminderStatus !==
+    ProjectReminderUserStateStatus.DISMISSED
+  );
+});
 }
 
 async getPurchaseReminderList(currentUser: any) {
@@ -1764,7 +1792,19 @@ async getPurchaseReminderList(currentUser: any) {
 
   const rows = await qb.getRawMany();
 
-  return rows.map((row) => {
+const reminderIds = rows.map((row) =>
+  Number(row.id),
+);
+
+const stateMap =
+  await this.getUnifiedReminderStateMap(
+    currentUser,
+    'PURCHASE',
+    reminderIds,
+  );
+
+  return rows
+  .map((row) => {
     const reminderType =
       row.purchaseStatus ===
       'PARTIALLY_PURCHASED'
@@ -1821,11 +1861,206 @@ async getPurchaseReminderList(currentUser: any) {
       projectSerial:
         row.projectSerial || null,
 
-      userReminderStatus: 'UNREAD',
+      userReminderStatus:
+  stateMap[String(row.id)]
+    ?.status || 'UNREAD',
 
       createdAt: row.createdAt,
     };
+    })
+  .filter((item) => {
+    if (!item) return false;
+
+    return (
+      item.userReminderStatus !==
+      ProjectReminderUserStateStatus.DISMISSED
+    );
   });
+}
+
+private async getUnifiedReminderStateMap(
+  currentUser: any,
+  reminderSource: string,
+  referenceIds: number[],
+) {
+  const userId =
+    currentUser?.id || currentUser?.userId;
+
+  if (!userId || referenceIds.length === 0) {
+    return {};
+  }
+
+  const states =
+    await this.projectReminderUserStateRepository.find({
+      where: {
+        userId,
+        reminderSource,
+        referenceId: In(referenceIds),
+      },
+    });
+
+  const map: Record<string, any> = {};
+
+  for (const item of states) {
+    map[String(item.referenceId)] = item;
+  }
+
+  return map;
+}
+
+async markUnifiedReminderAsRead(
+  body: {
+    reminderSource: string;
+    reminderType: string;
+    referenceId: number;
+    projectId?: number;
+  },
+  currentUser: any,
+) {
+  const userId =
+    currentUser?.id || currentUser?.userId;
+
+  const userName =
+    currentUser?.name ||
+    currentUser?.email ||
+    'Unknown User';
+
+  if (!body?.referenceId) {
+    throw new BadRequestException(
+      'Reference ID is required',
+    );
+  }
+
+  if (!body?.reminderSource) {
+    throw new BadRequestException(
+      'Reminder source is required',
+    );
+  }
+
+  let state =
+    await this.projectReminderUserStateRepository.findOne({
+      where: {
+        userId,
+        reminderSource:
+          body.reminderSource,
+        referenceId:
+          Number(body.referenceId),
+      },
+    });
+
+  if (!state) {
+    state =
+      this.projectReminderUserStateRepository.create({
+        userId,
+        userName,
+
+        reminderSource:
+          body.reminderSource,
+
+        reminderType:
+          body.reminderType,
+
+        referenceId:
+          Number(body.referenceId),
+
+        projectId:
+  body.projectId
+    ? Number(body.projectId)
+    : undefined,
+
+        status:
+          ProjectReminderUserStateStatus.READ,
+
+        readAt: new Date(),
+      });
+  } else {
+    state.status =
+      ProjectReminderUserStateStatus.READ;
+
+    state.readAt = new Date();
+  }
+
+  return this.projectReminderUserStateRepository.save(
+    state,
+  );
+}
+
+async dismissUnifiedReminderForUser(
+  body: {
+    reminderSource: string;
+    reminderType: string;
+    referenceId: number;
+    projectId?: number;
+  },
+  currentUser: any,
+) {
+  const userId =
+    currentUser?.id || currentUser?.userId;
+
+  const userName =
+    currentUser?.name ||
+    currentUser?.email ||
+    'Unknown User';
+
+  if (!body?.referenceId) {
+    throw new BadRequestException(
+      'Reference ID is required',
+    );
+  }
+
+  if (!body?.reminderSource) {
+    throw new BadRequestException(
+      'Reminder source is required',
+    );
+  }
+
+  let state =
+    await this.projectReminderUserStateRepository.findOne({
+      where: {
+        userId,
+        reminderSource:
+          body.reminderSource,
+        referenceId:
+          Number(body.referenceId),
+      },
+    });
+
+  if (!state) {
+    state =
+      this.projectReminderUserStateRepository.create({
+        userId,
+        userName,
+
+        reminderSource:
+          body.reminderSource,
+
+        reminderType:
+          body.reminderType,
+
+        referenceId:
+          Number(body.referenceId),
+
+        projectId:
+  body.projectId
+    ? Number(body.projectId)
+    : undefined,
+
+        status:
+          ProjectReminderUserStateStatus.DISMISSED,
+
+        dismissedAt: new Date(),
+      });
+  } else {
+    state.status =
+      ProjectReminderUserStateStatus.DISMISSED;
+
+    state.dismissedAt =
+      new Date();
+  }
+
+  return this.projectReminderUserStateRepository.save(
+    state,
+  );
 }
 
 async getUnreadPurchaseReminderCount(

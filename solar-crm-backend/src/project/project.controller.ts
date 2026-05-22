@@ -466,6 +466,28 @@ async getUnreadPurchaseReminderCount(
   );
 }
 
+@Post('reminders/mark-read')
+async markUnifiedReminderAsRead(
+  @Body() body: any,
+  @Req() req: any,
+) {
+  return this.projectService.markUnifiedReminderAsRead(
+    body,
+    req.user,
+  );
+}
+
+@Post('reminders/dismiss')
+async dismissUnifiedReminderForUser(
+  @Body() body: any,
+  @Req() req: any,
+) {
+  return this.projectService.dismissUnifiedReminderForUser(
+    body,
+    req.user,
+  );
+}
+
 @Get('payment-reminders')
 async getPaymentReminderList(@Req() req: any) {
   return this.projectService.getPaymentReminderList(req.user);
