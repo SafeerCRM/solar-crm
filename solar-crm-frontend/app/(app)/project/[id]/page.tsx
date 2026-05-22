@@ -39,6 +39,8 @@ projectOwnerRole?: string;
   expectedLagat?: number;
   expectedProfit?: number;
   status?: string;
+  projectManagerApprovalStatus?: string;
+projectManagerApprovalNote?: string;
   marketingHeadApprovalStatus?: string;
   marketingHeadApprovalNote?: string;
   ownerApprovalStatus?: string;
@@ -283,6 +285,11 @@ const [executionLoading, setExecutionLoading] =
   const [completionDate, setCompletionDate] = useState('');
 const [completionNote, setCompletionNote] = useState('');
 const [completionLoading, setCompletionLoading] = useState(false);
+const [projectManagerApprovalLoading, setProjectManagerApprovalLoading] =
+  useState(false);
+
+const [projectManagerApprovalNote, setProjectManagerApprovalNote] =
+  useState('');
 
 const [proofFiles, setProofFiles] =
   useState<Record<number, File[]>>({});
@@ -642,6 +649,46 @@ const submitApproval = async (
     );
   } finally {
     setApprovalLoading(false);
+  }
+};
+
+const handleProjectManagerApproval = async (
+  status: 'APPROVED' | 'REJECTED',
+) => {
+  if (!project?.id) return;
+
+  try {
+    setProjectManagerApprovalLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/${project.id}/project-manager-approval`,
+      {
+        status,
+        note: projectManagerApprovalNote,
+      },
+      {
+  headers: token
+    ? {
+        Authorization: `Bearer ${token}`,
+      }
+    : {},
+},
+    );
+
+    await fetchProject();
+
+    alert(`Project ${status.toLowerCase()} successfully`);
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to update approval',
+    );
+  } finally {
+    setProjectManagerApprovalLoading(false);
   }
 };
 
@@ -1597,7 +1644,18 @@ const canManageMaterial = hasRole([
 
       <div className="rounded-2xl bg-white p-5 shadow">
         <h2 className="mb-4 text-lg font-bold text-gray-800">Approval Status</h2>
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid gap-3 md:grid-cols-3">
+
+         <div className="rounded-xl bg-blue-50 p-4">
+  <p className="text-sm text-gray-500">Project Manager Approval</p>
+  <p className="mt-1 font-bold text-blue-700">
+    {project.projectManagerApprovalStatus || 'PENDING'}
+  </p>
+  <p className="mt-2 text-sm text-gray-700">
+    {project.projectManagerApprovalNote || 'No note'}
+  </p>
+</div>
+
           <div className="rounded-xl bg-yellow-50 p-4">
             <p className="text-sm text-gray-500">Marketing Head Approval</p>
             <p className="mt-1 font-bold text-yellow-700">
@@ -1620,6 +1678,68 @@ const canManageMaterial = hasRole([
         </div>
 
        <div className="mt-5 grid gap-4 md:grid-cols-2">
+
+        {hasRole([
+  'OWNER',
+  'MARKETING_HEAD',
+  'PROJECT_MANAGER',
+]) && (
+  <div className="rounded-xl border p-4">
+    <h3 className="font-bold text-gray-800">
+      Project Manager Action
+    </h3>
+
+    <p className="mt-2 text-sm">
+      Status:{' '}
+      <span className="font-semibold">
+        {project?.projectManagerApprovalStatus ||
+          'PENDING'}
+      </span>
+    </p>
+
+    <textarea
+      placeholder="Approval note"
+      value={projectManagerApprovalNote}
+      onChange={(e) =>
+        setProjectManagerApprovalNote(
+          e.target.value,
+        )
+      }
+      className="mt-3 w-full rounded-xl border p-3"
+      rows={3}
+    />
+
+    <div className="mt-3 flex gap-3">
+      <button
+        onClick={() =>
+          handleProjectManagerApproval(
+            'APPROVED',
+          )
+        }
+        disabled={
+          projectManagerApprovalLoading
+        }
+        className="rounded-xl bg-green-600 px-4 py-2 text-white hover:bg-green-700 disabled:opacity-50"
+      >
+        Approve
+      </button>
+
+      <button
+        onClick={() =>
+          handleProjectManagerApproval(
+            'REJECTED',
+          )
+        }
+        disabled={
+          projectManagerApprovalLoading
+        }
+        className="rounded-xl bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:opacity-50"
+      >
+        Reject
+      </button>
+    </div>
+  </div>
+)}
 
         {canMarketingApprove && (
   <div className="rounded-xl border p-4">

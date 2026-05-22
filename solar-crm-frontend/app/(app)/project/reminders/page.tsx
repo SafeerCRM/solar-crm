@@ -42,9 +42,10 @@ type ApprovalReminderItem = {
   projectId: number;
 
   reminderType:
-    | 'MARKETING_APPROVAL_PENDING'
-    | 'OWNER_APPROVAL_PENDING'
-    | 'PROJECT_APPROVAL_PENDING';
+  | 'PROJECT_MANAGER_APPROVAL_PENDING'
+  | 'MARKETING_APPROVAL_PENDING'
+  | 'OWNER_APPROVAL_PENDING'
+  | 'PROJECT_APPROVAL_PENDING';
 
   title: string;
   subtitle: string;
@@ -59,8 +60,9 @@ type ApprovalReminderItem = {
   projectSerial: string | null;
   projectStatus: string | null;
 
-  marketingHeadApprovalStatus: string | null;
-  ownerApprovalStatus: string | null;
+  projectManagerApprovalStatus: string | null;
+marketingHeadApprovalStatus: string | null;
+ownerApprovalStatus: string | null;
 
   createdAt: string;
 
@@ -2435,6 +2437,13 @@ function getPurchaseReminderBadge(
 function getApprovalReminderBadge(
   type: ApprovalReminderItem['reminderType'],
 ) {
+   if (type === 'PROJECT_MANAGER_APPROVAL_PENDING') {
+  return {
+    label: 'Project Manager Approval Pending',
+    className: 'bg-blue-100 text-blue-700',
+  };
+}
+
   if (type === 'MARKETING_APPROVAL_PENDING') {
     return {
       label: 'Marketing Approval Pending',
