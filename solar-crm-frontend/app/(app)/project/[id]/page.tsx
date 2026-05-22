@@ -132,6 +132,17 @@ type ExecutionProof = {
   createdAt?: string;
 };
 
+type ProjectEditHistory = {
+  id: number;
+  projectId: number;
+  fieldName?: string;
+  oldValue?: string;
+  newValue?: string;
+  changedByName?: string;
+  changedByRole?: string;
+  createdAt?: string;
+};
+
 type PaymentInstallment = {
   id: number;
   projectId: number;
@@ -296,6 +307,9 @@ const [proofFiles, setProofFiles] =
 
 const [proofUploadingId, setProofUploadingId] =
   useState<number | null>(null);
+
+  const [projectEditHistory, setProjectEditHistory] =
+  useState<ProjectEditHistory[]>([]);
 
   const [paymentInstallments, setPaymentInstallments] =
   useState<PaymentInstallment[]>([]);
@@ -1178,6 +1192,30 @@ activities.forEach((activity: ExecutionActivity) => {
   }
 };
 
+const fetchProjectEditHistory = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/${projectId}/edit-history`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setProjectEditHistory(res.data || []);
+  } catch (error) {
+    console.error(
+      'Failed to load project history:',
+      error,
+    );
+  }
+};
+
 const fetchPaymentInstallments = async () => {
   try {
     const token = localStorage.getItem('token');
@@ -1628,6 +1666,7 @@ const canManageMaterial = hasRole([
   fetchElectricityDetail();
   fetchExecutionActivities();
   fetchPaymentInstallments();
+  fetchProjectEditHistory();
 }
 }, [projectId]);
 
@@ -1682,6 +1721,7 @@ const canManageMaterial = hasRole([
     { key: 'ELECTRICITY_DEPARTMENT', label: 'Electricity Department' },
     { key: 'PAYMENT_COLLECTION', label: 'Payment Collection' },
     { key: 'DOCUMENTS', label: 'Documents' },
+    { key: 'PROJECT_HISTORY', label: 'Project History' },
   ].map((tab) => (
     <button
       key={tab.key}
@@ -2876,6 +2916,58 @@ const canManageMaterial = hasRole([
           ))
         )}
       </div>
+    </div>
+  </div>
+)}
+
+{activeTab === 'PROJECT_HISTORY' && (
+  <div className="rounded-2xl bg-white p-5 shadow">
+    <h2 className="text-xl font-bold text-gray-800">
+      Project Edit History
+    </h2>
+
+    <div className="mt-5 space-y-3">
+      {projectEditHistory.length === 0 ? (
+        <p className="text-sm text-gray-500">
+          No project history found.
+        </p>
+      ) : (
+        projectEditHistory.map((item) => (
+          <div
+            key={item.id}
+            className="rounded-xl border p-4"
+          >
+            <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+              <div>
+                <p className="font-semibold text-gray-800">
+                  {item.fieldName}
+                </p>
+
+                <p className="mt-1 text-sm text-red-600">
+                  Old: {item.oldValue || '-'}
+                </p>
+
+                <p className="mt-1 text-sm text-green-700">
+                  New: {item.newValue || '-'}
+                </p>
+
+                <p className="mt-2 text-xs text-gray-500">
+                  {item.changedByName || '-'} |{' '}
+                  {item.changedByRole || '-'}
+                </p>
+              </div>
+
+              <p className="text-xs text-gray-500">
+                {item.createdAt
+                  ? new Date(
+                      item.createdAt,
+                    ).toLocaleString()
+                  : '-'}
+              </p>
+            </div>
+          </div>
+        ))
+      )}
     </div>
   </div>
 )}
