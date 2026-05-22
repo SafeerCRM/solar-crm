@@ -1461,7 +1461,10 @@ const canManagePayment = hasRole([
 
 const canManageMaterial = hasRole([
   'OWNER',
+  'MARKETING_HEAD',
   'PROJECT_MANAGER',
+  'PROJECT_EXECUTIVE',
+  'MEETING_MANAGER',
 ]);
 
   useEffect(() => {

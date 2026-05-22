@@ -23,6 +23,11 @@ const navItems = [
       'LEAD_EXECUTIVE',
       'PROJECT_EXECUTIVE',
       'MEETING_ASSISTANT',
+      'LOAN_MANAGER',
+'SUBSIDY_MANAGER',
+'ELECTRICITY_MANAGER',
+'PAYMENT_MANAGER',
+'ACCOUNT_MANAGER',
     ],
   },
   { name: 'Users', href: '/users', roles: ['OWNER'] },
@@ -96,6 +101,8 @@ const navItems = [
 'TELECALLER',
 'TELECALLING_ASSISTANT',
 'LEAD_MANAGER',
+'PAYMENT_MANAGER',
+'ACCOUNT_MANAGER',
   ],
 },
 
@@ -160,6 +167,11 @@ const navItems = [
     'TELECALLER',
     'TELECALLING_ASSISTANT',
     'TELECALLING_MANAGER',
+    'LOAN_MANAGER',
+'SUBSIDY_MANAGER',
+'ELECTRICITY_MANAGER',
+'PAYMENT_MANAGER',
+'ACCOUNT_MANAGER',
   ],
 },
 
@@ -172,7 +184,14 @@ const navItems = [
 {
   name: 'Payment Collection',
   href: '/project/payment-collection',
-  roles: ['OWNER', 'MARKETING_HEAD', 'PROJECT_MANAGER'],
+  roles: [
+  'OWNER',
+  'MARKETING_HEAD',
+  'PROJECT_MANAGER',
+  'PAYMENT_COLLECTION_EXECUTIVE',
+  'PAYMENT_MANAGER',
+  'ACCOUNT_MANAGER',
+],
 },
 
 {
@@ -238,6 +257,11 @@ const [bellOpen, setBellOpen] = useState(false);
     'TELECALLER',
     'TELECALLING_ASSISTANT',
     'TELECALLING_MANAGER',
+    'LOAN_MANAGER',
+'SUBSIDY_MANAGER',
+'ELECTRICITY_MANAGER',
+'PAYMENT_MANAGER',
+'ACCOUNT_MANAGER',
   ];
 
   const canSeeReminders = userRoles.some((role) =>
