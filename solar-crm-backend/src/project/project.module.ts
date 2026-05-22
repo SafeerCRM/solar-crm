@@ -21,11 +21,15 @@ import { ProjectPaymentInstallment } from './project-payment-installment.entity'
 import { ProjectPaymentReminderUserState } from './project-payment-reminder-user-state.entity';
 import { ProjectReminderUserState } from './project-reminder-user-state.entity';
 import { ProjectEditHistory } from './project-edit-history.entity';
+import { ProjectVendor } from './project-vendor.entity';
+import { ProjectPurchaseOrder } from './project-purchase-order.entity';
+import { ProjectPurchaseOrderItem } from './project-purchase-order-item.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Project, ProjectDocument, ProjectComment, ProjectMaterialMaster, ProjectMaterialRequest,
-ProjectMaterialRequestItem, ProjectBranch, ProjectLoanDetail, ProjectSubsidyDetail, ProjectElectricityDetail, ProjectExecutionActivity, ProjectExecutionProof, ProjectExecutionReminder, ProjectExecutionReminderUserState, ProjectPaymentInstallment, ProjectPaymentReminderUserState, ProjectReminderUserState, ProjectEditHistory,]),
+ProjectMaterialRequestItem, ProjectBranch, ProjectLoanDetail, ProjectSubsidyDetail, ProjectElectricityDetail, ProjectExecutionActivity, ProjectExecutionProof, ProjectExecutionReminder, ProjectExecutionReminderUserState, ProjectPaymentInstallment, ProjectPaymentReminderUserState, ProjectReminderUserState, ProjectEditHistory,
+ ProjectVendor, ProjectPurchaseOrder, ProjectPurchaseOrderItem]),
     CalculatorModule,
   ],
   controllers: [ProjectController],

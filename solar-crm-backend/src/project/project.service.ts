@@ -25,7 +25,10 @@ import {
 import { CalculatorService } from '../calculator/calculator.service';
 import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
-import { ProjectMaterialMaster } from './project-material-master.entity';
+import {
+  ProjectMaterialMaster,
+  ProjectMaterialMarginType,
+} from './project-material-master.entity';
 import { ProjectMaterialRequest } from './project-material-request.entity';
 import { ProjectMaterialRequestItem } from './project-material-request-item.entity';
 import { ProjectBranch } from './project-branch.entity';
@@ -75,6 +78,15 @@ import {
 
 import { ProjectEditHistory } from './project-edit-history.entity';
 
+import { ProjectVendor } from './project-vendor.entity';
+
+import {
+  ProjectPurchaseOrder,
+  ProjectPurchaseOrderStatus,
+} from './project-purchase-order.entity';
+
+import { ProjectPurchaseOrderItem } from './project-purchase-order-item.entity';
+
 @Injectable()
 export class ProjectService {
 
@@ -88,6 +100,10 @@ export class ProjectService {
   return Number.isFinite(num)
     ? num
     : 0;
+}
+
+private generatePoNumber() {
+  return `PO-${Date.now()}`;
 }
 
   constructor(
@@ -144,6 +160,15 @@ private readonly projectReminderUserStateRepository: Repository<ProjectReminderU
 
 @InjectRepository(ProjectEditHistory)
 private readonly projectEditHistoryRepository: Repository<ProjectEditHistory>,
+
+@InjectRepository(ProjectVendor)
+private readonly projectVendorRepository: Repository<ProjectVendor>,
+
+@InjectRepository(ProjectPurchaseOrder)
+private readonly projectPurchaseOrderRepository: Repository<ProjectPurchaseOrder>,
+
+@InjectRepository(ProjectPurchaseOrderItem)
+private readonly projectPurchaseOrderItemRepository: Repository<ProjectPurchaseOrderItem>,
 
     private readonly calculatorService: CalculatorService,
 
@@ -1020,9 +1045,25 @@ async projectManagerApproval(
     category: data.category || '',
     unit: data.unit || '',
     brand: data.brand || '',
+
+    hsnCode: (data as any).hsnCode || '',
+    vendorPreferredName: (data as any).vendorPreferredName || '',
+
+    // Existing working field preserved
     rate: Number(data.rate || 0),
+
     gstPercent: Number(data.gstPercent || 0),
+
+    marginType:
+      (data as any).marginType === 'PERCENT'
+        ? ProjectMaterialMarginType.PERCENT
+: ProjectMaterialMarginType.AMOUNT,
+
+    // Existing working field preserved
     expectedMargin: Number((data as any).expectedMargin || 0),
+
+    sellingRate: Number((data as any).sellingRate || 0),
+
     remarks: data.remarks || '',
     isActive: data.isActive !== false,
   });
@@ -1054,19 +1095,43 @@ async updateMaterialMaster(id: number, data: Partial<ProjectMaterialMaster>) {
 
   Object.assign(item, {
     ...data,
+
+    hsnCode:
+      (data as any).hsnCode !== undefined
+        ? (data as any).hsnCode || ''
+        : (item as any).hsnCode,
+
+    vendorPreferredName:
+      (data as any).vendorPreferredName !== undefined
+        ? (data as any).vendorPreferredName || ''
+        : (item as any).vendorPreferredName,
+
     rate:
       data.rate !== undefined
         ? Number(data.rate || 0)
         : item.rate,
+
     gstPercent:
       data.gstPercent !== undefined
         ? Number(data.gstPercent || 0)
         : item.gstPercent,
 
-        expectedMargin:
-  (data as any).expectedMargin !== undefined
-    ? Number((data as any).expectedMargin || 0)
-    : (item as any).expectedMargin,
+    marginType:
+      (data as any).marginType !== undefined
+        ? (data as any).marginType === 'PERCENT'
+          ? ProjectMaterialMarginType.PERCENT
+: ProjectMaterialMarginType.AMOUNT
+        : (item as any).marginType,
+
+    expectedMargin:
+      (data as any).expectedMargin !== undefined
+        ? Number((data as any).expectedMargin || 0)
+        : (item as any).expectedMargin,
+
+    sellingRate:
+      (data as any).sellingRate !== undefined
+        ? Number((data as any).sellingRate || 0)
+        : (item as any).sellingRate,
   });
 
   return this.projectMaterialMasterRepository.save(item);
@@ -1115,6 +1180,101 @@ async enableMaterialMaster(id: number) {
 
   return {
     message: 'Material item enabled successfully',
+  };
+}
+
+async createVendor(data: Partial<ProjectVendor>) {
+  if (!data.vendorName || !String(data.vendorName).trim()) {
+    throw new BadRequestException('Vendor name is required');
+  }
+
+  const vendor = this.projectVendorRepository.create({
+    vendorName: String(data.vendorName).trim(),
+    contactPerson: data.contactPerson || '',
+    phone: data.phone || '',
+    email: data.email || '',
+    gstNumber: data.gstNumber || '',
+    address: data.address || '',
+    city: data.city || '',
+    state: data.state || '',
+    materialCategory: data.materialCategory || '',
+    remarks: data.remarks || '',
+    isActive: data.isActive !== false,
+  });
+
+  return this.projectVendorRepository.save(vendor);
+}
+
+async getVendors(activeOnly = false) {
+  return this.projectVendorRepository.find({
+    where: activeOnly
+      ? {
+          isActive: true,
+        }
+      : {},
+    order: {
+      createdAt: 'DESC',
+    },
+  });
+}
+
+async updateVendor(id: number, data: Partial<ProjectVendor>) {
+  const vendor = await this.projectVendorRepository.findOne({
+    where: { id },
+  });
+
+  if (!vendor) {
+    throw new NotFoundException('Vendor not found');
+  }
+
+  Object.assign(vendor, {
+    ...data,
+    vendorName:
+      data.vendorName !== undefined
+        ? String(data.vendorName || '').trim()
+        : vendor.vendorName,
+    isActive:
+      data.isActive !== undefined
+        ? data.isActive
+        : vendor.isActive,
+  });
+
+  return this.projectVendorRepository.save(vendor);
+}
+
+async disableVendor(id: number) {
+  const vendor = await this.projectVendorRepository.findOne({
+    where: { id },
+  });
+
+  if (!vendor) {
+    throw new NotFoundException('Vendor not found');
+  }
+
+  vendor.isActive = false;
+
+  await this.projectVendorRepository.save(vendor);
+
+  return {
+    message: 'Vendor disabled successfully',
+  };
+}
+
+async enableVendor(id: number) {
+  const vendor = await this.projectVendorRepository.findOne({
+    where: { id },
+  });
+
+  if (!vendor) {
+    throw new NotFoundException('Vendor not found');
+  }
+
+  vendor.isActive = true;
+
+  await this.projectVendorRepository.save(vendor);
+
+  return {
+    message: 'Vendor enabled successfully',
   };
 }
 
@@ -4654,6 +4814,269 @@ async buyMaterialRequestItem(
   return this.projectMaterialRequestItemRepository.save(
     item,
   );
+}
+
+async createPurchaseOrder(
+  body: any,
+  user: any,
+) {
+  const items = Array.isArray(body?.items)
+    ? body.items
+    : [];
+
+  if (!body?.projectId) {
+    throw new BadRequestException(
+      'Project ID is required',
+    );
+  }
+
+  if (!body?.vendorId) {
+    throw new BadRequestException(
+      'Vendor is required',
+    );
+  }
+
+  if (items.length === 0) {
+    throw new BadRequestException(
+      'At least one PO item is required',
+    );
+  }
+
+  const vendor =
+    await this.projectVendorRepository.findOne({
+      where: {
+        id: Number(body.vendorId),
+      },
+    });
+
+  if (!vendor) {
+    throw new NotFoundException(
+      'Vendor not found',
+    );
+  }
+
+  let subtotalAmount = 0;
+  let gstAmount = 0;
+  let totalAmount = 0;
+
+  const preparedItems: any[] = [];
+
+  for (const item of items) {
+    const purchaseRate = Number(
+      item.purchaseRate || 0,
+    );
+
+    const quantity = Number(
+      item.quantity || 0,
+    );
+
+    const gstPercent = Number(
+      item.gstPercent || 0,
+    );
+
+    const subtotal =
+      purchaseRate * quantity;
+
+    const gst =
+      (subtotal * gstPercent) / 100;
+
+    const total = subtotal + gst;
+
+    subtotalAmount += subtotal;
+    gstAmount += gst;
+    totalAmount += total;
+
+    preparedItems.push({
+      ...item,
+      purchaseRate,
+      quantity,
+      gstPercent,
+      subtotalAmount: subtotal,
+      gstAmount: gst,
+      totalAmount: total,
+    });
+  }
+
+  const po =
+    this.projectPurchaseOrderRepository.create({
+      projectId: Number(body.projectId),
+
+      materialRequestId:
+        body.materialRequestId
+          ? Number(body.materialRequestId)
+          : null,
+
+      vendorId: vendor.id,
+
+      vendorName: vendor.vendorName,
+
+      poNumber: this.generatePoNumber(),
+
+      status:
+        ProjectPurchaseOrderStatus.DRAFT,
+
+      subtotalAmount,
+
+      gstAmount,
+
+      totalAmount,
+
+      orderDate: body.orderDate
+        ? new Date(body.orderDate)
+        : new Date(),
+
+      expectedDeliveryDate:
+        body.expectedDeliveryDate
+          ? new Date(
+              body.expectedDeliveryDate,
+            )
+          : null,
+
+      remarks: body.remarks || '',
+
+      createdBy:
+        user?.id || user?.userId || null,
+
+      createdByName:
+        user?.name || '',
+
+      createdByRole:
+        Array.isArray(user?.roles)
+          ? user.roles.join(', ')
+          : '',
+        } as Partial<ProjectPurchaseOrder>);
+
+  const savedPo =
+  await this.projectPurchaseOrderRepository.save(
+    po as ProjectPurchaseOrder,
+  );
+
+  const poItems = preparedItems.map(
+    (item) =>
+      this.projectPurchaseOrderItemRepository.create({
+        purchaseOrderId: savedPo.id,
+
+        projectId: Number(body.projectId),
+
+        materialRequestItemId:
+          item.materialRequestItemId
+            ? Number(
+                item.materialRequestItemId,
+              )
+            : null,
+
+        materialId:
+          item.materialId
+            ? Number(item.materialId)
+            : null,
+
+        materialName:
+          item.materialName || '',
+
+        category:
+          item.category || '',
+
+        brand:
+          item.brand || '',
+
+        unit:
+          item.unit || '',
+
+        purchaseRate:
+          item.purchaseRate,
+
+        gstPercent:
+          item.gstPercent,
+
+        quantity:
+          item.quantity,
+
+        receivedQuantity: 0,
+
+        pendingQuantity:
+          item.quantity,
+
+        subtotalAmount:
+          item.subtotalAmount,
+
+        gstAmount:
+          item.gstAmount,
+
+        totalAmount:
+          item.totalAmount,
+
+        remarks:
+          item.remarks || '',
+            } as Partial<ProjectPurchaseOrderItem>),
+  );
+
+  await this.projectPurchaseOrderItemRepository.save(
+    poItems,
+  );
+
+  return {
+    message:
+      'Purchase order created successfully',
+
+    purchaseOrder: savedPo,
+  };
+}
+
+async getPurchaseOrderById(id: number) {
+  const po =
+    await this.projectPurchaseOrderRepository.findOne({
+      where: { id },
+    });
+
+  if (!po) {
+    throw new NotFoundException(
+      'Purchase order not found',
+    );
+  }
+
+  const items =
+    await this.projectPurchaseOrderItemRepository.find({
+      where: {
+        purchaseOrderId: id,
+      },
+      order: {
+        createdAt: 'ASC',
+      },
+    });
+
+  return {
+    ...po,
+    items,
+  };
+}
+
+async getPurchasableMaterialRequestItems(
+  projectId?: number,
+) {
+  const query =
+    this.projectMaterialRequestItemRepository.createQueryBuilder(
+      'item',
+    );
+
+  query.where(
+    'item.pendingQuantity > 0',
+  );
+
+  if (projectId) {
+    query.andWhere(
+      'item.projectId = :projectId',
+      {
+        projectId,
+      },
+    );
+  }
+
+  query.orderBy(
+    'item.createdAt',
+    'DESC',
+  );
+
+  return query.getMany();
 }
 
 async getProjectLoanDetail(projectId: number) {

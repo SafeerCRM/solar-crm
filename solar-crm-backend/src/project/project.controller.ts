@@ -125,6 +125,45 @@ enableMaterialMaster(@Param('id') id: string) {
   );
 }
 
+@Roles('OWNER', 'PROJECT_MANAGER')
+@Post('vendor')
+createVendor(@Body() body: any) {
+  return this.projectService.createVendor(body);
+}
+
+@Get('vendor')
+getVendors(
+  @Query('activeOnly') activeOnly?: string,
+) {
+  return this.projectService.getVendors(
+    activeOnly === 'true',
+  );
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER')
+@Patch('vendor/:id')
+updateVendor(
+  @Param('id') id: string,
+  @Body() body: any,
+) {
+  return this.projectService.updateVendor(
+    Number(id),
+    body,
+  );
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER')
+@Patch('vendor/:id/delete')
+disableVendor(@Param('id') id: string) {
+  return this.projectService.disableVendor(Number(id));
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER')
+@Patch('vendor/:id/enable')
+enableVendor(@Param('id') id: string) {
+  return this.projectService.enableVendor(Number(id));
+}
+
 @Roles(
   'OWNER',
   'MARKETING_HEAD',
@@ -191,6 +230,39 @@ getPurchaseOrders(
     branch: branch || '',
     owner: owner || '',
   });
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER')
+@Post('purchase-order')
+createPurchaseOrder(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.createPurchaseOrder(
+    body,
+    user,
+  );
+}
+
+@Get('purchase-order/:id')
+getPurchaseOrderById(
+  @Param('id') id: string,
+) {
+  return this.projectService.getPurchaseOrderById(
+    Number(id),
+  );
+}
+
+@Get('purchase-order/purchasable-items')
+getPurchasableMaterialRequestItems(
+  @Query('projectId')
+  projectId?: string,
+) {
+  return this.projectService.getPurchasableMaterialRequestItems(
+    projectId
+      ? Number(projectId)
+      : undefined,
+  );
 }
 
 @Roles('OWNER', 'PROJECT_MANAGER')
