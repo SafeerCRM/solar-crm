@@ -392,6 +392,17 @@ getGeneratedPurchaseOrders(
   });
 }
 
+@Get('purchase-order/:id/pdf')
+generatePurchaseOrderPdf(
+  @Param('id') id: string,
+  @Res() res: Response,
+) {
+  return this.projectService.generatePurchaseOrderPdf(
+    Number(id),
+    res,
+  );
+}
+
 @Roles('OWNER', 'PROJECT_MANAGER')
 
 @Patch('material-request-item/:id/buy')
