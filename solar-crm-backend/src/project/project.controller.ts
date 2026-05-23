@@ -329,6 +329,18 @@ getFinalInvoiceById(
   );
 }
 
+@Roles('OWNER', 'PROJECT_MANAGER')
+@Post('proforma-invoice/:id/final-invoice')
+createFinalInvoiceFromProforma(
+  @Param('id') id: string,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.createFinalInvoiceFromProforma(
+    Number(id),
+    user,
+  );
+}
+
 @Get('purchase-order/purchasable-items')
 getPurchasableMaterialRequestItems(
   @Query('projectId')

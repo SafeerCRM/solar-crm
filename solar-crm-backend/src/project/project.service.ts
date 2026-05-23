@@ -5774,6 +5774,56 @@ async createFinalInvoice(
   };
 }
 
+async createFinalInvoiceFromProforma(
+  proformaInvoiceId: number,
+  user: any,
+) {
+  const pi =
+    await this.getProformaInvoiceById(
+      proformaInvoiceId,
+    );
+
+  if (!pi) {
+    throw new NotFoundException(
+      'Proforma invoice not found',
+    );
+  }
+
+  const existingInvoice =
+    await this.projectFinalInvoiceRepository.findOne({
+      where: {
+        projectId: Number(pi.projectId),
+      },
+    });
+
+  if (existingInvoice) {
+    throw new BadRequestException(
+      'Final invoice already exists for this project',
+    );
+  }
+
+  return this.createFinalInvoice(
+    {
+      projectId: pi.projectId,
+      invoiceDate: new Date(),
+      remarks: `Generated from ${pi.invoiceNumber}`,
+      items: (pi.items || []).map((item: any) => ({
+        materialId: item.materialId || null,
+        itemName: item.itemName || '',
+        category: item.category || '',
+        brand: item.brand || '',
+        unit: item.unit || '',
+        finalRate: Number(item.sellingRate || 0),
+        gstPercent: Number(item.gstPercent || 0),
+        quantity: Number(item.quantity || 0),
+        discountAmount: Number(item.discountAmount || 0),
+        remarks: item.remarks || '',
+      })),
+    },
+    user,
+  );
+}
+
 async getFinalInvoices(filters?: {
   page?: number;
   limit?: number;
