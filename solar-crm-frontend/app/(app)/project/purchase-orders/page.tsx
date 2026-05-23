@@ -465,7 +465,10 @@ const createFinalInvoiceFromPi = async (piId: number) => {
   }
 };
 
-const downloadFinalInvoicePdf = async (invoiceId: number) => {
+const downloadFinalInvoicePdf = async (
+  invoiceId: number,
+  share = false,
+) => {
   try {
     const token = localStorage.getItem('token');
 
@@ -485,20 +488,84 @@ const downloadFinalInvoicePdf = async (invoiceId: number) => {
       type: 'application/pdf',
     });
 
-    const url = window.URL.createObjectURL(blob);
+    const fileName = `final-invoice-${invoiceId}.pdf`;
 
-    const link = document.createElement('a');
+    const jsPDF = (await import('jspdf')).default;
 
-    link.href = url;
-    link.download = `final-invoice-${invoiceId}.pdf`;
+    const pdf = new jsPDF();
 
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+    const arrayBuffer = await blob.arrayBuffer();
 
-    window.URL.revokeObjectURL(url);
+    const uint8Array = new Uint8Array(arrayBuffer);
+
+    const binaryString = uint8Array.reduce(
+      (data, byte) =>
+        data + String.fromCharCode(byte),
+      '',
+    );
+
+    const base64 =
+      btoa(binaryString);
+
+    try {
+      const { Filesystem, Directory } =
+        await import(
+          '@capacitor/filesystem'
+        );
+
+      const { Share } =
+        await import(
+          '@capacitor/share'
+        );
+
+      const saved =
+        await Filesystem.writeFile({
+          path: fileName,
+          data: base64,
+          directory:
+            Directory.Documents,
+          recursive: true,
+        });
+
+      if (share) {
+        await Share.share({
+          title: 'Final Invoice',
+          text: `Final Invoice #${invoiceId}`,
+          url: saved.uri,
+          dialogTitle:
+            'Share Final Invoice PDF',
+        });
+
+        return;
+      }
+
+      window.open(saved.uri, '_blank');
+      return;
+    } catch {
+      const url =
+        window.URL.createObjectURL(
+          blob,
+        );
+
+      const link =
+        document.createElement('a');
+
+      link.href = url;
+      link.download = fileName;
+
+      document.body.appendChild(link);
+
+      link.click();
+
+      link.remove();
+
+      window.URL.revokeObjectURL(
+        url,
+      );
+    }
   } catch (error: any) {
     console.error(error);
+
     alert(
       error?.response?.data?.message ||
         'Failed to download final invoice PDF',
@@ -1212,12 +1279,31 @@ const generateProformaInvoice = async () => {
   View Invoice
 </button>
 
-<button
-  onClick={() => downloadFinalInvoicePdf(invoice.id)}
-  className="mt-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
->
-  Download PDF
-</button>
+<div className="mt-2 flex flex-wrap gap-2">
+  <button
+    onClick={() =>
+      downloadFinalInvoicePdf(
+        invoice.id,
+        false,
+      )
+    }
+    className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+  >
+    Download PDF
+  </button>
+
+  <button
+    onClick={() =>
+      downloadFinalInvoicePdf(
+        invoice.id,
+        true,
+      )
+    }
+    className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
+  >
+    Share PDF
+  </button>
+</div>
             </div>
           </div>
         </div>
