@@ -37,6 +37,10 @@ const [pendingDocuments, setPendingDocuments] = useState<PendingDocument[]>([]);
     customerPhone: '',
     city: '',
     zone: '',
+        address: '',
+    gpsLatitude: '',
+    gpsLongitude: '',
+    gpsAddress: '',
     electricityKNumber: '',
     customerGmail: '',
     aadhaarLinkedMobile: '',
@@ -267,6 +271,10 @@ const fetchMeetingPrefill = async () => {
       leadId: meeting.leadId ? String(meeting.leadId) : '',
       customerName: meeting.customerName || prev.customerName,
       customerPhone: meeting.mobile || prev.customerPhone,
+            address: meeting.address || meeting.gpsAddress || prev.address,
+      gpsLatitude: meeting.gpsLatitude ? String(meeting.gpsLatitude) : prev.gpsLatitude,
+      gpsLongitude: meeting.gpsLongitude ? String(meeting.gpsLongitude) : prev.gpsLongitude,
+      gpsAddress: meeting.gpsAddress || prev.gpsAddress,
       remarks:
         meeting.notes ||
         meeting.managerRemarks ||
@@ -459,6 +467,15 @@ router.push(`/project/${createdProjectId}`);
             value={form.zone}
             onChange={handleChange}
             className="rounded-xl border p-3"
+          />
+
+                    <textarea
+            name="address"
+            placeholder="Project Address / Location"
+            value={form.address}
+            onChange={handleChange}
+            className="rounded-xl border p-3 md:col-span-3"
+            rows={3}
           />
 
           <select
