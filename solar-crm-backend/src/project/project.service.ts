@@ -459,7 +459,13 @@ const roles = Array.isArray(user?.roles)
 const canViewAll =
   roles.includes('OWNER') ||
   roles.includes('MARKETING_HEAD') ||
-  roles.includes('PROJECT_MANAGER');
+  roles.includes('PROJECT_MANAGER') ||
+  roles.includes('LOAN_MANAGER') ||
+  roles.includes('SUBSIDY_MANAGER') ||
+  roles.includes('ELECTRICITY_MANAGER') ||
+  roles.includes('PAYMENT_COLLECTION_EXECUTIVE') ||
+  roles.includes('PAYMENT_MANAGER') ||
+  roles.includes('ACCOUNT_MANAGER');
 
 if (
   !canViewAll &&
