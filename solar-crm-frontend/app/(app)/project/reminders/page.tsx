@@ -333,6 +333,11 @@ const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 export default function ProjectRemindersPage() {
   const [summary, setSummary] = useState<ReminderSummary | null>(null);
+  const [approvalPage, setApprovalPage] =
+  useState(1);
+
+const [approvalTotalPages, setApprovalTotalPages] =
+  useState(1);
   const [items, setItems] = useState<ReminderItem[]>([]);
   const [paymentItems, setPaymentItems] = useState<PaymentReminderItem[]>([]);
   const [approvalItems, setApprovalItems] = useState<ApprovalReminderItem[]>([]);
@@ -434,7 +439,7 @@ export default function ProjectRemindersPage() {
       selectedFilter === 'APPROVAL'
     ) {
       const approvalRes = await axios.get(
-        `${apiBaseUrl}/project/approval-reminders`,
+  `${apiBaseUrl}/project/approval-reminders?page=${approvalPage}&limit=20`,
         {
           headers: getAuthHeaders(),
         },
@@ -446,6 +451,12 @@ export default function ProjectRemindersPage() {
     : Array.isArray(approvalRes.data?.data)
       ? approvalRes.data.data
       : [],
+);
+
+setApprovalTotalPages(
+  Number(
+    approvalRes.data?.totalPages || 1,
+  ),
 );
     }
 
@@ -702,7 +713,7 @@ const dismissPaymentReminder = async (installmentId: number) => {
 
   useEffect(() => {
   fetchReminders(filter);
-}, [filter]);
+}, [filter, approvalPage]);
 
   const filteredExecutionItems = items.filter((item) => {
   if (filter === 'ALL' || filter === 'EXECUTION') return true;
@@ -1050,6 +1061,45 @@ onDismiss={dismissUnifiedReminder}
   actionLoadingId={actionLoadingId}
 />
 ))}
+
+{filter === 'APPROVAL' &&
+  approvalTotalPages > 1 && (
+    <div className="mt-6 flex items-center justify-center gap-4">
+      <button
+        disabled={approvalPage <= 1}
+        onClick={() =>
+          setApprovalPage((prev) =>
+            Math.max(prev - 1, 1),
+          )
+        }
+        className="rounded-xl bg-gray-200 px-4 py-2 text-sm font-semibold disabled:opacity-50"
+      >
+        Previous
+      </button>
+
+      <div className="text-sm font-semibold text-gray-700">
+        Page {approvalPage} of{' '}
+        {approvalTotalPages}
+      </div>
+
+      <button
+        disabled={
+          approvalPage >= approvalTotalPages
+        }
+        onClick={() =>
+          setApprovalPage((prev) =>
+            Math.min(
+              prev + 1,
+              approvalTotalPages,
+            ),
+          )
+        }
+        className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+      >
+        Next
+      </button>
+    </div>
+  )}
 
 {filteredFinalClosureItems.map((item) => (
   <FinalClosureReminderListItem
