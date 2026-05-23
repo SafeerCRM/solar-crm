@@ -1734,8 +1734,8 @@ const generateProjectPdf = async (share = false) => {
     const pdf = new jsPDF('p', 'mm', 'a4');
 
     const pages = Array.from(
-      pdfRef.current.querySelectorAll('.project-pdf-page'),
-    ) as HTMLElement[];
+  pdfRef.current.querySelectorAll('.project-pdf-page.top-project-summary'),
+) as HTMLElement[];
 
     for (let i = 0; i < pages.length; i++) {
       const canvas = await html2canvas(pages[i], {
@@ -4290,7 +4290,7 @@ const generateProjectPdf = async (share = false) => {
     color: '#111827',
   }}
 >
-  <div className="project-pdf-page bg-white p-8 text-sm">
+  <div className="project-pdf-page top-project-summary bg-white p-8 text-sm">
     <h1 className="text-2xl font-bold">Project Internal Report</h1>
     <p className="mt-1">Project #{project.id}</p>
 
