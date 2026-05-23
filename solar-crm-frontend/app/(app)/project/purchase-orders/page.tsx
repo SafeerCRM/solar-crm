@@ -135,6 +135,9 @@ const [showPiModal, setShowPiModal] =
 const [piDiscount, setPiDiscount] = useState<Record<number, string>>({});
 const [generatingPi, setGeneratingPi] = useState(false);
 
+const [creatingFinalInvoiceId, setCreatingFinalInvoiceId] =
+  useState<number | null>(null);
+
 const [summary, setSummary] = useState({
   totalPendingItems: 0,
   totalPendingQuantity: 0,
@@ -330,6 +333,43 @@ const fetchPiDetail = async (id: number) => {
     alert('Failed to load PI detail');
   } finally {
     setPiDetailLoading(false);
+  }
+};
+
+const createFinalInvoiceFromPi = async (piId: number) => {
+  const confirmed = window.confirm(
+    'Create final invoice from this proforma invoice?',
+  );
+
+  if (!confirmed) return;
+
+  try {
+    setCreatingFinalInvoiceId(piId);
+
+    const token = localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/proforma-invoice/${piId}/final-invoice`,
+      {},
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Final invoice created successfully');
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to create final invoice',
+    );
+  } finally {
+    setCreatingFinalInvoiceId(null);
   }
 };
 
@@ -948,6 +988,17 @@ const generateProformaInvoice = async () => {
 >
   View PI
 </button>
+
+<button
+  onClick={() => createFinalInvoiceFromPi(pi.id)}
+  disabled={creatingFinalInvoiceId === pi.id}
+  className="mt-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+>
+  {creatingFinalInvoiceId === pi.id
+    ? 'Creating...'
+    : 'Create Final Invoice'}
+</button>
+
             </div>
           </div>
         </div>
