@@ -395,6 +395,15 @@ if (!canViewAll) {
     );
   }
 
+  if (roles.includes('LOAN_MANAGER')) {
+  query.andWhere(
+    'project.projectType = :loanProjectType',
+    {
+      loanProjectType: 'LOAN',
+    },
+  );
+}
+
   if (filters?.status) {
     query.andWhere(
       'project.status = :status',
@@ -776,6 +785,33 @@ async uploadProjectDocuments(files: any[], body: any, user: any) {
 
   const uploadedDocuments: ProjectDocument[] = [];
 
+  const roles = Array.isArray(user?.roles)
+  ? user.roles
+  : [];
+
+const canUploadAnyDepartment =
+  roles.includes('OWNER') ||
+  roles.includes('MARKETING_HEAD') ||
+  roles.includes('PROJECT_MANAGER');
+
+if (!canUploadAnyDepartment) {
+  if (roles.includes('LOAN_MANAGER')) {
+    body.department = 'LOAN';
+  } else if (roles.includes('SUBSIDY_MANAGER')) {
+    body.department = 'SUBSIDY';
+  } else if (roles.includes('ELECTRICITY_MANAGER')) {
+    body.department = 'ELECTRICITY';
+  } else if (
+    roles.includes('PAYMENT_COLLECTION_EXECUTIVE') ||
+    roles.includes('PAYMENT_MANAGER') ||
+    roles.includes('ACCOUNT_MANAGER')
+  ) {
+    body.department = 'PAYMENT_COLLECTION';
+  } else if (roles.includes('PROJECT_EXECUTIVE')) {
+    body.department = 'PROJECT_MANAGEMENT';
+  }
+}
+
   for (const file of files) {
     const result = await this.uploadProjectDocument(file, body, user);
     uploadedDocuments.push(result.document);
@@ -787,7 +823,7 @@ async uploadProjectDocuments(files: any[], body: any, user: any) {
   };
 }
 
-async getProjectDocuments(projectId: number) {
+async getProjectDocuments(projectId: number, user?: any) {
   const project = await this.projectRepository.findOne({
     where: { id: projectId },
   });
@@ -796,12 +832,64 @@ async getProjectDocuments(projectId: number) {
     throw new NotFoundException('Project not found');
   }
 
-  return this.projectDocumentRepository.find({
-    where: { projectId },
-    order: {
-      createdAt: 'DESC',
-    },
-  });
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  const canSeeAllDocuments =
+    roles.includes('OWNER') ||
+    roles.includes('MARKETING_HEAD') ||
+    roles.includes('PROJECT_MANAGER');
+
+  let allowedDepartments: string[] = [];
+
+  if (canSeeAllDocuments) {
+    return this.projectDocumentRepository.find({
+      where: { projectId },
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+  }
+
+  if (roles.includes('LOAN_MANAGER')) {
+    allowedDepartments.push('LOAN');
+  }
+
+  if (roles.includes('SUBSIDY_MANAGER')) {
+    allowedDepartments.push('SUBSIDY');
+  }
+
+  if (roles.includes('ELECTRICITY_MANAGER')) {
+    allowedDepartments.push('ELECTRICITY');
+  }
+
+  if (
+    roles.includes('PAYMENT_COLLECTION_EXECUTIVE') ||
+    roles.includes('PAYMENT_MANAGER') ||
+    roles.includes('ACCOUNT_MANAGER')
+  ) {
+    allowedDepartments.push('PAYMENT_COLLECTION');
+  }
+
+  if (roles.includes('PROJECT_EXECUTIVE')) {
+    allowedDepartments.push('PROJECT_MANAGEMENT');
+  }
+
+  if (allowedDepartments.length === 0) {
+    allowedDepartments = ['PROJECT_CREATION'];
+  }
+
+  return this.projectDocumentRepository
+    .createQueryBuilder('document')
+    .where('document.projectId = :projectId', {
+      projectId,
+    })
+    .andWhere('document.department IN (:...allowedDepartments)', {
+      allowedDepartments,
+    })
+    .orderBy('document.createdAt', 'DESC')
+    .getMany();
 }
 
 

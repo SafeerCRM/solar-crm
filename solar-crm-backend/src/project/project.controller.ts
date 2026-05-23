@@ -71,9 +71,13 @@ findAll(
 }
 
   @Get(':id/documents')
-getProjectDocuments(@Param('id') id: string) {
+getProjectDocuments(
+  @Param('id') id: string,
+  @CurrentUser() user: any,
+) {
   return this.projectService.getProjectDocuments(
     Number(id),
+    user,
   );
 }
 
