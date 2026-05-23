@@ -42,6 +42,16 @@ type VendorItem = {
   isActive?: boolean;
 };
 
+type GeneratedPurchaseOrder = {
+  id: number;
+  poNumber?: string;
+  vendorName?: string;
+  projectId?: number;
+  totalAmount?: number;
+  status?: string;
+  createdAt?: string;
+};
+
 export default function PurchaseOrdersPage() {
   const [items, setItems] = useState<PurchaseItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -59,6 +69,9 @@ const [vendors, setVendors] = useState<VendorItem[]>([]);
 const [selectedVendorId, setSelectedVendorId] = useState('');
 const [selectedItemIds, setSelectedItemIds] = useState<Record<number, boolean>>({});
 const [generatingPo, setGeneratingPo] = useState(false);
+const [generatedPos, setGeneratedPos] = useState<
+  GeneratedPurchaseOrder[]
+>([]);
 
 const [summary, setSummary] = useState({
   totalPendingItems: 0,
@@ -157,6 +170,30 @@ const fetchVendors = async () => {
   }
 };
 
+const fetchGeneratedPos = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/generated-purchase-orders`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setGeneratedPos(res.data?.data || []);
+  } catch (error) {
+    console.error(
+      'Failed to load generated POs:',
+      error,
+    );
+  }
+};
+
   useEffect(() => {
   fetchPurchaseOrders();
 }, [page, projectFilter, materialFilter, statusFilter, branchFilter, ownerFilter]);
@@ -164,6 +201,7 @@ const fetchVendors = async () => {
 useEffect(() => {
   fetchProjectOwners();
   fetchVendors();
+  fetchGeneratedPos();
 }, []);
 
   const filteredItems = items;
@@ -367,6 +405,7 @@ const canGeneratePo =
     setSelectedVendorId('');
 
     fetchPurchaseOrders();
+    fetchGeneratedPos();
   } catch (error: any) {
     console.error(error);
 
@@ -389,6 +428,76 @@ const canGeneratePo =
           Pending project material purchase requirements.
         </p>
       </div>
+
+      <div className="rounded-2xl bg-white p-5 shadow">
+  <div className="mb-4 flex items-center justify-between">
+    <div>
+      <h2 className="text-xl font-bold text-gray-800">
+        Generated PO Documents
+      </h2>
+
+      <p className="mt-1 text-sm text-gray-500">
+        Commercial purchase order snapshots
+      </p>
+    </div>
+  </div>
+
+  {generatedPos.length === 0 ? (
+    <p className="text-sm text-gray-500">
+      No generated purchase orders yet.
+    </p>
+  ) : (
+    <div className="space-y-3">
+      {generatedPos.map((po) => (
+        <div
+          key={po.id}
+          className="rounded-xl border p-4"
+        >
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="font-bold text-gray-800">
+                {po.poNumber || `PO-${po.id}`}
+              </p>
+
+              <p className="mt-1 text-sm text-gray-500">
+                Vendor: {po.vendorName || '-'}
+              </p>
+
+              <p className="mt-1 text-sm text-gray-500">
+                Project #{po.projectId}
+              </p>
+
+              <p className="mt-1 text-sm text-gray-500">
+                Status: {po.status || '-'}
+              </p>
+            </div>
+
+            <div className="text-left md:text-right">
+              <p className="text-sm text-gray-500">
+                Total Amount
+              </p>
+
+              <p className="text-xl font-bold text-green-700">
+                ₹
+                {Number(
+                  po.totalAmount || 0,
+                ).toLocaleString('en-IN')}
+              </p>
+
+              <p className="mt-1 text-xs text-gray-400">
+                {po.createdAt
+                  ? new Date(
+                      po.createdAt,
+                    ).toLocaleString()
+                  : '-'}
+              </p>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )}
+</div>
 
       <div className="rounded-2xl bg-white p-5 shadow">
         <div className="mb-5 grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">

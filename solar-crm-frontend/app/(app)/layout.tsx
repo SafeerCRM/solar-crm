@@ -278,254 +278,30 @@ const [bellOpen, setBellOpen] = useState(false);
 
   const fetchReminderCount = async () => {
   try {
-    const [
-  executionCountRes,
-  paymentCountRes,
-  approvalCountRes,
-  purchaseCountRes,
-  documentCountRes,
-  loanCountRes,
-  subsidyCountRes,
-  electricityCountRes,
-  finalClosureCountRes,
-  executionListRes,
-  paymentListRes,
-  approvalListRes,
-  purchaseListRes,
-  documentListRes,
-  loanListRes,
-  subsidyListRes,
-  electricityListRes,
-  finalClosureListRes,
-] = await Promise.all([
-  axios.get(`${apiBaseUrl}/project/execution-reminders/unread-count`, {
-    headers: getAuthHeaders(),
-  }),
-  axios.get(`${apiBaseUrl}/project/payment-reminders/unread-count`, {
-    headers: getAuthHeaders(),
-  }),
-  axios.get(`${apiBaseUrl}/project/approval-reminders/unread-count`, {
-    headers: getAuthHeaders(),
-  }),
-  axios.get(`${apiBaseUrl}/project/purchase-reminders/unread-count`, {
-  headers: getAuthHeaders(),
-}),
-axios.get(`${apiBaseUrl}/project/document-reminders/unread-count`, {
-  headers: getAuthHeaders(),
-}),
-axios.get(`${apiBaseUrl}/project/loan-reminders/unread-count`, {
-  headers: getAuthHeaders(),
-}),
-axios.get(`${apiBaseUrl}/project/subsidy-reminders/unread-count`, {
-  headers: getAuthHeaders(),
-}),
-axios.get(`${apiBaseUrl}/project/electricity-reminders/unread-count`, {
-  headers: getAuthHeaders(),
-}),
-axios.get(`${apiBaseUrl}/project/final-closure-reminders/unread-count`, {
-  headers: getAuthHeaders(),
-}),
-  axios.get(`${apiBaseUrl}/project/execution-reminders`, {
-    headers: getAuthHeaders(),
-  }),
-  axios.get(`${apiBaseUrl}/project/payment-reminders`, {
-    headers: getAuthHeaders(),
-  }),
-  axios.get(`${apiBaseUrl}/project/approval-reminders`, {
-    headers: getAuthHeaders(),
-  }),
-  axios.get(`${apiBaseUrl}/project/purchase-reminders`, {
-  headers: getAuthHeaders(),
-}),
-axios.get(`${apiBaseUrl}/project/document-reminders`, {
-  headers: getAuthHeaders(),
-}),
-axios.get(`${apiBaseUrl}/project/loan-reminders`, {
-  headers: getAuthHeaders(),
-}),
-axios.get(`${apiBaseUrl}/project/subsidy-reminders`, {
-  headers: getAuthHeaders(),
-}),
-axios.get(`${apiBaseUrl}/project/electricity-reminders`, {
-  headers: getAuthHeaders(),
-}),
-axios.get(`${apiBaseUrl}/project/final-closure-reminders`, {
-  headers: getAuthHeaders(),
-}),
-]);
+    const endpoints = [
+      '/project/execution-reminders/unread-count',
+      '/project/payment-reminders/unread-count',
+      '/project/approval-reminders/unread-count',
+      '/project/purchase-reminders/unread-count',
+      '/project/document-reminders/unread-count',
+      '/project/loan-reminders/unread-count',
+      '/project/subsidy-reminders/unread-count',
+      '/project/electricity-reminders/unread-count',
+      '/project/final-closure-reminders/unread-count',
+    ];
 
-    const executionCount = executionCountRes.data?.unreadCount || 0;
-const paymentCount = paymentCountRes.data?.unreadCount || 0;
-const approvalCount = approvalCountRes.data?.unreadCount || 0;
-const purchaseCount = purchaseCountRes.data?.unreadCount || 0;
-const documentCount = documentCountRes.data?.unreadCount || 0;
-const loanCount = loanCountRes.data?.unreadCount || 0;
-const subsidyCount = subsidyCountRes.data?.unreadCount || 0;
-const electricityCount = electricityCountRes.data?.unreadCount || 0;
-const finalClosureCount = finalClosureCountRes.data?.unreadCount || 0;
+    let total = 0;
 
-setReminderCount(
-  executionCount +
-    paymentCount +
-    approvalCount +
-    purchaseCount +
-    documentCount +
-    loanCount +
-    subsidyCount + 
-    electricityCount + 
-    finalClosureCount,
-);
+    for (const endpoint of endpoints) {
+      const res = await axios.get(`${apiBaseUrl}${endpoint}`, {
+        headers: getAuthHeaders(),
+      });
 
-    const executionList = Array.isArray(executionListRes.data)
-      ? executionListRes.data
-      : [];
+      total += Number(res.data?.unreadCount || 0);
+    }
 
-    const paymentList = Array.isArray(paymentListRes.data)
-      ? paymentListRes.data
-      : [];
-
-      const approvalList = Array.isArray(approvalListRes.data)
-  ? approvalListRes.data
-  : [];
-
-  const purchaseList = Array.isArray(purchaseListRes.data)
-  ? purchaseListRes.data
-  : [];
-
-  const documentList = Array.isArray(documentListRes.data)
-  ? documentListRes.data
-  : [];
-
-  const loanList = Array.isArray(loanListRes.data)
-  ? loanListRes.data
-  : [];
-
-  const subsidyList = Array.isArray(subsidyListRes.data)
-  ? subsidyListRes.data
-  : [];
-
-  const electricityList = Array.isArray(electricityListRes.data)
-  ? electricityListRes.data
-  : [];
-
-  const finalClosureList = Array.isArray(finalClosureListRes.data)
-  ? finalClosureListRes.data
-  : [];
-
-    const executionUnread = executionList
-      .filter((item: any) => item.userReminderStatus !== 'READ')
-      .map((item: any) => ({
-        id: `execution-${item.id}`,
-        href: '/project/reminders',
-        title: item.reminderType,
-        subtitle: item.activityType,
-        customerName: item.customerName,
-        projectId: item.projectId,
-      }));
-
-    const paymentUnread = paymentList
-      .filter((item: any) => item.userReminderStatus !== 'READ')
-      .map((item: any) => ({
-        id: `payment-${item.id}`,
-        href: '/project/reminders',
-        title: item.reminderType,
-        subtitle: item.label,
-        customerName: item.customerName,
-        projectId: item.projectId,
-      }));
-
-      const approvalUnread = approvalList
-  .filter((item: any) => item.userReminderStatus !== 'READ')
-  .map((item: any) => ({
-    id: `approval-${item.id}`,
-    href: '/project/reminders',
-    title: item.reminderType,
-    subtitle: item.subtitle || 'Project approval pending',
-    customerName: item.customerName,
-    projectId: item.projectId,
-  }));
-
-  const purchaseUnread = purchaseList
-  .filter((item: any) => item.userReminderStatus !== 'READ')
-  .map((item: any) => ({
-    id: `purchase-${item.id}`,
-    href: '/project/reminders',
-    title: item.reminderType,
-    subtitle: item.materialName || 'Purchase pending',
-    customerName: item.customerName,
-    projectId: item.projectId,
-  }));
-
-  const documentUnread = documentList
-  .filter((item: any) => item.userReminderStatus !== 'READ')
-  .map((item: any) => ({
-    id: `document-${item.id}`,
-    href: '/project/reminders',
-    title: item.reminderType,
-    subtitle: `${item.missingCount || 0} documents pending`,
-    customerName: item.customerName,
-    projectId: item.projectId,
-  }));
-
-  const loanUnread = loanList
-  .filter((item: any) => item.userReminderStatus !== 'READ')
-  .map((item: any) => ({
-    id: `loan-${item.id}`,
-    href: '/project/reminders',
-    title: item.reminderType,
-    subtitle: item.loanStatus || 'Loan pending',
-    customerName: item.customerName,
-    projectId: item.projectId,
-  }));
-
-  const subsidyUnread = subsidyList
-  .filter((item: any) => item.userReminderStatus !== 'READ')
-  .map((item: any) => ({
-    id: `subsidy-${item.id}`,
-    href: '/project/reminders',
-    title: item.reminderType,
-    subtitle: item.subsidyStatus || 'Subsidy pending',
-    customerName: item.customerName,
-    projectId: item.projectId,
-  }));
-
-  const electricityUnread = electricityList
-  .filter((item: any) => item.userReminderStatus !== 'READ')
-  .map((item: any) => ({
-    id: `electricity-${item.id}`,
-    href: '/project/reminders',
-    title: item.reminderType,
-    subtitle:
-      item.electricityStatus || 'Electricity pending',
-    customerName: item.customerName,
-    projectId: item.projectId,
-  }));
-
-  const finalClosureUnread = finalClosureList
-  .filter((item: any) => item.userReminderStatus !== 'READ')
-  .map((item: any) => ({
-    id: `final-closure-${item.id}`,
-    href: '/project/reminders',
-    title: item.reminderType,
-    subtitle:
-      item.projectStatus || 'Project closure pending',
-    customerName: item.customerName,
-    projectId: item.projectId,
-  }));
-
-    setReminderPreview(
-  [
-  ...executionUnread,
-  ...paymentUnread,
-  ...approvalUnread,
-  ...purchaseUnread,
-  ...documentUnread,
-  ...loanUnread,
-  ...subsidyUnread,
-  ...electricityUnread,
-  ...finalClosureUnread,
-].slice(0, 5),
-);
+    setReminderCount(total);
+    setReminderPreview([]);
   } catch (error) {
     console.error('Reminder count error:', error);
     setReminderCount(0);
