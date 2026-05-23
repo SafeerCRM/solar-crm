@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -47,6 +47,11 @@ projectManagerApprovalNote?: string;
   ownerApprovalNote?: string;
   remarks?: string;
   createdAt?: string;
+    address?: string;
+  gpsAddress?: string;
+  gpsLatitude?: number;
+  gpsLongitude?: number;
+  finalCost?: number;
 };
 
 type ProjectDocument = {
@@ -183,6 +188,9 @@ function Field({ label, value }: { label: string; value?: string | number }) {
 export default function ProjectDetailPage() {
   const params = useParams();
   const projectId = params?.id as string;
+
+    const pdfRef = useRef<HTMLDivElement | null>(null);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
 
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1654,6 +1662,11 @@ const canManageMaterial = hasRole([
   'MEETING_MANAGER',
 ]);
 
+const canShareProjectPdf = hasRole([
+  'OWNER',
+  'PROJECT_MANAGER',
+]);
+
   useEffect(() => {
   if (projectId) {
     fetchProject();
@@ -1698,6 +1711,83 @@ useEffect(() => {
   }
 }, [activeTab, projectId]);
 
+const generateProjectPdf = async (share = false) => {
+  if (!pdfRef.current || !project) return;
+
+  try {
+    setGeneratingPdf(true);
+
+    await fetchDocuments();
+    await fetchMaterialRequests();
+    await fetchExecutionActivities();
+    await fetchPaymentInstallments();
+    await fetchProjectEditHistory();
+    await fetchLoanDetail();
+    await fetchSubsidyDetail();
+    await fetchElectricityDetail();
+
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    const html2canvas = (await import('html2canvas')).default;
+    const jsPDF = (await import('jspdf')).default;
+
+    const pdf = new jsPDF('p', 'mm', 'a4');
+
+    const pages = Array.from(
+      pdfRef.current.querySelectorAll('.project-pdf-page'),
+    ) as HTMLElement[];
+
+    for (let i = 0; i < pages.length; i++) {
+      const canvas = await html2canvas(pages[i], {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+      });
+
+      const data = canvas.toDataURL('image/jpeg', 0.95);
+
+      if (i > 0) pdf.addPage();
+
+      pdf.addImage(data, 'JPEG', 0, 0, 210, 297);
+    }
+
+    const fileName = `Project-${project.id}-${project.customerName || 'Details'}.pdf`;
+
+    if (!share) {
+      pdf.save(fileName);
+      return;
+    }
+
+    const base64 = pdf.output('datauristring').split(',')[1];
+
+    try {
+      const { Filesystem, Directory } = await import('@capacitor/filesystem');
+      const { Share } = await import('@capacitor/share');
+
+      const saved = await Filesystem.writeFile({
+        path: fileName,
+        data: base64,
+        directory: Directory.Documents,
+        recursive: true,
+      });
+
+      await Share.share({
+        title: 'Project Details',
+        text: `Project details for ${project.customerName || `Project #${project.id}`}`,
+        url: saved.uri,
+        dialogTitle: 'Share Project PDF',
+      });
+    } catch {
+      pdf.save(fileName);
+    }
+  } catch (error) {
+    console.error(error);
+    alert('Failed to generate project PDF');
+  } finally {
+    setGeneratingPdf(false);
+  }
+};
+
   if (loading) {
     return <div className="rounded-2xl bg-white p-5 shadow">Loading project...</div>;
   }
@@ -1727,6 +1817,26 @@ useEffect(() => {
           <span className="rounded-full bg-blue-100 px-4 py-2 text-sm font-semibold text-blue-700">
             {project.status || 'UNKNOWN'}
           </span>
+
+          {canShareProjectPdf && (
+  <div className="flex flex-wrap gap-2">
+    <button
+      onClick={() => generateProjectPdf(false)}
+      disabled={generatingPdf}
+      className="rounded-xl bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-50"
+    >
+      {generatingPdf ? 'Generating...' : 'Download Project PDF'}
+    </button>
+
+    <button
+      onClick={() => generateProjectPdf(true)}
+      disabled={generatingPdf}
+      className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+    >
+      Share Project PDF
+    </button>
+  </div>
+)}
 
           {canEditProject && (
   <button
@@ -4149,6 +4259,184 @@ useEffect(() => {
   </div>
 </div>
 )}
+
+<div
+  ref={pdfRef}
+  style={{
+    position: 'fixed',
+    left: '-10000px',
+    top: 0,
+    width: '794px',
+    background: '#ffffff',
+    color: '#111827',
+  }}
+>
+  <div className="project-pdf-page bg-white p-8 text-sm">
+    <h1 className="text-2xl font-bold">Project Internal Report</h1>
+    <p className="mt-1">Project #{project.id}</p>
+
+    <h2 className="mt-6 text-lg font-bold">Customer & Location</h2>
+    <div className="mt-3 grid grid-cols-2 gap-2">
+      <Field label="Customer Name" value={project.customerName} />
+      <Field label="Phone" value={project.customerPhone} />
+      <Field label="City" value={project.city} />
+      <Field label="Zone" value={project.zone} />
+      <Field label="Address" value={project.address || project.gpsAddress} />
+      <Field label="GPS" value={project.gpsLatitude && project.gpsLongitude ? `${project.gpsLatitude}, ${project.gpsLongitude}` : '-'} />
+      <Field label="Branch" value={project.branchName} />
+      <Field label="Project Owner" value={project.projectOwnerName} />
+      <Field label="Owner Role" value={project.projectOwnerRole} />
+    </div>
+
+    <h2 className="mt-6 text-lg font-bold">Technical Details</h2>
+    <div className="mt-3 grid grid-cols-2 gap-2">
+      <Field label="Panel Brand" value={project.panelBrand} />
+      <Field label="DCR Panel Count" value={project.dcrPanelCount} />
+      <Field label="Non-DCR Panel Count" value={project.nonDcrPanelCount} />
+      <Field label="Converter Brand" value={project.converterBrand} />
+      <Field label="Converter Capacity" value={project.converterCapacity} />
+      <Field label="Converter Phase" value={project.converterPhase} />
+      <Field label="Structure Type" value={project.structureType} />
+      <Field label="Structure Capacity KW" value={project.structureCapacityKw} />
+      <Field label="Building Height" value={project.buildingHeight} />
+    </div>
+
+    <h2 className="mt-6 text-lg font-bold">Finance, Margin & Profit</h2>
+    <div className="mt-3 grid grid-cols-2 gap-2">
+      <Field label="Project Type" value={project.projectType} />
+      <Field label="Margin Money" value={money(project.marginMoney)} />
+      <Field label="Loan Amount" value={money(project.loanAmount)} />
+      <Field label="Project Cost" value={money(project.projectCost)} />
+      <Field label="Final Cost" value={money(project.finalCost)} />
+      <Field label="Expected Laagat" value={money(project.expectedLagat)} />
+      <Field label="Expected Profit" value={money(project.expectedProfit)} />
+      <Field label="Subsidy Type" value={project.subsidyType} />
+      <Field label="DISCOM Name" value={project.discomName} />
+      <Field label="DISCOM Expenditure Type" value={project.discomExpenditureType} />
+      <Field label="DISCOM Expenditure Amount" value={money(project.discomExpenditureAmount)} />
+    </div>
+  </div>
+
+  <div className="project-pdf-page bg-white p-8 text-sm">
+    <h2 className="text-xl font-bold">Approvals & Remarks</h2>
+    <div className="mt-3 grid grid-cols-1 gap-2">
+      <Field label="Project Status" value={project.status} />
+      <Field label="Project Manager Approval" value={`${project.projectManagerApprovalStatus || '-'} - ${project.projectManagerApprovalNote || 'No note'}`} />
+      <Field label="Marketing Head Approval" value={`${project.marketingHeadApprovalStatus || '-'} - ${project.marketingHeadApprovalNote || 'No note'}`} />
+      <Field label="Owner Approval" value={`${project.ownerApprovalStatus || '-'} - ${project.ownerApprovalNote || 'No note'}`} />
+      <Field label="Remarks" value={project.remarks} />
+    </div>
+
+    <h2 className="mt-6 text-xl font-bold">Documents</h2>
+    <div className="mt-3 space-y-2">
+      {documents.length === 0 ? (
+        <p>No documents found</p>
+      ) : (
+        documents.map((doc) => (
+          <div key={doc.id} className="rounded border p-2">
+            <p><b>{doc.documentType}</b> | {doc.department}</p>
+            <p>{doc.fileName}</p>
+            <p>{doc.remarks || '-'}</p>
+          </div>
+        ))
+      )}
+    </div>
+  </div>
+
+  <div className="project-pdf-page bg-white p-8 text-sm">
+    <h2 className="text-xl font-bold">Material Requests</h2>
+    <div className="mt-3 space-y-3">
+      {materialRequests.length === 0 ? (
+        <p>No material requests found</p>
+      ) : (
+        materialRequests.map((request) => (
+          <div key={request.id} className="rounded border p-3">
+            <p className="font-bold">{request.title || 'Material Request'}</p>
+            <p>Requested By: {request.requestedByName || '-'}</p>
+            <p>Total: ₹{Number(request.totalAmount || 0).toLocaleString('en-IN')}</p>
+            <p>Status: {request.status || '-'}</p>
+
+            {request.items?.map((item, index) => (
+              <p key={index}>
+                {item.materialName} | Qty: {item.quantity} | Rate: ₹{Number(item.rate || 0).toLocaleString('en-IN')} | GST: {item.gstPercent}% | Total: ₹{Number(item.totalAmount || 0).toLocaleString('en-IN')}
+              </p>
+            ))}
+          </div>
+        ))
+      )}
+    </div>
+  </div>
+
+  <div className="project-pdf-page bg-white p-8 text-sm">
+    <h2 className="text-xl font-bold">Payment Collection</h2>
+    <div className="mt-3 space-y-2">
+      {paymentInstallments.length === 0 ? (
+        <p>No payment records found</p>
+      ) : (
+        paymentInstallments.map((payment) => (
+          <div key={payment.id} className="rounded border p-2">
+            <p><b>{payment.label}</b> | {payment.status}</p>
+            <p>Amount: {money(payment.amount)} | Paid: {money(payment.paidAmount)} | Pending: {money(payment.pendingAmount)}</p>
+            <p>Due: {payment.dueDate || '-'} | Paid Date: {payment.paidDate || '-'}</p>
+            <p>Mode: {payment.paymentMode || '-'} | Transaction: {payment.transactionId || '-'}</p>
+            <p>Remarks: {payment.remarks || '-'}</p>
+          </div>
+        ))
+      )}
+    </div>
+
+    <h2 className="mt-6 text-xl font-bold">Execution Activities</h2>
+    <div className="mt-3 space-y-2">
+      {executionActivities.length === 0 ? (
+        <p>No execution activities found</p>
+      ) : (
+        executionActivities.map((activity) => (
+          <div key={activity.id} className="rounded border p-2">
+            <p><b>{activity.activityType}</b> | {activity.status}</p>
+            <p>Scheduled: {activity.scheduledDate || '-'} | Completed: {activity.completedDate || '-'}</p>
+            <p>Assigned To: {activity.assignedToName || '-'}</p>
+            <p>Remarks: {activity.remarks || '-'}</p>
+          </div>
+        ))
+      )}
+    </div>
+  </div>
+
+  <div className="project-pdf-page bg-white p-8 text-sm">
+    <h2 className="text-xl font-bold">Department Details</h2>
+
+    <h3 className="mt-4 font-bold">Loan</h3>
+    <pre className="whitespace-pre-wrap rounded border p-3">
+      {JSON.stringify(loanDetail || {}, null, 2)}
+    </pre>
+
+    <h3 className="mt-4 font-bold">Subsidy</h3>
+    <pre className="whitespace-pre-wrap rounded border p-3">
+      {JSON.stringify(subsidyDetail || {}, null, 2)}
+    </pre>
+
+    <h3 className="mt-4 font-bold">Electricity</h3>
+    <pre className="whitespace-pre-wrap rounded border p-3">
+      {JSON.stringify(electricityDetail || {}, null, 2)}
+    </pre>
+
+    <h2 className="mt-6 text-xl font-bold">Project History</h2>
+    <div className="mt-3 space-y-2">
+      {projectEditHistory.length === 0 ? (
+        <p>No project history found</p>
+      ) : (
+        projectEditHistory.map((history) => (
+          <div key={history.id} className="rounded border p-2">
+            <p><b>{history.fieldName}</b></p>
+            <p>Old: {history.oldValue || '-'}</p>
+            <p>New: {history.newValue || '-'}</p>
+            <p>Changed By: {history.changedByName || '-'} | {history.changedByRole || '-'}</p>
+          </div>
+        ))
+      )}
+    </div>
+  </div>
+</div>
 
     </div>
   );
