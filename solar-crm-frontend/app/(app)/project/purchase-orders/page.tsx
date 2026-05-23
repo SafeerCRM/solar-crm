@@ -573,6 +573,91 @@ const downloadFinalInvoicePdf = async (
   }
 };
 
+const downloadProformaInvoicePdf = async (
+  piId: number,
+  share = false,
+) => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/proforma-invoice/${piId}/pdf`,
+      {
+        responseType: 'blob',
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    const blob = new Blob([res.data], {
+      type: 'application/pdf',
+    });
+
+    const fileName = `proforma-invoice-${piId}.pdf`;
+
+    const arrayBuffer = await blob.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
+
+    const binaryString = uint8Array.reduce(
+      (data, byte) => data + String.fromCharCode(byte),
+      '',
+    );
+
+    const base64 = btoa(binaryString);
+
+    try {
+      const { Filesystem, Directory } = await import(
+        '@capacitor/filesystem'
+      );
+
+      const { Share } = await import('@capacitor/share');
+
+      const saved = await Filesystem.writeFile({
+        path: fileName,
+        data: base64,
+        directory: Directory.Documents,
+        recursive: true,
+      });
+
+      if (share) {
+        await Share.share({
+          title: 'Proforma Invoice',
+          text: `Proforma Invoice #${piId}`,
+          url: saved.uri,
+          dialogTitle: 'Share Proforma Invoice PDF',
+        });
+
+        return;
+      }
+
+      window.open(saved.uri, '_blank');
+      return;
+    } catch {
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+
+      link.href = url;
+      link.download = fileName;
+
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      window.URL.revokeObjectURL(url);
+    }
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to download proforma invoice PDF',
+    );
+  }
+};
+
   useEffect(() => {
   fetchPurchaseOrders();
 }, [page, projectFilter, materialFilter, statusFilter, branchFilter, ownerFilter]);
@@ -1199,6 +1284,26 @@ const generateProformaInvoice = async () => {
     ? 'Creating...'
     : 'Create Final Invoice'}
 </button>
+
+<div className="mt-2 flex flex-wrap gap-2">
+  <button
+    onClick={() =>
+      downloadProformaInvoicePdf(pi.id, false)
+    }
+    className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+  >
+    Download PDF
+  </button>
+
+  <button
+    onClick={() =>
+      downloadProformaInvoicePdf(pi.id, true)
+    }
+    className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
+  >
+    Share PDF
+  </button>
+</div>
 
             </div>
           </div>
