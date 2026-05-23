@@ -361,123 +361,205 @@ export default function ProjectRemindersPage() {
   | 'UPCOMING'
 >('ALL');
 
-  const fetchReminders = async () => {
+  const fetchReminders = async (
+  selectedFilter:
+    | 'ALL'
+    | 'EXECUTION'
+    | 'PAYMENT'
+    | 'APPROVAL'
+    | 'PURCHASE'
+    | 'DOCUMENT'
+    | 'LOAN'
+    | 'SUBSIDY'
+    | 'ELECTRICITY'
+    | 'FINAL_CLOSURE'
+    | 'OVERDUE'
+    | 'TODAY'
+    | 'UPCOMING' = 'ALL',
+) => {
   try {
     setLoading(true);
     setMessage('');
 
-    const [
-  summaryRes,
-  listRes,
-  paymentRes,
-  approvalRes,
-  purchaseRes,
-  documentRes,
-  loanRes,
-  subsidyRes,
-  electricityRes,
-  finalClosureRes,
-] = await Promise.all([
-  axios.get(`${apiBaseUrl}/project/execution-reminders/summary`, {
-    headers: getAuthHeaders(),
-  }),
-
-  axios.get(`${apiBaseUrl}/project/execution-reminders`, {
-    headers: getAuthHeaders(),
-  }),
-
-  axios.get(`${apiBaseUrl}/project/payment-reminders`, {
-    headers: getAuthHeaders(),
-  }),
-
-  axios.get(`${apiBaseUrl}/project/approval-reminders`, {
-    headers: getAuthHeaders(),
-  }),
-
-  axios.get(`${apiBaseUrl}/project/purchase-reminders`, {
-  headers: getAuthHeaders(),
-}),
-
-axios.get(`${apiBaseUrl}/project/document-reminders`, {
-  headers: getAuthHeaders(),
-}),
-
-axios.get(`${apiBaseUrl}/project/loan-reminders`, {
-  headers: getAuthHeaders(),
-}),
-
-axios.get(`${apiBaseUrl}/project/subsidy-reminders`, {
-  headers: getAuthHeaders(),
-}),
-
-axios.get(`${apiBaseUrl}/project/electricity-reminders`, {
-  headers: getAuthHeaders(),
-}),
-
-axios.get(`${apiBaseUrl}/project/final-closure-reminders`, {
-  headers: getAuthHeaders(),
-}),
-]);
+    const summaryRes = await axios.get(
+      `${apiBaseUrl}/project/execution-reminders/summary`,
+      {
+        headers: getAuthHeaders(),
+      },
+    );
 
     setSummary(summaryRes.data || null);
-    setItems(Array.isArray(listRes.data) ? listRes.data : []);
-    setPaymentItems(Array.isArray(paymentRes.data) ? paymentRes.data : []);
-    setApprovalItems(
-  Array.isArray(approvalRes.data)
-    ? approvalRes.data
-    : [],
-);
 
-setPurchaseItems(
-  Array.isArray(purchaseRes.data)
-    ? purchaseRes.data
-    : [],
-);
+    if (
+      selectedFilter === 'ALL' ||
+      selectedFilter === 'EXECUTION' ||
+      selectedFilter === 'OVERDUE' ||
+      selectedFilter === 'TODAY' ||
+      selectedFilter === 'UPCOMING'
+    ) {
+      const listRes = await axios.get(
+        `${apiBaseUrl}/project/execution-reminders`,
+        {
+          headers: getAuthHeaders(),
+        },
+      );
 
-setDocumentItems(
-  Array.isArray(documentRes.data)
-    ? documentRes.data
-    : [],
-);
+      setItems(
+        Array.isArray(listRes.data)
+          ? listRes.data
+          : [],
+      );
+    }
 
-setLoanItems(
-  Array.isArray(loanRes.data)
-    ? loanRes.data
-    : [],
-);
+    if (
+      selectedFilter === 'ALL' ||
+      selectedFilter === 'PAYMENT'
+    ) {
+      const paymentRes = await axios.get(
+        `${apiBaseUrl}/project/payment-reminders`,
+        {
+          headers: getAuthHeaders(),
+        },
+      );
 
-setSubsidyItems(
-  Array.isArray(subsidyRes.data)
-    ? subsidyRes.data
-    : [],
-);
+      setPaymentItems(
+        Array.isArray(paymentRes.data)
+          ? paymentRes.data
+          : [],
+      );
+    }
 
-setElectricityItems(
-  Array.isArray(electricityRes.data)
-    ? electricityRes.data
-    : [],
-);
+    if (
+      selectedFilter === 'ALL' ||
+      selectedFilter === 'APPROVAL'
+    ) {
+      const approvalRes = await axios.get(
+        `${apiBaseUrl}/project/approval-reminders`,
+        {
+          headers: getAuthHeaders(),
+        },
+      );
 
-setFinalClosureItems(
-  Array.isArray(finalClosureRes.data)
-    ? finalClosureRes.data
-    : [],
-);
+      setApprovalItems(
+        Array.isArray(approvalRes.data)
+          ? approvalRes.data
+          : [],
+      );
+    }
 
+    if (
+      selectedFilter === 'ALL' ||
+      selectedFilter === 'PURCHASE'
+    ) {
+      const purchaseRes = await axios.get(
+        `${apiBaseUrl}/project/purchase-reminders`,
+        {
+          headers: getAuthHeaders(),
+        },
+      );
+
+      setPurchaseItems(
+        Array.isArray(purchaseRes.data)
+          ? purchaseRes.data
+          : [],
+      );
+    }
+
+    if (
+      selectedFilter === 'ALL' ||
+      selectedFilter === 'DOCUMENT'
+    ) {
+      const documentRes = await axios.get(
+        `${apiBaseUrl}/project/document-reminders`,
+        {
+          headers: getAuthHeaders(),
+        },
+      );
+
+      setDocumentItems(
+        Array.isArray(documentRes.data)
+          ? documentRes.data
+          : [],
+      );
+    }
+
+    if (
+      selectedFilter === 'ALL' ||
+      selectedFilter === 'LOAN'
+    ) {
+      const loanRes = await axios.get(
+        `${apiBaseUrl}/project/loan-reminders`,
+        {
+          headers: getAuthHeaders(),
+        },
+      );
+
+      setLoanItems(
+        Array.isArray(loanRes.data)
+          ? loanRes.data
+          : [],
+      );
+    }
+
+    if (
+      selectedFilter === 'ALL' ||
+      selectedFilter === 'SUBSIDY'
+    ) {
+      const subsidyRes = await axios.get(
+        `${apiBaseUrl}/project/subsidy-reminders`,
+        {
+          headers: getAuthHeaders(),
+        },
+      );
+
+      setSubsidyItems(
+        Array.isArray(subsidyRes.data)
+          ? subsidyRes.data
+          : [],
+      );
+    }
+
+    if (
+      selectedFilter === 'ALL' ||
+      selectedFilter === 'ELECTRICITY'
+    ) {
+      const electricityRes = await axios.get(
+        `${apiBaseUrl}/project/electricity-reminders`,
+        {
+          headers: getAuthHeaders(),
+        },
+      );
+
+      setElectricityItems(
+        Array.isArray(electricityRes.data)
+          ? electricityRes.data
+          : [],
+      );
+    }
+
+    if (
+      selectedFilter === 'ALL' ||
+      selectedFilter === 'FINAL_CLOSURE'
+    ) {
+      const finalClosureRes = await axios.get(
+        `${apiBaseUrl}/project/final-closure-reminders`,
+        {
+          headers: getAuthHeaders(),
+        },
+      );
+
+      setFinalClosureItems(
+        Array.isArray(finalClosureRes.data)
+          ? finalClosureRes.data
+          : [],
+      );
+    }
   } catch (error: any) {
     console.error('Reminder error:', error);
-    setSummary(null);
-    setItems([]);
-    setPaymentItems([]);
-    setApprovalItems([]);
-    setPurchaseItems([]);
-    setDocumentItems([]);
-    setLoanItems([]);
-    setSubsidyItems([]);
-    setElectricityItems([]);
-    setFinalClosureItems([]);
+
     setMessage(
-      error?.response?.data?.message || 'Failed to load reminders.',
+      error?.response?.data?.message ||
+        'Failed to load reminders.',
     );
   } finally {
     setLoading(false);
@@ -617,8 +699,8 @@ const dismissPaymentReminder = async (installmentId: number) => {
 };
 
   useEffect(() => {
-    fetchReminders();
-  }, []);
+  fetchReminders(filter);
+}, [filter]);
 
   const filteredExecutionItems = items.filter((item) => {
   if (filter === 'ALL' || filter === 'EXECUTION') return true;
@@ -886,7 +968,7 @@ const totalVisibleReminders =
               </div>
 
               <button
-                onClick={fetchReminders}
+                onClick={() => fetchReminders(filter)}
                 className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white"
               >
                 Refresh
