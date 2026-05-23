@@ -965,7 +965,7 @@ const canGeneratePo =
 
       {showPoModal && selectedPo && (
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3">
-    <div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white p-5">
+    <div className="print-area max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold text-gray-800">
@@ -977,15 +977,24 @@ const canGeneratePo =
           </p>
         </div>
 
-        <button
-          onClick={() => {
-            setShowPoModal(false);
-            setSelectedPo(null);
-          }}
-          className="rounded-xl bg-gray-700 px-4 py-2 text-sm font-semibold text-white"
-        >
-          Close
-        </button>
+        <div className="flex gap-2">
+  <button
+    onClick={() => window.print()}
+    className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white"
+  >
+    Print
+  </button>
+
+  <button
+    onClick={() => {
+      setShowPoModal(false);
+      setSelectedPo(null);
+    }}
+    className="rounded-xl bg-gray-700 px-4 py-2 text-sm font-semibold text-white"
+  >
+    Close
+  </button>
+</div>
       </div>
 
       {poDetailLoading ? (
@@ -1159,6 +1168,35 @@ const canGeneratePo =
     </div>
   </div>
 )}
+
+<style jsx global>{`
+  @media print {
+    body * {
+      visibility: hidden;
+    }
+
+    .print-area,
+    .print-area * {
+      visibility: visible;
+    }
+
+    .print-area {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      max-width: 100%;
+      max-height: none;
+      overflow: visible;
+      box-shadow: none;
+      border-radius: 0;
+    }
+
+    button {
+      display: none !important;
+    }
+  }
+`}</style>
     </div>
   );
 }
