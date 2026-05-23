@@ -5958,10 +5958,11 @@ async generateFinalInvoicePdf(
   doc.pipe(res);
 
   doc.image(logoPath, 40, 20, {
-  width: 515,
+  fit: [515, 110],
+  align: 'center',
 });
 
-doc.moveDown(7);
+doc.y = 145;
 
 doc
   .fontSize(22)
@@ -6032,7 +6033,7 @@ doc
     });
 
     doc.text(
-      `₹${Number(item.finalRate || 0).toLocaleString('en-IN')}`,
+      `Rs.${Number(item.finalRate || 0).toLocaleString('en-IN')}`,
       270,
       y,
       {
@@ -6041,7 +6042,7 @@ doc
     );
 
     doc.text(
-      `₹${Number(item.discountAmount || 0).toLocaleString('en-IN')}`,
+      `Rs.${Number(item.discountAmount || 0).toLocaleString('en-IN')}`,
       350,
       y,
       {
@@ -6054,7 +6055,7 @@ doc
     });
 
     doc.text(
-      `₹${Number(item.totalAmount || 0).toLocaleString('en-IN')}`,
+      `Rs.${Number(item.totalAmount || 0).toLocaleString('en-IN')}`,
       470,
       y,
       {
@@ -6075,21 +6076,21 @@ doc
     .fontSize(14)
     .fillColor('#111827')
     .text(
-      `Subtotal: ₹${Number(invoice.subtotalAmount || 0).toLocaleString('en-IN')}`,
+      `Subtotal: Rs.${Number(invoice.subtotalAmount || 0).toLocaleString('en-IN')}`,
       {
         align: 'right',
       },
     );
 
   doc.text(
-    `Discount: ₹${Number(invoice.discountAmount || 0).toLocaleString('en-IN')}`,
+    `Discount: Rs.${Number(invoice.discountAmount || 0).toLocaleString('en-IN')}`,
     {
       align: 'right',
     },
   );
 
   doc.text(
-    `GST: ₹${Number(invoice.gstAmount || 0).toLocaleString('en-IN')}`,
+    `GST: Rs.${Number(invoice.gstAmount || 0).toLocaleString('en-IN')}`,
     {
       align: 'right',
     },
@@ -6099,7 +6100,7 @@ doc
     .fontSize(18)
     .fillColor('#16a34a')
     .text(
-      `Total: ₹${Number(invoice.totalAmount || 0).toLocaleString('en-IN')}`,
+      `Total: Rs.${Number(invoice.totalAmount || 0).toLocaleString('en-IN')}`,
       {
         align: 'right',
       },
@@ -6111,14 +6112,14 @@ doc
     .fontSize(11)
     .fillColor('#111827')
     .text(
-      `Paid Amount: ₹${Number(invoice.paidAmount || 0).toLocaleString('en-IN')}`,
+      `Paid Amount: Rs.${Number(invoice.paidAmount || 0).toLocaleString('en-IN')}`,
       {
         align: 'right',
       },
     );
 
   doc.text(
-    `Pending Amount: ₹${Number(invoice.pendingAmount || 0).toLocaleString('en-IN')}`,
+    `Pending Amount: Rs.${Number(invoice.pendingAmount || 0).toLocaleString('en-IN')}`,
     {
       align: 'right',
     },
