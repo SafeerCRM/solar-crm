@@ -84,6 +84,18 @@ projectOwnerRole: string;
   @Column({ nullable: true })
   city: string;
 
+    @Column({ type: 'text', nullable: true })
+  address: string;
+
+  @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true })
+  gpsLatitude: number;
+
+  @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true })
+  gpsLongitude: number;
+
+  @Column({ type: 'text', nullable: true })
+  gpsAddress: string;
+
   @Column({ nullable: true })
 branchName: string;
 

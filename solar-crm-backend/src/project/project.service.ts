@@ -559,6 +559,10 @@ if (
     'expectedCompletionDate',
     'actualCompletionDate',
     'remarks',
+        'address',
+    'gpsLatitude',
+    'gpsLongitude',
+    'gpsAddress',
   ];
 
   const editableFieldsForMarketingHead = [
@@ -590,6 +594,10 @@ if (
     'startDate',
     'expectedCompletionDate',
     'remarks',
+        'address',
+    'gpsLatitude',
+    'gpsLongitude',
+    'gpsAddress',
   ];
 
   const editableFieldsForProjectManager = [
@@ -610,6 +618,10 @@ if (
     'startDate',
     'expectedCompletionDate',
     'remarks',
+        'address',
+    'gpsLatitude',
+    'gpsLongitude',
+    'gpsAddress',
   ];
 
   let allowedFields: string[] = [];
