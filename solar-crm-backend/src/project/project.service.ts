@@ -2088,12 +2088,30 @@ async getPaymentReminderList(currentUser: any) {
     .filter(Boolean);
 }
 
-async getApprovalReminderList(currentUser: any) {
+async getApprovalReminderList(
+  currentUser: any,
+  pagination?: {
+    page?: number;
+    limit?: number;
+  },
+) {
   const roles = Array.isArray(currentUser?.roles)
     ? currentUser.roles
     : [];
 
   const userId = currentUser?.id || currentUser?.userId;
+
+  const page =
+  Number(pagination?.page) > 0
+    ? Number(pagination?.page)
+    : 1;
+
+const limit =
+  Number(pagination?.limit) > 0
+    ? Math.min(Number(pagination?.limit), 50)
+    : 20;
+
+const skip = (page - 1) * limit;
 
   const canSeeApprovalReminders =
     roles.includes('OWNER') ||
@@ -2134,10 +2152,30 @@ async getApprovalReminderList(currentUser: any) {
         pendingStatus: ProjectApprovalStatus.PENDING,
       },
     )
-    .orderBy('project.createdAt', 'ASC')
-    .limit(100);
+    .orderBy('project.createdAt', 'DESC')
+.offset(skip)
+.limit(limit);
 
   const rows = await qb.getRawMany();
+
+  const totalQb = this.projectRepository
+  .createQueryBuilder('project')
+  .where('project.isHidden = false')
+  .andWhere('project.status = :pendingApprovalStatus', {
+    pendingApprovalStatus: ProjectStatus.PENDING_APPROVAL,
+  })
+  .andWhere(
+    `(
+      project.projectManagerApprovalStatus = :pendingStatus
+      OR project.marketingHeadApprovalStatus = :pendingStatus
+      OR project.ownerApprovalStatus = :pendingStatus
+    )`,
+    {
+      pendingStatus: ProjectApprovalStatus.PENDING,
+    },
+  );
+
+const total = await totalQb.getCount();
 
 const reminderIds = rows.map((row) =>
   Number(row.projectId),
@@ -2150,7 +2188,7 @@ const stateMap =
     reminderIds,
   );
 
-  return rows
+  const data = rows
     .map((row) => {
       const projectManagerPending =
   row.projectManagerApprovalStatus ===
@@ -2226,6 +2264,14 @@ ownerApprovalStatus:
     ProjectReminderUserStateStatus.DISMISSED
   );
 });
+
+return {
+  data,
+  total,
+  page,
+  limit,
+  totalPages: Math.ceil(total / limit) || 1,
+};
 }
 
 async getPurchaseReminderList(currentUser: any) {
@@ -3462,11 +3508,18 @@ async getUnreadPurchaseReminderCount(
 }
 
 async getUnreadApprovalReminderCount(currentUser: any) {
-  const list = await this.getApprovalReminderList(currentUser);
+  const result = await this.getApprovalReminderList(currentUser, {
+  page: 1,
+  limit: 100,
+});
 
-  return {
-    unreadCount: list.length,
-  };
+const list = Array.isArray(result)
+  ? result
+  : result.data || [];
+
+return {
+  unreadCount: list.length,
+};
 }
 
 async getUnreadPaymentReminderCount(currentUser: any) {

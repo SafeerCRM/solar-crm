@@ -566,8 +566,18 @@ async receivePaymentInstallment(
 }
 
 @Get('approval-reminders')
-async getApprovalReminderList(@Req() req: any) {
-  return this.projectService.getApprovalReminderList(req.user);
+async getApprovalReminderList(
+  @Req() req: any,
+  @Query('page') page?: string,
+  @Query('limit') limit?: string,
+) {
+  return this.projectService.getApprovalReminderList(
+    req.user,
+    {
+      page: Number(page || 1),
+      limit: Number(limit || 20),
+    },
+  );
 }
 
 @Get('approval-reminders/unread-count')
