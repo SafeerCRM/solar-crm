@@ -93,6 +93,35 @@ type ProformaInvoiceItem = {
   totalAmount?: number;
 };
 
+type FinalInvoice = {
+  id: number;
+  invoiceNumber?: string;
+  projectId?: number;
+  subtotalAmount?: number;
+  discountAmount?: number;
+  gstAmount?: number;
+  totalAmount?: number;
+  paidAmount?: number;
+  pendingAmount?: number;
+  status?: string;
+  createdAt?: string;
+};
+
+type FinalInvoiceItem = {
+  id: number;
+  itemName?: string;
+  category?: string;
+  brand?: string;
+  unit?: string;
+  finalRate?: number;
+  gstPercent?: number;
+  quantity?: number;
+  discountAmount?: number;
+  subtotalAmount?: number;
+  gstAmount?: number;
+  totalAmount?: number;
+};
+
 export default function PurchaseOrdersPage() {
   const [items, setItems] = useState<PurchaseItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -135,8 +164,20 @@ const [showPiModal, setShowPiModal] =
 const [piDiscount, setPiDiscount] = useState<Record<number, string>>({});
 const [generatingPi, setGeneratingPi] = useState(false);
 
+const [selectedFinalInvoice, setSelectedFinalInvoice] =
+  useState<any>(null);
+
+const [finalInvoiceDetailLoading, setFinalInvoiceDetailLoading] =
+  useState(false);
+
+const [showFinalInvoiceModal, setShowFinalInvoiceModal] =
+  useState(false);
+
 const [creatingFinalInvoiceId, setCreatingFinalInvoiceId] =
   useState<number | null>(null);
+
+  const [finalInvoices, setFinalInvoices] =
+  useState<FinalInvoice[]>([]);
 
 const [summary, setSummary] = useState({
   totalPendingItems: 0,
@@ -280,6 +321,27 @@ const fetchGeneratedPis = async () => {
   }
 };
 
+const fetchFinalInvoices = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/final-invoices`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setFinalInvoices(res.data?.data || []);
+  } catch (error) {
+    console.error('Failed to load final invoices:', error);
+  }
+};
+
 const fetchPoDetail = async (id: number) => {
   try {
     setPoDetailLoading(true);
@@ -336,6 +398,35 @@ const fetchPiDetail = async (id: number) => {
   }
 };
 
+const fetchFinalInvoiceDetail = async (id: number) => {
+  try {
+    setFinalInvoiceDetailLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/final-invoice/${id}`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setSelectedFinalInvoice(res.data);
+
+    setShowFinalInvoiceModal(true);
+  } catch (error) {
+    console.error(error);
+
+    alert('Failed to load final invoice');
+  } finally {
+    setFinalInvoiceDetailLoading(false);
+  }
+};
+
 const createFinalInvoiceFromPi = async (piId: number) => {
   const confirmed = window.confirm(
     'Create final invoice from this proforma invoice?',
@@ -361,6 +452,7 @@ const createFinalInvoiceFromPi = async (piId: number) => {
     );
 
     alert('Final invoice created successfully');
+    fetchFinalInvoices();
   } catch (error: any) {
     console.error(error);
 
@@ -382,6 +474,7 @@ useEffect(() => {
   fetchVendors();
   fetchGeneratedPos();
   fetchGeneratedPis();
+  fetchFinalInvoices();
 }, []);
 
   const filteredItems = items;
@@ -999,6 +1092,84 @@ const generateProformaInvoice = async () => {
     : 'Create Final Invoice'}
 </button>
 
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )}
+</div>
+
+<div className="rounded-2xl bg-white p-5 shadow">
+  <h2 className="text-xl font-bold text-gray-800">
+    Final Invoices
+  </h2>
+
+  <p className="mt-1 text-sm text-gray-500">
+    Final customer billing documents generated from approved PI
+  </p>
+
+  {finalInvoices.length === 0 ? (
+    <p className="mt-4 text-sm text-gray-500">
+      No final invoices generated yet.
+    </p>
+  ) : (
+    <div className="mt-4 space-y-3">
+      {finalInvoices.map((invoice) => (
+        <div
+          key={invoice.id}
+          className="rounded-xl border p-4"
+        >
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="font-bold text-gray-800">
+                {invoice.invoiceNumber || `INV-${invoice.id}`}
+              </p>
+
+              <p className="mt-1 text-sm text-gray-500">
+                Project #{invoice.projectId}
+              </p>
+
+              <p className="mt-1 text-sm text-gray-500">
+                Status: {invoice.status || '-'}
+              </p>
+            </div>
+
+            <div className="text-left md:text-right">
+              <p className="text-sm text-gray-500">
+                Total Amount
+              </p>
+
+              <p className="text-xl font-bold text-green-700">
+                ₹
+                {Number(
+                  invoice.totalAmount || 0,
+                ).toLocaleString('en-IN')}
+              </p>
+
+              <p className="mt-1 text-xs text-gray-400">
+                Pending: ₹
+                {Number(
+                  invoice.pendingAmount || 0,
+                ).toLocaleString('en-IN')}
+              </p>
+
+              <p className="mt-1 text-xs text-gray-400">
+                {invoice.createdAt
+                  ? new Date(
+                      invoice.createdAt,
+                    ).toLocaleString()
+                  : '-'}
+              </p>
+
+              <button
+  onClick={() =>
+    fetchFinalInvoiceDetail(invoice.id)
+  }
+  className="mt-3 rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
+>
+  View Invoice
+</button>
             </div>
           </div>
         </div>
@@ -1696,6 +1867,259 @@ const generateProformaInvoice = async () => {
                 ₹
                 {Number(
                   selectedPi.totalAmount || 0,
+                ).toLocaleString('en-IN')}
+              </p>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  </div>
+)}
+
+{showFinalInvoiceModal && selectedFinalInvoice && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3">
+    <div className="print-area max-h-[90vh] w-full max-w-6xl overflow-y-auto rounded-2xl bg-white p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-800">
+            Final Invoice Detail
+          </h2>
+
+          <p className="mt-1 text-sm text-gray-500">
+            {selectedFinalInvoice.invoiceNumber}
+          </p>
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            onClick={() => window.print()}
+            className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white"
+          >
+            Print
+          </button>
+
+          <button
+            onClick={() => {
+              setShowFinalInvoiceModal(false);
+              setSelectedFinalInvoice(null);
+            }}
+            className="rounded-xl bg-gray-700 px-4 py-2 text-sm font-semibold text-white"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+
+      {finalInvoiceDetailLoading ? (
+        <p className="mt-5">Loading...</p>
+      ) : (
+        <>
+          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            <div className="rounded-xl bg-gray-50 p-4">
+              <p className="text-sm text-gray-500">
+                Project
+              </p>
+
+              <p className="mt-1 font-bold text-gray-800">
+                #{selectedFinalInvoice.projectId}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-gray-50 p-4">
+              <p className="text-sm text-gray-500">
+                Status
+              </p>
+
+              <p className="mt-1 font-bold text-gray-800">
+                {selectedFinalInvoice.status || '-'}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-gray-50 p-4">
+              <p className="text-sm text-gray-500">
+                Invoice Date
+              </p>
+
+              <p className="mt-1 font-bold text-gray-800">
+                {selectedFinalInvoice.invoiceDate
+                  ? new Date(
+                      selectedFinalInvoice.invoiceDate,
+                    ).toLocaleDateString()
+                  : '-'}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-green-50 p-4">
+              <p className="text-sm text-gray-500">
+                Paid Amount
+              </p>
+
+              <p className="mt-1 text-xl font-bold text-green-700">
+                ₹
+                {Number(
+                  selectedFinalInvoice.paidAmount || 0,
+                ).toLocaleString('en-IN')}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-red-50 p-4">
+              <p className="text-sm text-gray-500">
+                Pending Amount
+              </p>
+
+              <p className="mt-1 text-xl font-bold text-red-600">
+                ₹
+                {Number(
+                  selectedFinalInvoice.pendingAmount || 0,
+                ).toLocaleString('en-IN')}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-6 overflow-x-auto rounded-2xl border">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Item
+                  </th>
+
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Qty
+                  </th>
+
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Final Rate
+                  </th>
+
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Discount
+                  </th>
+
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    GST
+                  </th>
+
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Total
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody className="divide-y divide-gray-100 bg-white">
+                {(selectedFinalInvoice.items || []).map(
+                  (
+                    item: FinalInvoiceItem,
+                  ) => (
+                    <tr key={item.id}>
+                      <td className="px-4 py-3">
+                        <p className="font-semibold text-gray-800">
+                          {item.itemName}
+                        </p>
+
+                        <p className="text-xs text-gray-500">
+                          {item.category || '-'} | {item.brand || '-'}
+                        </p>
+                      </td>
+
+                      <td className="px-4 py-3">
+                        {item.quantity || 0}
+                      </td>
+
+                      <td className="px-4 py-3">
+                        ₹
+                        {Number(
+                          item.finalRate || 0,
+                        ).toLocaleString('en-IN')}
+                      </td>
+
+                      <td className="px-4 py-3 text-red-600">
+                        ₹
+                        {Number(
+                          item.discountAmount || 0,
+                        ).toLocaleString('en-IN')}
+                      </td>
+
+                      <td className="px-4 py-3">
+                        {item.gstPercent || 0}%
+                      </td>
+
+                      <td className="px-4 py-3 font-semibold text-green-700">
+                        ₹
+                        {Number(
+                          item.totalAmount || 0,
+                        ).toLocaleString('en-IN')}
+                      </td>
+                    </tr>
+                  ),
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-5">
+            <div className="rounded-xl bg-gray-50 p-4">
+              <p className="text-sm text-gray-500">
+                Subtotal
+              </p>
+
+              <p className="mt-1 text-xl font-bold text-gray-800">
+                ₹
+                {Number(
+                  selectedFinalInvoice.subtotalAmount || 0,
+                ).toLocaleString('en-IN')}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-red-50 p-4">
+              <p className="text-sm text-gray-500">
+                Discount
+              </p>
+
+              <p className="mt-1 text-xl font-bold text-red-600">
+                ₹
+                {Number(
+                  selectedFinalInvoice.discountAmount || 0,
+                ).toLocaleString('en-IN')}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-gray-50 p-4">
+              <p className="text-sm text-gray-500">
+                GST Amount
+              </p>
+
+              <p className="mt-1 text-xl font-bold text-gray-800">
+                ₹
+                {Number(
+                  selectedFinalInvoice.gstAmount || 0,
+                ).toLocaleString('en-IN')}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-green-50 p-4">
+              <p className="text-sm text-gray-500">
+                Paid
+              </p>
+
+              <p className="mt-1 text-xl font-bold text-green-700">
+                ₹
+                {Number(
+                  selectedFinalInvoice.paidAmount || 0,
+                ).toLocaleString('en-IN')}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-blue-50 p-4">
+              <p className="text-sm text-gray-500">
+                Total Amount
+              </p>
+
+              <p className="mt-1 text-2xl font-bold text-blue-700">
+                ₹
+                {Number(
+                  selectedFinalInvoice.totalAmount || 0,
                 ).toLocaleString('en-IN')}
               </p>
             </div>
