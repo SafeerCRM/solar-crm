@@ -87,6 +87,13 @@ import {
 
 import { ProjectPurchaseOrderItem } from './project-purchase-order-item.entity';
 
+import {
+  ProjectProformaInvoice,
+  ProjectProformaInvoiceStatus,
+} from './project-proforma-invoice.entity';
+
+import { ProjectProformaInvoiceItem } from './project-proforma-invoice-item.entity';
+
 @Injectable()
 export class ProjectService {
 
@@ -104,6 +111,10 @@ export class ProjectService {
 
 private generatePoNumber() {
   return `PO-${Date.now()}`;
+}
+
+private generatePiNumber() {
+  return `PI-${Date.now()}`;
 }
 
   constructor(
@@ -169,6 +180,12 @@ private readonly projectPurchaseOrderRepository: Repository<ProjectPurchaseOrder
 
 @InjectRepository(ProjectPurchaseOrderItem)
 private readonly projectPurchaseOrderItemRepository: Repository<ProjectPurchaseOrderItem>,
+
+@InjectRepository(ProjectProformaInvoice)
+private readonly projectProformaInvoiceRepository: Repository<ProjectProformaInvoice>,
+
+@InjectRepository(ProjectProformaInvoiceItem)
+private readonly projectProformaInvoiceItemRepository: Repository<ProjectProformaInvoiceItem>,
 
     private readonly calculatorService: CalculatorService,
 
@@ -5276,6 +5293,281 @@ async getGeneratedPurchaseOrders(filters?: {
     limit,
     totalPages:
       Math.ceil(total / limit) || 1,
+  };
+}
+
+async createProformaInvoice(
+  body: any,
+  user: any,
+) {
+  const items = Array.isArray(body?.items)
+    ? body.items
+    : [];
+
+  if (!body?.projectId) {
+    throw new BadRequestException(
+      'Project ID is required',
+    );
+  }
+
+  if (items.length === 0) {
+    throw new BadRequestException(
+      'At least one invoice item is required',
+    );
+  }
+
+  let subtotalAmount = 0;
+  let discountAmount = 0;
+  let gstAmount = 0;
+  let totalAmount = 0;
+
+  const preparedItems: any[] = [];
+
+  for (const item of items) {
+    const sellingRate = Number(
+      item.sellingRate || 0,
+    );
+
+    const quantity = Number(
+      item.quantity || 0,
+    );
+
+    const gstPercent = Number(
+      item.gstPercent || 0,
+    );
+
+    const itemDiscount = Number(
+      item.discountAmount || 0,
+    );
+
+    const subtotal =
+      sellingRate * quantity;
+
+    const taxable =
+      subtotal - itemDiscount;
+
+    const gst =
+      (taxable * gstPercent) / 100;
+
+    const total = taxable + gst;
+
+    subtotalAmount += subtotal;
+    discountAmount += itemDiscount;
+    gstAmount += gst;
+    totalAmount += total;
+
+    preparedItems.push({
+      ...item,
+      sellingRate,
+      quantity,
+      gstPercent,
+      discountAmount: itemDiscount,
+      subtotalAmount: subtotal,
+      gstAmount: gst,
+      totalAmount: total,
+    });
+  }
+
+  const invoice =
+    this.projectProformaInvoiceRepository.create({
+      projectId: Number(body.projectId),
+
+      invoiceNumber:
+        this.generatePiNumber(),
+
+      status:
+        ProjectProformaInvoiceStatus.DRAFT,
+
+      subtotalAmount,
+
+      discountAmount,
+
+      gstAmount,
+
+      totalAmount,
+
+      invoiceDate: body.invoiceDate
+        ? new Date(body.invoiceDate)
+        : new Date(),
+
+      validUntil: body.validUntil
+        ? new Date(body.validUntil)
+        : null,
+
+      remarks: body.remarks || '',
+
+      createdBy:
+        user?.id || user?.userId || null,
+
+      createdByName:
+        user?.name || '',
+
+      createdByRole:
+        Array.isArray(user?.roles)
+          ? user.roles.join(', ')
+          : '',
+    } as Partial<ProjectProformaInvoice>);
+
+  const savedInvoice =
+    await this.projectProformaInvoiceRepository.save(
+      invoice as ProjectProformaInvoice,
+    );
+
+  const invoiceItems =
+    preparedItems.map((item) =>
+      this.projectProformaInvoiceItemRepository.create({
+        proformaInvoiceId:
+          savedInvoice.id,
+
+        projectId: Number(
+          body.projectId,
+        ),
+
+        materialId:
+          item.materialId
+            ? Number(item.materialId)
+            : null,
+
+        itemName:
+          item.itemName || '',
+
+        category:
+          item.category || '',
+
+        brand:
+          item.brand || '',
+
+        unit:
+          item.unit || '',
+
+        sellingRate:
+          item.sellingRate,
+
+        gstPercent:
+          item.gstPercent,
+
+        quantity:
+          item.quantity,
+
+        discountAmount:
+          item.discountAmount,
+
+        subtotalAmount:
+          item.subtotalAmount,
+
+        gstAmount:
+          item.gstAmount,
+
+        totalAmount:
+          item.totalAmount,
+
+        remarks:
+          item.remarks || '',
+      } as Partial<ProjectProformaInvoiceItem>),
+    );
+
+  await this.projectProformaInvoiceItemRepository.save(
+    invoiceItems,
+  );
+
+  return {
+    message:
+      'Proforma invoice created successfully',
+
+    invoice: savedInvoice,
+  };
+}
+
+async getProformaInvoices(filters?: {
+  page?: number;
+  limit?: number;
+  search?: string;
+  status?: string;
+}) {
+  const page =
+    Number(filters?.page) > 0
+      ? Number(filters?.page)
+      : 1;
+
+  const limit =
+    Number(filters?.limit) > 0
+      ? Math.min(Number(filters?.limit), 100)
+      : 20;
+
+  const skip = (page - 1) * limit;
+
+  const query =
+    this.projectProformaInvoiceRepository.createQueryBuilder(
+      'pi',
+    );
+
+  if (filters?.search) {
+    query.andWhere(
+      `
+      LOWER(pi."invoiceNumber") LIKE :search
+      `,
+      {
+        search: `%${filters.search.toLowerCase()}%`,
+      },
+    );
+  }
+
+  if (filters?.status) {
+    query.andWhere(
+      'pi.status = :status',
+      {
+        status: filters.status,
+      },
+    );
+  }
+
+  query.orderBy(
+    'pi.createdAt',
+    'DESC',
+  );
+
+  query.skip(skip).take(limit);
+
+  const [data, total] =
+    await query.getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages:
+      Math.ceil(total / limit) || 1,
+  };
+}
+
+async getProformaInvoiceById(
+  id: number,
+) {
+  const invoice =
+    await this.projectProformaInvoiceRepository.findOne({
+      where: { id },
+    });
+
+  if (!invoice) {
+    throw new NotFoundException(
+      'Proforma invoice not found',
+    );
+  }
+
+  const items =
+    await this.projectProformaInvoiceItemRepository.find({
+      where: {
+        proformaInvoiceId: id,
+      },
+      order: {
+        createdAt: 'ASC',
+      },
+    });
+
+  return {
+    ...invoice,
+    items,
   };
 }
 

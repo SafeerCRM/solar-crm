@@ -24,12 +24,15 @@ import { ProjectEditHistory } from './project-edit-history.entity';
 import { ProjectVendor } from './project-vendor.entity';
 import { ProjectPurchaseOrder } from './project-purchase-order.entity';
 import { ProjectPurchaseOrderItem } from './project-purchase-order-item.entity';
+import { ProjectProformaInvoice } from './project-proforma-invoice.entity';
+import { ProjectProformaInvoiceItem } from './project-proforma-invoice-item.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Project, ProjectDocument, ProjectComment, ProjectMaterialMaster, ProjectMaterialRequest,
 ProjectMaterialRequestItem, ProjectBranch, ProjectLoanDetail, ProjectSubsidyDetail, ProjectElectricityDetail, ProjectExecutionActivity, ProjectExecutionProof, ProjectExecutionReminder, ProjectExecutionReminderUserState, ProjectPaymentInstallment, ProjectPaymentReminderUserState, ProjectReminderUserState, ProjectEditHistory,
- ProjectVendor, ProjectPurchaseOrder, ProjectPurchaseOrderItem]),
+ ProjectVendor, ProjectPurchaseOrder, ProjectPurchaseOrderItem, ProjectProformaInvoice,
+ProjectProformaInvoiceItem,]),
     CalculatorModule,
   ],
   controllers: [ProjectController],

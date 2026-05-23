@@ -257,6 +257,42 @@ getPurchaseOrderById(
   );
 }
 
+@Roles('OWNER', 'PROJECT_MANAGER')
+@Post('proforma-invoice')
+createProformaInvoice(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.createProformaInvoice(
+    body,
+    user,
+  );
+}
+
+@Get('proforma-invoices')
+getProformaInvoices(
+  @Query('page') page?: string,
+  @Query('limit') limit?: string,
+  @Query('search') search?: string,
+  @Query('status') status?: string,
+) {
+  return this.projectService.getProformaInvoices({
+    page: Number(page || 1),
+    limit: Number(limit || 20),
+    search: search || '',
+    status: status || '',
+  });
+}
+
+@Get('proforma-invoice/:id')
+getProformaInvoiceById(
+  @Param('id') id: string,
+) {
+  return this.projectService.getProformaInvoiceById(
+    Number(id),
+  );
+}
+
 @Get('purchase-order/purchasable-items')
 getPurchasableMaterialRequestItems(
   @Query('projectId')
