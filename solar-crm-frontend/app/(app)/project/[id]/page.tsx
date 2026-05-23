@@ -1712,17 +1712,96 @@ const canManageMaterial = hasRole([
       </div>
 
       <div className="flex flex-wrap gap-2">
-  {[
-    { key: 'PROJECT_CREATION', label: 'Project Creation' },
-    { key: 'LOAN_DEPARTMENT', label: 'Loan Department' },
-    { key: 'PROJECT_MANAGEMENT', label: 'Material Requirement' },
-    { key: 'PROJECT_EXECUTION', label: 'Project Execution' },
-    { key: 'SUBSIDY_DEPARTMENT', label: 'Subsidy Department' },
-    { key: 'ELECTRICITY_DEPARTMENT', label: 'Electricity Department' },
-    { key: 'PAYMENT_COLLECTION', label: 'Payment Collection' },
-    { key: 'DOCUMENTS', label: 'Documents' },
-    { key: 'PROJECT_HISTORY', label: 'Project History' },
-  ].map((tab) => (
+  {(() => {
+  const allTabs = [
+    {
+      key: 'PROJECT_CREATION',
+      label: 'Project Creation',
+    },
+    {
+      key: 'LOAN_DEPARTMENT',
+      label: 'Loan Department',
+    },
+    {
+      key: 'PROJECT_MANAGEMENT',
+      label: 'Material Requirement',
+    },
+    {
+      key: 'PROJECT_EXECUTION',
+      label: 'Project Execution',
+    },
+    {
+      key: 'SUBSIDY_DEPARTMENT',
+      label: 'Subsidy Department',
+    },
+    {
+      key: 'ELECTRICITY_DEPARTMENT',
+      label: 'Electricity Department',
+    },
+    {
+      key: 'PAYMENT_COLLECTION',
+      label: 'Payment Collection',
+    },
+    {
+      key: 'DOCUMENTS',
+      label: 'Documents',
+    },
+    {
+      key: 'PROJECT_HISTORY',
+      label: 'Project History',
+    },
+  ];
+
+  let visibleTabs = allTabs;
+
+  if (hasRole(['LOAN_MANAGER'])) {
+    visibleTabs = allTabs.filter((tab) =>
+      [
+        'PROJECT_CREATION',
+        'LOAN_DEPARTMENT',
+        'DOCUMENTS',
+        'PROJECT_HISTORY',
+      ].includes(tab.key),
+    );
+  } else if (
+    hasRole(['SUBSIDY_MANAGER'])
+  ) {
+    visibleTabs = allTabs.filter((tab) =>
+      [
+        'PROJECT_CREATION',
+        'SUBSIDY_DEPARTMENT',
+        'DOCUMENTS',
+        'PROJECT_HISTORY',
+      ].includes(tab.key),
+    );
+  } else if (
+    hasRole(['ELECTRICITY_MANAGER'])
+  ) {
+    visibleTabs = allTabs.filter((tab) =>
+      [
+        'PROJECT_CREATION',
+        'ELECTRICITY_DEPARTMENT',
+        'DOCUMENTS',
+        'PROJECT_HISTORY',
+      ].includes(tab.key),
+    );
+  } else if (
+    hasRole([
+      'PAYMENT_COLLECTION_EXECUTIVE',
+      'PAYMENT_MANAGER',
+    ])
+  ) {
+    visibleTabs = allTabs.filter((tab) =>
+      [
+        'PROJECT_CREATION',
+        'PAYMENT_COLLECTION',
+        'DOCUMENTS',
+        'PROJECT_HISTORY',
+      ].includes(tab.key),
+    );
+  }
+
+  return visibleTabs.map((tab) => (
     <button
       key={tab.key}
       onClick={() => setActiveTab(tab.key)}
@@ -1734,7 +1813,8 @@ const canManageMaterial = hasRole([
     >
       {tab.label}
     </button>
-  ))}
+  ));
+})()}
 </div>
 
 {showEditModal && (
