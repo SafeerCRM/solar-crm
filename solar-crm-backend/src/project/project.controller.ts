@@ -5,6 +5,7 @@ import {
   Post,
   Patch,
   Body,
+  Res,
   Param,
   UploadedFiles,
 UseGuards,
@@ -21,6 +22,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
+import type { Response } from 'express';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('project')
@@ -338,6 +340,17 @@ createFinalInvoiceFromProforma(
   return this.projectService.createFinalInvoiceFromProforma(
     Number(id),
     user,
+  );
+}
+
+@Get('final-invoice/:id/pdf')
+generateFinalInvoicePdf(
+  @Param('id') id: string,
+  @Res() res: Response,
+) {
+  return this.projectService.generateFinalInvoicePdf(
+    Number(id),
+    res,
   );
 }
 

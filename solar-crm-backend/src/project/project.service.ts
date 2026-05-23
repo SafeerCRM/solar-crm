@@ -9,6 +9,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 
 import { In, MoreThan, Repository } from 'typeorm';
 
+import PDFDocument = require('pdfkit');
+import { Response } from 'express';
+
 import { Project } from './project.entity';
 import {
   ProjectDocument,
@@ -5915,6 +5918,207 @@ async getFinalInvoiceById(
     ...invoice,
     items,
   };
+}
+
+async generateFinalInvoicePdf(
+  id: number,
+  res: Response,
+) {
+  const invoice =
+    await this.getFinalInvoiceById(id);
+
+  const doc = new PDFDocument({
+    margin: 40,
+    size: 'A4',
+  });
+
+  const fileName = `${
+    invoice.invoiceNumber || `INV-${invoice.id}`
+  }.pdf`;
+
+  res.setHeader(
+    'Content-Disposition',
+    `inline; filename="${fileName}"`,
+  );
+
+  res.setHeader(
+    'Content-Type',
+    'application/pdf',
+  );
+
+  doc.pipe(res);
+
+  doc
+    .fontSize(22)
+    .fillColor('#0f172a')
+    .text('FINAL INVOICE', {
+      align: 'center',
+    });
+
+  doc.moveDown();
+
+  doc
+    .fontSize(12)
+    .fillColor('#111827')
+    .text(`Invoice No: ${invoice.invoiceNumber || '-'}`);
+
+  doc.text(
+    `Date: ${
+      invoice.invoiceDate
+        ? new Date(invoice.invoiceDate).toLocaleDateString('en-IN')
+        : new Date(invoice.createdAt).toLocaleDateString('en-IN')
+    }`,
+  );
+
+  doc.text(`Project ID: ${invoice.projectId}`);
+  doc.text(`Status: ${invoice.status || '-'}`);
+
+  doc.moveDown();
+
+  doc
+    .fontSize(16)
+    .fillColor('#2563eb')
+    .text('Invoice Items');
+
+  doc.moveDown(0.5);
+
+  doc
+    .fontSize(10)
+    .fillColor('#111827');
+
+  const startX = 40;
+  let y = doc.y;
+
+  doc.text('Item', startX, y, { width: 170 });
+  doc.text('Qty', 220, y, { width: 50 });
+  doc.text('Rate', 270, y, { width: 80 });
+  doc.text('Disc.', 350, y, { width: 70 });
+  doc.text('GST', 420, y, { width: 50 });
+  doc.text('Total', 470, y, { width: 90 });
+
+  y += 18;
+
+  doc.moveTo(40, y).lineTo(555, y).stroke();
+
+  y += 10;
+
+  for (const item of invoice.items || []) {
+    if (y > 720) {
+      doc.addPage();
+      y = 40;
+    }
+
+    doc.text(item.itemName || '-', startX, y, {
+      width: 170,
+    });
+
+    doc.text(String(item.quantity || 0), 220, y, {
+      width: 50,
+    });
+
+    doc.text(
+      `₹${Number(item.finalRate || 0).toLocaleString('en-IN')}`,
+      270,
+      y,
+      {
+        width: 80,
+      },
+    );
+
+    doc.text(
+      `₹${Number(item.discountAmount || 0).toLocaleString('en-IN')}`,
+      350,
+      y,
+      {
+        width: 70,
+      },
+    );
+
+    doc.text(`${item.gstPercent || 0}%`, 420, y, {
+      width: 50,
+    });
+
+    doc.text(
+      `₹${Number(item.totalAmount || 0).toLocaleString('en-IN')}`,
+      470,
+      y,
+      {
+        width: 90,
+      },
+    );
+
+    y += 28;
+  }
+
+  doc.moveDown(2);
+
+  if (doc.y < y) {
+    doc.y = y;
+  }
+
+  doc
+    .fontSize(14)
+    .fillColor('#111827')
+    .text(
+      `Subtotal: ₹${Number(invoice.subtotalAmount || 0).toLocaleString('en-IN')}`,
+      {
+        align: 'right',
+      },
+    );
+
+  doc.text(
+    `Discount: ₹${Number(invoice.discountAmount || 0).toLocaleString('en-IN')}`,
+    {
+      align: 'right',
+    },
+  );
+
+  doc.text(
+    `GST: ₹${Number(invoice.gstAmount || 0).toLocaleString('en-IN')}`,
+    {
+      align: 'right',
+    },
+  );
+
+  doc
+    .fontSize(18)
+    .fillColor('#16a34a')
+    .text(
+      `Total: ₹${Number(invoice.totalAmount || 0).toLocaleString('en-IN')}`,
+      {
+        align: 'right',
+      },
+    );
+
+  doc.moveDown();
+
+  doc
+    .fontSize(11)
+    .fillColor('#111827')
+    .text(
+      `Paid Amount: ₹${Number(invoice.paidAmount || 0).toLocaleString('en-IN')}`,
+      {
+        align: 'right',
+      },
+    );
+
+  doc.text(
+    `Pending Amount: ₹${Number(invoice.pendingAmount || 0).toLocaleString('en-IN')}`,
+    {
+      align: 'right',
+    },
+  );
+
+  doc.moveDown(2);
+
+  doc
+    .fontSize(10)
+    .fillColor('#6b7280')
+    .text('This is a system-generated final invoice.', {
+      align: 'center',
+    });
+
+  doc.end();
 }
 
 async getPurchasableMaterialRequestItems(
