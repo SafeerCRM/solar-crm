@@ -1739,10 +1739,29 @@ const generateProjectPdf = async (share = false) => {
 
     for (let i = 0; i < pages.length; i++) {
       const canvas = await html2canvas(pages[i], {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-      });
+  scale: 2,
+  useCORS: true,
+  allowTaint: true,
+  backgroundColor: '#ffffff',
+  logging: false,
+  onclone: (doc) => {
+    const style = doc.createElement('style');
+    style.innerHTML = `
+      * {
+        color: #111827 !important;
+        background-color: #ffffff !important;
+        border-color: #d1d5db !important;
+        box-shadow: none !important;
+        text-shadow: none !important;
+      }
+
+      .project-pdf-page {
+        background: #ffffff !important;
+      }
+    `;
+    doc.head.appendChild(style);
+  },
+});
 
       const data = canvas.toDataURL('image/jpeg', 0.95);
 
