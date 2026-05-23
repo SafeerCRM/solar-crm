@@ -295,6 +295,17 @@ getProformaInvoiceById(
   );
 }
 
+@Get('proforma-invoice/:id/pdf')
+generateProformaInvoicePdf(
+  @Param('id') id: string,
+  @Res() res: Response,
+) {
+  return this.projectService.generateProformaInvoicePdf(
+    Number(id),
+    res,
+  );
+}
+
 @Roles('OWNER', 'PROJECT_MANAGER')
 @Post('final-invoice')
 createFinalInvoice(

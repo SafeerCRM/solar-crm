@@ -5593,6 +5593,257 @@ async getProformaInvoiceById(
   };
 }
 
+async generateProformaInvoicePdf(
+  id: number,
+  res: Response,
+) {
+  const pi =
+    await this.getProformaInvoiceById(id);
+
+  const doc = new PDFDocument({
+    margin: 40,
+    size: 'A4',
+  });
+
+  const logoPath = path.join(
+    process.cwd(),
+    'src',
+    'assets',
+    'aditya-logo.jpg',
+  );
+
+  const fileName = `${
+    pi.invoiceNumber || `PI-${pi.id}`
+  }.pdf`;
+
+  res.setHeader(
+    'Content-Disposition',
+    `inline; filename="${fileName}"`,
+  );
+
+  res.setHeader(
+    'Content-Type',
+    'application/pdf',
+  );
+
+  doc.pipe(res);
+
+  doc.image(logoPath, 40, 20, {
+    fit: [515, 110],
+    align: 'center',
+  });
+
+  doc.y = 145;
+
+  doc
+    .fontSize(22)
+    .fillColor('#0f172a')
+    .text('PROFORMA INVOICE', {
+      align: 'center',
+    });
+
+  doc.moveDown();
+
+  doc
+    .fontSize(12)
+    .fillColor('#111827')
+    .text(`PI No: ${pi.invoiceNumber || '-'}`);
+
+  doc.text(
+    `Date: ${
+      pi.invoiceDate
+        ? new Date(pi.invoiceDate).toLocaleDateString(
+            'en-IN',
+          )
+        : new Date(
+            pi.createdAt,
+          ).toLocaleDateString('en-IN')
+    }`,
+  );
+
+  doc.text(`Project ID: ${pi.projectId}`);
+
+  doc.text(`Status: ${pi.status || '-'}`);
+
+  doc.moveDown();
+
+  doc
+    .fontSize(16)
+    .fillColor('#2563eb')
+    .text('Invoice Items');
+
+  doc.moveDown(0.5);
+
+  doc
+    .fontSize(10)
+    .fillColor('#111827');
+
+  const startX = 40;
+
+  let y = doc.y;
+
+  doc.text('Item', startX, y, {
+    width: 170,
+  });
+
+  doc.text('Qty', 220, y, {
+    width: 50,
+  });
+
+  doc.text('Rate', 270, y, {
+    width: 80,
+  });
+
+  doc.text('Disc.', 350, y, {
+    width: 70,
+  });
+
+  doc.text('GST', 420, y, {
+    width: 50,
+  });
+
+  doc.text('Total', 470, y, {
+    width: 90,
+  });
+
+  y += 18;
+
+  doc.moveTo(40, y).lineTo(555, y).stroke();
+
+  y += 10;
+
+  for (const item of pi.items || []) {
+    if (y > 720) {
+      doc.addPage();
+      y = 40;
+    }
+
+    doc.text(
+      item.itemName || '-',
+      startX,
+      y,
+      {
+        width: 170,
+      },
+    );
+
+    doc.text(
+      String(item.quantity || 0),
+      220,
+      y,
+      {
+        width: 50,
+      },
+    );
+
+    doc.text(
+      `Rs. ${Number(
+        item.sellingRate || 0,
+      ).toLocaleString('en-IN')}`,
+      270,
+      y,
+      {
+        width: 80,
+      },
+    );
+
+    doc.text(
+      `Rs. ${Number(
+        item.discountAmount || 0,
+      ).toLocaleString('en-IN')}`,
+      350,
+      y,
+      {
+        width: 70,
+      },
+    );
+
+    doc.text(
+      `${item.gstPercent || 0}%`,
+      420,
+      y,
+      {
+        width: 50,
+      },
+    );
+
+    doc.text(
+      `Rs. ${Number(
+        item.totalAmount || 0,
+      ).toLocaleString('en-IN')}`,
+      470,
+      y,
+      {
+        width: 90,
+      },
+    );
+
+    y += 28;
+  }
+
+  doc.moveDown(2);
+
+  if (doc.y < y) {
+    doc.y = y;
+  }
+
+  doc
+    .fontSize(14)
+    .fillColor('#111827')
+    .text(
+      `Subtotal: Rs. ${Number(
+        pi.subtotalAmount || 0,
+      ).toLocaleString('en-IN')}`,
+      {
+        align: 'right',
+      },
+    );
+
+  doc.text(
+    `Discount: Rs. ${Number(
+      pi.discountAmount || 0,
+    ).toLocaleString('en-IN')}`,
+    {
+      align: 'right',
+    },
+  );
+
+  doc.text(
+    `GST: Rs. ${Number(
+      pi.gstAmount || 0,
+    ).toLocaleString('en-IN')}`,
+    {
+      align: 'right',
+    },
+  );
+
+  doc
+    .fontSize(18)
+    .fillColor('#16a34a')
+    .text(
+      `Total: Rs. ${Number(
+        pi.totalAmount || 0,
+      ).toLocaleString('en-IN')}`,
+      {
+        align: 'right',
+      },
+    );
+
+  doc.moveDown(2);
+
+  doc
+    .fontSize(10)
+    .fillColor('#6b7280')
+    .text(
+      'This is a system-generated proforma invoice.',
+      {
+        align: 'center',
+      },
+    );
+
+  doc.end();
+}
+
 async createFinalInvoice(
   body: any,
   user: any,
