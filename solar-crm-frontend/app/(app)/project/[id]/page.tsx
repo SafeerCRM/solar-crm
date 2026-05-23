@@ -1656,19 +1656,47 @@ const canManageMaterial = hasRole([
 
   useEffect(() => {
   if (projectId) {
-  fetchProject();
-  fetchLoanDetail();
-  fetchDocuments();
-  fetchMaterials();
-  fetchMaterialRequests();
-  fetchLoanComments();
-  fetchSubsidyDetail();
-  fetchElectricityDetail();
-  fetchExecutionActivities();
-  fetchPaymentInstallments();
-  fetchProjectEditHistory();
-}
+    fetchProject();
+  }
 }, [projectId]);
+
+useEffect(() => {
+  if (!projectId) return;
+
+  if (activeTab === 'LOAN_DEPARTMENT') {
+    fetchLoanDetail();
+    fetchLoanComments();
+  }
+
+  if (activeTab === 'DOCUMENTS') {
+    fetchDocuments();
+  }
+
+  if (activeTab === 'PROJECT_MANAGEMENT') {
+    fetchMaterials();
+    fetchMaterialRequests();
+  }
+
+  if (activeTab === 'SUBSIDY_DEPARTMENT') {
+    fetchSubsidyDetail();
+  }
+
+  if (activeTab === 'ELECTRICITY_DEPARTMENT') {
+    fetchElectricityDetail();
+  }
+
+  if (activeTab === 'PROJECT_EXECUTION') {
+    fetchExecutionActivities();
+  }
+
+  if (activeTab === 'PAYMENT_COLLECTION') {
+    fetchPaymentInstallments();
+  }
+
+  if (activeTab === 'PROJECT_HISTORY') {
+    fetchProjectEditHistory();
+  }
+}, [activeTab, projectId]);
 
   if (loading) {
     return <div className="rounded-2xl bg-white p-5 shadow">Loading project...</div>;
