@@ -52,6 +52,20 @@ type GeneratedPurchaseOrder = {
   createdAt?: string;
 };
 
+type GeneratedPurchaseOrderItem = {
+  id: number;
+  materialName?: string;
+  category?: string;
+  brand?: string;
+  unit?: string;
+  purchaseRate?: number;
+  gstPercent?: number;
+  quantity?: number;
+  subtotalAmount?: number;
+  gstAmount?: number;
+  totalAmount?: number;
+};
+
 export default function PurchaseOrdersPage() {
   const [items, setItems] = useState<PurchaseItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -72,6 +86,14 @@ const [generatingPo, setGeneratingPo] = useState(false);
 const [generatedPos, setGeneratedPos] = useState<
   GeneratedPurchaseOrder[]
 >([]);
+const [selectedPo, setSelectedPo] =
+  useState<any>(null);
+
+const [poDetailLoading, setPoDetailLoading] =
+  useState(false);
+
+const [showPoModal, setShowPoModal] =
+  useState(false);
 
 const [summary, setSummary] = useState({
   totalPendingItems: 0,
@@ -191,6 +213,35 @@ const fetchGeneratedPos = async () => {
       'Failed to load generated POs:',
       error,
     );
+  }
+};
+
+const fetchPoDetail = async (id: number) => {
+  try {
+    setPoDetailLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/purchase-order/${id}`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setSelectedPo(res.data);
+
+    setShowPoModal(true);
+  } catch (error) {
+    console.error(error);
+
+    alert('Failed to load PO detail');
+  } finally {
+    setPoDetailLoading(false);
   }
 };
 
@@ -491,6 +542,13 @@ const canGeneratePo =
                     ).toLocaleString()
                   : '-'}
               </p>
+
+              <button
+  onClick={() => fetchPoDetail(po.id)}
+  className="mt-3 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+>
+  View PO
+</button>
             </div>
           </div>
         </div>
@@ -904,6 +962,203 @@ const canGeneratePo =
 </div>
 
       </div>
+
+      {showPoModal && selectedPo && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3">
+    <div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-800">
+            Purchase Order Detail
+          </h2>
+
+          <p className="mt-1 text-sm text-gray-500">
+            {selectedPo.poNumber}
+          </p>
+        </div>
+
+        <button
+          onClick={() => {
+            setShowPoModal(false);
+            setSelectedPo(null);
+          }}
+          className="rounded-xl bg-gray-700 px-4 py-2 text-sm font-semibold text-white"
+        >
+          Close
+        </button>
+      </div>
+
+      {poDetailLoading ? (
+        <p className="mt-5">Loading...</p>
+      ) : (
+        <>
+          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-xl bg-gray-50 p-4">
+              <p className="text-sm text-gray-500">
+                Vendor
+              </p>
+
+              <p className="mt-1 font-bold text-gray-800">
+                {selectedPo.vendorName || '-'}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-gray-50 p-4">
+              <p className="text-sm text-gray-500">
+                Project
+              </p>
+
+              <p className="mt-1 font-bold text-gray-800">
+                #{selectedPo.projectId}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-gray-50 p-4">
+              <p className="text-sm text-gray-500">
+                Status
+              </p>
+
+              <p className="mt-1 font-bold text-gray-800">
+                {selectedPo.status || '-'}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-gray-50 p-4">
+              <p className="text-sm text-gray-500">
+                Order Date
+              </p>
+
+              <p className="mt-1 font-bold text-gray-800">
+                {selectedPo.orderDate
+                  ? new Date(
+                      selectedPo.orderDate,
+                    ).toLocaleDateString()
+                  : '-'}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-6 overflow-x-auto rounded-2xl border">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Material
+                  </th>
+
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Qty
+                  </th>
+
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Rate
+                  </th>
+
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    GST
+                  </th>
+
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Total
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody className="divide-y divide-gray-100 bg-white">
+                {(selectedPo.items || []).map(
+                  (
+                    item: GeneratedPurchaseOrderItem,
+                  ) => (
+                    <tr key={item.id}>
+                      <td className="px-4 py-3">
+                        <p className="font-semibold text-gray-800">
+                          {item.materialName}
+                        </p>
+
+                        <p className="text-xs text-gray-500">
+                          {item.category ||
+                            '-'}{' '}
+                          | {item.brand || '-'}
+                        </p>
+                      </td>
+
+                      <td className="px-4 py-3">
+                        {item.quantity || 0}
+                      </td>
+
+                      <td className="px-4 py-3">
+                        ₹
+                        {Number(
+                          item.purchaseRate || 0,
+                        ).toLocaleString(
+                          'en-IN',
+                        )}
+                      </td>
+
+                      <td className="px-4 py-3">
+                        {item.gstPercent || 0}%
+                      </td>
+
+                      <td className="px-4 py-3 font-semibold text-green-700">
+                        ₹
+                        {Number(
+                          item.totalAmount || 0,
+                        ).toLocaleString(
+                          'en-IN',
+                        )}
+                      </td>
+                    </tr>
+                  ),
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-3">
+            <div className="rounded-xl bg-gray-50 p-4">
+              <p className="text-sm text-gray-500">
+                Subtotal
+              </p>
+
+              <p className="mt-1 text-xl font-bold text-gray-800">
+                ₹
+                {Number(
+                  selectedPo.subtotalAmount || 0,
+                ).toLocaleString('en-IN')}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-gray-50 p-4">
+              <p className="text-sm text-gray-500">
+                GST Amount
+              </p>
+
+              <p className="mt-1 text-xl font-bold text-gray-800">
+                ₹
+                {Number(
+                  selectedPo.gstAmount || 0,
+                ).toLocaleString('en-IN')}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-green-50 p-4">
+              <p className="text-sm text-gray-500">
+                Total Amount
+              </p>
+
+              <p className="mt-1 text-2xl font-bold text-green-700">
+                ₹
+                {Number(
+                  selectedPo.totalAmount || 0,
+                ).toLocaleString('en-IN')}
+              </p>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  </div>
+)}
     </div>
   );
 }
