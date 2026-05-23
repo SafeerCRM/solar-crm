@@ -94,6 +94,13 @@ import {
 
 import { ProjectProformaInvoiceItem } from './project-proforma-invoice-item.entity';
 
+import {
+  ProjectFinalInvoice,
+  ProjectFinalInvoiceStatus,
+} from './project-final-invoice.entity';
+
+import { ProjectFinalInvoiceItem } from './project-final-invoice-item.entity';
+
 @Injectable()
 export class ProjectService {
 
@@ -115,6 +122,10 @@ private generatePoNumber() {
 
 private generatePiNumber() {
   return `PI-${Date.now()}`;
+}
+
+private generateFinalInvoiceNumber() {
+  return `INV-${Date.now()}`;
 }
 
   constructor(
@@ -186,6 +197,12 @@ private readonly projectProformaInvoiceRepository: Repository<ProjectProformaInv
 
 @InjectRepository(ProjectProformaInvoiceItem)
 private readonly projectProformaInvoiceItemRepository: Repository<ProjectProformaInvoiceItem>,
+
+@InjectRepository(ProjectFinalInvoice)
+private readonly projectFinalInvoiceRepository: Repository<ProjectFinalInvoice>,
+
+@InjectRepository(ProjectFinalInvoiceItem)
+private readonly projectFinalInvoiceItemRepository: Repository<ProjectFinalInvoiceItem>,
 
     private readonly calculatorService: CalculatorService,
 
@@ -5559,6 +5576,285 @@ async getProformaInvoiceById(
     await this.projectProformaInvoiceItemRepository.find({
       where: {
         proformaInvoiceId: id,
+      },
+      order: {
+        createdAt: 'ASC',
+      },
+    });
+
+  return {
+    ...invoice,
+    items,
+  };
+}
+
+async createFinalInvoice(
+  body: any,
+  user: any,
+) {
+  const items = Array.isArray(body?.items)
+    ? body.items
+    : [];
+
+  if (!body?.projectId) {
+    throw new BadRequestException(
+      'Project ID is required',
+    );
+  }
+
+  if (items.length === 0) {
+    throw new BadRequestException(
+      'At least one invoice item is required',
+    );
+  }
+
+  let subtotalAmount = 0;
+  let discountAmount = 0;
+  let gstAmount = 0;
+  let totalAmount = 0;
+
+  const preparedItems: any[] = [];
+
+  for (const item of items) {
+    const finalRate = Number(
+      item.finalRate || 0,
+    );
+
+    const quantity = Number(
+      item.quantity || 0,
+    );
+
+    const gstPercent = Number(
+      item.gstPercent || 0,
+    );
+
+    const itemDiscount = Number(
+      item.discountAmount || 0,
+    );
+
+    const subtotal =
+      finalRate * quantity;
+
+    const taxable =
+      subtotal - itemDiscount;
+
+    const gst =
+      (taxable * gstPercent) / 100;
+
+    const total = taxable + gst;
+
+    subtotalAmount += subtotal;
+    discountAmount += itemDiscount;
+    gstAmount += gst;
+    totalAmount += total;
+
+    preparedItems.push({
+      ...item,
+      finalRate,
+      quantity,
+      gstPercent,
+      discountAmount: itemDiscount,
+      subtotalAmount: subtotal,
+      gstAmount: gst,
+      totalAmount: total,
+    });
+  }
+
+  const invoice =
+    this.projectFinalInvoiceRepository.create({
+      projectId: Number(body.projectId),
+
+      invoiceNumber:
+        this.generateFinalInvoiceNumber(),
+
+      status:
+        ProjectFinalInvoiceStatus.GENERATED,
+
+      subtotalAmount,
+
+      discountAmount,
+
+      gstAmount,
+
+      totalAmount,
+
+      paidAmount: 0,
+
+      pendingAmount: totalAmount,
+
+      invoiceDate: body.invoiceDate
+        ? new Date(body.invoiceDate)
+        : new Date(),
+
+      dueDate: body.dueDate
+        ? new Date(body.dueDate)
+        : null,
+
+      remarks: body.remarks || '',
+
+      createdBy:
+        user?.id || user?.userId || null,
+
+      createdByName:
+        user?.name || '',
+
+      createdByRole:
+        Array.isArray(user?.roles)
+          ? user.roles.join(', ')
+          : '',
+    } as Partial<ProjectFinalInvoice>);
+
+  const savedInvoice =
+    await this.projectFinalInvoiceRepository.save(
+      invoice as ProjectFinalInvoice,
+    );
+
+  const invoiceItems =
+    preparedItems.map((item) =>
+      this.projectFinalInvoiceItemRepository.create({
+        finalInvoiceId:
+          savedInvoice.id,
+
+        projectId: Number(
+          body.projectId,
+        ),
+
+        materialId:
+          item.materialId
+            ? Number(item.materialId)
+            : null,
+
+        itemName:
+          item.itemName || '',
+
+        category:
+          item.category || '',
+
+        brand:
+          item.brand || '',
+
+        unit:
+          item.unit || '',
+
+        finalRate:
+          item.finalRate,
+
+        gstPercent:
+          item.gstPercent,
+
+        quantity:
+          item.quantity,
+
+        discountAmount:
+          item.discountAmount,
+
+        subtotalAmount:
+          item.subtotalAmount,
+
+        gstAmount:
+          item.gstAmount,
+
+        totalAmount:
+          item.totalAmount,
+
+        remarks:
+          item.remarks || '',
+      } as Partial<ProjectFinalInvoiceItem>),
+    );
+
+  await this.projectFinalInvoiceItemRepository.save(
+    invoiceItems,
+  );
+
+  return {
+    message:
+      'Final invoice created successfully',
+
+    invoice: savedInvoice,
+  };
+}
+
+async getFinalInvoices(filters?: {
+  page?: number;
+  limit?: number;
+  search?: string;
+  status?: string;
+}) {
+  const page =
+    Number(filters?.page) > 0
+      ? Number(filters?.page)
+      : 1;
+
+  const limit =
+    Number(filters?.limit) > 0
+      ? Math.min(Number(filters?.limit), 100)
+      : 20;
+
+  const skip = (page - 1) * limit;
+
+  const query =
+    this.projectFinalInvoiceRepository.createQueryBuilder(
+      'invoice',
+    );
+
+  if (filters?.search) {
+    query.andWhere(
+      `
+      LOWER(invoice."invoiceNumber") LIKE :search
+      `,
+      {
+        search: `%${filters.search.toLowerCase()}%`,
+      },
+    );
+  }
+
+  if (filters?.status) {
+    query.andWhere(
+      'invoice.status = :status',
+      {
+        status: filters.status,
+      },
+    );
+  }
+
+  query.orderBy(
+    'invoice.createdAt',
+    'DESC',
+  );
+
+  query.skip(skip).take(limit);
+
+  const [data, total] =
+    await query.getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages:
+      Math.ceil(total / limit) || 1,
+  };
+}
+
+async getFinalInvoiceById(
+  id: number,
+) {
+  const invoice =
+    await this.projectFinalInvoiceRepository.findOne({
+      where: { id },
+    });
+
+  if (!invoice) {
+    throw new NotFoundException(
+      'Final invoice not found',
+    );
+  }
+
+  const items =
+    await this.projectFinalInvoiceItemRepository.find({
+      where: {
+        finalInvoiceId: id,
       },
       order: {
         createdAt: 'ASC',

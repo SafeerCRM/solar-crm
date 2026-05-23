@@ -293,6 +293,42 @@ getProformaInvoiceById(
   );
 }
 
+@Roles('OWNER', 'PROJECT_MANAGER')
+@Post('final-invoice')
+createFinalInvoice(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.createFinalInvoice(
+    body,
+    user,
+  );
+}
+
+@Get('final-invoices')
+getFinalInvoices(
+  @Query('page') page?: string,
+  @Query('limit') limit?: string,
+  @Query('search') search?: string,
+  @Query('status') status?: string,
+) {
+  return this.projectService.getFinalInvoices({
+    page: Number(page || 1),
+    limit: Number(limit || 20),
+    search: search || '',
+    status: status || '',
+  });
+}
+
+@Get('final-invoice/:id')
+getFinalInvoiceById(
+  @Param('id') id: string,
+) {
+  return this.projectService.getFinalInvoiceById(
+    Number(id),
+  );
+}
+
 @Get('purchase-order/purchasable-items')
 getPurchasableMaterialRequestItems(
   @Query('projectId')
