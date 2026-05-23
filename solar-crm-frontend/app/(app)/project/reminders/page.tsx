@@ -359,7 +359,7 @@ export default function ProjectRemindersPage() {
   | 'OVERDUE'
   | 'TODAY'
   | 'UPCOMING'
->('ALL');
+>('APPROVAL');
 
   const fetchReminders = async (
   selectedFilter:
@@ -441,10 +441,12 @@ export default function ProjectRemindersPage() {
       );
 
       setApprovalItems(
-        Array.isArray(approvalRes.data)
-          ? approvalRes.data
-          : [],
-      );
+  Array.isArray(approvalRes.data)
+    ? approvalRes.data
+    : Array.isArray(approvalRes.data?.data)
+      ? approvalRes.data.data
+      : [],
+);
     }
 
     if (
