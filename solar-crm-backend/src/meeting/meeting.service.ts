@@ -390,6 +390,28 @@ audioUrl:
     const currentUserId = this.getCurrentUserId(user);
     const currentUserName = this.getCurrentUserName(user);
 
+    const cleanNotes = String(createMeetingDto.notes || '').trim();
+
+if (!cleanNotes) {
+  throw new BadRequestException(
+    'Meeting notes are required',
+  );
+}
+
+createMeetingDto.notes = cleanNotes;
+
+const cleanAddress = String((createMeetingDto as any).address || '').trim();
+const cleanGpsAddress = String((createMeetingDto as any).gpsAddress || '').trim();
+
+if (!cleanAddress && !cleanGpsAddress) {
+  throw new BadRequestException(
+    'Meeting address is required. Please capture GPS location or enter address manually.',
+  );
+}
+
+(createMeetingDto as any).address = cleanAddress || cleanGpsAddress;
+(createMeetingDto as any).gpsAddress = cleanGpsAddress || cleanAddress;
+
     const assignedTo =
       this.isOwnMeetingRole(user) && !(createMeetingDto as any).assignedTo
         ? currentUserId
@@ -836,6 +858,18 @@ if (!hasContext) {
   throw new BadRequestException(
     'Please add notes, remarks, observation, reason, or outcome before saving action',
   );
+}
+
+if (actionData.status === MeetingStatus.CONVERTED_TO_PROJECT) {
+  const hasMeetingAddress =
+    String(existingMeeting.address || '').trim() ||
+    String(existingMeeting.gpsAddress || '').trim();
+
+  if (!hasMeetingAddress) {
+    throw new BadRequestException(
+      'Meeting address is required before converting to project.',
+    );
+  }
 }
 
 if (actionData.status === MeetingStatus.RESCHEDULED) {
