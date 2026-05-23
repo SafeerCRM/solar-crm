@@ -465,6 +465,47 @@ const createFinalInvoiceFromPi = async (piId: number) => {
   }
 };
 
+const downloadFinalInvoicePdf = async (invoiceId: number) => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/final-invoice/${invoiceId}/pdf`,
+      {
+        responseType: 'blob',
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    const blob = new Blob([res.data], {
+      type: 'application/pdf',
+    });
+
+    const url = window.URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.download = `final-invoice-${invoiceId}.pdf`;
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    window.URL.revokeObjectURL(url);
+  } catch (error: any) {
+    console.error(error);
+    alert(
+      error?.response?.data?.message ||
+        'Failed to download final invoice PDF',
+    );
+  }
+};
+
   useEffect(() => {
   fetchPurchaseOrders();
 }, [page, projectFilter, materialFilter, statusFilter, branchFilter, ownerFilter]);
@@ -1169,6 +1210,13 @@ const generateProformaInvoice = async () => {
   className="mt-3 rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
 >
   View Invoice
+</button>
+
+<button
+  onClick={() => downloadFinalInvoicePdf(invoice.id)}
+  className="mt-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+>
+  Download PDF
 </button>
             </div>
           </div>
