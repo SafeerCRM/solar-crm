@@ -66,6 +66,33 @@ type GeneratedPurchaseOrderItem = {
   totalAmount?: number;
 };
 
+type ProformaInvoice = {
+  id: number;
+  invoiceNumber?: string;
+  projectId?: number;
+  subtotalAmount?: number;
+  discountAmount?: number;
+  gstAmount?: number;
+  totalAmount?: number;
+  status?: string;
+  createdAt?: string;
+};
+
+type ProformaInvoiceItem = {
+  id: number;
+  itemName?: string;
+  category?: string;
+  brand?: string;
+  unit?: string;
+  sellingRate?: number;
+  gstPercent?: number;
+  quantity?: number;
+  discountAmount?: number;
+  subtotalAmount?: number;
+  gstAmount?: number;
+  totalAmount?: number;
+};
+
 export default function PurchaseOrdersPage() {
   const [items, setItems] = useState<PurchaseItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -94,6 +121,19 @@ const [poDetailLoading, setPoDetailLoading] =
 
 const [showPoModal, setShowPoModal] =
   useState(false);
+
+  const [selectedPi, setSelectedPi] =
+  useState<any>(null);
+
+const [piDetailLoading, setPiDetailLoading] =
+  useState(false);
+
+const [showPiModal, setShowPiModal] =
+  useState(false);
+
+  const [generatedPis, setGeneratedPis] = useState<ProformaInvoice[]>([]);
+const [piDiscount, setPiDiscount] = useState<Record<number, string>>({});
+const [generatingPi, setGeneratingPi] = useState(false);
 
 const [summary, setSummary] = useState({
   totalPendingItems: 0,
@@ -216,6 +256,27 @@ const fetchGeneratedPos = async () => {
   }
 };
 
+const fetchGeneratedPis = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/proforma-invoices`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setGeneratedPis(res.data?.data || []);
+  } catch (error) {
+    console.error('Failed to load proforma invoices:', error);
+  }
+};
+
 const fetchPoDetail = async (id: number) => {
   try {
     setPoDetailLoading(true);
@@ -245,6 +306,33 @@ const fetchPoDetail = async (id: number) => {
   }
 };
 
+const fetchPiDetail = async (id: number) => {
+  try {
+    setPiDetailLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/proforma-invoice/${id}`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setSelectedPi(res.data);
+    setShowPiModal(true);
+  } catch (error) {
+    console.error(error);
+    alert('Failed to load PI detail');
+  } finally {
+    setPiDetailLoading(false);
+  }
+};
+
   useEffect(() => {
   fetchPurchaseOrders();
 }, [page, projectFilter, materialFilter, statusFilter, branchFilter, ownerFilter]);
@@ -253,6 +341,7 @@ useEffect(() => {
   fetchProjectOwners();
   fetchVendors();
   fetchGeneratedPos();
+  fetchGeneratedPis();
 }, []);
 
   const filteredItems = items;
@@ -396,6 +485,13 @@ const canGeneratePo =
     }
   };
 
+  const getSellingRateForItem = (item: PurchaseItem) => {
+  const baseRate = Number(item.rate || 0);
+  const gstPercent = Number(item.gstPercent || 0);
+
+  return baseRate + (baseRate * gstPercent) / 100;
+};
+
   const generatePurchaseOrder = async () => {
   if (!selectedVendorId) {
     alert('Please select vendor');
@@ -466,6 +562,72 @@ const canGeneratePo =
     );
   } finally {
     setGeneratingPo(false);
+  }
+};
+
+const generateProformaInvoice = async () => {
+  if (!selectedItems.length) {
+    alert('Please select at least one item');
+    return;
+  }
+
+  if (selectedProjectIds.length !== 1) {
+    alert('Please select items from only one project for one PI');
+    return;
+  }
+
+  const confirmed = window.confirm(
+    'Generate proforma invoice snapshot for selected items?',
+  );
+
+  if (!confirmed) return;
+
+  try {
+    setGeneratingPi(true);
+
+    const token = localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/proforma-invoice`,
+      {
+        projectId: selectedProjectIds[0],
+        items: selectedItems.map((item) => ({
+          materialId: item.materialId || null,
+          itemName: item.materialName,
+          category: item.category || '',
+          brand: item.brand || '',
+          unit: item.unit || '',
+          sellingRate: getSellingRateForItem(item),
+          gstPercent: Number(item.gstPercent || 0),
+          quantity: Number(item.pendingQuantity || 0),
+          discountAmount: Number(piDiscount[item.id] || 0),
+          remarks: '',
+        })),
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Proforma invoice generated successfully');
+
+    setSelectedItemIds({});
+    setPiDiscount({});
+
+    fetchGeneratedPis();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to generate proforma invoice',
+    );
+  } finally {
+    setGeneratingPi(false);
   }
 };
 
@@ -677,7 +839,7 @@ const canGeneratePo =
     Select pending items from one project, choose vendor, then generate PO snapshot.
   </p>
 
-  <div className="mt-4 grid gap-3 md:grid-cols-3">
+  <div className="mt-4 grid gap-3 md:grid-cols-4">
     <select
       value={selectedVendorId}
       onChange={(e) => setSelectedVendorId(e.target.value)}
@@ -704,12 +866,93 @@ const canGeneratePo =
     >
       {generatingPo ? 'Generating...' : 'Generate PO'}
     </button>
+
+    <button
+  onClick={generateProformaInvoice}
+  disabled={
+    selectedItems.length === 0 ||
+    selectedProjectIds.length !== 1 ||
+    generatingPi
+  }
+  className="rounded-xl bg-purple-600 px-4 py-3 font-semibold text-white disabled:opacity-50"
+>
+  {generatingPi ? 'Generating PI...' : 'Generate PI'}
+</button>
   </div>
 
   {selectedItems.length > 0 && selectedProjectIds.length > 1 && (
     <p className="mt-3 text-sm font-semibold text-red-600">
       Please select items from only one project for one PO.
     </p>
+  )}
+</div>
+
+<div className="rounded-2xl bg-white p-5 shadow">
+  <h2 className="text-xl font-bold text-gray-800">
+    Generated Proforma Invoices
+  </h2>
+
+  <p className="mt-1 text-sm text-gray-500">
+    Customer-facing commercial invoice snapshots
+  </p>
+
+  {generatedPis.length === 0 ? (
+    <p className="mt-4 text-sm text-gray-500">
+      No proforma invoices generated yet.
+    </p>
+  ) : (
+    <div className="mt-4 space-y-3">
+      {generatedPis.map((pi) => (
+        <div
+          key={pi.id}
+          className="rounded-xl border p-4"
+        >
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="font-bold text-gray-800">
+                {pi.invoiceNumber || `PI-${pi.id}`}
+              </p>
+
+              <p className="mt-1 text-sm text-gray-500">
+                Project #{pi.projectId}
+              </p>
+
+              <p className="mt-1 text-sm text-gray-500">
+                Status: {pi.status || '-'}
+              </p>
+            </div>
+
+            <div className="text-left md:text-right">
+              <p className="text-sm text-gray-500">
+                Total Amount
+              </p>
+
+              <p className="text-xl font-bold text-purple-700">
+                ₹
+                {Number(
+                  pi.totalAmount || 0,
+                ).toLocaleString('en-IN')}
+              </p>
+
+              <p className="mt-1 text-xs text-gray-400">
+                {pi.createdAt
+                  ? new Date(
+                      pi.createdAt,
+                    ).toLocaleString()
+                  : '-'}
+              </p>
+
+              <button
+  onClick={() => fetchPiDetail(pi.id)}
+  className="mt-3 rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-700"
+>
+  View PI
+</button>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
   )}
 </div>
 
@@ -852,6 +1095,21 @@ const canGeneratePo =
   />
   Select for PO
 </label>
+
+{selectedItemIds[item.id] && (
+  <input
+    type="number"
+    placeholder="PI Discount Amount"
+    value={piDiscount[item.id] || ''}
+    onChange={(e) =>
+      setPiDiscount({
+        ...piDiscount,
+        [item.id]: e.target.value,
+      })
+    }
+    className="mb-3 w-full rounded-xl border p-3"
+  />
+)}
 
                     <h2 className="break-words text-lg font-bold text-gray-800">
                       {item.materialName}
@@ -1159,6 +1417,234 @@ const canGeneratePo =
                 ₹
                 {Number(
                   selectedPo.totalAmount || 0,
+                ).toLocaleString('en-IN')}
+              </p>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  </div>
+)}
+
+{showPiModal && selectedPi && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3">
+    <div className="print-area max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-800">
+            Proforma Invoice Detail
+          </h2>
+
+          <p className="mt-1 text-sm text-gray-500">
+            {selectedPi.invoiceNumber}
+          </p>
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            onClick={() => window.print()}
+            className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white"
+          >
+            Print
+          </button>
+
+          <button
+            onClick={() => {
+              setShowPiModal(false);
+              setSelectedPi(null);
+            }}
+            className="rounded-xl bg-gray-700 px-4 py-2 text-sm font-semibold text-white"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+
+      {piDetailLoading ? (
+        <p className="mt-5">Loading...</p>
+      ) : (
+        <>
+          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-xl bg-gray-50 p-4">
+              <p className="text-sm text-gray-500">
+                Project
+              </p>
+
+              <p className="mt-1 font-bold text-gray-800">
+                #{selectedPi.projectId}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-gray-50 p-4">
+              <p className="text-sm text-gray-500">
+                Status
+              </p>
+
+              <p className="mt-1 font-bold text-gray-800">
+                {selectedPi.status || '-'}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-gray-50 p-4">
+              <p className="text-sm text-gray-500">
+                Invoice Date
+              </p>
+
+              <p className="mt-1 font-bold text-gray-800">
+                {selectedPi.invoiceDate
+                  ? new Date(
+                      selectedPi.invoiceDate,
+                    ).toLocaleDateString()
+                  : '-'}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-gray-50 p-4">
+              <p className="text-sm text-gray-500">
+                Valid Until
+              </p>
+
+              <p className="mt-1 font-bold text-gray-800">
+                {selectedPi.validUntil
+                  ? new Date(
+                      selectedPi.validUntil,
+                    ).toLocaleDateString()
+                  : '-'}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-6 overflow-x-auto rounded-2xl border">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Item
+                  </th>
+
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Qty
+                  </th>
+
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Selling Rate
+                  </th>
+
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Discount
+                  </th>
+
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    GST
+                  </th>
+
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Total
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody className="divide-y divide-gray-100 bg-white">
+                {(selectedPi.items || []).map(
+                  (
+                    item: ProformaInvoiceItem,
+                  ) => (
+                    <tr key={item.id}>
+                      <td className="px-4 py-3">
+                        <p className="font-semibold text-gray-800">
+                          {item.itemName}
+                        </p>
+
+                        <p className="text-xs text-gray-500">
+                          {item.category || '-'} | {item.brand || '-'}
+                        </p>
+                      </td>
+
+                      <td className="px-4 py-3">
+                        {item.quantity || 0}
+                      </td>
+
+                      <td className="px-4 py-3">
+                        ₹
+                        {Number(
+                          item.sellingRate || 0,
+                        ).toLocaleString('en-IN')}
+                      </td>
+
+                      <td className="px-4 py-3 text-red-600">
+                        ₹
+                        {Number(
+                          item.discountAmount || 0,
+                        ).toLocaleString('en-IN')}
+                      </td>
+
+                      <td className="px-4 py-3">
+                        {item.gstPercent || 0}%
+                      </td>
+
+                      <td className="px-4 py-3 font-semibold text-purple-700">
+                        ₹
+                        {Number(
+                          item.totalAmount || 0,
+                        ).toLocaleString('en-IN')}
+                      </td>
+                    </tr>
+                  ),
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-4">
+            <div className="rounded-xl bg-gray-50 p-4">
+              <p className="text-sm text-gray-500">
+                Subtotal
+              </p>
+
+              <p className="mt-1 text-xl font-bold text-gray-800">
+                ₹
+                {Number(
+                  selectedPi.subtotalAmount || 0,
+                ).toLocaleString('en-IN')}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-red-50 p-4">
+              <p className="text-sm text-gray-500">
+                Discount
+              </p>
+
+              <p className="mt-1 text-xl font-bold text-red-600">
+                ₹
+                {Number(
+                  selectedPi.discountAmount || 0,
+                ).toLocaleString('en-IN')}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-gray-50 p-4">
+              <p className="text-sm text-gray-500">
+                GST Amount
+              </p>
+
+              <p className="mt-1 text-xl font-bold text-gray-800">
+                ₹
+                {Number(
+                  selectedPi.gstAmount || 0,
+                ).toLocaleString('en-IN')}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-purple-50 p-4">
+              <p className="text-sm text-gray-500">
+                Total Amount
+              </p>
+
+              <p className="mt-1 text-2xl font-bold text-purple-700">
+                ₹
+                {Number(
+                  selectedPi.totalAmount || 0,
                 ).toLocaleString('en-IN')}
               </p>
             </div>
