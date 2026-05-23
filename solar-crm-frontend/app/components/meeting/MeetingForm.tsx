@@ -225,6 +225,16 @@ const [solarMiterBankProof, setSolarMiterBankProof] = useState<File | null>(null
   return;
 }
 
+const hasMeetingAddress =
+  String(form.address || '').trim() ||
+  String(form.gpsAddress || '').trim();
+
+if (!hasMeetingAddress) {
+  setError('Please capture GPS location or enter meeting address before creating meeting');
+  setLoading(false);
+  return;
+}
+
             const tokenCheck =
         localStorage.getItem('token') ||
         localStorage.getItem('access_token') ||

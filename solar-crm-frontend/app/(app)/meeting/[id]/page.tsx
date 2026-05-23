@@ -524,6 +524,16 @@ const reassignMeeting = async () => {
   const convertToProject = async () => {
   if (!latestMeeting) return;
 
+    const hasMeetingAddress =
+    String(latestMeeting.address || '').trim() ||
+    String(latestMeeting.gpsAddress || '').trim();
+
+  if (!hasMeetingAddress) {
+    setError('Meeting address is required before converting to project.');
+    setConvertSliderValue(0);
+    return;
+  }
+
   const confirmed = window.confirm(
     'Convert this meeting to project? You will be taken to the Project Create form to complete details and upload required documents.',
   );
