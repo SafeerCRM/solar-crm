@@ -12,6 +12,8 @@ import { In, MoreThan, Repository } from 'typeorm';
 import PDFDocument = require('pdfkit');
 import { Response } from 'express';
 
+import * as path from 'path';
+
 import { Project } from './project.entity';
 import {
   ProjectDocument,
@@ -5932,6 +5934,13 @@ async generateFinalInvoicePdf(
     size: 'A4',
   });
 
+  const logoPath = path.join(
+  process.cwd(),
+  'src',
+  'assets',
+  'aditya-logo.jpg',
+);
+
   const fileName = `${
     invoice.invoiceNumber || `INV-${invoice.id}`
   }.pdf`;
@@ -5948,12 +5957,18 @@ async generateFinalInvoicePdf(
 
   doc.pipe(res);
 
-  doc
-    .fontSize(22)
-    .fillColor('#0f172a')
-    .text('FINAL INVOICE', {
-      align: 'center',
-    });
+  doc.image(logoPath, 40, 20, {
+  width: 515,
+});
+
+doc.moveDown(7);
+
+doc
+  .fontSize(22)
+  .fillColor('#0f172a')
+  .text('FINAL INVOICE', {
+    align: 'center',
+  });
 
   doc.moveDown();
 
