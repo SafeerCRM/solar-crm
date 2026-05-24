@@ -237,6 +237,23 @@ private readonly projectFinalInvoiceItemRepository: Repository<ProjectFinalInvoi
     const payload: any = {
   ...data,
 
+    gpsLatitude:
+    (data as any).gpsLatitude === '' ||
+    (data as any).gpsLatitude === null ||
+    (data as any).gpsLatitude === undefined
+      ? undefined
+      : Number((data as any).gpsLatitude),
+
+  gpsLongitude:
+    (data as any).gpsLongitude === '' ||
+    (data as any).gpsLongitude === null ||
+    (data as any).gpsLongitude === undefined
+      ? undefined
+      : Number((data as any).gpsLongitude),
+
+  gpsAddress:
+    String((data as any).gpsAddress || '').trim() || undefined,
+
   projectOwnerId: user?.id || null,
 
 projectOwnerName:
