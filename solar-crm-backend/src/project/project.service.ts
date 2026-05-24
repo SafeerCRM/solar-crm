@@ -921,15 +921,18 @@ async getProjectDocuments(projectId: number, user?: any) {
   }
 
   if (roles.includes('LOAN_MANAGER')) {
-    allowedDepartments.push('LOAN');
-  }
+  allowedDepartments.push('LOAN');
+  allowedDepartments.push('LOAN_DEPARTMENT');
+}
 
   if (roles.includes('SUBSIDY_MANAGER')) {
     allowedDepartments.push('SUBSIDY');
+allowedDepartments.push('SUBSIDY_DEPARTMENT');
   }
 
   if (roles.includes('ELECTRICITY_MANAGER')) {
     allowedDepartments.push('ELECTRICITY');
+allowedDepartments.push('ELECTRICITY_DEPARTMENT');
   }
 
   if (
