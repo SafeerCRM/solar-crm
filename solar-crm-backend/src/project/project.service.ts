@@ -116,7 +116,10 @@ import {
   ProjectContractorAssignment,
   ProjectContractorWorkStatus,
 } from './project-contractor-assignment.entity';
-import { ProjectContractorProof } from './project-contractor-proof.entity';
+import {
+  ProjectContractorProof,
+  ProjectContractorProofType,
+} from './project-contractor-proof.entity';
 import { ProjectContractor } from './project-contractor.entity';
 
 @Injectable()
@@ -7268,5 +7271,145 @@ async updateContractorAssignment(
   return this.projectContractorAssignmentRepository.save(
     assignment,
   );
+}
+
+async uploadContractorProofs(
+  files: any[],
+  body: any,
+  user: any,
+) {
+  if (!Array.isArray(files) || files.length === 0) {
+    throw new BadRequestException('Proof photos are required');
+  }
+
+  const assignmentId = Number(body?.assignmentId);
+  const projectId = Number(body?.projectId);
+
+  if (!assignmentId || !projectId) {
+    throw new BadRequestException('Assignment ID and Project ID are required');
+  }
+
+  const assignment =
+    await this.projectContractorAssignmentRepository.findOne({
+      where: { id: assignmentId },
+    });
+
+  if (!assignment) {
+    throw new NotFoundException('Contractor assignment not found');
+  }
+
+  const roles = Array.isArray(user?.roles) ? user.roles : [];
+  const currentUserId = Number(user?.id || user?.userId || user?.sub);
+
+  const isAllowed =
+    roles.includes('OWNER') ||
+    roles.includes('PROJECT_MANAGER') ||
+    Number(assignment.contractorId) === currentUserId;
+
+  if (!isAllowed) {
+    throw new ForbiddenException('You are not allowed to upload proof for this work');
+  }
+
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const bucket =
+    process.env.SUPABASE_PROJECT_DOCUMENTS_BUCKET || 'project-documents';
+
+  if (!supabaseUrl || !serviceKey) {
+    throw new BadRequestException('Supabase storage is not configured');
+  }
+
+  const supabase = createClient(supabaseUrl, serviceKey);
+
+  const uploadedProofs: ProjectContractorProof[] = [];
+
+  for (const file of files) {
+    const mimeType = String(file.mimetype || '');
+
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(mimeType)) {
+      throw new BadRequestException('Only JPG, PNG, and WEBP proof photos are allowed');
+    }
+
+    const originalName = String(file.originalname || 'proof');
+    const extension = originalName.includes('.')
+      ? originalName.split('.').pop()
+      : mimeType.split('/')[1] || 'jpg';
+
+    const safeExtension = String(extension || 'jpg').replace(/[^a-zA-Z0-9]/g, '');
+
+    const filePath = `projects/project-${projectId}/contractor-proofs/assignment-${assignmentId}/${Date.now()}-${randomUUID()}.${safeExtension}`;
+
+    const uploadResult = await supabase.storage
+      .from(bucket)
+      .upload(filePath, file.buffer, {
+        contentType: mimeType,
+        upsert: false,
+      });
+
+    if (uploadResult.error) {
+      throw new BadRequestException(uploadResult.error.message);
+    }
+
+    const publicUrlResult = supabase.storage.from(bucket).getPublicUrl(filePath);
+
+    const proof = this.projectContractorProofRepository.create({
+      projectId,
+      assignmentId,
+      proofType:
+        body?.proofType || ProjectContractorProofType.OTHER,
+      fileUrl: publicUrlResult.data.publicUrl,
+      latitude:
+        body?.latitude === '' || body?.latitude === undefined
+          ? undefined
+          : Number(body.latitude),
+      longitude:
+        body?.longitude === '' || body?.longitude === undefined
+          ? undefined
+          : Number(body.longitude),
+      gpsAddress: body?.gpsAddress || '',
+      remarks: body?.remarks || '',
+      uploadedBy: currentUserId || undefined,
+      uploadedByName: user?.name || user?.email || '',
+    });
+
+    const saved = await this.projectContractorProofRepository.save(
+  proof as ProjectContractorProof,
+);
+
+uploadedProofs.push(saved);
+  }
+
+  return {
+    message: `${uploadedProofs.length} contractor proof photo(s) uploaded`,
+    proofs: uploadedProofs,
+  };
+}
+
+async getContractorProofs(assignmentId: number, user: any) {
+  const assignment =
+    await this.projectContractorAssignmentRepository.findOne({
+      where: { id: assignmentId },
+    });
+
+  if (!assignment) {
+    throw new NotFoundException('Contractor assignment not found');
+  }
+
+  const roles = Array.isArray(user?.roles) ? user.roles : [];
+  const currentUserId = Number(user?.id || user?.userId || user?.sub);
+
+  const isAllowed =
+    roles.includes('OWNER') ||
+    roles.includes('PROJECT_MANAGER') ||
+    Number(assignment.contractorId) === currentUserId;
+
+  if (!isAllowed) {
+    throw new ForbiddenException('You are not allowed to view these proofs');
+  }
+
+  return this.projectContractorProofRepository.find({
+    where: { assignmentId },
+    order: { createdAt: 'DESC' },
+  });
 }
 }

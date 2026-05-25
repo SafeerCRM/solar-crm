@@ -239,6 +239,31 @@ updateContractorAssignment(
   );
 }
 
+@Post('contractor-proof/upload')
+@UseInterceptors(FilesInterceptor('files', 10))
+uploadContractorProofs(
+  @UploadedFiles() files: any[],
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.uploadContractorProofs(
+    files,
+    body,
+    user,
+  );
+}
+
+@Get('contractor-assignment/:id/proofs')
+getContractorProofs(
+  @Param('id') id: string,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.getContractorProofs(
+    Number(id),
+    user,
+  );
+}
+
 @Roles(
   'OWNER',
   'MARKETING_HEAD',
