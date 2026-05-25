@@ -13,6 +13,18 @@ type Contractor = {
   city?: string;
   address?: string;
   linkedUserId?: number;
+
+  aadhaarFrontUrl?: string;
+  aadhaarBackUrl?: string;
+  bankProofUrl?: string;
+
+  accountHolderName?: string;
+  bankName?: string;
+  accountNumber?: string;
+  ifscCode?: string;
+  upiId?: string;
+  panNumber?: string;
+
   remarks?: string;
   isActive?: boolean;
   createdAt?: string;
@@ -29,16 +41,38 @@ export default function ProjectContractorsPage() {
   const [contractors, setContractors] = useState<Contractor[]>([]);
   const [contractorUsers, setContractorUsers] = useState<ContractorUser[]>([]);
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+const [aadhaarFrontFile, setAadhaarFrontFile] =
+  useState<File | null>(null);
+
+const [aadhaarBackFile, setAadhaarBackFile] =
+  useState<File | null>(null);
+
+const [bankProofFile, setBankProofFile] =
+  useState<File | null>(null);
 
   const [form, setForm] = useState({
-    contractorName: '',
-    phone: '',
-    alternatePhone: '',
-    city: '',
-    address: '',
-    linkedUserId: '',
-    remarks: '',
-  });
+  contractorName: '',
+  phone: '',
+  alternatePhone: '',
+  city: '',
+  address: '',
+  linkedUserId: '',
+
+  accountHolderName: '',
+  bankName: '',
+  accountNumber: '',
+  ifscCode: '',
+  upiId: '',
+  panNumber: '',
+
+  aadhaarFrontUrl: '',
+  aadhaarBackUrl: '',
+  bankProofUrl: '',
+
+  remarks: '',
+});
 
   const fetchContractorUsers = async () => {
   try {
@@ -85,6 +119,31 @@ export default function ProjectContractorsPage() {
     }
   };
 
+  const uploadFile = async (file: File) => {
+  const token = localStorage.getItem('token');
+
+  const formData = new FormData();
+
+  formData.append('file', file);
+
+  const res = await axios.post(
+    `${API_BASE_URL}/meetings/proof/upload`,
+    formData,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'multipart/form-data',
+      },
+    },
+  );
+
+  return (
+    res.data?.url ||
+    res.data?.fileUrl ||
+    ''
+  );
+};
+
   const createContractor = async () => {
     if (!form.contractorName.trim()) {
       alert('Contractor name is required');
@@ -101,6 +160,31 @@ export default function ProjectContractorsPage() {
 
       const token = localStorage.getItem('token');
 
+      let aadhaarFrontUrl = '';
+let aadhaarBackUrl = '';
+let bankProofUrl = '';
+
+if (aadhaarFrontFile) {
+  setUploading(true);
+
+  aadhaarFrontUrl =
+    await uploadFile(aadhaarFrontFile);
+}
+
+if (aadhaarBackFile) {
+  setUploading(true);
+
+  aadhaarBackUrl =
+    await uploadFile(aadhaarBackFile);
+}
+
+if (bankProofFile) {
+  setUploading(true);
+
+  bankProofUrl =
+    await uploadFile(bankProofFile);
+}
+
       await axios.post(
         `${API_BASE_URL}/project/contractor-master`,
         {
@@ -112,6 +196,16 @@ export default function ProjectContractorsPage() {
           linkedUserId: form.linkedUserId
             ? Number(form.linkedUserId)
             : undefined,
+            accountHolderName: form.accountHolderName,
+bankName: form.bankName,
+accountNumber: form.accountNumber,
+ifscCode: form.ifscCode,
+upiId: form.upiId,
+panNumber: form.panNumber,
+
+aadhaarFrontUrl,
+aadhaarBackUrl,
+bankProofUrl,
           remarks: form.remarks,
         },
         {
@@ -126,14 +220,30 @@ export default function ProjectContractorsPage() {
       alert('Contractor created successfully');
 
       setForm({
-        contractorName: '',
-        phone: '',
-        alternatePhone: '',
-        city: '',
-        address: '',
-        linkedUserId: '',
-        remarks: '',
-      });
+  contractorName: '',
+  phone: '',
+  alternatePhone: '',
+  city: '',
+  address: '',
+  linkedUserId: '',
+
+  accountHolderName: '',
+  bankName: '',
+  accountNumber: '',
+  ifscCode: '',
+  upiId: '',
+  panNumber: '',
+
+  aadhaarFrontUrl: '',
+  aadhaarBackUrl: '',
+  bankProofUrl: '',
+
+  remarks: '',
+});
+
+setAadhaarFrontFile(null);
+setAadhaarBackFile(null);
+setBankProofFile(null);
 
       fetchContractors();
     } catch (error: any) {
@@ -280,6 +390,126 @@ export default function ProjectContractorsPage() {
             }
             className="rounded-xl border p-3"
           />
+
+          <input
+  placeholder="Account Holder Name"
+  value={form.accountHolderName}
+  onChange={(e) =>
+    setForm({
+      ...form,
+      accountHolderName: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+/>
+
+<input
+  placeholder="Bank Name"
+  value={form.bankName}
+  onChange={(e) =>
+    setForm({
+      ...form,
+      bankName: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+/>
+
+<input
+  placeholder="Account Number"
+  value={form.accountNumber}
+  onChange={(e) =>
+    setForm({
+      ...form,
+      accountNumber: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+/>
+
+<input
+  placeholder="IFSC Code"
+  value={form.ifscCode}
+  onChange={(e) =>
+    setForm({
+      ...form,
+      ifscCode: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+/>
+
+<input
+  placeholder="UPI ID"
+  value={form.upiId}
+  onChange={(e) =>
+    setForm({
+      ...form,
+      upiId: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+/>
+
+<input
+  placeholder="PAN Number"
+  value={form.panNumber}
+  onChange={(e) =>
+    setForm({
+      ...form,
+      panNumber: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+/>
+
+<div className="rounded-xl border p-3">
+  <p className="mb-2 text-sm font-semibold">
+    Aadhaar Front
+  </p>
+
+  <input
+    type="file"
+    accept="image/*"
+    onChange={(e) =>
+      setAadhaarFrontFile(
+        e.target.files?.[0] || null,
+      )
+    }
+  />
+</div>
+
+<div className="rounded-xl border p-3">
+  <p className="mb-2 text-sm font-semibold">
+    Aadhaar Back
+  </p>
+
+  <input
+    type="file"
+    accept="image/*"
+    onChange={(e) =>
+      setAadhaarBackFile(
+        e.target.files?.[0] || null,
+      )
+    }
+  />
+</div>
+
+<div className="rounded-xl border p-3">
+  <p className="mb-2 text-sm font-semibold">
+    Bank Proof
+  </p>
+
+  <input
+    type="file"
+    accept="image/*,.pdf"
+    onChange={(e) =>
+      setBankProofFile(
+        e.target.files?.[0] || null,
+      )
+    }
+  />
+</div>
         </div>
 
         <textarea
@@ -300,9 +530,9 @@ export default function ProjectContractorsPage() {
           disabled={loading}
           className="mt-4 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
         >
-          {loading
-            ? 'Creating...'
-            : 'Create Contractor'}
+          loading || uploading
+  ? 'Uploading...'
+  : 'Create Contractor'
         </button>
       </div>
 
@@ -351,6 +581,41 @@ export default function ProjectContractorsPage() {
                         {contractor.address}
                       </p>
                     )}
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+  {contractor.aadhaarFrontUrl && (
+    <a
+      href={contractor.aadhaarFrontUrl}
+      target="_blank"
+      rel="noreferrer"
+      className="rounded-lg bg-blue-100 px-3 py-2 text-xs font-semibold text-blue-700"
+    >
+      Aadhaar Front
+    </a>
+  )}
+
+  {contractor.aadhaarBackUrl && (
+    <a
+      href={contractor.aadhaarBackUrl}
+      target="_blank"
+      rel="noreferrer"
+      className="rounded-lg bg-blue-100 px-3 py-2 text-xs font-semibold text-blue-700"
+    >
+      Aadhaar Back
+    </a>
+  )}
+
+  {contractor.bankProofUrl && (
+    <a
+      href={contractor.bankProofUrl}
+      target="_blank"
+      rel="noreferrer"
+      className="rounded-lg bg-green-100 px-3 py-2 text-xs font-semibold text-green-700"
+    >
+      Bank Proof
+    </a>
+  )}
+</div>
 
                     {contractor.remarks && (
                       <p className="mt-2 text-sm text-gray-700">
