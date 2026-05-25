@@ -191,6 +191,12 @@ const [contactCounts, setContactCounts] = useState<{
   const [toDateFilter, setToDateFilter] = useState('');
 
   const [dashboardLoading, setDashboardLoading] = useState(false);
+  const [analyticsView, setAnalyticsView] = useState<
+  'TELECALLER' |
+  'LEAD_MANAGER' |
+  'MEETING_MANAGER' |
+  'TELECALLING_ASSISTANT'
+>('TELECALLER');
   const [contactsLoading, setContactsLoading] = useState(false);
   const [isFilterApplied, setIsFilterApplied] = useState(false);
 
@@ -271,9 +277,6 @@ const isOwnerDefaultView =
   performanceRes,
   hotLeadsRes,
   chartsRes,
-  meetingAnalyticsRes,
-  leadManagerAnalyticsRes,
-  telecallingAssistantAnalyticsRes,
 ] = await Promise.allSettled([
   axios.get(`${apiBaseUrl}/dashboard/summary`, {
     params,
@@ -292,22 +295,38 @@ const isOwnerDefaultView =
     params,
     headers: getAuthHeaders(),
   }),
-
-  axios.get(`${apiBaseUrl}/dashboard/meeting-manager-analytics`, {
-    headers: getAuthHeaders(),
-  }),
-
-  axios.get(`${apiBaseUrl}/dashboard/lead-manager-analytics`, {
-    headers: getAuthHeaders(),
-  }),
-
-  axios.get(
-  `${apiBaseUrl}/dashboard/telecalling-assistant-analytics`,
-  {
-    headers: getAuthHeaders(),
-  },
-),
 ]);
+
+let meetingAnalyticsRes: PromiseSettledResult<any> | null = null;
+let leadManagerAnalyticsRes: PromiseSettledResult<any> | null = null;
+let telecallingAssistantAnalyticsRes: PromiseSettledResult<any> | null = null;
+
+if (analyticsView === 'MEETING_MANAGER') {
+  meetingAnalyticsRes = await axios
+    .get(`${apiBaseUrl}/dashboard/meeting-manager-analytics`, {
+      headers: getAuthHeaders(),
+    })
+    .then((value) => ({ status: 'fulfilled' as const, value }))
+    .catch((reason) => ({ status: 'rejected' as const, reason }));
+}
+
+if (analyticsView === 'LEAD_MANAGER') {
+  leadManagerAnalyticsRes = await axios
+    .get(`${apiBaseUrl}/dashboard/lead-manager-analytics`, {
+      headers: getAuthHeaders(),
+    })
+    .then((value) => ({ status: 'fulfilled' as const, value }))
+    .catch((reason) => ({ status: 'rejected' as const, reason }));
+}
+
+if (analyticsView === 'TELECALLING_ASSISTANT') {
+  telecallingAssistantAnalyticsRes = await axios
+    .get(`${apiBaseUrl}/dashboard/telecalling-assistant-analytics`, {
+      headers: getAuthHeaders(),
+    })
+    .then((value) => ({ status: 'fulfilled' as const, value }))
+    .catch((reason) => ({ status: 'rejected' as const, reason }));
+}
 
       if (summaryRes.status === 'fulfilled') {
         setSummary(summaryRes.value.data);
@@ -336,7 +355,7 @@ const isOwnerDefaultView =
       } else {
         setCharts(null);
       }
- if (meetingAnalyticsRes.status === 'fulfilled') {
+ if (meetingAnalyticsRes?.status === 'fulfilled') {
   setMeetingAnalytics(
     Array.isArray(meetingAnalyticsRes.value.data)
       ? meetingAnalyticsRes.value.data
@@ -346,7 +365,11 @@ const isOwnerDefaultView =
   setMeetingAnalytics([]);
 }
 
-if (leadManagerAnalyticsRes.status === 'fulfilled') {
+if (analyticsView !== 'MEETING_MANAGER') {
+  setMeetingAnalytics([]);
+}
+
+if (leadManagerAnalyticsRes?.status === 'fulfilled') {
   setLeadManagerAnalytics(
     Array.isArray(leadManagerAnalyticsRes.value.data)
       ? leadManagerAnalyticsRes.value.data
@@ -356,13 +379,21 @@ if (leadManagerAnalyticsRes.status === 'fulfilled') {
   setLeadManagerAnalytics([]);
 }
 
-if (telecallingAssistantAnalyticsRes.status === 'fulfilled') {
+if (analyticsView !== 'LEAD_MANAGER') {
+  setLeadManagerAnalytics([]);
+}
+
+if (telecallingAssistantAnalyticsRes?.status === 'fulfilled') {
   setTelecallingAssistantAnalytics(
     Array.isArray(telecallingAssistantAnalyticsRes.value.data)
       ? telecallingAssistantAnalyticsRes.value.data
       : [],
   );
 } else {
+  setTelecallingAssistantAnalytics([]);
+}
+
+if (analyticsView !== 'TELECALLING_ASSISTANT') {
   setTelecallingAssistantAnalytics([]);
 }
 
@@ -465,7 +496,7 @@ useEffect(() => {
   if (userRoles.includes('OWNER')) {
     fetchOwnerSummary();
   }
-}, [isFilterApplied]);
+}, [isFilterApplied, analyticsView]);
 
     useEffect(() => {
     if (!currentUser) return;
@@ -640,6 +671,40 @@ useEffect(() => {
             />
           )}
         </div>
+
+        {userRoles.includes('OWNER') && (
+  <div className="mt-4">
+    <select
+      value={analyticsView}
+      onChange={(e) =>
+        setAnalyticsView(
+          e.target.value as
+            | 'TELECALLER'
+            | 'LEAD_MANAGER'
+            | 'MEETING_MANAGER'
+            | 'TELECALLING_ASSISTANT'
+        )
+      }
+      className="rounded-xl border border-gray-300 px-3 py-2"
+    >
+      <option value="TELECALLER">
+        Telecaller Analytics
+      </option>
+
+      <option value="LEAD_MANAGER">
+        Lead Manager Analytics
+      </option>
+
+      <option value="MEETING_MANAGER">
+        Meeting Manager Analytics
+      </option>
+
+      <option value="TELECALLING_ASSISTANT">
+        Telecalling Assistant Analytics
+      </option>
+    </select>
+  </div>
+)}
 
         <div className="mt-4 flex flex-col gap-2 md:flex-row">
           <button
