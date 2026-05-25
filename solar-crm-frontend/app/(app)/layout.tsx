@@ -33,6 +33,7 @@ const navItems = [
       'CUSTOMER_MANAGER',
       'HR_MANAGER',
       'TRADING_MANAGER',
+      'PROJECT_CONTRACTOR',
     ],
   },
   { name: 'Users', href: '/users', roles: ['OWNER'] },
@@ -108,6 +109,7 @@ const navItems = [
 'LEAD_MANAGER',
 'PAYMENT_MANAGER',
 'ACCOUNT_MANAGER',
+'PROJECT_CONTRACTOR',
   ],
 },
 

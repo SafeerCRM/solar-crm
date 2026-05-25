@@ -172,6 +172,20 @@ type PaymentInstallment = {
   createdAt?: string;
 };
 
+type ContractorAssignment = {
+  id: number;
+  projectId: number;
+  contractorId: number;
+  contractorName?: string;
+  contractorPhone?: string;
+  scheduledDate?: string;
+  amount?: number;
+  status?: string;
+  remarks?: string;
+  assignedByName?: string;
+  createdAt?: string;
+};
+
 function money(value?: number) {
   return `₹${Number(value || 0).toLocaleString('en-IN')}`;
 }
@@ -195,6 +209,19 @@ export default function ProjectDetailPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentUserRoles, setCurrentUserRoles] = useState<string[]>([]);
+  const [contractorAssignments, setContractorAssignments] =
+  useState<ContractorAssignment[]>([]);
+
+const [contractorLoading, setContractorLoading] = useState(false);
+
+const [contractorForm, setContractorForm] = useState({
+  contractorId: '',
+  contractorName: '',
+  contractorPhone: '',
+  scheduledDate: '',
+  amount: '',
+  remarks: '',
+});
 
   const [documents, setDocuments] = useState<ProjectDocument[]>([]);
 
@@ -1584,6 +1611,84 @@ const updateExecutionActivityStatus = async (
   }
 };
 
+const fetchContractorAssignments = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/${projectId}/contractor-assignments`,
+      {
+        headers: token
+          ? { Authorization: `Bearer ${token}` }
+          : {},
+      },
+    );
+
+    setContractorAssignments(
+      Array.isArray(res.data) ? res.data : [],
+    );
+  } catch (error) {
+    console.error('Failed to load contractor assignments:', error);
+  }
+};
+
+const assignContractor = async () => {
+  if (!contractorForm.contractorId) {
+    alert('Please enter contractor user ID');
+    return;
+  }
+
+  if (!contractorForm.contractorName.trim()) {
+    alert('Please enter contractor name');
+    return;
+  }
+
+  try {
+    setContractorLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/contractor/assign`,
+      {
+        projectId: Number(projectId),
+        contractorId: Number(contractorForm.contractorId),
+        contractorName: contractorForm.contractorName,
+        contractorPhone: contractorForm.contractorPhone,
+        scheduledDate: contractorForm.scheduledDate || undefined,
+        amount: contractorForm.amount || 0,
+        remarks: contractorForm.remarks,
+      },
+      {
+        headers: token
+          ? { Authorization: `Bearer ${token}` }
+          : {},
+      },
+    );
+
+    alert('Contractor assigned successfully');
+
+    setContractorForm({
+      contractorId: '',
+      contractorName: '',
+      contractorPhone: '',
+      scheduledDate: '',
+      amount: '',
+      remarks: '',
+    });
+
+    fetchContractorAssignments();
+  } catch (error: any) {
+    console.error(error);
+    alert(
+      error?.response?.data?.message ||
+        'Failed to assign contractor',
+    );
+  } finally {
+    setContractorLoading(false);
+  }
+};
+
 useEffect(() => {
   const storedUser = localStorage.getItem('user');
 
@@ -1667,6 +1772,11 @@ const canShareProjectPdf = hasRole([
   'PROJECT_MANAGER',
 ]);
 
+const canManageContractor = hasRole([
+  'OWNER',
+  'PROJECT_MANAGER',
+]);
+
   useEffect(() => {
   if (projectId) {
     fetchProject();
@@ -1708,6 +1818,10 @@ useEffect(() => {
 
   if (activeTab === 'PROJECT_HISTORY') {
     fetchProjectEditHistory();
+  }
+
+    if (activeTab === 'CONTRACTOR_WORK') {
+    fetchContractorAssignments();
   }
 }, [activeTab, projectId]);
 
@@ -1837,6 +1951,166 @@ const generateProjectPdf = async (share = false) => {
             {project.status || 'UNKNOWN'}
           </span>
 
+          {activeTab === 'CONTRACTOR_WORK' && (
+  <div className="space-y-5">
+    {canManageContractor && (
+      <div className="rounded-2xl bg-white p-5 shadow">
+        <h2 className="text-xl font-bold text-gray-800">
+          Assign Project Contractor
+        </h2>
+
+        <p className="mt-1 text-sm text-gray-500">
+          Assign one project contractor who will coordinate structure and electrical work.
+        </p>
+
+        <div className="mt-5 grid gap-3 md:grid-cols-3">
+          <input
+            type="number"
+            placeholder="Contractor User ID"
+            value={contractorForm.contractorId}
+            onChange={(e) =>
+              setContractorForm({
+                ...contractorForm,
+                contractorId: e.target.value,
+              })
+            }
+            className="rounded-xl border p-3"
+          />
+
+          <input
+            placeholder="Contractor Name"
+            value={contractorForm.contractorName}
+            onChange={(e) =>
+              setContractorForm({
+                ...contractorForm,
+                contractorName: e.target.value,
+              })
+            }
+            className="rounded-xl border p-3"
+          />
+
+          <input
+            placeholder="Contractor Phone"
+            value={contractorForm.contractorPhone}
+            onChange={(e) =>
+              setContractorForm({
+                ...contractorForm,
+                contractorPhone: e.target.value,
+              })
+            }
+            className="rounded-xl border p-3"
+          />
+
+          <input
+            type="date"
+            value={contractorForm.scheduledDate}
+            onChange={(e) =>
+              setContractorForm({
+                ...contractorForm,
+                scheduledDate: e.target.value,
+              })
+            }
+            className="rounded-xl border p-3"
+          />
+
+          <input
+            type="number"
+            placeholder="Work Amount"
+            value={contractorForm.amount}
+            onChange={(e) =>
+              setContractorForm({
+                ...contractorForm,
+                amount: e.target.value,
+              })
+            }
+            className="rounded-xl border p-3"
+          />
+
+          <input
+            placeholder="Remarks"
+            value={contractorForm.remarks}
+            onChange={(e) =>
+              setContractorForm({
+                ...contractorForm,
+                remarks: e.target.value,
+              })
+            }
+            className="rounded-xl border p-3"
+          />
+        </div>
+
+        <button
+          onClick={assignContractor}
+          disabled={contractorLoading}
+          className="mt-4 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+        >
+          {contractorLoading ? 'Assigning...' : 'Assign Contractor'}
+        </button>
+      </div>
+    )}
+
+    <div className="rounded-2xl bg-white p-5 shadow">
+      <h2 className="text-xl font-bold text-gray-800">
+        Contractor Assignment History
+      </h2>
+
+      <div className="mt-5 space-y-3">
+        {contractorAssignments.length === 0 ? (
+          <p className="text-sm text-gray-500">
+            No contractor assigned yet.
+          </p>
+        ) : (
+          contractorAssignments.map((item) => (
+            <div
+              key={item.id}
+              className="rounded-xl border bg-gray-50 p-4"
+            >
+              <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <p className="font-bold text-gray-800">
+                    {item.contractorName || `Contractor #${item.contractorId}`}
+                  </p>
+
+                  <p className="text-sm text-gray-500">
+                    Phone: {item.contractorPhone || '-'}
+                  </p>
+
+                  <p className="text-sm text-gray-500">
+                    Scheduled:{' '}
+                    {item.scheduledDate
+                      ? new Date(item.scheduledDate).toLocaleDateString('en-IN')
+                      : '-'}
+                  </p>
+
+                  <p className="text-sm text-gray-500">
+                    Assigned By: {item.assignedByName || '-'}
+                  </p>
+
+                  {item.remarks && (
+                    <p className="mt-2 text-sm text-gray-700">
+                      {item.remarks}
+                    </p>
+                  )}
+                </div>
+
+                <div className="text-right">
+                  <p className="rounded-full bg-blue-100 px-3 py-1 text-sm font-semibold text-blue-700">
+                    {item.status || 'ASSIGNED'}
+                  </p>
+
+                  <p className="mt-2 text-lg font-bold text-green-700">
+                    {money(item.amount)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  </div>
+)}
+
           {canShareProjectPdf && (
   <div className="flex flex-wrap gap-2">
     <button
@@ -1887,6 +2161,10 @@ const generateProjectPdf = async (share = false) => {
       key: 'PROJECT_EXECUTION',
       label: 'Project Execution',
     },
+    {
+  key: 'CONTRACTOR_WORK',
+  label: 'Contractor Work',
+},
     {
       key: 'SUBSIDY_DEPARTMENT',
       label: 'Subsidy Department',

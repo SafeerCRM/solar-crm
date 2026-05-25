@@ -46,6 +46,7 @@ const allRoles = [
   'CUSTOMER_MANAGER',
   'HR_MANAGER',
   'TRADING_MANAGER',
+  'PROJECT_CONTRACTOR',
 
   'CUSTOMER',
 ];
