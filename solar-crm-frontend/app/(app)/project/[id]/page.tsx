@@ -186,6 +186,18 @@ type ContractorAssignment = {
   createdAt?: string;
 };
 
+type ProjectContractorMaster = {
+  id: number;
+  contractorName?: string;
+  phone?: string;
+  alternatePhone?: string;
+  city?: string;
+  address?: string;
+  linkedUserId?: number;
+  remarks?: string;
+  isActive?: boolean;
+};
+
 function money(value?: number) {
   return `₹${Number(value || 0).toLocaleString('en-IN')}`;
 }
@@ -211,10 +223,13 @@ export default function ProjectDetailPage() {
   const [currentUserRoles, setCurrentUserRoles] = useState<string[]>([]);
   const [contractorAssignments, setContractorAssignments] =
   useState<ContractorAssignment[]>([]);
+  const [contractors, setContractors] =
+  useState<ProjectContractorMaster[]>([]);
 
 const [contractorLoading, setContractorLoading] = useState(false);
 
 const [contractorForm, setContractorForm] = useState({
+  contractorMasterId: '',
   contractorId: '',
   contractorName: '',
   contractorPhone: '',
@@ -1632,6 +1647,53 @@ const fetchContractorAssignments = async () => {
   }
 };
 
+const fetchContractors = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/contractor-master`,
+      {
+        params: {
+          activeOnly: true,
+        },
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setContractors(
+      Array.isArray(res.data) ? res.data : [],
+    );
+  } catch (error) {
+    console.error('Failed to load contractors:', error);
+  }
+};
+
+const selectContractor = (contractorId: string) => {
+  const selected = contractors.find(
+    (item) => String(item.id) === contractorId,
+  );
+
+  if (!selected) {
+    return;
+  }
+
+  setContractorForm((prev) => ({
+    ...prev,
+    contractorMasterId: contractorId,
+    contractorId: String(
+      selected.linkedUserId || '',
+    ),
+    contractorName:
+      selected.contractorName || '',
+    contractorPhone: selected.phone || '',
+  }));
+};
+
 const assignContractor = async () => {
   if (!contractorForm.contractorId) {
     alert('Please enter contractor user ID');
@@ -1669,7 +1731,8 @@ const assignContractor = async () => {
     alert('Contractor assigned successfully');
 
     setContractorForm({
-      contractorId: '',
+  contractorMasterId: '',
+  contractorId: '',
       contractorName: '',
       contractorPhone: '',
       scheduledDate: '',
@@ -1821,8 +1884,9 @@ useEffect(() => {
   }
 
     if (activeTab === 'CONTRACTOR_WORK') {
-    fetchContractorAssignments();
-  }
+  fetchContractorAssignments();
+  fetchContractors();
+}
 }, [activeTab, projectId]);
 
 const generateProjectPdf = async (share = false) => {
@@ -1964,42 +2028,39 @@ const generateProjectPdf = async (share = false) => {
         </p>
 
         <div className="mt-5 grid gap-3 md:grid-cols-3">
-          <input
-            type="number"
-            placeholder="Contractor User ID"
-            value={contractorForm.contractorId}
-            onChange={(e) =>
-              setContractorForm({
-                ...contractorForm,
-                contractorId: e.target.value,
-              })
-            }
-            className="rounded-xl border p-3"
-          />
+          <select
+  value={contractorForm.contractorMasterId}
+  onChange={(e) =>
+    selectContractor(e.target.value)
+  }
+  className="rounded-xl border p-3"
+>
+  <option value="">
+    Select Contractor
+  </option>
 
-          <input
-            placeholder="Contractor Name"
-            value={contractorForm.contractorName}
-            onChange={(e) =>
-              setContractorForm({
-                ...contractorForm,
-                contractorName: e.target.value,
-              })
-            }
-            className="rounded-xl border p-3"
-          />
+  {contractors.map((contractor) => (
+    <option
+      key={contractor.id}
+      value={contractor.id}
+    >
+      {contractor.contractorName} -{' '}
+      {contractor.phone}
+    </option>
+  ))}
+</select>
 
-          <input
-            placeholder="Contractor Phone"
-            value={contractorForm.contractorPhone}
-            onChange={(e) =>
-              setContractorForm({
-                ...contractorForm,
-                contractorPhone: e.target.value,
-              })
-            }
-            className="rounded-xl border p-3"
-          />
+<input
+  value={contractorForm.contractorName}
+  readOnly
+  className="rounded-xl border bg-gray-100 p-3"
+/>
+
+<input
+  value={contractorForm.contractorPhone}
+  readOnly
+  className="rounded-xl border bg-gray-100 p-3"
+/>
 
           <input
             type="date"
