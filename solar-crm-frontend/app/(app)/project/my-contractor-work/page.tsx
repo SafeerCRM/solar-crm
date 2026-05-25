@@ -34,6 +34,17 @@ type ContractorProof = {
   createdAt?: string;
 };
 
+type ContractorComment = {
+  id: number;
+  projectId: number;
+  assignmentId: number;
+  comment?: string;
+  commentType?: string;
+  createdByName?: string;
+  createdByRole?: string;
+  createdAt?: string;
+};
+
 function money(value?: number) {
   return `₹${Number(value || 0).toLocaleString(
     'en-IN',
@@ -68,6 +79,14 @@ const [gpsData, setGpsData] =
 
 const [uploadingProofId, setUploadingProofId] =
   useState<number | null>(null);
+  const [comments, setComments] =
+  useState<Record<number, ContractorComment[]>>({});
+
+const [commentText, setCommentText] =
+  useState<Record<number, string>>({});
+
+const [commentLoadingId, setCommentLoadingId] =
+  useState<number | null>(null);
 
   const fetchProjects = async () => {
     try {
@@ -95,6 +114,7 @@ setProjects(assignedProjects);
 assignedProjects.forEach((item: ContractorProject) => {
   if (item?.id) {
     fetchProofs(item.id);
+    fetchComments(item.id);
   }
 });
     } catch (error) {
@@ -303,6 +323,78 @@ const uploadContractorProofs = async (
     );
   } finally {
     setUploadingProofId(null);
+  }
+};
+
+const fetchComments = async (assignmentId: number) => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/contractor-assignment/${assignmentId}/comments`,
+      {
+        headers: token
+          ? { Authorization: `Bearer ${token}` }
+          : {},
+      },
+    );
+
+    setComments((prev) => ({
+      ...prev,
+      [assignmentId]: Array.isArray(res.data)
+        ? res.data
+        : [],
+    }));
+  } catch (error) {
+    console.error('Failed to load contractor comments:', error);
+  }
+};
+
+const submitComment = async (
+  item: ContractorProject,
+  commentType = 'GENERAL',
+) => {
+  const text = String(commentText[item.id] || '').trim();
+
+  if (!text) {
+    alert('Please write a comment');
+    return;
+  }
+
+  try {
+    setCommentLoadingId(item.id);
+
+    const token = localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/contractor-comment`,
+      {
+        projectId: item.projectId,
+        assignmentId: item.id,
+        comment: text,
+        commentType,
+      },
+      {
+        headers: token
+          ? { Authorization: `Bearer ${token}` }
+          : {},
+      },
+    );
+
+    setCommentText((prev) => ({
+      ...prev,
+      [item.id]: '',
+    }));
+
+    fetchComments(item.id);
+  } catch (error: any) {
+    console.error(error);
+    alert(
+      error?.response?.data?.message ||
+        'Failed to add comment',
+    );
+  } finally {
+    setCommentLoadingId(null);
   }
 };
 
@@ -559,6 +651,87 @@ const uploadContractorProofs = async (
           </a>
         ))}
       </div>
+    )}
+  </div>
+</div>
+
+<div className="mt-5 rounded-xl border bg-white p-4">
+  <h3 className="font-bold text-gray-800">
+    Contractor Work Comments
+  </h3>
+
+  <textarea
+    placeholder="Write update / pending proof reason / site issue"
+    value={commentText[item.id] || ''}
+    onChange={(e) =>
+      setCommentText((prev) => ({
+        ...prev,
+        [item.id]: e.target.value,
+      }))
+    }
+    className="mt-3 w-full rounded-xl border p-3"
+    rows={3}
+  />
+
+  <div className="mt-3 flex flex-wrap gap-2">
+    <button
+      onClick={() => submitComment(item, 'GENERAL')}
+      disabled={commentLoadingId === item.id}
+      className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+    >
+      Add Comment
+    </button>
+
+    <button
+      onClick={() =>
+        submitComment(item, 'PENDING_PROOF_REASON')
+      }
+      disabled={commentLoadingId === item.id}
+      className="rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+    >
+      Add Pending Proof Reason
+    </button>
+  </div>
+
+  <div className="mt-5 space-y-3">
+    {(!comments[item.id] ||
+      comments[item.id].length === 0) ? (
+      <p className="text-sm text-gray-500">
+        No comments yet.
+      </p>
+    ) : (
+      comments[item.id].map((comment) => (
+        <div
+          key={comment.id}
+          className="rounded-xl bg-gray-50 p-3"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-semibold text-gray-800">
+              {comment.createdByName || 'User'}
+            </p>
+
+            <span className="rounded-full bg-gray-200 px-2 py-1 text-xs font-semibold text-gray-700">
+              {(comment.commentType || 'GENERAL').replaceAll(
+                '_',
+                ' ',
+              )}
+            </span>
+          </div>
+
+          <p className="mt-1 text-xs text-gray-500">
+            {comment.createdByRole || '-'} ·{' '}
+            {comment.createdAt
+              ? new Date(comment.createdAt).toLocaleString(
+                  'en-IN',
+                )
+              : '-'}
+          </p>
+
+          <p className="mt-2 text-sm text-gray-700">
+            {comment.comment}
+          </p>
+        </div>
+      ))
     )}
   </div>
 </div>
