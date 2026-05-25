@@ -530,9 +530,9 @@ setBankProofFile(null);
           disabled={loading}
           className="mt-4 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
         >
-          loading || uploading
-  ? 'Uploading...'
-  : 'Create Contractor'
+          {loading || uploading
+            ? 'Uploading...'
+            : 'Create Contractor'}
         </button>
       </div>
 
