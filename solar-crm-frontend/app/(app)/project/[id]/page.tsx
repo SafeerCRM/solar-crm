@@ -227,6 +227,8 @@ export default function ProjectDetailPage() {
   useState<ProjectContractorMaster[]>([]);
 
 const [contractorLoading, setContractorLoading] = useState(false);
+const [updatingContractorAssignmentId, setUpdatingContractorAssignmentId] =
+  useState<number | null>(null);
 
 const [contractorForm, setContractorForm] = useState({
   contractorMasterId: '',
@@ -1752,6 +1754,44 @@ const assignContractor = async () => {
   }
 };
 
+const updateContractorAssignment = async (
+  assignmentId: number,
+  status: string,
+  remarks?: string,
+) => {
+  try {
+    setUpdatingContractorAssignmentId(assignmentId);
+
+    const token = localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/contractor-assignment/${assignmentId}`,
+      {
+        status,
+        remarks,
+      },
+      {
+        headers: token
+          ? { Authorization: `Bearer ${token}` }
+          : {},
+      },
+    );
+
+    alert('Contractor work updated');
+
+    fetchContractorAssignments();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to update contractor work',
+    );
+  } finally {
+    setUpdatingContractorAssignmentId(null);
+  }
+};
+
 useEffect(() => {
   const storedUser = localStorage.getItem('user');
 
@@ -2162,6 +2202,25 @@ const generateProjectPdf = async (share = false) => {
                   <p className="mt-2 text-lg font-bold text-green-700">
                     {money(item.amount)}
                   </p>
+
+                  <div className="mt-3 flex flex-wrap justify-end gap-2">
+  {['ASSIGNED', 'IN_PROGRESS', 'ON_HOLD', 'COMPLETED'].map((status) => (
+    <button
+      key={status}
+      onClick={() =>
+        updateContractorAssignment(
+          item.id,
+          status,
+          item.remarks || '',
+        )
+      }
+      disabled={updatingContractorAssignmentId === item.id}
+      className="rounded-lg bg-gray-800 px-3 py-2 text-xs font-semibold text-white hover:bg-black disabled:opacity-50"
+    >
+      {status.replaceAll('_', ' ')}
+    </button>
+  ))}
+</div>
                 </div>
               </div>
             </div>

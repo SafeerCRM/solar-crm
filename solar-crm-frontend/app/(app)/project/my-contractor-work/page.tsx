@@ -32,6 +32,7 @@ export default function MyContractorWorkPage() {
   const [projects, setProjects] = useState<
     ContractorProject[]
   >([]);
+  const [updatingId, setUpdatingId] = useState<number | null>(null);
 
   const fetchProjects = async () => {
     try {
@@ -62,6 +63,46 @@ export default function MyContractorWorkPage() {
       setLoading(false);
     }
   };
+
+  const updateContractorWork = async (
+  assignmentId: number,
+  status: string,
+  remarks?: string,
+) => {
+  try {
+    setUpdatingId(assignmentId);
+
+    const token = localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/contractor-assignment/${assignmentId}`,
+      {
+        status,
+        remarks,
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Work updated');
+
+    fetchProjects();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to update work',
+    );
+  } finally {
+    setUpdatingId(null);
+  }
+};
 
   useEffect(() => {
     fetchProjects();
@@ -152,6 +193,25 @@ export default function MyContractorWorkPage() {
                   >
                     Open Project
                   </Link>
+
+                  <div className="flex flex-wrap justify-end gap-2">
+  {['IN_PROGRESS', 'ON_HOLD', 'COMPLETED'].map((status) => (
+    <button
+      key={status}
+      onClick={() =>
+        updateContractorWork(
+          item.id,
+          status,
+          item.remarks || '',
+        )
+      }
+      disabled={updatingId === item.id}
+      className="rounded-lg bg-gray-800 px-3 py-2 text-xs font-semibold text-white hover:bg-black disabled:opacity-50"
+    >
+      {status.replaceAll('_', ' ')}
+    </button>
+  ))}
+</div>
                 </div>
               </div>
             </div>
