@@ -186,6 +186,19 @@ type ContractorAssignment = {
   createdAt?: string;
 };
 
+type ContractorProof = {
+  id: number;
+  assignmentId: number;
+  proofType?: string;
+  fileUrl?: string;
+  latitude?: string;
+  longitude?: string;
+  gpsAddress?: string;
+  remarks?: string;
+  uploadedByName?: string;
+  createdAt?: string;
+};
+
 type ProjectContractorMaster = {
   id: number;
   contractorName?: string;
@@ -223,6 +236,8 @@ export default function ProjectDetailPage() {
   const [currentUserRoles, setCurrentUserRoles] = useState<string[]>([]);
   const [contractorAssignments, setContractorAssignments] =
   useState<ContractorAssignment[]>([]);
+  const [contractorProofs, setContractorProofs] =
+  useState<Record<number, ContractorProof[]>>({});
   const [contractors, setContractors] =
   useState<ProjectContractorMaster[]>([]);
 
@@ -1649,6 +1664,37 @@ const fetchContractorAssignments = async () => {
   }
 };
 
+const fetchContractorProofs = async (
+  assignmentId: number,
+) => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/contractor-assignment/${assignmentId}/proofs`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setContractorProofs((prev) => ({
+      ...prev,
+      [assignmentId]: Array.isArray(res.data)
+        ? res.data
+        : [],
+    }));
+  } catch (error) {
+    console.error(
+      'Failed to load contractor proofs:',
+      error,
+    );
+  }
+};
+
 const fetchContractors = async () => {
   try {
     const token = localStorage.getItem('token');
@@ -1926,7 +1972,17 @@ useEffect(() => {
     if (activeTab === 'CONTRACTOR_WORK') {
   fetchContractorAssignments();
   fetchContractors();
+
+  setTimeout(() => {
+  contractorAssignments.forEach((item) => {
+    if (item?.id) {
+      fetchContractorProofs(item.id);
+    }
+  });
+}, 500);
+
 }
+
 }, [activeTab, projectId]);
 
 const generateProjectPdf = async (share = false) => {
@@ -2220,6 +2276,64 @@ const generateProjectPdf = async (share = false) => {
       {status.replaceAll('_', ' ')}
     </button>
   ))}
+</div>
+
+<div className="mt-5">
+  <h4 className="font-semibold text-gray-800">
+    Contractor Proof Photos
+  </h4>
+
+  {(!contractorProofs[item.id] ||
+    contractorProofs[item.id].length === 0) ? (
+    <p className="mt-2 text-sm text-gray-500">
+      No proofs uploaded yet.
+    </p>
+  ) : (
+    <div className="mt-3 grid gap-3 md:grid-cols-3">
+      {contractorProofs[item.id].map((proof) => (
+        <a
+          key={proof.id}
+          href={proof.fileUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="rounded-xl border bg-white p-3 hover:bg-gray-50"
+        >
+          {proof.fileUrl && (
+            <img
+              src={proof.fileUrl}
+              alt={proof.proofType || 'Proof'}
+              className="h-32 w-full rounded-lg object-cover"
+            />
+          )}
+
+          <p className="mt-2 text-xs font-semibold text-gray-700">
+            {(proof.proofType || 'OTHER').replaceAll(
+              '_',
+              ' ',
+            )}
+          </p>
+
+          <p className="text-xs text-gray-500">
+            By: {proof.uploadedByName || '-'}
+          </p>
+
+          {proof.latitude &&
+            proof.longitude && (
+              <p className="text-xs text-gray-500">
+                GPS: {proof.latitude},{' '}
+                {proof.longitude}
+              </p>
+            )}
+
+          {proof.gpsAddress && (
+            <p className="mt-1 text-xs text-gray-500">
+              {proof.gpsAddress}
+            </p>
+          )}
+        </a>
+      ))}
+    </div>
+  )}
 </div>
                 </div>
               </div>

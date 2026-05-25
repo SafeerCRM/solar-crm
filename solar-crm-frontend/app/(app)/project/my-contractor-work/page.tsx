@@ -180,18 +180,44 @@ const captureGps = (assignmentId: number) => {
   }
 
   navigator.geolocation.getCurrentPosition(
-    (position) => {
-      setGpsData((prev) => ({
-        ...prev,
-        [assignmentId]: {
-          latitude: String(position.coords.latitude),
-          longitude: String(position.coords.longitude),
-          gpsAddress: '',
-        },
-      }));
+    async (position) => {
+  const latitude = String(
+    position.coords.latitude,
+  );
 
-      alert('GPS captured successfully');
+  const longitude = String(
+    position.coords.longitude,
+  );
+
+  let gpsAddress = '';
+
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}`,
+    );
+
+    const data = await response.json();
+
+    gpsAddress =
+      data?.display_name || '';
+  } catch (error) {
+    console.error(
+      'Failed to fetch GPS address:',
+      error,
+    );
+  }
+
+  setGpsData((prev) => ({
+    ...prev,
+    [assignmentId]: {
+      latitude,
+      longitude,
+      gpsAddress,
     },
+  }));
+
+  alert('GPS captured successfully');
+},
     () => {
       alert('Unable to capture GPS location');
     },
