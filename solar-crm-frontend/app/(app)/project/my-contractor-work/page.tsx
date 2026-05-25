@@ -397,7 +397,7 @@ const uploadContractorProofs = async (
                   </Link>
 
                   <div className="flex flex-wrap justify-end gap-2">
-  {['IN_PROGRESS', 'ON_HOLD', 'COMPLETED'].map((status) => (
+  {['IN_PROGRESS', 'ON_HOLD', 'PENDING_FINAL_PROOFS', 'COMPLETED'].map((status) => (
     <button
       key={status}
       onClick={() =>

@@ -2268,7 +2268,7 @@ const generateProjectPdf = async (share = false) => {
                   </p>
 
                   <div className="mt-3 flex flex-wrap justify-end gap-2">
-  {['ASSIGNED', 'IN_PROGRESS', 'ON_HOLD', 'COMPLETED'].map((status) => (
+  {['ASSIGNED', 'IN_PROGRESS', 'ON_HOLD', 'PENDING_FINAL_PROOFS', 'COMPLETED'].map((status) => (
     <button
       key={status}
       onClick={() =>
