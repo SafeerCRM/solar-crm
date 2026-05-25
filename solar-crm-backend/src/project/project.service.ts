@@ -7300,12 +7300,50 @@ async updateContractorAssignment(
   const isAllowed =
     roles.includes('OWNER') ||
     roles.includes('PROJECT_MANAGER') ||
-    assignment.contractorId === currentUserId;
+    Number(assignment.contractorId) === currentUserId;
 
   if (!isAllowed) {
     throw new ForbiddenException(
       'You are not allowed to update this contractor work',
     );
+  }
+
+  const nextStatus = body?.status;
+
+  if (nextStatus === ProjectContractorWorkStatus.COMPLETED) {
+    const proofs =
+      await this.projectContractorProofRepository.find({
+        where: {
+          assignmentId,
+        },
+      });
+
+    const uploadedTypes = new Set(
+      proofs.map((proof) => String(proof.proofType)),
+    );
+
+    const requiredTypes = [
+      'STRUCTURE_PHOTO',
+      'PILLAR_PHOTO',
+      'PANEL_SERIAL_NUMBER_PHOTO',
+      'INVERTER_PHOTO',
+      'SOLAR_METER_PHOTO',
+      'NET_METER_PHOTO',
+      'EARTHING_WITH_CLIENT_PHOTO',
+      'PANEL_WITH_CLIENT_PHOTO',
+    ];
+
+    const missingTypes = requiredTypes.filter(
+      (type) => !uploadedTypes.has(type),
+    );
+
+    if (missingTypes.length > 0) {
+      throw new BadRequestException(
+        `Cannot mark completed. Missing proofs: ${missingTypes
+          .map((type) => type.replace(/_/g, ' '))
+          .join(', ')}`,
+      );
+    }
   }
 
   if (body?.status) {

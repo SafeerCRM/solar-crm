@@ -9,8 +9,9 @@ import {
 export enum ProjectContractorWorkStatus {
   ASSIGNED = 'ASSIGNED',
   IN_PROGRESS = 'IN_PROGRESS',
-  COMPLETED = 'COMPLETED',
   ON_HOLD = 'ON_HOLD',
+  PENDING_FINAL_PROOFS = 'PENDING_FINAL_PROOFS',
+  COMPLETED = 'COMPLETED',
 }
 
 @Entity()
