@@ -31,6 +31,7 @@ import { ProjectFinalInvoiceItem } from './project-final-invoice-item.entity';
 import { ProjectPartyLedger } from './project-party-ledger.entity';
 import { ProjectContractorAssignment } from './project-contractor-assignment.entity';
 import { ProjectContractorProof } from './project-contractor-proof.entity';
+import { ProjectContractor } from './project-contractor.entity';
 
 @Module({
   imports: [
@@ -38,7 +39,7 @@ import { ProjectContractorProof } from './project-contractor-proof.entity';
 ProjectMaterialRequestItem, ProjectBranch, ProjectLoanDetail, ProjectSubsidyDetail, ProjectElectricityDetail, ProjectExecutionActivity, ProjectExecutionProof, ProjectExecutionReminder, ProjectExecutionReminderUserState, ProjectPaymentInstallment, ProjectPaymentReminderUserState, ProjectReminderUserState, ProjectEditHistory,
  ProjectVendor, ProjectPurchaseOrder, ProjectPurchaseOrderItem, ProjectProformaInvoice,
 ProjectProformaInvoiceItem, ProjectFinalInvoice, ProjectFinalInvoiceItem, ProjectPartyLedger, ProjectContractorAssignment,
-ProjectContractorProof,]),
+ProjectContractorProof, ProjectContractor,]),
     CalculatorModule,
   ],
   controllers: [ProjectController],

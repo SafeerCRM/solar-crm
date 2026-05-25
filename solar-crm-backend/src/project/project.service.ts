@@ -117,6 +117,7 @@ import {
   ProjectContractorWorkStatus,
 } from './project-contractor-assignment.entity';
 import { ProjectContractorProof } from './project-contractor-proof.entity';
+import { ProjectContractor } from './project-contractor.entity';
 
 @Injectable()
 export class ProjectService {
@@ -229,6 +230,9 @@ private readonly projectContractorAssignmentRepository: Repository<ProjectContra
 
 @InjectRepository(ProjectContractorProof)
 private readonly projectContractorProofRepository: Repository<ProjectContractorProof>,
+
+@InjectRepository(ProjectContractor)
+private readonly projectContractorRepository: Repository<ProjectContractor>,
 
     private readonly calculatorService: CalculatorService,
 
@@ -7091,5 +7095,126 @@ async getMyContractorProjects(user: any) {
     where: { contractorId },
     order: { scheduledDate: 'DESC' },
   });
+}
+
+async createProjectContractor(body: any, user: any) {
+  const roles = Array.isArray(user?.roles) ? user.roles : [];
+
+  if (
+    !roles.includes('OWNER') &&
+    !roles.includes('PROJECT_MANAGER')
+  ) {
+    throw new ForbiddenException(
+      'Only Owner or Project Manager can create contractor',
+    );
+  }
+
+  if (!String(body?.contractorName || '').trim()) {
+    throw new BadRequestException('Contractor name is required');
+  }
+
+  if (!String(body?.phone || '').trim()) {
+    throw new BadRequestException('Contractor phone is required');
+  }
+
+  const contractor = this.projectContractorRepository.create({
+    contractorName: String(body.contractorName).trim(),
+    phone: String(body.phone).trim(),
+    alternatePhone: String(body?.alternatePhone || '').trim(),
+    city: String(body?.city || '').trim(),
+    address: String(body?.address || '').trim(),
+    linkedUserId: body?.linkedUserId ? Number(body.linkedUserId) : undefined,
+    remarks: String(body?.remarks || '').trim(),
+    isActive: body?.isActive !== false,
+    createdBy: user?.id || user?.userId || null,
+    createdByName: user?.name || user?.email || '',
+  });
+
+  return this.projectContractorRepository.save(contractor);
+}
+
+async getProjectContractors(activeOnly = false) {
+  return this.projectContractorRepository.find({
+    where: activeOnly ? { isActive: true } : {},
+    order: {
+      contractorName: 'ASC',
+    },
+  });
+}
+
+async updateProjectContractor(id: number, body: any, user: any) {
+  const roles = Array.isArray(user?.roles) ? user.roles : [];
+
+  if (
+    !roles.includes('OWNER') &&
+    !roles.includes('PROJECT_MANAGER')
+  ) {
+    throw new ForbiddenException(
+      'Only Owner or Project Manager can update contractor',
+    );
+  }
+
+  const contractor = await this.projectContractorRepository.findOne({
+    where: { id },
+  });
+
+  if (!contractor) {
+    throw new NotFoundException('Contractor not found');
+  }
+
+  Object.assign(contractor, {
+    contractorName:
+      body?.contractorName !== undefined
+        ? String(body.contractorName || '').trim()
+        : contractor.contractorName,
+    phone:
+      body?.phone !== undefined
+        ? String(body.phone || '').trim()
+        : contractor.phone,
+    alternatePhone:
+      body?.alternatePhone !== undefined
+        ? String(body.alternatePhone || '').trim()
+        : contractor.alternatePhone,
+    city:
+      body?.city !== undefined
+        ? String(body.city || '').trim()
+        : contractor.city,
+    address:
+      body?.address !== undefined
+        ? String(body.address || '').trim()
+        : contractor.address,
+    linkedUserId:
+      body?.linkedUserId !== undefined
+        ? body.linkedUserId
+          ? Number(body.linkedUserId)
+          : null
+        : contractor.linkedUserId,
+    remarks:
+      body?.remarks !== undefined
+        ? String(body.remarks || '').trim()
+        : contractor.remarks,
+    isActive:
+      body?.isActive !== undefined
+        ? body.isActive
+        : contractor.isActive,
+  });
+
+  return this.projectContractorRepository.save(contractor);
+}
+
+async disableProjectContractor(id: number, user: any) {
+  return this.updateProjectContractor(
+    id,
+    { isActive: false },
+    user,
+  );
+}
+
+async enableProjectContractor(id: number, user: any) {
+  return this.updateProjectContractor(
+    id,
+    { isActive: true },
+    user,
+  );
 }
 }

@@ -170,6 +170,62 @@ enableVendor(@Param('id') id: string) {
   return this.projectService.enableVendor(Number(id));
 }
 
+@Roles('OWNER', 'PROJECT_MANAGER')
+@Post('contractor-master')
+createProjectContractor(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.createProjectContractor(body, user);
+}
+
+@Get('contractor-master')
+getProjectContractors(
+  @Query('activeOnly') activeOnly?: string,
+) {
+  return this.projectService.getProjectContractors(
+    activeOnly === 'true',
+  );
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER')
+@Patch('contractor-master/:id')
+updateProjectContractor(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.updateProjectContractor(
+    Number(id),
+    body,
+    user,
+  );
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER')
+@Patch('contractor-master/:id/delete')
+disableProjectContractor(
+  @Param('id') id: string,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.disableProjectContractor(
+    Number(id),
+    user,
+  );
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER')
+@Patch('contractor-master/:id/enable')
+enableProjectContractor(
+  @Param('id') id: string,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.enableProjectContractor(
+    Number(id),
+    user,
+  );
+}
+
 @Roles(
   'OWNER',
   'MARKETING_HEAD',
