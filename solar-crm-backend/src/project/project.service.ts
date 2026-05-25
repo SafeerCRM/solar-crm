@@ -112,6 +112,12 @@ import {
   ProjectLedgerSourceType,
 } from './project-party-ledger.entity';
 
+import {
+  ProjectContractorAssignment,
+  ProjectContractorWorkStatus,
+} from './project-contractor-assignment.entity';
+import { ProjectContractorProof } from './project-contractor-proof.entity';
+
 @Injectable()
 export class ProjectService {
 
@@ -217,6 +223,12 @@ private readonly projectFinalInvoiceItemRepository: Repository<ProjectFinalInvoi
 
 @InjectRepository(ProjectPartyLedger)
 private readonly projectPartyLedgerRepository: Repository<ProjectPartyLedger>,
+
+@InjectRepository(ProjectContractorAssignment)
+private readonly projectContractorAssignmentRepository: Repository<ProjectContractorAssignment>,
+
+@InjectRepository(ProjectContractorProof)
+private readonly projectContractorProofRepository: Repository<ProjectContractorProof>,
 
     private readonly calculatorService: CalculatorService,
 
@@ -7004,5 +7016,80 @@ async saveProjectElectricityDetail(
   return this.projectElectricityDetailRepository.save(
     detail,
   );
+}
+
+async assignContractorToProject(body: any, user: any) {
+  const roles = Array.isArray(user?.roles) ? user.roles : [];
+
+  if (
+    !roles.includes('OWNER') &&
+    !roles.includes('PROJECT_MANAGER')
+  ) {
+    throw new ForbiddenException(
+      'Only Owner or Project Manager can assign contractor',
+    );
+  }
+
+  const projectId = Number(body?.projectId);
+  const contractorId = Number(body?.contractorId);
+
+  if (!projectId) {
+    throw new BadRequestException('Project ID is required');
+  }
+
+  if (!contractorId) {
+    throw new BadRequestException('Contractor is required');
+  }
+
+  const project = await this.projectRepository.findOne({
+    where: { id: projectId },
+  });
+
+  if (!project) {
+    throw new NotFoundException('Project not found');
+  }
+
+  const assignment =
+    this.projectContractorAssignmentRepository.create({
+      projectId,
+      contractorId,
+      contractorName: body?.contractorName || '',
+      contractorPhone: body?.contractorPhone || '',
+      scheduledDate: body?.scheduledDate
+        ? new Date(body.scheduledDate)
+        : undefined,
+      amount: this.toNumberOrZero(body?.amount),
+      status:
+        body?.status ||
+        ProjectContractorWorkStatus.ASSIGNED,
+      remarks: body?.remarks || '',
+      assignedBy: user?.id || user?.userId || null,
+      assignedByName:
+        user?.name || user?.email || '',
+    });
+
+  return this.projectContractorAssignmentRepository.save(
+    assignment,
+  );
+}
+
+async getProjectContractorAssignments(projectId: number) {
+  return this.projectContractorAssignmentRepository.find({
+    where: { projectId },
+    order: { createdAt: 'DESC' },
+  });
+}
+
+async getMyContractorProjects(user: any) {
+  const contractorId = Number(user?.id || user?.userId);
+
+  if (!contractorId) {
+    throw new BadRequestException('Invalid contractor user');
+  }
+
+  return this.projectContractorAssignmentRepository.find({
+    where: { contractorId },
+    order: { scheduledDate: 'DESC' },
+  });
 }
 }

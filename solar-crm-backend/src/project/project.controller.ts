@@ -365,6 +365,35 @@ generateFinalInvoicePdf(
   );
 }
 
+@Roles('OWNER', 'PROJECT_MANAGER')
+@Post('contractor/assign')
+assignContractorToProject(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.assignContractorToProject(
+    body,
+    user,
+  );
+}
+
+@Get(':id/contractor-assignments')
+getProjectContractorAssignments(
+  @Param('id') id: string,
+) {
+  return this.projectService.getProjectContractorAssignments(
+    Number(id),
+  );
+}
+
+@Roles('PROJECT_CONTRACTOR')
+@Get('contractor/my-projects')
+getMyContractorProjects(
+  @CurrentUser() user: any,
+) {
+  return this.projectService.getMyContractorProjects(user);
+}
+
 @Roles('OWNER', 'ACCOUNT_MANAGER')
 @Post('ledger-entry')
 createLedgerEntry(
