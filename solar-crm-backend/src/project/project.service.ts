@@ -106,6 +106,12 @@ import {
 
 import { ProjectFinalInvoiceItem } from './project-final-invoice-item.entity';
 
+import {
+  ProjectPartyLedger,
+  ProjectLedgerEntryType,
+  ProjectLedgerSourceType,
+} from './project-party-ledger.entity';
+
 @Injectable()
 export class ProjectService {
 
@@ -208,6 +214,9 @@ private readonly projectFinalInvoiceRepository: Repository<ProjectFinalInvoice>,
 
 @InjectRepository(ProjectFinalInvoiceItem)
 private readonly projectFinalInvoiceItemRepository: Repository<ProjectFinalInvoiceItem>,
+
+@InjectRepository(ProjectPartyLedger)
+private readonly projectPartyLedgerRepository: Repository<ProjectPartyLedger>,
 
     private readonly calculatorService: CalculatorService,
 
@@ -6572,6 +6581,125 @@ doc
     });
 
   doc.end();
+}
+
+async createLedgerEntry(
+  body: any,
+  user: any,
+) {
+  if (!body?.partyName) {
+    throw new BadRequestException('Party name is required');
+  }
+
+  if (!body?.entryType) {
+    throw new BadRequestException('Entry type is required');
+  }
+
+  if (!body?.sourceType) {
+    throw new BadRequestException('Source type is required');
+  }
+
+  const amount = Number(body.amount || 0);
+
+  if (!amount || amount <= 0) {
+    throw new BadRequestException('Valid amount is required');
+  }
+
+  const entry =
+    this.projectPartyLedgerRepository.create({
+      partyId: body.partyId ? Number(body.partyId) : null,
+      partyName: body.partyName || '',
+      partyType: body.partyType || '',
+      projectId: body.projectId ? Number(body.projectId) : null,
+
+      entryType:
+        body.entryType === ProjectLedgerEntryType.CREDIT
+          ? ProjectLedgerEntryType.CREDIT
+          : ProjectLedgerEntryType.DEBIT,
+
+      sourceType:
+        body.sourceType || ProjectLedgerSourceType.MANUAL_ADJUSTMENT,
+
+      sourceId: body.sourceId ? Number(body.sourceId) : null,
+
+      amount,
+
+      remarks: body.remarks || '',
+
+      createdBy: user?.id || user?.userId || null,
+      createdByName: user?.name || '',
+    } as Partial<ProjectPartyLedger>);
+
+  return this.projectPartyLedgerRepository.save(
+    entry as ProjectPartyLedger,
+  );
+}
+
+async getLedgerEntries(filters?: {
+  partyName?: string;
+  partyType?: string;
+  projectId?: number;
+  sourceType?: string;
+}) {
+  const query =
+    this.projectPartyLedgerRepository.createQueryBuilder(
+      'ledger',
+    );
+
+  if (filters?.partyName) {
+    query.andWhere(
+      'LOWER(ledger.partyName) LIKE :partyName',
+      {
+        partyName: `%${filters.partyName.toLowerCase()}%`,
+      },
+    );
+  }
+
+  if (filters?.partyType) {
+    query.andWhere('ledger.partyType = :partyType', {
+      partyType: filters.partyType,
+    });
+  }
+
+  if (filters?.projectId) {
+    query.andWhere('ledger.projectId = :projectId', {
+      projectId: filters.projectId,
+    });
+  }
+
+  if (filters?.sourceType) {
+    query.andWhere('ledger.sourceType = :sourceType', {
+      sourceType: filters.sourceType,
+    });
+  }
+
+  query.orderBy('ledger.createdAt', 'DESC');
+
+  return query.getMany();
+}
+
+async getLedgerOutstandingSummary() {
+  const rows =
+    await this.projectPartyLedgerRepository.find();
+
+  let totalDebit = 0;
+  let totalCredit = 0;
+
+  for (const row of rows) {
+    if (row.entryType === ProjectLedgerEntryType.DEBIT) {
+      totalDebit += Number(row.amount || 0);
+    }
+
+    if (row.entryType === ProjectLedgerEntryType.CREDIT) {
+      totalCredit += Number(row.amount || 0);
+    }
+  }
+
+  return {
+    totalDebit,
+    totalCredit,
+    netBalance: totalDebit - totalCredit,
+  };
 }
 
 async getPurchasableMaterialRequestItems(

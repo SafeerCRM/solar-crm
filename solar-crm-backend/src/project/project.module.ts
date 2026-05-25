@@ -28,13 +28,14 @@ import { ProjectProformaInvoice } from './project-proforma-invoice.entity';
 import { ProjectProformaInvoiceItem } from './project-proforma-invoice-item.entity';
 import { ProjectFinalInvoice } from './project-final-invoice.entity';
 import { ProjectFinalInvoiceItem } from './project-final-invoice-item.entity';
+import { ProjectPartyLedger } from './project-party-ledger.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Project, ProjectDocument, ProjectComment, ProjectMaterialMaster, ProjectMaterialRequest,
 ProjectMaterialRequestItem, ProjectBranch, ProjectLoanDetail, ProjectSubsidyDetail, ProjectElectricityDetail, ProjectExecutionActivity, ProjectExecutionProof, ProjectExecutionReminder, ProjectExecutionReminderUserState, ProjectPaymentInstallment, ProjectPaymentReminderUserState, ProjectReminderUserState, ProjectEditHistory,
  ProjectVendor, ProjectPurchaseOrder, ProjectPurchaseOrderItem, ProjectProformaInvoice,
-ProjectProformaInvoiceItem, ProjectFinalInvoice, ProjectFinalInvoiceItem]),
+ProjectProformaInvoiceItem, ProjectFinalInvoice, ProjectFinalInvoiceItem, ProjectPartyLedger]),
     CalculatorModule,
   ],
   controllers: [ProjectController],

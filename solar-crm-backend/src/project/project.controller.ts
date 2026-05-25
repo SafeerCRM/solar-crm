@@ -365,6 +365,38 @@ generateFinalInvoicePdf(
   );
 }
 
+@Roles('OWNER', 'ACCOUNT_MANAGER')
+@Post('ledger-entry')
+createLedgerEntry(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.createLedgerEntry(
+    body,
+    user,
+  );
+}
+
+@Get('ledger')
+getLedgerEntries(
+  @Query('partyName') partyName?: string,
+  @Query('partyType') partyType?: string,
+  @Query('projectId') projectId?: string,
+  @Query('sourceType') sourceType?: string,
+) {
+  return this.projectService.getLedgerEntries({
+    partyName: partyName || '',
+    partyType: partyType || '',
+    projectId: projectId ? Number(projectId) : undefined,
+    sourceType: sourceType || '',
+  });
+}
+
+@Get('ledger/summary')
+getLedgerOutstandingSummary() {
+  return this.projectService.getLedgerOutstandingSummary();
+}
+
 @Get('purchase-order/purchasable-items')
 getPurchasableMaterialRequestItems(
   @Query('projectId')
