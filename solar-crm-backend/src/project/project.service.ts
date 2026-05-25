@@ -7219,4 +7219,54 @@ async enableProjectContractor(id: number, user: any) {
     user,
   );
 }
+
+async updateContractorAssignment(
+  assignmentId: number,
+  body: any,
+  user: any,
+) {
+  const assignment =
+    await this.projectContractorAssignmentRepository.findOne({
+      where: { id: assignmentId },
+    });
+
+  if (!assignment) {
+    throw new NotFoundException(
+      'Contractor assignment not found',
+    );
+  }
+
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  const currentUserId = Number(
+    user?.id || user?.userId || user?.sub,
+  );
+
+  const isAllowed =
+    roles.includes('OWNER') ||
+    roles.includes('PROJECT_MANAGER') ||
+    assignment.contractorId === currentUserId;
+
+  if (!isAllowed) {
+    throw new ForbiddenException(
+      'You are not allowed to update this contractor work',
+    );
+  }
+
+  if (body?.status) {
+    assignment.status = body.status;
+  }
+
+  if (body?.remarks !== undefined) {
+    assignment.remarks = String(
+      body.remarks || '',
+    ).trim();
+  }
+
+  return this.projectContractorAssignmentRepository.save(
+    assignment,
+  );
+}
 }

@@ -226,6 +226,19 @@ enableProjectContractor(
   );
 }
 
+@Patch('contractor-assignment/:id')
+updateContractorAssignment(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.updateContractorAssignment(
+    Number(id),
+    body,
+    user,
+  );
+}
+
 @Roles(
   'OWNER',
   'MARKETING_HEAD',
