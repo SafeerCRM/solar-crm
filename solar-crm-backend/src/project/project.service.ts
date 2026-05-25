@@ -7129,6 +7129,17 @@ async createProjectContractor(body: any, user: any) {
     city: String(body?.city || '').trim(),
     address: String(body?.address || '').trim(),
     linkedUserId: body?.linkedUserId ? Number(body.linkedUserId) : undefined,
+
+    aadhaarFrontUrl: String(body?.aadhaarFrontUrl || '').trim(),
+    aadhaarBackUrl: String(body?.aadhaarBackUrl || '').trim(),
+    bankProofUrl: String(body?.bankProofUrl || '').trim(),
+    accountHolderName: String(body?.accountHolderName || '').trim(),
+    bankName: String(body?.bankName || '').trim(),
+    accountNumber: String(body?.accountNumber || '').trim(),
+    ifscCode: String(body?.ifscCode || '').trim(),
+    upiId: String(body?.upiId || '').trim(),
+    panNumber: String(body?.panNumber || '').trim(),
+
     remarks: String(body?.remarks || '').trim(),
     isActive: body?.isActive !== false,
     createdBy: user?.id || user?.userId || null,
@@ -7137,6 +7148,7 @@ async createProjectContractor(body: any, user: any) {
 
   return this.projectContractorRepository.save(contractor);
 }
+
 
 async getProjectContractors(activeOnly = false) {
   return this.projectContractorRepository.find({
@@ -7194,6 +7206,44 @@ async updateProjectContractor(id: number, body: any, user: any) {
           ? Number(body.linkedUserId)
           : null
         : contractor.linkedUserId,
+
+    aadhaarFrontUrl:
+      body?.aadhaarFrontUrl !== undefined
+        ? String(body.aadhaarFrontUrl || '').trim()
+        : contractor.aadhaarFrontUrl,
+    aadhaarBackUrl:
+      body?.aadhaarBackUrl !== undefined
+        ? String(body.aadhaarBackUrl || '').trim()
+        : contractor.aadhaarBackUrl,
+    bankProofUrl:
+      body?.bankProofUrl !== undefined
+        ? String(body.bankProofUrl || '').trim()
+        : contractor.bankProofUrl,
+    accountHolderName:
+      body?.accountHolderName !== undefined
+        ? String(body.accountHolderName || '').trim()
+        : contractor.accountHolderName,
+    bankName:
+      body?.bankName !== undefined
+        ? String(body.bankName || '').trim()
+        : contractor.bankName,
+    accountNumber:
+      body?.accountNumber !== undefined
+        ? String(body.accountNumber || '').trim()
+        : contractor.accountNumber,
+    ifscCode:
+      body?.ifscCode !== undefined
+        ? String(body.ifscCode || '').trim()
+        : contractor.ifscCode,
+    upiId:
+      body?.upiId !== undefined
+        ? String(body.upiId || '').trim()
+        : contractor.upiId,
+    panNumber:
+      body?.panNumber !== undefined
+        ? String(body.panNumber || '').trim()
+        : contractor.panNumber,
+
     remarks:
       body?.remarks !== undefined
         ? String(body.remarks || '').trim()
