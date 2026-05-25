@@ -7085,7 +7085,9 @@ async getProjectContractorAssignments(projectId: number) {
 }
 
 async getMyContractorProjects(user: any) {
-  const contractorId = Number(user?.id || user?.userId);
+  const contractorId = Number(
+  user?.id || user?.userId || user?.sub,
+);
 
   if (!contractorId) {
     throw new BadRequestException('Invalid contractor user');
