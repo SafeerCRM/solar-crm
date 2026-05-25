@@ -20,6 +20,20 @@ type ContractorProject = {
   createdAt?: string;
 };
 
+type ContractorProof = {
+  id: number;
+  projectId: number;
+  assignmentId: number;
+  proofType?: string;
+  fileUrl?: string;
+  latitude?: string;
+  longitude?: string;
+  gpsAddress?: string;
+  remarks?: string;
+  uploadedByName?: string;
+  createdAt?: string;
+};
+
 function money(value?: number) {
   return `₹${Number(value || 0).toLocaleString(
     'en-IN',
@@ -33,6 +47,27 @@ export default function MyContractorWorkPage() {
     ContractorProject[]
   >([]);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
+  const [proofs, setProofs] =
+  useState<Record<number, ContractorProof[]>>({});
+
+const [proofFiles, setProofFiles] =
+  useState<Record<number, File[]>>({});
+
+const [proofType, setProofType] =
+  useState<Record<number, string>>({});
+
+const [proofRemarks, setProofRemarks] =
+  useState<Record<number, string>>({});
+
+const [gpsData, setGpsData] =
+  useState<Record<number, {
+    latitude?: string;
+    longitude?: string;
+    gpsAddress?: string;
+  }>>({});
+
+const [uploadingProofId, setUploadingProofId] =
+  useState<number | null>(null);
 
   const fetchProjects = async () => {
     try {
@@ -51,9 +86,17 @@ export default function MyContractorWorkPage() {
         },
       );
 
-      setProjects(
-        Array.isArray(res.data) ? res.data : [],
-      );
+      const assignedProjects = Array.isArray(res.data)
+  ? res.data
+  : [];
+
+setProjects(assignedProjects);
+
+assignedProjects.forEach((item: ContractorProject) => {
+  if (item?.id) {
+    fetchProofs(item.id);
+  }
+});
     } catch (error) {
       console.error(error);
       alert(
@@ -101,6 +144,139 @@ export default function MyContractorWorkPage() {
     );
   } finally {
     setUpdatingId(null);
+  }
+};
+
+const fetchProofs = async (assignmentId: number) => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/contractor-assignment/${assignmentId}/proofs`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setProofs((prev) => ({
+      ...prev,
+      [assignmentId]: Array.isArray(res.data)
+        ? res.data
+        : [],
+    }));
+  } catch (error) {
+    console.error('Failed to load contractor proofs:', error);
+  }
+};
+
+const captureGps = (assignmentId: number) => {
+  if (!navigator.geolocation) {
+    alert('GPS is not supported on this device');
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      setGpsData((prev) => ({
+        ...prev,
+        [assignmentId]: {
+          latitude: String(position.coords.latitude),
+          longitude: String(position.coords.longitude),
+          gpsAddress: '',
+        },
+      }));
+
+      alert('GPS captured successfully');
+    },
+    () => {
+      alert('Unable to capture GPS location');
+    },
+    {
+      enableHighAccuracy: true,
+      timeout: 15000,
+      maximumAge: 0,
+    },
+  );
+};
+
+const uploadContractorProofs = async (
+  item: ContractorProject,
+) => {
+  const files = proofFiles[item.id] || [];
+
+  if (!files.length) {
+    alert('Please select proof photos');
+    return;
+  }
+
+  if (!proofType[item.id]) {
+    alert('Please select proof type');
+    return;
+  }
+
+  const gps = gpsData[item.id];
+
+  if (!gps?.latitude || !gps?.longitude) {
+    alert('Please capture GPS before uploading proof');
+    return;
+  }
+
+  try {
+    setUploadingProofId(item.id);
+
+    const token = localStorage.getItem('token');
+
+    const formData = new FormData();
+
+    files.forEach((file) => {
+      formData.append('files', file);
+    });
+
+    formData.append('assignmentId', String(item.id));
+    formData.append('projectId', String(item.projectId));
+    formData.append('proofType', proofType[item.id]);
+    formData.append('latitude', gps.latitude);
+    formData.append('longitude', gps.longitude);
+    formData.append('gpsAddress', gps.gpsAddress || '');
+    formData.append('remarks', proofRemarks[item.id] || '');
+
+    await axios.post(
+      `${API_BASE_URL}/project/contractor-proof/upload`,
+      formData,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data',
+        },
+      },
+    );
+
+    alert('Proof uploaded successfully');
+
+    setProofFiles((prev) => ({
+      ...prev,
+      [item.id]: [],
+    }));
+
+    setProofRemarks((prev) => ({
+      ...prev,
+      [item.id]: '',
+    }));
+
+    fetchProofs(item.id);
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to upload proof',
+    );
+  } finally {
+    setUploadingProofId(null);
   }
 };
 
@@ -211,6 +387,154 @@ export default function MyContractorWorkPage() {
       {status.replaceAll('_', ' ')}
     </button>
   ))}
+</div>
+
+<div className="mt-5 rounded-xl border bg-gray-50 p-4">
+  <h3 className="font-bold text-gray-800">
+    Upload GPS Proof Photos
+  </h3>
+
+  <div className="mt-3 grid gap-3 md:grid-cols-2">
+    <select
+      value={proofType[item.id] || ''}
+      onChange={(e) =>
+        setProofType((prev) => ({
+          ...prev,
+          [item.id]: e.target.value,
+        }))
+      }
+      className="rounded-xl border p-3"
+    >
+      <option value="">Select Proof Type</option>
+      <option value="STRUCTURE_PHOTO">Structure Photo</option>
+      <option value="PILLAR_PHOTO">Pillar Photo</option>
+      <option value="PANEL_SERIAL_NUMBER_PHOTO">
+        Panel Serial Number Photo
+      </option>
+      <option value="INVERTER_PHOTO">Inverter Photo</option>
+      <option value="SOLAR_METER_PHOTO">Solar Meter Photo</option>
+      <option value="NET_METER_PHOTO">Net Meter Photo</option>
+      <option value="EARTHING_WITH_CLIENT_PHOTO">
+        Earthing With Client Photo
+      </option>
+      <option value="PANEL_WITH_CLIENT_PHOTO">
+        Panel With Client Photo
+      </option>
+      <option value="OTHER">Other</option>
+    </select>
+
+    <input
+      type="file"
+      accept="image/*"
+      multiple
+      onChange={(e) =>
+        setProofFiles((prev) => ({
+          ...prev,
+          [item.id]: Array.from(e.target.files || []),
+        }))
+      }
+      className="rounded-xl border bg-white p-3"
+    />
+
+    <input
+      placeholder="GPS Address / Site Note"
+      value={gpsData[item.id]?.gpsAddress || ''}
+      onChange={(e) =>
+        setGpsData((prev) => ({
+          ...prev,
+          [item.id]: {
+            ...(prev[item.id] || {}),
+            gpsAddress: e.target.value,
+          },
+        }))
+      }
+      className="rounded-xl border p-3"
+    />
+
+    <input
+      placeholder="Proof Remarks"
+      value={proofRemarks[item.id] || ''}
+      onChange={(e) =>
+        setProofRemarks((prev) => ({
+          ...prev,
+          [item.id]: e.target.value,
+        }))
+      }
+      className="rounded-xl border p-3"
+    />
+  </div>
+
+  <div className="mt-3 flex flex-wrap gap-2">
+    <button
+      onClick={() => captureGps(item.id)}
+      className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+    >
+      Capture GPS
+    </button>
+
+    <button
+      onClick={() => uploadContractorProofs(item)}
+      disabled={uploadingProofId === item.id}
+      className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+    >
+      {uploadingProofId === item.id
+        ? 'Uploading...'
+        : 'Upload Proof'}
+    </button>
+  </div>
+
+  {gpsData[item.id]?.latitude && (
+    <p className="mt-2 text-xs text-gray-500">
+      GPS: {gpsData[item.id]?.latitude},{' '}
+      {gpsData[item.id]?.longitude}
+    </p>
+  )}
+
+  <div className="mt-5">
+    <h4 className="font-semibold text-gray-800">
+      Uploaded Proofs
+    </h4>
+
+    {(!proofs[item.id] || proofs[item.id].length === 0) ? (
+      <p className="mt-2 text-sm text-gray-500">
+        No proofs uploaded yet.
+      </p>
+    ) : (
+      <div className="mt-3 grid gap-3 md:grid-cols-3">
+        {proofs[item.id].map((proof) => (
+          <a
+            key={proof.id}
+            href={proof.fileUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-xl border bg-white p-3 hover:bg-gray-50"
+          >
+            {proof.fileUrl && (
+              <img
+                src={proof.fileUrl}
+                alt={proof.proofType || 'Proof'}
+                className="h-32 w-full rounded-lg object-cover"
+              />
+            )}
+
+            <p className="mt-2 text-xs font-semibold text-gray-700">
+              {(proof.proofType || 'OTHER').replaceAll('_', ' ')}
+            </p>
+
+            <p className="text-xs text-gray-500">
+              By: {proof.uploadedByName || '-'}
+            </p>
+
+            {proof.latitude && proof.longitude && (
+              <p className="text-xs text-gray-500">
+                GPS: {proof.latitude}, {proof.longitude}
+              </p>
+            )}
+          </a>
+        ))}
+      </div>
+    )}
+  </div>
 </div>
                 </div>
               </div>
