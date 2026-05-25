@@ -264,6 +264,28 @@ getContractorProofs(
   );
 }
 
+@Post('contractor-comment')
+addContractorComment(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.addContractorComment(
+    body,
+    user,
+  );
+}
+
+@Get('contractor-assignment/:id/comments')
+getContractorComments(
+  @Param('id') id: string,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.getContractorComments(
+    Number(id),
+    user,
+  );
+}
+
 @Roles(
   'OWNER',
   'MARKETING_HEAD',

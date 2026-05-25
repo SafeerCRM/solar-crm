@@ -121,6 +121,7 @@ import {
   ProjectContractorProofType,
 } from './project-contractor-proof.entity';
 import { ProjectContractor } from './project-contractor.entity';
+import { ProjectContractorComment } from './project-contractor-comment.entity';
 
 @Injectable()
 export class ProjectService {
@@ -236,6 +237,9 @@ private readonly projectContractorProofRepository: Repository<ProjectContractorP
 
 @InjectRepository(ProjectContractor)
 private readonly projectContractorRepository: Repository<ProjectContractor>,
+
+@InjectRepository(ProjectContractorComment)
+private readonly projectContractorCommentRepository: Repository<ProjectContractorComment>,
 
     private readonly calculatorService: CalculatorService,
 
@@ -7496,6 +7500,115 @@ async getContractorProofs(assignmentId: number, user: any) {
   }
 
   return this.projectContractorProofRepository.find({
+    where: { assignmentId },
+    order: { createdAt: 'DESC' },
+  });
+}
+
+async addContractorComment(
+  body: any,
+  user: any,
+) {
+  const assignmentId = Number(body?.assignmentId);
+  const projectId = Number(body?.projectId);
+
+  if (!assignmentId || !projectId) {
+    throw new BadRequestException(
+      'Assignment ID and Project ID are required',
+    );
+  }
+
+  if (!String(body?.comment || '').trim()) {
+    throw new BadRequestException(
+      'Comment is required',
+    );
+  }
+
+  const assignment =
+    await this.projectContractorAssignmentRepository.findOne({
+      where: { id: assignmentId },
+    });
+
+  if (!assignment) {
+    throw new NotFoundException(
+      'Contractor assignment not found',
+    );
+  }
+
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  const currentUserId = Number(
+    user?.id || user?.userId || user?.sub,
+  );
+
+  const isAllowed =
+    roles.includes('OWNER') ||
+    roles.includes('PROJECT_MANAGER') ||
+    Number(assignment.contractorId) === currentUserId;
+
+  if (!isAllowed) {
+    throw new ForbiddenException(
+      'You are not allowed to comment on this contractor work',
+    );
+  }
+
+  const comment =
+    this.projectContractorCommentRepository.create({
+      projectId,
+      assignmentId,
+      comment: String(body.comment).trim(),
+      commentType:
+        String(body?.commentType || 'GENERAL').trim(),
+      createdBy: currentUserId || undefined,
+      createdByName:
+        user?.name || user?.email || '',
+      createdByRole: Array.isArray(user?.roles)
+        ? user.roles.join(', ')
+        : '',
+    });
+
+  return this.projectContractorCommentRepository.save(
+    comment,
+  );
+}
+
+async getContractorComments(
+  assignmentId: number,
+  user: any,
+) {
+  const assignment =
+    await this.projectContractorAssignmentRepository.findOne({
+      where: { id: assignmentId },
+    });
+
+  if (!assignment) {
+    throw new NotFoundException(
+      'Contractor assignment not found',
+    );
+  }
+
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  const currentUserId = Number(
+    user?.id || user?.userId || user?.sub,
+  );
+
+  const isAllowed =
+    roles.includes('OWNER') ||
+    roles.includes('PROJECT_MANAGER') ||
+    Number(assignment.contractorId) === currentUserId;
+
+  if (!isAllowed) {
+    throw new ForbiddenException(
+      'You are not allowed to view contractor comments',
+    );
+  }
+
+  return this.projectContractorCommentRepository.find({
     where: { assignmentId },
     order: { createdAt: 'DESC' },
   });
