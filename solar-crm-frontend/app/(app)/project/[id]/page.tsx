@@ -199,6 +199,17 @@ type ContractorProof = {
   createdAt?: string;
 };
 
+type ContractorComment = {
+  id: number;
+  projectId: number;
+  assignmentId: number;
+  comment?: string;
+  commentType?: string;
+  createdByName?: string;
+  createdByRole?: string;
+  createdAt?: string;
+};
+
 type ProjectContractorMaster = {
   id: number;
   contractorName?: string;
@@ -238,6 +249,14 @@ export default function ProjectDetailPage() {
   useState<ContractorAssignment[]>([]);
   const [contractorProofs, setContractorProofs] =
   useState<Record<number, ContractorProof[]>>({});
+  const [contractorComments, setContractorComments] =
+  useState<Record<number, ContractorComment[]>>({});
+
+const [contractorCommentText, setContractorCommentText] =
+  useState<Record<number, string>>({});
+
+const [contractorCommentLoadingId, setContractorCommentLoadingId] =
+  useState<number | null>(null);
   const [contractors, setContractors] =
   useState<ProjectContractorMaster[]>([]);
 
@@ -1665,6 +1684,7 @@ const fetchContractorAssignments = async () => {
     assignments.forEach((item: ContractorAssignment) => {
       if (item?.id) {
         fetchContractorProofs(item.id);
+        fetchContractorComments(item.id);
       }
     });
   } catch (error) {
@@ -1700,6 +1720,90 @@ const fetchContractorProofs = async (
       'Failed to load contractor proofs:',
       error,
     );
+  }
+};
+
+const fetchContractorComments = async (
+  assignmentId: number,
+) => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/contractor-assignment/${assignmentId}/comments`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setContractorComments((prev) => ({
+      ...prev,
+      [assignmentId]: Array.isArray(res.data)
+        ? res.data
+        : [],
+    }));
+  } catch (error) {
+    console.error(
+      'Failed to load contractor comments:',
+      error,
+    );
+  }
+};
+
+const submitContractorComment = async (
+  item: ContractorAssignment,
+  commentType = 'GENERAL',
+) => {
+  const text = String(
+    contractorCommentText[item.id] || '',
+  ).trim();
+
+  if (!text) {
+    alert('Please write comment');
+    return;
+  }
+
+  try {
+    setContractorCommentLoadingId(item.id);
+
+    const token = localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/contractor-comment`,
+      {
+        projectId: item.projectId,
+        assignmentId: item.id,
+        comment: text,
+        commentType,
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setContractorCommentText((prev) => ({
+      ...prev,
+      [item.id]: '',
+    }));
+
+    fetchContractorComments(item.id);
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to add contractor comment',
+    );
+  } finally {
+    setContractorCommentLoadingId(null);
   }
 };
 
@@ -2342,6 +2446,86 @@ const generateProjectPdf = async (share = false) => {
       ))}
     </div>
   )}
+</div>
+
+<div className="mt-5 rounded-xl border bg-white p-4">
+  <h4 className="font-bold text-gray-800">
+    Contractor Communication Timeline
+  </h4>
+
+  <textarea
+    placeholder="Write contractor instruction / review / pending proof reply"
+    value={contractorCommentText[item.id] || ''}
+    onChange={(e) =>
+      setContractorCommentText((prev) => ({
+        ...prev,
+        [item.id]: e.target.value,
+      }))
+    }
+    className="mt-3 w-full rounded-xl border p-3"
+    rows={3}
+  />
+
+  <div className="mt-3 flex flex-wrap gap-2">
+    <button
+      onClick={() =>
+        submitContractorComment(
+          item,
+          'OWNER_PM_REPLY',
+        )
+      }
+      disabled={
+        contractorCommentLoadingId === item.id
+      }
+      className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+    >
+      Add Reply
+    </button>
+  </div>
+
+  <div className="mt-5 space-y-3">
+    {(!contractorComments[item.id] ||
+      contractorComments[item.id].length === 0) ? (
+      <p className="text-sm text-gray-500">
+        No communication yet.
+      </p>
+    ) : (
+      contractorComments[item.id].map(
+        (comment) => (
+          <div
+            key={comment.id}
+            className="rounded-xl bg-gray-50 p-3"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-gray-800">
+                {comment.createdByName || '-'}
+              </p>
+
+              <span className="rounded-full bg-gray-200 px-2 py-1 text-xs font-semibold text-gray-700">
+                {(
+                  comment.commentType ||
+                  'GENERAL'
+                ).replaceAll('_', ' ')}
+              </span>
+            </div>
+
+            <p className="mt-1 text-xs text-gray-500">
+              {comment.createdByRole || '-'} ·{' '}
+              {comment.createdAt
+                ? new Date(
+                    comment.createdAt,
+                  ).toLocaleString('en-IN')
+                : '-'}
+            </p>
+
+            <p className="mt-2 text-sm text-gray-700">
+              {comment.comment}
+            </p>
+          </div>
+        ),
+      )
+    )}
+  </div>
 </div>
                 </div>
               </div>
