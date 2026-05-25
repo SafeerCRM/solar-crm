@@ -6160,6 +6160,50 @@ async createFinalInvoice(
       invoice as ProjectFinalInvoice,
     );
 
+    const invoiceProject =
+  await this.projectRepository.findOne({
+    where: {
+      id: Number(savedInvoice.projectId),
+    },
+  });
+
+await this.projectPartyLedgerRepository.save(
+  this.projectPartyLedgerRepository.create({
+    partyId: undefined,
+
+    partyName:
+      invoiceProject?.customerName ||
+      'Customer',
+
+    partyType: 'CUSTOMER',
+
+    projectId: savedInvoice.projectId,
+
+    entryType:
+      ProjectLedgerEntryType.DEBIT,
+
+    sourceType:
+      ProjectLedgerSourceType.FINAL_INVOICE,
+
+    sourceId: savedInvoice.id,
+
+    amount: Number(
+      savedInvoice.totalAmount || 0,
+    ),
+
+    remarks: `Final Invoice ${
+      savedInvoice.invoiceNumber ||
+      savedInvoice.id
+    }`,
+
+    createdBy:
+      user?.id || user?.userId || null,
+
+    createdByName:
+      user?.name || '',
+  } as Partial<ProjectPartyLedger>),
+);
+
   const invoiceItems =
     preparedItems.map((item) =>
       this.projectFinalInvoiceItemRepository.create({
