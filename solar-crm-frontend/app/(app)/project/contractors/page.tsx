@@ -18,8 +18,16 @@ type Contractor = {
   createdAt?: string;
 };
 
+type ContractorUser = {
+  id: number;
+  name?: string;
+  email?: string;
+  roles?: string[];
+};
+
 export default function ProjectContractorsPage() {
   const [contractors, setContractors] = useState<Contractor[]>([]);
+  const [contractorUsers, setContractorUsers] = useState<ContractorUser[]>([]);
   const [loading, setLoading] = useState(false);
 
   const [form, setForm] = useState({
@@ -31,6 +39,27 @@ export default function ProjectContractorsPage() {
     linkedUserId: '',
     remarks: '',
   });
+
+  const fetchContractorUsers = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(`${API_BASE_URL}/users`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+
+    const users = Array.isArray(res.data) ? res.data : [];
+
+    setContractorUsers(
+      users.filter((user: ContractorUser) =>
+        Array.isArray(user.roles) &&
+        user.roles.includes('PROJECT_CONTRACTOR'),
+      ),
+    );
+  } catch (error) {
+    console.error(error);
+  }
+};
 
   const fetchContractors = async () => {
     try {
@@ -151,8 +180,9 @@ export default function ProjectContractorsPage() {
   };
 
   useEffect(() => {
-    fetchContractors();
-  }, []);
+  fetchContractors();
+  fetchContractorUsers();
+}, []);
 
   return (
     <div className="space-y-5">
@@ -220,17 +250,24 @@ export default function ProjectContractorsPage() {
             className="rounded-xl border p-3"
           />
 
-          <input
-            placeholder="Linked User ID"
-            value={form.linkedUserId}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                linkedUserId: e.target.value,
-              })
-            }
-            className="rounded-xl border p-3"
-          />
+          <select
+  value={form.linkedUserId}
+  onChange={(e) =>
+    setForm({
+      ...form,
+      linkedUserId: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+>
+  <option value="">Select PROJECT_CONTRACTOR User</option>
+
+  {contractorUsers.map((user) => (
+    <option key={user.id} value={user.id}>
+      {user.name || user.email || `User ${user.id}`} — ID {user.id}
+    </option>
+  ))}
+</select>
 
           <input
             placeholder="Address"
