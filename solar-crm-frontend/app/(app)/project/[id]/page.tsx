@@ -1656,9 +1656,17 @@ const fetchContractorAssignments = async () => {
       },
     );
 
-    setContractorAssignments(
-      Array.isArray(res.data) ? res.data : [],
-    );
+    const assignments = Array.isArray(res.data)
+      ? res.data
+      : [];
+
+    setContractorAssignments(assignments);
+
+    assignments.forEach((item: ContractorAssignment) => {
+      if (item?.id) {
+        fetchContractorProofs(item.id);
+      }
+    });
   } catch (error) {
     console.error('Failed to load contractor assignments:', error);
   }
