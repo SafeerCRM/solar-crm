@@ -113,6 +113,12 @@ const navItems = [
   ],
 },
 
+{
+  name: 'My Contractor Work',
+  href: '/project/my-contractor-work',
+  roles: ['PROJECT_CONTRACTOR'],
+},
+
   {
   name: 'Calculator',
   href: '/calculator',
