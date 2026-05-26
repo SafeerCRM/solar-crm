@@ -672,6 +672,18 @@ hidePurchaseOrder(
 }
 
 @Roles('OWNER', 'PROJECT_MANAGER')
+@Post('purchase-order/manual')
+createManualPurchaseOrder(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.createManualPurchaseOrder(
+    body,
+    user,
+  );
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER')
 
 @Patch('material-request-item/:id/buy')
 buyMaterialRequestItem(

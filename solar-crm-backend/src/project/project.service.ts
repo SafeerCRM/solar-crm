@@ -5384,6 +5384,132 @@ async createPurchaseOrder(
   };
 }
 
+async createManualPurchaseOrder(
+  body: any,
+  currentUser: any,
+) {
+  if (!body?.projectId) {
+    throw new BadRequestException(
+      'Project ID is required',
+    );
+  }
+
+  if (!body?.vendorName) {
+    throw new BadRequestException(
+      'Vendor name is required',
+    );
+  }
+
+  const items = Array.isArray(body?.items)
+    ? body.items
+    : [];
+
+  if (items.length === 0) {
+    throw new BadRequestException(
+      'At least one material item is required',
+    );
+  }
+
+  let subtotalAmount = 0;
+  let gstAmount = 0;
+  let totalAmount = 0;
+
+  for (const item of items) {
+    const quantity = Number(item.quantity || 0);
+    const purchaseRate = Number(item.purchaseRate || 0);
+    const gstPercent = Number(item.gstPercent || 0);
+
+    const rowSubtotal = quantity * purchaseRate;
+    const rowGst = (rowSubtotal * gstPercent) / 100;
+    const rowTotal = rowSubtotal + rowGst;
+
+    subtotalAmount += rowSubtotal;
+    gstAmount += rowGst;
+    totalAmount += rowTotal;
+  }
+
+  const po = this.projectPurchaseOrderRepository.create({
+    projectId: Number(body.projectId),
+    vendorId: body?.vendorId ? Number(body.vendorId) : undefined,
+    vendorName: body.vendorName,
+    poNumber: this.generatePoNumber(),
+    status: ProjectPurchaseOrderStatus.DRAFT,
+    subtotalAmount,
+    gstAmount,
+    totalAmount,
+    orderDate: body?.orderDate ? new Date(body.orderDate) : new Date(),
+    expectedDeliveryDate: body?.expectedDeliveryDate
+      ? new Date(body.expectedDeliveryDate)
+      : undefined,
+    remarks: body?.remarks || '',
+    createdBy: currentUser?.id || currentUser?.userId || null,
+    createdByName: currentUser?.name || '',
+    createdByRole: Array.isArray(currentUser?.roles)
+      ? currentUser.roles.join(', ')
+      : '',
+  } as Partial<ProjectPurchaseOrder>);
+
+  const savedPo =
+    await this.projectPurchaseOrderRepository.save(
+      po as ProjectPurchaseOrder,
+    );
+
+  const poItems = items.map((item: any) => {
+    const quantity = Number(item.quantity || 0);
+    const purchaseRate = Number(item.purchaseRate || 0);
+    const gstPercent = Number(item.gstPercent || 0);
+
+    const rowSubtotal = quantity * purchaseRate;
+    const rowGst = (rowSubtotal * gstPercent) / 100;
+    const rowTotal = rowSubtotal + rowGst;
+
+    return this.projectPurchaseOrderItemRepository.create({
+      purchaseOrderId: savedPo.id,
+      projectId: savedPo.projectId,
+      materialRequestItemId: undefined,
+      materialId: item.materialId ? Number(item.materialId) : undefined,
+      materialName: item.materialName || '',
+      category: item.category || '',
+      brand: item.brand || '',
+      unit: item.unit || '',
+      purchaseRate,
+      gstPercent,
+      quantity,
+      receivedQuantity: 0,
+      pendingQuantity: quantity,
+      subtotalAmount: rowSubtotal,
+      gstAmount: rowGst,
+      totalAmount: rowTotal,
+      remarks: item.remarks || '',
+    } as Partial<ProjectPurchaseOrderItem>);
+  });
+
+  await this.projectPurchaseOrderItemRepository.save(
+    poItems as ProjectPurchaseOrderItem[],
+  );
+
+  await this.projectPartyLedgerRepository.save(
+    this.projectPartyLedgerRepository.create({
+      partyId: body?.vendorId ? Number(body.vendorId) : undefined,
+      partyName: body.vendorName,
+      partyType: 'VENDOR',
+      projectId: savedPo.projectId,
+      entryType: ProjectLedgerEntryType.CREDIT,
+      sourceType: ProjectLedgerSourceType.PURCHASE_ORDER,
+      sourceId: savedPo.id,
+      amount: totalAmount,
+      remarks: `Manual PO ${savedPo.poNumber}`,
+      createdBy: currentUser?.id || currentUser?.userId || null,
+      createdByName: currentUser?.name || '',
+    } as Partial<ProjectPartyLedger>),
+  );
+
+  return {
+    message: 'Manual purchase order created successfully',
+    purchaseOrder: savedPo,
+  };
+}
+
 async getPurchaseOrderById(id: number) {
   const po =
     await this.projectPurchaseOrderRepository.findOne({
