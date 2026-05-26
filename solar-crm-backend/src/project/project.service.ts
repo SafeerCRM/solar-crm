@@ -2045,9 +2045,57 @@ async receivePaymentInstallment(
       ProjectPaymentInstallmentStatus.PENDING;
   }
 
-  return this.projectPaymentInstallmentRepository.save(
+  const savedInstallment =
+  await this.projectPaymentInstallmentRepository.save(
     installment,
   );
+
+const project =
+  await this.projectRepository.findOne({
+    where: {
+      id: Number(savedInstallment.projectId),
+    },
+  });
+
+await this.projectPartyLedgerRepository.save(
+  this.projectPartyLedgerRepository.create({
+    partyId: undefined,
+
+    partyName:
+      project?.customerName || 'Customer',
+
+    partyType: 'CUSTOMER',
+
+    projectId:
+      Number(savedInstallment.projectId),
+
+    entryType:
+      ProjectLedgerEntryType.CREDIT,
+
+    sourceType:
+      ProjectLedgerSourceType.CUSTOMER_PAYMENT,
+
+    sourceId:
+      savedInstallment.id,
+
+    amount:
+      receivedAmount,
+
+    remarks:
+      body?.remarks ||
+      `Payment received for ${savedInstallment.label || 'installment'}`,
+
+    createdBy:
+      currentUser?.id ||
+      currentUser?.userId ||
+      null,
+
+    createdByName:
+      currentUser?.name || '',
+  } as Partial<ProjectPartyLedger>),
+);
+
+return savedInstallment;
 }
 
 private getComputedPaymentStatus(
