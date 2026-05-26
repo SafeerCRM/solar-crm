@@ -6232,6 +6232,9 @@ async createManualProformaInvoice(
           proformaInvoiceId:
             savedInvoice.id,
 
+            projectId:
+  Number(body.projectId),
+
           materialId:
             item.materialId
               ? Number(item.materialId)
