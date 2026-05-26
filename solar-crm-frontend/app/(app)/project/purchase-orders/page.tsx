@@ -743,6 +743,51 @@ const downloadPurchaseOrderPdf = async (
   }
 };
 
+const hidePurchaseOrder = async (poId: number) => {
+  const reason = window.prompt(
+    'Why do you want to hide this PO?',
+    'Test entry',
+  );
+
+  if (reason === null) return;
+
+  const confirmed = window.confirm(
+    'This PO and its linked ledger entry will be hidden. Continue?',
+  );
+
+  if (!confirmed) return;
+
+  try {
+    const token = localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/purchase-order/${poId}/hide`,
+      {
+        reason,
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Purchase order hidden successfully');
+
+    fetchGeneratedPos();
+    fetchFinalInvoices();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to hide purchase order',
+    );
+  }
+};
+
   useEffect(() => {
   fetchPurchaseOrders();
 }, [page, projectFilter, materialFilter, statusFilter, branchFilter, ownerFilter]);
@@ -1141,6 +1186,13 @@ const generateProformaInvoice = async () => {
   >
     Share PDF
   </button>
+
+  <button
+  onClick={() => hidePurchaseOrder(po.id)}
+  className="mt-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+>
+  Hide PO
+</button>
 </div>
             </div>
           </div>
