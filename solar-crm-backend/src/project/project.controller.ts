@@ -411,6 +411,18 @@ getProformaInvoiceById(
   );
 }
 
+@Roles('OWNER', 'PROJECT_MANAGER')
+@Post('proforma-invoice/manual')
+createManualProformaInvoice(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.createManualProformaInvoice(
+    body,
+    user,
+  );
+}
+
 @Get('proforma-invoice/:id/pdf')
 generateProformaInvoicePdf(
   @Param('id') id: string,

@@ -6102,6 +6102,190 @@ async getProformaInvoiceById(
   };
 }
 
+async createManualProformaInvoice(
+  body: any,
+  currentUser: any,
+) {
+  if (!body?.projectId) {
+    throw new BadRequestException(
+      'Project ID is required',
+    );
+  }
+
+  const items = Array.isArray(body?.items)
+    ? body.items
+    : [];
+
+  if (items.length === 0) {
+    throw new BadRequestException(
+      'At least one item is required',
+    );
+  }
+
+  let subtotalAmount = 0;
+  let discountAmount = 0;
+  let gstAmount = 0;
+  let totalAmount = 0;
+
+  for (const item of items) {
+    const quantity = Number(item.quantity || 0);
+
+    const sellingRate = Number(
+      item.sellingRate || 0,
+    );
+
+    const gstPercent = Number(
+      item.gstPercent || 0,
+    );
+
+    const rowDiscount = Number(
+      item.discountAmount || 0,
+    );
+
+    const rowSubtotal =
+      quantity * sellingRate;
+
+    const taxableAmount =
+      rowSubtotal - rowDiscount;
+
+    const rowGst =
+      (taxableAmount * gstPercent) / 100;
+
+    const rowTotal =
+      taxableAmount + rowGst;
+
+    subtotalAmount += rowSubtotal;
+    discountAmount += rowDiscount;
+    gstAmount += rowGst;
+    totalAmount += rowTotal;
+  }
+
+  const invoice =
+    this.projectProformaInvoiceRepository.create({
+      projectId: Number(body.projectId),
+
+      invoiceNumber:
+        this.generatePiNumber(),
+
+      subtotalAmount,
+
+      discountAmount,
+
+      gstAmount,
+
+      totalAmount,
+
+      status:
+        ProjectProformaInvoiceStatus.DRAFT,
+
+      invoiceDate: new Date(),
+
+      remarks:
+        body?.remarks || '',
+
+      createdBy:
+        currentUser?.id ||
+        currentUser?.userId ||
+        null,
+
+      createdByName:
+        currentUser?.name || '',
+    } as Partial<ProjectProformaInvoice>);
+
+  const savedInvoice =
+    await this.projectProformaInvoiceRepository.save(
+      invoice as ProjectProformaInvoice,
+    );
+
+  const invoiceItems = items.map(
+    (item: any) => {
+      const quantity = Number(
+        item.quantity || 0,
+      );
+
+      const sellingRate = Number(
+        item.sellingRate || 0,
+      );
+
+      const gstPercent = Number(
+        item.gstPercent || 0,
+      );
+
+      const rowDiscount = Number(
+        item.discountAmount || 0,
+      );
+
+      const rowSubtotal =
+        quantity * sellingRate;
+
+      const taxableAmount =
+        rowSubtotal - rowDiscount;
+
+      const rowGst =
+        (taxableAmount * gstPercent) / 100;
+
+      const rowTotal =
+        taxableAmount + rowGst;
+
+      return this.projectProformaInvoiceItemRepository.create(
+        {
+          proformaInvoiceId:
+            savedInvoice.id,
+
+          materialId:
+            item.materialId
+              ? Number(item.materialId)
+              : undefined,
+
+          itemName:
+            item.itemName || '',
+
+          category:
+            item.category || '',
+
+          brand:
+            item.brand || '',
+
+          unit:
+            item.unit || '',
+
+          sellingRate,
+
+          gstPercent,
+
+          quantity,
+
+          discountAmount:
+            rowDiscount,
+
+          subtotalAmount:
+            rowSubtotal,
+
+          gstAmount:
+            rowGst,
+
+          totalAmount:
+            rowTotal,
+
+          remarks:
+            item.remarks || '',
+        } as Partial<ProjectProformaInvoiceItem>,
+      );
+    },
+  );
+
+  await this.projectProformaInvoiceItemRepository.save(
+    invoiceItems as ProjectProformaInvoiceItem[],
+  );
+
+  return {
+    message:
+      'Manual proforma invoice created successfully',
+
+    invoice: savedInvoice,
+  };
+}
+
 async generateProformaInvoicePdf(
   id: number,
   res: Response,
