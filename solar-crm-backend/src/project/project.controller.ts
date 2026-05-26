@@ -570,6 +570,15 @@ getLedgerOutstandingSummary() {
   return this.projectService.getLedgerOutstandingSummary();
 }
 
+@Get(':id/accounts-summary')
+getProjectAccountsSummary(
+  @Param('id') id: string,
+) {
+  return this.projectService.getProjectAccountsSummary(
+    Number(id),
+  );
+}
+
 @Roles('OWNER', 'ACCOUNT_MANAGER')
 @Post('ledger/customer-payment')
 recordCustomerPayment(

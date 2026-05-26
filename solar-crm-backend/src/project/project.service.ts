@@ -6982,6 +6982,86 @@ async getLedgerOutstandingSummary() {
   };
 }
 
+async getProjectAccountsSummary(
+  projectId: number,
+) {
+  const rows =
+    await this.projectPartyLedgerRepository.find({
+      where: {
+        projectId,
+        isHidden: false,
+      },
+    });
+
+  let customerInvoice = 0;
+  let customerPayments = 0;
+
+  let vendorPoAmount = 0;
+  let vendorPayments = 0;
+
+  for (const row of rows) {
+    const amount = Number(row.amount || 0);
+
+    if (
+      row.sourceType ===
+        ProjectLedgerSourceType.FINAL_INVOICE &&
+      row.entryType ===
+        ProjectLedgerEntryType.DEBIT
+    ) {
+      customerInvoice += amount;
+    }
+
+    if (
+      row.sourceType ===
+        ProjectLedgerSourceType.CUSTOMER_PAYMENT &&
+      row.entryType ===
+        ProjectLedgerEntryType.CREDIT
+    ) {
+      customerPayments += amount;
+    }
+
+    if (
+      row.sourceType ===
+        ProjectLedgerSourceType.PURCHASE_ORDER &&
+      row.entryType ===
+        ProjectLedgerEntryType.CREDIT
+    ) {
+      vendorPoAmount += amount;
+    }
+
+    if (
+      row.sourceType ===
+        ProjectLedgerSourceType.VENDOR_PAYMENT &&
+      row.entryType ===
+        ProjectLedgerEntryType.DEBIT
+    ) {
+      vendorPayments += amount;
+    }
+  }
+
+  const customerOutstanding =
+    customerInvoice - customerPayments;
+
+  const vendorOutstanding =
+    vendorPoAmount - vendorPayments;
+
+  return {
+    projectId,
+
+    customerInvoice,
+    customerPayments,
+    customerOutstanding,
+
+    vendorPoAmount,
+    vendorPayments,
+    vendorOutstanding,
+
+    netProjectPosition:
+      customerOutstanding -
+      vendorOutstanding,
+  };
+}
+
 async getPartyOutstandingSummary() {
   const rows =
     await this.projectPartyLedgerRepository.find({
