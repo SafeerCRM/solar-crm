@@ -832,6 +832,50 @@ const hideFinalInvoice = async (invoiceId: number) => {
   }
 };
 
+const hideProformaInvoice = async (piId: number) => {
+  const reason = window.prompt(
+    'Why do you want to hide this proforma invoice?',
+    'Test entry',
+  );
+
+  if (reason === null) return;
+
+  const confirmed = window.confirm(
+    'This proforma invoice will be hidden. Continue?',
+  );
+
+  if (!confirmed) return;
+
+  try {
+    const token = localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/proforma-invoice/${piId}/hide`,
+      {
+        reason,
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Proforma invoice hidden successfully');
+
+    fetchGeneratedPis();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to hide proforma invoice',
+    );
+  }
+};
+
   useEffect(() => {
   fetchPurchaseOrders();
 }, [page, projectFilter, materialFilter, statusFilter, branchFilter, ownerFilter]);
@@ -1504,6 +1548,13 @@ const generateProformaInvoice = async () => {
   >
     Share PDF
   </button>
+
+  <button
+  onClick={() => hideProformaInvoice(pi.id)}
+  className="mt-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+>
+  Hide PI
+</button>
 </div>
 
             </div>
