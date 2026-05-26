@@ -38,6 +38,18 @@ export class ProjectVendor {
   @Column({ nullable: true })
   materialCategory: string;
 
+  @Column({ nullable: true })
+partyType: string;
+
+@Column({ default: true })
+canSellToUs: boolean;
+
+@Column({ default: false })
+canBuyFromUs: boolean;
+
+@Column({ type: 'float', default: 0 })
+openingBalance: number;
+
   @Column({ type: 'text', nullable: true })
   remarks: string;
 

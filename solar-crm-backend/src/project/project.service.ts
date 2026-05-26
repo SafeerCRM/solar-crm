@@ -1403,6 +1403,10 @@ async createVendor(data: Partial<ProjectVendor>) {
     materialCategory: data.materialCategory || '',
     remarks: data.remarks || '',
     isActive: data.isActive !== false,
+    partyType: (data as any).partyType || 'VENDOR',
+canSellToUs: (data as any).canSellToUs !== false,
+canBuyFromUs: (data as any).canBuyFromUs === true,
+openingBalance: Number((data as any).openingBalance || 0),
   });
 
   return this.projectVendorRepository.save(vendor);
@@ -1440,6 +1444,25 @@ async updateVendor(id: number, data: Partial<ProjectVendor>) {
       data.isActive !== undefined
         ? data.isActive
         : vendor.isActive,
+        partyType:
+  (data as any).partyType !== undefined
+    ? (data as any).partyType || 'VENDOR'
+    : (vendor as any).partyType,
+
+canSellToUs:
+  (data as any).canSellToUs !== undefined
+    ? (data as any).canSellToUs === true
+    : (vendor as any).canSellToUs,
+
+canBuyFromUs:
+  (data as any).canBuyFromUs !== undefined
+    ? (data as any).canBuyFromUs === true
+    : (vendor as any).canBuyFromUs,
+
+openingBalance:
+  (data as any).openingBalance !== undefined
+    ? Number((data as any).openingBalance || 0)
+    : (vendor as any).openingBalance,
   });
 
   return this.projectVendorRepository.save(vendor);
