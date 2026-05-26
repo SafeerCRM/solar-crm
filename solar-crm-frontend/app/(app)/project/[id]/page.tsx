@@ -413,6 +413,19 @@ const [paymentForm, setPaymentForm] = useState({
 const [receivingPaymentId, setReceivingPaymentId] =
   useState<number | null>(null);
 
+  const [projectAccountsSummary, setProjectAccountsSummary] =
+  useState({
+    customerInvoice: 0,
+    customerPayments: 0,
+    customerOutstanding: 0,
+
+    vendorPoAmount: 0,
+    vendorPayments: 0,
+    vendorOutstanding: 0,
+
+    netProjectPosition: 0,
+  });
+
   const [showEditModal, setShowEditModal] =
   useState(false);
 
@@ -1330,6 +1343,31 @@ const fetchPaymentInstallments = async () => {
   }
 };
 
+const fetchProjectAccountsSummary =
+  async () => {
+    try {
+      const token =
+        localStorage.getItem('token');
+
+      const res = await axios.get(
+        `${API_BASE_URL}/project/${projectId}/accounts-summary`,
+        {
+          headers: token
+            ? {
+                Authorization: `Bearer ${token}`,
+              }
+            : {},
+        },
+      );
+
+      setProjectAccountsSummary(
+        res.data || {},
+      );
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
 const createPaymentInstallment = async () => {
   if (!paymentForm.amount) {
     alert('Please enter amount');
@@ -2075,6 +2113,7 @@ useEffect(() => {
 
   if (activeTab === 'PAYMENT_COLLECTION') {
     fetchPaymentInstallments();
+    fetchProjectAccountsSummary();
   }
 
   if (activeTab === 'PROJECT_HISTORY') {
@@ -4518,6 +4557,113 @@ const generateProjectPdf = async (share = false) => {
 
 {activeTab === 'PAYMENT_COLLECTION' && (
   <div className="space-y-5">
+    <div className="rounded-2xl bg-white p-5 shadow">
+  <h2 className="text-xl font-bold text-gray-800">
+    Project Accounts Summary
+  </h2>
+
+  <p className="mt-1 text-sm text-gray-500">
+    Financial overview for this project
+  </p>
+
+  <div className="mt-5 grid gap-4 md:grid-cols-3">
+    <div className="rounded-2xl bg-red-50 p-4">
+      <p className="text-sm text-gray-500">
+        Customer Invoice
+      </p>
+
+      <p className="mt-2 text-2xl font-bold text-red-700">
+        ₹
+        {Number(
+          projectAccountsSummary.customerInvoice || 0,
+        ).toLocaleString('en-IN')}
+      </p>
+    </div>
+
+    <div className="rounded-2xl bg-green-50 p-4">
+      <p className="text-sm text-gray-500">
+        Customer Payments
+      </p>
+
+      <p className="mt-2 text-2xl font-bold text-green-700">
+        ₹
+        {Number(
+          projectAccountsSummary.customerPayments || 0,
+        ).toLocaleString('en-IN')}
+      </p>
+    </div>
+
+    <div className="rounded-2xl bg-yellow-50 p-4">
+      <p className="text-sm text-gray-500">
+        Customer Outstanding
+      </p>
+
+      <p className="mt-2 text-2xl font-bold text-yellow-700">
+        ₹
+        {Number(
+          projectAccountsSummary.customerOutstanding || 0,
+        ).toLocaleString('en-IN')}
+      </p>
+    </div>
+
+    <div className="rounded-2xl bg-blue-50 p-4">
+      <p className="text-sm text-gray-500">
+        Vendor PO Amount
+      </p>
+
+      <p className="mt-2 text-2xl font-bold text-blue-700">
+        ₹
+        {Number(
+          projectAccountsSummary.vendorPoAmount || 0,
+        ).toLocaleString('en-IN')}
+      </p>
+    </div>
+
+    <div className="rounded-2xl bg-purple-50 p-4">
+      <p className="text-sm text-gray-500">
+        Vendor Payments
+      </p>
+
+      <p className="mt-2 text-2xl font-bold text-purple-700">
+        ₹
+        {Number(
+          projectAccountsSummary.vendorPayments || 0,
+        ).toLocaleString('en-IN')}
+      </p>
+    </div>
+
+    <div className="rounded-2xl bg-gray-100 p-4">
+      <p className="text-sm text-gray-500">
+        Vendor Outstanding
+      </p>
+
+      <p className="mt-2 text-2xl font-bold text-gray-800">
+        ₹
+        {Number(
+          projectAccountsSummary.vendorOutstanding || 0,
+        ).toLocaleString('en-IN')}
+      </p>
+    </div>
+  </div>
+
+  <div className="mt-5 rounded-2xl bg-black p-5 text-white">
+    <p className="text-sm text-gray-300">
+      Net Project Position
+    </p>
+
+    <p className="mt-2 text-3xl font-bold">
+      ₹
+      {Number(
+        projectAccountsSummary.netProjectPosition || 0,
+      ).toLocaleString('en-IN')}
+    </p>
+
+    <p className="mt-1 text-xs text-gray-400">
+      Customer Outstanding - Vendor Outstanding
+    </p>
+  </div>
+</div>
+
     <div className="grid gap-4 md:grid-cols-3">
       <div className="rounded-2xl bg-green-50 p-5 shadow">
         <p className="text-sm text-gray-500">
