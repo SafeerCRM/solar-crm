@@ -788,6 +788,50 @@ const hidePurchaseOrder = async (poId: number) => {
   }
 };
 
+const hideFinalInvoice = async (invoiceId: number) => {
+  const reason = window.prompt(
+    'Why do you want to hide this final invoice?',
+    'Test entry',
+  );
+
+  if (reason === null) return;
+
+  const confirmed = window.confirm(
+    'This final invoice and its linked ledger entry will be hidden. Continue?',
+  );
+
+  if (!confirmed) return;
+
+  try {
+    const token = localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/final-invoice/${invoiceId}/hide`,
+      {
+        reason,
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Final invoice hidden successfully');
+
+    fetchFinalInvoices();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to hide final invoice',
+    );
+  }
+};
+
   useEffect(() => {
   fetchPurchaseOrders();
 }, [page, projectFilter, materialFilter, statusFilter, branchFilter, ownerFilter]);
@@ -1565,6 +1609,13 @@ const generateProformaInvoice = async () => {
   >
     Share PDF
   </button>
+
+  <button
+  onClick={() => hideFinalInvoice(invoice.id)}
+  className="mt-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+>
+  Hide Invoice
+</button>
 </div>
             </div>
           </div>
