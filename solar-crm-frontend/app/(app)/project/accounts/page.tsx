@@ -25,6 +25,8 @@ type PartyOutstanding = {
   totalDebit: number;
   totalCredit: number;
   outstanding: number;
+  settlementStatus?: string;
+absoluteOutstanding?: number;
 };
 
 export default function AccountsLedgerPage() {
@@ -291,6 +293,18 @@ const submitVendorPayment = async () => {
                 {party.partyType}
               </p>
 
+              <span
+  className={`mt-2 inline-block rounded-full px-3 py-1 text-xs font-semibold ${
+    party.settlementStatus === 'RECEIVABLE'
+      ? 'bg-red-100 text-red-700'
+      : party.settlementStatus === 'PAYABLE'
+        ? 'bg-green-100 text-green-700'
+        : 'bg-gray-100 text-gray-700'
+  }`}
+>
+  {party.settlementStatus || 'SETTLED'}
+</span>
+
               <p className="mt-1 text-xs text-gray-400">
                 Debit: ₹
                 {Number(party.totalDebit || 0).toLocaleString('en-IN')}
@@ -318,9 +332,11 @@ const submitVendorPayment = async () => {
               </p>
 
               <p className="mt-1 text-xs text-gray-500">
-                {party.outstanding >= 0
-                  ? 'Receivable / Debit Balance'
-                  : 'Payable / Credit Balance'}
+                {party.settlementStatus === 'RECEIVABLE'
+  ? 'Receivable from party'
+  : party.settlementStatus === 'PAYABLE'
+    ? 'Payable to party'
+    : 'Settled'}
               </p>
             </div>
           </div>
