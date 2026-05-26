@@ -19,6 +19,14 @@ type LedgerEntry = {
   createdAt?: string;
 };
 
+type PartyOutstanding = {
+  partyName: string;
+  partyType: string;
+  totalDebit: number;
+  totalCredit: number;
+  outstanding: number;
+};
+
 export default function AccountsLedgerPage() {
   const [entries, setEntries] = useState<LedgerEntry[]>([]);
   const [summary, setSummary] = useState({
@@ -26,6 +34,8 @@ export default function AccountsLedgerPage() {
     totalCredit: 0,
     netBalance: 0,
   });
+  const [partyOutstanding, setPartyOutstanding] =
+  useState<PartyOutstanding[]>([]);
 
   const [loading, setLoading] = useState(false);
   const [partyName, setPartyName] = useState('');
@@ -56,7 +66,7 @@ const [submittingVendorPayment, setSubmittingVendorPayment] =
 
       const token = localStorage.getItem('token');
 
-      const [ledgerRes, summaryRes] = await Promise.all([
+      const [ledgerRes, summaryRes, outstandingRes] = await Promise.all([
         axios.get(`${API_BASE_URL}/project/ledger`, {
           params: {
             partyName,
@@ -77,6 +87,14 @@ const [submittingVendorPayment, setSubmittingVendorPayment] =
               }
             : {},
         }),
+
+        axios.get(`${API_BASE_URL}/project/ledger/party-outstanding`, {
+  headers: token
+    ? {
+        Authorization: `Bearer ${token}`,
+      }
+    : {},
+}),
       ]);
 
       setEntries(ledgerRes.data || []);
@@ -87,6 +105,8 @@ const [submittingVendorPayment, setSubmittingVendorPayment] =
           netBalance: 0,
         },
       );
+
+      setPartyOutstanding(outstandingRes.data || []);
     } catch (error) {
       console.error(error);
       alert('Failed to load ledger');
@@ -240,6 +260,75 @@ const submitVendorPayment = async () => {
           </p>
         </div>
       </div>
+
+      <div className="rounded-2xl bg-white p-5 shadow">
+  <h2 className="text-lg font-bold text-gray-800">
+    Party-wise Outstanding
+  </h2>
+
+  <p className="mt-1 text-sm text-gray-500">
+    Customer receivables and vendor payables based on active ledger entries.
+  </p>
+
+  {partyOutstanding.length === 0 ? (
+    <p className="mt-4 text-sm text-gray-500">
+      No outstanding balances found.
+    </p>
+  ) : (
+    <div className="mt-4 space-y-3">
+      {partyOutstanding.map((party) => (
+        <div
+          key={`${party.partyType}-${party.partyName}`}
+          className="rounded-xl border p-4"
+        >
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="font-bold text-gray-800">
+                {party.partyName}
+              </p>
+
+              <p className="mt-1 text-sm text-gray-500">
+                {party.partyType}
+              </p>
+
+              <p className="mt-1 text-xs text-gray-400">
+                Debit: ₹
+                {Number(party.totalDebit || 0).toLocaleString('en-IN')}
+                {' '}| Credit: ₹
+                {Number(party.totalCredit || 0).toLocaleString('en-IN')}
+              </p>
+            </div>
+
+            <div className="text-left md:text-right">
+              <p className="text-sm text-gray-500">
+                Outstanding
+              </p>
+
+              <p
+                className={`text-xl font-bold ${
+                  party.outstanding >= 0
+                    ? 'text-red-600'
+                    : 'text-green-600'
+                }`}
+              >
+                ₹
+                {Math.abs(
+                  Number(party.outstanding || 0),
+                ).toLocaleString('en-IN')}
+              </p>
+
+              <p className="mt-1 text-xs text-gray-500">
+                {party.outstanding >= 0
+                  ? 'Receivable / Debit Balance'
+                  : 'Payable / Credit Balance'}
+              </p>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )}
+</div>
 
       <div className="grid gap-5 md:grid-cols-2">
   <div className="rounded-2xl bg-white p-5 shadow">
