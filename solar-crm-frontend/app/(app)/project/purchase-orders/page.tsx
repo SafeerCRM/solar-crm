@@ -145,6 +145,22 @@ const [generatedPos, setGeneratedPos] = useState<
 const [selectedPo, setSelectedPo] =
   useState<any>(null);
 
+  const [manualPo, setManualPo] = useState({
+  projectId: '',
+  vendorName: '',
+  materialName: '',
+  category: '',
+  brand: '',
+  unit: '',
+  quantity: '',
+  purchaseRate: '',
+  gstPercent: '18',
+  remarks: '',
+});
+
+const [creatingManualPo, setCreatingManualPo] =
+  useState(false);
+
 const [poDetailLoading, setPoDetailLoading] =
   useState(false);
 
@@ -1109,6 +1125,103 @@ const canGeneratePo =
   }
 };
 
+const createManualPo = async () => {
+  if (
+    !manualPo.projectId ||
+    !manualPo.vendorName ||
+    !manualPo.materialName
+  ) {
+    alert(
+      'Project, vendor and material are required',
+    );
+
+    return;
+  }
+
+  try {
+    setCreatingManualPo(true);
+
+    const token = localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/purchase-order/manual`,
+      {
+        projectId: Number(
+          manualPo.projectId,
+        ),
+
+        vendorName:
+          manualPo.vendorName,
+
+        remarks: manualPo.remarks,
+
+        items: [
+          {
+            materialName:
+              manualPo.materialName,
+
+            category:
+              manualPo.category,
+
+            brand:
+              manualPo.brand,
+
+            unit:
+              manualPo.unit,
+
+            quantity: Number(
+              manualPo.quantity || 0,
+            ),
+
+            purchaseRate: Number(
+              manualPo.purchaseRate || 0,
+            ),
+
+            gstPercent: Number(
+              manualPo.gstPercent || 0,
+            ),
+          },
+        ],
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert(
+      'Manual purchase order created successfully',
+    );
+
+    setManualPo({
+      projectId: '',
+      vendorName: '',
+      materialName: '',
+      category: '',
+      brand: '',
+      unit: '',
+      quantity: '',
+      purchaseRate: '',
+      gstPercent: '18',
+      remarks: '',
+    });
+
+    fetchGeneratedPos();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to create manual PO',
+    );
+  } finally {
+    setCreatingManualPo(false);
+  }
+};
+
 const generateProformaInvoice = async () => {
   if (!selectedItems.length) {
     alert('Please select at least one item');
@@ -1456,6 +1569,153 @@ const generateProformaInvoice = async () => {
       Please select items from only one project for one PO.
     </p>
   )}
+</div>
+
+<div className="mb-5 rounded-2xl border bg-green-50 p-4">
+  <h2 className="text-lg font-bold text-gray-800">
+    Manual Purchase Order
+  </h2>
+
+  <p className="mt-1 text-sm text-gray-600">
+    Create PO manually without material request.
+  </p>
+
+  <div className="mt-4 grid gap-3 md:grid-cols-3">
+    <input
+      type="number"
+      placeholder="Project ID"
+      value={manualPo.projectId}
+      onChange={(e) =>
+        setManualPo({
+          ...manualPo,
+          projectId: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+
+    <input
+      placeholder="Vendor Name"
+      value={manualPo.vendorName}
+      onChange={(e) =>
+        setManualPo({
+          ...manualPo,
+          vendorName: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+
+    <input
+      placeholder="Material Name"
+      value={manualPo.materialName}
+      onChange={(e) =>
+        setManualPo({
+          ...manualPo,
+          materialName: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+
+    <input
+      placeholder="Category"
+      value={manualPo.category}
+      onChange={(e) =>
+        setManualPo({
+          ...manualPo,
+          category: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+
+    <input
+      placeholder="Brand"
+      value={manualPo.brand}
+      onChange={(e) =>
+        setManualPo({
+          ...manualPo,
+          brand: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+
+    <input
+      placeholder="Unit"
+      value={manualPo.unit}
+      onChange={(e) =>
+        setManualPo({
+          ...manualPo,
+          unit: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+
+    <input
+      type="number"
+      placeholder="Quantity"
+      value={manualPo.quantity}
+      onChange={(e) =>
+        setManualPo({
+          ...manualPo,
+          quantity: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+
+    <input
+      type="number"
+      placeholder="Purchase Rate"
+      value={manualPo.purchaseRate}
+      onChange={(e) =>
+        setManualPo({
+          ...manualPo,
+          purchaseRate: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+
+    <input
+      type="number"
+      placeholder="GST %"
+      value={manualPo.gstPercent}
+      onChange={(e) =>
+        setManualPo({
+          ...manualPo,
+          gstPercent: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+  </div>
+
+  <textarea
+    placeholder="Remarks"
+    value={manualPo.remarks}
+    onChange={(e) =>
+      setManualPo({
+        ...manualPo,
+        remarks: e.target.value,
+      })
+    }
+    className="mt-3 w-full rounded-xl border p-3"
+    rows={3}
+  />
+
+  <button
+    onClick={createManualPo}
+    disabled={creatingManualPo}
+    className="mt-4 rounded-xl bg-green-600 px-5 py-3 font-semibold text-white disabled:opacity-50"
+  >
+    {creatingManualPo
+      ? 'Creating...'
+      : 'Create Manual PO'}
+  </button>
 </div>
 
 <div className="rounded-2xl bg-white p-5 shadow">
