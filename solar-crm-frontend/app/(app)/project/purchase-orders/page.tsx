@@ -161,6 +161,22 @@ const [selectedPo, setSelectedPo] =
 const [creatingManualPo, setCreatingManualPo] =
   useState(false);
 
+  const [manualPi, setManualPi] = useState({
+  projectId: '',
+  itemName: '',
+  category: '',
+  brand: '',
+  unit: '',
+  quantity: '',
+  sellingRate: '',
+  gstPercent: '18',
+  discountAmount: '0',
+  remarks: '',
+});
+
+const [creatingManualPi, setCreatingManualPi] =
+  useState(false);
+
 const [poDetailLoading, setPoDetailLoading] =
   useState(false);
 
@@ -1222,6 +1238,103 @@ const createManualPo = async () => {
   }
 };
 
+const createManualPi = async () => {
+  if (
+    !manualPi.projectId ||
+    !manualPi.itemName
+  ) {
+    alert(
+      'Project and item are required',
+    );
+
+    return;
+  }
+
+  try {
+    setCreatingManualPi(true);
+
+    const token = localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/proforma-invoice/manual`,
+      {
+        projectId: Number(
+          manualPi.projectId,
+        ),
+
+        remarks: manualPi.remarks,
+
+        items: [
+          {
+            itemName:
+              manualPi.itemName,
+
+            category:
+              manualPi.category,
+
+            brand:
+              manualPi.brand,
+
+            unit:
+              manualPi.unit,
+
+            quantity: Number(
+              manualPi.quantity || 0,
+            ),
+
+            sellingRate: Number(
+              manualPi.sellingRate || 0,
+            ),
+
+            gstPercent: Number(
+              manualPi.gstPercent || 0,
+            ),
+
+            discountAmount: Number(
+              manualPi.discountAmount || 0,
+            ),
+          },
+        ],
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert(
+      'Manual PI created successfully',
+    );
+
+    setManualPi({
+      projectId: '',
+      itemName: '',
+      category: '',
+      brand: '',
+      unit: '',
+      quantity: '',
+      sellingRate: '',
+      gstPercent: '18',
+      discountAmount: '0',
+      remarks: '',
+    });
+
+    fetchGeneratedPis();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to create manual PI',
+    );
+  } finally {
+    setCreatingManualPi(false);
+  }
+};
+
 const generateProformaInvoice = async () => {
   if (!selectedItems.length) {
     alert('Please select at least one item');
@@ -1715,6 +1828,154 @@ const generateProformaInvoice = async () => {
     {creatingManualPo
       ? 'Creating...'
       : 'Create Manual PO'}
+  </button>
+</div>
+
+<div className="mb-5 rounded-2xl border bg-purple-50 p-4">
+  <h2 className="text-lg font-bold text-gray-800">
+    Manual Proforma Invoice
+  </h2>
+
+  <p className="mt-1 text-sm text-gray-600">
+    Create PI manually without material request.
+  </p>
+
+  <div className="mt-4 grid gap-3 md:grid-cols-3">
+    <input
+      type="number"
+      placeholder="Project ID"
+      value={manualPi.projectId}
+      onChange={(e) =>
+        setManualPi({
+          ...manualPi,
+          projectId: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+
+    <input
+      placeholder="Item Name"
+      value={manualPi.itemName}
+      onChange={(e) =>
+        setManualPi({
+          ...manualPi,
+          itemName: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+
+    <input
+      placeholder="Category"
+      value={manualPi.category}
+      onChange={(e) =>
+        setManualPi({
+          ...manualPi,
+          category: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+
+    <input
+      placeholder="Brand"
+      value={manualPi.brand}
+      onChange={(e) =>
+        setManualPi({
+          ...manualPi,
+          brand: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+
+    <input
+      placeholder="Unit"
+      value={manualPi.unit}
+      onChange={(e) =>
+        setManualPi({
+          ...manualPi,
+          unit: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+
+    <input
+      type="number"
+      placeholder="Quantity"
+      value={manualPi.quantity}
+      onChange={(e) =>
+        setManualPi({
+          ...manualPi,
+          quantity: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+
+    <input
+      type="number"
+      placeholder="Selling Rate"
+      value={manualPi.sellingRate}
+      onChange={(e) =>
+        setManualPi({
+          ...manualPi,
+          sellingRate: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+
+    <input
+      type="number"
+      placeholder="GST %"
+      value={manualPi.gstPercent}
+      onChange={(e) =>
+        setManualPi({
+          ...manualPi,
+          gstPercent: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+
+    <input
+      type="number"
+      placeholder="Discount Amount"
+      value={manualPi.discountAmount}
+      onChange={(e) =>
+        setManualPi({
+          ...manualPi,
+          discountAmount: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+  </div>
+
+  <textarea
+    placeholder="Remarks"
+    value={manualPi.remarks}
+    onChange={(e) =>
+      setManualPi({
+        ...manualPi,
+        remarks: e.target.value,
+      })
+    }
+    className="mt-3 w-full rounded-xl border p-3"
+    rows={3}
+  />
+
+  <button
+    onClick={createManualPi}
+    disabled={creatingManualPi}
+    className="mt-4 rounded-xl bg-purple-600 px-5 py-3 font-semibold text-white disabled:opacity-50"
+  >
+    {creatingManualPi
+      ? 'Creating...'
+      : 'Create Manual PI'}
   </button>
 </div>
 
