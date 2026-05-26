@@ -608,6 +608,17 @@ getPartyOutstandingSummary() {
   return this.projectService.getPartyOutstandingSummary();
 }
 
+@Post('ledger/:id/hide')
+hideLedgerEntry(
+  @Param('id') id: string,
+  @Req() req: any,
+) {
+  return this.projectService.hideLedgerEntry(
+    Number(id),
+    req.user,
+  );
+}
+
 @Get('purchase-order/purchasable-items')
 getPurchasableMaterialRequestItems(
   @Query('projectId')

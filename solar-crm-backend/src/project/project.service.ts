@@ -7030,6 +7030,43 @@ async getLedgerOutstandingSummary() {
   };
 }
 
+async hideLedgerEntry(
+  id: number,
+  currentUser: any,
+) {
+  const entry =
+    await this.projectPartyLedgerRepository.findOne({
+      where: { id },
+    });
+
+  if (!entry) {
+    throw new NotFoundException(
+      'Ledger entry not found',
+    );
+  }
+
+  entry.isHidden = true;
+
+  entry.hiddenAt = new Date();
+
+  entry.hiddenBy =
+    currentUser?.id ||
+    currentUser?.userId ||
+    null;
+
+  entry.hiddenReason =
+    'Hidden from accounts page';
+
+  await this.projectPartyLedgerRepository.save(
+    entry,
+  );
+
+  return {
+    message:
+      'Ledger entry hidden successfully',
+  };
+}
+
 async getProjectAccountsSummary(
   projectId: number,
 ) {
