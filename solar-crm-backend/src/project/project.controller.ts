@@ -423,6 +423,20 @@ generateProformaInvoicePdf(
 }
 
 @Roles('OWNER', 'PROJECT_MANAGER')
+@Patch('proforma-invoice/:id/hide')
+hideProformaInvoice(
+  @Param('id') id: string,
+  @Body('reason') reason: string,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.hideProformaInvoice(
+    Number(id),
+    reason || '',
+    user,
+  );
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER')
 @Post('final-invoice')
 createFinalInvoice(
   @Body() body: any,

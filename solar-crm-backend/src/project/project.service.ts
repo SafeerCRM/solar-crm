@@ -5853,6 +5853,8 @@ async getProformaInvoices(filters?: {
     );
   }
 
+  query.andWhere('pi.isHidden = false');
+
   query.orderBy(
     'pi.createdAt',
     'DESC',
@@ -6432,6 +6434,41 @@ async createFinalInvoiceFromProforma(
     },
     user,
   );
+}
+
+async hideProformaInvoice(
+  id: number,
+  reason: string,
+  user: any,
+) {
+  const invoice =
+    await this.projectProformaInvoiceRepository.findOne({
+      where: { id },
+    });
+
+  if (!invoice) {
+    throw new NotFoundException(
+      'Proforma invoice not found',
+    );
+  }
+
+  invoice.isHidden = true;
+  invoice.hiddenReason = reason || '';
+  invoice.hiddenAt = new Date();
+  invoice.hiddenBy =
+    user?.id || user?.userId || null;
+  invoice.hiddenByName =
+    user?.name || '';
+
+  await this.projectProformaInvoiceRepository.save(
+    invoice,
+  );
+
+  return {
+    success: true,
+    message:
+      'Proforma invoice hidden successfully',
+  };
 }
 
 async getFinalInvoices(filters?: {
