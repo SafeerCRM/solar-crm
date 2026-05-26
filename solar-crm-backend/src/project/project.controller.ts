@@ -482,6 +482,20 @@ generateFinalInvoicePdf(
 }
 
 @Roles('OWNER', 'PROJECT_MANAGER')
+@Patch('final-invoice/:id/hide')
+hideFinalInvoice(
+  @Param('id') id: string,
+  @Body('reason') reason: string,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.hideFinalInvoice(
+    Number(id),
+    reason || '',
+    user,
+  );
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER')
 @Post('contractor/assign')
 assignContractorToProject(
   @Body() body: any,

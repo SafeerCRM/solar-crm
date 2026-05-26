@@ -68,6 +68,21 @@ export class ProjectFinalInvoice {
   @Column({ nullable: true })
   createdByRole: string;
 
+  @Column({ default: false })
+isHidden: boolean;
+
+@Column({ type: 'text', nullable: true })
+hiddenReason: string;
+
+@Column({ type: 'timestamp', nullable: true })
+hiddenAt: Date;
+
+@Column({ nullable: true })
+hiddenBy: number;
+
+@Column({ nullable: true })
+hiddenByName: string;
+
   @CreateDateColumn()
   createdAt: Date;
 

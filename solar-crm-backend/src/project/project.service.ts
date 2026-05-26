@@ -6477,6 +6477,8 @@ async getFinalInvoices(filters?: {
     );
   }
 
+  query.andWhere('invoice.isHidden = false');
+
   query.orderBy(
     'invoice.createdAt',
     'DESC',
@@ -6524,6 +6526,59 @@ async getFinalInvoiceById(
   return {
     ...invoice,
     items,
+  };
+}
+
+async hideFinalInvoice(
+  id: number,
+  reason: string,
+  user: any,
+) {
+  const invoice =
+    await this.projectFinalInvoiceRepository.findOne({
+      where: { id },
+    });
+
+  if (!invoice) {
+    throw new NotFoundException(
+      'Final invoice not found',
+    );
+  }
+
+  invoice.isHidden = true;
+  invoice.hiddenReason = reason || '';
+  invoice.hiddenAt = new Date();
+  invoice.hiddenBy =
+    user?.id || user?.userId || null;
+  invoice.hiddenByName =
+    user?.name || '';
+
+  await this.projectFinalInvoiceRepository.save(
+    invoice,
+  );
+
+  await this.projectPartyLedgerRepository.update(
+    {
+      sourceType:
+        ProjectLedgerSourceType.FINAL_INVOICE,
+      sourceId: invoice.id,
+    },
+    {
+      isHidden: true,
+      hiddenReason:
+        reason || 'Final invoice hidden',
+      hiddenAt: new Date(),
+      hiddenBy:
+        user?.id || user?.userId || null,
+      hiddenByName:
+        user?.name || '',
+    },
+  );
+
+  return {
+    success: true,
+    message:
+      'Final invoice hidden successfully',
   };
 }
 
