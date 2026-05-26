@@ -231,6 +231,41 @@ const submitVendorPayment = async () => {
   }
 };
 
+const hideLedgerEntry = async (entryId: number) => {
+  const confirmed = window.confirm(
+    'Hide this ledger entry? This will remove it from summary and outstanding calculations.',
+  );
+
+  if (!confirmed) return;
+
+  try {
+    const token = localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/ledger/${entryId}/hide`,
+      {},
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Ledger entry hidden');
+
+    fetchLedger();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to hide ledger entry',
+    );
+  }
+};
+
   useEffect(() => {
     fetchLedger();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -576,6 +611,13 @@ const submitVendorPayment = async () => {
                     <p className="mt-1 text-xs text-gray-400">
                       By: {entry.createdByName || '-'}
                     </p>
+
+                    <button
+  onClick={() => hideLedgerEntry(entry.id)}
+  className="mt-3 rounded-xl bg-red-100 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-200"
+>
+  Hide Entry
+</button>
                   </div>
                 </div>
               </div>
