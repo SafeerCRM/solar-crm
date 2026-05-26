@@ -52,6 +52,7 @@ export default function AccountsLedgerPage() {
 
 const [vendorPayment, setVendorPayment] = useState({
   partyName: '',
+  projectId: '',
   amount: '',
   remarks: '',
 });
@@ -189,10 +190,16 @@ const submitVendorPayment = async () => {
     await axios.post(
       `${API_BASE_URL}/project/ledger/vendor-payment`,
       {
-        partyName: vendorPayment.partyName,
-        amount: Number(vendorPayment.amount),
-        remarks: vendorPayment.remarks,
-      },
+  partyName: vendorPayment.partyName,
+
+  projectId: vendorPayment.projectId
+    ? Number(vendorPayment.projectId)
+    : undefined,
+
+  amount: Number(vendorPayment.amount),
+
+  remarks: vendorPayment.remarks,
+},
       {
         headers: token
           ? {
@@ -205,10 +212,11 @@ const submitVendorPayment = async () => {
     alert('Vendor payment recorded');
 
     setVendorPayment({
-      partyName: '',
-      amount: '',
-      remarks: '',
-    });
+  partyName: '',
+  projectId: '',
+  amount: '',
+  remarks: '',
+});
 
     fetchLedger();
   } catch (error: any) {
@@ -419,6 +427,19 @@ const submitVendorPayment = async () => {
         }
         className="w-full rounded-xl border p-3"
       />
+
+      <input
+  type="number"
+  placeholder="Project ID (Optional)"
+  value={vendorPayment.projectId}
+  onChange={(e) =>
+    setVendorPayment((prev) => ({
+      ...prev,
+      projectId: e.target.value,
+    }))
+  }
+  className="w-full rounded-xl border p-3"
+/>
 
       <input
         type="number"
