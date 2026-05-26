@@ -6955,6 +6955,74 @@ async getLedgerOutstandingSummary() {
   };
 }
 
+async recordCustomerPayment(
+  body: any,
+  user: any,
+) {
+  if (!body?.partyName) {
+    throw new BadRequestException('Customer name is required');
+  }
+
+  const amount = Number(body.amount || 0);
+
+  if (!amount || amount <= 0) {
+    throw new BadRequestException('Valid amount is required');
+  }
+
+  return this.projectPartyLedgerRepository.save(
+    this.projectPartyLedgerRepository.create({
+      partyId: body.partyId ? Number(body.partyId) : undefined,
+      partyName: body.partyName || '',
+      partyType: 'CUSTOMER',
+      projectId: body.projectId ? Number(body.projectId) : undefined,
+
+      entryType: ProjectLedgerEntryType.CREDIT,
+      sourceType: ProjectLedgerSourceType.CUSTOMER_PAYMENT,
+      sourceId: body.sourceId ? Number(body.sourceId) : undefined,
+
+      amount,
+      remarks: body.remarks || 'Customer payment received',
+
+      createdBy: user?.id || user?.userId || null,
+      createdByName: user?.name || '',
+    } as Partial<ProjectPartyLedger>),
+  );
+}
+
+async recordVendorPayment(
+  body: any,
+  user: any,
+) {
+  if (!body?.partyName) {
+    throw new BadRequestException('Vendor name is required');
+  }
+
+  const amount = Number(body.amount || 0);
+
+  if (!amount || amount <= 0) {
+    throw new BadRequestException('Valid amount is required');
+  }
+
+  return this.projectPartyLedgerRepository.save(
+    this.projectPartyLedgerRepository.create({
+      partyId: body.partyId ? Number(body.partyId) : undefined,
+      partyName: body.partyName || '',
+      partyType: 'VENDOR',
+      projectId: body.projectId ? Number(body.projectId) : undefined,
+
+      entryType: ProjectLedgerEntryType.DEBIT,
+      sourceType: ProjectLedgerSourceType.VENDOR_PAYMENT,
+      sourceId: body.sourceId ? Number(body.sourceId) : undefined,
+
+      amount,
+      remarks: body.remarks || 'Vendor payment paid',
+
+      createdBy: user?.id || user?.userId || null,
+      createdByName: user?.name || '',
+    } as Partial<ProjectPartyLedger>),
+  );
+}
+
 async getPurchasableMaterialRequestItems(
   projectId?: number,
 ) {

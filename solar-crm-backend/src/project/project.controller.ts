@@ -570,6 +570,30 @@ getLedgerOutstandingSummary() {
   return this.projectService.getLedgerOutstandingSummary();
 }
 
+@Roles('OWNER', 'ACCOUNT_MANAGER')
+@Post('ledger/customer-payment')
+recordCustomerPayment(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.recordCustomerPayment(
+    body,
+    user,
+  );
+}
+
+@Roles('OWNER', 'ACCOUNT_MANAGER')
+@Post('ledger/vendor-payment')
+recordVendorPayment(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.recordVendorPayment(
+    body,
+    user,
+  );
+}
+
 @Get('purchase-order/purchasable-items')
 getPurchasableMaterialRequestItems(
   @Query('projectId')
