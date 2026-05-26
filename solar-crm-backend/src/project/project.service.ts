@@ -6959,6 +6959,58 @@ async getLedgerOutstandingSummary() {
   };
 }
 
+async getPartyOutstandingSummary() {
+  const rows =
+    await this.projectPartyLedgerRepository.find({
+      where: {
+        isHidden: false,
+      },
+    });
+
+  const partyMap: Record<
+    string,
+    {
+      partyName: string;
+      partyType: string;
+      totalDebit: number;
+      totalCredit: number;
+      outstanding: number;
+    }
+  > = {};
+
+  for (const row of rows) {
+    const key = `${row.partyType || 'UNKNOWN'}-${row.partyName || 'Unknown'}`;
+
+    if (!partyMap[key]) {
+      partyMap[key] = {
+        partyName: row.partyName || 'Unknown',
+        partyType: row.partyType || 'UNKNOWN',
+        totalDebit: 0,
+        totalCredit: 0,
+        outstanding: 0,
+      };
+    }
+
+    if (row.entryType === ProjectLedgerEntryType.DEBIT) {
+      partyMap[key].totalDebit += Number(row.amount || 0);
+    }
+
+    if (row.entryType === ProjectLedgerEntryType.CREDIT) {
+      partyMap[key].totalCredit += Number(row.amount || 0);
+    }
+  }
+
+  return Object.values(partyMap)
+    .map((item) => ({
+      ...item,
+      outstanding: item.totalDebit - item.totalCredit,
+    }))
+    .sort(
+      (a, b) =>
+        Math.abs(b.outstanding) - Math.abs(a.outstanding),
+    );
+}
+
 async recordCustomerPayment(
   body: any,
   user: any,

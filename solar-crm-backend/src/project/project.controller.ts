@@ -594,6 +594,11 @@ recordVendorPayment(
   );
 }
 
+@Get('ledger/party-outstanding')
+getPartyOutstandingSummary() {
+  return this.projectService.getPartyOutstandingSummary();
+}
+
 @Get('purchase-order/purchasable-items')
 getPurchasableMaterialRequestItems(
   @Query('projectId')
