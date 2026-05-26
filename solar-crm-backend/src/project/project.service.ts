@@ -7024,10 +7024,28 @@ async getPartyOutstandingSummary() {
   }
 
   return Object.values(partyMap)
-    .map((item) => ({
+  .map((item) => {
+    const outstanding =
+      item.totalDebit - item.totalCredit;
+
+    let settlementStatus = 'SETTLED';
+
+    if (outstanding > 0) {
+      settlementStatus = 'RECEIVABLE';
+    }
+
+    if (outstanding < 0) {
+      settlementStatus = 'PAYABLE';
+    }
+
+    return {
       ...item,
-      outstanding: item.totalDebit - item.totalCredit,
-    }))
+      outstanding,
+      settlementStatus,
+      absoluteOutstanding:
+        Math.abs(outstanding),
+    };
+  })
     .sort(
       (a, b) =>
         Math.abs(b.outstanding) - Math.abs(a.outstanding),
