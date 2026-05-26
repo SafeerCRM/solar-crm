@@ -32,6 +32,24 @@ export default function AccountsLedgerPage() {
   const [partyType, setPartyType] = useState('');
   const [sourceType, setSourceType] = useState('');
 
+  const [customerPayment, setCustomerPayment] = useState({
+  partyName: '',
+  amount: '',
+  remarks: '',
+});
+
+const [vendorPayment, setVendorPayment] = useState({
+  partyName: '',
+  amount: '',
+  remarks: '',
+});
+
+const [submittingCustomerPayment, setSubmittingCustomerPayment] =
+  useState(false);
+
+const [submittingVendorPayment, setSubmittingVendorPayment] =
+  useState(false);
+
   const fetchLedger = async () => {
     try {
       setLoading(true);
@@ -77,6 +95,112 @@ export default function AccountsLedgerPage() {
     }
   };
 
+  const submitCustomerPayment = async () => {
+  try {
+    if (!customerPayment.partyName.trim()) {
+      alert('Customer name required');
+      return;
+    }
+
+    if (!Number(customerPayment.amount || 0)) {
+      alert('Valid amount required');
+      return;
+    }
+
+    setSubmittingCustomerPayment(true);
+
+    const token = localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/ledger/customer-payment`,
+      {
+        partyName: customerPayment.partyName,
+        amount: Number(customerPayment.amount),
+        remarks: customerPayment.remarks,
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Customer payment recorded');
+
+    setCustomerPayment({
+      partyName: '',
+      amount: '',
+      remarks: '',
+    });
+
+    fetchLedger();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to record customer payment',
+    );
+  } finally {
+    setSubmittingCustomerPayment(false);
+  }
+};
+
+const submitVendorPayment = async () => {
+  try {
+    if (!vendorPayment.partyName.trim()) {
+      alert('Vendor name required');
+      return;
+    }
+
+    if (!Number(vendorPayment.amount || 0)) {
+      alert('Valid amount required');
+      return;
+    }
+
+    setSubmittingVendorPayment(true);
+
+    const token = localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/ledger/vendor-payment`,
+      {
+        partyName: vendorPayment.partyName,
+        amount: Number(vendorPayment.amount),
+        remarks: vendorPayment.remarks,
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Vendor payment recorded');
+
+    setVendorPayment({
+      partyName: '',
+      amount: '',
+      remarks: '',
+    });
+
+    fetchLedger();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to record vendor payment',
+    );
+  } finally {
+    setSubmittingVendorPayment(false);
+  }
+};
+
   useEffect(() => {
     fetchLedger();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -116,6 +240,118 @@ export default function AccountsLedgerPage() {
           </p>
         </div>
       </div>
+
+      <div className="grid gap-5 md:grid-cols-2">
+  <div className="rounded-2xl bg-white p-5 shadow">
+    <h2 className="mb-4 text-lg font-bold text-gray-800">
+      Customer Payment Received
+    </h2>
+
+    <div className="space-y-3">
+      <input
+        placeholder="Customer Name"
+        value={customerPayment.partyName}
+        onChange={(e) =>
+          setCustomerPayment((prev) => ({
+            ...prev,
+            partyName: e.target.value,
+          }))
+        }
+        className="w-full rounded-xl border p-3"
+      />
+
+      <input
+        type="number"
+        placeholder="Amount"
+        value={customerPayment.amount}
+        onChange={(e) =>
+          setCustomerPayment((prev) => ({
+            ...prev,
+            amount: e.target.value,
+          }))
+        }
+        className="w-full rounded-xl border p-3"
+      />
+
+      <textarea
+        placeholder="Remarks"
+        value={customerPayment.remarks}
+        onChange={(e) =>
+          setCustomerPayment((prev) => ({
+            ...prev,
+            remarks: e.target.value,
+          }))
+        }
+        className="w-full rounded-xl border p-3"
+      />
+
+      <button
+        onClick={submitCustomerPayment}
+        disabled={submittingCustomerPayment}
+        className="rounded-xl bg-green-600 px-5 py-3 font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+      >
+        {submittingCustomerPayment
+          ? 'Saving...'
+          : 'Record Customer Payment'}
+      </button>
+    </div>
+  </div>
+
+  <div className="rounded-2xl bg-white p-5 shadow">
+    <h2 className="mb-4 text-lg font-bold text-gray-800">
+      Vendor Payment Paid
+    </h2>
+
+    <div className="space-y-3">
+      <input
+        placeholder="Vendor Name"
+        value={vendorPayment.partyName}
+        onChange={(e) =>
+          setVendorPayment((prev) => ({
+            ...prev,
+            partyName: e.target.value,
+          }))
+        }
+        className="w-full rounded-xl border p-3"
+      />
+
+      <input
+        type="number"
+        placeholder="Amount"
+        value={vendorPayment.amount}
+        onChange={(e) =>
+          setVendorPayment((prev) => ({
+            ...prev,
+            amount: e.target.value,
+          }))
+        }
+        className="w-full rounded-xl border p-3"
+      />
+
+      <textarea
+        placeholder="Remarks"
+        value={vendorPayment.remarks}
+        onChange={(e) =>
+          setVendorPayment((prev) => ({
+            ...prev,
+            remarks: e.target.value,
+          }))
+        }
+        className="w-full rounded-xl border p-3"
+      />
+
+      <button
+        onClick={submitVendorPayment}
+        disabled={submittingVendorPayment}
+        className="rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+      >
+        {submittingVendorPayment
+          ? 'Saving...'
+          : 'Record Vendor Payment'}
+      </button>
+    </div>
+  </div>
+</div>
 
       <div className="rounded-2xl bg-white p-5 shadow">
         <div className="grid gap-3 md:grid-cols-3">
