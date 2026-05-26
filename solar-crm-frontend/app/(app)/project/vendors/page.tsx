@@ -18,6 +18,10 @@ type VendorItem = {
   state?: string;
   materialCategory?: string;
   remarks?: string;
+  partyType?: string;
+canSellToUs?: boolean;
+canBuyFromUs?: boolean;
+openingBalance?: number;
   isActive?: boolean;
 };
 
@@ -50,6 +54,10 @@ export default function VendorMasterPage() {
     state: '',
     materialCategory: '',
     remarks: '',
+    partyType: 'VENDOR',
+canSellToUs: true,
+canBuyFromUs: false,
+openingBalance: '',
   });
 
   const fetchItems = async () => {
@@ -152,6 +160,10 @@ export default function VendorMasterPage() {
         state: '',
         materialCategory: '',
         remarks: '',
+        partyType: 'VENDOR',
+canSellToUs: true,
+canBuyFromUs: false,
+openingBalance: '',
       });
 
       setEditingId(null);
@@ -183,6 +195,12 @@ export default function VendorMasterPage() {
       materialCategory:
         item.materialCategory || '',
       remarks: item.remarks || '',
+      partyType: item.partyType || 'VENDOR',
+canSellToUs: item.canSellToUs !== false,
+canBuyFromUs: item.canBuyFromUs === true,
+openingBalance: String(
+  item.openingBalance || '',
+),
     });
 
     window.scrollTo({
@@ -205,6 +223,10 @@ export default function VendorMasterPage() {
       state: '',
       materialCategory: '',
       remarks: '',
+      partyType: 'VENDOR',
+canSellToUs: true,
+canBuyFromUs: false,
+openingBalance: '',
     });
   };
 
@@ -397,6 +419,82 @@ export default function VendorMasterPage() {
               }
               className="rounded-xl border p-3"
             />
+
+            <select
+  value={form.partyType}
+  onChange={(e) =>
+    setForm({
+      ...form,
+      partyType: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+>
+  <option value="VENDOR">
+    Vendor
+  </option>
+
+  <option value="CUSTOMER">
+    Customer
+  </option>
+
+  <option value="DEALER">
+    Dealer
+  </option>
+
+  <option value="BOTH">
+    Both
+  </option>
+</select>
+
+<input
+  type="number"
+  placeholder="Opening Balance"
+  value={form.openingBalance}
+  onChange={(e) =>
+    setForm({
+      ...form,
+      openingBalance: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+/>
+
+<div className="flex items-center gap-3 rounded-xl border p-3">
+  <input
+    type="checkbox"
+    checked={form.canSellToUs}
+    onChange={(e) =>
+      setForm({
+        ...form,
+        canSellToUs:
+          e.target.checked,
+      })
+    }
+  />
+
+  <p className="text-sm font-medium">
+    Can Sell To Us
+  </p>
+</div>
+
+<div className="flex items-center gap-3 rounded-xl border p-3">
+  <input
+    type="checkbox"
+    checked={form.canBuyFromUs}
+    onChange={(e) =>
+      setForm({
+        ...form,
+        canBuyFromUs:
+          e.target.checked,
+      })
+    }
+  />
+
+  <p className="text-sm font-medium">
+    Can Buy From Us
+  </p>
+</div>
           </div>
 
           <textarea
@@ -521,6 +619,25 @@ export default function VendorMasterPage() {
                         {item.gstNumber}
                       </p>
                     )}
+
+                    <p className="text-sm text-gray-500">
+  Party Type:{' '}
+  {item.partyType || 'VENDOR'}
+</p>
+
+<p className="text-sm text-gray-500">
+  Opening Balance: ₹
+  {Number(
+    item.openingBalance || 0,
+  ).toLocaleString('en-IN')}
+</p>
+
+<p className="text-xs text-gray-400">
+  Sell To Us:{' '}
+  {item.canSellToUs ? 'Yes' : 'No'}{' '}
+  | Buy From Us:{' '}
+  {item.canBuyFromUs ? 'Yes' : 'No'}
+</p>
                   </div>
 
                   {canManage && (
