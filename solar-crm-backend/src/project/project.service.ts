@@ -5207,6 +5207,41 @@ async createPurchaseOrder(
     po as ProjectPurchaseOrder,
   );
 
+  await this.projectPartyLedgerRepository.save(
+  this.projectPartyLedgerRepository.create({
+    partyId: savedPo.vendorId || undefined,
+
+    partyName:
+      savedPo.vendorName || 'Vendor',
+
+    partyType: 'VENDOR',
+
+    projectId: savedPo.projectId,
+
+    entryType:
+      ProjectLedgerEntryType.CREDIT,
+
+    sourceType:
+      ProjectLedgerSourceType.PURCHASE_ORDER,
+
+    sourceId: savedPo.id,
+
+    amount: Number(
+      savedPo.totalAmount || 0,
+    ),
+
+    remarks: `Purchase Order ${
+      savedPo.poNumber || savedPo.id
+    }`,
+
+    createdBy:
+      user?.id || user?.userId || null,
+
+    createdByName:
+      user?.name || '',
+  } as Partial<ProjectPartyLedger>),
+);
+
   const poItems = preparedItems.map(
     (item) =>
       this.projectPurchaseOrderItemRepository.create({
