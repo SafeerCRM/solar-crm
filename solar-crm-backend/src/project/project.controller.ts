@@ -581,6 +581,20 @@ generatePurchaseOrderPdf(
 }
 
 @Roles('OWNER', 'PROJECT_MANAGER')
+@Patch('purchase-order/:id/hide')
+hidePurchaseOrder(
+  @Param('id') id: string,
+  @Body('reason') reason: string,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.hidePurchaseOrder(
+    Number(id),
+    reason || '',
+    user,
+  );
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER')
 
 @Patch('material-request-item/:id/buy')
 buyMaterialRequestItem(

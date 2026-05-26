@@ -5551,6 +5551,8 @@ async getGeneratedPurchaseOrders(filters?: {
     );
   }
 
+  query.andWhere('po.isHidden = false');
+
   query.orderBy(
     'po.createdAt',
     'DESC',
@@ -5568,6 +5570,61 @@ async getGeneratedPurchaseOrders(filters?: {
     limit,
     totalPages:
       Math.ceil(total / limit) || 1,
+  };
+}
+
+async hidePurchaseOrder(
+  id: number,
+  reason: string,
+  user: any,
+) {
+  const po =
+    await this.projectPurchaseOrderRepository.findOne({
+      where: { id },
+    });
+
+  if (!po) {
+    throw new NotFoundException(
+      'Purchase order not found',
+    );
+  }
+
+  po.isHidden = true;
+  po.hiddenReason = reason || '';
+  po.hiddenAt = new Date();
+
+  po.hiddenBy =
+    user?.id || user?.userId || null;
+
+  po.hiddenByName =
+    user?.name || '';
+
+  await this.projectPurchaseOrderRepository.save(
+    po,
+  );
+
+  await this.projectPartyLedgerRepository.update(
+    {
+      sourceType:
+        ProjectLedgerSourceType.PURCHASE_ORDER,
+      sourceId: po.id,
+    },
+    {
+      isHidden: true,
+      hiddenReason:
+        reason || 'PO hidden',
+      hiddenAt: new Date(),
+      hiddenBy:
+        user?.id || user?.userId || null,
+      hiddenByName:
+        user?.name || '',
+    },
+  );
+
+  return {
+    success: true,
+    message:
+      'Purchase order hidden successfully',
   };
 }
 
@@ -6774,6 +6831,8 @@ async getLedgerEntries(filters?: {
       sourceType: filters.sourceType,
     });
   }
+
+  query.andWhere('ledger.isHidden = false');
 
   query.orderBy('ledger.createdAt', 'DESC');
 
