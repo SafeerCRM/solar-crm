@@ -6933,7 +6933,11 @@ async getLedgerEntries(filters?: {
 
 async getLedgerOutstandingSummary() {
   const rows =
-    await this.projectPartyLedgerRepository.find();
+  await this.projectPartyLedgerRepository.find({
+    where: {
+      isHidden: false,
+    },
+  });
 
   let totalDebit = 0;
   let totalCredit = 0;
