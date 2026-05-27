@@ -307,6 +307,91 @@ const filteredItems = items.filter((item) => {
   return matchesSearch && matchesCategory && matchesStatus;
 });
 
+const downloadMaterialCsv = () => {
+  const rows = filteredItems.map((item) => {
+    const rate = Number(item.rate || 0);
+    const gstPercent = Number(item.gstPercent || 0);
+    const purchaseWithGst =
+      rate + (rate * gstPercent) / 100;
+
+    const sellingWithoutGst = Number(
+      item.sellingRate && item.sellingRate > 0
+        ? item.sellingRate
+        : purchaseWithGst +
+            (item.marginType === 'PERCENT'
+              ? (rate * Number(item.expectedMargin || 0)) / 100
+              : Number(item.expectedMargin || 0)),
+    );
+
+    const sellingWithGst =
+      sellingWithoutGst +
+      (sellingWithoutGst * gstPercent) / 100;
+
+    return {
+      Name: item.name || '',
+      Category: item.category || '',
+      Brand: item.brand || '',
+      Unit: item.unit || '',
+      HSN: item.hsnCode || '',
+      Vendor: item.vendorPreferredName || '',
+      'Purchase Without GST': rate,
+      'GST %': gstPercent,
+      'Purchase With GST': purchaseWithGst,
+      'Selling Without GST': sellingWithoutGst,
+      'Selling With GST': sellingWithGst,
+      'Margin Type': item.marginType || '',
+      'Expected Margin': item.expectedMargin || 0,
+      Status: item.isActive === false ? 'Disabled' : 'Active',
+    };
+  });
+
+  const headers = Object.keys(rows[0] || {
+    Name: '',
+    Category: '',
+    Brand: '',
+    Unit: '',
+    HSN: '',
+    Vendor: '',
+    'Purchase Without GST': '',
+    'GST %': '',
+    'Purchase With GST': '',
+    'Selling Without GST': '',
+    'Selling With GST': '',
+    'Margin Type': '',
+    'Expected Margin': '',
+    Status: '',
+  });
+
+  const csv = [
+    headers.join(','),
+    ...rows.map((row: any) =>
+      headers
+        .map((header) =>
+          `"${String(row[header] ?? '').replace(/"/g, '""')}"`,
+        )
+        .join(','),
+    ),
+  ].join('\n');
+
+  const blob = new Blob([csv], {
+    type: 'text/csv;charset=utf-8;',
+  });
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+
+  link.href = url;
+  link.download = `material-list-${new Date()
+    .toISOString()
+    .slice(0, 10)}.csv`;
+
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  URL.revokeObjectURL(url);
+};
+
   return (
     <div className="mx-auto max-w-7xl space-y-5">
       <div className="rounded-2xl bg-white p-5 shadow">
@@ -505,6 +590,13 @@ const filteredItems = items.filter((item) => {
         <h2 className="mb-4 text-lg font-bold">
           Material List
         </h2>
+
+        <button
+  onClick={downloadMaterialCsv}
+  className="mb-4 rounded-xl bg-green-600 px-5 py-3 font-semibold text-white hover:bg-green-700"
+>
+  Download Material List CSV
+</button>
 
         <div className="mb-4 grid gap-3 md:grid-cols-3">
   <input
