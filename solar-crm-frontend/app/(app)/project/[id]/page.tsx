@@ -2109,6 +2109,7 @@ const canManageElectricity = hasRole([
   'ELECTRICITY_MANAGER',
 ]);
 
+
 const canManagePayment = hasRole([
   'OWNER',
   'MARKETING_HEAD',
@@ -2297,6 +2298,34 @@ const generateProjectPdf = async (share = false) => {
   if (!project) {
     return <div className="rounded-2xl bg-white p-5 shadow">Project not found.</div>;
   }
+
+  const totalInstallmentAmount =
+  paymentInstallments.reduce(
+    (sum, item) =>
+      sum + Number(item.amount || 0),
+    0,
+  );
+
+const totalCollectedAmount =
+  paymentInstallments.reduce(
+    (sum, item) =>
+      sum + Number(item.paidAmount || 0),
+    0,
+  );
+
+const projectFinalAmount = Number(
+  project.finalCost ||
+    project.projectCost ||
+    0,
+);
+
+const remainingAmountToSchedule =
+  projectFinalAmount -
+  totalInstallmentAmount;
+
+const remainingAmountToCollect =
+  projectFinalAmount -
+  totalCollectedAmount;
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">
@@ -4615,6 +4644,60 @@ const generateProjectPdf = async (share = false) => {
 
 {activeTab === 'PAYMENT_COLLECTION' && (
   <div className="space-y-5">
+
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+  <div className="rounded-2xl bg-blue-50 p-4">
+    <p className="text-sm text-blue-600">
+      Final Project Amount
+    </p>
+
+    <p className="mt-2 text-2xl font-bold text-blue-800">
+      ₹
+      {projectFinalAmount.toLocaleString(
+        'en-IN',
+      )}
+    </p>
+  </div>
+
+  <div className="rounded-2xl bg-yellow-50 p-4">
+    <p className="text-sm text-yellow-700">
+      Remaining To Schedule
+    </p>
+
+    <p className="mt-2 text-2xl font-bold text-yellow-800">
+      ₹
+      {remainingAmountToSchedule.toLocaleString(
+        'en-IN',
+      )}
+    </p>
+  </div>
+
+  <div className="rounded-2xl bg-green-50 p-4">
+    <p className="text-sm text-green-700">
+      Total Collected
+    </p>
+
+    <p className="mt-2 text-2xl font-bold text-green-800">
+      ₹
+      {totalCollectedAmount.toLocaleString(
+        'en-IN',
+      )}
+    </p>
+  </div>
+
+  <div className="rounded-2xl bg-red-50 p-4">
+    <p className="text-sm text-red-700">
+      Remaining To Collect
+    </p>
+
+    <p className="mt-2 text-2xl font-bold text-red-800">
+      ₹
+      {remainingAmountToCollect.toLocaleString(
+        'en-IN',
+      )}
+    </p>
+  </div>
+</div>
     <div className="rounded-2xl bg-white p-5 shadow">
   <h2 className="text-xl font-bold text-gray-800">
     Project Accounts Summary
