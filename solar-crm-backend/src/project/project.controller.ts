@@ -522,6 +522,18 @@ hideFinalInvoice(
 }
 
 @Roles('OWNER', 'PROJECT_MANAGER')
+@Post('final-invoice/manual')
+createManualFinalInvoice(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.createFinalInvoice(
+    body,
+    user,
+  );
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER')
 @Post('contractor/assign')
 assignContractorToProject(
   @Body() body: any,
