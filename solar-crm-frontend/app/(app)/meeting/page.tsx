@@ -475,9 +475,10 @@ const stopMeetingAutoCall = () => {
     setMeetingPage(1);
     fetchMeetings(1);
   }}
-  className="rounded bg-gray-200 px-3 py-2 text-sm"
+  disabled={loading}
+  className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-blue-700 hover:to-indigo-700 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
 >
-  Apply Filters
+  {loading ? 'Applying...' : 'Apply Filters'}
 </button>
 
           <button
