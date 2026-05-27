@@ -1787,7 +1787,7 @@ const generateProformaInvoice = async () => {
     Select pending items from one project, choose vendor, then generate PO snapshot.
   </p>
 
-  <div className="mt-4 grid gap-3 md:grid-cols-4">
+  <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-4">
     <select
       value={selectedVendorId}
       onChange={(e) => setSelectedVendorId(e.target.value)}
