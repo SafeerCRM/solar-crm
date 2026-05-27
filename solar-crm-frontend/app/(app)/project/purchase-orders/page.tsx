@@ -132,6 +132,14 @@ type MaterialMasterItem = {
   gstPercent?: number;
 };
 
+type ProjectOption = {
+  id: number;
+  customerName?: string;
+  city?: string;
+  branchName?: string;
+  projectOwnerName?: string;
+};
+
 export default function PurchaseOrdersPage() {
   const [items, setItems] = useState<PurchaseItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -144,6 +152,8 @@ const [ownerFilter, setOwnerFilter] = useState('');
 const [projectOwners, setProjectOwners] = useState<ProjectOwner[]>([]);
 const [page, setPage] = useState(1);
 const [totalPages, setTotalPages] = useState(1);
+
+const [projects, setProjects] = useState<ProjectOption[]>([]);
 
 const [vendors, setVendors] = useState<VendorItem[]>([]);
 const [selectedVendorId, setSelectedVendorId] = useState('');
@@ -288,6 +298,29 @@ const [summary, setSummary] = useState({
     alert('Failed to load purchase orders');
   } finally {
     setLoading(false);
+  }
+};
+
+const fetchProjectsForManualForms = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(`${API_BASE_URL}/project`, {
+      params: {
+        page: 1,
+        limit: 100,
+        owner: ownerFilter || undefined,
+      },
+      headers: token
+        ? {
+            Authorization: `Bearer ${token}`,
+          }
+        : {},
+    });
+
+    setProjects(res.data?.data || []);
+  } catch (error) {
+    console.error('Failed to load projects:', error);
   }
 };
 
@@ -971,7 +1004,13 @@ useEffect(() => {
   fetchGeneratedPos();
   fetchGeneratedPis();
   fetchFinalInvoices();
+  fetchProjectsForManualForms();
 }, []);
+
+useEffect(() => {
+  fetchProjectsForManualForms();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [ownerFilter]);
 
   const filteredItems = items;
 
@@ -1845,18 +1884,25 @@ const generateProformaInvoice = async () => {
   </p>
 
   <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
-    <input
-      type="number"
-      placeholder="Project ID"
-      value={manualPo.projectId}
-      onChange={(e) =>
-        setManualPo({
-          ...manualPo,
-          projectId: e.target.value,
-        })
-      }
-      className="rounded-xl border p-3"
-    />
+    <select
+  value={manualPo.projectId}
+  onChange={(e) =>
+    setManualPo({
+      ...manualPo,
+      projectId: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+>
+  <option value="">Select Project</option>
+
+  {projects.map((project) => (
+    <option key={project.id} value={project.id}>
+      #{project.id} - {project.customerName || 'Unnamed'} -{' '}
+      {project.projectOwnerName || 'No Owner'}
+    </option>
+  ))}
+</select>
 
     <select
   value={manualPo.vendorName}
@@ -2015,18 +2061,25 @@ const generateProformaInvoice = async () => {
   </p>
 
   <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
-    <input
-      type="number"
-      placeholder="Project ID"
-      value={manualPi.projectId}
-      onChange={(e) =>
-        setManualPi({
-          ...manualPi,
-          projectId: e.target.value,
-        })
-      }
-      className="rounded-xl border p-3"
-    />
+    <select
+  value={manualPi.projectId}
+  onChange={(e) =>
+    setManualPi({
+      ...manualPi,
+      projectId: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+>
+  <option value="">Select Project</option>
+
+  {projects.map((project) => (
+    <option key={project.id} value={project.id}>
+      #{project.id} - {project.customerName || 'Unnamed'} -{' '}
+      {project.projectOwnerName || 'No Owner'}
+    </option>
+  ))}
+</select>
 
     <select
   value={manualPi.itemName}
@@ -2189,18 +2242,26 @@ const generateProformaInvoice = async () => {
   </p>
 
   <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
-    <input
-      type="number"
-      placeholder="Project ID"
-      value={manualInvoice.projectId}
-      onChange={(e) =>
-        setManualInvoice({
-          ...manualInvoice,
-          projectId: e.target.value,
-        })
-      }
-      className="rounded-xl border p-3"
-    />
+    <select
+  value={manualInvoice.projectId}
+
+onChange={(e) =>
+  setManualInvoice({
+    ...manualInvoice,
+    projectId: e.target.value,
+  })
+}
+  className="rounded-xl border p-3"
+>
+  <option value="">Select Project</option>
+
+  {projects.map((project) => (
+    <option key={project.id} value={project.id}>
+      #{project.id} - {project.customerName || 'Unnamed'} -{' '}
+      {project.projectOwnerName || 'No Owner'}
+    </option>
+  ))}
+</select>
 
     <select
   value={manualInvoice.itemName}
