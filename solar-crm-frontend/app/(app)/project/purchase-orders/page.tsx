@@ -122,6 +122,16 @@ type FinalInvoiceItem = {
   totalAmount?: number;
 };
 
+type MaterialMasterItem = {
+  id: number;
+  name: string;
+  category?: string;
+  brand?: string;
+  unit?: string;
+  rate?: number;
+  gstPercent?: number;
+};
+
 export default function PurchaseOrdersPage() {
   const [items, setItems] = useState<PurchaseItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -137,6 +147,7 @@ const [totalPages, setTotalPages] = useState(1);
 
 const [vendors, setVendors] = useState<VendorItem[]>([]);
 const [selectedVendorId, setSelectedVendorId] = useState('');
+const [materials, setMaterials] = useState<MaterialMasterItem[]>([]);
 const [selectedItemIds, setSelectedItemIds] = useState<Record<number, boolean>>({});
 const [generatingPo, setGeneratingPo] = useState(false);
 const [generatedPos, setGeneratedPos] = useState<
@@ -175,6 +186,23 @@ const [creatingManualPo, setCreatingManualPo] =
 });
 
 const [creatingManualPi, setCreatingManualPi] =
+  useState(false);
+
+  const [manualInvoice, setManualInvoice] =
+  useState({
+    projectId: '',
+    itemName: '',
+    category: '',
+    brand: '',
+    unit: '',
+    quantity: '',
+    finalRate: '',
+    gstPercent: '18',
+    discountAmount: '0',
+    remarks: '',
+  });
+
+const [creatingManualInvoice, setCreatingManualInvoice] =
   useState(false);
 
 const [poDetailLoading, setPoDetailLoading] =
@@ -305,6 +333,30 @@ const fetchVendors = async () => {
     setVendors(res.data || []);
   } catch (error) {
     console.error('Failed to load vendors:', error);
+  }
+};
+
+const fetchMaterials = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/material-master`,
+      {
+        params: {
+          activeOnly: true,
+        },
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setMaterials(res.data || []);
+  } catch (error) {
+    console.error('Failed to load materials:', error);
   }
 };
 
@@ -915,6 +967,7 @@ const hideProformaInvoice = async (piId: number) => {
 useEffect(() => {
   fetchProjectOwners();
   fetchVendors();
+  fetchMaterials();
   fetchGeneratedPos();
   fetchGeneratedPis();
   fetchFinalInvoices();
@@ -1335,6 +1388,104 @@ const createManualPi = async () => {
   }
 };
 
+const createManualInvoice = async () => {
+  if (
+    !manualInvoice.projectId ||
+    !manualInvoice.itemName
+  ) {
+    alert(
+      'Project and item are required',
+    );
+
+    return;
+  }
+
+  try {
+    setCreatingManualInvoice(true);
+
+    const token = localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/final-invoice/manual`,
+      {
+        projectId: Number(
+          manualInvoice.projectId,
+        ),
+
+        remarks:
+          manualInvoice.remarks,
+
+        items: [
+          {
+            itemName:
+              manualInvoice.itemName,
+
+            category:
+              manualInvoice.category,
+
+            brand:
+              manualInvoice.brand,
+
+            unit:
+              manualInvoice.unit,
+
+            quantity: Number(
+              manualInvoice.quantity || 0,
+            ),
+
+            finalRate: Number(
+              manualInvoice.finalRate || 0,
+            ),
+
+            gstPercent: Number(
+              manualInvoice.gstPercent || 0,
+            ),
+
+            discountAmount: Number(
+              manualInvoice.discountAmount || 0,
+            ),
+          },
+        ],
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert(
+      'Manual final invoice created successfully',
+    );
+
+    setManualInvoice({
+      projectId: '',
+      itemName: '',
+      category: '',
+      brand: '',
+      unit: '',
+      quantity: '',
+      finalRate: '',
+      gstPercent: '18',
+      discountAmount: '0',
+      remarks: '',
+    });
+
+    fetchFinalInvoices();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to create manual invoice',
+    );
+  } finally {
+    setCreatingManualInvoice(false);
+  }
+};
+
 const generateProformaInvoice = async () => {
   if (!selectedItems.length) {
     alert('Please select at least one item');
@@ -1651,7 +1802,7 @@ const generateProformaInvoice = async () => {
       ))}
     </select>
 
-    <div className="rounded-xl bg-white p-3 text-sm">
+    <div className="rounded-xl border bg-white p-3 text-sm font-semibold text-gray-700">
       Selected Items:{' '}
       <b>{selectedItems.length}</b>
     </div>
@@ -1707,29 +1858,52 @@ const generateProformaInvoice = async () => {
       className="rounded-xl border p-3"
     />
 
-    <input
-      placeholder="Vendor Name"
-      value={manualPo.vendorName}
-      onChange={(e) =>
-        setManualPo({
-          ...manualPo,
-          vendorName: e.target.value,
-        })
-      }
-      className="rounded-xl border p-3"
-    />
+    <select
+  value={manualPo.vendorName}
+  onChange={(e) =>
+    setManualPo({
+      ...manualPo,
+      vendorName: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+>
+  <option value="">Select Vendor</option>
 
-    <input
-      placeholder="Material Name"
-      value={manualPo.materialName}
-      onChange={(e) =>
-        setManualPo({
-          ...manualPo,
-          materialName: e.target.value,
-        })
-      }
-      className="rounded-xl border p-3"
-    />
+  {vendors.map((vendor) => (
+    <option key={vendor.id} value={vendor.vendorName}>
+      {vendor.vendorName}
+    </option>
+  ))}
+</select>
+
+    <select
+  value={manualPo.materialName}
+  onChange={(e) => {
+    const selected = materials.find(
+      (material) => material.name === e.target.value,
+    );
+
+    setManualPo({
+      ...manualPo,
+      materialName: selected?.name || '',
+      category: selected?.category || '',
+      brand: selected?.brand || '',
+      unit: selected?.unit || '',
+      purchaseRate: String(selected?.rate || ''),
+      gstPercent: String(selected?.gstPercent || '18'),
+    });
+  }}
+  className="rounded-xl border p-3"
+>
+  <option value="">Select Material</option>
+
+  {materials.map((material) => (
+    <option key={material.id} value={material.name}>
+      {material.name}
+    </option>
+  ))}
+</select>
 
     <input
       placeholder="Category"
@@ -1854,17 +2028,43 @@ const generateProformaInvoice = async () => {
       className="rounded-xl border p-3"
     />
 
-    <input
-      placeholder="Item Name"
-      value={manualPi.itemName}
-      onChange={(e) =>
-        setManualPi({
-          ...manualPi,
-          itemName: e.target.value,
-        })
-      }
-      className="rounded-xl border p-3"
-    />
+    <select
+  value={manualPi.itemName}
+  onChange={(e) => {
+    const selected = materials.find(
+      (material) =>
+        material.name === e.target.value,
+    );
+
+    setManualPi({
+      ...manualPi,
+      itemName: selected?.name || '',
+      category: selected?.category || '',
+      brand: selected?.brand || '',
+      unit: selected?.unit || '',
+      sellingRate: String(
+        selected?.rate || '',
+      ),
+      gstPercent: String(
+        selected?.gstPercent || '18',
+      ),
+    });
+  }}
+  className="rounded-xl border p-3"
+>
+  <option value="">
+    Select Material
+  </option>
+
+  {materials.map((material) => (
+    <option
+      key={material.id}
+      value={material.name}
+    >
+      {material.name}
+    </option>
+  ))}
+</select>
 
     <input
       placeholder="Category"
@@ -1976,6 +2176,180 @@ const generateProformaInvoice = async () => {
     {creatingManualPi
       ? 'Creating...'
       : 'Create Manual PI'}
+  </button>
+</div>
+
+<div className="mb-5 rounded-2xl border bg-blue-50 p-4">
+  <h2 className="text-lg font-bold text-gray-800">
+    Manual Final Invoice
+  </h2>
+
+  <p className="mt-1 text-sm text-gray-600">
+    Create final invoice manually.
+  </p>
+
+  <div className="mt-4 grid gap-3 md:grid-cols-3">
+    <input
+      type="number"
+      placeholder="Project ID"
+      value={manualInvoice.projectId}
+      onChange={(e) =>
+        setManualInvoice({
+          ...manualInvoice,
+          projectId: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+
+    <select
+  value={manualInvoice.itemName}
+  onChange={(e) => {
+    const selected = materials.find(
+      (material) =>
+        material.name === e.target.value,
+    );
+
+    setManualInvoice({
+      ...manualInvoice,
+      itemName: selected?.name || '',
+      category: selected?.category || '',
+      brand: selected?.brand || '',
+      unit: selected?.unit || '',
+      finalRate: String(
+        selected?.rate || '',
+      ),
+      gstPercent: String(
+        selected?.gstPercent || '18',
+      ),
+    });
+  }}
+  className="rounded-xl border p-3"
+>
+  <option value="">
+    Select Material
+  </option>
+
+  {materials.map((material) => (
+    <option
+      key={material.id}
+      value={material.name}
+    >
+      {material.name}
+    </option>
+  ))}
+</select>
+
+    <input
+      placeholder="Category"
+      value={manualInvoice.category}
+      onChange={(e) =>
+        setManualInvoice({
+          ...manualInvoice,
+          category: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+
+    <input
+      placeholder="Brand"
+      value={manualInvoice.brand}
+      onChange={(e) =>
+        setManualInvoice({
+          ...manualInvoice,
+          brand: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+
+    <input
+      placeholder="Unit"
+      value={manualInvoice.unit}
+      onChange={(e) =>
+        setManualInvoice({
+          ...manualInvoice,
+          unit: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+
+    <input
+      type="number"
+      placeholder="Quantity"
+      value={manualInvoice.quantity}
+      onChange={(e) =>
+        setManualInvoice({
+          ...manualInvoice,
+          quantity: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+
+    <input
+      type="number"
+      placeholder="Final Rate"
+      value={manualInvoice.finalRate}
+      onChange={(e) =>
+        setManualInvoice({
+          ...manualInvoice,
+          finalRate: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+
+    <input
+      type="number"
+      placeholder="GST %"
+      value={manualInvoice.gstPercent}
+      onChange={(e) =>
+        setManualInvoice({
+          ...manualInvoice,
+          gstPercent: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+
+    <input
+      type="number"
+      placeholder="Discount Amount"
+      value={manualInvoice.discountAmount}
+      onChange={(e) =>
+        setManualInvoice({
+          ...manualInvoice,
+          discountAmount: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+  </div>
+
+  <textarea
+    placeholder="Remarks"
+    value={manualInvoice.remarks}
+    onChange={(e) =>
+      setManualInvoice({
+        ...manualInvoice,
+        remarks: e.target.value,
+      })
+    }
+    className="mt-3 w-full rounded-xl border p-3"
+    rows={3}
+  />
+
+  <button
+    onClick={createManualInvoice}
+    disabled={creatingManualInvoice}
+    className="mt-4 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white disabled:opacity-50"
+  >
+    {creatingManualInvoice
+      ? 'Creating...'
+      : 'Create Manual Invoice'}
   </button>
 </div>
 
