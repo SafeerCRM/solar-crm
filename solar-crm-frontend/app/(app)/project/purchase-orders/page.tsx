@@ -1844,7 +1844,7 @@ const generateProformaInvoice = async () => {
     Create PO manually without material request.
   </p>
 
-  <div className="mt-4 grid gap-3 md:grid-cols-3">
+  <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
     <input
       type="number"
       placeholder="Project ID"
@@ -2014,7 +2014,7 @@ const generateProformaInvoice = async () => {
     Create PI manually without material request.
   </p>
 
-  <div className="mt-4 grid gap-3 md:grid-cols-3">
+  <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
     <input
       type="number"
       placeholder="Project ID"
@@ -2188,7 +2188,7 @@ const generateProformaInvoice = async () => {
     Create final invoice manually.
   </p>
 
-  <div className="mt-4 grid gap-3 md:grid-cols-3">
+  <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
     <input
       type="number"
       placeholder="Project ID"
