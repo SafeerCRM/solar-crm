@@ -6,6 +6,63 @@ import { useRouter } from 'next/navigation';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
+const compressImageFile = async (file: File): Promise<File> => {
+  if (!file.type.startsWith('image/')) return file;
+
+  if (file.size <= 1024 * 1024) return file;
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+
+    img.onload = () => {
+      const maxWidth = 1600;
+      const scale = Math.min(1, maxWidth / img.width);
+
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+
+      const ctx = canvas.getContext('2d');
+
+      if (!ctx) {
+        URL.revokeObjectURL(url);
+        resolve(file);
+        return;
+      }
+
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      canvas.toBlob(
+        (blob) => {
+          URL.revokeObjectURL(url);
+
+          if (!blob) {
+            resolve(file);
+            return;
+          }
+
+          resolve(
+            new File([blob], file.name.replace(/\.(png|jpg|jpeg|webp)$/i, '.jpg'), {
+              type: 'image/jpeg',
+              lastModified: Date.now(),
+            }),
+          );
+        },
+        'image/jpeg',
+        0.78,
+      );
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(file);
+    };
+
+    img.src = url;
+  });
+};
+
 type PendingDocument = {
   documentType: string;
   files: File[];
@@ -342,9 +399,10 @@ if (!createdProjectId) {
 for (const pendingDoc of pendingDocuments) {
   const formData = new FormData();
 
-  pendingDoc.files.forEach((file) => {
-    formData.append('files', file);
-  });
+  for (const file of pendingDoc.files) {
+  const uploadFile = await compressImageFile(file);
+  formData.append('files', uploadFile);
+}
 
   formData.append('projectId', String(createdProjectId));
   formData.append('department', 'PROJECT_CREATION');
