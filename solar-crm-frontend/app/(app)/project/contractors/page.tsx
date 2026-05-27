@@ -295,7 +295,7 @@ setBankProofFile(null);
 }, []);
 
   return (
-    <div className="space-y-5">
+    <div className="mx-auto max-w-7xl space-y-5 overflow-x-hidden px-3 pb-5">
       <div className="rounded-2xl bg-white p-5 shadow">
         <h1 className="text-2xl font-bold text-gray-800">
           Project Contractors
@@ -311,7 +311,7 @@ setBankProofFile(null);
           Add Contractor
         </h2>
 
-        <div className="mt-5 grid gap-3 md:grid-cols-2">
+        <div className="mt-5 grid grid-cols-1 gap-3 lg:grid-cols-2">
           <input
             placeholder="Contractor Name"
             value={form.contractorName}
@@ -321,7 +321,7 @@ setBankProofFile(null);
                 contractorName: e.target.value,
               })
             }
-            className="rounded-xl border p-3"
+            className="w-full rounded-xl border p-3"
           />
 
           <input
@@ -333,7 +333,7 @@ setBankProofFile(null);
                 phone: e.target.value,
               })
             }
-            className="rounded-xl border p-3"
+            className="w-full rounded-xl border p-3"
           />
 
           <input
@@ -345,7 +345,7 @@ setBankProofFile(null);
                 alternatePhone: e.target.value,
               })
             }
-            className="rounded-xl border p-3"
+            className="w-full rounded-xl border p-3"
           />
 
           <input
@@ -357,7 +357,7 @@ setBankProofFile(null);
                 city: e.target.value,
               })
             }
-            className="rounded-xl border p-3"
+            className="w-full rounded-xl border p-3"
           />
 
           <select
@@ -368,7 +368,7 @@ setBankProofFile(null);
       linkedUserId: e.target.value,
     })
   }
-  className="rounded-xl border p-3"
+  className="w-full rounded-xl border p-3"
 >
   <option value="">Select PROJECT_CONTRACTOR User</option>
 
@@ -388,7 +388,7 @@ setBankProofFile(null);
                 address: e.target.value,
               })
             }
-            className="rounded-xl border p-3"
+            className="w-full rounded-xl border p-3"
           />
 
           <input
@@ -400,7 +400,7 @@ setBankProofFile(null);
       accountHolderName: e.target.value,
     })
   }
-  className="rounded-xl border p-3"
+  className="w-full rounded-xl border p-3"
 />
 
 <input
@@ -412,7 +412,7 @@ setBankProofFile(null);
       bankName: e.target.value,
     })
   }
-  className="rounded-xl border p-3"
+  className="w-full rounded-xl border p-3"
 />
 
 <input
@@ -424,7 +424,7 @@ setBankProofFile(null);
       accountNumber: e.target.value,
     })
   }
-  className="rounded-xl border p-3"
+  className="w-full rounded-xl border p-3"
 />
 
 <input
@@ -436,7 +436,7 @@ setBankProofFile(null);
       ifscCode: e.target.value,
     })
   }
-  className="rounded-xl border p-3"
+  className="w-full rounded-xl border p-3"
 />
 
 <input
@@ -448,7 +448,7 @@ setBankProofFile(null);
       upiId: e.target.value,
     })
   }
-  className="rounded-xl border p-3"
+  className="w-full rounded-xl border p-3"
 />
 
 <input
@@ -460,7 +460,7 @@ setBankProofFile(null);
       panNumber: e.target.value,
     })
   }
-  className="rounded-xl border p-3"
+  className="w-full rounded-xl border p-3"
 />
 
 <div className="rounded-xl border p-3">
