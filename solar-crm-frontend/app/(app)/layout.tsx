@@ -231,6 +231,18 @@ const navItems = [
 },
 
 {
+  name: 'Accounts / Ledger',
+  href: '/project/accounts',
+  roles: [
+    'OWNER',
+    'MARKETING_HEAD',
+    'PROJECT_MANAGER',
+    'PAYMENT_MANAGER',
+    'ACCOUNT_MANAGER',
+  ],
+},
+
+{
   name: 'Branch Settings',
   href: '/project/branch-settings',
   roles: ['OWNER'],
