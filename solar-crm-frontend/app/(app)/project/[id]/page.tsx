@@ -413,6 +413,31 @@ const [loanCoApplicantLoading, setLoanCoApplicantLoading] =
 const [loanCoApplicantUploadingKey, setLoanCoApplicantUploadingKey] =
   useState<string | null>(null);
 
+  const [editingLoanCoApplicantId, setEditingLoanCoApplicantId] =
+  useState<number | null>(null);
+
+const [loanCoApplicantEditForm, setLoanCoApplicantEditForm] =
+  useState({
+    fullName: '',
+    relationWithCustomer: '',
+    mobileNumber: '',
+
+    aadhaarNumber: '',
+    panNumber: '',
+
+    bankName: '',
+    accountNumber: '',
+    ifscCode: '',
+
+    remarks: '',
+  });
+
+const [loanCoApplicantEditLoading, setLoanCoApplicantEditLoading] =
+  useState(false);
+
+const [deletingLoanCoApplicantId, setDeletingLoanCoApplicantId] =
+  useState<number | null>(null);
+
 const [loanCoApplicantForm, setLoanCoApplicantForm] =
   useState({
     fullName: '',
@@ -1371,6 +1396,125 @@ const uploadLoanCoApplicantDocument = async (
     );
   } finally {
     setLoanCoApplicantUploadingKey(null);
+  }
+};
+
+const startEditLoanCoApplicant = (item: LoanCoApplicant) => {
+  setEditingLoanCoApplicantId(item.id);
+
+  setLoanCoApplicantEditForm({
+    fullName: item.fullName || '',
+    relationWithCustomer:
+      item.relationWithCustomer || '',
+    mobileNumber: item.mobileNumber || '',
+
+    aadhaarNumber: item.aadhaarNumber || '',
+    panNumber: item.panNumber || '',
+
+    bankName: item.bankName || '',
+    accountNumber: item.accountNumber || '',
+    ifscCode: item.ifscCode || '',
+
+    remarks: item.remarks || '',
+  });
+};
+
+const cancelEditLoanCoApplicant = () => {
+  setEditingLoanCoApplicantId(null);
+
+  setLoanCoApplicantEditForm({
+    fullName: '',
+    relationWithCustomer: '',
+    mobileNumber: '',
+
+    aadhaarNumber: '',
+    panNumber: '',
+
+    bankName: '',
+    accountNumber: '',
+    ifscCode: '',
+
+    remarks: '',
+  });
+};
+
+const updateLoanCoApplicant = async () => {
+  if (!editingLoanCoApplicantId) return;
+
+  if (!loanCoApplicantEditForm.fullName.trim()) {
+    alert('Please enter co-applicant name');
+    return;
+  }
+
+  try {
+    setLoanCoApplicantEditLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/loan-co-applicants/${editingLoanCoApplicantId}`,
+      loanCoApplicantEditForm,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Co-applicant updated successfully');
+
+    cancelEditLoanCoApplicant();
+    fetchLoanCoApplicants();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to update co-applicant',
+    );
+  } finally {
+    setLoanCoApplicantEditLoading(false);
+  }
+};
+
+const deleteLoanCoApplicant = async (id: number) => {
+  const confirmed = window.confirm(
+    'Remove this co-applicant from Loan Department?',
+  );
+
+  if (!confirmed) return;
+
+  try {
+    setDeletingLoanCoApplicantId(id);
+
+    const token = localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/loan-co-applicants/${id}/delete`,
+      {},
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Co-applicant removed successfully');
+
+    fetchLoanCoApplicants();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to remove co-applicant',
+    );
+  } finally {
+    setDeletingLoanCoApplicantId(null);
   }
 };
 
@@ -4598,45 +4742,225 @@ const remainingAmountToCollect =
           className="rounded-xl border bg-gray-50 p-4"
         >
           <div className="grid gap-3 md:grid-cols-2">
-            <Field
-              label="Full Name"
-              value={item.fullName}
-            />
+            {editingLoanCoApplicantId === item.id ? (
+  <div className="rounded-xl border bg-white p-4">
+    <h4 className="font-bold text-gray-800">
+      Edit Co-Applicant
+    </h4>
 
-            <Field
-              label="Relation"
-              value={item.relationWithCustomer}
-            />
+    <div className="mt-4 grid gap-3 md:grid-cols-2">
+      <input
+        placeholder="Full Name"
+        value={loanCoApplicantEditForm.fullName}
+        onChange={(e) =>
+          setLoanCoApplicantEditForm({
+            ...loanCoApplicantEditForm,
+            fullName: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
 
-            <Field
-              label="Mobile Number"
-              value={item.mobileNumber}
-            />
+      <input
+        placeholder="Relation With Customer"
+        value={loanCoApplicantEditForm.relationWithCustomer}
+        onChange={(e) =>
+          setLoanCoApplicantEditForm({
+            ...loanCoApplicantEditForm,
+            relationWithCustomer: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
 
-            <Field
-              label="Aadhaar Number"
-              value={item.aadhaarNumber}
-            />
+      <input
+        placeholder="Mobile Number"
+        value={loanCoApplicantEditForm.mobileNumber}
+        onChange={(e) =>
+          setLoanCoApplicantEditForm({
+            ...loanCoApplicantEditForm,
+            mobileNumber: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
 
-            <Field
-              label="PAN Number"
-              value={item.panNumber}
-            />
+      <input
+        placeholder="Aadhaar Number"
+        value={loanCoApplicantEditForm.aadhaarNumber}
+        onChange={(e) =>
+          setLoanCoApplicantEditForm({
+            ...loanCoApplicantEditForm,
+            aadhaarNumber: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
 
-            <Field
-              label="Bank Name"
-              value={item.bankName}
-            />
+      <input
+        placeholder="PAN Number"
+        value={loanCoApplicantEditForm.panNumber}
+        onChange={(e) =>
+          setLoanCoApplicantEditForm({
+            ...loanCoApplicantEditForm,
+            panNumber: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
 
-            <Field
-              label="Account Number"
-              value={item.accountNumber}
-            />
+      <input
+        placeholder="Bank Name"
+        value={loanCoApplicantEditForm.bankName}
+        onChange={(e) =>
+          setLoanCoApplicantEditForm({
+            ...loanCoApplicantEditForm,
+            bankName: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
 
-            <Field
-              label="IFSC Code"
-              value={item.ifscCode}
-            />
+      <input
+        placeholder="Account Number"
+        value={loanCoApplicantEditForm.accountNumber}
+        onChange={(e) =>
+          setLoanCoApplicantEditForm({
+            ...loanCoApplicantEditForm,
+            accountNumber: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
+
+      <input
+        placeholder="IFSC Code"
+        value={loanCoApplicantEditForm.ifscCode}
+        onChange={(e) =>
+          setLoanCoApplicantEditForm({
+            ...loanCoApplicantEditForm,
+            ifscCode: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
+    </div>
+
+    <textarea
+      placeholder="Remarks"
+      value={loanCoApplicantEditForm.remarks}
+      onChange={(e) =>
+        setLoanCoApplicantEditForm({
+          ...loanCoApplicantEditForm,
+          remarks: e.target.value,
+        })
+      }
+      className="mt-4 w-full rounded-xl border p-3"
+      rows={3}
+    />
+
+    <div className="mt-4 flex flex-wrap gap-2">
+      <button
+        type="button"
+        onClick={updateLoanCoApplicant}
+        disabled={loanCoApplicantEditLoading}
+        className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+      >
+        {loanCoApplicantEditLoading
+          ? 'Updating...'
+          : 'Update Co-Applicant'}
+      </button>
+
+      <button
+        type="button"
+        onClick={cancelEditLoanCoApplicant}
+        className="rounded-xl bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-300"
+      >
+        Cancel
+      </button>
+    </div>
+  </div>
+) : (
+  <>
+    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+      <div>
+        <h3 className="text-lg font-bold text-gray-800">
+          {item.fullName || 'Unnamed Co-Applicant'}
+        </h3>
+
+        <p className="text-sm text-gray-500">
+          {item.relationWithCustomer || 'Relation not added'} ·{' '}
+          {item.mobileNumber || 'No mobile'}
+        </p>
+      </div>
+
+      {canManageLoan && (
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => startEditLoanCoApplicant(item)}
+            className="rounded-lg bg-yellow-500 px-3 py-2 text-sm font-semibold text-white hover:bg-yellow-600"
+          >
+            Edit
+          </button>
+
+          <button
+            type="button"
+            onClick={() => deleteLoanCoApplicant(item.id)}
+            disabled={deletingLoanCoApplicantId === item.id}
+            className="rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+          >
+            {deletingLoanCoApplicantId === item.id
+              ? 'Removing...'
+              : 'Remove'}
+          </button>
+        </div>
+      )}
+    </div>
+
+    <div className="mt-4 grid gap-3 md:grid-cols-2">
+      <Field
+        label="Full Name"
+        value={item.fullName}
+      />
+
+      <Field
+        label="Relation"
+        value={item.relationWithCustomer}
+      />
+
+      <Field
+        label="Mobile Number"
+        value={item.mobileNumber}
+      />
+
+      <Field
+        label="Aadhaar Number"
+        value={item.aadhaarNumber}
+      />
+
+      <Field
+        label="PAN Number"
+        value={item.panNumber}
+      />
+
+      <Field
+        label="Bank Name"
+        value={item.bankName}
+      />
+
+      <Field
+        label="Account Number"
+        value={item.accountNumber}
+      />
+
+      <Field
+        label="IFSC Code"
+        value={item.ifscCode}
+      />
+    </div>
+  </>
+)}
           </div>
 
           {canManageLoan && (
