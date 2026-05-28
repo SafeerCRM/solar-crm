@@ -550,10 +550,17 @@ if (
   !userRoles.includes(UserRole.OWNER) &&
   !userRoles.includes(UserRole.MARKETING_HEAD)
 ) {
-  filteredManagers = filteredManagers.filter(
-    (manager: any) =>
-      Number(manager.id) === Number(currentUserId),
-  );
+  const currentManager =
+    meetingManagers.find(
+      (manager: any) =>
+        Number(manager.id) === Number(currentUserId),
+    ) || {
+      id: Number(currentUserId),
+      name: 'My Analytics',
+      roles: [UserRole.MEETING_MANAGER],
+    };
+
+  filteredManagers = [currentManager as any];
 }
 
   const result: any[] = [];
