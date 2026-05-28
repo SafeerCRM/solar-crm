@@ -122,6 +122,7 @@ import {
 } from './project-contractor-proof.entity';
 import { ProjectContractor } from './project-contractor.entity';
 import { ProjectContractorComment } from './project-contractor-comment.entity';
+import { ProjectLoanCoApplicant } from './project-loan-co-applicant.entity';
 
 @Injectable()
 export class ProjectService {
@@ -240,6 +241,9 @@ private readonly projectContractorRepository: Repository<ProjectContractor>,
 
 @InjectRepository(ProjectContractorComment)
 private readonly projectContractorCommentRepository: Repository<ProjectContractorComment>,
+
+@InjectRepository(ProjectLoanCoApplicant)
+private readonly projectLoanCoApplicantRepository: Repository<ProjectLoanCoApplicant>,
 
     private readonly calculatorService: CalculatorService,
 
@@ -7693,6 +7697,187 @@ async saveProjectLoanDetail(
   });
 
   return this.projectLoanDetailRepository.save(detail);
+}
+
+async getProjectLoanCoApplicants(projectId: number) {
+  const project = await this.projectRepository.findOne({
+    where: { id: projectId },
+  });
+
+  if (!project) {
+    throw new NotFoundException('Project not found');
+  }
+
+  return this.projectLoanCoApplicantRepository.find({
+    where: {
+      projectId,
+      isActive: true,
+    },
+    order: {
+      createdAt: 'DESC',
+    },
+  });
+}
+
+async saveProjectLoanCoApplicant(
+  projectId: number,
+  body: any,
+  user: any,
+) {
+  const project = await this.projectRepository.findOne({
+    where: { id: projectId },
+  });
+
+  if (!project) {
+    throw new NotFoundException('Project not found');
+  }
+
+  const fullName = String(body?.fullName || '').trim();
+
+  if (!fullName) {
+    throw new BadRequestException('Co-applicant name is required');
+  }
+
+  const coApplicant =
+    this.projectLoanCoApplicantRepository.create({
+      projectId,
+      fullName,
+      relationWithCustomer:
+        String(body?.relationWithCustomer || '').trim(),
+      mobileNumber:
+        String(body?.mobileNumber || '').trim(),
+      aadhaarNumber:
+        String(body?.aadhaarNumber || '').trim(),
+      aadhaarFrontUrl:
+        String(body?.aadhaarFrontUrl || '').trim(),
+      aadhaarBackUrl:
+        String(body?.aadhaarBackUrl || '').trim(),
+      panNumber:
+        String(body?.panNumber || '').trim(),
+      panCardUrl:
+        String(body?.panCardUrl || '').trim(),
+      bankName:
+        String(body?.bankName || '').trim(),
+      accountNumber:
+        String(body?.accountNumber || '').trim(),
+      ifscCode:
+        String(body?.ifscCode || '').trim(),
+      bankProofUrl:
+        String(body?.bankProofUrl || '').trim(),
+      remarks:
+        String(body?.remarks || '').trim(),
+      isActive: true,
+      createdBy: user?.id || user?.userId || null,
+      createdByName: user?.name || user?.email || '',
+      updatedBy: user?.id || user?.userId || null,
+      updatedByName: user?.name || user?.email || '',
+    });
+
+  return this.projectLoanCoApplicantRepository.save(
+    coApplicant,
+  );
+}
+
+async updateProjectLoanCoApplicant(
+  id: number,
+  body: any,
+  user: any,
+) {
+  const coApplicant =
+    await this.projectLoanCoApplicantRepository.findOne({
+      where: { id },
+    });
+
+  if (!coApplicant) {
+    throw new NotFoundException('Co-applicant not found');
+  }
+
+  Object.assign(coApplicant, {
+    fullName:
+      body?.fullName !== undefined
+        ? String(body.fullName || '').trim()
+        : coApplicant.fullName,
+    relationWithCustomer:
+      body?.relationWithCustomer !== undefined
+        ? String(body.relationWithCustomer || '').trim()
+        : coApplicant.relationWithCustomer,
+    mobileNumber:
+      body?.mobileNumber !== undefined
+        ? String(body.mobileNumber || '').trim()
+        : coApplicant.mobileNumber,
+    aadhaarNumber:
+      body?.aadhaarNumber !== undefined
+        ? String(body.aadhaarNumber || '').trim()
+        : coApplicant.aadhaarNumber,
+    aadhaarFrontUrl:
+      body?.aadhaarFrontUrl !== undefined
+        ? String(body.aadhaarFrontUrl || '').trim()
+        : coApplicant.aadhaarFrontUrl,
+    aadhaarBackUrl:
+      body?.aadhaarBackUrl !== undefined
+        ? String(body.aadhaarBackUrl || '').trim()
+        : coApplicant.aadhaarBackUrl,
+    panNumber:
+      body?.panNumber !== undefined
+        ? String(body.panNumber || '').trim()
+        : coApplicant.panNumber,
+    panCardUrl:
+      body?.panCardUrl !== undefined
+        ? String(body.panCardUrl || '').trim()
+        : coApplicant.panCardUrl,
+    bankName:
+      body?.bankName !== undefined
+        ? String(body.bankName || '').trim()
+        : coApplicant.bankName,
+    accountNumber:
+      body?.accountNumber !== undefined
+        ? String(body.accountNumber || '').trim()
+        : coApplicant.accountNumber,
+    ifscCode:
+      body?.ifscCode !== undefined
+        ? String(body.ifscCode || '').trim()
+        : coApplicant.ifscCode,
+    bankProofUrl:
+      body?.bankProofUrl !== undefined
+        ? String(body.bankProofUrl || '').trim()
+        : coApplicant.bankProofUrl,
+    remarks:
+      body?.remarks !== undefined
+        ? String(body.remarks || '').trim()
+        : coApplicant.remarks,
+    updatedBy: user?.id || user?.userId || null,
+    updatedByName: user?.name || user?.email || '',
+  });
+
+  return this.projectLoanCoApplicantRepository.save(
+    coApplicant,
+  );
+}
+
+async deleteProjectLoanCoApplicant(
+  id: number,
+  user: any,
+) {
+  const coApplicant =
+    await this.projectLoanCoApplicantRepository.findOne({
+      where: { id },
+    });
+
+  if (!coApplicant) {
+    throw new NotFoundException('Co-applicant not found');
+  }
+
+  coApplicant.isActive = false;
+  coApplicant.updatedBy = user?.id || user?.userId || null;
+  coApplicant.updatedByName = user?.name || user?.email || '';
+
+  await this.projectLoanCoApplicantRepository.save(
+    coApplicant,
+  );
+
+  return {
+    message: 'Co-applicant removed successfully',
+  };
 }
 
 async getProjectSubsidyDetail(projectId: number) {

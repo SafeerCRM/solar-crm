@@ -1062,6 +1062,55 @@ async getUnreadLoanReminderCount(
   );
 }
 
+@Get(':id/loan-co-applicants')
+getProjectLoanCoApplicants(
+  @Param('id') id: string,
+) {
+  return this.projectService.getProjectLoanCoApplicants(
+    Number(id),
+  );
+}
+
+@Roles('OWNER', 'MARKETING_HEAD', 'PROJECT_MANAGER', 'LOAN_MANAGER')
+@Post(':id/loan-co-applicants')
+saveProjectLoanCoApplicant(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.saveProjectLoanCoApplicant(
+    Number(id),
+    body,
+    user,
+  );
+}
+
+@Roles('OWNER', 'MARKETING_HEAD', 'PROJECT_MANAGER', 'LOAN_MANAGER')
+@Patch('loan-co-applicants/:id')
+updateProjectLoanCoApplicant(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.updateProjectLoanCoApplicant(
+    Number(id),
+    body,
+    user,
+  );
+}
+
+@Roles('OWNER', 'MARKETING_HEAD', 'PROJECT_MANAGER', 'LOAN_MANAGER')
+@Patch('loan-co-applicants/:id/delete')
+deleteProjectLoanCoApplicant(
+  @Param('id') id: string,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.deleteProjectLoanCoApplicant(
+    Number(id),
+    user,
+  );
+}
+
 @Get('subsidy-reminders')
 async getSubsidyReminderList(
   @Req() req: any,
