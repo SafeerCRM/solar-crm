@@ -407,6 +407,12 @@ const [loanCoApplicants, setLoanCoApplicants] =
 const [loanCoApplicantLoading, setLoanCoApplicantLoading] =
   useState(false);
 
+  const [loanCoApplicantUploadFiles, setLoanCoApplicantUploadFiles] =
+  useState<Record<string, File | null>>({});
+
+const [loanCoApplicantUploadingKey, setLoanCoApplicantUploadingKey] =
+  useState<string | null>(null);
+
 const [loanCoApplicantForm, setLoanCoApplicantForm] =
   useState({
     fullName: '',
@@ -1278,6 +1284,93 @@ const saveLoanCoApplicant = async () => {
     );
   } finally {
     setLoanCoApplicantLoading(false);
+  }
+};
+
+const uploadLoanCoApplicantDocument = async (
+  coApplicantId: number,
+  fieldName:
+    | 'aadhaarFrontUrl'
+    | 'aadhaarBackUrl'
+    | 'panCardUrl'
+    | 'bankProofUrl',
+  label: string,
+) => {
+  const key = `${coApplicantId}-${fieldName}`;
+  const file = loanCoApplicantUploadFiles[key];
+
+  if (!file) {
+    alert(`Please select ${label}`);
+    return;
+  }
+
+  try {
+    setLoanCoApplicantUploadingKey(key);
+
+    const token = localStorage.getItem('token');
+
+    const formData = new FormData();
+    const uploadFile = await compressImageFile(file);
+
+    formData.append('files', uploadFile);
+    formData.append('projectId', String(projectId));
+    formData.append('department', 'LOAN');
+    formData.append('documentType', `CO_APPLICANT_${fieldName}`);
+    formData.append('remarks', `Co-applicant ${label}`);
+
+    const uploadRes = await axios.post(
+      `${API_BASE_URL}/project/documents/upload`,
+      formData,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data',
+        },
+      },
+    );
+
+    const fileUrl =
+      uploadRes.data?.documents?.[0]?.fileUrl ||
+      uploadRes.data?.document?.fileUrl ||
+      uploadRes.data?.fileUrl ||
+      '';
+
+    if (!fileUrl) {
+      throw new Error('File uploaded but URL not received');
+    }
+
+    await axios.patch(
+      `${API_BASE_URL}/project/loan-co-applicants/${coApplicantId}`,
+      {
+        [fieldName]: fileUrl,
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert(`${label} uploaded successfully`);
+
+    setLoanCoApplicantUploadFiles((prev) => ({
+      ...prev,
+      [key]: null,
+    }));
+
+    fetchLoanCoApplicants();
+    fetchDocuments();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        `Failed to upload ${label}`,
+    );
+  } finally {
+    setLoanCoApplicantUploadingKey(null);
   }
 };
 
@@ -4545,6 +4638,100 @@ const remainingAmountToCollect =
               value={item.ifscCode}
             />
           </div>
+
+          {canManageLoan && (
+  <div className="mt-4 rounded-xl border bg-white p-4">
+    <h4 className="font-semibold text-gray-800">
+      Upload Co-Applicant Documents
+    </h4>
+
+    <div className="mt-4 grid gap-4 md:grid-cols-2">
+      {[
+        {
+          field: 'aadhaarFrontUrl',
+          label: 'Aadhaar Front',
+          url: item.aadhaarFrontUrl,
+        },
+        {
+          field: 'aadhaarBackUrl',
+          label: 'Aadhaar Back',
+          url: item.aadhaarBackUrl,
+        },
+        {
+          field: 'panCardUrl',
+          label: 'PAN Card',
+          url: item.panCardUrl,
+        },
+        {
+          field: 'bankProofUrl',
+          label: 'Bank Proof',
+          url: item.bankProofUrl,
+        },
+      ].map((doc) => {
+        const key = `${item.id}-${doc.field}`;
+
+        return (
+          <div
+            key={doc.field}
+            className="rounded-xl bg-gray-50 p-3"
+          >
+            <p className="text-sm font-semibold text-gray-700">
+              {doc.label}
+            </p>
+
+            {doc.url ? (
+              <a
+                href={doc.url}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-2 inline-block text-sm font-semibold text-blue-600"
+              >
+                View Uploaded File
+              </a>
+            ) : (
+              <p className="mt-2 text-xs text-gray-500">
+                Not uploaded yet
+              </p>
+            )}
+
+            <input
+              type="file"
+              accept="image/*,application/pdf"
+              onChange={(e) =>
+                setLoanCoApplicantUploadFiles((prev) => ({
+                  ...prev,
+                  [key]: e.target.files?.[0] || null,
+                }))
+              }
+              className="mt-3 w-full rounded-lg border p-2 text-sm"
+            />
+
+            <button
+              type="button"
+              onClick={() =>
+                uploadLoanCoApplicantDocument(
+                  item.id,
+                  doc.field as
+                    | 'aadhaarFrontUrl'
+                    | 'aadhaarBackUrl'
+                    | 'panCardUrl'
+                    | 'bankProofUrl',
+                  doc.label,
+                )
+              }
+              disabled={loanCoApplicantUploadingKey === key}
+              className="mt-3 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+            >
+              {loanCoApplicantUploadingKey === key
+                ? 'Uploading...'
+                : `Upload ${doc.label}`}
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  </div>
+)}
 
           {item.remarks && (
             <div className="mt-4 rounded-xl bg-white p-3">
