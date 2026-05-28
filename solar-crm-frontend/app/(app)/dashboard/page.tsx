@@ -782,7 +782,8 @@ useEffect(() => {
         </div>
 
         {(userRoles.includes('OWNER') ||
-  userRoles.includes('MARKETING_HEAD')) && (
+  userRoles.includes('MARKETING_HEAD') ||
+  userRoles.includes('MEETING_MANAGER')) && (
   <div className="rounded-2xl bg-white p-4 shadow md:p-6">
     <h2 className="mb-4 text-xl font-bold">📅 Meeting Manager Analytics</h2>
 
