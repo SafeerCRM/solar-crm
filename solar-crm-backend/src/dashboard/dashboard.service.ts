@@ -527,7 +527,10 @@ private readonly meetingRepository: Repository<Meeting>,
     };
   }
 
-  async getMeetingManagerAnalytics() {
+  async getMeetingManagerAnalytics(
+  userRoles: string[] = [],
+  currentUserId?: number,
+) {
   const { start, end } = this.getTodayIndiaRange();
 
   const now = new Date();
@@ -536,11 +539,22 @@ const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 
 
   const meetingManagers = await this.userRepository.find();
 
-  const filteredManagers = meetingManagers.filter(
-    (u: any) =>
-      Array.isArray(u.roles) &&
-      u.roles.includes(UserRole.MEETING_MANAGER),
+  let filteredManagers = meetingManagers.filter(
+  (u: any) =>
+    Array.isArray(u.roles) &&
+    u.roles.includes(UserRole.MEETING_MANAGER),
+);
+
+if (
+  userRoles.includes(UserRole.MEETING_MANAGER) &&
+  !userRoles.includes(UserRole.OWNER) &&
+  !userRoles.includes(UserRole.MARKETING_HEAD)
+) {
+  filteredManagers = filteredManagers.filter(
+    (manager: any) =>
+      Number(manager.id) === Number(currentUserId),
   );
+}
 
   const result: any[] = [];
 

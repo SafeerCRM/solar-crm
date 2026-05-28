@@ -160,13 +160,17 @@ getMeetingManagerAnalytics(@CurrentUser() user?: any) {
   const userRoles = this.getUserRoles(user);
 
   if (
-  !userRoles.includes(UserRole.OWNER) &&
-  !userRoles.includes(UserRole.MARKETING_HEAD)
-) {
-  return [];
-}
+    !userRoles.includes(UserRole.OWNER) &&
+    !userRoles.includes(UserRole.MARKETING_HEAD) &&
+    !userRoles.includes(UserRole.MEETING_MANAGER)
+  ) {
+    return [];
+  }
 
-  return this.dashboardService.getMeetingManagerAnalytics();
+  return this.dashboardService.getMeetingManagerAnalytics(
+    userRoles,
+    user?.id,
+  );
 }
 
 @Get('lead-manager-analytics')
