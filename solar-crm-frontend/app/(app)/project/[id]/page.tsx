@@ -229,6 +229,31 @@ type PaymentInstallment = {
   createdAt?: string;
 };
 
+type LoanCoApplicant = {
+  id: number;
+
+  fullName?: string;
+  relationWithCustomer?: string;
+  mobileNumber?: string;
+
+  aadhaarNumber?: string;
+  aadhaarFrontUrl?: string;
+  aadhaarBackUrl?: string;
+
+  panNumber?: string;
+  panCardUrl?: string;
+
+  bankName?: string;
+  accountNumber?: string;
+  ifscCode?: string;
+  bankProofUrl?: string;
+
+  remarks?: string;
+
+  createdByName?: string;
+  createdAt?: string;
+};
+
 type ContractorAssignment = {
   id: number;
   projectId: number;
@@ -376,6 +401,32 @@ const [loanForm, setLoanForm] = useState({
 const [loanLoading, setLoanLoading] = useState(false);
 
 const [loanComments, setLoanComments] = useState<ProjectComment[]>([]);
+const [loanCoApplicants, setLoanCoApplicants] =
+  useState<LoanCoApplicant[]>([]);
+
+const [loanCoApplicantLoading, setLoanCoApplicantLoading] =
+  useState(false);
+
+const [loanCoApplicantForm, setLoanCoApplicantForm] =
+  useState({
+    fullName: '',
+    relationWithCustomer: '',
+    mobileNumber: '',
+
+    aadhaarNumber: '',
+    aadhaarFrontUrl: '',
+    aadhaarBackUrl: '',
+
+    panNumber: '',
+    panCardUrl: '',
+
+    bankName: '',
+    accountNumber: '',
+    ifscCode: '',
+    bankProofUrl: '',
+
+    remarks: '',
+  });
 const [loanCommentText, setLoanCommentText] = useState('');
 const [loanCommentLoading, setLoanCommentLoading] = useState(false);
 
@@ -1105,6 +1156,32 @@ const fetchLoanComments = async () => {
   }
 };
 
+const fetchLoanCoApplicants = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/${projectId}/loan-co-applicants`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setLoanCoApplicants(
+      Array.isArray(res.data) ? res.data : [],
+    );
+  } catch (error) {
+    console.error(
+      'Failed to load loan co-applicants:',
+      error,
+    );
+  }
+};
+
 const submitLoanComment = async () => {
   if (!loanCommentText.trim()) {
     alert('Please write a comment');
@@ -1143,6 +1220,64 @@ const submitLoanComment = async () => {
     );
   } finally {
     setLoanCommentLoading(false);
+  }
+};
+
+const saveLoanCoApplicant = async () => {
+  if (!loanCoApplicantForm.fullName.trim()) {
+    alert('Please enter co-applicant name');
+    return;
+  }
+
+  try {
+    setLoanCoApplicantLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/${projectId}/loan-co-applicants`,
+      loanCoApplicantForm,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Co-applicant added successfully');
+
+    setLoanCoApplicantForm({
+      fullName: '',
+      relationWithCustomer: '',
+      mobileNumber: '',
+
+      aadhaarNumber: '',
+      aadhaarFrontUrl: '',
+      aadhaarBackUrl: '',
+
+      panNumber: '',
+      panCardUrl: '',
+
+      bankName: '',
+      accountNumber: '',
+      ifscCode: '',
+      bankProofUrl: '',
+
+      remarks: '',
+    });
+
+    fetchLoanCoApplicants();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to save co-applicant',
+    );
+  } finally {
+    setLoanCoApplicantLoading(false);
   }
 };
 
@@ -2145,9 +2280,10 @@ useEffect(() => {
   if (!projectId) return;
 
   if (activeTab === 'LOAN_DEPARTMENT') {
-    fetchLoanDetail();
-    fetchLoanComments();
-  }
+  fetchLoanDetail();
+  fetchLoanComments();
+  fetchLoanCoApplicants();
+}
 
   if (activeTab === 'DOCUMENTS') {
     fetchDocuments();
@@ -4222,6 +4358,214 @@ const remainingAmountToCollect =
         : 'Save Loan Detail'}
     </button>
 )}
+
+<div className="mt-6 rounded-2xl bg-white p-5 shadow">
+  <h2 className="text-xl font-bold text-gray-800">
+    Loan Co-Applicant Details
+  </h2>
+
+  <p className="mt-1 text-sm text-gray-500">
+    Add co-applicant details required for senior citizen / bank loan processing.
+  </p>
+
+  {canManageLoan && (
+    <>
+      <div className="mt-5 grid gap-3 md:grid-cols-2">
+        <input
+          placeholder="Full Name"
+          value={loanCoApplicantForm.fullName}
+          onChange={(e) =>
+            setLoanCoApplicantForm({
+              ...loanCoApplicantForm,
+              fullName: e.target.value,
+            })
+          }
+          className="rounded-xl border p-3"
+        />
+
+        <input
+          placeholder="Relation With Customer"
+          value={loanCoApplicantForm.relationWithCustomer}
+          onChange={(e) =>
+            setLoanCoApplicantForm({
+              ...loanCoApplicantForm,
+              relationWithCustomer: e.target.value,
+            })
+          }
+          className="rounded-xl border p-3"
+        />
+
+        <input
+          placeholder="Mobile Number"
+          value={loanCoApplicantForm.mobileNumber}
+          onChange={(e) =>
+            setLoanCoApplicantForm({
+              ...loanCoApplicantForm,
+              mobileNumber: e.target.value,
+            })
+          }
+          className="rounded-xl border p-3"
+        />
+
+        <input
+          placeholder="Aadhaar Number"
+          value={loanCoApplicantForm.aadhaarNumber}
+          onChange={(e) =>
+            setLoanCoApplicantForm({
+              ...loanCoApplicantForm,
+              aadhaarNumber: e.target.value,
+            })
+          }
+          className="rounded-xl border p-3"
+        />
+
+        <input
+          placeholder="PAN Number"
+          value={loanCoApplicantForm.panNumber}
+          onChange={(e) =>
+            setLoanCoApplicantForm({
+              ...loanCoApplicantForm,
+              panNumber: e.target.value,
+            })
+          }
+          className="rounded-xl border p-3"
+        />
+
+        <input
+          placeholder="Bank Name"
+          value={loanCoApplicantForm.bankName}
+          onChange={(e) =>
+            setLoanCoApplicantForm({
+              ...loanCoApplicantForm,
+              bankName: e.target.value,
+            })
+          }
+          className="rounded-xl border p-3"
+        />
+
+        <input
+          placeholder="Account Number"
+          value={loanCoApplicantForm.accountNumber}
+          onChange={(e) =>
+            setLoanCoApplicantForm({
+              ...loanCoApplicantForm,
+              accountNumber: e.target.value,
+            })
+          }
+          className="rounded-xl border p-3"
+        />
+
+        <input
+          placeholder="IFSC Code"
+          value={loanCoApplicantForm.ifscCode}
+          onChange={(e) =>
+            setLoanCoApplicantForm({
+              ...loanCoApplicantForm,
+              ifscCode: e.target.value,
+            })
+          }
+          className="rounded-xl border p-3"
+        />
+      </div>
+
+      <textarea
+        placeholder="Remarks"
+        value={loanCoApplicantForm.remarks}
+        onChange={(e) =>
+          setLoanCoApplicantForm({
+            ...loanCoApplicantForm,
+            remarks: e.target.value,
+          })
+        }
+        className="mt-4 w-full rounded-xl border p-3"
+        rows={3}
+      />
+
+      <button
+        onClick={saveLoanCoApplicant}
+        disabled={loanCoApplicantLoading}
+        className="mt-4 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+      >
+        {loanCoApplicantLoading
+          ? 'Saving...'
+          : 'Add Co-Applicant'}
+      </button>
+    </>
+  )}
+
+  <div className="mt-6 space-y-4">
+    {loanCoApplicants.length === 0 ? (
+      <p className="text-sm text-gray-500">
+        No co-applicant added yet.
+      </p>
+    ) : (
+      loanCoApplicants.map((item) => (
+        <div
+          key={item.id}
+          className="rounded-xl border bg-gray-50 p-4"
+        >
+          <div className="grid gap-3 md:grid-cols-2">
+            <Field
+              label="Full Name"
+              value={item.fullName}
+            />
+
+            <Field
+              label="Relation"
+              value={item.relationWithCustomer}
+            />
+
+            <Field
+              label="Mobile Number"
+              value={item.mobileNumber}
+            />
+
+            <Field
+              label="Aadhaar Number"
+              value={item.aadhaarNumber}
+            />
+
+            <Field
+              label="PAN Number"
+              value={item.panNumber}
+            />
+
+            <Field
+              label="Bank Name"
+              value={item.bankName}
+            />
+
+            <Field
+              label="Account Number"
+              value={item.accountNumber}
+            />
+
+            <Field
+              label="IFSC Code"
+              value={item.ifscCode}
+            />
+          </div>
+
+          {item.remarks && (
+            <div className="mt-4 rounded-xl bg-white p-3">
+              <p className="text-xs text-gray-500">
+                Remarks
+              </p>
+
+              <p className="mt-1 text-sm text-gray-700">
+                {item.remarks}
+              </p>
+            </div>
+          )}
+
+          <p className="mt-3 text-xs text-gray-500">
+            Added By: {item.createdByName || '-'}
+          </p>
+        </div>
+      ))
+    )}
+  </div>
+</div>
 
     <div className="mt-8 rounded-2xl border p-4">
   <h3 className="text-lg font-bold text-gray-800">
