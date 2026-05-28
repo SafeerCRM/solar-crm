@@ -478,13 +478,23 @@ if (analyticsView !== 'TELECALLING_ASSISTANT') {
 
   setTelecallerFilter('');
 
+  if (userRoles.includes('MEETING_MANAGER')) {
+    setAnalyticsView('MEETING_MANAGER');
+  } else if (userRoles.includes('LEAD_MANAGER')) {
+    setAnalyticsView('LEAD_MANAGER');
+  } else if (userRoles.includes('TELECALLING_ASSISTANT')) {
+    setAnalyticsView('TELECALLING_ASSISTANT');
+  } else {
+    setAnalyticsView('TELECALLER');
+  }
+
   fetchTelecallers();
 
   // do not auto fetch, wait for user action
-setIsFilterApplied(false);
+  setIsFilterApplied(false);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [currentUser?.id]);
+}, [currentUser?.id, userRoles.join(',')]);
 
 useEffect(() => {
   if (!currentUser) return;
