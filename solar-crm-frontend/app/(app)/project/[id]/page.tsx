@@ -390,6 +390,8 @@ const [loanForm, setLoanForm] = useState({
   loanType: '',
   bankName: '',
   applicationNumber: '',
+  requiresCoApplicant: false,
+  coApplicantReason: '',
   marginMoney: '',
   sanctionAmount: '',
   firstEmiDisbursementAmount: '',
@@ -1109,6 +1111,10 @@ const fetchLoanDetail = async () => {
         bankName: res.data.bankName || '',
         applicationNumber:
           res.data.applicationNumber || '',
+          requiresCoApplicant:
+  res.data.requiresCoApplicant === true,
+coApplicantReason:
+  res.data.coApplicantReason || '',
         marginMoney:
           String(res.data.marginMoney || ''),
         sanctionAmount:
@@ -4466,6 +4472,42 @@ const remainingAmountToCollect =
         className="rounded-xl border p-3"
       />
 
+      <div className="rounded-xl border bg-gray-50 p-4">
+  <label className="flex items-center gap-3 text-sm font-semibold text-gray-700">
+    <input
+      type="checkbox"
+      checked={loanForm.requiresCoApplicant}
+      onChange={(e) =>
+        setLoanForm({
+          ...loanForm,
+          requiresCoApplicant: e.target.checked,
+        })
+      }
+      className="h-5 w-5"
+    />
+    Requires Co-Applicant
+  </label>
+
+  <p className="mt-1 text-xs text-gray-500">
+    Enable this if customer age is above 60 or bank requires a co-applicant.
+  </p>
+</div>
+
+{loanForm.requiresCoApplicant && (
+  <textarea
+    placeholder="Reason for co-applicant requirement"
+    value={loanForm.coApplicantReason}
+    onChange={(e) =>
+      setLoanForm({
+        ...loanForm,
+        coApplicantReason: e.target.value,
+      })
+    }
+    className="rounded-xl border p-3 md:col-span-2"
+    rows={3}
+  />
+)}
+
       <input
         type="number"
         placeholder="Margin Money"
@@ -4594,6 +4636,24 @@ const remainingAmountToCollect =
         ? 'Saving...'
         : 'Save Loan Detail'}
     </button>
+)}
+
+{loanForm.requiresCoApplicant && loanCoApplicants.length === 0 && (
+  <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4">
+    <p className="font-bold text-red-700">
+      Co-applicant required
+    </p>
+
+    <p className="mt-1 text-sm text-red-600">
+      Loan detail says co-applicant is required, but no co-applicant has been added yet.
+    </p>
+
+    {loanForm.coApplicantReason && (
+      <p className="mt-2 text-sm text-red-700">
+        Reason: {loanForm.coApplicantReason}
+      </p>
+    )}
+  </div>
 )}
 
 <div className="mt-6 rounded-2xl bg-white p-5 shadow">
