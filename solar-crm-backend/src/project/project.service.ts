@@ -7682,6 +7682,13 @@ async saveProjectLoanDetail(
     loanType: body.loanType || detail.loanType || null,
     bankName: body.bankName || '',
     applicationNumber: body.applicationNumber || '',
+    requiresCoApplicant:
+  body?.requiresCoApplicant === true ||
+  body?.requiresCoApplicant === 'true' ||
+  body?.requiresCoApplicant === 'YES',
+
+coApplicantReason:
+  String(body?.coApplicantReason || '').trim(),
     marginMoney: this.toNumberOrZero(body.marginMoney),
     sanctionAmount: this.toNumberOrZero(body.sanctionAmount),
     firstEmiDisbursementAmount: this.toNumberOrZero(

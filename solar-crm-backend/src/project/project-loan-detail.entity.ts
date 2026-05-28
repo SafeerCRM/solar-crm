@@ -44,6 +44,12 @@ export class ProjectLoanDetail {
   @Column({ nullable: true })
   applicationNumber: string;
 
+    @Column({ default: false })
+  requiresCoApplicant: boolean;
+
+  @Column({ type: 'text', nullable: true })
+  coApplicantReason: string;
+
   @Column({ type: 'float', default: 0 })
   marginMoney: number;
 
