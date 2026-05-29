@@ -226,6 +226,8 @@ type PaymentInstallment = {
 
   collectedByName?: string;
 
+  approvalStatus?: string;
+
   createdAt?: string;
 };
 
@@ -1918,6 +1920,77 @@ const receivePayment = async (installmentId: number) => {
   }
 };
 
+const approvePayment = async (installmentId: number) => {
+  try {
+    const token = localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/payment-collection/installments/${installmentId}/approve`,
+      {
+        approvalNote: 'Approved from project payment collection',
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Payment approved successfully');
+
+    fetchPaymentInstallments();
+    fetchProjectAccountsSummary();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to approve payment',
+    );
+  }
+};
+
+const rejectPayment = async (installmentId: number) => {
+  const reason = window.prompt(
+    'Reason for rejecting this payment?',
+    'Incorrect / unverified payment',
+  );
+
+  if (reason === null) return;
+
+  try {
+    const token = localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/payment-collection/installments/${installmentId}/reject`,
+      {
+        approvalNote: reason,
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Payment rejected successfully');
+
+    fetchPaymentInstallments();
+    fetchProjectAccountsSummary();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to reject payment',
+    );
+  }
+};
+
 const hidePaymentInstallment = async (installmentId: number) => {
   const reason = window.prompt(
     'Why do you want to hide this payment entry?',
@@ -2493,6 +2566,12 @@ const canManagePayment = hasRole([
   'MARKETING_HEAD',
   'PROJECT_MANAGER',
   'PAYMENT_COLLECTION_EXECUTIVE',
+]);
+
+const canApprovePayment = hasRole([
+  'OWNER',
+  'ACCOUNT_MANAGER',
+  'PAYMENT_MANAGER',
 ]);
 
 const canManageMaterial = hasRole([
@@ -5949,6 +6028,41 @@ const remainingAmountToCollect =
                   >
                     {item.status || 'PENDING'}
                   </span>
+
+                  <div className="mt-2">
+  <span
+    className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${
+      item.approvalStatus === 'APPROVED'
+        ? 'bg-green-100 text-green-700'
+        : item.approvalStatus === 'REJECTED'
+          ? 'bg-red-100 text-red-700'
+          : 'bg-yellow-100 text-yellow-700'
+    }`}
+  >
+    Approval: {item.approvalStatus || 'APPROVED'}
+  </span>
+</div>
+
+{canApprovePayment &&
+  item.approvalStatus === 'PENDING' && (
+    <div className="mt-3 flex justify-end gap-2">
+      <button
+        type="button"
+        onClick={() => approvePayment(item.id)}
+        className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
+      >
+        Approve
+      </button>
+
+      <button
+        type="button"
+        onClick={() => rejectPayment(item.id)}
+        className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+      >
+        Reject
+      </button>
+    </div>
+  )}
 
                   {item.status !== 'PAID' && item.status !== 'CANCELLED' && (
   <div className="mt-4 rounded-xl bg-gray-50 p-3 text-left">
