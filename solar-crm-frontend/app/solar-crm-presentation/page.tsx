@@ -28,7 +28,7 @@ export default function SolarCRMPresentation() {
       </div>
 
       <section className="slide hero">
-        <div className="badge">☀️ Safeer / Solar CRM</div>
+        <div className="badge">☀️ Solar CRM</div>
         <h1>SOLAR CRM</h1>
         <h2>Smart Solar Business Operating System</h2>
         <p>
@@ -111,14 +111,14 @@ export default function SolarCRMPresentation() {
         <h2>Software License</h2>
         <div className="price-box">
           <span>Total Product Cost</span>
-          <strong>₹2,50,000</strong>
+          <strong>₹3,00,000</strong>
         </div>
 
         <div className="pricing-grid">
           <div className="price-card">
             <h3>Full Payment</h3>
             <p>10% Discount</p>
-            <strong>₹2,25,000</strong>
+            <strong>₹2,70,000</strong>
           </div>
 
           <div className="price-card">
