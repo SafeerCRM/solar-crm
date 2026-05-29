@@ -82,6 +82,21 @@ export class ProjectPaymentInstallment {
   @Column({ type: 'text', nullable: true })
   createdByName: string;
 
+  @Column({ type: 'text', default: 'APPROVED' })
+approvalStatus: string;
+
+@Column({ type: 'int', nullable: true })
+approvedBy: number;
+
+@Column({ type: 'text', nullable: true })
+approvedByName: string;
+
+@Column({ type: 'timestamp', nullable: true })
+approvedAt: Date;
+
+@Column({ type: 'text', nullable: true })
+approvalNote: string;
+
  @Column({ type: 'boolean', default: false })
 isHidden: boolean;
 

@@ -458,6 +458,7 @@ const canViewAll =
   roles.includes('OWNER') ||
   roles.includes('MARKETING_HEAD') ||
   roles.includes('PROJECT_MANAGER') ||
+  roles.includes('PROJECT_EXECUTIVE') ||
   roles.includes('LOAN_MANAGER') ||
   roles.includes('SUBSIDY_MANAGER') ||
   roles.includes('ELECTRICITY_MANAGER') ||
@@ -2038,6 +2039,31 @@ async receivePaymentInstallment(
 
   installment.paidDate = new Date();
 
+  const roles = Array.isArray(currentUser?.roles)
+  ? currentUser.roles
+  : [];
+
+const canAutoApprovePayment =
+  roles.includes('OWNER') ||
+  roles.includes('ACCOUNT_MANAGER') ||
+  roles.includes('PAYMENT_MANAGER');
+
+installment.approvalStatus =
+  canAutoApprovePayment ? 'APPROVED' : 'PENDING';
+
+if (canAutoApprovePayment) {
+  installment.approvedBy =
+    currentUser?.id || currentUser?.userId || null;
+
+  installment.approvedByName =
+    currentUser?.name || '';
+
+  installment.approvedAt = new Date();
+
+  installment.approvalNote =
+    'Auto approved by authorized role';
+}
+
   if (newPendingAmount <= 0) {
     installment.status =
       ProjectPaymentInstallmentStatus.PAID;
@@ -2060,6 +2086,8 @@ const project =
       id: Number(savedInstallment.projectId),
     },
   });
+
+  if (savedInstallment.approvalStatus === 'APPROVED') {
 
 await this.projectPartyLedgerRepository.save(
   this.projectPartyLedgerRepository.create({
@@ -2098,8 +2126,120 @@ await this.projectPartyLedgerRepository.save(
       currentUser?.name || '',
   } as Partial<ProjectPartyLedger>),
 );
+  }
 
 return savedInstallment;
+}
+
+async approvePaymentInstallment(
+  installmentId: number,
+  body: any,
+  currentUser: any,
+) {
+  const installment =
+    await this.projectPaymentInstallmentRepository.findOne({
+      where: { id: installmentId },
+    });
+
+  if (!installment) {
+    throw new NotFoundException('Payment installment not found');
+  }
+
+  if (installment.approvalStatus === 'APPROVED') {
+    return {
+      message: 'Payment already approved',
+      installment,
+    };
+  }
+
+  installment.approvalStatus = 'APPROVED';
+  installment.approvedBy =
+    currentUser?.id || currentUser?.userId || null;
+  installment.approvedByName = currentUser?.name || '';
+  installment.approvedAt = new Date();
+  installment.approvalNote =
+    body?.approvalNote || 'Payment approved';
+
+  const savedInstallment =
+    await this.projectPaymentInstallmentRepository.save(
+      installment,
+    );
+
+  const existingLedger =
+    await this.projectPartyLedgerRepository.findOne({
+      where: {
+        sourceType:
+          ProjectLedgerSourceType.CUSTOMER_PAYMENT,
+        sourceId: savedInstallment.id,
+        isHidden: false,
+      },
+    });
+
+  if (!existingLedger) {
+    const project =
+      await this.projectRepository.findOne({
+        where: {
+          id: Number(savedInstallment.projectId),
+        },
+      });
+
+    await this.projectPartyLedgerRepository.save(
+      this.projectPartyLedgerRepository.create({
+        partyId: undefined,
+        partyName: project?.customerName || 'Customer',
+        partyType: 'CUSTOMER',
+        projectId: Number(savedInstallment.projectId),
+        entryType: ProjectLedgerEntryType.CREDIT,
+        sourceType:
+          ProjectLedgerSourceType.CUSTOMER_PAYMENT,
+        sourceId: savedInstallment.id,
+        amount: Number(savedInstallment.paidAmount || 0),
+        remarks:
+          savedInstallment.remarks ||
+          `Approved payment for ${savedInstallment.label || 'installment'}`,
+        createdBy:
+          currentUser?.id || currentUser?.userId || null,
+        createdByName: currentUser?.name || '',
+      } as Partial<ProjectPartyLedger>),
+    );
+  }
+
+  return {
+    message: 'Payment approved successfully',
+    installment: savedInstallment,
+  };
+}
+
+async rejectPaymentInstallment(
+  installmentId: number,
+  body: any,
+  currentUser: any,
+) {
+  const installment =
+    await this.projectPaymentInstallmentRepository.findOne({
+      where: { id: installmentId },
+    });
+
+  if (!installment) {
+    throw new NotFoundException('Payment installment not found');
+  }
+
+  installment.approvalStatus = 'REJECTED';
+  installment.approvedBy =
+    currentUser?.id || currentUser?.userId || null;
+  installment.approvedByName = currentUser?.name || '';
+  installment.approvedAt = new Date();
+  installment.approvalNote =
+    body?.approvalNote || 'Payment rejected';
+
+  await this.projectPaymentInstallmentRepository.save(
+    installment,
+  );
+
+  return {
+    message: 'Payment rejected successfully',
+    installment,
+  };
 }
 
 private getComputedPaymentStatus(

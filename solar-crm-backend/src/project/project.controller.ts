@@ -988,6 +988,38 @@ async receivePaymentInstallment(
   );
 }
 
+@Post('payment-collection/installments/:installmentId/approve')
+approvePaymentInstallment(
+  @Param('installmentId', ParseIntPipe)
+  installmentId: number,
+
+  @Body() body: any,
+
+  @Req() req: any,
+) {
+  return this.projectService.approvePaymentInstallment(
+    installmentId,
+    body,
+    req.user,
+  );
+}
+
+@Post('payment-collection/installments/:installmentId/reject')
+rejectPaymentInstallment(
+  @Param('installmentId', ParseIntPipe)
+  installmentId: number,
+
+  @Body() body: any,
+
+  @Req() req: any,
+) {
+  return this.projectService.rejectPaymentInstallment(
+    installmentId,
+    body,
+    req.user,
+  );
+}
+
 @Get('approval-reminders')
 async getApprovalReminderList(
   @Req() req: any,
