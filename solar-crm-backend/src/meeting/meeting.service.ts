@@ -704,6 +704,16 @@ return {
 
 this.assertCanModifyMeeting(existingMeeting, user);
 
+if (
+  updateMeetingDto.scheduledAt &&
+  new Date(updateMeetingDto.scheduledAt as any).getTime() !==
+    new Date(existingMeeting.scheduledAt).getTime()
+) {
+  throw new BadRequestException(
+    'Meeting schedule cannot be changed directly. Please use Reschedule action.',
+  );
+}
+
 const hasContext =
   !!String(updateMeetingDto.notes || '').trim() ||
   !!String(updateMeetingDto.managerRemarks || '').trim() ||
