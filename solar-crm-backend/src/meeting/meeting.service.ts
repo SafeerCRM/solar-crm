@@ -870,6 +870,8 @@ if (actionData.status === MeetingStatus.CONVERTED_TO_PROJECT) {
       'Meeting address is required before converting to project.',
     );
   }
+
+  actionData.convertToProject = true;
 }
 
 if (actionData.status === MeetingStatus.RESCHEDULED) {

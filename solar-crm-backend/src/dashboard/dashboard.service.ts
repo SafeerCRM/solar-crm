@@ -703,10 +703,23 @@ const solarMiterMeetingsCreatedToday = await this.meetingRepository.count({
 
     const convertedMeetingsTodayRaw = await this.meetingRepository
   .createQueryBuilder('meeting')
-  .select('COUNT(DISTINCT COALESCE(meeting.meetingGroupId, meeting.id))', 'count')
-  .where('meeting.assignedTo = :managerId', { managerId: manager.id })
-  .andWhere('meeting.convertToProject = true')
-  .andWhere('meeting.updatedAt BETWEEN :start AND :end', { start, end })
+  .select(
+    'COUNT(DISTINCT COALESCE(meeting.meetingGroupId, meeting.id))',
+    'count',
+  )
+  .where('meeting.assignedTo = :managerId', {
+    managerId: manager.id,
+  })
+  .andWhere(
+    '(meeting.convertToProject = true OR meeting.status = :convertedStatus)',
+    {
+      convertedStatus: MeetingStatus.CONVERTED_TO_PROJECT,
+    },
+  )
+  .andWhere('meeting.updatedAt BETWEEN :start AND :end', {
+    start,
+    end,
+  })
   .getRawOne();
 
 const convertedMeetingsToday = Number(convertedMeetingsTodayRaw?.count || 0);
