@@ -18,6 +18,7 @@ type PaymentRow = {
   paidDate?: string;
   status: string;
   paymentMode?: string;
+  approvalStatus?: string;
   transactionId?: string;
   remarks?: string;
   collectedByName?: string;
@@ -47,6 +48,8 @@ export default function PaymentCollectionPage() {
   const [branches, setBranches] = useState<BranchOption[]>([]);
 const [projectOwners, setProjectOwners] = useState<ProjectOwnerOption[]>([]);
   const [loading, setLoading] = useState(false);
+
+  const [approvalStatus, setApprovalStatus] = useState('');
 
   const [branch, setBranch] = useState('');
   const [search, setSearch] = useState('');
@@ -97,6 +100,7 @@ const [projectOwners, setProjectOwners] = useState<ProjectOwnerOption[]>([]);
           fromDate,
           toDate,
           status,
+          approvalStatus,
           pendingOnly: pendingOnly ? 'true' : '',
           limit: 100,
         },
@@ -130,6 +134,7 @@ const [projectOwners, setProjectOwners] = useState<ProjectOwnerOption[]>([]);
     setFromDate('');
     setToDate('');
     setStatus('');
+    setApprovalStatus('');
     setPendingOnly(false);
 
     setTimeout(fetchPayments, 0);
@@ -231,6 +236,17 @@ const [projectOwners, setProjectOwners] = useState<ProjectOwnerOption[]>([]);
             <option value="OVERDUE">Overdue</option>
             <option value="CANCELLED">Cancelled</option>
           </select>
+
+          <select
+  value={approvalStatus}
+  onChange={(e) => setApprovalStatus(e.target.value)}
+  className="rounded-xl border p-3"
+>
+  <option value="">All Approval Status</option>
+  <option value="PENDING">Pending Approval</option>
+  <option value="APPROVED">Approved</option>
+  <option value="REJECTED">Rejected</option>
+</select>
 
           <label className="flex items-center gap-2 rounded-xl border p-3 text-sm font-semibold text-gray-700">
             <input
