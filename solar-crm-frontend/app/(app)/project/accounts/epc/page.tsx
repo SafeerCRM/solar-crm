@@ -26,6 +26,7 @@ const [projectSummary, setProjectSummary] = useState({
 const [expenseForm, setExpenseForm] =
   useState({
     expenseType: 'PROJECT_FUND',
+    otherExpenseName: '',
     amount: '',
     remarks: '',
   });
@@ -210,16 +211,35 @@ const createExpense = async () => {
     return;
   }
 
+  if (
+    expenseForm.expenseType === 'OTHER' &&
+    !expenseForm.otherExpenseName.trim()
+  ) {
+    alert('Please enter Other Expense Name');
+    return;
+  }
+
+  let finalRemarks = expenseForm.remarks;
+
+  if (expenseForm.expenseType === 'OTHER') {
+    finalRemarks = `Other Expense: ${expenseForm.otherExpenseName}${
+      expenseForm.remarks
+        ? ` | ${expenseForm.remarks}`
+        : ''
+    }`;
+  }
+
   try {
     setExpenseLoading(true);
 
-    const token =
-      localStorage.getItem('token');
+    const token = localStorage.getItem('token');
 
     await axios.post(
       `${API_BASE_URL}/project/account-expenses`,
       {
-        ...expenseForm,
+        expenseType: expenseForm.expenseType,
+        amount: expenseForm.amount,
+        remarks: finalRemarks,
       },
       {
         headers: token
@@ -230,17 +250,16 @@ const createExpense = async () => {
       },
     );
 
-    alert(
-      'Expense request submitted successfully',
-    );
-
-    await loadExpenses();
+    alert('Expense request submitted successfully');
 
     setExpenseForm({
       expenseType: 'PROJECT_FUND',
+      otherExpenseName: '',
       amount: '',
       remarks: '',
     });
+
+    await loadExpenses();
   } catch (error: any) {
     console.error(error);
 
@@ -483,6 +502,21 @@ const rejectExpense = async (
       Other
     </option>
   </select>
+
+  {expenseForm.expenseType === 'OTHER' && (
+  <input
+    type="text"
+    placeholder="Other Expense Name"
+    value={expenseForm.otherExpenseName}
+    onChange={(e) =>
+      setExpenseForm({
+        ...expenseForm,
+        otherExpenseName: e.target.value,
+      })
+    }
+    className="rounded-xl border p-3"
+  />
+)}
 
   <input
     type="number"
