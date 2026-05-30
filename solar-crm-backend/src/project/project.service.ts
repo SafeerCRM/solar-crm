@@ -2453,6 +2453,101 @@ async listAccountExpenses() {
   });
 }
 
+async getAccountExpenseReport(query: any) {
+  const qb =
+    this.projectAccountExpenseRepository
+      .createQueryBuilder('expense')
+      .where('expense.isHidden = :isHidden', {
+        isHidden: false,
+      });
+
+  if (query?.fromDate) {
+    qb.andWhere(
+      'expense.createdAt >= :fromDate',
+      {
+        fromDate: new Date(query.fromDate),
+      },
+    );
+  }
+
+  if (query?.toDate) {
+    const toDate = new Date(query.toDate);
+    toDate.setHours(23, 59, 59, 999);
+
+    qb.andWhere('expense.createdAt <= :toDate', {
+      toDate,
+    });
+  }
+
+  if (query?.expenseType) {
+    qb.andWhere(
+      'expense.expenseType = :expenseType',
+      {
+        expenseType: query.expenseType,
+      },
+    );
+  }
+
+  if (query?.approvalStatus) {
+    qb.andWhere(
+      'expense.approvalStatus = :approvalStatus',
+      {
+        approvalStatus: query.approvalStatus,
+      },
+    );
+  }
+
+  qb.orderBy('expense.createdAt', 'DESC');
+
+  const rows = await qb.getMany();
+
+  const totalApprovedExpenses = rows
+    .filter(
+      (item) =>
+        item.approvalStatus ===
+        ProjectAccountExpenseApprovalStatus.APPROVED,
+    )
+    .reduce(
+      (total, item) =>
+        total + Number(item.amount || 0),
+      0,
+    );
+
+  const totalPendingExpenses = rows
+    .filter(
+      (item) =>
+        item.approvalStatus ===
+        ProjectAccountExpenseApprovalStatus.PENDING,
+    )
+    .reduce(
+      (total, item) =>
+        total + Number(item.amount || 0),
+      0,
+    );
+
+  const totalRejectedExpenses = rows
+    .filter(
+      (item) =>
+        item.approvalStatus ===
+        ProjectAccountExpenseApprovalStatus.REJECTED,
+    )
+    .reduce(
+      (total, item) =>
+        total + Number(item.amount || 0),
+      0,
+    );
+
+  return {
+    summary: {
+      totalApprovedExpenses,
+      totalPendingExpenses,
+      totalRejectedExpenses,
+      totalExpenseCount: rows.length,
+    },
+    data: rows,
+  };
+}
+
 async approveAccountExpense(
   expenseId: number,
   body: any,
