@@ -6030,20 +6030,28 @@ const remainingAmountToCollect =
                   </span>
 
                   <div className="mt-2">
-  <span
-    className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${
-      item.approvalStatus === 'APPROVED'
-        ? 'bg-green-100 text-green-700'
-        : item.approvalStatus === 'REJECTED'
-          ? 'bg-red-100 text-red-700'
-          : 'bg-yellow-100 text-yellow-700'
-    }`}
-  >
-    Approval: {item.approvalStatus || 'APPROVED'}
-  </span>
+  {Number(item.paidAmount || 0) <= 0 ? (
+    <span className="inline-block rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">
+      Payment Not Received
+    </span>
+  ) : (
+    <span
+      className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${
+        item.approvalStatus === 'APPROVED'
+          ? 'bg-green-100 text-green-700'
+          : item.approvalStatus === 'REJECTED'
+            ? 'bg-red-100 text-red-700'
+            : 'bg-yellow-100 text-yellow-700'
+      }`}
+    >
+      Payment Approval:{' '}
+      {item.approvalStatus || 'APPROVED'}
+    </span>
+  )}
 </div>
 
 {canApprovePayment &&
+  Number(item.paidAmount || 0) > 0 &&
   item.approvalStatus === 'PENDING' && (
     <div className="mt-3 flex justify-end gap-2">
       <button
