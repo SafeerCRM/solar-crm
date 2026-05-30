@@ -1,47 +1,128 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import axios from 'axios';
 
-const reportCards = [
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL;
+
+const expenseTypes = [
+  { value: '', label: 'All Expense Types' },
+  { value: 'PROJECT_FUND', label: 'Project Fund' },
   {
-    title: 'Expenditure Report',
-    description:
-      'View approved and pending expenses by type, date, branch and project owner.',
-    status: 'Phase 1C',
+    value: 'CONTRACTOR_PAYMENT',
+    label: 'Contractor Payment',
   },
-  {
-    title: 'Monthly Profit Report',
-    description:
-      'Compare customer collections against approved expenses month wise.',
-    status: 'Phase 1D',
-  },
-  {
-    title: 'Branch Wise Profit',
-    description:
-      'Review collections, expenses and profit branch wise.',
-    status: 'Phase 1E',
-  },
-  {
-    title: 'Project Owner Wise Profit',
-    description:
-      'Track collections, expenses and profitability by project owner.',
-    status: 'Phase 1F',
-  },
-  {
-    title: 'Salary Report',
-    description:
-      'Track salary and advance salary expenses.',
-    status: 'Phase 1G',
-  },
-  {
-    title: 'Incentive Report',
-    description:
-      'Track incentive expenses and future incentive workflows.',
-    status: 'Phase 1G',
-  },
+  { value: 'LABOUR_PAYMENT', label: 'Labour Payment' },
+  { value: 'TRANSPORTATION', label: 'Transportation' },
+  { value: 'SALARY', label: 'Salary' },
+  { value: 'INCENTIVE', label: 'Incentive' },
+  { value: 'ADVANCE_SALARY', label: 'Advance Salary' },
+  { value: 'OTHER', label: 'Other' },
 ];
 
+const approvalStatuses = [
+  { value: '', label: 'All Status' },
+  { value: 'PENDING', label: 'Pending' },
+  { value: 'APPROVED', label: 'Approved' },
+  { value: 'REJECTED', label: 'Rejected' },
+];
+
+const formatCurrency = (amount: number) =>
+  `₹${Number(amount || 0).toLocaleString('en-IN')}`;
+
 export default function AccountsReportsPage() {
+  const [filters, setFilters] = useState({
+    fromDate: '',
+    toDate: '',
+    expenseType: '',
+    approvalStatus: '',
+  });
+
+  const [summary, setSummary] = useState({
+    totalApprovedExpenses: 0,
+    totalPendingExpenses: 0,
+    totalRejectedExpenses: 0,
+    totalExpenseCount: 0,
+  });
+
+  const [expenses, setExpenses] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    loadExpenditureReport();
+  }, []);
+
+  const loadExpenditureReport = async () => {
+    try {
+      setLoading(true);
+
+      const token = localStorage.getItem('token');
+
+      const res = await axios.get(
+        `${API_BASE_URL}/project/account-expenses/report`,
+        {
+          params: {
+            fromDate: filters.fromDate || undefined,
+            toDate: filters.toDate || undefined,
+            expenseType:
+              filters.expenseType || undefined,
+            approvalStatus:
+              filters.approvalStatus || undefined,
+          },
+          headers: token
+            ? {
+                Authorization: `Bearer ${token}`,
+              }
+            : {},
+        },
+      );
+
+      setSummary({
+        totalApprovedExpenses: Number(
+          res.data?.summary
+            ?.totalApprovedExpenses || 0,
+        ),
+        totalPendingExpenses: Number(
+          res.data?.summary
+            ?.totalPendingExpenses || 0,
+        ),
+        totalRejectedExpenses: Number(
+          res.data?.summary
+            ?.totalRejectedExpenses || 0,
+        ),
+        totalExpenseCount: Number(
+          res.data?.summary?.totalExpenseCount || 0,
+        ),
+      });
+
+      setExpenses(
+        Array.isArray(res.data?.data)
+          ? res.data.data
+          : [],
+      );
+    } catch (error) {
+      console.error(error);
+      alert('Failed to load expenditure report');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetFilters = async () => {
+    setFilters({
+      fromDate: '',
+      toDate: '',
+      expenseType: '',
+      approvalStatus: '',
+    });
+
+    setTimeout(() => {
+      loadExpenditureReport();
+    }, 0);
+  };
+
   return (
     <div className="mx-auto max-w-7xl space-y-5">
       <div className="rounded-2xl bg-white p-5 shadow">
@@ -66,29 +147,273 @@ export default function AccountsReportsPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {reportCards.map((report) => (
-          <div
-            key={report.title}
-            className="rounded-2xl bg-white p-5 shadow"
+      <div className="rounded-2xl bg-white p-5 shadow">
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-gray-800">
+              Expenditure Report
+            </h2>
+
+            <p className="mt-1 text-sm text-gray-500">
+              Approved, pending and rejected expenses with date, type and
+              status filters.
+            </p>
+          </div>
+
+          <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
+            Phase 1C Active
+          </span>
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          <input
+            type="date"
+            value={filters.fromDate}
+            onChange={(e) =>
+              setFilters({
+                ...filters,
+                fromDate: e.target.value,
+              })
+            }
+            className="rounded-xl border p-3 text-sm"
+          />
+
+          <input
+            type="date"
+            value={filters.toDate}
+            onChange={(e) =>
+              setFilters({
+                ...filters,
+                toDate: e.target.value,
+              })
+            }
+            className="rounded-xl border p-3 text-sm"
+          />
+
+          <select
+            value={filters.expenseType}
+            onChange={(e) =>
+              setFilters({
+                ...filters,
+                expenseType: e.target.value,
+              })
+            }
+            className="rounded-xl border p-3 text-sm"
           >
-            <div className="flex items-start justify-between gap-3">
-              <h2 className="text-lg font-bold text-gray-800">
-                {report.title}
-              </h2>
+            {expenseTypes.map((type) => (
+              <option
+                key={type.value}
+                value={type.value}
+              >
+                {type.label}
+              </option>
+            ))}
+          </select>
 
-              <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
-                {report.status}
-              </span>
-            </div>
+          <select
+            value={filters.approvalStatus}
+            onChange={(e) =>
+              setFilters({
+                ...filters,
+                approvalStatus: e.target.value,
+              })
+            }
+            className="rounded-xl border p-3 text-sm"
+          >
+            {approvalStatuses.map((status) => (
+              <option
+                key={status.value}
+                value={status.value}
+              >
+                {status.label}
+              </option>
+            ))}
+          </select>
+        </div>
 
-            <p className="mt-3 text-sm text-gray-500">
-              {report.description}
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={loadExpenditureReport}
+            disabled={loading}
+            className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+          >
+            {loading ? 'Loading...' : 'Apply Filters'}
+          </button>
+
+          <button
+            type="button"
+            onClick={resetFilters}
+            className="rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700"
+          >
+            Reset
+          </button>
+        </div>
+
+        <div className="mt-5 grid gap-3 md:grid-cols-4">
+          <div className="rounded-xl bg-green-50 p-4">
+            <p className="text-xs text-green-700">
+              Approved Expenses
             </p>
 
-            <div className="mt-4 rounded-xl bg-gray-50 p-3 text-sm text-gray-500">
-              Report implementation pending.
-            </div>
+            <p className="mt-1 text-xl font-bold text-green-800">
+              {formatCurrency(
+                summary.totalApprovedExpenses,
+              )}
+            </p>
+          </div>
+
+          <div className="rounded-xl bg-yellow-50 p-4">
+            <p className="text-xs text-yellow-700">
+              Pending Expenses
+            </p>
+
+            <p className="mt-1 text-xl font-bold text-yellow-800">
+              {formatCurrency(
+                summary.totalPendingExpenses,
+              )}
+            </p>
+          </div>
+
+          <div className="rounded-xl bg-red-50 p-4">
+            <p className="text-xs text-red-700">
+              Rejected Expenses
+            </p>
+
+            <p className="mt-1 text-xl font-bold text-red-800">
+              {formatCurrency(
+                summary.totalRejectedExpenses,
+              )}
+            </p>
+          </div>
+
+          <div className="rounded-xl bg-gray-50 p-4">
+            <p className="text-xs text-gray-600">
+              Expense Count
+            </p>
+
+            <p className="mt-1 text-xl font-bold text-gray-800">
+              {summary.totalExpenseCount}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-5 overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="border-b bg-gray-50">
+                <th className="p-2 text-left">
+                  Date
+                </th>
+
+                <th className="p-2 text-left">
+                  Type
+                </th>
+
+                <th className="p-2 text-left">
+                  Amount
+                </th>
+
+                <th className="p-2 text-left">
+                  Status
+                </th>
+
+                <th className="p-2 text-left">
+                  Created By
+                </th>
+
+                <th className="p-2 text-left">
+                  Project Owner
+                </th>
+
+                <th className="p-2 text-left">
+                  Branch
+                </th>
+
+                <th className="p-2 text-left">
+                  Remarks
+                </th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {expenses.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={8}
+                    className="p-4 text-center text-gray-500"
+                  >
+                    No expenses found.
+                  </td>
+                </tr>
+              )}
+
+              {expenses.map((item) => (
+                <tr
+                  key={item.id}
+                  className="border-b"
+                >
+                  <td className="p-2">
+                    {item.createdAt
+                      ? new Date(
+                          item.createdAt,
+                        ).toLocaleDateString()
+                      : '-'}
+                  </td>
+
+                  <td className="p-2">
+                    {item.expenseType || '-'}
+                  </td>
+
+                  <td className="p-2 font-semibold">
+                    {formatCurrency(item.amount)}
+                  </td>
+
+                  <td className="p-2">
+                    {item.approvalStatus || '-'}
+                  </td>
+
+                  <td className="p-2">
+                    {item.createdByName || '-'}
+                  </td>
+
+                  <td className="p-2">
+                    {item.projectOwnerName || '-'}
+                  </td>
+
+                  <td className="p-2">
+                    {item.branchName || '-'}
+                  </td>
+
+                  <td className="p-2">
+                    {item.remarks || '-'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {[
+          'Monthly Profit Report',
+          'Branch Wise Profit',
+          'Project Owner Wise Profit',
+          'Salary Report',
+          'Incentive Report',
+        ].map((title) => (
+          <div
+            key={title}
+            className="rounded-2xl bg-white p-5 shadow"
+          >
+            <h2 className="text-lg font-bold text-gray-800">
+              {title}
+            </h2>
+
+            <p className="mt-3 text-sm text-gray-500">
+              Upcoming implementation.
+            </p>
           </div>
         ))}
       </div>
