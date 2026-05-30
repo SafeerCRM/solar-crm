@@ -17,6 +17,12 @@ export default function EPCAccountPage() {
   pendingApproval: 0,
 });
 
+const [projectSummary, setProjectSummary] = useState({
+  totalProjects: 0,
+  activeProjects: 0,
+  completedProjects: 0,
+});
+
 useEffect(() => {
   loadSummary();
 }, []);
@@ -24,9 +30,11 @@ useEffect(() => {
 const loadSummary = async () => {
   try {
     const token =
-      localStorage.getItem('token');
+  localStorage.getItem('token');
 
-    const res = await axios.get(
+const [paymentRes, projectRes] =
+  await Promise.all([
+    axios.get(
       `${API_BASE_URL}/project/payment-collection`,
       {
         params: {
@@ -38,13 +46,28 @@ const loadSummary = async () => {
             }
           : {},
       },
-    );
+    ),
+
+    axios.get(
+      `${API_BASE_URL}/project`,
+      {
+        params: {
+          limit: 10000,
+        },
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    ),
+  ]);
 
     const rows = Array.isArray(
-      res.data?.data,
-    )
-      ? res.data.data
-      : [];
+  paymentRes.data?.data,
+)
+  ? paymentRes.data.data
+  : [];
 
     let totalScheduled = 0;
     let totalReceived = 0;
@@ -74,6 +97,31 @@ const loadSummary = async () => {
         );
       }
     });
+
+    const projects = Array.isArray(
+  projectRes.data?.data,
+)
+  ? projectRes.data.data
+  : [];
+
+const totalProjects =
+  projects.length;
+
+const completedProjects =
+  projects.filter(
+    (project: any) =>
+      project.status === 'COMPLETED',
+  ).length;
+
+const activeProjects =
+  totalProjects -
+  completedProjects;
+
+setProjectSummary({
+  totalProjects,
+  activeProjects,
+  completedProjects,
+});
 
     setSummary({
       totalScheduled,
@@ -148,6 +196,38 @@ const loadSummary = async () => {
       {summary.pendingApproval.toLocaleString(
         'en-IN',
       )}
+    </p>
+  </div>
+</div>
+
+<div className="grid gap-4 md:grid-cols-3">
+  <div className="rounded-2xl bg-white p-5 shadow">
+    <p className="text-sm text-gray-500">
+      Total Projects
+    </p>
+
+    <p className="mt-2 text-2xl font-bold text-blue-700">
+      {projectSummary.totalProjects}
+    </p>
+  </div>
+
+  <div className="rounded-2xl bg-white p-5 shadow">
+    <p className="text-sm text-gray-500">
+      Active Projects
+    </p>
+
+    <p className="mt-2 text-2xl font-bold text-yellow-700">
+      {projectSummary.activeProjects}
+    </p>
+  </div>
+
+  <div className="rounded-2xl bg-white p-5 shadow">
+    <p className="text-sm text-gray-500">
+      Completed Projects
+    </p>
+
+    <p className="mt-2 text-2xl font-bold text-green-700">
+      {projectSummary.completedProjects}
     </p>
   </div>
 </div>
