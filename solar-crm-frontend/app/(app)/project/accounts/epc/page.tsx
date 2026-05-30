@@ -36,12 +36,23 @@ const [expenseLoading, setExpenseLoading] =
 
   const [expenses, setExpenses] = useState<any[]>([]);
 
+  const [expenseSummary, setExpenseSummary] =
+  useState({
+    totalExpenses: 0,
+    pendingExpenses: 0,
+    contractorPayments: 0,
+    labourPayments: 0,
+    transportationExpenses: 0,
+    salaryAndIncentives: 0,
+  });
+
   const [canApproveExpense, setCanApproveExpense] =
   useState(false);
 
 useEffect(() => {
   loadSummary();
   loadExpenses();
+  loadExpenseSummary();
 
   try {
   const userData =
@@ -205,6 +216,56 @@ const loadExpenses = async () => {
   }
 };
 
+const loadExpenseSummary = async () => {
+  try {
+    const token =
+      localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/account-expenses/summary`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setExpenseSummary({
+      totalExpenses:
+        Number(res.data?.totalExpenses || 0),
+
+      pendingExpenses:
+        Number(res.data?.pendingExpenses || 0),
+
+      contractorPayments:
+        Number(
+          res.data?.contractorPayments || 0,
+        ),
+
+      labourPayments:
+        Number(
+          res.data?.labourPayments || 0,
+        ),
+
+      transportationExpenses:
+        Number(
+          res.data?.transportationExpenses ||
+            0,
+        ),
+
+      salaryAndIncentives:
+        Number(
+          res.data?.salaryAndIncentives ||
+            0,
+        ),
+    });
+  } catch (error) {
+    console.error(error);
+  }
+};
+
 const createExpense = async () => {
   if (!expenseForm.amount) {
     alert('Please enter amount');
@@ -260,6 +321,7 @@ const createExpense = async () => {
     });
 
     await loadExpenses();
+    await loadExpenseSummary();
   } catch (error: any) {
     console.error(error);
 
@@ -293,6 +355,7 @@ const approveExpense = async (
 
     await loadExpenses();
     await loadSummary();
+    await loadExpenseSummary();
 
     alert('Expense approved');
   } catch (error: any) {
@@ -325,6 +388,7 @@ const rejectExpense = async (
     );
 
     await loadExpenses();
+    await loadExpenseSummary();
 
     alert('Expense rejected');
   } catch (error: any) {
@@ -545,47 +609,85 @@ const rejectExpense = async (
   />
 </div>
 
-  <div className="mt-4 grid gap-3 md:grid-cols-4">
-    <div className="rounded-xl bg-gray-50 p-3">
-      <p className="text-xs text-gray-500">
-        Pending Approval
-      </p>
+  <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+  <div className="rounded-xl bg-gray-50 p-3">
+    <p className="text-xs text-gray-500">
+      Total Expenses
+    </p>
 
-      <p className="mt-1 text-lg font-bold">
-        ₹0
-      </p>
-    </div>
-
-    <div className="rounded-xl bg-gray-50 p-3">
-      <p className="text-xs text-gray-500">
-        Approved Expenses
-      </p>
-
-      <p className="mt-1 text-lg font-bold">
-        ₹0
-      </p>
-    </div>
-
-    <div className="rounded-xl bg-gray-50 p-3">
-      <p className="text-xs text-gray-500">
-        This Month
-      </p>
-
-      <p className="mt-1 text-lg font-bold">
-        ₹0
-      </p>
-    </div>
-
-    <div className="rounded-xl bg-gray-50 p-3">
-      <p className="text-xs text-gray-500">
-        Total Expenses
-      </p>
-
-      <p className="mt-1 text-lg font-bold">
-        ₹0
-      </p>
-    </div>
+    <p className="mt-1 text-lg font-bold">
+      ₹
+      {expenseSummary.totalExpenses.toLocaleString(
+        'en-IN',
+      )}
+    </p>
   </div>
+
+  <div className="rounded-xl bg-gray-50 p-3">
+    <p className="text-xs text-gray-500">
+      Pending Expenses
+    </p>
+
+    <p className="mt-1 text-lg font-bold text-yellow-700">
+      ₹
+      {expenseSummary.pendingExpenses.toLocaleString(
+        'en-IN',
+      )}
+    </p>
+  </div>
+
+  <div className="rounded-xl bg-gray-50 p-3">
+    <p className="text-xs text-gray-500">
+      Contractor
+    </p>
+
+    <p className="mt-1 text-lg font-bold text-red-700">
+      ₹
+      {expenseSummary.contractorPayments.toLocaleString(
+        'en-IN',
+      )}
+    </p>
+  </div>
+
+  <div className="rounded-xl bg-gray-50 p-3">
+    <p className="text-xs text-gray-500">
+      Labour
+    </p>
+
+    <p className="mt-1 text-lg font-bold text-orange-700">
+      ₹
+      {expenseSummary.labourPayments.toLocaleString(
+        'en-IN',
+      )}
+    </p>
+  </div>
+
+  <div className="rounded-xl bg-gray-50 p-3">
+    <p className="text-xs text-gray-500">
+      Transportation
+    </p>
+
+    <p className="mt-1 text-lg font-bold text-blue-700">
+      ₹
+      {expenseSummary.transportationExpenses.toLocaleString(
+        'en-IN',
+      )}
+    </p>
+  </div>
+
+  <div className="rounded-xl bg-gray-50 p-3">
+    <p className="text-xs text-gray-500">
+      Salary & Incentive
+    </p>
+
+    <p className="mt-1 text-lg font-bold text-green-700">
+      ₹
+      {expenseSummary.salaryAndIncentives.toLocaleString(
+        'en-IN',
+      )}
+    </p>
+  </div>
+</div>
 </div>
 
 <div className="rounded-2xl bg-white p-5 shadow">
