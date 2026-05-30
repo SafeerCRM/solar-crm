@@ -942,9 +942,18 @@ async getProjectDocuments(projectId: number, user?: any) {
     : [];
 
   const canSeeAllDocuments =
-    roles.includes('OWNER') ||
-    roles.includes('MARKETING_HEAD') ||
-    roles.includes('PROJECT_MANAGER');
+  roles.includes('OWNER') ||
+  roles.includes('MARKETING_HEAD') ||
+  roles.includes('PROJECT_MANAGER') ||
+  roles.includes('PROJECT_EXECUTIVE') ||
+  roles.includes('PAYMENT_COLLECTION_EXECUTIVE') ||
+  roles.includes('PAYMENT_MANAGER') ||
+  roles.includes('ACCOUNT_MANAGER') ||
+  roles.includes('LOAN_MANAGER') ||
+  roles.includes('SUBSIDY_MANAGER') ||
+  roles.includes('ELECTRICITY_MANAGER') ||
+  roles.includes('MAINTENANCE_MANAGER') ||
+  roles.includes('CUSTOMER_MANAGER');
 
   let allowedDepartments: string[] = [];
 
