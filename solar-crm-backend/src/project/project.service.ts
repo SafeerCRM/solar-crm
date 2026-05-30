@@ -1650,6 +1650,7 @@ async getPaymentCollectionList(query: any, currentUser: any) {
   branch,
   projectOwnerId,
   customerName,
+  approvalStatus,
   fromDate,
   toDate,
   month,
@@ -1685,6 +1686,7 @@ async getPaymentCollectionList(query: any, currentUser: any) {
       'payment.dueDate AS "dueDate"',
       'payment.paidDate AS "paidDate"',
       'payment.status AS "status"',
+      'payment.approvalStatus AS "approvalStatus"',
       'payment.paymentMode AS "paymentMode"',
       'payment.transactionId AS "transactionId"',
       'payment.remarks AS "remarks"',
@@ -1751,6 +1753,16 @@ async getPaymentCollectionList(query: any, currentUser: any) {
       status: status.trim(),
     });
   }
+
+  if (approvalStatus?.trim()) {
+  qb.andWhere(
+    'payment.approvalStatus = :approvalStatus',
+    {
+      approvalStatus:
+        approvalStatus.trim(),
+    },
+  );
+}
 
   if (pendingOnly === 'true') {
     qb.andWhere('payment.pendingAmount > 0');
@@ -1845,6 +1857,16 @@ async getPaymentCollectionList(query: any, currentUser: any) {
     });
   }
 
+  if (approvalStatus?.trim()) {
+  countQb.andWhere(
+    'payment.approvalStatus = :approvalStatus',
+    {
+      approvalStatus:
+        approvalStatus.trim(),
+    },
+  );
+}
+
   if (pendingOnly === 'true') {
     countQb.andWhere('payment.pendingAmount > 0');
     countQb.andWhere('payment.status IN (:...pendingStatuses)', {
@@ -1901,6 +1923,8 @@ async getPaymentCollectionList(query: any, currentUser: any) {
   row.dueDate,
   Number(row.pendingAmount || 0),
 ),
+approvalStatus:
+  row.approvalStatus || 'APPROVED',
       paymentMode: row.paymentMode,
       transactionId: row.transactionId,
       remarks: row.remarks,
