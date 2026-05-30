@@ -2551,6 +2551,126 @@ async getMonthlyProfitReport(query: any) {
   };
 }
 
+async getBranchWiseProfitReport() {
+  const branchMap = new Map<
+    string,
+    {
+      branchName: string;
+      totalCollections: number;
+      totalExpenses: number;
+    }
+  >();
+
+  const payments =
+    await this.projectPaymentInstallmentRepository
+      .createQueryBuilder('payment')
+      .leftJoin(
+        Project,
+        'project',
+        'project.id = payment.projectId',
+      )
+      .select([
+        'payment.paidAmount AS "paidAmount"',
+        'payment.approvalStatus AS "approvalStatus"',
+        'project.branchName AS "branchName"',
+      ])
+      .where('payment.isHidden = false')
+      .andWhere('project.isHidden = false')
+      .getRawMany();
+
+  for (const row of payments) {
+    if (row.approvalStatus !== 'APPROVED') {
+      continue;
+    }
+
+    const branchName =
+      row.branchName?.trim() ||
+      'UNASSIGNED';
+
+    if (!branchMap.has(branchName)) {
+      branchMap.set(branchName, {
+        branchName,
+        totalCollections: 0,
+        totalExpenses: 0,
+      });
+    }
+
+    const current =
+      branchMap.get(branchName)!;
+
+    current.totalCollections += Number(
+      row.paidAmount || 0,
+    );
+  }
+
+  const expenses =
+    await this.projectAccountExpenseRepository.find({
+      where: {
+        approvalStatus:
+          ProjectAccountExpenseApprovalStatus.APPROVED,
+        isHidden: false,
+      },
+    });
+
+  for (const expense of expenses) {
+    let branchName: string =
+  expense.branchName?.trim() || '';
+
+    if (
+      !branchName &&
+      expense.projectId
+    ) {
+      const project =
+        await this.projectRepository.findOne({
+          where: {
+            id: expense.projectId,
+          },
+          select: [
+            'branchName',
+            'city',
+          ],
+        });
+
+      branchName =
+  project?.branchName?.trim() ||
+  project?.city?.trim() ||
+  '';
+    }
+
+    branchName =
+      branchName || 'UNASSIGNED';
+
+    if (!branchMap.has(branchName)) {
+      branchMap.set(branchName, {
+        branchName,
+        totalCollections: 0,
+        totalExpenses: 0,
+      });
+    }
+
+    const current =
+      branchMap.get(branchName)!;
+
+    current.totalExpenses += Number(
+      expense.amount || 0,
+    );
+  }
+
+  return Array.from(
+    branchMap.values(),
+  )
+    .map((item) => ({
+      ...item,
+      netProfit:
+        item.totalCollections -
+        item.totalExpenses,
+    }))
+    .sort(
+      (a, b) =>
+        b.netProfit - a.netProfit,
+    );
+}
+
 async getAccountExpenseReport(query: any) {
   const qb =
     this.projectAccountExpenseRepository
