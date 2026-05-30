@@ -2565,7 +2565,11 @@ const canManagePayment = hasRole([
   'OWNER',
   'MARKETING_HEAD',
   'PROJECT_MANAGER',
+  'PROJECT_EXECUTIVE',
+  'MEETING_MANAGER',
   'PAYMENT_COLLECTION_EXECUTIVE',
+  'PAYMENT_MANAGER',
+  'ACCOUNT_MANAGER',
 ]);
 
 const canApprovePayment = hasRole([
