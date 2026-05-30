@@ -65,9 +65,16 @@ const [monthlyProfit, setMonthlyProfit] =
 const [monthlyProfitLoading, setMonthlyProfitLoading] =
   useState(false);
 
+  const [branchProfitRows, setBranchProfitRows] =
+  useState<any[]>([]);
+
+const [branchProfitLoading, setBranchProfitLoading] =
+  useState(false);
+
   useEffect(() => {
   loadExpenditureReport();
   loadMonthlyProfitReport();
+  loadBranchWiseProfitReport();
 }, []);
 
   const loadExpenditureReport = async () => {
@@ -168,6 +175,34 @@ const [monthlyProfitLoading, setMonthlyProfitLoading] =
     alert('Failed to load monthly profit report');
   } finally {
     setMonthlyProfitLoading(false);
+  }
+};
+
+const loadBranchWiseProfitReport = async () => {
+  try {
+    setBranchProfitLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/accounts/reports/branch-profit`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setBranchProfitRows(
+      Array.isArray(res.data) ? res.data : [],
+    );
+  } catch (error) {
+    console.error(error);
+    alert('Failed to load branch wise profit report');
+  } finally {
+    setBranchProfitLoading(false);
   }
 };
 
@@ -562,9 +597,166 @@ const [monthlyProfitLoading, setMonthlyProfitLoading] =
   </div>
 </div>
 
-<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+<div className="rounded-2xl bg-white p-5 shadow">
+  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <div>
+      <h2 className="text-xl font-bold text-gray-800">
+        Branch Wise Profit Report
+      </h2>
+
+      <p className="mt-1 text-sm text-gray-500">
+        Branch wise customer collections, approved expenses and net profit.
+      </p>
+    </div>
+
+    <button
+      type="button"
+      onClick={loadBranchWiseProfitReport}
+      disabled={branchProfitLoading}
+      className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+    >
+      {branchProfitLoading
+        ? 'Loading...'
+        : 'Refresh'}
+    </button>
+  </div>
+
+  <div className="mt-5 grid gap-3 md:grid-cols-4">
+    <div className="rounded-xl bg-gray-50 p-4">
+      <p className="text-xs text-gray-600">
+        Total Branches
+      </p>
+
+      <p className="mt-1 text-xl font-bold text-gray-800">
+        {branchProfitRows.length}
+      </p>
+    </div>
+
+    <div className="rounded-xl bg-green-50 p-4">
+      <p className="text-xs text-green-700">
+        Total Collections
+      </p>
+
+      <p className="mt-1 text-xl font-bold text-green-800">
+        {formatCurrency(
+          branchProfitRows.reduce(
+            (total, item) =>
+              total +
+              Number(item.totalCollections || 0),
+            0,
+          ),
+        )}
+      </p>
+    </div>
+
+    <div className="rounded-xl bg-red-50 p-4">
+      <p className="text-xs text-red-700">
+        Total Expenses
+      </p>
+
+      <p className="mt-1 text-xl font-bold text-red-800">
+        {formatCurrency(
+          branchProfitRows.reduce(
+            (total, item) =>
+              total +
+              Number(item.totalExpenses || 0),
+            0,
+          ),
+        )}
+      </p>
+    </div>
+
+    <div className="rounded-xl bg-blue-50 p-4">
+      <p className="text-xs text-blue-700">
+        Total Profit
+      </p>
+
+      <p className="mt-1 text-xl font-bold text-blue-800">
+        {formatCurrency(
+          branchProfitRows.reduce(
+            (total, item) =>
+              total +
+              Number(item.netProfit || 0),
+            0,
+          ),
+        )}
+      </p>
+    </div>
+  </div>
+
+  <div className="mt-5 overflow-x-auto">
+    <table className="min-w-full text-sm">
+      <thead>
+        <tr className="border-b bg-gray-50">
+          <th className="p-2 text-left">
+            Branch
+          </th>
+
+          <th className="p-2 text-left">
+            Collections
+          </th>
+
+          <th className="p-2 text-left">
+            Expenses
+          </th>
+
+          <th className="p-2 text-left">
+            Net Profit
+          </th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {branchProfitRows.length === 0 && (
+          <tr>
+            <td
+              colSpan={4}
+              className="p-4 text-center text-gray-500"
+            >
+              No branch profit data found.
+            </td>
+          </tr>
+        )}
+
+        {branchProfitRows.map((item) => (
+          <tr
+            key={item.branchName}
+            className="border-b"
+          >
+            <td className="p-2 font-semibold">
+              {item.branchName || 'UNASSIGNED'}
+            </td>
+
+            <td className="p-2 text-green-700">
+              {formatCurrency(
+                item.totalCollections,
+              )}
+            </td>
+
+            <td className="p-2 text-red-700">
+              {formatCurrency(
+                item.totalExpenses,
+              )}
+            </td>
+
+            <td
+              className={`p-2 font-semibold ${
+                Number(item.netProfit || 0) >= 0
+                  ? 'text-blue-700'
+                  : 'text-red-700'
+              }`}
+            >
+              {formatCurrency(item.netProfit)}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div className="grid gap-4 md:grid-cols-3">
   {[
-    'Branch Wise Profit',
     'Project Owner Wise Profit',
     'Salary Report',
     'Incentive Report',
