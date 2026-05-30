@@ -612,6 +612,20 @@ getProjectAccountsSummary(
   'PAYMENT_MANAGER',
   'ACCOUNT_MANAGER',
 )
+@Get('account-expenses/summary')
+getAccountExpenseSummary() {
+  return this.projectService.getAccountExpenseSummary();
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'PROJECT_EXECUTIVE',
+  'MEETING_MANAGER',
+  'PAYMENT_COLLECTION_EXECUTIVE',
+  'PAYMENT_MANAGER',
+  'ACCOUNT_MANAGER',
+)
 @Post('account-expenses')
 createAccountExpense(
   @Body() body: any,

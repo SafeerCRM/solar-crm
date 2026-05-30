@@ -2378,6 +2378,73 @@ const expense =
   );
 }
 
+async getAccountExpenseSummary() {
+  const expenses =
+    await this.projectAccountExpenseRepository.find({
+      where: {
+        isHidden: false,
+      },
+    });
+
+  const approvedExpenses = expenses.filter(
+    (expense) =>
+      expense.approvalStatus ===
+      ProjectAccountExpenseApprovalStatus.APPROVED,
+  );
+
+  const pendingExpenses = expenses.filter(
+    (expense) =>
+      expense.approvalStatus ===
+      ProjectAccountExpenseApprovalStatus.PENDING,
+  );
+
+  const sum = (items: ProjectAccountExpense[]) =>
+    items.reduce(
+      (total, item) => total + Number(item.amount || 0),
+      0,
+    );
+
+  return {
+    totalExpenses: sum(approvedExpenses),
+
+    pendingExpenses: sum(pendingExpenses),
+
+    contractorPayments: sum(
+      approvedExpenses.filter(
+        (expense) =>
+          expense.expenseType ===
+          ProjectAccountExpenseType.CONTRACTOR_PAYMENT,
+      ),
+    ),
+
+    labourPayments: sum(
+      approvedExpenses.filter(
+        (expense) =>
+          expense.expenseType ===
+          ProjectAccountExpenseType.LABOUR_PAYMENT,
+      ),
+    ),
+
+    transportationExpenses: sum(
+      approvedExpenses.filter(
+        (expense) =>
+          expense.expenseType ===
+          ProjectAccountExpenseType.TRANSPORTATION,
+      ),
+    ),
+
+    salaryAndIncentives: sum(
+      approvedExpenses.filter((expense) =>
+        [
+          ProjectAccountExpenseType.SALARY,
+          ProjectAccountExpenseType.INCENTIVE,
+          ProjectAccountExpenseType.ADVANCE_SALARY,
+        ].includes(expense.expenseType),
+      ),
+    ),
+  };
+}
+
 async listAccountExpenses() {
   return this.projectAccountExpenseRepository.find({
     order: {
