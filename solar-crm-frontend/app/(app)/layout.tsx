@@ -231,7 +231,7 @@ const navItems = [
 },
 
 {
-  name: 'Accounts / Ledger',
+  name: 'Accounts',
   href: '/project/accounts',
   roles: [
     'OWNER',
