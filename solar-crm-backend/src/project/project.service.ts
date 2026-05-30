@@ -2453,6 +2453,104 @@ async listAccountExpenses() {
   });
 }
 
+async getMonthlyProfitReport(query: any) {
+  const month =
+    query?.month ||
+    new Date().toISOString().slice(0, 7);
+
+  const [year, monthNumber] = month
+    .split('-')
+    .map(Number);
+
+  if (!year || !monthNumber) {
+    throw new BadRequestException(
+      'Valid month is required',
+    );
+  }
+
+  const startDate = new Date(
+    year,
+    monthNumber - 1,
+    1,
+  );
+
+  const endDate = new Date(
+    year,
+    monthNumber,
+    1,
+  );
+
+  const collectionQb =
+    this.projectPaymentInstallmentRepository
+      .createQueryBuilder('payment')
+      .where('payment.isHidden = false')
+      .andWhere(
+        'payment.approvalStatus = :approvalStatus',
+        {
+          approvalStatus: 'APPROVED',
+        },
+      )
+      .andWhere('payment.paidAmount > 0')
+      .andWhere('payment.paidDate >= :startDate', {
+        startDate,
+      })
+      .andWhere('payment.paidDate < :endDate', {
+        endDate,
+      });
+
+  const expenseQb =
+    this.projectAccountExpenseRepository
+      .createQueryBuilder('expense')
+      .where('expense.isHidden = false')
+      .andWhere(
+        'expense.approvalStatus = :approvalStatus',
+        {
+          approvalStatus:
+            ProjectAccountExpenseApprovalStatus.APPROVED,
+        },
+      )
+      .andWhere('expense.createdAt >= :startDate', {
+        startDate,
+      })
+      .andWhere('expense.createdAt < :endDate', {
+        endDate,
+      });
+
+  const collectionRows =
+    await collectionQb.getMany();
+
+  const expenseRows =
+    await expenseQb.getMany();
+
+  const totalCollections =
+    collectionRows.reduce(
+      (total, item) =>
+        total + Number(item.paidAmount || 0),
+      0,
+    );
+
+  const totalExpenses =
+    expenseRows.reduce(
+      (total, item) =>
+        total + Number(item.amount || 0),
+      0,
+    );
+
+  return {
+    month,
+    summary: {
+      totalCollections,
+      totalExpenses,
+      netProfit:
+        totalCollections - totalExpenses,
+      collectionCount:
+        collectionRows.length,
+      expenseCount:
+        expenseRows.length,
+    },
+  };
+}
+
 async getAccountExpenseReport(query: any) {
   const qb =
     this.projectAccountExpenseRepository
