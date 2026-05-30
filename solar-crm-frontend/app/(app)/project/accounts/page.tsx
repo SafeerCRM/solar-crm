@@ -7,35 +7,35 @@ const cards = [
     title: 'EPC Account',
     description:
       'Client payments, project collections, contractor, labour and project expenses.',
-    href: '/projects/accounts/epc',
+    href: '/project/accounts/epc',
     status: 'Next',
   },
   {
     title: 'Trading Account',
     description:
       'Dealer payments, vendor purchases, trading sales and trading expenses.',
-    href: '/projects/accounts/trading',
+    href: '/project/accounts/trading',
     status: 'Planned',
   },
   {
     title: 'Reports',
     description:
       'Monthly profit, branch-wise profit, owner-wise profit and expenditure reports.',
-    href: '/projects/accounts/reports',
+    href: '/project/accounts/reports',
     status: 'Planned',
   },
   {
     title: 'Stock Management',
     description:
       'Incoming stock, outgoing stock, warehouse stock and branch-wise material availability.',
-    href: '/projects/accounts/stock',
+    href: '/project/accounts/stock',
     status: 'Planned',
   },
   {
     title: 'Ledger',
     description:
       'Existing party-wise debit, credit, receivables and payables ledger.',
-    href: '/projects/accounts/ledger',
+    href: '/project/accounts/ledger',
     status: 'Active',
   },
 ];
