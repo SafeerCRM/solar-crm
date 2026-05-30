@@ -942,7 +942,9 @@ async getPaymentCollectionList(
   'OWNER',
   'MARKETING_HEAD',
   'PROJECT_MANAGER',
+  'MEETING_MANAGER',
   'PAYMENT_COLLECTION_EXECUTIVE',
+  'PROJECT_EXECUTIVE',
   'PAYMENT_MANAGER',
   'ACCOUNT_MANAGER',
 )
@@ -967,7 +969,9 @@ async createPaymentInstallment(
   'OWNER',
   'MARKETING_HEAD',
   'PROJECT_MANAGER',
+  'MEETING_MANAGER',
   'PAYMENT_COLLECTION_EXECUTIVE',
+  'PROJECT_EXECUTIVE',
   'PAYMENT_MANAGER',
   'ACCOUNT_MANAGER',
 )
@@ -988,6 +992,12 @@ async receivePaymentInstallment(
   );
 }
 
+@Roles(
+  'OWNER',
+  'PAYMENT_MANAGER',
+  'ACCOUNT_MANAGER',
+)
+
 @Post('payment-collection/installments/:installmentId/approve')
 approvePaymentInstallment(
   @Param('installmentId', ParseIntPipe)
@@ -1003,6 +1013,12 @@ approvePaymentInstallment(
     req.user,
   );
 }
+
+@Roles(
+  'OWNER',
+  'PAYMENT_MANAGER',
+  'ACCOUNT_MANAGER',
+)
 
 @Post('payment-collection/installments/:installmentId/reject')
 rejectPaymentInstallment(
