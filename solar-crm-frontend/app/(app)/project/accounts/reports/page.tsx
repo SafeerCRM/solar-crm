@@ -50,9 +50,25 @@ export default function AccountsReportsPage() {
   const [expenses, setExpenses] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
+  const [monthlyProfitMonth, setMonthlyProfitMonth] =
+  useState(new Date().toISOString().slice(0, 7));
+
+const [monthlyProfit, setMonthlyProfit] =
+  useState({
+    totalCollections: 0,
+    totalExpenses: 0,
+    netProfit: 0,
+    collectionCount: 0,
+    expenseCount: 0,
+  });
+
+const [monthlyProfitLoading, setMonthlyProfitLoading] =
+  useState(false);
+
   useEffect(() => {
-    loadExpenditureReport();
-  }, []);
+  loadExpenditureReport();
+  loadMonthlyProfitReport();
+}, []);
 
   const loadExpenditureReport = async () => {
     try {
@@ -109,6 +125,51 @@ export default function AccountsReportsPage() {
       setLoading(false);
     }
   };
+
+  const loadMonthlyProfitReport = async () => {
+  try {
+    setMonthlyProfitLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/accounts/reports/monthly-profit`,
+      {
+        params: {
+          month: monthlyProfitMonth,
+        },
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setMonthlyProfit({
+      totalCollections: Number(
+        res.data?.summary?.totalCollections || 0,
+      ),
+      totalExpenses: Number(
+        res.data?.summary?.totalExpenses || 0,
+      ),
+      netProfit: Number(
+        res.data?.summary?.netProfit || 0,
+      ),
+      collectionCount: Number(
+        res.data?.summary?.collectionCount || 0,
+      ),
+      expenseCount: Number(
+        res.data?.summary?.expenseCount || 0,
+      ),
+    });
+  } catch (error) {
+    console.error(error);
+    alert('Failed to load monthly profit report');
+  } finally {
+    setMonthlyProfitLoading(false);
+  }
+};
 
   const resetFilters = async () => {
     setFilters({
@@ -395,28 +456,133 @@ export default function AccountsReportsPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {[
-          'Monthly Profit Report',
-          'Branch Wise Profit',
-          'Project Owner Wise Profit',
-          'Salary Report',
-          'Incentive Report',
-        ].map((title) => (
-          <div
-            key={title}
-            className="rounded-2xl bg-white p-5 shadow"
-          >
-            <h2 className="text-lg font-bold text-gray-800">
-              {title}
-            </h2>
+      <div className="rounded-2xl bg-white p-5 shadow">
+  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <div>
+      <h2 className="text-xl font-bold text-gray-800">
+        Monthly Profit Report
+      </h2>
 
-            <p className="mt-3 text-sm text-gray-500">
-              Upcoming implementation.
-            </p>
-          </div>
-        ))}
-      </div>
+      <p className="mt-1 text-sm text-gray-500">
+        Customer collections received minus approved expenses for selected month.
+      </p>
+    </div>
+
+    <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
+      Phase 1D Active
+    </span>
+  </div>
+
+  <div className="mt-4 flex flex-col gap-3 md:flex-row">
+    <input
+      type="month"
+      value={monthlyProfitMonth}
+      onChange={(e) =>
+        setMonthlyProfitMonth(e.target.value)
+      }
+      className="rounded-xl border p-3 text-sm"
+    />
+
+    <button
+      type="button"
+      onClick={loadMonthlyProfitReport}
+      disabled={monthlyProfitLoading}
+      className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+    >
+      {monthlyProfitLoading
+        ? 'Loading...'
+        : 'Apply Month'}
+    </button>
+  </div>
+
+  <div className="mt-5 grid gap-3 md:grid-cols-3">
+    <div className="rounded-xl bg-green-50 p-4">
+      <p className="text-xs text-green-700">
+        Total Collections
+      </p>
+
+      <p className="mt-1 text-xl font-bold text-green-800">
+        {formatCurrency(
+          monthlyProfit.totalCollections,
+        )}
+      </p>
+
+      <p className="mt-1 text-xs text-green-700">
+        {monthlyProfit.collectionCount} collection entries
+      </p>
+    </div>
+
+    <div className="rounded-xl bg-red-50 p-4">
+      <p className="text-xs text-red-700">
+        Total Expenses
+      </p>
+
+      <p className="mt-1 text-xl font-bold text-red-800">
+        {formatCurrency(
+          monthlyProfit.totalExpenses,
+        )}
+      </p>
+
+      <p className="mt-1 text-xs text-red-700">
+        {monthlyProfit.expenseCount} expense entries
+      </p>
+    </div>
+
+    <div
+      className={`rounded-xl p-4 ${
+        monthlyProfit.netProfit >= 0
+          ? 'bg-blue-50'
+          : 'bg-red-50'
+      }`}
+    >
+      <p
+        className={`text-xs ${
+          monthlyProfit.netProfit >= 0
+            ? 'text-blue-700'
+            : 'text-red-700'
+        }`}
+      >
+        Net Profit
+      </p>
+
+      <p
+        className={`mt-1 text-xl font-bold ${
+          monthlyProfit.netProfit >= 0
+            ? 'text-blue-800'
+            : 'text-red-800'
+        }`}
+      >
+        {formatCurrency(monthlyProfit.netProfit)}
+      </p>
+
+      <p className="mt-1 text-xs text-gray-600">
+        Collections - Approved Expenses
+      </p>
+    </div>
+  </div>
+</div>
+
+<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+  {[
+    'Branch Wise Profit',
+    'Project Owner Wise Profit',
+    'Salary Report',
+    'Incentive Report',
+  ].map((title) => (
+    <div
+      key={title}
+      className="rounded-2xl bg-white p-5 shadow"
+    >
+      <h2 className="text-lg font-bold text-gray-800">
+        {title}
+      </h2>
+
+      <p className="mt-3 text-sm text-gray-500">
+        Upcoming implementation.
+      </p>
+    </div>
+  ))}
+</div>
     </div>
   );
 }
