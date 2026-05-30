@@ -603,6 +603,82 @@ getProjectAccountsSummary(
   );
 }
 
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'PROJECT_EXECUTIVE',
+  'MEETING_MANAGER',
+  'PAYMENT_COLLECTION_EXECUTIVE',
+  'PAYMENT_MANAGER',
+  'ACCOUNT_MANAGER',
+)
+@Post('account-expenses')
+createAccountExpense(
+  @Body() body: any,
+  @Req() req: any,
+) {
+  return this.projectService.createAccountExpense(
+    body,
+    req.user,
+  );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'PROJECT_EXECUTIVE',
+  'MEETING_MANAGER',
+  'PAYMENT_COLLECTION_EXECUTIVE',
+  'PAYMENT_MANAGER',
+  'ACCOUNT_MANAGER',
+)
+@Get('account-expenses')
+listAccountExpenses() {
+  return this.projectService.listAccountExpenses();
+}
+
+@Roles(
+  'OWNER',
+  'PAYMENT_MANAGER',
+  'ACCOUNT_MANAGER',
+)
+@Post('account-expenses/:expenseId/approve')
+approveAccountExpense(
+  @Param('expenseId', ParseIntPipe)
+  expenseId: number,
+
+  @Body() body: any,
+
+  @Req() req: any,
+) {
+  return this.projectService.approveAccountExpense(
+    expenseId,
+    body,
+    req.user,
+  );
+}
+
+@Roles(
+  'OWNER',
+  'PAYMENT_MANAGER',
+  'ACCOUNT_MANAGER',
+)
+@Post('account-expenses/:expenseId/reject')
+rejectAccountExpense(
+  @Param('expenseId', ParseIntPipe)
+  expenseId: number,
+
+  @Body() body: any,
+
+  @Req() req: any,
+) {
+  return this.projectService.rejectAccountExpense(
+    expenseId,
+    body,
+    req.user,
+  );
+}
+
 @Roles('OWNER', 'ACCOUNT_MANAGER')
 @Post('ledger/customer-payment')
 recordCustomerPayment(

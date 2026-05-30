@@ -113,6 +113,12 @@ import {
 } from './project-party-ledger.entity';
 
 import {
+  ProjectAccountExpense,
+  ProjectAccountExpenseApprovalStatus,
+  ProjectAccountExpenseType,
+} from './project-account-expense.entity';
+
+import {
   ProjectContractorAssignment,
   ProjectContractorWorkStatus,
 } from './project-contractor-assignment.entity';
@@ -229,6 +235,9 @@ private readonly projectFinalInvoiceItemRepository: Repository<ProjectFinalInvoi
 
 @InjectRepository(ProjectPartyLedger)
 private readonly projectPartyLedgerRepository: Repository<ProjectPartyLedger>,
+
+@InjectRepository(ProjectAccountExpense)
+private readonly projectAccountExpenseRepository: Repository<ProjectAccountExpense>,
 
 @InjectRepository(ProjectContractorAssignment)
 private readonly projectContractorAssignmentRepository: Repository<ProjectContractorAssignment>,
@@ -2308,6 +2317,199 @@ private getComputedPaymentStatus(
   }
 
   return status;
+}
+
+async createAccountExpense(
+  body: any,
+  currentUser: any,
+) {
+  const amount = Number(body?.amount || 0);
+
+  if (!amount || amount <= 0) {
+    throw new BadRequestException(
+      'Valid amount is required',
+    );
+  }
+
+  const expenseData: Partial<ProjectAccountExpense> = {
+  expenseType:
+    Object.values(ProjectAccountExpenseType).includes(
+      body?.expenseType,
+    )
+      ? body.expenseType
+      : ProjectAccountExpenseType.OTHER,
+
+  amount,
+
+  remarks: body?.remarks || null,
+
+  projectId: body?.projectId
+    ? Number(body.projectId)
+    : undefined,
+
+  branchName: body?.branchName || null,
+
+  projectOwnerId: body?.projectOwnerId
+    ? Number(body.projectOwnerId)
+    : undefined,
+
+  projectOwnerName:
+    body?.projectOwnerName || null,
+
+  approvalStatus:
+    ProjectAccountExpenseApprovalStatus.PENDING,
+
+  createdBy:
+    currentUser?.id ||
+    currentUser?.userId ||
+    null,
+
+  createdByName:
+    currentUser?.name || '',
+};
+
+const expense =
+  this.projectAccountExpenseRepository.create(
+    expenseData,
+  );
+
+  return this.projectAccountExpenseRepository.save(
+    expense,
+  );
+}
+
+async listAccountExpenses() {
+  return this.projectAccountExpenseRepository.find({
+    order: {
+      createdAt: 'DESC',
+    },
+  });
+}
+
+async approveAccountExpense(
+  expenseId: number,
+  body: any,
+  currentUser: any,
+) {
+  const expense =
+    await this.projectAccountExpenseRepository.findOne({
+      where: {
+        id: expenseId,
+      },
+    });
+
+  if (!expense) {
+    throw new NotFoundException(
+      'Expense not found',
+    );
+  }
+
+  if (
+    expense.approvalStatus ===
+    ProjectAccountExpenseApprovalStatus.APPROVED
+  ) {
+    throw new BadRequestException(
+      'Expense already approved',
+    );
+  }
+
+  expense.approvalStatus =
+    ProjectAccountExpenseApprovalStatus.APPROVED;
+
+  expense.approvedBy =
+    currentUser?.id ||
+    currentUser?.userId ||
+    null;
+
+  expense.approvedByName =
+    currentUser?.name || '';
+
+  expense.approvedAt = new Date();
+
+  expense.approvalNote =
+    body?.approvalNote || null;
+
+  const savedExpense =
+    await this.projectAccountExpenseRepository.save(
+      expense,
+    );
+
+  await this.projectPartyLedgerRepository.save(
+    this.projectPartyLedgerRepository.create({
+      partyName: 'EPC Expense',
+
+      partyType: 'EXPENSE',
+
+      projectId:
+        savedExpense.projectId,
+
+      entryType:
+        ProjectLedgerEntryType.DEBIT,
+
+      sourceType:
+        ProjectLedgerSourceType.MANUAL_ADJUSTMENT,
+
+      sourceId:
+        savedExpense.id,
+
+      amount:
+        Number(savedExpense.amount || 0),
+
+      remarks:
+        `${savedExpense.expenseType} - ${
+          savedExpense.remarks || ''
+        }`,
+
+      createdBy:
+        currentUser?.id ||
+        currentUser?.userId ||
+        null,
+
+      createdByName:
+        currentUser?.name || '',
+    }),
+  );
+
+  return savedExpense;
+}
+
+async rejectAccountExpense(
+  expenseId: number,
+  body: any,
+  currentUser: any,
+) {
+  const expense =
+    await this.projectAccountExpenseRepository.findOne({
+      where: {
+        id: expenseId,
+      },
+    });
+
+  if (!expense) {
+    throw new NotFoundException(
+      'Expense not found',
+    );
+  }
+
+  expense.approvalStatus =
+    ProjectAccountExpenseApprovalStatus.REJECTED;
+
+  expense.approvedBy =
+    currentUser?.id ||
+    currentUser?.userId ||
+    null;
+
+  expense.approvedByName =
+    currentUser?.name || '';
+
+  expense.approvedAt = new Date();
+
+  expense.approvalNote =
+    body?.approvalNote || null;
+
+  return this.projectAccountExpenseRepository.save(
+    expense,
+  );
 }
 
 async getPaymentReminderList(currentUser: any) {
