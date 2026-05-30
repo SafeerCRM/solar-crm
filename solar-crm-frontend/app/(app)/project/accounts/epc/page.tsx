@@ -23,8 +23,52 @@ const [projectSummary, setProjectSummary] = useState({
   completedProjects: 0,
 });
 
+const [expenseForm, setExpenseForm] =
+  useState({
+    expenseType: 'PROJECT_FUND',
+    amount: '',
+    remarks: '',
+  });
+
+const [expenseLoading, setExpenseLoading] =
+  useState(false);
+
+  const [expenses, setExpenses] = useState<any[]>([]);
+
+  const [canApproveExpense, setCanApproveExpense] =
+  useState(false);
+
 useEffect(() => {
   loadSummary();
+  loadExpenses();
+
+  try {
+  const userData =
+    localStorage.getItem('user');
+
+  if (userData) {
+    const user =
+      JSON.parse(userData);
+
+    const roles = Array.isArray(
+      user?.roles,
+    )
+      ? user.roles
+      : [];
+
+    setCanApproveExpense(
+      roles.includes('OWNER') ||
+        roles.includes(
+          'ACCOUNT_MANAGER',
+        ) ||
+        roles.includes(
+          'PAYMENT_MANAGER',
+        ),
+    );
+  }
+} catch (error) {
+  console.error(error);
+}
 }, []);
 
 const loadSummary = async () => {
@@ -134,6 +178,146 @@ setProjectSummary({
   }
 };
 
+const loadExpenses = async () => {
+  try {
+    const token =
+      localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/account-expenses`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setExpenses(
+      Array.isArray(res.data)
+        ? res.data
+        : [],
+    );
+  } catch (error) {
+    console.error(error);
+  }
+};
+
+const createExpense = async () => {
+  if (!expenseForm.amount) {
+    alert('Please enter amount');
+    return;
+  }
+
+  try {
+    setExpenseLoading(true);
+
+    const token =
+      localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/account-expenses`,
+      {
+        ...expenseForm,
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert(
+      'Expense request submitted successfully',
+    );
+
+    await loadExpenses();
+
+    setExpenseForm({
+      expenseType: 'PROJECT_FUND',
+      amount: '',
+      remarks: '',
+    });
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to create expense',
+    );
+  } finally {
+    setExpenseLoading(false);
+  }
+};
+
+const approveExpense = async (
+  expenseId: number,
+) => {
+  try {
+    const token =
+      localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/account-expenses/${expenseId}/approve`,
+      {},
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    await loadExpenses();
+    await loadSummary();
+
+    alert('Expense approved');
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to approve expense',
+    );
+  }
+};
+
+const rejectExpense = async (
+  expenseId: number,
+) => {
+  try {
+    const token =
+      localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/account-expenses/${expenseId}/reject`,
+      {},
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    await loadExpenses();
+
+    alert('Expense rejected');
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to reject expense',
+    );
+  }
+};
+
   return (
     <div className="mx-auto max-w-7xl space-y-5">
       <div className="rounded-2xl bg-white p-5 shadow">
@@ -229,6 +413,248 @@ setProjectSummary({
     <p className="mt-2 text-2xl font-bold text-green-700">
       {projectSummary.completedProjects}
     </p>
+  </div>
+</div>
+
+<div className="rounded-2xl bg-white p-5 shadow">
+  <div className="flex items-center justify-between">
+    <div>
+      <h2 className="text-lg font-bold text-gray-800">
+        Expense Management
+      </h2>
+
+      <p className="mt-1 text-sm text-gray-500">
+        Project Fund, Labour, Transportation, Salary, Incentive and other expenses.
+      </p>
+    </div>
+
+    <button
+  type="button"
+  onClick={createExpense}
+  disabled={expenseLoading}
+  className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+>
+  {expenseLoading
+    ? 'Saving...'
+    : 'Add Expense'}
+</button>
+  </div>
+
+  <div className="mt-4 grid gap-3 md:grid-cols-3">
+  <select
+    value={expenseForm.expenseType}
+    onChange={(e) =>
+      setExpenseForm({
+        ...expenseForm,
+        expenseType: e.target.value,
+      })
+    }
+    className="rounded-xl border p-3"
+  >
+    <option value="PROJECT_FUND">
+      Project Fund
+    </option>
+
+    <option value="CONTRACTOR_PAYMENT">
+      Contractor Payment
+    </option>
+
+    <option value="LABOUR_PAYMENT">
+      Labour Payment
+    </option>
+
+    <option value="TRANSPORTATION">
+      Transportation
+    </option>
+
+    <option value="SALARY">
+      Salary
+    </option>
+
+    <option value="INCENTIVE">
+      Incentive
+    </option>
+
+    <option value="ADVANCE_SALARY">
+      Advance Salary
+    </option>
+
+    <option value="OTHER">
+      Other
+    </option>
+  </select>
+
+  <input
+    type="number"
+    placeholder="Amount"
+    value={expenseForm.amount}
+    onChange={(e) =>
+      setExpenseForm({
+        ...expenseForm,
+        amount: e.target.value,
+      })
+    }
+    className="rounded-xl border p-3"
+  />
+
+  <input
+    type="text"
+    placeholder="Remarks"
+    value={expenseForm.remarks}
+    onChange={(e) =>
+      setExpenseForm({
+        ...expenseForm,
+        remarks: e.target.value,
+      })
+    }
+    className="rounded-xl border p-3"
+  />
+</div>
+
+  <div className="mt-4 grid gap-3 md:grid-cols-4">
+    <div className="rounded-xl bg-gray-50 p-3">
+      <p className="text-xs text-gray-500">
+        Pending Approval
+      </p>
+
+      <p className="mt-1 text-lg font-bold">
+        ₹0
+      </p>
+    </div>
+
+    <div className="rounded-xl bg-gray-50 p-3">
+      <p className="text-xs text-gray-500">
+        Approved Expenses
+      </p>
+
+      <p className="mt-1 text-lg font-bold">
+        ₹0
+      </p>
+    </div>
+
+    <div className="rounded-xl bg-gray-50 p-3">
+      <p className="text-xs text-gray-500">
+        This Month
+      </p>
+
+      <p className="mt-1 text-lg font-bold">
+        ₹0
+      </p>
+    </div>
+
+    <div className="rounded-xl bg-gray-50 p-3">
+      <p className="text-xs text-gray-500">
+        Total Expenses
+      </p>
+
+      <p className="mt-1 text-lg font-bold">
+        ₹0
+      </p>
+    </div>
+  </div>
+</div>
+
+<div className="rounded-2xl bg-white p-5 shadow">
+  <h2 className="text-lg font-bold text-gray-800">
+    Recent Expenses
+  </h2>
+
+  <div className="mt-4 overflow-x-auto">
+    <table className="min-w-full text-sm">
+      <thead>
+        <tr className="border-b">
+          <th className="p-2 text-left">
+            Type
+          </th>
+
+          <th className="p-2 text-left">
+            Amount
+          </th>
+
+          <th className="p-2 text-left">
+            Status
+          </th>
+
+          <th className="p-2 text-left">
+            Created By
+          </th>
+
+          <th className="p-2 text-left">
+            Date
+          </th>
+
+          <th className="p-2 text-left">
+  Action
+</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {expenses.map((item) => (
+          <tr
+            key={item.id}
+            className="border-b"
+          >
+            <td className="p-2">
+              {item.expenseType}
+            </td>
+
+            <td className="p-2">
+              ₹
+              {Number(
+                item.amount || 0,
+              ).toLocaleString(
+                'en-IN',
+              )}
+            </td>
+
+            <td className="p-2">
+              {item.approvalStatus}
+            </td>
+
+            <td className="p-2">
+              {item.createdByName}
+            </td>
+
+            <td className="p-2">
+              {item.createdAt
+                ? new Date(
+                    item.createdAt,
+                  ).toLocaleDateString()
+                : '-'}
+            </td>
+
+            <td className="p-2">
+  {canApproveExpense &&
+    item.approvalStatus ===
+      'PENDING' && (
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() =>
+            approveExpense(item.id)
+          }
+          className="rounded bg-green-600 px-2 py-1 text-xs text-white"
+        >
+          Approve
+        </button>
+
+        <button
+          type="button"
+          onClick={() =>
+            rejectExpense(item.id)
+          }
+          className="rounded bg-red-600 px-2 py-1 text-xs text-white"
+        >
+          Reject
+        </button>
+      </div>
+    )}
+</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   </div>
 </div>
 
