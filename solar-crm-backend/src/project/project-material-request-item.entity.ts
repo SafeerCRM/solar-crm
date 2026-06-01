@@ -11,6 +11,12 @@ export enum ProjectMaterialPurchaseStatus {
   PURCHASED = 'PURCHASED',
 }
 
+export enum ProjectMaterialIssueStatus {
+  PENDING = 'PENDING',
+  PARTIALLY_ISSUED = 'PARTIALLY_ISSUED',
+  ISSUED = 'ISSUED',
+}
+
 @Entity()
 export class ProjectMaterialRequestItem {
   @PrimaryGeneratedColumn()
@@ -73,6 +79,28 @@ purchasedByName: string;
 
   @Column({ type: 'text', nullable: true })
   remarks: string;
+
+  @Column({ type: 'float', default: 0 })
+issuedQuantity: number;
+
+@Column({ type: 'float', default: 0 })
+issuePendingQuantity: number;
+
+@Column({
+  type: 'enum',
+  enum: ProjectMaterialIssueStatus,
+  default: ProjectMaterialIssueStatus.PENDING,
+})
+issueStatus: ProjectMaterialIssueStatus;
+
+@Column({ type: 'timestamp', nullable: true })
+issuedAt: Date;
+
+@Column({ nullable: true })
+issuedBy: number;
+
+@Column({ nullable: true })
+issuedByName: string;
 
   @CreateDateColumn()
   createdAt: Date;
