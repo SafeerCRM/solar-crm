@@ -401,6 +401,97 @@ const rejectExpense = async (
   }
 };
 
+const editExpense = async (item: any) => {
+  const amount = window.prompt(
+    'Enter new amount',
+    String(item.amount || ''),
+  );
+
+  if (!amount) {
+    return;
+  }
+
+  const remarks = window.prompt(
+    'Enter remarks',
+    item.remarks || '',
+  );
+
+  try {
+    const token =
+      localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/account-expenses/${item.id}`,
+      {
+        amount: Number(amount),
+        remarks,
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    await loadExpenses();
+    await loadExpenseSummary();
+
+    alert('Expense updated');
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to update expense',
+    );
+  }
+};
+
+const hideExpense = async (
+  expenseId: number,
+) => {
+  const hiddenReason = window.prompt(
+    'Enter hide reason',
+  );
+
+  if (!hiddenReason?.trim()) {
+    return;
+  }
+
+  try {
+    const token =
+      localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/account-expenses/${expenseId}/hide`,
+      {
+        hiddenReason,
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    await loadExpenses();
+    await loadExpenseSummary();
+
+    alert('Expense hidden');
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to hide expense',
+    );
+  }
+};
+
   return (
     <div className="mx-auto max-w-7xl space-y-5">
       <div className="rounded-2xl bg-white p-5 shadow">
@@ -761,31 +852,59 @@ const rejectExpense = async (
             </td>
 
             <td className="p-2">
-  {canApproveExpense &&
-    item.approvalStatus ===
-      'PENDING' && (
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() =>
-            approveExpense(item.id)
-          }
-          className="rounded bg-green-600 px-2 py-1 text-xs text-white"
-        >
-          Approve
-        </button>
+  <div className="flex flex-wrap gap-2">
+    {canApproveExpense &&
+      item.approvalStatus ===
+        'PENDING' && (
+        <>
+          <button
+            type="button"
+            onClick={() =>
+              approveExpense(item.id)
+            }
+            className="rounded bg-green-600 px-2 py-1 text-xs text-white"
+          >
+            Approve
+          </button>
 
+          <button
+            type="button"
+            onClick={() =>
+              rejectExpense(item.id)
+            }
+            className="rounded bg-red-600 px-2 py-1 text-xs text-white"
+          >
+            Reject
+          </button>
+        </>
+      )}
+
+    {canApproveExpense &&
+      item.approvalStatus !==
+        'APPROVED' && (
         <button
           type="button"
           onClick={() =>
-            rejectExpense(item.id)
+            editExpense(item)
           }
-          className="rounded bg-red-600 px-2 py-1 text-xs text-white"
+          className="rounded bg-blue-600 px-2 py-1 text-xs text-white"
         >
-          Reject
+          Edit
         </button>
-      </div>
+      )}
+
+    {canApproveExpense && (
+      <button
+        type="button"
+        onClick={() =>
+          hideExpense(item.id)
+        }
+        className="rounded bg-gray-700 px-2 py-1 text-xs text-white"
+      >
+        Hide
+      </button>
     )}
+  </div>
 </td>
           </tr>
         ))}
