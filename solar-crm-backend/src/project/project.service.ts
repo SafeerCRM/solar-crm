@@ -1627,6 +1627,90 @@ createdBy: currentUser?.id || currentUser?.userId || undefined,
   return stockItem;
 }
 
+async listProjectStockMovements(query: any) {
+  const {
+    page = 1,
+    limit = 20,
+    material,
+    branch,
+    movementType,
+    showHidden,
+  } = query || {};
+
+  const pageNumber = Math.max(Number(page) || 1, 1);
+  const limitNumber = Math.min(
+    Math.max(Number(limit) || 20, 1),
+    100,
+  );
+
+  const skip =
+    (pageNumber - 1) * limitNumber;
+
+  const qb =
+    this.projectStockMovementRepository
+      .createQueryBuilder('movement')
+      .orderBy(
+        'movement.createdAt',
+        'DESC',
+      )
+      .skip(skip)
+      .take(limitNumber);
+
+  if (showHidden === 'true') {
+    qb.where(
+      'movement.isHidden = true',
+    );
+  } else {
+    qb.where(
+      'movement.isHidden = false',
+    );
+  }
+
+  if (material?.trim()) {
+    qb.andWhere(
+      `LOWER(movement.materialName)
+       LIKE LOWER(:material)`,
+      {
+        material: `%${material.trim()}%`,
+      },
+    );
+  }
+
+  if (branch?.trim()) {
+    qb.andWhere(
+      `LOWER(movement.branchName)
+       LIKE LOWER(:branch)`,
+      {
+        branch: `%${branch.trim()}%`,
+      },
+    );
+  }
+
+  if (movementType?.trim()) {
+    qb.andWhere(
+      'movement.movementType = :movementType',
+      {
+        movementType,
+      },
+    );
+  }
+
+  const [data, total] =
+    await qb.getManyAndCount();
+
+  return {
+    data,
+    pagination: {
+      page: pageNumber,
+      limit: limitNumber,
+      total,
+      totalPages: Math.ceil(
+        total / limitNumber,
+      ),
+    },
+  };
+}
+
 async createVendor(data: Partial<ProjectVendor>) {
   if (!data.vendorName || !String(data.vendorName).trim()) {
     throw new BadRequestException('Vendor name is required');

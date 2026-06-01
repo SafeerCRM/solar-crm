@@ -915,6 +915,21 @@ issueProjectStock(
   );
 }
 
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'PROJECT_EXECUTIVE',
+  'ACCOUNT_MANAGER',
+)
+@Get('stock/movements')
+listProjectStockMovements(
+  @Query() query: any,
+) {
+  return this.projectService.listProjectStockMovements(
+    query,
+  );
+}
+
 @Get('generated-purchase-orders')
 getGeneratedPurchaseOrders(
   @Query('page') page?: string,
