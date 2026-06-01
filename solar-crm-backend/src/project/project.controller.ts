@@ -1138,6 +1138,33 @@ buyMaterialRequestItem(
   );
 }
 
+@Roles('OWNER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE')
+@Get('material-requests/approved-for-issue')
+listApprovedMaterialRequestsForIssue(
+  @Query() query: any,
+) {
+  return this.projectService.listApprovedMaterialRequestsForIssue(
+    query,
+  );
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER')
+@Post('material-requests/items/:itemId/issue-stock')
+issueMaterialRequestItemStock(
+  @Param('itemId', ParseIntPipe)
+  itemId: number,
+
+  @Body() body: any,
+
+  @Req() req: any,
+) {
+  return this.projectService.issueMaterialRequestItemStock(
+    itemId,
+    body,
+    req.user,
+  );
+}
+
 @Get(':id/loan-detail')
 getProjectLoanDetail(@Param('id') id: string) {
   return this.projectService.getProjectLoanDetail(Number(id));

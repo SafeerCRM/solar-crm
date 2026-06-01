@@ -34,7 +34,10 @@ import {
   ProjectMaterialMaster,
   ProjectMaterialMarginType,
 } from './project-material-master.entity';
-import { ProjectMaterialRequest } from './project-material-request.entity';
+import {
+  ProjectMaterialRequest,
+  ProjectMaterialRequestStatus,
+} from './project-material-request.entity';
 import { ProjectMaterialRequestItem } from './project-material-request-item.entity';
 import { ProjectBranch } from './project-branch.entity';
 import {
@@ -2426,6 +2429,289 @@ async getProjectMaterialRequests(
   }
 
   return finalData;
+}
+
+async listApprovedMaterialRequestsForIssue(query: any) {
+  const {
+    page = 1,
+    limit = 20,
+    projectId,
+  } = query || {};
+
+  const pageNumber = Math.max(Number(page) || 1, 1);
+  const limitNumber = Math.min(Math.max(Number(limit) || 20, 1), 100);
+  const skip = (pageNumber - 1) * limitNumber;
+
+  const qb = this.projectMaterialRequestRepository
+    .createQueryBuilder('request')
+    .where('request.status = :status', {
+      status: ProjectMaterialRequestStatus.APPROVED,
+    })
+    .orderBy('request.createdAt', 'DESC')
+    .skip(skip)
+    .take(limitNumber);
+
+  if (projectId) {
+    qb.andWhere('request.projectId = :projectId', {
+      projectId: Number(projectId),
+    });
+  }
+
+  const [requests, total] = await qb.getManyAndCount();
+
+  const data: any[] = [];
+
+  for (const request of requests) {
+    const items =
+      await this.projectMaterialRequestItemRepository.find({
+        where: {
+          requestId: request.id,
+        },
+        order: {
+          createdAt: 'DESC',
+        },
+      });
+
+    const pendingItems = items.filter((item: any) => {
+      const requestedQty = Number(item.quantity || 0);
+      const issuedQty = Number(item.issuedQuantity || 0);
+
+      return requestedQty - issuedQty > 0;
+    });
+
+    if (pendingItems.length > 0) {
+      data.push({
+        ...request,
+        items: pendingItems.map((item: any) => ({
+          ...item,
+          issuePendingQuantity:
+            Number(item.quantity || 0) -
+            Number(item.issuedQuantity || 0),
+        })),
+      });
+    }
+  }
+
+  return {
+    data,
+    pagination: {
+      page: pageNumber,
+      limit: limitNumber,
+      total,
+      totalPages: Math.ceil(total / limitNumber),
+    },
+  };
+}
+
+async issueMaterialRequestItemStock(
+  itemId: number,
+  body: any,
+  currentUser: any,
+) {
+  const quantity = Number(body?.quantity || 0);
+  const stockItemId = Number(body?.stockItemId || 0);
+
+  if (!stockItemId) {
+    throw new BadRequestException('Stock item is required');
+  }
+
+  if (!quantity || quantity <= 0) {
+    throw new BadRequestException('Valid quantity is required');
+  }
+
+  const requestItem =
+    await this.projectMaterialRequestItemRepository.findOne({
+      where: {
+        id: itemId,
+      },
+    });
+
+  if (!requestItem) {
+    throw new NotFoundException('Material request item not found');
+  }
+
+  const request =
+    await this.projectMaterialRequestRepository.findOne({
+      where: {
+        id: requestItem.requestId,
+      },
+    });
+
+  if (!request) {
+    throw new NotFoundException('Material request not found');
+  }
+
+  if (request.status !== ProjectMaterialRequestStatus.APPROVED) {
+    throw new BadRequestException(
+      'Only approved material requests can be issued',
+    );
+  }
+
+  const requestedQty = Number(requestItem.quantity || 0);
+  const alreadyIssuedQty = Number(
+    (requestItem as any).issuedQuantity || 0,
+  );
+  const pendingIssueQty =
+    requestedQty - alreadyIssuedQty;
+
+  if (quantity > pendingIssueQty) {
+    throw new BadRequestException(
+      `Issue quantity cannot exceed pending quantity ${pendingIssueQty}`,
+    );
+  }
+
+  const stockItem =
+    await this.projectStockItemRepository.findOne({
+      where: {
+        id: stockItemId,
+        isHidden: false,
+      },
+    });
+
+  if (!stockItem) {
+    throw new NotFoundException('Stock item not found');
+  }
+
+  if (
+    stockItem.materialId &&
+    requestItem.materialId &&
+    Number(stockItem.materialId) !==
+      Number(requestItem.materialId)
+  ) {
+    throw new BadRequestException(
+      'Selected stock material does not match requested material',
+    );
+  }
+
+  if (Number(stockItem.currentQuantity || 0) < quantity) {
+    throw new BadRequestException('Insufficient stock quantity');
+  }
+
+  const rate = Number(stockItem.averageRate || 0);
+  const totalAmount = quantity * rate;
+
+  stockItem.currentQuantity =
+    Number(stockItem.currentQuantity || 0) - quantity;
+
+  stockItem.stockValue =
+    Number(stockItem.currentQuantity || 0) * rate;
+
+  const savedStock =
+    await this.projectStockItemRepository.save(stockItem);
+
+  const movement =
+    await this.projectStockMovementRepository.save(
+      this.projectStockMovementRepository.create({
+        stockItemId: savedStock.id,
+        materialId: savedStock.materialId,
+        materialName: savedStock.materialName,
+        branchId: savedStock.branchId || undefined,
+        branchName: savedStock.branchName || undefined,
+        movementType: ProjectStockMovementType.ISSUE,
+        quantity,
+        rate,
+        totalAmount,
+        sourceType: 'MATERIAL_REQUEST',
+        sourceId: request.id,
+        projectId: request.projectId,
+        remarks:
+          body?.remarks ||
+          `Issued against material request #${request.id}`,
+        createdBy:
+          currentUser?.id ||
+          currentUser?.userId ||
+          undefined,
+        createdByName: currentUser?.name || '',
+      }),
+    );
+
+  const project =
+    await this.projectRepository.findOne({
+      where: {
+        id: request.projectId,
+      },
+    });
+
+  const consumption =
+    await this.projectConsumptionRepository.save(
+      this.projectConsumptionRepository.create({
+        projectId: request.projectId,
+        projectName:
+          project?.customerName ||
+          project?.customerPhone ||
+          `Project #${request.projectId}`,
+        materialId: savedStock.materialId,
+        materialName: savedStock.materialName,
+        branchId: savedStock.branchId || undefined,
+        branchName: savedStock.branchName || undefined,
+        stockItemId: savedStock.id,
+        stockMovementId: movement.id,
+        quantity,
+        rate,
+        totalAmount,
+        issuedBy:
+          currentUser?.id ||
+          currentUser?.userId ||
+          undefined,
+        issuedByName: currentUser?.name || '',
+        remarks:
+          body?.remarks ||
+          `Issued against material request #${request.id}`,
+      }),
+    );
+
+  const newIssuedQty =
+    alreadyIssuedQty + quantity;
+
+  (requestItem as any).issuedQuantity = newIssuedQty;
+  (requestItem as any).issuePendingQuantity =
+    Math.max(requestedQty - newIssuedQty, 0);
+
+  if (newIssuedQty >= requestedQty) {
+    (requestItem as any).issueStatus = 'ISSUED';
+    (requestItem as any).issuedAt = new Date();
+  } else {
+    (requestItem as any).issueStatus =
+      'PARTIALLY_ISSUED';
+  }
+
+  (requestItem as any).issuedBy =
+    currentUser?.id || currentUser?.userId || undefined;
+  (requestItem as any).issuedByName =
+    currentUser?.name || '';
+
+  await this.projectMaterialRequestItemRepository.save(
+    requestItem,
+  );
+
+  const allItems =
+    await this.projectMaterialRequestItemRepository.find({
+      where: {
+        requestId: request.id,
+      },
+    });
+
+  const allIssued = allItems.every((item: any) => {
+    return (
+      Number(item.issuedQuantity || 0) >=
+      Number(item.quantity || 0)
+    );
+  });
+
+  if (allIssued) {
+    request.status = ProjectMaterialRequestStatus.ISSUED;
+    await this.projectMaterialRequestRepository.save(
+      request,
+    );
+  }
+
+  return {
+    stockItem: savedStock,
+    movement,
+    consumption,
+    requestItem,
+    request,
+  };
 }
 
 async getPaymentCollectionList(query: any, currentUser: any) {
