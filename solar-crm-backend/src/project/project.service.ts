@@ -1711,6 +1711,78 @@ async listProjectStockMovements(query: any) {
   };
 }
 
+async hideProjectStockMovement(
+  movementId: number,
+  body: any,
+  currentUser: any,
+) {
+  const movement =
+    await this.projectStockMovementRepository.findOne({
+      where: {
+        id: movementId,
+      },
+    });
+
+  if (!movement) {
+    throw new NotFoundException(
+      'Stock movement not found',
+    );
+  }
+
+  if (!body?.hiddenReason?.trim()) {
+    throw new BadRequestException(
+      'Hide reason is required',
+    );
+  }
+
+  movement.isHidden = true;
+  movement.hiddenReason = body.hiddenReason.trim();
+  movement.hiddenAt = new Date();
+  movement.hiddenBy =
+    currentUser?.id || currentUser?.userId || undefined;
+  movement.hiddenByName = currentUser?.name || '';
+
+  return this.projectStockMovementRepository.save(
+    movement,
+  );
+}
+
+async restoreProjectStockMovement(
+  movementId: number,
+  body: any,
+  currentUser: any,
+) {
+  const movement =
+    await this.projectStockMovementRepository.findOne({
+      where: {
+        id: movementId,
+      },
+    });
+
+  if (!movement) {
+    throw new NotFoundException(
+      'Stock movement not found',
+    );
+  }
+
+  if (!body?.restoreReason?.trim()) {
+    throw new BadRequestException(
+      'Restore reason is required',
+    );
+  }
+
+  movement.isHidden = false;
+  movement.restoreReason = body.restoreReason.trim();
+  movement.restoredAt = new Date();
+  movement.restoredBy =
+    currentUser?.id || currentUser?.userId || undefined;
+  movement.restoredByName = currentUser?.name || '';
+
+  return this.projectStockMovementRepository.save(
+    movement,
+  );
+}
+
 async hideProjectStockItem(
   stockItemId: number,
   body: any,

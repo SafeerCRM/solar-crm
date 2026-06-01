@@ -931,6 +931,40 @@ listProjectStockMovements(
 }
 
 @Roles('OWNER', 'PROJECT_MANAGER')
+@Patch('stock/movements/:movementId/hide')
+hideProjectStockMovement(
+  @Param('movementId', ParseIntPipe)
+  movementId: number,
+
+  @Body() body: any,
+
+  @Req() req: any,
+) {
+  return this.projectService.hideProjectStockMovement(
+    movementId,
+    body,
+    req.user,
+  );
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER')
+@Patch('stock/movements/:movementId/restore')
+restoreProjectStockMovement(
+  @Param('movementId', ParseIntPipe)
+  movementId: number,
+
+  @Body() body: any,
+
+  @Req() req: any,
+) {
+  return this.projectService.restoreProjectStockMovement(
+    movementId,
+    body,
+    req.user,
+  );
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER')
 @Patch('stock/items/:stockItemId/hide')
 hideProjectStockItem(
   @Param('stockItemId', ParseIntPipe)

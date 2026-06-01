@@ -82,6 +82,18 @@ export class ProjectStockMovement {
   @Column({ nullable: true })
   hiddenByName: string;
 
+  @Column({ type: 'text', nullable: true })
+restoreReason: string;
+
+@Column({ type: 'timestamp', nullable: true })
+restoredAt: Date;
+
+@Column({ nullable: true })
+restoredBy: number;
+
+@Column({ nullable: true })
+restoredByName: string;
+
   @CreateDateColumn()
   createdAt: Date;
 }
