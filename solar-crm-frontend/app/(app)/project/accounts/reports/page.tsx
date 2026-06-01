@@ -71,6 +71,15 @@ const [monthlyProfitLoading, setMonthlyProfitLoading] =
 const [branchProfitLoading, setBranchProfitLoading] =
   useState(false);
 
+  const [branchProfitFilters, setBranchProfitFilters] =
+  useState({
+    month: '',
+    fromDate: '',
+    toDate: '',
+    branch: '',
+    projectOwnerId: '',
+  });
+
   useEffect(() => {
   loadExpenditureReport();
   loadMonthlyProfitReport();
@@ -187,12 +196,26 @@ const loadBranchWiseProfitReport = async () => {
     const res = await axios.get(
       `${API_BASE_URL}/project/accounts/reports/branch-profit`,
       {
-        headers: token
-          ? {
-              Authorization: `Bearer ${token}`,
-            }
-          : {},
-      },
+  params: {
+    month: branchProfitFilters.month || undefined,
+    fromDate:
+      branchProfitFilters.month
+        ? undefined
+        : branchProfitFilters.fromDate || undefined,
+    toDate:
+      branchProfitFilters.month
+        ? undefined
+        : branchProfitFilters.toDate || undefined,
+    branch: branchProfitFilters.branch || undefined,
+    projectOwnerId:
+      branchProfitFilters.projectOwnerId || undefined,
+  },
+  headers: token
+    ? {
+        Authorization: `Bearer ${token}`,
+      }
+    : {},
+},
     );
 
     setBranchProfitRows(
@@ -619,7 +642,95 @@ const loadBranchWiseProfitReport = async () => {
         ? 'Loading...'
         : 'Refresh'}
     </button>
+
+    <button
+  type="button"
+  onClick={() => {
+    setBranchProfitFilters({
+      month: '',
+      fromDate: '',
+      toDate: '',
+      branch: '',
+      projectOwnerId: '',
+    });
+
+    setTimeout(() => {
+      loadBranchWiseProfitReport();
+    }, 0);
+  }}
+  className="rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700"
+>
+  Reset
+</button>
   </div>
+
+  <div className="mt-4 grid gap-3 md:grid-cols-5">
+  <input
+    type="month"
+    value={branchProfitFilters.month}
+    onChange={(e) =>
+      setBranchProfitFilters({
+        ...branchProfitFilters,
+        month: e.target.value,
+        fromDate: '',
+        toDate: '',
+      })
+    }
+    className="rounded-xl border p-3 text-sm"
+  />
+
+  <input
+    type="date"
+    value={branchProfitFilters.fromDate}
+    disabled={!!branchProfitFilters.month}
+    onChange={(e) =>
+      setBranchProfitFilters({
+        ...branchProfitFilters,
+        fromDate: e.target.value,
+      })
+    }
+    className="rounded-xl border p-3 text-sm disabled:bg-gray-100"
+  />
+
+  <input
+    type="date"
+    value={branchProfitFilters.toDate}
+    disabled={!!branchProfitFilters.month}
+    onChange={(e) =>
+      setBranchProfitFilters({
+        ...branchProfitFilters,
+        toDate: e.target.value,
+      })
+    }
+    className="rounded-xl border p-3 text-sm disabled:bg-gray-100"
+  />
+
+  <input
+    type="text"
+    placeholder="Branch"
+    value={branchProfitFilters.branch}
+    onChange={(e) =>
+      setBranchProfitFilters({
+        ...branchProfitFilters,
+        branch: e.target.value,
+      })
+    }
+    className="rounded-xl border p-3 text-sm"
+  />
+
+  <input
+    type="number"
+    placeholder="Project Owner ID"
+    value={branchProfitFilters.projectOwnerId}
+    onChange={(e) =>
+      setBranchProfitFilters({
+        ...branchProfitFilters,
+        projectOwnerId: e.target.value,
+      })
+    }
+    className="rounded-xl border p-3 text-sm"
+  />
+</div>
 
   <div className="mt-5 grid gap-3 md:grid-cols-4">
     <div className="rounded-xl bg-gray-50 p-4">
