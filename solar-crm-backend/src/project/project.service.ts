@@ -2790,6 +2790,280 @@ async getBranchWiseProfitReport(query: any) {
     );
 }
 
+async getProjectOwnerWiseProfitReport(query: any) {
+  const {
+    month,
+    branch,
+    projectOwnerId,
+    page = 1,
+    limit = 20,
+  } = query || {};
+
+  const pageNumber = Math.max(Number(page) || 1, 1);
+  const limitNumber = Math.min(
+    Math.max(Number(limit) || 20, 1),
+    100,
+  );
+
+  let startDate: Date | null = null;
+  let endDate: Date | null = null;
+
+  if (month?.trim()) {
+    const [year, monthNumber] = month
+      .trim()
+      .split('-')
+      .map(Number);
+
+    if (year && monthNumber) {
+      startDate = new Date(year, monthNumber - 1, 1);
+      endDate = new Date(year, monthNumber, 1);
+    }
+  }
+
+  const ownerMap = new Map<
+    string,
+    {
+      projectOwnerId: number | null;
+      projectOwnerName: string;
+      totalCollections: number;
+      totalExpenses: number;
+    }
+  >();
+
+  const paymentQb =
+    this.projectPaymentInstallmentRepository
+      .createQueryBuilder('payment')
+      .leftJoin(
+        Project,
+        'project',
+        'project.id = payment.projectId',
+      )
+      .select([
+        'payment.paidAmount AS "paidAmount"',
+        'project.projectOwnerId AS "projectOwnerId"',
+        'project.projectOwnerName AS "projectOwnerName"',
+        'project.branchName AS "branchName"',
+      ])
+      .where('payment.isHidden = false')
+      .andWhere('project.isHidden = false')
+      .andWhere(
+        'payment.approvalStatus = :approvalStatus',
+        {
+          approvalStatus: 'APPROVED',
+        },
+      )
+      .andWhere('payment.paidAmount > 0');
+
+  if (startDate) {
+    paymentQb.andWhere(
+      'payment.paidDate >= :startDate',
+      { startDate },
+    );
+  }
+
+  if (endDate) {
+    paymentQb.andWhere('payment.paidDate < :endDate', {
+      endDate,
+    });
+  }
+
+  if (branch?.trim()) {
+    paymentQb.andWhere(
+      'LOWER(project.branchName) LIKE LOWER(:branch)',
+      {
+        branch: `%${branch.trim()}%`,
+      },
+    );
+  }
+
+  if (projectOwnerId) {
+    paymentQb.andWhere(
+      'project.projectOwnerId = :projectOwnerId',
+      {
+        projectOwnerId: Number(projectOwnerId),
+      },
+    );
+  }
+
+  const payments = await paymentQb.getRawMany();
+
+  for (const row of payments) {
+    const ownerId = row.projectOwnerId
+      ? Number(row.projectOwnerId)
+      : null;
+
+    const ownerName =
+      row.projectOwnerName?.trim() || 'UNASSIGNED';
+
+    const key = ownerId
+      ? String(ownerId)
+      : `UNASSIGNED-${ownerName}`;
+
+    if (!ownerMap.has(key)) {
+      ownerMap.set(key, {
+        projectOwnerId: ownerId,
+        projectOwnerName: ownerName,
+        totalCollections: 0,
+        totalExpenses: 0,
+      });
+    }
+
+    ownerMap.get(key)!.totalCollections += Number(
+      row.paidAmount || 0,
+    );
+  }
+
+  const expenseQb =
+    this.projectAccountExpenseRepository
+      .createQueryBuilder('expense')
+      .leftJoin(
+        Project,
+        'project',
+        'project.id = expense.projectId',
+      )
+      .select([
+        'expense.amount AS "amount"',
+        'expense.projectOwnerId AS "expenseProjectOwnerId"',
+        'expense.projectOwnerName AS "expenseProjectOwnerName"',
+        'expense.branchName AS "expenseBranchName"',
+        'project.projectOwnerId AS "projectOwnerId"',
+        'project.projectOwnerName AS "projectOwnerName"',
+        'project.branchName AS "projectBranchName"',
+        'project.city AS "projectCity"',
+      ])
+      .where('expense.isHidden = false')
+      .andWhere(
+        'expense.approvalStatus = :approvalStatus',
+        {
+          approvalStatus:
+            ProjectAccountExpenseApprovalStatus.APPROVED,
+        },
+      );
+
+  if (startDate) {
+    expenseQb.andWhere(
+      'expense.createdAt >= :startDate',
+      { startDate },
+    );
+  }
+
+  if (endDate) {
+    expenseQb.andWhere('expense.createdAt < :endDate', {
+      endDate,
+    });
+  }
+
+  if (branch?.trim()) {
+    expenseQb.andWhere(
+      `LOWER(
+        COALESCE(
+          expense.branchName,
+          project.branchName,
+          project.city,
+          'UNASSIGNED'
+        )
+      ) LIKE LOWER(:branch)`,
+      {
+        branch: `%${branch.trim()}%`,
+      },
+    );
+  }
+
+  if (projectOwnerId) {
+    expenseQb.andWhere(
+      `COALESCE(
+        expense.projectOwnerId,
+        project.projectOwnerId
+      ) = :projectOwnerId`,
+      {
+        projectOwnerId: Number(projectOwnerId),
+      },
+    );
+  }
+
+  const expenses = await expenseQb.getRawMany();
+
+  for (const row of expenses) {
+    const ownerId =
+      row.expenseProjectOwnerId ||
+      row.projectOwnerId
+        ? Number(
+            row.expenseProjectOwnerId ||
+              row.projectOwnerId,
+          )
+        : null;
+
+    const ownerName =
+      row.expenseProjectOwnerName?.trim() ||
+      row.projectOwnerName?.trim() ||
+      'UNASSIGNED';
+
+    const key = ownerId
+      ? String(ownerId)
+      : `UNASSIGNED-${ownerName}`;
+
+    if (!ownerMap.has(key)) {
+      ownerMap.set(key, {
+        projectOwnerId: ownerId,
+        projectOwnerName: ownerName,
+        totalCollections: 0,
+        totalExpenses: 0,
+      });
+    }
+
+    ownerMap.get(key)!.totalExpenses += Number(
+      row.amount || 0,
+    );
+  }
+
+  const allRows = Array.from(ownerMap.values())
+    .map((item) => ({
+      ...item,
+      netProfit:
+        item.totalCollections - item.totalExpenses,
+    }))
+    .sort((a, b) => b.netProfit - a.netProfit);
+
+  const total = allRows.length;
+
+  const paginatedRows = allRows.slice(
+    (pageNumber - 1) * limitNumber,
+    pageNumber * limitNumber,
+  );
+
+  return {
+    summary: {
+      totalOwners: total,
+      totalCollections: allRows.reduce(
+        (sum, item) =>
+          sum + Number(item.totalCollections || 0),
+        0,
+      ),
+      totalExpenses: allRows.reduce(
+        (sum, item) =>
+          sum + Number(item.totalExpenses || 0),
+        0,
+      ),
+      totalProfit: allRows.reduce(
+        (sum, item) =>
+          sum + Number(item.netProfit || 0),
+        0,
+      ),
+      highestProfitOwner:
+        allRows.length > 0
+          ? allRows[0].projectOwnerName
+          : '-',
+    },
+    data: paginatedRows,
+    pagination: {
+      page: pageNumber,
+      limit: limitNumber,
+      total,
+      totalPages: Math.ceil(total / limitNumber),
+    },
+  };
+}
+
 async getAccountExpenseReport(query: any) {
   const qb =
     this.projectAccountExpenseRepository

@@ -694,6 +694,22 @@ getBranchWiseProfitReport(@Query() query: any) {
   'PAYMENT_MANAGER',
   'ACCOUNT_MANAGER',
 )
+@Get('accounts/reports/project-owner-profit')
+getProjectOwnerWiseProfitReport(@Query() query: any) {
+  return this.projectService.getProjectOwnerWiseProfitReport(
+    query,
+  );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'PROJECT_EXECUTIVE',
+  'MEETING_MANAGER',
+  'PAYMENT_COLLECTION_EXECUTIVE',
+  'PAYMENT_MANAGER',
+  'ACCOUNT_MANAGER',
+)
 @Get('account-expenses')
 listAccountExpenses() {
   return this.projectService.listAccountExpenses();
