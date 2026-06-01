@@ -35,12 +35,15 @@ import { ProjectContractor } from './project-contractor.entity';
 import { ProjectContractorComment } from './project-contractor-comment.entity';
 import { ProjectLoanCoApplicant } from './project-loan-co-applicant.entity';
 import { ProjectAccountExpense } from './project-account-expense.entity';
+import { ProjectStockItem } from './project-stock-item.entity';
+import { ProjectStockMovement } from './project-stock-movement.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Project, ProjectDocument, ProjectComment, ProjectMaterialMaster, ProjectMaterialRequest,
 ProjectMaterialRequestItem, ProjectBranch, ProjectLoanDetail, ProjectSubsidyDetail, ProjectElectricityDetail, ProjectExecutionActivity, ProjectExecutionProof, ProjectExecutionReminder, ProjectExecutionReminderUserState, ProjectPaymentInstallment, ProjectPaymentReminderUserState, ProjectReminderUserState, ProjectEditHistory,
- ProjectVendor, ProjectPurchaseOrder, ProjectPurchaseOrderItem, ProjectProformaInvoice,
+ ProjectVendor, ProjectPurchaseOrder, ProjectStockItem,
+ProjectStockMovement, ProjectPurchaseOrderItem, ProjectProformaInvoice,
 ProjectProformaInvoiceItem, ProjectFinalInvoice, ProjectFinalInvoiceItem, ProjectPartyLedger, ProjectContractorAssignment,
 ProjectContractorProof, ProjectContractor, ProjectContractorComment, ProjectLoanCoApplicant, ProjectAccountExpense,]),
     CalculatorModule,
