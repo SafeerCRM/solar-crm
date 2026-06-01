@@ -950,18 +950,27 @@ const restoreStockMovement = async (movementId: number) => {
         </div>
 
         <div className="mt-4 grid gap-3 md:grid-cols-3">
-          <input
-            type="text"
-            placeholder="Branch"
-            value={filters.branch}
-            onChange={(e) =>
-              setFilters({
-                ...filters,
-                branch: e.target.value,
-              })
-            }
-            className="rounded-xl border p-3 text-sm"
-          />
+          <select
+  value={filters.branch}
+  onChange={(e) =>
+    setFilters({
+      ...filters,
+      branch: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3 text-sm"
+>
+  <option value="">All Branches</option>
+
+  {branches.map((branch: any) => (
+    <option
+      key={branch.id}
+      value={branch.name}
+    >
+      {branch.name}
+    </option>
+  ))}
+</select>
 
           <input
             type="text"
@@ -1187,18 +1196,27 @@ const restoreStockMovement = async (movementId: number) => {
   </div>
 
   <div className="mt-4 grid gap-3 md:grid-cols-2">
-    <input
-      type="text"
-      placeholder="Branch"
-      value={branchStockFilters.branch}
-      onChange={(e) =>
-        setBranchStockFilters({
-          ...branchStockFilters,
-          branch: e.target.value,
-        })
-      }
-      className="rounded-xl border p-3 text-sm"
-    />
+    <select
+  value={branchStockFilters.branch}
+  onChange={(e) =>
+    setBranchStockFilters({
+      ...branchStockFilters,
+      branch: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3 text-sm"
+>
+  <option value="">All Branches</option>
+
+  {branches.map((branch: any) => (
+    <option
+      key={branch.id}
+      value={branch.name}
+    >
+      {branch.name}
+    </option>
+  ))}
+</select>
 
     <input
       type="text"
@@ -1370,18 +1388,27 @@ const restoreStockMovement = async (movementId: number) => {
       className="rounded-xl border p-3 text-sm"
     />
 
-    <input
-      type="text"
-      placeholder="Branch"
-      value={movementFilters.branch}
-      onChange={(e) =>
-        setMovementFilters({
-          ...movementFilters,
-          branch: e.target.value,
-        })
-      }
-      className="rounded-xl border p-3 text-sm"
-    />
+    <select
+  value={movementFilters.branch}
+  onChange={(e) =>
+    setMovementFilters({
+      ...movementFilters,
+      branch: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3 text-sm"
+>
+  <option value="">All Branches</option>
+
+  {branches.map((branch: any) => (
+    <option
+      key={branch.id}
+      value={branch.name}
+    >
+      {branch.name}
+    </option>
+  ))}
+</select>
 
     <select
       value={movementFilters.movementType}
