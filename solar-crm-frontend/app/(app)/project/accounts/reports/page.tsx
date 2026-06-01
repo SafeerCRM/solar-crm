@@ -74,16 +74,19 @@ const [branchProfitLoading, setBranchProfitLoading] =
   const [branchProfitFilters, setBranchProfitFilters] =
   useState({
     month: '',
-    fromDate: '',
-    toDate: '',
     branch: '',
     projectOwnerId: '',
   });
+
+const [branches, setBranches] = useState<any[]>([]);
+const [projectOwners, setProjectOwners] = useState<any[]>([]);
 
   useEffect(() => {
   loadExpenditureReport();
   loadMonthlyProfitReport();
   loadBranchWiseProfitReport();
+  loadBranches();
+  loadProjectOwners();
 }, []);
 
   const loadExpenditureReport = async () => {
@@ -197,19 +200,11 @@ const loadBranchWiseProfitReport = async () => {
       `${API_BASE_URL}/project/accounts/reports/branch-profit`,
       {
   params: {
-    month: branchProfitFilters.month || undefined,
-    fromDate:
-      branchProfitFilters.month
-        ? undefined
-        : branchProfitFilters.fromDate || undefined,
-    toDate:
-      branchProfitFilters.month
-        ? undefined
-        : branchProfitFilters.toDate || undefined,
-    branch: branchProfitFilters.branch || undefined,
-    projectOwnerId:
-      branchProfitFilters.projectOwnerId || undefined,
-  },
+  month: branchProfitFilters.month || undefined,
+  branch: branchProfitFilters.branch || undefined,
+  projectOwnerId:
+    branchProfitFilters.projectOwnerId || undefined,
+},
   headers: token
     ? {
         Authorization: `Bearer ${token}`,
@@ -226,6 +221,50 @@ const loadBranchWiseProfitReport = async () => {
     alert('Failed to load branch wise profit report');
   } finally {
     setBranchProfitLoading(false);
+  }
+};
+
+const loadBranches = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/branch`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setBranches(Array.isArray(res.data) ? res.data : []);
+  } catch (error) {
+    console.error(error);
+  }
+};
+
+const loadProjectOwners = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/owners/list`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setProjectOwners(
+      Array.isArray(res.data) ? res.data : [],
+    );
+  } catch (error) {
+    console.error(error);
   }
 };
 
@@ -647,12 +686,10 @@ const loadBranchWiseProfitReport = async () => {
   type="button"
   onClick={() => {
     setBranchProfitFilters({
-      month: '',
-      fromDate: '',
-      toDate: '',
-      branch: '',
-      projectOwnerId: '',
-    });
+  month: '',
+  branch: '',
+  projectOwnerId: '',
+});
 
     setTimeout(() => {
       loadBranchWiseProfitReport();
@@ -664,7 +701,7 @@ const loadBranchWiseProfitReport = async () => {
 </button>
   </div>
 
-  <div className="mt-4 grid gap-3 md:grid-cols-5">
+  <div className="mt-4 grid gap-3 md:grid-cols-3">
   <input
     type="month"
     value={branchProfitFilters.month}
@@ -672,42 +709,12 @@ const loadBranchWiseProfitReport = async () => {
       setBranchProfitFilters({
         ...branchProfitFilters,
         month: e.target.value,
-        fromDate: '',
-        toDate: '',
       })
     }
     className="rounded-xl border p-3 text-sm"
   />
 
-  <input
-    type="date"
-    value={branchProfitFilters.fromDate}
-    disabled={!!branchProfitFilters.month}
-    onChange={(e) =>
-      setBranchProfitFilters({
-        ...branchProfitFilters,
-        fromDate: e.target.value,
-      })
-    }
-    className="rounded-xl border p-3 text-sm disabled:bg-gray-100"
-  />
-
-  <input
-    type="date"
-    value={branchProfitFilters.toDate}
-    disabled={!!branchProfitFilters.month}
-    onChange={(e) =>
-      setBranchProfitFilters({
-        ...branchProfitFilters,
-        toDate: e.target.value,
-      })
-    }
-    className="rounded-xl border p-3 text-sm disabled:bg-gray-100"
-  />
-
-  <input
-    type="text"
-    placeholder="Branch"
+  <select
     value={branchProfitFilters.branch}
     onChange={(e) =>
       setBranchProfitFilters({
@@ -716,11 +723,20 @@ const loadBranchWiseProfitReport = async () => {
       })
     }
     className="rounded-xl border p-3 text-sm"
-  />
+  >
+    <option value="">All Branches</option>
 
-  <input
-    type="number"
-    placeholder="Project Owner ID"
+    {branches.map((branch: any) => (
+      <option
+        key={branch.id || branch.name || branch.branchName}
+        value={branch.name || branch.branchName}
+      >
+        {branch.name || branch.branchName}
+      </option>
+    ))}
+  </select>
+
+  <select
     value={branchProfitFilters.projectOwnerId}
     onChange={(e) =>
       setBranchProfitFilters({
@@ -729,7 +745,18 @@ const loadBranchWiseProfitReport = async () => {
       })
     }
     className="rounded-xl border p-3 text-sm"
-  />
+  >
+    <option value="">All Project Owners</option>
+
+    {projectOwners.map((owner: any) => (
+      <option
+        key={owner.projectOwnerId}
+        value={owner.projectOwnerId}
+      >
+        {owner.projectOwnerName || 'Unnamed Owner'}
+      </option>
+    ))}
+  </select>
 </div>
 
   <div className="mt-5 grid gap-3 md:grid-cols-4">
