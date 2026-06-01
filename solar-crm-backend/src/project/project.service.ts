@@ -2444,9 +2444,12 @@ async listApprovedMaterialRequestsForIssue(query: any) {
 
   const qb = this.projectMaterialRequestRepository
     .createQueryBuilder('request')
-    .where('request.status = :status', {
-      status: ProjectMaterialRequestStatus.APPROVED,
-    })
+    .where('request.status IN (:...statuses)', {
+  statuses: [
+    ProjectMaterialRequestStatus.SUBMITTED,
+    ProjectMaterialRequestStatus.APPROVED,
+  ],
+})
     .orderBy('request.createdAt', 'DESC')
     .skip(skip)
     .take(limitNumber);
@@ -2541,11 +2544,16 @@ async issueMaterialRequestItemStock(
     throw new NotFoundException('Material request not found');
   }
 
-  if (request.status !== ProjectMaterialRequestStatus.APPROVED) {
-    throw new BadRequestException(
-      'Only approved material requests can be issued',
-    );
-  }
+  if (
+  ![
+    ProjectMaterialRequestStatus.SUBMITTED,
+    ProjectMaterialRequestStatus.APPROVED,
+  ].includes(request.status)
+) {
+  throw new BadRequestException(
+    'Only submitted or approved material requests can be issued',
+  );
+}
 
   const requestedQty = Number(requestItem.quantity || 0);
   const alreadyIssuedQty = Number(
