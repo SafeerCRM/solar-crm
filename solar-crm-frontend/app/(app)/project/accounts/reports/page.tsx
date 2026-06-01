@@ -113,11 +113,38 @@ const [
   setProjectOwnerProfitLoading,
 ] = useState(false);
 
+const [salaryRows, setSalaryRows] = useState<any[]>([]);
+
+const [salarySummary, setSalarySummary] = useState({
+  totalSalary: 0,
+  totalAdvanceSalary: 0,
+  approvedSalary: 0,
+  pendingSalary: 0,
+  totalRecords: 0,
+});
+
+const [salaryPagination, setSalaryPagination] = useState({
+  page: 1,
+  limit: 20,
+  total: 0,
+  totalPages: 1,
+});
+
+const [salaryFilters, setSalaryFilters] = useState({
+  month: '',
+  branch: '',
+  projectOwnerId: '',
+  approvalStatus: '',
+});
+
+const [salaryLoading, setSalaryLoading] = useState(false);
+
   useEffect(() => {
   loadExpenditureReport();
   loadMonthlyProfitReport();
   loadBranchWiseProfitReport();
   loadProjectOwnerWiseProfitReport();
+  loadSalaryReport();
   loadBranches();
   loadProjectOwners();
 }, []);
@@ -386,6 +413,87 @@ const loadProjectOwnerWiseProfitReport = async (
     );
   } finally {
     setProjectOwnerProfitLoading(false);
+  }
+};
+
+const loadSalaryReport = async (
+  overrideFilters?: {
+    month: string;
+    branch: string;
+    projectOwnerId: string;
+    approvalStatus: string;
+  },
+  overridePage?: number,
+) => {
+  try {
+    setSalaryLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    const activeFilters =
+      overrideFilters || salaryFilters;
+
+    const activePage =
+      overridePage || salaryPagination.page;
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/accounts/reports/salary`,
+      {
+        params: {
+          month: activeFilters.month || undefined,
+          branch: activeFilters.branch || undefined,
+          projectOwnerId:
+            activeFilters.projectOwnerId || undefined,
+          approvalStatus:
+            activeFilters.approvalStatus || undefined,
+          page: activePage,
+          limit: salaryPagination.limit,
+        },
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setSalarySummary({
+      totalSalary: Number(
+        res.data?.summary?.totalSalary || 0,
+      ),
+      totalAdvanceSalary: Number(
+        res.data?.summary?.totalAdvanceSalary || 0,
+      ),
+      approvedSalary: Number(
+        res.data?.summary?.approvedSalary || 0,
+      ),
+      pendingSalary: Number(
+        res.data?.summary?.pendingSalary || 0,
+      ),
+      totalRecords: Number(
+        res.data?.summary?.totalRecords || 0,
+      ),
+    });
+
+    setSalaryRows(
+      Array.isArray(res.data?.data)
+        ? res.data.data
+        : [],
+    );
+
+    setSalaryPagination({
+      page: Number(res.data?.pagination?.page || 1),
+      limit: Number(res.data?.pagination?.limit || 20),
+      total: Number(res.data?.pagination?.total || 0),
+      totalPages: Number(
+        res.data?.pagination?.totalPages || 1,
+      ),
+    });
+  } catch (error) {
+    console.error(error);
+    alert('Failed to load salary report');
+  } finally {
+    setSalaryLoading(false);
   }
 };
 
@@ -1303,21 +1411,298 @@ const loadProjectOwnerWiseProfitReport = async (
   </div>
 </div>
 
-<div className="grid gap-4 md:grid-cols-2">
-  {['Salary Report', 'Incentive Report'].map((title) => (
-    <div
-      key={title}
-      className="rounded-2xl bg-white p-5 shadow"
-    >
-      <h2 className="text-lg font-bold text-gray-800">
-        {title}
+<div className="rounded-2xl bg-white p-5 shadow">
+  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <div>
+      <h2 className="text-xl font-bold text-gray-800">
+        Salary Report
       </h2>
 
-      <p className="mt-3 text-sm text-gray-500">
-        Upcoming implementation.
+      <p className="mt-1 text-sm text-gray-500">
+        Salary and advance salary expenses with approval status and pagination.
       </p>
     </div>
-  ))}
+
+    <div className="flex flex-wrap gap-2">
+      <button
+        type="button"
+        onClick={() => loadSalaryReport(salaryFilters, 1)}
+        disabled={salaryLoading}
+        className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+      >
+        {salaryLoading ? 'Loading...' : 'Apply Filters'}
+      </button>
+
+      <button
+        type="button"
+        onClick={() => {
+          const emptyFilters = {
+            month: '',
+            branch: '',
+            projectOwnerId: '',
+            approvalStatus: '',
+          };
+
+          setSalaryFilters(emptyFilters);
+          loadSalaryReport(emptyFilters, 1);
+        }}
+        className="rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700"
+      >
+        Reset
+      </button>
+    </div>
+  </div>
+
+  <div className="mt-4 grid gap-3 md:grid-cols-4">
+    <input
+      type="month"
+      value={salaryFilters.month}
+      onChange={(e) =>
+        setSalaryFilters({
+          ...salaryFilters,
+          month: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    />
+
+    <select
+      value={salaryFilters.branch}
+      onChange={(e) =>
+        setSalaryFilters({
+          ...salaryFilters,
+          branch: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    >
+      <option value="">All Branches</option>
+
+      {branches.map((branch: any) => (
+        <option
+          key={branch.id || branch.name || branch.branchName}
+          value={branch.name || branch.branchName}
+        >
+          {branch.name || branch.branchName}
+        </option>
+      ))}
+    </select>
+
+    <select
+      value={salaryFilters.projectOwnerId}
+      onChange={(e) =>
+        setSalaryFilters({
+          ...salaryFilters,
+          projectOwnerId: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    >
+      <option value="">All Project Owners</option>
+
+      {projectOwners.map((owner: any) => (
+        <option
+          key={owner.projectOwnerId}
+          value={owner.projectOwnerId}
+        >
+          {owner.projectOwnerName || 'Unnamed Owner'}
+        </option>
+      ))}
+    </select>
+
+    <select
+      value={salaryFilters.approvalStatus}
+      onChange={(e) =>
+        setSalaryFilters({
+          ...salaryFilters,
+          approvalStatus: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    >
+      {approvalStatuses.map((status) => (
+        <option
+          key={status.value}
+          value={status.value}
+        >
+          {status.label}
+        </option>
+      ))}
+    </select>
+  </div>
+
+  <div className="mt-5 grid gap-3 md:grid-cols-5">
+    <div className="rounded-xl bg-gray-50 p-4">
+      <p className="text-xs text-gray-600">
+        Records
+      </p>
+
+      <p className="mt-1 text-xl font-bold text-gray-800">
+        {salarySummary.totalRecords}
+      </p>
+    </div>
+
+    <div className="rounded-xl bg-green-50 p-4">
+      <p className="text-xs text-green-700">
+        Total Salary
+      </p>
+
+      <p className="mt-1 text-xl font-bold text-green-800">
+        {formatCurrency(salarySummary.totalSalary)}
+      </p>
+    </div>
+
+    <div className="rounded-xl bg-blue-50 p-4">
+      <p className="text-xs text-blue-700">
+        Advance Salary
+      </p>
+
+      <p className="mt-1 text-xl font-bold text-blue-800">
+        {formatCurrency(salarySummary.totalAdvanceSalary)}
+      </p>
+    </div>
+
+    <div className="rounded-xl bg-purple-50 p-4">
+      <p className="text-xs text-purple-700">
+        Approved Salary
+      </p>
+
+      <p className="mt-1 text-xl font-bold text-purple-800">
+        {formatCurrency(salarySummary.approvedSalary)}
+      </p>
+    </div>
+
+    <div className="rounded-xl bg-yellow-50 p-4">
+      <p className="text-xs text-yellow-700">
+        Pending Salary
+      </p>
+
+      <p className="mt-1 text-xl font-bold text-yellow-800">
+        {formatCurrency(salarySummary.pendingSalary)}
+      </p>
+    </div>
+  </div>
+
+  <div className="mt-5 overflow-x-auto">
+    <table className="min-w-full text-sm">
+      <thead>
+        <tr className="border-b bg-gray-50">
+          <th className="p-2 text-left">Date</th>
+          <th className="p-2 text-left">Type</th>
+          <th className="p-2 text-left">Amount</th>
+          <th className="p-2 text-left">Status</th>
+          <th className="p-2 text-left">Created By</th>
+          <th className="p-2 text-left">Project Owner</th>
+          <th className="p-2 text-left">Branch</th>
+          <th className="p-2 text-left">Remarks</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {salaryRows.length === 0 && (
+          <tr>
+            <td
+              colSpan={8}
+              className="p-4 text-center text-gray-500"
+            >
+              No salary records found.
+            </td>
+          </tr>
+        )}
+
+        {salaryRows.map((item) => (
+          <tr key={item.id} className="border-b">
+            <td className="p-2">
+              {item.createdAt
+                ? new Date(item.createdAt).toLocaleDateString()
+                : '-'}
+            </td>
+
+            <td className="p-2">{item.expenseType || '-'}</td>
+
+            <td className="p-2 font-semibold">
+              {formatCurrency(item.amount)}
+            </td>
+
+            <td className="p-2">
+              {item.approvalStatus || '-'}
+            </td>
+
+            <td className="p-2">
+              {item.createdByName || '-'}
+            </td>
+
+            <td className="p-2">
+              {item.projectOwnerName || '-'}
+            </td>
+
+            <td className="p-2">
+              {item.branchName || '-'}
+            </td>
+
+            <td className="p-2">
+              {item.remarks || '-'}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+
+  <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <p className="text-sm text-gray-500">
+      Page {salaryPagination.page} of{' '}
+      {salaryPagination.totalPages} | Total{' '}
+      {salaryPagination.total}
+    </p>
+
+    <div className="flex gap-2">
+      <button
+        type="button"
+        disabled={
+          salaryPagination.page <= 1 ||
+          salaryLoading
+        }
+        onClick={() =>
+          loadSalaryReport(
+            salaryFilters,
+            salaryPagination.page - 1,
+          )
+        }
+        className="rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700 disabled:opacity-50"
+      >
+        Previous
+      </button>
+
+      <button
+        type="button"
+        disabled={
+          salaryPagination.page >=
+            salaryPagination.totalPages ||
+          salaryLoading
+        }
+        onClick={() =>
+          loadSalaryReport(
+            salaryFilters,
+            salaryPagination.page + 1,
+          )
+        }
+        className="rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700 disabled:opacity-50"
+      >
+        Next
+      </button>
+    </div>
+  </div>
+</div>
+
+<div className="rounded-2xl bg-white p-5 shadow">
+  <h2 className="text-lg font-bold text-gray-800">
+    Incentive Report
+  </h2>
+
+  <p className="mt-3 text-sm text-gray-500">
+    Upcoming implementation.
+  </p>
 </div>
     </div>
   );
