@@ -1711,6 +1711,66 @@ async listProjectStockMovements(query: any) {
   };
 }
 
+async hideProjectStockItem(
+  stockItemId: number,
+  body: any,
+  currentUser: any,
+) {
+  const stockItem =
+    await this.projectStockItemRepository.findOne({
+      where: {
+        id: stockItemId,
+      },
+    });
+
+  if (!stockItem) {
+    throw new NotFoundException('Stock item not found');
+  }
+
+  if (!body?.hiddenReason?.trim()) {
+    throw new BadRequestException('Hide reason is required');
+  }
+
+  stockItem.isHidden = true;
+  stockItem.hiddenReason = body.hiddenReason.trim();
+  stockItem.hiddenAt = new Date();
+  stockItem.hiddenBy =
+    currentUser?.id || currentUser?.userId || undefined;
+  stockItem.hiddenByName = currentUser?.name || '';
+
+  return this.projectStockItemRepository.save(stockItem);
+}
+
+async restoreProjectStockItem(
+  stockItemId: number,
+  body: any,
+  currentUser: any,
+) {
+  const stockItem =
+    await this.projectStockItemRepository.findOne({
+      where: {
+        id: stockItemId,
+      },
+    });
+
+  if (!stockItem) {
+    throw new NotFoundException('Stock item not found');
+  }
+
+  if (!body?.restoreReason?.trim()) {
+    throw new BadRequestException('Restore reason is required');
+  }
+
+  stockItem.isHidden = false;
+  stockItem.restoreReason = body.restoreReason.trim();
+  stockItem.restoredAt = new Date();
+  stockItem.restoredBy =
+    currentUser?.id || currentUser?.userId || undefined;
+  stockItem.restoredByName = currentUser?.name || '';
+
+  return this.projectStockItemRepository.save(stockItem);
+}
+
 async createVendor(data: Partial<ProjectVendor>) {
   if (!data.vendorName || !String(data.vendorName).trim()) {
     throw new BadRequestException('Vendor name is required');

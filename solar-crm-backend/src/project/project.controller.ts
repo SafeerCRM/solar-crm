@@ -930,6 +930,40 @@ listProjectStockMovements(
   );
 }
 
+@Roles('OWNER', 'PROJECT_MANAGER')
+@Patch('stock/items/:stockItemId/hide')
+hideProjectStockItem(
+  @Param('stockItemId', ParseIntPipe)
+  stockItemId: number,
+
+  @Body() body: any,
+
+  @Req() req: any,
+) {
+  return this.projectService.hideProjectStockItem(
+    stockItemId,
+    body,
+    req.user,
+  );
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER')
+@Patch('stock/items/:stockItemId/restore')
+restoreProjectStockItem(
+  @Param('stockItemId', ParseIntPipe)
+  stockItemId: number,
+
+  @Body() body: any,
+
+  @Req() req: any,
+) {
+  return this.projectService.restoreProjectStockItem(
+    stockItemId,
+    body,
+    req.user,
+  );
+}
+
 @Get('generated-purchase-orders')
 getGeneratedPurchaseOrders(
   @Query('page') page?: string,
