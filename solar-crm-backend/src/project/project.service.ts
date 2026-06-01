@@ -2378,6 +2378,113 @@ const expense =
   );
 }
 
+async updateAccountExpense(
+  expenseId: number,
+  body: any,
+  currentUser: any,
+) {
+  const expense =
+    await this.projectAccountExpenseRepository.findOne({
+      where: {
+        id: expenseId,
+      },
+    });
+
+  if (!expense) {
+    throw new NotFoundException('Expense not found');
+  }
+
+  if (
+    expense.approvalStatus ===
+    ProjectAccountExpenseApprovalStatus.APPROVED
+  ) {
+    throw new BadRequestException(
+      'Approved expense cannot be edited because ledger entry is already created',
+    );
+  }
+
+  const amount = Number(body?.amount || expense.amount || 0);
+
+  if (!amount || amount <= 0) {
+    throw new BadRequestException(
+      'Valid amount is required',
+    );
+  }
+
+  expense.expenseType =
+    Object.values(ProjectAccountExpenseType).includes(
+      body?.expenseType,
+    )
+      ? body.expenseType
+      : expense.expenseType;
+
+  expense.amount = amount;
+
+  expense.remarks =
+    body?.remarks !== undefined
+      ? body.remarks || null
+      : expense.remarks;
+
+  expense.branchName =
+    body?.branchName !== undefined
+      ? body.branchName || null
+      : expense.branchName;
+
+  expense.projectOwnerId =
+    body?.projectOwnerId !== undefined &&
+    body?.projectOwnerId !== ''
+      ? Number(body.projectOwnerId)
+      : expense.projectOwnerId;
+
+  expense.projectOwnerName =
+    body?.projectOwnerName !== undefined
+      ? body.projectOwnerName || null
+      : expense.projectOwnerName;
+
+  return this.projectAccountExpenseRepository.save(
+    expense,
+  );
+}
+
+async hideAccountExpense(
+  expenseId: number,
+  body: any,
+  currentUser: any,
+) {
+  const expense =
+    await this.projectAccountExpenseRepository.findOne({
+      where: {
+        id: expenseId,
+      },
+    });
+
+  if (!expense) {
+    throw new NotFoundException('Expense not found');
+  }
+
+  if (
+    !body?.hiddenReason ||
+    !String(body.hiddenReason).trim()
+  ) {
+    throw new BadRequestException(
+      'Hide reason is required',
+    );
+  }
+
+  expense.isHidden = true;
+  expense.hiddenReason = String(
+    body.hiddenReason,
+  ).trim();
+  expense.hiddenAt = new Date();
+  expense.hiddenBy =
+    currentUser?.id || currentUser?.userId || null;
+  expense.hiddenByName = currentUser?.name || '';
+
+  return this.projectAccountExpenseRepository.save(
+    expense,
+  );
+}
+
 async getAccountExpenseSummary() {
   const expenses =
     await this.projectAccountExpenseRepository.find({

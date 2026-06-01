@@ -639,6 +639,48 @@ createAccountExpense(
 
 @Roles(
   'OWNER',
+  'PAYMENT_MANAGER',
+  'ACCOUNT_MANAGER',
+)
+@Patch('account-expenses/:expenseId')
+updateAccountExpense(
+  @Param('expenseId', ParseIntPipe)
+  expenseId: number,
+
+  @Body() body: any,
+
+  @Req() req: any,
+) {
+  return this.projectService.updateAccountExpense(
+    expenseId,
+    body,
+    req.user,
+  );
+}
+
+@Roles(
+  'OWNER',
+  'PAYMENT_MANAGER',
+  'ACCOUNT_MANAGER',
+)
+@Patch('account-expenses/:expenseId/hide')
+hideAccountExpense(
+  @Param('expenseId', ParseIntPipe)
+  expenseId: number,
+
+  @Body() body: any,
+
+  @Req() req: any,
+) {
+  return this.projectService.hideAccountExpense(
+    expenseId,
+    body,
+    req.user,
+  );
+}
+
+@Roles(
+  'OWNER',
   'PROJECT_MANAGER',
   'PROJECT_EXECUTIVE',
   'MEETING_MANAGER',
