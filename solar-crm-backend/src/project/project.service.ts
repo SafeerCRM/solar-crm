@@ -2970,16 +2970,16 @@ async getProjectOwnerWiseProfitReport(query: any) {
   }
 
   if (projectOwnerId) {
-    expenseQb.andWhere(
-      `COALESCE(
-        expense.projectOwnerId,
-        project.projectOwnerId
-      ) = :projectOwnerId`,
-      {
-        projectOwnerId: Number(projectOwnerId),
-      },
-    );
-  }
+  expenseQb.andWhere(
+    `COALESCE(
+      "expense"."projectOwnerId",
+      "project"."projectOwnerId"
+    ) = :projectOwnerId`,
+    {
+      projectOwnerId: Number(projectOwnerId),
+    },
+  );
+}
 
   const expenses = await expenseQb.getRawMany();
 
