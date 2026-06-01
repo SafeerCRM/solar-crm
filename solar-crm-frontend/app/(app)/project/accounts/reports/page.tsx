@@ -139,12 +139,39 @@ const [salaryFilters, setSalaryFilters] = useState({
 
 const [salaryLoading, setSalaryLoading] = useState(false);
 
+const [incentiveRows, setIncentiveRows] = useState<any[]>([]);
+
+const [incentiveSummary, setIncentiveSummary] = useState({
+  totalIncentives: 0,
+  approvedIncentives: 0,
+  pendingIncentives: 0,
+  rejectedIncentives: 0,
+  totalRecords: 0,
+});
+
+const [incentivePagination, setIncentivePagination] = useState({
+  page: 1,
+  limit: 20,
+  total: 0,
+  totalPages: 1,
+});
+
+const [incentiveFilters, setIncentiveFilters] = useState({
+  month: '',
+  branch: '',
+  projectOwnerId: '',
+  approvalStatus: '',
+});
+
+const [incentiveLoading, setIncentiveLoading] = useState(false);
+
   useEffect(() => {
   loadExpenditureReport();
   loadMonthlyProfitReport();
   loadBranchWiseProfitReport();
   loadProjectOwnerWiseProfitReport();
   loadSalaryReport();
+  loadIncentiveReport();
   loadBranches();
   loadProjectOwners();
 }, []);
@@ -494,6 +521,87 @@ const loadSalaryReport = async (
     alert('Failed to load salary report');
   } finally {
     setSalaryLoading(false);
+  }
+};
+
+const loadIncentiveReport = async (
+  overrideFilters?: {
+    month: string;
+    branch: string;
+    projectOwnerId: string;
+    approvalStatus: string;
+  },
+  overridePage?: number,
+) => {
+  try {
+    setIncentiveLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    const activeFilters =
+      overrideFilters || incentiveFilters;
+
+    const activePage =
+      overridePage || incentivePagination.page;
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/accounts/reports/incentive`,
+      {
+        params: {
+          month: activeFilters.month || undefined,
+          branch: activeFilters.branch || undefined,
+          projectOwnerId:
+            activeFilters.projectOwnerId || undefined,
+          approvalStatus:
+            activeFilters.approvalStatus || undefined,
+          page: activePage,
+          limit: incentivePagination.limit,
+        },
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setIncentiveSummary({
+      totalIncentives: Number(
+        res.data?.summary?.totalIncentives || 0,
+      ),
+      approvedIncentives: Number(
+        res.data?.summary?.approvedIncentives || 0,
+      ),
+      pendingIncentives: Number(
+        res.data?.summary?.pendingIncentives || 0,
+      ),
+      rejectedIncentives: Number(
+        res.data?.summary?.rejectedIncentives || 0,
+      ),
+      totalRecords: Number(
+        res.data?.summary?.totalRecords || 0,
+      ),
+    });
+
+    setIncentiveRows(
+      Array.isArray(res.data?.data)
+        ? res.data.data
+        : [],
+    );
+
+    setIncentivePagination({
+      page: Number(res.data?.pagination?.page || 1),
+      limit: Number(res.data?.pagination?.limit || 20),
+      total: Number(res.data?.pagination?.total || 0),
+      totalPages: Number(
+        res.data?.pagination?.totalPages || 1,
+      ),
+    });
+  } catch (error) {
+    console.error(error);
+    alert('Failed to load incentive report');
+  } finally {
+    setIncentiveLoading(false);
   }
 };
 
@@ -1696,13 +1804,296 @@ const loadSalaryReport = async (
 </div>
 
 <div className="rounded-2xl bg-white p-5 shadow">
-  <h2 className="text-lg font-bold text-gray-800">
-    Incentive Report
-  </h2>
+  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <div>
+      <h2 className="text-xl font-bold text-gray-800">
+        Incentive Report
+      </h2>
 
-  <p className="mt-3 text-sm text-gray-500">
-    Upcoming implementation.
-  </p>
+      <p className="mt-1 text-sm text-gray-500">
+        Incentive expenses with approval status, filters and pagination.
+      </p>
+    </div>
+
+    <div className="flex flex-wrap gap-2">
+      <button
+        type="button"
+        onClick={() =>
+          loadIncentiveReport(incentiveFilters, 1)
+        }
+        disabled={incentiveLoading}
+        className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+      >
+        {incentiveLoading
+          ? 'Loading...'
+          : 'Apply Filters'}
+      </button>
+
+      <button
+        type="button"
+        onClick={() => {
+          const emptyFilters = {
+            month: '',
+            branch: '',
+            projectOwnerId: '',
+            approvalStatus: '',
+          };
+
+          setIncentiveFilters(emptyFilters);
+          loadIncentiveReport(emptyFilters, 1);
+        }}
+        className="rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700"
+      >
+        Reset
+      </button>
+    </div>
+  </div>
+
+  <div className="mt-4 grid gap-3 md:grid-cols-4">
+    <input
+      type="month"
+      value={incentiveFilters.month}
+      onChange={(e) =>
+        setIncentiveFilters({
+          ...incentiveFilters,
+          month: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    />
+
+    <select
+      value={incentiveFilters.branch}
+      onChange={(e) =>
+        setIncentiveFilters({
+          ...incentiveFilters,
+          branch: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    >
+      <option value="">All Branches</option>
+
+      {branches.map((branch: any) => (
+        <option
+          key={branch.id || branch.name || branch.branchName}
+          value={branch.name || branch.branchName}
+        >
+          {branch.name || branch.branchName}
+        </option>
+      ))}
+    </select>
+
+    <select
+      value={incentiveFilters.projectOwnerId}
+      onChange={(e) =>
+        setIncentiveFilters({
+          ...incentiveFilters,
+          projectOwnerId: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    >
+      <option value="">All Project Owners</option>
+
+      {projectOwners.map((owner: any) => (
+        <option
+          key={owner.projectOwnerId}
+          value={owner.projectOwnerId}
+        >
+          {owner.projectOwnerName || 'Unnamed Owner'}
+        </option>
+      ))}
+    </select>
+
+    <select
+      value={incentiveFilters.approvalStatus}
+      onChange={(e) =>
+        setIncentiveFilters({
+          ...incentiveFilters,
+          approvalStatus: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    >
+      {approvalStatuses.map((status) => (
+        <option
+          key={status.value}
+          value={status.value}
+        >
+          {status.label}
+        </option>
+      ))}
+    </select>
+  </div>
+
+  <div className="mt-5 grid gap-3 md:grid-cols-5">
+    <div className="rounded-xl bg-gray-50 p-4">
+      <p className="text-xs text-gray-600">
+        Records
+      </p>
+
+      <p className="mt-1 text-xl font-bold text-gray-800">
+        {incentiveSummary.totalRecords}
+      </p>
+    </div>
+
+    <div className="rounded-xl bg-green-50 p-4">
+      <p className="text-xs text-green-700">
+        Total Incentives
+      </p>
+
+      <p className="mt-1 text-xl font-bold text-green-800">
+        {formatCurrency(
+          incentiveSummary.totalIncentives,
+        )}
+      </p>
+    </div>
+
+    <div className="rounded-xl bg-purple-50 p-4">
+      <p className="text-xs text-purple-700">
+        Approved
+      </p>
+
+      <p className="mt-1 text-xl font-bold text-purple-800">
+        {formatCurrency(
+          incentiveSummary.approvedIncentives,
+        )}
+      </p>
+    </div>
+
+    <div className="rounded-xl bg-yellow-50 p-4">
+      <p className="text-xs text-yellow-700">
+        Pending
+      </p>
+
+      <p className="mt-1 text-xl font-bold text-yellow-800">
+        {formatCurrency(
+          incentiveSummary.pendingIncentives,
+        )}
+      </p>
+    </div>
+
+    <div className="rounded-xl bg-red-50 p-4">
+      <p className="text-xs text-red-700">
+        Rejected
+      </p>
+
+      <p className="mt-1 text-xl font-bold text-red-800">
+        {formatCurrency(
+          incentiveSummary.rejectedIncentives,
+        )}
+      </p>
+    </div>
+  </div>
+
+  <div className="mt-5 overflow-x-auto">
+    <table className="min-w-full text-sm">
+      <thead>
+        <tr className="border-b bg-gray-50">
+          <th className="p-2 text-left">Date</th>
+          <th className="p-2 text-left">Amount</th>
+          <th className="p-2 text-left">Status</th>
+          <th className="p-2 text-left">Created By</th>
+          <th className="p-2 text-left">Project Owner</th>
+          <th className="p-2 text-left">Branch</th>
+          <th className="p-2 text-left">Remarks</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {incentiveRows.length === 0 && (
+          <tr>
+            <td
+              colSpan={7}
+              className="p-4 text-center text-gray-500"
+            >
+              No incentive records found.
+            </td>
+          </tr>
+        )}
+
+        {incentiveRows.map((item) => (
+          <tr key={item.id} className="border-b">
+            <td className="p-2">
+              {item.createdAt
+                ? new Date(item.createdAt).toLocaleDateString()
+                : '-'}
+            </td>
+
+            <td className="p-2 font-semibold">
+              {formatCurrency(item.amount)}
+            </td>
+
+            <td className="p-2">
+              {item.approvalStatus || '-'}
+            </td>
+
+            <td className="p-2">
+              {item.createdByName || '-'}
+            </td>
+
+            <td className="p-2">
+              {item.projectOwnerName || '-'}
+            </td>
+
+            <td className="p-2">
+              {item.branchName || '-'}
+            </td>
+
+            <td className="p-2">
+              {item.remarks || '-'}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+
+  <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <p className="text-sm text-gray-500">
+      Page {incentivePagination.page} of{' '}
+      {incentivePagination.totalPages} | Total{' '}
+      {incentivePagination.total}
+    </p>
+
+    <div className="flex gap-2">
+      <button
+        type="button"
+        disabled={
+          incentivePagination.page <= 1 ||
+          incentiveLoading
+        }
+        onClick={() =>
+          loadIncentiveReport(
+            incentiveFilters,
+            incentivePagination.page - 1,
+          )
+        }
+        className="rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700 disabled:opacity-50"
+      >
+        Previous
+      </button>
+
+      <button
+        type="button"
+        disabled={
+          incentivePagination.page >=
+            incentivePagination.totalPages ||
+          incentiveLoading
+        }
+        onClick={() =>
+          loadIncentiveReport(
+            incentiveFilters,
+            incentivePagination.page + 1,
+          )
+        }
+        className="rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700 disabled:opacity-50"
+      >
+        Next
+      </button>
+    </div>
+  </div>
 </div>
     </div>
   );
