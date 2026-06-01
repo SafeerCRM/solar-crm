@@ -646,6 +646,20 @@ createAccountExpense(
   'PAYMENT_MANAGER',
   'ACCOUNT_MANAGER',
 )
+@Get('accounts/reports/salary')
+getSalaryReport(@Query() query: any) {
+  return this.projectService.getSalaryReport(query);
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'PROJECT_EXECUTIVE',
+  'MEETING_MANAGER',
+  'PAYMENT_COLLECTION_EXECUTIVE',
+  'PAYMENT_MANAGER',
+  'ACCOUNT_MANAGER',
+)
 @Get('account-expenses/report')
 getAccountExpenseReport(@Query() query: any) {
   return this.projectService.getAccountExpenseReport(
