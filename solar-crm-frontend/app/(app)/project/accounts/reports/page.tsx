@@ -190,20 +190,29 @@ const [projectOwners, setProjectOwners] = useState<any[]>([]);
   }
 };
 
-const loadBranchWiseProfitReport = async () => {
+const loadBranchWiseProfitReport = async (
+  overrideFilters?: {
+    month: string;
+    branch: string;
+    projectOwnerId: string;
+  },
+) => {
   try {
     setBranchProfitLoading(true);
 
     const token = localStorage.getItem('token');
 
+    const activeFilters =
+  overrideFilters || branchProfitFilters;
+
     const res = await axios.get(
       `${API_BASE_URL}/project/accounts/reports/branch-profit`,
       {
   params: {
-  month: branchProfitFilters.month || undefined,
-  branch: branchProfitFilters.branch || undefined,
+  month: activeFilters.month || undefined,
+  branch: activeFilters.branch || undefined,
   projectOwnerId:
-    branchProfitFilters.projectOwnerId || undefined,
+    activeFilters.projectOwnerId || undefined,
 },
   headers: token
     ? {
@@ -673,7 +682,7 @@ const loadProjectOwners = async () => {
 
     <button
       type="button"
-      onClick={loadBranchWiseProfitReport}
+      onClick={() => loadBranchWiseProfitReport()}
       disabled={branchProfitLoading}
       className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
     >
@@ -685,15 +694,15 @@ const loadProjectOwners = async () => {
     <button
   type="button"
   onClick={() => {
-    setBranchProfitFilters({
-  month: '',
-  branch: '',
-  projectOwnerId: '',
-});
+    const emptyFilters = {
+      month: '',
+      branch: '',
+      projectOwnerId: '',
+    };
 
-    setTimeout(() => {
-      loadBranchWiseProfitReport();
-    }, 0);
+    setBranchProfitFilters(emptyFilters);
+
+    loadBranchWiseProfitReport(emptyFilters);
   }}
   className="rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700"
 >
