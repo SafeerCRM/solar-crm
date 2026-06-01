@@ -81,10 +81,43 @@ const [branchProfitLoading, setBranchProfitLoading] =
 const [branches, setBranches] = useState<any[]>([]);
 const [projectOwners, setProjectOwners] = useState<any[]>([]);
 
+const [projectOwnerProfitRows, setProjectOwnerProfitRows] =
+  useState<any[]>([]);
+
+const [projectOwnerProfitSummary, setProjectOwnerProfitSummary] =
+  useState({
+    totalOwners: 0,
+    totalCollections: 0,
+    totalExpenses: 0,
+    totalProfit: 0,
+    highestProfitOwner: '-',
+  });
+
+const [projectOwnerProfitPagination, setProjectOwnerProfitPagination] =
+  useState({
+    page: 1,
+    limit: 20,
+    total: 0,
+    totalPages: 1,
+  });
+
+const [projectOwnerProfitFilters, setProjectOwnerProfitFilters] =
+  useState({
+    month: '',
+    branch: '',
+    projectOwnerId: '',
+  });
+
+const [
+  projectOwnerProfitLoading,
+  setProjectOwnerProfitLoading,
+] = useState(false);
+
   useEffect(() => {
   loadExpenditureReport();
   loadMonthlyProfitReport();
   loadBranchWiseProfitReport();
+  loadProjectOwnerWiseProfitReport();
   loadBranches();
   loadProjectOwners();
 }, []);
@@ -274,6 +307,85 @@ const loadProjectOwners = async () => {
     );
   } catch (error) {
     console.error(error);
+  }
+};
+
+const loadProjectOwnerWiseProfitReport = async (
+  overrideFilters?: {
+    month: string;
+    branch: string;
+    projectOwnerId: string;
+  },
+  overridePage?: number,
+) => {
+  try {
+    setProjectOwnerProfitLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    const activeFilters =
+      overrideFilters || projectOwnerProfitFilters;
+
+    const activePage =
+      overridePage || projectOwnerProfitPagination.page;
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/accounts/reports/project-owner-profit`,
+      {
+        params: {
+          month: activeFilters.month || undefined,
+          branch: activeFilters.branch || undefined,
+          projectOwnerId:
+            activeFilters.projectOwnerId || undefined,
+          page: activePage,
+          limit: projectOwnerProfitPagination.limit,
+        },
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setProjectOwnerProfitSummary({
+      totalOwners: Number(
+        res.data?.summary?.totalOwners || 0,
+      ),
+      totalCollections: Number(
+        res.data?.summary?.totalCollections || 0,
+      ),
+      totalExpenses: Number(
+        res.data?.summary?.totalExpenses || 0,
+      ),
+      totalProfit: Number(
+        res.data?.summary?.totalProfit || 0,
+      ),
+      highestProfitOwner:
+        res.data?.summary?.highestProfitOwner || '-',
+    });
+
+    setProjectOwnerProfitRows(
+      Array.isArray(res.data?.data)
+        ? res.data.data
+        : [],
+    );
+
+    setProjectOwnerProfitPagination({
+      page: Number(res.data?.pagination?.page || 1),
+      limit: Number(res.data?.pagination?.limit || 20),
+      total: Number(res.data?.pagination?.total || 0),
+      totalPages: Number(
+        res.data?.pagination?.totalPages || 1,
+      ),
+    });
+  } catch (error) {
+    console.error(error);
+    alert(
+      'Failed to load project owner wise profit report',
+    );
+  } finally {
+    setProjectOwnerProfitLoading(false);
   }
 };
 
@@ -680,6 +792,7 @@ const loadProjectOwners = async () => {
       </p>
     </div>
 
+<div className="flex gap-2">
     <button
       type="button"
       onClick={() => loadBranchWiseProfitReport()}
@@ -708,6 +821,7 @@ const loadProjectOwners = async () => {
 >
   Reset
 </button>
+</div>
   </div>
 
   <div className="mt-4 grid gap-3 md:grid-cols-3">
@@ -902,12 +1016,295 @@ const loadProjectOwners = async () => {
   </div>
 </div>
 
-<div className="grid gap-4 md:grid-cols-3">
-  {[
-    'Project Owner Wise Profit',
-    'Salary Report',
-    'Incentive Report',
-  ].map((title) => (
+<div className="rounded-2xl bg-white p-5 shadow">
+  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <div>
+      <h2 className="text-xl font-bold text-gray-800">
+        Project Owner Wise Profit Report
+      </h2>
+
+      <p className="mt-1 text-sm text-gray-500">
+        Project owner wise collections, approved expenses and net profit.
+      </p>
+    </div>
+
+    <div className="flex flex-wrap gap-2">
+      <button
+        type="button"
+        onClick={() =>
+          loadProjectOwnerWiseProfitReport(
+            projectOwnerProfitFilters,
+            1,
+          )
+        }
+        disabled={projectOwnerProfitLoading}
+        className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+      >
+        {projectOwnerProfitLoading
+          ? 'Loading...'
+          : 'Apply Filters'}
+      </button>
+
+      <button
+        type="button"
+        onClick={() => {
+          const emptyFilters = {
+            month: '',
+            branch: '',
+            projectOwnerId: '',
+          };
+
+          setProjectOwnerProfitFilters(emptyFilters);
+
+          loadProjectOwnerWiseProfitReport(
+            emptyFilters,
+            1,
+          );
+        }}
+        className="rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700"
+      >
+        Reset
+      </button>
+    </div>
+  </div>
+
+  <div className="mt-4 grid gap-3 md:grid-cols-3">
+    <input
+      type="month"
+      value={projectOwnerProfitFilters.month}
+      onChange={(e) =>
+        setProjectOwnerProfitFilters({
+          ...projectOwnerProfitFilters,
+          month: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    />
+
+    <select
+      value={projectOwnerProfitFilters.branch}
+      onChange={(e) =>
+        setProjectOwnerProfitFilters({
+          ...projectOwnerProfitFilters,
+          branch: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    >
+      <option value="">All Branches</option>
+
+      {branches.map((branch: any) => (
+        <option
+          key={branch.id || branch.name || branch.branchName}
+          value={branch.name || branch.branchName}
+        >
+          {branch.name || branch.branchName}
+        </option>
+      ))}
+    </select>
+
+    <select
+      value={projectOwnerProfitFilters.projectOwnerId}
+      onChange={(e) =>
+        setProjectOwnerProfitFilters({
+          ...projectOwnerProfitFilters,
+          projectOwnerId: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    >
+      <option value="">All Project Owners</option>
+
+      {projectOwners.map((owner: any) => (
+        <option
+          key={owner.projectOwnerId}
+          value={owner.projectOwnerId}
+        >
+          {owner.projectOwnerName || 'Unnamed Owner'}
+        </option>
+      ))}
+    </select>
+  </div>
+
+  <div className="mt-5 grid gap-3 md:grid-cols-5">
+    <div className="rounded-xl bg-gray-50 p-4">
+      <p className="text-xs text-gray-600">
+        Total Owners
+      </p>
+
+      <p className="mt-1 text-xl font-bold text-gray-800">
+        {projectOwnerProfitSummary.totalOwners}
+      </p>
+    </div>
+
+    <div className="rounded-xl bg-green-50 p-4">
+      <p className="text-xs text-green-700">
+        Collections
+      </p>
+
+      <p className="mt-1 text-xl font-bold text-green-800">
+        {formatCurrency(
+          projectOwnerProfitSummary.totalCollections,
+        )}
+      </p>
+    </div>
+
+    <div className="rounded-xl bg-red-50 p-4">
+      <p className="text-xs text-red-700">
+        Expenses
+      </p>
+
+      <p className="mt-1 text-xl font-bold text-red-800">
+        {formatCurrency(
+          projectOwnerProfitSummary.totalExpenses,
+        )}
+      </p>
+    </div>
+
+    <div className="rounded-xl bg-blue-50 p-4">
+      <p className="text-xs text-blue-700">
+        Profit
+      </p>
+
+      <p className="mt-1 text-xl font-bold text-blue-800">
+        {formatCurrency(
+          projectOwnerProfitSummary.totalProfit,
+        )}
+      </p>
+    </div>
+
+    <div className="rounded-xl bg-purple-50 p-4">
+      <p className="text-xs text-purple-700">
+        Highest Profit Owner
+      </p>
+
+      <p className="mt-1 text-sm font-bold text-purple-800">
+        {projectOwnerProfitSummary.highestProfitOwner}
+      </p>
+    </div>
+  </div>
+
+  <div className="mt-5 overflow-x-auto">
+    <table className="min-w-full text-sm">
+      <thead>
+        <tr className="border-b bg-gray-50">
+          <th className="p-2 text-left">
+            Project Owner
+          </th>
+
+          <th className="p-2 text-left">
+            Collections
+          </th>
+
+          <th className="p-2 text-left">
+            Expenses
+          </th>
+
+          <th className="p-2 text-left">
+            Net Profit
+          </th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {projectOwnerProfitRows.length === 0 && (
+          <tr>
+            <td
+              colSpan={4}
+              className="p-4 text-center text-gray-500"
+            >
+              No project owner profit data found.
+            </td>
+          </tr>
+        )}
+
+        {projectOwnerProfitRows.map((item) => (
+          <tr
+            key={
+              item.projectOwnerId ||
+              item.projectOwnerName
+            }
+            className="border-b"
+          >
+            <td className="p-2 font-semibold">
+              {item.projectOwnerName || 'UNASSIGNED'}
+            </td>
+
+            <td className="p-2 text-green-700">
+              {formatCurrency(
+                item.totalCollections,
+              )}
+            </td>
+
+            <td className="p-2 text-red-700">
+              {formatCurrency(
+                item.totalExpenses,
+              )}
+            </td>
+
+            <td
+              className={`p-2 font-semibold ${
+                Number(item.netProfit || 0) >= 0
+                  ? 'text-blue-700'
+                  : 'text-red-700'
+              }`}
+            >
+              {formatCurrency(item.netProfit)}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+
+  <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <p className="text-sm text-gray-500">
+      Page {projectOwnerProfitPagination.page} of{' '}
+      {projectOwnerProfitPagination.totalPages} | Total{' '}
+      {projectOwnerProfitPagination.total}
+    </p>
+
+    <div className="flex gap-2">
+      <button
+        type="button"
+        disabled={
+          projectOwnerProfitPagination.page <= 1 ||
+          projectOwnerProfitLoading
+        }
+        onClick={() =>
+          loadProjectOwnerWiseProfitReport(
+            projectOwnerProfitFilters,
+            projectOwnerProfitPagination.page - 1,
+          )
+        }
+        className="rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700 disabled:opacity-50"
+      >
+        Previous
+      </button>
+
+      <button
+        type="button"
+        disabled={
+          projectOwnerProfitPagination.page >=
+            projectOwnerProfitPagination.totalPages ||
+          projectOwnerProfitLoading
+        }
+        onClick={() =>
+          loadProjectOwnerWiseProfitReport(
+            projectOwnerProfitFilters,
+            projectOwnerProfitPagination.page + 1,
+          )
+        }
+        className="rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700 disabled:opacity-50"
+      >
+        Next
+      </button>
+    </div>
+  </div>
+</div>
+
+<div className="grid gap-4 md:grid-cols-2">
+  {['Salary Report', 'Incentive Report'].map((title) => (
     <div
       key={title}
       className="rounded-2xl bg-white p-5 shadow"
