@@ -13,6 +13,20 @@ export default function StockManagementPage() {
   const [stockItems, setStockItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
+  const [materials, setMaterials] = useState<any[]>([]);
+const [branches, setBranches] = useState<any[]>([]);
+
+const [receiveLoading, setReceiveLoading] = useState(false);
+
+const [receiveForm, setReceiveForm] = useState({
+  materialId: '',
+  branchId: '',
+  quantity: '',
+  rate: '',
+  sourceType: 'MANUAL',
+  remarks: '',
+});
+
   const [filters, setFilters] = useState({
     branch: '',
     material: '',
@@ -95,9 +109,112 @@ export default function StockManagementPage() {
     }
   };
 
+  const loadMaterials = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/material-master`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setMaterials(Array.isArray(res.data) ? res.data : []);
+  } catch (error) {
+    console.error(error);
+  }
+};
+
+const loadBranches = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/branch`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setBranches(Array.isArray(res.data) ? res.data : []);
+  } catch (error) {
+    console.error(error);
+  }
+};
+
+const receiveStock = async () => {
+  if (!receiveForm.materialId) {
+    alert('Please select material');
+    return;
+  }
+
+  if (!receiveForm.quantity) {
+    alert('Please enter quantity');
+    return;
+  }
+
+  try {
+    setReceiveLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/stock/receive`,
+      {
+        materialId: receiveForm.materialId,
+        branchId: receiveForm.branchId || undefined,
+        quantity: receiveForm.quantity,
+        rate: receiveForm.rate || 0,
+        sourceType: receiveForm.sourceType,
+        remarks: receiveForm.remarks,
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Stock received successfully');
+
+    setReceiveForm({
+      materialId: '',
+      branchId: '',
+      quantity: '',
+      rate: '',
+      sourceType: 'MANUAL',
+      remarks: '',
+    });
+
+    await loadStockItems(1);
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to receive stock',
+    );
+  } finally {
+    setReceiveLoading(false);
+  }
+};
+
   useEffect(() => {
-    loadStockItems(1);
-  }, []);
+  loadStockItems(1);
+  loadMaterials();
+  loadBranches();
+}, []);
 
   const totalQuantity = stockItems.reduce(
     (total, item) =>
@@ -164,6 +281,133 @@ export default function StockManagementPage() {
           </p>
         </div>
       </div>
+
+      <div className="rounded-2xl bg-white p-5 shadow">
+  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <div>
+      <h2 className="text-xl font-bold text-gray-800">
+        Incoming Stock
+      </h2>
+
+      <p className="mt-1 text-sm text-gray-500">
+        Receive manual, opening or adjustment stock into branch inventory.
+      </p>
+    </div>
+
+    <button
+      type="button"
+      onClick={receiveStock}
+      disabled={receiveLoading}
+      className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white"
+    >
+      {receiveLoading ? 'Receiving...' : 'Receive Stock'}
+    </button>
+  </div>
+
+  <div className="mt-4 grid gap-3 md:grid-cols-3">
+    <select
+      value={receiveForm.materialId}
+      onChange={(e) =>
+        setReceiveForm({
+          ...receiveForm,
+          materialId: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    >
+      <option value="">Select Material</option>
+
+      {materials.map((material: any) => (
+        <option
+          key={material.id}
+          value={material.id}
+        >
+          {material.name}
+          {material.brand ? ` - ${material.brand}` : ''}
+          {material.unit ? ` (${material.unit})` : ''}
+        </option>
+      ))}
+    </select>
+
+    <select
+      value={receiveForm.branchId}
+      onChange={(e) =>
+        setReceiveForm({
+          ...receiveForm,
+          branchId: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    >
+      <option value="">Select Branch</option>
+
+      {branches.map((branch: any) => (
+        <option
+          key={branch.id}
+          value={branch.id}
+        >
+          {branch.name}
+        </option>
+      ))}
+    </select>
+
+    <select
+      value={receiveForm.sourceType}
+      onChange={(e) =>
+        setReceiveForm({
+          ...receiveForm,
+          sourceType: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    >
+      <option value="MANUAL">Manual</option>
+      <option value="OPENING_STOCK">Opening Stock</option>
+      <option value="PURCHASE_ORDER">Purchase Order</option>
+      <option value="RETURN">Return</option>
+      <option value="ADJUSTMENT">Adjustment</option>
+    </select>
+
+    <input
+      type="number"
+      placeholder="Quantity"
+      value={receiveForm.quantity}
+      onChange={(e) =>
+        setReceiveForm({
+          ...receiveForm,
+          quantity: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    />
+
+    <input
+      type="number"
+      placeholder="Rate"
+      value={receiveForm.rate}
+      onChange={(e) =>
+        setReceiveForm({
+          ...receiveForm,
+          rate: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    />
+
+    <input
+      type="text"
+      placeholder="Remarks"
+      value={receiveForm.remarks}
+      onChange={(e) =>
+        setReceiveForm({
+          ...receiveForm,
+          remarks: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    />
+  </div>
+</div>
 
       <div className="rounded-2xl bg-white p-5 shadow">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
