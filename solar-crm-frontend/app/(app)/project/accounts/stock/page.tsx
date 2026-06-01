@@ -67,6 +67,21 @@ const [movementPagination, setMovementPagination] = useState({
   totalPages: 1,
 });
 
+const [branchStockRows, setBranchStockRows] = useState<any[]>([]);
+const [branchStockLoading, setBranchStockLoading] = useState(false);
+
+const [branchStockSummary, setBranchStockSummary] = useState({
+  totalBranches: 0,
+  totalItems: 0,
+  totalQuantity: 0,
+  totalStockValue: 0,
+});
+
+const [branchStockFilters, setBranchStockFilters] = useState({
+  branch: '',
+  material: '',
+});
+
   const loadStockItems = async (
     overridePage?: number,
     overrideFilters?: {
@@ -205,6 +220,63 @@ const [movementPagination, setMovementPagination] = useState({
     alert('Failed to load stock movements');
   } finally {
     setMovementLoading(false);
+  }
+};
+
+const loadBranchWiseStock = async (
+  overrideFilters?: {
+    branch: string;
+    material: string;
+  },
+) => {
+  try {
+    setBranchStockLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    const activeFilters =
+      overrideFilters || branchStockFilters;
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/stock/branch-wise`,
+      {
+        params: {
+          branch: activeFilters.branch || undefined,
+          material: activeFilters.material || undefined,
+        },
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setBranchStockSummary({
+      totalBranches: Number(
+        res.data?.summary?.totalBranches || 0,
+      ),
+      totalItems: Number(
+        res.data?.summary?.totalItems || 0,
+      ),
+      totalQuantity: Number(
+        res.data?.summary?.totalQuantity || 0,
+      ),
+      totalStockValue: Number(
+        res.data?.summary?.totalStockValue || 0,
+      ),
+    });
+
+    setBranchStockRows(
+      Array.isArray(res.data?.data)
+        ? res.data.data
+        : [],
+    );
+  } catch (error) {
+    console.error(error);
+    alert('Failed to load branch wise stock');
+  } finally {
+    setBranchStockLoading(false);
   }
 };
 
@@ -527,6 +599,7 @@ const restoreStockMovement = async (movementId: number) => {
   useEffect(() => {
   loadStockItems(1);
   loadStockMovements(1);
+  loadBranchWiseStock();
   loadMaterials();
   loadBranches();
 }, []);
@@ -1075,6 +1148,174 @@ const restoreStockMovement = async (movementId: number) => {
   <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
     <div>
       <h2 className="text-xl font-bold text-gray-800">
+        Branch Wise Stock
+      </h2>
+
+      <p className="mt-1 text-sm text-gray-500">
+        Branch-wise material count, quantity and stock value.
+      </p>
+    </div>
+
+    <div className="flex flex-wrap gap-2">
+      <button
+        type="button"
+        onClick={() => loadBranchWiseStock()}
+        disabled={branchStockLoading}
+        className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+      >
+        {branchStockLoading
+          ? 'Loading...'
+          : 'Apply Filters'}
+      </button>
+
+      <button
+        type="button"
+        onClick={() => {
+          const emptyFilters = {
+            branch: '',
+            material: '',
+          };
+
+          setBranchStockFilters(emptyFilters);
+          loadBranchWiseStock(emptyFilters);
+        }}
+        className="rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700"
+      >
+        Reset
+      </button>
+    </div>
+  </div>
+
+  <div className="mt-4 grid gap-3 md:grid-cols-2">
+    <input
+      type="text"
+      placeholder="Branch"
+      value={branchStockFilters.branch}
+      onChange={(e) =>
+        setBranchStockFilters({
+          ...branchStockFilters,
+          branch: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    />
+
+    <input
+      type="text"
+      placeholder="Material / Category / Brand"
+      value={branchStockFilters.material}
+      onChange={(e) =>
+        setBranchStockFilters({
+          ...branchStockFilters,
+          material: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    />
+  </div>
+
+  <div className="mt-5 grid gap-3 md:grid-cols-4">
+    <div className="rounded-xl bg-gray-50 p-4">
+      <p className="text-xs text-gray-600">
+        Branches
+      </p>
+
+      <p className="mt-1 text-xl font-bold text-gray-800">
+        {branchStockSummary.totalBranches}
+      </p>
+    </div>
+
+    <div className="rounded-xl bg-blue-50 p-4">
+      <p className="text-xs text-blue-700">
+        Stock Items
+      </p>
+
+      <p className="mt-1 text-xl font-bold text-blue-800">
+        {branchStockSummary.totalItems}
+      </p>
+    </div>
+
+    <div className="rounded-xl bg-purple-50 p-4">
+      <p className="text-xs text-purple-700">
+        Total Quantity
+      </p>
+
+      <p className="mt-1 text-xl font-bold text-purple-800">
+        {branchStockSummary.totalQuantity.toLocaleString(
+          'en-IN',
+        )}
+      </p>
+    </div>
+
+    <div className="rounded-xl bg-green-50 p-4">
+      <p className="text-xs text-green-700">
+        Stock Value
+      </p>
+
+      <p className="mt-1 text-xl font-bold text-green-800">
+        {formatCurrency(
+          branchStockSummary.totalStockValue,
+        )}
+      </p>
+    </div>
+  </div>
+
+  <div className="mt-5 overflow-x-auto">
+    <table className="min-w-full text-sm">
+      <thead>
+        <tr className="border-b bg-gray-50">
+          <th className="p-2 text-left">Branch</th>
+          <th className="p-2 text-left">Items</th>
+          <th className="p-2 text-left">Quantity</th>
+          <th className="p-2 text-left">Stock Value</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {branchStockRows.length === 0 && (
+          <tr>
+            <td
+              colSpan={4}
+              className="p-4 text-center text-gray-500"
+            >
+              No branch stock found.
+            </td>
+          </tr>
+        )}
+
+        {branchStockRows.map((item) => (
+          <tr
+            key={item.branchName}
+            className="border-b"
+          >
+            <td className="p-2 font-semibold">
+              {item.branchName || 'UNASSIGNED'}
+            </td>
+
+            <td className="p-2">
+              {item.totalItems}
+            </td>
+
+            <td className="p-2 font-semibold">
+              {Number(
+                item.totalQuantity || 0,
+              ).toLocaleString('en-IN')}
+            </td>
+
+            <td className="p-2 font-semibold text-green-700">
+              {formatCurrency(item.totalStockValue)}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+      <div className="rounded-2xl bg-white p-5 shadow">
+  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <div>
+      <h2 className="text-xl font-bold text-gray-800">
         Stock Movement History
       </h2>
 
@@ -1328,7 +1569,6 @@ const restoreStockMovement = async (movementId: number) => {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {[
           'Incoming Stock',
-          'Branch Wise Stock',
           'Material Availability',
           'Stock Reports',
         ].map((item) => (
