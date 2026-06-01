@@ -1595,7 +1595,6 @@ const restoreStockMovement = async (movementId: number) => {
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {[
-          'Incoming Stock',
           'Material Availability',
           'Stock Reports',
         ].map((item) => (
