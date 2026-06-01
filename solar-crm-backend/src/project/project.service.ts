@@ -2551,7 +2551,48 @@ async getMonthlyProfitReport(query: any) {
   };
 }
 
-async getBranchWiseProfitReport() {
+async getBranchWiseProfitReport(query: any) {
+  const {
+    month,
+    fromDate,
+    toDate,
+    branch,
+    projectOwnerId,
+  } = query || {};
+
+  let startDate: Date | null = null;
+  let endDate: Date | null = null;
+
+  if (month?.trim()) {
+    const [year, monthNumber] = month
+      .trim()
+      .split('-')
+      .map(Number);
+
+    if (year && monthNumber) {
+      startDate = new Date(
+        year,
+        monthNumber - 1,
+        1,
+      );
+
+      endDate = new Date(
+        year,
+        monthNumber,
+        1,
+      );
+    }
+  } else {
+    if (fromDate?.trim()) {
+      startDate = new Date(fromDate.trim());
+    }
+
+    if (toDate?.trim()) {
+      endDate = new Date(toDate.trim());
+      endDate.setHours(23, 59, 59, 999);
+    }
+  }
+
   const branchMap = new Map<
     string,
     {
@@ -2561,8 +2602,8 @@ async getBranchWiseProfitReport() {
     }
   >();
 
-  const payments =
-    await this.projectPaymentInstallmentRepository
+  const paymentQb =
+    this.projectPaymentInstallmentRepository
       .createQueryBuilder('payment')
       .leftJoin(
         Project,
@@ -2572,17 +2613,56 @@ async getBranchWiseProfitReport() {
       .select([
         'payment.paidAmount AS "paidAmount"',
         'payment.approvalStatus AS "approvalStatus"',
+        'payment.paidDate AS "paidDate"',
         'project.branchName AS "branchName"',
+        'project.projectOwnerId AS "projectOwnerId"',
       ])
       .where('payment.isHidden = false')
       .andWhere('project.isHidden = false')
-      .getRawMany();
+      .andWhere(
+        'payment.approvalStatus = :approvalStatus',
+        {
+          approvalStatus: 'APPROVED',
+        },
+      )
+      .andWhere('payment.paidAmount > 0');
+
+  if (startDate) {
+    paymentQb.andWhere(
+      'payment.paidDate >= :startDate',
+      { startDate },
+    );
+  }
+
+  if (endDate) {
+    paymentQb.andWhere(
+      'payment.paidDate < :endDate',
+      { endDate },
+    );
+  }
+
+  if (branch?.trim()) {
+    paymentQb.andWhere(
+      'LOWER(project.branchName) LIKE LOWER(:branch)',
+      {
+        branch: `%${branch.trim()}%`,
+      },
+    );
+  }
+
+  if (projectOwnerId) {
+    paymentQb.andWhere(
+      'project.projectOwnerId = :projectOwnerId',
+      {
+        projectOwnerId: Number(projectOwnerId),
+      },
+    );
+  }
+
+  const payments =
+    await paymentQb.getRawMany();
 
   for (const row of payments) {
-    if (row.approvalStatus !== 'APPROVED') {
-      continue;
-    }
-
     const branchName =
       row.branchName?.trim() ||
       'UNASSIGNED';
@@ -2603,42 +2683,83 @@ async getBranchWiseProfitReport() {
     );
   }
 
-  const expenses =
-    await this.projectAccountExpenseRepository.find({
-      where: {
-        approvalStatus:
-          ProjectAccountExpenseApprovalStatus.APPROVED,
-        isHidden: false,
+  const expenseQb =
+    this.projectAccountExpenseRepository
+      .createQueryBuilder('expense')
+      .leftJoin(
+        Project,
+        'project',
+        'project.id = expense.projectId',
+      )
+      .select([
+        'expense.amount AS "amount"',
+        'expense.branchName AS "expenseBranchName"',
+        'expense.createdAt AS "createdAt"',
+        'expense.projectOwnerId AS "expenseProjectOwnerId"',
+        'project.branchName AS "projectBranchName"',
+        'project.city AS "projectCity"',
+        'project.projectOwnerId AS "projectOwnerId"',
+      ])
+      .where('expense.isHidden = false')
+      .andWhere(
+        'expense.approvalStatus = :approvalStatus',
+        {
+          approvalStatus:
+            ProjectAccountExpenseApprovalStatus.APPROVED,
+        },
+      );
+
+  if (startDate) {
+    expenseQb.andWhere(
+      'expense.createdAt >= :startDate',
+      { startDate },
+    );
+  }
+
+  if (endDate) {
+    expenseQb.andWhere(
+      'expense.createdAt < :endDate',
+      { endDate },
+    );
+  }
+
+  if (branch?.trim()) {
+    expenseQb.andWhere(
+      `LOWER(
+        COALESCE(
+          expense.branchName,
+          project.branchName,
+          project.city,
+          'UNASSIGNED'
+        )
+      ) LIKE LOWER(:branch)`,
+      {
+        branch: `%${branch.trim()}%`,
       },
-    });
+    );
+  }
 
-  for (const expense of expenses) {
-    let branchName: string =
-  expense.branchName?.trim() || '';
+  if (projectOwnerId) {
+    expenseQb.andWhere(
+      `COALESCE(
+        expense.projectOwnerId,
+        project.projectOwnerId
+      ) = :projectOwnerId`,
+      {
+        projectOwnerId: Number(projectOwnerId),
+      },
+    );
+  }
 
-    if (
-      !branchName &&
-      expense.projectId
-    ) {
-      const project =
-        await this.projectRepository.findOne({
-          where: {
-            id: expense.projectId,
-          },
-          select: [
-            'branchName',
-            'city',
-          ],
-        });
+  const expenses =
+    await expenseQb.getRawMany();
 
-      branchName =
-  project?.branchName?.trim() ||
-  project?.city?.trim() ||
-  '';
-    }
-
-    branchName =
-      branchName || 'UNASSIGNED';
+  for (const row of expenses) {
+    const branchName =
+      row.expenseBranchName?.trim() ||
+      row.projectBranchName?.trim() ||
+      row.projectCity?.trim() ||
+      'UNASSIGNED';
 
     if (!branchMap.has(branchName)) {
       branchMap.set(branchName, {
@@ -2652,13 +2773,11 @@ async getBranchWiseProfitReport() {
       branchMap.get(branchName)!;
 
     current.totalExpenses += Number(
-      expense.amount || 0,
+      row.amount || 0,
     );
   }
 
-  return Array.from(
-    branchMap.values(),
-  )
+  return Array.from(branchMap.values())
     .map((item) => ({
       ...item,
       netProfit:

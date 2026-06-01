@@ -679,8 +679,10 @@ getMonthlyProfitReport(@Query() query: any) {
   'ACCOUNT_MANAGER',
 )
 @Get('accounts/reports/branch-profit')
-getBranchWiseProfitReport() {
-  return this.projectService.getBranchWiseProfitReport();
+getBranchWiseProfitReport(@Query() query: any) {
+  return this.projectService.getBranchWiseProfitReport(
+    query,
+  );
 }
 
 @Roles(
