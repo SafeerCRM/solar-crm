@@ -50,6 +50,23 @@ const [receiveForm, setReceiveForm] = useState({
     totalPages: 1,
   });
 
+  const [movements, setMovements] = useState<any[]>([]);
+const [movementLoading, setMovementLoading] = useState(false);
+
+const [movementFilters, setMovementFilters] = useState({
+  material: '',
+  branch: '',
+  movementType: '',
+  showHidden: false,
+});
+
+const [movementPagination, setMovementPagination] = useState({
+  page: 1,
+  limit: 20,
+  total: 0,
+  totalPages: 1,
+});
+
   const loadStockItems = async (
     overridePage?: number,
     overrideFilters?: {
@@ -118,6 +135,78 @@ const [receiveForm, setReceiveForm] = useState({
       setLoading(false);
     }
   };
+
+  const loadStockMovements = async (
+  overridePage?: number,
+  overrideFilters?: {
+    material: string;
+    branch: string;
+    movementType: string;
+    showHidden: boolean;
+  },
+) => {
+  try {
+    setMovementLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    const activePage =
+      overridePage || movementPagination.page;
+
+    const activeFilters =
+      overrideFilters || movementFilters;
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/stock/movements`,
+      {
+        params: {
+          page: activePage,
+          limit: movementPagination.limit,
+          material:
+            activeFilters.material || undefined,
+          branch:
+            activeFilters.branch || undefined,
+          movementType:
+            activeFilters.movementType || undefined,
+          showHidden: activeFilters.showHidden
+            ? 'true'
+            : undefined,
+        },
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setMovements(
+      Array.isArray(res.data?.data)
+        ? res.data.data
+        : [],
+    );
+
+    setMovementPagination({
+      page: Number(
+        res.data?.pagination?.page || 1,
+      ),
+      limit: Number(
+        res.data?.pagination?.limit || 20,
+      ),
+      total: Number(
+        res.data?.pagination?.total || 0,
+      ),
+      totalPages: Number(
+        res.data?.pagination?.totalPages || 1,
+      ),
+    });
+  } catch (error) {
+    console.error(error);
+    alert('Failed to load stock movements');
+  } finally {
+    setMovementLoading(false);
+  }
+};
 
   const loadMaterials = async () => {
   try {
@@ -208,6 +297,7 @@ const receiveStock = async () => {
     });
 
     await loadStockItems(1);
+    await loadStockMovements(1);
   } catch (error: any) {
     console.error(error);
 
@@ -265,6 +355,7 @@ const issueStock = async () => {
     });
 
     await loadStockItems(1);
+    await loadStockMovements(1);
   } catch (error: any) {
     console.error(error);
 
@@ -279,6 +370,7 @@ const issueStock = async () => {
 
   useEffect(() => {
   loadStockItems(1);
+  loadStockMovements(1);
   loadMaterials();
   loadBranches();
 }, []);
@@ -799,6 +891,240 @@ const issueStock = async () => {
           </div>
         </div>
       </div>
+
+      <div className="rounded-2xl bg-white p-5 shadow">
+  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <div>
+      <h2 className="text-xl font-bold text-gray-800">
+        Stock Movement History
+      </h2>
+
+      <p className="mt-1 text-sm text-gray-500">
+        Complete receive and issue history for stock audit.
+      </p>
+    </div>
+
+    <div className="flex flex-wrap gap-2">
+      <button
+        type="button"
+        onClick={() => loadStockMovements(1)}
+        disabled={movementLoading}
+        className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+      >
+        {movementLoading
+          ? 'Loading...'
+          : 'Apply Filters'}
+      </button>
+
+      <button
+        type="button"
+        onClick={() => {
+          const emptyFilters = {
+            material: '',
+            branch: '',
+            movementType: '',
+            showHidden: false,
+          };
+
+          setMovementFilters(emptyFilters);
+          loadStockMovements(1, emptyFilters);
+        }}
+        className="rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700"
+      >
+        Reset
+      </button>
+    </div>
+  </div>
+
+  <div className="mt-4 grid gap-3 md:grid-cols-4">
+    <input
+      type="text"
+      placeholder="Material"
+      value={movementFilters.material}
+      onChange={(e) =>
+        setMovementFilters({
+          ...movementFilters,
+          material: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    />
+
+    <input
+      type="text"
+      placeholder="Branch"
+      value={movementFilters.branch}
+      onChange={(e) =>
+        setMovementFilters({
+          ...movementFilters,
+          branch: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    />
+
+    <select
+      value={movementFilters.movementType}
+      onChange={(e) =>
+        setMovementFilters({
+          ...movementFilters,
+          movementType: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    >
+      <option value="">All Movement Types</option>
+      <option value="RECEIVE">Receive</option>
+      <option value="ISSUE">Issue</option>
+      <option value="ADJUST_IN">Adjust In</option>
+      <option value="ADJUST_OUT">Adjust Out</option>
+      <option value="TRANSFER_IN">Transfer In</option>
+      <option value="TRANSFER_OUT">Transfer Out</option>
+    </select>
+
+    <label className="flex items-center gap-2 rounded-xl border p-3 text-sm">
+      <input
+        type="checkbox"
+        checked={movementFilters.showHidden}
+        onChange={(e) =>
+          setMovementFilters({
+            ...movementFilters,
+            showHidden: e.target.checked,
+          })
+        }
+      />
+      View Hidden
+    </label>
+  </div>
+
+  <div className="mt-5 overflow-x-auto">
+    <table className="min-w-full text-sm">
+      <thead>
+        <tr className="border-b bg-gray-50">
+          <th className="p-2 text-left">Date</th>
+          <th className="p-2 text-left">Material</th>
+          <th className="p-2 text-left">Branch</th>
+          <th className="p-2 text-left">Type</th>
+          <th className="p-2 text-left">Qty</th>
+          <th className="p-2 text-left">Rate</th>
+          <th className="p-2 text-left">Amount</th>
+          <th className="p-2 text-left">Source</th>
+          <th className="p-2 text-left">Project</th>
+          <th className="p-2 text-left">Created By</th>
+          <th className="p-2 text-left">Remarks</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {movements.length === 0 && (
+          <tr>
+            <td
+              colSpan={11}
+              className="p-4 text-center text-gray-500"
+            >
+              No stock movements found.
+            </td>
+          </tr>
+        )}
+
+        {movements.map((item) => (
+          <tr key={item.id} className="border-b">
+            <td className="p-2">
+              {item.createdAt
+                ? new Date(item.createdAt).toLocaleDateString()
+                : '-'}
+            </td>
+
+            <td className="p-2 font-semibold">
+              {item.materialName || '-'}
+            </td>
+
+            <td className="p-2">
+              {item.branchName || '-'}
+            </td>
+
+            <td className="p-2">
+              {item.movementType || '-'}
+            </td>
+
+            <td className="p-2 font-semibold">
+              {Number(item.quantity || 0).toLocaleString(
+                'en-IN',
+              )}
+            </td>
+
+            <td className="p-2">
+              {formatCurrency(item.rate)}
+            </td>
+
+            <td className="p-2 font-semibold">
+              {formatCurrency(item.totalAmount)}
+            </td>
+
+            <td className="p-2">
+              {item.sourceType || '-'}
+            </td>
+
+            <td className="p-2">
+              {item.projectId || '-'}
+            </td>
+
+            <td className="p-2">
+              {item.createdByName || '-'}
+            </td>
+
+            <td className="p-2">
+              {item.remarks || '-'}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+
+  <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <p className="text-sm text-gray-500">
+      Page {movementPagination.page} of{' '}
+      {movementPagination.totalPages} | Total{' '}
+      {movementPagination.total}
+    </p>
+
+    <div className="flex gap-2">
+      <button
+        type="button"
+        disabled={
+          movementPagination.page <= 1 ||
+          movementLoading
+        }
+        onClick={() =>
+          loadStockMovements(
+            movementPagination.page - 1,
+          )
+        }
+        className="rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700 disabled:opacity-50"
+      >
+        Previous
+      </button>
+
+      <button
+        type="button"
+        disabled={
+          movementPagination.page >=
+            movementPagination.totalPages ||
+          movementLoading
+        }
+        onClick={() =>
+          loadStockMovements(
+            movementPagination.page + 1,
+          )
+        }
+        className="rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700 disabled:opacity-50"
+      >
+        Next
+      </button>
+    </div>
+  </div>
+</div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {[
