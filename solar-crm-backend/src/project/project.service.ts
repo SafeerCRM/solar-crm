@@ -3237,6 +3237,135 @@ async getSalaryReport(query: any) {
   };
 }
 
+async getIncentiveReport(query: any) {
+  const {
+    month,
+    branch,
+    projectOwnerId,
+    approvalStatus,
+    page = 1,
+    limit = 20,
+  } = query || {};
+
+  const pageNumber = Math.max(Number(page) || 1, 1);
+  const limitNumber = Math.min(Math.max(Number(limit) || 20, 1), 100);
+
+  let startDate: Date | null = null;
+  let endDate: Date | null = null;
+
+  if (month?.trim()) {
+    const [year, monthNumber] = month.trim().split('-').map(Number);
+
+    if (year && monthNumber) {
+      startDate = new Date(year, monthNumber - 1, 1);
+      endDate = new Date(year, monthNumber, 1);
+    }
+  }
+
+  const qb = this.projectAccountExpenseRepository
+    .createQueryBuilder('expense')
+    .leftJoin(Project, 'project', 'project.id = expense.projectId')
+    .where('expense.isHidden = false')
+    .andWhere('expense.expenseType = :expenseType', {
+      expenseType: ProjectAccountExpenseType.INCENTIVE,
+    });
+
+  if (startDate) {
+    qb.andWhere('expense.createdAt >= :startDate', { startDate });
+  }
+
+  if (endDate) {
+    qb.andWhere('expense.createdAt < :endDate', { endDate });
+  }
+
+  if (branch?.trim()) {
+    qb.andWhere(
+      `LOWER(
+        COALESCE(
+          expense.branchName,
+          project.branchName,
+          project.city,
+          'UNASSIGNED'
+        )
+      ) LIKE LOWER(:branch)`,
+      { branch: `%${branch.trim()}%` },
+    );
+  }
+
+  if (projectOwnerId) {
+    qb.andWhere(
+      `COALESCE(
+        "expense"."projectOwnerId",
+        "project"."projectOwnerId"
+      ) = :projectOwnerId`,
+      { projectOwnerId: Number(projectOwnerId) },
+    );
+  }
+
+  if (approvalStatus?.trim()) {
+    qb.andWhere('expense.approvalStatus = :approvalStatus', {
+      approvalStatus: approvalStatus.trim(),
+    });
+  }
+
+  qb.orderBy('expense.createdAt', 'DESC');
+
+  const allRows = await qb.getMany();
+
+  const totalIncentives = allRows.reduce(
+    (total, item) => total + Number(item.amount || 0),
+    0,
+  );
+
+  const approvedIncentives = allRows
+    .filter(
+      (item) =>
+        item.approvalStatus ===
+        ProjectAccountExpenseApprovalStatus.APPROVED,
+    )
+    .reduce((total, item) => total + Number(item.amount || 0), 0);
+
+  const pendingIncentives = allRows
+    .filter(
+      (item) =>
+        item.approvalStatus ===
+        ProjectAccountExpenseApprovalStatus.PENDING,
+    )
+    .reduce((total, item) => total + Number(item.amount || 0), 0);
+
+  const rejectedIncentives = allRows
+    .filter(
+      (item) =>
+        item.approvalStatus ===
+        ProjectAccountExpenseApprovalStatus.REJECTED,
+    )
+    .reduce((total, item) => total + Number(item.amount || 0), 0);
+
+  const total = allRows.length;
+
+  const paginatedRows = allRows.slice(
+    (pageNumber - 1) * limitNumber,
+    pageNumber * limitNumber,
+  );
+
+  return {
+    summary: {
+      totalIncentives,
+      approvedIncentives,
+      pendingIncentives,
+      rejectedIncentives,
+      totalRecords: total,
+    },
+    data: paginatedRows,
+    pagination: {
+      page: pageNumber,
+      limit: limitNumber,
+      total,
+      totalPages: Math.ceil(total / limitNumber),
+    },
+  };
+}
+
 async getAccountExpenseReport(query: any) {
   const qb =
     this.projectAccountExpenseRepository
