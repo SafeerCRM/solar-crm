@@ -368,6 +368,84 @@ const issueStock = async () => {
   }
 };
 
+const hideStockItem = async (stockItemId: number) => {
+  const hiddenReason = window.prompt(
+    'Enter hide reason',
+  );
+
+  if (!hiddenReason?.trim()) {
+    return;
+  }
+
+  try {
+    const token = localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/stock/items/${stockItemId}/hide`,
+      {
+        hiddenReason,
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Stock item hidden');
+
+    await loadStockItems(1);
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to hide stock item',
+    );
+  }
+};
+
+const restoreStockItem = async (stockItemId: number) => {
+  const restoreReason = window.prompt(
+    'Enter restore reason',
+  );
+
+  if (!restoreReason?.trim()) {
+    return;
+  }
+
+  try {
+    const token = localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/stock/items/${stockItemId}/restore`,
+      {
+        restoreReason,
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Stock item restored');
+
+    await loadStockItems(1);
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to restore stock item',
+    );
+  }
+};
+
   useEffect(() => {
   loadStockItems(1);
   loadStockMovements(1);
@@ -790,6 +868,9 @@ const issueStock = async () => {
                 <th className="p-2 text-left">
                   Stock Value
                 </th>
+                <th className="p-2 text-left">
+                  Action
+                </th>
               </tr>
             </thead>
 
@@ -797,7 +878,7 @@ const issueStock = async () => {
               {stockItems.length === 0 && (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={9}
                     className="p-4 text-center text-gray-500"
                   >
                     No stock items found.
@@ -843,6 +924,26 @@ const issueStock = async () => {
                   <td className="p-2 font-semibold text-green-700">
                     {formatCurrency(item.stockValue)}
                   </td>
+
+                  <td className="p-2">
+  {filters.showHidden ? (
+    <button
+      type="button"
+      onClick={() => restoreStockItem(item.id)}
+      className="rounded bg-green-600 px-2 py-1 text-xs text-white"
+    >
+      Restore
+    </button>
+  ) : (
+    <button
+      type="button"
+      onClick={() => hideStockItem(item.id)}
+      className="rounded bg-gray-700 px-2 py-1 text-xs text-white"
+    >
+      Hide
+    </button>
+  )}
+</td>
                 </tr>
               ))}
             </tbody>
