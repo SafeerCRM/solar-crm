@@ -446,6 +446,84 @@ const restoreStockItem = async (stockItemId: number) => {
   }
 };
 
+const hideStockMovement = async (movementId: number) => {
+  const hiddenReason = window.prompt(
+    'Enter hide reason',
+  );
+
+  if (!hiddenReason?.trim()) {
+    return;
+  }
+
+  try {
+    const token = localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/stock/movements/${movementId}/hide`,
+      {
+        hiddenReason,
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Stock movement hidden');
+
+    await loadStockMovements(1);
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to hide stock movement',
+    );
+  }
+};
+
+const restoreStockMovement = async (movementId: number) => {
+  const restoreReason = window.prompt(
+    'Enter restore reason',
+  );
+
+  if (!restoreReason?.trim()) {
+    return;
+  }
+
+  try {
+    const token = localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/stock/movements/${movementId}/restore`,
+      {
+        restoreReason,
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Stock movement restored');
+
+    await loadStockMovements(1);
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to restore stock movement',
+    );
+  }
+};
+
   useEffect(() => {
   loadStockItems(1);
   loadStockMovements(1);
@@ -1113,6 +1191,7 @@ const restoreStockItem = async (stockItemId: number) => {
           <th className="p-2 text-left">Project</th>
           <th className="p-2 text-left">Created By</th>
           <th className="p-2 text-left">Remarks</th>
+          <th className="p-2 text-left">Action</th>
         </tr>
       </thead>
 
@@ -1120,7 +1199,7 @@ const restoreStockItem = async (stockItemId: number) => {
         {movements.length === 0 && (
           <tr>
             <td
-              colSpan={11}
+              colSpan={12}
               className="p-4 text-center text-gray-500"
             >
               No stock movements found.
@@ -1177,6 +1256,25 @@ const restoreStockItem = async (stockItemId: number) => {
             <td className="p-2">
               {item.remarks || '-'}
             </td>
+            <td className="p-2">
+  {movementFilters.showHidden ? (
+    <button
+      type="button"
+      onClick={() => restoreStockMovement(item.id)}
+      className="rounded bg-green-600 px-2 py-1 text-xs text-white"
+    >
+      Restore
+    </button>
+  ) : (
+    <button
+      type="button"
+      onClick={() => hideStockMovement(item.id)}
+      className="rounded bg-gray-700 px-2 py-1 text-xs text-white"
+    >
+      Hide
+    </button>
+  )}
+</td>
           </tr>
         ))}
       </tbody>
