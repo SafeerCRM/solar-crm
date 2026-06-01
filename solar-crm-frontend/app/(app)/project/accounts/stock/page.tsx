@@ -18,6 +18,16 @@ const [branches, setBranches] = useState<any[]>([]);
 
 const [receiveLoading, setReceiveLoading] = useState(false);
 
+const [issueLoading, setIssueLoading] = useState(false);
+
+const [issueForm, setIssueForm] = useState({
+  stockItemId: '',
+  quantity: '',
+  sourceType: 'MANUAL',
+  projectId: '',
+  remarks: '',
+});
+
 const [receiveForm, setReceiveForm] = useState({
   materialId: '',
   branchId: '',
@@ -207,6 +217,63 @@ const receiveStock = async () => {
     );
   } finally {
     setReceiveLoading(false);
+  }
+};
+
+const issueStock = async () => {
+  if (!issueForm.stockItemId) {
+    alert('Please select stock item');
+    return;
+  }
+
+  if (!issueForm.quantity) {
+    alert('Please enter quantity');
+    return;
+  }
+
+  try {
+    setIssueLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/stock/issue`,
+      {
+        stockItemId: issueForm.stockItemId,
+        quantity: issueForm.quantity,
+        sourceType: issueForm.sourceType,
+        projectId: issueForm.projectId || undefined,
+        remarks: issueForm.remarks,
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Stock issued successfully');
+
+    setIssueForm({
+      stockItemId: '',
+      quantity: '',
+      sourceType: 'MANUAL',
+      projectId: '',
+      remarks: '',
+    });
+
+    await loadStockItems(1);
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to issue stock',
+    );
+  } finally {
+    setIssueLoading(false);
   }
 };
 
@@ -405,6 +472,115 @@ const receiveStock = async () => {
         })
       }
       className="rounded-xl border p-3 text-sm"
+    />
+  </div>
+</div>
+
+<div className="rounded-2xl bg-white p-5 shadow">
+  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <div>
+      <h2 className="text-xl font-bold text-gray-800">
+        Outgoing Stock
+      </h2>
+
+      <p className="mt-1 text-sm text-gray-500">
+        Issue material from available branch stock for project, damage, return or adjustment.
+      </p>
+    </div>
+
+    <button
+      type="button"
+      onClick={issueStock}
+      disabled={issueLoading}
+      className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white"
+    >
+      {issueLoading ? 'Issuing...' : 'Issue Stock'}
+    </button>
+  </div>
+
+  <div className="mt-4 grid gap-3 md:grid-cols-3">
+    <select
+      value={issueForm.stockItemId}
+      onChange={(e) =>
+        setIssueForm({
+          ...issueForm,
+          stockItemId: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    >
+      <option value="">Select Stock Item</option>
+
+      {stockItems.map((item: any) => (
+        <option
+          key={item.id}
+          value={item.id}
+        >
+          {item.materialName}
+          {item.branchName ? ` - ${item.branchName}` : ''}
+          {` | Qty: ${Number(
+            item.currentQuantity || 0,
+          ).toLocaleString('en-IN')}`}
+        </option>
+      ))}
+    </select>
+
+    <select
+      value={issueForm.sourceType}
+      onChange={(e) =>
+        setIssueForm({
+          ...issueForm,
+          sourceType: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    >
+      <option value="MANUAL">Manual</option>
+      <option value="PROJECT">Project</option>
+      <option value="DAMAGE">Damage</option>
+      <option value="RETURN_TO_VENDOR">
+        Return To Vendor
+      </option>
+      <option value="ADJUSTMENT">Adjustment</option>
+    </select>
+
+    <input
+      type="number"
+      placeholder="Quantity"
+      value={issueForm.quantity}
+      onChange={(e) =>
+        setIssueForm({
+          ...issueForm,
+          quantity: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    />
+
+    <input
+      type="number"
+      placeholder="Project ID (optional)"
+      value={issueForm.projectId}
+      onChange={(e) =>
+        setIssueForm({
+          ...issueForm,
+          projectId: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    />
+
+    <input
+      type="text"
+      placeholder="Remarks"
+      value={issueForm.remarks}
+      onChange={(e) =>
+        setIssueForm({
+          ...issueForm,
+          remarks: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm md:col-span-2"
     />
   </div>
 </div>
@@ -627,7 +803,6 @@ const receiveStock = async () => {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {[
           'Incoming Stock',
-          'Outgoing Stock',
           'Branch Wise Stock',
           'Material Availability',
           'Stock Reports',
