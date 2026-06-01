@@ -28,6 +28,17 @@ const [issueForm, setIssueForm] = useState({
   remarks: '',
 });
 
+const [approvedRequests, setApprovedRequests] = useState<any[]>([]);
+const [requestIssueLoading, setRequestIssueLoading] =
+  useState(false);
+
+const [requestIssueForm, setRequestIssueForm] = useState({
+  requestItemId: '',
+  stockItemId: '',
+  quantity: '',
+  remarks: '',
+});
+
 const [receiveForm, setReceiveForm] = useState({
   materialId: '',
   branchId: '',
@@ -220,6 +231,97 @@ const [branchStockFilters, setBranchStockFilters] = useState({
     alert('Failed to load stock movements');
   } finally {
     setMovementLoading(false);
+  }
+};
+
+const loadApprovedRequestsForIssue = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/material-requests/approved-for-issue`,
+      {
+        params: {
+          page: 1,
+          limit: 50,
+        },
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setApprovedRequests(
+      Array.isArray(res.data?.data)
+        ? res.data.data
+        : [],
+    );
+  } catch (error) {
+    console.error(error);
+  }
+};
+
+const issueAgainstMaterialRequest = async () => {
+  if (!requestIssueForm.requestItemId) {
+    alert('Please select material request item');
+    return;
+  }
+
+  if (!requestIssueForm.stockItemId) {
+    alert('Please select stock item');
+    return;
+  }
+
+  if (!requestIssueForm.quantity) {
+    alert('Please enter quantity');
+    return;
+  }
+
+  try {
+    setRequestIssueLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/material-requests/items/${requestIssueForm.requestItemId}/issue-stock`,
+      {
+        stockItemId: requestIssueForm.stockItemId,
+        quantity: requestIssueForm.quantity,
+        remarks: requestIssueForm.remarks,
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Stock issued against material request');
+
+    setRequestIssueForm({
+      requestItemId: '',
+      stockItemId: '',
+      quantity: '',
+      remarks: '',
+    });
+
+    await loadApprovedRequestsForIssue();
+    await loadStockItems(1);
+    await loadStockMovements(1);
+    await loadBranchWiseStock();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to issue stock against request',
+    );
+  } finally {
+    setRequestIssueLoading(false);
   }
 };
 
@@ -600,6 +702,7 @@ const restoreStockMovement = async (movementId: number) => {
   loadStockItems(1);
   loadStockMovements(1);
   loadBranchWiseStock();
+  loadApprovedRequestsForIssue();
   loadMaterials();
   loadBranches();
 }, []);
@@ -902,6 +1005,114 @@ const restoreStockMovement = async (movementId: number) => {
         })
       }
       className="rounded-xl border p-3 text-sm md:col-span-2"
+    />
+  </div>
+</div>
+
+<div className="rounded-2xl bg-white p-5 shadow">
+  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <div>
+      <h2 className="text-xl font-bold text-gray-800">
+        Issue Against Material Request
+      </h2>
+
+      <p className="mt-1 text-sm text-gray-500">
+        Issue warehouse stock against approved project material requests.
+      </p>
+    </div>
+
+    <button
+      type="button"
+      onClick={issueAgainstMaterialRequest}
+      disabled={requestIssueLoading}
+      className="rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold text-white"
+    >
+      {requestIssueLoading
+        ? 'Issuing...'
+        : 'Issue Against Request'}
+    </button>
+  </div>
+
+  <div className="mt-4 grid gap-3 md:grid-cols-2">
+    <select
+      value={requestIssueForm.requestItemId}
+      onChange={(e) =>
+        setRequestIssueForm({
+          ...requestIssueForm,
+          requestItemId: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    >
+      <option value="">Select Approved Request Item</option>
+
+      {approvedRequests.flatMap((request: any) =>
+        Array.isArray(request.items)
+          ? request.items.map((item: any) => (
+              <option
+                key={item.id}
+                value={item.id}
+              >
+                Request #{request.id} | Project #{request.projectId} | {item.materialName} | Pending:{' '}
+                {Number(
+                  item.issuePendingQuantity || 0,
+                ).toLocaleString('en-IN')}
+              </option>
+            ))
+          : [],
+      )}
+    </select>
+
+    <select
+      value={requestIssueForm.stockItemId}
+      onChange={(e) =>
+        setRequestIssueForm({
+          ...requestIssueForm,
+          stockItemId: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    >
+      <option value="">Select Stock Item</option>
+
+      {stockItems.map((item: any) => (
+        <option
+          key={item.id}
+          value={item.id}
+        >
+          {item.materialName}
+          {item.branchName ? ` - ${item.branchName}` : ''}
+          {` | Available: ${Number(
+            item.currentQuantity || 0,
+          ).toLocaleString('en-IN')}`}
+        </option>
+      ))}
+    </select>
+
+    <input
+      type="number"
+      placeholder="Issue Quantity"
+      value={requestIssueForm.quantity}
+      onChange={(e) =>
+        setRequestIssueForm({
+          ...requestIssueForm,
+          quantity: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    />
+
+    <input
+      type="text"
+      placeholder="Remarks"
+      value={requestIssueForm.remarks}
+      onChange={(e) =>
+        setRequestIssueForm({
+          ...requestIssueForm,
+          remarks: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
     />
   </div>
 </div>
