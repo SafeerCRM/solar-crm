@@ -1843,6 +1843,99 @@ async restoreProjectStockItem(
   return this.projectStockItemRepository.save(stockItem);
 }
 
+async getBranchWiseStockReport(query: any) {
+  const {
+    branch,
+    material,
+  } = query || {};
+
+  const qb = this.projectStockItemRepository
+    .createQueryBuilder('stock')
+    .where('stock.isHidden = false');
+
+  if (branch?.trim()) {
+    qb.andWhere(
+      'LOWER(stock.branchName) LIKE LOWER(:branch)',
+      {
+        branch: `%${branch.trim()}%`,
+      },
+    );
+  }
+
+  if (material?.trim()) {
+    qb.andWhere(
+      `(
+        LOWER(stock.materialName) LIKE LOWER(:material)
+        OR LOWER(stock.category) LIKE LOWER(:material)
+        OR LOWER(stock.brand) LIKE LOWER(:material)
+      )`,
+      {
+        material: `%${material.trim()}%`,
+      },
+    );
+  }
+
+  const rows = await qb.getMany();
+
+  const branchMap = new Map<
+    string,
+    {
+      branchName: string;
+      totalItems: number;
+      totalQuantity: number;
+      totalStockValue: number;
+    }
+  >();
+
+  for (const item of rows) {
+    const branchName =
+      item.branchName?.trim() || 'UNASSIGNED';
+
+    if (!branchMap.has(branchName)) {
+      branchMap.set(branchName, {
+        branchName,
+        totalItems: 0,
+        totalQuantity: 0,
+        totalStockValue: 0,
+      });
+    }
+
+    const current = branchMap.get(branchName)!;
+
+    current.totalItems += 1;
+    current.totalQuantity += Number(
+      item.currentQuantity || 0,
+    );
+    current.totalStockValue += Number(
+      item.stockValue || 0,
+    );
+  }
+
+  const data = Array.from(branchMap.values()).sort(
+    (a, b) =>
+      b.totalStockValue - a.totalStockValue,
+  );
+
+  return {
+    summary: {
+      totalBranches: data.length,
+      totalItems: data.reduce(
+        (sum, item) => sum + item.totalItems,
+        0,
+      ),
+      totalQuantity: data.reduce(
+        (sum, item) => sum + item.totalQuantity,
+        0,
+      ),
+      totalStockValue: data.reduce(
+        (sum, item) => sum + item.totalStockValue,
+        0,
+      ),
+    },
+    data,
+  };
+}
+
 async createVendor(data: Partial<ProjectVendor>) {
   if (!data.vendorName || !String(data.vendorName).trim()) {
     throw new BadRequestException('Vendor name is required');

@@ -998,6 +998,20 @@ restoreProjectStockItem(
   );
 }
 
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'PROJECT_EXECUTIVE',
+  'ACCOUNT_MANAGER',
+  'PAYMENT_MANAGER',
+)
+@Get('stock/branch-wise')
+getBranchWiseStockReport(@Query() query: any) {
+  return this.projectService.getBranchWiseStockReport(
+    query,
+  );
+}
+
 @Get('generated-purchase-orders')
 getGeneratedPurchaseOrders(
   @Query('page') page?: string,
