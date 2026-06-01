@@ -879,6 +879,42 @@ getPurchasableMaterialRequestItems(
   );
 }
 
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'PROJECT_EXECUTIVE',
+  'ACCOUNT_MANAGER',
+  'PAYMENT_MANAGER',
+)
+@Get('stock/items')
+listProjectStockItems(@Query() query: any) {
+  return this.projectService.listProjectStockItems(query);
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE')
+@Post('stock/receive')
+receiveProjectStock(
+  @Body() body: any,
+  @Req() req: any,
+) {
+  return this.projectService.receiveProjectStock(
+    body,
+    req.user,
+  );
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE')
+@Post('stock/issue')
+issueProjectStock(
+  @Body() body: any,
+  @Req() req: any,
+) {
+  return this.projectService.issueProjectStock(
+    body,
+    req.user,
+  );
+}
+
 @Get('generated-purchase-orders')
 getGeneratedPurchaseOrders(
   @Query('page') page?: string,

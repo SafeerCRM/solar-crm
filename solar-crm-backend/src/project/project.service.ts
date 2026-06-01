@@ -130,6 +130,12 @@ import { ProjectContractor } from './project-contractor.entity';
 import { ProjectContractorComment } from './project-contractor-comment.entity';
 import { ProjectLoanCoApplicant } from './project-loan-co-applicant.entity';
 
+import { ProjectStockItem } from './project-stock-item.entity';
+import {
+  ProjectStockMovement,
+  ProjectStockMovementType,
+} from './project-stock-movement.entity';
+
 @Injectable()
 export class ProjectService {
 
@@ -214,6 +220,12 @@ private readonly projectEditHistoryRepository: Repository<ProjectEditHistory>,
 
 @InjectRepository(ProjectVendor)
 private readonly projectVendorRepository: Repository<ProjectVendor>,
+
+@InjectRepository(ProjectStockItem)
+private readonly projectStockItemRepository: Repository<ProjectStockItem>,
+
+@InjectRepository(ProjectStockMovement)
+private readonly projectStockMovementRepository: Repository<ProjectStockMovement>,
 
 @InjectRepository(ProjectPurchaseOrder)
 private readonly projectPurchaseOrderRepository: Repository<ProjectPurchaseOrder>,
@@ -1407,6 +1419,212 @@ async enableMaterialMaster(id: number) {
   return {
     message: 'Material item enabled successfully',
   };
+}
+
+async listProjectStockItems(query: any) {
+  const {
+    page = 1,
+    limit = 20,
+    branch,
+    material,
+    showHidden,
+  } = query || {};
+
+  const pageNumber = Math.max(Number(page) || 1, 1);
+  const limitNumber = Math.min(Math.max(Number(limit) || 20, 1), 100);
+  const skip = (pageNumber - 1) * limitNumber;
+
+  const qb = this.projectStockItemRepository
+    .createQueryBuilder('stock')
+    .orderBy('stock.createdAt', 'DESC')
+    .skip(skip)
+    .take(limitNumber);
+
+  if (showHidden === 'true') {
+    qb.where('stock.isHidden = true');
+  } else {
+    qb.where('stock.isHidden = false');
+  }
+
+  if (branch?.trim()) {
+    qb.andWhere('LOWER(stock.branchName) LIKE LOWER(:branch)', {
+      branch: `%${branch.trim()}%`,
+    });
+  }
+
+  if (material?.trim()) {
+    qb.andWhere(
+      `(
+        LOWER(stock.materialName) LIKE LOWER(:material)
+        OR LOWER(stock.category) LIKE LOWER(:material)
+        OR LOWER(stock.brand) LIKE LOWER(:material)
+      )`,
+      {
+        material: `%${material.trim()}%`,
+      },
+    );
+  }
+
+  const [data, total] = await qb.getManyAndCount();
+
+  return {
+    data,
+    pagination: {
+      page: pageNumber,
+      limit: limitNumber,
+      total,
+      totalPages: Math.ceil(total / limitNumber),
+    },
+  };
+}
+
+async receiveProjectStock(body: any, currentUser: any) {
+  const materialId = Number(body?.materialId || 0);
+  const branchId = body?.branchId ? Number(body.branchId) : null;
+  const quantity = Number(body?.quantity || 0);
+  const rate = Number(body?.rate || 0);
+
+  if (!materialId) {
+    throw new BadRequestException('Material is required');
+  }
+
+  if (!quantity || quantity <= 0) {
+    throw new BadRequestException('Valid quantity is required');
+  }
+
+  const material = await this.projectMaterialMasterRepository.findOne({
+    where: { id: materialId },
+  });
+
+  if (!material) {
+    throw new NotFoundException('Material not found');
+  }
+
+  let branch: ProjectBranch | null = null;
+
+  if (branchId) {
+    branch = await this.projectBranchRepository.findOne({
+      where: { id: branchId },
+    });
+  }
+
+  let stockItem = await this.projectStockItemRepository.findOne({
+    where: {
+      materialId,
+      branchId: branchId || undefined,
+      isHidden: false,
+    },
+  });
+
+  if (!stockItem) {
+    stockItem = this.projectStockItemRepository.create({
+      materialId,
+      materialName: material.name,
+      category: material.category,
+      brand: material.brand,
+      unit: material.unit,
+      branchId: branchId || undefined,
+branchName: branch?.name || body?.branchName || undefined,
+      currentQuantity: 0,
+      averageRate: 0,
+      stockValue: 0,
+    });
+  }
+
+  const oldQty = Number(stockItem.currentQuantity || 0);
+  const oldValue = Number(stockItem.stockValue || 0);
+  const receiveValue = quantity * rate;
+  const newQty = oldQty + quantity;
+  const newValue = oldValue + receiveValue;
+
+  stockItem.currentQuantity = newQty;
+  stockItem.stockValue = newValue;
+  stockItem.averageRate = newQty > 0 ? newValue / newQty : 0;
+
+  const savedStock = await this.projectStockItemRepository.save(stockItem);
+
+  await this.projectStockMovementRepository.save(
+    this.projectStockMovementRepository.create({
+      stockItemId: savedStock.id,
+      materialId,
+      materialName: material.name,
+      branchId: savedStock.branchId,
+      branchName: savedStock.branchName,
+      movementType: ProjectStockMovementType.RECEIVE,
+      quantity,
+      rate,
+      totalAmount: receiveValue,
+      sourceType: body?.sourceType || 'MANUAL',
+      sourceId: body?.sourceId ? Number(body.sourceId) : undefined,
+projectId: body?.projectId ? Number(body.projectId) : undefined,
+remarks: body?.remarks || undefined,
+createdBy: currentUser?.id || currentUser?.userId || undefined,
+      createdByName: currentUser?.name || '',
+    }),
+  );
+
+  return savedStock;
+}
+
+async issueProjectStock(body: any, currentUser: any) {
+  const stockItemId = Number(body?.stockItemId || 0);
+  const quantity = Number(body?.quantity || 0);
+
+  if (!stockItemId) {
+    throw new BadRequestException('Stock item is required');
+  }
+
+  if (!quantity || quantity <= 0) {
+    throw new BadRequestException('Valid quantity is required');
+  }
+
+  const stockItem = await this.projectStockItemRepository.findOne({
+    where: {
+      id: stockItemId,
+      isHidden: false,
+    },
+  });
+
+  if (!stockItem) {
+    throw new NotFoundException('Stock item not found');
+  }
+
+  if (Number(stockItem.currentQuantity || 0) < quantity) {
+    throw new BadRequestException('Insufficient stock quantity');
+  }
+
+  const rate = Number(stockItem.averageRate || 0);
+  const totalAmount = quantity * rate;
+
+  stockItem.currentQuantity =
+    Number(stockItem.currentQuantity || 0) - quantity;
+
+  stockItem.stockValue =
+    Number(stockItem.currentQuantity || 0) * rate;
+
+  await this.projectStockItemRepository.save(stockItem);
+
+  await this.projectStockMovementRepository.save(
+    this.projectStockMovementRepository.create({
+      stockItemId: stockItem.id,
+      materialId: stockItem.materialId,
+      materialName: stockItem.materialName,
+      branchId: stockItem.branchId,
+      branchName: stockItem.branchName,
+      movementType: ProjectStockMovementType.ISSUE,
+      quantity,
+      rate,
+      totalAmount,
+      sourceType: body?.sourceType || 'MANUAL',
+      sourceId: body?.sourceId ? Number(body.sourceId) : undefined,
+projectId: body?.projectId ? Number(body.projectId) : undefined,
+remarks: body?.remarks || undefined,
+createdBy: currentUser?.id || currentUser?.userId || undefined,
+      createdByName: currentUser?.name || '',
+    }),
+  );
+
+  return stockItem;
 }
 
 async createVendor(data: Partial<ProjectVendor>) {
