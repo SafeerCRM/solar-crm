@@ -1017,7 +1017,7 @@ const restoreStockMovement = async (movementId: number) => {
       </h2>
 
       <p className="mt-1 text-sm text-gray-500">
-        Issue warehouse stock against approved project material requests.
+        Issue warehouse stock against project material requests.
       </p>
     </div>
 
@@ -1044,7 +1044,7 @@ const restoreStockMovement = async (movementId: number) => {
       }
       className="rounded-xl border p-3 text-sm"
     >
-      <option value="">Select Approved Request Item</option>
+      <option value="">Select Material Request Item</option>
 
       {approvedRequests.flatMap((request: any) =>
         Array.isArray(request.items)
