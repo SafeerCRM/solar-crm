@@ -37,6 +37,7 @@ import { ProjectLoanCoApplicant } from './project-loan-co-applicant.entity';
 import { ProjectAccountExpense } from './project-account-expense.entity';
 import { ProjectStockItem } from './project-stock-item.entity';
 import { ProjectStockMovement } from './project-stock-movement.entity';
+import { ProjectConsumption } from './project-consumption.entity';
 
 @Module({
   imports: [
@@ -45,7 +46,7 @@ ProjectMaterialRequestItem, ProjectBranch, ProjectLoanDetail, ProjectSubsidyDeta
  ProjectVendor, ProjectPurchaseOrder, ProjectStockItem,
 ProjectStockMovement, ProjectPurchaseOrderItem, ProjectProformaInvoice,
 ProjectProformaInvoiceItem, ProjectFinalInvoice, ProjectFinalInvoiceItem, ProjectPartyLedger, ProjectContractorAssignment,
-ProjectContractorProof, ProjectContractor, ProjectContractorComment, ProjectLoanCoApplicant, ProjectAccountExpense,]),
+ProjectContractorProof, ProjectContractor, ProjectContractorComment, ProjectLoanCoApplicant, ProjectAccountExpense, ProjectConsumption,]),
     CalculatorModule,
   ],
   controllers: [ProjectController],

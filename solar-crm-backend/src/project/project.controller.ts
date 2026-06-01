@@ -1012,6 +1012,65 @@ getBranchWiseStockReport(@Query() query: any) {
   );
 }
 
+@Roles('OWNER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE')
+@Post('stock/issue-to-project')
+issueStockToProject(
+  @Body() body: any,
+  @Req() req: any,
+) {
+  return this.projectService.issueStockToProject(
+    body,
+    req.user,
+  );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'PROJECT_EXECUTIVE',
+  'ACCOUNT_MANAGER',
+)
+@Get('consumptions')
+listProjectConsumptions(@Query() query: any) {
+  return this.projectService.listProjectConsumptions(
+    query,
+  );
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER')
+@Patch('consumptions/:consumptionId/hide')
+hideProjectConsumption(
+  @Param('consumptionId', ParseIntPipe)
+  consumptionId: number,
+
+  @Body() body: any,
+
+  @Req() req: any,
+) {
+  return this.projectService.hideProjectConsumption(
+    consumptionId,
+    body,
+    req.user,
+  );
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER')
+@Patch('consumptions/:consumptionId/restore')
+restoreProjectConsumption(
+  @Param('consumptionId', ParseIntPipe)
+  consumptionId: number,
+
+  @Body() body: any,
+
+  @Req() req: any,
+) {
+  return this.projectService.restoreProjectConsumption(
+    consumptionId,
+    body,
+    req.user,
+  );
+}
+
 @Get('generated-purchase-orders')
 getGeneratedPurchaseOrders(
   @Query('page') page?: string,

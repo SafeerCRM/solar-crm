@@ -136,6 +136,8 @@ import {
   ProjectStockMovementType,
 } from './project-stock-movement.entity';
 
+import { ProjectConsumption } from './project-consumption.entity';
+
 @Injectable()
 export class ProjectService {
 
@@ -265,6 +267,9 @@ private readonly projectContractorCommentRepository: Repository<ProjectContracto
 
 @InjectRepository(ProjectLoanCoApplicant)
 private readonly projectLoanCoApplicantRepository: Repository<ProjectLoanCoApplicant>,
+
+@InjectRepository(ProjectConsumption)
+private readonly projectConsumptionRepository: Repository<ProjectConsumption>,
 
     private readonly calculatorService: CalculatorService,
 
@@ -1934,6 +1939,240 @@ async getBranchWiseStockReport(query: any) {
     },
     data,
   };
+}
+
+async issueStockToProject(body: any, currentUser: any) {
+  const projectId = Number(body?.projectId || 0);
+  const stockItemId = Number(body?.stockItemId || 0);
+  const quantity = Number(body?.quantity || 0);
+
+  if (!projectId) {
+    throw new BadRequestException('Project is required');
+  }
+
+  if (!stockItemId) {
+    throw new BadRequestException('Stock item is required');
+  }
+
+  if (!quantity || quantity <= 0) {
+    throw new BadRequestException('Valid quantity is required');
+  }
+
+  const project = await this.projectRepository.findOne({
+    where: {
+      id: projectId,
+      isHidden: false,
+    },
+  });
+
+  if (!project) {
+    throw new NotFoundException('Project not found');
+  }
+
+  const stockItem = await this.projectStockItemRepository.findOne({
+    where: {
+      id: stockItemId,
+      isHidden: false,
+    },
+  });
+
+  if (!stockItem) {
+    throw new NotFoundException('Stock item not found');
+  }
+
+  if (Number(stockItem.currentQuantity || 0) < quantity) {
+    throw new BadRequestException('Insufficient stock quantity');
+  }
+
+  const rate = Number(stockItem.averageRate || 0);
+  const totalAmount = quantity * rate;
+
+  stockItem.currentQuantity =
+    Number(stockItem.currentQuantity || 0) - quantity;
+
+  stockItem.stockValue =
+    Number(stockItem.currentQuantity || 0) * rate;
+
+  const savedStock =
+    await this.projectStockItemRepository.save(stockItem);
+
+  const movement =
+    await this.projectStockMovementRepository.save(
+      this.projectStockMovementRepository.create({
+        stockItemId: savedStock.id,
+        materialId: savedStock.materialId,
+        materialName: savedStock.materialName,
+        branchId: savedStock.branchId || undefined,
+        branchName: savedStock.branchName || undefined,
+        movementType: ProjectStockMovementType.ISSUE,
+        quantity,
+        rate,
+        totalAmount,
+        sourceType: 'PROJECT',
+        projectId,
+        remarks: body?.remarks || undefined,
+        createdBy:
+          currentUser?.id ||
+          currentUser?.userId ||
+          undefined,
+        createdByName: currentUser?.name || '',
+      }),
+    );
+
+  const consumption =
+    await this.projectConsumptionRepository.save(
+      this.projectConsumptionRepository.create({
+        projectId,
+        projectName:
+          project.customerName ||
+          project.customerPhone ||
+          `Project #${project.id}`,
+        materialId: savedStock.materialId,
+        materialName: savedStock.materialName,
+        branchId: savedStock.branchId || undefined,
+        branchName: savedStock.branchName || undefined,
+        stockItemId: savedStock.id,
+        stockMovementId: movement.id,
+        quantity,
+        rate,
+        totalAmount,
+        issuedBy:
+          currentUser?.id ||
+          currentUser?.userId ||
+          undefined,
+        issuedByName: currentUser?.name || '',
+        remarks: body?.remarks || undefined,
+      }),
+    );
+
+  return {
+    stockItem: savedStock,
+    movement,
+    consumption,
+  };
+}
+
+async listProjectConsumptions(query: any) {
+  const {
+    page = 1,
+    limit = 20,
+    projectId,
+    material,
+    branch,
+    showHidden,
+  } = query || {};
+
+  const pageNumber = Math.max(Number(page) || 1, 1);
+  const limitNumber = Math.min(Math.max(Number(limit) || 20, 1), 100);
+  const skip = (pageNumber - 1) * limitNumber;
+
+  const qb = this.projectConsumptionRepository
+    .createQueryBuilder('consumption')
+    .orderBy('consumption.createdAt', 'DESC')
+    .skip(skip)
+    .take(limitNumber);
+
+  if (showHidden === 'true') {
+    qb.where('consumption.isHidden = true');
+  } else {
+    qb.where('consumption.isHidden = false');
+  }
+
+  if (projectId) {
+    qb.andWhere('consumption.projectId = :projectId', {
+      projectId: Number(projectId),
+    });
+  }
+
+  if (material?.trim()) {
+    qb.andWhere(
+      'LOWER(consumption.materialName) LIKE LOWER(:material)',
+      {
+        material: `%${material.trim()}%`,
+      },
+    );
+  }
+
+  if (branch?.trim()) {
+    qb.andWhere(
+      'LOWER(consumption.branchName) LIKE LOWER(:branch)',
+      {
+        branch: `%${branch.trim()}%`,
+      },
+    );
+  }
+
+  const [data, total] = await qb.getManyAndCount();
+
+  return {
+    data,
+    pagination: {
+      page: pageNumber,
+      limit: limitNumber,
+      total,
+      totalPages: Math.ceil(total / limitNumber),
+    },
+  };
+}
+
+async hideProjectConsumption(
+  consumptionId: number,
+  body: any,
+  currentUser: any,
+) {
+  const consumption =
+    await this.projectConsumptionRepository.findOne({
+      where: {
+        id: consumptionId,
+      },
+    });
+
+  if (!consumption) {
+    throw new NotFoundException('Consumption entry not found');
+  }
+
+  if (!body?.hiddenReason?.trim()) {
+    throw new BadRequestException('Hide reason is required');
+  }
+
+  consumption.isHidden = true;
+  consumption.hiddenReason = body.hiddenReason.trim();
+  consumption.hiddenAt = new Date();
+  consumption.hiddenBy =
+    currentUser?.id || currentUser?.userId || undefined;
+  consumption.hiddenByName = currentUser?.name || '';
+
+  return this.projectConsumptionRepository.save(consumption);
+}
+
+async restoreProjectConsumption(
+  consumptionId: number,
+  body: any,
+  currentUser: any,
+) {
+  const consumption =
+    await this.projectConsumptionRepository.findOne({
+      where: {
+        id: consumptionId,
+      },
+    });
+
+  if (!consumption) {
+    throw new NotFoundException('Consumption entry not found');
+  }
+
+  if (!body?.restoreReason?.trim()) {
+    throw new BadRequestException('Restore reason is required');
+  }
+
+  consumption.isHidden = false;
+  consumption.restoreReason = body.restoreReason.trim();
+  consumption.restoredAt = new Date();
+  consumption.restoredBy =
+    currentUser?.id || currentUser?.userId || undefined;
+  consumption.restoredByName = currentUser?.name || '';
+
+  return this.projectConsumptionRepository.save(consumption);
 }
 
 async createVendor(data: Partial<ProjectVendor>) {
