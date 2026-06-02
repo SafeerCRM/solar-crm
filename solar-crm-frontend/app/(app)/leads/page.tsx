@@ -131,6 +131,7 @@ const [transferLeadCount, setTransferLeadCount] = useState('');
 const [transferringLeads, setTransferringLeads] = useState(false);
 const [transferCityFilter, setTransferCityFilter] = useState('');
 const [transferPotentialFilter, setTransferPotentialFilter] = useState('');
+const [contactedStatusFilter, setContactedStatusFilter] = useState('');
 
   const currentRoles = currentUser?.roles || [];
 const isOwner = currentRoles.includes('OWNER');
@@ -326,6 +327,7 @@ const canAssignLeads = isOwner;
         phone: searchPhone || undefined,
         city: searchCity || undefined,
         potentialPercentage: potentialFilter || undefined,
+        contactedStatus: contactedStatusFilter || undefined,
       },
     });
 
@@ -770,6 +772,7 @@ const handleSelectAllFilteredStorage = async () => {
   setSearchPhone('');
   setSearchCity('');
   setPotentialFilter('');
+  setContactedStatusFilter('');
   setSelectedCalendarDate(null);
   setLeadPage(1);
   setTimeout(() => fetchLeads(1), 0);
@@ -1323,6 +1326,16 @@ disabled={isAutoCalling}
           onChange={(e) => setSearchCity(e.target.value)}
           className="rounded border p-2"
         />
+
+        <select
+  value={contactedStatusFilter}
+  onChange={(e) => setContactedStatusFilter(e.target.value)}
+  className="rounded border p-2"
+>
+  <option value="">All Contact Status</option>
+  <option value="NEVER_CONTACTED">Never Contacted</option>
+  <option value="CONTACTED">Contacted</option>
+</select>
 
         <select
           value={potentialFilter}
