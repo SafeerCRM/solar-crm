@@ -255,6 +255,26 @@ const overdueFollowupsCount = allFollowups.filter((f) => {
   );
 }).length;
 
+const pendingFollowupsCount = allFollowups.filter(
+  (f) => String(f.status || '').toUpperCase() === 'PENDING',
+).length;
+
+const completedFollowupsCount = allFollowups.filter(
+  (f) => String(f.status || '').toUpperCase() === 'COMPLETED',
+).length;
+
+const leadFollowupsCount = allFollowups.filter(
+  (f) => String(f.sourceModule || '').toUpperCase() === 'LEAD',
+).length;
+
+const meetingFollowupsCount = allFollowups.filter(
+  (f) => String(f.sourceModule || '').toUpperCase() === 'MEETING',
+).length;
+
+const telecallingFollowupsCount = allFollowups.filter(
+  (f) => String(f.sourceModule || '').toUpperCase() === 'TELECALLING',
+).length;
+
 const getSelectedFollowupRowColor = (f: FollowUp) => {
   const status = String(f.status || '').toUpperCase();
 
@@ -639,20 +659,48 @@ const filteredSelectedFollowups = selectedFollowups.filter((f) => {
           {message && <p className="mt-2 text-blue-600">{message}</p>}
         </div>
       )}
-<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-  <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4 shadow-sm">
-    <p className="text-sm font-medium text-yellow-800">Today Followups</p>
-    <p className="mt-1 text-2xl font-bold text-yellow-900">
-      {todayFollowupsCount}
-    </p>
-  </div>
+<div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-7">
+  <SummaryCard
+    title="Pending"
+    value={pendingFollowupsCount}
+    className="border-yellow-200 bg-yellow-50 text-yellow-900"
+  />
 
-  <div className="rounded-xl border border-red-200 bg-red-50 p-4 shadow-sm">
-    <p className="text-sm font-medium text-red-800">Overdue Followups</p>
-    <p className="mt-1 text-2xl font-bold text-red-900">
-      {overdueFollowupsCount}
-    </p>
-  </div>
+  <SummaryCard
+    title="Today"
+    value={todayFollowupsCount}
+    className="border-blue-200 bg-blue-50 text-blue-900"
+  />
+
+  <SummaryCard
+    title="Overdue"
+    value={overdueFollowupsCount}
+    className="border-red-200 bg-red-50 text-red-900"
+  />
+
+  <SummaryCard
+    title="Completed"
+    value={completedFollowupsCount}
+    className="border-green-200 bg-green-50 text-green-900"
+  />
+
+  <SummaryCard
+    title="Telecalling"
+    value={telecallingFollowupsCount}
+    className="border-indigo-200 bg-indigo-50 text-indigo-900"
+  />
+
+  <SummaryCard
+    title="Lead"
+    value={leadFollowupsCount}
+    className="border-cyan-200 bg-cyan-50 text-cyan-900"
+  />
+
+  <SummaryCard
+    title="Meeting"
+    value={meetingFollowupsCount}
+    className="border-purple-200 bg-purple-50 text-purple-900"
+  />
 </div>
 
 <div className="rounded-xl border border-red-200 bg-white p-4 shadow">
@@ -1111,4 +1159,21 @@ setDueFilter('');
 </div>
     </div>
   );
+
+  function SummaryCard({
+  title,
+  value,
+  className,
+}: {
+  title: string;
+  value: number;
+  className: string;
+}) {
+  return (
+    <div className={`rounded-xl border p-4 shadow-sm ${className}`}>
+      <p className="text-sm font-medium">{title}</p>
+      <p className="mt-1 text-2xl font-bold">{value}</p>
+    </div>
+  );
+}
 }
