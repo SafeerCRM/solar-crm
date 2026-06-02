@@ -2675,13 +2675,16 @@ async issueMaterialRequestItemStock(
   (requestItem as any).issuePendingQuantity =
     Math.max(requestedQty - newIssuedQty, 0);
 
-  if (newIssuedQty >= requestedQty) {
-    (requestItem as any).issueStatus = 'ISSUED';
-    (requestItem as any).issuedAt = new Date();
-  } else {
-    (requestItem as any).issueStatus =
-      'PARTIALLY_ISSUED';
-  }
+  if (!(requestItem as any).issuedAt) {
+  (requestItem as any).issuedAt = new Date();
+}
+
+if (newIssuedQty >= requestedQty) {
+  (requestItem as any).issueStatus = 'ISSUED';
+} else {
+  (requestItem as any).issueStatus =
+    'PARTIALLY_ISSUED';
+}
 
   (requestItem as any).issuedBy =
     currentUser?.id || currentUser?.userId || undefined;
