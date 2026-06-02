@@ -132,6 +132,7 @@ const [transferringLeads, setTransferringLeads] = useState(false);
 const [transferCityFilter, setTransferCityFilter] = useState('');
 const [transferPotentialFilter, setTransferPotentialFilter] = useState('');
 const [contactedStatusFilter, setContactedStatusFilter] = useState('');
+const [leadManagerFilter, setLeadManagerFilter] = useState('');
 
   const currentRoles = currentUser?.roles || [];
 const isOwner = currentRoles.includes('OWNER');
@@ -328,6 +329,7 @@ const canAssignLeads = isOwner;
         city: searchCity || undefined,
         potentialPercentage: potentialFilter || undefined,
         contactedStatus: contactedStatusFilter || undefined,
+        assignedTo: leadManagerFilter || undefined,
       },
     });
 
@@ -773,6 +775,7 @@ const handleSelectAllFilteredStorage = async () => {
   setSearchCity('');
   setPotentialFilter('');
   setContactedStatusFilter('');
+  setLeadManagerFilter('');
   setSelectedCalendarDate(null);
   setLeadPage(1);
   setTimeout(() => fetchLeads(1), 0);
@@ -1347,6 +1350,23 @@ disabled={isAutoCalling}
           <option value="50">Likely (50%)</option>
           <option value="75">High Potential (75%)</option>
         </select>
+
+        {isOwner && (
+  <select
+    value={leadManagerFilter}
+    onChange={(e) => setLeadManagerFilter(e.target.value)}
+    className="rounded border p-2"
+  >
+    <option value="">All Lead Managers</option>
+    {users
+      .filter((u) => (u.roles || []).includes('LEAD_MANAGER'))
+      .map((u) => (
+        <option key={u.id} value={u.id}>
+          {u.name}
+        </option>
+      ))}
+  </select>
+)}
       </div>
 
                   <div className="mb-4 flex flex-col gap-3 rounded bg-gray-100 p-3 text-sm text-gray-700">
