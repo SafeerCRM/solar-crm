@@ -2037,45 +2037,33 @@ await this.contactCallHistoryRepository.save(historyItem);
     // ✅ CREATE FOLLOWUP IF REMINDER EXISTS
     if (body.nextFollowUpDate) {
       try {
-        let lead = await this.leadRepository.findOne({
-          where: { phone: this.normalizePhone(contact.phone) },
-        });
-
-        if (!lead) {
-          lead = await this.leadRepository.save({
-            name: contact.name,
-            phone: this.normalizePhone(contact.phone),
-            city: contact.city || '',
-            address: contact.address || contact.location || contact.city || '',
-            source: 'TELECALLING',
-            assignedTo: contact.assignedTo || user.id,
-            createdBy: user.id,
-            createdByName: user.name,
-            originTelecallerId: contact.assignedTo,
-            originTelecallerName:
-              contact.assignedToName || `User ${contact.assignedTo || ''}`,
-            status: LeadStatus.NEW,
-          } as any);
-        }
-
         const followUp = this.followUpRepository.create({
-          leadId: lead!.id,
-          assignedTo: user?.id,
-          createdBy: user?.id,
-          createdByName: user?.name || user?.email || 'Unknown User',
-          sourceModule: 'TELECALLING',
-          sourceStage: 'QUICK_CALL',
-          followUpType:
-            normalizedStatus === 'CALLBACK'
-              ? FollowUpType.CALLBACK
-              : normalizedStatus === 'INTERESTED'
-              ? FollowUpType.CALL
-              : FollowUpType.GENERAL,
-          note:
-            body.callNotes || 'Follow-up created from telecalling reminder',
-          followUpDate: new Date(body.nextFollowUpDate),
-          status: FollowUpStatus.PENDING,
-        });
+  contactId: contact.id,
+  customerName: contact.name,
+  customerPhone: contact.phone,
+
+  assignedTo: user?.id,
+  createdBy: user?.id,
+  createdByName: user?.name || user?.email || 'Unknown User',
+
+  sourceModule: 'TELECALLING',
+  sourceStage: 'QUICK_CALL',
+
+  followUpType:
+    normalizedStatus === 'CALLBACK'
+      ? FollowUpType.CALLBACK
+      : normalizedStatus === 'INTERESTED'
+      ? FollowUpType.CALL
+      : FollowUpType.GENERAL,
+
+  note:
+    body.callNotes ||
+    'Follow-up created from telecalling reminder',
+
+  followUpDate: new Date(body.nextFollowUpDate),
+
+  status: FollowUpStatus.PENDING,
+});
 
         await this.followUpRepository.save(followUp);
       } catch (err) {
