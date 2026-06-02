@@ -23,6 +23,10 @@ type Lead = {
 type FollowUp = {
   id: number;
   leadId: number;
+    meetingId?: number | null;
+  contactId?: number | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
   assignedTo?: number;
   followUpDate: string;
   status: string;
@@ -586,6 +590,60 @@ const getLeadPotentialText = (f: FollowUp) => {
       (f.lead as any)?.potentialPercentage ||
       '',
   ).trim();
+};
+
+const getFollowupCustomerName = (f: FollowUp) => {
+  return (
+    String(f.lead?.name || '').trim() ||
+    String(f.customerName || '').trim() ||
+    (f.leadId ? `Lead ID: ${f.leadId}` : '') ||
+    (f.meetingId ? `Meeting ID: ${f.meetingId}` : '') ||
+    (f.contactId ? `Contact ID: ${f.contactId}` : '') ||
+    `Followup ${f.id}`
+  );
+};
+
+const getFollowupCustomerPhone = (f: FollowUp) => {
+  return (
+    String(f.lead?.phone || '').trim() ||
+    String(f.customerPhone || '').trim()
+  );
+};
+
+const getSourceOpenPath = (f: FollowUp) => {
+  const source = String(f.sourceModule || '').toUpperCase();
+
+  if (source === 'MEETING' && f.meetingId) {
+    return `/meeting/${f.meetingId}`;
+  }
+
+  if (source === 'TELECALLING' && f.contactId) {
+    return `/telecalling/contacts/${f.contactId}`;
+  }
+
+  if (f.leadId) {
+    return `/leads/${f.leadId}`;
+  }
+
+  return '';
+};
+
+const getSourceOpenLabel = (f: FollowUp) => {
+  const source = String(f.sourceModule || '').toUpperCase();
+
+  if (source === 'MEETING' && f.meetingId) {
+    return 'Open Meeting';
+  }
+
+  if (source === 'TELECALLING' && f.contactId) {
+    return 'Open Contact';
+  }
+
+  if (f.leadId) {
+    return 'Open Lead';
+  }
+
+  return 'Open Source';
 };
 
   const filteredAllFollowups = allFollowups.filter((f) => {
@@ -1157,7 +1215,7 @@ setDueFilter('');
                   className="cursor-pointer"
                 >
                   <h3 className="mb-2 text-lg font-semibold">
-                    {f.lead?.name || `Lead ID: ${f.leadId}`}
+                    {getFollowupCustomerName(f)}
                   </h3>
 
                   <div className="mb-3 flex flex-wrap gap-2">
@@ -1185,7 +1243,7 @@ setDueFilter('');
 </div>
 
                   <p className="mb-2 text-sm text-gray-600">
-                    {f.lead?.phone || ''}
+                    {getFollowupCustomerPhone(f)}
                   </p>
 
                   {getLeadLocationText(f) && (
@@ -1240,6 +1298,16 @@ setDueFilter('');
                   >
                     Open
                   </button>
+
+                  {getSourceOpenPath(f) && (
+  <button
+    type="button"
+    onClick={() => router.push(getSourceOpenPath(f))}
+    className="rounded bg-gray-700 px-3 py-2 text-sm text-white"
+  >
+    {getSourceOpenLabel(f)}
+  </button>
+)}
 
                   {String(f.status).toUpperCase() !== 'COMPLETED' && (
   <button
