@@ -7,6 +7,11 @@ import { useParams, useRouter } from 'next/navigation';
 import { getAuthHeaders } from '@/lib/authHeaders';
 import { Capacitor } from '@capacitor/core';
 import { CallControl } from '@/lib/callControl';
+import dayjs, { Dayjs } from 'dayjs';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
 
 type Meeting = {
   id: number;
@@ -263,6 +268,50 @@ const fetchMeetingManagers = async () => {
       [name]: value,
     }));
   };
+
+  const scheduledAtValue = form.scheduledAt
+  ? dayjs(form.scheduledAt)
+  : null;
+
+const updateScheduledDatePart = (newDate: Dayjs | null) => {
+  if (!newDate) {
+    setForm((prev) => ({
+      ...prev,
+      scheduledAt: '',
+    }));
+    return;
+  }
+
+  const base = form.scheduledAt ? dayjs(form.scheduledAt) : dayjs();
+
+  const merged = newDate
+    .hour(base.hour())
+    .minute(base.minute())
+    .second(0)
+    .millisecond(0);
+
+  setForm((prev) => ({
+    ...prev,
+    scheduledAt: merged.format('YYYY-MM-DDTHH:mm'),
+  }));
+};
+
+const updateScheduledTimePart = (newTime: Dayjs | null) => {
+  if (!newTime) return;
+
+  const base = form.scheduledAt ? dayjs(form.scheduledAt) : dayjs();
+
+  const merged = base
+    .hour(newTime.hour())
+    .minute(newTime.minute())
+    .second(0)
+    .millisecond(0);
+
+  setForm((prev) => ({
+    ...prev,
+    scheduledAt: merged.format('YYYY-MM-DDTHH:mm'),
+  }));
+};
 
   const formatCurrency = (value: number | string | undefined | null) => {
   const num = Number(value || 0);
@@ -751,13 +800,33 @@ const reassignMeeting = async () => {
 
           <div>
             <label className="mb-1 block text-sm font-medium">Scheduled At</label>
-            <input
-              type="datetime-local"
-              name="scheduledAt"
-              value={form.scheduledAt}
-              onChange={handleChange}
-              className="w-full rounded border p-2"
-            />
+            <LocalizationProvider dateAdapter={AdapterDayjs}>
+  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+    <DatePicker
+      label="Scheduled Date"
+      value={scheduledAtValue}
+      onChange={updateScheduledDatePart}
+      slotProps={{
+        textField: {
+          fullWidth: true,
+        },
+      }}
+    />
+
+    <MobileTimePicker
+      label="Scheduled Time"
+      value={scheduledAtValue}
+      onChange={updateScheduledTimePart}
+      ampm
+      ampmInClock
+      slotProps={{
+        textField: {
+          fullWidth: true,
+        },
+      }}
+    />
+  </div>
+</LocalizationProvider>
           </div>
 
           <div>
