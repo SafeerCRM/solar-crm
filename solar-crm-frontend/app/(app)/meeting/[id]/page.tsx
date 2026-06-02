@@ -118,6 +118,9 @@ const [reassigning, setReassigning] = useState(false);
 const [rescheduleAudioFile, setRescheduleAudioFile] = useState<File | null>(null);
   const [convertSliderValue, setConvertSliderValue] = useState(0);
   const [convertingProject, setConvertingProject] = useState(false);
+  const [followUpNote, setFollowUpNote] = useState('');
+const [followUpDate, setFollowUpDate] = useState('');
+const [creatingFollowUp, setCreatingFollowUp] = useState(false);
 
   const [form, setForm] = useState({
     scheduledAt: '',
@@ -273,6 +276,10 @@ const fetchMeetingManagers = async () => {
   ? dayjs(form.scheduledAt)
   : null;
 
+  const followUpDateValue = followUpDate
+  ? dayjs(followUpDate)
+  : null;
+
 const updateScheduledDatePart = (newDate: Dayjs | null) => {
   if (!newDate) {
     setForm((prev) => ({
@@ -311,6 +318,37 @@ const updateScheduledTimePart = (newTime: Dayjs | null) => {
     ...prev,
     scheduledAt: merged.format('YYYY-MM-DDTHH:mm'),
   }));
+};
+
+const updateFollowUpDatePart = (newDate: Dayjs | null) => {
+  if (!newDate) {
+    setFollowUpDate('');
+    return;
+  }
+
+  const base = followUpDate ? dayjs(followUpDate) : dayjs();
+
+  const merged = newDate
+    .hour(base.hour())
+    .minute(base.minute())
+    .second(0)
+    .millisecond(0);
+
+  setFollowUpDate(merged.format('YYYY-MM-DDTHH:mm'));
+};
+
+const updateFollowUpTimePart = (newTime: Dayjs | null) => {
+  if (!newTime) return;
+
+  const base = followUpDate ? dayjs(followUpDate) : dayjs();
+
+  const merged = base
+    .hour(newTime.hour())
+    .minute(newTime.minute())
+    .second(0)
+    .millisecond(0);
+
+  setFollowUpDate(merged.format('YYYY-MM-DDTHH:mm'));
 };
 
   const formatCurrency = (value: number | string | undefined | null) => {
@@ -567,6 +605,53 @@ const reassignMeeting = async () => {
     );
   } finally {
     setSavingAction(false);
+  }
+};
+
+const createMeetingFollowUp = async () => {
+  if (!latestMeeting) return;
+
+  if (!followUpDate) {
+    setError('Please choose follow-up date and time');
+    return;
+  }
+
+  try {
+    setCreatingFollowUp(true);
+    setError('');
+    setMessage('');
+
+    await axios.post(
+      `${backendUrl}/followup/create`,
+      {
+        meetingId: latestMeeting.id,
+        leadId: latestMeeting.leadId || undefined,
+        customerName: latestMeeting.customerName || '',
+        customerPhone: latestMeeting.mobile || '',
+        assignedTo: latestMeeting.assignedTo || undefined,
+        note: followUpNote,
+        followUpDate: new Date(followUpDate).toISOString(),
+        status: 'PENDING',
+        sourceModule: 'MEETING',
+        sourceStage: 'MEETING_DETAIL',
+      },
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+
+    setFollowUpNote('');
+    setFollowUpDate('');
+    setMessage('Meeting followup created successfully');
+  } catch (err: any) {
+    console.error(err);
+    setError(
+      err?.response?.data?.message ||
+        err?.message ||
+        'Failed to create meeting followup',
+    );
+  } finally {
+    setCreatingFollowUp(false);
   }
 };
 
@@ -1192,6 +1277,60 @@ const reassignMeeting = async () => {
           </div>
         </div>
       </div>
+
+      <div className="mb-6 rounded border bg-white p-6">
+  <h2 className="mb-4 text-xl font-semibold">Create Meeting Followup</h2>
+
+  <div className="mb-4 rounded-xl bg-purple-50 p-4 text-sm text-purple-800">
+    This creates a followup from this meeting and sends it to the central Followup work queue.
+  </div>
+
+  <div className="space-y-3">
+    <textarea
+      value={followUpNote}
+      onChange={(e) => setFollowUpNote(e.target.value)}
+      className="w-full rounded border p-3"
+      rows={3}
+      placeholder="Enter meeting follow-up note"
+    />
+
+    <LocalizationProvider dateAdapter={AdapterDayjs}>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <DatePicker
+          label="Followup Date"
+          value={followUpDateValue}
+          onChange={updateFollowUpDatePart}
+          slotProps={{
+            textField: {
+              fullWidth: true,
+            },
+          }}
+        />
+
+        <MobileTimePicker
+          label="Followup Time"
+          value={followUpDateValue}
+          onChange={updateFollowUpTimePart}
+          ampm
+          ampmInClock
+          slotProps={{
+            textField: {
+              fullWidth: true,
+            },
+          }}
+        />
+      </div>
+    </LocalizationProvider>
+
+    <button
+      onClick={createMeetingFollowUp}
+      disabled={creatingFollowUp}
+      className="rounded bg-purple-600 px-4 py-2 text-white disabled:opacity-50"
+    >
+      {creatingFollowUp ? 'Creating...' : 'Create Meeting Followup'}
+    </button>
+  </div>
+</div>
 
       <div className="mb-6 rounded border bg-white p-6">
   <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
