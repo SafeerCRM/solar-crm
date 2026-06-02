@@ -275,6 +275,20 @@ const telecallingFollowupsCount = allFollowups.filter(
   (f) => String(f.sourceModule || '').toUpperCase() === 'TELECALLING',
 ).length;
 
+const assignedFollowupsCount = allFollowups.filter(
+  (f) => !!f.assignedTo,
+).length;
+
+const unassignedFollowupsCount = allFollowups.filter(
+  (f) => !f.assignedTo,
+).length;
+
+const manualFollowupsCount = allFollowups.filter(
+  (f) =>
+    String(f.sourceModule || 'FOLLOWUP').toUpperCase() ===
+    'FOLLOWUP',
+).length;
+
 const getSelectedFollowupRowColor = (f: FollowUp) => {
   const status = String(f.status || '').toUpperCase();
 
@@ -679,7 +693,7 @@ const filteredSelectedFollowups = selectedFollowups.filter((f) => {
           {message && <p className="mt-2 text-blue-600">{message}</p>}
         </div>
       )}
-<div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-7">
+<div className="grid grid-cols-2 gap-4 md:grid-cols-5 xl:grid-cols-10">
   <SummaryCard
     title="Pending"
     value={pendingFollowupsCount}
@@ -721,6 +735,24 @@ const filteredSelectedFollowups = selectedFollowups.filter((f) => {
     value={meetingFollowupsCount}
     className="border-purple-200 bg-purple-50 text-purple-900"
   />
+
+  <SummaryCard
+  title="Assigned"
+  value={assignedFollowupsCount}
+  className="border-emerald-200 bg-emerald-50 text-emerald-900"
+/>
+
+<SummaryCard
+  title="Unassigned"
+  value={unassignedFollowupsCount}
+  className="border-orange-200 bg-orange-50 text-orange-900"
+/>
+
+<SummaryCard
+  title="Manual"
+  value={manualFollowupsCount}
+  className="border-gray-200 bg-gray-50 text-gray-900"
+/>
 </div>
 
 <div className="rounded-xl border border-red-200 bg-white p-4 shadow">
