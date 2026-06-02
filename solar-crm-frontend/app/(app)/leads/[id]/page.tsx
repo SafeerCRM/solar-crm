@@ -5,6 +5,11 @@ import axios from 'axios';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { getAuthHeaders } from '@/lib/authHeaders';
+import dayjs, { Dayjs } from 'dayjs';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
 
 type LeadSummary = {
   id: number;
@@ -50,6 +55,9 @@ export default function LeadHistoryPage() {
   const [updatingPotential, setUpdatingPotential] = useState(false);
   const [followUpNote, setFollowUpNote] = useState('');
   const [followUpDate, setFollowUpDate] = useState('');
+  const followUpDateValue = followUpDate
+  ? dayjs(followUpDate)
+  : null;
   const [creatingFollowUp, setCreatingFollowUp] = useState(false);
 
   useEffect(() => {
@@ -187,6 +195,45 @@ export default function LeadHistoryPage() {
       setCreatingFollowUp(false);
     }
   };
+
+  const updateFollowUpDatePart = (newDate: Dayjs | null) => {
+  if (!newDate) {
+    setFollowUpDate('');
+    return;
+  }
+
+  const base = followUpDate
+    ? dayjs(followUpDate)
+    : dayjs();
+
+  const merged = newDate
+    .hour(base.hour())
+    .minute(base.minute())
+    .second(0)
+    .millisecond(0);
+
+  setFollowUpDate(
+    merged.format('YYYY-MM-DDTHH:mm')
+  );
+};
+
+const updateFollowUpTimePart = (newTime: Dayjs | null) => {
+  if (!newTime) return;
+
+  const base = followUpDate
+    ? dayjs(followUpDate)
+    : dayjs();
+
+  const merged = base
+    .hour(newTime.hour())
+    .minute(newTime.minute())
+    .second(0)
+    .millisecond(0);
+
+  setFollowUpDate(
+    merged.format('YYYY-MM-DDTHH:mm')
+  );
+};
 
   const getPotentialMeta = (value?: number | null) => {
     const potential = Number(value || 15);
@@ -347,12 +394,21 @@ export default function LeadHistoryPage() {
             placeholder="Enter follow-up note"
           />
 
-          <input
-            type="datetime-local"
-            value={followUpDate}
-            onChange={(e) => setFollowUpDate(e.target.value)}
-            className="w-full rounded border p-3"
-          />
+          <LocalizationProvider dateAdapter={AdapterDayjs}>
+  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+    <DatePicker
+      label="Followup Date"
+      value={followUpDateValue}
+      onChange={updateFollowUpDatePart}
+    />
+
+    <MobileTimePicker
+      label="Followup Time"
+      value={followUpDateValue}
+      onChange={updateFollowUpTimePart}
+    />
+  </div>
+</LocalizationProvider>
 
           <button
             onClick={createFollowUp}
