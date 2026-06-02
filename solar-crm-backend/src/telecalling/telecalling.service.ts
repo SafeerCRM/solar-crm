@@ -380,8 +380,14 @@ qb.andWhere(`COALESCE(contact.stage, 'TELECALLING') = :stage`, {
 
         if (data.nextFollowUpDate && data.telecallerId) {
       const followUp = this.followUpRepository.create({
-        leadId: data.leadId,
-        assignedTo: data.telecallerId,
+  leadId: data.leadId,
+  contactId:
+  data.contactId !== undefined && data.contactId !== null
+    ? Number(data.contactId)
+    : undefined,
+customerName: (data as any).customerName || undefined,
+customerPhone: (data as any).customerPhone || undefined,
+  assignedTo: data.telecallerId,
         createdBy: data.telecallerId,
         createdByName: data.telecallerId
           ? `User ${data.telecallerId}`
