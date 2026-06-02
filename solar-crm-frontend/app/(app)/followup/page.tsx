@@ -387,6 +387,35 @@ fetchFollowups(1);
       setConvertingId(null);
     }
   };
+
+  const handleMarkCompleted = async (followupId: number) => {
+  try {
+    await axios.patch(
+      `${backendUrl}/followup/${followupId}/complete`,
+      {},
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+
+    await fetchFollowups(followupPage);
+    await fetchOverdueFollowups(overduePage);
+
+    if (selectedDate) {
+      await handleDateClick(selectedDate);
+    }
+
+    setMessage('Followup marked completed');
+  } catch (error: any) {
+    console.error(error);
+
+    setMessage(
+      error?.response?.data?.message ||
+        'Failed to mark followup completed',
+    );
+  }
+};
+
 const leadManagers = users.filter((u) =>
   Array.isArray(u.roles) && u.roles.includes('LEAD_MANAGER')
 );
@@ -813,6 +842,16 @@ const filteredSelectedFollowups = selectedFollowups.filter((f) => {
               Open
             </button>
 
+            {String(f.status).toUpperCase() !== 'COMPLETED' && (
+  <button
+    type="button"
+    onClick={() => handleMarkCompleted(f.id)}
+    className="rounded bg-green-600 px-3 py-2 text-sm text-white"
+  >
+    Complete
+  </button>
+)}
+
             <button
               type="button"
               onClick={() => handleConvertToMeeting(f.id)}
@@ -1193,6 +1232,15 @@ setDueFilter('');
                   >
                     Open
                   </button>
+
+                  {String(f.status).toUpperCase() !== 'COMPLETED' && (
+  <button
+    onClick={() => handleMarkCompleted(f.id)}
+    className="rounded bg-green-600 px-3 py-2 text-sm text-white"
+  >
+    Complete
+  </button>
+)}
 
                   <button
                     onClick={() => handleConvertToMeeting(f.id)}
