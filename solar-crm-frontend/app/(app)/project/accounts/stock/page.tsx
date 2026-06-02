@@ -546,7 +546,14 @@ const restoreProjectConsumption = async (
 
     alert('Consumption entry restored');
 
-    await loadProjectConsumptions(1);
+const normalFilters = {
+  ...consumptionFilters,
+  showHidden: false,
+};
+
+setConsumptionFilters(normalFilters);
+
+await loadProjectConsumptions(1, normalFilters);
   } catch (error: any) {
     console.error(error);
 
