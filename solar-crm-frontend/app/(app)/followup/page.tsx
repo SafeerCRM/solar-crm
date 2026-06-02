@@ -517,6 +517,26 @@ const getDueColor = (f: FollowUp) => {
     if (status === 'CANCELLED') return 'bg-red-100 text-red-700';
     return 'bg-gray-100 text-gray-700';
   };
+
+  const getLeadLocationText = (f: FollowUp) => {
+  const city = String(f.lead?.city || '').trim();
+  const zone = String(f.lead?.zone || '').trim();
+
+  if (city && zone) return `${city} • ${zone}`;
+  if (city) return city;
+  if (zone) return zone;
+
+  return '';
+};
+
+const getLeadPotentialText = (f: FollowUp) => {
+  return String(
+    f.lead?.potential ||
+      (f.lead as any)?.potentialPercentage ||
+      '',
+  ).trim();
+};
+
   const filteredAllFollowups = allFollowups.filter((f) => {
   const name = String(f.lead?.name || '').toLowerCase();
   const phone = String(f.lead?.phone || '').toLowerCase();
@@ -730,19 +750,21 @@ const filteredSelectedFollowups = selectedFollowups.filter((f) => {
             {f.lead?.phone || ''}
           </p>
 
-          <p className="text-sm text-gray-700">
-            {f.lead?.city || ''} {f.lead?.zone ? `• ${f.lead.zone}` : ''}
-          </p>
+          {getLeadLocationText(f) && (
+  <p className="text-sm text-gray-700">
+    {getLeadLocationText(f)}
+  </p>
+)}
 
           <p className="mt-1 text-sm font-medium text-red-700">
             Due: {formatDate(f.followUpDate)}
           </p>
 
-          {f.lead?.potential && (
-            <p className="text-sm text-gray-700">
-              Potential: {f.lead.potential}
-            </p>
-          )}
+          {getLeadPotentialText(f) && (
+  <p className="text-sm text-gray-700">
+    Potential: {getLeadPotentialText(f)}
+  </p>
+)}
 
           {f.note && (
             <p className="mt-1 text-sm text-gray-700">
@@ -1006,6 +1028,18 @@ setDueFilter('');
       {f.lead?.phone || ''}
     </p>
 
+    {getLeadLocationText(f) && (
+  <p className="mt-1 text-sm text-gray-700">
+    {getLeadLocationText(f)}
+  </p>
+)}
+
+{getLeadPotentialText(f) && (
+  <p className="mt-1 text-sm text-gray-700">
+    Potential: {getLeadPotentialText(f)}
+  </p>
+)}
+
     <p className="mt-1 text-sm text-gray-700">
       {formatDate(f.followUpDate)}
     </p>
@@ -1074,6 +1108,19 @@ setDueFilter('');
                   <p className="mb-2 text-sm text-gray-600">
                     {f.lead?.phone || ''}
                   </p>
+
+                  {getLeadLocationText(f) && (
+  <p className="mb-2 text-sm text-gray-700">
+    {getLeadLocationText(f)}
+  </p>
+)}
+
+{getLeadPotentialText(f) && (
+  <p className="mb-2 text-sm text-gray-700">
+    <span className="font-medium">Potential:</span>{' '}
+    {getLeadPotentialText(f)}
+  </p>
+)}
 
                   <p className="mb-2 text-sm">
                     <span className="font-medium">Date:</span>{' '}
