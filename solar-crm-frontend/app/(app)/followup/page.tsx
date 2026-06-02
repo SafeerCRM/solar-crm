@@ -27,6 +27,10 @@ type FollowUp = {
   followUpDate: string;
   status: string;
   note?: string;
+    sourceModule?: string;
+  sourceStage?: string;
+  followUpType?: string;
+  createdByName?: string;
     lead?: {
     id: number;
     name: string;
@@ -432,6 +436,57 @@ await fetchFollowups(1);
 
     setFollowUpDate(merged.format('YYYY-MM-DDTHH:mm'));
   };
+
+  const getSourceLabel = (source?: string) => {
+  const value = String(source || 'FOLLOWUP').toUpperCase();
+
+  if (value === 'TELECALLING') return 'Telecalling';
+  if (value === 'LEAD') return 'Lead';
+  if (value === 'MEETING') return 'Meeting';
+
+  return 'Followup';
+};
+
+const getSourceColor = (source?: string) => {
+  const value = String(source || 'FOLLOWUP').toUpperCase();
+
+  if (value === 'TELECALLING') {
+    return 'bg-indigo-100 text-indigo-700';
+  }
+
+  if (value === 'LEAD') {
+    return 'bg-blue-100 text-blue-700';
+  }
+
+  if (value === 'MEETING') {
+    return 'bg-purple-100 text-purple-700';
+  }
+
+  return 'bg-gray-100 text-gray-700';
+};
+
+const getDueLabel = (f: FollowUp) => {
+  const status = String(f.status || '').toUpperCase();
+
+  if (status === 'COMPLETED') return 'Completed';
+
+  const date = dayjs(f.followUpDate);
+
+  if (date.isBefore(dayjs(), 'day')) return 'Overdue';
+  if (date.isSame(dayjs(), 'day')) return 'Today';
+
+  return 'Upcoming';
+};
+
+const getDueColor = (f: FollowUp) => {
+  const label = getDueLabel(f);
+
+  if (label === 'Completed') return 'bg-green-100 text-green-700';
+  if (label === 'Overdue') return 'bg-red-100 text-red-700';
+  if (label === 'Today') return 'bg-yellow-100 text-yellow-700';
+
+  return 'bg-cyan-100 text-cyan-700';
+};
 
   const getStatusColor = (status: string) => {
     if (status === 'PENDING') return 'bg-yellow-100 text-yellow-700';
@@ -887,6 +942,30 @@ const filteredSelectedFollowups = selectedFollowups.filter((f) => {
                     {f.lead?.name || `Lead ID: ${f.leadId}`}
                   </h3>
 
+                  <div className="mb-3 flex flex-wrap gap-2">
+  <span
+    className={`rounded-full px-3 py-1 text-xs font-semibold ${getSourceColor(
+      f.sourceModule,
+    )}`}
+  >
+    {getSourceLabel(f.sourceModule)}
+  </span>
+
+  <span
+    className={`rounded-full px-3 py-1 text-xs font-semibold ${getDueColor(
+      f,
+    )}`}
+  >
+    {getDueLabel(f)}
+  </span>
+
+  {f.sourceStage && (
+    <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">
+      {String(f.sourceStage).replaceAll('_', ' ')}
+    </span>
+  )}
+</div>
+
                   <p className="mb-2 text-sm text-gray-600">
                     {f.lead?.phone || ''}
                   </p>
@@ -900,6 +979,13 @@ const filteredSelectedFollowups = selectedFollowups.filter((f) => {
                     <span className="font-medium">Assigned:</span>{' '}
                     {getUserName(f.assignedTo)}
                   </p>
+
+                  {f.createdByName && (
+  <p className="mb-2 text-sm">
+    <span className="font-medium">Created By:</span>{' '}
+    {f.createdByName}
+  </p>
+)}
 
                   {f.note && (
                     <p className="mb-2 text-sm text-gray-700">
