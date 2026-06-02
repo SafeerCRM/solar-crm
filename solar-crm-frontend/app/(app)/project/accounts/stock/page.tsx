@@ -93,6 +93,26 @@ const [branchStockFilters, setBranchStockFilters] = useState({
   material: '',
 });
 
+const [consumptions, setConsumptions] = useState<any[]>([]);
+const [consumptionLoading, setConsumptionLoading] =
+  useState(false);
+
+const [consumptionFilters, setConsumptionFilters] =
+  useState({
+    projectId: '',
+    material: '',
+    branch: '',
+    showHidden: false,
+  });
+
+const [consumptionPagination, setConsumptionPagination] =
+  useState({
+    page: 1,
+    limit: 20,
+    total: 0,
+    totalPages: 1,
+  });
+
   const loadStockItems = async (
     overridePage?: number,
     overrideFilters?: {
@@ -313,6 +333,7 @@ const issueAgainstMaterialRequest = async () => {
     await loadStockItems(1);
     await loadStockMovements(1);
     await loadBranchWiseStock();
+    await loadProjectConsumptions(1);
   } catch (error: any) {
     console.error(error);
 
@@ -379,6 +400,160 @@ const loadBranchWiseStock = async (
     alert('Failed to load branch wise stock');
   } finally {
     setBranchStockLoading(false);
+  }
+};
+
+const loadProjectConsumptions = async (
+  overridePage?: number,
+  overrideFilters?: {
+    projectId: string;
+    material: string;
+    branch: string;
+    showHidden: boolean;
+  },
+) => {
+  try {
+    setConsumptionLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    const activePage =
+      overridePage || consumptionPagination.page;
+
+    const activeFilters =
+      overrideFilters || consumptionFilters;
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/consumptions`,
+      {
+        params: {
+          page: activePage,
+          limit: consumptionPagination.limit,
+          projectId:
+            activeFilters.projectId || undefined,
+          material:
+            activeFilters.material || undefined,
+          branch:
+            activeFilters.branch || undefined,
+          showHidden: activeFilters.showHidden
+            ? 'true'
+            : undefined,
+        },
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setConsumptions(
+      Array.isArray(res.data?.data)
+        ? res.data.data
+        : [],
+    );
+
+    setConsumptionPagination({
+      page: Number(
+        res.data?.pagination?.page || 1,
+      ),
+      limit: Number(
+        res.data?.pagination?.limit || 20,
+      ),
+      total: Number(
+        res.data?.pagination?.total || 0,
+      ),
+      totalPages: Number(
+        res.data?.pagination?.totalPages || 1,
+      ),
+    });
+  } catch (error) {
+    console.error(error);
+    alert('Failed to load project consumption');
+  } finally {
+    setConsumptionLoading(false);
+  }
+};
+
+const hideProjectConsumption = async (
+  consumptionId: number,
+) => {
+  const hiddenReason = window.prompt(
+    'Enter hide reason',
+  );
+
+  if (!hiddenReason?.trim()) {
+    return;
+  }
+
+  try {
+    const token = localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/consumptions/${consumptionId}/hide`,
+      {
+        hiddenReason,
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Consumption entry hidden');
+
+    await loadProjectConsumptions(1);
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to hide consumption entry',
+    );
+  }
+};
+
+const restoreProjectConsumption = async (
+  consumptionId: number,
+) => {
+  const restoreReason = window.prompt(
+    'Enter restore reason',
+  );
+
+  if (!restoreReason?.trim()) {
+    return;
+  }
+
+  try {
+    const token = localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/consumptions/${consumptionId}/restore`,
+      {
+        restoreReason,
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Consumption entry restored');
+
+    await loadProjectConsumptions(1);
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to restore consumption entry',
+    );
   }
 };
 
@@ -703,6 +878,7 @@ const restoreStockMovement = async (movementId: number) => {
   loadStockMovements(1);
   loadBranchWiseStock();
   loadApprovedRequestsForIssue();
+  loadProjectConsumptions(1);
   loadMaterials();
   loadBranches();
 }, []);
@@ -1794,6 +1970,268 @@ const restoreStockMovement = async (movementId: number) => {
         onClick={() =>
           loadStockMovements(
             movementPagination.page + 1,
+          )
+        }
+        className="rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700 disabled:opacity-50"
+      >
+        Next
+      </button>
+    </div>
+  </div>
+</div>
+
+<div className="rounded-2xl bg-white p-5 shadow">
+  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <div>
+      <h2 className="text-xl font-bold text-gray-800">
+        Project Consumption Register
+      </h2>
+
+      <p className="mt-1 text-sm text-gray-500">
+        Materials issued to projects from warehouse stock.
+      </p>
+    </div>
+
+    <div className="flex flex-wrap gap-2">
+      <button
+        type="button"
+        onClick={() =>
+          loadProjectConsumptions(1)
+        }
+        disabled={consumptionLoading}
+        className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+      >
+        {consumptionLoading
+          ? 'Loading...'
+          : 'Apply Filters'}
+      </button>
+
+      <button
+        type="button"
+        onClick={() => {
+          const emptyFilters = {
+            projectId: '',
+            material: '',
+            branch: '',
+            showHidden: false,
+          };
+
+          setConsumptionFilters(emptyFilters);
+          loadProjectConsumptions(
+            1,
+            emptyFilters,
+          );
+        }}
+        className="rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700"
+      >
+        Reset
+      </button>
+    </div>
+  </div>
+
+  <div className="mt-4 grid gap-3 md:grid-cols-4">
+    <input
+      type="number"
+      placeholder="Project ID"
+      value={consumptionFilters.projectId}
+      onChange={(e) =>
+        setConsumptionFilters({
+          ...consumptionFilters,
+          projectId: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    />
+
+    <input
+      type="text"
+      placeholder="Material"
+      value={consumptionFilters.material}
+      onChange={(e) =>
+        setConsumptionFilters({
+          ...consumptionFilters,
+          material: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    />
+
+    <select
+      value={consumptionFilters.branch}
+      onChange={(e) =>
+        setConsumptionFilters({
+          ...consumptionFilters,
+          branch: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    >
+      <option value="">All Branches</option>
+
+      {branches.map((branch: any) => (
+        <option
+          key={branch.id}
+          value={branch.name}
+        >
+          {branch.name}
+        </option>
+      ))}
+    </select>
+
+    <label className="flex items-center gap-2 rounded-xl border p-3 text-sm">
+      <input
+        type="checkbox"
+        checked={consumptionFilters.showHidden}
+        onChange={(e) =>
+          setConsumptionFilters({
+            ...consumptionFilters,
+            showHidden: e.target.checked,
+          })
+        }
+      />
+      View Hidden
+    </label>
+  </div>
+
+  <div className="mt-5 overflow-x-auto">
+    <table className="min-w-full text-sm">
+      <thead>
+        <tr className="border-b bg-gray-50">
+          <th className="p-2 text-left">Date</th>
+          <th className="p-2 text-left">Project</th>
+          <th className="p-2 text-left">Material</th>
+          <th className="p-2 text-left">Branch</th>
+          <th className="p-2 text-left">Qty</th>
+          <th className="p-2 text-left">Rate</th>
+          <th className="p-2 text-left">Amount</th>
+          <th className="p-2 text-left">Issued By</th>
+          <th className="p-2 text-left">Remarks</th>
+          <th className="p-2 text-left">Action</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {consumptions.length === 0 && (
+          <tr>
+            <td
+              colSpan={10}
+              className="p-4 text-center text-gray-500"
+            >
+              No project consumption records found.
+            </td>
+          </tr>
+        )}
+
+        {consumptions.map((item) => (
+          <tr key={item.id} className="border-b">
+            <td className="p-2">
+              {item.createdAt
+                ? new Date(
+                    item.createdAt,
+                  ).toLocaleDateString()
+                : '-'}
+            </td>
+
+            <td className="p-2 font-semibold">
+              {item.projectName ||
+                `Project #${item.projectId}`}
+            </td>
+
+            <td className="p-2">
+              {item.materialName || '-'}
+            </td>
+
+            <td className="p-2">
+              {item.branchName || '-'}
+            </td>
+
+            <td className="p-2 font-semibold">
+              {Number(
+                item.quantity || 0,
+              ).toLocaleString('en-IN')}
+            </td>
+
+            <td className="p-2">
+              {formatCurrency(item.rate)}
+            </td>
+
+            <td className="p-2 font-semibold text-green-700">
+              {formatCurrency(item.totalAmount)}
+            </td>
+
+            <td className="p-2">
+              {item.issuedByName || '-'}
+            </td>
+
+            <td className="p-2">
+              {item.remarks || '-'}
+            </td>
+
+            <td className="p-2">
+              {consumptionFilters.showHidden ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    restoreProjectConsumption(
+                      item.id,
+                    )
+                  }
+                  className="rounded bg-green-600 px-2 py-1 text-xs text-white"
+                >
+                  Restore
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() =>
+                    hideProjectConsumption(item.id)
+                  }
+                  className="rounded bg-gray-700 px-2 py-1 text-xs text-white"
+                >
+                  Hide
+                </button>
+              )}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+
+  <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <p className="text-sm text-gray-500">
+      Page {consumptionPagination.page} of{' '}
+      {consumptionPagination.totalPages} | Total{' '}
+      {consumptionPagination.total}
+    </p>
+
+    <div className="flex gap-2">
+      <button
+        type="button"
+        disabled={
+          consumptionPagination.page <= 1 ||
+          consumptionLoading
+        }
+        onClick={() =>
+          loadProjectConsumptions(
+            consumptionPagination.page - 1,
+          )
+        }
+        className="rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700 disabled:opacity-50"
+      >
+        Previous
+      </button>
+
+      <button
+        type="button"
+        disabled={
+          consumptionPagination.page >=
+            consumptionPagination.totalPages ||
+          consumptionLoading
+        }
+        onClick={() =>
+          loadProjectConsumptions(
+            consumptionPagination.page + 1,
           )
         }
         className="rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700 disabled:opacity-50"
