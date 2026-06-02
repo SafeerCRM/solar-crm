@@ -392,6 +392,12 @@ if (potentialPercentage > 0) {
   });
 }
 
+if (filters?.assignedTo) {
+  query.andWhere('lead.assignedTo = :filterAssignedTo', {
+    filterAssignedTo: Number(filters.assignedTo),
+  });
+}
+
   if (filters?.status) {
     query.andWhere('lead.status = :status', { status: filters.status });
   }
