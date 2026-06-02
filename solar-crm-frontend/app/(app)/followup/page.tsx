@@ -160,7 +160,15 @@ const [dueFilter, setDueFilter] = useState('');
         headers: getAuthHeaders(),
       });
 
-      setLeads(Array.isArray(res.data) ? res.data : []);
+      const responseData = res.data || {};
+
+const leadData = Array.isArray(responseData.data)
+  ? responseData.data
+  : Array.isArray(responseData)
+  ? responseData
+  : [];
+
+setLeads(leadData);
     } catch (error) {
       console.error(error);
       setLeads([]);
