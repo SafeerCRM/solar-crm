@@ -84,6 +84,9 @@ const [zoneFilter, setZoneFilter] = useState('');
 const [bulkAssignedTo, setBulkAssignedTo] = useState('');
 const [assignLimit, setAssignLimit] = useState('');
 const [assigningFiltered, setAssigningFiltered] = useState(false);
+const [sourceFilter, setSourceFilter] = useState('');
+const [statusFilter, setStatusFilter] = useState('');
+const [dueFilter, setDueFilter] = useState('');
 
   const userRoles = user?.roles || [];
 
@@ -516,13 +519,29 @@ const getDueColor = (f: FollowUp) => {
   const matchesPotential =
     !potentialFilter || potential === potentialFilter.toUpperCase();
 
+    const source = String(f.sourceModule || 'FOLLOWUP').toUpperCase();
+const status = String(f.status || '').toUpperCase();
+const dueLabel = getDueLabel(f).toUpperCase();
+
+const matchesSource =
+  !sourceFilter || source === sourceFilter;
+
+const matchesStatus =
+  !statusFilter || status === statusFilter;
+
+const matchesDue =
+  !dueFilter || dueLabel === dueFilter;
+
   return (
-    matchesName &&
-    matchesPhone &&
-    matchesCity &&
-    matchesZone &&
-    matchesPotential
-  );
+  matchesName &&
+  matchesPhone &&
+  matchesCity &&
+  matchesZone &&
+  matchesPotential &&
+  matchesSource &&
+  matchesStatus &&
+  matchesDue
+);
 });
 
 const filteredSelectedFollowups = selectedFollowups.filter((f) => {
@@ -812,6 +831,41 @@ const filteredSelectedFollowups = selectedFollowups.filter((f) => {
       className="w-full rounded-lg border border-gray-300 p-2 focus:border-blue-500 focus:outline-none"
     />
 
+    <select
+  value={sourceFilter}
+  onChange={(e) => setSourceFilter(e.target.value)}
+  className="w-full rounded-lg border border-gray-300 p-2 focus:border-blue-500 focus:outline-none"
+>
+  <option value="">All Sources</option>
+  <option value="TELECALLING">Telecalling</option>
+  <option value="LEAD">Lead</option>
+  <option value="MEETING">Meeting</option>
+  <option value="FOLLOWUP">Manual Followup</option>
+</select>
+
+<select
+  value={statusFilter}
+  onChange={(e) => setStatusFilter(e.target.value)}
+  className="w-full rounded-lg border border-gray-300 p-2 focus:border-blue-500 focus:outline-none"
+>
+  <option value="">All Status</option>
+  <option value="PENDING">Pending</option>
+  <option value="COMPLETED">Completed</option>
+  <option value="CANCELLED">Cancelled</option>
+</select>
+
+<select
+  value={dueFilter}
+  onChange={(e) => setDueFilter(e.target.value)}
+  className="w-full rounded-lg border border-gray-300 p-2 focus:border-blue-500 focus:outline-none"
+>
+  <option value="">All Due Types</option>
+  <option value="TODAY">Today</option>
+  <option value="OVERDUE">Overdue</option>
+  <option value="UPCOMING">Upcoming</option>
+  <option value="COMPLETED">Completed</option>
+</select>
+
     <div className="mt-3 flex flex-col gap-3 md:flex-row md:items-center">
     <button
       type="button"
@@ -821,6 +875,9 @@ const filteredSelectedFollowups = selectedFollowups.filter((f) => {
         setCityFilter('');
         setPotentialFilter('');
         setZoneFilter('');
+        setSourceFilter('');
+setStatusFilter('');
+setDueFilter('');
       }}
       className="rounded bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700"
     >
