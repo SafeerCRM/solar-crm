@@ -425,6 +425,32 @@ if (potentialPercentage > 0) {
     });
   }
 
+  if (filters?.contactedStatus === 'NEVER_CONTACTED') {
+  query.andWhere((qb) => {
+    const subQuery = qb
+      .subQuery()
+      .select('1')
+      .from(CallLog, 'call')
+      .where('call.leadId = lead.id')
+      .getQuery();
+
+    return `NOT EXISTS ${subQuery}`;
+  });
+}
+
+if (filters?.contactedStatus === 'CONTACTED') {
+  query.andWhere((qb) => {
+    const subQuery = qb
+      .subQuery()
+      .select('1')
+      .from(CallLog, 'call')
+      .where('call.leadId = lead.id')
+      .getQuery();
+
+    return `EXISTS ${subQuery}`;
+  });
+}
+
   if (filters?.search) {
     query.andWhere(
       `(lead.name ILIKE :search 
