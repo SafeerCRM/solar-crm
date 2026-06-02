@@ -26,12 +26,27 @@ export class FollowUp {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
-  leadId: number;
+  @Column({ nullable: true })
+leadId: number;
 
-  @ManyToOne(() => Lead, (lead) => lead.followUps, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'leadId' })
-  lead: Lead;
+  @ManyToOne(() => Lead, (lead) => lead.followUps, {
+  onDelete: 'CASCADE',
+  nullable: true,
+})
+@JoinColumn({ name: 'leadId' })
+lead: Lead;
+
+  @Column({ nullable: true })
+meetingId: number;
+
+@Column({ nullable: true })
+contactId: number;
+
+@Column({ nullable: true })
+customerName: string;
+
+@Column({ nullable: true })
+customerPhone: string;
 
     @Column({ nullable: true })
   assignedTo: number;
