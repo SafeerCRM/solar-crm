@@ -155,35 +155,57 @@ export class FollowupService {
   }
 
     async create(data: Partial<FollowUp>, user: any) {
-    if (this.isProjectManager(user)) {
-      throw new ForbiddenException(
-        'Project manager cannot create followups',
-      );
-    }
-
-    const currentUserId = this.getCurrentUserId(user);
-    const currentUserName = user?.name || user?.email || 'Unknown User';
-
-    const followUpData = this.isOwnAssignedOnlyRole(user)
-      ? {
-          ...data,
-          assignedTo: data.assignedTo ?? currentUserId,
-          createdBy: currentUserId,
-          createdByName: currentUserName,
-          sourceModule: data.sourceModule || 'FOLLOWUP',
-          sourceStage: data.sourceStage || 'MANUAL',
-        }
-      : {
-          ...data,
-          createdBy: currentUserId,
-          createdByName: currentUserName,
-          sourceModule: data.sourceModule || 'FOLLOWUP',
-          sourceStage: data.sourceStage || 'MANUAL',
-        };
-
-    const followUp = this.followUpRepository.create(followUpData);
-    return this.followUpRepository.save(followUp);
+  if (this.isProjectManager(user)) {
+    throw new ForbiddenException(
+      'Project manager cannot create followups',
+    );
   }
+
+  const currentUserId = this.getCurrentUserId(user);
+  const currentUserName = user?.name || user?.email || 'Unknown User';
+
+  const sourceModule = String(data.sourceModule || 'FOLLOWUP').toUpperCase();
+
+  if (
+    !data.leadId &&
+    !(data as any).meetingId &&
+    !(data as any).contactId &&
+    !String((data as any).customerName || '').trim() &&
+    !String((data as any).customerPhone || '').trim()
+  ) {
+    throw new ForbiddenException(
+      'Followup must be linked with lead, meeting, contact, or customer details',
+    );
+  }
+
+  const cleanData: Partial<FollowUp> = {
+    ...data,
+    leadId: data.leadId ? Number(data.leadId) : null,
+    meetingId: (data as any).meetingId
+      ? Number((data as any).meetingId)
+      : null,
+    contactId: (data as any).contactId
+      ? Number((data as any).contactId)
+      : null,
+    customerName:
+      String((data as any).customerName || '').trim() || null,
+    customerPhone:
+      String((data as any).customerPhone || '').trim() || null,
+    sourceModule,
+    sourceStage: data.sourceStage || 'MANUAL',
+    createdBy: currentUserId,
+    createdByName: currentUserName,
+  } as any;
+
+  if (this.isOwnAssignedOnlyRole(user)) {
+    cleanData.assignedTo = data.assignedTo ?? currentUserId;
+  } else {
+    cleanData.assignedTo = data.assignedTo;
+  }
+
+  const followUp = this.followUpRepository.create(cleanData);
+  return this.followUpRepository.save(followUp);
+}
 
   async findAll(user: any, page = 1, limit = 50) {
   if (this.isProjectManager(user)) {
