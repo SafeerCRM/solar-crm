@@ -168,6 +168,90 @@ private generateFinalInvoiceNumber() {
   return `INV-${Date.now()}`;
 }
 
+private readonly projectCreationRequiredDocumentGroups = [
+  {
+    label: 'Aadhaar Card',
+    types: [ProjectDocumentType.AADHAAR_CARD],
+  },
+  {
+    label: 'Electricity Bill',
+    types: [ProjectDocumentType.ELECTRICITY_BILL],
+  },
+  {
+    label: 'Customer Photo',
+    types: [ProjectDocumentType.CLIENT_PHOTO],
+  },
+  {
+    label: 'Site Photo',
+    types: [
+      ProjectDocumentType.CLIENT_GPS_PHOTO,
+      ProjectDocumentType.ROOF_GPS_PHOTO,
+      ProjectDocumentType.PLANT_GPS_PHOTO,
+    ],
+  },
+  {
+    label: 'Bank Document',
+    types: [
+      ProjectDocumentType.CANCEL_CHEQUE,
+      ProjectDocumentType.BANK_DIARY,
+    ],
+  },
+  {
+    label: 'Loan Document',
+    types: [
+      ProjectDocumentType.JAN_SAMARTH_DOCUMENT,
+      ProjectDocumentType.LOAN_SANCTION_LETTER,
+      ProjectDocumentType.BANK_VISIT_PROOF,
+    ],
+  },
+  {
+    label: 'Property Document',
+    types: [ProjectDocumentType.HOUSE_REGISTRY],
+  },
+  {
+    label: 'Other',
+    types: [ProjectDocumentType.OTHER],
+  },
+];
+
+private async assertRequiredProjectCreationDocumentsUploaded(
+  projectId: number,
+) {
+  const allRequiredTypes =
+    this.projectCreationRequiredDocumentGroups.flatMap(
+      (group) => group.types,
+    );
+
+  const documents =
+    await this.projectDocumentRepository.find({
+      where: {
+        projectId,
+        documentType: In(allRequiredTypes),
+      },
+      select: ['documentType'],
+    });
+
+  const uploadedTypes = new Set(
+    documents.map((doc) => doc.documentType),
+  );
+
+  const missingGroups =
+    this.projectCreationRequiredDocumentGroups.filter(
+      (group) =>
+        !group.types.some((type) =>
+          uploadedTypes.has(type),
+        ),
+    );
+
+  if (missingGroups.length > 0) {
+    throw new BadRequestException(
+      `Please upload mandatory documents before approval: ${missingGroups
+        .map((group) => group.label)
+        .join(', ')}`,
+    );
+  }
+}
+
   constructor(
     @InjectRepository(Project)
     private readonly projectRepository: Repository<Project>,
@@ -722,29 +806,7 @@ if (
     'gpsAddress',
   ];
 
-  const editableFieldsForProjectManager = [
-    'branchName',
-    'projectOwnerId',
-    'projectOwnerName',
-    'projectOwnerRole',
-    'panelBrand',
-    'dcrPanelCount',
-    'nonDcrPanelCount',
-    'converterBrand',
-    'converterCapacity',
-    'converterPhase',
-    'structureType',
-    'structureCapacityKw',
-    'buildingHeight',
-    'discomName',
-    'startDate',
-    'expectedCompletionDate',
-    'remarks',
-        'address',
-    'gpsLatitude',
-    'gpsLongitude',
-    'gpsAddress',
-  ];
+  const editableFieldsForProjectManager = editableFieldsForOwner;
 
   let allowedFields: string[] = [];
 
@@ -1229,6 +1291,12 @@ async projectManagerApproval(
   project.projectManagerApprovedAt =
     new Date();
 
+    if (body?.status === 'APPROVED') {
+  await this.assertRequiredProjectCreationDocumentsUploaded(
+    id,
+  );
+}
+
   if (
     body?.status === 'APPROVED' &&
     project.status === 'PENDING_APPROVAL'
@@ -1258,6 +1326,15 @@ async projectManagerApproval(
 
   const approvalStatus =
     body.approvalStatus || body.status;
+
+    if (
+  approvalStatus ===
+  ProjectApprovalStatus.APPROVED
+) {
+  await this.assertRequiredProjectCreationDocumentsUploaded(
+    id,
+  );
+}
 
   if (!approvalStatus) {
     throw new BadRequestException('Approval status is required');
