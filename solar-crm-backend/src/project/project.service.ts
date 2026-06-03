@@ -2749,10 +2749,12 @@ async getPaymentCollectionList(query: any, currentUser: any) {
   const userId = currentUser?.id || currentUser?.userId;
 
   const canSeeAll =
-    roles.includes('OWNER') ||
-    roles.includes('MARKETING_HEAD') ||
-    roles.includes('PROJECT_MANAGER') ||
-    roles.includes('PAYMENT_COLLECTION_EXECUTIVE');
+  roles.includes('OWNER') ||
+  roles.includes('MARKETING_HEAD') ||
+  roles.includes('PROJECT_MANAGER') ||
+  roles.includes('PAYMENT_COLLECTION_EXECUTIVE') ||
+  roles.includes('PAYMENT_MANAGER') ||
+  roles.includes('ACCOUNT_MANAGER');
 
   const qb = this.projectPaymentInstallmentRepository
     .createQueryBuilder('payment')
@@ -6426,9 +6428,11 @@ async hidePaymentInstallment(
   const roles = currentUser?.roles || [];
 
   const canHide =
-    roles.includes('OWNER') ||
-    roles.includes('MARKETING_HEAD') ||
-    roles.includes('PROJECT_MANAGER');
+  roles.includes('OWNER') ||
+  roles.includes('MARKETING_HEAD') ||
+  roles.includes('PROJECT_MANAGER') ||
+  roles.includes('PAYMENT_MANAGER') ||
+  roles.includes('ACCOUNT_MANAGER');
 
   if (!canHide) {
     throw new ForbiddenException(
