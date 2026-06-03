@@ -580,17 +580,51 @@ const [editForm, setEditForm] = useState({
   customerPhone: '',
   city: '',
   zone: '',
+  address: '',
+  gpsAddress: '',
+  gpsLatitude: '',
+  gpsLongitude: '',
+
   branchName: '',
+  projectOwnerId: '',
+  projectOwnerName: '',
+  projectOwnerRole: '',
+
   electricityKNumber: '',
   customerGmail: '',
   aadhaarLinkedMobile: '',
+
   panelBrand: '',
+  dcrPanelCount: '',
+  nonDcrPanelCount: '',
   converterBrand: '',
   converterCapacity: '',
   converterPhase: '',
   structureType: '',
+  structureCapacityKw: '',
   buildingHeight: '',
+
+  projectType: '',
+  projectSize: '',
+  finalCost: '',
+  projectCost: '',
+  subsidy: '',
+  netAmount: '',
+  marginMoney: '',
+  loanAmount: '',
+  subsidyType: '',
   discomName: '',
+  discomExpenditureType: '',
+  discomExpenditureAmount: '',
+  expectedLagat: '',
+  expectedProfit: '',
+
+  status: '',
+  paymentStatus: '',
+  startDate: '',
+  expectedCompletionDate: '',
+  actualCompletionDate: '',
+
   remarks: '',
 });
 
@@ -934,6 +968,11 @@ const submitApproval = async (
   }
 };
 
+const formatDateForInput = (value?: string) => {
+  if (!value) return '';
+  return value.split('T')[0] || '';
+};
+
 const openEditProject = () => {
   if (!project) return;
 
@@ -942,26 +981,51 @@ const openEditProject = () => {
     customerPhone: project.customerPhone || '',
     city: project.city || '',
     zone: project.zone || '',
+    address: project.address || '',
+    gpsAddress: project.gpsAddress || '',
+    gpsLatitude: String(project.gpsLatitude || ''),
+    gpsLongitude: String(project.gpsLongitude || ''),
+
     branchName: project.branchName || '',
-    electricityKNumber:
-      project.electricityKNumber || '',
-    customerGmail:
-      project.customerGmail || '',
-    aadhaarLinkedMobile:
-      project.aadhaarLinkedMobile || '',
+    projectOwnerId: String((project as any).projectOwnerId || ''),
+    projectOwnerName: project.projectOwnerName || '',
+    projectOwnerRole: project.projectOwnerRole || '',
+
+    electricityKNumber: project.electricityKNumber || '',
+    customerGmail: project.customerGmail || '',
+    aadhaarLinkedMobile: project.aadhaarLinkedMobile || '',
+
     panelBrand: project.panelBrand || '',
-    converterBrand:
-      project.converterBrand || '',
-    converterCapacity:
-      project.converterCapacity || '',
-    converterPhase:
-      project.converterPhase || '',
-    structureType:
-      project.structureType || '',
-    buildingHeight:
-      project.buildingHeight || '',
-    discomName:
-      project.discomName || '',
+    dcrPanelCount: String(project.dcrPanelCount || ''),
+    nonDcrPanelCount: String(project.nonDcrPanelCount || ''),
+    converterBrand: project.converterBrand || '',
+    converterCapacity: project.converterCapacity || '',
+    converterPhase: project.converterPhase || '',
+    structureType: project.structureType || '',
+    structureCapacityKw: project.structureCapacityKw || '',
+    buildingHeight: project.buildingHeight || '',
+
+    projectType: project.projectType || '',
+    projectSize: (project as any).projectSize || '',
+    finalCost: String(project.finalCost || ''),
+    projectCost: String(project.projectCost || ''),
+    subsidy: String((project as any).subsidy || ''),
+    netAmount: String((project as any).netAmount || ''),
+    marginMoney: String((project as any).marginMoney || ''),
+    loanAmount: String((project as any).loanAmount || ''),
+    subsidyType: (project as any).subsidyType || '',
+    discomName: project.discomName || '',
+    discomExpenditureType: (project as any).discomExpenditureType || '',
+    discomExpenditureAmount: String((project as any).discomExpenditureAmount || ''),
+    expectedLagat: String((project as any).expectedLagat || ''),
+    expectedProfit: String((project as any).expectedProfit || ''),
+
+    status: project.status || '',
+    paymentStatus: (project as any).paymentStatus || '',
+    startDate: formatDateForInput((project as any).startDate),
+    expectedCompletionDate: formatDateForInput((project as any).expectedCompletionDate),
+    actualCompletionDate: formatDateForInput((project as any).actualCompletionDate),
+
     remarks: project.remarks || '',
   });
 
@@ -3286,201 +3350,63 @@ const remainingAmountToCollect =
       </div>
 
       <div className="mt-6 grid gap-4 md:grid-cols-2">
+  <h3 className="col-span-full text-lg font-bold text-gray-800">
+    Customer Information
+  </h3>
 
-        <input
-          placeholder="Customer Name"
-          value={editForm.customerName}
-          onChange={(e) =>
-            setEditForm({
-              ...editForm,
-              customerName: e.target.value,
-            })
-          }
-          className="rounded-xl border p-3"
-        />
+  <input placeholder="Customer Name" value={editForm.customerName} onChange={(e) => setEditForm({ ...editForm, customerName: e.target.value })} className="rounded-xl border p-3" />
+  <input placeholder="Customer Phone" value={editForm.customerPhone} onChange={(e) => setEditForm({ ...editForm, customerPhone: e.target.value })} className="rounded-xl border p-3" />
+  <input placeholder="City" value={editForm.city} onChange={(e) => setEditForm({ ...editForm, city: e.target.value })} className="rounded-xl border p-3" />
+  <input placeholder="Zone" value={editForm.zone} onChange={(e) => setEditForm({ ...editForm, zone: e.target.value })} className="rounded-xl border p-3" />
+  <textarea placeholder="Address" value={editForm.address} onChange={(e) => setEditForm({ ...editForm, address: e.target.value })} className="rounded-xl border p-3 md:col-span-2" />
 
-        <input
-          placeholder="Customer Phone"
-          value={editForm.customerPhone}
-          onChange={(e) =>
-            setEditForm({
-              ...editForm,
-              customerPhone: e.target.value,
-            })
-          }
-          className="rounded-xl border p-3"
-        />
+  <h3 className="col-span-full mt-4 text-lg font-bold text-gray-800">
+    Project Information
+  </h3>
 
-        <input
-          placeholder="City"
-          value={editForm.city}
-          onChange={(e) =>
-            setEditForm({
-              ...editForm,
-              city: e.target.value,
-            })
-          }
-          className="rounded-xl border p-3"
-        />
+  <input placeholder="Branch Name" value={editForm.branchName} onChange={(e) => setEditForm({ ...editForm, branchName: e.target.value })} className="rounded-xl border p-3" />
+  <input placeholder="Project Type" value={editForm.projectType} onChange={(e) => setEditForm({ ...editForm, projectType: e.target.value })} className="rounded-xl border p-3" />
+  <input placeholder="Project Size" value={editForm.projectSize} onChange={(e) => setEditForm({ ...editForm, projectSize: e.target.value })} className="rounded-xl border p-3" />
+  <input placeholder="Electricity K Number" value={editForm.electricityKNumber} onChange={(e) => setEditForm({ ...editForm, electricityKNumber: e.target.value })} className="rounded-xl border p-3" />
+  <input placeholder="Customer Gmail" value={editForm.customerGmail} onChange={(e) => setEditForm({ ...editForm, customerGmail: e.target.value })} className="rounded-xl border p-3" />
+  <input placeholder="Aadhaar Linked Mobile" value={editForm.aadhaarLinkedMobile} onChange={(e) => setEditForm({ ...editForm, aadhaarLinkedMobile: e.target.value })} className="rounded-xl border p-3" />
 
-        <input
-          placeholder="Zone"
-          value={editForm.zone}
-          onChange={(e) =>
-            setEditForm({
-              ...editForm,
-              zone: e.target.value,
-            })
-          }
-          className="rounded-xl border p-3"
-        />
+  <h3 className="col-span-full mt-4 text-lg font-bold text-gray-800">
+    Technical Details
+  </h3>
 
-        <input
-          placeholder="Branch Name"
-          value={editForm.branchName}
-          onChange={(e) =>
-            setEditForm({
-              ...editForm,
-              branchName: e.target.value,
-            })
-          }
-          className="rounded-xl border p-3"
-        />
+  <input placeholder="Panel Brand" value={editForm.panelBrand} onChange={(e) => setEditForm({ ...editForm, panelBrand: e.target.value })} className="rounded-xl border p-3" />
+  <input placeholder="DCR Panel Count" value={editForm.dcrPanelCount} onChange={(e) => setEditForm({ ...editForm, dcrPanelCount: e.target.value })} className="rounded-xl border p-3" />
+  <input placeholder="Non DCR Panel Count" value={editForm.nonDcrPanelCount} onChange={(e) => setEditForm({ ...editForm, nonDcrPanelCount: e.target.value })} className="rounded-xl border p-3" />
+  <input placeholder="Converter Brand" value={editForm.converterBrand} onChange={(e) => setEditForm({ ...editForm, converterBrand: e.target.value })} className="rounded-xl border p-3" />
+  <input placeholder="Converter Capacity" value={editForm.converterCapacity} onChange={(e) => setEditForm({ ...editForm, converterCapacity: e.target.value })} className="rounded-xl border p-3" />
+  <input placeholder="Converter Phase" value={editForm.converterPhase} onChange={(e) => setEditForm({ ...editForm, converterPhase: e.target.value })} className="rounded-xl border p-3" />
+  <input placeholder="Structure Type" value={editForm.structureType} onChange={(e) => setEditForm({ ...editForm, structureType: e.target.value })} className="rounded-xl border p-3" />
+  <input placeholder="Structure Capacity KW" value={editForm.structureCapacityKw} onChange={(e) => setEditForm({ ...editForm, structureCapacityKw: e.target.value })} className="rounded-xl border p-3" />
+  <input placeholder="Building Height" value={editForm.buildingHeight} onChange={(e) => setEditForm({ ...editForm, buildingHeight: e.target.value })} className="rounded-xl border p-3" />
 
-        <input
-          placeholder="Electricity K Number"
-          value={editForm.electricityKNumber}
-          onChange={(e) =>
-            setEditForm({
-              ...editForm,
-              electricityKNumber:
-                e.target.value,
-            })
-          }
-          className="rounded-xl border p-3"
-        />
+  <h3 className="col-span-full mt-4 text-lg font-bold text-gray-800">
+    Finance Details
+  </h3>
 
-        <input
-          placeholder="Customer Gmail"
-          value={editForm.customerGmail}
-          onChange={(e) =>
-            setEditForm({
-              ...editForm,
-              customerGmail:
-                e.target.value,
-            })
-          }
-          className="rounded-xl border p-3"
-        />
+  <input type="number" placeholder="Final Cost" value={editForm.finalCost} onChange={(e) => setEditForm({ ...editForm, finalCost: e.target.value })} className="rounded-xl border p-3" />
+  <input type="number" placeholder="Project Cost" value={editForm.projectCost} onChange={(e) => setEditForm({ ...editForm, projectCost: e.target.value })} className="rounded-xl border p-3" />
+  <input type="number" placeholder="Subsidy" value={editForm.subsidy} onChange={(e) => setEditForm({ ...editForm, subsidy: e.target.value })} className="rounded-xl border p-3" />
+  <input type="number" placeholder="Net Amount" value={editForm.netAmount} onChange={(e) => setEditForm({ ...editForm, netAmount: e.target.value })} className="rounded-xl border p-3" />
+  <input type="number" placeholder="Margin Money" value={editForm.marginMoney} onChange={(e) => setEditForm({ ...editForm, marginMoney: e.target.value })} className="rounded-xl border p-3" />
+  <input type="number" placeholder="Loan Amount" value={editForm.loanAmount} onChange={(e) => setEditForm({ ...editForm, loanAmount: e.target.value })} className="rounded-xl border p-3" />
+  <input type="number" placeholder="Expected Lagat" value={editForm.expectedLagat} onChange={(e) => setEditForm({ ...editForm, expectedLagat: e.target.value })} className="rounded-xl border p-3" />
+  <input type="number" placeholder="Expected Profit" value={editForm.expectedProfit} onChange={(e) => setEditForm({ ...editForm, expectedProfit: e.target.value })} className="rounded-xl border p-3" />
 
-        <input
-          placeholder="Aadhaar Linked Mobile"
-          value={
-            editForm.aadhaarLinkedMobile
-          }
-          onChange={(e) =>
-            setEditForm({
-              ...editForm,
-              aadhaarLinkedMobile:
-                e.target.value,
-            })
-          }
-          className="rounded-xl border p-3"
-        />
+  <h3 className="col-span-full mt-4 text-lg font-bold text-gray-800">
+    DISCOM / Status
+  </h3>
 
-        <input
-          placeholder="Panel Brand"
-          value={editForm.panelBrand}
-          onChange={(e) =>
-            setEditForm({
-              ...editForm,
-              panelBrand:
-                e.target.value,
-            })
-          }
-          className="rounded-xl border p-3"
-        />
-
-        <input
-          placeholder="Converter Brand"
-          value={editForm.converterBrand}
-          onChange={(e) =>
-            setEditForm({
-              ...editForm,
-              converterBrand:
-                e.target.value,
-            })
-          }
-          className="rounded-xl border p-3"
-        />
-
-        <input
-          placeholder="Converter Capacity"
-          value={
-            editForm.converterCapacity
-          }
-          onChange={(e) =>
-            setEditForm({
-              ...editForm,
-              converterCapacity:
-                e.target.value,
-            })
-          }
-          className="rounded-xl border p-3"
-        />
-
-        <input
-          placeholder="Converter Phase"
-          value={editForm.converterPhase}
-          onChange={(e) =>
-            setEditForm({
-              ...editForm,
-              converterPhase:
-                e.target.value,
-            })
-          }
-          className="rounded-xl border p-3"
-        />
-
-        <input
-          placeholder="Structure Type"
-          value={editForm.structureType}
-          onChange={(e) =>
-            setEditForm({
-              ...editForm,
-              structureType:
-                e.target.value,
-            })
-          }
-          className="rounded-xl border p-3"
-        />
-
-        <input
-          placeholder="Building Height"
-          value={editForm.buildingHeight}
-          onChange={(e) =>
-            setEditForm({
-              ...editForm,
-              buildingHeight:
-                e.target.value,
-            })
-          }
-          className="rounded-xl border p-3"
-        />
-
-        <input
-          placeholder="DISCOM Name"
-          value={editForm.discomName}
-          onChange={(e) =>
-            setEditForm({
-              ...editForm,
-              discomName:
-                e.target.value,
-            })
-          }
-          className="rounded-xl border p-3"
-        />
-      </div>
+  <input placeholder="DISCOM Name" value={editForm.discomName} onChange={(e) => setEditForm({ ...editForm, discomName: e.target.value })} className="rounded-xl border p-3" />
+  <input placeholder="DISCOM Expenditure Type" value={editForm.discomExpenditureType} onChange={(e) => setEditForm({ ...editForm, discomExpenditureType: e.target.value })} className="rounded-xl border p-3" />
+  <input type="number" placeholder="DISCOM Expenditure Amount" value={editForm.discomExpenditureAmount} onChange={(e) => setEditForm({ ...editForm, discomExpenditureAmount: e.target.value })} className="rounded-xl border p-3" />
+  <input placeholder="Payment Status" value={editForm.paymentStatus} onChange={(e) => setEditForm({ ...editForm, paymentStatus: e.target.value })} className="rounded-xl border p-3" />
+</div>
 
       <textarea
         placeholder="Remarks"
