@@ -860,6 +860,49 @@ for (const key of Object.keys(safeData)) {
   }
 }
 
+const numberFields = [
+  'projectOwnerId',
+  'dcrPanelCount',
+  'nonDcrPanelCount',
+  'marginMoney',
+  'loanAmount',
+  'finalCost',
+  'projectCost',
+  'subsidy',
+  'netAmount',
+  'discomExpenditureAmount',
+  'expectedLagat',
+  'expectedProfit',
+];
+
+for (const field of numberFields) {
+  if (Object.prototype.hasOwnProperty.call(safeData, field)) {
+    const value = (safeData as any)[field];
+
+    (safeData as any)[field] =
+      value === '' || value === null || value === undefined
+        ? 0
+        : Number(value);
+  }
+}
+
+const dateFields = [
+  'startDate',
+  'expectedCompletionDate',
+  'actualCompletionDate',
+];
+
+for (const field of dateFields) {
+  if (Object.prototype.hasOwnProperty.call(safeData, field)) {
+    const value = (safeData as any)[field];
+
+    (safeData as any)[field] =
+      value === '' || value === null || value === undefined
+        ? null
+        : new Date(value);
+  }
+}
+
 Object.assign(project, safeData);
 
 const updatedProject =
