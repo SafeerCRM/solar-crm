@@ -122,9 +122,20 @@ const [projectOwners, setProjectOwners] = useState<ProjectOwnerOption[]>([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const totalAmount = rows.reduce((sum, item) => sum + Number(item.amount || 0), 0);
-  const totalPaid = rows.reduce((sum, item) => sum + Number(item.paidAmount || 0), 0);
-  const totalPending = rows.reduce((sum, item) => sum + Number(item.pendingAmount || 0), 0);
+  const totalAmount = rows.reduce(
+  (sum, item) => sum + Number(item.amount || 0),
+  0,
+);
+
+const totalPaid = rows.reduce(
+  (sum, item) =>
+    item.approvalStatus === 'APPROVED'
+      ? sum + Number(item.paidAmount || 0)
+      : sum,
+  0,
+);
+
+const totalPending = Math.max(totalAmount - totalPaid, 0);
 
   const clearFilters = () => {
     setBranch('');
