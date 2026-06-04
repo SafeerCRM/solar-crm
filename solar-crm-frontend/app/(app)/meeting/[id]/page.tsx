@@ -535,10 +535,28 @@ const reassignMeeting = async () => {
   const applyAction = async () => {
   if (!latestMeeting || !selectedAction) return;
 
-  if (selectedAction === 'CANCELLED' && !form.reason.trim()) {
-    setError('Please enter reason for cancelled action');
-    return;
-  }
+  const reasonOrRemarks = String(
+  form.reason || form.managerRemarks || '',
+).trim();
+
+const isCompletedSiteVisit =
+  selectedAction === 'COMPLETED' &&
+  latestMeeting.meetingType === 'SITE_VISIT';
+
+if (isCompletedSiteVisit && !reschedulePhotoFile) {
+  setError('Please attach GPS/Site photo before completing site visit');
+  return;
+}
+
+if (selectedAction === 'CANCELLED' && !reasonOrRemarks) {
+  setError('Please enter reason or manager remarks before cancelling meeting');
+  return;
+}
+
+if (selectedAction === 'ON_HOLD' && !reasonOrRemarks) {
+  setError('Please enter reason or manager remarks before putting meeting on hold');
+  return;
+}
 
   if (selectedAction === 'RESCHEDULED' && !form.scheduledAt) {
     setError('Please select new scheduled time for rescheduled action');
@@ -562,7 +580,7 @@ const reassignMeeting = async () => {
     let gpsPhotoUrl = '';
     let audioUrl = '';
 
-    if (selectedAction === 'RESCHEDULED') {
+    if (selectedAction === 'RESCHEDULED' || isCompletedSiteVisit) {
       if (reschedulePhotoFile) {
         gpsPhotoUrl = await uploadMeetingProof(reschedulePhotoFile);
       }
@@ -610,6 +628,11 @@ const reassignMeeting = async () => {
 
 const createMeetingFollowUp = async () => {
   if (!latestMeeting) return;
+
+  if (!followUpNote.trim()) {
+  setError('Please enter follow-up note');
+  return;
+}
 
   if (!followUpDate) {
     setError('Please choose follow-up date and time');
@@ -1187,14 +1210,19 @@ const createMeetingFollowUp = async () => {
             </select>
           </div>
 
-          {selectedAction === 'RESCHEDULED' && (
+          {(selectedAction === 'RESCHEDULED' ||
+  (selectedAction === 'COMPLETED' && latestMeeting.meetingType === 'SITE_VISIT')) && (
   <div className="md:col-span-2 rounded-xl border border-yellow-200 bg-yellow-50 p-4">
     <h3 className="mb-3 font-semibold text-yellow-900">
-      Reschedule Proof Required
+      {selectedAction === 'RESCHEDULED'
+  ? 'Reschedule Proof Required'
+  : 'Site Visit Completion Proof Required'}
     </h3>
 
     <p className="mb-3 text-sm text-yellow-800">
-      Attach GPS/site photo or audio recording before saving reschedule.
+      {selectedAction === 'RESCHEDULED'
+  ? 'Attach GPS/site photo or audio recording before saving reschedule.'
+  : 'Attach GPS/site photo before completing this site visit.'}
     </p>
 
     <div className="grid gap-4 md:grid-cols-2">
