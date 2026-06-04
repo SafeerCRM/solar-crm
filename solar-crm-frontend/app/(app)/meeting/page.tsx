@@ -77,6 +77,8 @@ const [editingCustomerName, setEditingCustomerName] = useState('');
  const [meetingManagerName, setMeetingManagerName] = useState('');
 const [meetingManagerId, setMeetingManagerId] = useState('');
 const [meetingManagers, setMeetingManagers] = useState<User[]>([]);
+const [bulkAssignMeetingManagerId, setBulkAssignMeetingManagerId] = useState('');
+const [bulkAssigning, setBulkAssigning] = useState(false);
 const [meetingCategory, setMeetingCategory] = useState('');
 const [meetingStatus, setMeetingStatus] = useState('');
 const [month, setMonth] = useState('');
@@ -324,6 +326,82 @@ const stopMeetingAutoCall = () => {
   setCalledMeetingIds([]);
 };
 
+const bulkAssignFilteredMeetings = async () => {
+  if (!bulkAssignMeetingManagerId) {
+    setMessage('Please select meeting manager for bulk assignment.');
+    return;
+  }
+
+  const selectedManager = meetingManagers.find(
+    (manager) => String(manager.id) === String(bulkAssignMeetingManagerId),
+  );
+
+  if (!selectedManager) {
+    setMessage('Selected meeting manager not found.');
+    return;
+  }
+
+  const hasAnyFilter =
+    !!meetingManagerId ||
+    !!meetingStatus ||
+    !!meetingCategory ||
+    !!month ||
+    !!searchName.trim() ||
+    !!searchPhone.trim() ||
+    !!searchLocation.trim();
+
+  if (!hasAnyFilter) {
+    setMessage('Please apply at least one filter before bulk assigning meetings.');
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `This will assign all meetings matching current filters to ${selectedManager.name}. Continue?`,
+  );
+
+  if (!confirmed) return;
+
+  try {
+    setBulkAssigning(true);
+    setMessage('');
+
+    const res = await axios.patch(
+      `${backendUrl}/meetings/bulk/reassign`,
+      {
+        assignedTo: selectedManager.id,
+        assignedToName: selectedManager.name,
+        filters: {
+          assignedTo: meetingManagerId || undefined,
+          status: meetingStatus || undefined,
+          meetingCategory: meetingCategory || undefined,
+          month: month || undefined,
+          customerName: searchName.trim() || undefined,
+          mobile: searchPhone.trim() || undefined,
+          location: searchLocation.trim() || undefined,
+        },
+      },
+      { headers: getAuthHeaders() },
+    );
+
+    setMessage(
+      res.data?.message
+        ? `${res.data.message}. Updated: ${res.data.affected || 0}`
+        : 'Filtered meetings reassigned successfully.',
+    );
+
+    setMeetingPage(1);
+    await fetchMeetings(1);
+  } catch (err: any) {
+    console.error(err);
+    setMessage(
+      err?.response?.data?.message ||
+        'Failed to bulk assign filtered meetings.',
+    );
+  } finally {
+    setBulkAssigning(false);
+  }
+};
+
   const clearFilters = () => {
     setSearchName('');
     setSearchPhone('');
@@ -463,6 +541,41 @@ const stopMeetingAutoCall = () => {
           className="rounded border p-2"
         />
       </div>
+
+      <div className="mb-4 rounded-xl border border-orange-200 bg-orange-50 p-4">
+  <div className="mb-2">
+    <p className="text-sm font-semibold text-orange-800">
+      Bulk Assign Filtered Meetings
+    </p>
+    <p className="text-xs text-orange-700">
+      Apply at least one filter first, then assign all matching meetings to a meeting manager.
+    </p>
+  </div>
+
+  <div className="flex flex-col gap-2 md:flex-row md:items-center">
+    <select
+      value={bulkAssignMeetingManagerId}
+      onChange={(e) => setBulkAssignMeetingManagerId(e.target.value)}
+      className="rounded border p-2 text-sm"
+    >
+      <option value="">Select Meeting Manager</option>
+      {meetingManagers.map((manager) => (
+        <option key={`bulk-${manager.id}`} value={manager.id}>
+          {manager.name} ({manager.id})
+        </option>
+      ))}
+    </select>
+
+    <button
+      type="button"
+      onClick={bulkAssignFilteredMeetings}
+      disabled={bulkAssigning}
+      className="rounded bg-orange-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+    >
+      {bulkAssigning ? 'Assigning...' : 'Assign All Filtered Meetings'}
+    </button>
+  </div>
+</div>
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-sm text-gray-600">
         <div>
