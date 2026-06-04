@@ -88,7 +88,13 @@ type User = {
   roles?: string[];
 };
 
-type ActionOption = '' | 'COMPLETED' | 'CANCELLED' | 'ON_HOLD' | 'RESCHEDULED';
+type ActionOption =
+  | ''
+  | 'COMPLETED'
+  | 'CANCELLED'
+  | 'ON_HOLD'
+  | 'RESCHEDULED'
+  | 'CNR';
 
 const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -372,6 +378,8 @@ const updateFollowUpTimePart = (newTime: Dayjs | null) => {
         return 'bg-purple-600';
       case 'ON_HOLD':
         return 'bg-orange-600';
+      case 'CNR':
+        return 'bg-orange-500';
       case 'NO_SHOW':
         return 'bg-gray-600';
       default:
@@ -555,6 +563,13 @@ if (selectedAction === 'CANCELLED' && !reasonOrRemarks) {
 
 if (selectedAction === 'ON_HOLD' && !reasonOrRemarks) {
   setError('Please enter reason or manager remarks before putting meeting on hold');
+  return;
+}
+
+if (selectedAction === 'CNR' && !reasonOrRemarks) {
+  setError(
+    'Please enter reason or manager remarks before marking CNR',
+  );
   return;
 }
 
@@ -1206,6 +1221,7 @@ const createMeetingFollowUp = async () => {
               <option value="COMPLETED">Completed</option>
               <option value="CANCELLED">Cancelled</option>
               <option value="ON_HOLD">On Hold</option>
+              <option value="CNR">Customer Not Responding (CNR)</option>
               <option value="RESCHEDULED">Rescheduled</option>
             </select>
           </div>
