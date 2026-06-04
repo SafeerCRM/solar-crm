@@ -987,6 +987,36 @@ if (actionData.status === MeetingStatus.CONVERTED_TO_PROJECT) {
   actionData.convertToProject = true;
 }
 
+const actionStatus = String(actionData.status || '');
+
+const isCompletedSiteVisit =
+  actionStatus === MeetingStatus.COMPLETED &&
+  existingMeeting.meetingType === 'SITE_VISIT';
+
+if (isCompletedSiteVisit && !actionData.gpsPhotoUrl) {
+  throw new BadRequestException(
+    'GPS/Site photo is required before completing a site visit',
+  );
+}
+
+if (
+  actionStatus === MeetingStatus.CANCELLED &&
+  !String(actionData.reason || actionData.managerRemarks || '').trim()
+) {
+  throw new BadRequestException(
+    'Reason or manager remarks are required before cancelling meeting',
+  );
+}
+
+if (
+  actionStatus === MeetingStatus.ON_HOLD &&
+  !String(actionData.reason || actionData.managerRemarks || '').trim()
+) {
+  throw new BadRequestException(
+    'Reason or manager remarks are required before putting meeting on hold',
+  );
+}
+
 if (actionData.status === MeetingStatus.RESCHEDULED) {
     if (!actionData.newScheduledAt) {
       throw new BadRequestException(
