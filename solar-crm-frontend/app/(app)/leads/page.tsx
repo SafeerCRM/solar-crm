@@ -1605,7 +1605,13 @@ disabled={isAutoCalling}
               <p className="text-lg font-semibold text-gray-900">
                 {activeAutoLead?.name || 'Unknown Lead'}
               </p>
-              <p className="text-sm text-gray-600">{activeAutoLead?.phone || '-'}</p>
+              <p className="text-sm text-gray-600">
+  Phone: {activeAutoLead?.phone || '-'}
+</p>
+
+<p className="text-sm text-gray-600">
+  City: {activeAutoLead?.city || '-'}
+</p>
             </div>
 
             <div className="flex flex-wrap gap-2">
