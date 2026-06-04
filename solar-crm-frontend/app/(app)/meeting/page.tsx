@@ -123,8 +123,13 @@ const [calledMeetingIds, setCalledMeetingIds] = useState<number[]>([]);
       setMonth(parsed.month || '');
 
       const savedPage = Number(parsed.meetingPage || 1);
+      const finalPage = savedPage > 0 ? savedPage : 1;
 
-      setMeetingPage(savedPage > 0 ? savedPage : 1);
+      setMeetingPage(finalPage);
+
+      setTimeout(() => {
+        fetchMeetings(finalPage);
+      }, 0);
     } catch (err) {
       console.error(err);
       fetchMeetings(1);
