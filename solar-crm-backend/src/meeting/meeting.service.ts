@@ -695,6 +695,109 @@ return {
   };
 }
 
+async bulkReassignMeetings(
+  body: {
+    assignedTo: number;
+    assignedToName: string;
+    filters?: any;
+  },
+  user: any,
+) {
+  if (!this.isOwner(user) && !this.isMarketingHead(user)) {
+    throw new ForbiddenException(
+      'Only owner or marketing head can bulk reassign meetings',
+    );
+  }
+
+  const assignedTo = Number(body.assignedTo);
+  const assignedToName = String(body.assignedToName || '').trim();
+  const filters = body.filters || {};
+
+  if (!assignedTo || Number.isNaN(assignedTo)) {
+    throw new BadRequestException('Valid meeting manager is required');
+  }
+
+  if (!assignedToName) {
+    throw new BadRequestException('Meeting manager name is required');
+  }
+
+  const hasAnyFilter =
+    !!String(filters.assignedTo || '').trim() ||
+    !!String(filters.status || '').trim() ||
+    !!String(filters.meetingCategory || '').trim() ||
+    !!String(filters.month || '').trim() ||
+    !!String(filters.customerName || '').trim() ||
+    !!String(filters.mobile || '').trim() ||
+    !!String(filters.location || '').trim();
+
+  if (!hasAnyFilter) {
+    throw new BadRequestException(
+      'Please apply at least one filter before bulk assigning meetings',
+    );
+  }
+
+  const qb = this.meetingRepository
+    .createQueryBuilder('meeting')
+    .update(Meeting)
+    .set({
+      assignedTo,
+      assignedToName,
+      updatedBy: this.getCurrentUserId(user),
+      updatedByName: this.getCurrentUserName(user),
+    });
+
+  const conditions: string[] = [];
+  const params: any = {};
+
+  if (filters.assignedTo) {
+    conditions.push('meeting.assignedTo = :currentAssignedTo');
+    params.currentAssignedTo = Number(filters.assignedTo);
+  }
+
+  if (filters.status) {
+    conditions.push('meeting.status = :status');
+    params.status = filters.status;
+  }
+
+  if (filters.meetingCategory) {
+    conditions.push('meeting.meetingCategory = :meetingCategory');
+    params.meetingCategory = filters.meetingCategory;
+  }
+
+  if (filters.month) {
+    conditions.push(`TO_CHAR(meeting.scheduledAt, 'YYYY-MM') = :month`);
+    params.month = filters.month;
+  }
+
+  if (filters.customerName) {
+    conditions.push('meeting.customerName ILIKE :customerName');
+    params.customerName = `%${filters.customerName}%`;
+  }
+
+  if (filters.mobile) {
+    conditions.push('meeting.mobile ILIKE :mobile');
+    params.mobile = `%${filters.mobile}%`;
+  }
+
+  if (filters.location) {
+    conditions.push(
+      '(meeting.address ILIKE :location OR meeting.gpsAddress ILIKE :location)',
+    );
+    params.location = `%${filters.location}%`;
+  }
+
+  qb.where(conditions.join(' AND '), params);
+
+  const result = await qb.execute();
+
+  return {
+    message: 'Filtered meetings reassigned successfully',
+    affected: result.affected || 0,
+    assignedTo,
+    assignedToName,
+  };
+}
+
   async update(
     id: number,
     updateMeetingDto: UpdateMeetingDto,
