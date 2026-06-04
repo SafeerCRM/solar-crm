@@ -1065,11 +1065,13 @@ return this.meetingRepository.save(existingMeeting);
       notes:
         actionData.notes ??
         existingMeeting.notes,
+      gpsPhotoUrl: actionData.gpsPhotoUrl,
+      audioUrl: actionData.audioUrl,
       convertToProject:
         actionData.convertToProject !== undefined
           ? Boolean(actionData.convertToProject)
           : existingMeeting.convertToProject,
-    },
+    } as any,
     user,
   );
 
