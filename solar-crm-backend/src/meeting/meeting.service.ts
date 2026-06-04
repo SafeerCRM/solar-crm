@@ -737,7 +737,7 @@ async bulkReassignMeetings(
   }
 
   const qb = this.meetingRepository
-    .createQueryBuilder('meeting')
+    .createQueryBuilder()
     .update(Meeting)
     .set({
       assignedTo,
@@ -750,38 +750,38 @@ async bulkReassignMeetings(
   const params: any = {};
 
   if (filters.assignedTo) {
-    conditions.push('meeting.assignedTo = :currentAssignedTo');
+    conditions.push('"assignedTo" = :currentAssignedTo');
     params.currentAssignedTo = Number(filters.assignedTo);
   }
 
   if (filters.status) {
-    conditions.push('meeting.status = :status');
+    conditions.push('"status" = :status');
     params.status = filters.status;
   }
 
   if (filters.meetingCategory) {
-    conditions.push('meeting.meetingCategory = :meetingCategory');
+    conditions.push('"meetingCategory" = :meetingCategory');
     params.meetingCategory = filters.meetingCategory;
   }
 
   if (filters.month) {
-    conditions.push(`TO_CHAR(meeting.scheduledAt, 'YYYY-MM') = :month`);
+    conditions.push(`TO_CHAR("scheduledAt", 'YYYY-MM') = :month`);
     params.month = filters.month;
   }
 
   if (filters.customerName) {
-    conditions.push('meeting.customerName ILIKE :customerName');
+    conditions.push('"customerName" ILIKE :customerName');
     params.customerName = `%${filters.customerName}%`;
   }
 
   if (filters.mobile) {
-    conditions.push('meeting.mobile ILIKE :mobile');
+    conditions.push('"mobile" ILIKE :mobile');
     params.mobile = `%${filters.mobile}%`;
   }
 
   if (filters.location) {
     conditions.push(
-      '(meeting.address ILIKE :location OR meeting.gpsAddress ILIKE :location)',
+      '("address" ILIKE :location OR "gpsAddress" ILIKE :location)',
     );
     params.location = `%${filters.location}%`;
   }
