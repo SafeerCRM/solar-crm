@@ -127,9 +127,7 @@ const [calledMeetingIds, setCalledMeetingIds] = useState<number[]>([]);
 
       setMeetingPage(finalPage);
 
-      setTimeout(() => {
-        fetchMeetings(finalPage);
-      }, 0);
+      fetchMeetings(finalPage, parsed);
     } catch (err) {
       console.error(err);
       fetchMeetings(1);
@@ -160,34 +158,45 @@ const saveMeetingFilters = (pageNumber = meetingPage) => {
   );
 };
 
-  const fetchMeetings = async (pageNumber = meetingPage) => {
+  const fetchMeetings = async (
+  pageNumber = meetingPage,
+  overrideFilters?: any,
+) => {
   try {
     setLoading(true);
     setMessage('');
+
+    const activeFilters = overrideFilters || {
+      meetingManagerName,
+      meetingManagerId,
+      meetingCategory,
+      meetingStatus,
+      month,
+    };
 
     const params: Record<string, string | number> = {
       page: pageNumber,
       limit: meetingLimit,
     };
 
-    if (meetingManagerName.trim()) {
-      params.assignedToName = meetingManagerName.trim();
+    if (String(activeFilters.meetingManagerName || '').trim()) {
+      params.assignedToName = String(activeFilters.meetingManagerName).trim();
     }
 
-    if (meetingManagerId.trim()) {
-      params.assignedTo = meetingManagerId.trim();
+    if (String(activeFilters.meetingManagerId || '').trim()) {
+      params.assignedTo = String(activeFilters.meetingManagerId).trim();
     }
 
-    if (meetingCategory.trim()) {
-      params.meetingCategory = meetingCategory.trim();
+    if (String(activeFilters.meetingCategory || '').trim()) {
+      params.meetingCategory = String(activeFilters.meetingCategory).trim();
     }
 
-    if (meetingStatus.trim()) {
-  params.status = meetingStatus.trim();
-}
+    if (String(activeFilters.meetingStatus || '').trim()) {
+      params.status = String(activeFilters.meetingStatus).trim();
+    }
 
-    if (month.trim()) {
-      params.month = month.trim();
+    if (String(activeFilters.month || '').trim()) {
+      params.month = String(activeFilters.month).trim();
     }
 
     const res = await axios.get(`${backendUrl}/meetings`, {
@@ -466,7 +475,13 @@ const bulkAssignFilteredMeetings = async () => {
   setMonth('');
   setMeetingPage(1);
 
-  fetchMeetings(1);
+  fetchMeetings(1, {
+    meetingManagerName: '',
+    meetingManagerId: '',
+    meetingCategory: '',
+    meetingStatus: '',
+    month: '',
+  });
 };
 
   return (
