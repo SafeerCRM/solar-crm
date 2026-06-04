@@ -1017,6 +1017,15 @@ if (
   );
 }
 
+if (
+  actionStatus === MeetingStatus.CNR &&
+  !String(actionData.reason || actionData.managerRemarks || '').trim()
+) {
+  throw new BadRequestException(
+    'Reason or manager remarks are required before marking CNR',
+  );
+}
+
 if (actionData.status === MeetingStatus.RESCHEDULED) {
     if (!actionData.newScheduledAt) {
       throw new BadRequestException(

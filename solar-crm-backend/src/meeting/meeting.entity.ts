@@ -16,6 +16,7 @@ export enum MeetingStatus {
   CANCELLED = 'CANCELLED',
   ON_HOLD = 'ON_HOLD',
   NO_SHOW = 'NO_SHOW',
+  CNR = 'CNR',
   CONVERTED_TO_PROJECT = 'CONVERTED_TO_PROJECT',
 }
 
