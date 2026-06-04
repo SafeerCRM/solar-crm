@@ -55,6 +55,8 @@ type QuickLeadCallModalState = {
 
 const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
+const LEAD_FILTER_STORAGE_KEY = 'leadPageFilters';
+
 export default function LeadsPage() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -156,9 +158,35 @@ const canAssignLeads = isOwner;
 }, []);
 
   useEffect(() => {
-  fetchLeads(1);
+  const savedFilters = sessionStorage.getItem(LEAD_FILTER_STORAGE_KEY);
+
+  if (savedFilters) {
+    try {
+      const parsed = JSON.parse(savedFilters);
+
+      setSearchName(parsed.searchName || '');
+      setSearchPhone(parsed.searchPhone || '');
+      setSearchCity(parsed.searchCity || '');
+      setPotentialFilter(parsed.potentialFilter || '');
+      setContactedStatusFilter(parsed.contactedStatusFilter || '');
+      setLeadManagerFilter(parsed.leadManagerFilter || '');
+
+      const savedPage = Number(parsed.leadPage || 1);
+      const finalPage = savedPage > 0 ? savedPage : 1;
+
+      setLeadPage(finalPage);
+      fetchLeads(finalPage, parsed);
+    } catch (err) {
+      console.error(err);
+      fetchLeads(1);
+    }
+  } else {
+    fetchLeads(1);
+  }
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, []);
+
   useEffect(() => {
     return () => {
       clearAutoTimers();
@@ -314,22 +342,53 @@ const canAssignLeads = isOwner;
     setFilteredLeads(filtered);
   }, [searchName, searchPhone, searchCity, potentialFilter, leads]);
 
-  const fetchLeads = async (pageNumber = 1) => {
-    if (loadingLeads) return;
+  const saveLeadFilters = (pageNumber = leadPage) => {
+  sessionStorage.setItem(
+    LEAD_FILTER_STORAGE_KEY,
+    JSON.stringify({
+      searchName,
+      searchPhone,
+      searchCity,
+      potentialFilter,
+      contactedStatusFilter,
+      leadManagerFilter,
+      leadPage: pageNumber,
+    }),
+  );
+};
+
+  const fetchLeads = async (
+  pageNumber = 1,
+  overrideFilters?: any,
+) => {
+  if (loadingLeads) return;
+
   try {
     setLoadingLeads(true);
+
+    const activeFilters = overrideFilters || {
+      searchName,
+      searchPhone,
+      searchCity,
+      potentialFilter,
+      contactedStatusFilter,
+      leadManagerFilter,
+    };
 
     const res = await axios.get(`${backendUrl}/leads`, {
       headers: getAuthHeaders(),
       params: {
         page: pageNumber,
         limit: leadLimit,
-        search: searchName || undefined,
-        phone: searchPhone || undefined,
-        city: searchCity || undefined,
-        potentialPercentage: potentialFilter || undefined,
-        contactedStatus: contactedStatusFilter || undefined,
-        assignedTo: leadManagerFilter || undefined,
+        search: String(activeFilters.searchName || '').trim() || undefined,
+        phone: String(activeFilters.searchPhone || '').trim() || undefined,
+        city: String(activeFilters.searchCity || '').trim() || undefined,
+        potentialPercentage:
+          String(activeFilters.potentialFilter || '').trim() || undefined,
+        contactedStatus:
+          String(activeFilters.contactedStatusFilter || '').trim() || undefined,
+        assignedTo:
+          String(activeFilters.leadManagerFilter || '').trim() || undefined,
       },
     });
 
@@ -770,6 +829,8 @@ const handleSelectAllFilteredStorage = async () => {
   };
 
     const clearFilters = () => {
+  sessionStorage.removeItem(LEAD_FILTER_STORAGE_KEY);
+
   setSearchName('');
   setSearchPhone('');
   setSearchCity('');
@@ -778,7 +839,15 @@ const handleSelectAllFilteredStorage = async () => {
   setLeadManagerFilter('');
   setSelectedCalendarDate(null);
   setLeadPage(1);
-  setTimeout(() => fetchLeads(1), 0);
+
+  fetchLeads(1, {
+    searchName: '',
+    searchPhone: '',
+    searchCity: '',
+    potentialFilter: '',
+    contactedStatusFilter: '',
+    leadManagerFilter: '',
+  });
 };
 
     const LEAD_STAGES = [
@@ -1379,7 +1448,10 @@ disabled={isAutoCalling}
           <div className="flex flex-wrap gap-2">
   <button
     type="button"
-    onClick={() => fetchLeads(1)}
+    onClick={() => {
+  saveLeadFilters(1);
+  fetchLeads(1);
+}}
     className="rounded bg-indigo-600 px-3 py-1 text-white"
   >
     Apply Lead Filters
