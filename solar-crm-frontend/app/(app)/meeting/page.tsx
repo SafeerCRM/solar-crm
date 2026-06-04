@@ -57,6 +57,8 @@ type User = {
 
 const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
+const MEETING_FILTER_STORAGE_KEY = 'meetingPageFilters';
+
 export default function MeetingPage() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [meetingPage, setMeetingPage] = useState(1);
@@ -103,11 +105,55 @@ const [calledMeetingIds, setCalledMeetingIds] = useState<number[]>([]);
     }
   }
 
-  fetchMeetings(meetingPage);
+  const savedFilters = sessionStorage.getItem(
+    MEETING_FILTER_STORAGE_KEY,
+  );
+
+  if (savedFilters) {
+    try {
+      const parsed = JSON.parse(savedFilters);
+
+      setSearchName(parsed.searchName || '');
+      setSearchPhone(parsed.searchPhone || '');
+      setSearchLocation(parsed.searchLocation || '');
+      setMeetingManagerName(parsed.meetingManagerName || '');
+      setMeetingManagerId(parsed.meetingManagerId || '');
+      setMeetingCategory(parsed.meetingCategory || '');
+      setMeetingStatus(parsed.meetingStatus || '');
+      setMonth(parsed.month || '');
+
+      const savedPage = Number(parsed.meetingPage || 1);
+
+      setMeetingPage(savedPage > 0 ? savedPage : 1);
+    } catch (err) {
+      console.error(err);
+      fetchMeetings(1);
+    }
+  } else {
+    fetchMeetings(1);
+  }
+
   fetchMeetingManagers();
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [meetingPage]);
+}, []);
+
+const saveMeetingFilters = (pageNumber = meetingPage) => {
+  sessionStorage.setItem(
+    MEETING_FILTER_STORAGE_KEY,
+    JSON.stringify({
+      searchName,
+      searchPhone,
+      searchLocation,
+      meetingManagerName,
+      meetingManagerId,
+      meetingCategory,
+      meetingStatus,
+      month,
+      meetingPage: pageNumber,
+    }),
+  );
+};
 
   const fetchMeetings = async (pageNumber = meetingPage) => {
   try {
@@ -403,15 +449,20 @@ const bulkAssignFilteredMeetings = async () => {
 };
 
   const clearFilters = () => {
-    setSearchName('');
-    setSearchPhone('');
-    setSearchLocation('');
-    setMeetingManagerName('');
-    setMeetingManagerId('');
-    setMeetingCategory('');
-    setMeetingStatus('');
-    setMonth('');
-  };
+  sessionStorage.removeItem(MEETING_FILTER_STORAGE_KEY);
+
+  setSearchName('');
+  setSearchPhone('');
+  setSearchLocation('');
+  setMeetingManagerName('');
+  setMeetingManagerId('');
+  setMeetingCategory('');
+  setMeetingStatus('');
+  setMonth('');
+  setMeetingPage(1);
+
+  fetchMeetings(1);
+};
 
   return (
     <div className="p-6">
@@ -585,9 +636,10 @@ const bulkAssignFilteredMeetings = async () => {
         <div className="flex gap-2">
           <button
   onClick={() => {
-    setMeetingPage(1);
-    fetchMeetings(1);
-  }}
+  saveMeetingFilters(1);
+  setMeetingPage(1);
+  fetchMeetings(1);
+}}
   disabled={loading}
   className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-blue-700 hover:to-indigo-700 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
 >
@@ -825,7 +877,14 @@ const bulkAssignFilteredMeetings = async () => {
       <div className="mt-4 flex items-center justify-between rounded-xl bg-white p-4 shadow">
         <button
           type="button"
-          onClick={() => setMeetingPage((p) => Math.max(1, p - 1))}
+          onClick={() => {
+  setMeetingPage((p) => {
+    const nextPage = Math.max(1, p - 1);
+    saveMeetingFilters(nextPage);
+    fetchMeetings(nextPage);
+    return nextPage;
+  });
+}}
           disabled={meetingPage <= 1}
           className="rounded bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 disabled:opacity-50"
         >
@@ -838,11 +897,15 @@ const bulkAssignFilteredMeetings = async () => {
 
         <button
           type="button"
-          onClick={() =>
-            setMeetingPage((p) =>
-              p >= Math.ceil(meetingTotal / meetingLimit) ? p : p + 1,
-            )
-          }
+          onClick={() => {
+  setMeetingPage((p) => {
+    const totalPages = Math.ceil(meetingTotal / meetingLimit);
+    const nextPage = p >= totalPages ? p : p + 1;
+    saveMeetingFilters(nextPage);
+    fetchMeetings(nextPage);
+    return nextPage;
+  });
+}}
           disabled={meetingPage >= Math.ceil(meetingTotal / meetingLimit)}
           className="rounded bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 disabled:opacity-50"
         >
