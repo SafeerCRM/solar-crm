@@ -20,6 +20,15 @@ const [receiveLoading, setReceiveLoading] = useState(false);
 
 const [issueLoading, setIssueLoading] = useState(false);
 
+const [transferLoading, setTransferLoading] = useState(false);
+
+const [transferForm, setTransferForm] = useState({
+  sourceStockItemId: '',
+  destinationBranchId: '',
+  quantity: '',
+  remarks: '',
+});
+
 const [issueForm, setIssueForm] = useState({
   stockItemId: '',
   quantity: '',
@@ -724,6 +733,68 @@ const issueStock = async () => {
   }
 };
 
+const transferStock = async () => {
+  if (!transferForm.sourceStockItemId) {
+    alert('Please select source stock item');
+    return;
+  }
+
+  if (!transferForm.destinationBranchId) {
+    alert('Please select destination branch');
+    return;
+  }
+
+  if (!transferForm.quantity) {
+    alert('Please enter quantity');
+    return;
+  }
+
+  try {
+    setTransferLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/stock/transfer`,
+      {
+        sourceStockItemId: transferForm.sourceStockItemId,
+        destinationBranchId: transferForm.destinationBranchId,
+        quantity: transferForm.quantity,
+        remarks: transferForm.remarks,
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Stock transferred successfully');
+
+    setTransferForm({
+      sourceStockItemId: '',
+      destinationBranchId: '',
+      quantity: '',
+      remarks: '',
+    });
+
+    await loadStockItems(1);
+    await loadStockMovements(1);
+    await loadBranchWiseStock();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to transfer stock',
+    );
+  } finally {
+    setTransferLoading(false);
+  }
+};
+
 const hideStockItem = async (stockItemId: number) => {
   const hiddenReason = window.prompt(
     'Enter hide reason',
@@ -1188,6 +1259,99 @@ const restoreStockMovement = async (movementId: number) => {
         })
       }
       className="rounded-xl border p-3 text-sm md:col-span-2"
+    />
+  </div>
+</div>
+
+<div className="rounded-2xl bg-white p-5 shadow">
+  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <div>
+      <h2 className="text-xl font-bold text-gray-800">
+        Branch Stock Transfer
+      </h2>
+
+      <p className="mt-1 text-sm text-gray-500">
+        Transfer material from Kota Warehouse or any branch to another branch.
+      </p>
+    </div>
+
+    <button
+      type="button"
+      onClick={transferStock}
+      disabled={transferLoading}
+      className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white"
+    >
+      {transferLoading ? 'Transferring...' : 'Transfer Stock'}
+    </button>
+  </div>
+
+  <div className="mt-4 grid gap-3 md:grid-cols-2">
+    <select
+      value={transferForm.sourceStockItemId}
+      onChange={(e) =>
+        setTransferForm({
+          ...transferForm,
+          sourceStockItemId: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    >
+      <option value="">Select Source Stock Item</option>
+
+      {stockItems.map((item: any) => (
+        <option key={item.id} value={item.id}>
+          {item.materialName}
+          {item.branchName ? ` - ${item.branchName}` : ''}
+          {` | Available: ${Number(
+            item.currentQuantity || 0,
+          ).toLocaleString('en-IN')}`}
+        </option>
+      ))}
+    </select>
+
+    <select
+      value={transferForm.destinationBranchId}
+      onChange={(e) =>
+        setTransferForm({
+          ...transferForm,
+          destinationBranchId: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    >
+      <option value="">Select Destination Branch</option>
+
+      {branches.map((branch: any) => (
+        <option key={branch.id} value={branch.id}>
+          {branch.name}
+        </option>
+      ))}
+    </select>
+
+    <input
+      type="number"
+      placeholder="Transfer Quantity"
+      value={transferForm.quantity}
+      onChange={(e) =>
+        setTransferForm({
+          ...transferForm,
+          quantity: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    />
+
+    <input
+      type="text"
+      placeholder="Remarks"
+      value={transferForm.remarks}
+      onChange={(e) =>
+        setTransferForm({
+          ...transferForm,
+          remarks: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
     />
   </div>
 </div>
