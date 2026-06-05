@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import CustomerUpdatesTab from '@/app/components/meeting/project/CustomerUpdatesTab';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -3256,6 +3257,10 @@ const remainingAmountToCollect =
       label: 'Payment Collection',
     },
     {
+  key: 'CUSTOMER_UPDATES',
+  label: 'Customer Updates',
+},
+    {
       key: 'DOCUMENTS',
       label: 'Documents',
     },
@@ -6111,6 +6116,10 @@ const remainingAmountToCollect =
       </div>
     </div>
   </div>
+)}
+
+{activeTab === 'CUSTOMER_UPDATES' && (
+  <CustomerUpdatesTab projectId={projectId} />
 )}
 
 {activeTab === 'DOCUMENTS' && (
