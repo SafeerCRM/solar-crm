@@ -141,6 +141,8 @@ import {
 
 import { ProjectConsumption } from './project-consumption.entity';
 
+import { ProjectCustomerUpdate } from './project-customer-update.entity';
+
 @Injectable()
 export class ProjectService {
 
@@ -357,6 +359,9 @@ private readonly projectLoanCoApplicantRepository: Repository<ProjectLoanCoAppli
 
 @InjectRepository(ProjectConsumption)
 private readonly projectConsumptionRepository: Repository<ProjectConsumption>,
+
+@InjectRepository(ProjectCustomerUpdate)
+private readonly projectCustomerUpdateRepository: Repository<ProjectCustomerUpdate>,
 
     private readonly calculatorService: CalculatorService,
 
@@ -11041,6 +11046,126 @@ async getMyContractorProjects(user: any) {
     where: { contractorId },
     order: { scheduledDate: 'DESC' },
   });
+}
+
+async createCustomerUpdate(projectId: number, body: any, user: any) {
+  const project = await this.projectRepository.findOne({
+    where: { id: projectId },
+  });
+
+  if (!project) {
+    throw new NotFoundException('Project not found');
+  }
+
+  if (!body?.title && !body?.description) {
+    throw new BadRequestException('Update title or description is required');
+  }
+
+  const update = this.projectCustomerUpdateRepository.create({
+    projectId,
+    title: body?.title || '',
+    description: body?.description || '',
+    updateType: body?.updateType || 'GENERAL',
+    attachmentUrl: body?.attachmentUrl || '',
+    attachmentName: body?.attachmentName || '',
+    visibleToCustomer:
+      body?.visibleToCustomer === true ||
+      body?.visibleToCustomer === 'true',
+    createdBy: user?.id || user?.userId || null,
+    createdByName: user?.name || user?.email || '',
+    createdByRole: Array.isArray(user?.roles)
+      ? user.roles.join(', ')
+      : '',
+  });
+
+  return this.projectCustomerUpdateRepository.save(update);
+}
+
+async getCustomerUpdates(
+  projectId: number,
+  filters: {
+    page?: number;
+    limit?: number;
+    showHidden?: string;
+    customerView?: string;
+  },
+  user: any,
+) {
+  const project = await this.projectRepository.findOne({
+    where: { id: projectId },
+  });
+
+  if (!project) {
+    throw new NotFoundException('Project not found');
+  }
+
+  const page = Number(filters?.page) > 0 ? Number(filters.page) : 1;
+  const limit =
+    Number(filters?.limit) > 0 ? Math.min(Number(filters.limit), 100) : 20;
+  const skip = (page - 1) * limit;
+
+  const query = this.projectCustomerUpdateRepository
+    .createQueryBuilder('update')
+    .where('update.projectId = :projectId', { projectId });
+
+  if (filters?.showHidden === 'true') {
+    query.andWhere('update.isHidden = true');
+  } else {
+    query.andWhere('update.isHidden = false');
+  }
+
+  if (filters?.customerView === 'true') {
+    query.andWhere('update.visibleToCustomer = true');
+  }
+
+  query.orderBy('update.createdAt', 'DESC');
+  query.skip(skip).take(limit);
+
+  const [data, total] = await query.getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
+}
+
+async hideCustomerUpdate(updateId: number, body: any, user: any) {
+  const update = await this.projectCustomerUpdateRepository.findOne({
+    where: { id: updateId },
+  });
+
+  if (!update) {
+    throw new NotFoundException('Customer update not found');
+  }
+
+  update.isHidden = true;
+  update.hiddenReason = body?.reason || '';
+  update.hiddenAt = new Date();
+  update.hiddenBy = user?.id || user?.userId || null;
+  update.hiddenByName = user?.name || user?.email || '';
+
+  return this.projectCustomerUpdateRepository.save(update);
+}
+
+async restoreCustomerUpdate(updateId: number, body: any, user: any) {
+  const update = await this.projectCustomerUpdateRepository.findOne({
+    where: { id: updateId },
+  });
+
+  if (!update) {
+    throw new NotFoundException('Customer update not found');
+  }
+
+  update.isHidden = false;
+  update.restoreReason = body?.reason || '';
+  update.restoredAt = new Date();
+  update.restoredBy = user?.id || user?.userId || null;
+  update.restoredByName = user?.name || user?.email || '';
+
+  return this.projectCustomerUpdateRepository.save(update);
 }
 
 async createProjectContractor(body: any, user: any) {

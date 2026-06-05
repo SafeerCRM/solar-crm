@@ -1743,6 +1743,66 @@ async hidePaymentInstallment(
   );
 }
 
+@Post(':id/customer-updates')
+createCustomerUpdate(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.createCustomerUpdate(
+    Number(id),
+    body,
+    user,
+  );
+}
+
+@Get(':id/customer-updates')
+getCustomerUpdates(
+  @Param('id') id: string,
+  @Query('page') page?: string,
+  @Query('limit') limit?: string,
+  @Query('showHidden') showHidden?: string,
+  @Query('customerView') customerView?: string,
+  @CurrentUser() user?: any,
+) {
+  return this.projectService.getCustomerUpdates(
+    Number(id),
+    {
+      page: Number(page || 1),
+      limit: Number(limit || 20),
+      showHidden: showHidden || 'false',
+      customerView: customerView || 'false',
+    },
+    user,
+  );
+}
+
+@Patch('customer-updates/:id/hide')
+hideCustomerUpdate(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.hideCustomerUpdate(
+    Number(id),
+    body,
+    user,
+  );
+}
+
+@Patch('customer-updates/:id/restore')
+restoreCustomerUpdate(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.restoreCustomerUpdate(
+    Number(id),
+    body,
+    user,
+  );
+}
+
 @Patch(':id/hide')
 hideProject(
   @Param('id', ParseIntPipe) id: number,
