@@ -1755,6 +1755,178 @@ createdBy: currentUser?.id || currentUser?.userId || undefined,
   return stockItem;
 }
 
+async transferProjectStock(body: any, currentUser: any) {
+  const sourceStockItemId = Number(body?.sourceStockItemId || 0);
+  const destinationBranchId = Number(body?.destinationBranchId || 0);
+  const quantity = Number(body?.quantity || 0);
+
+  if (!sourceStockItemId) {
+    throw new BadRequestException('Source stock item is required');
+  }
+
+  if (!destinationBranchId) {
+    throw new BadRequestException('Destination branch is required');
+  }
+
+  if (!quantity || quantity <= 0) {
+    throw new BadRequestException('Valid quantity is required');
+  }
+
+  return this.projectStockItemRepository.manager.transaction(
+    async (manager) => {
+      const stockRepo = manager.getRepository(ProjectStockItem);
+      const movementRepo = manager.getRepository(ProjectStockMovement);
+      const branchRepo = manager.getRepository(ProjectBranch);
+
+      const sourceStock = await stockRepo.findOne({
+        where: {
+          id: sourceStockItemId,
+          isHidden: false,
+        },
+      });
+
+      if (!sourceStock) {
+        throw new NotFoundException('Source stock item not found');
+      }
+
+      if (Number(sourceStock.currentQuantity || 0) < quantity) {
+        throw new BadRequestException('Insufficient stock quantity');
+      }
+
+      if (
+        sourceStock.branchId &&
+        Number(sourceStock.branchId) === destinationBranchId
+      ) {
+        throw new BadRequestException(
+          'Source and destination branch cannot be same',
+        );
+      }
+
+      const destinationBranch = await branchRepo.findOne({
+        where: {
+          id: destinationBranchId,
+        },
+      });
+
+      if (!destinationBranch) {
+        throw new NotFoundException('Destination branch not found');
+      }
+
+      const rate = Number(sourceStock.averageRate || 0);
+      const transferValue = quantity * rate;
+
+      sourceStock.currentQuantity =
+        Number(sourceStock.currentQuantity || 0) - quantity;
+
+      sourceStock.stockValue =
+        Number(sourceStock.currentQuantity || 0) * rate;
+
+      const savedSourceStock = await stockRepo.save(sourceStock);
+
+      let destinationStock = await stockRepo.findOne({
+        where: {
+          materialId: savedSourceStock.materialId,
+          branchId: destinationBranchId,
+          isHidden: false,
+        },
+      });
+
+      if (!destinationStock) {
+        destinationStock = stockRepo.create({
+          materialId: savedSourceStock.materialId,
+          materialName: savedSourceStock.materialName,
+          category: savedSourceStock.category,
+          brand: savedSourceStock.brand,
+          unit: savedSourceStock.unit,
+          branchId: destinationBranch.id,
+          branchName: destinationBranch.name,
+          currentQuantity: 0,
+          averageRate: 0,
+          stockValue: 0,
+        });
+      }
+
+      const destinationOldQty = Number(
+        destinationStock.currentQuantity || 0,
+      );
+      const destinationOldValue = Number(
+        destinationStock.stockValue || 0,
+      );
+
+      const destinationNewQty = destinationOldQty + quantity;
+      const destinationNewValue = destinationOldValue + transferValue;
+
+      destinationStock.currentQuantity = destinationNewQty;
+      destinationStock.stockValue = destinationNewValue;
+      destinationStock.averageRate =
+        destinationNewQty > 0
+          ? destinationNewValue / destinationNewQty
+          : 0;
+
+      const savedDestinationStock =
+        await stockRepo.save(destinationStock);
+
+      const transferRemarks =
+        body?.remarks ||
+        `Stock transferred from ${
+          savedSourceStock.branchName || 'source branch'
+        } to ${savedDestinationStock.branchName || 'destination branch'}`;
+
+      const transferOutMovement = await movementRepo.save(
+        movementRepo.create({
+          stockItemId: savedSourceStock.id,
+          materialId: savedSourceStock.materialId,
+          materialName: savedSourceStock.materialName,
+          branchId: savedSourceStock.branchId || undefined,
+          branchName: savedSourceStock.branchName || undefined,
+          movementType: ProjectStockMovementType.TRANSFER_OUT,
+          quantity,
+          rate,
+          totalAmount: transferValue,
+          sourceType: 'BRANCH_TRANSFER',
+          remarks: transferRemarks,
+          createdBy:
+            currentUser?.id ||
+            currentUser?.userId ||
+            undefined,
+          createdByName: currentUser?.name || '',
+        }),
+      );
+
+      const transferInMovement = await movementRepo.save(
+        movementRepo.create({
+          stockItemId: savedDestinationStock.id,
+          materialId: savedDestinationStock.materialId,
+          materialName: savedDestinationStock.materialName,
+          branchId: savedDestinationStock.branchId || undefined,
+          branchName: savedDestinationStock.branchName || undefined,
+          movementType: ProjectStockMovementType.TRANSFER_IN,
+          quantity,
+          rate,
+          totalAmount: transferValue,
+          sourceType: 'BRANCH_TRANSFER',
+          remarks: transferRemarks,
+          createdBy:
+            currentUser?.id ||
+            currentUser?.userId ||
+            undefined,
+          createdByName: currentUser?.name || '',
+        }),
+      );
+
+      return {
+        message: 'Stock transferred successfully',
+        sourceStock: savedSourceStock,
+        destinationStock: savedDestinationStock,
+        movements: {
+          transferOut: transferOutMovement,
+          transferIn: transferInMovement,
+        },
+      };
+    },
+  );
+}
+
 async listProjectStockMovements(query: any) {
   const {
     page = 1,

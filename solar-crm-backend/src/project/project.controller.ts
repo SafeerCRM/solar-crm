@@ -1165,6 +1165,18 @@ issueMaterialRequestItemStock(
   );
 }
 
+@Roles('OWNER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE')
+@Post('stock/transfer')
+transferProjectStock(
+  @Body() body: any,
+  @Req() req: any,
+) {
+  return this.projectService.transferProjectStock(
+    body,
+    req.user,
+  );
+}
+
 @Get(':id/loan-detail')
 getProjectLoanDetail(@Param('id') id: string) {
   return this.projectService.getProjectLoanDetail(Number(id));
