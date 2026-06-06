@@ -116,6 +116,13 @@ export class UsersController {
     return this.usersService.deleteUser(id, user);
   }
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER', 'MARKETING_HEAD', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER')
+@Get('customers')
+findCustomers() {
+  return this.usersService.findCustomers();
+}
+
   @UseGuards(JwtAuthGuard)
   @Get(':id')
   findById(@Param('id', ParseIntPipe) id: number) {

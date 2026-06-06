@@ -176,6 +176,18 @@ export class UsersService {
     });
   }
 
+  async findCustomers() {
+  return this.userRepository.find({
+    where: {
+      roles: Raw((alias) => `${alias} LIKE :role`, {
+        role: '%CUSTOMER%',
+      }),
+    },
+    select: ['id', 'name', 'email', 'roles'],
+    order: { id: 'ASC' },
+  });
+}
+
   async findAllUsers() {
     return this.userRepository.find({
       select: ['id', 'name', 'email', 'roles', 'createdAt'],

@@ -106,6 +106,12 @@ branchName: string;
   customerGmail: string;
 
   @Column({ nullable: true })
+customerUserId: number;
+
+@Column({ nullable: true })
+customerUserName: string;
+
+  @Column({ nullable: true })
   aadhaarLinkedMobile: string;
 
   @Column({ nullable: true })
