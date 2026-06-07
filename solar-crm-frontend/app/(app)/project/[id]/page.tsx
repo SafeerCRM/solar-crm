@@ -76,6 +76,8 @@ type Project = {
 projectOwnerRole?: string;
   electricityKNumber?: string;
   customerGmail?: string;
+  customerUserId?: number;
+customerUserName?: string;
   aadhaarLinkedMobile?: string;
   panelBrand?: string;
   dcrPanelCount?: number;
@@ -305,6 +307,12 @@ type ProjectContractorMaster = {
   linkedUserId?: number;
   remarks?: string;
   isActive?: boolean;
+};
+
+type CustomerUser = {
+  id: number;
+  name: string;
+  email?: string;
 };
 
 function money(value?: number) {
@@ -576,6 +584,8 @@ const [receivingPaymentId, setReceivingPaymentId] =
 const [editLoading, setEditLoading] =
   useState(false);
 
+  const [customers, setCustomers] = useState<CustomerUser[]>([]);
+
 const [editForm, setEditForm] = useState({
   customerName: '',
   customerPhone: '',
@@ -593,6 +603,8 @@ const [editForm, setEditForm] = useState({
 
   electricityKNumber: '',
   customerGmail: '',
+  customerUserId: '',
+customerUserName: '',
   aadhaarLinkedMobile: '',
 
   panelBrand: '',
@@ -994,6 +1006,8 @@ const openEditProject = () => {
 
     electricityKNumber: project.electricityKNumber || '',
     customerGmail: project.customerGmail || '',
+    customerUserId: String((project as any).customerUserId || ''),
+customerUserName: (project as any).customerUserName || '',
     aadhaarLinkedMobile: project.aadhaarLinkedMobile || '',
 
     panelBrand: project.panelBrand || '',
@@ -1815,6 +1829,20 @@ const fetchProjectEditHistory = async () => {
       'Failed to load project history:',
       error,
     );
+  }
+};
+
+const fetchCustomers = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(`${API_BASE_URL}/users/customers`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+
+    setCustomers(res.data || []);
+  } catch (error) {
+    console.error('Failed to load customers', error);
   }
 };
 
@@ -2664,6 +2692,7 @@ const canManageContractor = hasRole([
   useEffect(() => {
   if (projectId) {
     fetchProject();
+    fetchCustomers();
   }
 }, [projectId]);
 
@@ -3374,6 +3403,36 @@ const remainingAmountToCollect =
   <input placeholder="Project Size" value={editForm.projectSize} onChange={(e) => setEditForm({ ...editForm, projectSize: e.target.value })} className="rounded-xl border p-3" />
   <input placeholder="Electricity K Number" value={editForm.electricityKNumber} onChange={(e) => setEditForm({ ...editForm, electricityKNumber: e.target.value })} className="rounded-xl border p-3" />
   <input placeholder="Customer Gmail" value={editForm.customerGmail} onChange={(e) => setEditForm({ ...editForm, customerGmail: e.target.value })} className="rounded-xl border p-3" />
+  <select
+  value={editForm.customerUserId}
+  onChange={(e) => {
+    const selectedCustomer = customers.find(
+      (customer) =>
+        String(customer.id) === e.target.value,
+    );
+
+    setEditForm({
+      ...editForm,
+      customerUserId: e.target.value,
+      customerUserName:
+        selectedCustomer?.name || '',
+    });
+  }}
+  className="rounded-xl border p-3"
+>
+  <option value="">
+    Select Customer Account (Optional)
+  </option>
+
+  {customers.map((customer) => (
+    <option
+      key={customer.id}
+      value={customer.id}
+    >
+      {customer.name}
+    </option>
+  ))}
+</select>
   <input placeholder="Aadhaar Linked Mobile" value={editForm.aadhaarLinkedMobile} onChange={(e) => setEditForm({ ...editForm, aadhaarLinkedMobile: e.target.value })} className="rounded-xl border p-3" />
 
   <h3 className="col-span-full mt-4 text-lg font-bold text-gray-800">
@@ -3469,9 +3528,29 @@ const remainingAmountToCollect =
   label="Owner Role"
   value={project.projectOwnerRole || '-'}
 />
-          <Field label="Electricity K Number" value={project.electricityKNumber} />
-          <Field label="Gmail" value={project.customerGmail} />
-          <Field label="Aadhaar Linked Mobile" value={project.aadhaarLinkedMobile} />
+          <Field
+  label="Electricity K Number"
+  value={project.electricityKNumber}
+/>
+
+<Field
+  label="Gmail"
+  value={project.customerGmail}
+/>
+
+<Field
+  label="Customer Account"
+  value={
+    project.customerUserName
+      ? `${project.customerUserName} (#${project.customerUserId})`
+      : 'Not linked'
+  }
+/>
+
+<Field
+  label="Aadhaar Linked Mobile"
+  value={project.aadhaarLinkedMobile}
+/>
         </div>
       </div>
 
