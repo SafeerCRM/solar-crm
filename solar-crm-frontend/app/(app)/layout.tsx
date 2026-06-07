@@ -114,6 +114,20 @@ const navItems = [
 },
 
 {
+  name: 'Customers',
+  href: '/customers',
+  roles: [
+    'OWNER',
+    'MARKETING_HEAD',
+    'PROJECT_MANAGER',
+    'PROJECT_EXECUTIVE',
+    'MEETING_MANAGER',
+    'LEAD_MANAGER',
+    'CUSTOMER_MANAGER',
+  ],
+},
+
+{
   name: 'My Contractor Work',
   href: '/project/my-contractor-work',
   roles: ['PROJECT_CONTRACTOR'],
