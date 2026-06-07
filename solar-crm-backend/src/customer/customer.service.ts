@@ -189,6 +189,15 @@ export class CustomerService {
       });
     }
 
+    if (filters?.customerSource) {
+  query.andWhere(
+    'customer.customerSource = :customerSource',
+    {
+      customerSource: filters.customerSource,
+    },
+  );
+}
+
     if (filters?.status) {
       query.andWhere('customer.customerStatus = :status', {
         status: filters.status,

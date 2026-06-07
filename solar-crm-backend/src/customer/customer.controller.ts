@@ -44,6 +44,7 @@ export class CustomerController {
     @Query('zone') zone?: string,
     @Query('branch') branch?: string,
     @Query('status') status?: string,
+    @Query('customerSource') customerSource?: string,
     @Query('showHidden') showHidden?: string,
     @CurrentUser() user?: any,
   ) {
@@ -56,6 +57,7 @@ export class CustomerController {
         zone: zone || '',
         branch: branch || '',
         status: status || '',
+        customerSource: customerSource || '',
         showHidden: showHidden || 'false',
       },
       user,
