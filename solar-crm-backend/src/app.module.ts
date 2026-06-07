@@ -18,6 +18,7 @@ import { VendorModule } from './vendor/vendor.module';
 import { MeetingModule } from './meeting/meeting.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ProposalModule } from './proposal/proposal.module';
+import { CustomerModule } from './customer/customer.module';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { ProposalModule } from './proposal/proposal.module';
     VendorModule,
     MeetingModule,
     ProposalModule,
+    CustomerModule,
   ],
   controllers: [AppController],
   providers: [AppService],
