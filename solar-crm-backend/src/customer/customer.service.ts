@@ -6,7 +6,11 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Brackets } from 'typeorm';
-import { Customer, CustomerStatus } from './customer.entity';
+import {
+  Customer,
+  CustomerStatus,
+  CustomerSource,
+} from './customer.entity';
 
 @Injectable()
 export class CustomerService {
@@ -122,6 +126,8 @@ export class CustomerService {
       remarks: this.normalizeText(data.remarks),
       createdBy: user?.id || user?.userId || null,
       createdByName: user?.name || user?.email || '',
+      customerSource:
+  data.customerSource || CustomerSource.MANUAL,
     });
 
     const saved = await this.customerRepository.save(customer);
@@ -262,6 +268,8 @@ export class CustomerService {
     customer.branchId = data.branchId ? Number(data.branchId) : undefined;
     customer.branchName = this.normalizeText(data.branchName);
     customer.customerStatus = data.customerStatus || customer.customerStatus;
+    customer.customerSource =
+  data.customerSource || customer.customerSource;
     customer.isPortalEnabled = data.isPortalEnabled === true;
     customer.remarks = this.normalizeText(data.remarks);
 

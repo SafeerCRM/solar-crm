@@ -12,6 +12,15 @@ export enum CustomerStatus {
   BLACKLISTED = 'BLACKLISTED',
 }
 
+export enum CustomerSource {
+  LEAD = 'LEAD',
+  MEETING = 'MEETING',
+  PROJECT = 'PROJECT',
+  MANUAL = 'MANUAL',
+  IMPORT = 'IMPORT',
+  REFERRAL = 'REFERRAL',
+}
+
 @Entity()
 export class Customer {
   @PrimaryGeneratedColumn()
@@ -62,6 +71,13 @@ branchId?: number;
     default: CustomerStatus.ACTIVE,
   })
   customerStatus: CustomerStatus;
+
+  @Column({
+  type: 'enum',
+  enum: CustomerSource,
+  default: CustomerSource.MANUAL,
+})
+customerSource: CustomerSource;
 
   @Column({ type: 'boolean', default: false })
   isPortalEnabled: boolean;
