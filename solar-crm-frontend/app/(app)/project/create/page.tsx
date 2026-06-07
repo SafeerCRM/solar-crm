@@ -74,6 +74,12 @@ type Branch = {
   name: string;
 };
 
+type CustomerUser = {
+  id: number;
+  name: string;
+  email?: string;
+};
+
 export default function CreateProjectPage() {
   const router = useRouter();
 
@@ -86,6 +92,8 @@ const [documentRemarks, setDocumentRemarks] = useState('');
 const [pendingDocuments, setPendingDocuments] = useState<PendingDocument[]>([]);
 
   const [branches, setBranches] = useState<Branch[]>([]);
+
+  const [customers, setCustomers] = useState<CustomerUser[]>([]);
 
   const [form, setForm] = useState({
     meetingId: '',
@@ -100,6 +108,8 @@ const [pendingDocuments, setPendingDocuments] = useState<PendingDocument[]>([]);
     gpsAddress: '',
     electricityKNumber: '',
     customerGmail: '',
+    customerUserId: '',
+customerUserName: '',
     aadhaarLinkedMobile: '',
     branchName: '',
 
@@ -271,8 +281,28 @@ useEffect(() => {
   }
 };
 
+const fetchCustomers = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/users/customers`,
+      {
+        headers: token
+          ? { Authorization: `Bearer ${token}` }
+          : {},
+      },
+    );
+
+    setCustomers(res.data || []);
+  } catch (error) {
+    console.error('Failed to load customers', error);
+  }
+};
+
 useEffect(() => {
   fetchBranches();
+  fetchCustomers();
 }, []);
 
 const addPendingDocument = () => {
@@ -566,6 +596,35 @@ router.push(`/project/${createdProjectId}`);
             onChange={handleChange}
             className="rounded-xl border p-3"
           />
+
+          <select
+  value={form.customerUserId}
+  onChange={(e) => {
+    const selectedCustomer = customers.find(
+      (c) => String(c.id) === e.target.value,
+    );
+
+    setForm({
+      ...form,
+      customerUserId: e.target.value,
+      customerUserName: selectedCustomer?.name || '',
+    });
+  }}
+  className="rounded-xl border p-3"
+>
+  <option value="">
+    Select Customer Account (Optional)
+  </option>
+
+  {customers.map((customer) => (
+    <option
+      key={customer.id}
+      value={customer.id}
+    >
+      {customer.name}
+    </option>
+  ))}
+</select>
 
           <input
             name="aadhaarLinkedMobile"
