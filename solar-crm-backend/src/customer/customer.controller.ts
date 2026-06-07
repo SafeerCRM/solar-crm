@@ -77,6 +77,20 @@ export class CustomerController {
   }
 
   @Roles(
+  'OWNER',
+  'MARKETING_HEAD',
+  'PROJECT_MANAGER',
+  'PROJECT_EXECUTIVE',
+  'MEETING_MANAGER',
+  'LEAD_MANAGER',
+  'CUSTOMER_MANAGER',
+)
+@Get('summary')
+getSummary() {
+  return this.customerService.getSummary();
+}
+
+  @Roles(
     'OWNER',
     'MARKETING_HEAD',
     'PROJECT_MANAGER',

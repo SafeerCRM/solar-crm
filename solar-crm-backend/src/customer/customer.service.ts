@@ -332,4 +332,53 @@ export class CustomerService {
 
     return result.customer;
   }
+
+  async getSummary() {
+  const totalCustomers =
+    await this.customerRepository.count({
+      where: {
+        isHidden: false,
+      },
+    });
+
+  const activeCustomers =
+    await this.customerRepository.count({
+      where: {
+        isHidden: false,
+        customerStatus: CustomerStatus.ACTIVE,
+      },
+    });
+
+  const inactiveCustomers =
+    await this.customerRepository.count({
+      where: {
+        isHidden: false,
+        customerStatus: CustomerStatus.INACTIVE,
+      },
+    });
+
+  const blacklistedCustomers =
+    await this.customerRepository.count({
+      where: {
+        isHidden: false,
+        customerStatus: CustomerStatus.BLACKLISTED,
+      },
+    });
+
+  const portalEnabledCustomers =
+    await this.customerRepository.count({
+      where: {
+        isHidden: false,
+        isPortalEnabled: true,
+      },
+    });
+
+  return {
+    totalCustomers,
+    activeCustomers,
+    inactiveCustomers,
+    blacklistedCustomers,
+    portalEnabledCustomers,
+  };
+}
 }
