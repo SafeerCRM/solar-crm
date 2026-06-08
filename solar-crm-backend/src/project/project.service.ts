@@ -12675,4 +12675,344 @@ async restoreDealerOrder(id: number, body: any, user: any) {
 
   return this.projectDealerOrderRepository.save(order);
 }
+
+async createDealerOrderProformaInvoice(
+  dealerOrderId: number,
+  body: any,
+  user: any,
+) {
+  const order =
+    await this.projectDealerOrderRepository.findOne({
+      where: {
+        id: dealerOrderId,
+      },
+    });
+
+  if (!order) {
+    throw new NotFoundException('Dealer order not found');
+  }
+
+  if (order.isHidden) {
+    throw new BadRequestException(
+      'Hidden dealer order cannot be used for PI',
+    );
+  }
+
+  const existingPi =
+    await this.projectProformaInvoiceRepository.findOne({
+      where: {
+        dealerId: order.dealerId,
+        invoiceType: 'DEALER',
+        remarks: `Generated from dealer order ${order.orderNumber || order.id}`,
+      } as any,
+    });
+
+  if (existingPi) {
+    throw new BadRequestException(
+      'PI already generated for this dealer order',
+    );
+  }
+
+  const orderItems =
+    await this.projectDealerOrderItemRepository.find({
+      where: {
+        dealerOrderId: order.id,
+      },
+      order: {
+        id: 'ASC',
+      },
+    });
+
+  if (!orderItems.length) {
+    throw new BadRequestException(
+      'Dealer order has no material items',
+    );
+  }
+
+  const bodyItems = Array.isArray(body?.items)
+    ? body.items
+    : [];
+
+  const bodyItemMap = new Map<number, any>();
+
+  for (const item of bodyItems) {
+    const itemId = Number(
+      item?.dealerOrderItemId || item?.id || 0,
+    );
+
+    if (itemId) {
+      bodyItemMap.set(itemId, item);
+    }
+  }
+
+  const preparedItems: any[] = [];
+
+  for (const orderItem of orderItems) {
+    const override = bodyItemMap.get(orderItem.id);
+
+    const requestedQuantity = Number(
+      override?.quantity ??
+        override?.acceptedQuantity ??
+        orderItem.pendingQuantity ??
+        orderItem.quantity ??
+        0,
+    );
+
+    if (requestedQuantity <= 0) {
+      continue;
+    }
+
+    const maxQuantity = Number(orderItem.quantity || 0);
+
+    if (requestedQuantity > maxQuantity) {
+      throw new BadRequestException(
+        `PI quantity cannot be more than ordered quantity for ${orderItem.materialName}`,
+      );
+    }
+
+    const sellingRate = Number(
+      override?.sellingRate ?? orderItem.sellingRate ?? 0,
+    );
+
+    const gstPercent = Number(
+      override?.gstPercent ?? orderItem.gstPercent ?? 0,
+    );
+
+    const rowDiscount = Number(
+      override?.discountAmount ?? orderItem.discountAmount ?? 0,
+    );
+
+    const rowSubtotal = requestedQuantity * sellingRate;
+    const taxableAmount = Math.max(
+      rowSubtotal - rowDiscount,
+      0,
+    );
+    const rowGst = (taxableAmount * gstPercent) / 100;
+    const rowTotal = taxableAmount + rowGst;
+
+    preparedItems.push({
+      dealerOrderItemId: orderItem.id,
+      materialId: orderItem.materialId,
+      itemName: orderItem.materialName || '',
+      category: orderItem.category || '',
+      brand: orderItem.brand || '',
+      unit: orderItem.unit || '',
+      sellingRate,
+      gstPercent,
+      quantity: requestedQuantity,
+      discountAmount: rowDiscount,
+      subtotalAmount: rowSubtotal,
+      gstAmount: rowGst,
+      totalAmount: rowTotal,
+      remarks: override?.remarks || orderItem.remarks || '',
+    });
+  }
+
+  if (!preparedItems.length) {
+    throw new BadRequestException(
+      'No valid PI quantity found',
+    );
+  }
+
+  const subtotalAmount = preparedItems.reduce(
+    (sum, item) => sum + Number(item.subtotalAmount || 0),
+    0,
+  );
+
+  const discountAmount = preparedItems.reduce(
+    (sum, item) => sum + Number(item.discountAmount || 0),
+    0,
+  );
+
+  const gstAmount = preparedItems.reduce(
+    (sum, item) => sum + Number(item.gstAmount || 0),
+    0,
+  );
+
+  const totalAmount = preparedItems.reduce(
+    (sum, item) => sum + Number(item.totalAmount || 0),
+    0,
+  );
+
+  const invoice =
+    this.projectProformaInvoiceRepository.create({
+      projectId: 0,
+      invoiceNumber: this.generatePiNumber(),
+      status: ProjectProformaInvoiceStatus.DRAFT,
+      subtotalAmount,
+      discountAmount,
+      gstAmount,
+      totalAmount,
+      invoiceDate: body?.invoiceDate
+        ? new Date(body.invoiceDate)
+        : new Date(),
+      validUntil: body?.validUntil
+        ? new Date(body.validUntil)
+        : null,
+      remarks:
+        body?.remarks ||
+        `Generated from dealer order ${order.orderNumber || order.id}`,
+      createdBy: user?.id || user?.userId || null,
+      createdByName: user?.name || user?.email || '',
+      createdByRole: Array.isArray(user?.roles)
+        ? user.roles.join(', ')
+        : '',
+      invoiceType: 'DEALER',
+      dealerId: order.dealerId,
+      dealerName: order.dealerName,
+      dealerPhone: order.dealerPhone,
+      dealerGstNumber: order.dealerGstNumber,
+      dealerAddress: order.dealerAddress,
+    } as Partial<ProjectProformaInvoice>);
+
+  const savedInvoice =
+    await this.projectProformaInvoiceRepository.save(
+      invoice as ProjectProformaInvoice,
+    );
+
+  const invoiceItems = preparedItems.map((item) =>
+    this.projectProformaInvoiceItemRepository.create({
+      proformaInvoiceId: savedInvoice.id,
+      projectId: 0,
+      materialId: item.materialId || undefined,
+      itemName: item.itemName || '',
+      category: item.category || '',
+      brand: item.brand || '',
+      unit: item.unit || '',
+      sellingRate: item.sellingRate,
+      gstPercent: item.gstPercent,
+      quantity: item.quantity,
+      discountAmount: item.discountAmount,
+      subtotalAmount: item.subtotalAmount,
+      gstAmount: item.gstAmount,
+      totalAmount: item.totalAmount,
+      remarks: item.remarks || '',
+    } as Partial<ProjectProformaInvoiceItem>),
+  );
+
+  await this.projectProformaInvoiceItemRepository.save(
+    invoiceItems as ProjectProformaInvoiceItem[],
+  );
+
+  const totalOrderedQuantity = orderItems.reduce(
+    (sum, item) => sum + Number(item.quantity || 0),
+    0,
+  );
+
+  const piQuantity = preparedItems.reduce(
+    (sum, item) => sum + Number(item.quantity || 0),
+    0,
+  );
+
+  order.status =
+    piQuantity >= totalOrderedQuantity
+      ? ProjectDealerOrderStatus.ACCEPTED
+      : ProjectDealerOrderStatus.PARTIALLY_ACCEPTED;
+
+  order.adminRemarks = `${
+    order.adminRemarks || ''
+  }\nPI generated: ${savedInvoice.invoiceNumber}`.trim();
+
+  await this.projectDealerOrderRepository.save(order);
+
+  return {
+    message: 'Dealer PI generated successfully',
+    invoice: savedInvoice,
+    items: invoiceItems,
+  };
+}
+
+async createDealerOrderFinalInvoice(
+  dealerOrderId: number,
+  body: any,
+  user: any,
+) {
+  const piResult =
+    await this.createDealerOrderProformaInvoice(
+      dealerOrderId,
+      {
+        ...body,
+        remarks:
+          body?.remarks ||
+          'Auto PI created before final dealer invoice',
+      },
+      user,
+    );
+
+  const piId = Number((piResult as any)?.invoice?.id || 0);
+
+  if (!piId) {
+    throw new BadRequestException(
+      'Failed to create dealer PI before final invoice',
+    );
+  }
+
+  const finalInvoice =
+    await this.createFinalInvoiceFromProforma(
+      piId,
+      user,
+    );
+
+  return {
+    message:
+      'Dealer PI and Final Invoice generated successfully',
+    pi: (piResult as any).invoice,
+    finalInvoice,
+  };
+}
+
+async getDealerOrderInvoices(dealerOrderId: number) {
+  const order =
+    await this.projectDealerOrderRepository.findOne({
+      where: {
+        id: dealerOrderId,
+      },
+    });
+
+  if (!order) {
+    throw new NotFoundException('Dealer order not found');
+  }
+
+  const searchText = `Generated from dealer order ${
+    order.orderNumber || order.id
+  }`;
+
+  const proformaInvoices =
+    await this.projectProformaInvoiceRepository
+      .createQueryBuilder('pi')
+      .where('pi.invoiceType = :invoiceType', {
+        invoiceType: 'DEALER',
+      })
+      .andWhere('pi.dealerId = :dealerId', {
+        dealerId: order.dealerId,
+      })
+      .andWhere('pi.remarks LIKE :remarks', {
+        remarks: `%${searchText}%`,
+      })
+      .andWhere('pi.isHidden = false')
+      .orderBy('pi.createdAt', 'DESC')
+      .getMany();
+
+  const finalInvoices =
+    await this.projectFinalInvoiceRepository
+      .createQueryBuilder('invoice')
+      .where('invoice.invoiceType = :invoiceType', {
+        invoiceType: 'DEALER',
+      })
+      .andWhere('invoice.dealerId = :dealerId', {
+        dealerId: order.dealerId,
+      })
+      .andWhere('invoice.remarks LIKE :remarks', {
+        remarks: `%${searchText}%`,
+      })
+      .andWhere('invoice.isHidden = false')
+      .orderBy('invoice.createdAt', 'DESC')
+      .getMany();
+
+  return {
+    order,
+    proformaInvoices,
+    finalInvoices,
+  };
+}
 }

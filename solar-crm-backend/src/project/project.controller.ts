@@ -1999,6 +1999,63 @@ restoreDealerOrder(
   );
 }
 
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'PAYMENT_MANAGER',
+  'TRADING_MANAGER',
+)
+@Post('dealer-order/:id/proforma-invoice')
+createDealerOrderProformaInvoice(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.createDealerOrderProformaInvoice(
+    Number(id),
+    body,
+    user,
+  );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'PAYMENT_MANAGER',
+  'TRADING_MANAGER',
+)
+@Post('dealer-order/:id/final-invoice')
+createDealerOrderFinalInvoice(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.createDealerOrderFinalInvoice(
+    Number(id),
+    body,
+    user,
+  );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'PAYMENT_MANAGER',
+  'TRADING_MANAGER',
+  'MEETING_MANAGER',
+)
+@Get('dealer-order/:id/invoices')
+getDealerOrderInvoices(
+  @Param('id') id: string,
+) {
+  return this.projectService.getDealerOrderInvoices(
+    Number(id),
+  );
+}
+
 @Patch(':id/hide')
 hideProject(
   @Param('id', ParseIntPipe) id: number,
