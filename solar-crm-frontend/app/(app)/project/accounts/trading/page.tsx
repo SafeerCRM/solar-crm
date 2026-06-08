@@ -549,7 +549,7 @@ export default function TradingAccountPage() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl space-y-5">
+    <div className="mx-auto max-w-7xl space-y-5 overflow-x-hidden px-1 sm:px-0">
       <div className="rounded-2xl bg-white p-5 shadow">
         <h1 className="text-2xl font-bold text-gray-800">Trading Account</h1>
         <p className="mt-1 text-sm text-gray-500">
@@ -767,15 +767,15 @@ export default function TradingAccountPage() {
       )}
 
       {activeTab === 'catalog' && (
-        <div className="grid gap-5 xl:grid-cols-2">
-          <div className="rounded-2xl bg-white p-5 shadow">
+        <div className="grid min-w-0 gap-5 xl:grid-cols-2">
+          <div className="min-w-0 rounded-2xl bg-white p-4 shadow sm:p-5">
             <h2 className="text-lg font-bold text-gray-800">Dealer Catalog</h2>
 
             <div className="mt-4 space-y-3">
               {catalog.map((item) => (
                 <div key={item.id} className="rounded-xl border p-4">
-                  <p className="font-bold">{item.name}</p>
-                  <p className="text-sm text-gray-500">{item.category || '-'} | {item.brand || '-'} | {item.unit || '-'}</p>
+                  <p className="break-words font-bold">{item.name}</p>
+                  <p className="break-words text-sm text-gray-500">{item.category || '-'} | {item.brand || '-'} | {item.unit || '-'}</p>
                   <p className="text-sm text-blue-700">Without GST: {money(item.sellingRate)} | With GST: {money(item.sellingRateWithGst)}</p>
                   <p className="text-sm text-green-700">Stock Available: {Number(item.availableQuantity || 0)}</p>
                 </div>
@@ -825,8 +825,8 @@ export default function TradingAccountPage() {
 
                 return (
                   <div key={index} className="rounded-xl border p-3">
-                    <div className="grid gap-3 md:grid-cols-4">
-                      <select value={row.materialId} onChange={(e) => updateOrderRow(index, 'materialId', e.target.value)} className="rounded-xl border p-3">
+                    <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                      <select value={row.materialId} onChange={(e) => updateOrderRow(index, 'materialId', e.target.value)} className="min-w-0 rounded-xl border p-3">
                         <option value="">Select Material</option>
                         {catalog.map((mat) => (
                           <option key={mat.id} value={mat.id}>{mat.name} - {money(mat.sellingRateWithGst)}</option>
@@ -859,7 +859,7 @@ export default function TradingAccountPage() {
       )}
 
       {activeTab === 'orders' && (
-        <div className="grid gap-5 xl:grid-cols-2">
+        <div className="grid min-w-0 gap-5 xl:grid-cols-2">
           <div className="rounded-2xl bg-white p-5 shadow">
             <h2 className="text-lg font-bold">Dealer Orders</h2>
 
