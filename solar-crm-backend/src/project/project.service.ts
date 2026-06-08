@@ -5249,9 +5249,12 @@ const skip = (page - 1) * limit;
       'project.createdAt AS "createdAt"',
     ])
     .where('project.isHidden = false')
-    .andWhere('project.status = :pendingApprovalStatus', {
-      pendingApprovalStatus: ProjectStatus.PENDING_APPROVAL,
-    })
+    .andWhere('project.status NOT IN (:...closedStatuses)', {
+  closedStatuses: [
+    ProjectStatus.REJECTED,
+    ProjectStatus.COMPLETED,
+  ],
+})
     .andWhere(
   `(
     project.projectManagerApprovalStatus = :pendingStatus
@@ -5271,9 +5274,12 @@ const skip = (page - 1) * limit;
   const totalQb = this.projectRepository
   .createQueryBuilder('project')
   .where('project.isHidden = false')
-  .andWhere('project.status = :pendingApprovalStatus', {
-    pendingApprovalStatus: ProjectStatus.PENDING_APPROVAL,
-  })
+  .andWhere('project.status NOT IN (:...closedStatuses)', {
+  closedStatuses: [
+    ProjectStatus.REJECTED,
+    ProjectStatus.COMPLETED,
+  ],
+})
   .andWhere(
     `(
       project.projectManagerApprovalStatus = :pendingStatus
