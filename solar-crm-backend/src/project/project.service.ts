@@ -12927,36 +12927,73 @@ async createDealerOrderFinalInvoice(
   body: any,
   user: any,
 ) {
-  const piResult =
-    await this.createDealerOrderProformaInvoice(
-      dealerOrderId,
-      {
-        ...body,
-        remarks:
-          body?.remarks ||
-          'Auto PI created before final dealer invoice',
+  const order =
+    await this.projectDealerOrderRepository.findOne({
+      where: {
+        id: dealerOrderId,
       },
-      user,
-    );
+    });
 
-  const piId = Number((piResult as any)?.invoice?.id || 0);
+  if (!order) {
+    throw new NotFoundException('Dealer order not found');
+  }
 
-  if (!piId) {
+  if (order.isHidden) {
     throw new BadRequestException(
-      'Failed to create dealer PI before final invoice',
+      'Hidden dealer order cannot be used for final invoice',
+    );
+  }
+
+  const searchText = `Generated from dealer order ${
+    order.orderNumber || order.id
+  }`;
+
+  let pi =
+    await this.projectProformaInvoiceRepository
+      .createQueryBuilder('pi')
+      .where('pi.invoiceType = :invoiceType', {
+        invoiceType: 'DEALER',
+      })
+      .andWhere('pi.dealerId = :dealerId', {
+        dealerId: order.dealerId,
+      })
+      .andWhere('pi.remarks LIKE :remarks', {
+        remarks: `%${searchText}%`,
+      })
+      .andWhere('pi.isHidden = false')
+      .orderBy('pi.createdAt', 'DESC')
+      .getOne();
+
+  if (!pi) {
+    const piResult =
+      await this.createDealerOrderProformaInvoice(
+        dealerOrderId,
+        {
+          ...body,
+          remarks: searchText,
+        },
+        user,
+      );
+
+    pi = (piResult as any)?.invoice;
+  }
+
+  if (!pi?.id) {
+    throw new BadRequestException(
+      'Unable to find or create dealer PI',
     );
   }
 
   const finalInvoice =
     await this.createFinalInvoiceFromProforma(
-      piId,
+      Number(pi.id),
       user,
     );
 
   return {
     message:
-      'Dealer PI and Final Invoice generated successfully',
-    pi: (piResult as any).invoice,
+      'Dealer Final Invoice generated successfully',
+    pi,
     finalInvoice,
   };
 }
