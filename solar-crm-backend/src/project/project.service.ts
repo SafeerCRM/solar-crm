@@ -228,58 +228,79 @@ private async assertRequiredProjectCreationDocumentsUploaded(
   }
 
   const cashRequiredGroups = [
-    {
-      label: 'Vendor Agreement',
-      types: [ProjectDocumentType.VENDOR_AGREEMENT],
-    },
-    {
-      label: 'Aadhaar Card',
-      types: [ProjectDocumentType.AADHAAR_CARD],
-    },
-    {
-      label: 'Electricity Bill',
-      types: [ProjectDocumentType.ELECTRICITY_BILL],
-    },
-    {
-      label: 'PAN Card',
-      types: [ProjectDocumentType.PAN_CARD],
-    },
-    {
-      label: 'Bank Document',
-      types: [
-        ProjectDocumentType.CANCEL_CHEQUE,
-        ProjectDocumentType.BANK_DIARY,
-      ],
-    },
-  ];
+  {
+    label: 'Vendor Agreement',
+    types: [
+      ProjectDocumentType.VENDOR_AGREEMENT,
+      'VENDOR_AGREEMENT' as any,
+    ],
+  },
+  {
+    label: 'Aadhaar Card',
+    types: [
+      ProjectDocumentType.AADHAAR_CARD,
+      'AADHAAR' as any,
+    ],
+  },
+  {
+    label: 'Electricity Bill',
+    types: [
+      ProjectDocumentType.ELECTRICITY_BILL,
+      'ELECTRICITY_BILL' as any,
+    ],
+  },
+  {
+    label: 'PAN Card',
+    types: [
+      ProjectDocumentType.PAN_CARD,
+      'PAN_CARD' as any,
+    ],
+  },
+  {
+    label: 'Bank Document',
+    types: [
+      ProjectDocumentType.CANCEL_CHEQUE,
+      ProjectDocumentType.BANK_DIARY,
+      'BANK_DOCUMENT' as any,
+    ],
+  },
+];
 
-  const loanRequiredGroups = [
-    ...cashRequiredGroups,
-    {
-      label: 'Customer Photo',
-      types: [ProjectDocumentType.CLIENT_PHOTO],
-    },
-    {
-      label: 'Site Photo',
-      types: [
-        ProjectDocumentType.CLIENT_GPS_PHOTO,
-        ProjectDocumentType.ROOF_GPS_PHOTO,
-        ProjectDocumentType.PLANT_GPS_PHOTO,
-      ],
-    },
-    {
-      label: 'Loan Document',
-      types: [
-        ProjectDocumentType.JAN_SAMARTH_DOCUMENT,
-        ProjectDocumentType.LOAN_SANCTION_LETTER,
-        ProjectDocumentType.BANK_VISIT_PROOF,
-      ],
-    },
-    {
-      label: 'Property Document',
-      types: [ProjectDocumentType.HOUSE_REGISTRY],
-    },
-  ];
+const loanRequiredGroups = [
+  ...cashRequiredGroups,
+  {
+    label: 'Customer Photo',
+    types: [
+      ProjectDocumentType.CLIENT_PHOTO,
+      'CUSTOMER_PHOTO' as any,
+    ],
+  },
+  {
+    label: 'Site Photo',
+    types: [
+      ProjectDocumentType.CLIENT_GPS_PHOTO,
+      ProjectDocumentType.ROOF_GPS_PHOTO,
+      ProjectDocumentType.PLANT_GPS_PHOTO,
+      'SITE_PHOTO' as any,
+    ],
+  },
+  {
+    label: 'Loan Document',
+    types: [
+      ProjectDocumentType.JAN_SAMARTH_DOCUMENT,
+      ProjectDocumentType.LOAN_SANCTION_LETTER,
+      ProjectDocumentType.BANK_VISIT_PROOF,
+      'LOAN_DOCUMENT' as any,
+    ],
+  },
+  {
+    label: 'Property Document',
+    types: [
+      ProjectDocumentType.HOUSE_REGISTRY,
+      'PROPERTY_DOCUMENT' as any,
+    ],
+  },
+];
 
   const requiredGroups =
     project.projectType === ProjectType.LOAN
