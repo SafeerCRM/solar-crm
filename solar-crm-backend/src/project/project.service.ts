@@ -8779,10 +8779,10 @@ async createProformaInvoice(
     : [];
 
   if (!body?.projectId) {
-    throw new BadRequestException(
-      'Project ID is required',
-    );
-  }
+  throw new BadRequestException(
+    'Project ID is required',
+  );
+}
 
   if (items.length === 0) {
     throw new BadRequestException(
@@ -9051,10 +9051,31 @@ async createManualProformaInvoice(
   body: any,
   currentUser: any,
 ) {
-  if (!body?.projectId) {
+  const projectId = body?.projectId ? Number(body.projectId) : null;
+  const dealerId = body?.dealerId ? Number(body.dealerId) : null;
+
+  if (!projectId && !dealerId) {
     throw new BadRequestException(
-      'Project ID is required',
+      'Please select either Project or Dealer',
     );
+  }
+
+  let dealer: ProjectVendor | null = null;
+
+  if (dealerId) {
+    dealer = await this.projectVendorRepository.findOne({
+      where: { id: dealerId },
+    });
+
+    if (!dealer) {
+      throw new NotFoundException('Dealer not found');
+    }
+
+    if ((dealer as any).canBuyFromUs !== true) {
+      throw new BadRequestException(
+        'Selected party is not marked as dealer/customer buyer',
+      );
+    }
   }
 
   const items = Array.isArray(body?.items)
@@ -9074,30 +9095,14 @@ async createManualProformaInvoice(
 
   for (const item of items) {
     const quantity = Number(item.quantity || 0);
+    const sellingRate = Number(item.sellingRate || 0);
+    const gstPercent = Number(item.gstPercent || 0);
+    const rowDiscount = Number(item.discountAmount || 0);
 
-    const sellingRate = Number(
-      item.sellingRate || 0,
-    );
-
-    const gstPercent = Number(
-      item.gstPercent || 0,
-    );
-
-    const rowDiscount = Number(
-      item.discountAmount || 0,
-    );
-
-    const rowSubtotal =
-      quantity * sellingRate;
-
-    const taxableAmount =
-      rowSubtotal - rowDiscount;
-
-    const rowGst =
-      (taxableAmount * gstPercent) / 100;
-
-    const rowTotal =
-      taxableAmount + rowGst;
+    const rowSubtotal = quantity * sellingRate;
+    const taxableAmount = rowSubtotal - rowDiscount;
+    const rowGst = (taxableAmount * gstPercent) / 100;
+    const rowTotal = taxableAmount + rowGst;
 
     subtotalAmount += rowSubtotal;
     discountAmount += rowDiscount;
@@ -9105,28 +9110,22 @@ async createManualProformaInvoice(
     totalAmount += rowTotal;
   }
 
-  const invoice =
+  const invoice: any =
     this.projectProformaInvoiceRepository.create({
-      projectId: Number(body.projectId),
+      projectId: projectId || undefined,
 
-      invoiceNumber:
-        this.generatePiNumber(),
+      invoiceNumber: this.generatePiNumber(),
 
       subtotalAmount,
-
       discountAmount,
-
       gstAmount,
-
       totalAmount,
 
-      status:
-        ProjectProformaInvoiceStatus.DRAFT,
+      status: ProjectProformaInvoiceStatus.DRAFT,
 
       invoiceDate: new Date(),
 
-      remarks:
-        body?.remarks || '',
+      remarks: body?.remarks || '',
 
       createdBy:
         currentUser?.id ||
@@ -9137,6 +9136,13 @@ async createManualProformaInvoice(
         currentUser?.name || '',
     } as Partial<ProjectProformaInvoice>);
 
+  invoice.invoiceType = dealerId ? 'DEALER' : 'PROJECT';
+  invoice.dealerId = dealer?.id || undefined;
+  invoice.dealerName = dealer?.vendorName || '';
+  invoice.dealerPhone = (dealer as any)?.phone || '';
+  invoice.dealerGstNumber = (dealer as any)?.gstNumber || '';
+  invoice.dealerAddress = (dealer as any)?.address || '';
+
   const savedInvoice =
     await this.projectProformaInvoiceRepository.save(
       invoice as ProjectProformaInvoice,
@@ -9144,41 +9150,20 @@ async createManualProformaInvoice(
 
   const invoiceItems = items.map(
     (item: any) => {
-      const quantity = Number(
-        item.quantity || 0,
-      );
+      const quantity = Number(item.quantity || 0);
+      const sellingRate = Number(item.sellingRate || 0);
+      const gstPercent = Number(item.gstPercent || 0);
+      const rowDiscount = Number(item.discountAmount || 0);
 
-      const sellingRate = Number(
-        item.sellingRate || 0,
-      );
-
-      const gstPercent = Number(
-        item.gstPercent || 0,
-      );
-
-      const rowDiscount = Number(
-        item.discountAmount || 0,
-      );
-
-      const rowSubtotal =
-        quantity * sellingRate;
-
-      const taxableAmount =
-        rowSubtotal - rowDiscount;
-
-      const rowGst =
-        (taxableAmount * gstPercent) / 100;
-
-      const rowTotal =
-        taxableAmount + rowGst;
+      const rowSubtotal = quantity * sellingRate;
+      const taxableAmount = rowSubtotal - rowDiscount;
+      const rowGst = (taxableAmount * gstPercent) / 100;
+      const rowTotal = taxableAmount + rowGst;
 
       return this.projectProformaInvoiceItemRepository.create(
         {
-          proformaInvoiceId:
-            savedInvoice.id,
-
-            projectId:
-  Number(body.projectId),
+          proformaInvoiceId: savedInvoice.id,
+          projectId: projectId || undefined,
 
           materialId:
             item.materialId
@@ -9198,9 +9183,7 @@ async createManualProformaInvoice(
             item.unit || '',
 
           sellingRate,
-
           gstPercent,
-
           quantity,
 
           discountAmount:
@@ -9240,6 +9223,10 @@ async generateProformaInvoicePdf(
 ) {
   const pi =
     await this.getProformaInvoiceById(id);
+
+  const isDealerInvoice =
+    (pi as any).invoiceType === 'DEALER' ||
+    !!(pi as any).dealerId;
 
   const doc = new PDFDocument({
     margin: 40,
@@ -9302,7 +9289,15 @@ async generateProformaInvoicePdf(
     }`,
   );
 
-  doc.text(`Project ID: ${pi.projectId}`);
+  if (isDealerInvoice) {
+    doc.text(`Invoice Type: Dealer / Trading`);
+    doc.text(`Dealer Name: ${(pi as any).dealerName || '-'}`);
+    doc.text(`Dealer Phone: ${(pi as any).dealerPhone || '-'}`);
+    doc.text(`Dealer GST: ${(pi as any).dealerGstNumber || '-'}`);
+    doc.text(`Dealer Address: ${(pi as any).dealerAddress || '-'}`);
+  } else {
+    doc.text(`Project ID: ${pi.projectId || '-'}`);
+  }
 
   doc.text(`Status: ${pi.status || '-'}`);
 
@@ -9730,6 +9725,214 @@ async createFinalInvoiceFromProforma(
     );
   }
 
+  const isDealerInvoice =
+    (pi as any).invoiceType === 'DEALER' ||
+    !!(pi as any).dealerId;
+
+  if (isDealerInvoice) {
+    const existingDealerInvoice =
+      await this.projectFinalInvoiceRepository.findOne({
+        where: {
+          dealerId: Number((pi as any).dealerId),
+          invoiceType: 'DEALER',
+        } as any,
+      });
+
+    if (existingDealerInvoice) {
+      throw new BadRequestException(
+        'Final invoice already exists for this dealer proforma invoice',
+      );
+    }
+
+    const items = Array.isArray((pi as any).items)
+      ? (pi as any).items
+      : [];
+
+    if (items.length === 0) {
+      throw new BadRequestException(
+        'Proforma invoice has no items',
+      );
+    }
+
+    let subtotalAmount = 0;
+    let discountAmount = 0;
+    let gstAmount = 0;
+    let totalAmount = 0;
+
+    const preparedItems = items.map((item: any) => {
+      const finalRate = Number(item.sellingRate || 0);
+      const quantity = Number(item.quantity || 0);
+      const gstPercent = Number(item.gstPercent || 0);
+      const itemDiscount = Number(item.discountAmount || 0);
+
+      const subtotal = finalRate * quantity;
+      const taxable = subtotal - itemDiscount;
+      const gst = (taxable * gstPercent) / 100;
+      const total = taxable + gst;
+
+      subtotalAmount += subtotal;
+      discountAmount += itemDiscount;
+      gstAmount += gst;
+      totalAmount += total;
+
+      return {
+        ...item,
+        finalRate,
+        quantity,
+        gstPercent,
+        discountAmount: itemDiscount,
+        subtotalAmount: subtotal,
+        gstAmount: gst,
+        totalAmount: total,
+      };
+    });
+
+    const invoice: any =
+      this.projectFinalInvoiceRepository.create({
+        projectId: undefined,
+
+        invoiceNumber:
+          this.generateFinalInvoiceNumber(),
+
+        status:
+          ProjectFinalInvoiceStatus.GENERATED,
+
+        subtotalAmount,
+        discountAmount,
+        gstAmount,
+        totalAmount,
+
+        paidAmount: 0,
+        pendingAmount: totalAmount,
+
+        invoiceDate: new Date(),
+
+        remarks: `Generated from ${pi.invoiceNumber}`,
+
+        createdBy:
+          user?.id || user?.userId || null,
+
+        createdByName:
+          user?.name || '',
+
+        createdByRole:
+          Array.isArray(user?.roles)
+            ? user.roles.join(', ')
+            : '',
+      } as Partial<ProjectFinalInvoice>);
+
+    invoice.invoiceType = 'DEALER';
+    invoice.dealerId = Number((pi as any).dealerId);
+    invoice.dealerName = (pi as any).dealerName || '';
+    invoice.dealerPhone = (pi as any).dealerPhone || '';
+    invoice.dealerGstNumber = (pi as any).dealerGstNumber || '';
+    invoice.dealerAddress = (pi as any).dealerAddress || '';
+
+    const savedInvoice =
+      await this.projectFinalInvoiceRepository.save(
+        invoice as ProjectFinalInvoice,
+      );
+
+    await this.projectPartyLedgerRepository.save(
+      this.projectPartyLedgerRepository.create({
+        partyId: Number((pi as any).dealerId),
+
+        partyName:
+          (pi as any).dealerName ||
+          'Dealer',
+
+        partyType: 'DEALER',
+
+        projectId: undefined,
+
+        entryType:
+          ProjectLedgerEntryType.DEBIT,
+
+        sourceType:
+          ProjectLedgerSourceType.FINAL_INVOICE,
+
+        sourceId: savedInvoice.id,
+
+        amount: Number(
+          savedInvoice.totalAmount || 0,
+        ),
+
+        remarks: `Dealer Final Invoice ${
+          savedInvoice.invoiceNumber ||
+          savedInvoice.id
+        }`,
+
+        createdBy:
+          user?.id || user?.userId || null,
+
+        createdByName:
+          user?.name || '',
+      } as Partial<ProjectPartyLedger>),
+    );
+
+    const invoiceItems =
+      preparedItems.map((item: any) =>
+        this.projectFinalInvoiceItemRepository.create({
+          finalInvoiceId:
+            savedInvoice.id,
+
+          projectId: undefined,
+
+          materialId:
+            item.materialId
+              ? Number(item.materialId)
+              : null,
+
+          itemName:
+            item.itemName || '',
+
+          category:
+            item.category || '',
+
+          brand:
+            item.brand || '',
+
+          unit:
+            item.unit || '',
+
+          finalRate:
+            item.finalRate,
+
+          gstPercent:
+            item.gstPercent,
+
+          quantity:
+            item.quantity,
+
+          discountAmount:
+            item.discountAmount,
+
+          subtotalAmount:
+            item.subtotalAmount,
+
+          gstAmount:
+            item.gstAmount,
+
+          totalAmount:
+            item.totalAmount,
+
+          remarks:
+            item.remarks || '',
+        } as Partial<ProjectFinalInvoiceItem>),
+      );
+
+    await this.projectFinalInvoiceItemRepository.save(
+      invoiceItems,
+    );
+
+    return {
+      message:
+        'Dealer final invoice created successfully',
+
+      invoice: savedInvoice,
+    };
+  }
+
   const existingInvoice =
     await this.projectFinalInvoiceRepository.findOne({
       where: {
@@ -9955,17 +10158,21 @@ async generateFinalInvoicePdf(
   const invoice =
     await this.getFinalInvoiceById(id);
 
+  const isDealerInvoice =
+    (invoice as any).invoiceType === 'DEALER' ||
+    !!(invoice as any).dealerId;
+
   const doc = new PDFDocument({
     margin: 40,
     size: 'A4',
   });
 
   const logoPath = path.join(
-  process.cwd(),
-  'src',
-  'assets',
-  'aditya-logo.jpg',
-);
+    process.cwd(),
+    'src',
+    'assets',
+    'aditya-logo.jpg',
+  );
 
   const fileName = `${
     invoice.invoiceNumber || `INV-${invoice.id}`
@@ -9984,18 +10191,18 @@ async generateFinalInvoicePdf(
   doc.pipe(res);
 
   doc.image(logoPath, 40, 20, {
-  fit: [515, 110],
-  align: 'center',
-});
-
-doc.y = 145;
-
-doc
-  .fontSize(22)
-  .fillColor('#0f172a')
-  .text('FINAL INVOICE', {
+    fit: [515, 110],
     align: 'center',
   });
+
+  doc.y = 145;
+
+  doc
+    .fontSize(22)
+    .fillColor('#0f172a')
+    .text('FINAL INVOICE', {
+      align: 'center',
+    });
 
   doc.moveDown();
 
@@ -10012,7 +10219,16 @@ doc
     }`,
   );
 
-  doc.text(`Project ID: ${invoice.projectId}`);
+  if (isDealerInvoice) {
+    doc.text(`Invoice Type: Dealer / Trading`);
+    doc.text(`Dealer Name: ${(invoice as any).dealerName || '-'}`);
+    doc.text(`Dealer Phone: ${(invoice as any).dealerPhone || '-'}`);
+    doc.text(`Dealer GST: ${(invoice as any).dealerGstNumber || '-'}`);
+    doc.text(`Dealer Address: ${(invoice as any).dealerAddress || '-'}`);
+  } else {
+    doc.text(`Project ID: ${invoice.projectId || '-'}`);
+  }
+
   doc.text(`Status: ${invoice.status || '-'}`);
 
   doc.moveDown();
