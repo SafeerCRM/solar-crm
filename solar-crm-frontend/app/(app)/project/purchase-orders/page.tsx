@@ -1323,10 +1323,10 @@ const addManualPoItem = () => {
 };
 
 const createManualPo = async () => {
-  if (!manualPo.projectId || !manualPo.vendorName) {
-    alert('Project and vendor are required');
-    return;
-  }
+  if (!manualPo.vendorName) {
+  alert('Vendor is required');
+  return;
+}
 
   const itemsToSubmit =
     manualPoItems.length > 0
@@ -1358,7 +1358,9 @@ const createManualPo = async () => {
     await axios.post(
       `${API_BASE_URL}/project/purchase-order/manual`,
       {
-        projectId: Number(manualPo.projectId),
+        projectId: manualPo.projectId
+  ? Number(manualPo.projectId)
+  : undefined,
         vendorName: manualPo.vendorName,
         remarks: manualPo.remarks,
 
@@ -2050,7 +2052,14 @@ const generateProformaInvoice = async () => {
 >
   <option value="">Select Vendor</option>
 
-  {vendors.map((vendor) => (
+  {vendors
+  .filter(
+    (vendor) =>
+      vendor.canSellToUs === true ||
+      vendor.partyType === 'VENDOR' ||
+      vendor.partyType === 'BOTH',
+  )
+  .map((vendor) => (
     <option key={vendor.id} value={vendor.vendorName}>
       {vendor.vendorName}
     </option>
