@@ -219,10 +219,76 @@ private readonly projectCreationRequiredDocumentGroups = [
 private async assertRequiredProjectCreationDocumentsUploaded(
   projectId: number,
 ) {
-  const allRequiredTypes =
-    this.projectCreationRequiredDocumentGroups.flatMap(
-      (group) => group.types,
-    );
+  const project = await this.projectRepository.findOne({
+    where: { id: projectId },
+  });
+
+  if (!project) {
+    throw new NotFoundException('Project not found');
+  }
+
+  const cashRequiredGroups = [
+    {
+      label: 'Vendor Agreement',
+      types: [ProjectDocumentType.VENDOR_AGREEMENT],
+    },
+    {
+      label: 'Aadhaar Card',
+      types: [ProjectDocumentType.AADHAAR_CARD],
+    },
+    {
+      label: 'Electricity Bill',
+      types: [ProjectDocumentType.ELECTRICITY_BILL],
+    },
+    {
+      label: 'PAN Card',
+      types: [ProjectDocumentType.PAN_CARD],
+    },
+    {
+      label: 'Bank Document',
+      types: [
+        ProjectDocumentType.CANCEL_CHEQUE,
+        ProjectDocumentType.BANK_DIARY,
+      ],
+    },
+  ];
+
+  const loanRequiredGroups = [
+    ...cashRequiredGroups,
+    {
+      label: 'Customer Photo',
+      types: [ProjectDocumentType.CLIENT_PHOTO],
+    },
+    {
+      label: 'Site Photo',
+      types: [
+        ProjectDocumentType.CLIENT_GPS_PHOTO,
+        ProjectDocumentType.ROOF_GPS_PHOTO,
+        ProjectDocumentType.PLANT_GPS_PHOTO,
+      ],
+    },
+    {
+      label: 'Loan Document',
+      types: [
+        ProjectDocumentType.JAN_SAMARTH_DOCUMENT,
+        ProjectDocumentType.LOAN_SANCTION_LETTER,
+        ProjectDocumentType.BANK_VISIT_PROOF,
+      ],
+    },
+    {
+      label: 'Property Document',
+      types: [ProjectDocumentType.HOUSE_REGISTRY],
+    },
+  ];
+
+  const requiredGroups =
+    project.projectType === ProjectType.LOAN
+      ? loanRequiredGroups
+      : cashRequiredGroups;
+
+  const allRequiredTypes = requiredGroups.flatMap(
+    (group) => group.types,
+  );
 
   const documents =
     await this.projectDocumentRepository.find({
@@ -237,13 +303,12 @@ private async assertRequiredProjectCreationDocumentsUploaded(
     documents.map((doc) => doc.documentType),
   );
 
-  const missingGroups =
-    this.projectCreationRequiredDocumentGroups.filter(
-      (group) =>
-        !group.types.some((type) =>
-          uploadedTypes.has(type),
-        ),
-    );
+  const missingGroups = requiredGroups.filter(
+    (group) =>
+      !group.types.some((type) =>
+        uploadedTypes.has(type),
+      ),
+  );
 
   if (missingGroups.length > 0) {
     throw new BadRequestException(
