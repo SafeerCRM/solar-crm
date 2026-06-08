@@ -155,6 +155,17 @@ type ProjectOption = {
   projectOwnerName?: string;
 };
 
+type ManualPiItem = {
+  itemName: string;
+  category: string;
+  brand: string;
+  unit: string;
+  quantity: string;
+  sellingRate: string;
+  gstPercent: string;
+  discountAmount: string;
+};
+
 export default function PurchaseOrdersPage() {
   const [items, setItems] = useState<PurchaseItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -213,6 +224,8 @@ const [creatingManualPo, setCreatingManualPo] =
 
 const [creatingManualPi, setCreatingManualPi] =
   useState(false);
+
+  const [manualPiItems, setManualPiItems] = useState<ManualPiItem[]>([]);
 
   const [manualInvoice, setManualInvoice] =
   useState({
@@ -1346,16 +1359,70 @@ const createManualPo = async () => {
   }
 };
 
-const createManualPi = async () => {
-  if (
-    (!manualPi.projectId &&
-      !manualPi.dealerId) ||
-    !manualPi.itemName
-  ) {
-    alert(
-  'Project or Dealer and item are required',
-);
+const addManualPiItem = () => {
+  if (!manualPi.itemName) {
+    alert('Please select material');
+    return;
+  }
 
+  if (!Number(manualPi.quantity || 0)) {
+    alert('Please enter quantity');
+    return;
+  }
+
+  setManualPiItems([
+    ...manualPiItems,
+    {
+      itemName: manualPi.itemName,
+      category: manualPi.category,
+      brand: manualPi.brand,
+      unit: manualPi.unit,
+      quantity: manualPi.quantity,
+      sellingRate: manualPi.sellingRate,
+      gstPercent: manualPi.gstPercent,
+      discountAmount: manualPi.discountAmount,
+    },
+  ]);
+
+  setManualPi({
+    ...manualPi,
+    itemName: '',
+    category: '',
+    brand: '',
+    unit: '',
+    quantity: '',
+    sellingRate: '',
+    gstPercent: '18',
+    discountAmount: '0',
+  });
+};
+
+const createManualPi = async () => {
+  if (!manualPi.projectId && !manualPi.dealerId) {
+    alert('Project or Dealer is required');
+    return;
+  }
+
+  const itemsToSubmit =
+    manualPiItems.length > 0
+      ? manualPiItems
+      : manualPi.itemName
+        ? [
+            {
+              itemName: manualPi.itemName,
+              category: manualPi.category,
+              brand: manualPi.brand,
+              unit: manualPi.unit,
+              quantity: manualPi.quantity,
+              sellingRate: manualPi.sellingRate,
+              gstPercent: manualPi.gstPercent,
+              discountAmount: manualPi.discountAmount,
+            },
+          ]
+        : [];
+
+  if (itemsToSubmit.length === 0) {
+    alert('Please add at least one material');
     return;
   }
 
@@ -1368,46 +1435,25 @@ const createManualPi = async () => {
       `${API_BASE_URL}/project/proforma-invoice/manual`,
       {
         projectId: manualPi.projectId
-  ? Number(manualPi.projectId)
-  : undefined,
+          ? Number(manualPi.projectId)
+          : undefined,
 
-dealerId: manualPi.dealerId
-  ? Number(manualPi.dealerId)
-  : undefined,
+        dealerId: manualPi.dealerId
+          ? Number(manualPi.dealerId)
+          : undefined,
 
         remarks: manualPi.remarks,
 
-        items: [
-          {
-            itemName:
-              manualPi.itemName,
-
-            category:
-              manualPi.category,
-
-            brand:
-              manualPi.brand,
-
-            unit:
-              manualPi.unit,
-
-            quantity: Number(
-              manualPi.quantity || 0,
-            ),
-
-            sellingRate: Number(
-              manualPi.sellingRate || 0,
-            ),
-
-            gstPercent: Number(
-              manualPi.gstPercent || 0,
-            ),
-
-            discountAmount: Number(
-              manualPi.discountAmount || 0,
-            ),
-          },
-        ],
+        items: itemsToSubmit.map((item) => ({
+          itemName: item.itemName,
+          category: item.category,
+          brand: item.brand,
+          unit: item.unit,
+          quantity: Number(item.quantity || 0),
+          sellingRate: Number(item.sellingRate || 0),
+          gstPercent: Number(item.gstPercent || 0),
+          discountAmount: Number(item.discountAmount || 0),
+        })),
       },
       {
         headers: token
@@ -1418,13 +1464,11 @@ dealerId: manualPi.dealerId
       },
     );
 
-    alert(
-      'Manual PI created successfully',
-    );
+    alert('Manual PI created successfully');
 
     setManualPi({
-  projectId: '',
-  dealerId: '',
+      projectId: '',
+      dealerId: '',
       itemName: '',
       category: '',
       brand: '',
@@ -1435,6 +1479,8 @@ dealerId: manualPi.dealerId
       discountAmount: '0',
       remarks: '',
     });
+
+    setManualPiItems([]);
 
     fetchGeneratedPis();
   } catch (error: any) {
@@ -2273,6 +2319,58 @@ const generateProformaInvoice = async () => {
     className="mt-3 w-full rounded-xl border p-3"
     rows={3}
   />
+
+  <button
+  type="button"
+  onClick={addManualPiItem}
+  className="rounded-xl bg-gray-800 px-4 py-3 text-sm font-semibold text-white hover:bg-black"
+>
+  Add Material
+</button>
+
+{manualPiItems.length > 0 && (
+  <div className="mt-4 rounded-xl bg-gray-50 p-4">
+    <p className="text-sm font-semibold text-gray-700">
+      Added Materials
+    </p>
+
+    <div className="mt-3 space-y-2">
+      {manualPiItems.map((item, index) => (
+        <div
+          key={`${item.itemName}-${index}`}
+          className="flex flex-col gap-2 rounded-lg border bg-white p-3 text-sm md:flex-row md:items-center md:justify-between"
+        >
+          <div>
+            <p className="font-semibold text-gray-800">
+              {item.itemName}
+            </p>
+
+            <p className="text-gray-500">
+              Qty: {item.quantity} {item.unit || ''}
+              {' '}| Rate: ₹
+              {Number(item.sellingRate || 0).toLocaleString('en-IN')}
+              {' '}| GST: {item.gstPercent || 0}%
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() =>
+              setManualPiItems(
+                manualPiItems.filter(
+                  (_, itemIndex) => itemIndex !== index,
+                ),
+              )
+            }
+            className="text-sm font-semibold text-red-600"
+          >
+            Remove
+          </button>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
 
   <button
     onClick={createManualPi}
