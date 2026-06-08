@@ -1365,13 +1365,6 @@ async projectManagerApproval(
   );
 }
 
-  if (
-    body?.status === 'APPROVED' &&
-    project.status === 'PENDING_APPROVAL'
-  ) {
-    project.status = ProjectStatus.PROJECT_MANAGEMENT;
-  }
-
   return this.projectRepository.save(project);
 }
 
