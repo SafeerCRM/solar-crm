@@ -74,10 +74,17 @@ type Branch = {
   name: string;
 };
 
-type CustomerUser = {
+type CustomerMaster = {
   id: number;
-  name: string;
+  customerCode?: string;
+  customerName?: string;
+  mobile?: string;
   email?: string;
+  electricityKNumber?: string;
+  address?: string;
+  city?: string;
+  zone?: string;
+  branchName?: string;
 };
 
 export default function CreateProjectPage() {
@@ -93,11 +100,14 @@ const [pendingDocuments, setPendingDocuments] = useState<PendingDocument[]>([]);
 
   const [branches, setBranches] = useState<Branch[]>([]);
 
-  const [customers, setCustomers] = useState<CustomerUser[]>([]);
+  const [customerSearch, setCustomerSearch] = useState('');
+const [customerResults, setCustomerResults] = useState<CustomerMaster[]>([]);
 
   const [form, setForm] = useState({
     meetingId: '',
     leadId: '',
+    customerId: '',
+customerCode: '',
     customerName: '',
     customerPhone: '',
     city: '',
@@ -281,28 +291,57 @@ useEffect(() => {
   }
 };
 
-const fetchCustomers = async () => {
+const searchCustomers = async (value: string) => {
+  setCustomerSearch(value);
+
+  if (value.trim().length < 2) {
+    setCustomerResults([]);
+    return;
+  }
+
   try {
     const token = localStorage.getItem('token');
 
     const res = await axios.get(
-      `${API_BASE_URL}/users/customers`,
+      `${API_BASE_URL}/customers/search`,
       {
+        params: { query: value },
         headers: token
           ? { Authorization: `Bearer ${token}` }
           : {},
       },
     );
 
-    setCustomers(res.data || []);
+    setCustomerResults(res.data || []);
   } catch (error) {
-    console.error('Failed to load customers', error);
+    console.error('Failed to search customers', error);
   }
+};
+
+const selectCustomer = (customer: CustomerMaster) => {
+  setForm((prev) => ({
+    ...prev,
+    customerId: String(customer.id || ''),
+    customerCode: customer.customerCode || '',
+    customerName: customer.customerName || prev.customerName,
+    customerPhone: customer.mobile || prev.customerPhone,
+    customerGmail: customer.email || prev.customerGmail,
+    electricityKNumber:
+      customer.electricityKNumber || prev.electricityKNumber,
+    city: customer.city || prev.city,
+    zone: customer.zone || prev.zone,
+    address: customer.address || prev.address,
+    branchName: customer.branchName || prev.branchName,
+  }));
+
+  setCustomerSearch(
+    `${customer.customerCode || ''} ${customer.customerName || ''}`.trim(),
+  );
+  setCustomerResults([]);
 };
 
 useEffect(() => {
   fetchBranches();
-  fetchCustomers();
 }, []);
 
 const addPendingDocument = () => {
@@ -617,34 +656,44 @@ router.push(`/project/${createdProjectId}`);
             className="rounded-xl border p-3"
           />
 
-          <select
-  value={form.customerUserId}
-  onChange={(e) => {
-    const selectedCustomer = customers.find(
-      (c) => String(c.id) === e.target.value,
-    );
+          <div className="relative md:col-span-3">
+  <input
+    placeholder="Search Customer Master by Code / Name / Mobile / K Number"
+    value={customerSearch}
+    onChange={(e) => searchCustomers(e.target.value)}
+    className="w-full rounded-xl border p-3"
+  />
 
-    setForm({
-      ...form,
-      customerUserId: e.target.value,
-      customerUserName: selectedCustomer?.name || '',
-    });
-  }}
-  className="rounded-xl border p-3"
->
-  <option value="">
-    Select Customer Account (Optional)
-  </option>
+  {form.customerCode && (
+    <p className="mt-1 text-xs font-semibold text-green-700">
+      Linked Customer: {form.customerCode} - {form.customerName}
+    </p>
+  )}
 
-  {customers.map((customer) => (
-    <option
-      key={customer.id}
-      value={customer.id}
-    >
-      {customer.name}
-    </option>
-  ))}
-</select>
+  {customerResults.length > 0 && (
+    <div className="absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-xl border bg-white shadow">
+      {customerResults.map((customer) => (
+        <button
+          key={customer.id}
+          type="button"
+          onClick={() => selectCustomer(customer)}
+          className="block w-full border-b p-3 text-left text-sm hover:bg-blue-50"
+        >
+          <p className="font-semibold text-gray-800">
+            {customer.customerCode} - {customer.customerName}
+          </p>
+          <p className="text-xs text-gray-500">
+            Mobile: {customer.mobile || '-'} | K No:{' '}
+            {customer.electricityKNumber || '-'}
+          </p>
+          <p className="text-xs text-gray-500">
+            {customer.city || '-'} / {customer.zone || '-'}
+          </p>
+        </button>
+      ))}
+    </div>
+  )}
+</div>
 
           <input
             name="aadhaarLinkedMobile"

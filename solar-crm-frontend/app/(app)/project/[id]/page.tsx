@@ -78,6 +78,8 @@ projectOwnerRole?: string;
   customerGmail?: string;
   customerUserId?: number;
 customerUserName?: string;
+customerId?: number;
+customerCode?: string;
   aadhaarLinkedMobile?: string;
   panelBrand?: string;
   dcrPanelCount?: number;
@@ -309,10 +311,17 @@ type ProjectContractorMaster = {
   isActive?: boolean;
 };
 
-type CustomerUser = {
+type CustomerMaster = {
   id: number;
-  name: string;
+  customerCode?: string;
+  customerName?: string;
+  mobile?: string;
   email?: string;
+  electricityKNumber?: string;
+  address?: string;
+  city?: string;
+  zone?: string;
+  branchName?: string;
 };
 
 function money(value?: number) {
@@ -584,9 +593,12 @@ const [receivingPaymentId, setReceivingPaymentId] =
 const [editLoading, setEditLoading] =
   useState(false);
 
-  const [customers, setCustomers] = useState<CustomerUser[]>([]);
+  const [customerSearch, setCustomerSearch] = useState('');
+const [customerResults, setCustomerResults] = useState<CustomerMaster[]>([]);
 
 const [editForm, setEditForm] = useState({
+  customerId: '',
+customerCode: '',
   customerName: '',
   customerPhone: '',
   city: '',
@@ -666,6 +678,55 @@ const [receivePaymentForms, setReceivePaymentForms] =
       setLoading(false);
     }
   };
+
+  const searchCustomers = async (value: string) => {
+  setCustomerSearch(value);
+
+  if (value.trim().length < 2) {
+    setCustomerResults([]);
+    return;
+  }
+
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/customers/search`,
+      {
+        params: { query: value },
+        headers: token
+          ? { Authorization: `Bearer ${token}` }
+          : {},
+      },
+    );
+
+    setCustomerResults(res.data || []);
+  } catch (error) {
+    console.error('Failed to search customers', error);
+  }
+};
+
+const selectCustomer = (customer: CustomerMaster) => {
+  setEditForm((prev) => ({
+    ...prev,
+    customerId: String(customer.id || ''),
+    customerCode: customer.customerCode || '',
+    customerName: customer.customerName || prev.customerName,
+    customerPhone: customer.mobile || prev.customerPhone,
+    customerGmail: customer.email || prev.customerGmail,
+    electricityKNumber:
+      customer.electricityKNumber || prev.electricityKNumber,
+    city: customer.city || prev.city,
+    zone: customer.zone || prev.zone,
+    address: customer.address || prev.address,
+    branchName: customer.branchName || prev.branchName,
+  }));
+
+  setCustomerSearch(
+    `${customer.customerCode || ''} ${customer.customerName || ''}`.trim(),
+  );
+  setCustomerResults([]);
+};
 
   const fetchDocuments = async () => {
   try {
@@ -990,8 +1051,10 @@ const openEditProject = () => {
   if (!project) return;
 
   setEditForm({
-    customerName: project.customerName || '',
-    customerPhone: project.customerPhone || '',
+    customerId: String((project as any).customerId || ''),
+customerCode: (project as any).customerCode || '',
+customerName: project.customerName || '',
+customerPhone: project.customerPhone || '',
     city: project.city || '',
     zone: project.zone || '',
     address: project.address || '',
@@ -1043,6 +1106,13 @@ customerUserName: (project as any).customerUserName || '',
 
     remarks: project.remarks || '',
   });
+
+  setCustomerSearch(
+  (project as any).customerCode
+    ? `${(project as any).customerCode} ${project.customerName || ''}`
+    : '',
+);
+setCustomerResults([]);
 
   setShowEditModal(true);
 };
@@ -1829,20 +1899,6 @@ const fetchProjectEditHistory = async () => {
       'Failed to load project history:',
       error,
     );
-  }
-};
-
-const fetchCustomers = async () => {
-  try {
-    const token = localStorage.getItem('token');
-
-    const res = await axios.get(`${API_BASE_URL}/users/customers`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-
-    setCustomers(res.data || []);
-  } catch (error) {
-    console.error('Failed to load customers', error);
   }
 };
 
@@ -2692,7 +2748,6 @@ const canManageContractor = hasRole([
   useEffect(() => {
   if (projectId) {
     fetchProject();
-    fetchCustomers();
   }
 }, [projectId]);
 
@@ -3403,36 +3458,44 @@ const remainingAmountToCollect =
   <input placeholder="Project Size" value={editForm.projectSize} onChange={(e) => setEditForm({ ...editForm, projectSize: e.target.value })} className="rounded-xl border p-3" />
   <input placeholder="Electricity K Number" value={editForm.electricityKNumber} onChange={(e) => setEditForm({ ...editForm, electricityKNumber: e.target.value })} className="rounded-xl border p-3" />
   <input placeholder="Customer Gmail" value={editForm.customerGmail} onChange={(e) => setEditForm({ ...editForm, customerGmail: e.target.value })} className="rounded-xl border p-3" />
-  <select
-  value={editForm.customerUserId}
-  onChange={(e) => {
-    const selectedCustomer = customers.find(
-      (customer) =>
-        String(customer.id) === e.target.value,
-    );
+  <div className="relative md:col-span-3">
+  <input
+    placeholder="Search Customer Master by Code / Name / Mobile / K Number"
+    value={customerSearch}
+    onChange={(e) => searchCustomers(e.target.value)}
+    className="w-full rounded-xl border p-3"
+  />
 
-    setEditForm({
-      ...editForm,
-      customerUserId: e.target.value,
-      customerUserName:
-        selectedCustomer?.name || '',
-    });
-  }}
-  className="rounded-xl border p-3"
->
-  <option value="">
-    Select Customer Account (Optional)
-  </option>
+  {editForm.customerCode && (
+    <p className="mt-1 text-xs font-semibold text-green-700">
+      Linked Customer: {editForm.customerCode} - {editForm.customerName}
+    </p>
+  )}
 
-  {customers.map((customer) => (
-    <option
-      key={customer.id}
-      value={customer.id}
-    >
-      {customer.name}
-    </option>
-  ))}
-</select>
+  {customerResults.length > 0 && (
+    <div className="absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-xl border bg-white shadow">
+      {customerResults.map((customer) => (
+        <button
+          key={customer.id}
+          type="button"
+          onClick={() => selectCustomer(customer)}
+          className="block w-full border-b p-3 text-left text-sm hover:bg-blue-50"
+        >
+          <p className="font-semibold text-gray-800">
+            {customer.customerCode} - {customer.customerName}
+          </p>
+          <p className="text-xs text-gray-500">
+            Mobile: {customer.mobile || '-'} | K No:{' '}
+            {customer.electricityKNumber || '-'}
+          </p>
+          <p className="text-xs text-gray-500">
+            {customer.city || '-'} / {customer.zone || '-'}
+          </p>
+        </button>
+      ))}
+    </div>
+  )}
+</div>
   <input placeholder="Aadhaar Linked Mobile" value={editForm.aadhaarLinkedMobile} onChange={(e) => setEditForm({ ...editForm, aadhaarLinkedMobile: e.target.value })} className="rounded-xl border p-3" />
 
   <h3 className="col-span-full mt-4 text-lg font-bold text-gray-800">
@@ -3516,6 +3579,14 @@ const remainingAmountToCollect =
         <div className="grid gap-3 md:grid-cols-3">
           <Field label="Customer Name" value={project.customerName} />
           <Field label="Phone" value={project.customerPhone} />
+          <Field
+  label="Customer Master"
+  value={
+    (project as any).customerCode
+      ? `${(project as any).customerCode} (#${(project as any).customerId})`
+      : 'Not linked'
+  }
+/>
           <Field label="City" value={project.city} />
           <Field label="Zone" value={project.zone} />
           <Field label="Branch" value={project.branchName} />
