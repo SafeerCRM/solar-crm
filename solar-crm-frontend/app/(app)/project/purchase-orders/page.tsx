@@ -166,6 +166,27 @@ type ManualPiItem = {
   discountAmount: string;
 };
 
+type ManualPoItem = {
+  materialName: string;
+  category: string;
+  brand: string;
+  unit: string;
+  quantity: string;
+  purchaseRate: string;
+  gstPercent: string;
+};
+
+type ManualInvoiceItem = {
+  itemName: string;
+  category: string;
+  brand: string;
+  unit: string;
+  quantity: string;
+  finalRate: string;
+  gstPercent: string;
+  discountAmount: string;
+};
+
 export default function PurchaseOrdersPage() {
   const [items, setItems] = useState<PurchaseItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -226,6 +247,9 @@ const [creatingManualPi, setCreatingManualPi] =
   useState(false);
 
   const [manualPiItems, setManualPiItems] = useState<ManualPiItem[]>([]);
+
+  const [manualPoItems, setManualPoItems] = useState<ManualPoItem[]>([]);
+const [manualInvoiceItems, setManualInvoiceItems] = useState<ManualInvoiceItem[]>([]);
 
   const [manualInvoice, setManualInvoice] =
   useState({
@@ -1262,16 +1286,67 @@ const canGeneratePo =
   }
 };
 
-const createManualPo = async () => {
-  if (
-    !manualPo.projectId ||
-    !manualPo.vendorName ||
-    !manualPo.materialName
-  ) {
-    alert(
-      'Project, vendor and material are required',
-    );
+const addManualPoItem = () => {
+  if (!manualPo.materialName) {
+    alert('Please select material');
+    return;
+  }
 
+  if (!Number(manualPo.quantity || 0)) {
+    alert('Please enter quantity');
+    return;
+  }
+
+  setManualPoItems([
+    ...manualPoItems,
+    {
+      materialName: manualPo.materialName,
+      category: manualPo.category,
+      brand: manualPo.brand,
+      unit: manualPo.unit,
+      quantity: manualPo.quantity,
+      purchaseRate: manualPo.purchaseRate,
+      gstPercent: manualPo.gstPercent,
+    },
+  ]);
+
+  setManualPo({
+    ...manualPo,
+    materialName: '',
+    category: '',
+    brand: '',
+    unit: '',
+    quantity: '',
+    purchaseRate: '',
+    gstPercent: '18',
+  });
+};
+
+const createManualPo = async () => {
+  if (!manualPo.projectId || !manualPo.vendorName) {
+    alert('Project and vendor are required');
+    return;
+  }
+
+  const itemsToSubmit =
+    manualPoItems.length > 0
+      ? manualPoItems
+      : manualPo.materialName
+        ? [
+            {
+              materialName: manualPo.materialName,
+              category: manualPo.category,
+              brand: manualPo.brand,
+              unit: manualPo.unit,
+              quantity: manualPo.quantity,
+              purchaseRate: manualPo.purchaseRate,
+              gstPercent: manualPo.gstPercent,
+            },
+          ]
+        : [];
+
+  if (itemsToSubmit.length === 0) {
+    alert('Please add at least one material');
     return;
   }
 
@@ -1283,55 +1358,26 @@ const createManualPo = async () => {
     await axios.post(
       `${API_BASE_URL}/project/purchase-order/manual`,
       {
-        projectId: Number(
-          manualPo.projectId,
-        ),
-
-        vendorName:
-          manualPo.vendorName,
-
+        projectId: Number(manualPo.projectId),
+        vendorName: manualPo.vendorName,
         remarks: manualPo.remarks,
 
-        items: [
-          {
-            materialName:
-              manualPo.materialName,
-
-            category:
-              manualPo.category,
-
-            brand:
-              manualPo.brand,
-
-            unit:
-              manualPo.unit,
-
-            quantity: Number(
-              manualPo.quantity || 0,
-            ),
-
-            purchaseRate: Number(
-              manualPo.purchaseRate || 0,
-            ),
-
-            gstPercent: Number(
-              manualPo.gstPercent || 0,
-            ),
-          },
-        ],
+        items: itemsToSubmit.map((item) => ({
+          materialName: item.materialName,
+          category: item.category,
+          brand: item.brand,
+          unit: item.unit,
+          quantity: Number(item.quantity || 0),
+          purchaseRate: Number(item.purchaseRate || 0),
+          gstPercent: Number(item.gstPercent || 0),
+        })),
       },
       {
-        headers: token
-          ? {
-              Authorization: `Bearer ${token}`,
-            }
-          : {},
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       },
     );
 
-    alert(
-      'Manual purchase order created successfully',
-    );
+    alert('Manual purchase order created successfully');
 
     setManualPo({
       projectId: '',
@@ -1346,14 +1392,12 @@ const createManualPo = async () => {
       remarks: '',
     });
 
+    setManualPoItems([]);
+
     fetchGeneratedPos();
   } catch (error: any) {
     console.error(error);
-
-    alert(
-      error?.response?.data?.message ||
-        'Failed to create manual PO',
-    );
+    alert(error?.response?.data?.message || 'Failed to create manual PO');
   } finally {
     setCreatingManualPo(false);
   }
@@ -1495,15 +1539,70 @@ const createManualPi = async () => {
   }
 };
 
-const createManualInvoice = async () => {
-  if (
-    !manualInvoice.projectId ||
-    !manualInvoice.itemName
-  ) {
-    alert(
-      'Project and item are required',
-    );
+const addManualInvoiceItem = () => {
+  if (!manualInvoice.itemName) {
+    alert('Please select item');
+    return;
+  }
 
+  if (!Number(manualInvoice.quantity || 0)) {
+    alert('Please enter quantity');
+    return;
+  }
+
+  setManualInvoiceItems([
+    ...manualInvoiceItems,
+    {
+      itemName: manualInvoice.itemName,
+      category: manualInvoice.category,
+      brand: manualInvoice.brand,
+      unit: manualInvoice.unit,
+      quantity: manualInvoice.quantity,
+      finalRate: manualInvoice.finalRate,
+      gstPercent: manualInvoice.gstPercent,
+      discountAmount: manualInvoice.discountAmount,
+    },
+  ]);
+
+  setManualInvoice({
+    ...manualInvoice,
+    itemName: '',
+    category: '',
+    brand: '',
+    unit: '',
+    quantity: '',
+    finalRate: '',
+    gstPercent: '18',
+    discountAmount: '0',
+  });
+};
+
+const createManualInvoice = async () => {
+  if (!manualInvoice.projectId) {
+    alert('Project is required');
+    return;
+  }
+
+  const itemsToSubmit =
+    manualInvoiceItems.length > 0
+      ? manualInvoiceItems
+      : manualInvoice.itemName
+        ? [
+            {
+              itemName: manualInvoice.itemName,
+              category: manualInvoice.category,
+              brand: manualInvoice.brand,
+              unit: manualInvoice.unit,
+              quantity: manualInvoice.quantity,
+              finalRate: manualInvoice.finalRate,
+              gstPercent: manualInvoice.gstPercent,
+              discountAmount: manualInvoice.discountAmount,
+            },
+          ]
+        : [];
+
+  if (itemsToSubmit.length === 0) {
+    alert('Please add at least one item');
     return;
   }
 
@@ -1515,57 +1614,26 @@ const createManualInvoice = async () => {
     await axios.post(
       `${API_BASE_URL}/project/final-invoice/manual`,
       {
-        projectId: Number(
-          manualInvoice.projectId,
-        ),
+        projectId: Number(manualInvoice.projectId),
+        remarks: manualInvoice.remarks,
 
-        remarks:
-          manualInvoice.remarks,
-
-        items: [
-          {
-            itemName:
-              manualInvoice.itemName,
-
-            category:
-              manualInvoice.category,
-
-            brand:
-              manualInvoice.brand,
-
-            unit:
-              manualInvoice.unit,
-
-            quantity: Number(
-              manualInvoice.quantity || 0,
-            ),
-
-            finalRate: Number(
-              manualInvoice.finalRate || 0,
-            ),
-
-            gstPercent: Number(
-              manualInvoice.gstPercent || 0,
-            ),
-
-            discountAmount: Number(
-              manualInvoice.discountAmount || 0,
-            ),
-          },
-        ],
+        items: itemsToSubmit.map((item) => ({
+          itemName: item.itemName,
+          category: item.category,
+          brand: item.brand,
+          unit: item.unit,
+          quantity: Number(item.quantity || 0),
+          finalRate: Number(item.finalRate || 0),
+          gstPercent: Number(item.gstPercent || 0),
+          discountAmount: Number(item.discountAmount || 0),
+        })),
       },
       {
-        headers: token
-          ? {
-              Authorization: `Bearer ${token}`,
-            }
-          : {},
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       },
     );
 
-    alert(
-      'Manual final invoice created successfully',
-    );
+    alert('Manual final invoice created successfully');
 
     setManualInvoice({
       projectId: '',
@@ -1580,14 +1648,12 @@ const createManualInvoice = async () => {
       remarks: '',
     });
 
+    setManualInvoiceItems([]);
+
     fetchFinalInvoices();
   } catch (error: any) {
     console.error(error);
-
-    alert(
-      error?.response?.data?.message ||
-        'Failed to create manual invoice',
-    );
+    alert(error?.response?.data?.message || 'Failed to create manual invoice');
   } finally {
     setCreatingManualInvoice(false);
   }
@@ -2109,6 +2175,14 @@ const generateProformaInvoice = async () => {
   />
 
   <button
+  type="button"
+  onClick={addManualPoItem}
+  className="rounded-xl bg-gray-800 px-4 py-3 text-sm font-semibold text-white hover:bg-black"
+>
+  Add Material
+</button>
+
+  <button
     onClick={createManualPo}
     disabled={creatingManualPo}
     className="mt-4 rounded-xl bg-green-600 px-5 py-3 font-semibold text-white disabled:opacity-50"
@@ -2553,6 +2627,14 @@ onChange={(e) =>
     className="mt-3 w-full rounded-xl border p-3"
     rows={3}
   />
+
+  <button
+  type="button"
+  onClick={addManualInvoiceItem}
+  className="rounded-xl bg-gray-800 px-4 py-3 text-sm font-semibold text-white hover:bg-black"
+>
+  Add Item
+</button>
 
   <button
     onClick={createManualInvoice}
