@@ -12377,10 +12377,14 @@ async getDealerOrders(query: any) {
   const search = String(query?.search || '').trim().toLowerCase();
   const status = String(query?.status || '').trim();
   const dealerId = Number(query?.dealerId || 0);
+  const showHidden =
+  String(query?.showHidden || 'false') === 'true';
 
   const qb = this.projectDealerOrderRepository
     .createQueryBuilder('dealerOrder')
-    .where('dealerOrder.isHidden = false')
+    .where('dealerOrder.isHidden = :showHidden', {
+  showHidden,
+})
     .orderBy('dealerOrder.createdAt', 'DESC')
     .skip(skip)
     .take(limit);
@@ -12626,5 +12630,49 @@ async getDealerAnalytics() {
     totalPending,
     overdueCreditOrders,
   };
+}
+
+async hideDealerOrder(id: number, body: any, user: any) {
+  const order =
+    await this.projectDealerOrderRepository.findOne({
+      where: { id },
+    });
+
+  if (!order) {
+    throw new NotFoundException('Dealer order not found');
+  }
+
+  order.isHidden = true;
+  order.hiddenReason =
+    body?.reason || 'Hidden by user';
+  order.hiddenAt = new Date();
+  order.hiddenBy = user?.id || user?.userId || null;
+  order.hiddenByName =
+    user?.name || user?.email || '';
+
+  return this.projectDealerOrderRepository.save(order);
+}
+
+async restoreDealerOrder(id: number, body: any, user: any) {
+  const order =
+    await this.projectDealerOrderRepository.findOne({
+      where: { id },
+    });
+
+  if (!order) {
+    throw new NotFoundException('Dealer order not found');
+  }
+
+  order.isHidden = false;
+  order.hiddenReason = null as any;
+  order.hiddenAt = null as any;
+  order.hiddenBy = null as any;
+  order.hiddenByName = null as any;
+
+  order.adminRemarks = `${
+    order.adminRemarks || ''
+  }\nRestored: ${body?.reason || 'Restored by user'}`.trim();
+
+  return this.projectDealerOrderRepository.save(order);
 }
 }
