@@ -476,6 +476,13 @@ projectOwnerId: payload?.projectOwnerId
   ? Number(payload.projectOwnerId)
   : undefined,
 
+  customerUserId: payload?.customerUserId
+  ? Number(payload.customerUserId)
+  : undefined,
+
+customerUserName:
+  String(payload?.customerUserName || '').trim() || undefined,
+
   status: ProjectStatus.PENDING_APPROVAL,
   marketingHeadApprovalStatus: ProjectApprovalStatus.PENDING,
   ownerApprovalStatus: ProjectApprovalStatus.PENDING,
@@ -877,7 +884,6 @@ const numberFields = [
   'loanAmount',
   'finalCost',
   'projectCost',
-  'customerUserId',
   'subsidy',
   'netAmount',
   'discomExpenditureAmount',
@@ -894,6 +900,15 @@ for (const field of numberFields) {
         ? 0
         : Number(value);
   }
+}
+
+if (Object.prototype.hasOwnProperty.call(safeData, 'customerUserId')) {
+  const value = (safeData as any).customerUserId;
+
+  (safeData as any).customerUserId =
+    value === '' || value === null || value === undefined
+      ? undefined
+      : Number(value);
 }
 
 const dateFields = [
