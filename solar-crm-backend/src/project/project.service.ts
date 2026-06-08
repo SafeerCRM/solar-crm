@@ -143,6 +143,18 @@ import { ProjectConsumption } from './project-consumption.entity';
 
 import { ProjectCustomerUpdate } from './project-customer-update.entity';
 
+import {
+  ProjectDealerOrder,
+  ProjectDealerOrderStatus,
+  ProjectDealerPaymentType,
+} from './project-dealer-order.entity';
+import { ProjectDealerOrderItem } from './project-dealer-order-item.entity';
+import {
+  ProjectDealerPayment,
+  ProjectDealerPaymentStatus,
+} from './project-dealer-payment.entity';
+import { ProjectDealerComment } from './project-dealer-comment.entity';
+
 @Injectable()
 export class ProjectService {
 
@@ -168,6 +180,27 @@ private generatePiNumber() {
 
 private generateFinalInvoiceNumber() {
   return `INV-${Date.now()}`;
+}
+
+private generateDealerOrderNumber() {
+  return `DO-${Date.now()}`;
+}
+
+private getMaterialSellingRate(material: ProjectMaterialMaster) {
+  const directSellingRate = Number((material as any).sellingRate || 0);
+
+  if (directSellingRate > 0) {
+    return directSellingRate;
+  }
+
+  const baseRate = Number((material as any).rate || 0);
+  const expectedMargin = Number((material as any).expectedMargin || 0);
+
+  if ((material as any).marginType === ProjectMaterialMarginType.PERCENT) {
+    return baseRate + (baseRate * expectedMargin) / 100;
+  }
+
+  return baseRate + expectedMargin;
 }
 
 private readonly projectCreationRequiredDocumentGroups = [
@@ -448,6 +481,18 @@ private readonly projectConsumptionRepository: Repository<ProjectConsumption>,
 
 @InjectRepository(ProjectCustomerUpdate)
 private readonly projectCustomerUpdateRepository: Repository<ProjectCustomerUpdate>,
+
+@InjectRepository(ProjectDealerOrder)
+private readonly projectDealerOrderRepository: Repository<ProjectDealerOrder>,
+
+@InjectRepository(ProjectDealerOrderItem)
+private readonly projectDealerOrderItemRepository: Repository<ProjectDealerOrderItem>,
+
+@InjectRepository(ProjectDealerPayment)
+private readonly projectDealerPaymentRepository: Repository<ProjectDealerPayment>,
+
+@InjectRepository(ProjectDealerComment)
+private readonly projectDealerCommentRepository: Repository<ProjectDealerComment>,
 
     private readonly calculatorService: CalculatorService,
 
@@ -12007,5 +12052,579 @@ async getContractorComments(
     where: { assignmentId },
     order: { createdAt: 'DESC' },
   });
+}
+
+async getDealerCatalog(query: any) {
+  const page = Math.max(Number(query?.page || 1), 1);
+  const limit = Math.min(Math.max(Number(query?.limit || 20), 1), 100);
+  const skip = (page - 1) * limit;
+
+  const search = String(query?.search || '').trim().toLowerCase();
+
+  const qb = this.projectMaterialMasterRepository
+    .createQueryBuilder('material')
+    .where('material.isActive = true')
+    .orderBy('material.name', 'ASC')
+    .skip(skip)
+    .take(limit);
+
+  if (search) {
+    qb.andWhere(
+      `(
+        LOWER(material.name) LIKE :search
+        OR LOWER(material.category) LIKE :search
+        OR LOWER(material.brand) LIKE :search
+      )`,
+      {
+        search: `%${search}%`,
+      },
+    );
+  }
+
+  const [materials, total] = await qb.getManyAndCount();
+
+  const stockRows = await this.projectStockItemRepository.find({
+    where: {
+      isHidden: false,
+    },
+  });
+
+  const stockByMaterial = new Map<number, number>();
+
+  for (const stock of stockRows) {
+    const materialId = Number((stock as any).materialId || 0);
+
+    stockByMaterial.set(
+      materialId,
+      Number(stockByMaterial.get(materialId) || 0) +
+        Number((stock as any).currentQuantity || 0),
+    );
+  }
+
+  const data = materials.map((material) => {
+    const sellingRate = this.getMaterialSellingRate(material);
+    const gstPercent = Number((material as any).gstPercent || 0);
+    const sellingRateWithGst =
+      sellingRate + (sellingRate * gstPercent) / 100;
+
+    return {
+      id: material.id,
+      name: material.name,
+      category: material.category,
+      brand: material.brand,
+      unit: material.unit,
+      hsnCode: (material as any).hsnCode || '',
+      gstPercent,
+      sellingRate,
+      sellingRateWithGst,
+      availableQuantity: stockByMaterial.get(material.id) || 0,
+      expectedAvailabilityDate: null,
+      remarks: material.remarks || '',
+    };
+  });
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
+}
+
+async getDealers(query: any) {
+  const page = Math.max(Number(query?.page || 1), 1);
+  const limit = Math.min(Math.max(Number(query?.limit || 20), 1), 100);
+  const skip = (page - 1) * limit;
+
+  const search = String(query?.search || '').trim().toLowerCase();
+  const branch = String(query?.branch || '').trim().toLowerCase();
+  const showHidden = String(query?.showHidden || 'false') === 'true';
+
+  const qb = this.projectVendorRepository
+    .createQueryBuilder('dealer')
+    .where(
+      `(
+        dealer.partyType = :dealerType
+        OR dealer.canBuyFromUs = true
+      )`,
+      {
+        dealerType: 'DEALER',
+      },
+    )
+    .orderBy('dealer.vendorName', 'ASC')
+    .skip(skip)
+    .take(limit);
+
+  if (!showHidden) {
+    qb.andWhere('dealer.isActive = true');
+  } else {
+    qb.andWhere('dealer.isActive = false');
+  }
+
+  if (search) {
+    qb.andWhere(
+      `(
+        LOWER(dealer.vendorName) LIKE :search
+        OR LOWER(dealer.phone) LIKE :search
+        OR LOWER(dealer.gstNumber) LIKE :search
+        OR LOWER(dealer.city) LIKE :search
+      )`,
+      {
+        search: `%${search}%`,
+      },
+    );
+  }
+
+  if (branch) {
+    qb.andWhere('LOWER(dealer.city) LIKE :branch', {
+      branch: `%${branch}%`,
+    });
+  }
+
+  const [data, total] = await qb.getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
+}
+
+async createDealer(body: any) {
+  if (!String(body?.vendorName || '').trim()) {
+    throw new BadRequestException('Dealer name is required');
+  }
+
+  const dealer = this.projectVendorRepository.create({
+    vendorName: String(body.vendorName || '').trim(),
+    contactPerson: body?.contactPerson || '',
+    phone: body?.phone || '',
+    email: body?.email || '',
+    gstNumber: body?.gstNumber || '',
+    address: body?.address || '',
+    city: body?.city || '',
+    state: body?.state || '',
+    materialCategory: body?.materialCategory || '',
+    remarks: body?.remarks || '',
+    partyType: 'DEALER',
+    canSellToUs: false,
+    canBuyFromUs: true,
+    openingBalance: Number(body?.openingBalance || 0),
+    isActive: true,
+  });
+
+  return this.projectVendorRepository.save(dealer);
+}
+
+async createDealerOrder(body: any, user: any) {
+  const dealerId = Number(body?.dealerId || 0);
+
+  if (!dealerId) {
+    throw new BadRequestException('Dealer is required');
+  }
+
+  const dealer = await this.projectVendorRepository.findOne({
+    where: {
+      id: dealerId,
+    },
+  });
+
+  if (!dealer || dealer.isActive === false) {
+    throw new NotFoundException('Active dealer not found');
+  }
+
+  const items = Array.isArray(body?.items) ? body.items : [];
+
+  if (!items.length) {
+    throw new BadRequestException('At least one material is required');
+  }
+
+  let subtotalAmount = 0;
+  let discountAmount = 0;
+  let gstAmount = 0;
+  let totalAmount = 0;
+
+  const order = this.projectDealerOrderRepository.create({
+    orderNumber: this.generateDealerOrderNumber(),
+    dealerId: dealer.id,
+    dealerName: dealer.vendorName,
+    dealerPhone: dealer.phone || '',
+    dealerGstNumber: dealer.gstNumber || '',
+    dealerAddress: dealer.address || '',
+    branchName: body?.branchName || dealer.city || '',
+    status: ProjectDealerOrderStatus.SUBMITTED,
+    paymentType:
+      body?.paymentType === ProjectDealerPaymentType.CREDIT
+        ? ProjectDealerPaymentType.CREDIT
+        : body?.paymentType === ProjectDealerPaymentType.ONLINE
+          ? ProjectDealerPaymentType.ONLINE
+          : body?.paymentType === ProjectDealerPaymentType.CHEQUE
+            ? ProjectDealerPaymentType.CHEQUE
+            : ProjectDealerPaymentType.CASH,
+    creditDueDate: body?.creditDueDate ? new Date(body.creditDueDate) : null,
+    expectedDeliveryAt: body?.expectedDeliveryAt
+      ? new Date(body.expectedDeliveryAt)
+      : null,
+    assignedStaffName: body?.assignedStaffName || '',
+    assignedStaffPhone: body?.assignedStaffPhone || '',
+    createdBy: user?.id || user?.userId || null,
+    createdByName: user?.name || user?.email || '',
+    remarks: body?.remarks || '',
+    } as Partial<ProjectDealerOrder>);
+
+  const savedOrder = await this.projectDealerOrderRepository.save(order);
+
+  const itemRows: ProjectDealerOrderItem[] = [];
+
+  for (const item of items) {
+    const materialId = Number(item?.materialId || 0);
+    const quantity = Number(item?.quantity || 0);
+
+    if (!materialId || quantity <= 0) {
+      continue;
+    }
+
+    const material = await this.projectMaterialMasterRepository.findOne({
+      where: {
+        id: materialId,
+        isActive: true,
+      },
+    });
+
+    if (!material) {
+      continue;
+    }
+
+    const sellingRate = this.getMaterialSellingRate(material);
+    const gstPercent = Number((material as any).gstPercent || 0);
+    const itemDiscount = Number(item?.discountAmount || 0);
+    const baseSubtotal = sellingRate * quantity;
+    const taxableSubtotal = Math.max(baseSubtotal - itemDiscount, 0);
+    const itemGstAmount = (taxableSubtotal * gstPercent) / 100;
+    const itemTotal = taxableSubtotal + itemGstAmount;
+
+    subtotalAmount += baseSubtotal;
+    discountAmount += itemDiscount;
+    gstAmount += itemGstAmount;
+    totalAmount += itemTotal;
+
+    const stockRows = await this.projectStockItemRepository.find({
+      where: {
+        materialId,
+        isHidden: false,
+      },
+    });
+
+    const stockAvailableQuantity = stockRows.reduce(
+      (sum, stock) => sum + Number((stock as any).currentQuantity || 0),
+      0,
+    );
+
+    itemRows.push(
+      this.projectDealerOrderItemRepository.create({
+        dealerOrderId: savedOrder.id,
+        materialId,
+        materialName: material.name,
+        category: material.category,
+        brand: material.brand,
+        unit: material.unit,
+        hsnCode: (material as any).hsnCode || '',
+        quantity,
+        acceptedQuantity: 0,
+        pendingQuantity: quantity,
+        sellingRate,
+        gstPercent,
+        discountAmount: itemDiscount,
+        subtotalAmount: baseSubtotal,
+        gstAmount: itemGstAmount,
+        totalAmount: itemTotal,
+        stockAvailableQuantity,
+        remarks: item?.remarks || '',
+      }),
+    );
+  }
+
+  if (!itemRows.length) {
+    await this.projectDealerOrderRepository.delete(savedOrder.id);
+    throw new BadRequestException('No valid material items found');
+  }
+
+  await this.projectDealerOrderItemRepository.save(itemRows);
+
+  savedOrder.subtotalAmount = subtotalAmount;
+  savedOrder.discountAmount = discountAmount;
+  savedOrder.gstAmount = gstAmount;
+  savedOrder.totalAmount = totalAmount;
+  savedOrder.pendingAmount = totalAmount;
+
+  const finalOrder = await this.projectDealerOrderRepository.save(savedOrder);
+
+  return {
+    message: 'Dealer order created successfully',
+    order: finalOrder,
+    items: itemRows,
+  };
+}
+
+async getDealerOrders(query: any) {
+  const page = Math.max(Number(query?.page || 1), 1);
+  const limit = Math.min(Math.max(Number(query?.limit || 20), 1), 100);
+  const skip = (page - 1) * limit;
+
+  const search = String(query?.search || '').trim().toLowerCase();
+  const status = String(query?.status || '').trim();
+  const dealerId = Number(query?.dealerId || 0);
+
+  const qb = this.projectDealerOrderRepository
+    .createQueryBuilder('dealerOrder')
+    .where('dealerOrder.isHidden = false')
+    .orderBy('dealerOrder.createdAt', 'DESC')
+    .skip(skip)
+    .take(limit);
+
+  if (dealerId) {
+    qb.andWhere('dealerOrder.dealerId = :dealerId', { dealerId });
+  }
+
+  if (status) {
+    qb.andWhere('dealerOrder.status = :status', { status });
+  }
+
+  if (search) {
+    qb.andWhere(
+      `(
+        LOWER(dealerOrder.orderNumber) LIKE :search
+        OR LOWER(dealerOrder.dealerName) LIKE :search
+        OR LOWER(dealerOrder.dealerPhone) LIKE :search
+        OR LOWER(dealerOrder.branchName) LIKE :search
+      )`,
+      {
+        search: `%${search}%`,
+      },
+    );
+  }
+
+  const [data, total] = await qb.getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
+}
+
+async getDealerOrderById(id: number) {
+  const order = await this.projectDealerOrderRepository.findOne({
+    where: {
+      id,
+    },
+  });
+
+  if (!order) {
+    throw new NotFoundException('Dealer order not found');
+  }
+
+  const items = await this.projectDealerOrderItemRepository.find({
+    where: {
+      dealerOrderId: id,
+    },
+    order: {
+      id: 'ASC',
+    },
+  });
+
+  const payments = await this.projectDealerPaymentRepository.find({
+    where: {
+      dealerOrderId: id,
+    },
+    order: {
+      createdAt: 'DESC',
+    },
+  });
+
+  const comments = await this.projectDealerCommentRepository.find({
+    where: {
+      dealerOrderId: id,
+    },
+    order: {
+      createdAt: 'DESC',
+    },
+  });
+
+  return {
+    order,
+    items,
+    payments,
+    comments,
+  };
+}
+
+async updateDealerOrderStatus(id: number, body: any, user: any) {
+  const order = await this.projectDealerOrderRepository.findOne({
+    where: {
+      id,
+    },
+  });
+
+  if (!order) {
+    throw new NotFoundException('Dealer order not found');
+  }
+
+  const allowedStatuses = Object.values(ProjectDealerOrderStatus);
+
+  if (!allowedStatuses.includes(body?.status)) {
+    throw new BadRequestException('Invalid dealer order status');
+  }
+
+  order.status = body.status;
+
+  if (body?.expectedDeliveryAt !== undefined) {
+    (order as any).expectedDeliveryAt = body.expectedDeliveryAt
+  ? new Date(body.expectedDeliveryAt)
+  : null;
+  }
+
+  if (body?.deliveredAt !== undefined) {
+    (order as any).deliveredAt = body.deliveredAt
+  ? new Date(body.deliveredAt)
+  : null;
+  }
+
+  if (body?.adminRemarks !== undefined) {
+    order.adminRemarks = body.adminRemarks || '';
+  }
+
+  return this.projectDealerOrderRepository.save(order);
+}
+
+async addDealerOrderPayment(body: any, user: any) {
+  const dealerOrderId = Number(body?.dealerOrderId || 0);
+  const amount = Number(body?.amount || 0);
+
+  if (!dealerOrderId) {
+    throw new BadRequestException('Dealer order is required');
+  }
+
+  if (amount <= 0) {
+    throw new BadRequestException('Payment amount is required');
+  }
+
+  const order = await this.projectDealerOrderRepository.findOne({
+    where: {
+      id: dealerOrderId,
+    },
+  });
+
+  if (!order) {
+    throw new NotFoundException('Dealer order not found');
+  }
+
+  const payment = this.projectDealerPaymentRepository.create({
+    dealerOrderId,
+    dealerId: order.dealerId,
+    dealerName: order.dealerName,
+    amount,
+    paymentMode: body?.paymentMode || '',
+    transactionId: body?.transactionId || '',
+    receiptUrl: body?.receiptUrl || '',
+    status: ProjectDealerPaymentStatus.SUBMITTED,
+    createdBy: user?.id || user?.userId || null,
+    createdByName: user?.name || user?.email || '',
+    remarks: body?.remarks || '',
+  });
+
+  const savedPayment = await this.projectDealerPaymentRepository.save(payment);
+
+  order.paidAmount = Number(order.paidAmount || 0) + amount;
+  order.pendingAmount = Math.max(
+    Number(order.totalAmount || 0) - Number(order.paidAmount || 0),
+    0,
+  );
+
+  await this.projectDealerOrderRepository.save(order);
+
+  return {
+    message: 'Dealer payment submitted successfully',
+    payment: savedPayment,
+  };
+}
+
+async addDealerOrderComment(body: any, user: any) {
+  const dealerOrderId = Number(body?.dealerOrderId || 0);
+
+  if (!dealerOrderId) {
+    throw new BadRequestException('Dealer order is required');
+  }
+
+  if (!String(body?.comment || '').trim()) {
+    throw new BadRequestException('Comment is required');
+  }
+
+  const order = await this.projectDealerOrderRepository.findOne({
+    where: {
+      id: dealerOrderId,
+    },
+  });
+
+  if (!order) {
+    throw new NotFoundException('Dealer order not found');
+  }
+
+  const comment = this.projectDealerCommentRepository.create({
+    dealerOrderId,
+    dealerId: order.dealerId,
+    dealerName: order.dealerName,
+    comment: String(body.comment || '').trim(),
+    commentType: body?.commentType || 'GENERAL',
+    createdBy: user?.id || user?.userId || null,
+    createdByName: user?.name || user?.email || '',
+    createdByRole: Array.isArray(user?.roles)
+      ? user.roles.join(', ')
+      : '',
+  });
+
+  return this.projectDealerCommentRepository.save(comment);
+}
+
+async getDealerAnalytics() {
+  const orders = await this.projectDealerOrderRepository.find({
+    where: {
+      isHidden: false,
+    },
+  });
+
+  const totalOrders = orders.length;
+  const totalSales = orders.reduce(
+    (sum, order) => sum + Number(order.totalAmount || 0),
+    0,
+  );
+  const totalPaid = orders.reduce(
+    (sum, order) => sum + Number(order.paidAmount || 0),
+    0,
+  );
+  const totalPending = orders.reduce(
+    (sum, order) => sum + Number(order.pendingAmount || 0),
+    0,
+  );
+
+  const overdueCreditOrders = orders.filter((order) => {
+    if (!order.creditDueDate) return false;
+    if (Number(order.pendingAmount || 0) <= 0) return false;
+
+    return new Date(order.creditDueDate).getTime() < Date.now();
+  }).length;
+
+  return {
+    totalOrders,
+    totalSales,
+    totalPaid,
+    totalPending,
+    overdueCreditOrders,
+  };
 }
 }

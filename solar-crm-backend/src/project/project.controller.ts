@@ -1803,6 +1803,162 @@ restoreCustomerUpdate(
   );
 }
 
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'PAYMENT_MANAGER',
+  'TRADING_MANAGER',
+  'MEETING_MANAGER',
+)
+@Get('dealer/catalog')
+getDealerCatalog(@Query() query: any) {
+  return this.projectService.getDealerCatalog(query);
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'PAYMENT_MANAGER',
+  'TRADING_MANAGER',
+  'MEETING_MANAGER',
+)
+@Get('dealer/list')
+getDealers(@Query() query: any) {
+  return this.projectService.getDealers(query);
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'PAYMENT_MANAGER',
+  'TRADING_MANAGER',
+)
+@Post('dealer')
+createDealer(@Body() body: any) {
+  return this.projectService.createDealer(body);
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'PAYMENT_MANAGER',
+  'TRADING_MANAGER',
+  'MEETING_MANAGER',
+)
+@Post('dealer-order')
+createDealerOrder(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.createDealerOrder(
+    body,
+    user,
+  );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'PAYMENT_MANAGER',
+  'TRADING_MANAGER',
+  'MEETING_MANAGER',
+)
+@Get('dealer-orders')
+getDealerOrders(@Query() query: any) {
+  return this.projectService.getDealerOrders(query);
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'PAYMENT_MANAGER',
+  'TRADING_MANAGER',
+  'MEETING_MANAGER',
+)
+@Get('dealer-order/:id')
+getDealerOrderById(@Param('id') id: string) {
+  return this.projectService.getDealerOrderById(
+    Number(id),
+  );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'PAYMENT_MANAGER',
+  'TRADING_MANAGER',
+)
+@Patch('dealer-order/:id/status')
+updateDealerOrderStatus(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.updateDealerOrderStatus(
+    Number(id),
+    body,
+    user,
+  );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'PAYMENT_MANAGER',
+  'TRADING_MANAGER',
+  'MEETING_MANAGER',
+)
+@Post('dealer-payment')
+addDealerOrderPayment(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.addDealerOrderPayment(
+    body,
+    user,
+  );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'PAYMENT_MANAGER',
+  'TRADING_MANAGER',
+  'MEETING_MANAGER',
+)
+@Post('dealer-comment')
+addDealerOrderComment(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.addDealerOrderComment(
+    body,
+    user,
+  );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'PAYMENT_MANAGER',
+  'TRADING_MANAGER',
+  'MEETING_MANAGER',
+)
+@Get('dealer-analytics')
+getDealerAnalytics() {
+  return this.projectService.getDealerAnalytics();
+}
+
 @Patch(':id/hide')
 hideProject(
   @Param('id', ParseIntPipe) id: number,
