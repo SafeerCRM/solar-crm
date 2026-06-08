@@ -81,4 +81,22 @@ hiddenByName: string;
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @Column({ default: 'PROJECT' })
+invoiceType: string;
+
+@Column({ nullable: true })
+dealerId: number;
+
+@Column({ nullable: true })
+dealerName: string;
+
+@Column({ nullable: true })
+dealerPhone: string;
+
+@Column({ nullable: true })
+dealerGstNumber: string;
+
+@Column({ nullable: true })
+dealerAddress: string;
 }
