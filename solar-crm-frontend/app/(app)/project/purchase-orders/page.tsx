@@ -70,6 +70,12 @@ type ProformaInvoice = {
   id: number;
   invoiceNumber?: string;
   projectId?: number;
+    invoiceType?: string;
+  dealerId?: number;
+  dealerName?: string;
+  dealerPhone?: string;
+  dealerGstNumber?: string;
+  dealerAddress?: string;
   subtotalAmount?: number;
   discountAmount?: number;
   gstAmount?: number;
@@ -97,6 +103,12 @@ type FinalInvoice = {
   id: number;
   invoiceNumber?: string;
   projectId?: number;
+    invoiceType?: string;
+  dealerId?: number;
+  dealerName?: string;
+  dealerPhone?: string;
+  dealerGstNumber?: string;
+  dealerAddress?: string;
   subtotalAmount?: number;
   discountAmount?: number;
   gstAmount?: number;
@@ -184,6 +196,7 @@ const [creatingManualPo, setCreatingManualPo] =
 
   const [manualPi, setManualPi] = useState({
   projectId: '',
+  dealerId: '',
   itemName: '',
   category: '',
   brand: '',
@@ -1332,12 +1345,13 @@ const createManualPo = async () => {
 
 const createManualPi = async () => {
   if (
-    !manualPi.projectId ||
+    (!manualPi.projectId &&
+      !manualPi.dealerId) ||
     !manualPi.itemName
   ) {
     alert(
-      'Project and item are required',
-    );
+  'Project or Dealer and item are required',
+);
 
     return;
   }
@@ -1350,9 +1364,13 @@ const createManualPi = async () => {
     await axios.post(
       `${API_BASE_URL}/project/proforma-invoice/manual`,
       {
-        projectId: Number(
-          manualPi.projectId,
-        ),
+        projectId: manualPi.projectId
+  ? Number(manualPi.projectId)
+  : undefined,
+
+dealerId: manualPi.dealerId
+  ? Number(manualPi.dealerId)
+  : undefined,
 
         remarks: manualPi.remarks,
 
@@ -1402,7 +1420,8 @@ const createManualPi = async () => {
     );
 
     setManualPi({
-      projectId: '',
+  projectId: '',
+  dealerId: '',
       itemName: '',
       category: '',
       brand: '',
@@ -2081,6 +2100,30 @@ const generateProformaInvoice = async () => {
   ))}
 </select>
 
+<select
+  value={manualPi.dealerId}
+  onChange={(e) =>
+    setManualPi({
+      ...manualPi,
+      dealerId: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+>
+  <option value="">
+    Select Dealer (Optional)
+  </option>
+
+  {vendors.map((vendor) => (
+    <option
+      key={vendor.id}
+      value={vendor.id}
+    >
+      {vendor.vendorName}
+    </option>
+  ))}
+</select>
+
     <select
   value={manualPi.itemName}
   onChange={(e) => {
@@ -2440,9 +2483,15 @@ onChange={(e) =>
                 {pi.invoiceNumber || `PI-${pi.id}`}
               </p>
 
-              <p className="mt-1 text-sm text-gray-500">
-                Project #{pi.projectId}
-              </p>
+              {pi.invoiceType === 'DEALER' ? (
+  <p className="mt-1 text-sm text-gray-500">
+    Dealer: {pi.dealerName || '-'}
+  </p>
+) : (
+  <p className="mt-1 text-sm text-gray-500">
+    Project #{pi.projectId || '-'}
+  </p>
+)}
 
               <p className="mt-1 text-sm text-gray-500">
                 Status: {pi.status || '-'}
@@ -2547,9 +2596,15 @@ onChange={(e) =>
                 {invoice.invoiceNumber || `INV-${invoice.id}`}
               </p>
 
-              <p className="mt-1 text-sm text-gray-500">
-                Project #{invoice.projectId}
-              </p>
+              {invoice.invoiceType === 'DEALER' ? (
+  <p className="mt-1 text-sm text-gray-500">
+    Dealer: {invoice.dealerName || '-'}
+  </p>
+) : (
+  <p className="mt-1 text-sm text-gray-500">
+    Project #{invoice.projectId || '-'}
+  </p>
+)}
 
               <p className="mt-1 text-sm text-gray-500">
                 Status: {invoice.status || '-'}
