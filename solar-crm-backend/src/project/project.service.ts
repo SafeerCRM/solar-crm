@@ -987,6 +987,8 @@ const numberFields = [
   'discomExpenditureAmount',
   'expectedLagat',
   'expectedProfit',
+  'gpsLatitude',
+'gpsLongitude',
 ];
 
 for (const field of numberFields) {
@@ -994,9 +996,9 @@ for (const field of numberFields) {
     const value = (safeData as any)[field];
 
     (safeData as any)[field] =
-      value === '' || value === null || value === undefined
-        ? 0
-        : Number(value);
+  value === '' || value === null || value === undefined
+    ? undefined
+    : Number(value);
   }
 }
 
