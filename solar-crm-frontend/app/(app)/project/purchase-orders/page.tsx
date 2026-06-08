@@ -2191,6 +2191,50 @@ const generateProformaInvoice = async () => {
   Add Material
 </button>
 
+{manualPoItems.length > 0 && (
+  <div className="mt-4 rounded-xl bg-gray-50 p-4">
+    <p className="text-sm font-semibold text-gray-700">
+      Added PO Materials
+    </p>
+
+    <div className="mt-3 space-y-2">
+      {manualPoItems.map((item, index) => (
+        <div
+          key={`${item.materialName}-${index}`}
+          className="flex flex-col gap-2 rounded-lg border bg-white p-3 text-sm md:flex-row md:items-center md:justify-between"
+        >
+          <div>
+            <p className="font-semibold text-gray-800">
+              {item.materialName}
+            </p>
+
+            <p className="text-gray-500">
+              Qty: {item.quantity} {item.unit || ''}
+              {' '}| Rate: ₹
+              {Number(item.purchaseRate || 0).toLocaleString('en-IN')}
+              {' '}| GST: {item.gstPercent || 0}%
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() =>
+              setManualPoItems(
+                manualPoItems.filter(
+                  (_, itemIndex) => itemIndex !== index,
+                ),
+              )
+            }
+            className="text-sm font-semibold text-red-600"
+          >
+            Remove
+          </button>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
+
   <button
     onClick={createManualPo}
     disabled={creatingManualPo}
