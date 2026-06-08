@@ -39,6 +39,9 @@ type ProjectOwner = {
 type VendorItem = {
   id: number;
   vendorName: string;
+    partyType?: string;
+  canBuyFromUs?: boolean;
+  canSellToUs?: boolean;
   isActive?: boolean;
 };
 
@@ -2114,7 +2117,14 @@ const generateProformaInvoice = async () => {
     Select Dealer (Optional)
   </option>
 
-  {vendors.map((vendor) => (
+  {vendors
+  .filter(
+    (vendor) =>
+      vendor.canBuyFromUs === true ||
+      vendor.partyType === 'DEALER' ||
+      vendor.partyType === 'BOTH',
+  )
+  .map((vendor) => (
     <option
       key={vendor.id}
       value={vendor.id}
