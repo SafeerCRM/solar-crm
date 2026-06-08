@@ -566,6 +566,13 @@ projectOwnerId: payload?.projectOwnerId
   ? Number(payload.customerUserId)
   : undefined,
 
+  customerId: payload?.customerId
+  ? Number(payload.customerId)
+  : undefined,
+
+customerCode:
+  String(payload?.customerCode || '').trim() || undefined,
+
 customerUserName:
   String(payload?.customerUserName || '').trim() || undefined,
 
@@ -839,6 +846,8 @@ if (
     'customerGmail',
     'customerUserId',
 'customerUserName',
+'customerId',
+'customerCode',
     'aadhaarLinkedMobile',
     'panelBrand',
     'dcrPanelCount',
@@ -884,6 +893,8 @@ if (
     'customerGmail',
     'customerUserId',
 'customerUserName',
+'customerId',
+'customerCode',
     'aadhaarLinkedMobile',
     'panelBrand',
     'dcrPanelCount',
@@ -967,6 +978,7 @@ const numberFields = [
   'dcrPanelCount',
   'nonDcrPanelCount',
   'marginMoney',
+  'customerId',
   'loanAmount',
   'finalCost',
   'projectCost',

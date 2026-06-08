@@ -92,6 +92,26 @@ getSummary() {
   return this.customerService.getSummary();
 }
 
+@Roles('OWNER', 'MARKETING_HEAD', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER')
+@Post('link-existing-projects')
+linkExistingProjects() {
+  return this.customerService.linkExistingProjects();
+}
+
+@Roles(
+  'OWNER',
+  'MARKETING_HEAD',
+  'PROJECT_MANAGER',
+  'PROJECT_EXECUTIVE',
+  'MEETING_MANAGER',
+  'LEAD_MANAGER',
+  'CUSTOMER_MANAGER',
+)
+@Get(':id/projects')
+getCustomerProjects(@Param('id', ParseIntPipe) id: number) {
+  return this.customerService.getCustomerProjects(id);
+}
+
   @Roles(
     'OWNER',
     'MARKETING_HEAD',

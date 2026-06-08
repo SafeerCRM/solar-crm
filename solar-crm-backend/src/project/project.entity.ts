@@ -115,6 +115,12 @@ customerUserName: string;
   aadhaarLinkedMobile: string;
 
   @Column({ nullable: true })
+customerId: number;
+
+@Column({ nullable: true })
+customerCode: string;
+
+  @Column({ nullable: true })
   projectSerial: string;
 
   @Column({ type: 'timestamp', nullable: true })

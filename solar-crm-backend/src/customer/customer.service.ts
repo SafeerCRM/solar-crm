@@ -11,12 +11,16 @@ import {
   CustomerStatus,
   CustomerSource,
 } from './customer.entity';
+import { Project } from '../project/project.entity';
 
 @Injectable()
 export class CustomerService {
   constructor(
     @InjectRepository(Customer)
     private readonly customerRepository: Repository<Customer>,
+
+    @InjectRepository(Project)
+private readonly projectRepository: Repository<Project>,
   ) {}
 
   private getRoles(user: any): string[] {
@@ -388,6 +392,109 @@ export class CustomerService {
     inactiveCustomers,
     blacklistedCustomers,
     portalEnabledCustomers,
+  };
+}
+
+async getCustomerProjects(customerId: number) {
+  const customer = await this.findOne(customerId);
+
+  const projects = await this.projectRepository.find({
+    where: {
+      customerId: customer.id,
+      isHidden: false,
+    },
+    order: {
+      createdAt: 'DESC',
+    },
+  });
+
+  return {
+    customer,
+    projects,
+  };
+}
+
+async linkExistingProjects() {
+  const customers = await this.customerRepository.find({
+    where: {
+      isHidden: false,
+    },
+  });
+
+  const projects = await this.projectRepository.find({
+    where: {
+      isHidden: false,
+    },
+  });
+
+  let linkedCount = 0;
+
+  for (const project of projects) {
+    if ((project as any).customerId) {
+      continue;
+    }
+
+    const projectKNumber = this.normalizeText(
+      (project as any).electricityKNumber,
+    ).toLowerCase();
+
+    const projectPhone = this.normalizeText(
+      (project as any).customerPhone,
+    );
+
+    const projectEmail = this.normalizeText(
+      (project as any).customerGmail,
+    ).toLowerCase();
+
+    const matchedCustomer = customers.find((customer) => {
+      const customerKNumber = this.normalizeText(
+        customer.electricityKNumber,
+      ).toLowerCase();
+
+      const customerMobile = this.normalizeText(
+        customer.mobile,
+      );
+
+      const customerAltMobile = this.normalizeText(
+        customer.alternateMobile,
+      );
+
+      const customerEmail = this.normalizeText(
+        customer.email,
+      ).toLowerCase();
+
+      if (projectKNumber && customerKNumber && projectKNumber === customerKNumber) {
+        return true;
+      }
+
+      if (
+        projectPhone &&
+        (projectPhone === customerMobile || projectPhone === customerAltMobile)
+      ) {
+        return true;
+      }
+
+      if (projectEmail && customerEmail && projectEmail === customerEmail) {
+        return true;
+      }
+
+      return false;
+    });
+
+    if (matchedCustomer) {
+      (project as any).customerId = matchedCustomer.id;
+      (project as any).customerCode = matchedCustomer.customerCode;
+
+      await this.projectRepository.save(project);
+      linkedCount += 1;
+    }
+  }
+
+  return {
+    message: 'Existing projects linked successfully',
+    totalCustomersChecked: customers.length,
+    totalProjectsChecked: projects.length,
+    linkedCount,
   };
 }
 }
