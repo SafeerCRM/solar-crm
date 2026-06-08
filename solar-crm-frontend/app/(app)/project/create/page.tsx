@@ -390,10 +390,30 @@ const uploadedDocumentTypes = pendingDocuments.map(
   (doc) => doc.documentType,
 );
 
-const requiredDocuments = [
+const cashRequiredDocuments = [
+  'VENDOR_AGREEMENT',
   'AADHAAR',
   'ELECTRICITY_BILL',
+  'PAN_CARD',
+  'BANK_DOCUMENT',
 ];
+
+const loanRequiredDocuments = [
+  'VENDOR_AGREEMENT',
+  'AADHAAR',
+  'ELECTRICITY_BILL',
+  'PAN_CARD',
+  'CUSTOMER_PHOTO',
+  'SITE_PHOTO',
+  'BANK_DOCUMENT',
+  'LOAN_DOCUMENT',
+  'PROPERTY_DOCUMENT',
+];
+
+const requiredDocuments =
+  form.projectType === 'LOAN'
+    ? loanRequiredDocuments
+    : cashRequiredDocuments;
 
 const missingDocuments = requiredDocuments.filter(
   (doc) => !uploadedDocumentTypes.includes(doc),
@@ -871,9 +891,25 @@ router.push(`/project/${createdProjectId}`);
   </p>
 
   <ul className="mt-2 list-disc pl-5">
-    <li>Aadhaar Card</li>
-    <li>Electricity Bill</li>
-  </ul>
+  <li>Vendor Agreement</li>
+  <li>Aadhaar Card</li>
+  <li>Electricity Bill</li>
+  <li>PAN Card</li>
+  <li>Bank Document</li>
+
+  {form.projectType === 'LOAN' && (
+    <>
+      <li>Customer Photo</li>
+      <li>Site Photo</li>
+      <li>Loan Document</li>
+      <li>Property Document</li>
+    </>
+  )}
+</ul>
+
+<p className="mt-2 text-xs">
+  Current Project Type: {form.projectType}
+</p>
 </div>
 
   <div className="grid gap-3 md:grid-cols-2">
@@ -895,6 +931,14 @@ router.push(`/project/${createdProjectId}`);
   <option value="ELECTRICITY_BILL">
     Electricity Bill
   </option>
+
+  <option value="PAN_CARD">
+  PAN Card
+</option>
+
+<option value="VENDOR_AGREEMENT">
+  Vendor Agreement
+</option>
 
   <option value="CUSTOMER_PHOTO">
     Customer Photo
