@@ -353,6 +353,62 @@ export default function TradingAccountPage() {
     setOrderRows(rows);
   };
 
+  const generateDealerPi = async () => {
+  if (!selectedOrder?.order?.id) return;
+
+  const confirmed = window.confirm(
+    'Generate Proforma Invoice for this dealer order?',
+  );
+
+  if (!confirmed) return;
+
+  try {
+    await axios.post(
+      `${API_BASE_URL}/project/dealer-order/${selectedOrder.order.id}/proforma-invoice`,
+      {},
+      { headers: headers() },
+    );
+
+    alert('Dealer PI generated successfully');
+    await openOrder(selectedOrder.order.id);
+    fetchOrders();
+  } catch (error: any) {
+    console.error(error);
+    alert(
+      error?.response?.data?.message ||
+        'Failed to generate Dealer PI',
+    );
+  }
+};
+
+const generateDealerFinalInvoice = async () => {
+  if (!selectedOrder?.order?.id) return;
+
+  const confirmed = window.confirm(
+    'Generate Final Invoice for this dealer order?',
+  );
+
+  if (!confirmed) return;
+
+  try {
+    await axios.post(
+      `${API_BASE_URL}/project/dealer-order/${selectedOrder.order.id}/final-invoice`,
+      {},
+      { headers: headers() },
+    );
+
+    alert('Dealer Final Invoice generated successfully');
+    await openOrder(selectedOrder.order.id);
+    fetchOrders();
+  } catch (error: any) {
+    console.error(error);
+    alert(
+      error?.response?.data?.message ||
+        'Failed to generate Dealer Final Invoice',
+    );
+  }
+};
+
   const createDealerOrder = async () => {
     if (!orderForm.dealerId) {
       alert('Please select dealer');
@@ -549,7 +605,7 @@ export default function TradingAccountPage() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl space-y-5 overflow-x-hidden px-1 sm:px-0">
+    <div className="w-full max-w-full overflow-x-hidden px-3 pb-6 sm:mx-auto sm:max-w-7xl sm:px-4">
       <div className="rounded-2xl bg-white p-5 shadow">
         <h1 className="text-2xl font-bold text-gray-800">Trading Account</h1>
         <p className="mt-1 text-sm text-gray-500">
@@ -860,7 +916,7 @@ export default function TradingAccountPage() {
 
       {activeTab === 'orders' && (
         <div className="grid min-w-0 gap-5 xl:grid-cols-2">
-          <div className="rounded-2xl bg-white p-5 shadow">
+          <div className="w-full max-w-full min-w-0 overflow-hidden rounded-2xl bg-white p-4 shadow sm:p-5">
             <h2 className="text-lg font-bold">Dealer Orders</h2>
 
             <div className="mt-4 space-y-3">
@@ -891,6 +947,22 @@ export default function TradingAccountPage() {
                 <div>
                   <h2 className="text-lg font-bold">{selectedOrder.order?.orderNumber} - {selectedOrder.order?.dealerName}</h2>
                   <p className="text-sm text-gray-500">Total {money(selectedOrder.order?.totalAmount)} | Pending {money(selectedOrder.order?.pendingAmount)}</p>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+  <button
+    onClick={generateDealerPi}
+    className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+  >
+    Generate PI
+  </button>
+
+  <button
+    onClick={generateDealerFinalInvoice}
+    className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white"
+  >
+    Generate Final Invoice
+  </button>
+</div>
                 </div>
 
                 <div className="rounded-xl border p-3">
@@ -976,12 +1048,12 @@ function Pagination({
   setPage: (value: number) => void;
 }) {
   return (
-    <div className="mt-4 flex items-center justify-between rounded-xl bg-gray-50 p-3">
+    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-gray-50 p-3">
       <p className="text-sm text-gray-600">
         Page {page} of {totalPages}
       </p>
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <button
           onClick={() => setPage(Math.max(page - 1, 1))}
           disabled={page <= 1}
