@@ -8432,11 +8432,9 @@ async createManualPurchaseOrder(
   body: any,
   currentUser: any,
 ) {
-  if (!body?.projectId) {
-    throw new BadRequestException(
-      'Project ID is required',
-    );
-  }
+  const projectId = body?.projectId
+    ? Number(body.projectId)
+    : null;
 
   if (!body?.vendorName) {
     throw new BadRequestException(
@@ -8473,7 +8471,7 @@ async createManualPurchaseOrder(
   }
 
   const po = this.projectPurchaseOrderRepository.create({
-    projectId: Number(body.projectId),
+    projectId: projectId || undefined,
     vendorId: body?.vendorId ? Number(body.vendorId) : undefined,
     vendorName: body.vendorName,
     poNumber: this.generatePoNumber(),
@@ -8509,7 +8507,7 @@ async createManualPurchaseOrder(
 
     return this.projectPurchaseOrderItemRepository.create({
       purchaseOrderId: savedPo.id,
-      projectId: savedPo.projectId,
+      projectId: projectId || undefined,
       materialRequestItemId: undefined,
       materialId: item.materialId ? Number(item.materialId) : undefined,
       materialName: item.materialName || '',
@@ -8537,7 +8535,7 @@ async createManualPurchaseOrder(
       partyId: body?.vendorId ? Number(body.vendorId) : undefined,
       partyName: body.vendorName,
       partyType: 'VENDOR',
-      projectId: savedPo.projectId,
+      projectId: projectId || undefined,
       entryType: ProjectLedgerEntryType.CREDIT,
       sourceType: ProjectLedgerSourceType.PURCHASE_ORDER,
       sourceId: savedPo.id,
