@@ -49,6 +49,12 @@ workScope: ProjectContractorWorkScope;
   @Column({ type: 'timestamp', nullable: true })
   scheduledDate: Date;
 
+  @Column({ type: 'timestamp', nullable: true })
+startedAt: Date;
+
+@Column({ type: 'timestamp', nullable: true })
+completedAt: Date;
+
   @Column({ nullable: true, default: 0 })
   amount: number;
 

@@ -11846,8 +11846,34 @@ async updateContractorAssignment(
   }
 
   if (body?.status) {
-    assignment.status = body.status;
+  const oldStatus = assignment.status;
+  const newStatus = body.status;
+
+  assignment.status = newStatus;
+
+  if (
+    newStatus === ProjectContractorWorkStatus.IN_PROGRESS &&
+    oldStatus !== ProjectContractorWorkStatus.IN_PROGRESS &&
+    !assignment.startedAt
+  ) {
+    assignment.startedAt = new Date();
   }
+
+  if (
+    newStatus === ProjectContractorWorkStatus.COMPLETED &&
+    oldStatus !== ProjectContractorWorkStatus.COMPLETED &&
+    !assignment.completedAt
+  ) {
+    assignment.completedAt = new Date();
+  }
+
+  if (
+    newStatus !== ProjectContractorWorkStatus.COMPLETED &&
+    oldStatus === ProjectContractorWorkStatus.COMPLETED
+  ) {
+    assignment.completedAt = null as any;
+  }
+}
 
   if (body?.remarks !== undefined) {
     assignment.remarks = String(
