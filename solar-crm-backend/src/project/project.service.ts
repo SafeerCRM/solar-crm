@@ -13672,4 +13672,231 @@ async getDealerCreditReminders() {
     data: overdueOrders,
   };
 }
+
+async getDealerLedgerHistory(query: any) {
+  const dealerId = Number(query?.dealerId || 0);
+
+  if (!dealerId) {
+    throw new BadRequestException('Dealer is required');
+  }
+
+  const dealer = await this.projectVendorRepository.findOne({
+    where: { id: dealerId },
+  });
+
+  if (!dealer) {
+    throw new NotFoundException('Dealer not found');
+  }
+
+  const orders = await this.projectDealerOrderRepository.find({
+    where: {
+      dealerId,
+      isHidden: false,
+    },
+    order: {
+      createdAt: 'DESC',
+    },
+  });
+
+  const orderIds = orders.map((order) => order.id);
+
+  const items = orderIds.length
+    ? await this.projectDealerOrderItemRepository.find({
+        where: {
+          dealerOrderId: In(orderIds),
+        },
+        order: {
+          id: 'ASC',
+        },
+      })
+    : [];
+
+  const payments = orderIds.length
+    ? await this.projectDealerPaymentRepository.find({
+        where: {
+          dealerOrderId: In(orderIds),
+        },
+        order: {
+          createdAt: 'DESC',
+        },
+      })
+    : [];
+
+  const proformaInvoices =
+    await this.projectProformaInvoiceRepository.find({
+      where: {
+        invoiceType: 'DEALER',
+        dealerId,
+        isHidden: false,
+      } as any,
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+
+  const finalInvoices =
+    await this.projectFinalInvoiceRepository.find({
+      where: {
+        invoiceType: 'DEALER',
+        dealerId,
+        isHidden: false,
+      } as any,
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+
+  const totalOrderValue = orders.reduce(
+    (sum, order) => sum + Number(order.totalAmount || 0),
+    0,
+  );
+
+  const totalPaid = orders.reduce(
+    (sum, order) => sum + Number(order.paidAmount || 0),
+    0,
+  );
+
+  const totalPending = orders.reduce(
+    (sum, order) => sum + Number(order.pendingAmount || 0),
+    0,
+  );
+
+  const overdueOrders = orders.filter((order) => {
+    if (order.paymentType !== ProjectDealerPaymentType.CREDIT) {
+      return false;
+    }
+
+    if (!order.creditDueDate) {
+      return false;
+    }
+
+    if (Number(order.pendingAmount || 0) <= 0) {
+      return false;
+    }
+
+    return new Date(order.creditDueDate).getTime() < Date.now();
+  });
+
+  const materialSummaryMap = new Map<
+    string,
+    {
+      materialId: number;
+      materialName: string;
+      category: string;
+      brand: string;
+      unit: string;
+      totalQuantity: number;
+      totalAmount: number;
+    }
+  >();
+
+  for (const item of items) {
+    const key = `${item.materialId}`;
+
+    const existing =
+      materialSummaryMap.get(key) ||
+      {
+        materialId: item.materialId,
+        materialName: item.materialName || '',
+        category: item.category || '',
+        brand: item.brand || '',
+        unit: item.unit || '',
+        totalQuantity: 0,
+        totalAmount: 0,
+      };
+
+    existing.totalQuantity += Number(item.quantity || 0);
+    existing.totalAmount += Number(item.totalAmount || 0);
+
+    materialSummaryMap.set(key, existing);
+  }
+
+  const timeline: any[] = [];
+
+  for (const order of orders) {
+    timeline.push({
+      date: order.createdAt,
+      type: 'ORDER',
+      title: order.orderNumber || `Order #${order.id}`,
+      amount: Number(order.totalAmount || 0),
+      status: order.status,
+      description: `Dealer order created. Pending: ₹${Number(
+        order.pendingAmount || 0,
+      ).toLocaleString('en-IN')}`,
+      referenceId: order.id,
+    });
+  }
+
+  for (const pi of proformaInvoices) {
+    timeline.push({
+      date: pi.createdAt,
+      type: 'PROFORMA_INVOICE',
+      title: pi.invoiceNumber || `PI #${pi.id}`,
+      amount: Number(pi.totalAmount || 0),
+      status: pi.status,
+      description: 'Dealer proforma invoice generated',
+      referenceId: pi.id,
+    });
+  }
+
+  for (const invoice of finalInvoices) {
+    timeline.push({
+      date: invoice.createdAt,
+      type: 'FINAL_INVOICE',
+      title: invoice.invoiceNumber || `Invoice #${invoice.id}`,
+      amount: Number(invoice.totalAmount || 0),
+      status: invoice.status,
+      description: 'Dealer final invoice generated',
+      referenceId: invoice.id,
+    });
+  }
+
+  for (const payment of payments) {
+    timeline.push({
+      date: payment.createdAt,
+      type: 'PAYMENT',
+      title: payment.paymentMode || 'Payment',
+      amount: Number(payment.amount || 0),
+      status: payment.status,
+      description: payment.transactionId
+        ? `Transaction: ${payment.transactionId}`
+        : payment.remarks || 'Dealer payment received',
+      referenceId: payment.id,
+    });
+  }
+
+  timeline.sort(
+    (a, b) =>
+      new Date(b.date).getTime() -
+      new Date(a.date).getTime(),
+  );
+
+  return {
+    dealer: {
+      id: dealer.id,
+      dealerName: dealer.vendorName,
+      contactPerson: dealer.contactPerson,
+      phone: dealer.phone,
+      email: dealer.email,
+      gstNumber: dealer.gstNumber,
+      city: dealer.city,
+      state: dealer.state,
+      address: dealer.address,
+      openingBalance: dealer.openingBalance || 0,
+    },
+    summary: {
+      totalOrders: orders.length,
+      totalOrderValue,
+      totalPaid,
+      totalPending,
+      overdueOrders: overdueOrders.length,
+      totalPi: proformaInvoices.length,
+      totalFinalInvoices: finalInvoices.length,
+      totalPayments: payments.length,
+    },
+    orders,
+    materialSummary: Array.from(materialSummaryMap.values()),
+    timeline,
+  };
+}
 }

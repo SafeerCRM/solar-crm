@@ -2218,6 +2218,21 @@ getDealerCreditReminders() {
   return this.projectService.getDealerCreditReminders();
 }
 
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'PAYMENT_MANAGER',
+  'TRADING_MANAGER',
+  'MEETING_MANAGER',
+)
+@Get('dealer-ledger-history')
+getDealerLedgerHistory(@Query() query: any) {
+  return this.projectService.getDealerLedgerHistory(
+    query,
+  );
+}
+
 @Patch(':id/hide')
 hideProject(
   @Param('id', ParseIntPipe) id: number,
