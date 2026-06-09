@@ -43,6 +43,8 @@ import { ProjectDealerOrder } from './project-dealer-order.entity';
 import { ProjectDealerOrderItem } from './project-dealer-order-item.entity';
 import { ProjectDealerPayment } from './project-dealer-payment.entity';
 import { ProjectDealerComment } from './project-dealer-comment.entity';
+import { ProjectDealerNotification } from './project-dealer-notification.entity';
+import { ProjectDealerMonthlyRequirement } from './project-dealer-monthly-requirement.entity';
 
 @Module({
   imports: [
@@ -54,7 +56,8 @@ ProjectProformaInvoiceItem, ProjectFinalInvoice, ProjectFinalInvoiceItem, Projec
 ProjectContractorProof, ProjectContractor, ProjectContractorComment, ProjectLoanCoApplicant, ProjectAccountExpense, ProjectConsumption, ProjectCustomerUpdate, ProjectDealerOrder,
 ProjectDealerOrderItem,
 ProjectDealerPayment,
-ProjectDealerComment,]),
+ProjectDealerComment, ProjectDealerNotification,
+ProjectDealerMonthlyRequirement,]),
     CalculatorModule,
   ],
   controllers: [ProjectController],

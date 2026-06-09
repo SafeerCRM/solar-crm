@@ -2056,6 +2056,142 @@ getDealerOrderInvoices(
   );
 }
 
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'PAYMENT_MANAGER',
+  'TRADING_MANAGER',
+)
+@Post('dealer-notification')
+createDealerNotification(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.createDealerNotification(
+    body,
+    user,
+  );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'PAYMENT_MANAGER',
+  'TRADING_MANAGER',
+  'MEETING_MANAGER',
+)
+@Get('dealer-notifications')
+getDealerNotifications(@Query() query: any) {
+  return this.projectService.getDealerNotifications(
+    query,
+  );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'PAYMENT_MANAGER',
+  'TRADING_MANAGER',
+  'MEETING_MANAGER',
+)
+@Patch('dealer-notification/:id/read')
+markDealerNotificationRead(
+  @Param('id') id: string,
+) {
+  return this.projectService.markDealerNotificationRead(
+    Number(id),
+  );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'PAYMENT_MANAGER',
+  'TRADING_MANAGER',
+  'MEETING_MANAGER',
+)
+@Post('dealer-monthly-requirement')
+createDealerMonthlyRequirement(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.createDealerMonthlyRequirement(
+    body,
+    user,
+  );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'PAYMENT_MANAGER',
+  'TRADING_MANAGER',
+  'MEETING_MANAGER',
+)
+@Get('dealer-monthly-requirements')
+getDealerMonthlyRequirements(@Query() query: any) {
+  return this.projectService.getDealerMonthlyRequirements(
+    query,
+  );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'PAYMENT_MANAGER',
+  'TRADING_MANAGER',
+)
+@Patch('dealer-monthly-requirement/:id/hide')
+hideDealerMonthlyRequirement(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.hideDealerMonthlyRequirement(
+    Number(id),
+    body,
+    user,
+  );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'PAYMENT_MANAGER',
+  'TRADING_MANAGER',
+)
+@Patch('dealer-monthly-requirement/:id/restore')
+restoreDealerMonthlyRequirement(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.restoreDealerMonthlyRequirement(
+    Number(id),
+    body,
+    user,
+  );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'PAYMENT_MANAGER',
+  'TRADING_MANAGER',
+)
+@Get('dealer-credit-reminders')
+getDealerCreditReminders() {
+  return this.projectService.getDealerCreditReminders();
+}
+
 @Patch(':id/hide')
 hideProject(
   @Param('id', ParseIntPipe) id: number,

@@ -154,6 +154,12 @@ import {
   ProjectDealerPaymentStatus,
 } from './project-dealer-payment.entity';
 import { ProjectDealerComment } from './project-dealer-comment.entity';
+import {
+  ProjectDealerNotification,
+  ProjectDealerNotificationStatus,
+} from './project-dealer-notification.entity';
+
+import { ProjectDealerMonthlyRequirement } from './project-dealer-monthly-requirement.entity';
 
 @Injectable()
 export class ProjectService {
@@ -493,6 +499,12 @@ private readonly projectDealerPaymentRepository: Repository<ProjectDealerPayment
 
 @InjectRepository(ProjectDealerComment)
 private readonly projectDealerCommentRepository: Repository<ProjectDealerComment>,
+
+@InjectRepository(ProjectDealerNotification)
+private readonly projectDealerNotificationRepository: Repository<ProjectDealerNotification>,
+
+@InjectRepository(ProjectDealerMonthlyRequirement)
+private readonly projectDealerMonthlyRequirementRepository: Repository<ProjectDealerMonthlyRequirement>,
 
     private readonly calculatorService: CalculatorService,
 
@@ -13050,6 +13062,332 @@ async getDealerOrderInvoices(dealerOrderId: number) {
     order,
     proformaInvoices,
     finalInvoices,
+  };
+}
+
+async createDealerNotification(body: any, user: any) {
+  const dealerId = Number(body?.dealerId || 0);
+
+  if (!dealerId) {
+    throw new BadRequestException('Dealer is required');
+  }
+
+  if (!String(body?.title || '').trim()) {
+    throw new BadRequestException('Notification title is required');
+  }
+
+  if (!String(body?.message || '').trim()) {
+    throw new BadRequestException('Notification message is required');
+  }
+
+  const dealer =
+    await this.projectVendorRepository.findOne({
+      where: {
+        id: dealerId,
+      },
+    });
+
+  if (!dealer) {
+    throw new NotFoundException('Dealer not found');
+  }
+
+  const notification =
+    this.projectDealerNotificationRepository.create({
+      dealerId,
+      dealerName: dealer.vendorName,
+      title: String(body.title || '').trim(),
+      message: String(body.message || '').trim(),
+      notificationType:
+        body?.notificationType || 'GENERAL',
+      status: ProjectDealerNotificationStatus.UNREAD,
+      createdBy: user?.id || user?.userId || null,
+      createdByName: user?.name || user?.email || '',
+    });
+
+  return this.projectDealerNotificationRepository.save(
+    notification,
+  );
+}
+
+async getDealerNotifications(query: any) {
+  const page = Math.max(Number(query?.page || 1), 1);
+  const limit = Math.min(
+    Math.max(Number(query?.limit || 20), 1),
+    100,
+  );
+
+  const skip = (page - 1) * limit;
+
+  const dealerId = Number(query?.dealerId || 0);
+  const status = String(query?.status || '').trim();
+
+  const qb =
+    this.projectDealerNotificationRepository
+      .createQueryBuilder('notification')
+      .orderBy('notification.createdAt', 'DESC')
+      .skip(skip)
+      .take(limit);
+
+  if (dealerId) {
+    qb.where('notification.dealerId = :dealerId', {
+      dealerId,
+    });
+  } else {
+    qb.where('1=1');
+  }
+
+  if (status) {
+    qb.andWhere('notification.status = :status', {
+      status,
+    });
+  }
+
+  const [data, total] = await qb.getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
+}
+
+async markDealerNotificationRead(id: number) {
+  const notification =
+    await this.projectDealerNotificationRepository.findOne({
+      where: { id },
+    });
+
+  if (!notification) {
+    throw new NotFoundException(
+      'Dealer notification not found',
+    );
+  }
+
+  notification.status =
+    ProjectDealerNotificationStatus.READ;
+
+  return this.projectDealerNotificationRepository.save(
+    notification,
+  );
+}
+
+async createDealerMonthlyRequirement(body: any, user: any) {
+  const dealerId = Number(body?.dealerId || 0);
+  const materialId = Number(body?.materialId || 0);
+  const expectedQuantity = Number(
+    body?.expectedQuantity || 0,
+  );
+
+  if (!dealerId) {
+    throw new BadRequestException('Dealer is required');
+  }
+
+  if (!materialId) {
+    throw new BadRequestException('Material is required');
+  }
+
+  if (expectedQuantity <= 0) {
+    throw new BadRequestException(
+      'Expected quantity must be greater than 0',
+    );
+  }
+
+  const requirementMonth = String(
+    body?.requirementMonth || '',
+  ).trim();
+
+  if (!requirementMonth) {
+    throw new BadRequestException(
+      'Requirement month is required',
+    );
+  }
+
+  const dealer =
+    await this.projectVendorRepository.findOne({
+      where: { id: dealerId },
+    });
+
+  if (!dealer) {
+    throw new NotFoundException('Dealer not found');
+  }
+
+  const material =
+    await this.projectMaterialMasterRepository.findOne({
+      where: {
+        id: materialId,
+      },
+    });
+
+  if (!material) {
+    throw new NotFoundException('Material not found');
+  }
+
+  const requirement =
+    this.projectDealerMonthlyRequirementRepository.create({
+      dealerId,
+      dealerName: dealer.vendorName,
+      materialId,
+      materialName: material.name,
+      category: material.category || '',
+      brand: material.brand || '',
+      unit: material.unit || '',
+      requirementMonth,
+      expectedQuantity,
+      remarks: body?.remarks || '',
+      createdBy: user?.id || user?.userId || null,
+      createdByName: user?.name || user?.email || '',
+    });
+
+  return this.projectDealerMonthlyRequirementRepository.save(
+    requirement,
+  );
+}
+
+async getDealerMonthlyRequirements(query: any) {
+  const page = Math.max(Number(query?.page || 1), 1);
+  const limit = Math.min(
+    Math.max(Number(query?.limit || 20), 1),
+    100,
+  );
+
+  const skip = (page - 1) * limit;
+
+  const dealerId = Number(query?.dealerId || 0);
+  const month = String(query?.month || '').trim();
+  const search = String(query?.search || '')
+    .trim()
+    .toLowerCase();
+  const showHidden =
+    String(query?.showHidden || 'false') === 'true';
+
+  const qb =
+    this.projectDealerMonthlyRequirementRepository
+      .createQueryBuilder('requirement')
+      .where('requirement.isHidden = :showHidden', {
+        showHidden,
+      })
+      .orderBy('requirement.createdAt', 'DESC')
+      .skip(skip)
+      .take(limit);
+
+  if (dealerId) {
+    qb.andWhere('requirement.dealerId = :dealerId', {
+      dealerId,
+    });
+  }
+
+  if (month) {
+    qb.andWhere(
+      'requirement.requirementMonth = :month',
+      { month },
+    );
+  }
+
+  if (search) {
+    qb.andWhere(
+      `(
+        LOWER(requirement.dealerName) LIKE :search
+        OR LOWER(requirement.materialName) LIKE :search
+        OR LOWER(requirement.category) LIKE :search
+        OR LOWER(requirement.brand) LIKE :search
+      )`,
+      {
+        search: `%${search}%`,
+      },
+    );
+  }
+
+  const [data, total] = await qb.getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
+}
+
+async hideDealerMonthlyRequirement(
+  id: number,
+  body: any,
+  user: any,
+) {
+  const requirement =
+    await this.projectDealerMonthlyRequirementRepository.findOne({
+      where: { id },
+    });
+
+  if (!requirement) {
+    throw new NotFoundException(
+      'Dealer monthly requirement not found',
+    );
+  }
+
+  requirement.isHidden = true;
+  requirement.hiddenReason =
+    body?.reason || 'Hidden by user';
+  requirement.hiddenAt = new Date();
+  requirement.hiddenBy =
+    user?.id || user?.userId || null;
+  requirement.hiddenByName =
+    user?.name || user?.email || '';
+
+  return this.projectDealerMonthlyRequirementRepository.save(
+    requirement,
+  );
+}
+
+async restoreDealerMonthlyRequirement(
+  id: number,
+  body: any,
+  user: any,
+) {
+  const requirement =
+    await this.projectDealerMonthlyRequirementRepository.findOne({
+      where: { id },
+    });
+
+  if (!requirement) {
+    throw new NotFoundException(
+      'Dealer monthly requirement not found',
+    );
+  }
+
+  requirement.isHidden = false;
+  requirement.hiddenReason = null as any;
+  requirement.hiddenAt = null as any;
+  requirement.hiddenBy = null as any;
+  requirement.hiddenByName = null as any;
+
+  return this.projectDealerMonthlyRequirementRepository.save(
+    requirement,
+  );
+}
+
+async getDealerCreditReminders() {
+  const today = new Date();
+
+  const overdueOrders =
+    await this.projectDealerOrderRepository
+      .createQueryBuilder('order')
+      .where('order.isHidden = false')
+      .andWhere('order.paymentType = :paymentType', {
+        paymentType: ProjectDealerPaymentType.CREDIT,
+      })
+      .andWhere('order.pendingAmount > 0')
+      .andWhere('order.creditDueDate IS NOT NULL')
+      .andWhere('order.creditDueDate < :today', {
+        today,
+      })
+      .orderBy('order.creditDueDate', 'ASC')
+      .getMany();
+
+  return {
+    total: overdueOrders.length,
+    data: overdueOrders,
   };
 }
 }
