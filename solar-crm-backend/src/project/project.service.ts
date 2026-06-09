@@ -11775,6 +11775,133 @@ async enableProjectContractor(id: number, user: any) {
   );
 }
 
+async getContractorAssignmentRegister(filters: any, user: any) {
+  const roles = Array.isArray(user?.roles) ? user.roles : [];
+
+  const canView =
+    roles.includes('OWNER') ||
+    roles.includes('PROJECT_MANAGER');
+
+  if (!canView) {
+    throw new ForbiddenException(
+      'You are not allowed to view contractor assignment register',
+    );
+  }
+
+  const page =
+    Number(filters?.page) > 0 ? Number(filters.page) : 1;
+
+  const limit =
+    Number(filters?.limit) > 0
+      ? Math.min(Number(filters.limit), 100)
+      : 20;
+
+  const skip = (page - 1) * limit;
+
+  const applyFilters = (query: any) => {
+    if (filters?.search) {
+      query.andWhere(
+        `
+        LOWER(assignment.contractorName) LIKE :search
+        OR LOWER(assignment.contractorPhone) LIKE :search
+        OR CAST(assignment.projectId AS TEXT) LIKE :search
+        `,
+        {
+          search: `%${String(filters.search).toLowerCase()}%`,
+        },
+      );
+    }
+
+    if (filters?.status) {
+      query.andWhere('assignment.status = :status', {
+        status: filters.status,
+      });
+    }
+
+    if (filters?.workScope) {
+      query.andWhere('assignment.workScope = :workScope', {
+        workScope: filters.workScope,
+      });
+    }
+
+    if (filters?.contractorId) {
+      query.andWhere(
+        'assignment.contractorId = :contractorId',
+        {
+          contractorId: Number(filters.contractorId),
+        },
+      );
+    }
+
+    if (filters?.projectId) {
+      query.andWhere('assignment.projectId = :projectId', {
+        projectId: Number(filters.projectId),
+      });
+    }
+
+    return query;
+  };
+
+  const dataQuery =
+    this.projectContractorAssignmentRepository
+      .createQueryBuilder('assignment');
+
+  applyFilters(dataQuery);
+
+  dataQuery
+    .orderBy('assignment.createdAt', 'DESC')
+    .skip(skip)
+    .take(limit);
+
+  const [data, total] =
+    await dataQuery.getManyAndCount();
+
+  const summaryBaseQuery =
+    this.projectContractorAssignmentRepository
+      .createQueryBuilder('assignment');
+
+  applyFilters(summaryBaseQuery);
+
+  const allFilteredAssignments =
+    await summaryBaseQuery.getMany();
+
+  const summary = {
+    totalAssignments: allFilteredAssignments.length,
+    totalProjects: new Set(
+      allFilteredAssignments.map((item) => item.projectId),
+    ).size,
+    totalContractors: new Set(
+      allFilteredAssignments.map((item) => item.contractorId),
+    ).size,
+    assigned: allFilteredAssignments.filter(
+      (item) => item.status === ProjectContractorWorkStatus.ASSIGNED,
+    ).length,
+    inProgress: allFilteredAssignments.filter(
+      (item) => item.status === ProjectContractorWorkStatus.IN_PROGRESS,
+    ).length,
+    onHold: allFilteredAssignments.filter(
+      (item) => item.status === ProjectContractorWorkStatus.ON_HOLD,
+    ).length,
+    pendingFinalProofs: allFilteredAssignments.filter(
+      (item) =>
+        item.status ===
+        ProjectContractorWorkStatus.PENDING_FINAL_PROOFS,
+    ).length,
+    completed: allFilteredAssignments.filter(
+      (item) => item.status === ProjectContractorWorkStatus.COMPLETED,
+    ).length,
+  };
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+    summary,
+  };
+}
+
 async updateContractorAssignment(
   assignmentId: number,
   body: any,

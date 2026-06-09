@@ -253,6 +253,32 @@ uploadContractorProofs(
   );
 }
 
+@Roles('OWNER', 'PROJECT_MANAGER')
+@Get('contractor-assignments/register')
+getContractorAssignmentRegister(
+  @Query('page') page?: string,
+  @Query('limit') limit?: string,
+  @Query('search') search?: string,
+  @Query('status') status?: string,
+  @Query('workScope') workScope?: string,
+  @Query('contractorId') contractorId?: string,
+  @Query('projectId') projectId?: string,
+  @CurrentUser() user?: any,
+) {
+  return this.projectService.getContractorAssignmentRegister(
+    {
+      page: Number(page || 1),
+      limit: Number(limit || 20),
+      search: search || '',
+      status: status || '',
+      workScope: workScope || '',
+      contractorId: contractorId || '',
+      projectId: projectId || '',
+    },
+    user,
+  );
+}
+
 @Get('contractor-assignment/:id/proofs')
 getContractorProofs(
   @Param('id') id: string,
