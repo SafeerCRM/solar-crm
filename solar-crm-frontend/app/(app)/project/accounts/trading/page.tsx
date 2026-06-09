@@ -48,6 +48,33 @@ type DealerOrder = {
   createdAt?: string;
 };
 
+type DealerNotification = {
+  id: number;
+  dealerName?: string;
+  title?: string;
+  message?: string;
+  notificationType?: string;
+  status?: string;
+  createdAt?: string;
+};
+
+type DealerMonthlyRequirement = {
+  id: number;
+  dealerName?: string;
+  materialName?: string;
+  category?: string;
+  brand?: string;
+  unit?: string;
+  requirementMonth?: string;
+  expectedQuantity?: number;
+  remarks?: string;
+  isHidden?: boolean;
+};
+
+type CreditReminder = DealerOrder & {
+  creditDueDate?: string;
+};
+
 type OrderItemRow = {
   materialId: string;
   quantity: string;
@@ -74,7 +101,14 @@ const emptyDealerForm = {
 
 export default function TradingAccountPage() {
   const [activeTab, setActiveTab] =
-    useState<'dealers' | 'catalog' | 'orders'>('dealers');
+    useState<
+      | 'dealers'
+      | 'catalog'
+      | 'orders'
+      | 'notifications'
+      | 'monthly'
+      | 'credit'
+    >('dealers');
 
   const [dealers, setDealers] = useState<Dealer[]>([]);
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
@@ -87,6 +121,32 @@ export default function TradingAccountPage() {
     totalPending: 0,
     overdueCreditOrders: 0,
   });
+
+  const [notifications, setNotifications] = useState<DealerNotification[]>([]);
+const [monthlyRequirements, setMonthlyRequirements] = useState<DealerMonthlyRequirement[]>([]);
+const [creditReminders, setCreditReminders] = useState<CreditReminder[]>([]);
+
+const [notificationPage, setNotificationPage] = useState(1);
+const [notificationTotalPages, setNotificationTotalPages] = useState(1);
+
+const [monthlyPage, setMonthlyPage] = useState(1);
+const [monthlyTotalPages, setMonthlyTotalPages] = useState(1);
+const [showHiddenMonthly, setShowHiddenMonthly] = useState(false);
+
+const [notificationForm, setNotificationForm] = useState({
+  dealerId: '',
+  title: '',
+  message: '',
+  notificationType: 'GENERAL',
+});
+
+const [monthlyForm, setMonthlyForm] = useState({
+  dealerId: '',
+  materialId: '',
+  requirementMonth: '',
+  expectedQuantity: '',
+  remarks: '',
+});
 
   const [loading, setLoading] = useState(false);
 
@@ -196,6 +256,41 @@ export default function TradingAccountPage() {
     setAnalytics(res.data || {});
   };
 
+  const fetchNotifications = async () => {
+  const res = await axios.get(`${API_BASE_URL}/project/dealer-notifications`, {
+    params: {
+      page: notificationPage,
+      limit: 20,
+    },
+    headers: headers(),
+  });
+
+  setNotifications(res.data?.data || []);
+  setNotificationTotalPages(res.data?.totalPages || 1);
+};
+
+const fetchMonthlyRequirements = async () => {
+  const res = await axios.get(`${API_BASE_URL}/project/dealer-monthly-requirements`, {
+    params: {
+      page: monthlyPage,
+      limit: 20,
+      showHidden: showHiddenMonthly,
+    },
+    headers: headers(),
+  });
+
+  setMonthlyRequirements(res.data?.data || []);
+  setMonthlyTotalPages(res.data?.totalPages || 1);
+};
+
+const fetchCreditReminders = async () => {
+  const res = await axios.get(`${API_BASE_URL}/project/dealer-credit-reminders`, {
+    headers: headers(),
+  });
+
+  setCreditReminders(res.data?.data || []);
+};
+
   const refreshAll = async () => {
     try {
       setLoading(true);
@@ -204,6 +299,9 @@ export default function TradingAccountPage() {
         fetchCatalog(),
         fetchOrders(),
         fetchAnalytics(),
+        fetchNotifications(),
+        fetchMonthlyRequirements(),
+        fetchCreditReminders(),
       ]);
     } catch (error: any) {
       console.error(error);
@@ -216,7 +314,16 @@ export default function TradingAccountPage() {
   useEffect(() => {
     refreshAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dealerPage, catalogPage, orderPage, showHiddenDealers, showHiddenOrders]);
+  }, [
+  dealerPage,
+  catalogPage,
+  orderPage,
+  notificationPage,
+  monthlyPage,
+  showHiddenDealers,
+  showHiddenOrders,
+  showHiddenMonthly,
+]);
 
   const selectedDealer = useMemo(
     () => dealers.find((item) => String(item.id) === String(orderForm.dealerId)),
@@ -604,6 +711,90 @@ const generateDealerFinalInvoice = async () => {
     setTimeout(refreshAll, 100);
   };
 
+  const sendDealerNotification = async () => {
+  if (!notificationForm.dealerId || !notificationForm.title || !notificationForm.message) {
+    alert('Dealer, title and message are required');
+    return;
+  }
+
+  try {
+    await axios.post(
+      `${API_BASE_URL}/project/dealer-notification`,
+      notificationForm,
+      { headers: headers() },
+    );
+
+    alert('Notification sent');
+
+    setNotificationForm({
+      dealerId: '',
+      title: '',
+      message: '',
+      notificationType: 'GENERAL',
+    });
+
+    fetchNotifications();
+  } catch (error: any) {
+    console.error(error);
+    alert(error?.response?.data?.message || 'Failed to send notification');
+  }
+};
+
+const addMonthlyRequirement = async () => {
+  if (!monthlyForm.dealerId || !monthlyForm.materialId || !monthlyForm.requirementMonth || !monthlyForm.expectedQuantity) {
+    alert('Dealer, material, month and quantity are required');
+    return;
+  }
+
+  try {
+    await axios.post(
+      `${API_BASE_URL}/project/dealer-monthly-requirement`,
+      monthlyForm,
+      { headers: headers() },
+    );
+
+    alert('Monthly requirement added');
+
+    setMonthlyForm({
+      dealerId: '',
+      materialId: '',
+      requirementMonth: '',
+      expectedQuantity: '',
+      remarks: '',
+    });
+
+    fetchMonthlyRequirements();
+  } catch (error: any) {
+    console.error(error);
+    alert(error?.response?.data?.message || 'Failed to add monthly requirement');
+  }
+};
+
+const hideOrRestoreMonthlyRequirement = async (
+  item: DealerMonthlyRequirement,
+  restore = false,
+) => {
+  const reason = window.prompt(
+    restore ? 'Reason for restoring?' : 'Reason for hiding?',
+    restore ? 'Valid requirement' : 'Test / wrong entry',
+  );
+
+  if (reason === null) return;
+
+  try {
+    await axios.patch(
+      `${API_BASE_URL}/project/dealer-monthly-requirement/${item.id}/${restore ? 'restore' : 'hide'}`,
+      { reason },
+      { headers: headers() },
+    );
+
+    fetchMonthlyRequirements();
+  } catch (error: any) {
+    console.error(error);
+    alert(error?.response?.data?.message || 'Failed to update requirement');
+  }
+};
+
   return (
     <div className="w-full max-w-full overflow-x-hidden px-3 pb-6 sm:mx-auto sm:max-w-7xl sm:px-4">
       <div className="rounded-2xl bg-white p-5 shadow">
@@ -644,10 +835,13 @@ const generateDealerFinalInvoice = async () => {
 
       <div className="flex flex-wrap gap-2">
         {[
-          ['dealers', 'Dealer Master'],
-          ['catalog', 'Catalog & Order'],
-          ['orders', 'Orders / Payments / Comments'],
-        ].map(([key, label]) => (
+  ['dealers', 'Dealer Master'],
+  ['catalog', 'Catalog & Order'],
+  ['orders', 'Orders / Payments / Comments'],
+  ['notifications', 'Notifications'],
+  ['monthly', 'Monthly Planning'],
+  ['credit', 'Credit Reminders'],
+].map(([key, label]) => (
           <button
             key={key}
             onClick={() => setActiveTab(key as any)}
@@ -1034,6 +1228,216 @@ const generateDealerFinalInvoice = async () => {
           </div>
         </div>
       )}
+
+      {activeTab === 'notifications' && (
+  <div className="grid min-w-0 gap-5 xl:grid-cols-2">
+    <div className="w-full max-w-full min-w-0 overflow-hidden rounded-2xl bg-white p-4 shadow sm:p-5">
+      <h2 className="text-lg font-bold text-gray-800">Send Dealer Notification</h2>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <select
+          value={notificationForm.dealerId}
+          onChange={(e) => setNotificationForm({ ...notificationForm, dealerId: e.target.value })}
+          className="w-full rounded-xl border p-3"
+        >
+          <option value="">Select Dealer</option>
+          {dealers.map((dealer) => (
+            <option key={dealer.id} value={dealer.id}>
+              {dealer.vendorName}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={notificationForm.notificationType}
+          onChange={(e) => setNotificationForm({ ...notificationForm, notificationType: e.target.value })}
+          className="w-full rounded-xl border p-3"
+        >
+          <option value="GENERAL">General</option>
+          <option value="OFFER">Offer</option>
+          <option value="PAYMENT">Payment</option>
+          <option value="DELIVERY">Delivery</option>
+        </select>
+
+        <input
+          placeholder="Title"
+          value={notificationForm.title}
+          onChange={(e) => setNotificationForm({ ...notificationForm, title: e.target.value })}
+          className="w-full rounded-xl border p-3 md:col-span-2"
+        />
+      </div>
+
+      <textarea
+        placeholder="Message"
+        value={notificationForm.message}
+        onChange={(e) => setNotificationForm({ ...notificationForm, message: e.target.value })}
+        className="mt-3 w-full rounded-xl border p-3"
+      />
+
+      <button
+        onClick={sendDealerNotification}
+        className="mt-4 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white"
+      >
+        Send Notification
+      </button>
+    </div>
+
+    <div className="w-full max-w-full min-w-0 overflow-hidden rounded-2xl bg-white p-4 shadow sm:p-5">
+      <h2 className="text-lg font-bold text-gray-800">Notification History</h2>
+
+      <div className="mt-4 space-y-3">
+        {notifications.map((item) => (
+          <div key={item.id} className="rounded-xl border p-4">
+            <p className="break-words font-bold">{item.title}</p>
+            <p className="text-sm text-gray-500">{item.dealerName} | {item.notificationType} | {item.status}</p>
+            <p className="mt-2 break-words text-sm">{item.message}</p>
+          </div>
+        ))}
+      </div>
+
+      <Pagination page={notificationPage} totalPages={notificationTotalPages} setPage={setNotificationPage} />
+    </div>
+  </div>
+)}
+
+{activeTab === 'monthly' && (
+  <div className="grid min-w-0 gap-5 xl:grid-cols-2">
+    <div className="w-full max-w-full min-w-0 overflow-hidden rounded-2xl bg-white p-4 shadow sm:p-5">
+      <h2 className="text-lg font-bold text-gray-800">Add Monthly Requirement</h2>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <select
+          value={monthlyForm.dealerId}
+          onChange={(e) => setMonthlyForm({ ...monthlyForm, dealerId: e.target.value })}
+          className="w-full rounded-xl border p-3"
+        >
+          <option value="">Select Dealer</option>
+          {dealers.map((dealer) => (
+            <option key={dealer.id} value={dealer.id}>
+              {dealer.vendorName}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={monthlyForm.materialId}
+          onChange={(e) => setMonthlyForm({ ...monthlyForm, materialId: e.target.value })}
+          className="w-full rounded-xl border p-3"
+        >
+          <option value="">Select Material</option>
+          {catalog.map((material) => (
+            <option key={material.id} value={material.id}>
+              {material.name}
+            </option>
+          ))}
+        </select>
+
+        <input
+          type="month"
+          value={monthlyForm.requirementMonth}
+          onChange={(e) => setMonthlyForm({ ...monthlyForm, requirementMonth: e.target.value })}
+          className="w-full rounded-xl border p-3"
+        />
+
+        <input
+          type="number"
+          placeholder="Expected Quantity"
+          value={monthlyForm.expectedQuantity}
+          onChange={(e) => setMonthlyForm({ ...monthlyForm, expectedQuantity: e.target.value })}
+          className="w-full rounded-xl border p-3"
+        />
+      </div>
+
+      <textarea
+        placeholder="Remarks"
+        value={monthlyForm.remarks}
+        onChange={(e) => setMonthlyForm({ ...monthlyForm, remarks: e.target.value })}
+        className="mt-3 w-full rounded-xl border p-3"
+      />
+
+      <button
+        onClick={addMonthlyRequirement}
+        className="mt-4 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white"
+      >
+        Add Requirement
+      </button>
+    </div>
+
+    <div className="w-full max-w-full min-w-0 overflow-hidden rounded-2xl bg-white p-4 shadow sm:p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-lg font-bold text-gray-800">Monthly Requirement List</h2>
+
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={showHiddenMonthly}
+            onChange={(e) => setShowHiddenMonthly(e.target.checked)}
+          />
+          View Hidden
+        </label>
+      </div>
+
+      <div className="mt-4 space-y-3">
+        {monthlyRequirements.map((item) => (
+          <div key={item.id} className={`rounded-xl border p-4 ${item.isHidden ? 'bg-gray-100 opacity-70' : ''}`}>
+            <p className="break-words font-bold">{item.dealerName}</p>
+            <p className="text-sm text-gray-500">{item.materialName} | {item.requirementMonth}</p>
+            <p className="text-sm">Expected Qty: {item.expectedQuantity} {item.unit || ''}</p>
+            {item.remarks && <p className="mt-1 break-words text-sm text-gray-500">{item.remarks}</p>}
+
+            <button
+              onClick={() => hideOrRestoreMonthlyRequirement(item, !!item.isHidden)}
+              className={`mt-3 rounded-xl px-3 py-2 text-sm font-semibold text-white ${item.isHidden ? 'bg-green-600' : 'bg-red-600'}`}
+            >
+              {item.isHidden ? 'Restore' : 'Hide'}
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <Pagination page={monthlyPage} totalPages={monthlyTotalPages} setPage={setMonthlyPage} />
+    </div>
+  </div>
+)}
+
+{activeTab === 'credit' && (
+  <div className="w-full max-w-full min-w-0 overflow-hidden rounded-2xl bg-white p-4 shadow sm:p-5">
+    <h2 className="text-lg font-bold text-gray-800">Dealer Credit Reminders</h2>
+    <p className="mt-1 text-sm text-gray-500">
+      Credit dealer orders where due date is over and payment is still pending.
+    </p>
+
+    <div className="mt-4 space-y-3">
+      {creditReminders.length === 0 ? (
+        <p className="text-sm text-gray-500">No overdue dealer credit reminders.</p>
+      ) : (
+        creditReminders.map((order) => {
+          const due = order.creditDueDate ? new Date(order.creditDueDate) : null;
+          const daysOverdue = due
+            ? Math.max(Math.floor((Date.now() - due.getTime()) / (1000 * 60 * 60 * 24)), 0)
+            : 0;
+
+          return (
+            <div key={order.id} className="rounded-xl border p-4">
+              <p className="break-words font-bold">{order.orderNumber} - {order.dealerName}</p>
+              <p className="text-sm text-gray-500">Due Date: {due ? due.toLocaleDateString('en-IN') : '-'}</p>
+              <p className="text-sm text-red-700">Pending: {money(order.pendingAmount)} | Overdue: {daysOverdue} day(s)</p>
+              <button
+  onClick={() => {
+    openOrder(order.id);
+    setActiveTab('orders');
+  }}
+  className="mt-3 rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white"
+>
+  Open Order
+</button>
+            </div>
+          );
+        })
+      )}
+    </div>
+  </div>
+)}
     </div>
   );
 }
@@ -1070,6 +1474,8 @@ function Pagination({
           Next
         </button>
       </div>
+
+      
     </div>
   );
 }
