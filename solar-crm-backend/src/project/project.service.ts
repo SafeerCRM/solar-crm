@@ -177,6 +177,48 @@ export class ProjectService {
     : 0;
 }
 
+private getRequiredContractorProofTypesByScopeForRegister(workScope: string) {
+  if (workScope === 'STRUCTURE_TEAM') {
+    return [
+      ProjectContractorProofType.STRUCTURE_PHOTO,
+      ProjectContractorProofType.PILLAR_PHOTO,
+      ProjectContractorProofType.PANEL_WITH_CLIENT_PHOTO,
+    ];
+  }
+
+  if (workScope === 'ELECTRICAL_TEAM') {
+    return [
+      ProjectContractorProofType.INVERTER_PHOTO,
+      ProjectContractorProofType.SOLAR_METER_PHOTO,
+      ProjectContractorProofType.NET_METER_PHOTO,
+      ProjectContractorProofType.EARTHING_WITH_CLIENT_PHOTO,
+    ];
+  }
+
+  if (workScope === 'INSTALLATION_TEAM') {
+    return [
+      ProjectContractorProofType.PANEL_SERIAL_NUMBER_PHOTO,
+      ProjectContractorProofType.PANEL_WITH_CLIENT_PHOTO,
+      ProjectContractorProofType.INVERTER_PHOTO,
+    ];
+  }
+
+  if (workScope === 'OTHER') {
+    return [ProjectContractorProofType.OTHER];
+  }
+
+  return [
+    ProjectContractorProofType.STRUCTURE_PHOTO,
+    ProjectContractorProofType.PILLAR_PHOTO,
+    ProjectContractorProofType.PANEL_SERIAL_NUMBER_PHOTO,
+    ProjectContractorProofType.INVERTER_PHOTO,
+    ProjectContractorProofType.SOLAR_METER_PHOTO,
+    ProjectContractorProofType.NET_METER_PHOTO,
+    ProjectContractorProofType.EARTHING_WITH_CLIENT_PHOTO,
+    ProjectContractorProofType.PANEL_WITH_CLIENT_PHOTO,
+  ];
+}
+
 private generatePoNumber() {
   return `PO-${Date.now()}`;
 }
@@ -11856,6 +11898,50 @@ async getContractorAssignmentRegister(filters: any, user: any) {
   const [data, total] =
     await dataQuery.getManyAndCount();
 
+    const assignmentIds = data.map((item) => item.id);
+
+const proofs = assignmentIds.length
+  ? await this.projectContractorProofRepository.find({
+      where: {
+        assignmentId: In(assignmentIds),
+      },
+    })
+  : [];
+
+const dataWithProgress = data.map((assignment) => {
+  const requiredProofs =
+    this.getRequiredContractorProofTypesByScopeForRegister(
+      String((assignment as any).workScope || 'FULL_PROJECT'),
+    );
+
+  const assignmentProofs = proofs.filter(
+    (proof) => proof.assignmentId === assignment.id,
+  );
+
+  const uploadedRequiredCount = requiredProofs.filter(
+    (requiredProof) =>
+      assignmentProofs.some(
+        (proof) => proof.proofType === requiredProof,
+      ),
+  ).length;
+
+  const totalRequired = requiredProofs.length;
+
+  const percentage =
+    totalRequired > 0
+      ? Math.round((uploadedRequiredCount / totalRequired) * 100)
+      : 0;
+
+  return {
+    ...assignment,
+    proofProgress: {
+      uploadedRequiredCount,
+      totalRequired,
+      percentage,
+    },
+  };
+});
+
   const summaryBaseQuery =
     this.projectContractorAssignmentRepository
       .createQueryBuilder('assignment');
@@ -11893,13 +11979,13 @@ async getContractorAssignmentRegister(filters: any, user: any) {
   };
 
   return {
-    data,
-    total,
-    page,
-    limit,
-    totalPages: Math.ceil(total / limit) || 1,
-    summary,
-  };
+  data: dataWithProgress,
+  total,
+  page,
+  limit,
+  totalPages: Math.ceil(total / limit) || 1,
+  summary,
+};
 }
 
 async updateContractorAssignment(
