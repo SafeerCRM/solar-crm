@@ -268,7 +268,11 @@ type ContractorAssignment = {
   contractorName?: string;
   contractorPhone?: string;
   workScope?: string;
+
   scheduledDate?: string;
+  startedAt?: string;
+  completedAt?: string;
+
   amount?: number;
   status?: string;
   remarks?: string;
@@ -3194,6 +3198,29 @@ const remainingAmountToCollect =
   <span className="rounded-full bg-gray-200 px-3 py-1 text-xs font-bold text-gray-700">
     Status: {formatContractorLabel(item.status)}
   </span>
+</div>
+
+<div className="mt-3 grid gap-2 text-sm text-gray-600 md:grid-cols-3">
+  <p>
+    Scheduled:{' '}
+    {item.scheduledDate
+      ? new Date(item.scheduledDate).toLocaleDateString('en-IN')
+      : '-'}
+  </p>
+
+  <p>
+    Started:{' '}
+    {item.startedAt
+      ? new Date(item.startedAt).toLocaleString('en-IN')
+      : '-'}
+  </p>
+
+  <p>
+    Completed:{' '}
+    {item.completedAt
+      ? new Date(item.completedAt).toLocaleString('en-IN')
+      : '-'}
+  </p>
 </div>
 
                   <p className="text-sm text-gray-500">
