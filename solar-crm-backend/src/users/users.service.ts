@@ -70,6 +70,10 @@ export class UsersService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
+    if (user.isHidden) {
+  throw new UnauthorizedException('This user account is disabled');
+}
+
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
@@ -188,12 +192,28 @@ export class UsersService {
   });
 }
 
-  async findAllUsers() {
-    return this.userRepository.find({
-      select: ['id', 'name', 'email', 'roles', 'createdAt'],
-      order: { id: 'ASC' },
-    });
-  }
+  async findAllUsers(includeHidden = false) {
+  return this.userRepository.find({
+    where: includeHidden ? {} : { isHidden: false },
+    select: [
+      'id',
+      'name',
+      'email',
+      'roles',
+      'createdAt',
+      'isHidden',
+      'hiddenAt',
+      'hiddenBy',
+      'hiddenByName',
+      'hiddenReason',
+      'restoredAt',
+      'restoredBy',
+      'restoredByName',
+      'restoreReason',
+    ],
+    order: { id: 'ASC' },
+  });
+}
 
   async updateUserPassword(id: number, password: string) {
     const user = await this.userRepository.findOne({
@@ -267,33 +287,77 @@ export class UsersService {
     };
   }
 
-  async deleteUser(id: number, currentUser: any) {
-    const currentUserRoles: string[] = Array.isArray(currentUser?.roles)
-      ? currentUser.roles
-      : [];
+  async deleteUser(id: number, currentUser: any, reason?: string) {
+  const currentUserRoles: string[] = Array.isArray(currentUser?.roles)
+    ? currentUser.roles
+    : [];
 
-    if (!currentUserRoles.includes(UserRole.OWNER)) {
-      throw new ForbiddenException('Only owner can delete users');
-    }
-
-    const user = await this.userRepository.findOne({
-      where: { id },
-    });
-
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    if (user.roles?.includes(UserRole.OWNER)) {
-      throw new BadRequestException('Owner user cannot be deleted');
-    }
-
-    await this.userRepository.delete(id);
-
-    return {
-      message: 'User deleted successfully',
-    };
+  if (!currentUserRoles.includes(UserRole.OWNER)) {
+    throw new ForbiddenException('Only owner can hide users');
   }
+
+  const user = await this.userRepository.findOne({
+    where: { id },
+  });
+
+  if (!user) {
+    throw new NotFoundException('User not found');
+  }
+
+  if (user.roles?.includes(UserRole.OWNER)) {
+    throw new BadRequestException('Owner user cannot be hidden');
+  }
+
+  if (user.isHidden) {
+    throw new BadRequestException('User is already hidden');
+  }
+
+  user.isHidden = true;
+  user.hiddenAt = new Date();
+  user.hiddenBy = currentUser?.id || null;
+  user.hiddenByName = currentUser?.name || null;
+  user.hiddenReason = reason?.trim() || 'Hidden by owner';
+
+  await this.userRepository.save(user);
+
+  return {
+    message: 'User hidden successfully',
+  };
+}
+
+async restoreUser(id: number, currentUser: any, reason?: string) {
+  const currentUserRoles: string[] = Array.isArray(currentUser?.roles)
+    ? currentUser.roles
+    : [];
+
+  if (!currentUserRoles.includes(UserRole.OWNER)) {
+    throw new ForbiddenException('Only owner can restore users');
+  }
+
+  const user = await this.userRepository.findOne({
+    where: { id },
+  });
+
+  if (!user) {
+    throw new NotFoundException('User not found');
+  }
+
+  if (!user.isHidden) {
+    throw new BadRequestException('User is not hidden');
+  }
+
+  user.isHidden = false;
+  user.restoredAt = new Date();
+  user.restoredBy = currentUser?.id || null;
+  user.restoredByName = currentUser?.name || null;
+  user.restoreReason = reason?.trim() || 'Restored by owner';
+
+  await this.userRepository.save(user);
+
+  return {
+    message: 'User restored successfully',
+  };
+}
 
   async findById(id: number) {
     return this.userRepository.findOne({

@@ -7,6 +7,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
@@ -81,9 +82,9 @@ export class UsersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
   @Get()
-  findAllUsers() {
-    return this.usersService.findAllUsers();
-  }
+findAllUsers(@Query('includeHidden') includeHidden?: string) {
+  return this.usersService.findAllUsers(includeHidden === 'true');
+}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER')
@@ -107,14 +108,26 @@ export class UsersController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER')
-  @Delete(':id')
-  deleteUser(
-    @Param('id', ParseIntPipe) id: number,
-    @CurrentUser() user: any,
-  ) {
-    return this.usersService.deleteUser(id, user);
-  }
+@Roles('OWNER')
+@Delete(':id')
+deleteUser(
+  @Param('id', ParseIntPipe) id: number,
+  @Body('reason') reason: string,
+  @CurrentUser() user: any,
+) {
+  return this.usersService.deleteUser(id, user, reason);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Patch(':id/restore')
+restoreUser(
+  @Param('id', ParseIntPipe) id: number,
+  @Body('reason') reason: string,
+  @CurrentUser() user: any,
+) {
+  return this.usersService.restoreUser(id, user, reason);
+}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('OWNER', 'MARKETING_HEAD', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER')

@@ -47,6 +47,33 @@ export class User {
   })
   roles: UserRole[];
 
+  @Column({ default: false })
+isHidden: boolean;
+
+@Column({ nullable: true })
+hiddenAt: Date;
+
+@Column({ nullable: true })
+hiddenBy: number;
+
+@Column({ type: 'text', nullable: true })
+hiddenByName: string;
+
+@Column({ type: 'text', nullable: true })
+hiddenReason: string;
+
+@Column({ nullable: true })
+restoredAt: Date;
+
+@Column({ nullable: true })
+restoredBy: number;
+
+@Column({ type: 'text', nullable: true })
+restoredByName: string;
+
+@Column({ type: 'text', nullable: true })
+restoreReason: string;
+
   @CreateDateColumn()
   createdAt: Date;
 }
