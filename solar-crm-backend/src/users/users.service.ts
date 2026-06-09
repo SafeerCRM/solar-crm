@@ -105,6 +105,7 @@ export class UsersService {
   async findAssignableStaff() {
     return this.userRepository.find({
       where: {
+        isHidden: false,
         roles: Raw(
           (alias) =>
             `${alias} LIKE :telecaller
@@ -131,6 +132,7 @@ export class UsersService {
   async findTelecallingAssistants() {
     return this.userRepository.find({
       where: {
+        isHidden: false,
         roles: Raw((alias) => `${alias} LIKE :role`, {
           role: '%TELECALLING_ASSISTANT%',
         }),
@@ -143,6 +145,7 @@ export class UsersService {
   async findMeetingManagers() {
   return this.userRepository.find({
     where: {
+      isHidden: false,
       roles: Raw((alias) => `${alias} LIKE :role`, {
         role: '%MEETING_MANAGER%',
       }),
@@ -154,6 +157,7 @@ export class UsersService {
   async findLeadManagers() {
     return this.userRepository.find({
       where: {
+        isHidden: false,
         roles: Raw((alias) => `${alias} LIKE :role`, {
           role: '%LEAD_MANAGER%',
         }),
@@ -166,6 +170,7 @@ export class UsersService {
   async findTelecallers() {
     return this.userRepository.find({
       where: {
+        isHidden: false,
         roles: Raw(
           (alias) =>
             `${alias} LIKE :telecaller OR ${alias} LIKE :telecallingAssistant`,
@@ -183,6 +188,7 @@ export class UsersService {
   async findCustomers() {
   return this.userRepository.find({
     where: {
+      isHidden: false,
       roles: Raw((alias) => `${alias} LIKE :role`, {
         role: '%CUSTOMER%',
       }),
