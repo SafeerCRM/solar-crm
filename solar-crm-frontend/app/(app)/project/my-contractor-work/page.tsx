@@ -13,7 +13,11 @@ type ContractorProject = {
   contractorName?: string;
   workScope?: string;
   contractorPhone?: string;
+
   scheduledDate?: string;
+  startedAt?: string;
+  completedAt?: string;
+
   amount?: number;
   status?: string;
   remarks?: string;
@@ -510,6 +514,24 @@ const submitComment = async (
                         )
                       : '-'}
                   </p>
+
+                  <p className="text-sm text-gray-500">
+  Started:{' '}
+  {item.startedAt
+    ? new Date(
+        item.startedAt,
+      ).toLocaleString('en-IN')
+    : '-'}
+</p>
+
+<p className="text-sm text-gray-500">
+  Completed:{' '}
+  {item.completedAt
+    ? new Date(
+        item.completedAt,
+      ).toLocaleString('en-IN')
+    : '-'}
+</p>
 
                   <p className="text-sm text-gray-500">
                     Assigned By:{' '}
