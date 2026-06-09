@@ -403,6 +403,38 @@ const CONTRACTOR_REQUIRED_PROOFS_BY_SCOPE: Record<string, string[]> = {
 const formatContractorLabel = (value?: string) =>
   String(value || 'FULL_PROJECT').replaceAll('_', ' ');
 
+const getContractorProofProgress = (
+  workScope: string | undefined,
+  uploadedProofs: ContractorProof[],
+) => {
+  const requiredProofs =
+    CONTRACTOR_REQUIRED_PROOFS_BY_SCOPE[
+      workScope || 'FULL_PROJECT'
+    ] || [];
+
+  const uploadedRequiredCount = requiredProofs.filter(
+    (requiredProof) =>
+      uploadedProofs.some(
+        (proof) => proof.proofType === requiredProof,
+      ),
+  ).length;
+
+  const totalRequired = requiredProofs.length;
+
+  const percentage =
+    totalRequired > 0
+      ? Math.round(
+          (uploadedRequiredCount / totalRequired) * 100,
+        )
+      : 0;
+
+  return {
+    uploadedRequiredCount,
+    totalRequired,
+    percentage,
+  };
+};
+
 export default function ProjectDetailPage() {
   const params = useParams();
   const projectId = params?.id as string;
@@ -3222,6 +3254,37 @@ const remainingAmountToCollect =
       : '-'}
   </p>
 </div>
+
+{(() => {
+  const progress = getContractorProofProgress(
+    item.workScope,
+    contractorProofs[item.id] || [],
+  );
+
+  return (
+    <div className="mt-3 rounded-xl border bg-white p-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-bold text-gray-800">
+          Proof Progress
+        </p>
+
+        <p className="text-sm font-bold text-blue-700">
+          {progress.uploadedRequiredCount} / {progress.totalRequired}{' '}
+          uploaded ({progress.percentage}%)
+        </p>
+      </div>
+
+      <div className="mt-2 h-3 overflow-hidden rounded-full bg-gray-200">
+        <div
+          className="h-full rounded-full bg-blue-600"
+          style={{
+            width: `${progress.percentage}%`,
+          }}
+        />
+      </div>
+    </div>
+  );
+})()}
 
                   <p className="text-sm text-gray-500">
                     Phone: {item.contractorPhone || '-'}
