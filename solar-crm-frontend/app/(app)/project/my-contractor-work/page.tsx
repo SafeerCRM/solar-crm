@@ -11,6 +11,7 @@ type ContractorProject = {
   id: number;
   projectId: number;
   contractorName?: string;
+  workScope?: string;
   contractorPhone?: string;
   scheduledDate?: string;
   amount?: number;
@@ -44,6 +45,39 @@ type ContractorComment = {
   createdByRole?: string;
   createdAt?: string;
 };
+
+const CONTRACTOR_REQUIRED_PROOFS_BY_SCOPE: Record<string, string[]> = {
+  FULL_PROJECT: [
+    'STRUCTURE_PHOTO',
+    'PILLAR_PHOTO',
+    'PANEL_SERIAL_NUMBER_PHOTO',
+    'INVERTER_PHOTO',
+    'SOLAR_METER_PHOTO',
+    'NET_METER_PHOTO',
+    'EARTHING_WITH_CLIENT_PHOTO',
+    'PANEL_WITH_CLIENT_PHOTO',
+  ],
+  STRUCTURE_TEAM: [
+    'STRUCTURE_PHOTO',
+    'PILLAR_PHOTO',
+    'PANEL_WITH_CLIENT_PHOTO',
+  ],
+  ELECTRICAL_TEAM: [
+    'INVERTER_PHOTO',
+    'SOLAR_METER_PHOTO',
+    'NET_METER_PHOTO',
+    'EARTHING_WITH_CLIENT_PHOTO',
+  ],
+  INSTALLATION_TEAM: [
+    'PANEL_SERIAL_NUMBER_PHOTO',
+    'PANEL_WITH_CLIENT_PHOTO',
+    'INVERTER_PHOTO',
+  ],
+  OTHER: ['OTHER'],
+};
+
+const formatContractorLabel = (value?: string) =>
+  String(value || 'FULL_PROJECT').replaceAll('_', ' ');
 
 function money(value?: number) {
   return `₹${Number(value || 0).toLocaleString(
@@ -444,6 +478,23 @@ const submitComment = async (
                     {item.contractorName || '-'}
                   </p>
 
+                  <div className="mt-2 flex flex-wrap gap-2">
+  <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-bold text-purple-700">
+    My Scope: {formatContractorLabel(item.workScope)}
+  </span>
+
+  <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">
+    Required Proofs:{' '}
+    {
+      (
+        CONTRACTOR_REQUIRED_PROOFS_BY_SCOPE[
+          item.workScope || 'FULL_PROJECT'
+        ] || []
+      ).length
+    }
+  </span>
+</div>
+
                   <p className="text-sm text-gray-500">
                     Phone:{' '}
                     {item.contractorPhone || '-'}
@@ -509,6 +560,36 @@ const submitComment = async (
 
 <div className="mt-5 rounded-xl border bg-gray-50 p-4">
   <h3 className="font-bold text-gray-800">
+    Required Proof Checklist
+  </h3>
+
+  <div className="mt-3 flex flex-wrap gap-2">
+    {(
+      CONTRACTOR_REQUIRED_PROOFS_BY_SCOPE[
+        item.workScope || 'FULL_PROJECT'
+      ] || []
+    ).map((requiredProof) => {
+      const uploaded = (proofs[item.id] || []).some(
+        (proof) => proof.proofType === requiredProof,
+      );
+
+      return (
+        <span
+          key={requiredProof}
+          className={`rounded-full px-3 py-1 text-xs font-semibold ${
+            uploaded
+              ? 'bg-green-100 text-green-700'
+              : 'bg-red-100 text-red-700'
+          }`}
+        >
+          {uploaded ? '✓' : '✗'}{' '}
+          {formatContractorLabel(requiredProof)}
+        </span>
+      );
+    })}
+  </div>
+
+  <h3 className="mt-5 font-bold text-gray-800">
     Upload GPS Proof Photos
   </h3>
 
@@ -524,21 +605,16 @@ const submitComment = async (
       className="rounded-xl border p-3"
     >
       <option value="">Select Proof Type</option>
-      <option value="STRUCTURE_PHOTO">Structure Photo</option>
-      <option value="PILLAR_PHOTO">Pillar Photo</option>
-      <option value="PANEL_SERIAL_NUMBER_PHOTO">
-        Panel Serial Number Photo
-      </option>
-      <option value="INVERTER_PHOTO">Inverter Photo</option>
-      <option value="SOLAR_METER_PHOTO">Solar Meter Photo</option>
-      <option value="NET_METER_PHOTO">Net Meter Photo</option>
-      <option value="EARTHING_WITH_CLIENT_PHOTO">
-        Earthing With Client Photo
-      </option>
-      <option value="PANEL_WITH_CLIENT_PHOTO">
-        Panel With Client Photo
-      </option>
-      <option value="OTHER">Other</option>
+
+{(
+  CONTRACTOR_REQUIRED_PROOFS_BY_SCOPE[
+    item.workScope || 'FULL_PROJECT'
+  ] || []
+).map((requiredProof) => (
+  <option key={requiredProof} value={requiredProof}>
+    {formatContractorLabel(requiredProof)}
+  </option>
+))}
     </select>
 
     <input
