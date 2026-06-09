@@ -267,6 +267,7 @@ type ContractorAssignment = {
   contractorId: number;
   contractorName?: string;
   contractorPhone?: string;
+  workScope?: string;
   scheduledDate?: string;
   amount?: number;
   status?: string;
@@ -337,6 +338,67 @@ function Field({ label, value }: { label: string; value?: string | number }) {
   );
 }
 
+const CONTRACTOR_WORK_SCOPE_OPTIONS = [
+  {
+    value: 'FULL_PROJECT',
+    label: 'Full Project Contractor',
+    description: 'Handles structure, electrical, installation and all final proofs.',
+  },
+  {
+    value: 'STRUCTURE_TEAM',
+    label: 'Structure Team',
+    description: 'Handles only structure and pillar related work proofs.',
+  },
+  {
+    value: 'ELECTRICAL_TEAM',
+    label: 'Electrical Team',
+    description: 'Handles inverter, meter, wiring and earthing related proofs.',
+  },
+  {
+    value: 'INSTALLATION_TEAM',
+    label: 'Installation Team',
+    description: 'Handles panel serial, panel with client and installation proofs.',
+  },
+  {
+    value: 'OTHER',
+    label: 'Other Work',
+    description: 'For special work not covered in above categories.',
+  },
+];
+
+const CONTRACTOR_REQUIRED_PROOFS_BY_SCOPE: Record<string, string[]> = {
+  FULL_PROJECT: [
+    'STRUCTURE_PHOTO',
+    'PILLAR_PHOTO',
+    'PANEL_SERIAL_NUMBER_PHOTO',
+    'INVERTER_PHOTO',
+    'SOLAR_METER_PHOTO',
+    'NET_METER_PHOTO',
+    'EARTHING_WITH_CLIENT_PHOTO',
+    'PANEL_WITH_CLIENT_PHOTO',
+  ],
+  STRUCTURE_TEAM: [
+    'STRUCTURE_PHOTO',
+    'PILLAR_PHOTO',
+    'PANEL_WITH_CLIENT_PHOTO',
+  ],
+  ELECTRICAL_TEAM: [
+    'INVERTER_PHOTO',
+    'SOLAR_METER_PHOTO',
+    'NET_METER_PHOTO',
+    'EARTHING_WITH_CLIENT_PHOTO',
+  ],
+  INSTALLATION_TEAM: [
+    'PANEL_SERIAL_NUMBER_PHOTO',
+    'PANEL_WITH_CLIENT_PHOTO',
+    'INVERTER_PHOTO',
+  ],
+  OTHER: ['OTHER'],
+};
+
+const formatContractorLabel = (value?: string) =>
+  String(value || 'FULL_PROJECT').replaceAll('_', ' ');
+
 export default function ProjectDetailPage() {
   const params = useParams();
   const projectId = params?.id as string;
@@ -371,6 +433,7 @@ const [contractorForm, setContractorForm] = useState({
   contractorId: '',
   contractorName: '',
   contractorPhone: '',
+  workScope: 'FULL_PROJECT',
   scheduledDate: '',
   amount: '',
   remarks: '',
@@ -2573,7 +2636,8 @@ const assignContractor = async () => {
         contractorId: Number(contractorForm.contractorId),
         contractorName: contractorForm.contractorName,
         contractorPhone: contractorForm.contractorPhone,
-        scheduledDate: contractorForm.scheduledDate || undefined,
+workScope: contractorForm.workScope || 'FULL_PROJECT',
+scheduledDate: contractorForm.scheduledDate || undefined,
         amount: contractorForm.amount || 0,
         remarks: contractorForm.remarks,
       },
@@ -2589,12 +2653,13 @@ const assignContractor = async () => {
     setContractorForm({
   contractorMasterId: '',
   contractorId: '',
-      contractorName: '',
-      contractorPhone: '',
-      scheduledDate: '',
-      amount: '',
-      remarks: '',
-    });
+  contractorName: '',
+  contractorPhone: '',
+  workScope: 'FULL_PROJECT',
+  scheduledDate: '',
+  amount: '',
+  remarks: '',
+});
 
     fetchContractorAssignments();
   } catch (error: any) {
@@ -2969,7 +3034,7 @@ const remainingAmountToCollect =
         </h2>
 
         <p className="mt-1 text-sm text-gray-500">
-          Assign one project contractor who will coordinate structure and electrical work.
+          Assign full project contractor or separate teams like Structure Team, Electrical Team, and Installation Team.
         </p>
 
         <div className="mt-5 grid gap-3 md:grid-cols-3">
@@ -3007,6 +3072,23 @@ const remainingAmountToCollect =
   className="rounded-xl border bg-gray-100 p-3"
 />
 
+<select
+  value={contractorForm.workScope}
+  onChange={(e) =>
+    setContractorForm({
+      ...contractorForm,
+      workScope: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+>
+  {CONTRACTOR_WORK_SCOPE_OPTIONS.map((scope) => (
+    <option key={scope.value} value={scope.value}>
+      {scope.label}
+    </option>
+  ))}
+</select>
+
           <input
             type="date"
             value={contractorForm.scheduledDate}
@@ -3043,6 +3125,33 @@ const remainingAmountToCollect =
             }
             className="rounded-xl border p-3"
           />
+
+          <div className="md:col-span-3 rounded-xl border bg-blue-50 p-4">
+  <p className="text-sm font-bold text-blue-800">
+    Selected Scope:{' '}
+    {CONTRACTOR_WORK_SCOPE_OPTIONS.find(
+      (scope) => scope.value === contractorForm.workScope,
+    )?.label || 'Full Project Contractor'}
+  </p>
+
+  <p className="mt-1 text-xs text-blue-700">
+    {CONTRACTOR_WORK_SCOPE_OPTIONS.find(
+      (scope) => scope.value === contractorForm.workScope,
+    )?.description}
+  </p>
+
+  <div className="mt-3 flex flex-wrap gap-2">
+    {(CONTRACTOR_REQUIRED_PROOFS_BY_SCOPE[contractorForm.workScope] || [])
+      .map((proofType) => (
+        <span
+          key={proofType}
+          className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-blue-700"
+        >
+          {formatContractorLabel(proofType)}
+        </span>
+      ))}
+  </div>
+</div>
         </div>
 
         <button
@@ -3076,6 +3185,16 @@ const remainingAmountToCollect =
                   <p className="font-bold text-gray-800">
                     {item.contractorName || `Contractor #${item.contractorId}`}
                   </p>
+
+                  <div className="mt-2 flex flex-wrap gap-2">
+  <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-bold text-purple-700">
+    Scope: {formatContractorLabel(item.workScope)}
+  </span>
+
+  <span className="rounded-full bg-gray-200 px-3 py-1 text-xs font-bold text-gray-700">
+    Status: {formatContractorLabel(item.status)}
+  </span>
+</div>
 
                   <p className="text-sm text-gray-500">
                     Phone: {item.contractorPhone || '-'}
@@ -3125,6 +3244,34 @@ const remainingAmountToCollect =
       {status.replaceAll('_', ' ')}
     </button>
   ))}
+</div>
+
+<div className="mt-5 rounded-xl border bg-white p-4">
+  <h4 className="font-bold text-gray-800">
+    Scope Based Required Proofs
+  </h4>
+
+  <div className="mt-3 flex flex-wrap gap-2">
+    {(CONTRACTOR_REQUIRED_PROOFS_BY_SCOPE[item.workScope || 'FULL_PROJECT'] || [])
+      .map((proofType) => {
+        const uploaded = (contractorProofs[item.id] || []).some(
+          (proof) => proof.proofType === proofType,
+        );
+
+        return (
+          <span
+            key={proofType}
+            className={`rounded-full px-3 py-1 text-xs font-semibold ${
+              uploaded
+                ? 'bg-green-100 text-green-700'
+                : 'bg-red-100 text-red-700'
+            }`}
+          >
+            {uploaded ? '✓' : '✗'} {formatContractorLabel(proofType)}
+          </span>
+        );
+      })}
+  </div>
 </div>
 
 <div className="mt-5">
