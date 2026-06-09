@@ -108,6 +108,7 @@ export default function TradingAccountPage() {
       | 'notifications'
       | 'monthly'
       | 'credit'
+      | 'ledger'
     >('dealers');
 
   const [dealers, setDealers] = useState<Dealer[]>([]);
@@ -125,6 +126,8 @@ export default function TradingAccountPage() {
   const [notifications, setNotifications] = useState<DealerNotification[]>([]);
 const [monthlyRequirements, setMonthlyRequirements] = useState<DealerMonthlyRequirement[]>([]);
 const [creditReminders, setCreditReminders] = useState<CreditReminder[]>([]);
+const [dealerLedger, setDealerLedger] = useState<any>(null);
+const [ledgerDealerId, setLedgerDealerId] = useState('');
 
 const [notificationPage, setNotificationPage] = useState(1);
 const [notificationTotalPages, setNotificationTotalPages] = useState(1);
@@ -289,6 +292,22 @@ const fetchCreditReminders = async () => {
   });
 
   setCreditReminders(res.data?.data || []);
+};
+
+const fetchDealerLedger = async () => {
+  if (!ledgerDealerId) {
+    setDealerLedger(null);
+    return;
+  }
+
+  const res = await axios.get(`${API_BASE_URL}/project/dealer-ledger-history`, {
+    params: {
+      dealerId: ledgerDealerId,
+    },
+    headers: headers(),
+  });
+
+  setDealerLedger(res.data || null);
 };
 
   const refreshAll = async () => {
@@ -841,6 +860,7 @@ const hideOrRestoreMonthlyRequirement = async (
   ['notifications', 'Notifications'],
   ['monthly', 'Monthly Planning'],
   ['credit', 'Credit Reminders'],
+  ['ledger', 'Dealer Ledger'],
 ].map(([key, label]) => (
           <button
             key={key}
@@ -1436,6 +1456,147 @@ const hideOrRestoreMonthlyRequirement = async (
         })
       )}
     </div>
+  </div>
+)}
+
+{activeTab === 'ledger' && (
+  <div className="grid min-w-0 gap-5 xl:grid-cols-2">
+    <div className="w-full max-w-full min-w-0 overflow-hidden rounded-2xl bg-white p-4 shadow sm:p-5">
+      <h2 className="text-lg font-bold text-gray-800">
+        Dealer Ledger / Transaction History
+      </h2>
+
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+        <select
+          value={ledgerDealerId}
+          onChange={(e) => setLedgerDealerId(e.target.value)}
+          className="w-full rounded-xl border p-3"
+        >
+          <option value="">Select Dealer</option>
+          {dealers.map((dealer) => (
+            <option key={dealer.id} value={dealer.id}>
+              {dealer.vendorName}
+            </option>
+          ))}
+        </select>
+
+        <button
+          onClick={fetchDealerLedger}
+          className="rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white"
+        >
+          Load Ledger
+        </button>
+      </div>
+
+      {!dealerLedger ? (
+        <p className="mt-4 text-sm text-gray-500">
+          Select a dealer to view orders, invoices, payments and material history.
+        </p>
+      ) : (
+        <div className="mt-5 space-y-4">
+          <div className="rounded-xl border p-4">
+            <p className="font-bold">
+              {dealerLedger.dealer?.dealerName}
+            </p>
+            <p className="text-sm text-gray-500">
+              {dealerLedger.dealer?.phone || '-'} | GST:{' '}
+              {dealerLedger.dealer?.gstNumber || '-'}
+            </p>
+            <p className="text-sm text-gray-500">
+              {dealerLedger.dealer?.city || '-'} | Opening Balance:{' '}
+              {money(dealerLedger.dealer?.openingBalance)}
+            </p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-xl bg-blue-50 p-4">
+              <p className="text-xs text-gray-500">Total Orders</p>
+              <p className="text-lg font-bold">
+                {dealerLedger.summary?.totalOrders || 0}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-blue-50 p-4">
+              <p className="text-xs text-gray-500">Order Value</p>
+              <p className="text-lg font-bold">
+                {money(dealerLedger.summary?.totalOrderValue)}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-green-50 p-4">
+              <p className="text-xs text-gray-500">Paid</p>
+              <p className="text-lg font-bold text-green-700">
+                {money(dealerLedger.summary?.totalPaid)}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-red-50 p-4">
+              <p className="text-xs text-gray-500">Pending</p>
+              <p className="text-lg font-bold text-red-700">
+                {money(dealerLedger.summary?.totalPending)}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+
+    {dealerLedger && (
+      <div className="w-full max-w-full min-w-0 overflow-hidden rounded-2xl bg-white p-4 shadow sm:p-5">
+        <h2 className="text-lg font-bold text-gray-800">
+          Material Summary
+        </h2>
+
+        <div className="mt-4 space-y-3">
+          {dealerLedger.materialSummary?.length === 0 ? (
+            <p className="text-sm text-gray-500">
+              No material history found.
+            </p>
+          ) : (
+            dealerLedger.materialSummary?.map((item: any) => (
+              <div key={item.materialId} className="rounded-xl border p-4">
+                <p className="break-words font-bold">
+                  {item.materialName}
+                </p>
+                <p className="text-sm text-gray-500">
+                  {item.category || '-'} | {item.brand || '-'}
+                </p>
+                <p className="text-sm">
+                  Qty: {item.totalQuantity} {item.unit || ''} | Value:{' '}
+                  {money(item.totalAmount)}
+                </p>
+              </div>
+            ))
+          )}
+        </div>
+
+        <h2 className="mt-6 text-lg font-bold text-gray-800">
+          Transaction Timeline
+        </h2>
+
+        <div className="mt-4 space-y-3">
+          {dealerLedger.timeline?.map((entry: any, index: number) => (
+            <div key={`${entry.type}-${entry.referenceId}-${index}`} className="rounded-xl border p-4">
+              <p className="break-words font-bold">
+                {entry.title}
+              </p>
+              <p className="text-sm text-gray-500">
+                {entry.type} | {entry.status || '-'} |{' '}
+                {entry.date
+                  ? new Date(entry.date).toLocaleString('en-IN')
+                  : '-'}
+              </p>
+              <p className="text-sm">
+                Amount: {money(entry.amount)}
+              </p>
+              <p className="break-words text-sm text-gray-500">
+                {entry.description}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
   </div>
 )}
     </div>
