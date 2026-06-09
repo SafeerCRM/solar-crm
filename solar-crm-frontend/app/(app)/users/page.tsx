@@ -112,21 +112,26 @@ const [showHidden, setShowHidden] = useState(false);
   useEffect(() => {
   let temp = [...users];
 
+  if (showHidden) {
+    temp = temp.filter((user) => user.isHidden === true);
+  } else {
+    temp = temp.filter((user) => user.isHidden !== true);
+  }
+
   if (search) {
-    temp = temp.filter((user) =>
-      user.name?.toLowerCase().includes(search.toLowerCase()) ||
-      user.email?.toLowerCase().includes(search.toLowerCase())
+    temp = temp.filter(
+      (user) =>
+        user.name?.toLowerCase().includes(search.toLowerCase()) ||
+        user.email?.toLowerCase().includes(search.toLowerCase()),
     );
   }
 
   if (roleFilter) {
-    temp = temp.filter((user) =>
-      user.roles?.includes(roleFilter)
-    );
+    temp = temp.filter((user) => user.roles?.includes(roleFilter));
   }
 
   setFilteredUsers(temp);
-}, [search, roleFilter, users]);
+}, [search, roleFilter, users, showHidden]);
 
   const fetchUsers = async () => {
     try {
