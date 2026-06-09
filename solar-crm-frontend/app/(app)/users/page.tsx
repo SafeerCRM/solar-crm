@@ -10,6 +10,9 @@ type User = {
   email: string;
   roles?: string[] | null;
   createdAt?: string;
+
+  isHidden?: boolean;
+  hiddenReason?: string;
 };
 
 const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -57,6 +60,7 @@ export default function UsersPage() {
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
 const [search, setSearch] = useState('');
 const [roleFilter, setRoleFilter] = useState('');
+const [showHidden, setShowHidden] = useState(false);
   const [editingRoles, setEditingRoles] = useState<Record<number, string[]>>({});
 
   const [name, setName] = useState('');
@@ -100,10 +104,10 @@ const [roleFilter, setRoleFilter] = useState('');
   }, []);
 
   useEffect(() => {
-    if (currentUser) {
-      fetchUsers();
-    }
-  }, [currentUser]);
+  if (currentUser) {
+    fetchUsers();
+  }
+}, [currentUser, showHidden]);
 
   useEffect(() => {
   let temp = [...users];
@@ -126,9 +130,12 @@ const [roleFilter, setRoleFilter] = useState('');
 
   const fetchUsers = async () => {
     try {
-      const res = await axios.get(`${backendUrl}/users`, {
-        headers: getAuthHeaders(),
-      });
+      const res = await axios.get(
+  `${backendUrl}/users?includeHidden=${showHidden}`,
+  {
+    headers: getAuthHeaders(),
+  },
+);
 
       const data = Array.isArray(res.data) ? res.data : [];
       setUsers(data);
@@ -264,26 +271,60 @@ const [roleFilter, setRoleFilter] = useState('');
   };
 
   const handleDeleteUser = async (userId: number) => {
-    const ok = window.confirm('Are you sure you want to delete this user?');
-    if (!ok) return;
+  const reason =
+    window.prompt('Reason for hiding this user?')?.trim() || '';
 
-    try {
-      setDeletingUserId(userId);
-      setMessage('');
+  if (!reason) {
+    return;
+  }
 
-      await axios.delete(`${backendUrl}/users/${userId}`, {
+  try {
+    setDeletingUserId(userId);
+    setMessage('');
+
+    await axios.delete(`${backendUrl}/users/${userId}`, {
+      headers: getAuthHeaders(),
+      data: {
+        reason,
+      },
+    });
+
+    setMessage('User hidden successfully');
+    await fetchUsers();
+  } catch (error: any) {
+    console.error(error);
+    setMessage(error?.response?.data?.message || 'Failed to hide user');
+  } finally {
+    setDeletingUserId(null);
+  }
+};
+
+const handleRestoreUser = async (userId: number) => {
+  const reason =
+    window.prompt('Reason for restoring this user?')?.trim() || '';
+
+  if (!reason) {
+    return;
+  }
+
+  try {
+    await axios.patch(
+      `${backendUrl}/users/${userId}/restore`,
+      {
+        reason,
+      },
+      {
         headers: getAuthHeaders(),
-      });
+      },
+    );
 
-      setMessage('User deleted successfully');
-      await fetchUsers();
-    } catch (error: any) {
-      console.error(error);
-      setMessage(error?.response?.data?.message || 'Failed to delete user');
-    } finally {
-      setDeletingUserId(null);
-    }
-  };
+    setMessage('User restored successfully');
+    await fetchUsers();
+  } catch (error: any) {
+    console.error(error);
+    setMessage(error?.response?.data?.message || 'Failed to restore user');
+  }
+};
 
   if (!currentUser) {
     return <div className="p-6">Loading users...</div>;
@@ -364,7 +405,19 @@ const [roleFilter, setRoleFilter] = useState('');
       </div>
 
       <div className="rounded-2xl bg-white p-6 shadow">
-        <h2 className="mb-4 text-2xl font-bold">All Users</h2>
+        <div className="mb-4 flex items-center justify-between">
+  <h2 className="text-2xl font-bold">
+    {showHidden ? 'Hidden Users' : 'All Users'}
+  </h2>
+
+  <button
+    type="button"
+    onClick={() => setShowHidden((prev) => !prev)}
+    className="rounded bg-indigo-600 px-4 py-2 text-white"
+  >
+    {showHidden ? 'View Active Users' : 'View Hidden Users'}
+  </button>
+</div>
 
         <div className="mb-4 flex flex-col gap-3 md:flex-row">
   <input
@@ -489,9 +542,19 @@ const [roleFilter, setRoleFilter] = useState('');
                             disabled={deletingUserId === user.id}
                             className="rounded bg-red-600 px-3 py-2 text-white"
                           >
-                            {deletingUserId === user.id ? 'Deleting...' : 'Delete'}
+                            {deletingUserId === user.id ? 'Hiding...' : 'Hide User'}
                           </button>
                         )}
+
+                        {showHidden && (
+  <button
+    type="button"
+    onClick={() => handleRestoreUser(user.id)}
+    className="rounded bg-blue-600 px-3 py-2 text-white"
+  >
+    Restore User
+  </button>
+)}
                       </div>
                     </td>
                   </tr>
