@@ -187,6 +187,12 @@ const navItems = [
 },
 
 {
+  name: 'Contractor Assignments',
+  href: '/project/contractor-assignments',
+  roles: ['OWNER', 'PROJECT_MANAGER'],
+},
+
+{
   name: 'Execution Calendar',
   href: '/project/execution-calendar',
   roles: [
