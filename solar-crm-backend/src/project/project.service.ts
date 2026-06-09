@@ -124,6 +124,7 @@ import {
 import {
   ProjectContractorAssignment,
   ProjectContractorWorkStatus,
+  ProjectContractorWorkScope,
 } from './project-contractor-assignment.entity';
 import {
   ProjectContractorProof,
@@ -190,6 +191,48 @@ private generateFinalInvoiceNumber() {
 
 private generateDealerOrderNumber() {
   return `DO-${Date.now()}`;
+}
+
+private getRequiredContractorProofTypesByScope(workScope: string) {
+  if (workScope === ProjectContractorWorkScope.STRUCTURE_TEAM) {
+    return [
+      ProjectContractorProofType.STRUCTURE_PHOTO,
+      ProjectContractorProofType.PILLAR_PHOTO,
+      ProjectContractorProofType.PANEL_WITH_CLIENT_PHOTO,
+    ];
+  }
+
+  if (workScope === ProjectContractorWorkScope.ELECTRICAL_TEAM) {
+    return [
+      ProjectContractorProofType.INVERTER_PHOTO,
+      ProjectContractorProofType.SOLAR_METER_PHOTO,
+      ProjectContractorProofType.NET_METER_PHOTO,
+      ProjectContractorProofType.EARTHING_WITH_CLIENT_PHOTO,
+    ];
+  }
+
+  if (workScope === ProjectContractorWorkScope.INSTALLATION_TEAM) {
+    return [
+      ProjectContractorProofType.PANEL_SERIAL_NUMBER_PHOTO,
+      ProjectContractorProofType.PANEL_WITH_CLIENT_PHOTO,
+      ProjectContractorProofType.INVERTER_PHOTO,
+    ];
+  }
+
+  if (workScope === ProjectContractorWorkScope.OTHER) {
+    return [ProjectContractorProofType.OTHER];
+  }
+
+  return [
+    ProjectContractorProofType.STRUCTURE_PHOTO,
+    ProjectContractorProofType.PILLAR_PHOTO,
+    ProjectContractorProofType.PANEL_SERIAL_NUMBER_PHOTO,
+    ProjectContractorProofType.INVERTER_PHOTO,
+    ProjectContractorProofType.SOLAR_METER_PHOTO,
+    ProjectContractorProofType.NET_METER_PHOTO,
+    ProjectContractorProofType.EARTHING_WITH_CLIENT_PHOTO,
+    ProjectContractorProofType.PANEL_WITH_CLIENT_PHOTO,
+  ];
 }
 
 private getMaterialSellingRate(material: ProjectMaterialMaster) {
@@ -11398,6 +11441,9 @@ async assignContractorToProject(body: any, user: any) {
       contractorId,
       contractorName: body?.contractorName || '',
       contractorPhone: body?.contractorPhone || '',
+      workScope:
+  body?.workScope ||
+  ProjectContractorWorkScope.FULL_PROJECT,
       scheduledDate: body?.scheduledDate
         ? new Date(body.scheduledDate)
         : undefined,
@@ -11778,16 +11824,13 @@ async updateContractorAssignment(
       proofs.map((proof) => String(proof.proofType)),
     );
 
-    const requiredTypes = [
-      'STRUCTURE_PHOTO',
-      'PILLAR_PHOTO',
-      'PANEL_SERIAL_NUMBER_PHOTO',
-      'INVERTER_PHOTO',
-      'SOLAR_METER_PHOTO',
-      'NET_METER_PHOTO',
-      'EARTHING_WITH_CLIENT_PHOTO',
-      'PANEL_WITH_CLIENT_PHOTO',
-    ];
+    const requiredTypes =
+  this.getRequiredContractorProofTypesByScope(
+    String(
+      (assignment as any).workScope ||
+        ProjectContractorWorkScope.FULL_PROJECT,
+    ),
+  );
 
     const missingTypes = requiredTypes.filter(
       (type) => !uploadedTypes.has(type),

@@ -6,6 +6,14 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
+export enum ProjectContractorWorkScope {
+  FULL_PROJECT = 'FULL_PROJECT',
+  STRUCTURE_TEAM = 'STRUCTURE_TEAM',
+  ELECTRICAL_TEAM = 'ELECTRICAL_TEAM',
+  INSTALLATION_TEAM = 'INSTALLATION_TEAM',
+  OTHER = 'OTHER',
+}
+
 export enum ProjectContractorWorkStatus {
   ASSIGNED = 'ASSIGNED',
   IN_PROGRESS = 'IN_PROGRESS',
@@ -30,6 +38,13 @@ export class ProjectContractorAssignment {
 
   @Column({ type: 'text', nullable: true })
   contractorPhone: string;
+
+  @Column({
+  type: 'enum',
+  enum: ProjectContractorWorkScope,
+  default: ProjectContractorWorkScope.FULL_PROJECT,
+})
+workScope: ProjectContractorWorkScope;
 
   @Column({ type: 'timestamp', nullable: true })
   scheduledDate: Date;
