@@ -187,6 +187,8 @@ const [monthlyForm, setMonthlyForm] = useState({
   ]);
 
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [selectedOrderInvoices, setSelectedOrderInvoices] =
+  useState<any>(null);
 
   const [paymentForm, setPaymentForm] = useState({
     amount: '',
@@ -589,6 +591,14 @@ const generateDealerFinalInvoice = async () => {
       });
 
       setSelectedOrder(res.data);
+      const invoiceRes = await axios.get(
+  `${API_BASE_URL}/project/dealer-order/${id}/invoices`,
+  {
+    headers: headers(),
+  },
+);
+
+setSelectedOrderInvoices(invoiceRes.data || null);
       setAdminStatus(res.data?.order?.status || '');
       setAdminExpectedDeliveryAt(
         res.data?.order?.expectedDeliveryAt
@@ -1162,6 +1172,25 @@ const hideOrRestoreMonthlyRequirement = async (
                   <h2 className="text-lg font-bold">{selectedOrder.order?.orderNumber} - {selectedOrder.order?.dealerName}</h2>
                   <p className="text-sm text-gray-500">Total {money(selectedOrder.order?.totalAmount)} | Pending {money(selectedOrder.order?.pendingAmount)}</p>
 
+                  <div className="mt-3 rounded-xl bg-gray-50 p-3 text-sm">
+  <p className="font-semibold text-gray-700">
+    Assigned Staff
+  </p>
+  <p className="text-gray-600">
+    {selectedOrder.order?.assignedStaffName || '-'} |{' '}
+    {selectedOrder.order?.assignedStaffPhone || '-'}
+  </p>
+
+  {selectedOrder.order?.assignedStaffPhone && (
+    <a
+      href={`tel:${selectedOrder.order.assignedStaffPhone}`}
+      className="mt-2 inline-block rounded-lg bg-green-600 px-3 py-2 text-xs font-semibold text-white"
+    >
+      Call Staff
+    </a>
+  )}
+</div>
+
                   <div className="mt-3 flex flex-wrap gap-2">
   <button
     onClick={generateDealerPi}
@@ -1243,6 +1272,56 @@ const hideOrRestoreMonthlyRequirement = async (
                     ))}
                   </div>
                 </div>
+
+                <div className="mt-4 rounded-xl border p-3">
+  <h3 className="font-bold">Generated PI / Final Invoices</h3>
+
+  <div className="mt-3 space-y-2">
+    {selectedOrderInvoices?.proformaInvoices?.length ? (
+      selectedOrderInvoices.proformaInvoices.map((pi: any) => (
+        <div
+          key={pi.id}
+          className="rounded-lg bg-blue-50 p-3 text-sm"
+        >
+          <p className="font-semibold">
+            PI: {pi.invoiceNumber || `#${pi.id}`}
+          </p>
+          <p>
+            Amount: {money(pi.totalAmount)} | Status:{' '}
+            {pi.status || '-'}
+          </p>
+        </div>
+      ))
+    ) : (
+      <p className="text-sm text-gray-500">
+        No PI generated yet.
+      </p>
+    )}
+
+    {selectedOrderInvoices?.finalInvoices?.length ? (
+      selectedOrderInvoices.finalInvoices.map((invoice: any) => (
+        <div
+          key={invoice.id}
+          className="rounded-lg bg-green-50 p-3 text-sm"
+        >
+          <p className="font-semibold">
+            Final Invoice:{' '}
+            {invoice.invoiceNumber || `#${invoice.id}`}
+          </p>
+          <p>
+            Amount: {money(invoice.totalAmount)} | Paid:{' '}
+            {money(invoice.paidAmount)} | Pending:{' '}
+            {money(invoice.pendingAmount)}
+          </p>
+        </div>
+      ))
+    ) : (
+      <p className="text-sm text-gray-500">
+        No final invoice generated yet.
+      </p>
+    )}
+  </div>
+</div>
               </div>
             )}
           </div>
