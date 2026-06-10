@@ -13899,4 +13899,69 @@ async getDealerLedgerHistory(query: any) {
     timeline,
   };
 }
+
+async uploadDealerPaymentReceipt(file: any) {
+  if (!file) {
+    throw new BadRequestException('Receipt file is required');
+  }
+
+  const mimeType = String(file.mimetype || '');
+
+  const isImage = mimeType.startsWith('image/');
+  const isPdf = mimeType === 'application/pdf';
+
+  if (!isImage && !isPdf) {
+    throw new BadRequestException(
+      'Only image or PDF receipt files are allowed',
+    );
+  }
+
+  const maxSize = 20 * 1024 * 1024;
+
+  if (file.size > maxSize) {
+    throw new BadRequestException(
+      'Receipt file must be less than 20 MB',
+    );
+  }
+
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const bucket = 'project-documents';
+
+  if (!supabaseUrl || !serviceKey) {
+    throw new BadRequestException(
+      'Supabase storage is not configured',
+    );
+  }
+
+  const { createClient } = await import('@supabase/supabase-js');
+
+  const supabase = createClient(supabaseUrl, serviceKey);
+
+  const extension =
+    String(file.originalname || '').split('.').pop() ||
+    'file';
+
+  const filePath = `dealer-payment-receipts/${Date.now()}-${Math.round(
+    Math.random() * 1e9,
+  )}.${extension}`;
+
+  const uploadResult = await supabase.storage
+    .from(bucket)
+    .upload(filePath, file.buffer, {
+      contentType: mimeType,
+    });
+
+  if (uploadResult.error) {
+    throw new BadRequestException(uploadResult.error.message);
+  }
+
+  const publicUrl = supabase.storage
+    .from(bucket)
+    .getPublicUrl(filePath).data.publicUrl;
+
+  return {
+    fileUrl: publicUrl,
+  };
+}
 }

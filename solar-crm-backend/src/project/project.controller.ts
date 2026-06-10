@@ -2233,6 +2233,16 @@ getDealerLedgerHistory(@Query() query: any) {
   );
 }
 
+@Post('dealer-payment-receipt/upload')
+@UseInterceptors(FilesInterceptor('files', 1))
+async uploadDealerPaymentReceipt(
+  @UploadedFiles() files: any[],
+) {
+  const file = files?.[0];
+
+  return this.projectService.uploadDealerPaymentReceipt(file);
+}
+
 @Patch(':id/hide')
 hideProject(
   @Param('id', ParseIntPipe) id: number,
