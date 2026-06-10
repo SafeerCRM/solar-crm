@@ -46,6 +46,7 @@ import { ProjectDealerComment } from './project-dealer-comment.entity';
 import { ProjectDealerNotification } from './project-dealer-notification.entity';
 import { ProjectDealerMonthlyRequirement } from './project-dealer-monthly-requirement.entity';
 import { ProjectTradingMeeting } from './project-trading-meeting.entity';
+import { FollowUp } from '../followup/follow-up.entity';
 
 @Module({
   imports: [
@@ -58,7 +59,7 @@ ProjectContractorProof, ProjectContractor, ProjectContractorComment, ProjectLoan
 ProjectDealerOrderItem,
 ProjectDealerPayment,
 ProjectDealerComment, ProjectDealerNotification,
-ProjectDealerMonthlyRequirement, ProjectTradingMeeting,]),
+ProjectDealerMonthlyRequirement, ProjectTradingMeeting, FollowUp,]),
     CalculatorModule,
   ],
   controllers: [ProjectController],

@@ -167,6 +167,8 @@ import {
   ProjectTradingMeetingStatus,
 } from './project-trading-meeting.entity';
 
+import { FollowUp } from '../followup/follow-up.entity';
+
 @Injectable()
 export class ProjectService {
 
@@ -598,6 +600,9 @@ private readonly projectDealerMonthlyRequirementRepository: Repository<ProjectDe
 
 @InjectRepository(ProjectTradingMeeting)
 private readonly projectTradingMeetingRepository: Repository<ProjectTradingMeeting>,
+
+@InjectRepository(FollowUp)
+private readonly followUpRepository: Repository<FollowUp>,
 
     private readonly calculatorService: CalculatorService,
 
@@ -14311,5 +14316,73 @@ async getTradingMeetingAnalytics(user: any) {
       0,
     ),
   };
+}
+
+async createTradingMeetingFollowup(
+  tradingMeetingId: number,
+  body: any,
+  user: any,
+) {
+  const meeting = await this.getTradingMeetingDetail(
+    tradingMeetingId,
+    user,
+  );
+
+  const note = String(body?.note || '').trim();
+
+  if (!note) {
+    throw new BadRequestException('Followup note is required');
+  }
+
+  if (!body?.followUpDate) {
+    throw new BadRequestException('Followup date/time is required');
+  }
+
+  const currentUserId = Number(
+    user?.id || user?.userId || user?.sub || 0,
+  );
+  const currentUserName = user?.name || user?.email || '';
+
+  const followup = this.followUpRepository.create({
+    tradingMeetingId: meeting.id,
+    assignedTo: meeting.assignedTo || currentUserId,
+    createdBy: currentUserId,
+    createdByName: currentUserName,
+    sourceModule: 'TRADING',
+    sourceStage: 'TRADING_MEETING',
+    customerName: meeting.dealerName || '',
+    customerPhone: meeting.dealerPhone || '',
+    followUpType: body?.followUpType || 'GENERAL',
+    status: 'PENDING',
+    note,
+    followUpDate: new Date(body.followUpDate),
+  } as any);
+
+  const saved = await this.followUpRepository.save(followup);
+
+  return {
+    message: 'Trading followup created successfully',
+    followup: saved,
+  };
+}
+
+async getTradingMeetingFollowups(
+  tradingMeetingId: number,
+  user: any,
+) {
+  const meeting = await this.getTradingMeetingDetail(
+    tradingMeetingId,
+    user,
+  );
+
+  return this.followUpRepository.find({
+    where: {
+      tradingMeetingId: meeting.id,
+    } as any,
+    order: {
+      followUpDate: 'DESC',
+      createdAt: 'DESC',
+    } as any,
+  });
 }
 }

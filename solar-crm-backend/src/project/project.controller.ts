@@ -2356,6 +2356,42 @@ restoreTradingMeeting(
   );
 }
 
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'TRADING_MANAGER',
+)
+@Post('trading-meeting/:id/followup')
+createTradingMeetingFollowup(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.createTradingMeetingFollowup(
+    Number(id),
+    body,
+    user,
+  );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'TRADING_MANAGER',
+)
+@Get('trading-meeting/:id/followups')
+getTradingMeetingFollowups(
+  @Param('id') id: string,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.getTradingMeetingFollowups(
+    Number(id),
+    user,
+  );
+}
+
 @Patch(':id/hide')
 hideProject(
   @Param('id', ParseIntPipe) id: number,
