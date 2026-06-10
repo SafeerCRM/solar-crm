@@ -14688,12 +14688,13 @@ async issueStock(body: any, user: any) {
     throw new ForbiddenException('You are not allowed to manage stock');
   }
 
-  const materialId = Number(body?.materialId || 0);
+  const stockItemId = Number(body?.stockItemId || 0);
+let materialId = Number(body?.materialId || 0);
   const quantity = Number(body?.quantity || 0);
 
-  if (!materialId) {
-    throw new BadRequestException('Material is required');
-  }
+  if (!materialId && !stockItemId) {
+  throw new BadRequestException('Material or stock item is required');
+}
 
   if (quantity <= 0) {
     throw new BadRequestException('Quantity must be greater than 0');
@@ -14701,13 +14702,28 @@ async issueStock(body: any, user: any) {
 
   const branchId = body?.branchId ? Number(body.branchId) : null;
 
-  const stockItem = await this.projectStockItemRepository.findOne({
+  let stockItem: ProjectStockItem | null = null;
+
+if (stockItemId) {
+  stockItem = await this.projectStockItemRepository.findOne({
+    where: {
+      id: stockItemId,
+      isHidden: false,
+    },
+  });
+
+  if (stockItem) {
+    materialId = stockItem.materialId;
+  }
+} else {
+  stockItem = await this.projectStockItemRepository.findOne({
     where: {
       materialId,
       branchId: branchId as any,
       isHidden: false,
     },
   });
+}
 
   if (!stockItem) {
     throw new NotFoundException('Stock item not found');
