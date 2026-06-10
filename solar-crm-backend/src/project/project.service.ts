@@ -14574,4 +14574,210 @@ async getStockMovements(query: any, user: any) {
     totalPages: Math.ceil(total / limit) || 1,
   };
 }
+
+async receiveStock(body: any, user: any) {
+  if (!this.canManageStock(user)) {
+    throw new ForbiddenException('You are not allowed to manage stock');
+  }
+
+  const materialId = Number(body?.materialId || 0);
+  const quantity = Number(body?.quantity || 0);
+  const rate = Number(body?.rate || 0);
+
+  if (!materialId) {
+    throw new BadRequestException('Material is required');
+  }
+
+  if (quantity <= 0) {
+    throw new BadRequestException('Quantity must be greater than 0');
+  }
+
+  if (rate < 0) {
+    throw new BadRequestException('Rate cannot be negative');
+  }
+
+  const material = await this.projectMaterialMasterRepository.findOne({
+    where: { id: materialId },
+  });
+
+  if (!material) {
+    throw new NotFoundException('Material not found');
+  }
+
+  const branchId = body?.branchId ? Number(body.branchId) : null;
+  const branchName = String(body?.branchName || '').trim();
+
+  let stockItem = await this.projectStockItemRepository.findOne({
+    where: {
+      materialId,
+      branchId: branchId as any,
+    },
+  });
+
+  const oldQuantity = Number(stockItem?.currentQuantity || 0);
+  const oldValue = Number(stockItem?.stockValue || 0);
+  const receivedValue = quantity * rate;
+
+  const newQuantity = oldQuantity + quantity;
+  const newValue = oldValue + receivedValue;
+  const averageRate = newQuantity > 0 ? newValue / newQuantity : rate;
+
+  if (!stockItem) {
+    const newStockItem = new ProjectStockItem();
+
+newStockItem.materialId = materialId;
+newStockItem.materialName = material.name;
+newStockItem.category = material.category || '';
+newStockItem.brand = material.brand || '';
+newStockItem.unit = material.unit || '';
+newStockItem.branchId = branchId as any;
+newStockItem.branchName = branchName;
+newStockItem.currentQuantity = newQuantity;
+newStockItem.averageRate = averageRate;
+newStockItem.stockValue = newValue;
+newStockItem.isHidden = false;
+
+stockItem = newStockItem;
+  } else {
+    stockItem.currentQuantity = newQuantity;
+    stockItem.averageRate = averageRate;
+    stockItem.stockValue = newValue;
+    stockItem.materialName = material.name;
+    stockItem.category = material.category || stockItem.category;
+    stockItem.brand = material.brand || stockItem.brand;
+    stockItem.unit = material.unit || stockItem.unit;
+    stockItem.branchName = branchName || stockItem.branchName;
+  }
+
+  if (!stockItem) {
+  throw new BadRequestException('Failed to prepare stock item');
+}
+
+const savedStockItem =
+  await this.projectStockItemRepository.save(stockItem);
+
+  const movement = new ProjectStockMovement();
+
+movement.stockItemId = savedStockItem.id;
+movement.materialId = materialId;
+movement.materialName = material.name;
+movement.branchId = branchId as any;
+movement.branchName = branchName;
+movement.movementType = ProjectStockMovementType.RECEIVE;
+movement.quantity = quantity;
+movement.rate = rate;
+movement.totalAmount = receivedValue;
+movement.sourceType = body?.sourceType || 'MANUAL_STOCK_RECEIVE';
+movement.sourceId = body?.sourceId ? Number(body.sourceId) : undefined as any;
+movement.remarks = body?.remarks || '';
+movement.createdBy = Number(user?.id || user?.userId || user?.sub || 0);
+movement.createdByName = user?.name || user?.email || '';
+
+  const savedMovement =
+    await this.projectStockMovementRepository.save(movement);
+
+  return {
+    message: 'Stock received successfully',
+    stockItem: savedStockItem,
+    movement: savedMovement,
+  };
+}
+
+async issueStock(body: any, user: any) {
+  if (!this.canManageStock(user)) {
+    throw new ForbiddenException('You are not allowed to manage stock');
+  }
+
+  const materialId = Number(body?.materialId || 0);
+  const quantity = Number(body?.quantity || 0);
+
+  if (!materialId) {
+    throw new BadRequestException('Material is required');
+  }
+
+  if (quantity <= 0) {
+    throw new BadRequestException('Quantity must be greater than 0');
+  }
+
+  const branchId = body?.branchId ? Number(body.branchId) : null;
+
+  const stockItem = await this.projectStockItemRepository.findOne({
+    where: {
+      materialId,
+      branchId: branchId as any,
+      isHidden: false,
+    },
+  });
+
+  if (!stockItem) {
+    throw new NotFoundException('Stock item not found');
+  }
+
+  const currentQuantity = Number(stockItem.currentQuantity || 0);
+
+  if (currentQuantity < quantity) {
+    throw new BadRequestException(
+      `Insufficient stock. Available quantity is ${currentQuantity}`,
+    );
+  }
+
+  const rate = Number(body?.rate || stockItem.averageRate || 0);
+  const totalAmount = quantity * rate;
+
+  stockItem.currentQuantity = currentQuantity - quantity;
+  stockItem.averageRate = Number(stockItem.averageRate || rate || 0);
+  stockItem.stockValue =
+    stockItem.currentQuantity * Number(stockItem.averageRate || 0);
+
+  const savedStockItem =
+    await this.projectStockItemRepository.save(stockItem);
+
+  const movement = new ProjectStockMovement();
+
+movement.stockItemId = savedStockItem.id;
+movement.materialId = materialId;
+movement.materialName = stockItem.materialName;
+movement.branchId = branchId as any;
+movement.branchName = stockItem.branchName || body?.branchName || '';
+movement.movementType = ProjectStockMovementType.ISSUE;
+movement.quantity = quantity;
+movement.rate = rate;
+movement.totalAmount = totalAmount;
+movement.sourceType = body?.sourceType || 'MANUAL_STOCK_ISSUE';
+movement.sourceId = body?.sourceId ? Number(body.sourceId) : undefined as any;
+movement.projectId = body?.projectId ? Number(body.projectId) : undefined as any;
+movement.remarks = body?.remarks || '';
+movement.createdBy = Number(user?.id || user?.userId || user?.sub || 0);
+movement.createdByName = user?.name || user?.email || '';
+
+  const savedMovement =
+    await this.projectStockMovementRepository.save(movement);
+
+  if (body?.projectId) {
+    const consumption = new ProjectConsumption();
+
+consumption.projectId = Number(body.projectId);
+consumption.projectName = body?.projectName || '';
+consumption.materialId = materialId;
+consumption.materialName = stockItem.materialName;
+consumption.branchId = branchId as any;
+consumption.branchName = stockItem.branchName || '';
+consumption.stockItemId = savedStockItem.id;
+consumption.stockMovementId = savedMovement.id;
+consumption.quantity = quantity;
+consumption.rate = rate;
+consumption.totalAmount = totalAmount;
+consumption.issuedBy = Number(user?.id || user?.userId || user?.sub || 0);
+consumption.issuedByName = user?.name || user?.email || '';
+consumption.remarks = body?.remarks || '';
+
+    await this.projectConsumptionRepository.save(consumption);
+  }
+
+  return {
+    message: 'Stock issued successfully',
+    stockItem: savedStockItem,
+    movement: savedMovement,
+  };
+}
 }
