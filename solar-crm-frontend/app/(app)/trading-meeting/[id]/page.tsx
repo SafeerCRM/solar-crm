@@ -390,6 +390,33 @@ const updateFollowupTimePart = (newTime: Dayjs | null) => {
   }
 };
 
+const convertToDealerOrder = async () => {
+  if (!meeting?.id) return;
+
+  try {
+    const res = await axios.get(
+      `${API_BASE_URL}/project/trading-meeting/${meeting.id}/convert-data`,
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+
+    localStorage.setItem(
+      'tradingMeetingConversionData',
+      JSON.stringify(res.data),
+    );
+
+    router.push('/project/accounts/trading');
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to load conversion data',
+    );
+  }
+};
+
   return (
     <div className="mx-auto max-w-6xl space-y-5 overflow-x-hidden">
       <div className="rounded-2xl bg-white p-5 shadow">
@@ -413,12 +440,21 @@ const updateFollowupTimePart = (newTime: Dayjs | null) => {
             </p>
           </div>
 
-          <Link
-            href="/trading-meeting"
-            className="rounded-xl bg-gray-800 px-4 py-2 text-sm font-semibold text-white"
-          >
-            Back
-          </Link>
+          <div className="flex flex-wrap gap-2">
+  <button
+    onClick={convertToDealerOrder}
+    className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white"
+  >
+    Convert To Dealer Order
+  </button>
+
+  <Link
+    href="/trading-meeting"
+    className="rounded-xl bg-gray-800 px-4 py-2 text-sm font-semibold text-white"
+  >
+    Back
+  </Link>
+</div>
         </div>
       </div>
 

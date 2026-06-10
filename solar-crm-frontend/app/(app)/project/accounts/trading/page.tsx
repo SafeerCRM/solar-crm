@@ -357,6 +357,52 @@ const fetchDealerLedger = async () => {
   showHiddenMonthly,
 ]);
 
+useEffect(() => {
+  const raw = localStorage.getItem('tradingMeetingConversionData');
+
+  if (!raw) return;
+
+  try {
+    const data = JSON.parse(raw);
+
+    setActiveTab('catalog');
+
+    setOrderForm((prev) => ({
+      ...prev,
+      dealerId: data?.dealerId ? String(data.dealerId) : prev.dealerId,
+      remarks: [
+        data?.meetingNotes
+          ? `Trading Meeting Notes: ${data.meetingNotes}`
+          : '',
+        data?.gpsAddress ? `GPS Address: ${data.gpsAddress}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    }));
+
+    if (data?.expectedMaterialName || data?.expectedQuantity) {
+      setOrderRows([
+        {
+          materialId: '',
+          quantity: data?.expectedQuantity
+            ? String(data.expectedQuantity)
+            : '',
+          discountAmount: '0',
+          remarks: data?.expectedMaterialName
+            ? `Expected Material: ${data.expectedMaterialName}`
+            : '',
+        },
+      ]);
+    }
+
+    localStorage.removeItem('tradingMeetingConversionData');
+  } catch (error) {
+    console.error('Failed to load trading conversion data', error);
+    localStorage.removeItem('tradingMeetingConversionData');
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
+
   const selectedDealer = useMemo(
     () => dealers.find((item) => String(item.id) === String(orderForm.dealerId)),
     [dealers, orderForm.dealerId],
