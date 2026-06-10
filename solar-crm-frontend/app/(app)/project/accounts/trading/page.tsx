@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
+import { uploadPreparedFile } from '@/app/utils/fileUpload';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -197,6 +198,11 @@ const [monthlyForm, setMonthlyForm] = useState({
     receiptUrl: '',
     remarks: '',
   });
+
+  const [paymentReceiptFile, setPaymentReceiptFile] =
+  useState<File | null>(null);
+const [paymentReceiptUploading, setPaymentReceiptUploading] =
+  useState(false);
 
   const [commentText, setCommentText] = useState('');
   const [adminStatus, setAdminStatus] = useState('');
@@ -664,35 +670,58 @@ setSelectedOrderInvoices(invoiceRes.data || null);
   };
 
   const addPayment = async () => {
-    if (!selectedOrder?.order?.id || !paymentForm.amount) {
-      alert('Payment amount required');
-      return;
-    }
+  if (!selectedOrder?.order?.id || !paymentForm.amount) {
+    alert('Payment amount required');
+    return;
+  }
 
-    try {
-      await axios.post(
-        `${API_BASE_URL}/project/dealer-payment`,
-        { dealerOrderId: selectedOrder.order.id, ...paymentForm },
-        { headers: headers() },
-      );
+  try {
+    setPaymentReceiptUploading(true);
 
-      alert('Payment added');
-      setPaymentForm({
-        amount: '',
-        paymentMode: 'ONLINE',
-        transactionId: '',
-        receiptUrl: '',
-        remarks: '',
+    let receiptUrl = paymentForm.receiptUrl;
+
+    if (paymentReceiptFile) {
+      const token = localStorage.getItem('token');
+
+      receiptUrl = await uploadPreparedFile({
+        file: paymentReceiptFile,
+        endpoint: `${API_BASE_URL}/project/dealer-payment-receipt/upload`,
+        token,
+        fieldName: 'files',
       });
-
-      await openOrder(selectedOrder.order.id);
-      fetchOrders();
-      fetchAnalytics();
-    } catch (error: any) {
-      console.error(error);
-      alert(error?.response?.data?.message || 'Failed to add payment');
     }
-  };
+
+    await axios.post(
+      `${API_BASE_URL}/project/dealer-payment`,
+      {
+        dealerOrderId: selectedOrder.order.id,
+        ...paymentForm,
+        receiptUrl,
+      },
+      { headers: headers() },
+    );
+
+    alert('Payment added');
+
+    setPaymentForm({
+      amount: '',
+      paymentMode: 'ONLINE',
+      transactionId: '',
+      receiptUrl: '',
+      remarks: '',
+    });
+    setPaymentReceiptFile(null);
+
+    await openOrder(selectedOrder.order.id);
+    fetchOrders();
+    fetchAnalytics();
+  } catch (error: any) {
+    console.error(error);
+    alert(error?.message || error?.response?.data?.message || 'Failed to add payment');
+  } finally {
+    setPaymentReceiptUploading(false);
+  }
+};
 
   const addComment = async () => {
     if (!selectedOrder?.order?.id || !commentText.trim()) {
@@ -1252,10 +1281,17 @@ const hideOrRestoreMonthlyRequirement = async (
                       <option value="CHEQUE">Cheque</option>
                     </select>
                     <input placeholder="Transaction ID" value={paymentForm.transactionId} onChange={(e) => setPaymentForm({ ...paymentForm, transactionId: e.target.value })} className="rounded-xl border p-3" />
-                    <input placeholder="Receipt URL" value={paymentForm.receiptUrl} onChange={(e) => setPaymentForm({ ...paymentForm, receiptUrl: e.target.value })} className="rounded-xl border p-3" />
+                    <input
+  type="file"
+  accept="image/*,application/pdf"
+  onChange={(e) =>
+    setPaymentReceiptFile(e.target.files?.[0] || null)
+  }
+  className="rounded-xl border p-3"
+/>
                   </div>
                   <textarea placeholder="Payment remarks" value={paymentForm.remarks} onChange={(e) => setPaymentForm({ ...paymentForm, remarks: e.target.value })} className="mt-3 w-full rounded-xl border p-3" />
-                  <button onClick={addPayment} className="mt-3 rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white">Add Payment</button>
+                  <button onClick={addPayment} className="mt-3 rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white">{paymentReceiptUploading ? 'Saving Payment...' : 'Add Payment'}</button>
                 </div>
 
                 <div className="rounded-xl border p-3">
