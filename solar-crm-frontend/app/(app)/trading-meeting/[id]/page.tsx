@@ -6,6 +6,11 @@ import { useParams, useRouter } from 'next/navigation';
 import axios from 'axios';
 import { getAuthHeaders } from '@/lib/authHeaders';
 import { uploadPreparedFile } from '@/app/utils/fileUpload';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
+import dayjs, { Dayjs } from 'dayjs';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -117,6 +122,58 @@ export default function TradingMeetingDetailPage() {
       fieldName: 'files',
     });
   };
+
+  const actionFollowupDateValue = actionForm.nextFollowUpDate
+  ? dayjs(actionForm.nextFollowUpDate)
+  : null;
+
+const actionFollowupTimeValue = actionForm.nextFollowUpDate
+  ? dayjs(actionForm.nextFollowUpDate)
+  : null;
+
+const updateActionFollowupDatePart = (newDate: Dayjs | null) => {
+  if (!newDate) {
+    setActionForm((prev) => ({
+      ...prev,
+      nextFollowUpDate: '',
+    }));
+    return;
+  }
+
+  const base = actionForm.nextFollowUpDate
+    ? dayjs(actionForm.nextFollowUpDate)
+    : dayjs();
+
+  const merged = newDate
+    .hour(base.hour())
+    .minute(base.minute())
+    .second(0)
+    .millisecond(0);
+
+  setActionForm((prev) => ({
+    ...prev,
+    nextFollowUpDate: merged.format('YYYY-MM-DDTHH:mm'),
+  }));
+};
+
+const updateActionFollowupTimePart = (newTime: Dayjs | null) => {
+  if (!newTime) return;
+
+  const base = actionForm.nextFollowUpDate
+    ? dayjs(actionForm.nextFollowUpDate)
+    : dayjs();
+
+  const merged = base
+    .hour(newTime.hour())
+    .minute(newTime.minute())
+    .second(0)
+    .millisecond(0);
+
+  setActionForm((prev) => ({
+    ...prev,
+    nextFollowUpDate: merged.format('YYYY-MM-DDTHH:mm'),
+  }));
+};
 
   const saveAction = async () => {
     if (!meeting?.id) return;
@@ -377,17 +434,33 @@ export default function TradingMeetingDetailPage() {
             <option value="CANCELLED">Cancelled</option>
           </select>
 
-          <input
-            type="datetime-local"
-            value={actionForm.nextFollowUpDate}
-            onChange={(e) =>
-              setActionForm({
-                ...actionForm,
-                nextFollowUpDate: e.target.value,
-              })
-            }
-            className="rounded-xl border p-3"
-          />
+          <LocalizationProvider dateAdapter={AdapterDayjs}>
+  <div className="grid gap-3 md:grid-cols-2">
+    <DatePicker
+      label="Next Follow-up Date"
+      value={actionFollowupDateValue}
+      onChange={updateActionFollowupDatePart}
+      slotProps={{
+        textField: {
+          fullWidth: true,
+        },
+      }}
+    />
+
+    <MobileTimePicker
+      label="Next Follow-up Time"
+      value={actionFollowupTimeValue}
+      onChange={updateActionFollowupTimePart}
+      ampm
+      ampmInClock
+      slotProps={{
+        textField: {
+          fullWidth: true,
+        },
+      }}
+    />
+  </div>
+</LocalizationProvider>
 
           <label className="rounded-xl border p-3 text-sm">
             Upload New GPS Photo

@@ -5,6 +5,11 @@ import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import { getAuthHeaders } from '@/lib/authHeaders';
 import { uploadPreparedFile } from '@/app/utils/fileUpload';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
+import dayjs, { Dayjs } from 'dayjs';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -236,6 +241,62 @@ export default function CreateTradingMeetingPage() {
     }
   };
 
+  const meetingDateValue = form.scheduledAt ? dayjs(form.scheduledAt) : null;
+const meetingTimeValue = form.scheduledAt ? dayjs(form.scheduledAt) : null;
+
+const followupDateValue = form.nextFollowUpDate
+  ? dayjs(form.nextFollowUpDate)
+  : null;
+const followupTimeValue = form.nextFollowUpDate
+  ? dayjs(form.nextFollowUpDate)
+  : null;
+
+const updateDateTimePart = (
+  field: 'scheduledAt' | 'nextFollowUpDate',
+  newDate: Dayjs | null,
+) => {
+  if (!newDate) {
+    setForm((prev) => ({
+      ...prev,
+      [field]: '',
+    }));
+    return;
+  }
+
+  const base = form[field] ? dayjs(form[field]) : dayjs();
+
+  const merged = newDate
+    .hour(base.hour())
+    .minute(base.minute())
+    .second(0)
+    .millisecond(0);
+
+  setForm((prev) => ({
+    ...prev,
+    [field]: merged.format('YYYY-MM-DDTHH:mm'),
+  }));
+};
+
+const updateTimePart = (
+  field: 'scheduledAt' | 'nextFollowUpDate',
+  newTime: Dayjs | null,
+) => {
+  if (!newTime) return;
+
+  const base = form[field] ? dayjs(form[field]) : dayjs();
+
+  const merged = base
+    .hour(newTime.hour())
+    .minute(newTime.minute())
+    .second(0)
+    .millisecond(0);
+
+  setForm((prev) => ({
+    ...prev,
+    [field]: merged.format('YYYY-MM-DDTHH:mm'),
+  }));
+};
+
   return (
     <div className="mx-auto max-w-5xl space-y-5 overflow-x-hidden">
       <div className="rounded-2xl bg-white p-5 shadow">
@@ -264,14 +325,37 @@ export default function CreateTradingMeetingPage() {
             ))}
           </select>
 
-          <input
-            type="datetime-local"
-            value={form.scheduledAt}
-            onChange={(e) =>
-              setForm({ ...form, scheduledAt: e.target.value })
-            }
-            className="rounded-xl border p-3"
-          />
+          <LocalizationProvider dateAdapter={AdapterDayjs}>
+  <div className="grid gap-3 md:grid-cols-2">
+    <DatePicker
+      label="Meeting Date"
+      value={meetingDateValue}
+      onChange={(value) =>
+        updateDateTimePart('scheduledAt', value)
+      }
+      slotProps={{
+        textField: {
+          fullWidth: true,
+        },
+      }}
+    />
+
+    <MobileTimePicker
+      label="Meeting Time"
+      value={meetingTimeValue}
+      onChange={(value) =>
+        updateTimePart('scheduledAt', value)
+      }
+      ampm
+      ampmInClock
+      slotProps={{
+        textField: {
+          fullWidth: true,
+        },
+      }}
+    />
+  </div>
+</LocalizationProvider>
 
           <select
             value={form.expectedMaterialName}
@@ -307,15 +391,37 @@ export default function CreateTradingMeetingPage() {
             className="rounded-xl border p-3"
           />
 
-          <input
-            type="datetime-local"
-            placeholder="Next Follow-up"
-            value={form.nextFollowUpDate}
-            onChange={(e) =>
-              setForm({ ...form, nextFollowUpDate: e.target.value })
-            }
-            className="rounded-xl border p-3"
-          />
+          <LocalizationProvider dateAdapter={AdapterDayjs}>
+  <div className="grid gap-3 md:grid-cols-2">
+    <DatePicker
+      label="Next Follow-up Date"
+      value={followupDateValue}
+      onChange={(value) =>
+        updateDateTimePart('nextFollowUpDate', value)
+      }
+      slotProps={{
+        textField: {
+          fullWidth: true,
+        },
+      }}
+    />
+
+    <MobileTimePicker
+      label="Next Follow-up Time"
+      value={followupTimeValue}
+      onChange={(value) =>
+        updateTimePart('nextFollowUpDate', value)
+      }
+      ampm
+      ampmInClock
+      slotProps={{
+        textField: {
+          fullWidth: true,
+        },
+      }}
+    />
+  </div>
+</LocalizationProvider>
         </div>
 
         <textarea

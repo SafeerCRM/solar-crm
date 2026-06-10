@@ -3,6 +3,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { uploadPreparedFile } from '@/app/utils/fileUpload';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
+import dayjs, { Dayjs } from 'dayjs';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -853,6 +858,112 @@ const hideOrRestoreMonthlyRequirement = async (
   }
 };
 
+const creditDueDateValue = orderForm.creditDueDate
+  ? dayjs(orderForm.creditDueDate)
+  : null;
+
+const orderDeliveryDateValue = orderForm.expectedDeliveryAt
+  ? dayjs(orderForm.expectedDeliveryAt)
+  : null;
+
+const orderDeliveryTimeValue = orderForm.expectedDeliveryAt
+  ? dayjs(orderForm.expectedDeliveryAt)
+  : null;
+
+const adminDeliveryDateValue = adminExpectedDeliveryAt
+  ? dayjs(adminExpectedDeliveryAt)
+  : null;
+
+const adminDeliveryTimeValue = adminExpectedDeliveryAt
+  ? dayjs(adminExpectedDeliveryAt)
+  : null;
+
+const updateOrderCreditDate = (newDate: Dayjs | null) => {
+  setOrderForm((prev) => ({
+    ...prev,
+    creditDueDate: newDate ? newDate.format('YYYY-MM-DD') : '',
+  }));
+};
+
+const updateOrderDeliveryDatePart = (newDate: Dayjs | null) => {
+  if (!newDate) {
+    setOrderForm((prev) => ({
+      ...prev,
+      expectedDeliveryAt: '',
+    }));
+    return;
+  }
+
+  const base = orderForm.expectedDeliveryAt
+    ? dayjs(orderForm.expectedDeliveryAt)
+    : dayjs();
+
+  const merged = newDate
+    .hour(base.hour())
+    .minute(base.minute())
+    .second(0)
+    .millisecond(0);
+
+  setOrderForm((prev) => ({
+    ...prev,
+    expectedDeliveryAt: merged.format('YYYY-MM-DDTHH:mm'),
+  }));
+};
+
+const updateOrderDeliveryTimePart = (newTime: Dayjs | null) => {
+  if (!newTime) return;
+
+  const base = orderForm.expectedDeliveryAt
+    ? dayjs(orderForm.expectedDeliveryAt)
+    : dayjs();
+
+  const merged = base
+    .hour(newTime.hour())
+    .minute(newTime.minute())
+    .second(0)
+    .millisecond(0);
+
+  setOrderForm((prev) => ({
+    ...prev,
+    expectedDeliveryAt: merged.format('YYYY-MM-DDTHH:mm'),
+  }));
+};
+
+const updateAdminDeliveryDatePart = (newDate: Dayjs | null) => {
+  if (!newDate) {
+    setAdminExpectedDeliveryAt('');
+    return;
+  }
+
+  const base = adminExpectedDeliveryAt
+    ? dayjs(adminExpectedDeliveryAt)
+    : dayjs();
+
+  const merged = newDate
+    .hour(base.hour())
+    .minute(base.minute())
+    .second(0)
+    .millisecond(0);
+
+  setAdminExpectedDeliveryAt(merged.format('YYYY-MM-DDTHH:mm'));
+};
+
+const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
+  if (!newTime) return;
+
+  const base = adminExpectedDeliveryAt
+    ? dayjs(adminExpectedDeliveryAt)
+    : dayjs();
+
+  const merged = base
+    .hour(newTime.hour())
+    .minute(newTime.minute())
+    .second(0)
+    .millisecond(0);
+
+  setAdminExpectedDeliveryAt(merged.format('YYYY-MM-DDTHH:mm'));
+};
+
   return (
     <div className="w-full max-w-full overflow-x-hidden px-3 pb-6 sm:mx-auto sm:max-w-7xl sm:px-4">
       <div className="rounded-2xl bg-white p-5 shadow">
@@ -1112,15 +1223,46 @@ const hideOrRestoreMonthlyRequirement = async (
                 <option value="CHEQUE">Cheque</option>
               </select>
 
-              <label className="text-sm font-semibold text-gray-700">
-                Credit Due Date
-                <input type="date" value={orderForm.creditDueDate} onChange={(e) => setOrderForm({ ...orderForm, creditDueDate: e.target.value })} className="mt-1 w-full rounded-xl border p-3" />
-              </label>
+              <LocalizationProvider dateAdapter={AdapterDayjs}>
+  <DatePicker
+    label="Credit Due Date"
+    value={creditDueDateValue}
+    onChange={updateOrderCreditDate}
+    slotProps={{
+      textField: {
+        fullWidth: true,
+      },
+    }}
+  />
+</LocalizationProvider>
 
-              <label className="text-sm font-semibold text-gray-700">
-                Expected Delivery Date & Time
-                <input type="datetime-local" value={orderForm.expectedDeliveryAt} onChange={(e) => setOrderForm({ ...orderForm, expectedDeliveryAt: e.target.value })} className="mt-1 w-full rounded-xl border p-3" />
-              </label>
+              <LocalizationProvider dateAdapter={AdapterDayjs}>
+  <div className="grid gap-3 md:grid-cols-2">
+    <DatePicker
+      label="Expected Delivery Date"
+      value={orderDeliveryDateValue}
+      onChange={updateOrderDeliveryDatePart}
+      slotProps={{
+        textField: {
+          fullWidth: true,
+        },
+      }}
+    />
+
+    <MobileTimePicker
+      label="Expected Delivery Time"
+      value={orderDeliveryTimeValue}
+      onChange={updateOrderDeliveryTimePart}
+      ampm
+      ampmInClock
+      slotProps={{
+        textField: {
+          fullWidth: true,
+        },
+      }}
+    />
+  </div>
+</LocalizationProvider>
 
               <input placeholder="Assigned Staff Name" value={orderForm.assignedStaffName} onChange={(e) => setOrderForm({ ...orderForm, assignedStaffName: e.target.value })} className="rounded-xl border p-3" />
               <input placeholder="Assigned Staff Phone" value={orderForm.assignedStaffPhone} onChange={(e) => setOrderForm({ ...orderForm, assignedStaffPhone: e.target.value })} className="rounded-xl border p-3" />
@@ -1261,10 +1403,33 @@ const hideOrRestoreMonthlyRequirement = async (
                       <option value="CANCELLED">Cancelled</option>
                     </select>
 
-                    <label className="text-sm font-semibold text-gray-700">
-                      Expected Delivery Date & Time
-                      <input type="datetime-local" value={adminExpectedDeliveryAt} onChange={(e) => setAdminExpectedDeliveryAt(e.target.value)} className="mt-1 w-full rounded-xl border p-3" />
-                    </label>
+                    <LocalizationProvider dateAdapter={AdapterDayjs}>
+  <div className="grid gap-3 md:grid-cols-2">
+    <DatePicker
+      label="Expected Delivery Date"
+      value={adminDeliveryDateValue}
+      onChange={updateAdminDeliveryDatePart}
+      slotProps={{
+        textField: {
+          fullWidth: true,
+        },
+      }}
+    />
+
+    <MobileTimePicker
+      label="Expected Delivery Time"
+      value={adminDeliveryTimeValue}
+      onChange={updateAdminDeliveryTimePart}
+      ampm
+      ampmInClock
+      slotProps={{
+        textField: {
+          fullWidth: true,
+        },
+      }}
+    />
+  </div>
+</LocalizationProvider>
                   </div>
 
                   <textarea placeholder="Admin remarks" value={adminRemarks} onChange={(e) => setAdminRemarks(e.target.value)} className="mt-3 w-full rounded-xl border p-3" />
