@@ -2243,6 +2243,119 @@ async uploadDealerPaymentReceipt(
   return this.projectService.uploadDealerPaymentReceipt(file);
 }
 
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'TRADING_MANAGER',
+)
+@Post('trading-meeting')
+createTradingMeeting(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.createTradingMeeting(body, user);
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'TRADING_MANAGER',
+)
+@Get('trading-meetings')
+getTradingMeetings(
+  @Query() query: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.getTradingMeetings(query, user);
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'TRADING_MANAGER',
+)
+@Get('trading-meeting-analytics')
+getTradingMeetingAnalytics(@CurrentUser() user: any) {
+  return this.projectService.getTradingMeetingAnalytics(user);
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'TRADING_MANAGER',
+)
+@Get('trading-meeting/:id')
+getTradingMeetingDetail(
+  @Param('id') id: string,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.getTradingMeetingDetail(
+    Number(id),
+    user,
+  );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'TRADING_MANAGER',
+)
+@Patch('trading-meeting/:id/status')
+updateTradingMeetingStatus(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.updateTradingMeetingStatus(
+    Number(id),
+    body,
+    user,
+  );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'TRADING_MANAGER',
+)
+@Patch('trading-meeting/:id/hide')
+hideTradingMeeting(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.hideTradingMeeting(
+    Number(id),
+    body,
+    user,
+  );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'TRADING_MANAGER',
+)
+@Patch('trading-meeting/:id/restore')
+restoreTradingMeeting(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.restoreTradingMeeting(
+    Number(id),
+    body,
+    user,
+  );
+}
+
 @Patch(':id/hide')
 hideProject(
   @Param('id', ParseIntPipe) id: number,

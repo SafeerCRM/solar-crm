@@ -162,6 +162,11 @@ import {
 
 import { ProjectDealerMonthlyRequirement } from './project-dealer-monthly-requirement.entity';
 
+import {
+  ProjectTradingMeeting,
+  ProjectTradingMeetingStatus,
+} from './project-trading-meeting.entity';
+
 @Injectable()
 export class ProjectService {
 
@@ -590,6 +595,9 @@ private readonly projectDealerNotificationRepository: Repository<ProjectDealerNo
 
 @InjectRepository(ProjectDealerMonthlyRequirement)
 private readonly projectDealerMonthlyRequirementRepository: Repository<ProjectDealerMonthlyRequirement>,
+
+@InjectRepository(ProjectTradingMeeting)
+private readonly projectTradingMeetingRepository: Repository<ProjectTradingMeeting>,
 
     private readonly calculatorService: CalculatorService,
 
@@ -13962,6 +13970,346 @@ async uploadDealerPaymentReceipt(file: any) {
 
   return {
     fileUrl: publicUrl,
+  };
+}
+
+private isTradingManager(user: any): boolean {
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : user?.role
+      ? [user.role]
+      : [];
+
+  return roles.includes('TRADING_MANAGER');
+}
+
+private canSeeAllTradingMeetings(user: any): boolean {
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : user?.role
+      ? [user.role]
+      : [];
+
+  return (
+    roles.includes('OWNER') ||
+    roles.includes('ACCOUNT_MANAGER') ||
+    roles.includes('PROJECT_MANAGER')
+  );
+}
+
+async createTradingMeeting(body: any, user: any) {
+  const dealerId = Number(body?.dealerId || 0);
+
+  if (!dealerId) {
+    throw new BadRequestException('Dealer is required');
+  }
+
+  if (!body?.scheduledAt) {
+    throw new BadRequestException('Meeting date/time is required');
+  }
+
+  const meetingNotes = String(body?.meetingNotes || '').trim();
+
+  if (!meetingNotes) {
+    throw new BadRequestException('Meeting notes are required');
+  }
+
+  const hasAddress =
+    String(body?.gpsAddress || '').trim() ||
+    String(body?.address || '').trim();
+
+  if (!hasAddress) {
+    throw new BadRequestException(
+      'GPS address or meeting address is required',
+    );
+  }
+
+  const dealer = await this.projectVendorRepository.findOne({
+    where: { id: dealerId },
+  });
+
+  if (!dealer) {
+    throw new NotFoundException('Dealer not found');
+  }
+
+  const currentUserId = Number(user?.id || user?.userId || user?.sub || 0);
+  const currentUserName = user?.name || user?.email || '';
+
+  const assignedTo = body?.assignedTo
+    ? Number(body.assignedTo)
+    : currentUserId;
+
+  const assignedToName =
+    body?.assignedToName || currentUserName;
+
+  const meeting =
+    this.projectTradingMeetingRepository.create({
+      dealerId,
+      dealerName: dealer.vendorName,
+      dealerPhone: dealer.phone || '',
+      dealerGstNumber: dealer.gstNumber || '',
+      branchName: dealer.city || body?.branchName || '',
+      scheduledAt: new Date(body.scheduledAt),
+      status:
+        body?.status ||
+        ProjectTradingMeetingStatus.SCHEDULED,
+      meetingNotes,
+      outcome: body?.outcome || '',
+      nextAction: body?.nextAction || '',
+      nextFollowUpDate: body?.nextFollowUpDate
+        ? new Date(body.nextFollowUpDate)
+        : null,
+      expectedMaterialName: body?.expectedMaterialName || '',
+      expectedQuantity: Number(body?.expectedQuantity || 0),
+      expectedOrderValue: Number(body?.expectedOrderValue || 0),
+      gpsLatitude:
+        body?.gpsLatitude !== undefined &&
+        body?.gpsLatitude !== ''
+          ? Number(body.gpsLatitude)
+          : null,
+      gpsLongitude:
+        body?.gpsLongitude !== undefined &&
+        body?.gpsLongitude !== ''
+          ? Number(body.gpsLongitude)
+          : null,
+      gpsAddress:
+        body?.gpsAddress || body?.address || '',
+      gpsPhotoUrl: body?.gpsPhotoUrl || '',
+      audioUrl: body?.audioUrl || '',
+      assignedTo,
+      assignedToName,
+      createdBy: currentUserId,
+      createdByName: currentUserName,
+      updatedBy: currentUserId,
+      updatedByName: currentUserName,
+    } as Partial<ProjectTradingMeeting>);
+
+  return this.projectTradingMeetingRepository.save(
+    meeting as ProjectTradingMeeting,
+  );
+}
+
+async getTradingMeetings(query: any, user: any) {
+  const page = Math.max(Number(query?.page || 1), 1);
+  const limit = Math.min(Math.max(Number(query?.limit || 20), 1), 100);
+  const skip = (page - 1) * limit;
+
+  const search = String(query?.search || '').trim().toLowerCase();
+  const status = String(query?.status || '').trim();
+  const dealerId = Number(query?.dealerId || 0);
+  const assignedTo = Number(query?.assignedTo || 0);
+  const showHidden = String(query?.showHidden || 'false') === 'true';
+
+  const qb = this.projectTradingMeetingRepository
+    .createQueryBuilder('meeting')
+    .where('meeting.isHidden = :showHidden', { showHidden })
+    .orderBy('meeting.scheduledAt', 'DESC')
+    .skip(skip)
+    .take(limit);
+
+  if (!this.canSeeAllTradingMeetings(user)) {
+    const currentUserId = Number(user?.id || user?.userId || user?.sub || 0);
+
+    qb.andWhere(
+      '(meeting.assignedTo = :currentUserId OR meeting.createdBy = :currentUserId)',
+      { currentUserId },
+    );
+  }
+
+  if (search) {
+    qb.andWhere(
+      `(
+        LOWER(meeting.dealerName) LIKE :search
+        OR LOWER(meeting.dealerPhone) LIKE :search
+        OR LOWER(meeting.branchName) LIKE :search
+        OR LOWER(meeting.meetingNotes) LIKE :search
+      )`,
+      { search: `%${search}%` },
+    );
+  }
+
+  if (status) {
+    qb.andWhere('meeting.status = :status', { status });
+  }
+
+  if (dealerId) {
+    qb.andWhere('meeting.dealerId = :dealerId', { dealerId });
+  }
+
+  if (assignedTo) {
+    qb.andWhere('meeting.assignedTo = :assignedTo', { assignedTo });
+  }
+
+  if (query?.fromDate) {
+    qb.andWhere('meeting.scheduledAt >= :fromDate', {
+      fromDate: query.fromDate,
+    });
+  }
+
+  if (query?.toDate) {
+    qb.andWhere('meeting.scheduledAt <= :toDate', {
+      toDate: query.toDate,
+    });
+  }
+
+  const [data, total] = await qb.getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
+}
+
+async getTradingMeetingDetail(id: number, user: any) {
+  const meeting =
+    await this.projectTradingMeetingRepository.findOne({
+      where: { id },
+    });
+
+  if (!meeting) {
+    throw new NotFoundException('Trading meeting not found');
+  }
+
+  if (!this.canSeeAllTradingMeetings(user)) {
+    const currentUserId = Number(user?.id || user?.userId || user?.sub || 0);
+
+    if (
+      Number(meeting.assignedTo || 0) !== currentUserId &&
+      Number(meeting.createdBy || 0) !== currentUserId
+    ) {
+      throw new ForbiddenException(
+        'You can access only your own trading meetings',
+      );
+    }
+  }
+
+  return meeting;
+}
+
+async updateTradingMeetingStatus(id: number, body: any, user: any) {
+  const meeting = await this.getTradingMeetingDetail(id, user);
+
+  const status = String(body?.status || '').trim();
+
+  if (!status) {
+    throw new BadRequestException('Status is required');
+  }
+
+  const hasNotes =
+  String(body?.meetingNotes || '').trim() ||
+  String(body?.outcome || '').trim() ||
+  String(body?.nextAction || '').trim();
+
+if (!hasNotes) {
+  throw new BadRequestException(
+    'Please add meeting notes, outcome, or next action before saving trading meeting action',
+  );
+}
+
+  meeting.status = status as ProjectTradingMeetingStatus;
+  meeting.outcome = body?.outcome ?? meeting.outcome;
+  meeting.nextAction = body?.nextAction ?? meeting.nextAction;
+  meeting.meetingNotes = body?.meetingNotes ?? meeting.meetingNotes;
+  meeting.nextFollowUpDate = body?.nextFollowUpDate
+    ? new Date(body.nextFollowUpDate)
+    : meeting.nextFollowUpDate;
+  meeting.gpsPhotoUrl = body?.gpsPhotoUrl ?? meeting.gpsPhotoUrl;
+  meeting.audioUrl = body?.audioUrl ?? meeting.audioUrl;
+  meeting.updatedBy = Number(user?.id || user?.userId || user?.sub || 0);
+  meeting.updatedByName = user?.name || user?.email || '';
+
+  if (
+    status === ProjectTradingMeetingStatus.COMPLETED &&
+    !meeting.gpsPhotoUrl
+  ) {
+    throw new BadRequestException(
+      'GPS photo is required before completing dealer meeting',
+    );
+  }
+
+  return this.projectTradingMeetingRepository.save(meeting);
+}
+
+async hideTradingMeeting(id: number, body: any, user: any) {
+  const meeting = await this.getTradingMeetingDetail(id, user);
+
+  meeting.isHidden = true;
+  meeting.hiddenReason = body?.reason || 'Hidden by user';
+  meeting.hiddenAt = new Date();
+  meeting.hiddenBy = Number(user?.id || user?.userId || user?.sub || 0);
+  meeting.hiddenByName = user?.name || user?.email || '';
+
+  return this.projectTradingMeetingRepository.save(meeting);
+}
+
+async restoreTradingMeeting(id: number, body: any, user: any) {
+  const meeting =
+    await this.projectTradingMeetingRepository.findOne({
+      where: { id },
+    });
+
+  if (!meeting) {
+    throw new NotFoundException('Trading meeting not found');
+  }
+
+  meeting.isHidden = false;
+  meeting.hiddenReason = null as any;
+  meeting.hiddenAt = null as any;
+  meeting.hiddenBy = null as any;
+  meeting.hiddenByName = null as any;
+
+  return this.projectTradingMeetingRepository.save(meeting);
+}
+
+async getTradingMeetingAnalytics(user: any) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const qb = this.projectTradingMeetingRepository
+    .createQueryBuilder('meeting')
+    .where('meeting.isHidden = false');
+
+  if (!this.canSeeAllTradingMeetings(user)) {
+    const currentUserId = Number(user?.id || user?.userId || user?.sub || 0);
+
+    qb.andWhere(
+      '(meeting.assignedTo = :currentUserId OR meeting.createdBy = :currentUserId)',
+      { currentUserId },
+    );
+  }
+
+  const all = await qb.getMany();
+
+  const todaysMeetings = all.filter((item) => {
+    const date = new Date(item.scheduledAt);
+    return date >= today && date < tomorrow;
+  });
+
+  return {
+    totalMeetings: all.length,
+    todaysMeetings: todaysMeetings.length,
+    completedMeetings: all.filter(
+      (item) => item.status === ProjectTradingMeetingStatus.COMPLETED,
+    ).length,
+    pendingMeetings: all.filter(
+      (item) => item.status === ProjectTradingMeetingStatus.SCHEDULED,
+    ).length,
+    orderExpected: all.filter(
+      (item) => item.status === ProjectTradingMeetingStatus.ORDER_EXPECTED,
+    ).length,
+    orderReceived: all.filter(
+      (item) => item.status === ProjectTradingMeetingStatus.ORDER_RECEIVED,
+    ).length,
+    expectedOrderValue: all.reduce(
+      (sum, item) => sum + Number(item.expectedOrderValue || 0),
+      0,
+    ),
   };
 }
 }
