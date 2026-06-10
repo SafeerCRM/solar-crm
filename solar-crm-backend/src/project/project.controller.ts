@@ -2392,6 +2392,23 @@ getTradingMeetingFollowups(
   );
 }
 
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'TRADING_MANAGER',
+)
+@Get('trading-meeting/:id/convert-data')
+getTradingMeetingConversionData(
+  @Param('id') id: string,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.getTradingMeetingConversionData(
+    Number(id),
+    user,
+  );
+}
+
 @Patch(':id/hide')
 hideProject(
   @Param('id', ParseIntPipe) id: number,

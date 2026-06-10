@@ -14385,4 +14385,33 @@ async getTradingMeetingFollowups(
     } as any,
   });
 }
+
+async getTradingMeetingConversionData(
+  id: number,
+  user: any,
+) {
+  const meeting = await this.getTradingMeetingDetail(
+    id,
+    user,
+  );
+
+  return {
+    tradingMeetingId: meeting.id,
+
+    dealerId: meeting.dealerId,
+    dealerName: meeting.dealerName,
+    dealerPhone: meeting.dealerPhone,
+    dealerGstNumber: meeting.dealerGstNumber,
+    branchName: meeting.branchName,
+
+    meetingNotes: meeting.meetingNotes,
+    gpsAddress: meeting.gpsAddress,
+
+    expectedMaterialName: meeting.expectedMaterialName,
+    expectedQuantity: meeting.expectedQuantity || 0,
+    expectedOrderValue: meeting.expectedOrderValue || 0,
+
+    status: meeting.status,
+  };
+}
 }
