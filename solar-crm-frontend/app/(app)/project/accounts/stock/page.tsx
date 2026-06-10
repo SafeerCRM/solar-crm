@@ -145,16 +145,12 @@ const [consumptionPagination, setConsumptionPagination] =
         `${API_BASE_URL}/project/stock/items`,
         {
           params: {
-            page: activePage,
-            limit: pagination.limit,
-            branch:
-              activeFilters.branch || undefined,
-            material:
-              activeFilters.material || undefined,
-            showHidden: activeFilters.showHidden
-              ? 'true'
-              : undefined,
-          },
+  page: activePage,
+  limit: pagination.limit,
+  branchName: activeFilters.branch || undefined,
+  search: activeFilters.material || undefined,
+  showHidden: activeFilters.showHidden ? 'true' : 'false',
+},
           headers: token
             ? {
                 Authorization: `Bearer ${token}`,
@@ -170,19 +166,11 @@ const [consumptionPagination, setConsumptionPagination] =
       );
 
       setPagination({
-        page: Number(
-          res.data?.pagination?.page || 1,
-        ),
-        limit: Number(
-          res.data?.pagination?.limit || 20,
-        ),
-        total: Number(
-          res.data?.pagination?.total || 0,
-        ),
-        totalPages: Number(
-          res.data?.pagination?.totalPages || 1,
-        ),
-      });
+  page: Number(res.data?.page || 1),
+  limit: Number(res.data?.limit || 20),
+  total: Number(res.data?.total || 0),
+  totalPages: Number(res.data?.totalPages || 1),
+});
     } catch (error) {
       console.error(error);
       alert('Failed to load stock items');
@@ -215,18 +203,15 @@ const [consumptionPagination, setConsumptionPagination] =
       `${API_BASE_URL}/project/stock/movements`,
       {
         params: {
-          page: activePage,
-          limit: movementPagination.limit,
-          material:
-            activeFilters.material || undefined,
-          branch:
-            activeFilters.branch || undefined,
-          movementType:
-            activeFilters.movementType || undefined,
-          showHidden: activeFilters.showHidden
-            ? 'true'
-            : undefined,
-        },
+  page: activePage,
+  limit: movementPagination.limit,
+  search:
+    activeFilters.material ||
+    activeFilters.branch ||
+    undefined,
+  movementType: activeFilters.movementType || undefined,
+  showHidden: activeFilters.showHidden ? 'true' : 'false',
+},
         headers: token
           ? {
               Authorization: `Bearer ${token}`,
@@ -242,19 +227,11 @@ const [consumptionPagination, setConsumptionPagination] =
     );
 
     setMovementPagination({
-      page: Number(
-        res.data?.pagination?.page || 1,
-      ),
-      limit: Number(
-        res.data?.pagination?.limit || 20,
-      ),
-      total: Number(
-        res.data?.pagination?.total || 0,
-      ),
-      totalPages: Number(
-        res.data?.pagination?.totalPages || 1,
-      ),
-    });
+  page: Number(res.data?.page || 1),
+  limit: Number(res.data?.limit || 20),
+  total: Number(res.data?.total || 0),
+  totalPages: Number(res.data?.totalPages || 1),
+});
   } catch (error) {
     console.error(error);
     alert('Failed to load stock movements');
@@ -631,11 +608,17 @@ const receiveStock = async () => {
 
     const token = localStorage.getItem('token');
 
+    const selectedBranch = branches.find(
+  (branch: any) =>
+    String(branch.id) === String(receiveForm.branchId),
+);
+
     await axios.post(
       `${API_BASE_URL}/project/stock/receive`,
       {
         materialId: receiveForm.materialId,
         branchId: receiveForm.branchId || undefined,
+        branchName: selectedBranch?.name || '',
         quantity: receiveForm.quantity,
         rate: receiveForm.rate || 0,
         sourceType: receiveForm.sourceType,
