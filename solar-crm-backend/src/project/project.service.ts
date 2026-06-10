@@ -14414,4 +14414,164 @@ async getTradingMeetingConversionData(
     status: meeting.status,
   };
 }
+
+private canManageStock(user: any): boolean {
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : user?.role
+      ? [user.role]
+      : [];
+
+  return (
+    roles.includes('OWNER') ||
+    roles.includes('PROJECT_MANAGER') ||
+    roles.includes('ACCOUNT_MANAGER') ||
+    roles.includes('STOCK_MANAGER')
+  );
+}
+
+async getStockDashboard(user: any) {
+  if (!this.canManageStock(user)) {
+    throw new ForbiddenException('You are not allowed to access stock');
+  }
+
+  const stockItems = await this.projectStockItemRepository.find({
+    where: {
+      isHidden: false,
+    },
+  });
+
+  const totalItems = stockItems.length;
+
+  const totalQuantity = stockItems.reduce(
+    (sum, item) => sum + Number(item.currentQuantity || 0),
+    0,
+  );
+
+  const totalStockValue = stockItems.reduce(
+    (sum, item) => sum + Number(item.stockValue || 0),
+    0,
+  );
+
+  const lowStockItems = stockItems.filter(
+    (item) => Number(item.currentQuantity || 0) <= 5,
+  );
+
+  const zeroStockItems = stockItems.filter(
+    (item) => Number(item.currentQuantity || 0) <= 0,
+  );
+
+  return {
+    totalItems,
+    totalQuantity,
+    totalStockValue,
+    lowStockItems: lowStockItems.length,
+    zeroStockItems: zeroStockItems.length,
+  };
+}
+
+async getStockItems(query: any, user: any) {
+  if (!this.canManageStock(user)) {
+    throw new ForbiddenException('You are not allowed to access stock');
+  }
+
+  const page = Math.max(Number(query?.page || 1), 1);
+  const limit = Math.min(Math.max(Number(query?.limit || 20), 1), 100);
+  const skip = (page - 1) * limit;
+
+  const search = String(query?.search || '').trim().toLowerCase();
+  const branchName = String(query?.branchName || '').trim().toLowerCase();
+  const showHidden = String(query?.showHidden || 'false') === 'true';
+  const lowStockOnly = String(query?.lowStockOnly || 'false') === 'true';
+
+  const qb = this.projectStockItemRepository
+    .createQueryBuilder('stock')
+    .where('stock.isHidden = :showHidden', { showHidden });
+
+  if (search) {
+    qb.andWhere(
+      `(
+        LOWER(stock.materialName) LIKE :search
+        OR LOWER(stock.category) LIKE :search
+        OR LOWER(stock.brand) LIKE :search
+        OR LOWER(stock.branchName) LIKE :search
+      )`,
+      { search: `%${search}%` },
+    );
+  }
+
+  if (branchName) {
+    qb.andWhere('LOWER(stock.branchName) LIKE :branchName', {
+      branchName: `%${branchName}%`,
+    });
+  }
+
+  if (lowStockOnly) {
+    qb.andWhere('stock.currentQuantity <= 5');
+  }
+
+  const [data, total] = await qb
+    .orderBy('stock.materialName', 'ASC')
+    .skip(skip)
+    .take(limit)
+    .getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
+}
+
+async getStockMovements(query: any, user: any) {
+  if (!this.canManageStock(user)) {
+    throw new ForbiddenException('You are not allowed to access stock');
+  }
+
+  const page = Math.max(Number(query?.page || 1), 1);
+  const limit = Math.min(Math.max(Number(query?.limit || 20), 1), 100);
+  const skip = (page - 1) * limit;
+
+  const search = String(query?.search || '').trim().toLowerCase();
+  const movementType = String(query?.movementType || '').trim();
+  const showHidden = String(query?.showHidden || 'false') === 'true';
+
+  const qb = this.projectStockMovementRepository
+    .createQueryBuilder('movement')
+    .where('movement.isHidden = :showHidden', { showHidden });
+
+  if (search) {
+    qb.andWhere(
+      `(
+        LOWER(movement.materialName) LIKE :search
+        OR LOWER(movement.branchName) LIKE :search
+        OR LOWER(movement.remarks) LIKE :search
+        OR LOWER(movement.sourceType) LIKE :search
+      )`,
+      { search: `%${search}%` },
+    );
+  }
+
+  if (movementType) {
+    qb.andWhere('movement.movementType = :movementType', {
+      movementType,
+    });
+  }
+
+  const [data, total] = await qb
+    .orderBy('movement.createdAt', 'DESC')
+    .skip(skip)
+    .take(limit)
+    .getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
+}
 }

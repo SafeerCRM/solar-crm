@@ -2409,6 +2409,30 @@ getTradingMeetingConversionData(
   );
 }
 
+@Roles('OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER', 'STOCK_MANAGER')
+@Get('stock/dashboard')
+getStockDashboard(@CurrentUser() user: any) {
+  return this.projectService.getStockDashboard(user);
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER', 'STOCK_MANAGER')
+@Get('stock/items')
+getStockItems(
+  @Query() query: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.getStockItems(query, user);
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER', 'STOCK_MANAGER')
+@Get('stock/movements')
+getStockMovements(
+  @Query() query: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.getStockMovements(query, user);
+}
+
 @Patch(':id/hide')
 hideProject(
   @Param('id', ParseIntPipe) id: number,
