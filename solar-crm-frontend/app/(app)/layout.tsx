@@ -91,6 +91,12 @@ const navItems = [
 },
 
 {
+  name: 'Trading Meetings',
+  href: '/trading-meeting',
+  roles: ['OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER', 'TRADING_MANAGER'],
+},
+
+{
   name: 'Project',
   href: '/project',
   roles: [
@@ -262,6 +268,7 @@ const navItems = [
 'PAYMENT_COLLECTION_EXECUTIVE',
     'PAYMENT_MANAGER',
     'ACCOUNT_MANAGER',
+    'TRADING_MANAGER',
   ],
 },
 
