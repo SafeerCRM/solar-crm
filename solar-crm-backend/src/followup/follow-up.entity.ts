@@ -40,6 +40,9 @@ lead: Lead;
 meetingId: number;
 
 @Column({ nullable: true })
+tradingMeetingId: number;
+
+@Column({ nullable: true })
 contactId: number;
 
 @Column({ nullable: true })
