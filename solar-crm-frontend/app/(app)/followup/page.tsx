@@ -25,6 +25,7 @@ type FollowUp = {
   leadId: number;
     meetingId?: number | null;
   contactId?: number | null;
+  tradingMeetingId?: number | null;
   customerName?: string | null;
   customerPhone?: string | null;
   assignedTo?: number;
@@ -521,6 +522,7 @@ await fetchFollowups(1);
   if (value === 'TELECALLING') return 'Telecalling';
   if (value === 'LEAD') return 'Lead';
   if (value === 'MEETING') return 'Meeting';
+  if (value === 'TRADING') return 'Trading';
 
   return 'Followup';
 };
@@ -539,6 +541,10 @@ const getSourceColor = (source?: string) => {
   if (value === 'MEETING') {
     return 'bg-purple-100 text-purple-700';
   }
+
+  if (value === 'TRADING') {
+  return 'bg-orange-100 text-orange-700';
+}
 
   return 'bg-gray-100 text-gray-700';
 };
@@ -621,6 +627,10 @@ const getSourceOpenPath = (f: FollowUp) => {
     return `/telecalling/contacts/${f.contactId}`;
   }
 
+  if (source === 'TRADING' && (f as any).tradingMeetingId) {
+  return `/trading-meeting/${(f as any).tradingMeetingId}`;
+}
+
   if (f.leadId) {
     return `/leads/${f.leadId}`;
   }
@@ -639,6 +649,10 @@ const getSourceOpenLabel = (f: FollowUp) => {
     return 'Open Contact';
   }
 
+  if (source === 'TRADING' && (f as any).tradingMeetingId) {
+  return 'Open Trading Meeting';
+}
+
   if (f.leadId) {
     return 'Open Lead';
   }
@@ -647,10 +661,20 @@ const getSourceOpenLabel = (f: FollowUp) => {
 };
 
   const filteredAllFollowups = allFollowups.filter((f) => {
-  const name = String(f.lead?.name || '').toLowerCase();
-  const phone = String(f.lead?.phone || '').toLowerCase();
-  const city = String(f.lead?.city || '').toLowerCase();
-  const zone = String(f.lead?.zone || '').toLowerCase();
+  const name = String(
+  f.lead?.name ||
+    f.customerName ||
+    '',
+).toLowerCase();
+
+const phone = String(
+  f.lead?.phone ||
+    f.customerPhone ||
+    '',
+).toLowerCase();
+
+const city = String(f.lead?.city || '').toLowerCase();
+const zone = String(f.lead?.zone || '').toLowerCase();
   const potential = String(f.lead?.potential || '').toUpperCase();
 
   const matchesName =
@@ -694,8 +718,17 @@ const matchesDue =
 });
 
 const filteredSelectedFollowups = selectedFollowups.filter((f) => {
-  const name = String(f.lead?.name || '').toLowerCase();
-  const phone = String(f.lead?.phone || '').toLowerCase();
+  const name = String(
+  f.lead?.name ||
+    f.customerName ||
+    '',
+).toLowerCase();
+
+const phone = String(
+  f.lead?.phone ||
+    f.customerPhone ||
+    '',
+).toLowerCase();
   const city = String(f.lead?.city || '').toLowerCase();
   const zone = String(f.lead?.zone || '').toLowerCase();
   const potential = String(f.lead?.potential || '').toUpperCase();
@@ -1047,6 +1080,7 @@ const filteredSelectedFollowups = selectedFollowups.filter((f) => {
   <option value="TELECALLING">Telecalling</option>
   <option value="LEAD">Lead</option>
   <option value="MEETING">Meeting</option>
+  <option value="TRADING">Trading</option>
   <option value="FOLLOWUP">Manual Followup</option>
 </select>
 
