@@ -25,14 +25,14 @@ export class FollowupController {
 
   @Get()
 findAll(
-  @Query('page') page: string,
-  @Query('limit') limit: string,
+  @Query() query: any,
   @CurrentUser() user: any,
 ) {
   return this.followupService.findAll(
     user,
-    Number(page) || 1,
-    Number(limit) || 50,
+    Number(query.page) || 1,
+    Number(query.limit) || 50,
+    query,
   );
 }
 

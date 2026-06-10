@@ -98,6 +98,93 @@ export class FollowupService {
     return Number(user?.id ?? user?.sub);
   }
 
+  private applyFollowupFilters(qb: any, query: any) {
+  const name = String(query?.name || '').trim().toLowerCase();
+  const phone = String(query?.phone || '').trim().toLowerCase();
+  const city = String(query?.city || '').trim().toLowerCase();
+  const zone = String(query?.zone || '').trim().toLowerCase();
+  const source = String(query?.source || '').trim().toUpperCase();
+  const status = String(query?.status || '').trim().toUpperCase();
+  const due = String(query?.due || '').trim().toUpperCase();
+
+  if (name) {
+    qb.andWhere(
+      `(
+        LOWER(COALESCE(lead.name, '')) LIKE :name
+        OR LOWER(COALESCE(followUp.customerName, '')) LIKE :name
+      )`,
+      { name: `%${name}%` },
+    );
+  }
+
+  if (phone) {
+    qb.andWhere(
+      `(
+        LOWER(COALESCE(lead.phone, '')) LIKE :phone
+        OR LOWER(COALESCE(followUp.customerPhone, '')) LIKE :phone
+      )`,
+      { phone: `%${phone}%` },
+    );
+  }
+
+  if (city) {
+    qb.andWhere(`LOWER(COALESCE(lead.city, '')) LIKE :city`, {
+      city: `%${city}%`,
+    });
+  }
+
+  if (zone) {
+    qb.andWhere(`LOWER(COALESCE(lead.zone, '')) LIKE :zone`, {
+      zone: `%${zone}%`,
+    });
+  }
+
+  if (source) {
+    qb.andWhere('UPPER(followUp.sourceModule) = :source', {
+      source,
+    });
+  }
+
+  if (status) {
+    qb.andWhere('UPPER(followUp.status) = :status', {
+      status,
+    });
+  }
+
+  const now = new Date();
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const todayEnd = new Date();
+  todayEnd.setHours(23, 59, 59, 999);
+
+  if (due === 'TODAY') {
+    qb.andWhere('followUp.followUpDate BETWEEN :todayStart AND :todayEnd', {
+      todayStart,
+      todayEnd,
+    });
+  }
+
+  if (due === 'OVERDUE') {
+    qb.andWhere('followUp.followUpDate < :now', { now });
+    qb.andWhere('followUp.status = :pendingStatus', {
+      pendingStatus: FollowUpStatus.PENDING,
+    });
+  }
+
+  if (due === 'UPCOMING') {
+    qb.andWhere('followUp.followUpDate > :todayEnd', {
+      todayEnd,
+    });
+  }
+
+  if (due === 'COMPLETED') {
+    qb.andWhere('followUp.status = :completedStatus', {
+      completedStatus: FollowUpStatus.COMPLETED,
+    });
+  }
+}
+
   private async getAccessibleFollowUp(id: number, user: any) {
     const followUp = await this.followUpRepository.findOne({
       where: { id },
@@ -207,7 +294,7 @@ export class FollowupService {
   return this.followUpRepository.save(followUp);
 }
 
-  async findAll(user: any, page = 1, limit = 50) {
+  async findAll(user: any, page = 1, limit = 50, query: any = {}) {
   if (this.isProjectManager(user)) {
     return { data: [], total: 0, page, limit };
   }
@@ -258,19 +345,23 @@ export class FollowupService {
     };
   }
 
-  const [data, total] = await this.followUpRepository.findAndCount({
-    relations: ['lead'],
-    order: { followUpDate: 'ASC' },
-    skip,
-    take: limit,
-  });
+  const qb = this.followUpRepository
+  .createQueryBuilder('followUp')
+  .leftJoinAndSelect('followUp.lead', 'lead')
+  .orderBy('followUp.followUpDate', 'ASC')
+  .skip(skip)
+  .take(limit);
 
-  return {
-    data,
-    total,
-    page,
-    limit,
-  };
+this.applyFollowupFilters(qb, query);
+
+const [data, total] = await qb.getManyAndCount();
+
+return {
+  data,
+  total,
+  page,
+  limit,
+};
 }
 
   async findToday(user: any) {
