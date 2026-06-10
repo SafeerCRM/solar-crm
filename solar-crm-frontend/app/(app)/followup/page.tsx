@@ -184,9 +184,16 @@ setLeads(leadData);
   try {
     const res = await axios.get(`${backendUrl}/followup`, {
       params: {
-        page: pageNumber,
-        limit: followupLimit,
-      },
+  page: pageNumber,
+  limit: followupLimit,
+  name: nameFilter || undefined,
+  phone: phoneFilter || undefined,
+  city: cityFilter || undefined,
+  zone: zoneFilter || undefined,
+  source: sourceFilter || undefined,
+  status: statusFilter || undefined,
+  due: dueFilter || undefined,
+},
       headers: getAuthHeaders(),
     });
 
@@ -1108,22 +1115,39 @@ const phone = String(
 </select>
 
     <div className="mt-3 flex flex-col gap-3 md:flex-row md:items-center">
-    <button
-      type="button"
-      onClick={() => {
-        setNameFilter('');
-        setPhoneFilter('');
-        setCityFilter('');
-        setPotentialFilter('');
-        setZoneFilter('');
-        setSourceFilter('');
-setStatusFilter('');
-setDueFilter('');
-      }}
-      className="rounded bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700"
-    >
-      Clear Search
-    </button>
+  <button
+    type="button"
+    onClick={() => {
+      setNameFilter('');
+      setPhoneFilter('');
+      setCityFilter('');
+      setPotentialFilter('');
+      setZoneFilter('');
+      setSourceFilter('');
+      setStatusFilter('');
+      setDueFilter('');
+
+      setFollowupPage(1);
+
+      setTimeout(() => {
+        fetchFollowups(1);
+      }, 100);
+    }}
+    className="rounded bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700"
+  >
+    Clear Search
+  </button>
+
+  <button
+    type="button"
+    onClick={() => {
+      setFollowupPage(1);
+      fetchFollowups(1);
+    }}
+    className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
+  >
+    Apply Search
+  </button>
 
     <select
       value={bulkAssignedTo}
