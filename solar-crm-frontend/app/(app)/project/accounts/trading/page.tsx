@@ -1295,6 +1295,55 @@ const hideOrRestoreMonthlyRequirement = async (
                 </div>
 
                 <div className="rounded-xl border p-3">
+  <h3 className="font-bold">Payment History</h3>
+
+  <div className="mt-3 space-y-2">
+    {selectedOrder.payments?.length ? (
+      selectedOrder.payments.map((payment: any) => (
+        <div
+          key={payment.id}
+          className="rounded-lg bg-gray-50 p-3 text-sm"
+        >
+          <p className="font-semibold">
+            Amount: {money(payment.amount)} | {payment.paymentMode || '-'}
+          </p>
+
+          <p className="text-gray-500">
+            Status: {payment.status || '-'} | Transaction:{' '}
+            {payment.transactionId || '-'}
+          </p>
+
+          {payment.remarks && (
+            <p className="mt-1 break-words text-gray-500">
+              Remarks: {payment.remarks}
+            </p>
+          )}
+
+          {payment.receiptUrl ? (
+            <a
+              href={payment.receiptUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 inline-block rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white"
+            >
+              View Receipt
+            </a>
+          ) : (
+            <p className="mt-2 text-xs text-gray-400">
+              No receipt uploaded
+            </p>
+          )}
+        </div>
+      ))
+    ) : (
+      <p className="text-sm text-gray-500">
+        No payments added yet.
+      </p>
+    )}
+  </div>
+</div>
+
+                <div className="rounded-xl border p-3">
                   <h3 className="font-bold">Comments</h3>
                   <textarea placeholder="Write comment / complaint" value={commentText} onChange={(e) => setCommentText(e.target.value)} className="mt-3 w-full rounded-xl border p-3" />
                   <button onClick={addComment} className="mt-3 rounded-xl bg-gray-800 px-4 py-2 text-sm font-semibold text-white">Add Comment</button>
