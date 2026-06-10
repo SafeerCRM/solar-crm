@@ -40,6 +40,15 @@ type TradingMeeting = {
   updatedByName?: string;
 };
 
+type TradingFollowup = {
+  id: number;
+  followUpDate?: string;
+  status?: string;
+  note?: string;
+  followUpType?: string;
+  createdByName?: string;
+};
+
 function money(value?: number) {
   return `₹${Number(value || 0).toLocaleString('en-IN')}`;
 }
@@ -62,6 +71,15 @@ export default function TradingMeetingDetailPage() {
 
   const [gpsPhotoFile, setGpsPhotoFile] = useState<File | null>(null);
   const [audioFile, setAudioFile] = useState<File | null>(null);
+
+  const [followups, setFollowups] = useState<TradingFollowup[]>([]);
+const [followupSaving, setFollowupSaving] = useState(false);
+
+const [followupForm, setFollowupForm] = useState({
+  note: '',
+  followUpDate: '',
+  followUpType: 'GENERAL',
+});
 
   const [actionForm, setActionForm] = useState({
     status: '',
@@ -107,10 +125,29 @@ export default function TradingMeetingDetailPage() {
     }
   };
 
+  const fetchFollowups = async () => {
+  if (!id) return;
+
+  try {
+    const res = await axios.get(
+      `${API_BASE_URL}/project/trading-meeting/${id}/followups`,
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+
+    setFollowups(Array.isArray(res.data) ? res.data : []);
+  } catch (error: any) {
+    console.error(error);
+    setFollowups([]);
+  }
+};
+
   useEffect(() => {
-    fetchMeeting();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  fetchMeeting();
+  fetchFollowups();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [id]);
 
   const uploadTradingProof = async (file: File) => {
     const token = localStorage.getItem('token');
@@ -172,6 +209,58 @@ const updateActionFollowupTimePart = (newTime: Dayjs | null) => {
   setActionForm((prev) => ({
     ...prev,
     nextFollowUpDate: merged.format('YYYY-MM-DDTHH:mm'),
+  }));
+};
+
+const followupDateValue = followupForm.followUpDate
+  ? dayjs(followupForm.followUpDate)
+  : null;
+
+const followupTimeValue = followupForm.followUpDate
+  ? dayjs(followupForm.followUpDate)
+  : null;
+
+const updateFollowupDatePart = (newDate: Dayjs | null) => {
+  if (!newDate) {
+    setFollowupForm((prev) => ({
+      ...prev,
+      followUpDate: '',
+    }));
+    return;
+  }
+
+  const base = followupForm.followUpDate
+    ? dayjs(followupForm.followUpDate)
+    : dayjs();
+
+  const merged = newDate
+    .hour(base.hour())
+    .minute(base.minute())
+    .second(0)
+    .millisecond(0);
+
+  setFollowupForm((prev) => ({
+    ...prev,
+    followUpDate: merged.format('YYYY-MM-DDTHH:mm'),
+  }));
+};
+
+const updateFollowupTimePart = (newTime: Dayjs | null) => {
+  if (!newTime) return;
+
+  const base = followupForm.followUpDate
+    ? dayjs(followupForm.followUpDate)
+    : dayjs();
+
+  const merged = base
+    .hour(newTime.hour())
+    .minute(newTime.minute())
+    .second(0)
+    .millisecond(0);
+
+  setFollowupForm((prev) => ({
+    ...prev,
+    followUpDate: merged.format('YYYY-MM-DDTHH:mm'),
   }));
 };
 
@@ -254,6 +343,52 @@ const updateActionFollowupTimePart = (newTime: Dayjs | null) => {
       </div>
     );
   }
+
+  const createFollowup = async () => {
+  if (!meeting?.id) return;
+
+  if (!followupForm.note.trim()) {
+    alert('Followup note is required');
+    return;
+  }
+
+  if (!followupForm.followUpDate) {
+    alert('Followup date/time is required');
+    return;
+  }
+
+  try {
+    setFollowupSaving(true);
+
+    await axios.post(
+      `${API_BASE_URL}/project/trading-meeting/${meeting.id}/followup`,
+      {
+        note: followupForm.note,
+        followUpDate: new Date(followupForm.followUpDate).toISOString(),
+        followUpType: followupForm.followUpType,
+      },
+      { headers: getAuthHeaders() },
+    );
+
+    alert('Followup created successfully');
+
+    setFollowupForm({
+      note: '',
+      followUpDate: '',
+      followUpType: 'GENERAL',
+    });
+
+    await fetchFollowups();
+  } catch (error: any) {
+    console.error(error);
+    alert(
+      error?.response?.data?.message ||
+        'Failed to create followup',
+    );
+  } finally {
+    setFollowupSaving(false);
+  }
+};
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 overflow-x-hidden">
@@ -528,6 +663,123 @@ const updateActionFollowupTimePart = (newTime: Dayjs | null) => {
           {saving ? 'Saving...' : 'Save Action'}
         </button>
       </div>
+
+      <div className="rounded-2xl bg-white p-5 shadow">
+  <h2 className="text-lg font-bold text-gray-800">
+    Trading Followups
+  </h2>
+
+  <div className="mt-4 grid gap-3 md:grid-cols-2">
+    <select
+      value={followupForm.followUpType}
+      onChange={(e) =>
+        setFollowupForm({
+          ...followupForm,
+          followUpType: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    >
+      <option value="GENERAL">General</option>
+      <option value="CALL">Call</option>
+      <option value="CALLBACK">Callback</option>
+      <option value="PAYMENT">Payment</option>
+    </select>
+
+    <LocalizationProvider dateAdapter={AdapterDayjs}>
+      <div className="grid gap-3 md:grid-cols-2">
+        <DatePicker
+          label="Follow-up Date"
+          value={followupDateValue}
+          onChange={updateFollowupDatePart}
+          slotProps={{
+            textField: {
+              fullWidth: true,
+            },
+          }}
+        />
+
+        <MobileTimePicker
+          label="Follow-up Time"
+          value={followupTimeValue}
+          onChange={updateFollowupTimePart}
+          ampm
+          ampmInClock
+          slotProps={{
+            textField: {
+              fullWidth: true,
+            },
+          }}
+        />
+      </div>
+    </LocalizationProvider>
+  </div>
+
+  <textarea
+    placeholder="Followup Note *"
+    value={followupForm.note}
+    onChange={(e) =>
+      setFollowupForm({
+        ...followupForm,
+        note: e.target.value,
+      })
+    }
+    className="mt-3 w-full rounded-xl border p-3"
+  />
+
+  <button
+    onClick={createFollowup}
+    disabled={followupSaving}
+    className="mt-4 rounded-xl bg-green-600 px-5 py-3 font-semibold text-white disabled:opacity-50"
+  >
+    {followupSaving ? 'Creating...' : 'Create Followup'}
+  </button>
+
+  <div className="mt-5 space-y-3">
+    <h3 className="font-bold text-gray-800">
+      Followup History
+    </h3>
+
+    {followups.length === 0 ? (
+      <p className="text-sm text-gray-500">
+        No followups created yet.
+      </p>
+    ) : (
+      followups.map((item) => (
+        <div
+          key={item.id}
+          className="rounded-xl border bg-gray-50 p-4 text-sm"
+        >
+          <p className="font-semibold">
+            {item.followUpType || 'GENERAL'} | {item.status || '-'}
+          </p>
+
+          <p className="text-gray-500">
+            Date:{' '}
+            {item.followUpDate
+              ? new Date(item.followUpDate).toLocaleString('en-IN')
+              : '-'}
+          </p>
+
+          <p className="mt-1 break-words text-gray-700">
+            {item.note || '-'}
+          </p>
+
+          <p className="mt-1 text-xs text-gray-500">
+            Created By: {item.createdByName || '-'}
+          </p>
+
+          <Link
+            href={`/followup/${item.id}`}
+            className="mt-3 inline-block rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white"
+          >
+            Open Followup
+          </Link>
+        </div>
+      ))
+    )}
+  </div>
+</div>
     </div>
   );
 }
