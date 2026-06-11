@@ -12800,7 +12800,10 @@ async updateDealerOrderStatus(id: number, body: any, user: any) {
     throw new BadRequestException('Invalid dealer order status');
   }
 
-  order.status = body.status;
+  const oldStatus = order.status;
+const newStatus = body.status;
+
+order.status = newStatus;
 
   if (body?.expectedDeliveryAt !== undefined) {
     (order as any).expectedDeliveryAt = body.expectedDeliveryAt
@@ -12817,6 +12820,24 @@ async updateDealerOrderStatus(id: number, body: any, user: any) {
   if (body?.adminRemarks !== undefined) {
     order.adminRemarks = body.adminRemarks || '';
   }
+
+  if (
+  oldStatus !== ProjectDealerOrderStatus.ACCEPTED &&
+  newStatus === ProjectDealerOrderStatus.ACCEPTED
+) {
+  await this.reserveStockForDealerOrder(order.id, user);
+}
+
+if (
+  oldStatus === ProjectDealerOrderStatus.ACCEPTED &&
+  [
+    ProjectDealerOrderStatus.CANCELLED,
+    ProjectDealerOrderStatus.POSTPONED,
+    ProjectDealerOrderStatus.STOCK_OUT,
+  ].includes(newStatus)
+) {
+  await this.releaseStockReservationForDealerOrder(order.id);
+}
 
   return this.projectDealerOrderRepository.save(order);
 }
@@ -14904,5 +14925,106 @@ async adjustStock(body: any, user: any) {
     stockItem: savedStockItem,
     movement: savedMovement,
   };
+}
+
+private async reserveStockForDealerOrder(orderId: number, user: any) {
+  const items = await this.projectDealerOrderItemRepository.find({
+    where: {
+      dealerOrderId: orderId,
+    },
+  });
+
+  if (!items.length) {
+    throw new BadRequestException('Dealer order has no items to reserve');
+  }
+
+  for (const item of items) {
+    const requiredQuantity = Number(
+      item.acceptedQuantity || item.quantity || 0,
+    );
+
+    const alreadyReserved = Number((item as any).reservedQuantity || 0);
+    const reserveNow = requiredQuantity - alreadyReserved;
+
+    if (reserveNow <= 0) {
+      continue;
+    }
+
+    const stockItem = await this.projectStockItemRepository.findOne({
+      where: {
+        materialId: item.materialId,
+        isHidden: false,
+      },
+      order: {
+        currentQuantity: 'DESC',
+      },
+    });
+
+    if (!stockItem) {
+      throw new BadRequestException(
+        `Stock not found for ${item.materialName}`,
+      );
+    }
+
+    const availableQuantity =
+      Number(stockItem.currentQuantity || 0) -
+      Number((stockItem as any).reservedQuantity || 0);
+
+    if (availableQuantity < reserveNow) {
+      throw new BadRequestException(
+        `Insufficient available stock for ${item.materialName}. Available: ${availableQuantity}, Required: ${reserveNow}`,
+      );
+    }
+
+    (stockItem as any).reservedQuantity =
+      Number((stockItem as any).reservedQuantity || 0) + reserveNow;
+
+    (item as any).reservedQuantity = alreadyReserved + reserveNow;
+
+    await this.projectStockItemRepository.save(stockItem);
+    await this.projectDealerOrderItemRepository.save(item);
+  }
+
+  return true;
+}
+
+private async releaseStockReservationForDealerOrder(orderId: number) {
+  const items = await this.projectDealerOrderItemRepository.find({
+    where: {
+      dealerOrderId: orderId,
+    },
+  });
+
+  for (const item of items) {
+    const reservedQuantity = Number((item as any).reservedQuantity || 0);
+
+    if (reservedQuantity <= 0) {
+      continue;
+    }
+
+    const stockItem = await this.projectStockItemRepository.findOne({
+      where: {
+        materialId: item.materialId,
+        isHidden: false,
+      },
+      order: {
+        currentQuantity: 'DESC',
+      },
+    });
+
+    if (stockItem) {
+      (stockItem as any).reservedQuantity = Math.max(
+        Number((stockItem as any).reservedQuantity || 0) - reservedQuantity,
+        0,
+      );
+
+      await this.projectStockItemRepository.save(stockItem);
+    }
+
+    (item as any).reservedQuantity = 0;
+    await this.projectDealerOrderItemRepository.save(item);
+  }
+
+  return true;
 }
 }
