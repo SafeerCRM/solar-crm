@@ -38,6 +38,12 @@ export class ProjectDealerOrderItem {
   acceptedQuantity: number;
 
   @Column({ type: 'float', default: 0 })
+reservedQuantity: number;
+
+@Column({ type: 'float', default: 0 })
+dispatchedQuantity: number;
+
+  @Column({ type: 'float', default: 0 })
   pendingQuantity: number;
 
   @Column({ type: 'float', default: 0 })

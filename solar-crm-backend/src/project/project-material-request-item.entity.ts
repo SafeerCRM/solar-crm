@@ -50,6 +50,9 @@ export class ProjectMaterialRequestItem {
   quantity: number;
 
   @Column({ type: 'float', default: 0 })
+reservedQuantity: number;
+
+  @Column({ type: 'float', default: 0 })
 purchasedQuantity: number;
 
 @Column({ type: 'float', default: 0 })
