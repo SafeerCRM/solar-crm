@@ -2484,6 +2484,18 @@ adjustStock(
   return this.projectService.adjustStock(body, user);
 }
 
+@Roles('OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER', 'STOCK_MANAGER')
+@Patch('material-requests/:id/approve-stock')
+approveMaterialRequestForStock(
+  @Param('id') id: string,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.approveMaterialRequestForStock(
+    Number(id),
+    user,
+  );
+}
+
 @Get(':id/edit-history')
 getProjectEditHistory(
   @Param('id', ParseIntPipe) id: number,

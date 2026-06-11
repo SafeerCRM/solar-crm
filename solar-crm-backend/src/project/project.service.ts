@@ -3298,6 +3298,82 @@ if (newIssuedQty >= requestedQty) {
   };
 }
 
+async approveMaterialRequestForStock(
+  requestId: number,
+  user: any,
+) {
+  const request =
+    await this.projectMaterialRequestRepository.findOne({
+      where: { id: requestId },
+    });
+
+  if (!request) {
+    throw new NotFoundException('Material request not found');
+  }
+
+  if (request.status !== ProjectMaterialRequestStatus.SUBMITTED) {
+    throw new BadRequestException(
+      'Only submitted material requests can be approved',
+    );
+  }
+
+  const items =
+    await this.projectMaterialRequestItemRepository.find({
+      where: { requestId },
+    });
+
+  for (const item of items) {
+    const requiredQty = Number(item.quantity || 0);
+
+    if (requiredQty <= 0) continue;
+
+    const stockItem =
+      await this.projectStockItemRepository.findOne({
+        where: {
+          materialId: item.materialId,
+          isHidden: false,
+        },
+        order: {
+          currentQuantity: 'DESC',
+        },
+      });
+
+    if (!stockItem) {
+      throw new BadRequestException(
+        `Stock not found for ${item.materialName}`,
+      );
+    }
+
+    const availableQty =
+      Number(stockItem.currentQuantity || 0) -
+      Number((stockItem as any).reservedQuantity || 0);
+
+    if (availableQty < requiredQty) {
+      throw new BadRequestException(
+        `Insufficient available stock for ${item.materialName}. Available: ${availableQty}, Required: ${requiredQty}`,
+      );
+    }
+
+    (stockItem as any).reservedQuantity =
+      Number((stockItem as any).reservedQuantity || 0) + requiredQty;
+
+    (item as any).reservedQuantity =
+      Number((item as any).reservedQuantity || 0) + requiredQty;
+
+    await this.projectStockItemRepository.save(stockItem);
+    await this.projectMaterialRequestItemRepository.save(item);
+  }
+
+  request.status = ProjectMaterialRequestStatus.APPROVED;
+
+  await this.projectMaterialRequestRepository.save(request);
+
+  return {
+    message: 'Material request approved and stock reserved',
+    request,
+  };
+}
+
 async getPaymentCollectionList(query: any, currentUser: any) {
   const {
   projectId,
