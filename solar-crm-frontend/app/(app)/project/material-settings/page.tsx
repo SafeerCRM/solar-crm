@@ -21,6 +21,7 @@ type MaterialItem = {
   vendorPreferredName?: string;
   marginType?: 'AMOUNT' | 'PERCENT';
   sellingRate?: number;
+  minimumStockLevel?: number;
 };
 
 export default function MaterialSettingsPage() {
@@ -54,6 +55,7 @@ const [statusFilter, setStatusFilter] = useState('');
     vendorPreferredName: '',
     marginType: 'AMOUNT',
     sellingRate: '',
+    minimumStockLevel: '',
   });
 
   const fetchItems = async () => {
@@ -116,6 +118,9 @@ const [statusFilter, setStatusFilter] = useState('');
   gstPercent: Number(form.gstPercent || 0),
   expectedMargin: Number(form.expectedMargin || 0),
   sellingRate: Number(form.sellingRate || 0),
+  minimumStockLevel: Number(
+  form.minimumStockLevel || 0,
+),
   marginType:
     form.marginType === 'PERCENT'
       ? 'PERCENT'
@@ -164,6 +169,7 @@ const [statusFilter, setStatusFilter] = useState('');
   marginType: 'AMOUNT',
   expectedMargin: '',
   sellingRate: '',
+  minimumStockLevel: '',
   remarks: '',
 });
 
@@ -198,7 +204,10 @@ const startEdit = (item: MaterialItem) => {
       : 'AMOUNT',
   expectedMargin: String(item.expectedMargin || ''),
   sellingRate: String(item.sellingRate || ''),
-  remarks: item.remarks || '',
+minimumStockLevel: String(
+  item.minimumStockLevel || '',
+),
+remarks: item.remarks || '',
 });
 
   window.scrollTo({
@@ -222,7 +231,8 @@ const cancelEdit = () => {
   marginType: 'AMOUNT',
   expectedMargin: '',
   sellingRate: '',
-  remarks: '',
+minimumStockLevel: '',
+remarks: '',
 });
 };
 
@@ -554,6 +564,19 @@ const downloadMaterialCsv = () => {
   }
   className="rounded-xl border p-3"
 />
+
+<input
+  type="number"
+  placeholder="Minimum Stock Level"
+  value={form.minimumStockLevel}
+  onChange={(e) =>
+    setForm({
+      ...form,
+      minimumStockLevel: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+/>
         </div>
 
         <textarea
@@ -705,6 +728,13 @@ const downloadMaterialCsv = () => {
   : `₹${Number(item.expectedMargin || 0).toLocaleString(
       'en-IN',
     )}`}
+</p>
+
+<p className="mt-1 text-sm font-medium text-red-700">
+  Minimum Stock Level:{' '}
+  {Number(
+    item.minimumStockLevel || 0,
+  ).toLocaleString('en-IN')}
 </p>
 
 <p className="mt-1 text-sm font-bold text-green-700">
