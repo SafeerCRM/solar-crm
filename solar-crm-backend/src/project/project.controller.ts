@@ -2475,6 +2475,15 @@ completeProject(
   );
 }
 
+@Roles('OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER', 'STOCK_MANAGER')
+@Post('stock/adjust')
+adjustStock(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.adjustStock(body, user);
+}
+
 @Get(':id/edit-history')
 getProjectEditHistory(
   @Param('id', ParseIntPipe) id: number,

@@ -14816,4 +14816,93 @@ consumption.remarks = body?.remarks || '';
     movement: savedMovement,
   };
 }
+
+async adjustStock(body: any, user: any) {
+  if (!this.canManageStock(user)) {
+    throw new ForbiddenException('You are not allowed to manage stock');
+  }
+
+  const stockItemId = Number(body?.stockItemId || 0);
+  const adjustmentType = String(body?.adjustmentType || '').trim();
+  const quantity = Number(body?.quantity || 0);
+  const remarks = String(body?.remarks || '').trim();
+
+  if (!stockItemId) {
+    throw new BadRequestException('Stock item is required');
+  }
+
+  if (!['ADJUST_IN', 'ADJUST_OUT'].includes(adjustmentType)) {
+    throw new BadRequestException('Valid adjustment type is required');
+  }
+
+  if (quantity <= 0) {
+    throw new BadRequestException('Quantity must be greater than 0');
+  }
+
+  if (!remarks) {
+    throw new BadRequestException('Remarks are required for stock adjustment');
+  }
+
+  const stockItem = await this.projectStockItemRepository.findOne({
+    where: {
+      id: stockItemId,
+      isHidden: false,
+    },
+  });
+
+  if (!stockItem) {
+    throw new NotFoundException('Stock item not found');
+  }
+
+  const currentQuantity = Number(stockItem.currentQuantity || 0);
+  const averageRate = Number(stockItem.averageRate || 0);
+
+  if (
+    adjustmentType === ProjectStockMovementType.ADJUST_OUT &&
+    currentQuantity < quantity
+  ) {
+    throw new BadRequestException(
+      `Insufficient stock. Available quantity is ${currentQuantity}`,
+    );
+  }
+
+  const newQuantity =
+    adjustmentType === ProjectStockMovementType.ADJUST_IN
+      ? currentQuantity + quantity
+      : currentQuantity - quantity;
+
+  stockItem.currentQuantity = newQuantity;
+  stockItem.stockValue = newQuantity * averageRate;
+
+  const savedStockItem =
+    await this.projectStockItemRepository.save(stockItem);
+
+  const movement = new ProjectStockMovement();
+
+  movement.stockItemId = savedStockItem.id;
+  movement.materialId = savedStockItem.materialId;
+  movement.materialName = savedStockItem.materialName;
+  movement.branchId = savedStockItem.branchId as any;
+  movement.branchName = savedStockItem.branchName || '';
+  movement.movementType =
+    adjustmentType === 'ADJUST_IN'
+      ? ProjectStockMovementType.ADJUST_IN
+      : ProjectStockMovementType.ADJUST_OUT;
+  movement.quantity = quantity;
+  movement.rate = averageRate;
+  movement.totalAmount = quantity * averageRate;
+  movement.sourceType = 'STOCK_ADJUSTMENT';
+  movement.remarks = remarks;
+  movement.createdBy = Number(user?.id || user?.userId || user?.sub || 0);
+  movement.createdByName = user?.name || user?.email || '';
+
+  const savedMovement =
+    await this.projectStockMovementRepository.save(movement);
+
+  return {
+    message: 'Stock adjusted successfully',
+    stockItem: savedStockItem,
+    movement: savedMovement,
+  };
+}
 }
