@@ -14461,9 +14461,21 @@ async getStockDashboard(user: any) {
     0,
   );
 
-  const lowStockItems = stockItems.filter(
-    (item) => Number(item.currentQuantity || 0) <= 5,
+  const materials =
+  await this.projectMaterialMasterRepository.find();
+
+const materialMap = new Map(
+  materials.map((m) => [m.id, m]),
+);
+
+const lowStockItems = stockItems.filter((item) => {
+  const material = materialMap.get(item.materialId);
+
+  return (
+    Number(item.currentQuantity || 0) <=
+    Number(material?.minimumStockLevel || 0)
   );
+});
 
   const zeroStockItems = stockItems.filter(
     (item) => Number(item.currentQuantity || 0) <= 0,
