@@ -3117,14 +3117,9 @@ async issueMaterialRequestItemStock(
     throw new NotFoundException('Material request not found');
   }
 
-  if (
-  ![
-    ProjectMaterialRequestStatus.SUBMITTED,
-    ProjectMaterialRequestStatus.APPROVED,
-  ].includes(request.status)
-) {
+  if (request.status !== ProjectMaterialRequestStatus.APPROVED) {
   throw new BadRequestException(
-    'Only submitted or approved material requests can be issued',
+    'Only approved material requests can be issued',
   );
 }
 
@@ -3164,15 +3159,26 @@ async issueMaterialRequestItemStock(
     );
   }
 
-  if (Number(stockItem.currentQuantity || 0) < quantity) {
-    throw new BadRequestException('Insufficient stock quantity');
-  }
+  const reservedQuantity = Number(
+  (stockItem as any).reservedQuantity || 0,
+);
+
+if (reservedQuantity < quantity) {
+  throw new BadRequestException(
+    `Insufficient reserved stock. Reserved quantity is ${reservedQuantity}`,
+  );
+}
 
   const rate = Number(stockItem.averageRate || 0);
   const totalAmount = quantity * rate;
 
   stockItem.currentQuantity =
     Number(stockItem.currentQuantity || 0) - quantity;
+
+    (stockItem as any).reservedQuantity = Math.max(
+  Number((stockItem as any).reservedQuantity || 0) - quantity,
+  0,
+);
 
   stockItem.stockValue =
     Number(stockItem.currentQuantity || 0) * rate;
@@ -3240,6 +3246,11 @@ async issueMaterialRequestItemStock(
           `Issued against material request #${request.id}`,
       }),
     );
+
+    (requestItem as any).reservedQuantity = Math.max(
+  Number((requestItem as any).reservedQuantity || 0) - quantity,
+  0,
+);
 
   const newIssuedQty =
     alreadyIssuedQty + quantity;
