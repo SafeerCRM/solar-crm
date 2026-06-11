@@ -12839,6 +12839,16 @@ if (
   await this.releaseStockReservationForDealerOrder(order.id);
 }
 
+if (
+  oldStatus !== ProjectDealerOrderStatus.DISPATCHED &&
+  newStatus === ProjectDealerOrderStatus.DISPATCHED
+) {
+  await this.dispatchDealerOrderStock(
+    order.id,
+    user,
+  );
+}
+
   return this.projectDealerOrderRepository.save(order);
 }
 
@@ -15023,6 +15033,111 @@ private async releaseStockReservationForDealerOrder(orderId: number) {
 
     (item as any).reservedQuantity = 0;
     await this.projectDealerOrderItemRepository.save(item);
+  }
+
+  return true;
+}
+
+private async dispatchDealerOrderStock(
+  orderId: number,
+  user: any,
+) {
+  const items =
+    await this.projectDealerOrderItemRepository.find({
+      where: {
+        dealerOrderId: orderId,
+      },
+    });
+
+  for (const item of items) {
+    const dispatchQty = Number(
+      (item as any).reservedQuantity || 0,
+    );
+
+    if (dispatchQty <= 0) {
+      continue;
+    }
+
+    const stockItem =
+      await this.projectStockItemRepository.findOne({
+        where: {
+          materialId: item.materialId,
+          isHidden: false,
+        },
+      });
+
+    if (!stockItem) {
+      throw new BadRequestException(
+        `Stock item not found for ${item.materialName}`,
+      );
+    }
+
+    if (
+      Number(stockItem.currentQuantity || 0) <
+      dispatchQty
+    ) {
+      throw new BadRequestException(
+        `Insufficient stock for ${item.materialName}`,
+      );
+    }
+
+    stockItem.currentQuantity =
+      Number(stockItem.currentQuantity || 0) -
+      dispatchQty;
+
+    (stockItem as any).reservedQuantity =
+      Math.max(
+        Number(
+          (stockItem as any).reservedQuantity || 0,
+        ) - dispatchQty,
+        0,
+      );
+
+    stockItem.stockValue =
+      Number(stockItem.currentQuantity || 0) *
+      Number(stockItem.averageRate || 0);
+
+    await this.projectStockItemRepository.save(
+      stockItem,
+    );
+
+    const movement =
+      this.projectStockMovementRepository.create({
+        stockItemId: stockItem.id,
+        materialId: stockItem.materialId,
+        materialName: stockItem.materialName,
+        branchId: stockItem.branchId,
+        branchName: stockItem.branchName,
+
+        movementType:
+          ProjectStockMovementType.ISSUE,
+
+        quantity: dispatchQty,
+        rate: stockItem.averageRate,
+        totalAmount:
+          dispatchQty *
+          Number(stockItem.averageRate || 0),
+
+        sourceType: 'DEALER_ORDER',
+        sourceId: orderId,
+
+        remarks: `Dealer Order Dispatch`,
+        createdBy: user?.id,
+        createdByName: user?.name,
+      });
+
+    await this.projectStockMovementRepository.save(
+      movement,
+    );
+
+    (item as any).dispatchedQuantity =
+      dispatchQty;
+
+    (item as any).reservedQuantity = 0;
+
+    await this.projectDealerOrderItemRepository.save(
+      item,
+    );
   }
 
   return true;
