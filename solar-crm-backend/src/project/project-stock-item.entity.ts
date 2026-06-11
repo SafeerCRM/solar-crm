@@ -36,6 +36,9 @@ export class ProjectStockItem {
   currentQuantity: number;
 
   @Column({ type: 'float', default: 0 })
+reservedQuantity: number;
+
+  @Column({ type: 'float', default: 0 })
   averageRate: number;
 
   @Column({ type: 'float', default: 0 })
