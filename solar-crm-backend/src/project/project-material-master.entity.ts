@@ -57,6 +57,9 @@ export class ProjectMaterialMaster {
   @Column({ type: 'float', default: 0 })
   sellingRate: number;
 
+  @Column({ type: 'float', default: 0 })
+minimumStockLevel: number;
+
   @Column({ type: 'text', nullable: true })
   remarks: string;
 

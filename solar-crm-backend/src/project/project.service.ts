@@ -1703,6 +1703,8 @@ async projectManagerApproval(
 
     sellingRate: Number((data as any).sellingRate || 0),
 
+    minimumStockLevel: Number((data as any).minimumStockLevel || 0),
+
     remarks: data.remarks || '',
     isActive: data.isActive !== false,
   });
@@ -1771,6 +1773,12 @@ async updateMaterialMaster(id: number, data: Partial<ProjectMaterialMaster>) {
       (data as any).sellingRate !== undefined
         ? Number((data as any).sellingRate || 0)
         : (item as any).sellingRate,
+
+    minimumStockLevel:
+      (data as any).minimumStockLevel !== undefined
+        ? Number((data as any).minimumStockLevel || 0)
+        : (item as any).minimumStockLevel,
+
   });
 
   return this.projectMaterialMasterRepository.save(item);
