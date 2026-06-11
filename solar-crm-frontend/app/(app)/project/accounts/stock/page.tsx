@@ -20,6 +20,15 @@ const [receiveLoading, setReceiveLoading] = useState(false);
 
 const [issueLoading, setIssueLoading] = useState(false);
 
+const [adjustLoading, setAdjustLoading] = useState(false);
+
+const [adjustForm, setAdjustForm] = useState({
+  stockItemId: '',
+  adjustmentType: 'ADJUST_IN',
+  quantity: '',
+  remarks: '',
+});
+
 const [transferLoading, setTransferLoading] = useState(false);
 
 const [transferForm, setTransferForm] = useState({
@@ -716,6 +725,68 @@ const issueStock = async () => {
   }
 };
 
+const adjustStock = async () => {
+  if (!adjustForm.stockItemId) {
+    alert('Please select stock item');
+    return;
+  }
+
+  if (!adjustForm.quantity) {
+    alert('Please enter quantity');
+    return;
+  }
+
+  if (!adjustForm.remarks.trim()) {
+    alert('Remarks are required for stock adjustment');
+    return;
+  }
+
+  try {
+    setAdjustLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/stock/adjust`,
+      {
+        stockItemId: adjustForm.stockItemId,
+        adjustmentType: adjustForm.adjustmentType,
+        quantity: adjustForm.quantity,
+        remarks: adjustForm.remarks,
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Stock adjusted successfully');
+
+    setAdjustForm({
+      stockItemId: '',
+      adjustmentType: 'ADJUST_IN',
+      quantity: '',
+      remarks: '',
+    });
+
+    await loadStockItems(1);
+    await loadStockMovements(1);
+    await loadBranchWiseStock();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to adjust stock',
+    );
+  } finally {
+    setAdjustLoading(false);
+  }
+};
+
 const transferStock = async () => {
   if (!transferForm.sourceStockItemId) {
     alert('Please select source stock item');
@@ -950,6 +1021,15 @@ const restoreStockMovement = async (movementId: number) => {
     0,
   );
 
+  const totalReservedQuantity = stockItems.reduce(
+  (total, item) =>
+    total + Number(item.reservedQuantity || 0),
+  0,
+);
+
+const totalAvailableQuantity =
+  totalQuantity - totalReservedQuantity;
+
   const totalStockValue = stockItems.reduce(
     (total, item) =>
       total + Number(item.stockValue || 0),
@@ -968,7 +1048,7 @@ const restoreStockMovement = async (movementId: number) => {
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
         <div className="rounded-2xl bg-white p-5 shadow">
           <p className="text-sm text-gray-500">
             Visible Stock Items
@@ -988,6 +1068,26 @@ const restoreStockMovement = async (movementId: number) => {
             {totalQuantity.toLocaleString('en-IN')}
           </p>
         </div>
+
+        <div className="rounded-2xl bg-white p-5 shadow">
+  <p className="text-sm text-gray-500">
+    Reserved Quantity
+  </p>
+
+  <p className="mt-2 text-2xl font-bold text-orange-700">
+    {totalReservedQuantity.toLocaleString('en-IN')}
+  </p>
+</div>
+
+<div className="rounded-2xl bg-white p-5 shadow">
+  <p className="text-sm text-gray-500">
+    Available Quantity
+  </p>
+
+  <p className="mt-2 text-2xl font-bold text-green-700">
+    {totalAvailableQuantity.toLocaleString('en-IN')}
+  </p>
+</div>
 
         <div className="rounded-2xl bg-white p-5 shadow">
           <p className="text-sm text-gray-500">
@@ -1242,6 +1342,94 @@ const restoreStockMovement = async (movementId: number) => {
         })
       }
       className="rounded-xl border p-3 text-sm md:col-span-2"
+    />
+  </div>
+</div>
+
+<div className="rounded-2xl bg-white p-5 shadow">
+  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <div>
+      <h2 className="text-xl font-bold text-gray-800">
+        Stock Adjustment
+      </h2>
+
+      <p className="mt-1 text-sm text-gray-500">
+        Correct physical stock difference with mandatory remarks and movement history.
+      </p>
+    </div>
+
+    <button
+      type="button"
+      onClick={adjustStock}
+      disabled={adjustLoading}
+      className="rounded-xl bg-orange-600 px-4 py-2 text-sm font-semibold text-white"
+    >
+      {adjustLoading ? 'Adjusting...' : 'Save Adjustment'}
+    </button>
+  </div>
+
+  <div className="mt-4 grid gap-3 md:grid-cols-2">
+    <select
+      value={adjustForm.stockItemId}
+      onChange={(e) =>
+        setAdjustForm({
+          ...adjustForm,
+          stockItemId: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    >
+      <option value="">Select Stock Item</option>
+
+      {stockItems.map((item: any) => (
+        <option key={item.id} value={item.id}>
+          {item.materialName}
+          {item.branchName ? ` - ${item.branchName}` : ''}
+          {` | Available: ${Number(
+            item.currentQuantity || 0,
+          ).toLocaleString('en-IN')}`}
+        </option>
+      ))}
+    </select>
+
+    <select
+      value={adjustForm.adjustmentType}
+      onChange={(e) =>
+        setAdjustForm({
+          ...adjustForm,
+          adjustmentType: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    >
+      <option value="ADJUST_IN">Adjust In / Add Stock</option>
+      <option value="ADJUST_OUT">Adjust Out / Reduce Stock</option>
+    </select>
+
+    <input
+      type="number"
+      placeholder="Adjustment Quantity"
+      value={adjustForm.quantity}
+      onChange={(e) =>
+        setAdjustForm({
+          ...adjustForm,
+          quantity: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
+    />
+
+    <input
+      type="text"
+      placeholder="Mandatory Remarks"
+      value={adjustForm.remarks}
+      onChange={(e) =>
+        setAdjustForm({
+          ...adjustForm,
+          remarks: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3 text-sm"
     />
   </div>
 </div>
@@ -1561,8 +1749,14 @@ const restoreStockMovement = async (movementId: number) => {
                   Branch
                 </th>
                 <th className="p-2 text-left">
-                  Quantity
-                </th>
+  Current Qty
+</th>
+<th className="p-2 text-left">
+  Reserved Qty
+</th>
+<th className="p-2 text-left">
+  Available Qty
+</th>
                 <th className="p-2 text-left">
                   Avg Rate
                 </th>
@@ -1579,7 +1773,7 @@ const restoreStockMovement = async (movementId: number) => {
               {stockItems.length === 0 && (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={11}
                     className="p-4 text-center text-gray-500"
                   >
                     No stock items found.
@@ -1613,10 +1807,24 @@ const restoreStockMovement = async (movementId: number) => {
                   </td>
 
                   <td className="p-2 font-semibold">
-                    {Number(
-                      item.currentQuantity || 0,
-                    ).toLocaleString('en-IN')}
-                  </td>
+  {Number(
+    item.currentQuantity || 0,
+  ).toLocaleString('en-IN')}
+</td>
+
+<td className="p-2 font-semibold text-orange-700">
+  {Number(
+    item.reservedQuantity || 0,
+  ).toLocaleString('en-IN')}
+</td>
+
+<td className="p-2 font-semibold text-green-700">
+  {Math.max(
+    Number(item.currentQuantity || 0) -
+      Number(item.reservedQuantity || 0),
+    0,
+  ).toLocaleString('en-IN')}
+</td>
 
                   <td className="p-2">
                     {formatCurrency(item.averageRate)}
