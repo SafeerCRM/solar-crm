@@ -3694,6 +3694,42 @@ async getPaymentCollectionList(query: any, currentUser: any) {
 
   const rows = await qb.getRawMany();
 
+  const projectIds = Array.from(
+  new Set(
+    rows
+      .map((row) => Number(row.projectId))
+      .filter(Boolean),
+  ),
+);
+
+let projectApprovedPaymentMap: Record<number, number> = {};
+
+if (projectIds.length > 0) {
+  const approvedPayments =
+    await this.projectPaymentInstallmentRepository
+      .createQueryBuilder('payment')
+      .select('payment.projectId', 'projectId')
+      .addSelect('SUM(payment.paidAmount)', 'receivedAmount')
+      .where('payment.projectId IN (:...projectIds)', {
+        projectIds,
+      })
+      .andWhere('payment.isHidden = false')
+      .andWhere('payment.approvalStatus = :approvalStatus', {
+        approvalStatus: 'APPROVED',
+      })
+      .groupBy('payment.projectId')
+      .getRawMany();
+
+  projectApprovedPaymentMap =
+    approvedPayments.reduce((acc, item) => {
+      acc[Number(item.projectId)] = Number(
+        item.receivedAmount || 0,
+      );
+
+      return acc;
+    }, {});
+}
+
   const countQb = this.projectPaymentInstallmentRepository
     .createQueryBuilder('payment')
     .leftJoin(Project, 'project', 'project.id = payment.projectId');
@@ -3798,7 +3834,23 @@ async getPaymentCollectionList(query: any, currentUser: any) {
   const total = await countQb.getCount();
 
   return {
-    data: rows.map((row) => ({
+  data: rows.map((row) => {
+    const finalCost = Number(row.finalCost || 0);
+
+    const projectReceivedAmount =
+      projectApprovedPaymentMap[Number(row.projectId)] || 0;
+
+    const paymentReceivedPercentage =
+      finalCost > 0
+        ? Math.min(
+            Math.round(
+              (projectReceivedAmount / finalCost) * 100,
+            ),
+            100,
+          )
+        : 0;
+
+    return {
       id: Number(row.id),
       projectId: Number(row.projectId),
       label: row.label,
@@ -3808,34 +3860,42 @@ async getPaymentCollectionList(query: any, currentUser: any) {
       dueDate: row.dueDate,
       paidDate: row.paidDate,
       status: this.getComputedPaymentStatus(
-  row.status,
-  row.dueDate,
-  Number(row.pendingAmount || 0),
-),
-approvalStatus:
-  row.approvalStatus || 'APPROVED',
+        row.status,
+        row.dueDate,
+        Number(row.pendingAmount || 0),
+      ),
+      approvalStatus: row.approvalStatus || 'APPROVED',
       paymentMode: row.paymentMode,
       transactionId: row.transactionId,
       remarks: row.remarks,
-      collectedBy: row.collectedBy ? Number(row.collectedBy) : null,
+      collectedBy: row.collectedBy
+        ? Number(row.collectedBy)
+        : null,
       collectedByName: row.collectedByName,
 
       customerName: row.customerName,
       customerPhone: row.customerPhone,
       branchName: row.branchName,
-      projectOwnerId: row.projectOwnerId ? Number(row.projectOwnerId) : null,
+      projectOwnerId: row.projectOwnerId
+        ? Number(row.projectOwnerId)
+        : null,
       projectOwnerName: row.projectOwnerName,
       projectSerial: row.projectSerial,
-      finalCost: Number(row.finalCost || 0),
+
+      finalCost,
+      projectReceivedAmount,
+      paymentReceivedPercentage,
+
       projectStatus: row.projectStatus,
-    })),
-    pagination: {
-      page: pageNumber,
-      limit: limitNumber,
-      total,
-      totalPages: Math.ceil(total / limitNumber),
-    },
-  };
+    };
+  }),
+  pagination: {
+    page: pageNumber,
+    limit: limitNumber,
+    total,
+    totalPages: Math.ceil(total / limitNumber),
+  },
+};
 }
 
 async createPaymentInstallment(
