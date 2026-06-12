@@ -19,6 +19,7 @@ import { MeetingModule } from './meeting/meeting.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ProposalModule } from './proposal/proposal.module';
 import { CustomerModule } from './customer/customer.module';
+import { StaffComplaintModule } from './staff-complaint/staff-complaint.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { CustomerModule } from './customer/customer.module';
     MeetingModule,
     ProposalModule,
     CustomerModule,
+    StaffComplaintModule,
   ],
   controllers: [AppController],
   providers: [AppService],
