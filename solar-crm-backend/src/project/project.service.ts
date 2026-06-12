@@ -929,22 +929,71 @@ const enrichedData = data.map((project) => {
     );
 
   const totalExecutionActivities =
-    projectActivities.length;
+  projectActivities.length;
 
-  const completedExecutionActivities =
-    projectActivities.filter(
-      (activity) =>
-        String(activity.status) === 'COMPLETED',
-    ).length;
+const completedActivities =
+  projectActivities.filter(
+    (activity) =>
+      String(activity.status) === 'COMPLETED',
+  );
 
-  const executionPercentage =
-    totalExecutionActivities > 0
-      ? Math.round(
-          (completedExecutionActivities /
-            totalExecutionActivities) *
-            100,
-        )
-      : 0;
+const runningActivities =
+  projectActivities.filter(
+    (activity) =>
+      String(activity.status) === 'IN_PROGRESS',
+  );
+
+const pendingActivities =
+  projectActivities.filter(
+    (activity) =>
+      String(activity.status) === 'PENDING' ||
+      String(activity.status) === 'OVERDUE',
+  );
+
+const completedExecutionActivities =
+  completedActivities.length;
+
+const executionPercentage =
+  totalExecutionActivities > 0
+    ? Math.round(
+        (completedExecutionActivities /
+          totalExecutionActivities) *
+          100,
+      )
+    : 0;
+
+const runningActivity =
+  runningActivities[0]?.activityType || '';
+
+const latestCompletedActivity =
+  completedActivities
+    .sort(
+      (a, b) =>
+        new Date(
+          b.completedDate ||
+            b.updatedAt ||
+            b.createdAt,
+        ).getTime() -
+        new Date(
+          a.completedDate ||
+            a.updatedAt ||
+            a.createdAt,
+        ).getTime(),
+    )[0]?.activityType || '';
+
+const nextPendingActivity =
+  pendingActivities
+    .sort(
+      (a, b) =>
+        new Date(
+          a.scheduledDate ||
+            a.createdAt,
+        ).getTime() -
+        new Date(
+          b.scheduledDate ||
+            b.createdAt,
+        ).getTime(),
+    )[0]?.activityType || '';
 
   const projectPayments =
     paymentInstallments.filter(
@@ -983,10 +1032,16 @@ const enrichedData = data.map((project) => {
   return {
     ...project,
     executionSummary: {
-      totalActivities: totalExecutionActivities,
-      completedActivities: completedExecutionActivities,
-      percentage: executionPercentage,
-    },
+  totalActivities: totalExecutionActivities,
+  completedActivities: completedExecutionActivities,
+  pendingActivities: pendingActivities.length,
+  runningActivities: runningActivities.length,
+  percentage: executionPercentage,
+
+  runningActivity,
+  latestCompletedActivity,
+  nextPendingActivity,
+},
     paymentSummary: {
       totalAmount: projectTotalAmount,
       receivedAmount: approvedReceivedAmount,
