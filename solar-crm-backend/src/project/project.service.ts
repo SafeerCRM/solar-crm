@@ -15053,6 +15053,10 @@ const enrichedData = data.map((item: any) => {
     isLowStock:
       minimumStockLevel > 0 &&
       availableQuantity <= minimumStockLevel,
+      debugCurrentQuantity: currentQuantity,
+debugReservedQuantity: reservedQuantity,
+debugAvailableQuantity: availableQuantity,
+debugMinimumStockLevel: minimumStockLevel,
   };
 });
 
