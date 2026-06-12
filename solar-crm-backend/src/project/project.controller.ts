@@ -1517,6 +1517,34 @@ rejectPaymentInstallment(
   );
 }
 
+@Roles('OWNER')
+@Patch('payment-collection/installments/:id/edit-installment')
+updatePaymentInstallment(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.updatePaymentInstallment(
+    Number(id),
+    body,
+    user,
+  );
+}
+
+@Roles('OWNER')
+@Patch('payment-collection/installments/:id/edit-payment')
+updatePaymentEntry(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.updatePaymentEntry(
+    Number(id),
+    body,
+    user,
+  );
+}
+
 @Get('approval-reminders')
 async getApprovalReminderList(
   @Req() req: any,

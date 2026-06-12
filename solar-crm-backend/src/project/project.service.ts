@@ -347,6 +347,18 @@ private readonly projectCreationRequiredDocumentGroups = [
   },
 ];
 
+private assertOwnerOnly(user: any) {
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  if (!roles.includes('OWNER')) {
+    throw new ForbiddenException(
+      'Only owner can edit payment entries',
+    );
+  }
+}
+
 private async assertRequiredProjectCreationDocumentsUploaded(
   projectId: number,
 ) {
@@ -3944,6 +3956,53 @@ async createPaymentInstallment(
   );
 }
 
+async updatePaymentInstallment(
+  installmentId: number,
+  body: any,
+  currentUser: any,
+) {
+  this.assertOwnerOnly(currentUser);
+
+  const installment =
+    await this.projectPaymentInstallmentRepository.findOne({
+      where: { id: installmentId },
+    });
+
+  if (!installment) {
+    throw new NotFoundException('Payment installment not found');
+  }
+
+  const newAmount = Number(body?.amount || installment.amount || 0);
+
+  if (!newAmount || newAmount <= 0) {
+    throw new BadRequestException('Valid amount is required');
+  }
+
+  const paidAmount = Number(installment.paidAmount || 0);
+
+  if (paidAmount > newAmount) {
+    throw new BadRequestException(
+      'Installment amount cannot be less than already paid amount',
+    );
+  }
+
+  installment.label = body?.label || installment.label;
+  installment.amount = newAmount;
+  installment.pendingAmount = newAmount - paidAmount;
+  installment.dueDate = body?.dueDate || installment.dueDate || null;
+  installment.remarks = body?.remarks ?? installment.remarks;
+
+  if (installment.pendingAmount <= 0) {
+    installment.status = ProjectPaymentInstallmentStatus.PAID;
+  } else if (paidAmount > 0) {
+    installment.status = ProjectPaymentInstallmentStatus.PARTIAL;
+  } else {
+    installment.status = ProjectPaymentInstallmentStatus.PENDING;
+  }
+
+  return this.projectPaymentInstallmentRepository.save(installment);
+}
+
 async receivePaymentInstallment(
   installmentId: number,
   body: any,
@@ -4102,6 +4161,89 @@ await this.projectPartyLedgerRepository.save(
   }
 
 return savedInstallment;
+}
+
+async updatePaymentEntry(
+  installmentId: number,
+  body: any,
+  currentUser: any,
+) {
+  this.assertOwnerOnly(currentUser);
+
+  const installment =
+    await this.projectPaymentInstallmentRepository.findOne({
+      where: { id: installmentId },
+    });
+
+  if (!installment) {
+    throw new NotFoundException('Payment installment not found');
+  }
+
+  const totalAmount = Number(installment.amount || 0);
+  const newPaidAmount = Number(body?.paidAmount || 0);
+
+  if (newPaidAmount < 0) {
+    throw new BadRequestException(
+      'Paid amount cannot be negative',
+    );
+  }
+
+  if (newPaidAmount > totalAmount) {
+    throw new BadRequestException(
+      'Paid amount cannot exceed installment amount',
+    );
+  }
+
+  installment.paidAmount = newPaidAmount;
+  installment.pendingAmount = totalAmount - newPaidAmount;
+
+  installment.paymentMode =
+    body?.paymentMode ?? installment.paymentMode;
+
+  installment.transactionId =
+    body?.transactionId ?? installment.transactionId;
+
+  installment.remarks =
+    body?.remarks ?? installment.remarks;
+
+  installment.paidDate = body?.paidDate
+    ? new Date(body.paidDate)
+    : installment.paidDate;
+
+  if (newPaidAmount <= 0) {
+    installment.status = ProjectPaymentInstallmentStatus.PENDING;
+    installment.approvalStatus = 'PENDING';
+  } else if (installment.pendingAmount <= 0) {
+    installment.status = ProjectPaymentInstallmentStatus.PAID;
+  } else {
+    installment.status = ProjectPaymentInstallmentStatus.PARTIAL;
+  }
+
+  const saved =
+    await this.projectPaymentInstallmentRepository.save(installment);
+
+  const existingLedger =
+    await this.projectPartyLedgerRepository.findOne({
+      where: {
+        sourceType: ProjectLedgerSourceType.CUSTOMER_PAYMENT,
+        sourceId: saved.id,
+        isHidden: false,
+      },
+    });
+
+  if (
+    existingLedger &&
+    saved.approvalStatus === 'APPROVED'
+  ) {
+    existingLedger.amount = Number(saved.paidAmount || 0);
+    existingLedger.remarks =
+      saved.remarks ||
+      `Updated payment for ${saved.label || 'installment'}`;
+
+    await this.projectPartyLedgerRepository.save(existingLedger);
+  }
+
+  return saved;
 }
 
 async approvePaymentInstallment(
