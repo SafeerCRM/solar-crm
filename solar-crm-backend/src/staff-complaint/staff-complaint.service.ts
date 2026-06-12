@@ -170,21 +170,193 @@ export class StaffComplaintService {
     return this.complaintRepository.save(complaint);
   }
 
-  async hide(id: number, user: any) {
-    if (!this.isOwner(user)) {
-      throw new ForbiddenException('Only owner can hide complaints');
-    }
-
-    const complaint = await this.complaintRepository.findOne({
-      where: { id, isHidden: false },
+  async hide(
+  id: number,
+  user: any,
+) {
+  const complaint =
+    await this.complaintRepository.findOne({
+      where: {
+        id,
+        isHidden: false,
+      },
     });
 
-    if (!complaint) {
-      throw new NotFoundException('Complaint not found');
-    }
-
-    complaint.isHidden = true;
-
-    return this.complaintRepository.save(complaint);
+  if (!complaint) {
+    throw new NotFoundException(
+      'Complaint not found',
+    );
   }
+
+  const userId =
+    user?.id ||
+    user?.userId ||
+    user?.sub;
+
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  const isOwner =
+    roles.includes('OWNER');
+
+  const isCreator =
+    complaint.createdBy === userId;
+
+  if (!isOwner && !isCreator) {
+    throw new ForbiddenException(
+      'Access denied',
+    );
+  }
+
+  complaint.isHidden = true;
+
+  complaint.hiddenBy = userId;
+
+  complaint.hiddenByName =
+    user?.name || '';
+
+  complaint.hiddenAt =
+    new Date();
+
+  return this.complaintRepository.save(
+    complaint,
+  );
+}
+
+async restore(
+  id: number,
+  user: any,
+) {
+  const complaint =
+    await this.complaintRepository.findOne({
+      where: {
+        id,
+        isHidden: true,
+      },
+    });
+
+  if (!complaint) {
+    throw new NotFoundException(
+      'Complaint not found',
+    );
+  }
+
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  if (
+    !roles.includes('OWNER')
+  ) {
+    throw new ForbiddenException(
+      'Only owner can restore complaints',
+    );
+  }
+
+  complaint.isHidden = false;
+
+  complaint.hiddenBy = null;
+  complaint.hiddenByName = null;
+  complaint.hiddenAt = null;
+
+  return this.complaintRepository.save(
+    complaint,
+  );
+}
+
+async findHidden(user: any) {
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  if (
+    !roles.includes('OWNER')
+  ) {
+    throw new ForbiddenException(
+      'Only owner can view hidden complaints',
+    );
+  }
+
+  return this.complaintRepository.find({
+    where: {
+      isHidden: true,
+    },
+    order: {
+      updatedAt: 'DESC',
+    },
+  });
+}
+
+  async updateComplaint(
+  id: number,
+  body: any,
+  user: any,
+) {
+  const complaint =
+    await this.complaintRepository.findOne({
+      where: {
+        id,
+        isHidden: false,
+      },
+    });
+
+  if (!complaint) {
+    throw new NotFoundException(
+      'Complaint not found',
+    );
+  }
+
+  const userId =
+    user?.id ||
+    user?.userId ||
+    user?.sub;
+
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  const isOwner =
+    roles.includes('OWNER');
+
+  const isCreator =
+    complaint.createdBy === userId;
+
+  if (!isOwner && !isCreator) {
+    throw new ForbiddenException(
+      'Access denied',
+    );
+  }
+
+  if (
+    !isOwner &&
+    complaint.status !==
+      StaffComplaintStatus.OPEN
+  ) {
+    throw new BadRequestException(
+      'Complaint can only be edited while OPEN',
+    );
+  }
+
+  complaint.title =
+    body?.title || complaint.title;
+
+  complaint.description =
+    body?.description ||
+    complaint.description;
+
+  if (
+    body?.priority &&
+    Object.values(
+      StaffComplaintPriority,
+    ).includes(body.priority)
+  ) {
+    complaint.priority =
+      body.priority;
+  }
+
+  return this.complaintRepository.save(
+    complaint,
+  );
+}
 }

@@ -47,6 +47,41 @@ export class StaffComplaintController {
     );
   }
 
+  @Patch(':id')
+updateComplaint(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffComplaintService.updateComplaint(
+    Number(id),
+    body,
+    user,
+  );
+}
+
+@Roles('OWNER')
+@Get('hidden')
+findHidden(
+  @CurrentUser() user: any,
+) {
+  return this.staffComplaintService.findHidden(
+    user,
+  );
+}
+
+@Roles('OWNER')
+@Patch(':id/restore')
+restore(
+  @Param('id') id: string,
+  @CurrentUser() user: any,
+) {
+  return this.staffComplaintService.restore(
+    Number(id),
+    user,
+  );
+}
+
   @Roles('OWNER')
   @Patch(':id/status')
   updateStatus(
