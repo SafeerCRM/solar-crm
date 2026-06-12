@@ -2034,15 +2034,56 @@ async listProjectStockItems(query: any) {
 
   const [data, total] = await qb.getManyAndCount();
 
+  const materialIds = data
+  .map((item) => Number(item.materialId || 0))
+  .filter(Boolean);
+
+const materials = materialIds.length
+  ? await this.projectMaterialMasterRepository.find({
+      where: {
+        id: In(materialIds),
+      },
+    })
+  : [];
+
+const materialMap = new Map(
+  materials.map((material) => [material.id, material]),
+);
+
+const enrichedData = data.map((item: any) => {
+  const currentQuantity = Number(item.currentQuantity || 0);
+  const reservedQuantity = Number(item.reservedQuantity || 0);
+  const availableQuantity = Math.max(
+    currentQuantity - reservedQuantity,
+    0,
+  );
+
+  const material = materialMap.get(Number(item.materialId || 0));
+
+  const minimumStockLevel = Number(
+    (material as any)?.minimumStockLevel || 0,
+  );
+
   return {
-    data,
-    pagination: {
-      page: pageNumber,
-      limit: limitNumber,
-      total,
-      totalPages: Math.ceil(total / limitNumber),
-    },
+    ...item,
+    reservedQuantity,
+    availableQuantity,
+    minimumStockLevel,
+    isLowStock:
+      minimumStockLevel > 0 &&
+      availableQuantity <= minimumStockLevel,
   };
+});
+
+return {
+  data: enrichedData,
+  pagination: {
+    page: pageNumber,
+    limit: limitNumber,
+    total,
+    totalPages: Math.ceil(total / limitNumber),
+  },
+};
 }
 
 async receiveProjectStock(body: any, currentUser: any) {
