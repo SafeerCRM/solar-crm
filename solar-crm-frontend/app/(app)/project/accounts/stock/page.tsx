@@ -1787,8 +1787,16 @@ const totalAvailableQuantity =
                   className="border-b"
                 >
                   <td className="p-2 font-semibold">
-                    {item.materialName || '-'}
-                  </td>
+  <div className="flex flex-col gap-1">
+    <span>{item.materialName || '-'}</span>
+
+    {item.isLowStock && (
+      <span className="w-fit rounded-full bg-red-100 px-2 py-1 text-xs font-bold text-red-700">
+        LOW STOCK
+      </span>
+    )}
+  </div>
+</td>
 
                   <td className="p-2">
                     {item.category || '-'}
@@ -1818,12 +1826,25 @@ const totalAvailableQuantity =
   ).toLocaleString('en-IN')}
 </td>
 
-<td className="p-2 font-semibold text-green-700">
+<td
+  className={`p-2 font-semibold ${
+    item.isLowStock
+      ? 'text-red-700'
+      : 'text-green-700'
+  }`}
+>
   {Math.max(
     Number(item.currentQuantity || 0) -
       Number(item.reservedQuantity || 0),
     0,
   ).toLocaleString('en-IN')}
+
+  <p className="text-xs text-gray-500">
+    Min:{' '}
+    {Number(
+      item.minimumStockLevel || 0,
+    ).toLocaleString('en-IN')}
+  </p>
 </td>
 
                   <td className="p-2">
