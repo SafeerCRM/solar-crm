@@ -145,6 +145,9 @@ type MaterialRequestRow = {
   brand: string;
   rate: string;
   quantity: string;
+  reservedQuantity?: number;
+issuedQuantity?: number;
+issuePendingQuantity?: number;
   gstPercent: string;
   totalAmount: number;
   remarks: string;
@@ -4551,8 +4554,20 @@ const remainingAmountToCollect =
                         </th>
 
                         <th className="border px-3 py-2 text-left">
-                          Qty
-                        </th>
+  Requested
+</th>
+
+<th className="border px-3 py-2 text-left">
+  Reserved
+</th>
+
+<th className="border px-3 py-2 text-left">
+  Issued
+</th>
+
+<th className="border px-3 py-2 text-left">
+  Pending
+</th>
 
                         <th className="border px-3 py-2 text-left">
                           Rate
@@ -4586,10 +4601,24 @@ const remainingAmountToCollect =
                             </td>
 
                             <td className="border px-3 py-2">
-                              {
-                                item.quantity
-                              }
-                            </td>
+  {Number(item.quantity || 0)}
+</td>
+
+<td className="border px-3 py-2 font-semibold text-orange-700">
+  {Number(item.reservedQuantity || 0)}
+</td>
+
+<td className="border px-3 py-2 font-semibold text-blue-700">
+  {Number(item.issuedQuantity || 0)}
+</td>
+
+<td className="border px-3 py-2 font-semibold text-red-700">
+  {Math.max(
+    Number(item.quantity || 0) -
+      Number(item.issuedQuantity || 0),
+    0,
+  )}
+</td>
 
                             <td className="border px-3 py-2">
                               ₹
