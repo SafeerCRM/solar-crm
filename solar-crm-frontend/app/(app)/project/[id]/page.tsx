@@ -673,6 +673,32 @@ const [paymentForm, setPaymentForm] = useState({
 const [receivingPaymentId, setReceivingPaymentId] =
   useState<number | null>(null);
 
+  const [editingInstallmentId, setEditingInstallmentId] =
+  useState<number | null>(null);
+
+const [editingPaymentId, setEditingPaymentId] =
+  useState<number | null>(null);
+
+const [installmentEditForm, setInstallmentEditForm] =
+  useState({
+    label: '',
+    amount: '',
+    dueDate: '',
+    remarks: '',
+  });
+
+const [paymentEditForm, setPaymentEditForm] =
+  useState({
+    paidAmount: '',
+    paymentMode: '',
+    transactionId: '',
+    paidDate: '',
+    remarks: '',
+  });
+
+const [savingPaymentEdit, setSavingPaymentEdit] =
+  useState(false);
+
   const [projectAccountsSummary, setProjectAccountsSummary] =
   useState({
     customerInvoice: 0,
@@ -2168,6 +2194,99 @@ const receivePayment = async (installmentId: number) => {
   }
 };
 
+const startEditInstallment = (item: PaymentInstallment) => {
+  setEditingInstallmentId(item.id);
+  setEditingPaymentId(null);
+
+  setInstallmentEditForm({
+    label: item.label || 'FIRST_PAYMENT',
+    amount: String(item.amount || ''),
+    dueDate: item.dueDate
+      ? item.dueDate.split('T')[0]
+      : '',
+    remarks: item.remarks || '',
+  });
+};
+
+const saveInstallmentEdit = async (installmentId: number) => {
+  try {
+    setSavingPaymentEdit(true);
+
+    const token = localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/payment-collection/installments/${installmentId}/edit-installment`,
+      installmentEditForm,
+      {
+        headers: token
+          ? { Authorization: `Bearer ${token}` }
+          : {},
+      },
+    );
+
+    alert('Installment updated successfully');
+
+    setEditingInstallmentId(null);
+    fetchPaymentInstallments();
+    fetchProjectAccountsSummary();
+  } catch (error: any) {
+    console.error(error);
+    alert(
+      error?.response?.data?.message ||
+        'Failed to update installment',
+    );
+  } finally {
+    setSavingPaymentEdit(false);
+  }
+};
+
+const startEditPayment = (item: PaymentInstallment) => {
+  setEditingPaymentId(item.id);
+  setEditingInstallmentId(null);
+
+  setPaymentEditForm({
+    paidAmount: String(item.paidAmount || ''),
+    paymentMode: item.paymentMode || '',
+    transactionId: item.transactionId || '',
+    paidDate: item.paidDate
+      ? item.paidDate.split('T')[0]
+      : '',
+    remarks: item.remarks || '',
+  });
+};
+
+const savePaymentEdit = async (installmentId: number) => {
+  try {
+    setSavingPaymentEdit(true);
+
+    const token = localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/payment-collection/installments/${installmentId}/edit-payment`,
+      paymentEditForm,
+      {
+        headers: token
+          ? { Authorization: `Bearer ${token}` }
+          : {},
+      },
+    );
+
+    alert('Payment entry updated successfully');
+
+    setEditingPaymentId(null);
+    fetchPaymentInstallments();
+    fetchProjectAccountsSummary();
+  } catch (error: any) {
+    console.error(error);
+    alert(
+      error?.response?.data?.message ||
+        'Failed to update payment entry',
+    );
+  } finally {
+    setSavingPaymentEdit(false);
+  }
+};
+
 const approvePayment = async (installmentId: number) => {
   try {
     const token = localStorage.getItem('token');
@@ -2827,6 +2946,8 @@ const canApprovePayment = hasRole([
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
 ]);
+
+const canEditPaymentAsOwner = hasRole(['OWNER']);
 
 const canManageMaterial = hasRole([
   'OWNER',
@@ -6492,6 +6613,196 @@ const remainingAmountToCollect =
 >
   Hide Entry
 </button>
+)}
+
+{canEditPaymentAsOwner && (
+  <div className="mt-3 flex flex-wrap gap-2">
+    <button
+      type="button"
+      onClick={() => startEditInstallment(item)}
+      className="rounded-xl bg-purple-100 px-4 py-2 text-sm font-semibold text-purple-700 hover:bg-purple-200"
+    >
+      Edit Installment
+    </button>
+
+    <button
+      type="button"
+      onClick={() => startEditPayment(item)}
+      className="rounded-xl bg-green-100 px-4 py-2 text-sm font-semibold text-green-700 hover:bg-green-200"
+    >
+      Edit Payment Entry
+    </button>
+  </div>
+)}
+
+{editingInstallmentId === item.id && (
+  <div className="mt-4 rounded-xl border bg-purple-50 p-4">
+    <h4 className="font-bold text-gray-800">
+      Edit Installment
+    </h4>
+
+    <div className="mt-3 grid gap-3 md:grid-cols-2">
+      <input
+        placeholder="Label"
+        value={installmentEditForm.label}
+        onChange={(e) =>
+          setInstallmentEditForm({
+            ...installmentEditForm,
+            label: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
+
+      <input
+        type="number"
+        placeholder="Installment Amount"
+        value={installmentEditForm.amount}
+        onChange={(e) =>
+          setInstallmentEditForm({
+            ...installmentEditForm,
+            amount: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
+
+      <input
+        type="date"
+        value={installmentEditForm.dueDate}
+        onChange={(e) =>
+          setInstallmentEditForm({
+            ...installmentEditForm,
+            dueDate: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
+
+      <input
+        placeholder="Remarks"
+        value={installmentEditForm.remarks}
+        onChange={(e) =>
+          setInstallmentEditForm({
+            ...installmentEditForm,
+            remarks: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
+    </div>
+
+    <div className="mt-3 flex flex-wrap gap-2">
+      <button
+        onClick={() => saveInstallmentEdit(item.id)}
+        disabled={savingPaymentEdit}
+        className="rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+      >
+        Save Installment
+      </button>
+
+      <button
+        onClick={() => setEditingInstallmentId(null)}
+        className="rounded-xl bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-800"
+      >
+        Cancel
+      </button>
+    </div>
+  </div>
+)}
+
+{editingPaymentId === item.id && (
+  <div className="mt-4 rounded-xl border bg-green-50 p-4">
+    <h4 className="font-bold text-gray-800">
+      Edit Payment Entry
+    </h4>
+
+    <div className="mt-3 grid gap-3 md:grid-cols-2">
+      <input
+        type="number"
+        placeholder="Paid Amount"
+        value={paymentEditForm.paidAmount}
+        onChange={(e) =>
+          setPaymentEditForm({
+            ...paymentEditForm,
+            paidAmount: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
+
+      <select
+        value={paymentEditForm.paymentMode}
+        onChange={(e) =>
+          setPaymentEditForm({
+            ...paymentEditForm,
+            paymentMode: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      >
+        <option value="">Payment Mode</option>
+        <option value="CASH">Cash</option>
+        <option value="UPI">UPI</option>
+        <option value="BANK_TRANSFER">Bank Transfer</option>
+        <option value="CHEQUE">Cheque</option>
+        <option value="OTHER">Other</option>
+      </select>
+
+      <input
+        placeholder="Transaction ID"
+        value={paymentEditForm.transactionId}
+        onChange={(e) =>
+          setPaymentEditForm({
+            ...paymentEditForm,
+            transactionId: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
+
+      <input
+        type="date"
+        value={paymentEditForm.paidDate}
+        onChange={(e) =>
+          setPaymentEditForm({
+            ...paymentEditForm,
+            paidDate: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
+
+      <input
+        placeholder="Remarks"
+        value={paymentEditForm.remarks}
+        onChange={(e) =>
+          setPaymentEditForm({
+            ...paymentEditForm,
+            remarks: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3 md:col-span-2"
+      />
+    </div>
+
+    <div className="mt-3 flex flex-wrap gap-2">
+      <button
+        onClick={() => savePaymentEdit(item.id)}
+        disabled={savingPaymentEdit}
+        className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+      >
+        Save Payment Entry
+      </button>
+
+      <button
+        onClick={() => setEditingPaymentId(null)}
+        className="rounded-xl bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-800"
+      >
+        Cancel
+      </button>
+    </div>
+  </div>
 )}
   </div>
 )}
