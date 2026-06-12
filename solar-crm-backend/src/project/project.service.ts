@@ -904,14 +904,105 @@ if (!canViewAll) {
   const [data, total] =
     await query.getManyAndCount();
 
+    const projectIds = data.map((project) => project.id);
+
+const executionActivities = projectIds.length
+  ? await this.projectExecutionActivityRepository.find({
+      where: {
+        projectId: In(projectIds),
+      },
+    })
+  : [];
+
+const paymentInstallments = projectIds.length
+  ? await this.projectPaymentInstallmentRepository.find({
+      where: {
+        projectId: In(projectIds),
+      },
+    })
+  : [];
+
+const enrichedData = data.map((project) => {
+  const projectActivities =
+    executionActivities.filter(
+      (activity) => activity.projectId === project.id,
+    );
+
+  const totalExecutionActivities =
+    projectActivities.length;
+
+  const completedExecutionActivities =
+    projectActivities.filter(
+      (activity) =>
+        String(activity.status) === 'COMPLETED',
+    ).length;
+
+  const executionPercentage =
+    totalExecutionActivities > 0
+      ? Math.round(
+          (completedExecutionActivities /
+            totalExecutionActivities) *
+            100,
+        )
+      : 0;
+
+  const projectPayments =
+    paymentInstallments.filter(
+      (payment) => payment.projectId === project.id,
+    );
+
+  const approvedReceivedAmount =
+    projectPayments
+      .filter(
+        (payment) =>
+          String((payment as any).approvalStatus || '') ===
+          'APPROVED',
+      )
+      .reduce(
+        (sum, payment) =>
+          sum + Number(payment.paidAmount || 0),
+        0,
+      );
+
+  const projectTotalAmount = Number(
+    (project as any).finalCost ||
+      (project as any).netAmount ||
+      (project as any).projectCost ||
+      0,
+  );
+
+  const paymentReceivedPercentage =
+    projectTotalAmount > 0
+      ? Math.round(
+          (approvedReceivedAmount /
+            projectTotalAmount) *
+            100,
+        )
+      : 0;
+
   return {
-    data,
-    total,
-    page,
-    limit,
-    totalPages:
-      Math.ceil(total / limit) || 1,
+    ...project,
+    executionSummary: {
+      totalActivities: totalExecutionActivities,
+      completedActivities: completedExecutionActivities,
+      percentage: executionPercentage,
+    },
+    paymentSummary: {
+      totalAmount: projectTotalAmount,
+      receivedAmount: approvedReceivedAmount,
+      percentage: Math.min(paymentReceivedPercentage, 100),
+    },
   };
+});
+
+  return {
+  data: enrichedData,
+  total,
+  page,
+  limit,
+  totalPages:
+    Math.ceil(total / limit) || 1,
+};
 }
 
   async findOne(id: number, user?: any) {
