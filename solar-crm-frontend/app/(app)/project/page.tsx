@@ -21,6 +21,22 @@ projectOwnerRole?: string;
   status?: string;
   marketingHeadApprovalStatus?: string;
   ownerApprovalStatus?: string;
+    executionSummary?: {
+    totalActivities?: number;
+    completedActivities?: number;
+    pendingActivities?: number;
+    runningActivities?: number;
+    percentage?: number;
+    runningActivity?: string;
+    latestCompletedActivity?: string;
+    nextPendingActivity?: string;
+  };
+
+  paymentSummary?: {
+    totalAmount?: number;
+    receivedAmount?: number;
+    percentage?: number;
+  };
   createdAt?: string;
 };
 
@@ -29,6 +45,17 @@ type ProjectOwner = {
   projectOwnerName?: string;
   projectOwnerRole?: string;
 };
+
+function formatLabel(value?: string) {
+  return String(value || '-')
+    .replaceAll('_', ' ')
+    .toLowerCase()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function money(value?: number) {
+  return `₹${Number(value || 0).toLocaleString('en-IN')}`;
+}
 
 export default function ProjectPage() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -310,6 +337,97 @@ useEffect(() => {
     <p className="font-semibold text-purple-700">
       {project.ownerApprovalStatus || 'PENDING'}
     </p>
+  </div>
+</div>
+
+<div className="mt-4 grid grid-cols-1 gap-3 xl:grid-cols-2">
+  <div className="rounded-xl bg-blue-50 p-3">
+    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+      <p className="font-semibold text-gray-800">
+        Execution Work
+      </p>
+
+      <p className="text-xs font-bold text-blue-700">
+        {project.executionSummary?.completedActivities || 0}/
+        {project.executionSummary?.totalActivities || 0} done ·{' '}
+        {project.executionSummary?.percentage || 0}%
+      </p>
+    </div>
+
+    <div className="mt-2 h-2 overflow-hidden rounded-full bg-blue-100">
+      <div
+        className="h-full rounded-full bg-blue-600"
+        style={{
+          width: `${project.executionSummary?.percentage || 0}%`,
+        }}
+      />
+    </div>
+
+    <div className="mt-3 grid gap-2 text-xs text-gray-700 md:grid-cols-3">
+      <div className="rounded-lg bg-white p-2">
+        <p className="text-gray-500">Running</p>
+        <p className="mt-1 font-semibold">
+          {project.executionSummary?.runningActivity
+            ? formatLabel(project.executionSummary.runningActivity)
+            : '-'}
+        </p>
+      </div>
+
+      <div className="rounded-lg bg-white p-2">
+        <p className="text-gray-500">Done</p>
+        <p className="mt-1 font-semibold">
+          {project.executionSummary?.latestCompletedActivity
+            ? formatLabel(project.executionSummary.latestCompletedActivity)
+            : '-'}
+        </p>
+      </div>
+
+      <div className="rounded-lg bg-white p-2">
+        <p className="text-gray-500">Next</p>
+        <p className="mt-1 font-semibold">
+          {project.executionSummary?.nextPendingActivity
+            ? formatLabel(project.executionSummary.nextPendingActivity)
+            : '-'}
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div className="rounded-xl bg-green-50 p-3">
+    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+      <p className="font-semibold text-gray-800">
+        Payment Received
+      </p>
+
+      <p className="text-xs font-bold text-green-700">
+        {project.paymentSummary?.percentage || 0}%
+      </p>
+    </div>
+
+    <div className="mt-2 h-2 overflow-hidden rounded-full bg-green-100">
+      <div
+        className="h-full rounded-full bg-green-600"
+        style={{
+          width: `${project.paymentSummary?.percentage || 0}%`,
+        }}
+      />
+    </div>
+
+    <div className="mt-3 grid gap-2 text-xs text-gray-700 md:grid-cols-2">
+      <div className="rounded-lg bg-white p-2">
+        <p className="text-gray-500">Received</p>
+        <p className="mt-1 font-semibold text-green-700">
+          {money(project.paymentSummary?.receivedAmount)}
+        </p>
+      </div>
+
+      <div className="rounded-lg bg-white p-2">
+        <p className="text-gray-500">Total</p>
+        <p className="mt-1 font-semibold">
+          {money(project.paymentSummary?.totalAmount)}
+        </p>
+      </div>
+    </div>
   </div>
 </div>
 
