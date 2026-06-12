@@ -28,7 +28,9 @@ type PaymentRow = {
   projectOwnerName?: string;
   projectSerial?: string;
   finalCost?: number;
-  projectStatus?: string;
+projectReceivedAmount?: number;
+paymentReceivedPercentage?: number;
+projectStatus?: string;
 };
 
 type BranchOption = {
@@ -48,6 +50,9 @@ export default function PaymentCollectionPage() {
   const [branches, setBranches] = useState<BranchOption[]>([]);
 const [projectOwners, setProjectOwners] = useState<ProjectOwnerOption[]>([]);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+const [totalPages, setTotalPages] = useState(1);
+const [totalRecords, setTotalRecords] = useState(0);
 
   const [approvalStatus, setApprovalStatus] = useState('');
 
@@ -102,12 +107,15 @@ const [projectOwners, setProjectOwners] = useState<ProjectOwnerOption[]>([]);
           status,
           approvalStatus,
           pendingOnly: pendingOnly ? 'true' : '',
-          limit: 100,
+          page,
+limit: 20,
         },
         headers: getAuthHeaders(),
       });
 
       setRows(Array.isArray(res.data?.data) ? res.data.data : []);
+      setTotalPages(res.data?.pagination?.totalPages || 1);
+setTotalRecords(res.data?.pagination?.total || 0);
     } catch (error) {
       console.error('Failed to load payment collection:', error);
       setRows([]);
@@ -121,6 +129,11 @@ const [projectOwners, setProjectOwners] = useState<ProjectOwnerOption[]>([]);
     fetchFilterOptions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+  fetchPayments();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [page]);
 
   const totalAmount = rows.reduce(
   (sum, item) => sum + Number(item.amount || 0),
@@ -147,7 +160,7 @@ const totalPending = Math.max(totalAmount - totalPaid, 0);
     setStatus('');
     setApprovalStatus('');
     setPendingOnly(false);
-
+    setPage(1);
     setTimeout(fetchPayments, 0);
   };
 
@@ -271,7 +284,10 @@ const totalPending = Math.max(totalAmount - totalPaid, 0);
 
         <div className="mt-4 flex flex-wrap gap-2">
           <button
-            onClick={fetchPayments}
+  onClick={() => {
+    setPage(1);
+    fetchPayments();
+  }}
             className="rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white"
           >
             {loading ? 'Loading...' : 'Apply Filters'}
@@ -353,6 +369,31 @@ const totalPending = Math.max(totalAmount - totalPaid, 0);
                       Pending: <b>{money(item.pendingAmount)}</b>
                     </p>
 
+                      <div className="mt-4 rounded-xl bg-white p-3 text-left">
+    <div className="flex items-center justify-between gap-2">
+      <p className="text-xs font-semibold text-gray-600">
+        Payment Received
+      </p>
+
+      <p className="text-xs font-bold text-green-700">
+        {item.paymentReceivedPercentage || 0}%
+      </p>
+    </div>
+
+    <div className="mt-2 h-2 overflow-hidden rounded-full bg-green-100">
+      <div
+        className="h-full rounded-full bg-green-600"
+        style={{
+          width: `${item.paymentReceivedPercentage || 0}%`,
+        }}
+      />
+    </div>
+
+    <p className="mt-2 text-xs text-gray-600">
+      {money(item.projectReceivedAmount)} / {money(item.finalCost)}
+    </p>
+  </div>
+
                     <Link
                       href={`/project/${item.projectId}`}
                       className="mt-3 block rounded-xl bg-blue-600 px-4 py-2 text-center text-sm font-semibold text-white"
@@ -366,6 +407,32 @@ const totalPending = Math.max(totalAmount - totalPaid, 0);
           </div>
         )}
       </div>
+
+      <div className="rounded-2xl bg-white p-4 shadow">
+  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <p className="text-sm text-gray-600">
+      Page {page} of {totalPages} · {totalRecords} record(s)
+    </p>
+
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      <button
+        onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
+        disabled={page <= 1}
+        className="rounded-xl bg-gray-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+      >
+        Previous
+      </button>
+
+      <button
+        onClick={() => setPage((prev) => Math.min(prev + 1, totalPages))}
+        disabled={page >= totalPages}
+        className="rounded-xl bg-gray-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+      >
+        Next
+      </button>
+    </div>
+  </div>
+</div>
     </div>
   );
 }
