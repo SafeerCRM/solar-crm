@@ -416,7 +416,7 @@ const loanRequiredGroups = [
     ],
   },
   {
-    label: 'Loan Document',
+    label: 'Proposal/Quotation',
     types: [
       ProjectDocumentType.JAN_SAMARTH_DOCUMENT,
       ProjectDocumentType.LOAN_SANCTION_LETTER,
