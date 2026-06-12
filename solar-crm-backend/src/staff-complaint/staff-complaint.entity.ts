@@ -69,13 +69,22 @@ export class StaffComplaint {
   @Column({ default: false })
   isHidden: boolean;
 
-  @Column({ nullable: true })
+  @Column({
+  type: 'int',
+  nullable: true,
+})
 hiddenBy: number | null;
 
-@Column({ type: 'text', nullable: true })
+@Column({
+  type: 'text',
+  nullable: true,
+})
 hiddenByName: string | null;
 
-@Column({ type: 'timestamp', nullable: true })
+@Column({
+  type: 'timestamp',
+  nullable: true,
+})
 hiddenAt: Date | null;
 
   @CreateDateColumn()
