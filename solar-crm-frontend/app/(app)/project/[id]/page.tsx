@@ -3160,6 +3160,43 @@ const remainingAmountToCollect =
   projectFinalAmount -
   totalCollectedAmount;
 
+  const approveAndReserveMaterialRequest = async (
+  requestId: number,
+) => {
+  const confirmed = window.confirm(
+    'Approve this material request and reserve stock?',
+  );
+
+  if (!confirmed) return;
+
+  try {
+    const token = localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/material-requests/${requestId}/approve-stock`,
+      {},
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Material request approved and stock reserved');
+
+    await fetchMaterialRequests();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to approve and reserve stock',
+    );
+  }
+};
+
   return (
     <div className="mx-auto max-w-7xl space-y-5">
       <div className="rounded-2xl bg-white p-5 shadow">
@@ -4477,11 +4514,21 @@ const remainingAmountToCollect =
                   </div>
 
                   <div className="text-right">
-                    <p className="text-sm font-semibold text-blue-700">
-                      {
-                        request.status
-                      }
-                    </p>
+  <p className="text-sm font-semibold text-blue-700">
+    {request.status}
+  </p>
+
+  {request.status === 'SUBMITTED' && (
+    <button
+      type="button"
+      onClick={() =>
+        approveAndReserveMaterialRequest(request.id)
+      }
+      className="mt-2 rounded-xl bg-green-600 px-3 py-2 text-xs font-semibold text-white"
+    >
+      Approve & Reserve Stock
+    </button>
+  )}
 
                     <p className="mt-2 text-lg font-bold text-green-700">
                       ₹
