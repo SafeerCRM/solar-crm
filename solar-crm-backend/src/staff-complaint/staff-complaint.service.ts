@@ -172,23 +172,25 @@ if (filters?.followUpDate) {
 
   const mimeType = String(file.mimetype || '');
 
-  const allowedAudioTypes = [
-    'audio/webm',
-    'audio/mpeg',
-    'audio/mp3',
-    'audio/wav',
-    'audio/x-wav',
-    'audio/mp4',
-    'audio/m4a',
-    'video/webm',
-    'application/octet-stream',
-  ];
+  const originalName = String(file.originalname || '').toLowerCase();
 
-  if (!allowedAudioTypes.includes(mimeType)) {
-    throw new BadRequestException(
-      'Only audio files are allowed',
-    );
-  }
+const isAllowedAudio =
+  mimeType.startsWith('audio/') ||
+  mimeType === 'video/webm' ||
+  mimeType === 'application/octet-stream' ||
+  originalName.endsWith('.m4a') ||
+  originalName.endsWith('.mp3') ||
+  originalName.endsWith('.wav') ||
+  originalName.endsWith('.webm') ||
+  originalName.endsWith('.aac') ||
+  originalName.endsWith('.ogg') ||
+  originalName.endsWith('.mp4');
+
+if (!isAllowedAudio) {
+  throw new BadRequestException(
+    'Only audio files are allowed',
+  );
+}
 
   const maxSize = 10 * 1024 * 1024;
 
@@ -212,7 +214,6 @@ if (filters?.followUpDate) {
 
   const supabase = createClient(supabaseUrl, serviceKey);
 
-  const originalName = String(file.originalname || 'audio');
   const extension = originalName.includes('.')
     ? originalName.split('.').pop()
     : mimeType.split('/')[1] || 'webm';
