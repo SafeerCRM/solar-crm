@@ -1176,6 +1176,7 @@ if (
     'loanAmount',
     'subsidyType',
     'projectCost',
+    'finalCost',
     'discomName',
     'discomExpenditureType',
     'discomExpenditureAmount',
