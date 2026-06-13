@@ -516,4 +516,69 @@ async getFollowUpSummary(user: any) {
     overdueFollowUps,
   };
 }
+
+async getFollowUpsByType(type: string, user: any) {
+  if (!this.isOwner(user)) {
+    throw new ForbiddenException('Only owner can view complaint follow-ups');
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const qb = this.complaintRepository
+    .createQueryBuilder('complaint')
+    .where('complaint.isHidden = false')
+    .andWhere('complaint.followUpDate IS NOT NULL');
+
+  const normalizedType = String(type || '').toUpperCase();
+
+  if (normalizedType === 'TODAY') {
+    qb.andWhere('complaint.followUpDate = :today', {
+      today: today.toISOString().split('T')[0],
+    });
+  }
+
+  if (normalizedType === 'OVERDUE') {
+    qb.andWhere('complaint.followUpDate < :today', {
+      today: today.toISOString().split('T')[0],
+    });
+    qb.andWhere('complaint.status NOT IN (:...closedStatuses)', {
+      closedStatuses: [
+        StaffComplaintStatus.RESOLVED,
+        StaffComplaintStatus.REJECTED,
+      ],
+    });
+  }
+
+  if (normalizedType === 'UPCOMING') {
+    qb.andWhere('complaint.followUpDate >= :tomorrow', {
+      tomorrow: tomorrow.toISOString().split('T')[0],
+    });
+  }
+
+  return qb
+    .orderBy('complaint.followUpDate', 'ASC')
+    .addOrderBy('complaint.followUpTime', 'ASC')
+    .getMany();
+}
+
+async findByDate(date: string, user: any) {
+  if (!this.isOwner(user)) {
+    throw new ForbiddenException('Only owner can view complaint calendar');
+  }
+
+  return this.complaintRepository.find({
+    where: {
+      isHidden: false,
+      followUpDate: date as any,
+    },
+    order: {
+      followUpTime: 'ASC' as any,
+      createdAt: 'DESC',
+    },
+  });
+}
 }

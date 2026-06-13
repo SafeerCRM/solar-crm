@@ -33,6 +33,22 @@ export class StaffComplaintController {
     return this.staffComplaintService.create(body, user);
   }
 
+  @Get('follow-ups')
+getFollowUpsByType(
+  @Query('type') type: string,
+  @CurrentUser() user: any,
+) {
+  return this.staffComplaintService.getFollowUpsByType(type, user);
+}
+
+@Get('by-date')
+findByDate(
+  @Query('date') date: string,
+  @CurrentUser() user: any,
+) {
+  return this.staffComplaintService.findByDate(date, user);
+}
+
   @Get()
   findAll(
     @Query('page') page?: string,
