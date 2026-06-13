@@ -5,6 +5,7 @@ import axios from 'axios';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import CustomerUpdatesTab from '@/app/components/meeting/project/CustomerUpdatesTab';
+import SearchableUserSelect from '@/app/components/meeting/common/SearchableUserSelect';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -74,6 +75,7 @@ type Project = {
   branchName?: string;
   projectOwnerName?: string;
 projectOwnerRole?: string;
+projectOwnerId?: number;
   electricityKNumber?: string;
   customerGmail?: string;
   customerUserId?: number;
@@ -3852,6 +3854,26 @@ const remainingAmountToCollect =
   </h3>
 
   <input placeholder="Branch Name" value={editForm.branchName} onChange={(e) => setEditForm({ ...editForm, branchName: e.target.value })} className="rounded-xl border p-3" />
+  <div className="md:col-span-2">
+  <SearchableUserSelect
+    label="Project Owner"
+    selectedUserId={editForm.projectOwnerId}
+    selectedUserName={editForm.projectOwnerName}
+    selectedUserRole={editForm.projectOwnerRole}
+    onSelect={(user) =>
+      setEditForm({
+        ...editForm,
+        projectOwnerId: String(user.id),
+        projectOwnerName: user.name,
+        projectOwnerRole: user.role,
+      })
+    }
+  />
+
+  <p className="mt-1 text-xs text-gray-500">
+    For old/backdated projects, leave unchanged to keep the current owner.
+  </p>
+</div>
   <input placeholder="Project Type" value={editForm.projectType} onChange={(e) => setEditForm({ ...editForm, projectType: e.target.value })} className="rounded-xl border p-3" />
   <input placeholder="Project Size" value={editForm.projectSize} onChange={(e) => setEditForm({ ...editForm, projectSize: e.target.value })} className="rounded-xl border p-3" />
   <input placeholder="Electricity K Number" value={editForm.electricityKNumber} onChange={(e) => setEditForm({ ...editForm, electricityKNumber: e.target.value })} className="rounded-xl border p-3" />
