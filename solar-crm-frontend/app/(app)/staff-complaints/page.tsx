@@ -2,6 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import axios from 'axios';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { DateCalendar } from '@mui/x-date-pickers/DateCalendar';
+import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
+import dayjs, { Dayjs } from 'dayjs';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -122,6 +127,12 @@ const [selectedCalendarDate, setSelectedCalendarDate] = useState('');
 const [calendarMonth, setCalendarMonth] = useState(
   new Date().toISOString().slice(0, 7),
 );
+
+const [todayComplaintFollowUps, setTodayComplaintFollowUps] = useState<StaffComplaint[]>([]);
+const [overdueComplaintFollowUps, setOverdueComplaintFollowUps] = useState<StaffComplaint[]>([]);
+const [upcomingComplaintFollowUps, setUpcomingComplaintFollowUps] = useState<StaffComplaint[]>([]);
+const [selectedDate, setSelectedDate] = useState<Dayjs | null>(null);
+const [selectedDateComplaints, setSelectedDateComplaints] = useState<StaffComplaint[]>([]);
 
   const [showHidden, setShowHidden] = useState(false);
   const [complaintAudioFile, setComplaintAudioFile] =
@@ -252,6 +263,66 @@ const [ownerAudioFiles, setOwnerAudioFiles] =
     });
   } catch (error) {
     console.error('Failed to load follow-up summary', error);
+  }
+};
+
+const fetchComplaintFollowUpsByType = async (
+  type: 'TODAY' | 'OVERDUE' | 'UPCOMING',
+) => {
+  if (!isOwner) return;
+
+  try {
+    const res = await axios.get(
+      `${API_BASE_URL}/staff-complaints/follow-ups`,
+      {
+        params: { type },
+        headers: getHeaders(),
+      },
+    );
+
+    const data = Array.isArray(res.data) ? res.data : [];
+
+    if (type === 'TODAY') setTodayComplaintFollowUps(data);
+    if (type === 'OVERDUE') setOverdueComplaintFollowUps(data);
+    if (type === 'UPCOMING') setUpcomingComplaintFollowUps(data);
+  } catch (error) {
+    console.error(`Failed to load ${type} complaint follow-ups`, error);
+  }
+};
+
+const fetchSelectedDateComplaints = async (date: Dayjs | null) => {
+  if (!date || !isOwner) return;
+
+  setSelectedDate(date);
+
+  const formatted = date.format('YYYY-MM-DD');
+
+  try {
+    const res = await axios.get(
+      `${API_BASE_URL}/staff-complaints/by-date`,
+      {
+        params: { date: formatted },
+        headers: getHeaders(),
+      },
+    );
+
+    setSelectedDateComplaints(Array.isArray(res.data) ? res.data : []);
+  } catch (error) {
+    console.error('Failed to load selected date complaints', error);
+    setSelectedDateComplaints([]);
+  }
+};
+
+const refreshComplaintFollowUpNotifications = async () => {
+  if (!isOwner) return;
+
+  await fetchFollowUpSummary();
+  await fetchComplaintFollowUpsByType('TODAY');
+  await fetchComplaintFollowUpsByType('OVERDUE');
+  await fetchComplaintFollowUpsByType('UPCOMING');
+
+  if (selectedDate) {
+    await fetchSelectedDateComplaints(selectedDate);
   }
 };
 
@@ -423,7 +494,7 @@ await axios.patch(
 }));
 
       fetchComplaints();
-fetchFollowUpSummary();
+refreshComplaintFollowUpNotifications();
 
 setOwnerAudioFiles((prev) => ({
   ...prev,
@@ -536,7 +607,7 @@ setSelectedCalendarDate('');
 
   useEffect(() => {
   if (isOwner) {
-    fetchFollowUpSummary();
+    refreshComplaintFollowUpNotifications();
   }
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [isOwner]);
@@ -606,61 +677,56 @@ setSelectedCalendarDate('');
 )}
 
 {isOwner && (
-  <div className="rounded-2xl bg-white p-5 shadow">
-    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-      <div>
-        <h2 className="text-lg font-bold text-gray-800">
-          Complaint Follow-up Calendar
-        </h2>
+  <div className="grid gap-4 xl:grid-cols-2">
+    <div className="rounded-2xl bg-white p-5 shadow">
+      <h2 className="text-lg font-bold text-gray-800">
+        Complaint Follow-up Calendar
+      </h2>
 
-        <p className="text-sm text-gray-500">
-          Select a date to filter complaints by follow-up date.
-        </p>
-      </div>
+      <p className="mt-1 text-sm text-gray-500">
+        Select a date to view complaint follow-ups for that day.
+      </p>
 
-      <input
-        type="month"
-        value={calendarMonth}
-        onChange={(e) => {
-          setCalendarMonth(e.target.value);
-          setSelectedCalendarDate('');
-        }}
-        className="rounded-xl border p-3"
-      />
+      <LocalizationProvider dateAdapter={AdapterDayjs}>
+        <DateCalendar
+          value={selectedDate}
+          onChange={(newValue) => fetchSelectedDateComplaints(newValue)}
+        />
+      </LocalizationProvider>
     </div>
 
-    <div className="mt-4 grid grid-cols-7 gap-2 text-center text-xs font-bold text-gray-500">
-      {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-        <div key={day}>{day}</div>
-      ))}
-    </div>
+    <div className="rounded-2xl bg-white p-5 shadow">
+      <h2 className="text-lg font-bold text-gray-800">
+        Selected Date Follow-ups
+      </h2>
 
-    <CalendarGrid
-      calendarMonth={calendarMonth}
-      selectedCalendarDate={selectedCalendarDate}
-      complaints={items}
-      onSelectDate={(date) => {
-        setSelectedCalendarDate(date);
-        setFollowUpDateFilter(date);
-        setPage(1);
-        setTimeout(fetchComplaints, 0);
-      }}
+      <p className="mt-1 text-sm text-gray-500">
+        {selectedDate
+          ? selectedDate.format('DD MMMM YYYY')
+          : 'Select a date from calendar'}
+      </p>
+
+      <ComplaintMiniList items={selectedDateComplaints} />
+    </div>
+  </div>
+)}
+
+{isOwner && (
+  <div className="grid gap-4 xl:grid-cols-3">
+    <NotificationPanel
+      title="Today's Complaint Follow-ups"
+      items={todayComplaintFollowUps}
     />
 
-    {selectedCalendarDate && (
-      <button
-        type="button"
-        onClick={() => {
-          setSelectedCalendarDate('');
-          setFollowUpDateFilter('');
-          setPage(1);
-          setTimeout(fetchComplaints, 0);
-        }}
-        className="mt-4 rounded-xl bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-800"
-      >
-        Clear Calendar Date Filter
-      </button>
-    )}
+    <NotificationPanel
+      title="Overdue Complaint Follow-ups"
+      items={overdueComplaintFollowUps}
+    />
+
+    <NotificationPanel
+      title="Upcoming Complaint Follow-ups"
+      items={upcomingComplaintFollowUps}
+    />
   </div>
 )}
 
@@ -1173,43 +1239,58 @@ setSelectedCalendarDate('');
   className="rounded-xl border p-3"
 />
 
-<input
-  type="time"
-  value={
-    statusEdit[item.id]?.followUpTime ||
-    item.followUpTime ||
-    ''
-  }
-  onChange={(e) =>
-    setStatusEdit((prev) => ({
-      ...prev,
-      [item.id]: {
-        status:
-          prev[item.id]?.status ||
-          item.status ||
-          'OPEN',
-        ownerRemarks:
-          prev[item.id]?.ownerRemarks ||
-          item.ownerRemarks ||
-          '',
-        ownerAudioUrl:
-          prev[item.id]?.ownerAudioUrl ||
-          item.ownerAudioUrl ||
-          '',
-        followUpDate:
-          prev[item.id]?.followUpDate ||
-          item.followUpDate ||
-          '',
-        followUpTime: e.target.value,
-        nextAction:
-          prev[item.id]?.nextAction ||
-          item.nextAction ||
-          '',
+<LocalizationProvider dateAdapter={AdapterDayjs}>
+  <MobileTimePicker
+    label="Follow-up Time"
+    ampm
+    ampmInClock
+    value={
+      statusEdit[item.id]?.followUpTime || item.followUpTime
+        ? dayjs(
+            `2026-01-01T${
+              statusEdit[item.id]?.followUpTime ||
+              item.followUpTime
+            }`,
+          )
+        : null
+    }
+    onChange={(newTime) =>
+      setStatusEdit((prev) => ({
+        ...prev,
+        [item.id]: {
+          status:
+            prev[item.id]?.status ||
+            item.status ||
+            'OPEN',
+          ownerRemarks:
+            prev[item.id]?.ownerRemarks ||
+            item.ownerRemarks ||
+            '',
+          ownerAudioUrl:
+            prev[item.id]?.ownerAudioUrl ||
+            item.ownerAudioUrl ||
+            '',
+          followUpDate:
+            prev[item.id]?.followUpDate ||
+            item.followUpDate ||
+            '',
+          followUpTime: newTime
+            ? newTime.format('HH:mm')
+            : '',
+          nextAction:
+            prev[item.id]?.nextAction ||
+            item.nextAction ||
+            '',
+        },
+      }))
+    }
+    slotProps={{
+      textField: {
+        fullWidth: true,
       },
-    }))
-  }
-  className="rounded-xl border p-3"
-/>
+    }}
+  />
+</LocalizationProvider>
 
 <input
   placeholder="Next Action"
@@ -1406,79 +1487,74 @@ function Info({
   );
 }
 
-function CalendarGrid({
-  calendarMonth,
-  selectedCalendarDate,
-  complaints,
-  onSelectDate,
+function ComplaintMiniList({
+  items,
 }: {
-  calendarMonth: string;
-  selectedCalendarDate: string;
-  complaints: StaffComplaint[];
-  onSelectDate: (date: string) => void;
+  items: StaffComplaint[];
 }) {
-  const [year, month] = calendarMonth.split('-').map(Number);
-
-  const firstDay = new Date(year, month - 1, 1);
-  const lastDay = new Date(year, month, 0);
-
-  const startOffset = firstDay.getDay();
-  const totalDays = lastDay.getDate();
-
-  const today = getTodayDateString();
-
-  const followUpDateSet = new Set(
-    complaints
-      .map((item) => item.followUpDate)
-      .filter(Boolean) as string[],
-  );
-
-  const cells = [];
-
-  for (let i = 0; i < startOffset; i++) {
-    cells.push(null);
-  }
-
-  for (let day = 1; day <= totalDays; day++) {
-    const date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    cells.push(date);
+  if (!items.length) {
+    return (
+      <p className="mt-4 text-sm text-gray-500">
+        No complaint follow-ups found.
+      </p>
+    );
   }
 
   return (
-    <div className="mt-2 grid grid-cols-7 gap-2">
-      {cells.map((date, index) => {
-        if (!date) {
-          return <div key={`empty-${index}`} />;
-        }
+    <div className="mt-4 space-y-3">
+      {items.map((item) => (
+        <div
+          key={item.id}
+          className="rounded-xl border bg-gray-50 p-3"
+        >
+          <p className="font-bold text-gray-800">
+            #{item.id} - {item.title || 'Complaint'}
+          </p>
 
-        const day = Number(date.split('-')[2]);
-        const hasFollowUp = followUpDateSet.has(date);
-        const isSelected = selectedCalendarDate === date;
-        const isToday = today === date;
+          <p className="mt-1 text-sm text-gray-600">
+            {item.createdByName || '-'} · {item.department || '-'}
+          </p>
 
-        return (
-          <button
-            key={date}
-            type="button"
-            onClick={() => onSelectDate(date)}
-            className={`min-h-[48px] rounded-xl border p-2 text-sm font-semibold ${
-              isSelected
-                ? 'bg-blue-600 text-white'
-                : hasFollowUp
-                  ? 'bg-yellow-100 text-yellow-800'
-                  : isToday
-                    ? 'bg-green-100 text-green-800'
-                    : 'bg-white text-gray-700'
-            }`}
-          >
-            {day}
+          <p className="mt-1 text-sm text-gray-700">
+            {item.followUpDate || '-'}
+            {item.followUpTime ? ` • ${item.followUpTime}` : ''}
+          </p>
 
-            {hasFollowUp && (
-              <div className="mx-auto mt-1 h-1.5 w-1.5 rounded-full bg-current" />
-            )}
-          </button>
-        );
-      })}
+          {item.nextAction && (
+            <p className="mt-1 text-sm text-gray-700">
+              {item.nextAction}
+            </p>
+          )}
+
+          <span className="mt-2 inline-block rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
+            {formatLabel(item.status)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function NotificationPanel({
+  title,
+  items,
+}: {
+  title: string;
+  items: StaffComplaint[];
+}) {
+  return (
+    <div className="rounded-2xl bg-white p-5 shadow">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-bold text-gray-800">
+          {title}
+        </h2>
+
+        <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-bold text-gray-700">
+          {items.length}
+        </span>
+      </div>
+
+      <ComplaintMiniList items={items.slice(0, 5)} />
     </div>
   );
 }
