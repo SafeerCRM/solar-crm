@@ -116,6 +116,7 @@ const navItems = [
 'PAYMENT_MANAGER',
 'ACCOUNT_MANAGER',
 'PROJECT_CONTRACTOR',
+'CUSTOMER_MANAGER',
   ],
 },
 
@@ -219,13 +220,13 @@ const navItems = [
 {
   name: 'Project Contractors',
   href: '/project/contractors',
-  roles: ['OWNER', 'PROJECT_MANAGER'],
+  roles: ['OWNER', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER',],
 },
 
 {
   name: 'Contractor Assignments',
   href: '/project/contractor-assignments',
-  roles: ['OWNER', 'PROJECT_MANAGER'],
+  roles: ['OWNER', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER',],
 },
 
 {

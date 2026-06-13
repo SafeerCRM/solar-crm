@@ -1,6 +1,11 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { DateCalendar } from '@mui/x-date-pickers/DateCalendar';
+import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
+import dayjs, { Dayjs } from 'dayjs';
 import axios from 'axios';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -285,6 +290,27 @@ type ContractorAssignment = {
   createdAt?: string;
 };
 
+type CleaningAssignment = {
+  id: number;
+  projectId: number;
+  contractorId: number;
+  contractorName?: string;
+  contractorPhone?: string;
+  cleaningDate?: string;
+  cleaningTime?: string;
+  status?: string;
+  remarks?: string;
+  completionRemarks?: string;
+  proofUrl?: string;
+  proofLatitude?: string;
+  proofLongitude?: string;
+  proofGpsAddress?: string;
+  completedAt?: string;
+  assignedByName?: string;
+  createdAt?: string;
+  project?: any;
+};
+
 type ContractorProof = {
   id: number;
   assignmentId: number;
@@ -477,6 +503,36 @@ const [contractorForm, setContractorForm] = useState({
   workScope: 'FULL_PROJECT',
   scheduledDate: '',
   amount: '',
+  remarks: '',
+});
+
+const [cleaningAssignments, setCleaningAssignments] =
+  useState<CleaningAssignment[]>([]);
+
+const [todayCleaning, setTodayCleaning] =
+  useState<CleaningAssignment[]>([]);
+
+const [overdueCleaning, setOverdueCleaning] =
+  useState<CleaningAssignment[]>([]);
+
+const [upcomingCleaning, setUpcomingCleaning] =
+  useState<CleaningAssignment[]>([]);
+
+const [selectedCleaningDate, setSelectedCleaningDate] =
+  useState<Dayjs | null>(null);
+
+const [selectedDateCleaning, setSelectedDateCleaning] =
+  useState<CleaningAssignment[]>([]);
+
+const [cleaningLoading, setCleaningLoading] = useState(false);
+
+const [cleaningForm, setCleaningForm] = useState({
+  contractorMasterId: '',
+  contractorId: '',
+  contractorName: '',
+  contractorPhone: '',
+  cleaningDate: '',
+  cleaningTime: '',
   remarks: '',
 });
 
@@ -2833,6 +2889,167 @@ scheduledDate: contractorForm.scheduledDate || undefined,
   }
 };
 
+const selectCleaningContractor = (contractorId: string) => {
+  const selected = contractors.find(
+    (item) => String(item.id) === contractorId,
+  );
+
+  if (!selected) return;
+
+  setCleaningForm((prev) => ({
+    ...prev,
+    contractorMasterId: contractorId,
+    contractorId: String(selected.linkedUserId || ''),
+    contractorName: selected.contractorName || '',
+    contractorPhone: selected.phone || '',
+  }));
+};
+
+const fetchCleaningAssignments = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/${projectId}/cleaning-assignments`,
+      {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      },
+    );
+
+    setCleaningAssignments(Array.isArray(res.data) ? res.data : []);
+  } catch (error) {
+    console.error('Failed to load cleaning assignments:', error);
+  }
+};
+
+const assignCleaning = async () => {
+  if (!cleaningForm.contractorId) {
+    alert('Please select contractor');
+    return;
+  }
+
+  if (!cleaningForm.cleaningDate) {
+    alert('Please select cleaning date');
+    return;
+  }
+
+  try {
+    setCleaningLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/cleaning/assign`,
+      {
+        projectId: Number(projectId),
+        contractorId: Number(cleaningForm.contractorId),
+        contractorName: cleaningForm.contractorName,
+        contractorPhone: cleaningForm.contractorPhone,
+        cleaningDate: cleaningForm.cleaningDate,
+        cleaningTime: cleaningForm.cleaningTime,
+        remarks: cleaningForm.remarks,
+      },
+      {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      },
+    );
+
+    alert('Cleaning assigned successfully');
+
+    setCleaningForm({
+      contractorMasterId: '',
+      contractorId: '',
+      contractorName: '',
+      contractorPhone: '',
+      cleaningDate: '',
+      cleaningTime: '',
+      remarks: '',
+    });
+
+    fetchCleaningAssignments();
+    fetchCleaningReminders('TODAY');
+    fetchCleaningReminders('OVERDUE');
+    fetchCleaningReminders('UPCOMING');
+  } catch (error: any) {
+    console.error(error);
+    alert(error?.response?.data?.message || 'Failed to assign cleaning');
+  } finally {
+    setCleaningLoading(false);
+  }
+};
+
+const fetchCleaningReminders = async (
+  type: 'TODAY' | 'OVERDUE' | 'UPCOMING',
+) => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/cleaning/reminders`,
+      {
+        params: { type },
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      },
+    );
+
+    const data = Array.isArray(res.data) ? res.data : [];
+
+    if (type === 'TODAY') setTodayCleaning(data);
+    if (type === 'OVERDUE') setOverdueCleaning(data);
+    if (type === 'UPCOMING') setUpcomingCleaning(data);
+  } catch (error) {
+    console.error('Failed to load cleaning reminders:', error);
+  }
+};
+
+const fetchCleaningByDate = async (date: Dayjs | null) => {
+  if (!date) return;
+
+  setSelectedCleaningDate(date);
+
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/cleaning/by-date`,
+      {
+        params: { date: date.format('YYYY-MM-DD') },
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      },
+    );
+
+    setSelectedDateCleaning(Array.isArray(res.data) ? res.data : []);
+  } catch (error) {
+    console.error('Failed to load cleaning by date:', error);
+    setSelectedDateCleaning([]);
+  }
+};
+
+const hideCleaningAssignment = async (id: number) => {
+  const confirmed = window.confirm('Hide this cleaning assignment?');
+
+  if (!confirmed) return;
+
+  try {
+    const token = localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/cleaning/${id}/hide`,
+      {},
+      {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      },
+    );
+
+    alert('Cleaning assignment hidden');
+
+    fetchCleaningAssignments();
+  } catch (error: any) {
+    console.error(error);
+    alert(error?.response?.data?.message || 'Failed to hide cleaning');
+  }
+};
+
 const updateContractorAssignment = async (
   assignmentId: number,
   status: string,
@@ -2970,6 +3187,7 @@ const canShareProjectPdf = hasRole([
 const canManageContractor = hasRole([
   'OWNER',
   'PROJECT_MANAGER',
+  'CUSTOMER_MANAGER',
 ]);
 
   useEffect(() => {
@@ -3020,6 +3238,10 @@ useEffect(() => {
     if (activeTab === 'CONTRACTOR_WORK') {
   fetchContractorAssignments();
   fetchContractors();
+  fetchCleaningAssignments();
+fetchCleaningReminders('TODAY');
+fetchCleaningReminders('OVERDUE');
+fetchCleaningReminders('UPCOMING');
 
   setTimeout(() => {
   contractorAssignments.forEach((item) => {
@@ -3362,6 +3584,191 @@ const remainingAmountToCollect =
         </button>
       </div>
     )}
+
+    <div className="mt-6 rounded-2xl border border-green-100 bg-green-50 p-5">
+  <h2 className="text-xl font-bold text-gray-800">
+    Assign Site Cleaning
+  </h2>
+
+  <p className="mt-1 text-sm text-gray-600">
+    Customer Manager / Owner can assign cleaning work to project contractor with reminder date and wall-clock time.
+  </p>
+
+  <div className="mt-5 grid gap-3 md:grid-cols-3">
+    <select
+      value={cleaningForm.contractorMasterId}
+      onChange={(e) => selectCleaningContractor(e.target.value)}
+      className="rounded-xl border p-3"
+    >
+      <option value="">Select Contractor</option>
+
+      {contractors.map((contractor) => (
+        <option key={contractor.id} value={contractor.id}>
+          {contractor.contractorName} - {contractor.phone}
+        </option>
+      ))}
+    </select>
+
+    <input
+      value={cleaningForm.contractorName}
+      readOnly
+      placeholder="Contractor Name"
+      className="rounded-xl border bg-gray-100 p-3"
+    />
+
+    <input
+      value={cleaningForm.contractorPhone}
+      readOnly
+      placeholder="Contractor Phone"
+      className="rounded-xl border bg-gray-100 p-3"
+    />
+
+    <input
+      type="date"
+      value={cleaningForm.cleaningDate}
+      onChange={(e) =>
+        setCleaningForm({
+          ...cleaningForm,
+          cleaningDate: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+
+    <LocalizationProvider dateAdapter={AdapterDayjs}>
+      <MobileTimePicker
+        label="Cleaning Time"
+        ampm
+        ampmInClock
+        value={
+          cleaningForm.cleaningTime
+            ? dayjs(`2026-01-01T${cleaningForm.cleaningTime}`)
+            : null
+        }
+        onChange={(newTime) =>
+          setCleaningForm({
+            ...cleaningForm,
+            cleaningTime: newTime ? newTime.format('HH:mm') : '',
+          })
+        }
+        slotProps={{
+          textField: {
+            fullWidth: true,
+          },
+        }}
+      />
+    </LocalizationProvider>
+
+    <input
+      placeholder="Cleaning Remarks"
+      value={cleaningForm.remarks}
+      onChange={(e) =>
+        setCleaningForm({
+          ...cleaningForm,
+          remarks: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+  </div>
+
+  <button
+    onClick={assignCleaning}
+    disabled={cleaningLoading}
+    className="mt-4 rounded-xl bg-green-600 px-5 py-3 font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+  >
+    {cleaningLoading ? 'Assigning...' : 'Assign Cleaning'}
+  </button>
+</div>
+
+<div className="rounded-2xl bg-white p-5 shadow">
+  <h2 className="text-xl font-bold text-gray-800">
+    Cleaning Reminder Calendar
+  </h2>
+
+  <div className="mt-4 grid gap-4 lg:grid-cols-2">
+    <div className="rounded-xl border p-3">
+      <LocalizationProvider dateAdapter={AdapterDayjs}>
+        <DateCalendar
+          value={selectedCleaningDate}
+          onChange={(newValue) => fetchCleaningByDate(newValue)}
+        />
+      </LocalizationProvider>
+    </div>
+
+    <div className="rounded-xl border p-4">
+      <h3 className="font-bold text-gray-800">
+        Selected Date Cleaning
+      </h3>
+
+      <CleaningMiniList items={selectedDateCleaning} />
+    </div>
+  </div>
+</div>
+
+<div className="grid gap-4 xl:grid-cols-3">
+  <CleaningPanel title="Today's Cleaning" items={todayCleaning} />
+  <CleaningPanel title="Overdue Cleaning" items={overdueCleaning} />
+  <CleaningPanel title="Upcoming Cleaning" items={upcomingCleaning} />
+</div>
+
+<div className="rounded-2xl bg-white p-5 shadow">
+  <h2 className="text-xl font-bold text-gray-800">
+    Cleaning Assignment History
+  </h2>
+
+  <div className="mt-5 space-y-3">
+    {cleaningAssignments.length === 0 ? (
+      <p className="text-sm text-gray-500">
+        No cleaning assigned yet.
+      </p>
+    ) : (
+      cleaningAssignments.map((item) => (
+        <div
+          key={item.id}
+          className="rounded-xl border bg-gray-50 p-4"
+        >
+          <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p className="font-bold text-gray-800">
+                {item.contractorName || `Contractor #${item.contractorId}`}
+              </p>
+
+              <p className="text-sm text-gray-500">
+                Phone: {item.contractorPhone || '-'}
+              </p>
+
+              <p className="mt-1 text-sm text-gray-700">
+                Cleaning: {item.cleaningDate || '-'}
+                {item.cleaningTime ? ` • ${item.cleaningTime}` : ''}
+              </p>
+
+              <p className="mt-1 text-sm text-gray-700">
+                Status: {String(item.status || '-').replaceAll('_', ' ')}
+              </p>
+
+              {item.remarks && (
+                <p className="mt-1 text-sm text-gray-600">
+                  {item.remarks}
+                </p>
+              )}
+            </div>
+
+            {canManageContractor && (
+              <button
+                type="button"
+                onClick={() => hideCleaningAssignment(item.id)}
+                className="rounded-xl bg-red-100 px-4 py-2 text-sm font-semibold text-red-700"
+              >
+                Hide
+              </button>
+            )}
+          </div>
+        </div>
+      ))
+    )}
+  </div>
+</div>
 
     <div className="rounded-2xl bg-white p-5 shadow">
       <h2 className="text-xl font-bold text-gray-800">
@@ -7229,4 +7636,65 @@ const remainingAmountToCollect =
 
     </div>
   );
+
+  function CleaningMiniList({
+  items,
+}: {
+  items: CleaningAssignment[];
+}) {
+  if (!items.length) {
+    return (
+      <p className="mt-3 text-sm text-gray-500">
+        No cleaning reminders found.
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-3 space-y-3">
+      {items.map((item) => (
+        <div key={item.id} className="rounded-xl border bg-gray-50 p-3">
+          <p className="font-bold text-gray-800">
+            {item.project?.customerName || item.contractorName || 'Cleaning'}
+          </p>
+
+          <p className="text-sm text-gray-600">
+            Contractor: {item.contractorName || '-'}
+          </p>
+
+          <p className="text-sm text-gray-600">
+            {item.cleaningDate || '-'}
+            {item.cleaningTime ? ` • ${item.cleaningTime}` : ''}
+          </p>
+
+          <p className="text-sm text-gray-600">
+            {String(item.status || '-').replaceAll('_', ' ')}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function CleaningPanel({
+  title,
+  items,
+}: {
+  title: string;
+  items: CleaningAssignment[];
+}) {
+  return (
+    <div className="rounded-2xl bg-white p-5 shadow">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-bold text-gray-800">{title}</h2>
+
+        <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-bold text-gray-700">
+          {items.length}
+        </span>
+      </div>
+
+      <CleaningMiniList items={items.slice(0, 5)} />
+    </div>
+  );
+}
 }

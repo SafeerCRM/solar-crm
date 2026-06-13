@@ -23,6 +23,20 @@ type ContractorProject = {
   remarks?: string;
   assignedByName?: string;
   createdAt?: string;
+    project?: {
+    id?: number;
+    customerName?: string;
+    customerPhone?: string;
+    address?: string;
+    gpsAddress?: string;
+    gpsLatitude?: number;
+    gpsLongitude?: number;
+    city?: string;
+    zone?: string;
+    branchName?: string;
+    projectSize?: string;
+    projectOwnerName?: string;
+  };
 };
 
 type ContractorProof = {
@@ -48,6 +62,21 @@ type ContractorComment = {
   createdByName?: string;
   createdByRole?: string;
   createdAt?: string;
+};
+
+type CleaningAssignment = {
+  id: number;
+  projectId: number;
+  contractorId: number;
+  contractorName?: string;
+  contractorPhone?: string;
+  cleaningDate?: string;
+  cleaningTime?: string;
+  status?: string;
+  remarks?: string;
+  completionRemarks?: string;
+  proofUrl?: string;
+  project?: any;
 };
 
 const CONTRACTOR_REQUIRED_PROOFS_BY_SCOPE: Record<string, string[]> = {
@@ -125,6 +154,14 @@ const [commentText, setCommentText] =
 
 const [commentLoadingId, setCommentLoadingId] =
   useState<number | null>(null);
+  const [cleaningAssignments, setCleaningAssignments] =
+  useState<CleaningAssignment[]>([]);
+
+const [cleaningRemarks, setCleaningRemarks] =
+  useState<Record<number, string>>({});
+
+const [cleaningUpdatingId, setCleaningUpdatingId] =
+  useState<number | null>(null);
 
   const fetchProjects = async () => {
     try {
@@ -165,6 +202,32 @@ assignedProjects.forEach((item: ContractorProject) => {
     }
   };
 
+  const fetchCleaningAssignments = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/cleaning/my`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setCleaningAssignments(
+      Array.isArray(res.data) ? res.data : [],
+    );
+  } catch (error) {
+    console.error(
+      'Failed to load cleaning assignments:',
+      error,
+    );
+  }
+};
+
   const updateContractorWork = async (
   assignmentId: number,
   status: string,
@@ -202,6 +265,46 @@ assignedProjects.forEach((item: ContractorProject) => {
     );
   } finally {
     setUpdatingId(null);
+  }
+};
+
+const updateCleaningStatus = async (
+  id: number,
+  status: string,
+) => {
+  try {
+    setCleaningUpdatingId(id);
+
+    const token = localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/cleaning/${id}`,
+      {
+        status,
+        completionRemarks:
+          cleaningRemarks[id] || '',
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Cleaning updated');
+
+    fetchCleaningAssignments();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to update cleaning',
+    );
+  } finally {
+    setCleaningUpdatingId(null);
   }
 };
 
@@ -437,8 +540,9 @@ const submitComment = async (
 };
 
   useEffect(() => {
-    fetchProjects();
-  }, []);
+  fetchProjects();
+  fetchCleaningAssignments();
+}, []);
 
   return (
     <div className="space-y-5">
@@ -476,6 +580,56 @@ const submitComment = async (
                   <p className="text-lg font-bold text-gray-800">
                     Project #{item.projectId}
                   </p>
+
+                  {item.project && (
+  <div className="mt-3 rounded-xl bg-blue-50 p-3">
+    <p className="font-semibold text-gray-800">
+      Customer: {item.project.customerName || '-'}
+    </p>
+
+    <p className="text-sm text-gray-600">
+      Phone: {item.project.customerPhone || '-'}
+    </p>
+
+    <p className="text-sm text-gray-600">
+      Address:{' '}
+      {item.project.gpsAddress ||
+        item.project.address ||
+        '-'}
+    </p>
+
+    <div className="mt-3 flex flex-wrap gap-2">
+      {item.project.customerPhone && (
+        <a
+          href={`tel:${item.project.customerPhone}`}
+          className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white"
+        >
+          Call Customer
+        </a>
+      )}
+
+      {(item.project.gpsLatitude &&
+        item.project.gpsLongitude) ||
+      item.project.gpsAddress ? (
+        <a
+          target="_blank"
+          rel="noreferrer"
+          href={
+            item.project.gpsLatitude &&
+            item.project.gpsLongitude
+              ? `https://www.google.com/maps?q=${item.project.gpsLatitude},${item.project.gpsLongitude}`
+              : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                  item.project.gpsAddress || '',
+                )}`
+          }
+          className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white"
+        >
+          Open GPS
+        </a>
+      ) : null}
+    </div>
+  </div>
+)}
 
                   <p className="mt-1 text-sm text-gray-500">
                     Contractor:{' '}
@@ -832,6 +986,83 @@ const submitComment = async (
       ))
     )}
   </div>
+</div>
+
+<div className="mt-5 rounded-xl border border-green-200 bg-green-50 p-4">
+  <h3 className="font-bold text-gray-800">
+    Cleaning Work
+  </h3>
+
+  {cleaningAssignments
+    .filter(
+      (cleaning) =>
+        Number(cleaning.projectId) ===
+        Number(item.projectId),
+    )
+    .map((cleaning) => (
+      <div
+        key={cleaning.id}
+        className="mt-3 rounded-xl border bg-white p-3"
+      >
+        <p className="font-semibold text-gray-800">
+          Cleaning Date:{' '}
+          {cleaning.cleaningDate || '-'}
+        </p>
+
+        <p className="text-sm text-gray-600">
+          Time: {cleaning.cleaningTime || '-'}
+        </p>
+
+        <p className="text-sm text-gray-600">
+          Status: {cleaning.status || '-'}
+        </p>
+
+        <textarea
+          placeholder="Completion remarks"
+          value={cleaningRemarks[cleaning.id] || ''}
+          onChange={(e) =>
+            setCleaningRemarks((prev) => ({
+              ...prev,
+              [cleaning.id]: e.target.value,
+            }))
+          }
+          className="mt-3 w-full rounded-xl border p-3"
+          rows={2}
+        />
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            onClick={() =>
+              updateCleaningStatus(
+                cleaning.id,
+                'IN_PROGRESS',
+              )
+            }
+            disabled={
+              cleaningUpdatingId === cleaning.id
+            }
+            className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+          >
+            Start Cleaning
+          </button>
+
+          <button
+            onClick={() =>
+              updateCleaningStatus(
+                cleaning.id,
+                'COMPLETED',
+              )
+            }
+            disabled={
+              cleaningUpdatingId === cleaning.id
+            }
+            className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white"
+          >
+            Complete Cleaning
+          </button>
+        </div>
+      </div>
+    ))}
 </div>
                 </div>
               </div>
