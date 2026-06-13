@@ -3701,15 +3701,36 @@ const remainingAmountToCollect =
         Selected Date Cleaning
       </h3>
 
-      <CleaningMiniList items={selectedDateCleaning} />
+      <CleaningMiniList
+  items={selectedDateCleaning.filter(
+    (item) => Number(item.projectId) === Number(projectId),
+  )}
+/>
     </div>
   </div>
 </div>
 
 <div className="grid gap-4 xl:grid-cols-3">
-  <CleaningPanel title="Today's Cleaning" items={todayCleaning} />
-  <CleaningPanel title="Overdue Cleaning" items={overdueCleaning} />
-  <CleaningPanel title="Upcoming Cleaning" items={upcomingCleaning} />
+  <CleaningPanel
+  title="Today's Cleaning"
+  items={todayCleaning.filter(
+    (item) => Number(item.projectId) === Number(projectId),
+  )}
+/>
+
+<CleaningPanel
+  title="Overdue Cleaning"
+  items={overdueCleaning.filter(
+    (item) => Number(item.projectId) === Number(projectId),
+  )}
+/>
+
+<CleaningPanel
+  title="Upcoming Cleaning"
+  items={upcomingCleaning.filter(
+    (item) => Number(item.projectId) === Number(projectId),
+  )}
+/>
 </div>
 
 <div className="rounded-2xl bg-white p-5 shadow">

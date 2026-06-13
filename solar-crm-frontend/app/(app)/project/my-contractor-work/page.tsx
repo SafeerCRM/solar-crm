@@ -556,6 +556,135 @@ const submitComment = async (
         </p>
       </div>
 
+      <div className="rounded-2xl bg-green-50 p-5 shadow">
+  <div className="flex items-center justify-between">
+    <h2 className="text-xl font-bold text-gray-800">
+      My Cleaning Work
+    </h2>
+
+    <span className="rounded-full bg-green-100 px-3 py-1 text-sm font-semibold text-green-700">
+      {cleaningAssignments.length}
+    </span>
+  </div>
+
+  {cleaningAssignments.length === 0 ? (
+    <p className="mt-4 text-sm text-gray-500">
+      No cleaning assignments available.
+    </p>
+  ) : (
+    <div className="mt-4 space-y-4">
+      {cleaningAssignments.map((cleaning) => (
+        <div
+          key={cleaning.id}
+          className="rounded-xl border bg-white p-4"
+        >
+          <p className="font-bold text-gray-800">
+            Project #{cleaning.projectId}
+          </p>
+
+          <p className="mt-1 text-sm text-gray-700">
+            Customer:{' '}
+            {cleaning.project?.customerName || '-'}
+          </p>
+
+          <p className="text-sm text-gray-700">
+            Phone:{' '}
+            {cleaning.project?.customerPhone || '-'}
+          </p>
+
+          <p className="text-sm text-gray-700">
+            Date: {cleaning.cleaningDate || '-'}
+          </p>
+
+          <p className="text-sm text-gray-700">
+            Time: {cleaning.cleaningTime || '-'}
+          </p>
+
+          <p className="text-sm text-gray-700">
+            Status: {cleaning.status || '-'}
+          </p>
+
+          <p className="mt-2 text-sm text-gray-700">
+            {cleaning.remarks || '-'}
+          </p>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            {cleaning.project?.customerPhone && (
+              <a
+                href={`tel:${cleaning.project.customerPhone}`}
+                className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white"
+              >
+                Call Customer
+              </a>
+            )}
+
+            {(cleaning.project?.gpsLatitude &&
+              cleaning.project?.gpsLongitude) ||
+            cleaning.project?.gpsAddress ? (
+              <a
+                target="_blank"
+                rel="noreferrer"
+                href={
+                  cleaning.project?.gpsLatitude &&
+                  cleaning.project?.gpsLongitude
+                    ? `https://www.google.com/maps?q=${cleaning.project.gpsLatitude},${cleaning.project.gpsLongitude}`
+                    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                        cleaning.project?.gpsAddress || '',
+                      )}`
+                }
+                className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white"
+              >
+                Open GPS
+              </a>
+            ) : null}
+          </div>
+
+          <textarea
+            placeholder="Completion remarks"
+            value={cleaningRemarks[cleaning.id] || ''}
+            onChange={(e) =>
+              setCleaningRemarks((prev) => ({
+                ...prev,
+                [cleaning.id]: e.target.value,
+              }))
+            }
+            className="mt-4 w-full rounded-xl border p-3"
+            rows={2}
+          />
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              onClick={() =>
+                updateCleaningStatus(
+                  cleaning.id,
+                  'IN_PROGRESS',
+                )
+              }
+              disabled={cleaningUpdatingId === cleaning.id}
+              className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+            >
+              Start Cleaning
+            </button>
+
+            <button
+              onClick={() =>
+                updateCleaningStatus(
+                  cleaning.id,
+                  'COMPLETED',
+                )
+              }
+              disabled={cleaningUpdatingId === cleaning.id}
+              className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white"
+            >
+              Complete Cleaning
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  )}
+</div>
+
       {loading ? (
         <div className="rounded-2xl bg-white p-5 shadow">
           <p className="text-sm text-gray-500">
