@@ -13,6 +13,12 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { Roles } from '../auth/roles.decorator';
+import {
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('staff-complaints')
@@ -64,6 +70,12 @@ updateComplaint(
     body,
     user,
   );
+}
+
+@Post('audio/upload')
+@UseInterceptors(FileInterceptor('file'))
+uploadAudio(@UploadedFile() file: any) {
+  return this.staffComplaintService.uploadAudio(file);
 }
 
 @Roles('OWNER')

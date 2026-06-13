@@ -11,6 +11,8 @@ import {
   StaffComplaintStatus,
   StaffComplaintPriority,
 } from './staff-complaint.entity';
+import { createClient } from '@supabase/supabase-js';
+import { randomUUID } from 'crypto';
 
 @Injectable()
 export class StaffComplaintService {
@@ -162,6 +164,85 @@ if (filters?.followUpDate) {
       },
     };
   }
+
+  async uploadAudio(file: any) {
+  if (!file) {
+    throw new BadRequestException('Audio file is required');
+  }
+
+  const mimeType = String(file.mimetype || '');
+
+  const allowedAudioTypes = [
+    'audio/webm',
+    'audio/mpeg',
+    'audio/mp3',
+    'audio/wav',
+    'audio/x-wav',
+    'audio/mp4',
+    'audio/m4a',
+    'video/webm',
+    'application/octet-stream',
+  ];
+
+  if (!allowedAudioTypes.includes(mimeType)) {
+    throw new BadRequestException(
+      'Only audio files are allowed',
+    );
+  }
+
+  const maxSize = 10 * 1024 * 1024;
+
+  if (Number(file.size || 0) > maxSize) {
+    throw new BadRequestException(
+      'Audio file is too large. Please upload below 10 MB',
+    );
+  }
+
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const bucket =
+    process.env.SUPABASE_PROJECT_DOCUMENTS_BUCKET ||
+    'project-documents';
+
+  if (!supabaseUrl || !serviceKey) {
+    throw new BadRequestException(
+      'Supabase storage is not configured',
+    );
+  }
+
+  const supabase = createClient(supabaseUrl, serviceKey);
+
+  const originalName = String(file.originalname || 'audio');
+  const extension = originalName.includes('.')
+    ? originalName.split('.').pop()
+    : mimeType.split('/')[1] || 'webm';
+
+  const safeExtension = String(extension || 'webm').replace(
+    /[^a-zA-Z0-9]/g,
+    '',
+  );
+
+  const filePath = `staff-complaints/audio/${Date.now()}-${randomUUID()}.${safeExtension}`;
+
+  const uploadResult = await supabase.storage
+    .from(bucket)
+    .upload(filePath, file.buffer, {
+      contentType: mimeType || 'audio/webm',
+      upsert: false,
+    });
+
+  if (uploadResult.error) {
+    throw new BadRequestException(uploadResult.error.message);
+  }
+
+  const publicUrlResult = supabase.storage
+    .from(bucket)
+    .getPublicUrl(filePath);
+
+  return {
+    audioUrl: publicUrlResult.data.publicUrl,
+  };
+}
 
   async updateStatus(id: number, body: any, user: any) {
     if (!this.isOwner(user)) {
