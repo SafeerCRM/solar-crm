@@ -3914,7 +3914,7 @@ const remainingAmountToCollect =
     Finance Details
   </h3>
 
-  <input type="number" placeholder="Final Cost" value={editForm.finalCost} onChange={(e) => setEditForm({ ...editForm, finalCost: e.target.value })} className="rounded-xl border p-3" />
+  <input type="number" placeholder="Project Cost After Discount" value={editForm.finalCost} onChange={(e) => setEditForm({ ...editForm, finalCost: e.target.value })} className="rounded-xl border p-3" />
   <input type="number" placeholder="Project Cost" value={editForm.projectCost} onChange={(e) => setEditForm({ ...editForm, projectCost: e.target.value })} className="rounded-xl border p-3" />
   <input type="number" placeholder="Subsidy" value={editForm.subsidy} onChange={(e) => setEditForm({ ...editForm, subsidy: e.target.value })} className="rounded-xl border p-3" />
   <input type="number" placeholder="Net Amount" value={editForm.netAmount} onChange={(e) => setEditForm({ ...editForm, netAmount: e.target.value })} className="rounded-xl border p-3" />
@@ -4046,6 +4046,10 @@ const remainingAmountToCollect =
           <Field label="Loan Amount" value={money(project.loanAmount)} />
           <Field label="Subsidy Type" value={project.subsidyType} />
           <Field label="Project Cost" value={money(project.projectCost)} />
+          <Field
+  label="Project Cost After Discount"
+  value={money(project.finalCost)}
+/>
           <Field label="DISCOM Name" value={project.discomName} />
           <Field label="DISCOM Expenditure Type" value={project.discomExpenditureType} />
           <Field label="DISCOM Expenditure Amount" value={money(project.discomExpenditureAmount)} />
@@ -7067,7 +7071,10 @@ const remainingAmountToCollect =
       <Field label="Margin Money" value={money(project.marginMoney)} />
       <Field label="Loan Amount" value={money(project.loanAmount)} />
       <Field label="Project Cost" value={money(project.projectCost)} />
-      <Field label="Final Cost" value={money(project.finalCost)} />
+      <Field
+  label="Project Cost After Discount"
+  value={money(project.finalCost)}
+/>
       <Field label="Expected Laagat" value={money(project.expectedLagat)} />
       <Field label="Expected Profit" value={money(project.expectedProfit)} />
       <Field label="Subsidy Type" value={project.subsidyType} />
