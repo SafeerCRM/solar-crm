@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  Req,
   Patch,
   Post,
   Query,
@@ -76,6 +77,15 @@ updateComplaint(
 @UseInterceptors(FileInterceptor('file'))
 uploadAudio(@UploadedFile() file: any) {
   return this.staffComplaintService.uploadAudio(file);
+}
+
+@Get('follow-up-summary')
+getFollowUpSummary(
+  @Req() req: any,
+) {
+  return this.staffComplaintService.getFollowUpSummary(
+    req.user,
+  );
 }
 
 @Roles('OWNER')

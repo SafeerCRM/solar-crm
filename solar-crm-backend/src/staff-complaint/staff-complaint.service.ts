@@ -480,4 +480,39 @@ async findHidden(user: any) {
     complaint,
   );
 }
+
+async getFollowUpSummary(user: any) {
+  const today = new Date().toISOString().split('T')[0];
+
+  const complaints =
+    await this.complaintRepository.find({
+      where: {
+        isHidden: false,
+      },
+    });
+
+  const todayFollowUps = complaints.filter(
+    (c: any) =>
+      c.followUpDate === today,
+  ).length;
+
+  const upcomingFollowUps = complaints.filter(
+    (c: any) =>
+      c.followUpDate &&
+      c.followUpDate > today,
+  ).length;
+
+  const overdueFollowUps = complaints.filter(
+    (c: any) =>
+      c.followUpDate &&
+      c.followUpDate < today &&
+      c.status !== 'RESOLVED',
+  ).length;
+
+  return {
+    todayFollowUps,
+    upcomingFollowUps,
+    overdueFollowUps,
+  };
+}
 }
