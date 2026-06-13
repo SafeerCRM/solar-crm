@@ -33,6 +33,9 @@ export class StaffComplaintController {
     @Query('search') search?: string,
     @Query('status') status?: string,
     @Query('priority') priority?: string,
+    @Query('department') department?: string,
+@Query('staffName') staffName?: string,
+@Query('followUpDate') followUpDate?: string,
     @CurrentUser() user?: any,
   ) {
     return this.staffComplaintService.findAll(
@@ -42,6 +45,9 @@ export class StaffComplaintController {
         search: search || '',
         status: status || '',
         priority: priority || '',
+        department: department || '',
+staffName: staffName || '',
+followUpDate: followUpDate || '',
       },
       user,
     );

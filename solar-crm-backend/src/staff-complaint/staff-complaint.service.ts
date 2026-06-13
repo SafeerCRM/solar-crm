@@ -32,9 +32,11 @@ export class StaffComplaintService {
       throw new BadRequestException('Complaint title is required');
     }
 
-    if (!description) {
-      throw new BadRequestException('Complaint description is required');
-    }
+    if (!description && !body?.audioUrl) {
+  throw new BadRequestException(
+    'Complaint description or audio is required',
+  );
+}
 
     const roles = Array.isArray(user?.roles) ? user.roles : [];
 
@@ -49,6 +51,8 @@ export class StaffComplaintService {
       createdBy: user?.id || user?.userId || user?.sub || null,
       createdByName: user?.name || user?.email || '',
       createdByRole: roles?.[0] || '',
+      department: body?.department || '',
+audioUrl: body?.audioUrl || '',
     });
 
     return this.complaintRepository.save(complaint);
@@ -81,6 +85,30 @@ export class StaffComplaintService {
         priority: filters.priority,
       });
     }
+
+    if (filters?.department) {
+  query.andWhere(
+    'LOWER(complaint.department) LIKE :department',
+    {
+      department: `%${String(filters.department).toLowerCase()}%`,
+    },
+  );
+}
+
+if (filters?.staffName) {
+  query.andWhere(
+    'LOWER(complaint.createdByName) LIKE :staffName',
+    {
+      staffName: `%${String(filters.staffName).toLowerCase()}%`,
+    },
+  );
+}
+
+if (filters?.followUpDate) {
+  query.andWhere('complaint.followUpDate = :followUpDate', {
+    followUpDate: filters.followUpDate,
+  });
+}
 
     if (filters?.search) {
       query.andWhere(
@@ -157,6 +185,18 @@ export class StaffComplaintService {
 
     complaint.status = body?.status || complaint.status;
     complaint.ownerRemarks = body?.ownerRemarks ?? complaint.ownerRemarks;
+
+    complaint.ownerAudioUrl =
+  body?.ownerAudioUrl ?? complaint.ownerAudioUrl;
+
+complaint.followUpDate =
+  body?.followUpDate ?? complaint.followUpDate;
+
+complaint.followUpTime =
+  body?.followUpTime ?? complaint.followUpTime;
+
+complaint.nextAction =
+  body?.nextAction ?? complaint.nextAction;
 
     if (
       complaint.status === StaffComplaintStatus.RESOLVED ||
@@ -256,9 +296,9 @@ async restore(
 
   complaint.isHidden = false;
 
-  complaint.hiddenBy = null;
-  complaint.hiddenByName = null;
-  complaint.hiddenAt = null;
+  complaint.hiddenBy = null as any;
+complaint.hiddenByName = null as any;
+complaint.hiddenAt = null as any;
 
   return this.complaintRepository.save(
     complaint,

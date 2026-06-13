@@ -9,6 +9,8 @@ import {
 export enum StaffComplaintStatus {
   OPEN = 'OPEN',
   IN_REVIEW = 'IN_REVIEW',
+  FOLLOW_UP_REQUIRED = 'FOLLOW_UP_REQUIRED',
+  WAITING_FOR_STAFF = 'WAITING_FOR_STAFF',
   RESOLVED = 'RESOLVED',
   REJECTED = 'REJECTED',
 }
@@ -65,6 +67,24 @@ export class StaffComplaint {
 
   @Column({ type: 'timestamp', nullable: true })
   resolvedAt: Date;
+
+  @Column({ type: 'text', nullable: true })
+department: string;
+
+@Column({ type: 'text', nullable: true })
+audioUrl: string;
+
+@Column({ type: 'text', nullable: true })
+ownerAudioUrl: string;
+
+@Column({ type: 'date', nullable: true })
+followUpDate: string;
+
+@Column({ type: 'text', nullable: true })
+followUpTime: string;
+
+@Column({ type: 'text', nullable: true })
+nextAction: string;
 
   @Column({ default: false })
   isHidden: boolean;
