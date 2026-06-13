@@ -47,6 +47,7 @@ import { ProjectDealerNotification } from './project-dealer-notification.entity'
 import { ProjectDealerMonthlyRequirement } from './project-dealer-monthly-requirement.entity';
 import { ProjectTradingMeeting } from './project-trading-meeting.entity';
 import { FollowUp } from '../followup/follow-up.entity';
+import { ProjectCleaningAssignment } from './project-cleaning-assignment.entity';
 
 @Module({
   imports: [
@@ -55,7 +56,7 @@ ProjectMaterialRequestItem, ProjectBranch, ProjectLoanDetail, ProjectSubsidyDeta
  ProjectVendor, ProjectPurchaseOrder, ProjectStockItem,
 ProjectStockMovement, ProjectPurchaseOrderItem, ProjectProformaInvoice,
 ProjectProformaInvoiceItem, ProjectFinalInvoice, ProjectFinalInvoiceItem, ProjectPartyLedger, ProjectContractorAssignment,
-ProjectContractorProof, ProjectContractor, ProjectContractorComment, ProjectLoanCoApplicant, ProjectAccountExpense, ProjectConsumption, ProjectCustomerUpdate, ProjectDealerOrder,
+ProjectContractorProof, ProjectCleaningAssignment, ProjectContractor, ProjectContractorComment, ProjectLoanCoApplicant, ProjectAccountExpense, ProjectConsumption, ProjectCustomerUpdate, ProjectDealerOrder,
 ProjectDealerOrderItem,
 ProjectDealerPayment,
 ProjectDealerComment, ProjectDealerNotification,

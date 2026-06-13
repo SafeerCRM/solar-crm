@@ -169,6 +169,11 @@ import {
 
 import { FollowUp } from '../followup/follow-up.entity';
 
+import {
+  ProjectCleaningAssignment,
+  ProjectCleaningStatus,
+} from './project-cleaning-assignment.entity';
+
 @Injectable()
 export class ProjectService {
 
@@ -573,6 +578,9 @@ private readonly projectAccountExpenseRepository: Repository<ProjectAccountExpen
 
 @InjectRepository(ProjectContractorAssignment)
 private readonly projectContractorAssignmentRepository: Repository<ProjectContractorAssignment>,
+
+@InjectRepository(ProjectCleaningAssignment)
+private readonly projectCleaningAssignmentRepository: Repository<ProjectCleaningAssignment>,
 
 @InjectRepository(ProjectContractorProof)
 private readonly projectContractorProofRepository: Repository<ProjectContractorProof>,
@@ -12011,16 +12019,398 @@ async getProjectContractorAssignments(projectId: number) {
 
 async getMyContractorProjects(user: any) {
   const contractorId = Number(
-  user?.id || user?.userId || user?.sub,
-);
+    user?.id || user?.userId || user?.sub,
+  );
 
   if (!contractorId) {
     throw new BadRequestException('Invalid contractor user');
   }
 
-  return this.projectContractorAssignmentRepository.find({
-    where: { contractorId },
-    order: { scheduledDate: 'DESC' },
+  const assignments =
+    await this.projectContractorAssignmentRepository.find({
+      where: { contractorId },
+      order: { scheduledDate: 'DESC' },
+    });
+
+  const projectIds = [
+    ...new Set(assignments.map((item) => item.projectId)),
+  ];
+
+  const projects = projectIds.length
+    ? await this.projectRepository.findByIds(projectIds)
+    : [];
+
+  return assignments.map((item) => {
+    const project = projects.find(
+      (p) => p.id === item.projectId,
+    );
+
+    return {
+      ...item,
+      project: project
+        ? {
+            id: project.id,
+            customerName: project.customerName || '',
+            customerPhone: project.customerPhone || '',
+            address: project.address || '',
+            gpsAddress: project.gpsAddress || '',
+            gpsLatitude: project.gpsLatitude || null,
+            gpsLongitude: project.gpsLongitude || null,
+            city: project.city || '',
+            zone: project.zone || '',
+            branchName: project.branchName || '',
+            projectSize: project.projectSize || '',
+            projectOwnerName: project.projectOwnerName || '',
+          }
+        : null,
+    };
+  });
+}
+
+private canManageCleaning(user: any) {
+  const roles = Array.isArray(user?.roles) ? user.roles : [];
+
+  return (
+    roles.includes('OWNER') ||
+    roles.includes('PROJECT_MANAGER') ||
+    roles.includes('CUSTOMER_MANAGER')
+  );
+}
+
+async assignProjectCleaning(body: any, user: any) {
+  if (!this.canManageCleaning(user)) {
+    throw new ForbiddenException(
+      'Only owner, project manager, or customer manager can assign cleaning',
+    );
+  }
+
+  const projectId = Number(body?.projectId);
+  const contractorId = Number(body?.contractorId);
+
+  if (!projectId) {
+    throw new BadRequestException('Project ID is required');
+  }
+
+  if (!contractorId) {
+    throw new BadRequestException('Contractor is required');
+  }
+
+  if (!body?.cleaningDate) {
+    throw new BadRequestException('Cleaning date is required');
+  }
+
+  const project = await this.projectRepository.findOne({
+    where: { id: projectId },
+  });
+
+  if (!project) {
+    throw new NotFoundException('Project not found');
+  }
+
+  const assignment =
+    this.projectCleaningAssignmentRepository.create({
+      projectId,
+      contractorId,
+      contractorName: body?.contractorName || '',
+      contractorPhone: body?.contractorPhone || '',
+      cleaningDate: body.cleaningDate,
+      cleaningTime: body?.cleaningTime || '',
+      status:
+        body?.status ||
+        ProjectCleaningStatus.ASSIGNED,
+      remarks: body?.remarks || '',
+      assignedBy: user?.id || user?.userId || null,
+      assignedByName: user?.name || user?.email || '',
+    });
+
+  return this.projectCleaningAssignmentRepository.save(
+    assignment,
+  );
+}
+
+async getProjectCleaningAssignments(projectId: number, user: any) {
+  return this.projectCleaningAssignmentRepository.find({
+    where: {
+      projectId,
+      isHidden: false,
+    },
+    order: {
+      cleaningDate: 'ASC' as any,
+      cleaningTime: 'ASC' as any,
+      createdAt: 'DESC',
+    },
+  });
+}
+
+async getMyCleaningAssignments(user: any) {
+  const contractorId = Number(
+    user?.id || user?.userId || user?.sub,
+  );
+
+  if (!contractorId) {
+    throw new BadRequestException('Invalid contractor user');
+  }
+
+  const cleanings =
+    await this.projectCleaningAssignmentRepository.find({
+      where: {
+        contractorId,
+        isHidden: false,
+      },
+      order: {
+        cleaningDate: 'ASC' as any,
+        cleaningTime: 'ASC' as any,
+      },
+    });
+
+  const projectIds = [
+    ...new Set(cleanings.map((item) => item.projectId)),
+  ];
+
+  const projects = projectIds.length
+    ? await this.projectRepository.findByIds(projectIds)
+    : [];
+
+  return cleanings.map((item) => {
+    const project = projects.find(
+      (p) => p.id === item.projectId,
+    );
+
+    return {
+      ...item,
+      project: project
+        ? {
+            id: project.id,
+            customerName: project.customerName || '',
+            customerPhone: project.customerPhone || '',
+            address: project.address || '',
+            gpsAddress: project.gpsAddress || '',
+            gpsLatitude: project.gpsLatitude || null,
+            gpsLongitude: project.gpsLongitude || null,
+            city: project.city || '',
+            zone: project.zone || '',
+            branchName: project.branchName || '',
+            projectSize: project.projectSize || '',
+            projectOwnerName: project.projectOwnerName || '',
+          }
+        : null,
+    };
+  });
+}
+
+async updateCleaningAssignment(id: number, body: any, user: any) {
+  const assignment =
+    await this.projectCleaningAssignmentRepository.findOne({
+      where: { id },
+    });
+
+  if (!assignment) {
+    throw new NotFoundException('Cleaning assignment not found');
+  }
+
+  const roles = Array.isArray(user?.roles) ? user.roles : [];
+  const currentUserId = Number(
+    user?.id || user?.userId || user?.sub,
+  );
+
+  const isAllowed =
+    this.canManageCleaning(user) ||
+    Number(assignment.contractorId) === currentUserId;
+
+  if (!isAllowed) {
+    throw new ForbiddenException(
+      'You are not allowed to update this cleaning assignment',
+    );
+  }
+
+  if (body?.status !== undefined) {
+    assignment.status = body.status;
+  }
+
+  if (body?.remarks !== undefined && this.canManageCleaning(user)) {
+    assignment.remarks = String(body.remarks || '').trim();
+  }
+
+  if (body?.cleaningDate !== undefined && this.canManageCleaning(user)) {
+    assignment.cleaningDate = body.cleaningDate || null;
+  }
+
+  if (body?.cleaningTime !== undefined && this.canManageCleaning(user)) {
+    assignment.cleaningTime = body.cleaningTime || '';
+  }
+
+  if (body?.completionRemarks !== undefined) {
+    assignment.completionRemarks = String(
+      body.completionRemarks || '',
+    ).trim();
+  }
+
+  if (body?.proofUrl !== undefined) {
+    assignment.proofUrl = body.proofUrl || '';
+  }
+
+  if (body?.proofLatitude !== undefined && body.proofLatitude !== '') {
+    assignment.proofLatitude = Number(body.proofLatitude);
+  }
+
+  if (body?.proofLongitude !== undefined && body.proofLongitude !== '') {
+    assignment.proofLongitude = Number(body.proofLongitude);
+  }
+
+  if (body?.proofGpsAddress !== undefined) {
+    assignment.proofGpsAddress = body.proofGpsAddress || '';
+  }
+
+  if (body?.status === ProjectCleaningStatus.COMPLETED) {
+    assignment.completedAt = new Date();
+  }
+
+  return this.projectCleaningAssignmentRepository.save(
+    assignment,
+  );
+}
+
+async hideCleaningAssignment(id: number, user: any) {
+  if (!this.canManageCleaning(user)) {
+    throw new ForbiddenException(
+      'Only owner, project manager, or customer manager can hide cleaning assignment',
+    );
+  }
+
+  const assignment =
+    await this.projectCleaningAssignmentRepository.findOne({
+      where: { id },
+    });
+
+  if (!assignment) {
+    throw new NotFoundException('Cleaning assignment not found');
+  }
+
+  assignment.isHidden = true;
+  assignment.hiddenAt = new Date();
+  assignment.hiddenBy = user?.id || user?.userId || null;
+  assignment.hiddenByName = user?.name || user?.email || '';
+
+  return this.projectCleaningAssignmentRepository.save(
+    assignment,
+  );
+}
+
+async getCleaningReminders(type: string, user: any) {
+  if (!this.canManageCleaning(user)) {
+    throw new ForbiddenException(
+      'Only owner, project manager, or customer manager can view cleaning reminders',
+    );
+  }
+
+  const today = new Date().toISOString().split('T')[0];
+  const normalizedType = String(type || '').toUpperCase();
+
+  const qb = this.projectCleaningAssignmentRepository
+    .createQueryBuilder('cleaning')
+    .where('cleaning.isHidden = false');
+
+  if (normalizedType === 'TODAY') {
+    qb.andWhere('cleaning.cleaningDate = :today', { today });
+  }
+
+  if (normalizedType === 'OVERDUE') {
+    qb.andWhere('cleaning.cleaningDate < :today', { today });
+    qb.andWhere('cleaning.status NOT IN (:...closedStatuses)', {
+      closedStatuses: [
+        ProjectCleaningStatus.COMPLETED,
+        ProjectCleaningStatus.CANCELLED,
+      ],
+    });
+  }
+
+  if (normalizedType === 'UPCOMING') {
+    qb.andWhere('cleaning.cleaningDate > :today', { today });
+  }
+
+  const cleanings = await qb
+    .orderBy('cleaning.cleaningDate', 'ASC')
+    .addOrderBy('cleaning.cleaningTime', 'ASC')
+    .getMany();
+
+  const projectIds = [
+    ...new Set(cleanings.map((item) => item.projectId)),
+  ];
+
+  const projects = projectIds.length
+    ? await this.projectRepository.findByIds(projectIds)
+    : [];
+
+  return cleanings.map((item) => {
+    const project = projects.find(
+      (p) => p.id === item.projectId,
+    );
+
+    return {
+      ...item,
+      project: project
+        ? {
+            customerName: project.customerName || '',
+            customerPhone: project.customerPhone || '',
+            address: project.address || '',
+            gpsAddress: project.gpsAddress || '',
+            gpsLatitude: project.gpsLatitude || null,
+            gpsLongitude: project.gpsLongitude || null,
+            city: project.city || '',
+            branchName: project.branchName || '',
+          }
+        : null,
+    };
+  });
+}
+
+async getCleaningByDate(date: string, user: any) {
+  if (!this.canManageCleaning(user)) {
+    throw new ForbiddenException(
+      'Only owner, project manager, or customer manager can view cleaning calendar',
+    );
+  }
+
+  const cleanings =
+    await this.projectCleaningAssignmentRepository.find({
+      where: {
+        cleaningDate: date as any,
+        isHidden: false,
+      },
+      order: {
+        cleaningTime: 'ASC' as any,
+        createdAt: 'DESC',
+      },
+    });
+
+  const projectIds = [
+    ...new Set(cleanings.map((item) => item.projectId)),
+  ];
+
+  const projects = projectIds.length
+    ? await this.projectRepository.findByIds(projectIds)
+    : [];
+
+  return cleanings.map((item) => {
+    const project = projects.find(
+      (p) => p.id === item.projectId,
+    );
+
+    return {
+      ...item,
+      project: project
+        ? {
+            customerName: project.customerName || '',
+            customerPhone: project.customerPhone || '',
+            address: project.address || '',
+            gpsAddress: project.gpsAddress || '',
+            gpsLatitude: project.gpsLatitude || null,
+            gpsLongitude: project.gpsLongitude || null,
+            city: project.city || '',
+            branchName: project.branchName || '',
+          }
+        : null,
+    };
   });
 }
 

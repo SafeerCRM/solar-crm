@@ -239,6 +239,85 @@ updateContractorAssignment(
   );
 }
 
+@Roles('OWNER', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER')
+@Post('cleaning/assign')
+assignProjectCleaning(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.assignProjectCleaning(
+    body,
+    user,
+  );
+}
+
+@Get(':id/cleaning-assignments')
+getProjectCleaningAssignments(
+  @Param('id') id: string,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.getProjectCleaningAssignments(
+    Number(id),
+    user,
+  );
+}
+
+@Get('cleaning/my')
+getMyCleaningAssignments(
+  @CurrentUser() user: any,
+) {
+  return this.projectService.getMyCleaningAssignments(user);
+}
+
+@Patch('cleaning/:id')
+updateCleaningAssignment(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.updateCleaningAssignment(
+    Number(id),
+    body,
+    user,
+  );
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER')
+@Patch('cleaning/:id/hide')
+hideCleaningAssignment(
+  @Param('id') id: string,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.hideCleaningAssignment(
+    Number(id),
+    user,
+  );
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER')
+@Get('cleaning/reminders')
+getCleaningReminders(
+  @Query('type') type: string,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.getCleaningReminders(
+    type,
+    user,
+  );
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER')
+@Get('cleaning/by-date')
+getCleaningByDate(
+  @Query('date') date: string,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.getCleaningByDate(
+    date,
+    user,
+  );
+}
+
 @Post('contractor-proof/upload')
 @UseInterceptors(FilesInterceptor('files', 10))
 uploadContractorProofs(
