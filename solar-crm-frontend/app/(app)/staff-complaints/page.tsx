@@ -9,6 +9,12 @@ type StaffComplaint = {
   id: number;
   title?: string;
   description?: string;
+  department?: string;
+  audioUrl?: string;
+  ownerAudioUrl?: string;
+  followUpDate?: string;
+  followUpTime?: string;
+  nextAction?: string;
   priority?: string;
   status?: string;
   createdBy?: number;
@@ -28,14 +34,24 @@ type Summary = {
   total: number;
   open: number;
   inReview: number;
+  followUpRequired?: number;
+  waitingForStaff?: number;
   resolved: number;
   rejected: number;
+};
+
+type FollowUpSummary = {
+  todayFollowUps: number;
+  upcomingFollowUps: number;
+  overdueFollowUps: number;
 };
 
 const emptySummary: Summary = {
   total: 0,
   open: 0,
   inReview: 0,
+  followUpRequired: 0,
+  waitingForStaff: 0,
   resolved: 0,
   rejected: 0,
 };
@@ -49,11 +65,46 @@ function formatDate(value?: string) {
   return new Date(value).toLocaleString('en-IN');
 }
 
+function formatDateOnly(value?: string) {
+  if (!value) return '-';
+  return new Date(value).toLocaleDateString('en-IN');
+}
+
+function getTodayDateString() {
+  return new Date().toISOString().split('T')[0];
+}
+
+const uploadComplaintAudio = async (file: File) => {
+  const token = localStorage.getItem('token');
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const res = await axios.post(
+    `${API_BASE_URL}/staff-complaints/audio/upload`,
+    formData,
+    {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        'Content-Type': 'multipart/form-data',
+      },
+    },
+  );
+
+  return res.data?.audioUrl || '';
+};
+
 export default function StaffComplaintsPage() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [items, setItems] = useState<StaffComplaint[]>([]);
   const [hiddenItems, setHiddenItems] = useState<StaffComplaint[]>([]);
   const [summary, setSummary] = useState<Summary>(emptySummary);
+  const [followUpSummary, setFollowUpSummary] =
+  useState<FollowUpSummary>({
+    todayFollowUps: 0,
+    upcomingFollowUps: 0,
+    overdueFollowUps: 0,
+  });
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -64,24 +115,52 @@ export default function StaffComplaintsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState('');
+const [staffNameFilter, setStaffNameFilter] = useState('');
+const [followUpDateFilter, setFollowUpDateFilter] = useState('');
+const [selectedCalendarDate, setSelectedCalendarDate] = useState('');
+const [calendarMonth, setCalendarMonth] = useState(
+  new Date().toISOString().slice(0, 7),
+);
 
   const [showHidden, setShowHidden] = useState(false);
+  const [complaintAudioFile, setComplaintAudioFile] =
+  useState<File | null>(null);
+
+const [ownerAudioFiles, setOwnerAudioFiles] =
+  useState<Record<number, File | null>>({});
 
   const [form, setForm] = useState({
-    title: '',
-    description: '',
-    priority: 'MEDIUM',
-  });
+  title: '',
+  description: '',
+  department: '',
+  priority: 'MEDIUM',
+  audioUrl: '',
+});
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState({
-    title: '',
-    description: '',
-    priority: 'MEDIUM',
-  });
+  title: '',
+  description: '',
+  department: '',
+  priority: 'MEDIUM',
+  audioUrl: '',
+});
 
   const [statusEdit, setStatusEdit] =
-    useState<Record<number, { status: string; ownerRemarks: string }>>({});
+  useState<
+    Record<
+      number,
+      {
+        status: string;
+        ownerRemarks: string;
+        ownerAudioUrl: string;
+        followUpDate: string;
+        followUpTime: string;
+        nextAction: string;
+      }
+    >
+  >({});
 
   const isOwner =
     Array.isArray(currentUser?.roles) &&
@@ -103,12 +182,16 @@ export default function StaffComplaintsPage() {
 
       const res = await axios.get(`${API_BASE_URL}/staff-complaints`, {
         params: {
-          page,
-          limit: 20,
-          search,
-          status: statusFilter,
-          priority: priorityFilter,
-        },
+  page,
+  limit: 20,
+  search,
+  status: statusFilter,
+  priority: priorityFilter,
+  department: departmentFilter,
+  staffName: staffNameFilter,
+  followUpDate:
+    selectedCalendarDate || followUpDateFilter,
+},
         headers: getHeaders(),
       });
 
@@ -151,31 +234,75 @@ export default function StaffComplaintsPage() {
     }
   };
 
+  const fetchFollowUpSummary = async () => {
+  if (!isOwner) return;
+
+  try {
+    const res = await axios.get(
+      `${API_BASE_URL}/staff-complaints/follow-up-summary`,
+      {
+        headers: getHeaders(),
+      },
+    );
+
+    setFollowUpSummary({
+      todayFollowUps: Number(res.data?.todayFollowUps || 0),
+      upcomingFollowUps: Number(res.data?.upcomingFollowUps || 0),
+      overdueFollowUps: Number(res.data?.overdueFollowUps || 0),
+    });
+  } catch (error) {
+    console.error('Failed to load follow-up summary', error);
+  }
+};
+
   const createComplaint = async () => {
     if (!form.title.trim()) {
       alert('Please enter complaint title');
       return;
     }
 
-    if (!form.description.trim()) {
-      alert('Please enter complaint description');
-      return;
-    }
+    if (
+  !form.description.trim() &&
+  !complaintAudioFile
+) {
+  alert(
+    'Please enter description or upload audio',
+  );
+  return;
+}
 
     try {
       setSaving(true);
 
-      await axios.post(`${API_BASE_URL}/staff-complaints`, form, {
+      let audioUrl = '';
+
+if (complaintAudioFile) {
+  audioUrl =
+    await uploadComplaintAudio(
+      complaintAudioFile,
+    );
+}
+
+      await axios.post(
+  `${API_BASE_URL}/staff-complaints`,
+  {
+    ...form,
+    audioUrl,
+  }, {
         headers: getHeaders(),
       });
 
       alert('Complaint submitted successfully');
 
       setForm({
-        title: '',
-        description: '',
-        priority: 'MEDIUM',
-      });
+  title: '',
+  description: '',
+  department: '',
+  priority: 'MEDIUM',
+  audioUrl: '',
+});
+
+setComplaintAudioFile(null);
 
       fetchComplaints();
     } catch (error: any) {
@@ -193,10 +320,12 @@ export default function StaffComplaintsPage() {
     setEditingId(item.id);
 
     setEditForm({
-      title: item.title || '',
-      description: item.description || '',
-      priority: item.priority || 'MEDIUM',
-    });
+  title: item.title || '',
+  description: item.description || '',
+  department: item.department || '',
+  priority: item.priority || 'MEDIUM',
+  audioUrl: item.audioUrl || '',
+});
   };
 
   const updateComplaint = async (id: number) => {
@@ -205,10 +334,13 @@ export default function StaffComplaintsPage() {
       return;
     }
 
-    if (!editForm.description.trim()) {
-      alert('Please enter complaint description');
-      return;
-    }
+    if (
+  !editForm.description.trim() &&
+  !editForm.audioUrl
+) {
+  alert('Please enter description or keep/upload audio');
+  return;
+}
 
     try {
       setSaving(true);
@@ -247,12 +379,30 @@ export default function StaffComplaintsPage() {
     try {
       setSaving(true);
 
-      await axios.patch(
-        `${API_BASE_URL}/staff-complaints/${item.id}/status`,
-        {
-          status: update.status,
-          ownerRemarks: update.ownerRemarks || '',
-        },
+      let ownerAudioUrl =
+  update.ownerAudioUrl || '';
+
+if (ownerAudioFiles[item.id]) {
+  ownerAudioUrl =
+    await uploadComplaintAudio(
+      ownerAudioFiles[item.id]!,
+    );
+}
+
+await axios.patch(
+  `${API_BASE_URL}/staff-complaints/${item.id}/status`,
+  {
+    status: update.status,
+    ownerRemarks:
+      update.ownerRemarks || '',
+    ownerAudioUrl,
+    followUpDate:
+      update.followUpDate || '',
+    followUpTime:
+      update.followUpTime || '',
+    nextAction:
+      update.nextAction || '',
+  },
         {
           headers: getHeaders(),
         },
@@ -261,14 +411,24 @@ export default function StaffComplaintsPage() {
       alert('Complaint status updated');
 
       setStatusEdit((prev) => ({
-        ...prev,
-        [item.id]: {
-          status: '',
-          ownerRemarks: '',
-        },
-      }));
+  ...prev,
+  [item.id]: {
+    status: '',
+    ownerRemarks: '',
+    ownerAudioUrl: '',
+    followUpDate: '',
+    followUpTime: '',
+    nextAction: '',
+  },
+}));
 
       fetchComplaints();
+fetchFollowUpSummary();
+
+setOwnerAudioFiles((prev) => ({
+  ...prev,
+  [item.id]: null,
+}));
     } catch (error: any) {
       console.error(error);
       alert(
@@ -348,6 +508,10 @@ export default function StaffComplaintsPage() {
     setSearch('');
     setStatusFilter('');
     setPriorityFilter('');
+    setDepartmentFilter('');
+setStaffNameFilter('');
+setFollowUpDateFilter('');
+setSelectedCalendarDate('');
     setPage(1);
 
     setTimeout(fetchComplaints, 0);
@@ -369,6 +533,13 @@ export default function StaffComplaintsPage() {
     fetchComplaints();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
+
+  useEffect(() => {
+  if (isOwner) {
+    fetchFollowUpSummary();
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [isOwner]);
 
   useEffect(() => {
     if (showHidden && isOwner) {
@@ -394,9 +565,104 @@ export default function StaffComplaintsPage() {
         <SummaryCard title="Total" value={summary.total} />
         <SummaryCard title="Open" value={summary.open} />
         <SummaryCard title="In Review" value={summary.inReview} />
+        <SummaryCard
+  title="Follow Up"
+  value={
+    Number(
+      summary.followUpRequired || 0,
+    )
+  }
+/>
+
+<SummaryCard
+  title="Waiting Staff"
+  value={
+    Number(
+      summary.waitingForStaff || 0,
+    )
+  }
+/>
         <SummaryCard title="Resolved" value={summary.resolved} />
         <SummaryCard title="Rejected" value={summary.rejected} />
       </div>
+
+      {isOwner && (
+  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+    <SummaryCard
+      title="Today's Follow-ups"
+      value={followUpSummary.todayFollowUps}
+    />
+
+    <SummaryCard
+      title="Upcoming Follow-ups"
+      value={followUpSummary.upcomingFollowUps}
+    />
+
+    <SummaryCard
+      title="Overdue Follow-ups"
+      value={followUpSummary.overdueFollowUps}
+    />
+  </div>
+)}
+
+{isOwner && (
+  <div className="rounded-2xl bg-white p-5 shadow">
+    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div>
+        <h2 className="text-lg font-bold text-gray-800">
+          Complaint Follow-up Calendar
+        </h2>
+
+        <p className="text-sm text-gray-500">
+          Select a date to filter complaints by follow-up date.
+        </p>
+      </div>
+
+      <input
+        type="month"
+        value={calendarMonth}
+        onChange={(e) => {
+          setCalendarMonth(e.target.value);
+          setSelectedCalendarDate('');
+        }}
+        className="rounded-xl border p-3"
+      />
+    </div>
+
+    <div className="mt-4 grid grid-cols-7 gap-2 text-center text-xs font-bold text-gray-500">
+      {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+        <div key={day}>{day}</div>
+      ))}
+    </div>
+
+    <CalendarGrid
+      calendarMonth={calendarMonth}
+      selectedCalendarDate={selectedCalendarDate}
+      complaints={items}
+      onSelectDate={(date) => {
+        setSelectedCalendarDate(date);
+        setFollowUpDateFilter(date);
+        setPage(1);
+        setTimeout(fetchComplaints, 0);
+      }}
+    />
+
+    {selectedCalendarDate && (
+      <button
+        type="button"
+        onClick={() => {
+          setSelectedCalendarDate('');
+          setFollowUpDateFilter('');
+          setPage(1);
+          setTimeout(fetchComplaints, 0);
+        }}
+        className="mt-4 rounded-xl bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-800"
+      >
+        Clear Calendar Date Filter
+      </button>
+    )}
+  </div>
+)}
 
       <div className="rounded-2xl bg-white p-5 shadow">
         <h2 className="text-lg font-bold text-gray-800">
@@ -415,6 +681,18 @@ export default function StaffComplaintsPage() {
             }
             className="rounded-xl border p-3"
           />
+
+          <input
+  placeholder="Department"
+  value={form.department}
+  onChange={(e) =>
+    setForm({
+      ...form,
+      department: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+/>
 
           <select
             value={form.priority}
@@ -445,6 +723,23 @@ export default function StaffComplaintsPage() {
             rows={4}
           />
         </div>
+
+        <div className="md:col-span-2">
+  <label className="mb-1 block text-sm font-medium text-gray-700">
+    Complaint Audio (Optional)
+  </label>
+
+  <input
+    type="file"
+    accept="audio/*"
+    onChange={(e) =>
+      setComplaintAudioFile(
+        e.target.files?.[0] || null,
+      )
+    }
+    className="w-full rounded-xl border p-3"
+  />
+</div>
 
         <button
           type="button"
@@ -481,16 +776,47 @@ export default function StaffComplaintsPage() {
             className="rounded-xl border p-3"
           />
 
+          <input
+  placeholder="Department"
+  value={departmentFilter}
+  onChange={(e) =>
+    setDepartmentFilter(e.target.value)
+  }
+  className="rounded-xl border p-3"
+/>
+
+<input
+  placeholder="Staff Name"
+  value={staffNameFilter}
+  onChange={(e) =>
+    setStaffNameFilter(e.target.value)
+  }
+  className="rounded-xl border p-3"
+/>
+
+<input
+  type="date"
+  value={followUpDateFilter}
+  onChange={(e) =>
+    setFollowUpDateFilter(
+      e.target.value,
+    )
+  }
+  className="rounded-xl border p-3"
+/>
+
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             className="rounded-xl border p-3"
           >
             <option value="">All Status</option>
-            <option value="OPEN">Open</option>
-            <option value="IN_REVIEW">In Review</option>
-            <option value="RESOLVED">Resolved</option>
-            <option value="REJECTED">Rejected</option>
+<option value="OPEN">Open</option>
+<option value="IN_REVIEW">In Review</option>
+<option value="FOLLOW_UP_REQUIRED">Follow Up Required</option>
+<option value="WAITING_FOR_STAFF">Waiting For Staff</option>
+<option value="RESOLVED">Resolved</option>
+<option value="REJECTED">Rejected</option>
           </select>
 
           <select
@@ -561,11 +887,22 @@ export default function StaffComplaintsPage() {
                       {item.description}
                     </p>
 
-                    <div className="mt-3 grid gap-2 text-sm md:grid-cols-3">
-                      <Info label="Raised By" value={item.createdByName || '-'} />
-                      <Info label="Role" value={item.createdByRole || '-'} />
-                      <Info label="Created" value={formatDate(item.createdAt)} />
-                    </div>
+                    {item.audioUrl && (
+  <div className="mt-3">
+    <audio
+      controls
+      className="w-full"
+      src={item.audioUrl}
+    />
+  </div>
+)}
+
+                    <div className="mt-3 grid gap-2 text-sm md:grid-cols-4">
+  <Info label="Raised By" value={item.createdByName || '-'} />
+  <Info label="Role" value={item.createdByRole || '-'} />
+  <Info label="Department" value={item.department || '-'} />
+  <Info label="Created" value={formatDate(item.createdAt)} />
+</div>
 
                     {item.ownerRemarks && (
                       <div className="mt-3 rounded-xl bg-white p-3">
@@ -577,6 +914,41 @@ export default function StaffComplaintsPage() {
                         </p>
                       </div>
                     )}
+
+                    {item.ownerAudioUrl && (
+  <div className="mt-3 rounded-xl bg-white p-3">
+    <p className="text-xs text-gray-500">
+      Owner Audio Response
+    </p>
+
+    <audio
+      controls
+      className="mt-2 w-full"
+      src={item.ownerAudioUrl}
+    />
+  </div>
+)}
+
+                    {item.followUpDate && (
+  <div className="mt-3 rounded-xl bg-blue-50 p-3">
+    <p className="text-xs text-gray-500">
+      Follow Up
+    </p>
+
+    <p className="mt-1 text-sm font-semibold text-gray-800">
+      {formatDateOnly(item.followUpDate)}
+      {item.followUpTime
+        ? ` • ${item.followUpTime}`
+        : ''}
+    </p>
+
+    {item.nextAction && (
+      <p className="mt-1 text-sm text-gray-700">
+        {item.nextAction}
+      </p>
+    )}
+  </div>
+)}
 
                     {editingId === item.id && (
                       <div className="mt-4 rounded-xl border bg-white p-4">
@@ -595,6 +967,18 @@ export default function StaffComplaintsPage() {
                             }
                             className="rounded-xl border p-3"
                           />
+
+                          <input
+  placeholder="Department"
+  value={editForm.department}
+  onChange={(e) =>
+    setEditForm({
+      ...editForm,
+      department: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+/>
 
                           <select
                             value={editForm.priority}
@@ -623,6 +1007,20 @@ export default function StaffComplaintsPage() {
                             className="rounded-xl border p-3 md:col-span-2"
                             rows={3}
                           />
+
+                          {editForm.audioUrl && (
+  <div className="md:col-span-2">
+    <p className="mb-1 text-xs text-gray-500">
+      Existing Complaint Audio
+    </p>
+
+    <audio
+      controls
+      className="w-full"
+      src={editForm.audioUrl}
+    />
+  </div>
+)}
                         </div>
 
                         <div className="mt-3 flex flex-wrap gap-2">
@@ -659,22 +1057,44 @@ export default function StaffComplaintsPage() {
                             }
                             onChange={(e) =>
                               setStatusEdit((prev) => ({
-                                ...prev,
-                                [item.id]: {
-                                  status: e.target.value,
-                                  ownerRemarks:
-                                    prev[item.id]?.ownerRemarks ||
-                                    item.ownerRemarks ||
-                                    '',
-                                },
-                              }))
+  ...prev,
+  [item.id]: {
+    status: e.target.value,
+    ownerRemarks:
+      prev[item.id]?.ownerRemarks ||
+      item.ownerRemarks ||
+      '',
+    ownerAudioUrl:
+      prev[item.id]?.ownerAudioUrl ||
+      item.ownerAudioUrl ||
+      '',
+    followUpDate:
+      prev[item.id]?.followUpDate ||
+      item.followUpDate ||
+      '',
+    followUpTime:
+      prev[item.id]?.followUpTime ||
+      item.followUpTime ||
+      '',
+    nextAction:
+      prev[item.id]?.nextAction ||
+      item.nextAction ||
+      '',
+  },
+}))
                             }
                             className="rounded-xl border p-3"
                           >
                             <option value="OPEN">Open</option>
-                            <option value="IN_REVIEW">In Review</option>
-                            <option value="RESOLVED">Resolved</option>
-                            <option value="REJECTED">Rejected</option>
+<option value="IN_REVIEW">In Review</option>
+<option value="FOLLOW_UP_REQUIRED">
+  Follow Up Required
+</option>
+<option value="WAITING_FOR_STAFF">
+  Waiting For Staff
+</option>
+<option value="RESOLVED">Resolved</option>
+<option value="REJECTED">Rejected</option>
                           </select>
 
                           <input
@@ -686,18 +1106,167 @@ export default function StaffComplaintsPage() {
                             }
                             onChange={(e) =>
                               setStatusEdit((prev) => ({
-                                ...prev,
-                                [item.id]: {
-                                  status:
-                                    prev[item.id]?.status ||
-                                    item.status ||
-                                    'OPEN',
-                                  ownerRemarks: e.target.value,
-                                },
-                              }))
+  ...prev,
+  [item.id]: {
+    status:
+      prev[item.id]?.status ||
+      item.status ||
+      'OPEN',
+    ownerRemarks: e.target.value,
+    ownerAudioUrl:
+      prev[item.id]?.ownerAudioUrl ||
+      item.ownerAudioUrl ||
+      '',
+    followUpDate:
+      prev[item.id]?.followUpDate ||
+      item.followUpDate ||
+      '',
+    followUpTime:
+      prev[item.id]?.followUpTime ||
+      item.followUpTime ||
+      '',
+    nextAction:
+      prev[item.id]?.nextAction ||
+      item.nextAction ||
+      '',
+  },
+}))
                             }
                             className="rounded-xl border p-3"
                           />
+
+                          <input
+  type="date"
+  value={
+    statusEdit[item.id]?.followUpDate ||
+    item.followUpDate ||
+    ''
+  }
+  onChange={(e) =>
+    setStatusEdit((prev) => ({
+      ...prev,
+      [item.id]: {
+        status:
+          prev[item.id]?.status ||
+          item.status ||
+          'OPEN',
+        ownerRemarks:
+          prev[item.id]?.ownerRemarks ||
+          item.ownerRemarks ||
+          '',
+        ownerAudioUrl:
+          prev[item.id]?.ownerAudioUrl ||
+          item.ownerAudioUrl ||
+          '',
+        followUpDate: e.target.value,
+        followUpTime:
+          prev[item.id]?.followUpTime ||
+          item.followUpTime ||
+          '',
+        nextAction:
+          prev[item.id]?.nextAction ||
+          item.nextAction ||
+          '',
+      },
+    }))
+  }
+  className="rounded-xl border p-3"
+/>
+
+<input
+  type="time"
+  value={
+    statusEdit[item.id]?.followUpTime ||
+    item.followUpTime ||
+    ''
+  }
+  onChange={(e) =>
+    setStatusEdit((prev) => ({
+      ...prev,
+      [item.id]: {
+        status:
+          prev[item.id]?.status ||
+          item.status ||
+          'OPEN',
+        ownerRemarks:
+          prev[item.id]?.ownerRemarks ||
+          item.ownerRemarks ||
+          '',
+        ownerAudioUrl:
+          prev[item.id]?.ownerAudioUrl ||
+          item.ownerAudioUrl ||
+          '',
+        followUpDate:
+          prev[item.id]?.followUpDate ||
+          item.followUpDate ||
+          '',
+        followUpTime: e.target.value,
+        nextAction:
+          prev[item.id]?.nextAction ||
+          item.nextAction ||
+          '',
+      },
+    }))
+  }
+  className="rounded-xl border p-3"
+/>
+
+<input
+  placeholder="Next Action"
+  value={
+    statusEdit[item.id]?.nextAction ||
+    item.nextAction ||
+    ''
+  }
+  onChange={(e) =>
+    setStatusEdit((prev) => ({
+      ...prev,
+      [item.id]: {
+        status:
+          prev[item.id]?.status ||
+          item.status ||
+          'OPEN',
+        ownerRemarks:
+          prev[item.id]?.ownerRemarks ||
+          item.ownerRemarks ||
+          '',
+        ownerAudioUrl:
+          prev[item.id]?.ownerAudioUrl ||
+          item.ownerAudioUrl ||
+          '',
+        followUpDate:
+          prev[item.id]?.followUpDate ||
+          item.followUpDate ||
+          '',
+        followUpTime:
+          prev[item.id]?.followUpTime ||
+          item.followUpTime ||
+          '',
+        nextAction: e.target.value,
+      },
+    }))
+  }
+  className="rounded-xl border p-3"
+/>
+
+<div>
+  <label className="mb-1 block text-sm font-medium text-gray-700">
+    Owner Audio Response
+  </label>
+
+  <input
+    type="file"
+    accept="audio/*"
+    onChange={(e) =>
+      setOwnerAudioFiles((prev) => ({
+        ...prev,
+        [item.id]:
+          e.target.files?.[0] || null,
+      }))
+    }
+    className="w-full rounded-xl border p-3"
+  />
+</div>
                         </div>
 
                         <button
@@ -833,6 +1402,83 @@ function Info({
       <p className="mt-1 break-words font-semibold text-gray-800">
         {value || '-'}
       </p>
+    </div>
+  );
+}
+
+function CalendarGrid({
+  calendarMonth,
+  selectedCalendarDate,
+  complaints,
+  onSelectDate,
+}: {
+  calendarMonth: string;
+  selectedCalendarDate: string;
+  complaints: StaffComplaint[];
+  onSelectDate: (date: string) => void;
+}) {
+  const [year, month] = calendarMonth.split('-').map(Number);
+
+  const firstDay = new Date(year, month - 1, 1);
+  const lastDay = new Date(year, month, 0);
+
+  const startOffset = firstDay.getDay();
+  const totalDays = lastDay.getDate();
+
+  const today = getTodayDateString();
+
+  const followUpDateSet = new Set(
+    complaints
+      .map((item) => item.followUpDate)
+      .filter(Boolean) as string[],
+  );
+
+  const cells = [];
+
+  for (let i = 0; i < startOffset; i++) {
+    cells.push(null);
+  }
+
+  for (let day = 1; day <= totalDays; day++) {
+    const date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    cells.push(date);
+  }
+
+  return (
+    <div className="mt-2 grid grid-cols-7 gap-2">
+      {cells.map((date, index) => {
+        if (!date) {
+          return <div key={`empty-${index}`} />;
+        }
+
+        const day = Number(date.split('-')[2]);
+        const hasFollowUp = followUpDateSet.has(date);
+        const isSelected = selectedCalendarDate === date;
+        const isToday = today === date;
+
+        return (
+          <button
+            key={date}
+            type="button"
+            onClick={() => onSelectDate(date)}
+            className={`min-h-[48px] rounded-xl border p-2 text-sm font-semibold ${
+              isSelected
+                ? 'bg-blue-600 text-white'
+                : hasFollowUp
+                  ? 'bg-yellow-100 text-yellow-800'
+                  : isToday
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-white text-gray-700'
+            }`}
+          >
+            {day}
+
+            {hasFollowUp && (
+              <div className="mx-auto mt-1 h-1.5 w-1.5 rounded-full bg-current" />
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
