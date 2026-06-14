@@ -445,7 +445,7 @@ const loanRequiredDocuments = [
   'CUSTOMER_PHOTO',
   'SITE_PHOTO',
   'BANK_DOCUMENT',
-  'Proposal / Quotation',
+  'LOAN_DOCUMENT',
   'PROPERTY_DOCUMENT',
 ];
 
@@ -459,11 +459,23 @@ const missingDocuments = requiredDocuments.filter(
 );
 
 if (missingDocuments.length > 0) {
-  alert(
-    `Please upload required documents: ${missingDocuments.join(
-      ', ',
-    )}`,
-  );
+  const documentLabelMap: Record<string, string> = {
+  VENDOR_AGREEMENT: 'Vendor Agreement',
+  AADHAAR: 'Aadhaar Card',
+  ELECTRICITY_BILL: 'Electricity Bill',
+  PAN_CARD: 'PAN Card',
+  BANK_DOCUMENT: 'Bank Document',
+  CUSTOMER_PHOTO: 'Customer Photo',
+  SITE_PHOTO: 'Site Photo',
+  LOAN_DOCUMENT: 'Proposal / Quotation',
+  PROPERTY_DOCUMENT: 'Property Document',
+};
+
+alert(
+  `Please upload required documents: ${missingDocuments
+    .map((doc) => documentLabelMap[doc] || doc.replaceAll('_', ' '))
+    .join(', ')}`,
+);
   return;
 }
 
@@ -1057,8 +1069,10 @@ router.push(`/project/${createdProjectId}`);
           className="rounded-lg border bg-white p-3 text-sm"
         >
           <p className="font-semibold text-gray-800">
-            {doc.documentType}
-          </p>
+  {doc.documentType === 'LOAN_DOCUMENT'
+    ? 'Proposal / Quotation'
+    : doc.documentType.replaceAll('_', ' ')}
+</p>
 
           <p className="text-gray-500">
             {doc.files.length} file(s)
