@@ -950,7 +950,7 @@ router.push(`/project/${createdProjectId}`);
     <>
       <li>Customer Photo</li>
       <li>Site Photo</li>
-      <li>Loan Document</li>
+      <li>Proposal / Quotation</li>
       <li>Property Document</li>
     </>
   )}
@@ -1002,7 +1002,7 @@ router.push(`/project/${createdProjectId}`);
   </option>
 
   <option value="LOAN_DOCUMENT">
-    Loan Document
+    Proposal / Quotation
   </option>
 
   <option value="PROPERTY_DOCUMENT">
