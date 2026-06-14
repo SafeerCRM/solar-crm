@@ -445,7 +445,7 @@ const loanRequiredDocuments = [
   'CUSTOMER_PHOTO',
   'SITE_PHOTO',
   'BANK_DOCUMENT',
-  'LOAN_DOCUMENT',
+  'Proposal / Quotation',
   'PROPERTY_DOCUMENT',
 ];
 
