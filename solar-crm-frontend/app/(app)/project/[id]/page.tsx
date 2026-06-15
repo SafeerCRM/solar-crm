@@ -536,6 +536,9 @@ const [cleaningForm, setCleaningForm] = useState({
   remarks: '',
 });
 
+const [pendingRescheduleRequests, setPendingRescheduleRequests] =
+  useState<any[]>([]);
+
   const [documents, setDocuments] = useState<ProjectDocument[]>([]);
 
 const [uploading, setUploading] = useState(false);
@@ -3050,6 +3053,83 @@ const hideCleaningAssignment = async (id: number) => {
   }
 };
 
+const fetchPendingRescheduleRequests = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/contractor-reschedule/pending`,
+      {
+        headers: token
+          ? { Authorization: `Bearer ${token}` }
+          : {},
+      },
+    );
+
+    setPendingRescheduleRequests(
+      Array.isArray(res.data) ? res.data : [],
+    );
+  } catch (error) {
+    console.error(error);
+  }
+};
+
+const approveRescheduleRequest = async (id: number) => {
+  try {
+    const token = localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/contractor-reschedule/${id}/approve`,
+      {},
+      {
+        headers: token
+          ? { Authorization: `Bearer ${token}` }
+          : {},
+      },
+    );
+
+    alert('Request approved');
+
+    fetchPendingRescheduleRequests();
+    fetchProject();
+  } catch (error: any) {
+    alert(
+      error?.response?.data?.message ||
+        'Failed to approve request',
+    );
+  }
+};
+
+const rejectRescheduleRequest = async (id: number) => {
+  const approvalNote =
+    prompt('Reason for rejection') || '';
+
+  try {
+    const token = localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/contractor-reschedule/${id}/reject`,
+      {
+        approvalNote,
+      },
+      {
+        headers: token
+          ? { Authorization: `Bearer ${token}` }
+          : {},
+      },
+    );
+
+    alert('Request rejected');
+
+    fetchPendingRescheduleRequests();
+  } catch (error: any) {
+    alert(
+      error?.response?.data?.message ||
+        'Failed to reject request',
+    );
+  }
+};
+
 const updateContractorAssignment = async (
   assignmentId: number,
   status: string,
@@ -3242,6 +3322,7 @@ useEffect(() => {
 fetchCleaningReminders('TODAY');
 fetchCleaningReminders('OVERDUE');
 fetchCleaningReminders('UPCOMING');
+fetchPendingRescheduleRequests();
 
   setTimeout(() => {
   contractorAssignments.forEach((item) => {
@@ -3448,6 +3529,82 @@ const remainingAmountToCollect =
 
           {activeTab === 'CONTRACTOR_WORK' && (
   <div className="space-y-5">
+
+    {hasRole(['OWNER', 'PROJECT_MANAGER']) && (
+  <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+    <h3 className="text-lg font-bold text-gray-800">
+      Pending Postpone Requests
+    </h3>
+
+    {pendingRescheduleRequests.filter(
+      (item) =>
+        Number(item.projectId) === Number(project.id),
+    ).length === 0 ? (
+      <p className="mt-3 text-sm text-gray-500">
+        No pending requests.
+      </p>
+    ) : (
+      <div className="mt-4 space-y-3">
+        {pendingRescheduleRequests
+          .filter(
+            (item) =>
+              Number(item.projectId) ===
+              Number(project.id),
+          )
+          .map((item) => (
+            <div
+              key={item.id}
+              className="rounded-xl border bg-white p-4"
+            >
+              <p className="font-semibold text-gray-800">
+                {item.contractorName}
+              </p>
+
+              <p className="text-sm text-gray-600">
+                Type:{' '}
+                {String(
+                  item.assignmentType || '',
+                ).replaceAll('_', ' ')}
+              </p>
+
+              <p className="text-sm text-gray-600">
+                Old Date: {item.oldDate || '-'}
+              </p>
+
+              <p className="text-sm text-gray-600">
+                Requested Date:{' '}
+                {item.requestedDate || '-'}
+              </p>
+
+              <p className="text-sm text-gray-600">
+                Reason: {item.reason || '-'}
+              </p>
+
+              <div className="mt-3 flex gap-2">
+                <button
+                  onClick={() =>
+                    approveRescheduleRequest(item.id)
+                  }
+                  className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white"
+                >
+                  Approve
+                </button>
+
+                <button
+                  onClick={() =>
+                    rejectRescheduleRequest(item.id)
+                  }
+                  className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white"
+                >
+                  Reject
+                </button>
+              </div>
+            </div>
+          ))}
+      </div>
+    )}
+  </div>
+)}
     {canManageContractor && (
       <div className="rounded-2xl bg-white p-5 shadow">
         <h2 className="text-xl font-bold text-gray-800">

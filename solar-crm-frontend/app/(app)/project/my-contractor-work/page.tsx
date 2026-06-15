@@ -3,6 +3,12 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import axios from 'axios';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { DateCalendar } from '@mui/x-date-pickers/DateCalendar';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
+import dayjs, { Dayjs } from 'dayjs';
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -77,6 +83,21 @@ type CleaningAssignment = {
   completionRemarks?: string;
   proofUrl?: string;
   project?: any;
+};
+
+type RescheduleRequest = {
+  id: number;
+  projectId: number;
+  assignmentType?: string;
+  assignmentId: number;
+  oldDate?: string;
+  oldTime?: string;
+  requestedDate?: string;
+  requestedTime?: string;
+  reason?: string;
+  status?: string;
+  approvalNote?: string;
+  createdAt?: string;
 };
 
 const CONTRACTOR_REQUIRED_PROOFS_BY_SCOPE: Record<string, string[]> = {
@@ -162,6 +183,19 @@ const [cleaningRemarks, setCleaningRemarks] =
 
 const [cleaningUpdatingId, setCleaningUpdatingId] =
   useState<number | null>(null);
+
+  const [selectedWorkDate, setSelectedWorkDate] =
+  useState<Dayjs | null>(dayjs());
+
+const [rescheduleRequests, setRescheduleRequests] =
+  useState<RescheduleRequest[]>([]);
+
+const [postponeForm, setPostponeForm] =
+  useState<Record<string, {
+    requestedDate: string;
+    requestedTime: string;
+    reason: string;
+  }>>({});
 
   const fetchProjects = async () => {
     try {
@@ -467,6 +501,75 @@ const uploadContractorProofs = async (
   }
 };
 
+const fetchMyRescheduleRequests = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/contractor-reschedule/my`,
+      {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      },
+    );
+
+    setRescheduleRequests(Array.isArray(res.data) ? res.data : []);
+  } catch (error) {
+    console.error('Failed to load postpone requests:', error);
+  }
+};
+
+const requestPostpone = async (
+  assignmentType: 'SITE_WORK' | 'CLEANING',
+  assignmentId: number,
+) => {
+  const key = `${assignmentType}-${assignmentId}`;
+  const form = postponeForm[key];
+
+  if (!form?.requestedDate) {
+    alert('Please select requested date');
+    return;
+  }
+
+  if (!form?.reason?.trim()) {
+    alert('Please enter postpone reason');
+    return;
+  }
+
+  try {
+    const token = localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/contractor-reschedule/request`,
+      {
+        assignmentType,
+        assignmentId,
+        requestedDate: form.requestedDate,
+        requestedTime: form.requestedTime,
+        reason: form.reason,
+      },
+      {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      },
+    );
+
+    alert('Postpone request sent for approval');
+
+    setPostponeForm((prev) => ({
+      ...prev,
+      [key]: {
+        requestedDate: '',
+        requestedTime: '',
+        reason: '',
+      },
+    }));
+
+    fetchMyRescheduleRequests();
+  } catch (error: any) {
+    console.error(error);
+    alert(error?.response?.data?.message || 'Failed to request postpone');
+  }
+};
+
 const fetchComments = async (assignmentId: number) => {
   try {
     const token = localStorage.getItem('token');
@@ -542,7 +645,22 @@ const submitComment = async (
   useEffect(() => {
   fetchProjects();
   fetchCleaningAssignments();
+  fetchMyRescheduleRequests();
 }, []);
+
+const selectedDateKey = selectedWorkDate
+  ? selectedWorkDate.format('YYYY-MM-DD')
+  : '';
+
+const selectedSiteWorks = projects.filter((item) =>
+  item.scheduledDate
+    ? item.scheduledDate.split('T')[0] === selectedDateKey
+    : false,
+);
+
+const selectedCleaningWorks = cleaningAssignments.filter(
+  (item) => item.cleaningDate === selectedDateKey,
+);
 
   return (
     <div className="space-y-5">
@@ -679,10 +797,67 @@ const submitComment = async (
               Complete Cleaning
             </button>
           </div>
+
+          <PostponeBox
+  formKey={`CLEANING-${cleaning.id}`}
+  value={postponeForm[`CLEANING-${cleaning.id}`]}
+  setPostponeForm={setPostponeForm}
+  onSubmit={() => requestPostpone('CLEANING', cleaning.id)}
+/>
         </div>
       ))}
     </div>
   )}
+</div>
+
+<div className="grid gap-4 lg:grid-cols-2">
+  <div className="rounded-2xl bg-white p-5 shadow">
+    <h2 className="text-xl font-bold text-gray-800">
+      My Work Calendar
+    </h2>
+
+    <LocalizationProvider dateAdapter={AdapterDayjs}>
+      <DateCalendar
+        value={selectedWorkDate}
+        onChange={(value) => setSelectedWorkDate(value)}
+      />
+    </LocalizationProvider>
+  </div>
+
+  <div className="rounded-2xl bg-white p-5 shadow">
+    <h2 className="text-xl font-bold text-gray-800">
+      Work on {selectedDateKey || '-'}
+    </h2>
+
+    {selectedSiteWorks.length === 0 &&
+    selectedCleaningWorks.length === 0 ? (
+      <p className="mt-4 text-sm text-gray-500">
+        No work assigned on this date.
+      </p>
+    ) : (
+      <div className="mt-4 space-y-3">
+        {selectedSiteWorks.map((item) => (
+          <WorkCalendarCard
+            key={`site-${item.id}`}
+            title={`Site Work - Project #${item.projectId}`}
+            subtitle={item.project?.customerName || ''}
+            status={item.status || 'ASSIGNED'}
+            href={`/project/${item.projectId}`}
+          />
+        ))}
+
+        {selectedCleaningWorks.map((item) => (
+          <WorkCalendarCard
+            key={`cleaning-${item.id}`}
+            title={`Cleaning - Project #${item.projectId}`}
+            subtitle={item.project?.customerName || ''}
+            status={item.status || 'ASSIGNED'}
+            href={`/project/${item.projectId}`}
+          />
+        ))}
+      </div>
+    )}
+  </div>
 </div>
 
       {loading ? (
@@ -862,6 +1037,13 @@ const submitComment = async (
     </button>
   ))}
 </div>
+
+<PostponeBox
+  formKey={`SITE_WORK-${item.id}`}
+  value={postponeForm[`SITE_WORK-${item.id}`]}
+  setPostponeForm={setPostponeForm}
+  onSubmit={() => requestPostpone('SITE_WORK', item.id)}
+/>
 
 <div className="mt-5 rounded-xl border bg-gray-50 p-4">
   <h3 className="font-bold text-gray-800">
@@ -1199,6 +1381,135 @@ const submitComment = async (
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function WorkCalendarCard({
+  title,
+  subtitle,
+  status,
+  href,
+}: {
+  title: string;
+  subtitle?: string;
+  status?: string;
+  href: string;
+}) {
+  return (
+    <div className="rounded-xl border bg-gray-50 p-3">
+      <p className="font-bold text-gray-800">{title}</p>
+      <p className="text-sm text-gray-600">{subtitle || '-'}</p>
+      <p className="text-sm text-gray-600">
+        Status: {String(status || '-').replaceAll('_', ' ')}
+      </p>
+      <Link
+        href={href}
+        className="mt-2 inline-block rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white"
+      >
+        Open
+      </Link>
+    </div>
+  );
+}
+
+function PostponeBox({
+  formKey,
+  value,
+  setPostponeForm,
+  onSubmit,
+}: {
+  formKey: string;
+  value?: {
+    requestedDate: string;
+    requestedTime: string;
+    reason: string;
+  };
+  setPostponeForm: React.Dispatch<
+    React.SetStateAction<Record<string, {
+      requestedDate: string;
+      requestedTime: string;
+      reason: string;
+    }>>
+  >;
+  onSubmit: () => void;
+}) {
+  return (
+    <div className="mt-4 rounded-xl border bg-amber-50 p-3">
+      <p className="font-semibold text-gray-800">
+        Request Postpone
+      </p>
+
+      <div className="mt-3 grid gap-3 md:grid-cols-3">
+        <LocalizationProvider dateAdapter={AdapterDayjs}>
+          <DatePicker
+            label="Requested Date"
+            value={
+              value?.requestedDate
+                ? dayjs(value.requestedDate)
+                : null
+            }
+            onChange={(date) =>
+              setPostponeForm((prev) => ({
+                ...prev,
+                [formKey]: {
+                  requestedDate: date
+                    ? date.format('YYYY-MM-DD')
+                    : '',
+                  requestedTime: prev[formKey]?.requestedTime || '',
+                  reason: prev[formKey]?.reason || '',
+                },
+              }))
+            }
+          />
+        </LocalizationProvider>
+
+        <LocalizationProvider dateAdapter={AdapterDayjs}>
+          <MobileTimePicker
+            label="Requested Time"
+            ampm
+            ampmInClock
+            value={
+              value?.requestedTime
+                ? dayjs(`2026-01-01T${value.requestedTime}`)
+                : null
+            }
+            onChange={(time) =>
+              setPostponeForm((prev) => ({
+                ...prev,
+                [formKey]: {
+                  requestedDate: prev[formKey]?.requestedDate || '',
+                  requestedTime: time ? time.format('HH:mm') : '',
+                  reason: prev[formKey]?.reason || '',
+                },
+              }))
+            }
+          />
+        </LocalizationProvider>
+
+        <input
+          placeholder="Reason"
+          value={value?.reason || ''}
+          onChange={(e) =>
+            setPostponeForm((prev) => ({
+              ...prev,
+              [formKey]: {
+                requestedDate: prev[formKey]?.requestedDate || '',
+                requestedTime: prev[formKey]?.requestedTime || '',
+                reason: e.target.value,
+              },
+            }))
+          }
+          className="rounded-xl border p-3"
+        />
+      </div>
+
+      <button
+        onClick={onSubmit}
+        className="mt-3 rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white"
+      >
+        Send For Approval
+      </button>
     </div>
   );
 }
