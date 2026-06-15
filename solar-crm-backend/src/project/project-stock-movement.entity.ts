@@ -56,6 +56,15 @@ export class ProjectStockMovement {
   sourceId: number;
 
   @Column({ nullable: true })
+dealerId: number;
+
+@Column({ nullable: true })
+dealerName: string;
+
+@Column({ nullable: true })
+dealerPhone: string;
+
+  @Column({ nullable: true })
   projectId: number;
 
   @Column({ type: 'text', nullable: true })

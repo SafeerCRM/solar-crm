@@ -2204,6 +2204,12 @@ async issueProjectStock(body: any, currentUser: any) {
     throw new BadRequestException('Valid quantity is required');
   }
 
+  if (body?.sourceType === 'DEALER' && !body?.dealerName) {
+  throw new BadRequestException(
+    'Dealer name is required for dealer sale',
+  );
+}
+
   const stockItem = await this.projectStockItemRepository.findOne({
     where: {
       id: stockItemId,
@@ -2243,6 +2249,14 @@ async issueProjectStock(body: any, currentUser: any) {
       totalAmount,
       sourceType: body?.sourceType || 'MANUAL',
       sourceId: body?.sourceId ? Number(body.sourceId) : undefined,
+      dealerId:
+  body?.dealerId ? Number(body.dealerId) : undefined,
+
+dealerName:
+  body?.dealerName || undefined,
+
+dealerPhone:
+  body?.dealerPhone || undefined,
 projectId: body?.projectId ? Number(body.projectId) : undefined,
 remarks: body?.remarks || undefined,
 createdBy: currentUser?.id || currentUser?.userId || undefined,
