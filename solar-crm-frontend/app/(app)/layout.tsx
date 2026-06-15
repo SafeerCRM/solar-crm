@@ -303,6 +303,18 @@ const navItems = [
     'PAYMENT_MANAGER',
     'ACCOUNT_MANAGER',
     'TRADING_MANAGER',
+  ],
+},
+
+{
+  name: 'Stock Management',
+  href: '/accounts/stock',
+  roles: [
+    'OWNER',
+    'PROJECT_MANAGER',
+    'PROJECT_EXECUTIVE',
+    'ACCOUNT_MANAGER',
+    'PAYMENT_MANAGER',
     'STOCK_MANAGER',
   ],
 },
