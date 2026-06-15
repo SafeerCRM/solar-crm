@@ -15339,9 +15339,15 @@ private canSeeAllTradingMeetings(user: any): boolean {
 async createTradingMeeting(body: any, user: any) {
   const dealerId = Number(body?.dealerId || 0);
 
-  if (!dealerId) {
-    throw new BadRequestException('Dealer is required');
-  }
+const manualDealerName = String(
+  body?.manualDealerName || body?.dealerName || '',
+).trim();
+
+if (!dealerId && !manualDealerName) {
+  throw new BadRequestException(
+    'Dealer is required',
+  );
+}
 
   if (!body?.scheduledAt) {
     throw new BadRequestException('Meeting date/time is required');
@@ -15363,13 +15369,15 @@ async createTradingMeeting(body: any, user: any) {
     );
   }
 
-  const dealer = await this.projectVendorRepository.findOne({
-    where: { id: dealerId },
-  });
+  const dealer = dealerId
+  ? await this.projectVendorRepository.findOne({
+      where: { id: dealerId },
+    })
+  : null;
 
-  if (!dealer) {
-    throw new NotFoundException('Dealer not found');
-  }
+if (dealerId && !dealer) {
+  throw new NotFoundException('Dealer not found');
+}
 
   const currentUserId = Number(user?.id || user?.userId || user?.sub || 0);
   const currentUserName = user?.name || user?.email || '';
@@ -15383,11 +15391,29 @@ async createTradingMeeting(body: any, user: any) {
 
   const meeting =
     this.projectTradingMeetingRepository.create({
-      dealerId,
-      dealerName: dealer.vendorName,
-      dealerPhone: dealer.phone || '',
-      dealerGstNumber: dealer.gstNumber || '',
-      branchName: dealer.city || body?.branchName || '',
+      dealerId: dealerId || null,
+
+dealerName:
+  dealer?.vendorName ||
+  manualDealerName,
+
+dealerPhone:
+  dealer?.phone ||
+  body?.manualDealerPhone ||
+  body?.dealerPhone ||
+  '',
+
+dealerGstNumber:
+  dealer?.gstNumber ||
+  body?.manualDealerGstNumber ||
+  body?.dealerGstNumber ||
+  '',
+
+branchName:
+  dealer?.city ||
+  body?.manualDealerCity ||
+  body?.branchName ||
+  '',
       scheduledAt: new Date(body.scheduledAt),
       status:
         body?.status ||
