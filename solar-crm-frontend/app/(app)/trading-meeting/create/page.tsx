@@ -41,6 +41,10 @@ export default function CreateTradingMeetingPage() {
 
   const [form, setForm] = useState({
     dealerId: '',
+    dealerMode: 'EXISTING',
+manualDealerName: '',
+manualDealerPhone: '',
+manualDealerCity: '',
     scheduledAt: '',
     meetingNotes: '',
     gpsLatitude: '',
@@ -171,10 +175,21 @@ export default function CreateTradingMeetingPage() {
   };
 
   const createMeeting = async () => {
-    if (!form.dealerId) {
-      alert('Dealer is required');
-      return;
-    }
+    if (
+  form.dealerMode === 'EXISTING' &&
+  !form.dealerId
+) {
+  alert('Dealer is required');
+  return;
+}
+
+if (
+  form.dealerMode === 'MANUAL' &&
+  !form.manualDealerName.trim()
+) {
+  alert('Dealer name is required');
+  return;
+}
 
     if (!form.scheduledAt) {
       alert('Meeting date/time is required');
@@ -310,20 +325,88 @@ const updateTimePart = (
 
       <div className="rounded-2xl bg-white p-5 shadow">
         <div className="grid gap-3 md:grid-cols-2">
-          <select
-            value={form.dealerId}
-            onChange={(e) =>
-              setForm({ ...form, dealerId: e.target.value })
-            }
-            className="rounded-xl border p-3"
-          >
-            <option value="">Select Dealer</option>
-            {dealers.map((dealer) => (
-              <option key={dealer.id} value={dealer.id}>
-                {dealer.vendorName} - {dealer.city || ''}
-              </option>
-            ))}
-          </select>
+          <div className="grid gap-3 md:grid-cols-2">
+  <select
+    value={form.dealerMode}
+    onChange={(e) =>
+      setForm({
+        ...form,
+        dealerMode: e.target.value,
+        dealerId: '',
+        manualDealerName: '',
+        manualDealerPhone: '',
+        manualDealerCity: '',
+      })
+    }
+    className="rounded-xl border p-3"
+  >
+    <option value="EXISTING">Existing Dealer</option>
+    <option value="MANUAL">New / Manual Dealer</option>
+  </select>
+
+  {form.dealerMode === 'EXISTING' ? (
+    <select
+      value={form.dealerId}
+      onChange={(e) =>
+        setForm({
+          ...form,
+          dealerId: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    >
+      <option value="">Select Dealer</option>
+      {dealers.map((dealer) => (
+        <option key={dealer.id} value={dealer.id}>
+          {dealer.vendorName} - {dealer.city || ''}
+        </option>
+      ))}
+    </select>
+  ) : (
+    <input
+      type="text"
+      placeholder="Dealer Name *"
+      value={form.manualDealerName}
+      onChange={(e) =>
+        setForm({
+          ...form,
+          manualDealerName: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+  )}
+
+  {form.dealerMode === 'MANUAL' && (
+    <>
+      <input
+        type="text"
+        placeholder="Dealer Phone"
+        value={form.manualDealerPhone}
+        onChange={(e) =>
+          setForm({
+            ...form,
+            manualDealerPhone: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
+
+      <input
+        type="text"
+        placeholder="Dealer City / Branch"
+        value={form.manualDealerCity}
+        onChange={(e) =>
+          setForm({
+            ...form,
+            manualDealerCity: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
+    </>
+  )}
+</div>
 
           <LocalizationProvider dateAdapter={AdapterDayjs}>
   <div className="grid gap-3 md:grid-cols-2">

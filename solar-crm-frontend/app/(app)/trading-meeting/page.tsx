@@ -51,6 +51,8 @@ export default function TradingMeetingPage() {
 
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
+  const [assignedTo, setAssignedTo] = useState('');
+const [users, setUsers] = useState<any[]>([]);
   const [showHidden, setShowHidden] = useState(false);
 
   const [page, setPage] = useState(1);
@@ -60,6 +62,7 @@ export default function TradingMeetingPage() {
     const res = await axios.get(`${API_BASE_URL}/project/trading-meetings`, {
       params: {
         search,
+        assignedTo: assignedTo || undefined,
         status,
         showHidden,
         page,
@@ -71,6 +74,22 @@ export default function TradingMeetingPage() {
     setMeetings(res.data?.data || []);
     setTotalPages(res.data?.totalPages || 1);
   };
+
+  const fetchUsers = async () => {
+  const res = await axios.get(`${API_BASE_URL}/users`, {
+    headers: getAuthHeaders(),
+  });
+
+  const rows = Array.isArray(res.data) ? res.data : [];
+
+  setUsers(
+    rows.filter((user: any) =>
+      Array.isArray(user.roles)
+        ? user.roles.includes('TRADING_MANAGER')
+        : false,
+    ),
+  );
+};
 
   const fetchAnalytics = async () => {
     const res = await axios.get(
@@ -86,7 +105,11 @@ export default function TradingMeetingPage() {
   const refreshAll = async () => {
     try {
       setLoading(true);
-      await Promise.all([fetchMeetings(), fetchAnalytics()]);
+      await Promise.all([
+  fetchMeetings(),
+  fetchAnalytics(),
+  fetchUsers(),
+]);
     } catch (error: any) {
       console.error(error);
       alert(
@@ -111,6 +134,7 @@ export default function TradingMeetingPage() {
   const resetFilters = () => {
     setSearch('');
     setStatus('');
+    setAssignedTo('');
     setShowHidden(false);
     setPage(1);
     setTimeout(refreshAll, 50);
@@ -198,7 +222,7 @@ export default function TradingMeetingPage() {
       </div>
 
       <div className="rounded-2xl bg-white p-4 shadow">
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-4">
           <input
             placeholder="Search dealer / phone / branch / notes"
             value={search}
@@ -221,6 +245,20 @@ export default function TradingMeetingPage() {
             <option value="ORDER_RECEIVED">Order Received</option>
             <option value="CANCELLED">Cancelled</option>
           </select>
+
+          <select
+  value={assignedTo}
+  onChange={(e) => setAssignedTo(e.target.value)}
+  className="rounded-xl border p-3"
+>
+  <option value="">All Trading Managers</option>
+
+  {users.map((user) => (
+    <option key={user.id} value={user.id}>
+      {user.name || user.email}
+    </option>
+  ))}
+</select>
 
           <label className="flex items-center gap-2 rounded-xl border p-3 text-sm">
             <input
