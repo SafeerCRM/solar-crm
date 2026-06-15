@@ -303,7 +303,6 @@ const navItems = [
 'PAYMENT_COLLECTION_EXECUTIVE',
     'PAYMENT_MANAGER',
     'ACCOUNT_MANAGER',
-    'TRADING_MANAGER',
   ],
 },
 
