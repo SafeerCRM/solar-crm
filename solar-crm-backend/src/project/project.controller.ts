@@ -1056,13 +1056,14 @@ getPurchasableMaterialRequestItems(
   'PROJECT_EXECUTIVE',
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
+  'STOCK_MANAGER',
 )
 @Get('stock/items')
 listProjectStockItems(@Query() query: any) {
   return this.projectService.listProjectStockItems(query);
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE')
+@Roles('OWNER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE', 'STOCK_MANAGER')
 @Post('stock/receive')
 receiveProjectStock(
   @Body() body: any,
@@ -1074,7 +1075,7 @@ receiveProjectStock(
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE')
+@Roles('OWNER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE', 'STOCK_MANAGER')
 @Post('stock/issue')
 issueProjectStock(
   @Body() body: any,
@@ -1091,6 +1092,7 @@ issueProjectStock(
   'PROJECT_MANAGER',
   'PROJECT_EXECUTIVE',
   'ACCOUNT_MANAGER',
+  'STOCK_MANAGER',
 )
 @Get('stock/movements')
 listProjectStockMovements(
@@ -1101,7 +1103,7 @@ listProjectStockMovements(
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER')
+@Roles('OWNER', 'PROJECT_MANAGER', 'STOCK_MANAGER')
 @Patch('stock/movements/:movementId/hide')
 hideProjectStockMovement(
   @Param('movementId', ParseIntPipe)
@@ -1118,7 +1120,7 @@ hideProjectStockMovement(
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER')
+@Roles('OWNER', 'PROJECT_MANAGER', 'STOCK_MANAGER')
 @Patch('stock/movements/:movementId/restore')
 restoreProjectStockMovement(
   @Param('movementId', ParseIntPipe)
@@ -1135,7 +1137,7 @@ restoreProjectStockMovement(
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER')
+@Roles('OWNER', 'PROJECT_MANAGER', 'STOCK_MANAGER')
 @Patch('stock/items/:stockItemId/hide')
 hideProjectStockItem(
   @Param('stockItemId', ParseIntPipe)
@@ -1152,7 +1154,7 @@ hideProjectStockItem(
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER')
+@Roles('OWNER', 'PROJECT_MANAGER', 'STOCK_MANAGER',)
 @Patch('stock/items/:stockItemId/restore')
 restoreProjectStockItem(
   @Param('stockItemId', ParseIntPipe)
@@ -1175,6 +1177,7 @@ restoreProjectStockItem(
   'PROJECT_EXECUTIVE',
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
+  'STOCK_MANAGER',
 )
 @Get('stock/branch-wise')
 getBranchWiseStockReport(@Query() query: any) {
@@ -1183,7 +1186,7 @@ getBranchWiseStockReport(@Query() query: any) {
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE')
+@Roles('OWNER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE', 'STOCK_MANAGER')
 @Post('stock/issue-to-project')
 issueStockToProject(
   @Body() body: any,
@@ -1200,6 +1203,7 @@ issueStockToProject(
   'PROJECT_MANAGER',
   'PROJECT_EXECUTIVE',
   'ACCOUNT_MANAGER',
+  'STOCK_MANAGER',
 )
 @Get('consumptions')
 listProjectConsumptions(@Query() query: any) {
@@ -1208,7 +1212,7 @@ listProjectConsumptions(@Query() query: any) {
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER')
+@Roles('OWNER', 'PROJECT_MANAGER', 'STOCK_MANAGER')
 @Patch('consumptions/:consumptionId/hide')
 hideProjectConsumption(
   @Param('consumptionId', ParseIntPipe)
@@ -1225,7 +1229,7 @@ hideProjectConsumption(
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER')
+@Roles('OWNER', 'PROJECT_MANAGER', 'STOCK_MANAGER')
 @Patch('consumptions/:consumptionId/restore')
 restoreProjectConsumption(
   @Param('consumptionId', ParseIntPipe)
@@ -1309,7 +1313,7 @@ buyMaterialRequestItem(
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE')
+@Roles('OWNER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE', 'STOCK_MANAGER',)
 @Get('material-requests/approved-for-issue')
 listApprovedMaterialRequestsForIssue(
   @Query() query: any,
@@ -1319,7 +1323,7 @@ listApprovedMaterialRequestsForIssue(
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER')
+@Roles('OWNER', 'PROJECT_MANAGER', 'STOCK_MANAGER')
 @Post('material-requests/items/:itemId/issue-stock')
 issueMaterialRequestItemStock(
   @Param('itemId', ParseIntPipe)
@@ -1336,7 +1340,7 @@ issueMaterialRequestItemStock(
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE')
+@Roles('OWNER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE' , 'STOCK_MANAGER')
 @Post('stock/transfer')
 transferProjectStock(
   @Body() body: any,
@@ -2586,24 +2590,6 @@ getTradingMeetingConversionData(
 @Get('stock/dashboard')
 getStockDashboard(@CurrentUser() user: any) {
   return this.projectService.getStockDashboard(user);
-}
-
-@Roles('OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER', 'STOCK_MANAGER')
-@Get('stock/items')
-getStockItems(
-  @Query() query: any,
-  @CurrentUser() user: any,
-) {
-  return this.projectService.getStockItems(query, user);
-}
-
-@Roles('OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER', 'STOCK_MANAGER')
-@Get('stock/movements')
-getStockMovements(
-  @Query() query: any,
-  @CurrentUser() user: any,
-) {
-  return this.projectService.getStockMovements(query, user);
 }
 
 @Roles('OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER', 'STOCK_MANAGER')
