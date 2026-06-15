@@ -318,6 +318,60 @@ getCleaningByDate(
   );
 }
 
+@Post('contractor-reschedule/request')
+requestContractorReschedule(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.requestContractorReschedule(
+    body,
+    user,
+  );
+}
+
+@Get('contractor-reschedule/my')
+getMyContractorRescheduleRequests(
+  @CurrentUser() user: any,
+) {
+  return this.projectService.getMyContractorRescheduleRequests(user);
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER')
+@Get('contractor-reschedule/pending')
+getPendingContractorRescheduleRequests(
+  @CurrentUser() user: any,
+) {
+  return this.projectService.getPendingContractorRescheduleRequests(user);
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER')
+@Patch('contractor-reschedule/:id/approve')
+approveContractorRescheduleRequest(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.approveContractorRescheduleRequest(
+    Number(id),
+    body,
+    user,
+  );
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER')
+@Patch('contractor-reschedule/:id/reject')
+rejectContractorRescheduleRequest(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.rejectContractorRescheduleRequest(
+    Number(id),
+    body,
+    user,
+  );
+}
+
 @Post('contractor-proof/upload')
 @UseInterceptors(FilesInterceptor('files', 10))
 uploadContractorProofs(

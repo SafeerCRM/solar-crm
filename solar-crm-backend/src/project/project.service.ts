@@ -174,6 +174,12 @@ import {
   ProjectCleaningStatus,
 } from './project-cleaning-assignment.entity';
 
+import {
+  ProjectContractorRescheduleRequest,
+  ContractorRescheduleAssignmentType,
+  ContractorRescheduleStatus,
+} from './project-contractor-reschedule-request.entity';
+
 @Injectable()
 export class ProjectService {
 
@@ -581,6 +587,9 @@ private readonly projectContractorAssignmentRepository: Repository<ProjectContra
 
 @InjectRepository(ProjectCleaningAssignment)
 private readonly projectCleaningAssignmentRepository: Repository<ProjectCleaningAssignment>,
+
+@InjectRepository(ProjectContractorRescheduleRequest)
+private readonly projectContractorRescheduleRequestRepository: Repository<ProjectContractorRescheduleRequest>,
 
 @InjectRepository(ProjectContractorProof)
 private readonly projectContractorProofRepository: Repository<ProjectContractorProof>,
@@ -12412,6 +12421,268 @@ async getCleaningByDate(date: string, user: any) {
         : null,
     };
   });
+}
+
+async requestContractorReschedule(body: any, user: any) {
+  const assignmentType = String(body?.assignmentType || '');
+
+  if (
+    assignmentType !== ContractorRescheduleAssignmentType.SITE_WORK &&
+    assignmentType !== ContractorRescheduleAssignmentType.CLEANING
+  ) {
+    throw new BadRequestException('Invalid assignment type');
+  }
+
+  const assignmentId = Number(body?.assignmentId);
+
+  if (!assignmentId) {
+    throw new BadRequestException('Assignment ID is required');
+  }
+
+  if (!body?.requestedDate) {
+    throw new BadRequestException('Requested date is required');
+  }
+
+  if (!String(body?.reason || '').trim()) {
+    throw new BadRequestException('Reason is required');
+  }
+
+  const currentUserId = Number(user?.id || user?.userId || user?.sub);
+
+  let source: any = null;
+
+  if (assignmentType === ContractorRescheduleAssignmentType.SITE_WORK) {
+    source = await this.projectContractorAssignmentRepository.findOne({
+      where: { id: assignmentId },
+    });
+  }
+
+  if (assignmentType === ContractorRescheduleAssignmentType.CLEANING) {
+    source = await this.projectCleaningAssignmentRepository.findOne({
+      where: { id: assignmentId },
+    });
+  }
+
+  if (!source) {
+    throw new NotFoundException('Assignment not found');
+  }
+
+  if (Number(source.contractorId) !== currentUserId) {
+    throw new ForbiddenException(
+      'You can request postpone only for your own work',
+    );
+  }
+
+  const existingPending =
+    await this.projectContractorRescheduleRequestRepository.findOne({
+      where: {
+        assignmentType: assignmentType as any,
+        assignmentId,
+        status: ContractorRescheduleStatus.PENDING,
+      },
+    });
+
+  if (existingPending) {
+    throw new BadRequestException(
+      'A pending postpone request already exists for this work',
+    );
+  }
+
+  const request =
+    this.projectContractorRescheduleRequestRepository.create({
+      projectId: Number(source.projectId),
+      assignmentType: assignmentType as any,
+      assignmentId,
+      contractorId: currentUserId,
+      contractorName: source.contractorName || '',
+      oldDate:
+        assignmentType === ContractorRescheduleAssignmentType.SITE_WORK
+          ? source.scheduledDate
+            ? new Date(source.scheduledDate).toISOString().split('T')[0]
+            : null
+          : source.cleaningDate || null,
+      oldTime:
+        assignmentType === ContractorRescheduleAssignmentType.CLEANING
+          ? source.cleaningTime || ''
+          : '',
+      requestedDate: body.requestedDate,
+      requestedTime: body?.requestedTime || '',
+      reason: String(body.reason || '').trim(),
+      status: ContractorRescheduleStatus.PENDING,
+    });
+
+  return this.projectContractorRescheduleRequestRepository.save(request);
+}
+
+async getMyContractorRescheduleRequests(user: any) {
+  const currentUserId = Number(user?.id || user?.userId || user?.sub);
+
+  return this.projectContractorRescheduleRequestRepository.find({
+    where: {
+      contractorId: currentUserId,
+    },
+    order: {
+      createdAt: 'DESC',
+    },
+  });
+}
+
+async getPendingContractorRescheduleRequests(user: any) {
+  const roles = Array.isArray(user?.roles) ? user.roles : [];
+
+  if (
+    !roles.includes('OWNER') &&
+    !roles.includes('PROJECT_MANAGER')
+  ) {
+    throw new ForbiddenException(
+      'Only owner or project manager can view postpone approvals',
+    );
+  }
+
+  const requests =
+    await this.projectContractorRescheduleRequestRepository.find({
+      where: {
+        status: ContractorRescheduleStatus.PENDING,
+      },
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+
+  const projectIds = [
+    ...new Set(requests.map((item) => item.projectId)),
+  ];
+
+  const projects = projectIds.length
+    ? await this.projectRepository.findByIds(projectIds)
+    : [];
+
+  return requests.map((item) => {
+    const project = projects.find((p) => p.id === item.projectId);
+
+    return {
+      ...item,
+      project: project
+        ? {
+            customerName: project.customerName || '',
+            customerPhone: project.customerPhone || '',
+            city: project.city || '',
+            branchName: project.branchName || '',
+          }
+        : null,
+    };
+  });
+}
+
+async approveContractorRescheduleRequest(
+  id: number,
+  body: any,
+  user: any,
+) {
+  const roles = Array.isArray(user?.roles) ? user.roles : [];
+
+  if (
+    !roles.includes('OWNER') &&
+    !roles.includes('PROJECT_MANAGER')
+  ) {
+    throw new ForbiddenException(
+      'Only owner or project manager can approve postpone request',
+    );
+  }
+
+  const request =
+    await this.projectContractorRescheduleRequestRepository.findOne({
+      where: { id },
+    });
+
+  if (!request) {
+    throw new NotFoundException('Postpone request not found');
+  }
+
+  if (request.status !== ContractorRescheduleStatus.PENDING) {
+    throw new BadRequestException('Request already processed');
+  }
+
+  if (
+    request.assignmentType === ContractorRescheduleAssignmentType.SITE_WORK
+  ) {
+    const assignment =
+      await this.projectContractorAssignmentRepository.findOne({
+        where: { id: request.assignmentId },
+      });
+
+    if (!assignment) {
+      throw new NotFoundException('Site work assignment not found');
+    }
+
+    assignment.scheduledDate = request.requestedDate as any;
+
+    await this.projectContractorAssignmentRepository.save(assignment);
+  }
+
+  if (
+    request.assignmentType === ContractorRescheduleAssignmentType.CLEANING
+  ) {
+    const cleaning =
+      await this.projectCleaningAssignmentRepository.findOne({
+        where: { id: request.assignmentId },
+      });
+
+    if (!cleaning) {
+      throw new NotFoundException('Cleaning assignment not found');
+    }
+
+    cleaning.cleaningDate = request.requestedDate;
+    cleaning.cleaningTime = request.requestedTime || cleaning.cleaningTime;
+
+    await this.projectCleaningAssignmentRepository.save(cleaning);
+  }
+
+  request.status = ContractorRescheduleStatus.APPROVED;
+  request.approvedBy = user?.id || user?.userId || null;
+  request.approvedByName = user?.name || user?.email || '';
+  request.approvalNote = body?.approvalNote || '';
+  request.approvedAt = new Date();
+
+  return this.projectContractorRescheduleRequestRepository.save(request);
+}
+
+async rejectContractorRescheduleRequest(
+  id: number,
+  body: any,
+  user: any,
+) {
+  const roles = Array.isArray(user?.roles) ? user.roles : [];
+
+  if (
+    !roles.includes('OWNER') &&
+    !roles.includes('PROJECT_MANAGER')
+  ) {
+    throw new ForbiddenException(
+      'Only owner or project manager can reject postpone request',
+    );
+  }
+
+  const request =
+    await this.projectContractorRescheduleRequestRepository.findOne({
+      where: { id },
+    });
+
+  if (!request) {
+    throw new NotFoundException('Postpone request not found');
+  }
+
+  if (request.status !== ContractorRescheduleStatus.PENDING) {
+    throw new BadRequestException('Request already processed');
+  }
+
+  request.status = ContractorRescheduleStatus.REJECTED;
+  request.approvedBy = user?.id || user?.userId || null;
+  request.approvedByName = user?.name || user?.email || '';
+  request.approvalNote = body?.approvalNote || '';
+  request.approvedAt = new Date();
+
+  return this.projectContractorRescheduleRequestRepository.save(request);
 }
 
 async createCustomerUpdate(projectId: number, body: any, user: any) {
