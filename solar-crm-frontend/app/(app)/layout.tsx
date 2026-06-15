@@ -308,7 +308,7 @@ const navItems = [
 
 {
   name: 'Stock Management',
-  href: '/accounts/stock',
+  href: '/project/accounts/stock',
   roles: [
     'OWNER',
     'PROJECT_MANAGER',
