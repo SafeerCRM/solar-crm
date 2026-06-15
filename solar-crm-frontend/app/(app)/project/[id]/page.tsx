@@ -3505,6 +3505,12 @@ const remainingAmountToCollect =
   }
 };
 
+const canApproveAndReserveStock =
+  currentUserRoles.includes('OWNER') ||
+  currentUserRoles.includes('PROJECT_MANAGER') ||
+  currentUserRoles.includes('ACCOUNT_MANAGER') ||
+  currentUserRoles.includes('STOCK_MANAGER');
+
   return (
     <div className="mx-auto max-w-7xl space-y-5">
       <div className="rounded-2xl bg-white p-5 shadow">
@@ -5132,7 +5138,8 @@ const remainingAmountToCollect =
     {request.status}
   </p>
 
-  {request.status === 'SUBMITTED' && (
+  {request.status === 'SUBMITTED' &&
+  canApproveAndReserveStock && (
     <button
       type="button"
       onClick={() =>

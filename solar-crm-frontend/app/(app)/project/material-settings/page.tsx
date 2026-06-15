@@ -289,6 +289,12 @@ remarks: '',
   userRoles.includes('OWNER') ||
   userRoles.includes('PROJECT_MANAGER');
 
+  const canViewMaterials =
+  canManageMaterials ||
+  userRoles.includes('ACCOUNT_MANAGER') ||
+  userRoles.includes('STOCK_MANAGER');
+
+
   const categoryOptions = Array.from(
   new Set(
     items
@@ -609,6 +615,7 @@ const downloadMaterialCsv = () => {
       </div>
       )}
 
+{canViewMaterials && (
       <div className="rounded-2xl bg-white p-5 shadow">
         <h2 className="mb-4 text-lg font-bold">
           Material List
@@ -788,6 +795,7 @@ const downloadMaterialCsv = () => {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

@@ -208,7 +208,9 @@ const navItems = [
   {
   name: 'Material Settings',
   href: '/project/material-settings',
-  roles: ['OWNER'],
+  roles: ['OWNER', 'PROJECT_MANAGER',
+'ACCOUNT_MANAGER',
+'STOCK_MANAGER',],
 },
 
 {
@@ -300,6 +302,7 @@ const navItems = [
     'PAYMENT_MANAGER',
     'ACCOUNT_MANAGER',
     'TRADING_MANAGER',
+    'STOCK_MANAGER',
   ],
 },
 
