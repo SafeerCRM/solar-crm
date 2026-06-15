@@ -12685,6 +12685,146 @@ async rejectContractorRescheduleRequest(
   return this.projectContractorRescheduleRequestRepository.save(request);
 }
 
+async listContractorRescheduleRequests(
+  filters: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    assignmentType?: string;
+    contractorName?: string;
+    projectSearch?: string;
+    city?: string;
+    zone?: string;
+    date?: string;
+  },
+  user: any,
+) {
+  const roles = Array.isArray(user?.roles) ? user.roles : [];
+
+  if (
+    !roles.includes('OWNER') &&
+    !roles.includes('PROJECT_MANAGER')
+  ) {
+    throw new ForbiddenException(
+      'Only owner or project manager can view postpone requests',
+    );
+  }
+
+  const page =
+    Number(filters?.page) > 0 ? Number(filters.page) : 1;
+
+  const limit =
+    Number(filters?.limit) > 0
+      ? Math.min(Number(filters.limit), 100)
+      : 20;
+
+  const skip = (page - 1) * limit;
+
+  const query =
+    this.projectContractorRescheduleRequestRepository
+      .createQueryBuilder('request')
+      .leftJoin(Project, 'project', 'project.id = request.projectId');
+
+  if (filters?.status) {
+    query.andWhere('request.status = :status', {
+      status: filters.status,
+    });
+  }
+
+  if (filters?.assignmentType) {
+    query.andWhere('request.assignmentType = :assignmentType', {
+      assignmentType: filters.assignmentType,
+    });
+  }
+
+  if (filters?.contractorName) {
+    query.andWhere(
+      'LOWER(request.contractorName) LIKE :contractorName',
+      {
+        contractorName: `%${filters.contractorName.toLowerCase()}%`,
+      },
+    );
+  }
+
+  if (filters?.projectSearch) {
+    query.andWhere(
+      `
+      CAST(request.projectId AS TEXT) LIKE :projectSearch
+      OR LOWER(project.customerName) LIKE :projectSearch
+      OR LOWER(project.customerPhone) LIKE :projectSearch
+      `,
+      {
+        projectSearch: `%${String(filters.projectSearch)
+          .toLowerCase()
+          .trim()}%`,
+      },
+    );
+  }
+
+  if (filters?.city) {
+    query.andWhere('LOWER(project.city) LIKE :city', {
+      city: `%${filters.city.toLowerCase().trim()}%`,
+    });
+  }
+
+  if (filters?.zone) {
+    query.andWhere('LOWER(project.zone) LIKE :zone', {
+      zone: `%${filters.zone.toLowerCase().trim()}%`,
+    });
+  }
+
+  if (filters?.date) {
+    query.andWhere('request.requestedDate = :date', {
+      date: filters.date,
+    });
+  }
+
+  query.orderBy('request.createdAt', 'DESC');
+  query.skip(skip).take(limit);
+
+  const [data, total] = await query.getManyAndCount();
+
+  const projectIds = [
+    ...new Set(data.map((item) => item.projectId)),
+  ];
+
+  const projects = projectIds.length
+    ? await this.projectRepository.findByIds(projectIds)
+    : [];
+
+  const enrichedData = data.map((item) => {
+    const project = projects.find(
+      (p) => Number(p.id) === Number(item.projectId),
+    );
+
+    return {
+      ...item,
+      project: project
+        ? {
+            customerName: project.customerName || '',
+            customerPhone: project.customerPhone || '',
+            address: project.address || '',
+            gpsAddress: project.gpsAddress || '',
+            gpsLatitude: project.gpsLatitude || null,
+            gpsLongitude: project.gpsLongitude || null,
+            city: project.city || '',
+            zone: project.zone || '',
+            branchName: project.branchName || '',
+            projectOwnerName: project.projectOwnerName || '',
+          }
+        : null,
+    };
+  });
+
+  return {
+    data: enrichedData,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
+}
+
 async createCustomerUpdate(projectId: number, body: any, user: any) {
   const project = await this.projectRepository.findOne({
     where: { id: projectId },

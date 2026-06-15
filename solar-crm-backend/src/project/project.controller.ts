@@ -318,6 +318,18 @@ getCleaningByDate(
   );
 }
 
+@Roles('OWNER', 'PROJECT_MANAGER')
+@Get('contractor-reschedule')
+listContractorRescheduleRequests(
+  @Query() query: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.listContractorRescheduleRequests(
+    query,
+    user,
+  );
+}
+
 @Post('contractor-reschedule/request')
 requestContractorReschedule(
   @Body() body: any,
