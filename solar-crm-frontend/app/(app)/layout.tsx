@@ -118,6 +118,7 @@ const navItems = [
 'PROJECT_CONTRACTOR',
 'CUSTOMER_MANAGER',
 'STOCK_MANAGER',
+'TRADING_MANAGER',
   ],
 },
 
@@ -316,6 +317,16 @@ const navItems = [
     'ACCOUNT_MANAGER',
     'PAYMENT_MANAGER',
     'STOCK_MANAGER',
+  ],
+},
+
+{
+  name: 'Trading Account',
+  href: '/project/accounts/trading',
+  roles: [
+    'OWNER',
+    'PROJECT_MANAGER',
+    'TRADING_MANAGER',
   ],
 },
 
