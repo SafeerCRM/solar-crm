@@ -91,6 +91,8 @@ export default function ContractorAssignmentRegisterPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [scopeFilter, setScopeFilter] = useState('');
   const [projectIdFilter, setProjectIdFilter] = useState('');
+  const [pendingRescheduleRequests, setPendingRescheduleRequests] =
+  useState<any[]>([]);
 
   const fetchAssignments = async () => {
     try {
@@ -131,6 +133,66 @@ export default function ContractorAssignmentRegisterPage() {
     }
   };
 
+  const fetchPendingRescheduleRequests = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/contractor-reschedule/pending`,
+      {
+        headers: token
+          ? { Authorization: `Bearer ${token}` }
+          : {},
+      },
+    );
+
+    setPendingRescheduleRequests(
+      Array.isArray(res.data) ? res.data : [],
+    );
+  } catch (error) {
+    console.error(error);
+  }
+};
+
+const approveRescheduleRequest = async (id: number) => {
+  try {
+    const token = localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/contractor-reschedule/${id}/approve`,
+      {},
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+    );
+
+    alert('Postpone request approved');
+    fetchPendingRescheduleRequests();
+    fetchAssignments();
+  } catch (error: any) {
+    alert(error?.response?.data?.message || 'Failed to approve request');
+  }
+};
+
+const rejectRescheduleRequest = async (id: number) => {
+  const approvalNote = window.prompt('Reason for rejection?', '');
+
+  if (approvalNote === null) return;
+
+  try {
+    const token = localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/contractor-reschedule/${id}/reject`,
+      { approvalNote },
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+    );
+
+    alert('Postpone request rejected');
+    fetchPendingRescheduleRequests();
+  } catch (error: any) {
+    alert(error?.response?.data?.message || 'Failed to reject request');
+  }
+};
+
   const resetFilters = () => {
     setSearch('');
     setStatusFilter('');
@@ -143,6 +205,7 @@ export default function ContractorAssignmentRegisterPage() {
 
   useEffect(() => {
     fetchAssignments();
+    fetchPendingRescheduleRequests();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
@@ -171,7 +234,108 @@ export default function ContractorAssignmentRegisterPage() {
         <SummaryCard title="Pending Final Proofs" value={summary.pendingFinalProofs} />
         <SummaryCard title="On Hold" value={summary.onHold} />
         <SummaryCard title="Completed" value={summary.completed} />
+
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow">
+  <p className="text-sm font-semibold text-amber-700">
+    Pending Postpone Requests
+  </p>
+
+  <p className="mt-2 text-3xl font-bold text-gray-900">
+    {pendingRescheduleRequests.length}
+  </p>
+
+  <p className="mt-1 text-xs text-gray-500">
+    Contractor approval requests awaiting action
+  </p>
+</div>
       </div>
+
+      {pendingRescheduleRequests.length > 0 && (
+  <div className="rounded-2xl bg-white p-5 shadow">
+    <div className="flex items-center justify-between">
+      <h2 className="text-lg font-bold text-gray-800">
+        Pending Postpone Requests
+      </h2>
+
+      <span className="rounded-full bg-amber-100 px-3 py-1 text-sm font-semibold text-amber-700">
+        {pendingRescheduleRequests.length}
+      </span>
+    </div>
+
+    <div className="mt-4 overflow-x-auto">
+      <table className="min-w-full text-sm">
+        <thead>
+          <tr className="border-b bg-gray-50">
+            <th className="p-3 text-left">Contractor</th>
+            <th className="p-3 text-left">Project</th>
+            <th className="p-3 text-left">Type</th>
+            <th className="p-3 text-left">Old Date</th>
+            <th className="p-3 text-left">Requested Date</th>
+            <th className="p-3 text-left">Reason</th>
+            <th className="p-3 text-left">Action</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {pendingRescheduleRequests.map((item) => (
+            <tr
+              key={item.id}
+              className="border-b"
+            >
+              <td className="p-3">
+                {item.contractorName || '-'}
+              </td>
+
+              <td className="p-3">
+                #{item.projectId}
+              </td>
+
+              <td className="p-3">
+                {String(
+                  item.assignmentType || '',
+                ).replaceAll('_', ' ')}
+              </td>
+
+              <td className="p-3">
+                {item.oldDate || '-'}
+              </td>
+
+              <td className="p-3">
+                {item.requestedDate || '-'}
+              </td>
+
+              <td className="p-3">
+                {item.reason || '-'}
+              </td>
+
+              <td className="p-3">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() =>
+                      approveRescheduleRequest(item.id)
+                    }
+                    className="rounded-lg bg-green-600 px-3 py-2 text-xs font-semibold text-white"
+                  >
+                    Approve
+                  </button>
+
+                  <button
+                    onClick={() =>
+                      rejectRescheduleRequest(item.id)
+                    }
+                    className="rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white"
+                  >
+                    Reject
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </div>
+)}
 
       <div className="rounded-2xl bg-white p-5 shadow">
         <h2 className="text-lg font-bold text-gray-800">Filters</h2>
