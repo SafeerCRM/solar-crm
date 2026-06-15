@@ -43,6 +43,8 @@ const [issueForm, setIssueForm] = useState({
   quantity: '',
   sourceType: 'MANUAL',
   projectId: '',
+  dealerName: '',
+  dealerPhone: '',
   remarks: '',
 });
 
@@ -690,6 +692,8 @@ const issueStock = async () => {
         quantity: issueForm.quantity,
         sourceType: issueForm.sourceType,
         projectId: issueForm.projectId || undefined,
+        dealerName: issueForm.dealerName,
+dealerPhone: issueForm.dealerPhone,
         remarks: issueForm.remarks,
       },
       {
@@ -708,6 +712,8 @@ const issueStock = async () => {
       quantity: '',
       sourceType: 'MANUAL',
       projectId: '',
+      dealerName: '',
+      dealerPhone: '',
       remarks: '',
     });
 
@@ -1337,12 +1343,44 @@ const consumptionTotal = consumptions.reduce(
     >
       <option value="MANUAL">Manual</option>
       <option value="PROJECT">Project</option>
+      <option value="DEALER">
+  Dealer Sale
+</option>
       <option value="DAMAGE">Damage</option>
       <option value="RETURN_TO_VENDOR">
         Return To Vendor
       </option>
       <option value="ADJUSTMENT">Adjustment</option>
     </select>
+
+    {issueForm.sourceType === 'DEALER' && (
+      <>
+        <input
+          type="text"
+          placeholder="Dealer Name"
+          value={issueForm.dealerName}
+          onChange={(e) =>
+            setIssueForm({
+              ...issueForm,
+              dealerName: e.target.value,
+            })
+          }
+          className="rounded-xl border p-3 text-sm"
+        />
+        <input
+          type="text"
+          placeholder="Dealer Phone"
+          value={issueForm.dealerPhone}
+          onChange={(e) =>
+            setIssueForm({
+              ...issueForm,
+              dealerPhone: e.target.value,
+            })
+          }
+          className="rounded-xl border p-3 text-sm"
+        />
+      </>
+    )}
 
     <input
       type="number"
@@ -2265,6 +2303,7 @@ const consumptionTotal = consumptions.reduce(
           <th className="p-2 text-left">Rate</th>
           <th className="p-2 text-left">Amount</th>
           <th className="p-2 text-left">Source</th>
+          <th className="p-2 text-left">Dealer</th>
           <th className="p-2 text-left">Project</th>
           <th className="p-2 text-left">Created By</th>
           <th className="p-2 text-left">Remarks</th>
@@ -2276,7 +2315,7 @@ const consumptionTotal = consumptions.reduce(
         {movements.length === 0 && (
           <tr>
             <td
-              colSpan={12}
+              colSpan={13}
               className="p-4 text-center text-gray-500"
             >
               No stock movements found.
@@ -2319,12 +2358,25 @@ const consumptionTotal = consumptions.reduce(
             </td>
 
             <td className="p-2">
-              {item.sourceType || '-'}
-            </td>
+  {item.sourceType || '-'}
+</td>
 
-            <td className="p-2">
-              {item.projectId || '-'}
-            </td>
+<td className="p-2">
+  {item.dealerName ? (
+    <div>
+      <p className="font-semibold">{item.dealerName}</p>
+      <p className="text-xs text-gray-500">
+        {item.dealerPhone || '-'}
+      </p>
+    </div>
+  ) : (
+    '-'
+  )}
+</td>
+
+<td className="p-2">
+  {item.projectId || '-'}
+</td>
 
             <td className="p-2">
               {item.createdByName || '-'}
