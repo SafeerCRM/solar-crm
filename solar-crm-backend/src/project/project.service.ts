@@ -4700,6 +4700,9 @@ async getAccountExpenseSummary() {
 
 async listAccountExpenses() {
   return this.projectAccountExpenseRepository.find({
+    where: {
+      isHidden: false,
+    },
     order: {
       createdAt: 'DESC',
     },
