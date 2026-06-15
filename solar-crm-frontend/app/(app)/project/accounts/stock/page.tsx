@@ -1036,6 +1036,45 @@ const totalAvailableQuantity =
     0,
   );
 
+  const lowStockCount = stockItems.filter(
+  (item) => item.isLowStock,
+).length;
+
+const totalIncomingQty = movements
+  .filter((item) =>
+    ['RECEIVE', 'ADJUST_IN', 'TRANSFER_IN'].includes(
+      item.movementType,
+    ),
+  )
+  .reduce(
+    (total, item) => total + Number(item.quantity || 0),
+    0,
+  );
+
+const totalOutgoingQty = movements
+  .filter((item) =>
+    ['ISSUE', 'ADJUST_OUT', 'TRANSFER_OUT'].includes(
+      item.movementType,
+    ),
+  )
+  .reduce(
+    (total, item) => total + Number(item.quantity || 0),
+    0,
+  );
+
+const adjustmentCount = movements.filter((item) =>
+  ['ADJUST_IN', 'ADJUST_OUT'].includes(item.movementType),
+).length;
+
+const transferCount = movements.filter((item) =>
+  ['TRANSFER_IN', 'TRANSFER_OUT'].includes(item.movementType),
+).length;
+
+const consumptionTotal = consumptions.reduce(
+  (total, item) => total + Number(item.totalAmount || 0),
+  0,
+);
+
   return (
     <div className="mx-auto max-w-7xl space-y-5">
       <div className="rounded-2xl bg-white p-5 shadow">
@@ -2625,25 +2664,161 @@ const totalAvailableQuantity =
   </div>
 </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {[
-          'Material Availability',
-          'Stock Reports',
-        ].map((item) => (
-          <div
-            key={item}
-            className="rounded-2xl bg-white p-5 shadow"
-          >
-            <h2 className="text-lg font-bold text-gray-800">
-              {item}
-            </h2>
+      <div className="grid gap-4 xl:grid-cols-2">
 
-            <p className="mt-3 text-sm text-gray-500">
-              Upcoming implementation.
-            </p>
-          </div>
-        ))}
+  <div className="rounded-2xl bg-white p-5 shadow">
+    <h2 className="text-lg font-bold text-gray-800">
+      Material Availability
+    </h2>
+
+    <p className="mt-1 text-sm text-gray-500">
+      Current, reserved and available stock status.
+    </p>
+
+    <div className="mt-4 overflow-x-auto">
+      <table className="min-w-full text-sm">
+        <thead>
+          <tr className="border-b bg-gray-50">
+            <th className="p-2 text-left">Material</th>
+            <th className="p-2 text-left">Current</th>
+            <th className="p-2 text-left">Reserved</th>
+            <th className="p-2 text-left">Available</th>
+            <th className="p-2 text-left">Status</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {stockItems.slice(0, 10).map((item) => {
+            const currentQty = Number(
+              item.currentQuantity || 0,
+            );
+
+            const reservedQty = Number(
+              item.reservedQuantity || 0,
+            );
+
+            const availableQty = Math.max(
+              currentQty - reservedQty,
+              0,
+            );
+
+            return (
+              <tr
+                key={item.id}
+                className="border-b"
+              >
+                <td className="p-2 font-semibold">
+                  {item.materialName}
+                </td>
+
+                <td className="p-2">
+                  {currentQty}
+                </td>
+
+                <td className="p-2 text-orange-700">
+                  {reservedQty}
+                </td>
+
+                <td
+                  className={`p-2 font-semibold ${
+                    item.isLowStock
+                      ? 'text-red-700'
+                      : 'text-green-700'
+                  }`}
+                >
+                  {availableQty}
+                </td>
+
+                <td className="p-2">
+                  {item.isLowStock ? (
+                    <span className="rounded-full bg-red-100 px-2 py-1 text-xs font-semibold text-red-700">
+                      LOW
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-semibold text-green-700">
+                      OK
+                    </span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div className="rounded-2xl bg-white p-5 shadow">
+    <h2 className="text-lg font-bold text-gray-800">
+      Stock Reports
+    </h2>
+
+    <p className="mt-1 text-sm text-gray-500">
+      Quick operational stock summary.
+    </p>
+
+    <div className="mt-4 grid gap-3 md:grid-cols-2">
+
+      <div className="rounded-xl bg-blue-50 p-4">
+        <p className="text-xs text-blue-700">
+          Incoming Qty
+        </p>
+        <p className="text-xl font-bold text-blue-800">
+          {totalIncomingQty}
+        </p>
       </div>
+
+      <div className="rounded-xl bg-red-50 p-4">
+        <p className="text-xs text-red-700">
+          Outgoing Qty
+        </p>
+        <p className="text-xl font-bold text-red-800">
+          {totalOutgoingQty}
+        </p>
+      </div>
+
+      <div className="rounded-xl bg-orange-50 p-4">
+        <p className="text-xs text-orange-700">
+          Adjustments
+        </p>
+        <p className="text-xl font-bold text-orange-800">
+          {adjustmentCount}
+        </p>
+      </div>
+
+      <div className="rounded-xl bg-indigo-50 p-4">
+        <p className="text-xs text-indigo-700">
+          Transfers
+        </p>
+        <p className="text-xl font-bold text-indigo-800">
+          {transferCount}
+        </p>
+      </div>
+
+      <div className="rounded-xl bg-red-50 p-4">
+        <p className="text-xs text-red-700">
+          Low Stock Items
+        </p>
+        <p className="text-xl font-bold text-red-800">
+          {lowStockCount}
+        </p>
+      </div>
+
+      <div className="rounded-xl bg-green-50 p-4">
+        <p className="text-xs text-green-700">
+          Consumption Value
+        </p>
+        <p className="text-xl font-bold text-green-800">
+          {formatCurrency(
+            consumptionTotal,
+          )}
+        </p>
+      </div>
+
+    </div>
+  </div>
+
+</div>
     </div>
   );
 }
