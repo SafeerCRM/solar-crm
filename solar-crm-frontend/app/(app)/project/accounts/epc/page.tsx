@@ -492,6 +492,40 @@ const hideExpense = async (
   }
 };
 
+const contractorExpenses = expenses.filter(
+  (item) => item.expenseType === 'CONTRACTOR_PAYMENT',
+);
+
+const labourExpenses = expenses.filter(
+  (item) => item.expenseType === 'LABOUR_PAYMENT',
+);
+
+const transportationExpenses = expenses.filter(
+  (item) => item.expenseType === 'TRANSPORTATION',
+);
+
+const totalApprovedExpenses = expenses
+  .filter((item) => item.approvalStatus === 'APPROVED')
+  .reduce(
+    (total, item) => total + Number(item.amount || 0),
+    0,
+  );
+
+const totalPendingExpenses = expenses
+  .filter((item) => item.approvalStatus === 'PENDING')
+  .reduce(
+    (total, item) => total + Number(item.amount || 0),
+    0,
+  );
+
+const estimatedNetPosition =
+  Number(summary.totalReceived || 0) -
+  Number(totalApprovedExpenses || 0);
+
+const estimatedPendingPosition =
+  Number(summary.totalPending || 0) -
+  Number(totalPendingExpenses || 0);
+
   return (
     <div className="mx-auto max-w-7xl space-y-5">
       <div className="rounded-2xl bg-white p-5 shadow">
@@ -941,44 +975,137 @@ const hideExpense = async (
         </Link>
 
         <div className="rounded-2xl bg-white p-5 shadow">
-          <h2 className="text-lg font-bold text-gray-800">
-            Contractor Payments
-          </h2>
+  <h2 className="text-lg font-bold text-gray-800">
+    Contractor Payments
+  </h2>
 
-          <p className="mt-2 text-sm text-gray-500">
-            Phase 2 Implementation.
-          </p>
-        </div>
+  <p className="mt-2 text-sm text-gray-500">
+    Approved and pending contractor payment expenses.
+  </p>
 
-        <div className="rounded-2xl bg-white p-5 shadow">
-          <h2 className="text-lg font-bold text-gray-800">
-            Labour Payments
-          </h2>
+  <p className="mt-4 text-2xl font-bold text-red-700">
+    ₹
+    {contractorExpenses
+      .reduce(
+        (total, item) =>
+          total + Number(item.amount || 0),
+        0,
+      )
+      .toLocaleString('en-IN')}
+  </p>
 
-          <p className="mt-2 text-sm text-gray-500">
-            Phase 2 Implementation.
-          </p>
-        </div>
+  <p className="mt-2 text-xs text-gray-500">
+    Entries: {contractorExpenses.length}
+  </p>
+</div>
 
-        <div className="rounded-2xl bg-white p-5 shadow">
-          <h2 className="text-lg font-bold text-gray-800">
-            Transportation
-          </h2>
+<div className="rounded-2xl bg-white p-5 shadow">
+  <h2 className="text-lg font-bold text-gray-800">
+    Labour Payments
+  </h2>
 
-          <p className="mt-2 text-sm text-gray-500">
-            Phase 2 Implementation.
-          </p>
-        </div>
+  <p className="mt-2 text-sm text-gray-500">
+    Labour related approved and pending expenses.
+  </p>
 
-        <div className="rounded-2xl bg-white p-5 shadow">
-          <h2 className="text-lg font-bold text-gray-800">
-            EPC Profit Reports
-          </h2>
+  <p className="mt-4 text-2xl font-bold text-orange-700">
+    ₹
+    {labourExpenses
+      .reduce(
+        (total, item) =>
+          total + Number(item.amount || 0),
+        0,
+      )
+      .toLocaleString('en-IN')}
+  </p>
 
-          <p className="mt-2 text-sm text-gray-500">
-            Phase 3 Implementation.
-          </p>
-        </div>
+  <p className="mt-2 text-xs text-gray-500">
+    Entries: {labourExpenses.length}
+  </p>
+</div>
+
+<div className="rounded-2xl bg-white p-5 shadow">
+  <h2 className="text-lg font-bold text-gray-800">
+    Transportation
+  </h2>
+
+  <p className="mt-2 text-sm text-gray-500">
+    Transportation and logistics expense tracking.
+  </p>
+
+  <p className="mt-4 text-2xl font-bold text-blue-700">
+    ₹
+    {transportationExpenses
+      .reduce(
+        (total, item) =>
+          total + Number(item.amount || 0),
+        0,
+      )
+      .toLocaleString('en-IN')}
+  </p>
+
+  <p className="mt-2 text-xs text-gray-500">
+    Entries: {transportationExpenses.length}
+  </p>
+</div>
+
+<div className="rounded-2xl bg-white p-5 shadow">
+  <h2 className="text-lg font-bold text-gray-800">
+    EPC Profit Reports
+  </h2>
+
+  <p className="mt-2 text-sm text-gray-500">
+    Estimated position based on received collections and approved expenses.
+  </p>
+
+  <div className="mt-4 space-y-2 text-sm">
+    <div className="flex justify-between">
+      <span className="text-gray-500">
+        Total Received
+      </span>
+      <span className="font-semibold text-green-700">
+        ₹
+        {summary.totalReceived.toLocaleString('en-IN')}
+      </span>
+    </div>
+
+    <div className="flex justify-between">
+      <span className="text-gray-500">
+        Approved Expenses
+      </span>
+      <span className="font-semibold text-red-700">
+        ₹
+        {totalApprovedExpenses.toLocaleString('en-IN')}
+      </span>
+    </div>
+
+    <div className="border-t pt-2 flex justify-between">
+      <span className="font-semibold text-gray-700">
+        Estimated Net
+      </span>
+      <span
+        className={`font-bold ${
+          estimatedNetPosition >= 0
+            ? 'text-green-700'
+            : 'text-red-700'
+        }`}
+      >
+        ₹
+        {estimatedNetPosition.toLocaleString('en-IN')}
+      </span>
+    </div>
+
+    <div className="flex justify-between">
+      <span className="text-gray-500">
+        Pending Collection - Pending Expenses
+      </span>
+      <span className="font-semibold text-blue-700">
+        ₹
+        {estimatedPendingPosition.toLocaleString('en-IN')}
+      </span>
+    </div>
+  </div>
+</div>
       </div>
     </div>
   );
