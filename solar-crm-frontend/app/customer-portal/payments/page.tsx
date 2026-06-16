@@ -8,6 +8,14 @@ export default function CustomerPaymentsPage() {
   const [dashboard, setDashboard] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [selectedReceipt, setSelectedReceipt] =
+  useState<File | null>(null);
+
+const [receiptPreview, setReceiptPreview] =
+  useState<string>('');
+
+const [uploadingReceipt, setUploadingReceipt] =
+  useState(false);
 
   const [form, setForm] = useState({
     projectId: '',
@@ -62,6 +70,104 @@ export default function CustomerPaymentsPage() {
     loadDashboard();
   }, []);
 
+  const compressImageFile = async (file: File) => {
+  if (!file.type.startsWith('image/')) {
+    return file;
+  }
+
+  return new Promise<File>((resolve) => {
+    const img = new Image();
+
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+
+      let width = img.width;
+      let height = img.height;
+
+      const maxWidth = 1600;
+
+      if (width > maxWidth) {
+        height = (height * maxWidth) / width;
+        width = maxWidth;
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext('2d');
+
+      ctx?.drawImage(img, 0, 0, width, height);
+
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            resolve(file);
+            return;
+          }
+
+          resolve(
+            new File(
+              [blob],
+              file.name,
+              {
+                type: 'image/jpeg',
+              },
+            ),
+          );
+        },
+        'image/jpeg',
+        0.8,
+      );
+    };
+
+    img.src = URL.createObjectURL(file);
+  });
+};
+
+const uploadReceiptFile = async () => {
+  if (!selectedReceipt) {
+    return null;
+  }
+
+  try {
+    setUploadingReceipt(true);
+
+    const token =
+      localStorage.getItem('customer_token');
+
+    const uploadFile =
+      await compressImageFile(selectedReceipt);
+
+    const formData = new FormData();
+
+    formData.append('files', uploadFile);
+
+    const res = await fetch(
+      `${API_BASE_URL}/customer-auth/payment-receipts/upload`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      },
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(
+        data?.message ||
+          'Receipt upload failed',
+      );
+    }
+
+    return data?.receipts?.[0] || null;
+  } finally {
+    setUploadingReceipt(false);
+  }
+};
+
   const submitReceipt = async () => {
     if (!form.projectId) {
       alert('Please select project');
@@ -87,6 +193,12 @@ export default function CustomerPaymentsPage() {
         (project: any) => String(project.id) === String(form.projectId),
       );
 
+      let receiptData = null;
+
+if (selectedReceipt) {
+  receiptData = await uploadReceiptFile();
+}
+
       const res = await fetch(`${API_BASE_URL}/customer-auth/payment-receipts`, {
         method: 'POST',
         headers: {
@@ -94,11 +206,13 @@ export default function CustomerPaymentsPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          ...form,
-          amount: Number(form.amount || 0),
-          projectName: selectedProject?.customerName || '',
-          branchName: selectedProject?.branchName || '',
-        }),
+  ...form,
+  amount: Number(form.amount || 0),
+  receiptUrl: receiptData?.fileUrl || '',
+  receiptFileName: receiptData?.fileName || '',
+  projectName: selectedProject?.customerName || '',
+  branchName: selectedProject?.branchName || '',
+}),
       });
 
       const data = await res.json();
@@ -120,6 +234,9 @@ export default function CustomerPaymentsPage() {
         receiptUrl: '',
         receiptFileName: '',
       });
+
+      setSelectedReceipt(null);
+setReceiptPreview('');
 
       loadDashboard();
     } catch (error) {
@@ -280,18 +397,52 @@ export default function CustomerPaymentsPage() {
                   className="w-full rounded-2xl border p-3"
                 />
 
-                <input
-                  placeholder="Receipt URL for now"
-                  value={form.receiptUrl}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      receiptUrl: e.target.value,
-                      receiptFileName: e.target.value ? 'receipt' : '',
-                    })
-                  }
-                  className="w-full rounded-2xl border p-3"
-                />
+                <div>
+  <label className="mb-2 block text-sm font-bold text-gray-700">
+    Receipt Upload
+  </label>
+
+  <input
+    type="file"
+    accept="image/*,.pdf"
+    onChange={(e) => {
+      const file =
+        e.target.files?.[0] || null;
+
+      setSelectedReceipt(file);
+
+      if (
+        file &&
+        file.type.startsWith('image/')
+      ) {
+        setReceiptPreview(
+          URL.createObjectURL(file),
+        );
+      } else {
+        setReceiptPreview('');
+      }
+    }}
+    className="w-full rounded-2xl border p-3"
+  />
+
+  {receiptPreview && (
+    <img
+      src={receiptPreview}
+      alt="Receipt"
+      className="mt-3 h-40 rounded-2xl border object-cover"
+    />
+  )}
+
+  {selectedReceipt &&
+    selectedReceipt.type ===
+      'application/pdf' && (
+      <div className="mt-3 rounded-2xl bg-red-50 p-3 text-sm font-semibold text-red-700">
+        PDF Selected:
+        {' '}
+        {selectedReceipt.name}
+      </div>
+    )}
+</div>
 
                 <textarea
                   rows={3}
@@ -308,7 +459,11 @@ export default function CustomerPaymentsPage() {
                   disabled={saving}
                   className="w-full rounded-2xl bg-orange-500 py-3 font-black text-white hover:bg-orange-600 disabled:opacity-50"
                 >
-                  {saving ? 'Submitting...' : 'Submit Receipt'}
+                  {uploadingReceipt
+  ? 'Uploading Receipt...'
+  : saving
+  ? 'Submitting...'
+  : 'Submit Receipt'}
                 </button>
               </div>
             </div>
