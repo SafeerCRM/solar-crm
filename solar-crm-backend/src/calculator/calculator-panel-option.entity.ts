@@ -26,6 +26,15 @@ export class CalculatorPanelOption {
   @Column({ type: 'float' })
   rate: number;
 
+  @Column({ type: 'float', default: 0 })
+availableQuantity: number;
+
+@Column({ type: 'date', nullable: true })
+expectedDate: Date;
+
+@Column({ type: 'text', nullable: true })
+availabilityNote: string;
+
   @Column({ type: 'boolean', default: true })
   isActive: boolean;
 

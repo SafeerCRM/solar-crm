@@ -782,6 +782,13 @@ async createPanelOption(data: any) {
     brandName: String(data.brandName || '').trim(),
     capacityWatt: Number(data.capacityWatt || 0),
     rate: Number(data.rate || 0),
+
+    availableQuantity: Number(data.availableQuantity || 0),
+    expectedDate:
+      String(data.expectedDate || '').trim() || (null as any),
+    availabilityNote:
+      String(data.availabilityNote || '').trim(),
+
     isActive: data.isActive !== false,
   });
 
@@ -809,6 +816,20 @@ async updatePanelOption(id: number, data: any) {
         ? Number(data.capacityWatt || 0)
         : option.capacityWatt,
     rate: data.rate !== undefined ? Number(data.rate || 0) : option.rate,
+    availableQuantity:
+  data.availableQuantity !== undefined
+    ? Number(data.availableQuantity || 0)
+    : option.availableQuantity,
+
+expectedDate:
+  data.expectedDate !== undefined
+    ? String(data.expectedDate || '').trim() || (null as any)
+    : option.expectedDate,
+
+availabilityNote:
+  data.availabilityNote !== undefined
+    ? String(data.availabilityNote || '').trim()
+    : option.availabilityNote,
     isActive:
       data.isActive !== undefined ? Boolean(data.isActive) : option.isActive,
   });
