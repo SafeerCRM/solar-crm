@@ -673,4 +673,90 @@ async updateWorkDateRequest(id: number, body: any, user: any) {
 
   return this.workDateRequestRepository.save(request);
 }
+
+async uploadPaymentReceipts(files: any[], user: any) {
+  if (!Array.isArray(files) || files.length === 0) {
+    throw new BadRequestException('At least one payment receipt is required');
+  }
+
+  const uploadedFiles: any[] = [];
+
+  const allowedTypes = [
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'application/pdf',
+  ];
+
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const bucket =
+    process.env.SUPABASE_PROJECT_DOCUMENTS_BUCKET || 'project-documents';
+
+  if (!supabaseUrl || !serviceKey) {
+    throw new BadRequestException('Supabase storage is not configured');
+  }
+
+  const supabase = createClient(supabaseUrl, serviceKey);
+
+  for (const file of files) {
+    if (!file) continue;
+
+    const mimeType = String(file.mimetype || '');
+
+    if (!allowedTypes.includes(mimeType)) {
+      throw new BadRequestException(
+        'Only JPG, PNG, WEBP and PDF receipts are allowed',
+      );
+    }
+
+    const maxSize = 5 * 1024 * 1024;
+
+    if (file.size > maxSize) {
+      throw new BadRequestException('Receipt file must be less than 5 MB');
+    }
+
+    const originalName = String(file.originalname || 'payment-receipt');
+    const extension = originalName.includes('.')
+      ? originalName.split('.').pop()
+      : mimeType.split('/')[1] || 'file';
+
+    const safeExtension = String(extension || 'file').replace(
+      /[^a-zA-Z0-9]/g,
+      '',
+    );
+
+    const filePath = `customer-payment-receipts/customer-${
+      user?.id || 'unknown'
+    }/${Date.now()}-${randomUUID()}.${safeExtension}`;
+
+    const uploadResult = await supabase.storage
+      .from(bucket)
+      .upload(filePath, file.buffer, {
+        contentType: mimeType,
+        upsert: false,
+      });
+
+    if (uploadResult.error) {
+      throw new BadRequestException(uploadResult.error.message);
+    }
+
+    const publicUrlResult = supabase.storage
+      .from(bucket)
+      .getPublicUrl(filePath);
+
+    uploadedFiles.push({
+      fileUrl: publicUrlResult.data.publicUrl,
+      fileName: originalName,
+      fileSize: file.size,
+      filePath,
+      mimeType,
+    });
+  }
+
+  return {
+    message: `${uploadedFiles.length} receipt file(s) uploaded successfully`,
+    receipts: uploadedFiles,
+  };
+}
 }

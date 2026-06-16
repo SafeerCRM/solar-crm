@@ -174,4 +174,30 @@ async createCustomerPaymentReceipt(
     customerCode: payload.customerCode,
   });
 }
+
+@Post('payment-receipts/upload')
+@UseInterceptors(FilesInterceptor('files', 5))
+async uploadPaymentReceipts(
+  @Req() req: any,
+  @UploadedFiles() files: any[],
+) {
+  const authHeader = req.headers?.authorization || '';
+  const token = authHeader.replace('Bearer ', '');
+
+  if (!token) {
+    throw new UnauthorizedException('Customer token missing');
+  }
+
+  const payload: any = jwt.verify(token, 'mysecretkey');
+
+  if (!payload?.customerId) {
+    throw new UnauthorizedException('Invalid customer token');
+  }
+
+  return this.service.uploadPaymentReceipts(files, {
+    id: Number(payload.customerId),
+    name: payload.customerCode,
+    roles: ['CUSTOMER'],
+  });
+}
 }
