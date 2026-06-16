@@ -157,11 +157,13 @@ export default function CustomerPortalPage() {
     text="Report generation, inverter, panel, subsidy, payment or service issue."
   />
 </a>
-              <ActionCard
-                icon="💳"
-                title="Upload Payment Receipt"
-                text="Upload receipt after payment to company account."
-              />
+              <a href="/customer-portal/payments">
+  <ActionCard
+    icon="💳"
+    title="Payments"
+    text="View installments, company account details, UPI/QR and upload receipt."
+  />
+</a>
               <ActionCard
                 icon="🎁"
                 title="Refer Customer"
