@@ -269,16 +269,16 @@ if (!isAllowedAudio) {
     complaint.ownerRemarks = body?.ownerRemarks ?? complaint.ownerRemarks;
 
     complaint.ownerAudioUrl =
-  body?.ownerAudioUrl ?? complaint.ownerAudioUrl;
+  String(body?.ownerAudioUrl || '').trim() || (undefined as any);
 
 complaint.followUpDate =
-  body?.followUpDate ?? complaint.followUpDate;
+  String(body?.followUpDate || '').trim() || (undefined as any);
 
 complaint.followUpTime =
-  body?.followUpTime ?? complaint.followUpTime;
+  String(body?.followUpTime || '').trim() || (undefined as any);
 
 complaint.nextAction =
-  body?.nextAction ?? complaint.nextAction;
+  String(body?.nextAction || '').trim() || (undefined as any);
 
     if (
       complaint.status === StaffComplaintStatus.RESOLVED ||
