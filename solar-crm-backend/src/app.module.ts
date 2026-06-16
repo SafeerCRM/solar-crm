@@ -20,6 +20,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { ProposalModule } from './proposal/proposal.module';
 import { CustomerModule } from './customer/customer.module';
 import { StaffComplaintModule } from './staff-complaint/staff-complaint.module';
+import { CustomerPortalModule } from './customer-portal/customer-portal.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { StaffComplaintModule } from './staff-complaint/staff-complaint.module';
     ProposalModule,
     CustomerModule,
     StaffComplaintModule,
+    CustomerPortalModule,
   ],
   controllers: [AppController],
   providers: [AppService],
