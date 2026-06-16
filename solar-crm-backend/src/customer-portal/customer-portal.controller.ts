@@ -88,4 +88,33 @@ updateWorkDateRequest(
 ) {
   return this.service.updateWorkDateRequest(id, body, user);
 }
+
+@Roles(
+  'OWNER',
+  'CUSTOMER_MANAGER',
+  'PROJECT_MANAGER',
+  'PAYMENT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'MARKETING_HEAD',
+)
+@Get('payment-receipts')
+listPaymentReceipts(@Query() query: any) {
+  return this.service.listPaymentReceipts(query);
+}
+
+@Roles(
+  'OWNER',
+  'CUSTOMER_MANAGER',
+  'PROJECT_MANAGER',
+  'PAYMENT_MANAGER',
+  'ACCOUNT_MANAGER',
+)
+@Patch('payment-receipts/:id')
+updatePaymentReceipt(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.service.updatePaymentReceipt(id, body, user);
+}
 }

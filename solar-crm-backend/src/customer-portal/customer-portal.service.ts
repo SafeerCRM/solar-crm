@@ -759,4 +759,106 @@ async uploadPaymentReceipts(files: any[], user: any) {
     receipts: uploadedFiles,
   };
 }
+
+async listPaymentReceipts(query: any) {
+  const page = Number(query?.page || 1);
+  const limit = Math.min(Number(query?.limit || 20), 100);
+  const skip = (page - 1) * limit;
+
+  const qb = this.paymentReceiptRepository
+    .createQueryBuilder('receipt')
+    .where('receipt.isHidden = false')
+    .orderBy('receipt.createdAt', 'DESC');
+
+  if (query?.customerId) {
+    qb.andWhere('receipt.customerId = :customerId', {
+      customerId: Number(query.customerId),
+    });
+  }
+
+  if (query?.projectId) {
+    qb.andWhere('receipt.projectId = :projectId', {
+      projectId: Number(query.projectId),
+    });
+  }
+
+  if (query?.status) {
+    qb.andWhere('receipt.status = :status', {
+      status: query.status,
+    });
+  }
+
+  if (query?.paymentMode) {
+    qb.andWhere('receipt.paymentMode = :paymentMode', {
+      paymentMode: query.paymentMode,
+    });
+  }
+
+  if (query?.branchName) {
+    qb.andWhere('LOWER(receipt.branchName) LIKE :branchName', {
+      branchName: `%${String(query.branchName).toLowerCase()}%`,
+    });
+  }
+
+  if (query?.customerSearch) {
+    const search = `%${String(query.customerSearch).toLowerCase()}%`;
+
+    qb.andWhere(
+      `
+      LOWER(receipt.customerName) LIKE :search
+      OR LOWER(receipt.customerCode) LIKE :search
+      `,
+      { search },
+    );
+  }
+
+  if (query?.fromDate) {
+    qb.andWhere('receipt.createdAt >= :fromDate', {
+      fromDate: new Date(query.fromDate),
+    });
+  }
+
+  if (query?.toDate) {
+    const endDate = new Date(query.toDate);
+    endDate.setHours(23, 59, 59, 999);
+
+    qb.andWhere('receipt.createdAt <= :toDate', {
+      toDate: endDate,
+    });
+  }
+
+  qb.skip(skip).take(limit);
+
+  const [data, total] = await qb.getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
+}
+
+async updatePaymentReceipt(id: number, body: any, user: any) {
+  const receipt = await this.paymentReceiptRepository.findOne({
+    where: { id },
+  });
+
+  if (!receipt) {
+    throw new NotFoundException('Payment receipt not found');
+  }
+
+  receipt.status = body.status || receipt.status;
+  receipt.verificationRemarks =
+    body.verificationRemarks || receipt.verificationRemarks;
+
+  if (body.status === 'VERIFIED' || body.status === 'REJECTED') {
+    receipt.verifiedBy = user?.id || null;
+    receipt.verifiedByName = user?.name || user?.email || '';
+    receipt.verifiedAt = new Date();
+  }
+
+  return this.paymentReceiptRepository.save(receipt);
+}
 }
