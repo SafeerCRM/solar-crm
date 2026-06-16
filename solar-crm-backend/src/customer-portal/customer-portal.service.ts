@@ -9,6 +9,8 @@ import { CustomerPaymentReceipt } from './customer-payment-receipt.entity';
 import { CustomerWorkDateRequest } from './customer-work-date-request.entity';
 import { CustomerNotification } from './customer-notification.entity';
 import { CustomerCleaningReminder } from './customer-cleaning-reminder.entity';
+import { UnauthorizedException } from '@nestjs/common';
+import * as jwt from 'jsonwebtoken';
 
 @Injectable()
 export class CustomerPortalService {
@@ -201,4 +203,62 @@ export class CustomerPortalService {
 
     return this.paymentReceiptRepository.save(receipt);
   }
+
+  async customerLogin(username: string, password: string) {
+  const loginUsername = String(username || '').trim();
+  const loginPassword = String(password || '').trim();
+
+  if (!loginUsername || !loginPassword) {
+    throw new UnauthorizedException('Username and password are required');
+  }
+
+  const customer = await this.customerRepository.findOne({
+    where: [
+      { portalUsername: loginUsername, isPortalEnabled: true, isHidden: false },
+      { mobile: loginUsername, isPortalEnabled: true, isHidden: false },
+      { electricityKNumber: loginUsername, isPortalEnabled: true, isHidden: false },
+    ] as any,
+  });
+
+  if (!customer) {
+    throw new UnauthorizedException('Customer portal access not found');
+  }
+
+  const expectedPassword =
+    (customer as any).portalPasswordHash ||
+    customer.mobile ||
+    customer.electricityKNumber ||
+    customer.customerCode;
+
+  if (loginPassword !== expectedPassword) {
+    throw new UnauthorizedException('Invalid customer password');
+  }
+
+  (customer as any).lastPortalLoginAt = new Date();
+  await this.customerRepository.save(customer);
+
+  const access_token = jwt.sign(
+    {
+      sub: customer.id,
+      customerId: customer.id,
+      customerCode: customer.customerCode,
+      roleType: 'CUSTOMER_PORTAL',
+      roles: ['CUSTOMER'],
+    },
+    'mysecretkey',
+    { expiresIn: '7d' },
+  );
+
+  return {
+    access_token,
+    customer: {
+      id: customer.id,
+      customerCode: customer.customerCode,
+      customerName: customer.customerName,
+      mobile: customer.mobile,
+      email: customer.email,
+      electricityKNumber: customer.electricityKNumber,
+    },
+  };
+}
 }

@@ -10,6 +10,7 @@ import { CustomerNotification } from './customer-notification.entity';
 import { CustomerCleaningReminder } from './customer-cleaning-reminder.entity';
 import { Customer } from '../customer/customer.entity';
 import { Project } from '../project/project.entity';
+import { CustomerAuthController } from './customer-auth.controller';
 
 @Module({
   imports: [
@@ -24,7 +25,7 @@ import { Project } from '../project/project.entity';
       Project,
     ]),
   ],
-  controllers: [CustomerPortalController],
+  controllers: [CustomerPortalController, CustomerAuthController],
   providers: [CustomerPortalService],
   exports: [CustomerPortalService],
 })
