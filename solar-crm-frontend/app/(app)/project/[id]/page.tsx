@@ -4363,6 +4363,7 @@ const canApproveAndReserveStock =
       [
         'PROJECT_CREATION',
         'SUBSIDY_DEPARTMENT',
+        'CONTRACTOR_WORK',
         'DOCUMENTS',
         'PROJECT_HISTORY',
       ].includes(tab.key),
