@@ -31,6 +31,13 @@ export enum CustomerComplaintStatus {
   REJECTED = 'REJECTED',
 }
 
+export enum CustomerComplaintPriority {
+  LOW = 'LOW',
+  MEDIUM = 'MEDIUM',
+  HIGH = 'HIGH',
+  URGENT = 'URGENT',
+}
+
 @Entity()
 export class CustomerComplaint {
   @PrimaryGeneratedColumn()
@@ -79,6 +86,13 @@ export class CustomerComplaint {
     default: CustomerComplaintStatus.OPEN,
   })
   status: CustomerComplaintStatus;
+
+  @Column({
+  type: 'enum',
+  enum: CustomerComplaintPriority,
+  default: CustomerComplaintPriority.MEDIUM,
+})
+priority: CustomerComplaintPriority;
 
   @Column({ nullable: true })
   assignedTo: number;

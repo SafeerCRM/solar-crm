@@ -11,6 +11,7 @@ import { CustomerNotification } from './customer-notification.entity';
 import { CustomerCleaningReminder } from './customer-cleaning-reminder.entity';
 import { UnauthorizedException } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
+import { CustomerComplaintAttachment } from './customer-complaint-attachment.entity';
 
 @Injectable()
 export class CustomerPortalService {
@@ -23,6 +24,9 @@ export class CustomerPortalService {
 
     @InjectRepository(CustomerComplaint)
     private readonly complaintRepository: Repository<CustomerComplaint>,
+
+    @InjectRepository(CustomerComplaintAttachment)
+private readonly complaintAttachmentRepository: Repository<CustomerComplaintAttachment>,
 
     @InjectRepository(CustomerReferral)
     private readonly referralRepository: Repository<CustomerReferral>,
@@ -55,26 +59,49 @@ export class CustomerPortalService {
     });
 
     const complaints = await this.complaintRepository.find({
-      where: { customerId, isHidden: false },
-      order: { createdAt: 'DESC' },
-      take: 10,
-    });
+  where: { customerId, isHidden: false },
+  order: { createdAt: 'DESC' },
+  take: 10,
+});
 
-    const notifications = await this.notificationRepository.find({
-      where: { customerId },
-      order: { createdAt: 'DESC' },
-      take: 10,
-    });
+const complaintIds = complaints.map((item) => item.id);
+
+const complaintAttachments = complaintIds.length
+  ? await this.complaintAttachmentRepository
+      .createQueryBuilder('attachment')
+      .where('attachment.complaintId IN (:...complaintIds)', {
+        complaintIds,
+      })
+      .orderBy('attachment.createdAt', 'DESC')
+      .getMany()
+  : [];
+
+const complaintsWithAttachments = complaints.map((complaint) => ({
+  ...complaint,
+  attachments: complaintAttachments.filter(
+    (attachment) => attachment.complaintId === complaint.id,
+  ),
+}));
+
+const notifications = await this.notificationRepository.find({
+  where: { customerId },
+  order: { createdAt: 'DESC' },
+  take: 10,
+});
 
     return {
-      customer,
-      projects,
-      complaints,
-      notifications,
-      totalProjects: projects.length,
-      openComplaints: complaints.filter((c) => c.status !== 'CLOSED').length,
-      unreadNotifications: notifications.filter((n) => !n.isRead).length,
-    };
+  customer,
+  projects,
+  complaints: complaintsWithAttachments,
+  notifications,
+  totalProjects: projects.length,
+  openComplaints: complaintsWithAttachments.filter(
+    (c) => c.status !== 'CLOSED',
+  ).length,
+  unreadNotifications: notifications.filter(
+    (n) => !n.isRead,
+  ).length,
+};
   }
 
   async createComplaint(body: any, user: any) {
@@ -103,7 +130,32 @@ export class CustomerPortalService {
       createdByRole: Array.isArray(user?.roles) ? user.roles.join(', ') : '',
     });
 
-    return this.complaintRepository.save(complaint);
+    const savedComplaint = await this.complaintRepository.save(complaint);
+
+const attachments = Array.isArray(body.attachments) ? body.attachments : [];
+
+for (const attachment of attachments) {
+  if (!attachment?.fileUrl) continue;
+
+  const complaintAttachment = this.complaintAttachmentRepository.create({
+    complaintId: savedComplaint.id,
+    fileUrl: attachment.fileUrl,
+    fileName: attachment.fileName || '',
+    fileSize: attachment.fileSize ? Number(attachment.fileSize) : undefined,
+    uploadedBy: user?.id || null,
+    uploadedByName: user?.name || user?.email || '',
+  });
+
+  await this.complaintAttachmentRepository.save(complaintAttachment);
+}
+
+return {
+  ...savedComplaint,
+  attachments: await this.complaintAttachmentRepository.find({
+    where: { complaintId: savedComplaint.id },
+    order: { createdAt: 'DESC' },
+  }),
+};
   }
 
   async listComplaints(query: any) {
@@ -205,13 +257,32 @@ export class CustomerPortalService {
 
   const [data, total] = await qb.getManyAndCount();
 
-  return {
-    data,
-    total,
-    page,
-    limit,
-    totalPages: Math.ceil(total / limit) || 1,
-  };
+const complaintIds = data.map((item) => item.id);
+
+const attachments = complaintIds.length
+  ? await this.complaintAttachmentRepository
+      .createQueryBuilder('attachment')
+      .where('attachment.complaintId IN (:...complaintIds)', {
+        complaintIds,
+      })
+      .orderBy('attachment.createdAt', 'DESC')
+      .getMany()
+  : [];
+
+const dataWithAttachments = data.map((complaint) => ({
+  ...complaint,
+  attachments: attachments.filter(
+    (attachment) => attachment.complaintId === complaint.id,
+  ),
+}));
+
+return {
+  data: dataWithAttachments,
+  total,
+  page,
+  limit,
+  totalPages: Math.ceil(total / limit) || 1,
+};
 }
 
   async updateComplaint(id: number, body: any, user: any) {

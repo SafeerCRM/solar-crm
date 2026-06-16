@@ -11,11 +11,13 @@ import { CustomerCleaningReminder } from './customer-cleaning-reminder.entity';
 import { Customer } from '../customer/customer.entity';
 import { Project } from '../project/project.entity';
 import { CustomerAuthController } from './customer-auth.controller';
+import { CustomerComplaintAttachment } from './customer-complaint-attachment.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([
       CustomerComplaint,
+CustomerComplaintAttachment,
       CustomerReferral,
       CustomerPaymentReceipt,
       CustomerWorkDateRequest,
