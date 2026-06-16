@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Customer } from '../customer/customer.entity';
@@ -9,9 +14,10 @@ import { CustomerPaymentReceipt } from './customer-payment-receipt.entity';
 import { CustomerWorkDateRequest } from './customer-work-date-request.entity';
 import { CustomerNotification } from './customer-notification.entity';
 import { CustomerCleaningReminder } from './customer-cleaning-reminder.entity';
-import { UnauthorizedException } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
 import { CustomerComplaintAttachment } from './customer-complaint-attachment.entity';
+import { createClient } from '@supabase/supabase-js';
+import { randomUUID } from 'crypto';
 
 @Injectable()
 export class CustomerPortalService {
@@ -399,6 +405,82 @@ return {
       email: customer.email,
       electricityKNumber: customer.electricityKNumber,
     },
+  };
+}
+
+async uploadComplaintAttachments(files: any[], user: any) {
+  if (!Array.isArray(files) || files.length === 0) {
+    throw new BadRequestException('At least one complaint photo is required');
+  }
+
+  const uploadedFiles: any[] = [];
+
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const bucket =
+    process.env.SUPABASE_PROJECT_DOCUMENTS_BUCKET || 'project-documents';
+
+  if (!supabaseUrl || !serviceKey) {
+    throw new BadRequestException('Supabase storage is not configured');
+  }
+
+  const supabase = createClient(supabaseUrl, serviceKey);
+
+  for (const file of files) {
+    if (!file) continue;
+
+    const mimeType = String(file.mimetype || '');
+
+    if (!allowedTypes.includes(mimeType)) {
+      throw new BadRequestException('Only JPG, PNG, and WEBP photos are allowed');
+    }
+
+    const maxSize = 5 * 1024 * 1024;
+
+    if (file.size > maxSize) {
+      throw new BadRequestException('Complaint photo must be less than 5 MB');
+    }
+
+    const originalName = String(file.originalname || 'complaint-photo');
+    const extension = originalName.includes('.')
+      ? originalName.split('.').pop()
+      : mimeType.split('/')[1] || 'jpg';
+
+    const safeExtension = String(extension || 'jpg').replace(
+      /[^a-zA-Z0-9]/g,
+      '',
+    );
+
+    const filePath = `customer-complaints/customer-${user?.id || 'unknown'}/${Date.now()}-${randomUUID()}.${safeExtension}`;
+
+    const uploadResult = await supabase.storage
+      .from(bucket)
+      .upload(filePath, file.buffer, {
+        contentType: mimeType,
+        upsert: false,
+      });
+
+    if (uploadResult.error) {
+      throw new BadRequestException(uploadResult.error.message);
+    }
+
+    const publicUrlResult = supabase.storage
+      .from(bucket)
+      .getPublicUrl(filePath);
+
+    uploadedFiles.push({
+      fileUrl: publicUrlResult.data.publicUrl,
+      fileName: originalName,
+      fileSize: file.size,
+      filePath,
+    });
+  }
+
+  return {
+    message: `${uploadedFiles.length} complaint photo(s) uploaded successfully`,
+    attachments: uploadedFiles,
   };
 }
 }

@@ -5,7 +5,10 @@ import {
   Post,
   Req,
   UnauthorizedException,
+  UploadedFiles,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { CustomerPortalService } from './customer-portal.service';
 import * as jwt from 'jsonwebtoken';
 
@@ -60,6 +63,35 @@ async createCustomerComplaint(
       customerId: Number(payload.customerId),
       customerCode: payload.customerCode,
     },
+    {
+      id: Number(payload.customerId),
+      name: payload.customerCode,
+      roles: ['CUSTOMER'],
+    },
+  );
+}
+
+@Post('complaint-attachments/upload')
+@UseInterceptors(FilesInterceptor('files', 10))
+async uploadComplaintAttachments(
+  @Req() req: any,
+  @UploadedFiles() files: any[],
+) {
+  const authHeader = req.headers?.authorization || '';
+  const token = authHeader.replace('Bearer ', '');
+
+  if (!token) {
+    throw new UnauthorizedException('Customer token missing');
+  }
+
+  const payload: any = jwt.verify(token, 'mysecretkey');
+
+  if (!payload?.customerId) {
+    throw new UnauthorizedException('Invalid customer token');
+  }
+
+  return this.service.uploadComplaintAttachments(
+    files,
     {
       id: Number(payload.customerId),
       name: payload.customerCode,
