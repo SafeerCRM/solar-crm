@@ -19,6 +19,7 @@ import { CustomerComplaintAttachment } from './customer-complaint-attachment.ent
 import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
 import { ProjectExecutionActivity } from '../project/project-execution-activity.entity';
+import { ProjectPaymentInstallment } from '../project/project-payment-installment.entity';
 
 @Injectable()
 export class CustomerPortalService {
@@ -28,6 +29,9 @@ export class CustomerPortalService {
 
     @InjectRepository(Project)
     private readonly projectRepository: Repository<Project>,
+
+    @InjectRepository(ProjectPaymentInstallment)
+private readonly paymentInstallmentRepository: Repository<ProjectPaymentInstallment>,
 
     @InjectRepository(ProjectExecutionActivity)
 private readonly executionActivityRepository: Repository<ProjectExecutionActivity>,
@@ -69,6 +73,35 @@ private readonly complaintAttachmentRepository: Repository<CustomerComplaintAtta
     });
 
     const projectIds = projects.map((project) => project.id);
+
+    const paymentInstallments = projectIds.length
+  ? await this.paymentInstallmentRepository
+      .createQueryBuilder('installment')
+      .where('installment.projectId IN (:...projectIds)', { projectIds })
+      .andWhere('installment.isHidden = false')
+      .orderBy('installment.dueDate', 'ASC')
+      .addOrderBy('installment.createdAt', 'ASC')
+      .getMany()
+  : [];
+
+const paymentSummary = {
+  totalAmount: paymentInstallments.reduce(
+    (sum, item) => sum + Number(item.amount || 0),
+    0,
+  ),
+  paidAmount: paymentInstallments.reduce(
+    (sum, item) => sum + Number(item.paidAmount || 0),
+    0,
+  ),
+  pendingAmount: paymentInstallments.reduce(
+    (sum, item) => sum + Number(item.pendingAmount || 0),
+    0,
+  ),
+  totalInstallments: paymentInstallments.length,
+  pendingInstallments: paymentInstallments.filter(
+    (item) => item.status !== 'PAID' && item.status !== 'CANCELLED',
+  ).length,
+};
 
 const executionActivities = projectIds.length
   ? await this.executionActivityRepository
@@ -178,6 +211,8 @@ upcomingExecutionActivities: executionActivities.filter(
     activity.status !== 'COMPLETED' &&
     activity.status !== 'CANCELLED',
 ).slice(0, 10),
+paymentInstallments,
+paymentSummary,
 };
   }
 
