@@ -2,6 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import axios from 'axios';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
+import dayjs from 'dayjs';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -129,8 +133,11 @@ export default function CustomerComplaintsAdminPage() {
           status: item.status || 'OPEN',
           assignedToName: item.assignedToName || '',
           serviceDate: item.serviceDate
-            ? new Date(item.serviceDate).toISOString().slice(0, 16)
-            : '',
+  ? new Date(item.serviceDate).toISOString().slice(0, 10)
+  : '',
+serviceTime: item.serviceDate
+  ? new Date(item.serviceDate).toTimeString().slice(0, 5)
+  : '',
           staffRemarks: item.staffRemarks || '',
           resolutionNote: item.resolutionNote || '',
         };
@@ -161,7 +168,12 @@ export default function CustomerComplaintsAdminPage() {
         {
           status: update.status,
           assignedToName: update.assignedToName,
-          serviceDate: update.serviceDate || '',
+          serviceDate:
+  update.serviceDate && update.serviceTime
+    ? `${update.serviceDate}T${update.serviceTime}:00`
+    : update.serviceDate
+      ? `${update.serviceDate}T09:00:00`
+      : '',
           staffRemarks: update.staffRemarks,
           resolutionNote: update.resolutionNote,
         },
@@ -303,6 +315,11 @@ export default function CustomerComplaintsAdminPage() {
             ))}
           </select>
 
+
+<div>
+  <label className="mb-1 block text-xs font-bold text-gray-500">
+    Complaint From Date
+  </label>
           <input
             type="date"
             value={filters.fromDate}
@@ -311,7 +328,13 @@ export default function CustomerComplaintsAdminPage() {
             }
             className="rounded-2xl border p-3"
           />
+          </div>
 
+
+<div>
+  <label className="mb-1 block text-xs font-bold text-gray-500">
+    Complaint To Date
+  </label>
           <input
             type="date"
             value={filters.toDate}
@@ -320,7 +343,12 @@ export default function CustomerComplaintsAdminPage() {
             }
             className="rounded-2xl border p-3"
           />
+          </div>
 
+<div>
+  <label className="mb-1 block text-xs font-bold text-gray-500">
+    Service From Date
+  </label>
           <input
             type="date"
             title="Service from date"
@@ -330,7 +358,12 @@ export default function CustomerComplaintsAdminPage() {
             }
             className="rounded-2xl border p-3"
           />
+          </div>
 
+<div>
+  <label className="mb-1 block text-xs font-bold text-gray-500">
+    Service To Date
+  </label>
           <input
             type="date"
             title="Service to date"
@@ -340,6 +373,7 @@ export default function CustomerComplaintsAdminPage() {
             }
             className="rounded-2xl border p-3"
           />
+          </div>
         </div>
 
         <div className="mt-4 flex flex-wrap gap-3">
@@ -480,19 +514,46 @@ export default function CustomerComplaintsAdminPage() {
                     />
 
                     <input
-                      type="datetime-local"
-                      value={editMap[item.id]?.serviceDate || ''}
-                      onChange={(e) =>
-                        setEditMap((prev) => ({
-                          ...prev,
-                          [item.id]: {
-                            ...prev[item.id],
-                            serviceDate: e.target.value,
-                          },
-                        }))
-                      }
-                      className="w-full rounded-2xl border p-3"
-                    />
+  type="date"
+  value={editMap[item.id]?.serviceDate || ''}
+  onChange={(e) =>
+    setEditMap((prev) => ({
+      ...prev,
+      [item.id]: {
+        ...prev[item.id],
+        serviceDate: e.target.value,
+      },
+    }))
+  }
+  className="w-full rounded-2xl border p-3"
+/>
+
+<LocalizationProvider dateAdapter={AdapterDayjs}>
+  <MobileTimePicker
+    label="Service Time"
+    ampm
+    ampmInClock
+    value={
+      editMap[item.id]?.serviceTime
+        ? dayjs(`2026-01-01T${editMap[item.id].serviceTime}`)
+        : null
+    }
+    onChange={(newTime) =>
+      setEditMap((prev) => ({
+        ...prev,
+        [item.id]: {
+          ...prev[item.id],
+          serviceTime: newTime ? newTime.format('HH:mm') : '',
+        },
+      }))
+    }
+    slotProps={{
+      textField: {
+        fullWidth: true,
+      },
+    }}
+  />
+</LocalizationProvider>
 
                     <textarea
                       placeholder="Staff remarks"
