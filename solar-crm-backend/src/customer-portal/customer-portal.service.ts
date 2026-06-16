@@ -521,4 +521,88 @@ async uploadComplaintAttachments(files: any[], user: any) {
     attachments: uploadedFiles,
   };
 }
+
+async listWorkDateRequests(query: any) {
+  const page = Number(query?.page || 1);
+  const limit = Math.min(Number(query?.limit || 20), 100);
+  const skip = (page - 1) * limit;
+
+  const qb = this.workDateRequestRepository
+    .createQueryBuilder('request')
+    .where('request.isHidden = false')
+    .orderBy('request.createdAt', 'DESC');
+
+  if (query?.customerId) {
+    qb.andWhere('request.customerId = :customerId', {
+      customerId: Number(query.customerId),
+    });
+  }
+
+  if (query?.projectId) {
+    qb.andWhere('request.projectId = :projectId', {
+      projectId: Number(query.projectId),
+    });
+  }
+
+  if (query?.status) {
+    qb.andWhere('request.status = :status', {
+      status: query.status,
+    });
+  }
+
+  if (query?.branchName) {
+    qb.andWhere('LOWER(request.branchName) LIKE :branchName', {
+      branchName: `%${String(query.branchName).toLowerCase()}%`,
+    });
+  }
+
+  if (query?.customerSearch) {
+    const search = `%${String(query.customerSearch).toLowerCase()}%`;
+
+    qb.andWhere(
+      `
+      LOWER(request.customerName) LIKE :search
+      OR LOWER(request.customerCode) LIKE :search
+      `,
+      { search },
+    );
+  }
+
+  qb.skip(skip).take(limit);
+
+  const [data, total] = await qb.getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
+}
+
+async updateWorkDateRequest(id: number, body: any, user: any) {
+  const request = await this.workDateRequestRepository.findOne({
+    where: { id },
+  });
+
+  if (!request) {
+    throw new NotFoundException('Work date request not found');
+  }
+
+  request.status = body.status || request.status;
+  request.approvalRemarks = body.approvalRemarks || request.approvalRemarks;
+
+  if (
+    body.status === 'APPROVED' ||
+    body.status === 'REJECTED' ||
+    body.status === 'RESCHEDULED'
+  ) {
+    request.approvedBy = user?.id || null;
+    request.approvedByName = user?.name || user?.email || '';
+    request.approvedAt = new Date();
+  }
+
+  return this.workDateRequestRepository.save(request);
+}
 }

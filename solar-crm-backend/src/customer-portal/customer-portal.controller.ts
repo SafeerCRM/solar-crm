@@ -72,4 +72,20 @@ export class CustomerPortalController {
   createPaymentReceipt(@Body() body: any) {
     return this.service.createPaymentReceipt(body);
   }
+
+  @Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE', 'MARKETING_HEAD')
+@Get('work-date-requests')
+listWorkDateRequests(@Query() query: any) {
+  return this.service.listWorkDateRequests(query);
+}
+
+@Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE')
+@Patch('work-date-requests/:id')
+updateWorkDateRequest(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.service.updateWorkDateRequest(id, body, user);
+}
 }
