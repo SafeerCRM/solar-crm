@@ -13541,9 +13541,10 @@ async getContractorProofs(assignmentId: number, user: any) {
   const currentUserId = Number(user?.id || user?.userId || user?.sub);
 
   const isAllowed =
-    roles.includes('OWNER') ||
-    roles.includes('PROJECT_MANAGER') ||
-    Number(assignment.contractorId) === currentUserId;
+  roles.includes('OWNER') ||
+  roles.includes('PROJECT_MANAGER') ||
+  roles.includes('SUBSIDY_MANAGER') ||
+  Number(assignment.contractorId) === currentUserId;
 
   if (!isAllowed) {
     throw new ForbiddenException('You are not allowed to view these proofs');
