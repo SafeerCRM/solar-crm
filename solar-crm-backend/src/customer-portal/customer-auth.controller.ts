@@ -35,4 +35,36 @@ export class CustomerAuthController {
 
     return this.service.getCustomerDashboard(Number(payload.customerId));
   }
+
+  @Post('complaints')
+async createCustomerComplaint(
+  @Req() req: any,
+  @Body() body: any,
+) {
+  const authHeader = req.headers?.authorization || '';
+  const token = authHeader.replace('Bearer ', '');
+
+  if (!token) {
+    throw new UnauthorizedException('Customer token missing');
+  }
+
+  const payload: any = jwt.verify(token, 'mysecretkey');
+
+  if (!payload?.customerId) {
+    throw new UnauthorizedException('Invalid customer token');
+  }
+
+  return this.service.createComplaint(
+    {
+      ...body,
+      customerId: Number(payload.customerId),
+      customerCode: payload.customerCode,
+    },
+    {
+      id: Number(payload.customerId),
+      name: payload.customerCode,
+      roles: ['CUSTOMER'],
+    },
+  );
+}
 }
