@@ -795,6 +795,37 @@ onWheel={preventNumberWheelChange}
                 </option>
               ))}
             </select>
+
+            {selectedPanelOptionId && (() => {
+  const selectedPanel = panelOptions.find(
+    (p) => Number(p.id) === Number(selectedPanelOptionId)
+  );
+
+  if (!selectedPanel) return null;
+
+  return (
+    <div className="mt-3 rounded-xl bg-blue-50 p-3 text-sm text-blue-800">
+      <div className="font-semibold">Panel Availability</div>
+
+      <div className="mt-1">
+        Available Quantity: {Number(selectedPanel.availableQuantity || 0)} panels
+      </div>
+
+      <div>
+        Expected Date:{' '}
+        {selectedPanel.expectedDate
+          ? String(selectedPanel.expectedDate).split('T')[0]
+          : '-'}
+      </div>
+
+      {selectedPanel.availabilityNote && (
+        <div className="mt-1">
+          Note: {selectedPanel.availabilityNote}
+        </div>
+      )}
+    </div>
+  );
+})()}
           </div>
         </div>
       </CalculatorSection>

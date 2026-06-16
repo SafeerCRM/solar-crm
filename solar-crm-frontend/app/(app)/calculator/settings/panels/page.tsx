@@ -19,12 +19,15 @@ export default function PanelSettingsPage() {
   const [page, setPage] = useState(1);
 
   const [form, setForm] = useState({
-    panelCategory: 'DCR',
-    panelType: 'P Type',
-    brandName: '',
-    capacityWatt: '',
-    rate: '',
-  });
+  panelCategory: 'DCR',
+  panelType: 'P Type',
+  brandName: '',
+  capacityWatt: '',
+  rate: '',
+  availableQuantity: '',
+  expectedDate: '',
+  availabilityNote: '',
+});
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingData, setEditingData] = useState<any>({});
@@ -138,6 +141,9 @@ export default function PanelSettingsPage() {
           brandName: form.brandName,
           capacityWatt: Number(form.capacityWatt),
           rate: Number(form.rate),
+          availableQuantity: Number(form.availableQuantity || 0),
+expectedDate: form.expectedDate || null,
+availabilityNote: form.availabilityNote,
         },
         { headers: getAuthHeaders() }
       );
@@ -148,6 +154,9 @@ export default function PanelSettingsPage() {
         brandName: '',
         capacityWatt: '',
         rate: '',
+        availableQuantity: '',
+expectedDate: '',
+availabilityNote: '',
       });
 
       fetchOptions();
@@ -189,6 +198,9 @@ export default function PanelSettingsPage() {
           brandName: editingData.brandName,
           capacityWatt: Number(editingData.capacityWatt),
           rate: Number(editingData.rate),
+          availableQuantity: Number(editingData.availableQuantity || 0),
+  expectedDate: editingData.expectedDate || null,
+  availabilityNote: editingData.availabilityNote || '',
         },
         { headers: getAuthHeaders() }
       );
@@ -223,7 +235,7 @@ export default function PanelSettingsPage() {
       <div className="bg-white p-5 rounded-2xl shadow space-y-4">
         <h2 className="font-semibold">Add New Panel Option</h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <select
             value={form.panelCategory}
             onChange={(e) =>
@@ -274,6 +286,34 @@ export default function PanelSettingsPage() {
             }
             className="border p-2 rounded"
           />
+
+          <input
+  type="number"
+  placeholder="Available Qty"
+  value={form.availableQuantity}
+  onChange={(e) =>
+    setForm({ ...form, availableQuantity: e.target.value })
+  }
+  className="border p-2 rounded"
+/>
+
+<input
+  type="date"
+  value={form.expectedDate}
+  onChange={(e) =>
+    setForm({ ...form, expectedDate: e.target.value })
+  }
+  className="border p-2 rounded"
+/>
+
+<input
+  placeholder="Availability Note"
+  value={form.availabilityNote}
+  onChange={(e) =>
+    setForm({ ...form, availabilityNote: e.target.value })
+  }
+  className="border p-2 rounded"
+/>
         </div>
 
         <button
@@ -293,7 +333,7 @@ export default function PanelSettingsPage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <input
             placeholder="Search brand, watt or rate"
             value={search}
@@ -421,6 +461,41 @@ export default function PanelSettingsPage() {
                         }
                         className="border p-2 rounded"
                       />
+
+                      <input
+  type="number"
+  value={editingData.availableQuantity || ''}
+  onChange={(e) =>
+    setEditingData({
+      ...editingData,
+      availableQuantity: e.target.value,
+    })
+  }
+  className="border p-2 rounded"
+/>
+
+<input
+  type="date"
+  value={editingData.expectedDate || ''}
+  onChange={(e) =>
+    setEditingData({
+      ...editingData,
+      expectedDate: e.target.value,
+    })
+  }
+  className="border p-2 rounded"
+/>
+
+<input
+  value={editingData.availabilityNote || ''}
+  onChange={(e) =>
+    setEditingData({
+      ...editingData,
+      availabilityNote: e.target.value,
+    })
+  }
+  className="border p-2 rounded"
+/>
                     </div>
 
                     <div className="space-x-3 shrink-0">
@@ -449,6 +524,19 @@ export default function PanelSettingsPage() {
                       <div className="text-gray-600">
                         {opt.panelCategory} | {opt.panelType} | {opt.capacityWatt}W | ₹{opt.rate} per watt
                       </div>
+
+                      <div className="mt-1 text-gray-600">
+  Available: {Number(opt.availableQuantity || 0)} panels
+  {opt.expectedDate
+    ? ` | Expected: ${String(opt.expectedDate).split('T')[0]}`
+    : ' | Expected: -'}
+</div>
+
+{opt.availabilityNote && (
+  <div className="mt-1 text-gray-500">
+    Note: {opt.availabilityNote}
+  </div>
+)}
                     </div>
 
                     <div className="space-x-3 shrink-0">
