@@ -98,6 +98,35 @@ linkExistingProjects() {
   return this.customerService.linkExistingProjects();
 }
 
+@Roles('OWNER', 'MARKETING_HEAD', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER')
+@Patch(':id/enable-portal')
+enablePortal(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.customerService.enablePortal(id, body, user);
+}
+
+@Roles('OWNER', 'MARKETING_HEAD', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER')
+@Patch(':id/disable-portal')
+disablePortal(
+  @Param('id', ParseIntPipe) id: number,
+  @CurrentUser() user: any,
+) {
+  return this.customerService.disablePortal(id, user);
+}
+
+@Roles('OWNER', 'MARKETING_HEAD', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER')
+@Patch(':id/reset-portal-username')
+resetPortalUsername(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.customerService.resetPortalUsername(id, body, user);
+}
+
 @Roles(
   'OWNER',
   'MARKETING_HEAD',

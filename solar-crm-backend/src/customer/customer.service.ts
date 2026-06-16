@@ -497,4 +497,59 @@ async linkExistingProjects() {
     linkedCount,
   };
 }
+
+async enablePortal(id: number, body: any, user: any) {
+  if (!this.canManage(user)) {
+    throw new ForbiddenException('You are not allowed to enable customer portal');
+  }
+
+  const customer = await this.findOne(id);
+
+  const username =
+    this.normalizeText(body?.portalUsername) ||
+    this.normalizeText(customer.mobile) ||
+    this.normalizeText(customer.electricityKNumber) ||
+    customer.customerCode;
+
+  if (!username) {
+    throw new BadRequestException(
+      'Portal username could not be generated. Please enter mobile or K number.',
+    );
+  }
+
+  customer.isPortalEnabled = true;
+  (customer as any).portalUsername = username;
+
+  return this.customerRepository.save(customer);
+}
+
+async disablePortal(id: number, user: any) {
+  if (!this.canManage(user)) {
+    throw new ForbiddenException('You are not allowed to disable customer portal');
+  }
+
+  const customer = await this.findOne(id);
+
+  customer.isPortalEnabled = false;
+
+  return this.customerRepository.save(customer);
+}
+
+async resetPortalUsername(id: number, body: any, user: any) {
+  if (!this.canManage(user)) {
+    throw new ForbiddenException('You are not allowed to reset portal username');
+  }
+
+  const customer = await this.findOne(id);
+
+  const username = this.normalizeText(body?.portalUsername);
+
+  if (!username) {
+    throw new BadRequestException('Portal username is required');
+  }
+
+  (customer as any).portalUsername = username;
+
+  return this.customerRepository.save(customer);
+}
 }

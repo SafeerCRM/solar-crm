@@ -82,6 +82,15 @@ customerSource: CustomerSource;
   @Column({ type: 'boolean', default: false })
   isPortalEnabled: boolean;
 
+  @Column({ nullable: true, unique: true })
+portalUsername: string;
+
+@Column({ nullable: true })
+portalPassword: string;
+
+@Column({ type: 'timestamp', nullable: true })
+lastPortalLoginAt: Date;
+
   @Column({ type: 'text', nullable: true })
   remarks: string;
 
