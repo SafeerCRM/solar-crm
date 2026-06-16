@@ -107,43 +107,112 @@ export class CustomerPortalService {
   }
 
   async listComplaints(query: any) {
-    const qb = this.complaintRepository
-      .createQueryBuilder('complaint')
-      .where('complaint.isHidden = false')
-      .orderBy('complaint.createdAt', 'DESC');
+  const page = Number(query?.page || 1);
+  const limit = Math.min(Number(query?.limit || 20), 100);
+  const skip = (page - 1) * limit;
 
-    if (query?.customerId) {
-      qb.andWhere('complaint.customerId = :customerId', {
-        customerId: Number(query.customerId),
-      });
-    }
+  const qb = this.complaintRepository
+    .createQueryBuilder('complaint')
+    .where('complaint.isHidden = false')
+    .orderBy('complaint.createdAt', 'DESC');
 
-    if (query?.projectId) {
-      qb.andWhere('complaint.projectId = :projectId', {
-        projectId: Number(query.projectId),
-      });
-    }
-
-    if (query?.branchName) {
-      qb.andWhere('LOWER(complaint.branchName) LIKE :branchName', {
-        branchName: `%${String(query.branchName).toLowerCase()}%`,
-      });
-    }
-
-    if (query?.subject) {
-      qb.andWhere('complaint.subject = :subject', {
-        subject: query.subject,
-      });
-    }
-
-    if (query?.status) {
-      qb.andWhere('complaint.status = :status', {
-        status: query.status,
-      });
-    }
-
-    return qb.getMany();
+  if (query?.customerId) {
+    qb.andWhere('complaint.customerId = :customerId', {
+      customerId: Number(query.customerId),
+    });
   }
+
+  if (query?.projectId) {
+    qb.andWhere('complaint.projectId = :projectId', {
+      projectId: Number(query.projectId),
+    });
+  }
+
+  if (query?.branchName) {
+    qb.andWhere('LOWER(complaint.branchName) LIKE :branchName', {
+      branchName: `%${String(query.branchName).toLowerCase()}%`,
+    });
+  }
+
+  if (query?.projectOwnerId) {
+    qb.andWhere('complaint.projectOwnerId = :projectOwnerId', {
+      projectOwnerId: Number(query.projectOwnerId),
+    });
+  }
+
+  if (query?.projectOwnerName) {
+    qb.andWhere('LOWER(complaint.projectOwnerName) LIKE :projectOwnerName', {
+      projectOwnerName: `%${String(query.projectOwnerName).toLowerCase()}%`,
+    });
+  }
+
+  if (query?.customerSearch) {
+    const search = `%${String(query.customerSearch).toLowerCase()}%`;
+
+    qb.andWhere(
+      `
+      LOWER(complaint.customerName) LIKE :search
+      OR LOWER(complaint.customerPhone) LIKE :search
+      OR LOWER(complaint.customerCode) LIKE :search
+      `,
+      { search },
+    );
+  }
+
+  if (query?.subject) {
+    qb.andWhere('complaint.subject = :subject', {
+      subject: query.subject,
+    });
+  }
+
+  if (query?.status) {
+    qb.andWhere('complaint.status = :status', {
+      status: query.status,
+    });
+  }
+
+  if (query?.fromDate) {
+    qb.andWhere('complaint.createdAt >= :fromDate', {
+      fromDate: new Date(query.fromDate),
+    });
+  }
+
+  if (query?.toDate) {
+    const endDate = new Date(query.toDate);
+    endDate.setHours(23, 59, 59, 999);
+
+    qb.andWhere('complaint.createdAt <= :toDate', {
+      toDate: endDate,
+    });
+  }
+
+  if (query?.serviceFromDate) {
+    qb.andWhere('complaint.serviceDate >= :serviceFromDate', {
+      serviceFromDate: new Date(query.serviceFromDate),
+    });
+  }
+
+  if (query?.serviceToDate) {
+    const serviceEndDate = new Date(query.serviceToDate);
+    serviceEndDate.setHours(23, 59, 59, 999);
+
+    qb.andWhere('complaint.serviceDate <= :serviceToDate', {
+      serviceToDate: serviceEndDate,
+    });
+  }
+
+  qb.skip(skip).take(limit);
+
+  const [data, total] = await qb.getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
+}
 
   async updateComplaint(id: number, body: any, user: any) {
     const complaint = await this.complaintRepository.findOne({
