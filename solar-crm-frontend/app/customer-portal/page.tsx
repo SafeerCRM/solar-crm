@@ -219,11 +219,13 @@ export default function CustomerPortalPage() {
               title="Project Timeline"
               text="Track approval, installation, subsidy, electricity and completion progress."
             />
-            <ActionCard
-              icon="📅"
-              title="Work Calendar"
-              text="See upcoming work dates and request date changes."
-            />
+            <a href="/customer-portal/work-calendar">
+  <ActionCard
+    icon="📅"
+    title="Work Calendar"
+    text="See upcoming work dates and request date changes."
+  />
+</a>
             <ActionCard
               icon="📁"
               title="Documents Vault"

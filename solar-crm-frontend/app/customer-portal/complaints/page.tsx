@@ -302,24 +302,17 @@ setPhotoPreviews([]);
                   className="w-full rounded-2xl border p-4"
                 >
                   <option value="OTHER">Other</option>
-                  <option value="INSTALLATION">
-                    Installation Issue
-                  </option>
-                  <option value="INVERTER">
-                    Inverter Issue
-                  </option>
-                  <option value="PANEL">
-                    Panel Issue
-                  </option>
-                  <option value="SUBSIDY">
-                    Subsidy Issue
-                  </option>
-                  <option value="PAYMENT">
-                    Payment Issue
-                  </option>
-                  <option value="SERVICE">
-                    Service Request
-                  </option>
+<option value="GENERATION_ISSUE">Generation Issue</option>
+<option value="PANEL_ISSUE">Panel Issue</option>
+<option value="INVERTER_ISSUE">Inverter Issue</option>
+<option value="STRUCTURE_ISSUE">Structure Issue</option>
+<option value="ELECTRICITY_ISSUE">Electricity Issue</option>
+<option value="SUBSIDY_ISSUE">Subsidy Issue</option>
+<option value="LOAN_ISSUE">Loan Issue</option>
+<option value="PAYMENT_ISSUE">Payment Issue</option>
+<option value="CLEANING_REQUEST">Cleaning Request</option>
+<option value="SERVICE_REQUEST">Service Request</option>
+<option value="DOCUMENT_REQUEST">Document Request</option>
                 </select>
 
                 <textarea
