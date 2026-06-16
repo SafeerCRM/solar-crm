@@ -99,4 +99,79 @@ async uploadComplaintAttachments(
     },
   );
 }
+
+@Post('referrals')
+async createCustomerReferral(
+  @Req() req: any,
+  @Body() body: any,
+) {
+  const authHeader = req.headers?.authorization || '';
+  const token = authHeader.replace('Bearer ', '');
+
+  if (!token) {
+    throw new UnauthorizedException('Customer token missing');
+  }
+
+  const payload: any = jwt.verify(token, 'mysecretkey');
+
+  if (!payload?.customerId) {
+    throw new UnauthorizedException('Invalid customer token');
+  }
+
+  return this.service.createReferral({
+    ...body,
+    customerId: Number(payload.customerId),
+    customerCode: payload.customerCode,
+  });
+}
+
+@Post('work-date-requests')
+async createCustomerWorkDateRequest(
+  @Req() req: any,
+  @Body() body: any,
+) {
+  const authHeader = req.headers?.authorization || '';
+  const token = authHeader.replace('Bearer ', '');
+
+  if (!token) {
+    throw new UnauthorizedException('Customer token missing');
+  }
+
+  const payload: any = jwt.verify(token, 'mysecretkey');
+
+  if (!payload?.customerId) {
+    throw new UnauthorizedException('Invalid customer token');
+  }
+
+  return this.service.createWorkDateRequest({
+    ...body,
+    customerId: Number(payload.customerId),
+    customerCode: payload.customerCode,
+  });
+}
+
+@Post('payment-receipts')
+async createCustomerPaymentReceipt(
+  @Req() req: any,
+  @Body() body: any,
+) {
+  const authHeader = req.headers?.authorization || '';
+  const token = authHeader.replace('Bearer ', '');
+
+  if (!token) {
+    throw new UnauthorizedException('Customer token missing');
+  }
+
+  const payload: any = jwt.verify(token, 'mysecretkey');
+
+  if (!payload?.customerId) {
+    throw new UnauthorizedException('Invalid customer token');
+  }
+
+  return this.service.createPaymentReceipt({
+    ...body,
+    customerId: Number(payload.customerId),
+    customerCode: payload.customerCode,
+  });
+}
 }

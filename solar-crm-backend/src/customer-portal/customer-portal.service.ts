@@ -95,6 +95,30 @@ const notifications = await this.notificationRepository.find({
   take: 10,
 });
 
+const referrals = await this.referralRepository.find({
+  where: { customerId, isHidden: false },
+  order: { createdAt: 'DESC' },
+  take: 10,
+});
+
+const paymentReceipts = await this.paymentReceiptRepository.find({
+  where: { customerId, isHidden: false },
+  order: { createdAt: 'DESC' },
+  take: 10,
+});
+
+const workDateRequests = await this.workDateRequestRepository.find({
+  where: { customerId, isHidden: false },
+  order: { createdAt: 'DESC' },
+  take: 10,
+});
+
+const cleaningReminders = await this.cleaningReminderRepository.find({
+  where: { customerId },
+  order: { cleaningDate: 'DESC' },
+  take: 10,
+});
+
     return {
   customer,
   projects,
@@ -107,6 +131,20 @@ const notifications = await this.notificationRepository.find({
   unreadNotifications: notifications.filter(
     (n) => !n.isRead,
   ).length,
+  referrals,
+paymentReceipts,
+workDateRequests,
+cleaningReminders,
+totalReferrals: referrals.length,
+pendingPaymentReceipts: paymentReceipts.filter(
+  (item) => item.status === 'SUBMITTED',
+).length,
+pendingWorkDateRequests: workDateRequests.filter(
+  (item) => item.status === 'PENDING',
+).length,
+upcomingCleaningReminders: cleaningReminders.filter(
+  (item) => item.status === 'PENDING',
+).length,
 };
   }
 
