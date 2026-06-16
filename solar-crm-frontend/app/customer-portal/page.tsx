@@ -150,11 +150,13 @@ export default function CustomerPortalPage() {
             />
 
             <div className="mt-4 grid gap-4">
-              <ActionCard
-                icon="🛠"
-                title="Raise Complaint"
-                text="Report generation, inverter, panel, subsidy, payment or service issue."
-              />
+              <a href="/customer-portal/complaints">
+  <ActionCard
+    icon="🛠"
+    title="Raise Complaint"
+    text="Report generation, inverter, panel, subsidy, payment or service issue."
+  />
+</a>
               <ActionCard
                 icon="💳"
                 title="Upload Payment Receipt"
