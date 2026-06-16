@@ -18,6 +18,7 @@ import * as jwt from 'jsonwebtoken';
 import { CustomerComplaintAttachment } from './customer-complaint-attachment.entity';
 import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
+import { ProjectExecutionActivity } from '../project/project-execution-activity.entity';
 
 @Injectable()
 export class CustomerPortalService {
@@ -27,6 +28,9 @@ export class CustomerPortalService {
 
     @InjectRepository(Project)
     private readonly projectRepository: Repository<Project>,
+
+    @InjectRepository(ProjectExecutionActivity)
+private readonly executionActivityRepository: Repository<ProjectExecutionActivity>,
 
     @InjectRepository(CustomerComplaint)
     private readonly complaintRepository: Repository<CustomerComplaint>,
@@ -63,6 +67,27 @@ private readonly complaintAttachmentRepository: Repository<CustomerComplaintAtta
       where: { customerId, isHidden: false },
       order: { createdAt: 'DESC' },
     });
+
+    const projectIds = projects.map((project) => project.id);
+
+const executionActivities = projectIds.length
+  ? await this.executionActivityRepository
+      .createQueryBuilder('activity')
+      .where('activity.projectId IN (:...projectIds)', { projectIds })
+      .orderBy('activity.scheduledDate', 'ASC')
+      .addOrderBy('activity.createdAt', 'DESC')
+      .getMany()
+  : [];
+
+const executionActivitiesByProject = projectIds.reduce(
+  (acc: any, projectId: number) => {
+    acc[projectId] = executionActivities.filter(
+      (activity) => activity.projectId === projectId,
+    );
+    return acc;
+  },
+  {},
+);
 
     const complaints = await this.complaintRepository.find({
   where: { customerId, isHidden: false },
@@ -145,6 +170,14 @@ pendingWorkDateRequests: workDateRequests.filter(
 upcomingCleaningReminders: cleaningReminders.filter(
   (item) => item.status === 'PENDING',
 ).length,
+executionActivities,
+executionActivitiesByProject,
+upcomingExecutionActivities: executionActivities.filter(
+  (activity) =>
+    activity.scheduledDate &&
+    activity.status !== 'COMPLETED' &&
+    activity.status !== 'CANCELLED',
+).slice(0, 10),
 };
   }
 
