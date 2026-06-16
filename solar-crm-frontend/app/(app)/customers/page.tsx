@@ -22,7 +22,9 @@ type Customer = {
   customerStatus?: string;
   customerSource?: string;
   isPortalEnabled?: boolean;
-  remarks?: string;
+portalUsername?: string;
+lastPortalLoginAt?: string;
+remarks?: string;
   isHidden?: boolean;
   hiddenReason?: string;
   createdAt?: string;
@@ -69,6 +71,10 @@ export default function CustomersPage() {
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [selectedCustomerProjects, setSelectedCustomerProjects] = useState<any[]>([]);
+const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+const [showProjectsModal, setShowProjectsModal] = useState(false);
+const [portalLoadingId, setPortalLoadingId] = useState<number | null>(null);
 
   const [search, setSearch] = useState('');
   const [city, setCity] = useState('');
@@ -254,6 +260,111 @@ export default function CustomersPage() {
       alert(error?.response?.data?.message || 'Failed to restore customer');
     }
   };
+
+  const viewCustomerProjects = async (customer: Customer) => {
+  try {
+    setSelectedCustomer(customer);
+    setShowProjectsModal(true);
+
+    const res = await axios.get(
+      `${API_BASE_URL}/customers/${customer.id}/projects`,
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+
+    setSelectedCustomerProjects(res.data?.projects || []);
+  } catch (error: any) {
+    console.error(error);
+    alert(error?.response?.data?.message || 'Failed to load customer projects');
+  }
+};
+
+const enablePortal = async (customer: Customer) => {
+  const username = window.prompt(
+    'Enter portal username. Mobile or K Number recommended.',
+    customer.mobile || customer.electricityKNumber || customer.customerCode || '',
+  );
+
+  if (username === null) return;
+
+  try {
+    setPortalLoadingId(customer.id);
+
+    await axios.patch(
+      `${API_BASE_URL}/customers/${customer.id}/enable-portal`,
+      { portalUsername: username },
+      { headers: getAuthHeaders() },
+    );
+
+    alert('Customer portal enabled successfully');
+    fetchSummary();
+    fetchCustomers(page);
+  } catch (error: any) {
+    console.error(error);
+    alert(error?.response?.data?.message || 'Failed to enable portal');
+  } finally {
+    setPortalLoadingId(null);
+  }
+};
+
+const disablePortal = async (customer: Customer) => {
+  const confirmed = window.confirm(
+    `Disable portal access for ${customer.customerName || 'this customer'}?`,
+  );
+
+  if (!confirmed) return;
+
+  try {
+    setPortalLoadingId(customer.id);
+
+    await axios.patch(
+      `${API_BASE_URL}/customers/${customer.id}/disable-portal`,
+      {},
+      { headers: getAuthHeaders() },
+    );
+
+    alert('Customer portal disabled successfully');
+    fetchSummary();
+    fetchCustomers(page);
+  } catch (error: any) {
+    console.error(error);
+    alert(error?.response?.data?.message || 'Failed to disable portal');
+  } finally {
+    setPortalLoadingId(null);
+  }
+};
+
+const resetPortalUsername = async (customer: Customer) => {
+  const username = window.prompt(
+    'Enter new portal username',
+    customer.portalUsername ||
+      customer.mobile ||
+      customer.electricityKNumber ||
+      customer.customerCode ||
+      '',
+  );
+
+  if (username === null) return;
+
+  try {
+    setPortalLoadingId(customer.id);
+
+    await axios.patch(
+      `${API_BASE_URL}/customers/${customer.id}/reset-portal-username`,
+      { portalUsername: username },
+      { headers: getAuthHeaders() },
+    );
+
+    alert('Portal username updated successfully');
+    fetchCustomers(page);
+  } catch (error: any) {
+    console.error(error);
+    alert(error?.response?.data?.message || 'Failed to reset portal username');
+  } finally {
+    setPortalLoadingId(null);
+  }
+};
 
   const applyFilters = () => {
     setAppliedFilters({
@@ -576,6 +687,7 @@ export default function CustomersPage() {
                   <th className="border p-3">Source</th>
                   <th className="border p-3">Status</th>
                   <th className="border p-3">Portal</th>
+                  <th className="border p-3">Portal Username</th>
                   <th className="border p-3">Actions</th>
                 </tr>
               </thead>
@@ -624,9 +736,30 @@ export default function CustomersPage() {
                       </span>
                     </td>
                     <td className="border p-3">
-                      {customer.isPortalEnabled ? 'Yes' : 'No'}
-                    </td>
-                    <td className="border p-3">
+  <span
+    className={`rounded-full px-3 py-1 text-xs font-semibold ${
+      customer.isPortalEnabled
+        ? 'bg-green-100 text-green-700'
+        : 'bg-gray-100 text-gray-600'
+    }`}
+  >
+    {customer.isPortalEnabled ? 'Enabled' : 'Disabled'}
+  </span>
+</td>
+
+<td className="border p-3">
+  <p className="font-semibold text-gray-800">
+    {customer.portalUsername || '-'}
+  </p>
+  {customer.lastPortalLoginAt && (
+    <p className="mt-1 text-xs text-gray-500">
+      Last login:{' '}
+      {new Date(customer.lastPortalLoginAt).toLocaleString('en-IN')}
+    </p>
+  )}
+</td>
+
+<td className="border p-3">
                       <div className="flex flex-wrap gap-2">
                         {!appliedFilters.showHidden && (
                           <>
@@ -636,6 +769,39 @@ export default function CustomersPage() {
                             >
                               Edit
                             </button>
+
+                            <button
+  onClick={() => viewCustomerProjects(customer)}
+  className="rounded-lg bg-purple-600 px-3 py-2 text-xs font-semibold text-white hover:bg-purple-700"
+>
+  Projects
+</button>
+
+{customer.isPortalEnabled ? (
+  <button
+    onClick={() => disablePortal(customer)}
+    disabled={portalLoadingId === customer.id}
+    className="rounded-lg bg-orange-600 px-3 py-2 text-xs font-semibold text-white hover:bg-orange-700 disabled:opacity-50"
+  >
+    Disable Portal
+  </button>
+) : (
+  <button
+    onClick={() => enablePortal(customer)}
+    disabled={portalLoadingId === customer.id}
+    className="rounded-lg bg-green-600 px-3 py-2 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+  >
+    Enable Portal
+  </button>
+)}
+
+<button
+  onClick={() => resetPortalUsername(customer)}
+  disabled={portalLoadingId === customer.id}
+  className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+>
+  Reset Username
+</button>
 
                             <button
                               onClick={() => hideCustomer(customer)}
@@ -686,7 +852,88 @@ export default function CustomersPage() {
             </button>
           </div>
         </div>
-      </div>
+            </div>
+
+      {showProjectsModal && selectedCustomer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-800">
+                  {selectedCustomer.customerName}
+                </h2>
+
+                <p className="mt-1 text-sm text-gray-500">
+                  {selectedCustomer.customerCode} |{' '}
+                  {selectedCustomer.mobile || '-'} | K No:{' '}
+                  {selectedCustomer.electricityKNumber || '-'}
+                </p>
+              </div>
+
+              <button
+                onClick={() => {
+                  setShowProjectsModal(false);
+                  setSelectedCustomer(null);
+                  setSelectedCustomerProjects([]);
+                }}
+                className="rounded-xl bg-gray-800 px-4 py-2 text-sm font-semibold text-white"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-5 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 p-5 text-white">
+              <p className="text-sm opacity-90">Linked Projects</p>
+              <p className="mt-2 text-4xl font-bold">
+                {selectedCustomerProjects.length}
+              </p>
+            </div>
+
+            <div className="mt-5 space-y-3">
+              {selectedCustomerProjects.length === 0 ? (
+                <p className="rounded-xl bg-gray-50 p-4 text-sm text-gray-500">
+                  No projects linked with this customer yet.
+                </p>
+              ) : (
+                selectedCustomerProjects.map((project) => (
+                  <div
+                    key={project.id}
+                    className="rounded-2xl border bg-white p-4 shadow-sm"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-lg font-bold text-gray-800">
+                          Project #{project.id} - {project.customerName || '-'}
+                        </p>
+
+                        <p className="mt-1 text-sm text-gray-500">
+                          Status: {project.status || '-'} | Branch:{' '}
+                          {project.branchName || '-'}
+                        </p>
+
+                        <p className="mt-1 text-sm text-gray-500">
+                          Owner: {project.projectOwnerName || '-'}
+                        </p>
+
+                        <p className="mt-1 text-sm text-gray-500">
+                          K Number: {project.electricityKNumber || '-'}
+                        </p>
+                      </div>
+
+                      <a
+                        href={`/project/${project.id}`}
+                        className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                      >
+                        Open Project
+                      </a>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
