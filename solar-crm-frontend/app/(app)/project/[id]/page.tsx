@@ -121,6 +121,9 @@ projectManagerApprovalNote?: string;
   gpsLatitude?: number;
   gpsLongitude?: number;
   finalCost?: number;
+  solarFranchiseUserId?: number;
+solarFranchiseName?: string;
+solarFranchisePhone?: string;
 };
 
 type ProjectDocument = {
@@ -844,6 +847,9 @@ customerUserName: '',
   actualCompletionDate: '',
 
   remarks: '',
+  solarFranchiseUserId: '',
+solarFranchiseName: '',
+solarFranchisePhone: '',
 });
 
 const [receivePaymentForms, setReceivePaymentForms] =
@@ -1423,6 +1429,9 @@ customerUserName: (project as any).customerUserName || '',
     actualCompletionDate: formatDateForInput((project as any).actualCompletionDate),
 
     remarks: project.remarks || '',
+    solarFranchiseUserId: String((project as any).solarFranchiseUserId || ''),
+solarFranchiseName: (project as any).solarFranchiseName || '',
+solarFranchisePhone: (project as any).solarFranchisePhone || '',
   });
 
   setCustomerSearch(
@@ -4776,6 +4785,55 @@ const canApproveAndReserveStock =
     For old/backdated projects, leave unchanged to keep the current owner.
   </p>
 </div>
+
+<div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+  <h3 className="mb-3 font-bold text-blue-900">
+    Solar Franchise Assignment
+  </h3>
+
+  <div className="grid gap-3 md:grid-cols-3">
+    <input
+      value={editForm.solarFranchiseUserId}
+      onChange={(e) =>
+        setEditForm((prev) => ({
+          ...prev,
+          solarFranchiseUserId: e.target.value,
+        }))
+      }
+      placeholder="Solar Franchise User ID"
+      className="rounded-xl border p-3"
+    />
+
+    <input
+      value={editForm.solarFranchiseName}
+      onChange={(e) =>
+        setEditForm((prev) => ({
+          ...prev,
+          solarFranchiseName: e.target.value,
+        }))
+      }
+      placeholder="Solar Franchise Name"
+      className="rounded-xl border p-3"
+    />
+
+    <input
+      value={editForm.solarFranchisePhone}
+      onChange={(e) =>
+        setEditForm((prev) => ({
+          ...prev,
+          solarFranchisePhone: e.target.value,
+        }))
+      }
+      placeholder="Solar Franchise Phone"
+      className="rounded-xl border p-3"
+    />
+  </div>
+
+  <p className="mt-2 text-xs text-blue-700">
+    Do not change Project Owner for franchise assignment. Project Owner remains internal team member.
+  </p>
+</div>
+
   <input placeholder="Project Type" value={editForm.projectType} onChange={(e) => setEditForm({ ...editForm, projectType: e.target.value })} className="rounded-xl border p-3" />
   <input placeholder="Project Size" value={editForm.projectSize} onChange={(e) => setEditForm({ ...editForm, projectSize: e.target.value })} className="rounded-xl border p-3" />
   <input placeholder="Electricity K Number" value={editForm.electricityKNumber} onChange={(e) => setEditForm({ ...editForm, electricityKNumber: e.target.value })} className="rounded-xl border p-3" />
