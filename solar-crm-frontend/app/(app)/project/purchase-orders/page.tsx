@@ -1472,6 +1472,7 @@ const createManualPi = async () => {
               category: manualPi.category,
               brand: manualPi.brand,
               unit: manualPi.unit,
+              hsnCode: manualPi.hsnCode,
               quantity: manualPi.quantity,
               sellingRate: manualPi.sellingRate,
               gstPercent: manualPi.gstPercent,
