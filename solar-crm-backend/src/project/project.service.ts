@@ -10026,9 +10026,29 @@ console.log('RESOLVED_HSN', {
   JSON.stringify(invoiceItems, null, 2),
 );
 
+  console.log(
+  'MANUAL_PI_SAVE_ITEMS',
+  invoiceItems.map((i: any) => ({
+    materialId: i.materialId,
+    hsnCode: i.hsnCode,
+    itemName: i.itemName,
+  })),
+);
+
+const savedItems =
   await this.projectProformaInvoiceItemRepository.save(
     invoiceItems as ProjectProformaInvoiceItem[],
   );
+
+console.log(
+  'MANUAL_PI_SAVED_ITEMS',
+  savedItems.map((i: any) => ({
+    id: i.id,
+    materialId: i.materialId,
+    hsnCode: i.hsnCode,
+    itemName: i.itemName,
+  })),
+);
 
   return {
     message:
