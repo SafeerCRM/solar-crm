@@ -9191,6 +9191,7 @@ async createManualPurchaseOrder(
       category: item.category || '',
       brand: item.brand || '',
       unit: item.unit || '',
+      hsnCode: item.hsnCode || '',
       purchaseRate,
       gstPercent,
       quantity,
@@ -9340,6 +9341,7 @@ async generatePurchaseOrderPdf(
   let y = doc.y;
 
   doc.text('Material', startX, y, { width: 170 });
+  doc.text('HSN', 175, y, { width: 55 });
   doc.text('Qty', 220, y, { width: 50 });
   doc.text('Rate', 270, y, { width: 80 });
   doc.text('GST', 360, y, { width: 50 });
@@ -9358,6 +9360,10 @@ async generatePurchaseOrderPdf(
     doc.text(item.materialName || '-', startX, y, {
       width: 170,
     });
+
+    doc.text((item as any).hsnCode || '-', 175, y, {
+  width: 55,
+});
 
     doc.text(String(item.quantity || 0), 220, y, {
       width: 50,

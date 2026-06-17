@@ -34,6 +34,9 @@ export class ProjectPurchaseOrderItem {
   @Column({ nullable: true })
   unit: string;
 
+  @Column({ nullable: true })
+hsnCode: string;
+
   // SNAPSHOT purchase price
   @Column({ type: 'float', default: 0 })
   purchaseRate: number;
