@@ -854,6 +854,17 @@ const [receivePaymentForms, setReceivePaymentForms] =
     remarks: string;
   }>>({});
 
+  const [franchisePayoutRequests, setFranchisePayoutRequests] =
+  useState<any[]>([]);
+
+const [franchisePayoutForm, setFranchisePayoutForm] = useState({
+  requestedAmount: '',
+  requestNote: '',
+});
+
+const [franchisePayoutLoading, setFranchisePayoutLoading] =
+  useState(false);
+
   const fetchProject = async () => {
     try {
       setLoading(true);
@@ -1102,6 +1113,29 @@ const updateDocumentCustomerVisibility = async (
   }
 };
 
+const fetchMyFranchisePayoutRequests = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/franchise-payout-request/my`,
+      {
+        params: {
+          projectId,
+          limit: 20,
+        },
+        headers: token
+          ? { Authorization: `Bearer ${token}` }
+          : {},
+      },
+    );
+
+    setFranchisePayoutRequests(res.data?.data || []);
+  } catch (error) {
+    console.error('Failed to load franchise payout requests:', error);
+  }
+};
+
 const fetchMaterials = async () => {
   try {
     const token = localStorage.getItem('token');
@@ -1279,6 +1313,50 @@ const submitApproval = async (
     );
   } finally {
     setApprovalLoading(false);
+  }
+};
+
+const submitFranchisePayoutRequest = async () => {
+  if (!franchisePayoutForm.requestedAmount) {
+    alert('Please enter payout amount');
+    return;
+  }
+
+  try {
+    setFranchisePayoutLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/franchise-payout-request`,
+      {
+        projectId: Number(projectId),
+        requestedAmount: Number(franchisePayoutForm.requestedAmount || 0),
+        requestNote: franchisePayoutForm.requestNote,
+      },
+      {
+        headers: token
+          ? { Authorization: `Bearer ${token}` }
+          : {},
+      },
+    );
+
+    alert('Payout request submitted successfully');
+
+    setFranchisePayoutForm({
+      requestedAmount: '',
+      requestNote: '',
+    });
+
+    fetchMyFranchisePayoutRequests();
+  } catch (error: any) {
+    console.error(error);
+    alert(
+      error?.response?.data?.message ||
+        'Failed to submit payout request',
+    );
+  } finally {
+    setFranchisePayoutLoading(false);
   }
 };
 
@@ -3242,6 +3320,24 @@ const hasRole = (allowedRoles: string[]) => {
   );
 };
 
+const isSolarFranchise = hasRole(['SOLAR_FRANCHISE']);
+
+const nextSiteWork = executionActivities
+  .filter((item) => item.scheduledDate)
+  .sort(
+    (a, b) =>
+      new Date(a.scheduledDate || '').getTime() -
+      new Date(b.scheduledDate || '').getTime(),
+  )[0];
+
+const latestSiteWork = executionActivities
+  .slice()
+  .sort(
+    (a, b) =>
+      new Date(b.createdAt || '').getTime() -
+      new Date(a.createdAt || '').getTime(),
+  )[0];
+
 const canMarketingApprove = hasRole([
   'OWNER',
   'MARKETING_HEAD',
@@ -3386,6 +3482,16 @@ fetchPendingRescheduleRequests();
 }
 
 }, [activeTab, projectId]);
+
+useEffect(() => {
+  if (!projectId) return;
+
+  if (hasRole(['SOLAR_FRANCHISE'])) {
+    fetchContractorAssignments();
+    fetchExecutionActivities();
+    fetchMyFranchisePayoutRequests();
+  }
+}, [projectId, currentUserRoles]);
 
 const generateProjectPdf = async (share = false) => {
   if (!pdfRef.current || !project) return;
@@ -4346,6 +4452,159 @@ const canApproveAndReserveStock =
 )}
         </div>
       </div>
+
+      {hasRole(['SOLAR_FRANCHISE']) && (
+  <div className="mb-6 rounded-2xl border border-blue-100 bg-blue-50 p-5 shadow-sm">
+    <h2 className="text-lg font-bold text-blue-900">
+      Franchise Project Summary
+    </h2>
+
+    <div className="mt-4 grid gap-4 md:grid-cols-3">
+      <Field
+        label="Project Manager"
+        value={project?.projectOwnerName || '-'}
+      />
+
+      <Field
+        label="Project Manager Role"
+        value={project?.projectOwnerRole || '-'}
+      />
+
+      <Field
+        label="Project Status"
+        value={project?.status || '-'}
+      />
+    </div>
+
+    <div className="mt-5">
+      <h3 className="font-semibold text-gray-800">
+        Contractor Team Details
+      </h3>
+
+      {contractorAssignments.length === 0 ? (
+        <p className="mt-2 text-sm text-gray-500">
+          Contractor team not assigned yet.
+        </p>
+      ) : (
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          {contractorAssignments.map((item) => (
+            <div
+              key={item.id}
+              className="rounded-xl bg-white p-4 shadow-sm"
+            >
+              <p className="font-bold text-gray-900">
+                {item.contractorName || '-'}
+              </p>
+
+              <p className="mt-1 text-sm text-gray-600">
+                Phone: {item.contractorPhone || '-'}
+              </p>
+
+              <p className="mt-1 text-sm text-gray-600">
+                Work Scope:{' '}
+                {String(item.workScope || '')
+                  .replaceAll('_', ' ')}
+              </p>
+
+              <p className="mt-1 text-sm text-gray-600">
+                Working Date:{' '}
+                {item.scheduledDate
+                  ? item.scheduledDate.split('T')[0]
+                  : '-'}
+              </p>
+
+              <p className="mt-1 font-semibold text-blue-700">
+                Status: {item.status || '-'}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+
+    <div className="mt-5">
+  <h3 className="font-semibold text-gray-800">
+    Payout Request
+  </h3>
+
+  <div className="mt-3 grid gap-3 rounded-xl bg-white p-4 md:grid-cols-3">
+    <input
+      type="number"
+      value={franchisePayoutForm.requestedAmount}
+      onChange={(e) =>
+        setFranchisePayoutForm((prev) => ({
+          ...prev,
+          requestedAmount: e.target.value,
+        }))
+      }
+      placeholder="Requested amount"
+      className="rounded-xl border px-3 py-2"
+    />
+
+    <input
+      value={franchisePayoutForm.requestNote}
+      onChange={(e) =>
+        setFranchisePayoutForm((prev) => ({
+          ...prev,
+          requestNote: e.target.value,
+        }))
+      }
+      placeholder="Note / reason"
+      className="rounded-xl border px-3 py-2"
+    />
+
+    <button
+      type="button"
+      onClick={submitFranchisePayoutRequest}
+      disabled={franchisePayoutLoading}
+      className="rounded-xl bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+    >
+      {franchisePayoutLoading
+        ? 'Submitting...'
+        : 'Request Payout'}
+    </button>
+  </div>
+
+  <div className="mt-3 space-y-2">
+    {franchisePayoutRequests.length === 0 ? (
+      <p className="text-sm text-gray-500">
+        No payout requests submitted yet.
+      </p>
+    ) : (
+      franchisePayoutRequests.map((item) => (
+        <div
+          key={item.id}
+          className="rounded-xl bg-white p-3 text-sm shadow-sm"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="font-semibold text-gray-900">
+              ₹{Number(item.requestedAmount || 0).toLocaleString('en-IN')}
+            </p>
+
+            <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">
+              {item.status || 'REQUESTED'}
+            </span>
+          </div>
+
+          {item.requestNote && (
+            <p className="mt-1 text-gray-600">
+              {item.requestNote}
+            </p>
+          )}
+
+          {item.accountManagerNote && (
+            <p className="mt-1 text-blue-700">
+              Account Note: {item.accountManagerNote}
+            </p>
+          )}
+        </div>
+      ))
+    )}
+  </div>
+</div>
+
+  </div>
+)}
 
       <div className="flex flex-wrap gap-2">
   {(() => {

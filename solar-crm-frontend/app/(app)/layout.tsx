@@ -34,6 +34,7 @@ const navItems = [
       'HR_MANAGER',
       'TRADING_MANAGER',
       'PROJECT_CONTRACTOR',
+      'SOLAR_FRANCHISE',
     ],
   },
   { name: 'Users', href: '/users', roles: ['OWNER'] },
@@ -70,6 +71,7 @@ const navItems = [
       'LEAD_EXECUTIVE',
       'PROJECT_EXECUTIVE',
       'TELECALLING_ASSISTANT',
+      'SOLAR_FRANCHISE',
     ],
   },
 
@@ -87,6 +89,7 @@ const navItems = [
     'LEAD_EXECUTIVE',
     'TELECALLING_ASSISTANT',
     'MEETING_ASSISTANT',
+    'SOLAR_FRANCHISE',
   ],
 },
 
@@ -119,6 +122,7 @@ const navItems = [
 'CUSTOMER_MANAGER',
 'STOCK_MANAGER',
 'TRADING_MANAGER',
+'SOLAR_FRANCHISE',
   ],
 },
 
@@ -163,6 +167,7 @@ const navItems = [
     'HR_MANAGER',
     'TRADING_MANAGER',
     'PROJECT_CONTRACTOR',
+    'SOLAR_FRANCHISE',
   ],
 },
 
@@ -289,6 +294,16 @@ const navItems = [
   'PAYMENT_MANAGER',
   'ACCOUNT_MANAGER',
 ],
+},
+
+{
+  name: 'Franchise Payouts',
+  href: '/project/franchise-payouts',
+  roles: [
+    'OWNER',
+    'ACCOUNT_MANAGER',
+    'PAYMENT_MANAGER',
+  ],
 },
 
 {
