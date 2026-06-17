@@ -9925,6 +9925,44 @@ async createManualProformaInvoice(
       invoice as ProjectProformaInvoice,
     );
 
+    const materialNames = items
+  .map((item: any) => String(item.itemName || '').trim())
+  .filter(Boolean);
+
+const matchedMaterials = materialNames.length
+  ? await this.projectMaterialMasterRepository.find({
+      where: {
+        name: In(materialNames),
+      },
+    })
+  : [];
+
+const materialHsnMap = new Map(
+  matchedMaterials.map((material: any) => [
+    String(material.name || '').trim().toLowerCase(),
+    String(material.hsnCode || '').trim(),
+  ]),
+);
+
+const materialIds = items
+  .map((item: any) => Number(item.materialId || 0))
+  .filter((id: number) => id > 0);
+
+const matchedMaterialsById = materialIds.length
+  ? await this.projectMaterialMasterRepository.find({
+      where: {
+        id: In(materialIds),
+      },
+    })
+  : [];
+
+const materialHsnById = new Map(
+  matchedMaterialsById.map((material: any) => [
+    Number(material.id),
+    String(material.hsnCode || '').trim(),
+  ]),
+);
+
   const invoiceItems = items.map(
     (item: any) => {
       const quantity = Number(item.quantity || 0);
@@ -9960,7 +9998,9 @@ async createManualProformaInvoice(
             item.unit || '',
 
             hsnCode:
-  item.hsnCode || '',
+  String(item.hsnCode || '').trim() ||
+  materialHsnById.get(Number(item.materialId || 0)) ||
+  '',
 
           sellingRate,
           gstPercent,
