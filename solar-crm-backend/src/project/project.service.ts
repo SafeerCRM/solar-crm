@@ -180,6 +180,8 @@ import {
   ContractorRescheduleStatus,
 } from './project-contractor-reschedule-request.entity';
 
+import { CustomerNotification } from '../customer-portal/customer-notification.entity';
+
 @Injectable()
 export class ProjectService {
 
@@ -500,6 +502,9 @@ const loanRequiredGroups = [
 
     @InjectRepository(ProjectDocument)
     private readonly projectDocumentRepository: Repository<ProjectDocument>,
+
+    @InjectRepository(CustomerNotification)
+private readonly customerNotificationRepository: Repository<CustomerNotification>,
 
     @InjectRepository(ProjectComment)
     private readonly projectCommentRepository: Repository<ProjectComment>,
@@ -1465,12 +1470,42 @@ async uploadProjectDocument(file: any, body: any, user: any) {
 
   const savedDocument = await this.projectDocumentRepository.save(document);
 
-  return {
-    message: 'Project document uploaded successfully',
-    document: savedDocument,
-    fileUrl,
-    filePath,
-  };
+const shouldNotifyCustomer =
+  body?.notifyCustomer === true ||
+  body?.notifyCustomer === 'true';
+
+const isVisibleToCustomer =
+  body?.visibleToCustomer === true ||
+  body?.visibleToCustomer === 'true';
+
+if (
+  shouldNotifyCustomer &&
+  isVisibleToCustomer &&
+  project.customerId
+) {
+  await this.customerNotificationRepository.save(
+    this.customerNotificationRepository.create({
+      customerId: Number(project.customerId),
+      customerCode: project.customerCode || '',
+      projectId: project.id,
+      notificationType: 'DOCUMENT_UPDATE',
+      title: 'New Document Uploaded',
+      message: `${String(savedDocument.documentType || 'Document').replaceAll(
+        '_',
+        ' ',
+      )} is now available in your Documents Vault.`,
+      relatedEntityType: 'PROJECT_DOCUMENT',
+      relatedEntityId: savedDocument.id,
+    } as any),
+  );
+}
+
+return {
+  message: 'Project document uploaded successfully',
+  document: savedDocument,
+  fileUrl,
+  filePath,
+};
 }
 
 async uploadProjectDocuments(files: any[], body: any, user: any) {

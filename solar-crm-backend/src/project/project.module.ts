@@ -49,10 +49,11 @@ import { ProjectTradingMeeting } from './project-trading-meeting.entity';
 import { FollowUp } from '../followup/follow-up.entity';
 import { ProjectCleaningAssignment } from './project-cleaning-assignment.entity';
 import { ProjectContractorRescheduleRequest } from './project-contractor-reschedule-request.entity';
+import { CustomerNotification } from '../customer-portal/customer-notification.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Project, ProjectDocument, ProjectComment, ProjectMaterialMaster, ProjectMaterialRequest,
+    TypeOrmModule.forFeature([Project, ProjectDocument, CustomerNotification, ProjectComment, ProjectMaterialMaster, ProjectMaterialRequest,
 ProjectMaterialRequestItem, ProjectBranch, ProjectLoanDetail, ProjectSubsidyDetail, ProjectElectricityDetail, ProjectExecutionActivity, ProjectExecutionProof, ProjectExecutionReminder, ProjectExecutionReminderUserState, ProjectPaymentInstallment, ProjectPaymentReminderUserState, ProjectReminderUserState, ProjectEditHistory,
  ProjectVendor, ProjectPurchaseOrder, ProjectStockItem,
 ProjectStockMovement, ProjectPurchaseOrderItem, ProjectProformaInvoice,
