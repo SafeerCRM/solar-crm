@@ -10194,10 +10194,24 @@ async generateProformaInvoicePdf(
       align: 'center',
     });
 
-  doc.y += 42;
+  doc.y += 38;
 
-  // Document info strip
-  doc.y += 8;
+doc
+  .fontSize(8)
+  .fillColor(muted)
+  .text(
+    'GSTIN: - | Phone: - | Email: - | Address: Aditya Solars',
+    pageLeft,
+    doc.y,
+    {
+      width: pageWidth,
+      align: 'center',
+    },
+  );
+
+doc.y += 14;
+
+// Bill to and details cards
 
   // Bill to and details cards
   const cardY = doc.y;
@@ -10296,14 +10310,14 @@ async generateProformaInvoicePdf(
       .fontSize(8)
       .fillColor('#ffffff')
       .text('Sr', 42, y + 7, { width: 22 })
-      .text('Item Name', 65, y + 7, { width: 145 })
-      .text('HSN', 210, y + 7, { width: 50 })
-      .text('Qty', 255, y + 7, { width: 35, align: 'right' })
-.text('Unit', 295, y + 7, { width: 45 })
-.text('Rate', 340, y + 7, { width: 55, align: 'right' })
-.text('GST%', 397, y + 7, { width: 35, align: 'right' })
-.text('GST Amt', 435, y + 7, { width: 55, align: 'right' })
-.text('Total', 490, y + 7, { width: 62, align: 'right' });
+      .text('Item Name', 65, y + 7, { width: 165 })
+.text('HSN', 230, y + 7, { width: 45 })
+.text('Qty', 275, y + 7, { width: 30, align: 'right' })
+.text('Unit', 308, y + 7, { width: 38 })
+.text('Rate', 348, y + 7, { width: 55, align: 'right' })
+.text('GST%', 405, y + 7, { width: 32, align: 'right' })
+.text('GST Amt', 440, y + 7, { width: 52, align: 'right' })
+.text('Total', 494, y + 7, { width: 58, align: 'right' });
 
     doc.y = y + 22;
   };
@@ -10347,33 +10361,33 @@ async generateProformaInvoicePdf(
       .fillColor(dark)
       .text(String(index + 1), 42, y + 7, { width: 22 })
       .text(itemName, 65, y + 7, {
-        width: 140,
-        height: rowHeight - 8,
-      })
-      .text(String((item as any).hsnCode || '-'), 210, y + 7, {
-        width: 50,
-      })
-      .text(String(item.quantity || 0), 255, y + 7, {
-  width: 35,
-  align: 'right',
+  width: 160,
+  height: rowHeight - 8,
 })
-.text(String(item.unit || '-'), 295, y + 7, {
+.text(String((item as any).hsnCode || '-'), 230, y + 7, {
   width: 45,
 })
-.text(this.formatInr(item.sellingRate || 0), 340, y + 7, {
+.text(String(item.quantity || 0), 275, y + 7, {
+  width: 30,
+  align: 'right',
+})
+.text(String(item.unit || '-'), 308, y + 7, {
+  width: 38,
+})
+.text(this.formatInr(item.sellingRate || 0), 348, y + 7, {
   width: 55,
   align: 'right',
 })
-.text(`${item.gstPercent || 0}%`, 397, y + 7, {
-  width: 35,
+.text(`${item.gstPercent || 0}%`, 405, y + 7, {
+  width: 32,
   align: 'right',
 })
-.text(this.formatInr(item.gstAmount || 0), 435, y + 7, {
-  width: 55,
+.text(this.formatInr(item.gstAmount || 0), 440, y + 7, {
+  width: 52,
   align: 'right',
 })
-.text(this.formatInr(item.totalAmount || 0), 490, y + 7, {
-  width: 62,
+.text(this.formatInr(item.totalAmount || 0), 494, y + 7, {
+  width: 58,
   align: 'right',
 });
 
@@ -10432,7 +10446,7 @@ async generateProformaInvoicePdf(
   doc.y = summaryY + 108;
 
   doc
-    .roundedRect(pageLeft, doc.y, pageWidth, 42, 6)
+  .roundedRect(pageLeft, doc.y, pageWidth, 34, 6)
     .fill(lightOrange)
     .strokeColor(border)
     .stroke();
@@ -10445,11 +10459,11 @@ async generateProformaInvoicePdf(
   doc
     .fontSize(10)
     .fillColor(dark)
-    .text(this.numberToWordsIndian(Number(pi.totalAmount || 0)), pageLeft + 12, doc.y + 23, {
+    .text(this.numberToWordsIndian(Number(pi.totalAmount || 0)), pageLeft + 12, doc.y + 20, {
       width: pageWidth - 24,
     });
 
-  doc.y += 58;
+  doc.y += 46;
 
   const footerY = doc.y;
 
@@ -10484,17 +10498,27 @@ async generateProformaInvoicePdf(
     .stroke();
 
   doc
-    .fontSize(10)
-    .fillColor(blue)
-    .text('For Aditya Solars', pageLeft + 277, footerY + 10);
+  .fontSize(10)
+  .fillColor(blue)
+  .text('For Aditya Solars', pageLeft + 277, footerY + 10);
 
-  doc
-    .fontSize(8)
-    .fillColor(muted)
-    .text('Authorized Signatory', pageLeft + 277, footerY + 58, {
-      width: 220,
-      align: 'right',
-    });
+doc
+  .fontSize(8)
+  .fillColor(dark)
+  .text(`Generated On: ${invoiceDate}`, pageLeft + 277, footerY + 28, {
+    width: 220,
+  })
+  .text('Prepared By: System', pageLeft + 277, footerY + 42, {
+    width: 220,
+  });
+
+doc
+  .fontSize(8)
+  .fillColor(muted)
+  .text('Authorized Signatory', pageLeft + 277, footerY + 62, {
+    width: 220,
+    align: 'right',
+  });
 
   doc.end();
 }
