@@ -861,4 +861,94 @@ async updatePaymentReceipt(id: number, body: any, user: any) {
 
   return this.paymentReceiptRepository.save(receipt);
 }
+
+async listReferrals(query: any) {
+  const page = Number(query?.page || 1);
+  const limit = Math.min(Number(query?.limit || 20), 100);
+  const skip = (page - 1) * limit;
+
+  const qb = this.referralRepository
+    .createQueryBuilder('referral')
+    .where('referral.isHidden = false')
+    .orderBy('referral.createdAt', 'DESC');
+
+  if (query?.customerId) {
+    qb.andWhere('referral.customerId = :customerId', {
+      customerId: Number(query.customerId),
+    });
+  }
+
+  if (query?.status) {
+    qb.andWhere('referral.status = :status', {
+      status: query.status,
+    });
+  }
+
+  if (query?.search) {
+    const search = `%${String(query.search).toLowerCase()}%`;
+
+    qb.andWhere(
+      `
+      LOWER(referral.referrerName) LIKE :search
+      OR LOWER(referral.referrerPhone) LIKE :search
+      OR LOWER(referral.referredName) LIKE :search
+      OR LOWER(referral.referredPhone) LIKE :search
+      OR LOWER(referral.customerCode) LIKE :search
+      `,
+      { search },
+    );
+  }
+
+  if (query?.city) {
+    qb.andWhere('LOWER(referral.referredCity) LIKE :city', {
+      city: `%${String(query.city).toLowerCase()}%`,
+    });
+  }
+
+  qb.skip(skip).take(limit);
+
+  const [data, total] = await qb.getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
+}
+
+async updateReferral(id: number, body: any, user: any) {
+  const referral = await this.referralRepository.findOne({
+    where: { id },
+  });
+
+  if (!referral) {
+    throw new NotFoundException('Referral not found');
+  }
+
+  referral.status = body.status || referral.status;
+  referral.linkedLeadId = body.linkedLeadId
+    ? Number(body.linkedLeadId)
+    : referral.linkedLeadId;
+  referral.linkedMeetingId = body.linkedMeetingId
+    ? Number(body.linkedMeetingId)
+    : referral.linkedMeetingId;
+  referral.linkedProjectId = body.linkedProjectId
+    ? Number(body.linkedProjectId)
+    : referral.linkedProjectId;
+  referral.rewardAmount = body.rewardAmount
+    ? Number(body.rewardAmount)
+    : referral.rewardAmount;
+  referral.remarks = body.remarks || referral.remarks;
+
+  if (body.status === 'REWARD_PAID' || body.rewardPaid === true) {
+    referral.rewardPaid = true;
+    referral.rewardPaidAt = new Date();
+    referral.rewardPaidBy = user?.id || null;
+    referral.rewardPaidByName = user?.name || user?.email || '';
+  }
+
+  return this.referralRepository.save(referral);
+}
 }

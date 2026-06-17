@@ -117,4 +117,32 @@ updatePaymentReceipt(
 ) {
   return this.service.updatePaymentReceipt(id, body, user);
 }
+
+@Roles(
+  'OWNER',
+  'CUSTOMER_MANAGER',
+  'PROJECT_MANAGER',
+  'MARKETING_HEAD',
+  'LEAD_MANAGER',
+)
+@Get('referrals')
+listReferrals(@Query() query: any) {
+  return this.service.listReferrals(query);
+}
+
+@Roles(
+  'OWNER',
+  'CUSTOMER_MANAGER',
+  'PROJECT_MANAGER',
+  'MARKETING_HEAD',
+  'LEAD_MANAGER',
+)
+@Patch('referrals/:id')
+updateReferral(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.service.updateReferral(id, body, user);
+}
 }
