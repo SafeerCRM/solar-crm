@@ -4,6 +4,7 @@ import {
   Get,
   Param,
 ParseIntPipe,
+Query,
 Patch,
   Post,
   Req,
@@ -223,5 +224,29 @@ async markNotificationRead(
   }
 
   return this.service.markNotificationRead(id, Number(payload.customerId));
+}
+
+@Get('documents')
+async getCustomerDocuments(
+  @Req() req: any,
+  @Query() query: any,
+) {
+  const authHeader = req.headers?.authorization || '';
+  const token = authHeader.replace('Bearer ', '');
+
+  if (!token) {
+    throw new UnauthorizedException('Customer token missing');
+  }
+
+  const payload: any = jwt.verify(token, 'mysecretkey');
+
+  if (!payload?.customerId) {
+    throw new UnauthorizedException('Invalid customer token');
+  }
+
+  return this.service.getCustomerDocuments(
+    Number(payload.customerId),
+    query,
+  );
 }
 }

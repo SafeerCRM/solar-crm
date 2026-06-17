@@ -14,6 +14,7 @@ import { CustomerAuthController } from './customer-auth.controller';
 import { CustomerComplaintAttachment } from './customer-complaint-attachment.entity';
 import { ProjectExecutionActivity } from '../project/project-execution-activity.entity';
 import { ProjectPaymentInstallment } from '../project/project-payment-installment.entity';
+import { ProjectDocument } from '../project/project-document.entity';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ CustomerComplaintAttachment,
       Project,
       ProjectExecutionActivity,
       ProjectPaymentInstallment,
+      ProjectDocument,
     ]),
   ],
   controllers: [CustomerPortalController, CustomerAuthController],

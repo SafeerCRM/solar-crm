@@ -20,6 +20,7 @@ import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
 import { ProjectExecutionActivity } from '../project/project-execution-activity.entity';
 import { ProjectPaymentInstallment } from '../project/project-payment-installment.entity';
+import { ProjectDocument } from '../project/project-document.entity';
 
 @Injectable()
 export class CustomerPortalService {
@@ -29,6 +30,9 @@ export class CustomerPortalService {
 
     @InjectRepository(Project)
     private readonly projectRepository: Repository<Project>,
+
+    @InjectRepository(ProjectDocument)
+private readonly projectDocumentRepository: Repository<ProjectDocument>,
 
     @InjectRepository(ProjectPaymentInstallment)
 private readonly paymentInstallmentRepository: Repository<ProjectPaymentInstallment>,
@@ -73,6 +77,15 @@ private readonly complaintAttachmentRepository: Repository<CustomerComplaintAtta
     });
 
     const projectIds = projects.map((project) => project.id);
+
+    const customerDocuments = projectIds.length
+  ? await this.projectDocumentRepository
+      .createQueryBuilder('document')
+      .where('document.projectId IN (:...projectIds)', { projectIds })
+      .andWhere('document.visibleToCustomer = true')
+      .orderBy('document.createdAt', 'DESC')
+      .getMany()
+  : [];
 
     const paymentInstallments = projectIds.length
   ? await this.paymentInstallmentRepository
@@ -213,6 +226,8 @@ upcomingExecutionActivities: executionActivities.filter(
 ).slice(0, 10),
 paymentInstallments,
 paymentSummary,
+customerDocuments,
+totalCustomerDocuments: customerDocuments.length,
 };
   }
 
@@ -1035,5 +1050,59 @@ async markNotificationRead(id: number, customerId: number) {
   notification.readAt = new Date();
 
   return this.notificationRepository.save(notification);
+}
+
+async getCustomerDocuments(customerId: number, query: any) {
+  const customer = await this.customerRepository.findOne({
+    where: { id: customerId, isHidden: false },
+  });
+
+  if (!customer) {
+    throw new NotFoundException('Customer not found');
+  }
+
+  const projects = await this.projectRepository.find({
+    where: { customerId, isHidden: false },
+  });
+
+  const projectIds = projects.map((project) => project.id);
+
+  if (!projectIds.length) {
+    return {
+      data: [],
+      total: 0,
+    };
+  }
+
+  const qb = this.projectDocumentRepository
+    .createQueryBuilder('document')
+    .where('document.projectId IN (:...projectIds)', { projectIds })
+    .andWhere('document.visibleToCustomer = true')
+    .orderBy('document.createdAt', 'DESC');
+
+  if (query?.projectId) {
+    qb.andWhere('document.projectId = :projectId', {
+      projectId: Number(query.projectId),
+    });
+  }
+
+  if (query?.department) {
+    qb.andWhere('document.department = :department', {
+      department: query.department,
+    });
+  }
+
+  if (query?.documentType) {
+    qb.andWhere('document.documentType = :documentType', {
+      documentType: query.documentType,
+    });
+  }
+
+  const data = await qb.getMany();
+
+  return {
+    data,
+    total: data.length,
+  };
 }
 }
