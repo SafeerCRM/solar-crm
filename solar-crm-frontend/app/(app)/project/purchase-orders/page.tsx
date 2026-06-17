@@ -158,6 +158,7 @@ type ProjectOption = {
 };
 
 type ManualPiItem = {
+  materialId?: number | string;
   itemName: string;
   category: string;
   brand: string;
@@ -238,6 +239,7 @@ const [creatingManualPo, setCreatingManualPo] =
   const [manualPi, setManualPi] = useState({
   projectId: '',
   dealerId: '',
+  materialId: '',
   itemName: '',
   category: '',
   brand: '',
@@ -1431,6 +1433,7 @@ const addManualPiItem = () => {
   setManualPiItems([
     ...manualPiItems,
     {
+      materialId: manualPi.materialId,
       itemName: manualPi.itemName,
       category: manualPi.category,
       brand: manualPi.brand,
@@ -1445,10 +1448,12 @@ const addManualPiItem = () => {
 
   setManualPi({
     ...manualPi,
+    materialId: '',
     itemName: '',
     category: '',
     brand: '',
     unit: '',
+    hsnCode: '',
     quantity: '',
     sellingRate: '',
     gstPercent: '18',
@@ -1468,6 +1473,7 @@ const createManualPi = async () => {
       : manualPi.itemName
         ? [
             {
+              materialId: manualPi.materialId,
               itemName: manualPi.itemName,
               category: manualPi.category,
               brand: manualPi.brand,
@@ -1505,6 +1511,7 @@ const createManualPi = async () => {
         remarks: manualPi.remarks,
 
         items: itemsToSubmit.map((item) => ({
+          materialId: item.materialId ? Number(item.materialId) : undefined,
           itemName: item.itemName,
           category: item.category,
           brand: item.brand,
@@ -1530,6 +1537,7 @@ const createManualPi = async () => {
     setManualPi({
       projectId: '',
       dealerId: '',
+      materialId: '',
       itemName: '',
       category: '',
       brand: '',
@@ -2350,6 +2358,7 @@ const generateProformaInvoice = async () => {
 
     setManualPi({
       ...manualPi,
+      materialId: selected?.id ? String(selected.id) : '',
       itemName: selected?.name || '',
       category: selected?.category || '',
       brand: selected?.brand || '',
