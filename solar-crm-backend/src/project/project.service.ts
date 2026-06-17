@@ -9062,6 +9062,9 @@ async createPurchaseOrder(
         unit:
           item.unit || '',
 
+          hsnCode:
+  item.hsnCode || '',
+
         purchaseRate:
           item.purchaseRate,
 
@@ -9685,6 +9688,9 @@ async createProformaInvoice(
         unit:
           item.unit || '',
 
+          hsnCode:
+  item.hsnCode || '',
+
         sellingRate:
           item.sellingRate,
 
@@ -9953,6 +9959,9 @@ async createManualProformaInvoice(
           unit:
             item.unit || '',
 
+            hsnCode:
+  item.hsnCode || '',
+
           sellingRate,
           gstPercent,
           quantity,
@@ -10085,32 +10094,34 @@ async generateProformaInvoicePdf(
     .fontSize(10)
     .fillColor('#111827');
 
-  const startX = 40;
+    let y = doc.y;
 
-  let y = doc.y;
-
-  doc.text('Item', startX, y, {
-    width: 170,
+  doc.text('Item', 40, y, {
+    width: 135,
   });
 
-  doc.text('Qty', 220, y, {
-    width: 50,
+  doc.text('HSN', 175, y, {
+    width: 55,
   });
 
-  doc.text('Rate', 270, y, {
-    width: 80,
+  doc.text('Qty', 230, y, {
+    width: 35,
   });
 
-  doc.text('Disc.', 350, y, {
-    width: 70,
+  doc.text('Rate', 265, y, {
+    width: 75,
   });
 
-  doc.text('GST', 420, y, {
-    width: 50,
+  doc.text('Disc.', 340, y, {
+    width: 65,
   });
 
-  doc.text('Total', 470, y, {
-    width: 90,
+  doc.text('GST', 405, y, {
+    width: 45,
+  });
+
+  doc.text('Total', 450, y, {
+    width: 100,
   });
 
   y += 18;
@@ -10125,21 +10136,30 @@ async generateProformaInvoicePdf(
       y = 40;
     }
 
-    doc.text(
+        doc.text(
       item.itemName || '-',
-      startX,
+      40,
       y,
       {
-        width: 170,
+        width: 135,
+      },
+    );
+
+    doc.text(
+      (item as any).hsnCode || '-',
+      175,
+      y,
+      {
+        width: 55,
       },
     );
 
     doc.text(
       String(item.quantity || 0),
-      220,
+      230,
       y,
       {
-        width: 50,
+        width: 35,
       },
     );
 
@@ -10147,10 +10167,10 @@ async generateProformaInvoicePdf(
       `Rs. ${Number(
         item.sellingRate || 0,
       ).toLocaleString('en-IN')}`,
-      270,
+      265,
       y,
       {
-        width: 80,
+        width: 75,
       },
     );
 
@@ -10158,19 +10178,19 @@ async generateProformaInvoicePdf(
       `Rs. ${Number(
         item.discountAmount || 0,
       ).toLocaleString('en-IN')}`,
-      350,
+      340,
       y,
       {
-        width: 70,
+        width: 65,
       },
     );
 
     doc.text(
       `${item.gstPercent || 0}%`,
-      420,
+      405,
       y,
       {
-        width: 50,
+        width: 45,
       },
     );
 
@@ -10178,10 +10198,10 @@ async generateProformaInvoicePdf(
       `Rs. ${Number(
         item.totalAmount || 0,
       ).toLocaleString('en-IN')}`,
-      470,
+      450,
       y,
       {
-        width: 90,
+        width: 100,
       },
     );
 
@@ -10442,6 +10462,9 @@ await this.projectPartyLedgerRepository.save(
 
         unit:
           item.unit || '',
+
+          hsnCode:
+  item.hsnCode || '',
 
         finalRate:
           item.finalRate,
@@ -11015,15 +11038,15 @@ async generateFinalInvoicePdf(
     .fontSize(10)
     .fillColor('#111827');
 
-  const startX = 40;
-  let y = doc.y;
+    let y = doc.y;
 
-  doc.text('Item', startX, y, { width: 170 });
-  doc.text('Qty', 220, y, { width: 50 });
-  doc.text('Rate', 270, y, { width: 80 });
-  doc.text('Disc.', 350, y, { width: 70 });
-  doc.text('GST', 420, y, { width: 50 });
-  doc.text('Total', 470, y, { width: 90 });
+  doc.text('Item', 40, y, { width: 135 });
+  doc.text('HSN', 175, y, { width: 55 });
+  doc.text('Qty', 230, y, { width: 35 });
+  doc.text('Rate', 265, y, { width: 75 });
+  doc.text('Disc.', 340, y, { width: 65 });
+  doc.text('GST', 405, y, { width: 45 });
+  doc.text('Total', 450, y, { width: 100 });
 
   y += 18;
 
@@ -11037,42 +11060,46 @@ async generateFinalInvoicePdf(
       y = 40;
     }
 
-    doc.text(item.itemName || '-', startX, y, {
-      width: 170,
+        doc.text(item.itemName || '-', 40, y, {
+      width: 135,
     });
 
-    doc.text(String(item.quantity || 0), 220, y, {
-      width: 50,
+    doc.text((item as any).hsnCode || '-', 175, y, {
+      width: 55,
+    });
+
+    doc.text(String(item.quantity || 0), 230, y, {
+      width: 35,
     });
 
     doc.text(
       `Rs.${Number(item.finalRate || 0).toLocaleString('en-IN')}`,
-      270,
+      265,
       y,
       {
-        width: 80,
+        width: 75,
       },
     );
 
     doc.text(
       `Rs.${Number(item.discountAmount || 0).toLocaleString('en-IN')}`,
-      350,
+      340,
       y,
       {
-        width: 70,
+        width: 65,
       },
     );
 
-    doc.text(`${item.gstPercent || 0}%`, 420, y, {
-      width: 50,
+    doc.text(`${item.gstPercent || 0}%`, 405, y, {
+      width: 45,
     });
 
     doc.text(
       `Rs.${Number(item.totalAmount || 0).toLocaleString('en-IN')}`,
-      470,
+      450,
       y,
       {
-        width: 90,
+        width: 100,
       },
     );
 

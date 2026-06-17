@@ -31,6 +31,9 @@ export class ProjectFinalInvoiceItem {
   @Column({ nullable: true })
   unit: string;
 
+  @Column({ nullable: true })
+hsnCode: string;
+
   @Column({ type: 'float', default: 0 })
   finalRate: number;
 
