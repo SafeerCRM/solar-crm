@@ -131,6 +131,7 @@ type ProjectDocument = {
   fileUrl?: string;
   uploadedByRole?: string;
   remarks?: string;
+  visibleToCustomer?: boolean;
   createdAt?: string;
 };
 
@@ -554,6 +555,9 @@ const [department, setDepartment] =
 const [documentRemarks, setDocumentRemarks] =
   useState('');
 
+  const [visibleToCustomer, setVisibleToCustomer] = useState(false);
+const [notifyCustomer, setNotifyCustomer] = useState(false);
+
   const [activeTab, setActiveTab] =
   useState('PROJECT_CREATION');
 
@@ -976,6 +980,16 @@ const uploadDocument = async () => {
       documentRemarks,
     );
 
+    formData.append(
+  'visibleToCustomer',
+  String(visibleToCustomer),
+);
+
+formData.append(
+  'notifyCustomer',
+  String(notifyCustomer),
+);
+
     const res = await axios.post(
       `${API_BASE_URL}/project/documents/upload`,
       formData,
@@ -996,6 +1010,8 @@ const uploadDocument = async () => {
     setSelectedFiles([]);
 
     setDocumentRemarks('');
+    setVisibleToCustomer(false);
+setNotifyCustomer(false);
 
     fetchDocuments();
   } catch (error: any) {
@@ -7570,6 +7586,48 @@ const canApproveAndReserveStock =
     className="mt-3 w-full rounded-xl border p-3"
   />
 
+  <div className="mt-3 grid gap-3 md:grid-cols-2">
+  <label className="flex cursor-pointer items-start gap-3 rounded-xl border bg-blue-50 p-4">
+    <input
+      type="checkbox"
+      checked={visibleToCustomer}
+      onChange={(e) =>
+        setVisibleToCustomer(e.target.checked)
+      }
+      className="mt-1 h-4 w-4"
+    />
+
+    <div>
+      <p className="text-sm font-bold text-blue-800">
+        Visible To Customer
+      </p>
+      <p className="mt-1 text-xs text-blue-600">
+        Customer can see this document in their Documents Vault.
+      </p>
+    </div>
+  </label>
+
+  <label className="flex cursor-pointer items-start gap-3 rounded-xl border bg-orange-50 p-4">
+    <input
+      type="checkbox"
+      checked={notifyCustomer}
+      onChange={(e) =>
+        setNotifyCustomer(e.target.checked)
+      }
+      className="mt-1 h-4 w-4"
+    />
+
+    <div>
+      <p className="text-sm font-bold text-orange-800">
+        Notify Customer
+      </p>
+      <p className="mt-1 text-xs text-orange-600">
+        Send customer notification after upload.
+      </p>
+    </div>
+  </label>
+</div>
+
   <input
   type="file"
   multiple
@@ -7607,6 +7665,12 @@ const canApproveAndReserveStock =
             <p className="text-sm text-gray-500">
               {doc.department}
             </p>
+
+            {doc.visibleToCustomer && (
+  <span className="mt-2 inline-block rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">
+    Visible To Customer
+  </span>
+)}
 
             {doc.remarks && (
               <p className="mt-1 text-sm text-gray-600">
