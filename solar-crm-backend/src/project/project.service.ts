@@ -9262,8 +9262,13 @@ async generatePurchaseOrderPdf(
   id: number,
   res: Response,
 ) {
-  const po =
-    await this.getPurchaseOrderById(id);
+  const po = await this.getPurchaseOrderById(id);
+
+  const project = po.projectId
+    ? await this.projectRepository.findOne({
+        where: { id: Number(po.projectId) },
+      })
+    : null;
 
   const doc = new PDFDocument({
     margin: 40,
@@ -9277,153 +9282,370 @@ async generatePurchaseOrderPdf(
     'aditya-logo.jpg',
   );
 
-  const fileName = `${
-    po.poNumber || `PO-${po.id}`
-  }.pdf`;
+  const fileName = `${po.poNumber || `PO-${po.id}`}.pdf`;
 
   res.setHeader(
     'Content-Disposition',
     `inline; filename="${fileName}"`,
   );
-
-  res.setHeader(
-    'Content-Type',
-    'application/pdf',
-  );
+  res.setHeader('Content-Type', 'application/pdf');
 
   doc.pipe(res);
+
+  const pageLeft = 40;
+  const pageRight = 555;
+  const pageWidth = pageRight - pageLeft;
+
+  const blue = '#1e40af';
+  const orange = '#f97316';
+  const lightBlue = '#eff6ff';
+  const lightOrange = '#fff7ed';
+  const border = '#d1d5db';
+  const dark = '#111827';
+  const muted = '#6b7280';
+
+  const orderDate = po.orderDate
+    ? new Date(po.orderDate).toLocaleDateString('en-IN')
+    : new Date(po.createdAt).toLocaleDateString('en-IN');
 
   doc.image(logoPath, 40, 20, {
     fit: [515, 110],
     align: 'center',
   });
 
-  doc.y = 145;
+  doc.y = 120;
 
   doc
-    .fontSize(22)
-    .fillColor('#0f172a')
-    .text('PURCHASE ORDER', {
+    .roundedRect(pageLeft, doc.y, pageWidth, 32, 6)
+    .fill(blue);
+
+  doc
+    .fillColor('#ffffff')
+    .fontSize(17)
+    .text('PURCHASE ORDER', pageLeft, doc.y + 8, {
+      width: pageWidth,
       align: 'center',
     });
 
-  doc.moveDown();
+  doc.y += 38;
 
   doc
-    .fontSize(12)
-    .fillColor('#111827')
-    .text(`PO No: ${po.poNumber || '-'}`);
-
-  doc.text(
-    `Date: ${
-      po.orderDate
-        ? new Date(po.orderDate).toLocaleDateString('en-IN')
-        : new Date(po.createdAt).toLocaleDateString('en-IN')
-    }`,
-  );
-
-  doc.text(`Project ID: ${po.projectId}`);
-  doc.text(`Vendor: ${po.vendorName || '-'}`);
-  doc.text(`Status: ${po.status || '-'}`);
-
-  doc.moveDown();
-
-  doc
-    .fontSize(16)
-    .fillColor('#2563eb')
-    .text('Purchase Items');
-
-  doc.moveDown(0.5);
-
-  doc.fontSize(10).fillColor('#111827');
-
-  const startX = 40;
-  let y = doc.y;
-
-  doc.text('Material', startX, y, { width: 170 });
-  doc.text('HSN', 175, y, { width: 55 });
-  doc.text('Qty', 220, y, { width: 50 });
-  doc.text('Rate', 270, y, { width: 80 });
-  doc.text('GST', 360, y, { width: 50 });
-  doc.text('Total', 430, y, { width: 110 });
-
-  y += 18;
-  doc.moveTo(40, y).lineTo(555, y).stroke();
-  y += 10;
-
-  for (const item of po.items || []) {
-    if (y > 720) {
-      doc.addPage();
-      y = 40;
-    }
-
-    doc.text(item.materialName || '-', startX, y, {
-      width: 170,
-    });
-
-    doc.text((item as any).hsnCode || '-', 175, y, {
-  width: 55,
-});
-
-    doc.text(String(item.quantity || 0), 220, y, {
-      width: 50,
-    });
-
-    doc.text(
-      `Rs. ${Number(item.purchaseRate || 0).toLocaleString('en-IN')}`,
-      270,
-      y,
-      { width: 80 },
-    );
-
-    doc.text(`${item.gstPercent || 0}%`, 360, y, {
-      width: 50,
-    });
-
-    doc.text(
-      `Rs. ${Number(item.totalAmount || 0).toLocaleString('en-IN')}`,
-      430,
-      y,
-      { width: 110 },
-    );
-
-    y += 28;
-  }
-
-  doc.moveDown(2);
-
-  if (doc.y < y) {
-    doc.y = y;
-  }
-
-  doc
-    .fontSize(14)
-    .fillColor('#111827')
+    .fontSize(8)
+    .fillColor(muted)
     .text(
-      `Subtotal: Rs. ${Number(po.subtotalAmount || 0).toLocaleString('en-IN')}`,
-      { align: 'right' },
+      'ADITYA SOLARS | adityasolarsraj01@gmail.com | 8306170662, 9887634474',
+      pageLeft,
+      doc.y,
+      {
+        width: pageWidth,
+        align: 'center',
+      },
     );
-
-  doc.text(
-    `GST: Rs. ${Number(po.gstAmount || 0).toLocaleString('en-IN')}`,
-    { align: 'right' },
-  );
 
   doc
-    .fontSize(18)
-    .fillColor('#16a34a')
+    .fontSize(8)
+    .fillColor(muted)
     .text(
-      `Total: Rs. ${Number(po.totalAmount || 0).toLocaleString('en-IN')}`,
-      { align: 'right' },
+      'GSTIN: 08CVFPM5354P1ZV',
+      pageLeft,
+      doc.y + 12,
+      {
+        width: pageWidth,
+        align: 'center',
+      },
     );
 
-  doc.moveDown(2);
+  doc.y += 26;
+
+  const cardY = doc.y;
+  const cardW = 250;
+  const cardH = 88;
+
+  doc
+    .roundedRect(pageLeft, cardY, cardW, cardH, 6)
+    .fill(lightBlue)
+    .strokeColor(border)
+    .stroke();
+
+  doc
+    .roundedRect(pageLeft + 265, cardY, cardW, cardH, 6)
+    .fill('#f9fafb')
+    .strokeColor(border)
+    .stroke();
 
   doc
     .fontSize(10)
-    .fillColor('#6b7280')
-    .text('This is a system-generated purchase order.', {
-      align: 'center',
+    .fillColor(blue)
+    .text('VENDOR DETAILS', pageLeft + 12, cardY + 10);
+
+  doc
+    .fontSize(9)
+    .fillColor(dark)
+    .text(`Vendor: ${po.vendorName || '-'}`, pageLeft + 12, cardY + 28, {
+      width: 225,
+    })
+    .text(`Project ID: ${po.projectId || '-'}`, pageLeft + 12, cardY + 43, {
+      width: 225,
+    })
+    .text(`Customer: ${(project as any)?.customerName || '-'}`, pageLeft + 12, cardY + 58, {
+      width: 225,
+    })
+    .text(`Branch: ${(project as any)?.branchName || '-'}`, pageLeft + 12, cardY + 73, {
+      width: 225,
+    });
+
+  doc
+    .fontSize(10)
+    .fillColor(orange)
+    .text('DOCUMENT DETAILS', pageLeft + 277, cardY + 10);
+
+  doc
+    .fontSize(9)
+    .fillColor(dark)
+    .text(`PO No: ${po.poNumber || '-'}`, pageLeft + 277, cardY + 28, {
+      width: 220,
+    })
+    .text(`Date: ${orderDate}`, pageLeft + 277, cardY + 43, {
+      width: 220,
+    })
+    .text(`Status: ${po.status || '-'}`, pageLeft + 277, cardY + 58, {
+      width: 220,
+    })
+    .text(`Type: Purchase Order`, pageLeft + 277, cardY + 73, {
+      width: 220,
+    });
+
+  doc.y = cardY + cardH + 16;
+
+  doc
+    .fontSize(12)
+    .fillColor(dark)
+    .text('Purchase Items', pageLeft, doc.y);
+
+  doc.y += 18;
+
+  const drawTableHeader = () => {
+    const y = doc.y;
+
+    doc
+      .rect(pageLeft, y, pageWidth, 22)
+      .fill(blue);
+
+    doc
+      .fontSize(8)
+      .fillColor('#ffffff')
+      .text('Sr', 42, y + 7, { width: 22 })
+      .text('Material', 65, y + 7, { width: 165 })
+      .text('HSN', 230, y + 7, { width: 45 })
+      .text('Qty', 275, y + 7, { width: 30, align: 'right' })
+      .text('Unit', 308, y + 7, { width: 38 })
+      .text('Rate', 348, y + 7, { width: 55, align: 'right' })
+      .text('GST%', 405, y + 7, { width: 32, align: 'right' })
+      .text('GST Amt', 440, y + 7, { width: 52, align: 'right' })
+      .text('Total', 494, y + 7, { width: 58, align: 'right' });
+
+    doc.y = y + 22;
+  };
+
+  drawTableHeader();
+
+  (po.items || []).forEach((item: any, index: number) => {
+    const itemName = item.materialName || '-';
+
+    const rowHeight = Math.max(
+      28,
+      Math.min(
+        46,
+        doc.fontSize(8).heightOfString(itemName, {
+          width: 160,
+        }) + 10,
+      ),
+    );
+
+    if (doc.y + rowHeight > 700) {
+      doc.addPage();
+      doc.y = 40;
+      drawTableHeader();
+    }
+
+    const y = doc.y;
+
+    doc
+      .rect(pageLeft, y, pageWidth, rowHeight)
+      .fill(index % 2 === 0 ? '#f9fafb' : '#ffffff');
+
+    doc
+      .strokeColor(border)
+      .lineWidth(0.4)
+      .rect(pageLeft, y, pageWidth, rowHeight)
+      .stroke();
+
+    doc
+      .fontSize(8)
+      .fillColor(dark)
+      .text(String(index + 1), 42, y + 7, { width: 22 })
+      .text(itemName, 65, y + 7, {
+        width: 160,
+        height: rowHeight - 8,
+      })
+      .text(String((item as any).hsnCode || '-'), 230, y + 7, {
+        width: 45,
+      })
+      .text(String(item.quantity || 0), 275, y + 7, {
+        width: 30,
+        align: 'right',
+      })
+      .text(String(item.unit || '-'), 308, y + 7, {
+        width: 38,
+      })
+      .text(this.formatInr(item.purchaseRate || 0), 348, y + 7, {
+        width: 55,
+        align: 'right',
+      })
+      .text(`${item.gstPercent || 0}%`, 405, y + 7, {
+        width: 32,
+        align: 'right',
+      })
+      .text(this.formatInr(item.gstAmount || 0), 440, y + 7, {
+        width: 52,
+        align: 'right',
+      })
+      .text(this.formatInr(item.totalAmount || 0), 494, y + 7, {
+        width: 58,
+        align: 'right',
+      });
+
+    doc.y = y + rowHeight;
+  });
+
+  doc.y += 14;
+
+  if (doc.y > 610) {
+    doc.addPage();
+    doc.y = 40;
+  }
+
+  const summaryX = 345;
+  const summaryY = doc.y;
+  const summaryW = 210;
+
+  doc
+    .roundedRect(summaryX, summaryY, summaryW, 76, 6)
+    .fill('#f8fafc')
+    .strokeColor(border)
+    .stroke();
+
+  const summaryLine = (
+    label: string,
+    value: any,
+    yOffset: number,
+    bold = false,
+    color = dark,
+  ) => {
+    doc
+      .fontSize(bold ? 11 : 9)
+      .fillColor(color)
+      .text(label, summaryX + 12, summaryY + yOffset, {
+        width: 85,
+      })
+      .text(this.formatInr(value), summaryX + 100, summaryY + yOffset, {
+        width: 95,
+        align: 'right',
+      });
+  };
+
+  summaryLine('Subtotal', po.subtotalAmount, 12);
+  summaryLine('GST', po.gstAmount, 30);
+
+  doc
+    .moveTo(summaryX + 10, summaryY + 49)
+    .lineTo(summaryX + summaryW - 10, summaryY + 49)
+    .strokeColor(orange)
+    .lineWidth(1)
+    .stroke();
+
+  summaryLine('Grand Total', po.totalAmount, 56, true, '#16a34a');
+
+  doc.y = summaryY + 90;
+
+  doc
+    .roundedRect(pageLeft, doc.y, pageWidth, 34, 6)
+    .fill(lightOrange)
+    .strokeColor(border)
+    .stroke();
+
+  doc
+    .fontSize(9)
+    .fillColor(orange)
+    .text('Amount in Words', pageLeft + 12, doc.y + 8);
+
+  doc
+    .fontSize(10)
+    .fillColor(dark)
+    .text(
+      this.numberToWordsIndian(Number(po.totalAmount || 0)),
+      pageLeft + 12,
+      doc.y + 20,
+      {
+        width: pageWidth - 24,
+      },
+    );
+
+  doc.y += 46;
+
+  const footerY = doc.y;
+
+  doc
+    .roundedRect(pageLeft, footerY, 250, 82, 6)
+    .fill('#f9fafb')
+    .strokeColor(border)
+    .stroke();
+
+  doc
+    .fontSize(10)
+    .fillColor(blue)
+    .text('Terms & Conditions', pageLeft + 12, footerY + 10);
+
+  doc
+    .fontSize(8)
+    .fillColor(dark)
+    .text('1. This purchase order is system-generated.', pageLeft + 12, footerY + 28, {
+      width: 225,
+    })
+    .text('2. Material rates and GST are as per approved order.', pageLeft + 12, footerY + 42, {
+      width: 225,
+    })
+    .text('3. Delivery and payment terms as mutually agreed.', pageLeft + 12, footerY + 56, {
+      width: 225,
+    });
+
+  doc
+    .roundedRect(pageLeft + 265, footerY, 250, 82, 6)
+    .fill('#f9fafb')
+    .strokeColor(border)
+    .stroke();
+
+  doc
+    .fontSize(10)
+    .fillColor(blue)
+    .text('For Aditya Solars', pageLeft + 277, footerY + 10);
+
+  doc
+    .fontSize(8)
+    .fillColor(dark)
+    .text(`Generated On: ${orderDate}`, pageLeft + 277, footerY + 28, {
+      width: 220,
+    })
+    .text('Prepared By: System', pageLeft + 277, footerY + 42, {
+      width: 220,
+    });
+
+  doc
+    .fontSize(8)
+    .fillColor(muted)
+    .text('Authorized Signatory', pageLeft + 277, footerY + 62, {
+      width: 220,
+      align: 'right',
     });
 
   doc.end();
@@ -10200,7 +10422,7 @@ doc
   .fontSize(8)
   .fillColor(muted)
   .text(
-    'GSTIN: - | Phone: - | Email: - | Address: Aditya Solars',
+    'ADITYA SOLARS | adityasolarsraj01@gmail.com | 8306170662, 9887634474',
     pageLeft,
     doc.y,
     {
@@ -10209,7 +10431,20 @@ doc
     },
   );
 
-doc.y += 14;
+doc
+  .fontSize(8)
+  .fillColor(muted)
+  .text(
+    'GSTIN: 08CVFPM5354P1ZV',
+    pageLeft,
+    doc.y + 12,
+    {
+      width: pageWidth,
+      align: 'center',
+    },
+  );
+
+doc.y += 26;
 
 // Bill to and details cards
 
@@ -11201,12 +11436,17 @@ async generateFinalInvoicePdf(
   id: number,
   res: Response,
 ) {
-  const invoice =
-    await this.getFinalInvoiceById(id);
+  const invoice = await this.getFinalInvoiceById(id);
 
   const isDealerInvoice =
     (invoice as any).invoiceType === 'DEALER' ||
     !!(invoice as any).dealerId;
+
+  const project = !isDealerInvoice && invoice.projectId
+    ? await this.projectRepository.findOne({
+        where: { id: Number(invoice.projectId) },
+      })
+    : null;
 
   const doc = new PDFDocument({
     margin: 40,
@@ -11220,210 +11460,390 @@ async generateFinalInvoicePdf(
     'aditya-logo.jpg',
   );
 
-  const fileName = `${
-    invoice.invoiceNumber || `INV-${invoice.id}`
-  }.pdf`;
+  const fileName = `${invoice.invoiceNumber || `INV-${invoice.id}`}.pdf`;
 
   res.setHeader(
     'Content-Disposition',
     `inline; filename="${fileName}"`,
   );
-
-  res.setHeader(
-    'Content-Type',
-    'application/pdf',
-  );
+  res.setHeader('Content-Type', 'application/pdf');
 
   doc.pipe(res);
+
+  const pageLeft = 40;
+  const pageRight = 555;
+  const pageWidth = pageRight - pageLeft;
+
+  const blue = '#1e40af';
+  const orange = '#f97316';
+  const lightBlue = '#eff6ff';
+  const lightOrange = '#fff7ed';
+  const border = '#d1d5db';
+  const dark = '#111827';
+  const muted = '#6b7280';
+
+  const invoiceDate = invoice.invoiceDate
+    ? new Date(invoice.invoiceDate).toLocaleDateString('en-IN')
+    : new Date(invoice.createdAt).toLocaleDateString('en-IN');
 
   doc.image(logoPath, 40, 20, {
     fit: [515, 110],
     align: 'center',
   });
 
-  doc.y = 145;
+  doc.y = 120;
 
   doc
-    .fontSize(22)
-    .fillColor('#0f172a')
-    .text('FINAL INVOICE', {
+    .roundedRect(pageLeft, doc.y, pageWidth, 32, 6)
+    .fill(blue);
+
+  doc
+    .fillColor('#ffffff')
+    .fontSize(17)
+    .text('TAX INVOICE', pageLeft, doc.y + 8, {
+      width: pageWidth,
       align: 'center',
     });
 
-  doc.moveDown();
+  doc.y += 38;
+
+  doc
+    .fontSize(8)
+    .fillColor(muted)
+    .text(
+      'ADITYA SOLARS | adityasolarsraj01@gmail.com | 8306170662, 9887634474',
+      pageLeft,
+      doc.y,
+      {
+        width: pageWidth,
+        align: 'center',
+      },
+    );
+
+  doc
+    .fontSize(8)
+    .fillColor(muted)
+    .text(
+      'GSTIN: 08CVFPM5354P1ZV',
+      pageLeft,
+      doc.y + 12,
+      {
+        width: pageWidth,
+        align: 'center',
+      },
+    );
+
+  doc.y += 26;
+
+  const cardY = doc.y;
+  const cardW = 250;
+  const cardH = 88;
+
+  doc
+    .roundedRect(pageLeft, cardY, cardW, cardH, 6)
+    .fill(lightBlue)
+    .strokeColor(border)
+    .stroke();
+
+  doc
+    .roundedRect(pageLeft + 265, cardY, cardW, cardH, 6)
+    .fill('#f9fafb')
+    .strokeColor(border)
+    .stroke();
+
+  doc
+    .fontSize(10)
+    .fillColor(blue)
+    .text('BILL TO', pageLeft + 12, cardY + 10);
+
+  if (isDealerInvoice) {
+    doc
+      .fontSize(9)
+      .fillColor(dark)
+      .text(`Name: ${(invoice as any).dealerName || '-'}`, pageLeft + 12, cardY + 28, {
+        width: 225,
+      })
+      .text(`Phone: ${(invoice as any).dealerPhone || '-'}`, pageLeft + 12, cardY + 43, {
+        width: 225,
+      })
+      .text(`GST: ${(invoice as any).dealerGstNumber || '-'}`, pageLeft + 12, cardY + 58, {
+        width: 225,
+      })
+      .text(`Address: ${(invoice as any).dealerAddress || '-'}`, pageLeft + 12, cardY + 73, {
+        width: 225,
+        height: 15,
+      });
+  } else {
+    doc
+      .fontSize(9)
+      .fillColor(dark)
+      .text(`Name: ${(project as any)?.customerName || '-'}`, pageLeft + 12, cardY + 28, {
+        width: 225,
+      })
+      .text(`Phone: ${(project as any)?.customerPhone || '-'}`, pageLeft + 12, cardY + 43, {
+        width: 225,
+      })
+      .text(`Address: ${(project as any)?.address || (project as any)?.gpsAddress || '-'}`, pageLeft + 12, cardY + 58, {
+        width: 225,
+        height: 28,
+      });
+  }
+
+  doc
+    .fontSize(10)
+    .fillColor(orange)
+    .text('DOCUMENT DETAILS', pageLeft + 277, cardY + 10);
+
+  doc
+    .fontSize(9)
+    .fillColor(dark)
+    .text(`Invoice No: ${invoice.invoiceNumber || '-'}`, pageLeft + 277, cardY + 28, {
+      width: 220,
+    })
+    .text(`Date: ${invoiceDate}`, pageLeft + 277, cardY + 43, {
+      width: 220,
+    })
+    .text(`Status: ${invoice.status || '-'}`, pageLeft + 277, cardY + 58, {
+      width: 220,
+    })
+    .text(`Type: ${isDealerInvoice ? 'Dealer / Trading' : 'Project'}`, pageLeft + 277, cardY + 73, {
+      width: 220,
+    });
+
+  doc.y = cardY + cardH + 16;
 
   doc
     .fontSize(12)
-    .fillColor('#111827')
-    .text(`Invoice No: ${invoice.invoiceNumber || '-'}`);
+    .fillColor(dark)
+    .text('Invoice Items', pageLeft, doc.y);
 
-  doc.text(
-    `Date: ${
-      invoice.invoiceDate
-        ? new Date(invoice.invoiceDate).toLocaleDateString('en-IN')
-        : new Date(invoice.createdAt).toLocaleDateString('en-IN')
-    }`,
-  );
+  doc.y += 18;
 
-  if (isDealerInvoice) {
-    doc.text(`Invoice Type: Dealer / Trading`);
-    doc.text(`Dealer Name: ${(invoice as any).dealerName || '-'}`);
-    doc.text(`Dealer Phone: ${(invoice as any).dealerPhone || '-'}`);
-    doc.text(`Dealer GST: ${(invoice as any).dealerGstNumber || '-'}`);
-    doc.text(`Dealer Address: ${(invoice as any).dealerAddress || '-'}`);
-  } else {
-    doc.text(`Project ID: ${invoice.projectId || '-'}`);
-  }
+  const drawTableHeader = () => {
+    const y = doc.y;
 
-  doc.text(`Status: ${invoice.status || '-'}`);
+    doc
+      .rect(pageLeft, y, pageWidth, 22)
+      .fill(blue);
 
-  doc.moveDown();
+    doc
+      .fontSize(8)
+      .fillColor('#ffffff')
+      .text('Sr', 42, y + 7, { width: 22 })
+      .text('Item Name', 65, y + 7, { width: 165 })
+      .text('HSN', 230, y + 7, { width: 45 })
+      .text('Qty', 275, y + 7, { width: 30, align: 'right' })
+      .text('Unit', 308, y + 7, { width: 38 })
+      .text('Rate', 348, y + 7, { width: 55, align: 'right' })
+      .text('GST%', 405, y + 7, { width: 32, align: 'right' })
+      .text('GST Amt', 440, y + 7, { width: 52, align: 'right' })
+      .text('Total', 494, y + 7, { width: 58, align: 'right' });
 
-  doc
-    .fontSize(16)
-    .fillColor('#2563eb')
-    .text('Invoice Items');
+    doc.y = y + 22;
+  };
 
-  doc.moveDown(0.5);
+  drawTableHeader();
 
-  doc
-    .fontSize(10)
-    .fillColor('#111827');
+  (invoice.items || []).forEach((item: any, index: number) => {
+    const itemName = item.itemName || '-';
 
-    let y = doc.y;
+    const rowHeight = Math.max(
+      28,
+      Math.min(
+        46,
+        doc.fontSize(8).heightOfString(itemName, {
+          width: 160,
+        }) + 10,
+      ),
+    );
 
-  doc.text('Item', 40, y, { width: 135 });
-  doc.text('HSN', 175, y, { width: 55 });
-  doc.text('Qty', 230, y, { width: 35 });
-  doc.text('Rate', 265, y, { width: 75 });
-  doc.text('Disc.', 340, y, { width: 65 });
-  doc.text('GST', 405, y, { width: 45 });
-  doc.text('Total', 450, y, { width: 100 });
-
-  y += 18;
-
-  doc.moveTo(40, y).lineTo(555, y).stroke();
-
-  y += 10;
-
-  for (const item of invoice.items || []) {
-    if (y > 720) {
+    if (doc.y + rowHeight > 700) {
       doc.addPage();
-      y = 40;
+      doc.y = 40;
+      drawTableHeader();
     }
 
-        doc.text(item.itemName || '-', 40, y, {
-      width: 135,
-    });
+    const y = doc.y;
 
-    doc.text((item as any).hsnCode || '-', 175, y, {
-      width: 55,
-    });
+    doc
+      .rect(pageLeft, y, pageWidth, rowHeight)
+      .fill(index % 2 === 0 ? '#f9fafb' : '#ffffff');
 
-    doc.text(String(item.quantity || 0), 230, y, {
-      width: 35,
-    });
+    doc
+      .strokeColor(border)
+      .lineWidth(0.4)
+      .rect(pageLeft, y, pageWidth, rowHeight)
+      .stroke();
 
-    doc.text(
-      `Rs.${Number(item.finalRate || 0).toLocaleString('en-IN')}`,
-      265,
-      y,
-      {
-        width: 75,
-      },
-    );
+    doc
+      .fontSize(8)
+      .fillColor(dark)
+      .text(String(index + 1), 42, y + 7, { width: 22 })
+      .text(itemName, 65, y + 7, {
+        width: 160,
+        height: rowHeight - 8,
+      })
+      .text(String((item as any).hsnCode || '-'), 230, y + 7, {
+        width: 45,
+      })
+      .text(String(item.quantity || 0), 275, y + 7, {
+        width: 30,
+        align: 'right',
+      })
+      .text(String(item.unit || '-'), 308, y + 7, {
+        width: 38,
+      })
+      .text(this.formatInr(item.finalRate || 0), 348, y + 7, {
+        width: 55,
+        align: 'right',
+      })
+      .text(`${item.gstPercent || 0}%`, 405, y + 7, {
+        width: 32,
+        align: 'right',
+      })
+      .text(this.formatInr(item.gstAmount || 0), 440, y + 7, {
+        width: 52,
+        align: 'right',
+      })
+      .text(this.formatInr(item.totalAmount || 0), 494, y + 7, {
+        width: 58,
+        align: 'right',
+      });
 
-    doc.text(
-      `Rs.${Number(item.discountAmount || 0).toLocaleString('en-IN')}`,
-      340,
-      y,
-      {
-        width: 65,
-      },
-    );
+    doc.y = y + rowHeight;
+  });
 
-    doc.text(`${item.gstPercent || 0}%`, 405, y, {
-      width: 45,
-    });
+  doc.y += 14;
 
-    doc.text(
-      `Rs.${Number(item.totalAmount || 0).toLocaleString('en-IN')}`,
-      450,
-      y,
-      {
-        width: 100,
-      },
-    );
-
-    y += 28;
+  if (doc.y > 590) {
+    doc.addPage();
+    doc.y = 40;
   }
 
-  doc.moveDown(2);
-
-  if (doc.y < y) {
-    doc.y = y;
-  }
+  const summaryX = 345;
+  const summaryY = doc.y;
+  const summaryW = 210;
 
   doc
-    .fontSize(14)
-    .fillColor('#111827')
-    .text(
-      `Subtotal: Rs.${Number(invoice.subtotalAmount || 0).toLocaleString('en-IN')}`,
-      {
+    .roundedRect(summaryX, summaryY, summaryW, 130, 6)
+    .fill('#f8fafc')
+    .strokeColor(border)
+    .stroke();
+
+  const summaryLine = (
+    label: string,
+    value: any,
+    yOffset: number,
+    bold = false,
+    color = dark,
+  ) => {
+    doc
+      .fontSize(bold ? 11 : 9)
+      .fillColor(color)
+      .text(label, summaryX + 12, summaryY + yOffset, {
+        width: 85,
+      })
+      .text(this.formatInr(value), summaryX + 100, summaryY + yOffset, {
+        width: 95,
         align: 'right',
-      },
-    );
+      });
+  };
 
-  doc.text(
-    `Discount: Rs.${Number(invoice.discountAmount || 0).toLocaleString('en-IN')}`,
-    {
-      align: 'right',
-    },
-  );
-
-  doc.text(
-    `GST: Rs.${Number(invoice.gstAmount || 0).toLocaleString('en-IN')}`,
-    {
-      align: 'right',
-    },
-  );
+  summaryLine('Subtotal', invoice.subtotalAmount, 12);
+  summaryLine('Discount', invoice.discountAmount, 30);
+  summaryLine('GST', invoice.gstAmount, 48);
 
   doc
-    .fontSize(18)
-    .fillColor('#16a34a')
-    .text(
-      `Total: Rs.${Number(invoice.totalAmount || 0).toLocaleString('en-IN')}`,
-      {
-        align: 'right',
-      },
-    );
+    .moveTo(summaryX + 10, summaryY + 67)
+    .lineTo(summaryX + summaryW - 10, summaryY + 67)
+    .strokeColor(orange)
+    .lineWidth(1)
+    .stroke();
 
-  doc.moveDown();
+  summaryLine('Grand Total', invoice.totalAmount, 74, true, '#16a34a');
+  summaryLine('Paid', invoice.paidAmount, 96);
+  summaryLine('Pending', invoice.pendingAmount, 112, true, '#dc2626');
+
+  doc.y = summaryY + 144;
 
   doc
-    .fontSize(11)
-    .fillColor('#111827')
-    .text(
-      `Paid Amount: Rs.${Number(invoice.paidAmount || 0).toLocaleString('en-IN')}`,
-      {
-        align: 'right',
-      },
-    );
+    .roundedRect(pageLeft, doc.y, pageWidth, 34, 6)
+    .fill(lightOrange)
+    .strokeColor(border)
+    .stroke();
 
-  doc.text(
-    `Pending Amount: Rs.${Number(invoice.pendingAmount || 0).toLocaleString('en-IN')}`,
-    {
-      align: 'right',
-    },
-  );
-
-  doc.moveDown(2);
+  doc
+    .fontSize(9)
+    .fillColor(orange)
+    .text('Amount in Words', pageLeft + 12, doc.y + 8);
 
   doc
     .fontSize(10)
-    .fillColor('#6b7280')
-    .text('This is a system-generated final invoice.', {
-      align: 'center',
+    .fillColor(dark)
+    .text(
+      this.numberToWordsIndian(Number(invoice.totalAmount || 0)),
+      pageLeft + 12,
+      doc.y + 20,
+      {
+        width: pageWidth - 24,
+      },
+    );
+
+  doc.y += 46;
+
+  const footerY = doc.y;
+
+  doc
+    .roundedRect(pageLeft, footerY, 250, 82, 6)
+    .fill('#f9fafb')
+    .strokeColor(border)
+    .stroke();
+
+  doc
+    .fontSize(10)
+    .fillColor(blue)
+    .text('Terms & Conditions', pageLeft + 12, footerY + 10);
+
+  doc
+    .fontSize(8)
+    .fillColor(dark)
+    .text('1. This is a system-generated tax invoice.', pageLeft + 12, footerY + 28, {
+      width: 225,
+    })
+    .text('2. Payment and warranty terms as per company policy.', pageLeft + 12, footerY + 42, {
+      width: 225,
+    })
+    .text('3. Subject to applicable GST rules.', pageLeft + 12, footerY + 56, {
+      width: 225,
+    });
+
+  doc
+    .roundedRect(pageLeft + 265, footerY, 250, 82, 6)
+    .fill('#f9fafb')
+    .strokeColor(border)
+    .stroke();
+
+  doc
+    .fontSize(10)
+    .fillColor(blue)
+    .text('For Aditya Solars', pageLeft + 277, footerY + 10);
+
+  doc
+    .fontSize(8)
+    .fillColor(dark)
+    .text(`Generated On: ${invoiceDate}`, pageLeft + 277, footerY + 28, {
+      width: 220,
+    })
+    .text('Prepared By: System', pageLeft + 277, footerY + 42, {
+      width: 220,
+    });
+
+  doc
+    .fontSize(8)
+    .fillColor(muted)
+    .text('Authorized Signatory', pageLeft + 277, footerY + 62, {
+      width: 220,
+      align: 'right',
     });
 
   doc.end();
