@@ -9964,6 +9964,16 @@ console.log('MANUAL_PI_HSN_DEBUG', {
       const rowGst = (taxableAmount * gstPercent) / 100;
       const rowTotal = taxableAmount + rowGst;
 
+      const resolvedHsnCode =
+  String(item.hsnCode || '').trim() ||
+  materialHsnById.get(Number(item.materialId || 0)) ||
+  '';
+
+console.log('RESOLVED_HSN', {
+  materialId: item.materialId,
+  resolvedHsnCode,
+});
+
       return this.projectProformaInvoiceItemRepository.create(
         {
           proformaInvoiceId: savedInvoice.id,
@@ -9986,17 +9996,14 @@ console.log('MANUAL_PI_HSN_DEBUG', {
           unit:
             item.unit || '',
 
-                      hsnCode:
-            String(item.hsnCode || '').trim() ||
-            materialHsnById.get(Number(item.materialId || 0)) ||
-            '',
-
           sellingRate,
           gstPercent,
           quantity,
 
           discountAmount:
             rowDiscount,
+
+            hsnCode: resolvedHsnCode,
 
           subtotalAmount:
             rowSubtotal,
