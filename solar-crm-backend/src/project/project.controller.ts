@@ -525,7 +525,7 @@ getPurchaseOrders(
   });
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER')
+@Roles('OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER')
 @Post('purchase-order')
 createPurchaseOrder(
   @Body() body: any,
@@ -546,7 +546,7 @@ getPurchaseOrderById(
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER')
+@Roles('OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER')
 @Post('proforma-invoice')
 createProformaInvoice(
   @Body() body: any,
@@ -582,7 +582,7 @@ getProformaInvoiceById(
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER')
+@Roles('OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER')
 @Post('proforma-invoice/manual')
 createManualProformaInvoice(
   @Body() body: any,
@@ -605,7 +605,7 @@ generateProformaInvoicePdf(
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER')
+@Roles('OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER')
 @Patch('proforma-invoice/:id/hide')
 hideProformaInvoice(
   @Param('id') id: string,
@@ -619,7 +619,7 @@ hideProformaInvoice(
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER')
+@Roles('OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER')
 @Post('final-invoice')
 createFinalInvoice(
   @Body() body: any,
@@ -655,7 +655,7 @@ getFinalInvoiceById(
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER')
+@Roles('OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER')
 @Post('proforma-invoice/:id/final-invoice')
 createFinalInvoiceFromProforma(
   @Param('id') id: string,
@@ -678,7 +678,7 @@ generateFinalInvoicePdf(
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER')
+@Roles('OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER')
 @Patch('final-invoice/:id/hide')
 hideFinalInvoice(
   @Param('id') id: string,
@@ -692,7 +692,7 @@ hideFinalInvoice(
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER')
+@Roles('OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER')
 @Post('final-invoice/manual')
 createManualFinalInvoice(
   @Body() body: any,
@@ -1272,7 +1272,7 @@ generatePurchaseOrderPdf(
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER')
+@Roles('OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER')
 @Patch('purchase-order/:id/hide')
 hidePurchaseOrder(
   @Param('id') id: string,
@@ -1286,7 +1286,7 @@ hidePurchaseOrder(
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER')
+@Roles('OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER')
 @Post('purchase-order/manual')
 createManualPurchaseOrder(
   @Body() body: any,
