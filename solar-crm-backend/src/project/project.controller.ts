@@ -94,6 +94,19 @@ deleteProjectDocument(
   );
 }
 
+@Patch('documents/:id/customer-visibility')
+updateDocumentCustomerVisibility(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.updateDocumentCustomerVisibility(
+    id,
+    body,
+    user,
+  );
+}
+
 @Post('material-master')
 createMaterialMaster(@Body() body: any) {
   return this.projectService.createMaterialMaster(body);

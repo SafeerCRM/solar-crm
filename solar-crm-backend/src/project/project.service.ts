@@ -17221,4 +17221,39 @@ private async dispatchDealerOrderStock(
 
   return true;
 }
+
+async updateDocumentCustomerVisibility(
+  id: number,
+  body: any,
+  user: any,
+) {
+  const document = await this.projectDocumentRepository.findOne({
+    where: { id },
+  });
+
+  if (!document) {
+    throw new NotFoundException('Document not found');
+  }
+
+  const roles = Array.isArray(user?.roles) ? user.roles : [];
+
+  const canUpdate =
+    roles.includes('OWNER') ||
+    roles.includes('MARKETING_HEAD') ||
+    roles.includes('PROJECT_MANAGER') ||
+    roles.includes('CUSTOMER_MANAGER') ||
+    roles.includes('ACCOUNT_MANAGER');
+
+  if (!canUpdate) {
+    throw new ForbiddenException(
+      'You are not allowed to update customer visibility',
+    );
+  }
+
+  document.visibleToCustomer =
+    body.visibleToCustomer === true ||
+    body.visibleToCustomer === 'true';
+
+  return this.projectDocumentRepository.save(document);
+}
 }
