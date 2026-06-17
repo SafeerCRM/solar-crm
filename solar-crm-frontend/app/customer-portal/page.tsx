@@ -114,10 +114,12 @@ export default function CustomerPortalPage() {
               title="Open Complaints"
               value={String(dashboard?.openComplaints || 0)}
             />
-            <HeroMiniCard
-              title="Unread Updates"
-              value={String(dashboard?.unreadNotifications || 0)}
-            />
+            <a href="/customer-portal/notifications">
+  <HeroMiniCard
+    title="Unread Updates"
+    value={String(dashboard?.unreadNotifications || 0)}
+  />
+</a>
             <HeroMiniCard
               title="Current Status"
               value={primaryProject?.status || 'No Project'}
