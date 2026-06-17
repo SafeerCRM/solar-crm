@@ -232,11 +232,13 @@ export default function CustomerPortalPage() {
     text="See upcoming work dates and request date changes."
   />
 </a>
-            <ActionCard
-              icon="📁"
-              title="Documents Vault"
-              text="View agreements, invoices, subsidy and electricity documents."
-            />
+            <a href="/customer-portal/documents">
+  <ActionCard
+    icon="📁"
+    title="Documents Vault"
+    text="View agreements, invoices, subsidy and electricity documents."
+  />
+</a>
             <ActionCard
               icon="🧽"
               title="Cleaning Calendar"
