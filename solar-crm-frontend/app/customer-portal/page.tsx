@@ -164,11 +164,13 @@ export default function CustomerPortalPage() {
     text="View installments, company account details, UPI/QR and upload receipt."
   />
 </a>
-              <ActionCard
-                icon="🎁"
-                title="Refer Customer"
-                text="Refer new customer and track ₹5000 reward status."
-              />
+              <a href="/customer-portal/referrals">
+  <ActionCard
+    icon="🎁"
+    title="Refer Customer"
+    text="Refer new customer and track ₹5000 referral rewards."
+  />
+</a>
             </div>
           </div>
         </div>
