@@ -9313,7 +9313,7 @@ async generatePurchaseOrderPdf(
     align: 'center',
   });
 
-  doc.y = 120;
+  doc.y = 132;
 
   doc
     .roundedRect(pageLeft, doc.y, pageWidth, 32, 6)
@@ -9437,7 +9437,7 @@ async generatePurchaseOrderPdf(
       .text('Sr', 42, y + 7, { width: 22 })
       .text('Material', 65, y + 7, { width: 165 })
       .text('HSN', 230, y + 7, { width: 45 })
-      .text('Qty', 275, y + 7, { width: 30, align: 'right' })
+      .text('Qty', 255, y + 7, { width: 30, align: 'right' })
       .text('Unit', 308, y + 7, { width: 38 })
       .text('Rate', 348, y + 7, { width: 55, align: 'right' })
       .text('GST%', 405, y + 7, { width: 32, align: 'right' })
@@ -9491,7 +9491,7 @@ async generatePurchaseOrderPdf(
       .text(String((item as any).hsnCode || '-'), 230, y + 7, {
         width: 45,
       })
-      .text(String(item.quantity || 0), 275, y + 7, {
+      .text(String(item.quantity || 0), 255, y + 7, {
         width: 30,
         align: 'right',
       })
@@ -10401,7 +10401,7 @@ async generateProformaInvoicePdf(
     align: 'center',
   });
 
-  doc.y = 120;
+  doc.y = 132;
 
   // Title bar
   doc
@@ -10547,7 +10547,7 @@ doc.y += 26;
       .text('Sr', 42, y + 7, { width: 22 })
       .text('Item Name', 65, y + 7, { width: 165 })
 .text('HSN', 230, y + 7, { width: 45 })
-.text('Qty', 275, y + 7, { width: 30, align: 'right' })
+.text('Qty', 255, y + 7, { width: 30, align: 'right' })
 .text('Unit', 308, y + 7, { width: 38 })
 .text('Rate', 348, y + 7, { width: 55, align: 'right' })
 .text('GST%', 405, y + 7, { width: 32, align: 'right' })
@@ -10602,7 +10602,7 @@ doc.y += 26;
 .text(String((item as any).hsnCode || '-'), 230, y + 7, {
   width: 45,
 })
-.text(String(item.quantity || 0), 275, y + 7, {
+.text(String(item.quantity || 0), 255, y + 7, {
   width: 30,
   align: 'right',
 })
@@ -11491,7 +11491,7 @@ async generateFinalInvoicePdf(
     align: 'center',
   });
 
-  doc.y = 120;
+  doc.y = 132;
 
   doc
     .roundedRect(pageLeft, doc.y, pageWidth, 32, 6)
@@ -11632,7 +11632,7 @@ async generateFinalInvoicePdf(
       .text('Sr', 42, y + 7, { width: 22 })
       .text('Item Name', 65, y + 7, { width: 165 })
       .text('HSN', 230, y + 7, { width: 45 })
-      .text('Qty', 275, y + 7, { width: 30, align: 'right' })
+      .text('Qty', 255, y + 7, { width: 30, align: 'right' })
       .text('Unit', 308, y + 7, { width: 38 })
       .text('Rate', 348, y + 7, { width: 55, align: 'right' })
       .text('GST%', 405, y + 7, { width: 32, align: 'right' })
@@ -11686,7 +11686,7 @@ async generateFinalInvoicePdf(
       .text(String((item as any).hsnCode || '-'), 230, y + 7, {
         width: 45,
       })
-      .text(String(item.quantity || 0), 275, y + 7, {
+      .text(String(item.quantity || 0), 255, y + 7, {
         width: 30,
         align: 'right',
       })
