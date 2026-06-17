@@ -13,6 +13,7 @@ type PurchaseItem = {
   unit?: string;
   brand?: string;
   rate?: number;
+  hsnCode?: string;
   quantity?: number;
   purchasedQuantity?: number;
   pendingQuantity?: number;
@@ -144,6 +145,7 @@ type MaterialMasterItem = {
   brand?: string;
   unit?: string;
   rate?: number;
+  hsnCode?: string;
   gstPercent?: number;
 };
 
@@ -160,6 +162,7 @@ type ManualPiItem = {
   category: string;
   brand: string;
   unit: string;
+  hsnCode?: string;
   quantity: string;
   sellingRate: string;
   gstPercent: string;
@@ -171,6 +174,7 @@ type ManualPoItem = {
   category: string;
   brand: string;
   unit: string;
+  hsnCode?: string;
   quantity: string;
   purchaseRate: string;
   gstPercent: string;
@@ -181,6 +185,7 @@ type ManualInvoiceItem = {
   category: string;
   brand: string;
   unit: string;
+  hsnCode?: string;
   quantity: string;
   finalRate: string;
   gstPercent: string;
@@ -220,6 +225,7 @@ const [selectedPo, setSelectedPo] =
   category: '',
   brand: '',
   unit: '',
+  hsnCode: '',
   quantity: '',
   purchaseRate: '',
   gstPercent: '18',
@@ -236,6 +242,7 @@ const [creatingManualPo, setCreatingManualPo] =
   category: '',
   brand: '',
   unit: '',
+  hsnCode: '',
   quantity: '',
   sellingRate: '',
   gstPercent: '18',
@@ -258,6 +265,7 @@ const [manualInvoiceItems, setManualInvoiceItems] = useState<ManualInvoiceItem[]
     category: '',
     brand: '',
     unit: '',
+    hsnCode: '',
     quantity: '',
     finalRate: '',
     gstPercent: '18',
@@ -1252,6 +1260,7 @@ const canGeneratePo =
           category: item.category || '',
           brand: item.brand || '',
           unit: item.unit || '',
+          hsnCode: item.hsnCode || '',
           purchaseRate: Number(item.rate || 0),
           gstPercent: Number(item.gstPercent || 0),
           quantity: Number(item.pendingQuantity || 0),
@@ -1304,6 +1313,7 @@ const addManualPoItem = () => {
       category: manualPo.category,
       brand: manualPo.brand,
       unit: manualPo.unit,
+      hsnCode: manualPo.hsnCode,
       quantity: manualPo.quantity,
       purchaseRate: manualPo.purchaseRate,
       gstPercent: manualPo.gstPercent,
@@ -1369,6 +1379,7 @@ const createManualPo = async () => {
           category: item.category,
           brand: item.brand,
           unit: item.unit,
+          hsnCode: item.hsnCode || '',
           quantity: Number(item.quantity || 0),
           purchaseRate: Number(item.purchaseRate || 0),
           gstPercent: Number(item.gstPercent || 0),
@@ -1388,6 +1399,7 @@ const createManualPo = async () => {
       category: '',
       brand: '',
       unit: '',
+      hsnCode: '',
       quantity: '',
       purchaseRate: '',
       gstPercent: '18',
@@ -1423,6 +1435,7 @@ const addManualPiItem = () => {
       category: manualPi.category,
       brand: manualPi.brand,
       unit: manualPi.unit,
+      hsnCode: manualPi.hsnCode,
       quantity: manualPi.quantity,
       sellingRate: manualPi.sellingRate,
       gstPercent: manualPi.gstPercent,
@@ -1495,6 +1508,7 @@ const createManualPi = async () => {
           category: item.category,
           brand: item.brand,
           unit: item.unit,
+          hsnCode: item.hsnCode || '',
           quantity: Number(item.quantity || 0),
           sellingRate: Number(item.sellingRate || 0),
           gstPercent: Number(item.gstPercent || 0),
@@ -1519,6 +1533,7 @@ const createManualPi = async () => {
       category: '',
       brand: '',
       unit: '',
+      hsnCode: '',
       quantity: '',
       sellingRate: '',
       gstPercent: '18',
@@ -1559,6 +1574,7 @@ const addManualInvoiceItem = () => {
       category: manualInvoice.category,
       brand: manualInvoice.brand,
       unit: manualInvoice.unit,
+      hsnCode: manualInvoice.hsnCode,
       quantity: manualInvoice.quantity,
       finalRate: manualInvoice.finalRate,
       gstPercent: manualInvoice.gstPercent,
@@ -1624,6 +1640,7 @@ const createManualInvoice = async () => {
           category: item.category,
           brand: item.brand,
           unit: item.unit,
+          hsnCode: item.hsnCode || '',
           quantity: Number(item.quantity || 0),
           finalRate: Number(item.finalRate || 0),
           gstPercent: Number(item.gstPercent || 0),
@@ -1643,6 +1660,7 @@ const createManualInvoice = async () => {
       category: '',
       brand: '',
       unit: '',
+      hsnCode: '',
       quantity: '',
       finalRate: '',
       gstPercent: '18',
@@ -1693,6 +1711,7 @@ const generateProformaInvoice = async () => {
           category: item.category || '',
           brand: item.brand || '',
           unit: item.unit || '',
+          hsnCode: item.hsnCode || '',
           sellingRate: getSellingRateForItem(item),
           gstPercent: Number(item.gstPercent || 0),
           quantity: Number(item.pendingQuantity || 0),
@@ -2079,6 +2098,7 @@ const generateProformaInvoice = async () => {
       category: selected?.category || '',
       brand: selected?.brand || '',
       unit: selected?.unit || '',
+      hsnCode: selected?.hsnCode || '',
       purchaseRate: String(selected?.rate || ''),
       gstPercent: String(selected?.gstPercent || '18'),
     });
@@ -2129,6 +2149,18 @@ const generateProformaInvoice = async () => {
       }
       className="rounded-xl border p-3"
     />
+
+    <input
+  placeholder="HSN Code"
+  value={manualPo.hsnCode}
+  onChange={(e) =>
+    setManualPo({
+      ...manualPo,
+      hsnCode: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+/>
 
     <input
       type="number"
@@ -2321,6 +2353,7 @@ const generateProformaInvoice = async () => {
       category: selected?.category || '',
       brand: selected?.brand || '',
       unit: selected?.unit || '',
+      hsnCode: selected?.hsnCode || '',
       sellingRate: String(
         selected?.rate || '',
       ),
@@ -2380,6 +2413,18 @@ const generateProformaInvoice = async () => {
       }
       className="rounded-xl border p-3"
     />
+
+    <input
+  placeholder="HSN Code"
+  value={manualPi.hsnCode}
+  onChange={(e) =>
+    setManualPi({
+      ...manualPi,
+      hsnCode: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+/>
 
     <input
       type="number"
@@ -2555,6 +2600,7 @@ onChange={(e) =>
       category: selected?.category || '',
       brand: selected?.brand || '',
       unit: selected?.unit || '',
+      hsnCode: selected?.hsnCode || '',
       finalRate: String(
         selected?.rate || '',
       ),
@@ -2614,6 +2660,18 @@ onChange={(e) =>
       }
       className="rounded-xl border p-3"
     />
+
+    <input
+  placeholder="HSN Code"
+  value={manualInvoice.hsnCode}
+  onChange={(e) =>
+    setManualInvoice({
+      ...manualInvoice,
+      hsnCode: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+/>
 
     <input
       type="number"
