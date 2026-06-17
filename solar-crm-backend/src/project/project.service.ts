@@ -10014,6 +10014,11 @@ console.log('MANUAL_PI_HSN_DEBUG', {
     },
   );
 
+  console.log(
+  'MANUAL_PI_SAVE_ITEMS',
+  JSON.stringify(invoiceItems, null, 2),
+);
+
   await this.projectProformaInvoiceItemRepository.save(
     invoiceItems as ProjectProformaInvoiceItem[],
   );
