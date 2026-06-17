@@ -71,6 +71,10 @@ export class MeetingService {
   return this.hasAnyRole(user, ['TELECALLING_ASSISTANT' as any]);
 }
 
+private isSolarFranchise(user: any): boolean {
+  return this.hasAnyRole(user, ['SOLAR_FRANCHISE' as any]);
+}
+
   private isMarketingHead(user: any): boolean {
     return this.hasAnyRole(user, [UserRole.MARKETING_HEAD]);
   }
@@ -141,7 +145,9 @@ private assertCanModifyMeeting(meeting: Meeting, user: any) {
       UserRole.TELECALLER,
       UserRole.LEAD_EXECUTIVE,
       UserRole.LEAD_MANAGER,
-    ]) || this.isTelecallingAssistant(user)
+    ]) ||
+    this.isTelecallingAssistant(user) ||
+    this.isSolarFranchise(user)
   );
 }
 
@@ -454,9 +460,10 @@ if (!cleanAddress && !cleanGpsAddress) {
           ? Number(assignedTo)
           : undefined,
       assignedToName,
-      meetingCategory:
-        (createMeetingDto as any).meetingCategory ||
-        MeetingCategory.COMPANY_MEETING,
+      meetingCategory: this.isSolarFranchise(user)
+  ? MeetingCategory.SOLARMITER
+  : (createMeetingDto as any).meetingCategory ||
+    MeetingCategory.COMPANY_MEETING,
       panelGivenToCustomerKw: this.normalizeDecimal(
         (createMeetingDto as any).panelGivenToCustomerKw,
       ),
@@ -480,6 +487,13 @@ if (!cleanAddress && !cleanGpsAddress) {
       createdByName: currentUserName,
       updatedBy: currentUserId,
       updatedByName: currentUserName,
+      solarMiterName: this.isSolarFranchise(user)
+  ? currentUserName
+  : (createMeetingDto as any).solarMiterName,
+
+solarMiterPhone: this.isSolarFranchise(user)
+  ? String((user as any)?.phone || '')
+  : (createMeetingDto as any).solarMiterPhone,
     };
 
     let meeting = this.meetingRepository.create(meetingData) as Meeting;

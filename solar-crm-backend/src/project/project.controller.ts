@@ -2599,6 +2599,50 @@ getTradingMeetingConversionData(
   );
 }
 
+@Roles('SOLAR_FRANCHISE')
+@Post('franchise-payout-request')
+createFranchisePayoutRequest(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.createFranchisePayoutRequest(
+    body,
+    user,
+  );
+}
+
+@Roles('SOLAR_FRANCHISE')
+@Get('franchise-payout-request/my')
+getMyFranchisePayoutRequests(
+  @Query() query: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.getMyFranchisePayoutRequests(
+    user,
+    query,
+  );
+}
+
+@Roles('OWNER', 'ACCOUNT_MANAGER', 'PAYMENT_MANAGER')
+@Get('franchise-payout-request')
+getFranchisePayoutRequests(@Query() query: any) {
+  return this.projectService.getFranchisePayoutRequests(query);
+}
+
+@Roles('OWNER', 'ACCOUNT_MANAGER', 'PAYMENT_MANAGER')
+@Patch('franchise-payout-request/:id/status')
+updateFranchisePayoutRequestStatus(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.updateFranchisePayoutRequestStatus(
+    id,
+    body,
+    user,
+  );
+}
+
 @Roles('OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER', 'STOCK_MANAGER')
 @Get('stock/dashboard')
 getStockDashboard(@CurrentUser() user: any) {

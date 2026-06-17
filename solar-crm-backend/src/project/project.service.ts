@@ -182,6 +182,11 @@ import {
 
 import { CustomerNotification } from '../customer-portal/customer-notification.entity';
 
+import {
+  ProjectFranchisePayoutRequest,
+  FranchisePayoutRequestStatus,
+} from './project-franchise-payout-request.entity';
+
 @Injectable()
 export class ProjectService {
 
@@ -545,6 +550,9 @@ private readonly projectExecutionReminderUserStateRepository: Repository<Project
 @InjectRepository(ProjectPaymentInstallment)
 private readonly projectPaymentInstallmentRepository: Repository<ProjectPaymentInstallment>,
 
+@InjectRepository(ProjectFranchisePayoutRequest)
+private readonly projectFranchisePayoutRequestRepository: Repository<ProjectFranchisePayoutRequest>,
+
 @InjectRepository(ProjectPaymentReminderUserState)
 private readonly projectPaymentReminderUserStateRepository: Repository<ProjectPaymentReminderUserState>,
 
@@ -873,7 +881,14 @@ const canViewAll =
   roles.includes('PAYMENT_MANAGER') ||
   roles.includes('ACCOUNT_MANAGER');
 
-if (!canViewAll) {
+if (roles.includes('SOLAR_FRANCHISE')) {
+  query.andWhere(
+    'project.solarFranchiseUserId = :currentUserId',
+    {
+      currentUserId,
+    },
+  );
+} else if (!canViewAll) {
   query.andWhere(
     'project.projectOwnerId = :currentUserId',
     {
@@ -1122,7 +1137,16 @@ const canViewAll =
   roles.includes('PAYMENT_MANAGER') ||
   roles.includes('ACCOUNT_MANAGER');
 
-if (
+if (roles.includes('SOLAR_FRANCHISE')) {
+  if (
+    Number(project.solarFranchiseUserId) !==
+    currentUserId
+  ) {
+    throw new ForbiddenException(
+      'You can only access your own franchise projects',
+    );
+  }
+} else if (
   !canViewAll &&
   Number(project.projectOwnerId) !==
     currentUserId
@@ -1214,6 +1238,9 @@ if (
     'gpsLatitude',
     'gpsLongitude',
     'gpsAddress',
+    'solarFranchiseUserId',
+'solarFranchiseName',
+'solarFranchisePhone',
   ];
 
   const editableFieldsForMarketingHead = [
@@ -1253,6 +1280,9 @@ if (
     'gpsLatitude',
     'gpsLongitude',
     'gpsAddress',
+    'solarFranchiseUserId',
+'solarFranchiseName',
+'solarFranchisePhone',
   ];
 
   const editableFieldsForProjectManager = editableFieldsForOwner;
@@ -1311,6 +1341,7 @@ for (const key of Object.keys(safeData)) {
 
 const numberFields = [
   'projectOwnerId',
+  'solarFranchiseUserId',
   'dcrPanelCount',
   'nonDcrPanelCount',
   'marginMoney',
@@ -4269,6 +4300,232 @@ await this.projectPartyLedgerRepository.save(
   }
 
 return savedInstallment;
+}
+
+async createFranchisePayoutRequest(
+  body: any,
+  user: any,
+) {
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  if (!roles.includes('SOLAR_FRANCHISE')) {
+    throw new ForbiddenException(
+      'Only Solar Franchise can request payout',
+    );
+  }
+
+  const projectId = Number(body?.projectId || 0);
+
+  if (!projectId) {
+    throw new BadRequestException('Project is required');
+  }
+
+  const project = await this.projectRepository.findOne({
+    where: {
+      id: projectId,
+      isHidden: false,
+    },
+  });
+
+  if (!project) {
+    throw new NotFoundException('Project not found');
+  }
+
+  const currentUserId = Number(user?.id || user?.sub);
+
+  if (
+    Number((project as any).solarFranchiseUserId) !==
+    currentUserId
+  ) {
+    throw new ForbiddenException(
+      'You can request payout only for your assigned project',
+    );
+  }
+
+  const requestedAmount = Number(body?.requestedAmount || 0);
+
+  if (!requestedAmount || requestedAmount <= 0) {
+    throw new BadRequestException(
+      'Valid requested amount is required',
+    );
+  }
+
+  const existingOpenRequest =
+  await this.projectFranchisePayoutRequestRepository.findOne({
+    where: {
+      projectId,
+      franchiseUserId: currentUserId,
+      status: In([
+        FranchisePayoutRequestStatus.REQUESTED,
+        FranchisePayoutRequestStatus.UNDER_REVIEW,
+        FranchisePayoutRequestStatus.APPROVED,
+        FranchisePayoutRequestStatus.ON_HOLD,
+      ]),
+      isHidden: false,
+    },
+  });
+
+if (existingOpenRequest) {
+  throw new BadRequestException(
+    'A payout request is already open for this project. Please wait until it is paid or rejected before creating another request.',
+  );
+}
+
+  const request = this.projectFranchisePayoutRequestRepository.create({
+    projectId,
+    franchiseUserId: currentUserId,
+    franchiseName:
+      (project as any).solarFranchiseName ||
+      user?.name ||
+      user?.email ||
+      '',
+    franchisePhone:
+      (project as any).solarFranchisePhone ||
+      body?.franchisePhone ||
+      '',
+    requestedAmount,
+    requestNote: String(body?.requestNote || '').trim(),
+    status: FranchisePayoutRequestStatus.REQUESTED,
+  });
+
+  return this.projectFranchisePayoutRequestRepository.save(request);
+}
+
+async getMyFranchisePayoutRequests(
+  user: any,
+  query: any = {},
+) {
+  const currentUserId = Number(user?.id || user?.sub);
+
+  const page = Number(query?.page || 1);
+  const limit = Math.min(Number(query?.limit || 20), 100);
+  const skip = (page - 1) * limit;
+
+  const qb =
+    this.projectFranchisePayoutRequestRepository
+      .createQueryBuilder('request')
+      .where('request.isHidden = false')
+      .andWhere(
+        'request.franchiseUserId = :currentUserId',
+        { currentUserId },
+      )
+      .orderBy('request.createdAt', 'DESC')
+      .skip(skip)
+      .take(limit);
+
+  const [data, total] = await qb.getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
+}
+
+async getFranchisePayoutRequests(query: any = {}) {
+  const page = Number(query?.page || 1);
+  const limit = Math.min(Number(query?.limit || 20), 100);
+  const skip = (page - 1) * limit;
+
+  const qb =
+    this.projectFranchisePayoutRequestRepository
+      .createQueryBuilder('request')
+      .where('request.isHidden = false')
+      .orderBy('request.createdAt', 'DESC')
+      .skip(skip)
+      .take(limit);
+
+  if (query?.status) {
+    qb.andWhere('request.status = :status', {
+      status: query.status,
+    });
+  }
+
+  if (query?.projectId) {
+    qb.andWhere('request.projectId = :projectId', {
+      projectId: Number(query.projectId),
+    });
+  }
+
+  const [data, total] = await qb.getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
+}
+
+async updateFranchisePayoutRequestStatus(
+  id: number,
+  body: any,
+  user: any,
+) {
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  if (
+    !roles.includes('OWNER') &&
+    !roles.includes('ACCOUNT_MANAGER') &&
+    !roles.includes('PAYMENT_MANAGER')
+  ) {
+    throw new ForbiddenException(
+      'Only owner or account/payment manager can update payout request',
+    );
+  }
+
+  const request =
+    await this.projectFranchisePayoutRequestRepository.findOne({
+      where: {
+        id,
+        isHidden: false,
+      },
+    });
+
+  if (!request) {
+    throw new NotFoundException(
+      'Payout request not found',
+    );
+  }
+
+  const status = String(body?.status || '').trim();
+
+  if (
+    !Object.values(FranchisePayoutRequestStatus).includes(
+      status as FranchisePayoutRequestStatus,
+    )
+  ) {
+    throw new BadRequestException(
+      'Invalid payout request status',
+    );
+  }
+
+  request.status = status as FranchisePayoutRequestStatus;
+  request.accountManagerNote =
+    String(body?.accountManagerNote || '').trim();
+
+  request.reviewedBy = Number(user?.id || user?.sub);
+  request.reviewedByName = user?.name || user?.email || '';
+  request.reviewedAt = new Date();
+
+  if (status === FranchisePayoutRequestStatus.PAID) {
+    request.paidBy = Number(user?.id || user?.sub);
+    request.paidByName = user?.name || user?.email || '';
+    request.paidAt = new Date();
+    request.paymentReference =
+      String(body?.paymentReference || '').trim();
+  }
+
+  return this.projectFranchisePayoutRequestRepository.save(
+    request,
+  );
 }
 
 async updatePaymentEntry(

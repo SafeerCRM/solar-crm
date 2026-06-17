@@ -85,14 +85,15 @@ export class FollowupService {
   }
 
   private isOwnAssignedOnlyRole(user: any): boolean {
-    return this.hasAnyRole(user, [
-      UserRole.TELECALLER,
-      UserRole.LEAD_EXECUTIVE,
-      UserRole.MEETING_MANAGER,
-      UserRole.PROJECT_EXECUTIVE,
-      UserRole.LEAD_MANAGER,
-    ]);
-  }
+  return this.hasAnyRole(user, [
+    UserRole.TELECALLER,
+    UserRole.LEAD_EXECUTIVE,
+    UserRole.MEETING_MANAGER,
+    UserRole.PROJECT_EXECUTIVE,
+    UserRole.LEAD_MANAGER,
+    'SOLAR_FRANCHISE' as any,
+  ]);
+}
 
   private getCurrentUserId(user: any): number {
     return Number(user?.id ?? user?.sub);

@@ -111,6 +111,15 @@ customerUserId: number;
 @Column({ nullable: true })
 customerUserName: string;
 
+@Column({ nullable: true })
+solarFranchiseUserId: number;
+
+@Column({ nullable: true })
+solarFranchiseName: string;
+
+@Column({ nullable: true })
+solarFranchisePhone: string;
+
   @Column({ nullable: true })
   aadhaarLinkedMobile: string;
 
