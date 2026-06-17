@@ -10071,16 +10071,68 @@ console.log(
   };
 }
 
+private formatInr(value: any) {
+  return `Rs. ${Number(value || 0).toLocaleString('en-IN', {
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+private numberToWordsIndian(amount: number) {
+  const ones = [
+    '', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight',
+    'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen',
+    'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen',
+  ];
+
+  const tens = [
+    '', '', 'Twenty', 'Thirty', 'Forty', 'Fifty',
+    'Sixty', 'Seventy', 'Eighty', 'Ninety',
+  ];
+
+  const belowHundred = (n: number): string => {
+    if (n < 20) return ones[n];
+    return `${tens[Math.floor(n / 10)]} ${ones[n % 10]}`.trim();
+  };
+
+  const belowThousand = (n: number): string => {
+    if (n < 100) return belowHundred(n);
+    return `${ones[Math.floor(n / 100)]} Hundred ${belowHundred(n % 100)}`.trim();
+  };
+
+  const n = Math.round(Number(amount || 0));
+
+  if (n === 0) return 'Zero Rupees Only';
+
+  const crore = Math.floor(n / 10000000);
+  const lakh = Math.floor((n % 10000000) / 100000);
+  const thousand = Math.floor((n % 100000) / 1000);
+  const rest = n % 1000;
+
+  const parts: string[] = [];
+
+  if (crore) parts.push(`${belowThousand(crore)} Crore`);
+  if (lakh) parts.push(`${belowThousand(lakh)} Lakh`);
+  if (thousand) parts.push(`${belowThousand(thousand)} Thousand`);
+  if (rest) parts.push(belowThousand(rest));
+
+  return `${parts.join(' ')} Rupees Only`;
+}
+
 async generateProformaInvoicePdf(
   id: number,
   res: Response,
 ) {
-  const pi =
-    await this.getProformaInvoiceById(id);
+  const pi = await this.getProformaInvoiceById(id);
 
   const isDealerInvoice =
     (pi as any).invoiceType === 'DEALER' ||
     !!(pi as any).dealerId;
+
+  const project = !isDealerInvoice && pi.projectId
+    ? await this.projectRepository.findOne({
+        where: { id: Number(pi.projectId) },
+      })
+    : null;
 
   const doc = new PDFDocument({
     margin: 40,
@@ -10094,253 +10146,381 @@ async generateProformaInvoicePdf(
     'aditya-logo.jpg',
   );
 
-  const fileName = `${
-    pi.invoiceNumber || `PI-${pi.id}`
-  }.pdf`;
+  const fileName = `${pi.invoiceNumber || `PI-${pi.id}`}.pdf`;
 
   res.setHeader(
     'Content-Disposition',
     `inline; filename="${fileName}"`,
   );
 
-  res.setHeader(
-    'Content-Type',
-    'application/pdf',
-  );
+  res.setHeader('Content-Type', 'application/pdf');
 
   doc.pipe(res);
 
+  const pageLeft = 40;
+  const pageRight = 555;
+  const pageWidth = pageRight - pageLeft;
+
+  const blue = '#1e40af';
+  const orange = '#f97316';
+  const lightBlue = '#eff6ff';
+  const lightOrange = '#fff7ed';
+  const border = '#d1d5db';
+  const dark = '#111827';
+  const muted = '#6b7280';
+
+  const invoiceDate = pi.invoiceDate
+    ? new Date(pi.invoiceDate).toLocaleDateString('en-IN')
+    : new Date(pi.createdAt).toLocaleDateString('en-IN');
+
+  // Logo unchanged: same image, same fit, same width.
   doc.image(logoPath, 40, 20, {
     fit: [515, 110],
     align: 'center',
   });
 
-  doc.y = 145;
+  doc.y = 120;
+
+  // Title bar
+  doc
+    .roundedRect(pageLeft, doc.y, pageWidth, 32, 6)
+    .fill(blue);
 
   doc
-    .fontSize(22)
-    .fillColor('#0f172a')
-    .text('PROFORMA INVOICE', {
+    .fillColor('#ffffff')
+    .fontSize(17)
+    .text('PROFORMA INVOICE', pageLeft, doc.y + 8, {
+      width: pageWidth,
       align: 'center',
     });
 
-  doc.moveDown();
+  doc.y += 42;
+
+  // Document info strip
+  doc
+    .roundedRect(pageLeft, doc.y, pageWidth, 38, 5)
+    .fill(lightOrange)
+    .strokeColor(orange)
+    .lineWidth(0.8)
+    .stroke();
 
   doc
-    .fontSize(12)
-    .fillColor('#111827')
-    .text(`PI No: ${pi.invoiceNumber || '-'}`);
+    .fontSize(9)
+    .fillColor(dark)
+    .text(`PI No: ${pi.invoiceNumber || '-'}`, pageLeft + 12, doc.y + 8, {
+      width: 170,
+    })
+    .text(`Date: ${invoiceDate}`, pageLeft + 210, doc.y + 8, {
+      width: 130,
+    })
+    .text(`Status: ${pi.status || '-'}`, pageLeft + 380, doc.y + 8, {
+      width: 140,
+    });
 
-  doc.text(
-    `Date: ${
-      pi.invoiceDate
-        ? new Date(pi.invoiceDate).toLocaleDateString(
-            'en-IN',
-          )
-        : new Date(
-            pi.createdAt,
-          ).toLocaleDateString('en-IN')
-    }`,
-  );
+  doc
+    .fillColor(muted)
+    .text(`Type: ${isDealerInvoice ? 'Dealer / Trading' : 'Project'}`, pageLeft + 12, doc.y + 22, {
+      width: 230,
+    });
+
+  doc.y += 50;
+
+  // Bill to and details cards
+  const cardY = doc.y;
+  const cardW = 250;
+  const cardH = 88;
+
+  doc
+    .roundedRect(pageLeft, cardY, cardW, cardH, 6)
+    .fill(lightBlue)
+    .strokeColor(border)
+    .stroke();
+
+  doc
+    .roundedRect(pageLeft + 265, cardY, cardW, cardH, 6)
+    .fill('#f9fafb')
+    .strokeColor(border)
+    .stroke();
+
+  doc
+    .fontSize(10)
+    .fillColor(blue)
+    .text('BILL TO', pageLeft + 12, cardY + 10);
 
   if (isDealerInvoice) {
-    doc.text(`Invoice Type: Dealer / Trading`);
-    doc.text(`Dealer Name: ${(pi as any).dealerName || '-'}`);
-    doc.text(`Dealer Phone: ${(pi as any).dealerPhone || '-'}`);
-    doc.text(`Dealer GST: ${(pi as any).dealerGstNumber || '-'}`);
-    doc.text(`Dealer Address: ${(pi as any).dealerAddress || '-'}`);
+    doc
+      .fontSize(9)
+      .fillColor(dark)
+      .text(`Name: ${(pi as any).dealerName || '-'}`, pageLeft + 12, cardY + 28, {
+        width: 225,
+      })
+      .text(`Phone: ${(pi as any).dealerPhone || '-'}`, pageLeft + 12, cardY + 43, {
+        width: 225,
+      })
+      .text(`GST: ${(pi as any).dealerGstNumber || '-'}`, pageLeft + 12, cardY + 58, {
+        width: 225,
+      })
+      .text(`Address: ${(pi as any).dealerAddress || '-'}`, pageLeft + 12, cardY + 73, {
+        width: 225,
+        height: 15,
+      });
   } else {
-    doc.text(`Project ID: ${pi.projectId || '-'}`);
+    doc
+      .fontSize(9)
+      .fillColor(dark)
+      .text(`Name: ${(project as any)?.customerName || '-'}`, pageLeft + 12, cardY + 28, {
+        width: 225,
+      })
+      .text(`Phone: ${(project as any)?.customerPhone || '-'}`, pageLeft + 12, cardY + 43, {
+        width: 225,
+      })
+      .text(`Address: ${(project as any)?.address || (project as any)?.gpsAddress || '-'}`, pageLeft + 12, cardY + 58, {
+        width: 225,
+        height: 28,
+      });
   }
-
-  doc.text(`Status: ${pi.status || '-'}`);
-
-  doc.moveDown();
-
-  doc
-    .fontSize(16)
-    .fillColor('#2563eb')
-    .text('Invoice Items');
-
-  doc.moveDown(0.5);
 
   doc
     .fontSize(10)
-    .fillColor('#111827');
+    .fillColor(orange)
+    .text('DOCUMENT DETAILS', pageLeft + 277, cardY + 10);
 
-    let y = doc.y;
+  doc
+    .fontSize(9)
+    .fillColor(dark)
+    .text(`Project ID: ${pi.projectId || '-'}`, pageLeft + 277, cardY + 28, {
+      width: 220,
+    })
+    .text(`Branch: ${(project as any)?.branchName || '-'}`, pageLeft + 277, cardY + 43, {
+      width: 220,
+    })
+    .text(`City: ${(project as any)?.city || '-'}`, pageLeft + 277, cardY + 58, {
+      width: 220,
+    })
+    .text(`Owner: ${(project as any)?.projectOwnerName || '-'}`, pageLeft + 277, cardY + 73, {
+      width: 220,
+    });
 
-  doc.text('Item', 40, y, {
-    width: 135,
-  });
+  doc.y = cardY + cardH + 16;
 
-  doc.text('HSN', 175, y, {
-    width: 55,
-  });
+  // Table title
+  doc
+    .fontSize(12)
+    .fillColor(dark)
+    .text('Item Details', pageLeft, doc.y);
 
-  doc.text('Qty', 230, y, {
-    width: 35,
-  });
+  doc.y += 18;
 
-  doc.text('Rate', 265, y, {
-    width: 75,
-  });
+  const drawTableHeader = () => {
+    const y = doc.y;
 
-  doc.text('Disc.', 340, y, {
-    width: 65,
-  });
+    doc
+      .rect(pageLeft, y, pageWidth, 22)
+      .fill(blue);
 
-  doc.text('GST', 405, y, {
-    width: 45,
-  });
+    doc
+      .fontSize(8)
+      .fillColor('#ffffff')
+      .text('Sr', 42, y + 7, { width: 22 })
+      .text('Item Name', 65, y + 7, { width: 145 })
+      .text('HSN', 210, y + 7, { width: 50 })
+      .text('Qty', 260, y + 7, { width: 35, align: 'right' })
+      .text('Unit', 295, y + 7, { width: 35 })
+      .text('Rate', 330, y + 7, { width: 60, align: 'right' })
+      .text('GST%', 390, y + 7, { width: 35, align: 'right' })
+      .text('GST Amt', 425, y + 7, { width: 55, align: 'right' })
+      .text('Total', 480, y + 7, { width: 75, align: 'right' });
 
-  doc.text('Total', 450, y, {
-    width: 100,
-  });
+    doc.y = y + 22;
+  };
 
-  y += 18;
+  drawTableHeader();
 
-  doc.moveTo(40, y).lineTo(555, y).stroke();
+  (pi.items || []).forEach((item: any, index: number) => {
+    const itemName = item.itemName || '-';
+    const rowHeight = Math.max(
+      28,
+      Math.min(
+        46,
+        doc.fontSize(8).heightOfString(itemName, {
+  width: 140,
+}) + 10,
+      ),
+    );
 
-  y += 10;
-
-  for (const item of pi.items || []) {
-    if (y > 720) {
+    if (doc.y + rowHeight > 700) {
       doc.addPage();
-      y = 40;
+      doc.y = 40;
+      drawTableHeader();
     }
 
-        doc.text(
-      item.itemName || '-',
-      40,
-      y,
-      {
-        width: 135,
-      },
-    );
+    const y = doc.y;
 
-    doc.text(
-      (item as any).hsnCode || '-',
-      175,
-      y,
-      {
-        width: 55,
-      },
-    );
+    if (index % 2 === 0) {
+      doc.rect(pageLeft, y, pageWidth, rowHeight).fill('#f9fafb');
+    } else {
+      doc.rect(pageLeft, y, pageWidth, rowHeight).fill('#ffffff');
+    }
 
-    doc.text(
-      String(item.quantity || 0),
-      230,
-      y,
-      {
+    doc
+      .strokeColor(border)
+      .lineWidth(0.4)
+      .rect(pageLeft, y, pageWidth, rowHeight)
+      .stroke();
+
+    doc
+      .fontSize(8)
+      .fillColor(dark)
+      .text(String(index + 1), 42, y + 7, { width: 22 })
+      .text(itemName, 65, y + 7, {
+        width: 140,
+        height: rowHeight - 8,
+      })
+      .text(String((item as any).hsnCode || '-'), 210, y + 7, {
+        width: 50,
+      })
+      .text(String(item.quantity || 0), 260, y + 7, {
         width: 35,
-      },
-    );
-
-    doc.text(
-      `Rs. ${Number(
-        item.sellingRate || 0,
-      ).toLocaleString('en-IN')}`,
-      265,
-      y,
-      {
+        align: 'right',
+      })
+      .text(String(item.unit || '-'), 295, y + 7, {
+        width: 35,
+      })
+      .text(this.formatInr(item.sellingRate || 0), 330, y + 7, {
+        width: 60,
+        align: 'right',
+      })
+      .text(`${item.gstPercent || 0}%`, 390, y + 7, {
+        width: 35,
+        align: 'right',
+      })
+      .text(this.formatInr(item.gstAmount || 0), 425, y + 7, {
+        width: 55,
+        align: 'right',
+      })
+      .text(this.formatInr(item.totalAmount || 0), 480, y + 7, {
         width: 75,
-      },
-    );
+        align: 'right',
+      });
 
-    doc.text(
-      `Rs. ${Number(
-        item.discountAmount || 0,
-      ).toLocaleString('en-IN')}`,
-      340,
-      y,
-      {
-        width: 65,
-      },
-    );
+    doc.y = y + rowHeight;
+  });
 
-    doc.text(
-      `${item.gstPercent || 0}%`,
-      405,
-      y,
-      {
-        width: 45,
-      },
-    );
+  doc.y += 14;
 
-    doc.text(
-      `Rs. ${Number(
-        item.totalAmount || 0,
-      ).toLocaleString('en-IN')}`,
-      450,
-      y,
-      {
-        width: 100,
-      },
-    );
-
-    y += 28;
+  if (doc.y > 610) {
+    doc.addPage();
+    doc.y = 40;
   }
 
-  doc.moveDown(2);
-
-  if (doc.y < y) {
-    doc.y = y;
-  }
+  const summaryX = 345;
+  const summaryY = doc.y;
+  const summaryW = 210;
 
   doc
-    .fontSize(14)
-    .fillColor('#111827')
-    .text(
-      `Subtotal: Rs. ${Number(
-        pi.subtotalAmount || 0,
-      ).toLocaleString('en-IN')}`,
-      {
+    .roundedRect(summaryX, summaryY, summaryW, 94, 6)
+    .fill('#f8fafc')
+    .strokeColor(border)
+    .stroke();
+
+  const summaryLine = (
+    label: string,
+    value: any,
+    yOffset: number,
+    bold = false,
+    color = dark,
+  ) => {
+    doc
+      .fontSize(bold ? 11 : 9)
+      .fillColor(color)
+      .text(label, summaryX + 12, summaryY + yOffset, {
+        width: 85,
+      })
+      .text(this.formatInr(value), summaryX + 100, summaryY + yOffset, {
+        width: 95,
         align: 'right',
-      },
-    );
+      });
+  };
 
-  doc.text(
-    `Discount: Rs. ${Number(
-      pi.discountAmount || 0,
-    ).toLocaleString('en-IN')}`,
-    {
-      align: 'right',
-    },
-  );
-
-  doc.text(
-    `GST: Rs. ${Number(
-      pi.gstAmount || 0,
-    ).toLocaleString('en-IN')}`,
-    {
-      align: 'right',
-    },
-  );
+  summaryLine('Subtotal', pi.subtotalAmount, 12);
+  summaryLine('Discount', pi.discountAmount, 30);
+  summaryLine('GST', pi.gstAmount, 48);
 
   doc
-    .fontSize(18)
-    .fillColor('#16a34a')
-    .text(
-      `Total: Rs. ${Number(
-        pi.totalAmount || 0,
-      ).toLocaleString('en-IN')}`,
-      {
-        align: 'right',
-      },
-    );
+    .moveTo(summaryX + 10, summaryY + 67)
+    .lineTo(summaryX + summaryW - 10, summaryY + 67)
+    .strokeColor(orange)
+    .lineWidth(1)
+    .stroke();
 
-  doc.moveDown(2);
+  summaryLine('Grand Total', pi.totalAmount, 74, true, '#16a34a');
+
+  doc.y = summaryY + 108;
+
+  doc
+    .roundedRect(pageLeft, doc.y, pageWidth, 42, 6)
+    .fill(lightOrange)
+    .strokeColor(border)
+    .stroke();
+
+  doc
+    .fontSize(9)
+    .fillColor(orange)
+    .text('Amount in Words', pageLeft + 12, doc.y + 8);
 
   doc
     .fontSize(10)
-    .fillColor('#6b7280')
-    .text(
-      'This is a system-generated proforma invoice.',
-      {
-        align: 'center',
-      },
-    );
+    .fillColor(dark)
+    .text(this.numberToWordsIndian(Number(pi.totalAmount || 0)), pageLeft + 12, doc.y + 23, {
+      width: pageWidth - 24,
+    });
+
+  doc.y += 58;
+
+  const footerY = doc.y;
+
+  doc
+    .roundedRect(pageLeft, footerY, 250, 82, 6)
+    .fill('#f9fafb')
+    .strokeColor(border)
+    .stroke();
+
+  doc
+    .fontSize(10)
+    .fillColor(blue)
+    .text('Terms & Conditions', pageLeft + 12, footerY + 10);
+
+  doc
+    .fontSize(8)
+    .fillColor(dark)
+    .text('1. This is a system-generated proforma invoice.', pageLeft + 12, footerY + 28, {
+      width: 225,
+    })
+    .text('2. Prices are subject to final approval and availability.', pageLeft + 12, footerY + 42, {
+      width: 225,
+    })
+    .text('3. Warranty as per manufacturer/company policy.', pageLeft + 12, footerY + 56, {
+      width: 225,
+    });
+
+  doc
+    .roundedRect(pageLeft + 265, footerY, 250, 82, 6)
+    .fill('#f9fafb')
+    .strokeColor(border)
+    .stroke();
+
+  doc
+    .fontSize(10)
+    .fillColor(blue)
+    .text('For Aditya Solars', pageLeft + 277, footerY + 10);
+
+  doc
+    .fontSize(8)
+    .fillColor(muted)
+    .text('Authorized Signatory', pageLeft + 277, footerY + 58, {
+      width: 220,
+      align: 'right',
+    });
 
   doc.end();
 }
