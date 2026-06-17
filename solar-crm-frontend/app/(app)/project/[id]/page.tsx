@@ -1067,6 +1067,41 @@ const deleteDocument = async (
   }
 };
 
+const updateDocumentCustomerVisibility = async (
+  documentId: number,
+  visible: boolean,
+) => {
+  try {
+    const token = localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/documents/${documentId}/customer-visibility`,
+      {
+        visibleToCustomer: visible,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+
+    alert(
+      visible
+        ? 'Document is now visible to customer'
+        : 'Document hidden from customer portal',
+    );
+
+    fetchDocuments();
+  } catch (error: any) {
+    console.error(error);
+    alert(
+      error?.response?.data?.message ||
+        'Failed to update document visibility',
+    );
+  }
+};
+
 const fetchMaterials = async () => {
   try {
     const token = localStorage.getItem('token');
@@ -7671,6 +7706,24 @@ const canApproveAndReserveStock =
     Visible To Customer
   </span>
 )}
+
+<button
+  onClick={() =>
+    updateDocumentCustomerVisibility(
+      doc.id,
+      !doc.visibleToCustomer,
+    )
+  }
+  className={`rounded-xl px-4 py-2 text-sm font-semibold ${
+    doc.visibleToCustomer
+      ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+  }`}
+>
+  {doc.visibleToCustomer
+    ? 'Hide From Customer'
+    : 'Show To Customer'}
+</button>
 
             {doc.remarks && (
               <p className="mt-1 text-sm text-gray-600">
