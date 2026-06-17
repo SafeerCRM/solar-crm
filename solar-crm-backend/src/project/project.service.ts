@@ -10197,33 +10197,7 @@ async generateProformaInvoicePdf(
   doc.y += 42;
 
   // Document info strip
-  doc
-    .roundedRect(pageLeft, doc.y, pageWidth, 38, 5)
-    .fill(lightOrange)
-    .strokeColor(orange)
-    .lineWidth(0.8)
-    .stroke();
-
-  doc
-    .fontSize(9)
-    .fillColor(dark)
-    .text(`PI No: ${pi.invoiceNumber || '-'}`, pageLeft + 12, doc.y + 8, {
-      width: 170,
-    })
-    .text(`Date: ${invoiceDate}`, pageLeft + 210, doc.y + 8, {
-      width: 130,
-    })
-    .text(`Status: ${pi.status || '-'}`, pageLeft + 380, doc.y + 8, {
-      width: 140,
-    });
-
-  doc
-    .fillColor(muted)
-    .text(`Type: ${isDealerInvoice ? 'Dealer / Trading' : 'Project'}`, pageLeft + 12, doc.y + 22, {
-      width: 230,
-    });
-
-  doc.y += 50;
+  doc.y += 8;
 
   // Bill to and details cards
   const cardY = doc.y;
@@ -10286,20 +10260,20 @@ async generateProformaInvoicePdf(
     .text('DOCUMENT DETAILS', pageLeft + 277, cardY + 10);
 
   doc
-    .fontSize(9)
-    .fillColor(dark)
-    .text(`Project ID: ${pi.projectId || '-'}`, pageLeft + 277, cardY + 28, {
-      width: 220,
-    })
-    .text(`Branch: ${(project as any)?.branchName || '-'}`, pageLeft + 277, cardY + 43, {
-      width: 220,
-    })
-    .text(`City: ${(project as any)?.city || '-'}`, pageLeft + 277, cardY + 58, {
-      width: 220,
-    })
-    .text(`Owner: ${(project as any)?.projectOwnerName || '-'}`, pageLeft + 277, cardY + 73, {
-      width: 220,
-    });
+  .fontSize(9)
+  .fillColor(dark)
+  .text(`PI No: ${pi.invoiceNumber || '-'}`, pageLeft + 277, cardY + 28, {
+    width: 220,
+  })
+  .text(`Date: ${invoiceDate}`, pageLeft + 277, cardY + 43, {
+    width: 220,
+  })
+  .text(`Status: ${pi.status || '-'}`, pageLeft + 277, cardY + 58, {
+    width: 220,
+  })
+  .text(`Type: ${isDealerInvoice ? 'Dealer / Trading' : 'Project'}`, pageLeft + 277, cardY + 73, {
+    width: 220,
+  });
 
   doc.y = cardY + cardH + 16;
 
@@ -10324,12 +10298,12 @@ async generateProformaInvoicePdf(
       .text('Sr', 42, y + 7, { width: 22 })
       .text('Item Name', 65, y + 7, { width: 145 })
       .text('HSN', 210, y + 7, { width: 50 })
-      .text('Qty', 260, y + 7, { width: 35, align: 'right' })
-      .text('Unit', 295, y + 7, { width: 35 })
-      .text('Rate', 330, y + 7, { width: 60, align: 'right' })
-      .text('GST%', 390, y + 7, { width: 35, align: 'right' })
-      .text('GST Amt', 425, y + 7, { width: 55, align: 'right' })
-      .text('Total', 480, y + 7, { width: 75, align: 'right' });
+      .text('Qty', 255, y + 7, { width: 35, align: 'right' })
+.text('Unit', 295, y + 7, { width: 45 })
+.text('Rate', 340, y + 7, { width: 55, align: 'right' })
+.text('GST%', 397, y + 7, { width: 35, align: 'right' })
+.text('GST Amt', 435, y + 7, { width: 55, align: 'right' })
+.text('Total', 490, y + 7, { width: 62, align: 'right' });
 
     doc.y = y + 22;
   };
@@ -10379,29 +10353,29 @@ async generateProformaInvoicePdf(
       .text(String((item as any).hsnCode || '-'), 210, y + 7, {
         width: 50,
       })
-      .text(String(item.quantity || 0), 260, y + 7, {
-        width: 35,
-        align: 'right',
-      })
-      .text(String(item.unit || '-'), 295, y + 7, {
-        width: 35,
-      })
-      .text(this.formatInr(item.sellingRate || 0), 330, y + 7, {
-        width: 60,
-        align: 'right',
-      })
-      .text(`${item.gstPercent || 0}%`, 390, y + 7, {
-        width: 35,
-        align: 'right',
-      })
-      .text(this.formatInr(item.gstAmount || 0), 425, y + 7, {
-        width: 55,
-        align: 'right',
-      })
-      .text(this.formatInr(item.totalAmount || 0), 480, y + 7, {
-        width: 75,
-        align: 'right',
-      });
+      .text(String(item.quantity || 0), 255, y + 7, {
+  width: 35,
+  align: 'right',
+})
+.text(String(item.unit || '-'), 295, y + 7, {
+  width: 45,
+})
+.text(this.formatInr(item.sellingRate || 0), 340, y + 7, {
+  width: 55,
+  align: 'right',
+})
+.text(`${item.gstPercent || 0}%`, 397, y + 7, {
+  width: 35,
+  align: 'right',
+})
+.text(this.formatInr(item.gstAmount || 0), 435, y + 7, {
+  width: 55,
+  align: 'right',
+})
+.text(this.formatInr(item.totalAmount || 0), 490, y + 7, {
+  width: 62,
+  align: 'right',
+});
 
     doc.y = y + rowHeight;
   });
