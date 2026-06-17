@@ -9952,6 +9952,13 @@ console.log('MANUAL_PI_HSN_DEBUG', {
   ),
 });
 
+console.log(
+  'PI_ENTITY_COLUMNS',
+  this.projectProformaInvoiceItemRepository.metadata.columns.map(
+    (c) => c.propertyName,
+  ),
+);
+
   const invoiceItems = items.map(
     (item: any) => {
       const quantity = Number(item.quantity || 0);
