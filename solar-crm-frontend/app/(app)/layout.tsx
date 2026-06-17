@@ -275,7 +275,7 @@ const navItems = [
 {
   name: 'Purchase Orders',
   href: '/project/purchase-orders',
-  roles: ['OWNER', 'PROJECT_MANAGER'],
+  roles: ['OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER'],
 },
 
 {
