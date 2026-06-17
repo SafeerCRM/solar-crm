@@ -9944,6 +9944,14 @@ const materialHsnById = new Map(
   ]),
 );
 
+console.log('MANUAL_PI_HSN_DEBUG', {
+  materialIds,
+  matchedMaterialsById,
+  materialHsnById: Array.from(
+    materialHsnById.entries(),
+  ),
+});
+
   const invoiceItems = items.map(
     (item: any) => {
       const quantity = Number(item.quantity || 0);
