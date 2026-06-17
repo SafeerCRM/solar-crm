@@ -419,7 +419,20 @@ return {
       complaint.closedByName = user?.name || user?.email || '';
     }
 
-    return this.complaintRepository.save(complaint);
+    const savedComplaint = await this.complaintRepository.save(complaint);
+
+await this.createCustomerNotification({
+  customerId: savedComplaint.customerId,
+  customerCode: savedComplaint.customerCode,
+  projectId: savedComplaint.projectId,
+  notificationType: 'COMPLAINT_UPDATE',
+  title: 'Complaint Updated',
+  message: `Your complaint #${savedComplaint.id} status is now ${savedComplaint.status}.`,
+  relatedEntityType: 'CUSTOMER_COMPLAINT',
+  relatedEntityId: savedComplaint.id,
+});
+
+return savedComplaint;
   }
 
   async createReferral(body: any) {
@@ -671,7 +684,20 @@ async updateWorkDateRequest(id: number, body: any, user: any) {
     request.approvedAt = new Date();
   }
 
-  return this.workDateRequestRepository.save(request);
+  const savedRequest = await this.workDateRequestRepository.save(request);
+
+await this.createCustomerNotification({
+  customerId: savedRequest.customerId,
+  customerCode: savedRequest.customerCode,
+  projectId: savedRequest.projectId,
+  notificationType: 'WORK_REMINDER',
+  title: 'Work Date Request Updated',
+  message: `Your work date request #${savedRequest.id} is now ${savedRequest.status}.`,
+  relatedEntityType: 'WORK_DATE_REQUEST',
+  relatedEntityId: savedRequest.id,
+});
+
+return savedRequest;
 }
 
 async uploadPaymentReceipts(files: any[], user: any) {
@@ -859,7 +885,20 @@ async updatePaymentReceipt(id: number, body: any, user: any) {
     receipt.verifiedAt = new Date();
   }
 
-  return this.paymentReceiptRepository.save(receipt);
+  const savedReceipt = await this.paymentReceiptRepository.save(receipt);
+
+await this.createCustomerNotification({
+  customerId: savedReceipt.customerId,
+  customerCode: savedReceipt.customerCode,
+  projectId: savedReceipt.projectId,
+  notificationType: 'PAYMENT_REMINDER',
+  title: 'Payment Receipt Updated',
+  message: `Your payment receipt #${savedReceipt.id} is now ${savedReceipt.status}.`,
+  relatedEntityType: 'PAYMENT_RECEIPT',
+  relatedEntityId: savedReceipt.id,
+});
+
+return savedReceipt;
 }
 
 async listReferrals(query: any) {
@@ -949,6 +988,52 @@ async updateReferral(id: number, body: any, user: any) {
     referral.rewardPaidByName = user?.name || user?.email || '';
   }
 
-  return this.referralRepository.save(referral);
+  const savedReferral = await this.referralRepository.save(referral);
+
+await this.createCustomerNotification({
+  customerId: savedReferral.customerId,
+  customerCode: savedReferral.customerCode,
+  notificationType: 'GENERAL',
+  title: 'Referral Updated',
+  message: `Your referral for ${savedReferral.referredName} is now ${savedReferral.status}.`,
+  relatedEntityType: 'CUSTOMER_REFERRAL',
+  relatedEntityId: savedReferral.id,
+});
+
+return savedReferral;
+}
+
+async createCustomerNotification(body: any) {
+  if (!body?.customerId) {
+    return null;
+  }
+
+  const notification = this.notificationRepository.create({
+  customerId: Number(body.customerId),
+  customerCode: body.customerCode || '',
+  projectId: body.projectId ? Number(body.projectId) : null,
+  notificationType: body.notificationType || 'GENERAL',
+  title: body.title || 'Notification',
+  message: body.message || '',
+  relatedEntityType: body.relatedEntityType || '',
+  relatedEntityId: body.relatedEntityId ? Number(body.relatedEntityId) : null,
+} as any);
+
+  return this.notificationRepository.save(notification);
+}
+
+async markNotificationRead(id: number, customerId: number) {
+  const notification = await this.notificationRepository.findOne({
+    where: { id, customerId },
+  });
+
+  if (!notification) {
+    throw new NotFoundException('Notification not found');
+  }
+
+  notification.isRead = true;
+  notification.readAt = new Date();
+
+  return this.notificationRepository.save(notification);
 }
 }
