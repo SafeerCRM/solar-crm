@@ -1,15 +1,13 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
-export default function DealerOrderDetailPage({
-  params,
-}: {
-  params: { id: string };
-}) {
-  const orderId = params.id;
+export default function DealerOrderDetailPage() {
+  const params = useParams();
+  const orderId = String(params?.id || '');
 
   const [detail, setDetail] = useState<any>(null);
   const [pi, setPi] = useState<any>(null);
