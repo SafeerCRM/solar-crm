@@ -418,6 +418,31 @@ const fetchMeetingPrefill = async () => {
 
       const token = localStorage.getItem('token');
 
+      const requiredCustomerFields = [
+  { key: 'customerName', label: 'Customer Name' },
+  { key: 'customerPhone', label: 'Customer Phone' },
+  { key: 'city', label: 'City' },
+  { key: 'zone', label: 'Zone' },
+  { key: 'address', label: 'Project Address / Location' },
+  { key: 'branchName', label: 'Branch' },
+  { key: 'electricityKNumber', label: 'Electricity K Number' },
+  { key: 'customerGmail', label: 'Customer Gmail' },
+  { key: 'aadhaarLinkedMobile', label: 'Aadhaar Linked Mobile' },
+];
+
+const missingCustomerFields = requiredCustomerFields.filter(
+  (field) => !String((form as any)[field.key] || '').trim(),
+);
+
+if (missingCustomerFields.length > 0) {
+  alert(
+    `Please fill required customer details: ${missingCustomerFields
+      .map((field) => field.label)
+      .join(', ')}`,
+  );
+  return;
+}
+
       if (!pendingDocuments.length) {
   alert(
     'Please add required project documents before submitting',
