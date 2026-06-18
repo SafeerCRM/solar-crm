@@ -21,6 +21,7 @@ import { ProposalModule } from './proposal/proposal.module';
 import { CustomerModule } from './customer/customer.module';
 import { StaffComplaintModule } from './staff-complaint/staff-complaint.module';
 import { CustomerPortalModule } from './customer-portal/customer-portal.module';
+import { DealerModule } from './dealer/dealer.module';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { CustomerPortalModule } from './customer-portal/customer-portal.module';
     CustomerModule,
     StaffComplaintModule,
     CustomerPortalModule,
+    DealerModule,
   ],
   controllers: [AppController],
   providers: [AppService],
