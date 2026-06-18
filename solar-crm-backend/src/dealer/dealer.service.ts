@@ -341,7 +341,7 @@ export class DealerService {
       await this.proformaInvoiceItemRepository.save(invoiceItem);
     }
 
-    order.status = 'DRAFT' as any;
+    order.status = ProjectDealerOrderStatus.SUBMITTED;
     await this.dealerOrderRepository.save(order);
 
     const notification = this.dealerNotificationRepository.create({
