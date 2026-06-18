@@ -234,13 +234,22 @@ export default function DealerPortalPage() {
                 <p className="text-sm text-white/60">No notifications yet.</p>
               )}
 
-              {(dashboard?.notifications || []).map((item: any) => (
+              {(dashboard?.notifications || []).slice(0, 5).map((item: any) => (
                 <div key={item.id} className="rounded-2xl bg-white/10 p-4">
                   <p className="font-black">{item.title}</p>
                   <p className="mt-1 text-sm text-white/70">{item.message}</p>
                 </div>
               ))}
             </div>
+
+            <div className="mt-4 text-right">
+  <a
+    href="/dealer-portal/notifications"
+    className="text-sm font-black text-orange-300"
+  >
+    View All →
+  </a>
+</div>
           </div>
 
           <div className="rounded-[2rem] border border-white/10 bg-white/10 p-6 shadow-xl backdrop-blur-xl">
@@ -253,15 +262,27 @@ export default function DealerPortalPage() {
                 </p>
               )}
 
-              {(dashboard?.monthlyRequirements || []).map((item: any) => (
+              {(dashboard?.monthlyRequirements || []).slice(0, 5).map((item: any) => (
                 <div key={item.id} className="rounded-2xl bg-white/10 p-4">
-                  <p className="font-black">{item.materialName}</p>
-                  <p className="mt-1 text-sm text-white/70">
-                    {item.requirementMonth} · {item.expectedQuantity} {item.unit || ''}
-                  </p>
-                </div>
+  <p className="font-black">{item.materialName}</p>
+
+  <div className="mt-2 grid gap-1 text-sm text-white/70">
+    <p>Month: {item.requirementMonth || '-'}</p>
+    <p>Expected Qty: {item.expectedQuantity || 0}</p>
+    {item.unit && <p>Unit: {item.unit}</p>}
+  </div>
+</div>
               ))}
             </div>
+
+            <div className="mt-4 text-right">
+  <a
+    href="/dealer-portal/monthly-requirements"
+    className="text-sm font-black text-orange-300"
+  >
+    View All →
+  </a>
+</div>
           </div>
         </section>
       </div>

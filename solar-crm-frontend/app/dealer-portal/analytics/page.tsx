@@ -165,14 +165,16 @@ export default function DealerAnalyticsPage() {
                 >
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="font-black">{item.requirementMonth}</p>
+                      <p className="font-black">
+  {formatRequirementMonth(item.requirementMonth)}
+</p>
                       <p className="text-xs font-semibold text-slate-500">
                         {item.totalMaterials} material types
                       </p>
                     </div>
 
                     <p className="text-xl font-black">
-                      {item.totalExpectedQuantity}
+                      Expected Qty: {item.totalExpectedQuantity}
                     </p>
                   </div>
                 </div>
@@ -211,6 +213,18 @@ export default function DealerAnalyticsPage() {
       </div>
     </main>
   );
+}
+
+function formatRequirementMonth(value: string) {
+  if (!value) return '-';
+
+  const [year, month] = value.split('-');
+  const date = new Date(Number(year), Number(month) - 1, 1);
+
+  return date.toLocaleDateString('en-IN', {
+    month: 'long',
+    year: 'numeric',
+  });
 }
 
 function getPaymentClearRatio(analytics: any) {

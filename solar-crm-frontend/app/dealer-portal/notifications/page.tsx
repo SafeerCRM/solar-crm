@@ -8,10 +8,13 @@ export default function DealerNotificationsPage() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [status, setStatus] = useState('');
   const [message, setMessage] = useState('');
+  const [page, setPage] = useState(1);
+const [totalPages, setTotalPages] = useState(1);
 
   useEffect(() => {
-    loadNotifications();
-  }, [status]);
+  setPage(1);
+  loadNotifications(1);
+}, [status]);
 
   const getToken = () => {
     const token = localStorage.getItem('dealer_token');
@@ -24,23 +27,29 @@ export default function DealerNotificationsPage() {
     return token;
   };
 
-  const loadNotifications = async () => {
-    const token = getToken();
+  const loadNotifications = async (pageNumber = page) => {
+  const token = getToken();
 
-    try {
-      const params = new URLSearchParams();
-      if (status) params.set('status', status);
+  try {
+    const params = new URLSearchParams();
+    params.set('page', String(pageNumber));
+    params.set('limit', '10');
 
-      const res = await fetch(`${API_BASE_URL}/dealer-auth/notifications?${params}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+    if (status) params.set('status', status);
 
-      const data = await res.json();
-      setNotifications(Array.isArray(data.data) ? data.data : []);
-    } catch (error) {
-      console.error(error);
-    }
-  };
+    const res = await fetch(`${API_BASE_URL}/dealer-auth/notifications?${params}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    const data = await res.json();
+
+    setNotifications(Array.isArray(data.data) ? data.data : []);
+    setPage(Number(data.page || pageNumber));
+    setTotalPages(Number(data.totalPages || 1));
+  } catch (error) {
+    console.error(error);
+  }
+};
 
   const markRead = async (id: number) => {
     const token = getToken();
@@ -58,7 +67,7 @@ export default function DealerNotificationsPage() {
       }
 
       setMessage('Notification marked as read.');
-      loadNotifications();
+      loadNotifications(page);
     } catch (error) {
       console.error(error);
       setMessage('Notification update error.');
@@ -146,6 +155,30 @@ export default function DealerNotificationsPage() {
             </div>
           ))}
         </section>
+
+        {totalPages > 1 && (
+  <div className="mt-6 flex items-center justify-center gap-3">
+    <button
+      onClick={() => loadNotifications(Math.max(page - 1, 1))}
+      disabled={page <= 1}
+      className="rounded-2xl bg-white px-5 py-3 text-sm font-black text-slate-900 disabled:opacity-50"
+    >
+      Previous
+    </button>
+
+    <span className="rounded-2xl bg-white/10 px-5 py-3 text-sm font-black">
+      Page {page} of {totalPages}
+    </span>
+
+    <button
+      onClick={() => loadNotifications(Math.min(page + 1, totalPages))}
+      disabled={page >= totalPages}
+      className="rounded-2xl bg-white px-5 py-3 text-sm font-black text-slate-900 disabled:opacity-50"
+    >
+      Next
+    </button>
+  </div>
+)}
       </div>
     </main>
   );

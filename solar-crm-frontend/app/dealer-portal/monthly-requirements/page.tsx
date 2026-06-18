@@ -14,6 +14,8 @@ export default function DealerMonthlyRequirementsPage() {
   const [filterMonth, setFilterMonth] = useState('');
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [page, setPage] = useState(1);
+const [totalPages, setTotalPages] = useState(1);
 
   useEffect(() => {
     const now = new Date();
@@ -26,8 +28,9 @@ export default function DealerMonthlyRequirementsPage() {
   }, []);
 
   useEffect(() => {
-    loadRequirements();
-  }, [filterMonth]);
+  setPage(1);
+  loadRequirements(1);
+}, [filterMonth]);
 
   const getToken = () => {
     const token = localStorage.getItem('dealer_token');
@@ -55,26 +58,32 @@ export default function DealerMonthlyRequirementsPage() {
     }
   };
 
-  const loadRequirements = async () => {
-    const token = getToken();
+  const loadRequirements = async (pageNumber = page) => {
+  const token = getToken();
 
-    try {
-      const params = new URLSearchParams();
-      if (filterMonth) params.set('requirementMonth', filterMonth);
+  try {
+    const params = new URLSearchParams();
+    params.set('page', String(pageNumber));
+    params.set('limit', '10');
 
-      const res = await fetch(
-        `${API_BASE_URL}/dealer-auth/monthly-requirements?${params}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
+    if (filterMonth) params.set('requirementMonth', filterMonth);
 
-      const data = await res.json();
-      setRequirements(Array.isArray(data.data) ? data.data : []);
-    } catch (error) {
-      console.error(error);
-    }
-  };
+    const res = await fetch(
+      `${API_BASE_URL}/dealer-auth/monthly-requirements?${params}`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+
+    const data = await res.json();
+
+    setRequirements(Array.isArray(data.data) ? data.data : []);
+    setPage(Number(data.page || pageNumber));
+    setTotalPages(Number(data.totalPages || 1));
+  } catch (error) {
+    console.error(error);
+  }
+};
 
   const uniqueMaterials = useMemo(() => {
     const map = new Map();
@@ -136,7 +145,7 @@ export default function DealerMonthlyRequirementsPage() {
       setMaterialId('');
       setExpectedQuantity('');
       setRemarks('');
-      loadRequirements();
+      loadRequirements(1);
     } catch (error) {
       console.error(error);
       setMessage('Requirement submit error.');
@@ -283,7 +292,10 @@ export default function DealerMonthlyRequirementsPage() {
                   </p>
 
                   <div className="mt-4 grid grid-cols-2 gap-3">
-                    <Info label="Month" value={item.requirementMonth || '-'} />
+                    <Info
+  label="Month"
+  value={formatRequirementMonth(item.requirementMonth)}
+/>
                     <Info
                       label="Expected Qty"
                       value={`${item.expectedQuantity || 0} ${item.unit || ''}`}
@@ -298,11 +310,47 @@ export default function DealerMonthlyRequirementsPage() {
                 </div>
               ))}
             </div>
+
+            {totalPages > 1 && (
+  <div className="mt-6 flex items-center justify-center gap-3">
+    <button
+      onClick={() => loadRequirements(Math.max(page - 1, 1))}
+      disabled={page <= 1}
+      className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white disabled:opacity-50"
+    >
+      Previous
+    </button>
+
+    <span className="rounded-2xl bg-slate-100 px-5 py-3 text-sm font-black text-slate-700">
+      Page {page} of {totalPages}
+    </span>
+
+    <button
+      onClick={() => loadRequirements(Math.min(page + 1, totalPages))}
+      disabled={page >= totalPages}
+      className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white disabled:opacity-50"
+    >
+      Next
+    </button>
+  </div>
+)}
           </section>
         </section>
       </div>
     </main>
   );
+}
+
+function formatRequirementMonth(value: string) {
+  if (!value) return '-';
+
+  const [year, month] = value.split('-');
+  const date = new Date(Number(year), Number(month) - 1, 1);
+
+  return date.toLocaleDateString('en-IN', {
+    month: 'long',
+    year: 'numeric',
+  });
 }
 
 function Input({
