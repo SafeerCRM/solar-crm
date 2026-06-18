@@ -377,6 +377,28 @@ function Field({ label, value }: { label: string; value?: string | number }) {
   );
 }
 
+const DOCUMENT_TYPE_LABELS: Record<string, string> = {
+  LOAN_DOCUMENT: 'Proposal / Quotation',
+  CUSTOMER_PHOTO: 'Customer Photo',
+  SITE_PHOTO: 'Site Photo',
+  BANK_DOCUMENT: 'Bank Document',
+  PROPERTY_DOCUMENT: 'Property Document',
+  AADHAAR: 'Aadhaar Card',
+  AADHAAR_CARD: 'Aadhaar Card',
+  PAN_CARD: 'PAN Card',
+  ELECTRICITY_BILL: 'Electricity Bill',
+  VENDOR_AGREEMENT: 'Vendor Agreement',
+};
+
+const getDocumentTypeLabel = (documentType?: string) => {
+  if (!documentType) return 'Document';
+
+  return (
+    DOCUMENT_TYPE_LABELS[documentType] ||
+    documentType.replaceAll('_', ' ')
+  );
+};
+
 const CONTRACTOR_WORK_SCOPE_OPTIONS = [
   {
     value: 'FULL_PROJECT',
@@ -8011,7 +8033,7 @@ const canApproveAndReserveStock =
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="font-semibold text-gray-800">
-              {doc.documentType || 'Document'}
+              {getDocumentTypeLabel(doc.documentType)}
             </p>
 
             <p className="text-sm text-gray-500">
@@ -8150,7 +8172,7 @@ const canApproveAndReserveStock =
       ) : (
         documents.map((doc) => (
           <div key={doc.id} className="rounded border p-2">
-            <p><b>{doc.documentType}</b> | {doc.department}</p>
+            <p><b>{getDocumentTypeLabel(doc.documentType)}</b> | {doc.department}</p>
             <p>{doc.fileName}</p>
             <p>{doc.remarks || '-'}</p>
           </div>
