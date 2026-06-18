@@ -658,6 +658,29 @@ private readonly followUpRepository: Repository<FollowUp>,
       throw new BadRequestException('Customer name is required');
     }
 
+    const requiredCustomerFields = [
+  { key: 'customerPhone', label: 'Customer phone' },
+  { key: 'city', label: 'City' },
+  { key: 'zone', label: 'Zone' },
+  { key: 'address', label: 'Project address / location' },
+  { key: 'branchName', label: 'Branch' },
+  { key: 'electricityKNumber', label: 'Electricity K Number' },
+  { key: 'customerGmail', label: 'Customer Gmail' },
+  { key: 'aadhaarLinkedMobile', label: 'Aadhaar linked mobile' },
+];
+
+const missingCustomerFields = requiredCustomerFields.filter(
+  (field) => !String((data as any)[field.key] || '').trim(),
+);
+
+if (missingCustomerFields.length > 0) {
+  throw new BadRequestException(
+    `Please fill required customer details: ${missingCustomerFields
+      .map((field) => field.label)
+      .join(', ')}`,
+  );
+}
+
     if (!data.projectType) {
       throw new BadRequestException('Project type is required');
     }
