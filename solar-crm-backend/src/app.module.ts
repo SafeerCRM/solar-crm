@@ -22,6 +22,7 @@ import { CustomerModule } from './customer/customer.module';
 import { StaffComplaintModule } from './staff-complaint/staff-complaint.module';
 import { CustomerPortalModule } from './customer-portal/customer-portal.module';
 import { DealerModule } from './dealer/dealer.module';
+import { StaffModule } from './staff/staff.module';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { DealerModule } from './dealer/dealer.module';
     ProposalModule,
     CustomerModule,
     StaffComplaintModule,
+    StaffModule,
     CustomerPortalModule,
     DealerModule,
   ],
