@@ -103,6 +103,56 @@ export default function DealerOrderDetailPage() {
     }
   };
 
+    const openPdf = async (
+    type: 'pi' | 'invoice',
+    id: number,
+    download = false,
+  ) => {
+    try {
+      const token = localStorage.getItem('dealer_token');
+
+      if (!token) {
+        window.location.href = '/dealer-login';
+        return;
+      }
+
+      const endpoint =
+        type === 'pi'
+          ? `/project/proforma-invoice/${id}/pdf`
+          : `/project/final-invoice/${id}/pdf`;
+
+      const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        alert('Unable to open PDF. Please try again.');
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+
+      if (download) {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${
+          type === 'pi' ? 'Proforma-Invoice' : 'Final-Invoice'
+        }-${id}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } else {
+        window.open(url, '_blank');
+      }
+
+      setTimeout(() => window.URL.revokeObjectURL(url), 30000);
+    } catch (error) {
+      console.error(error);
+      alert('PDF error. Please try again.');
+    }
+  };
+
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-950 text-white">
@@ -205,16 +255,22 @@ export default function DealerOrderDetailPage() {
 
               <div className="mt-4 grid gap-3">
                 <InvoiceBox
-                  title="Proforma Invoice"
-                  value={pi?.invoice?.invoiceNumber || 'Not generated'}
-                  amount={pi?.invoice?.totalAmount}
-                />
+  title="Proforma Invoice"
+  value={pi?.invoice?.invoiceNumber || 'Not generated'}
+  amount={pi?.invoice?.totalAmount}
+  invoiceId={pi?.invoice?.id}
+  onView={() => openPdf('pi', pi.invoice.id, false)}
+  onDownload={() => openPdf('pi', pi.invoice.id, true)}
+/>
 
-                <InvoiceBox
-                  title="Final Invoice"
-                  value={invoice?.invoice?.invoiceNumber || 'Not generated'}
-                  amount={invoice?.invoice?.totalAmount}
-                />
+<InvoiceBox
+  title="Final Invoice"
+  value={invoice?.invoice?.invoiceNumber || 'Not generated'}
+  amount={invoice?.invoice?.totalAmount}
+  invoiceId={invoice?.invoice?.id}
+  onView={() => openPdf('invoice', invoice.invoice.id, false)}
+  onDownload={() => openPdf('invoice', invoice.invoice.id, true)}
+/>
               </div>
             </div>
 
@@ -340,18 +396,50 @@ function InvoiceBox({
   title,
   value,
   amount,
+  invoiceId,
+  onView,
+  onDownload,
 }: {
   title: string;
   value: string;
   amount?: number;
+  invoiceId?: number;
+  onView?: () => void;
+  onDownload?: () => void;
 }) {
   return (
     <div className="rounded-2xl bg-slate-50 p-4">
       <p className="text-xs font-bold text-slate-400">{title}</p>
+
       <p className="mt-1 font-black">{value}</p>
+
       {amount !== undefined && (
         <p className="mt-1 text-sm font-bold text-slate-500">
           ₹{Number(amount || 0).toLocaleString('en-IN')}
+        </p>
+      )}
+
+      {invoiceId ? (
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={onView}
+            className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-black text-white"
+          >
+            View
+          </button>
+
+          <button
+            type="button"
+            onClick={onDownload}
+            className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-black text-white"
+          >
+            Download
+          </button>
+        </div>
+      ) : (
+        <p className="mt-3 rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-500">
+          PDF not available yet
         </p>
       )}
     </div>
