@@ -47,6 +47,35 @@ const emptyForm = {
   remarks: '',
 };
 
+const USER_ROLE_OPTIONS = [
+  'OWNER',
+  'TELECALLING_MANAGER',
+  'TELECALLING_ASSISTANT',
+  'LEAD_MANAGER',
+  'LEAD_EXECUTIVE',
+  'MARKETING_HEAD',
+  'MEETING_MANAGER',
+  'MEETING_ASSISTANT',
+  'PROJECT_MANAGER',
+  'PROJECT_EXECUTIVE',
+  'CUSTOMER',
+  'TELECALLER',
+  'LOAN_MANAGER',
+  'ELECTRICITY_MANAGER',
+  'SUBSIDY_MANAGER',
+  'PAYMENT_COLLECTION_EXECUTIVE',
+  'PAYMENT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'STOCK_MANAGER',
+  'MAINTENANCE_MANAGER',
+  'CUSTOMER_MANAGER',
+  'HR_MANAGER',
+  'TRADING_MANAGER',
+  'PROJECT_CONTRACTOR',
+  'SOLAR_FRANCHISE',
+  'DEALER',
+];
+
 export default function StaffPage() {
   const [staff, setStaff] = useState<Staff[]>([]);
   const [form, setForm] = useState<any>(emptyForm);
@@ -67,6 +96,9 @@ export default function StaffPage() {
   const [vaultStaff, setVaultStaff] = useState<any>(null);
 const [vaultDocuments, setVaultDocuments] = useState<any[]>([]);
 const [vaultAssets, setVaultAssets] = useState<any[]>([]);
+
+const [designationSearch, setDesignationSearch] = useState('');
+const [showDesignationOptions, setShowDesignationOptions] = useState(false);
 
   const [assetForm, setAssetForm] = useState({
     staffId: '',
@@ -118,6 +150,8 @@ const [vaultAssets, setVaultAssets] = useState<any[]>([]);
     setEditingId(null);
     setForm(emptyForm);
     setPhotoFile(null);
+    setDesignationSearch('');
+setShowDesignationOptions(false);
   };
 
   const saveStaff = async () => {
@@ -178,6 +212,8 @@ const [vaultAssets, setVaultAssets] = useState<any[]>([]);
       joiningDate: item.joiningDate || '',
       dateOfBirth: item.dateOfBirth || '',
     });
+    setDesignationSearch('');
+setShowDesignationOptions(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -275,6 +311,12 @@ const [vaultAssets, setVaultAssets] = useState<any[]>([]);
   }
 };
 
+const filteredDesignationOptions = USER_ROLE_OPTIONS.filter((role) =>
+  role.toLowerCase().includes(
+    String(designationSearch || form.designation || '').toLowerCase(),
+  ),
+);
+
   return (
     <div className="mx-auto max-w-7xl space-y-5 px-3 pb-8">
       <div className="rounded-2xl bg-white p-5 shadow">
@@ -299,7 +341,48 @@ const [vaultAssets, setVaultAssets] = useState<any[]>([]);
           <input placeholder="Alternate Mobile" value={form.alternateMobile} onChange={(e) => setForm({ ...form, alternateMobile: e.target.value })} className="rounded-xl border p-3" />
           <input placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="rounded-xl border p-3" />
 
-          <input placeholder="Designation" value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} className="rounded-xl border p-3" />
+          <div className="relative">
+  <input
+    placeholder="Designation / Role"
+    value={designationSearch || form.designation}
+    onChange={(e) => {
+      const value = e.target.value;
+      setDesignationSearch(value);
+      setForm({ ...form, designation: value });
+      setShowDesignationOptions(true);
+    }}
+    onFocus={() => {
+      setDesignationSearch(form.designation || '');
+      setShowDesignationOptions(true);
+    }}
+    className="w-full rounded-xl border p-3"
+  />
+
+  {showDesignationOptions && (
+    <div className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border bg-white shadow">
+      {filteredDesignationOptions.length === 0 ? (
+        <div className="p-3 text-sm text-gray-500">
+          No matching role found
+        </div>
+      ) : (
+        filteredDesignationOptions.map((role) => (
+          <button
+            key={role}
+            type="button"
+            onClick={() => {
+              setForm({ ...form, designation: role });
+              setDesignationSearch('');
+              setShowDesignationOptions(false);
+            }}
+            className="block w-full border-b p-3 text-left text-sm hover:bg-blue-50"
+          >
+            {role.replaceAll('_', ' ')}
+          </button>
+        ))
+      )}
+    </div>
+  )}
+</div>
           <input placeholder="Department" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} className="rounded-xl border p-3" />
           <input placeholder="Reporting Manager" value={form.reportingManagerName} onChange={(e) => setForm({ ...form, reportingManagerName: e.target.value })} className="rounded-xl border p-3" />
           <input placeholder="Branch" value={form.branchName} onChange={(e) => setForm({ ...form, branchName: e.target.value })} className="rounded-xl border p-3" />
