@@ -685,21 +685,31 @@ const handlePurchasePdf = async (
     const url = window.URL.createObjectURL(blob);
 
     if (action === 'view') {
-      window.open(url, '_blank');
-    } else {
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+  window.open(url, '_blank');
+} else if (action === 'download') {
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  a.target = '_blank';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 
-      if (action === 'share') {
-        alert(
-          'Sharing is not supported on this device/browser. PDF has been downloaded, you can share it manually.',
-        );
-      }
-    }
+  const isMobile =
+    /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  if (isMobile) {
+    setTimeout(() => {
+      window.open(url, '_blank');
+    }, 500);
+  }
+} else {
+  window.open(url, '_blank');
+
+  alert(
+    'Direct sharing is not supported on this browser. PDF has been opened, please share it from your browser or downloads.',
+  );
+}
 
     setTimeout(() => window.URL.revokeObjectURL(url), 30000);
   } catch (error) {
