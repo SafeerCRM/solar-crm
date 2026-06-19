@@ -114,54 +114,44 @@ export default function DealerOrderDetailPage() {
   };
 
     const openPdf = async (
-    type: 'pi' | 'invoice',
-    id: number,
-    download = false,
-  ) => {
-    try {
-      const token = localStorage.getItem('dealer_token');
+  type: 'pi' | 'invoice',
+  id: number,
+  download = false,
+) => {
+  try {
+    const token = localStorage.getItem('dealer_token');
 
-      if (!token) {
-        window.location.href = '/dealer-login';
-        return;
-      }
-
-      const endpoint =
-  type === 'pi'
-    ? `/dealer-auth/proforma-invoice/${id}/pdf`
-    : `/dealer-auth/final-invoice/${id}/pdf`;
-
-      const res = await fetch(`${API_BASE_URL}${endpoint}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!res.ok) {
-        alert('Unable to open PDF. Please try again.');
-        return;
-      }
-
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-
-      if (download) {
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${
-          type === 'pi' ? 'Proforma-Invoice' : 'Final-Invoice'
-        }-${id}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-      } else {
-        window.open(url, '_blank');
-      }
-
-      setTimeout(() => window.URL.revokeObjectURL(url), 30000);
-    } catch (error) {
-      console.error(error);
-      alert('PDF error. Please try again.');
+    if (!token) {
+      window.location.href = '/dealer-login';
+      return;
     }
-  };
+
+    const endpoint =
+      type === 'pi'
+        ? `/dealer-auth/proforma-invoice/${id}/pdf`
+        : `/dealer-auth/final-invoice/${id}/pdf`;
+
+    const url = `${API_BASE_URL}${endpoint}?token=${encodeURIComponent(token)}`;
+
+    if (download) {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${
+        type === 'pi' ? 'Proforma-Invoice' : 'Final-Invoice'
+      }-${id}.pdf`;
+      a.target = '_blank';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      return;
+    }
+
+    window.open(url, '_blank');
+  } catch (error) {
+    console.error(error);
+    alert('PDF error. Please try again.');
+  }
+};
 
   const openPdfInBrowser = (
   type: 'pi' | 'invoice',
@@ -464,14 +454,6 @@ function InvoiceBox({
       Download
     </button>
   </div>
-
-  <button
-    type="button"
-    onClick={onOpenBrowser}
-    className="rounded-xl bg-orange-500 px-3 py-2 text-xs font-black text-white"
-  >
-    Open in Browser
-  </button>
 </div>
       ) : (
         <p className="mt-3 rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-500">
