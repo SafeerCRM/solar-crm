@@ -172,6 +172,12 @@ const navItems = [
 },
 
 {
+  name: 'Staff Management',
+  href: '/staff',
+  roles: ['OWNER', 'HR_MANAGER'],
+},
+
+{
   name: 'My Contractor Work',
   href: '/project/my-contractor-work',
   roles: ['PROJECT_CONTRACTOR'],
