@@ -64,6 +64,9 @@ export default function StaffPage() {
   const [documentType, setDocumentType] = useState('AADHAAR');
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [documentRemarks, setDocumentRemarks] = useState('');
+  const [vaultStaff, setVaultStaff] = useState<any>(null);
+const [vaultDocuments, setVaultDocuments] = useState<any[]>([]);
+const [vaultAssets, setVaultAssets] = useState<any[]>([]);
 
   const [assetForm, setAssetForm] = useState({
     staffId: '',
@@ -256,6 +259,22 @@ export default function StaffPage() {
     });
   };
 
+  const openVault = async (item: Staff) => {
+  try {
+    const [docRes, assetRes] = await Promise.all([
+      axios.get(`${API_BASE_URL}/staff/${item.id}/documents`, { headers: headers() }),
+      axios.get(`${API_BASE_URL}/staff/${item.id}/assets`, { headers: headers() }),
+    ]);
+
+    setVaultStaff(item);
+    setVaultDocuments(docRes.data || []);
+    setVaultAssets(assetRes.data || []);
+  } catch (error: any) {
+    console.error(error);
+    alert(error?.response?.data?.message || 'Failed to open staff vault');
+  }
+};
+
   return (
     <div className="mx-auto max-w-7xl space-y-5 px-3 pb-8">
       <div className="rounded-2xl bg-white p-5 shadow">
@@ -285,8 +304,25 @@ export default function StaffPage() {
           <input placeholder="Reporting Manager" value={form.reportingManagerName} onChange={(e) => setForm({ ...form, reportingManagerName: e.target.value })} className="rounded-xl border p-3" />
           <input placeholder="Branch" value={form.branchName} onChange={(e) => setForm({ ...form, branchName: e.target.value })} className="rounded-xl border p-3" />
 
-          <input type="date" value={form.joiningDate} onChange={(e) => setForm({ ...form, joiningDate: e.target.value })} className="rounded-xl border p-3" />
-          <input type="date" value={form.dateOfBirth} onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })} className="rounded-xl border p-3" />
+          <div>
+  <p className="mb-1 text-xs font-semibold text-gray-600">Joining Date</p>
+  <input
+    type="date"
+    value={form.joiningDate}
+    onChange={(e) => setForm({ ...form, joiningDate: e.target.value })}
+    className="w-full rounded-xl border p-3"
+  />
+</div>
+
+<div>
+  <p className="mb-1 text-xs font-semibold text-gray-600">Date of Birth</p>
+  <input
+    type="date"
+    value={form.dateOfBirth}
+    onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })}
+    className="w-full rounded-xl border p-3"
+  />
+</div>
 
           <select value={form.employmentType} onChange={(e) => setForm({ ...form, employmentType: e.target.value })} className="rounded-xl border p-3">
             <option value="FULL_TIME">Full Time</option>
@@ -382,6 +418,13 @@ export default function StaffPage() {
                   <button onClick={() => hideOrRestore(item, !!item.isHidden)} className={`rounded-xl px-3 py-2 text-sm font-semibold text-white ${item.isHidden ? 'bg-green-600' : 'bg-red-600'}`}>
                     {item.isHidden ? 'Restore' : 'Hide'}
                   </button>
+
+                  <button
+  onClick={() => openVault(item)}
+  className="rounded-xl bg-slate-800 px-3 py-2 text-sm font-semibold text-white"
+>
+  View Vault
+</button>
                 </div>
               </div>
             ))}
@@ -459,6 +502,95 @@ export default function StaffPage() {
           </div>
         </div>
       </div>
+
+      {vaultStaff && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+    <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-gray-800">
+          Staff Vault - {vaultStaff.fullName}
+        </h2>
+
+        <button
+          onClick={() => setVaultStaff(null)}
+          className="rounded-xl bg-gray-200 px-4 py-2 text-sm font-semibold"
+        >
+          Close
+        </button>
+      </div>
+
+      <div className="mt-5 grid gap-4 md:grid-cols-2">
+        <div className="rounded-xl bg-gray-50 p-4">
+          <h3 className="font-bold text-gray-800">Profile</h3>
+          <p className="mt-2 text-sm">Mobile: {vaultStaff.mobile || '-'}</p>
+          <p className="text-sm">Email: {vaultStaff.email || '-'}</p>
+          <p className="text-sm">DOB: {vaultStaff.dateOfBirth || '-'}</p>
+          <p className="text-sm">Joining: {vaultStaff.joiningDate || '-'}</p>
+          <p className="text-sm">Department: {vaultStaff.department || '-'}</p>
+          <p className="text-sm">Branch: {vaultStaff.branchName || '-'}</p>
+        </div>
+
+        <div className="rounded-xl bg-blue-50 p-4">
+          <h3 className="font-bold text-blue-900">Public Contact</h3>
+          <p className="mt-2 text-sm">Customer Visible: {vaultStaff.visibleToCustomer ? 'Yes' : 'No'}</p>
+          <p className="text-sm">Dealer Visible: {vaultStaff.visibleToDealer ? 'Yes' : 'No'}</p>
+          <p className="text-sm">Name: {vaultStaff.publicDisplayName || '-'}</p>
+          <p className="text-sm">Phone: {vaultStaff.publicPhone || '-'}</p>
+          <p className="text-sm">Email: {vaultStaff.publicEmail || '-'}</p>
+          <p className="text-sm">Designation: {vaultStaff.publicDesignation || '-'}</p>
+        </div>
+      </div>
+
+      <div className="mt-5 rounded-xl border p-4">
+        <h3 className="font-bold text-gray-800">Documents</h3>
+
+        <div className="mt-3 space-y-2">
+          {vaultDocuments.length === 0 ? (
+            <p className="text-sm text-gray-500">No documents uploaded.</p>
+          ) : (
+            vaultDocuments.map((doc) => (
+              <div key={doc.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-gray-50 p-3">
+                <div>
+                  <p className="font-semibold">{doc.documentType}</p>
+                  <p className="text-xs text-gray-500">{doc.fileName || '-'}</p>
+                  <p className="text-xs text-gray-500">{doc.remarks || ''}</p>
+                </div>
+
+                <a
+                  href={doc.fileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+                >
+                  View / Download
+                </a>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="mt-5 rounded-xl border p-4">
+        <h3 className="font-bold text-gray-800">Assets</h3>
+
+        <div className="mt-3 space-y-2">
+          {vaultAssets.length === 0 ? (
+            <p className="text-sm text-gray-500">No assets assigned.</p>
+          ) : (
+            vaultAssets.map((asset) => (
+              <div key={asset.id} className="rounded-lg bg-gray-50 p-3">
+                <p className="font-semibold">{asset.assetType} - {asset.assetName}</p>
+                <p className="text-sm text-gray-500">No: {asset.assetNumber || '-'}</p>
+                <p className="text-sm text-gray-500">Assigned: {asset.assignedDate || '-'}</p>
+                <p className="text-sm text-gray-500">{asset.remarks || ''}</p>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 }
