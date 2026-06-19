@@ -16,11 +16,23 @@ const emptyForm = {
   isActive: true,
 };
 
+const emptyCompanyForm = {
+  companyName: '',
+  email: '',
+  phone1: '',
+  phone2: '',
+  gstin: '',
+  website: '',
+  logoUrl: '',
+};
+
 export default function PortalSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [bankDetails, setBankDetails] = useState<any[]>([]);
   const [form, setForm] = useState<any>(emptyForm);
+  const [companyForm, setCompanyForm] = useState<any>(emptyCompanyForm);
+const [companySaving, setCompanySaving] = useState(false);
 
   const headers = () => ({
     Authorization: `Bearer ${localStorage.getItem('token')}`,
@@ -28,6 +40,7 @@ export default function PortalSettingsPage() {
 
   useEffect(() => {
     loadBankDetails();
+loadCompanySetting();
   }, []);
 
   const loadBankDetails = async () => {
@@ -112,6 +125,46 @@ export default function PortalSettingsPage() {
     }
   };
 
+  const loadCompanySetting = async () => {
+  try {
+    const res = await axios.get(
+      `${API_BASE_URL}/dealer/portal-company-setting`,
+      { headers: headers() },
+    );
+
+    setCompanyForm({
+      companyName: res.data?.companyName || '',
+      email: res.data?.email || '',
+      phone1: res.data?.phone1 || '',
+      phone2: res.data?.phone2 || '',
+      gstin: res.data?.gstin || '',
+      website: res.data?.website || '',
+      logoUrl: res.data?.logoUrl || '',
+    });
+  } catch (error) {
+    console.error(error);
+  }
+};
+
+const saveCompanySetting = async () => {
+  try {
+    setCompanySaving(true);
+
+    await axios.post(
+      `${API_BASE_URL}/dealer/portal-company-setting`,
+      companyForm,
+      { headers: headers() },
+    );
+
+    alert('Company portal information saved');
+  } catch (error: any) {
+    console.error(error);
+    alert(error?.response?.data?.message || 'Failed to save company information');
+  } finally {
+    setCompanySaving(false);
+  }
+};
+
   const startEdit = (item: any) => {
     setForm({
       id: item.id,
@@ -144,6 +197,45 @@ export default function PortalSettingsPage() {
             Manage dealer and customer portal settings.
           </p>
         </header>
+
+        <section className="mt-6 rounded-2xl bg-white p-6 shadow">
+  <h2 className="text-lg font-bold text-gray-800">
+    Company Portal Information
+  </h2>
+
+  <div className="mt-4 grid gap-3 md:grid-cols-2">
+    {[
+      ['Company Name', 'companyName'],
+      ['Support Email', 'email'],
+      ['Primary Phone', 'phone1'],
+      ['Secondary Phone', 'phone2'],
+      ['GSTIN', 'gstin'],
+      ['Website', 'website'],
+      ['Logo URL', 'logoUrl'],
+    ].map(([label, key]) => (
+      <input
+        key={key}
+        placeholder={label}
+        value={companyForm[key] || ''}
+        onChange={(e) =>
+          setCompanyForm({
+            ...companyForm,
+            [key]: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
+    ))}
+  </div>
+
+  <button
+    onClick={saveCompanySetting}
+    disabled={companySaving}
+    className="mt-4 rounded-xl bg-slate-900 px-5 py-3 font-bold text-white disabled:opacity-60"
+  >
+    {companySaving ? 'Saving...' : 'Save Company Information'}
+  </button>
+</section>
 
         <section className="mt-6 grid gap-6 lg:grid-cols-2">
           <div className="rounded-2xl bg-white p-6 shadow">
