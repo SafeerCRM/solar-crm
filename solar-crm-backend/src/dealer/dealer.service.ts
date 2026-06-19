@@ -2200,7 +2200,7 @@ if (body.adminRemarks !== undefined) {
     return this.projectService.generateFinalInvoicePdf(invoiceId, res);
   }
 
-      async getDealerOrderInvoicesForPortal(dealerId: number, orderId: number) {
+        async getDealerOrderInvoicesForPortal(dealerId: number, orderId: number) {
     const order = await this.dealerOrderRepository.findOne({
       where: {
         id: orderId,
@@ -2215,28 +2215,23 @@ if (body.adminRemarks !== undefined) {
 
     const proformaInvoices = await this.proformaInvoiceRepository.find({
       where: {
-        dealerOrderId: orderId,
+        dealerId,
+        invoiceType: 'DEALER',
+        isHidden: false,
       } as any,
       order: { createdAt: 'DESC' } as any,
+      take: 1,
     });
 
-    const proformaInvoiceIds = proformaInvoices.map((item: any) => item.id);
-
-    const finalInvoices = proformaInvoiceIds.length
-      ? await this.finalInvoiceRepository
-          .createQueryBuilder('invoice')
-          .where('invoice.dealerOrderId = :orderId', { orderId })
-          .orWhere('invoice.proformaInvoiceId IN (:...proformaInvoiceIds)', {
-            proformaInvoiceIds,
-          })
-          .orderBy('invoice.createdAt', 'DESC')
-          .getMany()
-      : await this.finalInvoiceRepository.find({
-          where: {
-            dealerOrderId: orderId,
-          } as any,
-          order: { createdAt: 'DESC' } as any,
-        });
+    const finalInvoices = await this.finalInvoiceRepository.find({
+      where: {
+        dealerId,
+        invoiceType: 'DEALER',
+        isHidden: false,
+      } as any,
+      order: { createdAt: 'DESC' } as any,
+      take: 1,
+    });
 
     return {
       proformaInvoices,
