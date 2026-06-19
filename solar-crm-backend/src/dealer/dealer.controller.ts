@@ -57,6 +57,16 @@ export class DealerController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER', 'TRADING_MANAGER')
+@Patch(':id/portal-password')
+updateDealerPortalPassword(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+) {
+  return this.dealerService.updateDealerPortalPassword(id, body);
+}
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER', 'TRADING_MANAGER', 'STOCK_MANAGER', 'ACCOUNT_MANAGER')
   @Get(':id')
   getDealer(@Param('id', ParseIntPipe) id: number) {

@@ -160,6 +160,30 @@ export class DealerService {
     };
   }
 
+  async updateDealerPortalPassword(id: number, body: any) {
+  const newPassword = String(body?.portalPassword || '').trim();
+
+  if (!newPassword) {
+    throw new BadRequestException('Password is required');
+  }
+
+  if (newPassword.length < 4) {
+    throw new BadRequestException('Password must be at least 4 characters');
+  }
+
+  const dealer = await this.dealerRepository.findOne({
+    where: { id, isHidden: false },
+  });
+
+  if (!dealer) {
+    throw new NotFoundException('Dealer not found');
+  }
+
+  (dealer as any).portalPassword = newPassword;
+
+  return this.dealerRepository.save(dealer);
+}
+
   async getDealerDashboard(dealerId: number) {
     const dealer = await this.dealerRepository.findOne({
       where: { id: dealerId, isHidden: false },

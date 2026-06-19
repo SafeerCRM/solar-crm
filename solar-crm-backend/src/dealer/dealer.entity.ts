@@ -41,6 +41,9 @@ export class Dealer {
   @Column({ type: 'text', nullable: true })
   address: string;
 
+  @Column({ type: 'text', nullable: true })
+portalPassword: string;
+
   @Column({ default: false })
   creditEnabled: boolean;
 
