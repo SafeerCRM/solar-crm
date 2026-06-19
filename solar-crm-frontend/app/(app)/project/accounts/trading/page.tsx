@@ -115,6 +115,7 @@ export default function TradingAccountPage() {
       | 'monthly'
       | 'credit'
       | 'ledger'
+      | 'complaints'
     >('dealers');
 
   const [dealers, setDealers] = useState<Dealer[]>([]);
@@ -134,6 +135,10 @@ const [monthlyRequirements, setMonthlyRequirements] = useState<DealerMonthlyRequ
 const [creditReminders, setCreditReminders] = useState<CreditReminder[]>([]);
 const [dealerLedger, setDealerLedger] = useState<any>(null);
 const [ledgerDealerId, setLedgerDealerId] = useState('');
+const [dealerComplaints, setDealerComplaints] = useState<any[]>([]);
+const [complaintPage, setComplaintPage] = useState(1);
+const [complaintTotalPages, setComplaintTotalPages] = useState(1);
+const [complaintStatus, setComplaintStatus] = useState('');
 
 const [notificationPage, setNotificationPage] = useState(1);
 const [notificationTotalPages, setNotificationTotalPages] = useState(1);
@@ -299,6 +304,20 @@ const fetchMonthlyRequirements = async () => {
   setMonthlyTotalPages(res.data?.totalPages || 1);
 };
 
+const fetchDealerComplaints = async () => {
+  const res = await axios.get(`${API_BASE_URL}/dealer/complaints`, {
+    params: {
+      page: complaintPage,
+      limit: 20,
+      status: complaintStatus,
+    },
+    headers: headers(),
+  });
+
+  setDealerComplaints(res.data?.data || []);
+  setComplaintTotalPages(res.data?.totalPages || 1);
+};
+
 const fetchCreditReminders = async () => {
   const res = await axios.get(`${API_BASE_URL}/project/dealer-credit-reminders`, {
     headers: headers(),
@@ -334,6 +353,7 @@ const fetchDealerLedger = async () => {
         fetchNotifications(),
         fetchMonthlyRequirements(),
         fetchCreditReminders(),
+        fetchDealerComplaints(),
       ]);
     } catch (error: any) {
       console.error(error);
@@ -355,6 +375,8 @@ const fetchDealerLedger = async () => {
   showHiddenDealers,
   showHiddenOrders,
   showHiddenMonthly,
+  complaintPage,
+complaintStatus,
 ]);
 
 useEffect(() => {
@@ -904,6 +926,22 @@ const hideOrRestoreMonthlyRequirement = async (
   }
 };
 
+const updateDealerComplaintStatus = async (id: number, status: string) => {
+  try {
+    await axios.patch(
+      `${API_BASE_URL}/dealer/complaints/${id}`,
+      { status },
+      { headers: headers() },
+    );
+
+    alert('Complaint status updated');
+    fetchDealerComplaints();
+  } catch (error: any) {
+    console.error(error);
+    alert(error?.response?.data?.message || 'Failed to update complaint');
+  }
+};
+
 const creditDueDateValue = orderForm.creditDueDate
   ? dayjs(orderForm.creditDueDate)
   : null;
@@ -1057,6 +1095,7 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
   ['monthly', 'Monthly Planning'],
   ['credit', 'Credit Reminders'],
   ['ledger', 'Dealer Ledger'],
+  ['complaints', 'Dealer Complaints'],
 ].map(([key, label]) => (
           <button
             key={key}
@@ -1692,6 +1731,104 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
 
       <Pagination page={notificationPage} totalPages={notificationTotalPages} setPage={setNotificationPage} />
     </div>
+  </div>
+)}
+
+{activeTab === 'complaints' && (
+  <div className="w-full max-w-full min-w-0 overflow-hidden rounded-2xl bg-white p-4 shadow sm:p-5">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 className="text-lg font-bold text-gray-800">
+          Dealer Complaints
+        </h2>
+        <p className="mt-1 text-sm text-gray-500">
+          Complaints raised by dealers from Dealer Portal.
+        </p>
+      </div>
+
+      <select
+        value={complaintStatus}
+        onChange={(e) => {
+          setComplaintStatus(e.target.value);
+          setComplaintPage(1);
+        }}
+        className="rounded-xl border p-3"
+      >
+        <option value="">All Status</option>
+        <option value="OPEN">Open</option>
+        <option value="IN_PROGRESS">In Progress</option>
+        <option value="RESOLVED">Resolved</option>
+        <option value="CLOSED">Closed</option>
+      </select>
+    </div>
+
+    <div className="mt-4 space-y-3">
+      {dealerComplaints.length === 0 ? (
+        <p className="text-sm text-gray-500">No dealer complaints found.</p>
+      ) : (
+        dealerComplaints.map((item) => (
+          <div key={item.id} className="rounded-xl border p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="break-words font-bold">
+                  #{item.id} - {item.subject}
+                </p>
+                <p className="text-sm text-gray-500">
+                  Dealer ID: {item.dealerId}
+                  {item.dealerOrderId ? ` | Order ID: ${item.dealerOrderId}` : ''}
+                </p>
+                <p className="mt-2 break-words text-sm">
+                  {item.description}
+                </p>
+              </div>
+
+              <select
+                value={item.status || 'OPEN'}
+                onChange={(e) =>
+                  updateDealerComplaintStatus(item.id, e.target.value)
+                }
+                className="rounded-xl border p-2 text-sm"
+              >
+                <option value="OPEN">Open</option>
+                <option value="IN_PROGRESS">In Progress</option>
+                <option value="RESOLVED">Resolved</option>
+                <option value="CLOSED">Closed</option>
+              </select>
+            </div>
+
+            {Array.isArray(item.photoUrls) && item.photoUrls.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {item.photoUrls.map((url: string) => (
+                  <a
+                    key={url}
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="h-20 w-20 overflow-hidden rounded-xl border bg-gray-50"
+                  >
+                    <img
+                      src={url}
+                      alt="Complaint"
+                      className="h-full w-full object-cover"
+                    />
+                  </a>
+                ))}
+              </div>
+            )}
+
+            <p className="mt-3 text-xs text-gray-400">
+              Created: {item.createdAt ? new Date(item.createdAt).toLocaleString('en-IN') : '-'}
+            </p>
+          </div>
+        ))
+      )}
+    </div>
+
+    <Pagination
+      page={complaintPage}
+      totalPages={complaintTotalPages}
+      setPage={setComplaintPage}
+    />
   </div>
 )}
 
