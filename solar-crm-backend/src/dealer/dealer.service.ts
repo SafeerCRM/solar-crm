@@ -2200,7 +2200,7 @@ if (body.adminRemarks !== undefined) {
     return this.projectService.generateFinalInvoicePdf(invoiceId, res);
   }
 
-    async getDealerOrderInvoicesForPortal(dealerId: number, orderId: number) {
+      async getDealerOrderInvoicesForPortal(dealerId: number, orderId: number) {
     const order = await this.dealerOrderRepository.findOne({
       where: {
         id: orderId,
@@ -2213,6 +2213,34 @@ if (body.adminRemarks !== undefined) {
       throw new NotFoundException('Dealer order not found');
     }
 
-    return this.projectService.getDealerOrderInvoices(orderId);
+    const proformaInvoices = await this.proformaInvoiceRepository.find({
+      where: {
+        dealerOrderId: orderId,
+      } as any,
+      order: { createdAt: 'DESC' } as any,
+    });
+
+    const proformaInvoiceIds = proformaInvoices.map((item: any) => item.id);
+
+    const finalInvoices = proformaInvoiceIds.length
+      ? await this.finalInvoiceRepository
+          .createQueryBuilder('invoice')
+          .where('invoice.dealerOrderId = :orderId', { orderId })
+          .orWhere('invoice.proformaInvoiceId IN (:...proformaInvoiceIds)', {
+            proformaInvoiceIds,
+          })
+          .orderBy('invoice.createdAt', 'DESC')
+          .getMany()
+      : await this.finalInvoiceRepository.find({
+          where: {
+            dealerOrderId: orderId,
+          } as any,
+          order: { createdAt: 'DESC' } as any,
+        });
+
+    return {
+      proformaInvoices,
+      finalInvoices,
+    };
   }
 }
