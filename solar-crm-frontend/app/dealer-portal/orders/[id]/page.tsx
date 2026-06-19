@@ -48,20 +48,30 @@ export default function DealerOrderDetailPage() {
       setComments(Array.isArray(commentsData) ? commentsData : []);
 
       try {
-        const piRes = await fetch(
-          `${API_BASE_URL}/dealer-auth/orders/${orderId}/proforma-invoice`,
-          { headers },
-        );
-        if (piRes.ok) setPi(await piRes.json());
-      } catch {}
+  const invoiceRes = await fetch(
+    `${API_BASE_URL}/dealer-auth/orders/${orderId}/invoices`,
+    { headers },
+  );
 
-      try {
-        const invoiceRes = await fetch(
-          `${API_BASE_URL}/dealer-auth/orders/${orderId}/final-invoice`,
-          { headers },
-        );
-        if (invoiceRes.ok) setInvoice(await invoiceRes.json());
-      } catch {}
+  if (invoiceRes.ok) {
+    const invoiceData = await invoiceRes.json();
+
+    const latestPi =
+      Array.isArray(invoiceData?.proformaInvoices) &&
+      invoiceData.proformaInvoices.length
+        ? invoiceData.proformaInvoices[0]
+        : null;
+
+    const latestFinalInvoice =
+      Array.isArray(invoiceData?.finalInvoices) &&
+      invoiceData.finalInvoices.length
+        ? invoiceData.finalInvoices[0]
+        : null;
+
+    setPi(latestPi ? { invoice: latestPi } : null);
+    setInvoice(latestFinalInvoice ? { invoice: latestFinalInvoice } : null);
+  }
+} catch {}
     } catch (error) {
       console.error(error);
     } finally {
