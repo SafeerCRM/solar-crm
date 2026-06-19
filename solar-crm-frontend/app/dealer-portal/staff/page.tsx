@@ -33,6 +33,12 @@ export default function DealerStaffPage() {
       });
 
       const data = await res.json();
+
+      if (!res.ok) {
+        setMessage(data.message || 'Unable to load staff contacts.');
+        return;
+      }
+
       setStaff(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error(error);
@@ -44,33 +50,33 @@ export default function DealerStaffPage() {
     const q = search.toLowerCase();
 
     return staff.filter((item) => {
-      const roleText = Array.isArray(item.roles) ? item.roles.join(' ') : '';
+      const name = item.publicDisplayName || item.fullName || '';
+      const phone = item.publicPhone || item.mobile || '';
+      const email = item.publicEmail || item.email || '';
+      const designation = item.publicDesignation || item.designation || '';
+      const department = item.department || '';
 
       return (
         !q ||
-        String(item.name || '').toLowerCase().includes(q) ||
-        String(item.email || '').toLowerCase().includes(q) ||
-        roleText.toLowerCase().includes(q)
+        String(name).toLowerCase().includes(q) ||
+        String(phone).toLowerCase().includes(q) ||
+        String(email).toLowerCase().includes(q) ||
+        String(designation).toLowerCase().includes(q) ||
+        String(department).toLowerCase().includes(q)
       );
     });
   }, [staff, search]);
 
   const grouped = useMemo(() => {
-    return {
-      Owner: filteredStaff.filter((item) => item.roles?.includes('OWNER')),
-      'Trading Team': filteredStaff.filter((item) =>
-        item.roles?.includes('TRADING_MANAGER'),
-      ),
-      'Stock Team': filteredStaff.filter((item) =>
-        item.roles?.includes('STOCK_MANAGER'),
-      ),
-      'Accounts Team': filteredStaff.filter((item) =>
-        item.roles?.includes('ACCOUNT_MANAGER'),
-      ),
-      'Customer Support': filteredStaff.filter((item) =>
-        item.roles?.includes('CUSTOMER_MANAGER'),
-      ),
-    };
+    const result: Record<string, any[]> = {};
+
+    filteredStaff.forEach((item) => {
+      const department = item.department || 'Support Team';
+      if (!result[department]) result[department] = [];
+      result[department].push(item);
+    });
+
+    return result;
   }, [filteredStaff]);
 
   return (
@@ -87,17 +93,17 @@ export default function DealerStaffPage() {
           <div className="mt-3 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
               <h1 className="text-3xl font-black md:text-4xl">
-                Aditya Solars Staff Directory
+                Staff Directory
               </h1>
 
               <p className="mt-1 text-sm text-white/60">
-                Contact trading, stock, accounts and support team for dealer communication.
+                Contact company staff for order, payment, delivery and support coordination.
               </p>
             </div>
 
             <input
               type="text"
-              placeholder="Search staff or role..."
+              placeholder="Search staff, phone, role..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="rounded-2xl bg-white px-4 py-3 text-sm font-black text-slate-900 outline-none"
@@ -112,6 +118,12 @@ export default function DealerStaffPage() {
         )}
 
         <section className="mt-6 space-y-8">
+          {!filteredStaff.length && (
+            <div className="rounded-3xl border border-dashed border-white/20 bg-white/10 p-8 text-center text-white/70">
+              No dealer-visible staff found.
+            </div>
+          )}
+
           {Object.entries(grouped).map(([groupName, users]) => (
             <StaffGroup key={groupName} title={groupName} users={users} />
           ))}
@@ -143,19 +155,31 @@ function StaffGroup({ title, users }: { title: string; users: any[] }) {
 }
 
 function StaffCard({ user }: { user: any }) {
-  const email = String(user.email || '');
-  const initials = String(user.name || 'AS')
+  const name = user.publicDisplayName || user.fullName || 'Staff Member';
+  const phone = user.publicPhone || user.mobile || '';
+  const email = user.publicEmail || user.email || '';
+  const designation = user.publicDesignation || user.designation || '';
+  const photoUrl = user.photoUrl || '';
+  const remarks = user.remarks || '';
+
+  const initials = String(name)
     .split(' ')
     .map((part) => part[0])
     .join('')
     .slice(0, 2)
     .toUpperCase();
 
-  const copyEmail = async () => {
-    if (!email) return;
-    await navigator.clipboard.writeText(email);
-    alert('Email copied');
+  const copyContact = async () => {
+    const text = [name, phone, email].filter(Boolean).join(' | ');
+    if (!text) return;
+
+    await navigator.clipboard.writeText(text);
+    alert('Contact copied');
   };
+
+  const whatsappText = encodeURIComponent(
+    `Hello ${name}, I need support regarding dealer portal/order.`,
+  );
 
   return (
     <div className="overflow-hidden rounded-[2rem] bg-white text-slate-900 shadow-xl transition hover:-translate-y-1 hover:shadow-2xl">
@@ -163,45 +187,90 @@ function StaffCard({ user }: { user: any }) {
 
       <div className="p-5">
         <div className="flex items-start gap-4">
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-3xl bg-gradient-to-br from-blue-700 to-orange-400 text-xl font-black text-white shadow-lg">
-            {initials}
-          </div>
+          {photoUrl ? (
+            <img
+              src={photoUrl}
+              alt={name}
+              className="h-16 w-16 shrink-0 rounded-3xl object-cover shadow-lg"
+            />
+          ) : (
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-3xl bg-gradient-to-br from-blue-700 to-orange-400 text-xl font-black text-white shadow-lg">
+              {initials}
+            </div>
+          )}
 
           <div className="min-w-0">
-            <p className="truncate text-lg font-black">{user.name || 'Staff Member'}</p>
+            <p className="truncate text-lg font-black">{name}</p>
             <p className="mt-1 truncate text-sm font-semibold text-slate-500">
-              {email || 'No email'}
+              {designation || 'Company Staff'}
+            </p>
+            <p className="mt-1 truncate text-xs font-bold text-slate-400">
+              {user.department || '-'}
             </p>
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2">
-          {(Array.isArray(user.roles) ? user.roles : []).map((role: string) => (
-            <span
-              key={role}
-              className="rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700"
-            >
-              {role.replaceAll('_', ' ')}
-            </span>
-          ))}
+        <div className="mt-5 grid gap-3 text-sm">
+          <Info label="Phone" value={phone || '-'} />
+          <Info label="Email" value={email || '-'} />
         </div>
+
+        {remarks && (
+          <div className="mt-4 rounded-2xl bg-blue-50 p-3">
+            <p className="text-xs font-black text-blue-500">Remarks</p>
+            <p className="mt-1 text-sm font-semibold text-blue-900">
+              {remarks}
+            </p>
+          </div>
+        )}
 
         <div className="mt-5 grid grid-cols-2 gap-3">
           <a
-            href={`mailto:${email}`}
-            className="rounded-2xl bg-slate-950 px-4 py-3 text-center text-sm font-black text-white"
+            href={phone ? `tel:${phone}` : '#'}
+            className={`rounded-2xl px-4 py-3 text-center text-sm font-black text-white ${
+              phone ? 'bg-green-600' : 'pointer-events-none bg-slate-300'
+            }`}
+          >
+            Call
+          </a>
+
+          <a
+            href={phone ? `https://wa.me/91${phone}?text=${whatsappText}` : '#'}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`rounded-2xl px-4 py-3 text-center text-sm font-black text-white ${
+              phone ? 'bg-emerald-600' : 'pointer-events-none bg-slate-300'
+            }`}
+          >
+            WhatsApp
+          </a>
+
+          <a
+            href={email ? `mailto:${email}` : '#'}
+            className={`rounded-2xl px-4 py-3 text-center text-sm font-black text-white ${
+              email ? 'bg-slate-950' : 'pointer-events-none bg-slate-300'
+            }`}
           >
             Email
           </a>
 
           <button
-            onClick={copyEmail}
+            onClick={copyContact}
             className="rounded-2xl bg-orange-100 px-4 py-3 text-sm font-black text-orange-700"
           >
             Copy
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function Info({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl bg-slate-50 p-3">
+      <p className="text-xs font-bold text-slate-400">{label}</p>
+      <p className="mt-1 break-words font-black">{value}</p>
     </div>
   );
 }
