@@ -167,9 +167,19 @@ export default function DealerOrderDetailPage() {
                   </div>
 
                   <div className="mt-4 grid gap-3 md:grid-cols-5">
-                    <Info label="Ordered" value={`${item.quantity} ${item.unit || ''}`} />
-                    <Info label="Accepted" value={`${item.acceptedQuantity || 0}`} />
-                    <Info label="Pending" value={`${item.pendingQuantity || 0}`} />
+                    <Info
+  label="Ordered"
+  value={`${item.quantity || 0}${item.unit && item.unit !== '1' ? ` ${item.unit}` : ''}`}
+/>
+                    <Info
+  label="Accepted"
+  value={`${item.acceptedQuantity || 0}${item.unit && item.unit !== '1' ? ` ${item.unit}` : ''}`}
+/>
+
+<Info
+  label="Pending"
+  value={`${item.pendingQuantity || 0}${item.unit && item.unit !== '1' ? ` ${item.unit}` : ''}`}
+/>
                     <Info label="Rate" value={`₹${Number(item.sellingRate || 0).toLocaleString('en-IN')}`} />
                     <Info label="GST" value={`${item.gstPercent || 0}%`} />
                   </div>
