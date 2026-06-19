@@ -663,6 +663,57 @@ const handlePurchasePdf = async (
     }
 
     const blob = await res.blob();
+
+    const isCapacitor =
+      typeof window !== 'undefined' &&
+      !!(window as any).Capacitor;
+
+    if (isCapacitor) {
+      const arrayBuffer = await blob.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
+
+      let binaryString = '';
+
+      for (let i = 0; i < uint8Array.length; i += 1) {
+        binaryString += String.fromCharCode(uint8Array[i]);
+      }
+
+      const base64 = btoa(binaryString);
+
+      const { Filesystem, Directory } = await import(
+        '@capacitor/filesystem'
+      );
+
+      const { Share } = await import('@capacitor/share');
+
+      const saved = await Filesystem.writeFile({
+        path: fileName,
+        data: base64,
+        directory: Directory.Documents,
+        recursive: true,
+      });
+
+      if (action === 'share') {
+        await Share.share({
+          title: fileName.replace('.pdf', ''),
+          text: fileName,
+          url: saved.uri,
+          dialogTitle: 'Share PDF',
+        });
+
+        return;
+      }
+
+      await Share.share({
+        title: fileName.replace('.pdf', ''),
+        text: 'PDF saved. Open or share from available apps.',
+        url: saved.uri,
+        dialogTitle: 'Open PDF',
+      });
+
+      return;
+    }
+
     const file = new File([blob], fileName, {
       type: 'application/pdf',
     });
@@ -685,31 +736,31 @@ const handlePurchasePdf = async (
     const url = window.URL.createObjectURL(blob);
 
     if (action === 'view') {
-  window.open(url, '_blank');
-} else if (action === 'download') {
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = fileName;
-  a.target = '_blank';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-
-  const isMobile =
-    /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-
-  if (isMobile) {
-    setTimeout(() => {
       window.open(url, '_blank');
-    }, 500);
-  }
-} else {
-  window.open(url, '_blank');
+    } else if (action === 'download') {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      a.target = '_blank';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
 
-  alert(
-    'Direct sharing is not supported on this browser. PDF has been opened, please share it from your browser or downloads.',
-  );
-}
+      const isMobile =
+        /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+      if (isMobile) {
+        setTimeout(() => {
+          window.open(url, '_blank');
+        }, 500);
+      }
+    } else {
+      window.open(url, '_blank');
+
+      alert(
+        'Direct sharing is not supported on this browser. PDF has been opened, please share it from your browser or downloads.',
+      );
+    }
 
     setTimeout(() => window.URL.revokeObjectURL(url), 30000);
   } catch (error) {
