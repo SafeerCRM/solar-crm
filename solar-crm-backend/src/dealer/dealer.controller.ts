@@ -38,6 +38,24 @@ export class DealerController {
     return this.dealerService.listDealers(query);
   }
 
+    @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER', 'TRADING_MANAGER', 'CUSTOMER_MANAGER', 'STOCK_MANAGER')
+  @Get('complaints')
+  listInternalDealerComplaints(@Query() query: any) {
+    return this.dealerService.listInternalDealerComplaints(query);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER', 'TRADING_MANAGER', 'CUSTOMER_MANAGER', 'STOCK_MANAGER')
+  @Patch('complaints/:id')
+  updateInternalDealerComplaint(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: any,
+    @CurrentUser() user: any,
+  ) {
+    return this.dealerService.updateInternalDealerComplaint(id, body, user);
+  }
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER', 'TRADING_MANAGER', 'STOCK_MANAGER', 'ACCOUNT_MANAGER')
   @Get(':id')
@@ -101,24 +119,6 @@ export class DealerController {
     @CurrentUser() user: any,
   ) {
     return this.dealerService.updateBankDetail(id, body, user);
-  }
-
-    @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER', 'TRADING_MANAGER', 'CUSTOMER_MANAGER', 'STOCK_MANAGER')
-  @Get('complaints')
-  listInternalDealerComplaints(@Query() query: any) {
-    return this.dealerService.listInternalDealerComplaints(query);
-  }
-
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER', 'TRADING_MANAGER', 'CUSTOMER_MANAGER', 'STOCK_MANAGER')
-  @Patch('complaints/:id')
-  updateInternalDealerComplaint(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() body: any,
-    @CurrentUser() user: any,
-  ) {
-    return this.dealerService.updateInternalDealerComplaint(id, body, user);
   }
 
     @UseGuards(JwtAuthGuard, RolesGuard)
