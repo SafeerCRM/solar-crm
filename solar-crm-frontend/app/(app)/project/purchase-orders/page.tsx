@@ -763,10 +763,17 @@ const handlePurchasePdf = async (
     }
 
     setTimeout(() => window.URL.revokeObjectURL(url), 30000);
-  } catch (error) {
-    console.error(error);
-    alert('PDF error. Please try again.');
-  }
+  } catch (error: any) {
+  console.error('PDF ERROR', error);
+
+  alert(
+    JSON.stringify(
+      error?.message ||
+      error?.toString() ||
+      error,
+    ),
+  );
+}
 };
 
 const downloadFinalInvoicePdf = async (
