@@ -1830,6 +1830,13 @@ return {
 
     complaint.status = body.status || complaint.status;
 
+if (body.adminRemarks !== undefined) {
+  complaint.adminRemarks = body.adminRemarks || '';
+  complaint.lastResponseBy = user?.id || null;
+  complaint.lastResponseByName = user?.name || user?.email || '';
+  complaint.lastResponseAt = new Date();
+}
+
     const savedComplaint =
       await this.dealerComplaintRepository.save(complaint);
 
@@ -1842,7 +1849,11 @@ return {
         dealerId: dealer.id,
         dealerName: dealer.dealerName,
         title: 'Complaint Updated',
-        message: `Your complaint #${savedComplaint.id} status is now ${savedComplaint.status}.`,
+        message: `Your complaint #${savedComplaint.id} status is now ${savedComplaint.status}.${
+  savedComplaint.adminRemarks
+    ? ` Response: ${savedComplaint.adminRemarks}`
+    : ''
+}`,
         notificationType: 'DEALER_COMPLAINT_STATUS',
         createdBy: user?.id || null,
         createdByName: user?.name || user?.email || '',

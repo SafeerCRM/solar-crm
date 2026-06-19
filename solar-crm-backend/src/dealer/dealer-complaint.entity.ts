@@ -49,6 +49,18 @@ export class DealerComplaint {
   @Column({ type: 'text', nullable: true })
   createdByRole: string;
 
+    @Column({ type: 'text', nullable: true })
+  adminRemarks: string;
+
+  @Column({ nullable: true })
+  lastResponseBy: number;
+
+  @Column({ type: 'text', nullable: true })
+  lastResponseByName: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  lastResponseAt: Date;
+
   @CreateDateColumn()
   createdAt: Date;
 
