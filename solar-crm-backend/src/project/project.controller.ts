@@ -2086,6 +2086,7 @@ restoreCustomerUpdate(
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
+  'STOCK_MANAGER',
 )
 @Get('dealer/catalog')
 getDealerCatalog(@Query() query: any) {
@@ -2099,6 +2100,7 @@ getDealerCatalog(@Query() query: any) {
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
+  'STOCK_MANAGER',
 )
 @Get('dealer/list')
 getDealers(@Query() query: any) {
@@ -2111,6 +2113,7 @@ getDealers(@Query() query: any) {
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
+  'STOCK_MANAGER',
 )
 @Post('dealer')
 createDealer(@Body() body: any) {
@@ -2124,6 +2127,7 @@ createDealer(@Body() body: any) {
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
+  'STOCK_MANAGER',
 )
 @Post('dealer-order')
 createDealerOrder(
@@ -2143,6 +2147,7 @@ createDealerOrder(
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
+  'STOCK_MANAGER',
 )
 @Get('dealer-orders')
 getDealerOrders(@Query() query: any) {
@@ -2156,6 +2161,7 @@ getDealerOrders(@Query() query: any) {
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
+  'STOCK_MANAGER',
 )
 @Get('dealer-order/:id')
 getDealerOrderById(@Param('id') id: string) {
@@ -2170,6 +2176,7 @@ getDealerOrderById(@Param('id') id: string) {
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
+  'STOCK_MANAGER',
 )
 @Patch('dealer-order/:id/status')
 updateDealerOrderStatus(
@@ -2191,6 +2198,7 @@ updateDealerOrderStatus(
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
+  'STOCK_MANAGER',
 )
 @Post('dealer-payment')
 addDealerOrderPayment(
@@ -2210,6 +2218,7 @@ addDealerOrderPayment(
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
+  'STOCK_MANAGER',
 )
 @Post('dealer-comment')
 addDealerOrderComment(
@@ -2229,6 +2238,7 @@ addDealerOrderComment(
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
+  'STOCK_MANAGER',
 )
 @Get('dealer-analytics')
 getDealerAnalytics() {
@@ -2241,6 +2251,7 @@ getDealerAnalytics() {
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
+  'STOCK_MANAGER',
 )
 @Patch('dealer-order/:id/hide')
 hideDealerOrder(
@@ -2261,6 +2272,7 @@ hideDealerOrder(
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
+  'STOCK_MANAGER',
 )
 @Patch('dealer-order/:id/restore')
 restoreDealerOrder(
@@ -2281,6 +2293,7 @@ restoreDealerOrder(
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
+  'STOCK_MANAGER',
 )
 @Post('dealer-order/:id/proforma-invoice')
 createDealerOrderProformaInvoice(
@@ -2301,6 +2314,7 @@ createDealerOrderProformaInvoice(
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
+  'STOCK_MANAGER',
 )
 @Post('dealer-order/:id/final-invoice')
 createDealerOrderFinalInvoice(
@@ -2322,6 +2336,7 @@ createDealerOrderFinalInvoice(
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
+  'STOCK_MANAGER',
 )
 @Get('dealer-order/:id/invoices')
 getDealerOrderInvoices(
@@ -2338,6 +2353,7 @@ getDealerOrderInvoices(
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
+  'STOCK_MANAGER',
 )
 @Post('dealer-notification')
 createDealerNotification(
@@ -2357,6 +2373,7 @@ createDealerNotification(
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
+  'STOCK_MANAGER',
 )
 @Get('dealer-notifications')
 getDealerNotifications(@Query() query: any) {
@@ -2372,6 +2389,7 @@ getDealerNotifications(@Query() query: any) {
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
+  'STOCK_MANAGER',
 )
 @Patch('dealer-notification/:id/read')
 markDealerNotificationRead(
@@ -2389,6 +2407,7 @@ markDealerNotificationRead(
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
+  'STOCK_MANAGER',
 )
 @Post('dealer-monthly-requirement')
 createDealerMonthlyRequirement(
@@ -2408,6 +2427,7 @@ createDealerMonthlyRequirement(
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
+  'STOCK_MANAGER',
 )
 @Get('dealer-monthly-requirements')
 getDealerMonthlyRequirements(@Query() query: any) {
@@ -2422,6 +2442,7 @@ getDealerMonthlyRequirements(@Query() query: any) {
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
+  'STOCK_MANAGER',
 )
 @Patch('dealer-monthly-requirement/:id/hide')
 hideDealerMonthlyRequirement(
@@ -2442,6 +2463,7 @@ hideDealerMonthlyRequirement(
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
+  'STOCK_MANAGER',
 )
 @Patch('dealer-monthly-requirement/:id/restore')
 restoreDealerMonthlyRequirement(
@@ -2462,6 +2484,7 @@ restoreDealerMonthlyRequirement(
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
+  'STOCK_MANAGER',
 )
 @Get('dealer-credit-reminders')
 getDealerCreditReminders() {
@@ -2475,6 +2498,7 @@ getDealerCreditReminders() {
   'PAYMENT_MANAGER',
   'TRADING_MANAGER',
   'MEETING_MANAGER',
+  'STOCK_MANAGER',
 )
 @Get('dealer-ledger-history')
 getDealerLedgerHistory(@Query() query: any) {
