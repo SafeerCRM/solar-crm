@@ -26,6 +26,15 @@ const emptyCompanyForm = {
   logoUrl: '',
 };
 
+const emptyDeliveryForm = {
+  officeName: '',
+  officeAddress: '',
+  baseKm: '',
+  baseCharge: '',
+  perKmCharge: '',
+  minimumCharge: '',
+};
+
 export default function PortalSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -33,6 +42,8 @@ export default function PortalSettingsPage() {
   const [form, setForm] = useState<any>(emptyForm);
   const [companyForm, setCompanyForm] = useState<any>(emptyCompanyForm);
 const [companySaving, setCompanySaving] = useState(false);
+const [deliveryForm, setDeliveryForm] = useState<any>(emptyDeliveryForm);
+const [deliverySaving, setDeliverySaving] = useState(false);
 
   const headers = () => ({
     Authorization: `Bearer ${localStorage.getItem('token')}`,
@@ -41,6 +52,7 @@ const [companySaving, setCompanySaving] = useState(false);
   useEffect(() => {
     loadBankDetails();
 loadCompanySetting();
+loadDeliverySetting();
   }, []);
 
   const loadBankDetails = async () => {
@@ -165,6 +177,45 @@ const saveCompanySetting = async () => {
   }
 };
 
+const loadDeliverySetting = async () => {
+  try {
+    const res = await axios.get(
+      `${API_BASE_URL}/dealer/delivery-setting`,
+      { headers: headers() },
+    );
+
+    setDeliveryForm({
+      officeName: res.data?.officeName || '',
+      officeAddress: res.data?.officeAddress || '',
+      baseKm: String(res.data?.baseKm || ''),
+      baseCharge: String(res.data?.baseCharge || ''),
+      perKmCharge: String(res.data?.perKmCharge || ''),
+      minimumCharge: String(res.data?.minimumCharge || ''),
+    });
+  } catch (error) {
+    console.error(error);
+  }
+};
+
+const saveDeliverySetting = async () => {
+  try {
+    setDeliverySaving(true);
+
+    await axios.post(
+      `${API_BASE_URL}/dealer/delivery-setting`,
+      deliveryForm,
+      { headers: headers() },
+    );
+
+    alert('Delivery settings saved');
+  } catch (error: any) {
+    console.error(error);
+    alert(error?.response?.data?.message || 'Failed to save delivery settings');
+  } finally {
+    setDeliverySaving(false);
+  }
+};
+
   const startEdit = (item: any) => {
     setForm({
       id: item.id,
@@ -234,6 +285,107 @@ const saveCompanySetting = async () => {
     className="mt-4 rounded-xl bg-slate-900 px-5 py-3 font-bold text-white disabled:opacity-60"
   >
     {companySaving ? 'Saving...' : 'Save Company Information'}
+  </button>
+</section>
+
+<section className="mt-6 rounded-2xl bg-white p-6 shadow">
+  <h2 className="text-lg font-bold text-gray-800">
+    Dealer Delivery Settings
+  </h2>
+
+  <p className="mt-1 text-sm text-gray-500">
+    Used when dealer selects delivery instead of self collection.
+  </p>
+
+  <div className="mt-4 grid gap-3 md:grid-cols-2">
+    <input
+      placeholder="Office Name"
+      value={deliveryForm.officeName}
+      onChange={(e) =>
+        setDeliveryForm({
+          ...deliveryForm,
+          officeName: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+
+    <input
+      placeholder="Office Address"
+      value={deliveryForm.officeAddress}
+      onChange={(e) =>
+        setDeliveryForm({
+          ...deliveryForm,
+          officeAddress: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+
+    <input
+      type="number"
+      placeholder="Base KM"
+      value={deliveryForm.baseKm}
+      onChange={(e) =>
+        setDeliveryForm({
+          ...deliveryForm,
+          baseKm: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+
+    <input
+      type="number"
+      placeholder="Base Charge"
+      value={deliveryForm.baseCharge}
+      onChange={(e) =>
+        setDeliveryForm({
+          ...deliveryForm,
+          baseCharge: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+
+    <input
+      type="number"
+      placeholder="Per KM Charge"
+      value={deliveryForm.perKmCharge}
+      onChange={(e) =>
+        setDeliveryForm({
+          ...deliveryForm,
+          perKmCharge: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+
+    <input
+      type="number"
+      placeholder="Minimum Charge"
+      value={deliveryForm.minimumCharge}
+      onChange={(e) =>
+        setDeliveryForm({
+          ...deliveryForm,
+          minimumCharge: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+  </div>
+
+  <div className="mt-4 rounded-xl bg-blue-50 p-4 text-sm text-blue-800">
+    Formula: Delivery Charge = Base Charge + extra KM × Per KM Charge.
+    Minimum charge will be applied if calculated charge is lower.
+  </div>
+
+  <button
+    onClick={saveDeliverySetting}
+    disabled={deliverySaving}
+    className="mt-4 rounded-xl bg-slate-900 px-5 py-3 font-bold text-white disabled:opacity-60"
+  >
+    {deliverySaving ? 'Saving...' : 'Save Delivery Settings'}
   </button>
 </section>
 
@@ -405,9 +557,6 @@ const saveCompanySetting = async () => {
           </h2>
 
           <div className="mt-4 grid gap-3 md:grid-cols-2">
-            <div className="rounded-xl bg-gray-50 p-4">
-              Dealer delivery settings
-            </div>
 
             <div className="rounded-xl bg-gray-50 p-4">
               Dealer support settings
