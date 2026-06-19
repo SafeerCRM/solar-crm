@@ -117,9 +117,9 @@ export default function DealerOrderDetailPage() {
       }
 
       const endpoint =
-        type === 'pi'
-          ? `/project/proforma-invoice/${id}/pdf`
-          : `/project/final-invoice/${id}/pdf`;
+  type === 'pi'
+    ? `/dealer-auth/proforma-invoice/${id}/pdf`
+    : `/dealer-auth/final-invoice/${id}/pdf`;
 
       const res = await fetch(`${API_BASE_URL}${endpoint}`, {
         headers: { Authorization: `Bearer ${token}` },
