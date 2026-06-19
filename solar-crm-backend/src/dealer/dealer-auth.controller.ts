@@ -294,7 +294,9 @@ export class DealerAuthController {
 
   private getDealerPayload(req: any) {
     const authHeader = req.headers?.authorization || '';
-    const token = authHeader.replace('Bearer ', '');
+const headerToken = authHeader.replace('Bearer ', '');
+const queryToken = req.query?.token || '';
+const token = headerToken || queryToken;
 
     if (!token) {
       throw new UnauthorizedException('Dealer token missing');
