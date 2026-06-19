@@ -163,6 +163,18 @@ export default function DealerOrderDetailPage() {
     }
   };
 
+  const openPdfInBrowser = (
+  type: 'pi' | 'invoice',
+  id: number,
+) => {
+  const endpoint =
+    type === 'pi'
+      ? `/dealer-auth/proforma-invoice/${id}/pdf`
+      : `/dealer-auth/final-invoice/${id}/pdf`;
+
+  window.open(`${API_BASE_URL}${endpoint}`, '_blank');
+};
+
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-950 text-white">
@@ -271,6 +283,7 @@ export default function DealerOrderDetailPage() {
   invoiceId={pi?.invoice?.id}
   onView={() => openPdf('pi', pi.invoice.id, false)}
   onDownload={() => openPdf('pi', pi.invoice.id, true)}
+  onOpenBrowser={() => openPdfInBrowser('pi', pi.invoice.id)}
 />
 
 <InvoiceBox
@@ -280,6 +293,7 @@ export default function DealerOrderDetailPage() {
   invoiceId={invoice?.invoice?.id}
   onView={() => openPdf('invoice', invoice.invoice.id, false)}
   onDownload={() => openPdf('invoice', invoice.invoice.id, true)}
+  onOpenBrowser={() => openPdfInBrowser('invoice', invoice.invoice.id)}
 />
               </div>
             </div>
@@ -409,6 +423,7 @@ function InvoiceBox({
   invoiceId,
   onView,
   onDownload,
+  onOpenBrowser,
 }: {
   title: string;
   value: string;
@@ -416,6 +431,7 @@ function InvoiceBox({
   invoiceId?: number;
   onView?: () => void;
   onDownload?: () => void;
+  onOpenBrowser?: () => void;
 }) {
   return (
     <div className="rounded-2xl bg-slate-50 p-4">
@@ -430,23 +446,33 @@ function InvoiceBox({
       )}
 
       {invoiceId ? (
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={onView}
-            className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-black text-white"
-          >
-            View
-          </button>
+        <div className="mt-4 grid gap-2">
+  <div className="grid grid-cols-2 gap-2">
+    <button
+      type="button"
+      onClick={onView}
+      className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-black text-white"
+    >
+      View
+    </button>
 
-          <button
-            type="button"
-            onClick={onDownload}
-            className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-black text-white"
-          >
-            Download
-          </button>
-        </div>
+    <button
+      type="button"
+      onClick={onDownload}
+      className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-black text-white"
+    >
+      Download
+    </button>
+  </div>
+
+  <button
+    type="button"
+    onClick={onOpenBrowser}
+    className="rounded-xl bg-orange-500 px-3 py-2 text-xs font-black text-white"
+  >
+    Open in Browser
+  </button>
+</div>
       ) : (
         <p className="mt-3 rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-500">
           PDF not available yet
