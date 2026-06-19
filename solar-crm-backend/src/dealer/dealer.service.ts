@@ -171,9 +171,27 @@ export class DealerService {
     throw new BadRequestException('Password must be at least 4 characters');
   }
 
-  const dealer = await this.dealerRepository.findOne({
-    where: { id, isHidden: false },
+  let dealer = await this.dealerRepository.findOne({
+  where: { id, isHidden: false },
+});
+
+if (!dealer && body?.phone) {
+  dealer = await this.dealerRepository.findOne({
+    where: { phone: String(body.phone).trim(), isHidden: false },
   });
+}
+
+if (!dealer && body?.gstNumber) {
+  dealer = await this.dealerRepository.findOne({
+    where: { gstNumber: String(body.gstNumber).trim(), isHidden: false },
+  });
+}
+
+if (!dealer && body?.email) {
+  dealer = await this.dealerRepository.findOne({
+    where: { email: String(body.email).trim(), isHidden: false },
+  });
+}
 
   if (!dealer) {
     throw new NotFoundException('Dealer not found');
