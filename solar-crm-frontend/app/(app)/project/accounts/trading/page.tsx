@@ -732,7 +732,12 @@ const saveDealerPortalPassword = async () => {
 
     await axios.patch(
       `${API_BASE_URL}/dealer/${passwordModalDealer.id}/portal-password`,
-      { portalPassword: password },
+      {
+  portalPassword: password,
+  phone: passwordModalDealer.phone,
+  email: passwordModalDealer.email,
+  gstNumber: passwordModalDealer.gstNumber,
+},
       { headers: headers() },
     );
 
