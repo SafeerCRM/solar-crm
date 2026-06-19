@@ -645,282 +645,100 @@ const createFinalInvoiceFromPi = async (piId: number) => {
   }
 };
 
-const downloadFinalInvoicePdf = async (
-  invoiceId: number,
-  share = false,
+const handlePurchasePdf = async (
+  endpoint: string,
+  fileName: string,
+  action: 'view' | 'download' | 'share',
 ) => {
   try {
     const token = localStorage.getItem('token');
 
-    const res = await axios.get(
-      `${API_BASE_URL}/project/final-invoice/${invoiceId}/pdf`,
-      {
-        responseType: 'blob',
-        headers: token
-          ? {
-              Authorization: `Bearer ${token}`,
-            }
-          : {},
-      },
-    );
+    const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
 
-    const blob = new Blob([res.data], {
+    if (!res.ok) {
+      alert('Unable to open PDF. Please try again.');
+      return;
+    }
+
+    const blob = await res.blob();
+    const file = new File([blob], fileName, {
       type: 'application/pdf',
     });
 
-    const fileName = `final-invoice-${invoiceId}.pdf`;
+    if (
+      action === 'share' &&
+      navigator.share &&
+      navigator.canShare &&
+      navigator.canShare({ files: [file] })
+    ) {
+      await navigator.share({
+        title: fileName.replace('.pdf', ''),
+        text: fileName,
+        files: [file],
+      });
 
-    const jsPDF = (await import('jspdf')).default;
-
-    const pdf = new jsPDF();
-
-    const arrayBuffer = await blob.arrayBuffer();
-
-    const uint8Array = new Uint8Array(arrayBuffer);
-
-    const binaryString = uint8Array.reduce(
-      (data, byte) =>
-        data + String.fromCharCode(byte),
-      '',
-    );
-
-    const base64 =
-      btoa(binaryString);
-
-    try {
-      const { Filesystem, Directory } =
-        await import(
-          '@capacitor/filesystem'
-        );
-
-      const { Share } =
-        await import(
-          '@capacitor/share'
-        );
-
-      const saved =
-        await Filesystem.writeFile({
-          path: fileName,
-          data: base64,
-          directory:
-            Directory.Documents,
-          recursive: true,
-        });
-
-      if (share) {
-        await Share.share({
-          title: 'Final Invoice',
-          text: `Final Invoice #${invoiceId}`,
-          url: saved.uri,
-          dialogTitle:
-            'Share Final Invoice PDF',
-        });
-
-        return;
-      }
-
-      window.open(saved.uri, '_blank');
       return;
-    } catch {
-      const url =
-        window.URL.createObjectURL(
-          blob,
-        );
-
-      const link =
-        document.createElement('a');
-
-      link.href = url;
-      link.download = fileName;
-
-      document.body.appendChild(link);
-
-      link.click();
-
-      link.remove();
-
-      window.URL.revokeObjectURL(
-        url,
-      );
     }
-  } catch (error: any) {
-    console.error(error);
 
-    alert(
-      error?.response?.data?.message ||
-        'Failed to download final invoice PDF',
-    );
+    const url = window.URL.createObjectURL(blob);
+
+    if (action === 'view') {
+      window.open(url, '_blank');
+    } else {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      if (action === 'share') {
+        alert(
+          'Sharing is not supported on this device/browser. PDF has been downloaded, you can share it manually.',
+        );
+      }
+    }
+
+    setTimeout(() => window.URL.revokeObjectURL(url), 30000);
+  } catch (error) {
+    console.error(error);
+    alert('PDF error. Please try again.');
   }
+};
+
+const downloadFinalInvoicePdf = async (
+  invoiceId: number,
+  action: 'view' | 'download' | 'share' = 'download',
+) => {
+  return handlePurchasePdf(
+    `/project/final-invoice/${invoiceId}/pdf`,
+    `final-invoice-${invoiceId}.pdf`,
+    action,
+  );
 };
 
 const downloadProformaInvoicePdf = async (
   piId: number,
-  share = false,
+  action: 'view' | 'download' | 'share' = 'download',
 ) => {
-  try {
-    const token = localStorage.getItem('token');
-
-    const res = await axios.get(
-      `${API_BASE_URL}/project/proforma-invoice/${piId}/pdf`,
-      {
-        responseType: 'blob',
-        headers: token
-          ? {
-              Authorization: `Bearer ${token}`,
-            }
-          : {},
-      },
-    );
-
-    const blob = new Blob([res.data], {
-      type: 'application/pdf',
-    });
-
-    const fileName = `proforma-invoice-${piId}.pdf`;
-
-    const arrayBuffer = await blob.arrayBuffer();
-    const uint8Array = new Uint8Array(arrayBuffer);
-
-    const binaryString = uint8Array.reduce(
-      (data, byte) => data + String.fromCharCode(byte),
-      '',
-    );
-
-    const base64 = btoa(binaryString);
-
-    try {
-      const { Filesystem, Directory } = await import(
-        '@capacitor/filesystem'
-      );
-
-      const { Share } = await import('@capacitor/share');
-
-      const saved = await Filesystem.writeFile({
-        path: fileName,
-        data: base64,
-        directory: Directory.Documents,
-        recursive: true,
-      });
-
-      if (share) {
-        await Share.share({
-          title: 'Proforma Invoice',
-          text: `Proforma Invoice #${piId}`,
-          url: saved.uri,
-          dialogTitle: 'Share Proforma Invoice PDF',
-        });
-
-        return;
-      }
-
-      window.open(saved.uri, '_blank');
-      return;
-    } catch {
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-
-      link.href = url;
-      link.download = fileName;
-
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-
-      window.URL.revokeObjectURL(url);
-    }
-  } catch (error: any) {
-    console.error(error);
-
-    alert(
-      error?.response?.data?.message ||
-        'Failed to download proforma invoice PDF',
-    );
-  }
+  return handlePurchasePdf(
+    `/project/proforma-invoice/${piId}/pdf`,
+    `proforma-invoice-${piId}.pdf`,
+    action,
+  );
 };
 
 const downloadPurchaseOrderPdf = async (
   poId: number,
-  share = false,
+  action: 'view' | 'download' | 'share' = 'download',
 ) => {
-  try {
-    const token = localStorage.getItem('token');
-
-    const res = await axios.get(
-      `${API_BASE_URL}/project/purchase-order/${poId}/pdf`,
-      {
-        responseType: 'blob',
-        headers: token
-          ? {
-              Authorization: `Bearer ${token}`,
-            }
-          : {},
-      },
-    );
-
-    const blob = new Blob([res.data], {
-      type: 'application/pdf',
-    });
-
-    const fileName = `purchase-order-${poId}.pdf`;
-
-    const arrayBuffer = await blob.arrayBuffer();
-    const uint8Array = new Uint8Array(arrayBuffer);
-
-    const binaryString = uint8Array.reduce(
-      (data, byte) => data + String.fromCharCode(byte),
-      '',
-    );
-
-    const base64 = btoa(binaryString);
-
-    try {
-      const { Filesystem, Directory } = await import(
-        '@capacitor/filesystem'
-      );
-
-      const { Share } = await import('@capacitor/share');
-
-      const saved = await Filesystem.writeFile({
-        path: fileName,
-        data: base64,
-        directory: Directory.Documents,
-        recursive: true,
-      });
-
-      if (share) {
-        await Share.share({
-          title: 'Purchase Order',
-          text: `Purchase Order #${poId}`,
-          url: saved.uri,
-          dialogTitle: 'Share Purchase Order PDF',
-        });
-
-        return;
-      }
-
-      window.open(saved.uri, '_blank');
-      return;
-    } catch {
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-
-      link.href = url;
-      link.download = fileName;
-
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-
-      window.URL.revokeObjectURL(url);
-    }
-  } catch (error: any) {
-    console.error(error);
-
-    alert(
-      error?.response?.data?.message ||
-        'Failed to download purchase order PDF',
-    );
-  }
+  return handlePurchasePdf(
+    `/project/purchase-order/${poId}/pdf`,
+    `purchase-order-${poId}.pdf`,
+    action,
+  );
 };
 
 const hidePurchaseOrder = async (poId: number) => {
@@ -1841,7 +1659,7 @@ const generateProformaInvoice = async () => {
 <div className="mt-2 flex flex-wrap gap-2">
   <button
     onClick={() =>
-      downloadPurchaseOrderPdf(po.id, false)
+      downloadPurchaseOrderPdf(po.id, 'download')
     }
     className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
   >
@@ -1850,7 +1668,7 @@ const generateProformaInvoice = async () => {
 
   <button
     onClick={() =>
-      downloadPurchaseOrderPdf(po.id, true)
+      downloadPurchaseOrderPdf(po.id, 'share')
     }
     className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
   >
@@ -2851,7 +2669,7 @@ onChange={(e) =>
 <div className="mt-2 flex flex-wrap gap-2">
   <button
     onClick={() =>
-      downloadProformaInvoicePdf(pi.id, false)
+      downloadProformaInvoicePdf(pi.id, 'download')
     }
     className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
   >
@@ -2860,7 +2678,7 @@ onChange={(e) =>
 
   <button
     onClick={() =>
-      downloadProformaInvoicePdf(pi.id, true)
+      downloadProformaInvoicePdf(pi.id, 'share')
     }
     className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
   >
@@ -2963,10 +2781,8 @@ onChange={(e) =>
 <div className="mt-2 flex flex-wrap gap-2">
   <button
     onClick={() =>
-      downloadFinalInvoicePdf(
-        invoice.id,
-        false,
-      )
+      downloadFinalInvoicePdf(invoice.id, 'download')
+
     }
     className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
   >
@@ -2975,10 +2791,7 @@ onChange={(e) =>
 
   <button
     onClick={() =>
-      downloadFinalInvoicePdf(
-        invoice.id,
-        true,
-      )
+      downloadFinalInvoicePdf(invoice.id, 'share')
     }
     className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
   >
