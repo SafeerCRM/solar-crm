@@ -84,6 +84,20 @@ deactivateCompanyBankDetail(@Param('id', ParseIntPipe) id: number) {
   return this.dealerService.deactivateCompanyBankDetail(id);
 }
 
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER', 'ACCOUNT_MANAGER', 'TRADING_MANAGER')
+@Get('portal-company-setting')
+getPortalCompanySetting() {
+  return this.dealerService.getPortalCompanySetting();
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER', 'ACCOUNT_MANAGER', 'TRADING_MANAGER')
+@Post('portal-company-setting')
+savePortalCompanySetting(@Body() body: any) {
+  return this.dealerService.savePortalCompanySetting(body);
+}
+
   @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('OWNER', 'TRADING_MANAGER')
 @Patch(':id/portal-password')

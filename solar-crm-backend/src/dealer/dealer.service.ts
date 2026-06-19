@@ -39,6 +39,7 @@ import {
 import { ProjectFinalInvoiceItem } from '../project/project-final-invoice-item.entity';
 import { ProjectService } from '../project/project.service';
 import { StaffMember } from '../staff/staff-member.entity';
+import { DealerPortalCompanySetting } from './dealer-portal-company-setting.entity';
 
 @Injectable()
 export class DealerService {
@@ -93,6 +94,9 @@ export class DealerService {
 
     @InjectRepository(StaffMember)
 private readonly staffMemberRepository: Repository<StaffMember>,
+
+@InjectRepository(DealerPortalCompanySetting)
+private readonly portalCompanySettingRepository: Repository<DealerPortalCompanySetting>,
 
     private readonly projectService: ProjectService,
   ) {}
@@ -412,20 +416,68 @@ if (!dealer && body?.email) {
   }
 
     async getBankDetails() {
-    const bankDetails = await this.bankDetailRepository.find({
-      where: { isActive: true },
-      order: { createdAt: 'DESC' },
+  const bankDetails = await this.bankDetailRepository.find({
+    where: { isActive: true },
+    order: { createdAt: 'DESC' },
+  });
+
+  const setting = await this.getPortalCompanySetting();
+
+  return {
+    companyName: setting.companyName || '',
+    email: setting.email || '',
+    phone1: setting.phone1 || '',
+    phone2: setting.phone2 || '',
+    gstin: setting.gstin || '',
+    website: setting.website || '',
+    logoUrl: setting.logoUrl || '',
+    bankDetails,
+  };
+}
+
+  async getPortalCompanySetting() {
+  let setting = await this.portalCompanySettingRepository.findOne({
+    where: {},
+    order: { id: 'ASC' } as any,
+  });
+
+  if (!setting) {
+    setting = this.portalCompanySettingRepository.create({
+      companyName: '',
+      email: '',
+      phone1: '',
+      phone2: '',
+      gstin: '',
+      website: '',
+      logoUrl: '',
     });
 
-    return {
-      companyName: 'ADITYA SOLARS',
-      email: 'adityasolarsraj01@gmail.com',
-      phone1: '8306170662',
-      phone2: '9887634474',
-      gstin: '08CVFPM5354P1ZV',
-      bankDetails,
-    };
+    setting = await this.portalCompanySettingRepository.save(setting);
   }
+
+  return setting;
+}
+
+async savePortalCompanySetting(body: any) {
+  let setting = await this.portalCompanySettingRepository.findOne({
+    where: {},
+    order: { id: 'ASC' } as any,
+  });
+
+  if (!setting) {
+    setting = this.portalCompanySettingRepository.create();
+  }
+
+  setting.companyName = body.companyName || '';
+  setting.email = body.email || '';
+  setting.phone1 = body.phone1 || '';
+  setting.phone2 = body.phone2 || '';
+  setting.gstin = body.gstin || '';
+  setting.website = body.website || '';
+  setting.logoUrl = body.logoUrl || '';
+
+  return this.portalCompanySettingRepository.save(setting);
+}
 
     async getDealerStaffContacts() {
   return this.staffMemberRepository.find({

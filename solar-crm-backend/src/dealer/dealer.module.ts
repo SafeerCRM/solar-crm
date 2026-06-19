@@ -24,6 +24,7 @@ import { ProjectFinalInvoice } from '../project/project-final-invoice.entity';
 import { ProjectFinalInvoiceItem } from '../project/project-final-invoice-item.entity';
 import { ProjectModule } from '../project/project.module';
 import { StaffMember } from '../staff/staff-member.entity';
+import { DealerPortalCompanySetting } from './dealer-portal-company-setting.entity';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ ProjectProformaInvoiceItem,
 ProjectFinalInvoice,
 ProjectFinalInvoiceItem,
 StaffMember,
+DealerPortalCompanySetting,
     ]),
     ProjectModule,
   ],
