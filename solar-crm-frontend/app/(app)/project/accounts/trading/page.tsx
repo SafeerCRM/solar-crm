@@ -182,6 +182,10 @@ const [monthlyForm, setMonthlyForm] = useState({
 
   const [editingDealerId, setEditingDealerId] = useState<number | null>(null);
   const [dealerForm, setDealerForm] = useState(emptyDealerForm);
+  const [passwordModalDealer, setPasswordModalDealer] = useState<Dealer | null>(null);
+const [newPortalPassword, setNewPortalPassword] = useState('');
+const [confirmPortalPassword, setConfirmPortalPassword] = useState('');
+const [passwordSaving, setPasswordSaving] = useState(false);
 
   const [orderForm, setOrderForm] = useState({
     dealerId: '',
@@ -688,6 +692,59 @@ const generateDealerFinalInvoice = async () => {
       alert(error?.response?.data?.message || 'Failed to create dealer order');
     }
   };
+
+  const openResetPasswordModal = (dealer: Dealer) => {
+  setPasswordModalDealer(dealer);
+  setNewPortalPassword('');
+  setConfirmPortalPassword('');
+};
+
+const closeResetPasswordModal = () => {
+  setPasswordModalDealer(null);
+  setNewPortalPassword('');
+  setConfirmPortalPassword('');
+  setPasswordSaving(false);
+};
+
+const saveDealerPortalPassword = async () => {
+  if (!passwordModalDealer) return;
+
+  const password = newPortalPassword.trim();
+  const confirmPassword = confirmPortalPassword.trim();
+
+  if (!password) {
+    alert('New password is required');
+    return;
+  }
+
+  if (password.length < 4) {
+    alert('Password must be at least 4 characters');
+    return;
+  }
+
+  if (password !== confirmPassword) {
+    alert('Password and confirm password do not match');
+    return;
+  }
+
+  try {
+    setPasswordSaving(true);
+
+    await axios.patch(
+      `${API_BASE_URL}/dealer/${passwordModalDealer.id}/portal-password`,
+      { portalPassword: password },
+      { headers: headers() },
+    );
+
+    alert('Dealer portal password updated successfully');
+    closeResetPasswordModal();
+  } catch (error: any) {
+    console.error(error);
+    alert(error?.response?.data?.message || 'Failed to update password');
+  } finally {
+    setPasswordSaving(false);
+  }
+};
 
   const openOrder = async (id: number) => {
     try {
@@ -1320,14 +1377,30 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
                     <p className="text-sm text-gray-500">{dealer.city || '-'} | GST: {dealer.gstNumber || '-'}</p>
                     <p className="text-sm text-gray-500">Opening Balance: {money(dealer.openingBalance)}</p>
 
-                    <div className="mt-3 flex gap-2">
-                      <button onClick={() => startEditDealer(dealer)} className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white">
-                        Edit
-                      </button>
-                      <button onClick={() => toggleDealer(dealer)} className={`rounded-xl px-3 py-2 text-sm font-semibold text-white ${dealer.isActive === false ? 'bg-green-600' : 'bg-red-600'}`}>
-                        {dealer.isActive === false ? 'Restore' : 'Hide'}
-                      </button>
-                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+  <button
+    onClick={() => startEditDealer(dealer)}
+    className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white"
+  >
+    Edit
+  </button>
+
+  <button
+    onClick={() => openResetPasswordModal(dealer)}
+    className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white"
+  >
+    Reset Password
+  </button>
+
+  <button
+    onClick={() => toggleDealer(dealer)}
+    className={`rounded-xl px-3 py-2 text-sm font-semibold text-white ${
+      dealer.isActive === false ? 'bg-green-600' : 'bg-red-600'
+    }`}
+  >
+    {dealer.isActive === false ? 'Restore' : 'Hide'}
+  </button>
+</div>
                   </div>
                 ))
               )}
@@ -2220,6 +2293,69 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
     )}
   </div>
 )}
+
+    {passwordModalDealer && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+        <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-gray-800">
+                Reset Dealer Portal Password
+              </h2>
+              <p className="mt-1 text-sm text-gray-500">
+                {passwordModalDealer.vendorName || passwordModalDealer.contactPerson || 'Dealer'}
+              </p>
+            </div>
+
+            <button
+              onClick={closeResetPasswordModal}
+              className="rounded-xl bg-gray-100 px-3 py-2 text-sm font-bold text-gray-700"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            <input
+              type="password"
+              placeholder="New password"
+              value={newPortalPassword}
+              onChange={(e) => setNewPortalPassword(e.target.value)}
+              className="w-full rounded-xl border p-3"
+            />
+
+            <input
+              type="password"
+              placeholder="Confirm password"
+              value={confirmPortalPassword}
+              onChange={(e) => setConfirmPortalPassword(e.target.value)}
+              className="w-full rounded-xl border p-3"
+            />
+
+            <p className="rounded-xl bg-blue-50 p-3 text-xs font-semibold text-blue-700">
+              Password will not be shown later. If dealer forgets it, reset again.
+            </p>
+          </div>
+
+          <div className="mt-5 flex flex-wrap justify-end gap-2">
+            <button
+              onClick={closeResetPasswordModal}
+              className="rounded-xl bg-gray-200 px-4 py-2 text-sm font-bold text-gray-700"
+            >
+              Cancel
+            </button>
+
+            <button
+              onClick={saveDealerPortalPassword}
+              disabled={passwordSaving}
+              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:opacity-60"
+            >
+              {passwordSaving ? 'Saving...' : 'Save Password'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     </div>
   );
 }
