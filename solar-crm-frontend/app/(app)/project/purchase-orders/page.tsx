@@ -687,11 +687,11 @@ const handlePurchasePdf = async (
       const { Share } = await import('@capacitor/share');
 
       const saved = await Filesystem.writeFile({
-        path: fileName,
-        data: base64,
-        directory: Directory.Documents,
-        recursive: true,
-      });
+  path: fileName,
+  data: base64,
+  directory: Directory.Cache,
+  recursive: true,
+});
 
       if (action === 'share') {
         await Share.share({
