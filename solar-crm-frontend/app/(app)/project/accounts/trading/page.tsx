@@ -926,15 +926,19 @@ const hideOrRestoreMonthlyRequirement = async (
   }
 };
 
-const updateDealerComplaintStatus = async (id: number, status: string) => {
+const updateDealerComplaintStatus = async (
+  id: number,
+  status: string,
+  adminRemarks = '',
+) => {
   try {
     await axios.patch(
       `${API_BASE_URL}/dealer/complaints/${id}`,
-      { status },
+      { status, adminRemarks },
       { headers: headers() },
     );
 
-    alert('Complaint status updated');
+    alert('Complaint updated');
     fetchDealerComplaints();
   } catch (error: any) {
     console.error(error);
@@ -1782,18 +1786,38 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
                 </p>
               </div>
 
-              <select
-                value={item.status || 'OPEN'}
-                onChange={(e) =>
-                  updateDealerComplaintStatus(item.id, e.target.value)
-                }
-                className="rounded-xl border p-2 text-sm"
-              >
-                <option value="OPEN">Open</option>
-                <option value="IN_PROGRESS">In Progress</option>
-                <option value="RESOLVED">Resolved</option>
-                <option value="CLOSED">Closed</option>
-              </select>
+              <div className="flex flex-col gap-2">
+  <select
+    value={item.status || 'OPEN'}
+    onChange={(e) =>
+      updateDealerComplaintStatus(
+        item.id,
+        e.target.value,
+        item.adminRemarks || '',
+      )
+    }
+    className="rounded-xl border p-2 text-sm"
+  >
+    <option value="OPEN">Open</option>
+    <option value="IN_PROGRESS">In Progress</option>
+    <option value="RESOLVED">Resolved</option>
+    <option value="CLOSED">Closed</option>
+  </select>
+
+  <textarea
+    placeholder="Staff response / remarks"
+    defaultValue={item.adminRemarks || ''}
+    onBlur={(e) =>
+      updateDealerComplaintStatus(
+        item.id,
+        item.status || 'OPEN',
+        e.target.value,
+      )
+    }
+    className="rounded-xl border p-2 text-sm"
+    rows={3}
+  />
+</div>
             </div>
 
             {Array.isArray(item.photoUrls) && item.photoUrls.length > 0 && (

@@ -317,6 +317,22 @@ export default function DealerComplaintsPage() {
                     {item.description}
                   </p>
 
+                  {item.adminRemarks && (
+  <div className="mt-4 rounded-2xl bg-blue-50 p-4">
+    <p className="text-xs font-black text-blue-500">
+      Company Response
+    </p>
+    <p className="mt-1 text-sm font-semibold text-blue-900">
+      {item.adminRemarks}
+    </p>
+    {item.lastResponseByName && (
+      <p className="mt-2 text-xs font-bold text-blue-500">
+        By: {item.lastResponseByName}
+      </p>
+    )}
+  </div>
+)}
+
                   {Array.isArray(item.photoUrls) && item.photoUrls.length > 0 && (
                     <div className="mt-4 flex flex-wrap gap-2">
                       {item.photoUrls.map((url: string) => (
