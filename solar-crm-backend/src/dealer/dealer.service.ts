@@ -37,6 +37,7 @@ import {
   ProjectFinalInvoiceStatus,
 } from '../project/project-final-invoice.entity';
 import { ProjectFinalInvoiceItem } from '../project/project-final-invoice-item.entity';
+import { ProjectService } from '../project/project.service';
 
 @Injectable()
 export class DealerService {
@@ -88,6 +89,8 @@ export class DealerService {
 
     @InjectRepository(ProjectFinalInvoiceItem)
     private readonly finalInvoiceItemRepository: Repository<ProjectFinalInvoiceItem>,
+
+    private readonly projectService: ProjectService,
   ) {}
 
   healthCheck() {
@@ -2141,5 +2144,59 @@ if (body.adminRemarks !== undefined) {
       recentOrders: orders.slice(0, 10),
       recentPayments: payments.slice(0, 10),
     };
+  }
+
+      async generateDealerProformaInvoicePdf(
+    dealerId: number,
+    invoiceId: number,
+    res: any,
+  ) {
+    const invoiceData: any = await this.projectService.getProformaInvoiceById(
+      invoiceId,
+    );
+
+    if (!invoiceData?.id) {
+      throw new NotFoundException('Proforma invoice not found');
+    }
+
+    const invoiceDealerId = Number(
+      invoiceData.dealerId ||
+        invoiceData.customerId ||
+        invoiceData.partyId ||
+        0,
+    );
+
+    if (invoiceDealerId && invoiceDealerId !== Number(dealerId)) {
+      throw new UnauthorizedException('This invoice does not belong to dealer');
+    }
+
+    return this.projectService.generateProformaInvoicePdf(invoiceId, res);
+  }
+
+  async generateDealerFinalInvoicePdf(
+    dealerId: number,
+    invoiceId: number,
+    res: any,
+  ) {
+    const invoiceData: any = await this.projectService.getFinalInvoiceById(
+      invoiceId,
+    );
+
+    if (!invoiceData?.id) {
+      throw new NotFoundException('Final invoice not found');
+    }
+
+    const invoiceDealerId = Number(
+      invoiceData.dealerId ||
+        invoiceData.customerId ||
+        invoiceData.partyId ||
+        0,
+    );
+
+    if (invoiceDealerId && invoiceDealerId !== Number(dealerId)) {
+      throw new UnauthorizedException('This invoice does not belong to dealer');
+    }
+
+    return this.projectService.generateFinalInvoicePdf(invoiceId, res);
   }
 }

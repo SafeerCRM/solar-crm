@@ -8,6 +8,7 @@ Patch,
 Query,
   Post,
   Req,
+  Res,
   UnauthorizedException,
   UploadedFiles,
 UseInterceptors,
@@ -15,6 +16,7 @@ UseInterceptors,
 import { DealerService } from './dealer.service';
 import * as jwt from 'jsonwebtoken';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 
 @Controller('dealer-auth')
 export class DealerAuthController {
@@ -244,6 +246,36 @@ export class DealerAuthController {
     return this.service.listMonthlyRequirements(
       Number(payload.dealerId),
       query,
+    );
+  }
+
+    @Get('proforma-invoice/:id/pdf')
+  async dealerProformaInvoicePdf(
+    @Req() req: any,
+    @Res() res: Response,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    const payload = this.getDealerPayload(req);
+
+    return this.service.generateDealerProformaInvoicePdf(
+      Number(payload.dealerId),
+      id,
+      res,
+    );
+  }
+
+  @Get('final-invoice/:id/pdf')
+  async dealerFinalInvoicePdf(
+    @Req() req: any,
+    @Res() res: Response,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    const payload = this.getDealerPayload(req);
+
+    return this.service.generateDealerFinalInvoicePdf(
+      Number(payload.dealerId),
+      id,
+      res,
     );
   }
 

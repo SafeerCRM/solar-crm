@@ -22,6 +22,7 @@ import { ProjectProformaInvoice } from '../project/project-proforma-invoice.enti
 import { ProjectProformaInvoiceItem } from '../project/project-proforma-invoice-item.entity';
 import { ProjectFinalInvoice } from '../project/project-final-invoice.entity';
 import { ProjectFinalInvoiceItem } from '../project/project-final-invoice-item.entity';
+import { ProjectModule } from '../project/project.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { ProjectFinalInvoiceItem } from '../project/project-final-invoice-item.e
 ProjectProformaInvoiceItem,
 ProjectFinalInvoice,
 ProjectFinalInvoiceItem,
+ProjectModule,
     ]),
   ],
   providers: [DealerService],
