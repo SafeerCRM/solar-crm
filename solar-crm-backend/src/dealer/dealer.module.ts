@@ -23,6 +23,7 @@ import { ProjectProformaInvoiceItem } from '../project/project-proforma-invoice-
 import { ProjectFinalInvoice } from '../project/project-final-invoice.entity';
 import { ProjectFinalInvoiceItem } from '../project/project-final-invoice-item.entity';
 import { ProjectModule } from '../project/project.module';
+import { StaffMember } from '../staff/staff-member.entity';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { ProjectModule } from '../project/project.module';
 ProjectProformaInvoiceItem,
 ProjectFinalInvoice,
 ProjectFinalInvoiceItem,
+StaffMember,
     ]),
     ProjectModule,
   ],

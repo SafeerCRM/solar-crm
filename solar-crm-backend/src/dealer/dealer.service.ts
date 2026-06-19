@@ -38,6 +38,7 @@ import {
 } from '../project/project-final-invoice.entity';
 import { ProjectFinalInvoiceItem } from '../project/project-final-invoice-item.entity';
 import { ProjectService } from '../project/project.service';
+import { StaffMember } from '../staff/staff-member.entity';
 
 @Injectable()
 export class DealerService {
@@ -89,6 +90,9 @@ export class DealerService {
 
     @InjectRepository(ProjectFinalInvoiceItem)
     private readonly finalInvoiceItemRepository: Repository<ProjectFinalInvoiceItem>,
+
+    @InjectRepository(StaffMember)
+private readonly staffMemberRepository: Repository<StaffMember>,
 
     private readonly projectService: ProjectService,
   ) {}
@@ -423,33 +427,19 @@ if (!dealer && body?.email) {
     };
   }
 
-    async getStaffContacts() {
-    const allowedRoles = [
-      'OWNER',
-      'STOCK_MANAGER',
-      'TRADING_MANAGER',
-      'ACCOUNT_MANAGER',
-      'CUSTOMER_MANAGER',
-    ];
-
-    const users = await this.userRepository.find({
-      where: { isHidden: false },
-      order: { name: 'ASC' },
-    });
-
-    return users
-      .filter((user: any) => {
-        const roles = Array.isArray(user.roles) ? user.roles : [];
-
-        return roles.some((role: string) => allowedRoles.includes(role));
-      })
-      .map((user: any) => ({
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        roles: Array.isArray(user.roles) ? user.roles : [],
-      }));
-  }
+    async getDealerStaffContacts() {
+  return this.staffMemberRepository.find({
+    where: {
+      visibleToDealer: true,
+      isActive: true,
+      isHidden: false,
+    } as any,
+    order: {
+      department: 'ASC',
+      fullName: 'ASC',
+    } as any,
+  });
+}
 
     async createDealerOrder(dealerId: number, body: any) {
     const dealer = await this.dealerRepository.findOne({
@@ -1813,6 +1803,75 @@ return {
 
     return this.bankDetailRepository.save(bankDetail);
   }
+
+  async listCompanyBankDetails(query: any) {
+  const showInactive = query?.showInactive === 'true';
+
+  return this.bankDetailRepository.find({
+    where: showInactive ? {} : { isActive: true },
+    order: { createdAt: 'DESC' } as any,
+  });
+}
+
+async saveCompanyBankDetail(body: any) {
+  const isActive = body?.isActive !== false;
+
+  if (isActive) {
+    await this.bankDetailRepository.update({}, { isActive: false });
+  }
+
+  let detail: any = null;
+
+  if (body?.id) {
+    detail = await this.bankDetailRepository.findOne({
+      where: { id: Number(body.id) },
+    });
+  }
+
+  if (!detail) {
+    detail = this.bankDetailRepository.create();
+  }
+
+  detail.accountName = body.accountName || '';
+  detail.bankName = body.bankName || '';
+  detail.accountNumber = body.accountNumber || '';
+  detail.ifsc = body.ifsc || '';
+  detail.upiId = body.upiId || '';
+  detail.qrCodeUrl = body.qrCodeUrl || '';
+  detail.isActive = isActive;
+
+  return this.bankDetailRepository.save(detail);
+}
+
+async activateCompanyBankDetail(id: number) {
+  const detail = await this.bankDetailRepository.findOne({
+    where: { id },
+  });
+
+  if (!detail) {
+    throw new NotFoundException('Bank detail not found');
+  }
+
+  await this.bankDetailRepository.update({}, { isActive: false });
+
+  detail.isActive = true;
+
+  return this.bankDetailRepository.save(detail);
+}
+
+async deactivateCompanyBankDetail(id: number) {
+  const detail = await this.bankDetailRepository.findOne({
+    where: { id },
+  });
+
+  if (!detail) {
+    throw new NotFoundException('Bank detail not found');
+  }
+
+  detail.isActive = false;
+
+  return this.bankDetailRepository.save(detail);
+}
 
     async listInternalDealerComplaints(query: any) {
     const page = Number(query?.page || 1);

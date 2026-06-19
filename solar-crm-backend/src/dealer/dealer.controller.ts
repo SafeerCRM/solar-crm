@@ -57,6 +57,34 @@ export class DealerController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER', 'ACCOUNT_MANAGER', 'TRADING_MANAGER')
+@Get('company-bank-details')
+listCompanyBankDetails(@Query() query: any) {
+  return this.dealerService.listCompanyBankDetails(query);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER', 'ACCOUNT_MANAGER', 'TRADING_MANAGER')
+@Post('company-bank-detail')
+saveCompanyBankDetail(@Body() body: any) {
+  return this.dealerService.saveCompanyBankDetail(body);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER', 'ACCOUNT_MANAGER', 'TRADING_MANAGER')
+@Patch('company-bank-detail/:id/activate')
+activateCompanyBankDetail(@Param('id', ParseIntPipe) id: number) {
+  return this.dealerService.activateCompanyBankDetail(id);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER', 'ACCOUNT_MANAGER', 'TRADING_MANAGER')
+@Patch('company-bank-detail/:id/deactivate')
+deactivateCompanyBankDetail(@Param('id', ParseIntPipe) id: number) {
+  return this.dealerService.deactivateCompanyBankDetail(id);
+}
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('OWNER', 'TRADING_MANAGER')
 @Patch(':id/portal-password')
 updateDealerPortalPassword(

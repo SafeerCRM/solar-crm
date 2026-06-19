@@ -52,7 +52,7 @@ export class DealerAuthController {
   async staffContacts(@Req() req: any) {
     this.getDealerPayload(req);
 
-    return this.service.getStaffContacts();
+    return this.service.getDealerStaffContacts();
   }
 
     @Post('orders')
