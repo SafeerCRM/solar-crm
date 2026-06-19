@@ -347,6 +347,8 @@ const navItems = [
     'OWNER',
     'PROJECT_MANAGER',
     'TRADING_MANAGER',
+    'STOCK_MANAGER',
+    'ACCOUNT_MANAGER',
   ],
 },
 
