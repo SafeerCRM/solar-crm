@@ -4776,7 +4776,7 @@ const canApproveAndReserveStock =
     Customer Information
   </h3>
 
-  <input placeholder="Customer Name" value={editForm.customerName} onChange={(e) => setEditForm({ ...editForm, customerName: e.target.value })} className="rounded-xl border p-3" />
+  <input placeholder="Customer Name" value={editForm.customerName} onChange={(e) => setEditForm({ ...editForm, customerName: e.target.value })} className="rounded-xl border p-3 md:col-span-2" />
   <input placeholder="Customer Phone" value={editForm.customerPhone} onChange={(e) => setEditForm({ ...editForm, customerPhone: e.target.value })} className="rounded-xl border p-3" />
   <input placeholder="City" value={editForm.city} onChange={(e) => setEditForm({ ...editForm, city: e.target.value })} className="rounded-xl border p-3" />
   <input placeholder="Zone" value={editForm.zone} onChange={(e) => setEditForm({ ...editForm, zone: e.target.value })} className="rounded-xl border p-3" />
@@ -4808,7 +4808,7 @@ const canApproveAndReserveStock =
   </p>
 </div>
 
-<div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+<div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 md:col-span-2">
   <h3 className="mb-3 font-bold text-blue-900">
     Solar Franchise Assignment
   </h3>
@@ -4860,7 +4860,7 @@ const canApproveAndReserveStock =
   <input placeholder="Project Size" value={editForm.projectSize} onChange={(e) => setEditForm({ ...editForm, projectSize: e.target.value })} className="rounded-xl border p-3" />
   <input placeholder="Electricity K Number" value={editForm.electricityKNumber} onChange={(e) => setEditForm({ ...editForm, electricityKNumber: e.target.value })} className="rounded-xl border p-3" />
   <input placeholder="Customer Gmail" value={editForm.customerGmail} onChange={(e) => setEditForm({ ...editForm, customerGmail: e.target.value })} className="rounded-xl border p-3" />
-  <div className="relative md:col-span-3">
+  <div className="relative md:col-span-2">
   <input
     placeholder="Search Customer Master by Code / Name / Mobile / K Number"
     value={customerSearch}
@@ -4898,7 +4898,7 @@ const canApproveAndReserveStock =
     </div>
   )}
 </div>
-  <input placeholder="Aadhaar Linked Mobile" value={editForm.aadhaarLinkedMobile} onChange={(e) => setEditForm({ ...editForm, aadhaarLinkedMobile: e.target.value })} className="rounded-xl border p-3" />
+  <input placeholder="Aadhaar Linked Mobile" value={editForm.aadhaarLinkedMobile} onChange={(e) => setEditForm({ ...editForm, aadhaarLinkedMobile: e.target.value })} className="rounded-xl border p-3 md:col-span-2" />
 
   <h3 className="col-span-full mt-4 text-lg font-bold text-gray-800">
     Technical Details
