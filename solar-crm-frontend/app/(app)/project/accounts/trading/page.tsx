@@ -796,6 +796,43 @@ setSelectedOrderInvoices(invoiceRes.data || null);
   }
 };
 
+const updateDealerPaymentStatus = async (
+  paymentId: number,
+  status: 'APPROVED' | 'REJECTED',
+) => {
+  const approvalNote = window.prompt(
+    status === 'APPROVED'
+      ? 'Approval note optional'
+      : 'Reason for rejection',
+    status === 'APPROVED' ? 'Payment verified' : '',
+  );
+
+  if (approvalNote === null) return;
+
+  try {
+    await axios.patch(
+      `${API_BASE_URL}/dealer/payments/${paymentId}/approve`,
+      {
+        status,
+        approvalNote,
+      },
+      { headers: headers() },
+    );
+
+    alert(`Payment ${status.toLowerCase()} successfully`);
+
+    if (selectedOrder?.order?.id) {
+      await openOrder(selectedOrder.order.id);
+    }
+
+    fetchOrders();
+    fetchAnalytics();
+  } catch (error: any) {
+    console.error(error);
+    alert(error?.response?.data?.message || 'Failed to update payment');
+  }
+};
+
   const addComment = async () => {
     if (!selectedOrder?.order?.id || !commentText.trim()) {
       alert('Comment is required');
@@ -1572,6 +1609,28 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
               Remarks: {payment.remarks}
             </p>
           )}
+
+          <div className="mt-3 flex flex-wrap gap-2">
+  <button
+    onClick={() => updateDealerPaymentStatus(payment.id, 'APPROVED')}
+    className="rounded-lg bg-green-600 px-3 py-2 text-xs font-semibold text-white"
+  >
+    Approve
+  </button>
+
+  <button
+    onClick={() => updateDealerPaymentStatus(payment.id, 'REJECTED')}
+    className="rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white"
+  >
+    Reject
+  </button>
+</div>
+
+{payment.approvalNote && (
+  <p className="mt-2 break-words text-xs text-gray-500">
+    Approval Note: {payment.approvalNote}
+  </p>
+)}
 
           {payment.receiptUrl ? (
             <a
