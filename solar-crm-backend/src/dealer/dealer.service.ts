@@ -2199,4 +2199,20 @@ if (body.adminRemarks !== undefined) {
 
     return this.projectService.generateFinalInvoicePdf(invoiceId, res);
   }
+
+    async getDealerOrderInvoicesForPortal(dealerId: number, orderId: number) {
+    const order = await this.dealerOrderRepository.findOne({
+      where: {
+        id: orderId,
+        dealerId,
+        isHidden: false,
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException('Dealer order not found');
+    }
+
+    return this.projectService.getDealerOrderInvoices(orderId);
+  }
 }

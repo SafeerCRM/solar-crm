@@ -279,6 +279,19 @@ export class DealerAuthController {
     );
   }
 
+    @Get('orders/:id/invoices')
+  async dealerOrderInvoices(
+    @Req() req: any,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    const payload = this.getDealerPayload(req);
+
+    return this.service.getDealerOrderInvoicesForPortal(
+      Number(payload.dealerId),
+      id,
+    );
+  }
+
   private getDealerPayload(req: any) {
     const authHeader = req.headers?.authorization || '';
     const token = authHeader.replace('Bearer ', '');
