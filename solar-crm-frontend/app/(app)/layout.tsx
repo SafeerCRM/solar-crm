@@ -280,7 +280,13 @@ const navItems = [
 {
   name: 'Purchase Orders',
   href: '/project/purchase-orders',
-  roles: ['OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER'],
+  roles: [
+    'OWNER',
+    'PROJECT_MANAGER',
+    'ACCOUNT_MANAGER',
+    'STOCK_MANAGER',
+    'TRADING_MANAGER',
+  ],
 },
 
 {
