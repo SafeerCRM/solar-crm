@@ -2554,41 +2554,56 @@ if (deliveryCharge > 0) {
   }
 
         async getDealerOrderInvoicesForPortal(dealerId: number, orderId: number) {
-    const order = await this.dealerOrderRepository.findOne({
-      where: {
-        id: orderId,
-        dealerId,
-        isHidden: false,
-      },
-    });
+  const order = await this.dealerOrderRepository.findOne({
+    where: {
+      id: orderId,
+      dealerId,
+      isHidden: false,
+    },
+  });
 
-    if (!order) {
-      throw new NotFoundException('Dealer order not found');
-    }
-
-    const proformaInvoices = await this.proformaInvoiceRepository.find({
-      where: {
-        dealerId,
-        invoiceType: 'DEALER',
-        isHidden: false,
-      } as any,
-      order: { createdAt: 'DESC' } as any,
-      take: 1,
-    });
-
-    const finalInvoices = await this.finalInvoiceRepository.find({
-      where: {
-        dealerId,
-        invoiceType: 'DEALER',
-        isHidden: false,
-      } as any,
-      order: { createdAt: 'DESC' } as any,
-      take: 1,
-    });
-
-    return {
-      proformaInvoices,
-      finalInvoices,
-    };
+  if (!order) {
+    throw new NotFoundException('Dealer order not found');
   }
+
+  const orderText = order.orderNumber || `DO-${order.id}`;
+  const searchText = `Generated from dealer order ${orderText}`;
+
+  const proformaInvoices = await this.proformaInvoiceRepository
+    .createQueryBuilder('pi')
+    .where('pi.dealerId = :dealerId', { dealerId })
+    .andWhere('pi.invoiceType = :invoiceType', { invoiceType: 'DEALER' })
+    .andWhere('pi.isHidden = false')
+    .andWhere(
+      '(pi.invoiceNumber = :invoiceNumber OR pi.remarks LIKE :remarks)',
+      {
+        invoiceNumber: `DPI-${order.id}`,
+        remarks: `%${searchText}%`,
+      },
+    )
+    .orderBy('pi.createdAt', 'DESC')
+    .getMany();
+
+  const finalInvoices = await this.finalInvoiceRepository
+    .createQueryBuilder('invoice')
+    .where('invoice.dealerId = :dealerId', { dealerId })
+    .andWhere('invoice.invoiceType = :invoiceType', {
+      invoiceType: 'DEALER',
+    })
+    .andWhere('invoice.isHidden = false')
+    .andWhere(
+      '(invoice.invoiceNumber = :invoiceNumber OR invoice.remarks LIKE :remarks)',
+      {
+        invoiceNumber: `DINV-${order.id}`,
+        remarks: `%${searchText}%`,
+      },
+    )
+    .orderBy('invoice.createdAt', 'DESC')
+    .getMany();
+
+  return {
+    proformaInvoices,
+    finalInvoices,
+  };
+}
 }
