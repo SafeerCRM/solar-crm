@@ -287,7 +287,8 @@ remarks: '',
 
   const canManageMaterials =
   userRoles.includes('OWNER') ||
-  userRoles.includes('PROJECT_MANAGER');
+  userRoles.includes('PROJECT_MANAGER')||
+  userRoles.includes('ACCOUNT_MANAGER');
 
   const canViewMaterials =
   canManageMaterials ||
