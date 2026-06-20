@@ -2250,6 +2250,42 @@ if (body.adminRemarks !== undefined) {
       await this.finalInvoiceItemRepository.save(invoiceItem);
     }
 
+    if (
+  order.deliveryMode === 'DELIVERY' &&
+  Number(order.deliveryCharge || 0) <= 0
+) {
+  throw new BadRequestException(
+    'Please confirm delivery charge before generating final invoice',
+  );
+}
+
+const deliveryCharge = Number(order.deliveryCharge || 0);
+
+if (deliveryCharge > 0) {
+  subtotalAmount += deliveryCharge;
+  totalAmount += deliveryCharge;
+
+  const deliveryItem = this.finalInvoiceItemRepository.create({
+    finalInvoiceId: savedInvoice.id,
+    materialId: 0,
+    itemName: `Delivery Charge (${Number(order.deliveryDistanceKm || 0)} KM)`,
+    category: 'DELIVERY',
+    brand: '',
+    unit: 'SERVICE',
+    hsnCode: '',
+    quantity: 1,
+    finalRate: deliveryCharge,
+    gstPercent: 0,
+    discountAmount: 0,
+    subtotalAmount: deliveryCharge,
+    gstAmount: 0,
+    totalAmount: deliveryCharge,
+    remarks: order.deliveryAddress || '',
+  } as any);
+
+  await this.finalInvoiceItemRepository.save(deliveryItem);
+}
+
     savedInvoice.subtotalAmount = subtotalAmount;
     savedInvoice.discountAmount = discountAmount;
     savedInvoice.gstAmount = gstAmount;
