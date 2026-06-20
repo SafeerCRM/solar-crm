@@ -267,7 +267,7 @@ assignedProjects.forEach((item: ContractorProject) => {
     } catch (error) {
       console.error(error);
       alert(
-        'Failed to load contractor assigned projects',
+        'दिए गए कॉन्ट्रैक्टर प्रोजेक्ट लोड नहीं हो पाए',
       );
     } finally {
       setLoading(false);
@@ -325,7 +325,7 @@ assignedProjects.forEach((item: ContractorProject) => {
       },
     );
 
-    alert('Work updated');
+    alert('काम अपडेट हो गया');
 
     fetchProjects();
   } catch (error: any) {
@@ -333,7 +333,7 @@ assignedProjects.forEach((item: ContractorProject) => {
 
     alert(
       error?.response?.data?.message ||
-        'Failed to update work',
+        'काम अपडेट नहीं हो पाया',
     );
   } finally {
     setUpdatingId(null);
@@ -365,7 +365,7 @@ const updateCleaningStatus = async (
       },
     );
 
-    alert('Cleaning updated');
+    alert('सफाई कार्य अपडेट हो गया');
 
     fetchCleaningAssignments();
   } catch (error: any) {
@@ -373,7 +373,7 @@ const updateCleaningStatus = async (
 
     alert(
       error?.response?.data?.message ||
-        'Failed to update cleaning',
+        'सफाई कार्य अपडेट नहीं हो पाया',
     );
   } finally {
     setCleaningUpdatingId(null);
@@ -449,7 +449,7 @@ const captureGps = (assignmentId: number) => {
     },
   }));
 
-  alert('GPS captured successfully');
+  alert('GPS सफलतापूर्वक कैप्चर हो गया');
 },
     () => {
       alert('Unable to capture GPS location');
@@ -468,19 +468,19 @@ const uploadContractorProofs = async (
   const files = proofFiles[item.id] || [];
 
   if (!files.length) {
-    alert('Please select proof photos');
+    alert('कृपया फोटो चुनें');
     return;
   }
 
   if (!proofType[item.id]) {
-    alert('Please select proof type');
+    alert('कृपया फोटो का प्रकार चुनें');
     return;
   }
 
   const gps = gpsData[item.id];
 
   if (!gps?.latitude || !gps?.longitude) {
-    alert('Please capture GPS before uploading proof');
+    alert('फोटो अपलोड करने से पहले GPS कैप्चर करें');
     return;
   }
 
@@ -514,7 +514,7 @@ const uploadContractorProofs = async (
       },
     );
 
-    alert('Proof uploaded successfully');
+    alert('फोटो सफलतापूर्वक अपलोड हो गया');
 
     setProofFiles((prev) => ({
       ...prev,
@@ -532,7 +532,7 @@ const uploadContractorProofs = async (
 
     alert(
       error?.response?.data?.message ||
-        'Failed to upload proof',
+        'फोटो अपलोड नहीं हो पाया',
     );
   } finally {
     setUploadingProofId(null);
@@ -725,7 +725,7 @@ const selectedCleaningWorks = cleaningAssignments.filter(
 
   {cleaningAssignments.length === 0 ? (
     <p className="mt-4 text-sm text-gray-500">
-      No cleaning assignments available.
+      कोई सफाई कार्य उपलब्ध नहीं है।
     </p>
   ) : (
     <div className="mt-4 space-y-4">
@@ -735,7 +735,7 @@ const selectedCleaningWorks = cleaningAssignments.filter(
           className="rounded-xl border bg-white p-4"
         >
           <p className="font-bold text-gray-800">
-            Project #{cleaning.projectId}
+            प्रोजेक्ट #{cleaning.projectId}
           </p>
 
           <p className="mt-1 text-sm text-gray-700">
@@ -864,13 +864,13 @@ const selectedCleaningWorks = cleaningAssignments.filter(
 
   <div className="rounded-2xl bg-white p-5 shadow">
     <h2 className="text-xl font-bold text-gray-800">
-      Work on {selectedDateKey || '-'}
+      {selectedDateKey || '-'} का काम
     </h2>
 
     {selectedSiteWorks.length === 0 &&
     selectedCleaningWorks.length === 0 ? (
       <p className="mt-4 text-sm text-gray-500">
-        No work assigned on this date.
+        इस तारीख को कोई काम नहीं है।
       </p>
     ) : (
       <div className="mt-4 space-y-3">
@@ -901,13 +901,13 @@ const selectedCleaningWorks = cleaningAssignments.filter(
       {loading ? (
         <div className="rounded-2xl bg-white p-5 shadow">
           <p className="text-sm text-gray-500">
-            Loading assigned projects...
+            दिए गए प्रोजेक्ट लोड हो रहे हैं...
           </p>
         </div>
       ) : projects.length === 0 ? (
         <div className="rounded-2xl bg-white p-5 shadow">
           <p className="text-sm text-gray-500">
-            No contractor work assigned yet.
+            अभी कोई कॉन्ट्रैक्टर कार्य नहीं दिया गया है।
           </p>
         </div>
       ) : (
@@ -920,7 +920,7 @@ const selectedCleaningWorks = cleaningAssignments.filter(
               <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 <div>
                   <p className="text-lg font-bold text-gray-800">
-                    Project #{item.projectId}
+                    प्रोजेक्ट #{item.projectId}
                   </p>
 
                   {item.project && (
@@ -934,7 +934,7 @@ const selectedCleaningWorks = cleaningAssignments.filter(
     </p>
 
     <p className="text-sm text-gray-600">
-      Address:{' '}
+      पता:{' '}
       {item.project.gpsAddress ||
         item.project.address ||
         '-'}
@@ -974,7 +974,7 @@ const selectedCleaningWorks = cleaningAssignments.filter(
 )}
 
                   <p className="mt-1 text-sm text-gray-500">
-                    Contractor:{' '}
+                    कॉन्ट्रैक्टर:{' '}
                     {item.contractorName || '-'}
                   </p>
 
@@ -984,7 +984,7 @@ const selectedCleaningWorks = cleaningAssignments.filter(
   </span>
 
   <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">
-    Required Proofs:{' '}
+    जरूरी फोटो:{' '}
     {
       (
         CONTRACTOR_REQUIRED_PROOFS_BY_SCOPE[
@@ -1001,7 +1001,7 @@ const selectedCleaningWorks = cleaningAssignments.filter(
                   </p>
 
                   <p className="text-sm text-gray-500">
-                    Scheduled:{' '}
+                    तय तारीख:{' '}
                     {item.scheduledDate
                       ? new Date(
                           item.scheduledDate,
@@ -1012,7 +1012,7 @@ const selectedCleaningWorks = cleaningAssignments.filter(
                   </p>
 
                   <p className="text-sm text-gray-500">
-  Started:{' '}
+  शुरू:{' '}
   {item.startedAt
     ? new Date(
         item.startedAt,
@@ -1021,7 +1021,7 @@ const selectedCleaningWorks = cleaningAssignments.filter(
 </p>
 
 <p className="text-sm text-gray-500">
-  Completed:{' '}
+  पूर्ण:{' '}
   {item.completedAt
     ? new Date(
         item.completedAt,
@@ -1030,7 +1030,7 @@ const selectedCleaningWorks = cleaningAssignments.filter(
 </p>
 
                   <p className="text-sm text-gray-500">
-                    Assigned By:{' '}
+                    दिया गया:{' '}
                     {item.assignedByName || '-'}
                   </p>
 
@@ -1054,7 +1054,7 @@ const selectedCleaningWorks = cleaningAssignments.filter(
                     href={`/project/${item.projectId}`}
                     className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
                   >
-                    Open Project
+                    प्रोजेक्ट खोलें
                   </Link>
 
                   <div className="flex flex-wrap justify-end gap-2">
@@ -1085,7 +1085,7 @@ const selectedCleaningWorks = cleaningAssignments.filter(
 
 <div className="mt-5 rounded-xl border bg-gray-50 p-4">
   <h3 className="font-bold text-gray-800">
-    Required Proof Checklist
+    जरूरी फोटो चेकलिस्ट
   </h3>
 
   <div className="mt-3 flex flex-wrap gap-2">
@@ -1115,7 +1115,7 @@ const selectedCleaningWorks = cleaningAssignments.filter(
   </div>
 
   <h3 className="mt-5 font-bold text-gray-800">
-    Upload GPS Proof Photos
+    GPS वाली फोटो अपलोड करें
   </h3>
 
   <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -1129,7 +1129,7 @@ const selectedCleaningWorks = cleaningAssignments.filter(
       }
       className="rounded-xl border p-3"
     >
-      <option value="">Select Proof Type</option>
+      <option value="">फोटो का प्रकार चुनें</option>
 
 {(
   CONTRACTOR_REQUIRED_PROOFS_BY_SCOPE[
@@ -1156,7 +1156,7 @@ const selectedCleaningWorks = cleaningAssignments.filter(
     />
 
     <input
-      placeholder="GPS Address / Site Note"
+      placeholder="GPS पता / साइट नोट"
       value={gpsData[item.id]?.gpsAddress || ''}
       onChange={(e) =>
         setGpsData((prev) => ({
@@ -1171,7 +1171,7 @@ const selectedCleaningWorks = cleaningAssignments.filter(
     />
 
     <input
-      placeholder="Proof Remarks"
+      placeholder="फोटो टिप्पणी"
       value={proofRemarks[item.id] || ''}
       onChange={(e) =>
         setProofRemarks((prev) => ({
@@ -1188,7 +1188,7 @@ const selectedCleaningWorks = cleaningAssignments.filter(
       onClick={() => captureGps(item.id)}
       className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
     >
-      Capture GPS
+      GPS कैप्चर करें
     </button>
 
     <button
@@ -1197,8 +1197,8 @@ const selectedCleaningWorks = cleaningAssignments.filter(
       className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
     >
       {uploadingProofId === item.id
-        ? 'Uploading...'
-        : 'Upload Proof'}
+        ? 'अपलोड हो रहा है...'
+        : 'फोटो अपलोड करें'}
     </button>
   </div>
 
@@ -1211,12 +1211,12 @@ const selectedCleaningWorks = cleaningAssignments.filter(
 
   <div className="mt-5">
     <h4 className="font-semibold text-gray-800">
-      Uploaded Proofs
+      अपलोड की गई फोटो
     </h4>
 
     {(!proofs[item.id] || proofs[item.id].length === 0) ? (
       <p className="mt-2 text-sm text-gray-500">
-        No proofs uploaded yet.
+        अभी कोई फोटो अपलोड नहीं हुई है।
       </p>
     ) : (
       <div className="mt-3 grid gap-3 md:grid-cols-3">
@@ -1258,11 +1258,11 @@ const selectedCleaningWorks = cleaningAssignments.filter(
 
 <div className="mt-5 rounded-xl border bg-white p-4">
   <h3 className="font-bold text-gray-800">
-    Contractor Work Comments
+    कॉन्ट्रैक्टर कार्य टिप्पणी
   </h3>
 
   <textarea
-    placeholder="Write update / pending proof reason / site issue"
+    placeholder="अपडेट / फोटो बाकी होने का कारण / साइट समस्या लिखें"
     value={commentText[item.id] || ''}
     onChange={(e) =>
       setCommentText((prev) => ({
@@ -1280,7 +1280,7 @@ const selectedCleaningWorks = cleaningAssignments.filter(
       disabled={commentLoadingId === item.id}
       className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
     >
-      Add Comment
+      टिप्पणी जोड़ें
     </button>
 
     <button
@@ -1290,7 +1290,7 @@ const selectedCleaningWorks = cleaningAssignments.filter(
       disabled={commentLoadingId === item.id}
       className="rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
     >
-      Add Pending Proof Reason
+      फोटो बाकी होने का कारण जोड़ें
     </button>
   </div>
 
@@ -1298,7 +1298,7 @@ const selectedCleaningWorks = cleaningAssignments.filter(
     {(!comments[item.id] ||
       comments[item.id].length === 0) ? (
       <p className="text-sm text-gray-500">
-        No comments yet.
+        अभी कोई टिप्पणी नहीं है।
       </p>
     ) : (
       comments[item.id].map((comment) => (
@@ -1339,7 +1339,7 @@ const selectedCleaningWorks = cleaningAssignments.filter(
 
 <div className="mt-5 rounded-xl border border-green-200 bg-green-50 p-4">
   <h3 className="font-bold text-gray-800">
-    Cleaning Work
+    सफाई कार्य
   </h3>
 
   {cleaningAssignments
@@ -1475,13 +1475,13 @@ function PostponeBox({
   return (
     <div className="mt-4 rounded-xl border bg-amber-50 p-3">
       <p className="font-semibold text-gray-800">
-        Request Postpone
+        तारीख बदलने का अनुरोध
       </p>
 
       <div className="mt-3 grid gap-3 md:grid-cols-3">
         <LocalizationProvider dateAdapter={AdapterDayjs}>
           <DatePicker
-            label="Requested Date"
+            label="नई तारीख"
             value={
               value?.requestedDate
                 ? dayjs(value.requestedDate)
@@ -1504,7 +1504,7 @@ function PostponeBox({
 
         <LocalizationProvider dateAdapter={AdapterDayjs}>
           <MobileTimePicker
-            label="Requested Time"
+            label="नया समय"
             ampm
             ampmInClock
             value={
@@ -1526,7 +1526,7 @@ function PostponeBox({
         </LocalizationProvider>
 
         <input
-          placeholder="Reason"
+          placeholder="कारण"
           value={value?.reason || ''}
           onChange={(e) =>
             setPostponeForm((prev) => ({
@@ -1546,7 +1546,7 @@ function PostponeBox({
         onClick={onSubmit}
         className="mt-3 rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white"
       >
-        Send For Approval
+        अनुमति के लिए भेजें
       </button>
     </div>
   );
