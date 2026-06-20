@@ -574,6 +574,27 @@ async savePortalCompanySetting(body: any) {
 
     const paymentType = body.paymentType || ProjectDealerPaymentType.CASH;
 
+    if (!body.expectedDeliveryAt) {
+  throw new BadRequestException(
+    'Expected delivery date is required',
+  );
+}
+
+if (!String(body.remarks || '').trim()) {
+  throw new BadRequestException(
+    'Order remarks are required',
+  );
+}
+
+if (
+  body.deliveryMode === 'DELIVERY' &&
+  !String(body.deliveryAddress || '').trim()
+) {
+  throw new BadRequestException(
+    'Delivery address is required',
+  );
+}
+
     const deliveryMode =
   body.deliveryMode === ProjectDealerDeliveryMode.DELIVERY
     ? ProjectDealerDeliveryMode.DELIVERY
