@@ -11333,18 +11333,25 @@ async createFinalInvoiceFromProforma(
 
   if (isDealerInvoice) {
     const existingDealerInvoice =
-      await this.projectFinalInvoiceRepository.findOne({
-        where: {
-          dealerId: Number((pi as any).dealerId),
-          invoiceType: 'DEALER',
-        } as any,
-      });
+  await this.projectFinalInvoiceRepository
+    .createQueryBuilder('invoice')
+    .where('invoice.dealerId = :dealerId', {
+      dealerId: Number((pi as any).dealerId),
+    })
+    .andWhere('invoice.invoiceType = :invoiceType', {
+      invoiceType: 'DEALER',
+    })
+    .andWhere('invoice.isHidden = false')
+    .andWhere('invoice.remarks LIKE :remarks', {
+      remarks: `%Generated from ${pi.invoiceNumber}%`,
+    })
+    .getOne();
 
-    if (existingDealerInvoice) {
-      throw new BadRequestException(
-        'Final invoice already exists for this dealer proforma invoice',
-      );
-    }
+if (existingDealerInvoice) {
+  throw new BadRequestException(
+    'Final invoice already exists for this dealer proforma invoice',
+  );
+}
 
     const items = Array.isArray((pi as any).items)
       ? (pi as any).items
