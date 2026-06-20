@@ -10,6 +10,7 @@ import { FollowUp } from '../followup/follow-up.entity';
 import { TelecallingContact } from '../telecalling/telecalling-contact.entity';
 import { Meeting } from '../meeting/meeting.entity'; // ✅ IMPORTANT
 import { User } from '../users/user.entity';
+import { Project } from '../project/project.entity';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { User } from '../users/user.entity';
       TelecallingContact,
       Meeting, // ✅ MUST BE HERE
       User,
+      Project,
     ]),
   ],
   controllers: [DashboardController],

@@ -13,6 +13,11 @@ import {
   MeetingType,
 } from '../meeting/meeting.entity';
 import { User } from '../users/user.entity';
+import {
+  Project,
+  ProjectStatus,
+  ProjectType,
+} from '../project/project.entity';
 
 
 type DashboardFilters = {
@@ -47,6 +52,9 @@ private readonly userRepository: Repository<User>,
 
 @InjectRepository(Meeting)
 private readonly meetingRepository: Repository<Meeting>,
+
+@InjectRepository(Project)
+private readonly projectRepository: Repository<Project>,
 ) {}
 
   private hasAnyRole(userRoles: string[] = [], rolesToCheck: UserRole[]): boolean {
@@ -724,6 +732,70 @@ const solarMiterMeetingsCreatedToday = await this.meetingRepository.count({
 
 const convertedMeetingsToday = Number(convertedMeetingsTodayRaw?.count || 0);
 
+const loanProjectsCreatedThisMonth =
+  await this.projectRepository.count({
+    where: {
+      projectOwnerId: manager.id,
+      projectType: ProjectType.LOAN,
+      isHidden: false,
+      createdAt: Between(monthStart, monthEnd),
+    },
+  });
+
+const cashProjectsCreatedThisMonth =
+  await this.projectRepository.count({
+    where: {
+      projectOwnerId: manager.id,
+      projectType: ProjectType.CASH,
+      isHidden: false,
+      createdAt: Between(monthStart, monthEnd),
+    },
+  });
+
+const cashProjectsCancelledRejectedThisMonth =
+  await this.projectRepository
+    .createQueryBuilder('project')
+    .where('project.projectOwnerId = :managerId', {
+      managerId: manager.id,
+    })
+    .andWhere('project.projectType = :projectType', {
+      projectType: ProjectType.CASH,
+    })
+    .andWhere('project.isHidden = false')
+    .andWhere('project.status IN (:...statuses)', {
+      statuses: [
+        ProjectStatus.CANCELLED,
+        ProjectStatus.REJECTED,
+      ],
+    })
+    .andWhere('project.cancelledAt BETWEEN :monthStart AND :monthEnd', {
+      monthStart,
+      monthEnd,
+    })
+    .getCount();
+
+const loanProjectsCancelledRejectedThisMonth =
+  await this.projectRepository
+    .createQueryBuilder('project')
+    .where('project.projectOwnerId = :managerId', {
+      managerId: manager.id,
+    })
+    .andWhere('project.projectType = :projectType', {
+      projectType: ProjectType.LOAN,
+    })
+    .andWhere('project.isHidden = false')
+    .andWhere('project.status IN (:...statuses)', {
+      statuses: [
+        ProjectStatus.CANCELLED,
+        ProjectStatus.REJECTED,
+      ],
+    })
+    .andWhere('project.cancelledAt BETWEEN :monthStart AND :monthEnd', {
+      monthStart,
+      monthEnd,
+    })
+    .getCount();
+
     result.push({
       managerId: manager.id,
       managerName: manager.name,
@@ -746,6 +818,10 @@ selfMeetingsCreatedToday,
 solarMiterMeetingsCreatedToday,
 companyMeetingsCreatedThisMonth,
 selfMeetingsCreatedThisMonth,
+loanProjectsCreatedThisMonth,
+cashProjectsCreatedThisMonth,
+cashProjectsCancelledRejectedThisMonth,
+loanProjectsCancelledRejectedThisMonth,
 
       // old names kept for frontend safety
       companyMeetings: companyMeetingsToday,
