@@ -141,6 +141,29 @@ const [deliveryDistanceKm, setDeliveryDistanceKm] = useState('');
       return;
     }
 
+    if (!paymentType) {
+  alert('Please select payment type');
+  return;
+}
+
+if (!expectedDeliveryAt) {
+  alert('Please select expected delivery date');
+  return;
+}
+
+if (!remarks.trim()) {
+  alert('Please enter order remarks');
+  return;
+}
+
+if (
+  deliveryMode === 'DELIVERY' &&
+  !deliveryAddress.trim()
+) {
+  alert('Please enter delivery address');
+  return;
+}
+
     if (paymentType === 'CREDIT' && !dealer?.creditEnabled) {
       setMessage('Credit facility is not enabled for your dealer account.');
       return;
