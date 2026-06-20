@@ -8259,6 +8259,67 @@ async completeProject(
   return this.projectRepository.save(project);
 }
 
+async moveProjectStatus(
+  id: number,
+  body: any,
+  currentUser: any,
+) {
+  const roles = currentUser?.roles || [];
+
+  const canMove =
+    roles.includes('OWNER') ||
+    roles.includes('MARKETING_HEAD') ||
+    roles.includes('PROJECT_MANAGER');
+
+  if (!canMove) {
+    throw new ForbiddenException(
+      'You are not allowed to move project status',
+    );
+  }
+
+  const project = await this.projectRepository.findOne({
+    where: { id },
+  });
+
+  if (!project) {
+    throw new NotFoundException('Project not found');
+  }
+
+  if (
+    project.status === ProjectStatus.COMPLETED ||
+    project.status === ProjectStatus.CANCELLED ||
+    project.status === ProjectStatus.REJECTED
+  ) {
+    throw new BadRequestException(
+      'Completed, cancelled or rejected project cannot be moved',
+    );
+  }
+
+  const nextStatus = String(body?.status || '').trim();
+
+  const allowedStatuses = [
+    ProjectStatus.PROJECT_MANAGEMENT,
+    ProjectStatus.SUBSIDY_PROCESS,
+    ProjectStatus.ELECTRICITY_PROCESS,
+  ];
+
+  if (!allowedStatuses.includes(nextStatus as ProjectStatus)) {
+    throw new BadRequestException('Invalid project status movement');
+  }
+
+  project.status = nextStatus as ProjectStatus;
+
+  const note = String(body?.note || '').trim();
+
+  if (note) {
+    project.remarks = project.remarks
+      ? `${project.remarks}\n\n[STATUS MOVED TO ${nextStatus}]\n${note}`
+      : `[STATUS MOVED TO ${nextStatus}]\n${note}`;
+  }
+
+  return this.projectRepository.save(project);
+}
+
 async cancelProject(
   id: number,
   body: any,

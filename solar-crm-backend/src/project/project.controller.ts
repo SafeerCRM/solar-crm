@@ -2776,6 +2776,20 @@ completeProject(
 }
 
 @Roles('OWNER', 'MARKETING_HEAD', 'PROJECT_MANAGER')
+@Patch(':id/move-status')
+moveProjectStatus(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.moveProjectStatus(
+    id,
+    body,
+    user,
+  );
+}
+
+@Roles('OWNER', 'MARKETING_HEAD', 'PROJECT_MANAGER')
 @Patch(':id/cancel')
 cancelProject(
   @Param('id', ParseIntPipe) id: number,
