@@ -1158,6 +1158,7 @@ const canViewAll =
   roles.includes('OWNER') ||
   roles.includes('MARKETING_HEAD') ||
   roles.includes('PROJECT_MANAGER') ||
+  roles.includes('PROJECT_EXECUTIVE') ||
   roles.includes('LOAN_MANAGER') ||
   roles.includes('SUBSIDY_MANAGER') ||
   roles.includes('ELECTRICITY_MANAGER') ||
