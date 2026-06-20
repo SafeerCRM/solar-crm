@@ -2775,6 +2775,20 @@ completeProject(
   );
 }
 
+@Roles('OWNER', 'MARKETING_HEAD', 'PROJECT_MANAGER')
+@Patch(':id/cancel')
+cancelProject(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.cancelProject(
+    id,
+    body,
+    user,
+  );
+}
+
 @Roles('OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER', 'STOCK_MANAGER')
 @Post('stock/adjust')
 adjustStock(

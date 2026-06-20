@@ -929,6 +929,7 @@ if (roles.includes('SOLAR_FRANCHISE')) {
       `
       LOWER(project.customerName) LIKE :search
       OR LOWER(project.customerPhone) LIKE :search
+      OR LOWER(project.electricityKNumber) LIKE :search
       OR CAST(project.id AS TEXT) LIKE :search
       `,
       {
@@ -8253,6 +8254,65 @@ async completeProject(
       ? `${project.remarks}\n\n[PROJECT COMPLETED]\n${completionNote}`
       : `[PROJECT COMPLETED]\n${completionNote}`;
   }
+
+  return this.projectRepository.save(project);
+}
+
+async cancelProject(
+  id: number,
+  body: any,
+  currentUser: any,
+) {
+  const roles = currentUser?.roles || [];
+
+  const canCancel =
+    roles.includes('OWNER') ||
+    roles.includes('MARKETING_HEAD') ||
+    roles.includes('PROJECT_MANAGER');
+
+  if (!canCancel) {
+    throw new ForbiddenException(
+      'You are not allowed to cancel projects',
+    );
+  }
+
+  const project = await this.projectRepository.findOne({
+    where: { id },
+  });
+
+  if (!project) {
+    throw new NotFoundException('Project not found');
+  }
+
+  if (project.status === ProjectStatus.COMPLETED) {
+    throw new BadRequestException(
+      'Completed project cannot be cancelled',
+    );
+  }
+
+  const reason = String(body?.reason || '').trim();
+
+  if (!reason) {
+    throw new BadRequestException(
+      'Cancellation / rejection reason is required',
+    );
+  }
+
+  project.status =
+    body?.status === ProjectStatus.REJECTED
+      ? ProjectStatus.REJECTED
+      : ProjectStatus.CANCELLED;
+
+  project.cancelledAt = new Date();
+  project.cancelledBy =
+    currentUser?.id || currentUser?.userId || null;
+  project.cancelledByName =
+    currentUser?.name || currentUser?.email || '';
+  project.cancellationReason = reason;
+
+  project.remarks = project.remarks
+    ? `${project.remarks}\n\n[PROJECT ${project.status}]\n${reason}`
+    : `[PROJECT ${project.status}]\n${reason}`;
 
   return this.projectRepository.save(project);
 }

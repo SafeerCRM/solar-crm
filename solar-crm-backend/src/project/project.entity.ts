@@ -19,6 +19,7 @@ export enum ProjectStatus {
   PENDING_APPROVAL = 'PENDING_APPROVAL',
   APPROVED = 'APPROVED',
   REJECTED = 'REJECTED',
+    CANCELLED = 'CANCELLED',
   LOAN_PROCESS = 'LOAN_PROCESS',
   PROJECT_MANAGEMENT = 'PROJECT_MANAGEMENT',
   SUBSIDY_PROCESS = 'SUBSIDY_PROCESS',
@@ -288,6 +289,18 @@ projectManagerApprovedAt: Date;
 
   @Column({ nullable: true, type: 'text' })
   remarks: string;
+
+    @Column({ type: 'timestamp', nullable: true })
+  cancelledAt: Date;
+
+  @Column({ nullable: true })
+  cancelledBy: number;
+
+  @Column({ nullable: true })
+  cancelledByName: string;
+
+  @Column({ type: 'text', nullable: true })
+  cancellationReason: string;
 
   @Column({ type: 'boolean', default: false })
 isHidden: boolean;
