@@ -738,6 +738,8 @@ const [completionLoading, setCompletionLoading] = useState(false);
 const [cancellationReason, setCancellationReason] = useState('');
 const [cancellationStatus, setCancellationStatus] = useState<'CANCELLED' | 'REJECTED'>('CANCELLED');
 const [cancellationLoading, setCancellationLoading] = useState(false);
+const [moveStatusNote, setMoveStatusNote] = useState('');
+const [moveStatusLoading, setMoveStatusLoading] = useState(false);
 const [projectManagerApprovalLoading, setProjectManagerApprovalLoading] =
   useState(false);
 
@@ -1588,6 +1590,49 @@ const completeProject = async () => {
     );
   } finally {
     setCompletionLoading(false);
+  }
+};
+
+const moveProjectStatus = async (
+  nextStatus: 'PROJECT_MANAGEMENT' | 'SUBSIDY_PROCESS' | 'ELECTRICITY_PROCESS',
+) => {
+  const confirmed = window.confirm(
+    `Move this project to ${nextStatus.replaceAll('_', ' ')}?`,
+  );
+
+  if (!confirmed) return;
+
+  try {
+    setMoveStatusLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/${projectId}/move-status`,
+      {
+        status: nextStatus,
+        note: moveStatusNote,
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert(`Project moved to ${nextStatus.replaceAll('_', ' ')}`);
+    setMoveStatusNote('');
+    fetchProject();
+  } catch (error: any) {
+    console.error(error);
+    alert(
+      error?.response?.data?.message ||
+        'Failed to move project status',
+    );
+  } finally {
+    setMoveStatusLoading(false);
   }
 };
 
@@ -5308,6 +5353,65 @@ const canApproveAndReserveStock =
 </div>
 
       </div>
+
+{canCompleteProject &&
+  project?.status !== 'COMPLETED' &&
+  project?.status !== 'CANCELLED' &&
+  project?.status !== 'REJECTED' && (
+    <div className="rounded-2xl bg-white p-5 shadow">
+      <h2 className="text-lg font-bold text-gray-800">
+        Move Project Workflow Status
+      </h2>
+
+      <p className="mt-1 text-sm text-gray-500">
+        Use this to manually move project between workflow stages so the project appears in the correct status filter.
+      </p>
+
+      <input
+        placeholder="Optional movement note"
+        value={moveStatusNote}
+        onChange={(e) => setMoveStatusNote(e.target.value)}
+        className="mt-4 w-full rounded-xl border p-3"
+      />
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button
+          onClick={() => moveProjectStatus('PROJECT_MANAGEMENT')}
+          disabled={
+            moveStatusLoading ||
+            project?.status === 'PROJECT_MANAGEMENT'
+          }
+          className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+        >
+          Move to Project Management
+        </button>
+
+        <button
+          onClick={() => moveProjectStatus('SUBSIDY_PROCESS')}
+          disabled={
+            moveStatusLoading ||
+            project?.status === 'SUBSIDY_PROCESS'
+          }
+          className="rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-700 disabled:opacity-50"
+        >
+          Move to Subsidy Process
+        </button>
+
+        <button
+          onClick={() => moveProjectStatus('ELECTRICITY_PROCESS')}
+          disabled={
+            moveStatusLoading ||
+            project?.status === 'ELECTRICITY_PROCESS'
+          }
+          className="rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+        >
+          Move to Electricity Process
+        </button>
+      </div>
+    </div>
+  )}
+
+
 {canCompleteProject && (
       <div className="rounded-2xl bg-white p-5 shadow">
   <h2 className="text-lg font-bold text-gray-800">
