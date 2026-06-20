@@ -98,6 +98,30 @@ savePortalCompanySetting(@Body() body: any) {
   return this.dealerService.savePortalCompanySetting(body);
 }
 
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER', 'ACCOUNT_MANAGER', 'TRADING_MANAGER')
+@Get('delivery-setting')
+getDealerDeliverySetting() {
+  return this.dealerService.getDealerDeliverySetting();
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER', 'ACCOUNT_MANAGER', 'TRADING_MANAGER')
+@Post('delivery-setting')
+saveDealerDeliverySetting(@Body() body: any) {
+  return this.dealerService.saveDealerDeliverySetting(body);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER', 'ACCOUNT_MANAGER', 'TRADING_MANAGER')
+@Patch('dealer-order/:id/delivery')
+updateDealerOrderDelivery(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+) {
+  return this.dealerService.updateDealerOrderDelivery(id, body);
+}
+
   @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('OWNER', 'TRADING_MANAGER')
 @Patch(':id/portal-password')

@@ -19,6 +19,7 @@ import { User } from '../users/user.entity';
 import {
   ProjectDealerOrderStatus,
   ProjectDealerPaymentType,
+  ProjectDealerDeliveryMode,
 } from '../project/project-dealer-order.entity';
 import { ProjectDealerOrderItem } from '../project/project-dealer-order-item.entity';
 import { BadRequestException } from '@nestjs/common';
@@ -40,6 +41,7 @@ import { ProjectFinalInvoiceItem } from '../project/project-final-invoice-item.e
 import { ProjectService } from '../project/project.service';
 import { StaffMember } from '../staff/staff-member.entity';
 import { DealerPortalCompanySetting } from './dealer-portal-company-setting.entity';
+import { DealerDeliverySetting } from './dealer-delivery-setting.entity';
 
 @Injectable()
 export class DealerService {
@@ -97,6 +99,9 @@ private readonly staffMemberRepository: Repository<StaffMember>,
 
 @InjectRepository(DealerPortalCompanySetting)
 private readonly portalCompanySettingRepository: Repository<DealerPortalCompanySetting>,
+
+@InjectRepository(DealerDeliverySetting)
+private readonly deliverySettingRepository: Repository<DealerDeliverySetting>,
 
     private readonly projectService: ProjectService,
   ) {}
@@ -208,6 +213,65 @@ if (!dealer && body?.email) {
   (dealer as any).portalPassword = newPassword;
 
   return this.dealerRepository.save(dealer);
+}
+
+async getDealerDeliverySetting() {
+  let setting = await this.deliverySettingRepository.findOne({
+    where: { isActive: true },
+    order: { id: 'ASC' } as any,
+  });
+
+  if (!setting) {
+    setting = this.deliverySettingRepository.create({
+      officeName: 'Main Office',
+      officeAddress: '',
+      baseKm: 0,
+      baseCharge: 0,
+      perKmCharge: 0,
+      minimumCharge: 0,
+      isActive: true,
+    });
+
+    setting = await this.deliverySettingRepository.save(setting);
+  }
+
+  return setting;
+}
+
+async saveDealerDeliverySetting(body: any) {
+  let setting = await this.deliverySettingRepository.findOne({
+    where: { isActive: true },
+    order: { id: 'ASC' } as any,
+  });
+
+  if (!setting) {
+    setting = this.deliverySettingRepository.create({
+      isActive: true,
+    });
+  }
+
+  setting.officeName = body.officeName || '';
+  setting.officeAddress = body.officeAddress || '';
+  setting.baseKm = Number(body.baseKm || 0);
+  setting.baseCharge = Number(body.baseCharge || 0);
+  setting.perKmCharge = Number(body.perKmCharge || 0);
+  setting.minimumCharge = Number(body.minimumCharge || 0);
+  setting.isActive = true;
+
+  return this.deliverySettingRepository.save(setting);
+}
+
+calculateDealerDeliveryCharge(distanceKm: number, setting: any) {
+  const distance = Math.max(Number(distanceKm || 0), 0);
+  const baseKm = Math.max(Number(setting?.baseKm || 0), 0);
+  const baseCharge = Math.max(Number(setting?.baseCharge || 0), 0);
+  const perKmCharge = Math.max(Number(setting?.perKmCharge || 0), 0);
+  const minimumCharge = Math.max(Number(setting?.minimumCharge || 0), 0);
+
+  const extraKm = Math.max(distance - baseKm, 0);
+  const calculatedCharge = baseCharge + extraKm * perKmCharge;
+
+  return Math.max(calculatedCharge, minimumCharge);
 }
 
   async getDealerDashboard(dealerId: number) {
@@ -510,6 +574,23 @@ async savePortalCompanySetting(body: any) {
 
     const paymentType = body.paymentType || ProjectDealerPaymentType.CASH;
 
+    const deliveryMode =
+  body.deliveryMode === ProjectDealerDeliveryMode.DELIVERY
+    ? ProjectDealerDeliveryMode.DELIVERY
+    : ProjectDealerDeliveryMode.SELF_COLLECTION;
+
+const deliveryDistanceKm =
+  deliveryMode === ProjectDealerDeliveryMode.DELIVERY
+    ? Number(body.deliveryDistanceKm || 0)
+    : 0;
+
+const deliveryAddress =
+  deliveryMode === ProjectDealerDeliveryMode.DELIVERY
+    ? String(body.deliveryAddress || '').trim()
+    : '';
+
+let deliveryCharge = 0;
+
     if (
       paymentType === ProjectDealerPaymentType.CREDIT &&
       !dealer.creditEnabled
@@ -529,6 +610,10 @@ order.dealerAddress = dealer.address;
 order.branchName = dealer.branchName;
 order.status = ProjectDealerOrderStatus.SUBMITTED;
 order.paymentType = paymentType;
+order.deliveryMode = deliveryMode;
+order.deliveryAddress = deliveryAddress;
+order.deliveryDistanceKm = deliveryDistanceKm;
+order.deliveryCharge = deliveryCharge;
 if (paymentType === ProjectDealerPaymentType.CREDIT && body.creditDueDate) {
   order.creditDueDate = new Date(body.creditDueDate);
 }
@@ -625,9 +710,10 @@ order.createdByName = dealer.dealerName;
     savedOrder.subtotalAmount = subtotalAmount;
     savedOrder.discountAmount = discountAmount;
     savedOrder.gstAmount = gstAmount;
-    savedOrder.totalAmount = totalAmount;
-    savedOrder.paidAmount = 0;
-    savedOrder.pendingAmount = totalAmount;
+    savedOrder.deliveryCharge = deliveryCharge;
+savedOrder.totalAmount = totalAmount + deliveryCharge;
+savedOrder.paidAmount = 0;
+savedOrder.pendingAmount = savedOrder.totalAmount;
 
     await this.dealerOrderRepository.save(savedOrder);
 
@@ -717,6 +803,47 @@ return {
       payments,
     };
   }
+
+  async updateDealerOrderDelivery(orderId: number, body: any) {
+  const order = await this.dealerOrderRepository.findOne({
+    where: {
+      id: orderId,
+      isHidden: false,
+    },
+  });
+
+  if (!order) {
+    throw new NotFoundException('Dealer order not found');
+  }
+
+  const deliveryDistanceKm = Number(body?.deliveryDistanceKm || 0);
+
+  if (deliveryDistanceKm < 0) {
+    throw new BadRequestException('Distance cannot be negative');
+  }
+
+  const deliverySetting = await this.getDealerDeliverySetting();
+
+  const deliveryCharge = this.calculateDealerDeliveryCharge(
+    deliveryDistanceKm,
+    deliverySetting,
+  );
+
+  const oldDeliveryCharge = Number(order.deliveryCharge || 0);
+  const currentTotal = Number(order.totalAmount || 0);
+  const currentPending = Number(order.pendingAmount || 0);
+
+  order.deliveryDistanceKm = deliveryDistanceKm;
+  order.deliveryCharge = deliveryCharge;
+
+  order.totalAmount = currentTotal - oldDeliveryCharge + deliveryCharge;
+  order.pendingAmount = Math.max(
+    currentPending - oldDeliveryCharge + deliveryCharge,
+    0,
+  );
+
+  return this.dealerOrderRepository.save(order);
+}
 
     async createDealerPayment(dealerId: number, body: any) {
     const dealer = await this.dealerRepository.findOne({

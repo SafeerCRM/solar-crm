@@ -25,6 +25,11 @@ export enum ProjectDealerPaymentType {
   CHEQUE = 'CHEQUE',
 }
 
+export enum ProjectDealerDeliveryMode {
+  SELF_COLLECTION = 'SELF_COLLECTION',
+  DELIVERY = 'DELIVERY',
+}
+
 @Entity()
 export class ProjectDealerOrder {
   @PrimaryGeneratedColumn()
@@ -64,6 +69,22 @@ export class ProjectDealerOrder {
     default: ProjectDealerPaymentType.CASH,
   })
   paymentType: ProjectDealerPaymentType;
+
+    @Column({
+    type: 'enum',
+    enum: ProjectDealerDeliveryMode,
+    default: ProjectDealerDeliveryMode.SELF_COLLECTION,
+  })
+  deliveryMode: ProjectDealerDeliveryMode;
+
+  @Column({ type: 'text', nullable: true })
+  deliveryAddress: string;
+
+  @Column({ type: 'float', default: 0 })
+  deliveryDistanceKm: number;
+
+  @Column({ type: 'float', default: 0 })
+  deliveryCharge: number;
 
   @Column({ type: 'float', default: 0 })
   subtotalAmount: number;
