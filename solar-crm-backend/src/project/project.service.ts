@@ -15670,6 +15670,25 @@ async createDealerOrderFinalInvoice(
     );
   }
 
+  const savedInvoiceForOrder =
+  await this.projectFinalInvoiceRepository.findOne({
+    where: { id: Number(finalInvoice.id) },
+  });
+
+if (savedInvoiceForOrder) {
+  savedInvoiceForOrder.invoiceNumber = `DINV-${order.id}`;
+  savedInvoiceForOrder.remarks = [
+    savedInvoiceForOrder.remarks || '',
+    searchText,
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  await this.projectFinalInvoiceRepository.save(
+    savedInvoiceForOrder,
+  );
+}
+
   const deliveryCharge = Number(order.deliveryCharge || 0);
 
   if (deliveryCharge > 0) {
