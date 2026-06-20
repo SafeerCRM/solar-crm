@@ -222,6 +222,8 @@ const [paymentReceiptUploading, setPaymentReceiptUploading] =
   const [adminStatus, setAdminStatus] = useState('');
   const [adminExpectedDeliveryAt, setAdminExpectedDeliveryAt] = useState('');
   const [adminRemarks, setAdminRemarks] = useState('');
+const [deliveryDistanceKm, setDeliveryDistanceKm] = useState('');
+const [deliverySaving, setDeliverySaving] = useState(false);
 
   const headers = () => {
     const token = localStorage.getItem('token');
@@ -773,6 +775,11 @@ setSelectedOrderInvoices(invoiceRes.data || null);
           : '',
       );
       setAdminRemarks(res.data?.order?.adminRemarks || '');
+      setDeliveryDistanceKm(
+  res.data?.order?.deliveryDistanceKm
+    ? String(res.data.order.deliveryDistanceKm)
+    : '',
+);
     } catch (error: any) {
       console.error(error);
       alert(error?.response?.data?.message || 'Failed to open dealer order');
@@ -802,6 +809,32 @@ setSelectedOrderInvoices(invoiceRes.data || null);
       alert(error?.response?.data?.message || 'Failed to update order status');
     }
   };
+
+  const updateDeliveryCharge = async () => {
+  if (!selectedOrder?.order?.id) return;
+
+  try {
+    setDeliverySaving(true);
+
+    await axios.patch(
+      `${API_BASE_URL}/dealer/dealer-order/${selectedOrder.order.id}/delivery`,
+      {
+        deliveryDistanceKm: Number(deliveryDistanceKm || 0),
+      },
+      { headers: headers() },
+    );
+
+    alert('Delivery charge updated');
+    await openOrder(selectedOrder.order.id);
+    fetchOrders();
+    fetchAnalytics();
+  } catch (error: any) {
+    console.error(error);
+    alert(error?.response?.data?.message || 'Failed to update delivery charge');
+  } finally {
+    setDeliverySaving(false);
+  }
+};
 
   const hideOrRestoreOrder = async (order: DealerOrder, restore = false) => {
     const reason = window.prompt(
@@ -1591,6 +1624,41 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
     </a>
   )}
 </div>
+
+{selectedOrder.order?.deliveryMode === 'DELIVERY' && (
+  <div className="mt-3 rounded-xl border p-3">
+    <h3 className="font-bold">Delivery Management</h3>
+
+    <div className="mt-2 rounded-xl bg-blue-50 p-3 text-sm text-blue-800">
+      <p>
+        <span className="font-semibold">Delivery Address:</span>{' '}
+        {selectedOrder.order?.deliveryAddress || '-'}
+      </p>
+      <p className="mt-1">
+        Current Delivery Charge: {money(selectedOrder.order?.deliveryCharge)}
+      </p>
+    </div>
+
+    <div className="mt-3 grid gap-3 md:grid-cols-2">
+      <input
+        type="number"
+        min="0"
+        placeholder="Distance KM"
+        value={deliveryDistanceKm}
+        onChange={(e) => setDeliveryDistanceKm(e.target.value)}
+        className="rounded-xl border p-3"
+      />
+
+      <button
+        onClick={updateDeliveryCharge}
+        disabled={deliverySaving}
+        className="rounded-xl bg-orange-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+      >
+        {deliverySaving ? 'Saving...' : 'Calculate & Save Charge'}
+      </button>
+    </div>
+  </div>
+)}
 
                   <div className="mt-3 flex flex-wrap gap-2">
   <button

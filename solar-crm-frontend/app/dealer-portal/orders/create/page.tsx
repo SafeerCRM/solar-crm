@@ -9,6 +9,9 @@ export default function CreateDealerOrderPage() {
   const [cart, setCart] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [paymentType, setPaymentType] = useState('CASH');
+  const [deliveryMode, setDeliveryMode] = useState('SELF_COLLECTION');
+const [deliveryAddress, setDeliveryAddress] = useState('');
+const [deliveryDistanceKm, setDeliveryDistanceKm] = useState('');
   const [creditDueDate, setCreditDueDate] = useState('');
   const [expectedDeliveryAt, setExpectedDeliveryAt] = useState('');
   const [remarks, setRemarks] = useState('');
@@ -83,6 +86,7 @@ export default function CreateDealerOrderPage() {
       { subtotal: 0, discount: 0, gst: 0, total: 0 },
     );
   }, [cart]);
+
 
   const addToCart = (item: any) => {
     setMessage('');
@@ -164,6 +168,10 @@ export default function CreateDealerOrderPage() {
           pickupStaffName,
           pickupStaffPhone,
           remarks,
+          deliveryMode,
+deliveryAddress,
+deliveryDistanceKm:
+  Number(deliveryDistanceKm || 0),
           items: cart.map((item) => ({
             materialId: item.materialId,
             quantity: Number(item.quantity || 0),
@@ -326,7 +334,9 @@ export default function CreateDealerOrderPage() {
             </section>
 
             <section className="rounded-[2rem] bg-gradient-to-br from-orange-500 to-yellow-400 p-5 text-slate-950 shadow-xl">
-              <h2 className="text-xl font-black">Payment & Pickup</h2>
+              <h2 className="text-xl font-black">
+  Payment & Delivery
+</h2>
 
               <div className="mt-4 space-y-3">
                 <select
@@ -338,6 +348,37 @@ export default function CreateDealerOrderPage() {
                   <option value="ONLINE">Online Payment</option>
                   {dealer?.creditEnabled && <option value="CREDIT">Credit</option>}
                 </select>
+
+                <select
+  value={deliveryMode}
+  onChange={(e) => setDeliveryMode(e.target.value)}
+  className="w-full rounded-2xl border border-white/40 bg-white px-4 py-3 text-sm font-black outline-none"
+>
+  <option value="SELF_COLLECTION">
+    Self Collection
+  </option>
+
+  <option value="DELIVERY">
+    Delivery
+  </option>
+</select>
+
+{deliveryMode === 'DELIVERY' && (
+  <>
+    <textarea
+      value={deliveryAddress}
+      onChange={(e) => setDeliveryAddress(e.target.value)}
+      className="w-full rounded-2xl border border-white/40 bg-white px-4 py-3 text-sm font-black outline-none"
+      placeholder="Delivery Address"
+      rows={3}
+    />
+
+<p className="rounded-2xl bg-white/70 p-3 text-xs font-bold text-slate-800">
+  Delivery charges will be confirmed by company after reviewing the address.
+</p>
+
+  </>
+)}
 
                 {paymentType === 'CREDIT' && (
                   <input
@@ -355,6 +396,8 @@ export default function CreateDealerOrderPage() {
                   className="w-full rounded-2xl border border-white/40 bg-white px-4 py-3 text-sm font-black outline-none"
                 />
 
+         {deliveryMode === 'SELF_COLLECTION' && (
+                 <>
                 <input
                   type="text"
                   value={pickupStaffName}
@@ -370,6 +413,8 @@ export default function CreateDealerOrderPage() {
                   className="w-full rounded-2xl border border-white/40 bg-white px-4 py-3 text-sm font-black outline-none"
                   placeholder="Pickup staff phone"
                 />
+                </>
+                   )}
 
                 <textarea
                   value={remarks}
@@ -388,6 +433,7 @@ export default function CreateDealerOrderPage() {
                 <SummaryRow label="Subtotal" value={totals.subtotal} />
                 <SummaryRow label="Discount" value={totals.discount} />
                 <SummaryRow label="GST" value={totals.gst} />
+                
                 <div className="border-t border-slate-100 pt-3">
                   <SummaryRow label="Grand Total" value={totals.total} big />
                 </div>
