@@ -186,6 +186,7 @@ import {
   ProjectFranchisePayoutRequest,
   FranchisePayoutRequestStatus,
 } from './project-franchise-payout-request.entity';
+import { Dealer } from '../dealer/dealer.entity';
 
 @Injectable()
 export class ProjectService {
@@ -645,6 +646,9 @@ private readonly projectTradingMeetingRepository: Repository<ProjectTradingMeeti
 
 @InjectRepository(FollowUp)
 private readonly followUpRepository: Repository<FollowUp>,
+
+@InjectRepository(Dealer)
+private readonly dealerRepository: Repository<Dealer>,
 
     private readonly calculatorService: CalculatorService,
 
@@ -9753,11 +9757,11 @@ async generatePurchaseOrderPdf(
       .text('Material', 65, y + 7, { width: 165 })
       .text('HSN', 230, y + 7, { width: 45 })
       .text('Qty', 255, y + 7, { width: 30, align: 'right' })
-      .text('Unit', 308, y + 7, { width: 38 })
-      .text('Rate', 348, y + 7, { width: 55, align: 'right' })
-      .text('GST%', 405, y + 7, { width: 32, align: 'right' })
-      .text('GST Amt', 440, y + 7, { width: 52, align: 'right' })
-      .text('Total', 494, y + 7, { width: 58, align: 'right' });
+      .text('Unit', 292, y + 7, { width: 70 })
+.text('Rate', 365, y + 7, { width: 45, align: 'right' })
+.text('GST%', 412, y + 7, { width: 30, align: 'right' })
+.text('GST Amt', 445, y + 7, { width: 48, align: 'right' })
+.text('Total', 495, y + 7, { width: 57, align: 'right' })
 
     doc.y = y + 22;
   };
@@ -9810,25 +9814,26 @@ async generatePurchaseOrderPdf(
         width: 30,
         align: 'right',
       })
-      .text(String(item.unit || '-'), 308, y + 7, {
-        width: 38,
-      })
-      .text(this.formatInr(item.purchaseRate || 0), 348, y + 7, {
-        width: 55,
+      .text(String(item.unit || '-').replace(/\s*-\s*/g, '-'), 292, y + 7, {
+  width: 70,
+  height: rowHeight - 8,
+})
+      .text(this.formatInr(item.purchaseRate || 0), 365, y + 7, {
+        width: 45,
         align: 'right',
       })
-      .text(`${item.gstPercent || 0}%`, 405, y + 7, {
-        width: 32,
-        align: 'right',
-      })
-      .text(this.formatInr(item.gstAmount || 0), 440, y + 7, {
-        width: 52,
-        align: 'right',
-      })
-      .text(this.formatInr(item.totalAmount || 0), 494, y + 7, {
-        width: 58,
-        align: 'right',
-      });
+      .text(`${item.gstPercent || 0}%`, 412, y + 7, {
+  width: 30,
+  align: 'right',
+})
+.text(this.formatInr(item.gstAmount || 0), 445, y + 7, {
+  width: 48,
+  align: 'right',
+})
+.text(this.formatInr(item.totalAmount || 0), 495, y + 7, {
+  width: 57,
+  align: 'right',
+})
 
     doc.y = y + rowHeight;
   });
@@ -10863,11 +10868,11 @@ doc.y += 26;
       .text('Item Name', 65, y + 7, { width: 165 })
 .text('HSN', 230, y + 7, { width: 45 })
 .text('Qty', 255, y + 7, { width: 30, align: 'right' })
-.text('Unit', 308, y + 7, { width: 38 })
-.text('Rate', 348, y + 7, { width: 55, align: 'right' })
-.text('GST%', 405, y + 7, { width: 32, align: 'right' })
-.text('GST Amt', 440, y + 7, { width: 52, align: 'right' })
-.text('Total', 494, y + 7, { width: 58, align: 'right' });
+.text('Unit', 292, y + 7, { width: 70 })
+.text('Rate', 365, y + 7, { width: 45, align: 'right' })
+.text('GST%', 412, y + 7, { width: 30, align: 'right' })
+.text('GST Amt', 445, y + 7, { width: 48, align: 'right' })
+.text('Total', 495, y + 7, { width: 57, align: 'right' })
 
     doc.y = y + 22;
   };
@@ -10921,25 +10926,26 @@ doc.y += 26;
   width: 30,
   align: 'right',
 })
-.text(String(item.unit || '-'), 308, y + 7, {
-  width: 38,
+.text(String(item.unit || '-').replace(/\s*-\s*/g, '-'), 292, y + 7, {
+  width: 70,
+  height: rowHeight - 8,
 })
-.text(this.formatInr(item.sellingRate || 0), 348, y + 7, {
-  width: 55,
+.text(this.formatInr(item.finalRate || item.sellingRate || 0), 365, y + 7, {
+  width: 45,
   align: 'right',
 })
-.text(`${item.gstPercent || 0}%`, 405, y + 7, {
-  width: 32,
+.text(`${item.gstPercent || 0}%`, 412, y + 7, {
+  width: 30,
   align: 'right',
 })
-.text(this.formatInr(item.gstAmount || 0), 440, y + 7, {
-  width: 52,
+.text(this.formatInr(item.gstAmount || 0), 445, y + 7, {
+  width: 48,
   align: 'right',
 })
-.text(this.formatInr(item.totalAmount || 0), 494, y + 7, {
-  width: 58,
+.text(this.formatInr(item.totalAmount || 0), 495, y + 7, {
+  width: 57,
   align: 'right',
-});
+})
 
     doc.y = y + rowHeight;
   });
@@ -11948,11 +11954,11 @@ async generateFinalInvoicePdf(
       .text('Item Name', 65, y + 7, { width: 165 })
       .text('HSN', 230, y + 7, { width: 45 })
       .text('Qty', 255, y + 7, { width: 30, align: 'right' })
-      .text('Unit', 308, y + 7, { width: 38 })
-      .text('Rate', 348, y + 7, { width: 55, align: 'right' })
-      .text('GST%', 405, y + 7, { width: 32, align: 'right' })
-      .text('GST Amt', 440, y + 7, { width: 52, align: 'right' })
-      .text('Total', 494, y + 7, { width: 58, align: 'right' });
+      .text('Unit', 292, y + 7, { width: 70 })
+.text('Rate', 365, y + 7, { width: 45, align: 'right' })
+.text('GST%', 412, y + 7, { width: 30, align: 'right' })
+.text('GST Amt', 445, y + 7, { width: 48, align: 'right' })
+.text('Total', 495, y + 7, { width: 57, align: 'right' })
 
     doc.y = y + 22;
   };
@@ -12005,25 +12011,26 @@ async generateFinalInvoicePdf(
         width: 30,
         align: 'right',
       })
-      .text(String(item.unit || '-'), 308, y + 7, {
-        width: 38,
-      })
-      .text(this.formatInr(item.finalRate || 0), 348, y + 7, {
-        width: 55,
+      .text(String(item.unit || '-').replace(/\s*-\s*/g, '-'), 292, y + 7, {
+  width: 70,
+  height: rowHeight - 8,
+})
+      .text(this.formatInr(item.finalRate || 0), 365, y + 7, {
+        width: 45,
         align: 'right',
       })
-      .text(`${item.gstPercent || 0}%`, 405, y + 7, {
-        width: 32,
-        align: 'right',
-      })
-      .text(this.formatInr(item.gstAmount || 0), 440, y + 7, {
-        width: 52,
-        align: 'right',
-      })
-      .text(this.formatInr(item.totalAmount || 0), 494, y + 7, {
-        width: 58,
-        align: 'right',
-      });
+      .text(`${item.gstPercent || 0}%`, 412, y + 7, {
+  width: 30,
+  align: 'right',
+})
+.text(this.formatInr(item.gstAmount || 0), 445, y + 7, {
+  width: 48,
+  align: 'right',
+})
+.text(this.formatInr(item.totalAmount || 0), 495, y + 7, {
+  width: 57,
+  align: 'right',
+})
 
     doc.y = y + rowHeight;
   });
@@ -15600,6 +15607,15 @@ async createDealerOrderFinalInvoice(
     );
   }
 
+  if (
+    order.deliveryMode === 'DELIVERY' &&
+    Number(order.deliveryCharge || 0) <= 0
+  ) {
+    throw new BadRequestException(
+      'Please confirm delivery charge before generating final invoice',
+    );
+  }
+
   const searchText = `Generated from dealer order ${
     order.orderNumber || order.id
   }`;
@@ -15640,11 +15656,116 @@ async createDealerOrderFinalInvoice(
     );
   }
 
-  const finalInvoice =
+  const finalInvoiceResult =
     await this.createFinalInvoiceFromProforma(
       Number(pi.id),
       user,
     );
+
+  const finalInvoice = (finalInvoiceResult as any)?.invoice || finalInvoiceResult;
+
+  if (!finalInvoice?.id) {
+    throw new BadRequestException(
+      'Unable to generate dealer final invoice',
+    );
+  }
+
+  const deliveryCharge = Number(order.deliveryCharge || 0);
+
+  if (deliveryCharge > 0) {
+    const existingDeliveryItem =
+      await this.projectFinalInvoiceItemRepository.findOne({
+        where: {
+          finalInvoiceId: Number(finalInvoice.id),
+          category: 'DELIVERY',
+        } as any,
+      });
+
+    if (!existingDeliveryItem) {
+      const deliveryItem =
+        this.projectFinalInvoiceItemRepository.create({
+          finalInvoiceId: Number(finalInvoice.id),
+          materialId: 0,
+          itemName: `Delivery Charge (${Number(
+            order.deliveryDistanceKm || 0,
+          )} KM)`,
+          category: 'DELIVERY',
+          brand: '',
+          unit: 'SERVICE',
+          hsnCode: '',
+          quantity: 1,
+          finalRate: deliveryCharge,
+          gstPercent: 0,
+          discountAmount: 0,
+          subtotalAmount: deliveryCharge,
+          gstAmount: 0,
+          totalAmount: deliveryCharge,
+          remarks: order.deliveryAddress || '',
+        } as any);
+
+      await this.projectFinalInvoiceItemRepository.save(
+        deliveryItem,
+      );
+    }
+
+    const savedFinalInvoice =
+      await this.projectFinalInvoiceRepository.findOne({
+        where: { id: Number(finalInvoice.id) },
+      });
+
+    if (savedFinalInvoice) {
+      savedFinalInvoice.subtotalAmount =
+        Number(savedFinalInvoice.subtotalAmount || 0) +
+        deliveryCharge;
+
+      savedFinalInvoice.totalAmount =
+        Number(savedFinalInvoice.totalAmount || 0) +
+        deliveryCharge;
+
+      savedFinalInvoice.pendingAmount = Math.max(
+        Number(savedFinalInvoice.totalAmount || 0) -
+          Number(savedFinalInvoice.paidAmount || 0),
+        0,
+      );
+
+      await this.projectFinalInvoiceRepository.save(
+        savedFinalInvoice,
+      );
+
+      order.totalAmount = Number(savedFinalInvoice.totalAmount || 0);
+      order.pendingAmount = Number(savedFinalInvoice.pendingAmount || 0);
+      await this.projectDealerOrderRepository.save(order);
+    }
+  }
+
+  const portalDealer = await this.dealerRepository.findOne({
+    where: [
+      { phone: order.dealerPhone, isHidden: false },
+      { gstNumber: order.dealerGstNumber, isHidden: false },
+    ] as any,
+  });
+
+  const targetDealerId = portalDealer?.id || order.dealerId;
+  const targetDealerName =
+    portalDealer?.dealerName || order.dealerName;
+
+  const notification =
+    this.projectDealerNotificationRepository.create({
+      dealerId: targetDealerId,
+      dealerName: targetDealerName,
+      title: 'Final Invoice Generated',
+      message: `Final Invoice generated for order ${
+        order.orderNumber || order.id
+      }.`,
+      notificationType: 'DEALER_FINAL_INVOICE',
+      status: ProjectDealerNotificationStatus.UNREAD,
+      createdBy: user?.id || user?.userId || null,
+      createdByName: user?.name || user?.email || '',
+    });
+
+  await this.projectDealerNotificationRepository.save(
+    notification,
+  );
 
   return {
     message:
@@ -15735,10 +15856,22 @@ async createDealerNotification(body: any, user: any) {
     throw new NotFoundException('Dealer not found');
   }
 
+  const portalDealer = await this.dealerRepository.findOne({
+    where: [
+      { phone: dealer.phone, isHidden: false },
+      { gstNumber: dealer.gstNumber, isHidden: false },
+      { email: dealer.email, isHidden: false },
+    ] as any,
+  });
+
+  const targetDealerId = portalDealer?.id || dealerId;
+  const targetDealerName =
+    portalDealer?.dealerName || dealer.vendorName;
+
   const notification =
     this.projectDealerNotificationRepository.create({
-      dealerId,
-      dealerName: dealer.vendorName,
+      dealerId: targetDealerId,
+      dealerName: targetDealerName,
       title: String(body.title || '').trim(),
       message: String(body.message || '').trim(),
       notificationType:

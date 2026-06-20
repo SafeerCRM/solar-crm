@@ -51,6 +51,7 @@ import { ProjectCleaningAssignment } from './project-cleaning-assignment.entity'
 import { ProjectContractorRescheduleRequest } from './project-contractor-reschedule-request.entity';
 import { CustomerNotification } from '../customer-portal/customer-notification.entity';
 import { ProjectFranchisePayoutRequest } from './project-franchise-payout-request.entity';
+import { Dealer } from '../dealer/dealer.entity';
 
 @Module({
   imports: [
@@ -63,7 +64,7 @@ ProjectContractorProof, ProjectCleaningAssignment, ProjectContractor, ProjectCon
 ProjectDealerOrderItem,
 ProjectDealerPayment,
 ProjectDealerComment, ProjectDealerNotification,
-ProjectDealerMonthlyRequirement, ProjectTradingMeeting, FollowUp, ProjectFranchisePayoutRequest,]),
+ProjectDealerMonthlyRequirement, ProjectTradingMeeting, FollowUp, ProjectFranchisePayoutRequest, Dealer,]),
     CalculatorModule,
   ],
   controllers: [ProjectController],
