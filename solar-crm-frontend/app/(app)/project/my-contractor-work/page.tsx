@@ -130,8 +130,46 @@ const CONTRACTOR_REQUIRED_PROOFS_BY_SCOPE: Record<string, string[]> = {
   OTHER: ['OTHER'],
 };
 
-const formatContractorLabel = (value?: string) =>
-  String(value || 'FULL_PROJECT').replaceAll('_', ' ');
+const HINDI_STATUS: Record<string, string> = {
+  ASSIGNED: 'कार्य सौंपा गया',
+  IN_PROGRESS: 'कार्य चालू',
+  ON_HOLD: 'कार्य रोका गया',
+  PENDING_FINAL_PROOFS: 'अंतिम फोटो बाकी',
+  COMPLETED: 'कार्य पूर्ण',
+  PENDING: 'बाकी',
+};
+
+const HINDI_SCOPE: Record<string, string> = {
+  FULL_PROJECT: 'पूरा प्रोजेक्ट',
+  STRUCTURE_TEAM: 'स्ट्रक्चर टीम',
+  ELECTRICAL_TEAM: 'इलेक्ट्रिकल टीम',
+  INSTALLATION_TEAM: 'इंस्टॉलेशन टीम',
+  OTHER: 'अन्य कार्य',
+};
+
+const HINDI_PROOF: Record<string, string> = {
+  STRUCTURE_PHOTO: 'स्ट्रक्चर फोटो',
+  PILLAR_PHOTO: 'पिलर फोटो',
+  PANEL_SERIAL_NUMBER_PHOTO: 'पैनल सीरियल नंबर फोटो',
+  INVERTER_PHOTO: 'इन्वर्टर फोटो',
+  SOLAR_METER_PHOTO: 'सोलर मीटर फोटो',
+  NET_METER_PHOTO: 'नेट मीटर फोटो',
+  EARTHING_WITH_CLIENT_PHOTO: 'अर्थिंग फोटो',
+  PANEL_WITH_CLIENT_PHOTO: 'ग्राहक के साथ पैनल फोटो',
+  OTHER: 'अन्य फोटो',
+};
+
+const getHindiStatus = (value?: string) =>
+  HINDI_STATUS[value || ''] ||
+  String(value || '-').replaceAll('_', ' ');
+
+const getHindiScope = (value?: string) =>
+  HINDI_SCOPE[value || ''] ||
+  String(value || '-').replaceAll('_', ' ');
+
+const getHindiProof = (value?: string) =>
+  HINDI_PROOF[value || ''] ||
+  String(value || '-').replaceAll('_', ' ');
 
 function money(value?: number) {
   return `₹${Number(value || 0).toLocaleString(
@@ -666,18 +704,18 @@ const selectedCleaningWorks = cleaningAssignments.filter(
     <div className="space-y-5">
       <div className="rounded-2xl bg-white p-5 shadow">
         <h1 className="text-2xl font-bold text-gray-800">
-          My Contractor Work
+          मेरा कॉन्ट्रैक्टर कार्य
         </h1>
 
         <p className="mt-1 text-sm text-gray-500">
-          View assigned execution projects and work schedules.
+          अपने दिए गए प्रोजेक्ट और काम की तारीख देखें।
         </p>
       </div>
 
       <div className="rounded-2xl bg-green-50 p-5 shadow">
   <div className="flex items-center justify-between">
     <h2 className="text-xl font-bold text-gray-800">
-      My Cleaning Work
+      मेरा सफाई कार्य
     </h2>
 
     <span className="rounded-full bg-green-100 px-3 py-1 text-sm font-semibold text-green-700">
@@ -701,25 +739,25 @@ const selectedCleaningWorks = cleaningAssignments.filter(
           </p>
 
           <p className="mt-1 text-sm text-gray-700">
-            Customer:{' '}
+            ग्राहक:{' '}
             {cleaning.project?.customerName || '-'}
           </p>
 
           <p className="text-sm text-gray-700">
-            Phone:{' '}
+            फोन:{' '}
             {cleaning.project?.customerPhone || '-'}
           </p>
 
           <p className="text-sm text-gray-700">
-            Date: {cleaning.cleaningDate || '-'}
+            तारीख: {cleaning.cleaningDate || '-'}
           </p>
 
           <p className="text-sm text-gray-700">
-            Time: {cleaning.cleaningTime || '-'}
+            समय: {cleaning.cleaningTime || '-'}
           </p>
 
           <p className="text-sm text-gray-700">
-            Status: {cleaning.status || '-'}
+            स्थिति: {cleaning.status || '-'}
           </p>
 
           <p className="mt-2 text-sm text-gray-700">
@@ -732,7 +770,7 @@ const selectedCleaningWorks = cleaningAssignments.filter(
                 href={`tel:${cleaning.project.customerPhone}`}
                 className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white"
               >
-                Call Customer
+                ग्राहक को कॉल करें
               </a>
             )}
 
@@ -752,13 +790,13 @@ const selectedCleaningWorks = cleaningAssignments.filter(
                 }
                 className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white"
               >
-                Open GPS
+                लोकेशन खोलें
               </a>
             ) : null}
           </div>
 
           <textarea
-            placeholder="Completion remarks"
+            placeholder="काम पूरा होने की टिप्पणी"
             value={cleaningRemarks[cleaning.id] || ''}
             onChange={(e) =>
               setCleaningRemarks((prev) => ({
@@ -781,7 +819,7 @@ const selectedCleaningWorks = cleaningAssignments.filter(
               disabled={cleaningUpdatingId === cleaning.id}
               className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
             >
-              Start Cleaning
+              सफाई शुरू करें
             </button>
 
             <button
@@ -794,7 +832,7 @@ const selectedCleaningWorks = cleaningAssignments.filter(
               disabled={cleaningUpdatingId === cleaning.id}
               className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white"
             >
-              Complete Cleaning
+              सफाई पूर्ण करें
             </button>
           </div>
 
@@ -813,7 +851,7 @@ const selectedCleaningWorks = cleaningAssignments.filter(
 <div className="grid gap-4 lg:grid-cols-2">
   <div className="rounded-2xl bg-white p-5 shadow">
     <h2 className="text-xl font-bold text-gray-800">
-      My Work Calendar
+      मेरा काम कैलेंडर
     </h2>
 
     <LocalizationProvider dateAdapter={AdapterDayjs}>
@@ -888,11 +926,11 @@ const selectedCleaningWorks = cleaningAssignments.filter(
                   {item.project && (
   <div className="mt-3 rounded-xl bg-blue-50 p-3">
     <p className="font-semibold text-gray-800">
-      Customer: {item.project.customerName || '-'}
+      ग्राहक: {item.project.customerName || '-'}
     </p>
 
     <p className="text-sm text-gray-600">
-      Phone: {item.project.customerPhone || '-'}
+      फोन: {item.project.customerPhone || '-'}
     </p>
 
     <p className="text-sm text-gray-600">
@@ -908,7 +946,7 @@ const selectedCleaningWorks = cleaningAssignments.filter(
           href={`tel:${item.project.customerPhone}`}
           className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white"
         >
-          Call Customer
+          ग्राहक को कॉल करें
         </a>
       )}
 
@@ -928,7 +966,7 @@ const selectedCleaningWorks = cleaningAssignments.filter(
           }
           className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white"
         >
-          Open GPS
+          लोकेशन खोलें
         </a>
       ) : null}
     </div>
@@ -942,7 +980,7 @@ const selectedCleaningWorks = cleaningAssignments.filter(
 
                   <div className="mt-2 flex flex-wrap gap-2">
   <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-bold text-purple-700">
-    My Scope: {formatContractorLabel(item.workScope)}
+    मेरा काम: {getHindiScope(item.workScope)}
   </span>
 
   <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">
@@ -958,7 +996,7 @@ const selectedCleaningWorks = cleaningAssignments.filter(
 </div>
 
                   <p className="text-sm text-gray-500">
-                    Phone:{' '}
+                    फोन:{' '}
                     {item.contractorPhone || '-'}
                   </p>
 
@@ -1005,7 +1043,7 @@ const selectedCleaningWorks = cleaningAssignments.filter(
 
                 <div className="flex flex-col items-end gap-3">
                   <span className="rounded-full bg-blue-100 px-3 py-1 text-sm font-semibold text-blue-700">
-                    {item.status || 'ASSIGNED'}
+                    {getHindiStatus(item.status || 'ASSIGNED')}
                   </span>
 
                   <p className="text-xl font-bold text-green-700">
@@ -1033,7 +1071,7 @@ const selectedCleaningWorks = cleaningAssignments.filter(
       disabled={updatingId === item.id}
       className="rounded-lg bg-gray-800 px-3 py-2 text-xs font-semibold text-white hover:bg-black disabled:opacity-50"
     >
-      {status.replaceAll('_', ' ')}
+      {getHindiStatus(status)}
     </button>
   ))}
 </div>
@@ -1070,7 +1108,7 @@ const selectedCleaningWorks = cleaningAssignments.filter(
           }`}
         >
           {uploaded ? '✓' : '✗'}{' '}
-          {formatContractorLabel(requiredProof)}
+          {getHindiProof(requiredProof)}
         </span>
       );
     })}
@@ -1099,7 +1137,7 @@ const selectedCleaningWorks = cleaningAssignments.filter(
   ] || []
 ).map((requiredProof) => (
   <option key={requiredProof} value={requiredProof}>
-    {formatContractorLabel(requiredProof)}
+    {getHindiProof(requiredProof)}
   </option>
 ))}
     </select>
@@ -1199,7 +1237,7 @@ const selectedCleaningWorks = cleaningAssignments.filter(
             )}
 
             <p className="mt-2 text-xs font-semibold text-gray-700">
-              {(proof.proofType || 'OTHER').replaceAll('_', ' ')}
+              {getHindiProof(proof.proofType || 'OTHER')}
             </p>
 
             <p className="text-xs text-gray-500">
@@ -1316,20 +1354,20 @@ const selectedCleaningWorks = cleaningAssignments.filter(
         className="mt-3 rounded-xl border bg-white p-3"
       >
         <p className="font-semibold text-gray-800">
-          Cleaning Date:{' '}
+          सफाई की तारीख:{' '}
           {cleaning.cleaningDate || '-'}
         </p>
 
         <p className="text-sm text-gray-600">
-          Time: {cleaning.cleaningTime || '-'}
+          समय: {cleaning.cleaningTime || '-'}
         </p>
 
         <p className="text-sm text-gray-600">
-          Status: {cleaning.status || '-'}
+          स्थिति: {cleaning.status || '-'}
         </p>
 
         <textarea
-          placeholder="Completion remarks"
+          placeholder="काम पूरा होने की टिप्पणी"
           value={cleaningRemarks[cleaning.id] || ''}
           onChange={(e) =>
             setCleaningRemarks((prev) => ({
@@ -1354,7 +1392,7 @@ const selectedCleaningWorks = cleaningAssignments.filter(
             }
             className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
           >
-            Start Cleaning
+            सफाई शुरू करें
           </button>
 
           <button
@@ -1369,7 +1407,7 @@ const selectedCleaningWorks = cleaningAssignments.filter(
             }
             className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white"
           >
-            Complete Cleaning
+            सफाई पूर्ण करें
           </button>
         </div>
       </div>
@@ -1401,7 +1439,7 @@ function WorkCalendarCard({
       <p className="font-bold text-gray-800">{title}</p>
       <p className="text-sm text-gray-600">{subtitle || '-'}</p>
       <p className="text-sm text-gray-600">
-        Status: {String(status || '-').replaceAll('_', ' ')}
+        स्थिति: {String(status || '-').replaceAll('_', ' ')}
       </p>
       <Link
         href={href}
