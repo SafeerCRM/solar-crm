@@ -74,6 +74,10 @@ selfMeetingsCreatedToday?: number;
 solarMiterMeetingsCreatedToday?: number;
 companyMeetingsCreatedThisMonth?: number;
 selfMeetingsCreatedThisMonth?: number;
+loanProjectsCreatedThisMonth?: number;
+cashProjectsCreatedThisMonth?: number;
+cashProjectsCancelledRejectedThisMonth?: number;
+loanProjectsCancelledRejectedThisMonth?: number;
 };
 
 type LeadManagerAnalyticsItem = {
@@ -887,6 +891,42 @@ useEffect(() => {
   <p className="text-gray-500">Self Meetings Created This Month</p>
   <p className="text-lg font-bold text-purple-700">
     {item.selfMeetingsCreatedThisMonth || 0}
+  </p>
+</div>
+
+<div className="rounded bg-white p-2">
+  <p className="text-gray-500">
+    Loan Projects Created This Month
+  </p>
+  <p className="text-lg font-bold text-blue-600">
+    {item.loanProjectsCreatedThisMonth || 0}
+  </p>
+</div>
+
+<div className="rounded bg-white p-2">
+  <p className="text-gray-500">
+    Cash Projects Created This Month
+  </p>
+  <p className="text-lg font-bold text-green-600">
+    {item.cashProjectsCreatedThisMonth || 0}
+  </p>
+</div>
+
+<div className="rounded bg-white p-2">
+  <p className="text-gray-500">
+    Cash Projects Cancelled / Rejected This Month
+  </p>
+  <p className="text-lg font-bold text-red-600">
+    {item.cashProjectsCancelledRejectedThisMonth || 0}
+  </p>
+</div>
+
+<div className="rounded bg-white p-2">
+  <p className="text-gray-500">
+    Loan Projects Cancelled / Rejected This Month
+  </p>
+  <p className="text-lg font-bold text-red-600">
+    {item.loanProjectsCancelledRejectedThisMonth || 0}
   </p>
 </div>
 
