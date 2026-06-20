@@ -193,7 +193,7 @@ useEffect(() => {
 <div className="rounded-2xl bg-white p-5 shadow">
   <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
     <input
-      placeholder="Search by name, phone, or Project ID"
+      placeholder="Search by name, phone, K No, or Project ID"
       value={search}
       onChange={(e) => {
         setSearch(e.target.value);
@@ -247,6 +247,7 @@ useEffect(() => {
       <option value="PENDING_APPROVAL">Pending Approval</option>
       <option value="APPROVED">Approved</option>
       <option value="REJECTED">Rejected</option>
+      <option value="CANCELLED">Cancelled</option>
       <option value="LOAN_PROCESS">Loan Process</option>
       <option value="PROJECT_MANAGEMENT">Project Management</option>
       <option value="SUBSIDY_PROCESS">Subsidy Process</option>

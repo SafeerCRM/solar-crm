@@ -735,6 +735,9 @@ const [executionLoading, setExecutionLoading] =
   const [completionDate, setCompletionDate] = useState('');
 const [completionNote, setCompletionNote] = useState('');
 const [completionLoading, setCompletionLoading] = useState(false);
+const [cancellationReason, setCancellationReason] = useState('');
+const [cancellationStatus, setCancellationStatus] = useState<'CANCELLED' | 'REJECTED'>('CANCELLED');
+const [cancellationLoading, setCancellationLoading] = useState(false);
 const [projectManagerApprovalLoading, setProjectManagerApprovalLoading] =
   useState(false);
 
@@ -1585,6 +1588,56 @@ const completeProject = async () => {
     );
   } finally {
     setCompletionLoading(false);
+  }
+};
+
+const cancelProject = async () => {
+  if (!cancellationReason.trim()) {
+    alert('Please enter cancellation / rejection reason');
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `Mark this project as ${cancellationStatus}?`,
+  );
+
+  if (!confirmed) return;
+
+  try {
+    setCancellationLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/${projectId}/cancel`,
+      {
+        status: cancellationStatus,
+        reason: cancellationReason,
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert(`Project marked as ${cancellationStatus}`);
+
+    setCancellationReason('');
+    setCancellationStatus('CANCELLED');
+
+    fetchProject();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to cancel / reject project',
+    );
+  } finally {
+    setCancellationLoading(false);
   }
 };
 
@@ -5292,6 +5345,56 @@ const canApproveAndReserveStock =
   </button>
 </div>
 )}
+
+{canCompleteProject &&
+  project?.status !== 'COMPLETED' &&
+  project?.status !== 'CANCELLED' &&
+  project?.status !== 'REJECTED' && (
+    <div className="rounded-2xl bg-white p-5 shadow">
+      <h2 className="text-lg font-bold text-gray-800">
+        Cancel / Reject Project
+      </h2>
+
+      <p className="mt-1 text-sm text-gray-500">
+        Use this when a project is cancelled after creation or rejected during workflow.
+        This keeps the project record for analytics and history.
+      </p>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <select
+          value={cancellationStatus}
+          onChange={(e) =>
+            setCancellationStatus(
+              e.target.value as 'CANCELLED' | 'REJECTED',
+            )
+          }
+          className="rounded-xl border p-3"
+        >
+          <option value="CANCELLED">Cancelled</option>
+          <option value="REJECTED">Rejected</option>
+        </select>
+
+        <input
+          placeholder="Cancellation / rejection reason"
+          value={cancellationReason}
+          onChange={(e) =>
+            setCancellationReason(e.target.value)
+          }
+          className="rounded-xl border p-3"
+        />
+      </div>
+
+      <button
+        onClick={cancelProject}
+        disabled={cancellationLoading}
+        className="mt-4 rounded-xl bg-red-600 px-5 py-3 font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+      >
+        {cancellationLoading
+          ? 'Updating...'
+          : 'Mark Cancelled / Rejected'}
+      </button>
+    </div>
+  )}
 
       <div className="rounded-2xl bg-white p-5 shadow">
         <h2 className="mb-2 text-lg font-bold text-gray-800">Remarks</h2>
