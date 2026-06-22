@@ -5918,11 +5918,13 @@ const canApproveAndReserveStock =
           <option value="PILLAR_INSPECTION">Pillar Inspection</option>
           <option value="PANEL_INSTALLED">Panel Installed</option>
           <option value="INVERTER_INSTALLED">Inverter Installed</option>
-          <option value="EARTHING_PACKING">Earthing / Packing</option>
-          <option value="GENERATION_STARTED">Generation Started</option>
-          <option value="GENERATION_INSPECTION">Generation Inspection</option>
-          <option value="INVOICE_FILE_GIVEN">Invoice File Given</option>
-          <option value="NON_DCR_PENDING">Non-DCR Pending</option>
+          <option value="WIRING">Wiring</option>
+<option value="EARTHING_PACKING">Earthing / Packing</option>
+<option value="GENERATION_STARTED">Generation Started</option>
+<option value="GENERATION_INSPECTION">Generation Inspection</option>
+<option value="INVOICE_FILE_GIVEN">Invoice File Given</option>
+<option value="SUBSIDY_REDEEMED">Subsidy Redeemed</option>
+<option value="SUBSIDY_DISBURSED">Subsidy Disbursed</option>
         </select>
 
         <select
@@ -7044,6 +7046,7 @@ const canApproveAndReserveStock =
         <option value="DCR_CERTIFICATE_READY">DCR Certificate Ready</option>
         <option value="SUBMISSION_DONE">Submission Done</option>
         <option value="SUBSIDY_REQUESTED">Subsidy Requested</option>
+        <option value="SUBSIDY_REDEEMED">Subsidy Redeemed</option>
         <option value="SUBSIDY_DISBURSED">Subsidy Disbursed</option>
         <option value="REJECTED">Rejected</option>
       </select>
