@@ -187,6 +187,7 @@ import {
   FranchisePayoutRequestStatus,
 } from './project-franchise-payout-request.entity';
 import { Dealer } from '../dealer/dealer.entity';
+import { ProjectPaymentReceipt } from './project-payment-receipt.entity';
 
 @Injectable()
 export class ProjectService {
@@ -643,6 +644,9 @@ private readonly projectDealerMonthlyRequirementRepository: Repository<ProjectDe
 
 @InjectRepository(ProjectTradingMeeting)
 private readonly projectTradingMeetingRepository: Repository<ProjectTradingMeeting>,
+
+@InjectRepository(ProjectPaymentReceipt)
+private readonly projectPaymentReceiptRepository: Repository<ProjectPaymentReceipt>,
 
 @InjectRepository(FollowUp)
 private readonly followUpRepository: Repository<FollowUp>,
@@ -3891,6 +3895,23 @@ async getPaymentCollectionList(query: any, currentUser: any) {
 
   const rows = await qb.getRawMany();
 
+  const installmentIds = rows
+  .map((row) => Number(row.id))
+  .filter(Boolean);
+
+const receipts = installmentIds.length
+  ? await this.projectPaymentReceiptRepository.find({
+      where: {
+        installmentId: In(installmentIds),
+        isHidden: false,
+      },
+      order: {
+        paymentDate: 'DESC',
+        id: 'DESC',
+      },
+    })
+  : [];
+
   const projectIds = Array.from(
   new Set(
     rows
@@ -4084,6 +4105,25 @@ if (projectIds.length > 0) {
       paymentReceivedPercentage,
 
       projectStatus: row.projectStatus,
+
+      receipts: receipts
+  .filter((receipt) => Number(receipt.installmentId) === Number(row.id))
+  .map((receipt) => ({
+    id: receipt.id,
+    receivedAmount: Number(receipt.receivedAmount || 0),
+    paymentDate: receipt.paymentDate,
+    paymentMode: receipt.paymentMode,
+    transactionId: receipt.transactionId,
+    proofUrl: receipt.proofUrl,
+    remarks: receipt.remarks,
+    collectedBy: receipt.collectedBy,
+    collectedByName: receipt.collectedByName,
+    approvalStatus: receipt.approvalStatus,
+    approvedBy: receipt.approvedBy,
+    approvedByName: receipt.approvedByName,
+    approvedAt: receipt.approvedAt,
+    approvalNote: receipt.approvalNote,
+  })),
     };
   }),
   pagination: {
@@ -4280,6 +4320,38 @@ if (canAutoApprovePayment) {
   installment.approvalNote =
     'Auto approved by authorized role';
 }
+
+const paymentReceipt = new ProjectPaymentReceipt();
+
+paymentReceipt.projectId = Number(installment.projectId);
+paymentReceipt.installmentId = Number(installment.id);
+paymentReceipt.receivedAmount = receivedAmount;
+paymentReceipt.paymentDate = new Date();
+paymentReceipt.paymentMode = body?.paymentMode || null;
+paymentReceipt.transactionId = body?.transactionId || null;
+paymentReceipt.proofUrl = body?.proofUrl || null;
+paymentReceipt.remarks = body?.remarks || null;
+paymentReceipt.collectedBy =
+  currentUser?.id || currentUser?.userId || null;
+paymentReceipt.collectedByName = currentUser?.name || null;
+paymentReceipt.approvalStatus = installment.approvalStatus;
+if (installment.approvedBy) {
+  paymentReceipt.approvedBy = installment.approvedBy;
+}
+
+if (installment.approvedByName) {
+  paymentReceipt.approvedByName = installment.approvedByName;
+}
+
+if (installment.approvedAt) {
+  paymentReceipt.approvedAt = installment.approvedAt;
+}
+
+if (installment.approvalNote) {
+  paymentReceipt.approvalNote = installment.approvalNote;
+}
+
+await this.projectPaymentReceiptRepository.save(paymentReceipt);
 
   if (newPendingAmount <= 0) {
     installment.status =
