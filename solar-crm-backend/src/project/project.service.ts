@@ -7987,6 +7987,61 @@ async hideProject(id: number, body: any, user: any) {
   return this.projectRepository.save(project);
 }
 
+async getHiddenProjects(user: any) {
+  const roles = Array.isArray(user?.roles) ? user.roles : [];
+
+  const canViewHidden =
+    roles.includes('OWNER') ||
+    roles.includes('PROJECT_MANAGER');
+
+  if (!canViewHidden) {
+    throw new ForbiddenException(
+      'You are not allowed to view hidden projects',
+    );
+  }
+
+  return this.projectRepository.find({
+    where: {
+      isHidden: true,
+    },
+    order: {
+      hiddenAt: 'DESC',
+      updatedAt: 'DESC',
+    } as any,
+    take: 100,
+  });
+}
+
+async restoreProject(id: number, body: any, user: any) {
+  const roles = Array.isArray(user?.roles) ? user.roles : [];
+
+  const canRestore =
+    roles.includes('OWNER') ||
+    roles.includes('PROJECT_MANAGER');
+
+  if (!canRestore) {
+    throw new ForbiddenException(
+      'You are not allowed to restore projects',
+    );
+  }
+
+  const project = await this.projectRepository.findOne({
+    where: { id },
+  });
+
+  if (!project) {
+    throw new NotFoundException('Project not found');
+  }
+
+  project.isHidden = false;
+  project.hiddenAt = null as any;
+  project.hiddenBy = null as any;
+  project.hiddenByName = null as any;
+  project.hiddenReason = null as any;
+
+  return this.projectRepository.save(project);
+}
+
 async createExecutionActivity(
   data: Partial<ProjectExecutionActivity>,
   user: any,

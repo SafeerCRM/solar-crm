@@ -2776,6 +2776,20 @@ hideProject(
   return this.projectService.hideProject(id, body, user);
 }
 
+@Get('hidden/list')
+getHiddenProjects(@CurrentUser() user: any) {
+  return this.projectService.getHiddenProjects(user);
+}
+
+@Patch(':id/restore')
+restoreProject(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.restoreProject(id, body, user);
+}
+
 @Roles('OWNER', 'MARKETING_HEAD', 'PROJECT_MANAGER')
 
 @Patch(':id/complete')
