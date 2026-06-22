@@ -866,6 +866,8 @@ const project = this.projectRepository.create(projectData);
     status?: string;
     branch?: string;
     owner?: string;
+    fromDate?: string;
+toDate?: string;
   },
   user?: any,
 ) {
@@ -973,6 +975,18 @@ if (roles.includes('SOLAR_FRANCHISE')) {
       owner: filters.owner,
     },
   );
+}
+
+if (filters?.fromDate) {
+  query.andWhere('project.createdAt >= :fromDate', {
+    fromDate: new Date(`${filters.fromDate}T00:00:00`),
+  });
+}
+
+if (filters?.toDate) {
+  query.andWhere('project.createdAt <= :toDate', {
+    toDate: new Date(`${filters.toDate}T23:59:59`),
+  });
 }
 
   query.orderBy('project.createdAt', 'DESC');

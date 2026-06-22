@@ -57,6 +57,8 @@ findAll(
   @Query('status') status?: string,
   @Query('branch') branch?: string,
   @Query('owner') owner: string = '',
+  @Query('fromDate') fromDate?: string,
+@Query('toDate') toDate?: string,
 @CurrentUser() user?: any,
 ) {
   return this.projectService.findAll(
@@ -67,6 +69,8 @@ findAll(
     status: status || '',
     branch: branch || '',
     owner: owner || '',
+    fromDate: fromDate || '',
+toDate: toDate || '',
   },
   user,
 );
