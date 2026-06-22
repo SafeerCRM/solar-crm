@@ -71,6 +71,8 @@ const [fromDate, setFromDate] = useState('');
 const [toDate, setToDate] = useState('');
 const [filtersLoaded, setFiltersLoaded] = useState(false);
 const [projectOwners, setProjectOwners] = useState<ProjectOwner[]>([]);
+const [hiddenProjects, setHiddenProjects] = useState<Project[]>([]);
+const [showHiddenProjects, setShowHiddenProjects] = useState(false);
 
 useEffect(() => {
   const saved = localStorage.getItem('projectListFilters');
@@ -214,6 +216,64 @@ const hideProject = async (projectId: number) => {
   }
 };
 
+const fetchHiddenProjects = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/hidden/list`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setHiddenProjects(res.data || []);
+  } catch (error) {
+    console.error(error);
+    alert('Failed to load hidden projects');
+  }
+};
+
+const restoreProject = async (projectId: number) => {
+  const confirmed = window.confirm(
+    'Restore this hidden project?',
+  );
+
+  if (!confirmed) return;
+
+  try {
+    const token = localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/${projectId}/restore`,
+      {},
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Project restored');
+
+    fetchProjects();
+    fetchHiddenProjects();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to restore project',
+    );
+  }
+};
+
   useEffect(() => {
   if (!filtersLoaded) return;
   fetchProjects();
@@ -250,6 +310,24 @@ useEffect(() => {
     >
       + Create Project
     </Link>
+
+    <button
+  type="button"
+  onClick={() => {
+    if (!showHiddenProjects) {
+      fetchHiddenProjects();
+    }
+
+    setShowHiddenProjects(
+      !showHiddenProjects,
+    );
+  }}
+  className="rounded-xl bg-gray-700 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800"
+>
+  {showHiddenProjects
+    ? 'Hide Hidden Projects'
+    : 'View Hidden Projects'}
+</button>
   </div>
 </div>
 
@@ -377,6 +455,43 @@ useEffect(() => {
   </button>
 </div>
 </div>
+
+{showHiddenProjects && (
+  <div className="rounded-2xl bg-white p-5 shadow">
+    <h2 className="text-lg font-bold text-red-700">
+      Hidden Projects
+    </h2>
+
+    <div className="mt-4 space-y-3">
+      {hiddenProjects.length === 0 ? (
+        <p className="text-sm text-gray-500">
+          No hidden projects found.
+        </p>
+      ) : (
+        hiddenProjects.map((project) => (
+          <div
+            key={project.id}
+            className="rounded-xl border p-4"
+          >
+            <p className="font-bold">
+              #{project.id} -{' '}
+              {project.customerName}
+            </p>
+
+            <button
+              onClick={() =>
+                restoreProject(project.id)
+              }
+              className="mt-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white"
+            >
+              Restore Project
+            </button>
+          </div>
+        ))
+      )}
+    </div>
+  </div>
+)}
 
       {loading ? (
         <div className="rounded-2xl bg-white p-4 shadow">Loading projects...</div>
