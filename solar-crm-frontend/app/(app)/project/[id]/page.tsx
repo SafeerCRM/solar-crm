@@ -4834,6 +4834,18 @@ const canApproveAndReserveStock =
     );
   }
 
+  else if (hasRole(['STOCK_MANAGER'])) {
+  visibleTabs = allTabs.filter((tab) =>
+    [
+      'PROJECT_CREATION',
+      'PROJECT_MANAGEMENT',
+      'PROJECT_EXECUTION',
+      'DOCUMENTS',
+      'PROJECT_HISTORY',
+    ].includes(tab.key),
+  );
+}
+
   return visibleTabs.map((tab) => (
     <button
       key={tab.key}
