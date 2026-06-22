@@ -37,6 +37,38 @@ const navItems = [
       'SOLAR_FRANCHISE',
     ],
   },
+
+  {
+  name: 'Analytics',
+  href: '/dashboard/analytics',
+  roles: [
+    'OWNER',
+    'TELECALLING_MANAGER',
+    'TELECALLING_ASSISTANT',
+    'TELECALLER',
+    'LEAD_MANAGER',
+    'LEAD_EXECUTIVE',
+    'MARKETING_HEAD',
+    'MEETING_MANAGER',
+    'MEETING_ASSISTANT',
+    'PROJECT_MANAGER',
+    'PROJECT_EXECUTIVE',
+    'LOAN_MANAGER',
+    'SUBSIDY_MANAGER',
+    'ELECTRICITY_MANAGER',
+    'PAYMENT_COLLECTION_EXECUTIVE',
+    'PAYMENT_MANAGER',
+    'ACCOUNT_MANAGER',
+    'STOCK_MANAGER',
+    'MAINTENANCE_MANAGER',
+    'CUSTOMER_MANAGER',
+    'HR_MANAGER',
+    'TRADING_MANAGER',
+    'PROJECT_CONTRACTOR',
+    'SOLAR_FRANCHISE',
+  ],
+},
+
   { name: 'Users', href: '/users', roles: ['OWNER'] },
 
   {
