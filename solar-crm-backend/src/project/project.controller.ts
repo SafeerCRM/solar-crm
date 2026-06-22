@@ -476,6 +476,7 @@ getContractorComments(
   'PROJECT_MANAGER',
   'PROJECT_EXECUTIVE',
   'MEETING_MANAGER',
+  'STOCK_MANAGER',
 )
 
 @Post('material-request')
