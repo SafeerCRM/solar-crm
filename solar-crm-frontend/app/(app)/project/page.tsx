@@ -67,7 +67,52 @@ const [search, setSearch] = useState('');
 const [statusFilter, setStatusFilter] = useState('');
 const [branchFilter, setBranchFilter] = useState('');
 const [ownerFilter, setOwnerFilter] = useState('');
+const [fromDate, setFromDate] = useState('');
+const [toDate, setToDate] = useState('');
 const [projectOwners, setProjectOwners] = useState<ProjectOwner[]>([]);
+
+useEffect(() => {
+  const saved = localStorage.getItem('projectListFilters');
+
+  if (!saved) return;
+
+  try {
+    const parsed = JSON.parse(saved);
+
+    setSearch(parsed.search || '');
+    setStatusFilter(parsed.statusFilter || '');
+    setBranchFilter(parsed.branchFilter || '');
+    setOwnerFilter(parsed.ownerFilter || '');
+    setFromDate(parsed.fromDate || '');
+    setToDate(parsed.toDate || '');
+    setPage(Number(parsed.page || 1));
+  } catch {
+    localStorage.removeItem('projectListFilters');
+  }
+}, []);
+
+useEffect(() => {
+  localStorage.setItem(
+    'projectListFilters',
+    JSON.stringify({
+      search,
+      statusFilter,
+      branchFilter,
+      ownerFilter,
+      fromDate,
+      toDate,
+      page,
+    }),
+  );
+}, [
+  search,
+  statusFilter,
+  branchFilter,
+  ownerFilter,
+  fromDate,
+  toDate,
+  page,
+]);
 
   const fetchProjects = async () => {
     try {
@@ -82,6 +127,8 @@ const [projectOwners, setProjectOwners] = useState<ProjectOwner[]>([]);
     status: statusFilter,
     branch: branchFilter,
     owner: ownerFilter,
+    fromDate,
+toDate,
   },
   headers: token
     ? {
@@ -163,7 +210,7 @@ const hideProject = async (projectId: number) => {
 
   useEffect(() => {
   fetchProjects();
-}, [page, search, statusFilter, branchFilter, ownerFilter]);
+}, [page, search, statusFilter, branchFilter, ownerFilter, fromDate, toDate]);
 
 useEffect(() => {
   fetchProjectOwners();
@@ -212,6 +259,26 @@ useEffect(() => {
       className="rounded-xl border p-3"
     />
 
+    <input
+  type="date"
+  value={fromDate}
+  onChange={(e) => {
+    setFromDate(e.target.value);
+    setPage(1);
+  }}
+  className="rounded-xl border p-3"
+/>
+
+<input
+  type="date"
+  value={toDate}
+  onChange={(e) => {
+    setToDate(e.target.value);
+    setPage(1);
+  }}
+  className="rounded-xl border p-3"
+/>
+
     <select
   value={ownerFilter}
   onChange={(e) => {
@@ -255,6 +322,44 @@ useEffect(() => {
       <option value="COMPLETED">Completed</option>
     </select>
   </div>
+
+  <div className="mt-3 flex flex-wrap gap-2">
+  <button
+    type="button"
+    onClick={() => {
+      const now = new Date();
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+      const formatDate = (date: Date) =>
+        date.toISOString().slice(0, 10);
+
+      setFromDate(formatDate(firstDay));
+      setToDate(formatDate(lastDay));
+      setPage(1);
+    }}
+    className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+  >
+    This Month
+  </button>
+
+  <button
+    type="button"
+    onClick={() => {
+      setSearch('');
+      setStatusFilter('');
+      setBranchFilter('');
+      setOwnerFilter('');
+      setFromDate('');
+      setToDate('');
+      setPage(1);
+      localStorage.removeItem('projectListFilters');
+    }}
+    className="rounded-xl bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-700"
+  >
+    Clear Filters
+  </button>
+</div>
 </div>
 
       {loading ? (
