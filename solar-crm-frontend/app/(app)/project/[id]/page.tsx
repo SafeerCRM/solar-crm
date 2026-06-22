@@ -7733,6 +7733,56 @@ const canApproveAndReserveStock =
                       {item.remarks}
                     </p>
                   )}
+
+                  {Array.isArray((item as any).receipts) &&
+  (item as any).receipts.length > 0 && (
+    <div className="mt-3 rounded-xl bg-green-50 p-3">
+      <p className="text-sm font-bold text-green-800">
+        Payment Receipts
+      </p>
+
+      <div className="mt-2 space-y-2">
+        {(item as any).receipts.map((receipt: any) => (
+          <div
+            key={receipt.id}
+            className="rounded-lg bg-white p-3 text-sm"
+          >
+            <p className="font-semibold text-gray-800">
+              ₹
+              {Number(
+                receipt.receivedAmount || 0,
+              ).toLocaleString('en-IN')}
+            </p>
+
+            <p className="text-xs text-gray-500">
+              Date:{' '}
+              {receipt.paymentDate
+                ? new Date(
+                    receipt.paymentDate,
+                  ).toLocaleString('en-IN')
+                : '-'}
+            </p>
+
+            <p className="text-xs text-gray-500">
+              Mode: {receipt.paymentMode || '-'} | Ref:{' '}
+              {receipt.transactionId || '-'}
+            </p>
+
+            {receipt.remarks && (
+              <p className="mt-1 text-xs text-gray-700">
+                Remarks: {receipt.remarks}
+              </p>
+            )}
+
+            <p className="mt-1 text-xs text-gray-500">
+              Collected By:{' '}
+              {receipt.collectedByName || '-'}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )}
                 </div>
 
                 <div className="text-right">
