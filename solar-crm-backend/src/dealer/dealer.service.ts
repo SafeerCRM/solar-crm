@@ -42,6 +42,8 @@ import { ProjectService } from '../project/project.service';
 import { StaffMember } from '../staff/staff-member.entity';
 import { DealerPortalCompanySetting } from './dealer-portal-company-setting.entity';
 import { DealerDeliverySetting } from './dealer-delivery-setting.entity';
+import { DealerKit } from './dealer-kit.entity';
+import { DealerKitItem } from './dealer-kit-item.entity';
 
 @Injectable()
 export class DealerService {
@@ -99,6 +101,12 @@ private readonly staffMemberRepository: Repository<StaffMember>,
 
 @InjectRepository(DealerPortalCompanySetting)
 private readonly portalCompanySettingRepository: Repository<DealerPortalCompanySetting>,
+
+@InjectRepository(DealerKit)
+private readonly dealerKitRepository: Repository<DealerKit>,
+
+@InjectRepository(DealerKitItem)
+private readonly dealerKitItemRepository: Repository<DealerKitItem>,
 
 @InjectRepository(DealerDeliverySetting)
 private readonly deliverySettingRepository: Repository<DealerDeliverySetting>,
@@ -272,6 +280,198 @@ calculateDealerDeliveryCharge(distanceKm: number, setting: any) {
   const calculatedCharge = baseCharge + extraKm * perKmCharge;
 
   return Math.max(calculatedCharge, minimumCharge);
+}
+
+async listDealerKits(query: any) {
+  const showHidden = query?.showHidden === 'true';
+
+  const where: any = {};
+
+  if (!showHidden) {
+    where.isHidden = false;
+  }
+
+  const kits = await this.dealerKitRepository.find({
+    where,
+    order: {
+      createdAt: 'DESC',
+    } as any,
+  });
+
+  const result: any[] = [];
+
+  for (const kit of kits) {
+    const items = await this.dealerKitItemRepository.find({
+      where: { kitId: kit.id },
+      order: { sortOrder: 'ASC', id: 'ASC' } as any,
+    });
+
+    result.push({
+      ...kit,
+      items,
+    });
+  }
+
+  return result;
+}
+
+async listDealerKitsForPortal() {
+  const kits = await this.dealerKitRepository.find({
+    where: {
+      isHidden: false,
+      isAvailable: true,
+    } as any,
+    order: {
+      createdAt: 'DESC',
+    } as any,
+  });
+
+  const result: any[] = [];
+
+  for (const kit of kits) {
+    const items = await this.dealerKitItemRepository.find({
+      where: { kitId: kit.id },
+      order: { sortOrder: 'ASC', id: 'ASC' } as any,
+    });
+
+    result.push({
+      ...kit,
+      items,
+    });
+  }
+
+  return result;
+}
+
+async saveDealerKit(body: any, user: any) {
+  if (!String(body?.kitName || '').trim()) {
+    throw new BadRequestException('Kit name is required');
+  }
+
+  let kit: any = null;
+
+  if (body?.id) {
+    kit = await this.dealerKitRepository.findOne({
+      where: { id: Number(body.id) },
+    });
+  }
+
+  if (!kit) {
+    kit = this.dealerKitRepository.create({
+      createdBy: user?.id || user?.userId || null,
+      createdByName: user?.name || user?.email || '',
+    });
+  }
+
+  kit.kitName = String(body.kitName || '').trim();
+  kit.shortDescription = body.shortDescription || '';
+  kit.displayBrand = body.displayBrand || '';
+  kit.displayCapacity = body.displayCapacity || '';
+  kit.sellingPrice = Number(body.sellingPrice || 0);
+  kit.gstPercent = Number(body.gstPercent || 0);
+  kit.isAvailable = body.isAvailable !== false;
+
+  const savedKit = await this.dealerKitRepository.save(kit);
+
+  await this.dealerKitItemRepository.delete({
+    kitId: savedKit.id,
+  });
+
+  const items = Array.isArray(body.items) ? body.items : [];
+
+  for (let index = 0; index < items.length; index += 1) {
+    const item = items[index];
+
+    if (
+      !String(item?.material || '').trim() &&
+      !String(item?.brandSizeType || '').trim() &&
+      !String(item?.quantity || '').trim()
+    ) {
+      continue;
+    }
+
+    await this.dealerKitItemRepository.save(
+      this.dealerKitItemRepository.create({
+        kitId: savedKit.id,
+        material: item.material || '',
+        brandSizeType: item.brandSizeType || '',
+        quantity: item.quantity || '',
+        sortOrder: index,
+      }),
+    );
+  }
+
+  return this.getDealerKitById(savedKit.id);
+}
+
+async getDealerKitById(id: number) {
+  const kit = await this.dealerKitRepository.findOne({
+    where: { id },
+  });
+
+  if (!kit) {
+    throw new NotFoundException('Dealer kit not found');
+  }
+
+  const items = await this.dealerKitItemRepository.find({
+    where: { kitId: kit.id },
+    order: { sortOrder: 'ASC', id: 'ASC' } as any,
+  });
+
+  return {
+    ...kit,
+    items,
+  };
+}
+
+async hideDealerKit(id: number, body: any, user: any) {
+  const kit = await this.dealerKitRepository.findOne({
+    where: { id },
+  });
+
+  if (!kit) {
+    throw new NotFoundException('Dealer kit not found');
+  }
+
+  kit.isHidden = true;
+  kit.hiddenReason = body?.reason || '';
+  kit.hiddenAt = new Date();
+  kit.hiddenBy = user?.id || user?.userId || null;
+  kit.hiddenByName = user?.name || user?.email || '';
+
+  return this.dealerKitRepository.save(kit);
+}
+
+async restoreDealerKit(id: number) {
+  const kit = await this.dealerKitRepository.findOne({
+    where: { id },
+  });
+
+  if (!kit) {
+    throw new NotFoundException('Dealer kit not found');
+  }
+
+  kit.isHidden = false;
+  kit.hiddenReason = '';
+  (kit as any).hiddenAt = null;
+(kit as any).hiddenBy = null;
+  kit.hiddenByName = '';
+
+  return this.dealerKitRepository.save(kit);
+}
+
+async toggleDealerKitAvailability(id: number, body: any) {
+  const kit = await this.dealerKitRepository.findOne({
+    where: { id },
+  });
+
+  if (!kit) {
+    throw new NotFoundException('Dealer kit not found');
+  }
+
+  kit.isAvailable = body?.isAvailable === true;
+
+  return this.dealerKitRepository.save(kit);
 }
 
   async getDealerDashboard(dealerId: number) {
@@ -569,7 +769,7 @@ async savePortalCompanySetting(body: any) {
     const items = Array.isArray(body.items) ? body.items : [];
 
     if (!items.length) {
-      throw new NotFoundException('At least one material is required');
+      throw new NotFoundException('At least one kit or material is required');
     }
 
     const paymentType = body.paymentType || ProjectDealerPaymentType.CASH;
@@ -659,74 +859,160 @@ order.createdByName = dealer.dealerName;
     let discountAmount = 0;
 
     for (const item of items) {
-      const materialId = Number(item.materialId || 0);
-      const quantity = Number(item.quantity || 0);
+  const itemType = String(item.itemType || 'MATERIAL').toUpperCase();
+  const quantity = Number(item.quantity || 0);
 
-      if (!materialId || quantity <= 0) {
-        continue;
-      }
+  if (quantity <= 0) {
+    continue;
+  }
 
-      const material = await this.materialRepository.findOne({
-        where: { id: materialId, isActive: true },
-      });
+  if (itemType === 'KIT') {
+    const kitId = Number(item.kitId || 0);
 
-      if (!material) {
-        continue;
-      }
-
-      const stockItems = await this.stockRepository.find({
-        where: {
-          materialId,
-          isHidden: false,
-        },
-      });
-
-      const availableQuantity = stockItems.reduce(
-        (sum, stock) =>
-          sum +
-          Math.max(
-            Number(stock.currentQuantity || 0) -
-              Number(stock.reservedQuantity || 0),
-            0,
-          ),
-        0,
-      );
-
-      const sellingRate = Number(material.sellingRate || material.rate || 0);
-      const gstPercent = Number(material.gstPercent || 0);
-      const itemDiscount = Number(item.discountAmount || 0);
-
-      const itemSubtotal = quantity * sellingRate;
-      const itemGst = ((itemSubtotal - itemDiscount) * gstPercent) / 100;
-      const itemTotal = itemSubtotal - itemDiscount + itemGst;
-
-      subtotalAmount += itemSubtotal;
-      discountAmount += itemDiscount;
-      gstAmount += itemGst;
-      totalAmount += itemTotal;
-
-      const orderItem = this.dealerOrderItemRepository.create({
-        dealerOrderId: savedOrder.id,
-        materialId: material.id,
-        materialName: material.name,
-        category: material.category,
-        brand: material.brand,
-        unit: material.unit,
-        hsnCode: material.hsnCode,
-        quantity,
-        pendingQuantity: quantity,
-        sellingRate,
-        gstPercent,
-        discountAmount: itemDiscount,
-        subtotalAmount: itemSubtotal,
-        gstAmount: itemGst,
-        totalAmount: itemTotal,
-        stockAvailableQuantity: availableQuantity,
-        remarks: item.remarks || '',
-      });
-
-      await this.dealerOrderItemRepository.save(orderItem);
+    if (!kitId) {
+      continue;
     }
+
+    const kit = await this.dealerKitRepository.findOne({
+      where: {
+        id: kitId,
+        isHidden: false,
+        isAvailable: true,
+      } as any,
+    });
+
+    if (!kit) {
+      continue;
+    }
+
+    const kitItems = await this.dealerKitItemRepository.find({
+      where: { kitId: kit.id },
+      order: { sortOrder: 'ASC', id: 'ASC' } as any,
+    });
+
+    const sellingRate = Number(kit.sellingPrice || 0);
+    const gstPercent = Number(kit.gstPercent || 0);
+    const itemDiscount = Number(item.discountAmount || 0);
+
+    const itemSubtotal = quantity * sellingRate;
+    const itemGst = ((itemSubtotal - itemDiscount) * gstPercent) / 100;
+    const itemTotal = itemSubtotal - itemDiscount + itemGst;
+
+    subtotalAmount += itemSubtotal;
+    discountAmount += itemDiscount;
+    gstAmount += itemGst;
+    totalAmount += itemTotal;
+
+    const kitSpecification = kitItems
+      .map(
+        (row) =>
+          `${row.material || '-'} | ${row.brandSizeType || '-'} | Qty: ${
+            row.quantity || '-'
+          }`,
+      )
+      .join('\n');
+
+    const orderItem = this.dealerOrderItemRepository.create({
+      dealerOrderId: savedOrder.id,
+      itemType: 'KIT',
+      kitId: kit.id,
+      kitSpecification,
+      materialId: null,
+      materialName: kit.kitName,
+      category: 'KIT',
+      brand: kit.displayBrand || '',
+      unit: 'KIT',
+      hsnCode: '',
+      quantity,
+      pendingQuantity: quantity,
+      sellingRate,
+      gstPercent,
+      discountAmount: itemDiscount,
+      subtotalAmount: itemSubtotal,
+      gstAmount: itemGst,
+      totalAmount: itemTotal,
+      stockAvailableQuantity: 0,
+      remarks:
+        item.remarks ||
+        kit.shortDescription ||
+        kit.displayCapacity ||
+        '',
+    } as any);
+
+    await this.dealerOrderItemRepository.save(orderItem);
+    continue;
+  }
+
+  const materialId = Number(item.materialId || 0);
+
+  if (!materialId) {
+    continue;
+  }
+
+  const material = await this.materialRepository.findOne({
+    where: { id: materialId, isActive: true },
+  });
+
+  if (!material) {
+    continue;
+  }
+
+  const stockItems = await this.stockRepository.find({
+    where: {
+      materialId,
+      isHidden: false,
+    },
+  });
+
+  const availableQuantity = stockItems.reduce(
+    (sum, stock) =>
+      sum +
+      Math.max(
+        Number(stock.currentQuantity || 0) -
+          Number(stock.reservedQuantity || 0),
+        0,
+      ),
+    0,
+  );
+
+  const sellingRate = Number(material.sellingRate || material.rate || 0);
+  const gstPercent = Number(material.gstPercent || 0);
+  const itemDiscount = Number(item.discountAmount || 0);
+
+  const itemSubtotal = quantity * sellingRate;
+  const itemGst = ((itemSubtotal - itemDiscount) * gstPercent) / 100;
+  const itemTotal = itemSubtotal - itemDiscount + itemGst;
+
+  subtotalAmount += itemSubtotal;
+  discountAmount += itemDiscount;
+  gstAmount += itemGst;
+  totalAmount += itemTotal;
+
+  const orderItem = this.dealerOrderItemRepository.create({
+    dealerOrderId: savedOrder.id,
+    itemType: 'MATERIAL',
+    kitId: null,
+    kitSpecification: '',
+    materialId: material.id,
+    materialName: material.name,
+    category: material.category,
+    brand: material.brand,
+    unit: material.unit,
+    hsnCode: material.hsnCode,
+    quantity,
+    pendingQuantity: quantity,
+    sellingRate,
+    gstPercent,
+    discountAmount: itemDiscount,
+    subtotalAmount: itemSubtotal,
+    gstAmount: itemGst,
+    totalAmount: itemTotal,
+    stockAvailableQuantity: availableQuantity,
+    remarks: item.remarks || '',
+  } as any);
+
+  await this.dealerOrderItemRepository.save(orderItem);
+}
 
     savedOrder.subtotalAmount = subtotalAmount;
     savedOrder.discountAmount = discountAmount;

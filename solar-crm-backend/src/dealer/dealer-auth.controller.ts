@@ -105,6 +105,13 @@ export class DealerAuthController {
     );
   }
 
+  @Get('kits')
+async kits(@Req() req: any) {
+  this.getDealerPayload(req);
+
+  return this.service.listDealerKitsForPortal();
+}
+
     @Get('analytics')
   async analytics(@Req() req: any) {
     const payload = this.getDealerPayload(req);

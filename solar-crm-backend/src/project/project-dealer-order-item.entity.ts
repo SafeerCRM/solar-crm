@@ -49,6 +49,15 @@ dispatchedQuantity: number;
   @Column({ type: 'float', default: 0 })
   sellingRate: number;
 
+  @Column({ type: 'text', default: 'MATERIAL' })
+itemType: string;
+
+@Column({ nullable: true })
+kitId: number;
+
+@Column({ type: 'text', nullable: true })
+kitSpecification: string;
+
   @Column({ type: 'float', default: 0 })
   gstPercent: number;
 

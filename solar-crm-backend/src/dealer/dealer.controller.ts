@@ -122,6 +122,48 @@ updateDealerOrderDelivery(
   return this.dealerService.updateDealerOrderDelivery(id, body);
 }
 
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER', 'ACCOUNT_MANAGER', 'TRADING_MANAGER')
+@Get('kits')
+listDealerKits(@Query() query: any) {
+  return this.dealerService.listDealerKits(query);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER', 'ACCOUNT_MANAGER', 'TRADING_MANAGER')
+@Post('kits')
+saveDealerKit(@Body() body: any, @CurrentUser() user: any) {
+  return this.dealerService.saveDealerKit(body, user);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER', 'ACCOUNT_MANAGER', 'TRADING_MANAGER')
+@Patch('kits/:id/hide')
+hideDealerKit(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.dealerService.hideDealerKit(id, body, user);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER', 'ACCOUNT_MANAGER', 'TRADING_MANAGER')
+@Patch('kits/:id/restore')
+restoreDealerKit(@Param('id', ParseIntPipe) id: number) {
+  return this.dealerService.restoreDealerKit(id);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER', 'ACCOUNT_MANAGER', 'TRADING_MANAGER')
+@Patch('kits/:id/availability')
+toggleDealerKitAvailability(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+) {
+  return this.dealerService.toggleDealerKitAvailability(id, body);
+}
+
   @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('OWNER', 'TRADING_MANAGER')
 @Patch(':id/portal-password')
