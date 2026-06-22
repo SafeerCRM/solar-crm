@@ -17,6 +17,8 @@ export enum ProjectExecutionActivityType {
 
   INVERTER_INSTALLED = 'INVERTER_INSTALLED',
 
+  WIRING = 'WIRING',
+
   EARTHING_PACKING = 'EARTHING_PACKING',
 
   GENERATION_STARTED = 'GENERATION_STARTED',
@@ -25,7 +27,9 @@ export enum ProjectExecutionActivityType {
 
   INVOICE_FILE_GIVEN = 'INVOICE_FILE_GIVEN',
 
-  NON_DCR_PENDING = 'NON_DCR_PENDING',
+  SUBSIDY_REDEEMED = 'SUBSIDY_REDEEMED',
+
+  SUBSIDY_DISBURSED = 'SUBSIDY_DISBURSED',
 }
 
 export enum ProjectExecutionActivityStatus {
