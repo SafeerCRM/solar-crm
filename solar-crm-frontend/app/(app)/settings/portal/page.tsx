@@ -35,6 +35,24 @@ const emptyDeliveryForm = {
   minimumCharge: '',
 };
 
+const emptyKitForm = {
+  id: '',
+  kitName: '',
+  shortDescription: '',
+  displayBrand: '',
+  displayCapacity: '',
+  sellingPrice: '',
+  gstPercent: '',
+  isAvailable: true,
+  items: [
+    {
+      material: '',
+      brandSizeType: '',
+      quantity: '',
+    },
+  ],
+};
+
 export default function PortalSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -45,6 +63,12 @@ const [companySaving, setCompanySaving] = useState(false);
 const [deliveryForm, setDeliveryForm] = useState<any>(emptyDeliveryForm);
 const [deliverySaving, setDeliverySaving] = useState(false);
 
+const [kits, setKits] = useState<any[]>([]);
+const [kitForm, setKitForm] = useState<any>(emptyKitForm);
+const [kitSaving, setKitSaving] = useState(false);
+const [showHiddenKits, setShowHiddenKits] = useState(false);
+const [expandedKitId, setExpandedKitId] = useState<number | null>(null);
+
   const headers = () => ({
     Authorization: `Bearer ${localStorage.getItem('token')}`,
   });
@@ -53,7 +77,12 @@ const [deliverySaving, setDeliverySaving] = useState(false);
     loadBankDetails();
 loadCompanySetting();
 loadDeliverySetting();
+loadKits();
   }, []);
+
+  useEffect(() => {
+  loadKits();
+}, [showHiddenKits]);
 
   const loadBankDetails = async () => {
     try {
@@ -213,6 +242,181 @@ const saveDeliverySetting = async () => {
     alert(error?.response?.data?.message || 'Failed to save delivery settings');
   } finally {
     setDeliverySaving(false);
+  }
+};
+
+const loadKits = async () => {
+  try {
+    const res = await axios.get(
+      `${API_BASE_URL}/dealer/kits`,
+      {
+        params: {
+          showHidden: showHiddenKits,
+        },
+        headers: headers(),
+      },
+    );
+
+    setKits(Array.isArray(res.data) ? res.data : []);
+  } catch (error) {
+    console.error(error);
+    alert('Failed to load dealer kits');
+  }
+};
+
+const updateKitItem = (index: number, key: string, value: string) => {
+  const rows = [...kitForm.items];
+  rows[index] = {
+    ...rows[index],
+    [key]: value,
+  };
+
+  setKitForm({
+    ...kitForm,
+    items: rows,
+  });
+};
+
+const addKitItem = () => {
+  setKitForm({
+    ...kitForm,
+    items: [
+      ...kitForm.items,
+      {
+        material: '',
+        brandSizeType: '',
+        quantity: '',
+      },
+    ],
+  });
+};
+
+const removeKitItem = (index: number) => {
+  const rows = kitForm.items.filter((_: any, rowIndex: number) => rowIndex !== index);
+
+  setKitForm({
+    ...kitForm,
+    items: rows.length
+      ? rows
+      : [
+          {
+            material: '',
+            brandSizeType: '',
+            quantity: '',
+          },
+        ],
+  });
+};
+
+const resetKitForm = () => {
+  setKitForm(emptyKitForm);
+};
+
+const saveKit = async () => {
+  if (!String(kitForm.kitName || '').trim()) {
+    alert('Kit name is required');
+    return;
+  }
+
+  try {
+    setKitSaving(true);
+
+    await axios.post(
+      `${API_BASE_URL}/dealer/kits`,
+      kitForm,
+      {
+        headers: headers(),
+      },
+    );
+
+    alert('Kit saved successfully');
+    resetKitForm();
+    await loadKits();
+  } catch (error: any) {
+    console.error(error);
+    alert(error?.response?.data?.message || 'Failed to save kit');
+  } finally {
+    setKitSaving(false);
+  }
+};
+
+const startEditKit = (kit: any) => {
+  setKitForm({
+    id: kit.id || '',
+    kitName: kit.kitName || '',
+    shortDescription: kit.shortDescription || '',
+    displayBrand: kit.displayBrand || '',
+    displayCapacity: kit.displayCapacity || '',
+    sellingPrice: String(kit.sellingPrice || ''),
+    gstPercent: String(kit.gstPercent || ''),
+    isAvailable: kit.isAvailable !== false,
+    items:
+      Array.isArray(kit.items) && kit.items.length
+        ? kit.items.map((item: any) => ({
+            material: item.material || '',
+            brandSizeType: item.brandSizeType || '',
+            quantity: item.quantity || '',
+          }))
+        : [
+            {
+              material: '',
+              brandSizeType: '',
+              quantity: '',
+            },
+          ],
+  });
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
+const hideKit = async (kit: any) => {
+  const reason = window.prompt('Reason for hiding kit?', 'Not available');
+
+  if (reason === null) return;
+
+  try {
+    await axios.patch(
+      `${API_BASE_URL}/dealer/kits/${kit.id}/hide`,
+      { reason },
+      { headers: headers() },
+    );
+
+    await loadKits();
+  } catch (error: any) {
+    console.error(error);
+    alert(error?.response?.data?.message || 'Failed to hide kit');
+  }
+};
+
+const restoreKit = async (kit: any) => {
+  try {
+    await axios.patch(
+      `${API_BASE_URL}/dealer/kits/${kit.id}/restore`,
+      {},
+      { headers: headers() },
+    );
+
+    await loadKits();
+  } catch (error: any) {
+    console.error(error);
+    alert(error?.response?.data?.message || 'Failed to restore kit');
+  }
+};
+
+const toggleKitAvailability = async (kit: any) => {
+  try {
+    await axios.patch(
+      `${API_BASE_URL}/dealer/kits/${kit.id}/availability`,
+      {
+        isAvailable: kit.isAvailable === false,
+      },
+      { headers: headers() },
+    );
+
+    await loadKits();
+  } catch (error: any) {
+    console.error(error);
+    alert(error?.response?.data?.message || 'Failed to update availability');
   }
 };
 
@@ -387,6 +591,268 @@ const saveDeliverySetting = async () => {
   >
     {deliverySaving ? 'Saving...' : 'Save Delivery Settings'}
   </button>
+</section>
+
+<section className="mt-6 rounded-2xl bg-white p-6 shadow">
+  <div className="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h2 className="text-lg font-bold text-gray-800">
+        Dealer Kit Settings
+      </h2>
+      <p className="mt-1 text-sm text-gray-500">
+        Create dealer kits with manual specifications. Kits are shown first in dealer stock and order pages.
+      </p>
+    </div>
+
+    <label className="flex items-center gap-2 rounded-xl border px-3 py-2 text-sm">
+      <input
+        type="checkbox"
+        checked={showHiddenKits}
+        onChange={(e) => setShowHiddenKits(e.target.checked)}
+      />
+      View Hidden Kits
+    </label>
+  </div>
+
+  <div className="mt-5 rounded-2xl border p-4">
+    <h3 className="font-bold text-gray-800">
+      {kitForm.id ? 'Edit Kit' : 'Create Kit'}
+    </h3>
+
+    <div className="mt-4 grid gap-3 md:grid-cols-2">
+      <input
+        placeholder="Kit Name"
+        value={kitForm.kitName}
+        onChange={(e) => setKitForm({ ...kitForm, kitName: e.target.value })}
+        className="rounded-xl border p-3"
+      />
+
+      <input
+        placeholder="Short Display Line"
+        value={kitForm.shortDescription}
+        onChange={(e) =>
+          setKitForm({ ...kitForm, shortDescription: e.target.value })
+        }
+        className="rounded-xl border p-3"
+      />
+
+      <input
+        placeholder="Display Brand"
+        value={kitForm.displayBrand}
+        onChange={(e) =>
+          setKitForm({ ...kitForm, displayBrand: e.target.value })
+        }
+        className="rounded-xl border p-3"
+      />
+
+      <input
+        placeholder="Display Capacity"
+        value={kitForm.displayCapacity}
+        onChange={(e) =>
+          setKitForm({ ...kitForm, displayCapacity: e.target.value })
+        }
+        className="rounded-xl border p-3"
+      />
+
+      <input
+        type="number"
+        placeholder="Selling Price"
+        value={kitForm.sellingPrice}
+        onChange={(e) =>
+          setKitForm({ ...kitForm, sellingPrice: e.target.value })
+        }
+        className="rounded-xl border p-3"
+      />
+
+      <input
+        type="number"
+        placeholder="GST %"
+        value={kitForm.gstPercent}
+        onChange={(e) =>
+          setKitForm({ ...kitForm, gstPercent: e.target.value })
+        }
+        className="rounded-xl border p-3"
+      />
+    </div>
+
+    <label className="mt-3 flex items-center gap-2 text-sm font-semibold">
+      <input
+        type="checkbox"
+        checked={kitForm.isAvailable}
+        onChange={(e) =>
+          setKitForm({ ...kitForm, isAvailable: e.target.checked })
+        }
+      />
+      Available for Dealer
+    </label>
+
+    <div className="mt-5">
+      <div className="flex items-center justify-between">
+        <h4 className="font-bold text-gray-800">Kit Specification Rows</h4>
+        <button
+          type="button"
+          onClick={addKitItem}
+          className="rounded-xl bg-gray-800 px-3 py-2 text-sm font-semibold text-white"
+        >
+          + Add Row
+        </button>
+      </div>
+
+      <div className="mt-3 space-y-3">
+        {kitForm.items.map((item: any, index: number) => (
+          <div key={index} className="grid gap-3 rounded-xl bg-gray-50 p-3 md:grid-cols-4">
+            <input
+              placeholder="Material"
+              value={item.material}
+              onChange={(e) => updateKitItem(index, 'material', e.target.value)}
+              className="rounded-xl border p-3"
+            />
+
+            <input
+              placeholder="Brand / Size / Type"
+              value={item.brandSizeType}
+              onChange={(e) =>
+                updateKitItem(index, 'brandSizeType', e.target.value)
+              }
+              className="rounded-xl border p-3"
+            />
+
+            <input
+              placeholder="Quantity"
+              value={item.quantity}
+              onChange={(e) => updateKitItem(index, 'quantity', e.target.value)}
+              className="rounded-xl border p-3"
+            />
+
+            <button
+              type="button"
+              onClick={() => removeKitItem(index)}
+              className="rounded-xl bg-red-100 px-3 py-2 text-sm font-semibold text-red-700"
+            >
+              Remove
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    <div className="mt-5 flex flex-wrap gap-3">
+      <button
+        onClick={saveKit}
+        disabled={kitSaving}
+        className="rounded-xl bg-blue-600 px-5 py-3 font-bold text-white disabled:opacity-60"
+      >
+        {kitSaving ? 'Saving...' : 'Save Kit'}
+      </button>
+
+      {kitForm.id && (
+        <button
+          onClick={resetKitForm}
+          className="rounded-xl bg-gray-200 px-5 py-3 font-bold text-gray-700"
+        >
+          Cancel Edit
+        </button>
+      )}
+    </div>
+  </div>
+
+  <div className="mt-6 grid gap-4 md:grid-cols-2">
+    {kits.map((kit) => (
+      <div
+        key={kit.id}
+        className={`rounded-2xl border p-4 ${
+          kit.isHidden ? 'bg-gray-100 opacity-70' : 'bg-white'
+        }`}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-lg font-bold text-gray-800">{kit.kitName}</p>
+            <p className="mt-1 text-sm text-gray-500">
+              {kit.shortDescription || '-'}
+            </p>
+            <p className="mt-1 text-sm text-gray-500">
+              {kit.displayBrand || '-'} | {kit.displayCapacity || '-'}
+            </p>
+            <p className="mt-2 font-bold text-green-700">
+              ₹{Number(kit.sellingPrice || 0).toLocaleString('en-IN')} + GST {kit.gstPercent || 0}%
+            </p>
+          </div>
+
+          <span
+            className={`rounded-full px-3 py-1 text-xs font-bold ${
+              kit.isAvailable
+                ? 'bg-green-100 text-green-700'
+                : 'bg-orange-100 text-orange-700'
+            }`}
+          >
+            {kit.isAvailable ? 'AVAILABLE' : 'UNAVAILABLE'}
+          </span>
+        </div>
+
+        {expandedKitId === kit.id && (
+          <div className="mt-4 rounded-xl bg-gray-50 p-3">
+            <h4 className="font-bold text-gray-800">Full Specification</h4>
+
+            <div className="mt-3 space-y-2">
+              {Array.isArray(kit.items) && kit.items.length ? (
+                kit.items.map((item: any) => (
+                  <div key={item.id} className="rounded-lg bg-white p-3 text-sm">
+                    <p className="font-semibold">{item.material || '-'}</p>
+                    <p className="text-gray-500">
+                      {item.brandSizeType || '-'} | Qty: {item.quantity || '-'}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-gray-500">No specification rows.</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            onClick={() =>
+              setExpandedKitId(expandedKitId === kit.id ? null : kit.id)
+            }
+            className="rounded-xl bg-gray-800 px-3 py-2 text-sm font-semibold text-white"
+          >
+            {expandedKitId === kit.id ? 'Hide Full' : 'Show Full'}
+          </button>
+
+          <button
+            onClick={() => startEditKit(kit)}
+            className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white"
+          >
+            Edit
+          </button>
+
+          <button
+            onClick={() => toggleKitAvailability(kit)}
+            className="rounded-xl bg-orange-600 px-3 py-2 text-sm font-semibold text-white"
+          >
+            {kit.isAvailable ? 'Make Unavailable' : 'Make Available'}
+          </button>
+
+          {kit.isHidden ? (
+            <button
+              onClick={() => restoreKit(kit)}
+              className="rounded-xl bg-green-600 px-3 py-2 text-sm font-semibold text-white"
+            >
+              Restore
+            </button>
+          ) : (
+            <button
+              onClick={() => hideKit(kit)}
+              className="rounded-xl bg-red-600 px-3 py-2 text-sm font-semibold text-white"
+            >
+              Hide
+            </button>
+          )}
+        </div>
+      </div>
+    ))}
+  </div>
 </section>
 
         <section className="mt-6 grid gap-6 lg:grid-cols-2">

@@ -6,6 +6,9 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 export default function DealerStockPage() {
   const [stock, setStock] = useState<any[]>([]);
+  const [kits, setKits] = useState<any[]>([]);
+const [viewMode, setViewMode] = useState<'KITS' | 'MATERIALS'>('KITS');
+const [expandedKitId, setExpandedKitId] = useState<number | null>(null);
   const [dealer, setDealer] = useState<any>(null);
   const [search, setSearch] = useState('');
   const [branch, setBranch] = useState('');
@@ -22,6 +25,7 @@ export default function DealerStockPage() {
 
     setDealer(JSON.parse(savedDealer));
     loadStock(token);
+    loadKits(token);
   }, []);
 
   const loadStock = async (token: string) => {
@@ -38,6 +42,19 @@ export default function DealerStockPage() {
       setLoading(false);
     }
   };
+
+  const loadKits = async (token: string) => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/dealer-auth/kits`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    const data = await res.json();
+    setKits(Array.isArray(data) ? data : []);
+  } catch (error) {
+    console.error(error);
+  }
+};
 
   const branches = useMemo(() => {
     return Array.from(
@@ -61,6 +78,20 @@ export default function DealerStockPage() {
       return matchesSearch && matchesBranch;
     });
   }, [stock, search, branch]);
+
+  const filteredKits = useMemo(() => {
+  const q = search.toLowerCase();
+
+  return kits.filter((kit) => {
+    return (
+      !q ||
+      String(kit.kitName || '').toLowerCase().includes(q) ||
+      String(kit.shortDescription || '').toLowerCase().includes(q) ||
+      String(kit.displayBrand || '').toLowerCase().includes(q) ||
+      String(kit.displayCapacity || '').toLowerCase().includes(q)
+    );
+  });
+}, [kits, search]);
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
@@ -115,10 +146,34 @@ export default function DealerStockPage() {
             </select>
 
             <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-black">
-              Showing {filteredStock.length} / {stock.length} items
+              Showing {viewMode === 'KITS' ? filteredKits.length : filteredStock.length} / {viewMode === 'KITS' ? kits.length : stock.length} items
             </div>
           </div>
         </header>
+
+        <div className="mt-6 flex gap-2">
+  <button
+    onClick={() => setViewMode('KITS')}
+    className={`rounded-2xl px-5 py-3 text-sm font-black ${
+      viewMode === 'KITS'
+        ? 'bg-orange-400 text-slate-950'
+        : 'bg-white/10 text-white'
+    }`}
+  >
+    Kits
+  </button>
+
+  <button
+    onClick={() => setViewMode('MATERIALS')}
+    className={`rounded-2xl px-5 py-3 text-sm font-black ${
+      viewMode === 'MATERIALS'
+        ? 'bg-orange-400 text-slate-950'
+        : 'bg-white/10 text-white'
+    }`}
+  >
+    Materials
+  </button>
+</div>
 
         {loading ? (
           <div className="mt-6 rounded-3xl bg-white p-8 text-center font-black text-slate-900">
@@ -126,19 +181,118 @@ export default function DealerStockPage() {
           </div>
         ) : (
           <section className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {filteredStock.map((item) => (
-              <StockCard key={`${item.materialId}-${item.branchName}`} item={item} />
-            ))}
+  {viewMode === 'KITS' &&
+    filteredKits.map((kit) => (
+      <KitCard
+        key={kit.id}
+        kit={kit}
+        expanded={expandedKitId === kit.id}
+        onToggle={() =>
+          setExpandedKitId(expandedKitId === kit.id ? null : kit.id)
+        }
+      />
+    ))}
 
-            {!filteredStock.length && (
-              <div className="rounded-3xl border border-dashed border-white/20 bg-white/10 p-8 text-center text-white/70 md:col-span-2 xl:col-span-3">
-                No stock item found.
-              </div>
-            )}
-          </section>
+  {viewMode === 'MATERIALS' &&
+    filteredStock.map((item) => (
+      <StockCard key={`${item.materialId}-${item.branchName}`} item={item} />
+    ))}
+
+  {viewMode === 'KITS' && !filteredKits.length && (
+    <div className="rounded-3xl border border-dashed border-white/20 bg-white/10 p-8 text-center text-white/70 md:col-span-2 xl:col-span-3">
+      No kit found.
+    </div>
+  )}
+
+  {viewMode === 'MATERIALS' && !filteredStock.length && (
+    <div className="rounded-3xl border border-dashed border-white/20 bg-white/10 p-8 text-center text-white/70 md:col-span-2 xl:col-span-3">
+      No stock item found.
+    </div>
+  )}
+</section>
         )}
       </div>
     </main>
+  );
+}
+
+function KitCard({
+  kit,
+  expanded,
+  onToggle,
+}: {
+  kit: any;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="group overflow-hidden rounded-[2rem] bg-white text-slate-900 shadow-xl transition hover:-translate-y-1 hover:shadow-2xl">
+      <div className="h-2 bg-gradient-to-r from-orange-500 via-yellow-400 to-blue-600" />
+
+      <div className="p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-lg font-black">{kit.kitName}</p>
+            <p className="mt-1 text-xs font-semibold text-slate-500">
+              {kit.shortDescription || '-'}
+            </p>
+            <p className="mt-1 text-xs font-semibold text-slate-500">
+              {kit.displayBrand || '-'} · {kit.displayCapacity || '-'}
+            </p>
+          </div>
+
+          <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-700">
+            Available
+          </span>
+        </div>
+
+        <div className="mt-5 grid grid-cols-2 gap-3">
+          <InfoBox
+            label="Kit Price"
+            value={`₹${Number(kit.sellingPrice || 0).toLocaleString('en-IN')}`}
+          />
+          <InfoBox label="GST" value={`${Number(kit.gstPercent || 0)}%`} />
+        </div>
+
+        {expanded && (
+          <div className="mt-5 rounded-2xl bg-slate-50 p-4">
+            <p className="text-sm font-black">Kit Details</p>
+
+            <div className="mt-3 space-y-2">
+              {Array.isArray(kit.items) && kit.items.length ? (
+                kit.items.map((item: any) => (
+                  <div key={item.id} className="rounded-xl bg-white p-3 text-sm">
+                    <p className="font-black">{item.material || '-'}</p>
+                    <p className="text-slate-500">
+                      {item.brandSizeType || '-'} | Qty: {item.quantity || '-'}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-slate-500">No kit details added.</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="mt-5 grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={onToggle}
+            className="rounded-2xl bg-slate-100 py-3 text-sm font-black text-slate-800"
+          >
+            {expanded ? 'Hide Details' : 'View Details'}
+          </button>
+
+          <a
+            href="/dealer-portal/orders/create"
+            className="rounded-2xl bg-gradient-to-r from-blue-700 to-sky-500 py-3 text-center text-sm font-black text-white shadow-lg transition group-hover:scale-[1.01]"
+          >
+            Add to Order
+          </a>
+        </div>
+      </div>
+    </div>
   );
 }
 

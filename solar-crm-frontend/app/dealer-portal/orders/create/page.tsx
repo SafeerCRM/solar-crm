@@ -6,6 +6,9 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 export default function CreateDealerOrderPage() {
   const [stock, setStock] = useState<any[]>([]);
+  const [kits, setKits] = useState<any[]>([]);
+const [viewMode, setViewMode] = useState<'KITS' | 'MATERIALS'>('KITS');
+const [expandedKitId, setExpandedKitId] = useState<number | null>(null);
   const [cart, setCart] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [paymentType, setPaymentType] = useState('CASH');
@@ -33,6 +36,7 @@ const [deliveryDistanceKm, setDeliveryDistanceKm] = useState('');
 
     setDealer(JSON.parse(savedDealer));
     loadStock(token);
+    loadKits(token);
   }, []);
 
   const loadStock = async (token: string) => {
@@ -50,6 +54,19 @@ const [deliveryDistanceKm, setDeliveryDistanceKm] = useState('');
     }
   };
 
+  const loadKits = async (token: string) => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/dealer-auth/kits`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    const data = await res.json();
+    setKits(Array.isArray(data) ? data : []);
+  } catch (error) {
+    console.error(error);
+  }
+};
+
   const filteredStock = useMemo(() => {
     const q = search.toLowerCase();
 
@@ -63,6 +80,20 @@ const [deliveryDistanceKm, setDeliveryDistanceKm] = useState('');
       );
     });
   }, [stock, search]);
+
+  const filteredKits = useMemo(() => {
+  const q = search.toLowerCase();
+
+  return kits.filter((kit) => {
+    return (
+      !q ||
+      String(kit.kitName || '').toLowerCase().includes(q) ||
+      String(kit.shortDescription || '').toLowerCase().includes(q) ||
+      String(kit.displayBrand || '').toLowerCase().includes(q) ||
+      String(kit.displayCapacity || '').toLowerCase().includes(q)
+    );
+  });
+}, [kits, search]);
 
   const totals = useMemo(() => {
     return cart.reduce(
@@ -88,43 +119,107 @@ const [deliveryDistanceKm, setDeliveryDistanceKm] = useState('');
   }, [cart]);
 
 
-  const addToCart = (item: any) => {
-    setMessage('');
+  const addMaterialToCart = (item: any) => {
+  setMessage('');
 
-    setCart((prev) => {
-      const exists = prev.find((row) => row.materialId === item.materialId);
-
-      if (exists) {
-        return prev.map((row) =>
-          row.materialId === item.materialId
-            ? { ...row, quantity: Number(row.quantity || 0) + 1 }
-            : row,
-        );
-      }
-
-      return [
-        ...prev,
-        {
-          ...item,
-          quantity: 1,
-          discountAmount: 0,
-          remarks: '',
-        },
-      ];
-    });
-  };
-
-  const updateCartItem = (materialId: number, key: string, value: any) => {
-    setCart((prev) =>
-      prev.map((item) =>
-        item.materialId === materialId ? { ...item, [key]: value } : item,
-      ),
+  setCart((prev) => {
+    const exists = prev.find(
+      (row) =>
+        row.itemType === 'MATERIAL' &&
+        row.materialId === item.materialId,
     );
-  };
 
-  const removeCartItem = (materialId: number) => {
-    setCart((prev) => prev.filter((item) => item.materialId !== materialId));
-  };
+    if (exists) {
+      return prev.map((row) =>
+        row.itemType === 'MATERIAL' &&
+        row.materialId === item.materialId
+          ? {
+              ...row,
+              quantity: Number(row.quantity || 0) + 1,
+            }
+          : row,
+      );
+    }
+
+    return [
+      ...prev,
+      {
+        ...item,
+        itemType: 'MATERIAL',
+        quantity: 1,
+        discountAmount: 0,
+        remarks: '',
+      },
+    ];
+  });
+};
+
+const addKitToCart = (kit: any) => {
+  setMessage('');
+
+  setCart((prev) => {
+    const exists = prev.find(
+      (row) =>
+        row.itemType === 'KIT' &&
+        row.kitId === kit.id,
+    );
+
+    if (exists) {
+      return prev.map((row) =>
+        row.itemType === 'KIT' &&
+        row.kitId === kit.id
+          ? {
+              ...row,
+              quantity: Number(row.quantity || 0) + 1,
+            }
+          : row,
+      );
+    }
+
+    return [
+      ...prev,
+      {
+        itemType: 'KIT',
+        kitId: kit.id,
+        materialId: null,
+        materialName: kit.kitName,
+        sellingRateWithoutGst: Number(kit.sellingPrice || 0),
+        gstPercent: Number(kit.gstPercent || 0),
+        quantity: 1,
+        discountAmount: 0,
+        remarks: '',
+        kitItems: kit.items || [],
+      },
+    ];
+  });
+};
+
+  const updateCartItem = (
+  itemKey: string,
+  key: string,
+  value: any,
+) => {
+  setCart((prev) =>
+    prev.map((item) =>
+      (item.itemType === 'KIT'
+        ? `KIT-${item.kitId}`
+        : `MAT-${item.materialId}`) === itemKey
+        ? { ...item, [key]: value }
+        : item,
+    ),
+  );
+};
+
+  const removeCartItem = (itemKey: string) => {
+  setCart((prev) =>
+    prev.filter(
+      (item) =>
+        (item.itemType === 'KIT'
+          ? `KIT-${item.kitId}`
+          : `MAT-${item.materialId}`) !== itemKey,
+    ),
+  );
+};
 
   const submitOrder = async (e: FormEvent) => {
     e.preventDefault();
@@ -196,11 +291,13 @@ deliveryAddress,
 deliveryDistanceKm:
   Number(deliveryDistanceKm || 0),
           items: cart.map((item) => ({
-            materialId: item.materialId,
-            quantity: Number(item.quantity || 0),
-            discountAmount: Number(item.discountAmount || 0),
-            remarks: item.remarks || '',
-          })),
+  itemType: item.itemType || 'MATERIAL',
+  kitId: item.kitId || null,
+  materialId: item.materialId || null,
+  quantity: Number(item.quantity || 0),
+  discountAmount: Number(item.discountAmount || 0),
+  remarks: item.remarks || '',
+})),
         }),
       });
 
@@ -239,11 +336,11 @@ deliveryDistanceKm:
           <div className="mt-3 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
               <h1 className="text-3xl font-black md:text-4xl">
-                Create Material Order
-              </h1>
-              <p className="mt-1 text-sm text-white/60">
-                Select material, review GST pricing, choose payment mode and submit order.
-              </p>
+  Create Dealer Order
+</h1>
+<p className="mt-1 text-sm text-white/60">
+  Select kits or materials, review GST pricing, choose payment mode and submit order.
+</p>
             </div>
 
             <div className="rounded-2xl bg-white px-5 py-3 text-sm font-black text-slate-900">
@@ -256,15 +353,43 @@ deliveryDistanceKm:
           <section className="rounded-[2rem] bg-white p-5 text-slate-900 shadow-xl lg:col-span-2">
             <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
-                <h2 className="text-xl font-black">Available Materials</h2>
-                <p className="text-sm text-slate-500">
-                  Add items to your dealer order.
-                </p>
+                <h2 className="text-xl font-black">
+  {viewMode === 'KITS' ? 'Available Kits' : 'Available Materials'}
+</h2>
+<p className="text-sm text-slate-500">
+  Add kits or materials to your dealer order.
+</p>
               </div>
+
+              <div className="flex gap-2">
+  <button
+    type="button"
+    onClick={() => setViewMode('KITS')}
+    className={`rounded-2xl px-4 py-3 text-sm font-black ${
+      viewMode === 'KITS'
+        ? 'bg-orange-400 text-slate-950'
+        : 'bg-slate-100 text-slate-700'
+    }`}
+  >
+    Kits
+  </button>
+
+  <button
+    type="button"
+    onClick={() => setViewMode('MATERIALS')}
+    className={`rounded-2xl px-4 py-3 text-sm font-black ${
+      viewMode === 'MATERIALS'
+        ? 'bg-orange-400 text-slate-950'
+        : 'bg-slate-100 text-slate-700'
+    }`}
+  >
+    Materials
+  </button>
+</div>
 
               <input
                 type="text"
-                placeholder="Search material, brand, HSN..."
+                placeholder={viewMode === 'KITS' ? 'Search kit, brand, capacity...' : 'Search material, brand, HSN...'}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:bg-white"
@@ -277,14 +402,40 @@ deliveryDistanceKm:
               </div>
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
-                {filteredStock.map((item) => (
-                  <MaterialCard
-                    key={`${item.materialId}-${item.branchName}`}
-                    item={item}
-                    onAdd={() => addToCart(item)}
-                  />
-                ))}
-              </div>
+  {viewMode === 'KITS' &&
+    filteredKits.map((kit) => (
+      <KitOrderCard
+        key={kit.id}
+        kit={kit}
+        expanded={expandedKitId === kit.id}
+        onToggle={() =>
+          setExpandedKitId(expandedKitId === kit.id ? null : kit.id)
+        }
+        onAdd={() => addKitToCart(kit)}
+      />
+    ))}
+
+  {viewMode === 'MATERIALS' &&
+    filteredStock.map((item) => (
+      <MaterialCard
+        key={`${item.materialId}-${item.branchName}`}
+        item={item}
+        onAdd={() => addMaterialToCart(item)}
+      />
+    ))}
+
+  {viewMode === 'KITS' && !filteredKits.length && (
+    <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm font-semibold text-slate-500 md:col-span-2">
+      No kit found.
+    </div>
+  )}
+
+  {viewMode === 'MATERIALS' && !filteredStock.length && (
+    <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm font-semibold text-slate-500 md:col-span-2">
+      No material found.
+    </div>
+  )}
+</div>
             )}
           </section>
 
@@ -299,11 +450,24 @@ deliveryDistanceKm:
                   </div>
                 )}
 
-                {cart.map((item) => (
-                  <div key={item.materialId} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                {cart.map((item) => {
+  const itemKey =
+    item.itemType === 'KIT'
+      ? `KIT-${item.kitId}`
+      : `MAT-${item.materialId}`;
+
+  return (
+    <div key={itemKey} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="font-black">{item.materialName}</p>
+                        <p className="font-black">
+  {item.materialName}
+  {item.itemType === 'KIT' && (
+    <span className="ml-2 rounded-full bg-orange-100 px-2 py-1 text-[10px] font-black text-orange-700">
+      KIT
+    </span>
+  )}
+</p>
                         <p className="text-xs text-slate-500">
                           ₹{Number(item.sellingRateWithoutGst || 0).toLocaleString('en-IN')} + GST {item.gstPercent}%
                         </p>
@@ -311,7 +475,7 @@ deliveryDistanceKm:
 
                       <button
                         type="button"
-                        onClick={() => removeCartItem(item.materialId)}
+                        onClick={() => removeCartItem(itemKey)}
                         className="rounded-full bg-red-100 px-3 py-1 text-xs font-black text-red-700"
                       >
                         Remove
@@ -324,7 +488,7 @@ deliveryDistanceKm:
                         min="1"
                         value={item.quantity}
                         onChange={(e) =>
-                          updateCartItem(item.materialId, 'quantity', e.target.value)
+                          updateCartItem(itemKey, 'quantity', e.target.value)
                         }
                         className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold"
                         placeholder="Qty"
@@ -335,7 +499,7 @@ deliveryDistanceKm:
                         min="0"
                         value={item.discountAmount}
                         onChange={(e) =>
-                          updateCartItem(item.materialId, 'discountAmount', e.target.value)
+                          updateCartItem(itemKey, 'discountAmount', e.target.value)
                         }
                         className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold"
                         placeholder="Discount"
@@ -346,13 +510,14 @@ deliveryDistanceKm:
                       type="text"
                       value={item.remarks}
                       onChange={(e) =>
-                        updateCartItem(item.materialId, 'remarks', e.target.value)
+                        updateCartItem(itemKey, 'remarks', e.target.value)
                       }
                       className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold"
                       placeholder="Item remarks"
                     />
                   </div>
-                ))}
+                  );
+})}
               </div>
             </section>
 
@@ -480,6 +645,91 @@ deliveryDistanceKm:
         </form>
       </div>
     </main>
+  );
+}
+
+function KitOrderCard({
+  kit,
+  expanded,
+  onToggle,
+  onAdd,
+}: {
+  kit: any;
+  expanded: boolean;
+  onToggle: () => void;
+  onAdd: () => void;
+}) {
+  return (
+    <div className="rounded-[1.7rem] border border-orange-100 bg-orange-50 p-4 transition hover:-translate-y-1 hover:bg-white hover:shadow-xl">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="font-black">{kit.kitName}</p>
+          <p className="mt-1 text-xs font-semibold text-slate-500">
+            {kit.shortDescription || '-'}
+          </p>
+          <p className="mt-1 text-xs font-semibold text-slate-500">
+            {kit.displayBrand || '-'} · {kit.displayCapacity || '-'}
+          </p>
+        </div>
+
+        <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-700">
+          Kit
+        </span>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <div className="rounded-2xl bg-white p-3">
+          <p className="text-xs font-bold text-slate-400">Kit Price</p>
+          <p className="font-black">
+            ₹{Number(kit.sellingPrice || 0).toLocaleString('en-IN')}
+          </p>
+        </div>
+
+        <div className="rounded-2xl bg-white p-3">
+          <p className="text-xs font-bold text-slate-400">GST</p>
+          <p className="font-black">{Number(kit.gstPercent || 0)}%</p>
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="mt-4 rounded-2xl bg-white p-3">
+          <p className="text-sm font-black">Kit Details</p>
+
+          <div className="mt-2 space-y-2">
+            {Array.isArray(kit.items) && kit.items.length ? (
+              kit.items.map((row: any) => (
+                <div key={row.id} className="rounded-xl bg-slate-50 p-3 text-sm">
+                  <p className="font-black">{row.material || '-'}</p>
+                  <p className="text-slate-500">
+                    {row.brandSizeType || '-'} | Qty: {row.quantity || '-'}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-slate-500">No kit details added.</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="rounded-2xl bg-white py-3 text-sm font-black text-slate-900"
+        >
+          {expanded ? 'Hide Details' : 'View Details'}
+        </button>
+
+        <button
+          type="button"
+          onClick={onAdd}
+          className="rounded-2xl bg-slate-950 py-3 text-sm font-black text-white transition hover:scale-[1.01]"
+        >
+          Add Kit
+        </button>
+      </div>
+    </div>
   );
 }
 
