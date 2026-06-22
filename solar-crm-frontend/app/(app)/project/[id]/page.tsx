@@ -4357,23 +4357,48 @@ const canApproveAndReserveStock =
                     {money(item.amount)}
                   </p>
 
-                  <div className="mt-3 flex flex-wrap justify-end gap-2">
-  {['ASSIGNED', 'IN_PROGRESS', 'ON_HOLD', 'PENDING_FINAL_PROOFS', 'COMPLETED'].map((status) => (
-    <button
-      key={status}
-      onClick={() =>
-        updateContractorAssignment(
-          item.id,
-          status,
+                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+  <select
+    value={item.status || 'ASSIGNED'}
+    onChange={(e) =>
+      updateContractorAssignment(
+        item.id,
+        e.target.value,
+        item.remarks || '',
+      )
+    }
+    disabled={
+      updatingContractorAssignmentId === item.id
+    }
+    className="rounded-xl border p-3"
+  >
+    <option value="ASSIGNED">Assigned</option>
+    <option value="IN_PROGRESS">In Progress</option>
+    <option value="ON_HOLD">On Hold</option>
+    <option value="PENDING_FINAL_PROOFS">
+      Pending Final Proofs
+    </option>
+    <option value="COMPLETED">Completed</option>
+  </select>
+
+  <button
+    onClick={() =>
+      updateContractorAssignment(
+        item.id,
+        item.status || 'ASSIGNED',
+        prompt(
+          'Update remarks',
           item.remarks || '',
-        )
-      }
-      disabled={updatingContractorAssignmentId === item.id}
-      className="rounded-lg bg-gray-800 px-3 py-2 text-xs font-semibold text-white hover:bg-black disabled:opacity-50"
-    >
-      {status.replaceAll('_', ' ')}
-    </button>
-  ))}
+        ) || '',
+      )
+    }
+    disabled={
+      updatingContractorAssignmentId === item.id
+    }
+    className="rounded-xl bg-blue-600 px-4 py-3 text-white"
+  >
+    Update Remarks
+  </button>
 </div>
 
 <div className="mt-5 rounded-xl border bg-white p-4">
