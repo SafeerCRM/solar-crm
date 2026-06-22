@@ -69,12 +69,16 @@ const [branchFilter, setBranchFilter] = useState('');
 const [ownerFilter, setOwnerFilter] = useState('');
 const [fromDate, setFromDate] = useState('');
 const [toDate, setToDate] = useState('');
+const [filtersLoaded, setFiltersLoaded] = useState(false);
 const [projectOwners, setProjectOwners] = useState<ProjectOwner[]>([]);
 
 useEffect(() => {
   const saved = localStorage.getItem('projectListFilters');
 
-  if (!saved) return;
+  if (!saved) {
+    setFiltersLoaded(true);
+    return;
+  }
 
   try {
     const parsed = JSON.parse(saved);
@@ -88,6 +92,8 @@ useEffect(() => {
     setPage(Number(parsed.page || 1));
   } catch {
     localStorage.removeItem('projectListFilters');
+  } finally {
+    setFiltersLoaded(true);
   }
 }, []);
 
@@ -209,8 +215,18 @@ const hideProject = async (projectId: number) => {
 };
 
   useEffect(() => {
+  if (!filtersLoaded) return;
   fetchProjects();
-}, [page, search, statusFilter, branchFilter, ownerFilter, fromDate, toDate]);
+}, [
+  filtersLoaded,
+  page,
+  search,
+  statusFilter,
+  branchFilter,
+  ownerFilter,
+  fromDate,
+  toDate,
+]);
 
 useEffect(() => {
   fetchProjectOwners();
