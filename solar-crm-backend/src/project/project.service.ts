@@ -14977,7 +14977,117 @@ async createDealer(body: any) {
     isActive: true,
   });
 
-  return this.projectVendorRepository.save(dealer);
+  const savedDealer =
+    await this.projectVendorRepository.save(dealer);
+
+  await this.syncSingleDealerToPortal(savedDealer);
+
+  return savedDealer;
+}
+
+private async syncSingleDealerToPortal(dealer: ProjectVendor) {
+  const phone = String(dealer.phone || '').trim();
+  const email = String(dealer.email || '').trim();
+  const gstNumber = String(dealer.gstNumber || '').trim();
+
+  let portalDealer: Dealer | null = null;
+
+  if (phone) {
+    portalDealer = await this.dealerRepository.findOne({
+      where: { phone } as any,
+    });
+  }
+
+  if (!portalDealer && email) {
+    portalDealer = await this.dealerRepository.findOne({
+      where: { email } as any,
+    });
+  }
+
+  if (!portalDealer && gstNumber) {
+    portalDealer = await this.dealerRepository.findOne({
+      where: { gstNumber } as any,
+    });
+  }
+
+  if (portalDealer) {
+    portalDealer.dealerName =
+      portalDealer.dealerName || dealer.vendorName;
+    portalDealer.firmName =
+      portalDealer.firmName || dealer.vendorName;
+    portalDealer.phone = portalDealer.phone || phone;
+    portalDealer.email = portalDealer.email || email;
+    portalDealer.gstNumber =
+      portalDealer.gstNumber || gstNumber;
+    portalDealer.branchName =
+      portalDealer.branchName || dealer.city || '';
+    portalDealer.city = portalDealer.city || dealer.city || '';
+    portalDealer.address =
+      portalDealer.address || dealer.address || '';
+
+    await this.dealerRepository.save(portalDealer);
+    return portalDealer;
+  }
+
+  const newPortalDealer = this.dealerRepository.create({
+    dealerName: dealer.vendorName,
+    firmName: dealer.vendorName,
+    phone,
+    email,
+    gstNumber,
+    branchName: dealer.city || '',
+    city: dealer.city || '',
+    address: dealer.address || '',
+    portalPassword: phone || gstNumber || '1234',
+    creditEnabled: false,
+    creditLimit: 0,
+    creditDays: 0,
+    status: 'ACTIVE',
+    isHidden: false,
+  } as any);
+
+  return this.dealerRepository.save(newPortalDealer);
+}
+
+async syncDealersToPortal() {
+  const dealers = await this.projectVendorRepository.find({
+    where: {
+      partyType: 'DEALER',
+      isActive: true,
+    } as any,
+    order: {
+      vendorName: 'ASC',
+    } as any,
+  });
+
+  let createdOrUpdated = 0;
+  let failed = 0;
+
+  const errors: any[] = [];
+
+  for (const dealer of dealers) {
+    try {
+      await this.syncSingleDealerToPortal(dealer);
+      createdOrUpdated += 1;
+    } catch (error: any) {
+      failed += 1;
+      errors.push({
+        dealerId: dealer.id,
+        dealerName: dealer.vendorName,
+        phone: dealer.phone,
+        email: dealer.email,
+        gstNumber: dealer.gstNumber,
+        error: error?.message || 'Unknown error',
+      });
+    }
+  }
+
+  return {
+    totalDealers: dealers.length,
+    synced: createdOrUpdated,
+    failed,
+    errors,
+  };
 }
 
 async createDealerOrder(body: any, user: any) {

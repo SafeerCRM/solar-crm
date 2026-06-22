@@ -2109,6 +2109,17 @@ getDealers(@Query() query: any) {
 
 @Roles(
   'OWNER',
+  'ACCOUNT_MANAGER',
+  'TRADING_MANAGER',
+  'STOCK_MANAGER',
+)
+@Post('dealer/sync-portal')
+syncDealersToPortal() {
+  return this.projectService.syncDealersToPortal();
+}
+
+@Roles(
+  'OWNER',
   'PROJECT_MANAGER',
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
