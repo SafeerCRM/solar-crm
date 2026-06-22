@@ -1165,7 +1165,8 @@ const canViewAll =
   roles.includes('ELECTRICITY_MANAGER') ||
   roles.includes('PAYMENT_COLLECTION_EXECUTIVE') ||
   roles.includes('PAYMENT_MANAGER') ||
-  roles.includes('ACCOUNT_MANAGER');
+  roles.includes('ACCOUNT_MANAGER') ||
+  roles.includes('STOCK_MANAGER');
 
 if (roles.includes('SOLAR_FRANCHISE')) {
   if (
