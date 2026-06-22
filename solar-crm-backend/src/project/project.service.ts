@@ -11218,10 +11218,12 @@ doc.y += 26;
 
   doc.y += 14;
 
-  if (doc.y > 610) {
-    doc.addPage();
-    doc.y = 40;
-  }
+const requiredFooterSpace = isDealerInvoice ? 190 : 180;
+
+if (doc.y + requiredFooterSpace > 760) {
+  doc.addPage();
+  doc.y = 40;
+}
 
   const summaryX = 345;
   const summaryY = doc.y;
@@ -11286,6 +11288,11 @@ doc.y += 26;
     });
 
   doc.y += 46;
+
+  if (doc.y + 95 > 760) {
+  doc.addPage();
+  doc.y = 40;
+}
 
   const footerY = doc.y;
 
@@ -12310,10 +12317,12 @@ async generateFinalInvoicePdf(
 
   doc.y += 14;
 
-  if (doc.y > 590) {
-    doc.addPage();
-    doc.y = 40;
-  }
+const requiredFooterSpace = isDealerInvoice ? 190 : 180;
+
+if (doc.y + requiredFooterSpace > 760) {
+  doc.addPage();
+  doc.y = 40;
+}
 
   const summaryX = 345;
   const summaryY = doc.y;
@@ -12385,6 +12394,11 @@ async generateFinalInvoicePdf(
     );
 
   doc.y += 46;
+
+  if (doc.y + 95 > 760) {
+  doc.addPage();
+  doc.y = 40;
+}
 
   const footerY = doc.y;
 
