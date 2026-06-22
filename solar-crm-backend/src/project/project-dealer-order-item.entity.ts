@@ -13,8 +13,8 @@ export class ProjectDealerOrderItem {
   @Column()
   dealerOrderId: number;
 
-  @Column()
-  materialId: number;
+  @Column({ nullable: true })
+materialId: number;
 
   @Column({ nullable: true })
   materialName: string;
