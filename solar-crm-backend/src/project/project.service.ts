@@ -14578,6 +14578,32 @@ async updateContractorAssignment(
     );
   }
 
+  if (body?.contractorId !== undefined) {
+  assignment.contractorId = Number(body.contractorId);
+}
+
+if (body?.contractorName !== undefined) {
+  assignment.contractorName = String(body.contractorName || '').trim();
+}
+
+if (body?.contractorPhone !== undefined) {
+  assignment.contractorPhone = String(body.contractorPhone || '').trim();
+}
+
+if (body?.workScope !== undefined) {
+  assignment.workScope = body.workScope;
+}
+
+if (body?.scheduledDate !== undefined) {
+  assignment.scheduledDate = body.scheduledDate
+    ? new Date(body.scheduledDate)
+    : null as any;
+}
+
+if (body?.amount !== undefined) {
+  assignment.amount = Number(body.amount || 0);
+}
+
   const nextStatus = body?.status;
 
   if (nextStatus === ProjectContractorWorkStatus.COMPLETED) {
