@@ -186,6 +186,7 @@ const [monthlyForm, setMonthlyForm] = useState({
 const [newPortalPassword, setNewPortalPassword] = useState('');
 const [confirmPortalPassword, setConfirmPortalPassword] = useState('');
 const [passwordSaving, setPasswordSaving] = useState(false);
+const [showPortalPassword, setShowPortalPassword] = useState(false);
 
   const [orderForm, setOrderForm] = useState({
     dealerId: '',
@@ -706,6 +707,7 @@ const closeResetPasswordModal = () => {
   setNewPortalPassword('');
   setConfirmPortalPassword('');
   setPasswordSaving(false);
+  setShowPortalPassword(false);
 };
 
 const saveDealerPortalPassword = async () => {
@@ -2390,20 +2392,29 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
 
           <div className="mt-4 space-y-3">
             <input
-              type="password"
-              placeholder="New password"
-              value={newPortalPassword}
-              onChange={(e) => setNewPortalPassword(e.target.value)}
-              className="w-full rounded-xl border p-3"
-            />
+  type={showPortalPassword ? 'text' : 'password'}
+  placeholder="New Password"
+  value={newPortalPassword}
+  onChange={(e) => setNewPortalPassword(e.target.value)}
+  className="rounded-xl border p-3"
+/>
 
-            <input
-              type="password"
-              placeholder="Confirm password"
-              value={confirmPortalPassword}
-              onChange={(e) => setConfirmPortalPassword(e.target.value)}
-              className="w-full rounded-xl border p-3"
-            />
+<input
+  type={showPortalPassword ? 'text' : 'password'}
+  placeholder="Confirm Password"
+  value={confirmPortalPassword}
+  onChange={(e) => setConfirmPortalPassword(e.target.value)}
+  className="rounded-xl border p-3"
+/>
+
+<label className="mt-2 flex items-center gap-2 text-sm text-gray-600">
+  <input
+    type="checkbox"
+    checked={showPortalPassword}
+    onChange={(e) => setShowPortalPassword(e.target.checked)}
+  />
+  Show password
+</label>
 
             <p className="rounded-xl bg-blue-50 p-3 text-xs font-semibold text-blue-700">
               Password will not be shown later. If dealer forgets it, reset again.
