@@ -23,6 +23,7 @@ import { StaffComplaintModule } from './staff-complaint/staff-complaint.module';
 import { CustomerPortalModule } from './customer-portal/customer-portal.module';
 import { DealerModule } from './dealer/dealer.module';
 import { StaffModule } from './staff/staff.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { StaffModule } from './staff/staff.module';
     TelecallingModule,
     FollowupModule,
     DashboardModule,
+    AnalyticsModule,
     MastersModule,
     ProjectModule,
     CalculatorModule,
