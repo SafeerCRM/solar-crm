@@ -1,6 +1,11 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
+import dayjs, { Dayjs } from 'dayjs';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -29,6 +34,7 @@ const [deliveryLocationSource, setDeliveryLocationSource] =
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
 
   useEffect(() => {
     const token = localStorage.getItem('dealer_token');
@@ -225,6 +231,43 @@ const addKitToCart = (kit: any) => {
           : `MAT-${item.materialId}`) !== itemKey,
     ),
   );
+};
+
+const expectedDeliveryDateValue = expectedDeliveryAt
+  ? dayjs(expectedDeliveryAt)
+  : null;
+
+const expectedDeliveryTimeValue = expectedDeliveryAt
+  ? dayjs(expectedDeliveryAt)
+  : null;
+
+const updateExpectedDeliveryDatePart = (newDate: Dayjs | null) => {
+  if (!newDate) {
+    setExpectedDeliveryAt('');
+    return;
+  }
+
+  const base = expectedDeliveryAt ? dayjs(expectedDeliveryAt) : dayjs();
+  const merged = newDate
+    .hour(base.hour())
+    .minute(base.minute())
+    .second(0)
+    .millisecond(0);
+
+  setExpectedDeliveryAt(merged.format('YYYY-MM-DDTHH:mm'));
+};
+
+const updateExpectedDeliveryTimePart = (newTime: Dayjs | null) => {
+  if (!newTime) return;
+
+  const base = expectedDeliveryAt ? dayjs(expectedDeliveryAt) : dayjs();
+  const merged = base
+    .hour(newTime.hour())
+    .minute(newTime.minute())
+    .second(0)
+    .millisecond(0);
+
+  setExpectedDeliveryAt(merged.format('YYYY-MM-DDTHH:mm'));
 };
 
   const submitOrder = async (e: FormEvent) => {
@@ -696,12 +739,33 @@ deliveryDistanceKm:
                   />
                 )}
 
-                <input
-                  type="datetime-local"
-                  value={expectedDeliveryAt}
-                  onChange={(e) => setExpectedDeliveryAt(e.target.value)}
-                  className="w-full rounded-2xl border border-white/40 bg-white px-4 py-3 text-sm font-black outline-none"
-                />
+                <LocalizationProvider dateAdapter={AdapterDayjs}>
+  <div className="grid gap-3 md:grid-cols-2">
+    <DatePicker
+      label="Expected Delivery Date"
+      value={expectedDeliveryDateValue}
+      onChange={updateExpectedDeliveryDatePart}
+      slotProps={{
+        textField: {
+          fullWidth: true,
+        },
+      }}
+    />
+
+    <MobileTimePicker
+      label="Expected Delivery Time"
+      value={expectedDeliveryTimeValue}
+      onChange={updateExpectedDeliveryTimePart}
+      ampm
+      ampmInClock
+      slotProps={{
+        textField: {
+          fullWidth: true,
+        },
+      }}
+    />
+  </div>
+</LocalizationProvider>
 
          {deliveryMode === 'SELF_COLLECTION' && (
                  <>
