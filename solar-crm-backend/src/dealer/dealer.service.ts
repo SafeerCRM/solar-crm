@@ -1703,104 +1703,169 @@ return {
   }
 
   async updateDealerOrderItem(
-    orderId: number,
-    itemId: number,
-    body: any,
-    user: any,
-  ) {
-    const order = await this.dealerOrderRepository.findOne({
-      where: { id: orderId, isHidden: false },
-    });
+  orderId: number,
+  itemId: number,
+  body: any,
+  user: any,
+) {
+  const order = await this.dealerOrderRepository.findOne({
+    where: { id: orderId, isHidden: false },
+  });
 
-    if (!order) {
-      throw new NotFoundException('Dealer order not found');
-    }
-
-    const item = await this.dealerOrderItemRepository.findOne({
-      where: {
-        id: itemId,
-        dealerOrderId: order.id,
-      },
-    });
-
-    if (!item) {
-      throw new NotFoundException('Dealer order item not found');
-    }
-
-    const acceptedQuantity =
-      body.acceptedQuantity !== undefined
-        ? Number(body.acceptedQuantity || 0)
-        : Number(item.acceptedQuantity || 0);
-
-    if (acceptedQuantity < 0) {
-      throw new BadRequestException('Accepted quantity cannot be negative');
-    }
-
-    if (acceptedQuantity > Number(item.quantity || 0)) {
-      throw new BadRequestException(
-        'Accepted quantity cannot be greater than ordered quantity',
-      );
-    }
-
-    item.acceptedQuantity = acceptedQuantity;
-    item.pendingQuantity = Math.max(Number(item.quantity || 0) - acceptedQuantity, 0);
-
-    if (body.reservedQuantity !== undefined) {
-      item.reservedQuantity = Number(body.reservedQuantity || 0);
-    }
-
-    if (body.dispatchedQuantity !== undefined) {
-      item.dispatchedQuantity = Number(body.dispatchedQuantity || 0);
-    }
-
-    if (body.remarks !== undefined) {
-      item.remarks = body.remarks || '';
-    }
-
-    await this.dealerOrderItemRepository.save(item);
-
-    const items = await this.dealerOrderItemRepository.find({
-      where: { dealerOrderId: order.id },
-    });
-
-    const totalOrdered = items.reduce(
-      (sum, row) => sum + Number(row.quantity || 0),
-      0,
-    );
-
-    const totalAccepted = items.reduce(
-      (sum, row) => sum + Number(row.acceptedQuantity || 0),
-      0,
-    );
-
-    if (totalAccepted <= 0) {
-      order.status = 'STOCK_OUT' as any;
-    } else if (totalAccepted < totalOrdered) {
-      order.status = 'PARTIALLY_ACCEPTED' as any;
-    } else {
-      order.status = 'ACCEPTED' as any;
-    }
-
-    await this.dealerOrderRepository.save(order);
-
-    const notification = this.dealerNotificationRepository.create({
-      dealerId: order.dealerId,
-      dealerName: order.dealerName,
-      title: 'Order Item Updated',
-      message: `Material item updated in order ${order.orderNumber}.`,
-      notificationType: 'DEALER_ORDER_ITEM',
-      createdBy: user?.id || null,
-      createdByName: user?.name || user?.email || '',
-    });
-
-    await this.dealerNotificationRepository.save(notification);
-
-    return {
-      order,
-      item,
-      items,
-    };
+  if (!order) {
+    throw new NotFoundException('Dealer order not found');
   }
+
+  const item = await this.dealerOrderItemRepository.findOne({
+    where: {
+      id: itemId,
+      dealerOrderId: order.id,
+    },
+  });
+
+  if (!item) {
+    throw new NotFoundException('Dealer order item not found');
+  }
+
+  const acceptedQuantity =
+    body.acceptedQuantity !== undefined
+      ? Number(body.acceptedQuantity || 0)
+      : Number(item.acceptedQuantity || 0);
+
+  if (acceptedQuantity < 0) {
+    throw new BadRequestException('Accepted quantity cannot be negative');
+  }
+
+  if (acceptedQuantity > Number(item.quantity || 0)) {
+    throw new BadRequestException(
+      'Accepted quantity cannot be greater than ordered quantity',
+    );
+  }
+
+  const discountAmount =
+    body.discountAmount !== undefined
+      ? Number(body.discountAmount || 0)
+      : Number(item.discountAmount || 0);
+
+  if (discountAmount < 0) {
+    throw new BadRequestException('Discount cannot be negative');
+  }
+
+  item.acceptedQuantity = acceptedQuantity;
+  item.pendingQuantity = Math.max(
+    Number(item.quantity || 0) - acceptedQuantity,
+    0,
+  );
+
+  item.discountAmount = discountAmount;
+
+  const baseQuantity =
+    acceptedQuantity > 0
+      ? acceptedQuantity
+      : Number(item.quantity || 0);
+
+  const subtotalAmount =
+    baseQuantity * Number(item.sellingRate || 0);
+
+  const taxableAmount = Math.max(
+    subtotalAmount - discountAmount,
+    0,
+  );
+
+  const gstAmount =
+    (taxableAmount * Number(item.gstPercent || 0)) / 100;
+
+  item.subtotalAmount = subtotalAmount;
+  item.gstAmount = gstAmount;
+  item.totalAmount = taxableAmount + gstAmount;
+
+  if (body.reservedQuantity !== undefined) {
+    item.reservedQuantity = Number(body.reservedQuantity || 0);
+  }
+
+  if (body.dispatchedQuantity !== undefined) {
+    item.dispatchedQuantity = Number(body.dispatchedQuantity || 0);
+  }
+
+  if (body.remarks !== undefined) {
+    item.remarks = body.remarks || '';
+  }
+
+  await this.dealerOrderItemRepository.save(item);
+
+  const items = await this.dealerOrderItemRepository.find({
+    where: { dealerOrderId: order.id },
+  });
+
+  const totalOrdered = items.reduce(
+    (sum, row) => sum + Number(row.quantity || 0),
+    0,
+  );
+
+  const totalAccepted = items.reduce(
+    (sum, row) => sum + Number(row.acceptedQuantity || 0),
+    0,
+  );
+
+  const subtotalAmountTotal = items.reduce(
+    (sum, row) => sum + Number(row.subtotalAmount || 0),
+    0,
+  );
+
+  const discountAmountTotal = items.reduce(
+    (sum, row) => sum + Number(row.discountAmount || 0),
+    0,
+  );
+
+  const gstAmountTotal = items.reduce(
+    (sum, row) => sum + Number(row.gstAmount || 0),
+    0,
+  );
+
+  const itemsTotalAmount = items.reduce(
+    (sum, row) => sum + Number(row.totalAmount || 0),
+    0,
+  );
+
+  order.subtotalAmount = subtotalAmountTotal;
+  order.discountAmount = discountAmountTotal;
+  order.gstAmount = gstAmountTotal;
+  order.totalAmount =
+    itemsTotalAmount + Number(order.deliveryCharge || 0);
+  order.pendingAmount = Math.max(
+    Number(order.totalAmount || 0) -
+      Number(order.paidAmount || 0),
+    0,
+  );
+
+  if (totalAccepted <= 0) {
+    order.status = 'STOCK_OUT' as any;
+  } else if (totalAccepted < totalOrdered) {
+    order.status = 'PARTIALLY_ACCEPTED' as any;
+  } else {
+    order.status = 'ACCEPTED' as any;
+  }
+
+  await this.dealerOrderRepository.save(order);
+
+  const notification = this.dealerNotificationRepository.create({
+    dealerId: order.dealerId,
+    dealerName: order.dealerName,
+    title: 'Order Item Updated',
+    message: `Order item updated in order ${order.orderNumber}.`,
+    notificationType: 'DEALER_ORDER_ITEM',
+    createdBy: user?.id || null,
+    createdByName: user?.name || user?.email || '',
+  });
+
+  await this.dealerNotificationRepository.save(notification);
+
+  return {
+    order,
+    item,
+    items,
+  };
+}
 
     async approveDealerPayment(paymentId: number, body: any, user: any) {
     const payment = await this.dealerPaymentRepository.findOne({
