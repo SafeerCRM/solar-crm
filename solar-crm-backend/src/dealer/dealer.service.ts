@@ -260,6 +260,11 @@ async saveDealerDeliverySetting(body: any) {
 
   setting.officeName = body.officeName || '';
   setting.officeAddress = body.officeAddress || '';
+  setting.warehouseAddress = body.warehouseAddress || '';
+setting.warehouseLatitude = Number(body.warehouseLatitude || 0);
+setting.warehouseLongitude = Number(body.warehouseLongitude || 0);
+setting.autoDeliveryChargeEnabled =
+  body.autoDeliveryChargeEnabled !== false;
   setting.baseKm = Number(body.baseKm || 0);
   setting.baseCharge = Number(body.baseCharge || 0);
   setting.perKmCharge = Number(body.perKmCharge || 0);
