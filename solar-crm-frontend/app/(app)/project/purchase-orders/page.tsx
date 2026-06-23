@@ -714,55 +714,52 @@ const handlePurchasePdf = async (
       return;
     }
 
-    const file = new File([blob], fileName, {
-      type: 'application/pdf',
-    });
-
-    if (
-      action === 'share' &&
-      navigator.share &&
-      navigator.canShare &&
-      navigator.canShare({ files: [file] })
-    ) {
-      await navigator.share({
-        title: fileName.replace('.pdf', ''),
-        text: fileName,
-        files: [file],
-      });
-
-      return;
-    }
-
     const url = window.URL.createObjectURL(blob);
 
-    if (action === 'view') {
-      window.open(url, '_blank');
-    } else if (action === 'download') {
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName;
-      a.target = '_blank';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+if (action === 'view') {
+  window.open(url, '_blank');
+  setTimeout(() => window.URL.revokeObjectURL(url), 30000);
+  return;
+}
 
-      const isMobile =
-        /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+if (action === 'download') {
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 
-      if (isMobile) {
-        setTimeout(() => {
-          window.open(url, '_blank');
-        }, 500);
-      }
-    } else {
-      window.open(url, '_blank');
+  setTimeout(() => window.URL.revokeObjectURL(url), 30000);
+  return;
+}
 
-      alert(
-        'Direct sharing is not supported on this browser. PDF has been opened, please share it from your browser or downloads.',
-      );
-    }
+const file = new File([blob], fileName, {
+  type: 'application/pdf',
+});
 
-    setTimeout(() => window.URL.revokeObjectURL(url), 30000);
+if (
+  navigator.share &&
+  navigator.canShare &&
+  navigator.canShare({ files: [file] })
+) {
+  await navigator.share({
+    title: fileName.replace('.pdf', ''),
+    text: fileName,
+    files: [file],
+  });
+
+  setTimeout(() => window.URL.revokeObjectURL(url), 30000);
+  return;
+}
+
+window.open(url, '_blank');
+
+alert(
+  'Direct sharing is not supported on this browser. PDF has been opened, please share it from your browser or downloads.',
+);
+
+setTimeout(() => window.URL.revokeObjectURL(url), 30000);
   } catch (error: any) {
   console.error('PDF ERROR', error);
 
