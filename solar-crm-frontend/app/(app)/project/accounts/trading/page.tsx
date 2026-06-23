@@ -858,6 +858,31 @@ setSelectedOrderInvoices(invoiceRes.data || null);
   }
 };
 
+const updateDealerOrderItem = async (
+  orderId: number,
+  item: any,
+) => {
+  try {
+    await axios.patch(
+      `${API_BASE_URL}/dealer/orders/${orderId}/items/${item.id}`,
+      {
+        acceptedQuantity: Number(item.acceptedQuantity || 0),
+        discountAmount: Number(item.discountAmount || 0),
+        remarks: item.remarks || '',
+      },
+      { headers: headers() },
+    );
+
+    alert('Order item updated');
+    await openOrder(orderId);
+    fetchOrders();
+    fetchAnalytics();
+  } catch (error: any) {
+    console.error(error);
+    alert(error?.response?.data?.message || 'Failed to update order item');
+  }
+};
+
   const hideOrRestoreOrder = async (order: DealerOrder, restore = false) => {
     const reason = window.prompt(
       restore ? 'Reason for restoring this order?' : 'Reason for hiding this order?',
@@ -1702,14 +1727,84 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
                 </div>
 
                 <div className="rounded-xl border p-3">
-                  <h3 className="font-bold">Items</h3>
-                  {selectedOrder.items?.map((item: any) => (
-                    <div key={item.id} className="mt-2 rounded-lg bg-gray-50 p-3 text-sm">
-                      <p className="font-semibold">{item.materialName}</p>
-                      <p>Qty {item.quantity} | Rate {money(item.sellingRate)} | Discount {money(item.discountAmount)} | Total {money(item.totalAmount)}</p>
-                    </div>
-                  ))}
-                </div>
+  <h3 className="font-bold">Review / Edit Items Before Final Invoice</h3>
+
+  {selectedOrder.items?.map((item: any) => (
+    <div
+      key={item.id}
+      className="mt-3 rounded-xl border bg-gray-50 p-3 text-sm"
+    >
+      <p className="font-semibold">
+        {item.materialName}
+        {item.itemType === 'KIT' && (
+          <span className="ml-2 rounded-full bg-orange-100 px-2 py-1 text-[10px] font-bold text-orange-700">
+            KIT
+          </span>
+        )}
+      </p>
+
+      <p className="mt-1 text-xs text-gray-500">
+        Ordered Qty: {item.quantity} | Rate: {money(item.sellingRate)} | GST:{' '}
+        {item.gstPercent || 0}% | Current Total: {money(item.totalAmount)}
+      </p>
+
+      <div className="mt-3 grid gap-2 md:grid-cols-3">
+        <input
+          type="number"
+          min="0"
+          max={item.quantity}
+          defaultValue={item.acceptedQuantity || 0}
+          onChange={(e) => {
+            item.acceptedQuantity = e.target.value;
+          }}
+          className="rounded-lg border p-2 text-sm"
+          placeholder="Accepted / Final Qty"
+        />
+
+        <input
+          type="number"
+          min="0"
+          defaultValue={item.discountAmount || 0}
+          onChange={(e) => {
+            item.discountAmount = e.target.value;
+          }}
+          className="rounded-lg border p-2 text-sm"
+          placeholder="Item Discount"
+        />
+
+        <input
+          type="text"
+          defaultValue={item.remarks || ''}
+          onChange={(e) => {
+            item.remarks = e.target.value;
+          }}
+          className="rounded-lg border p-2 text-sm"
+          placeholder="Item Remarks"
+        />
+      </div>
+
+      {item.kitSpecification && (
+        <pre className="mt-3 whitespace-pre-wrap rounded-lg bg-white p-3 text-xs text-gray-600">
+          {item.kitSpecification}
+        </pre>
+      )}
+
+      <div className="mt-3 flex justify-end">
+        <button
+          onClick={() =>
+            updateDealerOrderItem(
+              selectedOrder.order.id,
+              item,
+            )
+          }
+          className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white"
+        >
+          Save Item
+        </button>
+      </div>
+    </div>
+  ))}
+</div>
 
                 <div className="rounded-xl border p-3">
                   <h3 className="font-bold">Update Status</h3>
