@@ -251,7 +251,14 @@ function KitCard({
             label="Kit Price"
             value={`₹${Number(kit.sellingPrice || 0).toLocaleString('en-IN')}`}
           />
-          <InfoBox label="GST" value={`${Number(kit.gstPercent || 0)}%`} />
+          <InfoBox
+  label="GST"
+  value={
+    kit.gstMode === 'INCLUDING'
+      ? 'Included'
+      : `${Number(kit.gstPercent || 0)}%`
+  }
+/>
         </div>
 
         {expanded && (
