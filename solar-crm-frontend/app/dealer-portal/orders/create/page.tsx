@@ -869,9 +869,14 @@ function KitOrderCard({
         </div>
 
         <div className="rounded-2xl bg-white p-3">
-          <p className="text-xs font-bold text-slate-400">GST</p>
-          <p className="font-black">{Number(kit.gstPercent || 0)}%</p>
-        </div>
+  <p className="text-xs font-bold text-slate-400">GST</p>
+
+  <p className="font-black">
+    {kit.gstMode === 'INCLUDING'
+      ? 'Included'
+      : `${Number(kit.gstPercent || 0)}%`}
+  </p>
+</div>
       </div>
 
       {expanded && (
