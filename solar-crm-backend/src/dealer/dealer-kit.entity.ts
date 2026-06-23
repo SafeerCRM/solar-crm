@@ -32,6 +32,9 @@ export class DealerKit {
   @Column({ default: true })
   isAvailable: boolean;
 
+  @Column({ type: 'text', default: 'EXCLUDING' })
+gstMode: string;
+
   @Column({ default: false })
   isHidden: boolean;
 

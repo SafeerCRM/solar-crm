@@ -369,6 +369,8 @@ async saveDealerKit(body: any, user: any) {
   kit.displayCapacity = body.displayCapacity || '';
   kit.sellingPrice = Number(body.sellingPrice || 0);
   kit.gstPercent = Number(body.gstPercent || 0);
+  kit.gstMode =
+  body.gstMode === 'INCLUDING' ? 'INCLUDING' : 'EXCLUDING';
   kit.isAvailable = body.isAvailable !== false;
 
   const savedKit = await this.dealerKitRepository.save(kit);
@@ -890,13 +892,29 @@ order.createdByName = dealer.dealerName;
       order: { sortOrder: 'ASC', id: 'ASC' } as any,
     });
 
-    const sellingRate = Number(kit.sellingPrice || 0);
-    const gstPercent = Number(kit.gstPercent || 0);
-    const itemDiscount = Number(item.discountAmount || 0);
+    const kitPrice = Number(kit.sellingPrice || 0);
+const gstPercent = Number(kit.gstPercent || 0);
+const gstMode = String((kit as any).gstMode || 'EXCLUDING');
+const itemDiscount = Number(item.discountAmount || 0);
 
-    const itemSubtotal = quantity * sellingRate;
-    const itemGst = ((itemSubtotal - itemDiscount) * gstPercent) / 100;
-    const itemTotal = itemSubtotal - itemDiscount + itemGst;
+let sellingRate = kitPrice;
+let itemSubtotal = quantity * kitPrice;
+let itemGst = 0;
+let itemTotal = 0;
+
+if (gstMode === 'INCLUDING' && gstPercent > 0) {
+  const totalIncludingGst = Math.max(itemSubtotal - itemDiscount, 0);
+  const taxable = totalIncludingGst / (1 + gstPercent / 100);
+
+  itemGst = totalIncludingGst - taxable;
+  itemSubtotal = taxable + itemDiscount;
+  sellingRate = kitPrice / (1 + gstPercent / 100);
+  itemTotal = totalIncludingGst;
+} else {
+  const taxable = Math.max(itemSubtotal - itemDiscount, 0);
+  itemGst = (taxable * gstPercent) / 100;
+  itemTotal = taxable + itemGst;
+}
 
     subtotalAmount += itemSubtotal;
     discountAmount += itemDiscount;
@@ -933,10 +951,10 @@ order.createdByName = dealer.dealerName;
       totalAmount: itemTotal,
       stockAvailableQuantity: 0,
       remarks:
-        item.remarks ||
-        kit.shortDescription ||
-        kit.displayCapacity ||
-        '',
+  item.remarks ||
+  `${kit.shortDescription || kit.displayCapacity || ''}${
+    gstMode === 'INCLUDING' ? ' | GST Included' : ' | GST Extra'
+  }`,
     } as any);
 
     await this.dealerOrderItemRepository.save(orderItem);
