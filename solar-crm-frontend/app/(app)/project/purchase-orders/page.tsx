@@ -664,11 +664,12 @@ const handlePurchasePdf = async (
 
     const blob = await res.blob();
 
-    const isCapacitor =
-      typeof window !== 'undefined' &&
-      !!(window as any).Capacitor;
+    const isNativeCapacitor =
+  typeof window !== 'undefined' &&
+  !!(window as any).Capacitor &&
+  (window as any).Capacitor.isNativePlatform?.() === true;
 
-    if (isCapacitor) {
+    if (isNativeCapacitor) {
       const arrayBuffer = await blob.arrayBuffer();
       const uint8Array = new Uint8Array(arrayBuffer);
 
