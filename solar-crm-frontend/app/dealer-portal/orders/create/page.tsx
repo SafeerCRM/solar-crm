@@ -425,11 +425,11 @@ deliveryDistanceKm:
 };
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
+    <main className="min-h-screen overflow-x-hidden bg-slate-950 text-white">
       <div className="absolute left-[-120px] top-[-120px] h-80 w-80 rounded-full bg-orange-500/25 blur-3xl" />
       <div className="absolute right-[-120px] top-40 h-96 w-96 rounded-full bg-blue-500/20 blur-3xl" />
 
-      <div className="relative mx-auto max-w-7xl px-4 py-6">
+      <div className="relative mx-auto w-full max-w-7xl overflow-x-hidden px-4 py-6">
         <header className="rounded-[2rem] border border-white/10 bg-white/10 p-5 shadow-2xl backdrop-blur-xl">
           <a href="/dealer-portal" className="text-sm font-black text-orange-300">
             ← Back to Dashboard
@@ -451,7 +451,7 @@ deliveryDistanceKm:
           </div>
         </header>
 
-        <form onSubmit={submitOrder} className="mt-6 grid gap-6 lg:grid-cols-3">
+        <form onSubmit={submitOrder} className="mt-6 grid w-full gap-6 overflow-x-hidden lg:grid-cols-3">
           <section className="rounded-[2rem] bg-white p-5 text-slate-900 shadow-xl lg:col-span-2">
             <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
