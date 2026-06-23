@@ -802,17 +802,79 @@ if (
     ? ProjectDealerDeliveryMode.DELIVERY
     : ProjectDealerDeliveryMode.SELF_COLLECTION;
 
-const deliveryDistanceKm =
-  deliveryMode === ProjectDealerDeliveryMode.DELIVERY
-    ? Number(body.deliveryDistanceKm || 0)
-    : 0;
-
 const deliveryAddress =
   deliveryMode === ProjectDealerDeliveryMode.DELIVERY
     ? String(body.deliveryAddress || '').trim()
     : '';
 
+let deliveryLatitude =
+  deliveryMode === ProjectDealerDeliveryMode.DELIVERY
+    ? Number(body.deliveryLatitude || 0)
+    : 0;
+
+let deliveryLongitude =
+  deliveryMode === ProjectDealerDeliveryMode.DELIVERY
+    ? Number(body.deliveryLongitude || 0)
+    : 0;
+
+const deliveryGpsUrl =
+  deliveryMode === ProjectDealerDeliveryMode.DELIVERY
+    ? String(body.deliveryGpsUrl || '').trim()
+    : '';
+
+const deliveryLocationSource =
+  deliveryMode === ProjectDealerDeliveryMode.DELIVERY
+    ? String(body.deliveryLocationSource || '').trim()
+    : '';
+
+if (
+  deliveryMode === ProjectDealerDeliveryMode.DELIVERY &&
+  (!deliveryLatitude || !deliveryLongitude) &&
+  deliveryGpsUrl
+) {
+  const extracted = this.extractCoordinatesFromGpsUrl(deliveryGpsUrl);
+
+  deliveryLatitude = extracted.latitude;
+  deliveryLongitude = extracted.longitude;
+}
+
+let deliveryDistanceKm = 0;
+let autoDeliveryDistanceKm = 0;
+let autoDeliveryCharge = 0;
 let deliveryCharge = 0;
+
+if (
+  deliveryMode === ProjectDealerDeliveryMode.DELIVERY &&
+  deliveryLatitude &&
+  deliveryLongitude
+) {
+  const deliverySetting = await this.deliverySettingRepository.findOne({
+    where: {},
+    order: { id: 'DESC' } as any,
+  });
+
+  if (
+    deliverySetting &&
+    (deliverySetting as any).autoDeliveryChargeEnabled !== false &&
+    Number((deliverySetting as any).warehouseLatitude || 0) &&
+    Number((deliverySetting as any).warehouseLongitude || 0)
+  ) {
+    autoDeliveryDistanceKm = this.calculateDistanceKm(
+      Number((deliverySetting as any).warehouseLatitude || 0),
+      Number((deliverySetting as any).warehouseLongitude || 0),
+      deliveryLatitude,
+      deliveryLongitude,
+    );
+
+    autoDeliveryCharge = this.calculateDeliveryChargeFromSetting(
+      autoDeliveryDistanceKm,
+      deliverySetting,
+    );
+
+    deliveryDistanceKm = autoDeliveryDistanceKm;
+    deliveryCharge = autoDeliveryCharge;
+  }
+}
 
     if (
       paymentType === ProjectDealerPaymentType.CREDIT &&
@@ -837,6 +899,12 @@ order.deliveryMode = deliveryMode;
 order.deliveryAddress = deliveryAddress;
 order.deliveryDistanceKm = deliveryDistanceKm;
 order.deliveryCharge = deliveryCharge;
+order.deliveryLatitude = deliveryLatitude;
+order.deliveryLongitude = deliveryLongitude;
+order.deliveryGpsUrl = deliveryGpsUrl;
+order.deliveryLocationSource = deliveryLocationSource;
+order.autoDeliveryDistanceKm = autoDeliveryDistanceKm;
+order.autoDeliveryCharge = autoDeliveryCharge;
 if (paymentType === ProjectDealerPaymentType.CREDIT && body.creditDueDate) {
   order.creditDueDate = new Date(body.creditDueDate);
 }
@@ -1141,27 +1209,98 @@ return {
     throw new NotFoundException('Dealer order not found');
   }
 
-  const deliveryDistanceKm = Number(body?.deliveryDistanceKm || 0);
+  const oldDeliveryCharge = Number(order.deliveryCharge || 0);
+  const currentTotal = Number(order.totalAmount || 0);
+  const currentPending = Number(order.pendingAmount || 0);
+
+  let deliveryDistanceKm = Number(
+    body?.deliveryDistanceKm ??
+      order.deliveryDistanceKm ??
+      order.autoDeliveryDistanceKm ??
+      0,
+  );
 
   if (deliveryDistanceKm < 0) {
     throw new BadRequestException('Distance cannot be negative');
   }
 
-  const deliverySetting = await this.getDealerDeliverySetting();
-
-  const deliveryCharge = this.calculateDealerDeliveryCharge(
-    deliveryDistanceKm,
-    deliverySetting,
+  let deliveryLatitude = Number(
+    body?.deliveryLatitude ?? order.deliveryLatitude ?? 0,
   );
 
-  const oldDeliveryCharge = Number(order.deliveryCharge || 0);
-  const currentTotal = Number(order.totalAmount || 0);
-  const currentPending = Number(order.pendingAmount || 0);
+  let deliveryLongitude = Number(
+    body?.deliveryLongitude ?? order.deliveryLongitude ?? 0,
+  );
+
+  const deliveryGpsUrl = String(
+    body?.deliveryGpsUrl ?? order.deliveryGpsUrl ?? '',
+  ).trim();
+
+  if ((!deliveryLatitude || !deliveryLongitude) && deliveryGpsUrl) {
+    const extracted = this.extractCoordinatesFromGpsUrl(deliveryGpsUrl);
+    deliveryLatitude = extracted.latitude;
+    deliveryLongitude = extracted.longitude;
+  }
+
+  const deliverySetting = await this.getDealerDeliverySetting();
+
+  let autoDeliveryDistanceKm = Number(order.autoDeliveryDistanceKm || 0);
+  let autoDeliveryCharge = Number(order.autoDeliveryCharge || 0);
+
+  if (
+    deliveryLatitude &&
+    deliveryLongitude &&
+    Number((deliverySetting as any)?.warehouseLatitude || 0) &&
+    Number((deliverySetting as any)?.warehouseLongitude || 0)
+  ) {
+    autoDeliveryDistanceKm = this.calculateDistanceKm(
+      Number((deliverySetting as any).warehouseLatitude || 0),
+      Number((deliverySetting as any).warehouseLongitude || 0),
+      deliveryLatitude,
+      deliveryLongitude,
+    );
+
+    autoDeliveryCharge = this.calculateDeliveryChargeFromSetting(
+      autoDeliveryDistanceKm,
+      deliverySetting,
+    );
+
+    deliveryDistanceKm = autoDeliveryDistanceKm;
+  }
+
+  const manualDeliveryChargeProvided =
+    body?.deliveryCharge !== undefined &&
+    body?.deliveryCharge !== null &&
+    body?.deliveryCharge !== '';
+
+  const deliveryCharge = manualDeliveryChargeProvided
+    ? Number(body.deliveryCharge || 0)
+    : autoDeliveryCharge > 0
+      ? autoDeliveryCharge
+      : this.calculateDealerDeliveryCharge(
+          deliveryDistanceKm,
+          deliverySetting,
+        );
+
+  if (deliveryCharge < 0) {
+    throw new BadRequestException('Delivery charge cannot be negative');
+  }
 
   order.deliveryDistanceKm = deliveryDistanceKm;
+  order.deliveryLatitude = deliveryLatitude;
+  order.deliveryLongitude = deliveryLongitude;
+  order.deliveryGpsUrl = deliveryGpsUrl;
+  order.deliveryLocationSource =
+    body?.deliveryLocationSource ||
+    order.deliveryLocationSource ||
+    '';
+  order.autoDeliveryDistanceKm = autoDeliveryDistanceKm;
+  order.autoDeliveryCharge = autoDeliveryCharge;
   order.deliveryCharge = deliveryCharge;
 
-  order.totalAmount = currentTotal - oldDeliveryCharge + deliveryCharge;
+  order.totalAmount =
+    currentTotal - oldDeliveryCharge + deliveryCharge;
+
   order.pendingAmount = Math.max(
     currentPending - oldDeliveryCharge + deliveryCharge,
     0,
@@ -2974,5 +3113,87 @@ if (deliveryCharge > 0) {
     proformaInvoices,
     finalInvoices,
   };
+}
+
+private calculateDistanceKm(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+) {
+  const toRad = (value: number) => (value * Math.PI) / 180;
+  const earthRadiusKm = 6371;
+
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return Number((earthRadiusKm * c).toFixed(2));
+}
+
+private extractCoordinatesFromGpsUrl(value: string) {
+  const text = String(value || '').trim();
+
+  if (!text) {
+    return { latitude: 0, longitude: 0 };
+  }
+
+  const qMatch = text.match(/[?&]q=(-?\d+(\.\d+)?),\s*(-?\d+(\.\d+)?)/);
+
+  if (qMatch) {
+    return {
+      latitude: Number(qMatch[1]),
+      longitude: Number(qMatch[3]),
+    };
+  }
+
+  const atMatch = text.match(/@(-?\d+(\.\d+)?),\s*(-?\d+(\.\d+)?)/);
+
+  if (atMatch) {
+    return {
+      latitude: Number(atMatch[1]),
+      longitude: Number(atMatch[3]),
+    };
+  }
+
+  const plainMatch = text.match(/(-?\d+(\.\d+)?),\s*(-?\d+(\.\d+)?)/);
+
+  if (plainMatch) {
+    return {
+      latitude: Number(plainMatch[1]),
+      longitude: Number(plainMatch[3]),
+    };
+  }
+
+  return { latitude: 0, longitude: 0 };
+}
+
+private calculateDeliveryChargeFromSetting(
+  distanceKm: number,
+  setting: any,
+) {
+  const baseKm = Number(setting?.baseKm || 0);
+  const baseCharge = Number(setting?.baseCharge || 0);
+  const perKmCharge = Number(setting?.perKmCharge || 0);
+
+  if (distanceKm <= 0) {
+    return 0;
+  }
+
+  if (distanceKm <= baseKm) {
+    return baseCharge;
+  }
+
+  const extraKm = distanceKm - baseKm;
+
+  return Math.round(baseCharge + extraKm * perKmCharge);
 }
 }

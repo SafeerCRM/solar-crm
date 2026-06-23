@@ -37,4 +37,16 @@ export class DealerDeliverySetting {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @Column({ type: 'float', default: 0 })
+warehouseLatitude: number;
+
+@Column({ type: 'float', default: 0 })
+warehouseLongitude: number;
+
+@Column({ nullable: true })
+warehouseAddress: string;
+
+@Column({ default: true })
+autoDeliveryChargeEnabled: boolean;
 }

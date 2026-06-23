@@ -151,4 +151,22 @@ export class ProjectDealerOrder {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @Column({ type: 'float', default: 0 })
+deliveryLatitude: number;
+
+@Column({ type: 'float', default: 0 })
+deliveryLongitude: number;
+
+@Column({ type: 'text', nullable: true })
+deliveryGpsUrl: string;
+
+@Column({ nullable: true })
+deliveryLocationSource: string;
+
+@Column({ type: 'float', default: 0 })
+autoDeliveryDistanceKm: number;
+
+@Column({ type: 'float', default: 0 })
+autoDeliveryCharge: number;
 }
