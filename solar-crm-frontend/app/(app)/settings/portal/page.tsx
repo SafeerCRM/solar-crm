@@ -43,6 +43,7 @@ const emptyKitForm = {
   displayCapacity: '',
   sellingPrice: '',
   gstPercent: '',
+  gstMode: 'EXCLUDING',
   isAvailable: true,
   items: [
     {
@@ -349,6 +350,7 @@ const startEditKit = (kit: any) => {
     displayCapacity: kit.displayCapacity || '',
     sellingPrice: String(kit.sellingPrice || ''),
     gstPercent: String(kit.gstPercent || ''),
+    gstMode: kit.gstMode || 'EXCLUDING',
     isAvailable: kit.isAvailable !== false,
     items:
       Array.isArray(kit.items) && kit.items.length
@@ -673,6 +675,18 @@ const toggleKitAvailability = async (kit: any) => {
         }
         className="rounded-xl border p-3"
       />
+
+<select
+  value={kitForm.gstMode}
+  onChange={(e) =>
+    setKitForm({ ...kitForm, gstMode: e.target.value })
+  }
+  className="rounded-xl border p-3"
+>
+  <option value="EXCLUDING">GST Extra / Excluding GST</option>
+  <option value="INCLUDING">GST Included in Price</option>
+</select>
+
     </div>
 
     <label className="mt-3 flex items-center gap-2 text-sm font-semibold">
@@ -774,7 +788,8 @@ const toggleKitAvailability = async (kit: any) => {
               {kit.displayBrand || '-'} | {kit.displayCapacity || '-'}
             </p>
             <p className="mt-2 font-bold text-green-700">
-              ₹{Number(kit.sellingPrice || 0).toLocaleString('en-IN')} + GST {kit.gstPercent || 0}%
+              ₹{Number(kit.sellingPrice || 0).toLocaleString('en-IN')} 
+{kit.gstMode === 'INCLUDING' ? ' GST Included' : ` + GST ${kit.gstPercent || 0}%`}
             </p>
           </div>
 

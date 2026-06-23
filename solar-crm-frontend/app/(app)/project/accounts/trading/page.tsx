@@ -1250,7 +1250,8 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="overflow-x-auto pb-2">
+  <div className="flex min-w-max gap-2">
         {[
   ['dealers', 'Dealer Master'],
   ['catalog', 'Catalog & Order'],
@@ -1280,7 +1281,8 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
         >
           Refresh
         </button>
-      </div>
+        </div>
+</div>
 
       <div className="rounded-2xl bg-white p-4 shadow">
         <div className="grid gap-3 md:grid-cols-3">
@@ -2019,7 +2021,7 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
                 </p>
               </div>
 
-              <div className="flex flex-col gap-2">
+              <div className="w-full md:w-[380px] flex flex-col gap-2">
   <select
     value={item.status || 'OPEN'}
     onChange={(e) =>
@@ -2029,7 +2031,7 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
         item.adminRemarks || '',
       )
     }
-    className="rounded-xl border p-2 text-sm"
+    className="w-full min-h-[140px] rounded-xl border p-2 text-sm"
   >
     <option value="OPEN">Open</option>
     <option value="IN_PROGRESS">In Progress</option>
@@ -2048,7 +2050,7 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
       )
     }
     className="rounded-xl border p-2 text-sm"
-    rows={3}
+    rows={5}
   />
 </div>
             </div>

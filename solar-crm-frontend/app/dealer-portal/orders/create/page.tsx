@@ -185,6 +185,7 @@ const addKitToCart = (kit: any) => {
         materialName: kit.kitName,
         sellingRateWithoutGst: Number(kit.sellingPrice || 0),
         gstPercent: Number(kit.gstPercent || 0),
+        gstMode: kit.gstMode || 'EXCLUDING',
         quantity: 1,
         discountAmount: 0,
         remarks: '',
@@ -469,8 +470,14 @@ deliveryDistanceKm:
   )}
 </p>
                         <p className="text-xs text-slate-500">
-                          ₹{Number(item.sellingRateWithoutGst || 0).toLocaleString('en-IN')} + GST {item.gstPercent}%
-                        </p>
+  ₹{Number(item.sellingRateWithoutGst || 0).toLocaleString('en-IN')}
+
+  {item.itemType === 'KIT'
+    ? item.gstMode === 'INCLUDING'
+      ? ' • GST Included'
+      : ` • GST ${item.gstPercent || 0}% Extra`
+    : ` + GST ${item.gstPercent || 0}%`}
+</p>
                       </div>
 
                       <button
