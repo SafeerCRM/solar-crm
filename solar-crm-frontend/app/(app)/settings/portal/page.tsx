@@ -29,10 +29,14 @@ const emptyCompanyForm = {
 const emptyDeliveryForm = {
   officeName: '',
   officeAddress: '',
+  warehouseAddress: '',
+  warehouseLatitude: '',
+  warehouseLongitude: '',
   baseKm: '',
   baseCharge: '',
   perKmCharge: '',
   minimumCharge: '',
+  autoDeliveryChargeEnabled: true,
 };
 
 const emptyKitForm = {
@@ -217,6 +221,11 @@ const loadDeliverySetting = async () => {
     setDeliveryForm({
       officeName: res.data?.officeName || '',
       officeAddress: res.data?.officeAddress || '',
+      warehouseAddress: res.data?.warehouseAddress || '',
+warehouseLatitude: String(res.data?.warehouseLatitude || ''),
+warehouseLongitude: String(res.data?.warehouseLongitude || ''),
+autoDeliveryChargeEnabled:
+  res.data?.autoDeliveryChargeEnabled !== false,
       baseKm: String(res.data?.baseKm || ''),
       baseCharge: String(res.data?.baseCharge || ''),
       perKmCharge: String(res.data?.perKmCharge || ''),
@@ -527,6 +536,60 @@ const toggleKitAvailability = async (kit: any) => {
       }
       className="rounded-xl border p-3"
     />
+
+    <textarea
+  placeholder="Warehouse Address"
+  value={deliveryForm.warehouseAddress}
+  onChange={(e) =>
+    setDeliveryForm({
+      ...deliveryForm,
+      warehouseAddress: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3 md:col-span-2"
+/>
+
+<input
+  type="number"
+  step="any"
+  placeholder="Warehouse Latitude"
+  value={deliveryForm.warehouseLatitude}
+  onChange={(e) =>
+    setDeliveryForm({
+      ...deliveryForm,
+      warehouseLatitude: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+/>
+
+<input
+  type="number"
+  step="any"
+  placeholder="Warehouse Longitude"
+  value={deliveryForm.warehouseLongitude}
+  onChange={(e) =>
+    setDeliveryForm({
+      ...deliveryForm,
+      warehouseLongitude: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+/>
+
+<label className="flex items-center gap-2 rounded-xl border p-3 text-sm font-semibold">
+  <input
+    type="checkbox"
+    checked={!!deliveryForm.autoDeliveryChargeEnabled}
+    onChange={(e) =>
+      setDeliveryForm({
+        ...deliveryForm,
+        autoDeliveryChargeEnabled: e.target.checked,
+      })
+    }
+  />
+  Enable Auto Delivery Charge from Warehouse GPS
+</label>
 
     <input
       type="number"

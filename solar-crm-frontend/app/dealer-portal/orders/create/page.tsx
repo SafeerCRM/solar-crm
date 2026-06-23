@@ -15,6 +15,11 @@ const [expandedKitId, setExpandedKitId] = useState<number | null>(null);
   const [deliveryMode, setDeliveryMode] = useState('SELF_COLLECTION');
 const [deliveryAddress, setDeliveryAddress] = useState('');
 const [deliveryDistanceKm, setDeliveryDistanceKm] = useState('');
+const [deliveryLatitude, setDeliveryLatitude] = useState('');
+const [deliveryLongitude, setDeliveryLongitude] = useState('');
+const [deliveryGpsUrl, setDeliveryGpsUrl] = useState('');
+const [deliveryLocationSource, setDeliveryLocationSource] =
+  useState<'CURRENT_GPS' | 'GPS_URL'>('CURRENT_GPS');
   const [creditDueDate, setCreditDueDate] = useState('');
   const [expectedDeliveryAt, setExpectedDeliveryAt] = useState('');
   const [remarks, setRemarks] = useState('');
@@ -260,6 +265,24 @@ if (
   return;
 }
 
+if (
+  deliveryMode === 'DELIVERY' &&
+  deliveryLocationSource === 'CURRENT_GPS' &&
+  (!deliveryLatitude || !deliveryLongitude)
+) {
+  alert('Please capture GPS location');
+  return;
+}
+
+if (
+  deliveryMode === 'DELIVERY' &&
+  deliveryLocationSource === 'GPS_URL' &&
+  !deliveryGpsUrl.trim()
+) {
+  alert('Please enter Google Maps URL');
+  return;
+}
+
     if (paymentType === 'CREDIT' && !dealer?.creditEnabled) {
       setMessage('Credit facility is not enabled for your dealer account.');
       return;
@@ -289,6 +312,15 @@ if (
           remarks,
           deliveryMode,
 deliveryAddress,
+deliveryLatitude:
+  Number(deliveryLatitude || 0),
+
+deliveryLongitude:
+  Number(deliveryLongitude || 0),
+
+deliveryGpsUrl,
+
+deliveryLocationSource,
 deliveryDistanceKm:
   Number(deliveryDistanceKm || 0),
           items: cart.map((item) => ({
@@ -322,6 +354,32 @@ deliveryDistanceKm:
       setSubmitting(false);
     }
   };
+
+  const captureCurrentLocation = () => {
+  if (!navigator.geolocation) {
+    alert('GPS is not supported on this device');
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
+
+      setDeliveryLatitude(String(lat));
+      setDeliveryLongitude(String(lng));
+
+      setDeliveryGpsUrl(
+        `https://maps.google.com/?q=${lat},${lng}`,
+      );
+
+      alert('Location captured successfully');
+    },
+    () => {
+      alert('Unable to capture location');
+    },
+  );
+};
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
@@ -567,6 +625,60 @@ deliveryDistanceKm:
       placeholder="Delivery Address"
       rows={3}
     />
+
+    <div className="rounded-2xl bg-white/70 p-3">
+  <p className="mb-2 text-xs font-black text-slate-700">
+    Delivery Location Source
+  </p>
+
+  <select
+    value={deliveryLocationSource}
+    onChange={(e) =>
+      setDeliveryLocationSource(
+        e.target.value as 'CURRENT_GPS' | 'GPS_URL',
+      )
+    }
+    className="w-full rounded-xl border bg-white px-3 py-2 text-sm font-semibold"
+  >
+    <option value="CURRENT_GPS">
+      Use Current GPS Location
+    </option>
+
+    <option value="GPS_URL">
+      Use Different Delivery Location
+    </option>
+  </select>
+</div>
+
+{deliveryLocationSource === 'CURRENT_GPS' && (
+  <div className="rounded-2xl bg-white/70 p-3">
+    <button
+      type="button"
+      onClick={captureCurrentLocation}
+      className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-black text-white"
+    >
+      Capture Current GPS
+    </button>
+
+    {deliveryLatitude && deliveryLongitude && (
+      <p className="mt-2 text-xs font-bold text-green-700">
+        GPS Captured ✓
+      </p>
+    )}
+  </div>
+)}
+
+{deliveryLocationSource === 'GPS_URL' && (
+  <input
+    type="text"
+    value={deliveryGpsUrl}
+    onChange={(e) =>
+      setDeliveryGpsUrl(e.target.value)
+    }
+    className="w-full rounded-2xl border border-white/40 bg-white px-4 py-3 text-sm font-semibold outline-none"
+    placeholder="Paste Google Maps Location URL"
+  />
+)}
 
 <p className="rounded-2xl bg-white/70 p-3 text-xs font-bold text-slate-800">
   Delivery charges will be confirmed by company after reviewing the address.
