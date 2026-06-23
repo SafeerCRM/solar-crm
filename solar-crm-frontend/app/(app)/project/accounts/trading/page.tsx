@@ -225,6 +225,12 @@ const [paymentReceiptUploading, setPaymentReceiptUploading] =
   const [adminRemarks, setAdminRemarks] = useState('');
 const [deliveryDistanceKm, setDeliveryDistanceKm] = useState('');
 const [deliverySaving, setDeliverySaving] = useState(false);
+const [finalInvoiceModalOpen, setFinalInvoiceModalOpen] = useState(false);
+const [finalInvoiceForm, setFinalInvoiceForm] = useState({
+  invoiceNumber: '',
+  invoiceDiscountAmount: '',
+  invoiceRemarks: '',
+});
 
   const headers = () => {
     const token = localStorage.getItem('token');
@@ -621,23 +627,37 @@ alert('Dealer added successfully');
   }
 };
 
-const generateDealerFinalInvoice = async () => {
+const openFinalInvoiceModal = () => {
   if (!selectedOrder?.order?.id) return;
 
-  const confirmed = window.confirm(
-    'Generate Final Invoice for this dealer order?',
-  );
+  setFinalInvoiceForm({
+    invoiceNumber: `DINV-${selectedOrder.order.id}`,
+    invoiceDiscountAmount: '',
+    invoiceRemarks: '',
+  });
 
-  if (!confirmed) return;
+  setFinalInvoiceModalOpen(true);
+};
+
+const generateDealerFinalInvoice = async () => {
+  if (!selectedOrder?.order?.id) return;
 
   try {
     await axios.post(
       `${API_BASE_URL}/project/dealer-order/${selectedOrder.order.id}/final-invoice`,
-      {},
+      {
+        invoiceNumber: finalInvoiceForm.invoiceNumber,
+        invoiceDiscountAmount: Number(
+          finalInvoiceForm.invoiceDiscountAmount || 0,
+        ),
+        invoiceRemarks: finalInvoiceForm.invoiceRemarks,
+      },
       { headers: headers() },
     );
 
     alert('Dealer Final Invoice generated successfully');
+    setFinalInvoiceModalOpen(false);
+
     await openOrder(selectedOrder.order.id);
     fetchOrders();
   } catch (error: any) {
@@ -1673,7 +1693,7 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
   </button>
 
   <button
-    onClick={generateDealerFinalInvoice}
+    onClick={openFinalInvoiceModal}
     className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white"
   >
     Generate Final Invoice
@@ -2442,6 +2462,102 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
         </div>
       </div>
     )}
+
+    {finalInvoiceModalOpen && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-bold text-gray-800">
+            Generate Final Invoice
+          </h2>
+          <p className="mt-1 text-sm text-gray-500">
+            Review invoice number, discount and remarks before generating.
+          </p>
+        </div>
+
+        <button
+          onClick={() => setFinalInvoiceModalOpen(false)}
+          className="rounded-full bg-gray-100 px-3 py-1 text-sm font-bold text-gray-600"
+        >
+          ✕
+        </button>
+      </div>
+
+      <div className="mt-4 space-y-3">
+        <input
+          placeholder="Invoice Number"
+          value={finalInvoiceForm.invoiceNumber}
+          onChange={(e) =>
+            setFinalInvoiceForm({
+              ...finalInvoiceForm,
+              invoiceNumber: e.target.value,
+            })
+          }
+          className="w-full rounded-xl border p-3"
+        />
+
+        <input
+          type="number"
+          min="0"
+          placeholder="Final Invoice Discount"
+          value={finalInvoiceForm.invoiceDiscountAmount}
+          onChange={(e) =>
+            setFinalInvoiceForm({
+              ...finalInvoiceForm,
+              invoiceDiscountAmount: e.target.value,
+            })
+          }
+          className="w-full rounded-xl border p-3"
+        />
+
+        <textarea
+          placeholder="Invoice Remarks"
+          value={finalInvoiceForm.invoiceRemarks}
+          onChange={(e) =>
+            setFinalInvoiceForm({
+              ...finalInvoiceForm,
+              invoiceRemarks: e.target.value,
+            })
+          }
+          className="w-full rounded-xl border p-3"
+          rows={4}
+        />
+
+        <div className="rounded-xl bg-blue-50 p-3 text-sm text-blue-800">
+          <p>
+            Current Order Total:{' '}
+            <span className="font-bold">
+              {money(selectedOrder?.order?.totalAmount)}
+            </span>
+          </p>
+          <p>
+            Delivery Charge:{' '}
+            <span className="font-bold">
+              {money(selectedOrder?.order?.deliveryCharge)}
+            </span>
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-5 flex flex-wrap justify-end gap-3">
+        <button
+          onClick={() => setFinalInvoiceModalOpen(false)}
+          className="rounded-xl bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-700"
+        >
+          Cancel
+        </button>
+
+        <button
+          onClick={generateDealerFinalInvoice}
+          className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white"
+        >
+          Generate Final Invoice
+        </button>
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 }
