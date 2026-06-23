@@ -158,8 +158,8 @@ const [consumptionPagination, setConsumptionPagination] =
           params: {
   page: activePage,
   limit: pagination.limit,
-  branchName: activeFilters.branch || undefined,
-  search: activeFilters.material || undefined,
+  branch: activeFilters.branch || undefined,
+  material: activeFilters.material || undefined,
   showHidden: activeFilters.showHidden ? 'true' : 'false',
 },
           headers: token
@@ -176,11 +176,13 @@ const [consumptionPagination, setConsumptionPagination] =
           : [],
       );
 
-      setPagination({
-  page: Number(res.data?.page || 1),
-  limit: Number(res.data?.limit || 20),
-  total: Number(res.data?.total || 0),
-  totalPages: Number(res.data?.totalPages || 1),
+      const pageInfo = res.data?.pagination || res.data || {};
+
+setPagination({
+  page: Number(pageInfo.page || 1),
+  limit: Number(pageInfo.limit || 20),
+  total: Number(pageInfo.total || 0),
+  totalPages: Number(pageInfo.totalPages || 1),
 });
     } catch (error) {
       console.error(error);
@@ -216,10 +218,8 @@ const [consumptionPagination, setConsumptionPagination] =
         params: {
   page: activePage,
   limit: movementPagination.limit,
-  search:
-    activeFilters.material ||
-    activeFilters.branch ||
-    undefined,
+  material: activeFilters.material || undefined,
+  branch: activeFilters.branch || undefined,
   movementType: activeFilters.movementType || undefined,
   showHidden: activeFilters.showHidden ? 'true' : 'false',
 },
@@ -237,11 +237,13 @@ const [consumptionPagination, setConsumptionPagination] =
         : [],
     );
 
-    setMovementPagination({
-  page: Number(res.data?.page || 1),
-  limit: Number(res.data?.limit || 20),
-  total: Number(res.data?.total || 0),
-  totalPages: Number(res.data?.totalPages || 1),
+    const pageInfo = res.data?.pagination || res.data || {};
+
+setMovementPagination({
+  page: Number(pageInfo.page || 1),
+  limit: Number(pageInfo.limit || 20),
+  total: Number(pageInfo.total || 0),
+  totalPages: Number(pageInfo.totalPages || 1),
 });
   } catch (error) {
     console.error(error);
@@ -884,6 +886,7 @@ const hideStockItem = async (stockItemId: number) => {
     alert('Stock item hidden');
 
     await loadStockItems(1);
+    await loadBranchWiseStock();
   } catch (error: any) {
     console.error(error);
 
@@ -923,6 +926,7 @@ const restoreStockItem = async (stockItemId: number) => {
     alert('Stock item restored');
 
     await loadStockItems(1);
+    await loadBranchWiseStock();
   } catch (error: any) {
     console.error(error);
 
