@@ -641,7 +641,7 @@ async toggleDealerKitAvailability(id: number, body: any) {
     for (const item of orderItems) {
       const invoiceItem = this.proformaInvoiceItemRepository.create({
         proformaInvoiceId: savedInvoice.id,
-        materialId: item.materialId,
+        materialId: item.materialId || 0,
         itemName: item.materialName,
         category: item.category,
         brand: item.brand,

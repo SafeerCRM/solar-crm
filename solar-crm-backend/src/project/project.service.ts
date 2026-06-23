@@ -15836,13 +15836,14 @@ async createDealerOrderProformaInvoice(
   for (const orderItem of orderItems) {
     const override = bodyItemMap.get(orderItem.id);
 
-    const requestedQuantity = Number(
-      override?.quantity ??
-        override?.acceptedQuantity ??
-        orderItem.pendingQuantity ??
-        orderItem.quantity ??
-        0,
-    );
+    const acceptedQty = Number(orderItem.acceptedQuantity || 0);
+
+const requestedQuantity = Number(
+  override?.quantity ??
+    override?.acceptedQuantity ??
+    (acceptedQty > 0 ? acceptedQty : orderItem.quantity) ??
+    0,
+);
 
     if (requestedQuantity <= 0) {
       continue;
@@ -15883,6 +15884,7 @@ async createDealerOrderProformaInvoice(
       category: orderItem.category || '',
       brand: orderItem.brand || '',
       unit: orderItem.unit || '',
+      hsnCode: orderItem.hsnCode || '',
       sellingRate,
       gstPercent,
       quantity: requestedQuantity,
@@ -15960,11 +15962,12 @@ async createDealerOrderProformaInvoice(
     this.projectProformaInvoiceItemRepository.create({
       proformaInvoiceId: savedInvoice.id,
       projectId: 0,
-      materialId: item.materialId || undefined,
+      materialId: item.materialId || 0,
       itemName: item.itemName || '',
       category: item.category || '',
       brand: item.brand || '',
       unit: item.unit || '',
+      hsnCode: item.hsnCode || '',
       sellingRate: item.sellingRate,
       gstPercent: item.gstPercent,
       quantity: item.quantity,
@@ -16078,6 +16081,86 @@ async createDealerOrderFinalInvoice(
       'Unable to find or create dealer PI',
     );
   }
+
+  const latestOrderItems =
+  await this.projectDealerOrderItemRepository.find({
+    where: { dealerOrderId: order.id },
+    order: { id: 'ASC' },
+  });
+
+await this.projectProformaInvoiceItemRepository.delete({
+  proformaInvoiceId: Number(pi.id),
+} as any);
+
+let piSubtotal = 0;
+let piDiscount = 0;
+let piGst = 0;
+let piTotal = 0;
+
+const refreshedPiItems: any[] = [];
+
+for (const orderItem of latestOrderItems) {
+  const finalQty =
+    Number(orderItem.acceptedQuantity || 0) > 0
+      ? Number(orderItem.acceptedQuantity || 0)
+      : Number(orderItem.quantity || 0);
+
+  if (finalQty <= 0) {
+    continue;
+  }
+
+  const sellingRate = Number(orderItem.sellingRate || 0);
+  const gstPercent = Number(orderItem.gstPercent || 0);
+  const discountAmount = Number(orderItem.discountAmount || 0);
+
+  const subtotalAmount = finalQty * sellingRate;
+  const taxableAmount = Math.max(subtotalAmount - discountAmount, 0);
+  const gstAmount = (taxableAmount * gstPercent) / 100;
+  const totalAmount = taxableAmount + gstAmount;
+
+  piSubtotal += subtotalAmount;
+  piDiscount += discountAmount;
+  piGst += gstAmount;
+  piTotal += totalAmount;
+
+  refreshedPiItems.push(
+    this.projectProformaInvoiceItemRepository.create({
+      proformaInvoiceId: Number(pi.id),
+      projectId: 0,
+      materialId: Number(orderItem.materialId || 0),
+      itemName: orderItem.materialName || '',
+      category: orderItem.category || '',
+      brand: orderItem.brand || '',
+      unit: orderItem.unit || '',
+      hsnCode: orderItem.hsnCode || '',
+      sellingRate,
+      gstPercent,
+      quantity: finalQty,
+      discountAmount,
+      subtotalAmount,
+      gstAmount,
+      totalAmount,
+      remarks: orderItem.remarks || '',
+    } as any),
+  );
+}
+
+if (!refreshedPiItems.length) {
+  throw new BadRequestException(
+    'No accepted/final quantity found for final invoice',
+  );
+}
+
+await this.projectProformaInvoiceItemRepository.save(
+  refreshedPiItems,
+);
+
+pi.subtotalAmount = piSubtotal;
+pi.discountAmount = piDiscount;
+pi.gstAmount = piGst;
+pi.totalAmount = piTotal;
+
+await this.projectProformaInvoiceRepository.save(pi);
 
   const finalInvoiceResult =
     await this.createFinalInvoiceFromProforma(
