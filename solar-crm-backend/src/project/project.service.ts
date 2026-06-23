@@ -3784,6 +3784,20 @@ async getPaymentCollectionList(query: any, currentUser: any) {
   roles.includes('PAYMENT_MANAGER') ||
   roles.includes('ACCOUNT_MANAGER');
 
+  const projectCollectedSql = `
+  COALESCE((
+    SELECT SUM(p2."paidAmount")
+    FROM project_payment_installments p2
+    WHERE p2."projectId" = project.id
+      AND p2."isHidden" = false
+      AND p2."approvalStatus" = 'APPROVED'
+  ), 0)
+`;
+
+const projectPendingSql = `
+  GREATEST(COALESCE(project."finalCost", 0) - ${projectCollectedSql}, 0)
+`;
+
   const qb = this.projectPaymentInstallmentRepository
     .createQueryBuilder('payment')
     .leftJoin(Project, 'project', 'project.id = payment.projectId')
@@ -3876,15 +3890,8 @@ async getPaymentCollectionList(query: any, currentUser: any) {
 }
 
   if (pendingOnly === 'true') {
-    qb.andWhere('payment.pendingAmount > 0');
-    qb.andWhere('payment.status IN (:...pendingStatuses)', {
-      pendingStatuses: [
-        ProjectPaymentInstallmentStatus.PENDING,
-        ProjectPaymentInstallmentStatus.PARTIAL,
-        ProjectPaymentInstallmentStatus.OVERDUE,
-      ],
-    });
-  }
+  qb.andWhere(`${projectPendingSql} > 0`);
+}
 
   if (month?.trim()) {
     const [year, monthNumber] = month.trim().split('-').map(Number);
@@ -4032,15 +4039,8 @@ if (projectIds.length > 0) {
 }
 
   if (pendingOnly === 'true') {
-    countQb.andWhere('payment.pendingAmount > 0');
-    countQb.andWhere('payment.status IN (:...pendingStatuses)', {
-      pendingStatuses: [
-        ProjectPaymentInstallmentStatus.PENDING,
-        ProjectPaymentInstallmentStatus.PARTIAL,
-        ProjectPaymentInstallmentStatus.OVERDUE,
-      ],
-    });
-  }
+  countQb.andWhere(`${projectPendingSql} > 0`);
+}
 
   if (month?.trim()) {
     const [year, monthNumber] = month.trim().split('-').map(Number);
@@ -4071,6 +4071,132 @@ if (projectIds.length > 0) {
   }
 
   const total = await countQb.getCount();
+
+  const summaryQb = this.projectPaymentInstallmentRepository
+  .createQueryBuilder('payment')
+  .leftJoin(Project, 'project', 'project.id = payment.projectId')
+  .select('project.id', 'projectId')
+  .addSelect('project.finalCost', 'finalCost')
+  .addSelect(projectCollectedSql, 'collectedAmount');
+
+summaryQb.where('payment.isHidden = false');
+summaryQb.andWhere('project.isHidden = false');
+
+if (!canSeeAll) {
+  summaryQb.andWhere('project.projectOwnerId = :userId', {
+    userId,
+  });
+}
+
+if (projectId) {
+  summaryQb.andWhere('payment.projectId = :projectId', {
+    projectId: Number(projectId),
+  });
+}
+
+if (branch?.trim()) {
+  summaryQb.andWhere(
+    'LOWER(project.branchName) LIKE LOWER(:branch)',
+    {
+      branch: `%${branch.trim()}%`,
+    },
+  );
+}
+
+if (projectOwnerId) {
+  summaryQb.andWhere(
+    'project.projectOwnerId = :projectOwnerId',
+    {
+      projectOwnerId: Number(projectOwnerId),
+    },
+  );
+}
+
+if (customerName?.trim()) {
+  const searchText = customerName.trim();
+
+  summaryQb.andWhere(
+    `(
+      LOWER(project.customerName) LIKE LOWER(:search)
+      OR LOWER(project.customerPhone) LIKE LOWER(:search)
+      OR LOWER(project.projectSerial) LIKE LOWER(:search)
+      OR CAST(project.id AS TEXT) LIKE :search
+    )`,
+    {
+      search: `%${searchText}%`,
+    },
+  );
+}
+
+if (status?.trim()) {
+  summaryQb.andWhere('payment.status = :status', {
+    status: status.trim(),
+  });
+}
+
+if (approvalStatus?.trim()) {
+  summaryQb.andWhere(
+    'payment.approvalStatus = :approvalStatus',
+    {
+      approvalStatus: approvalStatus.trim(),
+    },
+  );
+}
+
+if (pendingOnly === 'true') {
+  summaryQb.andWhere(`${projectPendingSql} > 0`);
+}
+
+if (month?.trim()) {
+  const [year, monthNumber] = month
+    .trim()
+    .split('-')
+    .map(Number);
+
+  if (year && monthNumber) {
+    const startDate = new Date(year, monthNumber - 1, 1);
+    const endDate = new Date(year, monthNumber, 1);
+
+    summaryQb.andWhere('payment.dueDate >= :monthStart', {
+      monthStart: startDate,
+    });
+
+    summaryQb.andWhere('payment.dueDate < :monthEnd', {
+      monthEnd: endDate,
+    });
+  }
+} else {
+  if (fromDate?.trim()) {
+    summaryQb.andWhere('payment.dueDate >= :fromDate', {
+      fromDate: fromDate.trim(),
+    });
+  }
+
+  if (toDate?.trim()) {
+    summaryQb.andWhere('payment.dueDate <= :toDate', {
+      toDate: toDate.trim(),
+    });
+  }
+}
+
+summaryQb.groupBy('project.id');
+
+const summaryRows = await summaryQb.getRawMany();
+
+const projectTotalAmount = summaryRows.reduce(
+  (sum, item) => sum + Number(item.finalCost || 0),
+  0,
+);
+
+const projectCollectedAmount = summaryRows.reduce(
+  (sum, item) => sum + Number(item.collectedAmount || 0),
+  0,
+);
+
+const projectPendingAmount = Math.max(
+  projectTotalAmount - projectCollectedAmount,
+  0,
+);
 
   return {
   data: rows.map((row) => {
@@ -4147,6 +4273,11 @@ if (projectIds.length > 0) {
   })),
     };
   }),
+  summary: {
+  projectTotalAmount,
+  projectCollectedAmount,
+  projectPendingAmount,
+},
   pagination: {
     page: pageNumber,
     limit: limitNumber,
