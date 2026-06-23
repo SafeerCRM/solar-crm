@@ -1683,9 +1683,51 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
         <span className="font-semibold">Delivery Address:</span>{' '}
         {selectedOrder.order?.deliveryAddress || '-'}
       </p>
+
       <p className="mt-1">
-        Current Delivery Charge: {money(selectedOrder.order?.deliveryCharge)}
+        <span className="font-semibold">Location Source:</span>{' '}
+        {selectedOrder.order?.deliveryLocationSource || '-'}
       </p>
+
+      <p className="mt-1">
+        <span className="font-semibold">Auto Distance:</span>{' '}
+        {selectedOrder.order?.autoDeliveryDistanceKm
+          ? `${selectedOrder.order.autoDeliveryDistanceKm} km`
+          : '-'}
+      </p>
+
+      <p className="mt-1">
+        <span className="font-semibold">Auto Delivery Charge:</span>{' '}
+        {money(selectedOrder.order?.autoDeliveryCharge)}
+      </p>
+
+      <p className="mt-1">
+        <span className="font-semibold">Current Delivery Charge:</span>{' '}
+        {money(selectedOrder.order?.deliveryCharge)}
+      </p>
+
+      {selectedOrder.order?.deliveryGpsUrl && (
+        <p className="mt-2">
+          <span className="font-semibold">GPS Location:</span>{' '}
+          <a
+            href={selectedOrder.order.deliveryGpsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-blue-700 underline"
+          >
+            Open Map
+          </a>
+        </p>
+      )}
+
+      {(selectedOrder.order?.deliveryLatitude ||
+        selectedOrder.order?.deliveryLongitude) && (
+        <p className="mt-1 text-xs text-blue-600">
+          Coordinates: {selectedOrder.order?.deliveryLatitude || '-'},
+          {' '}
+          {selectedOrder.order?.deliveryLongitude || '-'}
+        </p>
+      )}
     </div>
 
     <div className="mt-3 grid gap-3 md:grid-cols-2">
