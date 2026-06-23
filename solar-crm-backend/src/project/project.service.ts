@@ -16099,13 +16099,41 @@ async createDealerOrderFinalInvoice(
   });
 
 if (savedInvoiceForOrder) {
-  savedInvoiceForOrder.invoiceNumber = `DINV-${order.id}`;
+  const manualInvoiceNumber = String(body?.invoiceNumber || '').trim();
+  const invoiceRemarks = String(body?.invoiceRemarks || '').trim();
+  const invoiceDiscountAmount = Math.max(
+    Number(body?.invoiceDiscountAmount || 0),
+    0,
+  );
+
+  savedInvoiceForOrder.invoiceNumber =
+    manualInvoiceNumber || `DINV-${order.id}`;
+
   savedInvoiceForOrder.remarks = [
     savedInvoiceForOrder.remarks || '',
+    invoiceRemarks,
     searchText,
   ]
     .filter(Boolean)
     .join('\n');
+
+  if (invoiceDiscountAmount > 0) {
+    savedInvoiceForOrder.discountAmount =
+      Number(savedInvoiceForOrder.discountAmount || 0) +
+      invoiceDiscountAmount;
+
+    savedInvoiceForOrder.totalAmount = Math.max(
+      Number(savedInvoiceForOrder.totalAmount || 0) -
+        invoiceDiscountAmount,
+      0,
+    );
+
+    savedInvoiceForOrder.pendingAmount = Math.max(
+      Number(savedInvoiceForOrder.totalAmount || 0) -
+        Number(savedInvoiceForOrder.paidAmount || 0),
+      0,
+    );
+  }
 
   await this.projectFinalInvoiceRepository.save(
     savedInvoiceForOrder,
@@ -16161,14 +16189,15 @@ if (savedInvoiceForOrder) {
         deliveryCharge;
 
       savedFinalInvoice.totalAmount =
-        Number(savedFinalInvoice.totalAmount || 0) +
-        deliveryCharge;
+  Number(savedFinalInvoice.subtotalAmount || 0) -
+  Number(savedFinalInvoice.discountAmount || 0) +
+  Number(savedFinalInvoice.gstAmount || 0);
 
-      savedFinalInvoice.pendingAmount = Math.max(
-        Number(savedFinalInvoice.totalAmount || 0) -
-          Number(savedFinalInvoice.paidAmount || 0),
-        0,
-      );
+savedFinalInvoice.pendingAmount = Math.max(
+  Number(savedFinalInvoice.totalAmount || 0) -
+    Number(savedFinalInvoice.paidAmount || 0),
+  0,
+);
 
       await this.projectFinalInvoiceRepository.save(
         savedFinalInvoice,
