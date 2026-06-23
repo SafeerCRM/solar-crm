@@ -53,6 +53,11 @@ const [projectOwners, setProjectOwners] = useState<ProjectOwnerOption[]>([]);
   const [page, setPage] = useState(1);
 const [totalPages, setTotalPages] = useState(1);
 const [totalRecords, setTotalRecords] = useState(0);
+const [summary, setSummary] = useState({
+  projectTotalAmount: 0,
+  projectCollectedAmount: 0,
+  projectPendingAmount: 0,
+});
 
   const [approvalStatus, setApprovalStatus] = useState('');
 
@@ -116,6 +121,14 @@ limit: 20,
       setRows(Array.isArray(res.data?.data) ? res.data.data : []);
       setTotalPages(res.data?.pagination?.totalPages || 1);
 setTotalRecords(res.data?.pagination?.total || 0);
+setSummary({
+  projectTotalAmount:
+    Number(res.data?.summary?.projectTotalAmount || 0),
+  projectCollectedAmount:
+    Number(res.data?.summary?.projectCollectedAmount || 0),
+  projectPendingAmount:
+    Number(res.data?.summary?.projectPendingAmount || 0),
+});
     } catch (error) {
       console.error('Failed to load payment collection:', error);
       setRows([]);
@@ -135,20 +148,7 @@ setTotalRecords(res.data?.pagination?.total || 0);
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [page]);
 
-  const totalAmount = rows.reduce(
-  (sum, item) => sum + Number(item.amount || 0),
-  0,
-);
 
-const totalPaid = rows.reduce(
-  (sum, item) =>
-    item.approvalStatus === 'APPROVED'
-      ? sum + Number(item.paidAmount || 0)
-      : sum,
-  0,
-);
-
-const totalPending = Math.max(totalAmount - totalPaid, 0);
 
   const clearFilters = () => {
     setBranch('');
@@ -176,9 +176,23 @@ const totalPending = Math.max(totalAmount - totalPaid, 0);
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <SummaryCard title="Total Amount" value={totalAmount} tone="blue" />
-        <SummaryCard title="Total Paid" value={totalPaid} tone="green" />
-        <SummaryCard title="Total Pending" value={totalPending} tone="red" />
+        <SummaryCard
+  title="Total Project Amount"
+  value={summary.projectTotalAmount}
+  tone="blue"
+/>
+
+<SummaryCard
+  title="Total Collected"
+  value={summary.projectCollectedAmount}
+  tone="green"
+/>
+
+<SummaryCard
+  title="Total Pending"
+  value={summary.projectPendingAmount}
+  tone="red"
+/>
       </div>
 
       <div className="rounded-2xl bg-white p-5 shadow">
