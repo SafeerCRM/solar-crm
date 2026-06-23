@@ -76,4 +76,7 @@ restoredByName: string;
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @Column({ default: true })
+dealerVisible: boolean;
 }

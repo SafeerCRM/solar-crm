@@ -2220,6 +2220,27 @@ return {
 };
 }
 
+async updateStockItemDealerVisibility(
+  stockItemId: number,
+  body: any,
+  user: any,
+) {
+  const stockItem =
+    await this.projectStockItemRepository.findOne({
+      where: { id: stockItemId },
+    });
+
+  if (!stockItem) {
+    throw new NotFoundException('Stock item not found');
+  }
+
+  stockItem.dealerVisible =
+    body?.dealerVisible === true ||
+    body?.dealerVisible === 'true';
+
+  return this.projectStockItemRepository.save(stockItem);
+}
+
 async receiveProjectStock(body: any, currentUser: any) {
   const materialId = Number(body?.materialId || 0);
   const branchId = body?.branchId ? Number(body.branchId) : null;

@@ -542,12 +542,15 @@ async toggleDealerKitAvailability(id: number, body: any) {
 
     async getDealerStock() {
     const stockItems = await this.stockRepository.find({
-      where: { isHidden: false },
-      order: {
-        materialName: 'ASC',
-        branchName: 'ASC',
-      },
-    });
+  where: {
+    isHidden: false,
+    dealerVisible: true,
+  },
+  order: {
+    materialName: 'ASC',
+    branchName: 'ASC',
+  },
+});
 
     const materialIds = stockItems.map((item) => item.materialId);
 

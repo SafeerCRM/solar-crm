@@ -1170,6 +1170,20 @@ listProjectStockMovements(
 }
 
 @Roles('OWNER', 'PROJECT_MANAGER', 'STOCK_MANAGER')
+@Patch('stock/items/:id/dealer-visibility')
+updateStockItemDealerVisibility(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.updateStockItemDealerVisibility(
+    id,
+    body,
+    user,
+  );
+}
+
+@Roles('OWNER', 'PROJECT_MANAGER', 'STOCK_MANAGER')
 @Patch('stock/movements/:movementId/hide')
 hideProjectStockMovement(
   @Param('movementId', ParseIntPipe)
