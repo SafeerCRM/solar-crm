@@ -937,6 +937,35 @@ const restoreStockItem = async (stockItemId: number) => {
   }
 };
 
+const updateDealerVisibility = async (
+  stockItemId: number,
+  dealerVisible: boolean,
+) => {
+  try {
+    const token = localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/stock/items/${stockItemId}/dealer-visibility`,
+      { dealerVisible },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    await loadStockItems(pagination.page);
+  } catch (error: any) {
+    console.error(error);
+    alert(
+      error?.response?.data?.message ||
+        'Failed to update dealer visibility',
+    );
+  }
+};
+
 const hideStockMovement = async (movementId: number) => {
   const hiddenReason = window.prompt(
     'Enter hide reason',
@@ -1845,6 +1874,9 @@ const consumptionTotal = consumptions.reduce(
                   Stock Value
                 </th>
                 <th className="p-2 text-left">
+  Dealer Visibility
+</th>
+                <th className="p-2 text-left">
                   Action
                 </th>
               </tr>
@@ -1854,7 +1886,7 @@ const consumptionTotal = consumptions.reduce(
               {stockItems.length === 0 && (
                 <tr>
                   <td
-                    colSpan={11}
+                    colSpan={12}
                     className="p-4 text-center text-gray-500"
                   >
                     No stock items found.
@@ -1935,6 +1967,46 @@ const consumptionTotal = consumptions.reduce(
                   <td className="p-2 font-semibold text-green-700">
                     {formatCurrency(item.stockValue)}
                   </td>
+
+                  <td className="p-2">
+  {item.dealerVisible === false ? (
+    <div className="space-y-2">
+      <span className="rounded-full bg-red-100 px-2 py-1 text-xs font-bold text-red-700">
+        Hidden From Dealer
+      </span>
+
+      {!filters.showHidden && (
+        <button
+          type="button"
+          onClick={() =>
+            updateDealerVisibility(item.id, true)
+          }
+          className="block rounded bg-green-600 px-2 py-1 text-xs text-white"
+        >
+          Show To Dealer
+        </button>
+      )}
+    </div>
+  ) : (
+    <div className="space-y-2">
+      <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-bold text-green-700">
+        Visible To Dealer
+      </span>
+
+      {!filters.showHidden && (
+        <button
+          type="button"
+          onClick={() =>
+            updateDealerVisibility(item.id, false)
+          }
+          className="block rounded bg-orange-600 px-2 py-1 text-xs text-white"
+        >
+          Hide From Dealer
+        </button>
+      )}
+    </div>
+  )}
+</td>
 
                   <td className="p-2">
   {filters.showHidden ? (
