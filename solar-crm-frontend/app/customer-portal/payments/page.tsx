@@ -32,6 +32,23 @@ const [uploadingReceipt, setUploadingReceipt] =
   const installments = dashboard?.paymentInstallments || [];
   const receipts = dashboard?.paymentReceipts || [];
   const summary = dashboard?.paymentSummary || {};
+  const paymentPercent =
+  Number(summary.totalAmount || 0) > 0
+    ? Math.min(
+        100,
+        Math.round(
+          (Number(summary.paidAmount || 0) /
+            Number(summary.totalAmount || 0)) *
+            100,
+        ),
+      )
+    : 0;
+
+const nextDueInstallment = installments.find(
+  (item: any) =>
+    Number(item.pendingAmount || 0) > 0 &&
+    item.status !== 'PAID',
+);
 
   const loadDashboard = async () => {
     try {
@@ -277,6 +294,39 @@ setReceiptPreview('');
             <HeroCard title="Pending" value={formatCurrency(summary.pendingAmount)} />
             <HeroCard title="Pending Receipts" value={String(dashboard?.pendingPaymentReceipts || 0)} />
           </div>
+
+          <div className="mt-6 rounded-3xl bg-white/20 p-5 backdrop-blur">
+  <div className="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <p className="text-sm font-bold opacity-90">
+        Payment Progress
+      </p>
+
+      <p className="mt-1 text-2xl font-black">
+        {paymentPercent}%
+      </p>
+    </div>
+
+    <div className="text-right">
+      <p className="text-xs font-bold opacity-80">
+        Paid
+      </p>
+
+      <p className="font-black">
+        {formatCurrency(summary.paidAmount)}
+      </p>
+    </div>
+  </div>
+
+  <div className="mt-4 h-4 overflow-hidden rounded-full bg-white/20">
+    <div
+      className="h-full rounded-full bg-white"
+      style={{
+        width: `${paymentPercent}%`,
+      }}
+    />
+  </div>
+</div>
         </div>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-3">
@@ -317,6 +367,42 @@ setReceiptPreview('');
           </div>
 
           <div className="space-y-6">
+
+            <div className="rounded-[2rem] bg-gradient-to-r from-blue-500 to-indigo-600 p-6 text-white shadow-xl">
+  <h2 className="text-xl font-black">
+    Next Payment Due
+  </h2>
+
+  {nextDueInstallment ? (
+    <>
+      <p className="mt-3 text-lg font-black">
+        {formatLabel(nextDueInstallment.label)}
+      </p>
+
+      <p className="mt-2 text-sm">
+        Pending:
+        {' '}
+        {formatCurrency(
+          nextDueInstallment.pendingAmount,
+        )}
+      </p>
+
+      <p className="mt-1 text-sm">
+        Due Date:
+        {' '}
+        {nextDueInstallment.dueDate
+          ? new Date(
+              nextDueInstallment.dueDate,
+            ).toLocaleDateString('en-IN')
+          : '-'}
+      </p>
+    </>
+  ) : (
+    <p className="mt-3 text-sm font-semibold">
+      All installments paid.
+    </p>
+  )}
+</div>
             <div className="rounded-[2rem] bg-white p-6 shadow-xl">
               <h2 className="text-2xl font-black text-gray-900">
                 Company Payment Details
