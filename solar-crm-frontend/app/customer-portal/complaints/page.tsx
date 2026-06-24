@@ -8,6 +8,9 @@ export default function CustomerComplaintsPage() {
   const [dashboard, setDashboard] = useState<any>(null);
   const [projects, setProjects] = useState<any[]>([]);
   const [complaints, setComplaints] = useState<any[]>([]);
+  const [selectedComplaint, setSelectedComplaint] = useState<any>(null);
+const [activities, setActivities] = useState<any[]>([]);
+const [timelineLoading, setTimelineLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedPhotos, setSelectedPhotos] = useState<File[]>([]);
 const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
@@ -51,6 +54,34 @@ const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
       console.error(error);
     }
   };
+
+  const loadComplaintActivities = async (
+  complaintId: number,
+) => {
+  try {
+    setTimelineLoading(true);
+
+    const token = localStorage.getItem('customer_token');
+
+    const res = await fetch(
+      `${API_BASE_URL}/customer-auth/complaints/${complaintId}/activities`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+
+    const data = await res.json();
+
+    setActivities(Array.isArray(data) ? data : []);
+  } catch (error) {
+    console.error(error);
+    setActivities([]);
+  } finally {
+    setTimelineLoading(false);
+  }
+};
 
   const compressImage = (file: File): Promise<File> => {
   return new Promise((resolve) => {
@@ -660,6 +691,18 @@ setAudioPreview('');
                           </p>
                         </div>
                       )}
+
+                      <div className="mt-4 flex justify-end">
+  <button
+    onClick={async () => {
+      setSelectedComplaint(item);
+      await loadComplaintActivities(item.id);
+    }}
+    className="rounded-2xl bg-blue-600 px-4 py-2 text-sm font-black text-white"
+  >
+    View Timeline
+  </button>
+</div>
                     </div>
                   ))
                 )}
@@ -668,6 +711,71 @@ setAudioPreview('');
           </div>
         </div>
       </div>
+
+      {selectedComplaint && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+    <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[2rem] bg-white p-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-black">
+          Complaint Timeline
+        </h2>
+
+        <button
+          onClick={() => {
+            setSelectedComplaint(null);
+            setActivities([]);
+          }}
+          className="rounded-xl bg-red-100 px-4 py-2 font-black text-red-700"
+        >
+          Close
+        </button>
+      </div>
+
+      <div className="mt-6 space-y-4">
+        {timelineLoading ? (
+          <div className="text-center font-semibold">
+            Loading timeline...
+          </div>
+        ) : activities.length === 0 ? (
+          <div className="text-center font-semibold text-gray-500">
+            No timeline available.
+          </div>
+        ) : (
+          activities.map((activity) => (
+            <div
+              key={activity.id}
+              className="rounded-3xl border bg-gray-50 p-4"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="font-black text-gray-900">
+                  {activity.activityTitle}
+                </p>
+
+                <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-black text-orange-700">
+                  {activity.activityType}
+                </span>
+              </div>
+
+              {activity.activityDescription && (
+                <p className="mt-2 text-sm text-gray-600">
+                  {activity.activityDescription}
+                </p>
+              )}
+
+              <div className="mt-3 text-xs text-gray-500">
+                By: {activity.performedByName || 'System'}
+              </div>
+
+              <div className="mt-1 text-xs text-gray-500">
+                {new Date(activity.createdAt).toLocaleString('en-IN')}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  </div>
+)}
     </main>
   );
 }
