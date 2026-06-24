@@ -21,6 +21,7 @@ import { randomUUID } from 'crypto';
 import { ProjectExecutionActivity } from '../project/project-execution-activity.entity';
 import { ProjectPaymentInstallment } from '../project/project-payment-installment.entity';
 import { ProjectDocument } from '../project/project-document.entity';
+import { StaffMember } from '../staff/staff-member.entity';
 
 @Injectable()
 export class CustomerPortalService {
@@ -60,6 +61,9 @@ private readonly complaintAttachmentRepository: Repository<CustomerComplaintAtta
 
     @InjectRepository(CustomerCleaningReminder)
     private readonly cleaningReminderRepository: Repository<CustomerCleaningReminder>,
+
+    @InjectRepository(StaffMember)
+private readonly staffMemberRepository: Repository<StaffMember>,
   ) {}
 
   async getCustomerDashboard(customerId: number) {
@@ -1104,5 +1108,19 @@ async getCustomerDocuments(customerId: number, query: any) {
     data,
     total: data.length,
   };
+}
+
+async getCustomerStaffDirectory() {
+  return this.staffMemberRepository.find({
+    where: {
+      visibleToCustomer: true,
+      isActive: true,
+      isHidden: false,
+    } as any,
+    order: {
+      department: 'ASC',
+      fullName: 'ASC',
+    } as any,
+  });
 }
 }
