@@ -466,6 +466,12 @@ setReceiptPreview('');
     </p>
   )}
 </div>
+
+{!activePaymentDetail?.id && (
+  <div className="mb-4 rounded-2xl bg-yellow-50 p-3 text-sm font-bold text-yellow-800">
+    Payment details are not available yet. Please contact Aditya Solars before making payment.
+  </div>
+)}
             <div className="rounded-[2rem] bg-white p-6 shadow-xl">
               <h2 className="text-2xl font-black text-gray-900">
                 Company Payment Details
@@ -474,7 +480,7 @@ setReceiptPreview('');
               <div className="mt-5 space-y-3">
                 <PaymentInfo
   label="Account Name"
-  value={activePaymentDetail.accountName || 'Aditya Solars'}
+  value={activePaymentDetail.accountName || '-'}
 />
 <PaymentInfo
   label="Bank"
