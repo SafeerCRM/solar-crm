@@ -363,11 +363,13 @@ const activityFeed = [
               title="Cleaning Calendar"
               text="Manage cleaning schedule and reminders."
             />
-            <ActionCard
-              icon="👷"
-              title="Staff Directory"
-              text="View project owner, manager, contractor and department contacts."
-            />
+            <a href="/customer-portal/staff-directory">
+  <ActionCard
+    icon="👷"
+    title="Staff Directory"
+    text="View project owner, manager, contractor and department contacts."
+  />
+</a>
             <ActionCard
               icon="📜"
               title="Policies"
