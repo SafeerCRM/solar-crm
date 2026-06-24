@@ -916,6 +916,38 @@ hideAccountExpense(
   );
 }
 
+@Post('account-expenses/request')
+createMyAccountExpenseRequest(
+  @Body() body: any,
+  @Req() req: any,
+) {
+  return this.projectService.createAccountExpense(
+    body,
+    req.user,
+  );
+}
+
+@Get('account-expenses/my')
+getMyAccountExpenses(
+  @Query() query: any,
+  @Req() req: any,
+) {
+  return this.projectService.getMyAccountExpenses(
+    query,
+    req.user,
+  );
+}
+
+@Post('account-expenses/proof/upload')
+@UseInterceptors(FilesInterceptor('files', 1))
+async uploadAccountExpenseProof(
+  @UploadedFiles() files: any[],
+) {
+  const file = files?.[0];
+
+  return this.projectService.uploadAccountExpenseProof(file);
+}
+
 @Roles(
   'OWNER',
   'PROJECT_MANAGER',

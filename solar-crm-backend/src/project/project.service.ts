@@ -5039,6 +5039,12 @@ async createAccountExpense(
     );
   }
 
+  const purpose = String(body?.purpose || '').trim();
+
+if (!purpose) {
+  throw new BadRequestException('Purpose is required');
+}
+
   const expenseData: Partial<ProjectAccountExpense> = {
   expenseType:
     Object.values(ProjectAccountExpenseType).includes(
@@ -5048,6 +5054,9 @@ async createAccountExpense(
       : ProjectAccountExpenseType.OTHER,
 
   amount,
+
+  purpose,
+proofUrl: body?.proofUrl || null,
 
   remarks: body?.remarks || null,
 
@@ -5269,6 +5278,66 @@ async listAccountExpenses() {
       createdAt: 'DESC',
     },
   });
+}
+
+async getMyAccountExpenses(query: any, currentUser: any) {
+  const page = Math.max(Number(query?.page || 1), 1);
+  const limit = Math.min(
+    Math.max(Number(query?.limit || 20), 1),
+    100,
+  );
+  const skip = (page - 1) * limit;
+
+  const currentUserId = Number(
+    currentUser?.id || currentUser?.userId || currentUser?.sub,
+  );
+
+  const qb = this.projectAccountExpenseRepository
+    .createQueryBuilder('expense')
+    .where('expense.isHidden = false')
+    .andWhere('expense.createdBy = :currentUserId', {
+      currentUserId,
+    });
+
+  if (query?.status) {
+    qb.andWhere('expense.approvalStatus = :status', {
+      status: query.status,
+    });
+  }
+
+  if (query?.expenseType) {
+    qb.andWhere('expense.expenseType = :expenseType', {
+      expenseType: query.expenseType,
+    });
+  }
+
+  if (query?.fromDate) {
+    qb.andWhere('expense.createdAt >= :fromDate', {
+      fromDate: query.fromDate,
+    });
+  }
+
+  if (query?.toDate) {
+    qb.andWhere('expense.createdAt <= :toDate', {
+      toDate: query.toDate,
+    });
+  }
+
+  qb.orderBy('expense.createdAt', 'DESC')
+    .skip(skip)
+    .take(limit);
+
+  const [data, total] = await qb.getManyAndCount();
+
+  return {
+    data,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit) || 1,
+    },
+  };
 }
 
 async getMonthlyProfitReport(query: any) {
@@ -17155,6 +17224,80 @@ async uploadDealerPaymentReceipt(file: any) {
 
   if (uploadResult.error) {
     throw new BadRequestException(uploadResult.error.message);
+  }
+
+  const publicUrl = supabase.storage
+    .from(bucket)
+    .getPublicUrl(filePath).data.publicUrl;
+
+  return {
+    fileUrl: publicUrl,
+  };
+}
+
+async uploadAccountExpenseProof(file: any) {
+  if (!file) {
+    throw new BadRequestException('Expense proof file is required');
+  }
+
+  const mimeType = String(file.mimetype || '');
+
+  const isImage = mimeType.startsWith('image/');
+  const isPdf = mimeType === 'application/pdf';
+
+  if (!isImage && !isPdf) {
+    throw new BadRequestException(
+      'Only image or PDF proof files are allowed',
+    );
+  }
+
+  const maxSize = 20 * 1024 * 1024;
+
+  if (file.size > maxSize) {
+    throw new BadRequestException(
+      'Proof file must be less than 20 MB',
+    );
+  }
+
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const bucket = 'project-documents';
+
+  if (!supabaseUrl || !serviceKey) {
+    throw new BadRequestException(
+      'Supabase storage is not configured',
+    );
+  }
+
+  const { createClient } = await import(
+    '@supabase/supabase-js'
+  );
+
+  const supabase = createClient(
+    supabaseUrl,
+    serviceKey,
+  );
+
+  const extension =
+    String(file.originalname || '')
+      .split('.')
+      .pop() || 'file';
+
+  const filePath = `account-expense-proofs/${Date.now()}-${Math.round(
+    Math.random() * 1e9,
+  )}.${extension}`;
+
+  const uploadResult = await supabase.storage
+    .from(bucket)
+    .upload(filePath, file.buffer, {
+      contentType: mimeType,
+    });
+
+  if (uploadResult.error) {
+    throw new BadRequestException(
+      uploadResult.error.message,
+    );
   }
 
   const publicUrl = supabase.storage

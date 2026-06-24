@@ -11,6 +11,16 @@ export enum ProjectAccountExpenseType {
   CONTRACTOR_PAYMENT = 'CONTRACTOR_PAYMENT',
   LABOUR_PAYMENT = 'LABOUR_PAYMENT',
   TRANSPORTATION = 'TRANSPORTATION',
+
+  TRAVEL = 'TRAVEL',
+  FOOD = 'FOOD',
+  FUEL = 'FUEL',
+  MOBILE_RECHARGE = 'MOBILE_RECHARGE',
+  OFFICE_SUPPLIES = 'OFFICE_SUPPLIES',
+  SITE_PURCHASE = 'SITE_PURCHASE',
+  REPAIR_MAINTENANCE = 'REPAIR_MAINTENANCE',
+  CUSTOMER_VISIT = 'CUSTOMER_VISIT',
+
   SALARY = 'SALARY',
   INCENTIVE = 'INCENTIVE',
   ADVANCE_SALARY = 'ADVANCE_SALARY',
@@ -36,6 +46,12 @@ export class ProjectAccountExpense {
 
   @Column({ type: 'float', default: 0 })
   amount: number;
+
+  @Column({ type: 'text', nullable: true })
+purpose: string;
+
+@Column({ type: 'text', nullable: true })
+proofUrl: string;
 
   @Column({ type: 'text', nullable: true })
   remarks: string;
