@@ -60,4 +60,19 @@ export class CustomerCleaningReminder {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @Column({ type: 'boolean', default: false })
+isHidden: boolean;
+
+@Column({ type: 'text', nullable: true })
+hiddenReason: string;
+
+@Column({ type: 'timestamp', nullable: true })
+hiddenAt: Date;
+
+@Column({ nullable: true })
+hiddenBy: number;
+
+@Column({ nullable: true })
+hiddenByName: string;
 }

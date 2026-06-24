@@ -134,6 +134,26 @@ updateCleaningReminder(
   return this.service.updateCleaningReminder(id, body, user);
 }
 
+@Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'MAINTENANCE_MANAGER')
+@Patch('cleaning-reminders/:id/hide')
+hideCleaningReminder(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.service.hideCleaningReminder(id, body, user);
+}
+
+@Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'MAINTENANCE_MANAGER')
+@Patch('cleaning-reminders/:id/restore')
+restoreCleaningReminder(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.service.restoreCleaningReminder(id, body, user);
+}
+
 @Roles(
   'OWNER',
   'CUSTOMER_MANAGER',

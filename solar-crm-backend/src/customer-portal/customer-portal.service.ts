@@ -1142,9 +1142,19 @@ async createCleaningReminder(body: any) {
 }
 
 async listCleaningReminders(query: any) {
+  const page = Number(query?.page || 1);
+  const limit = Math.min(Number(query?.limit || 20), 100);
+  const skip = (page - 1) * limit;
+
   const qb = this.cleaningReminderRepository
     .createQueryBuilder('cleaning')
     .orderBy('cleaning.cleaningDate', 'DESC');
+
+  if (query?.showHidden === 'true') {
+    qb.where('1 = 1');
+  } else {
+    qb.where('cleaning.isHidden = false');
+  }
 
   if (query?.customerId) {
     qb.andWhere('cleaning.customerId = :customerId', {
@@ -1164,7 +1174,44 @@ async listCleaningReminders(query: any) {
     });
   }
 
-  return qb.getMany();
+  if (query?.customerSearch) {
+    const search = `%${String(query.customerSearch).toLowerCase()}%`;
+
+    qb.andWhere(
+      `
+      LOWER(cleaning.customerCode) LIKE :search
+      OR LOWER(cleaning.projectName) LIKE :search
+      `,
+      { search },
+    );
+  }
+
+  if (query?.fromDate) {
+    qb.andWhere('cleaning.cleaningDate >= :fromDate', {
+      fromDate: new Date(query.fromDate),
+    });
+  }
+
+  if (query?.toDate) {
+    const endDate = new Date(query.toDate);
+    endDate.setHours(23, 59, 59, 999);
+
+    qb.andWhere('cleaning.cleaningDate <= :toDate', {
+      toDate: endDate,
+    });
+  }
+
+  qb.skip(skip).take(limit);
+
+  const [data, total] = await qb.getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
 }
 
 async updateCleaningReminder(id: number, body: any, user: any) {
@@ -1205,5 +1252,41 @@ async updateCleaningReminder(id: number, body: any, user: any) {
   });
 
   return saved;
+}
+
+async hideCleaningReminder(id: number, body: any, user: any) {
+  const reminder = await this.cleaningReminderRepository.findOne({
+    where: { id },
+  });
+
+  if (!reminder) {
+    throw new NotFoundException('Cleaning reminder not found');
+  }
+
+  (reminder as any).isHidden = true;
+  (reminder as any).hiddenReason = body?.hiddenReason || body?.reason || '';
+  (reminder as any).hiddenAt = new Date();
+  (reminder as any).hiddenBy = user?.id || null;
+  (reminder as any).hiddenByName = user?.name || user?.email || '';
+
+  return this.cleaningReminderRepository.save(reminder);
+}
+
+async restoreCleaningReminder(id: number, body: any, user: any) {
+  const reminder = await this.cleaningReminderRepository.findOne({
+    where: { id },
+  });
+
+  if (!reminder) {
+    throw new NotFoundException('Cleaning reminder not found');
+  }
+
+  (reminder as any).isHidden = false;
+  (reminder as any).hiddenReason = '';
+  (reminder as any).hiddenAt = null;
+  (reminder as any).hiddenBy = null;
+  (reminder as any).hiddenByName = '';
+
+  return this.cleaningReminderRepository.save(reminder);
 }
 }
