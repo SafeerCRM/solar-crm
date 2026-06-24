@@ -1514,4 +1514,25 @@ async getCustomerComplaintActivities(
     order: { createdAt: 'ASC' },
   });
 }
+
+async markAllCustomerNotificationsRead(customerId: number) {
+  const notifications = await this.notificationRepository.find({
+    where: {
+      customerId,
+      isRead: false,
+    },
+  });
+
+  for (const notification of notifications) {
+    notification.isRead = true;
+    notification.readAt = new Date();
+  }
+
+  await this.notificationRepository.save(notifications);
+
+  return {
+    message: 'All notifications marked as read',
+    updated: notifications.length,
+  };
+}
 }
