@@ -448,30 +448,83 @@ serviceTime: item.serviceDate
                   </p>
 
                   {Array.isArray(item.attachments) && item.attachments.length > 0 && (
-                    <div className="mt-4">
-                      <p className="mb-2 text-sm font-black text-gray-800">
-                        Customer Photos
-                      </p>
+  <div className="mt-4 space-y-4">
+    {item.attachments.some(
+      (attachment: any) =>
+        String(attachment.mimeType || '').startsWith('image/') ||
+        String(attachment.attachmentType || '') === 'IMAGE',
+    ) && (
+      <div>
+        <p className="mb-2 text-sm font-black text-gray-800">
+          Customer Photos
+        </p>
 
-                      <div className="grid grid-cols-3 gap-3 md:grid-cols-5">
-                        {item.attachments.map((attachment) => (
-                          <a
-                            key={attachment.id || attachment.fileUrl}
-                            href={attachment.fileUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="overflow-hidden rounded-2xl border bg-gray-50 shadow"
-                          >
-                            <img
-                              src={attachment.fileUrl}
-                              alt={attachment.fileName || 'Complaint photo'}
-                              className="h-24 w-full object-cover"
-                            />
-                          </a>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+        <div className="grid grid-cols-3 gap-3 md:grid-cols-5">
+          {item.attachments
+            .filter(
+              (attachment: any) =>
+                String(attachment.mimeType || '').startsWith('image/') ||
+                String(attachment.attachmentType || '') === 'IMAGE',
+            )
+            .map((attachment: any) => (
+              <a
+                key={attachment.id || attachment.fileUrl}
+                href={attachment.fileUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="overflow-hidden rounded-2xl border bg-gray-50 shadow"
+              >
+                <img
+                  src={attachment.fileUrl}
+                  alt={attachment.fileName || 'Complaint photo'}
+                  className="h-24 w-full object-cover"
+                />
+              </a>
+            ))}
+        </div>
+      </div>
+    )}
+
+    {item.attachments.some(
+      (attachment: any) =>
+        String(attachment.mimeType || '').startsWith('audio/') ||
+        String(attachment.attachmentType || '') === 'AUDIO' ||
+        String(attachment.mimeType || '') === 'video/webm',
+    ) && (
+      <div>
+        <p className="mb-2 text-sm font-black text-gray-800">
+          Customer Voice Notes
+        </p>
+
+        <div className="space-y-3">
+          {item.attachments
+            .filter(
+              (attachment: any) =>
+                String(attachment.mimeType || '').startsWith('audio/') ||
+                String(attachment.attachmentType || '') === 'AUDIO' ||
+                String(attachment.mimeType || '') === 'video/webm',
+            )
+            .map((attachment: any) => (
+              <div
+                key={attachment.id || attachment.fileUrl}
+                className="rounded-2xl bg-blue-50 p-3"
+              >
+                <p className="mb-2 text-xs font-black text-blue-700">
+                  {attachment.fileName || 'Voice Note'}
+                </p>
+
+                <audio
+                  controls
+                  src={attachment.fileUrl}
+                  className="w-full"
+                />
+              </div>
+            ))}
+        </div>
+      </div>
+    )}
+  </div>
+)}
                 </div>
 
                 <div className="rounded-[2rem] bg-gray-50 p-4">
