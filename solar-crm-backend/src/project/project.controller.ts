@@ -111,6 +111,8 @@ updateDocumentCustomerVisibility(
   );
 }
 
+@Roles('OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER', 'STOCK_MANAGER')
+
 @Post('material-master')
 createMaterialMaster(@Body() body: any) {
   return this.projectService.createMaterialMaster(body);
@@ -125,6 +127,8 @@ getMaterialMasters(
   );
 }
 
+@Roles('OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER', 'STOCK_MANAGER')
+
 @Patch('material-master/:id')
 updateMaterialMaster(
   @Param('id') id: string,
@@ -136,10 +140,14 @@ updateMaterialMaster(
   );
 }
 
+@Roles('OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER', 'STOCK_MANAGER')
+
 @Patch('material-master/:id/delete')
 deleteMaterialMaster(@Param('id') id: string) {
   return this.projectService.deleteMaterialMaster(Number(id));
 }
+
+@Roles('OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER', 'STOCK_MANAGER')
 
 @Patch('material-master/:id/enable')
 enableMaterialMaster(@Param('id') id: string) {
