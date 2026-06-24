@@ -257,7 +257,7 @@ upcomingExecutionActivities: executionActivities.filter(
     activity.status !== 'COMPLETED' &&
     activity.status !== 'CANCELLED',
 ).slice(0, 10),
-paymentInstallments,
+paymentInstallments: validPaymentInstallments,
 paymentSummary,
 customerDocuments,
 totalCustomerDocuments: customerDocuments.length,
