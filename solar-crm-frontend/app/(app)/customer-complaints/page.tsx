@@ -63,6 +63,9 @@ export default function CustomerComplaintsAdminPage() {
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState<number | null>(null);
 
+  const [activities, setActivities] = useState<any[]>([]);
+const [timelineLoading, setTimelineLoading] = useState(false);
+
   const [summary, setSummary] = useState({
     total: 0,
     open: 0,
@@ -191,6 +194,34 @@ serviceTime: item.serviceDate
       setSavingId(null);
     }
   };
+
+  const loadComplaintActivities = async (
+  complaintId: number,
+) => {
+  try {
+    setTimelineLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/customer-portal/complaints/${complaintId}/activities`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+
+    setActivities(
+      Array.isArray(res.data) ? res.data : [],
+    );
+  } catch (error) {
+    console.error(error);
+    setActivities([]);
+  } finally {
+    setTimelineLoading(false);
+  }
+};
 
   const applyFilters = () => {
     setPage(1);
@@ -433,7 +464,10 @@ serviceTime: item.serviceDate
                   </div>
 
                   <button
-                    onClick={() => setSelectedComplaint(item)}
+                    onClick={() => {
+  setSelectedComplaint(item);
+  loadComplaintActivities(item.id);
+}}
                     className="rounded-2xl bg-gray-900 px-4 py-2 text-sm font-black text-white hover:bg-black"
                   >
                     View Detail
