@@ -108,22 +108,44 @@ private readonly staffMemberRepository: Repository<StaffMember>,
       .getMany()
   : [];
 
+const projectTotalAmount = projects.reduce((sum, project: any) => {
+  const projectAmount =
+    Number(project.finalCost || 0) ||
+    Number(project.netAmount || 0) ||
+    Number(project.projectCost || 0);
+
+  return sum + projectAmount;
+}, 0);
+
+const validPaymentInstallments = paymentInstallments.filter((item: any) => {
+  if (item.isHidden) return false;
+  if (item.status === 'CANCELLED') return false;
+  if (item.approvalStatus === 'REJECTED') return false;
+
+  return true;
+});
+
+const paidAmount = validPaymentInstallments
+  .filter((item: any) => item.approvalStatus === 'APPROVED')
+  .reduce(
+    (sum, item: any) => sum + Number(item.paidAmount || 0),
+    0,
+  );
+
+const scheduledAmount = validPaymentInstallments.reduce(
+  (sum, item: any) => sum + Number(item.amount || 0),
+  0,
+);
+
 const paymentSummary = {
-  totalAmount: paymentInstallments.reduce(
-    (sum, item) => sum + Number(item.amount || 0),
-    0,
-  ),
-  paidAmount: paymentInstallments.reduce(
-    (sum, item) => sum + Number(item.paidAmount || 0),
-    0,
-  ),
-  pendingAmount: paymentInstallments.reduce(
-    (sum, item) => sum + Number(item.pendingAmount || 0),
-    0,
-  ),
+  totalAmount: projectTotalAmount,
+  paidAmount,
+  pendingAmount: Math.max(projectTotalAmount - paidAmount, 0),
+  scheduledAmount,
+  remainingToSchedule: Math.max(projectTotalAmount - scheduledAmount, 0),
   totalInstallments: paymentInstallments.length,
-  pendingInstallments: paymentInstallments.filter(
-    (item) => item.status !== 'PAID' && item.status !== 'CANCELLED',
+  pendingInstallments: validPaymentInstallments.filter(
+    (item: any) => item.status !== 'PAID',
   ).length,
 };
 
