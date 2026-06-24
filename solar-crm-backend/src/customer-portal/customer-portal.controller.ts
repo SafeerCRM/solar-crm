@@ -118,6 +118,22 @@ updatePaymentReceipt(
   return this.service.updatePaymentReceipt(id, body, user);
 }
 
+@Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'MAINTENANCE_MANAGER')
+@Get('cleaning-reminders')
+listCleaningReminders(@Query() query: any) {
+  return this.service.listCleaningReminders(query);
+}
+
+@Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'MAINTENANCE_MANAGER')
+@Patch('cleaning-reminders/:id')
+updateCleaningReminder(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.service.updateCleaningReminder(id, body, user);
+}
+
 @Roles(
   'OWNER',
   'CUSTOMER_MANAGER',

@@ -1123,4 +1123,87 @@ async getCustomerStaffDirectory() {
     } as any,
   });
 }
+
+async createCleaningReminder(body: any) {
+  const reminder = this.cleaningReminderRepository.create({
+    customerId: Number(body.customerId),
+    customerCode: body.customerCode || '',
+    projectId: Number(body.projectId),
+    projectName: body.projectName || '',
+    cleaningDate: new Date(body.cleaningDate),
+    nextCleaningDate: body.nextCleaningDate
+      ? new Date(body.nextCleaningDate)
+      : undefined,
+    status: body.status || 'PENDING',
+    remarks: body.remarks || '',
+  });
+
+  return this.cleaningReminderRepository.save(reminder);
+}
+
+async listCleaningReminders(query: any) {
+  const qb = this.cleaningReminderRepository
+    .createQueryBuilder('cleaning')
+    .orderBy('cleaning.cleaningDate', 'DESC');
+
+  if (query?.customerId) {
+    qb.andWhere('cleaning.customerId = :customerId', {
+      customerId: Number(query.customerId),
+    });
+  }
+
+  if (query?.projectId) {
+    qb.andWhere('cleaning.projectId = :projectId', {
+      projectId: Number(query.projectId),
+    });
+  }
+
+  if (query?.status) {
+    qb.andWhere('cleaning.status = :status', {
+      status: query.status,
+    });
+  }
+
+  return qb.getMany();
+}
+
+async updateCleaningReminder(id: number, body: any, user: any) {
+  const reminder = await this.cleaningReminderRepository.findOne({
+    where: { id },
+  });
+
+  if (!reminder) {
+    throw new NotFoundException('Cleaning reminder not found');
+  }
+
+  reminder.status = body.status || reminder.status;
+  reminder.cleaningDate = body.cleaningDate
+    ? new Date(body.cleaningDate)
+    : reminder.cleaningDate;
+  reminder.nextCleaningDate = body.nextCleaningDate
+    ? new Date(body.nextCleaningDate)
+    : reminder.nextCleaningDate;
+  reminder.remarks = body.remarks || reminder.remarks;
+
+  if (body.status === 'COMPLETED') {
+    reminder.completedBy = user?.id || null;
+    reminder.completedByName = user?.name || user?.email || '';
+    reminder.completedAt = new Date();
+  }
+
+  const saved = await this.cleaningReminderRepository.save(reminder);
+
+  await this.createCustomerNotification({
+    customerId: saved.customerId,
+    customerCode: saved.customerCode,
+    projectId: saved.projectId,
+    notificationType: 'CLEANING_REMINDER',
+    title: 'Cleaning Schedule Updated',
+    message: `Your cleaning schedule is now ${saved.status}.`,
+    relatedEntityType: 'CLEANING_REMINDER',
+    relatedEntityId: saved.id,
+  });
+
+  return saved;
+}
 }

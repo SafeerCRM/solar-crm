@@ -122,6 +122,32 @@ async getCustomerStaffDirectory(@Req() req: any) {
   return this.service.getCustomerStaffDirectory();
 }
 
+@Post('cleaning-reminders')
+async createCustomerCleaningReminder(
+  @Req() req: any,
+  @Body() body: any,
+) {
+  const authHeader = req.headers?.authorization || '';
+  const token = authHeader.replace('Bearer ', '');
+
+  if (!token) {
+    throw new UnauthorizedException('Customer token missing');
+  }
+
+  const payload: any = jwt.verify(token, 'mysecretkey');
+
+  if (!payload?.customerId) {
+    throw new UnauthorizedException('Invalid customer token');
+  }
+
+  return this.service.createCleaningReminder({
+    ...body,
+    customerId: Number(payload.customerId),
+    customerCode: payload.customerCode,
+    status: 'PENDING',
+  });
+}
+
 @Post('referrals')
 async createCustomerReferral(
   @Req() req: any,
