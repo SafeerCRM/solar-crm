@@ -104,6 +104,30 @@ async uploadComplaintAttachments(
   );
 }
 
+@Get('complaints/:id/activities')
+async getCustomerComplaintActivities(
+  @Req() req: any,
+  @Param('id', ParseIntPipe) id: number,
+) {
+  const authHeader = req.headers?.authorization || '';
+  const token = authHeader.replace('Bearer ', '');
+
+  if (!token) {
+    throw new UnauthorizedException('Customer token missing');
+  }
+
+  const payload: any = jwt.verify(token, 'mysecretkey');
+
+  if (!payload?.customerId) {
+    throw new UnauthorizedException('Invalid customer token');
+  }
+
+  return this.service.getCustomerComplaintActivities(
+    id,
+    Number(payload.customerId),
+  );
+}
+
 @Get('staff-directory')
 async getCustomerStaffDirectory(@Req() req: any) {
   const authHeader = req.headers?.authorization || '';

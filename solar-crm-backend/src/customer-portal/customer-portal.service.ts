@@ -1492,4 +1492,26 @@ async addComplaintActivity(body: any, user?: any) {
 
   return this.complaintActivityRepository.save(activity);
 }
+
+async getCustomerComplaintActivities(
+  complaintId: number,
+  customerId: number,
+) {
+  const complaint = await this.complaintRepository.findOne({
+    where: {
+      id: complaintId,
+      customerId,
+      isHidden: false,
+    },
+  });
+
+  if (!complaint) {
+    throw new NotFoundException('Complaint not found');
+  }
+
+  return this.complaintActivityRepository.find({
+    where: { complaintId },
+    order: { createdAt: 'ASC' },
+  });
+}
 }
