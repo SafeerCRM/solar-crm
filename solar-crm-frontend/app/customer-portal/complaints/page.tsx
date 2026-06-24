@@ -12,6 +12,10 @@ export default function CustomerComplaintsPage() {
   const [selectedPhotos, setSelectedPhotos] = useState<File[]>([]);
 const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
 const [uploadingPhotos, setUploadingPhotos] = useState(false);
+const [selectedAudio, setSelectedAudio] = useState<File | null>(null);
+const [audioPreview, setAudioPreview] = useState('');
+const [recording, setRecording] = useState(false);
+const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
 
   const [form, setForm] = useState({
     projectId: '',
@@ -149,10 +153,81 @@ const removePhoto = (index: number) => {
   setPhotoPreviews((prev) => prev.filter((_, i) => i !== index));
 };
 
-const uploadComplaintPhotos = async () => {
-  if (!selectedPhotos.length) {
-    return [];
+const handleAudioSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const file = event.target.files?.[0] || null;
+
+  if (!file) return;
+
+  setSelectedAudio(file);
+  setAudioPreview(URL.createObjectURL(file));
+
+  event.target.value = '';
+};
+
+const removeAudio = () => {
+  setSelectedAudio(null);
+  setAudioPreview('');
+};
+
+const startRecording = async () => {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: true,
+    });
+
+    const recorder = new MediaRecorder(stream, {
+      mimeType: 'audio/webm',
+    });
+
+    const chunks: BlobPart[] = [];
+
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        chunks.push(event.data);
+      }
+    };
+
+    recorder.onstop = () => {
+      const blob = new Blob(chunks, {
+        type: 'audio/webm',
+      });
+
+      const file = new File(
+        [blob],
+        `complaint-audio-${Date.now()}.webm`,
+        {
+          type: 'audio/webm',
+        },
+      );
+
+      setSelectedAudio(file);
+      setAudioPreview(URL.createObjectURL(file));
+
+      stream.getTracks().forEach((track) => track.stop());
+    };
+
+    recorder.start();
+    setMediaRecorder(recorder);
+    setRecording(true);
+  } catch (error) {
+    console.error(error);
+    alert('Microphone permission is required to record audio.');
   }
+};
+
+const stopRecording = () => {
+  if (mediaRecorder) {
+    mediaRecorder.stop();
+  }
+
+  setRecording(false);
+  setMediaRecorder(null);
+};
+
+const uploadComplaintPhotos = async () => {
+  if (!selectedPhotos.length && !selectedAudio) {
+  return [];
+}
 
   const token = localStorage.getItem('customer_token');
 
@@ -161,6 +236,10 @@ const uploadComplaintPhotos = async () => {
   selectedPhotos.forEach((file) => {
     formData.append('files', file);
   });
+
+  if (selectedAudio) {
+  formData.append('files', selectedAudio);
+}
 
   setUploadingPhotos(true);
 
@@ -238,6 +317,8 @@ const uploadComplaintPhotos = async () => {
 
       setSelectedPhotos([]);
 setPhotoPreviews([]);
+setSelectedAudio(null);
+setAudioPreview('');
 
       loadDashboard();
     } catch (error) {
@@ -253,7 +334,7 @@ setPhotoPreviews([]);
       <div className="mx-auto max-w-7xl px-4 py-6">
         <div className="rounded-[2rem] bg-gradient-to-r from-orange-500 via-yellow-500 to-emerald-500 p-6 text-white shadow-2xl">
           <h1 className="text-4xl font-black">
-            🛠 Complaints & Service Support
+            🛠 Complaints & Maintenance Support
           </h1>
 
           <p className="mt-2 text-white/90">
@@ -384,6 +465,63 @@ setPhotoPreviews([]);
   )}
 </div>
 
+<div className="rounded-[2rem] border-2 border-dashed border-blue-200 bg-blue-50 p-4">
+  <div className="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <p className="text-sm font-black text-blue-800">
+        🎙 Add Voice Note
+      </p>
+      <p className="mt-1 text-xs text-blue-700">
+        Record or upload audio if typing the issue is difficult.
+      </p>
+    </div>
+
+    <div className="flex flex-wrap gap-2">
+      {!recording ? (
+        <button
+          type="button"
+          onClick={startRecording}
+          className="rounded-2xl bg-blue-600 px-4 py-3 text-xs font-black text-white"
+        >
+          Record
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={stopRecording}
+          className="rounded-2xl bg-red-600 px-4 py-3 text-xs font-black text-white"
+        >
+          Stop
+        </button>
+      )}
+
+      <label className="cursor-pointer rounded-2xl bg-gray-900 px-4 py-3 text-xs font-black text-white">
+        Upload Audio
+        <input
+          type="file"
+          accept="audio/*,video/webm"
+          onChange={handleAudioSelect}
+          className="hidden"
+        />
+      </label>
+    </div>
+  </div>
+
+  {audioPreview && (
+    <div className="mt-4 rounded-2xl bg-white p-3">
+      <audio controls src={audioPreview} className="w-full" />
+
+      <button
+        type="button"
+        onClick={removeAudio}
+        className="mt-3 rounded-xl bg-red-100 px-4 py-2 text-xs font-black text-red-700"
+      >
+        Remove Audio
+      </button>
+    </div>
+  )}
+</div>
+
                 <button
                   disabled={loading}
                   onClick={createComplaint}
@@ -427,22 +565,55 @@ setPhotoPreviews([]);
                           </p>
 
                           {Array.isArray(item.attachments) && item.attachments.length > 0 && (
-  <div className="mt-4 grid grid-cols-3 gap-3">
-    {item.attachments.map((attachment: any) => (
-      <a
-        key={attachment.id || attachment.fileUrl}
-        href={attachment.fileUrl}
-        target="_blank"
-        rel="noreferrer"
-        className="overflow-hidden rounded-2xl border bg-white shadow"
-      >
-        <img
-          src={attachment.fileUrl}
-          alt={attachment.fileName || 'Complaint attachment'}
-          className="h-24 w-full object-cover"
-        />
-      </a>
-    ))}
+  <div className="mt-4 space-y-3">
+
+    <div className="grid grid-cols-3 gap-3">
+      {item.attachments
+        .filter(
+          (attachment: any) =>
+            String(attachment.mimeType || '').startsWith('image/') ||
+            String(attachment.attachmentType || '') === 'IMAGE',
+        )
+        .map((attachment: any) => (
+          <a
+            key={attachment.id || attachment.fileUrl}
+            href={attachment.fileUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="overflow-hidden rounded-2xl border bg-white shadow"
+          >
+            <img
+              src={attachment.fileUrl}
+              alt={attachment.fileName || 'Complaint attachment'}
+              className="h-24 w-full object-cover"
+            />
+          </a>
+        ))}
+    </div>
+
+    {item.attachments
+      .filter(
+        (attachment: any) =>
+          String(attachment.mimeType || '').startsWith('audio/') ||
+          String(attachment.attachmentType || '') === 'AUDIO' ||
+          String(attachment.mimeType || '') === 'video/webm',
+      )
+      .map((attachment: any) => (
+        <div
+          key={attachment.id || attachment.fileUrl}
+          className="rounded-2xl bg-blue-50 p-3"
+        >
+          <p className="mb-2 text-xs font-black text-blue-700">
+            Voice Note
+          </p>
+
+          <audio
+            controls
+            src={attachment.fileUrl}
+            className="w-full"
+          />
+        </div>
+      ))}
   </div>
 )}
                         </div>
