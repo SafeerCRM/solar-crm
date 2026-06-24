@@ -17,6 +17,7 @@ import { ProjectPaymentInstallment } from '../project/project-payment-installmen
 import { ProjectDocument } from '../project/project-document.entity';
 import { StaffMember } from '../staff/staff-member.entity';
 import { CustomerComplaintActivity } from './customer-complaint-activity.entity';
+import { DealerCompanyBankDetail } from '../dealer/dealer-company-bank-detail.entity';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ CustomerComplaintAttachment,
       ProjectDocument,
       StaffMember,
       CustomerComplaintActivity,
+      DealerCompanyBankDetail,
     ]),
   ],
   controllers: [CustomerPortalController, CustomerAuthController],

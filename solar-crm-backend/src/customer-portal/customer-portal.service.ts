@@ -26,6 +26,7 @@ import {
   CustomerComplaintActivity,
   CustomerComplaintActivityType,
 } from './customer-complaint-activity.entity';
+import { DealerCompanyBankDetail } from '../dealer/dealer-company-bank-detail.entity';
 
 @Injectable()
 export class CustomerPortalService {
@@ -68,6 +69,9 @@ private readonly complaintAttachmentRepository: Repository<CustomerComplaintAtta
 
     @InjectRepository(CustomerCleaningReminder)
     private readonly cleaningReminderRepository: Repository<CustomerCleaningReminder>,
+
+    @InjectRepository(DealerCompanyBankDetail)
+private readonly companyBankDetailRepository: Repository<DealerCompanyBankDetail>,
 
     @InjectRepository(StaffMember)
 private readonly staffMemberRepository: Repository<StaffMember>,
@@ -223,6 +227,16 @@ const cleaningReminders = await this.cleaningReminderRepository.find({
   take: 10,
 });
 
+const customerPaymentDetails =
+  await this.companyBankDetailRepository.find({
+    where: {
+      isActive: true,
+      isHidden: false,
+      visibleToCustomer: true,
+    } as any,
+    order: { createdAt: 'DESC' } as any,
+  });
+
     return {
   customer,
   projects,
@@ -261,6 +275,7 @@ paymentInstallments: validPaymentInstallments,
 paymentSummary,
 customerDocuments,
 totalCustomerDocuments: customerDocuments.length,
+customerPaymentDetails,
 };
   }
 
