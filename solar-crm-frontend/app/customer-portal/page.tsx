@@ -220,11 +220,13 @@ export default function CustomerPortalPage() {
           />
 
           <div className="mt-5 grid gap-5 md:grid-cols-3">
-            <ActionCard
-              icon="📊"
-              title="Project Timeline"
-              text="Track approval, installation, subsidy, electricity and completion progress."
-            />
+            <a href="/customer-portal/project-tracker">
+  <ActionCard
+    icon="📊"
+    title="Project Timeline"
+    text="Track approval, installation, subsidy, electricity and completion progress."
+  />
+</a>
             <a href="/customer-portal/work-calendar">
   <ActionCard
     icon="📅"
