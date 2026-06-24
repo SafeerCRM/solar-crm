@@ -32,6 +32,27 @@ export class DealerCompanyBankDetail {
   @Column({ default: true })
   isActive: boolean;
 
+  @Column({ type: 'boolean', default: true })
+visibleToDealer: boolean;
+
+@Column({ type: 'boolean', default: false })
+visibleToCustomer: boolean;
+
+@Column({ type: 'boolean', default: false })
+isHidden: boolean;
+
+@Column({ type: 'timestamp', nullable: true })
+hiddenAt: Date;
+
+@Column({ nullable: true })
+hiddenBy: number;
+
+@Column({ nullable: true })
+hiddenByName: string;
+
+@Column({ type: 'text', nullable: true })
+hiddenReason: string;
+
   @CreateDateColumn()
   createdAt: Date;
 

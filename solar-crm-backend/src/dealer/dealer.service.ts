@@ -2485,16 +2485,28 @@ return {
       upiId: body.upiId || '',
       qrCodeUrl: body.qrCodeUrl || '',
       isActive: body.isActive !== undefined ? Boolean(body.isActive) : true,
+      visibleToDealer:
+  body.visibleToDealer !== undefined
+    ? Boolean(body.visibleToDealer)
+    : true,
+
+visibleToCustomer:
+  body.visibleToCustomer !== undefined
+    ? Boolean(body.visibleToCustomer)
+    : false,
+
+isHidden: false,
     });
 
     return this.bankDetailRepository.save(bankDetail);
   }
 
   async listBankDetails() {
-    return this.bankDetailRepository.find({
-      order: { createdAt: 'DESC' },
-    });
-  }
+  return this.bankDetailRepository.find({
+    where: { isHidden: false } as any,
+    order: { createdAt: 'DESC' },
+  });
+}
 
   async updateBankDetail(id: number, body: any, user: any) {
     const bankDetail = await this.bankDetailRepository.findOne({
@@ -2516,15 +2528,35 @@ return {
       body.isActive !== undefined
         ? Boolean(body.isActive)
         : bankDetail.isActive;
+        bankDetail.visibleToDealer =
+  body.visibleToDealer !== undefined
+    ? Boolean(body.visibleToDealer)
+    : bankDetail.visibleToDealer;
+
+bankDetail.visibleToCustomer =
+  body.visibleToCustomer !== undefined
+    ? Boolean(body.visibleToCustomer)
+    : bankDetail.visibleToCustomer;
 
     return this.bankDetailRepository.save(bankDetail);
   }
 
   async listCompanyBankDetails(query: any) {
   const showInactive = query?.showInactive === 'true';
+  const showHidden = query?.showHidden === 'true';
+
+  const where: any = {};
+
+  if (!showInactive) {
+    where.isActive = true;
+  }
+
+  if (!showHidden) {
+    where.isHidden = false;
+  }
 
   return this.bankDetailRepository.find({
-    where: showInactive ? {} : { isActive: true },
+    where,
     order: { createdAt: 'DESC' } as any,
   });
 }
@@ -2563,6 +2595,17 @@ await this.bankDetailRepository.save(activeRecords);
   detail.upiId = body.upiId || '';
   detail.qrCodeUrl = body.qrCodeUrl || '';
   detail.isActive = isActive;
+  detail.visibleToDealer =
+  body.visibleToDealer !== undefined
+    ? Boolean(body.visibleToDealer)
+    : true;
+
+detail.visibleToCustomer =
+  body.visibleToCustomer !== undefined
+    ? Boolean(body.visibleToCustomer)
+    : false;
+
+detail.isHidden = false;
 
   return this.bankDetailRepository.save(detail);
 }
@@ -2603,6 +2646,17 @@ async deactivateCompanyBankDetail(id: number) {
   detail.isActive = false;
 
   return this.bankDetailRepository.save(detail);
+}
+
+async getCustomerVisibleCompanyBankDetails() {
+  return this.bankDetailRepository.find({
+    where: {
+      isActive: true,
+      isHidden: false,
+      visibleToCustomer: true,
+    } as any,
+    order: { createdAt: 'DESC' } as any,
+  });
 }
 
     async listInternalDealerComplaints(query: any) {
