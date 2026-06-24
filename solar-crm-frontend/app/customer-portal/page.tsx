@@ -358,11 +358,13 @@ const activityFeed = [
     text="View agreements, invoices, subsidy and electricity documents."
   />
 </a>
-            <ActionCard
-              icon="🧽"
-              title="Cleaning Calendar"
-              text="Manage cleaning schedule and reminders."
-            />
+            <a href="/customer-portal/cleaning-calendar">
+  <ActionCard
+    icon="🧽"
+    title="Cleaning Calendar"
+    text="Manage cleaning schedule and reminders."
+  />
+</a>
             <a href="/customer-portal/staff-directory">
   <ActionCard
     icon="👷"
