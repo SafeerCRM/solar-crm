@@ -8,9 +8,16 @@ export default function CustomerNotificationsPage() {
   const [dashboard, setDashboard] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<number | null>(null);
+  const [filter, setFilter] = useState('ALL');
+const [savingAll, setSavingAll] = useState(false);
 
   const notifications = dashboard?.notifications || [];
   const unreadCount = notifications.filter((item: any) => !item.isRead).length;
+  const filteredNotifications = notifications.filter((item: any) => {
+  if (filter === 'UNREAD') return !item.isRead;
+  if (filter === 'READ') return item.isRead;
+  return true;
+});
 
   const loadDashboard = async () => {
     try {
@@ -81,6 +88,38 @@ export default function CustomerNotificationsPage() {
     }
   };
 
+  const markAllRead = async () => {
+  try {
+    setSavingAll(true);
+
+    const token = localStorage.getItem('customer_token');
+
+    const res = await fetch(
+      `${API_BASE_URL}/customer-auth/notifications/read-all`,
+      {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      alert(data?.message || 'Failed to mark all notifications read');
+      return;
+    }
+
+    loadDashboard();
+  } catch (error) {
+    console.error(error);
+    alert('Failed to mark all notifications read');
+  } finally {
+    setSavingAll(false);
+  }
+};
+
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-orange-50">
@@ -123,17 +162,43 @@ export default function CustomerNotificationsPage() {
         </div>
 
         <div className="mt-6 rounded-[2rem] bg-white p-6 shadow-xl">
-          <h2 className="text-2xl font-black text-gray-900">
-            Latest Updates
-          </h2>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+  <h2 className="text-2xl font-black text-gray-900">
+    Latest Updates
+  </h2>
+
+  <div className="flex flex-wrap gap-2">
+    {['ALL', 'UNREAD', 'READ'].map((item) => (
+      <button
+        key={item}
+        onClick={() => setFilter(item)}
+        className={`rounded-2xl px-4 py-2 text-xs font-black ${
+          filter === item
+            ? 'bg-gray-900 text-white'
+            : 'bg-gray-100 text-gray-700'
+        }`}
+      >
+        {item}
+      </button>
+    ))}
+
+    <button
+      onClick={markAllRead}
+      disabled={savingAll || unreadCount === 0}
+      className="rounded-2xl bg-emerald-600 px-4 py-2 text-xs font-black text-white disabled:opacity-50"
+    >
+      {savingAll ? 'Saving...' : 'Mark All Read'}
+    </button>
+  </div>
+</div>
 
           <div className="mt-5 space-y-4">
-            {notifications.length === 0 ? (
+            {filteredNotifications.length === 0 ? (
               <div className="rounded-3xl border border-dashed p-8 text-center text-sm font-semibold text-gray-500">
                 No notifications yet.
               </div>
             ) : (
-              notifications.map((item: any) => (
+              filteredNotifications.map((item: any) => (
                 <div
                   key={item.id}
                   className={`rounded-3xl border p-5 ${
