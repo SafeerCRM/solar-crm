@@ -158,6 +158,20 @@ restoreCleaningReminder(
   'OWNER',
   'CUSTOMER_MANAGER',
   'PROJECT_MANAGER',
+  'PROJECT_EXECUTIVE',
+  'MEETING_MANAGER',
+  'MARKETING_HEAD',
+  'MAINTENANCE_MANAGER',
+)
+@Get('complaints/:id/activities')
+getComplaintActivities(@Param('id', ParseIntPipe) id: number) {
+  return this.service.getComplaintActivities(id);
+}
+
+@Roles(
+  'OWNER',
+  'CUSTOMER_MANAGER',
+  'PROJECT_MANAGER',
   'MARKETING_HEAD',
   'LEAD_MANAGER',
 )

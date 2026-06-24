@@ -22,6 +22,10 @@ import { ProjectExecutionActivity } from '../project/project-execution-activity.
 import { ProjectPaymentInstallment } from '../project/project-payment-installment.entity';
 import { ProjectDocument } from '../project/project-document.entity';
 import { StaffMember } from '../staff/staff-member.entity';
+import {
+  CustomerComplaintActivity,
+  CustomerComplaintActivityType,
+} from './customer-complaint-activity.entity';
 
 @Injectable()
 export class CustomerPortalService {
@@ -43,6 +47,9 @@ private readonly executionActivityRepository: Repository<ProjectExecutionActivit
 
     @InjectRepository(CustomerComplaint)
     private readonly complaintRepository: Repository<CustomerComplaint>,
+
+    @InjectRepository(CustomerComplaintActivity)
+private readonly complaintActivityRepository: Repository<CustomerComplaintActivity>,
 
     @InjectRepository(CustomerComplaintAttachment)
 private readonly complaintAttachmentRepository: Repository<CustomerComplaintAttachment>,
@@ -280,6 +287,36 @@ for (const attachment of attachments) {
   await this.complaintAttachmentRepository.save(complaintAttachment);
 }
 
+await this.addComplaintActivity(
+  {
+    complaintId: savedComplaint.id,
+    customerId: savedComplaint.customerId,
+    customerCode: savedComplaint.customerCode,
+    projectId: savedComplaint.projectId,
+    activityType: CustomerComplaintActivityType.COMPLAINT_CREATED,
+    activityTitle: 'Complaint Created',
+    activityDescription: savedComplaint.complaintText || '',
+    newValue: savedComplaint.status,
+  },
+  user,
+);
+
+if (attachments.length > 0) {
+  await this.addComplaintActivity(
+    {
+      complaintId: savedComplaint.id,
+      customerId: savedComplaint.customerId,
+      customerCode: savedComplaint.customerCode,
+      projectId: savedComplaint.projectId,
+      activityType: CustomerComplaintActivityType.ATTACHMENT_UPLOADED,
+      activityTitle: 'Attachments Uploaded',
+      activityDescription: `${attachments.length} attachment(s) uploaded by customer.`,
+      newValue: String(attachments.length),
+    },
+    user,
+  );
+}
+
 return {
   ...savedComplaint,
   attachments: await this.complaintAttachmentRepository.find({
@@ -425,6 +462,12 @@ return {
       throw new NotFoundException('Complaint not found');
     }
 
+    const oldStatus = complaint.status;
+const oldAssignedToName = complaint.assignedToName;
+const oldServiceDate = complaint.serviceDate;
+const oldStaffRemarks = complaint.staffRemarks;
+const oldResolutionNote = complaint.resolutionNote;
+
     complaint.status = body.status || complaint.status;
     complaint.assignedTo = body.assignedTo ? Number(body.assignedTo) : complaint.assignedTo;
     complaint.assignedToName = body.assignedToName || complaint.assignedToName;
@@ -440,6 +483,103 @@ return {
 
     const savedComplaint = await this.complaintRepository.save(complaint);
 
+    if (oldStatus !== savedComplaint.status) {
+  await this.addComplaintActivity(
+    {
+      complaintId: savedComplaint.id,
+      customerId: savedComplaint.customerId,
+      customerCode: savedComplaint.customerCode,
+      projectId: savedComplaint.projectId,
+      activityType:
+        savedComplaint.status === 'CLOSED'
+          ? CustomerComplaintActivityType.CLOSED
+          : savedComplaint.status === 'REJECTED'
+            ? CustomerComplaintActivityType.REJECTED
+            : CustomerComplaintActivityType.STATUS_CHANGED,
+      activityTitle: 'Status Updated',
+      activityDescription: `Complaint status changed from ${oldStatus} to ${savedComplaint.status}.`,
+      oldValue: oldStatus,
+      newValue: savedComplaint.status,
+    },
+    user,
+  );
+}
+
+if (oldAssignedToName !== savedComplaint.assignedToName) {
+  await this.addComplaintActivity(
+    {
+      complaintId: savedComplaint.id,
+      customerId: savedComplaint.customerId,
+      customerCode: savedComplaint.customerCode,
+      projectId: savedComplaint.projectId,
+      activityType: CustomerComplaintActivityType.ASSIGNED,
+      activityTitle: 'Complaint Assigned',
+      activityDescription: `Assigned to ${savedComplaint.assignedToName || '-'}.`,
+      oldValue: oldAssignedToName || '',
+      newValue: savedComplaint.assignedToName || '',
+    },
+    user,
+  );
+}
+
+if (
+  String(oldServiceDate || '') !==
+  String(savedComplaint.serviceDate || '')
+) {
+  await this.addComplaintActivity(
+    {
+      complaintId: savedComplaint.id,
+      customerId: savedComplaint.customerId,
+      customerCode: savedComplaint.customerCode,
+      projectId: savedComplaint.projectId,
+      activityType: CustomerComplaintActivityType.SERVICE_SCHEDULED,
+      activityTitle: 'Service Scheduled',
+      activityDescription: savedComplaint.serviceDate
+        ? `Service scheduled for ${savedComplaint.serviceDate}.`
+        : 'Service date updated.',
+      oldValue: oldServiceDate ? String(oldServiceDate) : '',
+      newValue: savedComplaint.serviceDate
+        ? String(savedComplaint.serviceDate)
+        : '',
+    },
+    user,
+  );
+}
+
+if (oldStaffRemarks !== savedComplaint.staffRemarks) {
+  await this.addComplaintActivity(
+    {
+      complaintId: savedComplaint.id,
+      customerId: savedComplaint.customerId,
+      customerCode: savedComplaint.customerCode,
+      projectId: savedComplaint.projectId,
+      activityType: CustomerComplaintActivityType.STAFF_REMARK_ADDED,
+      activityTitle: 'Staff Remark Added',
+      activityDescription: savedComplaint.staffRemarks || '',
+      oldValue: oldStaffRemarks || '',
+      newValue: savedComplaint.staffRemarks || '',
+    },
+    user,
+  );
+}
+
+if (oldResolutionNote !== savedComplaint.resolutionNote) {
+  await this.addComplaintActivity(
+    {
+      complaintId: savedComplaint.id,
+      customerId: savedComplaint.customerId,
+      customerCode: savedComplaint.customerCode,
+      projectId: savedComplaint.projectId,
+      activityType: CustomerComplaintActivityType.RESOLUTION_ADDED,
+      activityTitle: 'Resolution Added',
+      activityDescription: savedComplaint.resolutionNote || '',
+      oldValue: oldResolutionNote || '',
+      newValue: savedComplaint.resolutionNote || '',
+    },
+    user,
+  );
+}
+
 await this.createCustomerNotification({
   customerId: savedComplaint.customerId,
   customerCode: savedComplaint.customerCode,
@@ -453,6 +593,13 @@ await this.createCustomerNotification({
 
 return savedComplaint;
   }
+
+  async getComplaintActivities(complaintId: number) {
+  return this.complaintActivityRepository.find({
+    where: { complaintId },
+    order: { createdAt: 'ASC' },
+  });
+}
 
   async createReferral(body: any) {
     const referral = this.referralRepository.create({
@@ -1318,5 +1465,31 @@ async restoreCleaningReminder(id: number, body: any, user: any) {
   (reminder as any).hiddenByName = '';
 
   return this.cleaningReminderRepository.save(reminder);
+}
+
+async addComplaintActivity(body: any, user?: any) {
+  if (!body?.complaintId) {
+    return null;
+  }
+
+  const activity = this.complaintActivityRepository.create({
+    complaintId: Number(body.complaintId),
+    customerId: body.customerId ? Number(body.customerId) : null,
+    customerCode: body.customerCode || '',
+    projectId: body.projectId ? Number(body.projectId) : null,
+    activityType: body.activityType,
+    activityTitle: body.activityTitle || 'Complaint Update',
+    activityDescription: body.activityDescription || '',
+    performedBy: user?.id || body.performedBy || null,
+    performedByName:
+      user?.name || user?.email || body.performedByName || '',
+    performedByRole: Array.isArray(user?.roles)
+      ? user.roles.join(', ')
+      : body.performedByRole || '',
+    oldValue: body.oldValue || '',
+    newValue: body.newValue || '',
+  } as any);
+
+  return this.complaintActivityRepository.save(activity);
 }
 }
