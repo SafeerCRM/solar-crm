@@ -548,12 +548,23 @@ return savedComplaint;
 
 async uploadComplaintAttachments(files: any[], user: any) {
   if (!Array.isArray(files) || files.length === 0) {
-    throw new BadRequestException('At least one complaint photo is required');
+    throw new BadRequestException('At least one complaint attachment is required');
   }
 
   const uploadedFiles: any[] = [];
 
-  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+  const allowedTypes = [
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'audio/mpeg',
+    'audio/mp3',
+    'audio/wav',
+    'audio/webm',
+    'audio/ogg',
+    'audio/mp4',
+    'video/webm',
+  ];
 
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -570,28 +581,45 @@ async uploadComplaintAttachments(files: any[], user: any) {
     if (!file) continue;
 
     const mimeType = String(file.mimetype || '');
+    const isImage = mimeType.startsWith('image/');
+    const isAudio =
+      mimeType.startsWith('audio/') ||
+      mimeType === 'video/webm';
 
     if (!allowedTypes.includes(mimeType)) {
-      throw new BadRequestException('Only JPG, PNG, and WEBP photos are allowed');
+      throw new BadRequestException(
+        'Only JPG, PNG, WEBP photos and MP3, WAV, WEBM, OGG audio files are allowed',
+      );
     }
 
-    const maxSize = 5 * 1024 * 1024;
+    const maxImageSize = 5 * 1024 * 1024;
+    const maxAudioSize = 15 * 1024 * 1024;
 
-    if (file.size > maxSize) {
+    if (isImage && file.size > maxImageSize) {
       throw new BadRequestException('Complaint photo must be less than 5 MB');
     }
 
-    const originalName = String(file.originalname || 'complaint-photo');
+    if (isAudio && file.size > maxAudioSize) {
+      throw new BadRequestException('Complaint audio must be less than 15 MB');
+    }
+
+    const originalName = String(file.originalname || 'complaint-attachment');
     const extension = originalName.includes('.')
       ? originalName.split('.').pop()
-      : mimeType.split('/')[1] || 'jpg';
+      : mimeType.split('/')[1] || 'file';
 
-    const safeExtension = String(extension || 'jpg').replace(
+    const safeExtension = String(extension || 'file').replace(
       /[^a-zA-Z0-9]/g,
       '',
     );
 
-    const filePath = `customer-complaints/customer-${user?.id || 'unknown'}/${Date.now()}-${randomUUID()}.${safeExtension}`;
+    const folder = isImage
+      ? 'customer-complaints'
+      : 'customer-complaint-audio';
+
+    const filePath = `${folder}/customer-${
+      user?.id || 'unknown'
+    }/${Date.now()}-${randomUUID()}.${safeExtension}`;
 
     const uploadResult = await supabase.storage
       .from(bucket)
@@ -613,11 +641,13 @@ async uploadComplaintAttachments(files: any[], user: any) {
       fileName: originalName,
       fileSize: file.size,
       filePath,
+      mimeType,
+      attachmentType: isImage ? 'IMAGE' : 'AUDIO',
     });
   }
 
   return {
-    message: `${uploadedFiles.length} complaint photo(s) uploaded successfully`,
+    message: `${uploadedFiles.length} complaint attachment(s) uploaded successfully`,
     attachments: uploadedFiles,
   };
 }
