@@ -12,6 +12,73 @@ export default function CustomerPortalPage() {
   const projects = dashboard?.projects || [];
   const complaints = dashboard?.complaints || [];
   const notifications = dashboard?.notifications || [];
+  const documents = dashboard?.customerDocuments || [];
+const paymentReceipts = dashboard?.paymentReceipts || [];
+const workDateRequests = dashboard?.workDateRequests || [];
+const referrals = dashboard?.referrals || [];
+const executionActivities = dashboard?.executionActivities || [];
+
+const activityFeed = [
+  ...notifications.map((item: any) => ({
+    id: `notification-${item.id}`,
+    type: '🔔',
+    title: item.title || 'Notification',
+    text: item.message || '',
+    date: item.createdAt,
+    link: '/customer-portal/notifications',
+  })),
+
+  ...documents.map((item: any) => ({
+    id: `document-${item.id}`,
+    type: '📁',
+    title: `${formatStatus(item.documentType)} uploaded`,
+    text: `Project #${item.projectId}`,
+    date: item.createdAt,
+    link: '/customer-portal/documents',
+  })),
+
+  ...paymentReceipts.map((item: any) => ({
+    id: `payment-${item.id}`,
+    type: '💳',
+    title: `Payment receipt ${formatStatus(item.status)}`,
+    text: `₹${Number(item.amount || 0).toLocaleString('en-IN')} · Project #${item.projectId}`,
+    date: item.updatedAt || item.createdAt,
+    link: '/customer-portal/payments',
+  })),
+
+  ...workDateRequests.map((item: any) => ({
+    id: `work-${item.id}`,
+    type: '📅',
+    title: `Work date request ${formatStatus(item.status)}`,
+    text: item.reason || `Project #${item.projectId}`,
+    date: item.updatedAt || item.createdAt,
+    link: '/customer-portal/work-calendar',
+  })),
+
+  ...referrals.map((item: any) => ({
+    id: `referral-${item.id}`,
+    type: '🎁',
+    title: `Referral ${formatStatus(item.status)}`,
+    text: item.referredName || '',
+    date: item.updatedAt || item.createdAt,
+    link: '/customer-portal/referrals',
+  })),
+
+  ...executionActivities.map((item: any) => ({
+    id: `execution-${item.id}`,
+    type: '⚙️',
+    title: formatStatus(item.activityType),
+    text: `Status: ${formatStatus(item.status)} · Project #${item.projectId}`,
+    date: item.updatedAt || item.scheduledDate || item.createdAt,
+    link: '/customer-portal/project-tracker',
+  })),
+]
+  .filter((item) => item.date)
+  .sort(
+    (a, b) =>
+      new Date(b.date).getTime() - new Date(a.date).getTime(),
+  )
+  .slice(0, 10);
 
   useEffect(() => {
     const token = localStorage.getItem('customer_token');
@@ -126,6 +193,56 @@ export default function CustomerPortalPage() {
             />
           </div>
         </div>
+
+        <div className="mt-6 rounded-[2rem] bg-white p-6 shadow-xl">
+  <div className="flex flex-wrap items-center justify-between gap-3">
+    <SectionTitle
+      title="Recent Activity"
+      subtitle="Latest updates from your project, payments, documents and support"
+    />
+
+    <a
+      href="/customer-portal/notifications"
+      className="rounded-2xl bg-gray-900 px-4 py-2 text-sm font-black text-white hover:bg-black"
+    >
+      View Updates
+    </a>
+  </div>
+
+  <div className="mt-5 space-y-3">
+    {activityFeed.length === 0 ? (
+      <EmptyCard text="No recent activity yet." />
+    ) : (
+      activityFeed.map((item) => (
+        <a
+          key={item.id}
+          href={item.link}
+          className="flex items-start gap-4 rounded-3xl border bg-gray-50 p-4 transition hover:-translate-y-1 hover:bg-orange-50 hover:shadow"
+        >
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-2xl shadow">
+            {item.type}
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <p className="font-black text-gray-900">
+              {item.title}
+            </p>
+
+            {item.text && (
+              <p className="mt-1 text-sm text-gray-500">
+                {item.text}
+              </p>
+            )}
+
+            <p className="mt-2 text-xs font-semibold text-gray-400">
+              {new Date(item.date).toLocaleString('en-IN')}
+            </p>
+          </div>
+        </a>
+      ))
+    )}
+  </div>
+</div>
 
         <div className="mt-6 grid gap-5 lg:grid-cols-3">
           <div className="lg:col-span-2">
