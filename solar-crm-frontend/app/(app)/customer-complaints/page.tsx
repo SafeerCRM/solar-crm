@@ -487,11 +487,9 @@ serviceTime: item.serviceDate
 
                   {Array.isArray(item.attachments) && item.attachments.length > 0 && (
   <div className="mt-4 space-y-4">
-    {item.attachments.some(
-      (attachment: any) =>
-        String(attachment.mimeType || '').startsWith('image/') ||
-        String(attachment.attachmentType || '') === 'IMAGE',
-    ) && (
+    {item.attachments.some((attachment: any) =>
+  isImageAttachment(attachment),
+) && (
       <div>
         <p className="mb-2 text-sm font-black text-gray-800">
           Customer Photos
@@ -499,11 +497,9 @@ serviceTime: item.serviceDate
 
         <div className="grid grid-cols-3 gap-3 md:grid-cols-5">
           {item.attachments
-            .filter(
-              (attachment: any) =>
-                String(attachment.mimeType || '').startsWith('image/') ||
-                String(attachment.attachmentType || '') === 'IMAGE',
-            )
+            .filter((attachment: any) =>
+  isImageAttachment(attachment),
+)
             .map((attachment: any) => (
               <a
                 key={attachment.id || attachment.fileUrl}
@@ -523,12 +519,9 @@ serviceTime: item.serviceDate
       </div>
     )}
 
-    {item.attachments.some(
-      (attachment: any) =>
-        String(attachment.mimeType || '').startsWith('audio/') ||
-        String(attachment.attachmentType || '') === 'AUDIO' ||
-        String(attachment.mimeType || '') === 'video/webm',
-    ) && (
+    {item.attachments.some((attachment: any) =>
+  isAudioAttachment(attachment),
+) && (
       <div>
         <p className="mb-2 text-sm font-black text-gray-800">
           Customer Voice Notes
@@ -536,12 +529,9 @@ serviceTime: item.serviceDate
 
         <div className="space-y-3">
           {item.attachments
-            .filter(
-              (attachment: any) =>
-                String(attachment.mimeType || '').startsWith('audio/') ||
-                String(attachment.attachmentType || '') === 'AUDIO' ||
-                String(attachment.mimeType || '') === 'video/webm',
-            )
+            .filter((attachment: any) =>
+  isAudioAttachment(attachment),
+)
             .map((attachment: any) => (
               <div
                 key={attachment.id || attachment.fileUrl}
@@ -810,11 +800,9 @@ function ComplaintDetailModal({
 
         {Array.isArray(item.attachments) && item.attachments.length > 0 && (
   <div className="mt-5 space-y-5">
-    {item.attachments.some(
-      (attachment: any) =>
-        String(attachment.mimeType || '').startsWith('image/') ||
-        String(attachment.attachmentType || '') === 'IMAGE',
-    ) && (
+    {item.attachments.some((attachment: any) =>
+  isImageAttachment(attachment),
+) && (
       <div>
         <p className="mb-3 text-lg font-black text-gray-900">
           Uploaded Photos
@@ -822,11 +810,9 @@ function ComplaintDetailModal({
 
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
           {item.attachments
-            .filter(
-              (attachment: any) =>
-                String(attachment.mimeType || '').startsWith('image/') ||
-                String(attachment.attachmentType || '') === 'IMAGE',
-            )
+            .filter((attachment: any) =>
+  isImageAttachment(attachment),
+)
             .map((attachment: any) => (
               <a
                 key={attachment.id || attachment.fileUrl}
@@ -846,12 +832,9 @@ function ComplaintDetailModal({
       </div>
     )}
 
-    {item.attachments.some(
-      (attachment: any) =>
-        String(attachment.mimeType || '').startsWith('audio/') ||
-        String(attachment.attachmentType || '') === 'AUDIO' ||
-        String(attachment.mimeType || '') === 'video/webm',
-    ) && (
+    {item.attachments.some((attachment: any) =>
+  isAudioAttachment(attachment),
+) && (
       <div>
         <p className="mb-3 text-lg font-black text-gray-900">
           Uploaded Voice Notes
@@ -859,12 +842,9 @@ function ComplaintDetailModal({
 
         <div className="space-y-3">
           {item.attachments
-            .filter(
-              (attachment: any) =>
-                String(attachment.mimeType || '').startsWith('audio/') ||
-                String(attachment.attachmentType || '') === 'AUDIO' ||
-                String(attachment.mimeType || '') === 'video/webm',
-            )
+            .filter((attachment: any) =>
+  isAudioAttachment(attachment),
+)
             .map((attachment: any) => (
               <div
                 key={attachment.id || attachment.fileUrl}
@@ -918,4 +898,46 @@ function InfoCard({ label, value }: { label: string; value?: string }) {
 
 function formatLabel(value?: string) {
   return String(value || '-').replaceAll('_', ' ');
+}
+
+function isAudioAttachment(attachment: any) {
+  const mimeType = String(attachment?.mimeType || '').toLowerCase();
+  const type = String(attachment?.attachmentType || '').toUpperCase();
+  const fileName = String(attachment?.fileName || '').toLowerCase();
+  const fileUrl = String(attachment?.fileUrl || '').toLowerCase();
+
+  return (
+    mimeType.startsWith('audio/') ||
+    mimeType === 'video/webm' ||
+    type === 'AUDIO' ||
+    fileName.endsWith('.webm') ||
+    fileName.endsWith('.mp3') ||
+    fileName.endsWith('.wav') ||
+    fileName.endsWith('.ogg') ||
+    fileUrl.includes('customer-complaint-audio') ||
+    fileUrl.endsWith('.webm') ||
+    fileUrl.endsWith('.mp3') ||
+    fileUrl.endsWith('.wav') ||
+    fileUrl.endsWith('.ogg')
+  );
+}
+
+function isImageAttachment(attachment: any) {
+  const mimeType = String(attachment?.mimeType || '').toLowerCase();
+  const type = String(attachment?.attachmentType || '').toUpperCase();
+  const fileName = String(attachment?.fileName || '').toLowerCase();
+  const fileUrl = String(attachment?.fileUrl || '').toLowerCase();
+
+  return (
+    mimeType.startsWith('image/') ||
+    type === 'IMAGE' ||
+    fileName.endsWith('.jpg') ||
+    fileName.endsWith('.jpeg') ||
+    fileName.endsWith('.png') ||
+    fileName.endsWith('.webp') ||
+    fileUrl.endsWith('.jpg') ||
+    fileUrl.endsWith('.jpeg') ||
+    fileUrl.endsWith('.png') ||
+    fileUrl.endsWith('.webp')
+  );
 }
