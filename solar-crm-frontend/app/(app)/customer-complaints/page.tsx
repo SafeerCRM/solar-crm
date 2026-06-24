@@ -443,9 +443,47 @@ serviceTime: item.serviceDate
 
               <div className="grid gap-5 p-5 lg:grid-cols-3">
                 <div className="lg:col-span-2">
-                  <p className="whitespace-pre-wrap text-sm leading-6 text-gray-700">
-                    {item.complaintText || '-'}
-                  </p>
+  <div className="grid gap-3 md:grid-cols-3">
+    <InfoCard
+      label="Customer"
+      value={item.customerName || '-'}
+    />
+
+    <InfoCard
+      label="Phone"
+      value={item.customerPhone || '-'}
+    />
+
+    <InfoCard
+      label="Customer Code"
+      value={item.customerCode || '-'}
+    />
+
+    <InfoCard
+      label="Project"
+      value={`#${item.projectId || '-'}`}
+    />
+
+    <InfoCard
+      label="Branch"
+      value={item.branchName || '-'}
+    />
+
+    <InfoCard
+      label="Owner"
+      value={item.projectOwnerName || '-'}
+    />
+  </div>
+
+  <div className="mt-4 rounded-3xl bg-gray-50 p-5">
+    <p className="text-xs font-bold text-gray-500">
+      Complaint Details
+    </p>
+
+    <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-gray-700">
+      {item.complaintText || '-'}
+    </p>
+  </div>
 
                   {Array.isArray(item.attachments) && item.attachments.length > 0 && (
   <div className="mt-4 space-y-4">
@@ -771,30 +809,83 @@ function ComplaintDetailModal({
         </div>
 
         {Array.isArray(item.attachments) && item.attachments.length > 0 && (
-          <div className="mt-5">
-            <p className="mb-3 text-lg font-black text-gray-900">
-              Uploaded Photos
-            </p>
+  <div className="mt-5 space-y-5">
+    {item.attachments.some(
+      (attachment: any) =>
+        String(attachment.mimeType || '').startsWith('image/') ||
+        String(attachment.attachmentType || '') === 'IMAGE',
+    ) && (
+      <div>
+        <p className="mb-3 text-lg font-black text-gray-900">
+          Uploaded Photos
+        </p>
 
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-              {item.attachments.map((attachment: any) => (
-                <a
-                  key={attachment.id || attachment.fileUrl}
-                  href={attachment.fileUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="overflow-hidden rounded-3xl border bg-gray-50 shadow"
-                >
-                  <img
-                    src={attachment.fileUrl}
-                    alt={attachment.fileName || 'Complaint photo'}
-                    className="h-40 w-full object-cover"
-                  />
-                </a>
-              ))}
-            </div>
-          </div>
-        )}
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+          {item.attachments
+            .filter(
+              (attachment: any) =>
+                String(attachment.mimeType || '').startsWith('image/') ||
+                String(attachment.attachmentType || '') === 'IMAGE',
+            )
+            .map((attachment: any) => (
+              <a
+                key={attachment.id || attachment.fileUrl}
+                href={attachment.fileUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="overflow-hidden rounded-3xl border bg-gray-50 shadow"
+              >
+                <img
+                  src={attachment.fileUrl}
+                  alt={attachment.fileName || 'Complaint photo'}
+                  className="h-40 w-full object-cover"
+                />
+              </a>
+            ))}
+        </div>
+      </div>
+    )}
+
+    {item.attachments.some(
+      (attachment: any) =>
+        String(attachment.mimeType || '').startsWith('audio/') ||
+        String(attachment.attachmentType || '') === 'AUDIO' ||
+        String(attachment.mimeType || '') === 'video/webm',
+    ) && (
+      <div>
+        <p className="mb-3 text-lg font-black text-gray-900">
+          Uploaded Voice Notes
+        </p>
+
+        <div className="space-y-3">
+          {item.attachments
+            .filter(
+              (attachment: any) =>
+                String(attachment.mimeType || '').startsWith('audio/') ||
+                String(attachment.attachmentType || '') === 'AUDIO' ||
+                String(attachment.mimeType || '') === 'video/webm',
+            )
+            .map((attachment: any) => (
+              <div
+                key={attachment.id || attachment.fileUrl}
+                className="rounded-3xl bg-blue-50 p-4"
+              >
+                <p className="mb-2 text-xs font-black text-blue-700">
+                  {attachment.fileName || 'Voice Note'}
+                </p>
+
+                <audio
+                  controls
+                  src={attachment.fileUrl}
+                  className="w-full"
+                />
+              </div>
+            ))}
+        </div>
+      </div>
+    )}
+  </div>
+)}
 
         <div className="mt-5 grid gap-4 md:grid-cols-2">
           <InfoCard label="Assigned To" value={item.assignedToName || '-'} />
