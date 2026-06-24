@@ -2564,18 +2564,6 @@ bankDetail.visibleToCustomer =
 async saveCompanyBankDetail(body: any) {
   const isActive = body?.isActive !== false;
 
-  if (isActive) {
-    const activeRecords = await this.bankDetailRepository.find({
-  where: { isActive: true } as any,
-});
-
-for (const record of activeRecords) {
-  record.isActive = false;
-}
-
-await this.bankDetailRepository.save(activeRecords);
-  }
-
   let detail: any = null;
 
   if (body?.id) {
@@ -2618,16 +2606,6 @@ async activateCompanyBankDetail(id: number) {
   if (!detail) {
     throw new NotFoundException('Bank detail not found');
   }
-
- const activeRecords = await this.bankDetailRepository.find({
-  where: { isActive: true } as any,
-});
-
-for (const record of activeRecords) {
-  record.isActive = false;
-}
-
-await this.bankDetailRepository.save(activeRecords);
 
   detail.isActive = true;
 
