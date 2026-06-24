@@ -691,9 +691,13 @@ async toggleDealerKitAvailability(id: number, body: any) {
 
     async getBankDetails() {
   const bankDetails = await this.bankDetailRepository.find({
-    where: { isActive: true },
-    order: { createdAt: 'DESC' },
-  });
+  where: {
+    isActive: true,
+    isHidden: false,
+    visibleToDealer: true,
+  } as any,
+  order: { createdAt: 'DESC' } as any,
+});
 
   const setting = await this.getPortalCompanySetting();
 
