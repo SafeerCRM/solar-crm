@@ -14,6 +14,8 @@ const emptyForm = {
   upiId: '',
   qrCodeUrl: '',
   isActive: true,
+  visibleToDealer: true,
+  visibleToCustomer: false,
 };
 
 const emptyCompanyForm = {
@@ -441,6 +443,8 @@ const toggleKitAvailability = async (kit: any) => {
       upiId: item.upiId || '',
       qrCodeUrl: item.qrCodeUrl || '',
       isActive: item.isActive !== false,
+      visibleToDealer: item.visibleToDealer !== false,
+visibleToCustomer: item.visibleToCustomer === true,
     });
   };
 
@@ -936,7 +940,7 @@ const toggleKitAvailability = async (kit: any) => {
         <section className="mt-6 grid gap-6 lg:grid-cols-2">
           <div className="rounded-2xl bg-white p-6 shadow">
             <h2 className="text-lg font-bold text-gray-800">
-              Dealer Bank Details
+              Company Payment Accounts
             </h2>
 
             <div className="mt-4 space-y-3">
@@ -1012,13 +1016,52 @@ const toggleKitAvailability = async (kit: any) => {
                 className="w-full rounded-xl border p-3"
               />
 
+              <div className="grid gap-3 md:grid-cols-2">
+  <label className="flex items-center gap-2 rounded-xl border p-3 text-sm font-semibold">
+    <input
+      type="checkbox"
+      checked={!!form.visibleToDealer}
+      onChange={(e) =>
+        setForm({
+          ...form,
+          visibleToDealer: e.target.checked,
+        })
+      }
+    />
+    Visible to Dealer Portal
+  </label>
+
+  <label className="flex items-center gap-2 rounded-xl border p-3 text-sm font-semibold">
+    <input
+      type="checkbox"
+      checked={!!form.visibleToCustomer}
+      onChange={(e) =>
+        setForm({
+          ...form,
+          visibleToCustomer: e.target.checked,
+        })
+      }
+    />
+    Visible to Customer Portal
+  </label>
+</div>
+
               <button
                 onClick={saveBankDetail}
                 disabled={saving}
                 className="w-full rounded-xl bg-blue-600 py-3 font-bold text-white"
               >
-                {saving ? 'Saving...' : 'Save Bank Detail'}
+                {saving ? 'Saving...' : form.id ? 'Update Payment Account' : 'Save Payment Account'}
               </button>
+
+              {form.id && (
+  <button
+    onClick={() => setForm(emptyForm)}
+    className="w-full rounded-xl bg-gray-200 py-3 font-bold text-gray-700"
+  >
+    Cancel Edit
+  </button>
+)}
             </div>
           </div>
 
@@ -1059,6 +1102,26 @@ const toggleKitAvailability = async (kit: any) => {
                     <p className="mt-1 text-sm text-gray-500">
                       {item.bankName}
                     </p>
+
+                    <div className="mt-2 flex flex-wrap gap-2">
+  {item.visibleToDealer && (
+    <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">
+      DEALER
+    </span>
+  )}
+
+  {item.visibleToCustomer && (
+    <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-bold text-orange-700">
+      CUSTOMER
+    </span>
+  )}
+
+  {!item.visibleToDealer && !item.visibleToCustomer && (
+    <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700">
+      NOT VISIBLE
+    </span>
+  )}
+</div>
 
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button
