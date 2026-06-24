@@ -743,9 +743,11 @@ serviceTime: item.serviceDate
 
       {selectedComplaint && (
         <ComplaintDetailModal
-          item={selectedComplaint}
-          onClose={() => setSelectedComplaint(null)}
-        />
+  item={selectedComplaint}
+  activities={activities}
+  timelineLoading={timelineLoading}
+  onClose={() => setSelectedComplaint(null)}
+/>
       )}
     </div>
   );
@@ -782,9 +784,13 @@ function PriorityBadge({ priority }: { priority?: string }) {
 
 function ComplaintDetailModal({
   item,
+  activities,
+  timelineLoading,
   onClose,
 }: {
   item: CustomerComplaint;
+  activities: any[];
+  timelineLoading: boolean;
   onClose: () => void;
 }) {
   return (
@@ -831,6 +837,78 @@ function ComplaintDetailModal({
             {item.complaintText || '-'}
           </p>
         </div>
+
+        <div className="mt-5 rounded-3xl bg-white p-5 shadow-inner">
+  <div className="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <p className="text-lg font-black text-gray-900">
+        Complaint Timeline
+      </p>
+      <p className="mt-1 text-xs font-semibold text-gray-500">
+        Complete activity history for this complaint.
+      </p>
+    </div>
+
+    <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-black text-blue-700">
+      {activities.length} update(s)
+    </span>
+  </div>
+
+  <div className="mt-5 space-y-4">
+    {timelineLoading ? (
+      <div className="rounded-2xl border border-dashed p-5 text-center text-sm font-semibold text-gray-500">
+        Loading timeline...
+      </div>
+    ) : activities.length === 0 ? (
+      <div className="rounded-2xl border border-dashed p-5 text-center text-sm font-semibold text-gray-500">
+        No timeline activity yet.
+      </div>
+    ) : (
+      activities.map((activity) => (
+        <div key={activity.id} className="flex gap-4">
+          <div className="flex flex-col items-center">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-500 text-lg text-white">
+              {activityIcon(activity.activityType)}
+            </div>
+            <div className="h-full min-h-8 w-1 bg-orange-100" />
+          </div>
+
+          <div className="flex-1 rounded-3xl bg-gray-50 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <p className="font-black text-gray-900">
+                  {activity.activityTitle || formatLabel(activity.activityType)}
+                </p>
+
+                {activity.activityDescription && (
+                  <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-gray-600">
+                    {activity.activityDescription}
+                  </p>
+                )}
+              </div>
+
+              <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-gray-600">
+                {formatLabel(activity.activityType)}
+              </span>
+            </div>
+
+            <div className="mt-3 grid gap-2 text-xs font-semibold text-gray-500 md:grid-cols-2">
+              <p>
+                By: {activity.performedByName || 'System'}
+              </p>
+              <p>
+                Time:{' '}
+                {activity.createdAt
+                  ? new Date(activity.createdAt).toLocaleString('en-IN')
+                  : '-'}
+              </p>
+            </div>
+          </div>
+        </div>
+      ))
+    )}
+  </div>
+</div>
 
         {Array.isArray(item.attachments) && item.attachments.length > 0 && (
   <div className="mt-5 space-y-5">
@@ -928,6 +1006,22 @@ function InfoCard({ label, value }: { label: string; value?: string }) {
       </p>
     </div>
   );
+}
+
+function activityIcon(type?: string) {
+  const value = String(type || '');
+
+  if (value.includes('CREATED')) return '📝';
+  if (value.includes('STATUS')) return '🔄';
+  if (value.includes('ASSIGNED')) return '👤';
+  if (value.includes('SERVICE')) return '📅';
+  if (value.includes('REMARK')) return '💬';
+  if (value.includes('RESOLUTION')) return '✅';
+  if (value.includes('CLOSED')) return '🔒';
+  if (value.includes('REJECTED')) return '❌';
+  if (value.includes('ATTACHMENT')) return '📎';
+
+  return '•';
 }
 
 function formatLabel(value?: string) {
