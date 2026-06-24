@@ -17,6 +17,8 @@ const [receiptPreview, setReceiptPreview] =
 const [uploadingReceipt, setUploadingReceipt] =
   useState(false);
 
+  const [receiptFilter, setReceiptFilter] = useState('ALL');
+
   const [form, setForm] = useState({
     projectId: '',
     amount: '',
@@ -49,6 +51,23 @@ const nextDueInstallment = installments.find(
     Number(item.pendingAmount || 0) > 0 &&
     item.status !== 'PAID',
 );
+
+const overdueInstallments = installments.filter((item: any) => {
+  if (!item.dueDate || item.status === 'PAID') return false;
+
+  const due = new Date(item.dueDate);
+  const today = new Date();
+
+  due.setHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
+
+  return due < today && Number(item.pendingAmount || 0) > 0;
+});
+
+const filteredReceipts = receipts.filter((item: any) => {
+  if (receiptFilter === 'ALL') return true;
+  return item.status === receiptFilter;
+});
 
   const loadDashboard = async () => {
     try {
@@ -329,6 +348,35 @@ setReceiptPreview('');
 </div>
         </div>
 
+        <div className="mt-5 grid gap-4 md:grid-cols-3">
+  <div className="rounded-3xl bg-white/20 p-5 backdrop-blur">
+    <p className="text-xs font-bold opacity-80">
+      Total Project Cost
+    </p>
+    <p className="mt-2 text-2xl font-black">
+      {formatCurrency(summary.totalAmount)}
+    </p>
+  </div>
+
+  <div className="rounded-3xl bg-white/20 p-5 backdrop-blur">
+    <p className="text-xs font-bold opacity-80">
+      Total Paid
+    </p>
+    <p className="mt-2 text-2xl font-black">
+      {formatCurrency(summary.paidAmount)}
+    </p>
+  </div>
+
+  <div className="rounded-3xl bg-white/20 p-5 backdrop-blur">
+    <p className="text-xs font-bold opacity-80">
+      Total Pending
+    </p>
+    <p className="mt-2 text-2xl font-black">
+      {formatCurrency(summary.pendingAmount)}
+    </p>
+  </div>
+</div>
+
         <div className="mt-6 grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2 rounded-[2rem] bg-white p-6 shadow-xl">
             <h2 className="text-2xl font-black text-gray-900">Installments</h2>
@@ -338,7 +386,14 @@ setReceiptPreview('');
                 <EmptyCard text="No payment installments found for your projects." />
               ) : (
                 installments.map((item: any) => (
-                  <div key={item.id} className="rounded-3xl border bg-gray-50 p-5">
+                  <div
+  key={item.id}
+  className={`rounded-3xl border p-5 ${
+    overdueInstallments.some((overdue: any) => overdue.id === item.id)
+      ? 'border-red-200 bg-red-50'
+      : 'bg-gray-50'
+  }`}
+>
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <h3 className="font-black text-gray-900">
@@ -353,6 +408,12 @@ setReceiptPreview('');
                       </div>
 
                       <StatusBadge status={item.status} />
+
+                      {overdueInstallments.some((overdue: any) => overdue.id === item.id) && (
+  <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-black text-red-700">
+    OVERDUE
+  </span>
+)}
                     </div>
 
                     <div className="mt-4 grid gap-3 md:grid-cols-3">
@@ -557,13 +618,33 @@ setReceiptPreview('');
         </div>
 
         <div className="mt-6 rounded-[2rem] bg-white p-6 shadow-xl">
-          <h2 className="text-2xl font-black text-gray-900">Receipt History</h2>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+  <h2 className="text-2xl font-black text-gray-900">
+    Receipt History
+  </h2>
+
+  <div className="flex flex-wrap gap-2">
+    {['ALL', 'SUBMITTED', 'VERIFIED', 'REJECTED'].map((item) => (
+      <button
+        key={item}
+        onClick={() => setReceiptFilter(item)}
+        className={`rounded-2xl px-4 py-2 text-xs font-black ${
+          receiptFilter === item
+            ? 'bg-gray-900 text-white'
+            : 'bg-gray-100 text-gray-700'
+        }`}
+      >
+        {formatLabel(item)}
+      </button>
+    ))}
+  </div>
+</div>
 
           <div className="mt-5 space-y-4">
-            {receipts.length === 0 ? (
+            {filteredReceipts.length === 0 ? (
               <EmptyCard text="No receipt submitted yet." />
             ) : (
-              receipts.map((item: any) => (
+              filteredReceipts.map((item: any) => (
                 <div key={item.id} className="rounded-3xl border bg-gray-50 p-5">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
