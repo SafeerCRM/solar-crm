@@ -370,11 +370,13 @@ const activityFeed = [
     text="View project owner, manager, contractor and department contacts."
   />
 </a>
-            <ActionCard
-              icon="📜"
-              title="Policies"
-              text="Read customer policy, warranty and maintenance guidelines."
-            />
+            <a href="/customer-portal/policies">
+  <ActionCard
+    icon="📜"
+    title="Policies"
+    text="View customer policy, payment rules and project guidelines."
+  />
+</a>
           </div>
         </div>
       </div>
