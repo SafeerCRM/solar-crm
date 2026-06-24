@@ -34,6 +34,8 @@ const [uploadingReceipt, setUploadingReceipt] =
   const installments = dashboard?.paymentInstallments || [];
   const receipts = dashboard?.paymentReceipts || [];
   const summary = dashboard?.paymentSummary || {};
+  const customerPaymentDetails = dashboard?.customerPaymentDetails || [];
+const activePaymentDetail = customerPaymentDetails[0] || {};
   const paymentPercent =
   Number(summary.totalAmount || 0) > 0
     ? Math.min(
@@ -470,19 +472,43 @@ setReceiptPreview('');
               </h2>
 
               <div className="mt-5 space-y-3">
-                <PaymentInfo label="Account Name" value="Aditya Solars" />
-                <PaymentInfo label="Bank" value="Update bank name" />
-                <PaymentInfo label="Account No." value="Update account number" />
-                <PaymentInfo label="IFSC" value="Update IFSC" />
-                <PaymentInfo label="UPI ID" value="update-upi@bank" />
+                <PaymentInfo
+  label="Account Name"
+  value={activePaymentDetail.accountName || 'Aditya Solars'}
+/>
+<PaymentInfo
+  label="Bank"
+  value={activePaymentDetail.bankName || '-'}
+/>
+<PaymentInfo
+  label="Account No."
+  value={activePaymentDetail.accountNumber || '-'}
+/>
+<PaymentInfo
+  label="IFSC"
+  value={activePaymentDetail.ifsc || '-'}
+/>
+<PaymentInfo
+  label="UPI ID"
+  value={activePaymentDetail.upiId || '-'}
+/>
               </div>
 
               <div className="mt-5 rounded-3xl border-2 border-dashed bg-yellow-50 p-6 text-center">
-                <p className="text-sm font-black text-yellow-800">QR Code</p>
-                <p className="mt-2 text-xs text-yellow-700">
-                  Add company QR image later from settings.
-                </p>
-              </div>
+  <p className="text-sm font-black text-yellow-800">QR Code</p>
+
+  {activePaymentDetail.qrCodeUrl ? (
+    <img
+      src={activePaymentDetail.qrCodeUrl}
+      alt="Payment QR Code"
+      className="mx-auto mt-4 max-h-64 rounded-2xl border bg-white object-contain p-2"
+    />
+  ) : (
+    <p className="mt-2 text-xs text-yellow-700">
+      QR code not available.
+    </p>
+  )}
+</div>
             </div>
 
             <div className="rounded-[2rem] bg-white p-6 shadow-xl">
