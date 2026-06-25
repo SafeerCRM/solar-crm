@@ -60,6 +60,18 @@ const emptyKitForm = {
   ],
 };
 
+const emptyPolicyForm = {
+  id: '',
+  portalType: 'CUSTOMER',
+  title: '',
+  language: 'HINDI',
+  content: '',
+  pdfUrl: '',
+  visibleToCustomer: true,
+  isActive: true,
+  sortOrder: '0',
+};
+
 export default function PortalSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -76,6 +88,11 @@ const [kitSaving, setKitSaving] = useState(false);
 const [showHiddenKits, setShowHiddenKits] = useState(false);
 const [expandedKitId, setExpandedKitId] = useState<number | null>(null);
 
+const [policies, setPolicies] = useState<any[]>([]);
+const [policyForm, setPolicyForm] = useState<any>(emptyPolicyForm);
+const [policySaving, setPolicySaving] = useState(false);
+const [showHiddenPolicies, setShowHiddenPolicies] = useState(false);
+
   const headers = () => ({
     Authorization: `Bearer ${localStorage.getItem('token')}`,
   });
@@ -85,11 +102,16 @@ const [expandedKitId, setExpandedKitId] = useState<number | null>(null);
 loadCompanySetting();
 loadDeliverySetting();
 loadKits();
+loadPolicies();
   }, []);
 
   useEffect(() => {
   loadKits();
 }, [showHiddenKits]);
+
+useEffect(() => {
+  loadPolicies();
+}, [showHiddenPolicies]);
 
   const loadBankDetails = async () => {
     try {
@@ -447,6 +469,87 @@ const toggleKitAvailability = async (kit: any) => {
 visibleToCustomer: item.visibleToCustomer === true,
     });
   };
+
+  const loadPolicies = async () => {
+  try {
+    const res = await axios.get(`${API_BASE_URL}/dealer/portal-policies`, {
+      params: {
+        portalType: 'CUSTOMER',
+        showHidden: showHiddenPolicies,
+      },
+      headers: headers(),
+    });
+
+    setPolicies(Array.isArray(res.data) ? res.data : []);
+  } catch (error) {
+    console.error(error);
+    alert('Failed to load portal documents');
+  }
+};
+
+const savePolicy = async () => {
+  if (!String(policyForm.title || '').trim()) {
+    alert('Document title is required');
+    return;
+  }
+
+  try {
+    setPolicySaving(true);
+
+    await axios.post(`${API_BASE_URL}/dealer/portal-policies`, policyForm, {
+      headers: headers(),
+    });
+
+    alert('Portal document saved');
+    setPolicyForm(emptyPolicyForm);
+    await loadPolicies();
+  } catch (error: any) {
+    console.error(error);
+    alert(error?.response?.data?.message || 'Failed to save portal document');
+  } finally {
+    setPolicySaving(false);
+  }
+};
+
+const startEditPolicy = (item: any) => {
+  setPolicyForm({
+    id: item.id || '',
+    portalType: item.portalType || 'CUSTOMER',
+    title: item.title || '',
+    language: item.language || 'HINDI',
+    content: item.content || '',
+    pdfUrl: item.pdfUrl || '',
+    visibleToCustomer: item.visibleToCustomer !== false,
+    isActive: item.isActive !== false,
+    sortOrder: String(item.sortOrder || 0),
+  });
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
+const hidePolicy = async (item: any) => {
+  const reason = window.prompt('Reason for hiding document?', 'Not required');
+
+  if (reason === null) return;
+
+  await axios.patch(
+    `${API_BASE_URL}/dealer/portal-policies/${item.id}/hide`,
+    { reason },
+    { headers: headers() },
+  );
+
+  await loadPolicies();
+};
+
+const restorePolicy = async (item: any) => {
+  await axios.patch(
+    `${API_BASE_URL}/dealer/portal-policies/${item.id}/restore`,
+    {},
+    { headers: headers() },
+  );
+
+  await loadPolicies();
+};
 
   return (
     <main className="min-h-screen bg-gray-50 p-4 md:p-6">
@@ -1159,25 +1262,241 @@ visibleToCustomer: item.visibleToCustomer === true,
         </section>
 
         <section className="mt-6 rounded-2xl bg-white p-6 shadow">
-          <h2 className="text-lg font-bold text-gray-800">
-            Future Portal Controls
-          </h2>
+  <div className="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h2 className="text-lg font-bold text-gray-800">
+        Portal Content Management
+      </h2>
+      <p className="mt-1 text-sm text-gray-500">
+        Manage customer-facing documents, policies, warranty terms and portal content.
+      </p>
+    </div>
 
-          <div className="mt-4 grid gap-3 md:grid-cols-2">
+    <label className="flex items-center gap-2 rounded-xl border px-3 py-2 text-sm">
+      <input
+        type="checkbox"
+        checked={showHiddenPolicies}
+        onChange={(e) => setShowHiddenPolicies(e.target.checked)}
+      />
+      View Hidden Documents
+    </label>
+  </div>
 
-            <div className="rounded-xl bg-gray-50 p-4">
-              Dealer support settings
-            </div>
+  <div className="mt-5 rounded-2xl border p-4">
+    <h3 className="font-bold text-gray-800">
+      {policyForm.id ? 'Edit Portal Document' : 'Add Portal Document'}
+    </h3>
 
-            <div className="rounded-xl bg-gray-50 p-4">
-              Customer portal settings
-            </div>
+    <div className="mt-4 grid gap-3 md:grid-cols-2">
+      <input
+        placeholder="Document Title"
+        value={policyForm.title}
+        onChange={(e) =>
+          setPolicyForm({
+            ...policyForm,
+            title: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
 
-            <div className="rounded-xl bg-gray-50 p-4">
-              Notification settings
+      <select
+        value={policyForm.language}
+        onChange={(e) =>
+          setPolicyForm({
+            ...policyForm,
+            language: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      >
+        <option value="HINDI">Hindi</option>
+        <option value="ENGLISH">English</option>
+      </select>
+
+      <input
+        placeholder="PDF URL (optional)"
+        value={policyForm.pdfUrl}
+        onChange={(e) =>
+          setPolicyForm({
+            ...policyForm,
+            pdfUrl: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
+
+      <input
+        type="number"
+        placeholder="Sort Order"
+        value={policyForm.sortOrder}
+        onChange={(e) =>
+          setPolicyForm({
+            ...policyForm,
+            sortOrder: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
+    </div>
+
+    <textarea
+      rows={8}
+      placeholder="Document / policy content"
+      value={policyForm.content}
+      onChange={(e) =>
+        setPolicyForm({
+          ...policyForm,
+          content: e.target.value,
+        })
+      }
+      className="mt-3 w-full rounded-xl border p-3"
+    />
+
+    <div className="mt-3 grid gap-3 md:grid-cols-2">
+      <label className="flex items-center gap-2 rounded-xl border p-3 text-sm font-semibold">
+        <input
+          type="checkbox"
+          checked={!!policyForm.visibleToCustomer}
+          onChange={(e) =>
+            setPolicyForm({
+              ...policyForm,
+              visibleToCustomer: e.target.checked,
+            })
+          }
+        />
+        Visible to Customer Portal
+      </label>
+
+      <label className="flex items-center gap-2 rounded-xl border p-3 text-sm font-semibold">
+        <input
+          type="checkbox"
+          checked={!!policyForm.isActive}
+          onChange={(e) =>
+            setPolicyForm({
+              ...policyForm,
+              isActive: e.target.checked,
+            })
+          }
+        />
+        Active
+      </label>
+    </div>
+
+    <div className="mt-4 flex flex-wrap gap-3">
+      <button
+        onClick={savePolicy}
+        disabled={policySaving}
+        className="rounded-xl bg-blue-600 px-5 py-3 font-bold text-white disabled:opacity-60"
+      >
+        {policySaving ? 'Saving...' : policyForm.id ? 'Update Document' : 'Save Document'}
+      </button>
+
+      {policyForm.id && (
+        <button
+          onClick={() => setPolicyForm(emptyPolicyForm)}
+          className="rounded-xl bg-gray-200 px-5 py-3 font-bold text-gray-700"
+        >
+          Cancel Edit
+        </button>
+      )}
+    </div>
+  </div>
+
+  <div className="mt-6 grid gap-4 md:grid-cols-2">
+    {policies.length === 0 ? (
+      <div className="rounded-2xl border border-dashed p-6 text-center text-sm font-semibold text-gray-500 md:col-span-2">
+        No portal documents found.
+      </div>
+    ) : (
+      policies.map((item) => (
+        <div
+          key={item.id}
+          className={`rounded-2xl border p-4 ${
+            item.isHidden ? 'bg-gray-100 opacity-70' : 'bg-white'
+          }`}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-lg font-bold text-gray-800">
+                {item.title}
+              </p>
+
+              <p className="mt-1 text-sm text-gray-500">
+                {item.language || 'HINDI'} | Sort: {item.sortOrder || 0}
+              </p>
+
+              <div className="mt-2 flex flex-wrap gap-2">
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-bold ${
+                    item.visibleToCustomer
+                      ? 'bg-orange-100 text-orange-700'
+                      : 'bg-gray-100 text-gray-600'
+                  }`}
+                >
+                  {item.visibleToCustomer ? 'CUSTOMER VISIBLE' : 'NOT CUSTOMER VISIBLE'}
+                </span>
+
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-bold ${
+                    item.isActive
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-red-100 text-red-700'
+                  }`}
+                >
+                  {item.isActive ? 'ACTIVE' : 'INACTIVE'}
+                </span>
+
+                {item.isHidden && (
+                  <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700">
+                    HIDDEN
+                  </span>
+                )}
+              </div>
             </div>
           </div>
-        </section>
+
+          {item.content && (
+            <p className="mt-3 line-clamp-4 whitespace-pre-line text-sm text-gray-600">
+              {item.content}
+            </p>
+          )}
+
+          {item.pdfUrl && (
+            <p className="mt-3 break-all rounded-xl bg-blue-50 p-3 text-xs font-semibold text-blue-700">
+              PDF: {item.pdfUrl}
+            </p>
+          )}
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              onClick={() => startEditPolicy(item)}
+              className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white"
+            >
+              Edit
+            </button>
+
+            {item.isHidden ? (
+              <button
+                onClick={() => restorePolicy(item)}
+                className="rounded-xl bg-green-600 px-3 py-2 text-sm font-semibold text-white"
+              >
+                Restore
+              </button>
+            ) : (
+              <button
+                onClick={() => hidePolicy(item)}
+                className="rounded-xl bg-red-600 px-3 py-2 text-sm font-semibold text-white"
+              >
+                Hide
+              </button>
+            )}
+          </div>
+        </div>
+      ))
+    )}
+  </div>
+</section>
       </div>
     </main>
   );
