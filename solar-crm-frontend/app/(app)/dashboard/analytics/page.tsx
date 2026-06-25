@@ -88,16 +88,34 @@ function formatLabel(value: string) {
 }
 
 function isMoneyKey(key: string) {
+  const normalized = key.toLowerCase();
+
+  if (
+    normalized.includes('review') ||
+    normalized.includes('calls') ||
+    normalized.includes('contacts') ||
+    normalized.includes('leads') ||
+    normalized.includes('meetings') ||
+    normalized.includes('projects') ||
+    normalized.includes('complaints') ||
+    normalized.includes('assignments') ||
+    normalized.includes('converted') ||
+    normalized.includes('pending reviews') ||
+    normalized.includes('pendingreviews')
+  ) {
+    return false;
+  }
+
   return (
-    key.toLowerCase().includes('amount') ||
-    key.toLowerCase().includes('expense') ||
-    key.toLowerCase().includes('cost') ||
-    key.toLowerCase().includes('collected') ||
-    key.toLowerCase().includes('pending') ||
-    key.toLowerCase().includes('debit') ||
-    key.toLowerCase().includes('credit') ||
-    key.toLowerCase().includes('receivable') ||
-    key.toLowerCase().includes('value')
+    normalized.includes('amount') ||
+    normalized.includes('expense') ||
+    normalized.includes('cost') ||
+    normalized.includes('collected') ||
+    normalized.includes('payment') ||
+    normalized.includes('debit') ||
+    normalized.includes('credit') ||
+    normalized.includes('receivable') ||
+    normalized.includes('value')
   );
 }
 
