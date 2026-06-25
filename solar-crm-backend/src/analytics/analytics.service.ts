@@ -62,6 +62,7 @@ import {
 } from '../dealer/dealer-complaint.entity';
 
 import { TelecallingAnalyticsBuilder } from './builders/telecalling.analytics';
+import { TelecallingAssistantAnalyticsBuilder } from './builders/telecalling-assistant.analytics';
 
 type AnalyticsQuery = {
   month?: string;
@@ -576,111 +577,17 @@ export class AnalyticsService {
   ).build(query, user);
 }
 
-  private async getTelecallingAssistantReport(query: AnalyticsQuery, user: any) {
-    const { start, end } = this.getDateRange(query);
-    const userIds = await this.getAllowedUserIds(query, user);
-
-    const callsQb = this.callLogRepository
-      .createQueryBuilder('call')
-      .where('call.createdAt BETWEEN :start AND :end', { start, end })
-      .andWhere('call.reviewAssignedTo IS NOT NULL');
-
-    if (userIds.length) {
-      callsQb.andWhere('call.reviewAssignedTo IN (:...userIds)', { userIds });
-    }
-
-    const [
-  assigned,
-  pending,
-  potential,
-  converted,
-  rejected,
-  leadsCreated,
-  meetingsScheduled,
-  meetingsConverted,
-] = await Promise.all([
-      callsQb.clone().getCount(),
-      callsQb.clone().andWhere('call.reviewStatus = :status', { status: CallReviewStatus.PENDING }).getCount(),
-      callsQb.clone().andWhere('call.reviewStatus = :status', { status: CallReviewStatus.POTENTIAL }).getCount(),
-      callsQb.clone().andWhere('call.reviewStatus = :status', { status: CallReviewStatus.CONVERTED }).getCount(),
-      callsQb.clone().andWhere('call.reviewStatus = :status', { status: CallReviewStatus.REJECTED }).getCount(),
-      this.leadRepository
-  .createQueryBuilder('lead')
-  .where('lead.createdAt BETWEEN :start AND :end', { start, end })
-  .andWhere(
-    userIds.length ? 'lead.createdBy IN (:...userIds)' : '1=1',
-    { userIds },
-  )
-  .getCount(),
-
-this.meetingRepository
-  .createQueryBuilder('meeting')
-  .where('meeting.createdAt BETWEEN :start AND :end', { start, end })
-  .andWhere(
-    userIds.length
-      ? '(meeting.createdBy IN (:...userIds) OR meeting.assignedTo IN (:...userIds))'
-      : '1=1',
-    { userIds },
-  )
-  .getCount(),
-
-this.meetingRepository
-  .createQueryBuilder('meeting')
-  .where('meeting.updatedAt BETWEEN :start AND :end', { start, end })
-  .andWhere(
-    userIds.length
-      ? '(meeting.createdBy IN (:...userIds) OR meeting.assignedTo IN (:...userIds) OR meeting.updatedBy IN (:...userIds))'
-      : '1=1',
-    { userIds },
-  )
-  .andWhere(
-    '(meeting.convertToProject = true OR meeting.status = :convertedStatus)',
-    { convertedStatus: MeetingStatus.CONVERTED_TO_PROJECT },
-  )
-  .getCount(),
-    ]);
-
-    const assistantWise = await callsQb
-      .clone()
-      .select('call.reviewAssignedTo', 'userId')
-      .addSelect('COALESCE(call.reviewAssignedToName, \'Unassigned\')', 'name')
-      .addSelect('COUNT(*)', 'assigned')
-      .addSelect(`SUM(CASE WHEN call.reviewStatus = :converted THEN 1 ELSE 0 END)`, 'converted')
-      .addSelect(`SUM(CASE WHEN call.reviewStatus = :pending THEN 1 ELSE 0 END)`, 'pending')
-      .setParameters({
-        converted: CallReviewStatus.CONVERTED,
-        pending: CallReviewStatus.PENDING,
-      })
-      .groupBy('call.reviewAssignedTo')
-      .addGroupBy('call.reviewAssignedToName')
-      .orderBy('COUNT(*)', 'DESC')
-      .limit(50)
-      .getRawMany();
-
-    return {
-      department: 'TELECALLING_ASSISTANT',
-      cards: {
-  assigned,
-  pending,
-  potential,
-  converted,
-  rejected,
-  leadsCreated,
-  meetingsScheduled,
-  meetingsConverted,
-},
-      charts: {
-        reviewTrend: await this.chartDaily('call_log', 'createdAt', start, end),
-      },
-      rows: assistantWise.map((row) => ({
-        userId: row.userId ? Number(row.userId) : null,
-        name: row.name,
-        assigned: Number(row.assigned || 0),
-        converted: Number(row.converted || 0),
-        pending: Number(row.pending || 0),
-      })),
-    };
-  }
+  private async getTelecallingAssistantReport(
+  query: AnalyticsQuery,
+  user: any,
+) {
+  return new TelecallingAssistantAnalyticsBuilder(
+    this.userRepository,
+    this.callLogRepository,
+    this.leadRepository,
+    this.meetingRepository,
+  ).build(query, user);
+}
 
   private async getLeadsReport(query: AnalyticsQuery, user: any) {
     const { start, end } = this.getDateRange(query);
