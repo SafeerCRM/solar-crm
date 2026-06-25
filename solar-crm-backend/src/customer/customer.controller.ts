@@ -127,6 +127,16 @@ resetPortalUsername(
   return this.customerService.resetPortalUsername(id, body, user);
 }
 
+@Roles('OWNER', 'MARKETING_HEAD', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER')
+@Patch(':id/reset-portal-password')
+resetPortalPassword(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.customerService.resetPortalPassword(id, body, user);
+}
+
 @Roles(
   'OWNER',
   'MARKETING_HEAD',

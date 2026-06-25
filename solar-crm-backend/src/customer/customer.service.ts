@@ -552,4 +552,29 @@ async resetPortalUsername(id: number, body: any, user: any) {
 
   return this.customerRepository.save(customer);
 }
+
+async resetPortalPassword(id: number, body: any, user: any) {
+  if (!this.canManage(user)) {
+    throw new ForbiddenException(
+      'You are not allowed to reset customer portal password',
+    );
+  }
+
+  const newPassword = this.normalizeText(body?.portalPassword);
+
+  if (!newPassword) {
+    throw new BadRequestException('Password is required');
+  }
+
+  if (newPassword.length < 4) {
+    throw new BadRequestException('Password must be at least 4 characters');
+  }
+
+  const customer = await this.findOne(id);
+
+  (customer as any).portalPasswordHash = newPassword;
+  customer.isPortalEnabled = true;
+
+  return this.customerRepository.save(customer);
+}
 }

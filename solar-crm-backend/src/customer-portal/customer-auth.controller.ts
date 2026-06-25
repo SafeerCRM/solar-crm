@@ -379,4 +379,28 @@ async getPaymentReceiptActivities(
     Number(payload.customerId),
   );
 }
+
+@Patch('change-password')
+async changeCustomerPassword(
+  @Req() req: any,
+  @Body() body: any,
+) {
+  const authHeader = req.headers?.authorization || '';
+  const token = authHeader.replace('Bearer ', '');
+
+  if (!token) {
+    throw new UnauthorizedException('Customer token missing');
+  }
+
+  const payload: any = jwt.verify(token, 'mysecretkey');
+
+  if (!payload?.customerId) {
+    throw new UnauthorizedException('Invalid customer token');
+  }
+
+  return this.service.changeCustomerPortalPassword(
+    Number(payload.customerId),
+    body,
+  );
+}
 }

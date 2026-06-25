@@ -777,6 +777,57 @@ const savedReceipt = await this.paymentReceiptRepository.save(receipt);
   };
 }
 
+async changeCustomerPortalPassword(customerId: number, body: any) {
+  const currentPassword = String(body?.currentPassword || '').trim();
+  const newPassword = String(body?.newPassword || '').trim();
+  const confirmPassword = String(body?.confirmPassword || '').trim();
+
+  if (!currentPassword || !newPassword || !confirmPassword) {
+    throw new BadRequestException(
+      'Current password, new password and confirm password are required',
+    );
+  }
+
+  if (newPassword.length < 4) {
+    throw new BadRequestException('New password must be at least 4 characters');
+  }
+
+  if (newPassword !== confirmPassword) {
+    throw new BadRequestException('New password and confirm password do not match');
+  }
+
+  const customer = await this.customerRepository.findOne({
+    where: {
+      id: customerId,
+      isPortalEnabled: true,
+      isHidden: false,
+    } as any,
+  });
+
+  if (!customer) {
+    throw new NotFoundException('Customer portal access not found');
+  }
+
+  const expectedPassword =
+    (customer as any).portalPasswordHash ||
+    customer.mobile ||
+    customer.electricityKNumber ||
+    customer.customerCode;
+
+  if (currentPassword !== expectedPassword) {
+    throw new UnauthorizedException('Current password is incorrect');
+  }
+
+  (customer as any).portalPasswordHash = newPassword;
+
+  await this.customerRepository.save(customer);
+
+  return {
+    success: true,
+    message: 'Password changed successfully',
+  };
+}
+
 async uploadComplaintAttachments(files: any[], user: any) {
   if (!Array.isArray(files) || files.length === 0) {
     throw new BadRequestException('At least one complaint attachment is required');
