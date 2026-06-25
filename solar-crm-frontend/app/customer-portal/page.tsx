@@ -9,6 +9,15 @@ export default function CustomerPortalPage() {
   const [dashboard, setDashboard] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
+  const [showPasswordBox, setShowPasswordBox] = useState(false);
+const [passwordForm, setPasswordForm] = useState({
+  currentPassword: '',
+  newPassword: '',
+  confirmPassword: '',
+});
+const [passwordSaving, setPasswordSaving] = useState(false);
+const [showPasswordText, setShowPasswordText] = useState(false);
+
   const projects = dashboard?.projects || [];
   const complaints = dashboard?.complaints || [];
   const notifications = dashboard?.notifications || [];
@@ -121,6 +130,56 @@ const activityFeed = [
     }
   };
 
+  const changePassword = async () => {
+  if (!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
+    alert('Please fill all password fields');
+    return;
+  }
+
+  if (passwordForm.newPassword.length < 4) {
+    alert('New password must be at least 4 characters');
+    return;
+  }
+
+  if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+    alert('New password and confirm password do not match');
+    return;
+  }
+
+  try {
+    setPasswordSaving(true);
+
+    const token = localStorage.getItem('customer_token');
+
+    const res = await fetch(`${API_BASE_URL}/customer-auth/change-password`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(passwordForm),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      alert(data.message || 'Failed to change password');
+      return;
+    }
+
+    alert('Password changed successfully. Please login again.');
+
+    localStorage.removeItem('customer_token');
+    localStorage.removeItem('customer');
+    window.location.href = '/customer-login';
+  } catch (error) {
+    console.error(error);
+    alert('Failed to change password');
+  } finally {
+    setPasswordSaving(false);
+  }
+};
+
   const logout = () => {
     localStorage.removeItem('customer_token');
     localStorage.removeItem('customer');
@@ -164,12 +223,21 @@ const activityFeed = [
               </p>
             </div>
 
-            <button
-              onClick={logout}
-              className="rounded-2xl bg-white/20 px-4 py-2 text-sm font-bold backdrop-blur hover:bg-white/30"
-            >
-              Logout
-            </button>
+            <div className="flex flex-wrap gap-2">
+  <button
+    onClick={() => setShowPasswordBox(!showPasswordBox)}
+    className="rounded-2xl bg-white/20 px-4 py-2 text-sm font-bold backdrop-blur hover:bg-white/30"
+  >
+    Change Password
+  </button>
+
+  <button
+    onClick={logout}
+    className="rounded-2xl bg-white/20 px-4 py-2 text-sm font-bold backdrop-blur hover:bg-white/30"
+  >
+    Logout
+  </button>
+</div>
           </div>
 
           <div className="mt-8 grid gap-4 md:grid-cols-4">
@@ -193,6 +261,85 @@ const activityFeed = [
             />
           </div>
         </div>
+
+        {showPasswordBox && (
+  <div className="mt-4 rounded-[2rem] bg-white p-5 shadow-xl">
+    <h2 className="text-xl font-black text-gray-900">
+      Change Password
+    </h2>
+
+    <p className="mt-1 text-sm text-gray-500">
+      Update your customer portal login password.
+    </p>
+
+    <div className="mt-4 grid gap-3 md:grid-cols-3">
+      <input
+        type={showPasswordText ? 'text' : 'password'}
+        placeholder="Current Password"
+        value={passwordForm.currentPassword}
+        onChange={(e) =>
+          setPasswordForm({
+            ...passwordForm,
+            currentPassword: e.target.value,
+          })
+        }
+        className="rounded-2xl border p-3"
+      />
+
+      <input
+        type={showPasswordText ? 'text' : 'password'}
+        placeholder="New Password"
+        value={passwordForm.newPassword}
+        onChange={(e) =>
+          setPasswordForm({
+            ...passwordForm,
+            newPassword: e.target.value,
+          })
+        }
+        className="rounded-2xl border p-3"
+      />
+
+      <input
+        type={showPasswordText ? 'text' : 'password'}
+        placeholder="Confirm New Password"
+        value={passwordForm.confirmPassword}
+        onChange={(e) =>
+          setPasswordForm({
+            ...passwordForm,
+            confirmPassword: e.target.value,
+          })
+        }
+        className="rounded-2xl border p-3"
+      />
+    </div>
+
+    <label className="mt-3 flex items-center gap-2 text-sm font-semibold text-gray-600">
+      <input
+        type="checkbox"
+        checked={showPasswordText}
+        onChange={(e) => setShowPasswordText(e.target.checked)}
+      />
+      Show Password
+    </label>
+
+    <div className="mt-4 flex flex-wrap gap-3">
+      <button
+        onClick={changePassword}
+        disabled={passwordSaving}
+        className="rounded-2xl bg-orange-500 px-5 py-3 text-sm font-black text-white disabled:opacity-60"
+      >
+        {passwordSaving ? 'Saving...' : 'Update Password'}
+      </button>
+
+      <button
+        onClick={() => setShowPasswordBox(false)}
+        className="rounded-2xl bg-gray-200 px-5 py-3 text-sm font-black text-gray-700"
+      >
+        Cancel
+      </button>
+    </div>
+  </div>
+)}
 
         <div className="mt-6 rounded-[2rem] bg-white p-6 shadow-xl">
   <div className="flex flex-wrap items-center justify-between gap-3">

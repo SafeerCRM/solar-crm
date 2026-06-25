@@ -75,6 +75,12 @@ export default function CustomersPage() {
 const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 const [showProjectsModal, setShowProjectsModal] = useState(false);
 const [portalLoadingId, setPortalLoadingId] = useState<number | null>(null);
+const [passwordModalCustomer, setPasswordModalCustomer] = useState<Customer | null>(null);
+const [portalPasswordForm, setPortalPasswordForm] = useState({
+  newPassword: '',
+  confirmPassword: '',
+});
+const [showPortalPassword, setShowPortalPassword] = useState(false);
 
   const [search, setSearch] = useState('');
   const [city, setCity] = useState('');
@@ -361,6 +367,51 @@ const resetPortalUsername = async (customer: Customer) => {
   } catch (error: any) {
     console.error(error);
     alert(error?.response?.data?.message || 'Failed to reset portal username');
+  } finally {
+    setPortalLoadingId(null);
+  }
+};
+
+const resetPortalPassword = async () => {
+  if (!passwordModalCustomer) return;
+
+  if (!portalPasswordForm.newPassword.trim()) {
+    alert('Password is required');
+    return;
+  }
+
+  if (portalPasswordForm.newPassword.trim().length < 4) {
+    alert('Password must be at least 4 characters');
+    return;
+  }
+
+  if (portalPasswordForm.newPassword !== portalPasswordForm.confirmPassword) {
+    alert('New password and confirm password do not match');
+    return;
+  }
+
+  try {
+    setPortalLoadingId(passwordModalCustomer.id);
+
+    await axios.patch(
+      `${API_BASE_URL}/customers/${passwordModalCustomer.id}/reset-portal-password`,
+      { portalPassword: portalPasswordForm.newPassword },
+      { headers: getAuthHeaders() },
+    );
+
+    alert('Customer portal password updated successfully');
+
+    setPasswordModalCustomer(null);
+    setPortalPasswordForm({
+      newPassword: '',
+      confirmPassword: '',
+    });
+    setShowPortalPassword(false);
+
+    fetchCustomers(page);
+  } catch (error: any) {
+    console.error(error);
+    alert(error?.response?.data?.message || 'Failed to reset portal password');
   } finally {
     setPortalLoadingId(null);
   }
@@ -803,6 +854,21 @@ const resetPortalUsername = async (customer: Customer) => {
   Reset Username
 </button>
 
+<button
+  onClick={() => {
+    setPasswordModalCustomer(customer);
+    setPortalPasswordForm({
+      newPassword: customer.mobile || customer.electricityKNumber || customer.customerCode || '',
+      confirmPassword: customer.mobile || customer.electricityKNumber || customer.customerCode || '',
+    });
+    setShowPortalPassword(false);
+  }}
+  disabled={portalLoadingId === customer.id}
+  className="rounded-xl bg-purple-600 px-3 py-2 text-sm font-semibold text-white hover:bg-purple-700 disabled:opacity-50"
+>
+  Reset Password
+</button>
+
                             <button
                               onClick={() => hideCustomer(customer)}
                               className="rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700"
@@ -934,6 +1000,83 @@ const resetPortalUsername = async (customer: Customer) => {
           </div>
         </div>
       )}
+
+      {passwordModalCustomer && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+    <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
+      <h2 className="text-xl font-bold text-gray-900">
+        Reset Customer Portal Password
+      </h2>
+
+      <p className="mt-2 text-sm text-gray-500">
+        Customer: {passwordModalCustomer.customerName || '-'}
+      </p>
+
+      <div className="mt-5 space-y-3">
+        <input
+          type={showPortalPassword ? 'text' : 'password'}
+          placeholder="New Password"
+          value={portalPasswordForm.newPassword}
+          onChange={(e) =>
+            setPortalPasswordForm({
+              ...portalPasswordForm,
+              newPassword: e.target.value,
+            })
+          }
+          className="w-full rounded-xl border p-3"
+        />
+
+        <input
+          type={showPortalPassword ? 'text' : 'password'}
+          placeholder="Confirm Password"
+          value={portalPasswordForm.confirmPassword}
+          onChange={(e) =>
+            setPortalPasswordForm({
+              ...portalPasswordForm,
+              confirmPassword: e.target.value,
+            })
+          }
+          className="w-full rounded-xl border p-3"
+        />
+
+        <label className="flex items-center gap-2 text-sm font-semibold text-gray-600">
+          <input
+            type="checkbox"
+            checked={showPortalPassword}
+            onChange={(e) => setShowPortalPassword(e.target.checked)}
+          />
+          Show Password
+        </label>
+      </div>
+
+      <div className="mt-5 flex flex-wrap gap-3">
+        <button
+          onClick={resetPortalPassword}
+          disabled={portalLoadingId === passwordModalCustomer.id}
+          className="rounded-xl bg-purple-600 px-5 py-3 font-bold text-white disabled:opacity-60"
+        >
+          {portalLoadingId === passwordModalCustomer.id
+            ? 'Saving...'
+            : 'Save Password'}
+        </button>
+
+        <button
+          onClick={() => {
+            setPasswordModalCustomer(null);
+            setPortalPasswordForm({
+              newPassword: '',
+              confirmPassword: '',
+            });
+            setShowPortalPassword(false);
+          }}
+          className="rounded-xl bg-gray-200 px-5 py-3 font-bold text-gray-700"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 }
