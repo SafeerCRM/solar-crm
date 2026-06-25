@@ -57,4 +57,9 @@ export class AnalyticsController {
   getUsers(@Query() query: any, @CurrentUser() user: any) {
     return this.analyticsService.getUsers(query, user);
   }
+
+    @Get('filter-options')
+  getFilterOptions(@CurrentUser() user: any) {
+    return this.analyticsService.getFilterOptions(user);
+  }
 }

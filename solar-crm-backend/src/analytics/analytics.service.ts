@@ -227,6 +227,52 @@ export class AnalyticsService {
     return qb;
   }
 
+    private async getDailyTrend(
+    tableName: string,
+    dateColumn: string,
+    start: Date,
+    end: Date,
+    extraWhere = '1=1',
+    params: Record<string, any> = {},
+  ) {
+    const raw = await this.userRepository.query(
+      `
+      SELECT TO_CHAR("${dateColumn}", 'YYYY-MM-DD') AS label, COUNT(*)::int AS value
+      FROM ${tableName}
+      WHERE "${dateColumn}" BETWEEN $1 AND $2
+      AND ${extraWhere}
+      GROUP BY TO_CHAR("${dateColumn}", 'YYYY-MM-DD')
+      ORDER BY label ASC
+      `,
+      [start, end, ...Object.values(params)],
+    );
+
+    return raw.map((item: any) => ({
+      label: item.label,
+      value: Number(item.value || 0),
+    }));
+  }
+
+  private async getPaymentDailyTrend(start: Date, end: Date) {
+    const raw = await this.paymentRepository.query(
+      `
+      SELECT TO_CHAR("createdAt", 'YYYY-MM-DD') AS label,
+      COALESCE(SUM("paidAmount"), 0)::numeric AS value
+      FROM project_payment_installments
+      WHERE "createdAt" BETWEEN $1 AND $2
+      AND "isHidden" = false
+      GROUP BY TO_CHAR("createdAt", 'YYYY-MM-DD')
+      ORDER BY label ASC
+      `,
+      [start, end],
+    );
+
+    return raw.map((item: any) => ({
+      label: item.label,
+      value: Number(item.value || 0),
+    }));
+  }
+
   async getOverview(query: AnalyticsFilters, user: any) {
     const contactsQb = this.contactRepository.createQueryBuilder('contact').where('1=1');
     this.applyContactFilters(contactsQb, query, user);
@@ -246,6 +292,8 @@ export class AnalyticsService {
 
     const paymentsQb = this.paymentRepository.createQueryBuilder('payment').where('1=1');
     this.applyPaymentFilters(paymentsQb, query, user);
+
+        const trendRange = this.getDateRange(query);
 
     const [
       totalContacts,
@@ -278,6 +326,44 @@ export class AnalyticsService {
         totalPaymentAmount: Number(paymentRaw?.totalAmount || 0),
         totalCollectedAmount: Number(paymentRaw?.paidAmount || 0),
         totalPendingAmount: Number(paymentRaw?.pendingAmount || 0),
+      },
+
+            trends: {
+        contacts: await this.getDailyTrend(
+          'telecalling_contact',
+          'createdAt',
+          trendRange.start,
+          trendRange.end,
+        ),
+        calls: await this.getDailyTrend(
+          'call_log',
+          'createdAt',
+          trendRange.start,
+          trendRange.end,
+        ),
+        leads: await this.getDailyTrend(
+          'lead',
+          'createdAt',
+          trendRange.start,
+          trendRange.end,
+        ),
+        meetings: await this.getDailyTrend(
+          'meetings',
+          'createdAt',
+          trendRange.start,
+          trendRange.end,
+        ),
+        projects: await this.getDailyTrend(
+          'project',
+          'createdAt',
+          trendRange.start,
+          trendRange.end,
+          `"isHidden" = false`,
+        ),
+        payments: await this.getPaymentDailyTrend(
+          trendRange.start,
+          trendRange.end,
+        ),
       },
     };
   }
@@ -328,6 +414,25 @@ export class AnalyticsService {
       .limit(50)
       .getRawMany();
 
+      const telecallerLeaderboard = await callsBaseQb
+  .clone()
+  .select('call.telecallerId', 'userId')
+  .addSelect('COUNT(*)', 'totalCalls')
+  .addSelect(
+    `SUM(CASE WHEN UPPER(COALESCE(call.callStatus, '')) = 'INTERESTED' THEN 1 ELSE 0 END)`,
+    'interestedCalls',
+  )
+  .addSelect(
+    `SUM(CASE WHEN call.reviewStatus = :converted THEN 1 ELSE 0 END)`,
+    'convertedCalls',
+  )
+  .setParameter('converted', CallReviewStatus.CONVERTED)
+  .where('call.telecallerId IS NOT NULL')
+  .groupBy('call.telecallerId')
+  .orderBy('COUNT(*)', 'DESC')
+  .limit(20)
+  .getRawMany();
+
     return {
       callsByStatus: callsByStatus.map((row) => ({
         label: row.label,
@@ -345,6 +450,12 @@ export class AnalyticsService {
         callbackCalls: Number(row.callbackCalls || 0),
         interestedCalls: Number(row.interestedCalls || 0),
       })),
+      leaderboard: telecallerLeaderboard.map((row) => ({
+  userId: row.userId ? Number(row.userId) : null,
+  totalCalls: Number(row.totalCalls || 0),
+  interestedCalls: Number(row.interestedCalls || 0),
+  convertedCalls: Number(row.convertedCalls || 0),
+})),
     };
   }
 
@@ -394,6 +505,42 @@ export class AnalyticsService {
       })
       .getCount();
 
+      const branchWise = await baseQb
+  .clone()
+  .select('COALESCE(project.branchName, \'Unassigned Branch\')', 'label')
+  .addSelect('COUNT(*)', 'projects')
+  .addSelect('COALESCE(SUM(project.finalCost), 0)', 'value')
+  .groupBy('project.branchName')
+  .orderBy('projects', 'DESC')
+  .limit(30)
+  .getRawMany();
+
+const cityWise = await baseQb
+  .clone()
+  .select('COALESCE(project.city, \'Unknown City\')', 'label')
+  .addSelect('COUNT(*)', 'projects')
+  .addSelect('COALESCE(SUM(project.finalCost), 0)', 'value')
+  .groupBy('project.city')
+  .orderBy('projects', 'DESC')
+  .limit(30)
+  .getRawMany();
+
+const projectValueByType = await baseQb
+  .clone()
+  .select('COALESCE(project.projectType, \'UNKNOWN\')', 'label')
+  .addSelect('COALESCE(SUM(project.finalCost), 0)', 'value')
+  .groupBy('project.projectType')
+  .orderBy('value', 'DESC')
+  .getRawMany();
+
+const projectValueByStatus = await baseQb
+  .clone()
+  .select('COALESCE(project.status, \'UNKNOWN\')', 'label')
+  .addSelect('COALESCE(SUM(project.finalCost), 0)', 'value')
+  .groupBy('project.status')
+  .orderBy('value', 'DESC')
+  .getRawMany();
+
     return {
       cards: {
         cashProjects,
@@ -409,6 +556,27 @@ export class AnalyticsService {
         label: row.label,
         value: Number(row.value || 0),
       })),
+      branchWise: branchWise.map((row) => ({
+  label: row.label,
+  projects: Number(row.projects || 0),
+  value: Number(row.value || 0),
+})),
+
+cityWise: cityWise.map((row) => ({
+  label: row.label,
+  projects: Number(row.projects || 0),
+  value: Number(row.value || 0),
+})),
+
+projectValueByType: projectValueByType.map((row) => ({
+  label: row.label,
+  value: Number(row.value || 0),
+})),
+
+projectValueByStatus: projectValueByStatus.map((row) => ({
+  label: row.label,
+  value: Number(row.value || 0),
+})),
     };
   }
 
@@ -447,6 +615,15 @@ export class AnalyticsService {
     const totalAmount = Number(summary?.totalAmount || 0);
     const paidAmount = Number(summary?.paidAmount || 0);
 
+    const paymentValueByStatus = await baseQb
+  .clone()
+  .select('COALESCE(payment.status, \'UNKNOWN\')', 'label')
+  .addSelect('COALESCE(SUM(payment.paidAmount), 0)', 'paidAmount')
+  .addSelect('COALESCE(SUM(payment.pendingAmount), 0)', 'pendingAmount')
+  .groupBy('payment.status')
+  .orderBy('paidAmount', 'DESC')
+  .getRawMany();
+
     return {
       cards: {
         totalAmount,
@@ -465,6 +642,11 @@ export class AnalyticsService {
         paidAmount: Number(row.paidAmount || 0),
         pendingAmount: Number(row.pendingAmount || 0),
       })),
+      paymentValueByStatus: paymentValueByStatus.map((row) => ({
+  label: row.label,
+  paidAmount: Number(row.paidAmount || 0),
+  pendingAmount: Number(row.pendingAmount || 0),
+})),
     };
   }
 
@@ -1024,6 +1206,65 @@ export class AnalyticsService {
       canViewAll,
       currentUserRoles: roles,
       users: result,
+    };
+  }
+
+    async getFilterOptions(user: any) {
+    const canViewAll = this.canViewAll(user);
+    const currentUserId = Number(user?.id || user?.userId);
+
+    const usersQb = this.userRepository
+      .createQueryBuilder('user')
+      .select(['user.id', 'user.name', 'user.email', 'user.roles'])
+      .where('user.isHidden = false')
+      .orderBy('user.name', 'ASC');
+
+    if (!canViewAll && currentUserId) {
+      usersQb.andWhere('user.id = :currentUserId', { currentUserId });
+    }
+
+    const users = await usersQb.getMany();
+
+    const branchesRaw = await this.projectRepository
+      .createQueryBuilder('project')
+      .select('DISTINCT project.branchName', 'value')
+      .where('project.isHidden = false')
+      .andWhere('project.branchName IS NOT NULL')
+      .andWhere("TRIM(project.branchName) <> ''")
+      .orderBy('project.branchName', 'ASC')
+      .limit(200)
+      .getRawMany();
+
+    const citiesRaw = await this.contactRepository
+      .createQueryBuilder('contact')
+      .select('DISTINCT contact.city', 'value')
+      .where('contact.city IS NOT NULL')
+      .andWhere("TRIM(contact.city) <> ''")
+      .orderBy('contact.city', 'ASC')
+      .limit(300)
+      .getRawMany();
+
+    const zonesRaw = await this.contactRepository
+      .createQueryBuilder('contact')
+      .select('DISTINCT contact.zone', 'value')
+      .where('contact.zone IS NOT NULL')
+      .andWhere("TRIM(contact.zone) <> ''")
+      .orderBy('contact.zone', 'ASC')
+      .limit(200)
+      .getRawMany();
+
+    return {
+      canViewAll,
+      users: users.map((item: any) => ({
+        id: item.id,
+        name: item.name,
+        email: item.email,
+        roles: Array.isArray(item.roles) ? item.roles : [],
+      })),
+      roles: Object.values(UserRole),
+      branches: branchesRaw.map((item) => item.value).filter(Boolean),
+      cities: citiesRaw.map((item) => item.value).filter(Boolean),
+      zones: zonesRaw.map((item) => item.value).filter(Boolean),
     };
   }
 }
