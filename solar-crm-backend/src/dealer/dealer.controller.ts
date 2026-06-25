@@ -164,6 +164,38 @@ toggleDealerKitAvailability(
   return this.dealerService.toggleDealerKitAvailability(id, body);
 }
 
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Get('portal-policies')
+listPortalPolicies(@Query() query: any) {
+  return this.dealerService.listPortalPolicies(query);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Post('portal-policies')
+savePortalPolicy(@Body() body: any, @CurrentUser() user: any) {
+  return this.dealerService.savePortalPolicy(body, user);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Patch('portal-policies/:id/hide')
+hidePortalPolicy(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.dealerService.hidePortalPolicy(id, body, user);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Patch('portal-policies/:id/restore')
+restorePortalPolicy(@Param('id', ParseIntPipe) id: number) {
+  return this.dealerService.restorePortalPolicy(id);
+}
+
   @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('OWNER', 'TRADING_MANAGER')
 @Patch(':id/portal-password')

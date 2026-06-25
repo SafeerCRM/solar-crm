@@ -28,6 +28,7 @@ import { DealerPortalCompanySetting } from './dealer-portal-company-setting.enti
 import { DealerDeliverySetting } from './dealer-delivery-setting.entity';
 import { DealerKit } from './dealer-kit.entity';
 import { DealerKitItem } from './dealer-kit-item.entity';
+import { PortalPolicy } from './portal-policy.entity';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ StaffMember,
 DealerPortalCompanySetting,
 DealerDeliverySetting,
 DealerKit,
+PortalPolicy,
 DealerKitItem,
     ]),
     ProjectModule,

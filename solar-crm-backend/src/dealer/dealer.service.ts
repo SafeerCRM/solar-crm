@@ -44,6 +44,11 @@ import { DealerPortalCompanySetting } from './dealer-portal-company-setting.enti
 import { DealerDeliverySetting } from './dealer-delivery-setting.entity';
 import { DealerKit } from './dealer-kit.entity';
 import { DealerKitItem } from './dealer-kit-item.entity';
+import {
+  PortalPolicy,
+  PortalPolicyLanguage,
+  PortalPolicyType,
+} from './portal-policy.entity';
 
 @Injectable()
 export class DealerService {
@@ -111,6 +116,9 @@ private readonly dealerKitItemRepository: Repository<DealerKitItem>,
 @InjectRepository(DealerDeliverySetting)
 private readonly deliverySettingRepository: Repository<DealerDeliverySetting>,
 
+@InjectRepository(PortalPolicy)
+private readonly portalPolicyRepository: Repository<PortalPolicy>,
+
     private readonly projectService: ProjectService,
   ) {}
 
@@ -120,6 +128,119 @@ private readonly deliverySettingRepository: Repository<DealerDeliverySetting>,
       message: 'Dealer module is active',
     };
   }
+
+  async listPortalPolicies(query: any) {
+  const showHidden = query?.showHidden === 'true';
+  const portalType =
+    query?.portalType === PortalPolicyType.DEALER ||
+    query?.portalType === PortalPolicyType.STAFF
+      ? query.portalType
+      : PortalPolicyType.CUSTOMER;
+
+  const qb = this.portalPolicyRepository
+    .createQueryBuilder('policy')
+    .where('policy.portalType = :portalType', { portalType })
+    .orderBy('policy.sortOrder', 'ASC')
+    .addOrderBy('policy.createdAt', 'DESC');
+
+  if (!showHidden) {
+    qb.andWhere('policy.isHidden = false');
+  }
+
+  return qb.getMany();
+}
+
+async savePortalPolicy(body: any, user: any) {
+  const title = String(body?.title || '').trim();
+
+  if (!title) {
+    throw new BadRequestException('Policy title is required');
+  }
+
+  let policy: PortalPolicy | null = null;
+
+  if (body?.id) {
+    policy = await this.portalPolicyRepository.findOne({
+      where: { id: Number(body.id) },
+    });
+  }
+
+  if (!policy) {
+    policy = this.portalPolicyRepository.create();
+  }
+
+  policy.portalType =
+    body?.portalType === PortalPolicyType.DEALER ||
+    body?.portalType === PortalPolicyType.STAFF
+      ? body.portalType
+      : PortalPolicyType.CUSTOMER;
+
+  policy.title = title;
+
+  policy.language =
+    body?.language === PortalPolicyLanguage.ENGLISH
+      ? PortalPolicyLanguage.ENGLISH
+      : PortalPolicyLanguage.HINDI;
+
+  policy.content = body?.content || '';
+  policy.pdfUrl = body?.pdfUrl || '';
+  policy.visibleToCustomer = body?.visibleToCustomer !== false;
+  policy.isActive = body?.isActive !== false;
+  policy.sortOrder = Number(body?.sortOrder || 0);
+
+  return this.portalPolicyRepository.save(policy);
+}
+
+async hidePortalPolicy(id: number, body: any, user: any) {
+  const policy = await this.portalPolicyRepository.findOne({
+    where: { id },
+  });
+
+  if (!policy) {
+    throw new NotFoundException('Policy not found');
+  }
+
+  policy.isHidden = true;
+  policy.hiddenReason = body?.reason || body?.hiddenReason || '';
+  policy.hiddenAt = new Date();
+  policy.hiddenBy = user?.id || user?.userId || null;
+  policy.hiddenByName = user?.name || user?.email || '';
+
+  return this.portalPolicyRepository.save(policy);
+}
+
+async restorePortalPolicy(id: number) {
+  const policy = await this.portalPolicyRepository.findOne({
+    where: { id },
+  });
+
+  if (!policy) {
+    throw new NotFoundException('Policy not found');
+  }
+
+  policy.isHidden = false;
+  policy.hiddenReason = '';
+  (policy as any).hiddenAt = null;
+  (policy as any).hiddenBy = null;
+  policy.hiddenByName = '';
+
+  return this.portalPolicyRepository.save(policy);
+}
+
+async listPortalPoliciesForCustomer() {
+  return this.portalPolicyRepository.find({
+    where: {
+      portalType: PortalPolicyType.CUSTOMER,
+      visibleToCustomer: true,
+      isActive: true,
+      isHidden: false,
+    } as any,
+    order: {
+      sortOrder: 'ASC',
+      createdAt: 'DESC',
+    } as any,
+  });
+}
 
   async dealerLogin(username: string, password: string) {
     const loginUsername = String(username || '').trim();

@@ -18,6 +18,7 @@ import { ProjectDocument } from '../project/project-document.entity';
 import { StaffMember } from '../staff/staff-member.entity';
 import { CustomerComplaintActivity } from './customer-complaint-activity.entity';
 import { DealerCompanyBankDetail } from '../dealer/dealer-company-bank-detail.entity';
+import { PortalPolicy } from '../dealer/portal-policy.entity';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ CustomerComplaintAttachment,
       StaffMember,
       CustomerComplaintActivity,
       DealerCompanyBankDetail,
+      PortalPolicy,
     ]),
   ],
   controllers: [CustomerPortalController, CustomerAuthController],

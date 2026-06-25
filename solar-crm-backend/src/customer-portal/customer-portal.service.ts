@@ -27,6 +27,10 @@ import {
   CustomerComplaintActivityType,
 } from './customer-complaint-activity.entity';
 import { DealerCompanyBankDetail } from '../dealer/dealer-company-bank-detail.entity';
+import {
+  PortalPolicy,
+  PortalPolicyType,
+} from '../dealer/portal-policy.entity';
 
 @Injectable()
 export class CustomerPortalService {
@@ -72,6 +76,9 @@ private readonly complaintAttachmentRepository: Repository<CustomerComplaintAtta
 
     @InjectRepository(DealerCompanyBankDetail)
 private readonly companyBankDetailRepository: Repository<DealerCompanyBankDetail>,
+
+@InjectRepository(PortalPolicy)
+private readonly portalPolicyRepository: Repository<PortalPolicy>,
 
     @InjectRepository(StaffMember)
 private readonly staffMemberRepository: Repository<StaffMember>,
@@ -488,6 +495,21 @@ return {
   limit,
   totalPages: Math.ceil(total / limit) || 1,
 };
+}
+
+async listPortalPoliciesForCustomer() {
+  return this.portalPolicyRepository.find({
+    where: {
+      portalType: PortalPolicyType.CUSTOMER,
+      visibleToCustomer: true,
+      isActive: true,
+      isHidden: false,
+    } as any,
+    order: {
+      sortOrder: 'ASC',
+      createdAt: 'DESC',
+    } as any,
+  });
 }
 
   async updateComplaint(id: number, body: any, user: any) {
