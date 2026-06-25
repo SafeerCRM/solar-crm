@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import {
   Bar,
@@ -32,6 +32,20 @@ type TabKey =
   | 'users'
   | 'activity-stream';
 
+  type FilterOptions = {
+  canViewAll: boolean;
+  users: {
+    id: number;
+    name: string;
+    email?: string;
+    roles: string[];
+  }[];
+  roles: string[];
+  branches: string[];
+  cities: string[];
+  zones: string[];
+};
+
 const tabs: { key: TabKey; label: string; icon: string }[] = [
   { key: 'overview', label: 'Overview', icon: '📊' },
   { key: 'telecalling', label: 'Telecalling', icon: '☎️' },
@@ -59,6 +73,29 @@ const COLORS = [
 const today = () => new Date().toISOString().slice(0, 10);
 const thisMonth = () => new Date().toISOString().slice(0, 7);
 
+function formatCurrency(value: any) {
+  const amount = Number(value || 0);
+
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
+function isMoneyField(key: string) {
+  return [
+    'value',
+    'paidAmount',
+    'pendingAmount',
+    'collectedAmount',
+    'totalAmount',
+    'totalPaymentAmount',
+    'totalCollectedAmount',
+    'totalPendingAmount',
+  ].includes(key);
+}
+
 export default function AnalyticsPage() {
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
   const [month, setMonth] = useState(thisMonth());
@@ -72,7 +109,10 @@ export default function AnalyticsPage() {
 
   const [loading, setLoading] = useState(false);
   const [reportData, setReportData] = useState<any>(null);
+  const [filterOptions, setFilterOptions] = useState<FilterOptions | null>(null);
+const [userSearch, setUserSearch] = useState('');
   const [hasGenerated, setHasGenerated] = useState(false);
+  const [generatedAt, setGeneratedAt] = useState<string>('');
 
   const params = useMemo(() => {
     const p: Record<string, string> = {};
@@ -89,6 +129,40 @@ export default function AnalyticsPage() {
     return p;
   }, [month, fromDate, toDate, userId, role, branchName, city, zone]);
 
+  useEffect(() => {
+  const fetchFilterOptions = async () => {
+    try {
+      const res = await axios.get(`${apiBaseUrl}/analytics/filter-options`, {
+        headers: getAuthHeaders(),
+      });
+
+      setFilterOptions(res.data || null);
+    } catch (error) {
+      console.error('Analytics filter options error:', error);
+      setFilterOptions(null);
+    }
+  };
+
+  fetchFilterOptions();
+}, []);
+
+const filteredUsers = useMemo(() => {
+  const users = filterOptions?.users || [];
+  const search = userSearch.trim().toLowerCase();
+
+  if (!search) return users.slice(0, 50);
+
+  return users
+    .filter((item) => {
+      return (
+        item.name?.toLowerCase().includes(search) ||
+        item.email?.toLowerCase().includes(search) ||
+        String(item.id).includes(search)
+      );
+    })
+    .slice(0, 50);
+}, [filterOptions, userSearch]);
+
   const generateReport = async () => {
     try {
       setLoading(true);
@@ -101,6 +175,7 @@ export default function AnalyticsPage() {
       });
 
       setReportData(res.data);
+      setGeneratedAt(new Date().toLocaleString('en-IN'));
     } catch (error) {
       console.error('Analytics report error:', error);
       setReportData(null);
@@ -153,81 +228,111 @@ export default function AnalyticsPage() {
         </div>
 
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-8">
-          <input
-            type="month"
-            value={month}
-            onChange={(e) => {
-              setMonth(e.target.value);
-              setFromDate('');
-              setToDate('');
-            }}
-            className="rounded-2xl border px-3 py-2"
-          />
+  <input
+    type="month"
+    value={month}
+    onChange={(e) => {
+      setMonth(e.target.value);
+      setFromDate('');
+      setToDate('');
+    }}
+    className="rounded-2xl border px-3 py-2"
+  />
 
-          <input
-            type="date"
-            value={fromDate}
-            onChange={(e) => {
-              setFromDate(e.target.value);
-              setMonth('');
-            }}
-            className="rounded-2xl border px-3 py-2"
-          />
+  <input
+    type="date"
+    value={fromDate}
+    onChange={(e) => {
+      setFromDate(e.target.value);
+      setMonth('');
+    }}
+    className="rounded-2xl border px-3 py-2"
+  />
 
-          <input
-            type="date"
-            value={toDate}
-            onChange={(e) => {
-              setToDate(e.target.value);
-              setMonth('');
-            }}
-            className="rounded-2xl border px-3 py-2"
-          />
+  <input
+    type="date"
+    value={toDate}
+    onChange={(e) => {
+      setToDate(e.target.value);
+      setMonth('');
+    }}
+    className="rounded-2xl border px-3 py-2"
+  />
 
-          <select
-            value={role}
-            onChange={(e) => setRole(e.target.value)}
-            className="rounded-2xl border px-3 py-2"
-          >
-            <option value="">All Roles</option>
-            <option value="TELECALLER">Telecaller</option>
-            <option value="TELECALLING_ASSISTANT">Telecalling Assistant</option>
-            <option value="TELECALLING_MANAGER">Telecalling Manager</option>
-            <option value="LEAD_MANAGER">Lead Manager</option>
-            <option value="MEETING_MANAGER">Meeting Manager</option>
-            <option value="PROJECT_MANAGER">Project Manager</option>
-            <option value="PAYMENT_MANAGER">Payment Manager</option>
-            <option value="ACCOUNT_MANAGER">Account Manager</option>
-          </select>
+  <select
+    value={role}
+    onChange={(e) => setRole(e.target.value)}
+    className="rounded-2xl border px-3 py-2"
+  >
+    <option value="">All Roles</option>
+    {(filterOptions?.roles || []).map((item) => (
+      <option key={item} value={item}>
+        {item.replaceAll('_', ' ')}
+      </option>
+    ))}
+  </select>
 
-          <input
-            placeholder="User ID"
-            value={userId}
-            onChange={(e) => setUserId(e.target.value)}
-            className="rounded-2xl border px-3 py-2"
-          />
+  <div className="xl:col-span-2">
+    <input
+      placeholder="Search user by name / email / ID"
+      value={userSearch}
+      onChange={(e) => setUserSearch(e.target.value)}
+      className="mb-2 w-full rounded-2xl border px-3 py-2"
+    />
 
-          <input
-            placeholder="Branch"
-            value={branchName}
-            onChange={(e) => setBranchName(e.target.value)}
-            className="rounded-2xl border px-3 py-2"
-          />
+    <select
+      value={userId}
+      onChange={(e) => setUserId(e.target.value)}
+      className="w-full rounded-2xl border px-3 py-2"
+    >
+      <option value="">All Users / My Data</option>
+      {filteredUsers.map((item) => (
+        <option key={item.id} value={item.id}>
+          {item.name} #{item.id}
+        </option>
+      ))}
+    </select>
+  </div>
 
-          <input
-            placeholder="City"
-            value={city}
-            onChange={(e) => setCity(e.target.value)}
-            className="rounded-2xl border px-3 py-2"
-          />
+  <select
+    value={branchName}
+    onChange={(e) => setBranchName(e.target.value)}
+    className="rounded-2xl border px-3 py-2"
+  >
+    <option value="">All Branches</option>
+    {(filterOptions?.branches || []).map((item) => (
+      <option key={item} value={item}>
+        {item}
+      </option>
+    ))}
+  </select>
 
-          <input
-            placeholder="Zone"
-            value={zone}
-            onChange={(e) => setZone(e.target.value)}
-            className="rounded-2xl border px-3 py-2"
-          />
-        </div>
+  <select
+    value={city}
+    onChange={(e) => setCity(e.target.value)}
+    className="rounded-2xl border px-3 py-2"
+  >
+    <option value="">All Cities</option>
+    {(filterOptions?.cities || []).map((item) => (
+      <option key={item} value={item}>
+        {item}
+      </option>
+    ))}
+  </select>
+
+  <select
+    value={zone}
+    onChange={(e) => setZone(e.target.value)}
+    className="rounded-2xl border px-3 py-2"
+  >
+    <option value="">All Zones</option>
+    {(filterOptions?.zones || []).map((item) => (
+      <option key={item} value={item}>
+        {item}
+      </option>
+    ))}
+  </select>
+</div>
 
         <button
           onClick={generateReport}
@@ -236,6 +341,15 @@ export default function AnalyticsPage() {
         >
           {loading ? 'Generating...' : 'Generate Report'}
         </button>
+
+        {hasGenerated && reportData && (
+  <button
+    onClick={() => window.print()}
+    className="ml-3 mt-4 rounded-2xl bg-green-600 px-6 py-3 font-bold text-white shadow hover:bg-green-700"
+  >
+    Print / Save PDF
+  </button>
+)}
       </div>
 
       <div className="flex gap-2 overflow-x-auto pb-2">
@@ -276,9 +390,15 @@ export default function AnalyticsPage() {
         </div>
       )}
 
-      {!loading && hasGenerated && (
-        <ReportRenderer activeTab={activeTab} data={reportData} />
-      )}
+      {!loading && hasGenerated && generatedAt && (
+  <div className="rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-slate-600 shadow">
+    Report generated at: {generatedAt}
+  </div>
+)}
+
+{!loading && hasGenerated && (
+  <ReportRenderer activeTab={activeTab} data={reportData} />
+)}
     </div>
   );
 }
@@ -309,6 +429,7 @@ function ReportRenderer({ activeTab, data }: { activeTab: TabKey; data: any }) {
 
 function OverviewReport({ data }: { data: any }) {
   const cards = data.cards || {};
+  const trends = data.trends || {};
 
   return (
     <div className="space-y-6">
@@ -324,15 +445,38 @@ function OverviewReport({ data }: { data: any }) {
           ['Pending', cards.totalPendingAmount],
         ]}
       />
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <LineBox title="Contacts Trend" data={trends.contacts || []} />
+        <LineBox title="Calls Trend" data={trends.calls || []} />
+        <LineBox title="Leads Trend" data={trends.leads || []} />
+        <LineBox title="Meetings Trend" data={trends.meetings || []} />
+        <LineBox title="Projects Trend" data={trends.projects || []} />
+        <LineBox title="Payment Collection Trend" data={trends.payments || []} />
+      </div>
     </div>
   );
 }
 
 function TelecallingReport({ data }: { data: any }) {
   return (
-    <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-      <PieBox title="Calls by Status" data={data.callsByStatus || []} />
-      <BarBox title="Reviews by Status" data={data.reviewsByStatus || []} />
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <PieBox title="Calls by Status" data={data.callsByStatus || []} />
+        <BarBox title="Reviews by Status" data={data.reviewsByStatus || []} />
+      </div>
+
+      <TableBox
+        title="🏆 Telecaller Leaderboard"
+        rows={data.leaderboard || []}
+        columns={[
+          ['userId', 'User ID'],
+          ['totalCalls', 'Total Calls'],
+          ['interestedCalls', 'Interested'],
+          ['convertedCalls', 'Converted'],
+        ]}
+      />
+
       <TableBox
         title="Telecaller-wise Report"
         rows={data.userWise || []}
@@ -479,7 +623,29 @@ function ProjectsReport({ data }: { data: any }) {
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <PieBox title="Projects by Type" data={data.byType || []} />
         <BarBox title="Projects by Status" data={data.byStatus || []} />
+        <BarBox title="Project Value by Type" data={data.projectValueByType || []} />
+        <BarBox title="Project Value by Status" data={data.projectValueByStatus || []} />
       </div>
+
+      <TableBox
+        title="🏢 Branch-wise Project Ranking"
+        rows={data.branchWise || []}
+        columns={[
+          ['label', 'Branch'],
+          ['projects', 'Projects'],
+          ['value', 'Project Value'],
+        ]}
+      />
+
+      <TableBox
+        title="🏙️ City-wise Project Ranking"
+        rows={data.cityWise || []}
+        columns={[
+          ['label', 'City'],
+          ['projects', 'Projects'],
+          ['value', 'Project Value'],
+        ]}
+      />
     </div>
   );
 }
@@ -499,17 +665,28 @@ function PaymentsReport({ data }: { data: any }) {
       />
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <PieBox title="Payment Status" data={data.byStatus || []} />
+        <PieBox title="Payment Status Count" data={data.byStatus || []} />
+
         <TableBox
-          title="Collector-wise Payment Report"
-          rows={data.collectorWise || []}
+          title="Payment Value by Status"
+          rows={data.paymentValueByStatus || []}
           columns={[
-            ['name', 'Collector'],
+            ['label', 'Status'],
             ['paidAmount', 'Collected'],
             ['pendingAmount', 'Pending'],
           ]}
         />
       </div>
+
+      <TableBox
+        title="Collector-wise Payment Report"
+        rows={data.collectorWise || []}
+        columns={[
+          ['name', 'Collector'],
+          ['paidAmount', 'Collected'],
+          ['pendingAmount', 'Pending'],
+        ]}
+      />
     </div>
   );
 }
@@ -611,7 +788,14 @@ function CardGrid({ items }: { items: [string, any][] }) {
             {title}
           </p>
           <p className="mt-2 text-2xl font-black text-slate-900">
-            {value ?? 0}
+            {typeof value === 'string'
+  ? value
+  : title.toLowerCase().includes('amount') ||
+    title.toLowerCase().includes('collected') ||
+    title.toLowerCase().includes('pending') ||
+    title.toLowerCase().includes('value')
+  ? formatCurrency(value)
+  : value ?? 0}
           </p>
         </div>
       ))}
@@ -636,6 +820,36 @@ function PieBox({ title, data }: { title: string; data: any[] }) {
               </Pie>
               <Tooltip />
             </PieChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LineBox({ title, data }: { title: string; data: any[] }) {
+  return (
+    <div className="rounded-3xl bg-white p-5 shadow">
+      <h2 className="mb-4 text-lg font-black text-slate-900">{title}</h2>
+
+      {data.length === 0 ? (
+        <p className="text-sm text-slate-500">No data available</p>
+      ) : (
+        <div className="h-72">
+          <ResponsiveContainer>
+            <LineChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="label" />
+              <YAxis allowDecimals={false} />
+              <Tooltip />
+              <Line
+                type="monotone"
+                dataKey="value"
+                stroke="#2563eb"
+                strokeWidth={3}
+                dot={{ r: 3 }}
+              />
+            </LineChart>
           </ResponsiveContainer>
         </div>
       )}
@@ -709,8 +923,10 @@ function TableBox({
                   {columns.map(([key]) => (
                     <td key={key} className="px-4 py-3">
                       {Array.isArray(row[key])
-                        ? row[key].join(', ')
-                        : row[key] ?? 0}
+  ? row[key].join(', ')
+  : isMoneyField(key)
+  ? formatCurrency(row[key])
+  : row[key] ?? 0}
                     </td>
                   ))}
                 </tr>
