@@ -17,6 +17,15 @@ export enum PortalPolicyLanguage {
   ENGLISH = 'ENGLISH',
 }
 
+export enum PortalDocumentType {
+  POLICY = 'POLICY',
+  WARRANTY = 'WARRANTY',
+  MANUAL = 'MANUAL',
+  GUIDE = 'GUIDE',
+  AGREEMENT = 'AGREEMENT',
+  OTHER = 'OTHER',
+}
+
 @Entity('portal_policy')
 export class PortalPolicy {
   @PrimaryGeneratedColumn()
@@ -38,6 +47,13 @@ export class PortalPolicy {
     default: PortalPolicyLanguage.HINDI,
   })
   language: PortalPolicyLanguage;
+
+  @Column({
+  type: 'enum',
+  enum: PortalDocumentType,
+  default: PortalDocumentType.POLICY,
+})
+documentType: PortalDocumentType;
 
   @Column({ type: 'text', nullable: true })
   content: string;

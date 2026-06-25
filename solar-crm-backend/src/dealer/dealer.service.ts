@@ -45,6 +45,7 @@ import { DealerDeliverySetting } from './dealer-delivery-setting.entity';
 import { DealerKit } from './dealer-kit.entity';
 import { DealerKitItem } from './dealer-kit-item.entity';
 import {
+  PortalDocumentType,
   PortalPolicy,
   PortalPolicyLanguage,
   PortalPolicyType,
@@ -181,6 +182,15 @@ async savePortalPolicy(body: any, user: any) {
     body?.language === PortalPolicyLanguage.ENGLISH
       ? PortalPolicyLanguage.ENGLISH
       : PortalPolicyLanguage.HINDI;
+
+      policy.documentType =
+  body?.documentType === PortalDocumentType.WARRANTY ||
+  body?.documentType === PortalDocumentType.MANUAL ||
+  body?.documentType === PortalDocumentType.GUIDE ||
+  body?.documentType === PortalDocumentType.AGREEMENT ||
+  body?.documentType === PortalDocumentType.OTHER
+    ? body.documentType
+    : PortalDocumentType.POLICY;
 
   policy.content = body?.content || '';
   policy.pdfUrl = body?.pdfUrl || '';
