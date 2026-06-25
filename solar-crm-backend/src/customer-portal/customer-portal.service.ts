@@ -740,7 +740,7 @@ const savedReceipt = await this.paymentReceiptRepository.save(receipt);
   }
 
   const expectedPassword =
-    (customer as any).portalPasswordHash ||
+    customer.portalPassword ||
     customer.mobile ||
     customer.electricityKNumber ||
     customer.customerCode;
@@ -809,7 +809,7 @@ async changeCustomerPortalPassword(customerId: number, body: any) {
   }
 
   const expectedPassword =
-    (customer as any).portalPasswordHash ||
+    customer.portalPassword ||
     customer.mobile ||
     customer.electricityKNumber ||
     customer.customerCode;
@@ -818,7 +818,7 @@ async changeCustomerPortalPassword(customerId: number, body: any) {
     throw new UnauthorizedException('Current password is incorrect');
   }
 
-  (customer as any).portalPasswordHash = newPassword;
+  customer.portalPassword = newPassword;
 
   await this.customerRepository.save(customer);
 

@@ -572,7 +572,7 @@ async resetPortalPassword(id: number, body: any, user: any) {
 
   const customer = await this.findOne(id);
 
-  (customer as any).portalPasswordHash = newPassword;
+  customer.portalPassword = newPassword;
   customer.isPortalEnabled = true;
 
   return this.customerRepository.save(customer);
