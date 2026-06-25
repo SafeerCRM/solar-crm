@@ -143,6 +143,21 @@ const navItems = [
 },
 
 {
+  name: 'Customer Portal',
+  href: '/customer-portal-management',
+  roles: [
+    'OWNER',
+    'CUSTOMER_MANAGER',
+    'PROJECT_MANAGER',
+    'PROJECT_EXECUTIVE',
+    'PAYMENT_MANAGER',
+    'ACCOUNT_MANAGER',
+    'MAINTENANCE_MANAGER',
+    'MARKETING_HEAD',
+  ],
+},
+
+{
   name: 'Staff Complaints',
   href: '/staff-complaints',
   roles: [
