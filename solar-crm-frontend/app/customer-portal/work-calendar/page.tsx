@@ -1,6 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { MobileDatePicker } from '@mui/x-date-pickers/MobileDatePicker';
+import dayjs from 'dayjs';
 
 export default function CustomerWorkCalendarPage() {
   const [dashboard, setDashboard] = useState<any>(null);
@@ -275,18 +279,24 @@ export default function CustomerWorkCalendarPage() {
               <label className="mb-1 block text-xs font-bold text-gray-500">
                 Requested New Work Date
               </label>
-              <input
-  type="text"
-  placeholder="YYYY-MM-DD, example 2026-06-30"
-  value={form.requestedWorkDate}
-  onChange={(e) =>
-    setForm({
-      ...form,
-      requestedWorkDate: e.target.value,
-    })
-  }
-  className="w-full rounded-2xl border bg-white p-3 text-gray-900"
-/>
+              <LocalizationProvider dateAdapter={AdapterDayjs}>
+  <MobileDatePicker
+    label="Requested New Work Date"
+    value={form.requestedWorkDate ? dayjs(form.requestedWorkDate) : null}
+    minDate={dayjs()}
+    onChange={(newDate) =>
+      setForm({
+        ...form,
+        requestedWorkDate: newDate ? newDate.format('YYYY-MM-DD') : '',
+      })
+    }
+    slotProps={{
+      textField: {
+        fullWidth: true,
+      },
+    }}
+  />
+</LocalizationProvider>
             </div>
           </div>
 

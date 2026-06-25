@@ -526,16 +526,18 @@ setAudioPreview('');
         </button>
       )}
 
-      <label className="cursor-pointer rounded-2xl bg-gray-900 px-4 py-3 text-xs font-black text-white">
-  Use Phone Recorder
-  <input
-    type="file"
-    accept="audio/*"
-    capture
-    onChange={handleAudioSelect}
-    className="hidden"
-  />
-</label>
+      <div className="rounded-2xl bg-gray-900 px-4 py-3 text-xs font-black text-white">
+  <label className="block">
+    Use Phone Recorder
+    <input
+      type="file"
+      accept="audio/*"
+      capture
+      onChange={handleAudioSelect}
+      className="mt-2 block w-full text-xs text-white"
+    />
+  </label>
+</div>
     </div>
   </div>
 
