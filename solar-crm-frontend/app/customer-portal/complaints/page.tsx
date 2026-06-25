@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -19,6 +19,8 @@ const [selectedAudio, setSelectedAudio] = useState<File | null>(null);
 const [audioPreview, setAudioPreview] = useState('');
 const [recording, setRecording] = useState(false);
 const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+const photoInputRef = useRef<HTMLInputElement | null>(null);
+const audioInputRef = useRef<HTMLInputElement | null>(null);
 
   const [form, setForm] = useState({
     projectId: '',
@@ -451,17 +453,23 @@ setAudioPreview('');
       </p>
     </div>
 
-    <label className="cursor-pointer rounded-2xl bg-orange-500 px-4 py-3 text-xs font-black text-white shadow hover:bg-orange-600">
-      Add Photos
-      <input
-        type="file"
-        accept="image/*"
-        multiple
-        capture="environment"
-        onChange={handlePhotoSelect}
-        className="hidden"
-      />
-    </label>
+    <button
+  type="button"
+  onClick={() => photoInputRef.current?.click()}
+  className="rounded-2xl bg-orange-500 px-4 py-3 text-xs font-black text-white shadow hover:bg-orange-600"
+>
+  Add Photos
+</button>
+
+<input
+  ref={photoInputRef}
+  type="file"
+  accept="image/*"
+  multiple
+  capture="environment"
+  onChange={handlePhotoSelect}
+  className="hidden"
+/>
   </div>
 
   {photoPreviews.length > 0 && (
@@ -527,16 +535,22 @@ setAudioPreview('');
       )}
 
       <div className="rounded-2xl bg-gray-900 px-4 py-3 text-xs font-black text-white">
-  <label className="block">
-    Use Phone Recorder
-    <input
-      type="file"
-      accept="audio/*"
-      capture
-      onChange={handleAudioSelect}
-      className="mt-2 block w-full text-xs text-white"
-    />
-  </label>
+  <button
+  type="button"
+  onClick={() => audioInputRef.current?.click()}
+  className="rounded-2xl bg-gray-900 px-4 py-3 text-xs font-black text-white"
+>
+  Use Phone Recorder
+</button>
+
+<input
+  ref={audioInputRef}
+  type="file"
+  accept="audio/*"
+  capture
+  onChange={handleAudioSelect}
+  className="hidden"
+/>
 </div>
     </div>
   </div>
