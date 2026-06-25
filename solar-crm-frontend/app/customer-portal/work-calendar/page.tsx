@@ -9,6 +9,7 @@ import dayjs from 'dayjs';
 export default function CustomerWorkCalendarPage() {
   const [dashboard, setDashboard] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [requestFilter, setRequestFilter] = useState('ALL');
 
   const [form, setForm] = useState({
     projectId: '',
@@ -140,6 +141,30 @@ export default function CustomerWorkCalendarPage() {
     ? new Date(currentWorkDateValue).toLocaleDateString('en-IN')
     : 'No scheduled work date found';
 
+    const upcomingWork = dashboard?.upcomingExecutionActivities || [];
+const workDateRequests = dashboard?.workDateRequests || [];
+
+const pendingRequests = workDateRequests.filter(
+  (item: any) => item.status === 'PENDING',
+).length;
+
+const approvedRequests = workDateRequests.filter(
+  (item: any) => item.status === 'APPROVED' || item.status === 'RESCHEDULED',
+).length;
+
+const rejectedRequests = workDateRequests.filter(
+  (item: any) => item.status === 'REJECTED',
+).length;
+
+const filteredRequests = workDateRequests.filter((item: any) => {
+  if (requestFilter === 'ALL') return true;
+  if (requestFilter === 'APPROVED') {
+    return item.status === 'APPROVED' || item.status === 'RESCHEDULED';
+  }
+
+  return item.status === requestFilter;
+});
+
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-orange-50">
@@ -163,6 +188,13 @@ export default function CustomerWorkCalendarPage() {
           <p className="mt-2 text-sm">
             Track upcoming installation work and request schedule changes.
           </p>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-4">
+  <HeroCard title="Upcoming Work" value={String(upcomingWork.length)} />
+  <HeroCard title="Pending Requests" value={String(pendingRequests)} />
+  <HeroCard title="Approved" value={String(approvedRequests)} />
+  <HeroCard title="Rejected" value={String(rejectedRequests)} />
+</div>
         </div>
 
         <div className="mt-6 rounded-[2rem] bg-white p-6 shadow-xl">
@@ -190,9 +222,15 @@ export default function CustomerWorkCalendarPage() {
                         </p>
                       </div>
 
-                      <span className="rounded-full bg-blue-100 px-4 py-2 text-xs font-black text-blue-700">
-                        {activity.status}
-                      </span>
+                      <div className="flex flex-wrap gap-2">
+  <StatusBadge status={activity.status} />
+
+  {isDelayed(activity.scheduledDate, activity.status) && (
+    <span className="rounded-full bg-red-100 px-4 py-2 text-xs font-black text-red-700">
+      DELAYED
+    </span>
+  )}
+</div>
                     </div>
 
                     <div className="mt-3 text-sm">
@@ -324,13 +362,29 @@ export default function CustomerWorkCalendarPage() {
         <div className="mt-6 rounded-[2rem] bg-white p-6 shadow-xl">
           <h2 className="text-2xl font-black">My Requests</h2>
 
+          <div className="mt-4 flex flex-wrap gap-2">
+  {['ALL', 'PENDING', 'APPROVED', 'REJECTED'].map((item) => (
+    <button
+      key={item}
+      onClick={() => setRequestFilter(item)}
+      className={`rounded-2xl px-4 py-2 text-xs font-black ${
+        requestFilter === item
+          ? 'bg-gray-900 text-white'
+          : 'bg-gray-100 text-gray-700'
+      }`}
+    >
+      {formatLabel(item)}
+    </button>
+  ))}
+</div>
+
           <div className="mt-5 space-y-4">
-            {(dashboard?.workDateRequests || []).length === 0 ? (
+            {filteredRequests.length === 0 ? (
               <div className="rounded-3xl border border-dashed p-6 text-center text-sm font-semibold text-gray-500">
                 No work date change requests yet.
               </div>
             ) : (
-              (dashboard?.workDateRequests || []).map((item: any) => (
+              filteredRequests.map((item: any) => (
                 <div key={item.id} className="rounded-3xl border p-5">
                   <div className="flex flex-wrap justify-between gap-3">
                     <div>
@@ -360,6 +414,28 @@ export default function CustomerWorkCalendarPage() {
                     </span>
                   </div>
 
+                  <div className="mt-4 grid gap-3 md:grid-cols-3">
+  <InfoBox label="Project" value={`#${item.projectId || '-'}`} />
+
+  <InfoBox
+    label="Current Date"
+    value={
+      item.currentWorkDate
+        ? new Date(item.currentWorkDate).toLocaleDateString('en-IN')
+        : '-'
+    }
+  />
+
+  <InfoBox
+    label="Requested Date"
+    value={
+      item.requestedWorkDate
+        ? new Date(item.requestedWorkDate).toLocaleDateString('en-IN')
+        : '-'
+    }
+  />
+</div>
+
                   {item.reason && (
                     <div className="mt-3 text-sm">{item.reason}</div>
                   )}
@@ -377,4 +453,49 @@ export default function CustomerWorkCalendarPage() {
       </div>
     </main>
   );
+}
+
+function HeroCard({ title, value }: { title: string; value: string }) {
+  return (
+    <div className="rounded-3xl bg-white/20 p-4 backdrop-blur">
+      <p className="text-xs font-bold opacity-90">{title}</p>
+      <p className="mt-2 break-words text-2xl font-black">{value}</p>
+    </div>
+  );
+}
+
+function InfoBox({ label, value }: { label: string; value?: string }) {
+  return (
+    <div className="rounded-2xl bg-gray-50 p-3">
+      <p className="text-xs font-bold text-gray-500">{label}</p>
+      <p className="mt-1 break-words text-sm font-black text-gray-900">
+        {value || '-'}
+      </p>
+    </div>
+  );
+}
+
+function StatusBadge({ status }: { status?: string }) {
+  return (
+    <span className="rounded-full bg-blue-100 px-4 py-2 text-xs font-black text-blue-700">
+      {formatLabel(status)}
+    </span>
+  );
+}
+
+function isDelayed(date?: string, status?: string) {
+  if (!date) return false;
+  if (status === 'COMPLETED' || status === 'CANCELLED') return false;
+
+  const scheduled = new Date(date);
+  const today = new Date();
+
+  scheduled.setHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
+
+  return scheduled < today;
+}
+
+function formatLabel(value?: string) {
+  return String(value || '-').replaceAll('_', ' ');
 }
