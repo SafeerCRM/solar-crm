@@ -31,25 +31,26 @@ type TabKey =
   | 'conversions'
   | 'users'
   | 'activity-stream'
-| 'work-report';
+| 'performance-report';
 
   type FilterOptions = {
   canViewAll: boolean;
-  users: {
-    id: number;
-    name: string;
-    email?: string;
-    roles: string[];
-  }[];
   roles: string[];
   branches: string[];
   cities: string[];
   zones: string[];
 };
 
+type UserSearchOption = {
+  id: number;
+  name: string;
+  email?: string;
+  roles: string[];
+};
+
 const tabs: { key: TabKey; label: string; icon: string }[] = [
   { key: 'overview', label: 'Overview', icon: '📊' },
-  { key: 'work-report', label: 'Work Report', icon: '🧾' },
+  { key: 'performance-report', label: 'Performance Report', icon: '🧾' },
   { key: 'telecalling', label: 'Telecalling', icon: '☎️' },
   { key: 'telecalling-assistant', label: 'Assistant', icon: '🎧' },
   { key: 'leads', label: 'Leads', icon: '🔥' },
@@ -113,6 +114,8 @@ export default function AnalyticsPage() {
   const [reportData, setReportData] = useState<any>(null);
   const [filterOptions, setFilterOptions] = useState<FilterOptions | null>(null);
 const [userSearch, setUserSearch] = useState('');
+const [userOptions, setUserOptions] = useState<UserSearchOption[]>([]);
+const [userSearchLoading, setUserSearchLoading] = useState(false);
   const [hasGenerated, setHasGenerated] = useState(false);
   const [generatedAt, setGeneratedAt] = useState<string>('');
 
@@ -148,22 +151,37 @@ const [userSearch, setUserSearch] = useState('');
   fetchFilterOptions();
 }, []);
 
-const filteredUsers = useMemo(() => {
-  const users = filterOptions?.users || [];
-  const search = userSearch.trim().toLowerCase();
+useEffect(() => {
+  const search = userSearch.trim();
 
-  if (!search) return users.slice(0, 50);
+  if (search.length < 2) {
+    setUserOptions([]);
+    return;
+  }
 
-  return users
-    .filter((item) => {
-      return (
-        item.name?.toLowerCase().includes(search) ||
-        item.email?.toLowerCase().includes(search) ||
-        String(item.id).includes(search)
-      );
-    })
-    .slice(0, 50);
-}, [filterOptions, userSearch]);
+  const timer = window.setTimeout(async () => {
+    try {
+      setUserSearchLoading(true);
+
+      const res = await axios.get(`${apiBaseUrl}/analytics/users/search`, {
+        params: {
+          q: search,
+          role: role || undefined,
+        },
+        headers: getAuthHeaders(),
+      });
+
+      setUserOptions(Array.isArray(res.data?.users) ? res.data.users : []);
+    } catch (error) {
+      console.error('User search error:', error);
+      setUserOptions([]);
+    } finally {
+      setUserSearchLoading(false);
+    }
+  }, 350);
+
+  return () => window.clearTimeout(timer);
+}, [userSearch, role]);
 
   const generateReport = async () => {
     try {
@@ -272,26 +290,32 @@ const filteredUsers = useMemo(() => {
   </select>
 
   <div className="xl:col-span-2">
-    <input
-      placeholder="Search user by name / email / ID"
-      value={userSearch}
-      onChange={(e) => setUserSearch(e.target.value)}
-      className="mb-2 w-full rounded-2xl border px-3 py-2"
-    />
+  <input
+    placeholder="Type at least 2 letters to search user"
+    value={userSearch}
+    onChange={(e) => {
+      setUserSearch(e.target.value);
+      setUserId('');
+    }}
+    className="mb-2 w-full rounded-2xl border px-3 py-2"
+  />
 
-    <select
-      value={userId}
-      onChange={(e) => setUserId(e.target.value)}
-      className="w-full rounded-2xl border px-3 py-2"
-    >
-      <option value="">All Users / My Data</option>
-      {filteredUsers.map((item) => (
-        <option key={item.id} value={item.id}>
-          {item.name} #{item.id}
-        </option>
-      ))}
-    </select>
-  </div>
+  <select
+    value={userId}
+    onChange={(e) => setUserId(e.target.value)}
+    className="w-full rounded-2xl border px-3 py-2"
+  >
+    <option value="">
+      {userSearchLoading ? 'Searching...' : 'All Users / My Data'}
+    </option>
+
+    {userOptions.map((item) => (
+      <option key={item.id} value={item.id}>
+        {item.name} #{item.id}
+      </option>
+    ))}
+  </select>
+</div>
 
   <select
     value={branchName}
@@ -412,7 +436,7 @@ function ReportRenderer({ activeTab, data }: { activeTab: TabKey; data: any }) {
   }
 
   if (activeTab === 'overview') return <OverviewReport data={data} />;
-  if (activeTab === 'work-report') return <WorkReport data={data} />;
+  if (activeTab === 'performance-report') return <PerformanceReport data={data} />;
   if (activeTab === 'telecalling') return <TelecallingReport data={data} />;
   if (activeTab === 'telecalling-assistant')
     return <AssistantReport data={data} />;
@@ -427,71 +451,89 @@ function ReportRenderer({ activeTab, data }: { activeTab: TabKey; data: any }) {
   return null;
 }
 
-function WorkReport({ data }: { data: any }) {
-  const totals = data.totals || {};
+function PerformanceReport({ data }: { data: any }) {
+  const cards = data.cards || {};
 
   return (
     <div className="space-y-6">
-      <CardGrid
-        items={[
-          ['Contacts Assigned', totals.totalContactsAssigned],
-          ['Calls', totals.totalCalls],
-          ['Connected Calls', totals.connectedCalls],
-          ['CNR Calls', totals.cnrCalls],
-          ['Interested Calls', totals.interestedCalls],
-          ['Reviews Assigned', totals.reviewsAssigned],
-          ['Reviews Converted', totals.reviewsConverted],
-          ['Reviews Pending', totals.reviewsPending],
-          ['Leads Created', totals.leadsCreated],
-          ['Leads Assigned', totals.leadsAssigned],
-          ['High Potential Leads', totals.highPotentialLeads],
-          ['Meetings Created', totals.meetingsCreated],
-          ['Meetings Assigned', totals.meetingsAssigned],
-          ['Meetings Completed', totals.meetingsCompleted],
-          ['Meetings Converted', totals.meetingsConverted],
-          ['Cash Projects', totals.cashProjects],
-          ['Loan Projects', totals.loanProjects],
-          ['Cash Cancelled / Rejected', totals.cashCancelledRejected],
-          ['Loan Cancelled / Rejected', totals.loanCancelledRejected],
-          ['Final Project Value', totals.finalProjectValue],
-          ['Collected Amount', totals.collectedAmount],
-          ['Pending Amount', totals.pendingAmount],
-        ]}
-      />
+      <div className="rounded-3xl bg-white p-5 shadow">
+        <h2 className="text-xl font-black text-slate-900">
+          CRM Performance Report
+        </h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Counts are based on actual CRM fields: telecaller, review assigned,
+          lead assigned/created, meeting assigned/created/updated, project owner,
+          project creator, and payment collector.
+        </p>
+      </div>
 
-      <TableBox
-        title="Actual CRM User-wise Work Report"
-        rows={data.rows || []}
-        columns={[
-          ['name', 'User'],
-          ['roles', 'Roles'],
-          ['totalContactsAssigned', 'Contacts'],
-          ['totalCalls', 'Calls'],
-          ['connectedCalls', 'Connected'],
-          ['cnrCalls', 'CNR'],
-          ['interestedCalls', 'Interested'],
-          ['reviewsAssigned', 'Reviews'],
-          ['reviewsConverted', 'Review Converted'],
-          ['reviewsPending', 'Review Pending'],
-          ['leadsCreated', 'Leads Created'],
-          ['leadsAssigned', 'Leads Assigned'],
-          ['highPotentialLeads', 'High Potential'],
-          ['meetingsCreated', 'Meetings Created'],
-          ['meetingsAssigned', 'Meetings Assigned'],
-          ['meetingsCompleted', 'Meetings Completed'],
-          ['meetingsConverted', 'Meetings Converted'],
-          ['companyMeetings', 'Company'],
-          ['selfMeetings', 'Self'],
-          ['solarMiterMeetings', 'SolarMiter'],
-          ['cashProjects', 'Cash Projects'],
-          ['loanProjects', 'Loan Projects'],
-          ['cashCancelledRejected', 'Cash Cancel/Reject'],
-          ['loanCancelledRejected', 'Loan Cancel/Reject'],
-          ['finalProjectValue', 'Project Value'],
-          ['collectedAmount', 'Collected'],
-          ['pendingAmount', 'Pending'],
-        ]}
-      />
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <SectionBox
+          title="☎️ Telecalling Work"
+          items={[
+            ['Contacts Assigned', cards.contactsAssigned],
+            ['Total Calls', cards.totalCalls],
+            ['Connected', cards.connectedCalls],
+            ['CNR', cards.cnrCalls],
+            ['Callback', cards.callbackCalls],
+            ['Interested', cards.interestedCalls],
+          ]}
+        />
+
+        <SectionBox
+          title="🎧 Telecalling Assistant Review"
+          items={[
+            ['Reviews Assigned', cards.reviewAssigned],
+            ['Pending', cards.reviewPending],
+            ['Potential', cards.reviewPotential],
+            ['Converted', cards.reviewConverted],
+            ['Rejected', cards.reviewRejected],
+          ]}
+        />
+
+        <SectionBox
+          title="🔥 Lead Work"
+          items={[
+            ['Total Leads', cards.totalLeads],
+            ['High Potential', cards.highPotentialLeads],
+            ['Medium Potential', cards.mediumPotentialLeads],
+            ['Low Potential', cards.lowPotentialLeads],
+          ]}
+        />
+
+        <SectionBox
+          title="📅 Meeting Work"
+          items={[
+            ['Total Meetings', cards.totalMeetings],
+            ['Completed', cards.completedMeetings],
+            ['Converted', cards.convertedMeetings],
+            ['Company', cards.companyMeetings],
+            ['Self', cards.selfMeetings],
+            ['SolarMiter', cards.solarMiterMeetings],
+          ]}
+        />
+
+        <SectionBox
+          title="🏗️ Project Work"
+          items={[
+            ['Total Projects', cards.totalProjects],
+            ['Cash Projects', cards.cashProjects],
+            ['Loan Projects', cards.loanProjects],
+            ['Cash Cancelled / Rejected', cards.cashCancelledRejected],
+            ['Loan Cancelled / Rejected', cards.loanCancelledRejected],
+            ['Final Project Value', cards.finalProjectValue],
+            ['Project Cost Value', cards.projectCostValue],
+          ]}
+        />
+
+        <SectionBox
+          title="💰 Payment Work"
+          items={[
+            ['Collected Amount', cards.collectedAmount],
+            ['Pending Amount', cards.pendingAmount],
+          ]}
+        />
+      </div>
     </div>
   );
 }
@@ -840,6 +882,39 @@ function ActivityStream({ data }: { data: any }) {
         {(data.stream || []).length === 0 && (
           <p className="text-sm text-slate-500">No recent activity found.</p>
         )}
+      </div>
+    </div>
+  );
+}
+
+function SectionBox({
+  title,
+  items,
+}: {
+  title: string;
+  items: [string, any][];
+}) {
+  return (
+    <div className="rounded-3xl bg-white p-5 shadow">
+      <h2 className="mb-4 text-lg font-black text-slate-900">{title}</h2>
+
+      <div className="grid grid-cols-2 gap-3">
+        {items.map(([label, value]) => {
+          const isMoney =
+            label.toLowerCase().includes('amount') ||
+            label.toLowerCase().includes('value');
+
+          return (
+            <div key={label} className="rounded-2xl bg-slate-50 p-4">
+              <p className="text-xs font-bold uppercase text-slate-400">
+                {label}
+              </p>
+              <p className="mt-1 text-xl font-black text-slate-900">
+                {isMoney ? formatCurrency(value) : value ?? 0}
+              </p>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
