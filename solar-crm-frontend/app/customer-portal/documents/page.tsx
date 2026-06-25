@@ -35,6 +35,7 @@ export default function CustomerDocumentsPage() {
   const [dashboard, setDashboard] = useState<any>(null);
   const [documents, setDocuments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
 
   const [filters, setFilters] = useState({
     projectId: '',
@@ -43,6 +44,20 @@ export default function CustomerDocumentsPage() {
   });
 
   const projects = dashboard?.projects || [];
+
+  const filteredDocuments = documents.filter((doc: any) => {
+  const q = search.toLowerCase();
+
+  return (
+    !q ||
+    String(doc.fileName || '').toLowerCase().includes(q) ||
+    String(doc.documentType || '').toLowerCase().includes(q) ||
+    String(doc.department || '').toLowerCase().includes(q) ||
+    String(doc.remarks || '').toLowerCase().includes(q)
+  );
+});
+
+const recentDocuments = filteredDocuments.slice(0, 3);
 
   const loadDashboard = async () => {
     const token = localStorage.getItem('customer_token');
@@ -157,6 +172,14 @@ export default function CustomerDocumentsPage() {
         <div className="mt-6 rounded-[2rem] bg-white p-5 shadow-xl">
           <h2 className="text-xl font-black text-gray-900">Filters</h2>
 
+          <input
+  type="text"
+  placeholder="Search by file name, document type, department or remarks..."
+  value={search}
+  onChange={(e) => setSearch(e.target.value)}
+  className="mt-4 w-full rounded-2xl border p-3"
+/>
+
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             <select
               value={filters.projectId}
@@ -221,6 +244,42 @@ export default function CustomerDocumentsPage() {
           </div>
         </div>
 
+        {recentDocuments.length > 0 && (
+  <div className="mt-6 rounded-[2rem] bg-white p-6 shadow-xl">
+    <h2 className="text-2xl font-black text-gray-900">
+      Recently Added
+    </h2>
+
+    <div className="mt-5 grid gap-4 md:grid-cols-3">
+      {recentDocuments.map((doc: any) => (
+        <a
+          key={`recent-${doc.id}`}
+          href={doc.fileUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="rounded-3xl border bg-orange-50 p-4 transition hover:bg-orange-100"
+        >
+          <p className="font-black text-gray-900">
+            {documentIcon(doc.fileName || doc.fileUrl)}
+            {' '}
+            {formatLabel(doc.documentType)}
+          </p>
+
+          <p className="mt-1 text-sm text-gray-600">
+            {doc.fileName || 'Document'}
+          </p>
+
+          <p className="mt-2 text-xs font-bold text-orange-700">
+            {doc.createdAt
+              ? new Date(doc.createdAt).toLocaleDateString('en-IN')
+              : '-'}
+          </p>
+        </a>
+      ))}
+    </div>
+  </div>
+)}
+
         <div className="mt-6 rounded-[2rem] bg-white p-6 shadow-xl">
           <h2 className="text-2xl font-black text-gray-900">
             Available Documents
@@ -228,11 +287,11 @@ export default function CustomerDocumentsPage() {
 
           <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {loading ? (
-              <EmptyCard text="Loading documents..." />
-            ) : documents.length === 0 ? (
-              <EmptyCard text="No customer-visible documents found." />
-            ) : (
-              documents.map((doc) => (
+  <EmptyCard text="Loading documents..." />
+) : filteredDocuments.length === 0 ? (
+  <EmptyCard text="No matching customer-visible documents found." />
+) : (
+  filteredDocuments.map((doc) => (
                 <div
                   key={doc.id}
                   className="overflow-hidden rounded-[2rem] border bg-gray-50 shadow"
@@ -242,9 +301,19 @@ export default function CustomerDocumentsPage() {
                       Project #{doc.projectId}
                     </p>
 
-                    <h3 className="mt-2 text-lg font-black">
-                      {formatLabel(doc.documentType)}
-                    </h3>
+                    <div className="mt-2 flex items-start justify-between gap-3">
+  <h3 className="text-lg font-black">
+    {documentIcon(doc.fileName || doc.fileUrl)}
+    {' '}
+    {formatLabel(doc.documentType)}
+  </h3>
+
+  {isRecent(doc.createdAt) && (
+    <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-orange-700">
+      NEW
+    </span>
+  )}
+</div>
 
                     <p className="mt-1 text-xs opacity-90">
                       {formatLabel(doc.department)}
@@ -280,7 +349,7 @@ export default function CustomerDocumentsPage() {
                         rel="noreferrer"
                         className="rounded-2xl bg-gray-900 px-4 py-3 text-center text-sm font-black text-white hover:bg-black"
                       >
-                        View
+                        Open
                       </a>
 
                       <a
@@ -328,6 +397,36 @@ function EmptyCard({ text }: { text: string }) {
       {text}
     </div>
   );
+}
+
+function isRecent(date?: string) {
+  if (!date) return false;
+
+  const created = new Date(date).getTime();
+  const now = Date.now();
+  const sevenDays = 7 * 24 * 60 * 60 * 1000;
+
+  return now - created <= sevenDays;
+}
+
+function documentIcon(value?: string) {
+  const file = String(value || '').toLowerCase();
+
+  if (file.endsWith('.pdf')) return '📄';
+  if (
+    file.endsWith('.jpg') ||
+    file.endsWith('.jpeg') ||
+    file.endsWith('.png') ||
+    file.endsWith('.webp')
+  ) {
+    return '🖼️';
+  }
+
+  if (file.endsWith('.xls') || file.endsWith('.xlsx')) return '📊';
+  if (file.endsWith('.doc') || file.endsWith('.docx')) return '📝';
+  if (file.endsWith('.zip') || file.endsWith('.rar')) return '🗂️';
+
+  return '📁';
 }
 
 function formatLabel(value?: string) {
