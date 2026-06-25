@@ -1210,63 +1210,44 @@ projectValueByStatus: projectValueByStatus.map((row) => ({
   }
 
     async getFilterOptions(user: any) {
-    const canViewAll = this.canViewAll(user);
-    const currentUserId = Number(user?.id || user?.userId);
+  const canViewAll = this.canViewAll(user);
 
-    const usersQb = this.userRepository
-      .createQueryBuilder('user')
-      .select(['user.id', 'user.name', 'user.email', 'user.roles'])
-      .where('user.isHidden = false')
-      .orderBy('user.name', 'ASC');
+  const branchesRaw = await this.projectRepository
+    .createQueryBuilder('project')
+    .select('DISTINCT project.branchName', 'value')
+    .where('project.isHidden = false')
+    .andWhere('project.branchName IS NOT NULL')
+    .andWhere("TRIM(project.branchName) <> ''")
+    .orderBy('project.branchName', 'ASC')
+    .limit(100)
+    .getRawMany();
 
-    if (!canViewAll && currentUserId) {
-      usersQb.andWhere('user.id = :currentUserId', { currentUserId });
-    }
+  const citiesRaw = await this.contactRepository
+    .createQueryBuilder('contact')
+    .select('DISTINCT contact.city', 'value')
+    .where('contact.city IS NOT NULL')
+    .andWhere("TRIM(contact.city) <> ''")
+    .orderBy('contact.city', 'ASC')
+    .limit(150)
+    .getRawMany();
 
-    const users = await usersQb.getMany();
+  const zonesRaw = await this.contactRepository
+    .createQueryBuilder('contact')
+    .select('DISTINCT contact.zone', 'value')
+    .where('contact.zone IS NOT NULL')
+    .andWhere("TRIM(contact.zone) <> ''")
+    .orderBy('contact.zone', 'ASC')
+    .limit(100)
+    .getRawMany();
 
-    const branchesRaw = await this.projectRepository
-      .createQueryBuilder('project')
-      .select('DISTINCT project.branchName', 'value')
-      .where('project.isHidden = false')
-      .andWhere('project.branchName IS NOT NULL')
-      .andWhere("TRIM(project.branchName) <> ''")
-      .orderBy('project.branchName', 'ASC')
-      .limit(200)
-      .getRawMany();
-
-    const citiesRaw = await this.contactRepository
-      .createQueryBuilder('contact')
-      .select('DISTINCT contact.city', 'value')
-      .where('contact.city IS NOT NULL')
-      .andWhere("TRIM(contact.city) <> ''")
-      .orderBy('contact.city', 'ASC')
-      .limit(300)
-      .getRawMany();
-
-    const zonesRaw = await this.contactRepository
-      .createQueryBuilder('contact')
-      .select('DISTINCT contact.zone', 'value')
-      .where('contact.zone IS NOT NULL')
-      .andWhere("TRIM(contact.zone) <> ''")
-      .orderBy('contact.zone', 'ASC')
-      .limit(200)
-      .getRawMany();
-
-    return {
-      canViewAll,
-      users: users.map((item: any) => ({
-        id: item.id,
-        name: item.name,
-        email: item.email,
-        roles: Array.isArray(item.roles) ? item.roles : [],
-      })),
-      roles: Object.values(UserRole),
-      branches: branchesRaw.map((item) => item.value).filter(Boolean),
-      cities: citiesRaw.map((item) => item.value).filter(Boolean),
-      zones: zonesRaw.map((item) => item.value).filter(Boolean),
-    };
-  }
+  return {
+    canViewAll,
+    roles: Object.values(UserRole),
+    branches: branchesRaw.map((item) => item.value).filter(Boolean),
+    cities: citiesRaw.map((item) => item.value).filter(Boolean),
+    zones: zonesRaw.map((item) => item.value).filter(Boolean),
+  };
+}
 
     async getWorkReport(query: AnalyticsFilters, user: any) {
     const canViewAll = this.canViewAll(user);
@@ -1582,6 +1563,349 @@ projectValueByStatus: projectValueByStatus.map((row) => ({
       canViewAll,
       totals,
       rows,
+    };
+  }
+
+    async searchUsers(query: any, user: any) {
+    const canViewAll = this.canViewAll(user);
+    const currentUserId = Number(user?.id || user?.userId);
+    const search = String(query?.q || '').trim().toLowerCase();
+    const role = String(query?.role || '').trim();
+
+    const qb = this.userRepository
+      .createQueryBuilder('user')
+      .select(['user.id', 'user.name', 'user.email', 'user.roles'])
+      .where('user.isHidden = false');
+
+    if (!canViewAll && currentUserId) {
+      qb.andWhere('user.id = :currentUserId', { currentUserId });
+    }
+
+    if (search) {
+      qb.andWhere(
+        `(
+          LOWER(user.name) LIKE :search
+          OR LOWER(user.email) LIKE :search
+          OR CAST(user.id AS TEXT) LIKE :search
+        )`,
+        { search: `%${search}%` },
+      );
+    }
+
+    const users = await qb.orderBy('user.name', 'ASC').limit(20).getMany();
+
+    const filteredUsers = role
+      ? users.filter(
+          (item: any) =>
+            Array.isArray(item.roles) && item.roles.includes(role),
+        )
+      : users;
+
+    return {
+      users: filteredUsers.map((item: any) => ({
+        id: item.id,
+        name: item.name,
+        email: item.email,
+        roles: Array.isArray(item.roles) ? item.roles : [],
+      })),
+    };
+  }
+
+  private async getReportUserIds(query: any, user: any) {
+    const canViewAll = this.canViewAll(user);
+    const currentUserId = Number(user?.id || user?.userId);
+    const selectedUserId = query?.userId ? Number(query.userId) : null;
+    const selectedRole = String(query?.role || '').trim();
+
+    if (!canViewAll) {
+      return currentUserId ? [currentUserId] : [];
+    }
+
+    if (selectedUserId) {
+      return [selectedUserId];
+    }
+
+    if (selectedRole) {
+      const users = await this.userRepository.find({
+        where: { isHidden: false } as any,
+      });
+
+      return users
+        .filter(
+          (item: any) =>
+            Array.isArray(item.roles) && item.roles.includes(selectedRole),
+        )
+        .map((item) => Number(item.id));
+    }
+
+    return [];
+  }
+
+  async getPerformanceReport(query: AnalyticsFilters, user: any) {
+    const { start, end } = this.getDateRange(query);
+    const userIds = await this.getReportUserIds(query, user);
+    const hasUserFilter = userIds.length > 0;
+
+    const idParams = { userIds, start, end };
+
+    const contactsAssigned = await this.contactRepository
+      .createQueryBuilder('contact')
+      .where('contact.createdAt BETWEEN :start AND :end', { start, end })
+      .andWhere(
+        hasUserFilter ? 'contact.assignedTo IN (:...userIds)' : '1=1',
+        idParams,
+      )
+      .getCount();
+
+    const callsQb = this.callLogRepository
+      .createQueryBuilder('call')
+      .where('call.createdAt BETWEEN :start AND :end', { start, end })
+      .andWhere(
+        hasUserFilter
+          ? '(call.telecallerId IN (:...userIds) OR call.reviewAssignedTo IN (:...userIds))'
+          : '1=1',
+        idParams,
+      );
+
+    const totalCalls = await callsQb.clone().getCount();
+
+    const connectedCalls = await callsQb
+      .clone()
+      .andWhere(`UPPER(COALESCE(call.callStatus, '')) = 'CONNECTED'`)
+      .getCount();
+
+    const cnrCalls = await callsQb
+      .clone()
+      .andWhere(`UPPER(COALESCE(call.callStatus, '')) = 'CNR'`)
+      .getCount();
+
+    const callbackCalls = await callsQb
+      .clone()
+      .andWhere(`UPPER(COALESCE(call.callStatus, '')) = 'CALLBACK'`)
+      .getCount();
+
+    const interestedCalls = await callsQb
+      .clone()
+      .andWhere(`UPPER(COALESCE(call.callStatus, '')) = 'INTERESTED'`)
+      .getCount();
+
+    const reviewAssigned = await callsQb
+      .clone()
+      .andWhere('call.reviewAssignedTo IS NOT NULL')
+      .getCount();
+
+    const reviewPending = await callsQb
+      .clone()
+      .andWhere('call.reviewStatus = :status', {
+        status: CallReviewStatus.PENDING,
+      })
+      .getCount();
+
+    const reviewPotential = await callsQb
+      .clone()
+      .andWhere('call.reviewStatus = :status', {
+        status: CallReviewStatus.POTENTIAL,
+      })
+      .getCount();
+
+    const reviewConverted = await callsQb
+      .clone()
+      .andWhere('call.reviewStatus = :status', {
+        status: CallReviewStatus.CONVERTED,
+      })
+      .getCount();
+
+    const reviewRejected = await callsQb
+      .clone()
+      .andWhere('call.reviewStatus = :status', {
+        status: CallReviewStatus.REJECTED,
+      })
+      .getCount();
+
+    const leadsQb = this.leadRepository
+      .createQueryBuilder('lead')
+      .where('lead.createdAt BETWEEN :start AND :end', { start, end })
+      .andWhere(
+        hasUserFilter
+          ? '(lead.assignedTo IN (:...userIds) OR lead.createdBy IN (:...userIds) OR lead.originTelecallerId IN (:...userIds))'
+          : '1=1',
+        idParams,
+      );
+
+    const totalLeads = await leadsQb.clone().getCount();
+    const highPotentialLeads = await leadsQb
+      .clone()
+      .andWhere('lead.potential = :potential', {
+        potential: LeadPotential.HIGH,
+      })
+      .getCount();
+    const mediumPotentialLeads = await leadsQb
+      .clone()
+      .andWhere('lead.potential = :potential', {
+        potential: LeadPotential.MEDIUM,
+      })
+      .getCount();
+    const lowPotentialLeads = await leadsQb
+      .clone()
+      .andWhere('lead.potential = :potential', {
+        potential: LeadPotential.LOW,
+      })
+      .getCount();
+
+    const meetingsQb = this.meetingRepository
+      .createQueryBuilder('meeting')
+      .where('meeting.createdAt BETWEEN :start AND :end', { start, end })
+      .andWhere(
+        hasUserFilter
+          ? '(meeting.assignedTo IN (:...userIds) OR meeting.createdBy IN (:...userIds) OR meeting.updatedBy IN (:...userIds))'
+          : '1=1',
+        idParams,
+      );
+
+    const totalMeetings = await meetingsQb.clone().getCount();
+    const completedMeetings = await meetingsQb
+      .clone()
+      .andWhere('meeting.status = :status', {
+        status: MeetingStatus.COMPLETED,
+      })
+      .getCount();
+    const convertedMeetings = await meetingsQb
+      .clone()
+      .andWhere(
+        '(meeting.convertToProject = true OR meeting.status = :status)',
+        { status: MeetingStatus.CONVERTED_TO_PROJECT },
+      )
+      .getCount();
+    const companyMeetings = await meetingsQb
+      .clone()
+      .andWhere('meeting.meetingCategory = :category', {
+        category: MeetingCategory.COMPANY_MEETING,
+      })
+      .getCount();
+    const selfMeetings = await meetingsQb
+      .clone()
+      .andWhere('meeting.meetingCategory = :category', {
+        category: MeetingCategory.SELF_MEETING,
+      })
+      .getCount();
+    const solarMiterMeetings = await meetingsQb
+      .clone()
+      .andWhere('meeting.meetingCategory = :category', {
+        category: MeetingCategory.SOLARMITER,
+      })
+      .getCount();
+
+    const projectsQb = this.projectRepository
+      .createQueryBuilder('project')
+      .where('project.isHidden = false')
+      .andWhere('project.createdAt BETWEEN :start AND :end', { start, end })
+      .andWhere(
+        hasUserFilter
+          ? '(project.projectOwnerId IN (:...userIds) OR project.createdBy IN (:...userIds))'
+          : '1=1',
+        idParams,
+      );
+
+    const totalProjects = await projectsQb.clone().getCount();
+    const cashProjects = await projectsQb
+      .clone()
+      .andWhere('project.projectType = :type', { type: ProjectType.CASH })
+      .getCount();
+    const loanProjects = await projectsQb
+      .clone()
+      .andWhere('project.projectType = :type', { type: ProjectType.LOAN })
+      .getCount();
+    const cashCancelledRejected = await projectsQb
+      .clone()
+      .andWhere('project.projectType = :type', { type: ProjectType.CASH })
+      .andWhere('project.status IN (:...statuses)', {
+        statuses: [ProjectStatus.CANCELLED, ProjectStatus.REJECTED],
+      })
+      .getCount();
+    const loanCancelledRejected = await projectsQb
+      .clone()
+      .andWhere('project.projectType = :type', { type: ProjectType.LOAN })
+      .andWhere('project.status IN (:...statuses)', {
+        statuses: [ProjectStatus.CANCELLED, ProjectStatus.REJECTED],
+      })
+      .getCount();
+
+    const projectValueRaw = await projectsQb
+      .clone()
+      .select('COALESCE(SUM(project.finalCost), 0)', 'finalCost')
+      .addSelect('COALESCE(SUM(project.projectCost), 0)', 'projectCost')
+      .getRawOne();
+
+    const paymentsQb = this.paymentRepository
+      .createQueryBuilder('payment')
+      .where('payment.isHidden = false')
+      .andWhere('payment.createdAt BETWEEN :start AND :end', { start, end })
+      .andWhere(
+        hasUserFilter
+          ? '(payment.collectedBy IN (:...userIds) OR payment.createdBy IN (:...userIds))'
+          : '1=1',
+        idParams,
+      );
+
+    const paymentRaw = await paymentsQb
+      .clone()
+      .select('COALESCE(SUM(payment.paidAmount), 0)', 'paidAmount')
+      .addSelect('COALESCE(SUM(payment.pendingAmount), 0)', 'pendingAmount')
+      .getRawOne();
+
+    const userWiseRaw = hasUserFilter
+      ? []
+      : await this.userRepository
+          .createQueryBuilder('user')
+          .select('user.id', 'userId')
+          .addSelect('user.name', 'name')
+          .addSelect('user.roles', 'roles')
+          .where('user.isHidden = false')
+          .orderBy('user.name', 'ASC')
+          .limit(100)
+          .getRawMany();
+
+    return {
+      range: { start, end },
+      selectedUserIds: userIds,
+      cards: {
+        contactsAssigned,
+        totalCalls,
+        connectedCalls,
+        cnrCalls,
+        callbackCalls,
+        interestedCalls,
+
+        reviewAssigned,
+        reviewPending,
+        reviewPotential,
+        reviewConverted,
+        reviewRejected,
+
+        totalLeads,
+        highPotentialLeads,
+        mediumPotentialLeads,
+        lowPotentialLeads,
+
+        totalMeetings,
+        completedMeetings,
+        convertedMeetings,
+        companyMeetings,
+        selfMeetings,
+        solarMiterMeetings,
+
+        totalProjects,
+        cashProjects,
+        loanProjects,
+        cashCancelledRejected,
+        loanCancelledRejected,
+        finalProjectValue: Number(projectValueRaw?.finalCost || 0),
+        projectCostValue: Number(projectValueRaw?.projectCost || 0),
+
+        collectedAmount: Number(paymentRaw?.paidAmount || 0),
+        pendingAmount: Number(paymentRaw?.pendingAmount || 0),
+      },
+      users: userWiseRaw,
     };
   }
 }

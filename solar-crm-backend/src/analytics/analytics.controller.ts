@@ -58,13 +58,23 @@ export class AnalyticsController {
     return this.analyticsService.getActivityStream(query, user);
   }
 
+  @Get('filter-options')
+  getFilterOptions(@CurrentUser() user: any) {
+    return this.analyticsService.getFilterOptions(user);
+  }
+
+    @Get('users/search')
+  searchUsers(@Query() query: any, @CurrentUser() user: any) {
+    return this.analyticsService.searchUsers(query, user);
+  }
+
+  @Get('performance-report')
+  getPerformanceReport(@Query() query: any, @CurrentUser() user: any) {
+    return this.analyticsService.getPerformanceReport(query, user);
+  }
+
     @Get('users')
   getUsers(@Query() query: any, @CurrentUser() user: any) {
     return this.analyticsService.getUsers(query, user);
-  }
-
-    @Get('filter-options')
-  getFilterOptions(@CurrentUser() user: any) {
-    return this.analyticsService.getFilterOptions(user);
   }
 }
