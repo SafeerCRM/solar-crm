@@ -600,8 +600,17 @@ export class AnalyticsService {
       });
     }
 
-    const [assignedContacts, totalCalls, connected, cnr, callback, interested, convertedLeads] =
-      await Promise.all([
+    const [
+  assignedContacts,
+  totalCalls,
+  connected,
+  cnr,
+  callback,
+  interested,
+  convertedLeads,
+  meetingsScheduled,
+  meetingsConverted,
+] = await Promise.all([
         contactsQb.getCount(),
         callsQb.clone().getCount(),
         callsQb.clone().andWhere(`UPPER(COALESCE(call.callStatus, '')) = 'CONNECTED'`).getCount(),
@@ -616,6 +625,31 @@ export class AnalyticsService {
             { userIds },
           )
           .getCount(),
+          this.meetingRepository
+  .createQueryBuilder('meeting')
+  .where('meeting.createdAt BETWEEN :start AND :end', { start, end })
+  .andWhere(
+    userIds.length
+      ? '(meeting.createdBy IN (:...userIds) OR meeting.assignedTo IN (:...userIds))'
+      : '1=1',
+    { userIds },
+  )
+  .getCount(),
+
+this.meetingRepository
+  .createQueryBuilder('meeting')
+  .where('meeting.updatedAt BETWEEN :start AND :end', { start, end })
+  .andWhere(
+    userIds.length
+      ? '(meeting.createdBy IN (:...userIds) OR meeting.assignedTo IN (:...userIds) OR meeting.updatedBy IN (:...userIds))'
+      : '1=1',
+    { userIds },
+  )
+  .andWhere(
+    '(meeting.convertToProject = true OR meeting.status = :convertedStatus)',
+    { convertedStatus: MeetingStatus.CONVERTED_TO_PROJECT },
+  )
+  .getCount(),
       ]);
 
     const userWise = await callsQb
@@ -641,6 +675,8 @@ export class AnalyticsService {
         callback,
         interested,
         convertedLeads,
+        meetingsScheduled,
+meetingsConverted,
       },
       charts: {
         callsTrend: await this.chartDaily('call_log', 'createdAt', start, end),
@@ -668,12 +704,55 @@ export class AnalyticsService {
       callsQb.andWhere('call.reviewAssignedTo IN (:...userIds)', { userIds });
     }
 
-    const [assigned, pending, potential, converted, rejected] = await Promise.all([
+    const [
+  assigned,
+  pending,
+  potential,
+  converted,
+  rejected,
+  leadsCreated,
+  meetingsScheduled,
+  meetingsConverted,
+] = await Promise.all([
       callsQb.clone().getCount(),
       callsQb.clone().andWhere('call.reviewStatus = :status', { status: CallReviewStatus.PENDING }).getCount(),
       callsQb.clone().andWhere('call.reviewStatus = :status', { status: CallReviewStatus.POTENTIAL }).getCount(),
       callsQb.clone().andWhere('call.reviewStatus = :status', { status: CallReviewStatus.CONVERTED }).getCount(),
       callsQb.clone().andWhere('call.reviewStatus = :status', { status: CallReviewStatus.REJECTED }).getCount(),
+      this.leadRepository
+  .createQueryBuilder('lead')
+  .where('lead.createdAt BETWEEN :start AND :end', { start, end })
+  .andWhere(
+    userIds.length ? 'lead.createdBy IN (:...userIds)' : '1=1',
+    { userIds },
+  )
+  .getCount(),
+
+this.meetingRepository
+  .createQueryBuilder('meeting')
+  .where('meeting.createdAt BETWEEN :start AND :end', { start, end })
+  .andWhere(
+    userIds.length
+      ? '(meeting.createdBy IN (:...userIds) OR meeting.assignedTo IN (:...userIds))'
+      : '1=1',
+    { userIds },
+  )
+  .getCount(),
+
+this.meetingRepository
+  .createQueryBuilder('meeting')
+  .where('meeting.updatedAt BETWEEN :start AND :end', { start, end })
+  .andWhere(
+    userIds.length
+      ? '(meeting.createdBy IN (:...userIds) OR meeting.assignedTo IN (:...userIds) OR meeting.updatedBy IN (:...userIds))'
+      : '1=1',
+    { userIds },
+  )
+  .andWhere(
+    '(meeting.convertToProject = true OR meeting.status = :convertedStatus)',
+    { convertedStatus: MeetingStatus.CONVERTED_TO_PROJECT },
+  )
+  .getCount(),
     ]);
 
     const assistantWise = await callsQb
@@ -695,7 +774,16 @@ export class AnalyticsService {
 
     return {
       department: 'TELECALLING_ASSISTANT',
-      cards: { assigned, pending, potential, converted, rejected },
+      cards: {
+  assigned,
+  pending,
+  potential,
+  converted,
+  rejected,
+  leadsCreated,
+  meetingsScheduled,
+  meetingsConverted,
+},
       charts: {
         reviewTrend: await this.chartDaily('call_log', 'createdAt', start, end),
       },
