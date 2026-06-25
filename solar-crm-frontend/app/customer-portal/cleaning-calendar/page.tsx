@@ -8,6 +8,7 @@ export default function CustomerCleaningCalendarPage() {
   const [dashboard, setDashboard] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('ALL');
 
   const [form, setForm] = useState({
     projectId: '',
@@ -17,6 +18,20 @@ export default function CustomerCleaningCalendarPage() {
 
   const projects = dashboard?.projects || [];
   const reminders = dashboard?.cleaningReminders || [];
+  const upcomingReminders = reminders
+  .filter((item: any) => item.status === 'PENDING')
+  .sort(
+    (a: any, b: any) =>
+      new Date(a.cleaningDate || '').getTime() -
+      new Date(b.cleaningDate || '').getTime(),
+  );
+
+const nextCleaning = upcomingReminders[0];
+
+const filteredReminders = reminders.filter((item: any) => {
+  if (statusFilter === 'ALL') return true;
+  return item.status === statusFilter;
+});
 
   const loadDashboard = async () => {
     try {
@@ -149,6 +164,33 @@ export default function CustomerCleaningCalendarPage() {
 
         <div className="mt-6 grid gap-6 lg:grid-cols-3">
           <div className="rounded-[2rem] bg-white p-6 shadow-xl">
+
+            <div className="rounded-[2rem] bg-gradient-to-r from-emerald-500 to-teal-600 p-6 text-white shadow-xl lg:col-span-3">
+  <h2 className="text-2xl font-black">
+    Next Cleaning
+  </h2>
+
+  {nextCleaning ? (
+    <div className="mt-4 grid gap-4 md:grid-cols-4">
+      <InfoBox label="Project" value={`#${nextCleaning.projectId || '-'}`} light />
+      <InfoBox
+        label="Date"
+        value={
+          nextCleaning.cleaningDate
+            ? new Date(nextCleaning.cleaningDate).toLocaleDateString('en-IN')
+            : '-'
+        }
+        light
+      />
+      <InfoBox label="Status" value={formatLabel(nextCleaning.status)} light />
+      <InfoBox label="Remarks" value={nextCleaning.remarks || '-'} light />
+    </div>
+  ) : (
+    <p className="mt-3 text-sm font-semibold">
+      No upcoming cleaning scheduled.
+    </p>
+  )}
+</div>
             <h2 className="text-2xl font-black text-gray-900">
               Request Cleaning
             </h2>
@@ -201,11 +243,27 @@ export default function CustomerCleaningCalendarPage() {
               Cleaning History
             </h2>
 
+            <div className="mt-4 flex flex-wrap gap-2">
+  {['ALL', 'PENDING', 'COMPLETED', 'POSTPONED', 'CANCELLED'].map((item) => (
+    <button
+      key={item}
+      onClick={() => setStatusFilter(item)}
+      className={`rounded-2xl px-4 py-2 text-xs font-black ${
+        statusFilter === item
+          ? 'bg-gray-900 text-white'
+          : 'bg-gray-100 text-gray-700'
+      }`}
+    >
+      {formatLabel(item)}
+    </button>
+  ))}
+</div>
+
             <div className="mt-5 space-y-4">
-              {reminders.length === 0 ? (
+              {filteredReminders.length === 0 ? (
                 <EmptyCard text="No cleaning requests or reminders yet." />
               ) : (
-                reminders.map((item: any) => (
+                filteredReminders.map((item: any) => (
                   <div key={item.id} className="rounded-3xl border bg-gray-50 p-5">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
@@ -222,6 +280,26 @@ export default function CustomerCleaningCalendarPage() {
 
                       <StatusBadge status={item.status} />
                     </div>
+
+                    <div className="mt-4 grid gap-3 md:grid-cols-3">
+  <InfoBox label="Project" value={`#${item.projectId || '-'}`} />
+  <InfoBox
+    label="Cleaning Date"
+    value={
+      item.cleaningDate
+        ? new Date(item.cleaningDate).toLocaleDateString('en-IN')
+        : '-'
+    }
+  />
+  <InfoBox
+    label="Next Cleaning"
+    value={
+      item.nextCleaningDate
+        ? new Date(item.nextCleaningDate).toLocaleDateString('en-IN')
+        : '-'
+    }
+  />
+</div>
 
                     {item.nextCleaningDate && (
                       <p className="mt-3 text-sm font-semibold text-emerald-700">
@@ -247,6 +325,43 @@ export default function CustomerCleaningCalendarPage() {
       </div>
     </main>
   );
+}
+
+function InfoBox({
+  label,
+  value,
+  light,
+}: {
+  label: string;
+  value?: string;
+  light?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-2xl p-3 ${
+        light ? 'bg-white/20' : 'bg-white'
+      }`}
+    >
+      <p
+        className={`text-xs font-bold ${
+          light ? 'text-white/80' : 'text-gray-500'
+        }`}
+      >
+        {label}
+      </p>
+      <p
+        className={`mt-1 break-words text-sm font-black ${
+          light ? 'text-white' : 'text-gray-900'
+        }`}
+      >
+        {value || '-'}
+      </p>
+    </div>
+  );
+}
+
+function formatLabel(value?: string) {
+  return String(value || '-').replaceAll('_', ' ');
 }
 
 function HeroCard({ title, value }: { title: string; value: string }) {
