@@ -840,22 +840,77 @@ this.meetingRepository
         .getCount(),
     ]);
 
-    return {
-      department: 'LEADS',
-      cards: {
-        totalLeads,
-        newLeads,
-        interestedLeads,
-        highPotential,
-        mediumPotential,
-        lowPotential,
-        convertedToMeeting,
-      },
-      charts: {
-        leadTrend: await this.chartDaily('lead', 'createdAt', start, end),
-      },
-      rows: [],
-    };
+    const leadStatusRows = await leadsQb
+  .clone()
+  .select('COALESCE(lead.status, \'UNKNOWN\')', 'label')
+  .addSelect('COUNT(*)', 'value')
+  .groupBy('lead.status')
+  .orderBy('value', 'DESC')
+  .getRawMany();
+
+const leadPotentialRows = await leadsQb
+  .clone()
+  .select('COALESCE(lead.potential, \'UNKNOWN\')', 'label')
+  .addSelect('COUNT(*)', 'value')
+  .groupBy('lead.potential')
+  .orderBy('value', 'DESC')
+  .getRawMany();
+
+const percent = (current: number, previous: number) =>
+  previous > 0 ? Math.round((current / previous) * 100) : 0;
+
+return {
+  department: 'LEADS',
+  cards: {
+    totalLeads,
+    newLeads,
+    interestedLeads,
+    highPotential,
+    mediumPotential,
+    lowPotential,
+    convertedToMeeting,
+  },
+  charts: {
+    leadStatusSplit: {
+      type: 'bar',
+      title: 'Lead Status Split',
+      data: leadStatusRows.map((row) => ({
+        label: row.label,
+        value: Number(row.value || 0),
+      })),
+    },
+    potentialSplit: {
+      type: 'bar',
+      title: 'Lead Potential Split',
+      data: leadPotentialRows.map((row) => ({
+        label: row.label,
+        value: Number(row.value || 0),
+      })),
+    },
+    leadToMeetingFunnel: {
+      type: 'funnel',
+      title: 'Lead to Meeting Funnel',
+      data: [
+        {
+          label: 'Total Leads',
+          value: totalLeads,
+          percent: 100,
+        },
+        {
+          label: 'Interested Leads',
+          value: interestedLeads,
+          percent: percent(interestedLeads, totalLeads),
+        },
+        {
+          label: 'Converted to Meeting',
+          value: convertedToMeeting,
+          percent: percent(convertedToMeeting, totalLeads),
+        },
+      ],
+    },
+  },
+  rows: [],
+};
   }
 
   private async getMeetingsReport(query: AnalyticsQuery, user: any) {
