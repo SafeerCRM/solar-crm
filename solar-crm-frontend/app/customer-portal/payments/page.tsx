@@ -18,6 +18,9 @@ const [uploadingReceipt, setUploadingReceipt] =
   useState(false);
 
   const [receiptFilter, setReceiptFilter] = useState('ALL');
+  const [selectedReceiptTimeline, setSelectedReceiptTimeline] = useState<any>(null);
+const [receiptActivities, setReceiptActivities] = useState<any[]>([]);
+const [timelineLoading, setTimelineLoading] = useState(false);
 
   const [form, setForm] = useState({
     projectId: '',
@@ -103,6 +106,32 @@ const filteredReceipts = receipts.filter((item: any) => {
       setLoading(false);
     }
   };
+
+  const loadReceiptActivities = async (receiptId: number) => {
+  try {
+    setTimelineLoading(true);
+
+    const token = localStorage.getItem('customer_token');
+
+    const res = await fetch(
+      `${API_BASE_URL}/customer-auth/payment-receipts/${receiptId}/activities`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+
+    const data = await res.json();
+
+    setReceiptActivities(Array.isArray(data) ? data : []);
+  } catch (error) {
+    console.error(error);
+    setReceiptActivities([]);
+  } finally {
+    setTimelineLoading(false);
+  }
+};
 
   useEffect(() => {
     loadDashboard();
@@ -710,12 +739,105 @@ setReceiptPreview('');
                       View Receipt
                     </a>
                   )}
+
+                  <button
+  onClick={async () => {
+    setSelectedReceiptTimeline(item);
+    await loadReceiptActivities(item.id);
+  }}
+  className="mt-4 ml-2 inline-block rounded-2xl bg-blue-600 px-4 py-2 text-sm font-black text-white"
+>
+  View Timeline
+</button>
                 </div>
               ))
             )}
           </div>
         </div>
       </div>
+
+      {selectedReceiptTimeline && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+    <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[2rem] bg-white p-6 shadow-2xl">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-black text-gray-900">
+            Receipt Timeline
+          </h2>
+          <p className="mt-1 text-sm text-gray-500">
+            Receipt #{selectedReceiptTimeline.id} ·{' '}
+            {formatCurrency(selectedReceiptTimeline.amount)}
+          </p>
+        </div>
+
+        <button
+          onClick={() => {
+            setSelectedReceiptTimeline(null);
+            setReceiptActivities([]);
+          }}
+          className="rounded-2xl bg-red-100 px-4 py-2 text-sm font-black text-red-700"
+        >
+          Close
+        </button>
+      </div>
+
+      <div className="mt-6 space-y-4">
+        {timelineLoading ? (
+          <div className="rounded-2xl border border-dashed p-6 text-center text-sm font-semibold text-gray-500">
+            Loading timeline...
+          </div>
+        ) : receiptActivities.length === 0 ? (
+          <div className="rounded-2xl border border-dashed p-6 text-center text-sm font-semibold text-gray-500">
+            No receipt timeline available yet.
+          </div>
+        ) : (
+          receiptActivities.map((activity) => (
+            <div key={activity.id} className="flex gap-4">
+              <div className="flex flex-col items-center">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-500 text-lg text-white">
+                  {receiptActivityIcon(activity.activityType)}
+                </div>
+                <div className="h-full min-h-8 w-1 bg-orange-100" />
+              </div>
+
+              <div className="flex-1 rounded-3xl bg-gray-50 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="font-black text-gray-900">
+                      {activity.activityTitle || formatLabel(activity.activityType)}
+                    </p>
+
+                    {activity.activityDescription && (
+                      <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-gray-600">
+                        {activity.activityDescription}
+                      </p>
+                    )}
+                  </div>
+
+                  <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-gray-600">
+                    {formatLabel(activity.activityType)}
+                  </span>
+                </div>
+
+                <div className="mt-3 grid gap-2 text-xs font-semibold text-gray-500 md:grid-cols-2">
+                  <p>
+                    By: {activity.performedByName || 'System'}
+                  </p>
+                  <p>
+                    Time:{' '}
+                    {activity.createdAt
+                      ? new Date(activity.createdAt).toLocaleString('en-IN')
+                      : '-'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  </div>
+)}
     </main>
   );
 }
@@ -765,6 +887,21 @@ function StatusBadge({ status }: { status?: string }) {
       {formatLabel(value)}
     </span>
   );
+}
+
+function receiptActivityIcon(type?: string) {
+  const value = String(type || '');
+
+  if (value.includes('UPLOADED')) return '📤';
+  if (value.includes('VERIFIED')) return '✅';
+  if (value.includes('REJECTED')) return '❌';
+  if (value.includes('STATUS')) return '🔄';
+  if (value.includes('LINKED')) return '🔗';
+  if (value.includes('APPROVED')) return '👍';
+  if (value.includes('CANCELLED')) return '🚫';
+  if (value.includes('UPDATED')) return '💬';
+
+  return '•';
 }
 
 function formatCurrency(value?: number | string) {
