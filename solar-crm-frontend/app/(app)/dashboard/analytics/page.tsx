@@ -245,9 +245,6 @@ export default function AnalyticsPage() {
   return (
     <div className="min-h-screen space-y-6 bg-slate-100 p-4 md:p-6">
       <div className="overflow-hidden rounded-[2rem] bg-gradient-to-r from-slate-950 via-blue-900 to-orange-500 p-6 text-white shadow-xl">
-        <p className="text-sm font-bold uppercase tracking-[0.3em] text-orange-100">
-          Aditya Solars CRM / ERP
-        </p>
         <h1 className="mt-3 text-3xl font-black md:text-5xl">
           Analytics Control Room
         </h1>
@@ -606,10 +603,10 @@ function DepartmentReport({
       <CardGrid cards={Object.entries(cards).map(([key, value]) => [formatLabel(key), value]) as any} />
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        {Object.entries(charts).map(([key, value]: any) => (
-          <LineBox key={key} title={formatLabel(key)} data={Array.isArray(value) ? value : []} />
-        ))}
-      </div>
+  {Object.entries(charts).map(([key, value]: any) => (
+    <ChartBox key={key} chartKey={key} chart={value} />
+  ))}
+</div>
 
       {rows.length > 0 && (
         <SmartTable title={`${departmentLabel} Breakdown`} rows={rows} />
@@ -680,6 +677,88 @@ function LineBox({ title, data }: { title: string; data: any[] }) {
                 dot={{ r: 3 }}
               />
             </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ChartBox({ chartKey, chart }: { chartKey: string; chart: any }) {
+  if (Array.isArray(chart)) {
+    return <LineBox title={formatLabel(chartKey)} data={chart} />;
+  }
+
+  const type = chart?.type || 'bar';
+  const title = chart?.title || formatLabel(chartKey);
+  const data = Array.isArray(chart?.data) ? chart.data : [];
+
+  if (type === 'line') {
+    return <LineBox title={title} data={data} />;
+  }
+
+  if (type === 'funnel') {
+    return (
+      <div className="rounded-[2rem] bg-white p-5 shadow">
+        <h2 className="mb-4 text-lg font-black text-slate-900">{title}</h2>
+
+        {data.length === 0 ? (
+          <p className="text-sm text-slate-500">No funnel data available.</p>
+        ) : (
+          <div className="space-y-4">
+            {data.map((item: any, index: number) => {
+              const maxValue = Number(data[0]?.value || 1);
+              const width = Math.max(
+                8,
+                Math.min(100, Math.round((Number(item.value || 0) / maxValue) * 100)),
+              );
+
+              return (
+                <div key={`${item.label}-${index}`}>
+                  <div className="mb-1 flex justify-between text-sm font-bold text-slate-700">
+                    <span>{item.label}</span>
+                    <span>{item.value ?? 0}</span>
+                  </div>
+                  <div className="h-4 overflow-hidden rounded-full bg-slate-100">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-blue-600 to-orange-500"
+                      style={{ width: `${width}%` }}
+                    />
+                  </div>
+                  {item.percent !== undefined && (
+                    <p className="mt-1 text-xs font-semibold text-slate-400">
+                      Conversion: {item.percent}%
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return <BarBox title={title} data={data} />;
+}
+
+function BarBox({ title, data }: { title: string; data: any[] }) {
+  return (
+    <div className="rounded-[2rem] bg-white p-5 shadow">
+      <h2 className="mb-4 text-lg font-black text-slate-900">{title}</h2>
+
+      {data.length === 0 ? (
+        <p className="text-sm text-slate-500">No chart data available.</p>
+      ) : (
+        <div className="h-72">
+          <ResponsiveContainer>
+            <BarChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="label" />
+              <YAxis allowDecimals={false} />
+              <Tooltip />
+              <Bar dataKey="value" fill="#2563eb" radius={[8, 8, 0, 0]} />
+            </BarChart>
           </ResponsiveContainer>
         </div>
       )}
