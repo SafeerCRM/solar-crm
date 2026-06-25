@@ -61,6 +61,8 @@ import {
   DealerComplaintStatus,
 } from '../dealer/dealer-complaint.entity';
 
+import { TelecallingAnalyticsBuilder } from './builders/telecalling.analytics';
+
 type AnalyticsQuery = {
   month?: string;
   fromDate?: string;
@@ -565,131 +567,14 @@ export class AnalyticsService {
   }
 
   private async getTelecallingReport(query: AnalyticsQuery, user: any) {
-    const { start, end } = this.getDateRange(query);
-    const userIds = await this.getAllowedUserIds(query, user);
-
-    const callsQb = this.callLogRepository
-      .createQueryBuilder('call')
-      .where('call.createdAt BETWEEN :start AND :end', { start, end })
-      .andWhere(`UPPER(COALESCE(call.callStatus, '')) <> 'INITIATED'`);
-
-    if (userIds.length) {
-      callsQb.andWhere('call.telecallerId IN (:...userIds)', { userIds });
-    }
-
-    const contactsQb = this.contactRepository
-      .createQueryBuilder('contact')
-      .where('contact.createdAt BETWEEN :start AND :end', { start, end });
-
-    if (userIds.length) {
-      contactsQb.andWhere('contact.assignedTo IN (:...userIds)', { userIds });
-    }
-
-    const city = this.normalize(query.city);
-    if (city) {
-      contactsQb.andWhere(
-        `(LOWER(COALESCE(contact.city, '')) LIKE :city OR LOWER(COALESCE(contact.address, '')) LIKE :city OR LOWER(COALESCE(contact.location, '')) LIKE :city)`,
-        { city: `%${city}%` },
-      );
-    }
-
-    const zone = this.normalize(query.zone);
-    if (zone) {
-      contactsQb.andWhere('LOWER(COALESCE(contact.zone, \'\')) LIKE :zone', {
-        zone: `%${zone}%`,
-      });
-    }
-
-    const [
-  assignedContacts,
-  totalCalls,
-  connected,
-  cnr,
-  callback,
-  interested,
-  convertedLeads,
-  meetingsScheduled,
-  meetingsConverted,
-] = await Promise.all([
-        contactsQb.getCount(),
-        callsQb.clone().getCount(),
-        callsQb.clone().andWhere(`UPPER(COALESCE(call.callStatus, '')) = 'CONNECTED'`).getCount(),
-        callsQb.clone().andWhere(`UPPER(COALESCE(call.callStatus, '')) = 'CNR'`).getCount(),
-        callsQb.clone().andWhere(`UPPER(COALESCE(call.callStatus, '')) = 'CALLBACK'`).getCount(),
-        callsQb.clone().andWhere(`UPPER(COALESCE(call.callStatus, '')) = 'INTERESTED'`).getCount(),
-        this.leadRepository
-          .createQueryBuilder('lead')
-          .where('lead.createdAt BETWEEN :start AND :end', { start, end })
-          .andWhere(
-            userIds.length ? 'lead.originTelecallerId IN (:...userIds)' : '1=1',
-            { userIds },
-          )
-          .getCount(),
-          this.meetingRepository
-  .createQueryBuilder('meeting')
-  .where('meeting.createdAt BETWEEN :start AND :end', { start, end })
-  .andWhere(
-    userIds.length
-      ? '(meeting.createdBy IN (:...userIds) OR meeting.assignedTo IN (:...userIds))'
-      : '1=1',
-    { userIds },
-  )
-  .getCount(),
-
-this.meetingRepository
-  .createQueryBuilder('meeting')
-  .where('meeting.updatedAt BETWEEN :start AND :end', { start, end })
-  .andWhere(
-    userIds.length
-      ? '(meeting.createdBy IN (:...userIds) OR meeting.assignedTo IN (:...userIds) OR meeting.updatedBy IN (:...userIds))'
-      : '1=1',
-    { userIds },
-  )
-  .andWhere(
-    '(meeting.convertToProject = true OR meeting.status = :convertedStatus)',
-    { convertedStatus: MeetingStatus.CONVERTED_TO_PROJECT },
-  )
-  .getCount(),
-      ]);
-
-    const userWise = await callsQb
-      .clone()
-      .select('call.telecallerId', 'userId')
-      .addSelect('COUNT(*)', 'totalCalls')
-      .addSelect(`SUM(CASE WHEN UPPER(COALESCE(call.callStatus, '')) = 'CONNECTED' THEN 1 ELSE 0 END)`, 'connected')
-      .addSelect(`SUM(CASE WHEN UPPER(COALESCE(call.callStatus, '')) = 'CNR' THEN 1 ELSE 0 END)`, 'cnr')
-      .addSelect(`SUM(CASE WHEN UPPER(COALESCE(call.callStatus, '')) = 'INTERESTED' THEN 1 ELSE 0 END)`, 'interested')
-      .andWhere('call.telecallerId IS NOT NULL')
-      .groupBy('call.telecallerId')
-      .orderBy('COUNT(*)', 'DESC')
-      .limit(50)
-      .getRawMany();
-
-    return {
-      department: 'TELECALLING',
-      cards: {
-        assignedContacts,
-        totalCalls,
-        connected,
-        cnr,
-        callback,
-        interested,
-        convertedLeads,
-        meetingsScheduled,
-meetingsConverted,
-      },
-      charts: {
-        callsTrend: await this.chartDaily('call_log', 'createdAt', start, end),
-      },
-      rows: userWise.map((row) => ({
-        userId: row.userId ? Number(row.userId) : null,
-        totalCalls: Number(row.totalCalls || 0),
-        connected: Number(row.connected || 0),
-        cnr: Number(row.cnr || 0),
-        interested: Number(row.interested || 0),
-      })),
-    };
-  }
+  return new TelecallingAnalyticsBuilder(
+    this.userRepository,
+    this.contactRepository,
+    this.callLogRepository,
+    this.leadRepository,
+    this.meetingRepository,
+  ).build(query, user);
+}
 
   private async getTelecallingAssistantReport(query: AnalyticsQuery, user: any) {
     const { start, end } = this.getDateRange(query);
