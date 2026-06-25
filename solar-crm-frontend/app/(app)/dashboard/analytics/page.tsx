@@ -30,7 +30,8 @@ type TabKey =
   | 'payments'
   | 'conversions'
   | 'users'
-  | 'activity-stream';
+  | 'activity-stream'
+| 'work-report';
 
   type FilterOptions = {
   canViewAll: boolean;
@@ -48,6 +49,7 @@ type TabKey =
 
 const tabs: { key: TabKey; label: string; icon: string }[] = [
   { key: 'overview', label: 'Overview', icon: '📊' },
+  { key: 'work-report', label: 'Work Report', icon: '🧾' },
   { key: 'telecalling', label: 'Telecalling', icon: '☎️' },
   { key: 'telecalling-assistant', label: 'Assistant', icon: '🎧' },
   { key: 'leads', label: 'Leads', icon: '🔥' },
@@ -199,9 +201,6 @@ const filteredUsers = useMemo(() => {
   return (
     <div className="min-h-screen space-y-6 bg-slate-100 p-4 md:p-6">
       <div className="overflow-hidden rounded-3xl bg-gradient-to-r from-blue-700 via-indigo-700 to-orange-500 p-6 text-white shadow-xl">
-        <p className="text-sm font-medium uppercase tracking-wider text-blue-100">
-          Aditya Solars CRM / ERP
-        </p>
         <h1 className="mt-2 text-3xl font-black md:text-4xl">
           Analytics & Reports
         </h1>
@@ -413,6 +412,7 @@ function ReportRenderer({ activeTab, data }: { activeTab: TabKey; data: any }) {
   }
 
   if (activeTab === 'overview') return <OverviewReport data={data} />;
+  if (activeTab === 'work-report') return <WorkReport data={data} />;
   if (activeTab === 'telecalling') return <TelecallingReport data={data} />;
   if (activeTab === 'telecalling-assistant')
     return <AssistantReport data={data} />;
@@ -425,6 +425,75 @@ function ReportRenderer({ activeTab, data }: { activeTab: TabKey; data: any }) {
   if (activeTab === 'activity-stream') return <ActivityStream data={data} />;
 
   return null;
+}
+
+function WorkReport({ data }: { data: any }) {
+  const totals = data.totals || {};
+
+  return (
+    <div className="space-y-6">
+      <CardGrid
+        items={[
+          ['Contacts Assigned', totals.totalContactsAssigned],
+          ['Calls', totals.totalCalls],
+          ['Connected Calls', totals.connectedCalls],
+          ['CNR Calls', totals.cnrCalls],
+          ['Interested Calls', totals.interestedCalls],
+          ['Reviews Assigned', totals.reviewsAssigned],
+          ['Reviews Converted', totals.reviewsConverted],
+          ['Reviews Pending', totals.reviewsPending],
+          ['Leads Created', totals.leadsCreated],
+          ['Leads Assigned', totals.leadsAssigned],
+          ['High Potential Leads', totals.highPotentialLeads],
+          ['Meetings Created', totals.meetingsCreated],
+          ['Meetings Assigned', totals.meetingsAssigned],
+          ['Meetings Completed', totals.meetingsCompleted],
+          ['Meetings Converted', totals.meetingsConverted],
+          ['Cash Projects', totals.cashProjects],
+          ['Loan Projects', totals.loanProjects],
+          ['Cash Cancelled / Rejected', totals.cashCancelledRejected],
+          ['Loan Cancelled / Rejected', totals.loanCancelledRejected],
+          ['Final Project Value', totals.finalProjectValue],
+          ['Collected Amount', totals.collectedAmount],
+          ['Pending Amount', totals.pendingAmount],
+        ]}
+      />
+
+      <TableBox
+        title="Actual CRM User-wise Work Report"
+        rows={data.rows || []}
+        columns={[
+          ['name', 'User'],
+          ['roles', 'Roles'],
+          ['totalContactsAssigned', 'Contacts'],
+          ['totalCalls', 'Calls'],
+          ['connectedCalls', 'Connected'],
+          ['cnrCalls', 'CNR'],
+          ['interestedCalls', 'Interested'],
+          ['reviewsAssigned', 'Reviews'],
+          ['reviewsConverted', 'Review Converted'],
+          ['reviewsPending', 'Review Pending'],
+          ['leadsCreated', 'Leads Created'],
+          ['leadsAssigned', 'Leads Assigned'],
+          ['highPotentialLeads', 'High Potential'],
+          ['meetingsCreated', 'Meetings Created'],
+          ['meetingsAssigned', 'Meetings Assigned'],
+          ['meetingsCompleted', 'Meetings Completed'],
+          ['meetingsConverted', 'Meetings Converted'],
+          ['companyMeetings', 'Company'],
+          ['selfMeetings', 'Self'],
+          ['solarMiterMeetings', 'SolarMiter'],
+          ['cashProjects', 'Cash Projects'],
+          ['loanProjects', 'Loan Projects'],
+          ['cashCancelledRejected', 'Cash Cancel/Reject'],
+          ['loanCancelledRejected', 'Loan Cancel/Reject'],
+          ['finalProjectValue', 'Project Value'],
+          ['collectedAmount', 'Collected'],
+          ['pendingAmount', 'Pending'],
+        ]}
+      />
+    </div>
+  );
 }
 
 function OverviewReport({ data }: { data: any }) {
