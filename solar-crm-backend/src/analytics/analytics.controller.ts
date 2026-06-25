@@ -10,12 +10,12 @@ export class AnalyticsController {
 
   @Get('overview')
   getOwnerOverview(@Query() query: any, @CurrentUser() user: any) {
-    return this.analyticsService.getOverview(query, user);
+    return this.analyticsService.getOwnerOverview(query, user);
   }
 
   @Get('department-report')
   getDepartmentReport(@Query() query: any, @CurrentUser() user: any) {
-    return this.analyticsService.getOverview(query, user);
+    return this.analyticsService.getDepartmentReport(query, user);
   }
 
   @Get('users/search')
