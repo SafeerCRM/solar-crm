@@ -276,9 +276,9 @@ export default function CustomerWorkCalendarPage() {
                 Requested New Work Date
               </label>
               <input
-  type="date"
+  type="text"
+  placeholder="YYYY-MM-DD, example 2026-06-30"
   value={form.requestedWorkDate}
-  min={new Date().toISOString().slice(0, 10)}
   onChange={(e) =>
     setForm({
       ...form,

@@ -527,14 +527,15 @@ setAudioPreview('');
       )}
 
       <label className="cursor-pointer rounded-2xl bg-gray-900 px-4 py-3 text-xs font-black text-white">
-        Upload Audio
-        <input
-          type="file"
-          accept="audio/*,video/webm"
-          onChange={handleAudioSelect}
-          className="hidden"
-        />
-      </label>
+  Use Phone Recorder
+  <input
+    type="file"
+    accept="audio/*"
+    capture
+    onChange={handleAudioSelect}
+    className="hidden"
+  />
+</label>
     </div>
   </div>
 
