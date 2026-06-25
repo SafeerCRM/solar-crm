@@ -40,22 +40,6 @@ const cards = [
     key: 'pendingCleaning',
     label: 'Pending',
   },
-  {
-    title: 'Customer Referrals',
-    description: 'Track customer referrals, status and reward follow-up.',
-    href: '/customer-referrals',
-    icon: '🎁',
-    key: 'pendingReferrals',
-    label: 'Pending',
-  },
-  {
-    title: 'Customer-Facing Portal',
-    description: 'Open customer portal web view for testing login and mobile layout.',
-    href: '/customer-login',
-    icon: '📱',
-    key: 'portal',
-    label: 'Live',
-  },
 ];
 
 export default function CustomerPortalManagementPage() {
@@ -74,12 +58,11 @@ export default function CustomerPortalManagementPage() {
       setLoading(true);
 
       const [
-        complaintsRes,
-        receiptsRes,
-        workRequestsRes,
-        cleaningRes,
-        referralsRes,
-      ] = await Promise.allSettled([
+  complaintsRes,
+  receiptsRes,
+  workRequestsRes,
+  cleaningRes,
+] = await Promise.allSettled([
         axios.get(`${API_BASE_URL}/customer-portal/complaints`, {
           params: { page: 1, limit: 1, status: 'OPEN' },
           headers: getAuthHeaders(),
@@ -93,10 +76,6 @@ export default function CustomerPortalManagementPage() {
           headers: getAuthHeaders(),
         }),
         axios.get(`${API_BASE_URL}/customer-portal/cleaning-reminders`, {
-          params: { page: 1, limit: 1, status: 'PENDING' },
-          headers: getAuthHeaders(),
-        }),
-        axios.get(`${API_BASE_URL}/customer-portal/referrals`, {
           params: { page: 1, limit: 1, status: 'PENDING' },
           headers: getAuthHeaders(),
         }),
@@ -119,11 +98,6 @@ export default function CustomerPortalManagementPage() {
           cleaningRes.status === 'fulfilled'
             ? Number(cleaningRes.value.data?.total || 0)
             : 0,
-        pendingReferrals:
-          referralsRes.status === 'fulfilled'
-            ? Number(referralsRes.value.data?.total || 0)
-            : 0,
-        portal: 'Live',
       });
     } catch (error) {
       console.error('Customer portal stats error:', error);
@@ -141,7 +115,6 @@ export default function CustomerPortalManagementPage() {
       <section className="overflow-hidden rounded-3xl bg-gradient-to-r from-orange-500 via-yellow-500 to-emerald-500 p-6 text-white shadow-xl">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-sm font-bold opacity-90">Aditya Solars CRM</p>
 
             <h1 className="mt-2 text-3xl font-black md:text-5xl">
               Customer Portal Management
@@ -163,13 +136,11 @@ export default function CustomerPortalManagementPage() {
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <SummaryCard title="Open Complaints" value={stats.openComplaints} />
         <SummaryCard title="Pending Receipts" value={stats.pendingReceipts} />
         <SummaryCard title="Work Requests" value={stats.pendingWorkRequests} />
         <SummaryCard title="Cleaning Pending" value={stats.pendingCleaning} />
-        <SummaryCard title="Pending Referrals" value={stats.pendingReferrals} />
-        <SummaryCard title="Portal Status" value="Live" />
       </section>
 
       <section className="rounded-3xl bg-white p-6 shadow">
