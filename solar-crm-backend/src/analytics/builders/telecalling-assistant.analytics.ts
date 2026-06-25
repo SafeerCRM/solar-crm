@@ -148,7 +148,7 @@ export class TelecallingAssistantAnalyticsBuilder {
 
       reviewsQb
         .clone()
-        .select('COALESCE(call.reviewStatus, \'UNKNOWN\')', 'label')
+        .select('COALESCE(call.reviewStatus::text, \'UNKNOWN\')', 'label')
         .addSelect('COUNT(*)', 'value')
         .groupBy('call.reviewStatus')
         .orderBy('value', 'DESC')
