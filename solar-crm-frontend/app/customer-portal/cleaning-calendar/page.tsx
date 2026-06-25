@@ -2,6 +2,11 @@
 
 import { useEffect, useState } from 'react';
 
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { MobileDatePicker } from '@mui/x-date-pickers/MobileDatePicker';
+import dayjs from 'dayjs';
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 export default function CustomerCleaningCalendarPage() {
@@ -213,12 +218,24 @@ const filteredReminders = reminders.filter((item: any) => {
                 ))}
               </select>
 
-              <input
-                type="date"
-                value={form.cleaningDate}
-                onChange={(e) => setForm({ ...form, cleaningDate: e.target.value })}
-                className="w-full rounded-2xl border p-3"
-              />
+              <LocalizationProvider dateAdapter={AdapterDayjs}>
+  <MobileDatePicker
+    label="Preferred Cleaning Date"
+    value={form.cleaningDate ? dayjs(form.cleaningDate) : null}
+    minDate={dayjs()}
+    onChange={(newDate) =>
+      setForm({
+        ...form,
+        cleaningDate: newDate ? newDate.format('YYYY-MM-DD') : '',
+      })
+    }
+    slotProps={{
+      textField: {
+        fullWidth: true,
+      },
+    }}
+  />
+</LocalizationProvider>
 
               <textarea
                 rows={4}

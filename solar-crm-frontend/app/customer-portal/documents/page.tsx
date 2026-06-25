@@ -138,6 +138,67 @@ const recentDocuments = filteredDocuments.slice(0, 3);
     setTimeout(loadDocuments, 0);
   };
 
+  const openPdf = async (pdfUrl: string, title: string) => {
+    try {
+      const res = await fetch(pdfUrl);
+
+      if (!res.ok) {
+        alert('Unable to open document. Please try again.');
+        return;
+      }
+
+      const blob = await res.blob();
+
+      const isNativeCapacitor =
+        typeof window !== 'undefined' &&
+        !!(window as any).Capacitor &&
+        (window as any).Capacitor.isNativePlatform?.() === true;
+
+      if (isNativeCapacitor) {
+        const arrayBuffer = await blob.arrayBuffer();
+        const uint8Array = new Uint8Array(arrayBuffer);
+
+        let binaryString = '';
+
+        for (let i = 0; i < uint8Array.length; i += 1) {
+          binaryString += String.fromCharCode(uint8Array[i]);
+        }
+
+        const base64 = btoa(binaryString);
+
+        const { Filesystem, Directory } = await import('@capacitor/filesystem');
+        const { Share } = await import('@capacitor/share');
+
+        const safeName = `${String(title || 'portal-document')
+          .replace(/[^a-zA-Z0-9-_]/g, '-')
+          .toLowerCase()}.pdf`;
+
+        const saved = await Filesystem.writeFile({
+          path: safeName,
+          data: base64,
+          directory: Directory.Cache,
+          recursive: true,
+        });
+
+        await Share.share({
+          title,
+          text: title,
+          url: saved.uri,
+          dialogTitle: 'Open / Share Document',
+        });
+
+        return;
+      }
+
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(() => window.URL.revokeObjectURL(url), 30000);
+    } catch (error: any) {
+      console.error(error);
+      alert(error?.message || 'Unable to open document.');
+    }
+  };
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-orange-50 via-yellow-50 to-emerald-50">
       <div className="mx-auto max-w-7xl px-4 py-6">
@@ -352,13 +413,20 @@ const recentDocuments = filteredDocuments.slice(0, 3);
                         Open
                       </a>
 
-                      <a
-                        href={doc.fileUrl}
-                        download
-                        className="rounded-2xl bg-emerald-600 px-4 py-3 text-center text-sm font-black text-white hover:bg-emerald-700"
-                      >
-                        Download
-                      </a>
+                      <button
+  type="button"
+  onClick={() =>
+    openPdf(
+      doc.fileUrl,
+      doc.documentName ||
+        doc.documentType ||
+        `Document-${doc.id}`,
+    )
+  }
+  className="rounded-2xl bg-emerald-600 px-4 py-3 text-center text-sm font-black text-white hover:bg-emerald-700"
+>
+  Download
+</button>
                     </div>
                   </div>
                 </div>
