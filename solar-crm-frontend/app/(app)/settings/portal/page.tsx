@@ -65,6 +65,7 @@ const emptyPolicyForm = {
   portalType: 'CUSTOMER',
   title: '',
   language: 'HINDI',
+  documentType: 'POLICY',
   content: '',
   pdfUrl: '',
   visibleToCustomer: true,
@@ -91,6 +92,7 @@ const [expandedKitId, setExpandedKitId] = useState<number | null>(null);
 const [policies, setPolicies] = useState<any[]>([]);
 const [policyForm, setPolicyForm] = useState<any>(emptyPolicyForm);
 const [policySaving, setPolicySaving] = useState(false);
+const [policyPdfUploading, setPolicyPdfUploading] = useState(false);
 const [showHiddenPolicies, setShowHiddenPolicies] = useState(false);
 
   const headers = () => ({
@@ -487,6 +489,52 @@ visibleToCustomer: item.visibleToCustomer === true,
   }
 };
 
+const uploadPolicyPdf = async (
+  event: React.ChangeEvent<HTMLInputElement>,
+) => {
+  const file = event.target.files?.[0];
+
+  if (!file) return;
+
+  if (file.type !== 'application/pdf') {
+    alert('Please select a PDF file.');
+    return;
+  }
+
+  try {
+    setPolicyPdfUploading(true);
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const res = await axios.post(
+      `${API_BASE_URL}/dealer/portal-policies/upload`,
+      formData,
+      {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'multipart/form-data',
+        },
+      },
+    );
+
+    setPolicyForm((prev: any) => ({
+      ...prev,
+      pdfUrl: res.data.fileUrl,
+    }));
+
+    alert('PDF uploaded successfully.');
+  } catch (error: any) {
+    console.error(error);
+    alert(
+      error?.response?.data?.message ||
+        'Failed to upload PDF.',
+    );
+  } finally {
+    setPolicyPdfUploading(false);
+  }
+};
+
 const savePolicy = async () => {
   if (!String(policyForm.title || '').trim()) {
     alert('Document title is required');
@@ -517,6 +565,7 @@ const startEditPolicy = (item: any) => {
     portalType: item.portalType || 'CUSTOMER',
     title: item.title || '',
     language: item.language || 'HINDI',
+    documentType: item.documentType || 'POLICY',
     content: item.content || '',
     pdfUrl: item.pdfUrl || '',
     visibleToCustomer: item.visibleToCustomer !== false,
@@ -1314,17 +1363,48 @@ const restorePolicy = async (item: any) => {
         <option value="ENGLISH">English</option>
       </select>
 
-      <input
-        placeholder="PDF URL (optional)"
-        value={policyForm.pdfUrl}
-        onChange={(e) =>
-          setPolicyForm({
-            ...policyForm,
-            pdfUrl: e.target.value,
-          })
-        }
-        className="rounded-xl border p-3"
-      />
+      <select
+  value={policyForm.documentType}
+  onChange={(e) =>
+    setPolicyForm({
+      ...policyForm,
+      documentType: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+>
+  <option value="POLICY">Policy</option>
+  <option value="WARRANTY">Warranty</option>
+  <option value="MANUAL">Manual</option>
+  <option value="GUIDE">Guide</option>
+  <option value="AGREEMENT">Agreement</option>
+  <option value="OTHER">Other</option>
+</select>
+
+      <div className="rounded-xl border p-3">
+  <label className="block text-sm font-semibold text-gray-700">
+    Upload PDF
+  </label>
+
+  <input
+    type="file"
+    accept="application/pdf"
+    onChange={uploadPolicyPdf}
+    className="mt-2 w-full text-sm"
+  />
+
+  {policyPdfUploading && (
+    <p className="mt-2 text-sm text-blue-600">
+      Uploading PDF...
+    </p>
+  )}
+
+  {policyForm.pdfUrl && (
+    <p className="mt-2 break-all text-xs text-green-700">
+      PDF uploaded successfully.
+    </p>
+  )}
+</div>
 
       <input
         type="number"
@@ -1423,8 +1503,9 @@ const restorePolicy = async (item: any) => {
               </p>
 
               <p className="mt-1 text-sm text-gray-500">
-                {item.language || 'HINDI'} | Sort: {item.sortOrder || 0}
-              </p>
+  {item.documentType || 'POLICY'} | {item.language || 'HINDI'} | Sort:{' '}
+  {item.sortOrder || 0}
+</p>
 
               <div className="mt-2 flex flex-wrap gap-2">
                 <span
