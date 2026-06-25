@@ -8,6 +8,9 @@ export default function CustomerReferralsPage() {
   const [dashboard, setDashboard] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState('');
+const [statusFilter, setStatusFilter] = useState('ALL');
+const [rewardFilter, setRewardFilter] = useState('ALL');
 
   const [form, setForm] = useState({
     referredName: '',
@@ -18,6 +21,27 @@ export default function CustomerReferralsPage() {
   });
 
   const referrals = dashboard?.referrals || [];
+
+  const filteredReferrals = referrals.filter((item: any) => {
+  const q = search.toLowerCase();
+
+  const matchesSearch =
+    !q ||
+    String(item.referredName || '').toLowerCase().includes(q) ||
+    String(item.referredPhone || '').toLowerCase().includes(q) ||
+    String(item.referredCity || '').toLowerCase().includes(q) ||
+    String(item.remarks || '').toLowerCase().includes(q);
+
+  const matchesStatus =
+    statusFilter === 'ALL' || item.status === statusFilter;
+
+  const matchesReward =
+    rewardFilter === 'ALL' ||
+    (rewardFilter === 'PAID' && item.rewardPaid) ||
+    (rewardFilter === 'PENDING' && !item.rewardPaid);
+
+  return matchesSearch && matchesStatus && matchesReward;
+});
 
   const loadDashboard = async () => {
     try {
@@ -227,11 +251,60 @@ export default function CustomerReferralsPage() {
               Referral Tracking
             </h2>
 
+            <div className="mt-4 space-y-3">
+  <input
+    placeholder="Search by name, phone, city or remarks..."
+    value={search}
+    onChange={(e) => setSearch(e.target.value)}
+    className="w-full rounded-2xl border p-3"
+  />
+
+  <div className="flex flex-wrap gap-2">
+    {[
+      'ALL',
+      'REFERRED',
+      'LEAD_CREATED',
+      'MEETING_DONE',
+      'PROJECT_CREATED',
+      'PROJECT_COMPLETED',
+      'REWARD_PAID',
+    ].map((item) => (
+      <button
+        key={item}
+        onClick={() => setStatusFilter(item)}
+        className={`rounded-2xl px-4 py-2 text-xs font-black ${
+          statusFilter === item
+            ? 'bg-gray-900 text-white'
+            : 'bg-gray-100 text-gray-700'
+        }`}
+      >
+        {formatLabel(item)}
+      </button>
+    ))}
+  </div>
+
+  <div className="flex flex-wrap gap-2">
+    {['ALL', 'PAID', 'PENDING'].map((item) => (
+      <button
+        key={item}
+        onClick={() => setRewardFilter(item)}
+        className={`rounded-2xl px-4 py-2 text-xs font-black ${
+          rewardFilter === item
+            ? 'bg-orange-500 text-white'
+            : 'bg-orange-50 text-orange-700'
+        }`}
+      >
+        Reward {formatLabel(item)}
+      </button>
+    ))}
+  </div>
+</div>
+
             <div className="mt-5 space-y-4">
-              {referrals.length === 0 ? (
+              {filteredReferrals.length === 0 ? (
                 <EmptyCard text="No referrals submitted yet." />
               ) : (
-                referrals.map((item: any) => (
+                filteredReferrals.map((item: any) => (
                   <div key={item.id} className="rounded-3xl border bg-gray-50 p-5">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
@@ -246,7 +319,12 @@ export default function CustomerReferralsPage() {
                       <StatusBadge status={item.status} />
                     </div>
 
-                    <div className="mt-4 grid gap-3 md:grid-cols-3">
+                    <div className="mt-4 grid gap-3 md:grid-cols-4">
+
+                        <InfoCard
+  label="Referral ID"
+  value={`#${item.id || '-'}`}
+/>
                       <InfoCard
                         label="Reward Amount"
                         value={formatCurrency(item.rewardAmount || 5000)}
@@ -326,8 +404,21 @@ function EmptyCard({ text }: { text: string }) {
 function StatusBadge({ status }: { status?: string }) {
   const value = status || 'REFERRED';
 
+  const color =
+    value === 'REWARD_PAID'
+      ? 'bg-emerald-100 text-emerald-700'
+      : value === 'PROJECT_COMPLETED'
+        ? 'bg-green-100 text-green-700'
+        : value === 'PROJECT_CREATED'
+          ? 'bg-blue-100 text-blue-700'
+          : value === 'MEETING_DONE'
+            ? 'bg-indigo-100 text-indigo-700'
+            : value === 'LEAD_CREATED'
+              ? 'bg-orange-100 text-orange-700'
+              : 'bg-gray-100 text-gray-700';
+
   return (
-    <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-700">
+    <span className={`rounded-full px-3 py-1 text-xs font-black ${color}`}>
       {formatLabel(value)}
     </span>
   );
