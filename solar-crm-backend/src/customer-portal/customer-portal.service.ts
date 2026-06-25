@@ -31,6 +31,10 @@ import {
   PortalPolicy,
   PortalPolicyType,
 } from '../dealer/portal-policy.entity';
+import {
+  CustomerPaymentReceiptActivity,
+  CustomerPaymentReceiptActivityType,
+} from './customer-payment-receipt-activity.entity';
 
 @Injectable()
 export class CustomerPortalService {
@@ -64,6 +68,9 @@ private readonly complaintAttachmentRepository: Repository<CustomerComplaintAtta
 
     @InjectRepository(CustomerPaymentReceipt)
     private readonly paymentReceiptRepository: Repository<CustomerPaymentReceipt>,
+
+    @InjectRepository(CustomerPaymentReceiptActivity)
+private readonly paymentReceiptActivityRepository: Repository<CustomerPaymentReceiptActivity>,
 
     @InjectRepository(CustomerWorkDateRequest)
     private readonly workDateRequestRepository: Repository<CustomerWorkDateRequest>,
@@ -1593,5 +1600,52 @@ async markAllCustomerNotificationsRead(customerId: number) {
     message: 'All notifications marked as read',
     updated: notifications.length,
   };
+}
+
+async addPaymentReceiptActivity(body: any, user?: any) {
+  if (!body?.receiptId) {
+    return null;
+  }
+
+  const activity = this.paymentReceiptActivityRepository.create({
+    receiptId: Number(body.receiptId),
+    customerId: body.customerId ? Number(body.customerId) : null,
+    projectId: body.projectId ? Number(body.projectId) : null,
+    activityType: body.activityType,
+    activityTitle: body.activityTitle || 'Payment Receipt Update',
+    activityDescription: body.activityDescription || '',
+    performedBy: user?.id || body.performedBy || null,
+    performedByName:
+      user?.name || user?.email || body.performedByName || '',
+    performedByRole: Array.isArray(user?.roles)
+      ? user.roles.join(', ')
+      : body.performedByRole || '',
+    oldValue: body.oldValue || '',
+    newValue: body.newValue || '',
+  } as any);
+
+  return this.paymentReceiptActivityRepository.save(activity);
+}
+
+async getCustomerPaymentReceiptActivities(
+  receiptId: number,
+  customerId: number,
+) {
+  const receipt = await this.paymentReceiptRepository.findOne({
+    where: {
+      id: receiptId,
+      customerId,
+      isHidden: false,
+    } as any,
+  });
+
+  if (!receipt) {
+    throw new NotFoundException('Payment receipt not found');
+  }
+
+  return this.paymentReceiptActivityRepository.find({
+    where: { receiptId },
+    order: { createdAt: 'ASC' },
+  });
 }
 }
