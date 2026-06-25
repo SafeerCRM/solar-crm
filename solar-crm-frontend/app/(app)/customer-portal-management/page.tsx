@@ -1,75 +1,175 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import axios from 'axios';
+import { getAuthHeaders } from '@/lib/authHeaders';
 
-const customerModuleCards = [
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+const cards = [
   {
     title: 'Customer Complaints',
     description: 'View, assign, update and close customer complaints.',
     href: '/customer-complaints',
     icon: '🛠',
-    roles: 'Customer Manager / Project / Maintenance',
+    key: 'openComplaints',
+    label: 'Open',
   },
   {
     title: 'Payment Receipts',
-    description: 'Verify customer uploaded receipts, approve or reject with remarks.',
+    description: 'Verify uploaded receipts, approve or reject with remarks.',
     href: '/customer-payment-receipts',
     icon: '💳',
-    roles: 'Payment / Account / Customer Manager',
+    key: 'pendingReceipts',
+    label: 'Pending',
   },
   {
     title: 'Work Date Requests',
     description: 'Approve, reject or reschedule customer requested work dates.',
     href: '/customer-work-requests',
     icon: '📅',
-    roles: 'Project / Customer Manager',
+    key: 'pendingWorkRequests',
+    label: 'Pending',
   },
   {
     title: 'Cleaning Reminders',
     description: 'Track cleaning requests, reminders and maintenance updates.',
     href: '/customer-cleaning-reminders',
     icon: '🧽',
-    roles: 'Maintenance / Customer Manager',
+    key: 'pendingCleaning',
+    label: 'Pending',
   },
   {
     title: 'Customer Referrals',
     description: 'Track customer referrals, status and reward follow-up.',
     href: '/customer-referrals',
     icon: '🎁',
-    roles: 'Marketing / Lead / Customer Manager',
+    key: 'pendingReferrals',
+    label: 'Pending',
   },
   {
     title: 'Customer-Facing Portal',
     description: 'Open customer portal web view for testing login and mobile layout.',
     href: '/customer-login',
     icon: '📱',
-    roles: 'Testing / Handover',
+    key: 'portal',
+    label: 'Live',
   },
 ];
 
 export default function CustomerPortalManagementPage() {
+  const [stats, setStats] = useState<any>({
+    openComplaints: 0,
+    pendingReceipts: 0,
+    pendingWorkRequests: 0,
+    pendingCleaning: 0,
+    pendingReferrals: 0,
+    portal: 'Live',
+  });
+  const [loading, setLoading] = useState(false);
+
+  const loadStats = async () => {
+    try {
+      setLoading(true);
+
+      const [
+        complaintsRes,
+        receiptsRes,
+        workRequestsRes,
+        cleaningRes,
+        referralsRes,
+      ] = await Promise.allSettled([
+        axios.get(`${API_BASE_URL}/customer-portal/complaints`, {
+          params: { page: 1, limit: 1, status: 'OPEN' },
+          headers: getAuthHeaders(),
+        }),
+        axios.get(`${API_BASE_URL}/customer-portal/payment-receipts`, {
+          params: { page: 1, limit: 1, status: 'SUBMITTED' },
+          headers: getAuthHeaders(),
+        }),
+        axios.get(`${API_BASE_URL}/customer-portal/work-date-requests`, {
+          params: { page: 1, limit: 1, status: 'PENDING' },
+          headers: getAuthHeaders(),
+        }),
+        axios.get(`${API_BASE_URL}/customer-portal/cleaning-reminders`, {
+          params: { page: 1, limit: 1, status: 'PENDING' },
+          headers: getAuthHeaders(),
+        }),
+        axios.get(`${API_BASE_URL}/customer-portal/referrals`, {
+          params: { page: 1, limit: 1, status: 'PENDING' },
+          headers: getAuthHeaders(),
+        }),
+      ]);
+
+      setStats({
+        openComplaints:
+          complaintsRes.status === 'fulfilled'
+            ? Number(complaintsRes.value.data?.total || 0)
+            : 0,
+        pendingReceipts:
+          receiptsRes.status === 'fulfilled'
+            ? Number(receiptsRes.value.data?.total || 0)
+            : 0,
+        pendingWorkRequests:
+          workRequestsRes.status === 'fulfilled'
+            ? Number(workRequestsRes.value.data?.total || 0)
+            : 0,
+        pendingCleaning:
+          cleaningRes.status === 'fulfilled'
+            ? Number(cleaningRes.value.data?.total || 0)
+            : 0,
+        pendingReferrals:
+          referralsRes.status === 'fulfilled'
+            ? Number(referralsRes.value.data?.total || 0)
+            : 0,
+        portal: 'Live',
+      });
+    } catch (error) {
+      console.error('Customer portal stats error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadStats();
+  }, []);
+
   return (
     <main className="space-y-6">
       <section className="overflow-hidden rounded-3xl bg-gradient-to-r from-orange-500 via-yellow-500 to-emerald-500 p-6 text-white shadow-xl">
-        <p className="text-sm font-bold opacity-90">
-          Aditya Solars CRM
-        </p>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-bold opacity-90">Aditya Solars CRM</p>
 
-        <h1 className="mt-2 text-3xl font-black md:text-5xl">
-          Customer Portal Management
-        </h1>
+            <h1 className="mt-2 text-3xl font-black md:text-5xl">
+              Customer Portal Management
+            </h1>
 
-        <p className="mt-3 max-w-3xl text-sm font-medium text-white/90">
-          Manage customer complaints, payment receipts, work date requests,
-          cleaning reminders, referrals and customer-facing portal testing from
-          one place.
-        </p>
+            <p className="mt-3 max-w-3xl text-sm font-medium text-white/90">
+              Manage customer complaints, payment receipts, work date requests,
+              cleaning reminders, referrals and customer-facing portal testing from
+              one place.
+            </p>
+          </div>
+
+          <button
+            onClick={loadStats}
+            className="rounded-2xl bg-white/20 px-5 py-3 text-sm font-black backdrop-blur hover:bg-white/30"
+          >
+            {loading ? 'Refreshing...' : 'Refresh'}
+          </button>
+        </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <SummaryCard title="Customer Portal" value="Live" />
-        <SummaryCard title="Complaint Timeline" value="Enabled" />
-        <SummaryCard title="Payment Accounts" value="Portal Settings" />
+      <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+        <SummaryCard title="Open Complaints" value={stats.openComplaints} />
+        <SummaryCard title="Pending Receipts" value={stats.pendingReceipts} />
+        <SummaryCard title="Work Requests" value={stats.pendingWorkRequests} />
+        <SummaryCard title="Cleaning Pending" value={stats.pendingCleaning} />
+        <SummaryCard title="Pending Referrals" value={stats.pendingReferrals} />
+        <SummaryCard title="Portal Status" value="Live" />
       </section>
 
       <section className="rounded-3xl bg-white p-6 shadow">
@@ -79,7 +179,7 @@ export default function CustomerPortalManagementPage() {
               Customer Work Center
             </h2>
             <p className="mt-1 text-sm text-gray-500">
-              Use these sections to handle all customer portal activities.
+              Live workload summary with quick access to each customer section.
             </p>
           </div>
 
@@ -92,7 +192,7 @@ export default function CustomerPortalManagementPage() {
         </div>
 
         <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {customerModuleCards.map((item) => (
+          {cards.map((item) => (
             <Link
               key={item.href}
               href={item.href}
@@ -103,17 +203,19 @@ export default function CustomerPortalManagementPage() {
                   {item.icon}
                 </div>
 
-                <div>
-                  <h3 className="text-lg font-black text-gray-900">
-                    {item.title}
-                  </h3>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-3">
+                    <h3 className="text-lg font-black text-gray-900">
+                      {item.title}
+                    </h3>
+
+                    <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-black text-orange-700">
+                      {item.label}: {stats[item.key]}
+                    </span>
+                  </div>
 
                   <p className="mt-2 text-sm text-gray-600">
                     {item.description}
-                  </p>
-
-                  <p className="mt-3 text-xs font-bold text-orange-600">
-                    {item.roles}
                   </p>
                 </div>
               </div>
@@ -142,17 +244,13 @@ export default function CustomerPortalManagementPage() {
   );
 }
 
-function SummaryCard({
-  title,
-  value,
-}: {
-  title: string;
-  value: string;
-}) {
+function SummaryCard({ title, value }: { title: string; value: any }) {
   return (
     <div className="rounded-3xl bg-white p-5 shadow">
       <p className="text-sm font-bold text-gray-500">{title}</p>
-      <p className="mt-2 text-2xl font-black text-gray-900">{value}</p>
+      <p className="mt-2 text-2xl font-black text-gray-900">
+        {String(value ?? 0)}
+      </p>
     </div>
   );
 }
