@@ -106,6 +106,36 @@ export default function CustomerWorkCalendarPage() {
     }
   };
 
+    const selectedProject = (dashboard?.projects || []).find(
+    (project: any) => String(project.id) === String(form.projectId),
+  );
+
+  const selectedProjectActivities = (dashboard?.executionActivities || [])
+    .filter(
+      (activity: any) =>
+        String(activity.projectId) === String(form.projectId) &&
+        activity.scheduledDate &&
+        activity.status !== 'COMPLETED' &&
+        activity.status !== 'CANCELLED',
+    )
+    .sort(
+      (a: any, b: any) =>
+        new Date(a.scheduledDate).getTime() -
+        new Date(b.scheduledDate).getTime(),
+    );
+
+  const nextWorkActivity = selectedProjectActivities[0];
+
+  const currentWorkDateValue =
+    form.currentWorkDate ||
+    (nextWorkActivity?.scheduledDate
+      ? new Date(nextWorkActivity.scheduledDate).toISOString().slice(0, 10)
+      : '');
+
+  const currentWorkDateDisplay = currentWorkDateValue
+    ? new Date(currentWorkDateValue).toLocaleDateString('en-IN')
+    : 'No scheduled work date found';
+
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-orange-50">
@@ -188,12 +218,33 @@ export default function CustomerWorkCalendarPage() {
           <div className="mt-5 grid gap-4 md:grid-cols-2">
             <select
               value={form.projectId}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  projectId: e.target.value,
-                })
-              }
+              onChange={(e) => {
+  const projectId = e.target.value;
+
+  const activities = (dashboard?.executionActivities || [])
+    .filter(
+      (activity: any) =>
+        String(activity.projectId) === String(projectId) &&
+        activity.scheduledDate &&
+        activity.status !== 'COMPLETED' &&
+        activity.status !== 'CANCELLED',
+    )
+    .sort(
+      (a: any, b: any) =>
+        new Date(a.scheduledDate).getTime() -
+        new Date(b.scheduledDate).getTime(),
+    );
+
+  const nextActivity = activities[0];
+
+  setForm({
+    ...form,
+    projectId,
+    currentWorkDate: nextActivity?.scheduledDate
+      ? new Date(nextActivity.scheduledDate).toISOString().slice(0, 10)
+      : '',
+  });
+}}
               className="rounded-2xl border p-3"
             >
               <option value="">Select Project</option>
@@ -209,18 +260,15 @@ export default function CustomerWorkCalendarPage() {
               <label className="mb-1 block text-xs font-bold text-gray-500">
                 Current Work Date
               </label>
-              <input
-                type="date"
-                value={form.currentWorkDate}
-                readOnly
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    currentWorkDate: e.target.value,
-                  })
-                }
-                className="w-full rounded-2xl border bg-gray-50 p-3"
-              />
+              <div className="w-full rounded-2xl border bg-gray-50 p-3 text-sm font-black text-gray-800">
+  {currentWorkDateDisplay}
+</div>
+
+{nextWorkActivity && (
+  <p className="mt-1 text-xs font-semibold text-gray-500">
+    Next work: {String(nextWorkActivity.activityType || '').replaceAll('_', ' ')}
+  </p>
+)}
             </div>
 
             <div>
@@ -228,16 +276,17 @@ export default function CustomerWorkCalendarPage() {
                 Requested New Work Date
               </label>
               <input
-                type="date"
-                value={form.requestedWorkDate}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    requestedWorkDate: e.target.value,
-                  })
-                }
-                className="w-full rounded-2xl border p-3"
-              />
+  type="date"
+  value={form.requestedWorkDate}
+  min={new Date().toISOString().slice(0, 10)}
+  onChange={(e) =>
+    setForm({
+      ...form,
+      requestedWorkDate: e.target.value,
+    })
+  }
+  className="w-full rounded-2xl border bg-white p-3 text-gray-900"
+/>
             </div>
           </div>
 
