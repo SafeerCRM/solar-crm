@@ -10,6 +10,10 @@ export class AnalyticsController {
 
   @Get('overview')
   getOwnerOverview(@Query() query: any, @CurrentUser() user: any) {
+    if (query?.department) {
+      return this.analyticsService.getDepartmentReport(query, user);
+    }
+
     return this.analyticsService.getOwnerOverview(query, user);
   }
 
