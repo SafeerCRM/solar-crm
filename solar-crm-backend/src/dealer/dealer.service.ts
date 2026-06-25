@@ -1740,6 +1740,62 @@ return {
     };
   }
 
+  async uploadPortalPolicyPdf(file: any, user: any) {
+  if (!file) {
+    throw new BadRequestException('PDF file is required');
+  }
+
+  const mimeType = String(file.mimetype || '');
+
+  if (mimeType !== 'application/pdf') {
+    throw new BadRequestException('Only PDF files are allowed');
+  }
+
+  const maxSize = 8 * 1024 * 1024;
+
+  if (file.size > maxSize) {
+    throw new BadRequestException('PDF file must be less than 8 MB');
+  }
+
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const bucket =
+    process.env.SUPABASE_PROJECT_DOCUMENTS_BUCKET || 'project-documents';
+
+  if (!supabaseUrl || !serviceKey) {
+    throw new BadRequestException('Supabase storage is not configured');
+  }
+
+  const supabase = createClient(supabaseUrl, serviceKey);
+
+  const originalName = String(file.originalname || 'portal-document.pdf');
+  const filePath = `portal-documents/${Date.now()}-${randomUUID()}.pdf`;
+
+  const uploadResult = await supabase.storage
+    .from(bucket)
+    .upload(filePath, file.buffer, {
+      contentType: mimeType,
+      upsert: false,
+    });
+
+  if (uploadResult.error) {
+    throw new BadRequestException(uploadResult.error.message);
+  }
+
+  const publicUrlResult = supabase.storage
+    .from(bucket)
+    .getPublicUrl(filePath);
+
+  return {
+    fileUrl: publicUrlResult.data.publicUrl,
+    fileName: originalName,
+    fileSize: file.size,
+    filePath,
+    mimeType,
+    uploadedBy: user?.id || null,
+  };
+}
+
     async createDealerOrderComment(
     dealerId: number,
     orderId: number,

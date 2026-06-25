@@ -7,13 +7,16 @@ import {
   Patch,
   Post,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { DealerService } from './dealer.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @Controller('dealer')
 export class DealerController {
@@ -162,6 +165,17 @@ toggleDealerKitAvailability(
   @Body() body: any,
 ) {
   return this.dealerService.toggleDealerKitAvailability(id, body);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Post('portal-policies/upload')
+@UseInterceptors(FileInterceptor('file'))
+uploadPortalPolicyPdf(
+  @UploadedFile() file: any,
+  @CurrentUser() user: any,
+) {
+  return this.dealerService.uploadPortalPolicyPdf(file, user);
 }
 
 @UseGuards(JwtAuthGuard, RolesGuard)
