@@ -269,7 +269,7 @@ const navItems = [
   {
   name: 'Portal Settings',
   href: '/settings/portal',
-  roles: ['OWNER', 'ACCOUNT_MANAGER', 'TRADING_MANAGER'],
+  roles: ['OWNER'],
 },
 
   {

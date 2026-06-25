@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 
@@ -166,6 +167,12 @@ export default function CustomerPaymentReceiptsPage() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-5 pb-8">
+        <Link
+  href="/customer-portal-management"
+  className="inline-flex items-center gap-2 rounded-2xl bg-gray-900 px-4 py-2 text-sm font-black text-white hover:bg-black"
+>
+  ← Customer Portal Dashboard
+</Link>
       <div className="overflow-hidden rounded-[2rem] bg-gradient-to-r from-orange-500 via-yellow-500 to-emerald-500 p-6 text-white shadow-2xl">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
