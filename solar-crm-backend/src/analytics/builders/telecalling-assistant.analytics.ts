@@ -147,12 +147,12 @@ export class TelecallingAssistantAnalyticsBuilder {
       meetingsConvertedQb.clone().getCount(),
 
       reviewsQb
-        .clone()
-        .select('COALESCE(call.reviewStatus::text, \'UNKNOWN\')', 'label')
-        .addSelect('COUNT(*)', 'value')
-        .groupBy('call.reviewStatus')
-        .orderBy('value', 'DESC')
-        .getRawMany(),
+  .clone()
+  .select('call."reviewStatus"::text', 'label')
+  .addSelect('COUNT(*)', 'value')
+  .groupBy('call."reviewStatus"')
+  .orderBy('value', 'DESC')
+  .getRawMany(),
 
       reviewsQb
         .clone()
