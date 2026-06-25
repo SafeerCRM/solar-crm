@@ -13,6 +13,11 @@ export class AnalyticsController {
     return this.analyticsService.getOverview(query, user);
   }
 
+    @Get('work-report')
+  getWorkReport(@Query() query: any, @CurrentUser() user: any) {
+    return this.analyticsService.getWorkReport(query, user);
+  }
+
   @Get('telecalling')
   getTelecalling(@Query() query: any, @CurrentUser() user: any) {
     return this.analyticsService.getTelecalling(query, user);
