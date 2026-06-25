@@ -66,19 +66,47 @@ export default function CustomerProjectTrackerPage() {
     ? Math.round((completedActivities / projectActivities.length) * 100)
     : 0;
 
-  const projectPaid = projectInstallments.reduce(
+  const projectTotal =
+  Number(selectedProject?.finalCost || 0) ||
+  Number(selectedProject?.netAmount || 0) ||
+  Number(selectedProject?.projectCost || 0);
+
+const projectPaid = projectInstallments
+  .filter((item: any) => item.approvalStatus === 'APPROVED')
+  .reduce(
     (sum: number, item: any) => sum + Number(item.paidAmount || 0),
     0,
   );
 
-  const projectTotal = projectInstallments.reduce(
-    (sum: number, item: any) => sum + Number(item.amount || 0),
-    0,
-  );
+const projectPending = Math.max(projectTotal - projectPaid, 0);
 
-  const paymentPercent = projectTotal
-    ? Math.round((projectPaid / projectTotal) * 100)
-    : 0;
+const paymentPercent = projectTotal
+  ? Math.min(
+      100,
+      Math.round((projectPaid / projectTotal) * 100),
+    )
+  : 0;
+
+  const upcomingActivity = projectActivities
+  .filter((item: any) => item.status !== 'COMPLETED' && item.status !== 'CANCELLED')
+  .sort(
+    (a: any, b: any) =>
+      new Date(a.scheduledDate || a.createdAt || '').getTime() -
+      new Date(b.scheduledDate || b.createdAt || '').getTime(),
+  )[0];
+
+const overdueActivities = projectActivities.filter((item: any) => {
+  if (!item.scheduledDate) return false;
+  if (item.status === 'COMPLETED' || item.status === 'CANCELLED') return false;
+
+  const scheduled = new Date(item.scheduledDate);
+  const today = new Date();
+
+  scheduled.setHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
+
+  return scheduled < today;
+});
 
   const loadDashboard = async () => {
     try {
@@ -265,6 +293,41 @@ export default function CustomerProjectTrackerPage() {
           </div>
 
           <div className="space-y-5">
+
+            <div className="rounded-[2rem] bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white shadow-xl">
+  <h2 className="text-xl font-black">
+    Next Upcoming Work
+  </h2>
+
+  {upcomingActivity ? (
+    <>
+      <p className="mt-3 text-lg font-black">
+        {formatLabel(upcomingActivity.activityType)}
+      </p>
+
+      <p className="mt-2 text-sm">
+        Status: {formatLabel(upcomingActivity.status)}
+      </p>
+
+      <p className="mt-1 text-sm">
+        Scheduled:{' '}
+        {upcomingActivity.scheduledDate
+          ? new Date(upcomingActivity.scheduledDate).toLocaleDateString('en-IN')
+          : '-'}
+      </p>
+
+      {overdueActivities.some((item: any) => item.id === upcomingActivity.id) && (
+        <span className="mt-4 inline-block rounded-full bg-red-100 px-4 py-2 text-xs font-black text-red-700">
+          DELAYED
+        </span>
+      )}
+    </>
+  ) : (
+    <p className="mt-3 text-sm font-semibold">
+      No upcoming work scheduled.
+    </p>
+  )}
+</div>
             <SummaryCard
               title="Project Details"
               rows={[
@@ -308,9 +371,13 @@ export default function CustomerProjectTrackerPage() {
               ) : (
                 projectActivities.map((activity: any) => (
                   <div
-                    key={activity.id}
-                    className="rounded-3xl border bg-gray-50 p-4"
-                  >
+  key={activity.id}
+  className={`rounded-3xl border p-4 ${
+    overdueActivities.some((item: any) => item.id === activity.id)
+      ? 'border-red-200 bg-red-50'
+      : 'bg-gray-50'
+  }`}
+>
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <h3 className="font-black text-gray-900">
@@ -325,6 +392,12 @@ export default function CustomerProjectTrackerPage() {
                       </div>
 
                       <StatusBadge status={activity.status} />
+
+                      {overdueActivities.some((item: any) => item.id === activity.id) && (
+  <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-black text-red-700">
+    DELAYED
+  </span>
+)}
                     </div>
 
                     {activity.remarks && (
@@ -352,12 +425,9 @@ export default function CustomerProjectTrackerPage() {
             <ProgressBar percent={paymentPercent} />
 
             <div className="mt-5 grid gap-3 md:grid-cols-3">
-              <InfoBox label="Total" value={formatCurrency(projectTotal)} />
-              <InfoBox label="Paid" value={formatCurrency(projectPaid)} />
-              <InfoBox
-                label="Pending"
-                value={formatCurrency(projectTotal - projectPaid)}
-              />
+              <InfoBox label="Total Project Cost" value={formatCurrency(projectTotal)} />
+<InfoBox label="Paid" value={formatCurrency(projectPaid)} />
+<InfoBox label="Pending" value={formatCurrency(projectPending)} />
             </div>
 
             <div className="mt-5 space-y-3">
