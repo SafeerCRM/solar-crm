@@ -511,28 +511,11 @@ setAudioPreview('');
         🎙 Add Voice Note
       </p>
       <p className="mt-1 text-xs text-blue-700">
-        Record or upload audio if typing the issue is difficult.
+        Upload audio from phone recorder if typing the issue is difficult.
       </p>
     </div>
 
     <div className="flex flex-wrap gap-2">
-      {!recording ? (
-        <button
-          type="button"
-          onClick={startRecording}
-          className="rounded-2xl bg-blue-600 px-4 py-3 text-xs font-black text-white"
-        >
-          Record
-        </button>
-      ) : (
-        <button
-          type="button"
-          onClick={stopRecording}
-          className="rounded-2xl bg-red-600 px-4 py-3 text-xs font-black text-white"
-        >
-          Stop
-        </button>
-      )}
 
       <div className="rounded-2xl bg-gray-900 px-4 py-3 text-xs font-black text-white">
   <button
