@@ -690,16 +690,34 @@ return savedComplaint;
   }
 
   async createPaymentReceipt(body: any) {
-    const receipt = this.paymentReceiptRepository.create({
-      ...body,
-      customerId: Number(body.customerId),
-      projectId: Number(body.projectId),
-      amount: Number(body.amount || 0),
-      paymentDate: body.paymentDate ? new Date(body.paymentDate) : undefined,
-    });
+  const receipt = new CustomerPaymentReceipt();
 
-    return this.paymentReceiptRepository.save(receipt);
-  }
+Object.assign(receipt, {
+  ...body,
+  customerId: Number(body.customerId),
+  projectId: Number(body.projectId),
+  amount: Number(body.amount || 0),
+  paymentDate: body.paymentDate ? new Date(body.paymentDate) : undefined,
+});
+
+const savedReceipt = await this.paymentReceiptRepository.save(receipt);
+
+  await this.addPaymentReceiptActivity({
+    receiptId: savedReceipt.id,
+    customerId: savedReceipt.customerId,
+    projectId: savedReceipt.projectId,
+    activityType: CustomerPaymentReceiptActivityType.RECEIPT_UPLOADED,
+    activityTitle: 'Payment Receipt Uploaded',
+    activityDescription: `Receipt of ₹${Number(
+      savedReceipt.amount || 0,
+    ).toLocaleString('en-IN')} submitted for verification.`,
+    newValue: savedReceipt.status || 'SUBMITTED',
+    performedByName: savedReceipt.customerName || 'Customer',
+    performedByRole: 'CUSTOMER',
+  });
+
+  return savedReceipt;
+}
 
   async customerLogin(username: string, password: string) {
   const loginUsername = String(username || '').trim();
@@ -1137,6 +1155,9 @@ async updatePaymentReceipt(id: number, body: any, user: any) {
     throw new NotFoundException('Payment receipt not found');
   }
 
+  const oldStatus = receipt.status;
+  const oldRemarks = receipt.verificationRemarks;
+
   receipt.status = body.status || receipt.status;
   receipt.verificationRemarks =
     body.verificationRemarks || receipt.verificationRemarks;
@@ -1149,18 +1170,60 @@ async updatePaymentReceipt(id: number, body: any, user: any) {
 
   const savedReceipt = await this.paymentReceiptRepository.save(receipt);
 
-await this.createCustomerNotification({
-  customerId: savedReceipt.customerId,
-  customerCode: savedReceipt.customerCode,
-  projectId: savedReceipt.projectId,
-  notificationType: 'PAYMENT_REMINDER',
-  title: 'Payment Receipt Updated',
-  message: `Your payment receipt #${savedReceipt.id} is now ${savedReceipt.status}.`,
-  relatedEntityType: 'PAYMENT_RECEIPT',
-  relatedEntityId: savedReceipt.id,
-});
+  if (oldStatus !== savedReceipt.status) {
+    await this.addPaymentReceiptActivity(
+      {
+        receiptId: savedReceipt.id,
+        customerId: savedReceipt.customerId,
+        projectId: savedReceipt.projectId,
+        activityType:
+          savedReceipt.status === 'VERIFIED'
+            ? CustomerPaymentReceiptActivityType.VERIFIED
+            : savedReceipt.status === 'REJECTED'
+              ? CustomerPaymentReceiptActivityType.REJECTED
+              : CustomerPaymentReceiptActivityType.STATUS_CHANGED,
+        activityTitle:
+          savedReceipt.status === 'VERIFIED'
+            ? 'Payment Receipt Verified'
+            : savedReceipt.status === 'REJECTED'
+              ? 'Payment Receipt Rejected'
+              : 'Payment Receipt Status Updated',
+        activityDescription: `Receipt status changed from ${oldStatus} to ${savedReceipt.status}.`,
+        oldValue: oldStatus,
+        newValue: savedReceipt.status,
+      },
+      user,
+    );
+  }
 
-return savedReceipt;
+  if (oldRemarks !== savedReceipt.verificationRemarks) {
+    await this.addPaymentReceiptActivity(
+      {
+        receiptId: savedReceipt.id,
+        customerId: savedReceipt.customerId,
+        projectId: savedReceipt.projectId,
+        activityType: CustomerPaymentReceiptActivityType.PAYMENT_UPDATED,
+        activityTitle: 'Verification Remark Updated',
+        activityDescription: savedReceipt.verificationRemarks || '',
+        oldValue: oldRemarks || '',
+        newValue: savedReceipt.verificationRemarks || '',
+      },
+      user,
+    );
+  }
+
+  await this.createCustomerNotification({
+    customerId: savedReceipt.customerId,
+    customerCode: savedReceipt.customerCode,
+    projectId: savedReceipt.projectId,
+    notificationType: 'PAYMENT_REMINDER',
+    title: 'Payment Receipt Updated',
+    message: `Your payment receipt #${savedReceipt.id} is now ${savedReceipt.status}.`,
+    relatedEntityType: 'PAYMENT_RECEIPT',
+    relatedEntityId: savedReceipt.id,
+  });
+
+  return savedReceipt;
 }
 
 async listReferrals(query: any) {
