@@ -108,6 +108,15 @@ const overdueActivities = projectActivities.filter((item: any) => {
   return scheduled < today;
 });
 
+const recentDocuments = projectDocuments.slice(0, 3);
+const recentComplaints = projectComplaints.slice(0, 3);
+
+const remainingActivities = projectActivities.filter(
+  (item: any) =>
+    item.status !== 'COMPLETED' &&
+    item.status !== 'CANCELLED',
+).length;
+
   const loadDashboard = async () => {
     try {
       setLoading(true);
@@ -365,6 +374,25 @@ const overdueActivities = projectActivities.filter((item: any) => {
 
             <ProgressBar percent={executionPercent} />
 
+            <div className="mt-5 grid gap-3 md:grid-cols-4">
+  <InfoBox
+    label="Total"
+    value={String(projectActivities.length)}
+  />
+  <InfoBox
+    label="Completed"
+    value={String(completedActivities)}
+  />
+  <InfoBox
+    label="Remaining"
+    value={String(remainingActivities)}
+  />
+  <InfoBox
+    label="Delayed"
+    value={String(overdueActivities.length)}
+  />
+</div>
+
             <div className="mt-5 space-y-3">
               {projectActivities.length === 0 ? (
                 <EmptyCard text="No execution activities scheduled yet." />
@@ -381,8 +409,10 @@ const overdueActivities = projectActivities.filter((item: any) => {
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <h3 className="font-black text-gray-900">
-                          {formatLabel(activity.activityType)}
-                        </h3>
+  {executionIcon(activity.status, overdueActivities.some((item: any) => item.id === activity.id))}
+  {' '}
+  {formatLabel(activity.activityType)}
+</h3>
                         <p className="mt-1 text-sm text-gray-500">
                           Scheduled:{' '}
                           {activity.scheduledDate
@@ -466,6 +496,95 @@ const overdueActivities = projectActivities.filter((item: any) => {
             </div>
           </div>
         </div>
+
+        <div className="mt-6 grid gap-6 lg:grid-cols-2">
+  <div className="rounded-[2rem] bg-white p-6 shadow-xl">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <h2 className="text-2xl font-black text-gray-900">
+        Recent Documents
+      </h2>
+
+      <a
+        href="/customer-portal/documents"
+        className="rounded-2xl bg-gray-900 px-4 py-2 text-sm font-black text-white"
+      >
+        View All
+      </a>
+    </div>
+
+    <div className="mt-5 space-y-3">
+      {recentDocuments.length === 0 ? (
+        <EmptyCard text="No customer-visible documents yet." />
+      ) : (
+        recentDocuments.map((doc: any) => (
+          <a
+            key={doc.id}
+            href={doc.fileUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="block rounded-3xl border bg-gray-50 p-4 transition hover:bg-orange-50"
+          >
+            <p className="font-black text-gray-900">
+              📄 {formatLabel(doc.documentType)}
+            </p>
+
+            <p className="mt-1 text-sm text-gray-500">
+              {doc.fileName || doc.department || 'Document'}
+            </p>
+
+            <p className="mt-2 text-xs font-semibold text-gray-400">
+              {doc.createdAt
+                ? new Date(doc.createdAt).toLocaleDateString('en-IN')
+                : '-'}
+            </p>
+          </a>
+        ))
+      )}
+    </div>
+  </div>
+
+  <div className="rounded-[2rem] bg-white p-6 shadow-xl">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <h2 className="text-2xl font-black text-gray-900">
+        Recent Support
+      </h2>
+
+      <a
+        href="/customer-portal/complaints"
+        className="rounded-2xl bg-gray-900 px-4 py-2 text-sm font-black text-white"
+      >
+        View All
+      </a>
+    </div>
+
+    <div className="mt-5 space-y-3">
+      {recentComplaints.length === 0 ? (
+        <EmptyCard text="No support complaints raised yet." />
+      ) : (
+        recentComplaints.map((complaint: any) => (
+          <div
+            key={complaint.id}
+            className="rounded-3xl border bg-gray-50 p-4"
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="font-black text-gray-900">
+                  🛠 {formatLabel(complaint.subject)}
+                </p>
+
+                <p className="mt-1 line-clamp-2 text-sm text-gray-500">
+                  {complaint.complaintText || '-'}
+                </p>
+              </div>
+
+              <StatusBadge status={complaint.status} />
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+  </div>
+</div>
 
         <div className="mt-6 grid gap-5 md:grid-cols-4">
           <a href="/customer-portal/work-calendar">
@@ -648,6 +767,18 @@ function ActionCard({
       <p className="mt-2 text-sm leading-6 text-gray-500">{text}</p>
     </div>
   );
+}
+
+function executionIcon(status?: string, isDelayed?: boolean) {
+  if (isDelayed) return '🔴';
+
+  const value = String(status || '');
+
+  if (value === 'COMPLETED') return '✅';
+  if (value === 'IN_PROGRESS') return '🟠';
+  if (value === 'CANCELLED') return '🚫';
+
+  return '⏳';
 }
 
 function customerStatus(status?: string) {
