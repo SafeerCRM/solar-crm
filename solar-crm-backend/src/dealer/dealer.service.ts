@@ -1796,6 +1796,73 @@ return {
   };
 }
 
+async uploadPortalAssetImage(file: any, user: any) {
+  if (!file) {
+    throw new BadRequestException('Image file is required');
+  }
+
+  const allowedTypes = [
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/webp',
+  ];
+
+  if (!allowedTypes.includes(file.mimetype)) {
+    throw new BadRequestException(
+      'Only JPG, PNG, or WEBP image files are allowed',
+    );
+  }
+
+  const maxSize = 5 * 1024 * 1024;
+
+  if (Number(file.size || 0) > maxSize) {
+    throw new BadRequestException('Image size must be less than 5 MB');
+  }
+
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const bucket =
+    process.env.SUPABASE_STORAGE_BUCKET || 'documents';
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new BadRequestException(
+      'Supabase storage is not configured',
+    );
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
+  const extension =
+    file.originalname?.split('.').pop()?.toLowerCase() || 'jpg';
+
+  const filePath = `portal-assets/${Date.now()}-${randomUUID()}.${extension}`;
+
+  const { error } = await supabase.storage
+    .from(bucket)
+    .upload(filePath, file.buffer, {
+      contentType: file.mimetype,
+      upsert: false,
+    });
+
+  if (error) {
+    throw new BadRequestException(
+      error.message || 'Failed to upload image',
+    );
+  }
+
+  const { data } = supabase.storage
+    .from(bucket)
+    .getPublicUrl(filePath);
+
+  return {
+    fileUrl: data.publicUrl,
+    filePath,
+    uploadedBy: user?.id || user?.userId || null,
+    uploadedByName: user?.name || user?.email || '',
+  };
+}
+
     async createDealerOrderComment(
     dealerId: number,
     orderId: number,

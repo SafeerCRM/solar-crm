@@ -180,6 +180,17 @@ uploadPortalPolicyPdf(
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('OWNER')
+@Post('portal-assets/upload')
+@UseInterceptors(FileInterceptor('file'))
+uploadPortalAssetImage(
+  @UploadedFile() file: any,
+  @CurrentUser() user: any,
+) {
+  return this.dealerService.uploadPortalAssetImage(file, user);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
 @Get('portal-policies')
 listPortalPolicies(@Query() query: any) {
   return this.dealerService.listPortalPolicies(query);
