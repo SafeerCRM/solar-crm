@@ -63,6 +63,7 @@ import {
 
 import { TelecallingAnalyticsBuilder } from './builders/telecalling.analytics';
 import { TelecallingAssistantAnalyticsBuilder } from './builders/telecalling-assistant.analytics';
+import { LeadAnalyticsBuilder } from './builders/lead.analytics';
 
 type AnalyticsQuery = {
   month?: string;
@@ -590,120 +591,12 @@ export class AnalyticsService {
 }
 
   private async getLeadsReport(query: AnalyticsQuery, user: any) {
-    const { start, end } = this.getDateRange(query);
-    const userIds = await this.getAllowedUserIds(query, user);
-
-    const leadsQb = this.leadRepository
-      .createQueryBuilder('lead')
-      .where('lead.createdAt BETWEEN :start AND :end', { start, end });
-
-    if (userIds.length) {
-      leadsQb.andWhere(
-        '(lead.assignedTo IN (:...userIds) OR lead.createdBy IN (:...userIds) OR lead.originTelecallerId IN (:...userIds))',
-        { userIds },
-      );
-    }
-
-    const [
-      totalLeads,
-      newLeads,
-      interestedLeads,
-      highPotential,
-      mediumPotential,
-      lowPotential,
-      convertedToMeeting,
-    ] = await Promise.all([
-      leadsQb.clone().getCount(),
-      leadsQb.clone().andWhere('lead.status = :status', { status: LeadStatus.NEW }).getCount(),
-      leadsQb.clone().andWhere('lead.status = :status', { status: LeadStatus.INTERESTED }).getCount(),
-      leadsQb.clone().andWhere('lead.potential = :potential', { potential: LeadPotential.HIGH }).getCount(),
-      leadsQb.clone().andWhere('lead.potential = :potential', { potential: LeadPotential.MEDIUM }).getCount(),
-      leadsQb.clone().andWhere('lead.potential = :potential', { potential: LeadPotential.LOW }).getCount(),
-      this.meetingRepository
-        .createQueryBuilder('meeting')
-        .where('meeting.createdAt BETWEEN :start AND :end', { start, end })
-        .andWhere('meeting.leadId IS NOT NULL')
-        .andWhere(
-          userIds.length
-            ? '(meeting.createdBy IN (:...userIds) OR meeting.assignedTo IN (:...userIds))'
-            : '1=1',
-          { userIds },
-        )
-        .getCount(),
-    ]);
-
-    const leadStatusRows = await leadsQb
-  .clone()
-  .select('COALESCE(lead.status, \'UNKNOWN\')', 'label')
-  .addSelect('COUNT(*)', 'value')
-  .groupBy('lead.status')
-  .orderBy('value', 'DESC')
-  .getRawMany();
-
-const leadPotentialRows = await leadsQb
-  .clone()
-  .select('COALESCE(lead.potential, \'UNKNOWN\')', 'label')
-  .addSelect('COUNT(*)', 'value')
-  .groupBy('lead.potential')
-  .orderBy('value', 'DESC')
-  .getRawMany();
-
-const percent = (current: number, previous: number) =>
-  previous > 0 ? Math.round((current / previous) * 100) : 0;
-
-return {
-  department: 'LEADS',
-  cards: {
-    totalLeads,
-    newLeads,
-    interestedLeads,
-    highPotential,
-    mediumPotential,
-    lowPotential,
-    convertedToMeeting,
-  },
-  charts: {
-    leadStatusSplit: {
-      type: 'bar',
-      title: 'Lead Status Split',
-      data: leadStatusRows.map((row) => ({
-        label: row.label,
-        value: Number(row.value || 0),
-      })),
-    },
-    potentialSplit: {
-      type: 'bar',
-      title: 'Lead Potential Split',
-      data: leadPotentialRows.map((row) => ({
-        label: row.label,
-        value: Number(row.value || 0),
-      })),
-    },
-    leadToMeetingFunnel: {
-      type: 'funnel',
-      title: 'Lead to Meeting Funnel',
-      data: [
-        {
-          label: 'Total Leads',
-          value: totalLeads,
-          percent: 100,
-        },
-        {
-          label: 'Interested Leads',
-          value: interestedLeads,
-          percent: percent(interestedLeads, totalLeads),
-        },
-        {
-          label: 'Converted to Meeting',
-          value: convertedToMeeting,
-          percent: percent(convertedToMeeting, totalLeads),
-        },
-      ],
-    },
-  },
-  rows: [],
-};
-  }
+  return new LeadAnalyticsBuilder(
+    this.userRepository,
+    this.leadRepository,
+    this.meetingRepository,
+  ).build(query, user);
+}
 
   private async getMeetingsReport(query: AnalyticsQuery, user: any) {
     const { start, end } = this.getDateRange(query);
