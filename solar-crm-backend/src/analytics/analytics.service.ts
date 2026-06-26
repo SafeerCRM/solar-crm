@@ -64,6 +64,7 @@ import {
 import { TelecallingAnalyticsBuilder } from './builders/telecalling.analytics';
 import { TelecallingAssistantAnalyticsBuilder } from './builders/telecalling-assistant.analytics';
 import { LeadAnalyticsBuilder } from './builders/lead.analytics';
+import { MeetingAnalyticsBuilder } from './builders/meeting.analytics';
 
 type AnalyticsQuery = {
   month?: string;
@@ -599,78 +600,12 @@ export class AnalyticsService {
 }
 
   private async getMeetingsReport(query: AnalyticsQuery, user: any) {
-    const { start, end } = this.getDateRange(query);
-    const userIds = await this.getAllowedUserIds(query, user);
-
-    const meetingsQb = this.meetingRepository
-      .createQueryBuilder('meeting')
-      .where('meeting.createdAt BETWEEN :start AND :end', { start, end });
-
-    if (userIds.length) {
-      meetingsQb.andWhere(
-        '(meeting.assignedTo IN (:...userIds) OR meeting.createdBy IN (:...userIds) OR meeting.updatedBy IN (:...userIds))',
-        { userIds },
-      );
-    }
-
-    const [
-      totalMeetings,
-      companyMeetings,
-      selfMeetings,
-      solarMiterMeetings,
-      siteVisits,
-      completed,
-      converted,
-      cancelled,
-      cnr,
-    ] = await Promise.all([
-      meetingsQb.clone().getCount(),
-      meetingsQb.clone().andWhere('meeting.meetingCategory = :category', { category: MeetingCategory.COMPANY_MEETING }).getCount(),
-      meetingsQb.clone().andWhere('meeting.meetingCategory = :category', { category: MeetingCategory.SELF_MEETING }).getCount(),
-      meetingsQb.clone().andWhere('meeting.meetingCategory = :category', { category: MeetingCategory.SOLARMITER }).getCount(),
-      meetingsQb.clone().andWhere('meeting.meetingType = :type', { type: MeetingType.SITE_VISIT }).getCount(),
-      meetingsQb.clone().andWhere('meeting.status = :status', { status: MeetingStatus.COMPLETED }).getCount(),
-      meetingsQb.clone().andWhere('(meeting.convertToProject = true OR meeting.status = :status)', { status: MeetingStatus.CONVERTED_TO_PROJECT }).getCount(),
-      meetingsQb.clone().andWhere('meeting.status = :status', { status: MeetingStatus.CANCELLED }).getCount(),
-      meetingsQb.clone().andWhere('meeting.status = :status', { status: MeetingStatus.CNR }).getCount(),
-    ]);
-
-    const projectQb = this.projectRepository
-      .createQueryBuilder('project')
-      .where('project.isHidden = false')
-      .andWhere('project.createdAt BETWEEN :start AND :end', { start, end });
-
-    if (userIds.length) {
-      projectQb.andWhere(
-        '(project.projectOwnerId IN (:...userIds) OR project.createdBy IN (:...userIds))',
-        { userIds },
-      );
-    }
-
-    const cashProjects = await projectQb.clone().andWhere('project.projectType = :type', { type: ProjectType.CASH }).getCount();
-    const loanProjects = await projectQb.clone().andWhere('project.projectType = :type', { type: ProjectType.LOAN }).getCount();
-
-    return {
-      department: 'MEETINGS',
-      cards: {
-        totalMeetings,
-        companyMeetings,
-        selfMeetings,
-        solarMiterMeetings,
-        siteVisits,
-        completed,
-        converted,
-        cancelled,
-        cnr,
-        cashProjects,
-        loanProjects,
-      },
-      charts: {
-        meetingTrend: await this.chartDaily('meetings', 'createdAt', start, end),
-      },
-      rows: [],
-    };
-  }
+  return new MeetingAnalyticsBuilder(
+    this.userRepository,
+    this.meetingRepository,
+    this.projectRepository,
+  ).build(query, user);
+}
 
   private async getProjectsReport(query: AnalyticsQuery, user: any) {
     const { start, end } = this.getDateRange(query);
