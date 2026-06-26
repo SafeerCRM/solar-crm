@@ -932,18 +932,18 @@ if (roles.includes('SOLAR_FRANCHISE')) {
 }
 
   if (filters?.search) {
-    query.andWhere(
-      `
+  query.andWhere(
+    `(
       LOWER(project.customerName) LIKE :search
       OR LOWER(project.customerPhone) LIKE :search
       OR LOWER(project.electricityKNumber) LIKE :search
       OR CAST(project.id AS TEXT) LIKE :search
-      `,
-      {
-        search: `%${filters.search.toLowerCase()}%`,
-      },
-    );
-  }
+    )`,
+    {
+      search: `%${filters.search.toLowerCase()}%`,
+    },
+  );
+}
 
   if (roles.includes('LOAN_MANAGER')) {
   query.andWhere(
