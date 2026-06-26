@@ -80,6 +80,8 @@ export default function PortalSettingsPage() {
   const [form, setForm] = useState<any>(emptyForm);
   const [companyForm, setCompanyForm] = useState<any>(emptyCompanyForm);
 const [companySaving, setCompanySaving] = useState(false);
+const [logoUploading, setLogoUploading] = useState(false);
+const [qrUploading, setQrUploading] = useState(false);
 const [deliveryForm, setDeliveryForm] = useState<any>(emptyDeliveryForm);
 const [deliverySaving, setDeliverySaving] = useState(false);
 
@@ -535,6 +537,66 @@ const uploadPolicyPdf = async (
   }
 };
 
+const uploadPortalAssetImage = async (
+  event: React.ChangeEvent<HTMLInputElement>,
+  target: 'logo' | 'qr',
+) => {
+  const file = event.target.files?.[0];
+
+  if (!file) return;
+
+  if (!['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(file.type)) {
+    alert('Please select JPG, PNG, or WEBP image.');
+    return;
+  }
+
+  try {
+    if (target === 'logo') {
+      setLogoUploading(true);
+    } else {
+      setQrUploading(true);
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const res = await axios.post(
+      `${API_BASE_URL}/dealer/portal-assets/upload`,
+      formData,
+      {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'multipart/form-data',
+        },
+      },
+    );
+
+    if (target === 'logo') {
+      setCompanyForm((prev: any) => ({
+        ...prev,
+        logoUrl: res.data.fileUrl,
+      }));
+    } else {
+      setForm((prev: any) => ({
+        ...prev,
+        qrCodeUrl: res.data.fileUrl,
+      }));
+    }
+
+    alert('Image uploaded successfully.');
+  } catch (error: any) {
+    console.error(error);
+    alert(
+      error?.response?.data?.message ||
+        'Failed to upload image.',
+    );
+  } finally {
+    setLogoUploading(false);
+    setQrUploading(false);
+    event.target.value = '';
+  }
+};
+
 const savePolicy = async () => {
   if (!String(policyForm.title || '').trim()) {
     alert('Document title is required');
@@ -649,6 +711,36 @@ const restorePolicy = async (item: any) => {
       />
     ))}
   </div>
+
+  <div className="rounded-xl border p-3 md:col-span-2">
+  <label className="block text-sm font-semibold text-gray-700">
+    Upload Company Logo
+  </label>
+
+  <input
+    type="file"
+    accept="image/jpeg,image/jpg,image/png,image/webp"
+    onChange={(e) => uploadPortalAssetImage(e, 'logo')}
+    className="mt-2 w-full rounded border p-2"
+  />
+
+  {logoUploading && (
+    <p className="mt-2 text-sm text-blue-600">
+      Uploading logo...
+    </p>
+  )}
+
+  {companyForm.logoUrl && (
+    <div className="mt-3">
+      <p className="text-xs text-gray-500">Logo Preview</p>
+      <img
+        src={companyForm.logoUrl}
+        alt="Company logo"
+        className="mt-2 max-h-24 rounded border bg-white p-2"
+      />
+    </div>
+  )}
+</div>
 
   <button
     onClick={saveCompanySetting}
@@ -1167,6 +1259,36 @@ const restorePolicy = async (item: any) => {
                 }
                 className="w-full rounded-xl border p-3"
               />
+
+              <div className="rounded-xl border p-3 md:col-span-2">
+  <label className="block text-sm font-semibold text-gray-700">
+    Upload QR Code Image
+  </label>
+
+  <input
+    type="file"
+    accept="image/jpeg,image/jpg,image/png,image/webp"
+    onChange={(e) => uploadPortalAssetImage(e, 'qr')}
+    className="mt-2 w-full rounded border p-2"
+  />
+
+  {qrUploading && (
+    <p className="mt-2 text-sm text-blue-600">
+      Uploading QR code...
+    </p>
+  )}
+
+  {form.qrCodeUrl && (
+    <div className="mt-3">
+      <p className="text-xs text-gray-500">QR Preview</p>
+      <img
+        src={form.qrCodeUrl}
+        alt="QR code"
+        className="mt-2 max-h-32 rounded border bg-white p-2"
+      />
+    </div>
+  )}
+</div>
 
               <div className="grid gap-3 md:grid-cols-2">
   <label className="flex items-center gap-2 rounded-xl border p-3 text-sm font-semibold">
