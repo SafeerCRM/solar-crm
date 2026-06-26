@@ -166,17 +166,21 @@ userWiseRows,
 
       this.meetingRepository
   .createQueryBuilder('meeting')
-  .select('COUNT(DISTINCT meeting.leadId)', 'count')
-  .where('meeting.createdAt BETWEEN :start AND :end', { start, end })
-  .andWhere('meeting.leadId IS NOT NULL')
+  .select('COUNT(DISTINCT meeting."leadId")', 'count')
+  .where('meeting."createdAt" BETWEEN :start AND :end', { start, end })
+  .andWhere('meeting."leadId" IS NOT NULL')
   .andWhere(
-    `meeting.leadId IN (
-      SELECT lead.id
-      FROM lead lead
-      WHERE lead.createdAt BETWEEN :start AND :end
+    `meeting."leadId" IN (
+      SELECT l.id
+      FROM lead l
+      WHERE l."createdAt" BETWEEN :start AND :end
       ${
         userIds.length
-          ? 'AND (lead.assignedTo IN (:...userIds) OR lead.createdBy IN (:...userIds) OR lead.originTelecallerId IN (:...userIds))'
+          ? `AND (
+              l."assignedTo" IN (:...userIds)
+              OR l."createdBy" IN (:...userIds)
+              OR l."originTelecallerId" IN (:...userIds)
+            )`
           : ''
       }
     )`,
