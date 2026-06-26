@@ -126,6 +126,11 @@ const customerPortalMode = hasActiveProject
         title: 'After-Sales Support',
         subtitle:
           'Cleaning, complaints, documents, referrals and support after project completion',
+          quickActions: {
+  complaints: true,
+  payments: true,
+  referrals: true,
+},
         enabledSections: {
           projectTracker: true,
           workCalendar: false,
@@ -143,6 +148,11 @@ const customerPortalMode = hasActiveProject
           mode: customerPortalMode,
           title: 'Customer Services',
           subtitle: 'Everything related to your solar plant in one place',
+          quickActions: {
+  complaints: true,
+  payments: true,
+  referrals: true,
+},
           enabledSections: {
             projectTracker: true,
             workCalendar: true,
@@ -159,6 +169,11 @@ const customerPortalMode = hasActiveProject
           mode: customerPortalMode,
           title: 'Customer Portal',
           subtitle: 'Customer services and support',
+          quickActions: {
+  complaints: true,
+  payments: true,
+  referrals: true,
+},
           enabledSections: {
             projectTracker: false,
             workCalendar: false,
