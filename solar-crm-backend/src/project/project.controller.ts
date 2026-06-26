@@ -1158,6 +1158,15 @@ getPurchasableMaterialRequestItems(
   );
 }
 
+@Get('stock/material-summary')
+getMaterialWiseStockSummary(
+  @Query('material') material?: string,
+) {
+  return this.projectService.getMaterialWiseStockSummary({
+    material: material || '',
+  });
+}
+
 @Roles(
   'OWNER',
   'PROJECT_MANAGER',

@@ -2960,6 +2960,122 @@ async getBranchWiseStockReport(query: any) {
   };
 }
 
+async getMaterialWiseStockSummary(query: any) {
+  const { material } = query || {};
+
+  const qb = this.projectStockItemRepository
+    .createQueryBuilder('stock')
+    .where('stock.isHidden = false');
+
+  if (material?.trim()) {
+    qb.andWhere(
+      `(
+        LOWER(stock.materialName) LIKE LOWER(:material)
+        OR LOWER(stock.category) LIKE LOWER(:material)
+        OR LOWER(stock.brand) LIKE LOWER(:material)
+      )`,
+      {
+        material: `%${material.trim()}%`,
+      },
+    );
+  }
+
+  const rows = await qb.getMany();
+
+  const materialMap = new Map<
+    string,
+    {
+      materialId: number;
+      materialName: string;
+      category: string;
+      brand: string;
+      unit: string;
+      totalBranches: number;
+      totalCurrentQuantity: number;
+      totalReservedQuantity: number;
+      totalAvailableQuantity: number;
+      totalStockValue: number;
+      branchNames: string[];
+    }
+  >();
+
+  for (const item of rows as any[]) {
+    const materialKey = String(
+      item.materialId ||
+        `${item.materialName}-${item.category}-${item.brand}-${item.unit}`,
+    );
+
+    const currentQuantity = Number(item.currentQuantity || 0);
+    const reservedQuantity = Number(item.reservedQuantity || 0);
+    const availableQuantity = Math.max(
+      currentQuantity - reservedQuantity,
+      0,
+    );
+
+    if (!materialMap.has(materialKey)) {
+      materialMap.set(materialKey, {
+        materialId: Number(item.materialId || 0),
+        materialName: item.materialName || '',
+        category: item.category || '',
+        brand: item.brand || '',
+        unit: item.unit || '',
+        totalBranches: 0,
+        totalCurrentQuantity: 0,
+        totalReservedQuantity: 0,
+        totalAvailableQuantity: 0,
+        totalStockValue: 0,
+        branchNames: [],
+      });
+    }
+
+    const current = materialMap.get(materialKey)!;
+
+    const branchName =
+      String(item.branchName || '').trim() || 'UNASSIGNED';
+
+    if (!current.branchNames.includes(branchName)) {
+      current.branchNames.push(branchName);
+    }
+
+    current.totalCurrentQuantity += currentQuantity;
+    current.totalReservedQuantity += reservedQuantity;
+    current.totalAvailableQuantity += availableQuantity;
+    current.totalStockValue += Number(item.stockValue || 0);
+    current.totalBranches = current.branchNames.length;
+  }
+
+  const data = Array.from(materialMap.values()).sort(
+    (a, b) => b.totalStockValue - a.totalStockValue,
+  );
+
+  return {
+    summary: {
+      totalMaterials: data.length,
+      totalBranches: data.reduce(
+        (sum, item) => sum + item.totalBranches,
+        0,
+      ),
+      totalCurrentQuantity: data.reduce(
+        (sum, item) => sum + item.totalCurrentQuantity,
+        0,
+      ),
+      totalReservedQuantity: data.reduce(
+        (sum, item) => sum + item.totalReservedQuantity,
+        0,
+      ),
+      totalAvailableQuantity: data.reduce(
+        (sum, item) => sum + item.totalAvailableQuantity,
+        0,
+      ),
+      totalStockValue: data.reduce(
+        (sum, item) => sum + item.totalStockValue,
+        0,
+      ),
+    },
+    data,
+  };
+}
+
 async issueStockToProject(body: any, currentUser: any) {
   const projectId = Number(body?.projectId || 0);
   const stockItemId = Number(body?.stockItemId || 0);
