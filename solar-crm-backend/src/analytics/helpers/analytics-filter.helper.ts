@@ -75,5 +75,6 @@ export function canViewAllAnalytics(user?: any): boolean {
     UserRole.ACCOUNT_MANAGER,
     UserRole.HR_MANAGER,
     UserRole.CUSTOMER_MANAGER,
+    UserRole.TRADING_MANAGER,
   ].some((role) => roles.includes(role));
 }

@@ -65,6 +65,7 @@ import { TelecallingAnalyticsBuilder } from './builders/telecalling.analytics';
 import { TelecallingAssistantAnalyticsBuilder } from './builders/telecalling-assistant.analytics';
 import { LeadAnalyticsBuilder } from './builders/lead.analytics';
 import { MeetingAnalyticsBuilder } from './builders/meeting.analytics';
+import { ProjectAnalyticsBuilder } from './builders/project.analytics';
 
 type AnalyticsQuery = {
   month?: string;
@@ -162,6 +163,7 @@ export class AnalyticsService {
       UserRole.ACCOUNT_MANAGER,
       UserRole.HR_MANAGER,
       UserRole.CUSTOMER_MANAGER,
+      UserRole.TRADING_MANAGER,
     ].some((role) => roles.includes(role));
   }
 
@@ -608,86 +610,11 @@ export class AnalyticsService {
 }
 
   private async getProjectsReport(query: AnalyticsQuery, user: any) {
-    const { start, end } = this.getDateRange(query);
-    const userIds = await this.getAllowedUserIds(query, user);
-
-    const projectsQb = this.projectRepository
-      .createQueryBuilder('project')
-      .where('project.isHidden = false')
-      .andWhere('project.createdAt BETWEEN :start AND :end', { start, end });
-
-    this.applyProjectLocationFilters(projectsQb, 'project', query);
-
-    if (userIds.length) {
-      projectsQb.andWhere(
-        '(project.projectOwnerId IN (:...userIds) OR project.createdBy IN (:...userIds))',
-        { userIds },
-      );
-    }
-
-    if (query.projectType) {
-      projectsQb.andWhere('project.projectType = :projectType', {
-        projectType: query.projectType,
-      });
-    }
-
-    if (query.status) {
-      projectsQb.andWhere('project.status = :status', { status: query.status });
-    }
-
-    const [
-      totalProjects,
-      cashProjects,
-      loanProjects,
-      completedProjects,
-      cancelledProjects,
-      rejectedProjects,
-      valueRaw,
-    ] = await Promise.all([
-      projectsQb.clone().getCount(),
-      projectsQb.clone().andWhere('project.projectType = :type', { type: ProjectType.CASH }).getCount(),
-      projectsQb.clone().andWhere('project.projectType = :type', { type: ProjectType.LOAN }).getCount(),
-      projectsQb.clone().andWhere('project.status = :status', { status: ProjectStatus.COMPLETED }).getCount(),
-      projectsQb.clone().andWhere('project.status = :status', { status: ProjectStatus.CANCELLED }).getCount(),
-      projectsQb.clone().andWhere('project.status = :status', { status: ProjectStatus.REJECTED }).getCount(),
-      projectsQb.clone()
-        .select('COALESCE(SUM(project.finalCost), 0)', 'finalCost')
-        .addSelect('COALESCE(SUM(project.projectCost), 0)', 'projectCost')
-        .getRawOne(),
-    ]);
-
-    const branchWise = await projectsQb
-      .clone()
-      .select('COALESCE(project.branchName, \'Unassigned Branch\')', 'label')
-      .addSelect('COUNT(*)', 'count')
-      .addSelect('COALESCE(SUM(project.finalCost), 0)', 'value')
-      .groupBy('project.branchName')
-      .orderBy('count', 'DESC')
-      .limit(30)
-      .getRawMany();
-
-    return {
-      department: 'PROJECTS',
-      cards: {
-        totalProjects,
-        cashProjects,
-        loanProjects,
-        completedProjects,
-        cancelledProjects,
-        rejectedProjects,
-        finalCost: Number(valueRaw?.finalCost || 0),
-        projectCost: Number(valueRaw?.projectCost || 0),
-      },
-      charts: {
-        projectTrend: await this.chartDaily('project', 'createdAt', start, end, `"isHidden" = false`),
-      },
-      rows: branchWise.map((row) => ({
-        label: row.label,
-        count: Number(row.count || 0),
-        value: Number(row.value || 0),
-      })),
-    };
-  }
+  return new ProjectAnalyticsBuilder(
+    this.userRepository,
+    this.projectRepository,
+  ).build(query, user);
+}
 
   private async getContractorsReport(query: AnalyticsQuery, user: any) {
     const { start, end } = this.getDateRange(query);
