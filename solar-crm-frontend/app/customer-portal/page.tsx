@@ -205,6 +205,7 @@ const activityFeed = [
 
   const portalExperience = dashboard?.portalExperience || {};
 const enabledSections = portalExperience?.enabledSections || {};
+const quickActions = portalExperience?.quickActions || {};
 
 const customerPortalMode =
   portalExperience?.mode || dashboard?.customerPortalMode || 'NO_PROJECT';
@@ -433,6 +434,8 @@ const portalModeLabel =
             />
 
             <div className="mt-4 grid gap-4">
+
+                {quickActions.complaints && (
               <a href="/customer-portal/complaints">
   <ActionCard
     icon="🛠"
@@ -440,6 +443,9 @@ const portalModeLabel =
     text="Report generation, inverter, panel, subsidy, payment or service issue."
   />
 </a>
+)}
+
+         {quickActions.payments && (
               <a href="/customer-portal/payments">
   <ActionCard
     icon="💳"
@@ -447,6 +453,10 @@ const portalModeLabel =
     text="View installments, company account details, UPI/QR and upload receipt."
   />
 </a>
+)}
+
+
+      {quickActions.referrals && (
               <a href="/customer-portal/referrals">
   <ActionCard
     icon="🎁"
@@ -454,6 +464,8 @@ const portalModeLabel =
     text="Refer new customer and track ₹5000 referral rewards."
   />
 </a>
+)}
+
             </div>
           </div>
         </div>
