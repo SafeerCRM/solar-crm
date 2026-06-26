@@ -30,6 +30,7 @@ import { CustomerComplaintActivity } from '../customer-portal/customer-complaint
 
 import { DealerComplaint } from '../dealer/dealer-complaint.entity';
 
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([

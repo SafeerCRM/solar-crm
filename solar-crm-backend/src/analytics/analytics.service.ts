@@ -66,6 +66,7 @@ import { TelecallingAssistantAnalyticsBuilder } from './builders/telecalling-ass
 import { LeadAnalyticsBuilder } from './builders/lead.analytics';
 import { MeetingAnalyticsBuilder } from './builders/meeting.analytics';
 import { ProjectAnalyticsBuilder } from './builders/project.analytics';
+import { CustomerAnalyticsBuilder } from './builders/customer.analytics';
 
 type AnalyticsQuery = {
   month?: string;
@@ -564,9 +565,13 @@ export class AnalyticsService {
       return this.getAccountsReport(query, user);
     }
 
-    if (department === 'COMPLAINTS') {
-      return this.getComplaintsReport(query, user);
-    }
+    if (
+  department === 'CUSTOMERS' ||
+  department === 'CUSTOMER' ||
+  department === 'COMPLAINTS'
+) {
+  return this.getCustomersReport(query, user);
+}
 
     return this.getOwnerOverview(query, user);
   }
@@ -613,6 +618,17 @@ export class AnalyticsService {
   return new ProjectAnalyticsBuilder(
     this.userRepository,
     this.projectRepository,
+  ).build(query, user);
+}
+
+private async getCustomersReport(
+  query: AnalyticsQuery,
+  user: any,
+) {
+  return new CustomerAnalyticsBuilder(
+    this.userRepository,
+    this.customerComplaintRepository,
+    this.dealerComplaintRepository,
   ).build(query, user);
 }
 
