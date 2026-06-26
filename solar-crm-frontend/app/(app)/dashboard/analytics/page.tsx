@@ -535,7 +535,7 @@ export default function AnalyticsPage() {
 
       {!loading && hasGenerated && generatedAt && (
         <div className="rounded-2xl bg-white px-5 py-3 text-sm font-bold text-slate-600 shadow">
-          Report generated at: {generatedAt}
+          Generated on: {generatedAt}
         </div>
       )}
 
@@ -554,7 +554,7 @@ export default function AnalyticsPage() {
 
       {!loading && hasGenerated && !reportData && (
         <div className="rounded-[2rem] bg-white p-8 text-center text-sm text-slate-500 shadow">
-          No report data available.
+          No records found for the selected filters. Try changing the date range or filters.
         </div>
       )}
     </div>
@@ -615,7 +615,7 @@ function DepartmentReport({
     <div className="space-y-6">
       <SectionTitle
         title={`${departmentLabel} Report`}
-        subtitle="Filtered department work report based on actual CRM records."
+        subtitle="This report is generated from actual CRM activity for the selected filters and date range."
       />
 
       <CardGrid cards={Object.entries(cards).map(([key, value]) => [formatLabel(key), value]) as any} />
@@ -627,8 +627,10 @@ function DepartmentReport({
 </div>
 
       {rows.length > 0 && (
-        <SmartTable title={`${departmentLabel} Breakdown`} rows={rows} />
+        <SmartTable title={getPerformanceTableTitle(departmentLabel)} rows={rows} />
       )}
+
+      <ReportFooter />
     </div>
   );
 }
@@ -644,6 +646,16 @@ function SectionTitle({
     <div className="rounded-[2rem] bg-white p-5 shadow">
       <h2 className="text-2xl font-black text-slate-900">{title}</h2>
       <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
+    </div>
+  );
+}
+
+function ReportFooter() {
+  return (
+    <div className="rounded-[2rem] bg-white p-5 text-xs font-semibold text-slate-500 shadow">
+      <div className="border-t pt-4">
+        Generated from Solar CRM ERP
+      </div>
     </div>
   );
 }
@@ -782,6 +794,17 @@ function BarBox({ title, data }: { title: string; data: any[] }) {
       )}
     </div>
   );
+}
+
+function getPerformanceTableTitle(departmentLabel: string) {
+  const label = departmentLabel.toLowerCase();
+
+  if (label.includes('telecalling assistant')) return 'Assistant Performance';
+  if (label.includes('telecalling')) return 'Telecaller Performance';
+  if (label.includes('lead')) return 'Lead Manager Performance';
+  if (label.includes('meeting')) return 'Meeting Manager Performance';
+
+  return `${departmentLabel} Performance`;
 }
 
 function SmartTable({ title, rows }: { title: string; rows: any[] }) {
