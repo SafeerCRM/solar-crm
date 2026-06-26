@@ -108,6 +108,10 @@ customerCode?: string;
   expectedLagat?: number;
   expectedProfit?: number;
   status?: string;
+  projectWorkState?: string;
+projectWorkStateReason?: string;
+projectWorkStateUpdatedAt?: string;
+projectWorkStateUpdatedByName?: string;
   projectManagerApprovalStatus?: string;
 projectManagerApprovalNote?: string;
   marketingHeadApprovalStatus?: string;
@@ -868,6 +872,8 @@ customerUserName: '',
   expectedProfit: '',
 
   status: '',
+  projectWorkState: '',
+projectWorkStateReason: '',
   paymentStatus: '',
   startDate: '',
   expectedCompletionDate: '',
@@ -1450,6 +1456,11 @@ customerUserName: (project as any).customerUserName || '',
     expectedProfit: String((project as any).expectedProfit || ''),
 
     status: project.status || '',
+    projectWorkState:
+  (project as any).projectWorkState || 'IN_PROCESS',
+
+projectWorkStateReason:
+  (project as any).projectWorkStateReason || '',
     paymentStatus: (project as any).paymentStatus || '',
     startDate: formatDateForInput((project as any).startDate),
     expectedCompletionDate: formatDateForInput((project as any).expectedCompletionDate),
@@ -5072,6 +5083,44 @@ const canApproveAndReserveStock =
   <input placeholder="Payment Status" value={editForm.paymentStatus} onChange={(e) => setEditForm({ ...editForm, paymentStatus: e.target.value })} className="rounded-xl border p-3" />
 </div>
 
+<div className="rounded-2xl border bg-amber-50 p-4 md:col-span-2">
+  <h3 className="font-bold text-amber-900">
+    Project Work State
+  </h3>
+
+  <p className="mt-1 text-sm text-amber-700">
+    Change this when project moves between in process and running.
+  </p>
+
+  <div className="mt-4 grid gap-3 md:grid-cols-2">
+    <select
+      value={editForm.projectWorkState}
+      onChange={(e) =>
+        setEditForm({
+          ...editForm,
+          projectWorkState: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    >
+      <option value="IN_PROCESS">In Process</option>
+      <option value="RUNNING">Running</option>
+    </select>
+
+    <input
+      placeholder="Reason / remark"
+      value={editForm.projectWorkStateReason}
+      onChange={(e) =>
+        setEditForm({
+          ...editForm,
+          projectWorkStateReason: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+  </div>
+</div>
+
       <textarea
         placeholder="Remarks"
         value={editForm.remarks}
@@ -8464,6 +8513,17 @@ const canApproveAndReserveStock =
     <h2 className="text-xl font-bold">Approvals & Remarks</h2>
     <div className="mt-3 grid grid-cols-1 gap-2">
       <Field label="Project Status" value={project.status} />
+      <Field
+  label="Work State"
+  value={String(
+    (project as any).projectWorkState || 'IN_PROCESS',
+  ).replaceAll('_', ' ')}
+/>
+
+<Field
+  label="Work State Reason"
+  value={(project as any).projectWorkStateReason || '-'}
+/>
       <Field label="Project Manager Approval" value={`${project.projectManagerApprovalStatus || '-'} - ${project.projectManagerApprovalNote || 'No note'}`} />
       <Field label="Marketing Head Approval" value={`${project.marketingHeadApprovalStatus || '-'} - ${project.marketingHeadApprovalNote || 'No note'}`} />
       <Field label="Owner Approval" value={`${project.ownerApprovalStatus || '-'} - ${project.ownerApprovalNote || 'No note'}`} />

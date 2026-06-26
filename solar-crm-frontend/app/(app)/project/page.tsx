@@ -19,6 +19,10 @@ projectOwnerRole?: string;
   projectCost?: number;
   netAmount?: number;
   status?: string;
+  projectWorkState?: string;
+projectWorkStateReason?: string;
+projectWorkStateUpdatedAt?: string;
+projectWorkStateUpdatedByName?: string;
   marketingHeadApprovalStatus?: string;
   ownerApprovalStatus?: string;
     executionSummary?: {
@@ -65,6 +69,7 @@ const [totalPages, setTotalPages] = useState(1);
 
 const [search, setSearch] = useState('');
 const [statusFilter, setStatusFilter] = useState('');
+const [projectWorkStateFilter, setProjectWorkStateFilter] = useState('');
 const [branchFilter, setBranchFilter] = useState('');
 const [ownerFilter, setOwnerFilter] = useState('');
 const [fromDate, setFromDate] = useState('');
@@ -87,6 +92,7 @@ useEffect(() => {
 
     setSearch(parsed.search || '');
     setStatusFilter(parsed.statusFilter || '');
+    setProjectWorkStateFilter(parsed.projectWorkStateFilter || '');
     setBranchFilter(parsed.branchFilter || '');
     setOwnerFilter(parsed.ownerFilter || '');
     setFromDate(parsed.fromDate || '');
@@ -106,6 +112,7 @@ useEffect(() => {
       search,
       statusFilter,
       branchFilter,
+      projectWorkStateFilter,
       ownerFilter,
       fromDate,
       toDate,
@@ -115,6 +122,7 @@ useEffect(() => {
 }, [
   search,
   statusFilter,
+  projectWorkStateFilter,
   branchFilter,
   ownerFilter,
   fromDate,
@@ -133,6 +141,7 @@ useEffect(() => {
     limit: 20,
     search,
     status: statusFilter,
+    projectWorkState: projectWorkStateFilter,
     branch: branchFilter,
     owner: ownerFilter,
     fromDate,
@@ -282,6 +291,7 @@ const restoreProject = async (projectId: number) => {
   page,
   search,
   statusFilter,
+  projectWorkStateFilter,
   branchFilter,
   ownerFilter,
   fromDate,
@@ -396,6 +406,19 @@ useEffect(() => {
   ))}
 </select>
 
+<select
+  value={projectWorkStateFilter}
+  onChange={(e) => {
+    setProjectWorkStateFilter(e.target.value);
+    setPage(1);
+  }}
+  className="rounded-xl border p-3"
+>
+  <option value="">All Work States</option>
+  <option value="IN_PROCESS">In Process</option>
+  <option value="RUNNING">Running</option>
+</select>
+
     <select
       value={statusFilter}
       onChange={(e) => {
@@ -443,6 +466,7 @@ useEffect(() => {
       setSearch('');
       setStatusFilter('');
       setBranchFilter('');
+      setProjectWorkStateFilter('');
       setOwnerFilter('');
       setFromDate('');
       setToDate('');
@@ -530,6 +554,22 @@ useEffect(() => {
                   {project.status || 'UNKNOWN'}
                 </span>
               </div>
+
+              <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+  <p className="text-xs font-bold text-amber-700">
+    Work State
+  </p>
+
+  <p className="font-semibold">
+    {(project.projectWorkState || 'IN_PROCESS').replaceAll('_', ' ')}
+  </p>
+
+  {project.projectWorkStateReason && (
+    <p className="mt-1 text-sm text-gray-700">
+      {project.projectWorkStateReason}
+    </p>
+  )}
+</div>
 
               <div className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
                 <div className="rounded-xl bg-gray-50 p-3">

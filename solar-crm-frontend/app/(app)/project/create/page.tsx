@@ -154,7 +154,10 @@ customerUserName: '',
     expectedLagat: '',
     expectedProfit: '',
 
-    remarks: '',
+    projectWorkState: 'IN_PROCESS',
+projectWorkStateReason: '',
+
+remarks: '',
   });
 
   const fetchLatestCalculatorForMeeting = async () => {
@@ -946,6 +949,37 @@ router.push(`/project/${createdProjectId}`);
           />
         </div>
       </div>
+
+      <div className="md:col-span-2">
+  <label className="mb-1 block text-sm font-semibold">
+    Project Work State
+  </label>
+
+  <select
+    name="projectWorkState"
+    value={form.projectWorkState}
+    onChange={handleChange}
+    className="w-full rounded-xl border p-3"
+  >
+    <option value="IN_PROCESS">In Process</option>
+    <option value="RUNNING">Running</option>
+  </select>
+</div>
+
+<div className="md:col-span-2">
+  <label className="mb-1 block text-sm font-semibold">
+    Work State Reason / Remark
+  </label>
+
+  <textarea
+    name="projectWorkStateReason"
+    value={form.projectWorkStateReason}
+    onChange={handleChange}
+    placeholder="Example: Customer requested installation after 10 days."
+    className="w-full rounded-xl border p-3"
+    rows={3}
+  />
+</div>
 
       <div className="rounded-2xl bg-white p-5 shadow">
         <h2 className="mb-4 text-lg font-bold text-gray-800">
