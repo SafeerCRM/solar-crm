@@ -105,6 +105,20 @@ private readonly staffMemberRepository: Repository<StaffMember>,
       order: { createdAt: 'DESC' },
     });
 
+    const hasActiveProject = projects.some(
+  (project: any) => project.status !== 'COMPLETED',
+);
+
+const hasCompletedProject = projects.some(
+  (project: any) => project.status === 'COMPLETED',
+);
+
+const customerPortalMode = hasActiveProject
+  ? 'PROJECT_ACTIVE'
+  : hasCompletedProject
+    ? 'AFTER_SALES'
+    : 'NO_PROJECT';
+
     const projectIds = projects.map((project) => project.id);
 
     const customerDocuments = projectIds.length
@@ -254,6 +268,9 @@ const customerPaymentDetails =
     return {
   customer,
   projects,
+  customerPortalMode,
+hasActiveProject,
+hasCompletedProject,
   complaints: complaintsWithAttachments,
   notifications,
   totalProjects: projects.length,
