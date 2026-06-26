@@ -126,6 +126,11 @@ const customerPortalMode = hasActiveProject
         title: 'After-Sales Support',
         subtitle:
           'Cleaning, complaints, documents, referrals and support after project completion',
+          hero: {
+  badge: 'After-Sales / Support Customer',
+  message:
+    'Your installation is complete. You can continue using this portal for cleaning, complaints, documents, referrals and support.',
+},
           quickActions: {
   complaints: true,
   payments: true,
@@ -148,6 +153,11 @@ const customerPortalMode = hasActiveProject
           mode: customerPortalMode,
           title: 'Customer Services',
           subtitle: 'Everything related to your solar plant in one place',
+          hero: {
+  badge: 'Project Active Customer',
+  message:
+    'Track your solar project, payments, documents, work schedule and support updates from one place.',
+},
           quickActions: {
   complaints: true,
   payments: true,
@@ -169,6 +179,11 @@ const customerPortalMode = hasActiveProject
           mode: customerPortalMode,
           title: 'Customer Portal',
           subtitle: 'Customer services and support',
+          hero: {
+  badge: 'Customer Portal',
+  message:
+    'Use this portal for customer support, referrals, policies and available services.',
+},
           quickActions: {
   complaints: true,
   payments: true,
