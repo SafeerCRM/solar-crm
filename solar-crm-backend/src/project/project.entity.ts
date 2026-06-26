@@ -47,6 +47,11 @@ export enum DiscomExpenditureType {
   EXCLUDING = 'EXCLUDING',
 }
 
+export enum ProjectWorkState {
+  IN_PROCESS = 'IN_PROCESS',
+  RUNNING = 'RUNNING',
+}
+
 @Entity()
 export class Project {
   @PrimaryGeneratedColumn()
@@ -223,6 +228,21 @@ finalCost: number;
     default: ProjectStatus.PENDING_APPROVAL,
   })
   status: ProjectStatus;
+
+  @Column({ nullable: true, default: 'IN_PROCESS' })
+projectWorkState: string;
+
+@Column({ nullable: true, type: 'text' })
+projectWorkStateReason: string;
+
+@Column({ type: 'timestamp', nullable: true })
+projectWorkStateUpdatedAt: Date;
+
+@Column({ nullable: true })
+projectWorkStateUpdatedBy: number;
+
+@Column({ nullable: true })
+projectWorkStateUpdatedByName: string;
 
   @Column({
   type: 'enum',

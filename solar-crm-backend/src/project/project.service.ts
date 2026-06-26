@@ -731,6 +731,22 @@ projectOwnerRole: Array.isArray(user?.roles)
   ? user.roles.join(', ')
   : '',
 
+  projectWorkState:
+  (data as any).projectWorkState === 'RUNNING'
+    ? 'RUNNING'
+    : 'IN_PROCESS',
+
+projectWorkStateReason:
+  String((data as any).projectWorkStateReason || '').trim(),
+
+projectWorkStateUpdatedAt: new Date(),
+
+projectWorkStateUpdatedBy:
+  user?.id || user?.userId || user?.sub || null,
+
+projectWorkStateUpdatedByName:
+  user?.name || user?.email || '',
+
   dcrPanelCount: this.toNumberOrZero(
     (data as any).dcrPanelCount,
   ),
@@ -804,6 +820,21 @@ customerCode:
 customerUserName:
   String(payload?.customerUserName || '').trim() || undefined,
 
+  projectWorkState:
+  payload.projectWorkState || 'IN_PROCESS',
+
+projectWorkStateReason:
+  payload.projectWorkStateReason || '',
+
+projectWorkStateUpdatedAt:
+  payload.projectWorkStateUpdatedAt,
+
+projectWorkStateUpdatedBy:
+  payload.projectWorkStateUpdatedBy,
+
+projectWorkStateUpdatedByName:
+  payload.projectWorkStateUpdatedByName,
+
   status: ProjectStatus.PENDING_APPROVAL,
   marketingHeadApprovalStatus: ProjectApprovalStatus.PENDING,
   ownerApprovalStatus: ProjectApprovalStatus.PENDING,
@@ -868,6 +899,7 @@ const project = this.projectRepository.create(projectData);
     limit?: number;
     search?: string;
     status?: string;
+    projectWorkState?: string;
     branch?: string;
     owner?: string;
     fromDate?: string;
@@ -962,6 +994,15 @@ if (roles.includes('SOLAR_FRANCHISE')) {
       },
     );
   }
+
+  if (filters?.projectWorkState) {
+  query.andWhere(
+    'project.projectWorkState = :projectWorkState',
+    {
+      projectWorkState: filters.projectWorkState,
+    },
+  );
+}
 
   if (filters?.branch) {
     query.andWhere(
@@ -1278,6 +1319,11 @@ if (roles.includes('SOLAR_FRANCHISE')) {
     'expectedLagat',
     'expectedProfit',
     'status',
+    'projectWorkState',
+'projectWorkStateReason',
+'projectWorkStateUpdatedAt',
+'projectWorkStateUpdatedBy',
+'projectWorkStateUpdatedByName',
     'paymentStatus',
     'startDate',
     'expectedCompletionDate',
@@ -1325,6 +1371,11 @@ if (roles.includes('SOLAR_FRANCHISE')) {
     'startDate',
     'expectedCompletionDate',
     'remarks',
+    'projectWorkState',
+'projectWorkStateReason',
+'projectWorkStateUpdatedAt',
+'projectWorkStateUpdatedBy',
+'projectWorkStateUpdatedByName',
         'address',
     'gpsLatitude',
     'gpsLongitude',
@@ -1353,6 +1404,30 @@ if (roles.includes('SOLAR_FRANCHISE')) {
       (safeData as any)[key] = (data as any)[key];
     }
   }
+
+  if (
+  Object.prototype.hasOwnProperty.call(safeData, 'projectWorkState') ||
+  Object.prototype.hasOwnProperty.call(safeData, 'projectWorkStateReason')
+) {
+  const nextState =
+    (safeData as any).projectWorkState === 'RUNNING'
+      ? 'RUNNING'
+      : 'IN_PROCESS';
+
+  (safeData as any).projectWorkState = nextState;
+
+  (safeData as any).projectWorkStateReason = String(
+    (safeData as any).projectWorkStateReason || '',
+  ).trim();
+
+  (safeData as any).projectWorkStateUpdatedAt = new Date();
+
+  (safeData as any).projectWorkStateUpdatedBy =
+    user?.id || user?.userId || user?.sub || null;
+
+  (safeData as any).projectWorkStateUpdatedByName =
+    user?.name || user?.email || '';
+}
 
   const historyRows: Partial<ProjectEditHistory>[] = [];
 
