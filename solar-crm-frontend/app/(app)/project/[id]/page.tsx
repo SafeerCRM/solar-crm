@@ -7986,6 +7986,46 @@ const canApproveAndReserveStock =
       </button>
 )}
     </div>
+  </div>
+)}
+
+{canEditPaymentAsOwner && (
+  <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-left">
+    <p className="text-sm font-bold text-amber-800">
+      Owner Financial Override
+    </p>
+
+    <p className="mt-1 text-xs text-amber-700">
+      Owner can correct approved or paid payment records.
+    </p>
+
+    <div className="mt-3 flex flex-wrap gap-2">
+      <button
+        type="button"
+        onClick={() => startEditInstallment(item)}
+        className="rounded-xl bg-purple-100 px-4 py-2 text-sm font-semibold text-purple-700 hover:bg-purple-200"
+      >
+        Edit Installment
+      </button>
+
+      <button
+        type="button"
+        onClick={() => startEditPayment(item)}
+        className="rounded-xl bg-green-100 px-4 py-2 text-sm font-semibold text-green-700 hover:bg-green-200"
+      >
+        Edit Payment Entry
+      </button>
+
+      <button
+        type="button"
+        onClick={() => hidePaymentInstallment(item.id)}
+        className="rounded-xl bg-red-100 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-200"
+      >
+        Hide Entry
+      </button>
+    </div>
+  </div>
+)}
 
 {editingInstallmentId === item.id && (
   <div className="mt-4 rounded-xl border bg-purple-50 p-4">
@@ -8152,46 +8192,6 @@ const canApproveAndReserveStock =
         className="rounded-xl bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-800"
       >
         Cancel
-      </button>
-    </div>
-  </div>
-)}
-  </div>
-)}
-
-{canEditPaymentAsOwner && (
-  <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-left">
-    <p className="text-sm font-bold text-amber-800">
-      Owner Financial Override
-    </p>
-
-    <p className="mt-1 text-xs text-amber-700">
-      Owner can correct approved or paid payment records.
-    </p>
-
-    <div className="mt-3 flex flex-wrap gap-2">
-      <button
-        type="button"
-        onClick={() => startEditInstallment(item)}
-        className="rounded-xl bg-purple-100 px-4 py-2 text-sm font-semibold text-purple-700 hover:bg-purple-200"
-      >
-        Edit Installment
-      </button>
-
-      <button
-        type="button"
-        onClick={() => startEditPayment(item)}
-        className="rounded-xl bg-green-100 px-4 py-2 text-sm font-semibold text-green-700 hover:bg-green-200"
-      >
-        Edit Payment Entry
-      </button>
-
-      <button
-        type="button"
-        onClick={() => hidePaymentInstallment(item.id)}
-        className="rounded-xl bg-red-100 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-200"
-      >
-        Hide Entry
       </button>
     </div>
   </div>
