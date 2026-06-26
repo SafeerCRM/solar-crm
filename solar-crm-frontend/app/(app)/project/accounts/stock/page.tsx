@@ -94,6 +94,10 @@ const [receiveForm, setReceiveForm] = useState({
   const [movements, setMovements] = useState<any[]>([]);
 const [movementLoading, setMovementLoading] = useState(false);
 
+const [materialSummaryRows, setMaterialSummaryRows] = useState<any[]>([]);
+const [materialSummaryLoading, setMaterialSummaryLoading] = useState(false);
+const [materialSummarySearch, setMaterialSummarySearch] = useState('');
+
 const [movementFilters, setMovementFilters] = useState({
   material: '',
   branch: '',
@@ -373,6 +377,7 @@ const issueAgainstMaterialRequest = async () => {
     await loadSelectableStockItems();
     await loadStockMovements(1);
     await loadBranchWiseStock();
+    await loadMaterialSummary();
     await loadProjectConsumptions(1);
   } catch (error: any) {
     console.error(error);
@@ -440,6 +445,39 @@ const loadBranchWiseStock = async (
     alert('Failed to load branch wise stock');
   } finally {
     setBranchStockLoading(false);
+  }
+};
+
+const loadMaterialSummary = async (
+  searchValue?: string,
+) => {
+  try {
+    setMaterialSummaryLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/stock/material-summary`,
+      {
+        params: {
+          material: searchValue || materialSummarySearch || undefined,
+        },
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setMaterialSummaryRows(
+      Array.isArray(res.data?.data) ? res.data.data : [],
+    );
+  } catch (error) {
+    console.error(error);
+    alert('Failed to load material summary');
+  } finally {
+    setMaterialSummaryLoading(false);
   }
 };
 
@@ -701,6 +739,7 @@ const receiveStock = async () => {
     await loadStockItems(1);
     await loadSelectableStockItems();
     await loadStockMovements(1);
+    await loadMaterialSummary();
   } catch (error: any) {
     console.error(error);
 
@@ -764,6 +803,7 @@ dealerPhone: issueForm.dealerPhone,
     await loadStockItems(1);
     await loadSelectableStockItems();
     await loadStockMovements(1);
+    await loadMaterialSummary();
   } catch (error: any) {
     console.error(error);
 
@@ -827,6 +867,7 @@ const adjustStock = async () => {
     await loadSelectableStockItems();
     await loadStockMovements(1);
     await loadBranchWiseStock();
+    await loadMaterialSummary();
   } catch (error: any) {
     console.error(error);
 
@@ -890,6 +931,7 @@ const transferStock = async () => {
     await loadSelectableStockItems();
     await loadStockMovements(1);
     await loadBranchWiseStock();
+    await loadMaterialSummary();
   } catch (error: any) {
     console.error(error);
 
@@ -933,6 +975,7 @@ const hideStockItem = async (stockItemId: number) => {
     await loadStockItems(1);
     await loadSelectableStockItems();
     await loadBranchWiseStock();
+    await loadMaterialSummary();
   } catch (error: any) {
     console.error(error);
 
@@ -974,6 +1017,7 @@ const restoreStockItem = async (stockItemId: number) => {
     await loadStockItems(1);
     await loadSelectableStockItems();
     await loadBranchWiseStock();
+    await loadMaterialSummary();
   } catch (error: any) {
     console.error(error);
 
@@ -1093,6 +1137,7 @@ const restoreStockMovement = async (movementId: number) => {
 
   useEffect(() => {
   loadStockItems(1);
+  loadMaterialSummary();
   loadSelectableStockItems();
   loadStockMovements(1);
   loadBranchWiseStock();
@@ -1864,6 +1909,138 @@ const getFilteredSelectableStockItems = (searchText: string) => {
       }
       className="rounded-xl border p-3 text-sm"
     />
+  </div>
+</div>
+
+<div className="rounded-2xl bg-white p-5 shadow">
+  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <div>
+      <h2 className="text-xl font-bold text-gray-800">
+        Material Summary
+      </h2>
+
+      <p className="mt-1 text-sm text-gray-500">
+        Clean material-wise view. Branch-wise stock is still maintained internally for transfer, issue and audit.
+      </p>
+    </div>
+
+    <button
+      type="button"
+      onClick={() => loadMaterialSummary()}
+      disabled={materialSummaryLoading}
+      className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+    >
+      {materialSummaryLoading ? 'Loading...' : 'Refresh'}
+    </button>
+  </div>
+
+  <div className="mt-4 flex flex-col gap-3 md:flex-row">
+    <input
+      type="text"
+      placeholder="Search material / category / brand"
+      value={materialSummarySearch}
+      onChange={(e) => setMaterialSummarySearch(e.target.value)}
+      className="rounded-xl border p-3 text-sm md:w-96"
+    />
+
+    <button
+      type="button"
+      onClick={() => loadMaterialSummary(materialSummarySearch)}
+      className="rounded-xl bg-gray-800 px-4 py-2 text-sm font-semibold text-white"
+    >
+      Apply Search
+    </button>
+
+    <button
+      type="button"
+      onClick={() => {
+        setMaterialSummarySearch('');
+        loadMaterialSummary('');
+      }}
+      className="rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700"
+    >
+      Reset
+    </button>
+  </div>
+
+  <div className="mt-5 overflow-x-auto">
+    <table className="min-w-full text-sm">
+      <thead>
+        <tr className="border-b bg-gray-50">
+          <th className="p-2 text-left">Material</th>
+          <th className="p-2 text-left">Category</th>
+          <th className="p-2 text-left">Brand</th>
+          <th className="p-2 text-left">Unit</th>
+          <th className="p-2 text-left">Branches</th>
+          <th className="p-2 text-left">Current Qty</th>
+          <th className="p-2 text-left">Reserved Qty</th>
+          <th className="p-2 text-left">Available Qty</th>
+          <th className="p-2 text-left">Stock Value</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {materialSummaryRows.length === 0 && (
+          <tr>
+            <td
+              colSpan={9}
+              className="p-4 text-center text-gray-500"
+            >
+              No material summary found.
+            </td>
+          </tr>
+        )}
+
+        {materialSummaryRows.map((item: any) => (
+          <tr
+            key={item.materialId || item.materialName}
+            className="border-b"
+          >
+            <td className="p-2 font-semibold">
+              {item.materialName || '-'}
+            </td>
+
+            <td className="p-2">{item.category || '-'}</td>
+
+            <td className="p-2">{item.brand || '-'}</td>
+
+            <td className="p-2">{item.unit || '-'}</td>
+
+            <td className="p-2">
+              <p className="font-semibold">
+                {Number(item.totalBranches || 0)}
+              </p>
+
+              {Array.isArray(item.branchNames) &&
+                item.branchNames.length > 0 && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    {item.branchNames.slice(0, 4).join(', ')}
+                    {item.branchNames.length > 4
+                      ? ` +${item.branchNames.length - 4} more`
+                      : ''}
+                  </p>
+                )}
+            </td>
+
+            <td className="p-2 font-semibold">
+              {Number(item.totalCurrentQuantity || 0).toLocaleString('en-IN')}
+            </td>
+
+            <td className="p-2 font-semibold text-orange-700">
+              {Number(item.totalReservedQuantity || 0).toLocaleString('en-IN')}
+            </td>
+
+            <td className="p-2 font-semibold text-green-700">
+              {Number(item.totalAvailableQuantity || 0).toLocaleString('en-IN')}
+            </td>
+
+            <td className="p-2 font-semibold text-green-700">
+              {formatCurrency(item.totalStockValue)}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   </div>
 </div>
 
