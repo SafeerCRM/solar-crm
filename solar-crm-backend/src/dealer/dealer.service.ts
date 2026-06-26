@@ -1822,8 +1822,8 @@ async uploadPortalAssetImage(file: any, user: any) {
 
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const bucket =
-    process.env.SUPABASE_STORAGE_BUCKET || 'documents';
+const bucket =
+  process.env.SUPABASE_PROJECT_DOCUMENTS_BUCKET || 'project-documents';
 
   if (!supabaseUrl || !supabaseKey) {
     throw new BadRequestException(
