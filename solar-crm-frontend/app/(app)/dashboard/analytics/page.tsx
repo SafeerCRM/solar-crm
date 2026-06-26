@@ -35,7 +35,7 @@ const departments = [
   { value: 'CONTRACTORS', label: 'Contractors' },
   { value: 'PAYMENTS', label: 'Payments' },
   { value: 'ACCOUNTS', label: 'Accounts / Expense' },
-  { value: 'COMPLAINTS', label: 'Complaints' },
+  { value: 'CUSTOMERS', label: 'Customers / Complaints' },
 ];
 
 const roles = [
