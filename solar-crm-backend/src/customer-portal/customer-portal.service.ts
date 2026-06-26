@@ -119,6 +119,59 @@ const customerPortalMode = hasActiveProject
     ? 'AFTER_SALES'
     : 'NO_PROJECT';
 
+    const portalExperience =
+  customerPortalMode === 'AFTER_SALES'
+    ? {
+        mode: customerPortalMode,
+        title: 'After-Sales Support',
+        subtitle:
+          'Cleaning, complaints, documents, referrals and support after project completion',
+        enabledSections: {
+          projectTracker: true,
+          workCalendar: false,
+          payments: true,
+          documents: true,
+          complaints: true,
+          cleaning: true,
+          referrals: true,
+          policies: true,
+          staffDirectory: true,
+        },
+      }
+    : customerPortalMode === 'PROJECT_ACTIVE'
+      ? {
+          mode: customerPortalMode,
+          title: 'Customer Services',
+          subtitle: 'Everything related to your solar plant in one place',
+          enabledSections: {
+            projectTracker: true,
+            workCalendar: true,
+            payments: true,
+            documents: true,
+            complaints: true,
+            cleaning: true,
+            referrals: true,
+            policies: true,
+            staffDirectory: true,
+          },
+        }
+      : {
+          mode: customerPortalMode,
+          title: 'Customer Portal',
+          subtitle: 'Customer services and support',
+          enabledSections: {
+            projectTracker: false,
+            workCalendar: false,
+            payments: false,
+            documents: true,
+            complaints: true,
+            cleaning: false,
+            referrals: true,
+            policies: true,
+            staffDirectory: true,
+          },
+        };
+
     const projectIds = projects.map((project) => project.id);
 
     const customerDocuments = projectIds.length
@@ -271,6 +324,7 @@ const customerPaymentDetails =
   customerPortalMode,
 hasActiveProject,
 hasCompletedProject,
+portalExperience,
   complaints: complaintsWithAttachments,
   notifications,
   totalProjects: projects.length,
