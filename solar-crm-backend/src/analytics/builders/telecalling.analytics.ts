@@ -243,7 +243,7 @@ export class TelecallingAnalyticsBuilder {
         },
         telecallingFunnel: {
           type: 'funnel',
-          title: 'Telecalling Funnel',
+          title: 'Telecalling Outcome Distribution',
           data: [
             { label: 'Assigned Contacts', value: assignedContacts, percent: 100 },
             {

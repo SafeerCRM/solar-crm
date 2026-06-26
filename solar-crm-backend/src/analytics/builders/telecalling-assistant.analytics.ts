@@ -234,16 +234,16 @@ export class TelecallingAssistantAnalyticsBuilder {
         },
         assistantReviewFunnel: {
           type: 'funnel',
-          title: 'Assistant Review Funnel',
+          title: 'Review Status Distribution',
           data: [
             { label: 'Assigned Reviews', value: assignedReviews, percent: 100 },
             {
-              label: 'Reviewed',
+              label: 'Reviews Completed',
               value: reviewedReviews,
               percent: reviewedPercent,
             },
             {
-              label: 'Potential',
+              label: 'Potential Reviews', 
               value: potentialReviews,
               percent:
                 assignedReviews > 0
@@ -251,7 +251,7 @@ export class TelecallingAssistantAnalyticsBuilder {
                   : 0,
             },
             {
-              label: 'Converted',
+              label: 'Converted Reviews',
               value: convertedReviews,
               percent: conversionPercent,
             },

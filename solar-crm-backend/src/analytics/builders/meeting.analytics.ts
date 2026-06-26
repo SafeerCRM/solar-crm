@@ -226,7 +226,7 @@ export class MeetingAnalyticsBuilder {
       charts: {
         meetingStatusSplit: {
           type: 'bar',
-          title: 'Meeting Status Split',
+          title: 'Meeting Status Distribution',
           data: statusRows.map((row) => ({
             label: row.label,
             value: Number(row.value || 0),
@@ -234,7 +234,7 @@ export class MeetingAnalyticsBuilder {
         },
         meetingCategorySplit: {
           type: 'bar',
-          title: 'Meeting Category Split',
+          title: 'Meeting Category Distribution',
           data: categoryRows.map((row) => ({
             label: row.label,
             value: Number(row.value || 0),
@@ -245,7 +245,7 @@ export class MeetingAnalyticsBuilder {
           title: 'Meeting to Project Funnel',
           data: [
             { label: 'Total Meetings', value: totalMeetings, percent: 100 },
-            { label: 'Completed', value: completed, percent: totalMeetings > 0 ? Math.round((completed / totalMeetings) * 100) : 0 },
+            { label: 'Completed Meetings', value: completed, percent: totalMeetings > 0 ? Math.round((completed / totalMeetings) * 100) : 0 },
             { label: 'Converted to Project', value: convertedToProject, percent: conversionPercent },
             { label: 'Cash Projects', value: cashProjects, percent: convertedToProject > 0 ? Math.round((cashProjects / convertedToProject) * 100) : 0 },
             { label: 'Loan Projects', value: loanProjects, percent: convertedToProject > 0 ? Math.round((loanProjects / convertedToProject) * 100) : 0 },

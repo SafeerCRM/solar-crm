@@ -262,7 +262,7 @@ const meetingConversionPercent =
       charts: {
         leadStatusSplit: {
           type: 'bar',
-          title: 'Lead Status Split',
+          title: 'Lead Status Distribution',
           data: statusRows.map((row) => ({
             label: row.label,
             value: Number(row.value || 0),
@@ -270,7 +270,7 @@ const meetingConversionPercent =
         },
         potentialSplit: {
           type: 'bar',
-          title: 'Lead Potential Split',
+          title: 'Lead Potential Distribution',
           data: potentialRows.map((row) => ({
             label: row.label,
             value: Number(row.value || 0),
@@ -282,7 +282,7 @@ const meetingConversionPercent =
           data: [
             { label: 'Total Leads', value: totalLeads, percent: 100 },
             {
-              label: 'Interested',
+              label: 'Interested Leads',
               value: interestedLeads,
               percent:
                 totalLeads > 0
@@ -295,7 +295,7 @@ const meetingConversionPercent =
   percent: meetingConversionPercent,
 },
 {
-  label: 'Meetings Generated',
+  label: 'Total Meetings Generated',
   value: convertedToMeeting,
   percent: 0,
 },
