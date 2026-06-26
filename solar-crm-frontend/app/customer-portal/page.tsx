@@ -203,6 +203,10 @@ const activityFeed = [
 
   const primaryProject = projects[0];
 
+  const customerPortalMode = dashboard?.customerPortalMode || 'NO_PROJECT';
+const isAfterSales = customerPortalMode === 'AFTER_SALES';
+const isProjectActive = customerPortalMode === 'PROJECT_ACTIVE';
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-orange-50 via-yellow-50 to-emerald-50 pb-24">
       <div className="mx-auto max-w-7xl px-4 py-5">
@@ -221,6 +225,14 @@ const activityFeed = [
                 Customer Code: {customer.customerCode || '-'} | K Number:{' '}
                 {customer.electricityKNumber || '-'}
               </p>
+
+              <p className="mt-3 inline-flex rounded-full bg-white/20 px-4 py-2 text-xs font-black text-white backdrop-blur">
+  {isProjectActive
+    ? 'Project Active Customer'
+    : isAfterSales
+      ? 'After-Sales / Support Customer'
+      : 'Customer Portal'}
+</p>
             </div>
 
             <div className="flex flex-wrap gap-2">
@@ -479,9 +491,13 @@ const activityFeed = [
 
         <div className="mt-8 rounded-[2rem] bg-white p-6 shadow-xl">
           <SectionTitle
-            title="Customer Services"
-            subtitle="Everything related to your solar plant in one place"
-          />
+  title={isAfterSales ? 'After-Sales Support' : 'Customer Services'}
+  subtitle={
+    isAfterSales
+      ? 'Cleaning, complaints, documents, referrals and support after project completion'
+      : 'Everything related to your solar plant in one place'
+  }
+/>
 
           <div className="mt-5 grid gap-5 md:grid-cols-3">
             <a href="/customer-portal/project-tracker">
@@ -491,6 +507,8 @@ const activityFeed = [
     text="Track approval, installation, subsidy, electricity and completion progress."
   />
 </a>
+
+     {!isAfterSales && (
             <a href="/customer-portal/work-calendar">
   <ActionCard
     icon="📅"
@@ -498,6 +516,7 @@ const activityFeed = [
     text="See upcoming work dates and request date changes."
   />
 </a>
+)}
             <a href="/customer-portal/documents">
   <ActionCard
     icon="📁"
