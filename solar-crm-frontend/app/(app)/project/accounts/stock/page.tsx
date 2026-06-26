@@ -11,6 +11,16 @@ const formatCurrency = (amount: number) =>
 
 export default function StockManagementPage() {
   const [stockItems, setStockItems] = useState<any[]>([]);
+  const [selectableStockItems, setSelectableStockItems] =
+  useState<any[]>([]);
+
+  const [stockSelectorSearch, setStockSelectorSearch] =
+  useState({
+    issue: '',
+    adjust: '',
+    transfer: '',
+    requestIssue: '',
+  });
   const [loading, setLoading] = useState(false);
 
   const [materials, setMaterials] = useState<any[]>([]);
@@ -192,6 +202,36 @@ setPagination({
     }
   };
 
+  const loadSelectableStockItems = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/stock/items`,
+      {
+        params: {
+          page: 1,
+          limit: 100,
+          showHidden: 'false',
+        },
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setSelectableStockItems(
+      Array.isArray(res.data?.data)
+        ? res.data.data
+        : [],
+    );
+  } catch (error) {
+    console.error(error);
+  }
+};
+
   const loadStockMovements = async (
   overridePage?: number,
   overrideFilters?: {
@@ -330,6 +370,7 @@ const issueAgainstMaterialRequest = async () => {
 
     await loadApprovedRequestsForIssue();
     await loadStockItems(1);
+    await loadSelectableStockItems();
     await loadStockMovements(1);
     await loadBranchWiseStock();
     await loadProjectConsumptions(1);
@@ -658,6 +699,7 @@ const receiveStock = async () => {
     });
 
     await loadStockItems(1);
+    await loadSelectableStockItems();
     await loadStockMovements(1);
   } catch (error: any) {
     console.error(error);
@@ -720,6 +762,7 @@ dealerPhone: issueForm.dealerPhone,
     });
 
     await loadStockItems(1);
+    await loadSelectableStockItems();
     await loadStockMovements(1);
   } catch (error: any) {
     console.error(error);
@@ -781,6 +824,7 @@ const adjustStock = async () => {
     });
 
     await loadStockItems(1);
+    await loadSelectableStockItems();
     await loadStockMovements(1);
     await loadBranchWiseStock();
   } catch (error: any) {
@@ -843,6 +887,7 @@ const transferStock = async () => {
     });
 
     await loadStockItems(1);
+    await loadSelectableStockItems();
     await loadStockMovements(1);
     await loadBranchWiseStock();
   } catch (error: any) {
@@ -886,6 +931,7 @@ const hideStockItem = async (stockItemId: number) => {
     alert('Stock item hidden');
 
     await loadStockItems(1);
+    await loadSelectableStockItems();
     await loadBranchWiseStock();
   } catch (error: any) {
     console.error(error);
@@ -926,6 +972,7 @@ const restoreStockItem = async (stockItemId: number) => {
     alert('Stock item restored');
 
     await loadStockItems(1);
+    await loadSelectableStockItems();
     await loadBranchWiseStock();
   } catch (error: any) {
     console.error(error);
@@ -1046,6 +1093,7 @@ const restoreStockMovement = async (movementId: number) => {
 
   useEffect(() => {
   loadStockItems(1);
+  loadSelectableStockItems();
   loadStockMovements(1);
   loadBranchWiseStock();
   loadApprovedRequestsForIssue();
@@ -1113,6 +1161,28 @@ const consumptionTotal = consumptions.reduce(
   (total, item) => total + Number(item.totalAmount || 0),
   0,
 );
+
+const getStockItemLabel = (item: any) => {
+  const availableQty =
+    Number(item.currentQuantity || 0) -
+    Number(item.reservedQuantity || 0);
+
+  return `${item.materialName || ''} ${item.branchName || ''} ${
+    item.category || ''
+  } ${item.brand || ''} ${item.unit || ''} Qty ${availableQty}`;
+};
+
+const getFilteredSelectableStockItems = (searchText: string) => {
+  const value = searchText.trim().toLowerCase();
+
+  if (!value) {
+    return selectableStockItems;
+  }
+
+  return selectableStockItems.filter((item: any) =>
+    getStockItemLabel(item).toLowerCase().includes(value),
+  );
+};
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">
@@ -1338,6 +1408,19 @@ const consumptionTotal = consumptions.reduce(
   </div>
 
   <div className="mt-4 grid gap-3 md:grid-cols-3">
+
+    <input
+  type="text"
+  placeholder="Search stock item by material, branch, brand"
+  value={stockSelectorSearch.issue}
+  onChange={(e) =>
+    setStockSelectorSearch({
+      ...stockSelectorSearch,
+      issue: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3 text-sm"
+/>
     <select
       value={issueForm.stockItemId}
       onChange={(e) =>
@@ -1350,7 +1433,7 @@ const consumptionTotal = consumptions.reduce(
     >
       <option value="">Select Stock Item</option>
 
-      {stockItems.map((item: any) => (
+      {getFilteredSelectableStockItems(stockSelectorSearch.issue).map((item: any) => (
         <option
           key={item.id}
           value={item.id}
@@ -1479,6 +1562,19 @@ const consumptionTotal = consumptions.reduce(
   </div>
 
   <div className="mt-4 grid gap-3 md:grid-cols-2">
+
+    <input
+  type="text"
+  placeholder="Search stock item by material, branch, brand"
+  value={stockSelectorSearch.adjust}
+  onChange={(e) =>
+    setStockSelectorSearch({
+      ...stockSelectorSearch,
+      adjust: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3 text-sm"
+/>
     <select
       value={adjustForm.stockItemId}
       onChange={(e) =>
@@ -1491,7 +1587,7 @@ const consumptionTotal = consumptions.reduce(
     >
       <option value="">Select Stock Item</option>
 
-      {stockItems.map((item: any) => (
+      {getFilteredSelectableStockItems(stockSelectorSearch.adjust).map((item: any) => (
         <option key={item.id} value={item.id}>
           {item.materialName}
           {item.branchName ? ` - ${item.branchName}` : ''}
@@ -1567,6 +1663,19 @@ const consumptionTotal = consumptions.reduce(
   </div>
 
   <div className="mt-4 grid gap-3 md:grid-cols-2">
+
+    <input
+  type="text"
+  placeholder="Search source stock item"
+  value={stockSelectorSearch.transfer}
+  onChange={(e) =>
+    setStockSelectorSearch({
+      ...stockSelectorSearch,
+      transfer: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3 text-sm"
+/>
     <select
       value={transferForm.sourceStockItemId}
       onChange={(e) =>
@@ -1579,7 +1688,7 @@ const consumptionTotal = consumptions.reduce(
     >
       <option value="">Select Source Stock Item</option>
 
-      {stockItems.map((item: any) => (
+      {getFilteredSelectableStockItems(stockSelectorSearch.transfer).map((item: any) => (
         <option key={item.id} value={item.id}>
           {item.materialName}
           {item.branchName ? ` - ${item.branchName}` : ''}
@@ -1691,6 +1800,19 @@ const consumptionTotal = consumptions.reduce(
       )}
     </select>
 
+
+<input
+  type="text"
+  placeholder="Search stock item for issue"
+  value={stockSelectorSearch.requestIssue}
+  onChange={(e) =>
+    setStockSelectorSearch({
+      ...stockSelectorSearch,
+      requestIssue: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3 text-sm"
+/>
     <select
       value={requestIssueForm.stockItemId}
       onChange={(e) =>
@@ -1703,7 +1825,7 @@ const consumptionTotal = consumptions.reduce(
     >
       <option value="">Select Stock Item</option>
 
-      {stockItems.map((item: any) => (
+      {getFilteredSelectableStockItems(stockSelectorSearch.requestIssue).map((item: any) => (
         <option
           key={item.id}
           value={item.id}
