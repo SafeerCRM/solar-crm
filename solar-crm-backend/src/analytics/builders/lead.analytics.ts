@@ -164,9 +164,24 @@ userWiseRows,
 
       meetingsQb.clone().getCount(),
 
-      meetingsQb
-  .clone()
+      this.meetingRepository
+  .createQueryBuilder('meeting')
   .select('COUNT(DISTINCT meeting.leadId)', 'count')
+  .where('meeting.createdAt BETWEEN :start AND :end', { start, end })
+  .andWhere('meeting.leadId IS NOT NULL')
+  .andWhere(
+    `meeting.leadId IN (
+      SELECT lead.id
+      FROM lead lead
+      WHERE lead.createdAt BETWEEN :start AND :end
+      ${
+        userIds.length
+          ? 'AND (lead.assignedTo IN (:...userIds) OR lead.createdBy IN (:...userIds) OR lead.originTelecallerId IN (:...userIds))'
+          : ''
+      }
+    )`,
+    { start, end, userIds },
+  )
   .getRawOne(),
 
       leadsQb
