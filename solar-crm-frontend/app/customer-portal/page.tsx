@@ -203,9 +203,18 @@ const activityFeed = [
 
   const primaryProject = projects[0];
 
-  const customerPortalMode = dashboard?.customerPortalMode || 'NO_PROJECT';
-const isAfterSales = customerPortalMode === 'AFTER_SALES';
-const isProjectActive = customerPortalMode === 'PROJECT_ACTIVE';
+  const portalExperience = dashboard?.portalExperience || {};
+const enabledSections = portalExperience?.enabledSections || {};
+
+const customerPortalMode =
+  portalExperience?.mode || dashboard?.customerPortalMode || 'NO_PROJECT';
+
+const portalModeLabel =
+  customerPortalMode === 'PROJECT_ACTIVE'
+    ? 'Project Active Customer'
+    : customerPortalMode === 'AFTER_SALES'
+      ? 'After-Sales / Support Customer'
+      : 'Customer Portal';
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-orange-50 via-yellow-50 to-emerald-50 pb-24">
@@ -227,11 +236,7 @@ const isProjectActive = customerPortalMode === 'PROJECT_ACTIVE';
               </p>
 
               <p className="mt-3 inline-flex rounded-full bg-white/20 px-4 py-2 text-xs font-black text-white backdrop-blur">
-  {isProjectActive
-    ? 'Project Active Customer'
-    : isAfterSales
-      ? 'After-Sales / Support Customer'
-      : 'Customer Portal'}
+  {portalModeLabel}
 </p>
             </div>
 
@@ -491,15 +496,16 @@ const isProjectActive = customerPortalMode === 'PROJECT_ACTIVE';
 
         <div className="mt-8 rounded-[2rem] bg-white p-6 shadow-xl">
           <SectionTitle
-  title={isAfterSales ? 'After-Sales Support' : 'Customer Services'}
+  title={portalExperience?.title || 'Customer Services'}
   subtitle={
-    isAfterSales
-      ? 'Cleaning, complaints, documents, referrals and support after project completion'
-      : 'Everything related to your solar plant in one place'
+    portalExperience?.subtitle ||
+    'Everything related to your solar plant in one place'
   }
 />
 
           <div className="mt-5 grid gap-5 md:grid-cols-3">
+
+            {enabledSections.projectTracker && (
             <a href="/customer-portal/project-tracker">
   <ActionCard
     icon="📊"
@@ -507,16 +513,19 @@ const isProjectActive = customerPortalMode === 'PROJECT_ACTIVE';
     text="Track approval, installation, subsidy, electricity and completion progress."
   />
 </a>
-
-     {!isAfterSales && (
-            <a href="/customer-portal/work-calendar">
-  <ActionCard
-    icon="📅"
-    title="Work Calendar"
-    text="See upcoming work dates and request date changes."
-  />
-</a>
 )}
+
+     {enabledSections.workCalendar && (
+  <a href="/customer-portal/work-calendar">
+    <ActionCard
+      icon="📅"
+      title="Work Calendar"
+      text="See upcoming work dates and request date changes."
+    />
+  </a>
+)}
+
+      {enabledSections.documents && (
             <a href="/customer-portal/documents">
   <ActionCard
     icon="📁"
@@ -524,6 +533,9 @@ const isProjectActive = customerPortalMode === 'PROJECT_ACTIVE';
     text="View agreements, invoices, subsidy and electricity documents."
   />
 </a>
+)}
+
+      {enabledSections.cleaning && (
             <a href="/customer-portal/cleaning-calendar">
   <ActionCard
     icon="🧽"
@@ -531,6 +543,9 @@ const isProjectActive = customerPortalMode === 'PROJECT_ACTIVE';
     text="Manage cleaning schedule and reminders."
   />
 </a>
+)}
+
+       {enabledSections.staffDirectory && (
             <a href="/customer-portal/staff-directory">
   <ActionCard
     icon="👷"
@@ -538,6 +553,9 @@ const isProjectActive = customerPortalMode === 'PROJECT_ACTIVE';
     text="View project owner, manager, contractor and department contacts."
   />
 </a>
+)}
+
+     {enabledSections.policies && (
             <a href="/customer-portal/policies">
   <ActionCard
     icon="📜"
@@ -545,6 +563,7 @@ const isProjectActive = customerPortalMode === 'PROJECT_ACTIVE';
     text="View customer policy, payment rules and project guidelines."
   />
 </a>
+)}
           </div>
         </div>
       </div>
