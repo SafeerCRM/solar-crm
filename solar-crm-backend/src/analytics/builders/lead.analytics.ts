@@ -102,9 +102,10 @@ export class LeadAnalyticsBuilder {
       mediumPotential,
       lowPotential,
       convertedToMeeting,
-      statusRows,
-      potentialRows,
-      userWiseRows,
+uniqueLeadsConvertedToMeeting,
+statusRows,
+potentialRows,
+userWiseRows,
     ] = await Promise.all([
       leadsQb.clone().getCount(),
 
@@ -163,6 +164,11 @@ export class LeadAnalyticsBuilder {
 
       meetingsQb.clone().getCount(),
 
+      meetingsQb
+  .clone()
+  .select('COUNT(DISTINCT meeting.leadId)', 'count')
+  .getRawOne(),
+
       leadsQb
         .clone()
         .select('lead.status::text', 'label')
@@ -207,8 +213,14 @@ export class LeadAnalyticsBuilder {
         .getRawMany(),
     ]);
 
-    const meetingConversionPercent =
-      totalLeads > 0 ? Math.round((convertedToMeeting / totalLeads) * 100) : 0;
+    const uniqueLeadConvertedCount = Number(
+  uniqueLeadsConvertedToMeeting?.count || 0,
+);
+
+const meetingConversionPercent =
+  totalLeads > 0
+    ? Math.round((uniqueLeadConvertedCount / totalLeads) * 100)
+    : 0;
 
     return {
       department: 'LEADS',
@@ -225,6 +237,7 @@ export class LeadAnalyticsBuilder {
         mediumPotential,
         lowPotential,
         convertedToMeeting,
+        uniqueLeadConvertedCount,
         meetingConversionPercent,
       },
       charts: {
@@ -258,10 +271,15 @@ export class LeadAnalyticsBuilder {
                   : 0,
             },
             {
-              label: 'Converted to Meeting',
-              value: convertedToMeeting,
-              percent: meetingConversionPercent,
-            },
+  label: 'Unique Leads Converted',
+  value: uniqueLeadConvertedCount,
+  percent: meetingConversionPercent,
+},
+{
+  label: 'Meetings Generated',
+  value: convertedToMeeting,
+  percent: 0,
+},
           ],
         },
       },
