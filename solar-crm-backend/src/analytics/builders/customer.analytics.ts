@@ -54,6 +54,13 @@ export class CustomerAnalyticsBuilder {
     const { start, end } = getAnalyticsDateRange(query);
     const userIds = await this.getUserIds(query, user);
 
+    console.log({
+  department: query.department,
+  role: query.role,
+  userId: query.userId,
+  userIds,
+});
+
     const customerQb = this.customerComplaintRepository
       .createQueryBuilder('complaint')
       .where('complaint.isHidden = false')
