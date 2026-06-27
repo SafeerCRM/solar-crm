@@ -7,6 +7,7 @@ import { StaffService } from './staff.service';
 import { StaffController } from './staff.controller';
 import { StaffAttendance } from './staff-attendance.entity';
 import { StaffSelfController } from './staff-self.controller';
+import { StaffLeave } from './staff-leave.entity';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { StaffSelfController } from './staff-self.controller';
       StaffDocument,
       StaffAsset,
       StaffAttendance,
+      StaffLeave,
     ]),
   ],
   controllers: [StaffController, StaffSelfController],

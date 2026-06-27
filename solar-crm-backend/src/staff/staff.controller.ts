@@ -117,4 +117,58 @@ punchOut(@Body() body: any, @CurrentUser() user: any) {
 getMyStaffProfile(@CurrentUser() user: any) {
   return this.staffService.getMyStaffProfile(user);
 }
+
+@Get('leaves')
+listLeaves(@Query() query: any) {
+  return this.staffService.listLeaves(query);
+}
+
+@Post('leave')
+createLeave(@Body() body: any, @CurrentUser() user: any) {
+  return this.staffService.createLeave(body, user);
+}
+
+@Patch('leave/:id')
+updateLeave(@Param('id') id: string, @Body() body: any) {
+  return this.staffService.updateLeave(Number(id), body);
+}
+
+@Patch('leave/:id/approve')
+approveLeave(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffService.approveLeave(Number(id), body, user);
+}
+
+@Patch('leave/:id/reject')
+rejectLeave(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffService.rejectLeave(Number(id), body, user);
+}
+
+@Patch('leave/:id/hide')
+hideLeave(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffService.hideLeave(Number(id), body, user);
+}
+
+@Patch('leave/:id/restore')
+restoreLeave(@Param('id') id: string) {
+  return this.staffService.restoreLeave(Number(id));
+}
+
+@Post('leave/proof-upload')
+@UseInterceptors(FilesInterceptor('files', 1))
+uploadLeaveProof(@UploadedFiles() files: any[]) {
+  const file = files?.[0];
+  return this.staffService.uploadLeaveProof(file);
+}
 }

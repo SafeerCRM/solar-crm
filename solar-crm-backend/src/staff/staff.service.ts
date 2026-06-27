@@ -9,6 +9,7 @@ import { StaffMember } from './staff-member.entity';
 import { StaffDocument } from './staff-document.entity';
 import { StaffAsset } from './staff-asset.entity';
 import { StaffAttendance } from './staff-attendance.entity';
+import { StaffLeave } from './staff-leave.entity';
 
 @Injectable()
 export class StaffService {
@@ -24,6 +25,9 @@ export class StaffService {
 
     @InjectRepository(StaffAttendance)
 private readonly attendanceRepo: Repository<StaffAttendance>,
+
+@InjectRepository(StaffLeave)
+private readonly leaveRepo: Repository<StaffLeave>,
   ) {}
 
   async findAll(query: any) {
@@ -477,5 +481,183 @@ async getMyAttendance(query: any, user: any) {
     limit,
     totalPages: Math.ceil(total / limit) || 1,
   };
+}
+
+private calculateLeaveDays(fromDate: string, toDate: string) {
+  const start = new Date(fromDate);
+  const end = new Date(toDate);
+
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return 1;
+  }
+
+  const diffMs = end.getTime() - start.getTime();
+  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1;
+
+  return Math.max(days, 1);
+}
+
+async createLeave(body: any, user: any) {
+  if (!body.staffId) {
+    throw new BadRequestException('Staff is required');
+  }
+
+  if (!body.fromDate || !body.toDate) {
+    throw new BadRequestException('Leave from date and to date are required');
+  }
+
+  if (!String(body.reason || '').trim()) {
+    throw new BadRequestException('Leave reason is required');
+  }
+
+  const staff = await this.staffRepo.findOne({
+    where: {
+      id: Number(body.staffId),
+      isHidden: false,
+    },
+  });
+
+  if (!staff) {
+    throw new NotFoundException('Staff not found');
+  }
+
+  const leave = this.leaveRepo.create({
+    staffId: staff.id,
+    staffName: staff.fullName,
+    employeeCode: staff.employeeCode || '',
+    leaveType: body.leaveType || 'CASUAL',
+    fromDate: body.fromDate,
+    toDate: body.toDate,
+    totalDays: this.calculateLeaveDays(body.fromDate, body.toDate),
+    reason: body.reason,
+    proofUrl: body.proofUrl || '',
+    status: 'PENDING' as any,
+    requestedBy: user?.id || null,
+    requestedByName: user?.name || '',
+    isHidden: false,
+  });
+
+  return this.leaveRepo.save(leave);
+}
+
+async listLeaves(query: any) {
+  const page = Math.max(Number(query.page || 1), 1);
+  const limit = Math.min(Math.max(Number(query.limit || 20), 1), 100);
+  const showHidden = query.showHidden === 'true';
+
+  const where: any = {
+    isHidden: showHidden,
+  };
+
+  if (query.staffId) where.staffId = Number(query.staffId);
+  if (query.status) where.status = query.status;
+  if (query.leaveType) where.leaveType = query.leaveType;
+
+  const [data, total] = await this.leaveRepo.findAndCount({
+    where,
+    order: { createdAt: 'DESC' },
+    skip: (page - 1) * limit,
+    take: limit,
+  });
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
+}
+
+async updateLeave(id: number, body: any) {
+  const leave = await this.leaveRepo.findOne({ where: { id } });
+
+  if (!leave) {
+    throw new NotFoundException('Leave not found');
+  }
+
+  if (leave.status !== 'PENDING') {
+    throw new BadRequestException('Only pending leave can be edited');
+  }
+
+  Object.assign(leave, {
+    leaveType: body.leaveType || leave.leaveType,
+    fromDate: body.fromDate || leave.fromDate,
+    toDate: body.toDate || leave.toDate,
+    reason: body.reason || leave.reason,
+    proofUrl: body.proofUrl || leave.proofUrl,
+  });
+
+  leave.totalDays = this.calculateLeaveDays(leave.fromDate, leave.toDate);
+
+  return this.leaveRepo.save(leave);
+}
+
+async approveLeave(id: number, body: any, user: any) {
+  const leave = await this.leaveRepo.findOne({ where: { id } });
+
+  if (!leave) {
+    throw new NotFoundException('Leave not found');
+  }
+
+  leave.status = 'APPROVED' as any;
+  leave.approvedBy = user?.id || null;
+  leave.approvedByName = user?.name || '';
+  leave.approvedAt = new Date();
+  leave.approvalRemarks = body?.approvalRemarks || '';
+
+  return this.leaveRepo.save(leave);
+}
+
+async rejectLeave(id: number, body: any, user: any) {
+  const leave = await this.leaveRepo.findOne({ where: { id } });
+
+  if (!leave) {
+    throw new NotFoundException('Leave not found');
+  }
+
+  leave.status = 'REJECTED' as any;
+  leave.approvedBy = user?.id || null;
+  leave.approvedByName = user?.name || '';
+  leave.approvedAt = new Date();
+  leave.approvalRemarks = body?.approvalRemarks || '';
+
+  return this.leaveRepo.save(leave);
+}
+
+async hideLeave(id: number, body: any, user: any) {
+  const leave = await this.leaveRepo.findOne({ where: { id } });
+
+  if (!leave) {
+    throw new NotFoundException('Leave not found');
+  }
+
+  leave.isHidden = true;
+  leave.hiddenAt = new Date();
+  leave.hiddenBy = user?.id || null;
+  leave.hiddenReason = body?.reason || '';
+
+  return this.leaveRepo.save(leave);
+}
+
+async restoreLeave(id: number) {
+  const leave = await this.leaveRepo.findOne({ where: { id } });
+
+  if (!leave) {
+    throw new NotFoundException('Leave not found');
+  }
+
+  leave.isHidden = false;
+
+  return this.leaveRepo.save(leave);
+}
+
+async uploadLeaveProof(file: any) {
+  return this.uploadFileToSupabase(
+    file,
+    'staff-leave-proofs',
+    ['image/', 'application/pdf'],
+    10,
+  );
 }
 }
