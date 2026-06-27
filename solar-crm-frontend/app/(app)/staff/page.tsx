@@ -30,6 +30,7 @@ const emptyForm = {
   alternateMobile: '',
   email: '',
   designation: '',
+  staffRole: '',
   department: '',
   reportingManagerName: '',
   branchName: '',
@@ -370,10 +371,15 @@ const filteredDesignationOptions = USER_ROLE_OPTIONS.filter((role) =>
             key={role}
             type="button"
             onClick={() => {
-              setForm({ ...form, designation: role });
-              setDesignationSearch('');
-              setShowDesignationOptions(false);
-            }}
+  setForm({
+    ...form,
+    designation: role.replaceAll('_', ' '),
+    staffRole: role,
+  });
+
+  setDesignationSearch('');
+  setShowDesignationOptions(false);
+}}
             className="block w-full border-b p-3 text-left text-sm hover:bg-blue-50"
           >
             {role.replaceAll('_', ' ')}
