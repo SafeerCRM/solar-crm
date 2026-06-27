@@ -258,6 +258,12 @@ const navItems = [
 },
 
 {
+  name: 'Staff Attendance',
+  href: '/staff/attendance',
+  roles: ['OWNER', 'HR_MANAGER'],
+},
+
+{
   name: 'My Contractor Work',
   href: '/project/my-contractor-work',
   roles: ['PROJECT_CONTRACTOR'],
