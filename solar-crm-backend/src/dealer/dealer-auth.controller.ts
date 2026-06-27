@@ -48,6 +48,13 @@ export class DealerAuthController {
     return this.service.getBankDetails();
   }
 
+  @Get('policies')
+async policies(@Req() req: any) {
+  this.getDealerPayload(req);
+
+  return this.service.listPortalPoliciesForDealer();
+}
+
     @Get('staff-contacts')
   async staffContacts(@Req() req: any) {
     this.getDealerPayload(req);

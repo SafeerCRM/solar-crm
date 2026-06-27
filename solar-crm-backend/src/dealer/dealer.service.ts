@@ -252,6 +252,21 @@ async listPortalPoliciesForCustomer() {
   });
 }
 
+async listPortalPoliciesForDealer() {
+  return this.portalPolicyRepository.find({
+    where: {
+      portalType: PortalPolicyType.DEALER,
+      visibleToCustomer: true,
+      isActive: true,
+      isHidden: false,
+    } as any,
+    order: {
+      sortOrder: 'ASC',
+      createdAt: 'DESC',
+    } as any,
+  });
+}
+
   async dealerLogin(username: string, password: string) {
     const loginUsername = String(username || '').trim();
     const loginPassword = String(password || '');
