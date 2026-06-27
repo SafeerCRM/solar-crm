@@ -660,4 +660,50 @@ async uploadLeaveProof(file: any) {
     10,
   );
 }
+
+async createMyLeave(body: any, user: any) {
+  const staff = await this.getMyStaffProfile(user);
+
+  return this.createLeave(
+    {
+      ...body,
+      staffId: staff.id,
+    },
+    user,
+  );
+}
+
+async listMyLeaves(query: any, user: any) {
+  const staff = await this.getMyStaffProfile(user);
+
+  const page = Math.max(Number(query.page || 1), 1);
+  const limit = Math.min(Math.max(Number(query.limit || 20), 1), 100);
+
+  const where: any = {
+    staffId: staff.id,
+    isHidden: false,
+  };
+
+  if (query.status) {
+    where.status = query.status;
+  }
+
+  const [data, total] = await this.leaveRepo.findAndCount({
+    where,
+    order: {
+      createdAt: 'DESC',
+    },
+    skip: (page - 1) * limit,
+    take: limit,
+  });
+
+  return {
+    staff,
+    data,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
+}
 }

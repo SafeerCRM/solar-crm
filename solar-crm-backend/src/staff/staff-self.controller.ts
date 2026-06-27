@@ -81,4 +81,21 @@ export class StaffSelfController {
     const file = files?.[0];
     return this.staffService.uploadAttendancePhoto(file);
   }
+
+  @Get('leaves')
+listMyLeaves(@Query() query: any, @CurrentUser() user: any) {
+  return this.staffService.listMyLeaves(query, user);
+}
+
+@Post('leave')
+createMyLeave(@Body() body: any, @CurrentUser() user: any) {
+  return this.staffService.createMyLeave(body, user);
+}
+
+@Post('leave/proof-upload')
+@UseInterceptors(FilesInterceptor('files', 1))
+uploadLeaveProof(@UploadedFiles() files: any[]) {
+  const file = files?.[0];
+  return this.staffService.uploadLeaveProof(file);
+}
 }
