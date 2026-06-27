@@ -80,7 +80,7 @@ export class UsersController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER')
+  @Roles('OWNER', 'HR_MANAGER')
   @Get()
 findAllUsers(@Query('includeHidden') includeHidden?: string) {
   return this.usersService.findAllUsers(includeHidden === 'true');
