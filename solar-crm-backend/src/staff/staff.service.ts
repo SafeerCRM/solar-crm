@@ -8,6 +8,7 @@ import { Repository, ILike } from 'typeorm';
 import { StaffMember } from './staff-member.entity';
 import { StaffDocument } from './staff-document.entity';
 import { StaffAsset } from './staff-asset.entity';
+import { StaffAttendance } from './staff-attendance.entity';
 
 @Injectable()
 export class StaffService {
@@ -20,6 +21,9 @@ export class StaffService {
 
     @InjectRepository(StaffAsset)
     private readonly assetRepo: Repository<StaffAsset>,
+
+    @InjectRepository(StaffAttendance)
+private readonly attendanceRepo: Repository<StaffAttendance>,
   ) {}
 
   async findAll(query: any) {
@@ -210,4 +214,211 @@ export class StaffService {
 
     return this.assetRepo.save(asset);
   }
+
+  private async uploadFileToSupabase(
+  file: any,
+  folder: string,
+  allowedTypes: string[],
+  maxSizeMb = 20,
+) {
+  if (!file) {
+    throw new BadRequestException('File is required');
+  }
+
+  const mimeType = String(file.mimetype || '');
+
+  const isAllowed = allowedTypes.some((type) =>
+    type.endsWith('/')
+      ? mimeType.startsWith(type)
+      : mimeType === type,
+  );
+
+  if (!isAllowed) {
+    throw new BadRequestException('File type is not allowed');
+  }
+
+  const maxSize = maxSizeMb * 1024 * 1024;
+
+  if (file.size > maxSize) {
+    throw new BadRequestException(`File must be less than ${maxSizeMb} MB`);
+  }
+
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const bucket = 'project-documents';
+
+  if (!supabaseUrl || !serviceKey) {
+    throw new BadRequestException('Supabase storage is not configured');
+  }
+
+  const { createClient } = await import('@supabase/supabase-js');
+  const supabase = createClient(supabaseUrl, serviceKey);
+
+  const extension =
+    String(file.originalname || '').split('.').pop() || 'file';
+
+  const filePath = `${folder}/${Date.now()}-${Math.round(
+    Math.random() * 1e9,
+  )}.${extension}`;
+
+  const uploadResult = await supabase.storage
+    .from(bucket)
+    .upload(filePath, file.buffer, {
+      contentType: mimeType,
+    });
+
+  if (uploadResult.error) {
+    throw new BadRequestException(uploadResult.error.message);
+  }
+
+  const publicUrl = supabase.storage
+    .from(bucket)
+    .getPublicUrl(filePath).data.publicUrl;
+
+  return {
+    fileUrl: publicUrl,
+  };
+}
+
+async uploadAttendancePhoto(file: any) {
+  return this.uploadFileToSupabase(
+    file,
+    'staff-attendance',
+    ['image/'],
+    10,
+  );
+}
+
+private getTodayDate() {
+  return new Date().toISOString().split('T')[0];
+}
+
+private calculateWorkingHours(punchIn?: Date, punchOut?: Date) {
+  if (!punchIn || !punchOut) return 0;
+
+  const diffMs = new Date(punchOut).getTime() - new Date(punchIn).getTime();
+
+  if (diffMs <= 0) return 0;
+
+  return Number((diffMs / (1000 * 60 * 60)).toFixed(2));
+}
+
+async punchIn(body: any, user: any) {
+  if (!body.staffId) {
+    throw new BadRequestException('Staff is required');
+  }
+
+  const staff = await this.staffRepo.findOne({
+    where: {
+      id: Number(body.staffId),
+      isHidden: false,
+    },
+  });
+
+  if (!staff) {
+    throw new NotFoundException('Staff not found');
+  }
+
+  const attendanceDate = body.attendanceDate || this.getTodayDate();
+
+  const existing = await this.attendanceRepo.findOne({
+    where: {
+      staffId: staff.id,
+      attendanceDate,
+    },
+  });
+
+  if (existing?.punchInTime) {
+    throw new BadRequestException('Staff already punched in today');
+  }
+
+  const attendance =
+    existing ||
+    this.attendanceRepo.create({
+      staffId: staff.id,
+      staffName: staff.fullName,
+      employeeCode: staff.employeeCode || '',
+      attendanceDate,
+    });
+
+  attendance.punchInTime = new Date();
+  attendance.punchInLatitude = body.latitude || '';
+  attendance.punchInLongitude = body.longitude || '';
+  attendance.punchInGpsAddress = body.gpsAddress || '';
+  attendance.punchInPhotoUrl = body.photoUrl || '';
+  attendance.status = body.status || 'PRESENT';
+  attendance.remarks = body.remarks || attendance.remarks || '';
+  attendance.createdBy = user?.id || null;
+  attendance.createdByName = user?.name || '';
+
+  return this.attendanceRepo.save(attendance);
+}
+
+async punchOut(body: any, user: any) {
+  if (!body.staffId) {
+    throw new BadRequestException('Staff is required');
+  }
+
+  const attendanceDate = body.attendanceDate || this.getTodayDate();
+
+  const attendance = await this.attendanceRepo.findOne({
+    where: {
+      staffId: Number(body.staffId),
+      attendanceDate,
+    },
+  });
+
+  if (!attendance || !attendance.punchInTime) {
+    throw new BadRequestException('Punch in is required before punch out');
+  }
+
+  if (attendance.punchOutTime) {
+    throw new BadRequestException('Staff already punched out today');
+  }
+
+  attendance.punchOutTime = new Date();
+  attendance.punchOutLatitude = body.latitude || '';
+  attendance.punchOutLongitude = body.longitude || '';
+  attendance.punchOutGpsAddress = body.gpsAddress || '';
+  attendance.punchOutPhotoUrl = body.photoUrl || '';
+  attendance.workingHours = this.calculateWorkingHours(
+    attendance.punchInTime,
+    attendance.punchOutTime,
+  );
+  attendance.remarks = body.remarks || attendance.remarks || '';
+
+  if (attendance.workingHours > 0 && attendance.workingHours < 4) {
+    attendance.status = 'HALF_DAY' as any;
+  }
+
+  return this.attendanceRepo.save(attendance);
+}
+
+async getAttendance(query: any) {
+  const page = Math.max(Number(query.page || 1), 1);
+  const limit = Math.min(Math.max(Number(query.limit || 20), 1), 100);
+
+  const where: any = {};
+
+  if (query.staffId) where.staffId = Number(query.staffId);
+  if (query.date) where.attendanceDate = query.date;
+
+  const [data, total] = await this.attendanceRepo.findAndCount({
+    where,
+    order: {
+      attendanceDate: 'DESC',
+      createdAt: 'DESC',
+    },
+    skip: (page - 1) * limit,
+    take: limit,
+  });
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
+}
 }

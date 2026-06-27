@@ -7,12 +7,15 @@ import {
   Post,
   Query,
   UseGuards,
+  UploadedFiles,
+  UseInterceptors,
 } from '@nestjs/common';
 import { StaffService } from './staff.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { FilesInterceptor } from '@nestjs/platform-express';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('OWNER', 'HR_MANAGER')
@@ -87,4 +90,26 @@ export class StaffController {
   hideAsset(@Param('id') id: string) {
     return this.staffService.hideAsset(Number(id));
   }
+
+  @Post('attendance/photo-upload')
+@UseInterceptors(FilesInterceptor('files', 1))
+uploadAttendancePhoto(@UploadedFiles() files: any[]) {
+  const file = files?.[0];
+  return this.staffService.uploadAttendancePhoto(file);
+}
+
+@Get('attendance')
+getAttendance(@Query() query: any) {
+  return this.staffService.getAttendance(query);
+}
+
+@Post('attendance/punch-in')
+punchIn(@Body() body: any, @CurrentUser() user: any) {
+  return this.staffService.punchIn(body, user);
+}
+
+@Post('attendance/punch-out')
+punchOut(@Body() body: any, @CurrentUser() user: any) {
+  return this.staffService.punchOut(body, user);
+}
 }

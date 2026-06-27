@@ -5,6 +5,7 @@ import { StaffDocument } from './staff-document.entity';
 import { StaffAsset } from './staff-asset.entity';
 import { StaffService } from './staff.service';
 import { StaffController } from './staff.controller';
+import { StaffAttendance } from './staff-attendance.entity';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { StaffController } from './staff.controller';
       StaffMember,
       StaffDocument,
       StaffAsset,
+      StaffAttendance,
     ]),
   ],
   controllers: [StaffController],
