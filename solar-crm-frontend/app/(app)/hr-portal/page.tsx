@@ -25,9 +25,9 @@ const sections = [
   },
   {
     title: 'HR Settings',
-    href: '#',
+    href: '/staff/hr-settings',
     description: 'Attendance, salary, incentive, penalty and holiday rules.',
-    disabled: true,
+    disabled: false,
   },
   {
     title: 'Payroll',

@@ -7,7 +7,9 @@ import { uploadPreparedFile } from '@/app/utils/fileUpload';
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 export default function EmployeePortalPage() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'attendance' | 'leave'>('dashboard');
+  const [activeTab, setActiveTab] = useState<
+  'dashboard' | 'attendance' | 'leave' | 'policies'
+>('dashboard');
   const [staff, setStaff] = useState<any>(null);
   const [attendance, setAttendance] = useState<any[]>([]);
   const [leaves, setLeaves] = useState<any[]>([]);
@@ -16,6 +18,7 @@ export default function EmployeePortalPage() {
   const [attendanceRemarks, setAttendanceRemarks] = useState('');
   const [leaveProof, setLeaveProof] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [policies, setPolicies] = useState<any[]>([]);
 
   const [leaveForm, setLeaveForm] = useState({
     leaveType: 'CASUAL',
@@ -31,7 +34,7 @@ export default function EmployeePortalPage() {
 
   const loadPortal = async () => {
     try {
-      const [meRes, attendanceRes, leavesRes] = await Promise.all([
+      const [meRes, attendanceRes, leavesRes, policiesRes] = await Promise.all([
         axios.get(`${API_BASE_URL}/staff/self/me`, { headers: headers() }),
         axios.get(`${API_BASE_URL}/staff/self/attendance`, {
           params: { date: attendanceDate, limit: 20 },
@@ -41,11 +44,16 @@ export default function EmployeePortalPage() {
           params: { limit: 20 },
           headers: headers(),
         }),
+        axios.get(`${API_BASE_URL}/staff/self/employee-policies`, {
+  params: { limit: 50 },
+  headers: headers(),
+}),
       ]);
 
       setStaff(meRes.data || null);
       setAttendance(attendanceRes.data?.data || []);
       setLeaves(leavesRes.data?.data || []);
+      setPolicies(policiesRes.data?.data || []);
     } catch (error: any) {
       console.error(error);
       alert(error?.response?.data?.message || 'Unable to load employee portal');
@@ -199,6 +207,7 @@ export default function EmployeePortalPage() {
           ['dashboard', 'Dashboard'],
           ['attendance', 'Attendance'],
           ['leave', 'Leave'],
+          ['policies', 'Policies'],
         ].map(([key, label]) => (
           <button
             key={key}
@@ -230,6 +239,13 @@ export default function EmployeePortalPage() {
             <p className="text-sm text-gray-500">Leave Requests</p>
             <p className="mt-2 text-xl font-bold">{leaves.length}</p>
           </div>
+
+          <div className="rounded-2xl bg-white p-5 shadow">
+  <p className="text-sm text-gray-500">Policies</p>
+  <p className="mt-2 text-xl font-bold text-blue-700">
+    {policies.length}
+  </p>
+</div>
         </div>
       )}
 
@@ -407,6 +423,55 @@ export default function EmployeePortalPage() {
           </div>
         </div>
       )}
+
+      {activeTab === 'policies' && (
+  <div className="rounded-2xl bg-white p-5 shadow">
+    <h2 className="text-lg font-bold text-gray-800">
+      Company / HR Policies
+    </h2>
+
+    <p className="mt-1 text-sm text-gray-500">
+      Policies shared by HR for employee reference.
+    </p>
+
+    <div className="mt-4 space-y-3">
+      {policies.length === 0 ? (
+        <p className="text-sm text-gray-500">
+          No policies available.
+        </p>
+      ) : (
+        policies.map((policy) => (
+          <div key={policy.id} className="rounded-xl border p-4">
+            <p className="font-bold text-gray-900">
+              {policy.title}
+            </p>
+
+            <p className="text-sm text-gray-500">
+              {policy.category || 'GENERAL'}
+            </p>
+
+            {policy.description && (
+              <p className="mt-2 text-sm text-gray-700">
+                {policy.description}
+              </p>
+            )}
+
+            {policy.fileUrl && (
+              <a
+                href={policy.fileUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 inline-block rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+              >
+                View / Download
+              </a>
+            )}
+          </div>
+        ))
+      )}
+    </div>
+  </div>
+)}
     </div>
   );
 }
