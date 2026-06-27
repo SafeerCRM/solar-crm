@@ -254,9 +254,9 @@ async listPortalPoliciesForCustomer() {
 
   async dealerLogin(username: string, password: string) {
     const loginUsername = String(username || '').trim();
-    const loginPassword = String(password || '').trim();
+    const loginPassword = String(password || '');
 
-    if (!loginUsername || !loginPassword) {
+    if (!loginUsername || !loginPassword.trim()) {
       throw new UnauthorizedException('Username and password are required');
     }
 
@@ -313,9 +313,9 @@ async listPortalPoliciesForCustomer() {
   }
 
   async updateDealerPortalPassword(id: number, body: any) {
-  const newPassword = String(body?.portalPassword || '').trim();
+  const newPassword = String(body?.portalPassword || '');
 
-  if (!newPassword) {
+  if (!newPassword.trim()) {
     throw new BadRequestException('Password is required');
   }
 
