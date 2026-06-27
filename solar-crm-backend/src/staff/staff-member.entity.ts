@@ -39,6 +39,9 @@ export class StaffMember {
   designation: string;
 
   @Column({ nullable: true })
+staffRole: string;
+
+  @Column({ nullable: true })
   department: string;
 
   @Column({ nullable: true })

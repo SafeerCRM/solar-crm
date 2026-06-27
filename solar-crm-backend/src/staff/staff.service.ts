@@ -304,16 +304,19 @@ private calculateWorkingHours(punchIn?: Date, punchOut?: Date) {
 }
 
 async punchIn(body: any, user: any) {
-  if (!body.staffId) {
-    throw new BadRequestException('Staff is required');
-  }
+  let staffId = body.staffId;
 
-  const staff = await this.staffRepo.findOne({
-    where: {
-      id: Number(body.staffId),
-      isHidden: false,
-    },
-  });
+if (!staffId) {
+  const linkedStaff = await this.getMyStaffProfile(user);
+  staffId = linkedStaff.id;
+}
+
+const staff = await this.staffRepo.findOne({
+  where: {
+    id: Number(staffId),
+    isHidden: false,
+  },
+});
 
   if (!staff) {
     throw new NotFoundException('Staff not found');
@@ -355,18 +358,21 @@ async punchIn(body: any, user: any) {
 }
 
 async punchOut(body: any, user: any) {
-  if (!body.staffId) {
-    throw new BadRequestException('Staff is required');
-  }
+  let staffId = body.staffId;
 
-  const attendanceDate = body.attendanceDate || this.getTodayDate();
+if (!staffId) {
+  const linkedStaff = await this.getMyStaffProfile(user);
+  staffId = linkedStaff.id;
+}
 
-  const attendance = await this.attendanceRepo.findOne({
-    where: {
-      staffId: Number(body.staffId),
-      attendanceDate,
-    },
-  });
+const attendanceDate = body.attendanceDate || this.getTodayDate();
+
+const attendance = await this.attendanceRepo.findOne({
+  where: {
+    staffId: Number(staffId),
+    attendanceDate,
+  },
+});
 
   if (!attendance || !attendance.punchInTime) {
     throw new BadRequestException('Punch in is required before punch out');
@@ -420,5 +426,22 @@ async getAttendance(query: any) {
     limit,
     totalPages: Math.ceil(total / limit) || 1,
   };
+}
+
+async getMyStaffProfile(user: any) {
+  const staff = await this.staffRepo.findOne({
+    where: {
+      linkedUserId: user?.id,
+      isHidden: false,
+    },
+  });
+
+  if (!staff) {
+    throw new NotFoundException(
+      'No staff profile linked with your login. Please contact HR.',
+    );
+  }
+
+  return staff;
 }
 }

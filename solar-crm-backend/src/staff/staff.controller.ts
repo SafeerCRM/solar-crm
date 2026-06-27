@@ -112,4 +112,9 @@ punchIn(@Body() body: any, @CurrentUser() user: any) {
 punchOut(@Body() body: any, @CurrentUser() user: any) {
   return this.staffService.punchOut(body, user);
 }
+
+@Get('me')
+getMyStaffProfile(@CurrentUser() user: any) {
+  return this.staffService.getMyStaffProfile(user);
+}
 }
