@@ -78,6 +78,42 @@ projectOwnerName: string;
 @Column({ nullable: true })
 projectOwnerRole: string;
 
+@Column({ nullable: true })
+telecallerId: number;
+
+@Column({ nullable: true })
+telecallerName: string;
+
+@Column({ nullable: true })
+telecallerRole: string;
+
+@Column({ nullable: true })
+telecallingAssistantId: number;
+
+@Column({ nullable: true })
+telecallingAssistantName: string;
+
+@Column({ nullable: true })
+telecallingAssistantRole: string;
+
+@Column({ nullable: true })
+leadManagerId: number;
+
+@Column({ nullable: true })
+leadManagerName: string;
+
+@Column({ nullable: true })
+leadManagerRole: string;
+
+@Column({ nullable: true })
+meetingManagerId: number;
+
+@Column({ nullable: true })
+meetingManagerName: string;
+
+@Column({ nullable: true })
+meetingManagerRole: string;
+
   @Column({ nullable: true })
   customerName: string;
 

@@ -189,6 +189,11 @@ import {
 import { Dealer, DealerStatus } from '../dealer/dealer.entity';
 import { ProjectPaymentReceipt } from './project-payment-receipt.entity';
 
+import { Lead } from '../leads/lead.entity';
+import { Meeting } from '../meeting/meeting.entity';
+import { CallLog } from '../telecalling/call-log.entity';
+import { TelecallingContact } from '../telecalling/telecalling-contact.entity';
+
 @Injectable()
 export class ProjectService {
 
@@ -654,9 +659,144 @@ private readonly followUpRepository: Repository<FollowUp>,
 @InjectRepository(Dealer)
 private readonly dealerRepository: Repository<Dealer>,
 
+@InjectRepository(Lead)
+private readonly leadRepository: Repository<Lead>,
+
+@InjectRepository(Meeting)
+private readonly meetingRepository: Repository<Meeting>,
+
+@InjectRepository(CallLog)
+private readonly callLogRepository: Repository<CallLog>,
+
+@InjectRepository(TelecallingContact)
+private readonly telecallingContactRepository: Repository<TelecallingContact>,
+
     private readonly calculatorService: CalculatorService,
 
   ) {}
+
+  private async buildProjectJourneySnapshot(data: any, user?: any) {
+  const snapshot: any = {
+    telecallerId: null,
+    telecallerName: '',
+    telecallerRole: '',
+
+    telecallingAssistantId: null,
+    telecallingAssistantName: '',
+    telecallingAssistantRole: '',
+
+    leadManagerId: null,
+    leadManagerName: '',
+    leadManagerRole: '',
+
+    meetingManagerId: null,
+    meetingManagerName: '',
+    meetingManagerRole: '',
+  };
+
+  let leadId = data?.leadId ? Number(data.leadId) : null;
+  let meeting: any = null;
+  let lead: any = null;
+
+  if (data?.meetingId) {
+    meeting = await this.meetingRepository.findOne({
+      where: { id: Number(data.meetingId) },
+    });
+
+    if (meeting) {
+      leadId = meeting.leadId ? Number(meeting.leadId) : leadId;
+
+      if (meeting.assignedTo) {
+        snapshot.meetingManagerId = Number(meeting.assignedTo);
+        snapshot.meetingManagerName =
+          meeting.assignedToName || '';
+        snapshot.meetingManagerRole = 'MEETING_MANAGER';
+      } else if (meeting.createdBy) {
+        snapshot.meetingManagerId = Number(meeting.createdBy);
+        snapshot.meetingManagerName =
+          meeting.createdByName || '';
+        snapshot.meetingManagerRole = 'MEETING_MANAGER';
+      }
+    }
+  }
+
+  if (leadId) {
+    lead = await this.leadRepository.findOne({
+      where: { id: Number(leadId) },
+    });
+
+    if (lead) {
+      if (lead.createdBy) {
+        snapshot.leadManagerId = Number(lead.createdBy);
+        snapshot.leadManagerName =
+          lead.createdByName || '';
+        snapshot.leadManagerRole = 'LEAD_MANAGER';
+      }
+
+      if (lead.originTelecallerId) {
+        snapshot.telecallerId = Number(
+          lead.originTelecallerId,
+        );
+        snapshot.telecallerName =
+          lead.originTelecallerName || '';
+        snapshot.telecallerRole = 'TELECALLER';
+      }
+    }
+
+    const latestCallLog = await this.callLogRepository.findOne({
+      where: { leadId: Number(leadId) },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (latestCallLog) {
+      if (!snapshot.telecallerId && latestCallLog.telecallerId) {
+        snapshot.telecallerId = Number(latestCallLog.telecallerId);
+        snapshot.telecallerRole = 'TELECALLER';
+      }
+
+      if (latestCallLog.reviewAssignedTo) {
+        snapshot.telecallingAssistantId = Number(
+          latestCallLog.reviewAssignedTo,
+        );
+        snapshot.telecallingAssistantName =
+          latestCallLog.reviewAssignedToName || '';
+        snapshot.telecallingAssistantRole =
+          'TELECALLING_ASSISTANT';
+      }
+
+      if (latestCallLog.contactId) {
+        const contact =
+          await this.telecallingContactRepository.findOne({
+            where: { id: Number(latestCallLog.contactId) },
+          });
+
+        if (contact) {
+          if (!snapshot.telecallerId && contact.assignedTo) {
+            snapshot.telecallerId = Number(contact.assignedTo);
+            snapshot.telecallerName =
+              contact.assignedToName || '';
+            snapshot.telecallerRole = 'TELECALLER';
+          }
+
+          if (
+            !snapshot.telecallingAssistantId &&
+            contact.reviewAssignedTo
+          ) {
+            snapshot.telecallingAssistantId = Number(
+              contact.reviewAssignedTo,
+            );
+            snapshot.telecallingAssistantName =
+              contact.reviewAssignedToName || '';
+            snapshot.telecallingAssistantRole =
+              'TELECALLING_ASSISTANT';
+          }
+        }
+      }
+    }
+  }
+
+  return snapshot;
+}
 
   async create(
   data: Partial<Project>,
@@ -702,6 +842,9 @@ if (missingCustomerFields.length > 0) {
       );
     }
 
+    const journeySnapshot =
+  await this.buildProjectJourneySnapshot(data, user);
+
     const payload: any = {
   ...data,
 
@@ -730,6 +873,8 @@ projectOwnerName:
 projectOwnerRole: Array.isArray(user?.roles)
   ? user.roles.join(', ')
   : '',
+
+  ...journeySnapshot,
 
   projectWorkState:
   (data as any).projectWorkState === 'RUNNING'
@@ -805,6 +950,28 @@ vendorId: payload?.vendorId ? Number(payload.vendorId) : undefined,
 projectOwnerId: payload?.projectOwnerId
   ? Number(payload.projectOwnerId)
   : undefined,
+
+  telecallerId: payload.telecallerId || undefined,
+telecallerName: payload.telecallerName || '',
+telecallerRole: payload.telecallerRole || '',
+
+telecallingAssistantId:
+  payload.telecallingAssistantId || undefined,
+telecallingAssistantName:
+  payload.telecallingAssistantName || '',
+telecallingAssistantRole:
+  payload.telecallingAssistantRole || '',
+
+leadManagerId: payload.leadManagerId || undefined,
+leadManagerName: payload.leadManagerName || '',
+leadManagerRole: payload.leadManagerRole || '',
+
+meetingManagerId:
+  payload.meetingManagerId || undefined,
+meetingManagerName:
+  payload.meetingManagerName || '',
+meetingManagerRole:
+  payload.meetingManagerRole || '',
 
   customerUserId: payload?.customerUserId
   ? Number(payload.customerUserId)
