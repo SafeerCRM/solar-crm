@@ -53,6 +53,10 @@ import { CustomerNotification } from '../customer-portal/customer-notification.e
 import { ProjectFranchisePayoutRequest } from './project-franchise-payout-request.entity';
 import { Dealer } from '../dealer/dealer.entity';
 import { ProjectPaymentReceipt } from './project-payment-receipt.entity';
+import { Lead } from '../leads/lead.entity';
+import { Meeting } from '../meeting/meeting.entity';
+import { CallLog } from '../telecalling/call-log.entity';
+import { TelecallingContact } from '../telecalling/telecalling-contact.entity';
 
 @Module({
   imports: [
@@ -65,7 +69,10 @@ ProjectContractorProof, ProjectCleaningAssignment, ProjectContractor, ProjectCon
 ProjectDealerOrderItem,
 ProjectDealerPayment,
 ProjectDealerComment, ProjectDealerNotification,
-ProjectDealerMonthlyRequirement, ProjectTradingMeeting, FollowUp, ProjectFranchisePayoutRequest, Dealer, ProjectPaymentReceipt,]),
+ProjectDealerMonthlyRequirement, ProjectTradingMeeting, FollowUp, ProjectFranchisePayoutRequest, Dealer, ProjectPaymentReceipt, Lead,
+Meeting,
+CallLog,
+TelecallingContact,]),
     CalculatorModule,
   ],
   controllers: [ProjectController],
