@@ -444,4 +444,38 @@ async getMyStaffProfile(user: any) {
 
   return staff;
 }
+
+async getMyAttendance(query: any, user: any) {
+  const staff = await this.getMyStaffProfile(user);
+
+  const page = Math.max(Number(query.page || 1), 1);
+  const limit = Math.min(Math.max(Number(query.limit || 20), 1), 100);
+
+  const where: any = {
+    staffId: staff.id,
+  };
+
+  if (query.date) {
+    where.attendanceDate = query.date;
+  }
+
+  const [data, total] = await this.attendanceRepo.findAndCount({
+    where,
+    order: {
+      attendanceDate: 'DESC',
+      createdAt: 'DESC',
+    },
+    skip: (page - 1) * limit,
+    take: limit,
+  });
+
+  return {
+    staff,
+    data,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
+}
 }

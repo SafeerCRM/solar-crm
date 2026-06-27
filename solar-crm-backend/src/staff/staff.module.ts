@@ -6,6 +6,7 @@ import { StaffAsset } from './staff-asset.entity';
 import { StaffService } from './staff.service';
 import { StaffController } from './staff.controller';
 import { StaffAttendance } from './staff-attendance.entity';
+import { StaffSelfController } from './staff-self.controller';
 
 @Module({
   imports: [
@@ -16,7 +17,7 @@ import { StaffAttendance } from './staff-attendance.entity';
       StaffAttendance,
     ]),
   ],
-  controllers: [StaffController],
+  controllers: [StaffController, StaffSelfController],
   providers: [StaffService],
 })
 export class StaffModule {}
