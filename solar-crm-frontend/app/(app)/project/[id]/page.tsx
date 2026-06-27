@@ -81,6 +81,21 @@ type Project = {
   projectOwnerName?: string;
 projectOwnerRole?: string;
 projectOwnerId?: number;
+telecallerId?: number;
+telecallerName?: string;
+telecallerRole?: string;
+
+telecallingAssistantId?: number;
+telecallingAssistantName?: string;
+telecallingAssistantRole?: string;
+
+leadManagerId?: number;
+leadManagerName?: string;
+leadManagerRole?: string;
+
+meetingManagerId?: number;
+meetingManagerName?: string;
+meetingManagerRole?: string;
   electricityKNumber?: string;
   customerGmail?: string;
   customerUserId?: number;
@@ -3808,6 +3823,39 @@ const canApproveAndReserveStock =
   currentUserRoles.includes('ACCOUNT_MANAGER') ||
   currentUserRoles.includes('STOCK_MANAGER');
 
+  const journeyRows = [
+  {
+    label: 'Telecaller',
+    name: (project as any)?.telecallerName,
+    role: (project as any)?.telecallerRole,
+  },
+  {
+    label: 'Telecalling Assistant',
+    name: (project as any)?.telecallingAssistantName,
+    role: (project as any)?.telecallingAssistantRole,
+  },
+  {
+    label: 'Lead Manager',
+    name: (project as any)?.leadManagerName,
+    role: (project as any)?.leadManagerRole,
+  },
+  {
+    label: 'Meeting Manager',
+    name: (project as any)?.meetingManagerName,
+    role: (project as any)?.meetingManagerRole,
+  },
+  {
+    label: 'Project Owner',
+    name: project?.projectOwnerName,
+    role: project?.projectOwnerRole,
+  },
+  {
+    label: 'Solar Franchise',
+    name: (project as any)?.solarFranchiseName,
+    role: 'SOLAR_FRANCHISE',
+  },
+];
+
   return (
     <div className="mx-auto max-w-7xl space-y-5">
       <div className="rounded-2xl bg-white p-5 shadow">
@@ -4770,6 +4818,39 @@ const canApproveAndReserveStock =
 
   </div>
 )}
+
+<div className="rounded-2xl bg-white p-5 shadow">
+  <h2 className="text-lg font-bold text-gray-800">
+    Project Journey
+  </h2>
+
+  <p className="mt-1 text-sm text-gray-500">
+    Role-wise customer journey for incentive, ownership and accountability.
+  </p>
+
+  <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+    {journeyRows.map((row) => (
+      <div
+        key={row.label}
+        className="rounded-xl border bg-gray-50 p-3"
+      >
+        <p className="text-xs font-bold uppercase tracking-wide text-gray-500">
+          {row.label}
+        </p>
+
+        <p className="mt-1 font-semibold text-gray-900">
+          {row.name || '-'}
+        </p>
+
+        {row.role && (
+          <p className="mt-1 text-xs text-gray-500">
+            {String(row.role).replaceAll('_', ' ')}
+          </p>
+        )}
+      </div>
+    ))}
+  </div>
+</div>
 
       <div className="flex flex-wrap gap-2">
   {(() => {
