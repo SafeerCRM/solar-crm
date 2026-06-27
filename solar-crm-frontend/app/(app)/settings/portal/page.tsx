@@ -117,6 +117,10 @@ useEffect(() => {
   loadPolicies();
 }, [showHiddenPolicies]);
 
+useEffect(() => {
+  loadPolicies();
+}, [policyForm.portalType]);
+
   const loadBankDetails = async () => {
     try {
       setLoading(true);
@@ -478,7 +482,7 @@ visibleToCustomer: item.visibleToCustomer === true,
   try {
     const res = await axios.get(`${API_BASE_URL}/dealer/portal-policies`, {
       params: {
-        portalType: 'CUSTOMER',
+        portalType: policyForm.portalType || 'CUSTOMER',
         showHidden: showHiddenPolicies,
       },
       headers: headers(),
@@ -1459,6 +1463,21 @@ const restorePolicy = async (item: any) => {
     </h3>
 
     <div className="mt-4 grid gap-3 md:grid-cols-2">
+
+        <select
+  value={policyForm.portalType}
+  onChange={(e) =>
+    setPolicyForm({
+      ...policyForm,
+      portalType: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+>
+  <option value="CUSTOMER">Customer Portal</option>
+  <option value="DEALER">Dealer Portal</option>
+</select>
+
       <input
         placeholder="Document Title"
         value={policyForm.title}
@@ -1567,7 +1586,11 @@ const restorePolicy = async (item: any) => {
             })
           }
         />
-        Visible to Customer Portal
+        {policyForm.portalType === 'DEALER'
+  ? 'Visible to Dealer Portal'
+  : policyForm.portalType === 'STAFF'
+    ? 'Visible to Staff Portal'
+    : 'Visible to Customer Portal'}
       </label>
 
       <label className="flex items-center gap-2 rounded-xl border p-3 text-sm font-semibold">

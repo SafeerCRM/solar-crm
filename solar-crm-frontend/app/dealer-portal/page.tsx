@@ -221,6 +221,7 @@ export default function DealerPortalPage() {
   <QuickAction href="/dealer-portal/bank-details" icon="🏦" title="Bank Details / QR" />
   <QuickAction href="/dealer-portal/staff" icon="👥" title="Staff Directory" />
   <QuickAction href="/dealer-portal/analytics" icon="📊" title="Analytics" />
+  <QuickAction href="/dealer-portal/policies" icon="📜" title="Documents & Policies" />
 </div>
           </div>
         </section>
