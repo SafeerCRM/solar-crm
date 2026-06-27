@@ -57,6 +57,7 @@ import { Lead } from '../leads/lead.entity';
 import { Meeting } from '../meeting/meeting.entity';
 import { CallLog } from '../telecalling/call-log.entity';
 import { TelecallingContact } from '../telecalling/telecalling-contact.entity';
+import { User } from '../users/user.entity';
 
 @Module({
   imports: [
@@ -72,7 +73,7 @@ ProjectDealerComment, ProjectDealerNotification,
 ProjectDealerMonthlyRequirement, ProjectTradingMeeting, FollowUp, ProjectFranchisePayoutRequest, Dealer, ProjectPaymentReceipt, Lead,
 Meeting,
 CallLog,
-TelecallingContact,]),
+TelecallingContact, User,]),
     CalculatorModule,
   ],
   controllers: [ProjectController],
