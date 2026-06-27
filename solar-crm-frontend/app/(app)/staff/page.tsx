@@ -23,9 +23,17 @@ type Staff = {
   isHidden?: boolean;
 };
 
+type CrmUser = {
+  id: number;
+  name?: string;
+  email?: string;
+  roles?: string[];
+};
+
 const emptyForm = {
   fullName: '',
   employeeCode: '',
+  linkedUserId: '',
   mobile: '',
   alternateMobile: '',
   email: '',
@@ -111,10 +119,22 @@ const [showDesignationOptions, setShowDesignationOptions] = useState(false);
     remarks: '',
   });
 
+  const [users, setUsers] = useState<CrmUser[]>([]);
+const [linkedUserSearch, setLinkedUserSearch] = useState('');
+const [showLinkedUserOptions, setShowLinkedUserOptions] = useState(false);
+
   const headers = () => {
     const token = localStorage.getItem('token');
     return token ? { Authorization: `Bearer ${token}` } : {};
   };
+
+  const fetchUsers = async () => {
+  const res = await axios.get(`${API_BASE_URL}/users`, {
+    headers: headers(),
+  });
+
+  setUsers(Array.isArray(res.data) ? res.data : []);
+};
 
   const fetchStaff = async () => {
     try {
@@ -144,6 +164,7 @@ const [showDesignationOptions, setShowDesignationOptions] = useState(false);
 
   useEffect(() => {
     fetchStaff();
+    fetchUsers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, showHidden]);
 
@@ -153,6 +174,8 @@ const [showDesignationOptions, setShowDesignationOptions] = useState(false);
     setPhotoFile(null);
     setDesignationSearch('');
 setShowDesignationOptions(false);
+setLinkedUserSearch('');
+setShowLinkedUserOptions(false);
   };
 
   const saveStaff = async () => {
@@ -213,6 +236,10 @@ setShowDesignationOptions(false);
       joiningDate: item.joiningDate || '',
       dateOfBirth: item.dateOfBirth || '',
     });
+    setLinkedUserSearch(
+  item.linkedUserId ? `Linked User ID: ${item.linkedUserId}` : '',
+);
+setShowLinkedUserOptions(false);
     setDesignationSearch('');
 setShowDesignationOptions(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -318,6 +345,12 @@ const filteredDesignationOptions = USER_ROLE_OPTIONS.filter((role) =>
   ),
 );
 
+const filteredUsers = users.filter((user) => {
+  const text = `${user.name || ''} ${user.email || ''} ${(user.roles || []).join(' ')}`.toLowerCase();
+
+  return text.includes(linkedUserSearch.toLowerCase());
+});
+
   return (
     <div className="mx-auto max-w-7xl space-y-5 px-3 pb-8">
       <div className="rounded-2xl bg-white p-5 shadow">
@@ -337,6 +370,61 @@ const filteredDesignationOptions = USER_ROLE_OPTIONS.filter((role) =>
 
         <div className="mt-4 grid gap-3 md:grid-cols-3">
           <input placeholder="Full Name" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} className="rounded-xl border p-3 md:col-span-2" />
+
+          <div className="relative md:col-span-3">
+  <input
+    placeholder="Search Linked CRM User by Name / Email / Role"
+    value={linkedUserSearch}
+    onChange={(e) => {
+      setLinkedUserSearch(e.target.value);
+      setShowLinkedUserOptions(true);
+    }}
+    onFocus={() => setShowLinkedUserOptions(true)}
+    className="w-full rounded-xl border p-3"
+  />
+
+  {form.linkedUserId && (
+    <p className="mt-1 text-xs font-semibold text-green-700">
+      Linked User ID: {form.linkedUserId}
+    </p>
+  )}
+
+  {showLinkedUserOptions && (
+    <div className="absolute z-40 mt-1 max-h-72 w-full overflow-y-auto rounded-xl border bg-white shadow">
+      {filteredUsers.length === 0 ? (
+        <div className="p-3 text-sm text-gray-500">
+          No matching user found
+        </div>
+      ) : (
+        filteredUsers.map((user) => (
+          <button
+            key={user.id}
+            type="button"
+            onClick={() => {
+              setForm({
+                ...form,
+                linkedUserId: user.id,
+              });
+              setLinkedUserSearch(
+                `${user.name || 'Unnamed'} (${(user.roles || []).join(', ')})`,
+              );
+              setShowLinkedUserOptions(false);
+            }}
+            className="block w-full border-b p-3 text-left text-sm hover:bg-blue-50"
+          >
+            <p className="font-semibold text-gray-800">
+              {user.name || 'Unnamed'}
+            </p>
+            <p className="text-xs text-gray-500">{user.email || '-'}</p>
+            <p className="text-xs text-gray-500">
+              {(user.roles || []).join(', ') || '-'}
+            </p>
+          </button>
+        ))
+      )}
+    </div>
+  )}
+</div>
           <input placeholder="Employee Code" value={form.employeeCode} onChange={(e) => setForm({ ...form, employeeCode: e.target.value })} className="rounded-xl border p-3" />
           <input placeholder="Mobile" value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value })} className="rounded-xl border p-3" />
           <input placeholder="Alternate Mobile" value={form.alternateMobile} onChange={(e) => setForm({ ...form, alternateMobile: e.target.value })} className="rounded-xl border p-3" />
