@@ -700,10 +700,9 @@ private readonly userRepository: Repository<User>,
 
   let leadId = data?.leadId ? Number(data.leadId) : null;
   let lead: any = null;
-  let meeting: any = null;
 
   if (data?.meetingId) {
-    meeting = await this.meetingRepository.findOne({
+    const meeting = await this.meetingRepository.findOne({
       where: { id: Number(data.meetingId) },
     });
 
@@ -726,33 +725,60 @@ private readonly userRepository: Repository<User>,
     lead = await this.leadRepository.findOne({
       where: { id: Number(leadId) },
     });
+  }
 
-    if (lead) {
-      if (lead.assignedTo) {
-        snapshot.leadManagerId = Number(lead.assignedTo);
-        snapshot.leadManagerRole = 'LEAD_MANAGER';
+  let contact: any = null;
 
-        const leadManager = await this.userRepository.findOne({
-          where: { id: Number(lead.assignedTo) },
-        });
+  if (lead?.phone) {
+    contact = await this.telecallingContactRepository.findOne({
+      where: { phone: lead.phone },
+      order: { updatedAt: 'DESC' },
+    });
+  }
 
-        snapshot.leadManagerName =
-          leadManager?.name ||
-          leadManager?.email ||
-          '';
-      } else if (lead.createdBy) {
-        snapshot.leadManagerId = Number(lead.createdBy);
-        snapshot.leadManagerName = lead.createdByName || '';
-        snapshot.leadManagerRole = 'LEAD_MANAGER';
-      }
-
-      if (lead.originTelecallerId) {
-        snapshot.telecallerId = Number(lead.originTelecallerId);
-        snapshot.telecallerName = lead.originTelecallerName || '';
-        snapshot.telecallerRole = 'TELECALLER';
-      }
+  if (contact) {
+    if (contact.assignedTo) {
+      snapshot.telecallerId = Number(contact.assignedTo);
+      snapshot.telecallerName = contact.assignedToName || '';
+      snapshot.telecallerRole = 'TELECALLER';
     }
 
+    if (contact.reviewAssignedTo) {
+      snapshot.telecallingAssistantId = Number(
+        contact.reviewAssignedTo,
+      );
+      snapshot.telecallingAssistantName =
+        contact.reviewAssignedToName || '';
+      snapshot.telecallingAssistantRole =
+        'TELECALLING_ASSISTANT';
+    }
+  }
+
+  if (lead) {
+    if (lead.assignedTo) {
+      snapshot.leadManagerId = Number(lead.assignedTo);
+      snapshot.leadManagerRole = 'LEAD_MANAGER';
+
+      const leadManager = await this.userRepository.findOne({
+        where: { id: Number(lead.assignedTo) },
+      });
+
+      snapshot.leadManagerName =
+        leadManager?.name || leadManager?.email || '';
+    } else if (lead.createdBy) {
+      snapshot.leadManagerId = Number(lead.createdBy);
+      snapshot.leadManagerName = lead.createdByName || '';
+      snapshot.leadManagerRole = 'LEAD_MANAGER';
+    }
+
+    if (!snapshot.telecallerId && lead.originTelecallerId) {
+      snapshot.telecallerId = Number(lead.originTelecallerId);
+      snapshot.telecallerName = lead.originTelecallerName || '';
+      snapshot.telecallerRole = 'TELECALLER';
+    }
+  }
+
+  if (leadId) {
     const latestCallLog = await this.callLogRepository.findOne({
       where: { leadId: Number(leadId) },
       order: { createdAt: 'DESC' },
@@ -764,7 +790,10 @@ private readonly userRepository: Repository<User>,
         snapshot.telecallerRole = 'TELECALLER';
       }
 
-      if (latestCallLog.reviewAssignedTo) {
+      if (
+        !snapshot.telecallingAssistantId &&
+        latestCallLog.reviewAssignedTo
+      ) {
         snapshot.telecallingAssistantId = Number(
           latestCallLog.reviewAssignedTo,
         );
@@ -774,57 +803,41 @@ private readonly userRepository: Repository<User>,
           'TELECALLING_ASSISTANT';
       }
 
-      if (latestCallLog.contactId) {
-        const contact = await this.telecallingContactRepository.findOne({
-          where: { id: Number(latestCallLog.contactId) },
-        });
+      if (
+        latestCallLog.contactId &&
+        (!snapshot.telecallerId ||
+          !snapshot.telecallingAssistantId)
+      ) {
+        const contactFromCall =
+          await this.telecallingContactRepository.findOne({
+            where: { id: Number(latestCallLog.contactId) },
+          });
 
-        if (contact) {
-          if (!snapshot.telecallerId && contact.assignedTo) {
-            snapshot.telecallerId = Number(contact.assignedTo);
-            snapshot.telecallerName = contact.assignedToName || '';
+        if (contactFromCall) {
+          if (
+            !snapshot.telecallerId &&
+            contactFromCall.assignedTo
+          ) {
+            snapshot.telecallerId = Number(
+              contactFromCall.assignedTo,
+            );
+            snapshot.telecallerName =
+              contactFromCall.assignedToName || '';
             snapshot.telecallerRole = 'TELECALLER';
           }
 
-          if (contact.reviewAssignedTo) {
+          if (
+            !snapshot.telecallingAssistantId &&
+            contactFromCall.reviewAssignedTo
+          ) {
             snapshot.telecallingAssistantId = Number(
-              contact.reviewAssignedTo,
+              contactFromCall.reviewAssignedTo,
             );
             snapshot.telecallingAssistantName =
-              contact.reviewAssignedToName || '';
+              contactFromCall.reviewAssignedToName || '';
             snapshot.telecallingAssistantRole =
               'TELECALLING_ASSISTANT';
           }
-        }
-      }
-    }
-
-    if (
-      lead?.phone &&
-      (!snapshot.telecallingAssistantId || !snapshot.telecallerId)
-    ) {
-      const contactByPhone =
-        await this.telecallingContactRepository.findOne({
-          where: { phone: lead.phone },
-          order: { updatedAt: 'DESC' },
-        });
-
-      if (contactByPhone) {
-        if (!snapshot.telecallerId && contactByPhone.assignedTo) {
-          snapshot.telecallerId = Number(contactByPhone.assignedTo);
-          snapshot.telecallerName =
-            contactByPhone.assignedToName || '';
-          snapshot.telecallerRole = 'TELECALLER';
-        }
-
-        if (contactByPhone.reviewAssignedTo) {
-          snapshot.telecallingAssistantId = Number(
-            contactByPhone.reviewAssignedTo,
-          );
-          snapshot.telecallingAssistantName =
-            contactByPhone.reviewAssignedToName || '';
-          snapshot.telecallingAssistantRole =
-            'TELECALLING_ASSISTANT';
         }
       }
     }
