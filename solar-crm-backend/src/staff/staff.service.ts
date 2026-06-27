@@ -11,6 +11,7 @@ import { StaffAsset } from './staff-asset.entity';
 import { StaffAttendance } from './staff-attendance.entity';
 import { StaffLeave } from './staff-leave.entity';
 import { EmployeePolicy } from './employee-policy.entity';
+import { HrPolicy, HrPolicyType } from './hr-policy.entity';
 
 @Injectable()
 export class StaffService {
@@ -32,6 +33,9 @@ private readonly leaveRepo: Repository<StaffLeave>,
 
 @InjectRepository(EmployeePolicy)
 private readonly employeePolicyRepo: Repository<EmployeePolicy>,
+
+@InjectRepository(HrPolicy)
+private readonly hrPolicyRepo: Repository<HrPolicy>,
   ) {}
 
   async findAll(query: any) {
@@ -862,5 +866,139 @@ async restoreEmployeePolicy(id: number, body: any, user: any) {
   item.restoreReason = body?.reason || '';
 
   return this.employeePolicyRepo.save(item);
+}
+
+async listHrSettings(query: any) {
+  const page = Math.max(Number(query.page || 1), 1);
+  const limit = Math.min(Math.max(Number(query.limit || 20), 1), 100);
+  const showHidden = query.showHidden === 'true';
+
+  const qb = this.hrPolicyRepo
+    .createQueryBuilder('policy')
+    .where('policy.isHidden = :showHidden', { showHidden });
+
+  if (query.policyType) {
+    qb.andWhere('policy.policyType = :policyType', {
+      policyType: query.policyType,
+    });
+  }
+
+  if (query.search) {
+    qb.andWhere(
+      '(policy.policyKey ILIKE :search OR policy.description ILIKE :search)',
+      { search: `%${query.search}%` },
+    );
+  }
+
+  const [data, total] = await qb
+    .orderBy('policy.createdAt', 'DESC')
+    .skip((page - 1) * limit)
+    .take(limit)
+    .getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
+}
+
+async getHrSettingByType(policyType: string) {
+  let policy = await this.hrPolicyRepo.findOne({
+    where: {
+      policyType: policyType as any,
+      policyKey: 'DEFAULT',
+      isHidden: false,
+    },
+  });
+
+  if (!policy) {
+    policy = this.hrPolicyRepo.create({
+      policyType: policyType as any,
+      policyKey: 'DEFAULT',
+      policyData: {},
+      description: '',
+      version: 1,
+      isActive: true,
+      isHidden: false,
+    });
+
+    policy = await this.hrPolicyRepo.save(policy);
+  }
+
+  return policy;
+}
+
+async saveHrSetting(policyType: string, body: any, user: any) {
+  let policy = await this.hrPolicyRepo.findOne({
+    where: {
+      policyType: policyType as any,
+      policyKey: body.policyKey || 'DEFAULT',
+      isHidden: false,
+    },
+  });
+
+  if (!policy) {
+    policy = this.hrPolicyRepo.create({
+      policyType: policyType as any,
+      policyKey: body.policyKey || 'DEFAULT',
+      policyData: body.policyData || {},
+      description: body.description || '',
+      version: 1,
+      changeRemarks: body.changeRemarks || '',
+      isActive: body.isActive !== false,
+      isHidden: false,
+      createdBy: user?.id || null,
+      updatedBy: user?.id || null,
+    });
+
+    return this.hrPolicyRepo.save(policy);
+  }
+
+  policy.policyData = body.policyData || policy.policyData || {};
+  policy.description = body.description ?? policy.description;
+  policy.changeRemarks = body.changeRemarks || '';
+  policy.isActive =
+    body.isActive === undefined ? policy.isActive : body.isActive;
+  policy.updatedBy = user?.id || null;
+  policy.version = Number(policy.version || 1) + 1;
+
+  return this.hrPolicyRepo.save(policy);
+}
+
+async hideHrSetting(id: number, body: any, user: any) {
+  const policy = await this.hrPolicyRepo.findOne({ where: { id } });
+
+  if (!policy) {
+    throw new NotFoundException('HR policy setting not found');
+  }
+
+  policy.isHidden = true;
+  policy.isActive = false;
+  policy.hiddenAt = new Date();
+  policy.hiddenBy = user?.id || null;
+  policy.hiddenByName = user?.name || '';
+  policy.hiddenReason = body?.reason || '';
+
+  return this.hrPolicyRepo.save(policy);
+}
+
+async restoreHrSetting(id: number, body: any, user: any) {
+  const policy = await this.hrPolicyRepo.findOne({ where: { id } });
+
+  if (!policy) {
+    throw new NotFoundException('HR policy setting not found');
+  }
+
+  policy.isHidden = false;
+  policy.isActive = true;
+  policy.restoredAt = new Date();
+  policy.restoredBy = user?.id || null;
+  policy.restoredByName = user?.name || '';
+  policy.restoreReason = body?.reason || '';
+
+  return this.hrPolicyRepo.save(policy);
 }
 }

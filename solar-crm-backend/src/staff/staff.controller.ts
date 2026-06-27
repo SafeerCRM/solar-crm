@@ -215,4 +215,41 @@ uploadEmployeePolicyFile(@UploadedFiles() files: any[]) {
   const file = files?.[0];
   return this.staffService.uploadEmployeePolicyFile(file);
 }
+
+@Get('hr-settings')
+listHrSettings(@Query() query: any) {
+  return this.staffService.listHrSettings(query);
+}
+
+@Get('hr-settings/:type')
+getHrSettingByType(@Param('type') type: string) {
+  return this.staffService.getHrSettingByType(type);
+}
+
+@Patch('hr-settings/:type')
+saveHrSetting(
+  @Param('type') type: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffService.saveHrSetting(type, body, user);
+}
+
+@Patch('hr-settings/:id/hide')
+hideHrSetting(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffService.hideHrSetting(Number(id), body, user);
+}
+
+@Patch('hr-settings/:id/restore')
+restoreHrSetting(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffService.restoreHrSetting(Number(id), body, user);
+}
 }
