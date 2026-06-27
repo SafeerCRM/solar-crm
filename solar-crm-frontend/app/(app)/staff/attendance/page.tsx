@@ -26,6 +26,10 @@ export default function StaffAttendancePage() {
   const [remarks, setRemarks] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const [staffSearch, setStaffSearch] = useState('');
+const [showStaffOptions, setShowStaffOptions] = useState(false);
+const [selectedStaffName, setSelectedStaffName] = useState('');
+
   const headers = () => {
     const token = localStorage.getItem('token');
     return token ? { Authorization: `Bearer ${token}` } : {};
@@ -122,6 +126,10 @@ export default function StaffAttendancePage() {
       setPhotoFile(null);
       setRemarks('');
       fetchAttendance();
+      setSelectedStaffId('');
+setSelectedStaffName('');
+setStaffSearch('');
+setShowStaffOptions(false);
     } catch (error: any) {
       console.error(error);
       alert(error?.response?.data?.message || error?.message || 'Attendance failed');
@@ -129,6 +137,12 @@ export default function StaffAttendancePage() {
       setLoading(false);
     }
   };
+
+  const filteredStaff = staff.filter((item) => {
+  const text = `${item.fullName || ''} ${item.employeeCode || ''} ${item.department || ''} ${item.branchName || ''}`.toLowerCase();
+
+  return text.includes(staffSearch.toLowerCase());
+});
 
   return (
     <div className="mx-auto max-w-7xl space-y-5 px-3 pb-8">
@@ -147,18 +161,56 @@ export default function StaffAttendancePage() {
         </h2>
 
         <div className="mt-4 grid gap-3 md:grid-cols-3">
-          <select
-            value={selectedStaffId}
-            onChange={(e) => setSelectedStaffId(e.target.value)}
-            className="rounded-xl border p-3"
+          <div className="relative">
+  <input
+    placeholder="Search Staff by Name / Code / Department / Branch"
+    value={staffSearch || selectedStaffName}
+    onChange={(e) => {
+      setStaffSearch(e.target.value);
+      setSelectedStaffName('');
+      setSelectedStaffId('');
+      setShowStaffOptions(true);
+    }}
+    onFocus={() => setShowStaffOptions(true)}
+    className="w-full rounded-xl border p-3"
+  />
+
+  {showStaffOptions && (
+    <div className="absolute z-30 mt-1 max-h-72 w-full overflow-y-auto rounded-xl border bg-white shadow">
+      {filteredStaff.length === 0 ? (
+        <div className="p-3 text-sm text-gray-500">
+          No matching staff found
+        </div>
+      ) : (
+        filteredStaff.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => {
+              setSelectedStaffId(String(item.id));
+              setSelectedStaffName(
+                `${item.fullName || 'Unnamed'} ${
+                  item.employeeCode ? `(${item.employeeCode})` : ''
+                }`,
+              );
+              setStaffSearch('');
+              setShowStaffOptions(false);
+            }}
+            className="block w-full border-b p-3 text-left text-sm hover:bg-blue-50"
           >
-            <option value="">Select Staff</option>
-            {staff.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.fullName} {item.employeeCode ? `(${item.employeeCode})` : ''}
-              </option>
-            ))}
-          </select>
+            <p className="font-semibold text-gray-800">
+              {item.fullName || 'Unnamed'}
+              {item.employeeCode ? ` (${item.employeeCode})` : ''}
+            </p>
+            <p className="text-xs text-gray-500">
+              {item.department || '-'} | {item.branchName || '-'}
+            </p>
+          </button>
+        ))
+      )}
+    </div>
+  )}
+</div>
 
           <input
             type="date"
