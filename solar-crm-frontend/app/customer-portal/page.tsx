@@ -217,6 +217,10 @@ const portalModeLabel =
       ? 'After-Sales / Support Customer'
       : 'Customer Portal';
 
+      const heroConfig = portalExperience?.hero || {};
+const portalHeroBadge = heroConfig?.badge || portalModeLabel;
+const portalHeroMessage = heroConfig?.message || '';
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-orange-50 via-yellow-50 to-emerald-50 pb-24">
       <div className="mx-auto max-w-7xl px-4 py-5">
@@ -237,8 +241,14 @@ const portalModeLabel =
               </p>
 
               <p className="mt-3 inline-flex rounded-full bg-white/20 px-4 py-2 text-xs font-black text-white backdrop-blur">
-  {portalModeLabel}
+  {portalHeroBadge}
 </p>
+
+{portalHeroMessage && (
+  <p className="mt-3 max-w-3xl text-sm font-semibold text-white/90">
+    {portalHeroMessage}
+  </p>
+)}
             </div>
 
             <div className="flex flex-wrap gap-2">
