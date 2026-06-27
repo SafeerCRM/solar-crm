@@ -15555,12 +15555,44 @@ async createDealer(body: any) {
     throw new BadRequestException('Dealer name is required');
   }
 
+  const phone = String(body?.phone || '').trim();
+  const email = String(body?.email || '').trim();
+  const gstNumber = String(body?.gstNumber || '').trim();
+
+  if (phone || email || gstNumber) {
+    const existingDealer = await this.projectVendorRepository
+      .createQueryBuilder('vendor')
+      .where('vendor.partyType = :partyType', {
+        partyType: 'DEALER',
+      })
+      .andWhere('vendor.isActive = true')
+      .andWhere(
+        `(
+          (:phone != '' AND vendor.phone = :phone)
+          OR (:email != '' AND vendor.email = :email)
+          OR (:gstNumber != '' AND vendor.gstNumber = :gstNumber)
+        )`,
+        {
+          phone,
+          email,
+          gstNumber,
+        },
+      )
+      .getOne();
+
+    if (existingDealer) {
+      throw new BadRequestException(
+        'Dealer already exists with same phone, email, or GST number',
+      );
+    }
+  }
+
   const dealer = this.projectVendorRepository.create({
     vendorName: String(body.vendorName || '').trim(),
     contactPerson: body?.contactPerson || '',
-    phone: body?.phone || '',
-    email: body?.email || '',
-    gstNumber: body?.gstNumber || '',
+    phone,
+email,
+gstNumber,
     address: body?.address || '',
     city: body?.city || '',
     state: body?.state || '',
