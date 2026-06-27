@@ -171,4 +171,48 @@ uploadLeaveProof(@UploadedFiles() files: any[]) {
   const file = files?.[0];
   return this.staffService.uploadLeaveProof(file);
 }
+
+@Get('employee-policies')
+listEmployeePolicies(@Query() query: any) {
+  return this.staffService.listEmployeePolicies(query);
+}
+
+@Post('employee-policy')
+createEmployeePolicy(@Body() body: any, @CurrentUser() user: any) {
+  return this.staffService.createEmployeePolicy(body, user);
+}
+
+@Patch('employee-policy/:id')
+updateEmployeePolicy(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffService.updateEmployeePolicy(Number(id), body, user);
+}
+
+@Patch('employee-policy/:id/hide')
+hideEmployeePolicy(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffService.hideEmployeePolicy(Number(id), body, user);
+}
+
+@Patch('employee-policy/:id/restore')
+restoreEmployeePolicy(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffService.restoreEmployeePolicy(Number(id), body, user);
+}
+
+@Post('employee-policy/file-upload')
+@UseInterceptors(FilesInterceptor('files', 1))
+uploadEmployeePolicyFile(@UploadedFiles() files: any[]) {
+  const file = files?.[0];
+  return this.staffService.uploadEmployeePolicyFile(file);
+}
 }

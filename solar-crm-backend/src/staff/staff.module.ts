@@ -8,6 +8,8 @@ import { StaffController } from './staff.controller';
 import { StaffAttendance } from './staff-attendance.entity';
 import { StaffSelfController } from './staff-self.controller';
 import { StaffLeave } from './staff-leave.entity';
+import { HrPolicy } from './hr-policy.entity';
+import { EmployeePolicy } from './employee-policy.entity';
 
 @Module({
   imports: [
@@ -17,6 +19,8 @@ import { StaffLeave } from './staff-leave.entity';
       StaffAsset,
       StaffAttendance,
       StaffLeave,
+      HrPolicy,
+      EmployeePolicy,
     ]),
   ],
   controllers: [StaffController, StaffSelfController],

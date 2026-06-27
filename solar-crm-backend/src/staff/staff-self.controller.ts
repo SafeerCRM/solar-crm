@@ -98,4 +98,9 @@ uploadLeaveProof(@UploadedFiles() files: any[]) {
   const file = files?.[0];
   return this.staffService.uploadLeaveProof(file);
 }
+
+@Get('employee-policies')
+listVisibleEmployeePolicies(@Query() query: any) {
+  return this.staffService.listVisibleEmployeePolicies(query);
+}
 }

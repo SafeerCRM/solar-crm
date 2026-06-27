@@ -10,6 +10,7 @@ import { StaffDocument } from './staff-document.entity';
 import { StaffAsset } from './staff-asset.entity';
 import { StaffAttendance } from './staff-attendance.entity';
 import { StaffLeave } from './staff-leave.entity';
+import { EmployeePolicy } from './employee-policy.entity';
 
 @Injectable()
 export class StaffService {
@@ -28,6 +29,9 @@ private readonly attendanceRepo: Repository<StaffAttendance>,
 
 @InjectRepository(StaffLeave)
 private readonly leaveRepo: Repository<StaffLeave>,
+
+@InjectRepository(EmployeePolicy)
+private readonly employeePolicyRepo: Repository<EmployeePolicy>,
   ) {}
 
   async findAll(query: any) {
@@ -705,5 +709,158 @@ async listMyLeaves(query: any, user: any) {
     limit,
     totalPages: Math.ceil(total / limit) || 1,
   };
+}
+
+async uploadEmployeePolicyFile(file: any) {
+  return this.uploadFileToSupabase(
+    file,
+    'employee-policies',
+    ['image/', 'application/pdf'],
+    20,
+  );
+}
+
+async createEmployeePolicy(body: any, user: any) {
+  if (!String(body.title || '').trim()) {
+    throw new BadRequestException('Policy title is required');
+  }
+
+  const item = this.employeePolicyRepo.create({
+    category: body.category || 'GENERAL',
+    title: String(body.title).trim(),
+    description: body.description || '',
+    fileUrl: body.fileUrl || '',
+    fileName: body.fileName || '',
+    visibleToEmployee: body.visibleToEmployee !== false,
+    isActive: body.isActive !== false,
+    isHidden: false,
+    createdBy: user?.id || null,
+    createdByName: user?.name || '',
+  });
+
+  return this.employeePolicyRepo.save(item);
+}
+
+async listEmployeePolicies(query: any) {
+  const page = Math.max(Number(query.page || 1), 1);
+  const limit = Math.min(Math.max(Number(query.limit || 20), 1), 100);
+  const showHidden = query.showHidden === 'true';
+
+  const qb = this.employeePolicyRepo
+    .createQueryBuilder('policy')
+    .where('policy.isHidden = :showHidden', { showHidden });
+
+  if (query.category) {
+    qb.andWhere('policy.category = :category', { category: query.category });
+  }
+
+  if (query.search) {
+    qb.andWhere(
+      '(policy.title ILIKE :search OR policy.description ILIKE :search)',
+      { search: `%${query.search}%` },
+    );
+  }
+
+  const [data, total] = await qb
+    .orderBy('policy.createdAt', 'DESC')
+    .skip((page - 1) * limit)
+    .take(limit)
+    .getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
+}
+
+async listVisibleEmployeePolicies(query: any) {
+  const page = Math.max(Number(query.page || 1), 1);
+  const limit = Math.min(Math.max(Number(query.limit || 20), 1), 100);
+
+  const qb = this.employeePolicyRepo
+    .createQueryBuilder('policy')
+    .where('policy.isHidden = false')
+    .andWhere('policy.isActive = true')
+    .andWhere('policy.visibleToEmployee = true');
+
+  if (query.category) {
+    qb.andWhere('policy.category = :category', { category: query.category });
+  }
+
+  const [data, total] = await qb
+    .orderBy('policy.createdAt', 'DESC')
+    .skip((page - 1) * limit)
+    .take(limit)
+    .getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
+}
+
+async updateEmployeePolicy(id: number, body: any, user: any) {
+  const item = await this.employeePolicyRepo.findOne({ where: { id } });
+
+  if (!item) {
+    throw new NotFoundException('Policy not found');
+  }
+
+  Object.assign(item, {
+    category: body.category || item.category,
+    title: body.title ?? item.title,
+    description: body.description ?? item.description,
+    fileUrl: body.fileUrl ?? item.fileUrl,
+    fileName: body.fileName ?? item.fileName,
+    visibleToEmployee:
+      body.visibleToEmployee === undefined
+        ? item.visibleToEmployee
+        : body.visibleToEmployee,
+    isActive: body.isActive === undefined ? item.isActive : body.isActive,
+    updatedBy: user?.id || null,
+    updatedByName: user?.name || '',
+  });
+
+  return this.employeePolicyRepo.save(item);
+}
+
+async hideEmployeePolicy(id: number, body: any, user: any) {
+  const item = await this.employeePolicyRepo.findOne({ where: { id } });
+
+  if (!item) {
+    throw new NotFoundException('Policy not found');
+  }
+
+  item.isHidden = true;
+  item.isActive = false;
+  item.hiddenAt = new Date();
+  item.hiddenBy = user?.id || null;
+  item.hiddenByName = user?.name || '';
+  item.hiddenReason = body?.reason || '';
+
+  return this.employeePolicyRepo.save(item);
+}
+
+async restoreEmployeePolicy(id: number, body: any, user: any) {
+  const item = await this.employeePolicyRepo.findOne({ where: { id } });
+
+  if (!item) {
+    throw new NotFoundException('Policy not found');
+  }
+
+  item.isHidden = false;
+  item.isActive = true;
+  item.restoredAt = new Date();
+  item.restoredBy = user?.id || null;
+  item.restoredByName = user?.name || '';
+  item.restoreReason = body?.reason || '';
+
+  return this.employeePolicyRepo.save(item);
 }
 }
