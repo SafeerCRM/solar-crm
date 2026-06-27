@@ -35,6 +35,7 @@ const [expenseLoading, setExpenseLoading] =
   useState(false);
 
   const [expenses, setExpenses] = useState<any[]>([]);
+  const [selectedExpense, setSelectedExpense] = useState<any | null>(null);
 
   const [expenseSummary, setExpenseSummary] =
   useState({
@@ -371,13 +372,23 @@ const approveExpense = async (
 const rejectExpense = async (
   expenseId: number,
 ) => {
+  const approvalNote = window.prompt(
+    'Enter rejection reason',
+  );
+
+  if (!approvalNote?.trim()) {
+    return;
+  }
+
   try {
     const token =
       localStorage.getItem('token');
 
     await axios.post(
       `${API_BASE_URL}/project/account-expenses/${expenseId}/reject`,
-      {},
+      {
+        approvalNote,
+      },
       {
         headers: token
           ? {
@@ -389,6 +400,8 @@ const rejectExpense = async (
 
     await loadExpenses();
     await loadExpenseSummary();
+
+    setSelectedExpense(null);
 
     alert('Expense rejected');
   } catch (error: any) {
@@ -891,6 +904,15 @@ const estimatedPendingPosition =
       item.approvalStatus ===
         'PENDING' && (
         <>
+
+        <button
+  type="button"
+  onClick={() => setSelectedExpense(item)}
+  className="rounded bg-indigo-600 px-2 py-1 text-xs text-white"
+>
+  View
+</button>
+
           <button
             type="button"
             onClick={() =>
@@ -1107,6 +1129,188 @@ const estimatedPendingPosition =
   </div>
 </div>
       </div>
+
+      {selectedExpense && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-5 shadow-xl">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-bold text-gray-900">
+            Expense Details
+          </h2>
+
+          <p className="mt-1 text-sm text-gray-500">
+            Review purpose, proof and approval status before taking action.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setSelectedExpense(null)}
+          className="rounded bg-gray-200 px-3 py-1 text-sm font-semibold"
+        >
+          Close
+        </button>
+      </div>
+
+      <div className="mt-5 grid gap-3 md:grid-cols-3">
+        <div className="rounded-xl bg-gray-50 p-3">
+          <p className="text-xs text-gray-500">Type</p>
+          <p className="mt-1 font-bold">
+            {selectedExpense.expenseType || '-'}
+          </p>
+        </div>
+
+        <div className="rounded-xl bg-gray-50 p-3">
+          <p className="text-xs text-gray-500">Amount</p>
+          <p className="mt-1 font-bold text-blue-700">
+            ₹{Number(selectedExpense.amount || 0).toLocaleString('en-IN')}
+          </p>
+        </div>
+
+        <div className="rounded-xl bg-gray-50 p-3">
+          <p className="text-xs text-gray-500">Status</p>
+          <p className="mt-1 font-bold">
+            {selectedExpense.approvalStatus || '-'}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <div className="rounded-xl border p-3">
+          <p className="text-xs font-semibold text-gray-500">
+            Purpose
+          </p>
+          <p className="mt-1 whitespace-pre-wrap text-sm text-gray-800">
+            {selectedExpense.purpose || '-'}
+          </p>
+        </div>
+
+        <div className="rounded-xl border p-3">
+          <p className="text-xs font-semibold text-gray-500">
+            Remarks
+          </p>
+          <p className="mt-1 whitespace-pre-wrap text-sm text-gray-800">
+            {selectedExpense.remarks || '-'}
+          </p>
+        </div>
+
+        <div className="rounded-xl border p-3">
+          <p className="text-xs font-semibold text-gray-500">
+            Submitted By
+          </p>
+          <p className="mt-1 text-sm font-semibold">
+            {selectedExpense.createdByName || '-'}
+          </p>
+        </div>
+
+        <div className="rounded-xl border p-3">
+          <p className="text-xs font-semibold text-gray-500">
+            Submitted Date
+          </p>
+          <p className="mt-1 text-sm font-semibold">
+            {selectedExpense.createdAt
+              ? new Date(selectedExpense.createdAt).toLocaleString()
+              : '-'}
+          </p>
+        </div>
+
+        <div className="rounded-xl border p-3">
+          <p className="text-xs font-semibold text-gray-500">
+            Branch
+          </p>
+          <p className="mt-1 text-sm font-semibold">
+            {selectedExpense.branchName || '-'}
+          </p>
+        </div>
+
+        <div className="rounded-xl border p-3">
+          <p className="text-xs font-semibold text-gray-500">
+            Project
+          </p>
+          <p className="mt-1 text-sm font-semibold">
+            {selectedExpense.projectId || '-'}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4 rounded-xl border p-3">
+        <p className="text-sm font-bold text-gray-800">
+          Proof
+        </p>
+
+        {!selectedExpense.proofUrl ? (
+          <p className="mt-2 text-sm text-gray-500">
+            No proof uploaded.
+          </p>
+        ) : String(selectedExpense.proofUrl).toLowerCase().includes('.pdf') ? (
+          <a
+            href={selectedExpense.proofUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-2 inline-block rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+          >
+            Open PDF Proof
+          </a>
+        ) : (
+          <a
+            href={selectedExpense.proofUrl}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <img
+              src={selectedExpense.proofUrl}
+              alt="Expense proof"
+              className="mt-3 max-h-96 w-full rounded-xl border object-contain"
+            />
+          </a>
+        )}
+      </div>
+
+      {selectedExpense.approvalNote && (
+        <div className="mt-4 rounded-xl bg-yellow-50 p-3">
+          <p className="text-xs font-semibold text-yellow-700">
+            Approval Note
+          </p>
+          <p className="mt-1 text-sm text-yellow-900">
+            {selectedExpense.approvalNote}
+          </p>
+        </div>
+      )}
+
+      <div className="mt-5 flex flex-wrap justify-end gap-2">
+        {canApproveExpense &&
+          selectedExpense.approvalStatus === 'PENDING' && (
+            <>
+              <button
+                type="button"
+                onClick={() => approveExpense(selectedExpense.id)}
+                className="rounded bg-green-600 px-4 py-2 text-sm font-semibold text-white"
+              >
+                Approve
+              </button>
+
+              <button
+                type="button"
+                onClick={() => rejectExpense(selectedExpense.id)}
+                className="rounded bg-red-600 px-4 py-2 text-sm font-semibold text-white"
+              >
+                Reject
+              </button>
+            </>
+          )}
+
+        <button
+          type="button"
+          onClick={() => setSelectedExpense(null)}
+          className="rounded bg-gray-700 px-4 py-2 text-sm font-semibold text-white"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 }
