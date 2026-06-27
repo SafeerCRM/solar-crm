@@ -186,7 +186,7 @@ import {
   ProjectFranchisePayoutRequest,
   FranchisePayoutRequestStatus,
 } from './project-franchise-payout-request.entity';
-import { Dealer } from '../dealer/dealer.entity';
+import { Dealer, DealerStatus } from '../dealer/dealer.entity';
 import { ProjectPaymentReceipt } from './project-payment-receipt.entity';
 
 @Injectable()
@@ -15588,38 +15588,50 @@ private async syncSingleDealerToPortal(dealer: ProjectVendor) {
 
   let portalDealer: Dealer | null = null;
 
+  const qb = this.dealerRepository
+    .createQueryBuilder('dealer')
+    .where('dealer.isHidden = false');
+
+  const conditions: string[] = [];
+  const params: any = {};
+
   if (phone) {
-    portalDealer = await this.dealerRepository.findOne({
-      where: { phone } as any,
-    });
+    conditions.push('dealer.phone = :phone');
+    params.phone = phone;
   }
 
-  if (!portalDealer && email) {
-    portalDealer = await this.dealerRepository.findOne({
-      where: { email } as any,
-    });
+  if (email) {
+    conditions.push('dealer.email = :email');
+    params.email = email;
   }
 
-  if (!portalDealer && gstNumber) {
-    portalDealer = await this.dealerRepository.findOne({
-      where: { gstNumber } as any,
-    });
+  if (gstNumber) {
+    conditions.push('dealer.gstNumber = :gstNumber');
+    params.gstNumber = gstNumber;
+  }
+
+  if (conditions.length) {
+    portalDealer = await qb
+      .andWhere(`(${conditions.join(' OR ')})`, params)
+      .orderBy('dealer.id', 'DESC')
+      .getOne();
   }
 
   if (portalDealer) {
-    portalDealer.dealerName =
-      portalDealer.dealerName || dealer.vendorName;
-    portalDealer.firmName =
-      portalDealer.firmName || dealer.vendorName;
-    portalDealer.phone = portalDealer.phone || phone;
-    portalDealer.email = portalDealer.email || email;
+    portalDealer.dealerName = dealer.vendorName;
+    portalDealer.firmName = dealer.vendorName;
+    portalDealer.phone = phone || portalDealer.phone;
+    portalDealer.email = email || portalDealer.email;
     portalDealer.gstNumber =
-      portalDealer.gstNumber || gstNumber;
+      gstNumber || portalDealer.gstNumber;
     portalDealer.branchName =
-      portalDealer.branchName || dealer.city || '';
-    portalDealer.city = portalDealer.city || dealer.city || '';
+      dealer.city || portalDealer.branchName || '';
+    portalDealer.city =
+      dealer.city || portalDealer.city || '';
     portalDealer.address =
-      portalDealer.address || dealer.address || '';
+      dealer.address || portalDealer.address || '';
+    portalDealer.status = DealerStatus.ACTIVE;
+    portalDealer.isHidden = false;
 
     await this.dealerRepository.save(portalDealer);
     return portalDealer;

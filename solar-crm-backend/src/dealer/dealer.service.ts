@@ -260,13 +260,19 @@ async listPortalPoliciesForCustomer() {
       throw new UnauthorizedException('Username and password are required');
     }
 
-    const dealer = await this.dealerRepository.findOne({
-      where: [
-        { email: loginUsername, isHidden: false },
-        { phone: loginUsername, isHidden: false },
-        { gstNumber: loginUsername, isHidden: false },
-      ] as any,
-    });
+    const dealer = await this.dealerRepository
+  .createQueryBuilder('dealer')
+  .where('dealer.isHidden = false')
+  .andWhere(
+    `(
+      dealer.email = :loginUsername
+      OR dealer.phone = :loginUsername
+      OR dealer.gstNumber = :loginUsername
+    )`,
+    { loginUsername },
+  )
+  .orderBy('dealer.id', 'DESC')
+  .getOne();
 
     if (!dealer) {
       throw new UnauthorizedException('Dealer portal access not found');
