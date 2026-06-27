@@ -264,6 +264,12 @@ const navItems = [
 },
 
 {
+  name: 'Leave Management',
+  href: '/staff/leaves',
+  roles: ['OWNER', 'HR_MANAGER'],
+},
+
+{
   name: 'My Attendance',
   href: '/staff/my-attendance',
   roles: [
