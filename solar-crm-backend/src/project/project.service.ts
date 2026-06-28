@@ -471,10 +471,7 @@ const loanRequiredGroups = [
   },
 ];
 
-  const requiredGroups =
-    project.projectType === ProjectType.LOAN
-      ? loanRequiredGroups
-      : cashRequiredGroups;
+  const requiredGroups = loanRequiredGroups;
 
   const allRequiredTypes = requiredGroups.flatMap(
     (group) => group.types,

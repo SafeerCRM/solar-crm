@@ -26,7 +26,7 @@ export class CustomerPortalController {
     return this.service.getCustomerDashboard(customerId);
   }
 
-  @Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'CUSTOMER')
+  @Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'CUSTOMER', 'MAINTENANCE_MANAGER',)
   @Post('complaints')
   createComplaint(@Body() body: any, @CurrentUser() user: any) {
     return this.service.createComplaint(body, user);
@@ -39,13 +39,14 @@ export class CustomerPortalController {
     'PROJECT_EXECUTIVE',
     'MEETING_MANAGER',
     'MARKETING_HEAD',
+    'MAINTENANCE_MANAGER',
   )
   @Get('complaints')
   listComplaints(@Query() query: any) {
     return this.service.listComplaints(query);
   }
 
-  @Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE')
+  @Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE', 'MAINTENANCE_MANAGER',)
   @Patch('complaints/:id')
   updateComplaint(
     @Param('id', ParseIntPipe) id: number,
