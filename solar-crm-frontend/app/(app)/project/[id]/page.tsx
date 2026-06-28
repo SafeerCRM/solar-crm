@@ -407,6 +407,24 @@ const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   PAN_CARD: 'PAN Card',
   ELECTRICITY_BILL: 'Electricity Bill',
   VENDOR_AGREEMENT: 'Vendor Agreement',
+  APPLICATION: 'Application',
+E_TOKAN: 'E-Tokan',
+FEASIBILITY: 'Feasibility',
+NET_METERING: 'Net Metering',
+DIGITAL_LATTER: 'Digital Latter',
+RTS_VENDOR_FEASIBILITY_REPORT: 'RTS Vendor Feasibility Report',
+STATE_SUBSIDY: 'State Subsidy',
+
+TESTING_REPORT: 'Testing Report',
+FILE_ACKNOWLEDGEMENT: 'File Acknowledgement',
+DEMAND_ESTIMATE_NOTE: 'Demand / Estimated Note',
+
+WCR: 'WCR',
+DCR: 'DCR',
+VENDOR_AGREEMENT_STAMP: 'Vendor Agreement (Stamp)',
+PANEL_WARRANTY_CARD_DOCUMENT: 'Panel Warranty Card',
+INVERTER_WARRANTY_CARD_DOCUMENT: 'Inverter Warranty Card',
+FINAL_INVOICE: 'Final Invoice',
 };
 
 const getDocumentTypeLabel = (documentType?: string) => {
@@ -416,6 +434,82 @@ const getDocumentTypeLabel = (documentType?: string) => {
     DOCUMENT_TYPE_LABELS[documentType] ||
     documentType.replaceAll('_', ' ')
   );
+};
+
+const DOCUMENT_TYPES_BY_DEPARTMENT: Record<
+  string,
+  { value: string; label: string }[]
+> = {
+  PROJECT_CREATION: [
+    { value: 'VENDOR_AGREEMENT', label: 'Vendor Agreement' },
+    { value: 'AADHAAR_CARD', label: 'Aadhaar Card' },
+    { value: 'ELECTRICITY_BILL', label: 'Electricity Bill' },
+    { value: 'PAN_CARD', label: 'PAN Card' },
+    { value: 'BANK_DOCUMENT', label: 'Bank Document' },
+    { value: 'CUSTOMER_PHOTO', label: 'Customer Photo' },
+    { value: 'SITE_PHOTO', label: 'Site Photo' },
+    { value: 'LOAN_DOCUMENT', label: 'Proposal / Quotation' },
+    { value: 'PROPERTY_DOCUMENT', label: 'Property Document' },
+  ],
+
+  LOAN: [
+    { value: 'APPLICATION', label: 'Application' },
+    { value: 'E_TOKAN', label: 'E-Tokan' },
+    { value: 'FEASIBILITY', label: 'Feasibility' },
+    { value: 'NET_METERING', label: 'Net Metering' },
+    { value: 'DIGITAL_LATTER', label: 'Digital Letter' },
+    {
+      value: 'RTS_VENDOR_FEASIBILITY_REPORT',
+      label: 'RTS Vendor Feasibility Report',
+    },
+    { value: 'STATE_SUBSIDY', label: 'State Subsidy' },
+  ],
+
+  ELECTRICITY: [
+    { value: 'TESTING_REPORT', label: 'Testing Report' },
+    {
+      value: 'FILE_ACKNOWLEDGEMENT',
+      label: 'File Acknowledgement',
+    },
+    {
+      value: 'DEMAND_ESTIMATE_NOTE',
+      label: 'Demand / Estimated Note',
+    },
+  ],
+
+  SUBSIDY: [
+    { value: 'WCR', label: 'WCR' },
+    { value: 'DCR', label: 'DCR' },
+    {
+      value: 'VENDOR_AGREEMENT_STAMP',
+      label: 'Vendor Agreement (Stamp)',
+    },
+    {
+      value: 'PANEL_WARRANTY_CARD_DOCUMENT',
+      label: 'Panel Warranty Card',
+    },
+    {
+      value: 'INVERTER_WARRANTY_CARD_DOCUMENT',
+      label: 'Inverter Warranty Card',
+    },
+    { value: 'FINAL_INVOICE', label: 'Final Invoice' },
+  ],
+
+  PROJECT_MANAGEMENT: [
+    { value: 'OTHER', label: 'Other' },
+  ],
+
+  PAYMENT_COLLECTION: [
+    { value: 'PAYMENT_RECEIPT', label: 'Payment Receipt' },
+  ],
+
+  CUSTOMER: [
+    { value: 'OTHER', label: 'Other' },
+  ],
+
+  OTHER: [
+    { value: 'OTHER', label: 'Other' },
+  ],
 };
 
 const CONTRACTOR_WORK_SCOPE_OPTIONS = [
@@ -8348,42 +8442,61 @@ const canApproveAndReserveStock =
 
   <div className="mt-4 grid gap-3 md:grid-cols-2">
     <select
-      value={department}
-      onChange={(e) =>
-        setDepartment(e.target.value)
-      }
-      className="rounded-xl border p-3"
+  value={department}
+  onChange={(e) => {
+    const nextDepartment = e.target.value;
+
+    setDepartment(nextDepartment);
+
+    const firstDocument =
+      DOCUMENT_TYPES_BY_DEPARTMENT[nextDepartment]?.[0];
+
+    setDocumentType(firstDocument?.value || 'OTHER');
+  }}
+  className="rounded-xl border p-3"
+>
+  <option value="PROJECT_CREATION">
+    Project Creation
+  </option>
+
+  <option value="LOAN">
+    Loan Department
+  </option>
+
+  <option value="PROJECT_MANAGEMENT">
+    Project Management
+  </option>
+
+  <option value="SUBSIDY">
+    Subsidy Department
+  </option>
+
+  <option value="ELECTRICITY">
+    Electricity Department
+  </option>
+</select>
+
+    <select
+  value={documentType}
+  onChange={(e) =>
+    setDocumentType(e.target.value)
+  }
+  className="rounded-xl border p-3"
+>
+  {(DOCUMENT_TYPES_BY_DEPARTMENT[department] || [
+    {
+      value: 'OTHER',
+      label: 'Other',
+    },
+  ]).map((doc) => (
+    <option
+      key={doc.value}
+      value={doc.value}
     >
-      <option value="PROJECT_CREATION">
-        Project Creation
-      </option>
-
-      <option value="LOAN_DEPARTMENT">
-        Loan Department
-      </option>
-
-      <option value="PROJECT_MANAGEMENT">
-        Project Management
-      </option>
-
-      <option value="SUBSIDY_DEPARTMENT">
-        Subsidy Department
-      </option>
-
-      <option value="ELECTRICITY_DEPARTMENT">
-        Electricity Department
-      </option>
-    </select>
-
-    <input
-      type="text"
-      placeholder="Document Type"
-      value={documentType}
-      onChange={(e) =>
-        setDocumentType(e.target.value)
-      }
-      className="rounded-xl border p-3"
-    />
+      {doc.label}
+    </option>
+  ))}
+</select>
   </div>
 
   <textarea

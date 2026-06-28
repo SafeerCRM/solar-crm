@@ -457,15 +457,7 @@ const uploadedDocumentTypes = pendingDocuments.map(
   (doc) => doc.documentType,
 );
 
-const cashRequiredDocuments = [
-  'VENDOR_AGREEMENT',
-  'AADHAAR',
-  'ELECTRICITY_BILL',
-  'PAN_CARD',
-  'BANK_DOCUMENT',
-];
-
-const loanRequiredDocuments = [
+const requiredDocuments = [
   'VENDOR_AGREEMENT',
   'AADHAAR',
   'ELECTRICITY_BILL',
@@ -476,11 +468,6 @@ const loanRequiredDocuments = [
   'LOAN_DOCUMENT',
   'PROPERTY_DOCUMENT',
 ];
-
-const requiredDocuments =
-  form.projectType === 'LOAN'
-    ? loanRequiredDocuments
-    : cashRequiredDocuments;
 
 const missingDocuments = requiredDocuments.filter(
   (doc) => !uploadedDocumentTypes.includes(doc),
