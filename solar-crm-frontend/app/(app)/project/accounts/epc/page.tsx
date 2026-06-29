@@ -737,7 +737,7 @@ const estimatedPendingPosition =
   </div>
 
   <div className="rounded-2xl bg-white p-5 shadow">
-    <p className="text-sm text-gray-500">Net Cash Position</p>
+    <p className="text-sm text-gray-500">Available Cash</p>
     <p className="mt-2 text-2xl font-bold text-blue-700">
       ₹{Number(
         Number(summary.totalReceived || 0) -
@@ -794,7 +794,7 @@ const estimatedPendingPosition =
       </h2>
 
       <p className="mt-1 text-sm text-gray-500">
-        Project Fund, Labour, Transportation, Salary, Incentive and other expenses.
+        Record market purchases, office expenses, labour, contractor, salary, transport and other outgoing payments.
       </p>
     </div>
 
