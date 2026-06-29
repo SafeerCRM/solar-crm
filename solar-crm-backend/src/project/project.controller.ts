@@ -60,6 +60,8 @@ findAll(
   @Query('owner') owner: string = '',
   @Query('fromDate') fromDate?: string,
 @Query('toDate') toDate?: string,
+@Query('legacyFilter') legacyFilter?: string,
+@Query('legacyYear') legacyYear?: string,
 @CurrentUser() user?: any,
 ) {
   return this.projectService.findAll(
@@ -73,6 +75,8 @@ findAll(
     owner: owner || '',
     fromDate: fromDate || '',
 toDate: toDate || '',
+legacyFilter: legacyFilter || '',
+legacyYear: legacyYear || '',
   },
   user,
 );

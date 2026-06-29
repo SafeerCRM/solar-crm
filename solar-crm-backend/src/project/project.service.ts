@@ -1116,6 +1116,8 @@ const project = this.projectRepository.create(projectData);
     owner?: string;
     fromDate?: string;
 toDate?: string;
+legacyFilter?: string;
+legacyYear?: string;
   },
   user?: any,
 ) {
@@ -1232,6 +1234,25 @@ if (roles.includes('SOLAR_FRANCHISE')) {
       owner: filters.owner,
     },
   );
+}
+
+if (filters?.legacyFilter === 'CRM') {
+  query.andWhere(
+    '(project.isLegacyProject = false OR project.isLegacyProject IS NULL)',
+  );
+}
+
+if (filters?.legacyFilter === 'LEGACY') {
+  query.andWhere('project.isLegacyProject = true');
+}
+
+if (
+  filters?.legacyYear &&
+  filters.legacyFilter === 'LEGACY'
+) {
+  query.andWhere('project.legacyYear = :legacyYear', {
+    legacyYear: Number(filters.legacyYear),
+  });
 }
 
 if (filters?.fromDate) {
