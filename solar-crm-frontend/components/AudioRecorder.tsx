@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
+import { Filesystem } from '@capacitor/filesystem';
 import { CapacitorAudioRecorder } from '@capgo/capacitor-audio-recorder';
 
 type Props = {
@@ -17,13 +18,28 @@ export default function AudioRecorder({ onRecordingReady }: Props) {
   const [audioUrl, setAudioUrl] = useState('');
   const [error, setError] = useState('');
 
-  const createFileFromNativeUri = async (uri: string) => {
-    const response = await fetch(uri);
-    const blob = await response.blob();
+  const base64ToFile = (base64: string, fileName: string, mimeType: string) => {
+    const byteCharacters = atob(base64);
+    const byteNumbers = Array.from(byteCharacters, (char) =>
+      char.charCodeAt(0),
+    );
+    const byteArray = new Uint8Array(byteNumbers);
+    return new File([byteArray], fileName, { type: mimeType });
+  };
 
-    return new File([blob], `customer-audio-${Date.now()}.m4a`, {
-      type: blob.type || 'audio/mp4',
-    });
+  const createFileFromNativeUri = async (uri: string) => {
+    const fileData = await Filesystem.readFile({ path: uri });
+
+    const base64Data =
+      typeof fileData.data === 'string'
+        ? fileData.data
+        : await fileData.data.text();
+
+    return base64ToFile(
+      base64Data,
+      `customer-audio-${Date.now()}.m4a`,
+      'audio/mp4',
+    );
   };
 
   const startNativeRecording = async () => {
@@ -195,14 +211,10 @@ export default function AudioRecorder({ onRecordingReady }: Props) {
         </p>
       )}
 
-      {audioUrl && (
-        <audio controls src={audioUrl} className="mt-3 w-full" />
-      )}
+      {audioUrl && <audio controls src={audioUrl} className="mt-3 w-full" />}
 
       {error && (
-        <p className="mt-3 text-sm font-semibold text-red-600">
-          {error}
-        </p>
+        <p className="mt-3 text-sm font-semibold text-red-600">{error}</p>
       )}
     </div>
   );
