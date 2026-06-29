@@ -10841,21 +10841,18 @@ async createManualPurchaseOrder(
     poItems as ProjectPurchaseOrderItem[],
   );
 
-  await this.projectPartyLedgerRepository.save(
-    this.projectPartyLedgerRepository.create({
-      partyId: body?.vendorId ? Number(body.vendorId) : undefined,
-      partyName: body.vendorName,
-      partyType: 'VENDOR',
-      projectId: projectId || undefined,
-      entryType: ProjectLedgerEntryType.CREDIT,
-      sourceType: ProjectLedgerSourceType.PURCHASE_ORDER,
-      sourceId: savedPo.id,
-      amount: totalAmount,
-      remarks: `Manual PO ${savedPo.poNumber}`,
-      createdBy: currentUser?.id || currentUser?.userId || null,
-      createdByName: currentUser?.name || '',
-    } as Partial<ProjectPartyLedger>),
-  );
+  await this.postLedgerEntryOnce({
+  partyId: body?.vendorId ? Number(body.vendorId) : null,
+  partyName: body.vendorName,
+  partyType: 'VENDOR',
+  projectId: projectId || null,
+  entryType: ProjectLedgerEntryType.CREDIT,
+  sourceType: ProjectLedgerSourceType.PURCHASE_ORDER,
+  sourceId: savedPo.id,
+  amount: totalAmount,
+  remarks: `Manual PO ${savedPo.poNumber}`,
+  user: currentUser,
+});
 
   return {
     message: 'Manual purchase order created successfully',
