@@ -611,6 +611,8 @@ getProformaInvoices(
   @Query('vendorId') vendorId?: string,
   @Query('vendorName') vendorName?: string,
   @Query('material') material?: string,
+  @Query('fromDate') fromDate?: string,
+  @Query('toDate') toDate?: string,
 ) {
   return this.projectService.getProformaInvoices({
     page: Number(page || 1),
@@ -620,6 +622,8 @@ getProformaInvoices(
     vendorId: vendorId || '',
     vendorName: vendorName || '',
     material: material || '',
+    fromDate: fromDate || '',
+    toDate: toDate || '',
   });
 }
 
@@ -708,6 +712,8 @@ getFinalInvoices(
   @Query('vendorId') vendorId?: string,
   @Query('vendorName') vendorName?: string,
   @Query('material') material?: string,
+  @Query('fromDate') fromDate?: string,
+  @Query('toDate') toDate?: string,
 ) {
   return this.projectService.getFinalInvoices({
     page: Number(page || 1),
@@ -717,6 +723,8 @@ getFinalInvoices(
     vendorId: vendorId || '',
     vendorName: vendorName || '',
     material: material || '',
+    fromDate: fromDate || '',
+    toDate: toDate || '',
   });
 }
 
@@ -1446,6 +1454,8 @@ getGeneratedPurchaseOrders(
   @Query('vendorId') vendorId?: string,
   @Query('vendorName') vendorName?: string,
   @Query('material') material?: string,
+  @Query('fromDate') fromDate?: string,
+  @Query('toDate') toDate?: string,
 ) {
   return this.projectService.getGeneratedPurchaseOrders({
     page: Number(page || 1),
@@ -1455,6 +1465,8 @@ getGeneratedPurchaseOrders(
     vendorId: vendorId || '',
     vendorName: vendorName || '',
     material: material || '',
+    fromDate: fromDate || '',
+    toDate: toDate || '',
   });
 }
 
