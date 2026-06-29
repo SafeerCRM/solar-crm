@@ -5456,67 +5456,91 @@ async createAccountExpense(
   currentUser: any,
 ) {
   const amount = Number(body?.amount || 0);
+  const taxableAmount = Number(body?.taxableAmount || 0);
+  const gstAmount = Number(body?.gstAmount || 0);
+  const totalAmount =
+    Number(body?.totalAmount || 0) || amount + gstAmount;
 
   if (!amount || amount <= 0) {
-    throw new BadRequestException(
-      'Valid amount is required',
-    );
+    throw new BadRequestException('Valid amount is required');
   }
 
-  const purpose = String(body?.purpose || '').trim();
+  const purpose = String(
+    body?.purpose || body?.expenseHead || body?.remarks || '',
+  ).trim();
 
-if (!purpose) {
-  throw new BadRequestException('Purpose is required');
-}
+  if (!purpose) {
+    throw new BadRequestException('Purpose is required');
+  }
+
+  const expenseType = Object.values(ProjectAccountExpenseType).includes(
+    body?.expenseType,
+  )
+    ? body.expenseType
+    : ProjectAccountExpenseType.OTHER;
 
   const expenseData: Partial<ProjectAccountExpense> = {
-  expenseType:
-    Object.values(ProjectAccountExpenseType).includes(
-      body?.expenseType,
-    )
-      ? body.expenseType
-      : ProjectAccountExpenseType.OTHER,
+    expenseType,
+    amount,
+    taxableAmount,
+    gstAmount,
+    totalAmount,
 
-  amount,
+    expenseNumber: `EXP-${Date.now()}`,
+    expenseDate:
+      body?.expenseDate || new Date().toISOString().slice(0, 10),
+    expenseHead: body?.expenseHead || purpose,
 
-  purpose,
-proofUrl: body?.proofUrl || null,
+    purpose,
+    proofUrl: body?.proofUrl || null,
+    remarks: body?.remarks || null,
 
-  remarks: body?.remarks || null,
+    vendorName: body?.vendorName || null,
+    vendorGstNumber: body?.vendorGstNumber || null,
+    billNumber: body?.billNumber || null,
+    billDate: body?.billDate || null,
 
-  projectId: body?.projectId
-    ? Number(body.projectId)
-    : undefined,
+    paymentMode: body?.paymentMode || null,
+    paymentReference: body?.paymentReference || null,
+    paidFrom: body?.paidFrom || null,
+    paidTo: body?.paidTo || null,
 
-  branchName: body?.branchName || null,
+    projectId: body?.projectId ? Number(body.projectId) : undefined,
+    dealerId: body?.dealerId ? Number(body.dealerId) : undefined,
+    dealerName: body?.dealerName || null,
+    staffId: body?.staffId ? Number(body.staffId) : undefined,
+    staffName: body?.staffName || null,
 
-  projectOwnerId: body?.projectOwnerId
-    ? Number(body.projectOwnerId)
-    : undefined,
+    branchName: body?.branchName || null,
 
-  projectOwnerName:
-    body?.projectOwnerName || null,
+    projectOwnerId: body?.projectOwnerId
+      ? Number(body.projectOwnerId)
+      : undefined,
 
-  approvalStatus:
-    ProjectAccountExpenseApprovalStatus.PENDING,
+    projectOwnerName: body?.projectOwnerName || null,
 
-  createdBy:
-    currentUser?.id ||
-    currentUser?.userId ||
-    null,
+    expenseStatus: body?.expenseStatus || 'UNPAID',
+    recurringExpense: body?.recurringExpense === true,
 
-  createdByName:
-    currentUser?.name || '',
-};
+    approvalStatus:
+      ProjectAccountExpenseApprovalStatus.PENDING,
 
-const expense =
-  this.projectAccountExpenseRepository.create(
-    expenseData,
-  );
+    createdBy:
+      currentUser?.id ||
+      currentUser?.userId ||
+      currentUser?.sub ||
+      null,
 
-  return this.projectAccountExpenseRepository.save(
-    expense,
-  );
+    createdByName:
+      currentUser?.name ||
+      currentUser?.email ||
+      '',
+  };
+
+  const expense =
+    this.projectAccountExpenseRepository.create(expenseData);
+
+  return this.projectAccountExpenseRepository.save(expense);
 }
 
 async updateAccountExpense(
@@ -5526,9 +5550,7 @@ async updateAccountExpense(
 ) {
   const expense =
     await this.projectAccountExpenseRepository.findOne({
-      where: {
-        id: expenseId,
-      },
+      where: { id: expenseId },
     });
 
   if (!expense) {
@@ -5547,9 +5569,7 @@ async updateAccountExpense(
   const amount = Number(body?.amount || expense.amount || 0);
 
   if (!amount || amount <= 0) {
-    throw new BadRequestException(
-      'Valid amount is required',
-    );
+    throw new BadRequestException('Valid amount is required');
   }
 
   expense.expenseType =
@@ -5560,16 +5580,110 @@ async updateAccountExpense(
       : expense.expenseType;
 
   expense.amount = amount;
+  expense.taxableAmount = Number(
+    body?.taxableAmount ?? expense.taxableAmount ?? 0,
+  );
+  expense.gstAmount = Number(
+    body?.gstAmount ?? expense.gstAmount ?? 0,
+  );
+  expense.totalAmount =
+    Number(body?.totalAmount || 0) ||
+    amount + Number(expense.gstAmount || 0);
+
+  expense.expenseDate =
+    body?.expenseDate !== undefined
+      ? body.expenseDate || null
+      : expense.expenseDate;
+
+  expense.expenseHead =
+    body?.expenseHead !== undefined
+      ? body.expenseHead || null
+      : expense.expenseHead;
+
+  expense.purpose =
+    body?.purpose !== undefined
+      ? body.purpose || null
+      : expense.purpose;
+
+  expense.proofUrl =
+    body?.proofUrl !== undefined
+      ? body.proofUrl || null
+      : expense.proofUrl;
 
   expense.remarks =
     body?.remarks !== undefined
       ? body.remarks || null
       : expense.remarks;
 
+  expense.vendorName =
+    body?.vendorName !== undefined
+      ? body.vendorName || null
+      : expense.vendorName;
+
+  expense.vendorGstNumber =
+    body?.vendorGstNumber !== undefined
+      ? body.vendorGstNumber || null
+      : expense.vendorGstNumber;
+
+  expense.billNumber =
+    body?.billNumber !== undefined
+      ? body.billNumber || null
+      : expense.billNumber;
+
+  expense.billDate =
+    body?.billDate !== undefined
+      ? body.billDate || null
+      : expense.billDate;
+
+  expense.paymentMode =
+    body?.paymentMode !== undefined
+      ? body.paymentMode || null
+      : expense.paymentMode;
+
+  expense.paymentReference =
+    body?.paymentReference !== undefined
+      ? body.paymentReference || null
+      : expense.paymentReference;
+
+  expense.paidFrom =
+    body?.paidFrom !== undefined
+      ? body.paidFrom || null
+      : expense.paidFrom;
+
+  expense.paidTo =
+    body?.paidTo !== undefined
+      ? body.paidTo || null
+      : expense.paidTo;
+
   expense.branchName =
     body?.branchName !== undefined
       ? body.branchName || null
       : expense.branchName;
+
+  expense.projectId =
+    body?.projectId !== undefined && body?.projectId !== ''
+      ? Number(body.projectId)
+      : expense.projectId;
+
+  expense.dealerId =
+    body?.dealerId !== undefined && body?.dealerId !== ''
+      ? Number(body.dealerId)
+      : expense.dealerId;
+
+  expense.dealerName =
+    body?.dealerName !== undefined
+      ? body.dealerName || null
+      : expense.dealerName;
+
+  expense.staffId =
+    body?.staffId !== undefined && body?.staffId !== ''
+      ? Number(body.staffId)
+      : expense.staffId;
+
+  expense.staffName =
+    body?.staffName !== undefined
+      ? body.staffName || null
+      : expense.staffName;
 
   expense.projectOwnerId =
     body?.projectOwnerId !== undefined &&
@@ -5582,9 +5696,17 @@ async updateAccountExpense(
       ? body.projectOwnerName || null
       : expense.projectOwnerName;
 
-  return this.projectAccountExpenseRepository.save(
-    expense,
-  );
+  expense.expenseStatus =
+    body?.expenseStatus !== undefined
+      ? body.expenseStatus || null
+      : expense.expenseStatus;
+
+  expense.recurringExpense =
+    body?.recurringExpense !== undefined
+      ? body.recurringExpense === true
+      : expense.recurringExpense;
+
+  return this.projectAccountExpenseRepository.save(expense);
 }
 
 async hideAccountExpense(
@@ -5629,9 +5751,7 @@ async hideAccountExpense(
 async getAccountExpenseSummary() {
   const expenses =
     await this.projectAccountExpenseRepository.find({
-      where: {
-        isHidden: false,
-      },
+      where: { isHidden: false },
     });
 
   const approvedExpenses = expenses.filter(
@@ -5648,48 +5768,79 @@ async getAccountExpenseSummary() {
 
   const sum = (items: ProjectAccountExpense[]) =>
     items.reduce(
-      (total, item) => total + Number(item.amount || 0),
+      (total, item) =>
+        total +
+        Number(
+          (item as any).totalAmount ||
+            item.amount ||
+            0,
+        ),
       0,
+    );
+
+  const byTypes = (types: ProjectAccountExpenseType[]) =>
+    sum(
+      approvedExpenses.filter((expense) =>
+        types.includes(expense.expenseType),
+      ),
     );
 
   return {
     totalExpenses: sum(approvedExpenses),
-
     pendingExpenses: sum(pendingExpenses),
 
-    contractorPayments: sum(
-      approvedExpenses.filter(
-        (expense) =>
-          expense.expenseType ===
-          ProjectAccountExpenseType.CONTRACTOR_PAYMENT,
-      ),
-    ),
+    contractorPayments: byTypes([
+      ProjectAccountExpenseType.CONTRACTOR_PAYMENT,
+    ]),
 
-    labourPayments: sum(
-      approvedExpenses.filter(
-        (expense) =>
-          expense.expenseType ===
-          ProjectAccountExpenseType.LABOUR_PAYMENT,
-      ),
-    ),
+    labourPayments: byTypes([
+      ProjectAccountExpenseType.LABOUR_PAYMENT,
+    ]),
 
-    transportationExpenses: sum(
-      approvedExpenses.filter(
-        (expense) =>
-          expense.expenseType ===
-          ProjectAccountExpenseType.TRANSPORTATION,
-      ),
-    ),
+    transportationExpenses: byTypes([
+      ProjectAccountExpenseType.TRANSPORTATION,
+    ]),
 
-    salaryAndIncentives: sum(
-      approvedExpenses.filter((expense) =>
-        [
-          ProjectAccountExpenseType.SALARY,
-          ProjectAccountExpenseType.INCENTIVE,
-          ProjectAccountExpenseType.ADVANCE_SALARY,
-        ].includes(expense.expenseType),
-      ),
-    ),
+    marketPurchases: byTypes([
+      ProjectAccountExpenseType.MARKET_PURCHASE,
+      ProjectAccountExpenseType.SITE_PURCHASE,
+      ProjectAccountExpenseType.EQUIPMENT_PURCHASE,
+    ]),
+
+    officeExpenses: byTypes([
+      ProjectAccountExpenseType.OFFICE_EXPENSE,
+      ProjectAccountExpenseType.OFFICE_SUPPLIES,
+      ProjectAccountExpenseType.RENT,
+      ProjectAccountExpenseType.ELECTRICITY_BILL,
+      ProjectAccountExpenseType.INTERNET_BILL,
+      ProjectAccountExpenseType.MOBILE_RECHARGE,
+      ProjectAccountExpenseType.STATIONERY,
+      ProjectAccountExpenseType.PRINTING,
+      ProjectAccountExpenseType.COURIER,
+    ]),
+
+    travelAndVehicleExpenses: byTypes([
+      ProjectAccountExpenseType.TRAVEL,
+      ProjectAccountExpenseType.HOTEL,
+      ProjectAccountExpenseType.FOOD,
+      ProjectAccountExpenseType.FUEL,
+      ProjectAccountExpenseType.VEHICLE_EXPENSE,
+      ProjectAccountExpenseType.CUSTOMER_VISIT,
+    ]),
+
+    salaryAndIncentives: byTypes([
+      ProjectAccountExpenseType.SALARY,
+      ProjectAccountExpenseType.INCENTIVE,
+      ProjectAccountExpenseType.ADVANCE_SALARY,
+    ]),
+
+    marketingExpenses: byTypes([
+      ProjectAccountExpenseType.MARKETING,
+    ]),
+
+    repairMaintenance: byTypes([
+      ProjectAccountExpenseType.REPAIR_MAINTENANCE,
+    ]),
   };
 }
 
