@@ -609,6 +609,7 @@ getProformaInvoices(
   @Query('search') search?: string,
   @Query('status') status?: string,
   @Query('vendorId') vendorId?: string,
+  @Query('vendorName') vendorName?: string,
   @Query('material') material?: string,
 ) {
   return this.projectService.getProformaInvoices({
@@ -617,6 +618,7 @@ getProformaInvoices(
     search: search || '',
     status: status || '',
     vendorId: vendorId || '',
+    vendorName: vendorName || '',
     material: material || '',
   });
 }
@@ -704,6 +706,7 @@ getFinalInvoices(
   @Query('search') search?: string,
   @Query('status') status?: string,
   @Query('vendorId') vendorId?: string,
+  @Query('vendorName') vendorName?: string,
   @Query('material') material?: string,
 ) {
   return this.projectService.getFinalInvoices({
@@ -712,6 +715,7 @@ getFinalInvoices(
     search: search || '',
     status: status || '',
     vendorId: vendorId || '',
+    vendorName: vendorName || '',
     material: material || '',
   });
 }
@@ -1440,6 +1444,7 @@ getGeneratedPurchaseOrders(
   @Query('search') search?: string,
   @Query('status') status?: string,
   @Query('vendorId') vendorId?: string,
+  @Query('vendorName') vendorName?: string,
   @Query('material') material?: string,
 ) {
   return this.projectService.getGeneratedPurchaseOrders({
@@ -1448,6 +1453,7 @@ getGeneratedPurchaseOrders(
     search: search || '',
     status: status || '',
     vendorId: vendorId || '',
+    vendorName: vendorName || '',
     material: material || '',
   });
 }

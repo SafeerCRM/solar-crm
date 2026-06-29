@@ -11514,6 +11514,7 @@ async getGeneratedPurchaseOrders(filters?: {
   search?: string;
   status?: string;
   vendorId?: string;
+  vendorName?: string;
   material?: string;
 }) {
   const page =
@@ -11554,11 +11555,11 @@ async getGeneratedPurchaseOrders(filters?: {
     );
   }
 
-  if (filters?.vendorId) {
+  if (filters?.vendorName) {
   query.andWhere(
-    'CAST(po.vendorId AS TEXT) = :vendorId',
+    'LOWER(po."vendorName") LIKE :vendorName',
     {
-      vendorId: filters.vendorId,
+      vendorName: `%${filters.vendorName.toLowerCase()}%`,
     },
   );
 }
@@ -11846,6 +11847,7 @@ async getProformaInvoices(filters?: {
   search?: string;
   status?: string;
   vendorId?: string;
+  vendorName?: string;
   material?: string;
 }) {
   const page =
@@ -11885,11 +11887,15 @@ async getProformaInvoices(filters?: {
     );
   }
 
-  if (filters?.vendorId) {
+  if (filters?.vendorName) {
   query.andWhere(
-    'CAST(pi.dealerId AS TEXT) = :vendorId',
+    `(
+      LOWER(pi."dealerName") LIKE :vendorName
+      OR LOWER(pi."dealerPhone") LIKE :vendorName
+      OR LOWER(pi."dealerGstNumber") LIKE :vendorName
+    )`,
     {
-      vendorId: filters.vendorId,
+      vendorName: `%${filters.vendorName.toLowerCase()}%`,
     },
   );
 }
@@ -13214,6 +13220,7 @@ async getFinalInvoices(filters?: {
   search?: string;
   status?: string;
   vendorId?: string;
+  vendorName?: string;
   material?: string;
 }) {
   const page =
@@ -13253,11 +13260,15 @@ async getFinalInvoices(filters?: {
     );
   }
 
-  if (filters?.vendorId) {
+  if (filters?.vendorName) {
   query.andWhere(
-    'CAST(invoice.dealerId AS TEXT) = :vendorId',
+    `(
+      LOWER(invoice."dealerName") LIKE :vendorName
+      OR LOWER(invoice."dealerPhone") LIKE :vendorName
+      OR LOWER(invoice."dealerGstNumber") LIKE :vendorName
+    )`,
     {
-      vendorId: filters.vendorId,
+      vendorName: `%${filters.vendorName.toLowerCase()}%`,
     },
   );
 }
