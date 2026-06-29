@@ -385,6 +385,45 @@ private async postLedgerEntryOnce(data: {
   );
 }
 
+private async postCustomerPaymentInstallmentLedger(
+  installment: ProjectPaymentInstallment,
+  user?: any,
+) {
+  if (
+    String((installment as any).approvalStatus || '') !==
+    'APPROVED'
+  ) {
+    return null;
+  }
+
+  const paidAmount = Number(installment.paidAmount || 0);
+
+  if (!paidAmount || paidAmount <= 0) {
+    return null;
+  }
+
+  const project = await this.projectRepository.findOne({
+    where: { id: Number(installment.projectId) },
+  });
+
+  return this.postLedgerEntryOnce({
+    partyId: Number((project as any)?.customerId || 0) || null,
+    partyName:
+      (project as any)?.customerName ||
+      `Project #${installment.projectId}`,
+    partyType: 'CUSTOMER',
+    projectId: Number(installment.projectId),
+    entryType: ProjectLedgerEntryType.CREDIT,
+    sourceType: ProjectLedgerSourceType.CUSTOMER_PAYMENT,
+    sourceId: Number(installment.id),
+    amount: paidAmount,
+    remarks: `Customer payment approved - ${String(
+      installment.label || '',
+    ).replaceAll('_', ' ')}`,
+    user,
+  });
+}
+
 private readonly projectCreationRequiredDocumentGroups = [
   {
     label: 'Aadhaar Card',
@@ -5396,6 +5435,11 @@ async approvePaymentInstallment(
     await this.projectPaymentInstallmentRepository.save(
       installment,
     );
+
+    await this.postCustomerPaymentInstallmentLedger(
+  savedInstallment,
+  currentUser,
+);
 
   const existingLedger =
     await this.projectPartyLedgerRepository.findOne({
