@@ -52,6 +52,11 @@ export enum ProjectWorkState {
   RUNNING = 'RUNNING',
 }
 
+export enum ProjectSource {
+  CRM = 'CRM',
+  LEGACY = 'LEGACY',
+}
+
 @Entity()
 export class Project {
   @PrimaryGeneratedColumn()
