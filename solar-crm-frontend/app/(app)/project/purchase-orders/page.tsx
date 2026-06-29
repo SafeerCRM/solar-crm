@@ -477,7 +477,9 @@ const fetchGeneratedPos = async () => {
           page: 1,
           limit: 100,
           status: statusFilter,
-          vendorId: vendorFilterId,
+          vendorName:
+  vendors.find((vendor) => String(vendor.id) === String(vendorFilterId))
+    ?.vendorName || '',
           material: materialFilter,
         },
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -501,7 +503,9 @@ const fetchGeneratedPis = async () => {
           page: 1,
           limit: 100,
           status: statusFilter,
-          vendorId: vendorFilterId,
+          vendorName:
+  vendors.find((vendor) => String(vendor.id) === String(vendorFilterId))
+    ?.vendorName || '',
           material: materialFilter,
         },
         headers: token
@@ -529,7 +533,9 @@ const fetchFinalInvoices = async () => {
           page: 1,
           limit: 100,
           status: statusFilter,
-          vendorId: vendorFilterId,
+          vendorName:
+  vendors.find((vendor) => String(vendor.id) === String(vendorFilterId))
+    ?.vendorName || '',
           material: materialFilter,
         },
         headers: token
