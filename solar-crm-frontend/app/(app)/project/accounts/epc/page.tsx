@@ -863,9 +863,10 @@ const estimatedPendingPosition =
     />
   )}
 
-  <label className="text-xs font-semibold text-gray-500">
-  Expense Date *
-</label>
+  <div>
+  <label className="mb-1 block text-xs font-semibold text-gray-500">
+    Expense Date *
+  </label>
 
   <input
     type="date"
@@ -876,8 +877,9 @@ const estimatedPendingPosition =
         expenseDate: e.target.value,
       })
     }
-    className="rounded-xl border p-3"
+    className="w-full rounded-xl border p-3"
   />
+</div>
 
   <input
     type="text"
@@ -931,9 +933,10 @@ const estimatedPendingPosition =
     className="rounded-xl border p-3"
   />
 
-  <label className="text-xs font-semibold text-gray-500">
-  Bill / Invoice Date
-</label>
+  <div>
+  <label className="mb-1 block text-xs font-semibold text-gray-500">
+    Bill / Invoice Date
+  </label>
 
   <input
     type="date"
@@ -944,8 +947,9 @@ const estimatedPendingPosition =
         billDate: e.target.value,
       })
     }
-    className="rounded-xl border p-3"
+    className="w-full rounded-xl border p-3"
   />
+</div>
 
   <input
     type="number"
