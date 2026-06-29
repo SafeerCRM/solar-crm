@@ -11516,6 +11516,8 @@ async getGeneratedPurchaseOrders(filters?: {
   vendorId?: string;
   vendorName?: string;
   material?: string;
+  fromDate?: string;
+toDate?: string;
 }) {
   const page =
     Number(filters?.page) > 0
@@ -11577,6 +11579,18 @@ if (filters?.material) {
       material: `%${filters.material.toLowerCase()}%`,
     },
   );
+}
+
+if (filters?.fromDate) {
+  query.andWhere('po.createdAt >= :fromDate', {
+    fromDate: new Date(`${filters.fromDate}T00:00:00`),
+  });
+}
+
+if (filters?.toDate) {
+  query.andWhere('po.createdAt <= :toDate', {
+    toDate: new Date(`${filters.toDate}T23:59:59`),
+  });
 }
 
   query.andWhere('po.isHidden = false');
@@ -11849,6 +11863,8 @@ async getProformaInvoices(filters?: {
   vendorId?: string;
   vendorName?: string;
   material?: string;
+  fromDate?: string;
+toDate?: string;
 }) {
   const page =
     Number(filters?.page) > 0
@@ -11913,6 +11929,18 @@ if (filters?.material) {
       material: `%${filters.material.toLowerCase()}%`,
     },
   );
+}
+
+if (filters?.fromDate) {
+  query.andWhere('pi.createdAt >= :fromDate', {
+    fromDate: new Date(`${filters.fromDate}T00:00:00`),
+  });
+}
+
+if (filters?.toDate) {
+  query.andWhere('pi.createdAt <= :toDate', {
+    toDate: new Date(`${filters.toDate}T23:59:59`),
+  });
 }
 
   query.andWhere('pi.isHidden = false');
@@ -13222,6 +13250,8 @@ async getFinalInvoices(filters?: {
   vendorId?: string;
   vendorName?: string;
   material?: string;
+  fromDate?: string;
+toDate?: string;
 }) {
   const page =
     Number(filters?.page) > 0
@@ -13286,6 +13316,18 @@ if (filters?.material) {
       material: `%${filters.material.toLowerCase()}%`,
     },
   );
+}
+
+if (filters?.fromDate) {
+  query.andWhere('invoice.createdAt >= :fromDate', {
+    fromDate: new Date(`${filters.fromDate}T00:00:00`),
+  });
+}
+
+if (filters?.toDate) {
+  query.andWhere('invoice.createdAt <= :toDate', {
+    toDate: new Date(`${filters.toDate}T23:59:59`),
+  });
 }
 
   query.andWhere('invoice.isHidden = false');
