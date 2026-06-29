@@ -1676,6 +1676,84 @@ const generateProformaInvoice = async () => {
         </p>
       </div>
 
+      <div className="rounded-2xl bg-white p-5 shadow">
+  <h2 className="text-xl font-bold text-gray-800">
+    Procurement Document Filters
+  </h2>
+
+  <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-5">
+    <select
+      value={documentTypeFilter}
+      onChange={(e) => setDocumentTypeFilter(e.target.value)}
+      className="rounded-xl border p-3"
+    >
+      <option value="PO">Purchase Orders</option>
+      <option value="PI">Proforma Invoice</option>
+      <option value="INVOICE">Final Invoice</option>
+    </select>
+
+    <input
+      placeholder="Search Vendor"
+      value={vendorSearch}
+      onChange={(e) => setVendorSearch(e.target.value)}
+      className="rounded-xl border p-3"
+    />
+
+    <select
+      value={vendorFilterId}
+      onChange={(e) => setVendorFilterId(e.target.value)}
+      className="rounded-xl border p-3"
+    >
+      <option value="">All Vendors</option>
+
+      {filteredVendors.map((v) => (
+        <option key={v.id} value={v.id}>
+          {v.vendorName}
+        </option>
+      ))}
+    </select>
+
+    <input
+      placeholder="Material"
+      value={materialFilter}
+      onChange={(e) => setMaterialFilter(e.target.value)}
+      className="rounded-xl border p-3"
+    />
+
+    <button
+      type="button"
+      onClick={() => {
+        fetchGeneratedPos();
+        fetchGeneratedPis();
+        fetchFinalInvoices();
+      }}
+      className="rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white"
+    >
+      Apply
+    </button>
+  </div>
+
+  <button
+    type="button"
+    onClick={() => {
+      setDocumentTypeFilter('PO');
+      setVendorFilterId('');
+      setVendorSearch('');
+      setMaterialFilter('');
+      setStatusFilter('');
+
+      setTimeout(() => {
+        fetchGeneratedPos();
+        fetchGeneratedPis();
+        fetchFinalInvoices();
+      }, 100);
+    }}
+    className="mt-3 rounded-xl bg-gray-700 px-4 py-2 text-sm font-semibold text-white"
+  >
+    Reset Filters
+  </button>
+</div>
+
       <div
   className={`rounded-2xl bg-white p-5 shadow ${
     documentTypeFilter !== 'PO' ? 'hidden' : ''
@@ -1691,62 +1769,6 @@ const generateProformaInvoice = async () => {
       <p className="mt-1 text-sm text-gray-500">
         Commercial purchase order snapshots
       </p>
-
-      <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-5">
-
-<select
-    value={documentTypeFilter}
-    onChange={(e)=>setDocumentTypeFilter(e.target.value)}
-    className="rounded-xl border p-3"
->
-    <option value="PO">Purchase Orders</option>
-    <option value="PI">Proforma Invoice</option>
-    <option value="INVOICE">Final Invoice</option>
-</select>
-
-<input
-    placeholder="Search Vendor"
-    value={vendorSearch}
-    onChange={(e)=>setVendorSearch(e.target.value)}
-    className="rounded-xl border p-3"
-/>
-
-<select
-    value={vendorFilterId}
-    onChange={(e)=>setVendorFilterId(e.target.value)}
-    className="rounded-xl border p-3"
->
-    <option value="">All Vendors</option>
-
-    {filteredVendors.map(v=>(
-        <option
-            key={v.id}
-            value={v.id}
-        >
-            {v.vendorName}
-        </option>
-    ))}
-</select>
-
-<input
-    placeholder="Material"
-    value={materialFilter}
-    onChange={(e)=>setMaterialFilter(e.target.value)}
-    className="rounded-xl border p-3"
-/>
-
-<button
-    onClick={()=>{
-        fetchGeneratedPos();
-        fetchGeneratedPis();
-        fetchFinalInvoices();
-    }}
-    className="rounded-xl bg-blue-600 text-white"
->
-    Apply
-</button>
-
-</div>
     </div>
   </div>
 
