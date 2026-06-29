@@ -5865,13 +5865,6 @@ async getFinanceSummary(query: any = {}) {
       } as any,
     });
 
-  const dealerPayments =
-    await this.projectDealerPaymentRepository.find({
-      where: {
-        isHidden: false,
-      } as any,
-    });
-
   const expenses =
     await this.projectAccountExpenseRepository.find({
       where: {
@@ -5879,30 +5872,20 @@ async getFinanceSummary(query: any = {}) {
       },
     });
 
-  const approvedProjectCollections =
-    paymentInstallments.filter(
-      (item: any) =>
-        String(item.approvalStatus || '') === 'APPROVED',
-    );
+  const ledgerSummary =
+    await this.getLedgerOutstandingSummary();
 
-  const pendingProjectCollections =
-    paymentInstallments.filter(
-      (item: any) =>
-        String(item.approvalStatus || '') === 'PENDING' &&
-        Number(item.paidAmount || 0) > 0,
-    );
+  const validCollections = paymentInstallments.filter(
+    (item: any) =>
+      Number(item.paidAmount || 0) > 0 &&
+      String(item.approvalStatus || '') !== 'REJECTED',
+  );
 
-  const approvedDealerPayments =
-    dealerPayments.filter(
-      (item: any) =>
-        String(item.status || '') === 'APPROVED',
-    );
-
-  const pendingDealerPayments =
-    dealerPayments.filter(
-      (item: any) =>
-        String(item.status || '') === 'PENDING',
-    );
+  const pendingCollections = paymentInstallments.filter(
+    (item: any) =>
+      Number(item.pendingAmount || 0) > 0 &&
+      String(item.status || '') !== 'CANCELLED',
+  );
 
   const approvedExpenses = expenses.filter(
     (item) =>
@@ -5916,7 +5899,7 @@ async getFinanceSummary(query: any = {}) {
       ProjectAccountExpenseApprovalStatus.PENDING,
   );
 
-  const sum = (items: any[], key = 'amount') =>
+  const sum = (items: any[], key: string) =>
     items.reduce(
       (total, item) => total + Number(item?.[key] || 0),
       0,
@@ -5940,41 +5923,25 @@ async getFinanceSummary(query: any = {}) {
   };
 
   const customerIncoming = sum(
-    approvedProjectCollections,
+    validCollections,
     'paidAmount',
   );
 
-  const dealerIncoming = sum(
-    approvedDealerPayments,
-    'amount',
-  );
-
-  const totalIncoming = customerIncoming + dealerIncoming;
-
   const totalOutgoing = sumExpenses(approvedExpenses);
 
-  const pendingIncoming =
-    sum(pendingProjectCollections, 'paidAmount') +
-    sum(pendingDealerPayments, 'amount');
+  const pendingIncoming = sum(
+    pendingCollections,
+    'pendingAmount',
+  );
 
   const pendingOutgoing = sumExpenses(pendingExpenses);
 
-  const monthlyCustomerIncoming = sum(
-    approvedProjectCollections.filter((item: any) =>
+  const monthlyIncoming = sum(
+    validCollections.filter((item: any) =>
       isInMonth(item.paidDate || item.updatedAt || item.createdAt),
     ),
     'paidAmount',
   );
-
-  const monthlyDealerIncoming = sum(
-    approvedDealerPayments.filter((item: any) =>
-      isInMonth(item.paymentDate || item.updatedAt || item.createdAt),
-    ),
-    'amount',
-  );
-
-  const monthlyIncoming =
-    monthlyCustomerIncoming + monthlyDealerIncoming;
 
   const monthlyOutgoing = sumExpenses(
     approvedExpenses.filter((item: any) =>
@@ -5989,8 +5956,8 @@ async getFinanceSummary(query: any = {}) {
 
     incoming: {
       customerCollections: customerIncoming,
-      dealerCollections: dealerIncoming,
-      totalIncoming,
+      dealerCollections: 0,
+      totalIncoming: customerIncoming,
       pendingIncoming,
     },
 
@@ -6000,7 +5967,7 @@ async getFinanceSummary(query: any = {}) {
     },
 
     cashFlow: {
-      netCashPosition: totalIncoming - totalOutgoing,
+      netCashPosition: customerIncoming - totalOutgoing,
       pendingNetPosition: pendingIncoming - pendingOutgoing,
     },
 
@@ -6008,9 +5975,11 @@ async getFinanceSummary(query: any = {}) {
       incoming: monthlyIncoming,
       outgoing: monthlyOutgoing,
       net: monthlyIncoming - monthlyOutgoing,
-      customerCollections: monthlyCustomerIncoming,
-      dealerCollections: monthlyDealerIncoming,
+      customerCollections: monthlyIncoming,
+      dealerCollections: 0,
     },
+
+    ledger: ledgerSummary,
   };
 }
 
