@@ -479,6 +479,177 @@ private async postDealerPaymentLedger(
   });
 }
 
+async getProjectProfitSummary(query: any = {}) {
+  const page = Math.max(Number(query?.page || 1), 1);
+  const limit = Math.min(Math.max(Number(query?.limit || 20), 1), 100);
+  const skip = (page - 1) * limit;
+
+  const projectQb = this.projectRepository
+    .createQueryBuilder('project')
+    .where('project.isHidden = false')
+    .orderBy('project.createdAt', 'DESC')
+    .skip(skip)
+    .take(limit);
+
+  if (query?.search) {
+    projectQb.andWhere(
+      `(
+        LOWER(project.customerName) LIKE :search
+        OR LOWER(project.customerPhone) LIKE :search
+        OR CAST(project.id AS TEXT) LIKE :search
+      )`,
+      { search: `%${String(query.search).toLowerCase()}%` },
+    );
+  }
+
+  if (query?.branch) {
+    projectQb.andWhere('LOWER(project.branchName) LIKE :branch', {
+      branch: `%${String(query.branch).toLowerCase()}%`,
+    });
+  }
+
+  const [projects, total] = await projectQb.getManyAndCount();
+  const projectIds = projects.map((project) => project.id);
+
+  const payments = projectIds.length
+    ? await this.projectPaymentInstallmentRepository.find({
+        where: { projectId: In(projectIds), isHidden: false } as any,
+      })
+    : [];
+
+  const expenses = projectIds.length
+    ? await this.projectAccountExpenseRepository.find({
+        where: { projectId: In(projectIds), isHidden: false } as any,
+      })
+    : [];
+
+  const purchaseOrders = projectIds.length
+    ? await this.projectPurchaseOrderRepository.find({
+        where: { projectId: In(projectIds), isHidden: false } as any,
+      })
+    : [];
+
+  const consumptions = projectIds.length
+    ? await this.projectConsumptionRepository.find({
+        where: { projectId: In(projectIds) } as any,
+      })
+    : [];
+
+  const expenseAmount = (item: any) =>
+    Number(item.totalAmount || item.amount || 0);
+
+  const data = projects.map((project: any) => {
+    const projectPayments = payments.filter(
+      (payment: any) => Number(payment.projectId) === Number(project.id),
+    );
+
+    const projectExpenses = expenses.filter(
+      (expense: any) => Number(expense.projectId) === Number(project.id),
+    );
+
+    const projectPurchaseOrders = purchaseOrders.filter(
+      (po: any) => Number(po.projectId) === Number(project.id),
+    );
+
+    const projectConsumptions = consumptions.filter(
+      (item: any) => Number(item.projectId) === Number(project.id),
+    );
+
+    const customerReceived = projectPayments
+      .filter(
+        (payment: any) =>
+          String(payment.approvalStatus || '') === 'APPROVED',
+      )
+      .reduce(
+        (sum: number, payment: any) =>
+          sum + Number(payment.paidAmount || 0),
+        0,
+      );
+
+    const approvedExpenses = projectExpenses
+      .filter(
+        (expense: any) =>
+          expense.approvalStatus ===
+          ProjectAccountExpenseApprovalStatus.APPROVED,
+      )
+      .reduce(
+        (sum: number, expense: any) => sum + expenseAmount(expense),
+        0,
+      );
+
+    const purchaseCost = projectPurchaseOrders
+      .filter(
+        (po: any) =>
+          String(po.status || '') !== 'CANCELLED',
+      )
+      .reduce(
+        (sum: number, po: any) => sum + Number(po.totalAmount || 0),
+        0,
+      );
+
+    const materialConsumedCost = projectConsumptions.reduce(
+      (sum: number, item: any) =>
+        sum +
+        Number(
+          item.totalAmount ||
+            Number(item.quantity || 0) * Number(item.rate || 0) ||
+            0,
+        ),
+      0,
+    );
+
+    const actualCost =
+      approvedExpenses +
+      purchaseCost +
+      materialConsumedCost;
+
+    const expectedRevenue = Number(
+      project.finalCost ||
+        project.netAmount ||
+        project.projectCost ||
+        0,
+    );
+
+    const expectedCost = Number(project.expectedLagat || 0);
+
+    return {
+      projectId: project.id,
+      customerName: project.customerName,
+      customerPhone: project.customerPhone,
+      branchName: project.branchName,
+      status: project.status,
+
+      expectedRevenue,
+      expectedCost,
+      expectedProfit:
+        Number(project.expectedProfit || 0) ||
+        expectedRevenue - expectedCost,
+
+      customerReceived,
+      approvedExpenses,
+      purchaseCost,
+      materialConsumedCost,
+      actualCost,
+      actualProfit: customerReceived - actualCost,
+
+      collectionPending: Math.max(
+        expectedRevenue - customerReceived,
+        0,
+      ),
+    };
+  });
+
+  return {
+    data,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit) || 1,
+    },
+  };
+}
+
 private readonly projectCreationRequiredDocumentGroups = [
   {
     label: 'Aadhaar Card',

@@ -826,6 +826,17 @@ getFinanceHubSummary() {
   return this.projectService.getFinanceHubSummary();
 }
 
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'PAYMENT_MANAGER',
+  'ACCOUNT_MANAGER',
+)
+@Get('accounts/project-profit')
+getProjectProfitSummary(@Query() query: any) {
+  return this.projectService.getProjectProfitSummary(query);
+}
+
 @Roles('OWNER', 'ACCOUNT_MANAGER')
 @Post('ledger-entry')
 createLedgerEntry(
