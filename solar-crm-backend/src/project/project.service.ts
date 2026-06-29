@@ -385,6 +385,21 @@ private async postLedgerEntryOnce(data: {
   );
 }
 
+async postFinanceLedgerEntry(data: {
+  partyId?: number | null;
+  partyName: string;
+  partyType: string;
+  projectId?: number | null;
+  entryType: ProjectLedgerEntryType;
+  sourceType: ProjectLedgerSourceType;
+  sourceId?: number | null;
+  amount: number;
+  remarks?: string;
+  user?: any;
+}) {
+  return this.postLedgerEntryOnce(data);
+}
+
 private async postCustomerPaymentInstallmentLedger(
   installment: ProjectPaymentInstallment,
   user?: any,
@@ -420,6 +435,46 @@ private async postCustomerPaymentInstallmentLedger(
     remarks: `Customer payment approved - ${String(
       installment.label || '',
     ).replaceAll('_', ' ')}`,
+    user,
+  });
+}
+
+private async postDealerPaymentLedger(
+  payment: ProjectDealerPayment,
+  user?: any,
+) {
+  if (
+    String((payment as any).status || '') !==
+    ProjectDealerPaymentStatus.APPROVED
+  ) {
+    return null;
+  }
+
+  const amount = Number(payment.amount || 0);
+
+  if (!amount || amount <= 0) {
+    return null;
+  }
+
+  const order = await this.projectDealerOrderRepository.findOne({
+    where: { id: Number(payment.dealerOrderId) },
+  });
+
+  return this.postLedgerEntryOnce({
+    partyId: Number(payment.dealerId || 0) || null,
+    partyName:
+      payment.dealerName ||
+      (order as any)?.dealerName ||
+      `Dealer #${payment.dealerId}`,
+    partyType: 'DEALER',
+    projectId: null,
+    entryType: ProjectLedgerEntryType.CREDIT,
+    sourceType: ProjectLedgerSourceType.CUSTOMER_PAYMENT,
+    sourceId: Number(payment.id),
+    amount,
+    remarks: `Dealer payment approved - Order ${
+      (order as any)?.orderNumber || payment.dealerOrderId
+    }`,
     user,
   });
 }

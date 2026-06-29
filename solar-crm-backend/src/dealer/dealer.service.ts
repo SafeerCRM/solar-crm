@@ -39,6 +39,10 @@ import {
 } from '../project/project-final-invoice.entity';
 import { ProjectFinalInvoiceItem } from '../project/project-final-invoice-item.entity';
 import { ProjectService } from '../project/project.service';
+import {
+  ProjectLedgerEntryType,
+  ProjectLedgerSourceType,
+} from '../project/project-party-ledger.entity';
 import { StaffMember } from '../staff/staff-member.entity';
 import { DealerPortalCompanySetting } from './dealer-portal-company-setting.entity';
 import { DealerDeliverySetting } from './dealer-delivery-setting.entity';
@@ -2343,6 +2347,24 @@ const bucket =
       );
 
       await this.dealerOrderRepository.save(order);
+
+      await this.projectService.postFinanceLedgerEntry({
+  partyId: Number(savedPayment.dealerId || 0) || null,
+  partyName:
+    savedPayment.dealerName ||
+    order.dealerName ||
+    `Dealer #${savedPayment.dealerId}`,
+  partyType: 'DEALER',
+  projectId: null,
+  entryType: ProjectLedgerEntryType.CREDIT,
+  sourceType: ProjectLedgerSourceType.CUSTOMER_PAYMENT,
+  sourceId: savedPayment.id,
+  amount: Number(savedPayment.amount || 0),
+  remarks: `Dealer payment approved - Order ${
+    order.orderNumber || order.id
+  }`,
+  user,
+});
     }
 
     const notification = this.dealerNotificationRepository.create({
