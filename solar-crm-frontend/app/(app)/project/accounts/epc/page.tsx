@@ -725,28 +725,31 @@ const estimatedPendingPosition =
   <div className="rounded-2xl bg-white p-5 shadow">
     <p className="text-sm text-gray-500">Total Incoming</p>
     <p className="mt-2 text-2xl font-bold text-green-700">
-      ₹{Number(financeSummary?.incoming?.totalIncoming || 0).toLocaleString('en-IN')}
+      ₹{Number(summary.totalReceived || 0).toLocaleString('en-IN')}
     </p>
   </div>
 
   <div className="rounded-2xl bg-white p-5 shadow">
     <p className="text-sm text-gray-500">Total Outgoing</p>
     <p className="mt-2 text-2xl font-bold text-red-700">
-      ₹{Number(financeSummary?.outgoing?.approvedExpenses || 0).toLocaleString('en-IN')}
+      ₹{Number(expenseSummary.totalExpenses || 0).toLocaleString('en-IN')}
     </p>
   </div>
 
   <div className="rounded-2xl bg-white p-5 shadow">
     <p className="text-sm text-gray-500">Net Cash Position</p>
     <p className="mt-2 text-2xl font-bold text-blue-700">
-      ₹{Number(financeSummary?.cashFlow?.netCashPosition || 0).toLocaleString('en-IN')}
+      ₹{Number(
+        Number(summary.totalReceived || 0) -
+          Number(expenseSummary.totalExpenses || 0),
+      ).toLocaleString('en-IN')}
     </p>
   </div>
 
   <div className="rounded-2xl bg-white p-5 shadow">
-    <p className="text-sm text-gray-500">This Month Net</p>
-    <p className="mt-2 text-2xl font-bold text-purple-700">
-      ₹{Number(financeSummary?.monthly?.net || 0).toLocaleString('en-IN')}
+    <p className="text-sm text-gray-500">Pending Outgoing</p>
+    <p className="mt-2 text-2xl font-bold text-orange-700">
+      ₹{Number(expenseSummary.pendingExpenses || 0).toLocaleString('en-IN')}
     </p>
   </div>
 </div>
