@@ -864,8 +864,14 @@ getProjectAccountsSummary(
   'ACCOUNT_MANAGER',
 )
 @Get('finance-summary')
-getFinanceSummary(@Query() query: any) {
-  return this.projectService.getFinanceSummary(query);
+getFinanceSummary(
+  @Query() query: any,
+  @Req() req: any,
+) {
+  return this.projectService.getFinanceSummary(
+    query,
+    req.user,
+  );
 }
 
 @Roles(

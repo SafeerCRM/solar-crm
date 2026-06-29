@@ -5844,7 +5844,7 @@ async getAccountExpenseSummary() {
   };
 }
 
-async getFinanceSummary(query: any = {}) {
+async getFinanceSummary(query: any = {}, currentUser?: any) {
   const month =
     query?.month || new Date().toISOString().slice(0, 7);
 
@@ -5858,34 +5858,57 @@ async getFinanceSummary(query: any = {}) {
     59,
   );
 
-  const paymentInstallments =
-    await this.projectPaymentInstallmentRepository.find({
-      where: {
-        isHidden: false,
-      } as any,
-    });
+  const paymentCollection: any =
+    await this.getPaymentCollectionList(
+      {
+        page: 1,
+        limit: 10000,
+      },
+      currentUser,
+    );
+
+  const paymentRows = Array.isArray(paymentCollection?.data)
+    ? paymentCollection.data
+    : [];
+
+  const customerScheduled = Number(
+    paymentCollection?.summary?.projectTotalAmount ||
+      paymentRows.reduce(
+        (sum: number, row: any) => sum + Number(row.amount || 0),
+        0,
+      ),
+  );
+
+  const customerReceived = Number(
+    paymentCollection?.summary?.projectCollectedAmount ||
+      paymentRows.reduce(
+        (sum: number, row: any) => sum + Number(row.paidAmount || 0),
+        0,
+      ),
+  );
+
+  const customerPending = Number(
+    paymentCollection?.summary?.projectPendingAmount ||
+      paymentRows.reduce(
+        (sum: number, row: any) => sum + Number(row.pendingAmount || 0),
+        0,
+      ),
+  );
+
+  const customerPaymentApprovalPending = paymentRows.reduce(
+    (sum: number, row: any) =>
+      sum +
+      (Number(row.paidAmount || 0) > 0 &&
+      String(row.approvalStatus || '') === 'PENDING'
+        ? Number(row.paidAmount || 0)
+        : 0),
+    0,
+  );
 
   const expenses =
     await this.projectAccountExpenseRepository.find({
-      where: {
-        isHidden: false,
-      },
+      where: { isHidden: false },
     });
-
-  const ledgerSummary =
-    await this.getLedgerOutstandingSummary();
-
-  const validCollections = paymentInstallments.filter(
-    (item: any) =>
-      Number(item.paidAmount || 0) > 0 &&
-      String(item.approvalStatus || '') !== 'REJECTED',
-  );
-
-  const pendingCollections = paymentInstallments.filter(
-    (item: any) =>
-      Number(item.pendingAmount || 0) > 0 &&
-      String(item.status || '') !== 'CANCELLED',
-  );
 
   const approvedExpenses = expenses.filter(
     (item) =>
@@ -5899,87 +5922,85 @@ async getFinanceSummary(query: any = {}) {
       ProjectAccountExpenseApprovalStatus.PENDING,
   );
 
-  const sum = (items: any[], key: string) =>
-    items.reduce(
-      (total, item) => total + Number(item?.[key] || 0),
-      0,
-    );
-
   const expenseAmount = (item: any) =>
     Number(item.totalAmount || item.amount || 0);
 
   const sumExpenses = (items: any[]) =>
     items.reduce(
-      (total, item) => total + expenseAmount(item),
+      (sum, item) => sum + expenseAmount(item),
       0,
     );
 
   const isInMonth = (dateValue: any) => {
     if (!dateValue) return false;
-
     const date = new Date(dateValue);
-
     return date >= monthStart && date <= monthEnd;
   };
 
-  const customerIncoming = sum(
-    validCollections,
-    'paidAmount',
+  const monthlyCustomerReceived = paymentRows.reduce(
+    (sum: number, row: any) => {
+      const receipts = Array.isArray(row.receipts) ? row.receipts : [];
+
+      const receiptTotal = receipts
+        .filter((receipt: any) =>
+          isInMonth(receipt.paymentDate || receipt.createdAt),
+        )
+        .filter(
+          (receipt: any) =>
+            String(receipt.approvalStatus || '') !== 'REJECTED',
+        )
+        .reduce(
+          (innerSum: number, receipt: any) =>
+            innerSum + Number(receipt.receivedAmount || 0),
+          0,
+        );
+
+      return sum + receiptTotal;
+    },
+    0,
   );
 
-  const totalOutgoing = sumExpenses(approvedExpenses);
-
-  const pendingIncoming = sum(
-    pendingCollections,
-    'pendingAmount',
-  );
-
-  const pendingOutgoing = sumExpenses(pendingExpenses);
-
-  const monthlyIncoming = sum(
-    validCollections.filter((item: any) =>
-      isInMonth(item.paidDate || item.updatedAt || item.createdAt),
-    ),
-    'paidAmount',
-  );
-
-  const monthlyOutgoing = sumExpenses(
+  const monthlyExpenses = sumExpenses(
     approvedExpenses.filter((item: any) =>
-      isInMonth(
-        item.expenseDate || item.approvedAt || item.createdAt,
-      ),
+      isInMonth(item.expenseDate || item.approvedAt || item.createdAt),
     ),
   );
 
   return {
     month,
 
+    collections: {
+      totalScheduled: customerScheduled,
+      totalReceived: customerReceived,
+      totalPending: customerPending,
+      paymentApprovalPending: customerPaymentApprovalPending,
+    },
+
     incoming: {
-      customerCollections: customerIncoming,
+      customerCollections: customerReceived,
       dealerCollections: 0,
-      totalIncoming: customerIncoming,
-      pendingIncoming,
+      otherIncome: 0,
+      totalIncoming: customerReceived,
+      pendingIncoming: customerPending,
     },
 
     outgoing: {
-      approvedExpenses: totalOutgoing,
-      pendingExpenses: pendingOutgoing,
+      approvedExpenses: sumExpenses(approvedExpenses),
+      pendingExpenses: sumExpenses(pendingExpenses),
     },
 
     cashFlow: {
-      netCashPosition: customerIncoming - totalOutgoing,
-      pendingNetPosition: pendingIncoming - pendingOutgoing,
+      netCashPosition:
+        customerReceived - sumExpenses(approvedExpenses),
+      pendingNetPosition:
+        customerPending - sumExpenses(pendingExpenses),
     },
 
     monthly: {
-      incoming: monthlyIncoming,
-      outgoing: monthlyOutgoing,
-      net: monthlyIncoming - monthlyOutgoing,
-      customerCollections: monthlyIncoming,
-      dealerCollections: 0,
+      incoming: monthlyCustomerReceived,
+      outgoing: monthlyExpenses,
+      net: monthlyCustomerReceived - monthlyExpenses,
     },
-
-    ledger: ledgerSummary,
   };
 }
 
