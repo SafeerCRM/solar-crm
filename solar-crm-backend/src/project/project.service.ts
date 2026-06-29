@@ -327,6 +327,64 @@ private getMaterialSellingRate(material: ProjectMaterialMaster) {
   return baseRate + expectedMargin;
 }
 
+private async postLedgerEntryOnce(data: {
+  partyId?: number | null;
+  partyName: string;
+  partyType: string;
+  projectId?: number | null;
+  entryType: ProjectLedgerEntryType;
+  sourceType: ProjectLedgerSourceType;
+  sourceId?: number | null;
+  amount: number;
+  remarks?: string;
+  user?: any;
+}) {
+  const amount = Number(data.amount || 0);
+
+  if (!amount || amount <= 0) {
+    return null;
+  }
+
+  if (data.sourceId) {
+    const existing =
+      await this.projectPartyLedgerRepository.findOne({
+        where: {
+          sourceType: data.sourceType,
+          sourceId: Number(data.sourceId),
+          entryType: data.entryType,
+          isHidden: false,
+        } as any,
+      });
+
+    if (existing) {
+      return existing;
+    }
+  }
+
+  return this.projectPartyLedgerRepository.save(
+    this.projectPartyLedgerRepository.create({
+      partyId: data.partyId || undefined,
+      partyName: data.partyName || '',
+      partyType: data.partyType || '',
+      projectId: data.projectId || undefined,
+      entryType: data.entryType,
+      sourceType: data.sourceType,
+      sourceId: data.sourceId || undefined,
+      amount,
+      remarks: data.remarks || '',
+      createdBy:
+        data.user?.id ||
+        data.user?.userId ||
+        data.user?.sub ||
+        null,
+      createdByName:
+        data.user?.name ||
+        data.user?.email ||
+        '',
+    } as Partial<ProjectPartyLedger>),
+  );
+}
+
 private readonly projectCreationRequiredDocumentGroups = [
   {
     label: 'Aadhaar Card',
@@ -7131,41 +7189,31 @@ async approveAccountExpense(
       expense,
     );
 
-  await this.projectPartyLedgerRepository.save(
-    this.projectPartyLedgerRepository.create({
-      partyName: 'EPC Expense',
-
-      partyType: 'EXPENSE',
-
-      projectId:
-        savedExpense.projectId,
-
-      entryType:
-        ProjectLedgerEntryType.DEBIT,
-
-      sourceType:
-        ProjectLedgerSourceType.MANUAL_ADJUSTMENT,
-
-      sourceId:
-        savedExpense.id,
-
-      amount:
-        Number(savedExpense.amount || 0),
-
-      remarks:
-        `${savedExpense.expenseType} - ${
-          savedExpense.remarks || ''
-        }`,
-
-      createdBy:
-        currentUser?.id ||
-        currentUser?.userId ||
-        null,
-
-      createdByName:
-        currentUser?.name || '',
-    }),
-  );
+  await this.postLedgerEntryOnce({
+  partyName:
+    savedExpense.vendorName ||
+    savedExpense.paidTo ||
+    savedExpense.staffName ||
+    savedExpense.dealerName ||
+    'EPC Expense',
+  partyType: 'EXPENSE',
+  projectId: savedExpense.projectId || null,
+  entryType: ProjectLedgerEntryType.DEBIT,
+  sourceType: ProjectLedgerSourceType.MANUAL_ADJUSTMENT,
+  sourceId: savedExpense.id,
+  amount: Number(
+    (savedExpense as any).totalAmount ||
+      savedExpense.amount ||
+      0,
+  ),
+  remarks: `${savedExpense.expenseType} - ${
+    savedExpense.expenseHead ||
+    savedExpense.purpose ||
+    savedExpense.remarks ||
+    ''
+  }`,
+  user: currentUser,
+});
 
   return savedExpense;
 }
@@ -13904,24 +13952,18 @@ async recordCustomerPayment(
     throw new BadRequestException('Valid amount is required');
   }
 
-  return this.projectPartyLedgerRepository.save(
-    this.projectPartyLedgerRepository.create({
-      partyId: body.partyId ? Number(body.partyId) : undefined,
-      partyName: body.partyName || '',
-      partyType: 'CUSTOMER',
-      projectId: body.projectId ? Number(body.projectId) : undefined,
-
-      entryType: ProjectLedgerEntryType.CREDIT,
-      sourceType: ProjectLedgerSourceType.CUSTOMER_PAYMENT,
-      sourceId: body.sourceId ? Number(body.sourceId) : undefined,
-
-      amount,
-      remarks: body.remarks || 'Customer payment received',
-
-      createdBy: user?.id || user?.userId || null,
-      createdByName: user?.name || '',
-    } as Partial<ProjectPartyLedger>),
-  );
+  return this.postLedgerEntryOnce({
+  partyId: body.partyId ? Number(body.partyId) : undefined,
+  partyName: body.partyName || '',
+  partyType: 'CUSTOMER',
+  projectId: body.projectId ? Number(body.projectId) : undefined,
+  entryType: ProjectLedgerEntryType.CREDIT,
+  sourceType: ProjectLedgerSourceType.CUSTOMER_PAYMENT,
+  sourceId: body.sourceId ? Number(body.sourceId) : undefined,
+  amount,
+  remarks: body.remarks || 'Customer payment received',
+  user,
+});
 }
 
 async recordVendorPayment(
@@ -13938,24 +13980,18 @@ async recordVendorPayment(
     throw new BadRequestException('Valid amount is required');
   }
 
-  return this.projectPartyLedgerRepository.save(
-    this.projectPartyLedgerRepository.create({
-      partyId: body.partyId ? Number(body.partyId) : undefined,
-      partyName: body.partyName || '',
-      partyType: 'VENDOR',
-      projectId: body.projectId ? Number(body.projectId) : undefined,
-
-      entryType: ProjectLedgerEntryType.DEBIT,
-      sourceType: ProjectLedgerSourceType.VENDOR_PAYMENT,
-      sourceId: body.sourceId ? Number(body.sourceId) : undefined,
-
-      amount,
-      remarks: body.remarks || 'Vendor payment paid',
-
-      createdBy: user?.id || user?.userId || null,
-      createdByName: user?.name || '',
-    } as Partial<ProjectPartyLedger>),
-  );
+  return this.postLedgerEntryOnce({
+  partyId: body.partyId ? Number(body.partyId) : undefined,
+  partyName: body.partyName || '',
+  partyType: 'VENDOR',
+  projectId: body.projectId ? Number(body.projectId) : undefined,
+  entryType: ProjectLedgerEntryType.DEBIT,
+  sourceType: ProjectLedgerSourceType.VENDOR_PAYMENT,
+  sourceId: body.sourceId ? Number(body.sourceId) : undefined,
+  amount,
+  remarks: body.remarks || 'Vendor payment paid',
+  user,
+});
 }
 
 async getPurchasableMaterialRequestItems(
