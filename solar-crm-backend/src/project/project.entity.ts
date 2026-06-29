@@ -346,6 +346,18 @@ projectManagerApprovedAt: Date;
   @Column({ nullable: true, type: 'text' })
   remarks: string;
 
+  @Column({ nullable: true })
+projectSource: string;
+
+@Column({ nullable: true })
+legacyYear: number;
+
+@Column({ type: 'timestamp', nullable: true })
+legacyImportedAt: Date;
+
+@Column({ type: 'text', nullable: true })
+legacyRemarks: string;
+
     @Column({ type: 'timestamp', nullable: true })
   cancelledAt: Date;
 
