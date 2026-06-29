@@ -363,6 +363,9 @@ legacyImportedAt: Date;
 @Column({ type: 'text', nullable: true })
 legacyRemarks: string;
 
+@Column({ default: false })
+isLegacyProject: boolean;
+
     @Column({ type: 'timestamp', nullable: true })
   cancelledAt: Date;
 
