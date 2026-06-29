@@ -202,6 +202,10 @@ const [materialFilter, setMaterialFilter] = useState('');
 const [statusFilter, setStatusFilter] = useState('');
 const [branchFilter, setBranchFilter] = useState('');
 const [ownerFilter, setOwnerFilter] = useState('');
+const [documentTypeFilter, setDocumentTypeFilter] = useState('PO');
+const [vendorFilterId, setVendorFilterId] = useState('');
+const [vendorSearch, setVendorSearch] = useState('');
+
 const [projectOwners, setProjectOwners] = useState<ProjectOwner[]>([]);
 const [page, setPage] = useState(1);
 const [totalPages, setTotalPages] = useState(1);
@@ -318,6 +322,12 @@ const [summary, setSummary] = useState({
   totalPendingAmount: 0,
   partiallyPurchasedCount: 0,
 });
+
+const filteredVendors = vendors.filter((vendor) =>
+  String(vendor.vendorName || '')
+    .toLowerCase()
+    .includes(vendorSearch.toLowerCase()),
+);
 
   const fetchPurchaseOrders = async () => {
   try {
@@ -463,20 +473,20 @@ const fetchGeneratedPos = async () => {
     const res = await axios.get(
       `${API_BASE_URL}/project/generated-purchase-orders`,
       {
-        headers: token
-          ? {
-              Authorization: `Bearer ${token}`,
-            }
-          : {},
+        params: {
+          page: 1,
+          limit: 100,
+          status: statusFilter,
+          vendorId: vendorFilterId,
+          material: materialFilter,
+        },
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       },
     );
 
     setGeneratedPos(res.data?.data || []);
   } catch (error) {
-    console.error(
-      'Failed to load generated POs:',
-      error,
-    );
+    console.error('Failed to load generated POs:', error);
   }
 };
 
@@ -487,6 +497,13 @@ const fetchGeneratedPis = async () => {
     const res = await axios.get(
       `${API_BASE_URL}/project/proforma-invoices`,
       {
+        params: {
+          page: 1,
+          limit: 100,
+          status: statusFilter,
+          vendorId: vendorFilterId,
+          material: materialFilter,
+        },
         headers: token
           ? {
               Authorization: `Bearer ${token}`,
@@ -508,6 +525,13 @@ const fetchFinalInvoices = async () => {
     const res = await axios.get(
       `${API_BASE_URL}/project/final-invoices`,
       {
+        params: {
+          page: 1,
+          limit: 100,
+          status: statusFilter,
+          vendorId: vendorFilterId,
+          material: materialFilter,
+        },
         headers: token
           ? {
               Authorization: `Bearer ${token}`,
@@ -1652,9 +1676,14 @@ const generateProformaInvoice = async () => {
         </p>
       </div>
 
-      <div className="rounded-2xl bg-white p-5 shadow">
+      <div
+  className={`rounded-2xl bg-white p-5 shadow ${
+    documentTypeFilter !== 'PO' ? 'hidden' : ''
+  }`}
+>
   <div className="mb-4 flex items-center justify-between">
     <div>
+
       <h2 className="text-xl font-bold text-gray-800">
         Generated PO Documents
       </h2>
@@ -1662,6 +1691,62 @@ const generateProformaInvoice = async () => {
       <p className="mt-1 text-sm text-gray-500">
         Commercial purchase order snapshots
       </p>
+
+      <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-5">
+
+<select
+    value={documentTypeFilter}
+    onChange={(e)=>setDocumentTypeFilter(e.target.value)}
+    className="rounded-xl border p-3"
+>
+    <option value="PO">Purchase Orders</option>
+    <option value="PI">Proforma Invoice</option>
+    <option value="INVOICE">Final Invoice</option>
+</select>
+
+<input
+    placeholder="Search Vendor"
+    value={vendorSearch}
+    onChange={(e)=>setVendorSearch(e.target.value)}
+    className="rounded-xl border p-3"
+/>
+
+<select
+    value={vendorFilterId}
+    onChange={(e)=>setVendorFilterId(e.target.value)}
+    className="rounded-xl border p-3"
+>
+    <option value="">All Vendors</option>
+
+    {filteredVendors.map(v=>(
+        <option
+            key={v.id}
+            value={v.id}
+        >
+            {v.vendorName}
+        </option>
+    ))}
+</select>
+
+<input
+    placeholder="Material"
+    value={materialFilter}
+    onChange={(e)=>setMaterialFilter(e.target.value)}
+    className="rounded-xl border p-3"
+/>
+
+<button
+    onClick={()=>{
+        fetchGeneratedPos();
+        fetchGeneratedPis();
+        fetchFinalInvoices();
+    }}
+    className="rounded-xl bg-blue-600 text-white"
+>
+    Apply
+</button>
+
+</div>
     </div>
   </div>
 
@@ -2654,7 +2739,11 @@ onChange={(e) =>
   </button>
 </div>
 
-<div className="rounded-2xl bg-white p-5 shadow">
+<div
+  className={`rounded-2xl bg-white p-5 shadow ${
+    documentTypeFilter !== 'PI' ? 'hidden' : ''
+  }`}
+>
   <h2 className="text-xl font-bold text-gray-800">
     Generated Proforma Invoices
   </h2>
@@ -2767,7 +2856,11 @@ onChange={(e) =>
   )}
 </div>
 
-<div className="rounded-2xl bg-white p-5 shadow">
+<div
+  className={`rounded-2xl bg-white p-5 shadow ${
+    documentTypeFilter !== 'INVOICE' ? 'hidden' : ''
+  }`}
+>
   <h2 className="text-xl font-bold text-gray-800">
     Final Invoices
   </h2>

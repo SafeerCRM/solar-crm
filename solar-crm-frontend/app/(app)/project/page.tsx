@@ -69,6 +69,7 @@ export default function ProjectPage() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
 const [totalPages, setTotalPages] = useState(1);
+const [totalProjects, setTotalProjects] = useState(0);
 
 const [search, setSearch] = useState('');
 const [statusFilter, setStatusFilter] = useState('');
@@ -168,6 +169,7 @@ legacyYear,
 });
 
 setProjects(res.data?.data || []);
+setTotalProjects(res.data?.total || 0);
 setTotalPages(res.data?.totalPages || 1);
     } catch (error) {
       console.error('Failed to load projects:', error);
@@ -321,8 +323,8 @@ useEffect(() => {
     <div className="mx-auto min-w-0 max-w-7xl space-y-4 overflow-x-hidden px-2 pb-4 md:px-0">
       <div className="rounded-2xl bg-white p-4 shadow">
   <h1 className="text-2xl font-bold text-gray-800">
-    Project Department
-  </h1>
+  Project Department ({totalProjects})
+</h1>
 
   <p className="mt-1 text-sm text-gray-500">
     Project orders, approvals, documents, and department workflow will be managed here.
