@@ -23,13 +23,28 @@ const [projectSummary, setProjectSummary] = useState({
   completedProjects: 0,
 });
 
-const [expenseForm, setExpenseForm] =
-  useState({
-    expenseType: 'PROJECT_FUND',
-    otherExpenseName: '',
-    amount: '',
-    remarks: '',
-  });
+const [expenseForm, setExpenseForm] = useState({
+  expenseType: 'MARKET_PURCHASE',
+  otherExpenseName: '',
+  expenseDate: new Date().toISOString().slice(0, 10),
+  expenseHead: '',
+  amount: '',
+  taxableAmount: '',
+  gstAmount: '',
+  totalAmount: '',
+  vendorName: '',
+  vendorGstNumber: '',
+  billNumber: '',
+  billDate: '',
+  paymentMode: 'CASH',
+  paymentReference: '',
+  paidFrom: '',
+  paidTo: '',
+  branchName: '',
+  projectId: '',
+  proofUrl: '',
+  remarks: '',
+});
 
 const [expenseLoading, setExpenseLoading] =
   useState(false);
@@ -299,10 +314,19 @@ const createExpense = async () => {
     await axios.post(
       `${API_BASE_URL}/project/account-expenses`,
       {
-        expenseType: expenseForm.expenseType,
-        amount: expenseForm.amount,
-        remarks: finalRemarks,
-      },
+  ...expenseForm,
+  amount: Number(expenseForm.amount || 0),
+  taxableAmount: Number(expenseForm.taxableAmount || 0),
+  gstAmount: Number(expenseForm.gstAmount || 0),
+  totalAmount:
+    Number(expenseForm.totalAmount || 0) ||
+    Number(expenseForm.amount || 0) +
+      Number(expenseForm.gstAmount || 0),
+  remarks: finalRemarks,
+  projectId: expenseForm.projectId
+    ? Number(expenseForm.projectId)
+    : null,
+},
       {
         headers: token
           ? {
@@ -315,11 +339,27 @@ const createExpense = async () => {
     alert('Expense request submitted successfully');
 
     setExpenseForm({
-      expenseType: 'PROJECT_FUND',
-      otherExpenseName: '',
-      amount: '',
-      remarks: '',
-    });
+  expenseType: 'MARKET_PURCHASE',
+  otherExpenseName: '',
+  expenseDate: new Date().toISOString().slice(0, 10),
+  expenseHead: '',
+  amount: '',
+  taxableAmount: '',
+  gstAmount: '',
+  totalAmount: '',
+  vendorName: '',
+  vendorGstNumber: '',
+  billNumber: '',
+  billDate: '',
+  paymentMode: 'CASH',
+  paymentReference: '',
+  paidFrom: '',
+  paidTo: '',
+  branchName: '',
+  projectId: '',
+  proofUrl: '',
+  remarks: '',
+});
 
     await loadExpenses();
     await loadExpenseSummary();
@@ -672,53 +712,126 @@ const estimatedPendingPosition =
     }
     className="rounded-xl border p-3"
   >
-    <option value="PROJECT_FUND">
-      Project Fund
-    </option>
-
-    <option value="CONTRACTOR_PAYMENT">
-      Contractor Payment
-    </option>
-
-    <option value="LABOUR_PAYMENT">
-      Labour Payment
-    </option>
-
-    <option value="TRANSPORTATION">
-      Transportation
-    </option>
-
-    <option value="SALARY">
-      Salary
-    </option>
-
-    <option value="INCENTIVE">
-      Incentive
-    </option>
-
-    <option value="ADVANCE_SALARY">
-      Advance Salary
-    </option>
-
-    <option value="OTHER">
-      Other
-    </option>
+    <option value="MARKET_PURCHASE">Market Purchase</option>
+    <option value="SITE_PURCHASE">Site Purchase</option>
+    <option value="PROJECT_FUND">Project Fund</option>
+    <option value="CONTRACTOR_PAYMENT">Contractor Payment</option>
+    <option value="LABOUR_PAYMENT">Labour Payment</option>
+    <option value="TRANSPORTATION">Transportation</option>
+    <option value="OFFICE_EXPENSE">Office Expense</option>
+    <option value="OFFICE_SUPPLIES">Office Supplies</option>
+    <option value="EQUIPMENT_PURCHASE">Equipment Purchase</option>
+    <option value="TRAVEL">Travel</option>
+    <option value="HOTEL">Hotel</option>
+    <option value="FOOD">Food</option>
+    <option value="FUEL">Fuel</option>
+    <option value="VEHICLE_EXPENSE">Vehicle Expense</option>
+    <option value="RENT">Rent</option>
+    <option value="ELECTRICITY_BILL">Electricity Bill</option>
+    <option value="INTERNET_BILL">Internet Bill</option>
+    <option value="MOBILE_RECHARGE">Mobile Recharge</option>
+    <option value="SALARY">Salary</option>
+    <option value="INCENTIVE">Incentive</option>
+    <option value="ADVANCE_SALARY">Advance Salary</option>
+    <option value="MARKETING">Marketing</option>
+    <option value="PRINTING">Printing</option>
+    <option value="COURIER">Courier</option>
+    <option value="STATIONERY">Stationery</option>
+    <option value="REPAIR_MAINTENANCE">Repair & Maintenance</option>
+    <option value="CUSTOMER_VISIT">Customer Visit</option>
+    <option value="OTHER">Other</option>
   </select>
 
   {expenseForm.expenseType === 'OTHER' && (
+    <input
+      type="text"
+      placeholder="Other Expense Name"
+      value={expenseForm.otherExpenseName}
+      onChange={(e) =>
+        setExpenseForm({
+          ...expenseForm,
+          otherExpenseName: e.target.value,
+        })
+      }
+      className="rounded-xl border p-3"
+    />
+  )}
+
   <input
-    type="text"
-    placeholder="Other Expense Name"
-    value={expenseForm.otherExpenseName}
+    type="date"
+    value={expenseForm.expenseDate}
     onChange={(e) =>
       setExpenseForm({
         ...expenseForm,
-        otherExpenseName: e.target.value,
+        expenseDate: e.target.value,
       })
     }
     className="rounded-xl border p-3"
   />
-)}
+
+  <input
+    type="text"
+    placeholder="Expense Head / Purpose"
+    value={expenseForm.expenseHead}
+    onChange={(e) =>
+      setExpenseForm({
+        ...expenseForm,
+        expenseHead: e.target.value,
+      })
+    }
+    className="rounded-xl border p-3"
+  />
+
+  <input
+    type="text"
+    placeholder="Vendor / Shop Name"
+    value={expenseForm.vendorName}
+    onChange={(e) =>
+      setExpenseForm({
+        ...expenseForm,
+        vendorName: e.target.value,
+      })
+    }
+    className="rounded-xl border p-3"
+  />
+
+  <input
+    type="text"
+    placeholder="Vendor GST Number"
+    value={expenseForm.vendorGstNumber}
+    onChange={(e) =>
+      setExpenseForm({
+        ...expenseForm,
+        vendorGstNumber: e.target.value,
+      })
+    }
+    className="rounded-xl border p-3"
+  />
+
+  <input
+    type="text"
+    placeholder="Bill Number"
+    value={expenseForm.billNumber}
+    onChange={(e) =>
+      setExpenseForm({
+        ...expenseForm,
+        billNumber: e.target.value,
+      })
+    }
+    className="rounded-xl border p-3"
+  />
+
+  <input
+    type="date"
+    value={expenseForm.billDate}
+    onChange={(e) =>
+      setExpenseForm({
+        ...expenseForm,
+        billDate: e.target.value,
+      })
+    }
+    className="rounded-xl border p-3"
+  />
 
   <input
     type="number"
@@ -734,6 +847,141 @@ const estimatedPendingPosition =
   />
 
   <input
+    type="number"
+    placeholder="Taxable Amount"
+    value={expenseForm.taxableAmount}
+    onChange={(e) =>
+      setExpenseForm({
+        ...expenseForm,
+        taxableAmount: e.target.value,
+      })
+    }
+    className="rounded-xl border p-3"
+  />
+
+  <input
+    type="number"
+    placeholder="GST Amount"
+    value={expenseForm.gstAmount}
+    onChange={(e) =>
+      setExpenseForm({
+        ...expenseForm,
+        gstAmount: e.target.value,
+      })
+    }
+    className="rounded-xl border p-3"
+  />
+
+  <input
+    type="number"
+    placeholder="Total Amount"
+    value={expenseForm.totalAmount}
+    onChange={(e) =>
+      setExpenseForm({
+        ...expenseForm,
+        totalAmount: e.target.value,
+      })
+    }
+    className="rounded-xl border p-3"
+  />
+
+  <select
+    value={expenseForm.paymentMode}
+    onChange={(e) =>
+      setExpenseForm({
+        ...expenseForm,
+        paymentMode: e.target.value,
+      })
+    }
+    className="rounded-xl border p-3"
+  >
+    <option value="CASH">Cash</option>
+    <option value="UPI">UPI</option>
+    <option value="BANK_TRANSFER">Bank Transfer</option>
+    <option value="CHEQUE">Cheque</option>
+    <option value="CARD">Card</option>
+    <option value="CREDIT">Credit / Pay Later</option>
+  </select>
+
+  <input
+    type="text"
+    placeholder="Payment Reference"
+    value={expenseForm.paymentReference}
+    onChange={(e) =>
+      setExpenseForm({
+        ...expenseForm,
+        paymentReference: e.target.value,
+      })
+    }
+    className="rounded-xl border p-3"
+  />
+
+  <input
+    type="text"
+    placeholder="Paid From"
+    value={expenseForm.paidFrom}
+    onChange={(e) =>
+      setExpenseForm({
+        ...expenseForm,
+        paidFrom: e.target.value,
+      })
+    }
+    className="rounded-xl border p-3"
+  />
+
+  <input
+    type="text"
+    placeholder="Paid To"
+    value={expenseForm.paidTo}
+    onChange={(e) =>
+      setExpenseForm({
+        ...expenseForm,
+        paidTo: e.target.value,
+      })
+    }
+    className="rounded-xl border p-3"
+  />
+
+  <input
+    type="text"
+    placeholder="Branch"
+    value={expenseForm.branchName}
+    onChange={(e) =>
+      setExpenseForm({
+        ...expenseForm,
+        branchName: e.target.value,
+      })
+    }
+    className="rounded-xl border p-3"
+  />
+
+  <input
+    type="number"
+    placeholder="Project ID (optional)"
+    value={expenseForm.projectId}
+    onChange={(e) =>
+      setExpenseForm({
+        ...expenseForm,
+        projectId: e.target.value,
+      })
+    }
+    className="rounded-xl border p-3"
+  />
+
+  <input
+    type="text"
+    placeholder="Proof / Bill URL"
+    value={expenseForm.proofUrl}
+    onChange={(e) =>
+      setExpenseForm({
+        ...expenseForm,
+        proofUrl: e.target.value,
+      })
+    }
+    className="rounded-xl border p-3"
+  />
+
+  <input
     type="text"
     placeholder="Remarks"
     value={expenseForm.remarks}
@@ -743,7 +991,7 @@ const estimatedPendingPosition =
         remarks: e.target.value,
       })
     }
-    className="rounded-xl border p-3"
+    className="rounded-xl border p-3 md:col-span-3"
   />
 </div>
 
@@ -841,9 +1089,18 @@ const estimatedPendingPosition =
             Type
           </th>
 
+          <th className="p-2 text-left">Date</th>
+<th className="p-2 text-left">Vendor / Shop</th>
+<th className="p-2 text-left">Bill No.</th>
+
           <th className="p-2 text-left">
             Amount
           </th>
+
+          <th className="p-2 text-left">GST</th>
+<th className="p-2 text-left">Total</th>
+<th className="p-2 text-left">Payment</th>
+<th className="p-2 text-left">Proof</th>
 
           <th className="p-2 text-left">
             Status
@@ -874,6 +1131,20 @@ const estimatedPendingPosition =
             </td>
 
             <td className="p-2">
+  {item.expenseDate
+    ? new Date(item.expenseDate).toLocaleDateString('en-IN')
+    : '-'}
+</td>
+
+<td className="p-2">
+  {item.vendorName || item.paidTo || '-'}
+</td>
+
+<td className="p-2">
+  {item.billNumber || '-'}
+</td>
+
+            <td className="p-2">
               ₹
               {Number(
                 item.amount || 0,
@@ -881,6 +1152,38 @@ const estimatedPendingPosition =
                 'en-IN',
               )}
             </td>
+
+            <td className="p-2">
+  ₹{Number(item.gstAmount || 0).toLocaleString('en-IN')}
+</td>
+
+<td className="p-2 font-semibold">
+  ₹{Number(item.totalAmount || item.amount || 0).toLocaleString('en-IN')}
+</td>
+
+<td className="p-2">
+  <div className="text-xs">
+    <p>{item.paymentMode || '-'}</p>
+    {item.paymentReference && (
+      <p className="text-gray-500">{item.paymentReference}</p>
+    )}
+  </div>
+</td>
+
+<td className="p-2">
+  {item.proofUrl ? (
+    <a
+      href={item.proofUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-xs font-semibold text-blue-600"
+    >
+      View
+    </a>
+  ) : (
+    '-'
+  )}
+</td>
 
             <td className="p-2">
               {item.approvalStatus}
