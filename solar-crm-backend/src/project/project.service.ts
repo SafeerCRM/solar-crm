@@ -13511,6 +13511,170 @@ async getLedgerEntries(filters?: {
   return query.getMany();
 }
 
+async getFinanceHubSummary() {
+  const payments = await this.projectPaymentInstallmentRepository.find({
+    where: { isHidden: false } as any,
+  });
+
+  const expenses = await this.projectAccountExpenseRepository.find({
+    where: { isHidden: false },
+  });
+
+  const purchaseOrders = await this.projectPurchaseOrderRepository.find({
+    where: { isHidden: false } as any,
+  });
+
+  const dealerOrders = await this.projectDealerOrderRepository.find({
+    where: { isHidden: false } as any,
+  });
+
+  const dealerPayments = await this.projectDealerPaymentRepository.find();
+
+  const ledgerEntries = await this.projectPartyLedgerRepository.find({
+    where: { isHidden: false },
+  });
+
+  const projects = await this.projectRepository.find({
+    where: { isHidden: false } as any,
+  });
+
+  const sum = (items: any[], key: string) =>
+    items.reduce((total, item) => total + Number(item?.[key] || 0), 0);
+
+  const approvedPayments = payments.filter(
+    (item: any) => String(item.approvalStatus || '') === 'APPROVED',
+  );
+
+  const pendingPayments = payments.filter(
+    (item: any) =>
+      Number(item.pendingAmount || 0) > 0 &&
+      String(item.status || '') !== 'CANCELLED',
+  );
+
+  const approvedExpenses = expenses.filter(
+    (item) =>
+      item.approvalStatus === ProjectAccountExpenseApprovalStatus.APPROVED,
+  );
+
+  const pendingExpenses = expenses.filter(
+    (item) =>
+      item.approvalStatus === ProjectAccountExpenseApprovalStatus.PENDING,
+  );
+
+  const approvedDealerPayments = dealerPayments.filter(
+    (item: any) => String(item.status || '') === 'APPROVED',
+  );
+
+  const pendingDealerPayments = dealerPayments.filter(
+    (item: any) =>
+      String(item.status || '') === 'PENDING' ||
+      String(item.status || '') === 'SUBMITTED',
+  );
+
+  const activePurchaseOrders = purchaseOrders.filter(
+    (item: any) =>
+      String(item.status || '') !== 'CANCELLED',
+  );
+
+  const approvedPurchaseOrders = purchaseOrders.filter(
+    (item: any) =>
+      String(item.status || '') === 'APPROVED' ||
+      String(item.status || '') === 'PARTIALLY_RECEIVED' ||
+      String(item.status || '') === 'COMPLETED',
+  );
+
+  const expenseAmount = (item: any) =>
+    Number(item.totalAmount || item.amount || 0);
+
+  const totalExpense = (items: any[]) =>
+    items.reduce((total, item) => total + expenseAmount(item), 0);
+
+  const ledgerDebit = ledgerEntries
+    .filter((item) => item.entryType === ProjectLedgerEntryType.DEBIT)
+    .reduce((total, item) => total + Number(item.amount || 0), 0);
+
+  const ledgerCredit = ledgerEntries
+    .filter((item) => item.entryType === ProjectLedgerEntryType.CREDIT)
+    .reduce((total, item) => total + Number(item.amount || 0), 0);
+
+  const projectExpectedRevenue = projects.reduce(
+    (total, project: any) =>
+      total +
+      Number(project.finalCost || project.netAmount || project.projectCost || 0),
+    0,
+  );
+
+  const projectExpectedCost = projects.reduce(
+    (total, project: any) =>
+      total + Number(project.expectedLagat || 0),
+    0,
+  );
+
+  const customerReceived = sum(approvedPayments, 'paidAmount');
+  const customerPending = sum(pendingPayments, 'pendingAmount');
+
+  const dealerSales = sum(dealerOrders, 'totalAmount');
+  const dealerReceived = sum(approvedDealerPayments, 'amount');
+  const dealerPending = Math.max(dealerSales - dealerReceived, 0);
+
+  const approvedExpenseTotal = totalExpense(approvedExpenses);
+  const pendingExpenseTotal = totalExpense(pendingExpenses);
+
+  const purchaseCommitted = sum(activePurchaseOrders, 'totalAmount');
+  const approvedPurchaseCost = sum(approvedPurchaseOrders, 'totalAmount');
+
+  return {
+    income: {
+      customerReceived,
+      customerPending,
+      dealerSales,
+      dealerReceived,
+      dealerPending,
+      totalReceived: customerReceived + dealerReceived,
+      totalPending: customerPending + dealerPending,
+    },
+
+    outgoing: {
+      approvedExpenses: approvedExpenseTotal,
+      pendingExpenses: pendingExpenseTotal,
+      purchaseCommitted,
+      approvedPurchaseCost,
+      totalOutgoing: approvedExpenseTotal + approvedPurchaseCost,
+    },
+
+    cashFlow: {
+      availableCash:
+        customerReceived +
+        dealerReceived -
+        approvedExpenseTotal -
+        approvedPurchaseCost,
+
+      cashOnlyAvailable:
+        customerReceived + dealerReceived - approvedExpenseTotal,
+    },
+
+    ledger: {
+      totalDebit: ledgerDebit,
+      totalCredit: ledgerCredit,
+      netBalance: ledgerCredit - ledgerDebit,
+    },
+
+    projectProfit: {
+      expectedRevenue: projectExpectedRevenue,
+      expectedCost: projectExpectedCost,
+      expectedProfit: projectExpectedRevenue - projectExpectedCost,
+    },
+
+    counts: {
+      projects: projects.length,
+      purchaseOrders: purchaseOrders.length,
+      dealerOrders: dealerOrders.length,
+      expenses: expenses.length,
+      ledgerEntries: ledgerEntries.length,
+    },
+  };
+}
+
 async getLedgerOutstandingSummary() {
   const rows =
   await this.projectPartyLedgerRepository.find({

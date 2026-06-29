@@ -813,6 +813,19 @@ getMyContractorProjects(
   return this.projectService.getMyContractorProjects(user);
 }
 
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'PAYMENT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'STOCK_MANAGER',
+  'TRADING_MANAGER',
+)
+@Get('accounts/finance-hub')
+getFinanceHubSummary() {
+  return this.projectService.getFinanceHubSummary();
+}
+
 @Roles('OWNER', 'ACCOUNT_MANAGER')
 @Post('ledger-entry')
 createLedgerEntry(
