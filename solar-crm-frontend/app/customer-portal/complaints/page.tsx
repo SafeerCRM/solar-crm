@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import AudioRecorder from '@/components/AudioRecorder';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -17,8 +18,7 @@ const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
 const [uploadingPhotos, setUploadingPhotos] = useState(false);
 const [selectedAudio, setSelectedAudio] = useState<File | null>(null);
 const [audioPreview, setAudioPreview] = useState('');
-const [recording, setRecording] = useState(false);
-const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+
 const photoInputRef = useRef<HTMLInputElement | null>(null);
 const audioInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -200,61 +200,6 @@ const handleAudioSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
 const removeAudio = () => {
   setSelectedAudio(null);
   setAudioPreview('');
-};
-
-const startRecording = async () => {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: true,
-    });
-
-    const recorder = new MediaRecorder(stream, {
-      mimeType: 'audio/webm',
-    });
-
-    const chunks: BlobPart[] = [];
-
-    recorder.ondataavailable = (event) => {
-      if (event.data.size > 0) {
-        chunks.push(event.data);
-      }
-    };
-
-    recorder.onstop = () => {
-      const blob = new Blob(chunks, {
-        type: 'audio/webm',
-      });
-
-      const file = new File(
-        [blob],
-        `complaint-audio-${Date.now()}.webm`,
-        {
-          type: 'audio/webm',
-        },
-      );
-
-      setSelectedAudio(file);
-      setAudioPreview(URL.createObjectURL(file));
-
-      stream.getTracks().forEach((track) => track.stop());
-    };
-
-    recorder.start();
-    setMediaRecorder(recorder);
-    setRecording(true);
-  } catch (error) {
-    console.error(error);
-    alert('Microphone permission is required to record audio.');
-  }
-};
-
-const stopRecording = () => {
-  if (mediaRecorder) {
-    mediaRecorder.stop();
-  }
-
-  setRecording(false);
-  setMediaRecorder(null);
 };
 
 const uploadComplaintPhotos = async () => {
@@ -511,19 +456,30 @@ setAudioPreview('');
         🎙 Add Voice Note
       </p>
       <p className="mt-1 text-xs text-blue-700">
-        Upload audio from phone recorder if typing the issue is difficult.
-      </p>
+  Record voice note directly or upload audio from phone recorder.
+</p>
     </div>
 
     <div className="flex flex-wrap gap-2">
 
-      <div className="rounded-2xl bg-gray-900 px-4 py-3 text-xs font-black text-white">
-  <button
+        <AudioRecorder
+  onRecordingReady={(file) => {
+    setSelectedAudio(file);
+
+    if (file) {
+      setAudioPreview(URL.createObjectURL(file));
+    } else {
+      setAudioPreview('');
+    }
+  }}
+/>
+
+      <button
   type="button"
   onClick={() => audioInputRef.current?.click()}
   className="rounded-2xl bg-gray-900 px-4 py-3 text-xs font-black text-white"
 >
-  Use Phone Recorder
+  Upload Audio File
 </button>
 
 <input
@@ -534,7 +490,6 @@ setAudioPreview('');
   onChange={handleAudioSelect}
   className="hidden"
 />
-</div>
     </div>
   </div>
 
