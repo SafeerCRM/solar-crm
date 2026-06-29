@@ -36,6 +36,7 @@ export default function AccountsLedgerPage() {
     totalCredit: 0,
     netBalance: 0,
   });
+  const [financeHub, setFinanceHub] = useState<any>(null);
   const [partyOutstanding, setPartyOutstanding] =
   useState<PartyOutstanding[]>([]);
 
@@ -69,7 +70,7 @@ const [submittingVendorPayment, setSubmittingVendorPayment] =
 
       const token = localStorage.getItem('token');
 
-      const [ledgerRes, summaryRes, outstandingRes] = await Promise.all([
+      const [ledgerRes, summaryRes, outstandingRes, financeHubRes] = await Promise.all([
         axios.get(`${API_BASE_URL}/project/ledger`, {
           params: {
             partyName,
@@ -98,6 +99,14 @@ const [submittingVendorPayment, setSubmittingVendorPayment] =
       }
     : {},
 }),
+
+axios.get(`${API_BASE_URL}/project/accounts/finance-hub`, {
+  headers: token
+    ? {
+        Authorization: `Bearer ${token}`,
+      }
+    : {},
+}),
       ]);
 
       setEntries(ledgerRes.data || []);
@@ -110,6 +119,7 @@ const [submittingVendorPayment, setSubmittingVendorPayment] =
       );
 
       setPartyOutstanding(outstandingRes.data || []);
+      setFinanceHub(financeHubRes.data || null);
     } catch (error) {
       console.error(error);
       alert('Failed to load ledger');
@@ -277,6 +287,78 @@ const hideLedgerEntry = async (entryId: number) => {
         <h1 className="text-2xl font-bold text-gray-800">
           Accounts / Ledger
         </h1>
+
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+  <FinanceCard
+    title="Total Received"
+    value={financeHub?.income?.totalReceived}
+    tone="green"
+  />
+
+  <FinanceCard
+    title="Total Pending"
+    value={financeHub?.income?.totalPending}
+    tone="orange"
+  />
+
+  <FinanceCard
+    title="Total Outgoing"
+    value={financeHub?.outgoing?.totalOutgoing}
+    tone="red"
+  />
+
+  <FinanceCard
+    title="Available Cash"
+    value={financeHub?.cashFlow?.availableCash}
+    tone="blue"
+  />
+</div>
+
+<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+  <FinanceCard
+    title="Customer Received"
+    value={financeHub?.income?.customerReceived}
+    tone="green"
+  />
+
+  <FinanceCard
+    title="Dealer Received"
+    value={financeHub?.income?.dealerReceived}
+    tone="green"
+  />
+
+  <FinanceCard
+    title="Approved Expenses"
+    value={financeHub?.outgoing?.approvedExpenses}
+    tone="red"
+  />
+
+  <FinanceCard
+    title="Approved PO Cost"
+    value={financeHub?.outgoing?.approvedPurchaseCost}
+    tone="red"
+  />
+</div>
+
+<div className="grid gap-4 md:grid-cols-3">
+  <FinanceCard
+    title="Expected Project Revenue"
+    value={financeHub?.projectProfit?.expectedRevenue}
+    tone="blue"
+  />
+
+  <FinanceCard
+    title="Expected Project Cost"
+    value={financeHub?.projectProfit?.expectedCost}
+    tone="red"
+  />
+
+  <FinanceCard
+    title="Expected Project Profit"
+    value={financeHub?.projectProfit?.expectedProfit}
+    tone="green"
+  />
+</div>
 
         <div className="mt-5 grid gap-4 md:grid-cols-4">
   <div className="rounded-2xl border p-5">
@@ -667,6 +749,34 @@ const hideLedgerEntry = async (entryId: number) => {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function FinanceCard({
+  title,
+  value,
+  tone,
+}: {
+  title: string;
+  value: any;
+  tone: 'green' | 'red' | 'blue' | 'orange';
+}) {
+  const colorClass =
+    tone === 'green'
+      ? 'text-green-700'
+      : tone === 'red'
+        ? 'text-red-700'
+        : tone === 'orange'
+          ? 'text-orange-700'
+          : 'text-blue-700';
+
+  return (
+    <div className="rounded-2xl bg-white p-5 shadow">
+      <p className="text-sm text-gray-500">{title}</p>
+      <p className={`mt-2 text-2xl font-bold ${colorClass}`}>
+        ₹{Number(value || 0).toLocaleString('en-IN')}
+      </p>
     </div>
   );
 }
