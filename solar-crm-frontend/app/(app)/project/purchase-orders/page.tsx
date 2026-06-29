@@ -323,10 +323,37 @@ const [summary, setSummary] = useState({
   partiallyPurchasedCount: 0,
 });
 
+const [partySearch, setPartySearch] = useState('');
+const [selectedPartyName, setSelectedPartyName] = useState('');
+const [fromDateFilter, setFromDateFilter] = useState('');
+const [toDateFilter, setToDateFilter] = useState('');
+
 const filteredVendors = vendors.filter((vendor) =>
   String(vendor.vendorName || '')
     .toLowerCase()
     .includes(vendorSearch.toLowerCase()),
+);
+
+const partyOptions = vendors.filter((party) => {
+  if (documentTypeFilter === 'PO') {
+    return (
+      party.canSellToUs === true ||
+      party.partyType === 'VENDOR' ||
+      party.partyType === 'BOTH'
+    );
+  }
+
+  return (
+    party.canBuyFromUs === true ||
+    party.partyType === 'DEALER' ||
+    party.partyType === 'BOTH'
+  );
+});
+
+const filteredPartyOptions = partyOptions.filter((party) =>
+  String(party.vendorName || '')
+    .toLowerCase()
+    .includes(partySearch.toLowerCase()),
 );
 
   const fetchPurchaseOrders = async () => {
@@ -477,10 +504,10 @@ const fetchGeneratedPos = async () => {
           page: 1,
           limit: 100,
           status: statusFilter,
-          vendorName:
-  vendors.find((vendor) => String(vendor.id) === String(vendorFilterId))
-    ?.vendorName || '',
-          material: materialFilter,
+          vendorName: selectedPartyName || partySearch,
+material: materialFilter,
+fromDate: fromDateFilter,
+toDate: toDateFilter,
         },
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       },
@@ -503,10 +530,10 @@ const fetchGeneratedPis = async () => {
           page: 1,
           limit: 100,
           status: statusFilter,
-          vendorName:
-  vendors.find((vendor) => String(vendor.id) === String(vendorFilterId))
-    ?.vendorName || '',
-          material: materialFilter,
+          vendorName: selectedPartyName || partySearch,
+material: materialFilter,
+fromDate: fromDateFilter,
+toDate: toDateFilter,
         },
         headers: token
           ? {
@@ -533,10 +560,10 @@ const fetchFinalInvoices = async () => {
           page: 1,
           limit: 100,
           status: statusFilter,
-          vendorName:
-  vendors.find((vendor) => String(vendor.id) === String(vendorFilterId))
-    ?.vendorName || '',
-          material: materialFilter,
+          vendorName: selectedPartyName || partySearch,
+material: materialFilter,
+fromDate: fromDateFilter,
+toDate: toDateFilter,
         },
         headers: token
           ? {
@@ -1687,44 +1714,85 @@ const generateProformaInvoice = async () => {
     Procurement Document Filters
   </h2>
 
-  <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-5">
+  <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
     <select
       value={documentTypeFilter}
-      onChange={(e) => setDocumentTypeFilter(e.target.value)}
+      onChange={(e) => {
+        setDocumentTypeFilter(e.target.value);
+        setPartySearch('');
+        setSelectedPartyName('');
+      }}
       className="rounded-xl border p-3"
     >
       <option value="PO">Purchase Orders</option>
-      <option value="PI">Proforma Invoice</option>
-      <option value="INVOICE">Final Invoice</option>
+      <option value="PI">Proforma Invoices</option>
+      <option value="INVOICE">Final Invoices</option>
     </select>
 
+    <div className="relative">
+      <input
+        placeholder={
+          documentTypeFilter === 'PO'
+            ? 'Search vendor'
+            : 'Search dealer'
+        }
+        value={partySearch}
+        onChange={(e) => {
+          setPartySearch(e.target.value);
+          setSelectedPartyName('');
+        }}
+        className="w-full rounded-xl border p-3"
+      />
+
+      {partySearch && filteredPartyOptions.length > 0 && (
+        <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border bg-white shadow">
+          {filteredPartyOptions.map((party) => (
+            <button
+              key={party.id}
+              type="button"
+              onClick={() => {
+                setPartySearch(party.vendorName);
+                setSelectedPartyName(party.vendorName);
+              }}
+              className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-100"
+            >
+              {party.vendorName}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+
     <input
-      placeholder="Search Vendor"
-      value={vendorSearch}
-      onChange={(e) => setVendorSearch(e.target.value)}
-      className="rounded-xl border p-3"
-    />
-
-    <select
-      value={vendorFilterId}
-      onChange={(e) => setVendorFilterId(e.target.value)}
-      className="rounded-xl border p-3"
-    >
-      <option value="">All Vendors</option>
-
-      {filteredVendors.map((v) => (
-        <option key={v.id} value={v.id}>
-          {v.vendorName}
-        </option>
-      ))}
-    </select>
-
-    <input
-      placeholder="Material"
+      placeholder="Search material"
       value={materialFilter}
       onChange={(e) => setMaterialFilter(e.target.value)}
       className="rounded-xl border p-3"
     />
+
+    <div>
+      <label className="text-xs font-semibold text-gray-500">
+        From Date
+      </label>
+      <input
+        type="date"
+        value={fromDateFilter}
+        onChange={(e) => setFromDateFilter(e.target.value)}
+        className="w-full rounded-xl border p-3"
+      />
+    </div>
+
+    <div>
+      <label className="text-xs font-semibold text-gray-500">
+        To Date
+      </label>
+      <input
+        type="date"
+        value={toDateFilter}
+        onChange={(e) => setToDateFilter(e.target.value)}
+        className="w-full rounded-xl border p-3"
+      />
+    </div>
 
     <button
       type="button"
@@ -1743,10 +1811,12 @@ const generateProformaInvoice = async () => {
     type="button"
     onClick={() => {
       setDocumentTypeFilter('PO');
-      setVendorFilterId('');
-      setVendorSearch('');
+      setPartySearch('');
+      setSelectedPartyName('');
       setMaterialFilter('');
       setStatusFilter('');
+      setFromDateFilter('');
+      setToDateFilter('');
 
       setTimeout(() => {
         fetchGeneratedPos();
@@ -1756,7 +1826,7 @@ const generateProformaInvoice = async () => {
     }}
     className="mt-3 rounded-xl bg-gray-700 px-4 py-2 text-sm font-semibold text-white"
   >
-    Reset Filters
+    Reset
   </button>
 </div>
 
