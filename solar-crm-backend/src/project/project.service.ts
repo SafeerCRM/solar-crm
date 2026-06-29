@@ -11513,6 +11513,8 @@ async getGeneratedPurchaseOrders(filters?: {
   limit?: number;
   search?: string;
   status?: string;
+  vendorId?: string;
+  material?: string;
 }) {
   const page =
     Number(filters?.page) > 0
@@ -11551,6 +11553,30 @@ async getGeneratedPurchaseOrders(filters?: {
       },
     );
   }
+
+  if (filters?.vendorId) {
+  query.andWhere(
+    'CAST(po.vendorId AS TEXT) = :vendorId',
+    {
+      vendorId: filters.vendorId,
+    },
+  );
+}
+
+if (filters?.material) {
+  query.innerJoin(
+    ProjectPurchaseOrderItem,
+    'poItemFilter',
+    'poItemFilter.purchaseOrderId = po.id',
+  );
+
+  query.andWhere(
+    'LOWER(poItemFilter.materialName) LIKE :material',
+    {
+      material: `%${filters.material.toLowerCase()}%`,
+    },
+  );
+}
 
   query.andWhere('po.isHidden = false');
 
@@ -11819,6 +11845,8 @@ async getProformaInvoices(filters?: {
   limit?: number;
   search?: string;
   status?: string;
+  vendorId?: string;
+  material?: string;
 }) {
   const page =
     Number(filters?.page) > 0
@@ -11856,6 +11884,30 @@ async getProformaInvoices(filters?: {
       },
     );
   }
+
+  if (filters?.vendorId) {
+  query.andWhere(
+    'CAST(pi.dealerId AS TEXT) = :vendorId',
+    {
+      vendorId: filters.vendorId,
+    },
+  );
+}
+
+if (filters?.material) {
+  query.innerJoin(
+    ProjectProformaInvoiceItem,
+    'piItemFilter',
+    'piItemFilter.proformaInvoiceId = pi.id',
+  );
+
+  query.andWhere(
+    'LOWER(piItemFilter.itemName) LIKE :material',
+    {
+      material: `%${filters.material.toLowerCase()}%`,
+    },
+  );
+}
 
   query.andWhere('pi.isHidden = false');
 
@@ -13161,6 +13213,8 @@ async getFinalInvoices(filters?: {
   limit?: number;
   search?: string;
   status?: string;
+  vendorId?: string;
+  material?: string;
 }) {
   const page =
     Number(filters?.page) > 0
@@ -13198,6 +13252,30 @@ async getFinalInvoices(filters?: {
       },
     );
   }
+
+  if (filters?.vendorId) {
+  query.andWhere(
+    'CAST(invoice.dealerId AS TEXT) = :vendorId',
+    {
+      vendorId: filters.vendorId,
+    },
+  );
+}
+
+if (filters?.material) {
+  query.innerJoin(
+    ProjectFinalInvoiceItem,
+    'invoiceItemFilter',
+    'invoiceItemFilter.finalInvoiceId = invoice.id',
+  );
+
+  query.andWhere(
+    'LOWER(invoiceItemFilter.itemName) LIKE :material',
+    {
+      material: `%${filters.material.toLowerCase()}%`,
+    },
+  );
+}
 
   query.andWhere('invoice.isHidden = false');
 

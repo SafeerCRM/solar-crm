@@ -608,12 +608,16 @@ getProformaInvoices(
   @Query('limit') limit?: string,
   @Query('search') search?: string,
   @Query('status') status?: string,
+  @Query('vendorId') vendorId?: string,
+  @Query('material') material?: string,
 ) {
   return this.projectService.getProformaInvoices({
     page: Number(page || 1),
     limit: Number(limit || 20),
     search: search || '',
     status: status || '',
+    vendorId: vendorId || '',
+    material: material || '',
   });
 }
 
@@ -699,12 +703,16 @@ getFinalInvoices(
   @Query('limit') limit?: string,
   @Query('search') search?: string,
   @Query('status') status?: string,
+  @Query('vendorId') vendorId?: string,
+  @Query('material') material?: string,
 ) {
   return this.projectService.getFinalInvoices({
     page: Number(page || 1),
     limit: Number(limit || 20),
     search: search || '',
     status: status || '',
+    vendorId: vendorId || '',
+    material: material || '',
   });
 }
 
@@ -1431,12 +1439,16 @@ getGeneratedPurchaseOrders(
   @Query('limit') limit?: string,
   @Query('search') search?: string,
   @Query('status') status?: string,
+  @Query('vendorId') vendorId?: string,
+  @Query('material') material?: string,
 ) {
   return this.projectService.getGeneratedPurchaseOrders({
     page: Number(page || 1),
     limit: Number(limit || 20),
     search: search || '',
     status: status || '',
+    vendorId: vendorId || '',
+    material: material || '',
   });
 }
 
