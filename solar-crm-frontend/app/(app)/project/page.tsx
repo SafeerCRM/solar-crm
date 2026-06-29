@@ -34,6 +34,9 @@ projectWorkStateUpdatedByName?: string;
     runningActivity?: string;
     latestCompletedActivity?: string;
     nextPendingActivity?: string;
+    isLegacyProject?: boolean;
+projectSource?: string;
+legacyYear?: number;
   };
 
   paymentSummary?: {
@@ -74,6 +77,8 @@ const [branchFilter, setBranchFilter] = useState('');
 const [ownerFilter, setOwnerFilter] = useState('');
 const [fromDate, setFromDate] = useState('');
 const [toDate, setToDate] = useState('');
+const [legacyFilter, setLegacyFilter] = useState('');
+const [legacyYear, setLegacyYear] = useState('');
 const [filtersLoaded, setFiltersLoaded] = useState(false);
 const [projectOwners, setProjectOwners] = useState<ProjectOwner[]>([]);
 const [hiddenProjects, setHiddenProjects] = useState<Project[]>([]);
@@ -97,6 +102,8 @@ useEffect(() => {
     setOwnerFilter(parsed.ownerFilter || '');
     setFromDate(parsed.fromDate || '');
     setToDate(parsed.toDate || '');
+    setLegacyFilter(parsed.legacyFilter || '');
+setLegacyYear(parsed.legacyYear || '');
     setPage(Number(parsed.page || 1));
   } catch {
     localStorage.removeItem('projectListFilters');
@@ -116,6 +123,8 @@ useEffect(() => {
       ownerFilter,
       fromDate,
       toDate,
+      legacyFilter,
+legacyYear,
       page,
     }),
   );
@@ -127,6 +136,8 @@ useEffect(() => {
   ownerFilter,
   fromDate,
   toDate,
+  legacyFilter,
+legacyYear,
   page,
 ]);
 
@@ -146,6 +157,8 @@ useEffect(() => {
     owner: ownerFilter,
     fromDate,
 toDate,
+legacyFilter,
+legacyYear,
   },
   headers: token
     ? {
@@ -296,6 +309,8 @@ const restoreProject = async (projectId: number) => {
   ownerFilter,
   fromDate,
   toDate,
+  legacyFilter,
+legacyYear,
 ]);
 
 useEffect(() => {
@@ -438,6 +453,40 @@ useEffect(() => {
       <option value="ELECTRICITY_PROCESS">Electricity Process</option>
       <option value="COMPLETED">Completed</option>
     </select>
+
+    <select
+  value={legacyFilter}
+  onChange={(e) => {
+    const value = e.target.value;
+    setLegacyFilter(value);
+
+    if (value !== 'LEGACY') {
+      setLegacyYear('');
+    }
+
+    setPage(1);
+  }}
+  className="rounded-xl border p-3"
+>
+  <option value="">All Project Sources</option>
+  <option value="CRM">CRM Projects Only</option>
+  <option value="LEGACY">Legacy Projects Only</option>
+</select>
+
+<select
+  value={legacyYear}
+  onChange={(e) => {
+    setLegacyYear(e.target.value);
+    setPage(1);
+  }}
+  disabled={legacyFilter !== 'LEGACY'}
+  className="rounded-xl border p-3 disabled:bg-gray-100 disabled:text-gray-400"
+>
+  <option value="">All Legacy Years</option>
+  <option value="2024">Legacy 2024</option>
+  <option value="2025">Legacy 2025</option>
+  <option value="2026">Legacy 2026</option>
+</select>
   </div>
 
   <div className="mt-3 flex flex-wrap gap-2">
@@ -470,6 +519,8 @@ useEffect(() => {
       setOwnerFilter('');
       setFromDate('');
       setToDate('');
+      setLegacyFilter('');
+setLegacyYear('');
       setPage(1);
       localStorage.removeItem('projectListFilters');
     }}
