@@ -5844,6 +5844,176 @@ async getAccountExpenseSummary() {
   };
 }
 
+async getFinanceSummary(query: any = {}) {
+  const month =
+    query?.month || new Date().toISOString().slice(0, 7);
+
+  const monthStart = new Date(`${month}-01T00:00:00`);
+  const monthEnd = new Date(
+    monthStart.getFullYear(),
+    monthStart.getMonth() + 1,
+    0,
+    23,
+    59,
+    59,
+  );
+
+  const paymentInstallments =
+    await this.projectPaymentInstallmentRepository.find({
+      where: {
+        isHidden: false,
+      } as any,
+    });
+
+  const dealerPayments =
+    await this.projectDealerPaymentRepository.find({
+      where: {
+        isHidden: false,
+      } as any,
+    });
+
+  const expenses =
+    await this.projectAccountExpenseRepository.find({
+      where: {
+        isHidden: false,
+      },
+    });
+
+  const approvedProjectCollections =
+    paymentInstallments.filter(
+      (item: any) =>
+        String(item.approvalStatus || '') === 'APPROVED',
+    );
+
+  const pendingProjectCollections =
+    paymentInstallments.filter(
+      (item: any) =>
+        String(item.approvalStatus || '') === 'PENDING' &&
+        Number(item.paidAmount || 0) > 0,
+    );
+
+  const approvedDealerPayments =
+    dealerPayments.filter(
+      (item: any) =>
+        String(item.status || '') === 'APPROVED',
+    );
+
+  const pendingDealerPayments =
+    dealerPayments.filter(
+      (item: any) =>
+        String(item.status || '') === 'PENDING',
+    );
+
+  const approvedExpenses = expenses.filter(
+    (item) =>
+      item.approvalStatus ===
+      ProjectAccountExpenseApprovalStatus.APPROVED,
+  );
+
+  const pendingExpenses = expenses.filter(
+    (item) =>
+      item.approvalStatus ===
+      ProjectAccountExpenseApprovalStatus.PENDING,
+  );
+
+  const sum = (items: any[], key = 'amount') =>
+    items.reduce(
+      (total, item) => total + Number(item?.[key] || 0),
+      0,
+    );
+
+  const expenseAmount = (item: any) =>
+    Number(item.totalAmount || item.amount || 0);
+
+  const sumExpenses = (items: any[]) =>
+    items.reduce(
+      (total, item) => total + expenseAmount(item),
+      0,
+    );
+
+  const isInMonth = (dateValue: any) => {
+    if (!dateValue) return false;
+
+    const date = new Date(dateValue);
+
+    return date >= monthStart && date <= monthEnd;
+  };
+
+  const customerIncoming = sum(
+    approvedProjectCollections,
+    'paidAmount',
+  );
+
+  const dealerIncoming = sum(
+    approvedDealerPayments,
+    'amount',
+  );
+
+  const totalIncoming = customerIncoming + dealerIncoming;
+
+  const totalOutgoing = sumExpenses(approvedExpenses);
+
+  const pendingIncoming =
+    sum(pendingProjectCollections, 'paidAmount') +
+    sum(pendingDealerPayments, 'amount');
+
+  const pendingOutgoing = sumExpenses(pendingExpenses);
+
+  const monthlyCustomerIncoming = sum(
+    approvedProjectCollections.filter((item: any) =>
+      isInMonth(item.paidDate || item.updatedAt || item.createdAt),
+    ),
+    'paidAmount',
+  );
+
+  const monthlyDealerIncoming = sum(
+    approvedDealerPayments.filter((item: any) =>
+      isInMonth(item.paymentDate || item.updatedAt || item.createdAt),
+    ),
+    'amount',
+  );
+
+  const monthlyIncoming =
+    monthlyCustomerIncoming + monthlyDealerIncoming;
+
+  const monthlyOutgoing = sumExpenses(
+    approvedExpenses.filter((item: any) =>
+      isInMonth(
+        item.expenseDate || item.approvedAt || item.createdAt,
+      ),
+    ),
+  );
+
+  return {
+    month,
+
+    incoming: {
+      customerCollections: customerIncoming,
+      dealerCollections: dealerIncoming,
+      totalIncoming,
+      pendingIncoming,
+    },
+
+    outgoing: {
+      approvedExpenses: totalOutgoing,
+      pendingExpenses: pendingOutgoing,
+    },
+
+    cashFlow: {
+      netCashPosition: totalIncoming - totalOutgoing,
+      pendingNetPosition: pendingIncoming - pendingOutgoing,
+    },
+
+    monthly: {
+      incoming: monthlyIncoming,
+      outgoing: monthlyOutgoing,
+      net: monthlyIncoming - monthlyOutgoing,
+      customerCollections: monthlyCustomerIncoming,
+      dealerCollections: monthlyDealerIncoming,
+    },
+  };
+}
+
 async listAccountExpenses() {
   return this.projectAccountExpenseRepository.find({
     where: {

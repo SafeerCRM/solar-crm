@@ -863,6 +863,20 @@ getProjectAccountsSummary(
   'PAYMENT_MANAGER',
   'ACCOUNT_MANAGER',
 )
+@Get('finance-summary')
+getFinanceSummary(@Query() query: any) {
+  return this.projectService.getFinanceSummary(query);
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'PROJECT_EXECUTIVE',
+  'MEETING_MANAGER',
+  'PAYMENT_COLLECTION_EXECUTIVE',
+  'PAYMENT_MANAGER',
+  'ACCOUNT_MANAGER',
+)
 @Get('account-expenses/summary')
 getAccountExpenseSummary() {
   return this.projectService.getAccountExpenseSummary();
