@@ -71,6 +71,7 @@ const [expenseLoading, setExpenseLoading] =
 
   const [canApproveExpense, setCanApproveExpense] =
   useState(false);
+  const [expenseProofUploading, setExpenseProofUploading] = useState(false);
 
 useEffect(() => {
   loadSummary();
@@ -404,6 +405,52 @@ const createExpense = async () => {
   }
 };
 
+const uploadExpenseProof = async (file: File | null) => {
+  if (!file) return;
+
+  try {
+    setExpenseProofUploading(true);
+
+    const token = localStorage.getItem('token');
+
+    const formData = new FormData();
+    formData.append('files', file);
+
+    const res = await axios.post(
+      `${API_BASE_URL}/project/account-expenses/proof/upload`,
+      formData,
+      {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'Content-Type': 'multipart/form-data',
+        },
+      },
+    );
+
+    const fileUrl = res.data?.fileUrl || '';
+
+    if (!fileUrl) {
+      alert('Proof upload failed');
+      return;
+    }
+
+    setExpenseForm({
+      ...expenseForm,
+      proofUrl: fileUrl,
+    });
+
+    alert('Proof uploaded successfully');
+  } catch (error: any) {
+    console.error(error);
+    alert(
+      error?.response?.data?.message ||
+        'Failed to upload proof',
+    );
+  } finally {
+    setExpenseProofUploading(false);
+  }
+};
+
 const approveExpense = async (
   expenseId: number,
 ) => {
@@ -662,7 +709,7 @@ const estimatedPendingPosition =
 
   <div className="rounded-2xl bg-white p-5 shadow">
     <p className="text-sm text-gray-500">
-      Pending Approval
+      Payment Approval Pending
     </p>
 
     <p className="mt-2 text-2xl font-bold text-yellow-700">
@@ -816,6 +863,10 @@ const estimatedPendingPosition =
     />
   )}
 
+  <label className="text-xs font-semibold text-gray-500">
+  Expense Date *
+</label>
+
   <input
     type="date"
     value={expenseForm.expenseDate}
@@ -879,6 +930,10 @@ const estimatedPendingPosition =
     }
     className="rounded-xl border p-3"
   />
+
+  <label className="text-xs font-semibold text-gray-500">
+  Bill / Invoice Date
+</label>
 
   <input
     type="date"
@@ -1027,18 +1082,52 @@ const estimatedPendingPosition =
     className="rounded-xl border p-3"
   />
 
+  <div className="rounded-xl border p-3">
+  <p className="mb-2 text-xs font-semibold text-gray-500">
+    Upload Bill / Receipt
+  </p>
+
   <input
-    type="text"
-    placeholder="Proof / Bill URL"
-    value={expenseForm.proofUrl}
+    type="file"
+    accept="image/*,application/pdf"
     onChange={(e) =>
-      setExpenseForm({
-        ...expenseForm,
-        proofUrl: e.target.value,
-      })
+      uploadExpenseProof(e.target.files?.[0] || null)
     }
-    className="rounded-xl border p-3"
+    className="w-full text-sm"
   />
+
+  {expenseProofUploading && (
+    <p className="mt-2 text-xs font-semibold text-blue-600">
+      Uploading proof...
+    </p>
+  )}
+
+  {expenseForm.proofUrl && (
+    <div className="mt-2 flex gap-3 text-xs">
+      <a
+        href={expenseForm.proofUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="font-semibold text-blue-600"
+      >
+        View Proof
+      </a>
+
+      <button
+        type="button"
+        onClick={() =>
+          setExpenseForm({
+            ...expenseForm,
+            proofUrl: '',
+          })
+        }
+        className="font-semibold text-red-600"
+      >
+        Remove
+      </button>
+    </div>
+  )}
+</div>
 
   <input
     type="text"
@@ -1148,7 +1237,7 @@ const estimatedPendingPosition =
             Type
           </th>
 
-          <th className="p-2 text-left">Date</th>
+          <th className="p-2 text-left">Expense Date</th>
 <th className="p-2 text-left">Vendor / Shop</th>
 <th className="p-2 text-left">Bill No.</th>
 
@@ -1170,7 +1259,7 @@ const estimatedPendingPosition =
           </th>
 
           <th className="p-2 text-left">
-            Date
+            Created Date
           </th>
 
           <th className="p-2 text-left">
