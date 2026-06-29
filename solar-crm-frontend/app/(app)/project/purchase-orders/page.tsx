@@ -325,6 +325,7 @@ const [summary, setSummary] = useState({
 
 const [partySearch, setPartySearch] = useState('');
 const [selectedPartyName, setSelectedPartyName] = useState('');
+const [documentNumberSearch, setDocumentNumberSearch] = useState('');
 const [fromDateFilter, setFromDateFilter] = useState('');
 const [toDateFilter, setToDateFilter] = useState('');
 
@@ -504,6 +505,7 @@ const fetchGeneratedPos = async () => {
           page: 1,
           limit: 100,
           status: statusFilter,
+          search: documentNumberSearch,
           vendorName: selectedPartyName || partySearch,
 material: materialFilter,
 fromDate: fromDateFilter,
@@ -530,6 +532,7 @@ const fetchGeneratedPis = async () => {
           page: 1,
           limit: 100,
           status: statusFilter,
+          search: documentNumberSearch,
           vendorName: selectedPartyName || partySearch,
 material: materialFilter,
 fromDate: fromDateFilter,
@@ -560,6 +563,7 @@ const fetchFinalInvoices = async () => {
           page: 1,
           limit: 100,
           status: statusFilter,
+          search: documentNumberSearch,
           vendorName: selectedPartyName || partySearch,
 material: materialFilter,
 fromDate: fromDateFilter,
@@ -1709,25 +1713,39 @@ const generateProformaInvoice = async () => {
         </p>
       </div>
 
-      <div className="rounded-2xl bg-white p-5 shadow">
-  <h2 className="text-xl font-bold text-gray-800">
+      <div className="rounded-2xl bg-white p-4 shadow">
+  <h2 className="text-lg font-bold text-gray-800">
     Procurement Document Filters
   </h2>
 
-  <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
+  <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
     <select
       value={documentTypeFilter}
       onChange={(e) => {
         setDocumentTypeFilter(e.target.value);
         setPartySearch('');
         setSelectedPartyName('');
+        setDocumentNumberSearch('');
       }}
-      className="rounded-xl border p-3"
+      className="h-11 rounded-xl border px-3 text-sm"
     >
       <option value="PO">Purchase Orders</option>
       <option value="PI">Proforma Invoices</option>
       <option value="INVOICE">Final Invoices</option>
     </select>
+
+    <input
+      placeholder={
+        documentTypeFilter === 'PO'
+          ? 'Search PO No.'
+          : documentTypeFilter === 'PI'
+            ? 'Search PI No.'
+            : 'Search Invoice No.'
+      }
+      value={documentNumberSearch}
+      onChange={(e) => setDocumentNumberSearch(e.target.value)}
+      className="h-11 rounded-xl border px-3 text-sm"
+    />
 
     <div className="relative">
       <input
@@ -1741,11 +1759,11 @@ const generateProformaInvoice = async () => {
           setPartySearch(e.target.value);
           setSelectedPartyName('');
         }}
-        className="w-full rounded-xl border p-3"
+        className="h-11 w-full rounded-xl border px-3 text-sm"
       />
 
       {partySearch && filteredPartyOptions.length > 0 && (
-        <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border bg-white shadow">
+        <div className="absolute z-20 mt-1 max-h-52 w-full overflow-y-auto rounded-xl border bg-white shadow">
           {filteredPartyOptions.map((party) => (
             <button
               key={party.id}
@@ -1767,33 +1785,35 @@ const generateProformaInvoice = async () => {
       placeholder="Search material"
       value={materialFilter}
       onChange={(e) => setMaterialFilter(e.target.value)}
-      className="rounded-xl border p-3"
+      className="h-11 rounded-xl border px-3 text-sm"
     />
 
     <div>
-      <label className="text-xs font-semibold text-gray-500">
+      <label className="mb-1 block text-xs font-semibold text-gray-500">
         From Date
       </label>
       <input
         type="date"
         value={fromDateFilter}
         onChange={(e) => setFromDateFilter(e.target.value)}
-        className="w-full rounded-xl border p-3"
+        className="h-11 w-full rounded-xl border px-3 text-sm"
       />
     </div>
 
     <div>
-      <label className="text-xs font-semibold text-gray-500">
+      <label className="mb-1 block text-xs font-semibold text-gray-500">
         To Date
       </label>
       <input
         type="date"
         value={toDateFilter}
         onChange={(e) => setToDateFilter(e.target.value)}
-        className="w-full rounded-xl border p-3"
+        className="h-11 w-full rounded-xl border px-3 text-sm"
       />
     </div>
+  </div>
 
+  <div className="mt-3 flex flex-wrap gap-2">
     <button
       type="button"
       onClick={() => {
@@ -1801,33 +1821,34 @@ const generateProformaInvoice = async () => {
         fetchGeneratedPis();
         fetchFinalInvoices();
       }}
-      className="rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white"
+      className="rounded-xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white"
     >
       Apply
     </button>
+
+    <button
+      type="button"
+      onClick={() => {
+        setDocumentTypeFilter('PO');
+        setPartySearch('');
+        setSelectedPartyName('');
+        setDocumentNumberSearch('');
+        setMaterialFilter('');
+        setStatusFilter('');
+        setFromDateFilter('');
+        setToDateFilter('');
+
+        setTimeout(() => {
+          fetchGeneratedPos();
+          fetchGeneratedPis();
+          fetchFinalInvoices();
+        }, 100);
+      }}
+      className="rounded-xl bg-gray-700 px-5 py-2 text-sm font-semibold text-white"
+    >
+      Reset
+    </button>
   </div>
-
-  <button
-    type="button"
-    onClick={() => {
-      setDocumentTypeFilter('PO');
-      setPartySearch('');
-      setSelectedPartyName('');
-      setMaterialFilter('');
-      setStatusFilter('');
-      setFromDateFilter('');
-      setToDateFilter('');
-
-      setTimeout(() => {
-        fetchGeneratedPos();
-        fetchGeneratedPis();
-        fetchFinalInvoices();
-      }, 100);
-    }}
-    className="mt-3 rounded-xl bg-gray-700 px-4 py-2 text-sm font-semibold text-white"
-  >
-    Reset
-  </button>
 </div>
 
       <div
