@@ -23,6 +23,13 @@ const [projectSummary, setProjectSummary] = useState({
   completedProjects: 0,
 });
 
+const [financeSummary, setFinanceSummary] = useState<any>({
+  incoming: {},
+  outgoing: {},
+  cashFlow: {},
+  monthly: {},
+});
+
 const [expenseForm, setExpenseForm] = useState({
   expenseType: 'MARKET_PURCHASE',
   otherExpenseName: '',
@@ -69,6 +76,7 @@ useEffect(() => {
   loadSummary();
   loadExpenses();
   loadExpenseSummary();
+  loadFinanceSummary();
 
   try {
   const userData =
@@ -98,6 +106,27 @@ useEffect(() => {
   console.error(error);
 }
 }, []);
+
+const loadFinanceSummary = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/finance-summary`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setFinanceSummary(res.data || {});
+  } catch (error) {
+    console.error(error);
+  }
+};
 
 const loadSummary = async () => {
   try {
@@ -641,6 +670,36 @@ const estimatedPendingPosition =
       {summary.pendingApproval.toLocaleString(
         'en-IN',
       )}
+    </p>
+  </div>
+</div>
+
+<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+  <div className="rounded-2xl bg-white p-5 shadow">
+    <p className="text-sm text-gray-500">Total Incoming</p>
+    <p className="mt-2 text-2xl font-bold text-green-700">
+      ₹{Number(financeSummary?.incoming?.totalIncoming || 0).toLocaleString('en-IN')}
+    </p>
+  </div>
+
+  <div className="rounded-2xl bg-white p-5 shadow">
+    <p className="text-sm text-gray-500">Total Outgoing</p>
+    <p className="mt-2 text-2xl font-bold text-red-700">
+      ₹{Number(financeSummary?.outgoing?.approvedExpenses || 0).toLocaleString('en-IN')}
+    </p>
+  </div>
+
+  <div className="rounded-2xl bg-white p-5 shadow">
+    <p className="text-sm text-gray-500">Net Cash Position</p>
+    <p className="mt-2 text-2xl font-bold text-blue-700">
+      ₹{Number(financeSummary?.cashFlow?.netCashPosition || 0).toLocaleString('en-IN')}
+    </p>
+  </div>
+
+  <div className="rounded-2xl bg-white p-5 shadow">
+    <p className="text-sm text-gray-500">This Month Net</p>
+    <p className="mt-2 text-2xl font-bold text-purple-700">
+      ₹{Number(financeSummary?.monthly?.net || 0).toLocaleString('en-IN')}
     </p>
   </div>
 </div>
