@@ -67,6 +67,16 @@ const [submittingCustomerPayment, setSubmittingCustomerPayment] =
 const [submittingVendorPayment, setSubmittingVendorPayment] =
   useState(false);
 
+  const [ledgerPage, setLedgerPage] = useState(1);
+const [ledgerTotalPages, setLedgerTotalPages] = useState(1);
+
+const [outstandingPage, setOutstandingPage] = useState(1);
+const [outstandingTotalPages, setOutstandingTotalPages] = useState(1);
+
+const [entryType, setEntryType] = useState('');
+const [fromDate, setFromDate] = useState('');
+const [toDate, setToDate] = useState('');
+
   const fetchLedger = async () => {
     try {
       setLoading(true);
@@ -82,10 +92,15 @@ const [submittingVendorPayment, setSubmittingVendorPayment] =
 ] = await Promise.all([
         axios.get(`${API_BASE_URL}/project/ledger`, {
           params: {
-            partyName,
-            partyType,
-            sourceType,
-          },
+  partyName,
+  partyType,
+  sourceType,
+  entryType,
+  fromDate,
+  toDate,
+  page: ledgerPage,
+  limit: 20,
+},
           headers: token
             ? {
                 Authorization: `Bearer ${token}`,
@@ -102,6 +117,13 @@ const [submittingVendorPayment, setSubmittingVendorPayment] =
         }),
 
         axios.get(`${API_BASE_URL}/project/ledger/party-outstanding`, {
+  params: {
+    search: partyName,
+    partyType,
+    page: outstandingPage,
+    limit: 20,
+    outstandingOnly: true,
+  },
   headers: token
     ? {
         Authorization: `Bearer ${token}`,
@@ -131,7 +153,8 @@ axios.get(`${API_BASE_URL}/project/accounts/project-profit`, {
 }),
       ]);
 
-      setEntries(ledgerRes.data || []);
+      setEntries(ledgerRes.data?.data || []);
+setLedgerTotalPages(ledgerRes.data?.pagination?.totalPages || 1);
       setSummary(
         summaryRes.data || {
           totalDebit: 0,
@@ -140,7 +163,10 @@ axios.get(`${API_BASE_URL}/project/accounts/project-profit`, {
         },
       );
 
-      setPartyOutstanding(outstandingRes.data || []);
+      setPartyOutstanding(outstandingRes.data?.data || []);
+setOutstandingTotalPages(
+  outstandingRes.data?.pagination?.totalPages || 1,
+);
       setFinanceHub(financeHubRes.data || null);
       setProjectProfitRows(projectProfitRes.data?.data || []);
 setProjectProfitTotalPages(
@@ -305,7 +331,17 @@ const hideLedgerEntry = async (entryId: number) => {
   useEffect(() => {
   fetchLedger();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [partyName, partyType, sourceType, projectProfitPage]);
+}, [
+  partyName,
+  partyType,
+  sourceType,
+  entryType,
+  fromDate,
+  toDate,
+  ledgerPage,
+  outstandingPage,
+  projectProfitPage,
+]);
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">
@@ -537,6 +573,30 @@ const hideLedgerEntry = async (entryId: number) => {
       ))}
     </div>
   )}
+
+  <div className="mt-4 flex items-center justify-between">
+  <button
+    disabled={outstandingPage <= 1}
+    onClick={() =>
+      setOutstandingPage((prev) => Math.max(prev - 1, 1))
+    }
+    className="rounded-xl border px-4 py-2 text-sm disabled:opacity-50"
+  >
+    Previous
+  </button>
+
+  <span className="text-sm text-gray-500">
+    Page {outstandingPage} of {outstandingTotalPages}
+  </span>
+
+  <button
+    disabled={outstandingPage >= outstandingTotalPages}
+    onClick={() => setOutstandingPage((prev) => prev + 1)}
+    className="rounded-xl border px-4 py-2 text-sm disabled:opacity-50"
+  >
+    Next
+  </button>
+</div>
 </div>
 
       <div className="grid gap-5 md:grid-cols-2">
@@ -811,6 +871,39 @@ const hideLedgerEntry = async (entryId: number) => {
           Ledger Entries
         </h2>
 
+        <select
+  value={entryType}
+  onChange={(e) => {
+    setEntryType(e.target.value);
+    setLedgerPage(1);
+  }}
+  className="rounded-xl border p-3"
+>
+  <option value="">All Entry Types</option>
+  <option value="DEBIT">Debit</option>
+  <option value="CREDIT">Credit</option>
+</select>
+
+<input
+  type="date"
+  value={fromDate}
+  onChange={(e) => {
+    setFromDate(e.target.value);
+    setLedgerPage(1);
+  }}
+  className="rounded-xl border p-3"
+/>
+
+<input
+  type="date"
+  value={toDate}
+  onChange={(e) => {
+    setToDate(e.target.value);
+    setLedgerPage(1);
+  }}
+  className="rounded-xl border p-3"
+/>
+
         {loading ? (
           <p>Loading...</p>
         ) : entries.length === 0 ? (
@@ -879,6 +972,30 @@ const hideLedgerEntry = async (entryId: number) => {
             ))}
           </div>
         )}
+
+        <div className="mt-4 flex items-center justify-between">
+  <button
+    disabled={ledgerPage <= 1}
+    onClick={() =>
+      setLedgerPage((prev) => Math.max(prev - 1, 1))
+    }
+    className="rounded-xl border px-4 py-2 text-sm disabled:opacity-50"
+  >
+    Previous
+  </button>
+
+  <span className="text-sm text-gray-500">
+    Page {ledgerPage} of {ledgerTotalPages}
+  </span>
+
+  <button
+    disabled={ledgerPage >= ledgerTotalPages}
+    onClick={() => setLedgerPage((prev) => prev + 1)}
+    className="rounded-xl border px-4 py-2 text-sm disabled:opacity-50"
+  >
+    Next
+  </button>
+</div>
       </div>
     </div>
   );
