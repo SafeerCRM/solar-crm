@@ -484,32 +484,54 @@ async getProjectProfitSummary(query: any = {}) {
   const limit = Math.min(Math.max(Number(query?.limit || 20), 1), 100);
   const skip = (page - 1) * limit;
 
-  const projectQb = this.projectRepository
-    .createQueryBuilder('project')
-    .where('project.isHidden = false')
-    .orderBy('project.createdAt', 'DESC')
-    .skip(skip)
-    .take(limit);
+ const projectQb = this.projectRepository
+  .createQueryBuilder('project')
+  .where('project.isHidden = false');
 
-  if (query?.search) {
-    projectQb.andWhere(
-      `(
-        LOWER(project.customerName) LIKE :search
-        OR LOWER(project.customerPhone) LIKE :search
-        OR CAST(project.id AS TEXT) LIKE :search
-      )`,
-      { search: `%${String(query.search).toLowerCase()}%` },
-    );
-  }
+const projectTypeFilter = String(
+  query?.projectTypeFilter || 'CRM',
+);
 
-  if (query?.branch) {
-    projectQb.andWhere('LOWER(project.branchName) LIKE :branch', {
-      branch: `%${String(query.branch).toLowerCase()}%`,
+if (projectTypeFilter === 'CRM') {
+  projectQb.andWhere(
+    '(project.isLegacyProject = false OR project.isLegacyProject IS NULL)',
+  );
+}
+
+if (projectTypeFilter === 'LEGACY') {
+  projectQb.andWhere('project.isLegacyProject = true');
+
+  if (query?.legacyYear) {
+    projectQb.andWhere('project.legacyYear = :legacyYear', {
+      legacyYear: Number(query.legacyYear),
     });
   }
+}
 
-  const [projects, total] = await projectQb.getManyAndCount();
-  const projectIds = projects.map((project) => project.id);
+if (query?.search) {
+  projectQb.andWhere(
+    `(
+      LOWER(project.customerName) LIKE :search
+      OR LOWER(project.customerPhone) LIKE :search
+      OR CAST(project.id AS TEXT) LIKE :search
+    )`,
+    { search: `%${String(query.search).toLowerCase()}%` },
+  );
+}
+
+if (query?.branch) {
+  projectQb.andWhere('LOWER(project.branchName) LIKE :branch', {
+    branch: `%${String(query.branch).toLowerCase()}%`,
+  });
+}
+
+projectQb
+  .orderBy('project.createdAt', 'DESC')
+  .skip(skip)
+  .take(limit);
+
+const [projects, total] = await projectQb.getManyAndCount();
+const projectIds = projects.map((project) => project.id);
 
   const payments = projectIds.length
     ? await this.projectPaymentInstallmentRepository.find({
