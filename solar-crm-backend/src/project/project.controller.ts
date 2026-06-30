@@ -495,6 +495,7 @@ getContractorComments(
   'PROJECT_EXECUTIVE',
   'MEETING_MANAGER',
   'STOCK_MANAGER',
+  'SOLAR_FRANCHISE'
 )
 
 @Post('material-request')
@@ -804,7 +805,7 @@ createManualFinalInvoice(
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER')
+@Roles('OWNER', 'PROJECT_MANAGER', 'SOLAR_FRANCHISE')
 @Post('contractor/assign')
 assignContractorToProject(
   @Body() body: any,
@@ -1578,7 +1579,7 @@ getProjectLoanDetail(@Param('id') id: string) {
   return this.projectService.getProjectLoanDetail(Number(id));
 }
 
-@Roles('OWNER', 'MARKETING_HEAD', 'PROJECT_MANAGER', 'LOAN_MANAGER')
+@Roles('OWNER', 'MARKETING_HEAD', 'PROJECT_MANAGER', 'LOAN_MANAGER', 'SOLAR_FRANCHISE')
 
 @Post(':id/loan-detail')
 saveProjectLoanDetail(
@@ -1598,7 +1599,7 @@ getProjectSubsidyDetail(@Param('id') id: string) {
   return this.projectService.getProjectSubsidyDetail(Number(id));
 }
 
-@Roles('OWNER', 'MARKETING_HEAD', 'PROJECT_MANAGER', 'SUBSIDY_MANAGER')
+@Roles('OWNER', 'MARKETING_HEAD', 'PROJECT_MANAGER', 'SUBSIDY_MANAGER', 'SOLAR_FRANCHISE')
 
 @Post(':id/subsidy-detail')
 saveProjectSubsidyDetail(
@@ -1622,7 +1623,7 @@ getProjectElectricityDetail(
   );
 }
 
-@Roles('OWNER', 'MARKETING_HEAD', 'PROJECT_MANAGER', 'ELECTRICITY_MANAGER')
+@Roles('OWNER', 'MARKETING_HEAD', 'PROJECT_MANAGER', 'ELECTRICITY_MANAGER', 'SOLAR_FRANCHISE')
 
 @Post(':id/electricity-detail')
 saveProjectElectricityDetail(
@@ -3035,6 +3036,7 @@ uploadProjectDocument(
   'OWNER',
   'MARKETING_HEAD',
   'PROJECT_MANAGER',
+  'SOLAR_FRANCHISE',
 )
 @Patch(':id')
 update(

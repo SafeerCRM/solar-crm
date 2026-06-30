@@ -1307,6 +1307,26 @@ projectWorkStateUpdatedByName:
   ),
 };
 
+const roles = Array.isArray(user?.roles) ? user.roles : [];
+const currentUserId = Number(user?.id || user?.sub);
+const currentUserName = user?.name || user?.email || '';
+
+const isSolarFranchise = roles.includes('SOLAR_FRANCHISE');
+
+const finalProjectOwnerId = isSolarFranchise
+  ? currentUserId
+  : payload?.projectOwnerId
+    ? Number(payload.projectOwnerId)
+    : undefined;
+
+const finalProjectOwnerName = isSolarFranchise
+  ? currentUserName
+  : String(payload?.projectOwnerName || '').trim() || undefined;
+
+const finalProjectOwnerRole = isSolarFranchise
+  ? 'SOLAR_FRANCHISE'
+  : String(payload?.projectOwnerRole || '').trim() || undefined;
+
     const project = this.projectRepository.create({
   ...payload,
 
@@ -1315,9 +1335,23 @@ meetingId: payload?.meetingId ? Number(payload.meetingId) : undefined,
 proposalId: payload?.proposalId ? Number(payload.proposalId) : undefined,
 vendorId: payload?.vendorId ? Number(payload.vendorId) : undefined,
 
-projectOwnerId: payload?.projectOwnerId
-  ? Number(payload.projectOwnerId)
-  : undefined,
+projectOwnerId: finalProjectOwnerId,
+projectOwnerName: finalProjectOwnerName,
+projectOwnerRole: finalProjectOwnerRole,
+
+solarFranchiseUserId: isSolarFranchise
+  ? currentUserId
+  : payload?.solarFranchiseUserId
+    ? Number(payload.solarFranchiseUserId)
+    : undefined,
+
+solarFranchiseName: isSolarFranchise
+  ? currentUserName
+  : String(payload?.solarFranchiseName || '').trim() || undefined,
+
+solarFranchisePhone: isSolarFranchise
+  ? String(payload?.solarFranchisePhone || '').trim()
+  : String(payload?.solarFranchisePhone || '').trim() || undefined,
 
   telecallerId: payload.telecallerId || undefined,
 telecallerName: payload.telecallerName || '',
@@ -1333,6 +1367,8 @@ telecallingAssistantRole:
 leadManagerId: payload.leadManagerId || undefined,
 leadManagerName: payload.leadManagerName || '',
 leadManagerRole: payload.leadManagerRole || '',
+
+
 
 meetingManagerId:
   payload.meetingManagerId || undefined,
@@ -1486,10 +1522,8 @@ const canViewAll =
 
 if (roles.includes('SOLAR_FRANCHISE')) {
   query.andWhere(
-    'project.solarFranchiseUserId = :currentUserId',
-    {
-      currentUserId,
-    },
+    'project.projectOwnerId = :currentUserId',
+    { currentUserId },
   );
 } else if (!canViewAll) {
   query.andWhere(
@@ -1784,23 +1818,19 @@ const canViewAll =
   roles.includes('STOCK_MANAGER');
 
 if (roles.includes('SOLAR_FRANCHISE')) {
-  if (
-    Number(project.solarFranchiseUserId) !==
-    currentUserId
-  ) {
+  if (Number(project.projectOwnerId) !== currentUserId) {
     throw new ForbiddenException(
       'You can only access your own franchise projects',
     );
   }
 } else if (
   !canViewAll &&
-  Number(project.projectOwnerId) !==
-    currentUserId
+  Number(project.projectOwnerId) !== currentUserId
 ) {
   throw new ForbiddenException(
     'You can only access your own projects',
   );
-}
+} 
 
     return project;
   }
@@ -1837,6 +1867,9 @@ if (roles.includes('SOLAR_FRANCHISE')) {
   const isOwner = roles.includes('OWNER');
   const isMarketingHead = roles.includes('MARKETING_HEAD');
   const isProjectManager = roles.includes('PROJECT_MANAGER');
+
+  const isSolarFranchise = roles.includes('SOLAR_FRANCHISE');
+const currentUserId = Number(user?.id || user?.sub);
 
   const editableFieldsForOwner = [
     'customerName',
@@ -1946,12 +1979,20 @@ if (roles.includes('SOLAR_FRANCHISE')) {
   let allowedFields: string[] = [];
 
   if (isOwner) {
-    allowedFields = editableFieldsForOwner;
-  } else if (isMarketingHead) {
-    allowedFields = editableFieldsForMarketingHead;
-  } else if (isProjectManager) {
-    allowedFields = editableFieldsForProjectManager;
+  allowedFields = editableFieldsForOwner;
+} else if (isMarketingHead) {
+  allowedFields = editableFieldsForMarketingHead;
+} else if (isProjectManager) {
+  allowedFields = editableFieldsForProjectManager;
+} else if (isSolarFranchise) {
+  if (Number(project.projectOwnerId) !== currentUserId) {
+    throw new ForbiddenException(
+      'You can edit only your own franchise project',
+    );
   }
+
+  allowedFields = editableFieldsForProjectManager;
+}
 
   const safeData: Partial<Project> = {};
 
@@ -5353,13 +5394,13 @@ async createFranchisePayoutRequest(
   const currentUserId = Number(user?.id || user?.sub);
 
   if (
-    Number((project as any).solarFranchiseUserId) !==
-    currentUserId
-  ) {
-    throw new ForbiddenException(
-      'You can request payout only for your assigned project',
-    );
-  }
+  Number(project.projectOwnerId) !== currentUserId ||
+  String(project.projectOwnerRole || '') !== 'SOLAR_FRANCHISE'
+) {
+  throw new ForbiddenException(
+    'You can request payout only for your own franchise project',
+  );
+}
 
   const requestedAmount = Number(body?.requestedAmount || 0);
 
@@ -5394,10 +5435,11 @@ if (existingOpenRequest) {
     projectId,
     franchiseUserId: currentUserId,
     franchiseName:
-      (project as any).solarFranchiseName ||
-      user?.name ||
-      user?.email ||
-      '',
+  (project as any).solarFranchiseName ||
+  project.projectOwnerName ||
+  user?.name ||
+  user?.email ||
+  '',
     franchisePhone:
       (project as any).solarFranchisePhone ||
       body?.franchisePhone ||
@@ -14847,14 +14889,18 @@ async saveProjectElectricityDetail(
 async assignContractorToProject(body: any, user: any) {
   const roles = Array.isArray(user?.roles) ? user.roles : [];
 
+  const currentUserId = Number(user?.id || user?.sub);
+const isSolarFranchise = roles.includes('SOLAR_FRANCHISE');
+
   if (
-    !roles.includes('OWNER') &&
-    !roles.includes('PROJECT_MANAGER')
-  ) {
-    throw new ForbiddenException(
-      'Only Owner or Project Manager can assign contractor',
-    );
-  }
+  !roles.includes('OWNER') &&
+  !roles.includes('PROJECT_MANAGER') &&
+  !roles.includes('SOLAR_FRANCHISE')
+) {
+  throw new ForbiddenException(
+    'Only owner, project manager, or solar franchise can assign contractor',
+  );
+}
 
   const projectId = Number(body?.projectId);
   const contractorId = Number(body?.contractorId);
@@ -14874,6 +14920,12 @@ async assignContractorToProject(body: any, user: any) {
   if (!project) {
     throw new NotFoundException('Project not found');
   }
+
+  if (isSolarFranchise && Number(project.projectOwnerId) !== currentUserId) {
+  throw new ForbiddenException(
+    'You can assign contractor only for your own franchise project',
+  );
+}
 
   const assignment =
     this.projectContractorAssignmentRepository.create({

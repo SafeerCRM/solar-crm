@@ -90,12 +90,16 @@ private isSolarFranchise(user: any): boolean {
   private canModifyMeeting(meeting: Meeting, user: any): boolean {
   const currentUserId = this.getCurrentUserId(user);
 
-  if (this.isOwner(user)) {
-    return true;
+  if (this.isOwner(user)) return true;
+
+  if (this.isSolarFranchise(user)) {
+    return (
+      Number(meeting.createdBy) === currentUserId ||
+      Number(meeting.assignedTo) === currentUserId
+    );
   }
-  if (this.isMeetingAssistant(user)) {
-  return true;
-}
+
+  if (this.isMeetingAssistant(user)) return true;
 
   if (this.isMeetingManager(user) && meeting.assignedTo === currentUserId) {
     return true;
@@ -168,7 +172,18 @@ private assertCanModifyMeeting(meeting: Meeting, user: any) {
   private applyRoleVisibility(qb: any, user: any) {
   const currentUserId = this.getCurrentUserId(user);
 
-  // ✅ Lead Manager must see only meetings created by him or assigned to him
+  if (this.isOwner(user)) {
+    return qb;
+  }
+
+  if (this.isSolarFranchise(user)) {
+    qb.andWhere(
+      '(meeting.assignedTo = :currentUserId OR meeting.createdBy = :currentUserId)',
+      { currentUserId },
+    );
+    return qb;
+  }
+
   if (this.isLeadManager(user)) {
     qb.andWhere(
       '(meeting.assignedTo = :currentUserId OR meeting.createdBy = :currentUserId)',
@@ -178,6 +193,10 @@ private assertCanModifyMeeting(meeting: Meeting, user: any) {
   }
 
   if (this.isBroadMeetingAccessRole(user)) {
+    qb.andWhere(
+      `(meeting.meetingCategory IS NULL OR meeting.meetingCategory != :solarMiterCategory)`,
+      { solarMiterCategory: MeetingCategory.SOLARMITER },
+    );
     return qb;
   }
 
@@ -238,9 +257,34 @@ private assertCanModifyMeeting(meeting: Meeting, user: any) {
       throw new NotFoundException(`Meeting with ID ${id} not found`);
     }
 
-    if (this.isBroadMeetingAccessRole(user)) {
-      return meeting;
-    }
+    if (this.isOwner(user)) {
+  return meeting;
+}
+
+if (this.isSolarFranchise(user)) {
+  const currentUserId = this.getCurrentUserId(user);
+
+  if (
+    Number(meeting.assignedTo) !== currentUserId &&
+    Number(meeting.createdBy) !== currentUserId
+  ) {
+    throw new ForbiddenException(
+      'You can only access your own franchise meetings',
+    );
+  }
+
+  return meeting;
+}
+
+if (this.isBroadMeetingAccessRole(user)) {
+  if (meeting.meetingCategory === MeetingCategory.SOLARMITER) {
+    throw new ForbiddenException(
+      'Solar Franchise meetings are visible only to owner and the franchise user',
+    );
+  }
+
+  return meeting;
+}
 
     if (this.isOwnMeetingRole(user)) {
       const currentUserId = this.getCurrentUserId(user);
