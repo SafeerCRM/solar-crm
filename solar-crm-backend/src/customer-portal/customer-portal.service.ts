@@ -485,7 +485,9 @@ return {
 
   const qb = this.complaintRepository
     .createQueryBuilder('complaint')
-    .where('complaint.isHidden = false')
+.leftJoin(Project, 'project', 'project.id = complaint.projectId')
+.addSelect('project.status', 'projectStatus')
+.where('complaint.isHidden = false')
     .orderBy('complaint.createdAt', 'DESC');
 
   if (query?.customerId) {
@@ -499,6 +501,21 @@ return {
       projectId: Number(query.projectId),
     });
   }
+
+  if (query?.projectStage === 'COMPLETED') {
+  qb.andWhere('project.status = :completedStatus', {
+    completedStatus: 'COMPLETED',
+  });
+}
+
+if (query?.projectStage === 'IN_PROGRESS') {
+  qb.andWhere(
+    '(project.status IS NULL OR project.status != :completedStatus)',
+    {
+      completedStatus: 'COMPLETED',
+    },
+  );
+}
 
   if (query?.branchName) {
     qb.andWhere('LOWER(complaint.branchName) LIKE :branchName', {
@@ -575,7 +592,12 @@ return {
 
   qb.skip(skip).take(limit);
 
-  const [data, total] = await qb.getManyAndCount();
+  const rawAndEntities = await qb.getRawAndEntities();
+const data = rawAndEntities.entities.map((item: any, index: number) => ({
+  ...item,
+  projectStatus: rawAndEntities.raw[index]?.projectStatus || '',
+}));
+const total = await qb.getCount();
 
 const complaintIds = data.map((item) => item.id);
 
@@ -1042,7 +1064,9 @@ async listWorkDateRequests(query: any) {
 
   const qb = this.workDateRequestRepository
     .createQueryBuilder('request')
-    .where('request.isHidden = false')
+.leftJoin(Project, 'project', 'project.id = request.projectId')
+.addSelect('project.status', 'projectStatus')
+.where('request.isHidden = false')
     .orderBy('request.createdAt', 'DESC');
 
   if (query?.customerId) {
@@ -1056,6 +1080,21 @@ async listWorkDateRequests(query: any) {
       projectId: Number(query.projectId),
     });
   }
+
+  if (query?.projectStage === 'COMPLETED') {
+  qb.andWhere('project.status = :completedStatus', {
+    completedStatus: 'COMPLETED',
+  });
+}
+
+if (query?.projectStage === 'IN_PROGRESS') {
+  qb.andWhere(
+    '(project.status IS NULL OR project.status != :completedStatus)',
+    {
+      completedStatus: 'COMPLETED',
+    },
+  );
+}
 
   if (query?.status) {
     qb.andWhere('request.status = :status', {
@@ -1083,7 +1122,12 @@ async listWorkDateRequests(query: any) {
 
   qb.skip(skip).take(limit);
 
-  const [data, total] = await qb.getManyAndCount();
+  const rawAndEntities = await qb.getRawAndEntities();
+const data = rawAndEntities.entities.map((item: any, index: number) => ({
+  ...item,
+  projectStatus: rawAndEntities.raw[index]?.projectStatus || '',
+}));
+const total = await qb.getCount();
 
   return {
     data,
@@ -1225,7 +1269,9 @@ async listPaymentReceipts(query: any) {
 
   const qb = this.paymentReceiptRepository
     .createQueryBuilder('receipt')
-    .where('receipt.isHidden = false')
+.leftJoin(Project, 'project', 'project.id = receipt.projectId')
+.addSelect('project.status', 'projectStatus')
+.where('receipt.isHidden = false')
     .orderBy('receipt.createdAt', 'DESC');
 
   if (query?.customerId) {
@@ -1239,6 +1285,21 @@ async listPaymentReceipts(query: any) {
       projectId: Number(query.projectId),
     });
   }
+
+  if (query?.projectStage === 'COMPLETED') {
+  qb.andWhere('project.status = :completedStatus', {
+    completedStatus: 'COMPLETED',
+  });
+}
+
+if (query?.projectStage === 'IN_PROGRESS') {
+  qb.andWhere(
+    '(project.status IS NULL OR project.status != :completedStatus)',
+    {
+      completedStatus: 'COMPLETED',
+    },
+  );
+}
 
   if (query?.status) {
     qb.andWhere('receipt.status = :status', {
@@ -1287,7 +1348,12 @@ async listPaymentReceipts(query: any) {
 
   qb.skip(skip).take(limit);
 
-  const [data, total] = await qb.getManyAndCount();
+  const rawAndEntities = await qb.getRawAndEntities();
+const data = rawAndEntities.entities.map((item: any, index: number) => ({
+  ...item,
+  projectStatus: rawAndEntities.raw[index]?.projectStatus || '',
+}));
+const total = await qb.getCount();
 
   return {
     data,
@@ -1606,7 +1672,9 @@ async listCleaningReminders(query: any) {
 
   const qb = this.cleaningReminderRepository
     .createQueryBuilder('cleaning')
-    .orderBy('cleaning.cleaningDate', 'DESC');
+.leftJoin(Project, 'project', 'project.id = cleaning.projectId')
+.addSelect('project.status', 'projectStatus')
+.orderBy('cleaning.cleaningDate', 'DESC');
 
   if (query?.showHidden === 'true') {
     qb.where('1 = 1');
@@ -1625,6 +1693,21 @@ async listCleaningReminders(query: any) {
       projectId: Number(query.projectId),
     });
   }
+
+  if (query?.projectStage === 'COMPLETED') {
+  qb.andWhere('project.status = :completedStatus', {
+    completedStatus: 'COMPLETED',
+  });
+}
+
+if (query?.projectStage === 'IN_PROGRESS') {
+  qb.andWhere(
+    '(project.status IS NULL OR project.status != :completedStatus)',
+    {
+      completedStatus: 'COMPLETED',
+    },
+  );
+}
 
   if (query?.status) {
     qb.andWhere('cleaning.status = :status', {
@@ -1661,7 +1744,12 @@ async listCleaningReminders(query: any) {
 
   qb.skip(skip).take(limit);
 
-  const [data, total] = await qb.getManyAndCount();
+  const rawAndEntities = await qb.getRawAndEntities();
+const data = rawAndEntities.entities.map((item: any, index: number) => ({
+  ...item,
+  projectStatus: rawAndEntities.raw[index]?.projectStatus || '',
+}));
+const total = await qb.getCount();
 
   return {
     data,
