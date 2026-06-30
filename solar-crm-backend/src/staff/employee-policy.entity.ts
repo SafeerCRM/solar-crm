@@ -15,6 +15,14 @@ export enum EmployeePolicyCategory {
   PENALTY = 'PENALTY',
   HOLIDAY = 'HOLIDAY',
   GENERAL = 'GENERAL',
+
+  FRANCHISE_GENERAL = 'FRANCHISE_GENERAL',
+  FRANCHISE_PAYOUT_RULE = 'FRANCHISE_PAYOUT_RULE',
+  FRANCHISE_MEETING_POLICY = 'FRANCHISE_MEETING_POLICY',
+  FRANCHISE_PROJECT_POLICY = 'FRANCHISE_PROJECT_POLICY',
+  FRANCHISE_CONTRACTOR_POLICY = 'FRANCHISE_CONTRACTOR_POLICY',
+  FRANCHISE_DOCUMENT_POLICY = 'FRANCHISE_DOCUMENT_POLICY',
+  FRANCHISE_CUSTOMER_HANDLING = 'FRANCHISE_CUSTOMER_HANDLING',
 }
 
 @Entity()
@@ -43,6 +51,9 @@ export class EmployeePolicy {
 
   @Column({ default: true })
   visibleToEmployee: boolean;
+
+  @Column({ default: false })
+visibleToSolarFranchise: boolean;
 
   @Column({ default: true })
   isActive: boolean;

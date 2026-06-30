@@ -736,6 +736,8 @@ async createEmployeePolicy(body: any, user: any) {
     fileUrl: body.fileUrl || '',
     fileName: body.fileName || '',
     visibleToEmployee: body.visibleToEmployee !== false,
+    visibleToSolarFranchise:
+  body.visibleToSolarFranchise === true,
     isActive: body.isActive !== false,
     isHidden: false,
     createdBy: user?.id || null,
@@ -809,6 +811,44 @@ async listVisibleEmployeePolicies(query: any) {
   };
 }
 
+async listVisibleSolarFranchisePolicies(query: any) {
+  const page = Math.max(Number(query.page || 1), 1);
+  const limit = Math.min(Math.max(Number(query.limit || 20), 1), 100);
+
+  const qb = this.employeePolicyRepo
+    .createQueryBuilder('policy')
+    .where('policy.isHidden = false')
+    .andWhere('policy.isActive = true')
+    .andWhere('policy.visibleToSolarFranchise = true');
+
+  if (query.category) {
+    qb.andWhere('policy.category = :category', {
+      category: query.category,
+    });
+  }
+
+  if (query.search) {
+    qb.andWhere(
+      '(policy.title ILIKE :search OR policy.description ILIKE :search)',
+      { search: `%${query.search}%` },
+    );
+  }
+
+  const [data, total] = await qb
+    .orderBy('policy.createdAt', 'DESC')
+    .skip((page - 1) * limit)
+    .take(limit)
+    .getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
+}
+
 async updateEmployeePolicy(id: number, body: any, user: any) {
   const item = await this.employeePolicyRepo.findOne({ where: { id } });
 
@@ -826,6 +866,10 @@ async updateEmployeePolicy(id: number, body: any, user: any) {
       body.visibleToEmployee === undefined
         ? item.visibleToEmployee
         : body.visibleToEmployee,
+        visibleToSolarFranchise:
+  body.visibleToSolarFranchise === undefined
+    ? (item as any).visibleToSolarFranchise
+    : body.visibleToSolarFranchise,
     isActive: body.isActive === undefined ? item.isActive : body.isActive,
     updatedBy: user?.id || null,
     updatedByName: user?.name || '',

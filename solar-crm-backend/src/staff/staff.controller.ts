@@ -216,6 +216,12 @@ uploadEmployeePolicyFile(@UploadedFiles() files: any[]) {
   return this.staffService.uploadEmployeePolicyFile(file);
 }
 
+@Roles('OWNER', 'HR_MANAGER', 'SOLAR_FRANCHISE')
+@Get('solar-franchise-policies')
+listVisibleSolarFranchisePolicies(@Query() query: any) {
+  return this.staffService.listVisibleSolarFranchisePolicies(query);
+}
+
 @Get('hr-settings')
 listHrSettings(@Query() query: any) {
   return this.staffService.listHrSettings(query);
