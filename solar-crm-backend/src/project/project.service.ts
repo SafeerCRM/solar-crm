@@ -13132,10 +13132,13 @@ if (existingDealerInvoice) {
             item.brand || '',
 
           unit:
-            item.unit || '',
+  item.unit || '',
 
-          finalRate:
-            item.finalRate,
+hsnCode:
+  item.hsnCode || '',
+
+finalRate:
+  item.finalRate,
 
           gstPercent:
             item.gstPercent,
