@@ -37,6 +37,7 @@ export default function AccountsLedgerPage() {
     netBalance: 0,
   });
   const [financeHub, setFinanceHub] = useState<any>(null);
+  const [outstandingSummary, setOutstandingSummary] = useState<any>(null);
   const [projectProfitRows, setProjectProfitRows] = useState<any[]>([]);
 const [projectProfitPage, setProjectProfitPage] = useState(1);
 const [projectProfitTotalPages, setProjectProfitTotalPages] = useState(1);
@@ -89,6 +90,7 @@ const [toDate, setToDate] = useState('');
   outstandingRes,
   financeHubRes,
   projectProfitRes,
+  outstandingSummaryRes,
 ] = await Promise.all([
         axios.get(`${API_BASE_URL}/project/ledger`, {
           params: {
@@ -139,6 +141,14 @@ axios.get(`${API_BASE_URL}/project/accounts/finance-hub`, {
     : {},
 }),
 
+axios.get(`${API_BASE_URL}/project/accounts/outstanding-summary`, {
+  headers: token
+    ? {
+        Authorization: `Bearer ${token}`,
+      }
+    : {},
+}),
+
 axios.get(`${API_BASE_URL}/project/accounts/project-profit`, {
   params: {
     page: projectProfitPage,
@@ -168,6 +178,7 @@ setOutstandingTotalPages(
   outstandingRes.data?.pagination?.totalPages || 1,
 );
       setFinanceHub(financeHubRes.data || null);
+      setOutstandingSummary(outstandingSummaryRes.data || null);
       setProjectProfitRows(projectProfitRes.data?.data || []);
 setProjectProfitTotalPages(
   projectProfitRes.data?.pagination?.totalPages || 1,
@@ -398,6 +409,32 @@ const hideLedgerEntry = async (entryId: number) => {
   <FinanceCard
     title="Approved PO Cost"
     value={financeHub?.outgoing?.approvedPurchaseCost}
+    tone="red"
+  />
+</div>
+
+<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+  <FinanceCard
+    title="Customer Receivable"
+    value={outstandingSummary?.customer?.receivable}
+    tone="orange"
+  />
+
+  <FinanceCard
+    title="Vendor Payable"
+    value={outstandingSummary?.vendor?.payable}
+    tone="red"
+  />
+
+  <FinanceCard
+    title="Dealer Receivable"
+    value={outstandingSummary?.dealer?.receivable}
+    tone="orange"
+  />
+
+  <FinanceCard
+    title="Total Payable"
+    value={outstandingSummary?.all?.payable}
     tone="red"
   />
 </div>
