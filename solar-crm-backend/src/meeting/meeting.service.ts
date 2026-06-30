@@ -652,9 +652,14 @@ if (!includeHistory && latestOnly) {
   finalData = this.pickLatestMeetings(meetings);
 }
 
+const finalTotal =
+  !includeHistory && latestOnly
+    ? finalData.length
+    : total;
+
 return {
   data: finalData,
-  total,
+  total: finalTotal,
   page,
   limit,
 };
