@@ -14263,86 +14263,145 @@ async getLedgerOutstandingSummary() {
 }
 
 async getFinanceOutstandingSummary() {
-  const rows = await this.projectPartyLedgerRepository.find({
+  const paymentInstallments =
+    await this.projectPaymentInstallmentRepository.find({
+      where: {
+        isHidden: false,
+      } as any,
+    });
+
+  const purchaseOrders =
+    await this.projectPurchaseOrderRepository.find({
+      where: {
+        isHidden: false,
+      } as any,
+    });
+
+  const dealerOrders =
+    await this.projectDealerOrderRepository.find({
+      where: {
+        isHidden: false,
+      } as any,
+    });
+
+  const dealerPayments =
+    await this.projectDealerPaymentRepository.find();
+
+  const accountExpenses =
+    await this.projectAccountExpenseRepository.find({
+      where: {
+        isHidden: false,
+      },
+    });
+
+  const customerReceivable = paymentInstallments
+    .filter(
+      (item: any) =>
+        String(item.status || '') !== 'CANCELLED' &&
+        Number(item.pendingAmount || 0) > 0,
+    )
+    .reduce(
+      (sum, item: any) =>
+        sum + Number(item.pendingAmount || 0),
+      0,
+    );
+
+  const approvedPurchaseAmount = purchaseOrders
+    .filter(
+      (item: any) =>
+        String(item.status || '') !== 'CANCELLED',
+    )
+    .reduce(
+      (sum, item: any) =>
+        sum + Number(item.totalAmount || 0),
+      0,
+    );
+
+  const vendorPayments = await this.projectPartyLedgerRepository.find({
     where: {
+      partyType: 'VENDOR',
+      entryType: ProjectLedgerEntryType.DEBIT,
       isHidden: false,
-    },
+    } as any,
   });
 
-  const sum = (
-    partyType: string,
-    entryType: ProjectLedgerEntryType,
-  ) =>
-    rows
-      .filter(
-        (row) =>
-          String(row.partyType || '') === partyType &&
-          row.entryType === entryType,
-      )
-      .reduce(
-        (total, row) => total + Number(row.amount || 0),
-        0,
-      );
-
-  const customerDebit = sum(
-    'CUSTOMER',
-    ProjectLedgerEntryType.DEBIT,
-  );
-  const customerCredit = sum(
-    'CUSTOMER',
-    ProjectLedgerEntryType.CREDIT,
+  const vendorPaid = vendorPayments.reduce(
+    (sum, item) => sum + Number(item.amount || 0),
+    0,
   );
 
-  const vendorDebit = sum(
-    'VENDOR',
-    ProjectLedgerEntryType.DEBIT,
-  );
-  const vendorCredit = sum(
-    'VENDOR',
-    ProjectLedgerEntryType.CREDIT,
+  const vendorPayable = Math.max(
+    approvedPurchaseAmount - vendorPaid,
+    0,
   );
 
-  const dealerDebit = sum(
-    'DEALER',
-    ProjectLedgerEntryType.DEBIT,
+  const dealerSales = dealerOrders
+    .filter(
+      (item: any) =>
+        String(item.status || '') !== 'CANCELLED',
+    )
+    .reduce(
+      (sum, item: any) =>
+        sum + Number(item.totalAmount || 0),
+      0,
+    );
+
+  const dealerReceived = dealerPayments
+    .filter(
+      (item: any) =>
+        String(item.status || '') === 'APPROVED',
+    )
+    .reduce(
+      (sum, item: any) =>
+        sum + Number(item.amount || 0),
+      0,
+    );
+
+  const dealerReceivable = Math.max(
+    dealerSales - dealerReceived,
+    0,
   );
-  const dealerCredit = sum(
-    'DEALER',
-    ProjectLedgerEntryType.CREDIT,
-  );
+
+  const pendingApprovedExpenses = accountExpenses
+    .filter(
+      (item: any) =>
+        String(item.approvalStatus || '') === 'PENDING',
+    )
+    .reduce(
+      (sum, item: any) =>
+        sum +
+        Number(
+          item.totalAmount ||
+            item.amount ||
+            0,
+        ),
+      0,
+    );
 
   return {
     customer: {
-      debit: customerDebit,
-      credit: customerCredit,
-      receivable: Math.max(customerDebit - customerCredit, 0),
-      payable: Math.max(customerCredit - customerDebit, 0),
+      receivable: customerReceivable,
     },
 
     vendor: {
-      debit: vendorDebit,
-      credit: vendorCredit,
-      receivable: Math.max(vendorDebit - vendorCredit, 0),
-      payable: Math.max(vendorCredit - vendorDebit, 0),
+      payable: vendorPayable,
+      purchaseAmount: approvedPurchaseAmount,
+      paid: vendorPaid,
     },
 
     dealer: {
-      debit: dealerDebit,
-      credit: dealerCredit,
-      receivable: Math.max(dealerDebit - dealerCredit, 0),
-      payable: Math.max(dealerCredit - dealerDebit, 0),
+      receivable: dealerReceivable,
+      sales: dealerSales,
+      received: dealerReceived,
     },
 
     all: {
-      receivable:
-        Math.max(customerDebit - customerCredit, 0) +
-        Math.max(vendorDebit - vendorCredit, 0) +
-        Math.max(dealerDebit - dealerCredit, 0),
+      payable: vendorPayable + pendingApprovedExpenses,
+      receivable: customerReceivable + dealerReceivable,
+    },
 
-      payable:
-        Math.max(customerCredit - customerDebit, 0) +
-        Math.max(vendorCredit - vendorDebit, 0) +
-        Math.max(dealerCredit - dealerDebit, 0),
+    expense: {
+      pending: pendingApprovedExpenses,
     },
   };
 }
