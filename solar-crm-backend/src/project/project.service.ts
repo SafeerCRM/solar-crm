@@ -14263,66 +14263,86 @@ async getLedgerOutstandingSummary() {
 }
 
 async getFinanceOutstandingSummary() {
-  const rows = await this.getPartyOutstandingPaginated({
-    page: 1,
-    limit: 10000,
-    outstandingOnly: true,
+  const rows = await this.projectPartyLedgerRepository.find({
+    where: {
+      isHidden: false,
+    },
   });
 
-  const data = Array.isArray((rows as any)?.data)
-    ? (rows as any).data
-    : [];
-
-  const sumByType = (partyType: string) => {
-    const items = data.filter(
-      (item: any) => String(item.partyType || '') === partyType,
-    );
-
-    const receivable = items
-      .filter((item: any) => item.settlementStatus === 'RECEIVABLE')
+  const sum = (
+    partyType: string,
+    entryType: ProjectLedgerEntryType,
+  ) =>
+    rows
+      .filter(
+        (row) =>
+          String(row.partyType || '') === partyType &&
+          row.entryType === entryType,
+      )
       .reduce(
-        (sum: number, item: any) =>
-          sum + Number(item.absoluteOutstanding || 0),
+        (total, row) => total + Number(row.amount || 0),
         0,
       );
 
-    const payable = items
-      .filter((item: any) => item.settlementStatus === 'PAYABLE')
-      .reduce(
-        (sum: number, item: any) =>
-          sum + Number(item.absoluteOutstanding || 0),
-        0,
-      );
+  const customerDebit = sum(
+    'CUSTOMER',
+    ProjectLedgerEntryType.DEBIT,
+  );
+  const customerCredit = sum(
+    'CUSTOMER',
+    ProjectLedgerEntryType.CREDIT,
+  );
 
-    return {
-      count: items.length,
-      receivable,
-      payable,
-      net: receivable - payable,
-    };
-  };
+  const vendorDebit = sum(
+    'VENDOR',
+    ProjectLedgerEntryType.DEBIT,
+  );
+  const vendorCredit = sum(
+    'VENDOR',
+    ProjectLedgerEntryType.CREDIT,
+  );
+
+  const dealerDebit = sum(
+    'DEALER',
+    ProjectLedgerEntryType.DEBIT,
+  );
+  const dealerCredit = sum(
+    'DEALER',
+    ProjectLedgerEntryType.CREDIT,
+  );
 
   return {
-    customer: sumByType('CUSTOMER'),
-    vendor: sumByType('VENDOR'),
-    dealer: sumByType('DEALER'),
-    expense: sumByType('EXPENSE'),
+    customer: {
+      debit: customerDebit,
+      credit: customerCredit,
+      receivable: Math.max(customerDebit - customerCredit, 0),
+      payable: Math.max(customerCredit - customerDebit, 0),
+    },
+
+    vendor: {
+      debit: vendorDebit,
+      credit: vendorCredit,
+      receivable: Math.max(vendorDebit - vendorCredit, 0),
+      payable: Math.max(vendorCredit - vendorDebit, 0),
+    },
+
+    dealer: {
+      debit: dealerDebit,
+      credit: dealerCredit,
+      receivable: Math.max(dealerDebit - dealerCredit, 0),
+      payable: Math.max(dealerCredit - dealerDebit, 0),
+    },
+
     all: {
-      count: data.length,
-      receivable: data
-        .filter((item: any) => item.settlementStatus === 'RECEIVABLE')
-        .reduce(
-          (sum: number, item: any) =>
-            sum + Number(item.absoluteOutstanding || 0),
-          0,
-        ),
-      payable: data
-        .filter((item: any) => item.settlementStatus === 'PAYABLE')
-        .reduce(
-          (sum: number, item: any) =>
-            sum + Number(item.absoluteOutstanding || 0),
-          0,
-        ),
+      receivable:
+        Math.max(customerDebit - customerCredit, 0) +
+        Math.max(vendorDebit - vendorCredit, 0) +
+        Math.max(dealerDebit - dealerCredit, 0),
+
+      payable:
+        Math.max(customerCredit - customerDebit, 0) +
+        Math.max(vendorCredit - vendorDebit, 0) +
+        Math.max(dealerCredit - dealerDebit, 0),
     },
   };
 }
