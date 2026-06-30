@@ -17,6 +17,7 @@ type CustomerComplaint = {
   customerName?: string;
   customerPhone?: string;
   projectId?: number;
+  projectStatus?: string;
   projectName?: string;
   branchName?: string;
   projectOwnerId?: number;
@@ -82,6 +83,7 @@ const [timelineLoading, setTimelineLoading] = useState(false);
     branchName: '',
     projectOwnerName: '',
     subject: '',
+    projectStage: '',
     status: '',
     fromDate: '',
     toDate: '',
@@ -235,6 +237,7 @@ serviceTime: item.serviceDate
       branchName: '',
       projectOwnerName: '',
       subject: '',
+      projectStage: '',
       status: '',
       fromDate: '',
       toDate: '',
@@ -354,6 +357,18 @@ serviceTime: item.serviceDate
             ))}
           </select>
 
+          <select
+  value={filters.projectStage}
+  onChange={(e) =>
+    setFilters({ ...filters, projectStage: e.target.value })
+  }
+  className="rounded-2xl border p-3"
+>
+  <option value="">All Project Stages</option>
+  <option value="IN_PROGRESS">In Progress Projects</option>
+  <option value="COMPLETED">Completed Projects</option>
+</select>
+
 
 <div>
   <label className="mb-1 block text-xs font-bold text-gray-500">
@@ -457,6 +472,7 @@ serviceTime: item.serviceDate
 
                       <StatusBadge status={item.status} />
                       <PriorityBadge priority={item.priority} />
+                      <ProjectStatusBadge status={item.projectStatus} />
                     </div>
 
                     <p className="mt-2 text-sm text-gray-600">
@@ -786,6 +802,22 @@ function PriorityBadge({ priority }: { priority?: string }) {
   return (
     <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-black text-red-700">
       {formatLabel(value)}
+    </span>
+  );
+}
+
+function ProjectStatusBadge({ status }: { status?: string }) {
+  const isCompleted = status === 'COMPLETED';
+
+  return (
+    <span
+      className={`rounded-full px-3 py-1 text-xs font-black ${
+        isCompleted
+          ? 'bg-emerald-100 text-emerald-700'
+          : 'bg-yellow-100 text-yellow-700'
+      }`}
+    >
+      {isCompleted ? 'COMPLETED PROJECT' : 'IN PROGRESS PROJECT'}
     </span>
   );
 }
