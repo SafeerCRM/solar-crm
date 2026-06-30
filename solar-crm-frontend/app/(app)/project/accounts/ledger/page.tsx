@@ -302,10 +302,9 @@ const hideLedgerEntry = async (entryId: number) => {
 };
 
   useEffect(() => {
-    fetchLedger();
-    projectProfitPage
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [partyName, partyType, sourceType]);
+  fetchLedger();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [partyName, partyType, sourceType, projectProfitPage]);
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">
