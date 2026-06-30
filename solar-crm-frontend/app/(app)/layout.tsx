@@ -65,7 +65,6 @@ const navItems = [
     'HR_MANAGER',
     'TRADING_MANAGER',
     'PROJECT_CONTRACTOR',
-    'SOLAR_FRANCHISE',
   ],
 },
 
