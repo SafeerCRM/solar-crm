@@ -121,6 +121,7 @@ axios.get(`${API_BASE_URL}/project/accounts/project-profit`, {
   params: {
     page: projectProfitPage,
     limit: 20,
+    projectTypeFilter: 'CRM',
   },
   headers: token
     ? {
