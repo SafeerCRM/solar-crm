@@ -13985,19 +13985,25 @@ async getLedgerEntries(filters?: {
   partyType?: string;
   projectId?: number;
   sourceType?: string;
+  entryType?: string;
+  fromDate?: string;
+  toDate?: string;
+  page?: number;
+  limit?: number;
 }) {
+  const page = Math.max(Number(filters?.page || 1), 1);
+  const limit = Math.min(Math.max(Number(filters?.limit || 20), 1), 100);
+  const skip = (page - 1) * limit;
+
   const query =
-    this.projectPartyLedgerRepository.createQueryBuilder(
-      'ledger',
-    );
+    this.projectPartyLedgerRepository.createQueryBuilder('ledger');
+
+  query.where('ledger.isHidden = false');
 
   if (filters?.partyName) {
-    query.andWhere(
-      'LOWER(ledger.partyName) LIKE :partyName',
-      {
-        partyName: `%${filters.partyName.toLowerCase()}%`,
-      },
-    );
+    query.andWhere('LOWER(ledger.partyName) LIKE :partyName', {
+      partyName: `%${filters.partyName.toLowerCase()}%`,
+    });
   }
 
   if (filters?.partyType) {
@@ -14018,11 +14024,50 @@ async getLedgerEntries(filters?: {
     });
   }
 
-  query.andWhere('ledger.isHidden = false');
+  if (filters?.entryType) {
+    query.andWhere('ledger.entryType = :entryType', {
+      entryType: filters.entryType,
+    });
+  }
 
-  query.orderBy('ledger.createdAt', 'DESC');
+  if (filters?.fromDate) {
+    query.andWhere('ledger.createdAt >= :fromDate', {
+      fromDate: new Date(`${filters.fromDate}T00:00:00`),
+    });
+  }
 
-  return query.getMany();
+  if (filters?.toDate) {
+    query.andWhere('ledger.createdAt <= :toDate', {
+      toDate: new Date(`${filters.toDate}T23:59:59`),
+    });
+  }
+
+  query.orderBy('ledger.createdAt', 'DESC').skip(skip).take(limit);
+
+  const [data, total] = await query.getManyAndCount();
+
+  const totalDebit = data
+    .filter((item) => item.entryType === ProjectLedgerEntryType.DEBIT)
+    .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+
+  const totalCredit = data
+    .filter((item) => item.entryType === ProjectLedgerEntryType.CREDIT)
+    .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+
+  return {
+    data,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit) || 1,
+    },
+    pageSummary: {
+      totalDebit,
+      totalCredit,
+      netBalance: totalDebit - totalCredit,
+    },
+  };
 }
 
 async getFinanceHubSummary() {
@@ -14214,6 +14259,95 @@ async getLedgerOutstandingSummary() {
     totalDebit,
     totalCredit,
     netBalance: totalDebit - totalCredit,
+  };
+}
+
+async getPartyOutstandingPaginated(query: any = {}) {
+  const page = Math.max(Number(query?.page || 1), 1);
+  const limit = Math.min(Math.max(Number(query?.limit || 20), 1), 100);
+  const search = String(query?.search || '').trim().toLowerCase();
+  const partyType = String(query?.partyType || '').trim();
+  const outstandingOnly =
+    query?.outstandingOnly === true || query?.outstandingOnly === 'true';
+
+  const rows = await this.projectPartyLedgerRepository.find({
+    where: {
+      isHidden: false,
+    },
+  });
+
+  const partyMap: Record<string, any> = {};
+
+  for (const row of rows) {
+    const key = `${row.partyType || 'UNKNOWN'}-${row.partyName || 'Unknown'}`;
+
+    if (!partyMap[key]) {
+      partyMap[key] = {
+        partyName: row.partyName || 'Unknown',
+        partyType: row.partyType || 'UNKNOWN',
+        totalDebit: 0,
+        totalCredit: 0,
+        outstanding: 0,
+      };
+    }
+
+    if (row.entryType === ProjectLedgerEntryType.DEBIT) {
+      partyMap[key].totalDebit += Number(row.amount || 0);
+    }
+
+    if (row.entryType === ProjectLedgerEntryType.CREDIT) {
+      partyMap[key].totalCredit += Number(row.amount || 0);
+    }
+  }
+
+  let data = Object.values(partyMap)
+    .map((item: any) => {
+      const outstanding = item.totalDebit - item.totalCredit;
+
+      let settlementStatus = 'SETTLED';
+
+      if (outstanding > 0) settlementStatus = 'RECEIVABLE';
+      if (outstanding < 0) settlementStatus = 'PAYABLE';
+
+      return {
+        ...item,
+        outstanding,
+        settlementStatus,
+        absoluteOutstanding: Math.abs(outstanding),
+      };
+    })
+    .filter((item: any) => {
+      if (search && !String(item.partyName || '').toLowerCase().includes(search)) {
+        return false;
+      }
+
+      if (partyType && String(item.partyType || '') !== partyType) {
+        return false;
+      }
+
+      if (outstandingOnly && Number(item.absoluteOutstanding || 0) <= 0) {
+        return false;
+      }
+
+      return true;
+    })
+    .sort(
+      (a: any, b: any) =>
+        Number(b.absoluteOutstanding || 0) -
+        Number(a.absoluteOutstanding || 0),
+    );
+
+  const total = data.length;
+  data = data.slice((page - 1) * limit, page * limit);
+
+  return {
+    data,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit) || 1,
+    },
   };
 }
 

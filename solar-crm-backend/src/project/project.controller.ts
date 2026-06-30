@@ -876,12 +876,22 @@ getLedgerEntries(
   @Query('partyType') partyType?: string,
   @Query('projectId') projectId?: string,
   @Query('sourceType') sourceType?: string,
+  @Query('entryType') entryType?: string,
+  @Query('fromDate') fromDate?: string,
+  @Query('toDate') toDate?: string,
+  @Query('page') page?: string,
+  @Query('limit') limit?: string,
 ) {
   return this.projectService.getLedgerEntries({
-    partyName: partyName || '',
-    partyType: partyType || '',
+    partyName,
+    partyType,
     projectId: projectId ? Number(projectId) : undefined,
-    sourceType: sourceType || '',
+    sourceType,
+    entryType,
+    fromDate,
+    toDate,
+    page: Number(page || 1),
+    limit: Number(limit || 20),
   });
 }
 
@@ -1200,8 +1210,8 @@ recordVendorPayment(
 }
 
 @Get('ledger/party-outstanding')
-getPartyOutstandingSummary() {
-  return this.projectService.getPartyOutstandingSummary();
+getPartyOutstanding(@Query() query: any) {
+  return this.projectService.getPartyOutstandingPaginated(query);
 }
 
 @Post('ledger/:id/hide')
