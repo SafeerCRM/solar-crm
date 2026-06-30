@@ -361,33 +361,13 @@ const hideLedgerEntry = async (entryId: number) => {
           Accounts / Ledger
         </h1>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <FinanceSection title="Collections">
   <FinanceCard
     title="Total Received"
     value={financeHub?.income?.totalReceived}
     tone="green"
   />
 
-  <FinanceCard
-    title="Total Pending"
-    value={financeHub?.income?.totalPending}
-    tone="orange"
-  />
-
-  <FinanceCard
-    title="Total Outgoing"
-    value={financeHub?.outgoing?.totalOutgoing}
-    tone="red"
-  />
-
-  <FinanceCard
-    title="Available Cash"
-    value={financeHub?.cashFlow?.availableCash}
-    tone="blue"
-  />
-</div>
-
-<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
   <FinanceCard
     title="Customer Received"
     value={financeHub?.income?.customerReceived}
@@ -401,6 +381,26 @@ const hideLedgerEntry = async (entryId: number) => {
   />
 
   <FinanceCard
+    title="Total Pending"
+    value={financeHub?.income?.totalPending}
+    tone="orange"
+  />
+</FinanceSection>
+
+<FinanceSection title="Cash Flow">
+  <FinanceCard
+    title="Available Cash"
+    value={financeHub?.cashFlow?.availableCash}
+    tone="blue"
+  />
+
+  <FinanceCard
+    title="Total Outgoing"
+    value={financeHub?.outgoing?.totalOutgoing}
+    tone="red"
+  />
+
+  <FinanceCard
     title="Approved Expenses"
     value={financeHub?.outgoing?.approvedExpenses}
     tone="red"
@@ -411,9 +411,9 @@ const hideLedgerEntry = async (entryId: number) => {
     value={financeHub?.outgoing?.approvedPurchaseCost}
     tone="red"
   />
-</div>
+</FinanceSection>
 
-<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+<FinanceSection title="Outstanding">
   <FinanceCard
     title="Customer Receivable"
     value={outstandingSummary?.customer?.receivable}
@@ -437,9 +437,9 @@ const hideLedgerEntry = async (entryId: number) => {
     value={outstandingSummary?.all?.payable}
     tone="red"
   />
-</div>
+</FinanceSection>
 
-<div className="grid gap-4 md:grid-cols-3">
+<FinanceSection title="Business Health">
   <FinanceCard
     title="Expected Project Revenue"
     value={financeHub?.projectProfit?.expectedRevenue}
@@ -457,7 +457,7 @@ const hideLedgerEntry = async (entryId: number) => {
     value={financeHub?.projectProfit?.expectedProfit}
     tone="green"
   />
-</div>
+</FinanceSection>
 
         <div className="mt-5 grid gap-4 md:grid-cols-4">
   <div className="rounded-2xl border p-5">
@@ -1035,6 +1035,26 @@ const hideLedgerEntry = async (entryId: number) => {
 </div>
       </div>
     </div>
+  );
+}
+
+function FinanceSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="space-y-3">
+      <h2 className="text-sm font-black uppercase tracking-wide text-gray-500">
+        {title}
+      </h2>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {children}
+      </div>
+    </section>
   );
 }
 
