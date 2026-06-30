@@ -37,6 +37,9 @@ export default function AccountsLedgerPage() {
     netBalance: 0,
   });
   const [financeHub, setFinanceHub] = useState<any>(null);
+  const [projectProfitRows, setProjectProfitRows] = useState<any[]>([]);
+const [projectProfitPage, setProjectProfitPage] = useState(1);
+const [projectProfitTotalPages, setProjectProfitTotalPages] = useState(1);
   const [partyOutstanding, setPartyOutstanding] =
   useState<PartyOutstanding[]>([]);
 
@@ -70,7 +73,13 @@ const [submittingVendorPayment, setSubmittingVendorPayment] =
 
       const token = localStorage.getItem('token');
 
-      const [ledgerRes, summaryRes, outstandingRes, financeHubRes] = await Promise.all([
+      const [
+  ledgerRes,
+  summaryRes,
+  outstandingRes,
+  financeHubRes,
+  projectProfitRes,
+] = await Promise.all([
         axios.get(`${API_BASE_URL}/project/ledger`, {
           params: {
             partyName,
@@ -107,6 +116,18 @@ axios.get(`${API_BASE_URL}/project/accounts/finance-hub`, {
       }
     : {},
 }),
+
+axios.get(`${API_BASE_URL}/project/accounts/project-profit`, {
+  params: {
+    page: projectProfitPage,
+    limit: 20,
+  },
+  headers: token
+    ? {
+        Authorization: `Bearer ${token}`,
+      }
+    : {},
+}),
       ]);
 
       setEntries(ledgerRes.data || []);
@@ -120,6 +141,10 @@ axios.get(`${API_BASE_URL}/project/accounts/finance-hub`, {
 
       setPartyOutstanding(outstandingRes.data || []);
       setFinanceHub(financeHubRes.data || null);
+      setProjectProfitRows(projectProfitRes.data?.data || []);
+setProjectProfitTotalPages(
+  projectProfitRes.data?.pagination?.totalPages || 1,
+);
     } catch (error) {
       console.error(error);
       alert('Failed to load ledger');
@@ -278,6 +303,7 @@ const hideLedgerEntry = async (entryId: number) => {
 
   useEffect(() => {
     fetchLedger();
+    projectProfitPage
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partyName, partyType, sourceType]);
 
@@ -674,6 +700,111 @@ const hideLedgerEntry = async (entryId: number) => {
           </select>
         </div>
       </div>
+
+      <div className="rounded-2xl bg-white p-5 shadow">
+  <h2 className="text-lg font-bold text-gray-800">
+    Project Actual Profit
+  </h2>
+
+  <p className="mt-1 text-sm text-gray-500">
+    Calculates received customer amount minus actual project-linked expenses, purchase orders and material consumption.
+  </p>
+
+  <div className="mt-4 overflow-x-auto">
+    <table className="min-w-full text-sm">
+      <thead>
+        <tr className="border-b bg-gray-50">
+          <th className="p-2 text-left">Project</th>
+          <th className="p-2 text-left">Customer</th>
+          <th className="p-2 text-left">Expected Revenue</th>
+          <th className="p-2 text-left">Received</th>
+          <th className="p-2 text-left">Expenses</th>
+          <th className="p-2 text-left">PO Cost</th>
+          <th className="p-2 text-left">Material Used</th>
+          <th className="p-2 text-left">Actual Cost</th>
+          <th className="p-2 text-left">Actual Profit</th>
+          <th className="p-2 text-left">Pending Collection</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {projectProfitRows.length === 0 && (
+          <tr>
+            <td colSpan={10} className="p-4 text-center text-gray-500">
+              No project profit data found.
+            </td>
+          </tr>
+        )}
+
+        {projectProfitRows.map((row) => (
+          <tr key={row.projectId} className="border-b">
+            <td className="p-2 font-semibold">#{row.projectId}</td>
+            <td className="p-2">
+              <div>
+                <p className="font-semibold">{row.customerName || '-'}</p>
+                <p className="text-xs text-gray-500">{row.branchName || '-'}</p>
+              </div>
+            </td>
+            <td className="p-2">
+              ₹{Number(row.expectedRevenue || 0).toLocaleString('en-IN')}
+            </td>
+            <td className="p-2 text-green-700">
+              ₹{Number(row.customerReceived || 0).toLocaleString('en-IN')}
+            </td>
+            <td className="p-2 text-red-700">
+              ₹{Number(row.approvedExpenses || 0).toLocaleString('en-IN')}
+            </td>
+            <td className="p-2 text-red-700">
+              ₹{Number(row.purchaseCost || 0).toLocaleString('en-IN')}
+            </td>
+            <td className="p-2 text-red-700">
+              ₹{Number(row.materialConsumedCost || 0).toLocaleString('en-IN')}
+            </td>
+            <td className="p-2 font-semibold text-red-700">
+              ₹{Number(row.actualCost || 0).toLocaleString('en-IN')}
+            </td>
+            <td
+              className={`p-2 font-bold ${
+                Number(row.actualProfit || 0) >= 0
+                  ? 'text-green-700'
+                  : 'text-red-700'
+              }`}
+            >
+              ₹{Number(row.actualProfit || 0).toLocaleString('en-IN')}
+            </td>
+            <td className="p-2 text-orange-700">
+              ₹{Number(row.collectionPending || 0).toLocaleString('en-IN')}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+
+  <div className="mt-4 flex items-center justify-between">
+    <button
+      disabled={projectProfitPage <= 1}
+      onClick={() =>
+        setProjectProfitPage((prev) => Math.max(prev - 1, 1))
+      }
+      className="rounded-xl border px-4 py-2 text-sm disabled:opacity-50"
+    >
+      Previous
+    </button>
+
+    <span className="text-sm text-gray-500">
+      Page {projectProfitPage} of {projectProfitTotalPages}
+    </span>
+
+    <button
+      disabled={projectProfitPage >= projectProfitTotalPages}
+      onClick={() => setProjectProfitPage((prev) => prev + 1)}
+      className="rounded-xl border px-4 py-2 text-sm disabled:opacity-50"
+    >
+      Next
+    </button>
+  </div>
+</div>
 
       <div className="rounded-2xl bg-white p-5 shadow">
         <h2 className="mb-4 text-lg font-bold text-gray-800">
