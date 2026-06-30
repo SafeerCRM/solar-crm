@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { uploadPreparedFile } from '@/app/utils/fileUpload';
 
@@ -18,6 +18,9 @@ export default function EmployeePortalPage() {
   const [attendanceRemarks, setAttendanceRemarks] = useState('');
   const [leaveProof, setLeaveProof] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const selfieInputRef = useRef<HTMLInputElement | null>(null);
+const [pendingPunchType, setPendingPunchType] =
+  useState<'punch-in' | 'punch-out' | null>(null);
   const [policies, setPolicies] = useState<any[]>([]);
 
   const [leaveForm, setLeaveForm] = useState({
@@ -78,48 +81,52 @@ export default function EmployeePortalPage() {
       });
     });
 
-  const punch = async (type: 'punch-in' | 'punch-out') => {
-    if (!attendancePhoto) {
-      alert('Please upload selfie/photo');
-      return;
-    }
+  const punch = async (
+  type: 'punch-in' | 'punch-out',
+  selfieFile: File,
+) => {
+  try {
+    setLoading(true);
 
-    try {
-      setLoading(true);
+    const position = await getLocation();
 
-      const position = await getLocation();
+    const photoUrl = await uploadPreparedFile({
+      file: selfieFile,
+      endpoint: `${API_BASE_URL}/staff/self/attendance/photo-upload`,
+      token: localStorage.getItem('token'),
+      fieldName: 'files',
+    });
 
-      const photoUrl = await uploadPreparedFile({
-        file: attendancePhoto,
-        endpoint: `${API_BASE_URL}/staff/self/attendance/photo-upload`,
-        token: localStorage.getItem('token'),
-        fieldName: 'files',
-      });
+    await axios.post(
+      `${API_BASE_URL}/staff/self/attendance/${type}`,
+      {
+        attendanceDate,
+        latitude: String(position.coords.latitude),
+        longitude: String(position.coords.longitude),
+        gpsAddress: `Lat: ${position.coords.latitude}, Lng: ${position.coords.longitude}`,
+        photoUrl,
+        remarks: attendanceRemarks,
+      },
+      { headers: headers() },
+    );
 
-      await axios.post(
-        `${API_BASE_URL}/staff/self/attendance/${type}`,
-        {
-          attendanceDate,
-          latitude: String(position.coords.latitude),
-          longitude: String(position.coords.longitude),
-          gpsAddress: `Lat: ${position.coords.latitude}, Lng: ${position.coords.longitude}`,
-          photoUrl,
-          remarks: attendanceRemarks,
-        },
-        { headers: headers() },
-      );
+    alert(type === 'punch-in' ? 'Punch in saved' : 'Punch out saved');
 
-      alert(type === 'punch-in' ? 'Punch in saved' : 'Punch out saved');
-      setAttendancePhoto(null);
-      setAttendanceRemarks('');
-      loadPortal();
-    } catch (error: any) {
-      console.error(error);
-      alert(error?.response?.data?.message || error?.message || 'Attendance failed');
-    } finally {
-      setLoading(false);
-    }
-  };
+    setAttendancePhoto(null);
+    setAttendanceRemarks('');
+    loadPortal();
+  } catch (error: any) {
+    console.error(error);
+    alert(error?.response?.data?.message || error?.message || 'Attendance failed');
+  } finally {
+    setLoading(false);
+  }
+};
+
+const startSelfiePunch = (type: 'punch-in' | 'punch-out') => {
+  setPendingPunchType(type);
+  selfieInputRef.current?.click();
+};
 
   const applyLeave = async () => {
     if (!leaveForm.fromDate || !leaveForm.toDate || !leaveForm.reason.trim()) {
@@ -263,12 +270,22 @@ export default function EmployeePortalPage() {
               />
 
               <input
-                type="file"
-                accept="image/*"
-                capture="user"
-                onChange={(e) => setAttendancePhoto(e.target.files?.[0] || null)}
-                className="rounded-xl border p-3"
-              />
+  ref={selfieInputRef}
+  type="file"
+  accept="image/*"
+  capture="user"
+  className="hidden"
+  onChange={async (e) => {
+    const file = e.target.files?.[0] || null;
+
+    if (!file || !pendingPunchType) return;
+
+    await punch(pendingPunchType, file);
+
+    setPendingPunchType(null);
+    e.target.value = '';
+  }}
+/>
             </div>
 
             <textarea
@@ -281,7 +298,7 @@ export default function EmployeePortalPage() {
             <div className="mt-4 flex flex-wrap gap-3">
               <button
                 disabled={loading || !!todayAttendance?.punchInTime}
-                onClick={() => punch('punch-in')}
+                onClick={() => startSelfiePunch('punch-in')}
                 className="rounded-xl bg-green-600 px-5 py-3 font-semibold text-white disabled:opacity-50"
               >
                 Punch In
@@ -289,7 +306,7 @@ export default function EmployeePortalPage() {
 
               <button
                 disabled={loading || !todayAttendance?.punchInTime || !!todayAttendance?.punchOutTime}
-                onClick={() => punch('punch-out')}
+                onClick={() => startSelfiePunch('punch-out')}
                 className="rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white disabled:opacity-50"
               >
                 Punch Out
