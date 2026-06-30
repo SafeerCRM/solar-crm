@@ -317,6 +317,7 @@ const navItems = [
     'CUSTOMER_MANAGER',
     'HR_MANAGER',
     'TRADING_MANAGER',
+    'SOLAR_FRANCHISE',
   ],
 },
 

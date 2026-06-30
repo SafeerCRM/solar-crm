@@ -233,6 +233,9 @@ const [contactCounts, setContactCounts] = useState<{
     return [];
   }, [currentUser]);
 
+  const isSolarFranchise =
+  userRoles.includes('SOLAR_FRANCHISE');
+
   const isTelecaller = userRoles.includes('TELECALLER');
   const canChooseTelecaller =
     userRoles.includes('OWNER') || userRoles.includes('TELECALLING_MANAGER');
@@ -579,6 +582,10 @@ useEffect(() => {
   if (!summary && dashboardLoading) {
     return <div className="p-4 md:p-6">Loading dashboard...</div>;
   }
+
+  if (isSolarFranchise) {
+  return <SolarFranchiseDashboard />;
+}
 
   return (
     <div className="space-y-6 bg-gray-50 p-4 md:p-6">
@@ -1313,6 +1320,170 @@ function LineChartCard({
           </ResponsiveContainer>
         </div>
       )}
+    </div>
+  );
+}
+
+function SolarFranchiseDashboard() {
+  const [loading, setLoading] = useState(false);
+  const [meetings, setMeetings] = useState<any[]>([]);
+  const [followups, setFollowups] = useState<any[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [payouts, setPayouts] = useState<any[]>([]);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+
+      const [meetingRes, followupRes, projectRes, payoutRes] =
+        await Promise.all([
+          axios.get(`${apiBaseUrl}/meetings`, {
+            params: { page: 1, limit: 100 },
+            headers: getAuthHeaders(),
+          }),
+          axios.get(`${apiBaseUrl}/followup`, {
+            params: { page: 1, limit: 100 },
+            headers: getAuthHeaders(),
+          }),
+          axios.get(`${apiBaseUrl}/project`, {
+            params: { page: 1, limit: 100 },
+            headers: getAuthHeaders(),
+          }),
+          axios.get(`${apiBaseUrl}/project/franchise-payout-request/my`, {
+            params: { page: 1, limit: 100 },
+            headers: getAuthHeaders(),
+          }),
+        ]);
+
+      setMeetings(meetingRes.data?.data || []);
+      setFollowups(followupRes.data?.data || []);
+      setProjects(projectRes.data?.data || []);
+      setPayouts(payoutRes.data?.data || []);
+    } catch (error) {
+      console.error('Solar franchise dashboard error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const today = new Date().toISOString().split('T')[0];
+
+  const todayMeetings = meetings.filter((item) =>
+    String(item.scheduledAt || '').startsWith(today),
+  );
+
+  const pendingMeetings = meetings.filter((item) =>
+    ['SCHEDULED', 'RESCHEDULED', 'ON_HOLD'].includes(
+      String(item.status || ''),
+    ),
+  );
+
+  const pendingFollowups = followups.filter(
+    (item) => String(item.status || '') === 'PENDING',
+  );
+
+  const runningProjects = projects.filter(
+    (item) =>
+      !['COMPLETED', 'REJECTED', 'CANCELLED'].includes(
+        String(item.status || ''),
+      ),
+  );
+
+  const completedProjects = projects.filter(
+    (item) => String(item.status || '') === 'COMPLETED',
+  );
+
+  const openPayouts = payouts.filter((item) =>
+    [
+      'REQUESTED',
+      'UNDER_REVIEW',
+      'APPROVED',
+      'ON_HOLD',
+    ].includes(String(item.status || '')),
+  );
+
+  const paidPayouts = payouts.filter(
+    (item) => String(item.status || '') === 'PAID',
+  );
+
+  return (
+    <div className="space-y-5 bg-gray-50 p-3 md:p-6">
+      <div className="rounded-2xl bg-white p-5 shadow">
+        <h1 className="text-2xl font-bold text-gray-900">
+          Solar Franchise Dashboard
+        </h1>
+        <p className="mt-1 text-sm text-gray-500">
+          Your meetings, followups, projects and payout requests.
+        </p>
+      </div>
+
+      {loading && (
+        <div className="rounded-2xl bg-white p-4 text-sm text-gray-500 shadow">
+          Loading dashboard...
+        </div>
+      )}
+
+      <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-4">
+        <SolarFranchiseCard title="Today Meetings" value={todayMeetings.length} />
+        <SolarFranchiseCard title="Pending Meetings" value={pendingMeetings.length} />
+        <SolarFranchiseCard title="Pending Followups" value={pendingFollowups.length} />
+        <SolarFranchiseCard title="Total Projects" value={projects.length} />
+        <SolarFranchiseCard title="Running Projects" value={runningProjects.length} />
+        <SolarFranchiseCard title="Completed Projects" value={completedProjects.length} />
+        <SolarFranchiseCard title="Open Payouts" value={openPayouts.length} />
+        <SolarFranchiseCard title="Paid Payouts" value={paidPayouts.length} />
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-4">
+        <a
+          href="/meeting"
+          className="rounded-xl bg-blue-600 p-4 text-center font-semibold text-white"
+        >
+          Create / View Meetings
+        </a>
+
+        <a
+          href="/followup"
+          className="rounded-xl bg-green-600 p-4 text-center font-semibold text-white"
+        >
+          Followups
+        </a>
+
+        <a
+          href="/calculator"
+          className="rounded-xl bg-purple-600 p-4 text-center font-semibold text-white"
+        >
+          Calculator / Proposal
+        </a>
+
+        <a
+          href="/project"
+          className="rounded-xl bg-gray-900 p-4 text-center font-semibold text-white"
+        >
+          My Projects
+        </a>
+      </div>
+    </div>
+  );
+}
+
+function SolarFranchiseCard({
+  title,
+  value,
+}: {
+  title: string;
+  value: number;
+}) {
+  return (
+    <div className="rounded-2xl bg-white p-5 shadow">
+      <p className="text-sm text-gray-500">{title}</p>
+      <p className="mt-2 text-3xl font-bold text-gray-900">
+        {value}
+      </p>
     </div>
   );
 }

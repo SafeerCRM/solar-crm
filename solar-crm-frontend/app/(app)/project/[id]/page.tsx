@@ -3598,12 +3598,14 @@ const canEditProject = hasRole([
   'OWNER',
   'MARKETING_HEAD',
   'PROJECT_MANAGER',
+  'SOLAR_FRANCHISE',
 ]);
 
 const canCompleteProject = hasRole([
   'OWNER',
   'MARKETING_HEAD',
   'PROJECT_MANAGER',
+  'SOLAR_FRANCHISE',
 ]);
 
 const canManageLoan = hasRole([
@@ -3611,6 +3613,7 @@ const canManageLoan = hasRole([
   'MARKETING_HEAD',
   'PROJECT_MANAGER',
   'LOAN_MANAGER',
+  'SOLAR_FRANCHISE',
 ]);
 
 const canManageSubsidy = hasRole([
@@ -3618,6 +3621,7 @@ const canManageSubsidy = hasRole([
   'MARKETING_HEAD',
   'PROJECT_MANAGER',
   'SUBSIDY_MANAGER',
+  'SOLAR_FRANCHISE',
 ]);
 
 const canManageElectricity = hasRole([
@@ -3625,6 +3629,7 @@ const canManageElectricity = hasRole([
   'MARKETING_HEAD',
   'PROJECT_MANAGER',
   'ELECTRICITY_MANAGER',
+  'SOLAR_FRANCHISE',
 ]);
 
 
@@ -3637,6 +3642,7 @@ const canManagePayment = hasRole([
   'PAYMENT_COLLECTION_EXECUTIVE',
   'PAYMENT_MANAGER',
   'ACCOUNT_MANAGER',
+  'SOLAR_FRANCHISE',
 ]);
 
 const canApprovePayment = hasRole([
@@ -3653,17 +3659,20 @@ const canManageMaterial = hasRole([
   'PROJECT_MANAGER',
   'PROJECT_EXECUTIVE',
   'MEETING_MANAGER',
+  'SOLAR_FRANCHISE',
 ]);
 
 const canShareProjectPdf = hasRole([
   'OWNER',
   'PROJECT_MANAGER',
+  'SOLAR_FRANCHISE',
 ]);
 
 const canManageContractor = hasRole([
   'OWNER',
   'PROJECT_MANAGER',
   'CUSTOMER_MANAGER',
+  'SOLAR_FRANCHISE',
 ]);
 
   useEffect(() => {
