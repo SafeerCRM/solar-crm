@@ -14262,6 +14262,71 @@ async getLedgerOutstandingSummary() {
   };
 }
 
+async getFinanceOutstandingSummary() {
+  const rows = await this.getPartyOutstandingPaginated({
+    page: 1,
+    limit: 10000,
+    outstandingOnly: true,
+  });
+
+  const data = Array.isArray((rows as any)?.data)
+    ? (rows as any).data
+    : [];
+
+  const sumByType = (partyType: string) => {
+    const items = data.filter(
+      (item: any) => String(item.partyType || '') === partyType,
+    );
+
+    const receivable = items
+      .filter((item: any) => item.settlementStatus === 'RECEIVABLE')
+      .reduce(
+        (sum: number, item: any) =>
+          sum + Number(item.absoluteOutstanding || 0),
+        0,
+      );
+
+    const payable = items
+      .filter((item: any) => item.settlementStatus === 'PAYABLE')
+      .reduce(
+        (sum: number, item: any) =>
+          sum + Number(item.absoluteOutstanding || 0),
+        0,
+      );
+
+    return {
+      count: items.length,
+      receivable,
+      payable,
+      net: receivable - payable,
+    };
+  };
+
+  return {
+    customer: sumByType('CUSTOMER'),
+    vendor: sumByType('VENDOR'),
+    dealer: sumByType('DEALER'),
+    expense: sumByType('EXPENSE'),
+    all: {
+      count: data.length,
+      receivable: data
+        .filter((item: any) => item.settlementStatus === 'RECEIVABLE')
+        .reduce(
+          (sum: number, item: any) =>
+            sum + Number(item.absoluteOutstanding || 0),
+          0,
+        ),
+      payable: data
+        .filter((item: any) => item.settlementStatus === 'PAYABLE')
+        .reduce(
+          (sum: number, item: any) =>
+            sum + Number(item.absoluteOutstanding || 0),
+          0,
+        ),
+    },
+  };
+}
+
 async getPartyOutstandingPaginated(query: any = {}) {
   const page = Math.max(Number(query?.page || 1), 1);
   const limit = Math.min(Math.max(Number(query?.limit || 20), 1), 100);

@@ -900,6 +900,19 @@ getLedgerOutstandingSummary() {
   return this.projectService.getLedgerOutstandingSummary();
 }
 
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'PAYMENT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'STOCK_MANAGER',
+  'TRADING_MANAGER',
+)
+@Get('accounts/outstanding-summary')
+getFinanceOutstandingSummary() {
+  return this.projectService.getFinanceOutstandingSummary();
+}
+
 @Get(':id/accounts-summary')
 getProjectAccountsSummary(
   @Param('id') id: string,
