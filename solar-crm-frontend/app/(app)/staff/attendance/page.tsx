@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { uploadPreparedFile } from '@/app/utils/fileUpload';
 
@@ -25,6 +25,10 @@ export default function StaffAttendancePage() {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [remarks, setRemarks] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const selfieInputRef = useRef<HTMLInputElement | null>(null);
+const [pendingPunchType, setPendingPunchType] =
+  useState<'punch-in' | 'punch-out' | null>(null);
 
   const [staffSearch, setStaffSearch] = useState('');
 const [showStaffOptions, setShowStaffOptions] = useState(false);
@@ -75,13 +79,13 @@ const [selectedStaffName, setSelectedStaffName] = useState('');
       });
     });
 
-  const uploadAttendancePhoto = async () => {
-    if (!photoFile) return '';
+  const uploadAttendancePhoto = async (file: File) => {
+  if (!file) return '';
 
     const token = localStorage.getItem('token');
 
     const fileUrl = await uploadPreparedFile({
-      file: photoFile,
+      file,
       endpoint: `${API_BASE_URL}/staff/attendance/photo-upload`,
       token,
       fieldName: 'files',
@@ -90,53 +94,61 @@ const [selectedStaffName, setSelectedStaffName] = useState('');
     return fileUrl;
   };
 
-  const submitPunch = async (type: 'punch-in' | 'punch-out') => {
-    if (!selectedStaffId) {
-      alert('Please select staff');
-      return;
-    }
+  const submitPunch = async (
+  type: 'punch-in' | 'punch-out',
+  selfieFile: File,
+) => {
+  if (!selectedStaffId) {
+    alert('Please select staff');
+    return;
+  }
 
-    if (!photoFile) {
-      alert('Please upload attendance selfie/photo');
-      return;
-    }
+  try {
+    setLoading(true);
 
-    try {
-      setLoading(true);
+    const position = await getLocation();
+    const photoUrl = await uploadAttendancePhoto(selfieFile);
 
-      const position = await getLocation();
-      const photoUrl = await uploadAttendancePhoto();
+    await axios.post(
+      `${API_BASE_URL}/staff/attendance/${type}`,
+      {
+        staffId: Number(selectedStaffId),
+        attendanceDate,
+        latitude: String(position.coords.latitude),
+        longitude: String(position.coords.longitude),
+        gpsAddress: `Lat: ${position.coords.latitude}, Lng: ${position.coords.longitude}`,
+        photoUrl,
+        remarks,
+      },
+      { headers: headers() },
+    );
 
-      await axios.post(
-        `${API_BASE_URL}/staff/attendance/${type}`,
-        {
-          staffId: Number(selectedStaffId),
-          attendanceDate,
-          latitude: String(position.coords.latitude),
-          longitude: String(position.coords.longitude),
-          gpsAddress: `Lat: ${position.coords.latitude}, Lng: ${position.coords.longitude}`,
-          photoUrl,
-          remarks,
-        },
-        { headers: headers() },
-      );
+    alert(type === 'punch-in' ? 'Punch in saved' : 'Punch out saved');
 
-      alert(type === 'punch-in' ? 'Punch in saved' : 'Punch out saved');
+    setPhotoFile(null);
+    setRemarks('');
+    fetchAttendance();
+    setSelectedStaffId('');
+    setSelectedStaffName('');
+    setStaffSearch('');
+    setShowStaffOptions(false);
+  } catch (error: any) {
+    console.error(error);
+    alert(error?.response?.data?.message || error?.message || 'Attendance failed');
+  } finally {
+    setLoading(false);
+  }
+};
 
-      setPhotoFile(null);
-      setRemarks('');
-      fetchAttendance();
-      setSelectedStaffId('');
-setSelectedStaffName('');
-setStaffSearch('');
-setShowStaffOptions(false);
-    } catch (error: any) {
-      console.error(error);
-      alert(error?.response?.data?.message || error?.message || 'Attendance failed');
-    } finally {
-      setLoading(false);
-    }
-  };
+const startSelfiePunch = (type: 'punch-in' | 'punch-out') => {
+  if (!selectedStaffId) {
+    alert('Please select staff');
+    return;
+  }
+
+  setPendingPunchType(type);
+  selfieInputRef.current?.click();
+};
 
   const filteredStaff = staff.filter((item) => {
   const text = `${item.fullName || ''} ${item.employeeCode || ''} ${item.department || ''} ${item.branchName || ''}`.toLowerCase();
@@ -220,12 +232,22 @@ setShowStaffOptions(false);
           />
 
           <input
-            type="file"
-            accept="image/*"
-            capture="user"
-            onChange={(e) => setPhotoFile(e.target.files?.[0] || null)}
-            className="rounded-xl border p-3"
-          />
+  ref={selfieInputRef}
+  type="file"
+  accept="image/*"
+  capture="user"
+  className="hidden"
+  onChange={async (e) => {
+    const file = e.target.files?.[0] || null;
+
+    if (!file || !pendingPunchType) return;
+
+    await submitPunch(pendingPunchType, file);
+
+    setPendingPunchType(null);
+    e.target.value = '';
+  }}
+/>
         </div>
 
         <textarea
@@ -237,7 +259,7 @@ setShowStaffOptions(false);
 
         <div className="mt-4 flex flex-wrap gap-3">
           <button
-            onClick={() => submitPunch('punch-in')}
+            onClick={() => startSelfiePunch('punch-in')}
             disabled={loading}
             className="rounded-xl bg-green-600 px-5 py-3 font-semibold text-white disabled:opacity-50"
           >
@@ -245,7 +267,7 @@ setShowStaffOptions(false);
           </button>
 
           <button
-            onClick={() => submitPunch('punch-out')}
+            onClick={() => startSelfiePunch('punch-out')}
             disabled={loading}
             className="rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white disabled:opacity-50"
           >
