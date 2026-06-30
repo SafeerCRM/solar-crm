@@ -12,6 +12,7 @@ type WorkRequest = {
   customerCode?: string;
   customerName?: string;
   projectId?: number;
+  projectStatus?: string;
   projectName?: string;
   branchName?: string;
   currentWorkDate?: string;
@@ -33,11 +34,12 @@ export default function CustomerWorkRequestsPage() {
   const [savingId, setSavingId] = useState<number | null>(null);
 
   const [filters, setFilters] = useState({
-    customerSearch: '',
-    branchName: '',
-    status: '',
-    projectId: '',
-  });
+  customerSearch: '',
+  branchName: '',
+  status: '',
+  projectId: '',
+  projectStage: '',
+});
 
   const [editMap, setEditMap] = useState<Record<number, any>>({});
 
@@ -133,11 +135,12 @@ export default function CustomerWorkRequestsPage() {
 
   const resetFilters = () => {
     setFilters({
-      customerSearch: '',
-      branchName: '',
-      status: '',
-      projectId: '',
-    });
+  customerSearch: '',
+  branchName: '',
+  status: '',
+  projectId: '',
+  projectStage: '',
+});
 
     setTimeout(() => fetchRequests(1), 0);
   };
@@ -239,6 +242,25 @@ export default function CustomerWorkRequestsPage() {
               </option>
             ))}
           </select>
+
+          <select
+  value={filters.projectStage}
+  onChange={(e) =>
+    setFilters({
+      ...filters,
+      projectStage: e.target.value,
+    })
+  }
+  className="rounded-2xl border p-3"
+>
+  <option value="">All Project Stages</option>
+  <option value="IN_PROGRESS">
+    In Progress Projects
+  </option>
+  <option value="COMPLETED">
+    Completed Projects
+  </option>
+</select>
         </div>
 
         <div className="mt-4 flex flex-wrap gap-3">
@@ -281,6 +303,9 @@ export default function CustomerWorkRequestsPage() {
                         Request #{item.id}
                       </h3>
                       <StatusBadge status={item.status} />
+                      <ProjectStatusBadge
+  status={item.projectStatus}
+/>
                     </div>
 
                     <p className="mt-2 text-sm text-gray-600">
@@ -451,6 +476,28 @@ function StatusBadge({ status }: { status?: string }) {
   return (
     <span className={`rounded-full px-3 py-1 text-xs font-black ${color}`}>
       {formatLabel(value)}
+    </span>
+  );
+}
+
+function ProjectStatusBadge({
+  status,
+}: {
+  status?: string;
+}) {
+  const isCompleted = status === 'COMPLETED';
+
+  return (
+    <span
+      className={`rounded-full px-3 py-1 text-xs font-black ${
+        isCompleted
+          ? 'bg-emerald-100 text-emerald-700'
+          : 'bg-yellow-100 text-yellow-700'
+      }`}
+    >
+      {isCompleted
+        ? 'COMPLETED PROJECT'
+        : 'IN PROGRESS PROJECT'}
     </span>
   );
 }

@@ -14,13 +14,14 @@ export default function CustomerCleaningRemindersPage() {
   const [savingId, setSavingId] = useState<number | null>(null);
 
   const [filters, setFilters] = useState({
-    customerSearch: '',
-    projectId: '',
-    status: '',
-    fromDate: '',
-    toDate: '',
-    showHidden: 'false',
-  });
+  customerSearch: '',
+  projectId: '',
+  status: '',
+  projectStage: '',
+  fromDate: '',
+  toDate: '',
+  showHidden: 'false',
+});
 
   const [editMap, setEditMap] = useState<Record<number, any>>({});
 
@@ -168,6 +169,7 @@ export default function CustomerCleaningRemindersPage() {
     setFilters({
       customerSearch: '',
       projectId: '',
+      projectStage: '',
       status: '',
       fromDate: '',
       toDate: '',
@@ -270,6 +272,25 @@ export default function CustomerCleaningRemindersPage() {
           </select>
 
           <select
+  value={filters.projectStage}
+  onChange={(e) =>
+    setFilters({
+      ...filters,
+      projectStage: e.target.value,
+    })
+  }
+  className="rounded-2xl border p-3"
+>
+  <option value="">All Project Stages</option>
+  <option value="IN_PROGRESS">
+    In Progress Projects
+  </option>
+  <option value="COMPLETED">
+    Completed Projects
+  </option>
+</select>
+
+          <select
             value={filters.showHidden}
             onChange={(e) =>
               setFilters({ ...filters, showHidden: e.target.value })
@@ -352,6 +373,10 @@ export default function CustomerCleaningRemindersPage() {
                       </h3>
 
                       <StatusBadge status={item.status} />
+
+                      <ProjectStatusBadge
+  status={item.projectStatus}
+/>
 
                       {item.isHidden && (
                         <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-black text-red-700">
@@ -573,6 +598,28 @@ function StatusBadge({ status }: { status?: string }) {
   return (
     <span className={`rounded-full px-3 py-1 text-xs font-black ${color}`}>
       {formatLabel(value)}
+    </span>
+  );
+}
+
+function ProjectStatusBadge({
+  status,
+}: {
+  status?: string;
+}) {
+  const isCompleted = status === 'COMPLETED';
+
+  return (
+    <span
+      className={`rounded-full px-3 py-1 text-xs font-black ${
+        isCompleted
+          ? 'bg-emerald-100 text-emerald-700'
+          : 'bg-yellow-100 text-yellow-700'
+      }`}
+    >
+      {isCompleted
+        ? 'COMPLETED PROJECT'
+        : 'IN PROGRESS PROJECT'}
     </span>
   );
 }
