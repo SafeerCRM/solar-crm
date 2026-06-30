@@ -1901,8 +1901,9 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
                     <input type="number" placeholder="Amount" value={paymentForm.amount} onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })} className="rounded-xl border p-3" />
                     <select value={paymentForm.paymentMode} onChange={(e) => setPaymentForm({ ...paymentForm, paymentMode: e.target.value })} className="rounded-xl border p-3">
                       <option value="CASH">Cash</option>
-                      <option value="ONLINE">Online</option>
-                      <option value="CHEQUE">Cheque</option>
+<option value="CREDIT">Credit</option>
+<option value="ONLINE">Online</option>
+<option value="CHEQUE">Cheque</option>
                     </select>
                     <input placeholder="Transaction ID" value={paymentForm.transactionId} onChange={(e) => setPaymentForm({ ...paymentForm, transactionId: e.target.value })} className="rounded-xl border p-3" />
                     <input
