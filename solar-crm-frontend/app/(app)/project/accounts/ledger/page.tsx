@@ -89,8 +89,8 @@ const [toDate, setToDate] = useState('');
   summaryRes,
   outstandingRes,
   financeHubRes,
-  projectProfitRes,
   outstandingSummaryRes,
+  projectProfitRes,
 ] = await Promise.all([
         axios.get(`${API_BASE_URL}/project/ledger`, {
           params: {
