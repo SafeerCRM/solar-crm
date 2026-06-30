@@ -13,6 +13,7 @@ const emptyForm = {
   fileUrl: '',
   fileName: '',
   visibleToEmployee: true,
+  visibleToSolarFranchise: false,
   isActive: true,
 };
 
@@ -134,7 +135,9 @@ export default function EmployeePoliciesPage() {
       fileUrl: policy.fileUrl || '',
       fileName: policy.fileName || '',
       visibleToEmployee: policy.visibleToEmployee !== false,
-      isActive: policy.isActive !== false,
+visibleToSolarFranchise:
+  policy.visibleToSolarFranchise === true,
+isActive: policy.isActive !== false,
     });
     setPolicyFile(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -158,15 +161,23 @@ export default function EmployeePoliciesPage() {
   };
 
   const categories = [
-    'HR',
-    'ATTENDANCE',
-    'LEAVE',
-    'SALARY',
-    'INCENTIVE',
-    'PENALTY',
-    'HOLIDAY',
-    'GENERAL',
-  ];
+  'HR',
+  'ATTENDANCE',
+  'LEAVE',
+  'SALARY',
+  'INCENTIVE',
+  'PENALTY',
+  'HOLIDAY',
+  'GENERAL',
+
+  'FRANCHISE_GENERAL',
+  'FRANCHISE_PAYOUT_RULE',
+  'FRANCHISE_MEETING_POLICY',
+  'FRANCHISE_PROJECT_POLICY',
+  'FRANCHISE_CONTRACTOR_POLICY',
+  'FRANCHISE_DOCUMENT_POLICY',
+  'FRANCHISE_CUSTOMER_HANDLING',
+];
 
   return (
     <div className="mx-auto max-w-7xl space-y-5 px-3 pb-8">
@@ -262,6 +273,20 @@ export default function EmployeePoliciesPage() {
             />{' '}
             Visible to Employee Portal
           </label>
+
+          <label className="rounded-xl border p-3 text-sm">
+  <input
+    type="checkbox"
+    checked={form.visibleToSolarFranchise}
+    onChange={(e) =>
+      setForm({
+        ...form,
+        visibleToSolarFranchise: e.target.checked,
+      })
+    }
+  />{' '}
+  Visible to Solar Franchise
+</label>
 
           <label className="rounded-xl border p-3 text-sm">
             <input
@@ -365,8 +390,9 @@ export default function EmployeePoliciesPage() {
                       </p>
                       <p className="text-sm text-gray-500">
                         {policy.category || 'GENERAL'} |{' '}
-                        {policy.visibleToEmployee ? 'Visible' : 'Not Visible'} |{' '}
-                        {policy.isActive ? 'Active' : 'Inactive'}
+                        Employee: {policy.visibleToEmployee ? 'Visible' : 'Hidden'} |{' '}
+Franchise: {policy.visibleToSolarFranchise ? 'Visible' : 'Hidden'} |{' '}
+{policy.isActive ? 'Active' : 'Inactive'}
                       </p>
 
                       {policy.description && (

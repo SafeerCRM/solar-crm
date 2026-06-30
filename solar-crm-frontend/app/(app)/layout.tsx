@@ -221,6 +221,12 @@ const navItems = [
 },
 
 {
+  name: 'Franchise Policies',
+  href: '/franchise-policies',
+  roles: ['OWNER', 'HR_MANAGER', 'SOLAR_FRANCHISE'],
+},
+
+{
   name: 'My Expense Requests',
   href: '/project/my-expense-requests',
   roles: [
