@@ -136,6 +136,14 @@ const customerPortalMode = hasActiveProject
   payments: true,
   referrals: true,
 },
+
+sectionLabels: {
+  projectTracker: {
+    title: 'Project Summary',
+    text:
+      'View completed project details, documents, payment history and service information.',
+  },
+},
         enabledSections: {
           projectTracker: true,
           workCalendar: false,
@@ -163,6 +171,14 @@ const customerPortalMode = hasActiveProject
   payments: true,
   referrals: true,
 },
+
+sectionLabels: {
+  projectTracker: {
+    title: 'Project Timeline',
+    text:
+      'Track approval, installation, subsidy, electricity and completion progress.',
+  },
+},
           enabledSections: {
             projectTracker: true,
             workCalendar: true,
@@ -188,6 +204,13 @@ const customerPortalMode = hasActiveProject
   complaints: true,
   payments: true,
   referrals: true,
+},
+
+sectionLabels: {
+  projectTracker: {
+    title: 'Project Timeline',
+    text: 'Project details will appear here once linked.',
+  },
 },
           enabledSections: {
             projectTracker: false,
