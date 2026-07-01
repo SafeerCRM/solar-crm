@@ -439,6 +439,7 @@ getContractorAssignmentRegister(
   @Query('workScope') workScope?: string,
   @Query('contractorId') contractorId?: string,
   @Query('projectId') projectId?: string,
+  @Query('projectName') projectName?: string,
   @CurrentUser() user?: any,
 ) {
   return this.projectService.getContractorAssignmentRegister(
@@ -450,6 +451,7 @@ getContractorAssignmentRegister(
       workScope: workScope || '',
       contractorId: contractorId || '',
       projectId: projectId || '',
+      projectName: projectName || '',
     },
     user,
   );

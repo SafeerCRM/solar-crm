@@ -16415,12 +16415,26 @@ async getContractorAssignmentRegister(filters: any, user: any) {
       });
     }
 
+    if (filters?.projectName) {
+  query.andWhere(
+    'LOWER(project.customerName) LIKE :projectName',
+    {
+      projectName: `%${String(filters.projectName).toLowerCase()}%`,
+    },
+  );
+}
+
     return query;
   };
 
   const dataQuery =
-    this.projectContractorAssignmentRepository
-      .createQueryBuilder('assignment');
+  this.projectContractorAssignmentRepository
+    .createQueryBuilder('assignment')
+    .leftJoin(
+      Project,
+      'project',
+      'project.id = assignment.projectId',
+    );
 
   applyFilters(dataQuery);
 
@@ -16431,6 +16445,14 @@ async getContractorAssignmentRegister(filters: any, user: any) {
 
   const [data, total] =
     await dataQuery.getManyAndCount();
+
+    const projectIds = [
+  ...new Set(data.map((item) => item.projectId)),
+];
+
+const projects = projectIds.length
+  ? await this.projectRepository.findByIds(projectIds)
+  : [];
 
     const assignmentIds = data.map((item) => item.id);
 
@@ -16466,9 +16488,23 @@ const dataWithProgress = data.map((assignment) => {
       ? Math.round((uploadedRequiredCount / totalRequired) * 100)
       : 0;
 
+      const project = projects.find(
+  (item) => item.id === assignment.projectId,
+);
+
   return {
-    ...assignment,
-    proofProgress: {
+  ...assignment,
+  project: project
+    ? {
+        id: project.id,
+        customerName: project.customerName || '',
+        customerPhone: project.customerPhone || '',
+        branchName: project.branchName || '',
+        city: project.city || '',
+        projectOwnerName: project.projectOwnerName || '',
+      }
+    : null,
+  proofProgress: {
       uploadedRequiredCount,
       totalRequired,
       percentage,
@@ -16477,8 +16513,13 @@ const dataWithProgress = data.map((assignment) => {
 });
 
   const summaryBaseQuery =
-    this.projectContractorAssignmentRepository
-      .createQueryBuilder('assignment');
+  this.projectContractorAssignmentRepository
+    .createQueryBuilder('assignment')
+    .leftJoin(
+      Project,
+      'project',
+      'project.id = assignment.projectId',
+    );
 
   applyFilters(summaryBaseQuery);
 
