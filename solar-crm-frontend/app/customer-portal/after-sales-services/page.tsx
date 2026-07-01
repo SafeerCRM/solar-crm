@@ -20,7 +20,15 @@ const [timelineLoading, setTimelineLoading] = useState(false);
 const [ratingMap, setRatingMap] = useState<Record<number, any>>({});
 const [ratingSavingId, setRatingSavingId] = useState<number | null>(null);
 
-  const [formMap, setFormMap] = useState<Record<number, any>>({});
+
+  const [selectedServiceId, setSelectedServiceId] = useState('');
+const [serviceSearch, setServiceSearch] = useState('');
+const [showServiceOptions, setShowServiceOptions] = useState(false);
+const [requestForm, setRequestForm] = useState({
+  projectId: '',
+  preferredDate: '',
+  customerRemarks: '',
+});
 
   const projects = dashboard?.projects || [];
 
@@ -83,16 +91,6 @@ const [ratingSavingId, setRatingSavingId] = useState<number | null>(null);
     }
   };
 
-  const updateForm = (serviceId: number, key: string, value: any) => {
-    setFormMap((prev) => ({
-      ...prev,
-      [serviceId]: {
-        ...(prev[serviceId] || {}),
-        [key]: value,
-      },
-    }));
-  };
-
   const loadRequestTimeline = async (request: any) => {
   try {
     setSelectedRequest(request);
@@ -117,57 +115,71 @@ const [ratingSavingId, setRatingSavingId] = useState<number | null>(null);
   }
 };
 
-  const submitRequest = async (service: any) => {
-    const form = formMap[service.id] || {};
+const filteredServices = services.filter((service) => {
+  const text = `${service.serviceName || ''} ${service.category || ''} ${service.description || ''}`.toLowerCase();
 
-    if (!form.preferredDate) {
-      alert('Please select preferred visit date');
+  return text.includes(serviceSearch.toLowerCase());
+});
+
+const selectedService = services.find(
+  (service) => String(service.id) === String(selectedServiceId),
+);
+
+  const submitRequest = async () => {
+  const service = selectedService;
+
+  if (!service) {
+    alert('Please select a service');
+    return;
+  }
+
+  if (!requestForm.preferredDate) {
+    alert('Please select preferred visit date');
+    return;
+  }
+
+  try {
+    setSavingServiceId(service.id);
+
+    const res = await fetch(
+      `${API_BASE_URL}/customer-auth/after-sales-requests`,
+      {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({
+          serviceId: service.id,
+          projectId: requestForm.projectId || projects[0]?.id || '',
+          preferredDate: requestForm.preferredDate,
+          customerRemarks: requestForm.customerRemarks || '',
+        }),
+      },
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      alert(data.message || 'Failed to submit service request');
       return;
     }
 
-    try {
-      setSavingServiceId(service.id);
+    alert('Service request submitted successfully');
 
-      const res = await fetch(
-        `${API_BASE_URL}/customer-auth/after-sales-requests`,
-        {
-          method: 'POST',
-          headers: authHeaders(),
-          body: JSON.stringify({
-            serviceId: service.id,
-            projectId: form.projectId || projects[0]?.id || '',
-            preferredDate: form.preferredDate,
-            customerRemarks: form.customerRemarks || '',
-          }),
-        },
-      );
+    setSelectedServiceId('');
+    setServiceSearch('');
+    setRequestForm({
+      projectId: '',
+      preferredDate: '',
+      customerRemarks: '',
+    });
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        alert(data.message || 'Failed to submit service request');
-        return;
-      }
-
-      alert('Service request submitted successfully');
-
-      setFormMap((prev) => ({
-        ...prev,
-        [service.id]: {
-          projectId: '',
-          preferredDate: '',
-          customerRemarks: '',
-        },
-      }));
-
-      await loadData();
-    } catch (error) {
-      console.error(error);
-      alert('Failed to submit service request');
-    } finally {
-      setSavingServiceId(null);
-    }
-  };
+    await loadData();
+  } catch (error) {
+    console.error(error);
+    alert('Failed to submit service request');
+  } finally {
+    setSavingServiceId(null);
+  }
+};
 
   const submitRating = async (request: any) => {
   const rating = ratingMap[request.id] || {};
@@ -256,129 +268,165 @@ const [ratingSavingId, setRatingSavingId] = useState<number | null>(null);
         </section>
 
         <section className="mt-6 rounded-[2rem] bg-white p-6 shadow-xl">
-          <h2 className="text-2xl font-black text-gray-900">
-            Available Services
-          </h2>
+  <h2 className="text-2xl font-black text-gray-900">
+    Request After-Sales Service
+  </h2>
 
-          <div className="mt-5 grid gap-5 lg:grid-cols-2">
-            {services.length === 0 ? (
-              <div className="rounded-3xl border border-dashed p-8 text-center text-sm font-bold text-gray-500 lg:col-span-2">
-                No after-sales services are available right now.
+  <p className="mt-1 text-sm font-semibold text-gray-500">
+    Search and select a service, review charges, choose preferred visit date and submit your request.
+  </p>
+
+  {services.length === 0 ? (
+    <div className="mt-5 rounded-3xl border border-dashed p-8 text-center text-sm font-bold text-gray-500">
+      No after-sales services are available right now.
+    </div>
+  ) : (
+    <div className="mt-5 grid gap-4">
+      <div className="relative">
+        <input
+          placeholder="Search service by name, category or issue"
+          value={serviceSearch}
+          onChange={(e) => {
+            setServiceSearch(e.target.value);
+            setShowServiceOptions(true);
+          }}
+          onFocus={() => setShowServiceOptions(true)}
+          className="w-full rounded-2xl border bg-white p-3"
+        />
+
+        {showServiceOptions && (
+          <div className="absolute z-40 mt-1 max-h-80 w-full overflow-y-auto rounded-2xl border bg-white shadow-xl">
+            {filteredServices.length === 0 ? (
+              <div className="p-4 text-sm font-semibold text-gray-500">
+                No matching service found.
               </div>
             ) : (
-              services.map((service) => {
-                const form = formMap[service.id] || {};
-
-                return (
-                  <div
-                    key={service.id}
-                    className="rounded-[2rem] border bg-gray-50 p-5 shadow-sm"
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <p className="text-xl font-black text-gray-900">
-                          {service.serviceName}
-                        </p>
-
-                        <p className="mt-1 text-sm font-semibold text-gray-500">
-                          {service.category || 'General Service'}
-                        </p>
-                      </div>
-
-                      <span className="rounded-full bg-emerald-100 px-4 py-2 text-sm font-black text-emerald-700">
-                        {service.isPaidService
-                          ? `₹${Number(service.price || 0).toLocaleString(
-                              'en-IN',
-                            )}`
-                          : 'Free'}
-                      </span>
-                    </div>
-
-                    {service.estimatedVisitTime && (
-                      <p className="mt-3 text-sm font-semibold text-blue-700">
-                        Estimated Duration: {service.estimatedVisitTime}
-                      </p>
-                    )}
-
-                    {service.description && (
-                      <p className="mt-3 whitespace-pre-line text-sm leading-6 text-gray-600">
-                        {service.description}
-                      </p>
-                    )}
-
-                    <div className="mt-5 grid gap-3">
-                      {projects.length > 1 && (
-                        <select
-                          value={form.projectId || ''}
-                          onChange={(e) =>
-                            updateForm(service.id, 'projectId', e.target.value)
-                          }
-                          className="rounded-2xl border bg-white p-3"
-                        >
-                          <option value="">Select Project</option>
-                          {projects.map((project: any) => (
-                            <option key={project.id} value={project.id}>
-                              Project #{project.id} -{' '}
-                              {project.projectSize || project.customerName || '-'}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-
-                      <LocalizationProvider dateAdapter={AdapterDayjs}>
-                        <MobileDatePicker
-                          label="Preferred Visit Date"
-                          value={
-                            form.preferredDate
-                              ? dayjs(form.preferredDate)
-                              : null
-                          }
-                          minDate={dayjs()}
-                          onChange={(newDate) =>
-                            updateForm(
-                              service.id,
-                              'preferredDate',
-                              newDate ? newDate.format('YYYY-MM-DD') : '',
-                            )
-                          }
-                          slotProps={{
-                            textField: {
-                              fullWidth: true,
-                            },
-                          }}
-                        />
-                      </LocalizationProvider>
-
-                      <textarea
-                        rows={3}
-                        placeholder="Remarks / issue details"
-                        value={form.customerRemarks || ''}
-                        onChange={(e) =>
-                          updateForm(
-                            service.id,
-                            'customerRemarks',
-                            e.target.value,
-                          )
-                        }
-                        className="rounded-2xl border bg-white p-3"
-                      />
-
-                      <button
-                        onClick={() => submitRequest(service)}
-                        disabled={savingServiceId === service.id}
-                        className="rounded-2xl bg-orange-600 px-5 py-3 text-sm font-black text-white disabled:opacity-50"
-                      >
-                        {savingServiceId === service.id
-                          ? 'Submitting...'
-                          : 'Submit Service Request'}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })
+              filteredServices.map((service) => (
+                <button
+                  key={service.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedServiceId(String(service.id));
+                    setServiceSearch(
+                      `${service.serviceName} - ${
+                        service.isPaidService
+                          ? `₹${Number(service.price || 0).toLocaleString('en-IN')}`
+                          : 'Free'
+                      }`,
+                    );
+                    setShowServiceOptions(false);
+                  }}
+                  className="block w-full border-b p-4 text-left hover:bg-orange-50"
+                >
+                  <p className="font-black text-gray-900">
+                    {service.serviceName}
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-gray-500">
+                    {service.category || 'General Service'} ·{' '}
+                    {service.isPaidService
+                      ? `₹${Number(service.price || 0).toLocaleString('en-IN')}`
+                      : 'Free'}
+                  </p>
+                </button>
+              ))
             )}
           </div>
-        </section>
+        )}
+      </div>
+
+      {selectedService && (
+        <div className="rounded-3xl bg-emerald-50 p-4">
+          <p className="text-lg font-black text-emerald-900">
+            {selectedService.serviceName}
+          </p>
+
+          <p className="mt-1 text-sm font-bold text-emerald-700">
+            {selectedService.category || 'General Service'} ·{' '}
+            {selectedService.isPaidService
+              ? `₹${Number(selectedService.price || 0).toLocaleString('en-IN')}`
+              : 'Free'}
+          </p>
+
+          {selectedService.estimatedVisitTime && (
+            <p className="mt-2 text-sm font-semibold text-blue-700">
+              Estimated Duration: {selectedService.estimatedVisitTime}
+            </p>
+          )}
+
+          {selectedService.description && (
+            <p className="mt-2 whitespace-pre-line text-sm text-gray-600">
+              {selectedService.description}
+            </p>
+          )}
+        </div>
+      )}
+
+      {projects.length > 1 && (
+        <select
+          value={requestForm.projectId}
+          onChange={(e) =>
+            setRequestForm({
+              ...requestForm,
+              projectId: e.target.value,
+            })
+          }
+          className="rounded-2xl border bg-white p-3"
+        >
+          <option value="">Select Project</option>
+          {projects.map((project: any) => (
+            <option key={project.id} value={project.id}>
+              Project #{project.id} - {project.projectSize || project.customerName || '-'}
+            </option>
+          ))}
+        </select>
+      )}
+
+      <LocalizationProvider dateAdapter={AdapterDayjs}>
+        <MobileDatePicker
+          label="Preferred Visit Date"
+          value={
+            requestForm.preferredDate
+              ? dayjs(requestForm.preferredDate)
+              : null
+          }
+          minDate={dayjs()}
+          onChange={(newDate) =>
+            setRequestForm({
+              ...requestForm,
+              preferredDate: newDate ? newDate.format('YYYY-MM-DD') : '',
+            })
+          }
+          slotProps={{
+            textField: {
+              fullWidth: true,
+            },
+          }}
+        />
+      </LocalizationProvider>
+
+      <textarea
+        rows={4}
+        placeholder="Remarks / issue details"
+        value={requestForm.customerRemarks}
+        onChange={(e) =>
+          setRequestForm({
+            ...requestForm,
+            customerRemarks: e.target.value,
+          })
+        }
+        className="rounded-2xl border bg-white p-3"
+      />
+
+      <button
+        onClick={submitRequest}
+        disabled={!!savingServiceId}
+        className="rounded-2xl bg-orange-600 px-5 py-3 text-sm font-black text-white disabled:opacity-50"
+      >
+        {savingServiceId ? 'Submitting...' : 'Submit Service Request'}
+      </button>
+    </div>
+  )}
+</section>
 
         <section className="mt-6 rounded-[2rem] bg-white p-6 shadow-xl">
           <h2 className="text-2xl font-black text-gray-900">
