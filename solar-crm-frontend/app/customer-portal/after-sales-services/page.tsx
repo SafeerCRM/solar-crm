@@ -14,6 +14,9 @@ export default function CustomerAfterSalesServicesPage() {
   const [dashboard, setDashboard] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [savingServiceId, setSavingServiceId] = useState<number | null>(null);
+  const [selectedRequest, setSelectedRequest] = useState<any>(null);
+const [requestActivities, setRequestActivities] = useState<any[]>([]);
+const [timelineLoading, setTimelineLoading] = useState(false);
 
   const [formMap, setFormMap] = useState<Record<number, any>>({});
 
@@ -87,6 +90,30 @@ export default function CustomerAfterSalesServicesPage() {
       },
     }));
   };
+
+  const loadRequestTimeline = async (request: any) => {
+  try {
+    setSelectedRequest(request);
+    setTimelineLoading(true);
+
+    const res = await fetch(
+      `${API_BASE_URL}/customer-auth/after-sales-requests/${request.id}/activities`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+
+    const data = await res.json();
+    setRequestActivities(Array.isArray(data) ? data : []);
+  } catch (error) {
+    console.error(error);
+    setRequestActivities([]);
+  } finally {
+    setTimelineLoading(false);
+  }
+};
 
   const submitRequest = async (service: any) => {
     const form = formMap[service.id] || {};
@@ -351,6 +378,13 @@ export default function CustomerAfterSalesServicesPage() {
                     <span className="rounded-full bg-blue-100 px-4 py-2 text-xs font-black text-blue-700">
                       {formatLabel(request.status)}
                     </span>
+
+                    <button
+  onClick={() => loadRequestTimeline(request)}
+  className="rounded-full bg-gray-900 px-4 py-2 text-xs font-black text-white"
+>
+  View Timeline
+</button>
                   </div>
 
                   {request.customerRemarks && (
@@ -376,6 +410,63 @@ export default function CustomerAfterSalesServicesPage() {
           </div>
         </section>
       </div>
+
+      {selectedRequest && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+    <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[2rem] bg-white p-6 shadow-2xl">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-black text-gray-900">
+            Service Request #{selectedRequest.id}
+          </h2>
+          <p className="mt-1 text-sm text-gray-500">
+            {selectedRequest.serviceName}
+          </p>
+        </div>
+
+        <button
+          onClick={() => setSelectedRequest(null)}
+          className="rounded-2xl bg-gray-900 px-4 py-2 text-sm font-black text-white"
+        >
+          Close
+        </button>
+      </div>
+
+      <div className="mt-5 space-y-4">
+        {timelineLoading ? (
+          <div className="rounded-2xl border border-dashed p-6 text-center text-sm font-bold text-gray-500">
+            Loading timeline...
+          </div>
+        ) : requestActivities.length === 0 ? (
+          <div className="rounded-2xl border border-dashed p-6 text-center text-sm font-bold text-gray-500">
+            No timeline yet.
+          </div>
+        ) : (
+          requestActivities.map((activity) => (
+            <div key={activity.id} className="rounded-3xl bg-gray-50 p-4">
+              <p className="font-black text-gray-900">
+                {activity.activityTitle}
+              </p>
+
+              {activity.activityDescription && (
+                <p className="mt-1 text-sm text-gray-600">
+                  {activity.activityDescription}
+                </p>
+              )}
+
+              <p className="mt-2 text-xs font-semibold text-gray-500">
+                {activity.performedByName || 'System'} ·{' '}
+                {activity.createdAt
+                  ? new Date(activity.createdAt).toLocaleString('en-IN')
+                  : '-'}
+              </p>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  </div>
+)}
     </main>
   );
 }
