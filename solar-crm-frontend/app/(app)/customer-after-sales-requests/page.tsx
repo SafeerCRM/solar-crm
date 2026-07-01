@@ -9,6 +9,19 @@ import { MobileDatePicker } from '@mui/x-date-pickers/MobileDatePicker';
 import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
 import dayjs from 'dayjs';
 
+type CrmUser = {
+  id: number;
+  name?: string;
+  email?: string;
+  roles?: string[];
+};
+
+const SERVICE_ASSIGNMENT_ROLES = [
+  'MAINTENANCE_MANAGER',
+  'PROJECT_MANAGER',
+  'PROJECT_EXECUTIVE',
+];
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 const STATUS_OPTIONS = [
@@ -29,6 +42,14 @@ export default function CustomerAfterSalesRequestsPage() {
   const [timelineLoading, setTimelineLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState<number | null>(null);
+
+  const [users, setUsers] = useState<CrmUser[]>([]);
+const [technicianSearch, setTechnicianSearch] = useState<
+  Record<number, string>
+>({});
+const [showTechnicianOptions, setShowTechnicianOptions] = useState<
+  Record<number, boolean>
+>({});
 
   const [filters, setFilters] = useState({
     customerSearch: '',
@@ -51,6 +72,14 @@ export default function CustomerAfterSalesRequestsPage() {
 
     setServices(Array.isArray(res.data) ? res.data : []);
   };
+
+  const loadUsers = async () => {
+  const res = await axios.get(`${API_BASE_URL}/users`, {
+    headers: headers(),
+  });
+
+  setUsers(Array.isArray(res.data) ? res.data : []);
+};
 
   const loadRequests = async () => {
     try {
@@ -147,7 +176,8 @@ scheduledVisitTime: item.scheduledVisitTime || '',
 
   useEffect(() => {
     loadServices();
-    loadRequests();
+loadUsers();
+loadRequests();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -158,6 +188,20 @@ scheduledVisitTime: item.scheduledVisitTime || '',
     progress: items.filter((x) => x.status === 'IN_PROGRESS').length,
     completed: items.filter((x) => x.status === 'COMPLETED').length,
   };
+
+  const getFilteredUsers = (search: string) =>
+  users.filter((user) => {
+    const allowed = (user.roles || []).some((role) =>
+      SERVICE_ASSIGNMENT_ROLES.includes(role),
+    );
+
+    if (!allowed) return false;
+
+    const text =
+      `${user.name || ''} ${user.email || ''} ${(user.roles || []).join(' ')}`.toLowerCase();
+
+    return text.includes(search.toLowerCase());
+  });
 
   return (
     <main className="mx-auto max-w-7xl space-y-5 p-4 pb-10">
@@ -381,20 +425,90 @@ scheduledVisitTime: item.scheduledVisitTime || '',
                       ))}
                     </select>
 
-                    <input
-                      placeholder="Assigned staff / technician name"
-                      value={editMap[item.id]?.assignedToName || ''}
-                      onChange={(e) =>
-                        setEditMap((prev) => ({
-                          ...prev,
-                          [item.id]: {
-                            ...prev[item.id],
-                            assignedToName: e.target.value,
-                          },
-                        }))
-                      }
-                      className="w-full rounded-2xl border p-3"
-                    />
+                    <div className="relative">
+  <input
+    placeholder="Search technician / staff"
+    value={
+      technicianSearch[item.id] ??
+      editMap[item.id]?.assignedToName ??
+      ''
+    }
+    onChange={(e) => {
+      setTechnicianSearch({
+        ...technicianSearch,
+        [item.id]: e.target.value,
+      });
+
+      setShowTechnicianOptions({
+        ...showTechnicianOptions,
+        [item.id]: true,
+      });
+    }}
+    onFocus={() =>
+      setShowTechnicianOptions({
+        ...showTechnicianOptions,
+        [item.id]: true,
+      })
+    }
+    className="w-full rounded-2xl border p-3"
+  />
+
+  {showTechnicianOptions[item.id] && (
+    <div className="absolute z-40 mt-1 max-h-72 w-full overflow-y-auto rounded-xl border bg-white shadow">
+      {getFilteredUsers(technicianSearch[item.id] || '').length === 0 ? (
+        <div className="p-3 text-sm text-gray-500">
+          No matching technician found
+        </div>
+      ) : (
+        getFilteredUsers(technicianSearch[item.id] || '').map((user) => {
+          const primaryRole =
+            (user.roles || []).find((role) =>
+              SERVICE_ASSIGNMENT_ROLES.includes(role),
+            ) || '';
+
+          return (
+            <button
+              key={user.id}
+              type="button"
+              onClick={() => {
+                setEditMap((prev) => ({
+                  ...prev,
+                  [item.id]: {
+                    ...prev[item.id],
+                    assignedTo: user.id,
+                    assignedToName: user.name || user.email || '',
+                    assignedToRole: primaryRole,
+                  },
+                }));
+
+                setTechnicianSearch({
+                  ...technicianSearch,
+                  [item.id]: `${user.name || user.email || 'Unnamed'}${
+                    primaryRole ? ` (${primaryRole.replaceAll('_', ' ')})` : ''
+                  }`,
+                });
+
+                setShowTechnicianOptions({
+                  ...showTechnicianOptions,
+                  [item.id]: false,
+                });
+              }}
+              className="block w-full border-b p-3 text-left text-sm hover:bg-blue-50"
+            >
+              <p className="font-semibold text-gray-800">
+                {user.name || 'Unnamed'}
+              </p>
+              <p className="text-xs text-gray-500">{user.email || '-'}</p>
+              <p className="text-xs text-gray-500">
+                {(user.roles || []).join(', ') || '-'}
+              </p>
+            </button>
+          );
+        })
+      )}
+    </div>
+  )}
+</div>
 
                     <LocalizationProvider dateAdapter={AdapterDayjs}>
   <MobileDatePicker
