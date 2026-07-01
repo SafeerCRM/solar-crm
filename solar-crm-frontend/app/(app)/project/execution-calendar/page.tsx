@@ -215,11 +215,11 @@ const ownerOptions = Array.from(
 
 <div>
   <p className="mb-1 text-sm font-semibold text-gray-700">
-    Customer Name
+    Project / Customer Name
   </p>
 
   <input
-    placeholder="Search customer"
+    placeholder="Search project / customer name"
     value={customerFilter}
     onChange={(e) => {
       setCustomerFilter(e.target.value)
@@ -297,8 +297,15 @@ const ownerOptions = Array.from(
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                   <div>
                     <p className="text-lg font-bold text-gray-800">
-                      {activity.activityType}
-                    </p>
+  {activity.activityType}
+</p>
+
+<p className="mt-1 text-sm font-semibold text-blue-700">
+  Project #{activity.projectId}
+  {activity.project?.customerName
+    ? ` - ${activity.project.customerName}`
+    : ''}
+</p>
 
                     <p className="mt-1 text-sm text-gray-600">
                       Customer:{' '}

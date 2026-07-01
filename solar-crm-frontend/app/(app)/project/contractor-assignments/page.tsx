@@ -25,6 +25,14 @@ type ContractorAssignment = {
     totalRequired: number;
     percentage: number;
   };
+  project?: {
+  id?: number;
+  customerName?: string;
+  customerPhone?: string;
+  branchName?: string;
+  city?: string;
+  projectOwnerName?: string;
+};
 };
 
 type Summary = {
@@ -91,6 +99,7 @@ export default function ContractorAssignmentRegisterPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [scopeFilter, setScopeFilter] = useState('');
   const [projectIdFilter, setProjectIdFilter] = useState('');
+  const [projectNameFilter, setProjectNameFilter] = useState('');
   const [pendingRescheduleRequests, setPendingRescheduleRequests] =
   useState<any[]>([]);
 
@@ -110,6 +119,7 @@ export default function ContractorAssignmentRegisterPage() {
             status: statusFilter,
             workScope: scopeFilter,
             projectId: projectIdFilter,
+            projectName: projectNameFilter,
           },
           headers: token
             ? {
@@ -198,6 +208,7 @@ const rejectRescheduleRequest = async (id: number) => {
     setStatusFilter('');
     setScopeFilter('');
     setProjectIdFilter('');
+    setProjectNameFilter('');
     setPage(1);
 
     setTimeout(fetchAssignments, 0);
@@ -256,7 +267,7 @@ const rejectRescheduleRequest = async (id: number) => {
       <div className="rounded-2xl bg-white p-5 shadow">
         <h2 className="text-lg font-bold text-gray-800">Filters</h2>
 
-        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
           <input
             placeholder="Search contractor / phone / project ID"
             value={search}
@@ -296,6 +307,13 @@ const rejectRescheduleRequest = async (id: number) => {
             onChange={(e) => setProjectIdFilter(e.target.value)}
             className="rounded-xl border p-3"
           />
+
+          <input
+  placeholder="Search project / customer name"
+  value={projectNameFilter}
+  onChange={(e) => setProjectNameFilter(e.target.value)}
+  className="rounded-xl border p-3"
+/>
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
@@ -352,8 +370,11 @@ const rejectRescheduleRequest = async (id: number) => {
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="text-lg font-bold text-gray-800">
-                          Project #{item.projectId}
-                        </h3>
+  Project #{item.projectId}
+  {item.project?.customerName
+    ? ` - ${item.project.customerName}`
+    : ''}
+</h3>
 
                         <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-bold text-purple-700">
                           {formatLabel(item.workScope)}
@@ -371,6 +392,11 @@ const rejectRescheduleRequest = async (id: number) => {
                       <p className="text-sm text-gray-500">
                         Phone: {item.contractorPhone || '-'}
                       </p>
+
+                      <p className="text-sm text-gray-500">
+  Project Branch: {item.project?.branchName || '-'} | Owner:{' '}
+  {item.project?.projectOwnerName || '-'}
+</p>
 
                       <div className="mt-4 grid gap-3 text-sm md:grid-cols-2 xl:grid-cols-4">
                         <Info label="Amount" value={money(item.amount)} />
