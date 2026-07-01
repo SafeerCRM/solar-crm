@@ -17,6 +17,8 @@ export default function CustomerAfterSalesServicesPage() {
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
 const [requestActivities, setRequestActivities] = useState<any[]>([]);
 const [timelineLoading, setTimelineLoading] = useState(false);
+const [ratingMap, setRatingMap] = useState<Record<number, any>>({});
+const [ratingSavingId, setRatingSavingId] = useState<number | null>(null);
 
   const [formMap, setFormMap] = useState<Record<number, any>>({});
 
@@ -166,6 +168,50 @@ const [timelineLoading, setTimelineLoading] = useState(false);
       setSavingServiceId(null);
     }
   };
+
+  const submitRating = async (request: any) => {
+  const rating = ratingMap[request.id] || {};
+
+  if (!rating.rating) {
+    alert('Please select a rating.');
+    return;
+  }
+
+  try {
+    setRatingSavingId(request.id);
+
+    const res = await fetch(
+      `${API_BASE_URL}/customer-auth/after-sales-requests/${request.id}/rating`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          rating: Number(rating.rating),
+          feedback: rating.feedback || '',
+          wouldRecommend: rating.wouldRecommend !== false,
+        }),
+      },
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data?.message || 'Failed to submit rating');
+    }
+
+    alert('Thank you for your feedback!');
+
+    await loadData();
+  } catch (error: any) {
+    console.error(error);
+    alert(error.message);
+  } finally {
+    setRatingSavingId(null);
+  }
+};
 
   useEffect(() => {
     loadData();
@@ -404,6 +450,96 @@ const [timelineLoading, setTimelineLoading] = useState(false);
                       Completion: {request.completionRemarks}
                     </p>
                   )}
+
+                  {request.status === 'COMPLETED' && request.rating && (
+  <div className="mt-4 rounded-3xl bg-emerald-50 p-4">
+    <p className="font-black text-emerald-900">
+      Thank you for your feedback
+    </p>
+
+    <p className="mt-2 text-2xl">
+      {'⭐'.repeat(Number(request.rating.rating || 0))}
+    </p>
+
+    {request.rating.feedback && (
+      <p className="mt-2 whitespace-pre-line text-sm text-emerald-800">
+        {request.rating.feedback}
+      </p>
+    )}
+
+    <p className="mt-2 text-xs font-bold text-emerald-700">
+      Recommend: {request.rating.wouldRecommend ? 'Yes' : 'No'}
+    </p>
+  </div>
+)}
+
+{request.status === 'COMPLETED' && !request.rating && (
+  <div className="mt-4 rounded-3xl bg-emerald-50 p-4">
+    <p className="font-black text-emerald-900">Rate This Service</p>
+
+    <div className="mt-3 flex gap-2">
+      {[1, 2, 3, 4, 5].map((star) => (
+        <button
+          key={star}
+          type="button"
+          onClick={() =>
+            setRatingMap((prev) => ({
+              ...prev,
+              [request.id]: {
+                ...(prev[request.id] || {}),
+                rating: star,
+              },
+            }))
+          }
+          className="text-3xl"
+        >
+          {Number(ratingMap[request.id]?.rating || 0) >= star ? '⭐' : '☆'}
+        </button>
+      ))}
+    </div>
+
+    <textarea
+      rows={3}
+      placeholder="Share your feedback"
+      value={ratingMap[request.id]?.feedback || ''}
+      onChange={(e) =>
+        setRatingMap((prev) => ({
+          ...prev,
+          [request.id]: {
+            ...(prev[request.id] || {}),
+            feedback: e.target.value,
+          },
+        }))
+      }
+      className="mt-3 w-full rounded-2xl border bg-white p-3"
+    />
+
+    <label className="mt-3 flex items-center gap-2 text-sm font-bold text-emerald-900">
+      <input
+        type="checkbox"
+        checked={ratingMap[request.id]?.wouldRecommend !== false}
+        onChange={(e) =>
+          setRatingMap((prev) => ({
+            ...prev,
+            [request.id]: {
+              ...(prev[request.id] || {}),
+              wouldRecommend: e.target.checked,
+            },
+          }))
+        }
+      />
+      I would recommend Aditya Solars
+    </label>
+
+    <button
+      onClick={() => submitRating(request)}
+      disabled={ratingSavingId === request.id}
+      className="mt-3 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-black text-white disabled:opacity-50"
+    >
+      {ratingSavingId === request.id ? 'Submitting...' : 'Submit Rating'}
+    </button>
+  </div>
+)}
                 </div>
               ))
             )}
