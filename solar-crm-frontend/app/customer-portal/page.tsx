@@ -221,6 +221,9 @@ const portalModeLabel =
 const portalHeroBadge = heroConfig?.badge || portalModeLabel;
 const portalHeroMessage = heroConfig?.message || '';
 
+const sectionLabels = portalExperience?.sectionLabels || {};
+const projectTrackerLabel = sectionLabels?.projectTracker || {};
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-orange-50 via-yellow-50 to-emerald-50 pb-24">
       <div className="mx-auto max-w-7xl px-4 py-5">
@@ -530,10 +533,13 @@ const portalHeroMessage = heroConfig?.message || '';
             {enabledSections.projectTracker && (
             <a href="/customer-portal/project-tracker">
   <ActionCard
-    icon="📊"
-    title="Project Timeline"
-    text="Track approval, installation, subsidy, electricity and completion progress."
-  />
+  icon="📊"
+  title={projectTrackerLabel?.title || 'Project Timeline'}
+  text={
+    projectTrackerLabel?.text ||
+    'Track approval, installation, subsidy, electricity and completion progress.'
+  }
+/>
 </a>
 )}
 
