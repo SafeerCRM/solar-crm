@@ -960,6 +960,12 @@ await this.addAfterSalesRequestActivity(
   `Customer requested "${savedRequest.serviceName}".`,
 );
 
+await this.notifyAfterSalesCustomer(
+  savedRequest,
+  'Service Request Submitted',
+  `Your request for ${savedRequest.serviceName} has been submitted.`,
+);
+
 return savedRequest;
 }
 
@@ -982,6 +988,12 @@ async updateAfterSalesRequest(id: number, body: any, user: any) {
   `Status changed to ${body.status}`,
   body.adminRemarks || '',
   user,
+);
+
+await this.notifyAfterSalesCustomer(
+  request,
+  'Service Request Updated',
+  `Your ${request.serviceName} request is now ${body.status}.`,
 );
 
   request.assignedToName =
@@ -1021,22 +1033,42 @@ if (body?.assignedToName) {
       '',
       user,
     );
+
+    await this.notifyAfterSalesCustomer(
+  request,
+  'Technician Assigned',
+  `${newAssignedToName} has been assigned for your ${request.serviceName} request.`,
+);
   }
 }
 
-if (body?.scheduledVisitDate) {
-  request.scheduledVisitAt = new Date(body.scheduledVisitDate);
-}
+const visitChanged =
+  body?.scheduledVisitDate !== undefined ||
+  body?.scheduledVisitTime !== undefined;
 
-if (body?.scheduledVisitTime) {
-  request.scheduledVisitTime = String(body.scheduledVisitTime || '').trim();
+if (visitChanged) {
+  if (body?.scheduledVisitDate) {
+    request.scheduledVisitAt = new Date(body.scheduledVisitDate);
+  }
+
+  if (body?.scheduledVisitTime) {
+    request.scheduledVisitTime = String(
+      body.scheduledVisitTime || '',
+    ).trim();
+  }
 
   await this.addAfterSalesRequestActivity(
     request.id,
     'VISIT_SCHEDULED',
     'Visit Scheduled',
-    `${body.scheduledVisitDate || ''} ${body.scheduledVisitTime || ''}`.trim(),
+    `${body?.scheduledVisitDate || ''} ${body?.scheduledVisitTime || ''}`.trim(),
     user,
+  );
+
+  await this.notifyAfterSalesCustomer(
+    request,
+    'Visit Scheduled',
+    `Visit scheduled for ${request.serviceName}: ${body?.scheduledVisitDate || ''} ${body?.scheduledVisitTime || ''}`.trim(),
   );
 }
 
@@ -1153,6 +1185,23 @@ async submitAfterSalesRequestRating(
   );
 
   return saved;
+}
+
+private async notifyAfterSalesCustomer(
+  request: any,
+  title: string,
+  message: string,
+) {
+  return this.createCustomerNotification({
+    customerId: request.customerId,
+    customerCode: request.customerCode,
+    projectId: request.projectId,
+    notificationType: 'AFTER_SALES_SERVICE',
+    title,
+    message,
+    relatedEntityType: 'AFTER_SALES_REQUEST',
+    relatedEntityId: request.id,
+  });
 }
 
   async updateComplaint(id: number, body: any, user: any) {
