@@ -573,6 +573,16 @@ const projectTrackerLabel = sectionLabels?.projectTracker || {};
 </a>
 )}
 
+{enabledSections.afterSalesServices && (
+  <a href="/customer-portal/after-sales-services">
+    <ActionCard
+      icon="🧰"
+      title="After-Sales Service"
+      text="Request maintenance, warranty service, AMC and paid services."
+    />
+  </a>
+)}
+
        {enabledSections.staffDirectory && (
             <a href="/customer-portal/staff-directory">
   <ActionCard
