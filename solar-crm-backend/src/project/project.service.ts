@@ -9872,6 +9872,7 @@ async getExecutionCalendarActivities(
     customer?: string;
     owner?: string;
     overdueOnly?: string;
+    teamSearch?: string;
   },
 ) {
   await this.refreshExecutionOverdueStatuses();
@@ -9958,6 +9959,25 @@ async getExecutionCalendarActivities(
     );
   }
 
+  if (filters?.teamSearch) {
+  query.innerJoin(
+    ProjectContractorAssignment,
+    'assignmentFilter',
+    'assignmentFilter.projectId = activity.projectId',
+  );
+
+  query.andWhere(
+    `(
+      LOWER(assignmentFilter.contractorName) LIKE :teamSearch
+      OR LOWER(assignmentFilter.contractorPhone) LIKE :teamSearch
+      OR LOWER(assignmentFilter.workScope) LIKE :teamSearch
+    )`,
+    {
+      teamSearch: `%${filters.teamSearch.toLowerCase()}%`,
+    },
+  );
+}
+
   if (filters?.overdueOnly === 'true') {
     query.andWhere('activity.status = :overdue', {
       overdue: ProjectExecutionActivityStatus.OVERDUE,
@@ -9986,21 +10006,46 @@ async getExecutionCalendarActivities(
         )
       : [];
 
+      const contractorAssignments =
+  projectIds.length > 0
+    ? await this.projectContractorAssignmentRepository.find({
+        where: {
+          projectId: In(projectIds),
+        },
+        order: {
+          createdAt: 'DESC',
+        },
+      })
+    : [];
+
   const data = activities.map((activity) => {
     const project = projects.find(
       (item) => item.id === activity.projectId,
     );
 
+    const projectTeams = contractorAssignments
+  .filter(
+    (assignment) =>
+      Number(assignment.projectId) === Number(activity.projectId),
+  )
+  .map((assignment) => ({
+    contractorName: assignment.contractorName || '',
+    contractorPhone: assignment.contractorPhone || '',
+    workScope: assignment.workScope || '',
+    status: assignment.status || '',
+  }));
+
     return {
       ...activity,
       project: project
-        ? {
-            customerName: project.customerName || '',
-            branchName: project.branchName || '',
-            projectOwnerName:
-              project.projectOwnerName || '',
-          }
-        : null,
+  ? {
+      customerName: project.customerName || '',
+      branchName: project.branchName || '',
+      projectOwnerName:
+        project.projectOwnerName || '',
+      contractorTeams: projectTeams,
+    }
+  : null,
     };
   });
 

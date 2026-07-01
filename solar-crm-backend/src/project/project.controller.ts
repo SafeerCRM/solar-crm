@@ -1746,6 +1746,7 @@ getExecutionCalendarActivities(
   @Query('customer') customer?: string,
   @Query('owner') owner?: string,
   @Query('overdueOnly') overdueOnly?: string,
+  @Query('teamSearch') teamSearch?: string,
 ) {
   return this.projectService.getExecutionCalendarActivities(
     user,
@@ -1758,6 +1759,7 @@ getExecutionCalendarActivities(
       customer: customer || '',
       owner: owner || '',
       overdueOnly: overdueOnly || '',
+      teamSearch: teamSearch || '',
     },
   );
 }
