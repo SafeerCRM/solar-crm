@@ -827,13 +827,30 @@ async listAfterSalesRequests(query: any) {
 
   const [data, total] = await qb.getManyAndCount();
 
-  return {
-    data,
-    total,
-    page,
-    limit,
-    totalPages: Math.ceil(total / limit) || 1,
-  };
+const requestIds = data.map((item) => item.id);
+
+const ratings = requestIds.length
+  ? await this.afterSalesRequestRatingRepository
+      .createQueryBuilder('rating')
+      .where('rating.requestId IN (:...requestIds)', {
+        requestIds,
+      })
+      .getMany()
+  : [];
+
+const dataWithRatings = data.map((request) => ({
+  ...request,
+  rating:
+    ratings.find((rating) => rating.requestId === request.id) || null,
+}));
+
+return {
+  data: dataWithRatings,
+  total,
+  page,
+  limit,
+  totalPages: Math.ceil(total / limit) || 1,
+};
 }
 
 private async addAfterSalesRequestActivity(
