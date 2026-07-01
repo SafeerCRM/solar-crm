@@ -20,6 +20,8 @@ import { CustomerComplaintActivity } from './customer-complaint-activity.entity'
 import { DealerCompanyBankDetail } from '../dealer/dealer-company-bank-detail.entity';
 import { PortalPolicy } from '../dealer/portal-policy.entity';
 import { CustomerPaymentReceiptActivity } from './customer-payment-receipt-activity.entity';
+import { CustomerAfterSalesService } from './customer-after-sales-service.entity';
+import { CustomerAfterSalesRequest } from './customer-after-sales-request.entity';
 
 @Module({
   imports: [
@@ -41,6 +43,8 @@ CustomerComplaintAttachment,
       DealerCompanyBankDetail,
       PortalPolicy,
       CustomerPaymentReceiptActivity,
+      CustomerAfterSalesService,
+      CustomerAfterSalesRequest,
     ]),
   ],
   controllers: [CustomerPortalController, CustomerAuthController],

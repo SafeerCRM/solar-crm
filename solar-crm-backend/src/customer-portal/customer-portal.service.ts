@@ -35,6 +35,11 @@ import {
   CustomerPaymentReceiptActivity,
   CustomerPaymentReceiptActivityType,
 } from './customer-payment-receipt-activity.entity';
+import { CustomerAfterSalesService } from './customer-after-sales-service.entity';
+import {
+  CustomerAfterSalesRequest,
+  CustomerAfterSalesRequestStatus,
+} from './customer-after-sales-request.entity';
 
 @Injectable()
 export class CustomerPortalService {
@@ -86,6 +91,12 @@ private readonly companyBankDetailRepository: Repository<DealerCompanyBankDetail
 
 @InjectRepository(PortalPolicy)
 private readonly portalPolicyRepository: Repository<PortalPolicy>,
+
+@InjectRepository(CustomerAfterSalesService)
+private readonly afterSalesServiceRepository: Repository<CustomerAfterSalesService>,
+
+@InjectRepository(CustomerAfterSalesRequest)
+private readonly afterSalesRequestRepository: Repository<CustomerAfterSalesRequest>,
 
     @InjectRepository(StaffMember)
 private readonly staffMemberRepository: Repository<StaffMember>,
@@ -663,6 +674,262 @@ async listPortalPoliciesForCustomer() {
       createdAt: 'DESC',
     } as any,
   });
+}
+
+async listAfterSalesServices(query: any) {
+  const qb = this.afterSalesServiceRepository
+    .createQueryBuilder('service')
+    .orderBy('service.sortOrder', 'ASC')
+    .addOrderBy('service.createdAt', 'DESC');
+
+  if (query?.showHidden === 'true') {
+    qb.where('1 = 1');
+  } else {
+    qb.where('service.isHidden = false');
+  }
+
+  if (query?.customerVisible === 'true') {
+    qb.andWhere('service.isActive = true');
+    qb.andWhere('service.isHidden = false');
+  }
+
+  return qb.getMany();
+}
+
+async saveAfterSalesService(body: any, user: any) {
+  const serviceName = String(body?.serviceName || '').trim();
+
+  if (!serviceName) {
+    throw new BadRequestException('Service name is required');
+  }
+
+  const service = body?.id
+    ? await this.afterSalesServiceRepository.findOne({
+        where: { id: Number(body.id) },
+      })
+    : this.afterSalesServiceRepository.create();
+
+  if (!service) {
+    throw new NotFoundException('Service not found');
+  }
+
+  service.serviceName = serviceName;
+  service.category = String(body?.category || '').trim();
+  service.price = Number(body?.price || 0);
+  service.isPaidService = body?.isPaidService !== false;
+  service.description = String(body?.description || '').trim();
+  service.estimatedVisitTime = String(body?.estimatedVisitTime || '').trim();
+  service.isActive = body?.isActive !== false;
+  service.sortOrder = Number(body?.sortOrder || 0);
+
+  return this.afterSalesServiceRepository.save(service);
+}
+
+async hideAfterSalesService(id: number, body: any, user: any) {
+  const service = await this.afterSalesServiceRepository.findOne({
+    where: { id },
+  });
+
+  if (!service) {
+    throw new NotFoundException('Service not found');
+  }
+
+  service.isHidden = true;
+  service.hiddenReason = String(body?.reason || body?.hiddenReason || '').trim();
+  service.hiddenBy = user?.id || user?.userId || null;
+  service.hiddenByName = user?.name || user?.email || '';
+  service.hiddenAt = new Date();
+
+  return this.afterSalesServiceRepository.save(service);
+}
+
+async restoreAfterSalesService(id: number) {
+  const service = await this.afterSalesServiceRepository.findOne({
+    where: { id },
+  });
+
+  if (!service) {
+    throw new NotFoundException('Service not found');
+  }
+
+  service.isHidden = false;
+  service.hiddenReason = '';
+  service.hiddenBy = undefined as any;
+  service.hiddenByName = '';
+  service.hiddenAt = undefined as any;
+
+  return this.afterSalesServiceRepository.save(service);
+}
+
+async listAfterSalesRequests(query: any) {
+  const page = Number(query?.page || 1);
+  const limit = Math.min(Number(query?.limit || 20), 100);
+  const skip = (page - 1) * limit;
+
+  const qb = this.afterSalesRequestRepository
+    .createQueryBuilder('request')
+    .where('request.isHidden = false')
+    .orderBy('request.createdAt', 'DESC');
+
+  if (query?.customerId) {
+    qb.andWhere('request.customerId = :customerId', {
+      customerId: Number(query.customerId),
+    });
+  }
+
+  if (query?.projectId) {
+    qb.andWhere('request.projectId = :projectId', {
+      projectId: Number(query.projectId),
+    });
+  }
+
+  if (query?.serviceId) {
+    qb.andWhere('request.serviceId = :serviceId', {
+      serviceId: Number(query.serviceId),
+    });
+  }
+
+  if (query?.status) {
+    qb.andWhere('request.status = :status', {
+      status: query.status,
+    });
+  }
+
+  if (query?.customerSearch) {
+    const search = `%${String(query.customerSearch).toLowerCase()}%`;
+
+    qb.andWhere(
+      `
+      LOWER(request.customerName) LIKE :search
+      OR LOWER(request.customerCode) LIKE :search
+      OR LOWER(request.customerPhone) LIKE :search
+      `,
+      { search },
+    );
+  }
+
+  qb.skip(skip).take(limit);
+
+  const [data, total] = await qb.getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
+}
+
+async createAfterSalesRequestFromCustomer(customerId: number, body: any) {
+  const serviceId = Number(body?.serviceId || 0);
+
+  if (!serviceId) {
+    throw new BadRequestException('Service is required');
+  }
+
+  const customer = await this.customerRepository.findOne({
+    where: {
+      id: customerId,
+      isHidden: false,
+    } as any,
+  });
+
+  if (!customer) {
+    throw new NotFoundException('Customer not found');
+  }
+
+  const service = await this.afterSalesServiceRepository.findOne({
+    where: {
+      id: serviceId,
+      isHidden: false,
+      isActive: true,
+    } as any,
+  });
+
+  if (!service) {
+    throw new NotFoundException('Service not available');
+  }
+
+  const projects = await this.projectRepository.find({
+    where: {
+      customerId,
+      isHidden: false,
+    } as any,
+    order: {
+      createdAt: 'DESC',
+    },
+  });
+
+  const selectedProject =
+    body?.projectId
+      ? projects.find(
+          (project: any) =>
+            Number(project.id) === Number(body.projectId),
+        )
+      : projects[0];
+
+  const request: any = new CustomerAfterSalesRequest();
+
+request.customerId = customer.id;
+request.customerCode = customer.customerCode;
+request.customerName = customer.customerName;
+request.customerPhone = customer.mobile || customer.alternateMobile || '';
+
+request.projectId = selectedProject?.id || null;
+request.projectName =
+  (selectedProject as any)?.projectName ||
+  selectedProject?.customerName ||
+  '';
+request.branchName = selectedProject?.branchName || customer.branchName || '';
+request.projectOwnerId = selectedProject?.projectOwnerId || null;
+request.projectOwnerName = selectedProject?.projectOwnerName || '';
+
+request.serviceId = service.id;
+request.serviceName = service.serviceName;
+request.serviceCategory = service.category;
+request.servicePrice = Number(service.price || 0);
+request.isPaidService = service.isPaidService;
+
+request.preferredDate = body?.preferredDate
+  ? new Date(body.preferredDate)
+  : null;
+
+request.customerRemarks = String(body?.customerRemarks || '').trim();
+request.status = CustomerAfterSalesRequestStatus.NEW;
+
+  return this.afterSalesRequestRepository.save(request);
+}
+
+async updateAfterSalesRequest(id: number, body: any, user: any) {
+  const request = await this.afterSalesRequestRepository.findOne({
+    where: { id },
+  });
+
+  if (!request) {
+    throw new NotFoundException('After-sales request not found');
+  }
+
+  if (body?.status) {
+    request.status = body.status;
+  }
+
+  request.assignedToName =
+    String(body?.assignedToName || '').trim() || request.assignedToName;
+
+  request.adminRemarks =
+    String(body?.adminRemarks || '').trim() || request.adminRemarks;
+
+  request.completionRemarks =
+    String(body?.completionRemarks || '').trim() || request.completionRemarks;
+
+  if (body?.status === CustomerAfterSalesRequestStatus.COMPLETED) {
+    request.completedAt = new Date();
+    request.completedBy = user?.id || user?.userId || null;
+    request.completedByName = user?.name || user?.email || '';
+  }
+
+  return this.afterSalesRequestRepository.save(request);
 }
 
   async updateComplaint(id: number, body: any, user: any) {

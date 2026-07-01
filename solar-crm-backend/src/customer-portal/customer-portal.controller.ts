@@ -196,4 +196,48 @@ updateReferral(
 ) {
   return this.service.updateReferral(id, body, user);
 }
+
+@Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'MAINTENANCE_MANAGER')
+@Get('after-sales-services')
+listAfterSalesServices(@Query() query: any) {
+  return this.service.listAfterSalesServices(query);
+}
+
+@Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'MAINTENANCE_MANAGER')
+@Post('after-sales-services')
+saveAfterSalesService(@Body() body: any, @CurrentUser() user: any) {
+  return this.service.saveAfterSalesService(body, user);
+}
+
+@Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'MAINTENANCE_MANAGER')
+@Patch('after-sales-services/:id/hide')
+hideAfterSalesService(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.service.hideAfterSalesService(id, body, user);
+}
+
+@Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'MAINTENANCE_MANAGER')
+@Patch('after-sales-services/:id/restore')
+restoreAfterSalesService(@Param('id', ParseIntPipe) id: number) {
+  return this.service.restoreAfterSalesService(id);
+}
+
+@Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'MAINTENANCE_MANAGER')
+@Get('after-sales-requests')
+listAfterSalesRequests(@Query() query: any) {
+  return this.service.listAfterSalesRequests(query);
+}
+
+@Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'MAINTENANCE_MANAGER')
+@Patch('after-sales-requests/:id')
+updateAfterSalesRequest(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.service.updateAfterSalesRequest(id, body, user);
+}
 }

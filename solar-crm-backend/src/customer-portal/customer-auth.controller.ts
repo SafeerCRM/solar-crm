@@ -356,6 +356,72 @@ async getCustomerPolicies(@Req() req: any) {
   return this.service.listPortalPoliciesForCustomer();
 }
 
+@Get('after-sales-services')
+async getCustomerAfterSalesServices(@Req() req: any) {
+  const authHeader = req.headers?.authorization || '';
+  const token = authHeader.replace('Bearer ', '');
+
+  if (!token) {
+    throw new UnauthorizedException('Customer token missing');
+  }
+
+  const payload: any = jwt.verify(token, 'mysecretkey');
+
+  if (!payload?.customerId) {
+    throw new UnauthorizedException('Invalid customer token');
+  }
+
+  return this.service.listAfterSalesServices({
+    customerVisible: 'true',
+  });
+}
+
+@Get('after-sales-requests')
+async getCustomerAfterSalesRequests(@Req() req: any) {
+  const authHeader = req.headers?.authorization || '';
+  const token = authHeader.replace('Bearer ', '');
+
+  if (!token) {
+    throw new UnauthorizedException('Customer token missing');
+  }
+
+  const payload: any = jwt.verify(token, 'mysecretkey');
+
+  if (!payload?.customerId) {
+    throw new UnauthorizedException('Invalid customer token');
+  }
+
+  return this.service.listAfterSalesRequests({
+    customerId: Number(payload.customerId),
+    page: 1,
+    limit: 50,
+  });
+}
+
+@Post('after-sales-requests')
+async createCustomerAfterSalesRequest(
+  @Req() req: any,
+  @Body() body: any,
+) {
+  const authHeader = req.headers?.authorization || '';
+  const token = authHeader.replace('Bearer ', '');
+
+  if (!token) {
+    throw new UnauthorizedException('Customer token missing');
+  }
+
+  const payload: any = jwt.verify(token, 'mysecretkey');
+
+  if (!payload?.customerId) {
+    throw new UnauthorizedException('Invalid customer token');
+  }
+
+  return this.service.createAfterSalesRequestFromCustomer(
+    Number(payload.customerId),
+    body,
+  );
+}
+
 @Get('payment-receipts/:id/activities')
 async getPaymentReceiptActivities(
   @Req() req: any,
