@@ -9967,15 +9967,15 @@ async getExecutionCalendarActivities(
   );
 
   query.andWhere(
-    `(
-      LOWER(assignmentFilter.contractorName) LIKE :teamSearch
-      OR LOWER(assignmentFilter.contractorPhone) LIKE :teamSearch
-      OR LOWER(assignmentFilter.workScope) LIKE :teamSearch
-    )`,
-    {
-      teamSearch: `%${filters.teamSearch.toLowerCase()}%`,
-    },
-  );
+  `(
+    LOWER(assignmentFilter.contractorName) LIKE :teamSearch
+    OR LOWER(assignmentFilter.contractorPhone) LIKE :teamSearch
+    OR LOWER(CAST(assignmentFilter.workScope AS TEXT)) LIKE :teamSearch
+  )`,
+  {
+    teamSearch: `%${filters.teamSearch.toLowerCase()}%`,
+  },
+);
 }
 
   if (filters?.overdueOnly === 'true') {
