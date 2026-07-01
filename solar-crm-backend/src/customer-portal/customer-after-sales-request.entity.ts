@@ -66,6 +66,12 @@ export class CustomerAfterSalesRequest {
   @Column({ type: 'timestamp', nullable: true })
   preferredDate: Date;
 
+  @Column({ type: 'timestamp', nullable: true })
+scheduledVisitAt: Date;
+
+@Column({ type: 'text', nullable: true })
+scheduledVisitTime: string;
+
   @Column({ type: 'text', nullable: true })
   customerRemarks: string;
 

@@ -962,11 +962,48 @@ async updateAfterSalesRequest(id: number, body: any, user: any) {
   request.completionRemarks =
     String(body?.completionRemarks || '').trim() || request.completionRemarks;
 
+
   if (body?.status === CustomerAfterSalesRequestStatus.COMPLETED) {
     request.completedAt = new Date();
     request.completedBy = user?.id || user?.userId || null;
     request.completedByName = user?.name || user?.email || '';
   }
+
+  if (body?.assignedTo !== undefined && body?.assignedTo !== '') {
+  request.assignedTo = Number(body.assignedTo);
+}
+
+if (body?.assignedToName) {
+  const newAssignedToName = String(body.assignedToName || '').trim();
+
+  if (newAssignedToName && newAssignedToName !== request.assignedToName) {
+    request.assignedToName = newAssignedToName;
+
+    await this.addAfterSalesRequestActivity(
+      request.id,
+      'ASSIGNED',
+      `Assigned to ${newAssignedToName}`,
+      '',
+      user,
+    );
+  }
+}
+
+if (body?.scheduledVisitDate) {
+  request.scheduledVisitAt = new Date(body.scheduledVisitDate);
+}
+
+if (body?.scheduledVisitTime) {
+  request.scheduledVisitTime = String(body.scheduledVisitTime || '').trim();
+
+  await this.addAfterSalesRequestActivity(
+    request.id,
+    'VISIT_SCHEDULED',
+    'Visit Scheduled',
+    `${body.scheduledVisitDate || ''} ${body.scheduledVisitTime || ''}`.trim(),
+    user,
+  );
+}
 
   return this.afterSalesRequestRepository.save(request);
 }
