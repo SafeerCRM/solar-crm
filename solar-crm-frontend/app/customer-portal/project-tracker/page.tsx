@@ -30,6 +30,11 @@ export default function CustomerProjectTrackerPage() {
   const documents = dashboard?.customerDocuments || [];
   const complaints = dashboard?.complaints || [];
 
+  const portalExperience = dashboard?.portalExperience || {};
+const enabledSections = portalExperience?.enabledSections || {};
+const portalMode = portalExperience?.mode || 'PROJECT_ACTIVE';
+const isAfterSales = portalMode === 'AFTER_SALES';
+
   const selectedProject =
     projects.find((project: any) => String(project.id) === selectedProjectId) ||
     projects[0];
@@ -192,16 +197,23 @@ const remainingActivities = projectActivities.filter(
     <main className="min-h-screen bg-gradient-to-br from-orange-50 via-yellow-50 to-emerald-50">
       <div className="mx-auto max-w-7xl px-4 py-6">
         <div className="overflow-hidden rounded-[2rem] bg-gradient-to-r from-orange-500 via-yellow-500 to-emerald-500 p-6 text-white shadow-2xl">
-          <p className="text-sm font-bold opacity-90">Solar Project Tracker</p>
+          <p className="text-sm font-bold opacity-90">
+  {isAfterSales
+    ? 'After-Sales Project Summary'
+    : 'Solar Project Tracker'}
+</p>
 
-          <h1 className="mt-2 text-4xl font-black md:text-5xl">
-            📊 My Project Progress
-          </h1>
+<h1 className="mt-2 text-4xl font-black md:text-5xl">
+  {isAfterSales
+    ? '📋 My Project Summary'
+    : '📊 My Project Progress'}
+</h1>
 
-          <p className="mt-2 max-w-3xl text-sm text-white/90">
-            Track project approval, installation work, payments, documents and
-            support status in one place.
-          </p>
+<p className="mt-2 max-w-3xl text-sm text-white/90">
+  {isAfterSales
+    ? 'View completed project information, documents, payments and after-sales support.'
+    : 'Track project approval, installation work, payments, documents and support status in one place.'}
+</p>
 
           <div className="mt-6 grid gap-4 md:grid-cols-4">
             <HeroCard title="Project" value={`#${selectedProject.id}`} />
@@ -233,7 +245,15 @@ const remainingActivities = projectActivities.filter(
           </div>
         )}
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-3">
+        <div
+  className={`mt-6 grid gap-6 ${
+    isAfterSales
+      ? 'lg:grid-cols-1'
+      : 'lg:grid-cols-3'
+  }`}
+>
+
+      {!isAfterSales && (
           <div className="rounded-[2rem] bg-white p-6 shadow-xl lg:col-span-2">
             <h2 className="text-2xl font-black text-gray-900">
               Main Project Journey
@@ -300,6 +320,7 @@ const remainingActivities = projectActivities.filter(
               ))}
             </div>
           </div>
+          )}
 
           <div className="space-y-5">
 
@@ -361,6 +382,7 @@ const remainingActivities = projectActivities.filter(
         </div>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-2">
+            {!isAfterSales && (
           <div className="rounded-[2rem] bg-white p-6 shadow-xl">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-2xl font-black text-gray-900">
@@ -440,6 +462,7 @@ const remainingActivities = projectActivities.filter(
               )}
             </div>
           </div>
+          )}
 
           <div className="rounded-[2rem] bg-white p-6 shadow-xl">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -587,13 +610,15 @@ const remainingActivities = projectActivities.filter(
 </div>
 
         <div className="mt-6 grid gap-5 md:grid-cols-4">
-          <a href="/customer-portal/work-calendar">
+          {enabledSections.workCalendar && (
+  <a href="/customer-portal/work-calendar">
             <ActionCard
               icon="📅"
               title="Work Calendar"
               text="View upcoming work and request date changes."
             />
           </a>
+          )}
 
           <a href="/customer-portal/documents">
             <ActionCard
