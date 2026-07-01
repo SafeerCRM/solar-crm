@@ -17,10 +17,16 @@ type ExecutionActivity = {
   remarks?: string;
 
   project?: {
-    customerName?: string;
-    branchName?: string;
-    projectOwnerName?: string;
-  };
+  customerName?: string;
+  branchName?: string;
+  projectOwnerName?: string;
+  contractorTeams?: {
+    contractorName?: string;
+    contractorPhone?: string;
+    workScope?: string;
+    status?: string;
+  }[];
+};
 };
 
 export default function ExecutionCalendarPage() {
@@ -43,6 +49,9 @@ const [customerFilter, setCustomerFilter] =
   useState('');
 
 const [ownerFilter, setOwnerFilter] =
+  useState('');
+
+  const [teamSearch, setTeamSearch] =
   useState('');
 
 const [overdueOnly, setOverdueOnly] =
@@ -69,6 +78,7 @@ const [totalPages, setTotalPages] = useState(1);
           customer: customerFilter,
           owner: ownerFilter,
           overdueOnly: overdueOnly ? 'true' : '',
+          teamSearch,
         },
         headers: token
           ? {
@@ -98,6 +108,7 @@ const [totalPages, setTotalPages] = useState(1);
   customerFilter,
   ownerFilter,
   overdueOnly,
+  teamSearch,
 ]);
 
   const branchOptions = Array.from(
@@ -252,6 +263,22 @@ const ownerOptions = Array.from(
   </select>
 </div>
 
+<div>
+  <p className="mb-1 text-sm font-semibold text-gray-700">
+    Contractor / Team
+  </p>
+
+  <input
+    placeholder="Search contractor / team"
+    value={teamSearch}
+    onChange={(e) => {
+      setTeamSearch(e.target.value);
+      setPage(1);
+    }}
+    className="w-full rounded-xl border p-3"
+  />
+</div>
+
 <label className="flex items-center gap-3 rounded-xl border p-3 text-sm font-semibold text-gray-700">
   <input
     type="checkbox"
@@ -325,6 +352,33 @@ const ownerOptions = Array.from(
                         ?.projectOwnerName ||
                         '-'}
                     </p>
+
+                    <div className="mt-3 rounded-xl bg-white/70 p-3">
+  <p className="text-sm font-bold text-gray-800">
+    Team Working
+  </p>
+
+  {activity.project?.contractorTeams?.length ? (
+    <div className="mt-2 space-y-1">
+      {activity.project.contractorTeams.map((team, index) => (
+        <p
+          key={`${team.contractorName}-${index}`}
+          className="text-sm text-gray-600"
+        >
+          {team.workScope || 'Team'} -{' '}
+          <span className="font-semibold">
+            {team.contractorName || '-'}
+          </span>
+          {team.status ? ` (${team.status.replaceAll('_', ' ')})` : ''}
+        </p>
+      ))}
+    </div>
+  ) : (
+    <p className="mt-1 text-sm text-gray-500">
+      No contractor/team assigned.
+    </p>
+  )}
+</div>
 
                     <p className="mt-1 text-sm text-gray-600">
                       Scheduled:{' '}
