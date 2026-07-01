@@ -8,6 +8,7 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { MobileDatePicker } from '@mui/x-date-pickers/MobileDatePicker';
 import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
 import dayjs from 'dayjs';
+import { uploadPreparedFile } from '@/app/utils/fileUpload';
 
 type CrmUser = {
   id: number;
@@ -34,6 +35,14 @@ const STATUS_OPTIONS = [
   'CANCELLED',
 ];
 
+const PROOF_TYPE_OPTIONS = [
+  'BEFORE_PHOTO',
+  'AFTER_PHOTO',
+  'COMPLETION_PHOTO',
+  'INVOICE',
+  'OTHER',
+];
+
 export default function CustomerAfterSalesRequestsPage() {
   const [items, setItems] = useState<any[]>([]);
   const [services, setServices] = useState<any[]>([]);
@@ -42,6 +51,11 @@ export default function CustomerAfterSalesRequestsPage() {
   const [timelineLoading, setTimelineLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState<number | null>(null);
+
+  const [proofs, setProofs] = useState<Record<number, any[]>>({});
+const [proofFileMap, setProofFileMap] = useState<Record<number, File | null>>({});
+const [proofFormMap, setProofFormMap] = useState<Record<number, any>>({});
+const [proofUploadingId, setProofUploadingId] = useState<number | null>(null);
 
   const [users, setUsers] = useState<CrmUser[]>([]);
 const [technicianSearch, setTechnicianSearch] = useState<
@@ -138,6 +152,84 @@ scheduledVisitTime: item.scheduledVisitTime || '',
       setTimelineLoading(false);
     }
   };
+
+  const loadProofs = async (requestId: number) => {
+  try {
+    const res = await axios.get(
+      `${API_BASE_URL}/customer-portal/after-sales-requests/${requestId}/proofs`,
+      { headers: headers() },
+    );
+
+    setProofs((prev) => ({
+      ...prev,
+      [requestId]: Array.isArray(res.data) ? res.data : [],
+    }));
+  } catch (error) {
+    console.error(error);
+    setProofs((prev) => ({
+      ...prev,
+      [requestId]: [],
+    }));
+  }
+};
+
+const uploadProof = async (item: any) => {
+  const file = proofFileMap[item.id];
+  const form = proofFormMap[item.id] || {};
+
+  if (!file) {
+    alert('Please select proof file');
+    return;
+  }
+
+  try {
+    setProofUploadingId(item.id);
+
+    const token = localStorage.getItem('token');
+
+    const fileUrl = await uploadPreparedFile({
+      file,
+      endpoint: `${API_BASE_URL}/project/dealer-payment-receipt/upload`,
+      token,
+      fieldName: 'files',
+    });
+
+    await axios.post(
+      `${API_BASE_URL}/customer-portal/after-sales-requests/${item.id}/proofs`,
+      {
+        proofType: form.proofType || 'OTHER',
+        fileUrl,
+        fileName: file.name,
+        mimeType: file.type,
+        remarks: form.remarks || '',
+      },
+      { headers: headers() },
+    );
+
+    alert('Proof uploaded');
+
+    setProofFileMap((prev) => ({
+      ...prev,
+      [item.id]: null,
+    }));
+
+    setProofFormMap((prev) => ({
+      ...prev,
+      [item.id]: {
+        proofType: 'OTHER',
+        remarks: '',
+      },
+    }));
+
+    await loadProofs(item.id);
+    await loadActivities(item);
+  } catch (error: any) {
+    console.error(error);
+    alert(error?.response?.data?.message || error?.message || 'Failed to upload proof');
+  } finally {
+    setProofUploadingId(null);
+  }
+};
 
   const updateRequest = async (item: any) => {
     const update = editMap[item.id];
@@ -400,6 +492,152 @@ loadRequests();
                     </div>
                   )}
                 </div>
+
+                <div className="mt-4 rounded-3xl bg-white p-5 shadow-inner">
+  <div className="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <p className="text-lg font-black text-gray-900">
+        Work Proofs
+      </p>
+      <p className="mt-1 text-xs font-semibold text-gray-500">
+        Upload before photos, after photos, completion proof or invoice.
+      </p>
+    </div>
+
+    <button
+      type="button"
+      onClick={() => loadProofs(item.id)}
+      className="rounded-xl bg-gray-900 px-3 py-2 text-xs font-black text-white"
+    >
+      Refresh Proofs
+    </button>
+  </div>
+
+  <div className="mt-4 grid gap-3 md:grid-cols-2">
+    <select
+      value={proofFormMap[item.id]?.proofType || 'OTHER'}
+      onChange={(e) =>
+        setProofFormMap((prev) => ({
+          ...prev,
+          [item.id]: {
+            ...prev[item.id],
+            proofType: e.target.value,
+          },
+        }))
+      }
+      className="rounded-2xl border p-3"
+    >
+      {PROOF_TYPE_OPTIONS.map((type) => (
+        <option key={type} value={type}>
+          {formatLabel(type)}
+        </option>
+      ))}
+    </select>
+
+    <input
+      type="file"
+      accept="image/*,application/pdf"
+      onChange={(e) =>
+        setProofFileMap((prev) => ({
+          ...prev,
+          [item.id]: e.target.files?.[0] || null,
+        }))
+      }
+      className="rounded-2xl border bg-white p-3"
+    />
+
+    <textarea
+      rows={2}
+      placeholder="Proof remarks"
+      value={proofFormMap[item.id]?.remarks || ''}
+      onChange={(e) =>
+        setProofFormMap((prev) => ({
+          ...prev,
+          [item.id]: {
+            ...prev[item.id],
+            remarks: e.target.value,
+          },
+        }))
+      }
+      className="rounded-2xl border p-3 md:col-span-2"
+    />
+
+    <button
+      type="button"
+      onClick={() => uploadProof(item)}
+      disabled={proofUploadingId === item.id}
+      className="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white disabled:opacity-50 md:col-span-2"
+    >
+      {proofUploadingId === item.id ? 'Uploading...' : 'Upload Proof'}
+    </button>
+  </div>
+
+  <div className="mt-5 space-y-4">
+    {(proofs[item.id] || []).length === 0 ? (
+      <div className="rounded-2xl border border-dashed p-5 text-center text-sm font-bold text-gray-500">
+        No proofs loaded yet. Click Refresh Proofs.
+      </div>
+    ) : (
+      PROOF_TYPE_OPTIONS.map((type) => {
+        const groupedProofs = (proofs[item.id] || []).filter(
+          (proof: any) => proof.proofType === type,
+        );
+
+        if (groupedProofs.length === 0) return null;
+
+        return (
+          <div key={type} className="rounded-2xl bg-gray-50 p-4">
+            <p className="mb-3 text-sm font-black text-gray-800">
+              {formatLabel(type)}
+            </p>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              {groupedProofs.map((proof: any) => (
+                <a
+                  key={proof.id}
+                  href={proof.fileUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block overflow-hidden rounded-2xl border bg-white shadow-sm"
+                >
+                  {String(proof.mimeType || '').startsWith('image/') ? (
+                    <img
+                      src={proof.fileUrl}
+                      alt={proof.fileName || 'Proof'}
+                      className="h-32 w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-32 items-center justify-center bg-red-50 text-sm font-black text-red-700">
+                      PDF / Document
+                    </div>
+                  )}
+
+                  <div className="p-3">
+                    <p className="line-clamp-1 text-xs font-bold text-gray-700">
+                      {proof.fileName || 'Proof'}
+                    </p>
+
+                    {proof.remarks && (
+                      <p className="mt-1 line-clamp-2 text-xs text-gray-500">
+                        {proof.remarks}
+                      </p>
+                    )}
+
+                    <p className="mt-2 text-[11px] font-semibold text-gray-400">
+                      {proof.createdAt
+                        ? new Date(proof.createdAt).toLocaleString('en-IN')
+                        : '-'}
+                    </p>
+                  </div>
+                </a>
+              ))}
+            </div>
+          </div>
+        );
+      })
+    )}
+  </div>
+</div>
 
                 <div className="rounded-[2rem] bg-gray-50 p-4">
                   <h4 className="font-black text-gray-900">Update Request</h4>
