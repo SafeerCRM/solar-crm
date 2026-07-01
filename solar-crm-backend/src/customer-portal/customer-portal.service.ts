@@ -45,6 +45,7 @@ import {
   CustomerAfterSalesRequestProof,
   CustomerAfterSalesProofType,
 } from './customer-after-sales-request-proof.entity';
+import { CustomerAfterSalesRequestRating } from './customer-after-sales-request-rating.entity';
 
 @Injectable()
 export class CustomerPortalService {
@@ -108,6 +109,9 @@ private readonly afterSalesRequestActivityRepository: Repository<CustomerAfterSa
 
 @InjectRepository(CustomerAfterSalesRequestProof)
 private readonly afterSalesRequestProofRepository: Repository<CustomerAfterSalesRequestProof>,
+
+@InjectRepository(CustomerAfterSalesRequestRating)
+private readonly afterSalesRequestRatingRepository: Repository<CustomerAfterSalesRequestRating>,
 
     @InjectRepository(StaffMember)
 private readonly staffMemberRepository: Repository<StaffMember>,
@@ -1074,6 +1078,61 @@ async addAfterSalesRequestProof(
   );
 
   return savedProof;
+}
+
+async submitAfterSalesRequestRating(
+  customerId: number,
+  requestId: number,
+  body: any,
+) {
+  const request = await this.afterSalesRequestRepository.findOne({
+    where: {
+      id: requestId,
+      customerId,
+    } as any,
+  });
+
+  if (!request) {
+    throw new NotFoundException('Service request not found');
+  }
+
+  if (request.status !== CustomerAfterSalesRequestStatus.COMPLETED) {
+    throw new BadRequestException('Rating allowed only after completion');
+  }
+
+  const existing = await this.afterSalesRequestRatingRepository.findOne({
+    where: {
+      requestId,
+      customerId,
+    } as any,
+  });
+
+  if (existing) {
+    throw new BadRequestException('Rating already submitted');
+  }
+
+  const rating = Number(body?.rating || 0);
+
+  if (rating < 1 || rating > 5) {
+    throw new BadRequestException('Rating must be between 1 and 5');
+  }
+
+  const saved = await this.afterSalesRequestRatingRepository.save({
+    requestId,
+    customerId,
+    rating,
+    feedback: String(body?.feedback || '').trim(),
+    wouldRecommend: body?.wouldRecommend !== false,
+  });
+
+  await this.addAfterSalesRequestActivity(
+    requestId,
+    'RATING_SUBMITTED',
+    `Customer submitted ${rating} star rating`,
+    saved.feedback || '',
+  );
+
+  return saved;
 }
 
   async updateComplaint(id: number, body: any, user: any) {
