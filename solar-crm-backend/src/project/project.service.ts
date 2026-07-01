@@ -17116,7 +17116,11 @@ private async syncSingleDealerToPortal(dealer: ProjectVendor) {
   const email = String(dealer.email || '').trim();
   const gstNumber = String(dealer.gstNumber || '').trim();
 
-  let portalDealer: Dealer | null = null;
+  if (!phone && !email && !gstNumber) {
+    throw new BadRequestException(
+      'Dealer phone, email or GST number is required for portal sync',
+    );
+  }
 
   const qb = this.dealerRepository
     .createQueryBuilder('dealer')
@@ -17140,11 +17144,22 @@ private async syncSingleDealerToPortal(dealer: ProjectVendor) {
     params.gstNumber = gstNumber;
   }
 
-  if (conditions.length) {
-    portalDealer = await qb
-      .andWhere(`(${conditions.join(' OR ')})`, params)
-      .orderBy('dealer.id', 'DESC')
-      .getOne();
+  const matchedDealers = await qb
+    .andWhere(`(${conditions.join(' OR ')})`, params)
+    .orderBy('dealer.id', 'ASC')
+    .getMany();
+
+  let portalDealer: Dealer | null = matchedDealers[0] || null;
+
+  if (matchedDealers.length > 1) {
+    for (const duplicate of matchedDealers.slice(1)) {
+      duplicate.isHidden = true;
+      duplicate.hiddenReason =
+        'Duplicate dealer record hidden automatically during portal sync';
+      duplicate.hiddenAt = new Date();
+
+      await this.dealerRepository.save(duplicate);
+    }
   }
 
   if (portalDealer) {
@@ -17152,16 +17167,17 @@ private async syncSingleDealerToPortal(dealer: ProjectVendor) {
     portalDealer.firmName = dealer.vendorName;
     portalDealer.phone = phone || portalDealer.phone;
     portalDealer.email = email || portalDealer.email;
-    portalDealer.gstNumber =
-      gstNumber || portalDealer.gstNumber;
-    portalDealer.branchName =
-      dealer.city || portalDealer.branchName || '';
-    portalDealer.city =
-      dealer.city || portalDealer.city || '';
-    portalDealer.address =
-      dealer.address || portalDealer.address || '';
+    portalDealer.gstNumber = gstNumber || portalDealer.gstNumber;
+    portalDealer.branchName = dealer.city || portalDealer.branchName || '';
+    portalDealer.city = dealer.city || portalDealer.city || '';
+    portalDealer.address = dealer.address || portalDealer.address || '';
     portalDealer.status = DealerStatus.ACTIVE;
     portalDealer.isHidden = false;
+
+    if (!(portalDealer as any).portalPassword) {
+      (portalDealer as any).portalPassword =
+        phone || gstNumber || String(portalDealer.id);
+    }
 
     await this.dealerRepository.save(portalDealer);
     return portalDealer;
@@ -17180,7 +17196,7 @@ private async syncSingleDealerToPortal(dealer: ProjectVendor) {
     creditEnabled: false,
     creditLimit: 0,
     creditDays: 0,
-    status: 'ACTIVE',
+    status: DealerStatus.ACTIVE,
     isHidden: false,
   } as any);
 

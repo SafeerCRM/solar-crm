@@ -290,7 +290,8 @@ async listPortalPoliciesForDealer() {
     )`,
     { loginUsername },
   )
-  .orderBy('dealer.id', 'DESC')
+  .orderBy('dealer.portalPassword', 'DESC')
+.addOrderBy('dealer.id', 'ASC')
   .getOne();
 
     if (!dealer) {
@@ -2613,29 +2614,88 @@ const bucket =
   }
 
     async createDealer(body: any, user: any) {
-    const dealerName = String(body.dealerName || '').trim();
+  const dealerName = String(
+    body.dealerName || body.vendorName || '',
+  ).trim();
 
-    if (!dealerName) {
-      throw new BadRequestException('Dealer name is required');
+  if (!dealerName) {
+    throw new BadRequestException('Dealer name is required');
+  }
+
+  const phone = String(body.phone || '').trim();
+  const email = String(body.email || '').trim();
+  const gstNumber = String(body.gstNumber || '').trim();
+
+  let dealer: Dealer | null = null;
+
+  if (phone || email || gstNumber) {
+    const conditions: string[] = [];
+    const params: any = {};
+
+    if (phone) {
+      conditions.push('dealer.phone = :phone');
+      params.phone = phone;
     }
 
-    const dealer = this.dealerRepository.create({
-      dealerName,
-      firmName: body.firmName || '',
-      phone: body.phone || '',
-      email: body.email || '',
-      gstNumber: body.gstNumber || '',
-      branchName: body.branchName || '',
-      city: body.city || '',
-      address: body.address || '',
-      creditEnabled: Boolean(body.creditEnabled),
-      creditLimit: Number(body.creditLimit || 0),
-      creditDays: Number(body.creditDays || 0),
-      status: body.status || 'ACTIVE',
-    } as any);
+    if (email) {
+      conditions.push('dealer.email = :email');
+      params.email = email;
+    }
 
-    return this.dealerRepository.save(dealer);
+    if (gstNumber) {
+      conditions.push('dealer.gstNumber = :gstNumber');
+      params.gstNumber = gstNumber;
+    }
+
+    const matchedDealers = await this.dealerRepository
+      .createQueryBuilder('dealer')
+      .where(`(${conditions.join(' OR ')})`, params)
+      .orderBy('dealer.isHidden', 'ASC')
+      .addOrderBy('dealer.id', 'ASC')
+      .getMany();
+
+    dealer = matchedDealers[0] || null;
+
+    if (matchedDealers.length > 1) {
+      for (const duplicate of matchedDealers.slice(1)) {
+        duplicate.isHidden = true;
+        duplicate.hiddenReason =
+          'Duplicate dealer hidden automatically during dealer create';
+        duplicate.hiddenAt = new Date();
+
+        await this.dealerRepository.save(duplicate);
+      }
+    }
   }
+
+  if (!dealer) {
+    dealer = this.dealerRepository.create();
+  }
+
+  dealer.dealerName = dealerName;
+  dealer.firmName = body.firmName || dealerName;
+  dealer.phone = phone || dealer.phone || '';
+  dealer.email = email || dealer.email || '';
+  dealer.gstNumber = gstNumber || dealer.gstNumber || '';
+  dealer.branchName = body.branchName || body.city || dealer.branchName || '';
+  dealer.city = body.city || dealer.city || '';
+  dealer.address = body.address || dealer.address || '';
+  dealer.creditEnabled = Boolean(body.creditEnabled);
+  dealer.creditLimit = Number(body.creditLimit || 0);
+  dealer.creditDays = Number(body.creditDays || 0);
+  dealer.status = body.status || 'ACTIVE';
+  dealer.isHidden = false;
+
+  if (!(dealer as any).portalPassword) {
+    (dealer as any).portalPassword =
+      String(body.portalPassword || '').trim() ||
+      phone ||
+      gstNumber ||
+      '1234';
+  }
+
+  return this.dealerRepository.save(dealer);
+}
 
   async listDealers(query: any) {
     const page = Number(query?.page || 1);
