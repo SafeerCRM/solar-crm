@@ -73,6 +73,18 @@ const emptyPolicyForm = {
   sortOrder: '0',
 };
 
+const emptyAfterSalesServiceForm = {
+  id: '',
+  serviceName: '',
+  category: '',
+  price: '',
+  isPaidService: true,
+  description: '',
+  estimatedVisitTime: '',
+  isActive: true,
+  sortOrder: '0',
+};
+
 export default function PortalSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -96,6 +108,13 @@ const [policyForm, setPolicyForm] = useState<any>(emptyPolicyForm);
 const [policySaving, setPolicySaving] = useState(false);
 const [policyPdfUploading, setPolicyPdfUploading] = useState(false);
 const [showHiddenPolicies, setShowHiddenPolicies] = useState(false);
+const [afterSalesServices, setAfterSalesServices] = useState<any[]>([]);
+const [afterSalesServiceForm, setAfterSalesServiceForm] = useState<any>(
+  emptyAfterSalesServiceForm,
+);
+const [afterSalesServiceSaving, setAfterSalesServiceSaving] = useState(false);
+const [showHiddenAfterSalesServices, setShowHiddenAfterSalesServices] =
+  useState(false);
 
   const headers = () => ({
     Authorization: `Bearer ${localStorage.getItem('token')}`,
@@ -107,6 +126,7 @@ loadCompanySetting();
 loadDeliverySetting();
 loadKits();
 loadPolicies();
+loadAfterSalesServices();
   }, []);
 
   useEffect(() => {
@@ -120,6 +140,10 @@ useEffect(() => {
 useEffect(() => {
   loadPolicies();
 }, [policyForm.portalType]);
+
+useEffect(() => {
+  loadAfterSalesServices();
+}, [showHiddenAfterSalesServices]);
 
   const loadBankDetails = async () => {
     try {
@@ -664,6 +688,92 @@ const restorePolicy = async (item: any) => {
   );
 
   await loadPolicies();
+};
+
+const loadAfterSalesServices = async () => {
+  try {
+    const res = await axios.get(
+      `${API_BASE_URL}/customer-portal/after-sales-services`,
+      {
+        params: {
+          showHidden: showHiddenAfterSalesServices,
+        },
+        headers: headers(),
+      },
+    );
+
+    setAfterSalesServices(Array.isArray(res.data) ? res.data : []);
+  } catch (error) {
+    console.error(error);
+    alert('Failed to load after-sales services');
+  }
+};
+
+const saveAfterSalesService = async () => {
+  if (!String(afterSalesServiceForm.serviceName || '').trim()) {
+    alert('Service name is required');
+    return;
+  }
+
+  try {
+    setAfterSalesServiceSaving(true);
+
+    await axios.post(
+      `${API_BASE_URL}/customer-portal/after-sales-services`,
+      afterSalesServiceForm,
+      { headers: headers() },
+    );
+
+    alert('After-sales service saved');
+
+    setAfterSalesServiceForm(emptyAfterSalesServiceForm);
+    await loadAfterSalesServices();
+  } catch (error: any) {
+    console.error(error);
+    alert(error?.response?.data?.message || 'Failed to save service');
+  } finally {
+    setAfterSalesServiceSaving(false);
+  }
+};
+
+const startEditAfterSalesService = (item: any) => {
+  setAfterSalesServiceForm({
+    id: item.id || '',
+    serviceName: item.serviceName || '',
+    category: item.category || '',
+    price: String(item.price || ''),
+    isPaidService: item.isPaidService !== false,
+    description: item.description || '',
+    estimatedVisitTime: item.estimatedVisitTime || '',
+    isActive: item.isActive !== false,
+    sortOrder: String(item.sortOrder || 0),
+  });
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
+const hideAfterSalesService = async (item: any) => {
+  const reason = window.prompt('Reason for hiding service?', 'Not required');
+
+  if (reason === null) return;
+
+  await axios.patch(
+    `${API_BASE_URL}/customer-portal/after-sales-services/${item.id}/hide`,
+    { reason },
+    { headers: headers() },
+  );
+
+  await loadAfterSalesServices();
+};
+
+const restoreAfterSalesService = async (item: any) => {
+  await axios.patch(
+    `${API_BASE_URL}/customer-portal/after-sales-services/${item.id}/restore`,
+    {},
+    { headers: headers() },
+  );
+
+  await loadAfterSalesServices();
 };
 
   return (
@@ -1712,6 +1822,262 @@ const restorePolicy = async (item: any) => {
             ) : (
               <button
                 onClick={() => hidePolicy(item)}
+                className="rounded-xl bg-red-600 px-3 py-2 text-sm font-semibold text-white"
+              >
+                Hide
+              </button>
+            )}
+          </div>
+        </div>
+      ))
+    )}
+  </div>
+</section>
+
+<section className="mt-6 rounded-2xl bg-white p-6 shadow">
+  <div className="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h2 className="text-lg font-bold text-gray-800">
+        After-Sales Services
+      </h2>
+      <p className="mt-1 text-sm text-gray-500">
+        Manage customer after-sales services, charges, visibility and request options.
+      </p>
+    </div>
+
+    <label className="flex items-center gap-2 rounded-xl border px-3 py-2 text-sm">
+      <input
+        type="checkbox"
+        checked={showHiddenAfterSalesServices}
+        onChange={(e) => setShowHiddenAfterSalesServices(e.target.checked)}
+      />
+      View Hidden Services
+    </label>
+  </div>
+
+  <div className="mt-5 rounded-2xl border p-4">
+    <h3 className="font-bold text-gray-800">
+      {afterSalesServiceForm.id ? 'Edit Service' : 'Add Service'}
+    </h3>
+
+    <div className="mt-4 grid gap-3 md:grid-cols-2">
+      <input
+        placeholder="Service Name"
+        value={afterSalesServiceForm.serviceName}
+        onChange={(e) =>
+          setAfterSalesServiceForm({
+            ...afterSalesServiceForm,
+            serviceName: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
+
+      <input
+        placeholder="Category"
+        value={afterSalesServiceForm.category}
+        onChange={(e) =>
+          setAfterSalesServiceForm({
+            ...afterSalesServiceForm,
+            category: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
+
+      <input
+        type="number"
+        placeholder="Price"
+        value={afterSalesServiceForm.price}
+        onChange={(e) =>
+          setAfterSalesServiceForm({
+            ...afterSalesServiceForm,
+            price: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
+
+      <input
+        placeholder="Estimated Visit Time"
+        value={afterSalesServiceForm.estimatedVisitTime}
+        onChange={(e) =>
+          setAfterSalesServiceForm({
+            ...afterSalesServiceForm,
+            estimatedVisitTime: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
+
+      <input
+        type="number"
+        placeholder="Sort Order"
+        value={afterSalesServiceForm.sortOrder}
+        onChange={(e) =>
+          setAfterSalesServiceForm({
+            ...afterSalesServiceForm,
+            sortOrder: e.target.value,
+          })
+        }
+        className="rounded-xl border p-3"
+      />
+    </div>
+
+    <textarea
+      rows={4}
+      placeholder="Description / notes shown to customer"
+      value={afterSalesServiceForm.description}
+      onChange={(e) =>
+        setAfterSalesServiceForm({
+          ...afterSalesServiceForm,
+          description: e.target.value,
+        })
+      }
+      className="mt-3 w-full rounded-xl border p-3"
+    />
+
+    <div className="mt-3 grid gap-3 md:grid-cols-2">
+      <label className="flex items-center gap-2 rounded-xl border p-3 text-sm font-semibold">
+        <input
+          type="checkbox"
+          checked={!!afterSalesServiceForm.isPaidService}
+          onChange={(e) =>
+            setAfterSalesServiceForm({
+              ...afterSalesServiceForm,
+              isPaidService: e.target.checked,
+            })
+          }
+        />
+        Paid Service
+      </label>
+
+      <label className="flex items-center gap-2 rounded-xl border p-3 text-sm font-semibold">
+        <input
+          type="checkbox"
+          checked={!!afterSalesServiceForm.isActive}
+          onChange={(e) =>
+            setAfterSalesServiceForm({
+              ...afterSalesServiceForm,
+              isActive: e.target.checked,
+            })
+          }
+        />
+        Active / Visible to Customer
+      </label>
+    </div>
+
+    <div className="mt-4 flex flex-wrap gap-3">
+      <button
+        onClick={saveAfterSalesService}
+        disabled={afterSalesServiceSaving}
+        className="rounded-xl bg-blue-600 px-5 py-3 font-bold text-white disabled:opacity-60"
+      >
+        {afterSalesServiceSaving
+          ? 'Saving...'
+          : afterSalesServiceForm.id
+            ? 'Update Service'
+            : 'Save Service'}
+      </button>
+
+      {afterSalesServiceForm.id && (
+        <button
+          onClick={() =>
+            setAfterSalesServiceForm(emptyAfterSalesServiceForm)
+          }
+          className="rounded-xl bg-gray-200 px-5 py-3 font-bold text-gray-700"
+        >
+          Cancel Edit
+        </button>
+      )}
+    </div>
+  </div>
+
+  <div className="mt-6 grid gap-4 md:grid-cols-2">
+    {afterSalesServices.length === 0 ? (
+      <div className="rounded-2xl border border-dashed p-6 text-center text-sm font-semibold text-gray-500 md:col-span-2">
+        No after-sales services found.
+      </div>
+    ) : (
+      afterSalesServices.map((item) => (
+        <div
+          key={item.id}
+          className={`rounded-2xl border p-4 ${
+            item.isHidden ? 'bg-gray-100 opacity-70' : 'bg-white'
+          }`}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-lg font-bold text-gray-800">
+                {item.serviceName}
+              </p>
+
+              <p className="mt-1 text-sm text-gray-500">
+                {item.category || 'General'} | Sort: {item.sortOrder || 0}
+              </p>
+
+              <p className="mt-2 text-lg font-black text-green-700">
+                {item.isPaidService
+                  ? `₹${Number(item.price || 0).toLocaleString('en-IN')}`
+                  : 'Free'}
+              </p>
+
+              {item.estimatedVisitTime && (
+                <p className="mt-1 text-sm text-gray-500">
+                  Estimated Visit: {item.estimatedVisitTime}
+                </p>
+              )}
+            </div>
+
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-bold ${
+                item.isActive
+                  ? 'bg-green-100 text-green-700'
+                  : 'bg-red-100 text-red-700'
+              }`}
+            >
+              {item.isActive ? 'ACTIVE' : 'INACTIVE'}
+            </span>
+          </div>
+
+          {item.description && (
+            <p className="mt-3 whitespace-pre-line text-sm text-gray-600">
+              {item.description}
+            </p>
+          )}
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            {item.isPaidService && (
+              <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-bold text-orange-700">
+                PAID SERVICE
+              </span>
+            )}
+
+            {item.isHidden && (
+              <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700">
+                HIDDEN
+              </span>
+            )}
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              onClick={() => startEditAfterSalesService(item)}
+              className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white"
+            >
+              Edit
+            </button>
+
+            {item.isHidden ? (
+              <button
+                onClick={() => restoreAfterSalesService(item)}
+                className="rounded-xl bg-green-600 px-3 py-2 text-sm font-semibold text-white"
+              >
+                Restore
+              </button>
+            ) : (
+              <button
+                onClick={() => hideAfterSalesService(item)}
                 className="rounded-xl bg-red-600 px-3 py-2 text-sm font-semibold text-white"
               >
                 Hide
