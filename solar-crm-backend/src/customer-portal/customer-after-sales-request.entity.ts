@@ -89,6 +89,9 @@ scheduledVisitTime: string;
   assignedToName: string;
 
   @Column({ type: 'text', nullable: true })
+assignedToRole: string;
+
+  @Column({ type: 'text', nullable: true })
   adminRemarks: string;
 
   @Column({ type: 'text', nullable: true })

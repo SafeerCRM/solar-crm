@@ -979,6 +979,10 @@ if (body?.assignedToName) {
   if (newAssignedToName && newAssignedToName !== request.assignedToName) {
     request.assignedToName = newAssignedToName;
 
+    if (body?.assignedToRole) {
+  request.assignedToRole = String(body.assignedToRole || '').trim();
+}
+
     await this.addAfterSalesRequestActivity(
       request.id,
       'ASSIGNED',
