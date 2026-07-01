@@ -3,6 +3,11 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import axios from 'axios';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { MobileDatePicker } from '@mui/x-date-pickers/MobileDatePicker';
+import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
+import dayjs from 'dayjs';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -70,6 +75,10 @@ export default function CustomerAfterSalesRequestsPage() {
           assignedToName: item.assignedToName || '',
           adminRemarks: item.adminRemarks || '',
           completionRemarks: item.completionRemarks || '',
+          scheduledVisitDate: item.scheduledVisitAt
+  ? String(item.scheduledVisitAt).slice(0, 10)
+  : '',
+scheduledVisitTime: item.scheduledVisitTime || '',
         };
       });
 
@@ -313,6 +322,17 @@ export default function CustomerAfterSalesRequestsPage() {
                           : '-'
                       }
                     />
+
+                    <InfoCard
+  label="Scheduled Visit"
+  value={
+    item.scheduledVisitAt
+      ? `${new Date(item.scheduledVisitAt).toLocaleDateString('en-IN')} ${
+          item.scheduledVisitTime || ''
+        }`
+      : '-'
+  }
+/>
                     <InfoCard label="Category" value={item.serviceCategory || '-'} />
                     <InfoCard label="Assigned To" value={item.assignedToName || '-'} />
                   </div>
@@ -375,6 +395,63 @@ export default function CustomerAfterSalesRequestsPage() {
                       }
                       className="w-full rounded-2xl border p-3"
                     />
+
+                    <LocalizationProvider dateAdapter={AdapterDayjs}>
+  <MobileDatePicker
+    label="Scheduled Visit Date"
+    value={
+      editMap[item.id]?.scheduledVisitDate
+        ? dayjs(editMap[item.id].scheduledVisitDate)
+        : null
+    }
+    minDate={dayjs()}
+    onChange={(newDate) =>
+      setEditMap((prev) => ({
+        ...prev,
+        [item.id]: {
+          ...prev[item.id],
+          scheduledVisitDate: newDate
+            ? newDate.format('YYYY-MM-DD')
+            : '',
+        },
+      }))
+    }
+    slotProps={{
+      textField: {
+        fullWidth: true,
+      },
+    }}
+  />
+</LocalizationProvider>
+
+<LocalizationProvider dateAdapter={AdapterDayjs}>
+  <MobileTimePicker
+    label="Scheduled Visit Time"
+    ampm
+    ampmInClock
+    value={
+      editMap[item.id]?.scheduledVisitTime
+        ? dayjs(`2026-01-01T${editMap[item.id].scheduledVisitTime}`)
+        : null
+    }
+    onChange={(newTime) =>
+      setEditMap((prev) => ({
+        ...prev,
+        [item.id]: {
+          ...prev[item.id],
+          scheduledVisitTime: newTime
+            ? newTime.format('HH:mm')
+            : '',
+        },
+      }))
+    }
+    slotProps={{
+      textField: {
+        fullWidth: true,
+      },
+    }}
+  />
+</LocalizationProvider>
 
                     <textarea
                       placeholder="Admin remarks"
