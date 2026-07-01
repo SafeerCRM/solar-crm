@@ -23,6 +23,7 @@ import { CustomerPaymentReceiptActivity } from './customer-payment-receipt-activ
 import { CustomerAfterSalesService } from './customer-after-sales-service.entity';
 import { CustomerAfterSalesRequest } from './customer-after-sales-request.entity';
 import { CustomerAfterSalesRequestActivity } from './customer-after-sales-request-activity.entity';
+import { CustomerAfterSalesRequestProof } from './customer-after-sales-request-proof.entity';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ CustomerComplaintAttachment,
       CustomerAfterSalesService,
       CustomerAfterSalesRequest,
       CustomerAfterSalesRequestActivity,
+      CustomerAfterSalesRequestProof,
     ]),
   ],
   controllers: [CustomerPortalController, CustomerAuthController],

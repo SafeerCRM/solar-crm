@@ -246,4 +246,20 @@ updateAfterSalesRequest(
 getAfterSalesRequestActivities(@Param('id', ParseIntPipe) id: number) {
   return this.service.getAfterSalesRequestActivities(id);
 }
+
+@Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'MAINTENANCE_MANAGER')
+@Get('after-sales-requests/:id/proofs')
+listAfterSalesRequestProofs(@Param('id', ParseIntPipe) id: number) {
+  return this.service.listAfterSalesRequestProofs(id);
+}
+
+@Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'MAINTENANCE_MANAGER')
+@Post('after-sales-requests/:id/proofs')
+addAfterSalesRequestProof(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.service.addAfterSalesRequestProof(id, body, user);
+}
 }

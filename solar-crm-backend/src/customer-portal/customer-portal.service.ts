@@ -41,6 +41,10 @@ import {
   CustomerAfterSalesRequestStatus,
 } from './customer-after-sales-request.entity';
 import { CustomerAfterSalesRequestActivity } from './customer-after-sales-request-activity.entity';
+import {
+  CustomerAfterSalesRequestProof,
+  CustomerAfterSalesProofType,
+} from './customer-after-sales-request-proof.entity';
 
 @Injectable()
 export class CustomerPortalService {
@@ -101,6 +105,9 @@ private readonly afterSalesRequestRepository: Repository<CustomerAfterSalesReque
 
 @InjectRepository(CustomerAfterSalesRequestActivity)
 private readonly afterSalesRequestActivityRepository: Repository<CustomerAfterSalesRequestActivity>,
+
+@InjectRepository(CustomerAfterSalesRequestProof)
+private readonly afterSalesRequestProofRepository: Repository<CustomerAfterSalesRequestProof>,
 
     @InjectRepository(StaffMember)
 private readonly staffMemberRepository: Repository<StaffMember>,
@@ -1017,6 +1024,56 @@ async getAfterSalesRequestActivities(requestId: number) {
     where: { requestId },
     order: { createdAt: 'DESC' },
   });
+}
+
+async listAfterSalesRequestProofs(requestId: number) {
+  return this.afterSalesRequestProofRepository.find({
+    where: { requestId },
+    order: { createdAt: 'DESC' },
+  });
+}
+
+async addAfterSalesRequestProof(
+  requestId: number,
+  body: any,
+  user: any,
+) {
+  const request = await this.afterSalesRequestRepository.findOne({
+    where: { id: requestId },
+  });
+
+  if (!request) {
+    throw new NotFoundException('After-sales request not found');
+  }
+
+  if (!body?.fileUrl) {
+    throw new BadRequestException('File URL is required');
+  }
+
+  const proof = this.afterSalesRequestProofRepository.create({
+    requestId,
+    proofType:
+      body?.proofType || CustomerAfterSalesProofType.OTHER,
+    fileUrl: String(body.fileUrl || ''),
+    fileName: String(body.fileName || ''),
+    mimeType: String(body.mimeType || ''),
+    remarks: String(body.remarks || ''),
+    uploadedBy: user?.id || user?.userId || null,
+    uploadedByName: user?.name || user?.email || '',
+  });
+
+  const savedProof =
+    await this.afterSalesRequestProofRepository.save(proof);
+
+  await this.addAfterSalesRequestActivity(
+    requestId,
+    'PROOF_UPLOADED',
+    `Proof uploaded: ${savedProof.proofType}`,
+    savedProof.remarks || savedProof.fileName || '',
+    user,
+  );
+
+  return savedProof;
 }
 
   async updateComplaint(id: number, body: any, user: any) {
