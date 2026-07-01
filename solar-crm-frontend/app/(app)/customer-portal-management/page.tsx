@@ -40,6 +40,15 @@ const cards = [
     key: 'pendingCleaning',
     label: 'Pending',
   },
+
+  {
+  title: 'After-Sales Service Requests',
+  description: 'Manage paid/free service requests, technician assignment, visits, proofs and ratings.',
+  href: '/customer-after-sales-requests',
+  icon: '🧰',
+  key: 'afterSalesRequests',
+  label: 'Open',
+},
 ];
 
 export default function CustomerPortalManagementPage() {
@@ -49,6 +58,7 @@ export default function CustomerPortalManagementPage() {
     pendingWorkRequests: 0,
     pendingCleaning: 0,
     pendingReferrals: 0,
+    afterSalesRequests: 0,
     portal: 'Live',
   });
   const [loading, setLoading] = useState(false);
@@ -62,6 +72,7 @@ export default function CustomerPortalManagementPage() {
   receiptsRes,
   workRequestsRes,
   cleaningRes,
+  afterSalesRes,
 ] = await Promise.allSettled([
         axios.get(`${API_BASE_URL}/customer-portal/complaints`, {
           params: { page: 1, limit: 1, status: 'OPEN' },
@@ -79,6 +90,10 @@ export default function CustomerPortalManagementPage() {
           params: { page: 1, limit: 1, status: 'PENDING' },
           headers: getAuthHeaders(),
         }),
+        axios.get(`${API_BASE_URL}/customer-portal/after-sales-requests`, {
+  params: { page: 1, limit: 1, status: 'NEW' },
+  headers: getAuthHeaders(),
+}),
       ]);
 
       setStats({
@@ -98,6 +113,10 @@ export default function CustomerPortalManagementPage() {
           cleaningRes.status === 'fulfilled'
             ? Number(cleaningRes.value.data?.total || 0)
             : 0,
+            afterSalesRequests:
+  afterSalesRes.status === 'fulfilled'
+    ? Number(afterSalesRes.value.data?.total || 0)
+    : 0,
       });
     } catch (error) {
       console.error('Customer portal stats error:', error);
