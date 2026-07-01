@@ -40,6 +40,7 @@ import {
   CustomerAfterSalesRequest,
   CustomerAfterSalesRequestStatus,
 } from './customer-after-sales-request.entity';
+import { CustomerAfterSalesRequestActivity } from './customer-after-sales-request-activity.entity';
 
 @Injectable()
 export class CustomerPortalService {
@@ -97,6 +98,9 @@ private readonly afterSalesServiceRepository: Repository<CustomerAfterSalesServi
 
 @InjectRepository(CustomerAfterSalesRequest)
 private readonly afterSalesRequestRepository: Repository<CustomerAfterSalesRequest>,
+
+@InjectRepository(CustomerAfterSalesRequestActivity)
+private readonly afterSalesRequestActivityRepository: Repository<CustomerAfterSalesRequestActivity>,
 
     @InjectRepository(StaffMember)
 private readonly staffMemberRepository: Repository<StaffMember>,
@@ -821,6 +825,23 @@ async listAfterSalesRequests(query: any) {
   };
 }
 
+private async addAfterSalesRequestActivity(
+  requestId: number,
+  activityType: string,
+  activityTitle: string,
+  activityDescription?: string,
+  user?: any,
+) {
+  await this.afterSalesRequestActivityRepository.save({
+    requestId,
+    activityType,
+    activityTitle,
+    activityDescription: activityDescription || '',
+    performedBy: user?.id || user?.userId || null,
+    performedByName: user?.name || user?.email || 'System',
+  });
+}
+
 async createAfterSalesRequestFromCustomer(customerId: number, body: any) {
   const serviceId = Number(body?.serviceId || 0);
 
@@ -898,7 +919,17 @@ request.preferredDate = body?.preferredDate
 request.customerRemarks = String(body?.customerRemarks || '').trim();
 request.status = CustomerAfterSalesRequestStatus.NEW;
 
-  return this.afterSalesRequestRepository.save(request);
+  const savedRequest =
+  await this.afterSalesRequestRepository.save(request);
+
+await this.addAfterSalesRequestActivity(
+  savedRequest.id,
+  'REQUEST_CREATED',
+  'Service Request Created',
+  `Customer requested "${savedRequest.serviceName}".`,
+);
+
+return savedRequest;
 }
 
 async updateAfterSalesRequest(id: number, body: any, user: any) {
@@ -913,6 +944,14 @@ async updateAfterSalesRequest(id: number, body: any, user: any) {
   if (body?.status) {
     request.status = body.status;
   }
+
+  await this.addAfterSalesRequestActivity(
+  request.id,
+  'STATUS_CHANGED',
+  `Status changed to ${body.status}`,
+  body.adminRemarks || '',
+  user,
+);
 
   request.assignedToName =
     String(body?.assignedToName || '').trim() || request.assignedToName;
@@ -930,6 +969,13 @@ async updateAfterSalesRequest(id: number, body: any, user: any) {
   }
 
   return this.afterSalesRequestRepository.save(request);
+}
+
+async getAfterSalesRequestActivities(requestId: number) {
+  return this.afterSalesRequestActivityRepository.find({
+    where: { requestId },
+    order: { createdAt: 'DESC' },
+  });
 }
 
   async updateComplaint(id: number, body: any, user: any) {

@@ -240,4 +240,10 @@ updateAfterSalesRequest(
 ) {
   return this.service.updateAfterSalesRequest(id, body, user);
 }
+
+@Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'MAINTENANCE_MANAGER')
+@Get('after-sales-requests/:id/activities')
+getAfterSalesRequestActivities(@Param('id', ParseIntPipe) id: number) {
+  return this.service.getAfterSalesRequestActivities(id);
+}
 }

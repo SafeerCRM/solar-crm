@@ -22,6 +22,7 @@ import { PortalPolicy } from '../dealer/portal-policy.entity';
 import { CustomerPaymentReceiptActivity } from './customer-payment-receipt-activity.entity';
 import { CustomerAfterSalesService } from './customer-after-sales-service.entity';
 import { CustomerAfterSalesRequest } from './customer-after-sales-request.entity';
+import { CustomerAfterSalesRequestActivity } from './customer-after-sales-request-activity.entity';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ CustomerComplaintAttachment,
       CustomerPaymentReceiptActivity,
       CustomerAfterSalesService,
       CustomerAfterSalesRequest,
+      CustomerAfterSalesRequestActivity,
     ]),
   ],
   controllers: [CustomerPortalController, CustomerAuthController],
