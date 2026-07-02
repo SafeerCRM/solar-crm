@@ -1478,6 +1478,42 @@ return {
   return this.dealerOrderRepository.save(order);
 }
 
+private async recalculateDealerOrderPaymentFromApprovedPayments(
+  orderId: number,
+) {
+  const order = await this.dealerOrderRepository.findOne({
+    where: {
+      id: orderId,
+      isHidden: false,
+    },
+  });
+
+  if (!order) {
+    return null;
+  }
+
+  const approvedPayments = await this.dealerPaymentRepository.find({
+    where: {
+      dealerOrderId: order.id,
+      dealerId: order.dealerId,
+      status: 'APPROVED' as any,
+    },
+  });
+
+  const paidAmount = approvedPayments.reduce(
+    (sum, item) => sum + Number(item.amount || 0),
+    0,
+  );
+
+  order.paidAmount = paidAmount;
+  order.pendingAmount = Math.max(
+    Number(order.totalAmount || 0) - paidAmount,
+    0,
+  );
+
+  return this.dealerOrderRepository.save(order);
+}
+
     async createDealerPayment(dealerId: number, body: any) {
   const dealer = await this.dealerRepository.findOne({
     where: { id: dealerId, isHidden: false },
@@ -2321,26 +2357,9 @@ const bucket =
     const savedPayment = await this.dealerPaymentRepository.save(payment);
 
     if (savedPayment.status === 'APPROVED') {
-      const approvedPayments = await this.dealerPaymentRepository.find({
-        where: {
-          dealerOrderId: order.id,
-          dealerId: order.dealerId,
-          status: 'APPROVED' as any,
-        },
-      });
-
-      const paidAmount = approvedPayments.reduce(
-        (sum, item) => sum + Number(item.amount || 0),
-        0,
-      );
-
-      order.paidAmount = paidAmount;
-      order.pendingAmount = Math.max(
-        Number(order.totalAmount || 0) - paidAmount,
-        0,
-      );
-
-      await this.dealerOrderRepository.save(order);
+      await this.recalculateDealerOrderPaymentFromApprovedPayments(
+  order.id,
+);
 
       await this.projectService.postFinanceLedgerEntry({
   partyId: Number(savedPayment.dealerId || 0) || null,
