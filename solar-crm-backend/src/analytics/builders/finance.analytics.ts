@@ -136,12 +136,11 @@ export class FinanceAnalyticsBuilder {
       .getRawOne(),
 
     this.dealerPaymentRepository
-      .createQueryBuilder('dealerPayment')
-      .where('"dealerPayment"."isHidden" = false')
-      .andWhere('dealerPayment.createdAt BETWEEN :start AND :end', {
-        start,
-        end,
-      })
+  .createQueryBuilder('dealerPayment')
+  .where('dealerPayment.createdAt BETWEEN :start AND :end', {
+    start,
+    end,
+  })
       .select('COUNT(*)', 'dealerPayments')
       .addSelect('COALESCE(SUM(dealerPayment.amount), 0)', 'dealerPaymentAmount')
       .addSelect(
