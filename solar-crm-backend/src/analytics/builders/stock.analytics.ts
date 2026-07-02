@@ -84,7 +84,7 @@ export class StockAnalyticsBuilder {
       .addSelect('COALESCE(SUM("stock"."currentQuantity"), 0)', 'currentQuantity')
       .addSelect('COALESCE(SUM("stock"."stockValue"), 0)', 'stockValue')
       .groupBy('"stock"."branchName"')
-      .orderBy('stockValue', 'DESC')
+      .orderBy('COALESCE(SUM("stock"."stockValue"), 0)', 'DESC')
       .limit(50)
       .getRawMany(),
 
