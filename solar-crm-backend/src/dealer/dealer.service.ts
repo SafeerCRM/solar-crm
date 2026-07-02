@@ -1479,71 +1479,72 @@ return {
 }
 
     async createDealerPayment(dealerId: number, body: any) {
-    const dealer = await this.dealerRepository.findOne({
-      where: { id: dealerId, isHidden: false },
-    });
+  const dealer = await this.dealerRepository.findOne({
+    where: { id: dealerId, isHidden: false },
+  });
 
-    if (!dealer) {
-      throw new NotFoundException('Dealer not found');
-    }
-
-    const orderId = Number(body.dealerOrderId || 0);
-
-    if (!orderId) {
-      throw new NotFoundException('Dealer order is required');
-    }
-
-    const order = await this.dealerOrderRepository.findOne({
-      where: {
-        id: orderId,
-        dealerId,
-        isHidden: false,
-      },
-    });
-
-    if (!order) {
-      throw new NotFoundException('Dealer order not found');
-    }
-
-    const amount = Number(body.amount || 0);
-
-    if (amount <= 0) {
-      throw new NotFoundException('Payment amount is required');
-    }
-
-    const payment = this.dealerPaymentRepository.create({
-      dealerOrderId: order.id,
-      dealerId: dealer.id,
-      dealerName: dealer.dealerName,
-      amount,
-      paymentMode: body.paymentMode || order.paymentType || 'ONLINE',
-      transactionId: body.transactionId || '',
-      receiptUrl: body.receiptUrl || '',
-      remarks: body.remarks || '',
-      createdBy: dealer.id,
-      createdByName: dealer.dealerName,
-    });
-
-    const savedPayment = await this.dealerPaymentRepository.save(payment);
-
-    const notification = this.dealerNotificationRepository.create({
-      dealerId: dealer.id,
-      dealerName: dealer.dealerName,
-      title: 'Payment Submitted',
-      message: `Payment of ₹${amount} submitted for order ${order.orderNumber}.`,
-      notificationType: 'DEALER_PAYMENT',
-      createdBy: dealer.id,
-      createdByName: dealer.dealerName,
-    });
-
-    await this.dealerNotificationRepository.save(notification);
-
-    return {
-      payment: savedPayment,
-      order,
-      message: 'Payment submitted successfully',
-    };
+  if (!dealer) {
+    throw new NotFoundException('Dealer not found');
   }
+
+  const orderId = Number(body.dealerOrderId || 0);
+
+  if (!orderId) {
+    throw new NotFoundException('Dealer order is required');
+  }
+
+  const order = await this.dealerOrderRepository.findOne({
+    where: {
+      id: orderId,
+      dealerId,
+      isHidden: false,
+    },
+  });
+
+  if (!order) {
+    throw new NotFoundException('Dealer order not found');
+  }
+
+  const amount = Number(body.amount || 0);
+
+  if (amount <= 0) {
+    throw new NotFoundException('Payment amount is required');
+  }
+
+  const payment = this.dealerPaymentRepository.create({
+    dealerOrderId: order.id,
+    dealerId: dealer.id,
+    dealerName: dealer.dealerName,
+    amount,
+    paymentMode: body.paymentMode || order.paymentType || 'ONLINE',
+    transactionId: body.transactionId || '',
+    receiptUrl: body.receiptUrl || '',
+    remarks: body.remarks || '',
+    status: 'SUBMITTED' as any,
+    createdBy: dealer.id,
+    createdByName: dealer.dealerName,
+  });
+
+  const savedPayment = await this.dealerPaymentRepository.save(payment);
+
+  const notification = this.dealerNotificationRepository.create({
+    dealerId: dealer.id,
+    dealerName: dealer.dealerName,
+    title: 'Payment Submitted',
+    message: `Payment of ₹${amount} submitted for order ${order.orderNumber}.`,
+    notificationType: 'DEALER_PAYMENT',
+    createdBy: dealer.id,
+    createdByName: dealer.dealerName,
+  });
+
+  await this.dealerNotificationRepository.save(notification);
+
+  return {
+    payment: savedPayment,
+    order,
+    message: 'Payment submitted successfully',
+  };
+}
 
     async uploadDealerPaymentReceipts(files: any[], user: any) {
     if (!Array.isArray(files) || files.length === 0) {
