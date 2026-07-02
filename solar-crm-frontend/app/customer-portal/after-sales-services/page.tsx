@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { MobileDatePicker } from '@mui/x-date-pickers/MobileDatePicker';
@@ -29,6 +29,8 @@ const [requestForm, setRequestForm] = useState({
   preferredDate: '',
   customerRemarks: '',
 });
+const serviceSearchRef = useRef<HTMLDivElement>(null);
+const remarksRef = useRef<HTMLTextAreaElement>(null);
 
   const projects = dashboard?.projects || [];
 
@@ -230,6 +232,26 @@ const selectedService = services.find(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+  const handleClickOutside = (event: MouseEvent) => {
+    if (
+      serviceSearchRef.current &&
+      !serviceSearchRef.current.contains(event.target as Node)
+    ) {
+      setShowServiceOptions(false);
+    }
+  };
+
+  document.addEventListener('mousedown', handleClickOutside);
+
+  return () => {
+    document.removeEventListener(
+      'mousedown',
+      handleClickOutside,
+    );
+  };
+}, []);
+
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-orange-50">
@@ -282,17 +304,40 @@ const selectedService = services.find(
     </div>
   ) : (
     <div className="mt-5 grid gap-4">
-      <div className="relative">
-        <input
-          placeholder="Search service by name, category or issue"
-          value={serviceSearch}
-          onChange={(e) => {
-            setServiceSearch(e.target.value);
-            setShowServiceOptions(true);
-          }}
-          onFocus={() => setShowServiceOptions(true)}
-          className="w-full rounded-2xl border bg-white p-3"
-        />
+      <div
+  ref={serviceSearchRef}
+  className="relative"
+>
+        <div className="relative">
+  <input
+    placeholder="Search service by name, category or issue"
+    value={serviceSearch}
+    onChange={(e) => {
+      setServiceSearch(e.target.value);
+      setShowServiceOptions(true);
+    }}
+    onFocus={() => setShowServiceOptions(true)}
+    className="w-full rounded-2xl border bg-white p-3 pr-12"
+  />
+
+  {selectedService && (
+    <button
+      type="button"
+      onClick={() => {
+        setSelectedServiceId('');
+        setServiceSearch('');
+        setRequestForm({
+          projectId: '',
+          preferredDate: '',
+          customerRemarks: '',
+        });
+      }}
+      className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-gray-200 px-2 py-1 text-xs font-bold hover:bg-gray-300"
+    >
+      ✕
+    </button>
+  )}
+</div>
 
         {showServiceOptions && (
           <div className="absolute z-40 mt-1 max-h-80 w-full overflow-y-auto rounded-2xl border bg-white shadow-xl">
@@ -315,6 +360,10 @@ const selectedService = services.find(
                       }`,
                     );
                     setShowServiceOptions(false);
+
+                    setTimeout(() => {
+  remarksRef.current?.focus();
+}, 100);
                   }}
                   className="block w-full border-b p-4 text-left hover:bg-orange-50"
                 >
@@ -340,12 +389,17 @@ const selectedService = services.find(
             {selectedService.serviceName}
           </p>
 
-          <p className="mt-1 text-sm font-bold text-emerald-700">
-            {selectedService.category || 'General Service'} ·{' '}
-            {selectedService.isPaidService
-              ? `₹${Number(selectedService.price || 0).toLocaleString('en-IN')}`
-              : 'Free'}
-          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+  <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-black text-blue-700">
+    {selectedService.category || 'General Service'}
+  </span>
+
+  <span className="text-sm font-bold text-emerald-700">
+    {selectedService.isPaidService
+      ? `₹${Number(selectedService.price || 0).toLocaleString('en-IN')}`
+      : 'Free'}
+  </span>
+</div>
 
           {selectedService.estimatedVisitTime && (
             <p className="mt-2 text-sm font-semibold text-blue-700">
@@ -405,6 +459,7 @@ const selectedService = services.find(
       </LocalizationProvider>
 
       <textarea
+  ref={remarksRef}
         rows={4}
         placeholder="Remarks / issue details"
         value={requestForm.customerRemarks}
