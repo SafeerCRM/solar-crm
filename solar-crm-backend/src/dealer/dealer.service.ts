@@ -1526,14 +1526,6 @@ return {
 
     const savedPayment = await this.dealerPaymentRepository.save(payment);
 
-    order.paidAmount = Number(order.paidAmount || 0) + amount;
-    order.pendingAmount = Math.max(
-      Number(order.totalAmount || 0) - Number(order.paidAmount || 0),
-      0,
-    );
-
-    await this.dealerOrderRepository.save(order);
-
     const notification = this.dealerNotificationRepository.create({
       dealerId: dealer.id,
       dealerName: dealer.dealerName,
