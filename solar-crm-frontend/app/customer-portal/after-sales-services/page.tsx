@@ -19,6 +19,7 @@ const [requestActivities, setRequestActivities] = useState<any[]>([]);
 const [timelineLoading, setTimelineLoading] = useState(false);
 const [ratingMap, setRatingMap] = useState<Record<number, any>>({});
 const [ratingSavingId, setRatingSavingId] = useState<number | null>(null);
+const [requestStatusFilter, setRequestStatusFilter] = useState('ALL');
 
 
   const [selectedServiceId, setSelectedServiceId] = useState('');
@@ -251,6 +252,19 @@ const selectedService = services.find(
     );
   };
 }, []);
+
+const filteredRequests =
+  requestStatusFilter === 'ALL'
+    ? requests
+    : requests.filter((request) => {
+        if (requestStatusFilter === 'OPEN') {
+          return !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(
+            request.status,
+          );
+        }
+
+        return request.status === requestStatusFilter;
+      });
 
   if (loading) {
     return (
@@ -488,13 +502,37 @@ const selectedService = services.find(
             My Service Requests
           </h2>
 
+          <div className="mt-4 flex flex-wrap gap-2">
+  {[
+    ['ALL', 'All'],
+    ['OPEN', 'Open'],
+    ['ASSIGNED', 'Assigned'],
+    ['IN_PROGRESS', 'In Progress'],
+    ['COMPLETED', 'Completed'],
+    ['CANCELLED', 'Cancelled'],
+  ].map(([value, label]) => (
+    <button
+      key={value}
+      type="button"
+      onClick={() => setRequestStatusFilter(value)}
+      className={`rounded-full px-4 py-2 text-xs font-black ${
+        requestStatusFilter === value
+          ? 'bg-orange-600 text-white'
+          : 'bg-gray-100 text-gray-700'
+      }`}
+    >
+      {label}
+    </button>
+  ))}
+</div>
+
           <div className="mt-5 space-y-3">
-            {requests.length === 0 ? (
+            {filteredRequests.length === 0 ? (
               <div className="rounded-3xl border border-dashed p-6 text-center text-sm font-bold text-gray-500">
                 No service requests yet.
               </div>
             ) : (
-              requests.map((request) => (
+              filteredRequests.map((request) => (
                 <div
                   key={request.id}
                   className="rounded-3xl border bg-gray-50 p-4"
