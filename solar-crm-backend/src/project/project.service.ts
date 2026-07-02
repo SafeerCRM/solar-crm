@@ -5873,6 +5873,7 @@ async createAccountExpense(
     expenseDate:
       body?.expenseDate || new Date().toISOString().slice(0, 10),
     expenseHead: body?.expenseHead || purpose,
+    expenseSubType: body?.expenseSubType || null,
 
     purpose,
     proofUrl: body?.proofUrl || null,
@@ -5982,6 +5983,11 @@ async updateAccountExpense(
     body?.expenseHead !== undefined
       ? body.expenseHead || null
       : expense.expenseHead;
+
+      expense.expenseSubType =
+  body?.expenseSubType !== undefined
+    ? body.expenseSubType || null
+    : expense.expenseSubType;
 
   expense.purpose =
     body?.purpose !== undefined
