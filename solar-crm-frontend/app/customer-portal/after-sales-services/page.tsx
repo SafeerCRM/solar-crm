@@ -20,6 +20,8 @@ const [timelineLoading, setTimelineLoading] = useState(false);
 const [ratingMap, setRatingMap] = useState<Record<number, any>>({});
 const [ratingSavingId, setRatingSavingId] = useState<number | null>(null);
 const [requestStatusFilter, setRequestStatusFilter] = useState('ALL');
+const [requestPage, setRequestPage] = useState(1);
+const [requestTotalPages, setRequestTotalPages] = useState(1);
 
 
   const [selectedServiceId, setSelectedServiceId] = useState('');
@@ -65,11 +67,18 @@ const remarksRef = useRef<HTMLTextAreaElement>(null);
             Authorization: `Bearer ${token}`,
           },
         }),
-        fetch(`${API_BASE_URL}/customer-auth/after-sales-requests`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }),
+        fetch(
+  `${API_BASE_URL}/customer-auth/after-sales-requests?page=${requestPage}&limit=10&status=${
+    requestStatusFilter === 'ALL' || requestStatusFilter === 'OPEN'
+      ? ''
+      : requestStatusFilter
+  }`,
+  {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  },
+),
       ]);
 
       const dashboardData = await dashboardRes.json();
@@ -86,6 +95,7 @@ const remarksRef = useRef<HTMLTextAreaElement>(null);
       setDashboard(dashboardData);
       setServices(Array.isArray(servicesData) ? servicesData : []);
       setRequests(Array.isArray(requestsData?.data) ? requestsData.data : []);
+      setRequestTotalPages(Number(requestsData?.totalPages || 1));
     } catch (error) {
       console.error(error);
       alert('Failed to load after-sales services');
@@ -252,6 +262,13 @@ const selectedService = services.find(
     );
   };
 }, []);
+
+useEffect(() => {
+  if (!loading) {
+    loadData();
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [requestPage, requestStatusFilter]);
 
 const filteredRequests =
   requestStatusFilter === 'ALL'
@@ -514,7 +531,10 @@ const filteredRequests =
     <button
       key={value}
       type="button"
-      onClick={() => setRequestStatusFilter(value)}
+      onClick={() => {
+  setRequestStatusFilter(value);
+  setRequestPage(1);
+}}
       className={`rounded-full px-4 py-2 text-xs font-black ${
         requestStatusFilter === value
           ? 'bg-orange-600 text-white'
@@ -685,6 +705,28 @@ const filteredRequests =
               ))
             )}
           </div>
+
+          <div className="mt-5 flex items-center justify-between">
+  <button
+    disabled={requestPage <= 1}
+    onClick={() => setRequestPage(requestPage - 1)}
+    className="rounded-2xl bg-gray-200 px-4 py-2 text-sm font-black text-gray-700 disabled:opacity-50"
+  >
+    Previous
+  </button>
+
+  <p className="text-sm font-bold text-gray-500">
+    Page {requestPage} of {requestTotalPages}
+  </p>
+
+  <button
+    disabled={requestPage >= requestTotalPages}
+    onClick={() => setRequestPage(requestPage + 1)}
+    className="rounded-2xl bg-gray-200 px-4 py-2 text-sm font-black text-gray-700 disabled:opacity-50"
+  >
+    Next
+  </button>
+</div>
         </section>
       </div>
 
