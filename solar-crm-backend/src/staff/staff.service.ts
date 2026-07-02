@@ -12,6 +12,7 @@ import { StaffAttendance } from './staff-attendance.entity';
 import { StaffLeave } from './staff-leave.entity';
 import { EmployeePolicy } from './employee-policy.entity';
 import { HrPolicy, HrPolicyType } from './hr-policy.entity';
+import { StaffPayroll } from './staff-payroll.entity';
 
 @Injectable()
 export class StaffService {
@@ -36,6 +37,9 @@ private readonly employeePolicyRepo: Repository<EmployeePolicy>,
 
 @InjectRepository(HrPolicy)
 private readonly hrPolicyRepo: Repository<HrPolicy>,
+
+@InjectRepository(StaffPayroll)
+private readonly payrollRepo: Repository<StaffPayroll>,
   ) {}
 
   async findAll(query: any) {
@@ -1044,5 +1048,246 @@ async restoreHrSetting(id: number, body: any, user: any) {
   policy.restoreReason = body?.reason || '';
 
   return this.hrPolicyRepo.save(policy);
+}
+
+private calculateMonthDays(payrollMonth: string) {
+  const [year, month] = String(payrollMonth).split('-').map(Number);
+
+  if (!year || !month) return 30;
+
+  return new Date(year, month, 0).getDate();
+}
+
+async generatePayroll(body: any, user: any) {
+  if (!body.staffId || !body.payrollMonth) {
+    throw new BadRequestException('Staff and payroll month are required');
+  }
+
+  const staff = await this.staffRepo.findOne({
+    where: { id: Number(body.staffId), isHidden: false },
+  });
+
+  if (!staff) {
+    throw new NotFoundException('Staff not found');
+  }
+
+  const existing = await this.payrollRepo.findOne({
+    where: {
+      staffId: staff.id,
+      payrollMonth: body.payrollMonth,
+      isHidden: false,
+    },
+  });
+
+  if (existing) {
+    throw new BadRequestException(
+      'Payroll already exists for this staff and month',
+    );
+  }
+
+  const basicSalary = Number(body.basicSalary || 0);
+  const monthDays = this.calculateMonthDays(body.payrollMonth);
+  const perDaySalary = monthDays > 0 ? basicSalary / monthDays : 0;
+
+  const presentDays = Number(body.presentDays || 0);
+  const halfDays = Number(body.halfDays || 0);
+  const absentDays = Number(body.absentDays || 0);
+  const leaveDays = Number(body.leaveDays || 0);
+
+  const attendanceDeduction =
+    absentDays * perDaySalary + halfDays * (perDaySalary / 2);
+
+  const leaveDeduction = Number(body.leaveDeduction || 0);
+  const penaltyAmount = Number(body.penaltyAmount || 0);
+  const incentiveAmount = Number(body.incentiveAmount || 0);
+  const otherAllowance = Number(body.otherAllowance || 0);
+  const otherDeduction = Number(body.otherDeduction || 0);
+
+  const grossSalary = basicSalary + incentiveAmount + otherAllowance;
+
+  const netSalary =
+    grossSalary -
+    attendanceDeduction -
+    leaveDeduction -
+    penaltyAmount -
+    otherDeduction;
+
+  const payroll = this.payrollRepo.create({
+    staffId: staff.id,
+    staffName: staff.fullName,
+    employeeCode: staff.employeeCode || '',
+    staffRole: staff.staffRole || '',
+    department: staff.department || '',
+    branchName: staff.branchName || '',
+    payrollMonth: body.payrollMonth,
+    basicSalary,
+    presentDays,
+    halfDays,
+    absentDays,
+    leaveDays,
+    workingHours: Number(body.workingHours || 0),
+    attendanceDeduction,
+    leaveDeduction,
+    penaltyAmount,
+    incentiveAmount,
+    otherAllowance,
+    otherDeduction,
+    grossSalary,
+    netSalary,
+    status: 'GENERATED' as any,
+    remarks: body.remarks || '',
+    generatedBy: user?.id || null,
+    generatedByName: user?.name || '',
+    isHidden: false,
+  });
+
+  return this.payrollRepo.save(payroll);
+}
+
+async listPayrolls(query: any) {
+  const page = Math.max(Number(query.page || 1), 1);
+  const limit = Math.min(Math.max(Number(query.limit || 20), 1), 100);
+  const showHidden = query.showHidden === 'true';
+
+  const where: any = { isHidden: showHidden };
+
+  if (query.staffId) where.staffId = Number(query.staffId);
+  if (query.payrollMonth) where.payrollMonth = query.payrollMonth;
+  if (query.status) where.status = query.status;
+
+  const [data, total] = await this.payrollRepo.findAndCount({
+    where,
+    order: { createdAt: 'DESC' },
+    skip: (page - 1) * limit,
+    take: limit,
+  });
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
+}
+
+async updatePayroll(id: number, body: any) {
+  const payroll = await this.payrollRepo.findOne({ where: { id } });
+
+  if (!payroll) {
+    throw new NotFoundException('Payroll not found');
+  }
+
+  if (payroll.status === 'PAID') {
+    throw new BadRequestException('Paid payroll cannot be edited');
+  }
+
+  Object.assign(payroll, {
+    basicSalary: Number(body.basicSalary ?? payroll.basicSalary),
+    presentDays: Number(body.presentDays ?? payroll.presentDays),
+    halfDays: Number(body.halfDays ?? payroll.halfDays),
+    absentDays: Number(body.absentDays ?? payroll.absentDays),
+    leaveDays: Number(body.leaveDays ?? payroll.leaveDays),
+    workingHours: Number(body.workingHours ?? payroll.workingHours),
+    leaveDeduction: Number(body.leaveDeduction ?? payroll.leaveDeduction),
+    penaltyAmount: Number(body.penaltyAmount ?? payroll.penaltyAmount),
+    incentiveAmount: Number(body.incentiveAmount ?? payroll.incentiveAmount),
+    otherAllowance: Number(body.otherAllowance ?? payroll.otherAllowance),
+    otherDeduction: Number(body.otherDeduction ?? payroll.otherDeduction),
+    remarks: body.remarks ?? payroll.remarks,
+  });
+
+  const monthDays = this.calculateMonthDays(payroll.payrollMonth);
+  const perDaySalary =
+    monthDays > 0 ? Number(payroll.basicSalary || 0) / monthDays : 0;
+
+  payroll.attendanceDeduction =
+    Number(payroll.absentDays || 0) * perDaySalary +
+    Number(payroll.halfDays || 0) * (perDaySalary / 2);
+
+  payroll.grossSalary =
+    Number(payroll.basicSalary || 0) +
+    Number(payroll.incentiveAmount || 0) +
+    Number(payroll.otherAllowance || 0);
+
+  payroll.netSalary =
+    Number(payroll.grossSalary || 0) -
+    Number(payroll.attendanceDeduction || 0) -
+    Number(payroll.leaveDeduction || 0) -
+    Number(payroll.penaltyAmount || 0) -
+    Number(payroll.otherDeduction || 0);
+
+  if (body.ownerOverrideNetSalary !== undefined) {
+    payroll.ownerOverrideApplied = true;
+    payroll.ownerOverrideNetSalary = Number(body.ownerOverrideNetSalary || 0);
+    payroll.ownerOverrideReason = body.ownerOverrideReason || '';
+    payroll.netSalary = payroll.ownerOverrideNetSalary;
+  }
+
+  return this.payrollRepo.save(payroll);
+}
+
+async approvePayroll(id: number, body: any, user: any) {
+  const payroll = await this.payrollRepo.findOne({ where: { id } });
+
+  if (!payroll) {
+    throw new NotFoundException('Payroll not found');
+  }
+
+  payroll.status = 'APPROVED' as any;
+  payroll.approvedBy = user?.id || null;
+  payroll.approvedByName = user?.name || '';
+  payroll.approvedAt = new Date();
+  payroll.remarks = body?.remarks || payroll.remarks || '';
+
+  return this.payrollRepo.save(payroll);
+}
+
+async markPayrollPaid(id: number, body: any, user: any) {
+  const payroll = await this.payrollRepo.findOne({ where: { id } });
+
+  if (!payroll) {
+    throw new NotFoundException('Payroll not found');
+  }
+
+  payroll.status = 'PAID' as any;
+  payroll.paidAt = new Date();
+  payroll.paidBy = user?.id || null;
+  payroll.paidByName = user?.name || '';
+  payroll.paymentRemarks = body?.paymentRemarks || '';
+
+  return this.payrollRepo.save(payroll);
+}
+
+async hidePayroll(id: number, body: any, user: any) {
+  const payroll = await this.payrollRepo.findOne({ where: { id } });
+
+  if (!payroll) {
+    throw new NotFoundException('Payroll not found');
+  }
+
+  payroll.isHidden = true;
+  payroll.hiddenAt = new Date();
+  payroll.hiddenBy = user?.id || null;
+  payroll.hiddenByName = user?.name || '';
+  payroll.hiddenReason = body?.reason || '';
+
+  return this.payrollRepo.save(payroll);
+}
+
+async restorePayroll(id: number, body: any, user: any) {
+  const payroll = await this.payrollRepo.findOne({ where: { id } });
+
+  if (!payroll) {
+    throw new NotFoundException('Payroll not found');
+  }
+
+  payroll.isHidden = false;
+  payroll.restoredAt = new Date();
+  payroll.restoredBy = user?.id || null;
+  payroll.restoredByName = user?.name || '';
+  payroll.restoreReason = body?.reason || '';
+
+  return this.payrollRepo.save(payroll);
 }
 }

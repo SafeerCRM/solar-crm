@@ -258,4 +258,55 @@ restoreHrSetting(
 ) {
   return this.staffService.restoreHrSetting(Number(id), body, user);
 }
+
+@Get('payrolls')
+listPayrolls(@Query() query: any) {
+  return this.staffService.listPayrolls(query);
+}
+
+@Post('payroll/generate')
+generatePayroll(@Body() body: any, @CurrentUser() user: any) {
+  return this.staffService.generatePayroll(body, user);
+}
+
+@Patch('payroll/:id')
+updatePayroll(@Param('id') id: string, @Body() body: any) {
+  return this.staffService.updatePayroll(Number(id), body);
+}
+
+@Patch('payroll/:id/approve')
+approvePayroll(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffService.approvePayroll(Number(id), body, user);
+}
+
+@Patch('payroll/:id/paid')
+markPayrollPaid(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffService.markPayrollPaid(Number(id), body, user);
+}
+
+@Patch('payroll/:id/hide')
+hidePayroll(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffService.hidePayroll(Number(id), body, user);
+}
+
+@Patch('payroll/:id/restore')
+restorePayroll(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffService.restorePayroll(Number(id), body, user);
+}
 }
