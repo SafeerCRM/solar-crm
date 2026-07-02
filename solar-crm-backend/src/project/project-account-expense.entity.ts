@@ -72,6 +72,9 @@ export class ProjectAccountExpense {
   @Column({ type: 'text', nullable: true })
   expenseHead: string;
 
+  @Column({ type: 'text', nullable: true })
+expenseSubType: string;
+
   @Column({ type: 'float', default: 0 })
   taxableAmount: number;
 

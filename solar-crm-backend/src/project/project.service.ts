@@ -1570,15 +1570,6 @@ if (roles.includes('SOLAR_FRANCHISE')) {
   );
 }
 
-  if (roles.includes('LOAN_MANAGER')) {
-  query.andWhere(
-    'project.projectType = :loanProjectType',
-    {
-      loanProjectType: 'LOAN',
-    },
-  );
-}
-
   if (filters?.status) {
     query.andWhere(
       'project.status = :status',
