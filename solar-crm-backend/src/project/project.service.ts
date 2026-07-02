@@ -17683,14 +17683,6 @@ async addDealerOrderPayment(body: any, user: any) {
 
   const savedPayment = await this.projectDealerPaymentRepository.save(payment);
 
-  order.paidAmount = Number(order.paidAmount || 0) + amount;
-  order.pendingAmount = Math.max(
-    Number(order.totalAmount || 0) - Number(order.paidAmount || 0),
-    0,
-  );
-
-  await this.projectDealerOrderRepository.save(order);
-
   return {
     message: 'Dealer payment submitted successfully',
     payment: savedPayment,
