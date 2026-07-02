@@ -377,7 +377,10 @@ async getCustomerAfterSalesServices(@Req() req: any) {
 }
 
 @Get('after-sales-requests')
-async getCustomerAfterSalesRequests(@Req() req: any) {
+async getCustomerAfterSalesRequests(
+  @Req() req: any,
+  @Query() query: any,
+) {
   const authHeader = req.headers?.authorization || '';
   const token = authHeader.replace('Bearer ', '');
 
@@ -392,10 +395,11 @@ async getCustomerAfterSalesRequests(@Req() req: any) {
   }
 
   return this.service.listAfterSalesRequests({
-    customerId: Number(payload.customerId),
-    page: 1,
-    limit: 50,
-  });
+  customerId: Number(payload.customerId),
+  page: Number(query?.page || 1),
+  limit: Number(query?.limit || 10),
+  status: query?.status || '',
+});
 }
 
 @Post('after-sales-requests')
