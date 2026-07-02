@@ -1312,8 +1312,15 @@ const estimatedPendingPosition =
             className="border-b"
           >
             <td className="p-2">
-              {item.expenseType}
-            </td>
+  <div>
+    <p>{item.expenseType}</p>
+    {item.expenseSubType && (
+      <p className="text-xs text-gray-500">
+        Type: {item.expenseSubType}
+      </p>
+    )}
+  </div>
+</td>
 
             <td className="p-2">
   {item.expenseDate
@@ -1641,28 +1648,35 @@ const estimatedPendingPosition =
         </button>
       </div>
 
-      <div className="mt-5 grid gap-3 md:grid-cols-3">
-        <div className="rounded-xl bg-gray-50 p-3">
-          <p className="text-xs text-gray-500">Type</p>
-          <p className="mt-1 font-bold">
-            {selectedExpense.expenseType || '-'}
-          </p>
-        </div>
+      <div className="mt-5 grid gap-3 md:grid-cols-4">
+  <div className="rounded-xl bg-gray-50 p-3">
+    <p className="text-xs text-gray-500">Type</p>
+    <p className="mt-1 font-bold">
+      {selectedExpense.expenseType || '-'}
+    </p>
+  </div>
 
-        <div className="rounded-xl bg-gray-50 p-3">
-          <p className="text-xs text-gray-500">Amount</p>
-          <p className="mt-1 font-bold text-blue-700">
-            ₹{Number(selectedExpense.amount || 0).toLocaleString('en-IN')}
-          </p>
-        </div>
+  <div className="rounded-xl bg-gray-50 p-3">
+    <p className="text-xs text-gray-500">Sub Type</p>
+    <p className="mt-1 font-bold">
+      {selectedExpense.expenseSubType || '-'}
+    </p>
+  </div>
 
-        <div className="rounded-xl bg-gray-50 p-3">
-          <p className="text-xs text-gray-500">Status</p>
-          <p className="mt-1 font-bold">
-            {selectedExpense.approvalStatus || '-'}
-          </p>
-        </div>
-      </div>
+  <div className="rounded-xl bg-gray-50 p-3">
+    <p className="text-xs text-gray-500">Amount</p>
+    <p className="mt-1 font-bold text-blue-700">
+      ₹{Number(selectedExpense.amount || 0).toLocaleString('en-IN')}
+    </p>
+  </div>
+
+  <div className="rounded-xl bg-gray-50 p-3">
+    <p className="text-xs text-gray-500">Status</p>
+    <p className="mt-1 font-bold">
+      {selectedExpense.approvalStatus || '-'}
+    </p>
+  </div>
+</div>
 
       <div className="mt-4 grid gap-3 md:grid-cols-2">
         <div className="rounded-xl border p-3">
