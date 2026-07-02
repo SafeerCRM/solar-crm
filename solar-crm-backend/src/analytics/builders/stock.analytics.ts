@@ -19,7 +19,7 @@ export class StockAnalyticsBuilder {
   async build(query: AnalyticsQuery, user: any) {
   const { start, end } = getAnalyticsDateRange(query);
 
-  const [
+    const [
     stockSummary,
     movementSummary,
     consumptionSummary,
@@ -29,76 +29,76 @@ export class StockAnalyticsBuilder {
   ] = await Promise.all([
     this.stockItemRepository
       .createQueryBuilder('stock')
-      .where('stock.isHidden = false')
+      .where('"stock"."isHidden" = false')
       .select('COUNT(*)', 'totalItems')
-      .addSelect('COALESCE(SUM(stock.currentQuantity), 0)', 'currentQuantity')
-      .addSelect('COALESCE(SUM(stock.reservedQuantity), 0)', 'reservedQuantity')
-      .addSelect('COALESCE(SUM(stock.stockValue), 0)', 'stockValue')
+      .addSelect('COALESCE(SUM("stock"."currentQuantity"), 0)', 'currentQuantity')
+      .addSelect('COALESCE(SUM("stock"."reservedQuantity"), 0)', 'reservedQuantity')
+      .addSelect('COALESCE(SUM("stock"."stockValue"), 0)', 'stockValue')
       .addSelect(
-        `COUNT(*) FILTER (WHERE stock.currentQuantity <= stock.minimumStockLevel)`,
+        'COUNT(*) FILTER (WHERE "stock"."currentQuantity" <= "stock"."minimumStockLevel")',
         'lowStockItems',
       )
       .getRawOne(),
 
     this.stockMovementRepository
       .createQueryBuilder('movement')
-      .where('movement.createdAt BETWEEN :start AND :end', { start, end })
+      .where('"movement"."createdAt" BETWEEN :start AND :end', { start, end })
       .select('COUNT(*)', 'movementEntries')
       .addSelect(
-        `COALESCE(SUM(CASE WHEN movement.movementType = 'INWARD' THEN movement.quantity ELSE 0 END), 0)`,
+        `COALESCE(SUM(CASE WHEN "movement"."movementType" = 'INWARD' THEN "movement"."quantity" ELSE 0 END), 0)`,
         'inwardQuantity',
       )
       .addSelect(
-        `COALESCE(SUM(CASE WHEN movement.movementType = 'OUTWARD' THEN movement.quantity ELSE 0 END), 0)`,
+        `COALESCE(SUM(CASE WHEN "movement"."movementType" = 'OUTWARD' THEN "movement"."quantity" ELSE 0 END), 0)`,
         'outwardQuantity',
       )
       .addSelect(
-        `COALESCE(SUM(CASE WHEN movement.movementType = 'TRANSFER' THEN movement.quantity ELSE 0 END), 0)`,
+        `COALESCE(SUM(CASE WHEN "movement"."movementType" = 'TRANSFER' THEN "movement"."quantity" ELSE 0 END), 0)`,
         'transferQuantity',
       )
       .getRawOne(),
 
     this.consumptionRepository
       .createQueryBuilder('consumption')
-      .where('consumption.createdAt BETWEEN :start AND :end', { start, end })
+      .where('"consumption"."createdAt" BETWEEN :start AND :end', { start, end })
       .select('COUNT(*)', 'consumptionEntries')
-      .addSelect('COALESCE(SUM(consumption.quantity), 0)', 'consumedQuantity')
-      .addSelect('COALESCE(SUM(consumption.totalAmount), 0)', 'consumptionAmount')
+      .addSelect('COALESCE(SUM("consumption"."quantity"), 0)', 'consumedQuantity')
+      .addSelect('COALESCE(SUM("consumption"."totalAmount"), 0)', 'consumptionAmount')
       .getRawOne(),
 
     this.stockItemRepository
       .createQueryBuilder('stock')
-      .where('stock.isHidden = false')
-      .select('COALESCE(stock.category, \'Uncategorized\')', 'label')
+      .where('"stock"."isHidden" = false')
+      .select('COALESCE("stock"."category", \'Uncategorized\')', 'label')
       .addSelect('COUNT(*)', 'items')
-      .addSelect('COALESCE(SUM(stock.stockValue), 0)', 'value')
-      .groupBy('stock.category')
+      .addSelect('COALESCE(SUM("stock"."stockValue"), 0)', 'value')
+      .groupBy('"stock"."category"')
       .orderBy('value', 'DESC')
       .limit(20)
       .getRawMany(),
 
     this.stockItemRepository
       .createQueryBuilder('stock')
-      .where('stock.isHidden = false')
-      .select('COALESCE(stock.branch, \'Unassigned Branch\')', 'branchName')
+      .where('"stock"."isHidden" = false')
+      .select('COALESCE("stock"."branch", \'Unassigned Branch\')', 'branchName')
       .addSelect('COUNT(*)', 'items')
-      .addSelect('COALESCE(SUM(stock.currentQuantity), 0)', 'currentQuantity')
-      .addSelect('COALESCE(SUM(stock.stockValue), 0)', 'stockValue')
-      .groupBy('stock.branch')
+      .addSelect('COALESCE(SUM("stock"."currentQuantity"), 0)', 'currentQuantity')
+      .addSelect('COALESCE(SUM("stock"."stockValue"), 0)', 'stockValue')
+      .groupBy('"stock"."branch"')
       .orderBy('stockValue', 'DESC')
       .limit(50)
       .getRawMany(),
 
     this.stockItemRepository
       .createQueryBuilder('stock')
-      .where('stock.isHidden = false')
-      .andWhere('stock.currentQuantity <= stock.minimumStockLevel')
-      .select('stock.materialName', 'materialName')
-      .addSelect('stock.category', 'category')
-      .addSelect('stock.branch', 'branch')
-      .addSelect('stock.currentQuantity', 'currentQuantity')
-      .addSelect('stock.minimumStockLevel', 'minimumStockLevel')
-      .orderBy('stock.currentQuantity', 'ASC')
+      .where('"stock"."isHidden" = false')
+      .andWhere('"stock"."currentQuantity" <= "stock"."minimumStockLevel"')
+      .select('"stock"."materialName"', 'materialName')
+      .addSelect('"stock"."category"', 'category')
+      .addSelect('"stock"."branch"', 'branch')
+      .addSelect('"stock"."currentQuantity"', 'currentQuantity')
+      .addSelect('"stock"."minimumStockLevel"', 'minimumStockLevel')
+      .orderBy('"stock"."currentQuantity"', 'ASC')
       .limit(50)
       .getRawMany(),
   ]);

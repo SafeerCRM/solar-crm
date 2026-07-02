@@ -123,9 +123,9 @@ export class TradingAnalyticsBuilder {
         start,
         end,
       })
-      .select('dealerOrder."status"::text', 'label')
+      .select('"dealerOrder"."status"::text', 'label')
       .addSelect('COUNT(*)', 'value')
-      .groupBy('dealerOrder."status"')
+      .groupBy('"dealerOrder"."status"')
       .orderBy('value', 'DESC')
       .getRawMany(),
 
@@ -135,9 +135,9 @@ export class TradingAnalyticsBuilder {
         start,
         end,
       })
-      .select('dealerPayment."status"::text', 'label')
-      .addSelect('COUNT(*)', 'value')
-      .groupBy('dealerPayment."status"')
+      .select('"dealerPayment"."status"::text', 'label')
+.addSelect('COUNT(*)', 'value')
+.groupBy('"dealerPayment"."status"')
       .orderBy('value', 'DESC')
       .getRawMany(),
 
