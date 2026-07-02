@@ -134,6 +134,20 @@ const filteredServices = services.filter((service) => {
   return text.includes(serviceSearch.toLowerCase());
 });
 
+const groupedFilteredServices = filteredServices.reduce(
+  (groups: Record<string, any[]>, service) => {
+    const category = service.category || 'General Service';
+
+    if (!groups[category]) {
+      groups[category] = [];
+    }
+
+    groups[category].push(service);
+    return groups;
+  },
+  {},
+);
+
 const selectedService = services.find(
   (service) => String(service.id) === String(selectedServiceId),
 );
@@ -377,38 +391,45 @@ const filteredRequests =
                 No matching service found.
               </div>
             ) : (
-              filteredServices.map((service) => (
-                <button
-                  key={service.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedServiceId(String(service.id));
-                    setServiceSearch(
-                      `${service.serviceName} - ${
-                        service.isPaidService
-                          ? `₹${Number(service.price || 0).toLocaleString('en-IN')}`
-                          : 'Free'
-                      }`,
-                    );
-                    setShowServiceOptions(false);
+              Object.entries(groupedFilteredServices).map(([category, categoryServices]) => (
+  <div key={category}>
+    <div className="bg-gray-100 px-4 py-2 text-xs font-black uppercase text-gray-500">
+      {category}
+    </div>
 
-                    setTimeout(() => {
-  remarksRef.current?.focus();
-}, 100);
-                  }}
-                  className="block w-full border-b p-4 text-left hover:bg-orange-50"
-                >
-                  <p className="font-black text-gray-900">
-                    {service.serviceName}
-                  </p>
-                  <p className="mt-1 text-xs font-semibold text-gray-500">
-                    {service.category || 'General Service'} ·{' '}
-                    {service.isPaidService
-                      ? `₹${Number(service.price || 0).toLocaleString('en-IN')}`
-                      : 'Free'}
-                  </p>
-                </button>
-              ))
+    {(categoryServices as any[]).map((service) => (
+      <button
+        key={service.id}
+        type="button"
+        onClick={() => {
+          setSelectedServiceId(String(service.id));
+          setServiceSearch(
+            `${service.serviceName} - ${
+              service.isPaidService
+                ? `₹${Number(service.price || 0).toLocaleString('en-IN')}`
+                : 'Free'
+            }`,
+          );
+          setShowServiceOptions(false);
+
+          setTimeout(() => {
+            remarksRef.current?.focus();
+          }, 100);
+        }}
+        className="block w-full border-b p-4 text-left hover:bg-orange-50"
+      >
+        <p className="font-black text-gray-900">
+          {service.serviceName}
+        </p>
+        <p className="mt-1 text-xs font-semibold text-gray-500">
+          {service.isPaidService
+            ? `₹${Number(service.price || 0).toLocaleString('en-IN')}`
+            : 'Free'}
+        </p>
+      </button>
+    ))}
+  </div>
+))
             )}
           </div>
         )}
