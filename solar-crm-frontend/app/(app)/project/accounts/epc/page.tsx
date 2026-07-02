@@ -35,6 +35,7 @@ const [expenseForm, setExpenseForm] = useState({
   otherExpenseName: '',
   expenseDate: new Date().toISOString().slice(0, 10),
   expenseHead: '',
+  expenseSubType: '',
   amount: '',
   taxableAmount: '',
   gstAmount: '',
@@ -319,6 +320,14 @@ const createExpense = async () => {
   }
 
   if (
+  expenseForm.expenseType === 'SITE_PURCHASE' &&
+  !expenseForm.expenseSubType.trim()
+) {
+  alert('Please enter Type for Site Purchase');
+  return;
+}
+
+  if (
     expenseForm.expenseType === 'OTHER' &&
     !expenseForm.otherExpenseName.trim()
   ) {
@@ -373,6 +382,7 @@ const createExpense = async () => {
   otherExpenseName: '',
   expenseDate: new Date().toISOString().slice(0, 10),
   expenseHead: '',
+  expenseSubType: '',
   amount: '',
   taxableAmount: '',
   gstAmount: '',
@@ -850,6 +860,26 @@ const estimatedPendingPosition =
     <option value="CUSTOMER_VISIT">Customer Visit</option>
     <option value="OTHER">Other</option>
   </select>
+
+  {expenseForm.expenseType === 'SITE_PURCHASE' && (
+  <div>
+    <label className="mb-1 block text-sm font-semibold text-gray-700">
+      Type
+    </label>
+
+    <input
+      placeholder="Enter site purchase type"
+      value={expenseForm.expenseSubType}
+      onChange={(e) =>
+        setExpenseForm({
+          ...expenseForm,
+          expenseSubType: e.target.value,
+        })
+      }
+      className="w-full rounded-xl border p-3"
+    />
+  </div>
+)}
 
   {expenseForm.expenseType === 'OTHER' && (
     <input
