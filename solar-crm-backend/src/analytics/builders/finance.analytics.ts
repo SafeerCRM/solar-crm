@@ -126,7 +126,7 @@ export class FinanceAnalyticsBuilder {
 
     this.dealerOrderRepository
       .createQueryBuilder('dealerOrder')
-      .where('dealerOrder.isHidden = false')
+      .where('"dealerOrder"."isHidden" = false')
       .andWhere('dealerOrder.createdAt BETWEEN :start AND :end', {
         start,
         end,
@@ -137,7 +137,7 @@ export class FinanceAnalyticsBuilder {
 
     this.dealerPaymentRepository
       .createQueryBuilder('dealerPayment')
-      .where('dealerPayment.isHidden = false')
+      .where('"dealerPayment"."isHidden" = false')
       .andWhere('dealerPayment.createdAt BETWEEN :start AND :end', {
         start,
         end,
