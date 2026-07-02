@@ -2,7 +2,6 @@ import { Repository } from 'typeorm';
 
 import { ProjectDealerOrder } from '../../project/project-dealer-order.entity';
 import { ProjectDealerPayment } from '../../project/project-dealer-payment.entity';
-import { ProjectPurchaseOrder } from '../../project/project-purchase-order.entity';
 import { ProjectProformaInvoice } from '../../project/project-proforma-invoice.entity';
 import { ProjectFinalInvoice } from '../../project/project-final-invoice.entity';
 import { ProjectTradingMeeting } from '../../project/project-trading-meeting.entity';
@@ -17,7 +16,6 @@ export class TradingAnalyticsBuilder {
   constructor(
     private readonly dealerOrderRepository: Repository<ProjectDealerOrder>,
     private readonly dealerPaymentRepository: Repository<ProjectDealerPayment>,
-    private readonly purchaseOrderRepository: Repository<ProjectPurchaseOrder>,
     private readonly proformaRepository: Repository<ProjectProformaInvoice>,
     private readonly finalInvoiceRepository: Repository<ProjectFinalInvoice>,
     private readonly tradingMeetingRepository: Repository<ProjectTradingMeeting>,
@@ -47,11 +45,23 @@ export class TradingAnalyticsBuilder {
       this.dealerOrderRepository
         .createQueryBuilder('dealerOrder')
         .where('"dealerOrder"."isHidden" = false')
-        .andWhere('"dealerOrder"."createdAt" BETWEEN :start AND :end', { start, end })
+        .andWhere('"dealerOrder"."createdAt" BETWEEN :start AND :end', {
+          start,
+          end,
+        })
         .select('COUNT(*)', 'dealerOrders')
-        .addSelect('COALESCE(SUM("dealerOrder"."totalAmount"), 0)', 'dealerOrderAmount')
-        .addSelect('COALESCE(SUM("dealerOrder"."paidAmount"), 0)', 'dealerOrderPaidAmount')
-        .addSelect('COALESCE(SUM("dealerOrder"."pendingAmount"), 0)', 'dealerOrderPendingAmount')
+        .addSelect(
+          'COALESCE(SUM("dealerOrder"."totalAmount"), 0)',
+          'dealerOrderAmount',
+        )
+        .addSelect(
+          'COALESCE(SUM("dealerOrder"."paidAmount"), 0)',
+          'dealerOrderPaidAmount',
+        )
+        .addSelect(
+          'COALESCE(SUM("dealerOrder"."pendingAmount"), 0)',
+          'dealerOrderPendingAmount',
+        )
         .addSelect(
           `COALESCE(SUM(CASE WHEN "dealerOrder"."status" = 'DELIVERED' THEN "dealerOrder"."totalAmount" ELSE 0 END), 0)`,
           'deliveredOrderAmount',
@@ -60,23 +70,32 @@ export class TradingAnalyticsBuilder {
 
       this.dealerPaymentRepository
         .createQueryBuilder('dealerPayment')
-        .where('"dealerPayment"."createdAt" BETWEEN :start AND :end', { start, end })
-        .select('COUNT(*)', 'dealerPayments')
-        .addSelect('COALESCE(SUM("dealerPayment"."amount"), 0)', 'dealerPaymentAmount')
+        .where('"dealerPayment"."createdAt" BETWEEN :start AND :end', {
+          start,
+          end,
+        })
+        .select('COUNT(*)', 'dealerPaymentsThisPeriod')
+        .addSelect(
+          'COALESCE(SUM("dealerPayment"."amount"), 0)',
+          'dealerPaymentAmountThisPeriod',
+        )
         .addSelect(
           `COALESCE(SUM(CASE WHEN "dealerPayment"."status" = 'APPROVED' THEN "dealerPayment"."amount" ELSE 0 END), 0)`,
-          'approvedDealerPayments',
+          'approvedDealerPaymentsThisPeriod',
         )
         .addSelect(
           `COALESCE(SUM(CASE WHEN "dealerPayment"."status" IN ('PENDING', 'SUBMITTED') THEN "dealerPayment"."amount" ELSE 0 END), 0)`,
-          'pendingDealerPayments',
+          'pendingDealerPaymentsThisPeriod',
         )
         .getRawOne(),
 
       this.proformaRepository
         .createQueryBuilder('pi')
         .where('"pi"."isHidden" = false')
-        .andWhere('"pi"."createdAt" BETWEEN :start AND :end', { start, end })
+        .andWhere('"pi"."createdAt" BETWEEN :start AND :end', {
+          start,
+          end,
+        })
         .select('COUNT(*)', 'proformaInvoices')
         .addSelect('COALESCE(SUM("pi"."totalAmount"), 0)', 'proformaAmount')
         .getRawOne(),
@@ -84,7 +103,10 @@ export class TradingAnalyticsBuilder {
       this.finalInvoiceRepository
         .createQueryBuilder('invoice')
         .where('"invoice"."isHidden" = false')
-        .andWhere('"invoice"."createdAt" BETWEEN :start AND :end', { start, end })
+        .andWhere('"invoice"."createdAt" BETWEEN :start AND :end', {
+          start,
+          end,
+        })
         .select('COUNT(*)', 'finalInvoices')
         .addSelect('COALESCE(SUM("invoice"."totalAmount"), 0)', 'invoiceAmount')
         .getRawOne(),
@@ -92,19 +114,28 @@ export class TradingAnalyticsBuilder {
       this.tradingMeetingRepository
         .createQueryBuilder('meeting')
         .where('"meeting"."isHidden" = false')
-        .andWhere('"meeting"."createdAt" BETWEEN :start AND :end', { start, end })
+        .andWhere('"meeting"."createdAt" BETWEEN :start AND :end', {
+          start,
+          end,
+        })
         .select('COUNT(*)', 'tradingMeetings')
         .addSelect(
           `COUNT(*) FILTER (WHERE "meeting"."status" = 'COMPLETED')`,
           'completedTradingMeetings',
         )
-        .addSelect('COALESCE(SUM("meeting"."expectedOrderValue"), 0)', 'expectedOrderValue')
+        .addSelect(
+          'COALESCE(SUM("meeting"."expectedOrderValue"), 0)',
+          'expectedOrderValue',
+        )
         .getRawOne(),
 
       this.dealerOrderRepository
         .createQueryBuilder('dealerOrder')
         .where('"dealerOrder"."isHidden" = false')
-        .andWhere('"dealerOrder"."createdAt" BETWEEN :start AND :end', { start, end })
+        .andWhere('"dealerOrder"."createdAt" BETWEEN :start AND :end', {
+          start,
+          end,
+        })
         .select('"dealerOrder"."status"::text', 'label')
         .addSelect('COUNT(*)', 'value')
         .groupBy('"dealerOrder"."status"')
@@ -113,7 +144,10 @@ export class TradingAnalyticsBuilder {
 
       this.dealerPaymentRepository
         .createQueryBuilder('dealerPayment')
-        .where('"dealerPayment"."createdAt" BETWEEN :start AND :end', { start, end })
+        .where('"dealerPayment"."createdAt" BETWEEN :start AND :end', {
+          start,
+          end,
+        })
         .select('"dealerPayment"."status"::text', 'label')
         .addSelect('COUNT(*)', 'value')
         .groupBy('"dealerPayment"."status"')
@@ -123,11 +157,28 @@ export class TradingAnalyticsBuilder {
       this.dealerOrderRepository
         .createQueryBuilder('dealerOrder')
         .where('"dealerOrder"."isHidden" = false')
-        .andWhere('"dealerOrder"."createdAt" BETWEEN :start AND :end', { start, end })
+        .andWhere('"dealerOrder"."createdAt" BETWEEN :start AND :end', {
+          start,
+          end,
+        })
         .select('"dealerOrder"."dealerId"', 'dealerId')
-        .addSelect('COALESCE("dealerOrder"."dealerName", \'Unknown Dealer\')', 'dealerName')
+        .addSelect(
+          'COALESCE("dealerOrder"."dealerName", \'Unknown Dealer\')',
+          'dealerName',
+        )
         .addSelect('COUNT(*)', 'orders')
-        .addSelect('COALESCE(SUM("dealerOrder"."totalAmount"), 0)', 'orderAmount')
+        .addSelect(
+          'COALESCE(SUM("dealerOrder"."totalAmount"), 0)',
+          'orderAmount',
+        )
+        .addSelect(
+          'COALESCE(SUM("dealerOrder"."paidAmount"), 0)',
+          'paidAmount',
+        )
+        .addSelect(
+          'COALESCE(SUM("dealerOrder"."pendingAmount"), 0)',
+          'pendingAmount',
+        )
         .groupBy('"dealerOrder"."dealerId"')
         .addGroupBy('"dealerOrder"."dealerName"')
         .orderBy('COALESCE(SUM("dealerOrder"."totalAmount"), 0)', 'DESC')
@@ -136,31 +187,52 @@ export class TradingAnalyticsBuilder {
     ]);
 
     const dealerOrderAmount = Number(orderSummary?.dealerOrderAmount || 0);
-    const dealerOrderPaidAmount = Number(orderSummary?.dealerOrderPaidAmount || 0);
-    const dealerOrderPendingAmount = Number(orderSummary?.dealerOrderPendingAmount || 0);
-    const approvedDealerPayments = Number(paymentSummary?.approvedDealerPayments || 0);
+    const dealerOrderPaidAmount = Number(
+      orderSummary?.dealerOrderPaidAmount || 0,
+    );
+    const dealerOrderPendingAmount = Number(
+      orderSummary?.dealerOrderPendingAmount || 0,
+    );
 
     return {
       department: 'TRADING',
       title: 'Trading Intelligence Report',
       cards: {
         totalDealers: Number(dealerSummary?.totalDealers || 0),
+
         dealerOrders: Number(orderSummary?.dealerOrders || 0),
         dealerOrderAmount,
         dealerOrderPaidAmount,
         dealerOrderPendingAmount,
         deliveredOrderAmount: Number(orderSummary?.deliveredOrderAmount || 0),
-        dealerPayments: Number(paymentSummary?.dealerPayments || 0),
-        dealerPaymentAmount: Number(paymentSummary?.dealerPaymentAmount || 0),
-        approvedDealerPayments,
-        pendingDealerPayments: Number(paymentSummary?.pendingDealerPayments || 0),
+
+        dealerPaymentsThisPeriod: Number(
+          paymentSummary?.dealerPaymentsThisPeriod || 0,
+        ),
+        dealerPaymentAmountThisPeriod: Number(
+          paymentSummary?.dealerPaymentAmountThisPeriod || 0,
+        ),
+        approvedDealerPaymentsThisPeriod: Number(
+          paymentSummary?.approvedDealerPaymentsThisPeriod || 0,
+        ),
+        pendingDealerPaymentsThisPeriod: Number(
+          paymentSummary?.pendingDealerPaymentsThisPeriod || 0,
+        ),
+
         proformaInvoices: Number(proformaSummary?.proformaInvoices || 0),
         proformaAmount: Number(proformaSummary?.proformaAmount || 0),
+
         finalInvoices: Number(invoiceSummary?.finalInvoices || 0),
         invoiceAmount: Number(invoiceSummary?.invoiceAmount || 0),
+
         tradingMeetings: Number(tradingMeetingSummary?.tradingMeetings || 0),
-        completedTradingMeetings: Number(tradingMeetingSummary?.completedTradingMeetings || 0),
-        expectedOrderValue: Number(tradingMeetingSummary?.expectedOrderValue || 0),
+        completedTradingMeetings: Number(
+          tradingMeetingSummary?.completedTradingMeetings || 0,
+        ),
+        expectedOrderValue: Number(
+          tradingMeetingSummary?.expectedOrderValue || 0,
+        ),
+
         tradingOutstanding: dealerOrderPendingAmount,
       },
       charts: {
@@ -184,10 +256,13 @@ export class TradingAnalyticsBuilder {
           type: 'bar',
           title: 'Trading Finance Summary',
           data: [
-            { label: 'Dealer Orders', value: dealerOrderAmount },
+            { label: 'Order Amount', value: dealerOrderAmount },
             { label: 'Order Paid', value: dealerOrderPaidAmount },
             { label: 'Order Pending', value: dealerOrderPendingAmount },
-            { label: 'Approved Payments', value: approvedDealerPayments },
+            {
+              label: 'Payments This Period',
+              value: Number(paymentSummary?.dealerPaymentAmountThisPeriod || 0),
+            },
           ],
         },
       },
@@ -196,6 +271,8 @@ export class TradingAnalyticsBuilder {
         dealerName: row.dealerName,
         orders: Number(row.orders || 0),
         orderAmount: Number(row.orderAmount || 0),
+        paidAmount: Number(row.paidAmount || 0),
+        pendingAmount: Number(row.pendingAmount || 0),
       })),
       range: { start, end },
     };

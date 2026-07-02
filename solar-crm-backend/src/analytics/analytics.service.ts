@@ -711,14 +711,10 @@ private async getStockReport(
   ).build(query, user);
 }
 
-private async getTradingReport(
-  query: AnalyticsQuery,
-  user: any,
-) {
+private async getTradingReport(query: AnalyticsQuery, user: any) {
   return new TradingAnalyticsBuilder(
     this.dealerOrderRepository,
     this.dealerPaymentRepository,
-    this.purchaseOrderRepository,
     this.proformaRepository,
     this.finalInvoiceRepository,
     this.tradingMeetingRepository,
