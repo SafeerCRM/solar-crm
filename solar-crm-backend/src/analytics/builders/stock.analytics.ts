@@ -19,7 +19,7 @@ export class StockAnalyticsBuilder {
   async build(query: AnalyticsQuery, user: any) {
   const { start, end } = getAnalyticsDateRange(query);
 
-    const [
+  const [
     stockSummary,
     movementSummary,
     consumptionSummary,
@@ -35,32 +35,31 @@ export class StockAnalyticsBuilder {
       .addSelect('COALESCE(SUM("stock"."reservedQuantity"), 0)', 'reservedQuantity')
       .addSelect('COALESCE(SUM("stock"."stockValue"), 0)', 'stockValue')
       .addSelect(
-        'COUNT(*) FILTER (WHERE "stock"."currentQuantity" <= "stock"."minimumStockLevel")',
-        'lowStockItems',
+        'COUNT(*) FILTER (WHERE "stock"."currentQuantity" <= 0)',
+        'zeroStockItems',
       )
       .getRawOne(),
 
     this.stockMovementRepository
       .createQueryBuilder('movement')
-      .where('"movement"."createdAt" BETWEEN :start AND :end', { start, end })
+      .where('"movement"."isHidden" = false')
+      .andWhere('"movement"."createdAt" BETWEEN :start AND :end', { start, end })
       .select('COUNT(*)', 'movementEntries')
       .addSelect(
-        `COALESCE(SUM(CASE WHEN "movement"."movementType" = 'INWARD' THEN "movement"."quantity" ELSE 0 END), 0)`,
+        `COALESCE(SUM(CASE WHEN "movement"."movementType" IN ('RECEIVE', 'ADJUST_IN', 'TRANSFER_IN') THEN "movement"."quantity" ELSE 0 END), 0)`,
         'inwardQuantity',
       )
       .addSelect(
-        `COALESCE(SUM(CASE WHEN "movement"."movementType" = 'OUTWARD' THEN "movement"."quantity" ELSE 0 END), 0)`,
+        `COALESCE(SUM(CASE WHEN "movement"."movementType" IN ('ISSUE', 'ADJUST_OUT', 'TRANSFER_OUT') THEN "movement"."quantity" ELSE 0 END), 0)`,
         'outwardQuantity',
       )
-      .addSelect(
-        `COALESCE(SUM(CASE WHEN "movement"."movementType" = 'TRANSFER' THEN "movement"."quantity" ELSE 0 END), 0)`,
-        'transferQuantity',
-      )
+      .addSelect('COALESCE(SUM("movement"."totalAmount"), 0)', 'movementAmount')
       .getRawOne(),
 
     this.consumptionRepository
       .createQueryBuilder('consumption')
-      .where('"consumption"."createdAt" BETWEEN :start AND :end', { start, end })
+      .where('"consumption"."isHidden" = false')
+      .andWhere('"consumption"."createdAt" BETWEEN :start AND :end', { start, end })
       .select('COUNT(*)', 'consumptionEntries')
       .addSelect('COALESCE(SUM("consumption"."quantity"), 0)', 'consumedQuantity')
       .addSelect('COALESCE(SUM("consumption"."totalAmount"), 0)', 'consumptionAmount')
@@ -80,11 +79,11 @@ export class StockAnalyticsBuilder {
     this.stockItemRepository
       .createQueryBuilder('stock')
       .where('"stock"."isHidden" = false')
-      .select('COALESCE("stock"."branch", \'Unassigned Branch\')', 'branchName')
+      .select('COALESCE("stock"."branchName", \'Unassigned Branch\')', 'branchName')
       .addSelect('COUNT(*)', 'items')
       .addSelect('COALESCE(SUM("stock"."currentQuantity"), 0)', 'currentQuantity')
       .addSelect('COALESCE(SUM("stock"."stockValue"), 0)', 'stockValue')
-      .groupBy('"stock"."branch"')
+      .groupBy('"stock"."branchName"')
       .orderBy('stockValue', 'DESC')
       .limit(50)
       .getRawMany(),
@@ -92,12 +91,12 @@ export class StockAnalyticsBuilder {
     this.stockItemRepository
       .createQueryBuilder('stock')
       .where('"stock"."isHidden" = false')
-      .andWhere('"stock"."currentQuantity" <= "stock"."minimumStockLevel"')
+      .andWhere('"stock"."currentQuantity" <= 0')
       .select('"stock"."materialName"', 'materialName')
       .addSelect('"stock"."category"', 'category')
-      .addSelect('"stock"."branch"', 'branch')
+      .addSelect('"stock"."branchName"', 'branchName')
       .addSelect('"stock"."currentQuantity"', 'currentQuantity')
-      .addSelect('"stock"."minimumStockLevel"', 'minimumStockLevel')
+      .addSelect('"stock"."stockValue"', 'stockValue')
       .orderBy('"stock"."currentQuantity"', 'ASC')
       .limit(50)
       .getRawMany(),
@@ -111,13 +110,11 @@ export class StockAnalyticsBuilder {
       currentQuantity: Number(stockSummary?.currentQuantity || 0),
       reservedQuantity: Number(stockSummary?.reservedQuantity || 0),
       stockValue: Number(stockSummary?.stockValue || 0),
-      lowStockItems: Number(stockSummary?.lowStockItems || 0),
-
+      zeroStockItems: Number(stockSummary?.zeroStockItems || 0),
       movementEntries: Number(movementSummary?.movementEntries || 0),
       inwardQuantity: Number(movementSummary?.inwardQuantity || 0),
       outwardQuantity: Number(movementSummary?.outwardQuantity || 0),
-      transferQuantity: Number(movementSummary?.transferQuantity || 0),
-
+      movementAmount: Number(movementSummary?.movementAmount || 0),
       consumptionEntries: Number(consumptionSummary?.consumptionEntries || 0),
       consumedQuantity: Number(consumptionSummary?.consumedQuantity || 0),
       consumptionAmount: Number(consumptionSummary?.consumptionAmount || 0),
@@ -137,16 +134,16 @@ export class StockAnalyticsBuilder {
         data: [
           { label: 'Inward', value: Number(movementSummary?.inwardQuantity || 0) },
           { label: 'Outward', value: Number(movementSummary?.outwardQuantity || 0) },
-          { label: 'Transfer', value: Number(movementSummary?.transferQuantity || 0) },
+          { label: 'Consumed', value: Number(consumptionSummary?.consumedQuantity || 0) },
         ],
       },
     },
     rows: lowStockRows.map((row) => ({
       materialName: row.materialName,
       category: row.category,
-      branch: row.branch,
+      branchName: row.branchName,
       currentQuantity: Number(row.currentQuantity || 0),
-      minimumStockLevel: Number(row.minimumStockLevel || 0),
+      stockValue: Number(row.stockValue || 0),
     })),
     branchRows: branchRows.map((row) => ({
       branchName: row.branchName,
