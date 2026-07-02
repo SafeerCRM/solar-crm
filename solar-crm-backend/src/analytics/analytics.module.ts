@@ -30,6 +30,13 @@ import { CustomerComplaintActivity } from '../customer-portal/customer-complaint
 
 import { DealerComplaint } from '../dealer/dealer-complaint.entity';
 
+import { ProjectPurchaseOrder } from '../project/project-purchase-order.entity';
+import { ProjectProformaInvoice } from '../project/project-proforma-invoice.entity';
+import { ProjectFinalInvoice } from '../project/project-final-invoice.entity';
+import { ProjectDealerOrder } from '../project/project-dealer-order.entity';
+import { ProjectDealerPayment } from '../project/project-dealer-payment.entity';
+import { ProjectConsumption } from '../project/project-consumption.entity';
+
 
 @Module({
   imports: [
@@ -47,6 +54,13 @@ import { DealerComplaint } from '../dealer/dealer-complaint.entity';
       ProjectPaymentInstallment,
       ProjectAccountExpense,
       ProjectPartyLedger,
+
+      ProjectPurchaseOrder,
+ProjectProformaInvoice,
+ProjectFinalInvoice,
+ProjectDealerOrder,
+ProjectDealerPayment,
+ProjectConsumption,
 
       ProjectContractor,
       ProjectContractorAssignment,

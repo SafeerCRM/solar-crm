@@ -67,6 +67,14 @@ import { LeadAnalyticsBuilder } from './builders/lead.analytics';
 import { MeetingAnalyticsBuilder } from './builders/meeting.analytics';
 import { ProjectAnalyticsBuilder } from './builders/project.analytics';
 import { CustomerAnalyticsBuilder } from './builders/customer.analytics';
+import { FinanceAnalyticsBuilder } from './builders/finance.analytics';
+
+import { ProjectPurchaseOrder } from '../project/project-purchase-order.entity';
+import { ProjectProformaInvoice } from '../project/project-proforma-invoice.entity';
+import { ProjectFinalInvoice } from '../project/project-final-invoice.entity';
+import { ProjectDealerOrder } from '../project/project-dealer-order.entity';
+import { ProjectDealerPayment } from '../project/project-dealer-payment.entity';
+import { ProjectConsumption } from '../project/project-consumption.entity';
 
 type AnalyticsQuery = {
   month?: string;
@@ -115,6 +123,24 @@ export class AnalyticsService {
 
     @InjectRepository(ProjectPartyLedger)
     private readonly ledgerRepository: Repository<ProjectPartyLedger>,
+
+    @InjectRepository(ProjectPurchaseOrder)
+private readonly purchaseOrderRepository: Repository<ProjectPurchaseOrder>,
+
+@InjectRepository(ProjectProformaInvoice)
+private readonly proformaRepository: Repository<ProjectProformaInvoice>,
+
+@InjectRepository(ProjectFinalInvoice)
+private readonly finalInvoiceRepository: Repository<ProjectFinalInvoice>,
+
+@InjectRepository(ProjectDealerOrder)
+private readonly dealerOrderRepository: Repository<ProjectDealerOrder>,
+
+@InjectRepository(ProjectDealerPayment)
+private readonly dealerPaymentRepository: Repository<ProjectDealerPayment>,
+
+@InjectRepository(ProjectConsumption)
+private readonly consumptionRepository: Repository<ProjectConsumption>,
 
     @InjectRepository(ProjectContractor)
     private readonly contractorRepository: Repository<ProjectContractor>,
@@ -553,6 +579,13 @@ export class AnalyticsService {
       return this.getProjectsReport(query, user);
     }
 
+    if (
+  department === 'FINANCE' ||
+  department === 'ACCOUNTS'
+) {
+  return this.getFinanceReport(query, user);
+}
+
     if (department === 'CONTRACTORS') {
       return this.getContractorsReport(query, user);
     }
@@ -618,6 +651,24 @@ export class AnalyticsService {
   return new ProjectAnalyticsBuilder(
     this.userRepository,
     this.projectRepository,
+  ).build(query, user);
+}
+
+private async getFinanceReport(
+  query: AnalyticsQuery,
+  user: any,
+) {
+  return new FinanceAnalyticsBuilder(
+    this.projectRepository,
+    this.ledgerRepository,
+    this.paymentRepository,
+    this.expenseRepository,
+    this.purchaseOrderRepository,
+    this.proformaRepository,
+    this.finalInvoiceRepository,
+    this.dealerOrderRepository,
+    this.dealerPaymentRepository,
+    this.consumptionRepository,
   ).build(query, user);
 }
 
