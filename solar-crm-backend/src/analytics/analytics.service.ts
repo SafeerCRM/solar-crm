@@ -76,6 +76,14 @@ import { ProjectDealerOrder } from '../project/project-dealer-order.entity';
 import { ProjectDealerPayment } from '../project/project-dealer-payment.entity';
 import { ProjectConsumption } from '../project/project-consumption.entity';
 
+import { StockAnalyticsBuilder } from './builders/stock.analytics';
+import { TradingAnalyticsBuilder } from './builders/trading.analytics';
+
+import { ProjectStockItem } from '../project/project-stock-item.entity';
+import { ProjectStockMovement } from '../project/project-stock-movement.entity';
+import { ProjectTradingMeeting } from '../project/project-trading-meeting.entity';
+import { Dealer } from '../dealer/dealer.entity';
+
 type AnalyticsQuery = {
   month?: string;
   fromDate?: string;
@@ -168,6 +176,18 @@ private readonly consumptionRepository: Repository<ProjectConsumption>,
 
     @InjectRepository(DealerComplaint)
     private readonly dealerComplaintRepository: Repository<DealerComplaint>,
+
+    @InjectRepository(ProjectStockItem)
+private readonly stockItemRepository: Repository<ProjectStockItem>,
+
+@InjectRepository(ProjectStockMovement)
+private readonly stockMovementRepository: Repository<ProjectStockMovement>,
+
+@InjectRepository(ProjectTradingMeeting)
+private readonly tradingMeetingRepository: Repository<ProjectTradingMeeting>,
+
+@InjectRepository(Dealer)
+private readonly dealerRepository: Repository<Dealer>,
   ) {}
 
   private getUserRoles(user?: any): string[] {
@@ -586,6 +606,14 @@ private readonly consumptionRepository: Repository<ProjectConsumption>,
   return this.getFinanceReport(query, user);
 }
 
+if (department === 'STOCK') {
+  return this.getStockReport(query, user);
+}
+
+if (department === 'TRADING') {
+  return this.getTradingReport(query, user);
+}
+
     if (department === 'CONTRACTORS') {
       return this.getContractorsReport(query, user);
     }
@@ -669,6 +697,32 @@ private async getFinanceReport(
     this.dealerOrderRepository,
     this.dealerPaymentRepository,
     this.consumptionRepository,
+  ).build(query, user);
+}
+
+private async getStockReport(
+  query: AnalyticsQuery,
+  user: any,
+) {
+  return new StockAnalyticsBuilder(
+    this.stockItemRepository,
+    this.stockMovementRepository,
+    this.consumptionRepository,
+  ).build(query, user);
+}
+
+private async getTradingReport(
+  query: AnalyticsQuery,
+  user: any,
+) {
+  return new TradingAnalyticsBuilder(
+    this.dealerOrderRepository,
+    this.dealerPaymentRepository,
+    this.purchaseOrderRepository,
+    this.proformaRepository,
+    this.finalInvoiceRepository,
+    this.tradingMeetingRepository,
+    this.dealerRepository,
   ).build(query, user);
 }
 

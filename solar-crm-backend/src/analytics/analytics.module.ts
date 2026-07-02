@@ -37,6 +37,11 @@ import { ProjectDealerOrder } from '../project/project-dealer-order.entity';
 import { ProjectDealerPayment } from '../project/project-dealer-payment.entity';
 import { ProjectConsumption } from '../project/project-consumption.entity';
 
+import { ProjectStockItem } from '../project/project-stock-item.entity';
+import { ProjectStockMovement } from '../project/project-stock-movement.entity';
+import { ProjectTradingMeeting } from '../project/project-trading-meeting.entity';
+import { Dealer } from '../dealer/dealer.entity';
+
 
 @Module({
   imports: [
@@ -73,6 +78,11 @@ ProjectConsumption,
       CustomerComplaintActivity,
 
       DealerComplaint,
+
+      ProjectStockItem,
+ProjectStockMovement,
+ProjectTradingMeeting,
+Dealer,
     ]),
   ],
   controllers: [AnalyticsController],
