@@ -31,9 +31,9 @@ const sections = [
   },
   {
     title: 'Payroll',
-    href: '#',
+    href: '/staff/payroll',
     description: 'Attendance-based salary, deductions, incentives and owner override.',
-    disabled: true,
+    disabled: false,
   },
   {
     title: 'Incentives',
