@@ -29,13 +29,16 @@ const executionActivities = dashboard?.executionActivities || [];
 
 const activityFeed = [
   ...notifications.map((item: any) => ({
-    id: `notification-${item.id}`,
-    type: '🔔',
-    title: item.title || 'Notification',
-    text: item.message || '',
-    date: item.createdAt,
-    link: '/customer-portal/notifications',
-  })),
+  id: `notification-${item.id}`,
+  type: item.relatedEntityType === 'AFTER_SALES_REQUEST' ? '🧰' : '🔔',
+  title: item.title || 'Notification',
+  text: item.message || '',
+  date: item.createdAt,
+  link:
+    item.relatedEntityType === 'AFTER_SALES_REQUEST' && item.relatedEntityId
+      ? `/customer-portal/after-sales-services?requestId=${item.relatedEntityId}`
+      : '/customer-portal/notifications',
+})),
 
   ...documents.map((item: any) => ({
     id: `document-${item.id}`,

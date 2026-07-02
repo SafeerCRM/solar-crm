@@ -95,6 +95,20 @@ const remarksRef = useRef<HTMLTextAreaElement>(null);
       setDashboard(dashboardData);
       setServices(Array.isArray(servicesData) ? servicesData : []);
       setRequests(Array.isArray(requestsData?.data) ? requestsData.data : []);
+      const urlParams = new URLSearchParams(window.location.search);
+const requestIdFromUrl = urlParams.get('requestId');
+
+if (requestIdFromUrl && Array.isArray(requestsData?.data)) {
+  const matchedRequest = requestsData.data.find(
+    (item: any) => String(item.id) === String(requestIdFromUrl),
+  );
+
+  if (matchedRequest) {
+    setTimeout(() => {
+      loadRequestTimeline(matchedRequest);
+    }, 300);
+  }
+}
       setRequestTotalPages(Number(requestsData?.totalPages || 1));
     } catch (error) {
       console.error(error);
