@@ -41,12 +41,15 @@ const sections = [
     description: 'Role-wise incentive eligibility and slabs.',
     disabled: false,
   },
+
   {
-    title: 'Penalties',
-    href: '#',
-    description: 'Late, absence, deadline miss and custom penalty management.',
-    disabled: true,
-  },
+  title: 'Performance Management',
+  href: '/staff/performance',
+  description:
+    'Create role-wise performance templates, KPIs, targets, weightages and evaluation rules.',
+  disabled: false,
+},
+
   {
     title: 'Recruitment',
     href: '/staff/recruitment',
