@@ -439,9 +439,9 @@ loadRequests();
                 </div>
               </div>
 
-              <div className="grid gap-5 p-5 lg:grid-cols-3">
-                <div className="lg:col-span-2">
-                  <div className="grid gap-3 md:grid-cols-4">
+              <div className="grid gap-5 p-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+                <div className="min-w-0 space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     <InfoCard
                       label="Service Price"
                       value={
@@ -493,7 +493,7 @@ loadRequests();
                   )}
                 </div>
 
-                <div className="mt-4 rounded-3xl bg-white p-5 shadow-inner">
+                <div className="rounded-[1.5rem] border bg-white p-4 shadow-sm xl:sticky xl:top-4">
   <div className="flex flex-wrap items-center justify-between gap-3">
     <div>
       <p className="text-lg font-black text-gray-900">
@@ -639,10 +639,10 @@ loadRequests();
   </div>
 </div>
 
-                <div className="rounded-[2rem] bg-gray-50 p-4">
-                  <h4 className="font-black text-gray-900">Update Request</h4>
+                <div className="rounded-[1.5rem] border bg-white p-4 shadow-sm">
+  <h4 className="font-black text-gray-900">Update Request</h4>
 
-                  <div className="mt-3 space-y-3">
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
                     <select
                       value={editMap[item.id]?.status || 'NEW'}
                       onChange={(e) =>
@@ -817,7 +817,7 @@ loadRequests();
                           },
                         }))
                       }
-                      className="w-full rounded-2xl border p-3"
+                      className="w-full rounded-2xl border p-3 md:col-span-1"
                       rows={3}
                     />
 
@@ -833,14 +833,14 @@ loadRequests();
                           },
                         }))
                       }
-                      className="w-full rounded-2xl border p-3"
+                      className="w-full rounded-2xl border p-3 md:col-span-1"
                       rows={3}
                     />
 
                     <button
                       onClick={() => updateRequest(item)}
                       disabled={savingId === item.id}
-                      className="w-full rounded-2xl bg-emerald-600 py-3 text-sm font-black text-white disabled:opacity-50"
+                      className="w-full rounded-2xl bg-emerald-600 py-3 text-sm font-black text-white disabled:opacity-50 md:col-span-2"
                     >
                       {savingId === item.id ? 'Saving...' : 'Save Update'}
                     </button>
