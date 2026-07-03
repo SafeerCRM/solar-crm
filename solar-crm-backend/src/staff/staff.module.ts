@@ -14,6 +14,9 @@ import { StaffPayroll } from './staff-payroll.entity';
 import { IncentiveRule } from './incentive-rule.entity';
 import { RecruitmentCandidate } from './recruitment-candidate.entity';
 import { RecruitmentCandidateDocument } from './recruitment-candidate-document.entity';
+import { StaffPerformance } from './staff-performance.entity';
+import { PerformanceTemplate } from './performance-template.entity';
+import { PerformanceTemplateMetric } from './performance-template-metric.entity';
 
 @Module({
   imports: [
@@ -29,6 +32,9 @@ import { RecruitmentCandidateDocument } from './recruitment-candidate-document.e
       IncentiveRule,
       RecruitmentCandidate,
       RecruitmentCandidateDocument,
+      StaffPerformance,
+      PerformanceTemplate,
+PerformanceTemplateMetric,
     ]),
   ],
   controllers: [StaffController, StaffSelfController],

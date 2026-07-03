@@ -16,6 +16,8 @@ import { StaffPayroll } from './staff-payroll.entity';
 import { IncentiveRule } from './incentive-rule.entity';
 import { RecruitmentCandidate } from './recruitment-candidate.entity';
 import { RecruitmentCandidateDocument } from './recruitment-candidate-document.entity';
+import { PerformanceTemplate } from './performance-template.entity';
+import { PerformanceTemplateMetric } from './performance-template-metric.entity';
 
 @Injectable()
 export class StaffService {
@@ -52,6 +54,12 @@ private readonly recruitmentRepo: Repository<RecruitmentCandidate>,
 
 @InjectRepository(RecruitmentCandidateDocument)
 private readonly recruitmentDocumentRepo: Repository<RecruitmentCandidateDocument>,
+
+@InjectRepository(PerformanceTemplate)
+private readonly performanceTemplateRepo: Repository<PerformanceTemplate>,
+
+@InjectRepository(PerformanceTemplateMetric)
+private readonly performanceTemplateMetricRepo: Repository<PerformanceTemplateMetric>,
   ) {}
 
   async findAll(query: any) {
@@ -1697,5 +1705,162 @@ async hideRecruitmentCandidateDocument(id: number) {
   document.isHidden = true;
 
   return this.recruitmentDocumentRepo.save(document);
+}
+
+async createPerformanceTemplate(body: any, user: any) {
+  if (!String(body.templateName || '').trim()) {
+    throw new BadRequestException('Template name is required');
+  }
+
+  if (!String(body.applicableRole || '').trim()) {
+    throw new BadRequestException('Applicable role is required');
+  }
+
+  const template = this.performanceTemplateRepo.create({
+    templateName: String(body.templateName).trim(),
+    applicableRole: body.applicableRole,
+    department: body.department || '',
+    branchName: body.branchName || '',
+    isDefault: body.isDefault !== false,
+    description: body.description || '',
+    isActive: body.isActive !== false,
+    isHidden: false,
+    createdBy: user?.id || null,
+    createdByName: user?.name || '',
+  });
+
+  const saved = await this.performanceTemplateRepo.save(template);
+
+  const metrics = Array.isArray(body.metrics) ? body.metrics : [];
+
+  for (const metric of metrics) {
+    if (!String(metric.metricName || '').trim()) continue;
+
+    const metricRow = this.performanceTemplateMetricRepo.create({
+      templateId: saved.id,
+      metricName: String(metric.metricName).trim(),
+      targetValue: Number(metric.targetValue || 0),
+      metricType: metric.metricType || 'NUMBER',
+      metricUnit: metric.metricUnit || 'COUNT',
+      mandatory: metric.mandatory === true,
+      weightage: Number(metric.weightage || 1),
+    });
+
+    await this.performanceTemplateMetricRepo.save(metricRow);
+  }
+
+  return saved;
+}
+
+async listPerformanceTemplates(query: any) {
+  const page = Math.max(Number(query.page || 1), 1);
+  const limit = Math.min(Math.max(Number(query.limit || 20), 1), 100);
+  const showHidden = query.showHidden === 'true';
+
+  const qb = this.performanceTemplateRepo
+    .createQueryBuilder('template')
+    .where('template.isHidden = :showHidden', { showHidden });
+
+  if (query.applicableRole) {
+    qb.andWhere('template.applicableRole = :applicableRole', {
+      applicableRole: query.applicableRole,
+    });
+  }
+
+  if (query.search) {
+    qb.andWhere(
+      '(template.templateName ILIKE :search OR template.description ILIKE :search)',
+      { search: `%${query.search}%` },
+    );
+  }
+
+  const [data, total] = await qb
+    .orderBy('template.createdAt', 'DESC')
+    .skip((page - 1) * limit)
+    .take(limit)
+    .getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
+}
+
+async getPerformanceTemplateMetrics(templateId: number) {
+  return this.performanceTemplateMetricRepo.find({
+    where: { templateId },
+    order: { id: 'ASC' },
+  });
+}
+
+async updatePerformanceTemplate(id: number, body: any, user: any) {
+  const template = await this.performanceTemplateRepo.findOne({ where: { id } });
+
+  if (!template) {
+    throw new NotFoundException('Performance template not found');
+  }
+
+  Object.assign(template, {
+    templateName: body.templateName ?? template.templateName,
+    applicableRole: body.applicableRole ?? template.applicableRole,
+    department: body.department ?? template.department,
+    branchName: body.branchName ?? template.branchName,
+    isDefault: body.isDefault === undefined ? template.isDefault : body.isDefault,
+    description: body.description ?? template.description,
+    isActive: body.isActive === undefined ? template.isActive : body.isActive,
+  });
+
+  const saved = await this.performanceTemplateRepo.save(template);
+
+  if (Array.isArray(body.metrics)) {
+    await this.performanceTemplateMetricRepo.delete({ templateId: id });
+
+    for (const metric of body.metrics) {
+      if (!String(metric.metricName || '').trim()) continue;
+
+      await this.performanceTemplateMetricRepo.save(
+        this.performanceTemplateMetricRepo.create({
+          templateId: id,
+          metricName: String(metric.metricName).trim(),
+          targetValue: Number(metric.targetValue || 0),
+          metricType: metric.metricType || 'NUMBER',
+          metricUnit: metric.metricUnit || 'COUNT',
+          mandatory: metric.mandatory === true,
+          weightage: Number(metric.weightage || 1),
+        }),
+      );
+    }
+  }
+
+  return saved;
+}
+
+async hidePerformanceTemplate(id: number) {
+  const template = await this.performanceTemplateRepo.findOne({ where: { id } });
+
+  if (!template) {
+    throw new NotFoundException('Performance template not found');
+  }
+
+  template.isHidden = true;
+  template.isActive = false;
+
+  return this.performanceTemplateRepo.save(template);
+}
+
+async restorePerformanceTemplate(id: number) {
+  const template = await this.performanceTemplateRepo.findOne({ where: { id } });
+
+  if (!template) {
+    throw new NotFoundException('Performance template not found');
+  }
+
+  template.isHidden = false;
+  template.isActive = true;
+
+  return this.performanceTemplateRepo.save(template);
 }
 }

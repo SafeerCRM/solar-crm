@@ -411,4 +411,41 @@ addRecruitmentCandidateDocument(
 hideRecruitmentCandidateDocument(@Param('id') id: string) {
   return this.staffService.hideRecruitmentCandidateDocument(Number(id));
 }
+
+@Get('performance-templates')
+listPerformanceTemplates(@Query() query: any) {
+  return this.staffService.listPerformanceTemplates(query);
+}
+
+@Post('performance-template')
+createPerformanceTemplate(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffService.createPerformanceTemplate(body, user);
+}
+
+@Get('performance-template/:id/metrics')
+getPerformanceTemplateMetrics(@Param('id') id: string) {
+  return this.staffService.getPerformanceTemplateMetrics(Number(id));
+}
+
+@Patch('performance-template/:id')
+updatePerformanceTemplate(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffService.updatePerformanceTemplate(Number(id), body, user);
+}
+
+@Patch('performance-template/:id/hide')
+hidePerformanceTemplate(@Param('id') id: string) {
+  return this.staffService.hidePerformanceTemplate(Number(id));
+}
+
+@Patch('performance-template/:id/restore')
+restorePerformanceTemplate(@Param('id') id: string) {
+  return this.staffService.restorePerformanceTemplate(Number(id));
+}
 }
