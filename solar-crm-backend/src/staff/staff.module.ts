@@ -13,6 +13,7 @@ import { EmployeePolicy } from './employee-policy.entity';
 import { StaffPayroll } from './staff-payroll.entity';
 import { IncentiveRule } from './incentive-rule.entity';
 import { RecruitmentCandidate } from './recruitment-candidate.entity';
+import { RecruitmentCandidateDocument } from './recruitment-candidate-document.entity';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { RecruitmentCandidate } from './recruitment-candidate.entity';
       StaffPayroll,
       IncentiveRule,
       RecruitmentCandidate,
+      RecruitmentCandidateDocument,
     ]),
   ],
   controllers: [StaffController, StaffSelfController],

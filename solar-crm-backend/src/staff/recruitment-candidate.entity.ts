@@ -78,6 +78,9 @@ export class RecruitmentCandidate {
   interviewDate: Date;
 
   @Column({ nullable: true })
+interviewTime: string;
+
+  @Column({ nullable: true })
   interviewerName: string;
 
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })

@@ -15,6 +15,7 @@ import { HrPolicy, HrPolicyType } from './hr-policy.entity';
 import { StaffPayroll } from './staff-payroll.entity';
 import { IncentiveRule } from './incentive-rule.entity';
 import { RecruitmentCandidate } from './recruitment-candidate.entity';
+import { RecruitmentCandidateDocument } from './recruitment-candidate-document.entity';
 
 @Injectable()
 export class StaffService {
@@ -48,6 +49,9 @@ private readonly incentiveRuleRepo: Repository<IncentiveRule>,
 
 @InjectRepository(RecruitmentCandidate)
 private readonly recruitmentRepo: Repository<RecruitmentCandidate>,
+
+@InjectRepository(RecruitmentCandidateDocument)
+private readonly recruitmentDocumentRepo: Repository<RecruitmentCandidateDocument>,
   ) {}
 
   async findAll(query: any) {
@@ -1582,6 +1586,7 @@ async updateRecruitmentCandidate(id: number, body: any, user: any) {
     documentUrl: body.documentUrl ?? item.documentUrl,
     stage: body.stage ?? item.stage,
     interviewDate: body.interviewDate ?? item.interviewDate,
+    interviewTime: body.interviewTime ?? item.interviewTime,
     interviewerName: body.interviewerName ?? item.interviewerName,
     interviewRating:
       body.interviewRating === undefined
@@ -1635,5 +1640,62 @@ async restoreRecruitmentCandidate(id: number, body: any, user: any) {
   item.restoreReason = body?.reason || '';
 
   return this.recruitmentRepo.save(item);
+}
+
+async addRecruitmentCandidateDocument(body: any, user: any) {
+  if (!body.candidateId || !String(body.documentLabel || '').trim()) {
+    throw new BadRequestException('Candidate and document label are required');
+  }
+
+  if (!body.fileUrl) {
+    throw new BadRequestException('Document file is required');
+  }
+
+  const candidate = await this.recruitmentRepo.findOne({
+    where: { id: Number(body.candidateId), isHidden: false },
+  });
+
+  if (!candidate) {
+    throw new NotFoundException('Candidate not found');
+  }
+
+  const document = this.recruitmentDocumentRepo.create({
+    candidateId: Number(body.candidateId),
+    documentLabel: String(body.documentLabel).trim(),
+    fileName: body.fileName || '',
+    fileUrl: body.fileUrl,
+    uploadedBy: user?.id || null,
+    uploadedByName: user?.name || '',
+    remarks: body.remarks || '',
+    isHidden: false,
+  });
+
+  return this.recruitmentDocumentRepo.save(document);
+}
+
+async listRecruitmentCandidateDocuments(candidateId: number) {
+  return this.recruitmentDocumentRepo.find({
+    where: {
+      candidateId,
+      isHidden: false,
+    },
+    order: {
+      createdAt: 'DESC',
+    },
+  });
+}
+
+async hideRecruitmentCandidateDocument(id: number) {
+  const document = await this.recruitmentDocumentRepo.findOne({
+    where: { id },
+  });
+
+  if (!document) {
+    throw new NotFoundException('Candidate document not found');
+  }
+
+  document.isHidden = true;
+
+  return this.recruitmentDocumentRepo.save(document);
 }
 }

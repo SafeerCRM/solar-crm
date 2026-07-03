@@ -393,4 +393,22 @@ uploadRecruitmentFile(@UploadedFiles() files: any[]) {
   const file = files?.[0];
   return this.staffService.uploadRecruitmentFile(file);
 }
+
+@Get('recruitment-candidate/:id/documents')
+listRecruitmentCandidateDocuments(@Param('id') id: string) {
+  return this.staffService.listRecruitmentCandidateDocuments(Number(id));
+}
+
+@Post('recruitment-candidate/document')
+addRecruitmentCandidateDocument(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffService.addRecruitmentCandidateDocument(body, user);
+}
+
+@Patch('recruitment-candidate/document/:id/hide')
+hideRecruitmentCandidateDocument(@Param('id') id: string) {
+  return this.staffService.hideRecruitmentCandidateDocument(Number(id));
+}
 }
