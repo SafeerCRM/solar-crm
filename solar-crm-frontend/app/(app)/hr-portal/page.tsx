@@ -37,9 +37,9 @@ const sections = [
   },
   {
     title: 'Incentives',
-    href: '#',
+    href: '/staff/incentives',
     description: 'Role-wise incentive eligibility and slabs.',
-    disabled: true,
+    disabled: false,
   },
   {
     title: 'Penalties',
