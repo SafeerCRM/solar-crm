@@ -49,9 +49,9 @@ const sections = [
   },
   {
     title: 'Recruitment',
-    href: '#',
+    href: '/staff/recruitment',
     description: 'Branch-wise hiring process, candidates and stages.',
-    disabled: true,
+    disabled: false,
   },
 ];
 
