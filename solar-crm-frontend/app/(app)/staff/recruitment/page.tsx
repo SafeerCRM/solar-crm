@@ -3,6 +3,11 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { uploadPreparedFile } from '@/app/utils/fileUpload';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
+import dayjs, { Dayjs } from 'dayjs';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -34,9 +39,9 @@ const emptyForm = {
   noticePeriod: '',
   resumeUrl: '',
   photoUrl: '',
-  documentUrl: '',
   stage: 'APPLIED',
   interviewDate: '',
+  interviewTime: '',
   interviewerName: '',
   interviewRating: '',
   interviewRemarks: '',
@@ -54,7 +59,10 @@ export default function RecruitmentPage() {
 
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [candidateDocuments, setCandidateDocuments] = useState<any[]>([]);
+const [documentLabel, setDocumentLabel] = useState('');
+const [documentRemarks, setDocumentRemarks] = useState('');
+const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [offerFile, setOfferFile] = useState<File | null>(null);
 
   const [search, setSearch] = useState('');
@@ -105,13 +113,17 @@ export default function RecruitmentPage() {
   };
 
   const resetForm = () => {
-    setEditingId(null);
-    setForm(emptyForm);
-    setResumeFile(null);
-    setPhotoFile(null);
-    setDocumentFile(null);
-    setOfferFile(null);
-  };
+  setEditingId(null);
+  setForm(emptyForm);
+  setResumeFile(null);
+  setPhotoFile(null);
+  setOfferFile(null);
+
+  setCandidateDocuments([]);
+  setDocumentLabel('');
+  setDocumentRemarks('');
+  setDocumentFile(null);
+};
 
   const saveCandidate = async () => {
     if (!form.candidateName.trim()) {
@@ -120,13 +132,12 @@ export default function RecruitmentPage() {
     }
 
     try {
-      const [resumeUrl, photoUrl, documentUrl, offerLetterUrl] =
-        await Promise.all([
-          uploadFile(resumeFile),
-          uploadFile(photoFile),
-          uploadFile(documentFile),
-          uploadFile(offerFile),
-        ]);
+      const [resumeUrl, photoUrl, offerLetterUrl] =
+  await Promise.all([
+    uploadFile(resumeFile),
+    uploadFile(photoFile),
+    uploadFile(offerFile),
+  ]);
 
       const payload = {
         ...form,
@@ -135,7 +146,6 @@ export default function RecruitmentPage() {
         offeredSalary: Number(form.offeredSalary || 0),
         resumeUrl: resumeUrl || form.resumeUrl,
         photoUrl: photoUrl || form.photoUrl,
-        documentUrl: documentUrl || form.documentUrl,
         offerLetterUrl: offerLetterUrl || form.offerLetterUrl,
       };
 
@@ -169,13 +179,15 @@ export default function RecruitmentPage() {
       expectedSalary: String(item.expectedSalary || ''),
       interviewRating: String(item.interviewRating || ''),
       offeredSalary: String(item.offeredSalary || ''),
-      interviewDate: item.interviewDate ? String(item.interviewDate).slice(0, 16) : '',
+      interviewDate: item.interviewDate ? String(item.interviewDate).slice(0, 10) : '',
+interviewTime: item.interviewTime || '',
       joiningDate: item.joiningDate ? String(item.joiningDate).slice(0, 10) : '',
     });
     setResumeFile(null);
     setPhotoFile(null);
     setDocumentFile(null);
     setOfferFile(null);
+    fetchCandidateDocuments(item.id);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -195,6 +207,86 @@ export default function RecruitmentPage() {
 
     fetchItems();
   };
+
+  const fetchCandidateDocuments = async (candidateId: number) => {
+  const res = await axios.get(
+    `${API_BASE_URL}/staff/recruitment-candidate/${candidateId}/documents`,
+    { headers: headers() },
+  );
+
+  setCandidateDocuments(res.data || []);
+};
+
+const addCandidateDocument = async () => {
+  if (!editingId) {
+    alert('Please save candidate first, then add documents');
+    return;
+  }
+
+  if (!documentLabel.trim() || !documentFile) {
+    alert('Document label and file are required');
+    return;
+  }
+
+  const fileUrl = await uploadFile(documentFile);
+
+  await axios.post(
+    `${API_BASE_URL}/staff/recruitment-candidate/document`,
+    {
+      candidateId: editingId,
+      documentLabel,
+      fileName: documentFile.name,
+      fileUrl,
+      remarks: documentRemarks,
+    },
+    { headers: headers() },
+  );
+
+  alert('Document added');
+
+  setDocumentLabel('');
+  setDocumentRemarks('');
+  setDocumentFile(null);
+
+  fetchCandidateDocuments(editingId);
+};
+
+const hideCandidateDocument = async (documentId: number) => {
+  await axios.patch(
+    `${API_BASE_URL}/staff/recruitment-candidate/document/${documentId}/hide`,
+    {},
+    { headers: headers() },
+  );
+
+  if (editingId) {
+    fetchCandidateDocuments(editingId);
+  }
+};
+
+  const interviewDateValue = form.interviewDate
+  ? dayjs(form.interviewDate)
+  : null;
+
+const interviewTimeValue =
+  form.interviewDate && form.interviewTime
+    ? dayjs(`${form.interviewDate}T${form.interviewTime}`)
+    : null;
+
+const updateInterviewDatePart = (newDate: Dayjs | null) => {
+  setForm({
+    ...form,
+    interviewDate: newDate ? newDate.format('YYYY-MM-DD') : '',
+  });
+};
+
+const updateInterviewTimePart = (newTime: Dayjs | null) => {
+  if (!newTime) return;
+
+  setForm({
+    ...form,
+    interviewTime: newTime.format('HH:mm'),
+  });
+};
 
   return (
     <div className="mx-auto max-w-7xl space-y-5 px-3 pb-8">
@@ -254,12 +346,50 @@ export default function RecruitmentPage() {
           <input placeholder="Experience" value={form.experience} onChange={(e) => setForm({ ...form, experience: e.target.value })} className="rounded-xl border p-3" />
 
           <input placeholder="Notice Period" value={form.noticePeriod} onChange={(e) => setForm({ ...form, noticePeriod: e.target.value })} className="rounded-xl border p-3" />
-          <input type="datetime-local" value={form.interviewDate} onChange={(e) => setForm({ ...form, interviewDate: e.target.value })} className="rounded-xl border p-3" />
+          <LocalizationProvider dateAdapter={AdapterDayjs}>
+  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+    <DatePicker
+      label="Interview Date"
+      value={interviewDateValue}
+      onChange={updateInterviewDatePart}
+      slotProps={{
+        textField: {
+          fullWidth: true,
+        },
+      }}
+    />
+
+    <MobileTimePicker
+      label="Interview Time"
+      value={interviewTimeValue}
+      onChange={updateInterviewTimePart}
+      ampm
+      ampmInClock
+      slotProps={{
+        textField: {
+          fullWidth: true,
+        },
+      }}
+    />
+  </div>
+</LocalizationProvider>
           <input placeholder="Interviewer Name" value={form.interviewerName} onChange={(e) => setForm({ ...form, interviewerName: e.target.value })} className="rounded-xl border p-3" />
 
           <input type="number" placeholder="Interview Rating" value={form.interviewRating} onChange={(e) => setForm({ ...form, interviewRating: e.target.value })} className="rounded-xl border p-3" />
           <input type="number" placeholder="Offered Salary" value={form.offeredSalary} onChange={(e) => setForm({ ...form, offeredSalary: e.target.value })} className="rounded-xl border p-3" />
-          <input type="date" value={form.joiningDate} onChange={(e) => setForm({ ...form, joiningDate: e.target.value })} className="rounded-xl border p-3" />
+          <div>
+  <p className="mb-1 text-xs font-semibold text-gray-600">
+    Joining Date
+  </p>
+  <input
+    type="date"
+    value={form.joiningDate}
+    onChange={(e) =>
+      setForm({ ...form, joiningDate: e.target.value })
+    }
+    className="w-full rounded-xl border p-3"
+  />
+</div>
 
           <label className="rounded-xl border p-3 text-sm">
             Resume
@@ -269,14 +399,96 @@ export default function RecruitmentPage() {
             Photo
             <input type="file" accept="image/*" onChange={(e) => setPhotoFile(e.target.files?.[0] || null)} className="mt-2 w-full" />
           </label>
-          <label className="rounded-xl border p-3 text-sm">
-            Document
-            <input type="file" accept="image/*,application/pdf" onChange={(e) => setDocumentFile(e.target.files?.[0] || null)} className="mt-2 w-full" />
-          </label>
           <label className="rounded-xl border p-3 text-sm md:col-span-3">
             Offer Letter
             <input type="file" accept="image/*,application/pdf" onChange={(e) => setOfferFile(e.target.files?.[0] || null)} className="mt-2 w-full" />
           </label>
+
+          <div className="md:col-span-3 rounded-xl border p-4">
+  <h3 className="font-bold text-gray-800">Additional Documents</h3>
+  <p className="mt-1 text-sm text-gray-500">
+    Add documents like Aadhaar, PAN, Experience Letter, Salary Slip, etc.
+  </p>
+
+  {!editingId && (
+    <p className="mt-2 rounded-xl bg-yellow-50 p-3 text-sm text-yellow-700">
+      Save candidate first to upload additional documents.
+    </p>
+  )}
+
+  {editingId && (
+    <>
+      <div className="mt-4 grid gap-3 md:grid-cols-3">
+        <input
+          placeholder="Document Label e.g. Aadhaar / PAN"
+          value={documentLabel}
+          onChange={(e) => setDocumentLabel(e.target.value)}
+          className="rounded-xl border p-3"
+        />
+
+        <input
+          type="file"
+          accept="image/*,application/pdf"
+          onChange={(e) => setDocumentFile(e.target.files?.[0] || null)}
+          className="rounded-xl border p-3"
+        />
+
+        <input
+          placeholder="Remarks"
+          value={documentRemarks}
+          onChange={(e) => setDocumentRemarks(e.target.value)}
+          className="rounded-xl border p-3"
+        />
+      </div>
+
+      <button
+        type="button"
+        onClick={addCandidateDocument}
+        className="mt-3 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+      >
+        Add Document
+      </button>
+    </>
+  )}
+
+  {candidateDocuments.length > 0 && (
+    <div className="mt-4 space-y-2">
+      {candidateDocuments.map((doc) => (
+        <div
+          key={doc.id}
+          className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-gray-50 p-3"
+        >
+          <div>
+            <p className="font-semibold text-gray-800">{doc.documentLabel}</p>
+            <p className="text-xs text-gray-500">{doc.fileName || '-'}</p>
+            {doc.remarks && (
+              <p className="text-xs text-gray-500">{doc.remarks}</p>
+            )}
+          </div>
+
+          <div className="flex gap-2">
+            <a
+              href={doc.fileUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-xl bg-gray-800 px-3 py-2 text-sm font-semibold text-white"
+            >
+              View
+            </a>
+
+            <button
+              type="button"
+              onClick={() => hideCandidateDocument(doc.id)}
+              className="rounded-xl bg-red-600 px-3 py-2 text-sm font-semibold text-white"
+            >
+              Hide
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  )}
+</div>
         </div>
 
         <textarea placeholder="Interview Remarks" value={form.interviewRemarks} onChange={(e) => setForm({ ...form, interviewRemarks: e.target.value })} className="mt-3 w-full rounded-xl border p-3" />
@@ -348,7 +560,7 @@ export default function RecruitmentPage() {
                     )}
 
                     {item.resumeUrl && <a href={item.resumeUrl} target="_blank" rel="noopener noreferrer" className="rounded-xl bg-gray-800 px-3 py-2 text-sm font-semibold text-white">Resume</a>}
-                    {item.documentUrl && <a href={item.documentUrl} target="_blank" rel="noopener noreferrer" className="rounded-xl bg-gray-800 px-3 py-2 text-sm font-semibold text-white">Document</a>}
+                    
                     {item.offerLetterUrl && <a href={item.offerLetterUrl} target="_blank" rel="noopener noreferrer" className="rounded-xl bg-gray-800 px-3 py-2 text-sm font-semibold text-white">Offer</a>}
 
                     <button onClick={() => hideRestore(item, !!item.isHidden)} className={`rounded-xl px-3 py-2 text-sm font-semibold text-white ${item.isHidden ? 'bg-green-600' : 'bg-red-600'}`}>
