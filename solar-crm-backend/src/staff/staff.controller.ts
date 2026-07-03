@@ -309,4 +309,41 @@ restorePayroll(
 ) {
   return this.staffService.restorePayroll(Number(id), body, user);
 }
+
+@Get('incentive-rules')
+listIncentiveRules(@Query() query: any) {
+  return this.staffService.listIncentiveRules(query);
+}
+
+@Post('incentive-rule')
+createIncentiveRule(@Body() body: any, @CurrentUser() user: any) {
+  return this.staffService.createIncentiveRule(body, user);
+}
+
+@Patch('incentive-rule/:id')
+updateIncentiveRule(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffService.updateIncentiveRule(Number(id), body, user);
+}
+
+@Patch('incentive-rule/:id/hide')
+hideIncentiveRule(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffService.hideIncentiveRule(Number(id), body, user);
+}
+
+@Patch('incentive-rule/:id/restore')
+restoreIncentiveRule(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffService.restoreIncentiveRule(Number(id), body, user);
+}
 }

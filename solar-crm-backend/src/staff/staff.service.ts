@@ -13,6 +13,7 @@ import { StaffLeave } from './staff-leave.entity';
 import { EmployeePolicy } from './employee-policy.entity';
 import { HrPolicy, HrPolicyType } from './hr-policy.entity';
 import { StaffPayroll } from './staff-payroll.entity';
+import { IncentiveRule } from './incentive-rule.entity';
 
 @Injectable()
 export class StaffService {
@@ -40,6 +41,9 @@ private readonly hrPolicyRepo: Repository<HrPolicy>,
 
 @InjectRepository(StaffPayroll)
 private readonly payrollRepo: Repository<StaffPayroll>,
+
+@InjectRepository(IncentiveRule)
+private readonly incentiveRuleRepo: Repository<IncentiveRule>,
   ) {}
 
   async findAll(query: any) {
@@ -1289,5 +1293,164 @@ async restorePayroll(id: number, body: any, user: any) {
   payroll.restoreReason = body?.reason || '';
 
   return this.payrollRepo.save(payroll);
+}
+
+async createIncentiveRule(body: any, user: any) {
+  if (!String(body.ruleName || '').trim()) {
+    throw new BadRequestException('Rule name is required');
+  }
+
+  const item = this.incentiveRuleRepo.create({
+    ruleName: String(body.ruleName).trim(),
+    description: body.description || '',
+    applicableRoles: Array.isArray(body.applicableRoles)
+      ? body.applicableRoles
+      : [],
+    applicableStaffIds: Array.isArray(body.applicableStaffIds)
+      ? body.applicableStaffIds
+      : [],
+    metricType: body.metricType || 'CUSTOM',
+    customMetricName: body.customMetricName || '',
+    calculationType: body.calculationType || 'MANUAL',
+    eligibilityTarget: Number(body.eligibilityTarget || 0),
+    rateAmount: Number(body.rateAmount || 0),
+    percentageRate: Number(body.percentageRate || 0),
+    slabRules: body.slabRules || null,
+    periodType: body.periodType || 'MONTHLY',
+    requiresApproval: body.requiresApproval !== false,
+    includeInPayroll: body.includeInPayroll !== false,
+    isActive: body.isActive !== false,
+    isHidden: false,
+    createdBy: user?.id || null,
+    createdByName: user?.name || '',
+  });
+
+  return this.incentiveRuleRepo.save(item);
+}
+
+async listIncentiveRules(query: any) {
+  const page = Math.max(Number(query.page || 1), 1);
+  const limit = Math.min(Math.max(Number(query.limit || 20), 1), 100);
+  const showHidden = query.showHidden === 'true';
+
+  const qb = this.incentiveRuleRepo
+    .createQueryBuilder('rule')
+    .where('rule.isHidden = :showHidden', { showHidden });
+
+  if (query.metricType) {
+    qb.andWhere('rule.metricType = :metricType', {
+      metricType: query.metricType,
+    });
+  }
+
+  if (query.calculationType) {
+    qb.andWhere('rule.calculationType = :calculationType', {
+      calculationType: query.calculationType,
+    });
+  }
+
+  if (query.search) {
+    qb.andWhere(
+      '(rule.ruleName ILIKE :search OR rule.description ILIKE :search)',
+      { search: `%${query.search}%` },
+    );
+  }
+
+  const [data, total] = await qb
+    .orderBy('rule.createdAt', 'DESC')
+    .skip((page - 1) * limit)
+    .take(limit)
+    .getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
+}
+
+async updateIncentiveRule(id: number, body: any, user: any) {
+  const item = await this.incentiveRuleRepo.findOne({ where: { id } });
+
+  if (!item) {
+    throw new NotFoundException('Incentive rule not found');
+  }
+
+  Object.assign(item, {
+    ruleName: body.ruleName ?? item.ruleName,
+    description: body.description ?? item.description,
+    applicableRoles: Array.isArray(body.applicableRoles)
+      ? body.applicableRoles
+      : item.applicableRoles,
+    applicableStaffIds: Array.isArray(body.applicableStaffIds)
+      ? body.applicableStaffIds
+      : item.applicableStaffIds,
+    metricType: body.metricType ?? item.metricType,
+    customMetricName: body.customMetricName ?? item.customMetricName,
+    calculationType: body.calculationType ?? item.calculationType,
+    eligibilityTarget:
+      body.eligibilityTarget === undefined
+        ? item.eligibilityTarget
+        : Number(body.eligibilityTarget || 0),
+    rateAmount:
+      body.rateAmount === undefined
+        ? item.rateAmount
+        : Number(body.rateAmount || 0),
+    percentageRate:
+      body.percentageRate === undefined
+        ? item.percentageRate
+        : Number(body.percentageRate || 0),
+    slabRules: body.slabRules === undefined ? item.slabRules : body.slabRules,
+    periodType: body.periodType ?? item.periodType,
+    requiresApproval:
+      body.requiresApproval === undefined
+        ? item.requiresApproval
+        : body.requiresApproval,
+    includeInPayroll:
+      body.includeInPayroll === undefined
+        ? item.includeInPayroll
+        : body.includeInPayroll,
+    isActive: body.isActive === undefined ? item.isActive : body.isActive,
+    updatedBy: user?.id || null,
+    updatedByName: user?.name || '',
+  });
+
+  return this.incentiveRuleRepo.save(item);
+}
+
+async hideIncentiveRule(id: number, body: any, user: any) {
+  const item = await this.incentiveRuleRepo.findOne({ where: { id } });
+
+  if (!item) {
+    throw new NotFoundException('Incentive rule not found');
+  }
+
+  item.isHidden = true;
+  item.isActive = false;
+  item.hiddenAt = new Date();
+  item.hiddenBy = user?.id || null;
+  item.hiddenByName = user?.name || '';
+  item.hiddenReason = body?.reason || '';
+
+  return this.incentiveRuleRepo.save(item);
+}
+
+async restoreIncentiveRule(id: number, body: any, user: any) {
+  const item = await this.incentiveRuleRepo.findOne({ where: { id } });
+
+  if (!item) {
+    throw new NotFoundException('Incentive rule not found');
+  }
+
+  item.isHidden = false;
+  item.isActive = true;
+  item.restoredAt = new Date();
+  item.restoredBy = user?.id || null;
+  item.restoredByName = user?.name || '';
+  item.restoreReason = body?.reason || '';
+
+  return this.incentiveRuleRepo.save(item);
 }
 }

@@ -11,6 +11,7 @@ import { StaffLeave } from './staff-leave.entity';
 import { HrPolicy } from './hr-policy.entity';
 import { EmployeePolicy } from './employee-policy.entity';
 import { StaffPayroll } from './staff-payroll.entity';
+import { IncentiveRule } from './incentive-rule.entity';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { StaffPayroll } from './staff-payroll.entity';
       HrPolicy,
       EmployeePolicy,
       StaffPayroll,
+      IncentiveRule,
     ]),
   ],
   controllers: [StaffController, StaffSelfController],
