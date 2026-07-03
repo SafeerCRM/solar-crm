@@ -14,6 +14,7 @@ import { EmployeePolicy } from './employee-policy.entity';
 import { HrPolicy, HrPolicyType } from './hr-policy.entity';
 import { StaffPayroll } from './staff-payroll.entity';
 import { IncentiveRule } from './incentive-rule.entity';
+import { RecruitmentCandidate } from './recruitment-candidate.entity';
 
 @Injectable()
 export class StaffService {
@@ -44,6 +45,9 @@ private readonly payrollRepo: Repository<StaffPayroll>,
 
 @InjectRepository(IncentiveRule)
 private readonly incentiveRuleRepo: Repository<IncentiveRule>,
+
+@InjectRepository(RecruitmentCandidate)
+private readonly recruitmentRepo: Repository<RecruitmentCandidate>,
   ) {}
 
   async findAll(query: any) {
@@ -1452,5 +1456,184 @@ async restoreIncentiveRule(id: number, body: any, user: any) {
   item.restoreReason = body?.reason || '';
 
   return this.incentiveRuleRepo.save(item);
+}
+
+async uploadRecruitmentFile(file: any) {
+  return this.uploadFileToSupabase(
+    file,
+    'recruitment',
+    ['image/', 'application/pdf'],
+    20,
+  );
+}
+
+async createRecruitmentCandidate(body: any, user: any) {
+  if (!String(body.candidateName || '').trim()) {
+    throw new BadRequestException('Candidate name is required');
+  }
+
+  const item = this.recruitmentRepo.create({
+    candidateName: String(body.candidateName).trim(),
+    mobile: body.mobile || '',
+    alternateMobile: body.alternateMobile || '',
+    email: body.email || '',
+    appliedRole: body.appliedRole || '',
+    department: body.department || '',
+    branchName: body.branchName || '',
+    source: body.source || '',
+    expectedSalary: Number(body.expectedSalary || 0),
+    experience: body.experience || '',
+    noticePeriod: body.noticePeriod || '',
+    resumeUrl: body.resumeUrl || '',
+    photoUrl: body.photoUrl || '',
+    documentUrl: body.documentUrl || '',
+    stage: body.stage || 'APPLIED',
+    interviewDate: body.interviewDate || null,
+    interviewerName: body.interviewerName || '',
+    interviewRating: Number(body.interviewRating || 0),
+    interviewRemarks: body.interviewRemarks || '',
+    offeredSalary: Number(body.offeredSalary || 0),
+    joiningDate: body.joiningDate || null,
+    offerLetterUrl: body.offerLetterUrl || '',
+    remarks: body.remarks || '',
+    isActive: body.isActive !== false,
+    isHidden: false,
+    createdBy: user?.id || null,
+    createdByName: user?.name || '',
+  });
+
+  return this.recruitmentRepo.save(item);
+}
+
+async listRecruitmentCandidates(query: any) {
+  const page = Math.max(Number(query.page || 1), 1);
+  const limit = Math.min(Math.max(Number(query.limit || 20), 1), 100);
+  const showHidden = query.showHidden === 'true';
+
+  const qb = this.recruitmentRepo
+    .createQueryBuilder('candidate')
+    .where('candidate.isHidden = :showHidden', { showHidden });
+
+  if (query.stage) {
+    qb.andWhere('candidate.stage = :stage', { stage: query.stage });
+  }
+
+  if (query.branchName) {
+    qb.andWhere('candidate.branchName = :branchName', {
+      branchName: query.branchName,
+    });
+  }
+
+  if (query.department) {
+    qb.andWhere('candidate.department = :department', {
+      department: query.department,
+    });
+  }
+
+  if (query.search) {
+    qb.andWhere(
+      `(candidate.candidateName ILIKE :search 
+        OR candidate.mobile ILIKE :search 
+        OR candidate.email ILIKE :search 
+        OR candidate.appliedRole ILIKE :search)`,
+      { search: `%${query.search}%` },
+    );
+  }
+
+  const [data, total] = await qb
+    .orderBy('candidate.createdAt', 'DESC')
+    .skip((page - 1) * limit)
+    .take(limit)
+    .getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
+}
+
+async updateRecruitmentCandidate(id: number, body: any, user: any) {
+  const item = await this.recruitmentRepo.findOne({ where: { id } });
+
+  if (!item) {
+    throw new NotFoundException('Candidate not found');
+  }
+
+  Object.assign(item, {
+    candidateName: body.candidateName ?? item.candidateName,
+    mobile: body.mobile ?? item.mobile,
+    alternateMobile: body.alternateMobile ?? item.alternateMobile,
+    email: body.email ?? item.email,
+    appliedRole: body.appliedRole ?? item.appliedRole,
+    department: body.department ?? item.department,
+    branchName: body.branchName ?? item.branchName,
+    source: body.source ?? item.source,
+    expectedSalary:
+      body.expectedSalary === undefined
+        ? item.expectedSalary
+        : Number(body.expectedSalary || 0),
+    experience: body.experience ?? item.experience,
+    noticePeriod: body.noticePeriod ?? item.noticePeriod,
+    resumeUrl: body.resumeUrl ?? item.resumeUrl,
+    photoUrl: body.photoUrl ?? item.photoUrl,
+    documentUrl: body.documentUrl ?? item.documentUrl,
+    stage: body.stage ?? item.stage,
+    interviewDate: body.interviewDate ?? item.interviewDate,
+    interviewerName: body.interviewerName ?? item.interviewerName,
+    interviewRating:
+      body.interviewRating === undefined
+        ? item.interviewRating
+        : Number(body.interviewRating || 0),
+    interviewRemarks: body.interviewRemarks ?? item.interviewRemarks,
+    offeredSalary:
+      body.offeredSalary === undefined
+        ? item.offeredSalary
+        : Number(body.offeredSalary || 0),
+    joiningDate: body.joiningDate ?? item.joiningDate,
+    offerLetterUrl: body.offerLetterUrl ?? item.offerLetterUrl,
+    remarks: body.remarks ?? item.remarks,
+    isActive: body.isActive === undefined ? item.isActive : body.isActive,
+    updatedBy: user?.id || null,
+    updatedByName: user?.name || '',
+  });
+
+  return this.recruitmentRepo.save(item);
+}
+
+async hideRecruitmentCandidate(id: number, body: any, user: any) {
+  const item = await this.recruitmentRepo.findOne({ where: { id } });
+
+  if (!item) {
+    throw new NotFoundException('Candidate not found');
+  }
+
+  item.isHidden = true;
+  item.isActive = false;
+  item.hiddenAt = new Date();
+  item.hiddenBy = user?.id || null;
+  item.hiddenByName = user?.name || '';
+  item.hiddenReason = body?.reason || '';
+
+  return this.recruitmentRepo.save(item);
+}
+
+async restoreRecruitmentCandidate(id: number, body: any, user: any) {
+  const item = await this.recruitmentRepo.findOne({ where: { id } });
+
+  if (!item) {
+    throw new NotFoundException('Candidate not found');
+  }
+
+  item.isHidden = false;
+  item.isActive = true;
+  item.restoredAt = new Date();
+  item.restoredBy = user?.id || null;
+  item.restoredByName = user?.name || '';
+  item.restoreReason = body?.reason || '';
+
+  return this.recruitmentRepo.save(item);
 }
 }

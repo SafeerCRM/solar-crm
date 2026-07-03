@@ -346,4 +346,51 @@ restoreIncentiveRule(
 ) {
   return this.staffService.restoreIncentiveRule(Number(id), body, user);
 }
+
+@Get('recruitment-candidates')
+listRecruitmentCandidates(@Query() query: any) {
+  return this.staffService.listRecruitmentCandidates(query);
+}
+
+@Post('recruitment-candidate')
+createRecruitmentCandidate(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffService.createRecruitmentCandidate(body, user);
+}
+
+@Patch('recruitment-candidate/:id')
+updateRecruitmentCandidate(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffService.updateRecruitmentCandidate(Number(id), body, user);
+}
+
+@Patch('recruitment-candidate/:id/hide')
+hideRecruitmentCandidate(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffService.hideRecruitmentCandidate(Number(id), body, user);
+}
+
+@Patch('recruitment-candidate/:id/restore')
+restoreRecruitmentCandidate(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffService.restoreRecruitmentCandidate(Number(id), body, user);
+}
+
+@Post('recruitment/file-upload')
+@UseInterceptors(FilesInterceptor('files', 1))
+uploadRecruitmentFile(@UploadedFiles() files: any[]) {
+  const file = files?.[0];
+  return this.staffService.uploadRecruitmentFile(file);
+}
 }
