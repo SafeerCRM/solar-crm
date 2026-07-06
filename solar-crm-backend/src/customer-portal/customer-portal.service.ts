@@ -1364,25 +1364,25 @@ return savedComplaint;
 }
 
   async createReferral(body: any) {
-    const referral: any = new CustomerReferral();
+  const referral: any = new CustomerReferral();
 
-Object.assign(referral, {
-  ...body,
-  customerId: Number(body.customerId),
-  rewardAmount: Number(body.rewardAmount || 5000),
-});
+  Object.assign(referral, {
+    ...body,
+    customerId: Number(body.customerId),
+    rewardAmount: Number(body.rewardAmount || 5000),
+  });
 
-    const savedReferral = await this.referralRepository.save(referral);
+  const savedReferral = await this.referralRepository.save(referral);
 
-await this.addReferralActivity(
-  savedReferral.id,
-  'REFERRAL_CREATED',
-  'Referral Submitted',
-  `Referral submitted for ${savedReferral.referredName}.`,
-);
+  await this.addReferralActivity(
+    savedReferral.id,
+    'REFERRAL_CREATED',
+    'Referral Submitted',
+    `Referral submitted for ${savedReferral.referredName}.`,
+  );
 
-return savedReferral;
-  }
+  return savedReferral;
+}
 
   async createWorkDateRequest(body: any) {
     const request = this.workDateRequestRepository.create({
