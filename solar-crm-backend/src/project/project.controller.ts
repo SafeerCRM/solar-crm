@@ -2534,6 +2534,30 @@ getDealerOrderInvoices(
   );
 }
 
+@Get(':id/epc-customer-invoice')
+getOrCreateEpcCustomerInvoiceDraft(
+  @Param('id') id: string,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.getOrCreateEpcCustomerInvoiceDraft(
+    Number(id),
+    user,
+  );
+}
+
+@Patch('epc-customer-invoice/:invoiceId')
+saveEpcCustomerInvoice(
+  @Param('invoiceId') invoiceId: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.saveEpcCustomerInvoice(
+    Number(invoiceId),
+    body,
+    user,
+  );
+}
+
 @Roles(
   'OWNER',
   'PROJECT_MANAGER',

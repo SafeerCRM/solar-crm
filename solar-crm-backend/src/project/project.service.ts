@@ -110,6 +110,13 @@ import {
 import { ProjectFinalInvoiceItem } from './project-final-invoice-item.entity';
 
 import {
+  ProjectEpcCustomerInvoice,
+  ProjectEpcCustomerInvoiceStatus,
+} from './project-epc-customer-invoice.entity';
+
+import { ProjectEpcCustomerInvoiceItem } from './project-epc-customer-invoice-item.entity';
+
+import {
   ProjectPartyLedger,
   ProjectLedgerEntryType,
   ProjectLedgerSourceType,
@@ -938,6 +945,12 @@ private readonly projectFinalInvoiceRepository: Repository<ProjectFinalInvoice>,
 
 @InjectRepository(ProjectFinalInvoiceItem)
 private readonly projectFinalInvoiceItemRepository: Repository<ProjectFinalInvoiceItem>,
+
+@InjectRepository(ProjectEpcCustomerInvoice)
+private readonly projectEpcCustomerInvoiceRepository: Repository<ProjectEpcCustomerInvoice>,
+
+@InjectRepository(ProjectEpcCustomerInvoiceItem)
+private readonly projectEpcCustomerInvoiceItemRepository: Repository<ProjectEpcCustomerInvoiceItem>,
 
 @InjectRepository(ProjectPartyLedger)
 private readonly projectPartyLedgerRepository: Repository<ProjectPartyLedger>,
@@ -20376,5 +20389,283 @@ async updateDocumentCustomerVisibility(
     body.visibleToCustomer === 'true';
 
   return this.projectDocumentRepository.save(document);
+}
+
+private calculateEpcInvoiceTotals(items: any[]) {
+  let taxableAmount = 0;
+  let cgstAmount = 0;
+  let sgstAmount = 0;
+  let totalTaxAmount = 0;
+  let grandTotalBeforeRound = 0;
+
+  const calculatedItems = items.map((item: any, index: number) => {
+    const quantity = Number(item.quantity || 0);
+    const rate = Number(item.rate || 0);
+    const gstPercent = Number(item.gstPercent || 0);
+
+    const itemTaxableAmount = quantity * rate;
+    const itemGstAmount = (itemTaxableAmount * gstPercent) / 100;
+    const itemCgstAmount = itemGstAmount / 2;
+    const itemSgstAmount = itemGstAmount / 2;
+    const itemTotalAmount = itemTaxableAmount + itemGstAmount;
+
+    taxableAmount += itemTaxableAmount;
+    cgstAmount += itemCgstAmount;
+    sgstAmount += itemSgstAmount;
+    totalTaxAmount += itemGstAmount;
+    grandTotalBeforeRound += itemTotalAmount;
+
+    return {
+      serialNumber: Number(item.serialNumber || index + 1),
+      description: item.description || '',
+      hsnSac: item.hsnSac || '',
+      quantity,
+      unit: item.unit || 'Units',
+      rate,
+      taxableAmount: itemTaxableAmount,
+      gstPercent,
+      cgstPercent: gstPercent / 2,
+      cgstAmount: itemCgstAmount,
+      sgstPercent: gstPercent / 2,
+      sgstAmount: itemSgstAmount,
+      totalAmount: itemTotalAmount,
+    };
+  });
+
+  const roundedGrandTotal = Math.round(grandTotalBeforeRound);
+  const roundOff = roundedGrandTotal - grandTotalBeforeRound;
+
+  return {
+    items: calculatedItems,
+    taxableAmount,
+    cgstAmount,
+    sgstAmount,
+    totalTaxAmount,
+    roundOff,
+    grandTotal: roundedGrandTotal,
+  };
+}
+
+async getOrCreateEpcCustomerInvoiceDraft(projectId: number, user: any) {
+  const existing =
+    await this.projectEpcCustomerInvoiceRepository.findOne({
+      where: {
+        projectId,
+        isHidden: false,
+      },
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+
+  if (existing) {
+    const items =
+      await this.projectEpcCustomerInvoiceItemRepository.find({
+        where: { invoiceId: existing.id },
+        order: { serialNumber: 'ASC' },
+      });
+
+    return {
+      invoice: existing,
+      items,
+    };
+  }
+
+  const project = await this.projectRepository.findOne({
+    where: { id: projectId },
+  });
+
+  if (!project) {
+    throw new NotFoundException('Project not found');
+  }
+
+  const finalAmount = Number(
+    (project as any).finalCost ||
+      (project as any).netAmount ||
+      (project as any).projectCost ||
+      0,
+  );
+
+  const goodsAmount = Math.round(finalAmount * 0.72);
+  const installationAmount = Math.max(finalAmount - goodsAmount, 0);
+
+  const defaultItems = [
+    {
+      serialNumber: 1,
+      description: `SOLAR POWER GENERATING SYSTEM\nSPGS PLANT CONTAINING\n${project.panelBrand || 'SOLAR PANEL'} ${project.dcrPanelCount || ''} NOS\n${project.converterBrand || 'INVERTER'} ${project.converterCapacity || ''}`,
+      hsnSac: '85414300',
+      quantity: 1,
+      unit: 'Units',
+      rate: goodsAmount,
+      gstPercent: 5,
+    },
+    {
+      serialNumber: 2,
+      description: 'Installation & Commissioning Charges',
+      hsnSac: '998736',
+      quantity: 1,
+      unit: 'Units',
+      rate: installationAmount,
+      gstPercent: 18,
+    },
+  ];
+
+  const totals = this.calculateEpcInvoiceTotals(defaultItems);
+
+  const invoice =
+    await this.projectEpcCustomerInvoiceRepository.save(
+      this.projectEpcCustomerInvoiceRepository.create({
+        projectId,
+        invoiceNumber: `AS/${projectId}/${new Date().getFullYear().toString().slice(-2)}-${(new Date().getFullYear() + 1).toString().slice(-2)}`,
+        invoiceDate: new Date().toISOString().slice(0, 10),
+        status: ProjectEpcCustomerInvoiceStatus.DRAFT,
+
+        fromName: 'ADITYA SOLARS',
+
+fromAddress:
+  '83, Jai Hind Nagar 1, Police Line, Kota, Rajasthan - 324001',
+
+  fromPincode: '324001',
+
+fromGstin: '08CVFPM5354P1ZV',
+
+fromPhone: '8306170662, 9887634474',
+
+fromEmail: 'adityasolarsraj01@gmail.com',
+
+deliveryNote: '',
+
+buyerOrderNo: '',
+
+dispatchThrough: '',
+
+termsOfDelivery: '',
+
+placeOfSupply: 'Rajasthan',
+
+stateCode: '08',
+
+vehicleNumber: '',
+
+ewayBillNumber: '',
+
+        billToName: project.customerName || '',
+        billToAddress: project.address || project.gpsAddress || '',
+        billToPhone: project.customerPhone || '',
+
+        shipToName: project.customerName || '',
+        shipToAddress: project.address || project.gpsAddress || '',
+        shipToPhone: project.customerPhone || '',
+
+        taxableAmount: totals.taxableAmount,
+        cgstAmount: totals.cgstAmount,
+        sgstAmount: totals.sgstAmount,
+        totalTaxAmount: totals.totalTaxAmount,
+        roundOff: totals.roundOff,
+        grandTotal: totals.grandTotal,
+
+        termsAndConditions:
+          '1. Goods once sold will not be taken back.\n2. Warranty as per manufacturer terms.\n3. Subject to Rajasthan jurisdiction.',
+        declaration:
+          'We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.',
+
+        createdBy: user?.id || user?.userId || user?.sub || null,
+        createdByName: user?.name || user?.email || '',
+      } as Partial<ProjectEpcCustomerInvoice>),
+    );
+
+  const invoiceItems = totals.items.map((item) =>
+    this.projectEpcCustomerInvoiceItemRepository.create({
+      ...item,
+      invoiceId: invoice.id,
+      projectId,
+    } as Partial<ProjectEpcCustomerInvoiceItem>),
+  );
+
+  await this.projectEpcCustomerInvoiceItemRepository.save(invoiceItems);
+
+  return {
+    invoice,
+    items: invoiceItems,
+  };
+}
+
+async saveEpcCustomerInvoice(
+  invoiceId: number,
+  body: any,
+  user: any,
+) {
+  const invoice =
+    await this.projectEpcCustomerInvoiceRepository.findOne({
+      where: { id: invoiceId },
+    });
+
+  if (!invoice) {
+    throw new NotFoundException('EPC invoice not found');
+  }
+
+  const items = Array.isArray(body?.items) ? body.items : [];
+  const totals = this.calculateEpcInvoiceTotals(items);
+
+  invoice.invoiceNumber = body.invoiceNumber || invoice.invoiceNumber;
+  invoice.invoiceDate = body.invoiceDate || invoice.invoiceDate;
+
+  invoice.fromName = body.fromName || '';
+invoice.fromAddress = body.fromAddress || '';
+invoice.fromGstin = body.fromGstin || '';
+invoice.fromPhone = body.fromPhone || '';
+invoice.fromEmail = body.fromEmail || '';
+
+invoice.deliveryNote = body.deliveryNote || '';
+invoice.buyerOrderNo = body.buyerOrderNo || '';
+invoice.dispatchThrough = body.dispatchThrough || '';
+invoice.termsOfDelivery = body.termsOfDelivery || '';
+invoice.placeOfSupply = body.placeOfSupply || '';
+invoice.stateCode = body.stateCode || '';
+invoice.vehicleNumber = body.vehicleNumber || '';
+invoice.ewayBillNumber = body.ewayBillNumber || '';
+
+  invoice.billToName = body.billToName || '';
+  invoice.billToAddress = body.billToAddress || '';
+  invoice.billToPhone = body.billToPhone || '';
+
+  invoice.shipToName = body.shipToName || '';
+  invoice.shipToAddress = body.shipToAddress || '';
+  invoice.shipToPhone = body.shipToPhone || '';
+
+  invoice.taxableAmount = totals.taxableAmount;
+  invoice.cgstAmount = totals.cgstAmount;
+  invoice.sgstAmount = totals.sgstAmount;
+  invoice.totalTaxAmount = totals.totalTaxAmount;
+  invoice.roundOff = totals.roundOff;
+  invoice.grandTotal = totals.grandTotal;
+
+  invoice.termsAndConditions = body.termsAndConditions || '';
+  invoice.declaration = body.declaration || '';
+  invoice.sealUrl = body.sealUrl || '';
+  invoice.signatureUrl = body.signatureUrl || '';
+
+  const savedInvoice =
+    await this.projectEpcCustomerInvoiceRepository.save(invoice);
+
+  await this.projectEpcCustomerInvoiceItemRepository.delete({
+    invoiceId: invoice.id,
+  });
+
+  const savedItems =
+    await this.projectEpcCustomerInvoiceItemRepository.save(
+      totals.items.map((item) =>
+        this.projectEpcCustomerInvoiceItemRepository.create({
+          ...item,
+          invoiceId: invoice.id,
+          projectId: invoice.projectId,
+        } as Partial<ProjectEpcCustomerInvoiceItem>),
+      ),
+    );
+
+  return {
+    invoice: savedInvoice,
+    items: savedItems,
+  };
 }
 }

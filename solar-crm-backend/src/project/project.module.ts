@@ -58,6 +58,8 @@ import { Meeting } from '../meeting/meeting.entity';
 import { CallLog } from '../telecalling/call-log.entity';
 import { TelecallingContact } from '../telecalling/telecalling-contact.entity';
 import { User } from '../users/user.entity';
+import { ProjectEpcCustomerInvoice } from './project-epc-customer-invoice.entity';
+import { ProjectEpcCustomerInvoiceItem } from './project-epc-customer-invoice-item.entity';
 
 @Module({
   imports: [
@@ -65,7 +67,8 @@ import { User } from '../users/user.entity';
 ProjectMaterialRequestItem, ProjectBranch, ProjectLoanDetail, ProjectSubsidyDetail, ProjectElectricityDetail, ProjectExecutionActivity, ProjectExecutionProof, ProjectExecutionReminder, ProjectExecutionReminderUserState, ProjectPaymentInstallment, ProjectPaymentReminderUserState, ProjectReminderUserState, ProjectEditHistory,
  ProjectVendor, ProjectPurchaseOrder, ProjectStockItem,
 ProjectStockMovement, ProjectPurchaseOrderItem, ProjectProformaInvoice,
-ProjectProformaInvoiceItem, ProjectFinalInvoice, ProjectFinalInvoiceItem, ProjectPartyLedger, ProjectContractorAssignment,
+ProjectProformaInvoiceItem, ProjectFinalInvoice, ProjectFinalInvoiceItem, ProjectEpcCustomerInvoice,
+ProjectEpcCustomerInvoiceItem, ProjectPartyLedger, ProjectContractorAssignment,
 ProjectContractorProof, ProjectCleaningAssignment, ProjectContractor, ProjectContractorComment, ProjectContractorRescheduleRequest, ProjectLoanCoApplicant, ProjectAccountExpense, ProjectConsumption, ProjectCustomerUpdate, ProjectDealerOrder,
 ProjectDealerOrderItem,
 ProjectDealerPayment,
