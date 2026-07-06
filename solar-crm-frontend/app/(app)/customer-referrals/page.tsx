@@ -20,6 +20,19 @@ const STATUS_OPTIONS = [
   'REJECTED',
 ];
 
+type CrmUser = {
+  id: number;
+  name?: string;
+  email?: string;
+  roles?: string[];
+};
+
+const REFERRAL_ASSIGNMENT_ROLES = [
+  'TELECALLER',
+  'TELECALLING_MANAGER',
+  'TELECALLING_ASSISTANT',
+];
+
 export default function CustomerReferralsPage() {
   const [items, setItems] = useState<any[]>([]);
   const [selected, setSelected] = useState<any>(null);
@@ -29,6 +42,11 @@ const [loadingActivities, setLoadingActivities] =
   useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  const [users, setUsers] = useState<CrmUser[]>([]);
+const [assigneeSearch, setAssigneeSearch] = useState('');
+const [showAssigneeOptions, setShowAssigneeOptions] = useState(false);
+const [assigning, setAssigning] = useState(false);
 
   const [filters, setFilters] = useState({
     search: '',
@@ -52,6 +70,14 @@ const [loadingActivities, setLoadingActivities] =
   const headers = () => ({
     Authorization: `Bearer ${localStorage.getItem('token')}`,
   });
+
+  const loadUsers = async () => {
+  const res = await axios.get(`${API_BASE_URL}/users`, {
+    headers: headers(),
+  });
+
+  setUsers(Array.isArray(res.data) ? res.data : []);
+};
 
   const loadReferrals = async () => {
     try {
@@ -112,6 +138,47 @@ const [loadingActivities, setLoadingActivities] =
     });
   };
 
+  const assignReferral = async (user: CrmUser) => {
+  if (!selected?.id) return;
+
+  const primaryRole =
+    (user.roles || []).find((role) =>
+      REFERRAL_ASSIGNMENT_ROLES.includes(role),
+    ) || '';
+
+  try {
+    setAssigning(true);
+
+    const res = await axios.patch(
+      `${API_BASE_URL}/customer-portal/referrals/${selected.id}/assign`,
+      {
+        assignedTo: user.id,
+        assignedToName: user.name || user.email || '',
+        assignedToRole: primaryRole,
+      },
+      { headers: headers() },
+    );
+
+    setSelected(res.data);
+    setAssigneeSearch(
+      `${user.name || user.email || 'Unnamed'}${
+        primaryRole ? ` (${formatLabel(primaryRole)})` : ''
+      }`,
+    );
+    setShowAssigneeOptions(false);
+
+    await loadActivities(selected.id);
+    await loadReferrals();
+
+    alert('Referral assigned');
+  } catch (error: any) {
+    console.error(error);
+    alert(error?.response?.data?.message || 'Failed to assign referral');
+  } finally {
+    setAssigning(false);
+  }
+};
+
   const saveReferral = async (extra: any = {}) => {
     if (!selected?.id) return;
 
@@ -142,7 +209,8 @@ const [loadingActivities, setLoadingActivities] =
   };
 
   useEffect(() => {
-    loadReferrals();
+    loadUsers();
+loadReferrals();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.page]);
 
@@ -160,6 +228,19 @@ const [loadingActivities, setLoadingActivities] =
       ['REWARD_PAYABLE', 'REWARD_PAID'].includes(x.status),
     ).length,
   };
+
+  const filteredAssignees = users.filter((user) => {
+  const allowed = (user.roles || []).some((role) =>
+    REFERRAL_ASSIGNMENT_ROLES.includes(role),
+  );
+
+  if (!allowed) return false;
+
+  const text =
+    `${user.name || ''} ${user.email || ''} ${(user.roles || []).join(' ')}`.toLowerCase();
+
+  return text.includes(assigneeSearch.toLowerCase());
+});
 
   return (
     <main className="mx-auto max-w-7xl space-y-5 p-4 pb-10">
@@ -370,6 +451,74 @@ const [loadingActivities, setLoadingActivities] =
                       ['Referrer Phone', selected.referrerPhone],
                     ]}
                   />
+
+                  <div className="rounded-3xl bg-blue-50 p-5 lg:col-span-2">
+  <h3 className="font-black text-blue-900">Assign Referral</h3>
+
+  <p className="mt-1 text-sm text-blue-700">
+    Assign this referred contact to telecalling team. The normal CRM flow will continue from there.
+  </p>
+
+  {selected.assignedToName && (
+    <div className="mt-3 rounded-2xl bg-white p-4">
+      <p className="text-xs font-bold text-gray-500">Currently Assigned To</p>
+      <p className="mt-1 font-black text-gray-900">
+        {selected.assignedToName}
+      </p>
+      <p className="text-xs font-semibold text-gray-500">
+        {formatLabel(selected.assignedToRole)}
+      </p>
+    </div>
+  )}
+
+  <div className="relative mt-4">
+    <input
+      placeholder="Search telecaller / telecalling assistant"
+      value={assigneeSearch}
+      onChange={(e) => {
+        setAssigneeSearch(e.target.value);
+        setShowAssigneeOptions(true);
+      }}
+      onFocus={() => setShowAssigneeOptions(true)}
+      className="w-full rounded-2xl border bg-white p-3"
+    />
+
+    {showAssigneeOptions && (
+      <div className="absolute z-40 mt-1 max-h-72 w-full overflow-y-auto rounded-2xl border bg-white shadow-xl">
+        {filteredAssignees.length === 0 ? (
+          <div className="p-4 text-sm font-semibold text-gray-500">
+            No matching telecalling user found.
+          </div>
+        ) : (
+          filteredAssignees.map((user) => {
+            const primaryRole =
+              (user.roles || []).find((role) =>
+                REFERRAL_ASSIGNMENT_ROLES.includes(role),
+              ) || '';
+
+            return (
+              <button
+                key={user.id}
+                type="button"
+                disabled={assigning}
+                onClick={() => assignReferral(user)}
+                className="block w-full border-b p-4 text-left hover:bg-blue-50 disabled:opacity-50"
+              >
+                <p className="font-black text-gray-900">
+                  {user.name || 'Unnamed'}
+                </p>
+                <p className="text-xs text-gray-500">{user.email || '-'}</p>
+                <p className="text-xs font-semibold text-gray-500">
+                  {formatLabel(primaryRole)}
+                </p>
+              </button>
+            );
+          })
+        )}
+      </div>
+    )}
+  </div>
+</div>
 
                   <div className="rounded-3xl bg-gray-50 p-5 lg:col-span-2">
                     <p className="text-xs font-bold text-gray-500">Remarks</p>
