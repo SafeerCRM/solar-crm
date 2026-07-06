@@ -50,6 +50,7 @@ import { CustomerReferralActivity } from './customer-referral-activity.entity';
 import { LeadsService } from '../leads/leads.service';
 import { MeetingService } from '../meeting/meeting.service';
 import { CustomerReferralStatus } from './customer-referral.entity';
+import { TelecallingContact, ContactStatus } from '../telecalling/telecalling-contact.entity';
 
 @Injectable()
 export class CustomerPortalService {
@@ -122,6 +123,9 @@ private readonly referralActivityRepository: Repository<CustomerReferralActivity
 
     @InjectRepository(StaffMember)
 private readonly staffMemberRepository: Repository<StaffMember>,
+
+@InjectRepository(TelecallingContact)
+private readonly telecallingContactRepository: Repository<TelecallingContact>,
 
 private readonly leadService: LeadsService,
 private readonly meetingService: MeetingService,
@@ -1414,6 +1418,48 @@ async assignReferral(
 
   const savedReferral =
     await this.referralRepository.save(referral);
+
+    const existingContact =
+  await this.telecallingContactRepository.findOne({
+    where: {
+      sourceModule: 'CUSTOMER_REFERRAL',
+      sourceReferralId: savedReferral.id,
+    } as any,
+  });
+
+if (!existingContact) {
+  const contact: any = new TelecallingContact();
+
+  Object.assign(contact, {
+    name: savedReferral.referredName,
+    phone: savedReferral.referredPhone,
+    city: savedReferral.referredCity || '',
+    address: savedReferral.referredAddress || '',
+    assignedTo: savedReferral.assignedTo,
+    assignedToName: savedReferral.assignedToName,
+    status: ContactStatus.NEW,
+    stage: 'TELECALLING',
+    hasCalled: false,
+    convertedToLead: false,
+    isInStorage: false,
+    remarks: savedReferral.remarks || '',
+    sourceModule: 'CUSTOMER_REFERRAL',
+    sourceReferralId: savedReferral.id,
+    referralCustomerCode: savedReferral.customerCode || '',
+    referralReferrerName: savedReferral.referrerName || '',
+    referralReferrerPhone: savedReferral.referrerPhone || '',
+    referralRemarks: savedReferral.remarks || '',
+  });
+
+  await this.telecallingContactRepository.save(contact);
+} else {
+  existingContact.assignedTo = savedReferral.assignedTo;
+  existingContact.assignedToName = savedReferral.assignedToName;
+  existingContact.isInStorage = false;
+  existingContact.stage = 'TELECALLING';
+
+  await this.telecallingContactRepository.save(existingContact);
+}
 
   await this.addReferralActivity(
     savedReferral.id,

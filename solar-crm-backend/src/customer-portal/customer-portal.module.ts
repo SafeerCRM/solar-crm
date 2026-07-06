@@ -29,6 +29,7 @@ import { CustomerReferralActivity } from './customer-referral-activity.entity';
 import { LeadsModule } from '../leads/leads.module';
 import { MeetingModule } from '../meeting/meeting.module';
 import { LeadsService } from 'src/leads/leads.service';
+import { TelecallingContact } from '../telecalling/telecalling-contact.entity';
 
 @Module({
   imports: [
@@ -58,6 +59,7 @@ CustomerComplaintAttachment,
       CustomerAfterSalesRequestProof,
       CustomerAfterSalesRequestRating,
       CustomerReferralActivity,
+      TelecallingContact,
     ]),
   ],
   controllers: [CustomerPortalController, CustomerAuthController],

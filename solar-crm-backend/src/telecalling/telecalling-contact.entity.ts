@@ -80,6 +80,24 @@ hasCalled: boolean;
   @Column({ nullable: true, type: 'text' })
   remarks: string;
 
+  @Column({ nullable: true })
+sourceModule: string;
+
+@Column({ nullable: true })
+sourceReferralId: number;
+
+@Column({ nullable: true })
+referralCustomerCode: string;
+
+@Column({ nullable: true })
+referralReferrerName: string;
+
+@Column({ nullable: true })
+referralReferrerPhone: string;
+
+@Column({ type: 'text', nullable: true })
+referralRemarks: string;
+
   @CreateDateColumn()
   createdAt: Date;
 
