@@ -62,6 +62,6 @@ CustomerComplaintAttachment,
   ],
   controllers: [CustomerPortalController, CustomerAuthController],
   providers: [CustomerPortalService],
-  exports: [CustomerPortalService, LeadsService],
+  exports: [CustomerPortalService],
 })
 export class CustomerPortalModule {}

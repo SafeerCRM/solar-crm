@@ -22,5 +22,6 @@ import { User } from '../users/user.entity';
   ],
   controllers: [LeadsController],
   providers: [LeadsService],
+  exports: [LeadsService],
 })
 export class LeadsModule {}
