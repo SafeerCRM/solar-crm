@@ -46,6 +46,7 @@ import {
   CustomerAfterSalesProofType,
 } from './customer-after-sales-request-proof.entity';
 import { CustomerAfterSalesRequestRating } from './customer-after-sales-request-rating.entity';
+import { CustomerReferralActivity } from './customer-referral-activity.entity';
 
 @Injectable()
 export class CustomerPortalService {
@@ -112,6 +113,9 @@ private readonly afterSalesRequestProofRepository: Repository<CustomerAfterSales
 
 @InjectRepository(CustomerAfterSalesRequestRating)
 private readonly afterSalesRequestRatingRepository: Repository<CustomerAfterSalesRequestRating>,
+
+@InjectRepository(CustomerReferralActivity)
+private readonly referralActivityRepository: Repository<CustomerReferralActivity>,
 
     @InjectRepository(StaffMember)
 private readonly staffMemberRepository: Repository<StaffMember>,
@@ -873,6 +877,7 @@ private async addAfterSalesRequestActivity(
   });
 }
 
+
 async createAfterSalesRequestFromCustomer(customerId: number, body: any) {
   const serviceId = Number(body?.serviceId || 0);
 
@@ -1353,13 +1358,24 @@ return savedComplaint;
 }
 
   async createReferral(body: any) {
-    const referral = this.referralRepository.create({
-      ...body,
-      customerId: Number(body.customerId),
-      rewardAmount: Number(body.rewardAmount || 5000),
-    });
+    const referral: any = new CustomerReferral();
 
-    return this.referralRepository.save(referral);
+Object.assign(referral, {
+  ...body,
+  customerId: Number(body.customerId),
+  rewardAmount: Number(body.rewardAmount || 5000),
+});
+
+    const savedReferral = await this.referralRepository.save(referral);
+
+await this.addReferralActivity(
+  savedReferral.id,
+  'REFERRAL_CREATED',
+  'Referral Submitted',
+  `Referral submitted for ${savedReferral.referredName}.`,
+);
+
+return savedReferral;
   }
 
   async createWorkDateRequest(body: any) {
@@ -2106,6 +2122,30 @@ await this.createCustomerNotification({
 });
 
 return savedReferral;
+}
+
+private async addReferralActivity(
+  referralId: number,
+  activityType: string,
+  activityTitle: string,
+  activityDescription?: string,
+  user?: any,
+) {
+  return this.referralActivityRepository.save({
+    referralId,
+    activityType,
+    activityTitle,
+    activityDescription: activityDescription || '',
+    performedBy: user?.id || user?.userId || null,
+    performedByName: user?.name || user?.email || 'System',
+  });
+}
+
+async getReferralActivities(referralId: number) {
+  return this.referralActivityRepository.find({
+    where: { referralId },
+    order: { createdAt: 'DESC' },
+  });
 }
 
 async createCustomerNotification(body: any) {

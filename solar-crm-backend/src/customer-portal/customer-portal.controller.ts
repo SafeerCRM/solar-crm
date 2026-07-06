@@ -262,4 +262,16 @@ addAfterSalesRequestProof(
 ) {
   return this.service.addAfterSalesRequestProof(id, body, user);
 }
+
+@Roles(
+  'OWNER',
+  'CUSTOMER_MANAGER',
+  'PROJECT_MANAGER',
+  'MARKETING_HEAD',
+  'LEAD_MANAGER',
+)
+@Get('referrals/:id/activities')
+getReferralActivities(@Param('id', ParseIntPipe) id: number) {
+  return this.service.getReferralActivities(id);
+}
 }

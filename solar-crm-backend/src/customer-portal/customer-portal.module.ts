@@ -25,6 +25,7 @@ import { CustomerAfterSalesRequest } from './customer-after-sales-request.entity
 import { CustomerAfterSalesRequestActivity } from './customer-after-sales-request-activity.entity';
 import { CustomerAfterSalesRequestProof } from './customer-after-sales-request-proof.entity';
 import { CustomerAfterSalesRequestRating } from './customer-after-sales-request-rating.entity';
+import { CustomerReferralActivity } from './customer-referral-activity.entity';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ CustomerComplaintAttachment,
       CustomerAfterSalesRequestActivity,
       CustomerAfterSalesRequestProof,
       CustomerAfterSalesRequestRating,
+      CustomerReferralActivity,
     ]),
   ],
   controllers: [CustomerPortalController, CustomerAuthController],
