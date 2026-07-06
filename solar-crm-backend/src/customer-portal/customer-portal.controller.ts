@@ -62,6 +62,26 @@ export class CustomerPortalController {
     return this.service.createReferral(body);
   }
 
+  @Roles(
+  'OWNER',
+  'CUSTOMER_MANAGER',
+  'PROJECT_MANAGER',
+  'MARKETING_HEAD',
+  'TELECALLING_MANAGER',
+)
+@Patch('referrals/:id/assign')
+assignReferral(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.service.assignReferral(
+    id,
+    body,
+    user,
+  );
+}
+
   @Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'CUSTOMER')
   @Post('work-date-requests')
   createWorkDateRequest(@Body() body: any) {

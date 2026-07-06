@@ -57,6 +57,18 @@ export class CustomerReferral {
   @Column({ type: 'text', nullable: true })
   remarks: string;
 
+  @Column({ nullable: true })
+assignedTo: number;
+
+@Column({ nullable: true })
+assignedToName: string;
+
+@Column({ nullable: true })
+assignedToRole: string;
+
+@Column({ type: 'timestamp', nullable: true })
+assignedAt: Date;
+
   @Column({
     type: 'enum',
     enum: CustomerReferralStatus,

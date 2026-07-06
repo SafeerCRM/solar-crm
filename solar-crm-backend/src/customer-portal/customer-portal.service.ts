@@ -1384,6 +1384,58 @@ return savedComplaint;
   return savedReferral;
 }
 
+async assignReferral(
+  id: number,
+  body: any,
+  user: any,
+) {
+  const referral = await this.referralRepository.findOne({
+    where: { id },
+  });
+
+  if (!referral) {
+    throw new NotFoundException('Referral not found');
+  }
+
+  if (!body?.assignedTo) {
+    throw new BadRequestException(
+      'Assigned user is required',
+    );
+  }
+
+  referral.assignedTo = Number(body.assignedTo);
+  referral.assignedToName = String(
+    body.assignedToName || '',
+  ).trim();
+  referral.assignedToRole = String(
+    body.assignedToRole || '',
+  ).trim();
+  referral.assignedAt = new Date();
+
+  const savedReferral =
+    await this.referralRepository.save(referral);
+
+  await this.addReferralActivity(
+    savedReferral.id,
+    'ASSIGNED',
+    'Referral Assigned',
+    `Assigned to ${savedReferral.assignedToName}`,
+    user,
+  );
+
+  await this.createCustomerNotification({
+    customerId: savedReferral.customerId,
+    customerCode: savedReferral.customerCode,
+    notificationType: 'CUSTOMER_REFERRAL',
+    title: 'Referral Assigned',
+    message: `Your referral for ${savedReferral.referredName} has been assigned to our team.`,
+    relatedEntityType: 'CUSTOMER_REFERRAL',
+    relatedEntityId: savedReferral.id,
+  });
+
+  return savedReferral;
+}
+
   async createWorkDateRequest(body: any) {
     const request = this.workDateRequestRepository.create({
       ...body,
