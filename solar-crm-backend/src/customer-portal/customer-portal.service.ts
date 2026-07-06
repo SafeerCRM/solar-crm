@@ -47,6 +47,9 @@ import {
 } from './customer-after-sales-request-proof.entity';
 import { CustomerAfterSalesRequestRating } from './customer-after-sales-request-rating.entity';
 import { CustomerReferralActivity } from './customer-referral-activity.entity';
+import { LeadsService } from '../leads/leads.service';
+import { MeetingService } from '../meeting/meeting.service';
+import { CustomerReferralStatus } from './customer-referral.entity';
 
 @Injectable()
 export class CustomerPortalService {
@@ -119,6 +122,9 @@ private readonly referralActivityRepository: Repository<CustomerReferralActivity
 
     @InjectRepository(StaffMember)
 private readonly staffMemberRepository: Repository<StaffMember>,
+
+private readonly leadService: LeadsService,
+private readonly meetingService: MeetingService,
   ) {}
 
   async getCustomerDashboard(customerId: number) {
@@ -2122,6 +2128,59 @@ await this.createCustomerNotification({
 });
 
 return savedReferral;
+}
+
+async convertReferralToLead(id: number, user: any) {
+  const referral = await this.referralRepository.findOne({
+    where: { id },
+  });
+
+  if (!referral) {
+    throw new NotFoundException('Referral not found');
+  }
+
+  if (referral.linkedLeadId) {
+    throw new BadRequestException('Lead already created for this referral');
+  }
+
+  const lead: any = await this.leadService.create(
+    {
+      name: referral.referredName,
+      phone: referral.referredPhone,
+      city: referral.referredCity || '',
+      address: referral.referredAddress || '',
+      source: 'CUSTOMER_REFERRAL',
+      remarks: `Customer referral from ${referral.referrerName || referral.customerCode || '-'}.\n\n${referral.remarks || ''}`,
+      status: 'NEW' as any,
+      potentialPercentage: 25,
+    } as any,
+    user,
+  );
+
+  referral.linkedLeadId = lead.id;
+  referral.status = CustomerReferralStatus.LEAD_CREATED;
+
+  const savedReferral = await this.referralRepository.save(referral);
+
+  await this.addReferralActivity(
+    savedReferral.id,
+    'LEAD_CREATED',
+    'Lead Created',
+    `Lead #${lead.id} created from referral.`,
+    user,
+  );
+
+  await this.createCustomerNotification({
+    customerId: savedReferral.customerId,
+    customerCode: savedReferral.customerCode,
+    notificationType: 'CUSTOMER_REFERRAL',
+    title: 'Referral Converted to Lead',
+    message: `Your referral for ${savedReferral.referredName} has been converted to a lead.`,
+    relatedEntityType: 'CUSTOMER_REFERRAL',
+    relatedEntityId: savedReferral.id,
+  });
+
+  return savedReferral;
 }
 
 private async addReferralActivity(

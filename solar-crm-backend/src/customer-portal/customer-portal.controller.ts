@@ -274,4 +274,19 @@ addAfterSalesRequestProof(
 getReferralActivities(@Param('id', ParseIntPipe) id: number) {
   return this.service.getReferralActivities(id);
 }
+
+@Roles(
+  'OWNER',
+  'CUSTOMER_MANAGER',
+  'PROJECT_MANAGER',
+  'MARKETING_HEAD',
+  'LEAD_MANAGER',
+)
+@Post('referrals/:id/convert-to-lead')
+convertReferralToLead(
+  @Param('id', ParseIntPipe) id: number,
+  @CurrentUser() user: any,
+) {
+  return this.service.convertReferralToLead(id, user);
+}
 }

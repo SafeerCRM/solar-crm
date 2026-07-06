@@ -26,10 +26,14 @@ import { CustomerAfterSalesRequestActivity } from './customer-after-sales-reques
 import { CustomerAfterSalesRequestProof } from './customer-after-sales-request-proof.entity';
 import { CustomerAfterSalesRequestRating } from './customer-after-sales-request-rating.entity';
 import { CustomerReferralActivity } from './customer-referral-activity.entity';
+import { LeadsModule } from '../leads/leads.module';
+import { MeetingModule } from '../meeting/meeting.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([
+  LeadsModule,
+  MeetingModule,
+  TypeOrmModule.forFeature([
       CustomerComplaint,
 CustomerComplaintAttachment,
       CustomerReferral,
