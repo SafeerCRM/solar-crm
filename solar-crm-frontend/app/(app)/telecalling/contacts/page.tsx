@@ -32,6 +32,12 @@ type Contact = {
   remarks?: string;
   reviewAssignedTo?: number;
   reviewAssignedToName?: string;
+  sourceModule?: string;
+sourceReferralId?: number;
+referralCustomerCode?: string;
+referralReferrerName?: string;
+referralReferrerPhone?: string;
+referralRemarks?: string;
 };
 
 type User = {
@@ -1286,6 +1292,42 @@ const transferContacts = async () => {
                         {c.city || c.zone || c.location || c.address || '-'}
                       </p>
                     </div>
+
+                    {c.sourceModule === 'CUSTOMER_REFERRAL' && (
+  <div className="mt-3 rounded-xl border border-emerald-300 bg-emerald-50 p-3">
+    <p className="text-xs font-black text-emerald-700">
+      ⭐ CUSTOMER REFERRAL
+    </p>
+
+    <p className="mt-2 text-xs">
+      <span className="font-bold">Referred By:</span>{' '}
+      {c.referralReferrerName || '-'}
+    </p>
+
+    <p className="text-xs">
+      <span className="font-bold">Referrer Phone:</span>{' '}
+      {c.referralReferrerPhone || '-'}
+    </p>
+
+    <p className="text-xs">
+      <span className="font-bold">City:</span>{' '}
+      {c.city || '-'}
+    </p>
+
+    <p className="text-xs">
+      <span className="font-bold">Customer Code:</span>{' '}
+      {c.referralCustomerCode || '-'}
+    </p>
+
+    {c.referralRemarks && (
+      <p className="mt-2 text-xs text-gray-700">
+        <span className="font-bold">Referral Notes:</span>{' '}
+        {c.referralRemarks}
+      </p>
+    )}
+  </div>
+)}
+
 
                     <input
                       type="checkbox"
