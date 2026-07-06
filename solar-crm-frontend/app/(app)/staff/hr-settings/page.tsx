@@ -9,8 +9,6 @@ const POLICY_TYPES = [
   'ATTENDANCE',
   'LEAVE',
   'SALARY',
-  'INCENTIVE',
-  'PENALTY',
   'HOLIDAY',
   'GENERAL',
 ];
@@ -41,21 +39,6 @@ const DEFAULT_POLICY_DATA: Record<string, any> = {
     deductAbsent: true,
     deductHalfDay: true,
     ownerCanOverride: true,
-  },
-  INCENTIVE: {
-    telecallerOrderIncentive: 1000,
-    telecallerMinimumOrders: 3,
-    telecallerQualifiedLeadTarget: 150,
-    leadManagerOrderIncentive: 500,
-    leadManagerMinimumOrders: 25,
-    meetingManagerOrderIncentive: 3000,
-    meetingManagerMinimumOrders: 5,
-  },
-  PENALTY: {
-    latePenaltyEnabled: false,
-    latePenaltyAmount: 0,
-    absentPenaltyEnabled: true,
-    missedDeadlinePenaltyEnabled: true,
   },
   HOLIDAY: {
     weeklyOff: 'SUNDAY',

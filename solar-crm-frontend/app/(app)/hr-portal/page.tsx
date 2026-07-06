@@ -43,6 +43,13 @@ const sections = [
   },
 
   {
+  title: 'Penalties',
+  href: '/staff/penalties',
+  description: 'Create and manage staff penalty rules.',
+  disabled: false,
+},
+
+  {
   title: 'Performance Management',
   href: '/staff/performance',
   description:
