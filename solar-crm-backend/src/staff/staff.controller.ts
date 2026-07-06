@@ -448,4 +448,56 @@ hidePerformanceTemplate(@Param('id') id: string) {
 restorePerformanceTemplate(@Param('id') id: string) {
   return this.staffService.restorePerformanceTemplate(Number(id));
 }
+
+@Get('penalty-rules')
+listPenaltyRules(@Query() query: any) {
+  return this.staffService.listPenaltyRules(query);
+}
+
+@Post('penalty-rule')
+createPenaltyRule(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffService.createPenaltyRule(body, user);
+}
+
+@Patch('penalty-rule/:id')
+updatePenaltyRule(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffService.updatePenaltyRule(
+    Number(id),
+    body,
+    user,
+  );
+}
+
+@Patch('penalty-rule/:id/hide')
+hidePenaltyRule(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffService.hidePenaltyRule(
+    Number(id),
+    body,
+    user,
+  );
+}
+
+@Patch('penalty-rule/:id/restore')
+restorePenaltyRule(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffService.restorePenaltyRule(
+    Number(id),
+    body,
+    user,
+  );
+}
 }

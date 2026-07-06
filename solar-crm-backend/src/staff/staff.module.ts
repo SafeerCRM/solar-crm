@@ -17,6 +17,7 @@ import { RecruitmentCandidateDocument } from './recruitment-candidate-document.e
 import { StaffPerformance } from './staff-performance.entity';
 import { PerformanceTemplate } from './performance-template.entity';
 import { PerformanceTemplateMetric } from './performance-template-metric.entity';
+import { PenaltyRule } from './penalty-rule.entity';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { PerformanceTemplateMetric } from './performance-template-metric.entity'
       StaffPerformance,
       PerformanceTemplate,
 PerformanceTemplateMetric,
+PenaltyRule,
     ]),
   ],
   controllers: [StaffController, StaffSelfController],

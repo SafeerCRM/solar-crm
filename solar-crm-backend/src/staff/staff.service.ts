@@ -18,6 +18,10 @@ import { RecruitmentCandidate } from './recruitment-candidate.entity';
 import { RecruitmentCandidateDocument } from './recruitment-candidate-document.entity';
 import { PerformanceTemplate } from './performance-template.entity';
 import { PerformanceTemplateMetric } from './performance-template-metric.entity';
+import {
+  PenaltyRule,
+  PenaltyCalculationType,
+} from './penalty-rule.entity';
 
 @Injectable()
 export class StaffService {
@@ -60,6 +64,9 @@ private readonly performanceTemplateRepo: Repository<PerformanceTemplate>,
 
 @InjectRepository(PerformanceTemplateMetric)
 private readonly performanceTemplateMetricRepo: Repository<PerformanceTemplateMetric>,
+
+@InjectRepository(PenaltyRule)
+private readonly penaltyRuleRepository: Repository<PenaltyRule>,
   ) {}
 
   async findAll(query: any) {
@@ -1862,5 +1869,153 @@ async restorePerformanceTemplate(id: number) {
   template.isActive = true;
 
   return this.performanceTemplateRepo.save(template);
+}
+
+// =====================================================
+// PENALTY MANAGEMENT
+// =====================================================
+
+async listPenaltyRules(query: any) {
+  const page = Math.max(Number(query.page || 1), 1);
+  const limit = Math.min(Math.max(Number(query.limit || 20), 1), 100);
+  const showHidden = query.showHidden === 'true';
+
+  const qb = this.penaltyRuleRepository
+    .createQueryBuilder('rule')
+    .where('rule.isHidden = :showHidden', { showHidden });
+
+  if (query.penaltyType) {
+    qb.andWhere('rule.penaltyType = :penaltyType', {
+      penaltyType: query.penaltyType,
+    });
+  }
+
+  if (query.calculationType) {
+    qb.andWhere('rule.calculationType = :calculationType', {
+      calculationType: query.calculationType,
+    });
+  }
+
+  if (query.search) {
+    qb.andWhere(
+      '(rule.ruleName ILIKE :search OR rule.description ILIKE :search)',
+      { search: `%${query.search}%` },
+    );
+  }
+
+  const [data, total] = await qb
+    .orderBy('rule.createdAt', 'DESC')
+    .skip((page - 1) * limit)
+    .take(limit)
+    .getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
+}
+
+async createPenaltyRule(body: any, user: any) {
+  if (!String(body.ruleName || '').trim()) {
+    throw new BadRequestException('Penalty rule name is required');
+  }
+
+  const item = this.penaltyRuleRepository.create({
+    ruleName: String(body.ruleName).trim(),
+    description: body.description || '',
+    applicableRoles: Array.isArray(body.applicableRoles)
+      ? body.applicableRoles
+      : [],
+    department: body.department || '',
+    branchName: body.branchName || '',
+    penaltyType: body.penaltyType || 'CUSTOM',
+    calculationType: body.calculationType || 'MANUAL',
+    amount: Number(body.amount || 0),
+    percentageRate: Number(body.percentageRate || 0),
+    requiresApproval: body.requiresApproval !== false,
+    includeInPayroll: body.includeInPayroll !== false,
+    isActive: body.isActive !== false,
+    isHidden: false,
+    createdBy: user?.id || null,
+    createdByName: user?.name || '',
+  });
+
+  return this.penaltyRuleRepository.save(item);
+}
+
+async updatePenaltyRule(id: number, body: any, user: any) {
+  const item = await this.penaltyRuleRepository.findOne({ where: { id } });
+
+  if (!item) {
+    throw new NotFoundException('Penalty rule not found');
+  }
+
+  Object.assign(item, {
+    ruleName: body.ruleName ?? item.ruleName,
+    description: body.description ?? item.description,
+    applicableRoles: Array.isArray(body.applicableRoles)
+      ? body.applicableRoles
+      : item.applicableRoles,
+    department: body.department ?? item.department,
+    branchName: body.branchName ?? item.branchName,
+    penaltyType: body.penaltyType ?? item.penaltyType,
+    calculationType: body.calculationType ?? item.calculationType,
+    amount:
+      body.amount === undefined ? item.amount : Number(body.amount || 0),
+    percentageRate:
+      body.percentageRate === undefined
+        ? item.percentageRate
+        : Number(body.percentageRate || 0),
+    requiresApproval:
+      body.requiresApproval === undefined
+        ? item.requiresApproval
+        : body.requiresApproval,
+    includeInPayroll:
+      body.includeInPayroll === undefined
+        ? item.includeInPayroll
+        : body.includeInPayroll,
+    isActive: body.isActive === undefined ? item.isActive : body.isActive,
+    updatedBy: user?.id || null,
+    updatedByName: user?.name || '',
+  });
+
+  return this.penaltyRuleRepository.save(item);
+}
+
+async hidePenaltyRule(id: number, body: any, user: any) {
+  const item = await this.penaltyRuleRepository.findOne({ where: { id } });
+
+  if (!item) {
+    throw new NotFoundException('Penalty rule not found');
+  }
+
+  item.isHidden = true;
+  item.isActive = false;
+  item.hiddenAt = new Date();
+  item.hiddenBy = user?.id || null;
+  item.hiddenByName = user?.name || '';
+  item.hiddenReason = body?.reason || '';
+
+  return this.penaltyRuleRepository.save(item);
+}
+
+async restorePenaltyRule(id: number, body: any, user: any) {
+  const item = await this.penaltyRuleRepository.findOne({ where: { id } });
+
+  if (!item) {
+    throw new NotFoundException('Penalty rule not found');
+  }
+
+  item.isHidden = false;
+  item.isActive = true;
+  item.restoredAt = new Date();
+  item.restoredBy = user?.id || null;
+  item.restoredByName = user?.name || '';
+  item.restoreReason = body?.reason || '';
+
+  return this.penaltyRuleRepository.save(item);
 }
 }
