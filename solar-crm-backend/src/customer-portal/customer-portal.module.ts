@@ -28,6 +28,7 @@ import { CustomerAfterSalesRequestRating } from './customer-after-sales-request-
 import { CustomerReferralActivity } from './customer-referral-activity.entity';
 import { LeadsModule } from '../leads/leads.module';
 import { MeetingModule } from '../meeting/meeting.module';
+import { LeadsService } from 'src/leads/leads.service';
 
 @Module({
   imports: [
@@ -61,6 +62,6 @@ CustomerComplaintAttachment,
   ],
   controllers: [CustomerPortalController, CustomerAuthController],
   providers: [CustomerPortalService],
-  exports: [CustomerPortalService],
+  exports: [CustomerPortalService, LeadsService],
 })
 export class CustomerPortalModule {}
