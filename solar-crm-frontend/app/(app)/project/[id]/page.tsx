@@ -3966,6 +3966,13 @@ const canApproveAndReserveStock =
           ← Back to Projects
         </Link>
 
+        <Link
+  href={`/project/epc-invoice/${projectId}`}
+  className="rounded-xl bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700"
+>
+  Generate EPC Tax Invoice
+</Link>
+
         <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-800">

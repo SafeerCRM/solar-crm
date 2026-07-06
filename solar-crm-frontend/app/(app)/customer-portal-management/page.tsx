@@ -49,6 +49,15 @@ const cards = [
   key: 'afterSalesRequests',
   label: 'Open',
 },
+
+{
+  title: 'Customer Referrals',
+  description: 'Track referred contacts, conversion to lead/meeting/project and referral rewards.',
+  href: '/customer-referrals',
+  icon: '🎁',
+  key: 'pendingReferrals',
+  label: 'Pending',
+},
 ];
 
 export default function CustomerPortalManagementPage() {
@@ -73,6 +82,7 @@ export default function CustomerPortalManagementPage() {
   workRequestsRes,
   cleaningRes,
   afterSalesRes,
+  referralsRes
 ] = await Promise.allSettled([
         axios.get(`${API_BASE_URL}/customer-portal/complaints`, {
           params: { page: 1, limit: 1, status: 'OPEN' },
@@ -92,6 +102,10 @@ export default function CustomerPortalManagementPage() {
         }),
         axios.get(`${API_BASE_URL}/customer-portal/after-sales-requests`, {
   params: { page: 1, limit: 1, status: 'NEW' },
+  headers: getAuthHeaders(),
+}),
+axios.get(`${API_BASE_URL}/customer-portal/referrals`, {
+  params: { page: 1, limit: 1, status: 'REFERRED' },
   headers: getAuthHeaders(),
 }),
       ]);
@@ -116,6 +130,10 @@ export default function CustomerPortalManagementPage() {
             afterSalesRequests:
   afterSalesRes.status === 'fulfilled'
     ? Number(afterSalesRes.value.data?.total || 0)
+    : 0,
+    pendingReferrals:
+  referralsRes.status === 'fulfilled'
+    ? Number(referralsRes.value.data?.total || 0)
     : 0,
       });
     } catch (error) {
