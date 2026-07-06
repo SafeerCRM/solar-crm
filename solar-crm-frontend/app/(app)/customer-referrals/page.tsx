@@ -24,6 +24,9 @@ export default function CustomerReferralsPage() {
   const [items, setItems] = useState<any[]>([]);
   const [selected, setSelected] = useState<any>(null);
   const [activeTab, setActiveTab] = useState('OVERVIEW');
+  const [activities, setActivities] = useState<any[]>([]);
+const [loadingActivities, setLoadingActivities] =
+  useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -75,8 +78,29 @@ export default function CustomerReferralsPage() {
     }
   };
 
+  const loadActivities = async (referralId: number) => {
+  try {
+    setLoadingActivities(true);
+
+    const res = await axios.get(
+      `${API_BASE_URL}/customer-portal/referrals/${referralId}/activities`,
+      {
+        headers: headers(),
+      },
+    );
+
+    setActivities(Array.isArray(res.data) ? res.data : []);
+  } catch (error) {
+    console.error(error);
+    setActivities([]);
+  } finally {
+    setLoadingActivities(false);
+  }
+};
+
   const selectReferral = (item: any) => {
     setSelected(item);
+    loadActivities(item.id);
     setActiveTab('OVERVIEW');
     setEditForm({
       status: item.status || 'REFERRED',
@@ -305,7 +329,12 @@ export default function CustomerReferralsPage() {
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2">
-                {['OVERVIEW', 'CONVERSION', 'REWARD'].map((tab) => (
+                {[
+  'OVERVIEW',
+  'TIMELINE',
+  'CONVERSION',
+  'REWARD',
+].map((tab) => (
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
@@ -350,6 +379,55 @@ export default function CustomerReferralsPage() {
                   </div>
                 </div>
               )}
+
+              {activeTab === 'TIMELINE' && (
+  <div className="mt-5 rounded-3xl bg-gray-50 p-5">
+    <h3 className="text-lg font-black text-gray-900">
+      Referral Timeline
+    </h3>
+
+    {loadingActivities ? (
+      <div className="mt-5 text-sm font-semibold text-gray-500">
+        Loading timeline...
+      </div>
+    ) : activities.length === 0 ? (
+      <div className="mt-5 rounded-2xl border border-dashed p-6 text-center text-sm font-semibold text-gray-500">
+        No timeline available.
+      </div>
+    ) : (
+      <div className="mt-5 space-y-4">
+        {activities.map((activity: any) => (
+          <div
+            key={activity.id}
+            className="rounded-2xl border bg-white p-4"
+          >
+            <div className="flex items-center justify-between">
+              <p className="font-black text-gray-900">
+                {activity.activityTitle}
+              </p>
+
+              <span className="text-xs text-gray-500">
+                {new Date(
+                  activity.createdAt,
+                ).toLocaleString()}
+              </span>
+            </div>
+
+            {activity.activityDescription && (
+              <p className="mt-2 text-sm text-gray-600">
+                {activity.activityDescription}
+              </p>
+            )}
+
+            <p className="mt-2 text-xs text-gray-400">
+              {activity.performedByName}
+            </p>
+          </div>
+        ))}
+      </div>
+    )}
+  </div>
+)}
 
               {activeTab === 'CONVERSION' && (
                 <div className="mt-5 rounded-3xl bg-gray-50 p-5">
