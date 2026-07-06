@@ -60,6 +60,7 @@ private readonly meetingRepository: Repository<Meeting>,
 
     @InjectRepository(ContactNote)
     private readonly contactNoteRepository: Repository<ContactNote>,
+
   ) {}
 
   private getRoles(user: any): string[] {
@@ -235,6 +236,7 @@ qb.andWhere(`COALESCE(contact.stage, 'TELECALLING') = :stage`, {
 
     throw new ForbiddenException('You do not have access to this contact');
   }
+
 
   async uploadCallRecording(
   file: any,
@@ -2623,6 +2625,8 @@ const finalMeetingNotes = latestContext
     .where('lead.id = :leadId', { leadId: lead.id })
     .orderBy('meeting.createdAt', 'DESC')
     .getOne();
+
+
 
   if (existingMeeting) {
     await this.meetingRepository.update(existingMeeting.id, {
