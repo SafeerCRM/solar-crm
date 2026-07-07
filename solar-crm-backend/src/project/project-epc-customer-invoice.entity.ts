@@ -115,6 +115,9 @@ ewayBillNumber: string;
   amountInWords: string;
 
   @Column({ type: 'text', nullable: true })
+bankDetails: string;
+
+  @Column({ type: 'text', nullable: true })
   termsAndConditions: string;
 
   @Column({ type: 'text', nullable: true })

@@ -2558,6 +2558,17 @@ saveEpcCustomerInvoice(
   );
 }
 
+@Get('epc-customer-invoice/:invoiceId/pdf')
+generateEpcCustomerInvoicePdf(
+  @Param('invoiceId') invoiceId: string,
+  @Res() res: Response,
+) {
+  return this.projectService.generateEpcCustomerInvoicePdf(
+    Number(invoiceId),
+    res,
+  );
+}
+
 @Roles(
   'OWNER',
   'PROJECT_MANAGER',

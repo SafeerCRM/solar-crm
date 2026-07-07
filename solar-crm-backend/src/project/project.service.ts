@@ -20564,6 +20564,9 @@ ewayBillNumber: '',
         roundOff: totals.roundOff,
         grandTotal: totals.grandTotal,
 
+        bankDetails:
+  'Account Holder Name: ADITYA SOLARS\nBank Name: ICICI BANK\nAccount Number: 687005603181\nIFSC Code: ICIC0006870\nBranch: Aerodrome Circle',
+
         termsAndConditions:
           '1. Goods once sold will not be taken back.\n2. Warranty as per manufacturer terms.\n3. Subject to Rajasthan jurisdiction.',
         declaration:
@@ -20640,6 +20643,8 @@ invoice.ewayBillNumber = body.ewayBillNumber || '';
   invoice.roundOff = totals.roundOff;
   invoice.grandTotal = totals.grandTotal;
 
+  invoice.bankDetails = body.bankDetails || '';
+
   invoice.termsAndConditions = body.termsAndConditions || '';
   invoice.declaration = body.declaration || '';
   invoice.sealUrl = body.sealUrl || '';
@@ -20667,5 +20672,343 @@ invoice.ewayBillNumber = body.ewayBillNumber || '';
     invoice: savedInvoice,
     items: savedItems,
   };
+}
+
+async generateEpcCustomerInvoicePdf(
+  invoiceId: number,
+  res: Response,
+) {
+  const invoice =
+    await this.projectEpcCustomerInvoiceRepository.findOne({
+      where: { id: invoiceId },
+    });
+
+  if (!invoice) {
+    throw new NotFoundException('EPC invoice not found');
+  }
+
+  const items =
+    await this.projectEpcCustomerInvoiceItemRepository.find({
+      where: { invoiceId },
+      order: { serialNumber: 'ASC' },
+    });
+
+  const doc = new PDFDocument({
+    margin: 28,
+    size: 'A4',
+  });
+
+  const fileName = `${invoice.invoiceNumber || `EPC-INVOICE-${invoice.id}`}.pdf`;
+
+  res.setHeader(
+    'Content-Disposition',
+    `inline; filename="${fileName}"`,
+  );
+  res.setHeader('Content-Type', 'application/pdf');
+
+  doc.pipe(res);
+
+  const left = 28;
+  const right = 567;
+  const pageWidth = right - left;
+  const border = '#111827';
+
+  const logoPath = path.join(
+    process.cwd(),
+    'src',
+    'assets',
+    'aditya-logo.jpg',
+  );
+
+  try {
+    doc.image(logoPath, left, 18, {
+      fit: [pageWidth, 70],
+      align: 'center',
+    });
+  } catch {}
+
+  doc.y = 92;
+
+  doc
+    .fontSize(15)
+    .fillColor('#111827')
+    .text('TAX INVOICE', left, doc.y, {
+      width: pageWidth,
+      align: 'center',
+    });
+
+  doc.y += 22;
+
+  const boxY = doc.y;
+  const boxH = 112;
+  const colW = pageWidth / 3;
+
+  doc.rect(left, boxY, pageWidth, boxH).strokeColor(border).stroke();
+
+  doc
+    .moveTo(left + colW, boxY)
+    .lineTo(left + colW, boxY + boxH)
+    .stroke();
+
+  doc
+    .moveTo(left + colW * 2, boxY)
+    .lineTo(left + colW * 2, boxY + boxH)
+    .stroke();
+
+  const addressBox = (
+    title: string,
+    x: number,
+    name: string,
+    address: string,
+    phone: string,
+    extra = '',
+  ) => {
+    doc.fontSize(8).fillColor('#111827');
+    doc.text(title, x + 6, boxY + 6, {
+      width: colW - 12,
+      underline: true,
+    });
+    doc.fontSize(8).text(name || '-', x + 6, boxY + 22, {
+      width: colW - 12,
+    });
+    doc.fontSize(7).text(address || '-', x + 6, boxY + 36, {
+      width: colW - 12,
+      height: 36,
+    });
+    doc.fontSize(7).text(`Phone: ${phone || '-'}`, x + 6, boxY + 76, {
+      width: colW - 12,
+    });
+    if (extra) {
+      doc.fontSize(7).text(extra, x + 6, boxY + 90, {
+        width: colW - 12,
+      });
+    }
+  };
+
+  addressBox(
+    'FROM',
+    left,
+    invoice.fromName || 'ADITYA SOLARS',
+    invoice.fromAddress || '',
+    invoice.fromPhone || '',
+    `GSTIN: ${invoice.fromGstin || '-'}`,
+  );
+
+  addressBox(
+    'BILL TO',
+    left + colW,
+    invoice.billToName || '',
+    invoice.billToAddress || '',
+    invoice.billToPhone || '',
+  );
+
+  addressBox(
+    'SHIP TO',
+    left + colW * 2,
+    invoice.shipToName || '',
+    invoice.shipToAddress || '',
+    invoice.shipToPhone || '',
+  );
+
+  doc.y = boxY + boxH + 10;
+
+  const detailY = doc.y;
+  const detailH = 54;
+
+  doc.rect(left, detailY, pageWidth, detailH).stroke();
+
+  const detailColW = pageWidth / 3;
+
+  const detail = (
+    label: string,
+    value: string,
+    x: number,
+    y: number,
+  ) => {
+    doc.fontSize(7).fillColor('#6b7280').text(label, x, y);
+    doc.fontSize(8).fillColor('#111827').text(value || '-', x, y + 10, {
+      width: detailColW - 10,
+    });
+  };
+
+  detail('Invoice No.', invoice.invoiceNumber || '', left + 6, detailY + 6);
+  detail(
+    'Invoice Date',
+    invoice.invoiceDate
+      ? new Date(invoice.invoiceDate).toLocaleDateString('en-IN')
+      : '',
+    left + detailColW + 6,
+    detailY + 6,
+  );
+  detail('Place of Supply', invoice.placeOfSupply || '', left + detailColW * 2 + 6, detailY + 6);
+
+  detail('Delivery Note', invoice.deliveryNote || '', left + 6, detailY + 30);
+  detail('Buyer Order No.', invoice.buyerOrderNo || '', left + detailColW + 6, detailY + 30);
+  detail('Dispatch Through', invoice.dispatchThrough || '', left + detailColW * 2 + 6, detailY + 30);
+
+  doc.y = detailY + detailH + 12;
+
+  const drawHeader = () => {
+    const y = doc.y;
+    doc.rect(left, y, pageWidth, 24).fill('#f3f4f6').strokeColor(border).stroke();
+
+    doc.fillColor('#111827').fontSize(7);
+    doc.text('Sr', left + 3, y + 8, { width: 24 });
+    doc.text('Description', left + 28, y + 8, { width: 185 });
+    doc.text('HSN/SAC', left + 218, y + 8, { width: 55 });
+    doc.text('Qty', left + 276, y + 8, { width: 35, align: 'right' });
+    doc.text('Unit', left + 315, y + 8, { width: 38 });
+    doc.text('Rate', left + 356, y + 8, { width: 58, align: 'right' });
+    doc.text('GST%', left + 418, y + 8, { width: 35, align: 'right' });
+    doc.text('GST Amt', left + 456, y + 8, { width: 55, align: 'right' });
+    doc.text('Total', left + 514, y + 8, { width: 50, align: 'right' });
+
+    doc.y = y + 24;
+  };
+
+  drawHeader();
+
+  items.forEach((item: any, index) => {
+    const description = item.description || '-';
+
+    const rowHeight = Math.max(
+      34,
+      doc.fontSize(7).heightOfString(description, {
+        width: 185,
+      }) + 14,
+    );
+
+    if (doc.y + rowHeight > 690) {
+      doc.addPage();
+      doc.y = 32;
+      drawHeader();
+    }
+
+    const y = doc.y;
+
+    doc.rect(left, y, pageWidth, rowHeight).strokeColor(border).stroke();
+
+    doc.fontSize(7).fillColor('#111827');
+    doc.text(String(item.serialNumber || index + 1), left + 3, y + 7, { width: 24 });
+    doc.text(description, left + 28, y + 7, {
+      width: 185,
+      height: rowHeight - 10,
+    });
+    doc.text(item.hsnSac || '-', left + 218, y + 7, { width: 55 });
+    doc.text(String(item.quantity || 0), left + 276, y + 7, {
+      width: 35,
+      align: 'right',
+    });
+    doc.text(item.unit || '-', left + 315, y + 7, { width: 38 });
+    doc.text(this.formatInr(item.rate || 0), left + 356, y + 7, {
+      width: 58,
+      align: 'right',
+    });
+    doc.text(`${item.gstPercent || 0}%`, left + 418, y + 7, {
+      width: 35,
+      align: 'right',
+    });
+    doc.text(this.formatInr((item.cgstAmount || 0) + (item.sgstAmount || 0)), left + 456, y + 7, {
+      width: 55,
+      align: 'right',
+    });
+    doc.text(this.formatInr(item.totalAmount || 0), left + 514, y + 7, {
+      width: 50,
+      align: 'right',
+    });
+
+    doc.y = y + rowHeight;
+  });
+
+  doc.y += 10;
+
+  if (doc.y + 210 > 760) {
+    doc.addPage();
+    doc.y = 32;
+  }
+
+  const summaryX = 365;
+  const summaryY = doc.y;
+  const summaryW = 202;
+
+  doc.rect(summaryX, summaryY, summaryW, 112).stroke();
+
+  const summaryLine = (label: string, value: any, y: number, bold = false) => {
+    doc.fontSize(bold ? 9 : 8);
+    doc.text(label, summaryX + 8, y, { width: 82 });
+    doc.text(this.formatInr(value || 0), summaryX + 96, y, {
+      width: 96,
+      align: 'right',
+    });
+  };
+
+  summaryLine('Taxable', invoice.taxableAmount, summaryY + 10);
+  summaryLine('CGST', invoice.cgstAmount, summaryY + 28);
+  summaryLine('SGST', invoice.sgstAmount, summaryY + 46);
+  summaryLine('Round Off', invoice.roundOff, summaryY + 64);
+  summaryLine('Grand Total', invoice.grandTotal, summaryY + 86, true);
+
+  doc.y = summaryY + 125;
+
+  doc.rect(left, doc.y, pageWidth, 42).stroke();
+  doc.fontSize(8).text('Amount in Words', left + 8, doc.y + 7);
+  doc.fontSize(9).text(
+    this.numberToWordsIndian(Number(invoice.grandTotal || 0)),
+    left + 8,
+    doc.y + 22,
+    { width: pageWidth - 16 },
+  );
+
+  doc.y += 54;
+
+  const lowerY = doc.y;
+  const lowerH = 120;
+
+  doc.rect(left, lowerY, pageWidth, lowerH).stroke();
+  doc.moveTo(left + pageWidth / 2, lowerY).lineTo(left + pageWidth / 2, lowerY + lowerH).stroke();
+
+  doc.fontSize(8).text('Bank Details', left + 8, lowerY + 8);
+  doc.fontSize(7).text(invoice.bankDetails || '-', left + 8, lowerY + 24, {
+    width: pageWidth / 2 - 16,
+    height: 85,
+  });
+
+  doc.fontSize(8).text('Terms & Conditions', left + pageWidth / 2 + 8, lowerY + 8);
+  doc.fontSize(7).text(invoice.termsAndConditions || '-', left + pageWidth / 2 + 8, lowerY + 24, {
+    width: pageWidth / 2 - 16,
+    height: 85,
+  });
+
+  doc.y = lowerY + lowerH + 10;
+
+  doc.rect(left, doc.y, pageWidth, 52).stroke();
+  doc.fontSize(8).text('Declaration', left + 8, doc.y + 8);
+  doc.fontSize(7).text(invoice.declaration || '-', left + 8, doc.y + 23, {
+    width: pageWidth - 16,
+  });
+
+  doc.y += 66;
+
+  const signY = doc.y;
+
+  doc.fontSize(8).text('For ADITYA SOLARS', right - 180, signY, {
+    width: 170,
+    align: 'center',
+  });
+
+  doc.fontSize(8).text('Seal & Authorised Signature', right - 180, signY + 62, {
+    width: 170,
+    align: 'center',
+  });
+
+  doc
+    .fontSize(7)
+    .fillColor('#6b7280')
+    .text('This is a Computer Generated Invoice', left, 792, {
+      width: pageWidth,
+      align: 'center',
+    });
+
+  doc.end();
 }
 }
