@@ -483,6 +483,12 @@ const navItems = [
   href: '/project/branch-settings',
   roles: ['OWNER'],
 },
+
+{
+  name: 'System Settings',
+  href: '/settings',
+  roles: ['OWNER'],
+},
 ];
 
 type CurrentUser = {

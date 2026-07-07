@@ -1,46 +1,30 @@
 'use client';
 
-const settingCards = [
-  {
-    title: 'Portal Settings',
-    description: 'Manage dealer and customer portal settings, bank details, QR, UPI and future portal controls.',
-    href: '/settings/portal',
-  },
-];
+import Link from 'next/link';
 
-export default function SettingsPage() {
+export default function SystemSettingsPage() {
   return (
-    <main className="min-h-screen bg-gray-50 p-4 md:p-6">
-      <div className="mx-auto max-w-6xl">
-        <header className="rounded-2xl bg-white p-6 shadow">
-          <h1 className="text-2xl font-bold text-gray-800">
-            Settings
-          </h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Central place for CRM, dealer portal and customer portal settings.
-          </p>
-        </header>
-
-        <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {settingCards.map((card) => (
-            <a
-              key={card.href}
-              href={card.href}
-              className="rounded-2xl bg-white p-5 shadow transition hover:-translate-y-1 hover:shadow-lg"
-            >
-              <p className="text-lg font-bold text-gray-800">
-                {card.title}
-              </p>
-              <p className="mt-2 text-sm text-gray-500">
-                {card.description}
-              </p>
-              <p className="mt-4 text-sm font-bold text-blue-600">
-                Open →
-              </p>
-            </a>
-          ))}
-        </section>
+    <div className="mx-auto max-w-4xl space-y-6">
+      <div className="rounded-2xl bg-white p-6 shadow">
+        <h1 className="text-2xl font-bold text-gray-900">System Settings</h1>
+        <p className="mt-2 text-sm text-gray-600">
+          Owner-only controls for CRM security, access, and system-wide modes.
+        </p>
       </div>
-    </main>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Link
+          href="/settings/maintenance"
+          className="rounded-2xl bg-white p-6 shadow hover:bg-gray-50"
+        >
+          <h2 className="text-lg font-bold text-gray-900">
+            Maintenance Mode
+          </h2>
+          <p className="mt-2 text-sm text-gray-600">
+            Temporarily block all non-owner users from accessing the web app and APK.
+          </p>
+        </Link>
+      </div>
+    </div>
   );
 }
