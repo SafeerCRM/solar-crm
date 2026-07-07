@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { AppSetting } from './app-setting.entity';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class AppSettingsService {
@@ -87,6 +88,29 @@ async updateScreenshotPolicy(data: {
   return this.appSettingRepository.save(setting);
 }
 
+private verifyPasswordHash(password: string, storedHash: string) {
+  const parts = String(storedHash || '').split('$');
+
+  if (parts.length !== 4) return false;
+
+  const [algorithm, iterationsRaw, salt, hash] = parts;
+
+  if (algorithm !== 'pbkdf2_sha512') return false;
+
+  const iterations = Number(iterationsRaw);
+
+  if (!iterations || !salt || !hash) return false;
+
+  const computedHash = crypto
+    .pbkdf2Sync(password, salt, iterations, 64, 'sha512')
+    .toString('hex');
+
+  return crypto.timingSafeEqual(
+    Buffer.from(hash, 'hex'),
+    Buffer.from(computedHash, 'hex'),
+  );
+}
+
 async verifyDeveloperPassword(password: string) {
   const setting = await this.appSettingRepository.findOne({
     where: { key: 'developer_access' },
@@ -96,10 +120,13 @@ async verifyDeveloperPassword(password: string) {
     throw new NotFoundException('Developer access setting not found');
   }
 
-  const savedPassword = setting.value?.password || '';
+  const savedPasswordHash = setting.value?.passwordHash || '';
+  const legacyPassword = setting.value?.password || '';
 
-  return {
-    allowed: Boolean(password && savedPassword && password === savedPassword),
-  };
+  const allowed = savedPasswordHash
+    ? this.verifyPasswordHash(password, savedPasswordHash)
+    : Boolean(password && legacyPassword && password === legacyPassword);
+
+  return { allowed };
 }
 }
