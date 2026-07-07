@@ -2562,6 +2562,7 @@ saveEpcCustomerInvoice(
 generateEpcCustomerInvoicePdf(
   @Param('invoiceId') invoiceId: string,
   @Res() res: Response,
+  @CurrentUser() user: any,
 ) {
   return this.projectService.generateEpcCustomerInvoicePdf(
     Number(invoiceId),
