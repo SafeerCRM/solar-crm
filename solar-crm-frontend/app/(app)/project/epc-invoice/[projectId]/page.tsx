@@ -61,6 +61,65 @@ export default function EpcCustomerInvoicePage() {
     setItems(updated);
   };
 
+  const openPdf = async () => {
+  if (!invoice?.id) return;
+
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/epc-customer-invoice/${invoice.id}/pdf`,
+      {
+        responseType: 'blob',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      },
+    );
+
+    const blob = new Blob([res.data], { type: 'application/pdf' });
+    const fileName = `${invoice.invoiceNumber || `EPC-INVOICE-${invoice.id}`}.pdf`;
+
+    const isNative =
+      typeof window !== 'undefined' &&
+      !!(window as any).Capacitor?.isNativePlatform?.();
+
+    if (isNative) {
+      const { Filesystem, Directory } = await import('@capacitor/filesystem');
+      const { FileOpener } = await import('@capacitor-community/file-opener');
+
+      const reader = new FileReader();
+
+      reader.onloadend = async () => {
+        const base64 = String(reader.result || '').split(',')[1];
+
+        const saved = await Filesystem.writeFile({
+          path: fileName,
+          data: base64,
+          directory: Directory.Documents,
+          recursive: true,
+        });
+
+        await FileOpener.open({
+          filePath: saved.uri,
+          contentType: 'application/pdf',
+        });
+      };
+
+      reader.readAsDataURL(blob);
+      return;
+    }
+
+    const url = window.URL.createObjectURL(blob);
+    window.open(url, '_blank');
+
+    setTimeout(() => {
+      window.URL.revokeObjectURL(url);
+    }, 60_000);
+  } catch (error: any) {
+    console.error(error);
+    alert(error?.response?.data?.message || 'Failed to open PDF');
+  }
+};
+
   const saveInvoice = async () => {
     if (!invoice?.id) return;
 
@@ -616,14 +675,7 @@ const liveRoundOff =
 
     <button
       type="button"
-      onClick={() => {
-        if (!invoice?.id) return;
-
-        window.open(
-          `${API_BASE_URL}/project/epc-customer-invoice/${invoice.id}/pdf`,
-          '_blank',
-        );
-      }}
+      onClick={openPdf}
       className="rounded-xl bg-orange-600 px-5 py-3 font-semibold text-white"
     >
       Open PDF
