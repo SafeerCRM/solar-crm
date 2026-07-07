@@ -20865,19 +20865,31 @@ async generateEpcCustomerInvoicePdf(
 
   // Consignee box above item table
   const consigneeY = topY + topH;
-  const consigneeH = 54;
+  const consigneeH = 64;
   rect(left, consigneeY, pageWidth, consigneeH);
 
   doc.font('Helvetica-Bold').fontSize(6.8);
-  text('Consignee (Ship to)', left + 5, consigneeY + 4, pageWidth - 10);
-  doc.font('Helvetica-Bold').fontSize(7);
-  text(invoice.shipToName || '-', left + 5, consigneeY + 16, pageWidth - 10);
-  doc.font('Helvetica').fontSize(6.4);
-  text(invoice.shipToAddress || '-', left + 5, consigneeY + 28, 330, {
-    height: 16,
-  });
-  text(`MOB NO ${invoice.shipToPhone || '-'}`, left + 345, consigneeY + 28, 170);
-  text(`State Name : ${invoice.placeOfSupply || 'Rajasthan'}, Code : ${invoice.stateCode || '08'}`, left + 5, consigneeY + 43, pageWidth - 10);
+text('Consignee (Ship to)', left + 5, consigneeY + 4, pageWidth - 10);
+
+doc.font('Helvetica-Bold').fontSize(7);
+text(invoice.shipToName || '-', left + 5, consigneeY + 16, pageWidth - 10);
+
+doc.font('Helvetica').fontSize(6.4);
+
+const shipAddress = invoice.shipToAddress || '-';
+
+text(shipAddress, left + 5, consigneeY + 28, pageWidth - 10, {
+  height: 16,
+});
+
+text(`MOB NO ${invoice.shipToPhone || '-'}`, left + 5, consigneeY + 43, pageWidth - 10);
+
+text(
+  `State Name : ${invoice.placeOfSupply || 'Rajasthan'}, Code : ${invoice.stateCode || '08'}`,
+  left + 5,
+  consigneeY + 53,
+  pageWidth - 10,
+);
 
   // Items table
   const tableY = consigneeY + consigneeH;
