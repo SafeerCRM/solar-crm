@@ -20807,18 +20807,21 @@ async generateEpcCustomerInvoicePdf(
   text(`E-Mail : ${invoice.fromEmail || '-'}`, left + 5, topY + 84, leftW - 10);
 
   // Bill / Ship split
-  const buyerY = topY + 94;
-  line(left, buyerY, left + leftW, buyerY);
+  const buyerY = topY + 90;
+line(left, buyerY, left + leftW, buyerY);
 
-  doc.font('Helvetica-Bold').fontSize(6.8);
-  text('Buyer (Bill to)', left + 5, buyerY + 4, leftW - 10);
-  doc.font('Helvetica-Bold').fontSize(7);
-  text(invoice.billToName || '-', left + 5, buyerY + 16, leftW - 10);
-  doc.font('Helvetica').fontSize(6.4);
-  text(invoice.billToAddress || '-', left + 5, buyerY + 28, leftW - 10, {
-    height: 22,
-  });
-  text(`MOB NO ${invoice.billToPhone || '-'}`, left + 5, buyerY + 51, leftW - 10);
+doc.font('Helvetica-Bold').fontSize(6.5);
+text('Buyer (Bill to)', left + 5, buyerY + 4, leftW - 10);
+
+doc.font('Helvetica-Bold').fontSize(6.7);
+text(invoice.billToName || '-', left + 5, buyerY + 15, leftW - 10);
+
+doc.font('Helvetica').fontSize(6.2);
+text(invoice.billToAddress || '-', left + 5, buyerY + 26, leftW - 10, {
+  height: 16,
+});
+
+text(`MOB NO ${invoice.billToPhone || '-'}`, left + 5, buyerY + 43, leftW - 10);
 
   // Right invoice details grid
   const rX = left + leftW;
@@ -20865,29 +20868,26 @@ async generateEpcCustomerInvoicePdf(
 
   // Consignee box above item table
   const consigneeY = topY + topH;
-  const consigneeH = 64;
+  const consigneeH = 70;
   rect(left, consigneeY, pageWidth, consigneeH);
 
-  doc.font('Helvetica-Bold').fontSize(6.8);
-text('Consignee (Ship to)', left + 5, consigneeY + 4, pageWidth - 10);
+  doc.font('Helvetica-Bold').fontSize(6.5);
+text('Consignee (Ship to)', left + 5, consigneeY + 5, pageWidth - 10);
 
-doc.font('Helvetica-Bold').fontSize(7);
-text(invoice.shipToName || '-', left + 5, consigneeY + 16, pageWidth - 10);
+doc.font('Helvetica-Bold').fontSize(6.7);
+text(invoice.shipToName || '-', left + 5, consigneeY + 17, pageWidth - 10);
 
-doc.font('Helvetica').fontSize(6.4);
-
-const shipAddress = invoice.shipToAddress || '-';
-
-text(shipAddress, left + 5, consigneeY + 28, pageWidth - 10, {
+doc.font('Helvetica').fontSize(6.2);
+text(invoice.shipToAddress || '-', left + 5, consigneeY + 29, pageWidth - 10, {
   height: 16,
 });
 
-text(`MOB NO ${invoice.shipToPhone || '-'}`, left + 5, consigneeY + 43, pageWidth - 10);
+text(`MOB NO ${invoice.shipToPhone || '-'}`, left + 5, consigneeY + 46, pageWidth - 10);
 
 text(
   `State Name : ${invoice.placeOfSupply || 'Rajasthan'}, Code : ${invoice.stateCode || '08'}`,
   left + 5,
-  consigneeY + 53,
+  consigneeY + 58,
   pageWidth - 10,
 );
 
