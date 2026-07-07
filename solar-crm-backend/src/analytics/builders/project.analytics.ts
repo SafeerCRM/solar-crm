@@ -158,25 +158,41 @@ export class ProjectAnalyticsBuilder {
         .getRawMany(),
 
       projectsQb
-        .clone()
-        .select('project.projectOwnerId', 'userId')
-        .addSelect('COALESCE(project.projectOwnerName, \'Unassigned Owner\')', 'name')
-        .addSelect('COUNT(*)', 'totalProjects')
-        .addSelect(`SUM(CASE WHEN project.projectType = :cash THEN 1 ELSE 0 END)`, 'cashProjects')
-        .addSelect(`SUM(CASE WHEN project.projectType = :loan THEN 1 ELSE 0 END)`, 'loanProjects')
-        .addSelect(`SUM(CASE WHEN project.status = :completed THEN 1 ELSE 0 END)`, 'completedProjects')
-        .setParameters({
-          cash: ProjectType.CASH,
-          loan: ProjectType.LOAN,
-          completed: ProjectStatus.COMPLETED,
-        })
-        .andWhere('project.projectOwnerId IS NOT NULL')
-        .groupBy('project.projectOwnerId')
-        .addGroupBy('project.projectOwnerName')
-        .orderBy('COUNT(*)', 'DESC')
-        .limit(50)
-        .getRawMany(),
+  .clone()
+  .select('project.projectOwnerId', 'userId')
+  .addSelect('COUNT(*)', 'totalProjects')
+  .addSelect(`SUM(CASE WHEN project.projectType = :cash THEN 1 ELSE 0 END)`, 'cashProjects')
+  .addSelect(`SUM(CASE WHEN project.projectType = :loan THEN 1 ELSE 0 END)`, 'loanProjects')
+  .addSelect(`SUM(CASE WHEN project.status = :completed THEN 1 ELSE 0 END)`, 'completedProjects')
+  .setParameters({
+    cash: ProjectType.CASH,
+    loan: ProjectType.LOAN,
+    completed: ProjectStatus.COMPLETED,
+  })
+  .andWhere('project.projectOwnerId IS NOT NULL')
+  .groupBy('project.projectOwnerId')
+  .orderBy('COUNT(*)', 'DESC')
+  .limit(50)
+  .getRawMany(),
     ]);
+
+    const rowUserIds = ownerRows
+  .map((row) => Number(row.userId || 0))
+  .filter(Boolean);
+
+const rowUsers = rowUserIds.length
+  ? await this.userRepository
+      .createQueryBuilder('user')
+      .where('user.id IN (:...rowUserIds)', { rowUserIds })
+      .getMany()
+  : [];
+
+const userNameMap = new Map(
+  rowUsers.map((item) => [
+    Number(item.id),
+    item.name || item.email || `User #${item.id}`,
+  ]),
+);
 
     const activeProjects =
       totalProjects - completedProjects - cancelledProjects - rejectedProjects;
@@ -243,14 +259,18 @@ export class ProjectAnalyticsBuilder {
           ],
         },
       },
-      rows: ownerRows.map((row) => ({
-        userId: row.userId ? Number(row.userId) : null,
-        name: row.name,
-        totalProjects: Number(row.totalProjects || 0),
-        cashProjects: Number(row.cashProjects || 0),
-        loanProjects: Number(row.loanProjects || 0),
-        completedProjects: Number(row.completedProjects || 0),
-      })),
+      rows: ownerRows.map((row) => {
+  const userId = row.userId ? Number(row.userId) : null;
+
+  return {
+    userId,
+    name: userId ? userNameMap.get(userId) || `User #${userId}` : '-',
+    totalProjects: Number(row.totalProjects || 0),
+    cashProjects: Number(row.cashProjects || 0),
+    loanProjects: Number(row.loanProjects || 0),
+    completedProjects: Number(row.completedProjects || 0),
+  };
+}),
       branchRows: branchRows.map((row) => ({
         branchName: row.branchName,
         totalProjects: Number(row.totalProjects || 0),
