@@ -27,4 +27,23 @@ export class AppSettingsController {
   ) {
     return this.appSettingsService.updateMaintenanceMode(body);
   }
+
+  @Get('screenshot-policy')
+async getScreenshotPolicy() {
+  return this.appSettingsService.getScreenshotPolicy();
+}
+
+@Patch('screenshot-policy')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+async updateScreenshotPolicy(
+  @Body()
+  body: {
+    blockByDefault: boolean;
+    allowedRoles?: string[];
+    allowedUserIds?: number[];
+  },
+) {
+  return this.appSettingsService.updateScreenshotPolicy(body);
+}
 }

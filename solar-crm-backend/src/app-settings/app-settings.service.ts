@@ -48,4 +48,42 @@ export class AppSettingsService {
 
     return this.appSettingRepository.save(setting);
   }
+
+  async getScreenshotPolicy() {
+  const setting = await this.appSettingRepository.findOne({
+    where: { key: 'apk_screenshot_policy' },
+  });
+
+  if (!setting) {
+    throw new NotFoundException('Screenshot policy setting not found');
+  }
+
+  return setting.value;
+}
+
+async updateScreenshotPolicy(data: {
+  blockByDefault: boolean;
+  allowedRoles?: string[];
+  allowedUserIds?: number[];
+}) {
+  const setting = await this.appSettingRepository.findOne({
+    where: { key: 'apk_screenshot_policy' },
+  });
+
+  if (!setting) {
+    throw new NotFoundException('Screenshot policy setting not found');
+  }
+
+  setting.value = {
+    blockByDefault: Boolean(data.blockByDefault),
+    allowedRoles: Array.isArray(data.allowedRoles) ? data.allowedRoles : [],
+    allowedUserIds: Array.isArray(data.allowedUserIds)
+      ? data.allowedUserIds.map((id) => Number(id)).filter(Boolean)
+      : [],
+  };
+
+  setting.updatedAt = new Date();
+
+  return this.appSettingRepository.save(setting);
+}
 }
