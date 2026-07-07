@@ -204,6 +204,24 @@ export class TelecallingAnalyticsBuilder {
         .getRawMany(),
     ]);
 
+    const rowUserIds = userWiseRows
+  .map((row) => Number(row.userId || 0))
+  .filter(Boolean);
+
+const rowUsers = rowUserIds.length
+  ? await this.userRepository
+      .createQueryBuilder('user')
+      .where('user.id IN (:...rowUserIds)', { rowUserIds })
+      .getMany()
+  : [];
+
+const userNameMap = new Map(
+  rowUsers.map((item) => [
+    Number(item.id),
+    item.name || item.email || `User #${item.id}`,
+  ]),
+);
+
     const connectedPercent =
       totalCalls > 0 ? Math.round((connected / totalCalls) * 100) : 0;
 
@@ -278,14 +296,19 @@ export class TelecallingAnalyticsBuilder {
           ],
         },
       },
-      rows: userWiseRows.map((row) => ({
-        userId: row.userId ? Number(row.userId) : null,
-        totalCalls: Number(row.totalCalls || 0),
-        connected: Number(row.connected || 0),
-        cnr: Number(row.cnr || 0),
-        callback: Number(row.callback || 0),
-        interested: Number(row.interested || 0),
-      })),
+      rows: userWiseRows.map((row) => {
+  const userId = row.userId ? Number(row.userId) : null;
+
+  return {
+    userId,
+    userName: userId ? userNameMap.get(userId) || `User #${userId}` : '-',
+    totalCalls: Number(row.totalCalls || 0),
+    connected: Number(row.connected || 0),
+    cnr: Number(row.cnr || 0),
+    callback: Number(row.callback || 0),
+    interested: Number(row.interested || 0),
+  };
+}),
     };
   }
 }

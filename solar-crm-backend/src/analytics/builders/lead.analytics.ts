@@ -232,6 +232,24 @@ userWiseRows,
         .getRawMany(),
     ]);
 
+    const rowUserIds = userWiseRows
+  .map((row) => Number(row.userId || 0))
+  .filter(Boolean);
+
+const rowUsers = rowUserIds.length
+  ? await this.userRepository
+      .createQueryBuilder('user')
+      .where('user.id IN (:...rowUserIds)', { rowUserIds })
+      .getMany()
+  : [];
+
+const userNameMap = new Map(
+  rowUsers.map((item) => [
+    Number(item.id),
+    item.name || item.email || `User #${item.id}`,
+  ]),
+);
+
     const uniqueLeadConvertedCount = Number(
   uniqueLeadsConvertedToMeeting?.count || 0,
 );
@@ -302,13 +320,18 @@ const meetingConversionPercent =
           ],
         },
       },
-      rows: userWiseRows.map((row) => ({
-        userId: row.userId ? Number(row.userId) : null,
-        totalLeads: Number(row.totalLeads || 0),
-        highPotential: Number(row.highPotential || 0),
-        mediumPotential: Number(row.mediumPotential || 0),
-        lowPotential: Number(row.lowPotential || 0),
-      })),
+      rows: userWiseRows.map((row) => {
+  const userId = row.userId ? Number(row.userId) : null;
+
+  return {
+    userId,
+    userName: userId ? userNameMap.get(userId) || `User #${userId}` : '-',
+    totalLeads: Number(row.totalLeads || 0),
+    highPotential: Number(row.highPotential || 0),
+    mediumPotential: Number(row.mediumPotential || 0),
+    lowPotential: Number(row.lowPotential || 0),
+  };
+}),
     };
   }
 }
