@@ -555,36 +555,81 @@ const liveRoundOff =
 </div>
 
       <div className="rounded-2xl bg-white p-5 shadow">
-        <h2 className="text-lg font-bold text-gray-800">
-          Terms & Declaration
-        </h2>
+  <h2 className="text-lg font-bold text-gray-800">
+    Bank Details, Terms & Signature
+  </h2>
 
-        <textarea
-          value={invoice.termsAndConditions || ''}
-          onChange={(e) =>
-            updateInvoice('termsAndConditions', e.target.value)
-          }
-          rows={5}
-          className="mt-4 w-full rounded-xl border p-3"
-        />
+  <div className="mt-4 grid gap-3 md:grid-cols-2">
+    <textarea
+      value={invoice.bankDetails || ''}
+      onChange={(e) => updateInvoice('bankDetails', e.target.value)}
+      rows={5}
+      placeholder="Bank Details"
+      className="w-full rounded-xl border p-3"
+    />
 
-        <textarea
-          value={invoice.declaration || ''}
-          onChange={(e) => updateInvoice('declaration', e.target.value)}
-          rows={4}
-          className="mt-4 w-full rounded-xl border p-3"
-        />
-      </div>
+    <textarea
+      value={invoice.termsAndConditions || ''}
+      onChange={(e) =>
+        updateInvoice('termsAndConditions', e.target.value)
+      }
+      rows={5}
+      placeholder="Terms & Conditions"
+      className="w-full rounded-xl border p-3"
+    />
+
+    <textarea
+      value={invoice.declaration || ''}
+      onChange={(e) => updateInvoice('declaration', e.target.value)}
+      rows={4}
+      placeholder="Declaration"
+      className="w-full rounded-xl border p-3"
+    />
+
+    <div className="grid gap-3">
+      <input
+        value={invoice.sealUrl || ''}
+        onChange={(e) => updateInvoice('sealUrl', e.target.value)}
+        placeholder="Seal Image URL"
+        className="rounded-xl border p-3"
+      />
+
+      <input
+        value={invoice.signatureUrl || ''}
+        onChange={(e) => updateInvoice('signatureUrl', e.target.value)}
+        placeholder="Signature Image URL"
+        className="rounded-xl border p-3"
+      />
+    </div>
+  </div>
+</div>
 
       <div className="sticky bottom-3 rounded-2xl bg-white p-4 shadow">
-        <button
-          onClick={saveInvoice}
-          disabled={saving}
-          className="rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white disabled:opacity-50"
-        >
-          {saving ? 'Saving...' : 'Save Draft'}
-        </button>
-      </div>
+  <div className="flex flex-wrap gap-3">
+    <button
+      onClick={saveInvoice}
+      disabled={saving}
+      className="rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white disabled:opacity-50"
+    >
+      {saving ? 'Saving...' : 'Save Draft'}
+    </button>
+
+    <button
+      type="button"
+      onClick={() => {
+        if (!invoice?.id) return;
+
+        window.open(
+          `${API_BASE_URL}/project/epc-customer-invoice/${invoice.id}/pdf`,
+          '_blank',
+        );
+      }}
+      className="rounded-xl bg-orange-600 px-5 py-3 font-semibold text-white"
+    >
+      Open PDF
+    </button>
+  </div>
+</div>
     </div>
   );
 }
