@@ -39,7 +39,7 @@ export default function AppSecurityGate({
 
     if (!token) {
       setAllowed(false);
-      router.replace('/login');
+      router.replace('/');
       return;
     }
 
