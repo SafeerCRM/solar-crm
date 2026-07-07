@@ -20784,33 +20784,52 @@ async generateEpcCustomerInvoicePdf(
       align: 'center',
     });
 
-  // Top section like sample
-  const topY = 82;
-  const topH = 118;
-  const leftW = 225;
-  const rightW = pageWidth - leftW;
+  // Top section like sample - fixed independent blocks
+const topY = 82;
+const leftW = 225;
+const rightW = pageWidth - leftW;
+const rX = left + leftW;
+const rCol = rightW / 2;
 
-  rect(left, topY, pageWidth, topH);
-  line(left + leftW, topY, left + leftW, topY + topH);
+const companyH = 78;
+const buyerH = 48;
+const consigneeH = 58;
+const topTotalH = companyH + buyerH + consigneeH;
 
-  // Seller
-  doc.font('Helvetica-Bold').fontSize(7.2);
-  text(invoice.fromName || 'ADITYA SOLARS', left + 5, topY + 6, leftW - 10);
+// Outer top box
+rect(left, topY, pageWidth, topTotalH);
 
-  doc.font('Helvetica').fontSize(6.8);
-  text(invoice.fromAddress || '', left + 5, topY + 20, leftW - 10, {
-    height: 25,
-  });
-  text(`GSTIN/UIN: ${invoice.fromGstin || '-'}`, left + 5, topY + 48, leftW - 10);
-  text(`State Name : ${invoice.placeOfSupply || 'Rajasthan'}, Code : ${invoice.stateCode || '08'}`, left + 5, topY + 60, leftW - 10);
-  text(`Phone : ${invoice.fromPhone || '-'}`, left + 5, topY + 72, leftW - 10);
-  text(`E-Mail : ${invoice.fromEmail || '-'}`, left + 5, topY + 84, leftW - 10);
+// Main vertical split
+line(rX, topY, rX, topY + topTotalH);
 
-  // Bill / Ship split
-  const buyerY = topY + 90;
-line(left, buyerY, left + leftW, buyerY);
+// Left-side independent sections
+const companyY = topY;
+const buyerY = companyY + companyH;
+const consigneeY = buyerY + buyerH;
 
-doc.font('Helvetica-Bold').fontSize(6.5);
+line(left, buyerY, rX, buyerY);
+line(left, consigneeY, rX, consigneeY);
+
+// Company block
+doc.font('Helvetica-Bold').fontSize(7.2);
+text(invoice.fromName || 'ADITYA SOLARS', left + 5, companyY + 6, leftW - 10);
+
+doc.font('Helvetica').fontSize(6.4);
+text(invoice.fromAddress || '', left + 5, companyY + 19, leftW - 10, {
+  height: 18,
+});
+
+text(`GSTIN/UIN: ${invoice.fromGstin || '-'}`, left + 5, companyY + 40, leftW - 10);
+text(
+  `State Name : ${invoice.placeOfSupply || 'Rajasthan'}, Code : ${invoice.stateCode || '08'}`,
+  left + 5,
+  companyY + 51,
+  leftW - 10,
+);
+text(`Phone : ${invoice.fromPhone || '-'}`, left + 5, companyY + 62, leftW - 10);
+
+// Buyer block
+doc.font('Helvetica-Bold').fontSize(6.4);
 text('Buyer (Bill to)', left + 5, buyerY + 4, leftW - 10);
 
 doc.font('Helvetica-Bold').fontSize(6.7);
@@ -20818,81 +20837,110 @@ text(invoice.billToName || '-', left + 5, buyerY + 15, leftW - 10);
 
 doc.font('Helvetica').fontSize(6.2);
 text(invoice.billToAddress || '-', left + 5, buyerY + 26, leftW - 10, {
-  height: 16,
+  height: 10,
 });
 
-text(`MOB NO ${invoice.billToPhone || '-'}`, left + 5, buyerY + 43, leftW - 10);
+text(`MOB NO ${invoice.billToPhone || '-'}`, left + 5, buyerY + 38, leftW - 10);
 
-  // Right invoice details grid
-  const rX = left + leftW;
-  const rCol = rightW / 2;
-  const rowH = 24;
-
-  for (let i = 1; i <= 5; i++) {
-    line(rX, topY + rowH * i, right, topY + rowH * i);
-  }
-  line(rX + rCol, topY, rX + rCol, topY + rowH * 4);
-
-  const infoCell = (
-    label: string,
-    value: string,
-    x: number,
-    y: number,
-  ) => {
-    doc.font('Helvetica').fontSize(6.2);
-    text(label, x + 4, y + 3, rCol - 8);
-    doc.font('Helvetica-Bold').fontSize(6.7);
-    text(value || '-', x + 4, y + 13, rCol - 8);
-  };
-
-  infoCell('Invoice No.', invoice.invoiceNumber || '', rX, topY);
-  infoCell(
-    'Dated',
-    invoice.invoiceDate
-      ? new Date(invoice.invoiceDate).toLocaleDateString('en-IN')
-      : '',
-    rX + rCol,
-    topY,
-  );
-  infoCell('Delivery Note', invoice.deliveryNote || '', rX, topY + rowH);
-  infoCell('Mode/Terms of Payment', invoice.termsOfDelivery || '', rX + rCol, topY + rowH);
-  infoCell('Reference No. & Date.', invoice.buyerOrderNo || '', rX, topY + rowH * 2);
-  infoCell('Other References', '-', rX + rCol, topY + rowH * 2);
-  infoCell('Dispatch Doc No.', invoice.dispatchThrough || '', rX, topY + rowH * 3);
-  infoCell('Delivery Note Date', '-', rX + rCol, topY + rowH * 3);
-
-  doc.font('Helvetica').fontSize(6.5);
-  text('Terms of Delivery', rX + 4, topY + rowH * 4 + 5, rightW - 8);
-  doc.font('Helvetica-Bold').fontSize(6.8);
-  text(invoice.termsOfDelivery || '-', rX + 4, topY + rowH * 4 + 17, rightW - 8);
-
-  // Consignee box above item table
-  const consigneeY = topY + topH;
-  const consigneeH = 70;
-  rect(left, consigneeY, pageWidth, consigneeH);
-
-  doc.font('Helvetica-Bold').fontSize(6.5);
-text('Consignee (Ship to)', left + 5, consigneeY + 5, pageWidth - 10);
+// Consignee block
+doc.font('Helvetica-Bold').fontSize(6.4);
+text('Consignee (Ship to)', left + 5, consigneeY + 4, leftW - 10);
 
 doc.font('Helvetica-Bold').fontSize(6.7);
-text(invoice.shipToName || '-', left + 5, consigneeY + 17, pageWidth - 10);
+text(invoice.shipToName || '-', left + 5, consigneeY + 15, leftW - 10);
 
 doc.font('Helvetica').fontSize(6.2);
-text(invoice.shipToAddress || '-', left + 5, consigneeY + 29, pageWidth - 10, {
-  height: 16,
+text(invoice.shipToAddress || '-', left + 5, consigneeY + 26, leftW - 10, {
+  height: 10,
 });
 
-text(`MOB NO ${invoice.shipToPhone || '-'}`, left + 5, consigneeY + 46, pageWidth - 10);
+text(`MOB NO ${invoice.shipToPhone || '-'}`, left + 5, consigneeY + 38, leftW - 10);
 
 text(
   `State Name : ${invoice.placeOfSupply || 'Rajasthan'}, Code : ${invoice.stateCode || '08'}`,
   left + 5,
-  consigneeY + 58,
-  pageWidth - 10,
+  consigneeY + 49,
+  leftW - 10,
 );
 
-  // Items table
-  const tableY = consigneeY + consigneeH;
+// Right invoice details grid
+const rowH = 24;
+
+for (let i = 1; i <= 5; i++) {
+  line(rX, topY + rowH * i, right, topY + rowH * i);
+}
+
+line(rX + rCol, topY, rX + rCol, topY + rowH * 4);
+
+const infoCell = (
+  label: string,
+  value: string,
+  x: number,
+  y: number,
+) => {
+  doc.font('Helvetica').fontSize(6.2);
+  text(label, x + 4, y + 3, rCol - 8);
+
+  doc.font('Helvetica-Bold').fontSize(6.7);
+  text(value || '-', x + 4, y + 13, rCol - 8);
+};
+
+infoCell('Invoice No.', invoice.invoiceNumber || '', rX, topY);
+
+infoCell(
+  'Dated',
+  invoice.invoiceDate
+    ? new Date(invoice.invoiceDate).toLocaleDateString('en-IN')
+    : '',
+  rX + rCol,
+  topY,
+);
+
+infoCell('Delivery Note', invoice.deliveryNote || '', rX, topY + rowH);
+
+infoCell(
+  'Mode/Terms of Payment',
+  invoice.termsOfDelivery || '',
+  rX + rCol,
+  topY + rowH,
+);
+
+infoCell(
+  'Reference No. & Date.',
+  invoice.buyerOrderNo || '',
+  rX,
+  topY + rowH * 2,
+);
+
+infoCell(
+  'Other References',
+  '-',
+  rX + rCol,
+  topY + rowH * 2,
+);
+
+infoCell(
+  'Dispatch Doc No.',
+  invoice.dispatchThrough || '',
+  rX,
+  topY + rowH * 3,
+);
+
+infoCell(
+  'Delivery Note Date',
+  '-',
+  rX + rCol,
+  topY + rowH * 3,
+);
+
+doc.font('Helvetica').fontSize(6.5);
+text('Terms of Delivery', rX + 4, topY + rowH * 4 + 5, rightW - 8);
+
+doc.font('Helvetica-Bold').fontSize(6.8);
+text(invoice.termsOfDelivery || '-', rX + 4, topY + rowH * 4 + 17, rightW - 8);
+
+// Items table starts after complete top block
+const tableY = topY + topTotalH;
   const headerH = 22;
 
   const c = {
