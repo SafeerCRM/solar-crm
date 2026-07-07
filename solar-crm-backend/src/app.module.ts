@@ -24,6 +24,7 @@ import { CustomerPortalModule } from './customer-portal/customer-portal.module';
 import { DealerModule } from './dealer/dealer.module';
 import { StaffModule } from './staff/staff.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { AppSettingsModule } from './app-settings/app-settings.module';
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
     StaffModule,
     CustomerPortalModule,
     DealerModule,
+    AppSettingsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
