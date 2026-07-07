@@ -21240,52 +21240,99 @@ const tableY = topY + topTotalH;
   y += taxH;
 
   // Tax amount in words
-  const taxWordsH = 24;
-  rect(left, y, pageWidth, taxWordsH);
-  doc.font('Helvetica').fontSize(6.5);
-  text('Tax Amount (in words) :', left + 5, y + 7, 95);
-  doc.font('Helvetica-Bold').fontSize(6.8);
-  text(
-    this.numberToWordsIndian(Number(invoice.totalTaxAmount || 0)),
-    left + 105,
-    y + 7,
-    pageWidth - 110,
-  );
+const taxWordsH = 22;
+rect(left, y, pageWidth, taxWordsH);
 
-  y += taxWordsH;
+doc.font('Helvetica').fontSize(6.5);
+text('Tax Amount (in words) :', left + 5, y + 7, 95);
 
-  // Declaration + signature
-  const footerH = 74;
-  rect(left, y, pageWidth, footerH);
-  line(left + 315, y, left + 315, y + footerH);
+doc.font('Helvetica-Bold').fontSize(6.8);
+text(
+  this.numberToWordsIndian(Number(invoice.totalTaxAmount || 0)),
+  left + 105,
+  y + 7,
+  pageWidth - 110,
+);
 
-  doc.font('Helvetica').fontSize(6.4);
-  text('Declaration', left + 5, y + 5, 100);
-  text(invoice.declaration || '-', left + 5, y + 17, 300, {
-    height: 42,
-  });
+y += taxWordsH;
 
-  doc.font('Helvetica-Bold').fontSize(6.8);
-  text('for ADITYA SOLARS', left + 320, y + 5, pageWidth - 325, {
+// Final bottom block: Bank + Terms + Declaration + Signature
+const bankTermsH = 58;
+const declarationH = 68;
+const computerFooterH = 14;
+const bottomBlockH = bankTermsH + declarationH + computerFooterH;
+
+// If bottom block cannot fit, move complete bottom block to next page.
+// This prevents orphan pages like only "Authorised Signatory" or footer.
+if (y + bottomBlockH > 790) {
+  doc.addPage();
+  y = 34;
+}
+
+// Bank Details + Terms & Conditions
+rect(left, y, pageWidth, bankTermsH);
+line(left + pageWidth / 2, y, left + pageWidth / 2, y + bankTermsH);
+
+doc.font('Helvetica-Bold').fontSize(6.8);
+text('Bank Details', left + 5, y + 5, pageWidth / 2 - 10);
+text(
+  'Terms & Conditions',
+  left + pageWidth / 2 + 5,
+  y + 5,
+  pageWidth / 2 - 10,
+);
+
+doc.font('Helvetica').fontSize(6.1);
+text(invoice.bankDetails || '-', left + 5, y + 18, pageWidth / 2 - 10, {
+  height: bankTermsH - 23,
+});
+
+text(
+  invoice.termsAndConditions || '-',
+  left + pageWidth / 2 + 5,
+  y + 18,
+  pageWidth / 2 - 10,
+  {
+    height: bankTermsH - 23,
+  },
+);
+
+y += bankTermsH;
+
+// Declaration + Signature
+rect(left, y, pageWidth, declarationH);
+line(left + 315, y, left + 315, y + declarationH);
+
+doc.font('Helvetica-Bold').fontSize(6.7);
+text('Declaration', left + 5, y + 5, 100);
+
+doc.font('Helvetica').fontSize(6.1);
+text(invoice.declaration || '-', left + 5, y + 18, 300, {
+  height: declarationH - 24,
+});
+
+doc.font('Helvetica-Bold').fontSize(6.8);
+text('for ADITYA SOLARS', left + 320, y + 5, pageWidth - 325, {
+  align: 'center',
+});
+
+try {
+  doc.image(sealSignPath, left + 365, y + 18, {
+    fit: [110, 36],
     align: 'center',
   });
+} catch {}
 
-  try {
-    doc.image(sealSignPath, left + 365, y + 18, {
-      fit: [110, 38],
-      align: 'center',
-    });
-  } catch {}
+doc.font('Helvetica').fontSize(6.3);
+text('Authorised Signatory', left + 320, y + 57, pageWidth - 325, {
+  align: 'right',
+});
 
-  doc.font('Helvetica').fontSize(6.3);
-  text('Authorised Signatory', left + 320, y + 60, pageWidth - 325, {
-    align: 'right',
-  });
+y += declarationH;
 
-  y += footerH;
-
-  doc.font('Helvetica').fontSize(6.5);
-  text('This is a Computer Generated Invoice', left, y + 5, pageWidth, {
+// Computer generated footer
+doc.font('Helvetica').fontSize(6.3);
+text('This is a Computer Generated Invoice', left, y + 5, pageWidth, {
   align: 'center',
 });
 
