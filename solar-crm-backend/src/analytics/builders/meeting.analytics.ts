@@ -75,9 +75,10 @@ export class MeetingAnalyticsBuilder {
     }
 
     const projectsQb = this.projectRepository
-      .createQueryBuilder('project')
-      .where('project.isHidden = false')
-      .andWhere('project.createdAt BETWEEN :start AND :end', { start, end });
+  .createQueryBuilder('project')
+  .where('project.isHidden = false')
+  .andWhere('project.createdAt BETWEEN :start AND :end', { start, end })
+  .andWhere('project.meetingId IS NOT NULL');
 
     if (userIds.length) {
       projectsQb.andWhere(
