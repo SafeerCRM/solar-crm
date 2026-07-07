@@ -111,6 +111,18 @@ private verifyPasswordHash(password: string, storedHash: string) {
   );
 }
 
+private createPasswordHash(password: string) {
+  const algorithm = 'pbkdf2_sha512';
+  const iterations = 120000;
+  const salt = crypto.randomBytes(16).toString('hex');
+
+  const hash = crypto
+    .pbkdf2Sync(password, salt, iterations, 64, 'sha512')
+    .toString('hex');
+
+  return `${algorithm}$${iterations}$${salt}$${hash}`;
+}
+
 async verifyDeveloperPassword(password: string) {
   const setting = await this.appSettingRepository.findOne({
     where: { key: 'developer_access' },
@@ -128,5 +140,31 @@ async verifyDeveloperPassword(password: string) {
     : Boolean(password && legacyPassword && password === legacyPassword);
 
   return { allowed };
+}
+
+async migrateDeveloperPasswordToHash(password: string) {
+  const setting = await this.appSettingRepository.findOne({
+    where: { key: 'developer_access' },
+  });
+
+  if (!setting) {
+    throw new NotFoundException('Developer access setting not found');
+  }
+
+  const verification = await this.verifyDeveloperPassword(password);
+
+  if (!verification.allowed) {
+    return { migrated: false, message: 'Invalid developer password' };
+  }
+
+  setting.value = {
+    passwordHash: this.createPasswordHash(password),
+  };
+
+  setting.updatedAt = new Date();
+
+  await this.appSettingRepository.save(setting);
+
+  return { migrated: true };
 }
 }

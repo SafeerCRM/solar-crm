@@ -56,4 +56,14 @@ async developerLogin(
 ) {
   return this.appSettingsService.verifyDeveloperPassword(body.password);
 }
+
+@Post('developer-password/migrate-to-hash')
+async migrateDeveloperPasswordToHash(
+  @Body()
+  body: {
+    password: string;
+  },
+) {
+  return this.appSettingsService.migrateDeveloperPasswordToHash(body.password);
+}
 }
