@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post, UseGuards } from '@nestjs/common';
 
 import { AppSettingsService } from './app-settings.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -45,5 +45,15 @@ async updateScreenshotPolicy(
   },
 ) {
   return this.appSettingsService.updateScreenshotPolicy(body);
+}
+
+@Post('developer-login')
+async developerLogin(
+  @Body()
+  body: {
+    password: string;
+  },
+) {
+  return this.appSettingsService.verifyDeveloperPassword(body.password);
 }
 }

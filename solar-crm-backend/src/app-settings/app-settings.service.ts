@@ -86,4 +86,20 @@ async updateScreenshotPolicy(data: {
 
   return this.appSettingRepository.save(setting);
 }
+
+async verifyDeveloperPassword(password: string) {
+  const setting = await this.appSettingRepository.findOne({
+    where: { key: 'developer_access' },
+  });
+
+  if (!setting) {
+    throw new NotFoundException('Developer access setting not found');
+  }
+
+  const savedPassword = setting.value?.password || '';
+
+  return {
+    allowed: Boolean(password && savedPassword && password === savedPassword),
+  };
+}
 }
