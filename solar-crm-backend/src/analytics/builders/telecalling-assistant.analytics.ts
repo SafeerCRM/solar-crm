@@ -77,11 +77,10 @@ export class TelecallingAssistantAnalyticsBuilder {
       .where('meeting.createdAt BETWEEN :start AND :end', { start, end });
 
     if (userIds.length) {
-      meetingsScheduledQb.andWhere(
-        '(meeting.createdBy IN (:...userIds) OR meeting.assignedTo IN (:...userIds))',
-        { userIds },
-      );
-    }
+  meetingsScheduledQb.andWhere('meeting.createdBy IN (:...userIds)', {
+    userIds,
+  });
+}
 
     const meetingsConvertedQb = this.meetingRepository
       .createQueryBuilder('meeting')
