@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { getAuthHeaders } from '@/lib/authHeaders';
+import AppSecurityGate from '@/components/AppSecurityGate';
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -601,6 +602,7 @@ const [bellOpen, setBellOpen] = useState(false);
 }, [user, userRoles]);
 
   return (
+    <AppSecurityGate>
         <div className="min-h-screen bg-gray-100 md:flex">
             <button
         onClick={() => setOpen(!open)}
@@ -737,6 +739,8 @@ const [bellOpen, setBellOpen] = useState(false);
 
             <main className="min-w-0 flex-1 px-3 pb-4 pt-20 md:p-8">{children}</main>
     </div>
+    </AppSecurityGate>
+
   );
 }
 

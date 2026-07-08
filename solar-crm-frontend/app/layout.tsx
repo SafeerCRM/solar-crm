@@ -31,9 +31,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
   <ClientProvider>
-    <AppSecurityGate>
       {children}
-    </AppSecurityGate>
   </ClientProvider>
 </body>
     </html>
