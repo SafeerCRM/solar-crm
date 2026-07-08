@@ -59,13 +59,9 @@ const [assigning, setAssigning] = useState(false);
   const [totalPages, setTotalPages] = useState(1);
 
   const [editForm, setEditForm] = useState<any>({
-    status: '',
-    linkedLeadId: '',
-    linkedMeetingId: '',
-    linkedProjectId: '',
-    rewardAmount: '',
-    remarks: '',
-  });
+  rewardAmount: '',
+  remarks: '',
+});
 
   const headers = () => ({
     Authorization: `Bearer ${localStorage.getItem('token')}`,
@@ -129,13 +125,9 @@ const [assigning, setAssigning] = useState(false);
     loadActivities(item.id);
     setActiveTab('OVERVIEW');
     setEditForm({
-      status: item.status || 'REFERRED',
-      linkedLeadId: item.linkedLeadId || '',
-      linkedMeetingId: item.linkedMeetingId || '',
-      linkedProjectId: item.linkedProjectId || '',
-      rewardAmount: item.rewardAmount || 5000,
-      remarks: item.remarks || '',
-    });
+  rewardAmount: item.rewardAmount || 5000,
+  remarks: item.remarks || '',
+});
   };
 
   const assignReferral = async (user: CrmUser) => {
@@ -413,7 +405,6 @@ loadReferrals();
                 {[
   'OVERVIEW',
   'TIMELINE',
-  'CONVERSION',
   'REWARD',
 ].map((tab) => (
                   <button
@@ -578,113 +569,6 @@ loadReferrals();
   </div>
 )}
 
-              {activeTab === 'CONVERSION' && (
-                <div className="mt-5 rounded-3xl bg-gray-50 p-5">
-                  <h3 className="text-lg font-black text-gray-900">
-                    Conversion Tracking
-                  </h3>
-
-                  <div className="mt-4 grid gap-3 md:grid-cols-2">
-                    <select
-                      value={editForm.status}
-                      onChange={(e) =>
-                        setEditForm({ ...editForm, status: e.target.value })
-                      }
-                      className="rounded-2xl border p-3"
-                    >
-                      {STATUS_OPTIONS.map((status) => (
-                        <option key={status} value={status}>
-                          {formatLabel(status)}
-                        </option>
-                      ))}
-                    </select>
-
-                    <input
-                      placeholder="Linked Lead ID"
-                      value={editForm.linkedLeadId}
-                      onChange={(e) =>
-                        setEditForm({
-                          ...editForm,
-                          linkedLeadId: e.target.value,
-                        })
-                      }
-                      className="rounded-2xl border p-3"
-                    />
-
-                    <input
-                      placeholder="Linked Meeting ID"
-                      value={editForm.linkedMeetingId}
-                      onChange={(e) =>
-                        setEditForm({
-                          ...editForm,
-                          linkedMeetingId: e.target.value,
-                        })
-                      }
-                      className="rounded-2xl border p-3"
-                    />
-
-                    <input
-                      placeholder="Linked Project ID"
-                      value={editForm.linkedProjectId}
-                      onChange={(e) =>
-                        setEditForm({
-                          ...editForm,
-                          linkedProjectId: e.target.value,
-                        })
-                      }
-                      className="rounded-2xl border p-3"
-                    />
-
-                    <textarea
-                      rows={4}
-                      placeholder="Internal remarks"
-                      value={editForm.remarks}
-                      onChange={(e) =>
-                        setEditForm({ ...editForm, remarks: e.target.value })
-                      }
-                      className="rounded-2xl border p-3 md:col-span-2"
-                    />
-
-                    <button
-                      onClick={() => saveReferral()}
-                      disabled={saving}
-                      className="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-black text-white disabled:opacity-50 md:col-span-2"
-                    >
-                      {saving ? 'Saving...' : 'Save Conversion'}
-                    </button>
-                  </div>
-
-                  <div className="mt-5 grid gap-3 md:grid-cols-3">
-                    {selected.linkedLeadId && (
-                      <a
-                        href={`/leads/${selected.linkedLeadId}`}
-                        className="rounded-2xl bg-blue-600 px-4 py-3 text-center text-sm font-black text-white"
-                      >
-                        Open Lead
-                      </a>
-                    )}
-
-                    {selected.linkedMeetingId && (
-                      <a
-                        href={`/meetings/${selected.linkedMeetingId}`}
-                        className="rounded-2xl bg-purple-600 px-4 py-3 text-center text-sm font-black text-white"
-                      >
-                        Open Meeting
-                      </a>
-                    )}
-
-                    {selected.linkedProjectId && (
-                      <a
-                        href={`/projects/${selected.linkedProjectId}`}
-                        className="rounded-2xl bg-gray-900 px-4 py-3 text-center text-sm font-black text-white"
-                      >
-                        Open Project
-                      </a>
-                    )}
-                  </div>
-                </div>
-              )}
-
               {activeTab === 'REWARD' && (
                 <div className="mt-5 rounded-3xl bg-gray-50 p-5">
                   <h3 className="text-lg font-black text-gray-900">
@@ -717,8 +601,7 @@ loadReferrals();
                     <button
                       onClick={() =>
                         saveReferral({
-                          status: 'REWARD_PAID',
-                          rewardPaid: true,
+                           rewardPaid: true,
                         })
                       }
                       disabled={saving || selected.rewardPaid}
