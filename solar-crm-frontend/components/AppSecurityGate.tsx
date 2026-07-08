@@ -7,6 +7,17 @@ const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 const PUBLIC_ROUTES = ['/', '/customer-login', '/dealer-login'];
 
+declare global {
+  interface Window {
+    Capacitor?: any;
+  }
+}
+
+type CurrentUser = {
+  id?: number;
+  roles?: string[];
+};
+
 function isPublicRoute(pathname: string) {
   return PUBLIC_ROUTES.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`),
@@ -24,15 +35,52 @@ function getStoredToken() {
   );
 }
 
-function getStoredUserRole() {
-  if (typeof window === 'undefined') return '';
+function getStoredUser(): CurrentUser {
+  if (typeof window === 'undefined') return {};
 
   try {
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    const roles = Array.isArray(user?.roles) ? user.roles : [];
-    return roles.includes('OWNER') ? 'OWNER' : roles[0] || '';
+    return JSON.parse(localStorage.getItem('user') || '{}');
   } catch {
-    return '';
+    return {};
+  }
+}
+
+async function applyScreenshotPolicy(user: CurrentUser) {
+  if (typeof window === 'undefined') return;
+
+  const screenSecurity = window.Capacitor?.Plugins?.ScreenSecurity;
+
+  if (!screenSecurity) return;
+
+  try {
+    const res = await fetch(`${apiBaseUrl}/app-settings/screenshot-policy`, {
+      cache: 'no-store',
+    });
+
+    const policy = await res.json();
+
+    const userId = Number(user?.id || 0);
+    const userRoles = Array.isArray(user?.roles) ? user.roles : [];
+
+    const allowedUserIds = Array.isArray(policy?.allowedUserIds)
+      ? policy.allowedUserIds.map((id: any) => Number(id))
+      : [];
+
+    const allowedRoles = Array.isArray(policy?.allowedRoles)
+      ? policy.allowedRoles
+      : [];
+
+    const allowedByUser = userId > 0 && allowedUserIds.includes(userId);
+    const allowedByRole = userRoles.some((role) => allowedRoles.includes(role));
+
+    if (allowedByUser || allowedByRole) {
+      await screenSecurity.allow();
+      return;
+    }
+
+    await screenSecurity.block();
+  } catch {
+    await screenSecurity.block();
   }
 }
 
@@ -62,15 +110,19 @@ export default function AppSecurityGate({
         return;
       }
 
+      const user = getStoredUser();
+
+      await applyScreenshotPolicy(user);
+
       try {
         const res = await fetch(`${apiBaseUrl}/app-settings/maintenance-mode`, {
           cache: 'no-store',
         });
 
         const maintenance = await res.json();
-        const role = getStoredUserRole();
+        const roles = Array.isArray(user?.roles) ? user.roles : [];
 
-        if (maintenance?.enabled && role !== 'OWNER') {
+        if (maintenance?.enabled && !roles.includes('OWNER')) {
           setMaintenanceMessage(
             maintenance.message ||
               'CRM is under maintenance. Please try again later.',

@@ -3751,6 +3751,14 @@ useEffect(() => {
   }
 }, [projectId, currentUserRoles]);
 
+useEffect(() => {
+  const firstDocumentType =
+    DOCUMENT_TYPES_BY_DEPARTMENT[department]?.[0]?.value ||
+    'OTHER';
+
+  setDocumentType(firstDocumentType);
+}, [department]);
+
 const generateProjectPdf = async (share = false) => {
   if (!pdfRef.current || !project) return;
 
