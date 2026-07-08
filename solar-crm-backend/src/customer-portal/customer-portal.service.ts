@@ -2156,12 +2156,6 @@ async listReferrals(query: any) {
     });
   }
 
-  if (query?.status) {
-    qb.andWhere('referral.status = :status', {
-      status: query.status,
-    });
-  }
-
   if (query?.search) {
     const search = `%${String(query.search).toLowerCase()}%`;
 
@@ -2183,16 +2177,27 @@ async listReferrals(query: any) {
     });
   }
 
-  qb.skip(skip).take(limit);
+  const rawReferrals = await qb.getMany();
 
-  const [data, total] = await qb.getManyAndCount();
+  const referralsWithProgress = await Promise.all(
+    rawReferrals.map((item: any) =>
+      this.buildReferralProgressSnapshot(item),
+    ),
+  );
+
+  const filtered =
+    query?.status
+      ? referralsWithProgress.filter(
+          (item: any) => item.status === query.status,
+        )
+      : referralsWithProgress;
 
   return {
-    data,
-    total,
+    data: filtered.slice(skip, skip + limit),
+    total: filtered.length,
     page,
     limit,
-    totalPages: Math.ceil(total / limit) || 1,
+    totalPages: Math.ceil(filtered.length / limit) || 1,
   };
 }
 
@@ -2430,10 +2435,76 @@ private async addReferralActivity(
 }
 
 async getReferralActivities(referralId: number) {
-  return this.referralActivityRepository.find({
-    where: { referralId },
-    order: { createdAt: 'DESC' },
+  const referral = await this.referralRepository.findOne({
+    where: { id: referralId },
   });
+
+  if (!referral) {
+    throw new NotFoundException('Referral not found');
+  }
+
+  const savedActivities =
+    await this.referralActivityRepository.find({
+      where: { referralId },
+      order: { createdAt: 'DESC' },
+    });
+
+  const snapshot =
+    await this.buildReferralProgressSnapshot(referral);
+
+  const autoActivities: any[] = [];
+
+  if (snapshot.crmProgress?.leadId) {
+    autoActivities.push({
+      id: `auto-lead-${snapshot.crmProgress.leadId}`,
+      referralId,
+      activityType: 'LEAD_CREATED_AUTO',
+      activityTitle: 'Lead Created',
+      activityDescription: `Lead #${snapshot.crmProgress.leadId} found in CRM.`,
+      performedByName: 'System',
+      createdAt: referral.updatedAt || referral.createdAt,
+    });
+  }
+
+  if (snapshot.crmProgress?.meetingId) {
+    autoActivities.push({
+      id: `auto-meeting-${snapshot.crmProgress.meetingId}`,
+      referralId,
+      activityType: 'MEETING_UPDATED_AUTO',
+      activityTitle:
+        snapshot.status === 'MEETING_DONE' ||
+        ['PROJECT_CREATED', 'PROJECT_COMPLETED', 'REWARD_PAID'].includes(
+          snapshot.status,
+        )
+          ? 'Meeting Completed'
+          : 'Meeting Scheduled',
+      activityDescription: `Meeting #${snapshot.crmProgress.meetingId} found in CRM.`,
+      performedByName: 'System',
+      createdAt: referral.updatedAt || referral.createdAt,
+    });
+  }
+
+  if (snapshot.crmProgress?.projectId) {
+    autoActivities.push({
+      id: `auto-project-${snapshot.crmProgress.projectId}`,
+      referralId,
+      activityType: 'PROJECT_UPDATED_AUTO',
+      activityTitle:
+        snapshot.status === 'PROJECT_COMPLETED' ||
+        snapshot.status === 'REWARD_PAID'
+          ? 'Project Completed'
+          : 'Project Created',
+      activityDescription: `Project #${snapshot.crmProgress.projectId} found in CRM.`,
+      performedByName: 'System',
+      createdAt: referral.updatedAt || referral.createdAt,
+    });
+  }
+
+  return [...autoActivities, ...savedActivities].sort(
+    (a: any, b: any) =>
+      new Date(b.createdAt).getTime() -
+      new Date(a.createdAt).getTime(),
+  );
 }
 
 async createCustomerNotification(body: any) {
