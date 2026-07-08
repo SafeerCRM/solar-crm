@@ -165,11 +165,11 @@ const customerPortalMode = hasActiveProject
         mode: customerPortalMode,
         title: 'After-Sales Support',
         subtitle:
-          'Cleaning, complaints, documents, referrals and support after project completion',
+          'Cleaning, complaints, referrals and support after project completion',
           hero: {
   badge: 'After-Sales / Support Customer',
   message:
-    'Your installation is complete. You can continue using this portal for cleaning, complaints, documents, referrals and support.',
+    'Your installation is complete. You can continue using this portal for cleaning, complaints, referrals and support.',
 },
           quickActions: {
   complaints: true,
@@ -185,10 +185,10 @@ sectionLabels: {
   },
 },
         enabledSections: {
-          projectTracker: true,
+          projectTracker: false,
           workCalendar: false,
           payments: true,
-          documents: true,
+          documents: false,
           complaints: true,
           cleaning: true,
           afterSalesServices: true,
