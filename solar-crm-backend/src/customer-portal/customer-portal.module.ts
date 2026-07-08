@@ -30,6 +30,8 @@ import { LeadsModule } from '../leads/leads.module';
 import { MeetingModule } from '../meeting/meeting.module';
 import { LeadsService } from 'src/leads/leads.service';
 import { TelecallingContact } from '../telecalling/telecalling-contact.entity';
+import { Lead } from '../leads/lead.entity';
+import { Meeting } from '../meeting/meeting.entity';
 
 @Module({
   imports: [
@@ -60,6 +62,8 @@ CustomerComplaintAttachment,
       CustomerAfterSalesRequestRating,
       CustomerReferralActivity,
       TelecallingContact,
+      Lead,
+      Meeting,
     ]),
   ],
   controllers: [CustomerPortalController, CustomerAuthController],

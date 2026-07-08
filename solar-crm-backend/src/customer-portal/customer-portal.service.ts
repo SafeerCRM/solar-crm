@@ -51,6 +51,8 @@ import { LeadsService } from '../leads/leads.service';
 import { MeetingService } from '../meeting/meeting.service';
 import { CustomerReferralStatus } from './customer-referral.entity';
 import { TelecallingContact, ContactStatus } from '../telecalling/telecalling-contact.entity';
+import { Lead } from '../leads/lead.entity';
+import { Meeting } from '../meeting/meeting.entity';
 
 @Injectable()
 export class CustomerPortalService {
@@ -126,6 +128,12 @@ private readonly staffMemberRepository: Repository<StaffMember>,
 
 @InjectRepository(TelecallingContact)
 private readonly telecallingContactRepository: Repository<TelecallingContact>,
+
+@InjectRepository(Lead)
+private readonly leadRepository: Repository<Lead>,
+
+@InjectRepository(Meeting)
+private readonly meetingRepository: Repository<Meeting>,
 
 private readonly leadService: LeadsService,
 private readonly meetingService: MeetingService,
@@ -386,6 +394,12 @@ const referrals = await this.referralRepository.find({
   take: 10,
 });
 
+const referralsWithProgress = await Promise.all(
+  referrals.map((item: any) =>
+    this.buildReferralProgressSnapshot(item),
+  ),
+);
+
 const paymentReceipts = await this.paymentReceiptRepository.find({
   where: { customerId, isHidden: false },
   order: { createdAt: 'DESC' },
@@ -430,7 +444,7 @@ portalExperience,
   unreadNotifications: notifications.filter(
     (n) => !n.isRead,
   ).length,
-  referrals,
+  referrals: referralsWithProgress,
 paymentReceipts,
 workDateRequests,
 cleaningReminders,
@@ -2226,6 +2240,123 @@ await this.createCustomerNotification({
 });
 
 return savedReferral;
+}
+
+private async buildReferralProgressSnapshot(referral: any) {
+  const phone = String(referral?.referredPhone || '').trim();
+
+  const contact =
+    await this.telecallingContactRepository.findOne({
+      where: [
+        {
+          sourceModule: 'CUSTOMER_REFERRAL',
+          sourceReferralId: referral.id,
+        } as any,
+        phone ? ({ phone } as any) : ({} as any),
+      ],
+      order: {
+        updatedAt: 'DESC',
+      } as any,
+    });
+
+  let lead: any = null;
+
+  if (referral.linkedLeadId) {
+    lead = await this.leadRepository.findOne({
+      where: { id: Number(referral.linkedLeadId) },
+    });
+  }
+
+  if (!lead && phone) {
+    lead = await this.leadRepository
+      .createQueryBuilder('lead')
+      .where('lead.phone = :phone', { phone })
+      .orderBy('lead.createdAt', 'DESC')
+      .getOne();
+  }
+
+  let meeting: any = null;
+
+  if (referral.linkedMeetingId) {
+    meeting = await this.meetingRepository.findOne({
+      where: { id: Number(referral.linkedMeetingId) },
+    });
+  }
+
+  if (!meeting && lead?.id) {
+    meeting = await this.meetingRepository
+      .createQueryBuilder('meeting')
+      .where('meeting.leadId = :leadId', {
+        leadId: Number(lead.id),
+      })
+      .orderBy('meeting.createdAt', 'DESC')
+      .getOne();
+  }
+
+  let project: any = null;
+
+  if (referral.linkedProjectId) {
+    project = await this.projectRepository.findOne({
+      where: {
+        id: Number(referral.linkedProjectId),
+        isHidden: false,
+      } as any,
+    });
+  }
+
+  if (!project && phone) {
+    project = await this.projectRepository
+      .createQueryBuilder('project')
+      .where('project.isHidden = false')
+      .andWhere('project.customerPhone = :phone', { phone })
+      .orderBy('project.createdAt', 'DESC')
+      .getOne();
+  }
+
+  let calculatedStatus = referral.status || 'REFERRED';
+
+  if (contact) {
+    calculatedStatus = 'CONTACTED';
+  }
+
+  if (lead) {
+    calculatedStatus = 'LEAD_CREATED';
+  }
+
+  if (meeting) {
+    calculatedStatus =
+      meeting.status === 'COMPLETED'
+        ? 'MEETING_DONE'
+        : 'MEETING_SCHEDULED';
+  }
+
+  if (project) {
+    calculatedStatus =
+      project.status === 'COMPLETED'
+        ? 'PROJECT_COMPLETED'
+        : 'PROJECT_CREATED';
+  }
+
+  if (referral.rewardPaid || referral.status === 'REWARD_PAID') {
+    calculatedStatus = 'REWARD_PAID';
+  }
+
+  return {
+    ...referral,
+    status: calculatedStatus,
+    calculatedStatus,
+    crmProgress: {
+      contactId: contact?.id || null,
+      leadId: lead?.id || referral.linkedLeadId || null,
+      meetingId: meeting?.id || referral.linkedMeetingId || null,
+      projectId: project?.id || referral.linkedProjectId || null,
+      projectStatus: project?.status || '',
+      assignedToName:
+        referral.assignedToName ||
+        contact?.assignedToName ||
+        '',
+    },
+  };
 }
 
 async convertReferralToLead(id: number, user: any) {
