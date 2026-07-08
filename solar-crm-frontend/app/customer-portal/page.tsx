@@ -659,7 +659,9 @@ function ProjectCard({ project }: { project: any }) {
         <InfoLine label="K Number" value={project.electricityKNumber} />
         <InfoLine label="Branch" value={project.branchName} />
         <InfoLine label="Project Owner" value={project.projectOwnerName} />
-        <InfoLine label="Project Type" value={project.projectType} />
+        {project.status !== 'COMPLETED' && !project.isLegacyProject && (
+  <InfoLine label="Project Type" value={project.projectType} />
+)}
 
         <div className="mt-4 rounded-2xl bg-emerald-50 p-4">
           <p className="text-xs font-bold text-emerald-700">
