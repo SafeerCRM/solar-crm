@@ -20511,8 +20511,13 @@ async getOrCreateEpcCustomerInvoiceDraft(projectId: number, user: any) {
       0,
   );
 
-  const goodsAmount = Math.round(finalAmount * 0.72);
-  const installationAmount = Math.max(finalAmount - goodsAmount, 0);
+  const goodsRate = Number(
+  ((finalAmount * 0.7) / 1.05).toFixed(2),
+);
+
+const installationRate = Number(
+  ((finalAmount * 0.3) / 1.18).toFixed(2),
+);
 
   const defaultItems = [
     {
@@ -20521,7 +20526,7 @@ async getOrCreateEpcCustomerInvoiceDraft(projectId: number, user: any) {
       hsnSac: '85414300',
       quantity: 1,
       unit: 'Units',
-      rate: goodsAmount,
+      rate: goodsRate,
       gstPercent: 5,
     },
     {
@@ -20530,7 +20535,7 @@ async getOrCreateEpcCustomerInvoiceDraft(projectId: number, user: any) {
       hsnSac: '998736',
       quantity: 1,
       unit: 'Units',
-      rate: installationAmount,
+      rate: installationRate,
       gstPercent: 18,
     },
   ];
