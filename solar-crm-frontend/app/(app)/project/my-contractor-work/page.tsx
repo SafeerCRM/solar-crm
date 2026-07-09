@@ -41,7 +41,22 @@ type ContractorProject = {
     zone?: string;
     branchName?: string;
     projectSize?: string;
-    projectOwnerName?: string;
+
+projectType?: string;
+
+panelBrand?: string;
+dcrPanelCount?: number;
+nonDcrPanelCount?: number;
+
+converterBrand?: string;
+converterCapacity?: string;
+converterPhase?: string;
+
+structureType?: string;
+structureCapacityKw?: string;
+buildingHeight?: string;
+
+projectOwnerName?: string;
   };
 };
 
@@ -969,6 +984,76 @@ const selectedCleaningWorks = cleaningAssignments.filter(
           लोकेशन खोलें
         </a>
       ) : null}
+    </div>
+  </div>
+)}
+
+{item.project && (
+  <div className="mt-3 rounded-xl bg-amber-50 p-3">
+    <h3 className="font-bold text-gray-800">
+      प्रोजेक्ट स्पेसिफिकेशन
+    </h3>
+
+    <div className="mt-3 grid gap-2 md:grid-cols-2">
+      <p className="text-sm text-gray-700">
+        <span className="font-semibold">Project Type:</span>{' '}
+        {item.project.projectType || '-'}
+      </p>
+
+      <p className="text-sm text-gray-700">
+        <span className="font-semibold">System Size:</span>{' '}
+        {item.project.projectSize || '-'}
+      </p>
+
+      <p className="text-sm text-gray-700">
+        <span className="font-semibold">Panel Brand:</span>{' '}
+        {item.project.panelBrand || '-'}
+      </p>
+
+      <p className="text-sm text-gray-700">
+        <span className="font-semibold">DCR Panels:</span>{' '}
+        {item.project.dcrPanelCount ?? 0}
+      </p>
+
+      <p className="text-sm text-gray-700">
+        <span className="font-semibold">Non-DCR Panels:</span>{' '}
+        {item.project.nonDcrPanelCount ?? 0}
+      </p>
+
+      <p className="text-sm text-gray-700">
+        <span className="font-semibold">Inverter Brand:</span>{' '}
+        {item.project.converterBrand || '-'}
+      </p>
+
+      <p className="text-sm text-gray-700">
+        <span className="font-semibold">Inverter Capacity:</span>{' '}
+        {item.project.converterCapacity || '-'}
+      </p>
+
+      <p className="text-sm text-gray-700">
+        <span className="font-semibold">Inverter Phase:</span>{' '}
+        {item.project.converterPhase || '-'}
+      </p>
+
+      <p className="text-sm text-gray-700">
+        <span className="font-semibold">Structure Type:</span>{' '}
+        {item.project.structureType || '-'}
+      </p>
+
+      <p className="text-sm text-gray-700">
+        <span className="font-semibold">Structure Capacity:</span>{' '}
+        {item.project.structureCapacityKw || '-'}
+      </p>
+
+      <p className="text-sm text-gray-700">
+        <span className="font-semibold">Building Height:</span>{' '}
+        {item.project.buildingHeight || '-'}
+      </p>
+
+      <p className="text-sm text-gray-700">
+        <span className="font-semibold">Branch:</span>{' '}
+        {item.project.branchName || '-'}
+      </p>
     </div>
   </div>
 )}
