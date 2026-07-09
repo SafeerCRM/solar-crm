@@ -1843,6 +1843,20 @@ const canViewAll =
   roles.includes('ACCOUNT_MANAGER') ||
   roles.includes('STOCK_MANAGER');
 
+  let isAssignedContractor = false;
+
+if (roles.includes('PROJECT_CONTRACTOR')) {
+  const assignment =
+    await this.projectContractorAssignmentRepository.findOne({
+      where: {
+        projectId: id,
+        contractorId: currentUserId,
+      } as any,
+    });
+
+  isAssignedContractor = !!assignment;
+}
+
 if (roles.includes('SOLAR_FRANCHISE')) {
   if (Number(project.projectOwnerId) !== currentUserId) {
     throw new ForbiddenException(
@@ -1851,12 +1865,13 @@ if (roles.includes('SOLAR_FRANCHISE')) {
   }
 } else if (
   !canViewAll &&
+  !isAssignedContractor &&
   Number(project.projectOwnerId) !== currentUserId
 ) {
   throw new ForbiddenException(
     'You can only access your own projects',
   );
-} 
+}
 
     return project;
   }
@@ -15358,8 +15373,18 @@ async getMyContractorProjects(user: any) {
             city: project.city || '',
             zone: project.zone || '',
             branchName: project.branchName || '',
-            projectSize: project.projectSize || '',
-            projectOwnerName: project.projectOwnerName || '',
+projectSize: project.projectSize || '',
+projectType: (project as any).projectType || '',
+panelBrand: project.panelBrand || '',
+dcrPanelCount: project.dcrPanelCount || 0,
+nonDcrPanelCount: project.nonDcrPanelCount || 0,
+converterBrand: project.converterBrand || '',
+converterCapacity: project.converterCapacity || '',
+converterPhase: project.converterPhase || '',
+structureType: project.structureType || '',
+structureCapacityKw: project.structureCapacityKw || '',
+buildingHeight: project.buildingHeight || '',
+projectOwnerName: project.projectOwnerName || '',
           }
         : null,
     };
