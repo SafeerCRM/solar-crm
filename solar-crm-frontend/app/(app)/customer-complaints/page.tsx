@@ -65,6 +65,15 @@ export default function CustomerComplaintsAdminPage() {
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState<number | null>(null);
 
+  const [showHiddenComplaints, setShowHiddenComplaints] =
+  useState(false);
+
+const [hidingId, setHidingId] =
+  useState<number | null>(null);
+
+const [restoringId, setRestoringId] =
+  useState<number | null>(null);
+
   const [activities, setActivities] = useState<any[]>([]);
 const [timelineLoading, setTimelineLoading] = useState(false);
 
@@ -111,10 +120,13 @@ const [timelineLoading, setTimelineLoading] = useState(false);
 
       const res = await axios.get(`${API_BASE_URL}/customer-portal/complaints`, {
         params: {
-          page: targetPage,
-          limit,
-          ...filters,
-        },
+  page: targetPage,
+  limit,
+  ...filters,
+  showHidden: showHiddenComplaints
+    ? 'true'
+    : 'false',
+},
         headers: getHeaders(),
       });
 
@@ -198,6 +210,107 @@ serviceTime: item.serviceDate
     }
   };
 
+  const hideComplaint = async (
+  item: CustomerComplaint,
+) => {
+  const reason = window.prompt(
+    'Enter reason for hiding this complaint',
+    'Duplicate / test complaint',
+  );
+
+  if (!reason?.trim()) {
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `Hide complaint #${item.id} from the customer portal?`,
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    setHidingId(item.id);
+
+    await axios.patch(
+      `${API_BASE_URL}/customer-portal/complaints/${item.id}/hide`,
+      {
+        reason: reason.trim(),
+      },
+      {
+        headers: getHeaders(),
+      },
+    );
+
+    alert('Complaint hidden successfully');
+
+    if (
+      items.length === 1 &&
+      page > 1
+    ) {
+      await fetchComplaints(page - 1);
+    } else {
+      await fetchComplaints(page);
+    }
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to hide complaint',
+    );
+  } finally {
+    setHidingId(null);
+  }
+};
+
+const restoreComplaint = async (
+  item: CustomerComplaint,
+) => {
+  const confirmed = window.confirm(
+    `Restore complaint #${item.id}?`,
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    setRestoringId(item.id);
+
+    await axios.patch(
+      `${API_BASE_URL}/customer-portal/complaints/${item.id}/restore`,
+      {
+        reason: 'Complaint restored by admin',
+      },
+      {
+        headers: getHeaders(),
+      },
+    );
+
+    alert('Complaint restored successfully');
+
+    if (
+      items.length === 1 &&
+      page > 1
+    ) {
+      await fetchComplaints(page - 1);
+    } else {
+      await fetchComplaints(page);
+    }
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to restore complaint',
+    );
+  } finally {
+    setRestoringId(null);
+  }
+};
+
   const loadComplaintActivities = async (
   complaintId: number,
 ) => {
@@ -249,9 +362,9 @@ serviceTime: item.serviceDate
   };
 
   useEffect(() => {
-    fetchComplaints(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  fetchComplaints(1);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [showHiddenComplaints]);
 
   return (
   <div className="mx-auto max-w-7xl space-y-5 pb-8">
@@ -277,12 +390,42 @@ serviceTime: item.serviceDate
             </p>
           </div>
 
-          <button
-            onClick={() => fetchComplaints(page)}
-            className="rounded-2xl bg-white/20 px-5 py-3 text-sm font-black backdrop-blur hover:bg-white/30"
-          >
-            Refresh
-          </button>
+          <p className="mt-2 text-sm font-black text-white">
+  {showHiddenComplaints
+    ? 'Showing hidden complaints'
+    : 'Showing active complaints'}
+</p>
+
+          <div className="flex flex-wrap gap-2">
+  <button
+    type="button"
+    onClick={() => {
+      setShowHiddenComplaints(
+        (prev) => !prev,
+      );
+      setPage(1);
+    }}
+    className={`rounded-2xl px-5 py-3 text-sm font-black ${
+      showHiddenComplaints
+        ? 'bg-red-700 text-white hover:bg-red-800'
+        : 'bg-white/20 text-white backdrop-blur hover:bg-white/30'
+    }`}
+  >
+    {showHiddenComplaints
+      ? 'View Active Complaints'
+      : 'View Hidden Complaints'}
+  </button>
+
+  <button
+    type="button"
+    onClick={() =>
+      fetchComplaints(page)
+    }
+    className="rounded-2xl bg-white/20 px-5 py-3 text-sm font-black backdrop-blur hover:bg-white/30"
+  >
+    Refresh
+  </button>
+</div>
         </div>
 
         <div className="mt-6 grid gap-4 md:grid-cols-4 xl:grid-cols-7">
@@ -733,6 +876,30 @@ serviceTime: item.serviceDate
                     >
                       {savingId === item.id ? 'Saving...' : 'Save Update'}
                     </button>
+
+                    {showHiddenComplaints ? (
+  <button
+    type="button"
+    disabled={restoringId === item.id}
+    onClick={() => restoreComplaint(item)}
+    className="w-full rounded-2xl bg-blue-600 py-3 text-sm font-black text-white hover:bg-blue-700 disabled:opacity-50"
+  >
+    {restoringId === item.id
+      ? 'Restoring...'
+      : 'Restore Complaint'}
+  </button>
+) : (
+  <button
+    type="button"
+    disabled={hidingId === item.id}
+    onClick={() => hideComplaint(item)}
+    className="w-full rounded-2xl bg-red-600 py-3 text-sm font-black text-white hover:bg-red-700 disabled:opacity-50"
+  >
+    {hidingId === item.id
+      ? 'Hiding...'
+      : 'Hide Complaint'}
+  </button>
+)}
                   </div>
                 </div>
               </div>
