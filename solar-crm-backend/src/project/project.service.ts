@@ -1506,6 +1506,7 @@ const project = this.projectRepository.create(projectData);
     search?: string;
     status?: string;
     projectWorkState?: string;
+    loanStatus?: string;
     branch?: string;
     owner?: string;
     fromDate?: string;
@@ -1591,6 +1592,20 @@ if (roles.includes('SOLAR_FRANCHISE')) {
       },
     );
   }
+
+  if (filters?.loanStatus) {
+  query.andWhere(
+    `EXISTS (
+      SELECT 1
+      FROM project_loan_detail loan_detail
+      WHERE loan_detail."projectId" = project.id
+        AND loan_detail.status = :loanStatus
+    )`,
+    {
+      loanStatus: filters.loanStatus,
+    },
+  );
+}
 
   if (filters?.projectWorkState) {
   query.andWhere(
