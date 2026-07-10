@@ -60,6 +60,23 @@ const [expenseLoading, setExpenseLoading] =
   const [expenses, setExpenses] = useState<any[]>([]);
   const [selectedExpense, setSelectedExpense] = useState<any | null>(null);
 
+  const [expensePage, setExpensePage] = useState(1);
+const [expenseLimit] = useState(20);
+
+const [expensePagination, setExpensePagination] =
+  useState({
+    page: 1,
+    limit: 20,
+    total: 0,
+    totalPages: 1,
+  });
+
+const [expenseStaffFilter, setExpenseStaffFilter] =
+  useState('');
+
+const [expenseTypeFilter, setExpenseTypeFilter] =
+  useState('');
+
   const [expenseSummary, setExpenseSummary] =
   useState({
     totalExpenses: 0,
@@ -237,7 +254,11 @@ setProjectSummary({
   }
 };
 
-const loadExpenses = async () => {
+const loadExpenses = async (
+  page: number = expensePage,
+  staffName: string = expenseStaffFilter,
+  expenseType: string = expenseTypeFilter,
+) => {
   try {
     const token =
       localStorage.getItem('token');
@@ -245,6 +266,12 @@ const loadExpenses = async () => {
     const res = await axios.get(
       `${API_BASE_URL}/project/account-expenses`,
       {
+        params: {
+          page,
+          limit: expenseLimit,
+          staffName: staffName.trim(),
+          expenseType,
+        },
         headers: token
           ? {
               Authorization: `Bearer ${token}`,
@@ -254,12 +281,44 @@ const loadExpenses = async () => {
     );
 
     setExpenses(
-      Array.isArray(res.data)
-        ? res.data
+      Array.isArray(res.data?.data)
+        ? res.data.data
         : [],
+    );
+
+    setExpensePagination({
+      page: Number(
+        res.data?.pagination?.page || page,
+      ),
+      limit: Number(
+        res.data?.pagination?.limit ||
+          expenseLimit,
+      ),
+      total: Number(
+        res.data?.pagination?.total || 0,
+      ),
+      totalPages: Number(
+        res.data?.pagination?.totalPages ||
+          1,
+      ),
+    });
+
+    setExpensePage(
+      Number(
+        res.data?.pagination?.page || page,
+      ),
     );
   } catch (error) {
     console.error(error);
+
+    setExpenses([]);
+
+    setExpensePagination({
+      page: 1,
+      limit: expenseLimit,
+      total: 0,
+      totalPages: 1,
+    });
   }
 };
 
@@ -629,6 +688,44 @@ const hideExpense = async (
         'Failed to hide expense',
     );
   }
+};
+
+const applyExpenseFilters = async () => {
+  setExpensePage(1);
+
+  await loadExpenses(
+    1,
+    expenseStaffFilter,
+    expenseTypeFilter,
+  );
+};
+
+const resetExpenseFilters = async () => {
+  setExpenseStaffFilter('');
+  setExpenseTypeFilter('');
+  setExpensePage(1);
+
+  await loadExpenses(1, '', '');
+};
+
+const changeExpensePage = async (
+  nextPage: number,
+) => {
+  if (
+    nextPage < 1 ||
+    nextPage > expensePagination.totalPages ||
+    nextPage === expensePage
+  ) {
+    return;
+  }
+
+  setExpensePage(nextPage);
+
+  await loadExpenses(
+    nextPage,
+    expenseStaffFilter,
+    expenseTypeFilter,
+  );
 };
 
 const contractorExpenses = expenses.filter(
@@ -1262,9 +1359,127 @@ const estimatedPendingPosition =
 </div>
 
 <div className="rounded-2xl bg-white p-5 shadow">
-  <h2 className="text-lg font-bold text-gray-800">
-    Recent Expenses
-  </h2>
+  <div>
+    <h2 className="text-lg font-bold text-gray-800">
+      Recent Expenses
+    </h2>
+
+    <p className="mt-1 text-sm text-gray-500">
+      Showing {expensePagination.total} matching expense
+      {expensePagination.total === 1 ? '' : 's'}
+    </p>
+  </div>
+
+  <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+    <input
+      type="text"
+      placeholder="Search Staff Name"
+      value={expenseStaffFilter}
+      onChange={(e) =>
+        setExpenseStaffFilter(e.target.value)
+      }
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          applyExpenseFilters();
+        }
+      }}
+      className="rounded-xl border p-3"
+    />
+
+    <select
+      value={expenseTypeFilter}
+      onChange={(e) =>
+        setExpenseTypeFilter(e.target.value)
+      }
+      className="rounded-xl border p-3"
+    >
+      <option value="">All Expense Types</option>
+      <option value="MARKET_PURCHASE">
+        Market Purchase
+      </option>
+      <option value="SITE_PURCHASE">
+        Site Purchase
+      </option>
+      <option value="PROJECT_FUND">
+        Project Fund
+      </option>
+      <option value="CONTRACTOR_PAYMENT">
+        Contractor Payment
+      </option>
+      <option value="LABOUR_PAYMENT">
+        Labour Payment
+      </option>
+      <option value="TRANSPORTATION">
+        Transportation
+      </option>
+      <option value="OFFICE_EXPENSE">
+        Office Expense
+      </option>
+      <option value="OFFICE_SUPPLIES">
+        Office Supplies
+      </option>
+      <option value="EQUIPMENT_PURCHASE">
+        Equipment Purchase
+      </option>
+      <option value="TRAVEL">
+        Travel
+      </option>
+      <option value="HOTEL">Hotel</option>
+      <option value="FOOD">Food</option>
+      <option value="FUEL">Fuel</option>
+      <option value="VEHICLE_EXPENSE">
+        Vehicle Expense
+      </option>
+      <option value="RENT">Rent</option>
+      <option value="ELECTRICITY_BILL">
+        Electricity Bill
+      </option>
+      <option value="INTERNET_BILL">
+        Internet Bill
+      </option>
+      <option value="MOBILE_RECHARGE">
+        Mobile Recharge
+      </option>
+      <option value="SALARY">Salary</option>
+      <option value="INCENTIVE">Incentive</option>
+      <option value="ADVANCE_SALARY">
+        Advance Salary
+      </option>
+      <option value="MARKETING">
+        Marketing
+      </option>
+      <option value="PRINTING">
+        Printing
+      </option>
+      <option value="COURIER">Courier</option>
+      <option value="STATIONERY">
+        Stationery
+      </option>
+      <option value="REPAIR_MAINTENANCE">
+        Repair &amp; Maintenance
+      </option>
+      <option value="CUSTOMER_VISIT">
+        Customer Visit
+      </option>
+      <option value="OTHER">Other</option>
+    </select>
+
+    <button
+      type="button"
+      onClick={applyExpenseFilters}
+      className="rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white"
+    >
+      Apply Filters
+    </button>
+
+    <button
+      type="button"
+      onClick={resetExpenseFilters}
+      className="rounded-xl border border-gray-300 px-4 py-3 text-sm font-semibold text-gray-700"
+    >
+      Reset
+    </button>
+  </div>
 
   <div className="mt-4 overflow-x-auto">
     <table className="min-w-full text-sm">
@@ -1306,6 +1521,18 @@ const estimatedPendingPosition =
       </thead>
 
       <tbody>
+
+        {expenses.length === 0 && (
+  <tr>
+    <td
+      colSpan={13}
+      className="p-6 text-center text-sm text-gray-500"
+    >
+      No expenses found for the selected filters.
+    </td>
+  </tr>
+)}
+
         {expenses.map((item) => (
           <tr
             key={item.id}
@@ -1461,6 +1688,46 @@ const estimatedPendingPosition =
         ))}
       </tbody>
     </table>
+  </div>
+
+    <div className="mt-4 flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+    <p className="text-sm text-gray-500">
+      Page {expensePagination.page} of{' '}
+      {expensePagination.totalPages}
+      {' '}— {expensePagination.total} total record
+      {expensePagination.total === 1 ? '' : 's'}
+    </p>
+
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={() =>
+          changeExpensePage(expensePage - 1)
+        }
+        disabled={expensePage <= 1}
+        className="rounded-lg border px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        Previous
+      </button>
+
+      <span className="rounded-lg bg-gray-100 px-3 py-2 text-sm font-semibold">
+        {expensePage}
+      </span>
+
+      <button
+        type="button"
+        onClick={() =>
+          changeExpensePage(expensePage + 1)
+        }
+        disabled={
+          expensePage >=
+          expensePagination.totalPages
+        }
+        className="rounded-lg border px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        Next
+      </button>
+    </div>
   </div>
 </div>
 
