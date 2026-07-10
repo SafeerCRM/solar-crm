@@ -107,7 +107,7 @@ export default function DealerPortalPage() {
         <header className="flex flex-col gap-4 rounded-[2rem] border border-white/10 bg-white/10 p-5 shadow-2xl backdrop-blur-xl md:flex-row md:items-center md:justify-between">
           <div>
             <div className="inline-flex rounded-full border border-white/15 bg-white/10 px-4 py-1 text-xs font-black text-orange-200">
-              ⚡ Aditya Solars Dealer Portal
+              ⚡ Solar Dealer Portal
             </div>
 
             <h1 className="mt-3 text-3xl font-black md:text-4xl">

@@ -228,20 +228,20 @@ const sectionLabels = portalExperience?.sectionLabels || {};
 const projectTrackerLabel = sectionLabels?.projectTracker || {};
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-orange-50 via-yellow-50 to-emerald-50 pb-24">
-      <div className="mx-auto max-w-7xl px-4 py-5">
+    <main className="min-h-screen w-screen max-w-full overflow-x-hidden bg-gradient-to-br from-orange-50 via-yellow-50 to-emerald-50 pb-24">
+  <div className="mx-auto w-full max-w-full overflow-x-hidden px-4 py-5 lg:max-w-7xl">
         <div className="overflow-hidden rounded-[2rem] bg-gradient-to-r from-orange-500 via-yellow-500 to-emerald-500 p-6 text-white shadow-2xl">
           <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
+            <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold opacity-90">
-                ☀ Aditya Solars Customer Portal
+                ☀ Solar Customer Portal
               </p>
 
               <h1 className="mt-3 text-3xl font-black md:text-5xl">
                 Welcome, {customer.customerName || 'Customer'}
               </h1>
 
-              <p className="mt-2 text-sm text-white/90">
+              <p className="mt-2 break-words text-sm text-white/90">
                 Customer Code: {customer.customerCode || '-'} | K Number:{' '}
                 {customer.electricityKNumber || '-'}
               </p>
@@ -678,10 +678,15 @@ function ProjectCard({ project }: { project: any }) {
 
 function InfoLine({ label, value }: { label: string; value?: string }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-2xl bg-gray-50 px-4 py-3">
-      <p className="text-xs font-bold text-gray-500">{label}</p>
-      <p className="text-right text-sm font-black text-gray-800">{value || '-'}</p>
-    </div>
+    <div className="flex min-w-0 items-center justify-between gap-3 rounded-2xl bg-gray-50 px-4 py-3">
+  <p className="shrink-0 text-xs font-bold text-gray-500">
+    {label}
+  </p>
+
+  <p className="min-w-0 break-words text-right text-sm font-black text-gray-800">
+    {value || '-'}
+  </p>
+</div>
   );
 }
 
