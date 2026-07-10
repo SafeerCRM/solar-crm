@@ -19,12 +19,17 @@ import { CreateMeetingDto } from './dto/create-meeting.dto';
 import { UpdateMeetingDto } from './dto/update-meeting.dto';
 import { UserRole } from '../users/user.entity';
 import { ProjectService } from '../project/project.service';
+import { MeetingReviewRemark } from './meeting-review-remark.entity';
 
 @Injectable()
 export class MeetingService {
   constructor(
   @InjectRepository(Meeting)
   private readonly meetingRepository: Repository<Meeting>,
+
+  @InjectRepository(MeetingReviewRemark)
+  private readonly meetingReviewRemarkRepository:
+    Repository<MeetingReviewRemark>,
 
   @Inject(forwardRef(() => ProjectService))
   private readonly projectService: ProjectService,
@@ -685,6 +690,92 @@ return {
       history,
     };
   }
+
+  async addReviewRemark(
+  id: number,
+  body: any,
+  user: any,
+) {
+  const meeting =
+    await this.getAccessibleMeeting(
+      id,
+      user,
+    );
+
+  if (
+    !this.isMeetingAssistant(user) &&
+    !this.isOwner(user) &&
+    !this.isMarketingHead(user)
+  ) {
+    throw new ForbiddenException(
+      'Only meeting assistant, owner, or marketing head can add review remarks',
+    );
+  }
+
+  const remark = String(
+    body?.remark || '',
+  ).trim();
+
+  if (!remark) {
+    throw new BadRequestException(
+      'Review remark is required',
+    );
+  }
+
+  const meetingGroupId =
+    meeting.meetingGroupId ||
+    meeting.id;
+
+  const reviewRemark =
+    this.meetingReviewRemarkRepository.create({
+      meetingId: meeting.id,
+      meetingGroupId,
+      remark,
+      createdBy:
+        this.getCurrentUserId(user),
+      createdByName:
+        this.getCurrentUserName(user),
+      createdByRole:
+        this.getRoles(user).join(', '),
+    });
+
+  return this.meetingReviewRemarkRepository.save(
+    reviewRemark,
+  );
+}
+
+async getReviewRemarks(
+  id: number,
+  user: any,
+) {
+  const meeting =
+    await this.getAccessibleMeeting(
+      id,
+      user,
+    );
+
+  const meetingGroupId =
+    meeting.meetingGroupId ||
+    meeting.id;
+
+  return this.meetingReviewRemarkRepository
+    .createQueryBuilder('reviewRemark')
+    .where(
+      `(
+        reviewRemark.meetingGroupId = :meetingGroupId
+        OR reviewRemark.meetingId = :meetingId
+      )`,
+      {
+        meetingGroupId,
+        meetingId: meeting.id,
+      },
+    )
+    .orderBy(
+      'reviewRemark.createdAt',
+      'DESC',
+    )
+    .getMany();
+}
 
   async reassignMeeting(
   id: number,

@@ -54,6 +54,30 @@ uploadMeetingProof(
     return this.meetingService.getDetail(id, user);
   }
 
+  @Get(':id/review-remarks')
+getReviewRemarks(
+  @Param('id', ParseIntPipe) id: number,
+  @CurrentUser() user: any,
+) {
+  return this.meetingService.getReviewRemarks(
+    id,
+    user,
+  );
+}
+
+@Post(':id/review-remarks')
+addReviewRemark(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.meetingService.addReviewRemark(
+    id,
+    body,
+    user,
+  );
+}
+
   @Get(':id')
   findOne(
     @Param('id', ParseIntPipe) id: number,
