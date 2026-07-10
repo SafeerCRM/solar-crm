@@ -564,11 +564,26 @@ return {
   const skip = (page - 1) * limit;
 
   const qb = this.complaintRepository
-    .createQueryBuilder('complaint')
-.leftJoin(Project, 'project', 'project.id = complaint.projectId')
-.addSelect('project.status', 'projectStatus')
-.where('complaint.isHidden = false')
-    .orderBy('complaint.createdAt', 'DESC');
+  .createQueryBuilder('complaint')
+  .leftJoin(
+    Project,
+    'project',
+    'project.id = complaint.projectId',
+  )
+  .addSelect(
+    'project.status',
+    'projectStatus',
+  )
+  .orderBy(
+    'complaint.createdAt',
+    'DESC',
+  );
+
+if (query?.showHidden === 'true') {
+  qb.where('complaint.isHidden = true');
+} else {
+  qb.where('complaint.isHidden = false');
+}
 
   if (query?.customerId) {
     qb.andWhere('complaint.customerId = :customerId', {
@@ -705,6 +720,109 @@ return {
   limit,
   totalPages: Math.ceil(total / limit) || 1,
 };
+}
+
+async hideComplaint(
+  id: number,
+  body: any,
+  user: any,
+) {
+  const complaint =
+    await this.complaintRepository.findOne({
+      where: { id },
+    });
+
+  if (!complaint) {
+    throw new NotFoundException(
+      'Complaint not found',
+    );
+  }
+
+  complaint.isHidden = true;
+
+  const savedComplaint =
+    await this.complaintRepository.save(
+      complaint,
+    );
+
+  await this.addComplaintActivity(
+    {
+      complaintId: savedComplaint.id,
+      customerId: savedComplaint.customerId,
+      customerCode:
+        savedComplaint.customerCode,
+      projectId: savedComplaint.projectId,
+      activityType:
+        CustomerComplaintActivityType.STATUS_CHANGED,
+      activityTitle: 'Complaint Hidden',
+      activityDescription:
+        String(
+          body?.reason ||
+            body?.hiddenReason ||
+            'Complaint hidden by admin',
+        ).trim(),
+      oldValue: 'VISIBLE',
+      newValue: 'HIDDEN',
+    },
+    user,
+  );
+
+  return {
+    message: 'Complaint hidden successfully',
+    complaint: savedComplaint,
+  };
+}
+
+async restoreComplaint(
+  id: number,
+  body: any,
+  user: any,
+) {
+  const complaint =
+    await this.complaintRepository.findOne({
+      where: { id },
+    });
+
+  if (!complaint) {
+    throw new NotFoundException(
+      'Complaint not found',
+    );
+  }
+
+  complaint.isHidden = false;
+
+  const savedComplaint =
+    await this.complaintRepository.save(
+      complaint,
+    );
+
+  await this.addComplaintActivity(
+    {
+      complaintId: savedComplaint.id,
+      customerId: savedComplaint.customerId,
+      customerCode:
+        savedComplaint.customerCode,
+      projectId: savedComplaint.projectId,
+      activityType:
+        CustomerComplaintActivityType.STATUS_CHANGED,
+      activityTitle: 'Complaint Restored',
+      activityDescription:
+        String(
+          body?.reason ||
+            body?.restoreReason ||
+            'Complaint restored by admin',
+        ).trim(),
+      oldValue: 'HIDDEN',
+      newValue: 'VISIBLE',
+    },
+    user,
+  );
+
+  return {
+    message:
+      'Complaint restored successfully',
+    complaint: savedComplaint,
+  };
 }
 
 async listPortalPoliciesForCustomer() {

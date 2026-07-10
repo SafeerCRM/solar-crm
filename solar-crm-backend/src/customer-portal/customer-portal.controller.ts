@@ -56,6 +56,46 @@ export class CustomerPortalController {
     return this.service.updateComplaint(id, body, user);
   }
 
+  @Roles(
+  'OWNER',
+  'CUSTOMER_MANAGER',
+  'PROJECT_MANAGER',
+  'PROJECT_EXECUTIVE',
+  'MAINTENANCE_MANAGER',
+)
+@Patch('complaints/:id/hide')
+hideComplaint(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.service.hideComplaint(
+    id,
+    body,
+    user,
+  );
+}
+
+@Roles(
+  'OWNER',
+  'CUSTOMER_MANAGER',
+  'PROJECT_MANAGER',
+  'PROJECT_EXECUTIVE',
+  'MAINTENANCE_MANAGER',
+)
+@Patch('complaints/:id/restore')
+restoreComplaint(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.service.restoreComplaint(
+    id,
+    body,
+    user,
+  );
+}
+
   @Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'CUSTOMER')
   @Post('referrals')
   createReferral(@Body() body: any) {
