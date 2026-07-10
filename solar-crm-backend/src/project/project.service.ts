@@ -6440,17 +6440,15 @@ async listAccountExpenses(query: any = {}) {
       .where('expense.isHidden = false');
 
   if (query?.staffName) {
-    qb.andWhere(
-      'LOWER(expense.staffName) LIKE :staffName',
-      {
-        staffName: `%${String(
-          query.staffName,
-        )
-          .trim()
-          .toLowerCase()}%`,
-      },
-    );
-  }
+  qb.andWhere(
+    'LOWER(expense.createdByName) LIKE :staffName',
+    {
+      staffName: `%${String(query.staffName)
+        .trim()
+        .toLowerCase()}%`,
+    },
+  );
+}
 
   if (query?.expenseType) {
     qb.andWhere(
