@@ -545,7 +545,12 @@ private readonly projectRepository: Repository<Project>,
 const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
 const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
-  const meetingManagers = await this.userRepository.find();
+  const meetingManagers =
+  await this.userRepository.find({
+    where: {
+      isHidden: false,
+    },
+  });
 
   let filteredManagers = meetingManagers.filter(
   (u: any) =>
