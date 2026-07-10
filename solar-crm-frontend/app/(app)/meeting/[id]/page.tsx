@@ -88,6 +88,17 @@ type User = {
   roles?: string[];
 };
 
+type MeetingReviewRemark = {
+  id: number;
+  meetingId: number;
+  meetingGroupId?: number | null;
+  remark: string;
+  createdBy?: number | null;
+  createdByName?: string | null;
+  createdByRole?: string | null;
+  createdAt: string;
+};
+
 type ActionOption =
   | ''
   | 'COMPLETED'
@@ -112,7 +123,14 @@ export default function MeetingDetailPage() {
   const [latestMeeting, setLatestMeeting] = useState<Meeting | null>(null);
   const [history, setHistory] = useState<Meeting[]>([]);
   const [calculators, setCalculators] = useState<CalculatorResult[]>([]);
+  const [reviewRemarks, setReviewRemarks] =
+  useState<MeetingReviewRemark[]>([]);
 
+const [reviewRemarkText, setReviewRemarkText] =
+  useState('');
+
+const [reviewRemarkSaving, setReviewRemarkSaving] =
+  useState(false);
   const [currentUserRoles, setCurrentUserRoles] = useState<string[]>([]);
 const [meetingManagers, setMeetingManagers] = useState<User[]>([]);
 const [reassignManagerId, setReassignManagerId] = useState('');
@@ -234,7 +252,38 @@ const [creatingFollowUp, setCreatingFollowUp] = useState(false);
   }
 };
 
+const fetchReviewRemarks = async () => {
+  if (!meetingId) return;
+
+  try {
+    const res = await axios.get<MeetingReviewRemark[]>(
+      `${backendUrl}/meetings/${meetingId}/review-remarks`,
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+
+    setReviewRemarks(
+      Array.isArray(res.data)
+        ? res.data
+        : [],
+    );
+  } catch (err) {
+    console.error(
+      'Failed to load meeting review remarks:',
+      err,
+    );
+
+    setReviewRemarks([]);
+  }
+};
+
 const canReassignMeeting =
+  currentUserRoles.includes('OWNER') ||
+  currentUserRoles.includes('MARKETING_HEAD');
+
+  const canAddReviewRemark =
+  currentUserRoles.includes('MEETING_ASSISTANT') ||
   currentUserRoles.includes('OWNER') ||
   currentUserRoles.includes('MARKETING_HEAD');
 
@@ -262,8 +311,9 @@ const fetchMeetingManagers = async () => {
   }
 
   fetchDetail();
-  fetchCalculators();
-  fetchMeetingManagers();
+fetchCalculators();
+fetchReviewRemarks();
+fetchMeetingManagers();
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [meetingId]);
@@ -465,6 +515,54 @@ const reassignMeeting = async () => {
     );
   } finally {
     setReassigning(false);
+  }
+};
+
+const submitReviewRemark = async () => {
+  if (!latestMeeting) return;
+
+  const remark =
+    reviewRemarkText.trim();
+
+  if (!remark) {
+    setError(
+      'Please enter a review remark',
+    );
+    return;
+  }
+
+  try {
+    setReviewRemarkSaving(true);
+    setError('');
+    setMessage('');
+
+    await axios.post(
+      `${backendUrl}/meetings/${latestMeeting.id}/review-remarks`,
+      {
+        remark,
+      },
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+
+    setReviewRemarkText('');
+
+    setMessage(
+      'Review remark added successfully',
+    );
+
+    await fetchReviewRemarks();
+  } catch (err: any) {
+    console.error(err);
+
+    setError(
+      err?.response?.data?.message ||
+        err?.message ||
+        'Failed to add review remark',
+    );
+  } finally {
+    setReviewRemarkSaving(false);
   }
 };
 
@@ -824,7 +922,8 @@ const createMeetingFollowUp = async () => {
     onClick={() => {
       router.refresh();
       fetchDetail();
-      fetchCalculators();
+fetchCalculators();
+fetchReviewRemarks();
     }}
     className="rounded bg-blue-600 px-4 py-2 text-white"
   >
@@ -1205,6 +1304,149 @@ const createMeetingFollowUp = async () => {
           </div>
         </div>
       </div>
+
+      <div className="mb-6 rounded border bg-white p-6">
+  <div className="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <h2 className="text-xl font-semibold">
+        Meeting Review Remarks
+      </h2>
+
+      <p className="mt-1 text-sm text-gray-500">
+        Review notes are added separately and do not replace the original
+        meeting remarks or notes.
+      </p>
+    </div>
+
+    <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold text-purple-700">
+      {reviewRemarks.length} Remark
+      {reviewRemarks.length === 1 ? '' : 's'}
+    </span>
+  </div>
+
+  {reviewRemarks.length > 0 && (
+    <div className="mt-4 rounded-xl border border-purple-200 bg-purple-50 p-4">
+      <p className="text-xs font-bold uppercase tracking-wide text-purple-700">
+        Latest Review Remark
+      </p>
+
+      <p className="mt-2 whitespace-pre-wrap text-sm font-semibold text-gray-900">
+        {reviewRemarks[0].remark}
+      </p>
+
+      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+        <span>
+          Added by:{' '}
+          <strong>
+            {reviewRemarks[0].createdByName || 'Unknown User'}
+          </strong>
+        </span>
+
+        {reviewRemarks[0].createdByRole && (
+          <span>
+            Role:{' '}
+            <strong>
+              {reviewRemarks[0].createdByRole}
+            </strong>
+          </span>
+        )}
+
+        <span>
+          {new Date(
+            reviewRemarks[0].createdAt,
+          ).toLocaleString('en-IN')}
+        </span>
+      </div>
+    </div>
+  )}
+
+  {canAddReviewRemark && (
+    <div className="mt-5 rounded-xl border bg-gray-50 p-4">
+      <label className="mb-2 block text-sm font-medium text-gray-800">
+        Add Review Remark
+      </label>
+
+      <textarea
+        value={reviewRemarkText}
+        onChange={(e) =>
+          setReviewRemarkText(e.target.value)
+        }
+        placeholder="Add review observation, correction, instruction, or follow-up note"
+        rows={4}
+        className="w-full rounded border bg-white p-3"
+      />
+
+      <button
+        type="button"
+        onClick={submitReviewRemark}
+        disabled={
+          reviewRemarkSaving ||
+          !reviewRemarkText.trim()
+        }
+        className="mt-3 rounded bg-purple-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {reviewRemarkSaving
+          ? 'Adding Remark...'
+          : 'Add Review Remark'}
+      </button>
+    </div>
+  )}
+
+  <div className="mt-5">
+    <h3 className="mb-3 font-semibold text-gray-900">
+      Review History
+    </h3>
+
+    {reviewRemarks.length === 0 ? (
+      <div className="rounded-xl border border-dashed bg-gray-50 p-5 text-center text-sm text-gray-500">
+        No review remarks added yet.
+      </div>
+    ) : (
+      <div className="space-y-3">
+        {reviewRemarks.map((item, index) => (
+          <div
+            key={item.id}
+            className={`rounded-xl border p-4 ${
+              index === 0
+                ? 'border-purple-200 bg-purple-50'
+                : 'bg-gray-50'
+            }`}
+          >
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <p className="text-sm font-semibold text-gray-900">
+                  {item.createdByName || 'Unknown User'}
+                </p>
+
+                <p className="mt-1 text-xs text-gray-500">
+                  {item.createdByRole || 'Role not available'}
+                </p>
+              </div>
+
+              <div className="text-right">
+                {index === 0 && (
+                  <span className="mb-1 inline-block rounded-full bg-purple-600 px-2 py-1 text-xs font-semibold text-white">
+                    Latest
+                  </span>
+                )}
+
+                <p className="text-xs text-gray-500">
+                  {new Date(
+                    item.createdAt,
+                  ).toLocaleString('en-IN')}
+                </p>
+              </div>
+            </div>
+
+            <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-gray-700">
+              {item.remark}
+            </p>
+          </div>
+        ))}
+      </div>
+    )}
+  </div>
+</div>
 
       <div className="mb-6 rounded border bg-white p-6">
         <h2 className="mb-4 text-xl font-semibold">Meeting Action</h2>
