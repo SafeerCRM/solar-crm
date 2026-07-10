@@ -3967,6 +3967,10 @@ const canApproveAndReserveStock =
   },
 ];
 
+const isLoanProcessCompleted =
+  String(loanDetail?.status || loanForm.status || '') ===
+  'LOAN_DISBURSED';
+
   return (
     <div className="mx-auto max-w-7xl space-y-5">
       <div className="rounded-2xl bg-white p-5 shadow">
@@ -3992,9 +3996,17 @@ const canApproveAndReserveStock =
             </p>
           </div>
 
-          <span className="rounded-full bg-blue-100 px-4 py-2 text-sm font-semibold text-blue-700">
-            {project.status || 'UNKNOWN'}
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+  <span className="rounded-full bg-blue-100 px-4 py-2 text-sm font-semibold text-blue-700">
+    {project.status || 'UNKNOWN'}
+  </span>
+
+  {isLoanProcessCompleted && (
+    <span className="rounded-full bg-green-100 px-4 py-2 text-sm font-semibold text-green-700">
+      ✓ Loan Process Completed
+    </span>
+  )}
+</div>
 
           {activeTab === 'CONTRACTOR_WORK' && (
   <div className="space-y-5">
@@ -6521,6 +6533,37 @@ const canApproveAndReserveStock =
 
 {activeTab === 'LOAN_DEPARTMENT' && (
   <div className="rounded-2xl bg-white p-5 shadow">
+
+    {isLoanProcessCompleted && (
+  <div className="rounded-2xl border border-green-200 bg-green-50 p-5">
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h3 className="text-lg font-bold text-green-800">
+          Loan Process Completed
+        </h3>
+
+        <p className="mt-1 text-sm text-green-700">
+          The loan has been marked as disbursed for this project.
+        </p>
+      </div>
+
+      <span className="w-fit rounded-full bg-green-600 px-4 py-2 text-sm font-semibold text-white">
+        LOAN DISBURSED
+      </span>
+    </div>
+
+    {loanDetail?.firstEmiDisbursementDate && (
+      <p className="mt-3 text-sm text-green-800">
+        First EMI disbursement date:{' '}
+        <span className="font-semibold">
+          {new Date(
+            loanDetail.firstEmiDisbursementDate,
+          ).toLocaleDateString('en-IN')}
+        </span>
+      </p>
+    )}
+  </div>
+)}
     <h2 className="text-xl font-bold text-gray-800">
       Loan Department
     </h2>

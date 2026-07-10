@@ -73,6 +73,7 @@ const [totalProjects, setTotalProjects] = useState(0);
 
 const [search, setSearch] = useState('');
 const [statusFilter, setStatusFilter] = useState('');
+const [loanStatusFilter, setLoanStatusFilter] = useState('');
 const [projectWorkStateFilter, setProjectWorkStateFilter] = useState('');
 const [branchFilter, setBranchFilter] = useState('');
 const [ownerFilter, setOwnerFilter] = useState('');
@@ -98,6 +99,7 @@ useEffect(() => {
 
     setSearch(parsed.search || '');
     setStatusFilter(parsed.statusFilter || '');
+    setLoanStatusFilter(parsed.loanStatusFilter || '');
     setProjectWorkStateFilter(parsed.projectWorkStateFilter || '');
     setBranchFilter(parsed.branchFilter || '');
     setOwnerFilter(parsed.ownerFilter || '');
@@ -119,6 +121,7 @@ useEffect(() => {
     JSON.stringify({
       search,
       statusFilter,
+      loanStatusFilter,
       branchFilter,
       projectWorkStateFilter,
       ownerFilter,
@@ -132,6 +135,7 @@ legacyYear,
 }, [
   search,
   statusFilter,
+  loanStatusFilter,
   projectWorkStateFilter,
   branchFilter,
   ownerFilter,
@@ -153,6 +157,7 @@ legacyYear,
     limit: 20,
     search,
     status: statusFilter,
+    loanStatus: loanStatusFilter,
     projectWorkState: projectWorkStateFilter,
     branch: branchFilter,
     owner: ownerFilter,
@@ -306,6 +311,7 @@ const restoreProject = async (projectId: number) => {
   page,
   search,
   statusFilter,
+  loanStatusFilter,
   projectWorkStateFilter,
   branchFilter,
   ownerFilter,
@@ -356,9 +362,60 @@ useEffect(() => {
     : 'View Hidden Projects'}
 </button>
   </div>
+
+  <div className="mt-5 border-t pt-4">
+  <p className="mb-3 text-sm font-semibold text-gray-700">
+    Project Sections
+  </p>
+
+  <div className="flex flex-wrap gap-2">
+    <button
+      type="button"
+      onClick={() => {
+        setLoanStatusFilter('');
+        setPage(1);
+      }}
+      className={`rounded-xl px-4 py-2 text-sm font-semibold ${
+        !loanStatusFilter
+          ? 'bg-gray-900 text-white'
+          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+      }`}
+    >
+      All Projects
+    </button>
+
+    <button
+      type="button"
+      onClick={() => {
+        setLoanStatusFilter('LOAN_DISBURSED');
+        setPage(1);
+      }}
+      className={`rounded-xl px-4 py-2 text-sm font-semibold ${
+        loanStatusFilter === 'LOAN_DISBURSED'
+          ? 'bg-green-600 text-white'
+          : 'bg-green-50 text-green-700 hover:bg-green-100'
+      }`}
+    >
+      Loan Process Completed
+    </button>
+  </div>
+</div>
 </div>
 
 <div className="rounded-2xl bg-white p-5 shadow">
+  {loanStatusFilter === 'LOAN_DISBURSED' && (
+    <div className="mb-4 rounded-xl border border-green-200 bg-green-50 p-4">
+      <p className="font-bold text-green-800">
+        Loan Process Completed Projects
+      </p>
+
+      <p className="mt-1 text-sm text-green-700">
+        Showing {totalProjects} project
+        {totalProjects === 1 ? '' : 's'} whose loan process is completed.
+      </p>
+    </div>
+  )}
+
   <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
     <input
       placeholder="Search by name, phone, K No, or Project ID"
@@ -516,6 +573,7 @@ useEffect(() => {
     onClick={() => {
       setSearch('');
       setStatusFilter('');
+      setLoanStatusFilter('');
       setBranchFilter('');
       setProjectWorkStateFilter('');
       setOwnerFilter('');
