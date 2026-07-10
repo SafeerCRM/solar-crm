@@ -6421,15 +6421,66 @@ async getFinanceSummary(query: any = {}, currentUser?: any) {
   };
 }
 
-async listAccountExpenses() {
-  return this.projectAccountExpenseRepository.find({
-    where: {
-      isHidden: false,
+async listAccountExpenses(query: any = {}) {
+  const page = Math.max(
+    Number(query?.page || 1),
+    1,
+  );
+
+  const limit = Math.min(
+    Math.max(Number(query?.limit || 20), 1),
+    100,
+  );
+
+  const skip = (page - 1) * limit;
+
+  const qb =
+    this.projectAccountExpenseRepository
+      .createQueryBuilder('expense')
+      .where('expense.isHidden = false');
+
+  if (query?.staffName) {
+    qb.andWhere(
+      'LOWER(expense.staffName) LIKE :staffName',
+      {
+        staffName: `%${String(
+          query.staffName,
+        )
+          .trim()
+          .toLowerCase()}%`,
+      },
+    );
+  }
+
+  if (query?.expenseType) {
+    qb.andWhere(
+      'expense.expenseType = :expenseType',
+      {
+        expenseType: String(
+          query.expenseType,
+        ).trim(),
+      },
+    );
+  }
+
+  qb
+    .orderBy('expense.createdAt', 'DESC')
+    .skip(skip)
+    .take(limit);
+
+  const [data, total] =
+    await qb.getManyAndCount();
+
+  return {
+    data,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages:
+        Math.ceil(total / limit) || 1,
     },
-    order: {
-      createdAt: 'DESC',
-    },
-  });
+  };
 }
 
 async getMyAccountExpenses(query: any, currentUser: any) {

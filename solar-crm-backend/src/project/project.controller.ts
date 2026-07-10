@@ -1154,8 +1154,18 @@ getProjectOwnerWiseProfitReport(@Query() query: any) {
   'ACCOUNT_MANAGER',
 )
 @Get('account-expenses')
-listAccountExpenses() {
-  return this.projectService.listAccountExpenses();
+listAccountExpenses(
+  @Query('page') page?: string,
+  @Query('limit') limit?: string,
+  @Query('staffName') staffName?: string,
+  @Query('expenseType') expenseType?: string,
+) {
+  return this.projectService.listAccountExpenses({
+    page: Number(page || 1),
+    limit: Number(limit || 20),
+    staffName: staffName || '',
+    expenseType: expenseType || '',
+  });
 }
 
 @Roles(
