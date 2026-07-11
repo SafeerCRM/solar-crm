@@ -115,12 +115,14 @@ const [movementPagination, setMovementPagination] = useState({
 const [branchStockRows, setBranchStockRows] = useState<any[]>([]);
 const [branchStockLoading, setBranchStockLoading] = useState(false);
 
-const [branchStockSummary, setBranchStockSummary] = useState({
-  totalBranches: 0,
-  totalItems: 0,
-  totalQuantity: 0,
-  totalStockValue: 0,
-});
+const [branchStockSummary, setBranchStockSummary] =
+  useState({
+    totalBranches: 0,
+    totalMaterials: 0,
+    totalItems: 0,
+    totalQuantity: 0,
+    totalStockValue: 0,
+  });
 
 const [branchStockFilters, setBranchStockFilters] = useState({
   branch: '',
@@ -421,19 +423,26 @@ const loadBranchWiseStock = async (
     );
 
     setBranchStockSummary({
-      totalBranches: Number(
-        res.data?.summary?.totalBranches || 0,
-      ),
-      totalItems: Number(
-        res.data?.summary?.totalItems || 0,
-      ),
-      totalQuantity: Number(
-        res.data?.summary?.totalQuantity || 0,
-      ),
-      totalStockValue: Number(
-        res.data?.summary?.totalStockValue || 0,
-      ),
-    });
+  totalBranches: Number(
+    res.data?.summary?.totalBranches || 0,
+  ),
+
+  totalMaterials: Number(
+    res.data?.summary?.totalMaterials || 0,
+  ),
+
+  totalItems: Number(
+    res.data?.summary?.totalItems || 0,
+  ),
+
+  totalQuantity: Number(
+    res.data?.summary?.totalQuantity || 0,
+  ),
+
+  totalStockValue: Number(
+    res.data?.summary?.totalStockValue || 0,
+  ),
+});
 
     setBranchStockRows(
       Array.isArray(res.data?.data)
@@ -2454,51 +2463,65 @@ const getFilteredSelectableStockItems = (searchText: string) => {
     />
   </div>
 
-  <div className="mt-5 grid gap-3 md:grid-cols-4">
-    <div className="rounded-xl bg-gray-50 p-4">
-      <p className="text-xs text-gray-600">
-        Branches
-      </p>
+  <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+  <div className="rounded-2xl bg-blue-50 p-4">
+    <p className="text-sm font-semibold text-blue-700">
+      Branches
+    </p>
 
-      <p className="mt-1 text-xl font-bold text-gray-800">
-        {branchStockSummary.totalBranches}
-      </p>
-    </div>
+    <p className="mt-2 text-2xl font-bold text-blue-900">
+      {branchStockSummary.totalBranches}
+    </p>
 
-    <div className="rounded-xl bg-blue-50 p-4">
-      <p className="text-xs text-blue-700">
-        Stock Items
-      </p>
-
-      <p className="mt-1 text-xl font-bold text-blue-800">
-        {branchStockSummary.totalItems}
-      </p>
-    </div>
-
-    <div className="rounded-xl bg-purple-50 p-4">
-      <p className="text-xs text-purple-700">
-        Total Quantity
-      </p>
-
-      <p className="mt-1 text-xl font-bold text-purple-800">
-        {branchStockSummary.totalQuantity.toLocaleString(
-          'en-IN',
-        )}
-      </p>
-    </div>
-
-    <div className="rounded-xl bg-green-50 p-4">
-      <p className="text-xs text-green-700">
-        Stock Value
-      </p>
-
-      <p className="mt-1 text-xl font-bold text-green-800">
-        {formatCurrency(
-          branchStockSummary.totalStockValue,
-        )}
-      </p>
-    </div>
+    <p className="mt-1 text-xs text-blue-600">
+      Distinct branches matching the filters
+    </p>
   </div>
+
+  <div className="rounded-2xl bg-purple-50 p-4">
+    <p className="text-sm font-semibold text-purple-700">
+      Distinct Materials
+    </p>
+
+    <p className="mt-2 text-2xl font-bold text-purple-900">
+      {branchStockSummary.totalMaterials}
+    </p>
+
+    <p className="mt-1 text-xs text-purple-600">
+      Unique material types held across branches
+    </p>
+  </div>
+
+  <div className="rounded-2xl bg-orange-50 p-4">
+    <p className="text-sm font-semibold text-orange-700">
+      Stock Lines
+    </p>
+
+    <p className="mt-2 text-2xl font-bold text-orange-900">
+      {branchStockSummary.totalItems}
+    </p>
+
+    <p className="mt-1 text-xs text-orange-600">
+      Material and branch stock records
+    </p>
+  </div>
+
+  <div className="rounded-2xl bg-green-50 p-4">
+    <p className="text-sm font-semibold text-green-700">
+      Total Stock Value
+    </p>
+
+    <p className="mt-2 text-2xl font-bold text-green-900">
+      {formatCurrency(
+        branchStockSummary.totalStockValue,
+      )}
+    </p>
+
+    <p className="mt-1 text-xs text-green-600">
+      Value of stock matching the filters
+    </p>
+  </div>
+</div>
 
   <div className="mt-5 overflow-x-auto">
     <table className="min-w-full text-sm">
