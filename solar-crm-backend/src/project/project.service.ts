@@ -1584,14 +1584,22 @@ if (roles.includes('SOLAR_FRANCHISE')) {
   );
 }
 
-  if (filters?.status) {
-    query.andWhere(
-      'project.status = :status',
-      {
-        status: filters.status,
-      },
-    );
-  }
+  if (filters?.status === 'APPROVED') {
+  query.andWhere(
+    'project.ownerApprovalStatus = :approvedStatus',
+    {
+      approvedStatus:
+        ProjectApprovalStatus.APPROVED,
+    },
+  );
+} else if (filters?.status) {
+  query.andWhere(
+    'project.status = :status',
+    {
+      status: filters.status,
+    },
+  );
+}
 
   if (filters?.loanStatus) {
   query.andWhere(
