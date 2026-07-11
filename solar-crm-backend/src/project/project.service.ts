@@ -3086,9 +3086,24 @@ async issueProjectStock(body: any, currentUser: any) {
     throw new NotFoundException('Stock item not found');
   }
 
-  if (Number(stockItem.currentQuantity || 0) < quantity) {
-    throw new BadRequestException('Insufficient stock quantity');
-  }
+  const currentQuantity = Number(
+  stockItem.currentQuantity || 0,
+);
+
+const reservedQuantity = Number(
+  (stockItem as any).reservedQuantity || 0,
+);
+
+const availableQuantity = Math.max(
+  currentQuantity - reservedQuantity,
+  0,
+);
+
+if (availableQuantity < quantity) {
+  throw new BadRequestException(
+    `Insufficient available stock. Available quantity is ${availableQuantity}; ${reservedQuantity} is reserved.`,
+  );
+}
 
   const rate = Number(stockItem.averageRate || 0);
   const totalAmount = quantity * rate;
@@ -3166,9 +3181,27 @@ async transferProjectStock(body: any, currentUser: any) {
         throw new NotFoundException('Source stock item not found');
       }
 
-      if (Number(sourceStock.currentQuantity || 0) < quantity) {
-        throw new BadRequestException('Insufficient stock quantity');
-      }
+      const sourceCurrentQuantity = Number(
+  sourceStock.currentQuantity || 0,
+);
+
+const sourceReservedQuantity = Number(
+  (sourceStock as any).reservedQuantity || 0,
+);
+
+const sourceAvailableQuantity = Math.max(
+  sourceCurrentQuantity -
+    sourceReservedQuantity,
+  0,
+);
+
+if (
+  sourceAvailableQuantity < quantity
+) {
+  throw new BadRequestException(
+    `Insufficient available stock. Available quantity is ${sourceAvailableQuantity}; ${sourceReservedQuantity} is reserved.`,
+  );
+}
 
       if (
         sourceStock.branchId &&
@@ -3554,6 +3587,9 @@ async getBranchWiseStockReport(query: any) {
 
   const rows = await qb.getMany();
 
+  const distinctMaterialKeys =
+  new Set<string>();
+
   const branchMap = new Map<
     string,
     {
@@ -3565,6 +3601,14 @@ async getBranchWiseStockReport(query: any) {
   >();
 
   for (const item of rows) {
+    const materialKey = String(
+  item.materialId ||
+    `${item.materialName}-${item.category}-${item.brand}-${item.unit}`,
+);
+
+distinctMaterialKeys.add(
+  materialKey,
+);
     const branchName =
       item.branchName?.trim() || 'UNASSIGNED';
 
@@ -3596,6 +3640,8 @@ async getBranchWiseStockReport(query: any) {
   return {
     summary: {
       totalBranches: data.length,
+      totalMaterials:
+  distinctMaterialKeys.size,
       totalItems: data.reduce(
         (sum, item) => sum + item.totalItems,
         0,
@@ -20198,13 +20244,24 @@ if (stockItemId) {
     throw new NotFoundException('Stock item not found');
   }
 
-  const currentQuantity = Number(stockItem.currentQuantity || 0);
+  const currentQuantity = Number(
+  stockItem.currentQuantity || 0,
+);
 
-  if (currentQuantity < quantity) {
-    throw new BadRequestException(
-      `Insufficient stock. Available quantity is ${currentQuantity}`,
-    );
-  }
+const reservedQuantity = Number(
+  (stockItem as any).reservedQuantity || 0,
+);
+
+const availableQuantity = Math.max(
+  currentQuantity - reservedQuantity,
+  0,
+);
+
+if (availableQuantity < quantity) {
+  throw new BadRequestException(
+    `Insufficient available stock. Available quantity is ${availableQuantity}; ${reservedQuantity} is reserved.`,
+  );
+}
 
   const rate = Number(body?.rate || stockItem.averageRate || 0);
   const totalAmount = quantity * rate;
@@ -20303,17 +20360,32 @@ async adjustStock(body: any, user: any) {
     throw new NotFoundException('Stock item not found');
   }
 
-  const currentQuantity = Number(stockItem.currentQuantity || 0);
-  const averageRate = Number(stockItem.averageRate || 0);
+  const currentQuantity = Number(
+  stockItem.currentQuantity || 0,
+);
 
-  if (
-    adjustmentType === ProjectStockMovementType.ADJUST_OUT &&
-    currentQuantity < quantity
-  ) {
-    throw new BadRequestException(
-      `Insufficient stock. Available quantity is ${currentQuantity}`,
-    );
-  }
+const reservedQuantity = Number(
+  (stockItem as any).reservedQuantity || 0,
+);
+
+const availableQuantity = Math.max(
+  currentQuantity - reservedQuantity,
+  0,
+);
+
+const averageRate = Number(
+  stockItem.averageRate || 0,
+);
+
+if (
+  adjustmentType ===
+    ProjectStockMovementType.ADJUST_OUT &&
+  availableQuantity < quantity
+) {
+  throw new BadRequestException(
+    `Insufficient available stock. Available quantity is ${availableQuantity}; ${reservedQuantity} is reserved.`,
+  );
+}
 
   const newQuantity =
     adjustmentType === ProjectStockMovementType.ADJUST_IN
