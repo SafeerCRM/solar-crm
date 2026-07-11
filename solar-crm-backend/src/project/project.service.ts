@@ -6290,18 +6290,125 @@ async getFinanceSummary(query: any = {}, currentUser?: any) {
     59,
   );
 
-  const paymentCollection: any =
-    await this.getPaymentCollectionList(
-      {
-        page: 1,
-        limit: 10000,
-      },
-      currentUser,
+ const firstPaymentCollectionPage: any =
+  await this.getPaymentCollectionList(
+    {
+      page: 1,
+      limit: 100,
+    },
+    currentUser,
+  );
+
+const paymentRows = Array.isArray(
+  firstPaymentCollectionPage?.data,
+)
+  ? [...firstPaymentCollectionPage.data]
+  : [];
+
+const paymentTotalPages = Math.max(
+  Number(
+    firstPaymentCollectionPage?.pagination?.totalPages ||
+      1,
+  ),
+  1,
+);
+
+if (paymentTotalPages > 1) {
+  const remainingPages =
+    await Promise.all(
+      Array.from(
+        {
+          length:
+            paymentTotalPages - 1,
+        },
+        (_, index) =>
+          this.getPaymentCollectionList(
+            {
+              page: index + 2,
+              limit: 100,
+            },
+            currentUser,
+          ),
+      ),
     );
 
-  const paymentRows = Array.isArray(paymentCollection?.data)
-    ? paymentCollection.data
-    : [];
+  for (const pageResult of remainingPages) {
+    if (Array.isArray(pageResult?.data)) {
+      paymentRows.push(
+        ...pageResult.data,
+      );
+    }
+  }
+}
+
+const paymentCollection =
+  firstPaymentCollectionPage;
+
+    const [
+  allProjectsResult,
+  completedProjectsResult,
+  cancelledProjectsResult,
+  rejectedProjectsResult,
+] = await Promise.all([
+  this.findAll(
+    {
+      page: 1,
+      limit: 1,
+    },
+    currentUser,
+  ),
+
+  this.findAll(
+    {
+      page: 1,
+      limit: 1,
+      status: ProjectStatus.COMPLETED,
+    },
+    currentUser,
+  ),
+
+  this.findAll(
+    {
+      page: 1,
+      limit: 1,
+      status: ProjectStatus.CANCELLED,
+    },
+    currentUser,
+  ),
+
+  this.findAll(
+    {
+      page: 1,
+      limit: 1,
+      status: ProjectStatus.REJECTED,
+    },
+    currentUser,
+  ),
+]);
+
+const totalProjects = Number(
+  allProjectsResult?.total || 0,
+);
+
+const completedProjects = Number(
+  completedProjectsResult?.total || 0,
+);
+
+const cancelledProjects = Number(
+  cancelledProjectsResult?.total || 0,
+);
+
+const rejectedProjects = Number(
+  rejectedProjectsResult?.total || 0,
+);
+
+const activeProjects = Math.max(
+  totalProjects -
+    completedProjects -
+    cancelledProjects -
+    rejectedProjects,
+  0,
+);
 
   const customerScheduled = Number(
     paymentCollection?.summary?.projectTotalAmount ||
@@ -6378,9 +6485,10 @@ async getFinanceSummary(query: any = {}, currentUser?: any) {
           isInMonth(receipt.paymentDate || receipt.createdAt),
         )
         .filter(
-          (receipt: any) =>
-            String(receipt.approvalStatus || '') !== 'REJECTED',
-        )
+  (receipt: any) =>
+    String(receipt.approvalStatus || '') ===
+    'APPROVED',
+)
         .reduce(
           (innerSum: number, receipt: any) =>
             innerSum + Number(receipt.receivedAmount || 0),
@@ -6399,9 +6507,17 @@ async getFinanceSummary(query: any = {}, currentUser?: any) {
   );
 
   return {
-    month,
+  month,
 
-    collections: {
+  projectSummary: {
+    totalProjects,
+    activeProjects,
+    completedProjects,
+    cancelledProjects,
+    rejectedProjects,
+  },
+
+  collections: {
       totalScheduled: customerScheduled,
       totalReceived: customerReceived,
       totalPending: customerPending,
