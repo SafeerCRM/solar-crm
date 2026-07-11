@@ -92,10 +92,9 @@ const [expenseTypeFilter, setExpenseTypeFilter] =
   const [expenseProofUploading, setExpenseProofUploading] = useState(false);
 
 useEffect(() => {
-  loadSummary();
   loadExpenses();
-  loadExpenseSummary();
-  loadFinanceSummary();
+loadExpenseSummary();
+loadFinanceSummary();
 
   try {
   const userData =
@@ -142,113 +141,31 @@ const loadFinanceSummary = async () => {
     );
 
     setFinanceSummary(res.data || {});
-  } catch (error) {
-    console.error(error);
-  }
-};
-
-const loadSummary = async () => {
-  try {
-    const token =
-  localStorage.getItem('token');
-
-const [paymentRes, projectRes] =
-  await Promise.all([
-    axios.get(
-      `${API_BASE_URL}/project/payment-collection`,
-      {
-        params: {
-          limit: 10000,
-        },
-        headers: token
-          ? {
-              Authorization: `Bearer ${token}`,
-            }
-          : {},
-      },
-    ),
-
-    axios.get(
-      `${API_BASE_URL}/project`,
-      {
-        params: {
-          limit: 10000,
-        },
-        headers: token
-          ? {
-              Authorization: `Bearer ${token}`,
-            }
-          : {},
-      },
-    ),
-  ]);
-
-    const rows = Array.isArray(
-  paymentRes.data?.data,
-)
-  ? paymentRes.data.data
-  : [];
-
-    let totalScheduled = 0;
-    let totalReceived = 0;
-    let totalPending = 0;
-    let pendingApproval = 0;
-
-    rows.forEach((row: any) => {
-      totalScheduled += Number(
-        row.amount || 0,
-      );
-
-      totalReceived += Number(
-        row.paidAmount || 0,
-      );
-
-      totalPending += Number(
-        row.pendingAmount || 0,
-      );
-
-      if (
-        Number(row.paidAmount || 0) > 0 &&
-        row.approvalStatus ===
-          'PENDING'
-      ) {
-        pendingApproval += Number(
-          row.paidAmount || 0,
-        );
-      }
-    });
-
-    const projects = Array.isArray(
-  projectRes.data?.data,
-)
-  ? projectRes.data.data
-  : [];
-
-const totalProjects =
-  projects.length;
-
-const completedProjects =
-  projects.filter(
-    (project: any) =>
-      project.status === 'COMPLETED',
-  ).length;
-
-const activeProjects =
-  totalProjects -
-  completedProjects;
-
-setProjectSummary({
-  totalProjects,
-  activeProjects,
-  completedProjects,
+    setProjectSummary({
+  totalProjects: Number(
+    res.data?.projectSummary?.totalProjects || 0,
+  ),
+  activeProjects: Number(
+    res.data?.projectSummary?.activeProjects || 0,
+  ),
+  completedProjects: Number(
+    res.data?.projectSummary?.completedProjects || 0,
+  ),
 });
-
-    setSummary({
-      totalScheduled,
-      totalReceived,
-      totalPending,
-      pendingApproval,
-    });
+setSummary({
+  totalScheduled: Number(
+    res.data?.collections?.totalScheduled || 0,
+  ),
+  totalReceived: Number(
+    res.data?.collections?.totalReceived || 0,
+  ),
+  totalPending: Number(
+    res.data?.collections?.totalPending || 0,
+  ),
+  pendingApproval: Number(
+    res.data?.collections?.paymentApprovalPending || 0,
+  ),
+});
   } catch (error) {
     console.error(error);
   }
@@ -462,6 +379,7 @@ const createExpense = async () => {
 
     await loadExpenses();
     await loadExpenseSummary();
+    await loadFinanceSummary();
   } catch (error: any) {
     console.error(error);
 
@@ -540,8 +458,8 @@ const approveExpense = async (
     );
 
     await loadExpenses();
-    await loadSummary();
-    await loadExpenseSummary();
+await loadExpenseSummary();
+await loadFinanceSummary();
 
     alert('Expense approved');
   } catch (error: any) {
@@ -585,6 +503,7 @@ const rejectExpense = async (
 
     await loadExpenses();
     await loadExpenseSummary();
+    await loadFinanceSummary();
 
     setSelectedExpense(null);
 
@@ -635,6 +554,7 @@ const editExpense = async (item: any) => {
 
     await loadExpenses();
     await loadExpenseSummary();
+    await loadFinanceSummary();
 
     alert('Expense updated');
   } catch (error: any) {
@@ -678,6 +598,7 @@ const hideExpense = async (
 
     await loadExpenses();
     await loadExpenseSummary();
+    await loadFinanceSummary();
 
     alert('Expense hidden');
   } catch (error: any) {
