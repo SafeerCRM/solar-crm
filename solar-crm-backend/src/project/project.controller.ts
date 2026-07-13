@@ -84,6 +84,45 @@ legacyYear: legacyYear || '',
 );
 }
 
+@Get('export/list')
+getProjectExportData(
+  @Query('search') search?: string,
+  @Query('status') status?: string,
+  @Query('projectWorkState')
+  projectWorkState?: string,
+  @Query('loanStatus')
+  loanStatus?: string,
+  @Query('branch') branch?: string,
+  @Query('owner') owner: string = '',
+  @Query('fromDate')
+  fromDate?: string,
+  @Query('toDate')
+  toDate?: string,
+  @Query('legacyFilter')
+  legacyFilter?: string,
+  @Query('legacyYear')
+  legacyYear?: string,
+  @CurrentUser() user?: any,
+) {
+  return this.projectService.getProjectExportData(
+    {
+      search: search || '',
+      status: status || '',
+      projectWorkState:
+        projectWorkState || '',
+      loanStatus: loanStatus || '',
+      branch: branch || '',
+      owner: owner || '',
+      fromDate: fromDate || '',
+      toDate: toDate || '',
+      legacyFilter:
+        legacyFilter || '',
+      legacyYear: legacyYear || '',
+    },
+    user,
+  );
+}
+
   @Get(':id/documents')
 getProjectDocuments(
   @Param('id') id: string,

@@ -1601,7 +1601,25 @@ if (roles.includes('SOLAR_FRANCHISE')) {
   );
 }
 
-  if (filters?.loanStatus) {
+  if (
+  filters?.loanStatus ===
+  'LOAN_PROCESS_COMPLETED'
+) {
+  query.andWhere(
+    `EXISTS (
+      SELECT 1
+      FROM project_loan_detail loan_detail
+      WHERE loan_detail."projectId" = project.id
+        AND loan_detail.status IN (:...completedLoanStatuses)
+    )`,
+    {
+      completedLoanStatuses: [
+        ProjectLoanStatus.IN_PRINCIPAL_GENERATED,
+        ProjectLoanStatus.LOAN_DISBURSED,
+      ],
+    },
+  );
+} else if (filters?.loanStatus) {
   query.andWhere(
     `EXISTS (
       SELECT 1
@@ -1834,6 +1852,235 @@ const nextPendingActivity =
   totalPages:
     Math.ceil(total / limit) || 1,
 };
+}
+
+async getProjectExportData(
+  filters: {
+    search?: string;
+    status?: string;
+    projectWorkState?: string;
+    loanStatus?: string;
+    branch?: string;
+    owner?: string;
+    fromDate?: string;
+    toDate?: string;
+    legacyFilter?: string;
+    legacyYear?: string;
+  } = {},
+  user?: any,
+) {
+  const firstPageResult: any =
+    await this.findAll(
+      {
+        ...filters,
+        page: 1,
+        limit: 100,
+      },
+      user,
+    );
+
+  const allProjects: any[] = Array.isArray(
+    firstPageResult?.data,
+  )
+    ? [...firstPageResult.data]
+    : [];
+
+  const totalPages = Math.max(
+    Number(
+      firstPageResult?.totalPages ||
+        1,
+    ),
+    1,
+  );
+
+  if (totalPages > 1) {
+    /*
+     * Load remaining filtered pages in small batches.
+     * This avoids one huge database query while still
+     * exporting every matching project.
+     */
+    const pageNumbers = Array.from(
+      {
+        length: totalPages - 1,
+      },
+      (_, index) => index + 2,
+    );
+
+    const batchSize = 5;
+
+    for (
+      let index = 0;
+      index < pageNumbers.length;
+      index += batchSize
+    ) {
+      const batchPages =
+        pageNumbers.slice(
+          index,
+          index + batchSize,
+        );
+
+      const batchResults =
+        await Promise.all(
+          batchPages.map((page) =>
+            this.findAll(
+              {
+                ...filters,
+                page,
+                limit: 100,
+              },
+              user,
+            ),
+          ),
+        );
+
+      for (const pageResult of batchResults) {
+        if (
+          Array.isArray(
+            pageResult?.data,
+          )
+        ) {
+          allProjects.push(
+            ...pageResult.data,
+          );
+        }
+      }
+    }
+  }
+
+  const rows = allProjects.map(
+    (project: any) => {
+      const projectCost = Number(
+        project.finalCost ||
+          project.netAmount ||
+          project.projectCost ||
+          0,
+      );
+
+      const receivedAmount = Number(
+        project.paymentSummary
+          ?.receivedAmount || 0,
+      );
+
+      const pendingPayment =
+        Math.max(
+          projectCost -
+            receivedAmount,
+          0,
+        );
+
+      return {
+        projectId:
+          Number(project.id || 0),
+
+        projectName:
+          String(
+            project.customerName ||
+              `Project #${project.id}`,
+          ),
+
+        customerName:
+          String(
+            project.customerName || '',
+          ),
+
+        customerPhone:
+          String(
+            project.customerPhone || '',
+          ),
+
+        customerEmail:
+          String(
+            project.customerGmail || '',
+          ),
+
+        electricityKNumber:
+          String(
+            project.electricityKNumber ||
+              '',
+          ),
+
+        branchName:
+          String(
+            project.branchName || '',
+          ),
+
+        projectOwner:
+          String(
+            project.projectOwnerName ||
+              '',
+          ),
+
+        projectType:
+          String(
+            project.projectType || '',
+          ),
+
+        projectCost,
+
+        receivedAmount,
+
+        pendingPayment,
+
+        workflowStatus:
+          String(
+            project.status || '',
+          ),
+
+        projectWorkState:
+          String(
+            project.projectWorkState ||
+              '',
+          ),
+
+        projectWorkStateReason:
+          String(
+            project.projectWorkStateReason ||
+              '',
+          ),
+
+        createdAt:
+          project.createdAt || null,
+      };
+    },
+  );
+
+  return {
+    filters: {
+      search:
+        String(filters.search || ''),
+      status:
+        String(filters.status || ''),
+      projectWorkState:
+        String(
+          filters.projectWorkState ||
+            '',
+        ),
+      loanStatus:
+        String(
+          filters.loanStatus || '',
+        ),
+      branch:
+        String(filters.branch || ''),
+      owner:
+        String(filters.owner || ''),
+      fromDate:
+        String(filters.fromDate || ''),
+      toDate:
+        String(filters.toDate || ''),
+      legacyFilter:
+        String(
+          filters.legacyFilter || '',
+        ),
+      legacyYear:
+        String(
+          filters.legacyYear || '',
+        ),
+    },
+
+    total: rows.length,
+    generatedAt: new Date(),
+    data: rows,
+  };
 }
 
   async findOne(id: number, user?: any) {
