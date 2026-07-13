@@ -245,18 +245,18 @@ export class SubsidyManagerAnalyticsBuilder {
           'subsidyAmount',
         )
         .addSelect(
-          `COALESCE(
-            SUM(
-              CASE
-                WHEN subsidy.status = :disbursedStatus
-                THEN subsidy.subsidyAmount
-                ELSE 0
-              END
-            ),
-            0
-          )`,
-          'disbursedAmount',
-        )
+  `COALESCE(
+    SUM(
+      CASE
+        WHEN "subsidy"."status" = :disbursedStatus
+        THEN "subsidy"."subsidyAmount"
+        ELSE 0
+      END
+    ),
+    0
+  )`,
+  'disbursedAmount',
+)
         .setParameter(
           'disbursedStatus',
           ProjectSubsidyStatus.SUBSIDY_DISBURSED,
@@ -321,18 +321,18 @@ export class SubsidyManagerAnalyticsBuilder {
           'rejected',
         )
         .addSelect(
-          `COALESCE(
-            SUM(
-              CASE
-                WHEN subsidy.status = :subsidyDisbursed
-                THEN subsidy.subsidyAmount
-                ELSE 0
-              END
-            ),
-            0
-          )`,
-          'disbursedAmount',
-        )
+  `COALESCE(
+    SUM(
+      CASE
+        WHEN "subsidy"."status" = :subsidyDisbursed
+        THEN "subsidy"."subsidyAmount"
+        ELSE 0
+      END
+    ),
+    0
+  )`,
+  'disbursedAmount',
+)
         .setParameters({
           documentPending:
             ProjectSubsidyStatus.DOCUMENT_PENDING,
