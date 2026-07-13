@@ -42,6 +42,7 @@ import { ProjectStockMovement } from '../project/project-stock-movement.entity';
 import { ProjectTradingMeeting } from '../project/project-trading-meeting.entity';
 import { Dealer } from '../dealer/dealer.entity';
 import { ProjectLoanDetail } from '../project/project-loan-detail.entity';
+import { ProjectSubsidyDetail } from '../project/project-subsidy-detail.entity';
 
 
 @Module({
@@ -59,6 +60,7 @@ import { ProjectLoanDetail } from '../project/project-loan-detail.entity';
       Project,
       ProjectPaymentInstallment,
       ProjectLoanDetail,
+      ProjectSubsidyDetail,
       ProjectAccountExpense,
       ProjectPartyLedger,
 

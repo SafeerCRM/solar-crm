@@ -85,6 +85,8 @@ import { ProjectTradingMeeting } from '../project/project-trading-meeting.entity
 import { Dealer } from '../dealer/dealer.entity';
 import { ProjectLoanDetail } from '../project/project-loan-detail.entity';
 import { LoanManagerAnalyticsBuilder } from './builders/loan-manager.analytics';
+import { ProjectSubsidyDetail } from '../project/project-subsidy-detail.entity';
+import { SubsidyManagerAnalyticsBuilder } from './builders/subsidy-manager.analytics';
 
 type AnalyticsQuery = {
   month?: string;
@@ -127,6 +129,9 @@ export class AnalyticsService {
 
     @InjectRepository(ProjectLoanDetail)
 private readonly loanDetailRepository: Repository<ProjectLoanDetail>,
+
+@InjectRepository(ProjectSubsidyDetail)
+private readonly subsidyDetailRepository: Repository<ProjectSubsidyDetail>,
 
     @InjectRepository(ProjectPaymentInstallment)
     private readonly paymentRepository: Repository<ProjectPaymentInstallment>,
@@ -607,6 +612,10 @@ private readonly dealerRepository: Repository<Dealer>,
     return this.getLoanManagerReport(query, user);
   }
 
+  if (role === UserRole.SUBSIDY_MANAGER) {
+    return this.getSubsidyManagerReport(query, user);
+  }
+
   return this.getProjectsReport(query, user);
 }
 
@@ -701,6 +710,17 @@ private async getLoanManagerReport(
     this.userRepository,
     this.projectRepository,
     this.loanDetailRepository,
+  ).build(query, user);
+}
+
+private async getSubsidyManagerReport(
+  query: AnalyticsQuery,
+  user: any,
+) {
+  return new SubsidyManagerAnalyticsBuilder(
+    this.userRepository,
+    this.projectRepository,
+    this.subsidyDetailRepository,
   ).build(query, user);
 }
 
