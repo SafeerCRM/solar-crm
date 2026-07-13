@@ -45,17 +45,37 @@ private readonly discountOptionRepository: Repository<CalculatorDiscountOption>,
   ) {}
 private getHighestCalculatorRole(roles: string[] = []) {
   const priority = [
-    'OWNER',
-    'MARKETING_HEAD',
-    'PROJECT_MANAGER',
-    'MEETING_MANAGER',
-    'LEAD_MANAGER',
-    'TELECALLING_MANAGER',
-    'PROJECT_EXECUTIVE',
-    'LEAD_EXECUTIVE',
-    'TELECALLING_ASSISTANT',
-    'TELECALLER',
-  ];
+  'OWNER',
+  'MARKETING_HEAD',
+
+  'PROJECT_MANAGER',
+  'SOLAR_FRANCHISE',
+  'MEETING_MANAGER',
+  'LEAD_MANAGER',
+  'TELECALLING_MANAGER',
+
+  'PROJECT_EXECUTIVE',
+  'MEETING_ASSISTANT',
+  'LEAD_EXECUTIVE',
+  'TELECALLING_ASSISTANT',
+  'TELECALLER',
+
+  'LOAN_MANAGER',
+  'SUBSIDY_MANAGER',
+  'ELECTRICITY_MANAGER',
+
+  'PAYMENT_MANAGER',
+  'PAYMENT_COLLECTION_EXECUTIVE',
+  'ACCOUNT_MANAGER',
+
+  'STOCK_MANAGER',
+  'TRADING_MANAGER',
+  'CUSTOMER_MANAGER',
+  'MAINTENANCE_MANAGER',
+  'HR_MANAGER',
+
+  'PROJECT_CONTRACTOR',
+];
 
   for (const role of priority) {
     if (roles.includes(role)) {
