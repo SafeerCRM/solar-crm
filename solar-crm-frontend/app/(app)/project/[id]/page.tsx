@@ -123,6 +123,7 @@ customerCode?: string;
   expectedLagat?: number;
   expectedProfit?: number;
   status?: string;
+  subsidyCategory?: string;
   projectWorkState?: string;
 projectWorkStateReason?: string;
 projectWorkStateUpdatedAt?: string;
@@ -973,6 +974,7 @@ customerUserName: '',
   netAmount: '',
   marginMoney: '',
   loanAmount: '',
+  subsidyCategory: '',
   subsidyType: '',
   discomName: '',
   discomExpenditureType: '',
@@ -1557,6 +1559,8 @@ customerUserName: (project as any).customerUserName || '',
     netAmount: String((project as any).netAmount || ''),
     marginMoney: String((project as any).marginMoney || ''),
     loanAmount: String((project as any).loanAmount || ''),
+    subsidyCategory:
+  project.subsidyCategory || '',
     subsidyType: (project as any).subsidyType || '',
     discomName: project.discomName || '',
     discomExpenditureType: (project as any).discomExpenditureType || '',
@@ -5214,6 +5218,54 @@ const isLoanProcessCompleted =
 </div>
 
   <input placeholder="Project Type" value={editForm.projectType} onChange={(e) => setEditForm({ ...editForm, projectType: e.target.value })} className="rounded-xl border p-3" />
+  <select
+  value={editForm.subsidyCategory}
+  onChange={(e) =>
+    setEditForm({
+      ...editForm,
+      subsidyCategory: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+>
+  <option value="">
+    Select Subsidy Category
+  </option>
+
+  <option value="SUBSIDY">
+    Subsidy Project
+  </option>
+
+  <option value="NON_SUBSIDY">
+    Non-Subsidy Project
+  </option>
+</select>
+
+{editForm.subsidyCategory === 'SUBSIDY' && (
+  <select
+    value={editForm.subsidyType}
+    onChange={(e) =>
+      setEditForm({
+        ...editForm,
+        subsidyType: e.target.value,
+      })
+    }
+    className="rounded-xl border p-3"
+  >
+    <option value="">
+      Select Subsidy Type
+    </option>
+
+    <option value="NATIONAL">
+      National
+    </option>
+
+    <option value="NATIONAL_STATE">
+      National + State
+    </option>
+  </select>
+)}
+
   <input placeholder="Project Size" value={editForm.projectSize} onChange={(e) => setEditForm({ ...editForm, projectSize: e.target.value })} className="rounded-xl border p-3" />
   <input placeholder="Electricity K Number" value={editForm.electricityKNumber} onChange={(e) => setEditForm({ ...editForm, electricityKNumber: e.target.value })} className="rounded-xl border p-3" />
   <input placeholder="Customer Gmail" value={editForm.customerGmail} onChange={(e) => setEditForm({ ...editForm, customerGmail: e.target.value })} className="rounded-xl border p-3" />

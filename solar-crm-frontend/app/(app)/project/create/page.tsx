@@ -137,10 +137,12 @@ customerUserName: '',
 
     projectType: 'CASH',
 
-    marginMoney: '',
-    loanAmount: '',
+subsidyCategory: 'SUBSIDY',
 
-    subsidyType: 'NATIONAL',
+marginMoney: '',
+loanAmount: '',
+
+subsidyType: 'NATIONAL',
 
     projectCost: '',
 
@@ -836,6 +838,21 @@ router.push(`/project/${createdProjectId}`);
             <option value="LOAN">Loan Project</option>
           </select>
 
+          <select
+  name="subsidyCategory"
+  value={form.subsidyCategory}
+  onChange={handleChange}
+  className="rounded-xl border p-3"
+>
+  <option value="SUBSIDY">
+    Subsidy Project
+  </option>
+
+  <option value="NON_SUBSIDY">
+    Non-Subsidy Project
+  </option>
+</select>
+
           {form.projectType === 'LOAN' && (
             <>
               <input
@@ -858,17 +875,23 @@ router.push(`/project/${createdProjectId}`);
             </>
           )}
 
-          <select
-            name="subsidyType"
-            value={form.subsidyType}
-            onChange={handleChange}
-            className="rounded-xl border p-3"
-          >
-            <option value="NATIONAL">National</option>
-            <option value="NATIONAL_STATE">
-              National + State
-            </option>
-          </select>
+          {form.subsidyCategory ===
+  'SUBSIDY' && (
+  <select
+    name="subsidyType"
+    value={form.subsidyType}
+    onChange={handleChange}
+    className="rounded-xl border p-3"
+  >
+    <option value="NATIONAL">
+      National
+    </option>
+
+    <option value="NATIONAL_STATE">
+      National + State
+    </option>
+  </select>
+)}
 
           <input
             type="number"

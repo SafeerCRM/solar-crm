@@ -23,6 +23,7 @@ type Project = {
   projectOwnerName?: string;
 projectOwnerRole?: string;
   projectType?: string;
+  subsidyCategory?: string;
   projectCost?: number;
   netAmount?: number;
   status?: string;
@@ -94,6 +95,8 @@ const [search, setSearch] = useState('');
 const [statusFilter, setStatusFilter] = useState('');
 const [loanStatusFilter, setLoanStatusFilter] = useState('');
 const [projectWorkStateFilter, setProjectWorkStateFilter] = useState('');
+const [subsidyCategoryFilter, setSubsidyCategoryFilter] =
+  useState('');
 const [branchFilter, setBranchFilter] = useState('');
 const [ownerFilter, setOwnerFilter] = useState('');
 const [fromDate, setFromDate] = useState('');
@@ -120,6 +123,9 @@ useEffect(() => {
     setStatusFilter(parsed.statusFilter || '');
     setLoanStatusFilter(parsed.loanStatusFilter || '');
     setProjectWorkStateFilter(parsed.projectWorkStateFilter || '');
+    setSubsidyCategoryFilter(
+  parsed.subsidyCategoryFilter || '',
+);
     setBranchFilter(parsed.branchFilter || '');
     setOwnerFilter(parsed.ownerFilter || '');
     setFromDate(parsed.fromDate || '');
@@ -143,6 +149,7 @@ useEffect(() => {
       loanStatusFilter,
       branchFilter,
       projectWorkStateFilter,
+      subsidyCategoryFilter,
       ownerFilter,
       fromDate,
       toDate,
@@ -156,6 +163,7 @@ legacyYear,
   statusFilter,
   loanStatusFilter,
   projectWorkStateFilter,
+  subsidyCategoryFilter,
   branchFilter,
   ownerFilter,
   fromDate,
@@ -177,6 +185,8 @@ legacyYear,
     search,
     status: statusFilter,
     loanStatus: loanStatusFilter,
+    subsidyCategory:
+  subsidyCategoryFilter,
     projectWorkState: projectWorkStateFilter,
     branch: branchFilter,
     owner: ownerFilter,
@@ -218,6 +228,8 @@ setTotalPages(res.data?.totalPages || 1);
           status: statusFilter,
           loanStatus:
             loanStatusFilter,
+            subsidyCategory:
+  subsidyCategoryFilter,
           projectWorkState:
             projectWorkStateFilter,
           branch: branchFilter,
@@ -259,6 +271,7 @@ setTotalPages(res.data?.totalPages || 1);
       'Branch Name',
       'Project Owner',
       'Project Type',
+      'Subsidy Category',
       'Project Cost',
       'Amount Received',
       'Pending Payment',
@@ -279,6 +292,9 @@ setTotalPages(res.data?.totalPages || 1);
         item.branchName,
         item.projectOwner,
         item.projectType,
+        String(
+  item.subsidyCategory || '',
+).replaceAll('_', ' '),
         Number(
           item.projectCost || 0,
         ),
@@ -319,6 +335,10 @@ setTotalPages(res.data?.totalPages || 1);
         'Loan Filter',
         loanStatusFilter || 'All',
       ],
+      [
+  'Subsidy Category Filter',
+  subsidyCategoryFilter || 'All',
+],
       [
         'Work State Filter',
         projectWorkStateFilter ||
@@ -569,6 +589,7 @@ const restoreProject = async (projectId: number) => {
   search,
   statusFilter,
   loanStatusFilter,
+  subsidyCategoryFilter,
   projectWorkStateFilter,
   branchFilter,
   ownerFilter,
@@ -842,6 +863,27 @@ useEffect(() => {
   <option value="2025">Legacy 2025</option>
   <option value="2026">Legacy 2026</option>
 </select>
+
+<select
+  value={subsidyCategoryFilter}
+  onChange={(e) => {
+    setSubsidyCategoryFilter(
+      e.target.value,
+    );
+    setPage(1);
+  }}
+  className="rounded-xl border p-3"
+>
+  <option value="">
+    All Subsidy Categories
+  </option>
+  <option value="SUBSIDY">
+    Subsidy
+  </option>
+  <option value="NON_SUBSIDY">
+    Non-Subsidy
+  </option>
+</select>
   </div>
 
   <div className="mt-3 flex flex-wrap gap-2">
@@ -872,6 +914,7 @@ useEffect(() => {
       setLoanStatusFilter('');
       setBranchFilter('');
       setProjectWorkStateFilter('');
+      setSubsidyCategoryFilter('');
       setOwnerFilter('');
       setFromDate('');
       setToDate('');
