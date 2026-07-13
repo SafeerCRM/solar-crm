@@ -3,6 +3,13 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import Link from 'next/link';
+import { Capacitor } from '@capacitor/core';
+import {
+  Directory,
+  Encoding,
+  Filesystem,
+} from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -64,9 +71,21 @@ function money(value?: number) {
   return `₹${Number(value || 0).toLocaleString('en-IN')}`;
 }
 
+function escapeCsvValue(value: any) {
+  const text =
+    value === null ||
+    value === undefined
+      ? ''
+      : String(value);
+
+  return `"${text.replaceAll('"', '""')}"`;
+}
+
 export default function ProjectPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exportLoading, setExportLoading] =
+  useState(false);
   const [page, setPage] = useState(1);
 const [totalPages, setTotalPages] = useState(1);
 const [totalProjects, setTotalProjects] = useState(0);
@@ -183,6 +202,244 @@ setTotalPages(res.data?.totalPages || 1);
       setLoading(false);
     }
   };
+
+  const downloadFilteredProjects = async () => {
+  try {
+    setExportLoading(true);
+
+    const token =
+      localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/export/list`,
+      {
+        params: {
+          search,
+          status: statusFilter,
+          loanStatus:
+            loanStatusFilter,
+          projectWorkState:
+            projectWorkStateFilter,
+          branch: branchFilter,
+          owner: ownerFilter,
+          fromDate,
+          toDate,
+          legacyFilter,
+          legacyYear,
+        },
+        headers: token
+          ? {
+              Authorization:
+                `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    const rows = Array.isArray(
+      res.data?.data,
+    )
+      ? res.data.data
+      : [];
+
+    if (!rows.length) {
+      alert(
+        'No projects found for the applied filters',
+      );
+      return;
+    }
+
+    const headers = [
+      'Project ID',
+      'Project Name',
+      'Customer Name',
+      'Customer Mobile',
+      'Customer Email',
+      'Electricity K Number',
+      'Branch Name',
+      'Project Owner',
+      'Project Type',
+      'Project Cost',
+      'Amount Received',
+      'Pending Payment',
+      'Workflow Status',
+      'Project Work State',
+      'Work State Reason',
+      'Created Date',
+    ];
+
+    const csvRows: any[][] = rows.map(
+  (item: any) => [
+        item.projectId,
+        item.projectName,
+        item.customerName,
+        item.customerPhone,
+        item.customerEmail,
+        item.electricityKNumber,
+        item.branchName,
+        item.projectOwner,
+        item.projectType,
+        Number(
+          item.projectCost || 0,
+        ),
+        Number(
+          item.receivedAmount || 0,
+        ),
+        Number(
+          item.pendingPayment || 0,
+        ),
+        String(
+          item.workflowStatus || '',
+        ).replaceAll('_', ' '),
+        String(
+          item.projectWorkState ||
+            '',
+        ).replaceAll('_', ' '),
+        item.projectWorkStateReason,
+        item.createdAt
+          ? new Date(
+              item.createdAt,
+            ).toLocaleDateString(
+              'en-IN',
+            )
+          : '',
+      ],
+    );
+
+    const filterSummary = [
+      [
+        'Exported Projects',
+        rows.length,
+      ],
+      [
+        'Status Filter',
+        statusFilter || 'All',
+      ],
+      [
+        'Loan Filter',
+        loanStatusFilter || 'All',
+      ],
+      [
+        'Work State Filter',
+        projectWorkStateFilter ||
+          'All',
+      ],
+      [
+        'Branch Filter',
+        branchFilter || 'All',
+      ],
+      [
+        'From Date',
+        fromDate || 'All',
+      ],
+      [
+        'To Date',
+        toDate || 'All',
+      ],
+      [],
+    ];
+
+    const csvContent = [
+      ...filterSummary.map((row) =>
+        row
+          .map(escapeCsvValue)
+          .join(','),
+      ),
+
+      headers
+        .map(escapeCsvValue)
+        .join(','),
+
+      ...csvRows.map((row) =>
+        row
+          .map(escapeCsvValue)
+          .join(','),
+      ),
+    ].join('\r\n');
+
+    // UTF-8 BOM ensures Excel correctly
+    // displays Hindi and Unicode text.
+    const csvWithBom =
+      `\uFEFF${csvContent}`;
+
+    const today =
+      new Date()
+        .toISOString()
+        .slice(0, 10);
+
+    const fileName =
+      `project-list-${today}.csv`;
+
+    if (
+      Capacitor.isNativePlatform()
+    ) {
+      const writeResult =
+        await Filesystem.writeFile({
+          path: fileName,
+          data: csvWithBom,
+          directory:
+            Directory.Cache,
+          encoding: Encoding.UTF8,
+          recursive: true,
+        });
+
+      await Share.share({
+        title:
+          'Filtered Project List',
+        text:
+          `${rows.length} filtered project record${rows.length === 1 ? '' : 's'}`,
+        files: [
+          writeResult.uri,
+        ],
+        dialogTitle:
+          'Save or share project list',
+      });
+
+      return;
+    }
+
+    const blob = new Blob(
+      [csvWithBom],
+      {
+        type:
+          'text/csv;charset=utf-8;',
+      },
+    );
+
+    const downloadUrl =
+      URL.createObjectURL(blob);
+
+    const anchor =
+      document.createElement('a');
+
+    anchor.href = downloadUrl;
+    anchor.download = fileName;
+
+    document.body.appendChild(
+      anchor,
+    );
+
+    anchor.click();
+    anchor.remove();
+
+    URL.revokeObjectURL(
+      downloadUrl,
+    );
+  } catch (error: any) {
+    console.error(
+      'Project export failed:',
+      error,
+    );
+
+    alert(
+      error?.response?.data?.message ||
+        error?.message ||
+        'Failed to download project list',
+    );
+  } finally {
+    setExportLoading(false);
+  }
+};
 
   const fetchProjectOwners = async () => {
   try {
@@ -385,36 +642,75 @@ useEffect(() => {
     </button>
 
     <button
-      type="button"
-      onClick={() => {
-        setLoanStatusFilter('LOAN_DISBURSED');
-        setPage(1);
-      }}
-      className={`rounded-xl px-4 py-2 text-sm font-semibold ${
-        loanStatusFilter === 'LOAN_DISBURSED'
-          ? 'bg-green-600 text-white'
-          : 'bg-green-50 text-green-700 hover:bg-green-100'
-      }`}
-    >
-      Loan Process Completed
-    </button>
+  type="button"
+  onClick={() => {
+    setLoanStatusFilter(
+      'LOAN_PROCESS_COMPLETED',
+    );
+    setPage(1);
+  }}
+  className={`rounded-xl px-4 py-2 text-sm font-semibold ${
+    loanStatusFilter ===
+    'LOAN_PROCESS_COMPLETED'
+      ? 'bg-green-600 text-white'
+      : 'bg-green-50 text-green-700 hover:bg-green-100'
+  }`}
+>
+  Loan Process Completed
+</button>
+
+<button
+  type="button"
+  onClick={() => {
+    setLoanStatusFilter(
+      'LOAN_DISBURSED',
+    );
+    setPage(1);
+  }}
+  className={`rounded-xl px-4 py-2 text-sm font-semibold ${
+    loanStatusFilter ===
+    'LOAN_DISBURSED'
+      ? 'bg-blue-600 text-white'
+      : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+  }`}
+>
+  Loan Disbursement
+</button>
   </div>
 </div>
 </div>
 
 <div className="rounded-2xl bg-white p-5 shadow">
-  {loanStatusFilter === 'LOAN_DISBURSED' && (
-    <div className="mb-4 rounded-xl border border-green-200 bg-green-50 p-4">
-      <p className="font-bold text-green-800">
-        Loan Process Completed Projects
-      </p>
+  {loanStatusFilter ===
+  'LOAN_PROCESS_COMPLETED' && (
+  <div className="mb-4 rounded-xl border border-green-200 bg-green-50 p-4">
+    <p className="font-bold text-green-800">
+      Loan Process Completed Projects
+    </p>
 
-      <p className="mt-1 text-sm text-green-700">
-        Showing {totalProjects} project
-        {totalProjects === 1 ? '' : 's'} whose loan process is completed.
-      </p>
-    </div>
-  )}
+    <p className="mt-1 text-sm text-green-700">
+      Showing {totalProjects} project
+      {totalProjects === 1 ? '' : 's'} where the
+      in-principal letter has been generated or
+      the loan has been disbursed.
+    </p>
+  </div>
+)}
+
+{loanStatusFilter ===
+  'LOAN_DISBURSED' && (
+  <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-4">
+    <p className="font-bold text-blue-800">
+      Loan Disbursement Projects
+    </p>
+
+    <p className="mt-1 text-sm text-blue-700">
+      Showing {totalProjects} project
+      {totalProjects === 1 ? '' : 's'} where the
+      loan has been disbursed.
+    </p>
+  </div>
+)}
 
   <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
     <input
@@ -588,6 +884,19 @@ setLegacyYear('');
   >
     Clear Filters
   </button>
+
+  <button
+  type="button"
+  onClick={
+    downloadFilteredProjects
+  }
+  disabled={exportLoading}
+  className="rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+>
+  {exportLoading
+    ? 'Preparing Download...'
+    : 'Download Filtered Project List'}
+</button>
 </div>
 </div>
 
