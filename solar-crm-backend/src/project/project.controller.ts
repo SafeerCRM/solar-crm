@@ -57,6 +57,8 @@ findAll(
   @Query('status') status?: string,
   @Query('projectWorkState') projectWorkState?: string,
   @Query('loanStatus') loanStatus?: string,
+  @Query('subsidyCategory')
+subsidyCategory?: string,
   @Query('branch') branch?: string,
   @Query('owner') owner: string = '',
   @Query('fromDate') fromDate?: string,
@@ -73,6 +75,8 @@ findAll(
     status: status || '',
     projectWorkState: projectWorkState || '',
     loanStatus: loanStatus || '',
+    subsidyCategory:
+  subsidyCategory || '',
     branch: branch || '',
     owner: owner || '',
     fromDate: fromDate || '',
@@ -92,6 +96,8 @@ getProjectExportData(
   projectWorkState?: string,
   @Query('loanStatus')
   loanStatus?: string,
+  @Query('subsidyCategory')
+subsidyCategory?: string,
   @Query('branch') branch?: string,
   @Query('owner') owner: string = '',
   @Query('fromDate')
@@ -111,6 +117,8 @@ getProjectExportData(
       projectWorkState:
         projectWorkState || '',
       loanStatus: loanStatus || '',
+      subsidyCategory:
+  subsidyCategory || '',
       branch: branch || '',
       owner: owner || '',
       fromDate: fromDate || '',

@@ -1507,6 +1507,7 @@ const project = this.projectRepository.create(projectData);
     status?: string;
     projectWorkState?: string;
     loanStatus?: string;
+    subsidyCategory?: string;
     branch?: string;
     owner?: string;
     fromDate?: string;
@@ -1638,6 +1639,16 @@ if (roles.includes('SOLAR_FRANCHISE')) {
     'project.projectWorkState = :projectWorkState',
     {
       projectWorkState: filters.projectWorkState,
+    },
+  );
+}
+
+if (filters?.subsidyCategory) {
+  query.andWhere(
+    'project.subsidyCategory = :subsidyCategory',
+    {
+      subsidyCategory:
+        filters.subsidyCategory,
     },
   );
 }
@@ -1860,6 +1871,7 @@ async getProjectExportData(
     status?: string;
     projectWorkState?: string;
     loanStatus?: string;
+    subsidyCategory?: string;
     branch?: string;
     owner?: string;
     fromDate?: string;
@@ -2015,6 +2027,11 @@ async getProjectExportData(
             project.projectType || '',
           ),
 
+          subsidyCategory:
+  String(
+    project.subsidyCategory || '',
+  ),
+
         projectCost,
 
         receivedAmount,
@@ -2059,6 +2076,10 @@ async getProjectExportData(
         String(
           filters.loanStatus || '',
         ),
+        subsidyCategory:
+  String(
+    filters.subsidyCategory || '',
+  ),
       branch:
         String(filters.branch || ''),
       owner:

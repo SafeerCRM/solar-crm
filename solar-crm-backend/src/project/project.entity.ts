@@ -42,6 +42,11 @@ export enum SubsidyType {
   NATIONAL_STATE = 'NATIONAL_STATE',
 }
 
+export enum ProjectSubsidyCategory {
+  SUBSIDY = 'SUBSIDY',
+  NON_SUBSIDY = 'NON_SUBSIDY',
+}
+
 export enum DiscomExpenditureType {
   INCLUDING = 'INCLUDING',
   EXCLUDING = 'EXCLUDING',
@@ -228,6 +233,13 @@ customerCode: string;
     nullable: true,
   })
   subsidyType: SubsidyType;
+
+  @Column({
+  type: 'enum',
+  enum: ProjectSubsidyCategory,
+  nullable: true,
+})
+subsidyCategory: ProjectSubsidyCategory;
 
   @Column({ nullable: true })
   projectSize: string;
