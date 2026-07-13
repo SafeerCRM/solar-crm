@@ -83,6 +83,8 @@ import { ProjectStockItem } from '../project/project-stock-item.entity';
 import { ProjectStockMovement } from '../project/project-stock-movement.entity';
 import { ProjectTradingMeeting } from '../project/project-trading-meeting.entity';
 import { Dealer } from '../dealer/dealer.entity';
+import { ProjectLoanDetail } from '../project/project-loan-detail.entity';
+import { LoanManagerAnalyticsBuilder } from './builders/loan-manager.analytics';
 
 type AnalyticsQuery = {
   month?: string;
@@ -122,6 +124,9 @@ export class AnalyticsService {
 
     @InjectRepository(Project)
     private readonly projectRepository: Repository<Project>,
+
+    @InjectRepository(ProjectLoanDetail)
+private readonly loanDetailRepository: Repository<ProjectLoanDetail>,
 
     @InjectRepository(ProjectPaymentInstallment)
     private readonly paymentRepository: Repository<ProjectPaymentInstallment>,
@@ -596,8 +601,14 @@ private readonly dealerRepository: Repository<Dealer>,
     }
 
     if (department === 'PROJECTS') {
-      return this.getProjectsReport(query, user);
-    }
+  const role = String(query.role || '').trim().toUpperCase();
+
+  if (role === UserRole.LOAN_MANAGER) {
+    return this.getLoanManagerReport(query, user);
+  }
+
+  return this.getProjectsReport(query, user);
+}
 
     if (
   department === 'FINANCE' ||
@@ -679,6 +690,17 @@ if (department === 'TRADING') {
   return new ProjectAnalyticsBuilder(
     this.userRepository,
     this.projectRepository,
+  ).build(query, user);
+}
+
+private async getLoanManagerReport(
+  query: AnalyticsQuery,
+  user: any,
+) {
+  return new LoanManagerAnalyticsBuilder(
+    this.userRepository,
+    this.projectRepository,
+    this.loanDetailRepository,
   ).build(query, user);
 }
 
