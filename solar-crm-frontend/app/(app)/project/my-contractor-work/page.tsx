@@ -1180,13 +1180,6 @@ const selectedCleaningWorks = cleaningAssignments.filter(
                     {money(item.amount)}
                   </p>
 
-                  <Link
-                    href={`/project/${item.projectId}`}
-                    className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
-                  >
-                    प्रोजेक्ट खोलें
-                  </Link>
-
                   <div className="flex flex-wrap justify-end gap-2">
   {['IN_PROGRESS', 'ON_HOLD', 'PENDING_FINAL_PROOFS', 'COMPLETED'].map((status) => (
     <button
@@ -1571,12 +1564,6 @@ function WorkCalendarCard({
       <p className="text-sm text-gray-600">
         स्थिति: {String(status || '-').replaceAll('_', ' ')}
       </p>
-      <Link
-        href={href}
-        className="mt-2 inline-block rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white"
-      >
-        Open
-      </Link>
     </div>
   );
 }
