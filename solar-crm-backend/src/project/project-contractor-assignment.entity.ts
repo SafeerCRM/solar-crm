@@ -46,6 +46,13 @@ export class ProjectContractorAssignment {
 })
 workScope: ProjectContractorWorkScope;
 
+@Column({
+  type: 'text',
+  array: true,
+  default: () => "'{}'",
+})
+assignedWorkItems: string[];
+
   @Column({ type: 'timestamp', nullable: true })
   scheduledDate: Date;
 

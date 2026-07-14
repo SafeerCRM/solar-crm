@@ -15916,6 +15916,12 @@ const isSolarFranchise = roles.includes('SOLAR_FRANCHISE');
       workScope:
   body?.workScope ||
   ProjectContractorWorkScope.FULL_PROJECT,
+
+assignedWorkItems: Array.isArray(body?.assignedWorkItems)
+  ? body.assignedWorkItems
+      .map((item: any) => String(item).trim())
+      .filter(Boolean)
+  : [],
       scheduledDate: body?.scheduledDate
         ? new Date(body.scheduledDate)
         : undefined,
@@ -17302,6 +17308,16 @@ if (body?.contractorPhone !== undefined) {
 
 if (body?.workScope !== undefined) {
   assignment.workScope = body.workScope;
+}
+
+if (body?.assignedWorkItems !== undefined) {
+  assignment.assignedWorkItems = Array.isArray(
+    body.assignedWorkItems,
+  )
+    ? body.assignedWorkItems
+        .map((item: any) => String(item).trim())
+        .filter(Boolean)
+    : [];
 }
 
 if (body?.scheduledDate !== undefined) {
