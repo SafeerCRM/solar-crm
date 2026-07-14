@@ -302,6 +302,7 @@ type ContractorAssignment = {
   contractorName?: string;
   contractorPhone?: string;
   workScope?: string;
+  assignedWorkItems?: string[];
 
   scheduledDate?: string;
   startedAt?: string;
@@ -513,6 +514,21 @@ const DOCUMENT_TYPES_BY_DEPARTMENT: Record<
   ],
 };
 
+const CONTRACTOR_WORK_ITEMS = [
+  'STRUCTURE_WORK',
+  'STRUCTURE_INSPECTION',
+  'PILLAR_WORK',
+  'PILLAR_INSPECTION',
+  'PANEL_INSTALLATION',
+  'INVERTER_INSTALLATION',
+  'WIRING',
+  'EARTHING',
+  'SOLAR_METER_WORK',
+  'NET_METER_WORK',
+  'GENERATION_WORK',
+  'OTHER',
+];
+
 const CONTRACTOR_WORK_SCOPE_OPTIONS = [
   {
     value: 'FULL_PROJECT',
@@ -641,6 +657,7 @@ const [contractorForm, setContractorForm] = useState({
   contractorName: '',
   contractorPhone: '',
   workScope: 'FULL_PROJECT',
+  assignedWorkItems: [] as string[],
   scheduledDate: '',
   amount: '',
   remarks: '',
@@ -3238,6 +3255,8 @@ const assignContractor = async () => {
         contractorName: contractorForm.contractorName,
         contractorPhone: contractorForm.contractorPhone,
 workScope: contractorForm.workScope || 'FULL_PROJECT',
+assignedWorkItems:
+  contractorForm.assignedWorkItems,
 scheduledDate: contractorForm.scheduledDate || undefined,
         amount: contractorForm.amount || 0,
         remarks: contractorForm.remarks,
@@ -3257,6 +3276,7 @@ scheduledDate: contractorForm.scheduledDate || undefined,
   contractorName: '',
   contractorPhone: '',
   workScope: 'FULL_PROJECT',
+  assignedWorkItems: [],
   scheduledDate: '',
   amount: '',
   remarks: '',
@@ -4152,6 +4172,47 @@ const isLoanProcessCompleted =
   ))}
 </select>
 
+<div className="md:col-span-3 rounded-xl border bg-gray-50 p-4">
+  <p className="font-semibold text-gray-800">
+    Assign Work Items
+  </p>
+
+  <div className="mt-3 grid grid-cols-2 md:grid-cols-3 gap-2">
+    {CONTRACTOR_WORK_ITEMS.map((item) => (
+      <label
+        key={item}
+        className="flex items-center gap-2 text-sm"
+      >
+        <input
+          type="checkbox"
+          checked={contractorForm.assignedWorkItems.includes(item)}
+          onChange={(e) => {
+            if (e.target.checked) {
+              setContractorForm({
+                ...contractorForm,
+                assignedWorkItems: [
+                  ...contractorForm.assignedWorkItems,
+                  item,
+                ],
+              });
+            } else {
+              setContractorForm({
+                ...contractorForm,
+                assignedWorkItems:
+                  contractorForm.assignedWorkItems.filter(
+                    (x) => x !== item,
+                  ),
+              });
+            }
+          }}
+        />
+
+        {item.replaceAll('_', ' ')}
+      </label>
+    ))}
+  </div>
+</div>
+
           <input
             type="date"
             value={contractorForm.scheduledDate}
@@ -4463,6 +4524,30 @@ const isLoanProcessCompleted =
   <span className="rounded-full bg-gray-200 px-3 py-1 text-xs font-bold text-gray-700">
     Status: {formatContractorLabel(item.status)}
   </span>
+</div>
+
+<div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 p-3">
+  <p className="text-sm font-bold text-blue-800">
+    Assigned Work Items
+  </p>
+
+  {Array.isArray(item.assignedWorkItems) &&
+  item.assignedWorkItems.length > 0 ? (
+    <div className="mt-2 flex flex-wrap gap-2">
+      {item.assignedWorkItems.map((workItem) => (
+        <span
+          key={workItem}
+          className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-blue-700 shadow-sm"
+        >
+          {formatContractorLabel(workItem)}
+        </span>
+      ))}
+    </div>
+  ) : (
+    <p className="mt-2 text-xs text-blue-700">
+      No detailed work checklist was selected for this assignment.
+    </p>
+  )}
 </div>
 
 <div className="mt-3 grid gap-2 text-sm text-gray-600 md:grid-cols-3">

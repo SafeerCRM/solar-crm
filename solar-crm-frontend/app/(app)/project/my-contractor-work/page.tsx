@@ -18,6 +18,7 @@ type ContractorProject = {
   projectId: number;
   contractorName?: string;
   workScope?: string;
+  assignedWorkItems?: string[];
   contractorPhone?: string;
 
   scheduledDate?: string;
@@ -173,6 +174,25 @@ const HINDI_PROOF: Record<string, string> = {
   PANEL_WITH_CLIENT_PHOTO: 'ग्राहक के साथ पैनल फोटो',
   OTHER: 'अन्य फोटो',
 };
+
+const HINDI_WORK_ITEM: Record<string, string> = {
+  STRUCTURE_WORK: 'स्ट्रक्चर का काम',
+  STRUCTURE_INSPECTION: 'स्ट्रक्चर निरीक्षण',
+  PILLAR_WORK: 'पिलर का काम',
+  PILLAR_INSPECTION: 'पिलर निरीक्षण',
+  PANEL_INSTALLATION: 'पैनल इंस्टॉलेशन',
+  INVERTER_INSTALLATION: 'इन्वर्टर इंस्टॉलेशन',
+  WIRING: 'वायरिंग',
+  EARTHING: 'अर्थिंग',
+  SOLAR_METER_WORK: 'सोलर मीटर का काम',
+  NET_METER_WORK: 'नेट मीटर का काम',
+  GENERATION_WORK: 'जनरेशन का काम',
+  OTHER: 'अन्य काम',
+};
+
+const getHindiWorkItem = (value?: string) =>
+  HINDI_WORK_ITEM[value || ''] ||
+  String(value || '-').replaceAll('_', ' ');
 
 const getHindiStatus = (value?: string) =>
   HINDI_STATUS[value || ''] ||
@@ -1078,6 +1098,31 @@ const selectedCleaningWorks = cleaningAssignments.filter(
       ).length
     }
   </span>
+</div>
+
+<div className="mt-3 rounded-xl border border-orange-200 bg-orange-50 p-3">
+  <p className="text-sm font-bold text-orange-800">
+    इस असाइनमेंट में आपका काम
+  </p>
+
+  {Array.isArray(item.assignedWorkItems) &&
+  item.assignedWorkItems.length > 0 ? (
+    <div className="mt-2 flex flex-wrap gap-2">
+      {item.assignedWorkItems.map((workItem) => (
+        <span
+          key={workItem}
+          className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-orange-700 shadow-sm"
+        >
+          ✓ {getHindiWorkItem(workItem)}
+        </span>
+      ))}
+    </div>
+  ) : (
+    <p className="mt-2 text-xs text-orange-700">
+      इस पुराने असाइनमेंट में अलग काम की सूची उपलब्ध नहीं है।
+      ऊपर दिया गया टीम प्रकार लागू रहेगा।
+    </p>
+  )}
 </div>
 
                   <p className="text-sm text-gray-500">
