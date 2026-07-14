@@ -13,6 +13,54 @@ import { Share } from '@capacitor/share';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
+const LOAN_ACTIVITY_OPTIONS = [
+  'DOCUMENT_PENDING',
+  'DOCUMENT_COMPLETED',
+  'REGISTRATION_COMPLETED',
+  'IN_PRINCIPAL_GENERATED',
+  'QUOTATION_SUBMITTED',
+  'BANK_VISITED',
+  'LOAN_DISBURSED',
+  'FILE_REJECTED',
+  'LOAN_REAPPLY',
+];
+
+const SUBSIDY_ACTIVITY_OPTIONS = [
+  'DOCUMENT_PENDING',
+  'PLANT_IMAGES_RECEIVED',
+  'DCR_CERTIFICATE_READY',
+  'SUBMISSION_DONE',
+  'SUBSIDY_REQUESTED',
+  'SUBSIDY_DISBURSED',
+  'REJECTED',
+];
+
+const ELECTRICITY_ACTIVITY_OPTIONS = [
+  'DOCUMENT_PENDING',
+  'FILE_SUBMITTED',
+  'SITE_VISIT_DONE',
+  'DEMAND_DEPOSITED',
+  'METER_TESTING_DONE',
+  'NET_METER_INSTALLED',
+  'CONNECTION_ACTIVE',
+  'REJECTED',
+];
+
+const EXECUTION_ACTIVITY_OPTIONS = [
+  'STRUCTURE_WORK',
+  'STRUCTURE_INSPECTION',
+  'PILLAR_WORK',
+  'PILLAR_INSPECTION',
+  'PANEL_INSTALLED',
+  'INVERTER_INSTALLED',
+  'WIRING',
+  'EARTHING_PACKING',
+  'GENERATION_STARTED',
+  'GENERATION_INSPECTION',
+  'INVOICE_FILE_GIVEN',
+  'NON_DCR_PENDING',
+];
+
 type Project = {
   id: number;
   customerName?: string;
@@ -107,6 +155,23 @@ const [filtersLoaded, setFiltersLoaded] = useState(false);
 const [projectOwners, setProjectOwners] = useState<ProjectOwner[]>([]);
 const [hiddenProjects, setHiddenProjects] = useState<Project[]>([]);
 const [showHiddenProjects, setShowHiddenProjects] = useState(false);
+const [showAdvancedActivityFilters, setShowAdvancedActivityFilters] =
+  useState(false);
+
+const [loanActivityFilter, setLoanActivityFilter] =
+  useState('');
+
+const [subsidyActivityFilter, setSubsidyActivityFilter] =
+  useState('');
+
+const [electricityActivityFilter, setElectricityActivityFilter] =
+  useState('');
+
+const [executionActivityFilter, setExecutionActivityFilter] =
+  useState('');
+
+const [activityMatchMode, setActivityMatchMode] =
+  useState<'ALL' | 'ANY'>('ALL');
 
 useEffect(() => {
   const saved = localStorage.getItem('projectListFilters');
@@ -132,6 +197,31 @@ useEffect(() => {
     setToDate(parsed.toDate || '');
     setLegacyFilter(parsed.legacyFilter || '');
 setLegacyYear(parsed.legacyYear || '');
+setLoanActivityFilter(
+  parsed.loanActivityFilter || '',
+);
+
+setSubsidyActivityFilter(
+  parsed.subsidyActivityFilter || '',
+);
+
+setElectricityActivityFilter(
+  parsed.electricityActivityFilter || '',
+);
+
+setExecutionActivityFilter(
+  parsed.executionActivityFilter || '',
+);
+
+setActivityMatchMode(
+  parsed.activityMatchMode === 'ANY'
+    ? 'ANY'
+    : 'ALL',
+);
+
+setShowAdvancedActivityFilters(
+  Boolean(parsed.showAdvancedActivityFilters),
+);
     setPage(Number(parsed.page || 1));
   } catch {
     localStorage.removeItem('projectListFilters');
@@ -155,6 +245,12 @@ useEffect(() => {
       toDate,
       legacyFilter,
 legacyYear,
+loanActivityFilter,
+subsidyActivityFilter,
+electricityActivityFilter,
+executionActivityFilter,
+activityMatchMode,
+showAdvancedActivityFilters,
       page,
     }),
   );
@@ -170,6 +266,12 @@ legacyYear,
   toDate,
   legacyFilter,
 legacyYear,
+loanActivityFilter,
+subsidyActivityFilter,
+electricityActivityFilter,
+executionActivityFilter,
+activityMatchMode,
+showAdvancedActivityFilters,
   page,
 ]);
 
@@ -194,6 +296,19 @@ legacyYear,
 toDate,
 legacyFilter,
 legacyYear,
+loanActivity:
+  loanActivityFilter,
+
+subsidyActivity:
+  subsidyActivityFilter,
+
+electricityActivity:
+  electricityActivityFilter,
+
+executionActivity:
+  executionActivityFilter,
+
+activityMatchMode,
   },
   headers: token
     ? {
@@ -238,6 +353,19 @@ setTotalPages(res.data?.totalPages || 1);
           toDate,
           legacyFilter,
           legacyYear,
+          loanActivity:
+  loanActivityFilter,
+
+subsidyActivity:
+  subsidyActivityFilter,
+
+electricityActivity:
+  electricityActivityFilter,
+
+executionActivity:
+  executionActivityFilter,
+
+activityMatchMode,
         },
         headers: token
           ? {
@@ -356,6 +484,26 @@ setTotalPages(res.data?.totalPages || 1);
         'To Date',
         toDate || 'All',
       ],
+      [
+  'Activity Match Mode',
+  activityMatchMode,
+],
+[
+  'Loan Activity Filter',
+  loanActivityFilter || 'All',
+],
+[
+  'Subsidy Activity Filter',
+  subsidyActivityFilter || 'All',
+],
+[
+  'Electricity Activity Filter',
+  electricityActivityFilter || 'All',
+],
+[
+  'Execution Activity Filter',
+  executionActivityFilter || 'All',
+],
       [],
     ];
 
@@ -597,6 +745,11 @@ const restoreProject = async (projectId: number) => {
   toDate,
   legacyFilter,
 legacyYear,
+loanActivityFilter,
+subsidyActivityFilter,
+electricityActivityFilter,
+executionActivityFilter,
+activityMatchMode,
 ]);
 
 useEffect(() => {
@@ -659,7 +812,7 @@ useEffect(() => {
           : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
       }`}
     >
-      All Projects
+      All Loan Stages
     </button>
 
     <button
@@ -886,6 +1039,186 @@ useEffect(() => {
 </select>
   </div>
 
+  <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50">
+  <button
+    type="button"
+    onClick={() =>
+      setShowAdvancedActivityFilters(
+        (prev) => !prev,
+      )
+    }
+    className="flex w-full items-center justify-between gap-3 p-4 text-left"
+  >
+    <div>
+      <p className="font-bold text-slate-800">
+        Advanced Department Activity Filters
+      </p>
+
+      <p className="mt-1 text-xs text-slate-500">
+        Combine Loan, Subsidy, Electricity and current Execution activities.
+      </p>
+    </div>
+
+    <span className="rounded-lg bg-white px-3 py-1 text-sm font-semibold text-slate-700 shadow-sm">
+      {showAdvancedActivityFilters
+        ? 'Hide'
+        : 'Show'}
+    </span>
+  </button>
+
+  {showAdvancedActivityFilters && (
+    <div className="border-t border-slate-200 p-4">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <select
+          value={activityMatchMode}
+          onChange={(e) => {
+            setActivityMatchMode(
+              e.target.value === 'ANY'
+                ? 'ANY'
+                : 'ALL',
+            );
+            setPage(1);
+          }}
+          className="rounded-xl border bg-white p-3"
+        >
+          <option value="ALL">
+            Match All Selected
+          </option>
+
+          <option value="ANY">
+            Match Any Selected
+          </option>
+        </select>
+
+        <select
+          value={loanActivityFilter}
+          onChange={(e) => {
+            setLoanActivityFilter(
+              e.target.value,
+            );
+            setPage(1);
+          }}
+          className="rounded-xl border bg-white p-3"
+        >
+          <option value="">
+            All Loan Activities
+          </option>
+
+          {LOAN_ACTIVITY_OPTIONS.map(
+            (item) => (
+              <option
+                key={item}
+                value={item}
+              >
+                {formatLabel(item)}
+              </option>
+            ),
+          )}
+        </select>
+
+        <select
+          value={subsidyActivityFilter}
+          onChange={(e) => {
+            setSubsidyActivityFilter(
+              e.target.value,
+            );
+            setPage(1);
+          }}
+          className="rounded-xl border bg-white p-3"
+        >
+          <option value="">
+            All Subsidy Activities
+          </option>
+
+          {SUBSIDY_ACTIVITY_OPTIONS.map(
+            (item) => (
+              <option
+                key={item}
+                value={item}
+              >
+                {formatLabel(item)}
+              </option>
+            ),
+          )}
+        </select>
+
+        <select
+          value={electricityActivityFilter}
+          onChange={(e) => {
+            setElectricityActivityFilter(
+              e.target.value,
+            );
+            setPage(1);
+          }}
+          className="rounded-xl border bg-white p-3"
+        >
+          <option value="">
+            All Electricity Activities
+          </option>
+
+          {ELECTRICITY_ACTIVITY_OPTIONS.map(
+            (item) => (
+              <option
+                key={item}
+                value={item}
+              >
+                {formatLabel(item)}
+              </option>
+            ),
+          )}
+        </select>
+
+        <select
+          value={executionActivityFilter}
+          onChange={(e) => {
+            setExecutionActivityFilter(
+              e.target.value,
+            );
+            setPage(1);
+          }}
+          className="rounded-xl border bg-white p-3"
+        >
+          <option value="">
+            All Current Execution Activities
+          </option>
+
+          {EXECUTION_ACTIVITY_OPTIONS.map(
+            (item) => (
+              <option
+                key={item}
+                value={item}
+              >
+                {formatLabel(item)}
+              </option>
+            ),
+          )}
+        </select>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs text-slate-500">
+          Execution matches only activities currently Pending, In Progress or Overdue.
+        </p>
+
+        <button
+          type="button"
+          onClick={() => {
+            setLoanActivityFilter('');
+            setSubsidyActivityFilter('');
+            setElectricityActivityFilter('');
+            setExecutionActivityFilter('');
+            setActivityMatchMode('ALL');
+            setPage(1);
+          }}
+          className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-100"
+        >
+          Clear Activity Filters
+        </button>
+      </div>
+    </div>
+  )}
+</div>
+
   <div className="mt-3 flex flex-wrap gap-2">
   <button
     type="button"
@@ -920,6 +1253,11 @@ useEffect(() => {
       setToDate('');
       setLegacyFilter('');
 setLegacyYear('');
+setLoanActivityFilter('');
+setSubsidyActivityFilter('');
+setElectricityActivityFilter('');
+setExecutionActivityFilter('');
+setActivityMatchMode('ALL');
       setPage(1);
       localStorage.removeItem('projectListFilters');
     }}
