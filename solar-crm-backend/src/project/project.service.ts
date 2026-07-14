@@ -1508,6 +1508,11 @@ const project = this.projectRepository.create(projectData);
     projectWorkState?: string;
     loanStatus?: string;
     subsidyCategory?: string;
+    loanActivity?: string;
+subsidyActivity?: string;
+electricityActivity?: string;
+executionActivity?: string;
+activityMatchMode?: 'ALL' | 'ANY';
     branch?: string;
     owner?: string;
     fromDate?: string;
@@ -1631,6 +1636,86 @@ if (roles.includes('SOLAR_FRANCHISE')) {
     {
       loanStatus: filters.loanStatus,
     },
+  );
+}
+
+const departmentActivityConditions: string[] = [];
+const departmentActivityParams: Record<string, any> = {};
+
+if (filters?.loanActivity) {
+  departmentActivityConditions.push(`
+    EXISTS (
+      SELECT 1
+      FROM project_loan_detail loan_activity
+      WHERE loan_activity."projectId" = project.id
+        AND loan_activity.status = :loanActivity
+    )
+  `);
+
+  departmentActivityParams.loanActivity =
+    filters.loanActivity;
+}
+
+if (filters?.subsidyActivity) {
+  departmentActivityConditions.push(`
+    EXISTS (
+      SELECT 1
+      FROM project_subsidy_detail subsidy_activity
+      WHERE subsidy_activity."projectId" = project.id
+        AND subsidy_activity.status = :subsidyActivity
+    )
+  `);
+
+  departmentActivityParams.subsidyActivity =
+    filters.subsidyActivity;
+}
+
+if (filters?.electricityActivity) {
+  departmentActivityConditions.push(`
+    EXISTS (
+      SELECT 1
+      FROM project_electricity_detail electricity_activity
+      WHERE electricity_activity."projectId" = project.id
+        AND electricity_activity.status = :electricityActivity
+    )
+  `);
+
+  departmentActivityParams.electricityActivity =
+    filters.electricityActivity;
+}
+
+if (filters?.executionActivity) {
+  departmentActivityConditions.push(`
+    EXISTS (
+      SELECT 1
+      FROM project_execution_activity execution_activity
+      WHERE execution_activity."projectId" = project.id
+        AND execution_activity."activityType" = :executionActivity
+        AND execution_activity.status IN (
+          'PENDING',
+          'IN_PROGRESS',
+          'OVERDUE'
+        )
+    )
+  `);
+
+  departmentActivityParams.executionActivity =
+    filters.executionActivity;
+}
+
+if (departmentActivityConditions.length > 0) {
+  const activityJoiner =
+    filters?.activityMatchMode === 'ANY'
+      ? ' OR '
+      : ' AND ';
+
+  query.andWhere(
+    `(
+      ${departmentActivityConditions.join(
+        activityJoiner,
+      )}
+    )`,
+    departmentActivityParams,
   );
 }
 
@@ -1871,6 +1956,11 @@ async getProjectExportData(
     status?: string;
     projectWorkState?: string;
     loanStatus?: string;
+    loanActivity?: string;
+subsidyActivity?: string;
+electricityActivity?: string;
+executionActivity?: string;
+activityMatchMode?: 'ALL' | 'ANY';
     subsidyCategory?: string;
     branch?: string;
     owner?: string;
@@ -2076,6 +2166,22 @@ async getProjectExportData(
         String(
           filters.loanStatus || '',
         ),
+        loanActivity:
+  String(filters.loanActivity || ''),
+
+subsidyActivity:
+  String(filters.subsidyActivity || ''),
+
+electricityActivity:
+  String(filters.electricityActivity || ''),
+
+executionActivity:
+  String(filters.executionActivity || ''),
+
+activityMatchMode:
+  filters.activityMatchMode === 'ANY'
+    ? 'ANY'
+    : 'ALL',
         subsidyCategory:
   String(
     filters.subsidyCategory || '',

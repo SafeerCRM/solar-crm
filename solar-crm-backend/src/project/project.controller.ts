@@ -57,6 +57,20 @@ findAll(
   @Query('status') status?: string,
   @Query('projectWorkState') projectWorkState?: string,
   @Query('loanStatus') loanStatus?: string,
+  @Query('loanActivity')
+loanActivity?: string,
+
+@Query('subsidyActivity')
+subsidyActivity?: string,
+
+@Query('electricityActivity')
+electricityActivity?: string,
+
+@Query('executionActivity')
+executionActivity?: string,
+
+@Query('activityMatchMode')
+activityMatchMode?: string,
   @Query('subsidyCategory')
 subsidyCategory?: string,
   @Query('branch') branch?: string,
@@ -75,6 +89,22 @@ subsidyCategory?: string,
     status: status || '',
     projectWorkState: projectWorkState || '',
     loanStatus: loanStatus || '',
+    loanActivity:
+  loanActivity || '',
+
+subsidyActivity:
+  subsidyActivity || '',
+
+electricityActivity:
+  electricityActivity || '',
+
+executionActivity:
+  executionActivity || '',
+
+activityMatchMode:
+  activityMatchMode === 'ANY'
+    ? 'ANY'
+    : 'ALL',
     subsidyCategory:
   subsidyCategory || '',
     branch: branch || '',
@@ -96,6 +126,20 @@ getProjectExportData(
   projectWorkState?: string,
   @Query('loanStatus')
   loanStatus?: string,
+  @Query('loanActivity')
+loanActivity?: string,
+
+@Query('subsidyActivity')
+subsidyActivity?: string,
+
+@Query('electricityActivity')
+electricityActivity?: string,
+
+@Query('executionActivity')
+executionActivity?: string,
+
+@Query('activityMatchMode')
+activityMatchMode?: string,
   @Query('subsidyCategory')
 subsidyCategory?: string,
   @Query('branch') branch?: string,
@@ -117,6 +161,22 @@ subsidyCategory?: string,
       projectWorkState:
         projectWorkState || '',
       loanStatus: loanStatus || '',
+      loanActivity:
+  loanActivity || '',
+
+subsidyActivity:
+  subsidyActivity || '',
+
+electricityActivity:
+  electricityActivity || '',
+
+executionActivity:
+  executionActivity || '',
+
+activityMatchMode:
+  activityMatchMode === 'ANY'
+    ? 'ANY'
+    : 'ALL',
       subsidyCategory:
   subsidyCategory || '',
       branch: branch || '',
