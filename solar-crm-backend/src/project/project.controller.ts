@@ -3200,7 +3200,11 @@ getProjectEditHistory(
 
   @Post('documents/upload')
 @UseInterceptors(
-  FilesInterceptor('files', 20),
+  FilesInterceptor('files', 20, {
+    limits: {
+      fileSize: 30 * 1024 * 1024,
+    },
+  }),
 )
 uploadProjectDocument(
   @UploadedFiles() files: any[],

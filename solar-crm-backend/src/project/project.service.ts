@@ -2687,10 +2687,10 @@ async uploadProjectDocument(file: any, body: any, user: any) {
     throw new BadRequestException('Only PDF, JPG, PNG, and WEBP files are allowed');
   }
 
-  const maxSize = 10 * 1024 * 1024;
+  const maxSize = 30 * 1024 * 1024;
 
   if (file.size > maxSize) {
-    throw new BadRequestException('Document file must be less than 10 MB');
+    throw new BadRequestException('Document file must be less than 30 MB');
   }
 
   const supabaseUrl = process.env.SUPABASE_URL;
