@@ -578,31 +578,31 @@ solarMiterPhone: this.isSolarFranchise(user)
   this.applyRoleVisibility(qb, user);
 
   if (!includeHistory && !query.followupId) {
-    qb.andWhere((subQueryBuilder) => {
-      const followUpExistsSubQuery = subQueryBuilder
-        .subQuery()
-        .select('1')
-        .from(FollowUp, 'existingFollowUp')
-        .innerJoin(
-          Meeting,
-          'followUpMeeting',
-          'followUpMeeting.id = existingFollowUp.meetingId',
+  qb.andWhere((subQueryBuilder) => {
+    const followUpExistsSubQuery = subQueryBuilder
+      .subQuery()
+      .select('1')
+      .from(FollowUp, 'existingFollowUp')
+      .innerJoin(
+        Meeting,
+        'followUpMeeting',
+        '"followUpMeeting"."id" = "existingFollowUp"."meetingId"',
+      )
+      .where('"existingFollowUp"."meetingId" IS NOT NULL')
+      .andWhere(`
+        COALESCE(
+          "followUpMeeting"."meetingGroupId",
+          "followUpMeeting"."id"
+        ) = COALESCE(
+          "meeting"."meetingGroupId",
+          "meeting"."id"
         )
-        .where('existingFollowUp.meetingId IS NOT NULL')
-        .andWhere(`
-          COALESCE(
-            followUpMeeting.meetingGroupId,
-            followUpMeeting.id
-          ) = COALESCE(
-            meeting.meetingGroupId,
-            meeting.id
-          )
-        `)
-        .getQuery();
+      `)
+      .getQuery();
 
-      return `NOT EXISTS ${followUpExistsSubQuery}`;
-    });
-  }
+    return `NOT EXISTS ${followUpExistsSubQuery}`;
+  });
+}
 
     if (query.status) {
       qb.andWhere('meeting.status = :status', {
