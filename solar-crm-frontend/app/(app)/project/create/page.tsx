@@ -461,17 +461,28 @@ const uploadedDocumentTypes = pendingDocuments.map(
   (doc) => doc.documentType,
 );
 
-const requiredDocuments = [
+const commonRequiredDocuments = [
   'VENDOR_AGREEMENT',
   'AADHAAR',
   'ELECTRICITY_BILL',
   'PAN_CARD',
+  'BANK_DOCUMENT',
+];
+
+const loanOnlyRequiredDocuments = [
   'CUSTOMER_PHOTO',
   'SITE_PHOTO',
-  'BANK_DOCUMENT',
   'LOAN_DOCUMENT',
   'PROPERTY_DOCUMENT',
 ];
+
+const requiredDocuments =
+  form.projectType === 'LOAN'
+    ? [
+        ...commonRequiredDocuments,
+        ...loanOnlyRequiredDocuments,
+      ]
+    : commonRequiredDocuments;
 
 const missingDocuments = requiredDocuments.filter(
   (doc) => !uploadedDocumentTypes.includes(doc),
