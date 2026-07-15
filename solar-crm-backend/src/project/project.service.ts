@@ -2852,6 +2852,7 @@ const isProjectOwner =
   Number(project.projectOwnerId) === currentUserId;
 
   const canSeeAllDocuments =
+  isProjectOwner ||
   roles.includes('OWNER') ||
   roles.includes('MARKETING_HEAD') ||
   roles.includes('PROJECT_MANAGER') ||
@@ -2864,7 +2865,7 @@ const isProjectOwner =
   roles.includes('ELECTRICITY_MANAGER') ||
   roles.includes('MAINTENANCE_MANAGER') ||
   roles.includes('CUSTOMER_MANAGER') ||
-  roles.includes('STOCK_MANAGER') ;
+  roles.includes('STOCK_MANAGER');
 
   let allowedDepartments: string[] = [];
 
