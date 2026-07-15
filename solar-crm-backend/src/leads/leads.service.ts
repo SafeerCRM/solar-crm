@@ -354,6 +354,17 @@ if (potentialPercentage > 0) {
 
   query.andWhere('COALESCE(lead.isArchived, false) = false');
 
+  query.andWhere((qb) => {
+  const followUpExistsSubQuery = qb
+    .subQuery()
+    .select('1')
+    .from(FollowUp, 'existingFollowUp')
+    .where('existingFollowUp.leadId = lead.id')
+    .getQuery();
+
+  return `NOT EXISTS ${followUpExistsSubQuery}`;
+});
+
   const currentUserId = this.getCurrentUserId(user);
 
   if (this.isTelecaller(user)) {

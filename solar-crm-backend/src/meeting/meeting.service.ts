@@ -15,6 +15,7 @@ import {
   MeetingCategory,
   MeetingStatus,
 } from './meeting.entity';
+import { FollowUp } from '../followup/follow-up.entity';
 import { CreateMeetingDto } from './dto/create-meeting.dto';
 import { UpdateMeetingDto } from './dto/update-meeting.dto';
 import { UserRole } from '../users/user.entity';
@@ -562,12 +563,46 @@ solarMiterPhone: this.isSolarFranchise(user)
   page: number;
   limit: number;
 }> {
-    const page = Number(query.page) || 1;
-const limit = Number(query.limit) || 50;
-const skip = (page - 1) * limit;
-    const qb = this.meetingRepository.createQueryBuilder('meeting');
+  const page = Number(query.page) || 1;
+  const limit = Number(query.limit) || 50;
+  const skip = (page - 1) * limit;
 
-    this.applyRoleVisibility(qb, user);
+  const includeHistory =
+    String(query.includeHistory || 'false') === 'true';
+
+  const latestOnly =
+    String(query.latestOnly || 'true') !== 'false';
+
+  const qb = this.meetingRepository.createQueryBuilder('meeting');
+
+  this.applyRoleVisibility(qb, user);
+
+  if (!includeHistory && !query.followupId) {
+    qb.andWhere((subQueryBuilder) => {
+      const followUpExistsSubQuery = subQueryBuilder
+        .subQuery()
+        .select('1')
+        .from(FollowUp, 'existingFollowUp')
+        .innerJoin(
+          Meeting,
+          'followUpMeeting',
+          'followUpMeeting.id = existingFollowUp.meetingId',
+        )
+        .where('existingFollowUp.meetingId IS NOT NULL')
+        .andWhere(`
+          COALESCE(
+            followUpMeeting.meetingGroupId,
+            followUpMeeting.id
+          ) = COALESCE(
+            meeting.meetingGroupId,
+            meeting.id
+          )
+        `)
+        .getQuery();
+
+      return `NOT EXISTS ${followUpExistsSubQuery}`;
+    });
+  }
 
     if (query.status) {
       qb.andWhere('meeting.status = :status', {
@@ -647,9 +682,6 @@ const skip = (page - 1) * limit;
   .skip(skip)
   .take(limit)
   .getManyAndCount();
-
-    const includeHistory = String(query.includeHistory || 'false') === 'true';
-    const latestOnly = String(query.latestOnly || 'true') !== 'false';
 
     let finalData = meetings;
 
