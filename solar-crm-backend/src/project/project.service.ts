@@ -2843,6 +2843,14 @@ async getProjectDocuments(projectId: number, user?: any) {
     ? user.roles
     : [];
 
+    const currentUserId = Number(
+  user?.id || user?.userId || user?.sub,
+);
+
+const isProjectOwner =
+  currentUserId > 0 &&
+  Number(project.projectOwnerId) === currentUserId;
+
   const canSeeAllDocuments =
   roles.includes('OWNER') ||
   roles.includes('MARKETING_HEAD') ||
