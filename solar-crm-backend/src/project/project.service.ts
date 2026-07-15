@@ -1245,6 +1245,91 @@ if (missingCustomerFields.length > 0) {
       );
     }
 
+    const normalizedCustomerPhone = String(
+  data.customerPhone || '',
+)
+  .replace(/\D/g, '')
+  .slice(-10);
+
+const normalizedElectricityKNumber = String(
+  data.electricityKNumber || '',
+)
+  .trim()
+  .toLowerCase();
+
+const duplicateCheckUserId = Number(
+  user?.id || user?.userId || user?.sub,
+);
+
+const duplicateProtectionStart = new Date(
+  Date.now() - 2 * 60 * 60 * 1000,
+);
+
+if (
+  normalizedCustomerPhone &&
+  normalizedElectricityKNumber &&
+  duplicateCheckUserId
+) {
+  const recentExistingProject =
+    await this.projectRepository
+      .createQueryBuilder('existingProject')
+      .where(
+        `
+        RIGHT(
+          REGEXP_REPLACE(
+            COALESCE(existingProject.customerPhone, ''),
+            '[^0-9]',
+            '',
+            'g'
+          ),
+          10
+        ) = :normalizedCustomerPhone
+        `,
+        {
+          normalizedCustomerPhone,
+        },
+      )
+      .andWhere(
+        `
+        LOWER(
+          TRIM(
+            COALESCE(existingProject.electricityKNumber, '')
+          )
+        ) = :normalizedElectricityKNumber
+        `,
+        {
+          normalizedElectricityKNumber,
+        },
+      )
+      .andWhere(
+        'existingProject.projectType = :projectType',
+        {
+          projectType: data.projectType,
+        },
+      )
+      .andWhere(
+        'existingProject.projectOwnerId = :duplicateCheckUserId',
+        {
+          duplicateCheckUserId,
+        },
+      )
+      .andWhere(
+        'COALESCE(existingProject.isHidden, false) = false',
+      )
+      .andWhere(
+        'existingProject.createdAt >= :duplicateProtectionStart',
+        {
+          duplicateProtectionStart,
+        },
+      )
+      .orderBy('existingProject.createdAt', 'DESC')
+      .getOne();
+
+  if (recentExistingProject) {
+    return recentExistingProject;
+  }
+}
+
     const journeySnapshot =
   await this.buildProjectJourneySnapshot(data, user);
 
