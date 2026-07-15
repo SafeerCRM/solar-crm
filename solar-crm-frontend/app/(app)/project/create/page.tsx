@@ -418,8 +418,10 @@ const fetchMeetingPrefill = async () => {
 };
 
   const handleSubmit = async () => {
-    try {
-      setLoading(true);
+  if (loading) return;
+
+  try {
+    setLoading(true);
 
       const token = localStorage.getItem('token');
 
