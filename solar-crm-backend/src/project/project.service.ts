@@ -823,7 +823,10 @@ const loanRequiredGroups = [
   },
 ];
 
-  const requiredGroups = loanRequiredGroups;
+  const requiredGroups =
+  project.projectType === ProjectType.LOAN
+    ? loanRequiredGroups
+    : cashRequiredGroups;
 
   const allRequiredTypes = requiredGroups.flatMap(
     (group) => group.types,
