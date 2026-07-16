@@ -757,6 +757,35 @@ const cashProjectsCreatedThisMonth =
     },
   });
 
+  const runningProjects =
+  await this.projectRepository.count({
+    where: {
+      projectOwnerId: manager.id,
+      projectWorkState: 'RUNNING',
+      isHidden: false,
+    },
+  });
+
+const runningCashProjects =
+  await this.projectRepository.count({
+    where: {
+      projectOwnerId: manager.id,
+      projectType: ProjectType.CASH,
+      projectWorkState: 'RUNNING',
+      isHidden: false,
+    },
+  });
+
+const runningLoanProjects =
+  await this.projectRepository.count({
+    where: {
+      projectOwnerId: manager.id,
+      projectType: ProjectType.LOAN,
+      projectWorkState: 'RUNNING',
+      isHidden: false,
+    },
+  });
+
 const cashProjectsCancelledRejectedThisMonth =
   await this.projectRepository
     .createQueryBuilder('project')
@@ -825,6 +854,11 @@ companyMeetingsCreatedThisMonth,
 selfMeetingsCreatedThisMonth,
 loanProjectsCreatedThisMonth,
 cashProjectsCreatedThisMonth,
+
+runningProjects,
+runningCashProjects,
+runningLoanProjects,
+
 cashProjectsCancelledRejectedThisMonth,
 loanProjectsCancelledRejectedThisMonth,
 
