@@ -1900,11 +1900,62 @@ const paymentInstallments = projectIds.length
     })
   : [];
 
+const loanDetails = projectIds.length
+  ? await this.projectLoanDetailRepository.find({
+      where: {
+        projectId: In(projectIds),
+      },
+      order: {
+        createdAt: 'DESC',
+      },
+    })
+  : [];
+
+const subsidyDetails = projectIds.length
+  ? await this.projectSubsidyDetailRepository.find({
+      where: {
+        projectId: In(projectIds),
+      },
+      order: {
+        createdAt: 'DESC',
+      },
+    })
+  : [];
+
+const electricityDetails = projectIds.length
+  ? await this.projectElectricityDetailRepository.find({
+      where: {
+        projectId: In(projectIds),
+      },
+      order: {
+        createdAt: 'DESC',
+      },
+    })
+  : [];
+
 const enrichedData = data.map((project) => {
   const projectActivities =
     executionActivities.filter(
       (activity) => activity.projectId === project.id,
     );
+
+    const latestLoanDetail =
+  loanDetails.find(
+    (detail) =>
+      Number(detail.projectId) === Number(project.id),
+  ) || null;
+
+const latestSubsidyDetail =
+  subsidyDetails.find(
+    (detail) =>
+      Number(detail.projectId) === Number(project.id),
+  ) || null;
+
+const latestElectricityDetail =
+  electricityDetails.find(
+    (detail) =>
+      Number(detail.projectId) === Number(project.id),
+  ) || null;
 
   const totalExecutionActivities =
   projectActivities.length;
@@ -2008,24 +2059,47 @@ const nextPendingActivity =
       : 0;
 
   return {
-    ...project,
-    executionSummary: {
-  totalActivities: totalExecutionActivities,
-  completedActivities: completedExecutionActivities,
-  pendingActivities: pendingActivities.length,
-  runningActivities: runningActivities.length,
-  percentage: executionPercentage,
+  ...project,
 
-  runningActivity,
-  latestCompletedActivity,
-  nextPendingActivity,
-},
-    paymentSummary: {
-      totalAmount: projectTotalAmount,
-      receivedAmount: approvedReceivedAmount,
-      percentage: Math.min(paymentReceivedPercentage, 100),
-    },
-  };
+  departmentStatusSummary: {
+    loanStatus:
+      project.projectType === ProjectType.LOAN
+        ? latestLoanDetail?.status || 'NOT_STARTED'
+        : 'NOT_APPLICABLE',
+
+    subsidyStatus:
+      project.subsidyCategory === 'NON_SUBSIDY'
+        ? 'NOT_APPLICABLE'
+        : latestSubsidyDetail?.status || 'NOT_STARTED',
+
+    electricityStatus:
+      latestElectricityDetail?.status || 'NOT_STARTED',
+
+    executionStatus:
+      runningActivity ||
+      latestCompletedActivity ||
+      nextPendingActivity ||
+      'NOT_STARTED',
+  },
+
+  executionSummary: {
+    totalActivities: totalExecutionActivities,
+    completedActivities: completedExecutionActivities,
+    pendingActivities: pendingActivities.length,
+    runningActivities: runningActivities.length,
+    percentage: executionPercentage,
+
+    runningActivity,
+    latestCompletedActivity,
+    nextPendingActivity,
+  },
+
+  paymentSummary: {
+    totalAmount: projectTotalAmount,
+    receivedAmount: approvedReceivedAmount,
+    percentage: Math.min(paymentReceivedPercentage, 100),
+  },
+};
 });
 
   return {
