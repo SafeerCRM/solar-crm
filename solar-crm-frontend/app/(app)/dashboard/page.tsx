@@ -78,6 +78,9 @@ loanProjectsCreatedThisMonth?: number;
 cashProjectsCreatedThisMonth?: number;
 cashProjectsCancelledRejectedThisMonth?: number;
 loanProjectsCancelledRejectedThisMonth?: number;
+runningProjects?: number;
+runningCashProjects?: number;
+runningLoanProjects?: number;
 };
 
 type LeadManagerAnalyticsItem = {
@@ -916,6 +919,33 @@ useEffect(() => {
   </p>
   <p className="text-lg font-bold text-green-600">
     {item.cashProjectsCreatedThisMonth || 0}
+  </p>
+</div>
+
+<div className="rounded bg-white p-2">
+  <p className="text-gray-500">
+    Running Projects
+  </p>
+  <p className="text-lg font-bold text-blue-700">
+    {item.runningProjects || 0}
+  </p>
+</div>
+
+<div className="rounded bg-white p-2">
+  <p className="text-gray-500">
+    Running Cash Projects
+  </p>
+  <p className="text-lg font-bold text-green-700">
+    {item.runningCashProjects || 0}
+  </p>
+</div>
+
+<div className="rounded bg-white p-2">
+  <p className="text-gray-500">
+    Running Loan Projects
+  </p>
+  <p className="text-lg font-bold text-indigo-700">
+    {item.runningLoanProjects || 0}
   </p>
 </div>
 
