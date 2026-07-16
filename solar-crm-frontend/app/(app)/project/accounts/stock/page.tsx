@@ -25,6 +25,13 @@ export default function StockManagementPage() {
 
   const [materials, setMaterials] = useState<any[]>([]);
 const [branches, setBranches] = useState<any[]>([]);
+const [projectSearch, setProjectSearch] = useState('');
+const [projectSearchResults, setProjectSearchResults] =
+  useState<any[]>([]);
+const [projectSearchLoading, setProjectSearchLoading] =
+  useState(false);
+const [selectedProject, setSelectedProject] =
+  useState<any | null>(null);
 
 const [receiveLoading, setReceiveLoading] = useState(false);
 
@@ -693,6 +700,78 @@ const loadBranches = async () => {
   }
 };
 
+const searchProjectsForStockIssue = async (
+  value: string,
+) => {
+  setProjectSearch(value);
+
+  if (value.trim().length < 2) {
+    setProjectSearchResults([]);
+    return;
+  }
+
+  try {
+    setProjectSearchLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project`,
+      {
+        params: {
+          page: 1,
+          limit: 20,
+          search: value.trim(),
+        },
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setProjectSearchResults(
+      Array.isArray(res.data?.data)
+        ? res.data.data
+        : [],
+    );
+  } catch (error) {
+    console.error(
+      'Failed to search projects for stock issue:',
+      error,
+    );
+
+    setProjectSearchResults([]);
+  } finally {
+    setProjectSearchLoading(false);
+  }
+};
+
+const selectProjectForStockIssue = (
+  project: any,
+) => {
+  setSelectedProject(project);
+
+  setIssueForm((prev) => ({
+    ...prev,
+    sourceType: 'PROJECT',
+    projectId: String(project.id),
+  }));
+
+  setProjectSearch(
+    `#${project.id} - ${
+      project.customerName || 'Unnamed Project'
+    }${
+      project.customerPhone
+        ? ` - ${project.customerPhone}`
+        : ''
+    }`,
+  );
+
+  setProjectSearchResults([]);
+};
+
 const receiveStock = async () => {
   if (!receiveForm.materialId) {
     alert('Please select material');
@@ -772,6 +851,16 @@ const issueStock = async () => {
     return;
   }
 
+  if (
+  issueForm.sourceType === 'PROJECT' &&
+  !issueForm.projectId
+) {
+  alert(
+    'Please search and select a project',
+  );
+  return;
+}
+
   try {
     setIssueLoading(true);
 
@@ -808,6 +897,10 @@ dealerPhone: issueForm.dealerPhone,
       dealerPhone: '',
       remarks: '',
     });
+
+    setSelectedProject(null);
+setProjectSearch('');
+setProjectSearchResults([]);
 
     await loadStockItems(1);
     await loadSelectableStockItems();
@@ -1503,12 +1596,24 @@ const getFilteredSelectableStockItems = (searchText: string) => {
 
     <select
       value={issueForm.sourceType}
-      onChange={(e) =>
-        setIssueForm({
-          ...issueForm,
-          sourceType: e.target.value,
-        })
-      }
+      onChange={(e) => {
+  const nextSourceType = e.target.value;
+
+  setIssueForm({
+    ...issueForm,
+    sourceType: nextSourceType,
+    projectId:
+      nextSourceType === 'PROJECT'
+        ? issueForm.projectId
+        : '',
+  });
+
+  if (nextSourceType !== 'PROJECT') {
+    setSelectedProject(null);
+    setProjectSearch('');
+    setProjectSearchResults([]);
+  }
+}}
       className="rounded-xl border p-3 text-sm"
     >
       <option value="MANUAL">Manual</option>
@@ -1565,18 +1670,97 @@ const getFilteredSelectableStockItems = (searchText: string) => {
       className="rounded-xl border p-3 text-sm"
     />
 
+    {issueForm.sourceType === 'PROJECT' && (
+  <div className="relative md:col-span-2">
     <input
-      type="number"
-      placeholder="Project ID (optional)"
-      value={issueForm.projectId}
-      onChange={(e) =>
-        setIssueForm({
-          ...issueForm,
-          projectId: e.target.value,
-        })
-      }
-      className="rounded-xl border p-3 text-sm"
+      type="text"
+      placeholder="Search project by customer name, phone, K number or project ID"
+      value={projectSearch}
+      onChange={(e) => {
+        setSelectedProject(null);
+
+        setIssueForm((prev) => ({
+          ...prev,
+          projectId: '',
+        }));
+
+        searchProjectsForStockIssue(
+          e.target.value,
+        );
+      }}
+      className="w-full rounded-xl border p-3 text-sm"
     />
+
+    {projectSearchLoading && (
+      <p className="mt-1 text-xs text-gray-500">
+        Searching projects...
+      </p>
+    )}
+
+    {projectSearchResults.length > 0 && (
+      <div className="absolute z-30 mt-1 max-h-72 w-full overflow-y-auto rounded-xl border bg-white shadow-lg">
+        {projectSearchResults.map(
+          (project: any) => (
+            <button
+              key={project.id}
+              type="button"
+              onClick={() =>
+                selectProjectForStockIssue(
+                  project,
+                )
+              }
+              className="block w-full border-b px-4 py-3 text-left hover:bg-gray-50"
+            >
+              <p className="font-semibold text-gray-800">
+                #{project.id} -{' '}
+                {project.customerName ||
+                  'Unnamed Project'}
+              </p>
+
+              <p className="mt-1 text-xs text-gray-500">
+                {[
+                  project.customerPhone,
+                  project.electricityKNumber
+                    ? `K No: ${project.electricityKNumber}`
+                    : '',
+                  project.branchName,
+                  project.projectType,
+                  project.status?.replaceAll(
+                    '_',
+                    ' ',
+                  ),
+                ]
+                  .filter(Boolean)
+                  .join(' | ')}
+              </p>
+            </button>
+          ),
+        )}
+      </div>
+    )}
+
+    {selectedProject && (
+      <div className="mt-2 rounded-xl bg-green-50 p-3 text-sm">
+        <p className="font-semibold text-green-800">
+          Selected Project
+        </p>
+
+        <p className="mt-1 text-green-700">
+          #{selectedProject.id} -{' '}
+          {selectedProject.customerName}
+        </p>
+
+        <p className="mt-1 text-xs text-green-700">
+          {selectedProject.customerPhone ||
+            '-'}
+          {selectedProject.branchName
+            ? ` | ${selectedProject.branchName}`
+            : ''}
+        </p>
+      </div>
+    )}
+  </div>
+)}
 
     <input
       type="text"
