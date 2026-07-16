@@ -95,6 +95,13 @@ projectSource?: string;
 legacyYear?: number;
   };
 
+  departmentStatusSummary?: {
+  loanStatus?: string;
+  subsidyStatus?: string;
+  electricityStatus?: string;
+  executionStatus?: string;
+};
+
   paymentSummary?: {
     totalAmount?: number;
     receivedAmount?: number;
@@ -1414,6 +1421,60 @@ setActivityMatchMode('ALL');
     <p className="text-gray-500">Owner Approval</p>
     <p className="font-semibold text-purple-700">
       {project.ownerApprovalStatus || 'PENDING'}
+    </p>
+  </div>
+</div>
+
+<div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+  <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
+    <p className="text-xs font-bold text-blue-700">
+      Loan Process
+    </p>
+
+    <p className="mt-1 font-semibold text-gray-800">
+      {formatLabel(
+        project.departmentStatusSummary?.loanStatus ||
+          'NOT_STARTED',
+      )}
+    </p>
+  </div>
+
+  <div className="rounded-xl border border-green-200 bg-green-50 p-3">
+    <p className="text-xs font-bold text-green-700">
+      Subsidy Process
+    </p>
+
+    <p className="mt-1 font-semibold text-gray-800">
+      {formatLabel(
+        project.departmentStatusSummary?.subsidyStatus ||
+          'NOT_STARTED',
+      )}
+    </p>
+  </div>
+
+  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+    <p className="text-xs font-bold text-amber-700">
+      Electricity Process
+    </p>
+
+    <p className="mt-1 font-semibold text-gray-800">
+      {formatLabel(
+        project.departmentStatusSummary?.electricityStatus ||
+          'NOT_STARTED',
+      )}
+    </p>
+  </div>
+
+  <div className="rounded-xl border border-purple-200 bg-purple-50 p-3">
+    <p className="text-xs font-bold text-purple-700">
+      Execution Activity
+    </p>
+
+    <p className="mt-1 font-semibold text-gray-800">
+      {formatLabel(
+        project.departmentStatusSummary?.executionStatus ||
+          'NOT_STARTED',
+      )}
     </p>
   </div>
 </div>
