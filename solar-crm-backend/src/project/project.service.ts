@@ -2598,13 +2598,33 @@ const currentUserId = Number(user?.id || user?.sub);
 
   const safeData: Partial<Project> = {};
 
-  for (const key of allowedFields) {
-    if (Object.prototype.hasOwnProperty.call(data, key)) {
-      (safeData as any)[key] = (data as any)[key];
-    }
+for (const key of allowedFields) {
+  if (Object.prototype.hasOwnProperty.call(data, key)) {
+    (safeData as any)[key] = (data as any)[key];
   }
+}
 
-  if (
+/*
+ * Optional enum fields must not be saved as an empty string.
+ * PostgreSQL enum columns accept valid enum values or null,
+ * but they reject ''.
+ *
+ * Deleting the field safely preserves the existing database value
+ * when an old Project edit form submits an empty value.
+ */
+const optionalEnumFields = [
+  'subsidyCategory',
+  'subsidyType',
+  'discomExpenditureType',
+] as const;
+
+for (const field of optionalEnumFields) {
+  if ((safeData as any)[field] === '') {
+    delete (safeData as any)[field];
+  }
+}
+
+if (
   Object.prototype.hasOwnProperty.call(safeData, 'projectWorkState') ||
   Object.prototype.hasOwnProperty.call(safeData, 'projectWorkStateReason')
 ) {
