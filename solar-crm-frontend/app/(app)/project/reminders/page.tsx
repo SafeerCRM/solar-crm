@@ -1,6 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import Link from 'next/link';
 import axios from 'axios';
 import { getAuthHeaders } from '@/lib/authHeaders';
@@ -366,6 +370,9 @@ const [approvalTotalPages, setApprovalTotalPages] =
   | 'UPCOMING'
 >('APPROVAL');
 
+const approvalPaginationInitialized =
+  useRef(false);
+
   const fetchReminders = async (
   selectedFilter:
     | 'ALL'
@@ -417,9 +424,12 @@ const [approvalTotalPages, setApprovalTotalPages] =
     }
 
     if (
-      selectedFilter === 'ALL' ||
-      selectedFilter === 'PAYMENT'
-    ) {
+  selectedFilter === 'ALL' ||
+  selectedFilter === 'PAYMENT' ||
+  selectedFilter === 'OVERDUE' ||
+  selectedFilter === 'TODAY' ||
+  selectedFilter === 'UPCOMING'
+) {
       const paymentRes = await axios.get(
         `${apiBaseUrl}/project/payment-reminders`,
         {
@@ -551,22 +561,23 @@ setApprovalTotalPages(
     }
 
     if (
-      selectedFilter === 'ALL' ||
-      selectedFilter === 'FINAL_CLOSURE'
-    ) {
-      const finalClosureRes = await axios.get(
-        `${apiBaseUrl}/project/final-closure-reminders`,
-        {
-          headers: getAuthHeaders(),
-        },
-      );
+  selectedFilter === 'ALL' ||
+  selectedFilter === 'FINAL_CLOSURE' ||
+  selectedFilter === 'OVERDUE'
+) {
+  const finalClosureRes = await axios.get(
+    `${apiBaseUrl}/project/final-closure-reminders`,
+    {
+      headers: getAuthHeaders(),
+    },
+  );
 
-      setFinalClosureItems(
-        Array.isArray(finalClosureRes.data)
-          ? finalClosureRes.data
-          : [],
-      );
-    }
+  setFinalClosureItems(
+    Array.isArray(finalClosureRes.data)
+      ? finalClosureRes.data
+      : [],
+  );
+}
   } catch (error: any) {
     console.error('Reminder error:', error);
 
@@ -579,6 +590,58 @@ setApprovalTotalPages(
   }
 };
 
+const updateUnifiedReminderAsReadLocally = (
+  reminderSource: string,
+  referenceId: number,
+) => {
+  const updateItems = (currentItems: any[]) =>
+    currentItems.map((item) =>
+      Number(item.id) === Number(referenceId)
+        ? {
+            ...item,
+            userReminderStatus: 'READ',
+            userReadAt: new Date().toISOString(),
+          }
+        : item,
+    );
+
+  switch (reminderSource) {
+    case 'APPROVAL':
+      setApprovalItems(updateItems);
+      break;
+
+    case 'PURCHASE':
+      setPurchaseItems(updateItems);
+      break;
+
+    case 'DOCUMENT':
+      setDocumentItems(updateItems);
+      break;
+
+    case 'LOAN':
+      setLoanItems(updateItems);
+      break;
+
+    case 'SUBSIDY':
+      setSubsidyItems(updateItems);
+      break;
+
+    case 'ELECTRICITY':
+      setElectricityItems(updateItems);
+      break;
+
+    case 'FINAL_CLOSURE':
+      setFinalClosureItems(updateItems);
+      break;
+
+    default:
+      console.warn(
+        'Unknown unified reminder source:',
+        reminderSource,
+      );
+  }
+};
+
 const markUnifiedReminderAsRead = async (body: {
   reminderSource: string;
   reminderType: string;
@@ -586,7 +649,9 @@ const markUnifiedReminderAsRead = async (body: {
   projectId?: number;
 }) => {
   try {
-    setActionLoadingId(`${body.reminderSource}-${body.referenceId}-READ`);
+    setActionLoadingId(
+      `${body.reminderSource}-${body.referenceId}-READ`,
+    );
 
     await axios.post(
       `${apiBaseUrl}/project/reminders/mark-read`,
@@ -596,11 +661,80 @@ const markUnifiedReminderAsRead = async (body: {
       },
     );
 
-    await fetchReminders();
-  } catch (error) {
-    console.error('Mark unified reminder read error:', error);
+    updateUnifiedReminderAsReadLocally(
+      body.reminderSource,
+      body.referenceId,
+    );
+  } catch (error: any) {
+    console.error(
+      'Mark unified reminder read error:',
+      error,
+    );
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to mark reminder as seen.',
+    );
   } finally {
     setActionLoadingId(null);
+  }
+};
+
+const removeUnifiedReminderLocally = (
+  reminderSource: string,
+  referenceId: number,
+) => {
+  const removeById = (currentItems: any[]) =>
+    currentItems.filter(
+      (item) =>
+        Number(item.id) !== Number(referenceId),
+    );
+
+  const removeDocumentByProjectId = (
+    currentItems: DocumentReminderItem[],
+  ) =>
+    currentItems.filter(
+      (item) =>
+        Number(item.projectId) !==
+        Number(referenceId),
+    );
+
+  switch (reminderSource) {
+    case 'APPROVAL':
+      setApprovalItems(removeById);
+      break;
+
+    case 'PURCHASE':
+      setPurchaseItems(removeById);
+      break;
+
+    case 'DOCUMENT':
+      setDocumentItems(
+        removeDocumentByProjectId,
+      );
+      break;
+
+    case 'LOAN':
+      setLoanItems(removeById);
+      break;
+
+    case 'SUBSIDY':
+      setSubsidyItems(removeById);
+      break;
+
+    case 'ELECTRICITY':
+      setElectricityItems(removeById);
+      break;
+
+    case 'FINAL_CLOSURE':
+      setFinalClosureItems(removeById);
+      break;
+
+    default:
+      console.warn(
+        'Unknown unified reminder source:',
+        reminderSource,
+      );
   }
 };
 
@@ -610,8 +744,18 @@ const dismissUnifiedReminder = async (body: {
   referenceId: number;
   projectId?: number;
 }) => {
+  const confirmed = window.confirm(
+    'Are you sure you want to dismiss this reminder?',
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
   try {
-    setActionLoadingId(`${body.reminderSource}-${body.referenceId}-DISMISS`);
+    setActionLoadingId(
+      `${body.reminderSource}-${body.referenceId}-DISMISS`,
+    );
 
     await axios.post(
       `${apiBaseUrl}/project/reminders/dismiss`,
@@ -621,9 +765,20 @@ const dismissUnifiedReminder = async (body: {
       },
     );
 
-    await fetchReminders();
-  } catch (error) {
-    console.error('Dismiss unified reminder error:', error);
+    removeUnifiedReminderLocally(
+      body.reminderSource,
+      body.referenceId,
+    );
+  } catch (error: any) {
+    console.error(
+      'Dismiss unified reminder error:',
+      error,
+    );
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to dismiss reminder.',
+    );
   } finally {
     setActionLoadingId(null);
   }
@@ -645,7 +800,11 @@ const dismissUnifiedReminder = async (body: {
       },
     );
 
-    await fetchReminders();
+    setItems((currentItems) =>
+  currentItems.filter(
+    (item) => item.id !== activityId,
+  ),
+);
   } catch (error: any) {
     console.error('Dismiss reminder error:', error);
     alert(
@@ -664,12 +823,31 @@ const markReminderAsRead = async (activityId: number) => {
         headers: getAuthHeaders(),
       },
     );
-  } catch (error) {
+
+    setItems((currentItems) =>
+      currentItems.map((item) =>
+        item.id === activityId
+          ? {
+              ...item,
+              userReminderStatus: 'READ',
+              userReadAt: new Date().toISOString(),
+            }
+          : item,
+      ),
+    );
+  } catch (error: any) {
     console.error('Mark reminder as read error:', error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to mark reminder as seen.',
+    );
   }
 };
 
-const markPaymentReminderAsRead = async (installmentId: number) => {
+const markPaymentReminderAsRead = async (
+  installmentId: number,
+) => {
   try {
     await axios.post(
       `${apiBaseUrl}/project/payment-reminders/${installmentId}/read`,
@@ -679,18 +857,40 @@ const markPaymentReminderAsRead = async (installmentId: number) => {
       },
     );
 
-    await fetchReminders();
-  } catch (error) {
-    console.error('Mark payment reminder as read error:', error);
+    setPaymentItems((currentItems) =>
+      currentItems.map((item) =>
+        item.id === installmentId
+          ? {
+              ...item,
+              userReminderStatus: 'READ',
+              userReadAt: new Date().toISOString(),
+            }
+          : item,
+      ),
+    );
+  } catch (error: any) {
+    console.error(
+      'Mark payment reminder as read error:',
+      error,
+    );
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to mark payment reminder as seen.',
+    );
   }
 };
 
-const dismissPaymentReminder = async (installmentId: number) => {
+const dismissPaymentReminder = async (
+  installmentId: number,
+) => {
   const confirmed = window.confirm(
     'Are you sure you want to dismiss this payment reminder?',
   );
 
-  if (!confirmed) return;
+  if (!confirmed) {
+    return;
+  }
 
   try {
     await axios.post(
@@ -701,9 +901,17 @@ const dismissPaymentReminder = async (installmentId: number) => {
       },
     );
 
-    await fetchReminders();
+    setPaymentItems((currentItems) =>
+      currentItems.filter(
+        (item) => item.id !== installmentId,
+      ),
+    );
   } catch (error: any) {
-    console.error('Dismiss payment reminder error:', error);
+    console.error(
+      'Dismiss payment reminder error:',
+      error,
+    );
+
     alert(
       error?.response?.data?.message ||
         'Failed to dismiss payment reminder.',
@@ -711,9 +919,42 @@ const dismissPaymentReminder = async (installmentId: number) => {
   }
 };
 
+const changeFilter = (
+  nextFilter:
+    | 'ALL'
+    | 'EXECUTION'
+    | 'PAYMENT'
+    | 'APPROVAL'
+    | 'PURCHASE'
+    | 'DOCUMENT'
+    | 'LOAN'
+    | 'SUBSIDY'
+    | 'ELECTRICITY'
+    | 'FINAL_CLOSURE'
+    | 'OVERDUE'
+    | 'TODAY'
+    | 'UPCOMING',
+) => {
+  setApprovalPage(1);
+  setFilter(nextFilter);
+};
+
   useEffect(() => {
   fetchReminders(filter);
-}, [filter, approvalPage]);
+}, [filter]);
+
+useEffect(() => {
+  if (!approvalPaginationInitialized.current) {
+    approvalPaginationInitialized.current = true;
+    return;
+  }
+
+  if (filter !== 'APPROVAL') {
+    return;
+  }
+
+  fetchReminders('APPROVAL');
+}, [approvalPage]);
 
   const filteredExecutionItems = items.filter((item) => {
   if (filter === 'ALL' || filter === 'EXECUTION') return true;
@@ -989,52 +1230,83 @@ const totalVisibleReminders =
             </div>
 
             <div className="mb-4 flex flex-wrap gap-2">
-  <FilterButton label="All" active={filter === 'ALL'} onClick={() => setFilter('ALL')} />
-  <FilterButton label="Execution" active={filter === 'EXECUTION'} onClick={() => setFilter('EXECUTION')} />
-  <FilterButton label="Payment" active={filter === 'PAYMENT'} onClick={() => setFilter('PAYMENT')} />
-    <FilterButton
-  label="Approval"
-  active={filter === 'APPROVAL'}
-  onClick={() => setFilter('APPROVAL')}
-/>
-<FilterButton
-  label="Purchase"
-  active={filter === 'PURCHASE'}
-  onClick={() => setFilter('PURCHASE')}
-/>
+  <FilterButton
+    label="All"
+    active={filter === 'ALL'}
+    onClick={() => changeFilter('ALL')}
+  />
 
-<FilterButton
-  label="Document"
-  active={filter === 'DOCUMENT'}
-  onClick={() => setFilter('DOCUMENT')}
-/>
+  <FilterButton
+    label="Execution"
+    active={filter === 'EXECUTION'}
+    onClick={() => changeFilter('EXECUTION')}
+  />
 
-<FilterButton
-  label="Loan"
-  active={filter === 'LOAN'}
-  onClick={() => setFilter('LOAN')}
-/>
+  <FilterButton
+    label="Payment"
+    active={filter === 'PAYMENT'}
+    onClick={() => changeFilter('PAYMENT')}
+  />
 
-<FilterButton
-  label="Subsidy"
-  active={filter === 'SUBSIDY'}
-  onClick={() => setFilter('SUBSIDY')}
-/>
+  <FilterButton
+    label="Approval"
+    active={filter === 'APPROVAL'}
+    onClick={() => changeFilter('APPROVAL')}
+  />
 
-<FilterButton
-  label="Electricity"
-  active={filter === 'ELECTRICITY'}
-  onClick={() => setFilter('ELECTRICITY')}
-/>
+  <FilterButton
+    label="Purchase"
+    active={filter === 'PURCHASE'}
+    onClick={() => changeFilter('PURCHASE')}
+  />
 
-<FilterButton
-  label="Final Closure"
-  active={filter === 'FINAL_CLOSURE'}
-  onClick={() => setFilter('FINAL_CLOSURE')}
-/>
-  <FilterButton label="Overdue" active={filter === 'OVERDUE'} onClick={() => setFilter('OVERDUE')} />
-  <FilterButton label="Today" active={filter === 'TODAY'} onClick={() => setFilter('TODAY')} />
-  <FilterButton label="Upcoming" active={filter === 'UPCOMING'} onClick={() => setFilter('UPCOMING')} />
+  <FilterButton
+    label="Document"
+    active={filter === 'DOCUMENT'}
+    onClick={() => changeFilter('DOCUMENT')}
+  />
+
+  <FilterButton
+    label="Loan"
+    active={filter === 'LOAN'}
+    onClick={() => changeFilter('LOAN')}
+  />
+
+  <FilterButton
+    label="Subsidy"
+    active={filter === 'SUBSIDY'}
+    onClick={() => changeFilter('SUBSIDY')}
+  />
+
+  <FilterButton
+    label="Electricity"
+    active={filter === 'ELECTRICITY'}
+    onClick={() => changeFilter('ELECTRICITY')}
+  />
+
+  <FilterButton
+    label="Final Closure"
+    active={filter === 'FINAL_CLOSURE'}
+    onClick={() => changeFilter('FINAL_CLOSURE')}
+  />
+
+  <FilterButton
+    label="Overdue"
+    active={filter === 'OVERDUE'}
+    onClick={() => changeFilter('OVERDUE')}
+  />
+
+  <FilterButton
+    label="Today"
+    active={filter === 'TODAY'}
+    onClick={() => changeFilter('TODAY')}
+  />
+
+  <FilterButton
+    label="Upcoming"
+    active={filter === 'UPCOMING'}
+    onClick={() => changeFilter('UPCOMING')}
+  />
 </div>
 
 {totalVisibleReminders === 0 ? (
