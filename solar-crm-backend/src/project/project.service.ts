@@ -37,8 +37,13 @@ import {
 import {
   ProjectMaterialRequest,
   ProjectMaterialRequestStatus,
+  ProjectMaterialRequestType,
 } from './project-material-request.entity';
-import { ProjectMaterialRequestItem } from './project-material-request-item.entity';
+import {
+  ProjectMaterialRequestItem,
+  ProjectMaterialPurchaseStatus,
+  ProjectMaterialIssueStatus,
+} from './project-material-request-item.entity';
 import { ProjectBranch } from './project-branch.entity';
 import {
   ProjectLoanDetail,
@@ -4718,7 +4723,20 @@ async createMaterialRequest(
 
   if (items.length === 0) {
     throw new BadRequestException(
-      'At least one material item is required',
+      'At least one material note item is required',
+    );
+  }
+
+  const project =
+    await this.projectRepository.findOne({
+      where: {
+        id: Number(body.projectId),
+      },
+    });
+
+  if (!project) {
+    throw new NotFoundException(
+      'Project not found',
     );
   }
 
@@ -4733,16 +4751,40 @@ async createMaterialRequest(
   const request =
     this.projectMaterialRequestRepository.create({
       projectId: Number(body.projectId),
-      title: body.title || '',
-      remarks: body.remarks || '',
-      requestedBy: user?.id || null,
+
+      title:
+        String(body.title || '').trim() ||
+        'Material Requirement Note',
+
+      remarks:
+        String(body.remarks || '').trim(),
+
+      requestedBy:
+        user?.id || user?.userId || null,
+
       requestedByName:
-        user?.name || '',
+        user?.name || user?.email || '',
+
       requestedByRole:
         Array.isArray(user?.roles)
           ? user.roles.join(', ')
           : '',
+
       totalAmount,
+
+      status:
+        ProjectMaterialRequestStatus.SUBMITTED,
+
+      requestType:
+        ProjectMaterialRequestType.INFORMATION_NOTE,
+
+      isProcurementActive: false,
+
+      procurementDeactivatedAt:
+        new Date(),
+
+      procurementDeactivationReason:
+        'Informational material requirement note; excluded from procurement',
     });
 
   const savedRequest =
@@ -4752,41 +4794,63 @@ async createMaterialRequest(
 
   const requestItems = items.map(
     (item: any) =>
-      this.projectMaterialRequestItemRepository.create(
-        {
-          requestId: savedRequest.id,
-          projectId: Number(
-            body.projectId,
-          ),
-          materialId:
-            item.materialId || null,
-          materialName:
-            item.materialName || '',
-          category:
-            item.category || '',
-          unit: item.unit || '',
-          brand: item.brand || '',
-          rate: Number(
-            item.rate || 0,
-          ),
-          quantity: Number(
-            item.quantity || 0,
-          ),
+      this.projectMaterialRequestItemRepository.create({
+        requestId: savedRequest.id,
 
-          purchasedQuantity: 0,
-pendingQuantity: Number(
-  item.quantity || 0,
-),
-          gstPercent: Number(
-            item.gstPercent || 0,
-          ),
-          totalAmount: Number(
-            item.totalAmount || 0,
-          ),
-          remarks:
-            item.remarks || '',
-        },
-      ),
+        projectId: Number(body.projectId),
+
+        materialId:
+  item.materialId
+    ? Number(item.materialId)
+    : undefined,
+
+        materialName:
+          String(
+            item.materialName ||
+              'Material information',
+          ).trim(),
+
+        category:
+          String(item.category || '').trim(),
+
+        unit:
+          String(item.unit || '').trim(),
+
+        brand:
+          String(item.brand || '').trim(),
+
+        rate: Number(item.rate || 0),
+
+        /*
+         * Quantity remains available for display
+         * as informational data.
+         */
+        quantity: Number(
+          item.quantity || 0,
+        ),
+
+        /*
+         * Informational notes must never create
+         * pending procurement demand.
+         */
+        purchasedQuantity: 0,
+        pendingQuantity: 0,
+
+        gstPercent: Number(
+          item.gstPercent || 0,
+        ),
+
+        totalAmount: Number(
+          item.totalAmount || 0,
+        ),
+
+        remarks:
+          String(item.remarks || '').trim(),
+
+        reservedQuantity: 0,
+        issuedQuantity: 0,
+        issuePendingQuantity: 0,
+      }),
   );
 
   await this.projectMaterialRequestItemRepository.save(
@@ -4795,7 +4859,7 @@ pendingQuantity: Number(
 
   return {
     message:
-      'Material request created successfully',
+      'Material requirement note created successfully',
     request: savedRequest,
   };
 }
@@ -4849,14 +4913,27 @@ async listApprovedMaterialRequestsForIssue(query: any) {
   const skip = (pageNumber - 1) * limitNumber;
 
   const qb = this.projectMaterialRequestRepository
-    .createQueryBuilder('request')
-    .where('request.status IN (:...statuses)', {
-  statuses: [
-    ProjectMaterialRequestStatus.SUBMITTED,
-    ProjectMaterialRequestStatus.APPROVED,
-  ],
-})
-    .orderBy('request.createdAt', 'DESC')
+  .createQueryBuilder('request')
+  .where('request.status IN (:...statuses)', {
+    statuses: [
+      ProjectMaterialRequestStatus.SUBMITTED,
+      ProjectMaterialRequestStatus.APPROVED,
+    ],
+  })
+  .andWhere(
+    'request.requestType != :informationNoteType',
+    {
+      informationNoteType:
+        ProjectMaterialRequestType.INFORMATION_NOTE,
+    },
+  )
+  .andWhere(
+    'request.isProcurementActive = :isProcurementActive',
+    {
+      isProcurementActive: true,
+    },
+  )
+  .orderBy('request.createdAt', 'DESC')
     .skip(skip)
     .take(limitNumber);
 
@@ -5154,6 +5231,16 @@ async approveMaterialRequestForStock(
   if (!request) {
     throw new NotFoundException('Material request not found');
   }
+
+  if (
+  request.requestType ===
+    ProjectMaterialRequestType.INFORMATION_NOTE ||
+  request.isProcurementActive === false
+) {
+  throw new BadRequestException(
+    'Informational material notes cannot reserve or issue stock',
+  );
+}
 
   if (request.status !== ProjectMaterialRequestStatus.SUBMITTED) {
     throw new BadRequestException(
@@ -10707,21 +10794,29 @@ async cancelProject(
     );
   }
 
-  const project = await this.projectRepository.findOne({
-    where: { id },
-  });
+  const project =
+    await this.projectRepository.findOne({
+      where: { id },
+    });
 
   if (!project) {
-    throw new NotFoundException('Project not found');
+    throw new NotFoundException(
+      'Project not found',
+    );
   }
 
-  if (project.status === ProjectStatus.COMPLETED) {
+  if (
+    project.status ===
+    ProjectStatus.COMPLETED
+  ) {
     throw new BadRequestException(
       'Completed project cannot be cancelled',
     );
   }
 
-  const reason = String(body?.reason || '').trim();
+  const reason = String(
+    body?.reason || '',
+  ).trim();
 
   if (!reason) {
     throw new BadRequestException(
@@ -10730,22 +10825,45 @@ async cancelProject(
   }
 
   project.status =
-    body?.status === ProjectStatus.REJECTED
+    body?.status ===
+    ProjectStatus.REJECTED
       ? ProjectStatus.REJECTED
       : ProjectStatus.CANCELLED;
 
   project.cancelledAt = new Date();
+
   project.cancelledBy =
-    currentUser?.id || currentUser?.userId || null;
+    currentUser?.id ||
+    currentUser?.userId ||
+    null;
+
   project.cancelledByName =
-    currentUser?.name || currentUser?.email || '';
-  project.cancellationReason = reason;
+    currentUser?.name ||
+    currentUser?.email ||
+    '';
+
+  project.cancellationReason =
+    reason;
 
   project.remarks = project.remarks
     ? `${project.remarks}\n\n[PROJECT ${project.status}]\n${reason}`
     : `[PROJECT ${project.status}]\n${reason}`;
 
-  return this.projectRepository.save(project);
+  const savedProject =
+    await this.projectRepository.save(
+      project,
+    );
+
+  await this.deactivateAutomaticProjectProcurement(
+    savedProject.id,
+    `Project ${savedProject.status.toLowerCase()}${
+      savedProject.cancellationReason
+        ? `: ${savedProject.cancellationReason}`
+        : ''
+    }`,
+  );
+
+  return savedProject;
 }
 
 async getExecutionCalendarActivities(
@@ -11379,6 +11497,373 @@ async dismissReminderForUser(
   );
 }
 
+private async createAutomaticProjectProcurement(
+  project: Project,
+) {
+  /*
+   * Duplicate protection:
+   * only one automatic procurement request
+   * may exist for a Project.
+   */
+  const existingRequest =
+    await this.projectMaterialRequestRepository.findOne({
+      where: {
+        projectId: project.id,
+        requestType:
+          ProjectMaterialRequestType.AUTO_PROJECT_PROCUREMENT,
+      },
+    });
+
+  if (existingRequest) {
+    return existingRequest;
+  }
+
+  const automaticItems: Array<{
+    materialName: string;
+    category: string;
+    unit: string;
+    brand: string;
+    quantity: number;
+    remarks: string;
+  }> = [];
+
+  const dcrPanelCount = Number(
+    project.dcrPanelCount || 0,
+  );
+
+  if (dcrPanelCount > 0) {
+    automaticItems.push({
+      materialName: 'DCR Solar Panel',
+      category: 'PANEL',
+      unit: 'NOS',
+      brand: String(
+        project.panelBrand || '',
+      ).trim(),
+      quantity: dcrPanelCount,
+      remarks:
+        'Automatically generated from approved Project details',
+    });
+  }
+
+  const nonDcrPanelCount = Number(
+    project.nonDcrPanelCount || 0,
+  );
+
+  if (nonDcrPanelCount > 0) {
+    automaticItems.push({
+      materialName: 'Non-DCR Solar Panel',
+      category: 'PANEL',
+      unit: 'NOS',
+      brand: String(
+        project.panelBrand || '',
+      ).trim(),
+      quantity: nonDcrPanelCount,
+      remarks:
+        'Automatically generated from approved Project details',
+    });
+  }
+
+  const converterBrand = String(
+    project.converterBrand || '',
+  ).trim();
+
+  const converterCapacity = String(
+    project.converterCapacity || '',
+  ).trim();
+
+  /*
+   * Create an inverter requirement when either
+   * its brand or capacity is available.
+   */
+  if (
+    converterBrand ||
+    converterCapacity
+  ) {
+    automaticItems.push({
+      materialName: 'Solar Inverter',
+      category: 'INVERTER',
+      unit: 'NOS',
+      brand: converterBrand,
+      quantity: 1,
+      remarks: [
+        converterCapacity
+          ? `Capacity: ${converterCapacity}`
+          : '',
+        project.converterPhase
+          ? `Phase: ${project.converterPhase}`
+          : '',
+        'Automatically generated from approved Project details',
+      ]
+        .filter(Boolean)
+        .join(' | '),
+    });
+  }
+
+  const structureType = String(
+    project.structureType || '',
+  ).trim();
+
+  const structureCapacityKw = String(
+    project.structureCapacityKw || '',
+  ).trim();
+
+  /*
+   * Create a structure requirement when either
+   * structure type or capacity is available.
+   */
+  if (
+    structureType ||
+    structureCapacityKw
+  ) {
+    automaticItems.push({
+      materialName:
+        'Module Mounting Structure',
+      category: 'STRUCTURE',
+      unit: 'SET',
+      brand: '',
+      quantity: 1,
+      remarks: [
+        structureType
+          ? `Type: ${structureType}`
+          : '',
+        structureCapacityKw
+          ? `Capacity: ${structureCapacityKw}`
+          : '',
+        project.buildingHeight
+          ? `Building Height: ${project.buildingHeight}`
+          : '',
+        'Automatically generated from approved Project details',
+      ]
+        .filter(Boolean)
+        .join(' | '),
+    });
+  }
+
+  /*
+   * Do not create an empty request when the
+   * Project has no usable material details.
+   */
+  if (automaticItems.length === 0) {
+    return null;
+  }
+
+  const request =
+    this.projectMaterialRequestRepository.create({
+      projectId: project.id,
+
+      title:
+        'Automatic Project Procurement Requirement',
+
+      remarks:
+        'Panels, inverter and structure generated automatically from approved Project details.',
+
+      requestedBy:
+  project.ownerApprovedBy || undefined,
+
+      requestedByName:
+        'Owner Approval',
+
+      requestedByRole:
+        'OWNER',
+
+      totalAmount: 0,
+
+      status:
+        ProjectMaterialRequestStatus.SUBMITTED,
+
+      requestType:
+        ProjectMaterialRequestType.AUTO_PROJECT_PROCUREMENT,
+
+      isProcurementActive: true,
+
+      procurementDeactivatedAt: undefined,
+
+procurementDeactivationReason: undefined,
+    });
+
+  const savedRequest =
+    await this.projectMaterialRequestRepository.save(
+      request,
+    );
+
+  const requestItems =
+    automaticItems.map((item) =>
+      this.projectMaterialRequestItemRepository.create({
+        requestId: savedRequest.id,
+
+        projectId: project.id,
+
+        /*
+         * These items are generated from Project
+         * fields, not selected from Material Master.
+         */
+        materialId: undefined,
+
+        materialName:
+          item.materialName,
+
+        category:
+          item.category,
+
+        unit:
+          item.unit,
+
+        brand:
+          item.brand,
+
+        rate: 0,
+
+        quantity:
+          item.quantity,
+
+        reservedQuantity: 0,
+
+        purchasedQuantity: 0,
+
+        pendingQuantity:
+          item.quantity,
+
+        purchaseStatus:
+          ProjectMaterialPurchaseStatus.PENDING,
+
+        gstPercent: 0,
+
+        totalAmount: 0,
+
+        remarks:
+          item.remarks,
+
+        issuedQuantity: 0,
+
+        issuePendingQuantity:
+          item.quantity,
+
+        issueStatus:
+          ProjectMaterialIssueStatus.PENDING,
+      }),
+    );
+
+  await this.projectMaterialRequestItemRepository.save(
+    requestItems,
+  );
+
+  return savedRequest;
+}
+
+private async deactivateAutomaticProjectProcurement(
+  projectId: number,
+  reason: string,
+) {
+  const automaticRequest =
+    await this.projectMaterialRequestRepository.findOne({
+      where: {
+        projectId,
+        requestType:
+          ProjectMaterialRequestType.AUTO_PROJECT_PROCUREMENT,
+      },
+    });
+
+  if (!automaticRequest) {
+    return null;
+  }
+
+  /*
+   * Already inactive:
+   * nothing further needs to be changed.
+   */
+  if (
+    automaticRequest.isProcurementActive ===
+    false
+  ) {
+    return automaticRequest;
+  }
+
+  const requestItems =
+    await this.projectMaterialRequestItemRepository.find({
+      where: {
+        requestId: automaticRequest.id,
+      },
+    });
+
+  for (const item of requestItems) {
+    const originalQuantity = Number(
+      item.quantity || 0,
+    );
+
+    const purchasedQuantity = Math.min(
+      Number(item.purchasedQuantity || 0),
+      originalQuantity,
+    );
+
+    /*
+     * Preserve all completed purchase quantities,
+     * but remove the remaining unpurchased demand.
+     */
+    item.pendingQuantity = 0;
+
+    if (purchasedQuantity >= originalQuantity) {
+      item.purchaseStatus =
+        ProjectMaterialPurchaseStatus.PURCHASED;
+    } else if (purchasedQuantity > 0) {
+      item.purchaseStatus =
+        ProjectMaterialPurchaseStatus
+          .PARTIALLY_PURCHASED;
+    } else {
+      /*
+       * Keep PENDING as historical status.
+       * The parent request is inactive and therefore
+       * must be excluded from active procurement.
+       */
+      item.purchaseStatus =
+        ProjectMaterialPurchaseStatus.PENDING;
+    }
+
+    /*
+     * Do not remove quantities already issued.
+     * Only cancel the remaining issue demand.
+     */
+    item.issuePendingQuantity = 0;
+
+    const issuedQuantity = Number(
+      item.issuedQuantity || 0,
+    );
+
+    if (
+      issuedQuantity >= originalQuantity &&
+      originalQuantity > 0
+    ) {
+      item.issueStatus =
+        ProjectMaterialIssueStatus.ISSUED;
+    } else if (issuedQuantity > 0) {
+      item.issueStatus =
+        ProjectMaterialIssueStatus
+          .PARTIALLY_ISSUED;
+    } else {
+      item.issueStatus =
+        ProjectMaterialIssueStatus.PENDING;
+    }
+  }
+
+  if (requestItems.length > 0) {
+    await this.projectMaterialRequestItemRepository.save(
+      requestItems,
+    );
+  }
+
+  automaticRequest.isProcurementActive =
+    false;
+
+  automaticRequest.procurementDeactivatedAt =
+    new Date();
+
+  automaticRequest.procurementDeactivationReason =
+    reason;
+
+  return this.projectMaterialRequestRepository.save(
+    automaticRequest,
+  );
+}
+
   async ownerApproval(
   id: number,
   body: {
@@ -11426,7 +11911,29 @@ async dismissReminderForUser(
     }
   }
 
-  return this.projectRepository.save(project);
+  const savedProject =
+  await this.projectRepository.save(project);
+
+if (
+  approvalStatus ===
+  ProjectApprovalStatus.APPROVED
+) {
+  await this.createAutomaticProjectProcurement(
+    savedProject,
+  );
+}
+
+if (
+  approvalStatus ===
+  ProjectApprovalStatus.REJECTED
+) {
+  await this.deactivateAutomaticProjectProcurement(
+    savedProject.id,
+    'Project rejected during Owner approval',
+  );
+}
+
+return savedProject;
 }
 
   async createBranch(data: any) {
@@ -11519,15 +12026,33 @@ async getPurchaseOrders(filters: {
     const owner = String(filters.owner || '')
   .trim();
 
-  const allPendingItems =
-    await this.projectMaterialRequestItemRepository.find({
-      where: {
-        pendingQuantity: MoreThan(0),
-      },
-      order: {
-        createdAt: 'DESC',
-      },
-    });
+  const activeProcurementRequests =
+  await this.projectMaterialRequestRepository.find({
+    where: {
+      isProcurementActive: true,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+const activeRequestIds =
+  activeProcurementRequests.map(
+    (request) => Number(request.id),
+  );
+
+const allPendingItems =
+  activeRequestIds.length > 0
+    ? await this.projectMaterialRequestItemRepository.find({
+        where: {
+          requestId: In(activeRequestIds),
+          pendingQuantity: MoreThan(0),
+        },
+        order: {
+          createdAt: 'DESC',
+        },
+      })
+    : [];
 
   const projectIds = Array.from(
     new Set(

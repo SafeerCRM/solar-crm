@@ -6,6 +6,12 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
+export enum ProjectMaterialRequestType {
+  LEGACY_PROCUREMENT = 'LEGACY_PROCUREMENT',
+  AUTO_PROJECT_PROCUREMENT = 'AUTO_PROJECT_PROCUREMENT',
+  INFORMATION_NOTE = 'INFORMATION_NOTE',
+}
+
 export enum ProjectMaterialRequestStatus {
   SUBMITTED = 'SUBMITTED',
   APPROVED = 'APPROVED',
@@ -45,6 +51,31 @@ export class ProjectMaterialRequest {
     default: ProjectMaterialRequestStatus.SUBMITTED,
   })
   status: ProjectMaterialRequestStatus;
+
+  @Column({
+  type: 'enum',
+  enum: ProjectMaterialRequestType,
+  default: ProjectMaterialRequestType.LEGACY_PROCUREMENT,
+})
+requestType: ProjectMaterialRequestType;
+
+@Column({
+  type: 'boolean',
+  default: true,
+})
+isProcurementActive: boolean;
+
+@Column({
+  type: 'timestamp',
+  nullable: true,
+})
+procurementDeactivatedAt: Date;
+
+@Column({
+  type: 'text',
+  nullable: true,
+})
+procurementDeactivationReason: string;
 
   @CreateDateColumn()
   createdAt: Date;
