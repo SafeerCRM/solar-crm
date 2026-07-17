@@ -162,6 +162,18 @@ const [filtersLoaded, setFiltersLoaded] = useState(false);
 const [projectOwners, setProjectOwners] = useState<ProjectOwner[]>([]);
 const [hiddenProjects, setHiddenProjects] = useState<Project[]>([]);
 const [showHiddenProjects, setShowHiddenProjects] = useState(false);
+
+const [hiddenProjectSearch, setHiddenProjectSearch] =
+  useState('');
+
+const [hiddenProjectPage, setHiddenProjectPage] =
+  useState(1);
+
+const [hiddenProjectTotalPages, setHiddenProjectTotalPages] =
+  useState(1);
+
+const [hiddenProjectTotal, setHiddenProjectTotal] =
+  useState(0);
 const [showAdvancedActivityFilters, setShowAdvancedActivityFilters] =
   useState(false);
 
@@ -684,6 +696,11 @@ const fetchHiddenProjects = async () => {
     const res = await axios.get(
       `${API_BASE_URL}/project/hidden/list`,
       {
+        params: {
+          page: hiddenProjectPage,
+          limit: 20,
+          search: hiddenProjectSearch,
+        },
         headers: token
           ? {
               Authorization: `Bearer ${token}`,
@@ -692,7 +709,11 @@ const fetchHiddenProjects = async () => {
       },
     );
 
-    setHiddenProjects(res.data || []);
+    setHiddenProjects(res.data.data || []);
+    setHiddenProjectTotal(res.data.total || 0);
+    setHiddenProjectTotalPages(
+      res.data.totalPages || 1,
+    );
   } catch (error) {
     console.error(error);
     alert('Failed to load hidden projects');
@@ -762,6 +783,16 @@ activityMatchMode,
 useEffect(() => {
   fetchProjectOwners();
 }, []);
+
+useEffect(() => {
+  if (!showHiddenProjects) return;
+
+  fetchHiddenProjects();
+}, [
+  showHiddenProjects,
+  hiddenProjectSearch,
+  hiddenProjectPage,
+]);
 
   return (
     <div className="mx-auto min-w-0 max-w-7xl space-y-4 overflow-x-hidden px-2 pb-4 md:px-0">
@@ -1294,6 +1325,20 @@ setActivityMatchMode('ALL');
       Hidden Projects
     </h2>
 
+    <p className="mt-1 text-sm text-gray-500">
+  Total Hidden Projects: {hiddenProjectTotal}
+</p>
+
+<input
+  placeholder="Search by Project ID, Customer, Phone, K No, Owner..."
+  value={hiddenProjectSearch}
+  onChange={(e) => {
+    setHiddenProjectSearch(e.target.value);
+    setHiddenProjectPage(1);
+  }}
+  className="mt-4 w-full rounded-xl border p-3"
+/>
+
     <div className="mt-4 space-y-3">
       {hiddenProjects.length === 0 ? (
         <p className="text-sm text-gray-500">
@@ -1322,6 +1367,42 @@ setActivityMatchMode('ALL');
         ))
       )}
     </div>
+
+    <div className="mt-4 flex items-center justify-between">
+  <button
+    disabled={hiddenProjectPage <= 1}
+    onClick={() =>
+      setHiddenProjectPage((prev) =>
+        Math.max(prev - 1, 1),
+      )
+    }
+    className="rounded-xl bg-gray-800 px-4 py-2 text-white disabled:opacity-50"
+  >
+    Previous
+  </button>
+
+  <p className="text-sm">
+    Page {hiddenProjectPage} of{' '}
+    {hiddenProjectTotalPages}
+  </p>
+
+  <button
+    disabled={
+      hiddenProjectPage >= hiddenProjectTotalPages
+    }
+    onClick={() =>
+      setHiddenProjectPage((prev) =>
+        Math.min(
+          prev + 1,
+          hiddenProjectTotalPages,
+        ),
+      )
+    }
+    className="rounded-xl bg-gray-800 px-4 py-2 text-white disabled:opacity-50"
+  >
+    Next
+  </button>
+</div>
   </div>
 )}
 
