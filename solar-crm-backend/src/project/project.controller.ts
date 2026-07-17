@@ -3103,8 +3103,14 @@ hideProject(
 }
 
 @Get('hidden/list')
-getHiddenProjects(@CurrentUser() user: any) {
-  return this.projectService.getHiddenProjects(user);
+getHiddenProjects(
+  @Query() query: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.getHiddenProjects(
+    user,
+    query,
+  );
 }
 
 @Patch(':id/restore')

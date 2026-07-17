@@ -10151,8 +10151,13 @@ async hideProject(id: number, body: any, user: any) {
   return this.projectRepository.save(project);
 }
 
-async getHiddenProjects(user: any) {
-  const roles = Array.isArray(user?.roles) ? user.roles : [];
+async getHiddenProjects(
+  user: any,
+  query: any = {},
+) {
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
 
   const canViewHidden =
     roles.includes('OWNER') ||
@@ -10164,16 +10169,72 @@ async getHiddenProjects(user: any) {
     );
   }
 
-  return this.projectRepository.find({
-    where: {
-      isHidden: true,
-    },
-    order: {
-      hiddenAt: 'DESC',
-      updatedAt: 'DESC',
-    } as any,
-    take: 100,
-  });
+  const page = Math.max(
+    Number(query?.page || 1),
+    1,
+  );
+
+  const limit = Math.min(
+    Math.max(Number(query?.limit || 20), 1),
+    100,
+  );
+
+  const skip = (page - 1) * limit;
+
+  const search = String(
+    query?.search || '',
+  ).trim();
+
+  const qb =
+    this.projectRepository
+      .createQueryBuilder('project')
+      .where(
+        'project.isHidden = :isHidden',
+        {
+          isHidden: true,
+        },
+      );
+
+  if (search) {
+    qb.andWhere(
+      `(
+        CAST(project.id AS TEXT) ILIKE :search
+        OR project.customerName ILIKE :search
+        OR project.customerPhone ILIKE :search
+        OR project.electricityKNumber ILIKE :search
+        OR project.projectOwnerName ILIKE :search
+        OR project.solarFranchiseName ILIKE :search
+        OR project.hiddenByName ILIKE :search
+        OR project.hiddenReason ILIKE :search
+      )`,
+      {
+        search: `%${search}%`,
+      },
+    );
+  }
+
+  const [data, total] =
+    await qb
+      .orderBy(
+        'project.hiddenAt',
+        'DESC',
+      )
+      .addOrderBy(
+        'project.updatedAt',
+        'DESC',
+      )
+      .skip(skip)
+      .take(limit)
+      .getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages:
+      Math.ceil(total / limit) || 1,
+  };
 }
 
 async restoreProject(id: number, body: any, user: any) {
