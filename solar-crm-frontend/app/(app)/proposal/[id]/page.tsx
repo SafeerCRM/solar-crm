@@ -31,6 +31,7 @@ export default function ProposalPage() {
   const { id } = useParams();
   const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
   const pdfRef = useRef<HTMLDivElement | null>(null);
+  const pdfGenerationLockRef = useRef(false);
 
   const [proposal, setProposal] = useState<any>(null);
   const [editable, setEditable] = useState<EditableProposal | null>(null);
@@ -156,10 +157,15 @@ export default function ProposalPage() {
   };
 
   const generatePdf = async (share = false) => {
-    if (!pdfRef.current) return;
-    setGeneratingPdf(true);
+  if (!pdfRef.current) return;
 
-    try {
+  // Prevent multiple PDF jobs from rapid or repeated taps.
+  if (pdfGenerationLockRef.current) return;
+
+  pdfGenerationLockRef.current = true;
+  setGeneratingPdf(true);
+
+  try {
       const html2canvas = (await import('html2canvas')).default;
       const jsPDF = (await import('jspdf')).default;
       const pdf = new jsPDF('p', 'mm', 'a4');
@@ -253,7 +259,8 @@ if (share) {
       } catch {
         pdf.save(fileName);
       }
-    } finally {
+        } finally {
+      pdfGenerationLockRef.current = false;
       setGeneratingPdf(false);
     }
   };
@@ -267,12 +274,23 @@ if (share) {
   return (
     <div className="min-h-screen bg-[#fff3e4] p-4">
       <div className="sticky top-2 z-20 mx-auto mb-4 flex max-w-5xl flex-wrap gap-2 rounded-xl bg-white p-3 shadow">
-        <button onClick={() => generatePdf(false)} className="rounded-lg bg-[#ff7900] px-4 py-3 font-semibold text-white">
-          {generatingPdf ? 'Generating...' : 'Download Exact PDF'}
-        </button>
-        <button onClick={() => generatePdf(true)} className="rounded-lg bg-green-600 px-4 py-3 font-semibold text-white">
-          Share PDF
-        </button>
+        <button
+  type="button"
+  disabled={generatingPdf}
+  onClick={() => generatePdf(false)}
+  className="rounded-lg bg-[#ff7900] px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+>
+  {generatingPdf ? 'Generating PDF...' : 'Download Exact PDF'}
+</button>
+
+<button
+  type="button"
+  disabled={generatingPdf}
+  onClick={() => generatePdf(true)}
+  className="rounded-lg bg-green-600 px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+>
+  {generatingPdf ? 'Please wait...' : 'Share PDF'}
+</button>
       </div>
 
       <div className="mx-auto max-w-5xl space-y-4">
