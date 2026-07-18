@@ -5,6 +5,8 @@ import { Repository } from 'typeorm';
 import { Calculator } from '../calculator/calculator.entity';
 import { CalculatorPanelOption } from '../calculator/calculator-panel-option.entity';
 import { CalculatorOngridOption } from '../calculator/calculator-ongrid-option.entity';
+import { CalculatorStructureOption } from '../calculator/calculator-structure-option.entity';
+import { CalculatorHybridOption } from '../calculator/calculator-hybrid-option.entity';
 import { randomBytes } from 'crypto';
 import PDFDocument = require('pdfkit');
 import { Response } from 'express';
@@ -21,6 +23,12 @@ private readonly panelOptionRepo: Repository<CalculatorPanelOption>,
 
 @InjectRepository(CalculatorOngridOption)
 private readonly ongridOptionRepo: Repository<CalculatorOngridOption>,
+
+@InjectRepository(CalculatorStructureOption)
+private readonly structureOptionRepo: Repository<CalculatorStructureOption>,
+
+@InjectRepository(CalculatorHybridOption)
+private readonly hybridOptionRepo: Repository<CalculatorHybridOption>,
   ) {}
 
   generateProposalNumber() {
@@ -71,19 +79,76 @@ private readonly ongridOptionRepo: Repository<CalculatorOngridOption>,
           })
         : null;
 
+        const structureOption = calculator.structureOptionId
+  ? await this.structureOptionRepo.findOne({
+      where: {
+        id: Number(calculator.structureOptionId),
+      },
+    })
+  : null;
+
+const hybridOption = calculator.hybridOptionId
+  ? await this.hybridOptionRepo.findOne({
+      where: {
+        id: Number(calculator.hybridOptionId),
+      },
+    })
+  : null;
+
       calculator = {
-        ...calculator,
+  ...calculator,
 
-        panelDisplayName: panelOption
-          ? `${panelOption.brandName} - ${panelOption.capacityWatt}W`
-          : null,
+  panelDisplayName: panelOption
+    ? `${panelOption.brandName} - ${panelOption.capacityWatt}W`
+    : null,
 
-        ongridDisplayName: ongridOption
-          ? `${ongridOption.brandName} - ${ongridOption.capacity}kW`
-          : null,
+  ongridDisplayName: ongridOption
+    ? `${ongridOption.brandName} - ${ongridOption.capacity}kW`
+    : null,
 
-        ongridPhase: ongridOption?.phaseType || null,
-      };
+  ongridPhase:
+    ongridOption?.phaseType || null,
+
+  structureDisplayName: structureOption
+    ? `${structureOption.structureType} - ${structureOption.capacityKw}kW`
+    : null,
+
+  structureType:
+    structureOption?.structureType ||
+    calculator.structureType ||
+    null,
+
+  structureCapacityKw:
+    structureOption
+      ? Number(structureOption.capacityKw || 0)
+      : Number(calculator.structureWatt || 0),
+
+  hybridDisplayName: hybridOption
+    ? `${hybridOption.brandName} - ${hybridOption.capacity}kW`
+    : null,
+
+  hybridBrand:
+    hybridOption?.brandName ||
+    calculator.hybridType ||
+    null,
+
+  hybridPhase:
+    hybridOption?.phase ||
+    calculator.hybridPhase ||
+    null,
+
+  hybridCapacityKw:
+    hybridOption
+      ? Number(hybridOption.capacity || 0)
+      : 0,
+
+  converterType:
+    hybridOption || calculator.hybridOptionId
+      ? 'HYBRID'
+      : ongridOption || calculator.ongridOptionId
+        ? 'ONGRID'
+        : null,
+};
     }
   }
 
