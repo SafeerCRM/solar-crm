@@ -148,6 +148,13 @@ const [totalProjects, setTotalProjects] = useState(0);
 
 const [search, setSearch] = useState('');
 const [statusFilter, setStatusFilter] = useState('');
+
+const [completedOnly, setCompletedOnly] =
+  useState(false);
+
+const [projectTypeFilter, setProjectTypeFilter] =
+  useState('');
+
 const [loanStatusFilter, setLoanStatusFilter] = useState('');
 const [projectWorkStateFilter, setProjectWorkStateFilter] = useState('');
 const [subsidyCategoryFilter, setSubsidyCategoryFilter] =
@@ -204,8 +211,22 @@ useEffect(() => {
     const parsed = JSON.parse(saved);
 
     setSearch(parsed.search || '');
-    setStatusFilter(parsed.statusFilter || '');
-    setLoanStatusFilter(parsed.loanStatusFilter || '');
+
+setStatusFilter(
+  parsed.statusFilter || '',
+);
+
+setCompletedOnly(
+  Boolean(parsed.completedOnly),
+);
+
+setProjectTypeFilter(
+  parsed.projectTypeFilter || '',
+);
+
+setLoanStatusFilter(
+  parsed.loanStatusFilter || '',
+);
     setProjectWorkStateFilter(parsed.projectWorkStateFilter || '');
     setSubsidyCategoryFilter(
   parsed.subsidyCategoryFilter || '',
@@ -254,8 +275,10 @@ useEffect(() => {
     'projectListFilters',
     JSON.stringify({
       search,
-      statusFilter,
-      loanStatusFilter,
+statusFilter,
+completedOnly,
+projectTypeFilter,
+loanStatusFilter,
       branchFilter,
       projectWorkStateFilter,
       subsidyCategoryFilter,
@@ -275,8 +298,10 @@ showAdvancedActivityFilters,
   );
 }, [
   search,
-  statusFilter,
-  loanStatusFilter,
+statusFilter,
+completedOnly,
+projectTypeFilter,
+loanStatusFilter,
   projectWorkStateFilter,
   subsidyCategoryFilter,
   branchFilter,
@@ -301,11 +326,22 @@ showAdvancedActivityFilters,
 
       const res = await axios.get(`${API_BASE_URL}/project`, {
   params: {
-    page,
-    limit: 20,
-    search,
-    status: statusFilter,
-    loanStatus: loanStatusFilter,
+  page,
+  limit: 20,
+  search,
+
+  status: statusFilter,
+
+  completedOnly:
+    completedOnly
+      ? 'true'
+      : '',
+
+  projectType:
+    projectTypeFilter,
+
+  loanStatus:
+    loanStatusFilter,
     subsidyCategory:
   subsidyCategoryFilter,
     projectWorkState: projectWorkStateFilter,
@@ -358,10 +394,20 @@ setTotalPages(res.data?.totalPages || 1);
       `${API_BASE_URL}/project/export/list`,
       {
         params: {
-          search,
-          status: statusFilter,
-          loanStatus:
-            loanStatusFilter,
+  search,
+
+  status: statusFilter,
+
+  completedOnly:
+    completedOnly
+      ? 'true'
+      : '',
+
+  projectType:
+    projectTypeFilter,
+
+  loanStatus:
+    loanStatusFilter,
             subsidyCategory:
   subsidyCategoryFilter,
           projectWorkState:
@@ -470,14 +516,29 @@ activityMatchMode,
     );
 
     const filterSummary = [
-      [
-        'Exported Projects',
-        rows.length,
-      ],
-      [
-        'Status Filter',
-        statusFilter || 'All',
-      ],
+  [
+    'Exported Projects',
+    rows.length,
+  ],
+
+  [
+    'Project Collection',
+    completedOnly
+      ? 'Completed Projects Only'
+      : 'Active / Non-Completed Projects',
+  ],
+
+  [
+    'Project Type Filter',
+    projectTypeFilter || 'All',
+  ],
+
+  [
+    'Status Filter',
+    completedOnly
+      ? 'Completed'
+      : statusFilter || 'All',
+  ],
       [
         'Loan Filter',
         loanStatusFilter || 'All',
@@ -764,6 +825,8 @@ const restoreProject = async (projectId: number) => {
   page,
   search,
   statusFilter,
+  completedOnly,
+  projectTypeFilter,
   loanStatusFilter,
   subsidyCategoryFilter,
   projectWorkStateFilter,
@@ -1003,11 +1066,12 @@ useEffect(() => {
 
     <select
       value={statusFilter}
+      disabled={completedOnly}
       onChange={(e) => {
         setStatusFilter(e.target.value);
         setPage(1);
       }}
-      className="rounded-xl border p-3"
+      className="rounded-xl border p-3 disabled:bg-gray-100 disabled:text-gray-400"
     >
       <option value="">All Status</option>
       <option value="PENDING_APPROVAL">Pending Approval</option>
@@ -1018,8 +1082,32 @@ useEffect(() => {
       <option value="PROJECT_MANAGEMENT">Project Management</option>
       <option value="SUBSIDY_PROCESS">Subsidy Process</option>
       <option value="ELECTRICITY_PROCESS">Electricity Process</option>
-      <option value="COMPLETED">Completed</option>
+      
     </select>
+
+    <select
+  value={projectTypeFilter}
+  onChange={(e) => {
+    setProjectTypeFilter(
+      e.target.value,
+    );
+
+    setPage(1);
+  }}
+  className="rounded-xl border p-3"
+>
+  <option value="">
+    All Project Types
+  </option>
+
+  <option value="CASH">
+    Cash Projects
+  </option>
+
+  <option value="LOAN">
+    Loan Projects
+  </option>
+</select>
 
     <select
   value={legacyFilter}
@@ -1076,6 +1164,63 @@ useEffect(() => {
   </option>
 </select>
   </div>
+
+  <label
+  className={`mt-4 flex cursor-pointer items-start gap-3 rounded-xl border p-4 ${
+    completedOnly
+      ? 'border-green-300 bg-green-50'
+      : 'border-gray-200 bg-gray-50'
+  }`}
+>
+  <input
+    type="checkbox"
+    checked={completedOnly}
+    onChange={(e) => {
+      const checked =
+        e.target.checked;
+
+      setCompletedOnly(
+        checked,
+      );
+
+      /*
+       * A normal workflow status does not apply
+       * when viewing completed projects.
+       */
+      if (checked) {
+        setStatusFilter('');
+      }
+
+      setPage(1);
+    }}
+    className="mt-1 h-5 w-5 rounded border-gray-300"
+  />
+
+  <div>
+    <p
+      className={`font-bold ${
+        completedOnly
+          ? 'text-green-800'
+          : 'text-gray-800'
+      }`}
+    >
+      Show Completed Projects Only
+    </p>
+
+    <p
+      className={`mt-1 text-sm ${
+        completedOnly
+          ? 'text-green-700'
+          : 'text-gray-500'
+      }`}
+    >
+      Completed projects are excluded from the
+      normal project list. Enable this to view
+      or download completed projects using the
+      other selected filters.
+    </p>
+  </div>
+</label>
 
   <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50">
   <button
@@ -1281,8 +1426,10 @@ useEffect(() => {
     type="button"
     onClick={() => {
       setSearch('');
-      setStatusFilter('');
-      setLoanStatusFilter('');
+setStatusFilter('');
+setCompletedOnly(false);
+setProjectTypeFilter('');
+setLoanStatusFilter('');
       setBranchFilter('');
       setProjectWorkStateFilter('');
       setSubsidyCategoryFilter('');
