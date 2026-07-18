@@ -11885,26 +11885,85 @@ private async deactivateAutomaticProjectProcurement(
     body.approvalStatus || body.status;
 
   if (!approvalStatus) {
-    throw new BadRequestException('Approval status is required');
+    throw new BadRequestException(
+      'Approval status is required',
+    );
   }
 
-  project.ownerApprovalStatus = approvalStatus;
+  const approvalTime = new Date();
+  const ownerId = body.approvedBy || 0;
+
+  project.ownerApprovalStatus =
+    approvalStatus;
 
   project.ownerApprovalNote =
     body.note || '';
 
   project.ownerApprovedBy =
-    body.approvedBy || 0;
+    ownerId;
 
-  project.ownerApprovedAt = new Date();
+  project.ownerApprovedAt =
+    approvalTime;
 
-  if (approvalStatus === ProjectApprovalStatus.REJECTED) {
-    project.status = ProjectStatus.REJECTED;
+  if (
+    approvalStatus ===
+    ProjectApprovalStatus.REJECTED
+  ) {
+    project.status =
+      ProjectStatus.REJECTED;
   }
 
-  if (approvalStatus === ProjectApprovalStatus.APPROVED) {
-    if (project.projectType === ProjectType.LOAN) {
-      project.status = ProjectStatus.LOAN_PROCESS;
+  if (
+    approvalStatus ===
+    ProjectApprovalStatus.APPROVED
+  ) {
+    /*
+     * Owner approval is the final authority.
+     *
+     * Any still-pending Project Manager or
+     * Marketing Head approval is treated as
+     * satisfied by the Owner's approval.
+     */
+    if (
+      project.projectManagerApprovalStatus ===
+      ProjectApprovalStatus.PENDING
+    ) {
+      project.projectManagerApprovalStatus =
+        ProjectApprovalStatus.APPROVED;
+
+      project.projectManagerApprovalNote =
+        'Automatically approved through final Owner approval';
+
+      project.projectManagerApprovedBy =
+        ownerId;
+
+      project.projectManagerApprovedAt =
+        approvalTime;
+    }
+
+    if (
+      project.marketingHeadApprovalStatus ===
+      ProjectApprovalStatus.PENDING
+    ) {
+      project.marketingHeadApprovalStatus =
+        ProjectApprovalStatus.APPROVED;
+
+      project.marketingHeadApprovalNote =
+        'Automatically approved through final Owner approval';
+
+      project.marketingHeadApprovedBy =
+        ownerId;
+
+      project.marketingHeadApprovedAt =
+        approvalTime;
+    }
+
+    if (
+      project.projectType ===
+      ProjectType.LOAN
+    ) {
+      project.status =
+        ProjectStatus.LOAN_PROCESS;
     } else {
       project.status =
         ProjectStatus.PROJECT_MANAGEMENT;
@@ -11912,28 +11971,30 @@ private async deactivateAutomaticProjectProcurement(
   }
 
   const savedProject =
-  await this.projectRepository.save(project);
+    await this.projectRepository.save(
+      project,
+    );
 
-if (
-  approvalStatus ===
-  ProjectApprovalStatus.APPROVED
-) {
-  await this.createAutomaticProjectProcurement(
-    savedProject,
-  );
-}
+  if (
+    approvalStatus ===
+    ProjectApprovalStatus.APPROVED
+  ) {
+    await this.createAutomaticProjectProcurement(
+      savedProject,
+    );
+  }
 
-if (
-  approvalStatus ===
-  ProjectApprovalStatus.REJECTED
-) {
-  await this.deactivateAutomaticProjectProcurement(
-    savedProject.id,
-    'Project rejected during Owner approval',
-  );
-}
+  if (
+    approvalStatus ===
+    ProjectApprovalStatus.REJECTED
+  ) {
+    await this.deactivateAutomaticProjectProcurement(
+      savedProject.id,
+      'Project rejected during Owner approval',
+    );
+  }
 
-return savedProject;
+  return savedProject;
 }
 
   async createBranch(data: any) {
