@@ -514,8 +514,12 @@ const handleGenerateProposal = async () => {
     });
 
     setSelectedPanelOptionId(null);
-    setSelectedOngridOptionId(null);
-    setSelectedStructureOptionId(null);
+setSelectedOngridOptionId(null);
+setSelectedHybridOptionId(null);
+setSelectedStructureOptionId(null);
+setSelectedElectricalOptionId(null);
+setSelectedBatteryOptionId(null);
+setSelectedKitOptionId(null);
     setTotalCost(0);
     setBaseCostBeforeMargin(0);
 setMarginAmount(0);
@@ -837,14 +841,20 @@ onWheel={preventNumberWheelChange}
             <select
               value={ongridPhase}
               onChange={(e) => {
-                setOngridPhase(e.target.value);
-                setSelectedOngridOptionId(null);
-                setValues((prev) => ({
-                  ...prev,
-                  ongridBrand: '',
-                  ongridWatt: 0,
-                }));
-              }}
+  setOngridPhase(e.target.value);
+
+  /*
+   * Phase changed, so the previously selected
+   * On-Grid option is no longer reliable.
+   */
+  setSelectedOngridOptionId(null);
+
+  setValues((prev) => ({
+    ...prev,
+    ongridBrand: '',
+    ongridWatt: 0,
+  }));
+}}
               className={inputClassName}
             >
               <option value="1 Phase">1 Phase</option>
@@ -857,20 +867,53 @@ onWheel={preventNumberWheelChange}
             <select
               value={selectedOngridOptionId || ''}
               onChange={(e) => {
-                const id = Number(e.target.value);
-                setSelectedOngridOptionId(id);
+  const rawValue = e.target.value;
 
-                const selected = ongridOptions.find((opt) => Number(opt.id) === id);
+  if (!rawValue) {
+    setSelectedOngridOptionId(null);
 
-                if (selected) {
-                  setValues((prev) => ({
-                    ...prev,
-                    ongridBrand: selected.brandName,
-                    ongridWatt: Number(selected.capacity || 0),
-                    ongridQuantity: prev.ongridQuantity || 1,
-                  }));
-                }
-              }}
+    setValues((prev) => ({
+      ...prev,
+      ongridBrand: '',
+      ongridWatt: 0,
+    }));
+
+    return;
+  }
+
+  const id = Number(rawValue);
+
+  const selected = ongridOptions.find(
+    (opt) => Number(opt.id) === id,
+  );
+
+  if (!selected) {
+    return;
+  }
+
+  /*
+   * Only one converter type can be selected.
+   * Selecting On-Grid removes Hybrid.
+   */
+  setSelectedOngridOptionId(id);
+  setSelectedHybridOptionId(null);
+
+  setValues((prev) => ({
+    ...prev,
+
+    ongridBrand:
+      selected.brandName || '',
+
+    ongridWatt:
+      Number(selected.capacity || 0),
+
+    ongridQuantity:
+      prev.ongridQuantity || 1,
+
+    hybridType: '',
+    hybridQuantity: 1,
+  }));
+}}
               className={inputClassName}
             >
               <option value="">Select converter</option>
@@ -1132,12 +1175,25 @@ onWheel={preventNumberWheelChange}
       <label className={labelClassName}>Phase</label>
       <select
         value={values.hybridPhase}
-        onChange={(e) =>
-          setTextValue(
-            'hybridPhase',
-            e.target.value as 'Single Phase' | 'Three Phase' | 'High Voltage'
-          )
-        }
+        onChange={(e) => {
+  const nextPhase =
+    e.target.value as
+      | 'Single Phase'
+      | 'Three Phase'
+      | 'High Voltage';
+
+  /*
+   * Phase changed, so clear the previously
+   * selected Hybrid option.
+   */
+  setSelectedHybridOptionId(null);
+
+  setValues((prev) => ({
+    ...prev,
+    hybridPhase: nextPhase,
+    hybridType: '',
+  }));
+}}
         className={inputClassName}
       >
         <option value="Single Phase">Single Phase</option>
@@ -1152,19 +1208,50 @@ onWheel={preventNumberWheelChange}
       <select
         value={selectedHybridOptionId || ''}
         onChange={(e) => {
-          const id = Number(e.target.value);
-          setSelectedHybridOptionId(id);
+  const rawValue = e.target.value;
 
-          const selected = hybridOptions.find((opt) => opt.id === id);
+  if (!rawValue) {
+    setSelectedHybridOptionId(null);
 
-          if (selected) {
-            setValues((prev) => ({
-              ...prev,
-              hybridType: selected.brandName,
-              hybridQuantity: prev.hybridQuantity || 1,
-            }));
-          }
-        }}
+    setValues((prev) => ({
+      ...prev,
+      hybridType: '',
+    }));
+
+    return;
+  }
+
+  const id = Number(rawValue);
+
+  const selected = hybridOptions.find(
+    (opt) => Number(opt.id) === id,
+  );
+
+  if (!selected) {
+    return;
+  }
+
+  /*
+   * Only one converter type can be selected.
+   * Selecting Hybrid removes On-Grid.
+   */
+  setSelectedHybridOptionId(id);
+  setSelectedOngridOptionId(null);
+
+  setValues((prev) => ({
+    ...prev,
+
+    hybridType:
+      selected.brandName || '',
+
+    hybridQuantity:
+      prev.hybridQuantity || 1,
+
+    ongridBrand: '',
+    ongridWatt: 0,
+    ongridQuantity: 1,
+  }));
+}}
         className={inputClassName}
       >
         <option value="">Select hybrid</option>

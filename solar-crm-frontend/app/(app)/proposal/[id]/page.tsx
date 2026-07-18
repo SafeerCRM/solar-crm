@@ -91,22 +91,79 @@ export default function ProposalPage() {
 ].filter(Boolean).join('\n') || 'As per selected system'
 ],
 [
-  'Solar Inverter',
-  'solar-inverter.jpg',
-  '1PH / 3PH On-Grid Inverter with product warranty and 10 years replacement warranty. Brand and capacity as per selected system configuration.',
-  [
-  calculator.ongridPhase ? `Phase: ${calculator.ongridPhase}` : '',
-  calculator.ongridDisplayName
-    ? `Inverter: ${calculator.ongridDisplayName}`
-    : calculator.ongridBrand
-      ? `Inverter: ${calculator.ongridBrand}`
-      : '',
-  Number(calculator.ongridQuantity || 0) > 0
-    ? `Qty: ${calculator.ongridQuantity}`
-    : '',
-].filter(Boolean).join('\n') || 'As per capacity'
+  calculator.converterType === 'HYBRID'
+    ? 'Hybrid Solar Inverter'
+    : 'Solar Inverter',
+
+  calculator.converterType === 'HYBRID'
+    ? 'hybrid-inverter.jpg'
+    : 'solar-inverter.jpg',
+
+  calculator.converterType === 'HYBRID'
+    ? 'Hybrid solar inverter suitable for solar generation with battery integration and backup support. Brand, phase and capacity are shown as per the selected calculator configuration.'
+    : '1PH / 3PH On-Grid Inverter with product warranty and 10 years replacement warranty. Brand and capacity as per selected system configuration.',
+
+  calculator.converterType === 'HYBRID'
+    ? [
+        calculator.hybridPhase
+          ? `Phase: ${calculator.hybridPhase}`
+          : '',
+
+        calculator.hybridDisplayName
+          ? `Inverter: ${calculator.hybridDisplayName}`
+          : calculator.hybridBrand
+            ? `Inverter: ${calculator.hybridBrand}`
+            : '',
+
+        Number(calculator.hybridCapacityKw || 0) > 0
+          ? `Capacity: ${calculator.hybridCapacityKw} kW`
+          : '',
+
+        Number(calculator.hybridQuantity || 0) > 0
+          ? `Qty: ${calculator.hybridQuantity}`
+          : '',
+      ]
+        .filter(Boolean)
+        .join('\n') || 'As per selected hybrid system'
+    : [
+        calculator.ongridPhase
+          ? `Phase: ${calculator.ongridPhase}`
+          : '',
+
+        calculator.ongridDisplayName
+          ? `Inverter: ${calculator.ongridDisplayName}`
+          : calculator.ongridBrand
+            ? `Inverter: ${calculator.ongridBrand}`
+            : '',
+
+        Number(calculator.ongridQuantity || 0) > 0
+          ? `Qty: ${calculator.ongridQuantity}`
+          : '',
+      ]
+        .filter(Boolean)
+        .join('\n') || 'As per capacity',
 ],
-        ['Module Mounting Structure', 'gi-structure.jpg', 'Galvanized Iron Structure 40×60×2 mm / 40×40×2 mm. Rooftop pipes in galvanized C-channel structure.', 'Site specific'],
+        [
+  'Module Mounting Structure',
+  'gi-structure.jpg',
+  'Galvanized Iron Structure 40×60×2 mm / 40×40×2 mm. Rooftop pipes in galvanized C-channel structure.',
+
+  [
+    calculator.structureType
+      ? `Type: ${calculator.structureType}`
+      : '',
+
+    Number(calculator.structureCapacityKw || 0) > 0
+      ? `Capacity: ${calculator.structureCapacityKw} kW`
+      : '',
+
+    Number(calculator.structureQuantity || 0) > 0
+      ? `Qty: ${calculator.structureQuantity}`
+      : '',
+  ]
+    .filter(Boolean)
+    .join('\n') || 'Site specific',
+],
         ['ACDB + DCDB', 'acdb-dcdb.jpg', 'AC Distribution Box and DC Distribution Box with protection system and surge protection devices.', 'Included'],
         ['Earthing Wire', 'earthing-wire.jpg', 'Copper 4 sq mm earthing wire. Maximum length 90 m.', 'Included'],
         ['DC Cable and AC Cable', 'dc-ac-cable.jpg', 'Reputed brand DC and AC cable such as Havells / Polycab / KEI as per project requirement.', 'Included'],
@@ -345,6 +402,16 @@ if (share) {
               <Row label="Phone" value={proposal.customerPhone || '-'} />
               <Row label="Address" value={editable.customerAddress || '-'} />
               <Row label="System Capacity" value={capacity ? `${capacity.toFixed(2)} kW` : '-'} />
+              <Row
+  label="Converter Type"
+  value={
+    calculator.converterType === 'HYBRID'
+      ? 'Hybrid'
+      : calculator.converterType === 'ONGRID'
+        ? 'On-Grid'
+        : '-'
+  }
+/>
             </tbody>
           </table>
 
@@ -368,7 +435,7 @@ if (share) {
 
           <Section title="System Configuration Summary" />
           <p className="text-block">
-            Price includes design, supply, installation, testing and commissioning of Solar On-Grid Power Plant as per selected system configuration and site requirement.
+            Price includes design, supply, installation, testing and commissioning of the selected solar power plant configuration and site requirement.
           </p>
         </PdfPage>
 
