@@ -408,12 +408,12 @@ if (share) {
           <Section title="Company Profile" />
           <p className="text-block">{editable.companyIntro}</p>
 
-          <div className="mt-5 grid grid-cols-4 gap-3">
-            <Stat value="3000+" label="Projects" />
-            <Stat value="5+" label="Years" />
-            <Stat value="10 MW" label="Capacity" />
-            <Stat value="35+" label="Branches" />
-          </div>
+          <div className="mt-3 grid grid-cols-4 gap-2 scale-[0.90] origin-top">
+  <Stat value="3000+" label="Projects" />
+  <Stat value="5+" label="Years" />
+  <Stat value="10 MW" label="Capacity" />
+  <Stat value="35+" label="Branches" />
+</div>
         </PdfPage>
 
         <PdfPage>
