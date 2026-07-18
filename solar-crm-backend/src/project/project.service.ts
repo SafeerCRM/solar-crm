@@ -1594,10 +1594,12 @@ const project = this.projectRepository.create(projectData);
 
   async findAll(
   filters?: {
-    page?: number;
+        page?: number;
     limit?: number;
     search?: string;
     status?: string;
+    completedOnly?: string;
+    projectType?: string;
     projectWorkState?: string;
     loanStatus?: string;
     subsidyCategory?: string;
@@ -1683,19 +1685,59 @@ if (roles.includes('SOLAR_FRANCHISE')) {
   );
 }
 
-  if (filters?.status === 'APPROVED') {
+  /*
+ * Completed projects remain outside the normal
+ * project list unless explicitly requested.
+ *
+ * This condition works together with all other
+ * project filters and is also reused by export.
+ */
+if (filters?.completedOnly === 'true') {
   query.andWhere(
-    'project.ownerApprovalStatus = :approvedStatus',
+    'project.status = :completedStatus',
     {
-      approvedStatus:
-        ProjectApprovalStatus.APPROVED,
+      completedStatus:
+        ProjectStatus.COMPLETED,
     },
   );
-} else if (filters?.status) {
+} else {
   query.andWhere(
-    'project.status = :status',
+    'project.status != :completedStatus',
     {
-      status: filters.status,
+      completedStatus:
+        ProjectStatus.COMPLETED,
+    },
+  );
+
+  if (filters?.status === 'APPROVED') {
+    query.andWhere(
+      'project.ownerApprovalStatus = :approvedStatus',
+      {
+        approvedStatus:
+          ProjectApprovalStatus.APPROVED,
+      },
+    );
+  } else if (filters?.status) {
+    query.andWhere(
+      'project.status = :status',
+      {
+        status: filters.status,
+      },
+    );
+  }
+}
+
+if (
+  filters?.projectType ===
+    ProjectType.CASH ||
+  filters?.projectType ===
+    ProjectType.LOAN
+) {
+  query.andWhere(
+    'project.projectType = :projectType',
+    {
+      projectType:
+        filters.projectType,
     },
   );
 }
@@ -2121,6 +2163,8 @@ async getProjectExportData(
   filters: {
     search?: string;
     status?: string;
+    completedOnly?: string;
+    projectType?: string;
     projectWorkState?: string;
     loanStatus?: string;
     loanActivity?: string;
@@ -2320,11 +2364,23 @@ activityMatchMode?: 'ALL' | 'ANY';
 
   return {
     filters: {
-      search:
-        String(filters.search || ''),
-      status:
-        String(filters.status || ''),
-      projectWorkState:
+  search:
+    String(filters.search || ''),
+
+  status:
+    String(filters.status || ''),
+
+  completedOnly:
+    String(
+      filters.completedOnly || '',
+    ),
+
+  projectType:
+    String(
+      filters.projectType || '',
+    ),
+
+  projectWorkState:
         String(
           filters.projectWorkState ||
             '',

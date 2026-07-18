@@ -53,8 +53,10 @@ create(
 findAll(
   @Query('page') page?: string,
   @Query('limit') limit?: string,
-  @Query('search') search?: string,
+    @Query('search') search?: string,
   @Query('status') status?: string,
+  @Query('completedOnly') completedOnly?: string,
+  @Query('projectType') projectType?: string,
   @Query('projectWorkState') projectWorkState?: string,
   @Query('loanStatus') loanStatus?: string,
   @Query('loanActivity')
@@ -85,8 +87,13 @@ subsidyCategory?: string,
   {
     page: Number(page || 1),
     limit: Number(limit || 20),
-    search: search || '',
+        search: search || '',
     status: status || '',
+    completedOnly:
+      completedOnly === 'true'
+        ? 'true'
+        : '',
+    projectType: projectType || '',
     projectWorkState: projectWorkState || '',
     loanStatus: loanStatus || '',
     loanActivity:
@@ -120,8 +127,12 @@ legacyYear: legacyYear || '',
 
 @Get('export/list')
 getProjectExportData(
-  @Query('search') search?: string,
+    @Query('search') search?: string,
   @Query('status') status?: string,
+  @Query('completedOnly')
+  completedOnly?: string,
+  @Query('projectType')
+  projectType?: string,
   @Query('projectWorkState')
   projectWorkState?: string,
   @Query('loanStatus')
@@ -156,8 +167,17 @@ subsidyCategory?: string,
 ) {
   return this.projectService.getProjectExportData(
     {
-      search: search || '',
+            search: search || '',
       status: status || '',
+
+      completedOnly:
+        completedOnly === 'true'
+          ? 'true'
+          : '',
+
+      projectType:
+        projectType || '',
+
       projectWorkState:
         projectWorkState || '',
       loanStatus: loanStatus || '',
