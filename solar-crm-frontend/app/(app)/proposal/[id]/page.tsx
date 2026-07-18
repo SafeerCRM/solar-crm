@@ -402,16 +402,6 @@ if (share) {
               <Row label="Phone" value={proposal.customerPhone || '-'} />
               <Row label="Address" value={editable.customerAddress || '-'} />
               <Row label="System Capacity" value={capacity ? `${capacity.toFixed(2)} kW` : '-'} />
-              <Row
-  label="Converter Type"
-  value={
-    calculator.converterType === 'HYBRID'
-      ? 'Hybrid'
-      : calculator.converterType === 'ONGRID'
-        ? 'On-Grid'
-        : '-'
-  }
-/>
             </tbody>
           </table>
 
