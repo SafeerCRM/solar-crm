@@ -482,7 +482,7 @@ if (share) {
           <Section title="Company Profile" />
           <p className="text-block">{editable.companyIntro}</p>
 
-          <div className="mt-2 grid grid-cols-4 gap-2 scale-[0.80] origin-top">
+          <div className="mt-3 grid w-full grid-cols-4 gap-2">
   <Stat value="3000+" label="Projects" />
   <Stat value="5+" label="Years" />
   <Stat value="10 MW" label="Capacity" />
@@ -651,12 +651,12 @@ function Stat({
   label: string;
 }) {
   return (
-    <div className="border-2 border-[#e98225] pdf-light-orange bg-[#fff0dc] p-4 text-center">
-      <p className="text-3xl font-black leading-none text-[#d94d00]">
+    <div className="flex min-h-[82px] flex-col items-center justify-center border-2 border-[#e98225] bg-[#fff0dc] px-2 py-3 text-center pdf-light-orange">
+      <p className="whitespace-nowrap text-[25px] font-black leading-none text-[#d94d00]">
         {value}
       </p>
 
-      <p className="mt-1 text-[10px] font-semibold leading-3">
+      <p className="mt-2 text-[13px] font-bold leading-none">
         {label}
       </p>
     </div>
