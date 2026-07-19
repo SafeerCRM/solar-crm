@@ -643,11 +643,22 @@ function Row({ label, value }: { label: string; value: string }) {
   return <tr><td>{label}</td><td>{value}</td></tr>;
 }
 
-function Stat({ value, label }: { value: string; label: string }) {
+function Stat({
+  value,
+  label,
+}: {
+  value: string;
+  label: string;
+}) {
   return (
     <div className="border-2 border-[#e98225] pdf-light-orange bg-[#fff0dc] p-4 text-center">
-      <p className="text-3xl font-black text-[#d94d00]">{value}</p>
-      <p className="text-sm font-bold">{label}</p>
+      <p className="text-3xl font-black leading-none text-[#d94d00]">
+        {value}
+      </p>
+
+      <p className="mt-1 text-[10px] font-semibold leading-3">
+        {label}
+      </p>
     </div>
   );
 }
