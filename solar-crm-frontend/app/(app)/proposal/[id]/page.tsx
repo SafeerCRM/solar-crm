@@ -174,6 +174,80 @@ export default function ProposalPage() {
         ['Civil Foundation', 'civil-foundation.jpg', '8 inch cement concrete civil foundation for RCC / ground mounted system, wherever required.', 'If required'],
         ['DC Connectors', 'dc-connectors.jpg', 'MC4 type reputed brand DC connectors for string connection.', 'Included'],
         ['Anchor Fasteners', 'anchor-fasteners.jpg', 'Heavy wedge anchor fasteners for RCC mounting and structure fixing.', 'Included'],
+        ...(calculator.converterType === 'HYBRID' &&
+(
+  (Array.isArray(calculator.batterySelections) &&
+    calculator.batterySelections.length > 0) ||
+  calculator.batteryOptionId ||
+  calculator.batteryType
+)
+  ? [
+      [
+        'Solar Battery',
+        'battery.jpg',
+        'Solar battery suitable for hybrid solar power systems, providing energy storage and backup support. Battery specifications are shown as per the selected calculator configuration.',
+
+        (
+          Array.isArray(calculator.batterySelections) &&
+          calculator.batterySelections.length > 0
+            ? calculator.batterySelections
+                .map(
+                  (
+                    battery: any,
+                    index: number,
+                  ) =>
+                    [
+                      `${index + 1}. ${
+                        battery.brandName ||
+                        'Battery'
+                      }`,
+
+                      battery.batteryType
+                        ? `Type: ${battery.batteryType}`
+                        : '',
+
+                      Number(
+                        battery.capacity || 0,
+                      ) > 0
+                        ? `Capacity: ${
+                            battery.capacity
+                          }`
+                        : '',
+
+                      Number(
+                        battery.quantity || 0,
+                      ) > 0
+                        ? `Qty: ${
+                            battery.quantity
+                          }`
+                        : '',
+                    ]
+                      .filter(Boolean)
+                      .join('\n'),
+                )
+                .join('\n\n')
+            : [
+                calculator.batteryType
+                  ? `Type: ${calculator.batteryType}`
+                  : '',
+
+                calculator.batteryStrength
+                  ? `Capacity: ${calculator.batteryStrength}`
+                  : '',
+
+                Number(
+                  calculator.batteryQuantity ||
+                    0,
+                ) > 0
+                  ? `Qty: ${calculator.batteryQuantity}`
+                  : '',
+              ]
+                .filter(Boolean)
+                .join('\n')
+        ) || 'As per selected battery',
+      ],
+    ]
+  : []),
       ].map((p, i) => ({
         id: String(i + 1),
         name: p[0],
@@ -323,10 +397,10 @@ if (share) {
   };
 
   const productPages = [
-    editable.products.slice(0, 4),
-    editable.products.slice(4, 8),
-    editable.products.slice(8, 13),
-  ];
+  editable.products.slice(0, 4),
+  editable.products.slice(4, 8),
+  editable.products.slice(8),
+];
 
   return (
     <div className="min-h-screen bg-[#fff3e4] p-4">
@@ -408,7 +482,7 @@ if (share) {
           <Section title="Company Profile" />
           <p className="text-block">{editable.companyIntro}</p>
 
-          <div className="mt-3 grid grid-cols-4 gap-2 scale-[0.90] origin-top">
+          <div className="mt-2 grid grid-cols-4 gap-2 scale-[0.80] origin-top">
   <Stat value="3000+" label="Projects" />
   <Stat value="5+" label="Years" />
   <Stat value="10 MW" label="Capacity" />

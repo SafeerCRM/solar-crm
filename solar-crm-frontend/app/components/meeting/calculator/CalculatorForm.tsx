@@ -62,6 +62,15 @@ type CalculatorValues = {
   tataQuantity: number;
 };
 
+type SelectedBattery = {
+  batteryOptionId: number;
+  batteryType: string;
+  brandName: string;
+  capacity: number;
+  quantity: number;
+  rate: number;
+};
+
 const inputClassName =
   'w-full rounded-xl border border-gray-300 bg-white p-3 text-sm outline-none focus:border-blue-500';
 
@@ -117,6 +126,9 @@ const [selectedElectricalOptionId, setSelectedElectricalOptionId] = useState<num
 const [selectedKitOptionId, setSelectedKitOptionId] = useState<number | null>(null);
 const [batteryTypes, setBatteryTypes] = useState<string[]>([]);
 const [selectedBatteryOptionId, setSelectedBatteryOptionId] = useState<number | null>(null);
+const [selectedBatteries, setSelectedBatteries] = useState<
+  SelectedBattery[]
+>([]);
 const [selectedHybridOptionId, setSelectedHybridOptionId] = useState<number | null>(null);
   const [selectedOngridOptionId, setSelectedOngridOptionId] = useState<number | null>(null);
   const [ongridPhase, setOngridPhase] = useState('1 Phase');
@@ -199,7 +211,7 @@ const [selectedHybridOptionId, setSelectedHybridOptionId] = useState<number | nu
           electricalQuantity: 1,
           distanceKm: values.distanceKm,
           hybridQuantity: 1,
-          batteryQuantity: 1,
+          
           celronicQuantity: 1,
           tataQuantity: 1,
           marginWatt: values.marginWatt,
@@ -208,7 +220,10 @@ ongridOptionId: selectedOngridOptionId,
 structureOptionId: selectedStructureOptionId,
 electricalOptionId: selectedElectricalOptionId,
 hybridOptionId: selectedHybridOptionId,
-batteryOptionId: selectedBatteryOptionId,
+batterySelections: selectedBatteries.map((battery) => ({
+  batteryOptionId: battery.batteryOptionId,
+  quantity: battery.quantity,
+})),
 kitOptionId: selectedKitOptionId,
 discountAmount: discountAmount,
         },
@@ -272,7 +287,7 @@ if (nextDiscountAdjusted) {
   }, 400);
 
   return () => clearTimeout(timer);
-}, [values, discountAmount]);
+}, [values, discountAmount, selectedBatteries]);
 
   useEffect(() => {
     fetchMarginOptions();
@@ -466,6 +481,105 @@ const handleGenerateProposal = async () => {
   }
 };
 
+const handleAddBattery = () => {
+  if (!selectedBatteryOptionId) {
+    alert('Please select a battery');
+    return;
+  }
+
+  const selectedOption = batteryOptions.find(
+    (option) =>
+      Number(option.id) === Number(selectedBatteryOptionId),
+  );
+
+  if (!selectedOption) {
+    alert('Selected battery option was not found');
+    return;
+  }
+
+  const quantity = Math.max(
+    Number(values.batteryQuantity || 1),
+    1,
+  );
+
+  setSelectedBatteries((previous) => {
+    const existingBattery = previous.find(
+      (battery) =>
+        Number(battery.batteryOptionId) ===
+        Number(selectedBatteryOptionId),
+    );
+
+    /*
+     * Selecting the same battery again increases its existing quantity
+     * rather than creating a duplicate row.
+     */
+    if (existingBattery) {
+      return previous.map((battery) =>
+        Number(battery.batteryOptionId) ===
+        Number(selectedBatteryOptionId)
+          ? {
+              ...battery,
+              quantity: battery.quantity + quantity,
+            }
+          : battery,
+      );
+    }
+
+    return [
+      ...previous,
+      {
+        batteryOptionId: Number(selectedOption.id),
+        batteryType: String(selectedOption.type || ''),
+        brandName: String(selectedOption.brandName || ''),
+        capacity: Number(selectedOption.capacity || 0),
+        quantity,
+        rate: Number(selectedOption.rate || 0),
+      },
+    ];
+  });
+
+  /*
+   * Clear only the battery currently being prepared.
+   * Already-added battery rows remain saved in selectedBatteries.
+   */
+  setSelectedBatteryOptionId(null);
+
+  setValues((previous) => ({
+    ...previous,
+    batteryStrength: '',
+    batteryQuantity: 1,
+  }));
+};
+
+const handleBatteryQuantityChange = (
+  batteryOptionId: number,
+  quantity: number,
+) => {
+  const safeQuantity = Math.max(Number(quantity || 1), 1);
+
+  setSelectedBatteries((previous) =>
+    previous.map((battery) =>
+      Number(battery.batteryOptionId) ===
+      Number(batteryOptionId)
+        ? {
+            ...battery,
+            quantity: safeQuantity,
+          }
+        : battery,
+    ),
+  );
+};
+
+const handleRemoveBattery = (batteryOptionId: number) => {
+  setSelectedBatteries((previous) =>
+    previous.filter(
+      (battery) =>
+        Number(battery.batteryOptionId) !==
+        Number(batteryOptionId),
+    ),
+  );
+};
+
   const handleResetCalculator = () => {
     setValues({
       meetingId: initialData?.meetingId || '',
@@ -519,6 +633,7 @@ setSelectedHybridOptionId(null);
 setSelectedStructureOptionId(null);
 setSelectedElectricalOptionId(null);
 setSelectedBatteryOptionId(null);
+setSelectedBatteries([]);
 setSelectedKitOptionId(null);
     setTotalCost(0);
     setBaseCostBeforeMargin(0);
@@ -567,9 +682,16 @@ setAreaError('');
         hybridPhase: values.hybridPhase,
         hybridQuantity: 1,
 
-        batteryType: values.batteryType,
-        batteryStrength: values.batteryStrength,
-        batteryQuantity: 1,
+        batteryType:
+  selectedBatteries[0]?.batteryType || '',
+
+batteryStrength:
+  selectedBatteries[0]
+    ? String(selectedBatteries[0].capacity)
+    : '',
+
+batteryQuantity:
+  selectedBatteries[0]?.quantity || 0,
 
         celronicType: values.celronicType,
         celronicQuantity: 1,
@@ -585,7 +707,13 @@ ongridOptionId: selectedOngridOptionId,
 structureOptionId: selectedStructureOptionId,
 electricalOptionId: selectedElectricalOptionId,
 hybridOptionId: selectedHybridOptionId,
-batteryOptionId: selectedBatteryOptionId,
+batteryOptionId:
+  selectedBatteries[0]?.batteryOptionId || null,
+
+batterySelections: selectedBatteries.map((battery) => ({
+  batteryOptionId: battery.batteryOptionId,
+  quantity: battery.quantity,
+})),
 kitOptionId: selectedKitOptionId,
 baseCostBeforeMargin,
 marginAmount,
@@ -897,6 +1025,8 @@ onWheel={preventNumberWheelChange}
    */
   setSelectedOngridOptionId(id);
   setSelectedHybridOptionId(null);
+  setSelectedBatteryOptionId(null);
+setSelectedBatteries([]);
 
   setValues((prev) => ({
     ...prev,
@@ -911,7 +1041,11 @@ onWheel={preventNumberWheelChange}
       prev.ongridQuantity || 1,
 
     hybridType: '',
-    hybridQuantity: 1,
+hybridQuantity: 1,
+
+batteryType: '',
+batteryStrength: '',
+batteryQuantity: 1,
   }));
 }}
               className={inputClassName}
@@ -1278,79 +1412,218 @@ onWheel={preventNumberWheelChange}
 </CalculatorSection>
 
           <CalculatorSection title="9. Battery">
-  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+  <div className="space-y-5">
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div>
+        <label className={labelClassName}>
+          Battery Type
+        </label>
 
-    {/* Battery Type */}
-    <div>
-      <label className={labelClassName}>Battery Type</label>
+        <select
+          value={values.batteryType}
+          onChange={(e) => {
+            setTextValue(
+              'batteryType',
+              e.target.value,
+            );
 
-      <select
-        value={values.batteryType}
-        onChange={(e) => {
-          setTextValue('batteryType', e.target.value);
-          setSelectedBatteryOptionId(null);
-          setTextValue('batteryStrength', '');
-        }}
-        className={inputClassName}
-      >
-        <option value="">Select type</option>
-        {batteryTypes.map((type) => (
-          <option key={type} value={type}>
-            {type}
-          </option>
-        ))}
-      </select>
-    </div>
+            setSelectedBatteryOptionId(null);
 
-    {/* Battery Option */}
-    <div>
-      <label className={labelClassName}>Select Battery</label>
-
-      <select
-        value={selectedBatteryOptionId || ''}
-        onChange={(e) => {
-          const id = Number(e.target.value);
-          setSelectedBatteryOptionId(id);
-
-          const selected = batteryOptions.find((opt) => opt.id === id);
-
-          if (selected) {
-            setValues((prev) => ({
-              ...prev,
-              batteryType: selected.type,
-              batteryStrength: selected.capacity,
+            setValues((previous) => ({
+              ...previous,
+              batteryType: e.target.value,
+              batteryStrength: '',
+              batteryQuantity: 1,
             }));
-          }
-        }}
-        className={inputClassName}
-      >
-        <option value="">Select battery</option>
+          }}
+          className={inputClassName}
+        >
+          <option value="">Select type</option>
 
-        {batteryOptions
-          .filter((opt) =>
-            values.batteryType ? opt.type === values.batteryType : true
-          )
-          .map((opt) => (
-            <option key={opt.id} value={opt.id}>
-              {opt.brandName} - {opt.capacity} kWh / Ah
+          {batteryTypes.map((type) => (
+            <option key={type} value={type}>
+              {type}
             </option>
           ))}
-      </select>
+        </select>
+      </div>
+
+      <div>
+        <label className={labelClassName}>
+          Select Battery
+        </label>
+
+        <select
+          value={selectedBatteryOptionId || ''}
+          onChange={(e) => {
+            const rawValue = e.target.value;
+
+            if (!rawValue) {
+              setSelectedBatteryOptionId(null);
+
+              setValues((previous) => ({
+                ...previous,
+                batteryStrength: '',
+              }));
+
+              return;
+            }
+
+            const id = Number(rawValue);
+
+            const selected = batteryOptions.find(
+              (option) =>
+                Number(option.id) === id,
+            );
+
+            if (!selected) {
+              return;
+            }
+
+            setSelectedBatteryOptionId(id);
+
+            setValues((previous) => ({
+              ...previous,
+              batteryType:
+                String(selected.type || ''),
+
+              batteryStrength:
+                String(selected.capacity || ''),
+
+              batteryQuantity:
+                previous.batteryQuantity || 1,
+            }));
+          }}
+          className={inputClassName}
+          disabled={!values.batteryType}
+        >
+          <option value="">Select battery</option>
+
+          {batteryOptions
+            .filter(
+              (option) =>
+                !values.batteryType ||
+                String(option.type || '')
+                  .trim()
+                  .toLowerCase() ===
+                  String(values.batteryType || '')
+                    .trim()
+                    .toLowerCase(),
+            )
+            .map((option) => (
+              <option
+                key={option.id}
+                value={option.id}
+              >
+                {option.brandName} -{' '}
+                {option.capacity} kWh / Ah
+              </option>
+            ))}
+        </select>
+      </div>
+
+      <div className="opacity-50 pointer-events-none">
+        <label className={labelClassName}>
+          Selected Capacity
+        </label>
+
+        <input
+          type="text"
+          value={values.batteryStrength}
+          readOnly
+          className={inputClassName}
+        />
+      </div>
+
+      <div>
+        <label className={labelClassName}>
+          Quantity
+        </label>
+
+        <input
+          type="number"
+          value={values.batteryQuantity}
+          onChange={(e) =>
+            setNumberValue(
+              'batteryQuantity',
+              e.target.value,
+            )
+          }
+          min={1}
+          onWheel={preventNumberWheelChange}
+          className={inputClassName}
+        />
+      </div>
     </div>
 
-    {/* Selected Strength */}
-    <div className="opacity-50 pointer-events-none">
-      <label className={labelClassName}>Selected Capacity</label>
-      <input
-        type="text"
-        value={values.batteryStrength}
-        readOnly
-        className={inputClassName}
-      />
-    </div>
+    <button
+      type="button"
+      onClick={handleAddBattery}
+      disabled={!selectedBatteryOptionId}
+      className="rounded-xl bg-blue-600 px-5 py-3 text-white disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      Add Battery
+    </button>
 
-    {/* Quantity */}
+    {selectedBatteries.length > 0 && (
+      <div className="space-y-3">
+        <h3 className="font-semibold text-gray-800">
+          Added Batteries
+        </h3>
 
+        {selectedBatteries.map((battery) => (
+          <div
+            key={battery.batteryOptionId}
+            className="rounded-xl border border-gray-200 bg-gray-50 p-4"
+          >
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_160px_120px] md:items-end">
+              <div>
+                <p className="font-semibold text-gray-800">
+                  {battery.brandName || 'Battery'}
+                </p>
+
+                <p className="mt-1 text-sm text-gray-600">
+                  {battery.batteryType || '-'} ·{' '}
+                  {battery.capacity || 0} kWh / Ah
+                </p>
+              </div>
+
+              <div>
+                <label className={labelClassName}>
+                  Quantity
+                </label>
+
+                <input
+                  type="number"
+                  value={battery.quantity}
+                  onChange={(e) =>
+                    handleBatteryQuantityChange(
+                      battery.batteryOptionId,
+                      Number(e.target.value),
+                    )
+                  }
+                  min={1}
+                  onWheel={preventNumberWheelChange}
+                  className={inputClassName}
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  handleRemoveBattery(
+                    battery.batteryOptionId,
+                  )
+                }
+                className="rounded-xl bg-red-500 px-4 py-3 text-white"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    )}
   </div>
 </CalculatorSection>
 
