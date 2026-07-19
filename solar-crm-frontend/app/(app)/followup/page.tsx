@@ -726,41 +726,66 @@ const matchesDue =
 
 const filteredSelectedFollowups = selectedFollowups.filter((f) => {
   const name = String(
-  f.lead?.name ||
-    f.customerName ||
-    '',
-).toLowerCase();
+    f.lead?.name ||
+      f.customerName ||
+      '',
+  ).toLowerCase();
 
-const phone = String(
-  f.lead?.phone ||
-    f.customerPhone ||
-    '',
-).toLowerCase();
+  const phone = String(
+    f.lead?.phone ||
+      f.customerPhone ||
+      '',
+  ).toLowerCase();
+
   const city = String(f.lead?.city || '').toLowerCase();
   const zone = String(f.lead?.zone || '').toLowerCase();
   const potential = String(f.lead?.potential || '').toUpperCase();
 
+  const source = String(
+    f.sourceModule || 'FOLLOWUP',
+  ).toUpperCase();
+
+  const status = String(f.status || '').toUpperCase();
+  const dueLabel = getDueLabel(f).toUpperCase();
+
   const matchesName =
-    !nameFilter.trim() || name.includes(nameFilter.trim().toLowerCase());
+    !nameFilter.trim() ||
+    name.includes(nameFilter.trim().toLowerCase());
 
   const matchesPhone =
-    !phoneFilter.trim() || phone.includes(phoneFilter.trim().toLowerCase());
+    !phoneFilter.trim() ||
+    phone.includes(phoneFilter.trim().toLowerCase());
 
   const matchesCity =
-    !cityFilter.trim() || city.includes(cityFilter.trim().toLowerCase());
+    !cityFilter.trim() ||
+    city.includes(cityFilter.trim().toLowerCase());
 
   const matchesZone =
-    !zoneFilter.trim() || zone.includes(zoneFilter.trim().toLowerCase());
+    !zoneFilter.trim() ||
+    zone.includes(zoneFilter.trim().toLowerCase());
 
   const matchesPotential =
-    !potentialFilter || potential === potentialFilter.toUpperCase();
+    !potentialFilter ||
+    potential === potentialFilter.toUpperCase();
+
+  const matchesSource =
+    !sourceFilter || source === sourceFilter;
+
+  const matchesStatus =
+    !statusFilter || status === statusFilter;
+
+  const matchesDue =
+    !dueFilter || dueLabel === dueFilter;
 
   return (
     matchesName &&
     matchesPhone &&
     matchesCity &&
     matchesZone &&
-    matchesPotential
+    matchesPotential &&
+    matchesSource &&
+    matchesStatus &&
+    matchesDue
   );
 });
 
@@ -1198,56 +1223,190 @@ const phone = String(
 
 {selectedDate && (
   <div className="rounded-xl bg-white p-4 shadow">
-    <h3 className="mb-3 font-semibold">
-  Followups on {selectedDate?.format('DD MMMM YYYY')}
-  {selectedFollowups.length > 0 && (
-    <span className="ml-2 text-sm font-normal text-gray-500">
-      ({selectedFollowups.length} items)
-    </span>
-  )}
-</h3>
+    <h3 className="mb-4 font-semibold">
+      Followups on {selectedDate.format('DD MMMM YYYY')}
+
+      <span className="ml-2 text-sm font-normal text-gray-500">
+        ({filteredSelectedFollowups.length} of{' '}
+        {selectedFollowups.length} items)
+      </span>
+    </h3>
 
     {filteredSelectedFollowups.length === 0 ? (
-      <p>No followups for this date</p>
+      <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 text-sm text-gray-600">
+        No followups found for this date and the selected filters
+      </div>
     ) : (
-      filteredSelectedFollowups.map((f) => (
-  <div
-    key={f.id}
-    className={`mb-2 rounded-xl border p-3 ${getSelectedFollowupRowColor(f)}`}
-  >
-    <p className="font-medium">
-      {f.lead?.name || `Lead ${f.leadId}`}
-    </p>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {filteredSelectedFollowups.map((f) => {
+          const customerPhone =
+            getFollowupCustomerPhone(f);
 
-    <p className="text-sm text-gray-600">
-      {f.lead?.phone || ''}
-    </p>
+          return (
+            <div
+              key={f.id}
+              className={`rounded-2xl border p-5 shadow-sm transition hover:shadow-lg ${getSelectedFollowupRowColor(
+                f,
+              )}`}
+            >
+              <div
+                onClick={() =>
+                  router.push(`/followup/${f.id}`)
+                }
+                className="cursor-pointer"
+              >
+                <h3 className="mb-2 text-lg font-semibold text-gray-900">
+                  {getFollowupCustomerName(f)}
+                </h3>
 
-    {getLeadLocationText(f) && (
-  <p className="mt-1 text-sm text-gray-700">
-    {getLeadLocationText(f)}
-  </p>
-)}
+                <div className="mb-3 flex flex-wrap gap-2">
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-semibold ${getSourceColor(
+                      f.sourceModule,
+                    )}`}
+                  >
+                    {getSourceLabel(f.sourceModule)}
+                  </span>
 
-{getLeadPotentialText(f) && (
-  <p className="mt-1 text-sm text-gray-700">
-    Potential: {getLeadPotentialText(f)}
-  </p>
-)}
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-semibold ${getDueColor(
+                      f,
+                    )}`}
+                  >
+                    {getDueLabel(f)}
+                  </span>
 
-    <p className="mt-1 text-sm text-gray-700">
-      {formatDate(f.followUpDate)}
-    </p>
+                  {f.sourceStage && (
+                    <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">
+                      {String(f.sourceStage).replaceAll(
+                        '_',
+                        ' ',
+                      )}
+                    </span>
+                  )}
+                </div>
 
-    {f.note && (
-      <p className="mt-1 text-sm text-gray-700">{f.note}</p>
-    )}
+                {customerPhone && (
+                  <p className="mb-2 text-sm text-gray-700">
+                    {customerPhone}
+                  </p>
+                )}
 
-    <span className={`mt-2 inline-block rounded-full px-3 py-1 text-xs ${getStatusColor(f.status)}`}>
-      {f.status}
-    </span>
-  </div>
-))
+                {getLeadLocationText(f) && (
+                  <p className="mb-2 text-sm text-gray-700">
+                    {getLeadLocationText(f)}
+                  </p>
+                )}
+
+                {getLeadPotentialText(f) && (
+                  <p className="mb-2 text-sm text-gray-700">
+                    <span className="font-medium">
+                      Potential:
+                    </span>{' '}
+                    {getLeadPotentialText(f)}
+                  </p>
+                )}
+
+                <p className="mb-2 text-sm text-gray-700">
+                  <span className="font-medium">
+                    Date:
+                  </span>{' '}
+                  {formatDate(f.followUpDate)}
+                </p>
+
+                <p className="mb-2 text-sm text-gray-700">
+                  <span className="font-medium">
+                    Assigned:
+                  </span>{' '}
+                  {getUserName(f.assignedTo)}
+                </p>
+
+                {f.createdByName && (
+                  <p className="mb-2 text-sm text-gray-700">
+                    <span className="font-medium">
+                      Created By:
+                    </span>{' '}
+                    {f.createdByName}
+                  </p>
+                )}
+
+                {f.note && (
+                  <p className="mb-2 text-sm text-gray-700">
+                    {f.note}
+                  </p>
+                )}
+
+                <span
+                  className={`inline-block rounded-full px-3 py-1 text-xs ${getStatusColor(
+                    f.status,
+                  )}`}
+                >
+                  {f.status}
+                </span>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    router.push(`/followup/${f.id}`)
+                  }
+                  className="rounded bg-blue-600 px-3 py-2 text-sm text-white"
+                >
+                  Open
+                </button>
+
+                {customerPhone && (
+                  <a
+                    href={`tel:${customerPhone}`}
+                    className="rounded bg-emerald-600 px-3 py-2 text-sm text-white"
+                  >
+                    Call
+                  </a>
+                )}
+
+                {getSourceOpenPath(f) && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      router.push(getSourceOpenPath(f))
+                    }
+                    className="rounded bg-gray-700 px-3 py-2 text-sm text-white"
+                  >
+                    {getSourceOpenLabel(f)}
+                  </button>
+                )}
+
+                {String(f.status).toUpperCase() !==
+                  'COMPLETED' && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleMarkCompleted(f.id)
+                    }
+                    className="rounded bg-green-600 px-3 py-2 text-sm text-white"
+                  >
+                    Complete
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleConvertToMeeting(f.id)
+                  }
+                  disabled={convertingId === f.id}
+                  className="rounded bg-purple-600 px-3 py-2 text-sm text-white disabled:opacity-50"
+                >
+                  {convertingId === f.id
+                    ? 'Opening...'
+                    : 'Convert to Meeting'}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     )}
   </div>
 )}
