@@ -11,6 +11,7 @@ import { CalculatorElectricalOption } from './calculator-electrical-option.entit
 import { CalculatorMarginOption } from './calculator-margin-option.entity';
 import { CalculatorHybridOption } from './calculator-hybrid-option.entity';
 import { CalculatorBatteryOption } from './calculator-battery-option.entity';
+import { CalculatorBatterySelection } from './calculator-battery-selection.entity';
 import { CalculatorKitOption } from './calculator-kit-option.entity';
 import { CalculatorExpectedProfit } from './calculator-expected-profit.entity';
 import { CalculatorDiscountOption } from './calculator-discount-option.entity';
@@ -36,6 +37,8 @@ private readonly marginOptionRepository: Repository<CalculatorMarginOption>,
 private readonly hybridOptionRepository: Repository<CalculatorHybridOption>,
 @InjectRepository(CalculatorBatteryOption)
 private readonly batteryOptionRepository: Repository<CalculatorBatteryOption>,
+@InjectRepository(CalculatorBatterySelection)
+private readonly batterySelectionRepository: Repository<CalculatorBatterySelection>,
 @InjectRepository(CalculatorKitOption)
 private readonly kitOptionRepository: Repository<CalculatorKitOption>,
 @InjectRepository(CalculatorExpectedProfit)
@@ -43,6 +46,133 @@ private readonly expectedProfitRepository: Repository<CalculatorExpectedProfit>,
 @InjectRepository(CalculatorDiscountOption)
 private readonly discountOptionRepository: Repository<CalculatorDiscountOption>,
   ) {}
+
+  private async resolveBatterySelections(data: any): Promise<{
+  rows: Array<{
+    batteryOptionId: number;
+    batteryType: string;
+    brandName: string;
+    capacity: number;
+    quantity: number;
+    rate: number;
+    totalCost: number;
+  }>;
+  totalCost: number;
+}> {
+  const requestedSelections = Array.isArray(data?.batterySelections)
+    ? data.batterySelections
+    : [];
+
+  /*
+   * New multi-battery request.
+   */
+  if (requestedSelections.length > 0) {
+    const mergedQuantities = new Map<number, number>();
+
+    for (const selection of requestedSelections) {
+      const batteryOptionId = Number(selection?.batteryOptionId || 0);
+      const quantity = Math.max(Number(selection?.quantity || 0), 1);
+
+      if (!batteryOptionId) {
+        continue;
+      }
+
+      mergedQuantities.set(
+        batteryOptionId,
+        Number(mergedQuantities.get(batteryOptionId) || 0) + quantity,
+      );
+    }
+
+    const rows: Array<{
+      batteryOptionId: number;
+      batteryType: string;
+      brandName: string;
+      capacity: number;
+      quantity: number;
+      rate: number;
+      totalCost: number;
+    }> = [];
+
+    for (const [batteryOptionId, quantity] of mergedQuantities.entries()) {
+      const option = await this.batteryOptionRepository.findOne({
+        where: {
+          id: batteryOptionId,
+        },
+      });
+
+      if (!option) {
+        throw new Error(
+          `Battery option ${batteryOptionId} was not found`,
+        );
+      }
+
+      const rate = Number(option.rate || 0);
+      const totalCost = rate * quantity;
+
+      rows.push({
+        batteryOptionId: Number(option.id),
+        batteryType: String(option.type || ''),
+        brandName: String(option.brandName || ''),
+        capacity: Number(option.capacity || 0),
+        quantity,
+        rate,
+        totalCost,
+      });
+    }
+
+    return {
+      rows,
+      totalCost: rows.reduce(
+        (sum, row) => sum + Number(row.totalCost || 0),
+        0,
+      ),
+    };
+  }
+
+  /*
+   * Backward-compatible single-battery request.
+   */
+  const legacyBatteryOptionId = Number(data?.batteryOptionId || 0);
+
+  if (!legacyBatteryOptionId) {
+    return {
+      rows: [],
+      totalCost: 0,
+    };
+  }
+
+  const option = await this.batteryOptionRepository.findOne({
+    where: {
+      id: legacyBatteryOptionId,
+    },
+  });
+
+  if (!option) {
+    throw new Error(
+      `Battery option ${legacyBatteryOptionId} was not found`,
+    );
+  }
+
+  const quantity = Math.max(Number(data?.batteryQuantity || 1), 1);
+  const rate = Number(option.rate || 0);
+  const totalCost = rate * quantity;
+
+  return {
+    rows: [
+      {
+        batteryOptionId: Number(option.id),
+        batteryType: String(option.type || ''),
+        brandName: String(option.brandName || ''),
+        capacity: Number(option.capacity || 0),
+        quantity,
+        rate,
+        totalCost,
+      },
+    ],
+    totalCost,
+  };
+}
+
 private getHighestCalculatorRole(roles: string[] = []) {
   const priority = [
   'OWNER',
@@ -121,12 +251,6 @@ async calculateProjectCost(data: any, user?: any) {
       })
     : null;
 
-  const batteryOption = data?.batteryOptionId
-    ? await this.batteryOptionRepository.findOne({
-        where: { id: Number(data.batteryOptionId) },
-      })
-    : null;
-
   const kitOption = data?.kitOptionId
     ? await this.kitOptionRepository.findOne({
         where: { id: Number(data.kitOptionId) },
@@ -146,7 +270,6 @@ async calculateProjectCost(data: any, user?: any) {
     electricalOption?.rate ?? settings.electricalRate ?? 0,
   );
   const hybridRate = Number(hybridOption?.rate ?? settings.hybridRate ?? 0);
-  const batteryRate = Number(batteryOption?.rate ?? settings.batteryRate ?? 0);
   const kitRate = Number(kitOption?.rate ?? settings.tataRate ?? 0);
 
   // ===== COSTS =====
@@ -164,7 +287,7 @@ const electricalCapacityKw = Number(
   electricalOption?.capacityKw || data?.electricalWatt || 0,
 );
 const hybridCapacityKw = Number(hybridOption?.capacity || 0);
-const batteryCapacity = Number(batteryOption?.capacity || 0);
+
 const kitCapacity = Number(kitOption?.capacity || 0);
 
 const ongridCost =
@@ -183,8 +306,12 @@ const electricalCost =
 const hybridCost =
   hybridRate * Number(data?.hybridQuantity || 1);
 
-const batteryCost =
-  batteryRate * Number(data?.batteryQuantity || 1);
+const resolvedBatteries =
+  await this.resolveBatterySelections(data);
+
+const batteryCost = Number(
+  resolvedBatteries.totalCost || 0,
+);
 
 const tataCost =
   kitRate * Number(data?.tataQuantity || 1);
@@ -286,6 +413,7 @@ return {
   appliedDiscount,
   discountAdjusted,
   finalCost,
+    batterySelections: resolvedBatteries.rows,
 
   breakdown: {
     panelCost,
@@ -710,30 +838,148 @@ async deleteOngridOption(id: number) {
 }
 
   async create(dto: CreateCalculatorDto, userId?: number) {
-    const calculator = this.calculatorRepository.create({
-      ...dto,
-      createdBy: userId || null,
+  const {
+    batterySelections = [],
+    ...calculatorData
+  } = dto;
+
+  const resolvedBatteries =
+    await this.resolveBatterySelections({
+      ...calculatorData,
+      batterySelections,
     });
 
-    return this.calculatorRepository.save(calculator);
+  const firstBattery =
+    resolvedBatteries.rows.length > 0
+      ? resolvedBatteries.rows[0]
+      : null;
+
+  /*
+   * Existing singular fields are preserved using the first selected
+   * battery so old reports and old proposal fallback logic keep working.
+   */
+  const calculator = this.calculatorRepository.create({
+    ...calculatorData,
+
+    batteryOptionId:
+      firstBattery?.batteryOptionId ??
+      calculatorData.batteryOptionId ??
+      null,
+
+    batteryType:
+      firstBattery?.batteryType ??
+      calculatorData.batteryType ??
+      null,
+
+    batteryStrength:
+      firstBattery
+        ? String(firstBattery.capacity)
+        : calculatorData.batteryStrength ?? null,
+
+    batteryQuantity:
+      firstBattery?.quantity ??
+      Number(calculatorData.batteryQuantity || 0),
+
+    batteryRate:
+      firstBattery?.rate ??
+      Number(calculatorData.batteryRate || 0),
+
+    /*
+     * The legacy calculator-level batteryCost now stores the total cost
+     * of every selected battery row.
+     */
+    batteryCost:
+      resolvedBatteries.rows.length > 0
+        ? resolvedBatteries.totalCost
+        : Number(calculatorData.batteryCost || 0),
+
+    createdBy: userId || null,
+  });
+
+  const savedCalculator =
+    await this.calculatorRepository.save(calculator);
+
+  if (resolvedBatteries.rows.length > 0) {
+    const selectionEntities =
+      resolvedBatteries.rows.map((row) =>
+        this.batterySelectionRepository.create({
+          calculatorId: savedCalculator.id,
+          batteryOptionId: row.batteryOptionId,
+          batteryType: row.batteryType,
+          brandName: row.brandName,
+          capacity: row.capacity,
+          quantity: row.quantity,
+          rate: row.rate,
+          totalCost: row.totalCost,
+        }),
+      );
+
+    await this.batterySelectionRepository.save(
+      selectionEntities,
+    );
   }
+
+  const savedBatterySelections =
+    await this.batterySelectionRepository.find({
+      where: {
+        calculatorId: savedCalculator.id,
+      },
+      order: {
+        id: 'ASC',
+      },
+    });
+
+  return {
+    ...savedCalculator,
+    batterySelections: savedBatterySelections,
+  };
+}
 
   async findAll() {
-    return this.calculatorRepository.find({
-      order: { createdAt: 'DESC' },
-    });
-  }
+  return this.calculatorRepository.find({
+    relations: {
+      batterySelections: true,
+    },
+    order: {
+      createdAt: 'DESC',
+      batterySelections: {
+        id: 'ASC',
+      },
+    },
+  });
+}
 
   async findOne(id: number) {
-    return this.calculatorRepository.findOne({
-      where: { id },
-    });
-  }
+  return this.calculatorRepository.findOne({
+    where: {
+      id,
+    },
+    relations: {
+      batterySelections: true,
+    },
+    order: {
+      batterySelections: {
+        id: 'ASC',
+      },
+    },
+  });
+}
 
   async findByMeetingId(meetingId: number) {
-  const calculators = await this.calculatorRepository.find({
-    where: { meetingId },
-    order: { createdAt: 'DESC' },
+  const calculators =
+  await this.calculatorRepository.find({
+    where: {
+      meetingId,
+    },
+    relations: {
+      batterySelections: true,
+    },
+    order: {
+      createdAt: 'DESC',
+      batterySelections: {
+        id: 'ASC',
+      },
+    },
   });
 
   const enrichedCalculators: any[] = [];

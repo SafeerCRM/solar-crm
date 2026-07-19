@@ -2,9 +2,11 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { CalculatorBatterySelection } from './calculator-battery-selection.entity';
 
 @Entity('calculators')
 export class Calculator {
@@ -216,4 +218,13 @@ appliedDiscount?: number;
 
 @Column({ type: 'decimal', precision: 12, scale: 2, nullable: true })
 finalCost?: number;
+
+@OneToMany(
+  () => CalculatorBatterySelection,
+  (batterySelection) => batterySelection.calculator,
+  {
+    cascade: false,
+  },
+)
+batterySelections?: CalculatorBatterySelection[];
 }

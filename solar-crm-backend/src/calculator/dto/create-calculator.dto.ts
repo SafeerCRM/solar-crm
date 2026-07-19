@@ -1,4 +1,22 @@
-import { IsNumber, IsOptional, IsString } from 'class-validator';
+import {
+  IsArray,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Min,
+  ValidateNested,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class CalculatorBatterySelectionDto {
+  @IsNumber()
+  batteryOptionId: number;
+
+  @IsInt()
+  @Min(1)
+  quantity: number;
+}
 
 export class CreateCalculatorDto {
   @IsOptional()
@@ -238,6 +256,12 @@ hybridOptionId?: number;
 @IsOptional()
 @IsNumber()
 batteryOptionId?: number;
+
+@IsOptional()
+@IsArray()
+@ValidateNested({ each: true })
+@Type(() => CalculatorBatterySelectionDto)
+batterySelections?: CalculatorBatterySelectionDto[];
 
 @IsOptional()
 @IsNumber()

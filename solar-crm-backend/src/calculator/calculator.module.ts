@@ -11,6 +11,7 @@ import { CalculatorElectricalOption } from './calculator-electrical-option.entit
 import { CalculatorMarginOption } from './calculator-margin-option.entity';
 import { CalculatorHybridOption } from './calculator-hybrid-option.entity';
 import { CalculatorBatteryOption } from './calculator-battery-option.entity';
+import { CalculatorBatterySelection } from './calculator-battery-selection.entity';
 import { CalculatorKitOption } from './calculator-kit-option.entity';
 import { CalculatorExpectedProfit } from './calculator-expected-profit.entity';
 import { CalculatorDiscountOption } from './calculator-discount-option.entity';
@@ -26,6 +27,7 @@ import { CalculatorDiscountOption } from './calculator-discount-option.entity';
   CalculatorMarginOption,
   CalculatorHybridOption,
   CalculatorBatteryOption,
+  CalculatorBatterySelection,
   CalculatorKitOption,
   CalculatorExpectedProfit,
   CalculatorDiscountOption,

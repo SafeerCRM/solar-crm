@@ -59,8 +59,18 @@ private readonly hybridOptionRepo: Repository<CalculatorHybridOption>,
 
   if (proposal.calculatorId) {
     calculator = await this.calculatorRepo.findOne({
-      where: { id: proposal.calculatorId },
-    });
+  where: {
+    id: proposal.calculatorId,
+  },
+  relations: {
+    batterySelections: true,
+  },
+  order: {
+    batterySelections: {
+      id: 'ASC',
+    },
+  },
+});
 
     if (calculator) {
       const panelOption = calculator.panelOptionId
@@ -95,8 +105,127 @@ const hybridOption = calculator.hybridOptionId
     })
   : null;
 
+  const savedBatterySelections = Array.isArray(
+  calculator.batterySelections,
+)
+  ? calculator.batterySelections
+      .map((battery: any) => ({
+        id: Number(battery.id || 0),
+
+        batteryOptionId: battery.batteryOptionId
+          ? Number(battery.batteryOptionId)
+          : null,
+
+        batteryType:
+          String(battery.batteryType || '').trim() ||
+          null,
+
+        brandName:
+          String(battery.brandName || '').trim() ||
+          null,
+
+        capacity: Number(battery.capacity || 0),
+
+        quantity: Math.max(
+          Number(battery.quantity || 1),
+          1,
+        ),
+
+        rate: Number(battery.rate || 0),
+
+        totalCost: Number(
+          battery.totalCost ||
+            Number(battery.rate || 0) *
+              Math.max(
+                Number(battery.quantity || 1),
+                1,
+              ),
+        ),
+      }))
+      .filter(
+        (battery: any) =>
+          battery.batteryOptionId ||
+          battery.brandName ||
+          battery.batteryType ||
+          battery.capacity > 0,
+      )
+  : [];
+
+/*
+ * Old calculators contain only the original singular battery fields.
+ * This fallback keeps their existing proposals working.
+ */
+const proposalBatterySelections =
+  savedBatterySelections.length > 0
+    ? savedBatterySelections
+    : calculator.batteryOptionId ||
+        calculator.batteryType ||
+        calculator.batteryStrength
+      ? [
+          {
+            id: 0,
+
+            batteryOptionId:
+              calculator.batteryOptionId
+                ? Number(calculator.batteryOptionId)
+                : null,
+
+            batteryType:
+              String(
+                calculator.batteryType || '',
+              ).trim() || null,
+
+            /*
+             * Older calculators did not store a separate battery brand.
+             * The frontend can therefore fall back to the generic
+             * product title "Battery".
+             */
+            brandName: null,
+
+            capacity: Number(
+              calculator.batteryStrength || 0,
+            ),
+
+            quantity: Math.max(
+              Number(
+                calculator.batteryQuantity || 1,
+              ),
+              1,
+            ),
+
+            rate: Number(
+              calculator.batteryRate || 0,
+            ),
+
+            totalCost: Number(
+              calculator.batteryCost ||
+                Number(
+                  calculator.batteryRate || 0,
+                ) *
+                  Math.max(
+                    Number(
+                      calculator.batteryQuantity ||
+                        1,
+                    ),
+                    1,
+                  ),
+            ),
+          },
+        ]
+      : [];
+
       calculator = {
   ...calculator,
+
+    batterySelections: proposalBatterySelections,
+
+  batteryTotalCost:
+    proposalBatterySelections.reduce(
+      (total: number, battery: any) =>
+        total +
+        Number(battery.totalCost || 0),
+      0,
+    ),
 
   panelDisplayName: panelOption
     ? `${panelOption.brandName} - ${panelOption.capacityWatt}W`
@@ -160,8 +289,18 @@ const hybridOption = calculator.hybridOptionId
 
   async createFromCalculator(calculatorId: number, user: any) {
   const calculator = await this.calculatorRepo.findOne({
-    where: { id: calculatorId },
-  });
+  where: {
+    id: calculatorId,
+  },
+  relations: {
+    batterySelections: true,
+  },
+  order: {
+    batterySelections: {
+      id: 'ASC',
+    },
+  },
+});
 
   if (!calculator) {
     throw new Error('Calculator not found');
