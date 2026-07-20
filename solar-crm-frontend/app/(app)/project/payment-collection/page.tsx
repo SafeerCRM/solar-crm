@@ -50,6 +50,7 @@ export default function PaymentCollectionPage() {
   const [branches, setBranches] = useState<BranchOption[]>([]);
 const [projectOwners, setProjectOwners] = useState<ProjectOwnerOption[]>([]);
   const [loading, setLoading] = useState(false);
+const [exportLoading, setExportLoading] = useState(false);
   const [page, setPage] = useState(1);
 const [totalPages, setTotalPages] = useState(1);
 const [totalRecords, setTotalRecords] = useState(0);
@@ -162,6 +163,184 @@ setSummary({
     setPendingOnly(false);
     setPage(1);
     setTimeout(fetchPayments, 0);
+  };
+
+  const downloadPaymentCollectionCsv =
+  async () => {
+    try {
+      setExportLoading(true);
+
+      const res = await axios.get(
+        `${API_BASE_URL}/project/payment-collection/export-csv`,
+        {
+          params: {
+            branch,
+            customerName: search,
+            projectOwnerId,
+            month,
+            fromDate,
+            toDate,
+            status,
+            approvalStatus,
+            pendingOnly: pendingOnly
+              ? 'true'
+              : '',
+          },
+
+          headers: getAuthHeaders(),
+
+          responseType: 'blob',
+        },
+      );
+
+      const blob = new Blob(
+        [res.data],
+        {
+          type: 'text/csv;charset=utf-8',
+        },
+      );
+
+      const today = new Date()
+        .toLocaleDateString('en-CA', {
+          timeZone: 'Asia/Kolkata',
+        });
+
+      const fileName =
+        `payment-collection-report-${today}.csv`;
+
+      /*
+       * Convert the CSV blob to Base64 so the
+       * Capacitor APK can save and share it.
+       */
+      const arrayBuffer =
+        await blob.arrayBuffer();
+
+      const bytes =
+        new Uint8Array(arrayBuffer);
+
+      let binaryString = '';
+
+      const chunkSize = 8192;
+
+      for (
+        let index = 0;
+        index < bytes.length;
+        index += chunkSize
+      ) {
+        const chunk = bytes.subarray(
+          index,
+          Math.min(
+            index + chunkSize,
+            bytes.length,
+          ),
+        );
+
+        binaryString +=
+          String.fromCharCode(...chunk);
+      }
+
+      const base64 =
+        btoa(binaryString);
+
+      try {
+        const {
+          Filesystem,
+          Directory,
+        } = await import(
+          '@capacitor/filesystem'
+        );
+
+        const { Share } =
+          await import(
+            '@capacitor/share'
+          );
+
+        const saved =
+          await Filesystem.writeFile({
+            path: fileName,
+            data: base64,
+            directory:
+              Directory.Documents,
+            recursive: true,
+          });
+
+        await Share.share({
+          title:
+            'Payment Collection Report',
+
+          text:
+            'Filtered payment collection report',
+
+          url: saved.uri,
+
+          dialogTitle:
+            'Save or share collection report',
+        });
+
+        return;
+      } catch {
+        /*
+         * Browser fallback.
+         */
+        const url =
+          window.URL.createObjectURL(
+            blob,
+          );
+
+        const link =
+          document.createElement('a');
+
+        link.href = url;
+        link.download = fileName;
+
+        document.body.appendChild(link);
+
+        link.click();
+        link.remove();
+
+        window.URL.revokeObjectURL(
+          url,
+        );
+      }
+    } catch (error: any) {
+      console.error(
+        'Failed to download payment collection CSV:',
+        error,
+      );
+
+      let message =
+        'Failed to download payment collection report';
+
+      const responseData =
+        error?.response?.data;
+
+      if (
+        responseData instanceof Blob
+      ) {
+        try {
+          const errorText =
+            await responseData.text();
+
+          const parsed =
+            JSON.parse(errorText);
+
+          message =
+            parsed?.message ||
+            message;
+        } catch {
+          // Keep the default error message.
+        }
+      } else if (
+        responseData?.message
+      ) {
+        message =
+          responseData.message;
+      }
+
+      alert(message);
+    } finally {
+      setExportLoading(false);
+    }
   };
 
   return (
@@ -297,23 +476,46 @@ setSummary({
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          <button
-  onClick={() => {
-    setPage(1);
-    fetchPayments();
-  }}
-            className="rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white"
-          >
-            {loading ? 'Loading...' : 'Apply Filters'}
-          </button>
+  <button
+    onClick={() => {
+      setPage(1);
+      fetchPayments();
+    }}
+    disabled={loading}
+    className="rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+  >
+    {loading
+      ? 'Loading...'
+      : 'Apply Filters'}
+  </button>
 
-          <button
-            onClick={clearFilters}
-            className="rounded-xl bg-gray-200 px-5 py-3 font-semibold text-gray-800"
-          >
-            Clear
-          </button>
-        </div>
+  <button
+    onClick={clearFilters}
+    disabled={
+      loading ||
+      exportLoading
+    }
+    className="rounded-xl bg-gray-200 px-5 py-3 font-semibold text-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
+  >
+    Clear
+  </button>
+
+  <button
+    type="button"
+    onClick={
+      downloadPaymentCollectionCsv
+    }
+    disabled={
+      loading ||
+      exportLoading
+    }
+    className="rounded-xl bg-green-600 px-5 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+  >
+    {exportLoading
+      ? 'Preparing Report...'
+      : 'Download Collection CSV'}
+  </button>
+</div>
       </div>
 
       <div className="rounded-2xl bg-white p-5 shadow">
