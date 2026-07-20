@@ -637,14 +637,189 @@ function HeroMiniCard({ title, value }: { title: string; value: string }) {
 }
 
 function ProjectCard({ project }: { project: any }) {
+  const [gpsLatitude, setGpsLatitude] = useState<number | null>(
+    project.gpsLatitude !== undefined &&
+      project.gpsLatitude !== null &&
+      Number.isFinite(Number(project.gpsLatitude))
+      ? Number(project.gpsLatitude)
+      : null,
+  );
+
+  const [gpsLongitude, setGpsLongitude] = useState<number | null>(
+    project.gpsLongitude !== undefined &&
+      project.gpsLongitude !== null &&
+      Number.isFinite(Number(project.gpsLongitude))
+      ? Number(project.gpsLongitude)
+      : null,
+  );
+
+  const [locationAddress, setLocationAddress] = useState(
+    project.gpsAddress || project.address || '',
+  );
+
+  const [capturingLocation, setCapturingLocation] = useState(false);
+  const [savingLocation, setSavingLocation] = useState(false);
+
+  const hasSavedLocation =
+    gpsLatitude !== null &&
+    gpsLongitude !== null &&
+    Number.isFinite(gpsLatitude) &&
+    Number.isFinite(gpsLongitude);
+
+  const captureCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      alert('Location access is not supported on this device.');
+      return;
+    }
+
+    setCapturingLocation(true);
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const latitude = position.coords.latitude;
+        const longitude = position.coords.longitude;
+
+        setGpsLatitude(latitude);
+        setGpsLongitude(longitude);
+
+        try {
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(
+              String(latitude),
+            )}&lon=${encodeURIComponent(String(longitude))}`,
+            {
+              headers: {
+                Accept: 'application/json',
+              },
+            },
+          );
+
+          if (response.ok) {
+            const data = await response.json();
+
+            setLocationAddress(
+              data?.display_name ||
+                `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
+            );
+          } else {
+            setLocationAddress(
+              `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
+            );
+          }
+        } catch (error) {
+          console.error(error);
+
+          setLocationAddress(
+            `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
+          );
+        } finally {
+          setCapturingLocation(false);
+        }
+      },
+      (error) => {
+        console.error(error);
+        setCapturingLocation(false);
+
+        if (error.code === error.PERMISSION_DENIED) {
+          alert(
+            'Location permission was denied. Please allow location access and try again.',
+          );
+          return;
+        }
+
+        if (error.code === error.POSITION_UNAVAILABLE) {
+          alert(
+            'Your current location could not be determined. Please try again.',
+          );
+          return;
+        }
+
+        if (error.code === error.TIMEOUT) {
+          alert('Location request timed out. Please try again.');
+          return;
+        }
+
+        alert('Unable to capture your current location.');
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 20000,
+        maximumAge: 0,
+      },
+    );
+  };
+
+  const saveProjectLocation = async () => {
+    if (
+      gpsLatitude === null ||
+      gpsLongitude === null ||
+      !Number.isFinite(gpsLatitude) ||
+      !Number.isFinite(gpsLongitude)
+    ) {
+      alert('Please capture your current location first.');
+      return;
+    }
+
+    const token = localStorage.getItem('customer_token');
+
+    if (!token) {
+      window.location.href = '/customer-login';
+      return;
+    }
+
+    try {
+      setSavingLocation(true);
+
+      const response = await fetch(
+        `${API_BASE_URL}/customer-auth/projects/${project.id}/site-location`,
+        {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            address: locationAddress,
+            gpsAddress: locationAddress,
+            gpsLatitude,
+            gpsLongitude,
+          }),
+        },
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        alert(
+          Array.isArray(data?.message)
+            ? data.message.join(', ')
+            : data?.message || 'Failed to save project location.',
+        );
+        return;
+      }
+
+      alert('Project location saved successfully.');
+    } catch (error) {
+      console.error(error);
+      alert('Failed to save project location.');
+    } finally {
+      setSavingLocation(false);
+    }
+  };
+
   return (
     <div className="overflow-hidden rounded-[2rem] bg-white shadow-xl transition hover:-translate-y-1 hover:shadow-2xl">
       <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-5 text-white">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold opacity-80">Project #{project.id}</p>
+            <p className="text-xs font-semibold opacity-80">
+              Project #{project.id}
+            </p>
+
             <h3 className="mt-1 text-xl font-black">
-              {project.projectSize || project.structureCapacityKw || 'Solar Project'}
+              {project.projectSize ||
+                project.structureCapacityKw ||
+                'Solar Project'}
             </h3>
           </div>
 
@@ -656,49 +831,100 @@ function ProjectCard({ project }: { project: any }) {
 
       <div className="space-y-3 p-5">
         <InfoLine label="Customer" value={project.customerName} />
-        <InfoLine label="K Number" value={project.electricityKNumber} />
+        <InfoLine
+          label="K Number"
+          value={project.electricityKNumber}
+        />
         <InfoLine label="Branch" value={project.branchName} />
-        <InfoLine label="Project Owner" value={project.projectOwnerName} />
-        {project.status !== 'COMPLETED' && !project.isLegacyProject && (
-  <InfoLine label="Project Type" value={project.projectType} />
-)}
+        <InfoLine
+          label="Project Owner"
+          value={project.projectOwnerName}
+        />
 
-<div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
-  <div className="flex items-center justify-between gap-3">
-    <div>
-      <p className="text-xs font-bold text-blue-700">
-        📍 Project Site Location
-      </p>
+        {project.status !== 'COMPLETED' &&
+          !project.isLegacyProject && (
+            <InfoLine
+              label="Project Type"
+              value={project.projectType}
+            />
+          )}
 
-      <p className="mt-1 text-sm font-semibold text-gray-800">
-        {project.gpsAddress ||
-          project.address ||
-          'Project location has not been added yet.'}
-      </p>
-    </div>
+        <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+          <p className="text-xs font-bold text-blue-700">
+            📍 Project Site Location
+          </p>
 
-    {project.gpsLatitude &&
-    project.gpsLongitude && (
-      <a
-        href={`https://www.google.com/maps?q=${encodeURIComponent(
-          String(project.gpsLatitude),
-        )},${encodeURIComponent(
-          String(project.gpsLongitude),
-        )}`}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700"
-      >
-        Open Maps
-      </a>
-    )}
-  </div>
-</div>
+          <p className="mt-2 text-sm font-semibold leading-6 text-gray-800">
+            {locationAddress ||
+              'Project location has not been added yet.'}
+          </p>
+
+          {hasSavedLocation && (
+            <p className="mt-2 text-xs font-semibold text-gray-500">
+              Latitude: {gpsLatitude?.toFixed(6)}
+              <br />
+              Longitude: {gpsLongitude?.toFixed(6)}
+            </p>
+          )}
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={captureCurrentLocation}
+              disabled={capturingLocation || savingLocation}
+              className="rounded-xl bg-orange-500 px-3 py-2 text-xs font-bold text-white hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {capturingLocation
+                ? 'Capturing Location...'
+                : hasSavedLocation
+                  ? 'Update Current Location'
+                  : 'Use My Current Location'}
+            </button>
+
+            {hasSavedLocation && (
+              <button
+                type="button"
+                onClick={saveProjectLocation}
+                disabled={capturingLocation || savingLocation}
+                className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {savingLocation
+                  ? 'Saving...'
+                  : project.gpsLatitude &&
+                      project.gpsLongitude
+                    ? 'Update Project Location'
+                    : 'Save Project Location'}
+              </button>
+            )}
+
+            {hasSavedLocation && (
+              <a
+                href={`https://www.google.com/maps?q=${encodeURIComponent(
+                  String(gpsLatitude),
+                )},${encodeURIComponent(
+                  String(gpsLongitude),
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700"
+              >
+                Open Maps
+              </a>
+            )}
+          </div>
+
+          <p className="mt-3 text-xs leading-5 text-gray-500">
+            Save the exact solar plant location so the service,
+            maintenance and cleaning teams can reach the site
+            easily.
+          </p>
+        </div>
 
         <div className="mt-4 rounded-2xl bg-emerald-50 p-4">
           <p className="text-xs font-bold text-emerald-700">
             Current Stage
           </p>
+
           <p className="mt-1 text-lg font-black text-emerald-900">
             {formatStatus(project.status)}
           </p>

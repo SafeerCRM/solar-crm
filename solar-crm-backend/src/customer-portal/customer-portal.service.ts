@@ -3030,4 +3030,49 @@ async getCustomerPaymentReceiptActivities(
     order: { createdAt: 'ASC' },
   });
 }
+
+async updateProjectSiteLocation(
+  customerId: number,
+  projectId: number,
+  body: any,
+) {
+  const project = await this.projectRepository.findOne({
+    where: {
+      id: projectId,
+      customerId,
+      isHidden: false,
+    },
+  });
+
+  if (!project) {
+    throw new NotFoundException(
+      'Project not found or access denied',
+    );
+  }
+
+  project.address = String(body.address || '').trim();
+  project.gpsAddress = String(body.gpsAddress || '').trim();
+  const gpsLatitude = Number(body.gpsLatitude);
+const gpsLongitude = Number(body.gpsLongitude);
+
+if (
+  !Number.isFinite(gpsLatitude) ||
+  !Number.isFinite(gpsLongitude)
+) {
+  throw new BadRequestException(
+    'Valid GPS latitude and longitude are required',
+  );
+}
+
+project.gpsLatitude = gpsLatitude;
+project.gpsLongitude = gpsLongitude;
+
+  await this.projectRepository.save(project);
+
+  return {
+    success: true,
+    message: 'Project site location updated successfully.',
+    project,
+  };
+}
 }

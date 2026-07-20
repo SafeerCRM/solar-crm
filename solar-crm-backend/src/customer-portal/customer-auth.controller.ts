@@ -497,6 +497,39 @@ async getPaymentReceiptActivities(
   );
 }
 
+@Patch('projects/:projectId/site-location')
+async updateProjectSiteLocation(
+  @Req() req: any,
+  @Param('projectId', ParseIntPipe) projectId: number,
+  @Body() body: any,
+) {
+  const authHeader = req.headers?.authorization || '';
+  const token = authHeader.replace('Bearer ', '');
+
+  if (!token) {
+    throw new UnauthorizedException(
+      'Customer token missing',
+    );
+  }
+
+  const payload: any = jwt.verify(
+    token,
+    'mysecretkey',
+  );
+
+  if (!payload?.customerId) {
+    throw new UnauthorizedException(
+      'Invalid customer token',
+    );
+  }
+
+  return this.service.updateProjectSiteLocation(
+    Number(payload.customerId),
+    projectId,
+    body,
+  );
+}
+
 @Patch('change-password')
 async changeCustomerPassword(
   @Req() req: any,
