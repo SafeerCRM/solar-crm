@@ -224,6 +224,44 @@ const [reassignmentPage, setReassignmentPage] =
 const [reassignmentTotalPages, setReassignmentTotalPages] =
   useState(1);
 
+  const [reassignmentName, setReassignmentName] = useState('');
+const [reassignmentPhone, setReassignmentPhone] = useState('');
+const [reassignmentCity, setReassignmentCity] = useState('');
+const [reassignmentZone, setReassignmentZone] = useState('');
+
+const [
+  reassignmentContactStatus,
+  setReassignmentContactStatus,
+] = useState('');
+
+const [
+  reassignmentCallStatus,
+  setReassignmentCallStatus,
+] = useState('');
+
+const [reassignmentStage, setReassignmentStage] =
+  useState('');
+
+const [
+  reassignmentSourceModule,
+  setReassignmentSourceModule,
+] = useState('');
+
+const [
+  reassignmentHasCalled,
+  setReassignmentHasCalled,
+] = useState('');
+
+const [
+  reassignmentConverted,
+  setReassignmentConverted,
+] = useState('');
+
+const [
+  reassignmentStorageState,
+  setReassignmentStorageState,
+] = useState('');
+
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const resumeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -439,17 +477,19 @@ const fetchContactHistory = async (
 };
 
 const fetchReassignmentContacts = async (
-  page = 1,
+  requestedPage = 1,
 ) => {
   if (!fromTelecallerId) {
     setReassignmentContacts([]);
     setReassignmentTotal(0);
+    setReassignmentPage(1);
     setReassignmentTotalPages(1);
     return;
   }
 
   try {
     setTransferLoading(true);
+    setHistoryMessage('');
 
     const res =
       await axios.get<ContactHistoryResponse>(
@@ -458,51 +498,54 @@ const fetchReassignmentContacts = async (
           params: {
             mode: 'reassignment',
 
-            page,
-
+            page: requestedPage,
             limit: historyLimit,
 
             telecallerId:
               Number(fromTelecallerId),
 
             name:
-              historyName || undefined,
+              reassignmentName.trim() ||
+              undefined,
 
             phone:
-              historyPhone || undefined,
+              reassignmentPhone.trim() ||
+              undefined,
 
             city:
-              historyCity || undefined,
+              reassignmentCity.trim() ||
+              undefined,
 
             zone:
-              historyZone || undefined,
+              reassignmentZone.trim() ||
+              undefined,
 
             contactStatus:
-              historyContactStatus ||
+              reassignmentContactStatus ||
               undefined,
 
             callStatus:
-              historyCallStatus ||
+              reassignmentCallStatus ||
               undefined,
 
             stage:
-              historyStage ||
+              reassignmentStage ||
               undefined,
 
             sourceModule:
-              historySourceModule ||
+              reassignmentSourceModule.trim() ||
               undefined,
 
             hasCalled:
-              historyHasCalled ||
+              reassignmentHasCalled ||
               undefined,
 
             convertedToLead:
-              historyConverted ||
+              reassignmentConverted ||
               undefined,
 
             storageState:
-              historyStorageState ||
+              reassignmentStorageState ||
               undefined,
           },
 
@@ -510,20 +553,47 @@ const fetchReassignmentContacts = async (
         },
       );
 
+    const loadedContacts =
+      Array.isArray(res.data?.data)
+        ? res.data.data
+        : [];
+
     setReassignmentContacts(
-      res.data.data || [],
+      loadedContacts,
     );
 
     setReassignmentTotal(
-      res.data.total || 0,
+      Number(res.data?.total || 0),
     );
 
     setReassignmentPage(
-      res.data.page || 1,
+      Number(
+        res.data?.page ||
+          requestedPage,
+      ),
     );
 
     setReassignmentTotalPages(
-      res.data.totalPages || 1,
+      Number(
+        res.data?.totalPages || 1,
+      ),
+    );
+  } catch (err: any) {
+    console.error(err);
+
+    setReassignmentContacts([]);
+    setReassignmentTotal(0);
+    setReassignmentPage(1);
+    setReassignmentTotalPages(1);
+
+    const errorMessage =
+      err?.response?.data?.message;
+
+    setHistoryMessage(
+      Array.isArray(errorMessage)
+        ? errorMessage.join(', ')
+        : errorMessage ||
+            'Failed to load reassignment contacts.',
     );
   } finally {
     setTransferLoading(false);
@@ -615,29 +685,19 @@ const reassignSelectedContacts = async () => {
 
     setSelectedHistoryContactIds([]);
 
-    await fetchReassignmentContacts(
-  reassignmentPage,
+const remainingOnPage =
+  reassignmentContacts.length -
+  selectedHistoryContactIds.length;
+
+const pageToReload =
+  remainingOnPage <= 0 &&
+  reassignmentPage > 1
+    ? reassignmentPage - 1
+    : reassignmentPage;
+
+await fetchReassignmentContacts(
+  pageToReload,
 );
-
-if (
-  Number(fromTelecallerId) !==
-  Number(toTelecallerId)
-) {
-  const previousFrom =
-    fromTelecallerId;
-
-  setFromTelecallerId(
-    toTelecallerId,
-  );
-
-  await new Promise((resolve) =>
-    setTimeout(resolve, 50),
-  );
-
-  setFromTelecallerId(
-    previousFrom,
-  );
-}
 
 await fetchContacts();
   } catch (err: any) {
@@ -665,25 +725,24 @@ useEffect(() => {
     return;
   }
 
-  fetchReassignmentContacts(1);
+  setSelectedHistoryContactIds([]);
+  setReassignmentPage(1);
 
-  // eslint-disable-next-line
+  if (!fromTelecallerId) {
+    setReassignmentContacts([]);
+    setReassignmentTotal(0);
+    setReassignmentTotalPages(1);
+    return;
+  }
+
+  void fetchReassignmentContacts(1);
+
+  // Load only when the From telecaller changes.
+  // Filters are loaded through the Apply Filters button.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [
+  historyWorkspaceTab,
   fromTelecallerId,
-
-  historyName,
-  historyPhone,
-  historyCity,
-  historyZone,
-
-  historyContactStatus,
-  historyCallStatus,
-  historyStage,
-  historySourceModule,
-
-  historyHasCalled,
-  historyConverted,
-  historyStorageState,
 ]);
 
 const openContactHistory = async () => {
@@ -709,10 +768,181 @@ const closeContactHistory = () => {
   setSelectedHistoryContactIds([]);
 
   setFromTelecallerId('');
-  setToTelecallerId('');
+setToTelecallerId('');
 
-  setHistoryMessage('');
+setReassignmentName('');
+setReassignmentPhone('');
+setReassignmentCity('');
+setReassignmentZone('');
+
+setReassignmentContactStatus('');
+setReassignmentCallStatus('');
+setReassignmentStage('');
+setReassignmentSourceModule('');
+
+setReassignmentHasCalled('');
+setReassignmentConverted('');
+setReassignmentStorageState('');
+
+setReassignmentContacts([]);
+setReassignmentTotal(0);
+setReassignmentPage(1);
+setReassignmentTotalPages(1);
+
+setHistoryMessage('');
 };
+
+const applyReassignmentFilters =
+  async () => {
+    if (!fromTelecallerId) {
+      setHistoryMessage(
+        'Select the From telecaller first.',
+      );
+      return;
+    }
+
+    setSelectedHistoryContactIds([]);
+    setReassignmentPage(1);
+
+    await fetchReassignmentContacts(1);
+  };
+
+const resetReassignmentFilters =
+  async () => {
+    setReassignmentName('');
+    setReassignmentPhone('');
+    setReassignmentCity('');
+    setReassignmentZone('');
+
+    setReassignmentContactStatus('');
+    setReassignmentCallStatus('');
+    setReassignmentStage('');
+    setReassignmentSourceModule('');
+
+    setReassignmentHasCalled('');
+    setReassignmentConverted('');
+    setReassignmentStorageState('');
+
+    setSelectedHistoryContactIds([]);
+    setReassignmentPage(1);
+    setHistoryMessage('');
+
+    if (!fromTelecallerId) {
+      setReassignmentContacts([]);
+      setReassignmentTotal(0);
+      setReassignmentTotalPages(1);
+      return;
+    }
+
+    try {
+      setTransferLoading(true);
+
+      const res =
+        await axios.get<ContactHistoryResponse>(
+          `${backendUrl}/telecalling/contacts/history`,
+          {
+            params: {
+              mode: 'reassignment',
+              page: 1,
+              limit: historyLimit,
+              telecallerId:
+                Number(fromTelecallerId),
+            },
+            headers: getAuthHeaders(),
+          },
+        );
+
+      setReassignmentContacts(
+        Array.isArray(res.data?.data)
+          ? res.data.data
+          : [],
+      );
+
+      setReassignmentTotal(
+        Number(res.data?.total || 0),
+      );
+
+      setReassignmentPage(1);
+
+      setReassignmentTotalPages(
+        Number(
+          res.data?.totalPages || 1,
+        ),
+      );
+    } catch (err: any) {
+      console.error(err);
+
+      setReassignmentContacts([]);
+      setReassignmentTotal(0);
+      setReassignmentTotalPages(1);
+
+      const errorMessage =
+        err?.response?.data?.message;
+
+      setHistoryMessage(
+        Array.isArray(errorMessage)
+          ? errorMessage.join(', ')
+          : errorMessage ||
+              'Failed to reset reassignment filters.',
+      );
+    } finally {
+      setTransferLoading(false);
+    }
+  };
+
+const allReassignmentPageSelected =
+  reassignmentContacts.length > 0 &&
+  reassignmentContacts.every(
+    (contact) =>
+      selectedHistoryContactIds.includes(
+        contact.id,
+      ),
+  );
+
+const toggleAllReassignmentPage =
+  () => {
+    const currentPageIds =
+      reassignmentContacts.map(
+        (contact) => contact.id,
+      );
+
+    if (allReassignmentPageSelected) {
+      const currentPageIdSet =
+        new Set(currentPageIds);
+
+      setSelectedHistoryContactIds(
+        (previous) =>
+          previous.filter(
+            (id) =>
+              !currentPageIdSet.has(id),
+          ),
+      );
+
+      return;
+    }
+
+    setSelectedHistoryContactIds(
+      (previous) =>
+        Array.from(
+          new Set([
+            ...previous,
+            ...currentPageIds,
+          ]),
+        ),
+    );
+  };
+
+const toggleReassignmentContact =
+  (contactId: number) => {
+    setSelectedHistoryContactIds(
+      (previous) =>
+        previous.includes(contactId)
+          ? previous.filter(
+              (id) => id !== contactId,
+            )
+          : [...previous, contactId],
+    );
+  };
 
 const applyContactHistoryFilters = async () => {
   setHistoryPage(1);
@@ -2705,193 +2935,594 @@ const transferContacts = async () => {
         ) : null}
         </>
         )}
-        {historyWorkspaceTab === 'reassignment' && (
-  <div className="rounded-3xl bg-white p-8 shadow-sm">
-    <h3 className="text-xl font-bold text-gray-900">
-      Contact Reassignment
-    </h3>
+        {historyWorkspaceTab ===
+  'reassignment' && (
+  <div className="space-y-4">
+    {historyMessage ? (
+      <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        {historyMessage}
+      </div>
+    ) : null}
 
-    <p className="mt-2 text-sm text-gray-500">
-      This workspace will allow managers to transfer
-      selected or filtered contacts between telecallers
-      without affecting the active contact queue.
-    </p>
-
-    <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2">
+    <div className="rounded-3xl bg-white p-4 shadow-sm">
       <div>
-        <label className="mb-2 block text-sm font-semibold text-gray-700">
-          From Telecaller
-        </label>
+        <h3 className="text-lg font-semibold text-gray-900">
+          Contact Reassignment
+        </h3>
 
-        <select
-          value={fromTelecallerId}
-          onChange={(e) =>
-            setFromTelecallerId(e.target.value)
-          }
-          className="w-full rounded-2xl border border-gray-200 p-3"
-        >
-          <option value="">Select</option>
-
-          {users.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.name}
-            </option>
-          ))}
-        </select>
+        <p className="mt-1 text-sm text-gray-500">
+          Select the current telecaller,
+          apply filters, select the required
+          contacts and transfer them.
+        </p>
       </div>
 
-      <div>
-        <label className="mb-2 block text-sm font-semibold text-gray-700">
-          To Telecaller
-        </label>
-
-        <select
-          value={toTelecallerId}
-          onChange={(e) =>
-            setToTelecallerId(e.target.value)
-          }
-          className="w-full rounded-2xl border border-gray-200 p-3"
-        >
-          <option value="">Select</option>
-
-          {users
-            .filter(
-              (u) =>
-                String(u.id) !== fromTelecallerId,
-            )
-            .map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name}
-              </option>
-            ))}
-        </select>
-      </div>
-    </div>
-
-    <div className="mt-8 rounded-2xl bg-gray-50 p-5">
-
-  <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-  <div>
-    <h4 className="font-semibold text-gray-900">
-      Contacts
-    </h4>
-
-    <p className="mt-1 text-sm text-gray-500">
-      Total: {reassignmentTotal} · Selected:{' '}
-      {selectedHistoryContactIds.length}
-    </p>
-  </div>
-
-  <div className="flex flex-wrap gap-2">
-    <button
-      type="button"
-      onClick={() =>
-        setSelectedHistoryContactIds([])
-      }
-      disabled={
-        transferLoading ||
-        selectedHistoryContactIds.length === 0
-      }
-      className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
-    >
-      Clear Selection
-    </button>
-
-    <button
-      type="button"
-      onClick={reassignSelectedContacts}
-      disabled={
-        transferLoading ||
-        !fromTelecallerId ||
-        !toTelecallerId ||
-        selectedHistoryContactIds.length === 0 ||
-        Number(fromTelecallerId) ===
-          Number(toTelecallerId)
-      }
-      className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-    >
-      {transferLoading
-        ? 'Transferring...'
-        : `Transfer Selected (${selectedHistoryContactIds.length})`}
-    </button>
-  </div>
-</div>
-
-  {reassignmentContacts.length === 0 ? (
-
-    <div className="py-10 text-center text-gray-500">
-
-      Select a telecaller to load contacts.
-
-    </div>
-
-  ) : (
-
-    <div className="space-y-3">
-
-      {reassignmentContacts.map(
-        (contact) => (
-
-          <label
-            key={contact.id}
-            className="flex cursor-pointer items-start gap-3 rounded-xl border bg-white p-4"
-          >
-
-            <input
-              type="checkbox"
-              checked={selectedHistoryContactIds.includes(
-                contact.id,
-              )}
-              onChange={(e) => {
-                if (e.target.checked) {
-                  setSelectedHistoryContactIds(
-                    (prev) => [
-                      ...prev,
-                      contact.id,
-                    ],
-                  );
-                } else {
-                  setSelectedHistoryContactIds(
-                    (prev) =>
-                      prev.filter(
-                        (id) =>
-                          id !== contact.id,
-                      ),
-                  );
-                }
-              }}
-            />
-
-            <div>
-
-              <div className="font-semibold">
-                {contact.name}
-              </div>
-
-              <div className="text-sm text-gray-500">
-
-                {contact.phone}
-
-              </div>
-
-              <div className="mt-1 text-xs">
-
-                {contact.city} • {contact.zone}
-
-              </div>
-
-            </div>
-
+      <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-gray-700">
+            From Telecaller
           </label>
 
-        ),
-      )}
+          <select
+            value={fromTelecallerId}
+            onChange={(e) => {
+              const value =
+                e.target.value;
 
+              setFromTelecallerId(value);
+              setToTelecallerId('');
+              setSelectedHistoryContactIds(
+                [],
+              );
+              setReassignmentPage(1);
+            }}
+            className="w-full rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-blue-500 focus:bg-white"
+          >
+            <option value="">
+              Select From Telecaller
+            </option>
+
+            {users.map((user) => (
+              <option
+                key={user.id}
+                value={user.id}
+              >
+                {user.id} - {user.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-gray-700">
+            To Telecaller
+          </label>
+
+          <select
+            value={toTelecallerId}
+            onChange={(e) =>
+              setToTelecallerId(
+                e.target.value,
+              )
+            }
+            disabled={!fromTelecallerId}
+            className="w-full rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-blue-500 focus:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <option value="">
+              Select To Telecaller
+            </option>
+
+            {users
+              .filter(
+                (user) =>
+                  String(user.id) !==
+                  fromTelecallerId,
+              )
+              .map((user) => (
+                <option
+                  key={user.id}
+                  value={user.id}
+                >
+                  {user.id} - {user.name}
+                </option>
+              ))}
+          </select>
+        </div>
+      </div>
     </div>
 
-  )}
+    <div className="rounded-3xl bg-white p-4 shadow-sm">
+      <div className="mb-4">
+        <h3 className="text-lg font-semibold text-gray-900">
+          Reassignment Filters
+        </h3>
 
-</div>
+        <p className="text-sm text-gray-500">
+          Every selected filter is applied
+          together.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <input
+          value={reassignmentName}
+          onChange={(e) =>
+            setReassignmentName(
+              e.target.value,
+            )
+          }
+          placeholder="Contact name"
+          className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-blue-500 focus:bg-white"
+        />
+
+        <input
+          value={reassignmentPhone}
+          onChange={(e) =>
+            setReassignmentPhone(
+              e.target.value,
+            )
+          }
+          placeholder="Phone number"
+          className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-blue-500 focus:bg-white"
+        />
+
+        <input
+          value={reassignmentCity}
+          onChange={(e) =>
+            setReassignmentCity(
+              e.target.value,
+            )
+          }
+          placeholder="City"
+          className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-blue-500 focus:bg-white"
+        />
+
+        <input
+          value={reassignmentZone}
+          onChange={(e) =>
+            setReassignmentZone(
+              e.target.value,
+            )
+          }
+          placeholder="Zone"
+          className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-blue-500 focus:bg-white"
+        />
+
+        <select
+          value={
+            reassignmentContactStatus
+          }
+          onChange={(e) =>
+            setReassignmentContactStatus(
+              e.target.value,
+            )
+          }
+          className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-blue-500 focus:bg-white"
+        >
+          <option value="">
+            All Contact Statuses
+          </option>
+          <option value="NEW">New</option>
+          <option value="CONVERTED">
+            Converted
+          </option>
+        </select>
+
+        <select
+          value={reassignmentCallStatus}
+          onChange={(e) =>
+            setReassignmentCallStatus(
+              e.target.value,
+            )
+          }
+          className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-blue-500 focus:bg-white"
+        >
+          <option value="">
+            All Latest Call Statuses
+          </option>
+          <option value="INTERESTED">
+            Interested
+          </option>
+          <option value="NOT_INTERESTED">
+            Not Interested
+          </option>
+          <option value="CALLBACK">
+            Callback
+          </option>
+          <option value="CONNECTED">
+            Connected
+          </option>
+          <option value="CNR">CNR</option>
+          <option value="NO_RESPONSE">
+            No Response
+          </option>
+          <option value="PROPOSAL_SENT">
+            Proposal Sent
+          </option>
+          <option value="BUSY">Busy</option>
+          <option value="SWITCH_OFF">
+            Switch Off
+          </option>
+          <option value="WRONG_NUMBER">
+            Wrong Number
+          </option>
+        </select>
+
+        <select
+          value={reassignmentStage}
+          onChange={(e) =>
+            setReassignmentStage(
+              e.target.value,
+            )
+          }
+          className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-blue-500 focus:bg-white"
+        >
+          <option value="">
+            All Stages
+          </option>
+          <option value="TELECALLING">
+            Telecalling
+          </option>
+          <option value="REVIEW">
+            Review
+          </option>
+          <option value="LEAD">Lead</option>
+          <option value="MEETING">
+            Meeting
+          </option>
+          <option value="PROJECT">
+            Project
+          </option>
+        </select>
+
+        <input
+          value={reassignmentSourceModule}
+          onChange={(e) =>
+            setReassignmentSourceModule(
+              e.target.value,
+            )
+          }
+          placeholder="Source module"
+          className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-blue-500 focus:bg-white"
+        />
+
+        <select
+          value={reassignmentHasCalled}
+          onChange={(e) =>
+            setReassignmentHasCalled(
+              e.target.value,
+            )
+          }
+          className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-blue-500 focus:bg-white"
+        >
+          <option value="">
+            Called: All
+          </option>
+          <option value="true">
+            Called: Yes
+          </option>
+          <option value="false">
+            Called: No
+          </option>
+        </select>
+
+        <select
+          value={reassignmentConverted}
+          onChange={(e) =>
+            setReassignmentConverted(
+              e.target.value,
+            )
+          }
+          className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-blue-500 focus:bg-white"
+        >
+          <option value="">
+            Conversion: All
+          </option>
+          <option value="true">
+            Converted
+          </option>
+          <option value="false">
+            Not Converted
+          </option>
+        </select>
+
+        <select
+          value={
+            reassignmentStorageState
+          }
+          onChange={(e) =>
+            setReassignmentStorageState(
+              e.target.value,
+            )
+          }
+          className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-blue-500 focus:bg-white"
+        >
+          <option value="">
+            Active / Storage: All
+          </option>
+          <option value="ACTIVE">
+            Active
+          </option>
+          <option value="STORAGE">
+            Storage
+          </option>
+        </select>
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={
+            applyReassignmentFilters
+          }
+          disabled={
+            transferLoading ||
+            !fromTelecallerId
+          }
+          className="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {transferLoading
+            ? 'Loading...'
+            : 'Apply Filters'}
+        </button>
+
+        <button
+          type="button"
+          onClick={
+            resetReassignmentFilters
+          }
+          disabled={transferLoading}
+          className="rounded-2xl bg-gray-200 px-5 py-3 text-sm font-semibold text-gray-700 disabled:opacity-50"
+        >
+          Reset Filters
+        </button>
+      </div>
+    </div>
+
+    <div className="rounded-3xl bg-white p-4 shadow-sm">
+      <div className="flex flex-col gap-4 border-b border-gray-100 pb-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h4 className="font-semibold text-gray-900">
+            Filtered Contacts
+          </h4>
+
+          <p className="mt-1 text-sm text-gray-500">
+            Filtered total:{' '}
+            {reassignmentTotal} · Current
+            page:{' '}
+            {reassignmentContacts.length} ·
+            Selected:{' '}
+            {
+              selectedHistoryContactIds.length
+            }
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={
+              toggleAllReassignmentPage
+            }
+            disabled={
+              transferLoading ||
+              reassignmentContacts.length ===
+                0
+            }
+            className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {allReassignmentPageSelected
+              ? 'Unselect Current Page'
+              : 'Select Current Page'}
+          </button>
+
+          <button
+            type="button"
+            onClick={() =>
+              setSelectedHistoryContactIds(
+                [],
+              )
+            }
+            disabled={
+              transferLoading ||
+              selectedHistoryContactIds.length ===
+                0
+            }
+            className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Clear Selection
+          </button>
+
+          <button
+            type="button"
+            onClick={
+              reassignSelectedContacts
+            }
+            disabled={
+              transferLoading ||
+              !fromTelecallerId ||
+              !toTelecallerId ||
+              selectedHistoryContactIds.length ===
+                0 ||
+              Number(fromTelecallerId) ===
+                Number(toTelecallerId)
+            }
+            className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {transferLoading
+              ? 'Processing...'
+              : `Transfer Selected (${selectedHistoryContactIds.length})`}
+          </button>
+        </div>
+      </div>
+
+      {!fromTelecallerId ? (
+        <div className="py-10 text-center text-gray-500">
+          Select the From Telecaller to
+          load assigned contacts.
+        </div>
+      ) : transferLoading &&
+        reassignmentContacts.length === 0 ? (
+        <div className="py-10 text-center text-gray-500">
+          Loading contacts...
+        </div>
+      ) : reassignmentContacts.length ===
+        0 ? (
+        <div className="py-10 text-center text-gray-500">
+          No contacts match the selected
+          filters.
+        </div>
+      ) : (
+        <div className="mt-4 space-y-3">
+          {reassignmentContacts.map(
+            (contact) => {
+              const selected =
+                selectedHistoryContactIds.includes(
+                  contact.id,
+                );
+
+              return (
+                <label
+                  key={contact.id}
+                  className={`block cursor-pointer rounded-2xl border p-4 transition ${
+                    selected
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-gray-200 bg-gray-50 hover:border-blue-300'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={() =>
+                        toggleReassignmentContact(
+                          contact.id,
+                        )
+                      }
+                      className="mt-1 h-4 w-4"
+                    />
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <p className="font-semibold text-gray-900">
+                            {contact.name || '-'}
+                          </p>
+
+                          <p className="text-sm text-gray-600">
+                            {contact.phone || '-'}
+                          </p>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-700">
+                            {contact.status ||
+                              'NO STATUS'}
+                          </span>
+
+                          <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-700">
+                            {contact.latestCallStatus ||
+                              'NOT CALLED'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 grid grid-cols-1 gap-2 text-sm text-gray-600 sm:grid-cols-2 lg:grid-cols-4">
+                        <p>
+                          <span className="font-medium">
+                            City:
+                          </span>{' '}
+                          {contact.city || '-'}
+                        </p>
+
+                        <p>
+                          <span className="font-medium">
+                            Zone:
+                          </span>{' '}
+                          {contact.zone || '-'}
+                        </p>
+
+                        <p>
+                          <span className="font-medium">
+                            Stage:
+                          </span>{' '}
+                          {contact.stage || '-'}
+                        </p>
+
+                        <p>
+                          <span className="font-medium">
+                            Source:
+                          </span>{' '}
+                          {contact.sourceModule ||
+                            '-'}
+                        </p>
+                      </div>
+
+                      <p className="mt-2 text-xs text-gray-500">
+                        Latest activity:{' '}
+                        {formatHistoryDate(
+                          contact.latestActivityAt,
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </label>
+              );
+            },
+          )}
+        </div>
+      )}
+    </div>
+
+    {reassignmentTotalPages > 1 ? (
+      <div className="flex flex-col gap-3 rounded-3xl bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-gray-600">
+          Page {reassignmentPage} of{' '}
+          {reassignmentTotalPages}
+        </p>
+
+        <div className="flex gap-2">
+          <button
+            type="button"
+            disabled={
+              transferLoading ||
+              reassignmentPage <= 1
+            }
+            onClick={async () => {
+              const nextPage =
+                reassignmentPage - 1;
+
+              await fetchReassignmentContacts(
+                nextPage,
+              );
+            }}
+            className="rounded-2xl bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 disabled:opacity-40"
+          >
+            Previous
+          </button>
+
+          <button
+            type="button"
+            disabled={
+              transferLoading ||
+              reassignmentPage >=
+                reassignmentTotalPages
+            }
+            onClick={async () => {
+              const nextPage =
+                reassignmentPage + 1;
+
+              await fetchReassignmentContacts(
+                nextPage,
+              );
+            }}
+            className="rounded-2xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    ) : null}
   </div>
 )}
       </div>
