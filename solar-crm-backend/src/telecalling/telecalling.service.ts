@@ -3262,54 +3262,42 @@ private buildRecycleEligibleContactsQuery(
    * or contact.createdAt as a call date.
    */
   const latestCallSubQuery =
-    this.contactCallHistoryRepository
-      .createQueryBuilder('history')
-      .select(
-        'DISTINCT ON (history."contactId") history."contactId"',
-        'contactId',
-      )
-      .addSelect(
-        'history.id',
-        'historyId',
-      )
-      .addSelect(
-        'history."callStatus"',
-        'callStatus',
-      )
-      .addSelect(
-        'history.notes',
-        'notes',
-      )
-      .addSelect(
-        'history."calledBy"',
-        'calledBy',
-      )
-      .addSelect(
-        'history."calledByName"',
-        'calledByName',
-      )
-      .addSelect(
-        `COALESCE(
-          history."updatedAt",
-          history."createdAt"
-        )`,
-        'latestCallAt',
-      )
-      .orderBy(
-        'history."contactId"',
-        'ASC',
-      )
-      .addOrderBy(
-        `COALESCE(
-          history."updatedAt",
-          history."createdAt"
-        )`,
-        'DESC',
-      )
-      .addOrderBy(
-        'history.id',
-        'DESC',
-      );
+  this.contactCallHistoryRepository
+    .createQueryBuilder('history')
+    .select([
+      `DISTINCT ON (history."contactId")
+       history."contactId" AS "contactId"`,
+
+      `history.id AS "historyId"`,
+
+      `history."callStatus" AS "callStatus"`,
+
+      `history.notes AS "notes"`,
+
+      `history."calledBy" AS "calledBy"`,
+
+      `history."calledByName" AS "calledByName"`,
+
+      `COALESCE(
+        history."updatedAt",
+        history."createdAt"
+      ) AS "latestCallAt"`,
+    ])
+    .orderBy(
+      'history."contactId"',
+      'ASC',
+    )
+    .addOrderBy(
+      `COALESCE(
+        history."updatedAt",
+        history."createdAt"
+      )`,
+      'DESC',
+    )
+    .addOrderBy(
+      'history.id',
+      'DESC',
+    );
 
   const qb =
     this.telecallingContactRepository
