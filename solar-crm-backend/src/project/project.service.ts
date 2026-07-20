@@ -22484,6 +22484,482 @@ ewayBillNumber: '',
   };
 }
 
+async getEpcCustomerInvoiceRegister(
+  query: any = {},
+) {
+  const page = Math.max(
+    Number(query?.page || 1),
+    1,
+  );
+
+  const limit = Math.min(
+    Math.max(
+      Number(query?.limit || 20),
+      1,
+    ),
+    100,
+  );
+
+  const skip =
+    (page - 1) * limit;
+
+  const search = String(
+    query?.search || '',
+  ).trim();
+
+  const status = String(
+    query?.status ||
+      ProjectEpcCustomerInvoiceStatus.GENERATED,
+  )
+    .trim()
+    .toUpperCase();
+
+  const branch = String(
+    query?.branch || '',
+  ).trim();
+
+  const projectOwnerId = Number(
+    query?.projectOwnerId || 0,
+  );
+
+  const createdBy = Number(
+    query?.createdBy || 0,
+  );
+
+  const fromDate = String(
+    query?.fromDate || '',
+  ).trim();
+
+  const toDate = String(
+    query?.toDate || '',
+  ).trim();
+
+  const visibility = String(
+    query?.visibility || 'ACTIVE',
+  )
+    .trim()
+    .toUpperCase();
+
+  const qb =
+    this.projectEpcCustomerInvoiceRepository
+      .createQueryBuilder('invoice')
+      .leftJoin(
+        Project,
+        'project',
+        'project.id = invoice.projectId',
+      )
+      .select([
+        'invoice.id AS "id"',
+        'invoice.projectId AS "projectId"',
+        'invoice.invoiceNumber AS "invoiceNumber"',
+        'invoice.invoiceDate AS "invoiceDate"',
+        'invoice.status AS "status"',
+
+        'invoice.billToName AS "billToName"',
+        'invoice.billToPhone AS "billToPhone"',
+
+        'invoice.taxableAmount AS "taxableAmount"',
+        'invoice.cgstAmount AS "cgstAmount"',
+        'invoice.sgstAmount AS "sgstAmount"',
+        'invoice.totalTaxAmount AS "totalTaxAmount"',
+        'invoice.roundOff AS "roundOff"',
+        'invoice.grandTotal AS "grandTotal"',
+
+        'invoice.createdBy AS "createdBy"',
+        'invoice.createdByName AS "createdByName"',
+        'invoice.isHidden AS "isHidden"',
+        'invoice.createdAt AS "createdAt"',
+        'invoice.updatedAt AS "updatedAt"',
+
+        'project.customerName AS "customerName"',
+        'project.customerPhone AS "customerPhone"',
+        'project.branchName AS "branchName"',
+        'project.projectOwnerId AS "projectOwnerId"',
+        'project.projectOwnerName AS "projectOwnerName"',
+        'project.projectOwnerRole AS "projectOwnerRole"',
+        'project.status AS "projectStatus"',
+        'project.projectType AS "projectType"',
+      ]);
+
+  /*
+   * Active invoices are shown by default.
+   * Hidden invoices remain available through
+   * the dedicated hidden filter.
+   */
+  if (visibility === 'HIDDEN') {
+    qb.where(
+      'invoice.isHidden = true',
+    );
+  } else if (
+    visibility === 'ALL'
+  ) {
+    qb.where('1 = 1');
+  } else {
+    qb.where(
+      'invoice.isHidden = false',
+    );
+  }
+
+  /*
+   * GENERATED is the default register view.
+   * Passing status=ALL allows management to
+   * view drafts and cancelled invoices too.
+   */
+  if (
+    status &&
+    status !== 'ALL'
+  ) {
+    qb.andWhere(
+      'invoice.status = :status',
+      {
+        status,
+      },
+    );
+  }
+
+  if (search) {
+    qb.andWhere(
+      `(
+        LOWER(
+          COALESCE(
+            invoice."invoiceNumber",
+            ''
+          )
+        ) LIKE :search
+        OR LOWER(
+          COALESCE(
+            invoice."billToName",
+            ''
+          )
+        ) LIKE :search
+        OR LOWER(
+          COALESCE(
+            invoice."billToPhone",
+            ''
+          )
+        ) LIKE :search
+        OR LOWER(
+          COALESCE(
+            project."customerName",
+            ''
+          )
+        ) LIKE :search
+        OR LOWER(
+          COALESCE(
+            project."customerPhone",
+            ''
+          )
+        ) LIKE :search
+        OR CAST(
+          invoice."projectId"
+          AS TEXT
+        ) LIKE :search
+        OR CAST(
+          invoice.id
+          AS TEXT
+        ) LIKE :search
+      )`,
+      {
+        search:
+          `%${search.toLowerCase()}%`,
+      },
+    );
+  }
+
+  if (branch) {
+    qb.andWhere(
+      `LOWER(
+        COALESCE(
+          project."branchName",
+          ''
+        )
+      ) LIKE :branch`,
+      {
+        branch:
+          `%${branch.toLowerCase()}%`,
+      },
+    );
+  }
+
+  if (
+    Number.isInteger(
+      projectOwnerId,
+    ) &&
+    projectOwnerId > 0
+  ) {
+    qb.andWhere(
+      `project."projectOwnerId" =
+        :projectOwnerId`,
+      {
+        projectOwnerId,
+      },
+    );
+  }
+
+  if (
+    Number.isInteger(createdBy) &&
+    createdBy > 0
+  ) {
+    qb.andWhere(
+      'invoice."createdBy" = :createdBy',
+      {
+        createdBy,
+      },
+    );
+  }
+
+  if (fromDate) {
+    qb.andWhere(
+      `invoice."invoiceDate" >=
+        :fromDate`,
+      {
+        fromDate,
+      },
+    );
+  }
+
+  if (toDate) {
+    qb.andWhere(
+      `invoice."invoiceDate" <=
+        :toDate`,
+      {
+        toDate,
+      },
+    );
+  }
+
+  const countQb =
+    qb.clone();
+
+  const summaryQb =
+    qb.clone();
+
+  const totalResult =
+    await countQb
+      .select(
+        'COUNT(DISTINCT invoice.id)',
+        'total',
+      )
+      .orderBy()
+      .getRawOne();
+
+  const total = Number(
+    totalResult?.total || 0,
+  );
+
+  const summary =
+    await summaryQb
+      .select(
+        `COALESCE(
+          SUM(invoice."taxableAmount"),
+          0
+        )`,
+        'taxableAmount',
+      )
+      .addSelect(
+        `COALESCE(
+          SUM(invoice."totalTaxAmount"),
+          0
+        )`,
+        'totalTaxAmount',
+      )
+      .addSelect(
+        `COALESCE(
+          SUM(invoice."grandTotal"),
+          0
+        )`,
+        'grandTotal',
+      )
+      .orderBy()
+      .getRawOne();
+
+  const rows =
+    await qb
+      .orderBy(
+        'invoice.invoiceDate',
+        'DESC',
+      )
+      .addOrderBy(
+        'invoice.createdAt',
+        'DESC',
+      )
+      .offset(skip)
+      .limit(limit)
+      .getRawMany();
+
+  return {
+    data: rows.map(
+      (row: any) => ({
+        id: Number(row.id),
+        projectId: Number(
+          row.projectId,
+        ),
+
+        invoiceNumber:
+          row.invoiceNumber || '',
+
+        invoiceDate:
+          row.invoiceDate || null,
+
+        status:
+          row.status ||
+          ProjectEpcCustomerInvoiceStatus.DRAFT,
+
+        customerName:
+          row.customerName ||
+          row.billToName ||
+          '',
+
+        customerPhone:
+          row.customerPhone ||
+          row.billToPhone ||
+          '',
+
+        billToName:
+          row.billToName || '',
+
+        billToPhone:
+          row.billToPhone || '',
+
+        branchName:
+          row.branchName || '',
+
+        projectOwnerId:
+          row.projectOwnerId
+            ? Number(
+                row.projectOwnerId,
+              )
+            : null,
+
+        projectOwnerName:
+          row.projectOwnerName || '',
+
+        projectOwnerRole:
+          row.projectOwnerRole || '',
+
+        projectStatus:
+          row.projectStatus || '',
+
+        projectType:
+          row.projectType || '',
+
+        taxableAmount: Number(
+          row.taxableAmount || 0,
+        ),
+
+        cgstAmount: Number(
+          row.cgstAmount || 0,
+        ),
+
+        sgstAmount: Number(
+          row.sgstAmount || 0,
+        ),
+
+        totalTaxAmount: Number(
+          row.totalTaxAmount || 0,
+        ),
+
+        roundOff: Number(
+          row.roundOff || 0,
+        ),
+
+        grandTotal: Number(
+          row.grandTotal || 0,
+        ),
+
+        createdBy:
+          row.createdBy
+            ? Number(row.createdBy)
+            : null,
+
+        createdByName:
+          row.createdByName || '',
+
+        isHidden:
+          Boolean(row.isHidden),
+
+        createdAt:
+          row.createdAt || null,
+
+        updatedAt:
+          row.updatedAt || null,
+      }),
+    ),
+
+    summary: {
+      totalInvoices: total,
+
+      taxableAmount: Number(
+        summary?.taxableAmount || 0,
+      ),
+
+      totalTaxAmount: Number(
+        summary?.totalTaxAmount || 0,
+      ),
+
+      grandTotal: Number(
+        summary?.grandTotal || 0,
+      ),
+    },
+
+    pagination: {
+      page,
+      limit,
+      total,
+
+      totalPages:
+        Math.ceil(
+          total / limit,
+        ) || 1,
+    },
+  };
+}
+
+async getEpcCustomerInvoiceCreators() {
+  const rows =
+    await this.projectEpcCustomerInvoiceRepository
+      .createQueryBuilder('invoice')
+      .select(
+        'invoice.createdBy',
+        'id',
+      )
+      .addSelect(
+        'invoice.createdByName',
+        'name',
+      )
+      .where(
+        'invoice.createdBy IS NOT NULL',
+      )
+      .andWhere(
+        `TRIM(
+          COALESCE(
+            invoice."createdByName",
+            ''
+          )
+        ) <> ''`,
+      )
+      .groupBy(
+        'invoice.createdBy',
+      )
+      .addGroupBy(
+        'invoice.createdByName',
+      )
+      .orderBy(
+        'invoice.createdByName',
+        'ASC',
+      )
+      .getRawMany();
+
+  return rows.map(
+    (row: any) => ({
+      id: Number(row.id),
+      name: String(
+        row.name || '',
+      ).trim(),
+    }),
+  );
+}
+
 async saveEpcCustomerInvoice(
   invoiceId: number,
   body: any,
@@ -22570,16 +23046,41 @@ async generateEpcCustomerInvoicePdf(
   res: Response,
 ) {
   const invoice =
-    await this.projectEpcCustomerInvoiceRepository.findOne({
-      where: { id: invoiceId },
-    });
+  await this.projectEpcCustomerInvoiceRepository.findOne({
+    where: {
+      id: invoiceId,
+      isHidden: false,
+    },
+  });
 
-  if (!invoice) {
-    throw new NotFoundException('EPC invoice not found');
-  }
+if (!invoice) {
+  throw new NotFoundException(
+    'EPC invoice not found',
+  );
+}
 
-  const items =
-    await this.projectEpcCustomerInvoiceItemRepository.find({
+/*
+ * Opening the editor only creates or loads a draft.
+ *
+ * The invoice becomes GENERATED only when its
+ * final PDF is actually generated/downloaded.
+ * This makes it eligible for the central
+ * Project Tax Invoice register.
+ */
+if (
+  invoice.status ===
+  ProjectEpcCustomerInvoiceStatus.DRAFT
+) {
+  invoice.status =
+    ProjectEpcCustomerInvoiceStatus.GENERATED;
+
+  await this.projectEpcCustomerInvoiceRepository.save(
+    invoice,
+  );
+}
+
+const items =
+  await this.projectEpcCustomerInvoiceItemRepository.find({
       where: { invoiceId },
       order: { serialNumber: 'ASC' },
     });
@@ -23228,5 +23729,63 @@ text('This is a Computer Generated Invoice', left, y + 5, pageWidth, {
 });
 
   doc.end();
+}
+
+async hideEpcCustomerInvoice(
+  invoiceId: number,
+) {
+  const invoice =
+    await this.projectEpcCustomerInvoiceRepository.findOne({
+      where: {
+        id: invoiceId,
+        isHidden: false,
+      },
+    });
+
+  if (!invoice) {
+    throw new NotFoundException(
+      'Tax invoice not found',
+    );
+  }
+
+  invoice.isHidden = true;
+
+  await this.projectEpcCustomerInvoiceRepository.save(
+    invoice,
+  );
+
+  return {
+    message:
+      'Tax invoice hidden successfully',
+  };
+}
+
+async restoreEpcCustomerInvoice(
+  invoiceId: number,
+) {
+  const invoice =
+    await this.projectEpcCustomerInvoiceRepository.findOne({
+      where: {
+        id: invoiceId,
+        isHidden: true,
+      },
+    });
+
+  if (!invoice) {
+    throw new NotFoundException(
+      'Tax invoice not found',
+    );
+  }
+
+  invoice.isHidden = false;
+
+  await this.projectEpcCustomerInvoiceRepository.save(
+    invoice,
+  );
+
+  return {
+    message:
+      'Tax invoice restored successfully',
+  };
 }
 }

@@ -2716,6 +2716,28 @@ getDealerOrderInvoices(
   );
 }
 
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+)
+@Get('tax-invoices/register')
+getEpcCustomerInvoiceRegister(
+  @Query() query: any,
+) {
+  return this.projectService.getEpcCustomerInvoiceRegister(
+    query,
+  );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+)
+@Get('tax-invoices/creators')
+getEpcCustomerInvoiceCreators() {
+  return this.projectService.getEpcCustomerInvoiceCreators();
+}
+
 @Get(':id/epc-customer-invoice')
 getOrCreateEpcCustomerInvoiceDraft(
   @Param('id') id: string,
@@ -2749,6 +2771,36 @@ generateEpcCustomerInvoicePdf(
   return this.projectService.generateEpcCustomerInvoicePdf(
     Number(invoiceId),
     res,
+  );
+}
+
+@Roles(
+  'OWNER',
+)
+@Patch(
+  'tax-invoices/:id/hide',
+)
+hideTaxInvoice(
+  @Param('id')
+  id: string,
+) {
+  return this.projectService.hideEpcCustomerInvoice(
+    Number(id),
+  );
+}
+
+@Roles(
+  'OWNER',
+)
+@Patch(
+  'tax-invoices/:id/restore',
+)
+restoreTaxInvoice(
+  @Param('id')
+  id: string,
+) {
+  return this.projectService.restoreEpcCustomerInvoice(
+    Number(id),
   );
 }
 
