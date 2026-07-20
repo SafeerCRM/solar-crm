@@ -67,6 +67,9 @@ type Project = {
   customerPhone?: string;
   city?: string;
   zone?: string;
+    gpsLatitude?: number | string | null;
+  gpsLongitude?: number | string | null;
+  gpsAddress?: string;
   branchName?: string;
   projectOwnerName?: string;
 projectOwnerRole?: string;
@@ -1584,6 +1587,34 @@ setActivityMatchMode('ALL');
     {project.projectOwnerName || 'Not Assigned'}
   </span>
 </p>
+
+{project.gpsLatitude &&
+project.gpsLongitude ? (
+  <div className="mt-2 flex flex-wrap items-center gap-2">
+    <span className="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
+      📍 Site Location Saved
+    </span>
+
+    <a
+      href={`https://www.google.com/maps?q=${encodeURIComponent(
+        String(project.gpsLatitude),
+      )},${encodeURIComponent(
+        String(project.gpsLongitude),
+      )}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-xs font-semibold text-blue-600 hover:underline"
+    >
+      Open in Maps
+    </a>
+  </div>
+) : (
+  <div className="mt-2">
+    <span className="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
+      📍 Site Location Not Added
+    </span>
+  </div>
+)}
                 </div>
 
                 <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">

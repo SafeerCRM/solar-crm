@@ -663,6 +663,38 @@ function ProjectCard({ project }: { project: any }) {
   <InfoLine label="Project Type" value={project.projectType} />
 )}
 
+<div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+  <div className="flex items-center justify-between gap-3">
+    <div>
+      <p className="text-xs font-bold text-blue-700">
+        📍 Project Site Location
+      </p>
+
+      <p className="mt-1 text-sm font-semibold text-gray-800">
+        {project.gpsAddress ||
+          project.address ||
+          'Project location has not been added yet.'}
+      </p>
+    </div>
+
+    {project.gpsLatitude &&
+    project.gpsLongitude && (
+      <a
+        href={`https://www.google.com/maps?q=${encodeURIComponent(
+          String(project.gpsLatitude),
+        )},${encodeURIComponent(
+          String(project.gpsLongitude),
+        )}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700"
+      >
+        Open Maps
+      </a>
+    )}
+  </div>
+</div>
+
         <div className="mt-4 rounded-2xl bg-emerald-50 p-4">
           <p className="text-xs font-bold text-emerald-700">
             Current Stage
