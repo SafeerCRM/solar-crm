@@ -36,6 +36,7 @@ type PaymentRow = {
   projectSerial?: string;
   finalCost?: number;
 projectReceivedAmount?: number;
+projectPendingAmount?: number;
 paymentReceivedPercentage?: number;
 projectStatus?: string;
 };
@@ -568,16 +569,31 @@ setSummary({
                   </div>
 
                   <div className="w-full rounded-xl bg-gray-50 p-4 text-left md:w-[180px] md:text-right">
-                    <p className="text-sm text-gray-500">Amount</p>
-                    <p className="text-lg font-bold text-gray-900">{money(item.amount)}</p>
+                    <p className="text-sm text-gray-500">
+  Project Amount
+</p>
 
-                    <p className="mt-2 text-sm text-green-700">
-                      Paid: <b>{money(item.paidAmount)}</b>
-                    </p>
+<p className="text-lg font-bold text-gray-900">
+  {money(item.finalCost)}
+</p>
 
-                    <p className="mt-1 text-sm text-red-700">
-                      Pending: <b>{money(item.pendingAmount)}</b>
-                    </p>
+<p className="mt-2 text-sm text-green-700">
+  Received:{' '}
+  <b>
+    {money(
+      item.projectReceivedAmount,
+    )}
+  </b>
+</p>
+
+<p className="mt-1 text-sm text-red-700">
+  Pending:{' '}
+  <b>
+    {money(
+      item.projectPendingAmount,
+    )}
+  </b>
+</p>
 
                       <div className="mt-4 rounded-xl bg-white p-3 text-left">
     <div className="flex items-center justify-between gap-2">
