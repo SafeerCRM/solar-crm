@@ -224,6 +224,26 @@ const [reassignmentPage, setReassignmentPage] =
 const [reassignmentTotalPages, setReassignmentTotalPages] =
   useState(1);
 
+  const [
+  reassignmentFromContactCount,
+  setReassignmentFromContactCount,
+] = useState<number | null>(null);
+
+const [
+  reassignmentToContactCount,
+  setReassignmentToContactCount,
+] = useState<number | null>(null);
+
+const [
+  loadingReassignmentFromCount,
+  setLoadingReassignmentFromCount,
+] = useState(false);
+
+const [
+  loadingReassignmentToCount,
+  setLoadingReassignmentToCount,
+] = useState(false);
+
   const [reassignmentName, setReassignmentName] = useState('');
 const [reassignmentPhone, setReassignmentPhone] = useState('');
 const [reassignmentCity, setReassignmentCity] = useState('');
@@ -476,6 +496,70 @@ const fetchContactHistory = async (
   }
 };
 
+const fetchReassignmentTelecallerCount = async (
+  userId: string,
+  type: 'from' | 'to',
+) => {
+  if (!userId) {
+    if (type === 'from') {
+      setReassignmentFromContactCount(null);
+    } else {
+      setReassignmentToContactCount(null);
+    }
+
+    return;
+  }
+
+  try {
+    if (type === 'from') {
+      setLoadingReassignmentFromCount(true);
+    } else {
+      setLoadingReassignmentToCount(true);
+    }
+
+    const res = await axios.get(
+      `${backendUrl}/telecalling/telecaller-contact-count/${userId}`,
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+
+    const contactCount = Number(
+      res.data?.count || 0,
+    );
+
+    if (type === 'from') {
+      setReassignmentFromContactCount(
+        contactCount,
+      );
+    } else {
+      setReassignmentToContactCount(
+        contactCount,
+      );
+    }
+  } catch (err) {
+    console.error(err);
+
+    if (type === 'from') {
+      setReassignmentFromContactCount(null);
+    } else {
+      setReassignmentToContactCount(null);
+    }
+
+    setHistoryMessage(
+      `Failed to load ${
+        type === 'from' ? 'From' : 'To'
+      } telecaller contact count.`,
+    );
+  } finally {
+    if (type === 'from') {
+      setLoadingReassignmentFromCount(false);
+    } else {
+      setLoadingReassignmentToCount(false);
+    }
+  }
+};
+
 const fetchReassignmentContacts = async (
   requestedPage = 1,
 ) => {
@@ -699,7 +783,17 @@ await fetchReassignmentContacts(
   pageToReload,
 );
 
-await fetchContacts();
+await Promise.all([
+  fetchReassignmentTelecallerCount(
+    fromTelecallerId,
+    'from',
+  ),
+  fetchReassignmentTelecallerCount(
+    toTelecallerId,
+    'to',
+  ),
+  fetchContacts(),
+]);
   } catch (err: any) {
     console.error(err);
 
@@ -788,6 +882,9 @@ setReassignmentContacts([]);
 setReassignmentTotal(0);
 setReassignmentPage(1);
 setReassignmentTotalPages(1);
+
+setReassignmentFromContactCount(null);
+setReassignmentToContactCount(null);
 
 setHistoryMessage('');
 };
@@ -2964,33 +3061,46 @@ const transferContacts = async () => {
           </label>
 
           <select
-            value={fromTelecallerId}
-            onChange={(e) => {
-              const value =
-                e.target.value;
+  value={fromTelecallerId}
+  onChange={(e) => {
+    const value = e.target.value;
 
-              setFromTelecallerId(value);
-              setToTelecallerId('');
-              setSelectedHistoryContactIds(
-                [],
-              );
-              setReassignmentPage(1);
-            }}
-            className="w-full rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-blue-500 focus:bg-white"
-          >
-            <option value="">
-              Select From Telecaller
-            </option>
+    setFromTelecallerId(value);
+    setToTelecallerId('');
 
-            {users.map((user) => (
-              <option
-                key={user.id}
-                value={user.id}
-              >
-                {user.id} - {user.name}
-              </option>
-            ))}
-          </select>
+    setSelectedHistoryContactIds([]);
+    setReassignmentPage(1);
+
+    setReassignmentToContactCount(null);
+
+    void fetchReassignmentTelecallerCount(
+      value,
+      'from',
+    );
+  }}
+  className="w-full rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-blue-500 focus:bg-white"
+>
+  <option value="">
+    Select From Telecaller
+  </option>
+
+  {users.map((user) => (
+    <option
+      key={user.id}
+      value={user.id}
+    >
+      {user.id} - {user.name}
+    </option>
+  ))}
+</select>
+
+<p className="mt-2 text-xs font-medium text-gray-500">
+  {loadingReassignmentFromCount
+    ? 'Loading contacts...'
+    : reassignmentFromContactCount !== null
+      ? `Current contacts: ${reassignmentFromContactCount}`
+      : 'Current contacts: -'}
+</p>
         </div>
 
         <div>
@@ -2999,34 +3109,47 @@ const transferContacts = async () => {
           </label>
 
           <select
-            value={toTelecallerId}
-            onChange={(e) =>
-              setToTelecallerId(
-                e.target.value,
-              )
-            }
-            disabled={!fromTelecallerId}
-            className="w-full rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-blue-500 focus:bg-white disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <option value="">
-              Select To Telecaller
-            </option>
+  value={toTelecallerId}
+  onChange={(e) => {
+    const value = e.target.value;
 
-            {users
-              .filter(
-                (user) =>
-                  String(user.id) !==
-                  fromTelecallerId,
-              )
-              .map((user) => (
-                <option
-                  key={user.id}
-                  value={user.id}
-                >
-                  {user.id} - {user.name}
-                </option>
-              ))}
-          </select>
+    setToTelecallerId(value);
+
+    void fetchReassignmentTelecallerCount(
+      value,
+      'to',
+    );
+  }}
+  disabled={!fromTelecallerId}
+  className="w-full rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-blue-500 focus:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+>
+  <option value="">
+    Select To Telecaller
+  </option>
+
+  {users
+    .filter(
+      (user) =>
+        String(user.id) !==
+        fromTelecallerId,
+    )
+    .map((user) => (
+      <option
+        key={user.id}
+        value={user.id}
+      >
+        {user.id} - {user.name}
+      </option>
+    ))}
+</select>
+
+<p className="mt-2 text-xs font-medium text-gray-500">
+  {loadingReassignmentToCount
+    ? 'Loading contacts...'
+    : reassignmentToContactCount !== null
+      ? `Current contacts: ${reassignmentToContactCount}`
+      : 'Current contacts: -'}
+</p>
         </div>
       </div>
     </div>
