@@ -74,6 +74,37 @@ type QuickCallModalState = {
   callLogId?: number;
 };
 
+type HistoryContact = Contact & {
+  status?: string;
+  stage?: string;
+  hasCalled?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+
+  latestActivityAt?: string | null;
+  latestCallStatus?: string;
+  latestCallNotes?: string;
+  latestCalledBy?: number | null;
+  latestCalledByName?: string;
+};
+
+type ContactHistoryResponse = {
+  data?: HistoryContact[];
+  total?: number;
+  page?: number;
+  limit?: number;
+  totalPages?: number;
+
+  filters?: {
+    fromDate?: string;
+    toDate?: string;
+    maximumDays?: number;
+    selectedTelecallerId?: number | null;
+  };
+};
+
+type HistoryDays = 30 | 60 | 90 | 120 | 150 | 180;
+
 const getUserRoles = (user: User | null): string[] => {
   if (!user) return [];
   if (Array.isArray(user.roles)) return user.roles;
@@ -136,6 +167,62 @@ export default function TelecallingContactsPage() {
 const [uploadingQuickCallRecording, setUploadingQuickCallRecording] = useState(false);
 const [myContactCount, setMyContactCount] = useState<number | null>(null);
 const [loadingMyCount, setLoadingMyCount] = useState(false);
+// CONTACT HISTORY WORKSPACE
+const [showContactHistory, setShowContactHistory] = useState(false);
+type HistoryWorkspaceTab = 'history' | 'reassignment';
+
+const [historyWorkspaceTab, setHistoryWorkspaceTab] =
+  useState<HistoryWorkspaceTab>('history');
+const [historyLoading, setHistoryLoading] = useState(false);
+const [historyMessage, setHistoryMessage] = useState('');
+
+const [historyContacts, setHistoryContacts] = useState<HistoryContact[]>([]);
+const [historyTotal, setHistoryTotal] = useState(0);
+const [historyPage, setHistoryPage] = useState(1);
+const [historyTotalPages, setHistoryTotalPages] = useState(1);
+const [historyLimit] = useState(50);
+
+const [historyDays, setHistoryDays] = useState<HistoryDays>(30);
+const [historyTelecallerId, setHistoryTelecallerId] = useState('');
+
+const [historyName, setHistoryName] = useState('');
+const [historyPhone, setHistoryPhone] = useState('');
+const [historyCity, setHistoryCity] = useState('');
+const [historyZone, setHistoryZone] = useState('');
+
+const [historyContactStatus, setHistoryContactStatus] = useState('');
+const [historyCallStatus, setHistoryCallStatus] = useState('');
+const [historyStage, setHistoryStage] = useState('');
+const [historySourceModule, setHistorySourceModule] = useState('');
+
+const [historyHasCalled, setHistoryHasCalled] = useState('');
+const [historyConverted, setHistoryConverted] = useState('');
+const [historyStorageState, setHistoryStorageState] = useState('');
+
+// REASSIGNMENT WORKSPACE
+const [fromTelecallerId, setFromTelecallerId] = useState('');
+const [toTelecallerId, setToTelecallerId] = useState('');
+
+const [selectedHistoryContactIds, setSelectedHistoryContactIds] =
+  useState<number[]>([]);
+
+const [transferMode, setTransferMode] = useState<
+  'SELECTED' | 'FILTERED'
+>('SELECTED');
+
+const [transferLoading, setTransferLoading] = useState(false);
+
+const [reassignmentContacts, setReassignmentContacts] =
+  useState<HistoryContact[]>([]);
+
+const [reassignmentTotal, setReassignmentTotal] =
+  useState(0);
+
+const [reassignmentPage, setReassignmentPage] =
+  useState(1);
+
+const [reassignmentTotalPages, setReassignmentTotalPages] =
+  useState(1);
 
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const resumeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -148,6 +235,14 @@ const isPausedRef = useRef(false);
   const roles = getUserRoles(currentUser);
   const isOwnerOrTelecallingManager =
     roles.includes('OWNER') || roles.includes('TELECALLING_MANAGER');
+    const canViewAllContactHistory =
+  roles.includes('OWNER') ||
+  roles.includes('TELECALLING_MANAGER') ||
+  roles.includes('TELECALLING_ASSISTANT');
+
+const canViewContactHistory =
+  canViewAllContactHistory ||
+  roles.includes('TELECALLER');
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
@@ -183,10 +278,10 @@ const isPausedRef = useRef(false);
 
   const fetchUsers = async () => {
     try {
-      if (!isOwnerOrTelecallingManager) {
-        setUsers([]);
-        return;
-      }
+      if (!canViewAllContactHistory) {
+  setUsers([]);
+  return;
+}
 
       const res = await axios.get(`${backendUrl}/users/telecallers`, {
         headers: getAuthHeaders(),
@@ -237,15 +332,483 @@ const isPausedRef = useRef(false);
     }
   };
 
+  const getHistoryDateRange = (days: HistoryDays) => {
+  const toDate = dayjs();
+  const fromDate = toDate.subtract(days - 1, 'day');
+
+  return {
+    fromDate: fromDate.format('YYYY-MM-DD'),
+    toDate: toDate.format('YYYY-MM-DD'),
+  };
+};
+
+const fetchContactHistory = async (
+  requestedPage = historyPage,
+) => {
+  if (!canViewContactHistory) {
+    setHistoryMessage(
+      'You do not have access to contact history.',
+    );
+    return;
+  }
+
+  try {
+    setHistoryLoading(true);
+    setHistoryMessage('');
+
+    const { fromDate, toDate } =
+      getHistoryDateRange(historyDays);
+
+    const res = await axios.get<ContactHistoryResponse>(
+      `${backendUrl}/telecalling/contacts/history`,
+      {
+        params: {
+          page: requestedPage,
+          limit: historyLimit,
+
+          fromDate,
+          toDate,
+
+          telecallerId:
+            canViewAllContactHistory &&
+            historyTelecallerId
+              ? Number(historyTelecallerId)
+              : undefined,
+
+          name: historyName.trim() || undefined,
+          phone: historyPhone.trim() || undefined,
+          city: historyCity.trim() || undefined,
+          zone: historyZone.trim() || undefined,
+
+          contactStatus:
+            historyContactStatus || undefined,
+
+          callStatus:
+            historyCallStatus || undefined,
+
+          stage:
+            historyStage || undefined,
+
+          sourceModule:
+            historySourceModule.trim() || undefined,
+
+          hasCalled:
+            historyHasCalled || undefined,
+
+          convertedToLead:
+            historyConverted || undefined,
+
+          storageState:
+            historyStorageState || undefined,
+        },
+        headers: getAuthHeaders(),
+      },
+    );
+
+    setHistoryContacts(
+      Array.isArray(res.data?.data)
+        ? res.data.data
+        : [],
+    );
+
+    setHistoryTotal(
+      Number(res.data?.total || 0),
+    );
+
+    setHistoryPage(
+      Number(res.data?.page || requestedPage),
+    );
+
+    setHistoryTotalPages(
+      Number(res.data?.totalPages || 1),
+    );
+  } catch (err: any) {
+    console.error(err);
+
+    setHistoryContacts([]);
+    setHistoryTotal(0);
+    setHistoryTotalPages(1);
+
+    setHistoryMessage(
+      err?.response?.data?.message ||
+        'Failed to load contact history.',
+    );
+  } finally {
+    setHistoryLoading(false);
+  }
+};
+
+const fetchReassignmentContacts = async (
+  page = 1,
+) => {
+  if (!fromTelecallerId) {
+    setReassignmentContacts([]);
+    setReassignmentTotal(0);
+    setReassignmentTotalPages(1);
+    return;
+  }
+
+  try {
+    setTransferLoading(true);
+
+    const res =
+      await axios.get<ContactHistoryResponse>(
+        `${backendUrl}/telecalling/contacts/history`,
+        {
+          params: {
+            mode: 'reassignment',
+
+            page,
+
+            limit: historyLimit,
+
+            telecallerId:
+              Number(fromTelecallerId),
+
+            name:
+              historyName || undefined,
+
+            phone:
+              historyPhone || undefined,
+
+            city:
+              historyCity || undefined,
+
+            zone:
+              historyZone || undefined,
+
+            contactStatus:
+              historyContactStatus ||
+              undefined,
+
+            callStatus:
+              historyCallStatus ||
+              undefined,
+
+            stage:
+              historyStage ||
+              undefined,
+
+            sourceModule:
+              historySourceModule ||
+              undefined,
+
+            hasCalled:
+              historyHasCalled ||
+              undefined,
+
+            convertedToLead:
+              historyConverted ||
+              undefined,
+
+            storageState:
+              historyStorageState ||
+              undefined,
+          },
+
+          headers: getAuthHeaders(),
+        },
+      );
+
+    setReassignmentContacts(
+      res.data.data || [],
+    );
+
+    setReassignmentTotal(
+      res.data.total || 0,
+    );
+
+    setReassignmentPage(
+      res.data.page || 1,
+    );
+
+    setReassignmentTotalPages(
+      res.data.totalPages || 1,
+    );
+  } finally {
+    setTransferLoading(false);
+  }
+};
+
+const reassignSelectedContacts = async () => {
+  if (!fromTelecallerId) {
+    setMessage(
+      'Select the From telecaller.',
+    );
+    return;
+  }
+
+  if (!toTelecallerId) {
+    setMessage(
+      'Select the To telecaller.',
+    );
+    return;
+  }
+
+  if (
+    Number(fromTelecallerId) ===
+    Number(toTelecallerId)
+  ) {
+    setMessage(
+      'From and To telecaller cannot be the same.',
+    );
+    return;
+  }
+
+  if (!selectedHistoryContactIds.length) {
+    setMessage(
+      'Select at least one contact.',
+    );
+    return;
+  }
+
+  const fromTelecaller =
+    users.find(
+      (item) =>
+        Number(item.id) ===
+        Number(fromTelecallerId),
+    );
+
+  const toTelecaller =
+    users.find(
+      (item) =>
+        Number(item.id) ===
+        Number(toTelecallerId),
+    );
+
+  const confirmed = window.confirm(
+    `Transfer ${selectedHistoryContactIds.length} selected contact(s) from ${
+      fromTelecaller?.name || 'selected telecaller'
+    } to ${
+      toTelecaller?.name || 'selected telecaller'
+    }?`,
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    setTransferLoading(true);
+
+    const res = await axios.post(
+      `${backendUrl}/telecalling/contacts/reassign-selected`,
+      {
+        fromTelecallerId:
+          Number(fromTelecallerId),
+
+        toTelecallerId:
+          Number(toTelecallerId),
+
+        contactIds:
+          selectedHistoryContactIds,
+      },
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+
+    setMessage(
+      res.data?.message ||
+        `${selectedHistoryContactIds.length} contacts reassigned successfully.`,
+    );
+
+    setSelectedHistoryContactIds([]);
+
+    await fetchReassignmentContacts(
+  reassignmentPage,
+);
+
+if (
+  Number(fromTelecallerId) !==
+  Number(toTelecallerId)
+) {
+  const previousFrom =
+    fromTelecallerId;
+
+  setFromTelecallerId(
+    toTelecallerId,
+  );
+
+  await new Promise((resolve) =>
+    setTimeout(resolve, 50),
+  );
+
+  setFromTelecallerId(
+    previousFrom,
+  );
+}
+
+await fetchContacts();
+  } catch (err: any) {
+    console.error(err);
+
+    const errorMessage =
+      err?.response?.data?.message;
+
+    setMessage(
+      Array.isArray(errorMessage)
+        ? errorMessage.join(', ')
+        : errorMessage ||
+            'Failed to reassign selected contacts.',
+    );
+  } finally {
+    setTransferLoading(false);
+  }
+};
+
+useEffect(() => {
+  if (
+    historyWorkspaceTab !==
+    'reassignment'
+  ) {
+    return;
+  }
+
+  fetchReassignmentContacts(1);
+
+  // eslint-disable-next-line
+}, [
+  fromTelecallerId,
+
+  historyName,
+  historyPhone,
+  historyCity,
+  historyZone,
+
+  historyContactStatus,
+  historyCallStatus,
+  historyStage,
+  historySourceModule,
+
+  historyHasCalled,
+  historyConverted,
+  historyStorageState,
+]);
+
+const openContactHistory = async () => {
+  setHistoryWorkspaceTab('history');
+
+  setSelectedHistoryContactIds([]);
+
+  setFromTelecallerId('');
+  setToTelecallerId('');
+
+  setShowContactHistory(true);
+
+  setHistoryPage(1);
+
+  await fetchContactHistory(1);
+};
+
+const closeContactHistory = () => {
+  setShowContactHistory(false);
+
+  setHistoryWorkspaceTab('history');
+
+  setSelectedHistoryContactIds([]);
+
+  setFromTelecallerId('');
+  setToTelecallerId('');
+
+  setHistoryMessage('');
+};
+
+const applyContactHistoryFilters = async () => {
+  setHistoryPage(1);
+  await fetchContactHistory(1);
+};
+
+const resetContactHistoryFilters = async () => {
+  setHistoryDays(30);
+  setHistoryTelecallerId('');
+
+  setHistoryName('');
+  setHistoryPhone('');
+  setHistoryCity('');
+  setHistoryZone('');
+
+  setHistoryContactStatus('');
+  setHistoryCallStatus('');
+  setHistoryStage('');
+  setHistorySourceModule('');
+
+  setHistoryHasCalled('');
+  setHistoryConverted('');
+  setHistoryStorageState('');
+
+  setHistoryPage(1);
+
+  try {
+    setHistoryLoading(true);
+    setHistoryMessage('');
+
+    const { fromDate, toDate } =
+      getHistoryDateRange(30);
+
+    const res = await axios.get<ContactHistoryResponse>(
+      `${backendUrl}/telecalling/contacts/history`,
+      {
+        params: {
+          page: 1,
+          limit: historyLimit,
+          fromDate,
+          toDate,
+        },
+        headers: getAuthHeaders(),
+      },
+    );
+
+    setHistoryContacts(
+      Array.isArray(res.data?.data)
+        ? res.data.data
+        : [],
+    );
+
+    setHistoryTotal(
+      Number(res.data?.total || 0),
+    );
+
+    setHistoryTotalPages(
+      Number(res.data?.totalPages || 1),
+    );
+  } catch (err: any) {
+    console.error(err);
+
+    setHistoryContacts([]);
+    setHistoryTotal(0);
+    setHistoryTotalPages(1);
+
+    setHistoryMessage(
+      err?.response?.data?.message ||
+        'Failed to reset contact history.',
+    );
+  } finally {
+    setHistoryLoading(false);
+  }
+};
+
+const formatHistoryDate = (
+  value?: string | null,
+) => {
+  if (!value) return '-';
+
+  const parsed = dayjs(value);
+
+  if (!parsed.isValid()) return '-';
+
+  return parsed.format('DD MMM YYYY, hh:mm A');
+};
+
   useEffect(() => {
     fetchContacts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, viewMode, cityFilter, showCnrRecall]);
 
   useEffect(() => {
-    fetchUsers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOwnerOrTelecallingManager]);
+  fetchUsers();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [canViewAllContactHistory]);
 
   useEffect(() => {
     return () => {
@@ -903,6 +1466,16 @@ const transferContacts = async () => {
               </div>
 
               <div className="flex flex-wrap gap-2">
+
+                {canViewContactHistory && (
+  <button
+    type="button"
+    onClick={openContactHistory}
+    className="rounded-xl bg-amber-400 px-4 py-2 text-sm font-semibold text-gray-900 shadow-sm transition hover:bg-amber-300"
+  >
+    Contact History & Reassignment
+  </button>
+)}
                 <Link
                   href="/telecalling"
                   className="rounded-xl bg-white/20 px-4 py-2 text-sm font-medium text-white backdrop-blur"
@@ -1551,6 +2124,780 @@ const transferContacts = async () => {
           </div>
         )}
       </div>
+
+      {showContactHistory && (
+  <div className="fixed inset-0 z-[100] overflow-y-auto bg-black/60 p-0 backdrop-blur-sm md:p-4">
+    <div className="min-h-screen bg-gray-100 md:mx-auto md:min-h-[calc(100vh-2rem)] md:max-w-7xl md:rounded-3xl md:shadow-2xl">
+      <div className="sticky top-0 z-20 border-b border-gray-200 bg-white">
+        <div className="bg-gradient-to-r from-slate-900 via-indigo-900 to-blue-900 p-4 text-white md:rounded-t-3xl md:p-5">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-xl font-bold md:text-2xl">
+                Contact History & Reassignment
+              </h2>
+
+              <p className="mt-1 text-sm text-blue-100">
+                {roles.includes('TELECALLER')
+                  ? 'View your own contact activity for the last 180 days.'
+                  : 'View contact activity telecaller-wise for the last 180 days.'}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={closeContactHistory}
+              className="self-start rounded-xl bg-white/15 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/25 md:self-auto"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-4 p-4 md:p-5">
+
+        <div className="rounded-3xl bg-white p-2 shadow-sm">
+  <div className="flex gap-2">
+    <button
+      type="button"
+      onClick={() => setHistoryWorkspaceTab('history')}
+      className={`flex-1 rounded-2xl px-5 py-3 text-sm font-semibold transition ${
+        historyWorkspaceTab === 'history'
+          ? 'bg-blue-600 text-white'
+          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+      }`}
+    >
+      Contact History
+    </button>
+
+    {canViewAllContactHistory && (
+      <button
+        type="button"
+        onClick={() =>
+          setHistoryWorkspaceTab('reassignment')
+        }
+        className={`flex-1 rounded-2xl px-5 py-3 text-sm font-semibold transition ${
+          historyWorkspaceTab === 'reassignment'
+            ? 'bg-blue-600 text-white'
+            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+        }`}
+      >
+        Reassignment
+      </button>
+    )}
+  </div>
+</div>
+
+{historyWorkspaceTab === 'history' && (
+  <>
+        {historyMessage ? (
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {historyMessage}
+          </div>
+        ) : null}
+
+        <div className="rounded-3xl bg-white p-4 shadow-sm">
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">
+              History Filters
+            </h3>
+
+            <p className="text-sm text-gray-500">
+              Every selected filter is applied together.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <select
+              value={historyDays}
+              onChange={(e) =>
+                setHistoryDays(
+                  Number(e.target.value) as HistoryDays,
+                )
+              }
+              className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-blue-500 focus:bg-white"
+            >
+              <option value={30}>Last 30 Days</option>
+<option value={60}>Last 60 Days</option>
+<option value={90}>Last 90 Days</option>
+<option value={120}>Last 120 Days</option>
+<option value={150}>Last 150 Days</option>
+<option value={180}>Last 180 Days</option>
+            </select>
+
+            {canViewAllContactHistory ? (
+              <select
+                value={historyTelecallerId}
+                onChange={(e) =>
+                  setHistoryTelecallerId(
+                    e.target.value,
+                  )
+                }
+                className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-blue-500 focus:bg-white"
+              >
+                <option value="">
+                  All Telecallers
+                </option>
+
+                {users.map((user) => (
+                  <option
+                    key={user.id}
+                    value={user.id}
+                  >
+                    {user.id} - {user.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-3 text-sm font-medium text-indigo-700">
+                My Contact History
+              </div>
+            )}
+
+            <input
+              value={historyName}
+              onChange={(e) =>
+                setHistoryName(e.target.value)
+              }
+              placeholder="Contact name"
+              className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-blue-500 focus:bg-white"
+            />
+
+            <input
+              value={historyPhone}
+              onChange={(e) =>
+                setHistoryPhone(e.target.value)
+              }
+              placeholder="Phone number"
+              className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-blue-500 focus:bg-white"
+            />
+
+            <input
+              value={historyCity}
+              onChange={(e) =>
+                setHistoryCity(e.target.value)
+              }
+              placeholder="City"
+              className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-blue-500 focus:bg-white"
+            />
+
+            <input
+              value={historyZone}
+              onChange={(e) =>
+                setHistoryZone(e.target.value)
+              }
+              placeholder="Zone"
+              className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-blue-500 focus:bg-white"
+            />
+
+            <select
+              value={historyContactStatus}
+              onChange={(e) =>
+                setHistoryContactStatus(
+                  e.target.value,
+                )
+              }
+              className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-blue-500 focus:bg-white"
+            >
+              <option value="">
+                All Contact Statuses
+              </option>
+              <option value="NEW">New</option>
+              <option value="CONVERTED">
+                Converted
+              </option>
+            </select>
+
+            <select
+              value={historyCallStatus}
+              onChange={(e) =>
+                setHistoryCallStatus(
+                  e.target.value,
+                )
+              }
+              className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-blue-500 focus:bg-white"
+            >
+              <option value="">
+                All Latest Call Statuses
+              </option>
+              <option value="INTERESTED">
+                Interested
+              </option>
+              <option value="NOT_INTERESTED">
+                Not Interested
+              </option>
+              <option value="CALLBACK">
+                Callback
+              </option>
+              <option value="CONNECTED">
+                Connected
+              </option>
+              <option value="CNR">CNR</option>
+              <option value="NO_RESPONSE">
+                No Response
+              </option>
+              <option value="PROPOSAL_SENT">
+                Proposal Sent
+              </option>
+              <option value="BUSY">Busy</option>
+              <option value="SWITCH_OFF">
+                Switch Off
+              </option>
+              <option value="WRONG_NUMBER">
+                Wrong Number
+              </option>
+            </select>
+
+            <select
+              value={historyStage}
+              onChange={(e) =>
+                setHistoryStage(e.target.value)
+              }
+              className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-blue-500 focus:bg-white"
+            >
+              <option value="">All Stages</option>
+              <option value="TELECALLING">
+                Telecalling
+              </option>
+              <option value="REVIEW">Review</option>
+              <option value="LEAD">Lead</option>
+              <option value="MEETING">
+                Meeting
+              </option>
+              <option value="PROJECT">
+                Project
+              </option>
+            </select>
+
+            <input
+              value={historySourceModule}
+              onChange={(e) =>
+                setHistorySourceModule(
+                  e.target.value,
+                )
+              }
+              placeholder="Source module"
+              className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-blue-500 focus:bg-white"
+            />
+
+            <select
+              value={historyHasCalled}
+              onChange={(e) =>
+                setHistoryHasCalled(e.target.value)
+              }
+              className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-blue-500 focus:bg-white"
+            >
+              <option value="">
+                Called: All
+              </option>
+              <option value="true">
+                Called: Yes
+              </option>
+              <option value="false">
+                Called: No
+              </option>
+            </select>
+
+            <select
+              value={historyConverted}
+              onChange={(e) =>
+                setHistoryConverted(e.target.value)
+              }
+              className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-blue-500 focus:bg-white"
+            >
+              <option value="">
+                Conversion: All
+              </option>
+              <option value="true">
+                Converted: Yes
+              </option>
+              <option value="false">
+                Converted: No
+              </option>
+            </select>
+
+            <select
+              value={historyStorageState}
+              onChange={(e) =>
+                setHistoryStorageState(
+                  e.target.value,
+                )
+              }
+              className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-blue-500 focus:bg-white"
+            >
+              <option value="">
+                Active + Storage
+              </option>
+              <option value="ACTIVE">
+                Active Only
+              </option>
+              <option value="STORAGE">
+                Storage Only
+              </option>
+            </select>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={applyContactHistoryFilters}
+              disabled={historyLoading}
+              className="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {historyLoading
+                ? 'Loading...'
+                : 'Apply Filters'}
+            </button>
+
+            <button
+              type="button"
+              onClick={resetContactHistoryFilters}
+              disabled={historyLoading}
+              className="rounded-2xl bg-gray-200 px-5 py-3 text-sm font-semibold text-gray-700 disabled:opacity-50"
+            >
+              Reset
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <StatCard
+            title="Filtered Total"
+            value={historyTotal}
+            tone="blue"
+          />
+
+          <StatCard
+            title="Showing"
+            value={historyContacts.length}
+            tone="green"
+          />
+
+          <StatCard
+            title="Current Page"
+            value={historyPage}
+            tone="purple"
+          />
+
+          <StatCard
+            title="Total Pages"
+            value={historyTotalPages}
+            tone="orange"
+          />
+        </div>
+
+        <div className="space-y-3">
+          {historyLoading ? (
+            <div className="rounded-3xl bg-white p-8 text-center text-gray-500 shadow-sm">
+              Loading contact history...
+            </div>
+          ) : historyContacts.length === 0 ? (
+            <div className="rounded-3xl bg-white p-8 text-center text-gray-500 shadow-sm">
+              No contacts were found for the selected
+              history filters.
+            </div>
+          ) : (
+            historyContacts.map((contact) => (
+              <div
+                key={contact.id}
+                className="rounded-3xl border border-gray-100 bg-white p-4 shadow-sm"
+              >
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        {contact.name ||
+                          'Unnamed Contact'}
+                      </h3>
+
+                      <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                        {contact.status || 'NEW'}
+                      </span>
+
+                      <span className="rounded-full bg-purple-50 px-3 py-1 text-xs font-semibold text-purple-700">
+                        {contact.stage ||
+                          'TELECALLING'}
+                      </span>
+
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                          contact.isInStorage
+                            ? 'bg-amber-50 text-amber-700'
+                            : 'bg-green-50 text-green-700'
+                        }`}
+                      >
+                        {contact.isInStorage
+                          ? 'STORAGE'
+                          : 'ACTIVE'}
+                      </span>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-1 gap-2 text-sm text-gray-600 sm:grid-cols-2 lg:grid-cols-3">
+                      <p>
+                        <span className="font-medium text-gray-800">
+                          Phone:
+                        </span>{' '}
+                        {contact.phone || '-'}
+                      </p>
+
+                      <p>
+                        <span className="font-medium text-gray-800">
+                          City:
+                        </span>{' '}
+                        {contact.city || '-'}
+                      </p>
+
+                      <p>
+                        <span className="font-medium text-gray-800">
+                          Zone:
+                        </span>{' '}
+                        {contact.zone || '-'}
+                      </p>
+
+                      <p>
+                        <span className="font-medium text-gray-800">
+                          Assigned To:
+                        </span>{' '}
+                        {contact.assignedToName ||
+                          (contact.assignedTo
+                            ? `User ${contact.assignedTo}`
+                            : 'Unassigned')}
+                      </p>
+
+                      <p>
+                        <span className="font-medium text-gray-800">
+                          Latest Call:
+                        </span>{' '}
+                        {contact.latestCallStatus ||
+                          'No call status'}
+                      </p>
+
+                      <p>
+                        <span className="font-medium text-gray-800">
+                          Last Worked By:
+                        </span>{' '}
+                        {contact.latestCalledByName ||
+                          (contact.latestCalledBy
+                            ? `User ${contact.latestCalledBy}`
+                            : '-')}
+                      </p>
+
+                      <p>
+                        <span className="font-medium text-gray-800">
+                          Last Activity:
+                        </span>{' '}
+                        {formatHistoryDate(
+                          contact.latestActivityAt,
+                        )}
+                      </p>
+
+                      <p>
+                        <span className="font-medium text-gray-800">
+                          Created:
+                        </span>{' '}
+                        {formatHistoryDate(
+                          contact.createdAt,
+                        )}
+                      </p>
+
+                      <p>
+                        <span className="font-medium text-gray-800">
+                          Source:
+                        </span>{' '}
+                        {contact.sourceModule || '-'}
+                      </p>
+                    </div>
+
+                    {contact.latestCallNotes ? (
+                      <div className="mt-3 rounded-2xl bg-gray-50 p-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                          Latest Notes
+                        </p>
+
+                        <p className="mt-1 whitespace-pre-wrap text-sm text-gray-700">
+                          {contact.latestCallNotes}
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 lg:w-44 lg:flex-col">
+                    <a
+                      href={`tel:${contact.phone}`}
+                      className="rounded-2xl bg-green-600 px-4 py-2 text-center text-sm font-semibold text-white"
+                    >
+                      Call
+                    </a>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        closeContactHistory();
+                        setNameFilter(
+                          contact.name || '',
+                        );
+                        setPhoneFilter(
+                          contact.phone || '',
+                        );
+                        setPage(1);
+                      }}
+                      className="rounded-2xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+                    >
+                      Open on Contacts Page
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {historyTotalPages > 1 ? (
+          <div className="flex flex-col gap-3 rounded-3xl bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-gray-600">
+              Page {historyPage} of{' '}
+              {historyTotalPages}
+            </p>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={
+                  historyLoading ||
+                  historyPage <= 1
+                }
+                onClick={async () => {
+                  const nextPage =
+                    historyPage - 1;
+
+                  setHistoryPage(nextPage);
+                  await fetchContactHistory(
+                    nextPage,
+                  );
+                }}
+                className="rounded-2xl bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 disabled:opacity-40"
+              >
+                Previous
+              </button>
+
+              <button
+                type="button"
+                disabled={
+                  historyLoading ||
+                  historyPage >=
+                    historyTotalPages
+                }
+                onClick={async () => {
+                  const nextPage =
+                    historyPage + 1;
+
+                  setHistoryPage(nextPage);
+                  await fetchContactHistory(
+                    nextPage,
+                  );
+                }}
+                className="rounded-2xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        ) : null}
+        </>
+        )}
+        {historyWorkspaceTab === 'reassignment' && (
+  <div className="rounded-3xl bg-white p-8 shadow-sm">
+    <h3 className="text-xl font-bold text-gray-900">
+      Contact Reassignment
+    </h3>
+
+    <p className="mt-2 text-sm text-gray-500">
+      This workspace will allow managers to transfer
+      selected or filtered contacts between telecallers
+      without affecting the active contact queue.
+    </p>
+
+    <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div>
+        <label className="mb-2 block text-sm font-semibold text-gray-700">
+          From Telecaller
+        </label>
+
+        <select
+          value={fromTelecallerId}
+          onChange={(e) =>
+            setFromTelecallerId(e.target.value)
+          }
+          className="w-full rounded-2xl border border-gray-200 p-3"
+        >
+          <option value="">Select</option>
+
+          {users.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label className="mb-2 block text-sm font-semibold text-gray-700">
+          To Telecaller
+        </label>
+
+        <select
+          value={toTelecallerId}
+          onChange={(e) =>
+            setToTelecallerId(e.target.value)
+          }
+          className="w-full rounded-2xl border border-gray-200 p-3"
+        >
+          <option value="">Select</option>
+
+          {users
+            .filter(
+              (u) =>
+                String(u.id) !== fromTelecallerId,
+            )
+            .map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
+            ))}
+        </select>
+      </div>
+    </div>
+
+    <div className="mt-8 rounded-2xl bg-gray-50 p-5">
+
+  <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+  <div>
+    <h4 className="font-semibold text-gray-900">
+      Contacts
+    </h4>
+
+    <p className="mt-1 text-sm text-gray-500">
+      Total: {reassignmentTotal} · Selected:{' '}
+      {selectedHistoryContactIds.length}
+    </p>
+  </div>
+
+  <div className="flex flex-wrap gap-2">
+    <button
+      type="button"
+      onClick={() =>
+        setSelectedHistoryContactIds([])
+      }
+      disabled={
+        transferLoading ||
+        selectedHistoryContactIds.length === 0
+      }
+      className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      Clear Selection
+    </button>
+
+    <button
+      type="button"
+      onClick={reassignSelectedContacts}
+      disabled={
+        transferLoading ||
+        !fromTelecallerId ||
+        !toTelecallerId ||
+        selectedHistoryContactIds.length === 0 ||
+        Number(fromTelecallerId) ===
+          Number(toTelecallerId)
+      }
+      className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {transferLoading
+        ? 'Transferring...'
+        : `Transfer Selected (${selectedHistoryContactIds.length})`}
+    </button>
+  </div>
+</div>
+
+  {reassignmentContacts.length === 0 ? (
+
+    <div className="py-10 text-center text-gray-500">
+
+      Select a telecaller to load contacts.
+
+    </div>
+
+  ) : (
+
+    <div className="space-y-3">
+
+      {reassignmentContacts.map(
+        (contact) => (
+
+          <label
+            key={contact.id}
+            className="flex cursor-pointer items-start gap-3 rounded-xl border bg-white p-4"
+          >
+
+            <input
+              type="checkbox"
+              checked={selectedHistoryContactIds.includes(
+                contact.id,
+              )}
+              onChange={(e) => {
+                if (e.target.checked) {
+                  setSelectedHistoryContactIds(
+                    (prev) => [
+                      ...prev,
+                      contact.id,
+                    ],
+                  );
+                } else {
+                  setSelectedHistoryContactIds(
+                    (prev) =>
+                      prev.filter(
+                        (id) =>
+                          id !== contact.id,
+                      ),
+                  );
+                }
+              }}
+            />
+
+            <div>
+
+              <div className="font-semibold">
+                {contact.name}
+              </div>
+
+              <div className="text-sm text-gray-500">
+
+                {contact.phone}
+
+              </div>
+
+              <div className="mt-1 text-xs">
+
+                {contact.city} • {contact.zone}
+
+              </div>
+
+            </div>
+
+          </label>
+
+        ),
+      )}
+
+    </div>
+
+  )}
+
+</div>
+  </div>
+)}
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 }
