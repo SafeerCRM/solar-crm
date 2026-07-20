@@ -279,6 +279,80 @@ getCnrRecallContacts(
     );
   }
 
+  @Get('contacts/history')
+getContactHistory(
+  @CurrentUser() user: any,
+
+  @Query('page') page = '1',
+  @Query('limit') limit = '50',
+
+  @Query('fromDate') fromDate = '',
+  @Query('toDate') toDate = '',
+
+  @Query('mode') mode = 'history',
+
+  @Query('telecallerId') telecallerId = '',
+
+  @Query('name') name = '',
+  @Query('phone') phone = '',
+  @Query('city') city = '',
+  @Query('zone') zone = '',
+
+  @Query('contactStatus') contactStatus = '',
+  @Query('callStatus') callStatus = '',
+  @Query('stage') stage = '',
+  @Query('sourceModule') sourceModule = '',
+
+  @Query('hasCalled') hasCalled = '',
+  @Query('convertedToLead') convertedToLead = '',
+  @Query('storageState') storageState = '',
+) {
+  return this.telecallingService.getContactHistory(
+    user,
+    {
+      page: Number(page),
+      limit: Number(limit),
+
+      fromDate: String(fromDate || ''),
+      toDate: String(toDate || ''),
+
+      mode:
+  mode === 'reassignment'
+    ? 'reassignment'
+    : 'history',
+
+      telecallerId: telecallerId
+        ? Number(telecallerId)
+        : undefined,
+
+      name: String(name || ''),
+      phone: String(phone || ''),
+      city: String(city || ''),
+      zone: String(zone || ''),
+
+      contactStatus: String(
+        contactStatus || '',
+      ),
+
+      callStatus: String(callStatus || ''),
+      stage: String(stage || ''),
+      sourceModule: String(
+        sourceModule || '',
+      ),
+
+      hasCalled: String(hasCalled || ''),
+
+      convertedToLead: String(
+        convertedToLead || '',
+      ),
+
+      storageState: String(
+        storageState || '',
+      ),
+    },
+  );
+}
+
     @Get('contacts/:id/work-history')
   getContactWorkHistory(
     @Param('id', ParseIntPipe) id: number,
@@ -459,6 +533,37 @@ getTelecallerContactCount(
   ) {
     return this.telecallingService.updateContactName(id, name, user);
   }
+
+  @Post('contacts/reassign-selected')
+reassignSelectedContacts(
+  @Body()
+  body: {
+    fromTelecallerId: number;
+    toTelecallerId: number;
+    contactIds: number[];
+  },
+  @CurrentUser() user: any,
+) {
+  return this.telecallingService.reassignSelectedContacts(
+    {
+      fromTelecallerId: Number(
+        body?.fromTelecallerId,
+      ),
+
+      toTelecallerId: Number(
+        body?.toTelecallerId,
+      ),
+
+      contactIds: Array.isArray(
+        body?.contactIds,
+      )
+        ? body.contactIds.map(Number)
+        : [],
+    },
+
+    user,
+  );
+}
 
   @Patch('transfer-contacts')
 transferContacts(

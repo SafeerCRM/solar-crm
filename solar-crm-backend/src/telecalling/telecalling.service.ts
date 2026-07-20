@@ -2704,6 +2704,228 @@ async getTelecallerContactCount(userId: number) {
   return { count };
 }
 
+async reassignSelectedContacts(
+  body: {
+    fromTelecallerId: number;
+    toTelecallerId: number;
+    contactIds: number[];
+  },
+  user: any,
+) {
+  if (
+    !this.hasAnyRole(user, [
+      'OWNER',
+      'TELECALLING_MANAGER',
+      'TELECALLING_ASSISTANT',
+    ])
+  ) {
+    throw new ForbiddenException(
+      'Only owner, telecalling manager, or telecalling assistant can reassign contacts',
+    );
+  }
+
+  const fromTelecallerId = Number(
+    body?.fromTelecallerId,
+  );
+
+  const toTelecallerId = Number(
+    body?.toTelecallerId,
+  );
+
+  const contactIds = Array.from(
+    new Set(
+      (Array.isArray(body?.contactIds)
+        ? body.contactIds
+        : []
+      )
+        .map((id) => Number(id))
+        .filter(
+          (id) =>
+            Number.isInteger(id) &&
+            id > 0,
+        ),
+    ),
+  );
+
+  if (
+    !fromTelecallerId ||
+    Number.isNaN(fromTelecallerId)
+  ) {
+    throw new BadRequestException(
+      'From telecaller is required',
+    );
+  }
+
+  if (
+    !toTelecallerId ||
+    Number.isNaN(toTelecallerId)
+  ) {
+    throw new BadRequestException(
+      'To telecaller is required',
+    );
+  }
+
+  if (fromTelecallerId === toTelecallerId) {
+    throw new BadRequestException(
+      'From and To telecaller cannot be the same',
+    );
+  }
+
+  if (!contactIds.length) {
+    throw new BadRequestException(
+      'Select at least one contact',
+    );
+  }
+
+  const [fromTelecaller, toTelecaller] =
+    await Promise.all([
+      this.userRepository.findOne({
+        where: {
+          id: fromTelecallerId,
+        },
+      }),
+
+      this.userRepository.findOne({
+        where: {
+          id: toTelecallerId,
+        },
+      }),
+    ]);
+
+  if (!fromTelecaller) {
+    throw new NotFoundException(
+      'From telecaller not found',
+    );
+  }
+
+  if (!toTelecaller) {
+    throw new NotFoundException(
+      'To telecaller not found',
+    );
+  }
+
+  const fromRoles: UserRole[] =
+    Array.isArray(fromTelecaller.roles)
+      ? (fromTelecaller.roles as UserRole[])
+      : [];
+
+  const toRoles: UserRole[] =
+    Array.isArray(toTelecaller.roles)
+      ? (toTelecaller.roles as UserRole[])
+      : [];
+
+  if (
+    !fromRoles.includes(
+      UserRole.TELECALLER,
+    )
+  ) {
+    throw new BadRequestException(
+      'Selected From user must have TELECALLER role',
+    );
+  }
+
+  if (
+    !toRoles.includes(
+      UserRole.TELECALLER,
+    )
+  ) {
+    throw new BadRequestException(
+      'Selected To user must have TELECALLER role',
+    );
+  }
+
+  /*
+   * Security and data-safety check:
+   * only contacts that are still assigned to the
+   * selected From telecaller can be transferred.
+   */
+  const eligibleContacts =
+    await this.contactRepository
+      .createQueryBuilder('contact')
+      .select(['contact.id'])
+      .where(
+        'contact.id IN (:...contactIds)',
+        {
+          contactIds,
+        },
+      )
+      .andWhere(
+        'contact.assignedTo = :fromTelecallerId',
+        {
+          fromTelecallerId,
+        },
+      )
+      .getMany();
+
+  const eligibleContactIds =
+    eligibleContacts.map(
+      (contact) => Number(contact.id),
+    );
+
+  if (!eligibleContactIds.length) {
+    throw new BadRequestException(
+      'None of the selected contacts are currently assigned to the From telecaller',
+    );
+  }
+
+  if (
+    eligibleContactIds.length !==
+    contactIds.length
+  ) {
+    throw new BadRequestException(
+      'Some selected contacts are no longer assigned to the From telecaller. Refresh the list and try again.',
+    );
+  }
+
+  const result =
+    await this.contactRepository
+      .createQueryBuilder()
+      .update(TelecallingContact)
+      .set({
+        assignedTo: toTelecaller.id,
+        assignedToName:
+          toTelecaller.name,
+      })
+      .where(
+        'id IN (:...eligibleContactIds)',
+        {
+          eligibleContactIds,
+        },
+      )
+      .andWhere(
+        '"assignedTo" = :fromTelecallerId',
+        {
+          fromTelecallerId,
+        },
+      )
+      .execute();
+
+  const transferredCount =
+    result.affected || 0;
+
+  if (
+    transferredCount !==
+    eligibleContactIds.length
+  ) {
+    throw new BadRequestException(
+      'Contact assignments changed during transfer. Refresh the list before trying again.',
+    );
+  }
+
+  return {
+    message: `${transferredCount} contacts reassigned successfully`,
+    transferredCount,
+    fromTelecallerId:
+      fromTelecaller.id,
+    fromTelecallerName:
+      fromTelecaller.name,
+    toTelecallerId:
+      toTelecaller.id,
+    toTelecallerName:
+      toTelecaller.name,
+  };
+}
+
   async transferContacts(body: {
   fromUserId: number;
   toUserId: number;
@@ -2825,6 +3047,468 @@ async getTelecallerContactCount(userId: number) {
   }
 
   return '';
+}
+
+async getContactHistory(
+  user: any,
+  filters: {
+    page?: number;
+    limit?: number;
+
+    fromDate?: string;
+    toDate?: string;
+
+    mode?: 'history' | 'reassignment';
+
+    telecallerId?: number;
+
+    name?: string;
+    phone?: string;
+    city?: string;
+    zone?: string;
+
+    contactStatus?: string;
+    callStatus?: string;
+    stage?: string;
+    sourceModule?: string;
+
+    hasCalled?: string;
+    convertedToLead?: string;
+    storageState?: string;
+  } = {},
+) {
+  const roles = this.getRoles(user);
+
+  const isTelecaller = roles.includes('TELECALLER');
+
+  const canViewAllTelecallers =
+    roles.includes('OWNER') ||
+    roles.includes('TELECALLING_MANAGER') ||
+    roles.includes('TELECALLING_ASSISTANT');
+
+  if (!isTelecaller && !canViewAllTelecallers) {
+    throw new ForbiddenException(
+      'You do not have access to telecalling contact history',
+    );
+  }
+
+  const currentUserId = Number(
+    user?.id ?? user?.userId ?? user?.sub,
+  );
+
+  const page =
+    Number(filters.page) > 0
+      ? Number(filters.page)
+      : 1;
+
+  const limit =
+    Number(filters.limit) > 0
+      ? Math.min(Number(filters.limit), 100)
+      : 50;
+
+  const skip = (page - 1) * limit;
+
+  /*
+   * The default history window is 30 days.
+   * The maximum permitted window is 180 days.
+   */
+  const toDate = filters.toDate
+    ? new Date(`${filters.toDate}T23:59:59.999`)
+    : new Date();
+
+  const fromDate = filters.fromDate
+    ? new Date(`${filters.fromDate}T00:00:00.000`)
+    : new Date(
+        toDate.getTime() -
+          29 * 24 * 60 * 60 * 1000,
+      );
+
+  if (
+    Number.isNaN(fromDate.getTime()) ||
+    Number.isNaN(toDate.getTime())
+  ) {
+    throw new BadRequestException(
+      'Invalid history date range',
+    );
+  }
+
+  if (fromDate.getTime() > toDate.getTime()) {
+    throw new BadRequestException(
+      'From date cannot be after to date',
+    );
+  }
+
+  const requestedDays =
+    Math.floor(
+      (toDate.getTime() - fromDate.getTime()) /
+        (24 * 60 * 60 * 1000),
+    ) + 1;
+
+  if (requestedDays > 180) {
+    throw new BadRequestException(
+      'Contact history can be viewed for a maximum of 180 days',
+    );
+  }
+
+  const name = String(filters.name || '')
+    .trim()
+    .toLowerCase();
+
+  const phone = String(filters.phone || '')
+    .trim()
+    .toLowerCase();
+
+  const city = String(filters.city || '')
+    .trim()
+    .toLowerCase();
+
+  const zone = String(filters.zone || '')
+    .trim()
+    .toLowerCase();
+
+  const contactStatus = String(
+    filters.contactStatus || '',
+  )
+    .trim()
+    .toUpperCase();
+
+  const callStatus = String(filters.callStatus || '')
+    .trim()
+    .toUpperCase();
+
+  const stage = String(filters.stage || '')
+    .trim()
+    .toUpperCase();
+
+  const sourceModule = String(
+    filters.sourceModule || '',
+  )
+    .trim()
+    .toUpperCase();
+
+  const hasCalled = String(filters.hasCalled || '')
+    .trim()
+    .toLowerCase();
+
+  const convertedToLead = String(
+    filters.convertedToLead || '',
+  )
+    .trim()
+    .toLowerCase();
+
+  const storageState = String(
+    filters.storageState || '',
+  )
+    .trim()
+    .toUpperCase();
+
+    const mode =
+  filters.mode === 'reassignment'
+    ? 'reassignment'
+    : 'history';
+
+  /*
+   * Latest work date for the contact:
+   *
+   * 1. Latest contact-call-history activity
+   * 2. Contact updatedAt
+   * 3. Contact createdAt
+   */
+  const latestActivityExpression = `
+    COALESCE(
+      (
+        SELECT COALESCE(
+          history."updatedAt",
+          history."createdAt"
+        )
+        FROM contact_call_history history
+        WHERE history."contactId" = contact.id
+        ORDER BY
+          COALESCE(
+            history."updatedAt",
+            history."createdAt"
+          ) DESC
+        LIMIT 1
+      ),
+      contact."updatedAt",
+      contact."createdAt"
+    )
+  `;
+
+  const latestCallStatusExpression = `
+    (
+      SELECT UPPER(
+        COALESCE(history."callStatus", '')
+      )
+      FROM contact_call_history history
+      WHERE history."contactId" = contact.id
+      ORDER BY
+        COALESCE(
+          history."updatedAt",
+          history."createdAt"
+        ) DESC
+      LIMIT 1
+    )
+  `;
+
+  const latestCallNotesExpression = `
+    (
+      SELECT COALESCE(history.notes, '')
+      FROM contact_call_history history
+      WHERE history."contactId" = contact.id
+      ORDER BY
+        COALESCE(
+          history."updatedAt",
+          history."createdAt"
+        ) DESC
+      LIMIT 1
+    )
+  `;
+
+  const latestCalledByNameExpression = `
+    (
+      SELECT COALESCE(
+        history."calledByName",
+        ''
+      )
+      FROM contact_call_history history
+      WHERE history."contactId" = contact.id
+      ORDER BY
+        COALESCE(
+          history."updatedAt",
+          history."createdAt"
+        ) DESC
+      LIMIT 1
+    )
+  `;
+
+  const latestCalledByExpression = `
+    (
+      SELECT history."calledBy"
+      FROM contact_call_history history
+      WHERE history."contactId" = contact.id
+      ORDER BY
+        COALESCE(
+          history."updatedAt",
+          history."createdAt"
+        ) DESC
+      LIMIT 1
+    )
+  `;
+
+  const qb = this.contactRepository
+    .createQueryBuilder('contact')
+    .addSelect(
+      latestActivityExpression,
+      'latestActivityAt',
+    )
+    .addSelect(
+      latestCallStatusExpression,
+      'latestCallStatus',
+    )
+    .addSelect(
+      latestCallNotesExpression,
+      'latestCallNotes',
+    )
+    .addSelect(
+      latestCalledByNameExpression,
+      'latestCalledByName',
+    )
+    .addSelect(
+      latestCalledByExpression,
+      'latestCalledBy',
+    )
+    .where('1 = 1');
+
+if (mode === 'history') {
+  qb.andWhere(
+    `${latestActivityExpression} BETWEEN :fromDate AND :toDate`,
+    {
+      fromDate,
+      toDate,
+    },
+  );
+}
+
+  /*
+   * A telecaller can never request another telecaller's contacts.
+   */
+  if (isTelecaller) {
+    qb.andWhere(
+      'contact.assignedTo = :visibleTelecallerId',
+      {
+        visibleTelecallerId: currentUserId,
+      },
+    );
+  } else if (Number(filters.telecallerId) > 0) {
+    qb.andWhere(
+      'contact.assignedTo = :visibleTelecallerId',
+      {
+        visibleTelecallerId: Number(
+          filters.telecallerId,
+        ),
+      },
+    );
+  }
+
+  if (name) {
+    qb.andWhere(
+      `LOWER(COALESCE(contact.name, '')) LIKE :name`,
+      {
+        name: `%${name}%`,
+      },
+    );
+  }
+
+  if (phone) {
+    qb.andWhere(
+      `LOWER(COALESCE(contact.phone, '')) LIKE :phone`,
+      {
+        phone: `%${phone}%`,
+      },
+    );
+  }
+
+  if (city) {
+    qb.andWhere(
+      `LOWER(COALESCE(contact.city, '')) LIKE :city`,
+      {
+        city: `%${city}%`,
+      },
+    );
+  }
+
+  if (zone) {
+    qb.andWhere(
+      `LOWER(COALESCE(contact.zone, '')) LIKE :zone`,
+      {
+        zone: `%${zone}%`,
+      },
+    );
+  }
+
+  if (contactStatus) {
+    qb.andWhere(
+      `UPPER(COALESCE(contact.status, '')) = :contactStatus`,
+      {
+        contactStatus,
+      },
+    );
+  }
+
+  if (callStatus) {
+    qb.andWhere(
+      `${latestCallStatusExpression} = :callStatus`,
+      {
+        callStatus,
+      },
+    );
+  }
+
+  if (stage) {
+    qb.andWhere(
+      `UPPER(
+        COALESCE(contact.stage, 'TELECALLING')
+      ) = :stage`,
+      {
+        stage,
+      },
+    );
+  }
+
+  if (sourceModule) {
+    qb.andWhere(
+      `UPPER(
+        COALESCE(contact.sourceModule, '')
+      ) = :sourceModule`,
+      {
+        sourceModule,
+      },
+    );
+  }
+
+  if (hasCalled === 'true') {
+    qb.andWhere('contact.hasCalled = true');
+  }
+
+  if (hasCalled === 'false') {
+    qb.andWhere('contact.hasCalled = false');
+  }
+
+  if (convertedToLead === 'true') {
+    qb.andWhere('contact.convertedToLead = true');
+  }
+
+  if (convertedToLead === 'false') {
+    qb.andWhere('contact.convertedToLead = false');
+  }
+
+  if (storageState === 'ACTIVE') {
+    qb.andWhere('contact.isInStorage = false');
+  }
+
+  if (storageState === 'STORAGE') {
+    qb.andWhere('contact.isInStorage = true');
+  }
+
+  const total = await qb.getCount();
+
+  const result = await qb
+    .orderBy(latestActivityExpression, 'DESC')
+    .addOrderBy('contact.id', 'DESC')
+    .skip(skip)
+    .take(limit)
+    .getRawAndEntities();
+
+  const data = result.entities.map(
+    (contact, index) => {
+      const raw = result.raw[index] || {};
+
+      return {
+        ...contact,
+
+        latestActivityAt:
+          raw.latestActivityAt || null,
+
+        latestCallStatus:
+          raw.latestCallStatus || '',
+
+        latestCallNotes:
+          raw.latestCallNotes || '',
+
+        latestCalledBy:
+          raw.latestCalledBy
+            ? Number(raw.latestCalledBy)
+            : null,
+
+        latestCalledByName:
+          raw.latestCalledByName || '',
+      };
+    },
+  );
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages:
+      Math.ceil(total / limit) || 1,
+
+    filters: {
+      fromDate:
+        fromDate.toISOString(),
+
+      toDate:
+        toDate.toISOString(),
+
+      maximumDays: 180,
+
+      selectedTelecallerId: isTelecaller
+        ? currentUserId
+        : Number(filters.telecallerId) || null,
+    },
+  };
 }
 }
 
