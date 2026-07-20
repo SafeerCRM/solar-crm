@@ -3998,16 +3998,21 @@ const isLoanProcessCompleted =
   return (
     <div className="mx-auto max-w-7xl space-y-5">
       <div className="rounded-2xl bg-white p-5 shadow">
-        <Link href="/project" className="text-sm font-semibold text-blue-600">
-          ← Back to Projects
-        </Link>
+        <div className="flex flex-wrap items-center gap-4">
+  <Link
+    href="/project"
+    className="inline-flex items-center rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50"
+  >
+    ← Back to Projects
+  </Link>
 
-        <Link
-  href={`/project/epc-invoice/${projectId}`}
-  className="rounded-xl bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700"
->
-  Generate EPC Tax Invoice
-</Link>
+  <Link
+    href={`/project/epc-invoice/${projectId}`}
+    className="inline-flex items-center rounded-xl bg-orange-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-orange-700"
+  >
+    Generate EPC Tax Invoice
+  </Link>
+</div>
 
         <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
