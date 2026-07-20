@@ -4,6 +4,13 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import axios from 'axios';
 import { getAuthHeaders } from '@/lib/authHeaders';
+import { Capacitor } from '@capacitor/core';
+import {
+  Directory,
+  Encoding,
+  Filesystem,
+} from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -170,97 +177,95 @@ setSummary({
     try {
       setExportLoading(true);
 
+      const token =
+        localStorage.getItem('token');
+
       const res = await axios.get(
         `${API_BASE_URL}/project/payment-collection/export-csv`,
         {
           params: {
             branch,
-            customerName: search,
+
+            customerName:
+              search,
+
             projectOwnerId,
+
             month,
+
             fromDate,
+
             toDate,
+
             status,
+
             approvalStatus,
-            pendingOnly: pendingOnly
-              ? 'true'
-              : '',
+
+            pendingOnly:
+              pendingOnly
+                ? 'true'
+                : '',
           },
 
-          headers: getAuthHeaders(),
+          headers: token
+            ? {
+                Authorization:
+                  `Bearer ${token}`,
+              }
+            : {},
 
-          responseType: 'blob',
+          responseType: 'text',
         },
       );
 
-      const blob = new Blob(
-        [res.data],
-        {
-          type: 'text/csv;charset=utf-8',
-        },
-      );
+      const csvContent =
+        typeof res.data === 'string'
+          ? res.data
+          : String(res.data || '');
 
-      const today = new Date()
-        .toLocaleDateString('en-CA', {
-          timeZone: 'Asia/Kolkata',
-        });
+      if (!csvContent.trim()) {
+        alert(
+          'No payment collection records found for the applied filters',
+        );
+
+        return;
+      }
+
+      /*
+       * The backend response already contains
+       * the UTF-8 BOM and completed CSV content.
+       */
+      const today =
+        new Date()
+          .toISOString()
+          .slice(0, 10);
 
       const fileName =
         `payment-collection-report-${today}.csv`;
 
       /*
-       * Convert the CSV blob to Base64 so the
-       * Capacitor APK can save and share it.
+       * APK:
+       * Save the CSV in the app cache and open
+       * the native Android share/save sheet.
+       *
+       * This is the same working pattern used
+       * by the Project List download.
        */
-      const arrayBuffer =
-        await blob.arrayBuffer();
-
-      const bytes =
-        new Uint8Array(arrayBuffer);
-
-      let binaryString = '';
-
-      const chunkSize = 8192;
-
-      for (
-        let index = 0;
-        index < bytes.length;
-        index += chunkSize
+      if (
+        Capacitor.isNativePlatform()
       ) {
-        const chunk = bytes.subarray(
-          index,
-          Math.min(
-            index + chunkSize,
-            bytes.length,
-          ),
-        );
-
-        binaryString +=
-          String.fromCharCode(...chunk);
-      }
-
-      const base64 =
-        btoa(binaryString);
-
-      try {
-        const {
-          Filesystem,
-          Directory,
-        } = await import(
-          '@capacitor/filesystem'
-        );
-
-        const { Share } =
-          await import(
-            '@capacitor/share'
-          );
-
-        const saved =
+        const writeResult =
           await Filesystem.writeFile({
             path: fileName,
-            data: base64,
+
+            data: csvContent,
+
             directory:
-              Directory.Documents,
+              Directory.Cache,
+
+            encoding:
+              Encoding.UTF8,
+
             recursive: true,
           });
 
@@ -271,73 +276,62 @@ setSummary({
           text:
             'Filtered payment collection report',
 
-          url: saved.uri,
+          files: [
+            writeResult.uri,
+          ],
 
           dialogTitle:
             'Save or share collection report',
         });
 
         return;
-      } catch {
-        /*
-         * Browser fallback.
-         */
-        const url =
-          window.URL.createObjectURL(
-            blob,
-          );
-
-        const link =
-          document.createElement('a');
-
-        link.href = url;
-        link.download = fileName;
-
-        document.body.appendChild(link);
-
-        link.click();
-        link.remove();
-
-        window.URL.revokeObjectURL(
-          url,
-        );
       }
+
+      /*
+       * Web:
+       * Download through the browser.
+       */
+      const blob = new Blob(
+        [csvContent],
+        {
+          type:
+            'text/csv;charset=utf-8;',
+        },
+      );
+
+      const downloadUrl =
+        URL.createObjectURL(blob);
+
+      const anchor =
+        document.createElement('a');
+
+      anchor.href =
+        downloadUrl;
+
+      anchor.download =
+        fileName;
+
+      document.body.appendChild(
+        anchor,
+      );
+
+      anchor.click();
+      anchor.remove();
+
+      URL.revokeObjectURL(
+        downloadUrl,
+      );
     } catch (error: any) {
       console.error(
-        'Failed to download payment collection CSV:',
+        'Payment collection export failed:',
         error,
       );
 
-      let message =
-        'Failed to download payment collection report';
-
-      const responseData =
-        error?.response?.data;
-
-      if (
-        responseData instanceof Blob
-      ) {
-        try {
-          const errorText =
-            await responseData.text();
-
-          const parsed =
-            JSON.parse(errorText);
-
-          message =
-            parsed?.message ||
-            message;
-        } catch {
-          // Keep the default error message.
-        }
-      } else if (
-        responseData?.message
-      ) {
-        message =
-          responseData.message;
-      }
-
-      alert(message);
+      alert(
+        error?.response?.data?.message ||
+          error?.message ||
+          'Failed to download payment collection report',
+      );
     } finally {
       setExportLoading(false);
     }
