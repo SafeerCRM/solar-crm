@@ -631,6 +631,23 @@ export default function ProjectDetailPage() {
 
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
+  const [siteLocationForm, setSiteLocationForm] =
+  useState({
+    address: '',
+    gpsAddress: '',
+    gpsLatitude: '',
+    gpsLongitude: '',
+  });
+
+const [
+  siteLocationSaving,
+  setSiteLocationSaving,
+] = useState(false);
+
+const [
+  siteLocationCapturing,
+  setSiteLocationCapturing,
+] = useState(false);
   const [currentUserRoles, setCurrentUserRoles] = useState<string[]>([]);
   const [contractorAssignments, setContractorAssignments] =
   useState<ContractorAssignment[]>([]);
@@ -1042,11 +1059,314 @@ const [franchisePayoutLoading, setFranchisePayoutLoading] =
       });
 
       setProject(res.data);
+
+setSiteLocationForm({
+  address:
+    res.data?.address || '',
+
+  gpsAddress:
+    res.data?.gpsAddress || '',
+
+  gpsLatitude:
+    res.data?.gpsLatitude !== null &&
+    res.data?.gpsLatitude !== undefined
+      ? String(
+          res.data.gpsLatitude,
+        )
+      : '',
+
+  gpsLongitude:
+    res.data?.gpsLongitude !== null &&
+    res.data?.gpsLongitude !== undefined
+      ? String(
+          res.data.gpsLongitude,
+        )
+      : '',
+});
     } catch (error) {
       console.error('Failed to load project:', error);
       alert('Failed to load project details');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const captureProjectSiteLocation =
+  () => {
+    if (
+      !navigator.geolocation
+    ) {
+      alert(
+        'GPS is not supported on this device',
+      );
+
+      return;
+    }
+
+    setSiteLocationCapturing(
+      true,
+    );
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const latitude =
+          String(
+            position.coords
+              .latitude,
+          );
+
+        const longitude =
+          String(
+            position.coords
+              .longitude,
+          );
+
+        let gpsAddress = '';
+
+        try {
+          const response =
+            await fetch(
+              `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}`,
+            );
+
+          if (response.ok) {
+            const data =
+              await response.json();
+
+            gpsAddress =
+              String(
+                data?.display_name ||
+                  '',
+              ).trim();
+          }
+        } catch (error) {
+          console.error(
+            'Failed to fetch project GPS address:',
+            error,
+          );
+        }
+
+        setSiteLocationForm(
+          (previous) => ({
+            ...previous,
+
+            gpsLatitude:
+              latitude,
+
+            gpsLongitude:
+              longitude,
+
+            gpsAddress:
+              gpsAddress ||
+              previous.gpsAddress,
+
+            address:
+              previous.address ||
+              gpsAddress,
+          }),
+        );
+
+        setSiteLocationCapturing(
+          false,
+        );
+
+        alert(
+          'Current location captured. Review it and click Save Project Location.',
+        );
+      },
+
+      (error) => {
+        console.error(
+          'Project GPS capture failed:',
+          error,
+        );
+
+        setSiteLocationCapturing(
+          false,
+        );
+
+        if (
+          error.code ===
+          error.PERMISSION_DENIED
+        ) {
+          alert(
+            'Location permission was denied. Please allow location access and try again.',
+          );
+
+          return;
+        }
+
+        alert(
+          'Unable to capture current location',
+        );
+      },
+
+      {
+        enableHighAccuracy: true,
+        timeout: 20000,
+        maximumAge: 0,
+      },
+    );
+  };
+
+  const saveProjectSiteLocation =
+  async () => {
+    const latitude =
+      String(
+        siteLocationForm.gpsLatitude ||
+          '',
+      ).trim();
+
+    const longitude =
+      String(
+        siteLocationForm.gpsLongitude ||
+          '',
+      ).trim();
+
+    const gpsAddress =
+      String(
+        siteLocationForm.gpsAddress ||
+          '',
+      ).trim();
+
+    const address =
+      String(
+        siteLocationForm.address ||
+          '',
+      ).trim();
+
+    if (
+      !latitude ||
+      !longitude
+    ) {
+      alert(
+        'Please capture or enter latitude and longitude',
+      );
+
+      return;
+    }
+
+    const latitudeNumber =
+      Number(latitude);
+
+    const longitudeNumber =
+      Number(longitude);
+
+    if (
+      !Number.isFinite(
+        latitudeNumber,
+      ) ||
+      latitudeNumber < -90 ||
+      latitudeNumber > 90
+    ) {
+      alert(
+        'Please enter a valid latitude',
+      );
+
+      return;
+    }
+
+    if (
+      !Number.isFinite(
+        longitudeNumber,
+      ) ||
+      longitudeNumber < -180 ||
+      longitudeNumber > 180
+    ) {
+      alert(
+        'Please enter a valid longitude',
+      );
+
+      return;
+    }
+
+    if (
+      !gpsAddress &&
+      !address
+    ) {
+      alert(
+        'Please enter the project site address',
+      );
+
+      return;
+    }
+
+    const locationExists =
+      Boolean(
+        project?.gpsLatitude &&
+          project?.gpsLongitude,
+      );
+
+    if (locationExists) {
+      const confirmed =
+        window.confirm(
+          'A project site location is already saved. Do you want to update the permanent location?',
+        );
+
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    try {
+      setSiteLocationSaving(
+        true,
+      );
+
+      const token =
+        localStorage.getItem(
+          'token',
+        );
+
+      await axios.patch(
+        `${API_BASE_URL}/project/${projectId}`,
+        {
+          address:
+            address ||
+            gpsAddress,
+
+          gpsAddress:
+            gpsAddress ||
+            address,
+
+          gpsLatitude:
+            latitudeNumber,
+
+          gpsLongitude:
+            longitudeNumber,
+        },
+        {
+          headers: token
+            ? {
+                Authorization:
+                  `Bearer ${token}`,
+              }
+            : {},
+        },
+      );
+
+      alert(
+        locationExists
+          ? 'Project site location updated successfully'
+          : 'Project site location saved successfully',
+      );
+
+      await fetchProject();
+    } catch (error: any) {
+      console.error(
+        'Failed to save project site location:',
+        error,
+      );
+
+      alert(
+        error?.response?.data
+          ?.message ||
+          'Failed to save project site location',
+      );
+    } finally {
+      setSiteLocationSaving(
+        false,
+      );
     }
   };
 
@@ -4035,6 +4355,168 @@ const isLoanProcessCompleted =
       ✓ Loan Process Completed
     </span>
   )}
+</div>
+
+{/* Permanent Project Site Location */}
+<div className="rounded-2xl border border-blue-100 bg-white p-5 shadow">
+  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+    <div>
+      <h2 className="text-lg font-bold text-gray-800">
+        📍 Project Site Location
+      </h2>
+
+      <p className="mt-1 text-sm text-gray-500">
+        Permanent installation location used for cleaning,
+        maintenance and after-sales visits.
+      </p>
+    </div>
+
+    {siteLocationForm.gpsLatitude &&
+    siteLocationForm.gpsLongitude ? (
+      <span className="w-fit rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
+        Location Saved
+      </span>
+    ) : (
+      <span className="w-fit rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
+        Location Not Added
+      </span>
+    )}
+  </div>
+
+  <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
+    <div className="md:col-span-2">
+      <label className="mb-1 block text-sm font-semibold text-gray-700">
+        Project Site Address
+      </label>
+
+      <textarea
+        value={siteLocationForm.address}
+        onChange={(event) =>
+          setSiteLocationForm((previous) => ({
+            ...previous,
+            address: event.target.value,
+          }))
+        }
+        rows={3}
+        placeholder="Enter the permanent project installation address"
+        className="w-full rounded-xl border border-gray-300 p-3 outline-none focus:border-blue-500"
+      />
+    </div>
+
+    <div className="md:col-span-2">
+      <label className="mb-1 block text-sm font-semibold text-gray-700">
+        GPS Address
+      </label>
+
+      <textarea
+        value={siteLocationForm.gpsAddress}
+        onChange={(event) =>
+          setSiteLocationForm((previous) => ({
+            ...previous,
+            gpsAddress: event.target.value,
+          }))
+        }
+        rows={2}
+        placeholder="Address captured from GPS or Google Maps"
+        className="w-full rounded-xl border border-gray-300 p-3 outline-none focus:border-blue-500"
+      />
+    </div>
+
+    <div>
+      <label className="mb-1 block text-sm font-semibold text-gray-700">
+        Latitude
+      </label>
+
+      <input
+        type="number"
+        step="any"
+        value={siteLocationForm.gpsLatitude}
+        onChange={(event) =>
+          setSiteLocationForm((previous) => ({
+            ...previous,
+            gpsLatitude: event.target.value,
+          }))
+        }
+        placeholder="Example: 25.2138"
+        className="w-full rounded-xl border border-gray-300 p-3 outline-none focus:border-blue-500"
+      />
+    </div>
+
+    <div>
+      <label className="mb-1 block text-sm font-semibold text-gray-700">
+        Longitude
+      </label>
+
+      <input
+        type="number"
+        step="any"
+        value={siteLocationForm.gpsLongitude}
+        onChange={(event) =>
+          setSiteLocationForm((previous) => ({
+            ...previous,
+            gpsLongitude: event.target.value,
+          }))
+        }
+        placeholder="Example: 75.8648"
+        className="w-full rounded-xl border border-gray-300 p-3 outline-none focus:border-blue-500"
+      />
+    </div>
+  </div>
+
+  <div className="mt-5 flex flex-wrap gap-3">
+    <button
+      type="button"
+      onClick={captureProjectSiteLocation}
+      disabled={
+        siteLocationCapturing ||
+        siteLocationSaving
+      }
+      className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      {siteLocationCapturing
+        ? 'Capturing Location...'
+        : 'Use Current GPS'}
+    </button>
+
+    <button
+      type="button"
+      onClick={saveProjectSiteLocation}
+      disabled={
+        siteLocationSaving ||
+        siteLocationCapturing
+      }
+      className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      {siteLocationSaving
+        ? 'Saving...'
+        : siteLocationForm.gpsLatitude &&
+            siteLocationForm.gpsLongitude
+          ? 'Save / Update Project Location'
+          : 'Save Project Location'}
+    </button>
+
+    {siteLocationForm.gpsLatitude &&
+    siteLocationForm.gpsLongitude ? (
+      <a
+        href={`https://www.google.com/maps?q=${encodeURIComponent(
+          siteLocationForm.gpsLatitude,
+        )},${encodeURIComponent(
+          siteLocationForm.gpsLongitude,
+        )}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+      >
+        Open in Google Maps
+      </a>
+    ) : null}
+  </div>
+
+  <div className="mt-4 rounded-xl bg-blue-50 p-3 text-sm text-blue-800">
+    This location remains attached to the project permanently and
+    can be reused for customer cleaning, complaints, maintenance
+    and after-sales service.
+  </div>
 </div>
 
           {activeTab === 'CONTRACTOR_WORK' && (
