@@ -149,6 +149,18 @@ meetingManagerRole: string;
   gpsAddress: string;
 
   @Column({ nullable: true })
+locationUpdatedBy: number;
+
+@Column({ nullable: true })
+locationUpdatedByName: string;
+
+@Column({ nullable: true })
+locationUpdatedByRole: string;
+
+@Column({ type: 'timestamp', nullable: true })
+locationUpdatedAt: Date;
+
+  @Column({ nullable: true })
 branchName: string;
 
   @Column({ nullable: true })

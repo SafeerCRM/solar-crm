@@ -2799,6 +2799,45 @@ for (const field of dateFields) {
   }
 }
 
+const hasProjectLocationUpdate =
+  Object.prototype.hasOwnProperty.call(
+    safeData,
+    'address',
+  ) ||
+  Object.prototype.hasOwnProperty.call(
+    safeData,
+    'gpsAddress',
+  ) ||
+  Object.prototype.hasOwnProperty.call(
+    safeData,
+    'gpsLatitude',
+  ) ||
+  Object.prototype.hasOwnProperty.call(
+    safeData,
+    'gpsLongitude',
+  );
+
+if (hasProjectLocationUpdate) {
+  (safeData as any).locationUpdatedBy =
+    user?.id ||
+    user?.userId ||
+    user?.sub ||
+    null;
+
+  (safeData as any).locationUpdatedByName =
+    user?.name ||
+    user?.email ||
+    'Internal User';
+
+  (safeData as any).locationUpdatedByRole =
+    Array.isArray(user?.roles)
+      ? user.roles.join(', ')
+      : '';
+
+  (safeData as any).locationUpdatedAt =
+    new Date();
+}
+
 Object.assign(project, safeData);
 
 const updatedProject =

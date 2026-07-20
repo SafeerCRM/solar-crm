@@ -3050,28 +3050,48 @@ async updateProjectSiteLocation(
     );
   }
 
-  project.address = String(body.address || '').trim();
-  project.gpsAddress = String(body.gpsAddress || '').trim();
   const gpsLatitude = Number(body.gpsLatitude);
-const gpsLongitude = Number(body.gpsLongitude);
+  const gpsLongitude = Number(body.gpsLongitude);
 
-if (
-  !Number.isFinite(gpsLatitude) ||
-  !Number.isFinite(gpsLongitude)
-) {
-  throw new BadRequestException(
-    'Valid GPS latitude and longitude are required',
-  );
-}
+  if (
+    !Number.isFinite(gpsLatitude) ||
+    !Number.isFinite(gpsLongitude)
+  ) {
+    throw new BadRequestException(
+      'Valid GPS latitude and longitude are required',
+    );
+  }
 
-project.gpsLatitude = gpsLatitude;
-project.gpsLongitude = gpsLongitude;
+  project.address = String(
+    body.address || '',
+  ).trim();
+
+  project.gpsAddress = String(
+    body.gpsAddress || '',
+  ).trim();
+
+  project.gpsLatitude = gpsLatitude;
+  project.gpsLongitude = gpsLongitude;
+
+  project.locationUpdatedBy = customerId;
+
+  project.locationUpdatedByName =
+    project.customerName ||
+    project.customerCode ||
+    'Customer';
+
+  project.locationUpdatedByRole =
+    'CUSTOMER';
+
+  project.locationUpdatedAt =
+    new Date();
 
   await this.projectRepository.save(project);
 
   return {
     success: true,
-    message: 'Project site location updated successfully.',
+    message:
+      'Project site location updated successfully.',
     project,
   };
 }
