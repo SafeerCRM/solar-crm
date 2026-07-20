@@ -5425,6 +5425,29 @@ const projectPendingSql = `
   )
 `;
 
+/*
+ * The card status is date-aware.
+ * Use the exact same calculation for filtering,
+ * counting and summary generation.
+ */
+const computedPaymentStatusSql = `
+  CASE
+    WHEN payment.status = 'PAID'
+      THEN 'PAID'
+
+    WHEN payment.status = 'CANCELLED'
+      THEN 'CANCELLED'
+
+    WHEN payment."dueDate" IS NOT NULL
+      AND COALESCE(payment."pendingAmount", 0) > 0
+      AND payment."dueDate"::date <
+        (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
+      THEN 'OVERDUE'
+
+    ELSE payment.status
+  END
+`;
+
   const qb = this.projectPaymentInstallmentRepository
     .createQueryBuilder('payment')
     .leftJoin(Project, 'project', 'project.id = payment.projectId')
@@ -5501,10 +5524,14 @@ const projectPendingSql = `
 }
 
   if (status?.trim()) {
-    qb.andWhere('payment.status = :status', {
-      status: status.trim(),
-    });
-  }
+  qb.andWhere(
+    `${computedPaymentStatusSql} = :status`,
+    {
+      status:
+        status.trim().toUpperCase(),
+    },
+  );
+}
 
   if (approvalStatus?.trim()) {
   qb.andWhere(
@@ -5650,10 +5677,14 @@ if (projectIds.length > 0) {
 }
 
   if (status?.trim()) {
-    countQb.andWhere('payment.status = :status', {
-      status: status.trim(),
-    });
-  }
+  countQb.andWhere(
+    `${computedPaymentStatusSql} = :status`,
+    {
+      status:
+        status.trim().toUpperCase(),
+    },
+  );
+}
 
   if (approvalStatus?.trim()) {
   countQb.andWhere(
@@ -5756,9 +5787,13 @@ if (customerName?.trim()) {
 }
 
 if (status?.trim()) {
-  summaryQb.andWhere('payment.status = :status', {
-    status: status.trim(),
-  });
+  summaryQb.andWhere(
+    `${computedPaymentStatusSql} = :status`,
+    {
+      status:
+        status.trim().toUpperCase(),
+    },
+  );
 }
 
 if (approvalStatus?.trim()) {
