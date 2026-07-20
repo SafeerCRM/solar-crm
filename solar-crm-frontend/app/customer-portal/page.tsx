@@ -660,6 +660,15 @@ function ProjectCard({ project }: { project: any }) {
   const [capturingLocation, setCapturingLocation] = useState(false);
   const [savingLocation, setSavingLocation] = useState(false);
 
+  const [locationUpdatedByName, setLocationUpdatedByName] =
+  useState(project.locationUpdatedByName || '');
+
+const [locationUpdatedByRole, setLocationUpdatedByRole] =
+  useState(project.locationUpdatedByRole || '');
+
+const [locationUpdatedAt, setLocationUpdatedAt] =
+  useState(project.locationUpdatedAt || '');
+
   const hasSavedLocation =
     gpsLatitude !== null &&
     gpsLongitude !== null &&
@@ -798,6 +807,20 @@ function ProjectCard({ project }: { project: any }) {
         return;
       }
 
+      if (data?.project) {
+  setLocationUpdatedByName(
+    data.project.locationUpdatedByName || '',
+  );
+
+  setLocationUpdatedByRole(
+    data.project.locationUpdatedByRole || '',
+  );
+
+  setLocationUpdatedAt(
+    data.project.locationUpdatedAt || '',
+  );
+}
+
       alert('Project location saved successfully.');
     } catch (error) {
       console.error(error);
@@ -912,6 +935,40 @@ function ProjectCard({ project }: { project: any }) {
               </a>
             )}
           </div>
+
+          {locationUpdatedAt && (
+  <div className="mt-4 rounded-xl border border-blue-200 bg-white p-3">
+    <p className="text-xs font-bold text-gray-700">
+      Location update details
+    </p>
+
+    <p className="mt-1 text-xs text-gray-600">
+      Last updated by:{' '}
+      <span className="font-semibold">
+        {locationUpdatedByRole === 'CUSTOMER'
+          ? 'Customer Portal'
+          : locationUpdatedByName || 'Internal Team'}
+      </span>
+    </p>
+
+    {locationUpdatedByRole &&
+      locationUpdatedByRole !== 'CUSTOMER' && (
+        <p className="text-xs text-gray-600">
+          Role:{' '}
+          <span className="font-semibold">
+            {locationUpdatedByRole}
+          </span>
+        </p>
+      )}
+
+    <p className="text-xs text-gray-600">
+      Updated on:{' '}
+      <span className="font-semibold">
+        {new Date(locationUpdatedAt).toLocaleString('en-IN')}
+      </span>
+    </p>
+  </div>
+)}
 
           <p className="mt-3 text-xs leading-5 text-gray-500">
             Save the exact solar plant location so the service,

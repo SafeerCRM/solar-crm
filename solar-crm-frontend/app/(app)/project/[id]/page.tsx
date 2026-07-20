@@ -140,6 +140,10 @@ projectManagerApprovalNote?: string;
   gpsAddress?: string;
   gpsLatitude?: number;
   gpsLongitude?: number;
+  locationUpdatedBy?: number;
+locationUpdatedByName?: string;
+locationUpdatedByRole?: string;
+locationUpdatedAt?: string;
   finalCost?: number;
   solarFranchiseUserId?: number;
 solarFranchiseName?: string;
@@ -4494,6 +4498,49 @@ const isLoanProcessCompleted =
           ? 'Save / Update Project Location'
           : 'Save Project Location'}
     </button>
+
+    {project?.locationUpdatedAt && (
+  <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-4">
+    <p className="text-sm font-bold text-blue-800">
+      Location Update Details
+    </p>
+
+    <div className="mt-3 grid gap-2 md:grid-cols-3">
+      <div>
+        <p className="text-xs text-gray-500">
+          Updated By
+        </p>
+
+        <p className="font-semibold text-gray-800">
+          {project.locationUpdatedByName || '-'}
+        </p>
+      </div>
+
+      <div>
+        <p className="text-xs text-gray-500">
+          Role
+        </p>
+
+        <p className="font-semibold text-gray-800">
+          {String(project.locationUpdatedByRole || '-')
+            .replaceAll('_', ' ')}
+        </p>
+      </div>
+
+      <div>
+        <p className="text-xs text-gray-500">
+          Updated On
+        </p>
+
+        <p className="font-semibold text-gray-800">
+          {new Date(
+            project.locationUpdatedAt,
+          ).toLocaleString('en-IN')}
+        </p>
+      </div>
+    </div>
+  </div>
+)}
 
     {siteLocationForm.gpsLatitude &&
     siteLocationForm.gpsLongitude ? (
