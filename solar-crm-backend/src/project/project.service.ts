@@ -5392,7 +5392,23 @@ async getPaymentCollectionList(query: any, currentUser: any) {
   roles.includes('PAYMENT_MANAGER') ||
   roles.includes('ACCOUNT_MANAGER');
 
-  const projectCollectedSql = `
+  /*
+ * Some older/legacy projects do not have finalCost,
+ * but do have netAmount or projectCost.
+ *
+ * Use the same project-total fallback already used
+ * elsewhere in the CRM.
+ */
+const projectTotalSql = `
+  COALESCE(
+    NULLIF(project."finalCost", 0),
+    NULLIF(project."netAmount", 0),
+    NULLIF(project."projectCost", 0),
+    0
+  )
+`;
+
+const projectCollectedSql = `
   COALESCE((
     SELECT SUM(p2."paidAmount")
     FROM project_payment_installments p2
@@ -5403,7 +5419,10 @@ async getPaymentCollectionList(query: any, currentUser: any) {
 `;
 
 const projectPendingSql = `
-  GREATEST(COALESCE(project."finalCost", 0) - ${projectCollectedSql}, 0)
+  GREATEST(
+    ${projectTotalSql} - ${projectCollectedSql},
+    0
+  )
 `;
 
   const qb = this.projectPaymentInstallmentRepository
@@ -5431,7 +5450,7 @@ const projectPendingSql = `
       'project.projectOwnerId AS "projectOwnerId"',
       'project.projectOwnerName AS "projectOwnerName"',
       'project.projectSerial AS "projectSerial"',
-      'project.finalCost AS "finalCost"',
+      `${projectTotalSql} AS "finalCost"`,
       'project.status AS "projectStatus"',
     ])
     .orderBy('payment.dueDate', 'ASC')
@@ -5684,8 +5703,8 @@ if (projectIds.length > 0) {
   .createQueryBuilder('payment')
   .leftJoin(Project, 'project', 'project.id = payment.projectId')
   .select('project.id', 'projectId')
-  .addSelect('project.finalCost', 'finalCost')
-  .addSelect(projectCollectedSql, 'collectedAmount');
+.addSelect(projectTotalSql, 'finalCost')
+.addSelect(projectCollectedSql, 'collectedAmount');
 
 summaryQb.where('payment.isHidden = false');
 summaryQb.andWhere('project.isHidden = false');
@@ -5791,20 +5810,59 @@ summaryQb.groupBy('project.id');
 
 const summaryRows = await summaryQb.getRawMany();
 
-const projectTotalAmount = summaryRows.reduce(
-  (sum, item) => sum + Number(item.finalCost || 0),
-  0,
-);
+const paymentCollectionSummary =
+  summaryRows.reduce(
+    (
+      result: {
+        projectTotalAmount: number;
+        projectCollectedAmount: number;
+        projectPendingAmount: number;
+      },
+      item: any,
+    ) => {
+      const projectTotal = Math.max(
+        Number(item.finalCost || 0),
+        0,
+      );
 
-const projectCollectedAmount = summaryRows.reduce(
-  (sum, item) => sum + Number(item.collectedAmount || 0),
-  0,
-);
+      const projectCollected = Math.max(
+        Number(item.collectedAmount || 0),
+        0,
+      );
 
-const projectPendingAmount = Math.max(
-  projectTotalAmount - projectCollectedAmount,
-  0,
-);
+      /*
+       * Calculate each project's pending amount separately.
+       * Excess on one project must not cancel another
+       * project's pending balance.
+       */
+      const projectPending = Math.max(
+        projectTotal - projectCollected,
+        0,
+      );
+
+      result.projectTotalAmount +=
+        projectTotal;
+
+      result.projectCollectedAmount +=
+        projectCollected;
+
+      result.projectPendingAmount +=
+        projectPending;
+
+      return result;
+    },
+    {
+      projectTotalAmount: 0,
+      projectCollectedAmount: 0,
+      projectPendingAmount: 0,
+    },
+  );
+
+const {
+  projectTotalAmount,
+  projectCollectedAmount,
+  projectPendingAmount,
+} = paymentCollectionSummary;
 
   return {
   data: rows.map((row) => {
@@ -5822,6 +5880,12 @@ const projectPendingAmount = Math.max(
             100,
           )
         : 0;
+
+        const projectPendingAmount =
+  Math.max(
+    finalCost - projectReceivedAmount,
+    0,
+  );
 
     return {
       id: Number(row.id),
@@ -5856,10 +5920,11 @@ const projectPendingAmount = Math.max(
       projectSerial: row.projectSerial,
 
       finalCost,
-      projectReceivedAmount,
-      paymentReceivedPercentage,
+projectReceivedAmount,
+projectPendingAmount,
+paymentReceivedPercentage,
 
-      projectStatus: row.projectStatus,
+projectStatus: row.projectStatus,
 
       receipts: receipts
   .filter((receipt) => Number(receipt.installmentId) === Number(row.id))
