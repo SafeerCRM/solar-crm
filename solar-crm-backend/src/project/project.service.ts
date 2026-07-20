@@ -5895,6 +5895,221 @@ const projectPendingAmount = Math.max(
 };
 }
 
+async exportPaymentCollectionCsv(
+  query: any,
+  currentUser: any,
+) {
+  const exportQuery = {
+    ...query,
+    page: 1,
+    limit: 100,
+  };
+
+  const firstPage: any =
+    await this.getPaymentCollectionList(
+      exportQuery,
+      currentUser,
+    );
+
+  const allInstallmentRows: any[] =
+    Array.isArray(firstPage?.data)
+      ? [...firstPage.data]
+      : [];
+
+  const totalPages = Math.max(
+    Number(
+      firstPage?.pagination?.totalPages || 1,
+    ),
+    1,
+  );
+
+  /*
+   * Load every filtered page.
+   * The existing payment collection method is reused,
+   * so no working filter or payment calculation changes.
+   */
+  for (
+    let currentPage = 2;
+    currentPage <= totalPages;
+    currentPage += 1
+  ) {
+    const pageResult: any =
+      await this.getPaymentCollectionList(
+        {
+          ...query,
+          page: currentPage,
+          limit: 100,
+        },
+        currentUser,
+      );
+
+    if (Array.isArray(pageResult?.data)) {
+      allInstallmentRows.push(
+        ...pageResult.data,
+      );
+    }
+  }
+
+  /*
+   * Payment Collection returns installment rows.
+   * CSV must contain only one row per project.
+   */
+  const projectMap = new Map<
+    number,
+    {
+      projectId: number;
+      projectName: string;
+      contactNumber: string;
+      branchName: string;
+      totalProjectCost: number;
+      amountReceived: number;
+      pendingAmount: number;
+      paymentReceivedPercentage: number;
+    }
+  >();
+
+  for (const row of allInstallmentRows) {
+    const projectId = Number(row?.projectId);
+
+    if (
+      !Number.isInteger(projectId) ||
+      projectId <= 0
+    ) {
+      continue;
+    }
+
+    if (projectMap.has(projectId)) {
+      continue;
+    }
+
+    const totalProjectCost = Number(
+      row?.finalCost || 0,
+    );
+
+    const amountReceived = Number(
+      row?.projectReceivedAmount || 0,
+    );
+
+    const pendingAmount = Math.max(
+      totalProjectCost - amountReceived,
+      0,
+    );
+
+    const paymentReceivedPercentage =
+      totalProjectCost > 0
+        ? Math.min(
+            Math.round(
+              (amountReceived /
+                totalProjectCost) *
+                100,
+            ),
+            100,
+          )
+        : 0;
+
+    projectMap.set(projectId, {
+      projectId,
+
+      projectName:
+        String(row?.customerName || '').trim() ||
+        String(row?.projectSerial || '').trim() ||
+        `Project #${projectId}`,
+
+      contactNumber:
+        String(
+          row?.customerPhone || '',
+        ).trim(),
+
+      branchName:
+        String(
+          row?.branchName || '',
+        ).trim(),
+
+      totalProjectCost,
+      amountReceived,
+      pendingAmount,
+      paymentReceivedPercentage,
+    });
+  }
+
+  const projectRows = Array.from(
+    projectMap.values(),
+  ).sort((a, b) =>
+    a.projectName.localeCompare(
+      b.projectName,
+      'en',
+      {
+        sensitivity: 'base',
+      },
+    ),
+  );
+
+  /*
+   * Protect CSV cells:
+   * - quotes and commas
+   * - line breaks
+   * - spreadsheet formula injection
+   */
+  const escapeCsvCell = (value: any) => {
+    let text =
+      value === null ||
+      value === undefined
+        ? ''
+        : String(value);
+
+    if (/^[=+\-@]/.test(text)) {
+      text = `'${text}`;
+    }
+
+    return `"${text.replace(
+      /"/g,
+      '""',
+    )}"`;
+  };
+
+  const headers = [
+    'Project Name',
+    'Contact Number',
+    'Branch of Project',
+    'Total Project Cost',
+    'Amount Received',
+    'Pending Amount',
+    'Payment Received %',
+  ];
+
+  const csvRows = [
+    headers
+      .map(escapeCsvCell)
+      .join(','),
+
+    ...projectRows.map((row) =>
+      [
+        row.projectName,
+        row.contactNumber,
+        row.branchName,
+        row.totalProjectCost,
+        row.amountReceived,
+        row.pendingAmount,
+        `${row.paymentReceivedPercentage}%`,
+      ]
+        .map(escapeCsvCell)
+        .join(','),
+    ),
+  ];
+
+  /*
+   * UTF-8 BOM ensures names and ₹-related data
+   * open correctly in Microsoft Excel.
+   */
+  const csvContent =
+    '\uFEFF' + csvRows.join('\r\n');
+
+  return {
+    csvContent,
+    totalProjects: projectRows.length,
+  };
+}
+
 async createPaymentInstallment(
   projectId: number,
   body: any,

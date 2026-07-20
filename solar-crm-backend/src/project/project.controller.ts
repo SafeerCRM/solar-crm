@@ -1956,6 +1956,49 @@ async getPaymentCollectionList(
   return this.projectService.getPaymentCollectionList(query, req.user);
 }
 
+@Get('payment-collection/export-csv')
+async exportPaymentCollectionCsv(
+  @Query() query: any,
+  @Req() req: any,
+  @Res() res: Response,
+) {
+  const result =
+    await this.projectService.exportPaymentCollectionCsv(
+      query,
+      req.user,
+    );
+
+  const indiaDate = new Intl.DateTimeFormat(
+    'en-CA',
+    {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    },
+  ).format(new Date());
+
+  const fileName =
+    `payment-collection-report-${indiaDate}.csv`;
+
+  res.setHeader(
+    'Content-Type',
+    'text/csv; charset=utf-8',
+  );
+
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="${fileName}"`,
+  );
+
+  res.setHeader(
+    'X-Total-Projects',
+    String(result.totalProjects),
+  );
+
+  return res.send(result.csvContent);
+}
+
 @Roles(
   'OWNER',
   'MARKETING_HEAD',
