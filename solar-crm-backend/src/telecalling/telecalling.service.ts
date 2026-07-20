@@ -32,6 +32,22 @@ import { Cron } from '@nestjs/schedule';
 import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
 
+type RecycleContactFilters = {
+  fromTelecallerId: number;
+
+  name?: string;
+  phone?: string;
+  city?: string;
+  zone?: string;
+
+  contactStatus?: string;
+  callStatus?: string;
+  sourceModule?: string;
+
+  hasCalled?: string;
+
+  recycleDays?: number;
+};
 
 @Injectable()
 export class TelecallingService {
@@ -2693,15 +2709,57 @@ const finalMeetingNotes = latestContext
 }
 
 /* ✅ ADD THIS METHOD ABOVE transferContacts */
-async getTelecallerContactCount(userId: number) {
-  const count = await this.telecallingContactRepository.count({
-    where: {
-      assignedTo: userId,
-      isInStorage: false,
-    },
-  });
+async getTelecallerContactCount(
+  userId: number,
+) {
+  const normalizedUserId =
+    Number(userId);
 
-  return { count };
+  if (
+    !Number.isInteger(
+      normalizedUserId,
+    ) ||
+    normalizedUserId <= 0
+  ) {
+    throw new BadRequestException(
+      'Valid telecaller ID is required',
+    );
+  }
+
+  const count =
+    await this
+      .telecallingContactRepository
+      .createQueryBuilder('contact')
+      .where(
+        'contact.assignedTo = :userId',
+        {
+          userId:
+            normalizedUserId,
+        },
+      )
+      .andWhere(
+        'contact.isInStorage = false',
+      )
+      .andWhere(
+        `COALESCE(
+          contact.convertedToLead,
+          false
+        ) = false`,
+      )
+      .andWhere(
+        `COALESCE(
+          contact.stage,
+          'TELECALLING'
+        ) = :stage`,
+        {
+          stage: 'TELECALLING',
+        },
+      )
+      .getCount();
+
+  return {
+    count,
+  };
 }
 
 async reassignSelectedContacts(
@@ -3026,6 +3084,700 @@ async reassignSelectedContacts(
       message: 'Contact name updated successfully',
     };
   }
+
+  private normalizeRecycleText(value: unknown): string {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase();
+}
+
+private normalizeRecycleUpperText(value: unknown): string {
+  return String(value ?? '')
+    .trim()
+    .toUpperCase();
+}
+
+private getRecycleDays(value: unknown): number | undefined {
+  if (
+    value === undefined ||
+    value === null ||
+    String(value).trim() === ''
+  ) {
+    return undefined;
+  }
+
+  const recycleDays = Number(value);
+
+  const allowedDays = [
+    30,
+    60,
+    90,
+    120,
+    150,
+    180,
+  ];
+
+  if (
+    !Number.isInteger(recycleDays) ||
+    !allowedDays.includes(recycleDays)
+  ) {
+    throw new BadRequestException(
+      'Recycle period must be 30, 60, 90, 120, 150, or 180 days',
+    );
+  }
+
+  return recycleDays;
+}
+
+private validateRecycleManagementAccess(user: any) {
+  if (
+    !this.hasAnyRole(user, [
+      'OWNER',
+      'TELECALLING_MANAGER',
+      'TELECALLING_ASSISTANT',
+    ])
+  ) {
+    throw new ForbiddenException(
+      'Only owner, telecalling manager, or telecalling assistant can recycle or reassign contacts',
+    );
+  }
+}
+
+private async validateRecycleTelecaller(
+  userId: number,
+  label: 'From' | 'To',
+): Promise<User> {
+  if (
+    !Number.isInteger(userId) ||
+    userId <= 0
+  ) {
+    throw new BadRequestException(
+      `${label} telecaller is required`,
+    );
+  }
+
+  const telecaller =
+    await this.userRepository.findOne({
+      where: {
+        id: userId,
+      },
+    });
+
+  if (!telecaller) {
+    throw new NotFoundException(
+      `${label} telecaller not found`,
+    );
+  }
+
+  const roles: UserRole[] =
+    Array.isArray(telecaller.roles)
+      ? (telecaller.roles as UserRole[])
+      : [];
+
+  if (
+    !roles.includes(
+      UserRole.TELECALLER,
+    )
+  ) {
+    throw new BadRequestException(
+      `${label} user must have TELECALLER role`,
+    );
+  }
+
+  if ((telecaller as any).isHidden === true) {
+    throw new BadRequestException(
+      `${label} telecaller is hidden`,
+    );
+  }
+
+  return telecaller;
+}
+
+private buildRecycleEligibleContactsQuery(
+  filters: RecycleContactFilters,
+) {
+  const fromTelecallerId = Number(
+    filters.fromTelecallerId,
+  );
+
+  if (
+    !Number.isInteger(fromTelecallerId) ||
+    fromTelecallerId <= 0
+  ) {
+    throw new BadRequestException(
+      'From telecaller is required',
+    );
+  }
+
+  const name =
+    this.normalizeRecycleText(
+      filters.name,
+    );
+
+  const phone =
+    this.normalizeRecycleText(
+      filters.phone,
+    );
+
+  const city =
+    this.normalizeRecycleText(
+      filters.city,
+    );
+
+  const zone =
+    this.normalizeRecycleText(
+      filters.zone,
+    );
+
+  const contactStatus =
+    this.normalizeRecycleUpperText(
+      filters.contactStatus,
+    );
+
+  const callStatus =
+    this.normalizeRecycleUpperText(
+      filters.callStatus,
+    );
+
+  const sourceModule =
+    this.normalizeRecycleUpperText(
+      filters.sourceModule,
+    );
+
+  const hasCalled =
+    this.normalizeRecycleText(
+      filters.hasCalled,
+    );
+
+  const recycleDays =
+    this.getRecycleDays(
+      filters.recycleDays,
+    );
+
+  /*
+   * This subquery obtains exactly one latest real
+   * contact-call-history record per contact.
+   *
+   * It deliberately does not use contact.updatedAt
+   * or contact.createdAt as a call date.
+   */
+  const latestCallSubQuery =
+    this.contactCallHistoryRepository
+      .createQueryBuilder('history')
+      .select(
+        'DISTINCT ON (history."contactId") history."contactId"',
+        'contactId',
+      )
+      .addSelect(
+        'history.id',
+        'historyId',
+      )
+      .addSelect(
+        'history."callStatus"',
+        'callStatus',
+      )
+      .addSelect(
+        'history.notes',
+        'notes',
+      )
+      .addSelect(
+        'history."calledBy"',
+        'calledBy',
+      )
+      .addSelect(
+        'history."calledByName"',
+        'calledByName',
+      )
+      .addSelect(
+        `COALESCE(
+          history."updatedAt",
+          history."createdAt"
+        )`,
+        'latestCallAt',
+      )
+      .orderBy(
+        'history."contactId"',
+        'ASC',
+      )
+      .addOrderBy(
+        `COALESCE(
+          history."updatedAt",
+          history."createdAt"
+        )`,
+        'DESC',
+      )
+      .addOrderBy(
+        'history.id',
+        'DESC',
+      );
+
+  const qb =
+    this.telecallingContactRepository
+      .createQueryBuilder('contact')
+      .leftJoin(
+        `(${latestCallSubQuery.getQuery()})`,
+        'latest_call',
+        `latest_call."contactId" = contact.id`,
+      )
+      .setParameters(
+        latestCallSubQuery.getParameters(),
+      )
+      .where(
+        'contact.assignedTo = :fromTelecallerId',
+        {
+          fromTelecallerId,
+        },
+      )
+
+      /*
+       * Mandatory safety conditions for the
+       * normal recycle/reassignment workspace.
+       */
+      .andWhere(
+        'contact.isInStorage = false',
+      )
+      .andWhere(
+        `COALESCE(
+          contact.convertedToLead,
+          false
+        ) = false`,
+      )
+      .andWhere(
+        `COALESCE(
+          contact.stage,
+          'TELECALLING'
+        ) = :eligibleStage`,
+        {
+          eligibleStage: 'TELECALLING',
+        },
+      );
+
+  /*
+   * Apply every selected filter together.
+   */
+
+  if (name) {
+    qb.andWhere(
+      `LOWER(
+        COALESCE(contact.name, '')
+      ) LIKE :recycleName`,
+      {
+        recycleName: `%${name}%`,
+      },
+    );
+  }
+
+  if (phone) {
+    qb.andWhere(
+      `LOWER(
+        COALESCE(contact.phone, '')
+      ) LIKE :recyclePhone`,
+      {
+        recyclePhone: `%${phone}%`,
+      },
+    );
+  }
+
+  if (city) {
+    qb.andWhere(
+      `LOWER(
+        TRIM(
+          COALESCE(contact.city, '')
+        )
+      ) LIKE :recycleCity`,
+      {
+        recycleCity: `%${city}%`,
+      },
+    );
+  }
+
+  if (zone) {
+    qb.andWhere(
+      `LOWER(
+        TRIM(
+          COALESCE(contact.zone, '')
+        )
+      ) LIKE :recycleZone`,
+      {
+        recycleZone: `%${zone}%`,
+      },
+    );
+  }
+
+  if (contactStatus) {
+    qb.andWhere(
+      `UPPER(
+        COALESCE(
+          contact.status::text,
+          ''
+        )
+      ) = :recycleContactStatus`,
+      {
+        recycleContactStatus:
+          contactStatus,
+      },
+    );
+  }
+
+  if (callStatus) {
+    qb.andWhere(
+      `UPPER(
+        COALESCE(
+          latest_call."callStatus",
+          ''
+        )
+      ) = :recycleCallStatus`,
+      {
+        recycleCallStatus:
+          callStatus,
+      },
+    );
+  }
+
+  if (sourceModule) {
+    qb.andWhere(
+      `UPPER(
+        COALESCE(
+          contact.sourceModule,
+          ''
+        )
+      ) = :recycleSourceModule`,
+      {
+        recycleSourceModule:
+          sourceModule,
+      },
+    );
+  }
+
+  if (hasCalled === 'true') {
+    qb.andWhere(
+      `latest_call."contactId" IS NOT NULL`,
+    );
+  }
+
+  if (hasCalled === 'false') {
+    qb.andWhere(
+      `latest_call."contactId" IS NULL`,
+    );
+  }
+
+  /*
+   * Recycling rule:
+   *
+   * - The latest real call must be at least
+   *   the selected number of days old.
+   * - It must not be older than 180 days.
+   *
+   * Example for 90 days:
+   * latest call is between 90 and 180 days old.
+   */
+  if (recycleDays) {
+    qb.andWhere(
+      `latest_call."latestCallAt" IS NOT NULL`,
+    );
+
+    qb.andWhere(
+      `latest_call."latestCallAt"
+        <= (
+          NOW() AT TIME ZONE
+          'Asia/Kolkata'
+        ) - (
+          :recycleDays *
+          INTERVAL '1 day'
+        )`,
+      {
+        recycleDays,
+      },
+    );
+
+    qb.andWhere(
+      `latest_call."latestCallAt"
+        >= (
+          NOW() AT TIME ZONE
+          'Asia/Kolkata'
+        ) - INTERVAL '180 days'`,
+    );
+  }
+
+  return qb;
+}
+
+async getRecycleContactPreview(
+  user: any,
+  filters: RecycleContactFilters & {
+    page?: number;
+    limit?: number;
+  },
+) {
+  this.validateRecycleManagementAccess(
+    user,
+  );
+
+  const fromTelecallerId = Number(
+    filters.fromTelecallerId,
+  );
+
+  await this.validateRecycleTelecaller(
+    fromTelecallerId,
+    'From',
+  );
+
+  const page =
+    Number(filters.page) > 0
+      ? Number(filters.page)
+      : 1;
+
+  const limit =
+    Number(filters.limit) > 0
+      ? Math.min(
+          Number(filters.limit),
+          100,
+        )
+      : 50;
+
+  const skip = (page - 1) * limit;
+
+  /*
+   * Count query and preview query use the exact
+   * same shared filter builder.
+   */
+  const countQuery =
+    this.buildRecycleEligibleContactsQuery(
+      filters,
+    );
+
+  const total = await countQuery.getCount();
+
+  const dataQuery =
+    this.buildRecycleEligibleContactsQuery(
+      filters,
+    );
+
+  const rawRows = await dataQuery
+    .select([
+      'contact.id AS "id"',
+      'contact.name AS "name"',
+      'contact.phone AS "phone"',
+      'contact.city AS "city"',
+      'contact.zone AS "zone"',
+      'contact.status AS "status"',
+      'contact.sourceModule AS "sourceModule"',
+      'contact.assignedTo AS "assignedTo"',
+      'contact.assignedToName AS "assignedToName"',
+      `latest_call."latestCallAt"
+        AS "latestCallAt"`,
+      `latest_call."callStatus"
+        AS "latestCallStatus"`,
+      `latest_call."notes"
+        AS "latestCallNotes"`,
+      `latest_call."calledByName"
+        AS "latestCalledByName"`,
+    ])
+    .orderBy(
+      `latest_call."latestCallAt"`,
+      'ASC',
+      'NULLS LAST',
+    )
+    .addOrderBy(
+      'contact.id',
+      'ASC',
+    )
+    .offset(skip)
+    .limit(limit)
+    .getRawMany();
+
+  return {
+    data: rawRows,
+    total,
+    page,
+    limit,
+    totalPages: Math.max(
+      1,
+      Math.ceil(total / limit),
+    ),
+  };
+}
+
+async reassignFilteredRecycleContacts(
+  body: RecycleContactFilters & {
+    toTelecallerId: number;
+    count: number;
+  },
+  user: any,
+) {
+  this.validateRecycleManagementAccess(
+    user,
+  );
+
+  const fromTelecallerId = Number(
+    body.fromTelecallerId,
+  );
+
+  const toTelecallerId = Number(
+    body.toTelecallerId,
+  );
+
+  const requestedCount = Number(
+    body.count,
+  );
+
+  if (
+    fromTelecallerId ===
+    toTelecallerId
+  ) {
+    throw new BadRequestException(
+      'From and To telecaller cannot be the same',
+    );
+  }
+
+  if (
+    !Number.isInteger(requestedCount) ||
+    requestedCount <= 0
+  ) {
+    throw new BadRequestException(
+      'Transfer count must be a positive whole number',
+    );
+  }
+
+  /*
+   * Protect the database from an accidental
+   * extremely large single request.
+   *
+   * Increase only when the client genuinely
+   * needs more than this in one operation.
+   */
+  if (requestedCount > 10000) {
+    throw new BadRequestException(
+      'A maximum of 10,000 contacts can be transferred at once',
+    );
+  }
+
+  const [
+    fromTelecaller,
+    toTelecaller,
+  ] = await Promise.all([
+    this.validateRecycleTelecaller(
+      fromTelecallerId,
+      'From',
+    ),
+    this.validateRecycleTelecaller(
+      toTelecallerId,
+      'To',
+    ),
+  ]);
+
+  const candidateQuery =
+    this.buildRecycleEligibleContactsQuery(
+      body,
+    );
+
+  const candidateRows =
+    await candidateQuery
+      .select(
+        'contact.id',
+        'id',
+      )
+      .orderBy(
+        `latest_call."latestCallAt"`,
+        'ASC',
+        'NULLS LAST',
+      )
+      .addOrderBy(
+        'contact.id',
+        'ASC',
+      )
+      .limit(requestedCount)
+      .getRawMany<{
+        id: string | number;
+      }>();
+
+  const contactIds = candidateRows
+    .map((item) => Number(item.id))
+    .filter(
+      (id) =>
+        Number.isInteger(id) &&
+        id > 0,
+    );
+
+  if (!contactIds.length) {
+    throw new NotFoundException(
+      'No eligible contacts found for the selected filters',
+    );
+  }
+
+  /*
+   * Recheck core eligibility during UPDATE.
+   * This protects against a contact being
+   * converted or moved after preview but
+   * before the transfer request.
+   */
+  const updateResult =
+    await this.telecallingContactRepository
+      .createQueryBuilder()
+      .update(TelecallingContact)
+      .set({
+        assignedTo:
+          toTelecaller.id,
+        assignedToName:
+          toTelecaller.name,
+      })
+      .where(
+        'id IN (:...contactIds)',
+        {
+          contactIds,
+        },
+      )
+      .andWhere(
+        'assignedTo = :fromTelecallerId',
+        {
+          fromTelecallerId,
+        },
+      )
+      .andWhere(
+        'isInStorage = false',
+      )
+      .andWhere(
+        `COALESCE(
+          "convertedToLead",
+          false
+        ) = false`,
+      )
+      .andWhere(
+        `COALESCE(
+          stage,
+          'TELECALLING'
+        ) = :eligibleStage`,
+        {
+          eligibleStage: 'TELECALLING',
+        },
+      )
+      .execute();
+
+  const transferredCount =
+    updateResult.affected || 0;
+
+  if (!transferredCount) {
+    throw new BadRequestException(
+      'The selected contacts are no longer eligible for transfer',
+    );
+  }
+
+  return {
+    message:
+      `${transferredCount} contact(s) transferred from ` +
+      `${fromTelecaller.name} to ${toTelecaller.name}.`,
+    requestedCount,
+    transferredCount,
+    fromTelecallerId:
+      fromTelecaller.id,
+    fromTelecallerName:
+      fromTelecaller.name,
+    toTelecallerId:
+      toTelecaller.id,
+    toTelecallerName:
+      toTelecaller.name,
+  };
+}
 
   private async getLatestContactContext(contactId: number): Promise<string> {
   const latestNote = await this.contactNoteRepository.findOne({

@@ -6,6 +6,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Req,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -351,6 +352,96 @@ getContactHistory(
       ),
     },
   );
+}
+
+@Get('contacts/recycle-preview')
+getRecycleContactPreview(
+  @Req() req: any,
+  @Query('page') page?: string,
+  @Query('limit') limit?: string,
+
+  @Query('fromTelecallerId')
+  fromTelecallerId?: string,
+
+  @Query('name') name?: string,
+  @Query('phone') phone?: string,
+  @Query('city') city?: string,
+  @Query('zone') zone?: string,
+
+  @Query('contactStatus')
+  contactStatus?: string,
+
+  @Query('callStatus')
+  callStatus?: string,
+
+  @Query('sourceModule')
+  sourceModule?: string,
+
+  @Query('hasCalled')
+  hasCalled?: string,
+
+  @Query('recycleDays')
+  recycleDays?: string,
+) {
+  return this.telecallingService
+    .getRecycleContactPreview(
+      req.user,
+      {
+        page: page
+          ? Number(page)
+          : undefined,
+
+        limit: limit
+          ? Number(limit)
+          : undefined,
+
+        fromTelecallerId:
+          Number(fromTelecallerId),
+
+        name,
+        phone,
+        city,
+        zone,
+        contactStatus,
+        callStatus,
+        sourceModule,
+        hasCalled,
+
+        recycleDays:
+          recycleDays
+            ? Number(recycleDays)
+            : undefined,
+      },
+    );
+}
+
+@Post('contacts/reassign-filtered')
+reassignFilteredRecycleContacts(
+  @Req() req: any,
+  @Body()
+  body: {
+    fromTelecallerId: number;
+    toTelecallerId: number;
+    count: number;
+
+    name?: string;
+    phone?: string;
+    city?: string;
+    zone?: string;
+
+    contactStatus?: string;
+    callStatus?: string;
+    sourceModule?: string;
+
+    hasCalled?: string;
+    recycleDays?: number;
+  },
+) {
+  return this.telecallingService
+    .reassignFilteredRecycleContacts(
+      body,
+      req.user,
+    );
 }
 
     @Get('contacts/:id/work-history')
