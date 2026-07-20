@@ -206,9 +206,20 @@ const [toTelecallerId, setToTelecallerId] = useState('');
 const [selectedHistoryContactIds, setSelectedHistoryContactIds] =
   useState<number[]>([]);
 
-const [transferMode, setTransferMode] = useState<
-  'SELECTED' | 'FILTERED'
->('SELECTED');
+const [transferMode, setTransferMode] =
+  useState<
+    'SELECTED' | 'FILTERED'
+  >('FILTERED');
+
+const [
+  reassignmentRecycleDays,
+  setReassignmentRecycleDays,
+] = useState<HistoryDays>(30);
+
+const [
+  filteredTransferCount,
+  setFilteredTransferCount,
+] = useState('');
 
 const [transferLoading, setTransferLoading] = useState(false);
 
@@ -577,31 +588,35 @@ const fetchReassignmentContacts = async (
 
     const res =
       await axios.get<ContactHistoryResponse>(
-        `${backendUrl}/telecalling/contacts/history`,
+        `${backendUrl}/telecalling/contacts/recycle-preview`,
         {
           params: {
-            mode: 'reassignment',
-
             page: requestedPage,
             limit: historyLimit,
 
-            telecallerId:
-              Number(fromTelecallerId),
+            fromTelecallerId:
+              Number(
+                fromTelecallerId,
+              ),
 
             name:
-              reassignmentName.trim() ||
+              reassignmentName
+                .trim() ||
               undefined,
 
             phone:
-              reassignmentPhone.trim() ||
+              reassignmentPhone
+                .trim() ||
               undefined,
 
             city:
-              reassignmentCity.trim() ||
+              reassignmentCity
+                .trim() ||
               undefined,
 
             zone:
-              reassignmentZone.trim() ||
+              reassignmentZone
+                .trim() ||
               undefined,
 
             contactStatus:
@@ -612,33 +627,28 @@ const fetchReassignmentContacts = async (
               reassignmentCallStatus ||
               undefined,
 
-            stage:
-              reassignmentStage ||
-              undefined,
-
             sourceModule:
-              reassignmentSourceModule.trim() ||
+              reassignmentSourceModule
+                .trim() ||
               undefined,
 
             hasCalled:
               reassignmentHasCalled ||
               undefined,
 
-            convertedToLead:
-              reassignmentConverted ||
-              undefined,
-
-            storageState:
-              reassignmentStorageState ||
-              undefined,
+            recycleDays:
+              reassignmentRecycleDays,
           },
 
-          headers: getAuthHeaders(),
+          headers:
+            getAuthHeaders(),
         },
       );
 
     const loadedContacts =
-      Array.isArray(res.data?.data)
+      Array.isArray(
+        res.data?.data,
+      )
         ? res.data.data
         : [];
 
@@ -647,7 +657,9 @@ const fetchReassignmentContacts = async (
     );
 
     setReassignmentTotal(
-      Number(res.data?.total || 0),
+      Number(
+        res.data?.total || 0,
+      ),
     );
 
     setReassignmentPage(
@@ -659,8 +671,13 @@ const fetchReassignmentContacts = async (
 
     setReassignmentTotalPages(
       Number(
-        res.data?.totalPages || 1,
+        res.data?.totalPages ||
+          1,
       ),
+    );
+
+    setSelectedHistoryContactIds(
+      [],
     );
   } catch (err: any) {
     console.error(err);
@@ -677,7 +694,7 @@ const fetchReassignmentContacts = async (
       Array.isArray(errorMessage)
         ? errorMessage.join(', ')
         : errorMessage ||
-            'Failed to load reassignment contacts.',
+            'Failed to load eligible recycle contacts.',
     );
   } finally {
     setTransferLoading(false);
@@ -811,6 +828,206 @@ await Promise.all([
   }
 };
 
+const reassignFilteredContacts =
+  async () => {
+    if (!fromTelecallerId) {
+      setMessage(
+        'Select the From telecaller.',
+      );
+      return;
+    }
+
+    if (!toTelecallerId) {
+      setMessage(
+        'Select the To telecaller.',
+      );
+      return;
+    }
+
+    if (
+      Number(fromTelecallerId) ===
+      Number(toTelecallerId)
+    ) {
+      setMessage(
+        'From and To telecaller cannot be the same.',
+      );
+      return;
+    }
+
+    const requestedCount =
+      Number(filteredTransferCount);
+
+    if (
+      !Number.isInteger(
+        requestedCount,
+      ) ||
+      requestedCount <= 0
+    ) {
+      setMessage(
+        'Enter a valid whole-number transfer count.',
+      );
+      return;
+    }
+
+    if (
+      requestedCount >
+      reassignmentTotal
+    ) {
+      setMessage(
+        `Only ${reassignmentTotal} contact(s) currently match the selected filters.`,
+      );
+      return;
+    }
+
+    const fromTelecaller =
+      users.find(
+        (item) =>
+          Number(item.id) ===
+          Number(
+            fromTelecallerId,
+          ),
+      );
+
+    const toTelecaller =
+      users.find(
+        (item) =>
+          Number(item.id) ===
+          Number(
+            toTelecallerId,
+          ),
+      );
+
+    const confirmed =
+      window.confirm(
+        `Transfer ${requestedCount} oldest eligible contact(s) from ${
+          fromTelecaller?.name ||
+          'selected telecaller'
+        } to ${
+          toTelecaller?.name ||
+          'selected telecaller'
+        } using all currently applied filters?`,
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setTransferLoading(true);
+      setHistoryMessage('');
+
+      const res =
+        await axios.post(
+          `${backendUrl}/telecalling/contacts/reassign-filtered`,
+          {
+            fromTelecallerId:
+              Number(
+                fromTelecallerId,
+              ),
+
+            toTelecallerId:
+              Number(
+                toTelecallerId,
+              ),
+
+            count:
+              requestedCount,
+
+            name:
+              reassignmentName
+                .trim() ||
+              undefined,
+
+            phone:
+              reassignmentPhone
+                .trim() ||
+              undefined,
+
+            city:
+              reassignmentCity
+                .trim() ||
+              undefined,
+
+            zone:
+              reassignmentZone
+                .trim() ||
+              undefined,
+
+            contactStatus:
+              reassignmentContactStatus ||
+              undefined,
+
+            callStatus:
+              reassignmentCallStatus ||
+              undefined,
+
+            sourceModule:
+              reassignmentSourceModule
+                .trim() ||
+              undefined,
+
+            hasCalled:
+              reassignmentHasCalled ||
+              undefined,
+
+            recycleDays:
+              reassignmentRecycleDays,
+          },
+          {
+            headers:
+              getAuthHeaders(),
+          },
+        );
+
+      setMessage(
+        res.data?.message ||
+          `${requestedCount} contacts transferred successfully.`,
+      );
+
+      setFilteredTransferCount(
+        '',
+      );
+
+      await Promise.all([
+        fetchReassignmentContacts(
+          1,
+        ),
+
+        fetchReassignmentTelecallerCount(
+          fromTelecallerId,
+          'from',
+        ),
+
+        fetchReassignmentTelecallerCount(
+          toTelecallerId,
+          'to',
+        ),
+
+        fetchContacts(),
+      ]);
+    } catch (err: any) {
+      console.error(err);
+
+      const errorMessage =
+        err?.response?.data?.message;
+
+      setMessage(
+        Array.isArray(
+          errorMessage,
+        )
+          ? errorMessage.join(
+              ', ',
+            )
+          : errorMessage ||
+              'Failed to transfer filtered contacts.',
+      );
+    } finally {
+      setTransferLoading(
+        false,
+      );
+    }
+  };
+
 useEffect(() => {
   if (
     historyWorkspaceTab !==
@@ -864,6 +1081,10 @@ const closeContactHistory = () => {
   setFromTelecallerId('');
 setToTelecallerId('');
 
+setReassignmentRecycleDays(30);
+setFilteredTransferCount('');
+setTransferMode('FILTERED');
+
 setReassignmentName('');
 setReassignmentPhone('');
 setReassignmentCity('');
@@ -910,6 +1131,9 @@ const resetReassignmentFilters =
     setReassignmentPhone('');
     setReassignmentCity('');
     setReassignmentZone('');
+
+    setReassignmentRecycleDays(30);
+setFilteredTransferCount('');
 
     setReassignmentContactStatus('');
     setReassignmentCallStatus('');
@@ -3212,6 +3436,44 @@ const transferContacts = async () => {
         />
 
         <select
+  value={
+    reassignmentRecycleDays
+  }
+  onChange={(e) =>
+    setReassignmentRecycleDays(
+      Number(
+        e.target.value,
+      ) as HistoryDays,
+    )
+  }
+  className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-blue-500 focus:bg-white"
+>
+  <option value={30}>
+    Last call at least 30 days ago
+  </option>
+
+  <option value={60}>
+    Last call at least 60 days ago
+  </option>
+
+  <option value={90}>
+    Last call at least 90 days ago
+  </option>
+
+  <option value={120}>
+    Last call at least 120 days ago
+  </option>
+
+  <option value={150}>
+    Last call at least 150 days ago
+  </option>
+
+  <option value={180}>
+    Last call at least 180 days ago
+  </option>
+</select>
+
+        <select
           value={
             reassignmentContactStatus
           }
@@ -3402,6 +3664,44 @@ const transferContacts = async () => {
       </div>
     </div>
 
+    <div className="rounded-2xl border border-gray-200 bg-gray-50 p-2">
+  <div className="grid grid-cols-2 gap-2">
+    <button
+      type="button"
+      onClick={() =>
+        setTransferMode(
+          'FILTERED',
+        )
+      }
+      className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${
+        transferMode ===
+        'FILTERED'
+          ? 'bg-blue-600 text-white'
+          : 'bg-white text-gray-700 hover:bg-gray-100'
+      }`}
+    >
+      Transfer by Filters & Count
+    </button>
+
+    <button
+      type="button"
+      onClick={() =>
+        setTransferMode(
+          'SELECTED',
+        )
+      }
+      className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${
+        transferMode ===
+        'SELECTED'
+          ? 'bg-blue-600 text-white'
+          : 'bg-white text-gray-700 hover:bg-gray-100'
+      }`}
+    >
+      Transfer Manually Selected
+    </button>
+  </div>
+</div>
+
     <div className="rounded-3xl bg-white p-4 shadow-sm">
       <div className="flex flex-col gap-4 border-b border-gray-100 pb-4 md:flex-row md:items-center md:justify-between">
         <div>
@@ -3421,63 +3721,137 @@ const transferContacts = async () => {
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={
-              toggleAllReassignmentPage
-            }
-            disabled={
-              transferLoading ||
-              reassignmentContacts.length ===
-                0
-            }
-            className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {allReassignmentPageSelected
-              ? 'Unselect Current Page'
-              : 'Select Current Page'}
-          </button>
+                {transferMode ===
+          'SELECTED' && (
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={
+                toggleAllReassignmentPage
+              }
+              disabled={
+                transferLoading ||
+                reassignmentContacts.length ===
+                  0
+              }
+              className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {allReassignmentPageSelected
+                ? 'Unselect Current Page'
+                : 'Select Current Page'}
+            </button>
 
-          <button
-            type="button"
-            onClick={() =>
-              setSelectedHistoryContactIds(
-                [],
-              )
-            }
-            disabled={
-              transferLoading ||
-              selectedHistoryContactIds.length ===
-                0
-            }
-            className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Clear Selection
-          </button>
+            <button
+              type="button"
+              onClick={() =>
+                setSelectedHistoryContactIds(
+                  [],
+                )
+              }
+              disabled={
+                transferLoading ||
+                selectedHistoryContactIds.length ===
+                  0
+              }
+              className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Clear Selection
+            </button>
 
-          <button
-            type="button"
-            onClick={
-              reassignSelectedContacts
-            }
-            disabled={
-              transferLoading ||
-              !fromTelecallerId ||
-              !toTelecallerId ||
-              selectedHistoryContactIds.length ===
-                0 ||
-              Number(fromTelecallerId) ===
-                Number(toTelecallerId)
-            }
-            className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {transferLoading
-              ? 'Processing...'
-              : `Transfer Selected (${selectedHistoryContactIds.length})`}
-          </button>
-        </div>
+            <button
+              type="button"
+              onClick={
+                reassignSelectedContacts
+              }
+              disabled={
+                transferLoading ||
+                !fromTelecallerId ||
+                !toTelecallerId ||
+                selectedHistoryContactIds.length ===
+                  0 ||
+                Number(
+                  fromTelecallerId,
+                ) ===
+                  Number(
+                    toTelecallerId,
+                  )
+              }
+              className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {transferLoading
+                ? 'Processing...'
+                : `Transfer Selected (${selectedHistoryContactIds.length})`}
+            </button>
+          </div>
+        )}
       </div>
+
+      {transferMode ===
+  'FILTERED' && (
+  <div className="rounded-3xl border border-blue-100 bg-blue-50 p-4">
+    <div className="mb-4">
+      <h4 className="font-semibold text-gray-900">
+        Transfer Matching Contacts
+      </h4>
+
+      <p className="mt-1 text-sm text-gray-600">
+        All selected filters work together.
+        The oldest eligible contacts are
+        transferred first.
+      </p>
+    </div>
+
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+      <div className="rounded-2xl bg-white p-4">
+        <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+          Matching contacts
+        </p>
+
+        <p className="mt-1 text-2xl font-bold text-gray-900">
+          {reassignmentTotal}
+        </p>
+      </div>
+
+      <input
+        type="number"
+        min={1}
+        max={
+          reassignmentTotal ||
+          undefined
+        }
+        step={1}
+        value={
+          filteredTransferCount
+        }
+        onChange={(e) =>
+          setFilteredTransferCount(
+            e.target.value,
+          )
+        }
+        placeholder="Number to transfer"
+        className="rounded-2xl border border-gray-200 bg-white p-3 text-gray-800 outline-none focus:border-blue-500"
+      />
+
+      <button
+        type="button"
+        disabled={
+          transferLoading ||
+          !fromTelecallerId ||
+          !toTelecallerId ||
+          !reassignmentTotal
+        }
+        onClick={
+          reassignFilteredContacts
+        }
+        className="rounded-2xl bg-blue-600 px-5 py-3 font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {transferLoading
+          ? 'Transferring...'
+          : 'Transfer Matching Contacts'}
+      </button>
+    </div>
+  </div>
+)}
 
       {!fromTelecallerId ? (
         <div className="py-10 text-center text-gray-500">
