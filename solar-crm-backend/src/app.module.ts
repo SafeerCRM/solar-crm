@@ -25,6 +25,7 @@ import { DealerModule } from './dealer/dealer.module';
 import { StaffModule } from './staff/staff.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AppSettingsModule } from './app-settings/app-settings.module';
+import { StaffLocationModule } from './staff-location/staff-location.module';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { AppSettingsModule } from './app-settings/app-settings.module';
     CustomerPortalModule,
     DealerModule,
     AppSettingsModule,
+    StaffLocationModule,
   ],
   controllers: [AppController],
   providers: [AppService],
