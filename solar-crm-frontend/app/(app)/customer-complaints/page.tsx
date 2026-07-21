@@ -633,6 +633,19 @@ const restoreComplaint = async (
                       {item.projectOwnerName || '-'}
                     </p>
 
+                    <p className="mt-2 text-sm font-semibold text-blue-700">
+  Complaint Registered:{' '}
+  {item.createdAt
+    ? new Date(item.createdAt).toLocaleString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : '-'}
+</p>
+
                     {(item.projectAddress ||
   item.projectGpsAddress ||
   item.projectGpsLatitude) && (
