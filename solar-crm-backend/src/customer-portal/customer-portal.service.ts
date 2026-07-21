@@ -570,13 +570,11 @@ return {
   'project',
   'project.id = complaint.projectId',
 )
-.addSelect([
-  'project.status',
-  'project.address',
-  'project.gpsAddress',
-  'project.gpsLatitude',
-  'project.gpsLongitude',
-])
+.addSelect('project.status', 'projectStatus')
+.addSelect('project.address', 'projectAddress')
+.addSelect('project.gpsAddress', 'projectGpsAddress')
+.addSelect('project.gpsLatitude', 'projectGpsLatitude')
+.addSelect('project.gpsLongitude', 'projectGpsLongitude')
   .orderBy(
     'complaint.createdAt',
     'DESC',
@@ -956,12 +954,10 @@ async listAfterSalesRequests(query: any) {
     'project',
     'project.id = request.projectId',
   )
-  .addSelect([
-    'project.address',
-    'project.gpsAddress',
-    'project.gpsLatitude',
-    'project.gpsLongitude',
-  ])
+  .addSelect('project.address', 'projectAddress')
+.addSelect('project.gpsAddress', 'projectGpsAddress')
+.addSelect('project.gpsLatitude', 'projectGpsLatitude')
+.addSelect('project.gpsLongitude', 'projectGpsLongitude')
   .where('request.isHidden = false')
   .orderBy('request.createdAt', 'DESC');
 
@@ -1933,13 +1929,11 @@ async listWorkDateRequests(query: any) {
   const qb = this.workDateRequestRepository
     .createQueryBuilder('request')
 .leftJoin(Project, 'project', 'project.id = request.projectId')
-.addSelect([
-  'project.status',
-  'project.address',
-  'project.gpsAddress',
-  'project.gpsLatitude',
-  'project.gpsLongitude',
-])
+.addSelect('project.status', 'projectStatus')
+.addSelect('project.address', 'projectAddress')
+.addSelect('project.gpsAddress', 'projectGpsAddress')
+.addSelect('project.gpsLatitude', 'projectGpsLatitude')
+.addSelect('project.gpsLongitude', 'projectGpsLongitude')
 .where('request.isHidden = false')
     .orderBy('request.createdAt', 'DESC');
 
@@ -2835,13 +2829,11 @@ async listCleaningReminders(query: any) {
     'project',
     'project.id = cleaning.projectId',
   )
-  .addSelect([
-    'project.status',
-    'project.address',
-    'project.gpsAddress',
-    'project.gpsLatitude',
-    'project.gpsLongitude',
-  ])
+  .addSelect('project.status', 'projectStatus')
+.addSelect('project.address', 'projectAddress')
+.addSelect('project.gpsAddress', 'projectGpsAddress')
+.addSelect('project.gpsLatitude', 'projectGpsLatitude')
+.addSelect('project.gpsLongitude', 'projectGpsLongitude')
   .orderBy(
     'cleaning.cleaningDate',
     'DESC',
