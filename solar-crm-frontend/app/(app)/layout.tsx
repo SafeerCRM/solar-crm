@@ -164,9 +164,10 @@ const navItems = [
   name: 'Project Tax Invoices',
   href: '/project/tax-invoices',
   roles: [
-    'OWNER',
-    'ACCOUNT_MANAGER',
-  ],
+  'OWNER',
+  'ACCOUNT_MANAGER',
+  'SUBSIDY_MANAGER',
+],
 },
 
 {
@@ -422,6 +423,7 @@ const navItems = [
     'ACCOUNT_MANAGER',
     'STOCK_MANAGER',
     'TRADING_MANAGER',
+    'SUBSIDY_MANAGER',
   ],
 },
 
