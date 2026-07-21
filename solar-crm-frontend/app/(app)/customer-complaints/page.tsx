@@ -19,6 +19,10 @@ type CustomerComplaint = {
   projectId?: number;
   projectStatus?: string;
   projectName?: string;
+  projectAddress?: string;
+projectGpsAddress?: string;
+projectGpsLatitude?: number;
+projectGpsLongitude?: number;
   branchName?: string;
   projectOwnerId?: number;
   projectOwnerName?: string;
@@ -628,6 +632,44 @@ const restoreComplaint = async (
                       {item.branchName || '-'} · Owner:{' '}
                       {item.projectOwnerName || '-'}
                     </p>
+
+                    {(item.projectAddress ||
+  item.projectGpsAddress ||
+  item.projectGpsLatitude) && (
+  <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+    <p className="text-xs font-black uppercase tracking-wide text-emerald-700">
+      📍 Project Site Location
+    </p>
+
+    <div className="mt-3 space-y-2 text-sm">
+      <div>
+        <span className="font-bold text-gray-700">
+          Address:
+        </span>{' '}
+        {item.projectAddress || '-'}
+      </div>
+
+      <div>
+        <span className="font-bold text-gray-700">
+          GPS Address:
+        </span>{' '}
+        {item.projectGpsAddress || '-'}
+      </div>
+
+      {item.projectGpsLatitude &&
+        item.projectGpsLongitude && (
+          <a
+            href={`https://www.google.com/maps?q=${item.projectGpsLatitude},${item.projectGpsLongitude}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex rounded-xl bg-emerald-600 px-4 py-2 text-sm font-black text-white hover:bg-emerald-700"
+          >
+            Open in Google Maps
+          </a>
+        )}
+    </div>
+  </div>
+)}
                   </div>
 
                   <button
