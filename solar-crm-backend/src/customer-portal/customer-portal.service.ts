@@ -566,14 +566,17 @@ return {
   const qb = this.complaintRepository
   .createQueryBuilder('complaint')
   .leftJoin(
-    Project,
-    'project',
-    'project.id = complaint.projectId',
-  )
-  .addSelect(
-    'project.status',
-    'projectStatus',
-  )
+  Project,
+  'project',
+  'project.id = complaint.projectId',
+)
+.addSelect([
+  'project.status',
+  'project.address',
+  'project.gpsAddress',
+  'project.gpsLatitude',
+  'project.gpsLongitude',
+])
   .orderBy(
     'complaint.createdAt',
     'DESC',
@@ -688,10 +691,26 @@ if (query?.projectStage === 'IN_PROGRESS') {
   qb.skip(skip).take(limit);
 
   const rawAndEntities = await qb.getRawAndEntities();
-const data = rawAndEntities.entities.map((item: any, index: number) => ({
-  ...item,
-  projectStatus: rawAndEntities.raw[index]?.projectStatus || '',
-}));
+const data = rawAndEntities.entities.map(
+  (item: any, index: number) => ({
+    ...item,
+
+    projectStatus:
+      rawAndEntities.raw[index]?.projectStatus || '',
+
+    projectAddress:
+      rawAndEntities.raw[index]?.projectAddress || '',
+
+    projectGpsAddress:
+      rawAndEntities.raw[index]?.projectGpsAddress || '',
+
+    projectGpsLatitude:
+      rawAndEntities.raw[index]?.projectGpsLatitude || null,
+
+    projectGpsLongitude:
+      rawAndEntities.raw[index]?.projectGpsLongitude || null,
+  }),
+);
 const total = await qb.getCount();
 
 const complaintIds = data.map((item) => item.id);
@@ -931,9 +950,20 @@ async listAfterSalesRequests(query: any) {
   const skip = (page - 1) * limit;
 
   const qb = this.afterSalesRequestRepository
-    .createQueryBuilder('request')
-    .where('request.isHidden = false')
-    .orderBy('request.createdAt', 'DESC');
+  .createQueryBuilder('request')
+  .leftJoin(
+    Project,
+    'project',
+    'project.id = request.projectId',
+  )
+  .addSelect([
+    'project.address',
+    'project.gpsAddress',
+    'project.gpsLatitude',
+    'project.gpsLongitude',
+  ])
+  .where('request.isHidden = false')
+  .orderBy('request.createdAt', 'DESC');
 
   if (query?.customerId) {
     qb.andWhere('request.customerId = :customerId', {
@@ -974,7 +1004,31 @@ async listAfterSalesRequests(query: any) {
 
   qb.skip(skip).take(limit);
 
-  const [data, total] = await qb.getManyAndCount();
+  const rawAndEntities = await qb.getRawAndEntities();
+
+const data = rawAndEntities.entities.map(
+  (item: any, index: number) => {
+    const raw = rawAndEntities.raw[index] || {};
+
+    return {
+      ...item,
+
+      projectAddress:
+        raw.projectAddress || '',
+
+      projectGpsAddress:
+        raw.projectGpsAddress || '',
+
+      projectGpsLatitude:
+        raw.projectGpsLatitude ?? null,
+
+      projectGpsLongitude:
+        raw.projectGpsLongitude ?? null,
+    };
+  },
+);
+
+const total = await qb.getCount();
 
 const requestIds = data.map((item) => item.id);
 
@@ -1879,7 +1933,13 @@ async listWorkDateRequests(query: any) {
   const qb = this.workDateRequestRepository
     .createQueryBuilder('request')
 .leftJoin(Project, 'project', 'project.id = request.projectId')
-.addSelect('project.status', 'projectStatus')
+.addSelect([
+  'project.status',
+  'project.address',
+  'project.gpsAddress',
+  'project.gpsLatitude',
+  'project.gpsLongitude',
+])
 .where('request.isHidden = false')
     .orderBy('request.createdAt', 'DESC');
 
@@ -1937,10 +1997,29 @@ if (query?.projectStage === 'IN_PROGRESS') {
   qb.skip(skip).take(limit);
 
   const rawAndEntities = await qb.getRawAndEntities();
-const data = rawAndEntities.entities.map((item: any, index: number) => ({
-  ...item,
-  projectStatus: rawAndEntities.raw[index]?.projectStatus || '',
-}));
+
+const data = rawAndEntities.entities.map(
+  (item: any, index: number) => {
+    const raw = rawAndEntities.raw[index] || {};
+
+    return {
+      ...item,
+
+      projectStatus: raw.projectStatus || '',
+
+      projectAddress: raw.projectAddress || '',
+
+      projectGpsAddress: raw.projectGpsAddress || '',
+
+      projectGpsLatitude:
+        raw.projectGpsLatitude ?? null,
+
+      projectGpsLongitude:
+        raw.projectGpsLongitude ?? null,
+    };
+  },
+);
+
 const total = await qb.getCount();
 
   return {
@@ -2750,10 +2829,23 @@ async listCleaningReminders(query: any) {
   const skip = (page - 1) * limit;
 
   const qb = this.cleaningReminderRepository
-    .createQueryBuilder('cleaning')
-.leftJoin(Project, 'project', 'project.id = cleaning.projectId')
-.addSelect('project.status', 'projectStatus')
-.orderBy('cleaning.cleaningDate', 'DESC');
+  .createQueryBuilder('cleaning')
+  .leftJoin(
+    Project,
+    'project',
+    'project.id = cleaning.projectId',
+  )
+  .addSelect([
+    'project.status',
+    'project.address',
+    'project.gpsAddress',
+    'project.gpsLatitude',
+    'project.gpsLongitude',
+  ])
+  .orderBy(
+    'cleaning.cleaningDate',
+    'DESC',
+  );
 
   if (query?.showHidden === 'true') {
     qb.where('1 = 1');
@@ -2823,11 +2915,36 @@ if (query?.projectStage === 'IN_PROGRESS') {
 
   qb.skip(skip).take(limit);
 
-  const rawAndEntities = await qb.getRawAndEntities();
-const data = rawAndEntities.entities.map((item: any, index: number) => ({
-  ...item,
-  projectStatus: rawAndEntities.raw[index]?.projectStatus || '',
-}));
+  const rawAndEntities =
+  await qb.getRawAndEntities();
+
+const data =
+  rawAndEntities.entities.map(
+    (item: any, index: number) => {
+      const raw =
+        rawAndEntities.raw[index] || {};
+
+      return {
+        ...item,
+
+        projectStatus:
+          raw.projectStatus || '',
+
+        projectAddress:
+          raw.projectAddress || '',
+
+        projectGpsAddress:
+          raw.projectGpsAddress || '',
+
+        projectGpsLatitude:
+          raw.projectGpsLatitude ?? null,
+
+        projectGpsLongitude:
+          raw.projectGpsLongitude ?? null,
+      };
+    },
+  );
+
 const total = await qb.getCount();
 
   return {
