@@ -695,6 +695,7 @@ getPurchaseOrders(
   'ACCOUNT_MANAGER',
   'STOCK_MANAGER',
   'TRADING_MANAGER',
+  'SUBSIDY_MANAGER',
 )
 @Post('purchase-order')
 createPurchaseOrder(
@@ -1652,6 +1653,7 @@ generatePurchaseOrderPdf(
   'ACCOUNT_MANAGER',
   'STOCK_MANAGER',
   'TRADING_MANAGER',
+  'SUBSIDY_MANAGER',
 )
 @Patch('purchase-order/:id/hide')
 hidePurchaseOrder(
@@ -1672,6 +1674,7 @@ hidePurchaseOrder(
   'ACCOUNT_MANAGER',
   'STOCK_MANAGER',
   'TRADING_MANAGER',
+  'SUBSIDY_MANAGER',
 )
 @Post('purchase-order/manual')
 createManualPurchaseOrder(
@@ -2738,6 +2741,12 @@ getEpcCustomerInvoiceCreators() {
   return this.projectService.getEpcCustomerInvoiceCreators();
 }
 
+
+@Roles(
+  'OWNER',
+  'SUBSIDY_MANAGER',
+  'ACCOUNT_MANAGER',
+)
 @Get(':id/epc-customer-invoice')
 getOrCreateEpcCustomerInvoiceDraft(
   @Param('id') id: string,
@@ -2749,6 +2758,11 @@ getOrCreateEpcCustomerInvoiceDraft(
   );
 }
 
+@Roles(
+  'OWNER',
+  'SUBSIDY_MANAGER',
+  'ACCOUNT_MANAGER',
+)
 @Patch('epc-customer-invoice/:invoiceId')
 saveEpcCustomerInvoice(
   @Param('invoiceId') invoiceId: string,
@@ -2762,6 +2776,11 @@ saveEpcCustomerInvoice(
   );
 }
 
+@Roles(
+  'OWNER',
+  'SUBSIDY_MANAGER',
+  'ACCOUNT_MANAGER',
+)
 @Get('epc-customer-invoice/:invoiceId/pdf')
 generateEpcCustomerInvoicePdf(
   @Param('invoiceId') invoiceId: string,
