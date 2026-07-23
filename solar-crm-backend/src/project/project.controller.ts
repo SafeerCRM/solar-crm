@@ -3358,6 +3358,32 @@ uploadProjectDocument(
 );
 }
 
+@Patch(':id/location')
+updateProjectLocation(
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+
+  @Body()
+  body: {
+    address?: string;
+    gpsAddress?: string;
+    gpsLatitude?: number | string;
+    gpsLongitude?: number | string;
+  },
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService.updateProjectLocation(
+    id,
+    body,
+    user,
+  );
+}
+
   @Roles(
   'OWNER',
   'MARKETING_HEAD',

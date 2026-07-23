@@ -2530,6 +2530,125 @@ if (roles.includes('SOLAR_FRANCHISE')) {
   });
 }
 
+async updateProjectLocation(
+  id: number,
+  data: {
+    address?: string;
+    gpsAddress?: string;
+    gpsLatitude?: number | string;
+    gpsLongitude?: number | string;
+  },
+  user: any,
+) {
+  const project =
+    await this.projectRepository.findOne({
+      where: {
+        id,
+        isHidden: false,
+      } as any,
+    });
+
+  if (!project) {
+    throw new NotFoundException(
+      'Project not found',
+    );
+  }
+
+  const address = String(
+    data?.address || '',
+  ).trim();
+
+  const gpsAddress = String(
+    data?.gpsAddress || '',
+  ).trim();
+
+  const latitude = Number(
+    data?.gpsLatitude,
+  );
+
+  const longitude = Number(
+    data?.gpsLongitude,
+  );
+
+  if (
+    !Number.isFinite(latitude) ||
+    latitude < -90 ||
+    latitude > 90
+  ) {
+    throw new BadRequestException(
+      'Please provide a valid latitude',
+    );
+  }
+
+  if (
+    !Number.isFinite(longitude) ||
+    longitude < -180 ||
+    longitude > 180
+  ) {
+    throw new BadRequestException(
+      'Please provide a valid longitude',
+    );
+  }
+
+  if (
+    !address &&
+    !gpsAddress
+  ) {
+    throw new BadRequestException(
+      'Project site address is required',
+    );
+  }
+
+  const currentUserId = Number(
+    user?.id ||
+      user?.userId ||
+      user?.sub ||
+      0,
+  );
+
+  const currentUserName = String(
+    user?.name ||
+      user?.email ||
+      '',
+  ).trim();
+
+  const currentUserRole = Array.isArray(
+    user?.roles,
+  )
+    ? user.roles.join(', ')
+    : String(user?.role || '').trim();
+
+  project.address =
+    address ||
+    gpsAddress;
+
+  project.gpsAddress =
+    gpsAddress ||
+    address;
+
+  project.gpsLatitude =
+    latitude;
+
+  project.gpsLongitude =
+    longitude;
+
+  project.locationUpdatedBy =
+  currentUserId || 0;
+
+  project.locationUpdatedByName =
+    currentUserName;
+
+  project.locationUpdatedByRole =
+    currentUserRole;
+
+  project.locationUpdatedAt =
+    new Date();
+
+  return this.projectRepository.save(
+    project,
+  );
+}
+
   async update(
   id: number,
   data: Partial<Project>,
