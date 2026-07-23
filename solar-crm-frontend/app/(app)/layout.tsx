@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { getAuthHeaders } from '@/lib/authHeaders';
 import AppSecurityGate from '@/components/AppSecurityGate';
+import LiveLocationManager from '@/components/LiveLocationManager';
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -71,6 +72,12 @@ const navItems = [
 
 
   { name: 'Users', href: '/users', roles: ['OWNER'] },
+
+  {
+  name: 'Staff Live Location',
+  href: '/live-location',
+  roles: ['OWNER'],
+},
 
   {
     name: 'Telecalling',
@@ -739,9 +746,13 @@ const [bellOpen, setBellOpen] = useState(false);
 
         <button
           onClick={() => {
-            localStorage.clear();
-            window.location.href = '/';
-          }}
+  window.dispatchEvent(
+    new Event('solar-crm:logout'),
+  );
+
+  localStorage.clear();
+  window.location.href = '/';
+}}
           className="mt-6 w-full rounded-xl bg-red-500 px-4 py-2 text-white hover:bg-red-600"
         >
           Logout
@@ -750,6 +761,7 @@ const [bellOpen, setBellOpen] = useState(false);
 
             <main className="min-w-0 flex-1 px-3 pb-4 pt-20 md:p-8">{children}</main>
     </div>
+    <LiveLocationManager />
     </AppSecurityGate>
 
   );
