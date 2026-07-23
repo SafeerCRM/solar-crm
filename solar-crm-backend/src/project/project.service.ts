@@ -1213,6 +1213,28 @@ private readonly userRepository: Repository<User>,
   data: Partial<Project>,
   user?: any,
 ) {
+  const currentUserRoles = Array.isArray(user?.roles)
+    ? user.roles
+    : user?.role
+      ? [user.role]
+      : [];
+
+  const isMeetingManager =
+    currentUserRoles.includes('MEETING_MANAGER');
+
+  const sourceMeetingId = Number(
+    (data as any)?.meetingId || 0,
+  );
+
+  if (
+    isMeetingManager &&
+    !sourceMeetingId
+  ) {
+    throw new ForbiddenException(
+      'Direct project creation is disabled for Meeting Managers. Please create a meeting first and convert that meeting into a project.',
+    );
+  }
+
     if (!data.customerName) {
       throw new BadRequestException('Customer name is required');
     }
