@@ -53,6 +53,7 @@ import type {
 } from '@/lib/live-location/types';
 
 const ACTIVE_SESSION_POLL_INTERVAL_MS = 15_000;
+const ACTIVE_SESSION_POLL_FAILURE_THRESHOLD = 3;
 
 type StoredUser = {
   id?: number;
@@ -422,11 +423,20 @@ export default function LiveLocationManager() {
   const [errorMessage, setErrorMessage] =
     useState<string | null>(null);
 
+      const [
+    activeSessionPollError,
+    setActiveSessionPollError,
+  ] = useState<string | null>(null);
+
   const [showTrackingCard, setShowTrackingCard] =
     useState(true);
 
   const mountedRef = useRef(false);
-  const pollRunningRef = useRef(false);
+    const pollRunningRef = useRef(false);
+
+  const activeSessionPollFailureCountRef =
+    useRef(0);
+
   const actionRef = useRef<ManagerAction>('NONE');
 
   const runtimeSessionIdRef =
@@ -770,7 +780,7 @@ export default function LiveLocationManager() {
     ],
   );
 
-  const fetchActiveSession =
+    const fetchActiveSession =
     useCallback(async () => {
       if (
         !enabledForCurrentUser ||
@@ -788,14 +798,38 @@ export default function LiveLocationManager() {
         const session =
           await getMyActiveLocationSession();
 
+        /*
+         * One successful request proves that the CRM API is reachable again.
+         * Clear only the polling/network warning; permission, GPS and native
+         * tracking errors remain untouched.
+         */
+        activeSessionPollFailureCountRef.current =
+          0;
+
+        if (mountedRef.current) {
+          setActiveSessionPollError(null);
+        }
+
         if (!mountedRef.current) {
           return;
         }
 
         await applyServerSession(session);
       } catch (error) {
-        if (mountedRef.current) {
-          setErrorMessage(
+        activeSessionPollFailureCountRef.current +=
+          1;
+
+        /*
+         * Do not alarm the staff for one temporary timeout.
+         * The warning appears only after three consecutive failed polls,
+         * representing roughly 45 seconds of sustained API failure.
+         */
+        if (
+          mountedRef.current &&
+          activeSessionPollFailureCountRef.current >=
+            ACTIVE_SESSION_POLL_FAILURE_THRESHOLD
+        ) {
+          setActiveSessionPollError(
             readErrorMessage(error),
           );
         }
@@ -1135,9 +1169,12 @@ await startRuntime(session);
 
     setCurrentUser(user);
 
-    return () => {
+        return () => {
       mountedRef.current = false;
       pollRunningRef.current = false;
+
+      activeSessionPollFailureCountRef.current =
+        0;
 
       /*
        * Remove native listeners when the authenticated layout genuinely
@@ -1206,7 +1243,10 @@ await startRuntime(session);
         activeSession.requestAccepted === true,
     );
 
-  const busy = action !== 'NONE';
+    const busy = action !== 'NONE';
+
+  const displayedErrorMessage =
+    errorMessage || activeSessionPollError;
 
   return (
     <>
@@ -1262,9 +1302,9 @@ await startRuntime(session);
                 tracking starts when you reject.
               </div>
 
-              {errorMessage && (
+                            {displayedErrorMessage && (
                 <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">
-                  {errorMessage}
+                  {displayedErrorMessage}
                 </div>
               )}
 
@@ -1361,9 +1401,9 @@ await startRuntime(session);
               </button>
             </div>
 
-            {errorMessage && (
+                        {displayedErrorMessage && (
               <div className="mt-3 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                {errorMessage}
+                {displayedErrorMessage}
               </div>
             )}
 
@@ -1414,18 +1454,23 @@ await startRuntime(session);
           </button>
         )}
 
-      {!activeSession &&
-        errorMessage &&
+            {!activeSession &&
+        displayedErrorMessage &&
         action === 'NONE' && (
           <div className="fixed bottom-4 right-4 z-[90] w-[calc(100%-2rem)] max-w-sm rounded-2xl border border-red-200 bg-white p-4 shadow-xl">
             <p className="text-sm font-semibold text-red-700">
-              {errorMessage}
+            {displayedErrorMessage}
             </p>
 
             <button
               type="button"
-              onClick={() => {
+                            onClick={() => {
                 setErrorMessage(null);
+                setActiveSessionPollError(null);
+
+                activeSessionPollFailureCountRef.current =
+                  0;
+
                 void fetchActiveSession();
               }}
               className="mt-3 rounded-xl bg-gray-900 px-4 py-2 text-sm font-bold text-white"

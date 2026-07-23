@@ -55,10 +55,10 @@ public class LiveLocationPlugin extends Plugin {
     @PluginMethod
     public void startTracking(PluginCall call) {
         long sessionId =
-                call.getLong(
-                        "sessionId",
-                        0L
-                );
+        call.getData().optLong(
+                "sessionId",
+                0L
+        );
 
         String authToken =
                 call.getString(
