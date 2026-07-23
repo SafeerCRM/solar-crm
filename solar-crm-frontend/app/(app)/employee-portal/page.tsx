@@ -13,6 +13,13 @@ export default function EmployeePortalPage() {
   const [staff, setStaff] = useState<any>(null);
   const [attendance, setAttendance] = useState<any[]>([]);
   const [leaves, setLeaves] = useState<any[]>([]);
+  const [leaveSummary, setLeaveSummary] = useState({
+  approvedDays: 0,
+  approvedRequests: 0,
+  pendingRequests: 0,
+  rejectedRequests: 0,
+  cancelledRequests: 0,
+});
   const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0]);
   const [attendancePhoto, setAttendancePhoto] = useState<File | null>(null);
   const [attendanceRemarks, setAttendanceRemarks] = useState('');
@@ -56,6 +63,23 @@ const [pendingPunchType, setPendingPunchType] =
       setStaff(meRes.data || null);
       setAttendance(attendanceRes.data?.data || []);
       setLeaves(leavesRes.data?.data || []);
+      setLeaveSummary({
+  approvedDays: Number(
+    leavesRes.data?.summary?.approvedDays || 0,
+  ),
+  approvedRequests: Number(
+    leavesRes.data?.summary?.approvedRequests || 0,
+  ),
+  pendingRequests: Number(
+    leavesRes.data?.summary?.pendingRequests || 0,
+  ),
+  rejectedRequests: Number(
+    leavesRes.data?.summary?.rejectedRequests || 0,
+  ),
+  cancelledRequests: Number(
+    leavesRes.data?.summary?.cancelledRequests || 0,
+  ),
+});
       setPolicies(policiesRes.data?.data || []);
     } catch (error: any) {
       console.error(error);
@@ -243,9 +267,18 @@ const startSelfiePunch = (type: 'punch-in' | 'punch-out') => {
           </div>
 
           <div className="rounded-2xl bg-white p-5 shadow">
-            <p className="text-sm text-gray-500">Leave Requests</p>
-            <p className="mt-2 text-xl font-bold">{leaves.length}</p>
-          </div>
+  <p className="text-sm text-gray-500">
+    Approved Leave Days
+  </p>
+
+  <p className="mt-2 text-xl font-bold text-green-700">
+    {leaveSummary.approvedDays}
+  </p>
+
+  <p className="mt-1 text-xs text-gray-500">
+    {leaveSummary.approvedRequests} approved request(s)
+  </p>
+</div>
 
           <div className="rounded-2xl bg-white p-5 shadow">
   <p className="text-sm text-gray-500">Policies</p>
@@ -346,6 +379,47 @@ const startSelfiePunch = (type: 'punch-in' | 'punch-out') => {
 
       {activeTab === 'leave' && (
         <div className="space-y-5">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+  <div className="rounded-2xl bg-white p-5 shadow">
+    <p className="text-sm text-gray-500">
+      Approved Leave Days
+    </p>
+
+    <p className="mt-2 text-2xl font-bold text-green-700">
+      {leaveSummary.approvedDays}
+    </p>
+  </div>
+
+  <div className="rounded-2xl bg-white p-5 shadow">
+    <p className="text-sm text-gray-500">
+      Approved Requests
+    </p>
+
+    <p className="mt-2 text-2xl font-bold text-blue-700">
+      {leaveSummary.approvedRequests}
+    </p>
+  </div>
+
+  <div className="rounded-2xl bg-white p-5 shadow">
+    <p className="text-sm text-gray-500">
+      Pending Requests
+    </p>
+
+    <p className="mt-2 text-2xl font-bold text-amber-600">
+      {leaveSummary.pendingRequests}
+    </p>
+  </div>
+
+  <div className="rounded-2xl bg-white p-5 shadow">
+    <p className="text-sm text-gray-500">
+      Rejected Requests
+    </p>
+
+    <p className="mt-2 text-2xl font-bold text-red-600">
+      {leaveSummary.rejectedRequests}
+    </p>
+  </div>
+</div>
           <div className="rounded-2xl bg-white p-5 shadow">
             <h2 className="text-lg font-bold text-gray-800">Apply Leave</h2>
 

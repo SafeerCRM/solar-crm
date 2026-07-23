@@ -17,6 +17,13 @@ type Staff = {
 export default function StaffLeavesPage() {
   const [staff, setStaff] = useState<Staff[]>([]);
   const [leaves, setLeaves] = useState<any[]>([]);
+  const [leaveSummary, setLeaveSummary] = useState({
+  approvedDays: 0,
+  approvedRequests: 0,
+  pendingRequests: 0,
+  rejectedRequests: 0,
+  cancelledRequests: 0,
+});
   const [selectedStaffId, setSelectedStaffId] = useState('');
   const [staffSearch, setStaffSearch] = useState('');
   const [selectedStaffName, setSelectedStaffName] = useState('');
@@ -62,7 +69,25 @@ export default function StaffLeavesPage() {
     });
 
     setLeaves(res.data?.data || []);
-    setTotalPages(res.data?.totalPages || 1);
+setTotalPages(res.data?.totalPages || 1);
+
+setLeaveSummary({
+  approvedDays: Number(
+    res.data?.summary?.approvedDays || 0,
+  ),
+  approvedRequests: Number(
+    res.data?.summary?.approvedRequests || 0,
+  ),
+  pendingRequests: Number(
+    res.data?.summary?.pendingRequests || 0,
+  ),
+  rejectedRequests: Number(
+    res.data?.summary?.rejectedRequests || 0,
+  ),
+  cancelledRequests: Number(
+    res.data?.summary?.cancelledRequests || 0,
+  ),
+});
   };
 
   useEffect(() => {
@@ -305,6 +330,44 @@ export default function StaffLeavesPage() {
           )}
         </div>
       </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+  <div className="rounded-2xl bg-white p-5 shadow">
+    <p className="text-sm text-gray-500">
+      Approved Leave Days
+    </p>
+    <p className="mt-2 text-2xl font-bold text-green-700">
+      {leaveSummary.approvedDays}
+    </p>
+  </div>
+
+  <div className="rounded-2xl bg-white p-5 shadow">
+    <p className="text-sm text-gray-500">
+      Approved Requests
+    </p>
+    <p className="mt-2 text-2xl font-bold text-blue-700">
+      {leaveSummary.approvedRequests}
+    </p>
+  </div>
+
+  <div className="rounded-2xl bg-white p-5 shadow">
+    <p className="text-sm text-gray-500">
+      Pending Requests
+    </p>
+    <p className="mt-2 text-2xl font-bold text-amber-600">
+      {leaveSummary.pendingRequests}
+    </p>
+  </div>
+
+  <div className="rounded-2xl bg-white p-5 shadow">
+    <p className="text-sm text-gray-500">
+      Rejected Requests
+    </p>
+    <p className="mt-2 text-2xl font-bold text-red-600">
+      {leaveSummary.rejectedRequests}
+    </p>
+  </div>
+</div>
 
       <div className="rounded-2xl bg-white p-5 shadow">
         <div className="grid gap-3 md:grid-cols-3">
