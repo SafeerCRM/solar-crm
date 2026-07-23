@@ -18,6 +18,11 @@ import type {
   LiveLocationUser,
 } from './LiveLocationSessionCard';
 
+import {
+  isReliableRoutePoint,
+  RELIABLE_GPS_ACCURACY_METRES,
+} from './LiveLocationRouteMap';
+
 import type {
   LiveLocationRoutePoint,
 } from './LiveLocationRouteMap';
@@ -399,6 +404,27 @@ export default function LiveLocationRouteModal({
     [route?.points],
   );
 
+    const reliablePointCount =
+    useMemo(
+      () =>
+        routePoints.filter(
+          isReliableRoutePoint,
+        ).length,
+      [routePoints],
+    );
+
+  const lowAccuracyPointCount =
+    useMemo(
+      () =>
+        routePoints.filter(
+          (point) =>
+            !isReliableRoutePoint(
+              point,
+            ),
+        ).length,
+      [routePoints],
+    );
+
   if (!session) {
     return null;
   }
@@ -463,7 +489,7 @@ export default function LiveLocationRouteModal({
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
-          <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                    <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
             <div className="rounded-2xl bg-gray-50 p-4">
               <p className="text-xs font-bold text-gray-500">
                 Status
@@ -500,6 +526,26 @@ export default function LiveLocationRouteModal({
               </p>
             </div>
 
+                        <div className="rounded-2xl border border-green-200 bg-green-50 p-4">
+              <p className="text-xs font-bold text-green-700">
+                Reliable Points
+              </p>
+
+              <p className="mt-1 font-black text-green-900">
+                {reliablePointCount}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <p className="text-xs font-bold text-amber-700">
+                Low-Accuracy Points
+              </p>
+
+              <p className="mt-1 font-black text-amber-900">
+                {lowAccuracyPointCount}
+              </p>
+            </div>
+
             <div className="rounded-2xl bg-gray-50 p-4">
               <p className="text-xs font-bold text-gray-500">
                 Last Location
@@ -524,6 +570,25 @@ export default function LiveLocationRouteModal({
               </p>
             </div>
           </div>
+
+                    {routePoints.length > 0 && (
+            <div className="mb-4 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+              <p className="font-black">
+                Route reliability
+              </p>
+
+              <p className="mt-1 leading-6">
+                All raw GPS points remain visible
+                for audit. The blue travelled line
+                connects only non-mock points with
+                accuracy of{' '}
+                {RELIABLE_GPS_ACCURACY_METRES} m
+                or better. Low-accuracy points do
+                not increase the trusted route
+                line.
+              </p>
+            </div>
+          )}
 
           {error && (
             <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">
@@ -550,13 +615,25 @@ export default function LiveLocationRouteModal({
                   }
                 />
 
-                <div className="mt-3 flex flex-wrap gap-3 text-xs font-semibold text-gray-600">
+                                <div className="mt-3 flex flex-wrap gap-3 text-xs font-semibold text-gray-600">
+                  <span className="rounded-full bg-blue-50 px-3 py-1 text-blue-700">
+                    Blue line: reliable route
+                  </span>
+
                   <span className="rounded-full bg-green-50 px-3 py-1 text-green-700">
                     Green: route start
                   </span>
 
                   <span className="rounded-full bg-red-50 px-3 py-1 text-red-700">
                     Red: latest position
+                  </span>
+
+                  <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-700">
+                    Amber: low accuracy
+                  </span>
+
+                  <span className="rounded-full bg-gray-100 px-3 py-1 text-gray-800">
+                    Black: mock location
                   </span>
 
                   <span className="rounded-full bg-purple-50 px-3 py-1 text-purple-700">
@@ -618,15 +695,57 @@ export default function LiveLocationRouteModal({
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="rounded-2xl bg-white p-3">
-                        <p className="text-xs font-bold text-gray-500">
+                                            <div
+                        className={`rounded-2xl border p-3 ${
+                          isReliableRoutePoint(
+                            selectedPoint,
+                          )
+                            ? 'border-green-200 bg-green-50'
+                            : 'border-amber-200 bg-amber-50'
+                        }`}
+                      >
+                        <p
+                          className={`text-xs font-bold ${
+                            isReliableRoutePoint(
+                              selectedPoint,
+                            )
+                              ? 'text-green-700'
+                              : 'text-amber-700'
+                          }`}
+                        >
                           Accuracy
                         </p>
 
-                        <p className="mt-1 text-sm font-black text-gray-900">
+                        <p
+                          className={`mt-1 text-sm font-black ${
+                            isReliableRoutePoint(
+                              selectedPoint,
+                            )
+                              ? 'text-green-900'
+                              : 'text-amber-900'
+                          }`}
+                        >
                           {formatAccuracy(
                             selectedPoint.accuracyMetres,
                           )}
+                        </p>
+
+                        <p
+                          className={`mt-1 text-xs font-bold ${
+                            isReliableRoutePoint(
+                              selectedPoint,
+                            )
+                              ? 'text-green-700'
+                              : 'text-amber-700'
+                          }`}
+                        >
+                          {selectedPoint.isMockLocation
+                            ? 'Mock location'
+                            : isReliableRoutePoint(
+                                  selectedPoint,
+                                )
+                              ? 'Reliable GPS point'
+                              : 'Low-accuracy GPS point'}
                         </p>
                       </div>
 

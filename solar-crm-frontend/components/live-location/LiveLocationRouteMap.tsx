@@ -58,6 +58,59 @@ type LiveLocationRouteMapProps = {
   ) => void;
 };
 
+export const RELIABLE_GPS_ACCURACY_METRES = 50;
+
+export function isReliableRoutePoint(
+  point: LiveLocationRoutePoint,
+): boolean {
+  const accuracy = Number(
+    point.accuracyMetres,
+  );
+
+  return (
+    point.isMockLocation !== true &&
+    Number.isFinite(accuracy) &&
+    accuracy >= 0 &&
+    accuracy <=
+      RELIABLE_GPS_ACCURACY_METRES
+  );
+}
+
+function createReliableRouteSegments(
+  points: LiveLocationRoutePoint[],
+): LatLngExpression[][] {
+  const segments: LatLngExpression[][] =
+    [];
+
+  let currentSegment:
+    | LatLngExpression[]
+    | null = null;
+
+  points.forEach((point) => {
+    if (!isReliableRoutePoint(point)) {
+      currentSegment = null;
+      return;
+    }
+
+    const position: LatLngExpression = [
+      Number(point.latitude),
+      Number(point.longitude),
+    ];
+
+    if (!currentSegment) {
+      currentSegment = [position];
+      segments.push(currentSegment);
+      return;
+    }
+
+    currentSegment.push(position);
+  });
+
+  return segments.filter(
+    (segment) => segment.length > 1,
+  );
+}
+
 type FitRouteBoundsProps = {
   positions: LatLngExpression[];
 };
@@ -199,6 +252,15 @@ export default function LiveLocationRouteMap({
       [validPoints],
     );
 
+      const reliableRouteSegments =
+    useMemo(
+      () =>
+        createReliableRouteSegments(
+          validPoints,
+        ),
+      [validPoints],
+    );
+
   if (validPoints.length === 0) {
     return (
       <div className="flex min-h-[420px] items-center justify-center rounded-3xl border border-dashed border-gray-300 bg-gray-50 p-6 text-center">
@@ -245,15 +307,18 @@ export default function LiveLocationRouteMap({
           positions={positions}
         />
 
-        {positions.length > 1 && (
-          <Polyline
-            positions={positions}
-            pathOptions={{
-              color: '#2563eb',
-              weight: 5,
-              opacity: 0.85,
-            }}
-          />
+                {reliableRouteSegments.map(
+          (segment, segmentIndex) => (
+            <Polyline
+              key={`reliable-route-${segmentIndex}`}
+              positions={segment}
+              pathOptions={{
+                color: '#2563eb',
+                weight: 5,
+                opacity: 0.85,
+              }}
+            />
+          ),
         )}
 
         {validPoints.map(
@@ -265,12 +330,24 @@ export default function LiveLocationRouteMap({
               index ===
               validPoints.length - 1;
 
-            const isSelected =
+                        const isSelected =
               selectedPointId ===
               point.id;
 
+            const isReliable =
+              isReliableRoutePoint(
+                point,
+              );
+
             let markerColour =
-              '#2563eb';
+              isReliable
+                ? '#2563eb'
+                : '#f59e0b';
+
+            if (point.isMockLocation) {
+              markerColour =
+                '#111827';
+            }
 
             if (isFirst) {
               markerColour =
@@ -304,14 +381,28 @@ export default function LiveLocationRouteMap({
                     : isFirst ||
                         isLast
                       ? 8
-                      : 4
+                      : isReliable
+                        ? 4
+                        : 6
                 }
-                pathOptions={{
-                  color: '#ffffff',
+                                pathOptions={{
+                  color: isReliable
+                    ? '#ffffff'
+                    : '#92400e',
                   fillColor:
                     markerColour,
-                  fillOpacity: 1,
-                  weight: 2,
+                  fillOpacity:
+                    isReliable
+                      ? 1
+                      : 0.8,
+                  weight:
+                    isReliable
+                      ? 2
+                      : 3,
+                  dashArray:
+                    isReliable
+                      ? undefined
+                      : '4 3',
                 }}
                 eventHandlers={{
                   click: () => {
@@ -360,6 +451,21 @@ export default function LiveLocationRouteMap({
                         {formatAccuracy(
                           point.accuracyMetres,
                         )}
+                      </p>
+
+                                            <p
+                        className={
+                          isReliable
+                            ? 'font-bold text-green-700'
+                            : 'font-bold text-amber-700'
+                        }
+                      >
+                        GPS Quality:{' '}
+                        {point.isMockLocation
+                          ? 'Mock Location'
+                          : isReliable
+                            ? 'Reliable'
+                            : 'Low Accuracy'}
                       </p>
 
                       <p>

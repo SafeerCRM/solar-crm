@@ -8,6 +8,7 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
@@ -1453,25 +1454,90 @@ public class LiveLocationForegroundService extends Service
     }
 
     private boolean isDeviceCharging() {
+    try {
+        /*
+         * ACTION_BATTERY_CHANGED is a sticky broadcast containing the
+         * device's current charging state. This is more reliable across
+         * Android manufacturers than relying only on
+         * BatteryManager.isCharging().
+         */
+        Intent batteryStatus =
+                registerReceiver(
+                        null,
+                        new IntentFilter(
+                                Intent.ACTION_BATTERY_CHANGED
+                        )
+                );
+
+        if (batteryStatus != null) {
+            int status =
+                    batteryStatus.getIntExtra(
+                            BatteryManager.EXTRA_STATUS,
+                            -1
+                    );
+
+            boolean chargingByStatus =
+                    status ==
+                            BatteryManager.BATTERY_STATUS_CHARGING ||
+                    status ==
+                            BatteryManager.BATTERY_STATUS_FULL;
+
+            int plugged =
+                    batteryStatus.getIntExtra(
+                            BatteryManager.EXTRA_PLUGGED,
+                            0
+                    );
+
+            boolean connectedToPower =
+                    plugged ==
+                            BatteryManager.BATTERY_PLUGGED_AC ||
+                    plugged ==
+                            BatteryManager.BATTERY_PLUGGED_USB ||
+                    plugged ==
+                            BatteryManager.BATTERY_PLUGGED_WIRELESS;
+
+            if (
+                    Build.VERSION.SDK_INT >=
+                            Build.VERSION_CODES.TIRAMISU
+            ) {
+                connectedToPower =
+                        connectedToPower ||
+                        plugged ==
+                                BatteryManager.BATTERY_PLUGGED_DOCK;
+            }
+
+            if (
+                    chargingByStatus ||
+                    connectedToPower
+            ) {
+                return true;
+            }
+        }
+
+        /*
+         * Keep BatteryManager as a fallback in case a device does not return
+         * the sticky battery broadcast.
+         */
         BatteryManager batteryManager =
                 (BatteryManager)
                         getSystemService(
                                 Context.BATTERY_SERVICE
                         );
 
-        if (batteryManager == null) {
-            return false;
-        }
-
-        if (
+        return batteryManager != null &&
                 Build.VERSION.SDK_INT >=
-                        Build.VERSION_CODES.M
-        ) {
-            return batteryManager.isCharging();
-        }
+                        Build.VERSION_CODES.M &&
+                batteryManager.isCharging();
+    } catch (Exception error) {
+        Log.w(
+                TAG,
+                "Unable to read charging state",
+                error
+        );
 
         return false;
     }
+}
 
     private String toIsoUtc(long timestamp) {
         java.text.SimpleDateFormat formatter =

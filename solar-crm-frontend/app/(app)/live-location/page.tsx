@@ -20,9 +20,17 @@ import ActiveLiveLocationSessions from '@/components/live-location/ActiveLiveLoc
 import LiveLocationRequestForm from '@/components/live-location/LiveLocationRequestForm';
 import LiveLocationSessionDrawer from '@/components/live-location/LiveLocationSessionDrawer';
 import LiveLocationRouteModal from '@/components/live-location/LiveLocationRouteModal';
+import LiveLocationHistory from '@/components/live-location/LiveLocationHistory';
+import {
+  LiveLocationTab,
+} from '@/components/live-location/LiveLocationTabs';
+
+import LiveLocationTabs from '@/components/live-location/LiveLocationTabs';
 
 const apiBaseUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL;
+
+  const HISTORY_PAGE_LIMIT = 10;
 
 type StoredUser = LiveLocationUser;
 
@@ -147,6 +155,59 @@ export default function LiveLocationOwnerPage() {
     useState<LocationRequestSession | null>(
       null,
     );
+
+      const [activeTab, setActiveTab] =
+    useState<LiveLocationTab>('ACTIVE');
+
+      const [historySessions, setHistorySessions] =
+    useState<LocationRequestSession[]>([]);
+
+  const [loadingHistory, setLoadingHistory] =
+    useState(false);
+
+  const [historyError, setHistoryError] =
+    useState<string | null>(null);
+
+  const [historyPage, setHistoryPage] =
+    useState(1);
+
+  const [historyTotal, setHistoryTotal] =
+    useState(0);
+
+  const [historyTotalPages, setHistoryTotalPages] =
+    useState(1);
+
+  const [historyStaffUserId, setHistoryStaffUserId] =
+    useState('');
+
+  const [historyStatus, setHistoryStatus] =
+    useState('');
+
+  const [historyFromDate, setHistoryFromDate] =
+    useState('');
+
+  const [historyToDate, setHistoryToDate] =
+    useState('');
+
+  const [
+    appliedHistoryStaffUserId,
+    setAppliedHistoryStaffUserId,
+  ] = useState('');
+
+  const [
+    appliedHistoryStatus,
+    setAppliedHistoryStatus,
+  ] = useState('');
+
+  const [
+    appliedHistoryFromDate,
+    setAppliedHistoryFromDate,
+  ] = useState('');
+
+  const [
+    appliedHistoryToDate,
+    setAppliedHistoryToDate,
+  ] = useState('');
 
     const [activeSessions, setActiveSessions] =
   useState<LocationRequestSession[]>([]);
@@ -403,6 +464,197 @@ setActiveSessionsError(null);
     }
   }, [currentUser, isOwner]);
 
+    const fetchHistory = useCallback(
+    async (
+      requestedPage = historyPage,
+      filters?: {
+        staffUserId?: string;
+        status?: string;
+        fromDate?: string;
+        toDate?: string;
+      },
+    ) => {
+      if (!currentUser || !isOwner) {
+        return;
+      }
+
+      const selectedFilters = {
+        staffUserId:
+          filters?.staffUserId ??
+          appliedHistoryStaffUserId,
+        status:
+          filters?.status ??
+          appliedHistoryStatus,
+        fromDate:
+          filters?.fromDate ??
+          appliedHistoryFromDate,
+        toDate:
+          filters?.toDate ??
+          appliedHistoryToDate,
+      };
+
+      setLoadingHistory(true);
+      setHistoryError(null);
+
+      try {
+        const params: Record<
+          string,
+          string | number | boolean
+        > = {
+          page: requestedPage,
+          limit: HISTORY_PAGE_LIMIT,
+          active: false,
+        };
+
+        if (selectedFilters.staffUserId) {
+          params.staffUserId = Number(
+            selectedFilters.staffUserId,
+          );
+        }
+
+        if (selectedFilters.status) {
+          params.status =
+            selectedFilters.status;
+        }
+
+        if (selectedFilters.fromDate) {
+          params.fromDate =
+            selectedFilters.fromDate;
+        }
+
+        if (selectedFilters.toDate) {
+          params.toDate =
+            selectedFilters.toDate;
+        }
+
+        const response = await axios.get(
+          `${apiBaseUrl}/staff-location/owner/history`,
+          {
+            headers: getAuthHeaders(),
+            params,
+          },
+        );
+
+        const responseData = response.data;
+
+        const sessions =
+          Array.isArray(responseData)
+            ? responseData
+            : Array.isArray(responseData?.data)
+              ? responseData.data
+              : Array.isArray(
+                    responseData?.items,
+                  )
+                ? responseData.items
+                : [];
+
+        const total = Number(
+          responseData?.total ??
+            responseData?.meta?.total ??
+            sessions.length,
+        );
+
+        const responsePage = Number(
+          responseData?.page ??
+            responseData?.meta?.page ??
+            requestedPage,
+        );
+
+        const responseLimit = Number(
+          responseData?.limit ??
+            responseData?.meta?.limit ??
+            HISTORY_PAGE_LIMIT,
+        );
+
+        const calculatedTotalPages =
+          Math.max(
+            1,
+            Math.ceil(
+              total /
+                Math.max(
+                  1,
+                  responseLimit,
+                ),
+            ),
+          );
+
+        const totalPages = Number(
+          responseData?.totalPages ??
+            responseData?.meta?.totalPages ??
+            calculatedTotalPages,
+        );
+
+        setHistorySessions(sessions);
+        setHistoryTotal(
+          Number.isFinite(total)
+            ? total
+            : sessions.length,
+        );
+
+        setHistoryPage(
+          Number.isFinite(responsePage)
+            ? responsePage
+            : requestedPage,
+        );
+
+        setHistoryTotalPages(
+          Number.isFinite(totalPages)
+            ? Math.max(1, totalPages)
+            : calculatedTotalPages,
+        );
+
+        setSelectedSession((current) => {
+          if (!current) {
+            return null;
+          }
+
+          return (
+            sessions.find(
+              (
+                session: LocationRequestSession,
+              ) =>
+                session.id === current.id,
+            ) || current
+          );
+        });
+
+        setSelectedRouteSession(
+          (current) => {
+            if (!current) {
+              return null;
+            }
+
+            return (
+              sessions.find(
+                (
+                  session: LocationRequestSession,
+                ) =>
+                  session.id === current.id,
+              ) || current
+            );
+          },
+        );
+      } catch (error) {
+        setHistorySessions([]);
+
+        setHistoryError(
+          getAxiosErrorMessage(error),
+        );
+      } finally {
+        setLoadingHistory(false);
+      }
+    },
+    [
+      appliedHistoryFromDate,
+      appliedHistoryStaffUserId,
+      appliedHistoryStatus,
+      appliedHistoryToDate,
+      currentUser,
+      historyPage,
+      isOwner,
+    ],
+  );
+
 useEffect(() => {
   if (!currentUser || !isOwner) {
     return;
@@ -425,6 +677,110 @@ useEffect(() => {
   fetchActiveSessions,
   isOwner,
 ]);
+
+  useEffect(() => {
+    if (
+      !currentUser ||
+      !isOwner ||
+      activeTab !== 'HISTORY'
+    ) {
+      return;
+    }
+
+    void fetchHistory(historyPage);
+  }, [
+    activeTab,
+    currentUser,
+    fetchHistory,
+    historyPage,
+    isOwner,
+  ]);
+
+    const handleApplyHistoryFilters =
+    useCallback(() => {
+      const nextFilters = {
+        staffUserId:
+          historyStaffUserId,
+        status:
+          historyStatus,
+        fromDate:
+          historyFromDate,
+        toDate:
+          historyToDate,
+      };
+
+      setAppliedHistoryStaffUserId(
+        nextFilters.staffUserId,
+      );
+
+      setAppliedHistoryStatus(
+        nextFilters.status,
+      );
+
+      setAppliedHistoryFromDate(
+        nextFilters.fromDate,
+      );
+
+      setAppliedHistoryToDate(
+        nextFilters.toDate,
+      );
+
+      setHistoryPage(1);
+
+      void fetchHistory(1, nextFilters);
+    }, [
+      fetchHistory,
+      historyFromDate,
+      historyStaffUserId,
+      historyStatus,
+      historyToDate,
+    ]);
+
+  const handleClearHistoryFilters =
+    useCallback(() => {
+      const clearedFilters = {
+        staffUserId: '',
+        status: '',
+        fromDate: '',
+        toDate: '',
+      };
+
+      setHistoryStaffUserId('');
+      setHistoryStatus('');
+      setHistoryFromDate('');
+      setHistoryToDate('');
+
+      setAppliedHistoryStaffUserId('');
+      setAppliedHistoryStatus('');
+      setAppliedHistoryFromDate('');
+      setAppliedHistoryToDate('');
+
+      setHistoryPage(1);
+
+      void fetchHistory(
+        1,
+        clearedFilters,
+      );
+    }, [fetchHistory]);
+
+  const handleHistoryPageChange =
+    useCallback(
+      (page: number) => {
+        if (
+          loadingHistory ||
+          page < 1 ||
+          page > historyTotalPages
+        ) {
+          return;
+        }
+
+        setHistoryPage(page);
+      },
+      [
+        historyTotalPages,
+        loadingHistory,
+      ],
+    );
 
   const handleSubmit = async (
     event: FormEvent<HTMLFormElement>,
@@ -572,7 +928,11 @@ setMessage({
       }.`,
     });
 
-    await fetchActiveSessions();
+        await fetchActiveSessions();
+
+    if (activeTab === 'HISTORY') {
+      await fetchHistory(historyPage);
+    }
   } catch (error) {
     setActiveSessionsError(
       getAxiosErrorMessage(error),
@@ -633,17 +993,72 @@ setMessage({
   }}
 />
 
-      <ActiveLiveLocationSessions
-  sessions={activeSessions}
-  usersById={usersById}
-  loading={loadingActiveSessions}
-  error={activeSessionsError}
-  stoppingSessionId={stoppingSessionId}
-    onRefresh={fetchActiveSessions}
-  onView={setSelectedSession}
-  onViewRoute={setSelectedRouteSession}
-  onStop={handleStopSession}
-/>
+                  <LiveLocationTabs
+        activeTab={activeTab}
+        activeCount={activeSessions.length}
+        historyCount={historyTotal}
+        onChange={setActiveTab}
+      />
+
+      {activeTab === 'ACTIVE' ? (
+        <ActiveLiveLocationSessions
+          sessions={activeSessions}
+          usersById={usersById}
+          loading={loadingActiveSessions}
+          error={activeSessionsError}
+          stoppingSessionId={stoppingSessionId}
+          onRefresh={fetchActiveSessions}
+          onView={setSelectedSession}
+          onViewRoute={setSelectedRouteSession}
+          onStop={handleStopSession}
+        />
+            ) : (
+        <LiveLocationHistory
+          sessions={historySessions}
+          usersById={usersById}
+          loading={loadingHistory}
+          error={historyError}
+          page={historyPage}
+          total={historyTotal}
+          totalPages={historyTotalPages}
+          staffUserId={historyStaffUserId}
+          status={historyStatus}
+          fromDate={historyFromDate}
+          toDate={historyToDate}
+          onStaffUserIdChange={
+            setHistoryStaffUserId
+          }
+          onStatusChange={
+            setHistoryStatus
+          }
+          onFromDateChange={
+            setHistoryFromDate
+          }
+          onToDateChange={
+            setHistoryToDate
+          }
+          onApplyFilters={
+            handleApplyHistoryFilters
+          }
+          onClearFilters={
+            handleClearHistoryFilters
+          }
+          onRefresh={() => {
+            void fetchHistory(
+              historyPage,
+            );
+          }}
+          onPageChange={
+            handleHistoryPageChange
+          }
+          onViewDetails={
+            setSelectedSession
+          }
+          onViewRoute={
+            setSelectedRouteSession
+          }
+        />
+      )}
 
       <section className="rounded-3xl border border-amber-200 bg-amber-50 p-5">
         <h3 className="font-black text-amber-900">
