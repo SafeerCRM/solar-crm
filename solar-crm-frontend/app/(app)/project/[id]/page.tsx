@@ -1323,7 +1323,7 @@ setSiteLocationForm({
         );
 
       await axios.patch(
-        `${API_BASE_URL}/project/${projectId}`,
+        `${API_BASE_URL}/project/${projectId}/location`,
         {
           address:
             address ||
