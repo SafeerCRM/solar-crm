@@ -22525,17 +22525,153 @@ async getOrCreateEpcCustomerInvoiceDraft(projectId: number, user: any) {
     });
 
   if (existing) {
-    const items =
-      await this.projectEpcCustomerInvoiceItemRepository.find({
-        where: { invoiceId: existing.id },
-        order: { serialNumber: 'ASC' },
+  const items =
+    await this.projectEpcCustomerInvoiceItemRepository.find({
+      where: {
+        invoiceId: existing.id,
+      },
+      order: {
+        serialNumber: 'ASC',
+      },
+    });
+
+  const existingInvoiceIsZero =
+    Number(existing.grandTotal || 0) === 0;
+
+  const existingItemsAreZero =
+    items.length === 0 ||
+    items.every(
+      (item) =>
+        Number(item.rate || 0) === 0 &&
+        Number(item.taxableAmount || 0) === 0 &&
+        Number(item.totalAmount || 0) === 0,
+    );
+
+  if (
+    existingInvoiceIsZero &&
+    existingItemsAreZero
+  ) {
+    const project =
+      await this.projectRepository.findOne({
+        where: {
+          id: projectId,
+        },
       });
 
-    return {
-      invoice: existing,
-      items,
-    };
+    if (!project) {
+      throw new NotFoundException(
+        'Project not found',
+      );
+    }
+
+    const finalAmount = Number(
+      (project as any).finalCost ||
+        (project as any).netAmount ||
+        (project as any).projectCost ||
+        0,
+    );
+
+    if (finalAmount > 0) {
+      const goodsRate = Number(
+        (
+          (finalAmount * 0.7) /
+          1.05
+        ).toFixed(2),
+      );
+
+      const installationRate = Number(
+        (
+          (finalAmount * 0.3) /
+          1.18
+        ).toFixed(2),
+      );
+
+      const repairedDefaultItems = [
+        {
+          serialNumber: 1,
+
+          description:
+            `SOLAR POWER GENERATING SYSTEM\n` +
+            `SPGS PLANT CONTAINING\n` +
+            `${project.panelBrand || 'SOLAR PANEL'} ` +
+            `${project.dcrPanelCount || ''} NOS\n` +
+            `${project.converterBrand || 'INVERTER'} ` +
+            `${project.converterCapacity || ''}`,
+
+          hsnSac: '85414300',
+          quantity: 1,
+          unit: 'Units',
+          rate: goodsRate,
+          gstPercent: 5,
+        },
+        {
+          serialNumber: 2,
+          description:
+            'Installation & Commissioning Charges',
+          hsnSac: '998736',
+          quantity: 1,
+          unit: 'Units',
+          rate: installationRate,
+          gstPercent: 18,
+        },
+      ];
+
+      const repairedTotals =
+        this.calculateEpcInvoiceTotals(
+          repairedDefaultItems,
+        );
+
+      existing.taxableAmount =
+        repairedTotals.taxableAmount;
+
+      existing.cgstAmount =
+        repairedTotals.cgstAmount;
+
+      existing.sgstAmount =
+        repairedTotals.sgstAmount;
+
+      existing.totalTaxAmount =
+        repairedTotals.totalTaxAmount;
+
+      existing.roundOff =
+        repairedTotals.roundOff;
+
+      existing.grandTotal =
+        repairedTotals.grandTotal;
+
+      const repairedInvoice =
+        await this.projectEpcCustomerInvoiceRepository.save(
+          existing,
+        );
+
+      await this.projectEpcCustomerInvoiceItemRepository.delete({
+        invoiceId: existing.id,
+      });
+
+      const repairedItems =
+        await this.projectEpcCustomerInvoiceItemRepository.save(
+          repairedTotals.items.map(
+            (item) =>
+              this.projectEpcCustomerInvoiceItemRepository.create({
+                ...item,
+                invoiceId: existing.id,
+                projectId,
+              } as Partial<ProjectEpcCustomerInvoiceItem>),
+          ),
+        );
+
+      return {
+        invoice: repairedInvoice,
+        items: repairedItems,
+      };
+    }
   }
+
+  return {
+    invoice: existing,
+    items,
+  };
+}
 
   const project = await this.projectRepository.findOne({
     where: { id: projectId },
