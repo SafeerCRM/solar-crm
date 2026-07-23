@@ -6,6 +6,55 @@ import { useRouter } from 'next/navigation';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
+function getRolesFromToken(): string[] {
+  try {
+    const token = localStorage.getItem('token');
+
+    if (!token) return [];
+
+    const payloadPart = token.split('.')[1];
+
+    if (!payloadPart) return [];
+
+    const normalizedPayload = payloadPart
+      .replace(/-/g, '+')
+      .replace(/_/g, '/');
+
+    const decodedPayload = JSON.parse(
+      decodeURIComponent(
+        window
+          .atob(normalizedPayload)
+          .split('')
+          .map(
+            (character) =>
+              `%${character
+                .charCodeAt(0)
+                .toString(16)
+                .padStart(2, '0')}`,
+          )
+          .join(''),
+      ),
+    );
+
+    if (Array.isArray(decodedPayload?.roles)) {
+      return decodedPayload.roles;
+    }
+
+    if (decodedPayload?.role) {
+      return [decodedPayload.role];
+    }
+
+    return [];
+  } catch (error) {
+    console.error(
+      'Failed to read roles from token:',
+      error,
+    );
+
+    return [];
+  }
+}
+
 const compressImageFile = async (file: File): Promise<File> => {
   if (!file.type.startsWith('image/')) return file;
 
@@ -89,6 +138,12 @@ type CustomerMaster = {
 
 export default function CreateProjectPage() {
   const router = useRouter();
+
+  const [accessChecked, setAccessChecked] =
+  useState(false);
+
+const [directCreationBlocked, setDirectCreationBlocked] =
+  useState(false);
 
   const [meetingId, setMeetingId] = useState('');
   const [meetingIdFromUrl, setMeetingIdFromUrl] = useState('');
@@ -567,16 +622,79 @@ router.push(`/project/${createdProjectId}`);
   };
 
   useEffect(() => {
-  const params = new URLSearchParams(window.location.search);
-  const id = params.get('meetingId') || '';
+  const params = new URLSearchParams(
+    window.location.search,
+  );
+
+  const id =
+    params.get('meetingId') || '';
+
+  const roles =
+    getRolesFromToken();
+
+  const isMeetingManager =
+    roles.includes(
+      'MEETING_MANAGER',
+    );
+
+  const isDirectCreation =
+    !String(id).trim();
 
   setMeetingId(id);
   setMeetingIdFromUrl(id);
+
+  setDirectCreationBlocked(
+    isMeetingManager &&
+      isDirectCreation,
+  );
+
+  setAccessChecked(true);
 }, []);
 
   useEffect(() => {
   fetchMeetingPrefill();
 }, [meetingId]);
+
+if (!accessChecked) {
+  return (
+    <div className="mx-auto max-w-3xl">
+      <div className="rounded-2xl bg-white p-6 text-center shadow">
+        <p className="font-semibold text-gray-700">
+          Checking project creation access...
+        </p>
+      </div>
+    </div>
+  );
+}
+
+if (directCreationBlocked) {
+  return (
+    <div className="mx-auto max-w-3xl">
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 shadow">
+        <h1 className="text-xl font-bold text-amber-900">
+          Direct Project Creation Disabled
+        </h1>
+
+        <p className="mt-3 text-sm leading-6 text-amber-800">
+          Meeting Managers cannot create a project
+          directly. Please create a meeting for the
+          contact first, then convert that meeting
+          into a project.
+        </p>
+
+        <button
+          type="button"
+          onClick={() =>
+            router.push('/project')
+          }
+          className="mt-5 rounded-xl bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-800"
+        >
+          Back to Projects
+        </button>
+      </div>
+    </div>
+  );
+}
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">

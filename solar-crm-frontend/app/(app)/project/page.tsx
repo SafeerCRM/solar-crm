@@ -13,6 +13,55 @@ import { Share } from '@capacitor/share';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
+function getRolesFromToken(): string[] {
+  try {
+    const token = localStorage.getItem('token');
+
+    if (!token) return [];
+
+    const payloadPart = token.split('.')[1];
+
+    if (!payloadPart) return [];
+
+    const normalizedPayload = payloadPart
+      .replace(/-/g, '+')
+      .replace(/_/g, '/');
+
+    const decodedPayload = JSON.parse(
+      decodeURIComponent(
+        window
+          .atob(normalizedPayload)
+          .split('')
+          .map(
+            (character) =>
+              `%${character
+                .charCodeAt(0)
+                .toString(16)
+                .padStart(2, '0')}`,
+          )
+          .join(''),
+      ),
+    );
+
+    if (Array.isArray(decodedPayload?.roles)) {
+      return decodedPayload.roles;
+    }
+
+    if (decodedPayload?.role) {
+      return [decodedPayload.role];
+    }
+
+    return [];
+  } catch (error) {
+    console.error(
+      'Failed to read roles from token:',
+      error,
+    );
+
+    return [];
+  }
+}
+
 const LOAN_ACTIVITY_OPTIONS = [
   'DOCUMENT_PENDING',
   'DOCUMENT_COMPLETED',
@@ -141,6 +190,8 @@ function escapeCsvValue(value: any) {
 }
 
 export default function ProjectPage() {
+  const [currentUserRoles, setCurrentUserRoles] =
+  useState<string[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [exportLoading, setExportLoading] =
@@ -201,6 +252,12 @@ const [executionActivityFilter, setExecutionActivityFilter] =
 
 const [activityMatchMode, setActivityMatchMode] =
   useState<'ALL' | 'ANY'>('ALL');
+
+  useEffect(() => {
+  setCurrentUserRoles(
+    getRolesFromToken(),
+  );
+}, []);
 
 useEffect(() => {
   const saved = localStorage.getItem('projectListFilters');
@@ -860,6 +917,11 @@ useEffect(() => {
   hiddenProjectPage,
 ]);
 
+const isMeetingManager =
+  currentUserRoles.includes(
+    'MEETING_MANAGER',
+  );
+
   return (
     <div className="mx-auto min-w-0 max-w-7xl space-y-4 overflow-x-hidden px-2 pb-4 md:px-0">
       <div className="rounded-2xl bg-white p-4 shadow">
@@ -872,12 +934,14 @@ useEffect(() => {
   </p>
 
   <div className="mt-4 flex flex-wrap gap-3">
-    <Link
-      href="/project/create"
-      className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
-    >
-      + Create Project
-    </Link>
+    {!isMeetingManager && (
+  <Link
+    href="/project/create"
+    className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+  >
+    + Create Project
+  </Link>
+)}
 
     <button
   type="button"
