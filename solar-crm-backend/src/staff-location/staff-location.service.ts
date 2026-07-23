@@ -31,6 +31,9 @@ import { StaffLocationHeartbeatDto } from './dto/staff-location-heartbeat.dto';
 import { StopStaffLocationDto } from './dto/stop-staff-location.dto';
 import { StaffLocationPointBatchDto } from './dto/staff-location-point.dto';
 
+const MAX_DISTANCE_ACCURACY_METRES = 50;
+const MIN_DISTANCE_SEGMENT_METRES = 10;
+
 @Injectable()
 export class StaffLocationService {
   constructor(
@@ -974,15 +977,42 @@ const nextStatus = this.resolveTrackingStatus({
        * We begin from the previous session coordinate, then walk through the
        * newly inserted points. The complete historical route is never loaded.
        */
-      let previousLatitude = session.lastLatitude;
+            let previousLatitude = session.lastLatitude;
       let previousLongitude = session.lastLongitude;
+      let previousAccuracyMetres =
+        session.lastAccuracyMetres;
 
       let addedDistanceMetres = 0;
+      let ignoredLowAccuracyPoints = 0;
+      let ignoredDriftSegments = 0;
 
       for (const point of pointEntities) {
+        const currentAccuracyMetres =
+          point.accuracyMetres;
+
+        const previousPointIsAccurate =
+          previousLatitude !== null &&
+          previousLongitude !== null &&
+          previousAccuracyMetres !== null &&
+          Number.isFinite(
+            Number(previousAccuracyMetres),
+          ) &&
+          Number(previousAccuracyMetres) <=
+            MAX_DISTANCE_ACCURACY_METRES;
+
+        const currentPointIsAccurate =
+          currentAccuracyMetres !== null &&
+          Number.isFinite(
+            Number(currentAccuracyMetres),
+          ) &&
+          Number(currentAccuracyMetres) <=
+            MAX_DISTANCE_ACCURACY_METRES;
+
         if (
           previousLatitude !== null &&
-          previousLongitude !== null
+          previousLongitude !== null &&
+          previousPointIsAccurate &&
+          currentPointIsAccurate
         ) {
           const segmentDistance =
             this.calculateDistanceMetres(
@@ -992,23 +1022,46 @@ const nextStatus = this.resolveTrackingStatus({
               point.longitude,
             );
 
+          const accuracyBasedDriftThreshold =
+            Math.max(
+              MIN_DISTANCE_SEGMENT_METRES,
+              Number(previousAccuracyMetres),
+              Number(currentAccuracyMetres),
+            );
+
           /**
-           * Ignore unrealistic jumps above 100 km within one segment.
+           * Count a segment only when:
+           * - both coordinates have acceptable GPS accuracy;
+           * - movement exceeds the likely GPS-drift radius;
+           * - the segment is not an impossible jump.
            *
-           * They are retained as raw points for audit, but they do not inflate
-           * the staff travel-distance summary.
+           * Every raw point remains stored for audit.
            */
           if (
             Number.isFinite(segmentDistance) &&
-            segmentDistance >= 0 &&
+            segmentDistance >
+              accuracyBasedDriftThreshold &&
             segmentDistance <= 100000
           ) {
-            addedDistanceMetres += segmentDistance;
+            addedDistanceMetres +=
+              segmentDistance;
+          } else if (
+            Number.isFinite(segmentDistance) &&
+            segmentDistance <=
+              accuracyBasedDriftThreshold
+          ) {
+            ignoredDriftSegments += 1;
           }
+        } else if (
+          !currentPointIsAccurate
+        ) {
+          ignoredLowAccuracyPoints += 1;
         }
 
         previousLatitude = point.latitude;
         previousLongitude = point.longitude;
+        previousAccuracyMetres =
+          currentAccuracyMetres;
       }
 
       /**
@@ -1105,8 +1158,17 @@ const nextStatus = this.resolveTrackingStatus({
             duplicatePointsIgnored:
               dto.points.length - pointEntities.length,
 
-            addedDistanceMetres:
+                        addedDistanceMetres:
               Math.round(addedDistanceMetres),
+
+            ignoredLowAccuracyPoints,
+            ignoredDriftSegments,
+
+            maximumDistanceAccuracyMetres:
+              MAX_DISTANCE_ACCURACY_METRES,
+
+            minimumDistanceSegmentMetres:
+              MIN_DISTANCE_SEGMENT_METRES,
 
             lastLatitude: latestPoint.latitude,
             lastLongitude: latestPoint.longitude,
