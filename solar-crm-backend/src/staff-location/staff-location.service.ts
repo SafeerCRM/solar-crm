@@ -259,7 +259,105 @@ export class StaffLocationService {
 
     const now = new Date();
 
-    const nextStatus = this.resolveTrackingStatus({
+/**
+ * The same start endpoint also records an explicit staff rejection.
+ *
+ * Rejection closes the request immediately so:
+ * - it no longer remains in the active-session queue;
+ * - GPS tracking never starts;
+ * - OWNER can request tracking again later;
+ * - the audit trail clearly shows that staff declined the request.
+ */
+if (dto.requestAccepted === false) {
+  return this.dataSource.transaction(async (manager) => {
+    const sessionRepository = manager.getRepository(
+      StaffLocationTrackingSession,
+    );
+
+    const eventRepository = manager.getRepository(
+      StaffLocationEvent,
+    );
+
+    const previousStatus = session.status;
+
+    session.requestOpened = true;
+    session.requestOpenedAt =
+      session.requestOpenedAt || now;
+
+    session.requestAccepted = false;
+    session.acceptedAt = null;
+    session.startedAt = null;
+
+    session.platform = dto.platform;
+    session.permissionStatus = dto.permissionStatus;
+    session.gpsStatus = dto.gpsStatus;
+    session.networkStatus = dto.networkStatus;
+
+    session.deviceId =
+      dto.deviceId?.trim() || null;
+
+    session.appVersion =
+      dto.appVersion?.trim() || null;
+
+    session.operatingSystemVersion =
+      dto.operatingSystemVersion?.trim() || null;
+
+    session.status =
+      StaffLocationTrackingStatus.STOPPED_BY_STAFF;
+
+    session.isActive = false;
+
+    session.stoppedByUserId = staffUserId;
+    session.stoppedAt = now;
+    session.stopReason =
+      StaffLocationStopReason.STAFF_STOPPED;
+
+    session.lastHeartbeatAt = now;
+    session.lastStatusChangeAt = now;
+
+    session.currentFailureCode =
+      'TRACKING_REQUEST_DECLINED';
+
+    session.currentFailureMessage =
+      'Staff declined the live location tracking request';
+
+    const savedSession =
+      await sessionRepository.save(session);
+
+    await eventRepository.save(
+      eventRepository.create({
+        sessionId: savedSession.id,
+        staffUserId: savedSession.staffUserId,
+        actorUserId: staffUserId,
+
+        eventType:
+          StaffLocationEventType.TRACKING_STOPPED,
+
+        previousStatus,
+        newStatus:
+          StaffLocationTrackingStatus.STOPPED_BY_STAFF,
+
+        message:
+          'Staff declined the live location tracking request',
+
+        metadata: {
+          requestAccepted: false,
+          platform: dto.platform,
+          permissionStatus: dto.permissionStatus,
+          gpsStatus: dto.gpsStatus,
+          networkStatus: dto.networkStatus,
+          deviceId: dto.deviceId || null,
+        },
+
+        occurredAt: now,
+      }),
+    );
+
+    return savedSession;
+  });
+}
+
+const nextStatus = this.resolveTrackingStatus({
       permissionStatus: dto.permissionStatus,
       gpsStatus: dto.gpsStatus,
       networkStatus: dto.networkStatus,
