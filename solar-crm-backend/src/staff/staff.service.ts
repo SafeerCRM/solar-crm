@@ -522,6 +522,83 @@ async getMyAttendance(query: any, user: any) {
   };
 }
 
+private async getLeaveSummary(staffId?: number) {
+  const qb = this.leaveRepo
+    .createQueryBuilder('leave')
+    .select(
+      `
+      COUNT(*) FILTER (
+        WHERE leave.status = 'APPROVED'
+      )
+      `,
+      'approvedRequests',
+    )
+    .addSelect(
+      `
+      COALESCE(
+        SUM(
+          CASE
+            WHEN leave.status = 'APPROVED'
+            THEN leave."totalDays"
+            ELSE 0
+          END
+        ),
+        0
+      )
+      `,
+      'approvedDays',
+    )
+    .addSelect(
+      `
+      COUNT(*) FILTER (
+        WHERE leave.status = 'PENDING'
+      )
+      `,
+      'pendingRequests',
+    )
+    .addSelect(
+      `
+      COUNT(*) FILTER (
+        WHERE leave.status = 'REJECTED'
+      )
+      `,
+      'rejectedRequests',
+    )
+    .addSelect(
+      `
+      COUNT(*) FILTER (
+        WHERE leave.status = 'CANCELLED'
+      )
+      `,
+      'cancelledRequests',
+    )
+    .where('leave.isHidden = false');
+
+  if (staffId) {
+    qb.andWhere('leave.staffId = :staffId', {
+      staffId,
+    });
+  }
+
+  const raw = await qb.getRawOne();
+
+  return {
+    approvedDays: Number(raw?.approvedDays || 0),
+    approvedRequests: Number(
+      raw?.approvedRequests || 0,
+    ),
+    pendingRequests: Number(
+      raw?.pendingRequests || 0,
+    ),
+    rejectedRequests: Number(
+      raw?.rejectedRequests || 0,
+    ),
+    cancelledRequests: Number(
+      raw?.cancelledRequests || 0,
+    ),
+  };
+}
+
 private calculateLeaveDays(fromDate: string, toDate: string) {
   const start = new Date(fromDate);
   const end = new Date(toDate);
@@ -599,13 +676,20 @@ async listLeaves(query: any) {
     take: limit,
   });
 
-  return {
-    data,
-    total,
-    page,
-    limit,
-    totalPages: Math.ceil(total / limit) || 1,
-  };
+  const summary = await this.getLeaveSummary(
+  query.staffId
+    ? Number(query.staffId)
+    : undefined,
+);
+
+return {
+  data,
+  total,
+  page,
+  limit,
+  totalPages: Math.ceil(total / limit) || 1,
+  summary,
+};
 }
 
 async updateLeave(id: number, body: any) {
@@ -736,14 +820,19 @@ async listMyLeaves(query: any, user: any) {
     take: limit,
   });
 
-  return {
-    staff,
-    data,
-    total,
-    page,
-    limit,
-    totalPages: Math.ceil(total / limit) || 1,
-  };
+  const summary = await this.getLeaveSummary(
+  staff.id,
+);
+
+return {
+  staff,
+  data,
+  total,
+  page,
+  limit,
+  totalPages: Math.ceil(total / limit) || 1,
+  summary,
+};
 }
 
 async uploadEmployeePolicyFile(file: any) {
