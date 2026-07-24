@@ -1,9 +1,11 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
   Param,
   Patch,
+  ParseIntPipe,
   Post,
   Query,
   UseGuards,
@@ -111,6 +113,202 @@ punchIn(@Body() body: any, @CurrentUser() user: any) {
 @Post('attendance/punch-out')
 punchOut(@Body() body: any, @CurrentUser() user: any) {
   return this.staffService.punchOut(body, user);
+}
+
+@Post('attendance-locations')
+createAttendanceLocation(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffService.createAttendanceLocation(
+    body,
+    user,
+  );
+}
+
+@Get('attendance-locations')
+listAttendanceLocations(
+  @Query() query: any,
+) {
+  return this.staffService.listAttendanceLocations(
+    query,
+  );
+}
+
+@Get('attendance-locations/active')
+getActiveAttendanceLocations() {
+  return this.staffService.getActiveAttendanceLocations();
+}
+
+@Get('attendance-locations/:id')
+getAttendanceLocation(
+  @Param('id', ParseIntPipe) id: number,
+) {
+  return this.staffService.getAttendanceLocation(
+    id,
+  );
+}
+
+@Patch('attendance-locations/:id')
+updateAttendanceLocation(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+) {
+  return this.staffService.updateAttendanceLocation(
+    id,
+    body,
+  );
+}
+
+@Patch('attendance-locations/:id/hide')
+hideAttendanceLocation(
+  @Param('id', ParseIntPipe) id: number,
+) {
+  return this.staffService.hideAttendanceLocation(
+    id,
+  );
+}
+
+@Patch('attendance-locations/:id/restore')
+restoreAttendanceLocation(
+  @Param('id', ParseIntPipe) id: number,
+) {
+  return this.staffService.restoreAttendanceLocation(
+    id,
+  );
+}
+
+@Post('attendance-policies')
+saveStaffAttendancePolicy(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffService.saveStaffAttendancePolicy(
+    body,
+    user,
+  );
+}
+
+@Get('attendance-policies')
+listStaffAttendancePolicies(
+  @Query() query: any,
+) {
+  return this.staffService.listStaffAttendancePolicies(
+    query,
+  );
+}
+
+@Get('attendance-policies/staff/:staffId')
+getStaffAttendancePolicy(
+  @Param('staffId', ParseIntPipe)
+  staffId: number,
+) {
+  return this.staffService.getStaffAttendancePolicy(
+    staffId,
+  );
+}
+
+@Patch(
+  'attendance-policies/staff/:staffId/active',
+)
+setStaffAttendancePolicyActive(
+  @Param('staffId', ParseIntPipe)
+  staffId: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  if (typeof body.isActive !== 'boolean') {
+    throw new BadRequestException(
+      'isActive must be true or false',
+    );
+  }
+
+  return this.staffService.setStaffAttendancePolicyActive(
+    staffId,
+    body.isActive,
+    user,
+  );
+}
+
+@Post('attendance-overrides')
+saveStaffAttendanceOverride(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffService.saveStaffAttendanceOverride(
+    body,
+    user,
+  );
+}
+
+@Get('attendance-overrides')
+listStaffAttendanceOverrides(
+  @Query() query: any,
+) {
+  return this.staffService.listStaffAttendanceOverrides(
+    query,
+  );
+}
+
+@Get('attendance-overrides/:id')
+getStaffAttendanceOverride(
+  @Param('id', ParseIntPipe) id: number,
+) {
+  return this.staffService.getStaffAttendanceOverride(
+    id,
+  );
+}
+
+@Patch('attendance-overrides/:id/active')
+setStaffAttendanceOverrideActive(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  if (typeof body.isActive !== 'boolean') {
+    throw new BadRequestException(
+      'isActive must be true or false',
+    );
+  }
+
+  return this.staffService.setStaffAttendanceOverrideActive(
+    id,
+    body.isActive,
+    user,
+  );
+}
+
+@Get('attendance-exception-requests')
+listAttendanceExceptionRequests(
+  @Query() query: any,
+) {
+  return this.staffService.listAttendanceExceptionRequests(
+    query,
+  );
+}
+
+@Get('attendance-exception-requests/:id')
+getAttendanceExceptionRequest(
+  @Param('id', ParseIntPipe) id: number,
+) {
+  return this.staffService.getAttendanceExceptionRequest(
+    id,
+  );
+}
+
+@Patch(
+  'attendance-exception-requests/:id/review',
+)
+reviewAttendanceExceptionRequest(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffService.reviewAttendanceExceptionRequest(
+    id,
+    body,
+    user,
+  );
 }
 
 @Get('me')

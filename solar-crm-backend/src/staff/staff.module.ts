@@ -18,6 +18,10 @@ import { StaffPerformance } from './staff-performance.entity';
 import { PerformanceTemplate } from './performance-template.entity';
 import { PerformanceTemplateMetric } from './performance-template-metric.entity';
 import { PenaltyRule } from './penalty-rule.entity';
+import { AttendanceLocation } from './attendance-location.entity';
+import { StaffAttendancePolicy } from './staff-attendance-policy.entity';
+import { StaffAttendanceOverride } from './staff-attendance-override.entity';
+import { StaffAttendanceException } from './staff-attendance-exception.entity';
 
 @Module({
   imports: [
@@ -37,6 +41,10 @@ import { PenaltyRule } from './penalty-rule.entity';
       PerformanceTemplate,
 PerformanceTemplateMetric,
 PenaltyRule,
+AttendanceLocation,
+StaffAttendancePolicy,
+StaffAttendanceOverride,
+StaffAttendanceException,
     ]),
   ],
   controllers: [StaffController, StaffSelfController],

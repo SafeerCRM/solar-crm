@@ -2,6 +2,9 @@ import {
   Body,
   Controller,
   Get,
+  Param,
+  ParseIntPipe,
+  Patch,
   Post,
   Query,
   UploadedFiles,
@@ -74,6 +77,39 @@ export class StaffSelfController {
       user,
     );
   }
+
+  @Post('attendance-exceptions')
+createMyAttendanceExceptionRequest(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffService.createAttendanceExceptionRequest(
+    body,
+    user,
+  );
+}
+
+@Get('attendance-exceptions')
+listMyAttendanceExceptionRequests(
+  @Query() query: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffService.listMyAttendanceExceptionRequests(
+    query,
+    user,
+  );
+}
+
+@Patch('attendance-exceptions/:id/cancel')
+cancelMyAttendanceExceptionRequest(
+  @Param('id', ParseIntPipe) id: number,
+  @CurrentUser() user: any,
+) {
+  return this.staffService.cancelMyAttendanceExceptionRequest(
+    id,
+    user,
+  );
+}
 
   @Post('attendance/photo-upload')
   @UseInterceptors(FilesInterceptor('files', 1))

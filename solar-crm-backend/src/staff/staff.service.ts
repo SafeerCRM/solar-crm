@@ -22,6 +22,17 @@ import {
   PenaltyRule,
   PenaltyCalculationType,
 } from './penalty-rule.entity';
+import { AttendanceLocation } from './attendance-location.entity';
+import {
+  StaffAttendanceLocationRule,
+  StaffAttendancePolicy,
+} from './staff-attendance-policy.entity';
+import { StaffAttendanceOverride } from './staff-attendance-override.entity';
+import {
+  StaffAttendanceException,
+  StaffAttendanceExceptionPunchType,
+  StaffAttendanceExceptionStatus,
+} from './staff-attendance-exception.entity';
 
 @Injectable()
 export class StaffService {
@@ -67,6 +78,18 @@ private readonly performanceTemplateMetricRepo: Repository<PerformanceTemplateMe
 
 @InjectRepository(PenaltyRule)
 private readonly penaltyRuleRepository: Repository<PenaltyRule>,
+
+@InjectRepository(AttendanceLocation)
+private readonly attendanceLocationRepo: Repository<AttendanceLocation>,
+
+@InjectRepository(StaffAttendancePolicy)
+private readonly attendancePolicyRepo: Repository<StaffAttendancePolicy>,
+
+@InjectRepository(StaffAttendanceOverride)
+private readonly attendanceOverrideRepo: Repository<StaffAttendanceOverride>,
+
+@InjectRepository(StaffAttendanceException)
+private readonly attendanceExceptionRepo: Repository<StaffAttendanceException>,
   ) {}
 
   async findAll(query: any) {
@@ -349,33 +372,94 @@ private calculateWorkingHours(punchIn?: Date, punchOut?: Date) {
 async punchIn(body: any, user: any) {
   let staffId = body.staffId;
 
-if (!staffId) {
-  const linkedStaff = await this.getMyStaffProfile(user);
-  staffId = linkedStaff.id;
-}
+  if (!staffId) {
+    const linkedStaff =
+      await this.getMyStaffProfile(user);
 
-const staff = await this.staffRepo.findOne({
-  where: {
-    id: Number(staffId),
-    isHidden: false,
-  },
-});
-
-  if (!staff) {
-    throw new NotFoundException('Staff not found');
+    staffId = linkedStaff.id;
   }
 
-  const attendanceDate = body.attendanceDate || this.getTodayDate();
-
-  const existing = await this.attendanceRepo.findOne({
+  const staff = await this.staffRepo.findOne({
     where: {
-      staffId: staff.id,
-      attendanceDate,
+      id: Number(staffId),
+      isHidden: false,
     },
   });
 
+  if (!staff) {
+    throw new NotFoundException(
+      'Staff not found',
+    );
+  }
+
+  const attendanceDate =
+    body.attendanceDate ||
+    this.getTodayDate();
+
+  const existing =
+    await this.attendanceRepo.findOne({
+      where: {
+        staffId: staff.id,
+        attendanceDate,
+      },
+    });
+
   if (existing?.punchInTime) {
-    throw new BadRequestException('Staff already punched in today');
+    throw new BadRequestException(
+      'Staff already punched in today',
+    );
+  }
+
+  const attemptedAt = new Date();
+
+  const locationEvaluation =
+    await this.evaluateAttendanceLocation(
+      staff.id,
+      attendanceDate,
+      'PUNCH_IN',
+      body.latitude,
+      body.longitude,
+    );
+
+  if (!locationEvaluation.allowed) {
+    throw new BadRequestException({
+      message:
+        `Punch in is allowed only within ${locationEvaluation.allowedRadiusMeters} metres of ${locationEvaluation.location?.name || 'the approved attendance location'}`,
+      code:
+        'ATTENDANCE_LOCATION_OUTSIDE_RADIUS',
+      canRequestException: true,
+      punchType: 'PUNCH_IN',
+      staffId: staff.id,
+      staffName: staff.fullName || '',
+      employeeCode:
+        staff.employeeCode || '',
+      attendanceDate,
+      attemptedAt:
+        attemptedAt.toISOString(),
+      latitude:
+        locationEvaluation.latitude,
+      longitude:
+        locationEvaluation.longitude,
+      gpsAddress:
+        String(body.gpsAddress || ''),
+      photoUrl:
+        String(body.photoUrl || ''),
+      attendanceLocationId:
+        locationEvaluation.location?.id ||
+        null,
+      attendanceLocationName:
+        locationEvaluation.location?.name ||
+        '',
+      distanceMeters:
+        locationEvaluation.distanceMeters,
+      allowedRadiusMeters:
+        locationEvaluation.allowedRadiusMeters,
+      ruleSource:
+        locationEvaluation.ruleSource,
+      overrideReason:
+        locationEvaluation.overrideReason ||
+        '',
+    });
   }
 
   const attendance =
@@ -383,64 +467,174 @@ const staff = await this.staffRepo.findOne({
     this.attendanceRepo.create({
       staffId: staff.id,
       staffName: staff.fullName,
-      employeeCode: staff.employeeCode || '',
+      employeeCode:
+        staff.employeeCode || '',
       attendanceDate,
     });
 
-  attendance.punchInTime = new Date();
-  attendance.punchInLatitude = body.latitude || '';
-  attendance.punchInLongitude = body.longitude || '';
-  attendance.punchInGpsAddress = body.gpsAddress || '';
-  attendance.punchInPhotoUrl = body.photoUrl || '';
-  attendance.status = body.status || 'PRESENT';
-  attendance.remarks = body.remarks || attendance.remarks || '';
-  attendance.createdBy = user?.id || null;
-  attendance.createdByName = user?.name || '';
+  attendance.punchInTime = attemptedAt;
 
-  return this.attendanceRepo.save(attendance);
+  attendance.punchInLatitude = String(
+    locationEvaluation.latitude,
+  );
+
+  attendance.punchInLongitude = String(
+    locationEvaluation.longitude,
+  );
+
+  attendance.punchInGpsAddress =
+    body.gpsAddress || '';
+
+  attendance.punchInPhotoUrl =
+    body.photoUrl || '';
+
+  attendance.status =
+    body.status || 'PRESENT';
+
+  attendance.remarks =
+    body.remarks ||
+    attendance.remarks ||
+    '';
+
+  attendance.createdBy =
+    user?.id || null;
+
+  attendance.createdByName =
+    user?.name || '';
+
+  return this.attendanceRepo.save(
+    attendance,
+  );
 }
 
 async punchOut(body: any, user: any) {
   let staffId = body.staffId;
 
-if (!staffId) {
-  const linkedStaff = await this.getMyStaffProfile(user);
-  staffId = linkedStaff.id;
-}
+  if (!staffId) {
+    const linkedStaff =
+      await this.getMyStaffProfile(user);
 
-const attendanceDate = body.attendanceDate || this.getTodayDate();
+    staffId = linkedStaff.id;
+  }
 
-const attendance = await this.attendanceRepo.findOne({
-  where: {
-    staffId: Number(staffId),
-    attendanceDate,
-  },
-});
+  const attendanceDate =
+    body.attendanceDate ||
+    this.getTodayDate();
 
-  if (!attendance || !attendance.punchInTime) {
-    throw new BadRequestException('Punch in is required before punch out');
+  const attendance =
+    await this.attendanceRepo.findOne({
+      where: {
+        staffId: Number(staffId),
+        attendanceDate,
+      },
+    });
+
+  if (
+    !attendance ||
+    !attendance.punchInTime
+  ) {
+    throw new BadRequestException(
+      'Punch in is required before punch out',
+    );
   }
 
   if (attendance.punchOutTime) {
-    throw new BadRequestException('Staff already punched out today');
+    throw new BadRequestException(
+      'Staff already punched out today',
+    );
   }
 
-  attendance.punchOutTime = new Date();
-  attendance.punchOutLatitude = body.latitude || '';
-  attendance.punchOutLongitude = body.longitude || '';
-  attendance.punchOutGpsAddress = body.gpsAddress || '';
-  attendance.punchOutPhotoUrl = body.photoUrl || '';
-  attendance.workingHours = this.calculateWorkingHours(
-    attendance.punchInTime,
-    attendance.punchOutTime,
+  const attemptedAt = new Date();
+
+  const locationEvaluation =
+    await this.evaluateAttendanceLocation(
+      attendance.staffId,
+      attendanceDate,
+      'PUNCH_OUT',
+      body.latitude,
+      body.longitude,
+    );
+
+  if (!locationEvaluation.allowed) {
+    throw new BadRequestException({
+      message:
+        `Punch out is allowed only within ${locationEvaluation.allowedRadiusMeters} metres of ${locationEvaluation.location?.name || 'the approved attendance location'}`,
+      code:
+        'ATTENDANCE_LOCATION_OUTSIDE_RADIUS',
+      canRequestException: true,
+      punchType: 'PUNCH_OUT',
+      staffId: attendance.staffId,
+      staffName:
+        attendance.staffName || '',
+      employeeCode:
+        attendance.employeeCode || '',
+      attendanceDate,
+      attemptedAt:
+        attemptedAt.toISOString(),
+      latitude:
+        locationEvaluation.latitude,
+      longitude:
+        locationEvaluation.longitude,
+      gpsAddress:
+        String(body.gpsAddress || ''),
+      photoUrl:
+        String(body.photoUrl || ''),
+      attendanceLocationId:
+        locationEvaluation.location?.id ||
+        null,
+      attendanceLocationName:
+        locationEvaluation.location?.name ||
+        '',
+      distanceMeters:
+        locationEvaluation.distanceMeters,
+      allowedRadiusMeters:
+        locationEvaluation.allowedRadiusMeters,
+      ruleSource:
+        locationEvaluation.ruleSource,
+      overrideReason:
+        locationEvaluation.overrideReason ||
+        '',
+    });
+  }
+
+  attendance.punchOutTime = attemptedAt;
+
+  attendance.punchOutLatitude = String(
+    locationEvaluation.latitude,
   );
-  attendance.remarks = body.remarks || attendance.remarks || '';
 
-  if (attendance.workingHours > 0 && attendance.workingHours < 4) {
-    attendance.status = 'HALF_DAY' as any;
+  attendance.punchOutLongitude = String(
+    locationEvaluation.longitude,
+  );
+
+  attendance.punchOutGpsAddress =
+    body.gpsAddress || '';
+
+  attendance.punchOutPhotoUrl =
+    body.photoUrl || '';
+
+  attendance.workingHours =
+    this.calculateWorkingHours(
+      attendance.punchInTime,
+      attendance.punchOutTime,
+    );
+
+  attendance.remarks =
+    body.remarks ||
+    attendance.remarks ||
+    '';
+
+  if (
+    attendance.workingHours > 0 &&
+    attendance.workingHours < 4
+  ) {
+    attendance.status =
+      'HALF_DAY' as any;
   }
 
-  return this.attendanceRepo.save(attendance);
+  return this.attendanceRepo.save(
+    attendance,
+  );
 }
 
 async getAttendance(query: any) {
@@ -2106,5 +2300,2221 @@ async restorePenaltyRule(id: number, body: any, user: any) {
   item.restoreReason = body?.reason || '';
 
   return this.penaltyRuleRepository.save(item);
+}
+
+async createAttendanceLocation(body: any, user: any) {
+  const name = String(body.name || '').trim();
+
+  if (!name) {
+    throw new BadRequestException('Location name is required');
+  }
+
+  const latitude = Number(body.latitude);
+  const longitude = Number(body.longitude);
+  const allowedRadiusMeters = Number(
+    body.allowedRadiusMeters || 150,
+  );
+
+  if (!Number.isFinite(latitude)) {
+    throw new BadRequestException(
+      'Valid latitude is required',
+    );
+  }
+
+  if (!Number.isFinite(longitude)) {
+    throw new BadRequestException(
+      'Valid longitude is required',
+    );
+  }
+
+  if (latitude < -90 || latitude > 90) {
+    throw new BadRequestException(
+      'Latitude must be between -90 and 90',
+    );
+  }
+
+  if (longitude < -180 || longitude > 180) {
+    throw new BadRequestException(
+      'Longitude must be between -180 and 180',
+    );
+  }
+
+  if (
+    !Number.isFinite(allowedRadiusMeters) ||
+    allowedRadiusMeters < 10 ||
+    allowedRadiusMeters > 10000
+  ) {
+    throw new BadRequestException(
+      'Allowed radius must be between 10 and 10000 metres',
+    );
+  }
+
+  const duplicate =
+    await this.attendanceLocationRepo.findOne({
+      where: {
+        name,
+        isHidden: false,
+      },
+    });
+
+  if (duplicate) {
+    throw new BadRequestException(
+      'An active attendance location with this name already exists',
+    );
+  }
+
+  const location =
+    this.attendanceLocationRepo.create({
+      name,
+      address: String(body.address || '').trim(),
+      latitude,
+      longitude,
+      allowedRadiusMeters: Math.round(
+        allowedRadiusMeters,
+      ),
+      branchName: String(
+        body.branchName || '',
+      ).trim(),
+      isActive:
+        body.isActive === undefined
+          ? true
+          : Boolean(body.isActive),
+      isHidden: false,
+      createdBy: user?.id || null,
+      createdByName: user?.name || '',
+    });
+
+  return this.attendanceLocationRepo.save(location);
+}
+
+async listAttendanceLocations(query: any) {
+  const page = Math.max(
+    Number(query.page || 1),
+    1,
+  );
+
+  const limit = Math.min(
+    Math.max(Number(query.limit || 20), 1),
+    100,
+  );
+
+  const qb =
+    this.attendanceLocationRepo
+      .createQueryBuilder('location');
+
+  if (String(query.showHidden) === 'true') {
+    qb.andWhere('location.isHidden = :isHidden', {
+      isHidden: true,
+    });
+  } else {
+    qb.andWhere('location.isHidden = :isHidden', {
+      isHidden: false,
+    });
+  }
+
+  if (
+    query.isActive !== undefined &&
+    query.isActive !== ''
+  ) {
+    qb.andWhere('location.isActive = :isActive', {
+      isActive:
+        String(query.isActive) === 'true',
+    });
+  }
+
+  if (query.branchName) {
+    qb.andWhere(
+      'LOWER(location.branchName) = LOWER(:branchName)',
+      {
+        branchName: String(
+          query.branchName,
+        ).trim(),
+      },
+    );
+  }
+
+  if (query.search) {
+    qb.andWhere(
+      `(
+        LOWER(location.name) LIKE LOWER(:search)
+        OR LOWER(COALESCE(location.address, '')) LIKE LOWER(:search)
+        OR LOWER(COALESCE(location.branchName, '')) LIKE LOWER(:search)
+      )`,
+      {
+        search: `%${String(query.search).trim()}%`,
+      },
+    );
+  }
+
+  qb.orderBy('location.isActive', 'DESC')
+    .addOrderBy('location.name', 'ASC')
+    .skip((page - 1) * limit)
+    .take(limit);
+
+  const [data, total] =
+    await qb.getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages:
+      Math.ceil(total / limit) || 1,
+  };
+}
+
+async getAttendanceLocation(id: number) {
+  const location =
+    await this.attendanceLocationRepo.findOne({
+      where: {
+        id: Number(id),
+      },
+    });
+
+  if (!location) {
+    throw new NotFoundException(
+      'Attendance location not found',
+    );
+  }
+
+  return location;
+}
+
+async updateAttendanceLocation(
+  id: number,
+  body: any,
+) {
+  const location =
+    await this.getAttendanceLocation(id);
+
+  if (body.name !== undefined) {
+    const name = String(body.name || '').trim();
+
+    if (!name) {
+      throw new BadRequestException(
+        'Location name is required',
+      );
+    }
+
+    const duplicate =
+      await this.attendanceLocationRepo
+        .createQueryBuilder('location')
+        .where(
+          'LOWER(location.name) = LOWER(:name)',
+          {
+            name,
+          },
+        )
+        .andWhere(
+          'location.id != :locationId',
+          {
+            locationId: location.id,
+          },
+        )
+        .andWhere(
+          'location.isHidden = :isHidden',
+          {
+            isHidden: false,
+          },
+        )
+        .getOne();
+
+    if (duplicate) {
+      throw new BadRequestException(
+        'Another active attendance location with this name already exists',
+      );
+    }
+
+    location.name = name;
+  }
+
+  if (body.latitude !== undefined) {
+    const latitude = Number(body.latitude);
+
+    if (
+      !Number.isFinite(latitude) ||
+      latitude < -90 ||
+      latitude > 90
+    ) {
+      throw new BadRequestException(
+        'Latitude must be between -90 and 90',
+      );
+    }
+
+    location.latitude = latitude;
+  }
+
+  if (body.longitude !== undefined) {
+    const longitude = Number(
+      body.longitude,
+    );
+
+    if (
+      !Number.isFinite(longitude) ||
+      longitude < -180 ||
+      longitude > 180
+    ) {
+      throw new BadRequestException(
+        'Longitude must be between -180 and 180',
+      );
+    }
+
+    location.longitude = longitude;
+  }
+
+  if (
+    body.allowedRadiusMeters !== undefined
+  ) {
+    const allowedRadiusMeters = Number(
+      body.allowedRadiusMeters,
+    );
+
+    if (
+      !Number.isFinite(
+        allowedRadiusMeters,
+      ) ||
+      allowedRadiusMeters < 10 ||
+      allowedRadiusMeters > 10000
+    ) {
+      throw new BadRequestException(
+        'Allowed radius must be between 10 and 10000 metres',
+      );
+    }
+
+    location.allowedRadiusMeters =
+      Math.round(allowedRadiusMeters);
+  }
+
+  if (body.address !== undefined) {
+    location.address = String(
+      body.address || '',
+    ).trim();
+  }
+
+  if (body.branchName !== undefined) {
+    location.branchName = String(
+      body.branchName || '',
+    ).trim();
+  }
+
+  if (body.isActive !== undefined) {
+    location.isActive = Boolean(
+      body.isActive,
+    );
+  }
+
+  return this.attendanceLocationRepo.save(
+    location,
+  );
+}
+
+async hideAttendanceLocation(
+  id: number,
+) {
+  const location =
+    await this.getAttendanceLocation(id);
+
+  location.isHidden = true;
+  location.isActive = false;
+
+  await this.attendanceLocationRepo.save(
+    location,
+  );
+
+  return {
+    message:
+      'Attendance location hidden successfully',
+  };
+}
+
+async restoreAttendanceLocation(
+  id: number,
+) {
+  const location =
+    await this.getAttendanceLocation(id);
+
+  location.isHidden = false;
+  location.isActive = true;
+
+  await this.attendanceLocationRepo.save(
+    location,
+  );
+
+  return {
+    message:
+      'Attendance location restored successfully',
+  };
+}
+
+async getActiveAttendanceLocations() {
+  return this.attendanceLocationRepo.find({
+    where: {
+      isActive: true,
+      isHidden: false,
+    },
+    order: {
+      name: 'ASC',
+    },
+  });
+}
+
+private parseAttendanceLocationRule(
+  value: any,
+): StaffAttendanceLocationRule {
+  if (
+    value ===
+      StaffAttendanceLocationRule.ANYWHERE_ALLOWED ||
+    value ===
+      StaffAttendanceLocationRule.OFFICE_LOCATION_REQUIRED
+  ) {
+    return value;
+  }
+
+  throw new BadRequestException(
+    'Attendance rule must be ANYWHERE_ALLOWED or OFFICE_LOCATION_REQUIRED',
+  );
+}
+
+private async validateAttendancePolicyLocation(
+  rule: StaffAttendanceLocationRule,
+  locationId: any,
+  punchLabel: string,
+) {
+  if (
+    rule ===
+    StaffAttendanceLocationRule.ANYWHERE_ALLOWED
+  ) {
+    return null;
+  }
+
+  const numericLocationId = Number(locationId);
+
+  if (
+    !Number.isInteger(numericLocationId) ||
+    numericLocationId <= 0
+  ) {
+    throw new BadRequestException(
+      `${punchLabel} location is required when office location is mandatory`,
+    );
+  }
+
+  const location =
+    await this.attendanceLocationRepo.findOne({
+      where: {
+        id: numericLocationId,
+        isActive: true,
+        isHidden: false,
+      },
+    });
+
+  if (!location) {
+    throw new BadRequestException(
+      `${punchLabel} attendance location is invalid or inactive`,
+    );
+  }
+
+  return location;
+}
+
+private parseAttendanceOverrideDate(
+  value: any,
+): string {
+  const attendanceDate = String(
+    value || '',
+  ).trim();
+
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(
+      attendanceDate,
+    )
+  ) {
+    throw new BadRequestException(
+      'Attendance date must be in YYYY-MM-DD format',
+    );
+  }
+
+  const parsedDate = new Date(
+    `${attendanceDate}T00:00:00.000Z`,
+  );
+
+  if (
+    Number.isNaN(parsedDate.getTime()) ||
+    parsedDate
+      .toISOString()
+      .slice(0, 10) !== attendanceDate
+  ) {
+    throw new BadRequestException(
+      'Invalid attendance date',
+    );
+  }
+
+  return attendanceDate;
+}
+
+private parseOptionalAttendanceLocationRule(
+  value: any,
+): StaffAttendanceLocationRule | null {
+  if (
+    value === undefined ||
+    value === null ||
+    value === ''
+  ) {
+    return null;
+  }
+
+  return this.parseAttendanceLocationRule(
+    value,
+  );
+}
+
+async saveStaffAttendanceOverride(
+  body: any,
+  user: any,
+) {
+  const staffId = Number(body.staffId);
+
+  if (
+    !Number.isInteger(staffId) ||
+    staffId <= 0
+  ) {
+    throw new BadRequestException(
+      'Valid staff is required',
+    );
+  }
+
+  const attendanceDate =
+    this.parseAttendanceOverrideDate(
+      body.attendanceDate,
+    );
+
+  const staff = await this.staffRepo.findOne({
+    where: {
+      id: staffId,
+      isHidden: false,
+    },
+  });
+
+  if (!staff) {
+    throw new NotFoundException(
+      'Staff not found',
+    );
+  }
+
+  const punchInRule =
+    this.parseOptionalAttendanceLocationRule(
+      body.punchInRule,
+    );
+
+  const punchOutRule =
+    this.parseOptionalAttendanceLocationRule(
+      body.punchOutRule,
+    );
+
+  if (
+    punchInRule === null &&
+    punchOutRule === null
+  ) {
+    throw new BadRequestException(
+      'At least one punch rule must be selected for the override',
+    );
+  }
+
+  const punchInLocation =
+    punchInRule === null
+      ? null
+      : await this.validateAttendancePolicyLocation(
+          punchInRule,
+          body.punchInLocationId,
+          'Punch in',
+        );
+
+  const punchOutLocation =
+    punchOutRule === null
+      ? null
+      : await this.validateAttendancePolicyLocation(
+          punchOutRule,
+          body.punchOutLocationId,
+          'Punch out',
+        );
+
+  let override =
+    await this.attendanceOverrideRepo.findOne({
+      where: {
+        staffId: staff.id,
+        attendanceDate,
+      },
+    });
+
+  if (!override) {
+    override =
+      this.attendanceOverrideRepo.create({
+        staffId: staff.id,
+        staffName: staff.fullName || '',
+        attendanceDate,
+        createdBy: user?.id || null,
+        createdByName: user?.name || '',
+      });
+  }
+
+  override.staffName =
+    staff.fullName || '';
+
+  override.punchInRule =
+    punchInRule;
+
+  override.punchInLocationId =
+    punchInLocation?.id || null;
+
+  override.punchOutRule =
+    punchOutRule;
+
+  override.punchOutLocationId =
+    punchOutLocation?.id || null;
+
+  override.reason = String(
+    body.reason || '',
+  ).trim();
+
+  override.isActive =
+    body.isActive === undefined
+      ? true
+      : Boolean(body.isActive);
+
+  override.updatedBy =
+    user?.id || null;
+
+  override.updatedByName =
+    user?.name || '';
+
+  return this.attendanceOverrideRepo.save(
+    override,
+  );
+}
+
+async listStaffAttendanceOverrides(
+  query: any,
+) {
+  const page = Math.max(
+    Number(query.page || 1),
+    1,
+  );
+
+  const limit = Math.min(
+    Math.max(Number(query.limit || 20), 1),
+    100,
+  );
+
+  const qb =
+    this.attendanceOverrideRepo
+      .createQueryBuilder('override');
+
+  if (query.staffId) {
+    qb.andWhere(
+      'override.staffId = :staffId',
+      {
+        staffId: Number(query.staffId),
+      },
+    );
+  }
+
+  if (query.attendanceDate) {
+    qb.andWhere(
+      'override.attendanceDate = :attendanceDate',
+      {
+        attendanceDate:
+          this.parseAttendanceOverrideDate(
+            query.attendanceDate,
+          ),
+      },
+    );
+  }
+
+  if (query.dateFrom) {
+    qb.andWhere(
+      'override.attendanceDate >= :dateFrom',
+      {
+        dateFrom:
+          this.parseAttendanceOverrideDate(
+            query.dateFrom,
+          ),
+      },
+    );
+  }
+
+  if (query.dateTo) {
+    qb.andWhere(
+      'override.attendanceDate <= :dateTo',
+      {
+        dateTo:
+          this.parseAttendanceOverrideDate(
+            query.dateTo,
+          ),
+      },
+    );
+  }
+
+  if (
+    query.isActive !== undefined &&
+    query.isActive !== ''
+  ) {
+    qb.andWhere(
+      'override.isActive = :isActive',
+      {
+        isActive:
+          String(query.isActive) === 'true',
+      },
+    );
+  }
+
+  if (query.search) {
+    qb.andWhere(
+      `(
+        LOWER(COALESCE(override.staffName, ''))
+        LIKE LOWER(:search)
+        OR LOWER(COALESCE(override.reason, ''))
+        LIKE LOWER(:search)
+      )`,
+      {
+        search: `%${String(
+          query.search,
+        ).trim()}%`,
+      },
+    );
+  }
+
+  qb.orderBy(
+    'override.attendanceDate',
+    'DESC',
+  )
+    .addOrderBy(
+      'override.staffName',
+      'ASC',
+    )
+    .skip((page - 1) * limit)
+    .take(limit);
+
+  const [data, total] =
+    await qb.getManyAndCount();
+
+  const locationIds = Array.from(
+    new Set(
+      data
+        .flatMap((item) => [
+          item.punchInLocationId,
+          item.punchOutLocationId,
+        ])
+        .filter(
+          (value): value is number =>
+            Number(value) > 0,
+        ),
+    ),
+  );
+
+  const locations =
+    locationIds.length > 0
+      ? await this.attendanceLocationRepo
+          .createQueryBuilder('location')
+          .where(
+            'location.id IN (:...locationIds)',
+            {
+              locationIds,
+            },
+          )
+          .getMany()
+      : [];
+
+  const locationMap = new Map(
+    locations.map((location) => [
+      Number(location.id),
+      location,
+    ]),
+  );
+
+  return {
+    data: data.map((override) => ({
+      ...override,
+      punchInLocation:
+        override.punchInLocationId
+          ? locationMap.get(
+              Number(
+                override.punchInLocationId,
+              ),
+            ) || null
+          : null,
+      punchOutLocation:
+        override.punchOutLocationId
+          ? locationMap.get(
+              Number(
+                override.punchOutLocationId,
+              ),
+            ) || null
+          : null,
+    })),
+    total,
+    page,
+    limit,
+    totalPages:
+      Math.ceil(total / limit) || 1,
+  };
+}
+
+async getStaffAttendanceOverride(
+  id: number,
+) {
+  const override =
+    await this.attendanceOverrideRepo.findOne({
+      where: {
+        id: Number(id),
+      },
+    });
+
+  if (!override) {
+    throw new NotFoundException(
+      'Attendance override not found',
+    );
+  }
+
+  const punchInLocation =
+    override.punchInLocationId
+      ? await this.attendanceLocationRepo.findOne({
+          where: {
+            id: Number(
+              override.punchInLocationId,
+            ),
+          },
+        })
+      : null;
+
+  const punchOutLocation =
+    override.punchOutLocationId
+      ? await this.attendanceLocationRepo.findOne({
+          where: {
+            id: Number(
+              override.punchOutLocationId,
+            ),
+          },
+        })
+      : null;
+
+  return {
+    ...override,
+    punchInLocation,
+    punchOutLocation,
+  };
+}
+
+async setStaffAttendanceOverrideActive(
+  id: number,
+  isActive: boolean,
+  user: any,
+) {
+  const override =
+    await this.attendanceOverrideRepo.findOne({
+      where: {
+        id: Number(id),
+      },
+    });
+
+  if (!override) {
+    throw new NotFoundException(
+      'Attendance override not found',
+    );
+  }
+
+  override.isActive =
+    Boolean(isActive);
+
+  override.updatedBy =
+    user?.id || null;
+
+  override.updatedByName =
+    user?.name || '';
+
+  return this.attendanceOverrideRepo.save(
+    override,
+  );
+}
+
+async saveStaffAttendancePolicy(
+  body: any,
+  user: any,
+) {
+  const staffId = Number(body.staffId);
+
+  if (
+    !Number.isInteger(staffId) ||
+    staffId <= 0
+  ) {
+    throw new BadRequestException(
+      'Valid staff is required',
+    );
+  }
+
+  const staff = await this.staffRepo.findOne({
+    where: {
+      id: staffId,
+      isHidden: false,
+    },
+  });
+
+  if (!staff) {
+    throw new NotFoundException(
+      'Staff not found',
+    );
+  }
+
+  const punchInRule =
+    this.parseAttendanceLocationRule(
+      body.punchInRule,
+    );
+
+  const punchOutRule =
+    this.parseAttendanceLocationRule(
+      body.punchOutRule,
+    );
+
+  const punchInLocation =
+    await this.validateAttendancePolicyLocation(
+      punchInRule,
+      body.punchInLocationId,
+      'Punch in',
+    );
+
+  const punchOutLocation =
+    await this.validateAttendancePolicyLocation(
+      punchOutRule,
+      body.punchOutLocationId,
+      'Punch out',
+    );
+
+  let policy =
+    await this.attendancePolicyRepo.findOne({
+      where: {
+        staffId: staff.id,
+      },
+    });
+
+  if (!policy) {
+    policy = this.attendancePolicyRepo.create({
+      staffId: staff.id,
+      staffName: staff.fullName || '',
+      createdBy: user?.id || null,
+      createdByName: user?.name || '',
+    });
+  }
+
+  policy.staffName = staff.fullName || '';
+
+  policy.punchInRule = punchInRule;
+  policy.punchInLocationId =
+    punchInLocation?.id || null;
+
+  policy.punchOutRule = punchOutRule;
+  policy.punchOutLocationId =
+    punchOutLocation?.id || null;
+
+  policy.isActive =
+    body.isActive === undefined
+      ? true
+      : Boolean(body.isActive);
+
+  policy.updatedBy = user?.id || null;
+  policy.updatedByName = user?.name || '';
+
+  return this.attendancePolicyRepo.save(
+    policy,
+  );
+}
+
+async listStaffAttendancePolicies(
+  query: any,
+) {
+  const page = Math.max(
+    Number(query.page || 1),
+    1,
+  );
+
+  const limit = Math.min(
+    Math.max(Number(query.limit || 20), 1),
+    100,
+  );
+
+  const qb =
+    this.attendancePolicyRepo
+      .createQueryBuilder('policy');
+
+  if (
+    query.isActive !== undefined &&
+    query.isActive !== ''
+  ) {
+    qb.andWhere(
+      'policy.isActive = :isActive',
+      {
+        isActive:
+          String(query.isActive) === 'true',
+      },
+    );
+  }
+
+  if (query.staffId) {
+    qb.andWhere(
+      'policy.staffId = :staffId',
+      {
+        staffId: Number(query.staffId),
+      },
+    );
+  }
+
+  if (query.search) {
+    qb.andWhere(
+      `(
+        LOWER(COALESCE(policy.staffName, ''))
+        LIKE LOWER(:search)
+      )`,
+      {
+        search: `%${String(
+          query.search,
+        ).trim()}%`,
+      },
+    );
+  }
+
+  qb.orderBy('policy.staffName', 'ASC')
+    .skip((page - 1) * limit)
+    .take(limit);
+
+  const [data, total] =
+    await qb.getManyAndCount();
+
+  const locationIds = Array.from(
+    new Set(
+      data
+        .flatMap((item) => [
+          item.punchInLocationId,
+          item.punchOutLocationId,
+        ])
+        .filter(
+          (value): value is number =>
+            Number(value) > 0,
+        ),
+    ),
+  );
+
+  const locations =
+    locationIds.length > 0
+      ? await this.attendanceLocationRepo
+          .createQueryBuilder('location')
+          .where(
+            'location.id IN (:...locationIds)',
+            {
+              locationIds,
+            },
+          )
+          .getMany()
+      : [];
+
+  const locationMap = new Map(
+    locations.map((location) => [
+      Number(location.id),
+      location,
+    ]),
+  );
+
+  return {
+    data: data.map((policy) => ({
+      ...policy,
+      punchInLocation:
+        policy.punchInLocationId
+          ? locationMap.get(
+              Number(
+                policy.punchInLocationId,
+              ),
+            ) || null
+          : null,
+      punchOutLocation:
+        policy.punchOutLocationId
+          ? locationMap.get(
+              Number(
+                policy.punchOutLocationId,
+              ),
+            ) || null
+          : null,
+    })),
+    total,
+    page,
+    limit,
+    totalPages:
+      Math.ceil(total / limit) || 1,
+  };
+}
+
+async getStaffAttendancePolicy(
+  staffId: number,
+) {
+  const staff = await this.staffRepo.findOne({
+    where: {
+      id: Number(staffId),
+      isHidden: false,
+    },
+  });
+
+  if (!staff) {
+    throw new NotFoundException(
+      'Staff not found',
+    );
+  }
+
+  const policy =
+    await this.attendancePolicyRepo.findOne({
+      where: {
+        staffId: staff.id,
+      },
+    });
+
+  if (!policy) {
+    return {
+      staffId: staff.id,
+      staffName: staff.fullName || '',
+      punchInRule:
+        StaffAttendanceLocationRule.ANYWHERE_ALLOWED,
+      punchInLocationId: null,
+      punchOutRule:
+        StaffAttendanceLocationRule.ANYWHERE_ALLOWED,
+      punchOutLocationId: null,
+      isActive: true,
+      isDefaultPolicy: true,
+    };
+  }
+
+  const punchInLocation =
+    policy.punchInLocationId
+      ? await this.attendanceLocationRepo.findOne({
+          where: {
+            id: Number(
+              policy.punchInLocationId,
+            ),
+          },
+        })
+      : null;
+
+  const punchOutLocation =
+    policy.punchOutLocationId
+      ? await this.attendanceLocationRepo.findOne({
+          where: {
+            id: Number(
+              policy.punchOutLocationId,
+            ),
+          },
+        })
+      : null;
+
+  return {
+    ...policy,
+    punchInLocation,
+    punchOutLocation,
+    isDefaultPolicy: false,
+  };
+}
+
+async setStaffAttendancePolicyActive(
+  staffId: number,
+  isActive: boolean,
+  user: any,
+) {
+  const policy =
+    await this.attendancePolicyRepo.findOne({
+      where: {
+        staffId: Number(staffId),
+      },
+    });
+
+  if (!policy) {
+    throw new NotFoundException(
+      'Staff attendance policy not found',
+    );
+  }
+
+  policy.isActive = Boolean(isActive);
+  policy.updatedBy = user?.id || null;
+  policy.updatedByName = user?.name || '';
+
+  return this.attendancePolicyRepo.save(
+    policy,
+  );
+}
+
+private calculateDistanceMeters(
+  latitude1: number,
+  longitude1: number,
+  latitude2: number,
+  longitude2: number,
+): number {
+  const earthRadiusMeters = 6371000;
+
+  const toRadians = (value: number) =>
+    (value * Math.PI) / 180;
+
+  const latitudeDifference = toRadians(
+    latitude2 - latitude1,
+  );
+
+  const longitudeDifference = toRadians(
+    longitude2 - longitude1,
+  );
+
+  const firstLatitudeRadians =
+    toRadians(latitude1);
+
+  const secondLatitudeRadians =
+    toRadians(latitude2);
+
+  const haversineValue =
+    Math.sin(latitudeDifference / 2) ** 2 +
+    Math.cos(firstLatitudeRadians) *
+      Math.cos(secondLatitudeRadians) *
+      Math.sin(
+        longitudeDifference / 2,
+      ) **
+        2;
+
+  const angularDistance =
+    2 *
+    Math.atan2(
+      Math.sqrt(haversineValue),
+      Math.sqrt(1 - haversineValue),
+    );
+
+  return Math.round(
+    earthRadiusMeters * angularDistance,
+  );
+}
+
+private validateAttendanceCoordinates(
+  latitudeValue: any,
+  longitudeValue: any,
+) {
+  const latitude = Number(latitudeValue);
+  const longitude = Number(longitudeValue);
+
+  if (
+    !Number.isFinite(latitude) ||
+    latitude < -90 ||
+    latitude > 90
+  ) {
+    throw new BadRequestException(
+      'Valid current latitude is required',
+    );
+  }
+
+  if (
+    !Number.isFinite(longitude) ||
+    longitude < -180 ||
+    longitude > 180
+  ) {
+    throw new BadRequestException(
+      'Valid current longitude is required',
+    );
+  }
+
+  return {
+    latitude,
+    longitude,
+  };
+}
+
+private async resolveEffectiveAttendanceRule(
+  staffId: number,
+  attendanceDate: string,
+  punchType: 'PUNCH_IN' | 'PUNCH_OUT',
+) {
+  const activeOverride =
+    await this.attendanceOverrideRepo.findOne({
+      where: {
+        staffId: Number(staffId),
+        attendanceDate,
+        isActive: true,
+      },
+    });
+
+  const activePolicy =
+    await this.attendancePolicyRepo.findOne({
+      where: {
+        staffId: Number(staffId),
+        isActive: true,
+      },
+    });
+
+  let rule =
+    StaffAttendanceLocationRule.ANYWHERE_ALLOWED;
+
+  let locationId: number | null = null;
+
+  let source:
+    | 'DEFAULT'
+    | 'PERMANENT_POLICY'
+    | 'DATE_OVERRIDE' = 'DEFAULT';
+
+  if (punchType === 'PUNCH_IN') {
+    if (activePolicy) {
+      rule =
+        activePolicy.punchInRule ||
+        StaffAttendanceLocationRule.ANYWHERE_ALLOWED;
+
+      locationId =
+        activePolicy.punchInLocationId ||
+        null;
+
+      source = 'PERMANENT_POLICY';
+    }
+
+    if (
+      activeOverride &&
+      activeOverride.punchInRule !== null
+    ) {
+      rule = activeOverride.punchInRule;
+
+      locationId =
+        activeOverride.punchInLocationId ||
+        null;
+
+      source = 'DATE_OVERRIDE';
+    }
+  } else {
+    if (activePolicy) {
+      rule =
+        activePolicy.punchOutRule ||
+        StaffAttendanceLocationRule.ANYWHERE_ALLOWED;
+
+      locationId =
+        activePolicy.punchOutLocationId ||
+        null;
+
+      source = 'PERMANENT_POLICY';
+    }
+
+    if (
+      activeOverride &&
+      activeOverride.punchOutRule !== null
+    ) {
+      rule = activeOverride.punchOutRule;
+
+      locationId =
+        activeOverride.punchOutLocationId ||
+        null;
+
+      source = 'DATE_OVERRIDE';
+    }
+  }
+
+  if (
+    rule ===
+    StaffAttendanceLocationRule.ANYWHERE_ALLOWED
+  ) {
+    return {
+      rule,
+      locationId: null,
+      location: null,
+      source,
+      overrideReason:
+        source === 'DATE_OVERRIDE'
+          ? activeOverride?.reason || ''
+          : '',
+    };
+  }
+
+  if (!locationId) {
+    throw new BadRequestException(
+      `${punchType === 'PUNCH_IN' ? 'Punch in' : 'Punch out'} office location is not configured correctly`,
+    );
+  }
+
+  const location =
+    await this.attendanceLocationRepo.findOne({
+      where: {
+        id: Number(locationId),
+        isActive: true,
+        isHidden: false,
+      },
+    });
+
+  if (!location) {
+    throw new BadRequestException(
+      `${punchType === 'PUNCH_IN' ? 'Punch in' : 'Punch out'} office location is inactive or unavailable`,
+    );
+  }
+
+  return {
+    rule,
+    locationId: location.id,
+    location,
+    source,
+    overrideReason:
+      source === 'DATE_OVERRIDE'
+        ? activeOverride?.reason || ''
+        : '',
+  };
+}
+
+private async evaluateAttendanceLocation(
+  staffId: number,
+  attendanceDate: string,
+  punchType: 'PUNCH_IN' | 'PUNCH_OUT',
+  latitudeValue: any,
+  longitudeValue: any,
+) {
+  const {
+    latitude,
+    longitude,
+  } = this.validateAttendanceCoordinates(
+    latitudeValue,
+    longitudeValue,
+  );
+
+  const effectiveRule =
+    await this.resolveEffectiveAttendanceRule(
+      staffId,
+      attendanceDate,
+      punchType,
+    );
+
+  if (
+    effectiveRule.rule ===
+    StaffAttendanceLocationRule.ANYWHERE_ALLOWED
+  ) {
+    return {
+      allowed: true,
+      latitude,
+      longitude,
+      rule: effectiveRule.rule,
+      ruleSource: effectiveRule.source,
+      location: null,
+      distanceMeters: null,
+      allowedRadiusMeters: null,
+      overrideReason:
+        effectiveRule.overrideReason,
+    };
+  }
+
+  const location = effectiveRule.location;
+
+  if (!location) {
+    throw new BadRequestException(
+      'Required attendance location could not be resolved',
+    );
+  }
+
+  const distanceMeters =
+    this.calculateDistanceMeters(
+      latitude,
+      longitude,
+      Number(location.latitude),
+      Number(location.longitude),
+    );
+
+  const allowedRadiusMeters = Number(
+    location.allowedRadiusMeters,
+  );
+
+  return {
+    allowed:
+      distanceMeters <= allowedRadiusMeters,
+    latitude,
+    longitude,
+    rule: effectiveRule.rule,
+    ruleSource: effectiveRule.source,
+    location,
+    distanceMeters,
+    allowedRadiusMeters,
+    overrideReason:
+      effectiveRule.overrideReason,
+  };
+}
+
+private parseAttendanceExceptionPunchType(
+  value: any,
+): StaffAttendanceExceptionPunchType {
+  if (
+    value ===
+      StaffAttendanceExceptionPunchType.PUNCH_IN ||
+    value ===
+      StaffAttendanceExceptionPunchType.PUNCH_OUT
+  ) {
+    return value;
+  }
+
+  throw new BadRequestException(
+    'Punch type must be PUNCH_IN or PUNCH_OUT',
+  );
+}
+
+private parseAttendanceExceptionAttemptedAt(
+  value: any,
+): Date {
+  const attemptedAt = new Date(value);
+
+  if (Number.isNaN(attemptedAt.getTime())) {
+    throw new BadRequestException(
+      'Valid attempted attendance time is required',
+    );
+  }
+
+  const now = new Date();
+
+  const differenceMilliseconds =
+    now.getTime() - attemptedAt.getTime();
+
+  const maximumAgeMilliseconds =
+    15 * 60 * 1000;
+
+  const maximumFutureDifferenceMilliseconds =
+    60 * 1000;
+
+  if (
+    differenceMilliseconds >
+    maximumAgeMilliseconds
+  ) {
+    throw new BadRequestException(
+      'Attendance exception request must be submitted within 15 minutes of the failed punch attempt',
+    );
+  }
+
+  if (
+    differenceMilliseconds <
+    -maximumFutureDifferenceMilliseconds
+  ) {
+    throw new BadRequestException(
+      'Attempted attendance time cannot be in the future',
+    );
+  }
+
+  return attemptedAt;
+}
+
+async createAttendanceExceptionRequest(
+  body: any,
+  user: any,
+) {
+  const linkedStaff =
+    await this.getMyStaffProfile(user);
+
+  const staff = await this.staffRepo.findOne({
+    where: {
+      id: Number(linkedStaff.id),
+      isHidden: false,
+    },
+  });
+
+  if (!staff) {
+    throw new NotFoundException(
+      'Staff not found',
+    );
+  }
+
+  const attendanceDate =
+    this.parseAttendanceOverrideDate(
+      body.attendanceDate ||
+        this.getTodayDate(),
+    );
+
+  const punchType =
+    this.parseAttendanceExceptionPunchType(
+      body.punchType,
+    );
+
+  const attemptedAt =
+    this.parseAttendanceExceptionAttemptedAt(
+      body.attemptedAt,
+    );
+
+  const employeeReason = String(
+    body.employeeReason || '',
+  ).trim();
+
+  if (!employeeReason) {
+    throw new BadRequestException(
+      'Reason for attendance exception is required',
+    );
+  }
+
+  if (employeeReason.length > 2000) {
+    throw new BadRequestException(
+      'Exception reason cannot exceed 2000 characters',
+    );
+  }
+
+  const locationEvaluation =
+    await this.evaluateAttendanceLocation(
+      staff.id,
+      attendanceDate,
+      punchType,
+      body.latitude,
+      body.longitude,
+    );
+
+  if (
+    locationEvaluation.rule ===
+    StaffAttendanceLocationRule.ANYWHERE_ALLOWED
+  ) {
+    throw new BadRequestException(
+      'An attendance exception is not required because attendance is allowed from any location',
+    );
+  }
+
+  if (locationEvaluation.allowed) {
+    throw new BadRequestException(
+      'You are currently within the approved attendance radius. Please punch attendance normally',
+    );
+  }
+
+  const attendance =
+    await this.attendanceRepo.findOne({
+      where: {
+        staffId: staff.id,
+        attendanceDate,
+      },
+    });
+
+  if (
+    punchType ===
+    StaffAttendanceExceptionPunchType.PUNCH_IN
+  ) {
+    if (attendance?.punchInTime) {
+      throw new BadRequestException(
+        'Punch in attendance has already been recorded',
+      );
+    }
+  }
+
+  if (
+    punchType ===
+    StaffAttendanceExceptionPunchType.PUNCH_OUT
+  ) {
+    if (
+      !attendance ||
+      !attendance.punchInTime
+    ) {
+      throw new BadRequestException(
+        'Punch in is required before requesting a punch out exception',
+      );
+    }
+
+    if (attendance.punchOutTime) {
+      throw new BadRequestException(
+        'Punch out attendance has already been recorded',
+      );
+    }
+  }
+
+  const existingPendingRequest =
+    await this.attendanceExceptionRepo.findOne({
+      where: {
+        staffId: staff.id,
+        attendanceDate,
+        punchType,
+        status:
+          StaffAttendanceExceptionStatus.PENDING,
+      },
+    });
+
+  if (existingPendingRequest) {
+    throw new BadRequestException(
+      'A pending exception request already exists for this attendance punch',
+    );
+  }
+
+  const exceptionRequest =
+    this.attendanceExceptionRepo.create({
+      staffId: staff.id,
+      staffName: staff.fullName || '',
+      employeeCode:
+        staff.employeeCode || '',
+      attendanceDate,
+      punchType,
+      attemptedAt,
+      latitude: String(
+        locationEvaluation.latitude,
+      ),
+      longitude: String(
+        locationEvaluation.longitude,
+      ),
+      gpsAddress: String(
+        body.gpsAddress || '',
+      ).trim(),
+      photoUrl: String(
+        body.photoUrl || '',
+      ).trim(),
+      attendanceLocationId:
+        Number(
+          locationEvaluation.location?.id,
+        ),
+      attendanceLocationName:
+        locationEvaluation.location?.name ||
+        '',
+      distanceMeters: Number(
+        locationEvaluation.distanceMeters ||
+          0,
+      ),
+      allowedRadiusMeters: Number(
+        locationEvaluation.allowedRadiusMeters ||
+          0,
+      ),
+      employeeReason,
+      status:
+        StaffAttendanceExceptionStatus.PENDING,
+    });
+
+  return this.attendanceExceptionRepo.save(
+    exceptionRequest,
+  );
+}
+
+async listMyAttendanceExceptionRequests(
+  query: any,
+  user: any,
+) {
+  const linkedStaff =
+    await this.getMyStaffProfile(user);
+
+  const page = Math.max(
+    Number(query.page || 1),
+    1,
+  );
+
+  const limit = Math.min(
+    Math.max(Number(query.limit || 20), 1),
+    100,
+  );
+
+  const qb =
+    this.attendanceExceptionRepo
+      .createQueryBuilder('request')
+      .where(
+        'request.staffId = :staffId',
+        {
+          staffId: Number(
+            linkedStaff.id,
+          ),
+        },
+      );
+
+  if (query.status) {
+    if (
+      !Object.values(
+        StaffAttendanceExceptionStatus,
+      ).includes(query.status)
+    ) {
+      throw new BadRequestException(
+        'Invalid exception request status',
+      );
+    }
+
+    qb.andWhere(
+      'request.status = :status',
+      {
+        status: query.status,
+      },
+    );
+  }
+
+  if (query.punchType) {
+    const punchType =
+      this.parseAttendanceExceptionPunchType(
+        query.punchType,
+      );
+
+    qb.andWhere(
+      'request.punchType = :punchType',
+      {
+        punchType,
+      },
+    );
+  }
+
+  if (query.dateFrom) {
+    qb.andWhere(
+      'request.attendanceDate >= :dateFrom',
+      {
+        dateFrom:
+          this.parseAttendanceOverrideDate(
+            query.dateFrom,
+          ),
+      },
+    );
+  }
+
+  if (query.dateTo) {
+    qb.andWhere(
+      'request.attendanceDate <= :dateTo',
+      {
+        dateTo:
+          this.parseAttendanceOverrideDate(
+            query.dateTo,
+          ),
+      },
+    );
+  }
+
+  qb.orderBy('request.createdAt', 'DESC')
+    .skip((page - 1) * limit)
+    .take(limit);
+
+  const [data, total] =
+    await qb.getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages:
+      Math.ceil(total / limit) || 1,
+  };
+}
+
+async listAttendanceExceptionRequests(
+  query: any,
+) {
+  const page = Math.max(
+    Number(query.page || 1),
+    1,
+  );
+
+  const limit = Math.min(
+    Math.max(Number(query.limit || 20), 1),
+    100,
+  );
+
+  const qb =
+    this.attendanceExceptionRepo
+      .createQueryBuilder('request');
+
+  if (query.staffId) {
+    const staffId = Number(query.staffId);
+
+    if (
+      !Number.isInteger(staffId) ||
+      staffId <= 0
+    ) {
+      throw new BadRequestException(
+        'Invalid staff filter',
+      );
+    }
+
+    qb.andWhere(
+      'request.staffId = :staffId',
+      {
+        staffId,
+      },
+    );
+  }
+
+  if (query.status) {
+    if (
+      !Object.values(
+        StaffAttendanceExceptionStatus,
+      ).includes(query.status)
+    ) {
+      throw new BadRequestException(
+        'Invalid exception request status',
+      );
+    }
+
+    qb.andWhere(
+      'request.status = :status',
+      {
+        status: query.status,
+      },
+    );
+  }
+
+  if (query.punchType) {
+    const punchType =
+      this.parseAttendanceExceptionPunchType(
+        query.punchType,
+      );
+
+    qb.andWhere(
+      'request.punchType = :punchType',
+      {
+        punchType,
+      },
+    );
+  }
+
+  if (query.attendanceDate) {
+    qb.andWhere(
+      'request.attendanceDate = :attendanceDate',
+      {
+        attendanceDate:
+          this.parseAttendanceOverrideDate(
+            query.attendanceDate,
+          ),
+      },
+    );
+  }
+
+  if (query.dateFrom) {
+    qb.andWhere(
+      'request.attendanceDate >= :dateFrom',
+      {
+        dateFrom:
+          this.parseAttendanceOverrideDate(
+            query.dateFrom,
+          ),
+      },
+    );
+  }
+
+  if (query.dateTo) {
+    qb.andWhere(
+      'request.attendanceDate <= :dateTo',
+      {
+        dateTo:
+          this.parseAttendanceOverrideDate(
+            query.dateTo,
+          ),
+      },
+    );
+  }
+
+  if (query.search) {
+    qb.andWhere(
+      `(
+        LOWER(COALESCE(request.staffName, ''))
+        LIKE LOWER(:search)
+        OR LOWER(COALESCE(request.employeeCode, ''))
+        LIKE LOWER(:search)
+        OR LOWER(COALESCE(request.employeeReason, ''))
+        LIKE LOWER(:search)
+      )`,
+      {
+        search: `%${String(
+          query.search,
+        ).trim()}%`,
+      },
+    );
+  }
+
+  qb.orderBy(
+    `CASE
+      WHEN request.status = 'PENDING' THEN 0
+      ELSE 1
+    END`,
+    'ASC',
+  )
+    .addOrderBy(
+      'request.createdAt',
+      'DESC',
+    )
+    .skip((page - 1) * limit)
+    .take(limit);
+
+  const [data, total] =
+    await qb.getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages:
+      Math.ceil(total / limit) || 1,
+  };
+}
+
+async getAttendanceExceptionRequest(
+  id: number,
+) {
+  const request =
+    await this.attendanceExceptionRepo.findOne({
+      where: {
+        id: Number(id),
+      },
+    });
+
+  if (!request) {
+    throw new NotFoundException(
+      'Attendance exception request not found',
+    );
+  }
+
+  return request;
+}
+
+async cancelMyAttendanceExceptionRequest(
+  id: number,
+  user: any,
+) {
+  const linkedStaff =
+    await this.getMyStaffProfile(user);
+
+  const request =
+    await this.attendanceExceptionRepo.findOne({
+      where: {
+        id: Number(id),
+        staffId: Number(linkedStaff.id),
+      },
+    });
+
+  if (!request) {
+    throw new NotFoundException(
+      'Attendance exception request not found',
+    );
+  }
+
+  if (
+    request.status !==
+    StaffAttendanceExceptionStatus.PENDING
+  ) {
+    throw new BadRequestException(
+      'Only a pending exception request can be cancelled',
+    );
+  }
+
+  request.status =
+    StaffAttendanceExceptionStatus.CANCELLED;
+
+  return this.attendanceExceptionRepo.save(
+    request,
+  );
+}
+
+async reviewAttendanceExceptionRequest(
+  id: number,
+  body: any,
+  user: any,
+) {
+  const requestedStatus = String(
+    body.status || '',
+  ).trim();
+
+  if (
+    requestedStatus !==
+      StaffAttendanceExceptionStatus.APPROVED &&
+    requestedStatus !==
+      StaffAttendanceExceptionStatus.REJECTED
+  ) {
+    throw new BadRequestException(
+      'Status must be APPROVED or REJECTED',
+    );
+  }
+
+  const reviewerId = Number(user?.id);
+
+  if (
+    !Number.isInteger(reviewerId) ||
+    reviewerId <= 0
+  ) {
+    throw new BadRequestException(
+      'Valid reviewer is required',
+    );
+  }
+
+  const approvalRemarks = String(
+    body.approvalRemarks || '',
+  ).trim();
+
+  return this.attendanceExceptionRepo.manager.transaction(
+    async (manager) => {
+      const exceptionRepository =
+        manager.getRepository(
+          StaffAttendanceException,
+        );
+
+      const attendanceRepository =
+        manager.getRepository(
+          StaffAttendance,
+        );
+
+      const request =
+        await exceptionRepository.findOne({
+          where: {
+            id: Number(id),
+          },
+          lock: {
+            mode: 'pessimistic_write',
+          },
+        });
+
+      if (!request) {
+        throw new NotFoundException(
+          'Attendance exception request not found',
+        );
+      }
+
+      if (
+        request.status !==
+        StaffAttendanceExceptionStatus.PENDING
+      ) {
+        throw new BadRequestException(
+          'This attendance exception request has already been reviewed',
+        );
+      }
+
+      request.reviewedBy = reviewerId;
+      request.reviewedByName =
+        user?.name || '';
+      request.reviewedAt = new Date();
+      request.approvalRemarks =
+        approvalRemarks;
+
+      if (
+        requestedStatus ===
+        StaffAttendanceExceptionStatus.REJECTED
+      ) {
+        request.status =
+          StaffAttendanceExceptionStatus.REJECTED;
+
+        return exceptionRepository.save(
+          request,
+        );
+      }
+
+      let attendance =
+        await attendanceRepository.findOne({
+          where: {
+            staffId: request.staffId,
+            attendanceDate:
+              request.attendanceDate,
+          },
+          lock: {
+            mode: 'pessimistic_write',
+          },
+        });
+
+      if (
+        request.punchType ===
+        StaffAttendanceExceptionPunchType.PUNCH_IN
+      ) {
+        if (attendance?.punchInTime) {
+          throw new BadRequestException(
+            'Punch in attendance has already been recorded for this employee',
+          );
+        }
+
+        if (!attendance) {
+          attendance =
+            attendanceRepository.create({
+              staffId: request.staffId,
+              staffName:
+                request.staffName || '',
+              employeeCode:
+                request.employeeCode || '',
+              attendanceDate:
+                request.attendanceDate,
+            });
+        }
+
+        attendance.punchInTime =
+          new Date(request.attemptedAt);
+
+        attendance.punchInLatitude =
+          request.latitude || '';
+
+        attendance.punchInLongitude =
+          request.longitude || '';
+
+        attendance.punchInGpsAddress =
+          request.gpsAddress || '';
+
+        attendance.punchInPhotoUrl =
+          request.photoUrl || '';
+
+        attendance.status =
+          'PRESENT' as any;
+
+        attendance.remarks =
+          approvalRemarks
+            ? `Attendance exception approved: ${approvalRemarks}`
+            : 'Attendance exception approved';
+
+        attendance.createdBy =
+          reviewerId;
+
+        attendance.createdByName =
+          user?.name || '';
+      } else {
+        if (
+          !attendance ||
+          !attendance.punchInTime
+        ) {
+          throw new BadRequestException(
+            'Punch in attendance must exist before approving a punch out exception',
+          );
+        }
+
+        if (attendance.punchOutTime) {
+          throw new BadRequestException(
+            'Punch out attendance has already been recorded for this employee',
+          );
+        }
+
+        const attemptedPunchOutTime =
+          new Date(request.attemptedAt);
+
+        if (
+          attemptedPunchOutTime.getTime() <=
+          new Date(
+            attendance.punchInTime,
+          ).getTime()
+        ) {
+          throw new BadRequestException(
+            'Punch out attempt time must be after punch in time',
+          );
+        }
+
+        attendance.punchOutTime =
+          attemptedPunchOutTime;
+
+        attendance.punchOutLatitude =
+          request.latitude || '';
+
+        attendance.punchOutLongitude =
+          request.longitude || '';
+
+        attendance.punchOutGpsAddress =
+          request.gpsAddress || '';
+
+        attendance.punchOutPhotoUrl =
+          request.photoUrl || '';
+
+        attendance.workingHours =
+          this.calculateWorkingHours(
+            attendance.punchInTime,
+            attendance.punchOutTime,
+          );
+
+        attendance.remarks =
+          approvalRemarks
+            ? `Attendance exception approved: ${approvalRemarks}`
+            : attendance.remarks ||
+              'Attendance exception approved';
+
+        if (
+          attendance.workingHours > 0 &&
+          attendance.workingHours < 4
+        ) {
+          attendance.status =
+            'HALF_DAY' as any;
+        }
+      }
+
+      const savedAttendance =
+        await attendanceRepository.save(
+          attendance,
+        );
+
+      request.status =
+        StaffAttendanceExceptionStatus.APPROVED;
+
+      request.createdAttendanceId =
+        savedAttendance.id;
+
+      return exceptionRepository.save(
+        request,
+      );
+    },
+  );
 }
 }
