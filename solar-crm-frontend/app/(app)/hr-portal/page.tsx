@@ -14,6 +14,13 @@ const sections = [
     description: 'HR attendance register, GPS photos, punch in/out and working hours.',
   },
   {
+  title: 'Attendance Settings',
+  href: '/staff/attendance-settings',
+  description:
+    'Configure office GPS locations, allowed radius, staff attendance rules and date-specific overrides.',
+  disabled: false,
+},
+  {
     title: 'Leave Management',
     href: '/staff/leaves',
     description: 'Create, approve, reject, hide and restore staff leave records.',

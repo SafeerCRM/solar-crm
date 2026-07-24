@@ -28,6 +28,17 @@ export default function EmployeePortalPage() {
   const selfieInputRef = useRef<HTMLInputElement | null>(null);
 const [pendingPunchType, setPendingPunchType] =
   useState<'punch-in' | 'punch-out' | null>(null);
+  const [attendanceExceptionAttempt, setAttendanceExceptionAttempt] =
+  useState<any>(null);
+
+const [attendanceExceptionReason, setAttendanceExceptionReason] =
+  useState('');
+
+const [attendanceExceptionSubmitting, setAttendanceExceptionSubmitting] =
+  useState(false);
+
+const [attendanceExceptionRequests, setAttendanceExceptionRequests] =
+  useState<any[]>([]);
   const [policies, setPolicies] = useState<any[]>([]);
 
   const [leaveForm, setLeaveForm] = useState({
@@ -44,7 +55,13 @@ const [pendingPunchType, setPendingPunchType] =
 
   const loadPortal = async () => {
     try {
-      const [meRes, attendanceRes, leavesRes, policiesRes] = await Promise.all([
+      const [
+  meRes,
+  attendanceRes,
+  leavesRes,
+  policiesRes,
+  attendanceExceptionRes,
+] = await Promise.all([
         axios.get(`${API_BASE_URL}/staff/self/me`, { headers: headers() }),
         axios.get(`${API_BASE_URL}/staff/self/attendance`, {
           params: { date: attendanceDate, limit: 20 },
@@ -58,6 +75,15 @@ const [pendingPunchType, setPendingPunchType] =
   params: { limit: 50 },
   headers: headers(),
 }),
+axios.get(
+  `${API_BASE_URL}/staff/self/attendance-exceptions`,
+  {
+    params: {
+      limit: 50,
+    },
+    headers: headers(),
+  },
+),
       ]);
 
       setStaff(meRes.data || null);
@@ -81,6 +107,9 @@ const [pendingPunchType, setPendingPunchType] =
   ),
 });
       setPolicies(policiesRes.data?.data || []);
+      setAttendanceExceptionRequests(
+  attendanceExceptionRes.data?.data || [],
+);
     } catch (error: any) {
       console.error(error);
       alert(error?.response?.data?.message || 'Unable to load employee portal');
@@ -112,6 +141,10 @@ const [pendingPunchType, setPendingPunchType] =
   try {
     setLoading(true);
 
+    // Remove any previous failed-attempt form before a new punch.
+    setAttendanceExceptionAttempt(null);
+    setAttendanceExceptionReason('');
+
     const position = await getLocation();
 
     const photoUrl = await uploadPreparedFile({
@@ -125,25 +158,150 @@ const [pendingPunchType, setPendingPunchType] =
       `${API_BASE_URL}/staff/self/attendance/${type}`,
       {
         attendanceDate,
-        latitude: String(position.coords.latitude),
-        longitude: String(position.coords.longitude),
-        gpsAddress: `Lat: ${position.coords.latitude}, Lng: ${position.coords.longitude}`,
+        latitude: String(
+          position.coords.latitude,
+        ),
+        longitude: String(
+          position.coords.longitude,
+        ),
+        gpsAddress:
+          `Lat: ${position.coords.latitude}, Lng: ${position.coords.longitude}`,
         photoUrl,
         remarks: attendanceRemarks,
       },
-      { headers: headers() },
+      {
+        headers: headers(),
+      },
     );
 
-    alert(type === 'punch-in' ? 'Punch in saved' : 'Punch out saved');
+    alert(
+      type === 'punch-in'
+        ? 'Punch in saved'
+        : 'Punch out saved',
+    );
 
     setAttendancePhoto(null);
     setAttendanceRemarks('');
-    loadPortal();
+    setAttendanceExceptionAttempt(null);
+    setAttendanceExceptionReason('');
+
+    await loadPortal();
   } catch (error: any) {
     console.error(error);
-    alert(error?.response?.data?.message || error?.message || 'Attendance failed');
+
+    const errorData =
+      error?.response?.data || {};
+
+    if (
+      errorData?.code ===
+      'ATTENDANCE_LOCATION_OUTSIDE_RADIUS'
+    ) {
+      setAttendanceExceptionAttempt({
+        ...errorData,
+
+        punchType:
+          errorData.punchType ||
+          (type === 'punch-in'
+            ? 'PUNCH_IN'
+            : 'PUNCH_OUT'),
+
+        attendanceDate:
+          errorData.attendanceDate ||
+          attendanceDate,
+      });
+
+      setAttendanceExceptionReason('');
+
+      return;
+    }
+
+    const errorMessage =
+      typeof errorData?.message === 'string'
+        ? errorData.message
+        : error?.message ||
+          'Attendance failed';
+
+    alert(errorMessage);
   } finally {
     setLoading(false);
+  }
+};
+
+const submitAttendanceException = async () => {
+  if (!attendanceExceptionAttempt) {
+    alert('No failed attendance attempt found');
+    return;
+  }
+
+  const reason =
+    attendanceExceptionReason.trim();
+
+  if (!reason) {
+    alert(
+      'Please enter the reason for requesting an attendance exception',
+    );
+    return;
+  }
+
+  try {
+    setAttendanceExceptionSubmitting(true);
+
+    await axios.post(
+      `${API_BASE_URL}/staff/self/attendance-exceptions`,
+      {
+        attendanceDate:
+          attendanceExceptionAttempt.attendanceDate,
+
+        punchType:
+          attendanceExceptionAttempt.punchType,
+
+        attemptedAt:
+          attendanceExceptionAttempt.attemptedAt,
+
+        latitude:
+          attendanceExceptionAttempt.latitude,
+
+        longitude:
+          attendanceExceptionAttempt.longitude,
+
+        gpsAddress:
+          attendanceExceptionAttempt.gpsAddress ||
+          '',
+
+        photoUrl:
+          attendanceExceptionAttempt.photoUrl ||
+          '',
+
+        employeeReason: reason,
+      },
+      {
+        headers: headers(),
+      },
+    );
+
+    alert(
+      'Attendance exception request submitted for approval',
+    );
+
+    setAttendanceExceptionAttempt(null);
+    setAttendanceExceptionReason('');
+
+    await loadPortal();
+  } catch (error: any) {
+    console.error(error);
+
+    const errorData =
+      error?.response?.data || {};
+
+    const errorMessage =
+      typeof errorData?.message === 'string'
+        ? errorData.message
+        : error?.message ||
+          'Failed to submit attendance exception request';
+
+    alert(errorMessage);
+  } finally {
+    setAttendanceExceptionSubmitting(false);
   }
 };
 
@@ -354,6 +512,115 @@ const startSelfiePunch = (type: 'punch-in' | 'punch-out') => {
             </div>
           </div>
 
+          {attendanceExceptionAttempt && (
+  <div className="rounded-2xl border border-amber-300 bg-amber-50 p-5 shadow">
+    <h2 className="text-lg font-bold text-amber-900">
+      Attendance Outside Allowed Location
+    </h2>
+
+    <p className="mt-2 text-sm text-amber-800">
+      Your attendance was not saved because you were outside the
+      configured attendance radius.
+    </p>
+
+    <div className="mt-4 grid gap-3 md:grid-cols-2">
+      <div className="rounded-xl bg-white p-4">
+        <p className="text-xs font-semibold uppercase text-gray-500">
+          Punch Type
+        </p>
+
+        <p className="mt-1 font-bold text-gray-900">
+          {attendanceExceptionAttempt.punchType === 'PUNCH_IN'
+            ? 'Punch In'
+            : 'Punch Out'}
+        </p>
+      </div>
+
+      <div className="rounded-xl bg-white p-4">
+        <p className="text-xs font-semibold uppercase text-gray-500">
+          Approved Location
+        </p>
+
+        <p className="mt-1 font-bold text-gray-900">
+          {attendanceExceptionAttempt.attendanceLocationName || '-'}
+        </p>
+      </div>
+
+      <div className="rounded-xl bg-white p-4">
+        <p className="text-xs font-semibold uppercase text-gray-500">
+          Your Distance
+        </p>
+
+        <p className="mt-1 font-bold text-red-700">
+          {Number(
+            attendanceExceptionAttempt.distanceMeters || 0,
+          ).toFixed(2)}{' '}
+          metres
+        </p>
+      </div>
+
+      <div className="rounded-xl bg-white p-4">
+        <p className="text-xs font-semibold uppercase text-gray-500">
+          Allowed Radius
+        </p>
+
+        <p className="mt-1 font-bold text-green-700">
+          {Number(
+            attendanceExceptionAttempt.allowedRadiusMeters || 0,
+          )}{' '}
+          metres
+        </p>
+      </div>
+    </div>
+
+    {attendanceExceptionAttempt.overrideReason && (
+      <div className="mt-3 rounded-xl bg-white p-4">
+        <p className="text-xs font-semibold uppercase text-gray-500">
+          Date Override
+        </p>
+
+        <p className="mt-1 text-sm text-gray-700">
+          {attendanceExceptionAttempt.overrideReason}
+        </p>
+      </div>
+    )}
+
+    <textarea
+      value={attendanceExceptionReason}
+      onChange={(e) =>
+        setAttendanceExceptionReason(e.target.value)
+      }
+      placeholder="Explain why this attendance attempt should be approved"
+      className="mt-4 min-h-28 w-full rounded-xl border border-amber-300 bg-white p-3"
+    />
+
+    <div className="mt-4 flex flex-wrap gap-3">
+      <button
+        type="button"
+        disabled={attendanceExceptionSubmitting}
+        onClick={submitAttendanceException}
+        className="rounded-xl bg-amber-600 px-5 py-3 font-semibold text-white disabled:opacity-50"
+      >
+        {attendanceExceptionSubmitting
+          ? 'Submitting...'
+          : 'Request Exception Approval'}
+      </button>
+
+      <button
+        type="button"
+        disabled={attendanceExceptionSubmitting}
+        onClick={() => {
+          setAttendanceExceptionAttempt(null);
+          setAttendanceExceptionReason('');
+        }}
+        className="rounded-xl border border-gray-300 bg-white px-5 py-3 font-semibold text-gray-700 disabled:opacity-50"
+      >
+        Cancel
+      </button>
+    </div>
+  </div>
+)}
+
           <div className="rounded-2xl bg-white p-5 shadow">
             <h2 className="text-lg font-bold text-gray-800">Attendance Status</h2>
 
@@ -374,6 +641,214 @@ const startSelfiePunch = (type: 'punch-in' | 'punch-out') => {
               </div>
             )}
           </div>
+
+          <div className="rounded-2xl bg-white p-5 shadow">
+  <div className="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h2 className="text-lg font-bold text-gray-800">
+        My Attendance Exception Requests
+      </h2>
+
+      <p className="mt-1 text-sm text-gray-500">
+        Requests submitted for attendance attempts made outside the
+        allowed location.
+      </p>
+    </div>
+
+    <button
+      type="button"
+      onClick={loadPortal}
+      disabled={loading}
+      className="rounded-xl border bg-white px-4 py-2 text-sm font-semibold text-gray-700 disabled:opacity-50"
+    >
+      Refresh
+    </button>
+  </div>
+
+  <div className="mt-4 space-y-3">
+    {attendanceExceptionRequests.length === 0 ? (
+      <p className="text-sm text-gray-500">
+        No attendance exception requests found.
+      </p>
+    ) : (
+      attendanceExceptionRequests.map((request) => {
+        const statusClass =
+          request.status === 'APPROVED'
+            ? 'bg-green-100 text-green-800'
+            : request.status === 'REJECTED'
+              ? 'bg-red-100 text-red-800'
+              : request.status === 'CANCELLED'
+                ? 'bg-gray-100 text-gray-700'
+                : 'bg-amber-100 text-amber-800';
+
+        return (
+          <div
+            key={request.id}
+            className="rounded-xl border p-4"
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="font-bold text-gray-900">
+                  {request.punchType === 'PUNCH_IN'
+                    ? 'Punch In'
+                    : 'Punch Out'}{' '}
+                  Exception
+                </p>
+
+                <p className="mt-1 text-sm text-gray-500">
+                  Attendance Date: {request.attendanceDate}
+                </p>
+
+                <p className="text-sm text-gray-500">
+                  Attempted At:{' '}
+                  {request.attemptedAt
+                    ? new Date(
+                        request.attemptedAt,
+                      ).toLocaleString('en-IN')
+                    : '-'}
+                </p>
+              </div>
+
+              <span
+                className={`rounded-full px-3 py-1 text-xs font-bold ${statusClass}`}
+              >
+                {request.status}
+              </span>
+            </div>
+
+            <div className="mt-3 grid gap-3 md:grid-cols-3">
+              <div className="rounded-xl bg-gray-50 p-3">
+                <p className="text-xs font-semibold uppercase text-gray-500">
+                  Approved Location
+                </p>
+
+                <p className="mt-1 text-sm font-semibold text-gray-900">
+                  {request.attendanceLocationName || '-'}
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-gray-50 p-3">
+                <p className="text-xs font-semibold uppercase text-gray-500">
+                  Your Distance
+                </p>
+
+                <p className="mt-1 text-sm font-semibold text-red-700">
+                  {Number(
+                    request.distanceMeters || 0,
+                  ).toFixed(2)}{' '}
+                  metres
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-gray-50 p-3">
+                <p className="text-xs font-semibold uppercase text-gray-500">
+                  Allowed Radius
+                </p>
+
+                <p className="mt-1 text-sm font-semibold text-green-700">
+                  {Number(
+                    request.allowedRadiusMeters || 0,
+                  )}{' '}
+                  metres
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-3 rounded-xl bg-gray-50 p-3">
+              <p className="text-xs font-semibold uppercase text-gray-500">
+                Employee Reason
+              </p>
+
+              <p className="mt-1 text-sm text-gray-700">
+                {request.employeeReason || '-'}
+              </p>
+            </div>
+
+            {request.approvalRemarks && (
+              <div className="mt-3 rounded-xl bg-blue-50 p-3">
+                <p className="text-xs font-semibold uppercase text-blue-700">
+                  Review Remarks
+                </p>
+
+                <p className="mt-1 text-sm text-blue-900">
+                  {request.approvalRemarks}
+                </p>
+              </div>
+            )}
+
+            {request.reviewedAt && (
+              <p className="mt-3 text-xs text-gray-500">
+                Reviewed by {request.reviewedByName || '-'} on{' '}
+                {new Date(
+                  request.reviewedAt,
+                ).toLocaleString('en-IN')}
+              </p>
+            )}
+
+            <div className="mt-4 flex flex-wrap gap-3">
+              {request.photoUrl && (
+                <a
+                  href={request.photoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-xl bg-gray-800 px-4 py-2 text-sm font-semibold text-white"
+                >
+                  View Selfie
+                </a>
+              )}
+
+              {request.status === 'PENDING' && (
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={async () => {
+                    const confirmed = window.confirm(
+                      'Cancel this pending attendance exception request?',
+                    );
+
+                    if (!confirmed) {
+                      return;
+                    }
+
+                    try {
+                      setLoading(true);
+
+                      await axios.patch(
+                        `${API_BASE_URL}/staff/self/attendance-exceptions/${request.id}/cancel`,
+                        {},
+                        {
+                          headers: headers(),
+                        },
+                      );
+
+                      alert(
+                        'Attendance exception request cancelled',
+                      );
+
+                      await loadPortal();
+                    } catch (error: any) {
+                      console.error(error);
+
+                      alert(
+                        error?.response?.data?.message ||
+                          'Failed to cancel attendance exception request',
+                      );
+                    } finally {
+                      setLoading(false);
+                    }
+                  }}
+                  className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  Cancel Request
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })
+    )}
+  </div>
+</div>
         </div>
       )}
 
