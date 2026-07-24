@@ -33,7 +33,10 @@ export class StaffAttendanceOverride {
   })
   punchInRule: StaffAttendanceLocationRule | null;
 
-  @Column({ nullable: true })
+  @Column({
+  type: 'int',
+  nullable: true,
+})
 punchInLocationId: number | null;
 
   @Column({
@@ -43,7 +46,10 @@ punchInLocationId: number | null;
   })
   punchOutRule: StaffAttendanceLocationRule | null;
 
-  @Column({ nullable: true })
+  @Column({
+  type: 'int',
+  nullable: true,
+})
 punchOutLocationId: number | null;
 
   @Column({ type: 'text', nullable: true })
@@ -52,13 +58,19 @@ punchOutLocationId: number | null;
   @Column({ default: true })
   isActive: boolean;
 
-  @Column({ nullable: true })
+  @Column({
+  type: 'int',
+  nullable: true,
+})
   createdBy: number;
 
   @Column({ nullable: true })
   createdByName: string;
 
-  @Column({ nullable: true })
+  @Column({
+  type: 'int',
+  nullable: true,
+})
   updatedBy: number;
 
   @Column({ nullable: true })

@@ -46,8 +46,11 @@ export class AttendanceLocation {
   @Column({ default: false })
   isHidden: boolean;
 
-  @Column({ nullable: true })
-  createdBy: number;
+  @Column({
+  type: 'int',
+  nullable: true,
+})
+createdBy: number;
 
   @Column({ nullable: true })
   createdByName: string;

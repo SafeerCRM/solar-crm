@@ -58,8 +58,11 @@ export class StaffAttendanceException {
   @Column({ type: 'text', nullable: true })
   photoUrl: string;
 
-  @Column({ nullable: true })
-  attendanceLocationId: number;
+  @Column({
+  type: 'int',
+  nullable: true,
+})
+attendanceLocationId: number;
 
   @Column({ nullable: true })
   attendanceLocationName: string;
@@ -91,8 +94,11 @@ export class StaffAttendanceException {
   @Column({ type: 'text', nullable: true })
   approvalRemarks: string;
 
-  @Column({ nullable: true })
-  reviewedBy: number;
+  @Column({
+  type: 'int',
+  nullable: true,
+})
+reviewedBy: number;
 
   @Column({ nullable: true })
   reviewedByName: string;
@@ -100,8 +106,11 @@ export class StaffAttendanceException {
   @Column({ nullable: true })
   reviewedAt: Date;
 
-  @Column({ nullable: true })
-  createdAttendanceId: number;
+  @Column({
+  type: 'int',
+  nullable: true,
+})
+createdAttendanceId: number;
 
   @CreateDateColumn()
   createdAt: Date;
