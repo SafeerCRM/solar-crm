@@ -181,12 +181,14 @@ getCnrRecallContacts(
   @Query('page') page = '1',
   @Query('limit') limit = '50',
   @Query('locationFilter') locationFilter = '',
+  @Query('sortOrder') sortOrder = 'OLDEST',
 ) {
   return this.telecallingService.getCnrRecallContacts(
     user,
     Number(page),
     Number(limit),
     String(locationFilter || ''),
+    String(sortOrder || 'OLDEST'),
   );
 }
 
@@ -194,11 +196,13 @@ getCnrRecallContacts(
 getCnrRecallContactIdsForAutoCall(
   @CurrentUser() user: any,
   @Query('locationFilter') locationFilter = '',
+  @Query('sortOrder') sortOrder = 'OLDEST',
 ) {
   return this.telecallingService
     .getCnrRecallContactIdsForAutoCall(
       user,
       String(locationFilter || ''),
+      String(sortOrder || 'OLDEST'),
     );
 }
 

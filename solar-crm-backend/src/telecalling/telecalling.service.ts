@@ -1284,9 +1284,12 @@ async getCnrRecallContacts(
   page = 1,
   limit = 50,
   locationFilter = '',
+  sortOrder = 'OLDEST',
 ) {
   const safePage =
-    Number.isFinite(Number(page)) && Number(page) > 0 ? Number(page) : 1;
+    Number.isFinite(Number(page)) && Number(page) > 0
+      ? Number(page)
+      : 1;
 
   const safeLimit =
     Number.isFinite(Number(limit)) && Number(limit) > 0
@@ -1294,73 +1297,23 @@ async getCnrRecallContacts(
       : 50;
 
   const skip = (safePage - 1) * safeLimit;
-  const normalizedFilter = String(locationFilter || '').trim().toLowerCase();
 
-  const qb = this.contactRepository
-    .createQueryBuilder('contact')
-    .where('contact.isInStorage = false')
-    .andWhere(`COALESCE(contact.stage, 'TELECALLING') = :stage`, {
-      stage: 'TELECALLING',
-    });
-
-  if (this.hasAnyRole(user, ['TELECALLER'])) {
-    qb.andWhere('contact.assignedTo = :assignedTo', {
-      assignedTo: user.id,
-    });
-  } else if (!this.hasAnyRole(user, ['OWNER', 'TELECALLING_MANAGER'])) {
-    throw new ForbiddenException(
-      'Only owner, telecalling manager, or telecaller can access CNR recall queue',
-    );
-  }
-
-  if (normalizedFilter) {
-    qb.andWhere(
-      `(
-        LOWER(COALESCE(contact.city, '')) LIKE :filter
-        OR LOWER(COALESCE(contact.zone, '')) LIKE :filter
-        OR LOWER(COALESCE(contact.address, '')) LIKE :filter
-        OR LOWER(COALESCE(contact.location, '')) LIKE :filter
-      )`,
-      { filter: `%${normalizedFilter}%` },
-    );
-  }
-
-  qb.andWhere((subQb) => {
-    const latestStatusSubQuery = subQb
-      .subQuery()
-      .select(`UPPER(COALESCE(call."disposition", call."callStatus", ''))`)
-      .from(CallLog, 'call')
-      .where('call."contactId" = contact.id')
-      .andWhere(`UPPER(COALESCE(call."callStatus", '')) <> 'INITIATED'`)
-      .orderBy('call."createdAt"', 'DESC')
-      .limit(1)
-      .getQuery();
-
-    return `${latestStatusSubQuery} = 'CNR'`;
-  });
-
-  const [data, total] = await qb
-    .orderBy('contact.updatedAt', 'DESC')
-    .skip(skip)
-    .take(safeLimit)
-    .getManyAndCount();
-
-  return {
-    data,
-    total,
-    page: safePage,
-    limit: safeLimit,
-    totalPages: Math.ceil(total / safeLimit) || 1,
-  };
-}
-
-async getCnrRecallContactIdsForAutoCall(
-  user: any,
-  locationFilter = '',
-) {
-  const normalizedFilter = String(locationFilter || '')
+  const normalizedFilter = String(
+    locationFilter || '',
+  )
     .trim()
     .toLowerCase();
+
+  const normalizedSortOrder =
+    String(sortOrder || 'OLDEST').toUpperCase() ===
+    'NEWEST'
+      ? 'NEWEST'
+      : 'OLDEST';
+
+  const sortDirection: 'ASC' | 'DESC' =
+    normalizedSortOrder === 'NEWEST'
+      ? 'DESC'
+      : 'ASC';
 
   const qb = this.contactRepository
     .createQueryBuilder('contact')
@@ -1372,19 +1325,13 @@ async getCnrRecallContactIdsForAutoCall(
       },
     );
 
-  /*
-   * Preserve the same CNR queue access rules:
-   *
-   * TELECALLER:
-   * only their own assigned contacts.
-   *
-   * OWNER / TELECALLING_MANAGER:
-   * all eligible CNR contacts.
-   */
   if (this.hasAnyRole(user, ['TELECALLER'])) {
-    qb.andWhere('contact.assignedTo = :assignedTo', {
-      assignedTo: user.id,
-    });
+    qb.andWhere(
+      'contact.assignedTo = :assignedTo',
+      {
+        assignedTo: user.id,
+      },
+    );
   } else if (
     !this.hasAnyRole(user, [
       'OWNER',
@@ -1392,7 +1339,7 @@ async getCnrRecallContactIdsForAutoCall(
     ])
   ) {
     throw new ForbiddenException(
-      'Only owner, telecalling manager, or telecaller can access CNR auto call queue',
+      'Only owner, telecalling manager, or telecaller can access CNR recall queue',
     );
   }
 
@@ -1410,44 +1357,215 @@ async getCnrRecallContactIdsForAutoCall(
     );
   }
 
-  /*
-   * CNR eligibility is based only on the latest completed call.
-   *
-   * INITIATED records are ignored because they do not represent
-   * a saved call outcome.
-   */
   qb.andWhere((subQb) => {
     const latestStatusSubQuery = subQb
       .subQuery()
       .select(
-        `UPPER(COALESCE(call."disposition", call."callStatus", ''))`,
+        `UPPER(
+          COALESCE(
+            call."disposition",
+            call."callStatus",
+            ''
+          )
+        )`,
       )
       .from(CallLog, 'call')
-      .where('call."contactId" = contact.id')
-      .andWhere(
-        `UPPER(COALESCE(call."callStatus", '')) <> 'INITIATED'`,
+      .where(
+        'call."contactId" = contact.id',
       )
-      .orderBy('call."createdAt"', 'DESC')
+      .andWhere(
+        `UPPER(
+          COALESCE(
+            call."callStatus",
+            ''
+          )
+        ) <> 'INITIATED'`,
+      )
+      .orderBy(
+        'call."createdAt"',
+        'DESC',
+      )
       .limit(1)
       .getQuery();
 
     return `${latestStatusSubQuery} = 'CNR'`;
   });
 
-  qb.andWhere(`COALESCE(contact.phone, '') <> ''`);
+  const latestCallAtSubQuery = qb
+    .subQuery()
+    .select('call_order."createdAt"')
+    .from(CallLog, 'call_order')
+    .where(
+      'call_order."contactId" = contact.id',
+    )
+    .andWhere(
+      `UPPER(
+        COALESCE(
+          call_order."callStatus",
+          ''
+        )
+      ) <> 'INITIATED'`,
+    )
+    .orderBy(
+      'call_order."createdAt"',
+      'DESC',
+    )
+    .limit(1)
+    .getQuery();
+
+  const [data, total] = await qb
+    .orderBy(
+      `(${latestCallAtSubQuery})`,
+      sortDirection,
+    )
+    .addOrderBy(
+      'contact.id',
+      sortDirection,
+    )
+    .skip(skip)
+    .take(safeLimit)
+    .getManyAndCount();
+
+  return {
+    data,
+    total,
+    page: safePage,
+    limit: safeLimit,
+    totalPages:
+      Math.ceil(total / safeLimit) || 1,
+    sortOrder: normalizedSortOrder,
+  };
+}
+
+async getCnrRecallContactIdsForAutoCall(
+  user: any,
+  locationFilter = '',
+  sortOrder = 'OLDEST',
+) {
+  const normalizedFilter = String(
+    locationFilter || '',
+  )
+    .trim()
+    .toLowerCase();
+
+  const normalizedSortOrder =
+    String(sortOrder || 'OLDEST').toUpperCase() ===
+    'NEWEST'
+      ? 'NEWEST'
+      : 'OLDEST';
+
+  const sortDirection: 'ASC' | 'DESC' =
+    normalizedSortOrder === 'NEWEST'
+      ? 'DESC'
+      : 'ASC';
+
+  const qb = this.contactRepository
+    .createQueryBuilder('contact')
+    .where('contact.isInStorage = false')
+    .andWhere(
+      `COALESCE(contact.stage, 'TELECALLING') = :stage`,
+      {
+        stage: 'TELECALLING',
+      },
+    );
+
+  if (this.hasAnyRole(user, ['TELECALLER'])) {
+    qb.andWhere(
+      'contact.assignedTo = :assignedTo',
+      {
+        assignedTo: user.id,
+      },
+    );
+  } else if (
+    !this.hasAnyRole(user, [
+      'OWNER',
+      'TELECALLING_MANAGER',
+    ])
+  ) {
+    throw new ForbiddenException(
+      'Only owner, telecalling manager, or telecaller can access CNR recall auto call queue',
+    );
+  }
+
+  if (normalizedFilter) {
+    qb.andWhere(
+      `(
+        LOWER(COALESCE(contact.city, '')) LIKE :filter
+        OR LOWER(COALESCE(contact.zone, '')) LIKE :filter
+        OR LOWER(COALESCE(contact.address, '')) LIKE :filter
+        OR LOWER(COALESCE(contact.location, '')) LIKE :filter
+      )`,
+      {
+        filter: `%${normalizedFilter}%`,
+      },
+    );
+  }
+
+  qb.andWhere((subQb) => {
+    const latestStatusSubQuery = subQb
+      .subQuery()
+      .select(
+        `UPPER(
+          COALESCE(
+            call."disposition",
+            call."callStatus",
+            ''
+          )
+        )`,
+      )
+      .from(CallLog, 'call')
+      .where(
+        'call."contactId" = contact.id',
+      )
+      .andWhere(
+        `UPPER(
+          COALESCE(
+            call."callStatus",
+            ''
+          )
+        ) <> 'INITIATED'`,
+      )
+      .orderBy(
+        'call."createdAt"',
+        'DESC',
+      )
+      .limit(1)
+      .getQuery();
+
+    return `${latestStatusSubQuery} = 'CNR'`;
+  });
+
+  const latestCallAtSubQuery = qb
+    .subQuery()
+    .select('call_order."createdAt"')
+    .from(CallLog, 'call_order')
+    .where(
+      'call_order."contactId" = contact.id',
+    )
+    .andWhere(
+      `UPPER(
+        COALESCE(
+          call_order."callStatus",
+          ''
+        )
+      ) <> 'INITIATED'`,
+    )
+    .orderBy(
+      'call_order."createdAt"',
+      'DESC',
+    )
+    .limit(1)
+    .getQuery();
 
   return qb
-    .select([
+    .orderBy(
+      `(${latestCallAtSubQuery})`,
+      sortDirection,
+    )
+    .addOrderBy(
       'contact.id',
-      'contact.name',
-      'contact.phone',
-      'contact.city',
-      'contact.zone',
-      'contact.address',
-      'contact.location',
-    ])
-    .orderBy('contact.updatedAt', 'DESC')
-    .take(150)
+      sortDirection,
+    )
     .getMany();
 }
 
