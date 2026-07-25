@@ -3144,7 +3144,6 @@ const transferContacts = async () => {
               Apply
             </button>
 
-            {!showCnrRecall && (
   <>
     {!isAutoCalling ? (
       <button
@@ -3162,7 +3161,7 @@ const transferContacts = async () => {
       </button>
     )}
   </>
-)}
+
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
