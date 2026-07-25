@@ -653,6 +653,10 @@ const [
   setSiteLocationCapturing,
 ] = useState(false);
   const [currentUserRoles, setCurrentUserRoles] = useState<string[]>([]);
+  const [
+  currentUserId,
+  setCurrentUserId,
+] = useState<number | null>(null);
   const [contractorAssignments, setContractorAssignments] =
   useState<ContractorAssignment[]>([]);
   const [contractorProofs, setContractorProofs] =
@@ -3895,19 +3899,40 @@ const updateContractorAssignment = async (
 };
 
 useEffect(() => {
-  const storedUser = localStorage.getItem('user');
+  const storedUser =
+    localStorage.getItem('user');
 
-  if (storedUser) {
-    try {
-      const parsedUser = JSON.parse(storedUser);
-      setCurrentUserRoles(
-        Array.isArray(parsedUser?.roles)
-          ? parsedUser.roles
-          : [],
-      );
-    } catch {
-      setCurrentUserRoles([]);
-    }
+  if (!storedUser) {
+    setCurrentUserRoles([]);
+    setCurrentUserId(null);
+    return;
+  }
+
+  try {
+    const parsedUser =
+      JSON.parse(storedUser);
+
+    setCurrentUserRoles(
+      Array.isArray(parsedUser?.roles)
+        ? parsedUser.roles
+        : [],
+    );
+
+    const parsedUserId = Number(
+      parsedUser?.id ||
+        parsedUser?.userId ||
+        parsedUser?.sub,
+    );
+
+    setCurrentUserId(
+      Number.isFinite(parsedUserId) &&
+        parsedUserId > 0
+        ? parsedUserId
+        : null,
+    );
+  } catch {
+    setCurrentUserRoles([]);
+    setCurrentUserId(null);
   }
 }, []);
 
@@ -4022,6 +4047,35 @@ const canManageContractor = hasRole([
   'CUSTOMER_MANAGER',
   'SOLAR_FRANCHISE',
 ]);
+
+const isCurrentUserProjectOwner =
+  Boolean(
+    project &&
+      currentUserId &&
+      Number(project.projectOwnerId) ===
+        Number(currentUserId),
+  );
+
+const canViewContractorWork =
+  hasRole([
+    'OWNER',
+    'PROJECT_MANAGER',
+    'PROJECT_EXECUTIVE',
+    'SUBSIDY_MANAGER',
+  ]) ||
+  isCurrentUserProjectOwner;
+
+const canUpdateContractorWork =
+  hasRole([
+    'OWNER',
+    'PROJECT_MANAGER',
+  ]);
+
+const canWriteContractorComment =
+  hasRole([
+    'OWNER',
+    'PROJECT_MANAGER',
+  ]);
 
   useEffect(() => {
   if (projectId) {
@@ -5177,6 +5231,7 @@ const isLoanProcessCompleted =
                     {money(item.amount)}
                   </p>
 
+{canUpdateContractorWork && (
                   <div className="mt-4 grid gap-3 md:grid-cols-2">
   <select
     value={item.status || 'ASSIGNED'}
@@ -5220,6 +5275,7 @@ const isLoanProcessCompleted =
     Update Remarks
   </button>
 </div>
+)}
 
 <div className="mt-5 rounded-xl border bg-white p-4">
   <h4 className="font-bold text-gray-800">
@@ -5312,35 +5368,47 @@ const isLoanProcessCompleted =
     Contractor Communication Timeline
   </h4>
 
-  <textarea
-    placeholder="Write contractor instruction / review / pending proof reply"
-    value={contractorCommentText[item.id] || ''}
-    onChange={(e) =>
-      setContractorCommentText((prev) => ({
-        ...prev,
-        [item.id]: e.target.value,
-      }))
-    }
-    className="mt-3 w-full rounded-xl border p-3"
-    rows={3}
-  />
-
-  <div className="mt-3 flex flex-wrap gap-2">
-    <button
-      onClick={() =>
-        submitContractorComment(
-          item,
-          'OWNER_PM_REPLY',
+  {canWriteContractorComment && (
+  <>
+    <textarea
+      placeholder="Write contractor instruction / review / pending proof reply"
+      value={
+        contractorCommentText[
+          item.id
+        ] || ''
+      }
+      onChange={(e) =>
+        setContractorCommentText(
+          (prev) => ({
+            ...prev,
+            [item.id]:
+              e.target.value,
+          }),
         )
       }
-      disabled={
-        contractorCommentLoadingId === item.id
-      }
-      className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
-    >
-      Add Reply
-    </button>
-  </div>
+      className="mt-3 w-full rounded-xl border p-3"
+      rows={3}
+    />
+
+    <div className="mt-3 flex flex-wrap gap-2">
+      <button
+        onClick={() =>
+          submitContractorComment(
+            item,
+            'OWNER_PM_REPLY',
+          )
+        }
+        disabled={
+          contractorCommentLoadingId ===
+          item.id
+        }
+        className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+      >
+        Add Reply
+      </button>
+    </div>
+  </>
+)}
 
   <div className="mt-5 space-y-3">
     {(!contractorComments[item.id] ||
@@ -5722,6 +5790,29 @@ const isLoanProcessCompleted =
       'PROJECT_HISTORY',
     ].includes(tab.key),
   );
+}
+
+if (
+  canViewContractorWork &&
+  !visibleTabs.some(
+    (tab) =>
+      tab.key ===
+      'CONTRACTOR_WORK',
+  )
+) {
+  const contractorWorkTab =
+    allTabs.find(
+      (tab) =>
+        tab.key ===
+        'CONTRACTOR_WORK',
+    );
+
+  if (contractorWorkTab) {
+    visibleTabs = [
+      ...visibleTabs,
+      contractorWorkTab,
+    ];
+  }
 }
 
   return visibleTabs.map((tab) => (
