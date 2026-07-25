@@ -1568,6 +1568,21 @@ async getTrackingEvents(
  *
  * The hard maximum prevents an accidental unlimited route query.
  */
+/**
+ * Returns route points for one session.
+ *
+ * Supported query values:
+ * - from: ISO date/time
+ * - to: ISO date/time
+ * - specificTime: ISO date/time
+ * - limit: maximum points returned
+ *
+ * Behaviour:
+ * - from/to returns points inside the selected range;
+ * - specificTime returns the closest recorded GPS point;
+ * - specificTime cannot be combined with from/to;
+ * - the hard maximum prevents an accidental unlimited query.
+ */
 async getTrackingRoute(
   sessionId: number,
   query: any = {},
@@ -1592,27 +1607,243 @@ async getTrackingRoute(
     );
   }
 
+  const hasFrom =
+    query.from !== undefined &&
+    query.from !== null &&
+    String(query.from).trim() !== '';
+
+  const hasTo =
+    query.to !== undefined &&
+    query.to !== null &&
+    String(query.to).trim() !== '';
+
+  const hasSpecificTime =
+    query.specificTime !== undefined &&
+    query.specificTime !== null &&
+    String(query.specificTime).trim() !== '';
+
+  if (
+    hasSpecificTime &&
+    (hasFrom || hasTo)
+  ) {
+    throw new BadRequestException(
+      'specificTime cannot be combined with from or to',
+    );
+  }
+
   const limit = Math.min(
     Math.max(Number(query.limit) || 2000, 1),
     5000,
   );
 
-  const qb =
-    this.locationPointRepository
-      .createQueryBuilder('point')
-      .where('point.sessionId = :sessionId', {
-        sessionId,
-      });
+  // ============================================================
+  // SPECIFIC TIME — RETURN CLOSEST RECORDED GPS POINT
+  // ============================================================
 
-  if (query.from) {
-    const from = new Date(query.from);
+  if (hasSpecificTime) {
+    const specificTime = new Date(
+      query.specificTime,
+    );
 
-    if (Number.isNaN(from.getTime())) {
+    if (
+      Number.isNaN(
+        specificTime.getTime(),
+      )
+    ) {
+      throw new BadRequestException(
+        'Invalid specific route time',
+      );
+    }
+
+    /**
+     * Query one point before and one point after the requested time.
+     *
+     * This uses the existing sessionId + recordedAt database index and avoids
+     * loading the complete route merely to find the closest coordinate.
+     */
+    const beforePoint =
+      await this.locationPointRepository
+        .createQueryBuilder('point')
+        .where(
+          'point.sessionId = :sessionId',
+          {
+            sessionId,
+          },
+        )
+        .andWhere(
+          'point.recordedAt <= :specificTime',
+          {
+            specificTime,
+          },
+        )
+        .orderBy(
+          'point.recordedAt',
+          'DESC',
+        )
+        .addOrderBy(
+          'point.sequenceNumber',
+          'DESC',
+        )
+        .getOne();
+
+    const afterPoint =
+      await this.locationPointRepository
+        .createQueryBuilder('point')
+        .where(
+          'point.sessionId = :sessionId',
+          {
+            sessionId,
+          },
+        )
+        .andWhere(
+          'point.recordedAt >= :specificTime',
+          {
+            specificTime,
+          },
+        )
+        .orderBy(
+          'point.recordedAt',
+          'ASC',
+        )
+        .addOrderBy(
+          'point.sequenceNumber',
+          'ASC',
+        )
+        .getOne();
+
+    let closestPoint:
+      | StaffLocationPoint
+      | null = null;
+
+    if (
+      beforePoint &&
+      afterPoint
+    ) {
+      const beforeDifference =
+        Math.abs(
+          specificTime.getTime() -
+            beforePoint.recordedAt.getTime(),
+        );
+
+      const afterDifference =
+        Math.abs(
+          afterPoint.recordedAt.getTime() -
+            specificTime.getTime(),
+        );
+
+      closestPoint =
+        beforeDifference <= afterDifference
+          ? beforePoint
+          : afterPoint;
+    } else {
+      closestPoint =
+        beforePoint ||
+        afterPoint ||
+        null;
+    }
+
+    const differenceMilliseconds =
+      closestPoint
+        ? Math.abs(
+            closestPoint.recordedAt.getTime() -
+              specificTime.getTime(),
+          )
+        : null;
+
+    return {
+      sessionId: session.id,
+      staffUserId:
+        session.staffUserId,
+
+      status: session.status,
+
+      totalDistanceMetres:
+        Math.round(
+          Number(
+            session.totalDistanceMetres ||
+              0,
+          ),
+        ),
+
+      lastLocationAt:
+        session.lastLocationAt,
+
+      filterMode: 'SPECIFIC_TIME',
+
+      requestedSpecificTime:
+        specificTime.toISOString(),
+
+      closestPointDifferenceSeconds:
+        differenceMilliseconds === null
+          ? null
+          : Math.round(
+              differenceMilliseconds /
+                1000,
+            ),
+
+      returnedPoints:
+        closestPoint ? 1 : 0,
+
+      maximumPoints: 1,
+
+      points: closestPoint
+        ? [closestPoint]
+        : [],
+    };
+  }
+
+  // ============================================================
+  // FULL ROUTE OR DATE/TIME RANGE
+  // ============================================================
+
+  let from: Date | null = null;
+  let to: Date | null = null;
+
+  if (hasFrom) {
+    from = new Date(query.from);
+
+    if (
+      Number.isNaN(from.getTime())
+    ) {
       throw new BadRequestException(
         'Invalid route start date',
       );
     }
+  }
 
+  if (hasTo) {
+    to = new Date(query.to);
+
+    if (
+      Number.isNaN(to.getTime())
+    ) {
+      throw new BadRequestException(
+        'Invalid route end date',
+      );
+    }
+  }
+
+  if (
+    from &&
+    to &&
+    from.getTime() > to.getTime()
+  ) {
+    throw new BadRequestException(
+      'Route start date cannot be after route end date',
+    );
+  }
+
+  const qb =
+    this.locationPointRepository
+      .createQueryBuilder('point')
+      .where(
+        'point.sessionId = :sessionId',
+        {
+          sessionId,
+        },
+      );
+
+  if (from) {
     qb.andWhere(
       'point.recordedAt >= :from',
       {
@@ -1621,15 +1852,7 @@ async getTrackingRoute(
     );
   }
 
-  if (query.to) {
-    const to = new Date(query.to);
-
-    if (Number.isNaN(to.getTime())) {
-      throw new BadRequestException(
-        'Invalid route end date',
-      );
-    }
-
+  if (to) {
     qb.andWhere(
       'point.recordedAt <= :to',
       {
@@ -1639,24 +1862,49 @@ async getTrackingRoute(
   }
 
   const points = await qb
-    .orderBy('point.recordedAt', 'ASC')
-    .addOrderBy('point.sequenceNumber', 'ASC')
+    .orderBy(
+      'point.recordedAt',
+      'ASC',
+    )
+    .addOrderBy(
+      'point.sequenceNumber',
+      'ASC',
+    )
     .take(limit)
     .getMany();
 
   return {
     sessionId: session.id,
-    staffUserId: session.staffUserId,
+    staffUserId:
+      session.staffUserId,
 
     status: session.status,
 
-    totalDistanceMetres: Math.round(
-      Number(session.totalDistanceMetres || 0),
-    ),
+    totalDistanceMetres:
+      Math.round(
+        Number(
+          session.totalDistanceMetres ||
+            0,
+        ),
+      ),
 
-    lastLocationAt: session.lastLocationAt,
+    lastLocationAt:
+      session.lastLocationAt,
 
-    returnedPoints: points.length,
+    filterMode:
+      from || to
+        ? 'DATE_TIME_RANGE'
+        : 'FULL_ROUTE',
+
+    requestedFrom:
+      from?.toISOString() || null,
+
+    requestedTo:
+      to?.toISOString() || null,
+
+    returnedPoints:
+      points.length,
+
     maximumPoints: limit,
 
     points,
