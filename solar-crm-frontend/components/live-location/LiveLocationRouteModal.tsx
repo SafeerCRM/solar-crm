@@ -27,6 +27,13 @@ import type {
   LiveLocationRoutePoint,
 } from './LiveLocationRouteMap';
 
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
+
+import dayjs, { Dayjs } from 'dayjs';
+
 const LiveLocationRouteMap = dynamic(
   () => import('./LiveLocationRouteMap'),
   {
@@ -44,6 +51,11 @@ const LiveLocationRouteMap = dynamic(
 const apiBaseUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL;
 
+  type RouteFilterMode =
+  | 'FULL_ROUTE'
+  | 'DATE_TIME_RANGE'
+  | 'SPECIFIC_TIME';
+
 type LiveLocationRouteResponse = {
   sessionId: number;
   staffUserId: number;
@@ -56,8 +68,23 @@ type LiveLocationRouteResponse = {
 
   lastLocationAt: string | null;
 
-  returnedPoints: number;
+    returnedPoints: number;
   maximumPoints: number;
+
+  filterMode?:
+    | RouteFilterMode
+    | null;
+
+  requestedFrom?: string | null;
+  requestedTo?: string | null;
+
+  requestedSpecificTime?:
+    | string
+    | null;
+
+  closestPointDifferenceSeconds?:
+    | number
+    | null;
 
   points: LiveLocationRoutePoint[];
 };
@@ -224,6 +251,35 @@ function formatAltitude(
   return `${altitude.toFixed(1)} m`;
 }
 
+function formatTimeDifference(
+  value?: number | null,
+): string {
+  const totalSeconds = Number(value);
+
+  if (
+    !Number.isFinite(totalSeconds) ||
+    totalSeconds < 0
+  ) {
+    return '-';
+  }
+
+  if (totalSeconds < 60) {
+    return `${Math.round(
+      totalSeconds,
+    )} second(s)`;
+  }
+
+  const minutes = Math.floor(
+    totalSeconds / 60,
+  );
+
+  const seconds = Math.round(
+    totalSeconds % 60,
+  );
+
+  return `${minutes} minute(s) ${seconds} second(s)`;
+}
+
 function formatBattery(
   point: LiveLocationRoutePoint,
 ): string {
@@ -305,9 +361,136 @@ export default function LiveLocationRouteModal({
   const [error, setError] =
     useState<string | null>(null);
 
-  const fetchRoute = useCallback(
-    async () => {
+      const [filterMode, setFilterMode] =
+    useState<RouteFilterMode>(
+      'FULL_ROUTE',
+    );
+
+  const [rangeFrom, setRangeFrom] =
+    useState('');
+
+  const [rangeTo, setRangeTo] =
+    useState('');
+
+  const [
+    specificTime,
+    setSpecificTime,
+  ] = useState('');
+
+  const rangeFromValue = rangeFrom
+  ? dayjs(rangeFrom)
+  : null;
+
+const rangeToValue = rangeTo
+  ? dayjs(rangeTo)
+  : null;
+
+const specificTimeValue = specificTime
+  ? dayjs(specificTime)
+  : null;
+
+const updateDatePart = (
+  currentValue: string,
+  newDate: Dayjs | null,
+  setter: (value: string) => void,
+) => {
+  if (!newDate) {
+    setter('');
+    setError(null);
+    return;
+  }
+
+  const base = currentValue
+    ? dayjs(currentValue)
+    : dayjs();
+
+  const merged = newDate
+    .hour(base.hour())
+    .minute(base.minute())
+    .second(0)
+    .millisecond(0);
+
+  setter(
+    merged.format(
+      'YYYY-MM-DDTHH:mm',
+    ),
+  );
+
+  setError(null);
+};
+
+const updateTimePart = (
+  currentValue: string,
+  newTime: Dayjs | null,
+  setter: (value: string) => void,
+) => {
+  if (!newTime) {
+    return;
+  }
+
+  const base = currentValue
+    ? dayjs(currentValue)
+    : dayjs();
+
+  const merged = base
+    .hour(newTime.hour())
+    .minute(newTime.minute())
+    .second(0)
+    .millisecond(0);
+
+  setter(
+    merged.format(
+      'YYYY-MM-DDTHH:mm',
+    ),
+  );
+
+  setError(null);
+};
+
+    const fetchRoute = useCallback(
+    async (
+      requestedMode:
+        RouteFilterMode =
+        filterMode,
+    ) => {
       if (!session) {
+        return;
+      }
+
+      if (
+        requestedMode ===
+          'DATE_TIME_RANGE' &&
+        (!rangeFrom || !rangeTo)
+      ) {
+        setError(
+          'Select both the route start date/time and end date/time.',
+        );
+
+        return;
+      }
+
+      if (
+        requestedMode ===
+          'DATE_TIME_RANGE' &&
+        new Date(rangeFrom).getTime() >
+          new Date(rangeTo).getTime()
+      ) {
+        setError(
+          'Route start date/time cannot be after the end date/time.',
+        );
+
+        return;
+      }
+
+      if (
+        requestedMode ===
+          'SPECIFIC_TIME' &&
+        !specificTime
+      ) {
+        setError(
+          'Select the specific date and time to locate.',
+        );
+
         return;
       }
 
@@ -315,29 +498,64 @@ export default function LiveLocationRouteModal({
       setError(null);
 
       try {
+        const params: {
+          limit: number;
+          from?: string;
+          to?: string;
+          specificTime?: string;
+        } = {
+          limit: 5000,
+        };
+
+        if (
+          requestedMode ===
+          'DATE_TIME_RANGE'
+        ) {
+          params.from =
+            new Date(
+              rangeFrom,
+            ).toISOString();
+
+          params.to =
+            new Date(
+              rangeTo,
+            ).toISOString();
+        }
+
+        if (
+          requestedMode ===
+          'SPECIFIC_TIME'
+        ) {
+          params.specificTime =
+            new Date(
+              specificTime,
+            ).toISOString();
+        }
+
         const response =
           await axios.get<LiveLocationRouteResponse>(
             `${apiBaseUrl}/staff-location/owner/session/${session.id}/route`,
             {
-              headers: getAuthHeaders(),
-              params: {
-                limit: 5000,
-              },
+              headers:
+                getAuthHeaders(),
+              params,
             },
           );
 
         const responseRoute =
           response.data;
 
-        const points = Array.isArray(
-          responseRoute?.points,
-        )
-          ? responseRoute.points
-          : [];
+        const points =
+          Array.isArray(
+            responseRoute?.points,
+          )
+            ? responseRoute.points
+            : [];
 
         const normalizedRoute: LiveLocationRouteResponse =
           {
             ...responseRoute,
+
             sessionId:
               Number(
                 responseRoute?.sessionId,
@@ -346,7 +564,8 @@ export default function LiveLocationRouteModal({
             staffUserId:
               Number(
                 responseRoute?.staffUserId,
-              ) || session.staffUserId,
+              ) ||
+              session.staffUserId,
 
             returnedPoints:
               Number(
@@ -356,16 +575,24 @@ export default function LiveLocationRouteModal({
             maximumPoints:
               Number(
                 responseRoute?.maximumPoints,
-              ) || 5000,
+              ) ||
+              (requestedMode ===
+              'SPECIFIC_TIME'
+                ? 1
+                : 5000),
 
             points,
           };
 
-        setRoute(normalizedRoute);
+        setRoute(
+          normalizedRoute,
+        );
 
         setSelectedPoint(
           points.length > 0
-            ? points[points.length - 1]
+            ? points[
+                points.length - 1
+              ]
             : null,
         );
       } catch (requestError) {
@@ -381,19 +608,36 @@ export default function LiveLocationRouteModal({
         setLoading(false);
       }
     },
-    [session],
+    [
+      filterMode,
+      rangeFrom,
+      rangeTo,
+      session,
+      specificTime,
+    ],
   );
 
   useEffect(() => {
-    if (!session) {
+        if (!session) {
       setRoute(null);
       setSelectedPoint(null);
       setError(null);
       setLoading(false);
+
+      setFilterMode(
+        'FULL_ROUTE',
+      );
+
+      setRangeFrom('');
+      setRangeTo('');
+      setSpecificTime('');
+
       return;
     }
 
-    void fetchRoute();
+        void fetchRoute(
+      'FULL_ROUTE',
+    );
   }, [fetchRoute, session]);
 
   useEffect(() => {
@@ -537,8 +781,10 @@ export default function LiveLocationRouteModal({
             <button
               type="button"
               onClick={() => {
-                void fetchRoute();
-              }}
+  void fetchRoute(
+    filterMode,
+  );
+}}
               disabled={loading}
               className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-black text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -559,6 +805,331 @@ export default function LiveLocationRouteModal({
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+
+            <LocalizationProvider
+  dateAdapter={AdapterDayjs}
+>
+
+            <div className="mb-4 rounded-3xl border border-gray-200 bg-gray-50 p-4">
+  <div className="flex flex-wrap gap-2">
+    <button
+      type="button"
+      onClick={() => {
+        setFilterMode(
+          'FULL_ROUTE',
+        );
+
+        void fetchRoute(
+          'FULL_ROUTE',
+        );
+      }}
+      disabled={loading}
+      className={`rounded-xl px-4 py-2 text-sm font-black disabled:cursor-not-allowed disabled:opacity-50 ${
+        filterMode ===
+        'FULL_ROUTE'
+          ? 'bg-blue-600 text-white'
+          : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-100'
+      }`}
+    >
+      Full Route
+    </button>
+
+    <button
+      type="button"
+      onClick={() => {
+        setFilterMode(
+          'DATE_TIME_RANGE',
+        );
+
+        setError(null);
+      }}
+      disabled={loading}
+      className={`rounded-xl px-4 py-2 text-sm font-black disabled:cursor-not-allowed disabled:opacity-50 ${
+        filterMode ===
+        'DATE_TIME_RANGE'
+          ? 'bg-blue-600 text-white'
+          : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-100'
+      }`}
+    >
+      Date & Time Range
+    </button>
+
+    <button
+      type="button"
+      onClick={() => {
+        setFilterMode(
+          'SPECIFIC_TIME',
+        );
+
+        setError(null);
+      }}
+      disabled={loading}
+      className={`rounded-xl px-4 py-2 text-sm font-black disabled:cursor-not-allowed disabled:opacity-50 ${
+        filterMode ===
+        'SPECIFIC_TIME'
+          ? 'bg-blue-600 text-white'
+          : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-100'
+      }`}
+    >
+      Specific Time
+    </button>
+  </div>
+
+  {filterMode ===
+    'DATE_TIME_RANGE' && (
+    <div className="mt-4 space-y-4">
+  <div>
+    <p className="mb-2 text-xs font-black uppercase tracking-wide text-gray-600">
+      From Date & Time
+    </p>
+
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      <DatePicker
+        label="From Date"
+        value={rangeFromValue}
+        onChange={(newDate) => {
+          updateDatePart(
+            rangeFrom,
+            newDate,
+            setRangeFrom,
+          );
+        }}
+        disabled={loading}
+        slotProps={{
+          textField: {
+            fullWidth: true,
+          },
+        }}
+      />
+
+      <MobileTimePicker
+        label="From Time"
+        value={rangeFromValue}
+        onChange={(newTime) => {
+          updateTimePart(
+            rangeFrom,
+            newTime,
+            setRangeFrom,
+          );
+        }}
+        disabled={loading}
+        ampm
+        ampmInClock
+        slotProps={{
+          textField: {
+            fullWidth: true,
+          },
+        }}
+      />
+    </div>
+  </div>
+
+  <div>
+    <p className="mb-2 text-xs font-black uppercase tracking-wide text-gray-600">
+      To Date & Time
+    </p>
+
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      <DatePicker
+        label="To Date"
+        value={rangeToValue}
+        onChange={(newDate) => {
+          updateDatePart(
+            rangeTo,
+            newDate,
+            setRangeTo,
+          );
+        }}
+        disabled={loading}
+        slotProps={{
+          textField: {
+            fullWidth: true,
+          },
+        }}
+      />
+
+      <MobileTimePicker
+        label="To Time"
+        value={rangeToValue}
+        onChange={(newTime) => {
+          updateTimePart(
+            rangeTo,
+            newTime,
+            setRangeTo,
+          );
+        }}
+        disabled={loading}
+        ampm
+        ampmInClock
+        slotProps={{
+          textField: {
+            fullWidth: true,
+          },
+        }}
+      />
+    </div>
+  </div>
+
+  <div className="flex justify-end">
+    <button
+      type="button"
+      onClick={() => {
+        void fetchRoute(
+          'DATE_TIME_RANGE',
+        );
+      }}
+      disabled={
+        loading ||
+        !rangeFrom ||
+        !rangeTo
+      }
+      className="w-full rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-black text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+    >
+      {loading
+        ? 'Loading...'
+        : 'Show Route'}
+    </button>
+  </div>
+</div>
+  )}
+
+  {filterMode ===
+    'SPECIFIC_TIME' && (
+    <div className="mt-4 space-y-4">
+  <div>
+    <p className="mb-2 text-xs font-black uppercase tracking-wide text-gray-600">
+      Location Date & Time
+    </p>
+
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      <DatePicker
+        label="Date"
+        value={specificTimeValue}
+        onChange={(newDate) => {
+          updateDatePart(
+            specificTime,
+            newDate,
+            setSpecificTime,
+          );
+        }}
+        disabled={loading}
+        slotProps={{
+          textField: {
+            fullWidth: true,
+          },
+        }}
+      />
+
+      <MobileTimePicker
+        label="Time"
+        value={specificTimeValue}
+        onChange={(newTime) => {
+          updateTimePart(
+            specificTime,
+            newTime,
+            setSpecificTime,
+          );
+        }}
+        disabled={loading}
+        ampm
+        ampmInClock
+        slotProps={{
+          textField: {
+            fullWidth: true,
+          },
+        }}
+      />
+    </div>
+  </div>
+
+  <div className="flex justify-end">
+    <button
+      type="button"
+      onClick={() => {
+        void fetchRoute(
+          'SPECIFIC_TIME',
+        );
+      }}
+      disabled={
+        loading ||
+        !specificTime
+      }
+      className="w-full rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-black text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+    >
+      {loading
+        ? 'Locating...'
+        : 'Find Location'}
+    </button>
+  </div>
+</div>
+  )}
+
+  {route?.filterMode ===
+    'DATE_TIME_RANGE' && (
+    <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+      <p className="font-black">
+        Showing selected route range
+      </p>
+
+      <p className="mt-1">
+        {formatDateTime(
+          route.requestedFrom,
+        )}{' '}
+        to{' '}
+        {formatDateTime(
+          route.requestedTo,
+        )}
+      </p>
+
+      <p className="mt-1 font-semibold">
+        {route.returnedPoints}{' '}
+        GPS point(s) found.
+      </p>
+    </div>
+  )}
+
+  {route?.filterMode ===
+    'SPECIFIC_TIME' && (
+    <div className="mt-4 rounded-2xl border border-purple-200 bg-purple-50 p-3 text-sm text-purple-800">
+      <p className="font-black">
+        Closest recorded location
+      </p>
+
+      <p className="mt-1">
+        Requested:{' '}
+        {formatDateTime(
+          route.requestedSpecificTime,
+        )}
+      </p>
+
+      {routePoints.length > 0 ? (
+        <>
+          <p className="mt-1">
+            Recorded:{' '}
+            {formatDateTime(
+              routePoints[0]
+                .recordedAt,
+            )}
+          </p>
+
+          <p className="mt-1 font-semibold">
+            Time difference:{' '}
+            {formatTimeDifference(
+              route.closestPointDifferenceSeconds,
+            )}
+          </p>
+        </>
+      ) : (
+        <p className="mt-1 font-semibold">
+          No recorded GPS point was
+          available for this session.
+        </p>
+      )}
+    </div>
+  )}
+</div>
+</LocalizationProvider>
+
                     <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
             <div className="rounded-2xl bg-gray-50 p-4">
               <p className="text-xs font-bold text-gray-500">
@@ -575,8 +1146,11 @@ export default function LiveLocationRouteModal({
 
             <div className="rounded-2xl bg-gray-50 p-4">
               <p className="text-xs font-bold text-gray-500">
-                Distance
-              </p>
+  {route?.filterMode ===
+  'FULL_ROUTE'
+    ? 'Session Distance'
+    : 'Full Session Distance'}
+</p>
 
               <p className="mt-1 font-black text-gray-900">
                 {formatDistance(
@@ -635,9 +1209,9 @@ export default function LiveLocationRouteModal({
               </p>
 
               <p className="mt-1 font-black text-gray-900">
-                {route?.maximumPoints ||
-                  5000}
-              </p>
+  {route?.maximumPoints ??
+    5000}
+</p>
             </div>
           </div>
 
