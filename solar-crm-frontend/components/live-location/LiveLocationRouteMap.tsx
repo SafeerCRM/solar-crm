@@ -3,6 +3,8 @@
 import {
   useEffect,
   useMemo,
+  useRef,
+  useState,
 } from 'react';
 
 import type {
@@ -113,31 +115,67 @@ function createReliableRouteSegments(
 
 type FitRouteBoundsProps = {
   positions: LatLngExpression[];
+  fitRequestKey: number;
 };
 
 function FitRouteBounds({
   positions,
+  fitRequestKey,
 }: FitRouteBoundsProps) {
   const map = useMap();
 
+  const hasInitiallyFittedRef =
+    useRef(false);
+
+  const lastHandledRequestRef =
+    useRef(fitRequestKey);
+
   useEffect(() => {
+    const isInitialFit =
+      !hasInitiallyFittedRef.current;
+
+    const isManualFitRequested =
+      lastHandledRequestRef.current !==
+      fitRequestKey;
+
+    if (
+      !isInitialFit &&
+      !isManualFitRequested
+    ) {
+      return;
+    }
+
     if (positions.length === 0) {
       return;
     }
 
     if (positions.length === 1) {
-      map.setView(positions[0], 17);
-      return;
+      map.setView(
+        positions[0],
+        17,
+        {
+          animate: true,
+        },
+      );
+    } else {
+      map.fitBounds(
+        positions as LatLngBoundsExpression,
+        {
+          padding: [35, 35],
+          maxZoom: 18,
+          animate: true,
+        },
+      );
     }
 
-    map.fitBounds(
-      positions as LatLngBoundsExpression,
-      {
-        padding: [35, 35],
-        maxZoom: 18,
-      },
-    );
-  }, [map, positions]);
+    hasInitiallyFittedRef.current = true;
+    lastHandledRequestRef.current =
+      fitRequestKey;
+  }, [
+    map,
+    positions,
+    fitRequestKey,
+  ]);
 
   return null;
 }
@@ -221,6 +259,12 @@ export default function LiveLocationRouteMap({
   selectedPointId,
   onPointSelect,
 }: LiveLocationRouteMapProps) {
+
+    const [
+  fitRouteRequestKey,
+  setFitRouteRequestKey,
+] = useState(0);
+
   const validPoints = useMemo(
     () =>
       points.filter((point) => {
@@ -285,14 +329,29 @@ export default function LiveLocationRouteMap({
       validPoints.length - 1
     ];
 
+    const routeSessionId =
+  firstPoint.sessionId;
+
   const initialCentre: LatLngExpression = [
     Number(lastPoint.latitude),
     Number(lastPoint.longitude),
   ];
 
   return (
-    <div className="h-[55vh] min-h-[420px] w-full overflow-hidden rounded-3xl border border-gray-200 bg-gray-100">
-      <MapContainer
+  <div className="relative h-[55vh] min-h-[420px] w-full overflow-hidden rounded-3xl border border-gray-200 bg-gray-100">
+    <button
+      type="button"
+      onClick={() => {
+        setFitRouteRequestKey(
+          (current) => current + 1,
+        );
+      }}
+      className="absolute right-3 top-3 z-[1000] rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-black text-gray-800 shadow hover:bg-gray-50"
+    >
+      Fit Route
+    </button>
+
+    <MapContainer
         center={initialCentre}
         zoom={16}
         scrollWheelZoom
@@ -304,8 +363,12 @@ export default function LiveLocationRouteMap({
         />
 
         <FitRouteBounds
-          positions={positions}
-        />
+  key={routeSessionId}
+  positions={positions}
+  fitRequestKey={
+    fitRouteRequestKey
+  }
+/>
 
                 {reliableRouteSegments.map(
           (segment, segmentIndex) => (

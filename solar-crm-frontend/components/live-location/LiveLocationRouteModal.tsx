@@ -249,6 +249,41 @@ function formatBattery(
   }`;
 }
 
+function openPointInGoogleMaps(
+  point: LiveLocationRoutePoint,
+  navigation = false,
+) {
+  const latitude = Number(point.latitude);
+  const longitude = Number(point.longitude);
+
+  if (
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude)
+  ) {
+    window.alert(
+      'Valid GPS coordinates are not available for this point.',
+    );
+
+    return;
+  }
+
+  const coordinate = `${latitude},${longitude}`;
+
+  const url = navigation
+    ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+        coordinate,
+      )}`
+    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+        coordinate,
+      )}`;
+
+  window.open(
+    url,
+    '_blank',
+    'noopener,noreferrer',
+  );
+}
+
 export default function LiveLocationRouteModal({
   session,
   staff,
@@ -404,6 +439,11 @@ export default function LiveLocationRouteModal({
     [route?.points],
   );
 
+  const latestPoint =
+  routePoints.length > 0
+    ? routePoints[routePoints.length - 1]
+    : null;
+
     const reliablePointCount =
     useMemo(
       () =>
@@ -463,7 +503,37 @@ export default function LiveLocationRouteModal({
             </p>
           </div>
 
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+
+            {latestPoint && (
+  <>
+    <button
+      type="button"
+      onClick={() =>
+        openPointInGoogleMaps(
+          latestPoint,
+          false,
+        )
+      }
+      className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-black text-emerald-700 hover:bg-emerald-100"
+    >
+      Open Latest GPS
+    </button>
+
+    <button
+      type="button"
+      onClick={() =>
+        openPointInGoogleMaps(
+          latestPoint,
+          true,
+        )
+      }
+      className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-black text-white hover:bg-emerald-700"
+    >
+      Navigate to Staff
+    </button>
+  </>
+)}
             <button
               type="button"
               onClick={() => {
@@ -654,6 +724,33 @@ export default function LiveLocationRouteModal({
                   </div>
                 ) : (
                   <div className="mt-4 space-y-3">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+  <button
+    type="button"
+    onClick={() =>
+      openPointInGoogleMaps(
+        selectedPoint,
+        false,
+      )
+    }
+    className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-black text-blue-700 hover:bg-blue-100"
+  >
+    Open GPS
+  </button>
+
+  <button
+    type="button"
+    onClick={() =>
+      openPointInGoogleMaps(
+        selectedPoint,
+        true,
+      )
+    }
+    className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-black text-white hover:bg-blue-700"
+  >
+    Navigate Here
+  </button>
+</div>
                     <div className="rounded-2xl bg-white p-3">
                       <p className="text-xs font-bold text-gray-500">
                         Recorded At
