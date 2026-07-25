@@ -177,6 +177,8 @@ export default function TelecallingContactsPage() {
   const [cityFilter, setCityFilter] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('active');
   const [showCnrRecall, setShowCnrRecall] = useState(false);
+  const [cnrSortOrder, setCnrSortOrder] =
+  useState<'OLDEST' | 'NEWEST'>('OLDEST');
 
   const [isAutoCalling, setIsAutoCalling] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -516,11 +518,16 @@ const canViewContactHistory =
   : `${backendUrl}/telecalling/contacts`,
         {
           params: {
-            page,
-            limit,
-            view: viewMode,
-            locationFilter: cityFilter || undefined,
-          },
+  page,
+  limit,
+  view: viewMode,
+  locationFilter: cityFilter || undefined,
+
+  // Used only by the dedicated CNR endpoint.
+  sortOrder: showCnrRecall
+    ? cnrSortOrder
+    : undefined,
+},
           headers: getAuthHeaders(),
         },
       );
@@ -2341,10 +2348,16 @@ const formatHistoryDate = (
   return parsed.format('DD MMM YYYY, hh:mm A');
 };
 
-  useEffect(() => {
-    fetchContacts();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, viewMode, cityFilter, showCnrRecall]);
+ useEffect(() => {
+  fetchContacts();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [
+  page,
+  viewMode,
+  cityFilter,
+  showCnrRecall,
+  cnrSortOrder,
+]);
 
   useEffect(() => {
   fetchUsers();
@@ -2648,12 +2661,15 @@ const fetchMyContactCount = async () => {
       : `${backendUrl}/telecalling/contacts/all-ids`;
 
     const res = await axios.get(queueEndpoint, {
-      params: {
-        view: viewMode,
-        locationFilter: cityFilter || undefined,
-      },
-      headers: getAuthHeaders(),
-    });
+  params: {
+    view: viewMode,
+    locationFilter: cityFilter || undefined,
+    sortOrder: showCnrRecall
+      ? cnrSortOrder
+      : undefined,
+  },
+  headers: getAuthHeaders(),
+});
 
     const fullQueue: Contact[] = Array.isArray(res.data)
       ? res.data
@@ -3136,6 +3152,29 @@ const transferContacts = async () => {
 >
   {showCnrRecall ? 'Exit CNR Recall Queue' : 'CNR Recall Queue'}
 </button>
+
+{showCnrRecall && (
+  <select
+    value={cnrSortOrder}
+    disabled={isAutoCalling}
+    onChange={(e) => {
+      setCnrSortOrder(
+        e.target.value as 'OLDEST' | 'NEWEST',
+      );
+      setPage(1);
+      setSelectedContactIds([]);
+    }}
+    className="rounded-2xl border border-amber-300 bg-amber-50 p-3 font-medium text-gray-800 outline-none transition focus:border-amber-500 disabled:cursor-not-allowed disabled:opacity-60"
+  >
+    <option value="OLDEST">
+      Oldest CNR First
+    </option>
+
+    <option value="NEWEST">
+      Newest CNR First
+    </option>
+  </select>
+)}
 
             <button
               onClick={fetchContacts}
