@@ -444,6 +444,254 @@ reassignFilteredRecycleContacts(
     );
 }
 
+@Get('contacts/storage-assignment-preview')
+getStorageAssignmentPreview(
+  @CurrentUser() user: any,
+
+  @Query('page')
+  page = '1',
+
+  @Query('limit')
+  limit = '50',
+
+  @Query('name')
+  name = '',
+
+  @Query('phone')
+  phone = '',
+
+  @Query('city')
+  city = '',
+
+  @Query('zone')
+  zone = '',
+
+  @Query('contactStatus')
+  contactStatus = '',
+
+  @Query('callStatus')
+  callStatus = '',
+
+  @Query('sourceModule')
+  sourceModule = '',
+
+  @Query('hasCalled')
+  hasCalled = '',
+) {
+  return this.telecallingService
+    .getStorageAssignmentPreview(
+      user,
+      {
+        page: Number(page),
+        limit: Number(limit),
+
+        name:
+          String(name || ''),
+
+        phone:
+          String(phone || ''),
+
+        city:
+          String(city || ''),
+
+        zone:
+          String(zone || ''),
+
+        contactStatus:
+          String(
+            contactStatus || '',
+          ),
+
+        callStatus:
+          String(
+            callStatus || '',
+          ),
+
+        sourceModule:
+          String(
+            sourceModule || '',
+          ),
+
+        hasCalled:
+          String(
+            hasCalled || '',
+          ),
+      },
+    );
+}
+
+@Get('contacts/storage-assignment-workload')
+getStorageAssignmentWorkload(
+  @CurrentUser() user: any,
+
+  @Query('name')
+  name = '',
+
+  @Query('phone')
+  phone = '',
+
+  @Query('city')
+  city = '',
+
+  @Query('zone')
+  zone = '',
+
+  @Query('contactStatus')
+  contactStatus = '',
+
+  @Query('callStatus')
+  callStatus = '',
+
+  @Query('sourceModule')
+  sourceModule = '',
+
+  @Query('hasCalled')
+  hasCalled = '',
+) {
+  return this.telecallingService
+    .getStorageAssignmentWorkload(
+      user,
+      {
+        name:
+          String(name || ''),
+
+        phone:
+          String(phone || ''),
+
+        city:
+          String(city || ''),
+
+        zone:
+          String(zone || ''),
+
+        contactStatus:
+          String(
+            contactStatus || '',
+          ),
+
+        callStatus:
+          String(
+            callStatus || '',
+          ),
+
+        sourceModule:
+          String(
+            sourceModule || '',
+          ),
+
+        hasCalled:
+          String(
+            hasCalled || '',
+          ),
+      },
+    );
+}
+
+@Post('contacts/storage-assign')
+assignStorageContacts(
+  @CurrentUser() user: any,
+
+  @Body()
+  body: {
+    mode:
+      | 'SELECTED'
+      | 'FILTERED';
+
+    assignedTo: number;
+
+    contactIds?: number[];
+
+    count?: number;
+
+    name?: string;
+    phone?: string;
+    city?: string;
+    zone?: string;
+
+    contactStatus?: string;
+    callStatus?: string;
+    sourceModule?: string;
+
+    hasCalled?: string;
+  },
+) {
+  return this.telecallingService
+    .assignStorageContacts(
+      {
+        mode:
+          body?.mode,
+
+        assignedTo:
+          Number(
+            body?.assignedTo,
+          ),
+
+        contactIds:
+          Array.isArray(
+            body?.contactIds,
+          )
+            ? body.contactIds.map(
+                Number,
+              )
+            : [],
+
+        count:
+          body?.count ===
+            undefined
+            ? undefined
+            : Number(
+                body.count,
+              ),
+
+        name:
+          String(
+            body?.name || '',
+          ),
+
+        phone:
+          String(
+            body?.phone || '',
+          ),
+
+        city:
+          String(
+            body?.city || '',
+          ),
+
+        zone:
+          String(
+            body?.zone || '',
+          ),
+
+        contactStatus:
+          String(
+            body?.contactStatus ||
+              '',
+          ),
+
+        callStatus:
+          String(
+            body?.callStatus ||
+              '',
+          ),
+
+        sourceModule:
+          String(
+            body?.sourceModule ||
+              '',
+          ),
+
+        hasCalled:
+          String(
+            body?.hasCalled ||
+              '',
+          ),
+      },
+
+      user,
+    );
+}
+
     @Get('contacts/:id/work-history')
   getContactWorkHistory(
     @Param('id', ParseIntPipe) id: number,

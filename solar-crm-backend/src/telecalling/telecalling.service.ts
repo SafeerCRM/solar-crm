@@ -49,6 +49,27 @@ type RecycleContactFilters = {
   recycleDays?: number;
 };
 
+type StorageAssignmentFilters = {
+  name?: string;
+  phone?: string;
+  city?: string;
+  zone?: string;
+
+  contactStatus?: string;
+  callStatus?: string;
+  sourceModule?: string;
+
+  hasCalled?: string;
+};
+
+type StorageAssignmentRequest = StorageAssignmentFilters & {
+  mode: 'SELECTED' | 'FILTERED';
+  assignedTo: number;
+
+  contactIds?: number[];
+  count?: number;
+};
+
 @Injectable()
 export class TelecallingService {
   constructor(
@@ -2705,6 +2726,881 @@ const finalMeetingNotes = latestContext
     meetingManagerId: meetingManager.id,
     meetingManagerName: meetingManager.name,
     leadId: lead.id,
+  };
+}
+
+private validateStorageAssignmentAccess(user: any) {
+  if (
+    !this.hasAnyRole(user, [
+      'OWNER',
+      'TELECALLING_MANAGER',
+    ])
+  ) {
+    throw new ForbiddenException(
+      'Only owner or telecalling manager can manage storage assignment',
+    );
+  }
+}
+
+private normalizeStorageText(
+  value?: string,
+): string {
+  return String(value || '')
+    .trim()
+    .toLowerCase();
+}
+
+private normalizeStorageUpperText(
+  value?: string,
+): string {
+  return String(value || '')
+    .trim()
+    .toUpperCase();
+}
+
+private async validateStorageAssignmentTelecaller(
+  userId: number,
+): Promise<User> {
+  const normalizedUserId = Number(userId);
+
+  if (
+    !Number.isInteger(normalizedUserId) ||
+    normalizedUserId <= 0
+  ) {
+    throw new BadRequestException(
+      'Destination telecaller is required',
+    );
+  }
+
+  const telecaller =
+    await this.userRepository.findOne({
+      where: {
+        id: normalizedUserId,
+      },
+    });
+
+  if (!telecaller) {
+    throw new NotFoundException(
+      'Destination telecaller not found',
+    );
+  }
+
+  const roles: UserRole[] =
+    Array.isArray(telecaller.roles)
+      ? (telecaller.roles as UserRole[])
+      : [];
+
+  if (
+    !roles.includes(
+      UserRole.TELECALLER,
+    )
+  ) {
+    throw new BadRequestException(
+      'Destination user must have TELECALLER role',
+    );
+  }
+
+  if ((telecaller as any).isHidden === true) {
+    throw new BadRequestException(
+      'Destination telecaller is hidden',
+    );
+  }
+
+  return telecaller;
+}
+
+private buildLatestStorageCallSubQuery() {
+  return this.contactCallHistoryRepository
+    .createQueryBuilder('history')
+    .select([
+      `DISTINCT ON (history."contactId")
+       history."contactId" AS "contactId"`,
+
+      `history.id AS "historyId"`,
+
+      `history."callStatus"
+       AS "callStatus"`,
+
+      `history.notes AS "notes"`,
+
+      `history."calledBy"
+       AS "calledBy"`,
+
+      `history."calledByName"
+       AS "calledByName"`,
+
+      `COALESCE(
+        history."updatedAt",
+        history."createdAt"
+      ) AS "latestCallAt"`,
+    ])
+    .where(
+      `UPPER(
+        COALESCE(
+          history."callStatus",
+          ''
+        )
+      ) <> 'INITIATED'`,
+    )
+    .orderBy(
+      `history."contactId"`,
+      'ASC',
+    )
+    .addOrderBy(
+      `COALESCE(
+        history."updatedAt",
+        history."createdAt"
+      )`,
+      'DESC',
+    )
+    .addOrderBy(
+      'history.id',
+      'DESC',
+    );
+}
+
+private applyStorageAssignmentFilters(
+  qb: any,
+  filters: StorageAssignmentFilters,
+) {
+  const name =
+    this.normalizeStorageText(
+      filters.name,
+    );
+
+  const phone =
+    this.normalizeStorageText(
+      filters.phone,
+    );
+
+  const city =
+    this.normalizeStorageText(
+      filters.city,
+    );
+
+  const zone =
+    this.normalizeStorageText(
+      filters.zone,
+    );
+
+  const contactStatus =
+    this.normalizeStorageUpperText(
+      filters.contactStatus,
+    );
+
+  const callStatus =
+    this.normalizeStorageUpperText(
+      filters.callStatus,
+    );
+
+  const sourceModule =
+    this.normalizeStorageUpperText(
+      filters.sourceModule,
+    );
+
+  const hasCalled =
+    this.normalizeStorageText(
+      filters.hasCalled,
+    );
+
+  if (name) {
+    qb.andWhere(
+      `LOWER(
+        COALESCE(
+          contact.name,
+          ''
+        )
+      ) LIKE :storageName`,
+      {
+        storageName: `%${name}%`,
+      },
+    );
+  }
+
+  if (phone) {
+    qb.andWhere(
+      `LOWER(
+        COALESCE(
+          contact.phone,
+          ''
+        )
+      ) LIKE :storagePhone`,
+      {
+        storagePhone: `%${phone}%`,
+      },
+    );
+  }
+
+  if (city) {
+    qb.andWhere(
+      `(
+        LOWER(
+          COALESCE(
+            contact.city,
+            ''
+          )
+        ) LIKE :storageCity
+        OR LOWER(
+          COALESCE(
+            contact.address,
+            ''
+          )
+        ) LIKE :storageCity
+        OR LOWER(
+          COALESCE(
+            contact.location,
+            ''
+          )
+        ) LIKE :storageCity
+      )`,
+      {
+        storageCity: `%${city}%`,
+      },
+    );
+  }
+
+  if (zone) {
+    qb.andWhere(
+      `LOWER(
+        COALESCE(
+          contact.zone,
+          ''
+        )
+      ) LIKE :storageZone`,
+      {
+        storageZone: `%${zone}%`,
+      },
+    );
+  }
+
+  if (contactStatus) {
+    qb.andWhere(
+      `UPPER(
+        COALESCE(
+          CAST(
+            contact.status AS TEXT
+          ),
+          ''
+        )
+      ) = :storageContactStatus`,
+      {
+        storageContactStatus:
+          contactStatus,
+      },
+    );
+  }
+
+  if (sourceModule) {
+    qb.andWhere(
+      `UPPER(
+        COALESCE(
+          contact."sourceModule",
+          ''
+        )
+      ) LIKE :storageSourceModule`,
+      {
+        storageSourceModule:
+          `%${sourceModule}%`,
+      },
+    );
+  }
+
+  if (callStatus) {
+    qb.andWhere(
+      `UPPER(
+        COALESCE(
+          latest_call."callStatus",
+          ''
+        )
+      ) = :storageCallStatus`,
+      {
+        storageCallStatus:
+          callStatus,
+      },
+    );
+  }
+
+  if (
+    hasCalled === 'true' ||
+    hasCalled === 'yes' ||
+    hasCalled === 'called'
+  ) {
+    qb.andWhere(
+      `latest_call."historyId"
+        IS NOT NULL`,
+    );
+  }
+
+  if (
+    hasCalled === 'false' ||
+    hasCalled === 'no' ||
+    hasCalled === 'not_called' ||
+    hasCalled === 'not-called'
+  ) {
+    qb.andWhere(
+      `latest_call."historyId"
+        IS NULL`,
+    );
+  }
+
+  return qb;
+}
+
+private buildStorageAssignmentContactsQuery(
+  filters: StorageAssignmentFilters,
+  source:
+    | 'STORAGE'
+    | 'ACTIVE',
+) {
+  const latestCallSubQuery =
+    this.buildLatestStorageCallSubQuery();
+
+  const qb =
+    this.contactRepository
+      .createQueryBuilder('contact')
+      .leftJoin(
+        `(${latestCallSubQuery.getQuery()})`,
+        'latest_call',
+        `latest_call."contactId" =
+          contact.id`,
+      )
+      .setParameters(
+        latestCallSubQuery.getParameters(),
+      );
+
+  if (source === 'STORAGE') {
+    qb.where(
+      'contact.isInStorage = true',
+    );
+
+    qb.andWhere(
+      `COALESCE(
+        contact.convertedToLead,
+        false
+      ) = false`,
+    );
+  } else {
+    qb.where(
+      'contact.isInStorage = false',
+    );
+
+    qb.andWhere(
+      'contact.assignedTo IS NOT NULL',
+    );
+
+    qb.andWhere(
+      `COALESCE(
+        contact.convertedToLead,
+        false
+      ) = false`,
+    );
+
+    qb.andWhere(
+      `COALESCE(
+        contact.stage,
+        'TELECALLING'
+      ) = :storageActiveStage`,
+      {
+        storageActiveStage:
+          'TELECALLING',
+      },
+    );
+  }
+
+  this.applyStorageAssignmentFilters(
+    qb,
+    filters,
+  );
+
+  return qb;
+}
+
+async getStorageAssignmentPreview(
+  user: any,
+  filters: StorageAssignmentFilters & {
+    page?: number;
+    limit?: number;
+  },
+) {
+  this.validateStorageAssignmentAccess(
+    user,
+  );
+
+  const page =
+    Number(filters.page) > 0
+      ? Number(filters.page)
+      : 1;
+
+  const limit =
+    Number(filters.limit) > 0
+      ? Math.min(
+          Number(filters.limit),
+          100,
+        )
+      : 50;
+
+  const skip =
+    (page - 1) * limit;
+
+  const countQuery =
+    this.buildStorageAssignmentContactsQuery(
+      filters,
+      'STORAGE',
+    );
+
+  const total =
+    await countQuery.getCount();
+
+  const dataQuery =
+    this.buildStorageAssignmentContactsQuery(
+      filters,
+      'STORAGE',
+    );
+
+  const data =
+    await dataQuery
+      .select([
+        'contact.id AS "id"',
+        'contact.name AS "name"',
+        'contact.phone AS "phone"',
+        'contact.city AS "city"',
+        'contact.zone AS "zone"',
+        'contact.address AS "address"',
+        'contact.location AS "location"',
+        'contact.status AS "status"',
+        `contact."sourceModule"
+          AS "sourceModule"`,
+        `contact."importedByName"
+          AS "importedByName"`,
+        `contact."createdAt"
+          AS "createdAt"`,
+        `contact."updatedAt"
+          AS "updatedAt"`,
+        `latest_call."latestCallAt"
+          AS "latestCallAt"`,
+        `latest_call."callStatus"
+          AS "latestCallStatus"`,
+        `latest_call."notes"
+          AS "latestCallNotes"`,
+        `latest_call."calledByName"
+          AS "latestCalledByName"`,
+      ])
+      .orderBy(
+        'contact.createdAt',
+        'DESC',
+      )
+      .addOrderBy(
+        'contact.id',
+        'DESC',
+      )
+      .offset(skip)
+      .limit(limit)
+      .getRawMany();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+
+    totalPages: Math.max(
+      1,
+      Math.ceil(total / limit),
+    ),
+  };
+}
+
+async getStorageAssignmentWorkload(
+  user: any,
+  filters: StorageAssignmentFilters,
+) {
+  this.validateStorageAssignmentAccess(
+    user,
+  );
+
+  const telecallers =
+    await this.userRepository
+      .createQueryBuilder('user')
+      .select([
+        'user.id',
+        'user.name',
+      ])
+      .where(
+        'user.isHidden = false',
+      )
+      .andWhere(
+        `CAST(
+          user.roles AS TEXT
+        ) LIKE :telecallerRole`,
+        {
+          telecallerRole:
+            '%TELECALLER%',
+        },
+      )
+      .orderBy(
+        'user.name',
+        'ASC',
+      )
+      .getMany();
+
+  if (!telecallers.length) {
+    return {
+      storageMatchingContacts: 0,
+      data: [],
+    };
+  }
+
+  const telecallerIds =
+    telecallers
+      .map((item) =>
+        Number(item.id),
+      )
+      .filter(
+        (id) =>
+          Number.isInteger(id) &&
+          id > 0,
+      );
+
+  const totalActiveRows =
+    await this.contactRepository
+      .createQueryBuilder('contact')
+      .select(
+        'contact.assignedTo',
+        'telecallerId',
+      )
+      .addSelect(
+        'COUNT(contact.id)',
+        'totalActiveContacts',
+      )
+      .where(
+        'contact.assignedTo IN (:...telecallerIds)',
+        {
+          telecallerIds,
+        },
+      )
+      .andWhere(
+        'contact.isInStorage = false',
+      )
+      .andWhere(
+        `COALESCE(
+          contact.convertedToLead,
+          false
+        ) = false`,
+      )
+      .andWhere(
+        `COALESCE(
+          contact.stage,
+          'TELECALLING'
+        ) = :workloadStage`,
+        {
+          workloadStage:
+            'TELECALLING',
+        },
+      )
+      .groupBy(
+        'contact.assignedTo',
+      )
+      .getRawMany();
+
+  const matchingActiveQuery =
+    this.buildStorageAssignmentContactsQuery(
+      filters,
+      'ACTIVE',
+    );
+
+  matchingActiveQuery.andWhere(
+    'contact.assignedTo IN (:...matchingTelecallerIds)',
+    {
+      matchingTelecallerIds:
+        telecallerIds,
+    },
+  );
+
+  const matchingActiveRows =
+    await matchingActiveQuery
+      .select(
+        'contact.assignedTo',
+        'telecallerId',
+      )
+      .addSelect(
+        'COUNT(contact.id)',
+        'matchingContacts',
+      )
+      .groupBy(
+        'contact.assignedTo',
+      )
+      .getRawMany();
+
+  const storageMatchingContacts =
+    await this
+      .buildStorageAssignmentContactsQuery(
+        filters,
+        'STORAGE',
+      )
+      .getCount();
+
+  const totalActiveMap =
+    new Map<number, number>(
+      totalActiveRows.map(
+        (row: any) => [
+          Number(row.telecallerId),
+          Number(
+            row.totalActiveContacts ||
+              0,
+          ),
+        ],
+      ),
+    );
+
+  const matchingMap =
+    new Map<number, number>(
+      matchingActiveRows.map(
+        (row: any) => [
+          Number(row.telecallerId),
+          Number(
+            row.matchingContacts ||
+              0,
+          ),
+        ],
+      ),
+    );
+
+  return {
+    storageMatchingContacts,
+
+    data: telecallers.map(
+      (telecaller) => ({
+        telecallerId:
+          Number(telecaller.id),
+
+        telecallerName:
+          telecaller.name || '',
+
+        totalActiveContacts:
+          totalActiveMap.get(
+            Number(telecaller.id),
+          ) || 0,
+
+        matchingContacts:
+          matchingMap.get(
+            Number(telecaller.id),
+          ) || 0,
+      }),
+    ),
+  };
+}
+
+async assignStorageContacts(
+  body: StorageAssignmentRequest,
+  user: any,
+) {
+  this.validateStorageAssignmentAccess(
+    user,
+  );
+
+  const mode =
+    String(body?.mode || '')
+      .trim()
+      .toUpperCase();
+
+  if (
+    mode !== 'SELECTED' &&
+    mode !== 'FILTERED'
+  ) {
+    throw new BadRequestException(
+      'Assignment mode must be SELECTED or FILTERED',
+    );
+  }
+
+  const assignedUser =
+    await this
+      .validateStorageAssignmentTelecaller(
+        Number(body?.assignedTo),
+      );
+
+  let requestedIds: number[] = [];
+
+  if (mode === 'SELECTED') {
+    requestedIds =
+      Array.from(
+        new Set(
+          (
+            Array.isArray(
+              body?.contactIds,
+            )
+              ? body.contactIds
+              : []
+          )
+            .map((id) =>
+              Number(id),
+            )
+            .filter(
+              (id) =>
+                Number.isInteger(id) &&
+                id > 0,
+            ),
+        ),
+      );
+
+    if (!requestedIds.length) {
+      throw new BadRequestException(
+        'Select at least one storage contact',
+      );
+    }
+
+    if (
+      requestedIds.length > 5000
+    ) {
+      throw new BadRequestException(
+        'A maximum of 5000 contacts can be assigned in one operation',
+      );
+    }
+  } else {
+    const requestedCount =
+      Number(body?.count);
+
+    if (
+      !Number.isInteger(
+        requestedCount,
+      ) ||
+      requestedCount <= 0
+    ) {
+      throw new BadRequestException(
+        'Enter a valid whole-number assignment count',
+      );
+    }
+
+    if (requestedCount > 5000) {
+      throw new BadRequestException(
+        'A maximum of 5000 contacts can be assigned in one operation',
+      );
+    }
+
+    const idsQuery =
+      this.buildStorageAssignmentContactsQuery(
+        body,
+        'STORAGE',
+      );
+
+    const selectedRows =
+      await idsQuery
+        .select(
+          'contact.id',
+          'id',
+        )
+        .orderBy(
+          'contact.createdAt',
+          'DESC',
+        )
+        .addOrderBy(
+          'contact.id',
+          'DESC',
+        )
+        .limit(requestedCount)
+        .getRawMany();
+
+    requestedIds =
+      selectedRows
+        .map((row: any) =>
+          Number(row.id),
+        )
+        .filter(
+          (id: number) =>
+            Number.isInteger(id) &&
+            id > 0,
+        );
+
+    if (!requestedIds.length) {
+      throw new NotFoundException(
+        'No storage contacts match the selected filters',
+      );
+    }
+
+    if (
+      requestedIds.length <
+      requestedCount
+    ) {
+      throw new BadRequestException(
+        `Only ${requestedIds.length} contact(s) currently match the selected filters`,
+      );
+    }
+  }
+
+  const assignmentResult =
+    await this.contactRepository
+      .createQueryBuilder()
+      .update(
+        TelecallingContact,
+      )
+      .set({
+        assignedTo:
+          assignedUser.id,
+
+        assignedToName:
+          assignedUser.name,
+
+        isInStorage:
+          false,
+
+        stage:
+          'TELECALLING' as any,
+
+        reviewAssignedTo:
+          null as any,
+
+        reviewAssignedToName:
+          null as any,
+      })
+      .where(
+        'id IN (:...requestedIds)',
+        {
+          requestedIds,
+        },
+      )
+      .andWhere(
+        '"isInStorage" = true',
+      )
+      .andWhere(
+        `COALESCE(
+          "convertedToLead",
+          false
+        ) = false`,
+      )
+      .execute();
+
+  const assignedCount =
+    Number(
+      assignmentResult.affected ||
+        0,
+    );
+
+  if (!assignedCount) {
+    throw new BadRequestException(
+      'The selected contacts are no longer available in storage',
+    );
+  }
+
+  return {
+    message:
+      `${assignedCount} contact(s) assigned to ${assignedUser.name} successfully`,
+
+    assignedCount,
+
+    requestedCount:
+      requestedIds.length,
+
+    assignedTo:
+      assignedUser.id,
+
+    assignedToName:
+      assignedUser.name,
+
+    skippedCount:
+      Math.max(
+        requestedIds.length -
+          assignedCount,
+        0,
+      ),
   };
 }
 
