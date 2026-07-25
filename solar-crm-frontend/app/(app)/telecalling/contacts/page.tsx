@@ -2637,43 +2637,66 @@ const fetchMyContactCount = async () => {
 };
 
     const startAutoCall = async () => {
-    try {
-      if (isAutoCalling) {
-        setMessage('Auto call is already running.');
-        return;
-      }
-
-      const res = await axios.get(`${backendUrl}/telecalling/contacts/all-ids`, {
-        params: {
-          view: viewMode,
-          locationFilter: cityFilter || undefined,
-        },
-        headers: getAuthHeaders(),
-      });
-
-      const fullQueue: Contact[] = Array.isArray(res.data) ? res.data : [];
-      const validQueue = fullQueue.filter((c) => !!String(c.phone || '').trim());
-
-      if (!validQueue.length) {
-        setMessage('No contacts available for auto call.');
-        return;
-      }
-
-      const firstContact = validQueue[0];
-
-      setIsAutoCalling(true);
-      setIsPaused(false);
-      setAutoCallQueue(validQueue);
-      setAutoCallIndex(0);
-      setCountdown(0);
-      setProcessedAutoCallIds(firstContact?.id ? [firstContact.id] : []);
-
-      await startQuickCall(firstContact);
-    } catch (err) {
-      console.error(err);
-      setMessage('Failed to start auto call.');
+  try {
+    if (isAutoCalling) {
+      setMessage('Auto call is already running.');
+      return;
     }
-  };
+
+    const queueEndpoint = showCnrRecall
+      ? `${backendUrl}/telecalling/contacts/cnr-recall-auto-call-ids`
+      : `${backendUrl}/telecalling/contacts/all-ids`;
+
+    const res = await axios.get(queueEndpoint, {
+      params: {
+        view: viewMode,
+        locationFilter: cityFilter || undefined,
+      },
+      headers: getAuthHeaders(),
+    });
+
+    const fullQueue: Contact[] = Array.isArray(res.data)
+      ? res.data
+      : [];
+
+    const validQueue = fullQueue.filter(
+      (contact) =>
+        !!String(contact.phone || '').trim(),
+    );
+
+    if (!validQueue.length) {
+      setMessage(
+        showCnrRecall
+          ? 'No CNR contacts available for auto call.'
+          : 'No contacts available for auto call.',
+      );
+      return;
+    }
+
+    const firstContact = validQueue[0];
+
+    setIsAutoCalling(true);
+    setIsPaused(false);
+    setAutoCallQueue(validQueue);
+    setAutoCallIndex(0);
+    setCountdown(0);
+    setProcessedAutoCallIds(
+      firstContact?.id
+        ? [firstContact.id]
+        : [],
+    );
+
+    await startQuickCall(firstContact);
+  } catch (err) {
+    console.error(err);
+
+    setMessage(
+      showCnrRecall
+        ? 'Failed to start CNR auto call.'
+        : 'Failed to start auto call.',
+    );
+  }
+};
 
   const pauseAutoCall = () => {
     clearAutoTimers();
