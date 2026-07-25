@@ -18907,32 +18907,68 @@ uploadedProofs.push(saved);
   };
 }
 
-async getContractorProofs(assignmentId: number, user: any) {
+async getContractorProofs(
+  assignmentId: number,
+  user: any,
+) {
   const assignment =
     await this.projectContractorAssignmentRepository.findOne({
       where: { id: assignmentId },
     });
 
   if (!assignment) {
-    throw new NotFoundException('Contractor assignment not found');
+    throw new NotFoundException(
+      'Contractor assignment not found',
+    );
   }
 
-  const roles = Array.isArray(user?.roles) ? user.roles : [];
-  const currentUserId = Number(user?.id || user?.userId || user?.sub);
+  const project =
+    await this.projectRepository.findOne({
+      where: {
+        id: Number(assignment.projectId),
+      },
+    });
+
+  if (!project) {
+    throw new NotFoundException(
+      'Project not found',
+    );
+  }
+
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  const currentUserId = Number(
+    user?.id ||
+      user?.userId ||
+      user?.sub,
+  );
+
+  const isProjectOwner =
+    Number(project.projectOwnerId) ===
+    currentUserId;
 
   const isAllowed =
-  roles.includes('OWNER') ||
-  roles.includes('PROJECT_MANAGER') ||
-  roles.includes('SUBSIDY_MANAGER') ||
-  Number(assignment.contractorId) === currentUserId;
+    roles.includes('OWNER') ||
+    roles.includes('PROJECT_MANAGER') ||
+    roles.includes('PROJECT_EXECUTIVE') ||
+    roles.includes('SUBSIDY_MANAGER') ||
+    isProjectOwner ||
+    Number(assignment.contractorId) ===
+      currentUserId;
 
   if (!isAllowed) {
-    throw new ForbiddenException('You are not allowed to view these proofs');
+    throw new ForbiddenException(
+      'You are not allowed to view these proofs',
+    );
   }
 
   return this.projectContractorProofRepository.find({
     where: { assignmentId },
-    order: { createdAt: 'DESC' },
+    order: {
+      createdAt: 'DESC',
+    },
   });
 }
 
@@ -19020,18 +19056,41 @@ async getContractorComments(
     );
   }
 
+  const project =
+    await this.projectRepository.findOne({
+      where: {
+        id: Number(assignment.projectId),
+      },
+    });
+
+  if (!project) {
+    throw new NotFoundException(
+      'Project not found',
+    );
+  }
+
   const roles = Array.isArray(user?.roles)
     ? user.roles
     : [];
 
   const currentUserId = Number(
-    user?.id || user?.userId || user?.sub,
+    user?.id ||
+      user?.userId ||
+      user?.sub,
   );
+
+  const isProjectOwner =
+    Number(project.projectOwnerId) ===
+    currentUserId;
 
   const isAllowed =
     roles.includes('OWNER') ||
     roles.includes('PROJECT_MANAGER') ||
-    Number(assignment.contractorId) === currentUserId;
+    roles.includes('PROJECT_EXECUTIVE') ||
+    roles.includes('SUBSIDY_MANAGER') ||
+    isProjectOwner ||
+    Number(assignment.contractorId) ===
+      currentUserId;
 
   if (!isAllowed) {
     throw new ForbiddenException(
@@ -19041,7 +19100,9 @@ async getContractorComments(
 
   return this.projectContractorCommentRepository.find({
     where: { assignmentId },
-    order: { createdAt: 'DESC' },
+    order: {
+      createdAt: 'DESC',
+    },
   });
 }
 
