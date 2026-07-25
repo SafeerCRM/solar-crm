@@ -12,6 +12,8 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
+import Autocomplete from '@mui/material/Autocomplete';
+import TextField from '@mui/material/TextField';
 
 const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -103,6 +105,37 @@ type ContactHistoryResponse = {
   };
 };
 
+type StorageAssignmentContact = HistoryContact & {
+  latestCallAt?: string | null;
+  latestCallStatus?: string;
+  latestCallNotes?: string;
+  latestCalledByName?: string;
+};
+
+type StorageAssignmentPreviewResponse = {
+  data?: StorageAssignmentContact[];
+  total?: number;
+  page?: number;
+  limit?: number;
+  totalPages?: number;
+};
+
+type StorageAssignmentWorkloadItem = {
+  telecallerId: number;
+  telecallerName: string;
+  totalActiveContacts: number;
+  matchingContacts: number;
+};
+
+type StorageAssignmentWorkloadResponse = {
+  storageMatchingContacts?: number;
+  data?: StorageAssignmentWorkloadItem[];
+};
+
+type StorageAssignmentMode =
+  | 'SELECTED'
+  | 'FILTERED';
+
 type HistoryDays = 30 | 60 | 90 | 120 | 150 | 180;
 
 const getUserRoles = (user: User | null): string[] => {
@@ -169,7 +202,10 @@ const [myContactCount, setMyContactCount] = useState<number | null>(null);
 const [loadingMyCount, setLoadingMyCount] = useState(false);
 // CONTACT HISTORY WORKSPACE
 const [showContactHistory, setShowContactHistory] = useState(false);
-type HistoryWorkspaceTab = 'history' | 'reassignment';
+type HistoryWorkspaceTab =
+  | 'history'
+  | 'reassignment'
+  | 'storage-assignment';
 
 const [historyWorkspaceTab, setHistoryWorkspaceTab] =
   useState<HistoryWorkspaceTab>('history');
@@ -291,6 +327,114 @@ const [
 const [
   reassignmentStorageState,
   setReassignmentStorageState,
+] = useState('');
+
+// STORAGE ASSIGNMENT WORKSPACE
+const [
+  storageAssignmentContacts,
+  setStorageAssignmentContacts,
+] = useState<StorageAssignmentContact[]>([]);
+
+const [
+  storageAssignmentWorkload,
+  setStorageAssignmentWorkload,
+] = useState<StorageAssignmentWorkloadItem[]>([]);
+
+const [
+  storageAssignmentTotal,
+  setStorageAssignmentTotal,
+] = useState(0);
+
+const [
+  storageAssignmentPage,
+  setStorageAssignmentPage,
+] = useState(1);
+
+const [
+  storageAssignmentTotalPages,
+  setStorageAssignmentTotalPages,
+] = useState(1);
+
+const [
+  storageAssignmentLoading,
+  setStorageAssignmentLoading,
+] = useState(false);
+
+const [
+  storageAssignmentWorkloadLoading,
+  setStorageAssignmentWorkloadLoading,
+] = useState(false);
+
+const [
+  storageAssignmentSubmitting,
+  setStorageAssignmentSubmitting,
+] = useState(false);
+
+const [
+  storageAssignmentMessage,
+  setStorageAssignmentMessage,
+] = useState('');
+
+const [
+  storageAssignmentSelectedIds,
+  setStorageAssignmentSelectedIds,
+] = useState<number[]>([]);
+
+const [
+  storageAssignmentMode,
+  setStorageAssignmentMode,
+] = useState<StorageAssignmentMode>(
+  'FILTERED',
+);
+
+const [
+  storageAssignmentTelecallerId,
+  setStorageAssignmentTelecallerId,
+] = useState('');
+
+const [
+  storageAssignmentCount,
+  setStorageAssignmentCount,
+] = useState('');
+
+const [
+  storageAssignmentName,
+  setStorageAssignmentName,
+] = useState('');
+
+const [
+  storageAssignmentPhone,
+  setStorageAssignmentPhone,
+] = useState('');
+
+const [
+  storageAssignmentCity,
+  setStorageAssignmentCity,
+] = useState('');
+
+const [
+  storageAssignmentZone,
+  setStorageAssignmentZone,
+] = useState('');
+
+const [
+  storageAssignmentContactStatus,
+  setStorageAssignmentContactStatus,
+] = useState('');
+
+const [
+  storageAssignmentCallStatus,
+  setStorageAssignmentCallStatus,
+] = useState('');
+
+const [
+  storageAssignmentSourceModule,
+  setStorageAssignmentSourceModule,
+] = useState('');
+
+const [
+  storageAssignmentHasCalled,
+  setStorageAssignmentHasCalled,
 ] = useState('');
 
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -701,6 +845,774 @@ const fetchReassignmentContacts = async (
   }
 };
 
+const getStorageAssignmentFilterParams =
+  () => ({
+    name:
+      storageAssignmentName.trim() ||
+      undefined,
+
+    phone:
+      storageAssignmentPhone.trim() ||
+      undefined,
+
+    city:
+      storageAssignmentCity.trim() ||
+      undefined,
+
+    zone:
+      storageAssignmentZone.trim() ||
+      undefined,
+
+    contactStatus:
+      storageAssignmentContactStatus ||
+      undefined,
+
+    callStatus:
+      storageAssignmentCallStatus ||
+      undefined,
+
+    sourceModule:
+      storageAssignmentSourceModule
+        .trim() ||
+      undefined,
+
+    hasCalled:
+      storageAssignmentHasCalled ||
+      undefined,
+  });
+
+  const fetchStorageAssignmentPreview =
+  async (
+    requestedPage = 1,
+    clearSelection = true,
+  ) => {
+    if (
+      !isOwnerOrTelecallingManager
+    ) {
+      setStorageAssignmentMessage(
+        'You do not have access to storage assignment.',
+      );
+      return;
+    }
+
+    try {
+      setStorageAssignmentLoading(
+        true,
+      );
+
+      setStorageAssignmentMessage(
+        '',
+      );
+
+      const res =
+        await axios.get<StorageAssignmentPreviewResponse>(
+          `${backendUrl}/telecalling/contacts/storage-assignment-preview`,
+          {
+            params: {
+              page:
+                requestedPage,
+
+              limit:
+                historyLimit,
+
+              ...getStorageAssignmentFilterParams(),
+            },
+
+            headers:
+              getAuthHeaders(),
+          },
+        );
+
+      const loadedContacts =
+        Array.isArray(
+          res.data?.data,
+        )
+          ? res.data.data
+          : [];
+
+      setStorageAssignmentContacts(
+        loadedContacts,
+      );
+
+      setStorageAssignmentTotal(
+        Number(
+          res.data?.total || 0,
+        ),
+      );
+
+      setStorageAssignmentPage(
+        Number(
+          res.data?.page ||
+            requestedPage,
+        ),
+      );
+
+      setStorageAssignmentTotalPages(
+        Number(
+          res.data?.totalPages ||
+            1,
+        ),
+      );
+
+      if (clearSelection) {
+        setStorageAssignmentSelectedIds(
+          [],
+        );
+      }
+    } catch (err: any) {
+      console.error(err);
+
+      setStorageAssignmentContacts(
+        [],
+      );
+
+      setStorageAssignmentTotal(0);
+      setStorageAssignmentPage(1);
+      setStorageAssignmentTotalPages(
+        1,
+      );
+
+      const errorMessage =
+        err?.response?.data?.message;
+
+      setStorageAssignmentMessage(
+        Array.isArray(errorMessage)
+          ? errorMessage.join(', ')
+          : errorMessage ||
+              'Failed to load storage contacts.',
+      );
+    } finally {
+      setStorageAssignmentLoading(
+        false,
+      );
+    }
+  };
+
+  const fetchStorageAssignmentWorkload =
+  async () => {
+    if (
+      !isOwnerOrTelecallingManager
+    ) {
+      return;
+    }
+
+    try {
+      setStorageAssignmentWorkloadLoading(
+        true,
+      );
+
+      const res =
+        await axios.get<StorageAssignmentWorkloadResponse>(
+          `${backendUrl}/telecalling/contacts/storage-assignment-workload`,
+          {
+            params:
+              getStorageAssignmentFilterParams(),
+
+            headers:
+              getAuthHeaders(),
+          },
+        );
+
+      setStorageAssignmentWorkload(
+        Array.isArray(
+          res.data?.data,
+        )
+          ? res.data.data
+          : [],
+      );
+
+      /*
+       * Keep the backend workload total and
+       * preview total synchronized. Both use
+       * exactly the same filters.
+       */
+      if (
+        typeof res.data
+          ?.storageMatchingContacts ===
+        'number'
+      ) {
+        setStorageAssignmentTotal(
+          Number(
+            res.data
+              .storageMatchingContacts,
+          ),
+        );
+      }
+    } catch (err: any) {
+      console.error(err);
+
+      setStorageAssignmentWorkload(
+        [],
+      );
+
+      const errorMessage =
+        err?.response?.data?.message;
+
+      setStorageAssignmentMessage(
+        Array.isArray(errorMessage)
+          ? errorMessage.join(', ')
+          : errorMessage ||
+              'Failed to load telecaller workload.',
+      );
+    } finally {
+      setStorageAssignmentWorkloadLoading(
+        false,
+      );
+    }
+  };
+
+  const applyStorageAssignmentFilters =
+  async () => {
+    setStorageAssignmentSelectedIds(
+      [],
+    );
+
+    setStorageAssignmentPage(1);
+    setStorageAssignmentMessage('');
+
+    await Promise.all([
+      fetchStorageAssignmentPreview(
+        1,
+      ),
+
+      fetchStorageAssignmentWorkload(),
+    ]);
+  };
+
+  const resetStorageAssignmentFilters =
+  async () => {
+    setStorageAssignmentName('');
+    setStorageAssignmentPhone('');
+    setStorageAssignmentCity('');
+    setStorageAssignmentZone('');
+
+    setStorageAssignmentContactStatus(
+      '',
+    );
+
+    setStorageAssignmentCallStatus(
+      '',
+    );
+
+    setStorageAssignmentSourceModule(
+      '',
+    );
+
+    setStorageAssignmentHasCalled(
+      '',
+    );
+
+    setStorageAssignmentCount('');
+    setStorageAssignmentSelectedIds(
+      [],
+    );
+
+    setStorageAssignmentPage(1);
+    setStorageAssignmentMessage('');
+
+    try {
+      setStorageAssignmentLoading(
+        true,
+      );
+
+      setStorageAssignmentWorkloadLoading(
+        true,
+      );
+
+      const [
+        previewResponse,
+        workloadResponse,
+      ] = await Promise.all([
+        axios.get<StorageAssignmentPreviewResponse>(
+          `${backendUrl}/telecalling/contacts/storage-assignment-preview`,
+          {
+            params: {
+              page: 1,
+              limit: historyLimit,
+            },
+
+            headers:
+              getAuthHeaders(),
+          },
+        ),
+
+        axios.get<StorageAssignmentWorkloadResponse>(
+          `${backendUrl}/telecalling/contacts/storage-assignment-workload`,
+          {
+            headers:
+              getAuthHeaders(),
+          },
+        ),
+      ]);
+
+      setStorageAssignmentContacts(
+        Array.isArray(
+          previewResponse.data?.data,
+        )
+          ? previewResponse.data.data
+          : [],
+      );
+
+      setStorageAssignmentTotal(
+        Number(
+          previewResponse.data?.total ||
+            workloadResponse.data
+              ?.storageMatchingContacts ||
+            0,
+        ),
+      );
+
+      setStorageAssignmentPage(1);
+
+      setStorageAssignmentTotalPages(
+        Number(
+          previewResponse.data
+            ?.totalPages || 1,
+        ),
+      );
+
+      setStorageAssignmentWorkload(
+        Array.isArray(
+          workloadResponse.data?.data,
+        )
+          ? workloadResponse.data.data
+          : [],
+      );
+    } catch (err: any) {
+      console.error(err);
+
+      setStorageAssignmentContacts(
+        [],
+      );
+
+      setStorageAssignmentWorkload(
+        [],
+      );
+
+      setStorageAssignmentTotal(0);
+      setStorageAssignmentPage(1);
+      setStorageAssignmentTotalPages(
+        1,
+      );
+
+      const errorMessage =
+        err?.response?.data?.message;
+
+      setStorageAssignmentMessage(
+        Array.isArray(errorMessage)
+          ? errorMessage.join(', ')
+          : errorMessage ||
+              'Failed to reset storage assignment filters.',
+      );
+    } finally {
+      setStorageAssignmentLoading(
+        false,
+      );
+
+      setStorageAssignmentWorkloadLoading(
+        false,
+      );
+    }
+  };
+
+  const allStorageAssignmentPageSelected =
+  storageAssignmentContacts.length >
+    0 &&
+  storageAssignmentContacts.every(
+    (contact) =>
+      storageAssignmentSelectedIds.includes(
+        contact.id,
+      ),
+  );
+
+const toggleAllStorageAssignmentPage =
+  () => {
+    const currentPageIds =
+      storageAssignmentContacts.map(
+        (contact) => contact.id,
+      );
+
+    if (
+      allStorageAssignmentPageSelected
+    ) {
+      const currentPageIdSet =
+        new Set(currentPageIds);
+
+      setStorageAssignmentSelectedIds(
+        (previous) =>
+          previous.filter(
+            (id) =>
+              !currentPageIdSet.has(
+                id,
+              ),
+          ),
+      );
+
+      return;
+    }
+
+    setStorageAssignmentSelectedIds(
+      (previous) =>
+        Array.from(
+          new Set([
+            ...previous,
+            ...currentPageIds,
+          ]),
+        ),
+    );
+  };
+
+const toggleStorageAssignmentContact =
+  (contactId: number) => {
+    setStorageAssignmentSelectedIds(
+      (previous) =>
+        previous.includes(contactId)
+          ? previous.filter(
+              (id) =>
+                id !== contactId,
+            )
+          : [
+              ...previous,
+              contactId,
+            ],
+    );
+  };
+
+  const sortedStorageAssignmentWorkload =
+  [...storageAssignmentWorkload].sort(
+    (first, second) => {
+      const workloadDifference =
+        Number(
+          second.totalActiveContacts ||
+            0,
+        ) -
+        Number(
+          first.totalActiveContacts ||
+            0,
+        );
+
+      if (workloadDifference !== 0) {
+        return workloadDifference;
+      }
+
+      return String(
+        first.telecallerName || '',
+      ).localeCompare(
+        String(
+          second.telecallerName || '',
+        ),
+      );
+    },
+  );
+
+const getStorageWorkloadStyle = (
+  totalContacts: number,
+) => {
+  const total =
+    Number(totalContacts || 0);
+
+  if (total > 3000) {
+    return {
+      card:
+        'border-red-200 bg-red-50 hover:border-red-400',
+
+      badge:
+        'bg-red-100 text-red-700',
+
+      number:
+        'text-red-700',
+
+      label:
+        'Heavy Load',
+    };
+  }
+
+  if (total > 1000) {
+    return {
+      card:
+        'border-amber-200 bg-amber-50 hover:border-amber-400',
+
+      badge:
+        'bg-amber-100 text-amber-700',
+
+      number:
+        'text-amber-700',
+
+      label:
+        'Medium Load',
+    };
+  }
+
+  return {
+    card:
+      'border-green-200 bg-green-50 hover:border-green-400',
+
+    badge:
+      'bg-green-100 text-green-700',
+
+    number:
+      'text-green-700',
+
+    label:
+      'Balanced',
+  };
+};
+
+  const selectedStorageTelecaller =
+  storageAssignmentWorkload.find(
+    (item) =>
+      Number(item.telecallerId) ===
+      Number(
+        storageAssignmentTelecallerId,
+      ),
+  );
+
+const storageAssignmentQuantity =
+  storageAssignmentMode ===
+  'SELECTED'
+    ? storageAssignmentSelectedIds.length
+    : Number(
+        storageAssignmentCount ||
+          0,
+      );
+
+const storageTelecallerExpectedTotal =
+  selectedStorageTelecaller
+    ? selectedStorageTelecaller
+        .totalActiveContacts +
+      storageAssignmentQuantity
+    : 0;
+
+const storageTelecallerExpectedMatching =
+  selectedStorageTelecaller
+    ? selectedStorageTelecaller
+        .matchingContacts +
+      storageAssignmentQuantity
+    : 0;
+
+    const assignStorageContacts =
+  async () => {
+    if (
+      !storageAssignmentTelecallerId
+    ) {
+      setStorageAssignmentMessage(
+        'Select the destination telecaller.',
+      );
+      return;
+    }
+
+    if (
+  storageAssignmentTotal <= 0
+) {
+  setStorageAssignmentMessage(
+    'No contacts match the current storage filters.',
+  );
+  return;
+}
+
+    if (
+      storageAssignmentMode ===
+        'SELECTED' &&
+      !storageAssignmentSelectedIds
+        .length
+    ) {
+      setStorageAssignmentMessage(
+        'Select at least one storage contact.',
+      );
+      return;
+    }
+
+    const requestedCount =
+      Number(
+        storageAssignmentCount,
+      );
+
+    if (
+      storageAssignmentMode ===
+        'FILTERED' &&
+      (!Number.isInteger(
+        requestedCount,
+      ) ||
+        requestedCount <= 0)
+    ) {
+      setStorageAssignmentMessage(
+        'Enter a valid whole-number assignment count.',
+      );
+      return;
+    }
+
+    if (
+      storageAssignmentMode ===
+        'FILTERED' &&
+      requestedCount >
+        storageAssignmentTotal
+    ) {
+      setStorageAssignmentMessage(
+        `Only ${storageAssignmentTotal} contact(s) currently match the selected filters.`,
+      );
+      return;
+    }
+
+    const destinationTelecaller =
+      storageAssignmentWorkload.find(
+        (item) =>
+          Number(
+            item.telecallerId,
+          ) ===
+          Number(
+            storageAssignmentTelecallerId,
+          ),
+      );
+
+    const quantity =
+      storageAssignmentMode ===
+      'SELECTED'
+        ? storageAssignmentSelectedIds
+            .length
+        : requestedCount;
+
+    const confirmed =
+      window.confirm(
+        `Assign ${quantity} ${
+          storageAssignmentMode ===
+          'SELECTED'
+            ? 'selected'
+            : 'filtered'
+        } contact(s) from storage to ${
+          destinationTelecaller
+            ?.telecallerName ||
+          'the selected telecaller'
+        }?`,
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setStorageAssignmentSubmitting(
+        true,
+      );
+
+      setStorageAssignmentMessage(
+        '',
+      );
+
+      const res =
+        await axios.post(
+          `${backendUrl}/telecalling/contacts/storage-assign`,
+          {
+            mode:
+              storageAssignmentMode,
+
+            assignedTo:
+              Number(
+                storageAssignmentTelecallerId,
+              ),
+
+            contactIds:
+              storageAssignmentMode ===
+              'SELECTED'
+                ? storageAssignmentSelectedIds
+                : undefined,
+
+            count:
+              storageAssignmentMode ===
+              'FILTERED'
+                ? requestedCount
+                : undefined,
+
+            ...(storageAssignmentMode ===
+            'FILTERED'
+              ? getStorageAssignmentFilterParams()
+              : {}),
+          },
+          {
+            headers:
+              getAuthHeaders(),
+          },
+        );
+
+      const completedAssignedCount =
+  Number(
+    res.data?.assignedCount ||
+      quantity,
+  );
+
+const completedSkippedCount =
+  Number(
+    res.data?.skippedCount ||
+      0,
+  );
+
+setStorageAssignmentMessage(
+  [
+    `Assignment completed successfully.`,
+
+    `Assigned: ${completedAssignedCount}`,
+
+    `Destination: ${
+      res.data?.assignedToName ||
+      destinationTelecaller
+        ?.telecallerName ||
+      'Selected telecaller'
+    }`,
+
+    `Skipped: ${completedSkippedCount}`,
+  ].join('\n'),
+);
+
+      const assignedCount =
+  completedAssignedCount;
+
+      const remainingOnPage =
+        storageAssignmentContacts.length -
+        Math.min(
+          assignedCount,
+          storageAssignmentContacts.length,
+        );
+
+      const pageToReload =
+        remainingOnPage <= 0 &&
+        storageAssignmentPage > 1
+          ? storageAssignmentPage -
+            1
+          : storageAssignmentPage;
+
+      setStorageAssignmentSelectedIds(
+        [],
+      );
+
+      setStorageAssignmentCount('');
+
+      await Promise.all([
+        fetchStorageAssignmentPreview(
+          pageToReload,
+        ),
+
+        fetchStorageAssignmentWorkload(),
+
+        fetchContacts(),
+      ]);
+    } catch (err: any) {
+      console.error(err);
+
+      const errorMessage =
+        err?.response?.data?.message;
+
+      setStorageAssignmentMessage(
+        Array.isArray(errorMessage)
+          ? errorMessage.join(', ')
+          : errorMessage ||
+              'Failed to assign storage contacts.',
+      );
+    } finally {
+      setStorageAssignmentSubmitting(
+        false,
+      );
+    }
+  };
+
 const reassignSelectedContacts = async () => {
   if (!fromTelecallerId) {
     setMessage(
@@ -1056,6 +1968,39 @@ useEffect(() => {
   fromTelecallerId,
 ]);
 
+useEffect(() => {
+  if (
+    historyWorkspaceTab !==
+    'storage-assignment'
+  ) {
+    return;
+  }
+
+  setStorageAssignmentSelectedIds(
+    [],
+  );
+
+  setStorageAssignmentPage(1);
+  setStorageAssignmentMessage('');
+
+  void Promise.all([
+    fetchStorageAssignmentPreview(
+      1,
+    ),
+
+    fetchStorageAssignmentWorkload(),
+  ]);
+
+  /*
+   * Load once when entering the tab.
+   * Filter fields do not trigger requests
+   * until Apply Filters is pressed.
+   */
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [
+  historyWorkspaceTab,
+]);
+
 const openContactHistory = async () => {
   setHistoryWorkspaceTab('history');
 
@@ -1106,6 +2051,51 @@ setReassignmentTotalPages(1);
 
 setReassignmentFromContactCount(null);
 setReassignmentToContactCount(null);
+
+// Storage Assignment reset
+setStorageAssignmentContacts([]);
+setStorageAssignmentWorkload([]);
+
+setStorageAssignmentTotal(0);
+setStorageAssignmentPage(1);
+setStorageAssignmentTotalPages(1);
+
+setStorageAssignmentMessage('');
+
+setStorageAssignmentSelectedIds(
+  [],
+);
+
+setStorageAssignmentMode(
+  'FILTERED',
+);
+
+setStorageAssignmentTelecallerId(
+  '',
+);
+
+setStorageAssignmentCount('');
+
+setStorageAssignmentName('');
+setStorageAssignmentPhone('');
+setStorageAssignmentCity('');
+setStorageAssignmentZone('');
+
+setStorageAssignmentContactStatus(
+  '',
+);
+
+setStorageAssignmentCallStatus(
+  '',
+);
+
+setStorageAssignmentSourceModule(
+  '',
+);
+
+setStorageAssignmentHasCalled(
+  '',
+);
 
 setHistoryMessage('');
 };
@@ -2708,13 +3698,18 @@ const transferContacts = async () => {
       <div className="space-y-4 p-4 md:p-5">
 
         <div className="rounded-3xl bg-white p-2 shadow-sm">
-  <div className="flex gap-2">
+  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
     <button
       type="button"
-      onClick={() => setHistoryWorkspaceTab('history')}
-      className={`flex-1 rounded-2xl px-5 py-3 text-sm font-semibold transition ${
-        historyWorkspaceTab === 'history'
-          ? 'bg-blue-600 text-white'
+      onClick={() =>
+        setHistoryWorkspaceTab(
+          'history',
+        )
+      }
+      className={`rounded-2xl px-5 py-3 text-sm font-semibold transition ${
+        historyWorkspaceTab ===
+        'history'
+          ? 'bg-blue-600 text-white shadow-sm'
           : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
       }`}
     >
@@ -2725,15 +3720,37 @@ const transferContacts = async () => {
       <button
         type="button"
         onClick={() =>
-          setHistoryWorkspaceTab('reassignment')
+          setHistoryWorkspaceTab(
+            'reassignment',
+          )
         }
-        className={`flex-1 rounded-2xl px-5 py-3 text-sm font-semibold transition ${
-          historyWorkspaceTab === 'reassignment'
-            ? 'bg-blue-600 text-white'
+        className={`rounded-2xl px-5 py-3 text-sm font-semibold transition ${
+          historyWorkspaceTab ===
+          'reassignment'
+            ? 'bg-blue-600 text-white shadow-sm'
             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
         }`}
       >
         Reassignment
+      </button>
+    )}
+
+    {isOwnerOrTelecallingManager && (
+      <button
+        type="button"
+        onClick={() =>
+          setHistoryWorkspaceTab(
+            'storage-assignment',
+          )
+        }
+        className={`rounded-2xl px-5 py-3 text-sm font-semibold transition ${
+          historyWorkspaceTab ===
+          'storage-assignment'
+            ? 'bg-emerald-600 text-white shadow-sm'
+            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+        }`}
+      >
+        Storage Assignment
       </button>
     )}
   </div>
@@ -3256,6 +4273,976 @@ const transferContacts = async () => {
         ) : null}
         </>
         )}
+
+        {historyWorkspaceTab ===
+  'storage-assignment' &&
+  isOwnerOrTelecallingManager && (
+    <div className="space-y-4">
+      {storageAssignmentMessage ? (
+        <div
+          className={`whitespace-pre-line rounded-2xl border px-4 py-3 text-sm font-medium ${
+            storageAssignmentMessage
+              .toLowerCase()
+              .includes('success')
+              ? 'border-green-200 bg-green-50 text-green-700'
+              : 'border-amber-200 bg-amber-50 text-amber-800'
+          }`}
+        >
+          {storageAssignmentMessage}
+        </div>
+      ) : null}
+
+      <div className="rounded-3xl bg-gradient-to-r from-emerald-700 via-teal-700 to-cyan-700 p-5 text-white shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-100">
+              Storage Assignment Workspace
+            </p>
+
+            <h3 className="mt-2 text-xl font-bold">
+              Assign filtered storage
+              contacts intelligently
+            </h3>
+
+            <p className="mt-1 max-w-3xl text-sm text-emerald-50">
+              Apply filters, review
+              matching storage contacts,
+              compare every telecaller&apos;s
+              workload and assign contacts
+              without leaving this workspace.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 sm:min-w-[330px]">
+            <div className="rounded-2xl bg-white/15 p-3 backdrop-blur">
+              <p className="text-xs text-emerald-100">
+                Matching Storage
+              </p>
+
+              <p className="mt-1 text-2xl font-bold">
+                {storageAssignmentLoading
+                  ? '...'
+                  : storageAssignmentTotal}
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-white/15 p-3 backdrop-blur">
+              <p className="text-xs text-emerald-100">
+                Selected
+              </p>
+
+              <p className="mt-1 text-2xl font-bold">
+                {
+                  storageAssignmentSelectedIds.length
+                }
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* FILTERS */}
+      <div className="rounded-3xl bg-white p-4 shadow-sm md:p-5">
+        <div className="mb-4">
+          <h3 className="text-lg font-semibold text-gray-900">
+            Storage Filters
+          </h3>
+
+          <p className="mt-1 text-sm text-gray-500">
+            Every selected filter is
+            applied together. Requests are
+            made only when Apply Filters is
+            pressed.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <input
+            value={
+              storageAssignmentName
+            }
+            onChange={(event) =>
+              setStorageAssignmentName(
+                event.target.value,
+              )
+            }
+            placeholder="Customer name"
+            className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-emerald-500 focus:bg-white"
+          />
+
+          <input
+            value={
+              storageAssignmentPhone
+            }
+            onChange={(event) =>
+              setStorageAssignmentPhone(
+                event.target.value,
+              )
+            }
+            placeholder="Phone number"
+            className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-emerald-500 focus:bg-white"
+          />
+
+          <input
+            value={
+              storageAssignmentCity
+            }
+            onChange={(event) =>
+              setStorageAssignmentCity(
+                event.target.value,
+              )
+            }
+            placeholder="City / Address / Location"
+            className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-emerald-500 focus:bg-white"
+          />
+
+          <input
+            value={
+              storageAssignmentZone
+            }
+            onChange={(event) =>
+              setStorageAssignmentZone(
+                event.target.value,
+              )
+            }
+            placeholder="Zone"
+            className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-emerald-500 focus:bg-white"
+          />
+
+          <input
+            value={
+              storageAssignmentContactStatus
+            }
+            onChange={(event) =>
+              setStorageAssignmentContactStatus(
+                event.target.value,
+              )
+            }
+            placeholder="Contact status"
+            className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-emerald-500 focus:bg-white"
+          />
+
+          <input
+            value={
+              storageAssignmentCallStatus
+            }
+            onChange={(event) =>
+              setStorageAssignmentCallStatus(
+                event.target.value,
+              )
+            }
+            placeholder="Latest call status"
+            className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-emerald-500 focus:bg-white"
+          />
+
+          <input
+            value={
+              storageAssignmentSourceModule
+            }
+            onChange={(event) =>
+              setStorageAssignmentSourceModule(
+                event.target.value,
+              )
+            }
+            placeholder="Source module"
+            className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-emerald-500 focus:bg-white"
+          />
+
+          <select
+            value={
+              storageAssignmentHasCalled
+            }
+            onChange={(event) =>
+              setStorageAssignmentHasCalled(
+                event.target.value,
+              )
+            }
+            className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-emerald-500 focus:bg-white"
+          >
+            <option value="">
+              All call activity
+            </option>
+
+            <option value="true">
+              Has been called
+            </option>
+
+            <option value="false">
+              Never called
+            </option>
+          </select>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={
+              applyStorageAssignmentFilters
+            }
+            disabled={
+              storageAssignmentLoading ||
+              storageAssignmentWorkloadLoading ||
+              storageAssignmentSubmitting
+            }
+            className="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {storageAssignmentLoading ||
+            storageAssignmentWorkloadLoading
+              ? 'Applying...'
+              : 'Apply Filters'}
+          </button>
+
+          <button
+            type="button"
+            onClick={
+              resetStorageAssignmentFilters
+            }
+            disabled={
+              storageAssignmentLoading ||
+              storageAssignmentWorkloadLoading ||
+              storageAssignmentSubmitting
+            }
+            className="rounded-2xl bg-gray-200 px-5 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-300 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Reset Filters
+          </button>
+        </div>
+      </div>
+
+      {/* WORKLOAD */}
+      <div className="rounded-3xl bg-white p-4 shadow-sm md:p-5">
+        <div className="flex flex-col gap-2 border-b border-gray-100 pb-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">
+              Telecaller Workload
+            </h3>
+
+            <p className="mt-1 text-sm text-gray-500">
+              Matching means active
+              contacts already held by that
+              telecaller under the same
+              filters.
+            </p>
+          </div>
+
+          <p className="text-sm font-semibold text-emerald-700">
+            {
+              storageAssignmentWorkload.length
+            }{' '}
+            telecaller(s)
+          </p>
+        </div>
+
+        {storageAssignmentWorkloadLoading ? (
+          <div className="py-10 text-center text-sm text-gray-500">
+            Loading telecaller
+            workload...
+          </div>
+        ) : storageAssignmentWorkload.length ===
+          0 ? (
+          <div className="py-10 text-center text-sm text-gray-500">
+            No active telecallers found.
+          </div>
+        ) : (
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {sortedStorageAssignmentWorkload.map(
+              (item) => {
+                const isSelected =
+                  Number(
+                    storageAssignmentTelecallerId,
+                  ) ===
+                  Number(
+                    item.telecallerId,
+                  );
+
+                  const workloadStyle =
+  getStorageWorkloadStyle(
+    item.totalActiveContacts,
+  );
+
+                return (
+                  <button
+                    type="button"
+                    key={
+                      item.telecallerId
+                    }
+                    onClick={() =>
+                      setStorageAssignmentTelecallerId(
+                        String(
+                          item.telecallerId,
+                        ),
+                      )
+                    }
+                    disabled={
+                      storageAssignmentSubmitting
+                    }
+                    className={`rounded-2xl border p-4 text-left transition ${
+  isSelected
+    ? 'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-100'
+    : workloadStyle.card
+}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-gray-900">
+                          {
+                            item.telecallerName
+                          }
+                        </p>
+
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+  <p className="text-xs text-gray-500">
+    Click to select for
+    assignment
+  </p>
+
+  <span
+    className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${workloadStyle.badge}`}
+  >
+    {workloadStyle.label}
+  </span>
+</div>
+                      </div>
+
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-bold ${
+                          isSelected
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-white text-gray-600'
+                        }`}
+                      >
+                        {isSelected
+                          ? 'Selected'
+                          : 'Select'}
+                      </span>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-2">
+                      <div className="rounded-xl bg-white p-3">
+                        <p className="text-xs text-gray-500">
+                          Total Active
+                        </p>
+
+                        <p
+  className={`mt-1 text-xl font-bold ${workloadStyle.number}`}
+>
+  {
+    item.totalActiveContacts
+  }
+</p>
+                      </div>
+
+                      <div className="rounded-xl bg-white p-3">
+                        <p className="text-xs text-gray-500">
+                          Matching
+                        </p>
+
+                        <p className="mt-1 text-xl font-bold text-blue-700">
+                          {
+                            item.matchingContacts
+                          }
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              },
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ASSIGNMENT MODE */}
+      <div className="rounded-3xl bg-white p-4 shadow-sm md:p-5">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900">
+            Assignment Method
+          </h3>
+
+          <p className="mt-1 text-sm text-gray-500">
+            Assign a requested count from
+            all filtered results or manually
+            select contacts from the preview.
+          </p>
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-2 rounded-2xl border border-gray-200 bg-gray-50 p-2 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => {
+              setStorageAssignmentMode(
+                'FILTERED',
+              );
+
+              setStorageAssignmentSelectedIds(
+                [],
+              );
+            }}
+            className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${
+              storageAssignmentMode ===
+              'FILTERED'
+                ? 'bg-emerald-600 text-white'
+                : 'bg-white text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            Assign by Filters & Count
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setStorageAssignmentMode(
+                'SELECTED',
+              );
+
+              setStorageAssignmentCount(
+                '',
+              );
+            }}
+            className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${
+              storageAssignmentMode ===
+              'SELECTED'
+                ? 'bg-emerald-600 text-white'
+                : 'bg-white text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            Assign Manually Selected
+          </button>
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-gray-700">
+              Assign To
+            </label>
+
+            <Autocomplete
+  options={sortedStorageAssignmentWorkload}
+  getOptionLabel={(option) =>
+    option.telecallerName || ''
+  }
+  value={
+    sortedStorageAssignmentWorkload.find(
+      (item) =>
+        Number(item.telecallerId) ===
+        Number(storageAssignmentTelecallerId),
+    ) || null
+  }
+  onChange={(_, value) =>
+    setStorageAssignmentTelecallerId(
+      value
+        ? String(value.telecallerId)
+        : '',
+    )
+  }
+  isOptionEqualToValue={(option, value) =>
+    option.telecallerId ===
+    value.telecallerId
+  }
+  renderOption={(props, option) => (
+    <li {...props}>
+      <div className="flex w-full items-center justify-between">
+        <div>
+          <div className="font-medium">
+            {option.telecallerName}
+          </div>
+
+          <div className="text-xs text-gray-500">
+            Matching:{' '}
+            {option.matchingContacts}
+          </div>
+        </div>
+
+        <div className="text-right">
+          <div className="text-xs text-gray-500">
+            Total
+          </div>
+
+          <div className="font-semibold">
+            {option.totalActiveContacts}
+          </div>
+        </div>
+      </div>
+    </li>
+  )}
+  renderInput={(params) => (
+    <TextField
+      {...params}
+      placeholder="Search telecaller..."
+      size="small"
+    />
+  )}
+/>
+          </div>
+
+          {storageAssignmentMode ===
+          'FILTERED' ? (
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-gray-700">
+                Assignment Count
+              </label>
+
+              <input
+                type="number"
+                min={1}
+                max={Math.min(
+                  storageAssignmentTotal,
+                  5000,
+                )}
+                step={1}
+                value={
+                  storageAssignmentCount
+                }
+                onChange={(event) =>
+                  setStorageAssignmentCount(
+                    event.target.value,
+                  )
+                }
+                placeholder={`Maximum ${Math.min(
+                  storageAssignmentTotal,
+                  5000,
+                )}`}
+                className="w-full rounded-2xl border border-gray-200 bg-gray-50 p-3 text-gray-800 outline-none focus:border-emerald-500 focus:bg-white"
+              />
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+              <p className="text-sm font-semibold text-blue-900">
+                Selected Contacts
+              </p>
+
+              <p className="mt-1 text-2xl font-bold text-blue-700">
+                {
+                  storageAssignmentSelectedIds.length
+                }
+              </p>
+            </div>
+          )}
+        </div>
+
+        {selectedStorageTelecaller ? (
+          <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+            <p className="font-semibold text-emerald-900">
+              Assignment Summary —{' '}
+              {
+                selectedStorageTelecaller.telecallerName
+              }
+            </p>
+
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div>
+                <p className="text-xs text-emerald-700">
+                  Current Total
+                </p>
+
+                <p className="mt-1 text-lg font-bold text-emerald-950">
+                  {
+                    selectedStorageTelecaller.totalActiveContacts
+                  }
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs text-emerald-700">
+                  Current Matching
+                </p>
+
+                <p className="mt-1 text-lg font-bold text-emerald-950">
+                  {
+                    selectedStorageTelecaller.matchingContacts
+                  }
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs text-emerald-700">
+                  Assigning
+                </p>
+
+                <p className="mt-1 text-lg font-bold text-emerald-950">
+                  {
+                    storageAssignmentQuantity
+                  }
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs text-emerald-700">
+                  Expected Total
+                </p>
+
+                <p className="mt-1 text-lg font-bold text-emerald-950">
+                  {
+                    storageTelecallerExpectedTotal
+                  }
+                </p>
+              </div>
+            </div>
+
+            <p className="mt-3 text-xs text-emerald-700">
+              Expected contacts matching
+              these filters after assignment:{' '}
+              <strong>
+                {
+                  storageTelecallerExpectedMatching
+                }
+              </strong>
+            </p>
+          </div>
+        ) : null}
+      </div>
+
+      {/* CONTACT PREVIEW */}
+      <div className="rounded-3xl bg-white p-4 shadow-sm md:p-5">
+        <div className="flex flex-col gap-4 border-b border-gray-100 pb-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">
+              Storage Contact Preview
+            </h3>
+
+            <p className="mt-1 text-sm text-gray-500">
+              Filtered total:{' '}
+              {storageAssignmentTotal} ·
+              Current page:{' '}
+              {
+                storageAssignmentContacts.length
+              }{' '}
+              · Selected:{' '}
+              {
+                storageAssignmentSelectedIds.length
+              }
+            </p>
+          </div>
+
+          {storageAssignmentMode ===
+          'SELECTED' ? (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={
+                  toggleAllStorageAssignmentPage
+                }
+                disabled={
+                  storageAssignmentLoading ||
+                  storageAssignmentContacts.length ===
+                    0
+                }
+                className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {allStorageAssignmentPageSelected
+                  ? 'Unselect Current Page'
+                  : 'Select Current Page'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setStorageAssignmentSelectedIds(
+                    [],
+                  )
+                }
+                disabled={
+                  storageAssignmentLoading ||
+                  storageAssignmentSelectedIds.length ===
+                    0
+                }
+                className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Clear Selection
+              </button>
+            </div>
+          ) : null}
+        </div>
+
+        {storageAssignmentLoading ? (
+          <div className="py-12 text-center text-sm text-gray-500">
+            Loading matching storage
+            contacts...
+          </div>
+        ) : storageAssignmentContacts.length ===
+          0 ? (
+          <div className="py-12 text-center">
+            <p className="font-semibold text-gray-700">
+              No storage contacts found
+            </p>
+
+            <p className="mt-1 text-sm text-gray-500">
+              Change or reset the filters
+              and try again.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {storageAssignmentContacts.map(
+              (contact) => {
+                const isSelected =
+                  storageAssignmentSelectedIds.includes(
+                    contact.id,
+                  );
+
+                return (
+                  <div
+                    key={contact.id}
+                    className={`rounded-2xl border p-4 transition ${
+                      isSelected
+                        ? 'border-emerald-500 bg-emerald-50'
+                        : 'border-gray-200 bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      {storageAssignmentMode ===
+                      'SELECTED' ? (
+                        <input
+                          type="checkbox"
+                          checked={
+                            isSelected
+                          }
+                          onChange={() =>
+                            toggleStorageAssignmentContact(
+                              contact.id,
+                            )
+                          }
+                          className="mt-1 h-5 w-5 rounded border-gray-300 accent-emerald-600"
+                        />
+                      ) : null}
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <p className="font-semibold text-gray-900">
+                              {contact.name ||
+                                'Unnamed Contact'}
+                            </p>
+
+                            <p className="mt-1 text-sm text-gray-600">
+                              {contact.phone ||
+                                '-'}
+                            </p>
+                          </div>
+
+                          <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-gray-600">
+                            #
+                            {contact.id}
+                          </span>
+                        </div>
+
+                        <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                          <div className="rounded-xl bg-white p-3">
+                            <p className="text-xs text-gray-500">
+                              City / Zone
+                            </p>
+
+                            <p className="mt-1 font-medium text-gray-800">
+                              {contact.city ||
+                                '-'}
+                              {contact.zone
+                                ? ` / ${contact.zone}`
+                                : ''}
+                            </p>
+                          </div>
+
+                          <div className="rounded-xl bg-white p-3">
+                            <p className="text-xs text-gray-500">
+                              Source
+                            </p>
+
+                            <p className="mt-1 break-words font-medium text-gray-800">
+                              {contact.sourceModule ||
+                                '-'}
+                            </p>
+                          </div>
+
+                          <div className="rounded-xl bg-white p-3">
+                            <p className="text-xs text-gray-500">
+                              Contact Status
+                            </p>
+
+                            <p className="mt-1 font-medium text-gray-800">
+                              {contact.status ||
+                                '-'}
+                            </p>
+                          </div>
+
+                          <div className="rounded-xl bg-white p-3">
+                            <p className="text-xs text-gray-500">
+                              Latest Call
+                            </p>
+
+                            <p className="mt-1 font-medium text-gray-800">
+                              {contact.latestCallStatus ||
+                                'Never Called'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 rounded-xl bg-white p-3 text-sm">
+                          <p className="text-xs text-gray-500">
+                            Location
+                          </p>
+
+                          <p className="mt-1 break-words text-gray-700">
+                            {contact.address ||
+                              contact.location ||
+                              '-'}
+                          </p>
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+                          <span>
+                            Imported:{' '}
+                            {contact.importedByName ||
+                              '-'}
+                          </span>
+
+                          <span>
+                            Added:{' '}
+                            {formatHistoryDate(
+                              contact.createdAt,
+                            )}
+                          </span>
+
+                          <span>
+                            Latest call:{' '}
+                            {formatHistoryDate(
+                              contact.latestCallAt,
+                            )}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              },
+            )}
+          </div>
+        )}
+
+        <div className="mt-5 flex flex-col gap-3 border-t border-gray-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-gray-500">
+            Page{' '}
+            {storageAssignmentPage} of{' '}
+            {
+              storageAssignmentTotalPages
+            }
+          </p>
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={
+                storageAssignmentLoading ||
+                storageAssignmentPage <= 1
+              }
+              onClick={() =>
+                fetchStorageAssignmentPreview(
+                  storageAssignmentPage -
+                    1,
+                  true,
+                )
+              }
+              className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Previous
+            </button>
+
+            <button
+              type="button"
+              disabled={
+                storageAssignmentLoading ||
+                storageAssignmentPage >=
+                  storageAssignmentTotalPages
+              }
+              onClick={() =>
+                fetchStorageAssignmentPreview(
+                  storageAssignmentPage +
+                    1,
+                  true,
+                )
+              }
+              className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* FINAL ACTION */}
+      <div className="sticky bottom-0 z-10 rounded-3xl border border-emerald-200 bg-white/95 p-4 shadow-xl backdrop-blur md:p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="font-semibold text-gray-900">
+              {selectedStorageTelecaller
+                ? `Assign to ${selectedStorageTelecaller.telecallerName}`
+                : 'Select a destination telecaller'}
+            </p>
+
+            {storageAssignmentTotal <= 0 ? (
+  <p className="mt-1 text-sm font-semibold text-red-600">
+    No contacts match the
+    current storage filters.
+  </p>
+) : (
+  <p className="mt-1 text-sm text-gray-500">
+    {storageAssignmentMode ===
+    'SELECTED'
+      ? `${storageAssignmentSelectedIds.length} manually selected contact(s)`
+      : `${Number(
+          storageAssignmentCount ||
+            0,
+        )} contact(s) from all matching filtered results`}
+  </p>
+)}
+          </div>
+
+          <button
+            type="button"
+            onClick={
+              assignStorageContacts
+            }
+            disabled={
+  storageAssignmentSubmitting ||
+  storageAssignmentLoading ||
+  storageAssignmentWorkloadLoading ||
+  storageAssignmentTotal <= 0 ||
+  !storageAssignmentTelecallerId ||
+  (storageAssignmentMode ===
+    'SELECTED' &&
+    storageAssignmentSelectedIds.length ===
+      0) ||
+  (storageAssignmentMode ===
+    'FILTERED' &&
+    (Number(
+      storageAssignmentCount ||
+        0,
+    ) <= 0 ||
+      Number(
+        storageAssignmentCount ||
+          0,
+      ) >
+        storageAssignmentTotal ||
+      Number(
+        storageAssignmentCount ||
+          0,
+      ) > 5000))
+}
+            className="rounded-2xl bg-emerald-600 px-7 py-3 font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {storageAssignmentSubmitting
+              ? 'Assigning Contacts...'
+              : storageAssignmentMode ===
+                  'SELECTED'
+                ? `Assign ${storageAssignmentSelectedIds.length} Selected`
+                : `Assign ${Number(
+                    storageAssignmentCount ||
+                      0,
+                  )} Filtered`}
+          </button>
+        </div>
+      </div>
+    </div>
+  )}
+
         {historyWorkspaceTab ===
   'reassignment' && (
   <div className="space-y-4">
