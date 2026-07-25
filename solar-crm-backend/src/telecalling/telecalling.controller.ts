@@ -190,6 +190,18 @@ getCnrRecallContacts(
   );
 }
 
+@Get('contacts/cnr-recall-auto-call-ids')
+getCnrRecallContactIdsForAutoCall(
+  @CurrentUser() user: any,
+  @Query('locationFilter') locationFilter = '',
+) {
+  return this.telecallingService
+    .getCnrRecallContactIdsForAutoCall(
+      user,
+      String(locationFilter || ''),
+    );
+}
+
 
   @Get('contacts')
   getContacts(
