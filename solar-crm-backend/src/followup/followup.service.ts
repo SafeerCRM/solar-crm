@@ -114,6 +114,10 @@ export class FollowupService {
   const status = String(query?.status || '').trim().toUpperCase();
   const due = String(query?.due || '').trim().toUpperCase();
 
+  const assignedTo = Number(
+  query?.assignedTo || 0,
+);
+
   const potential = String(
   query?.potential || '',
 )
@@ -172,6 +176,18 @@ export class FollowupService {
       status,
     });
   }
+
+  if (
+  assignedTo &&
+  !Number.isNaN(assignedTo)
+) {
+  qb.andWhere(
+    'followUp.assignedTo = :assignedTo',
+    {
+      assignedTo,
+    },
+  );
+}
 
   const now = new Date();
   const todayStart = new Date();
