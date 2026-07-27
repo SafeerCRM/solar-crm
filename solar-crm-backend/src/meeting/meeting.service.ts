@@ -161,6 +161,86 @@ private assertCanModifyMeeting(meeting: Meeting, user: any) {
   );
 }
 
+private normalizeMeetingMobile(value: any): string {
+  const digits = String(value || '')
+    .replace(/[^0-9]/g, '');
+
+  if (!digits) {
+    return '';
+  }
+
+  /*
+   * Indian numbers may arrive as:
+   * 9876543210
+   * 919876543210
+   * 09876543210
+   *
+   * The final 10 digits identify the actual mobile number.
+   */
+  return digits.length > 10
+    ? digits.slice(-10)
+    : digits;
+}
+
+private async assertNoDuplicateMeetingMobile(
+  mobile: any,
+): Promise<void> {
+  const normalizedMobile =
+    this.normalizeMeetingMobile(mobile);
+
+  if (!normalizedMobile) {
+    return;
+  }
+
+  const existingMeeting =
+    await this.meetingRepository
+      .createQueryBuilder('meeting')
+      .where(
+        `
+          RIGHT(
+            REGEXP_REPLACE(
+              COALESCE(meeting.mobile, ''),
+              '[^0-9]',
+              '',
+              'g'
+            ),
+            10
+          ) = :normalizedMobile
+        `,
+        {
+          normalizedMobile,
+        },
+      )
+      .orderBy(
+        'meeting.updatedAt',
+        'DESC',
+      )
+      .addOrderBy(
+        'meeting.id',
+        'DESC',
+      )
+      .getOne();
+
+  if (!existingMeeting) {
+    return;
+  }
+
+  throw new BadRequestException(
+    [
+      `A meeting already exists for mobile number ${normalizedMobile}.`,
+      `Meeting ID: ${existingMeeting.id}.`,
+      `Customer: ${existingMeeting.customerName || '-'}.`,
+      `Status: ${existingMeeting.status || '-'}.`,
+      `Assigned To: ${
+        existingMeeting.assignedToName ||
+        existingMeeting.assignedTo ||
+        'Unassigned'
+      }.`,
+      'Please open the existing meeting instead of creating a duplicate.',
+    ].join(' '),
+  );
+}
+
   private normalizeDecimal(value: any): number | undefined {
     if (value === undefined || value === null || value === '') {
       return undefined;
@@ -445,6 +525,10 @@ audioUrl:
     async create(createMeetingDto: CreateMeetingDto, user: any): Promise<Meeting> {
     const currentUserId = this.getCurrentUserId(user);
     const currentUserName = this.getCurrentUserName(user);
+
+    await this.assertNoDuplicateMeetingMobile(
+  (createMeetingDto as any).mobile,
+);
 
     const cleanNotes = String(createMeetingDto.notes || '').trim();
 
