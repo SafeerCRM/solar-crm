@@ -8031,12 +8031,27 @@ async getMonthlyProfitReport(query: any) {
 
 async getBranchWiseProfitReport(query: any) {
   const {
-    month,
-    fromDate,
-    toDate,
-    branch,
-    projectOwnerId,
-  } = query || {};
+  month,
+  fromDate,
+  toDate,
+  branch,
+  projectOwnerId,
+  page = 1,
+  limit = 20,
+} = query || {};
+
+const pageNumber = Math.max(
+  Number(page) || 1,
+  1,
+);
+
+const limitNumber = Math.min(
+  Math.max(
+    Number(limit) || 20,
+    1,
+  ),
+  100,
+);
 
   let startDate: Date | null = null;
   let endDate: Date | null = null;
@@ -8255,17 +8270,89 @@ async getBranchWiseProfitReport(query: any) {
     );
   }
 
-  return Array.from(branchMap.values())
+  const allRows =
+  Array.from(
+    branchMap.values(),
+  )
     .map((item) => ({
       ...item,
+
       netProfit:
         item.totalCollections -
         item.totalExpenses,
     }))
     .sort(
       (a, b) =>
-        b.netProfit - a.netProfit,
+        b.netProfit -
+        a.netProfit,
     );
+
+const totalBranches =
+  allRows.length;
+
+const totalCollections =
+  allRows.reduce(
+    (total, item) =>
+      total +
+      Number(
+        item.totalCollections ||
+          0,
+      ),
+    0,
+  );
+
+const totalExpenses =
+  allRows.reduce(
+    (total, item) =>
+      total +
+      Number(
+        item.totalExpenses ||
+          0,
+      ),
+    0,
+  );
+
+const totalProfit =
+  allRows.reduce(
+    (total, item) =>
+      total +
+      Number(
+        item.netProfit || 0,
+      ),
+    0,
+  );
+
+const skip =
+  (pageNumber - 1) *
+  limitNumber;
+
+const data =
+  allRows.slice(
+    skip,
+    skip + limitNumber,
+  );
+
+return {
+  summary: {
+    totalBranches,
+    totalCollections,
+    totalExpenses,
+    totalProfit,
+  },
+
+  data,
+
+  pagination: {
+    page: pageNumber,
+    limit: limitNumber,
+    total: totalBranches,
+    totalPages:
+      Math.ceil(
+        totalBranches /
+          limitNumber,
+      ) || 1,
+  },
+};
 }
 
 async getProjectOwnerWiseProfitReport(query: any) {
@@ -8845,36 +8932,66 @@ async getIncentiveReport(query: any) {
 }
 
 async getAccountExpenseReport(query: any) {
+  const page = Math.max(
+    Number(query?.page || 1),
+    1,
+  );
+
+  const limit = Math.min(
+    Math.max(
+      Number(query?.limit || 20),
+      1,
+    ),
+    100,
+  );
+
   const qb =
     this.projectAccountExpenseRepository
       .createQueryBuilder('expense')
-      .where('expense.isHidden = :isHidden', {
-        isHidden: false,
-      });
+      .where(
+        'expense.isHidden = :isHidden',
+        {
+          isHidden: false,
+        },
+      );
 
   if (query?.fromDate) {
     qb.andWhere(
       'expense.createdAt >= :fromDate',
       {
-        fromDate: new Date(query.fromDate),
+        fromDate: new Date(
+          query.fromDate,
+        ),
       },
     );
   }
 
   if (query?.toDate) {
-    const toDate = new Date(query.toDate);
-    toDate.setHours(23, 59, 59, 999);
+    const toDate = new Date(
+      query.toDate,
+    );
 
-    qb.andWhere('expense.createdAt <= :toDate', {
-      toDate,
-    });
+    toDate.setHours(
+      23,
+      59,
+      59,
+      999,
+    );
+
+    qb.andWhere(
+      'expense.createdAt <= :toDate',
+      {
+        toDate,
+      },
+    );
   }
 
   if (query?.expenseType) {
     qb.andWhere(
       'expense.expenseType = :expenseType',
       {
-        expenseType: query.expenseType,
+        expenseType:
+          query.expenseType,
       },
     );
   }
@@ -8883,49 +9000,72 @@ async getAccountExpenseReport(query: any) {
     qb.andWhere(
       'expense.approvalStatus = :approvalStatus',
       {
-        approvalStatus: query.approvalStatus,
+        approvalStatus:
+          query.approvalStatus,
       },
     );
   }
 
-  qb.orderBy('expense.createdAt', 'DESC');
+  qb.orderBy(
+    'expense.createdAt',
+    'DESC',
+  );
 
-  const rows = await qb.getMany();
+  const allRows =
+    await qb.getMany();
 
-  const totalApprovedExpenses = rows
-    .filter(
-      (item) =>
-        item.approvalStatus ===
-        ProjectAccountExpenseApprovalStatus.APPROVED,
-    )
-    .reduce(
-      (total, item) =>
-        total + Number(item.amount || 0),
-      0,
-    );
+  const totalApprovedExpenses =
+    allRows
+      .filter(
+        (item) =>
+          item.approvalStatus ===
+          ProjectAccountExpenseApprovalStatus.APPROVED,
+      )
+      .reduce(
+        (total, item) =>
+          total +
+          Number(item.amount || 0),
+        0,
+      );
 
-  const totalPendingExpenses = rows
-    .filter(
-      (item) =>
-        item.approvalStatus ===
-        ProjectAccountExpenseApprovalStatus.PENDING,
-    )
-    .reduce(
-      (total, item) =>
-        total + Number(item.amount || 0),
-      0,
-    );
+  const totalPendingExpenses =
+    allRows
+      .filter(
+        (item) =>
+          item.approvalStatus ===
+          ProjectAccountExpenseApprovalStatus.PENDING,
+      )
+      .reduce(
+        (total, item) =>
+          total +
+          Number(item.amount || 0),
+        0,
+      );
 
-  const totalRejectedExpenses = rows
-    .filter(
-      (item) =>
-        item.approvalStatus ===
-        ProjectAccountExpenseApprovalStatus.REJECTED,
-    )
-    .reduce(
-      (total, item) =>
-        total + Number(item.amount || 0),
-      0,
+  const totalRejectedExpenses =
+    allRows
+      .filter(
+        (item) =>
+          item.approvalStatus ===
+          ProjectAccountExpenseApprovalStatus.REJECTED,
+      )
+      .reduce(
+        (total, item) =>
+          total +
+          Number(item.amount || 0),
+        0,
+      );
+
+  const total =
+    allRows.length;
+
+  const skip =
+    (page - 1) * limit;
+
+  const data =
+    allRows.slice(
+      skip,
+      skip + limit,
     );
 
   return {
@@ -8933,9 +9073,21 @@ async getAccountExpenseReport(query: any) {
       totalApprovedExpenses,
       totalPendingExpenses,
       totalRejectedExpenses,
-      totalExpenseCount: rows.length,
+      totalExpenseCount:
+        total,
     },
-    data: rows,
+
+    data,
+
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages:
+        Math.ceil(
+          total / limit,
+        ) || 1,
+    },
   };
 }
 
