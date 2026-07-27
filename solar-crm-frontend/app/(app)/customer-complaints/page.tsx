@@ -7,6 +7,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
 import dayjs from 'dayjs';
+import { uploadPreparedFile } from '@/app/utils/fileUpload';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -64,6 +65,13 @@ const SUBJECT_OPTIONS = [
   'OTHER',
 ];
 
+const COMPLAINT_PROOF_TYPE_OPTIONS = [
+  'BEFORE_PHOTO',
+  'AFTER_PHOTO',
+  'COMPLETION_PHOTO',
+  'OTHER',
+];
+
 export default function CustomerComplaintsAdminPage() {
   const [items, setItems] = useState<CustomerComplaint[]>([]);
   const [loading, setLoading] = useState(false);
@@ -80,6 +88,19 @@ const [restoringId, setRestoringId] =
 
   const [activities, setActivities] = useState<any[]>([]);
 const [timelineLoading, setTimelineLoading] = useState(false);
+
+const [complaintProofs, setComplaintProofs] = useState<
+  Record<number, any[]>
+>({});
+
+const [complaintProofFileMap, setComplaintProofFileMap] =
+  useState<Record<number, File[]>>({});
+
+const [complaintProofFormMap, setComplaintProofFormMap] =
+  useState<Record<number, any>>({});
+
+const [complaintProofUploadingId, setComplaintProofUploadingId] =
+  useState<number | null>(null);
 
   const [summary, setSummary] = useState({
     total: 0,
@@ -340,6 +361,117 @@ const restoreComplaint = async (
     setActivities([]);
   } finally {
     setTimelineLoading(false);
+  }
+};
+
+const loadComplaintProofs = async (
+  complaintId: number,
+) => {
+  try {
+    const res = await axios.get(
+      `${API_BASE_URL}/customer-portal/complaints/${complaintId}/proofs`,
+      {
+        headers: getHeaders(),
+      },
+    );
+
+    setComplaintProofs((prev) => ({
+      ...prev,
+      [complaintId]: Array.isArray(res.data)
+        ? res.data
+        : [],
+    }));
+  } catch (error) {
+    console.error(error);
+
+    setComplaintProofs((prev) => ({
+      ...prev,
+      [complaintId]: [],
+    }));
+  }
+};
+
+const uploadComplaintProofs = async (
+  item: CustomerComplaint,
+) => {
+  const files =
+    complaintProofFileMap[item.id] || [];
+
+  const form =
+    complaintProofFormMap[item.id] || {};
+
+  if (files.length === 0) {
+    alert('Please select at least one proof photo');
+    return;
+  }
+
+  const purpose =
+    form.purpose || 'OTHER';
+
+  try {
+    setComplaintProofUploadingId(item.id);
+
+    const token =
+      localStorage.getItem('token');
+
+    for (const file of files) {
+      const fileUrl =
+        await uploadPreparedFile({
+          file,
+          endpoint:
+            `${API_BASE_URL}/project/dealer-payment-receipt/upload`,
+          token,
+          fieldName: 'files',
+        });
+
+      await axios.post(
+        `${API_BASE_URL}/customer-portal/complaints/${item.id}/proofs`,
+        {
+          purpose,
+          fileUrl,
+          fileName: file.name,
+          fileSize: file.size,
+          mimeType: file.type,
+          remarks: form.remarks || '',
+        },
+        {
+          headers: getHeaders(),
+        },
+      );
+    }
+
+    alert(
+      files.length === 1
+        ? 'Complaint proof uploaded successfully'
+        : `${files.length} complaint proofs uploaded successfully`,
+    );
+
+    setComplaintProofFileMap((prev) => ({
+      ...prev,
+      [item.id]: [],
+    }));
+
+    setComplaintProofFormMap((prev) => ({
+      ...prev,
+      [item.id]: {
+        purpose: 'OTHER',
+        remarks: '',
+      },
+    }));
+
+    await loadComplaintProofs(item.id);
+    await loadComplaintActivities(item.id);
+    await fetchComplaints(page);
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        error?.message ||
+        'Failed to upload complaint proof',
+    );
+  } finally {
+    setComplaintProofUploadingId(null);
   }
 };
 
@@ -689,6 +821,7 @@ const restoreComplaint = async (
                     onClick={() => {
   setSelectedComplaint(item);
   loadComplaintActivities(item.id);
+  loadComplaintProofs(item.id);
 }}
                     className="rounded-2xl bg-gray-900 px-4 py-2 text-sm font-black text-white hover:bg-black"
                   >
@@ -956,6 +1089,204 @@ const restoreComplaint = async (
   </button>
 )}
                   </div>
+
+                  <div className="mt-5 border-t border-gray-200 pt-5">
+  <div className="flex flex-wrap items-center justify-between gap-2">
+    <div>
+      <h4 className="font-black text-gray-900">
+        Work Proofs
+      </h4>
+
+      <p className="mt-1 text-xs font-semibold text-gray-500">
+        Upload multiple before, after or completion photos.
+      </p>
+    </div>
+
+    <button
+      type="button"
+      onClick={() =>
+        loadComplaintProofs(item.id)
+      }
+      className="rounded-xl bg-gray-900 px-3 py-2 text-xs font-black text-white hover:bg-black"
+    >
+      Refresh
+    </button>
+  </div>
+
+  <div className="mt-4 space-y-3">
+    <select
+      value={
+        complaintProofFormMap[item.id]?.purpose ||
+        'OTHER'
+      }
+      onChange={(e) =>
+        setComplaintProofFormMap((prev) => ({
+          ...prev,
+          [item.id]: {
+            ...prev[item.id],
+            purpose: e.target.value,
+          },
+        }))
+      }
+      className="w-full rounded-2xl border p-3"
+    >
+      {COMPLAINT_PROOF_TYPE_OPTIONS.map(
+        (purpose) => (
+          <option
+            key={purpose}
+            value={purpose}
+          >
+            {formatLabel(purpose)}
+          </option>
+        ),
+      )}
+    </select>
+
+    <input
+      type="file"
+      accept="image/*"
+      multiple
+      onChange={(e) =>
+        setComplaintProofFileMap((prev) => ({
+          ...prev,
+          [item.id]: Array.from(
+            e.target.files || [],
+          ),
+        }))
+      }
+      className="w-full rounded-2xl border bg-white p-3 text-sm"
+    />
+
+    {(complaintProofFileMap[item.id] || [])
+      .length > 0 && (
+      <div className="rounded-2xl bg-blue-50 p-3 text-xs font-bold text-blue-700">
+        {
+          (
+            complaintProofFileMap[item.id] ||
+            []
+          ).length
+        }{' '}
+        photo(s) selected
+      </div>
+    )}
+
+    <textarea
+      rows={2}
+      placeholder="Proof remarks"
+      value={
+        complaintProofFormMap[item.id]?.remarks ||
+        ''
+      }
+      onChange={(e) =>
+        setComplaintProofFormMap((prev) => ({
+          ...prev,
+          [item.id]: {
+            ...prev[item.id],
+            remarks: e.target.value,
+          },
+        }))
+      }
+      className="w-full rounded-2xl border p-3"
+    />
+
+    <button
+      type="button"
+      onClick={() =>
+        uploadComplaintProofs(item)
+      }
+      disabled={
+        complaintProofUploadingId === item.id
+      }
+      className="w-full rounded-2xl bg-blue-600 py-3 text-sm font-black text-white hover:bg-blue-700 disabled:opacity-50"
+    >
+      {complaintProofUploadingId === item.id
+        ? 'Uploading Proofs...'
+        : 'Upload Work Proofs'}
+    </button>
+  </div>
+
+  <div className="mt-5 space-y-4">
+    {(complaintProofs[item.id] || []).filter(
+      (proof: any) =>
+        proof.purpose !==
+        'CUSTOMER_ATTACHMENT',
+    ).length === 0 ? (
+      <div className="rounded-2xl border border-dashed p-4 text-center text-xs font-bold text-gray-500">
+        No staff work proofs uploaded yet.
+      </div>
+    ) : (
+      COMPLAINT_PROOF_TYPE_OPTIONS.map(
+        (purpose) => {
+          const groupedProofs = (
+            complaintProofs[item.id] || []
+          ).filter(
+            (proof: any) =>
+              proof.purpose === purpose,
+          );
+
+          if (groupedProofs.length === 0) {
+            return null;
+          }
+
+          return (
+            <div
+              key={purpose}
+              className="rounded-2xl bg-white p-3"
+            >
+              <p className="mb-3 text-xs font-black text-gray-800">
+                {formatLabel(purpose)}
+              </p>
+
+              <div className="grid grid-cols-2 gap-3">
+                {groupedProofs.map(
+                  (proof: any) => (
+                    <a
+                      key={
+                        proof.id ||
+                        proof.fileUrl
+                      }
+                      href={proof.fileUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="overflow-hidden rounded-2xl border bg-gray-50 shadow-sm"
+                    >
+                      <img
+                        src={proof.fileUrl}
+                        alt={
+                          proof.fileName ||
+                          'Complaint proof'
+                        }
+                        className="h-28 w-full object-cover"
+                      />
+
+                      <div className="p-2">
+                        {proof.remarks && (
+                          <p className="line-clamp-2 text-[11px] font-semibold text-gray-600">
+                            {proof.remarks}
+                          </p>
+                        )}
+
+                        <p className="mt-1 text-[10px] font-semibold text-gray-400">
+                          {proof.createdAt
+                            ? new Date(
+                                proof.createdAt,
+                              ).toLocaleString(
+                                'en-IN',
+                              )
+                            : '-'}
+                        </p>
+                      </div>
+                    </a>
+                  ),
+                )}
+              </div>
+            </div>
+          );
+        },
+      )
+    )}
+  </div>
+</div>
                 </div>
               </div>
             </div>
