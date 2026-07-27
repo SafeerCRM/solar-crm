@@ -1543,40 +1543,40 @@ const estimatedPendingPosition =
 
             <td className="p-2">
   <div className="flex flex-wrap gap-2">
-    {canApproveExpense &&
-      item.approvalStatus ===
-        'PENDING' && (
-        <>
+    {canApproveExpense && (
+  <button
+    type="button"
+    onClick={() => setSelectedExpense(item)}
+    className="rounded bg-indigo-600 px-2 py-1 text-xs text-white"
+  >
+    View
+  </button>
+)}
 
-        <button
-  type="button"
-  onClick={() => setSelectedExpense(item)}
-  className="rounded bg-indigo-600 px-2 py-1 text-xs text-white"
->
-  View
-</button>
+{canApproveExpense &&
+  item.approvalStatus === 'PENDING' && (
+    <>
+      <button
+        type="button"
+        onClick={() =>
+          approveExpense(item.id)
+        }
+        className="rounded bg-green-600 px-2 py-1 text-xs text-white"
+      >
+        Approve
+      </button>
 
-          <button
-            type="button"
-            onClick={() =>
-              approveExpense(item.id)
-            }
-            className="rounded bg-green-600 px-2 py-1 text-xs text-white"
-          >
-            Approve
-          </button>
-
-          <button
-            type="button"
-            onClick={() =>
-              rejectExpense(item.id)
-            }
-            className="rounded bg-red-600 px-2 py-1 text-xs text-white"
-          >
-            Reject
-          </button>
-        </>
-      )}
+      <button
+        type="button"
+        onClick={() =>
+          rejectExpense(item.id)
+        }
+        className="rounded bg-red-600 px-2 py-1 text-xs text-white"
+      >
+        Reject
+      </button>
+    </>
+)}
 
     {canApproveExpense &&
       item.approvalStatus !==

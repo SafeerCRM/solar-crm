@@ -2460,43 +2460,43 @@ const getFilteredSelectableStockItems = (searchText: string) => {
                     {formatCurrency(item.stockValue)}
                   </td>
 
-                  <td className="p-2">
+                  <td className="p-2 text-center">
   {item.dealerVisible === false ? (
-    <div className="space-y-2">
-      <span className="rounded-full bg-red-100 px-2 py-1 text-xs font-bold text-red-700">
-        Hidden From Dealer
-      </span>
+    <div className="flex flex-col items-center gap-2">
+  <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
+    🔴 Dealer Hidden
+  </span>
 
-      {!filters.showHidden && (
-        <button
-          type="button"
-          onClick={() =>
-            updateDealerVisibility(item.id, true)
-          }
-          className="block rounded bg-green-600 px-2 py-1 text-xs text-white"
-        >
-          Show To Dealer
-        </button>
-      )}
-    </div>
+  {!filters.showHidden && (
+    <button
+      type="button"
+      onClick={() =>
+        updateDealerVisibility(item.id, true)
+      }
+      className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
+    >
+      Show
+    </button>
+  )}
+</div>
   ) : (
-    <div className="space-y-2">
-      <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-bold text-green-700">
-        Visible To Dealer
-      </span>
+    <div className="flex flex-col items-center gap-2">
+  <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+    🟢 Dealer Visible
+  </span>
 
-      {!filters.showHidden && (
-        <button
-          type="button"
-          onClick={() =>
-            updateDealerVisibility(item.id, false)
-          }
-          className="block rounded bg-orange-600 px-2 py-1 text-xs text-white"
-        >
-          Hide From Dealer
-        </button>
-      )}
-    </div>
+  {!filters.showHidden && (
+    <button
+      type="button"
+      onClick={() =>
+        updateDealerVisibility(item.id, false)
+      }
+      className="rounded-lg border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700 transition hover:bg-orange-100"
+    >
+      Hide
+    </button>
+  )}
+</div>
   )}
 </td>
 

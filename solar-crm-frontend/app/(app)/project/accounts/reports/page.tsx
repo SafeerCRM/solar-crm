@@ -50,6 +50,16 @@ export default function AccountsReportsPage() {
   const [expenses, setExpenses] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
+  const [
+  expenditurePagination,
+  setExpenditurePagination,
+] = useState({
+  page: 1,
+  limit: 20,
+  total: 0,
+  totalPages: 1,
+});
+
   const [monthlyProfitMonth, setMonthlyProfitMonth] =
   useState(new Date().toISOString().slice(0, 7));
 
@@ -70,6 +80,26 @@ const [monthlyProfitLoading, setMonthlyProfitLoading] =
 
 const [branchProfitLoading, setBranchProfitLoading] =
   useState(false);
+
+  const [
+  branchProfitSummary,
+  setBranchProfitSummary,
+] = useState({
+  totalBranches: 0,
+  totalCollections: 0,
+  totalExpenses: 0,
+  totalProfit: 0,
+});
+
+const [
+  branchProfitPagination,
+  setBranchProfitPagination,
+] = useState({
+  page: 1,
+  limit: 20,
+  total: 0,
+  totalPages: 1,
+});
 
   const [branchProfitFilters, setBranchProfitFilters] =
   useState({
@@ -176,61 +206,127 @@ const [incentiveLoading, setIncentiveLoading] = useState(false);
   loadProjectOwners();
 }, []);
 
-  const loadExpenditureReport = async () => {
-    try {
-      setLoading(true);
+  const loadExpenditureReport = async (
+  overridePage?: number,
+  overrideFilters?: typeof filters,
+) => {
+  try {
+    setLoading(true);
 
-      const token = localStorage.getItem('token');
+    const token =
+      localStorage.getItem('token');
 
-      const res = await axios.get(
-        `${API_BASE_URL}/project/account-expenses/report`,
-        {
-          params: {
-            fromDate: filters.fromDate || undefined,
-            toDate: filters.toDate || undefined,
-            expenseType:
-              filters.expenseType || undefined,
-            approvalStatus:
-              filters.approvalStatus || undefined,
-          },
-          headers: token
-            ? {
-                Authorization: `Bearer ${token}`,
-              }
-            : {},
+    const activeFilters =
+      overrideFilters || filters;
+
+    const activePage =
+      overridePage ||
+      expenditurePagination.page;
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/account-expenses/report`,
+      {
+        params: {
+          fromDate:
+            activeFilters.fromDate ||
+            undefined,
+
+          toDate:
+            activeFilters.toDate ||
+            undefined,
+
+          expenseType:
+            activeFilters.expenseType ||
+            undefined,
+
+          approvalStatus:
+            activeFilters.approvalStatus ||
+            undefined,
+
+          page: activePage,
+
+          limit:
+            expenditurePagination.limit,
         },
-      );
 
-      setSummary({
-        totalApprovedExpenses: Number(
-          res.data?.summary
-            ?.totalApprovedExpenses || 0,
-        ),
-        totalPendingExpenses: Number(
-          res.data?.summary
-            ?.totalPendingExpenses || 0,
-        ),
-        totalRejectedExpenses: Number(
-          res.data?.summary
-            ?.totalRejectedExpenses || 0,
-        ),
-        totalExpenseCount: Number(
-          res.data?.summary?.totalExpenseCount || 0,
-        ),
-      });
+        headers: token
+          ? {
+              Authorization:
+                `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
 
-      setExpenses(
-        Array.isArray(res.data?.data)
-          ? res.data.data
-          : [],
-      );
-    } catch (error) {
-      console.error(error);
-      alert('Failed to load expenditure report');
-    } finally {
-      setLoading(false);
-    }
-  };
+    setSummary({
+      totalApprovedExpenses:
+        Number(
+          res.data?.summary
+            ?.totalApprovedExpenses ||
+            0,
+        ),
+
+      totalPendingExpenses:
+        Number(
+          res.data?.summary
+            ?.totalPendingExpenses ||
+            0,
+        ),
+
+      totalRejectedExpenses:
+        Number(
+          res.data?.summary
+            ?.totalRejectedExpenses ||
+            0,
+        ),
+
+      totalExpenseCount:
+        Number(
+          res.data?.summary
+            ?.totalExpenseCount ||
+            0,
+        ),
+    });
+
+    setExpenses(
+      Array.isArray(
+        res.data?.data,
+      )
+        ? res.data.data
+        : [],
+    );
+
+    setExpenditurePagination({
+      page: Number(
+        res.data?.pagination
+          ?.page || 1,
+      ),
+
+      limit: Number(
+        res.data?.pagination
+          ?.limit || 20,
+      ),
+
+      total: Number(
+        res.data?.pagination
+          ?.total || 0,
+      ),
+
+      totalPages: Number(
+        res.data?.pagination
+          ?.totalPages || 1,
+      ),
+    });
+  } catch (error) {
+    console.error(error);
+
+    alert(
+      'Failed to load expenditure report',
+    );
+  } finally {
+    setLoading(false);
+  }
+};
 
   const loadMonthlyProfitReport = async () => {
   try {
@@ -283,38 +379,111 @@ const loadBranchWiseProfitReport = async (
     branch: string;
     projectOwnerId: string;
   },
+  overridePage?: number,
 ) => {
   try {
     setBranchProfitLoading(true);
 
-    const token = localStorage.getItem('token');
+    const token =
+      localStorage.getItem('token');
 
     const activeFilters =
-  overrideFilters || branchProfitFilters;
+      overrideFilters ||
+      branchProfitFilters;
+
+    const activePage =
+      overridePage ||
+      branchProfitPagination.page;
 
     const res = await axios.get(
       `${API_BASE_URL}/project/accounts/reports/branch-profit`,
       {
-  params: {
-  month: activeFilters.month || undefined,
-  branch: activeFilters.branch || undefined,
-  projectOwnerId:
-    activeFilters.projectOwnerId || undefined,
-},
-  headers: token
-    ? {
-        Authorization: `Bearer ${token}`,
-      }
-    : {},
-},
+        params: {
+          month:
+            activeFilters.month ||
+            undefined,
+
+          branch:
+            activeFilters.branch ||
+            undefined,
+
+          projectOwnerId:
+            activeFilters
+              .projectOwnerId ||
+            undefined,
+
+          page: activePage,
+
+          limit:
+            branchProfitPagination.limit,
+        },
+
+        headers: token
+          ? {
+              Authorization:
+                `Bearer ${token}`,
+            }
+          : {},
+      },
     );
 
+    setBranchProfitSummary({
+      totalBranches: Number(
+        res.data?.summary
+          ?.totalBranches || 0,
+      ),
+
+      totalCollections: Number(
+        res.data?.summary
+          ?.totalCollections || 0,
+      ),
+
+      totalExpenses: Number(
+        res.data?.summary
+          ?.totalExpenses || 0,
+      ),
+
+      totalProfit: Number(
+        res.data?.summary
+          ?.totalProfit || 0,
+      ),
+    });
+
     setBranchProfitRows(
-      Array.isArray(res.data) ? res.data : [],
+      Array.isArray(
+        res.data?.data,
+      )
+        ? res.data.data
+        : [],
     );
+
+    setBranchProfitPagination({
+      page: Number(
+        res.data?.pagination
+          ?.page || 1,
+      ),
+
+      limit: Number(
+        res.data?.pagination
+          ?.limit || 20,
+      ),
+
+      total: Number(
+        res.data?.pagination
+          ?.total || 0,
+      ),
+
+      totalPages: Number(
+        res.data?.pagination
+          ?.totalPages || 1,
+      ),
+    });
   } catch (error) {
     console.error(error);
-    alert('Failed to load branch wise profit report');
+
+    alert(
+      'Failed to load branch wise profit report',
+    );
   } finally {
     setBranchProfitLoading(false);
   }
@@ -605,18 +774,21 @@ const loadIncentiveReport = async (
   }
 };
 
-  const resetFilters = async () => {
-    setFilters({
-      fromDate: '',
-      toDate: '',
-      expenseType: '',
-      approvalStatus: '',
-    });
-
-    setTimeout(() => {
-      loadExpenditureReport();
-    }, 0);
+  const resetFilters = () => {
+  const emptyFilters = {
+    fromDate: '',
+    toDate: '',
+    expenseType: '',
+    approvalStatus: '',
   };
+
+  setFilters(emptyFilters);
+
+  loadExpenditureReport(
+    1,
+    emptyFilters,
+  );
+};
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">
@@ -729,7 +901,12 @@ const loadIncentiveReport = async (
         <div className="mt-4 flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={loadExpenditureReport}
+            onClick={() =>
+  loadExpenditureReport(
+    1,
+    filters,
+  )
+}
             disabled={loading}
             className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
           >
@@ -888,6 +1065,58 @@ const loadIncentiveReport = async (
             </tbody>
           </table>
         </div>
+
+        <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+  <p className="text-sm text-gray-500">
+    Page{' '}
+    {expenditurePagination.page}{' '}
+    of{' '}
+    {expenditurePagination.totalPages}
+    {' | '}
+    Total{' '}
+    {expenditurePagination.total}
+  </p>
+
+  <div className="flex gap-2">
+    <button
+      type="button"
+      disabled={
+        expenditurePagination.page <=
+          1 ||
+        loading
+      }
+      onClick={() =>
+        loadExpenditureReport(
+          expenditurePagination.page -
+            1,
+          filters,
+        )
+      }
+      className="rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700 disabled:opacity-50"
+    >
+      Previous
+    </button>
+
+    <button
+      type="button"
+      disabled={
+        expenditurePagination.page >=
+          expenditurePagination.totalPages ||
+        loading
+      }
+      onClick={() =>
+        loadExpenditureReport(
+          expenditurePagination.page +
+            1,
+          filters,
+        )
+      }
+      className="rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700 disabled:opacity-50"
+    >
+      Next
+    </button>
+  </div>
+</div>
       </div>
 
       <div className="rounded-2xl bg-white p-5 shadow">
@@ -1011,7 +1240,12 @@ const loadIncentiveReport = async (
 <div className="flex gap-2">
     <button
       type="button"
-      onClick={() => loadBranchWiseProfitReport()}
+      onClick={() =>
+  loadBranchWiseProfitReport(
+    branchProfitFilters,
+    1,
+  )
+}
       disabled={branchProfitLoading}
       className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
     >
@@ -1031,7 +1265,10 @@ const loadIncentiveReport = async (
 
     setBranchProfitFilters(emptyFilters);
 
-    loadBranchWiseProfitReport(emptyFilters);
+    loadBranchWiseProfitReport(
+  emptyFilters,
+  1,
+);
   }}
   className="rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700"
 >
@@ -1105,7 +1342,7 @@ const loadIncentiveReport = async (
       </p>
 
       <p className="mt-1 text-xl font-bold text-gray-800">
-        {branchProfitRows.length}
+        {branchProfitSummary.totalBranches}
       </p>
     </div>
 
@@ -1116,13 +1353,8 @@ const loadIncentiveReport = async (
 
       <p className="mt-1 text-xl font-bold text-green-800">
         {formatCurrency(
-          branchProfitRows.reduce(
-            (total, item) =>
-              total +
-              Number(item.totalCollections || 0),
-            0,
-          ),
-        )}
+  branchProfitSummary.totalCollections,
+)}
       </p>
     </div>
 
@@ -1133,13 +1365,8 @@ const loadIncentiveReport = async (
 
       <p className="mt-1 text-xl font-bold text-red-800">
         {formatCurrency(
-          branchProfitRows.reduce(
-            (total, item) =>
-              total +
-              Number(item.totalExpenses || 0),
-            0,
-          ),
-        )}
+  branchProfitSummary.totalExpenses,
+)}
       </p>
     </div>
 
@@ -1150,13 +1377,8 @@ const loadIncentiveReport = async (
 
       <p className="mt-1 text-xl font-bold text-blue-800">
         {formatCurrency(
-          branchProfitRows.reduce(
-            (total, item) =>
-              total +
-              Number(item.netProfit || 0),
-            0,
-          ),
-        )}
+  branchProfitSummary.totalProfit,
+)}
       </p>
     </div>
   </div>
@@ -1230,6 +1452,58 @@ const loadIncentiveReport = async (
       </tbody>
     </table>
   </div>
+
+  <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+  <p className="text-sm text-gray-500">
+    Page{' '}
+    {branchProfitPagination.page}{' '}
+    of{' '}
+    {branchProfitPagination.totalPages}
+    {' | '}
+    Total{' '}
+    {branchProfitPagination.total}
+  </p>
+
+  <div className="flex gap-2">
+    <button
+      type="button"
+      disabled={
+        branchProfitPagination.page <=
+          1 ||
+        branchProfitLoading
+      }
+      onClick={() =>
+        loadBranchWiseProfitReport(
+          branchProfitFilters,
+          branchProfitPagination.page -
+            1,
+        )
+      }
+      className="rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700 disabled:opacity-50"
+    >
+      Previous
+    </button>
+
+    <button
+      type="button"
+      disabled={
+        branchProfitPagination.page >=
+          branchProfitPagination.totalPages ||
+        branchProfitLoading
+      }
+      onClick={() =>
+        loadBranchWiseProfitReport(
+          branchProfitFilters,
+          branchProfitPagination.page +
+            1,
+        )
+      }
+      className="rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700 disabled:opacity-50"
+    >
+      Next
+    </button>
+  </div>
+</div>
 </div>
 
 <div className="rounded-2xl bg-white p-5 shadow">
