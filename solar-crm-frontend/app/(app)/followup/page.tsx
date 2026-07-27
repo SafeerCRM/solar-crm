@@ -753,16 +753,21 @@ const filteredSelectedFollowups = selectedFollowups.filter((f) => {
   const matchesDue =
     !dueFilter || dueLabel === dueFilter;
 
+    const matchesStaff =
+  !staffFilterId ||
+  String(f.assignedTo) === String(staffFilterId);
+
   return (
-    matchesName &&
-    matchesPhone &&
-    matchesCity &&
-    matchesZone &&
-    matchesPotential &&
-    matchesSource &&
-    matchesStatus &&
-    matchesDue
-  );
+  matchesName &&
+  matchesPhone &&
+  matchesCity &&
+  matchesZone &&
+  matchesPotential &&
+  matchesSource &&
+  matchesStatus &&
+  matchesDue &&
+  matchesStaff
+);
 });
 
   return (
