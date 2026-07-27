@@ -16,8 +16,17 @@ export class ProjectDealerOrderItem {
   @Column({ nullable: true })
 materialId: number;
 
-  @Column({ nullable: true })
-  materialName: string;
+/*
+ * Exact stock row used for this reservation.
+ *
+ * Nullable keeps all existing dealer orders backward compatible.
+ * Older rows will continue using the existing material-based fallback.
+ */
+@Column({ nullable: true })
+stockItemId: number;
+
+@Column({ nullable: true })
+materialName: string;
 
   @Column({ nullable: true })
   category: string;

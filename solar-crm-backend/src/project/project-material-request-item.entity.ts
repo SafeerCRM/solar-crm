@@ -29,10 +29,18 @@ export class ProjectMaterialRequestItem {
   projectId: number;
 
   @Column({ nullable: true })
-  materialId: number;
+materialId: number;
 
-  @Column()
-  materialName: string;
+/*
+ * Exact stock row on which this material was reserved.
+ *
+ * Nullable preserves compatibility with existing material requests.
+ */
+@Column({ nullable: true })
+stockItemId: number;
+
+@Column()
+materialName: string;
 
   @Column({ nullable: true })
   category: string;

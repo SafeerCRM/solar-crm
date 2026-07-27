@@ -5210,315 +5210,636 @@ async issueMaterialRequestItemStock(
   body: any,
   currentUser: any,
 ) {
-  const quantity = Number(body?.quantity || 0);
-  const stockItemId = Number(body?.stockItemId || 0);
-
-  if (!stockItemId) {
-    throw new BadRequestException('Stock item is required');
-  }
-
-  if (!quantity || quantity <= 0) {
-    throw new BadRequestException('Valid quantity is required');
-  }
-
-  const requestItem =
-    await this.projectMaterialRequestItemRepository.findOne({
-      where: {
-        id: itemId,
-      },
-    });
-
-  if (!requestItem) {
-    throw new NotFoundException('Material request item not found');
-  }
-
-  const request =
-    await this.projectMaterialRequestRepository.findOne({
-      where: {
-        id: requestItem.requestId,
-      },
-    });
-
-  if (!request) {
-    throw new NotFoundException('Material request not found');
-  }
-
-  if (request.status !== ProjectMaterialRequestStatus.APPROVED) {
-  throw new BadRequestException(
-    'Only approved material requests can be issued',
+  const requestedStockItemId = Number(
+    body?.stockItemId || 0,
   );
-}
 
-  const requestedQty = Number(requestItem.quantity || 0);
-  const alreadyIssuedQty = Number(
-    (requestItem as any).issuedQuantity || 0,
+  const quantity = Number(
+    body?.quantity || 0,
   );
-  const pendingIssueQty =
-    requestedQty - alreadyIssuedQty;
 
-  if (quantity > pendingIssueQty) {
+  if (!requestedStockItemId) {
     throw new BadRequestException(
-      `Issue quantity cannot exceed pending quantity ${pendingIssueQty}`,
+      'Stock item is required',
     );
-  }
-
-  const stockItem =
-    await this.projectStockItemRepository.findOne({
-      where: {
-        id: stockItemId,
-        isHidden: false,
-      },
-    });
-
-  if (!stockItem) {
-    throw new NotFoundException('Stock item not found');
   }
 
   if (
-    stockItem.materialId &&
-    requestItem.materialId &&
-    Number(stockItem.materialId) !==
-      Number(requestItem.materialId)
+    !quantity ||
+    quantity <= 0
   ) {
     throw new BadRequestException(
-      'Selected stock material does not match requested material',
+      'Valid quantity is required',
     );
   }
 
-  const reservedQuantity = Number(
-  (stockItem as any).reservedQuantity || 0,
-);
+  return this.projectStockItemRepository.manager.transaction(
+    async (manager) => {
+      const requestRepository =
+        manager.getRepository(ProjectMaterialRequest);
 
-if (reservedQuantity < quantity) {
-  throw new BadRequestException(
-    `Insufficient reserved stock. Reserved quantity is ${reservedQuantity}`,
+      const requestItemRepository =
+        manager.getRepository(ProjectMaterialRequestItem);
+
+      const stockItemRepository =
+        manager.getRepository(ProjectStockItem);
+
+      const movementRepository =
+        manager.getRepository(ProjectStockMovement);
+
+      const consumptionRepository =
+        manager.getRepository(ProjectConsumption);
+
+      const projectRepository =
+        manager.getRepository(Project);
+
+      const requestItem =
+        await requestItemRepository.findOne({
+          where: {
+            id: itemId,
+          },
+        });
+
+      if (!requestItem) {
+        throw new NotFoundException(
+          'Material request item not found',
+        );
+      }
+
+      const request =
+        await requestRepository.findOne({
+          where: {
+            id: requestItem.requestId,
+          },
+        });
+
+      if (!request) {
+        throw new NotFoundException(
+          'Material request not found',
+        );
+      }
+
+      if (
+        request.status !==
+        ProjectMaterialRequestStatus.APPROVED
+      ) {
+        throw new BadRequestException(
+          'Only approved material requests can be issued',
+        );
+      }
+
+      const requestedQuantity = Number(
+        requestItem.quantity || 0,
+      );
+
+      const alreadyIssuedQuantity = Number(
+        requestItem.issuedQuantity || 0,
+      );
+
+      const pendingIssueQuantity =
+        requestedQuantity -
+        alreadyIssuedQuantity;
+
+      if (
+        quantity >
+        pendingIssueQuantity
+      ) {
+        throw new BadRequestException(
+          `Issue quantity cannot exceed pending quantity ${pendingIssueQuantity}`,
+        );
+      }
+
+      const itemReservedQuantity = Number(
+        requestItem.reservedQuantity || 0,
+      );
+
+      if (
+        itemReservedQuantity <
+        quantity
+      ) {
+        throw new BadRequestException(
+          `Issue quantity cannot exceed this request item's reserved quantity ${itemReservedQuantity}`,
+        );
+      }
+
+      /*
+       * For new requests, stockItemId is the exact
+       * stock row reserved during approval.
+       *
+       * Existing approved requests may still have
+       * stockItemId = null, so they retain the former
+       * manually selected stock-row behavior.
+       */
+      const effectiveStockItemId =
+        requestItem.stockItemId
+          ? Number(
+              requestItem.stockItemId,
+            )
+          : requestedStockItemId;
+
+      /*
+       * Prevent staff from issuing a new reservation
+       * from a different branch/stock row.
+       */
+      if (
+        requestItem.stockItemId &&
+        Number(requestItem.stockItemId) !==
+          requestedStockItemId
+      ) {
+        throw new BadRequestException(
+          `Please select the originally reserved stock row for ${requestItem.materialName}`,
+        );
+      }
+
+      const stockItem =
+        await stockItemRepository.findOne({
+          where: {
+            id: effectiveStockItemId,
+            isHidden: false,
+          },
+        });
+
+      if (!stockItem) {
+        throw new NotFoundException(
+          'Reserved stock item not found or is hidden',
+        );
+      }
+
+      if (
+        stockItem.materialId &&
+        requestItem.materialId &&
+        Number(stockItem.materialId) !==
+          Number(requestItem.materialId)
+      ) {
+        throw new BadRequestException(
+          'Selected stock material does not match requested material',
+        );
+      }
+
+      const stockCurrentQuantity = Number(
+        stockItem.currentQuantity || 0,
+      );
+
+      if (
+        stockCurrentQuantity <
+        quantity
+      ) {
+        throw new BadRequestException(
+          `Insufficient stock quantity. Current quantity is ${stockCurrentQuantity}`,
+        );
+      }
+
+      const stockReservedQuantity = Number(
+        stockItem.reservedQuantity || 0,
+      );
+
+      if (
+        stockReservedQuantity <
+        quantity
+      ) {
+        throw new BadRequestException(
+          `Insufficient reserved stock. Reserved quantity is ${stockReservedQuantity}`,
+        );
+      }
+
+      const rate = Number(
+        stockItem.averageRate || 0,
+      );
+
+      const totalAmount =
+        quantity * rate;
+
+      stockItem.currentQuantity =
+        stockCurrentQuantity -
+        quantity;
+
+      stockItem.reservedQuantity =
+        stockReservedQuantity -
+        quantity;
+
+      stockItem.stockValue =
+        Number(
+          stockItem.currentQuantity || 0,
+        ) * rate;
+
+      const savedStock =
+        await stockItemRepository.save(
+          stockItem,
+        );
+
+      const movement =
+        await movementRepository.save(
+          movementRepository.create({
+            stockItemId:
+              savedStock.id,
+
+            materialId:
+              savedStock.materialId,
+
+            materialName:
+              savedStock.materialName,
+
+            branchId:
+              savedStock.branchId ||
+              undefined,
+
+            branchName:
+              savedStock.branchName ||
+              undefined,
+
+            movementType:
+              ProjectStockMovementType.ISSUE,
+
+            quantity,
+            rate,
+            totalAmount,
+
+            sourceType:
+              'MATERIAL_REQUEST',
+
+            sourceId:
+              request.id,
+
+            projectId:
+              request.projectId,
+
+            remarks:
+              body?.remarks ||
+              `Issued against material request #${request.id}`,
+
+            createdBy:
+              currentUser?.id ||
+              currentUser?.userId ||
+              currentUser?.sub ||
+              undefined,
+
+            createdByName:
+              currentUser?.name ||
+              currentUser?.email ||
+              '',
+          }),
+        );
+
+      const project =
+        await projectRepository.findOne({
+          where: {
+            id: request.projectId,
+          },
+        });
+
+      const consumption =
+        await consumptionRepository.save(
+          consumptionRepository.create({
+            projectId:
+              request.projectId,
+
+            projectName:
+              project?.customerName ||
+              project?.customerPhone ||
+              `Project #${request.projectId}`,
+
+            materialId:
+              savedStock.materialId,
+
+            materialName:
+              savedStock.materialName,
+
+            branchId:
+              savedStock.branchId ||
+              undefined,
+
+            branchName:
+              savedStock.branchName ||
+              undefined,
+
+            stockItemId:
+              savedStock.id,
+
+            stockMovementId:
+              movement.id,
+
+            quantity,
+            rate,
+            totalAmount,
+
+            issuedBy:
+              currentUser?.id ||
+              currentUser?.userId ||
+              currentUser?.sub ||
+              undefined,
+
+            issuedByName:
+              currentUser?.name ||
+              currentUser?.email ||
+              '',
+
+            remarks:
+              body?.remarks ||
+              `Issued against material request #${request.id}`,
+          }),
+        );
+
+      requestItem.reservedQuantity =
+        Math.max(
+          itemReservedQuantity -
+            quantity,
+          0,
+        );
+
+      const newIssuedQuantity =
+        alreadyIssuedQuantity +
+        quantity;
+
+      requestItem.issuedQuantity =
+        newIssuedQuantity;
+
+      requestItem.issuePendingQuantity =
+        Math.max(
+          requestedQuantity -
+            newIssuedQuantity,
+          0,
+        );
+
+      if (!requestItem.issuedAt) {
+        requestItem.issuedAt =
+          new Date();
+      }
+
+      if (
+        newIssuedQuantity >=
+        requestedQuantity
+      ) {
+        requestItem.issueStatus =
+          ProjectMaterialIssueStatus.ISSUED;
+      } else {
+        requestItem.issueStatus =
+          ProjectMaterialIssueStatus.PARTIALLY_ISSUED;
+      }
+
+      requestItem.issuedBy =
+        currentUser?.id ||
+        currentUser?.userId ||
+        currentUser?.sub ||
+        undefined;
+
+      requestItem.issuedByName =
+        currentUser?.name ||
+        currentUser?.email ||
+        '';
+
+      /*
+       * Preserve exact stock-row linkage throughout
+       * partial and full issue history.
+       *
+       * For an older request with no linkage, the
+       * first successful issue safely records it.
+       */
+      requestItem.stockItemId =
+        savedStock.id;
+
+      await requestItemRepository.save(
+        requestItem,
+      );
+
+      const allItems =
+        await requestItemRepository.find({
+          where: {
+            requestId:
+              request.id,
+          },
+        });
+
+      const allIssued =
+        allItems.every(
+          (item) =>
+            Number(
+              item.issuedQuantity ||
+                0,
+            ) >=
+            Number(
+              item.quantity ||
+                0,
+            ),
+        );
+
+      if (allIssued) {
+        request.status =
+          ProjectMaterialRequestStatus.ISSUED;
+
+        await requestRepository.save(
+          request,
+        );
+      }
+
+      return {
+        stockItem:
+          savedStock,
+
+        movement,
+
+        consumption,
+
+        requestItem,
+
+        request,
+      };
+    },
   );
-}
-
-  const rate = Number(stockItem.averageRate || 0);
-  const totalAmount = quantity * rate;
-
-  stockItem.currentQuantity =
-    Number(stockItem.currentQuantity || 0) - quantity;
-
-    (stockItem as any).reservedQuantity = Math.max(
-  Number((stockItem as any).reservedQuantity || 0) - quantity,
-  0,
-);
-
-  stockItem.stockValue =
-    Number(stockItem.currentQuantity || 0) * rate;
-
-  const savedStock =
-    await this.projectStockItemRepository.save(stockItem);
-
-  const movement =
-    await this.projectStockMovementRepository.save(
-      this.projectStockMovementRepository.create({
-        stockItemId: savedStock.id,
-        materialId: savedStock.materialId,
-        materialName: savedStock.materialName,
-        branchId: savedStock.branchId || undefined,
-        branchName: savedStock.branchName || undefined,
-        movementType: ProjectStockMovementType.ISSUE,
-        quantity,
-        rate,
-        totalAmount,
-        sourceType: 'MATERIAL_REQUEST',
-        sourceId: request.id,
-        projectId: request.projectId,
-        remarks:
-          body?.remarks ||
-          `Issued against material request #${request.id}`,
-        createdBy:
-          currentUser?.id ||
-          currentUser?.userId ||
-          undefined,
-        createdByName: currentUser?.name || '',
-      }),
-    );
-
-  const project =
-    await this.projectRepository.findOne({
-      where: {
-        id: request.projectId,
-      },
-    });
-
-  const consumption =
-    await this.projectConsumptionRepository.save(
-      this.projectConsumptionRepository.create({
-        projectId: request.projectId,
-        projectName:
-          project?.customerName ||
-          project?.customerPhone ||
-          `Project #${request.projectId}`,
-        materialId: savedStock.materialId,
-        materialName: savedStock.materialName,
-        branchId: savedStock.branchId || undefined,
-        branchName: savedStock.branchName || undefined,
-        stockItemId: savedStock.id,
-        stockMovementId: movement.id,
-        quantity,
-        rate,
-        totalAmount,
-        issuedBy:
-          currentUser?.id ||
-          currentUser?.userId ||
-          undefined,
-        issuedByName: currentUser?.name || '',
-        remarks:
-          body?.remarks ||
-          `Issued against material request #${request.id}`,
-      }),
-    );
-
-    (requestItem as any).reservedQuantity = Math.max(
-  Number((requestItem as any).reservedQuantity || 0) - quantity,
-  0,
-);
-
-  const newIssuedQty =
-    alreadyIssuedQty + quantity;
-
-  (requestItem as any).issuedQuantity = newIssuedQty;
-  (requestItem as any).issuePendingQuantity =
-    Math.max(requestedQty - newIssuedQty, 0);
-
-  if (!(requestItem as any).issuedAt) {
-  (requestItem as any).issuedAt = new Date();
-}
-
-if (newIssuedQty >= requestedQty) {
-  (requestItem as any).issueStatus = 'ISSUED';
-} else {
-  (requestItem as any).issueStatus =
-    'PARTIALLY_ISSUED';
-}
-
-  (requestItem as any).issuedBy =
-    currentUser?.id || currentUser?.userId || undefined;
-  (requestItem as any).issuedByName =
-    currentUser?.name || '';
-
-  await this.projectMaterialRequestItemRepository.save(
-    requestItem,
-  );
-
-  const allItems =
-    await this.projectMaterialRequestItemRepository.find({
-      where: {
-        requestId: request.id,
-      },
-    });
-
-  const allIssued = allItems.every((item: any) => {
-    return (
-      Number(item.issuedQuantity || 0) >=
-      Number(item.quantity || 0)
-    );
-  });
-
-  if (allIssued) {
-    request.status = ProjectMaterialRequestStatus.ISSUED;
-    await this.projectMaterialRequestRepository.save(
-      request,
-    );
-  }
-
-  return {
-    stockItem: savedStock,
-    movement,
-    consumption,
-    requestItem,
-    request,
-  };
 }
 
 async approveMaterialRequestForStock(
   requestId: number,
   user: any,
 ) {
-  const request =
-    await this.projectMaterialRequestRepository.findOne({
-      where: { id: requestId },
-    });
+  return this.projectStockItemRepository.manager.transaction(
+    async (manager) => {
+      const requestRepository =
+        manager.getRepository(ProjectMaterialRequest);
 
-  if (!request) {
-    throw new NotFoundException('Material request not found');
-  }
+      const requestItemRepository =
+        manager.getRepository(ProjectMaterialRequestItem);
 
-  if (
-  request.requestType ===
-    ProjectMaterialRequestType.INFORMATION_NOTE ||
-  request.isProcurementActive === false
-) {
-  throw new BadRequestException(
-    'Informational material notes cannot reserve or issue stock',
+      const stockItemRepository =
+        manager.getRepository(ProjectStockItem);
+
+      const request =
+        await requestRepository.findOne({
+          where: {
+            id: requestId,
+          },
+        });
+
+      if (!request) {
+        throw new NotFoundException(
+          'Material request not found',
+        );
+      }
+
+      if (
+        request.requestType ===
+          ProjectMaterialRequestType.INFORMATION_NOTE ||
+        request.isProcurementActive === false
+      ) {
+        throw new BadRequestException(
+          'Informational material notes cannot reserve or issue stock',
+        );
+      }
+
+      if (
+        request.status !==
+        ProjectMaterialRequestStatus.SUBMITTED
+      ) {
+        throw new BadRequestException(
+          'Only submitted material requests can be approved',
+        );
+      }
+
+      const items =
+        await requestItemRepository.find({
+          where: {
+            requestId,
+          },
+        });
+
+      if (!items.length) {
+        throw new BadRequestException(
+          'Material request has no items',
+        );
+      }
+
+      for (const item of items) {
+        const requiredQuantity = Number(
+          item.quantity || 0,
+        );
+
+        const alreadyReservedQuantity = Number(
+          item.reservedQuantity || 0,
+        );
+
+        const reserveNow =
+          requiredQuantity -
+          alreadyReservedQuantity;
+
+        if (reserveNow <= 0) {
+          continue;
+        }
+
+        if (!item.materialId) {
+          throw new BadRequestException(
+            `Material master is not selected for ${item.materialName}`,
+          );
+        }
+
+        let stockItem: ProjectStockItem | null =
+          null;
+
+        /*
+         * This supports a partially processed row if
+         * approval is ever retried internally.
+         */
+        if (item.stockItemId) {
+          stockItem =
+            await stockItemRepository.findOne({
+              where: {
+                id: Number(item.stockItemId),
+                isHidden: false,
+              },
+            });
+
+          if (
+            stockItem &&
+            Number(stockItem.materialId) !==
+              Number(item.materialId)
+          ) {
+            throw new BadRequestException(
+              `Reserved stock row does not match ${item.materialName}`,
+            );
+          }
+        }
+
+        /*
+         * Normal path for a new material request.
+         */
+        if (!stockItem) {
+          stockItem =
+            await stockItemRepository.findOne({
+              where: {
+                materialId: Number(
+                  item.materialId,
+                ),
+                isHidden: false,
+              },
+              order: {
+                currentQuantity: 'DESC',
+              },
+            });
+        }
+
+        if (!stockItem) {
+          throw new BadRequestException(
+            `Stock not found for ${item.materialName}`,
+          );
+        }
+
+        const currentQuantity = Number(
+          stockItem.currentQuantity || 0,
+        );
+
+        const stockReservedQuantity = Number(
+          stockItem.reservedQuantity || 0,
+        );
+
+        const availableQuantity =
+          currentQuantity -
+          stockReservedQuantity;
+
+        if (
+          availableQuantity <
+          reserveNow
+        ) {
+          throw new BadRequestException(
+            `Insufficient available stock for ${item.materialName}. Available: ${availableQuantity}, Required: ${reserveNow}`,
+          );
+        }
+
+        stockItem.reservedQuantity =
+          stockReservedQuantity +
+          reserveNow;
+
+        item.reservedQuantity =
+          alreadyReservedQuantity +
+          reserveNow;
+
+        /*
+         * Persist the exact branch/stock row that
+         * received this reservation.
+         */
+        item.stockItemId =
+          stockItem.id;
+
+        await stockItemRepository.save(
+          stockItem,
+        );
+
+        await requestItemRepository.save(
+          item,
+        );
+      }
+
+      request.status =
+        ProjectMaterialRequestStatus.APPROVED;
+
+      await requestRepository.save(
+        request,
+      );
+
+      return {
+        message:
+          'Material request approved and stock reserved',
+        request,
+      };
+    },
   );
-}
-
-  if (request.status !== ProjectMaterialRequestStatus.SUBMITTED) {
-    throw new BadRequestException(
-      'Only submitted material requests can be approved',
-    );
-  }
-
-  const items =
-    await this.projectMaterialRequestItemRepository.find({
-      where: { requestId },
-    });
-
-  for (const item of items) {
-    const requiredQty = Number(item.quantity || 0);
-
-    if (requiredQty <= 0) continue;
-
-    const stockItem =
-      await this.projectStockItemRepository.findOne({
-        where: {
-          materialId: item.materialId,
-          isHidden: false,
-        },
-        order: {
-          currentQuantity: 'DESC',
-        },
-      });
-
-    if (!stockItem) {
-      throw new BadRequestException(
-        `Stock not found for ${item.materialName}`,
-      );
-    }
-
-    const availableQty =
-      Number(stockItem.currentQuantity || 0) -
-      Number((stockItem as any).reservedQuantity || 0);
-
-    if (availableQty < requiredQty) {
-      throw new BadRequestException(
-        `Insufficient available stock for ${item.materialName}. Available: ${availableQty}, Required: ${requiredQty}`,
-      );
-    }
-
-    (stockItem as any).reservedQuantity =
-      Number((stockItem as any).reservedQuantity || 0) + requiredQty;
-
-    (item as any).reservedQuantity =
-      Number((item as any).reservedQuantity || 0) + requiredQty;
-
-    await this.projectStockItemRepository.save(stockItem);
-    await this.projectMaterialRequestItemRepository.save(item);
-  }
-
-  request.status = ProjectMaterialRequestStatus.APPROVED;
-
-  await this.projectMaterialRequestRepository.save(request);
-
-  return {
-    message: 'Material request approved and stock reserved',
-    request,
-  };
 }
 
 async getPaymentCollectionList(query: any, currentUser: any) {
@@ -22409,38 +22730,84 @@ if (
   };
 }
 
-private async reserveStockForDealerOrder(orderId: number, user: any) {
-  const items = await this.projectDealerOrderItemRepository.find({
-    where: {
-      dealerOrderId: orderId,
-    },
-  });
+private async reserveStockForDealerOrder(
+  orderId: number,
+  user: any,
+) {
+  const items =
+    await this.projectDealerOrderItemRepository.find({
+      where: {
+        dealerOrderId: orderId,
+      },
+    });
 
   if (!items.length) {
-    throw new BadRequestException('Dealer order has no items to reserve');
+    throw new BadRequestException(
+      'Dealer order has no items to reserve',
+    );
   }
 
   for (const item of items) {
     const requiredQuantity = Number(
-      item.acceptedQuantity || item.quantity || 0,
+      item.acceptedQuantity ||
+        item.quantity ||
+        0,
     );
 
-    const alreadyReserved = Number((item as any).reservedQuantity || 0);
-    const reserveNow = requiredQuantity - alreadyReserved;
+    const alreadyReserved = Number(
+      item.reservedQuantity || 0,
+    );
+
+    const reserveNow =
+      requiredQuantity - alreadyReserved;
 
     if (reserveNow <= 0) {
       continue;
     }
 
-    const stockItem = await this.projectStockItemRepository.findOne({
-      where: {
-        materialId: item.materialId,
-        isHidden: false,
-      },
-      order: {
-        currentQuantity: 'DESC',
-      },
-    });
+    /*
+     * A dealer-order item must keep using the same
+     * stock row while its reservation is active.
+     *
+     * Existing rows normally have stockItemId = null,
+     * so they continue through the original
+     * material-based stock selection.
+     */
+    let stockItem: ProjectStockItem | null = null;
+
+    if (item.stockItemId) {
+      stockItem =
+        await this.projectStockItemRepository.findOne({
+          where: {
+            id: Number(item.stockItemId),
+            isHidden: false,
+          },
+        });
+
+      if (
+        stockItem &&
+        item.materialId &&
+        Number(stockItem.materialId) !==
+          Number(item.materialId)
+      ) {
+        throw new BadRequestException(
+          `Reserved stock row does not match ${item.materialName}`,
+        );
+      }
+    }
+
+    if (!stockItem) {
+      stockItem =
+        await this.projectStockItemRepository.findOne({
+          where: {
+            materialId: item.materialId,
+            isHidden: false,
+          },
+          order: {
+            currentQuantity: 'DESC',
+          },
+        });
+    }
 
     if (!stockItem) {
       throw new BadRequestException(
@@ -22450,7 +22817,7 @@ private async reserveStockForDealerOrder(orderId: number, user: any) {
 
     const availableQuantity =
       Number(stockItem.currentQuantity || 0) -
-      Number((stockItem as any).reservedQuantity || 0);
+      Number(stockItem.reservedQuantity || 0);
 
     if (availableQuantity < reserveNow) {
       throw new BadRequestException(
@@ -22458,53 +22825,131 @@ private async reserveStockForDealerOrder(orderId: number, user: any) {
       );
     }
 
-    (stockItem as any).reservedQuantity =
-      Number((stockItem as any).reservedQuantity || 0) + reserveNow;
+    stockItem.reservedQuantity =
+      Number(stockItem.reservedQuantity || 0) +
+      reserveNow;
 
-    (item as any).reservedQuantity = alreadyReserved + reserveNow;
+    item.reservedQuantity =
+      alreadyReserved + reserveNow;
 
-    await this.projectStockItemRepository.save(stockItem);
-    await this.projectDealerOrderItemRepository.save(item);
+    /*
+     * Persist the exact branch/stock row on which
+     * the reservation was placed.
+     */
+    item.stockItemId = stockItem.id;
+
+    await this.projectStockItemRepository.save(
+      stockItem,
+    );
+
+    await this.projectDealerOrderItemRepository.save(
+      item,
+    );
   }
 
   return true;
 }
 
-private async releaseStockReservationForDealerOrder(orderId: number) {
-  const items = await this.projectDealerOrderItemRepository.find({
-    where: {
-      dealerOrderId: orderId,
-    },
-  });
-
-  for (const item of items) {
-    const reservedQuantity = Number((item as any).reservedQuantity || 0);
-
-    if (reservedQuantity <= 0) {
-      continue;
-    }
-
-    const stockItem = await this.projectStockItemRepository.findOne({
+private async releaseStockReservationForDealerOrder(
+  orderId: number,
+) {
+  const items =
+    await this.projectDealerOrderItemRepository.find({
       where: {
-        materialId: item.materialId,
-        isHidden: false,
-      },
-      order: {
-        currentQuantity: 'DESC',
+        dealerOrderId: orderId,
       },
     });
 
+  for (const item of items) {
+    const reservedQuantity = Number(
+      item.reservedQuantity || 0,
+    );
+
+    if (reservedQuantity <= 0) {
+      /*
+       * Do not leave an obsolete stock reference
+       * when there is no active reservation.
+       */
+      if (item.stockItemId) {
+        item.stockItemId = null as any;
+
+        await this.projectDealerOrderItemRepository.save(
+          item,
+        );
+      }
+
+      continue;
+    }
+
+    let stockItem: ProjectStockItem | null = null;
+
+    /*
+     * New reservations release from the exact row.
+     *
+     * No isHidden filter is applied here intentionally:
+     * even if someone hid the stock row after reservation,
+     * its reservation must still be released from that row.
+     */
+    if (item.stockItemId) {
+      stockItem =
+        await this.projectStockItemRepository.findOne({
+          where: {
+            id: Number(item.stockItemId),
+          },
+        });
+
+      if (
+        stockItem &&
+        item.materialId &&
+        Number(stockItem.materialId) !==
+          Number(item.materialId)
+      ) {
+        throw new BadRequestException(
+          `Reserved stock row does not match ${item.materialName}`,
+        );
+      }
+    }
+
+    /*
+     * Backward-compatible fallback for existing orders
+     * created before stockItemId was introduced.
+     */
+    if (!stockItem) {
+      stockItem =
+        await this.projectStockItemRepository.findOne({
+          where: {
+            materialId: item.materialId,
+            isHidden: false,
+          },
+          order: {
+            currentQuantity: 'DESC',
+          },
+        });
+    }
+
     if (stockItem) {
-      (stockItem as any).reservedQuantity = Math.max(
-        Number((stockItem as any).reservedQuantity || 0) - reservedQuantity,
+      stockItem.reservedQuantity = Math.max(
+        Number(stockItem.reservedQuantity || 0) -
+          reservedQuantity,
         0,
       );
 
-      await this.projectStockItemRepository.save(stockItem);
+      await this.projectStockItemRepository.save(
+        stockItem,
+      );
     }
 
-    (item as any).reservedQuantity = 0;
-    await this.projectDealerOrderItemRepository.save(item);
+    item.reservedQuantity = 0;
+
+    /*
+     * The reservation no longer exists, so clear
+     * its active stock-row reference.
+     */
+    item.stockItemId = null as any;
+
+    await this.projectDealerOrderItemRepository.save(
+      item,
+    );
   }
 
   return true;
@@ -22523,20 +22968,58 @@ private async dispatchDealerOrderStock(
 
   for (const item of items) {
     const dispatchQty = Number(
-      (item as any).reservedQuantity || 0,
+      item.reservedQuantity || 0,
     );
 
     if (dispatchQty <= 0) {
       continue;
     }
 
-    const stockItem =
-      await this.projectStockItemRepository.findOne({
-        where: {
-          materialId: item.materialId,
-          isHidden: false,
-        },
-      });
+    let stockItem: ProjectStockItem | null = null;
+
+    /*
+     * New reservations dispatch only from the exact
+     * active stock row originally reserved.
+     */
+    if (item.stockItemId) {
+      stockItem =
+        await this.projectStockItemRepository.findOne({
+          where: {
+            id: Number(item.stockItemId),
+            isHidden: false,
+          },
+        });
+
+      if (!stockItem) {
+        throw new BadRequestException(
+          `The reserved stock row for ${item.materialName} is no longer active. Release or restore the reservation before dispatch.`,
+        );
+      }
+
+      if (
+        item.materialId &&
+        Number(stockItem.materialId) !==
+          Number(item.materialId)
+      ) {
+        throw new BadRequestException(
+          `Reserved stock row does not match ${item.materialName}`,
+        );
+      }
+    }
+
+    /*
+     * Backward-compatible fallback for old dealer
+     * orders where stockItemId is still null.
+     */
+    if (!stockItem) {
+      stockItem =
+        await this.projectStockItemRepository.findOne({
+          where: {
+            materialId: item.materialId,
+            isHidden: false,
+          },
+        });
+    }
 
     if (!stockItem) {
       throw new BadRequestException(
@@ -22553,17 +23036,26 @@ private async dispatchDealerOrderStock(
       );
     }
 
+    if (
+      Number(stockItem.reservedQuantity || 0) <
+      dispatchQty
+    ) {
+      throw new BadRequestException(
+        `Insufficient reserved stock for ${item.materialName}. Reserved: ${Number(
+          stockItem.reservedQuantity || 0,
+        )}, Required: ${dispatchQty}`,
+      );
+    }
+
     stockItem.currentQuantity =
       Number(stockItem.currentQuantity || 0) -
       dispatchQty;
 
-    (stockItem as any).reservedQuantity =
-      Math.max(
-        Number(
-          (stockItem as any).reservedQuantity || 0,
-        ) - dispatchQty,
-        0,
-      );
+    stockItem.reservedQuantity = Math.max(
+      Number(stockItem.reservedQuantity || 0) -
+        dispatchQty,
+      0,
+    );
 
     stockItem.stockValue =
       Number(stockItem.currentQuantity || 0) *
@@ -22593,19 +23085,35 @@ private async dispatchDealerOrderStock(
         sourceType: 'DEALER_ORDER',
         sourceId: orderId,
 
-        remarks: `Dealer Order Dispatch`,
-        createdBy: user?.id,
-        createdByName: user?.name,
+        remarks: 'Dealer Order Dispatch',
+
+        createdBy:
+          user?.id ||
+          user?.userId ||
+          user?.sub ||
+          undefined,
+
+        createdByName:
+          user?.name ||
+          user?.email ||
+          '',
       });
 
     await this.projectStockMovementRepository.save(
       movement,
     );
 
-    (item as any).dispatchedQuantity =
+    item.dispatchedQuantity =
+      Number(item.dispatchedQuantity || 0) +
       dispatchQty;
 
-    (item as any).reservedQuantity = 0;
+    item.reservedQuantity = 0;
+
+    /*
+     * Keep stockItemId after dispatch as an audit trail
+     * showing exactly which stock row supplied the order.
+     */
+    item.stockItemId = stockItem.id;
 
     await this.projectDealerOrderItemRepository.save(
       item,
