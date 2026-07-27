@@ -190,6 +190,8 @@ setLeads(leadData);
   phone: phoneFilter || undefined,
   city: cityFilter || undefined,
   zone: zoneFilter || undefined,
+  potential:
+    potentialFilter || undefined,
   source: sourceFilter || undefined,
   status: statusFilter || undefined,
   due: dueFilter || undefined,
@@ -667,62 +669,8 @@ const getSourceOpenLabel = (f: FollowUp) => {
   return 'Open Source';
 };
 
-  const filteredAllFollowups = allFollowups.filter((f) => {
-  const name = String(
-  f.lead?.name ||
-    f.customerName ||
-    '',
-).toLowerCase();
-
-const phone = String(
-  f.lead?.phone ||
-    f.customerPhone ||
-    '',
-).toLowerCase();
-
-const city = String(f.lead?.city || '').toLowerCase();
-const zone = String(f.lead?.zone || '').toLowerCase();
-  const potential = String(f.lead?.potential || '').toUpperCase();
-
-  const matchesName =
-    !nameFilter.trim() || name.includes(nameFilter.trim().toLowerCase());
-
-  const matchesPhone =
-    !phoneFilter.trim() || phone.includes(phoneFilter.trim().toLowerCase());
-
-  const matchesCity =
-    !cityFilter.trim() || city.includes(cityFilter.trim().toLowerCase());
-
-  const matchesZone =
-    !zoneFilter.trim() || zone.includes(zoneFilter.trim().toLowerCase());
-
-  const matchesPotential =
-    !potentialFilter || potential === potentialFilter.toUpperCase();
-
-    const source = String(f.sourceModule || 'FOLLOWUP').toUpperCase();
-const status = String(f.status || '').toUpperCase();
-const dueLabel = getDueLabel(f).toUpperCase();
-
-const matchesSource =
-  !sourceFilter || source === sourceFilter;
-
-const matchesStatus =
-  !statusFilter || status === statusFilter;
-
-const matchesDue =
-  !dueFilter || dueLabel === dueFilter;
-
-  return (
-  matchesName &&
-  matchesPhone &&
-  matchesCity &&
-  matchesZone &&
-  matchesPotential &&
-  matchesSource &&
-  matchesStatus &&
-  matchesDue
-);
-});
+  const filteredAllFollowups =
+  allFollowups;
 
 const filteredSelectedFollowups = selectedFollowups.filter((f) => {
   const name = String(
@@ -1209,7 +1157,16 @@ const filteredSelectedFollowups = selectedFollowups.filter((f) => {
     : 'Assign All Filtered'}
 </button>
   </div>
-    {(nameFilter || phoneFilter || cityFilter || potentialFilter || zoneFilter) && (
+    {(
+  nameFilter ||
+  phoneFilter ||
+  cityFilter ||
+  potentialFilter ||
+  zoneFilter ||
+  sourceFilter ||
+  statusFilter ||
+  dueFilter
+) && (
   <p className="mt-2 text-sm text-gray-600">
     Filters applied:
     {nameFilter && ` Name: "${nameFilter}"`}
@@ -1217,6 +1174,12 @@ const filteredSelectedFollowups = selectedFollowups.filter((f) => {
     {cityFilter && ` City: "${cityFilter}"`}
     {potentialFilter && ` Potential: "${potentialFilter}"`}
     {zoneFilter && ` Zone: "${zoneFilter}"`}
+    {sourceFilter &&
+  ` Source: "${sourceFilter}"`}
+{statusFilter &&
+  ` Status: "${statusFilter}"`}
+{dueFilter &&
+  ` Due: "${dueFilter}"`}
   </p>
 )}
 </div>
