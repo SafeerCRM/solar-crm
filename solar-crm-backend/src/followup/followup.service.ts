@@ -4,7 +4,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThan, Between, In } from 'typeorm';
+import {
+  Repository,
+  LessThan,
+  Between,
+  In,
+  Brackets,
+} from 'typeorm';
 import { FollowUp, FollowUpStatus } from './follow-up.entity';
 import { Lead } from '../leads/lead.entity';
 import { UserRole } from '../users/user.entity';
@@ -108,6 +114,12 @@ export class FollowupService {
   const status = String(query?.status || '').trim().toUpperCase();
   const due = String(query?.due || '').trim().toUpperCase();
 
+  const potential = String(
+  query?.potential || '',
+)
+  .trim()
+  .toUpperCase();
+
   if (name) {
     qb.andWhere(
       `(
@@ -133,6 +145,15 @@ export class FollowupService {
       city: `%${city}%`,
     });
   }
+
+  if (potential) {
+  qb.andWhere(
+    `UPPER(COALESCE(lead.potential, '')) = :potential`,
+    {
+      potential,
+    },
+  );
+}
 
   if (zone) {
     qb.andWhere(`LOWER(COALESCE(lead.zone, '')) LIKE :zone`, {
@@ -160,18 +181,39 @@ export class FollowupService {
   todayEnd.setHours(23, 59, 59, 999);
 
   if (due === 'TODAY') {
-    qb.andWhere('followUp.followUpDate BETWEEN :todayStart AND :todayEnd', {
+  qb.andWhere(
+    'followUp.followUpDate BETWEEN :todayStart AND :todayEnd',
+    {
       todayStart,
       todayEnd,
-    });
-  }
+    },
+  );
 
-  if (due === 'OVERDUE') {
-    qb.andWhere('followUp.followUpDate < :now', { now });
-    qb.andWhere('followUp.status = :pendingStatus', {
-      pendingStatus: FollowUpStatus.PENDING,
-    });
-  }
+  qb.andWhere(
+    'followUp.status = :todayPendingStatus',
+    {
+      todayPendingStatus:
+        FollowUpStatus.PENDING,
+    },
+  );
+}
+
+if (due === 'OVERDUE') {
+  qb.andWhere(
+    'followUp.followUpDate < :todayStart',
+    {
+      todayStart,
+    },
+  );
+
+  qb.andWhere(
+    'followUp.status = :overduePendingStatus',
+    {
+      overduePendingStatus:
+        FollowUpStatus.PENDING,
+    },
+  );
+}
 
   if (due === 'UPCOMING') {
     qb.andWhere('followUp.followUpDate > :todayEnd', {
@@ -295,74 +337,120 @@ export class FollowupService {
   return this.followUpRepository.save(followUp);
 }
 
-  async findAll(user: any, page = 1, limit = 50, query: any = {}) {
+  async findAll(
+  user: any,
+  page = 1,
+  limit = 50,
+  query: any = {},
+) {
+  const safePage =
+    Number(page) > 0 ? Number(page) : 1;
+
+  const safeLimit =
+    Number(limit) > 0
+      ? Math.min(Number(limit), 100)
+      : 50;
+
   if (this.isProjectManager(user)) {
-    return { data: [], total: 0, page, limit };
+    return {
+      data: [],
+      total: 0,
+      page: safePage,
+      limit: safeLimit,
+    };
   }
 
-  if (this.isMeetingAssistant(user)) {
-  const skip = (page - 1) * limit;
+  const skip =
+    (safePage - 1) * safeLimit;
 
-  const [data, total] = await this.followUpRepository.findAndCount({
-    where: {
-      sourceModule: 'MEETING',
-    },
-    relations: ['lead'],
-    order: { followUpDate: 'ASC' },
-    skip,
-    take: limit,
-  });
+  const qb =
+    this.followUpRepository
+      .createQueryBuilder('followUp')
+      .leftJoinAndSelect(
+        'followUp.lead',
+        'lead',
+      );
+
+  /*
+   * Role visibility is applied first.
+   * All search, source, status and due filters
+   * are then applied to the same query.
+   */
+  if (this.isMeetingAssistant(user)) {
+    qb.where(
+      'UPPER(followUp.sourceModule) = :meetingSourceModule',
+      {
+        meetingSourceModule: 'MEETING',
+      },
+    );
+  } else if (
+    this.isOwnAssignedOnlyRole(user)
+  ) {
+    const currentUserId =
+      this.getCurrentUserId(user);
+
+    qb.where(
+      new Brackets((roleQb) => {
+        roleQb
+          .where(
+            'followUp.assignedTo = :currentUserId',
+            {
+              currentUserId,
+            },
+          )
+          .orWhere(
+            'followUp.createdBy = :currentUserId',
+            {
+              currentUserId,
+            },
+          )
+          .orWhere(
+            'lead.assignedTo = :currentUserId',
+            {
+              currentUserId,
+            },
+          )
+          .orWhere(
+            'lead.createdBy = :currentUserId',
+            {
+              currentUserId,
+            },
+          )
+          .orWhere(
+            'lead.originTelecallerId = :currentUserId',
+            {
+              currentUserId,
+            },
+          );
+      }),
+    );
+  }
+
+  this.applyFollowupFilters(
+    qb,
+    query,
+  );
+
+  const [data, total] =
+    await qb
+      .orderBy(
+        'followUp.followUpDate',
+        'ASC',
+      )
+      .addOrderBy(
+        'followUp.id',
+        'ASC',
+      )
+      .skip(skip)
+      .take(safeLimit)
+      .getManyAndCount();
 
   return {
     data,
     total,
-    page,
-    limit,
+    page: safePage,
+    limit: safeLimit,
   };
-}
-
-  const skip = (page - 1) * limit;
-
-  if (this.isOwnAssignedOnlyRole(user)) {
-    const currentUserId = this.getCurrentUserId(user);
-
-    const qb = this.followUpRepository
-      .createQueryBuilder('followUp')
-      .leftJoinAndSelect('followUp.lead', 'lead')
-      .where('followUp.assignedTo = :currentUserId', { currentUserId })
-      .orWhere('followUp.createdBy = :currentUserId', { currentUserId })
-      .orWhere('lead.assignedTo = :currentUserId', { currentUserId })
-      .orWhere('lead.createdBy = :currentUserId', { currentUserId })
-      .orWhere('lead.originTelecallerId = :currentUserId', { currentUserId })
-      .orderBy('followUp.followUpDate', 'ASC');
-
-    const [data, total] = await qb.skip(skip).take(limit).getManyAndCount();
-
-    return {
-      data,
-      total,
-      page,
-      limit,
-    };
-  }
-
-  const qb = this.followUpRepository
-  .createQueryBuilder('followUp')
-  .leftJoinAndSelect('followUp.lead', 'lead')
-  .orderBy('followUp.followUpDate', 'ASC')
-  .skip(skip)
-  .take(limit);
-
-this.applyFollowupFilters(qb, query);
-
-const [data, total] = await qb.getManyAndCount();
-
-return {
-  data,
-  total,
-  page,
-  limit,
-};
 }
 
   async findToday(user: any) {
@@ -420,13 +508,27 @@ return {
   const safeLimit = Number(limit) > 0 ? Math.min(Number(limit), 50) : 20;
   const skip = (safePage - 1) * safeLimit;
 
-  const qb = this.followUpRepository
-    .createQueryBuilder('followUp')
-    .leftJoinAndSelect('followUp.lead', 'lead')
-    .where('followUp.followUpDate < :now', { now: new Date() })
-    .andWhere('followUp.status = :status', {
+  const todayStart = new Date();
+todayStart.setHours(0, 0, 0, 0);
+
+const qb = this.followUpRepository
+  .createQueryBuilder('followUp')
+  .leftJoinAndSelect(
+    'followUp.lead',
+    'lead',
+  )
+  .where(
+    'followUp.followUpDate < :todayStart',
+    {
+      todayStart,
+    },
+  )
+  .andWhere(
+    'followUp.status = :status',
+    {
       status: FollowUpStatus.PENDING,
-    });
+    },
+  );
 
   if (this.isMeetingAssistant(user)) {
     qb.andWhere('followUp.sourceModule = :sourceModule', {
