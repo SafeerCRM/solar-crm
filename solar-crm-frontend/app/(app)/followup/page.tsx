@@ -92,6 +92,11 @@ const [assigningFiltered, setAssigningFiltered] = useState(false);
 const [sourceFilter, setSourceFilter] = useState('');
 const [statusFilter, setStatusFilter] = useState('');
 const [dueFilter, setDueFilter] = useState('');
+const [staffSearch, setStaffSearch] =
+  useState('');
+
+const [staffFilterId, setStaffFilterId] =
+  useState('');
 
   const userRoles = user?.roles || [];
 
@@ -195,6 +200,8 @@ setLeads(leadData);
   source: sourceFilter || undefined,
   status: statusFilter || undefined,
   due: dueFilter || undefined,
+  assignedTo:
+  staffFilterId || undefined,
 },
       headers: getAuthHeaders(),
     });
@@ -437,6 +444,27 @@ fetchFollowups(1);
     );
   }
 };
+
+const matchingStaff = users
+  .filter((staff) => {
+    const search =
+      staffSearch.trim().toLowerCase();
+
+    if (!search) {
+      return true;
+    }
+
+    return (
+      String(staff.name || '')
+        .toLowerCase()
+        .includes(search) ||
+      String(staff.email || '')
+        .toLowerCase()
+        .includes(search) ||
+      String(staff.id).includes(search)
+    );
+  })
+  .slice(0, 20);
 
 const leadManagers = users.filter((u) =>
   Array.isArray(u.roles) && u.roles.includes('LEAD_MANAGER')
@@ -1087,6 +1115,76 @@ const filteredSelectedFollowups = selectedFollowups.filter((f) => {
   <option value="COMPLETED">Completed</option>
 </select>
 
+{userRoles.includes('OWNER') && (
+  <div className="relative">
+    <input
+      type="text"
+      placeholder="Search assigned staff"
+      value={staffSearch}
+      onChange={(e) => {
+        setStaffSearch(e.target.value);
+
+        if (staffFilterId) {
+          setStaffFilterId('');
+        }
+      }}
+      className="w-full rounded-lg border border-gray-300 p-2 focus:border-blue-500 focus:outline-none"
+    />
+
+    {staffSearch.trim() &&
+      !staffFilterId && (
+        <div className="absolute z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border bg-white shadow-xl">
+          {matchingStaff.length === 0 ? (
+            <div className="p-3 text-sm text-gray-500">
+              No matching staff found
+            </div>
+          ) : (
+            matchingStaff.map((staff) => (
+              <button
+                key={staff.id}
+                type="button"
+                onClick={() => {
+                  setStaffFilterId(
+                    String(staff.id),
+                  );
+
+                  setStaffSearch(
+                    `${staff.name} (${staff.id})`,
+                  );
+                }}
+                className="block w-full border-b px-3 py-2 text-left text-sm hover:bg-blue-50"
+              >
+                <p className="font-semibold text-gray-900">
+                  {staff.name}
+                </p>
+
+                <p className="text-xs text-gray-500">
+                  ID: {staff.id}
+                  {staff.email
+                    ? ` • ${staff.email}`
+                    : ''}
+                </p>
+              </button>
+            ))
+          )}
+        </div>
+      )}
+
+    {staffFilterId && (
+      <button
+        type="button"
+        onClick={() => {
+          setStaffSearch('');
+          setStaffFilterId('');
+        }}
+        className="mt-1 text-xs font-semibold text-red-600"
+      >
+        Clear staff selection
+      </button>
+    )}
+  </div>
+)}
+
     <div className="mt-3 flex flex-col gap-3 md:flex-row md:items-center">
   <button
     type="button"
@@ -1099,6 +1197,8 @@ const filteredSelectedFollowups = selectedFollowups.filter((f) => {
       setSourceFilter('');
       setStatusFilter('');
       setDueFilter('');
+      setStaffSearch('');
+setStaffFilterId('');
 
       setFollowupPage(1);
 
@@ -1165,7 +1265,8 @@ const filteredSelectedFollowups = selectedFollowups.filter((f) => {
   zoneFilter ||
   sourceFilter ||
   statusFilter ||
-  dueFilter
+  dueFilter  ||
+  staffFilterId
 ) && (
   <p className="mt-2 text-sm text-gray-600">
     Filters applied:
@@ -1180,6 +1281,8 @@ const filteredSelectedFollowups = selectedFollowups.filter((f) => {
   ` Status: "${statusFilter}"`}
 {dueFilter &&
   ` Due: "${dueFilter}"`}
+  {staffFilterId &&
+  ` Staff: "${staffSearch}"`}
   </p>
 )}
 </div>
