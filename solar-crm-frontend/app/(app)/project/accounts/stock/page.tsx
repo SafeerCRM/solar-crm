@@ -2011,12 +2011,36 @@ const getFilteredSelectableStockItems = (searchText: string) => {
   <div className="mt-4 grid gap-3 md:grid-cols-2">
     <select
       value={requestIssueForm.requestItemId}
-      onChange={(e) =>
-        setRequestIssueForm({
-          ...requestIssueForm,
-          requestItemId: e.target.value,
-        })
-      }
+      onChange={(e) => {
+  const requestItemId = e.target.value;
+
+  let selectedItem: any = null;
+
+  for (const request of approvedRequests) {
+    const found = Array.isArray(request.items)
+      ? request.items.find(
+          (item: any) =>
+            String(item.id) === String(requestItemId),
+        )
+      : null;
+
+    if (found) {
+      selectedItem = found;
+      break;
+    }
+  }
+
+  setRequestIssueForm({
+    ...requestIssueForm,
+    requestItemId,
+    stockItemId: selectedItem?.stockItemId
+      ? String(selectedItem.stockItemId)
+      : '',
+    quantity: selectedItem?.issuePendingQuantity
+      ? String(selectedItem.issuePendingQuantity)
+      : '',
+  });
+}}
       className="rounded-xl border p-3 text-sm"
     >
       <option value="">Select Material Request Item</option>
@@ -2076,6 +2100,12 @@ const getFilteredSelectableStockItems = (searchText: string) => {
         </option>
       ))}
     </select>
+
+    {requestIssueForm.stockItemId && (
+  <p className="text-xs text-green-700">
+    Reserved stock row selected automatically.
+  </p>
+)}
 
     <input
       type="number"
