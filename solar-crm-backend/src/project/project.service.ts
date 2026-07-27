@@ -1275,89 +1275,54 @@ if (missingCustomerFields.length > 0) {
       );
     }
 
-    const normalizedCustomerPhone = String(
-  data.customerPhone || '',
-)
-  .replace(/\D/g, '')
-  .slice(-10);
-
-const normalizedElectricityKNumber = String(
+    const normalizedElectricityKNumber = String(
   data.electricityKNumber || '',
 )
-  .trim()
+  .replace(/\s+/g, '')
   .toLowerCase();
 
-const duplicateCheckUserId = Number(
-  user?.id || user?.userId || user?.sub,
-);
+if (!normalizedElectricityKNumber) {
+  throw new BadRequestException(
+    'Electricity K Number is required',
+  );
+}
 
-const duplicateProtectionStart = new Date(
-  Date.now() - 2 * 60 * 60 * 1000,
-);
-
-if (
-  normalizedCustomerPhone &&
-  normalizedElectricityKNumber &&
-  duplicateCheckUserId
-) {
-  const recentExistingProject =
-    await this.projectRepository
-      .createQueryBuilder('existingProject')
-      .where(
-        `
-        RIGHT(
-          REGEXP_REPLACE(
-            COALESCE(existingProject.customerPhone, ''),
-            '[^0-9]',
-            '',
-            'g'
-          ),
-          10
-        ) = :normalizedCustomerPhone
-        `,
-        {
-          normalizedCustomerPhone,
-        },
-      )
-      .andWhere(
-        `
-        LOWER(
+const existingProjectForKNumber =
+  await this.projectRepository
+    .createQueryBuilder('existingProject')
+    .where(
+      `
+      LOWER(
+        REGEXP_REPLACE(
           TRIM(
-            COALESCE(existingProject.electricityKNumber, '')
-          )
-        ) = :normalizedElectricityKNumber
-        `,
-        {
-          normalizedElectricityKNumber,
-        },
-      )
-      .andWhere(
-        'existingProject.projectType = :projectType',
-        {
-          projectType: data.projectType,
-        },
-      )
-      .andWhere(
-        'existingProject.projectOwnerId = :duplicateCheckUserId',
-        {
-          duplicateCheckUserId,
-        },
-      )
-      .andWhere(
-        'COALESCE(existingProject.isHidden, false) = false',
-      )
-      .andWhere(
-        'existingProject.createdAt >= :duplicateProtectionStart',
-        {
-          duplicateProtectionStart,
-        },
-      )
-      .orderBy('existingProject.createdAt', 'DESC')
-      .getOne();
+            COALESCE(
+              existingProject.electricityKNumber,
+              ''
+            )
+          ),
+          '\\s+',
+          '',
+          'g'
+        )
+      ) = :normalizedElectricityKNumber
+      `,
+      {
+        normalizedElectricityKNumber,
+      },
+    )
+    .andWhere(
+      'COALESCE(existingProject.isHidden, false) = false',
+    )
+    .orderBy(
+      'existingProject.createdAt',
+      'DESC',
+    )
+    .getOne();
 
-  if (recentExistingProject) {
-    return recentExistingProject;
-  }
+if (existingProjectForKNumber) {
+  throw new BadRequestException(
+  `Project already exists for this Electricity K Number (Project ID: ${existingProjectForKNumber.id}). Duplicate project creation is not allowed.`,
+);
 }
 
     const journeySnapshot =
@@ -3362,16 +3327,31 @@ allowedDepartments.push('ELECTRICITY_DEPARTMENT');
 async getProjectOwners() {
   const rows = await this.projectRepository
     .createQueryBuilder('project')
-    .select([
-      'project.projectOwnerId AS "projectOwnerId"',
-      'project.projectOwnerName AS "projectOwnerName"',
-      'project.projectOwnerRole AS "projectOwnerRole"',
-    ])
-    .where('project.projectOwnerId IS NOT NULL')
-    .groupBy('project.projectOwnerId')
-    .addGroupBy('project.projectOwnerName')
-    .addGroupBy('project.projectOwnerRole')
-    .orderBy('project.projectOwnerName', 'ASC')
+    .select(
+      'project.projectOwnerId',
+      'projectOwnerId',
+    )
+    .addSelect(
+      `MAX(NULLIF(TRIM(project.projectOwnerName), ''))`,
+      'projectOwnerName',
+    )
+    .addSelect(
+      `MAX(NULLIF(TRIM(project.projectOwnerRole), ''))`,
+      'projectOwnerRole',
+    )
+    .where(
+      'project.projectOwnerId IS NOT NULL',
+    )
+    .andWhere(
+      'project.isHidden = false',
+    )
+    .groupBy(
+      'project.projectOwnerId',
+    )
+    .orderBy(
+      `MAX(NULLIF(TRIM(project.projectOwnerName), ''))`,
+      'ASC',
+    )
     .getRawMany();
 
   return rows;
