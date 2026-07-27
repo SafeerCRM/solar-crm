@@ -183,7 +183,7 @@ const customerPortalMode = hasActiveProject
     'Your installation is complete. You can continue using this portal for cleaning, complaints, referrals and support.',
 },
           quickActions: {
-  complaints: true,
+  complaints: false,
   payments: true,
   referrals: true,
 },
@@ -200,7 +200,7 @@ sectionLabels: {
           workCalendar: false,
           payments: true,
           documents: false,
-          complaints: true,
+          complaints: false,
           cleaning: true,
           afterSalesServices: true,
           referrals: true,
