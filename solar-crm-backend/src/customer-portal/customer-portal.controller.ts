@@ -33,6 +33,42 @@ export class CustomerPortalController {
   }
 
   @Roles(
+  'OWNER',
+  'CUSTOMER_MANAGER',
+  'PROJECT_MANAGER',
+  'PROJECT_EXECUTIVE',
+  'MEETING_MANAGER',
+  'MARKETING_HEAD',
+  'MAINTENANCE_MANAGER',
+)
+@Get('complaints/:id/proofs')
+listComplaintWorkProofs(
+  @Param('id', ParseIntPipe) id: number,
+) {
+  return this.service.listComplaintWorkProofs(id);
+}
+
+@Roles(
+  'OWNER',
+  'CUSTOMER_MANAGER',
+  'PROJECT_MANAGER',
+  'PROJECT_EXECUTIVE',
+  'MAINTENANCE_MANAGER',
+)
+@Post('complaints/:id/proofs')
+addComplaintWorkProof(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.service.addComplaintWorkProof(
+    id,
+    body,
+    user,
+  );
+}
+
+  @Roles(
     'OWNER',
     'CUSTOMER_MANAGER',
     'PROJECT_MANAGER',
@@ -45,6 +81,7 @@ export class CustomerPortalController {
   listComplaints(@Query() query: any) {
     return this.service.listComplaints(query);
   }
+
 
   @Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE', 'MAINTENANCE_MANAGER',)
   @Patch('complaints/:id')

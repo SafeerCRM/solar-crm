@@ -15,7 +15,10 @@ import { CustomerWorkDateRequest } from './customer-work-date-request.entity';
 import { CustomerNotification } from './customer-notification.entity';
 import { CustomerCleaningReminder } from './customer-cleaning-reminder.entity';
 import * as jwt from 'jsonwebtoken';
-import { CustomerComplaintAttachment } from './customer-complaint-attachment.entity';
+import {
+  CustomerComplaintAttachment,
+  CustomerComplaintAttachmentPurpose,
+} from './customer-complaint-attachment.entity';
 import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
 import { ProjectExecutionActivity } from '../project/project-execution-activity.entity';
@@ -508,13 +511,30 @@ for (const attachment of attachments) {
   if (!attachment?.fileUrl) continue;
 
   const complaintAttachment = this.complaintAttachmentRepository.create({
-    complaintId: savedComplaint.id,
-    fileUrl: attachment.fileUrl,
-    fileName: attachment.fileName || '',
-    fileSize: attachment.fileSize ? Number(attachment.fileSize) : undefined,
-    uploadedBy: user?.id || null,
-    uploadedByName: user?.name || user?.email || '',
-  });
+  complaintId: savedComplaint.id,
+  fileUrl: attachment.fileUrl,
+  fileName: attachment.fileName || '',
+  fileSize: attachment.fileSize
+    ? Number(attachment.fileSize)
+    : undefined,
+
+  purpose:
+    CustomerComplaintAttachmentPurpose.CUSTOMER_ATTACHMENT,
+
+  mimeType: attachment.mimeType || '',
+  remarks: '',
+
+  uploadedBy: user?.id || null,
+  uploadedByName:
+    user?.name ||
+    user?.customerName ||
+    user?.email ||
+    '',
+
+  uploadedByRole: Array.isArray(user?.roles)
+    ? user.roles.join(', ')
+    : 'CUSTOMER',
+});
 
   await this.complaintAttachmentRepository.save(complaintAttachment);
 }
@@ -557,6 +577,157 @@ return {
   }),
 };
   }
+
+  async addComplaintWorkProof(
+  complaintId: number,
+  body: any,
+  user: any,
+) {
+  const complaint =
+    await this.complaintRepository.findOne({
+      where: {
+        id: complaintId,
+        isHidden: false,
+      } as any,
+    });
+
+  if (!complaint) {
+    throw new NotFoundException(
+      'Complaint not found',
+    );
+  }
+
+  const fileUrl = String(
+    body?.fileUrl || '',
+  ).trim();
+
+  if (!fileUrl) {
+    throw new BadRequestException(
+      'Proof file is required',
+    );
+  }
+
+  const allowedPurposes = [
+    CustomerComplaintAttachmentPurpose.BEFORE_PHOTO,
+    CustomerComplaintAttachmentPurpose.AFTER_PHOTO,
+    CustomerComplaintAttachmentPurpose.COMPLETION_PHOTO,
+    CustomerComplaintAttachmentPurpose.OTHER,
+  ];
+
+  const requestedPurpose =
+    String(
+      body?.purpose ||
+        body?.proofType ||
+        CustomerComplaintAttachmentPurpose.OTHER,
+    ).trim() as CustomerComplaintAttachmentPurpose;
+
+  if (!allowedPurposes.includes(requestedPurpose)) {
+    throw new BadRequestException(
+      'Invalid complaint proof type',
+    );
+  }
+
+  const proof =
+    this.complaintAttachmentRepository.create({
+      complaintId: complaint.id,
+
+      fileUrl,
+      fileName: String(
+        body?.fileName || 'complaint-proof',
+      ).trim(),
+
+      fileSize:
+        body?.fileSize !== undefined &&
+        body?.fileSize !== null
+          ? Number(body.fileSize)
+          : undefined,
+
+      mimeType: String(
+        body?.mimeType || '',
+      ).trim(),
+
+      purpose: requestedPurpose,
+
+      remarks: String(
+        body?.remarks || '',
+      ).trim(),
+
+      uploadedBy: user?.id || null,
+
+      uploadedByName:
+        user?.name ||
+        user?.email ||
+        '',
+
+      uploadedByRole: Array.isArray(user?.roles)
+        ? user.roles.join(', ')
+        : '',
+    });
+
+  const savedProof =
+    await this.complaintAttachmentRepository.save(
+      proof,
+    );
+
+  await this.addComplaintActivity(
+    {
+      complaintId: complaint.id,
+      customerId: complaint.customerId,
+      customerCode: complaint.customerCode,
+      projectId: complaint.projectId,
+
+      activityType:
+        CustomerComplaintActivityType.ATTACHMENT_UPLOADED,
+
+      activityTitle: 'Work Proof Uploaded',
+
+      activityDescription: `${
+        String(requestedPurpose)
+          .replace(/_/g, ' ')
+          .toLowerCase()
+      } uploaded by ${
+        savedProof.uploadedByName || 'staff'
+      }${
+        savedProof.remarks
+          ? ` — ${savedProof.remarks}`
+          : ''
+      }.`,
+
+      newValue: String(requestedPurpose),
+    },
+    user,
+  );
+
+  return {
+    message:
+      'Complaint work proof uploaded successfully',
+    proof: savedProof,
+  };
+}
+
+async listComplaintWorkProofs(
+  complaintId: number,
+) {
+  const complaint =
+    await this.complaintRepository.findOne({
+      where: { id: complaintId },
+    });
+
+  if (!complaint) {
+    throw new NotFoundException(
+      'Complaint not found',
+    );
+  }
+
+  return this.complaintAttachmentRepository.find({
+    where: {
+      complaintId,
+    },
+    order: {
+      createdAt: 'DESC',
+    },
+  });
+}
 
   async listComplaints(query: any) {
   const page = Number(query?.page || 1);
