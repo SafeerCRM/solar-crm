@@ -487,6 +487,7 @@ const projectTrackerLabel = sectionLabels?.projectTracker || {};
         </div>
 
         <div className="mt-8 grid gap-5 lg:grid-cols-2">
+            {enabledSections.complaints && (
           <div className="rounded-[2rem] bg-white p-6 shadow-xl">
             <SectionTitle
               title="Latest Complaints"
@@ -503,6 +504,7 @@ const projectTrackerLabel = sectionLabels?.projectTracker || {};
               )}
             </div>
           </div>
+          )}
 
           <div className="rounded-[2rem] bg-white p-6 shadow-xl">
             <SectionTitle
