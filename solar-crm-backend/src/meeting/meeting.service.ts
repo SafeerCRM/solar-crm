@@ -833,16 +833,16 @@ solarMiterPhone: this.isSolarFranchise(user)
   }
 
   if (query?.assignedToName) {
-    qb.andWhere(
-      `meeting.assignedToName
-        ILIKE :assignedToName`,
-      {
-        assignedToName: `%${String(
-          query.assignedToName,
-        ).trim()}%`,
-      },
-    );
-  }
+  qb.andWhere(
+    `"meeting"."assignedToName"
+      ILIKE :assignedToName`,
+    {
+      assignedToName: `%${String(
+        query.assignedToName,
+      ).trim()}%`,
+    },
+  );
+}
 
   if (query?.leadId) {
     qb.andWhere(
