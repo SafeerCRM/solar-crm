@@ -4372,30 +4372,79 @@ private buildRecycleEligibleContactsQuery(
    * It deliberately does not use contact.updatedAt
    * or contact.createdAt as a call date.
    */
-  const latestCallSubQuery =
+  /*
+ * Get exactly one latest real call-history row
+ * per eligible contact of the selected telecaller.
+ *
+ * Important:
+ * Previously PostgreSQL calculated the latest
+ * history row for every contact in the entire
+ * history table before filtering by telecaller.
+ *
+ * This version limits history processing to the
+ * selected telecaller's currently eligible active
+ * contacts first. Business rules remain unchanged.
+ */
+const latestCallSubQuery =
   this.contactCallHistoryRepository
     .createQueryBuilder('history')
+    .innerJoin(
+      TelecallingContact,
+      'eligible_contact',
+      `
+        eligible_contact.id = history."contactId"
+        AND eligible_contact."assignedTo" = :latestCallFromTelecallerId
+        AND eligible_contact."isInStorage" = false
+        AND COALESCE(
+          eligible_contact."convertedToLead",
+          false
+        ) = false
+        AND COALESCE(
+          eligible_contact.stage,
+          'TELECALLING'
+        ) = :latestCallEligibleStage
+      `,
+    )
     .select([
       `DISTINCT ON (history."contactId")
        history."contactId" AS "contactId"`,
 
       `history.id AS "historyId"`,
 
-      `history."callStatus" AS "callStatus"`,
+      `history."callStatus"
+       AS "callStatus"`,
 
-      `history.notes AS "notes"`,
+      `history.notes
+       AS "notes"`,
 
-      `history."calledBy" AS "calledBy"`,
+      `history."calledBy"
+       AS "calledBy"`,
 
-      `history."calledByName" AS "calledByName"`,
+      `history."calledByName"
+       AS "calledByName"`,
 
       `COALESCE(
         history."updatedAt",
         history."createdAt"
       ) AS "latestCallAt"`,
     ])
+    .where(
+      `UPPER(
+        COALESCE(
+          history."callStatus",
+          ''
+        )
+      ) <> 'INITIATED'`,
+    )
+    .setParameters({
+      latestCallFromTelecallerId:
+        fromTelecallerId,
+
+      latestCallEligibleStage:
+        'TELECALLING',
+    })
     .orderBy(
-      'history."contactId"',
+      `history."contactId"`,
       'ASC',
     )
     .addOrderBy(
