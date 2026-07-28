@@ -2130,7 +2130,7 @@ const resetReassignmentFilters =
     setReassignmentZone('');
 
     setReassignmentRecycleDays(30);
-setFilteredTransferCount('');
+    setFilteredTransferCount('');
 
     setReassignmentContactStatus('');
     setReassignmentCallStatus('');
@@ -2155,18 +2155,29 @@ setFilteredTransferCount('');
     try {
       setTransferLoading(true);
 
+      /*
+       * Reset must use the same eligibility endpoint
+       * as the normal Reassignment preview.
+       *
+       * State updates are asynchronous, so the reset
+       * values are supplied explicitly in this request.
+       */
       const res =
         await axios.get<ContactHistoryResponse>(
-          `${backendUrl}/telecalling/contacts/history`,
+          `${backendUrl}/telecalling/contacts/recycle-preview`,
           {
             params: {
-              mode: 'reassignment',
               page: 1,
               limit: historyLimit,
-              telecallerId:
+
+              fromTelecallerId:
                 Number(fromTelecallerId),
+
+              recycleDays: 30,
             },
-            headers: getAuthHeaders(),
+
+            headers:
+              getAuthHeaders(),
           },
         );
 
@@ -2180,7 +2191,9 @@ setFilteredTransferCount('');
         Number(res.data?.total || 0),
       );
 
-      setReassignmentPage(1);
+      setReassignmentPage(
+        Number(res.data?.page || 1),
+      );
 
       setReassignmentTotalPages(
         Number(
@@ -2192,6 +2205,7 @@ setFilteredTransferCount('');
 
       setReassignmentContacts([]);
       setReassignmentTotal(0);
+      setReassignmentPage(1);
       setReassignmentTotalPages(1);
 
       const errorMessage =
