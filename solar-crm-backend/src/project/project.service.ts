@@ -3709,12 +3709,22 @@ const materialMap = new Map(
 );
 
 const enrichedData = data.map((item: any) => {
-  const currentQuantity = Number(item.currentQuantity || 0);
-  const reservedQuantity = Number(item.reservedQuantity || 0);
-  const availableQuantity = Math.max(
-    currentQuantity - reservedQuantity,
-    0,
-  );
+  const currentQuantity = Number(
+  item.currentQuantity || 0,
+);
+
+const reservedQuantity = Number(
+  item.reservedQuantity || 0,
+);
+
+/*
+ * Reservation is no longer part of the
+ * active inventory workflow.
+ *
+ * Physical stock itself is available stock.
+ */
+const availableQuantity =
+  currentQuantity;
 
   const material = materialMap.get(Number(item.materialId || 0));
 
@@ -3886,18 +3896,9 @@ async issueProjectStock(body: any, currentUser: any) {
   stockItem.currentQuantity || 0,
 );
 
-const reservedQuantity = Number(
-  (stockItem as any).reservedQuantity || 0,
-);
-
-const availableQuantity = Math.max(
-  currentQuantity - reservedQuantity,
-  0,
-);
-
-if (availableQuantity < quantity) {
+if (currentQuantity < quantity) {
   throw new BadRequestException(
-    `Insufficient available stock. Available quantity is ${availableQuantity}; ${reservedQuantity} is reserved.`,
+    `Insufficient stock quantity. Available quantity is ${currentQuantity}`,
   );
 }
 
@@ -3905,7 +3906,7 @@ if (availableQuantity < quantity) {
   const totalAmount = quantity * rate;
 
   stockItem.currentQuantity =
-    Number(stockItem.currentQuantity || 0) - quantity;
+  currentQuantity - quantity;
 
   stockItem.stockValue =
     Number(stockItem.currentQuantity || 0) * rate;
@@ -3981,21 +3982,9 @@ async transferProjectStock(body: any, currentUser: any) {
   sourceStock.currentQuantity || 0,
 );
 
-const sourceReservedQuantity = Number(
-  (sourceStock as any).reservedQuantity || 0,
-);
-
-const sourceAvailableQuantity = Math.max(
-  sourceCurrentQuantity -
-    sourceReservedQuantity,
-  0,
-);
-
-if (
-  sourceAvailableQuantity < quantity
-) {
+if (sourceCurrentQuantity < quantity) {
   throw new BadRequestException(
-    `Insufficient available stock. Available quantity is ${sourceAvailableQuantity}; ${sourceReservedQuantity} is reserved.`,
+    `Insufficient stock quantity. Available quantity is ${sourceCurrentQuantity}`,
   );
 }
 
@@ -4022,7 +4011,7 @@ if (
       const transferValue = quantity * rate;
 
       sourceStock.currentQuantity =
-        Number(sourceStock.currentQuantity || 0) - quantity;
+  sourceCurrentQuantity - quantity;
 
       sourceStock.stockValue =
         Number(sourceStock.currentQuantity || 0) * rate;
@@ -5210,7 +5199,7 @@ async issueMaterialRequestItemStock(
   body: any,
   currentUser: any,
 ) {
-  const requestedStockItemId = Number(
+  const stockItemId = Number(
     body?.stockItemId || 0,
   );
 
@@ -5218,16 +5207,13 @@ async issueMaterialRequestItemStock(
     body?.quantity || 0,
   );
 
-  if (!requestedStockItemId) {
+  if (!stockItemId) {
     throw new BadRequestException(
       'Stock item is required',
     );
   }
 
-  if (
-    !quantity ||
-    quantity <= 0
-  ) {
+  if (!quantity || quantity <= 0) {
     throw new BadRequestException(
       'Valid quantity is required',
     );
@@ -5236,22 +5222,34 @@ async issueMaterialRequestItemStock(
   return this.projectStockItemRepository.manager.transaction(
     async (manager) => {
       const requestRepository =
-        manager.getRepository(ProjectMaterialRequest);
+        manager.getRepository(
+          ProjectMaterialRequest,
+        );
 
       const requestItemRepository =
-        manager.getRepository(ProjectMaterialRequestItem);
+        manager.getRepository(
+          ProjectMaterialRequestItem,
+        );
 
       const stockItemRepository =
-        manager.getRepository(ProjectStockItem);
+        manager.getRepository(
+          ProjectStockItem,
+        );
 
       const movementRepository =
-        manager.getRepository(ProjectStockMovement);
+        manager.getRepository(
+          ProjectStockMovement,
+        );
 
       const consumptionRepository =
-        manager.getRepository(ProjectConsumption);
+        manager.getRepository(
+          ProjectConsumption,
+        );
 
       const projectRepository =
-        manager.getRepository(Project);
+        manager.getRepository(
+          Project,
+        );
 
       const requestItem =
         await requestItemRepository.findOne({
@@ -5296,72 +5294,43 @@ async issueMaterialRequestItemStock(
         requestItem.issuedQuantity || 0,
       );
 
-      const pendingIssueQuantity =
+      const pendingIssueQuantity = Math.max(
         requestedQuantity -
-        alreadyIssuedQuantity;
+          alreadyIssuedQuantity,
+        0,
+      );
 
-      if (
-        quantity >
-        pendingIssueQuantity
-      ) {
+      if (pendingIssueQuantity <= 0) {
+        throw new BadRequestException(
+          'This material request item is already fully issued',
+        );
+      }
+
+      if (quantity > pendingIssueQuantity) {
         throw new BadRequestException(
           `Issue quantity cannot exceed pending quantity ${pendingIssueQuantity}`,
         );
       }
 
-      const itemReservedQuantity = Number(
-        requestItem.reservedQuantity || 0,
-      );
-
-      if (
-        itemReservedQuantity <
-        quantity
-      ) {
-        throw new BadRequestException(
-          `Issue quantity cannot exceed this request item's reserved quantity ${itemReservedQuantity}`,
-        );
-      }
-
       /*
-       * For new requests, stockItemId is the exact
-       * stock row reserved during approval.
+       * Manual inventory workflow:
        *
-       * Existing approved requests may still have
-       * stockItemId = null, so they retain the former
-       * manually selected stock-row behavior.
+       * Warehouse staff manually select the exact
+       * stock row and branch at the time of issue.
+       *
+       * No previous reservation is required.
        */
-      const effectiveStockItemId =
-        requestItem.stockItemId
-          ? Number(
-              requestItem.stockItemId,
-            )
-          : requestedStockItemId;
-
-      /*
-       * Prevent staff from issuing a new reservation
-       * from a different branch/stock row.
-       */
-      if (
-        requestItem.stockItemId &&
-        Number(requestItem.stockItemId) !==
-          requestedStockItemId
-      ) {
-        throw new BadRequestException(
-          `Please select the originally reserved stock row for ${requestItem.materialName}`,
-        );
-      }
-
       const stockItem =
         await stockItemRepository.findOne({
           where: {
-            id: effectiveStockItemId,
+            id: stockItemId,
             isHidden: false,
           },
         });
 
       if (!stockItem) {
         throw new NotFoundException(
-          'Reserved stock item not found or is hidden',
+          'Selected stock item not found or is hidden',
         );
       }
 
@@ -5376,29 +5345,13 @@ async issueMaterialRequestItemStock(
         );
       }
 
-      const stockCurrentQuantity = Number(
+      const currentQuantity = Number(
         stockItem.currentQuantity || 0,
       );
 
-      if (
-        stockCurrentQuantity <
-        quantity
-      ) {
+      if (currentQuantity < quantity) {
         throw new BadRequestException(
-          `Insufficient stock quantity. Current quantity is ${stockCurrentQuantity}`,
-        );
-      }
-
-      const stockReservedQuantity = Number(
-        stockItem.reservedQuantity || 0,
-      );
-
-      if (
-        stockReservedQuantity <
-        quantity
-      ) {
-        throw new BadRequestException(
-          `Insufficient reserved stock. Reserved quantity is ${stockReservedQuantity}`,
+          `Insufficient stock quantity. Available quantity is ${currentQuantity}`,
         );
       }
 
@@ -5409,13 +5362,12 @@ async issueMaterialRequestItemStock(
       const totalAmount =
         quantity * rate;
 
+      /*
+       * Actual Stock Out:
+       * only current physical quantity changes.
+       */
       stockItem.currentQuantity =
-        stockCurrentQuantity -
-        quantity;
-
-      stockItem.reservedQuantity =
-        stockReservedQuantity -
-        quantity;
+        currentQuantity - quantity;
 
       stockItem.stockValue =
         Number(
@@ -5539,13 +5491,6 @@ async issueMaterialRequestItemStock(
           }),
         );
 
-      requestItem.reservedQuantity =
-        Math.max(
-          itemReservedQuantity -
-            quantity,
-          0,
-        );
-
       const newIssuedQuantity =
         alreadyIssuedQuantity +
         quantity;
@@ -5588,14 +5533,19 @@ async issueMaterialRequestItemStock(
         '';
 
       /*
-       * Preserve exact stock-row linkage throughout
-       * partial and full issue history.
+       * This now records which stock row was used
+       * for the latest/manual issue.
        *
-       * For an older request with no linkage, the
-       * first successful issue safely records it.
+       * It is no longer a reservation reference.
        */
       requestItem.stockItemId =
         savedStock.id;
+
+      /*
+       * Reservation is no longer part of the
+       * active workflow.
+       */
+      requestItem.reservedQuantity = 0;
 
       await requestItemRepository.save(
         requestItem,
@@ -5613,12 +5563,10 @@ async issueMaterialRequestItemStock(
         allItems.every(
           (item) =>
             Number(
-              item.issuedQuantity ||
-                0,
+              item.issuedQuantity || 0,
             ) >=
             Number(
-              item.quantity ||
-                0,
+              item.quantity || 0,
             ),
         );
 
@@ -5632,6 +5580,9 @@ async issueMaterialRequestItemStock(
       }
 
       return {
+        message:
+          'Stock issued successfully',
+
         stockItem:
           savedStock,
 
@@ -5651,195 +5602,57 @@ async approveMaterialRequestForStock(
   requestId: number,
   user: any,
 ) {
-  return this.projectStockItemRepository.manager.transaction(
-    async (manager) => {
-      const requestRepository =
-        manager.getRepository(ProjectMaterialRequest);
+  const request =
+    await this.projectMaterialRequestRepository.findOne({
+      where: { id: requestId },
+    });
 
-      const requestItemRepository =
-        manager.getRepository(ProjectMaterialRequestItem);
+  if (!request) {
+    throw new NotFoundException(
+      'Material request not found',
+    );
+  }
 
-      const stockItemRepository =
-        manager.getRepository(ProjectStockItem);
+  if (
+    request.requestType ===
+      ProjectMaterialRequestType.INFORMATION_NOTE ||
+    request.isProcurementActive === false
+  ) {
+    throw new BadRequestException(
+      'Informational material notes cannot be approved for stock issue',
+    );
+  }
 
-      const request =
-        await requestRepository.findOne({
-          where: {
-            id: requestId,
-          },
-        });
+  if (
+    request.status !==
+    ProjectMaterialRequestStatus.SUBMITTED
+  ) {
+    throw new BadRequestException(
+      'Only submitted material requests can be approved',
+    );
+  }
 
-      if (!request) {
-        throw new NotFoundException(
-          'Material request not found',
-        );
-      }
+  /*
+   * Manual inventory workflow:
+   *
+   * Approval is only an authorization/planning action.
+   * It must not reserve or reduce warehouse stock.
+   *
+   * Stock quantity will change only when warehouse staff
+   * actually issue the material through Stock Out.
+   */
+  request.status =
+    ProjectMaterialRequestStatus.APPROVED;
 
-      if (
-        request.requestType ===
-          ProjectMaterialRequestType.INFORMATION_NOTE ||
-        request.isProcurementActive === false
-      ) {
-        throw new BadRequestException(
-          'Informational material notes cannot reserve or issue stock',
-        );
-      }
-
-      if (
-        request.status !==
-        ProjectMaterialRequestStatus.SUBMITTED
-      ) {
-        throw new BadRequestException(
-          'Only submitted material requests can be approved',
-        );
-      }
-
-      const items =
-        await requestItemRepository.find({
-          where: {
-            requestId,
-          },
-        });
-
-      if (!items.length) {
-        throw new BadRequestException(
-          'Material request has no items',
-        );
-      }
-
-      for (const item of items) {
-        const requiredQuantity = Number(
-          item.quantity || 0,
-        );
-
-        const alreadyReservedQuantity = Number(
-          item.reservedQuantity || 0,
-        );
-
-        const reserveNow =
-          requiredQuantity -
-          alreadyReservedQuantity;
-
-        if (reserveNow <= 0) {
-          continue;
-        }
-
-        if (!item.materialId) {
-          throw new BadRequestException(
-            `Material master is not selected for ${item.materialName}`,
-          );
-        }
-
-        let stockItem: ProjectStockItem | null =
-          null;
-
-        /*
-         * This supports a partially processed row if
-         * approval is ever retried internally.
-         */
-        if (item.stockItemId) {
-          stockItem =
-            await stockItemRepository.findOne({
-              where: {
-                id: Number(item.stockItemId),
-                isHidden: false,
-              },
-            });
-
-          if (
-            stockItem &&
-            Number(stockItem.materialId) !==
-              Number(item.materialId)
-          ) {
-            throw new BadRequestException(
-              `Reserved stock row does not match ${item.materialName}`,
-            );
-          }
-        }
-
-        /*
-         * Normal path for a new material request.
-         */
-        if (!stockItem) {
-          stockItem =
-            await stockItemRepository.findOne({
-              where: {
-                materialId: Number(
-                  item.materialId,
-                ),
-                isHidden: false,
-              },
-              order: {
-                currentQuantity: 'DESC',
-              },
-            });
-        }
-
-        if (!stockItem) {
-          throw new BadRequestException(
-            `Stock not found for ${item.materialName}`,
-          );
-        }
-
-        const currentQuantity = Number(
-          stockItem.currentQuantity || 0,
-        );
-
-        const stockReservedQuantity = Number(
-          stockItem.reservedQuantity || 0,
-        );
-
-        const availableQuantity =
-          currentQuantity -
-          stockReservedQuantity;
-
-        if (
-          availableQuantity <
-          reserveNow
-        ) {
-          throw new BadRequestException(
-            `Insufficient available stock for ${item.materialName}. Available: ${availableQuantity}, Required: ${reserveNow}`,
-          );
-        }
-
-        stockItem.reservedQuantity =
-          stockReservedQuantity +
-          reserveNow;
-
-        item.reservedQuantity =
-          alreadyReservedQuantity +
-          reserveNow;
-
-        /*
-         * Persist the exact branch/stock row that
-         * received this reservation.
-         */
-        item.stockItemId =
-          stockItem.id;
-
-        await stockItemRepository.save(
-          stockItem,
-        );
-
-        await requestItemRepository.save(
-          item,
-        );
-      }
-
-      request.status =
-        ProjectMaterialRequestStatus.APPROVED;
-
-      await requestRepository.save(
-        request,
-      );
-
-      return {
-        message:
-          'Material request approved and stock reserved',
-        request,
-      };
-    },
+  await this.projectMaterialRequestRepository.save(
+    request,
   );
+
+  return {
+    message:
+      'Material request approved. Stock will change only when material is issued.',
+    request,
+  };
 }
 
 async getPaymentCollectionList(query: any, currentUser: any) {
@@ -20181,34 +19994,6 @@ order.status = newStatus;
     order.adminRemarks = body.adminRemarks || '';
   }
 
-  if (
-  oldStatus !== ProjectDealerOrderStatus.ACCEPTED &&
-  newStatus === ProjectDealerOrderStatus.ACCEPTED
-) {
-  await this.reserveStockForDealerOrder(order.id, user);
-}
-
-if (
-  oldStatus === ProjectDealerOrderStatus.ACCEPTED &&
-  [
-    ProjectDealerOrderStatus.CANCELLED,
-    ProjectDealerOrderStatus.POSTPONED,
-    ProjectDealerOrderStatus.STOCK_OUT,
-  ].includes(newStatus)
-) {
-  await this.releaseStockReservationForDealerOrder(order.id);
-}
-
-if (
-  oldStatus !== ProjectDealerOrderStatus.DISPATCHED &&
-  newStatus === ProjectDealerOrderStatus.DISPATCHED
-) {
-  await this.dispatchDealerOrderStock(
-    order.id,
-    user,
-  );
-}
-
   return this.projectDealerOrderRepository.save(order);
 }
 
@@ -22209,24 +21994,19 @@ const materialMap = new Map(
 );
 
 const lowStockItems = stockItems.filter((item) => {
-  const material = materialMap.get(item.materialId);
+  const material = materialMap.get(
+    item.materialId,
+  );
 
   const currentQuantity = Number(
     item.currentQuantity || 0,
   );
 
-  const reservedQuantity = Number(
-    (item as any).reservedQuantity || 0,
-  );
-
-  const availableQuantity = Math.max(
-    currentQuantity - reservedQuantity,
-    0,
-  );
-
   return (
-    availableQuantity <=
-    Number(material?.minimumStockLevel || 0)
+    currentQuantity <=
+    Number(
+      material?.minimumStockLevel || 0,
+    )
   );
 });
 
@@ -22308,12 +22088,18 @@ const materialMap = new Map(
 const enrichedData = data.map((item: any) => {
   const material = materialMap.get(Number(item.materialId || 0));
 
-  const currentQuantity = Number(item.currentQuantity || 0);
-  const reservedQuantity = Number(item.reservedQuantity || 0);
-  const availableQuantity = Math.max(
-    currentQuantity - reservedQuantity,
-    0,
-  );
+  const currentQuantity = Number(
+  item.currentQuantity || 0,
+);
+
+const reservedQuantity = Number(
+  item.reservedQuantity || 0,
+);
+
+// Reservation is no longer used.
+// Physical stock is the available stock.
+const availableQuantity =
+  currentQuantity;
 
   const minimumStockLevel = Number(
     (material as any)?.minimumStockLevel || 0,
@@ -22667,15 +22453,6 @@ async adjustStock(body: any, user: any) {
   stockItem.currentQuantity || 0,
 );
 
-const reservedQuantity = Number(
-  (stockItem as any).reservedQuantity || 0,
-);
-
-const availableQuantity = Math.max(
-  currentQuantity - reservedQuantity,
-  0,
-);
-
 const averageRate = Number(
   stockItem.averageRate || 0,
 );
@@ -22683,10 +22460,10 @@ const averageRate = Number(
 if (
   adjustmentType ===
     ProjectStockMovementType.ADJUST_OUT &&
-  availableQuantity < quantity
+  currentQuantity < quantity
 ) {
   throw new BadRequestException(
-    `Insufficient available stock. Available quantity is ${availableQuantity}; ${reservedQuantity} is reserved.`,
+    `Insufficient stock quantity. Available quantity is ${currentQuantity}`,
   );
 }
 
