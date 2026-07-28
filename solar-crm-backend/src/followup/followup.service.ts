@@ -172,10 +172,13 @@ export class FollowupService {
   }
 
   if (status) {
-    qb.andWhere('UPPER(followUp.status) = :status', {
+  qb.andWhere(
+    'followUp.status = :status',
+    {
       status,
-    });
-  }
+    },
+  );
+}
 
   if (
   assignedTo &&
