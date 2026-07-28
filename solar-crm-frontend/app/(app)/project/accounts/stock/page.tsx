@@ -1255,14 +1255,8 @@ const restoreStockMovement = async (movementId: number) => {
     0,
   );
 
-  const totalReservedQuantity = stockItems.reduce(
-  (total, item) =>
-    total + Number(item.reservedQuantity || 0),
-  0,
-);
-
-const totalAvailableQuantity =
-  totalQuantity - totalReservedQuantity;
+  const totalAvailableQuantity =
+  totalQuantity;
 
   const totalStockValue = stockItems.reduce(
     (total, item) =>
@@ -1310,9 +1304,9 @@ const consumptionTotal = consumptions.reduce(
 );
 
 const getStockItemLabel = (item: any) => {
-  const availableQty =
-    Number(item.currentQuantity || 0) -
-    Number(item.reservedQuantity || 0);
+  const availableQty = Number(
+    item.currentQuantity || 0,
+  );
 
   return `${item.materialName || ''} ${item.branchName || ''} ${
     item.category || ''
@@ -1364,15 +1358,6 @@ const getFilteredSelectableStockItems = (searchText: string) => {
           </p>
         </div>
 
-        <div className="rounded-2xl bg-white p-5 shadow">
-  <p className="text-sm text-gray-500">
-    Reserved Quantity
-  </p>
-
-  <p className="mt-2 text-2xl font-bold text-orange-700">
-    {totalReservedQuantity.toLocaleString('en-IN')}
-  </p>
-</div>
 
 <div className="rounded-2xl bg-white p-5 shadow">
   <p className="text-sm text-gray-500">
@@ -2101,11 +2086,6 @@ const getFilteredSelectableStockItems = (searchText: string) => {
       ))}
     </select>
 
-    {requestIssueForm.stockItemId && (
-  <p className="text-xs text-green-700">
-    Reserved stock row selected automatically.
-  </p>
-)}
 
     <input
       type="number"
@@ -2196,7 +2176,6 @@ const getFilteredSelectableStockItems = (searchText: string) => {
           <th className="p-2 text-left">Unit</th>
           <th className="p-2 text-left">Branches</th>
           <th className="p-2 text-left">Current Qty</th>
-          <th className="p-2 text-left">Reserved Qty</th>
           <th className="p-2 text-left">Available Qty</th>
           <th className="p-2 text-left">Stock Value</th>
         </tr>
@@ -2206,7 +2185,7 @@ const getFilteredSelectableStockItems = (searchText: string) => {
         {materialSummaryRows.length === 0 && (
           <tr>
             <td
-              colSpan={9}
+              colSpan={8}
               className="p-4 text-center text-gray-500"
             >
               No material summary found.
@@ -2247,10 +2226,6 @@ const getFilteredSelectableStockItems = (searchText: string) => {
 
             <td className="p-2 font-semibold">
               {Number(item.totalCurrentQuantity || 0).toLocaleString('en-IN')}
-            </td>
-
-            <td className="p-2 font-semibold text-orange-700">
-              {Number(item.totalReservedQuantity || 0).toLocaleString('en-IN')}
             </td>
 
             <td className="p-2 font-semibold text-green-700">
@@ -2384,9 +2359,6 @@ const getFilteredSelectableStockItems = (searchText: string) => {
   Current Qty
 </th>
 <th className="p-2 text-left">
-  Reserved Qty
-</th>
-<th className="p-2 text-left">
   Available Qty
 </th>
                 <th className="p-2 text-left">
@@ -2408,7 +2380,7 @@ const getFilteredSelectableStockItems = (searchText: string) => {
               {stockItems.length === 0 && (
                 <tr>
                   <td
-                    colSpan={12}
+                    colSpan={11}
                     className="p-4 text-center text-gray-500"
                   >
                     No stock items found.
@@ -2455,12 +2427,6 @@ const getFilteredSelectableStockItems = (searchText: string) => {
   ).toLocaleString('en-IN')}
 </td>
 
-<td className="p-2 font-semibold text-orange-700">
-  {Number(
-    item.reservedQuantity || 0,
-  ).toLocaleString('en-IN')}
-</td>
-
 <td
   className={`p-2 font-semibold ${
     item.isLowStock
@@ -2468,10 +2434,8 @@ const getFilteredSelectableStockItems = (searchText: string) => {
       : 'text-green-700'
   }`}
 >
-  {Math.max(
-    Number(item.currentQuantity || 0) -
-      Number(item.reservedQuantity || 0),
-    0,
+  {Number(
+    item.currentQuantity || 0,
   ).toLocaleString('en-IN')}
 
   <p className="text-xs text-gray-500">
@@ -3336,7 +3300,7 @@ const getFilteredSelectableStockItems = (searchText: string) => {
     </h2>
 
     <p className="mt-1 text-sm text-gray-500">
-      Current, reserved and available stock status.
+      Current physical stock and availability status.
     </p>
 
     <div className="mt-4 overflow-x-auto">
@@ -3345,7 +3309,6 @@ const getFilteredSelectableStockItems = (searchText: string) => {
           <tr className="border-b bg-gray-50">
             <th className="p-2 text-left">Material</th>
             <th className="p-2 text-left">Current</th>
-            <th className="p-2 text-left">Reserved</th>
             <th className="p-2 text-left">Available</th>
             <th className="p-2 text-left">Status</th>
           </tr>
@@ -3357,14 +3320,7 @@ const getFilteredSelectableStockItems = (searchText: string) => {
               item.currentQuantity || 0,
             );
 
-            const reservedQty = Number(
-              item.reservedQuantity || 0,
-            );
-
-            const availableQty = Math.max(
-              currentQty - reservedQty,
-              0,
-            );
+            const availableQty = currentQty;
 
             return (
               <tr
@@ -3377,10 +3333,6 @@ const getFilteredSelectableStockItems = (searchText: string) => {
 
                 <td className="p-2">
                   {currentQty}
-                </td>
-
-                <td className="p-2 text-orange-700">
-                  {reservedQty}
                 </td>
 
                 <td
