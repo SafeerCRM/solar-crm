@@ -1105,7 +1105,6 @@ const filteredSelectedFollowups = selectedFollowups.filter((f) => {
   <option value="">All Status</option>
   <option value="PENDING">Pending</option>
   <option value="COMPLETED">Completed</option>
-  <option value="CANCELLED">Cancelled</option>
 </select>
 
 <select
