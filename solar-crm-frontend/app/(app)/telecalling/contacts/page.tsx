@@ -2997,30 +2997,58 @@ const transferContacts = async () => {
 };
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const file = e.target.files?.[0];
+  if (!file) return;
 
-    const formData = new FormData();
-    formData.append('file', file);
+  const formData = new FormData();
+  formData.append('file', file);
 
-    try {
-      setImporting(true);
-      await axios.post(`${backendUrl}/telecalling/contacts/import`, formData, {
+  try {
+    setImporting(true);
+
+    const res = await axios.post(
+      `${backendUrl}/telecalling/contacts/import`,
+      formData,
+      {
         headers: {
           ...getAuthHeaders(),
           'Content-Type': 'multipart/form-data',
         },
-      });
-      setMessage('Contacts imported successfully.');
+      },
+    );
+
+    const importedCount = Number(res.data?.importedCount || 0);
+    const skippedCount = Number(res.data?.skippedCount || 0);
+    const totalRows = Number(res.data?.totalRows || 0);
+
+    if (importedCount === 0) {
+      setMessage(
+        `${res.data?.message || 'No new contacts were imported'}. ` +
+          `${skippedCount} of ${totalRows} row(s) were skipped because those contacts already exist or are duplicated in the file.`,
+      );
+    } else {
+      setMessage(
+        `${res.data?.message || 'Contacts imported successfully'}. ` +
+          `${importedCount} imported, ${skippedCount} skipped, ${totalRows} total row(s).`,
+      );
+
       await fetchContacts();
-    } catch (err) {
-      console.error(err);
-      setMessage('Failed to import contacts.');
-    } finally {
-      setImporting(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
     }
-  };
+  } catch (err: any) {
+    console.error(err);
+
+    setMessage(
+      err?.response?.data?.message ||
+        'Failed to import contacts.',
+    );
+  } finally {
+    setImporting(false);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }
+};
 
   const toggleContact = (id: number) => {
     setSelectedContactIds((prev) =>
