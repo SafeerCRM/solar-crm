@@ -112,14 +112,39 @@ transferLeadsBetweenManagers(@Body() body: any, @Req() req: any) {
 );
 }
 
-  @Get('export')
-  async exportCsv(@Res() res: any, @CurrentUser() user: any) {
-    const csv = await this.leadsService.exportCsv(user);
+  @UseGuards(RolesGuard)
+@Roles('OWNER')
+@Get('export')
+async exportCsv(
+  @Query() query: any,
+  @Res() res: any,
+  @CurrentUser() user: any,
+) {
+  const csv =
+    await this.leadsService.exportCsv(
+      query,
+      user,
+    );
 
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', 'attachment; filename="leads.csv"');
-    return res.send(csv);
-  }
+  res.setHeader(
+    'Content-Type',
+    'text/csv; charset=utf-8',
+  );
+
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="leads-${new Date()
+      .toISOString()
+      .slice(0, 10)}.csv"`,
+  );
+
+  res.setHeader(
+    'Cache-Control',
+    'no-store, no-cache, must-revalidate',
+  );
+
+  return res.send(csv);
+}
 
   @UseGuards(RolesGuard)
   @Roles('OWNER')

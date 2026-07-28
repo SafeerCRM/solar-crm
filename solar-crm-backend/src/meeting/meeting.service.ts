@@ -7,7 +7,10 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import {
+  Repository,
+  SelectQueryBuilder,
+} from 'typeorm';
 import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
 import {
@@ -641,150 +644,434 @@ solarMiterPhone: this.isSolarFranchise(user)
     return meeting;
   }
 
-  async findAll(query: any, user: any): Promise<{
+  private buildMeetingListQuery(
+  query: any,
+  user: any,
+): SelectQueryBuilder<Meeting> {
+  const qb =
+    this.meetingRepository.createQueryBuilder(
+      'meeting',
+    );
+
+  this.applyRoleVisibility(qb, user);
+
+  const includeHistory =
+    String(
+      query?.includeHistory || 'false',
+    ) === 'true';
+
+  const latestOnly =
+    String(
+      query?.latestOnly || 'true',
+    ) !== 'false';
+
+  /*
+   * Preserve the existing Follow-up section flow.
+   *
+   * When followupId is supplied, do not apply
+   * WITHOUT/WITH filtering because the caller is
+   * requesting one specific follow-up meeting.
+   */
+  if (!includeHistory && !query?.followupId) {
+    const requestedFollowUpFilter = String(
+      query?.followUpFilter || 'WITHOUT',
+    )
+      .trim()
+      .toUpperCase();
+
+    const allowedFollowUpFilters = [
+      'WITHOUT',
+      'WITH',
+      'ALL',
+    ];
+
+    /*
+     * Only OWNER may inspect meetings that already
+     * have follow-ups or combine both categories.
+     *
+     * Every other role keeps the current
+     * WITHOUT-follow-up behaviour.
+     */
+    const followUpFilter =
+      this.isOwner(user) &&
+      allowedFollowUpFilters.includes(
+        requestedFollowUpFilter,
+      )
+        ? requestedFollowUpFilter
+        : 'WITHOUT';
+
+    if (followUpFilter !== 'ALL') {
+      qb.andWhere((subQueryBuilder) => {
+        const followUpExistsSubQuery =
+          subQueryBuilder
+            .subQuery()
+            .select('1')
+            .from(
+              FollowUp,
+              'existingFollowUp',
+            )
+            .innerJoin(
+              Meeting,
+              'followUpMeeting',
+              `"followUpMeeting"."id" =
+                "existingFollowUp"."meetingId"`,
+            )
+            .where(
+              `"existingFollowUp"."meetingId"
+                IS NOT NULL`,
+            )
+            .andWhere(`
+              COALESCE(
+                "followUpMeeting"."meetingGroupId",
+                "followUpMeeting"."id"
+              ) = COALESCE(
+                "meeting"."meetingGroupId",
+                "meeting"."id"
+              )
+            `)
+            .getQuery();
+
+        if (followUpFilter === 'WITH') {
+          return `EXISTS ${followUpExistsSubQuery}`;
+        }
+
+        return `NOT EXISTS ${followUpExistsSubQuery}`;
+      });
+    }
+  }
+
+  /*
+   * Select only the newest record from every meeting
+   * group before pagination and counting.
+   *
+   * This replaces the old behaviour where records
+   * were grouped only after one page had already
+   * been loaded.
+   */
+  if (!includeHistory && latestOnly) {
+    qb.andWhere((subQueryBuilder) => {
+      const newerMeetingSubQuery =
+        subQueryBuilder
+          .subQuery()
+          .select('1')
+          .from(Meeting, 'newerMeeting')
+          .where(`
+            COALESCE(
+              "newerMeeting"."meetingGroupId",
+              "newerMeeting"."id"
+            ) = COALESCE(
+              "meeting"."meetingGroupId",
+              "meeting"."id"
+            )
+          `)
+          .andWhere(`
+            (
+              "newerMeeting"."updatedAt" >
+                "meeting"."updatedAt"
+
+              OR (
+                "newerMeeting"."updatedAt" =
+                  "meeting"."updatedAt"
+                AND "newerMeeting"."createdAt" >
+                  "meeting"."createdAt"
+              )
+
+              OR (
+                "newerMeeting"."updatedAt" =
+                  "meeting"."updatedAt"
+                AND "newerMeeting"."createdAt" =
+                  "meeting"."createdAt"
+                AND "newerMeeting"."id" >
+                  "meeting"."id"
+              )
+            )
+          `)
+          .getQuery();
+
+      return `NOT EXISTS ${newerMeetingSubQuery}`;
+    });
+  }
+
+  if (query?.status) {
+    qb.andWhere(
+      'meeting.status = :status',
+      {
+        status: query.status,
+      },
+    );
+  }
+
+  if (query?.meetingType) {
+    qb.andWhere(
+      'meeting.meetingType = :meetingType',
+      {
+        meetingType: query.meetingType,
+      },
+    );
+  }
+
+  if (query?.meetingCategory) {
+    qb.andWhere(
+      `meeting.meetingCategory =
+        :meetingCategory`,
+      {
+        meetingCategory:
+          query.meetingCategory,
+      },
+    );
+  }
+
+  if (query?.assignedTo) {
+    qb.andWhere(
+      'meeting.assignedTo = :assignedTo',
+      {
+        assignedTo: Number(
+          query.assignedTo,
+        ),
+      },
+    );
+  }
+
+  if (query?.assignedToName) {
+    qb.andWhere(
+      `meeting.assignedToName
+        ILIKE :assignedToName`,
+      {
+        assignedToName: `%${String(
+          query.assignedToName,
+        ).trim()}%`,
+      },
+    );
+  }
+
+  if (query?.leadId) {
+    qb.andWhere(
+      'meeting.leadId = :leadId',
+      {
+        leadId: Number(query.leadId),
+      },
+    );
+  }
+
+  if (query?.followupId) {
+    qb.andWhere(
+      'meeting.followupId = :followupId',
+      {
+        followupId: Number(
+          query.followupId,
+        ),
+      },
+    );
+  }
+
+  if (query?.mobile) {
+    qb.andWhere(
+      'meeting.mobile ILIKE :mobile',
+      {
+        mobile: `%${String(
+          query.mobile,
+        ).trim()}%`,
+      },
+    );
+  }
+
+  if (query?.customerName) {
+    qb.andWhere(
+      `meeting.customerName
+        ILIKE :customerName`,
+      {
+        customerName: `%${String(
+          query.customerName,
+        ).trim()}%`,
+      },
+    );
+  }
+
+  if (query?.location) {
+    qb.andWhere(
+      `(
+        meeting.address ILIKE :location
+        OR meeting.gpsAddress ILIKE :location
+      )`,
+      {
+        location: `%${String(
+          query.location,
+        ).trim()}%`,
+      },
+    );
+  }
+
+  if (query?.fromDate) {
+    qb.andWhere(
+      'meeting.scheduledAt >= :fromDate',
+      {
+        fromDate: query.fromDate,
+      },
+    );
+  }
+
+  if (query?.toDate) {
+    qb.andWhere(
+      'meeting.scheduledAt <= :toDate',
+      {
+        toDate: query.toDate,
+      },
+    );
+  }
+
+  if (query?.month) {
+    qb.andWhere(
+      `TO_CHAR(
+        meeting.scheduledAt,
+        'YYYY-MM'
+      ) = :month`,
+      {
+        month: query.month,
+      },
+    );
+  }
+
+  return qb;
+}
+
+  async findAll(
+  query: any,
+  user: any,
+): Promise<{
   data: Meeting[];
   total: number;
   page: number;
   limit: number;
 }> {
-  const page = Number(query.page) || 1;
-  const limit = Number(query.limit) || 50;
+  const page = Math.max(
+    Number(query?.page || 1),
+    1,
+  );
+
+  const limit = Math.min(
+    Math.max(
+      Number(query?.limit || 50),
+      1,
+    ),
+    200,
+  );
+
   const skip = (page - 1) * limit;
 
-  const includeHistory =
-    String(query.includeHistory || 'false') === 'true';
+  const qb = this.buildMeetingListQuery(
+    query,
+    user,
+  );
 
-  const latestOnly =
-    String(query.latestOnly || 'true') !== 'false';
+  const [data, total] = await qb
+    .orderBy(
+      'meeting.scheduledAt',
+      'DESC',
+    )
+    .addOrderBy(
+      'meeting.updatedAt',
+      'DESC',
+    )
+    .addOrderBy(
+      'meeting.id',
+      'DESC',
+    )
+    .skip(skip)
+    .take(limit)
+    .getManyAndCount();
 
-  const qb = this.meetingRepository.createQueryBuilder('meeting');
-
-  this.applyRoleVisibility(qb, user);
-
-  if (!includeHistory && !query.followupId) {
-  qb.andWhere((subQueryBuilder) => {
-    const followUpExistsSubQuery = subQueryBuilder
-      .subQuery()
-      .select('1')
-      .from(FollowUp, 'existingFollowUp')
-      .innerJoin(
-        Meeting,
-        'followUpMeeting',
-        '"followUpMeeting"."id" = "existingFollowUp"."meetingId"',
-      )
-      .where('"existingFollowUp"."meetingId" IS NOT NULL')
-      .andWhere(`
-        COALESCE(
-          "followUpMeeting"."meetingGroupId",
-          "followUpMeeting"."id"
-        ) = COALESCE(
-          "meeting"."meetingGroupId",
-          "meeting"."id"
-        )
-      `)
-      .getQuery();
-
-    return `NOT EXISTS ${followUpExistsSubQuery}`;
-  });
+  return {
+    data,
+    total,
+    page,
+    limit,
+  };
 }
 
-    if (query.status) {
-      qb.andWhere('meeting.status = :status', {
-        status: query.status,
-      });
-    }
-
-    if (query.meetingType) {
-      qb.andWhere('meeting.meetingType = :meetingType', {
-        meetingType: query.meetingType,
-      });
-    }
-
-    if (query.meetingCategory) {
-      qb.andWhere('meeting.meetingCategory = :meetingCategory', {
-        meetingCategory: query.meetingCategory,
-      });
-    }
-
-    if (query.assignedTo) {
-      qb.andWhere('meeting.assignedTo = :assignedTo', {
-        assignedTo: Number(query.assignedTo),
-      });
-    }
-
-    if (query.assignedToName) {
-      qb.andWhere('meeting.assignedToName ILIKE :assignedToName', {
-        assignedToName: `%${query.assignedToName}%`,
-      });
-    }
-
-    if (query.leadId) {
-      qb.andWhere('meeting.leadId = :leadId', {
-        leadId: Number(query.leadId),
-      });
-    }
-
-    if (query.followupId) {
-      qb.andWhere('meeting.followupId = :followupId', {
-        followupId: Number(query.followupId),
-      });
-    }
-
-    if (query.mobile) {
-      qb.andWhere('meeting.mobile ILIKE :mobile', {
-        mobile: `%${query.mobile}%`,
-      });
-    }
-
-    if (query.customerName) {
-      qb.andWhere('meeting.customerName ILIKE :customerName', {
-        customerName: `%${query.customerName}%`,
-      });
-    }
-
-    if (query.fromDate) {
-      qb.andWhere('meeting.scheduledAt >= :fromDate', {
-        fromDate: query.fromDate,
-      });
-    }
-
-    if (query.toDate) {
-      qb.andWhere('meeting.scheduledAt <= :toDate', {
-        toDate: query.toDate,
-      });
-    }
-
-    if (query.month) {
-      qb.andWhere(`TO_CHAR(meeting.scheduledAt, 'YYYY-MM') = :month`, {
-        month: query.month,
-      });
-    }
-
-    qb.orderBy('meeting.scheduledAt', 'DESC').addOrderBy('meeting.updatedAt', 'DESC');
-
-    const [meetings, total] = await qb
-  .skip(skip)
-  .take(limit)
-  .getManyAndCount();
-
-    let finalData = meetings;
-
-if (!includeHistory && latestOnly) {
-  finalData = this.pickLatestMeetings(meetings);
-}
-
-const finalTotal =
-  !includeHistory && latestOnly
-    ? finalData.length
-    : total;
-
-return {
-  data: finalData,
-  total: finalTotal,
-  page,
-  limit,
-};
+async exportCsv(
+  filters: any,
+  user: any,
+): Promise<string> {
+  if (!this.isOwner(user)) {
+    throw new ForbiddenException(
+      'Only owner can export meetings',
+    );
   }
+
+  const meetings = await this
+    .buildMeetingListQuery(filters, user)
+    .select([
+      'meeting.id',
+      'meeting.customerName',
+      'meeting.mobile',
+      'meeting.address',
+      'meeting.gpsAddress',
+      'meeting.scheduledAt',
+      'meeting.updatedAt',
+    ])
+    .orderBy(
+      'meeting.scheduledAt',
+      'DESC',
+    )
+    .addOrderBy(
+      'meeting.updatedAt',
+      'DESC',
+    )
+    .addOrderBy(
+      'meeting.id',
+      'DESC',
+    )
+    .getMany();
+
+  const escapeCsv = (value: any) => {
+    if (
+      value === null ||
+      value === undefined
+    ) {
+      return '""';
+    }
+
+    const stringValue = String(value)
+      .replace(/"/g, '""');
+
+    return `"${stringValue}"`;
+  };
+
+  const headers = [
+    'Name',
+    'Phone Number',
+    'City',
+  ];
+
+  const rows = meetings.map((meeting) => {
+    /*
+     * Meeting currently stores address/gpsAddress
+     * rather than a separate city field.
+     *
+     * Therefore the best available meeting
+     * location is exported under City.
+     */
+    const city =
+      String(
+        meeting.gpsAddress ||
+          meeting.address ||
+          '',
+      ).trim();
+
+    return [
+      meeting.customerName || '',
+      meeting.mobile || '',
+      city,
+    ]
+      .map(escapeCsv)
+      .join(',');
+  });
+
+  return `\uFEFF${[
+    headers.join(','),
+    ...rows,
+  ].join('\n')}`;
+}
 
   async findOne(id: number, user: any): Promise<Meeting> {
     return this.getAccessibleMeeting(id, user);

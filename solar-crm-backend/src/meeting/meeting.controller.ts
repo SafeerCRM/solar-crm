@@ -8,6 +8,7 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -18,6 +19,8 @@ import { UpdateMeetingDto } from './dto/update-meeting.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
 
 @UseGuards(JwtAuthGuard)
 @Controller('meetings')
@@ -45,6 +48,40 @@ uploadMeetingProof(
   findAll(@Query() query: any, @CurrentUser() user: any) {
     return this.meetingService.findAll(query, user);
   }
+
+  @UseGuards(RolesGuard)
+@Roles('OWNER')
+@Get('export')
+async exportCsv(
+  @Query() query: any,
+  @Res() res: any,
+  @CurrentUser() user: any,
+) {
+  const csv =
+    await this.meetingService.exportCsv(
+      query,
+      user,
+    );
+
+  res.setHeader(
+    'Content-Type',
+    'text/csv; charset=utf-8',
+  );
+
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="meetings-${new Date()
+      .toISOString()
+      .slice(0, 10)}.csv"`,
+  );
+
+  res.setHeader(
+    'Cache-Control',
+    'no-store, no-cache, must-revalidate',
+  );
+
+  return res.send(csv);
+}
 
   @Get(':id/detail')
   getDetail(

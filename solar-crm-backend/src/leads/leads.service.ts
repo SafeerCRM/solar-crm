@@ -5,7 +5,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import {
+  In,
+  Repository,
+  SelectQueryBuilder,
+} from 'typeorm';
 import { Lead, LeadStatus } from './lead.entity';
 import { LeadStorage, LeadStoragePotential } from './lead-storage.entity';
 import {
@@ -345,140 +349,275 @@ if (potentialPercentage > 0) {
   };
 }
 
-  async findAll(filters: any, user: any) {
-  const page = Math.max(Number(filters?.page || 1), 1);
-  const limit = Math.min(Math.max(Number(filters?.limit || 50), 1), 200);
-  const skip = (page - 1) * limit;
+private buildLeadListQuery(
+  filters: any,
+  user: any,
+): SelectQueryBuilder<Lead> {
+  const query =
+    this.leadRepository.createQueryBuilder('lead');
 
-  const query = this.leadRepository.createQueryBuilder('lead');
+  query.andWhere(
+    'COALESCE(lead.isArchived, false) = false',
+  );
 
-  query.andWhere('COALESCE(lead.isArchived, false) = false');
+  const requestedFollowUpFilter = String(
+    filters?.followUpFilter || 'WITHOUT',
+  )
+    .trim()
+    .toUpperCase();
 
-  query.andWhere((qb) => {
-  const followUpExistsSubQuery = qb
-    .subQuery()
-    .select('1')
-    .from(FollowUp, 'existingFollowUp')
-    .where('existingFollowUp.leadId = lead.id')
-    .getQuery();
+  const allowedFollowUpFilters = [
+    'WITHOUT',
+    'WITH',
+    'ALL',
+  ];
 
-  return `NOT EXISTS ${followUpExistsSubQuery}`;
-});
+  /*
+   * Only OWNER can inspect leads that already have
+   * follow-ups or combine both groups.
+   *
+   * Every other role always keeps the existing
+   * WITHOUT-follow-up behaviour.
+   */
+  const followUpFilter =
+    this.isOwner(user) &&
+    allowedFollowUpFilters.includes(
+      requestedFollowUpFilter,
+    )
+      ? requestedFollowUpFilter
+      : 'WITHOUT';
 
-  const currentUserId = this.getCurrentUserId(user);
+  if (followUpFilter !== 'ALL') {
+    query.andWhere((qb) => {
+      const followUpExistsSubQuery = qb
+        .subQuery()
+        .select('1')
+        .from(FollowUp, 'existingFollowUp')
+        .where(
+          'existingFollowUp.leadId = lead.id',
+        )
+        .getQuery();
+
+      if (followUpFilter === 'WITH') {
+        return `EXISTS ${followUpExistsSubQuery}`;
+      }
+
+      return `NOT EXISTS ${followUpExistsSubQuery}`;
+    });
+  }
+
+  const currentUserId =
+    this.getCurrentUserId(user);
 
   if (this.isTelecaller(user)) {
-  query.andWhere(
-    `(
-      lead.originTelecallerId = :currentUserId
-      OR lead.createdBy = :currentUserId
-      OR lead.assignedTo = :currentUserId
-    )`,
-    { currentUserId },
-  );
-} else if (this.isLeadExecutive(user)) {
-  query.andWhere(
-    '(lead.assignedTo = :assignedTo OR lead.assignedTo IS NULL)',
-    { assignedTo: currentUserId },
-  );
-} else if (this.isMeetingManager(user) || this.isProjectExecutive(user)) {
     query.andWhere(
-      '(lead.assignedTo = :currentUserId OR lead.createdBy = :currentUserId)',
+      `(
+        lead.originTelecallerId = :currentUserId
+        OR lead.createdBy = :currentUserId
+        OR lead.assignedTo = :currentUserId
+      )`,
+      { currentUserId },
+    );
+  } else if (this.isLeadExecutive(user)) {
+    query.andWhere(
+      `(
+        lead.assignedTo = :assignedTo
+        OR lead.assignedTo IS NULL
+      )`,
+      {
+        assignedTo: currentUserId,
+      },
+    );
+  } else if (
+    this.isMeetingManager(user) ||
+    this.isProjectExecutive(user)
+  ) {
+    query.andWhere(
+      `(
+        lead.assignedTo = :currentUserId
+        OR lead.createdBy = :currentUserId
+      )`,
       { currentUserId },
     );
   } else if (this.isProjectManager(user)) {
-    query.andWhere('lead.status IN (:...statuses)', {
-      statuses: this.getProjectPipelineStatuses(),
-    });
+    query.andWhere(
+      'lead.status IN (:...statuses)',
+      {
+        statuses:
+          this.getProjectPipelineStatuses(),
+      },
+    );
   } else if (this.isLeadManager(user)) {
     query.andWhere(
-      '(lead.assignedTo = :currentUserId OR lead.createdBy = :currentUserId)',
+      `(
+        lead.assignedTo = :currentUserId
+        OR lead.createdBy = :currentUserId
+      )`,
       { currentUserId },
+    );
+  } else if (
+    this.isTelecallingAssistant(user)
+  ) {
+    query.andWhere(
+      'lead.createdBy = :currentUserId',
+      {
+        currentUserId,
+      },
     );
   }
 
-  else if (this.isTelecallingAssistant(user)) {
-  query.andWhere('lead.createdBy = :currentUserId', {
-    currentUserId,
-  });
-}
-
-if (filters?.assignedTo) {
-  query.andWhere('lead.assignedTo = :filterAssignedTo', {
-    filterAssignedTo: Number(filters.assignedTo),
-  });
-}
+  if (filters?.assignedTo) {
+    query.andWhere(
+      'lead.assignedTo = :filterAssignedTo',
+      {
+        filterAssignedTo: Number(
+          filters.assignedTo,
+        ),
+      },
+    );
+  }
 
   if (filters?.status) {
-    query.andWhere('lead.status = :status', { status: filters.status });
+    query.andWhere(
+      'lead.status = :status',
+      {
+        status: filters.status,
+      },
+    );
   }
 
   if (filters?.phone) {
-    query.andWhere('lead.phone ILIKE :phone', {
-      phone: `%${filters.phone}%`,
-    });
+    query.andWhere(
+      'lead.phone ILIKE :phone',
+      {
+        phone: `%${String(
+          filters.phone,
+        ).trim()}%`,
+      },
+    );
   }
 
   if (filters?.city) {
     query.andWhere(
-      '(lead.city ILIKE :city OR lead.zone ILIKE :city OR lead.address ILIKE :city)',
-      { city: `%${filters.city}%` },
+      `(
+        lead.city ILIKE :city
+        OR lead.zone ILIKE :city
+        OR lead.address ILIKE :city
+      )`,
+      {
+        city: `%${String(
+          filters.city,
+        ).trim()}%`,
+      },
     );
   }
 
   if (filters?.zone) {
-    query.andWhere('lead.zone ILIKE :zone', { zone: `%${filters.zone}%` });
+    query.andWhere(
+      'lead.zone ILIKE :zone',
+      {
+        zone: `%${String(
+          filters.zone,
+        ).trim()}%`,
+      },
+    );
   }
 
   if (filters?.region) {
-    query.andWhere('lead.region ILIKE :region', {
-      region: `%${filters.region}%`,
-    });
+    query.andWhere(
+      'lead.region ILIKE :region',
+      {
+        region: `%${String(
+          filters.region,
+        ).trim()}%`,
+      },
+    );
   }
 
   if (filters?.potentialPercentage) {
-    query.andWhere('lead.potentialPercentage = :potentialPercentage', {
-      potentialPercentage: Number(filters.potentialPercentage),
+    query.andWhere(
+      `lead.potentialPercentage =
+        :potentialPercentage`,
+      {
+        potentialPercentage: Number(
+          filters.potentialPercentage,
+        ),
+      },
+    );
+  }
+
+  if (
+    filters?.contactedStatus ===
+    'NEVER_CONTACTED'
+  ) {
+    query.andWhere((qb) => {
+      const subQuery = qb
+        .subQuery()
+        .select('1')
+        .from(CallLog, 'call')
+        .where('call.leadId = lead.id')
+        .getQuery();
+
+      return `NOT EXISTS ${subQuery}`;
     });
   }
 
-  if (filters?.contactedStatus === 'NEVER_CONTACTED') {
-  query.andWhere((qb) => {
-    const subQuery = qb
-      .subQuery()
-      .select('1')
-      .from(CallLog, 'call')
-      .where('call.leadId = lead.id')
-      .getQuery();
+  if (
+    filters?.contactedStatus === 'CONTACTED'
+  ) {
+    query.andWhere((qb) => {
+      const subQuery = qb
+        .subQuery()
+        .select('1')
+        .from(CallLog, 'call')
+        .where('call.leadId = lead.id')
+        .getQuery();
 
-    return `NOT EXISTS ${subQuery}`;
-  });
-}
-
-if (filters?.contactedStatus === 'CONTACTED') {
-  query.andWhere((qb) => {
-    const subQuery = qb
-      .subQuery()
-      .select('1')
-      .from(CallLog, 'call')
-      .where('call.leadId = lead.id')
-      .getQuery();
-
-    return `EXISTS ${subQuery}`;
-  });
-}
+      return `EXISTS ${subQuery}`;
+    });
+  }
 
   if (filters?.search) {
     query.andWhere(
-      `(lead.name ILIKE :search 
-        OR lead.phone ILIKE :search 
-        OR lead.email ILIKE :search 
+      `(
+        lead.name ILIKE :search
+        OR lead.phone ILIKE :search
+        OR lead.email ILIKE :search
         OR lead.city ILIKE :search
         OR lead.zone ILIKE :search
-        OR lead.address ILIKE :search)`,
-      { search: `%${filters.search}%` },
+        OR lead.address ILIKE :search
+      )`,
+      {
+        search: `%${String(
+          filters.search,
+        ).trim()}%`,
+      },
     );
   }
+
+  return query;
+}
+
+  async findAll(filters: any, user: any) {
+  const page = Math.max(
+    Number(filters?.page || 1),
+    1,
+  );
+
+  const limit = Math.min(
+    Math.max(
+      Number(filters?.limit || 50),
+      1,
+    ),
+    200,
+  );
+
+  const skip = (page - 1) * limit;
+
+  const query = this.buildLeadListQuery(
+    filters,
+    user,
+  );
 
   const [data, total] = await query
     .orderBy('lead.createdAt', 'DESC')
@@ -491,7 +630,8 @@ if (filters?.contactedStatus === 'CONTACTED') {
     total,
     page,
     limit,
-    totalPages: Math.ceil(total / limit) || 1,
+    totalPages:
+      Math.ceil(total / limit) || 1,
   };
 }
 
@@ -800,101 +940,66 @@ if (filters?.contactedStatus === 'CONTACTED') {
     };
   }
 
-  async exportCsv(user: any) {
-    let leads: Lead[];
-    const currentUserId = this.getCurrentUserId(user);
+  async exportCsv(
+  filters: any,
+  user: any,
+) {
+  if (!this.isOwner(user)) {
+    throw new ForbiddenException(
+      'Only owner can export leads',
+    );
+  }
 
-    if (this.isTelecaller(user) || this.isLeadExecutive(user)) {
-      leads = await this.leadRepository.find({
-        where: [{ assignedTo: currentUserId }, { assignedTo: null as any }],
-        order: { createdAt: 'DESC' },
-        take: 5000,
-      });
-    } else if (this.isMeetingManager(user) || this.isProjectExecutive(user)) {
-      leads = await this.leadRepository.find({
-        where: [
-          { assignedTo: currentUserId },
-          { createdBy: currentUserId },
-        ],
-        order: { createdAt: 'DESC' },
-        take: 5000,
-      });
-    } else if (this.isProjectManager(user)) {
-      leads = await this.leadRepository
-  .createQueryBuilder('lead')
-  .where('lead.status IN (:...statuses)', {
-    statuses: this.getProjectPipelineStatuses(),
-  })
-  .orderBy('lead.createdAt', 'DESC')
-  .take(5000)
-  .getMany();
-    } else {
-      leads = await this.leadRepository.find({
-        order: { createdAt: 'DESC' },
-        take: 5000,
-      });
+  const leads = await this
+    .buildLeadListQuery(filters, user)
+    .select([
+      'lead.id',
+      'lead.name',
+      'lead.phone',
+      'lead.city',
+    ])
+    .orderBy('lead.createdAt', 'DESC')
+    .getMany();
+
+  const escapeCsv = (value: any) => {
+    if (
+      value === null ||
+      value === undefined
+    ) {
+      return '""';
     }
 
-    const headers = [
-      'id',
-      'name',
-      'phone',
-      'alternatePhone',
-      'email',
-      'address',
-      'city',
-      'state',
-      'zone',
-      'region',
-      'source',
-      'status',
-      'assignedTo',
-      'createdBy',
-      'createdByName',
-      'potentialPercentage',
-      'remarks',
-      'nextFollowUpDate',
-      'createdAt',
-      'updatedAt',
-    ];
+    const stringValue = String(value)
+      .replace(/"/g, '""');
 
-    const escapeCsv = (value: any) => {
-      if (value === null || value === undefined) return '';
-      const stringValue = String(value).replace(/"/g, '""');
-      return `"${stringValue}"`;
-    };
+    return `"${stringValue}"`;
+  };
 
-    const rows = leads.map((lead) =>
-      [
-        lead.id,
-        lead.name,
-        lead.phone,
-        lead.alternatePhone,
-        lead.email,
-        lead.address,
-        lead.city,
-        lead.state,
-        lead.zone,
-        lead.region,
-        lead.source,
-        lead.status,
-        lead.assignedTo,
-        lead.createdBy,
-        lead.createdByName,
-        lead.potentialPercentage,
-        lead.remarks,
-        lead.nextFollowUpDate
-          ? new Date(lead.nextFollowUpDate).toISOString()
-          : '',
-        lead.createdAt ? new Date(lead.createdAt).toISOString() : '',
-        lead.updatedAt ? new Date(lead.updatedAt).toISOString() : '',
-      ]
-        .map(escapeCsv)
-        .join(','),
-    );
+  const headers = [
+    'Name',
+    'Phone Number',
+    'City',
+  ];
 
-    return [headers.join(','), ...rows].join('\n');
-  }
+  const rows = leads.map((lead) =>
+    [
+      lead.name || '',
+      lead.phone || '',
+      lead.city || '',
+    ]
+      .map(escapeCsv)
+      .join(','),
+  );
+
+  /*
+   * UTF-8 BOM helps Excel correctly display
+   * Hindi names and other non-English text.
+   */
+  return `\uFEFF${[
+    headers.join(','),
+    ...rows,
+  ].join('\n')}`;
+}
 
   async importCsv(file: any, user: any) {
   if (!file) {
