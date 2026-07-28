@@ -5,6 +5,11 @@ import { useEffect, useMemo, useState } from 'react';
 import dayjs, { Dayjs } from 'dayjs';
 import axios from 'axios';
 import { Capacitor } from '@capacitor/core';
+import {
+  Directory,
+  Filesystem,
+} from '@capacitor/filesystem';
+import { Share as CapacitorShare } from '@capacitor/share';
 import { CallControl } from '@/lib/callControl';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
@@ -55,6 +60,11 @@ type User = {
   roles?: string[];
 };
 
+type FollowUpFilter =
+  | 'WITHOUT'
+  | 'WITH'
+  | 'ALL';
+
 const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 const MEETING_FILTER_STORAGE_KEY = 'meetingPageFilters';
@@ -84,6 +94,13 @@ const [bulkAssigning, setBulkAssigning] = useState(false);
 const [meetingCategory, setMeetingCategory] = useState('');
 const [meetingStatus, setMeetingStatus] = useState('');
 const [month, setMonth] = useState('');
+
+const [followUpFilter, setFollowUpFilter] =
+  useState<FollowUpFilter>('WITHOUT');
+
+const [exportingMeetings, setExportingMeetings] =
+  useState(false);
+
 const [isAutoCalling, setIsAutoCalling] = useState(false);
 const [isAutoCallPaused, setIsAutoCallPaused] = useState(false);
 const [autoCallIndex, setAutoCallIndex] = useState(0);
@@ -122,6 +139,17 @@ const [calledMeetingIds, setCalledMeetingIds] = useState<number[]>([]);
       setMeetingStatus(parsed.meetingStatus || '');
       setMonth(parsed.month || '');
 
+      const savedFollowUpFilter = String(
+  parsed.followUpFilter || 'WITHOUT',
+).toUpperCase();
+
+setFollowUpFilter(
+  savedFollowUpFilter === 'WITH' ||
+    savedFollowUpFilter === 'ALL'
+    ? savedFollowUpFilter
+    : 'WITHOUT',
+);
+
       const savedPage = Number(parsed.meetingPage || 1);
       const finalPage = savedPage > 0 ? savedPage : 1;
 
@@ -141,7 +169,9 @@ const [calledMeetingIds, setCalledMeetingIds] = useState<number[]>([]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, []);
 
-const saveMeetingFilters = (pageNumber = meetingPage) => {
+const saveMeetingFilters = (
+  pageNumber = meetingPage,
+) => {
   sessionStorage.setItem(
     MEETING_FILTER_STORAGE_KEY,
     JSON.stringify({
@@ -153,6 +183,7 @@ const saveMeetingFilters = (pageNumber = meetingPage) => {
       meetingCategory,
       meetingStatus,
       month,
+      followUpFilter,
       meetingPage: pageNumber,
     }),
   );
@@ -167,17 +198,58 @@ const saveMeetingFilters = (pageNumber = meetingPage) => {
     setMessage('');
 
     const activeFilters = overrideFilters || {
-      meetingManagerName,
-      meetingManagerId,
-      meetingCategory,
-      meetingStatus,
-      month,
-    };
+  searchName,
+  searchPhone,
+  searchLocation,
+  meetingManagerName,
+  meetingManagerId,
+  meetingCategory,
+  meetingStatus,
+  month,
+  followUpFilter,
+};
 
     const params: Record<string, string | number> = {
       page: pageNumber,
       limit: meetingLimit,
     };
+
+    if (
+  String(
+    activeFilters.searchName || '',
+  ).trim()
+) {
+  params.customerName = String(
+    activeFilters.searchName,
+  ).trim();
+}
+
+if (
+  String(
+    activeFilters.searchPhone || '',
+  ).trim()
+) {
+  params.mobile = String(
+    activeFilters.searchPhone,
+  ).trim();
+}
+
+if (
+  String(
+    activeFilters.searchLocation || '',
+  ).trim()
+) {
+  params.location = String(
+    activeFilters.searchLocation,
+  ).trim();
+}
+
+params.followUpFilter = String(
+  activeFilters.followUpFilter ||
+    'WITHOUT',
+)
+  .trim()
+  .toUpperCase();
 
     if (String(activeFilters.meetingManagerName || '').trim()) {
       params.assignedToName = String(activeFilters.meetingManagerName).trim();
@@ -204,8 +276,19 @@ const saveMeetingFilters = (pageNumber = meetingPage) => {
       params,
     });
 
-    setMeetings(Array.isArray(res.data?.data) ? res.data.data : []);
-    setMeetingTotal(Number(res.data?.total || 0));
+    setMeetings(
+  Array.isArray(res.data?.data)
+    ? res.data.data
+    : [],
+);
+
+setMeetingTotal(
+  Number(res.data?.total || 0),
+);
+
+setMeetingPage(
+  Number(res.data?.page || pageNumber),
+);
   } catch (err) {
     console.error(err);
     setMessage('Failed to fetch meetings');
@@ -213,6 +296,161 @@ const saveMeetingFilters = (pageNumber = meetingPage) => {
     setMeetingTotal(0);
   } finally {
     setLoading(false);
+  }
+};
+
+const blobToBase64 = (
+  blob: Blob,
+): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onloadend = () => {
+      const result = String(
+        reader.result || '',
+      );
+
+      const base64 = result.includes(',')
+        ? result.split(',')[1]
+        : result;
+
+      resolve(base64);
+    };
+
+    reader.onerror = () => {
+      reject(
+        new Error(
+          'Failed to prepare CSV file',
+        ),
+      );
+    };
+
+    reader.readAsDataURL(blob);
+  });
+};
+
+const exportFilteredMeetings = async () => {
+  if (!isOwner) {
+    setMessage(
+      'Only owner can export meetings',
+    );
+    return;
+  }
+
+  try {
+    setExportingMeetings(true);
+    setMessage('');
+
+    const response = await axios.get(
+      `${backendUrl}/meetings/export`,
+      {
+        headers: getAuthHeaders(),
+
+        params: {
+          customerName:
+            searchName.trim() || undefined,
+
+          mobile:
+            searchPhone.trim() || undefined,
+
+          location:
+            searchLocation.trim() ||
+            undefined,
+
+          assignedTo:
+            meetingManagerId || undefined,
+
+          assignedToName:
+            !meetingManagerId
+              ? meetingManagerName.trim() ||
+                undefined
+              : undefined,
+
+          meetingCategory:
+            meetingCategory || undefined,
+
+          status:
+            meetingStatus || undefined,
+
+          month:
+            month || undefined,
+
+          followUpFilter,
+        },
+
+        responseType: 'blob',
+      },
+    );
+
+    const fileName = `meetings-${dayjs().format(
+      'YYYY-MM-DD',
+    )}.csv`;
+
+    const csvBlob = new Blob(
+      [response.data],
+      {
+        type: 'text/csv;charset=utf-8',
+      },
+    );
+
+    if (Capacitor.isNativePlatform()) {
+      const base64Data =
+        await blobToBase64(csvBlob);
+
+      const savedFile =
+        await Filesystem.writeFile({
+          path: fileName,
+          data: base64Data,
+          directory: Directory.Cache,
+          recursive: true,
+        });
+
+      await CapacitorShare.share({
+        title:
+          'Filtered Meetings Export',
+        text:
+          'Filtered meetings CSV export',
+        url: savedFile.uri,
+        dialogTitle:
+          'Save or share meetings CSV',
+      });
+
+      setMessage(
+        'Meetings export prepared successfully',
+      );
+
+      return;
+    }
+
+    const downloadUrl =
+      window.URL.createObjectURL(csvBlob);
+
+    const anchor =
+      document.createElement('a');
+
+    anchor.href = downloadUrl;
+    anchor.download = fileName;
+
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+
+    window.URL.revokeObjectURL(
+      downloadUrl,
+    );
+
+    setMessage(
+      'Meetings exported successfully',
+    );
+  } catch (err: any) {
+    console.error(err);
+
+    setMessage(
+      err?.response?.data?.message ||
+        'Failed to export meetings',
+    );
+  } finally {
+    setExportingMeetings(false);
   }
 };
 
@@ -229,31 +467,7 @@ const fetchMeetingManagers = async () => {
   }
 };
 
-  const filteredMeetings = useMemo(() => {
-    let data = meetings;
-
-    if (searchName.trim()) {
-      data = data.filter((m) =>
-        (m.customerName || '').toLowerCase().includes(searchName.toLowerCase())
-      );
-    }
-
-    if (searchPhone.trim()) {
-      data = data.filter((m) => (m.mobile || '').includes(searchPhone));
-    }
-
-    if (searchLocation.trim()) {
-      data = data.filter((m) => {
-        const address = (m.address || '').toLowerCase();
-        const gps = (m.gpsAddress || '').toLowerCase();
-        const query = searchLocation.toLowerCase();
-
-        return address.includes(query) || gps.includes(query);
-      });
-    }
-
-    return data;
-  }, [meetings, searchName, searchPhone, searchLocation]);
+  const filteredMeetings = meetings;
 
   const meetingsBySelectedDate = useMemo(() => {
   if (!selectedDate) return [];
@@ -334,6 +548,9 @@ const updateMeetingName = async (meetingId: number) => {
   }
 };
 
+const isOwner =
+  currentUserRoles.includes('OWNER');
+
 const isMeetingAssistant =
   currentUserRoles.includes('MEETING_ASSISTANT');
 
@@ -402,13 +619,14 @@ const bulkAssignFilteredMeetings = async () => {
   }
 
   const hasAnyFilter =
-    !!meetingManagerId ||
-    !!meetingStatus ||
-    !!meetingCategory ||
-    !!month ||
-    !!searchName.trim() ||
-    !!searchPhone.trim() ||
-    !!searchLocation.trim();
+  !!meetingManagerId ||
+  !!meetingStatus ||
+  !!meetingCategory ||
+  !!month ||
+  !!searchName.trim() ||
+  !!searchPhone.trim() ||
+  !!searchLocation.trim() ||
+  followUpFilter !== 'WITHOUT';
 
   if (!hasAnyFilter) {
     setMessage('Please apply at least one filter before bulk assigning meetings.');
@@ -438,6 +656,7 @@ const bulkAssignFilteredMeetings = async () => {
           customerName: searchName.trim() || undefined,
           mobile: searchPhone.trim() || undefined,
           location: searchLocation.trim() || undefined,
+          followUpFilter,
         },
       },
       { headers: getAuthHeaders() },
@@ -463,7 +682,9 @@ const bulkAssignFilteredMeetings = async () => {
 };
 
   const clearFilters = () => {
-  sessionStorage.removeItem(MEETING_FILTER_STORAGE_KEY);
+  sessionStorage.removeItem(
+    MEETING_FILTER_STORAGE_KEY,
+  );
 
   setSearchName('');
   setSearchPhone('');
@@ -473,14 +694,19 @@ const bulkAssignFilteredMeetings = async () => {
   setMeetingCategory('');
   setMeetingStatus('');
   setMonth('');
+  setFollowUpFilter('WITHOUT');
   setMeetingPage(1);
 
   fetchMeetings(1, {
+    searchName: '',
+    searchPhone: '',
+    searchLocation: '',
     meetingManagerName: '',
     meetingManagerId: '',
     meetingCategory: '',
     meetingStatus: '',
     month: '',
+    followUpFilter: 'WITHOUT',
   });
 };
 
@@ -559,7 +785,7 @@ const bulkAssignFilteredMeetings = async () => {
         />
       </div>
 
-      <div className="mb-4 grid gap-3 md:grid-cols-4">
+      <div className="mb-4 grid gap-3 md:grid-cols-4 xl:grid-cols-5">
   <select
     value={meetingManagerId}
     onChange={(e) => {
@@ -611,6 +837,30 @@ const bulkAssignFilteredMeetings = async () => {
           onChange={(e) => setMonth(e.target.value)}
           className="rounded border p-2"
         />
+
+        {isOwner && (
+  <select
+    value={followUpFilter}
+    onChange={(e) =>
+      setFollowUpFilter(
+        e.target.value as FollowUpFilter,
+      )
+    }
+    className="rounded border p-2"
+  >
+    <option value="WITHOUT">
+      Without Follow-up
+    </option>
+
+    <option value="WITH">
+      With Follow-up
+    </option>
+
+    <option value="ALL">
+      All
+    </option>
+  </select>
+)}
       </div>
 
       <div className="mb-4 rounded-xl border border-orange-200 bg-orange-50 p-4">
@@ -653,26 +903,43 @@ const bulkAssignFilteredMeetings = async () => {
           Total: {meetingTotal} | This Page: {meetings.length} | Filtered: {filteredMeetings.length}
         </div>
 
-        <div className="flex gap-2">
-          <button
-  onClick={() => {
-  saveMeetingFilters(1);
-  setMeetingPage(1);
-  fetchMeetings(1);
-}}
-  disabled={loading}
-  className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-blue-700 hover:to-indigo-700 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
->
-  {loading ? 'Applying...' : 'Apply Filters'}
-</button>
+        <div className="flex flex-wrap gap-2">
+  <button
+    type="button"
+    onClick={() => {
+      saveMeetingFilters(1);
+      setMeetingPage(1);
+      fetchMeetings(1);
+    }}
+    disabled={loading}
+    className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-blue-700 hover:to-indigo-700 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
+  >
+    {loading
+      ? 'Applying...'
+      : 'Apply Filters'}
+  </button>
 
-          <button
-            onClick={clearFilters}
-            className="text-blue-600"
-          >
-            Clear Filters
-          </button>
-        </div>
+  {isOwner && (
+    <button
+      type="button"
+      onClick={exportFilteredMeetings}
+      disabled={exportingMeetings}
+      className="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {exportingMeetings
+        ? 'Exporting...'
+        : 'Export CSV'}
+    </button>
+  )}
+
+  <button
+    type="button"
+    onClick={clearFilters}
+    className="rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700"
+  >
+    Clear Filters
+  </button>
+</div>
       </div>
 
       {message && <p className="mb-4 text-sm text-blue-600">{message}</p>}

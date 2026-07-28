@@ -5,6 +5,11 @@ import axios from 'axios';
 import Link from 'next/link';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
+import {
+  Directory,
+  Filesystem,
+} from '@capacitor/filesystem';
+import { Share as CapacitorShare } from '@capacitor/share';
 import { CallControl } from '@/lib/callControl';
 import dayjs, { Dayjs } from 'dayjs';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -47,6 +52,11 @@ type QuickLeadCallDisposition =
   | 'CONNECTED'
   | 'CNR'
   | 'PROPOSAL_SENT';
+
+  type FollowUpFilter =
+  | 'WITHOUT'
+  | 'WITH'
+  | 'ALL';
 
 type QuickLeadCallModalState = {
   isOpen: boolean;
@@ -135,6 +145,11 @@ const [transferCityFilter, setTransferCityFilter] = useState('');
 const [transferPotentialFilter, setTransferPotentialFilter] = useState('');
 const [contactedStatusFilter, setContactedStatusFilter] = useState('');
 const [leadManagerFilter, setLeadManagerFilter] = useState('');
+const [followUpFilter, setFollowUpFilter] =
+  useState<FollowUpFilter>('WITHOUT');
+
+const [exportingLeads, setExportingLeads] =
+  useState(false);
 
   const currentRoles = currentUser?.roles || [];
 const isOwner = currentRoles.includes('OWNER');
@@ -170,6 +185,17 @@ const canAssignLeads = isOwner;
       setPotentialFilter(parsed.potentialFilter || '');
       setContactedStatusFilter(parsed.contactedStatusFilter || '');
       setLeadManagerFilter(parsed.leadManagerFilter || '');
+
+      const savedFollowUpFilter = String(
+  parsed.followUpFilter || 'WITHOUT',
+).toUpperCase();
+
+setFollowUpFilter(
+  savedFollowUpFilter === 'WITH' ||
+    savedFollowUpFilter === 'ALL'
+    ? savedFollowUpFilter
+    : 'WITHOUT',
+);
 
       const savedPage = Number(parsed.leadPage || 1);
       const finalPage = savedPage > 0 ? savedPage : 1;
@@ -342,7 +368,9 @@ const canAssignLeads = isOwner;
     setFilteredLeads(filtered);
   }, [searchName, searchPhone, searchCity, potentialFilter, leads]);
 
-  const saveLeadFilters = (pageNumber = leadPage) => {
+  const saveLeadFilters = (
+  pageNumber = leadPage,
+) => {
   sessionStorage.setItem(
     LEAD_FILTER_STORAGE_KEY,
     JSON.stringify({
@@ -352,6 +380,7 @@ const canAssignLeads = isOwner;
       potentialFilter,
       contactedStatusFilter,
       leadManagerFilter,
+      followUpFilter,
       leadPage: pageNumber,
     }),
   );
@@ -367,13 +396,14 @@ const canAssignLeads = isOwner;
     setLoadingLeads(true);
 
     const activeFilters = overrideFilters || {
-      searchName,
-      searchPhone,
-      searchCity,
-      potentialFilter,
-      contactedStatusFilter,
-      leadManagerFilter,
-    };
+  searchName,
+  searchPhone,
+  searchCity,
+  potentialFilter,
+  contactedStatusFilter,
+  leadManagerFilter,
+  followUpFilter,
+};
 
     const res = await axios.get(`${backendUrl}/leads`, {
       headers: getAuthHeaders(),
@@ -389,6 +419,12 @@ const canAssignLeads = isOwner;
           String(activeFilters.contactedStatusFilter || '').trim() || undefined,
         assignedTo:
           String(activeFilters.leadManagerFilter || '').trim() || undefined,
+          followUpFilter:
+  String(
+    activeFilters.followUpFilter || 'WITHOUT',
+  )
+    .trim()
+    .toUpperCase(),
       },
     });
 
@@ -412,6 +448,147 @@ const canAssignLeads = isOwner;
     setLeadTotalPages(1);
   } finally {
     setLoadingLeads(false);
+  }
+};
+
+const blobToBase64 = (
+  blob: Blob,
+): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onloadend = () => {
+      const result = String(
+        reader.result || '',
+      );
+
+      const base64 = result.includes(',')
+        ? result.split(',')[1]
+        : result;
+
+      resolve(base64);
+    };
+
+    reader.onerror = () => {
+      reject(
+        new Error(
+          'Failed to prepare CSV file',
+        ),
+      );
+    };
+
+    reader.readAsDataURL(blob);
+  });
+};
+
+const exportFilteredLeads = async () => {
+  if (!isOwner) {
+    setMessage(
+      'Only owner can export leads',
+    );
+    return;
+  }
+
+  try {
+    setExportingLeads(true);
+    setMessage('');
+
+    const response = await axios.get(
+      `${backendUrl}/leads/export`,
+      {
+        headers: getAuthHeaders(),
+        params: {
+          search:
+            searchName.trim() || undefined,
+
+          phone:
+            searchPhone.trim() || undefined,
+
+          city:
+            searchCity.trim() || undefined,
+
+          potentialPercentage:
+            potentialFilter || undefined,
+
+          contactedStatus:
+            contactedStatusFilter ||
+            undefined,
+
+          assignedTo:
+            leadManagerFilter || undefined,
+
+          followUpFilter,
+        },
+        responseType: 'blob',
+      },
+    );
+
+    const fileName = `leads-${dayjs().format(
+      'YYYY-MM-DD',
+    )}.csv`;
+
+    const csvBlob = new Blob(
+      [response.data],
+      {
+        type: 'text/csv;charset=utf-8',
+      },
+    );
+
+    if (Capacitor.isNativePlatform()) {
+      const base64Data =
+        await blobToBase64(csvBlob);
+
+      const savedFile =
+        await Filesystem.writeFile({
+          path: fileName,
+          data: base64Data,
+          directory: Directory.Cache,
+          recursive: true,
+        });
+
+      await CapacitorShare.share({
+        title: 'Filtered Leads Export',
+        text: 'Filtered leads CSV export',
+        url: savedFile.uri,
+        dialogTitle:
+          'Save or share leads CSV',
+      });
+
+      setMessage(
+        'Leads export prepared successfully',
+      );
+
+      return;
+    }
+
+    const downloadUrl =
+      window.URL.createObjectURL(csvBlob);
+
+    const anchor =
+      document.createElement('a');
+
+    anchor.href = downloadUrl;
+    anchor.download = fileName;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+
+    window.URL.revokeObjectURL(
+      downloadUrl,
+    );
+
+    setMessage(
+      'Leads exported successfully',
+    );
+  } catch (err: any) {
+    console.error(err);
+
+    setMessage(
+      err?.response?.data?.message ||
+        'Failed to export leads',
+    );
+  } finally {
+    setExportingLeads(false);
   }
 };
 
@@ -829,7 +1006,9 @@ const handleSelectAllFilteredStorage = async () => {
   };
 
     const clearFilters = () => {
-  sessionStorage.removeItem(LEAD_FILTER_STORAGE_KEY);
+  sessionStorage.removeItem(
+    LEAD_FILTER_STORAGE_KEY,
+  );
 
   setSearchName('');
   setSearchPhone('');
@@ -837,6 +1016,7 @@ const handleSelectAllFilteredStorage = async () => {
   setPotentialFilter('');
   setContactedStatusFilter('');
   setLeadManagerFilter('');
+  setFollowUpFilter('WITHOUT');
   setSelectedCalendarDate(null);
   setLeadPage(1);
 
@@ -847,6 +1027,7 @@ const handleSelectAllFilteredStorage = async () => {
     potentialFilter: '',
     contactedStatusFilter: '',
     leadManagerFilter: '',
+    followUpFilter: 'WITHOUT',
   });
 };
 
@@ -1436,6 +1617,30 @@ disabled={isAutoCalling}
       ))}
   </select>
 )}
+
+{isOwner && (
+  <select
+    value={followUpFilter}
+    onChange={(e) =>
+      setFollowUpFilter(
+        e.target.value as FollowUpFilter,
+      )
+    }
+    className="rounded border p-2"
+  >
+    <option value="WITHOUT">
+      Without Follow-up
+    </option>
+
+    <option value="WITH">
+      With Follow-up
+    </option>
+
+    <option value="ALL">
+      All
+    </option>
+  </select>
+)}
       </div>
 
                   <div className="mb-4 flex flex-col gap-3 rounded bg-gray-100 p-3 text-sm text-gray-700">
@@ -1449,15 +1654,29 @@ disabled={isAutoCalling}
   <button
     type="button"
     onClick={() => {
-  saveLeadFilters(1);
-  fetchLeads(1);
-}}
+      saveLeadFilters(1);
+      fetchLeads(1);
+    }}
     className="rounded bg-indigo-600 px-3 py-1 text-white"
   >
     Apply Lead Filters
   </button>
 
+  {isOwner && (
+    <button
+      type="button"
+      onClick={exportFilteredLeads}
+      disabled={exportingLeads}
+      className="rounded bg-green-700 px-3 py-1 text-white disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {exportingLeads
+        ? 'Exporting...'
+        : 'Export CSV'}
+    </button>
+  )}
+
   <button
+    type="button"
     onClick={clearFilters}
     className="rounded bg-gray-500 px-3 py-1 text-white"
   >
