@@ -551,20 +551,26 @@ const filteredUsers = users.filter((user) => {
   )}
 </div>
           <input placeholder="Branch" value={form.branchName} onChange={(e) => setForm({ ...form, branchName: e.target.value })} className="rounded-xl border p-3" />
-          <input
-  type="number"
-  min="0"
-  step="0.01"
-  placeholder="Monthly Basic Salary"
-  value={form.monthlyBasicSalary}
-  onChange={(e) =>
-    setForm({
-      ...form,
-      monthlyBasicSalary: Number(e.target.value),
-    })
-  }
-  className="rounded-xl border p-3"
-/>
+          <div className="rounded-xl border p-3">
+  <label className="mb-2 block text-sm font-medium text-gray-700">
+    Monthly Basic Salary
+  </label>
+
+  <input
+    type="number"
+    min="0"
+    step="0.01"
+    placeholder="Enter Monthly Basic Salary"
+    value={form.monthlyBasicSalary}
+    onChange={(e) =>
+      setForm({
+        ...form,
+        monthlyBasicSalary: Number(e.target.value),
+      })
+    }
+    className="w-full rounded-lg border p-2"
+  />
+</div>
 
 <label className="rounded-xl border p-3 text-sm flex items-center gap-2">
   <input
