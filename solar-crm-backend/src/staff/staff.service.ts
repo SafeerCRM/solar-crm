@@ -126,30 +126,179 @@ private readonly attendanceExceptionRepo: Repository<StaffAttendanceException>,
   }
 
   async create(body: any, user: any) {
-    if (!String(body.fullName || '').trim()) {
-      throw new BadRequestException('Staff full name is required');
-    }
-
-    const staff = this.staffRepo.create({
-      ...body,
-      isActive: body.isActive !== false,
-      isHidden: false,
-    });
-
-    return this.staffRepo.save(staff);
+  if (!String(body.fullName || '').trim()) {
+    throw new BadRequestException('Staff full name is required');
   }
+
+  const monthlyBasicSalary = Number(
+    body.monthlyBasicSalary || 0,
+  );
+
+  if (
+    !Number.isFinite(monthlyBasicSalary) ||
+    monthlyBasicSalary < 0
+  ) {
+    throw new BadRequestException(
+      'Monthly basic salary must be a valid non-negative amount',
+    );
+  }
+
+  const reportingManagerId =
+    body.reportingManagerId === undefined ||
+    body.reportingManagerId === null ||
+    body.reportingManagerId === ''
+      ? null
+      : Number(body.reportingManagerId);
+
+  if (
+    reportingManagerId !== null &&
+    (!Number.isInteger(reportingManagerId) ||
+      reportingManagerId <= 0)
+  ) {
+    throw new BadRequestException(
+      'Reporting manager is invalid',
+    );
+  }
+
+  const staff = this.staffRepo.create({
+    ...body,
+
+    fullName: String(body.fullName).trim(),
+
+    linkedUserId:
+      body.linkedUserId === undefined ||
+      body.linkedUserId === null ||
+      body.linkedUserId === ''
+        ? null
+        : Number(body.linkedUserId),
+
+    monthlyBasicSalary,
+    isSupportingStaff:
+      body.isSupportingStaff === true,
+
+    reportingManagerId,
+    reportingManagerName: String(
+      body.reportingManagerName || '',
+    ).trim(),
+
+    isActive: body.isActive !== false,
+    isHidden: false,
+  });
+
+  return this.staffRepo.save(staff);
+}
 
   async update(id: number, body: any) {
-    const staff = await this.staffRepo.findOne({ where: { id } });
+  const staff = await this.staffRepo.findOne({
+    where: { id },
+  });
 
-    if (!staff) {
-      throw new NotFoundException('Staff not found');
+  if (!staff) {
+    throw new NotFoundException('Staff not found');
+  }
+
+  if (body.fullName !== undefined) {
+    const fullName = String(
+      body.fullName || '',
+    ).trim();
+
+    if (!fullName) {
+      throw new BadRequestException(
+        'Staff full name is required',
+      );
     }
 
-    Object.assign(staff, body);
-
-    return this.staffRepo.save(staff);
+    staff.fullName = fullName;
   }
+
+  if (body.monthlyBasicSalary !== undefined) {
+    const monthlyBasicSalary = Number(
+      body.monthlyBasicSalary || 0,
+    );
+
+    if (
+      !Number.isFinite(monthlyBasicSalary) ||
+      monthlyBasicSalary < 0
+    ) {
+      throw new BadRequestException(
+        'Monthly basic salary must be a valid non-negative amount',
+      );
+    }
+
+    staff.monthlyBasicSalary =
+      monthlyBasicSalary;
+  }
+
+  if (body.isSupportingStaff !== undefined) {
+    staff.isSupportingStaff =
+      body.isSupportingStaff === true;
+  }
+
+  if (body.reportingManagerId !== undefined) {
+    if (
+      body.reportingManagerId === null ||
+      body.reportingManagerId === ''
+    ) {
+      staff.reportingManagerId = null;
+      staff.reportingManagerName = '';
+    } else {
+      const reportingManagerId = Number(
+        body.reportingManagerId,
+      );
+
+      if (
+        !Number.isInteger(reportingManagerId) ||
+        reportingManagerId <= 0
+      ) {
+        throw new BadRequestException(
+          'Reporting manager is invalid',
+        );
+      }
+
+      if (reportingManagerId === staff.id) {
+        throw new BadRequestException(
+          'A staff member cannot report to themselves',
+        );
+      }
+
+      staff.reportingManagerId =
+        reportingManagerId;
+    }
+  }
+
+  if (body.reportingManagerName !== undefined) {
+    staff.reportingManagerName = String(
+      body.reportingManagerName || '',
+    ).trim();
+  }
+
+  if (body.linkedUserId !== undefined) {
+    staff.linkedUserId =
+      body.linkedUserId === null ||
+      body.linkedUserId === ''
+        ? null
+        : Number(body.linkedUserId);
+  }
+
+  const protectedFields = new Set([
+    'id',
+    'monthlyBasicSalary',
+    'isSupportingStaff',
+    'reportingManagerId',
+    'reportingManagerName',
+    'linkedUserId',
+    'fullName',
+    'createdAt',
+  ]);
+
+  Object.entries(body).forEach(([key, value]) => {
+    if (!protectedFields.has(key)) {
+      (staff as any)[key] = value;
+    }
+  });
+
+  return this.staffRepo.save(staff);
+}
 
   async hide(id: number, body: any, user: any) {
     const staff = await this.staffRepo.findOne({ where: { id } });

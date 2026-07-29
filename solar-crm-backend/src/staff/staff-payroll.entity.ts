@@ -20,10 +20,13 @@ export class StaffPayroll {
   id: number;
 
   @Column()
-  staffId: number;
+staffId: number;
 
-  @Column({ nullable: true })
-  staffName: string;
+@Column({ nullable: true })
+linkedUserId: number;
+
+@Column({ nullable: true })
+staffName: string;
 
   @Column({ nullable: true })
   employeeCode: string;
@@ -56,10 +59,54 @@ export class StaffPayroll {
   leaveDays: number;
 
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
-  workingHours: number;
+workingHours: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
-  attendanceDeduction: number;
+/*
+ * Monthly salary eligibility result.
+ *
+ * Incentive eligibility remains independent and is calculated separately.
+ */
+@Column({ default: false })
+eligibilityMet: boolean;
+
+@Column({ type: 'text', nullable: true })
+eligibilityReason: string;
+
+@Column({ type: 'decimal', precision: 7, scale: 2, default: 0 })
+salaryPercentage: number;
+
+/*
+ * Frozen monthly performance figures used during payroll calculation.
+ */
+@Column({ type: 'int', default: 0 })
+actualLeads: number;
+
+@Column({ type: 'int', default: 0 })
+actualMeetings: number;
+
+@Column({ type: 'int', default: 0 })
+actualGpsMeetings: number;
+
+@Column({ type: 'int', default: 0 })
+actualScheduledMeetings: number;
+
+@Column({ type: 'int', default: 0 })
+actualOrders: number;
+
+@Column({ type: 'decimal', precision: 14, scale: 2, default: 0 })
+actualSales: number;
+
+@Column({ type: 'decimal', precision: 14, scale: 2, default: 0 })
+actualNetProfit: number;
+
+@Column({ type: 'int', default: 0 })
+actualJoinings: number;
+
+@Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+actualWorkingHours: number;
+
+@Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
+attendanceDeduction: number;
 
   @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
   leaveDeduction: number;
@@ -99,10 +146,22 @@ export class StaffPayroll {
   status: StaffPayrollStatus;
 
   @Column({ type: 'text', nullable: true })
-  remarks: string;
+remarks: string;
 
-  @Column({ nullable: true })
-  generatedBy: number;
+/*
+ * Complete frozen calculation data for audit and historical payroll.
+ *
+ * JSONB allows different role-specific figures without repeatedly
+ * changing the payroll table whenever a new rule is introduced.
+ */
+@Column({ type: 'jsonb', nullable: true })
+calculationSnapshot: Record<string, any>;
+
+@Column({ type: 'jsonb', nullable: true })
+ruleSnapshot: Record<string, any>;
+
+@Column({ nullable: true })
+generatedBy: number;
 
   @Column({ nullable: true })
   generatedByName: string;

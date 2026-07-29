@@ -18,7 +18,7 @@ export class StaffMember {
   id: number;
 
   @Column({ nullable: true })
-  linkedUserId: number;
+linkedUserId: number | null;
 
   @Column({ nullable: true })
   employeeCode: string;
@@ -41,11 +41,22 @@ export class StaffMember {
   @Column({ nullable: true })
 staffRole: string;
 
-  @Column({ nullable: true })
-  department: string;
+@Column({
+  type: 'decimal',
+  precision: 12,
+  scale: 2,
+  default: 0,
+})
+monthlyBasicSalary: number;
+
+@Column({ default: false })
+isSupportingStaff: boolean;
+
+@Column({ nullable: true })
+department: string;
 
   @Column({ nullable: true })
-  reportingManagerId: number;
+reportingManagerId: number | null;
 
   @Column({ nullable: true })
   reportingManagerName: string;
