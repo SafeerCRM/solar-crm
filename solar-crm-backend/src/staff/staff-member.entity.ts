@@ -17,7 +17,10 @@ export class StaffMember {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ nullable: true })
+  @Column({
+  type: 'int',
+  nullable: true,
+})
 linkedUserId: number | null;
 
   @Column({ nullable: true })
@@ -55,7 +58,10 @@ isSupportingStaff: boolean;
 @Column({ nullable: true })
 department: string;
 
-  @Column({ nullable: true })
+  @Column({
+  type: 'int',
+  nullable: true,
+})
 reportingManagerId: number | null;
 
   @Column({ nullable: true })
