@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { uploadPreparedFile } from '@/app/utils/fileUpload';
+import TextField from '@mui/material/TextField';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -551,26 +552,32 @@ const filteredUsers = users.filter((user) => {
   )}
 </div>
           <input placeholder="Branch" value={form.branchName} onChange={(e) => setForm({ ...form, branchName: e.target.value })} className="rounded-xl border p-3" />
-          <div className="rounded-xl border p-3">
-  <label className="mb-2 block text-sm font-medium text-gray-700">
-    Monthly Basic Salary
-  </label>
-
-  <input
-    type="number"
-    min="0"
-    step="0.01"
-    placeholder="Enter Monthly Basic Salary"
-    value={form.monthlyBasicSalary}
-    onChange={(e) =>
-      setForm({
-        ...form,
-        monthlyBasicSalary: Number(e.target.value),
-      })
-    }
-    className="w-full rounded-lg border p-2"
-  />
-</div>
+          <TextField
+  label="Monthly Basic Salary"
+  type="number"
+  fullWidth
+  value={form.monthlyBasicSalary}
+  onChange={(e) =>
+    setForm({
+      ...form,
+      monthlyBasicSalary: Number(e.target.value),
+    })
+  }
+  slotProps={{
+    input: {
+      inputProps: {
+        min: 0,
+        step: 0.01,
+      },
+    },
+  }}
+  sx={{
+    '& .MuiOutlinedInput-root': {
+      borderRadius: '0.75rem',
+      height: '54px',
+    },
+  }}
+/>
 
 <label className="rounded-xl border p-3 text-sm flex items-center gap-2">
   <input
@@ -587,25 +594,53 @@ const filteredUsers = users.filter((user) => {
   Include in Supporting Staff Incentive Pool
 </label>
 
-          <div>
-  <p className="mb-1 text-xs font-semibold text-gray-600">Joining Date</p>
-  <input
-    type="date"
-    value={form.joiningDate}
-    onChange={(e) => setForm({ ...form, joiningDate: e.target.value })}
-    className="w-full rounded-xl border p-3"
-  />
-</div>
+          <TextField
+  label="Joining Date"
+  type="date"
+  fullWidth
+  value={form.joiningDate || ''}
+  onChange={(e) =>
+    setForm({
+      ...form,
+      joiningDate: e.target.value,
+    })
+  }
+  slotProps={{
+    inputLabel: {
+      shrink: true,
+    },
+  }}
+  sx={{
+    '& .MuiOutlinedInput-root': {
+      borderRadius: '0.75rem',
+      height: '54px',
+    },
+  }}
+/>
 
-<div>
-  <p className="mb-1 text-xs font-semibold text-gray-600">Date of Birth</p>
-  <input
-    type="date"
-    value={form.dateOfBirth}
-    onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })}
-    className="w-full rounded-xl border p-3"
-  />
-</div>
+<TextField
+  label="Date of Birth"
+  type="date"
+  fullWidth
+  value={form.dateOfBirth || ''}
+  onChange={(e) =>
+    setForm({
+      ...form,
+      dateOfBirth: e.target.value,
+    })
+  }
+  slotProps={{
+    inputLabel: {
+      shrink: true,
+    },
+  }}
+  sx={{
+    '& .MuiOutlinedInput-root': {
+      borderRadius: '0.75rem',
+      height: '54px',
+    },
+  }}
+/>
 
           <select value={form.employmentType} onChange={(e) => setForm({ ...form, employmentType: e.target.value })} className="rounded-xl border p-3">
             <option value="FULL_TIME">Full Time</option>
