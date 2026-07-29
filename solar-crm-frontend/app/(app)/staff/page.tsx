@@ -21,6 +21,10 @@ type Staff = {
   visibleToCustomer?: boolean;
   visibleToDealer?: boolean;
   isHidden?: boolean;
+  reportingManagerId?: number | null;
+reportingManagerName?: string;
+monthlyBasicSalary?: number;
+isSupportingStaff?: boolean;
 };
 
 type CrmUser = {
@@ -41,7 +45,12 @@ const emptyForm = {
   staffRole: '',
   department: '',
   reportingManagerName: '',
-  branchName: '',
+reportingManagerId: '',
+
+monthlyBasicSalary: 0,
+isSupportingStaff: false,
+
+branchName: '',
   joiningDate: '',
   dateOfBirth: '',
   birthdayReminderEnabled: true,
@@ -80,6 +89,7 @@ const USER_ROLE_OPTIONS = [
   'CUSTOMER_MANAGER',
   'HR_MANAGER',
   'TRADING_MANAGER',
+  'TRADING_HEAD',
   'PROJECT_CONTRACTOR',
   'SOLAR_FRANCHISE',
   'DEALER',
@@ -478,8 +488,98 @@ const filteredUsers = users.filter((user) => {
   )}
 </div>
           <input placeholder="Department" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} className="rounded-xl border p-3" />
-          <input placeholder="Reporting Manager" value={form.reportingManagerName} onChange={(e) => setForm({ ...form, reportingManagerName: e.target.value })} className="rounded-xl border p-3" />
+          <div className="relative">
+  <input
+    placeholder="Search Reporting Manager"
+    value={form.reportingManagerName || ''}
+    onChange={(e) =>
+      setForm({
+        ...form,
+        reportingManagerId: '',
+        reportingManagerName: e.target.value,
+      })
+    }
+    className="w-full rounded-xl border p-3"
+  />
+
+  {form.reportingManagerName && (
+    <div className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border bg-white shadow">
+      {staff
+        .filter((manager) => {
+          if (manager.isHidden) return false;
+          if (editingId && manager.id === editingId) return false;
+
+          const text = `${manager.fullName || ''} ${
+            manager.designation || ''
+          } ${manager.department || ''}`.toLowerCase();
+
+          return text.includes(
+            String(form.reportingManagerName).toLowerCase(),
+          );
+        })
+        .map((manager) => (
+          <button
+            key={manager.id}
+            type="button"
+            onClick={() =>
+              setForm({
+                ...form,
+                reportingManagerId: manager.id,
+                reportingManagerName:
+                  manager.fullName || '',
+              })
+            }
+            className="block w-full border-b p-3 text-left text-sm hover:bg-blue-50"
+          >
+            <p className="font-semibold text-gray-800">
+              {manager.fullName}
+            </p>
+
+            <p className="text-xs text-gray-500">
+              {manager.designation || '-'} |{' '}
+              {manager.department || '-'}
+            </p>
+          </button>
+        ))}
+    </div>
+  )}
+
+  {form.reportingManagerId && (
+    <p className="mt-1 text-xs font-semibold text-green-700">
+      Selected Manager ID: {form.reportingManagerId}
+    </p>
+  )}
+</div>
           <input placeholder="Branch" value={form.branchName} onChange={(e) => setForm({ ...form, branchName: e.target.value })} className="rounded-xl border p-3" />
+          <input
+  type="number"
+  min="0"
+  step="0.01"
+  placeholder="Monthly Basic Salary"
+  value={form.monthlyBasicSalary}
+  onChange={(e) =>
+    setForm({
+      ...form,
+      monthlyBasicSalary: Number(e.target.value),
+    })
+  }
+  className="rounded-xl border p-3"
+/>
+
+<label className="rounded-xl border p-3 text-sm flex items-center gap-2">
+  <input
+    type="checkbox"
+    checked={form.isSupportingStaff}
+    onChange={(e) =>
+      setForm({
+        ...form,
+        isSupportingStaff: e.target.checked,
+      })
+    }
+  />
+
+  Include in Supporting Staff Incentive Pool
+</label>
 
           <div>
   <p className="mb-1 text-xs font-semibold text-gray-600">Joining Date</p>
