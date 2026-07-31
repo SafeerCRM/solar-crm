@@ -186,10 +186,11 @@ useEffect(() => {
   </label>
 
   <select
-    value={assignedTo}
-    onChange={(e) => setAssignedTo(e.target.value)}
-    className="w-full rounded-xl border px-4 py-3"
-  >
+  value={assignedTo}
+  onChange={(e) => setAssignedTo(e.target.value)}
+  className="w-full rounded-xl border px-4 py-3"
+  required
+>
     <option value="">Select Lead Manager</option>
     {leadManagers.map((u) => (
       <option key={u.id} value={u.id}>
