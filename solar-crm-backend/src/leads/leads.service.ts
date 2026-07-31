@@ -240,11 +240,50 @@ export class LeadsService {
           : 15,
     };
 
-    if (this.isTelecaller(user) || this.isLeadExecutive(user)) {
+    if (this.isTelecaller(user)) {
+  const selectedLeadManagerId = Number(
+    data.assignedTo || 0,
+  );
+
+  if (!selectedLeadManagerId) {
+    throw new BadRequestException(
+      'Please select a Lead Manager',
+    );
+  }
+
+  const selectedLeadManager =
+    await this.userRepository.findOne({
+      where: {
+        id: selectedLeadManagerId,
+      },
+    });
+
+  if (!selectedLeadManager) {
+    throw new NotFoundException(
+      'Selected Lead Manager not found',
+    );
+  }
+
+  if (
+    !selectedLeadManager.roles?.includes(
+      UserRole.LEAD_MANAGER,
+    )
+  ) {
+    throw new BadRequestException(
+      'Selected user must be a Lead Manager',
+    );
+  }
+
+  leadData = {
+    ...leadData,
+    assignedTo: selectedLeadManagerId,
+  };
+} else if (this.isLeadExecutive(user)) {
   leadData = {
     ...leadData,
     assignedTo:
-      data.assignedTo !== undefined && data.assignedTo !== null
+      data.assignedTo !== undefined &&
+      data.assignedTo !== null
         ? Number(data.assignedTo)
         : currentUserId,
   };
@@ -642,6 +681,14 @@ private buildLeadListQuery(
   async getLeadHistory(id: number, user: any) {
     const lead = await this.getAccessibleLead(id, user);
 
+    const assignedLeadManager = lead.assignedTo
+  ? await this.userRepository.findOne({
+      where: {
+        id: Number(lead.assignedTo),
+      },
+    })
+  : null;
+
     const [callLogs, followUps, notes] = await Promise.all([
   this.callLogRepository.find({
     where: { leadId: id },
@@ -675,7 +722,11 @@ private buildLeadListQuery(
       title: 'Lead Created',
       description: `Lead created by ${lead.createdByName || 'Unknown User'}`,
       meta: {
-        leadOwner: lead.createdByName || '-',
+        createdBy: lead.createdByName || '-',
+leadOwner:
+  assignedLeadManager?.name ||
+  assignedLeadManager?.email ||
+  '-',
         currentStatus: lead.status,
         potentialPercentage: lead.potentialPercentage || 15,
         currentRemarks: lead.remarks || '',
@@ -740,7 +791,12 @@ private buildLeadListQuery(
         zone: lead.zone,
         status: lead.status,
         potentialPercentage: lead.potentialPercentage || 15,
-        leadOwnerName: lead.createdByName || '-',
+        createdByName: lead.createdByName || '-',
+
+leadOwnerName:
+  assignedLeadManager?.name ||
+  assignedLeadManager?.email ||
+  '-',
         assignedTo: lead.assignedTo,
         remarks: lead.remarks || '',
         createdAt: lead.createdAt,
