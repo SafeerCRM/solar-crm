@@ -1132,8 +1132,8 @@ case StaffPayrollMetricType.TEAM_TELECALLER_APPROVED_PROJECTS:
       },
     )
     .andWhere(
-      'COALESCE(lead.isHidden, false) = false',
-    )
+  'COALESCE(lead.isArchived, false) = false',
+)
     .getCount();
 }
   private async resolveQualifiedLeads(
