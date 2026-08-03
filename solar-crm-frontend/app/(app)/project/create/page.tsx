@@ -195,6 +195,7 @@ customerUserName: '',
 subsidyCategory: 'SUBSIDY',
 
 marginMoney: '',
+applicableMargin: '',
 loanAmount: '',
 
 subsidyType: 'NATIONAL',
@@ -270,7 +271,7 @@ finalCost: String(latestCalculator.finalCost || ''),
 
 expectedLagat: String(latestCalculator.baseCostBeforeMargin || ''),
 
-marginMoney: String(
+applicableMargin: String(
   latestCalculator.marginAmount || '',
 ),
 
@@ -994,6 +995,15 @@ if (directCreationBlocked) {
                 onChange={handleChange}
                 className="rounded-xl border p-3"
               />
+
+              <input
+  type="number"
+  name="applicableMargin"
+  placeholder="Applicable Project Margin"
+  value={form.applicableMargin}
+  onChange={handleChange}
+  className="rounded-xl border p-3"
+/>
 
               <input
                 type="number"

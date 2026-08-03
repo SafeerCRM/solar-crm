@@ -53,6 +53,12 @@ export default function StaffPayrollPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
+  const [viewPayroll, setViewPayroll] =
+  useState<any>(null);
+
+const [viewCalculationOpen, setViewCalculationOpen] =
+  useState(false);
+
   const headers = () => {
     const token = localStorage.getItem('token');
     return token ? { Authorization: `Bearer ${token}` } : {};
@@ -520,9 +526,220 @@ export default function StaffPayrollPage() {
                       Deduction {money(Number(item.attendanceDeduction || 0) + Number(item.leaveDeduction || 0) + Number(item.penaltyAmount || 0) + Number(item.otherDeduction || 0))}
                       {' '}| Incentive {money(item.incentiveAmount)}
                     </p>
+
+                    {item.eligibilityMet !== undefined && (
+  <div className="mt-3 rounded-xl border bg-gray-50 p-3">
+    <div className="grid gap-2 md:grid-cols-2">
+      <p className="text-sm">
+        <span className="font-semibold">
+          Eligibility:
+        </span>{' '}
+        <span
+          className={
+            item.eligibilityMet
+              ? 'text-green-700'
+              : 'text-red-700'
+          }
+        >
+          {item.eligibilityMet
+            ? 'Eligible'
+            : 'Not Eligible'}
+        </span>
+      </p>
+
+      <p className="text-sm">
+        <span className="font-semibold">
+          Salary %:
+        </span>{' '}
+        {Number(
+          item.salaryPercentage || 0,
+        ).toFixed(2)}
+        %
+      </p>
+
+      <p className="text-sm md:col-span-2">
+        <span className="font-semibold">
+          Reason:
+        </span>{' '}
+        {item.eligibilityReason ||
+          '-'}
+      </p>
+    </div>
+  </div>
+)}
+
+{item.calculationSnapshot?.actualMetrics ||
+item.ruleSnapshot ? (
+  <div className="mt-3 rounded-xl border bg-white p-3">
+    <p className="mb-2 text-sm font-semibold text-gray-800">
+      Performance Metrics
+    </p>
+
+    <div className="grid gap-2 text-sm md:grid-cols-2 lg:grid-cols-3">
+      {Object.entries(
+        item.calculationSnapshot?.actualMetrics ||
+          {},
+      ).map(([key, value]) => (
+        <div
+          key={key}
+          className="rounded-lg bg-gray-50 p-2"
+        >
+          <p className="text-xs text-gray-500">
+            {key
+              .replace(/([A-Z])/g, ' $1')
+              .replace(/_/g, ' ')
+              .trim()}
+          </p>
+
+          <p className="font-semibold text-gray-900">
+            {typeof value === 'number'
+              ? Number(value).toLocaleString(
+                  'en-IN',
+                )
+              : String(value ?? '-')}
+          </p>
+        </div>
+      ))}
+
+      {!Object.keys(
+        item.calculationSnapshot?.actualMetrics ||
+          {},
+      ).length ? (
+        <>
+          <div className="rounded-lg bg-gray-50 p-2">
+            <p className="text-xs text-gray-500">
+              Leads
+            </p>
+            <p className="font-semibold">
+              {Number(
+                item.actualLeads || 0,
+              ).toLocaleString('en-IN')}
+            </p>
+          </div>
+
+          <div className="rounded-lg bg-gray-50 p-2">
+            <p className="text-xs text-gray-500">
+              Meetings
+            </p>
+            <p className="font-semibold">
+              {Number(
+                item.actualMeetings || 0,
+              ).toLocaleString('en-IN')}
+            </p>
+          </div>
+
+          <div className="rounded-lg bg-gray-50 p-2">
+            <p className="text-xs text-gray-500">
+              GPS Meetings
+            </p>
+            <p className="font-semibold">
+              {Number(
+                item.actualGpsMeetings || 0,
+              ).toLocaleString('en-IN')}
+            </p>
+          </div>
+
+          <div className="rounded-lg bg-gray-50 p-2">
+            <p className="text-xs text-gray-500">
+              Scheduled Meetings
+            </p>
+            <p className="font-semibold">
+              {Number(
+                item.actualScheduledMeetings ||
+                  0,
+              ).toLocaleString('en-IN')}
+            </p>
+          </div>
+
+          <div className="rounded-lg bg-gray-50 p-2">
+            <p className="text-xs text-gray-500">
+              Projects
+            </p>
+            <p className="font-semibold">
+              {Number(
+                item.actualOrders || 0,
+              ).toLocaleString('en-IN')}
+            </p>
+          </div>
+
+          <div className="rounded-lg bg-gray-50 p-2">
+            <p className="text-xs text-gray-500">
+              Sales
+            </p>
+            <p className="font-semibold">
+              {money(
+                item.actualSales || 0,
+              )}
+            </p>
+          </div>
+
+          <div className="rounded-lg bg-gray-50 p-2">
+            <p className="text-xs text-gray-500">
+              Net Profit
+            </p>
+            <p className="font-semibold">
+              {money(
+                item.actualNetProfit || 0,
+              )}
+            </p>
+          </div>
+
+          <div className="rounded-lg bg-gray-50 p-2">
+            <p className="text-xs text-gray-500">
+              Joinings
+            </p>
+            <p className="font-semibold">
+              {Number(
+                item.actualJoinings || 0,
+              ).toLocaleString('en-IN')}
+            </p>
+          </div>
+
+          <div className="rounded-lg bg-gray-50 p-2">
+            <p className="text-xs text-gray-500">
+              Working Hours
+            </p>
+            <p className="font-semibold">
+              {Number(
+                item.actualWorkingHours ||
+                  0,
+              ).toFixed(2)}
+            </p>
+          </div>
+        </>
+      ) : null}
+    </div>
+
+    <div className="mt-3 grid gap-2 text-sm md:grid-cols-2">
+      <p>
+        <span className="font-semibold">
+          Rule:
+        </span>{' '}
+        {item.ruleSnapshot?.ruleName || '-'}
+      </p>
+
+      <p>
+        <span className="font-semibold">
+          Rule Version:
+        </span>{' '}
+        {item.ruleSnapshot?.version ?? '-'}
+      </p>
+    </div>
+  </div>
+) : null}
                   </div>
 
                   <div className="flex flex-wrap gap-2">
+
+                    <button
+  onClick={() => {
+    setViewPayroll(item);
+    setViewCalculationOpen(true);
+  }}
+  className="rounded-xl bg-gray-800 px-3 py-2 text-sm font-semibold text-white"
+>
+  View Calculation
+</button>
                     {!item.isHidden && item.status !== 'PAID' && (
                       <button
                         onClick={() => startEdit(item)}
@@ -587,6 +804,149 @@ export default function StaffPayrollPage() {
           </button>
         </div>
       </div>
+
+      {viewCalculationOpen && viewPayroll && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3">
+    <div className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white shadow-xl">
+      <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-white p-5">
+        <div>
+          <h2 className="text-xl font-bold text-gray-800">
+            Payroll Calculation
+          </h2>
+
+          <p className="text-sm text-gray-500">
+            {viewPayroll.staffName || 'Staff'} ·{' '}
+            {viewPayroll.payrollMonth || '-'}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            setViewCalculationOpen(false);
+            setViewPayroll(null);
+          }}
+          className="rounded-xl bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-700"
+        >
+          Close
+        </button>
+      </div>
+
+      <div className="space-y-5 p-5">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-xl bg-gray-50 p-3">
+            <p className="text-xs text-gray-500">
+              Eligibility
+            </p>
+
+            <p
+              className={`font-bold ${
+                viewPayroll.eligibilityMet
+                  ? 'text-green-700'
+                  : 'text-red-700'
+              }`}
+            >
+              {viewPayroll.eligibilityMet
+                ? 'Eligible'
+                : 'Not Eligible'}
+            </p>
+          </div>
+
+          <div className="rounded-xl bg-gray-50 p-3">
+            <p className="text-xs text-gray-500">
+              Salary Percentage
+            </p>
+
+            <p className="font-bold">
+              {Number(
+                viewPayroll.salaryPercentage || 0,
+              ).toFixed(2)}
+              %
+            </p>
+          </div>
+
+          <div className="rounded-xl bg-gray-50 p-3">
+            <p className="text-xs text-gray-500">
+              Incentive
+            </p>
+
+            <p className="font-bold">
+              {money(viewPayroll.incentiveAmount)}
+            </p>
+          </div>
+
+          <div className="rounded-xl bg-gray-50 p-3">
+            <p className="text-xs text-gray-500">
+              Net Salary
+            </p>
+
+            <p className="font-bold text-green-700">
+              {money(viewPayroll.netSalary)}
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-xl border p-4">
+          <h3 className="font-bold text-gray-800">
+            Eligibility Reason
+          </h3>
+
+          <p className="mt-2 text-sm text-gray-600">
+            {viewPayroll.eligibilityReason || '-'}
+          </p>
+        </div>
+
+        <div>
+          <h3 className="mb-2 font-bold text-gray-800">
+            Calculation Snapshot
+          </h3>
+
+          <pre className="max-h-96 overflow-auto rounded-xl bg-gray-100 p-4 text-xs">
+            {JSON.stringify(
+              viewPayroll.calculationSnapshot || {},
+              null,
+              2,
+            )}
+          </pre>
+        </div>
+
+        <div>
+          <h3 className="mb-2 font-bold text-gray-800">
+            Rule Snapshot
+          </h3>
+
+          <pre className="max-h-96 overflow-auto rounded-xl bg-gray-100 p-4 text-xs">
+            {JSON.stringify(
+              viewPayroll.ruleSnapshot || {},
+              null,
+              2,
+            )}
+          </pre>
+        </div>
+
+        {viewPayroll.ownerOverrideApplied ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <h3 className="font-bold text-amber-800">
+              Owner Override Applied
+            </h3>
+
+            <p className="mt-2 text-sm text-amber-700">
+              Override Net Salary:{' '}
+              {money(
+                viewPayroll.ownerOverrideNetSalary,
+              )}
+            </p>
+
+            <p className="mt-1 text-sm text-amber-700">
+              Reason:{' '}
+              {viewPayroll.ownerOverrideReason || '-'}
+            </p>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 }

@@ -113,8 +113,9 @@ customerCode?: string;
   structureCapacityKw?: string;
   buildingHeight?: string;
   projectType?: string;
-  marginMoney?: number;
-  loanAmount?: number;
+marginMoney?: number;
+applicableMargin?: number;
+loanAmount?: number;
   subsidyType?: string;
   projectCost?: number;
   discomName?: string;
@@ -1014,8 +1015,9 @@ customerUserName: '',
   projectCost: '',
   subsidy: '',
   netAmount: '',
-  marginMoney: '',
-  loanAmount: '',
+marginMoney: '',
+applicableMargin: '',
+loanAmount: '',
   subsidyCategory: '',
   subsidyType: '',
   discomName: '',
@@ -1901,9 +1903,21 @@ customerUserName: (project as any).customerUserName || '',
     finalCost: String(project.finalCost || ''),
     projectCost: String(project.projectCost || ''),
     subsidy: String((project as any).subsidy || ''),
-    netAmount: String((project as any).netAmount || ''),
-    marginMoney: String((project as any).marginMoney || ''),
-    loanAmount: String((project as any).loanAmount || ''),
+    netAmount: String(
+  (project as any).netAmount || '',
+),
+
+marginMoney: String(
+  (project as any).marginMoney || '',
+),
+
+applicableMargin: String(
+  (project as any).applicableMargin || '',
+),
+
+loanAmount: String(
+  (project as any).loanAmount || '',
+),
     subsidyCategory:
   project.subsidyCategory || '',
     subsidyType: (project as any).subsidyType || '',
@@ -6049,8 +6063,50 @@ if (
   <input type="number" placeholder="Project Cost" value={editForm.projectCost} onChange={(e) => setEditForm({ ...editForm, projectCost: e.target.value })} className="rounded-xl border p-3" />
   <input type="number" placeholder="Subsidy" value={editForm.subsidy} onChange={(e) => setEditForm({ ...editForm, subsidy: e.target.value })} className="rounded-xl border p-3" />
   <input type="number" placeholder="Net Amount" value={editForm.netAmount} onChange={(e) => setEditForm({ ...editForm, netAmount: e.target.value })} className="rounded-xl border p-3" />
-  <input type="number" placeholder="Margin Money" value={editForm.marginMoney} onChange={(e) => setEditForm({ ...editForm, marginMoney: e.target.value })} className="rounded-xl border p-3" />
-  <input type="number" placeholder="Loan Amount" value={editForm.loanAmount} onChange={(e) => setEditForm({ ...editForm, loanAmount: e.target.value })} className="rounded-xl border p-3" />
+  <input
+  type="number"
+  placeholder="Margin Money"
+  value={editForm.marginMoney}
+  onChange={(e) =>
+    setEditForm({
+      ...editForm,
+      marginMoney: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+/>
+
+{hasRole([
+  'OWNER',
+  'PROJECT_MANAGER',
+]) && (
+  <input
+    type="number"
+    placeholder="Applicable Project Margin"
+    value={editForm.applicableMargin}
+    onChange={(e) =>
+      setEditForm({
+        ...editForm,
+        applicableMargin:
+          e.target.value,
+      })
+    }
+    className="rounded-xl border p-3"
+  />
+)}
+
+<input
+  type="number"
+  placeholder="Loan Amount"
+  value={editForm.loanAmount}
+  onChange={(e) =>
+    setEditForm({
+      ...editForm,
+      loanAmount: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+/>
   <input type="number" placeholder="Expected Lagat" value={editForm.expectedLagat} onChange={(e) => setEditForm({ ...editForm, expectedLagat: e.target.value })} className="rounded-xl border p-3" />
   <input type="number" placeholder="Expected Profit" value={editForm.expectedProfit} onChange={(e) => setEditForm({ ...editForm, expectedProfit: e.target.value })} className="rounded-xl border p-3" />
 
@@ -6210,9 +6266,25 @@ if (
       <div className="rounded-2xl bg-white p-5 shadow">
         <h2 className="mb-4 text-lg font-bold text-gray-800">Finance & DISCOM</h2>
         <div className="grid gap-3 md:grid-cols-3">
-          <Field label="Project Type" value={project.projectType} />
-          <Field label="Margin Money" value={money(project.marginMoney)} />
-          <Field label="Loan Amount" value={money(project.loanAmount)} />
+          <Field
+  label="Project Type"
+  value={project.projectType}
+/>
+
+<Field
+  label="Margin Money"
+  value={money(project.marginMoney)}
+/>
+
+<Field
+  label="Applicable Project Margin"
+  value={money(project.applicableMargin)}
+/>
+
+<Field
+  label="Loan Amount"
+  value={money(project.loanAmount)}
+/>
           <Field label="Subsidy Type" value={project.subsidyType} />
           <Field label="Project Cost" value={money(project.projectCost)} />
           <Field
@@ -9523,9 +9595,25 @@ if (
 
     <h2 className="mt-6 text-lg font-bold">Finance, Margin & Profit</h2>
     <div className="mt-3 grid grid-cols-2 gap-2">
-      <Field label="Project Type" value={project.projectType} />
-      <Field label="Margin Money" value={money(project.marginMoney)} />
-      <Field label="Loan Amount" value={money(project.loanAmount)} />
+      <Field
+  label="Project Type"
+  value={project.projectType}
+/>
+
+<Field
+  label="Margin Money"
+  value={money(project.marginMoney)}
+/>
+
+<Field
+  label="Applicable Project Margin"
+  value={money(project.applicableMargin)}
+/>
+
+<Field
+  label="Loan Amount"
+  value={money(project.loanAmount)}
+/>
       <Field label="Project Cost" value={money(project.projectCost)} />
       <Field
   label="Project Cost After Discount"

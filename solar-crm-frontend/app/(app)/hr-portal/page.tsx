@@ -43,6 +43,13 @@ const sections = [
     disabled: false,
   },
   {
+  title: 'Payroll Rules',
+  href: '/staff/payroll-rules',
+  description:
+    'Configure salary eligibility, payroll targets, incentives, slabs, pool rules and role-wise payroll calculations.',
+  disabled: false,
+},
+  {
     title: 'Incentives',
     href: '/staff/incentives',
     description: 'Role-wise incentive eligibility and slabs.',
