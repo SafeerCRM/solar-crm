@@ -77,9 +77,16 @@ activityMatchMode?: string,
 subsidyCategory?: string,
   @Query('branch') branch?: string,
   @Query('owner') owner: string = '',
-  @Query('fromDate') fromDate?: string,
-@Query('toDate') toDate?: string,
-@Query('legacyFilter') legacyFilter?: string,
+    @Query('fromDate') fromDate?: string,
+  @Query('toDate') toDate?: string,
+
+  @Query('minPaymentPercentage')
+  minPaymentPercentage?: string,
+
+  @Query('maxPaymentPercentage')
+  maxPaymentPercentage?: string,
+
+  @Query('legacyFilter') legacyFilter?: string,
 @Query('legacyYear') legacyYear?: string,
 @CurrentUser() user?: any,
 ) {
@@ -116,9 +123,16 @@ activityMatchMode:
   subsidyCategory || '',
     branch: branch || '',
     owner: owner || '',
-    fromDate: fromDate || '',
-toDate: toDate || '',
-legacyFilter: legacyFilter || '',
+        fromDate: fromDate || '',
+    toDate: toDate || '',
+
+    minPaymentPercentage:
+      minPaymentPercentage || '',
+
+    maxPaymentPercentage:
+      maxPaymentPercentage || '',
+
+    legacyFilter: legacyFilter || '',
 legacyYear: legacyYear || '',
   },
   user,
@@ -155,10 +169,18 @@ activityMatchMode?: string,
 subsidyCategory?: string,
   @Query('branch') branch?: string,
   @Query('owner') owner: string = '',
-  @Query('fromDate')
+    @Query('fromDate')
   fromDate?: string,
+
   @Query('toDate')
   toDate?: string,
+
+  @Query('minPaymentPercentage')
+  minPaymentPercentage?: string,
+
+  @Query('maxPaymentPercentage')
+  maxPaymentPercentage?: string,
+
   @Query('legacyFilter')
   legacyFilter?: string,
   @Query('legacyYear')
@@ -201,8 +223,15 @@ activityMatchMode:
   subsidyCategory || '',
       branch: branch || '',
       owner: owner || '',
-      fromDate: fromDate || '',
+            fromDate: fromDate || '',
       toDate: toDate || '',
+
+      minPaymentPercentage:
+        minPaymentPercentage || '',
+
+      maxPaymentPercentage:
+        maxPaymentPercentage || '',
+
       legacyFilter:
         legacyFilter || '',
       legacyYear: legacyYear || '',

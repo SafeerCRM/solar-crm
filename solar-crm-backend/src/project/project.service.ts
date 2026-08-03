@@ -2184,10 +2184,14 @@ executionActivity?: string;
 activityMatchMode?: 'ALL' | 'ANY';
     branch?: string;
     owner?: string;
-    fromDate?: string;
-toDate?: string;
-legacyFilter?: string;
-legacyYear?: string;
+        fromDate?: string;
+    toDate?: string;
+
+    minPaymentPercentage?: string;
+    maxPaymentPercentage?: string;
+
+    legacyFilter?: string;
+    legacyYear?: string;
   },
   user?: any,
 ) {
@@ -2496,6 +2500,121 @@ if (filters?.toDate) {
   });
 }
 
+/*
+ * Filter projects by approved payment received percentage.
+ *
+ * Percentage calculation:
+ *
+ * approved received amount
+ * ------------------------ × 100
+ * project total amount
+ *
+ * Project total follows the same priority already used
+ * by the project card:
+ * finalCost -> netAmount -> projectCost.
+ */
+const rawMinPaymentPercentage = Number(
+  filters?.minPaymentPercentage,
+);
+
+const rawMaxPaymentPercentage = Number(
+  filters?.maxPaymentPercentage,
+);
+
+const hasMinPaymentPercentage =
+  filters?.minPaymentPercentage !== undefined &&
+  filters?.minPaymentPercentage !== '' &&
+  Number.isFinite(rawMinPaymentPercentage);
+
+const hasMaxPaymentPercentage =
+  filters?.maxPaymentPercentage !== undefined &&
+  filters?.maxPaymentPercentage !== '' &&
+  Number.isFinite(rawMaxPaymentPercentage);
+
+const minPaymentPercentage =
+  hasMinPaymentPercentage
+    ? Math.min(
+        Math.max(rawMinPaymentPercentage, 0),
+        100,
+      )
+    : null;
+
+const maxPaymentPercentage =
+  hasMaxPaymentPercentage
+    ? Math.min(
+        Math.max(rawMaxPaymentPercentage, 0),
+        100,
+      )
+    : null;
+
+if (
+  minPaymentPercentage !== null &&
+  maxPaymentPercentage !== null &&
+  minPaymentPercentage > maxPaymentPercentage
+) {
+  throw new BadRequestException(
+    'Minimum payment percentage cannot be greater than maximum payment percentage',
+  );
+}
+
+const approvedPaymentAmountSql = `
+  COALESCE(
+    (
+      SELECT SUM(
+        COALESCE(payment_filter."paidAmount", 0)
+      )
+      FROM project_payment_installment payment_filter
+      WHERE payment_filter."projectId" = project.id
+        AND COALESCE(
+          payment_filter."isHidden",
+          false
+        ) = false
+        AND payment_filter."approvalStatus" = 'APPROVED'
+    ),
+    0
+  )
+`;
+
+const projectTotalAmountSql = `
+  COALESCE(
+    NULLIF(project."finalCost", 0),
+    NULLIF(project."netAmount", 0),
+    NULLIF(project."projectCost", 0),
+    0
+  )
+`;
+
+const paymentPercentageSql = `
+  CASE
+    WHEN (${projectTotalAmountSql}) > 0
+    THEN (
+      (${approvedPaymentAmountSql}) /
+      (${projectTotalAmountSql})
+    ) * 100
+    ELSE 0
+  END
+`;
+
+if (minPaymentPercentage !== null) {
+  query.andWhere(
+    `(${paymentPercentageSql}) >= :minPaymentPercentage`,
+    {
+      minPaymentPercentage,
+    },
+  );
+}
+
+if (maxPaymentPercentage !== null) {
+  query.andWhere(
+    `(${paymentPercentageSql}) <= :maxPaymentPercentage`,
+    {
+      maxPaymentPercentage,
+    },
+  );
+}
+
+query.orderBy('project.createdAt', 'DESC');
+
   query.orderBy('project.createdAt', 'DESC');
 
   query.skip(skip).take(limit);
@@ -2749,8 +2868,12 @@ activityMatchMode?: 'ALL' | 'ANY';
     subsidyCategory?: string;
     branch?: string;
     owner?: string;
-    fromDate?: string;
+        fromDate?: string;
     toDate?: string;
+
+    minPaymentPercentage?: string;
+    maxPaymentPercentage?: string;
+
     legacyFilter?: string;
     legacyYear?: string;
   } = {},
@@ -2987,10 +3110,22 @@ activityMatchMode:
         String(filters.branch || ''),
       owner:
         String(filters.owner || ''),
-      fromDate:
+            fromDate:
         String(filters.fromDate || ''),
+
       toDate:
         String(filters.toDate || ''),
+
+      minPaymentPercentage:
+        String(
+          filters.minPaymentPercentage || '',
+        ),
+
+      maxPaymentPercentage:
+        String(
+          filters.maxPaymentPercentage || '',
+        ),
+
       legacyFilter:
         String(
           filters.legacyFilter || '',
