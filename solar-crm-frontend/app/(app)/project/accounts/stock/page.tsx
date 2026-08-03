@@ -18,6 +18,8 @@ export default function StockManagementPage() {
   useState({
     issue: '',
     adjust: '',
+    reserve: '',
+    releaseReserved: '',
     transfer: '',
     requestIssue: '',
   });
@@ -39,6 +41,12 @@ const [issueLoading, setIssueLoading] = useState(false);
 
 const [adjustLoading, setAdjustLoading] = useState(false);
 
+const [reserveLoading, setReserveLoading] =
+  useState(false);
+
+const [releaseReservedLoading, setReleaseReservedLoading] =
+  useState(false);
+
 const [adjustForm, setAdjustForm] = useState({
   stockItemId: '',
   adjustmentType: 'ADJUST_IN',
@@ -46,11 +54,27 @@ const [adjustForm, setAdjustForm] = useState({
   remarks: '',
 });
 
+const [reserveForm, setReserveForm] = useState({
+  stockItemId: '',
+  quantity: '',
+  projectId: '',
+  remarks: '',
+});
+
+const [releaseReservedForm, setReleaseReservedForm] =
+  useState({
+    stockItemId: '',
+    quantity: '',
+    projectId: '',
+    remarks: '',
+  });
+
 const [transferLoading, setTransferLoading] = useState(false);
 
 const [transferForm, setTransferForm] = useState({
   sourceStockItemId: '',
   destinationBranchId: '',
+  deductFrom: 'AVAILABLE',
   quantity: '',
   remarks: '',
 });
@@ -59,6 +83,7 @@ const [issueForm, setIssueForm] = useState({
   stockItemId: '',
   quantity: '',
   sourceType: 'MANUAL',
+  deductFrom: 'AVAILABLE',
   projectId: '',
   dealerName: '',
   dealerPhone: '',
@@ -72,6 +97,7 @@ const [requestIssueLoading, setRequestIssueLoading] =
 const [requestIssueForm, setRequestIssueForm] = useState({
   requestItemId: '',
   stockItemId: '',
+  deductFrom: 'AVAILABLE',
   quantity: '',
   remarks: '',
 });
@@ -96,6 +122,15 @@ const [receiveForm, setReceiveForm] = useState({
     limit: 20,
     total: 0,
     totalPages: 1,
+  });
+
+  const [stockSummary, setStockSummary] =
+  useState({
+    totalItems: 0,
+    totalCurrentQuantity: 0,
+    totalReservedQuantity: 0,
+    totalAvailableQuantity: 0,
+    totalStockValue: 0,
   });
 
   const [movements, setMovements] = useState<any[]>([]);
@@ -198,6 +233,32 @@ const [consumptionPagination, setConsumptionPagination] =
           ? res.data.data
           : [],
       );
+
+      setStockSummary({
+  totalItems: Number(
+    res.data?.summary?.totalItems || 0,
+  ),
+
+  totalCurrentQuantity: Number(
+    res.data?.summary
+      ?.totalCurrentQuantity || 0,
+  ),
+
+  totalReservedQuantity: Number(
+    res.data?.summary
+      ?.totalReservedQuantity || 0,
+  ),
+
+  totalAvailableQuantity: Number(
+    res.data?.summary
+      ?.totalAvailableQuantity || 0,
+  ),
+
+  totalStockValue: Number(
+    res.data?.summary
+      ?.totalStockValue || 0,
+  ),
+});
 
       const pageInfo = res.data?.pagination || res.data || {};
 
@@ -359,10 +420,18 @@ const issueAgainstMaterialRequest = async () => {
     await axios.post(
       `${API_BASE_URL}/project/material-requests/items/${requestIssueForm.requestItemId}/issue-stock`,
       {
-        stockItemId: requestIssueForm.stockItemId,
-        quantity: requestIssueForm.quantity,
-        remarks: requestIssueForm.remarks,
-      },
+  stockItemId:
+    requestIssueForm.stockItemId,
+
+  deductFrom:
+    requestIssueForm.deductFrom,
+
+  quantity:
+    requestIssueForm.quantity,
+
+  remarks:
+    requestIssueForm.remarks,
+},
       {
         headers: token
           ? {
@@ -375,11 +444,12 @@ const issueAgainstMaterialRequest = async () => {
     alert('Stock issued against material request');
 
     setRequestIssueForm({
-      requestItemId: '',
-      stockItemId: '',
-      quantity: '',
-      remarks: '',
-    });
+  requestItemId: '',
+  stockItemId: '',
+  deductFrom: 'AVAILABLE',
+  quantity: '',
+  remarks: '',
+});
 
     await loadApprovedRequestsForIssue();
     await loadStockItems(1);
@@ -869,14 +939,15 @@ const issueStock = async () => {
     await axios.post(
       `${API_BASE_URL}/project/stock/issue`,
       {
-        stockItemId: issueForm.stockItemId,
-        quantity: issueForm.quantity,
-        sourceType: issueForm.sourceType,
-        projectId: issueForm.projectId || undefined,
-        dealerName: issueForm.dealerName,
-dealerPhone: issueForm.dealerPhone,
-        remarks: issueForm.remarks,
-      },
+  stockItemId: issueForm.stockItemId,
+  quantity: issueForm.quantity,
+  sourceType: issueForm.sourceType,
+  deductFrom: issueForm.deductFrom,
+  projectId: issueForm.projectId || undefined,
+  dealerName: issueForm.dealerName,
+  dealerPhone: issueForm.dealerPhone,
+  remarks: issueForm.remarks,
+},
       {
         headers: token
           ? {
@@ -889,14 +960,15 @@ dealerPhone: issueForm.dealerPhone,
     alert('Stock issued successfully');
 
     setIssueForm({
-      stockItemId: '',
-      quantity: '',
-      sourceType: 'MANUAL',
-      projectId: '',
-      dealerName: '',
-      dealerPhone: '',
-      remarks: '',
-    });
+  stockItemId: '',
+  quantity: '',
+  sourceType: 'MANUAL',
+  deductFrom: 'AVAILABLE',
+  projectId: '',
+  dealerName: '',
+  dealerPhone: '',
+  remarks: '',
+});
 
     setSelectedProject(null);
 setProjectSearch('');
@@ -915,6 +987,196 @@ setProjectSearchResults([]);
     );
   } finally {
     setIssueLoading(false);
+  }
+};
+
+const reserveStock = async () => {
+  if (!reserveForm.stockItemId) {
+    alert('Please select stock item');
+    return;
+  }
+
+  const quantity = Number(
+    reserveForm.quantity || 0,
+  );
+
+  if (
+    !Number.isFinite(quantity) ||
+    quantity <= 0
+  ) {
+    alert('Please enter valid quantity');
+    return;
+  }
+
+  if (!reserveForm.remarks.trim()) {
+    alert(
+      'Remarks are required for stock reservation',
+    );
+    return;
+  }
+
+  try {
+    setReserveLoading(true);
+
+    const token =
+      localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/stock/reserve`,
+      {
+        stockItemId:
+          reserveForm.stockItemId,
+
+        quantity,
+
+        projectId:
+          reserveForm.projectId ||
+          undefined,
+
+        sourceType:
+          reserveForm.projectId
+            ? 'PROJECT'
+            : 'MANUAL_RESERVATION',
+
+        remarks:
+          reserveForm.remarks.trim(),
+      },
+      {
+        headers: token
+          ? {
+              Authorization:
+                `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Stock reserved successfully');
+
+    setReserveForm({
+      stockItemId: '',
+      quantity: '',
+      projectId: '',
+      remarks: '',
+    });
+
+    setStockSelectorSearch((prev) => ({
+      ...prev,
+      reserve: '',
+    }));
+
+    await loadStockItems(1);
+    await loadSelectableStockItems();
+    await loadStockMovements(1);
+    await loadBranchWiseStock();
+    await loadMaterialSummary();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to reserve stock',
+    );
+  } finally {
+    setReserveLoading(false);
+  }
+};
+
+const releaseReservedStock = async () => {
+  if (
+    !releaseReservedForm.stockItemId
+  ) {
+    alert('Please select stock item');
+    return;
+  }
+
+  const quantity = Number(
+    releaseReservedForm.quantity || 0,
+  );
+
+  if (
+    !Number.isFinite(quantity) ||
+    quantity <= 0
+  ) {
+    alert('Please enter valid quantity');
+    return;
+  }
+
+  if (
+    !releaseReservedForm.remarks.trim()
+  ) {
+    alert(
+      'Remarks are required for releasing reserved stock',
+    );
+    return;
+  }
+
+  try {
+    setReleaseReservedLoading(true);
+
+    const token =
+      localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/stock/release-reserved`,
+      {
+        stockItemId:
+          releaseReservedForm.stockItemId,
+
+        quantity,
+
+        projectId:
+          releaseReservedForm.projectId ||
+          undefined,
+
+        sourceType:
+          releaseReservedForm.projectId
+            ? 'PROJECT'
+            : 'MANUAL_RESERVATION',
+
+        remarks:
+          releaseReservedForm.remarks.trim(),
+      },
+      {
+        headers: token
+          ? {
+              Authorization:
+                `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert(
+      'Reserved stock released successfully',
+    );
+
+    setReleaseReservedForm({
+      stockItemId: '',
+      quantity: '',
+      projectId: '',
+      remarks: '',
+    });
+
+    setStockSelectorSearch((prev) => ({
+      ...prev,
+      releaseReserved: '',
+    }));
+
+    await loadStockItems(1);
+    await loadSelectableStockItems();
+    await loadStockMovements(1);
+    await loadBranchWiseStock();
+    await loadMaterialSummary();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to release reserved stock',
+    );
+  } finally {
+    setReleaseReservedLoading(false);
   }
 };
 
@@ -1006,11 +1268,21 @@ const transferStock = async () => {
     await axios.post(
       `${API_BASE_URL}/project/stock/transfer`,
       {
-        sourceStockItemId: transferForm.sourceStockItemId,
-        destinationBranchId: transferForm.destinationBranchId,
-        quantity: transferForm.quantity,
-        remarks: transferForm.remarks,
-      },
+  sourceStockItemId:
+    transferForm.sourceStockItemId,
+
+  destinationBranchId:
+    transferForm.destinationBranchId,
+
+  deductFrom:
+    transferForm.deductFrom,
+
+  quantity:
+    transferForm.quantity,
+
+  remarks:
+    transferForm.remarks,
+},
       {
         headers: token
           ? {
@@ -1023,11 +1295,12 @@ const transferStock = async () => {
     alert('Stock transferred successfully');
 
     setTransferForm({
-      sourceStockItemId: '',
-      destinationBranchId: '',
-      quantity: '',
-      remarks: '',
-    });
+  sourceStockItemId: '',
+  destinationBranchId: '',
+  deductFrom: 'AVAILABLE',
+  quantity: '',
+  remarks: '',
+});
 
     await loadStockItems(1);
     await loadSelectableStockItems();
@@ -1249,20 +1522,17 @@ const restoreStockMovement = async (movementId: number) => {
   loadBranches();
 }, []);
 
-  const totalQuantity = stockItems.reduce(
-    (total, item) =>
-      total + Number(item.currentQuantity || 0),
-    0,
-  );
+  const totalQuantity =
+  stockSummary.totalCurrentQuantity;
 
-  const totalAvailableQuantity =
-  totalQuantity;
+const totalReservedQuantity =
+  stockSummary.totalReservedQuantity;
 
-  const totalStockValue = stockItems.reduce(
-    (total, item) =>
-      total + Number(item.stockValue || 0),
-    0,
-  );
+const totalAvailableQuantity =
+  stockSummary.totalAvailableQuantity;
+
+const totalStockValue =
+  stockSummary.totalStockValue;
 
   const lowStockCount = stockItems.filter(
   (item) => item.isLowStock,
@@ -1281,7 +1551,15 @@ const totalIncomingQty = movements
 
 const totalOutgoingQty = movements
   .filter((item) =>
-    ['ISSUE', 'ADJUST_OUT', 'TRANSFER_OUT'].includes(
+    [
+  'ISSUE',
+  'ISSUE_FROM_AVAILABLE',
+  'ISSUE_FROM_RESERVED',
+  'ADJUST_OUT',
+  'TRANSFER_OUT',
+  'TRANSFER_OUT_FROM_AVAILABLE',
+  'TRANSFER_OUT_FROM_RESERVED',
+].includes(
       item.movementType,
     ),
   )
@@ -1294,8 +1572,14 @@ const adjustmentCount = movements.filter((item) =>
   ['ADJUST_IN', 'ADJUST_OUT'].includes(item.movementType),
 ).length;
 
-const transferCount = movements.filter((item) =>
-  ['TRANSFER_IN', 'TRANSFER_OUT'].includes(item.movementType),
+const transferCount = movements.filter(
+  (item) =>
+    [
+      'TRANSFER_IN',
+      'TRANSFER_OUT',
+      'TRANSFER_OUT_FROM_AVAILABLE',
+      'TRANSFER_OUT_FROM_RESERVED',
+    ].includes(item.movementType),
 ).length;
 
 const consumptionTotal = consumptions.reduce(
@@ -1304,13 +1588,23 @@ const consumptionTotal = consumptions.reduce(
 );
 
 const getStockItemLabel = (item: any) => {
-  const availableQty = Number(
+  const currentQty = Number(
     item.currentQuantity || 0,
   );
 
-  return `${item.materialName || ''} ${item.branchName || ''} ${
-    item.category || ''
-  } ${item.brand || ''} ${item.unit || ''} Qty ${availableQty}`;
+  const reservedQty = Number(
+    item.reservedQuantity || 0,
+  );
+
+  const availableQty = Number(
+    item.availableQuantity || 0,
+  );
+
+  return `${item.materialName || ''} ${
+    item.branchName || ''
+  } ${item.category || ''} ${
+    item.brand || ''
+  } ${item.unit || ''} Current ${currentQty} Reserved ${reservedQty} Available ${availableQty}`;
 };
 
 const getFilteredSelectableStockItems = (searchText: string) => {
@@ -1337,14 +1631,14 @@ const getFilteredSelectableStockItems = (searchText: string) => {
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+      <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-7">
         <div className="rounded-2xl bg-white p-5 shadow">
           <p className="text-sm text-gray-500">
-            Visible Stock Items
+            Filtered Stock Items
           </p>
 
           <p className="mt-2 text-2xl font-bold text-gray-800">
-            {stockItems.length}
+            {stockSummary.totalItems}
           </p>
         </div>
 
@@ -1366,6 +1660,18 @@ const getFilteredSelectableStockItems = (searchText: string) => {
 
   <p className="mt-2 text-2xl font-bold text-green-700">
     {totalAvailableQuantity.toLocaleString('en-IN')}
+  </p>
+</div>
+
+<div className="rounded-2xl bg-white p-5 shadow">
+  <p className="text-sm text-gray-500">
+    Reserved Quantity
+  </p>
+
+  <p className="mt-2 text-2xl font-bold text-blue-700">
+    {totalReservedQuantity.toLocaleString(
+      'en-IN',
+    )}
   </p>
 </div>
 
@@ -1572,9 +1878,17 @@ const getFilteredSelectableStockItems = (searchText: string) => {
         >
           {item.materialName}
           {item.branchName ? ` - ${item.branchName}` : ''}
-          {` | Qty: ${Number(
-            item.currentQuantity || 0,
-          ).toLocaleString('en-IN')}`}
+          {` | Current: ${Number(
+  item.currentQuantity || 0,
+).toLocaleString('en-IN')}`}
+
+{` | Reserved: ${Number(
+  item.reservedQuantity || 0,
+).toLocaleString('en-IN')}`}
+
+{` | Available: ${Number(
+  item.availableQuantity || 0,
+).toLocaleString('en-IN')}`}
         </option>
       ))}
     </select>
@@ -1612,6 +1926,25 @@ const getFilteredSelectableStockItems = (searchText: string) => {
       </option>
       <option value="ADJUSTMENT">Adjustment</option>
     </select>
+
+    <select
+  value={issueForm.deductFrom}
+  onChange={(e) =>
+    setIssueForm({
+      ...issueForm,
+      deductFrom: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3 text-sm"
+>
+  <option value="AVAILABLE">
+    Deduct From Available Quantity
+  </option>
+
+  <option value="RESERVED">
+    Deduct From Reserved Quantity
+  </option>
+</select>
 
     {issueForm.sourceType === 'DEALER' && (
       <>
@@ -1759,6 +2092,277 @@ const getFilteredSelectableStockItems = (searchText: string) => {
       }
       className="rounded-xl border p-3 text-sm md:col-span-2"
     />
+  </div>
+</div>
+
+<div className="rounded-2xl bg-white p-5 shadow">
+  <div>
+    <h2 className="text-xl font-bold text-gray-800">
+      Reserved Stock Management
+    </h2>
+
+    <p className="mt-1 text-sm text-gray-500">
+      Manually reserve available warehouse stock for upcoming project requirements, or release reserved stock back into available quantity.
+    </p>
+  </div>
+
+  <div className="mt-5 grid gap-5 xl:grid-cols-2">
+    <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="font-bold text-blue-900">
+            Reserve Stock
+          </h3>
+
+          <p className="mt-1 text-xs text-blue-700">
+            Current quantity remains unchanged. Reserved quantity increases and available quantity decreases.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={reserveStock}
+          disabled={reserveLoading}
+          className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+        >
+          {reserveLoading
+            ? 'Reserving...'
+            : 'Reserve Stock'}
+        </button>
+      </div>
+
+      <div className="mt-4 grid gap-3">
+        <input
+          type="text"
+          placeholder="Search stock item by material, branch or brand"
+          value={stockSelectorSearch.reserve}
+          onChange={(e) =>
+            setStockSelectorSearch({
+              ...stockSelectorSearch,
+              reserve: e.target.value,
+            })
+          }
+          className="rounded-xl border bg-white p-3 text-sm"
+        />
+
+        <select
+          value={reserveForm.stockItemId}
+          onChange={(e) =>
+            setReserveForm({
+              ...reserveForm,
+              stockItemId: e.target.value,
+            })
+          }
+          className="rounded-xl border bg-white p-3 text-sm"
+        >
+          <option value="">
+            Select Stock Item
+          </option>
+
+          {getFilteredSelectableStockItems(
+            stockSelectorSearch.reserve,
+          ).map((item: any) => (
+            <option
+              key={item.id}
+              value={item.id}
+            >
+              {item.materialName}
+              {item.branchName
+                ? ` - ${item.branchName}`
+                : ''}
+              {` | Current: ${Number(
+                item.currentQuantity || 0,
+              ).toLocaleString('en-IN')}`}
+              {` | Reserved: ${Number(
+                item.reservedQuantity || 0,
+              ).toLocaleString('en-IN')}`}
+              {` | Available: ${Number(
+                item.availableQuantity || 0,
+              ).toLocaleString('en-IN')}`}
+            </option>
+          ))}
+        </select>
+
+        <input
+          type="number"
+          min="0"
+          step="any"
+          placeholder="Reserve Quantity"
+          value={reserveForm.quantity}
+          onChange={(e) =>
+            setReserveForm({
+              ...reserveForm,
+              quantity: e.target.value,
+            })
+          }
+          className="rounded-xl border bg-white p-3 text-sm"
+        />
+
+        <input
+          type="number"
+          min="1"
+          placeholder="Project ID (Optional)"
+          value={reserveForm.projectId}
+          onChange={(e) =>
+            setReserveForm({
+              ...reserveForm,
+              projectId: e.target.value,
+            })
+          }
+          className="rounded-xl border bg-white p-3 text-sm"
+        />
+
+        <input
+          type="text"
+          placeholder="Mandatory Remarks / Reservation Reason"
+          value={reserveForm.remarks}
+          onChange={(e) =>
+            setReserveForm({
+              ...reserveForm,
+              remarks: e.target.value,
+            })
+          }
+          className="rounded-xl border bg-white p-3 text-sm"
+        />
+      </div>
+    </div>
+
+    <div className="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="font-bold text-emerald-900">
+            Release Reserved Stock
+          </h3>
+
+          <p className="mt-1 text-xs text-emerald-700">
+            Current quantity remains unchanged. Reserved quantity decreases and available quantity increases.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={releaseReservedStock}
+          disabled={releaseReservedLoading}
+          className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+        >
+          {releaseReservedLoading
+            ? 'Releasing...'
+            : 'Release Stock'}
+        </button>
+      </div>
+
+      <div className="mt-4 grid gap-3">
+        <input
+          type="text"
+          placeholder="Search stock item by material, branch or brand"
+          value={
+            stockSelectorSearch.releaseReserved
+          }
+          onChange={(e) =>
+            setStockSelectorSearch({
+              ...stockSelectorSearch,
+              releaseReserved:
+                e.target.value,
+            })
+          }
+          className="rounded-xl border bg-white p-3 text-sm"
+        />
+
+        <select
+          value={
+            releaseReservedForm.stockItemId
+          }
+          onChange={(e) =>
+            setReleaseReservedForm({
+              ...releaseReservedForm,
+              stockItemId: e.target.value,
+            })
+          }
+          className="rounded-xl border bg-white p-3 text-sm"
+        >
+          <option value="">
+            Select Stock Item
+          </option>
+
+          {getFilteredSelectableStockItems(
+            stockSelectorSearch
+              .releaseReserved,
+          ).map((item: any) => (
+            <option
+              key={item.id}
+              value={item.id}
+              disabled={
+                Number(
+                  item.reservedQuantity || 0,
+                ) <= 0
+              }
+            >
+              {item.materialName}
+              {item.branchName
+                ? ` - ${item.branchName}`
+                : ''}
+              {` | Current: ${Number(
+                item.currentQuantity || 0,
+              ).toLocaleString('en-IN')}`}
+              {` | Reserved: ${Number(
+                item.reservedQuantity || 0,
+              ).toLocaleString('en-IN')}`}
+              {` | Available: ${Number(
+                item.availableQuantity || 0,
+              ).toLocaleString('en-IN')}`}
+            </option>
+          ))}
+        </select>
+
+        <input
+          type="number"
+          min="0"
+          step="any"
+          placeholder="Release Quantity"
+          value={
+            releaseReservedForm.quantity
+          }
+          onChange={(e) =>
+            setReleaseReservedForm({
+              ...releaseReservedForm,
+              quantity: e.target.value,
+            })
+          }
+          className="rounded-xl border bg-white p-3 text-sm"
+        />
+
+        <input
+          type="number"
+          min="1"
+          placeholder="Project ID (Optional)"
+          value={
+            releaseReservedForm.projectId
+          }
+          onChange={(e) =>
+            setReleaseReservedForm({
+              ...releaseReservedForm,
+              projectId: e.target.value,
+            })
+          }
+          className="rounded-xl border bg-white p-3 text-sm"
+        />
+
+        <input
+          type="text"
+          placeholder="Mandatory Remarks / Release Reason"
+          value={
+            releaseReservedForm.remarks
+          }
+          onChange={(e) =>
+            setReleaseReservedForm({
+              ...releaseReservedForm,
+              remarks: e.target.value,
+            })
+          }
+          className="rounded-xl border bg-white p-3 text-sm"
+        />
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1915,9 +2519,17 @@ const getFilteredSelectableStockItems = (searchText: string) => {
         <option key={item.id} value={item.id}>
           {item.materialName}
           {item.branchName ? ` - ${item.branchName}` : ''}
-          {` | Available: ${Number(
-            item.currentQuantity || 0,
-          ).toLocaleString('en-IN')}`}
+          {` | Current: ${Number(
+  item.currentQuantity || 0,
+).toLocaleString('en-IN')}`}
+
+{` | Reserved: ${Number(
+  item.reservedQuantity || 0,
+).toLocaleString('en-IN')}`}
+
+{` | Available: ${Number(
+  item.availableQuantity || 0,
+).toLocaleString('en-IN')}`}
         </option>
       ))}
     </select>
@@ -1940,6 +2552,25 @@ const getFilteredSelectableStockItems = (searchText: string) => {
         </option>
       ))}
     </select>
+
+    <select
+  value={transferForm.deductFrom}
+  onChange={(e) =>
+    setTransferForm({
+      ...transferForm,
+      deductFrom: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3 text-sm"
+>
+  <option value="AVAILABLE">
+    Transfer From Available Quantity
+  </option>
+
+  <option value="RESERVED">
+    Transfer From Reserved Quantity
+  </option>
+</select>
 
     <input
       type="number"
@@ -2079,12 +2710,39 @@ const getFilteredSelectableStockItems = (searchText: string) => {
         >
           {item.materialName}
           {item.branchName ? ` - ${item.branchName}` : ''}
-          {` | Available: ${Number(
-            item.currentQuantity || 0,
-          ).toLocaleString('en-IN')}`}
+          {` | Current: ${Number(
+  item.currentQuantity || 0,
+).toLocaleString('en-IN')}`}
+
+{` | Reserved: ${Number(
+  item.reservedQuantity || 0,
+).toLocaleString('en-IN')}`}
+
+{` | Available: ${Number(
+  item.availableQuantity || 0,
+).toLocaleString('en-IN')}`}
         </option>
       ))}
     </select>
+
+    <select
+  value={requestIssueForm.deductFrom}
+  onChange={(e) =>
+    setRequestIssueForm({
+      ...requestIssueForm,
+      deductFrom: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3 text-sm"
+>
+  <option value="AVAILABLE">
+    Issue From Available Quantity
+  </option>
+
+  <option value="RESERVED">
+    Issue From Reserved Quantity
+  </option>
+</select>
 
 
     <input
@@ -2175,8 +2833,17 @@ const getFilteredSelectableStockItems = (searchText: string) => {
           <th className="p-2 text-left">Brand</th>
           <th className="p-2 text-left">Unit</th>
           <th className="p-2 text-left">Branches</th>
-          <th className="p-2 text-left">Current Qty</th>
-          <th className="p-2 text-left">Available Qty</th>
+          <th className="p-2 text-left">
+  Current Qty
+</th>
+
+<th className="p-2 text-left">
+  Reserved Qty
+</th>
+
+<th className="p-2 text-left">
+  Available Qty
+</th>
           <th className="p-2 text-left">Stock Value</th>
         </tr>
       </thead>
@@ -2185,7 +2852,7 @@ const getFilteredSelectableStockItems = (searchText: string) => {
         {materialSummaryRows.length === 0 && (
           <tr>
             <td
-              colSpan={8}
+              colSpan={9}
               className="p-4 text-center text-gray-500"
             >
               No material summary found.
@@ -2225,12 +2892,22 @@ const getFilteredSelectableStockItems = (searchText: string) => {
             </td>
 
             <td className="p-2 font-semibold">
-              {Number(item.totalCurrentQuantity || 0).toLocaleString('en-IN')}
-            </td>
+  {Number(
+    item.totalCurrentQuantity || 0,
+  ).toLocaleString('en-IN')}
+</td>
 
-            <td className="p-2 font-semibold text-green-700">
-              {Number(item.totalAvailableQuantity || 0).toLocaleString('en-IN')}
-            </td>
+<td className="p-2 font-semibold text-blue-700">
+  {Number(
+    item.totalReservedQuantity || 0,
+  ).toLocaleString('en-IN')}
+</td>
+
+<td className="p-2 font-semibold text-green-700">
+  {Number(
+    item.totalAvailableQuantity || 0,
+  ).toLocaleString('en-IN')}
+</td>
 
             <td className="p-2 font-semibold text-green-700">
               {formatCurrency(item.totalStockValue)}
@@ -2358,6 +3035,11 @@ const getFilteredSelectableStockItems = (searchText: string) => {
                 <th className="p-2 text-left">
   Current Qty
 </th>
+
+<th className="p-2 text-left">
+  Reserved Qty
+</th>
+
 <th className="p-2 text-left">
   Available Qty
 </th>
@@ -2380,7 +3062,7 @@ const getFilteredSelectableStockItems = (searchText: string) => {
               {stockItems.length === 0 && (
                 <tr>
                   <td
-                    colSpan={11}
+                    colSpan={12}
                     className="p-4 text-center text-gray-500"
                   >
                     No stock items found.
@@ -2427,6 +3109,12 @@ const getFilteredSelectableStockItems = (searchText: string) => {
   ).toLocaleString('en-IN')}
 </td>
 
+<td className="p-2 font-semibold text-blue-700">
+  {Number(
+    item.reservedQuantity || 0,
+  ).toLocaleString('en-IN')}
+</td>
+
 <td
   className={`p-2 font-semibold ${
     item.isLowStock
@@ -2435,7 +3123,7 @@ const getFilteredSelectableStockItems = (searchText: string) => {
   }`}
 >
   {Number(
-    item.currentQuantity || 0,
+    item.availableQuantity || 0,
   ).toLocaleString('en-IN')}
 
   <p className="text-xs text-gray-500">
@@ -2846,6 +3534,29 @@ const getFilteredSelectableStockItems = (searchText: string) => {
       <option value="">All Movement Types</option>
       <option value="RECEIVE">Receive</option>
       <option value="ISSUE">Issue</option>
+      <option value="RESERVE">
+  Reserve
+</option>
+
+<option value="RELEASE_RESERVED">
+  Release Reserved
+</option>
+
+<option value="ISSUE_FROM_AVAILABLE">
+  Issue From Available
+</option>
+
+<option value="ISSUE_FROM_RESERVED">
+  Issue From Reserved
+</option>
+
+<option value="TRANSFER_OUT_FROM_AVAILABLE">
+  Transfer Out From Available
+</option>
+
+<option value="TRANSFER_OUT_FROM_RESERVED">
+  Transfer Out From Reserved
+</option>
       <option value="ADJUST_IN">Adjust In</option>
       <option value="ADJUST_OUT">Adjust Out</option>
       <option value="TRANSFER_IN">Transfer In</option>
@@ -3308,9 +4019,21 @@ const getFilteredSelectableStockItems = (searchText: string) => {
         <thead>
           <tr className="border-b bg-gray-50">
             <th className="p-2 text-left">Material</th>
-            <th className="p-2 text-left">Current</th>
-            <th className="p-2 text-left">Available</th>
-            <th className="p-2 text-left">Status</th>
+            <th className="p-2 text-left">
+  Current
+</th>
+
+<th className="p-2 text-left">
+  Reserved
+</th>
+
+<th className="p-2 text-left">
+  Available
+</th>
+
+<th className="p-2 text-left">
+  Status
+</th>
           </tr>
         </thead>
 
@@ -3320,7 +4043,13 @@ const getFilteredSelectableStockItems = (searchText: string) => {
               item.currentQuantity || 0,
             );
 
-            const availableQty = currentQty;
+            const reservedQty = Number(
+  item.reservedQuantity || 0,
+);
+
+const availableQty = Number(
+  item.availableQuantity || 0,
+);
 
             return (
               <tr
@@ -3334,6 +4063,10 @@ const getFilteredSelectableStockItems = (searchText: string) => {
                 <td className="p-2">
                   {currentQty}
                 </td>
+
+                <td className="p-2 font-semibold text-blue-700">
+  {reservedQty}
+</td>
 
                 <td
                   className={`p-2 font-semibold ${
