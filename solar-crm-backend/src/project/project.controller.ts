@@ -3337,6 +3337,28 @@ adjustStock(
   return this.projectService.adjustStock(body, user);
 }
 
+@Post('stock/reserve')
+reserveProjectStock(
+  @Body() body: any,
+  @Req() req: any,
+) {
+  return this.projectService.reserveProjectStock(
+    body,
+    req.user,
+  );
+}
+
+@Post('stock/release-reserved')
+releaseReservedProjectStock(
+  @Body() body: any,
+  @Req() req: any,
+) {
+  return this.projectService.releaseReservedProjectStock(
+    body,
+    req.user,
+  );
+}
+
 @Roles('OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER', 'STOCK_MANAGER')
 @Patch('material-requests/:id/approve-stock')
 approveMaterialRequestForStock(

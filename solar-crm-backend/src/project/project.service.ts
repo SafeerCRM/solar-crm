@@ -4391,103 +4391,259 @@ async listProjectStockItems(query: any) {
     showHidden,
   } = query || {};
 
-  const pageNumber = Math.max(Number(page) || 1, 1);
-  const limitNumber = Math.min(Math.max(Number(limit) || 20, 1), 100);
-  const skip = (pageNumber - 1) * limitNumber;
+  const pageNumber = Math.max(
+    Number(page) || 1,
+    1,
+  );
 
-  const qb = this.projectStockItemRepository
-    .createQueryBuilder('stock')
-    .orderBy('stock.createdAt', 'DESC')
-    .skip(skip)
-    .take(limitNumber);
+  const limitNumber = Math.min(
+    Math.max(Number(limit) || 20, 1),
+    100,
+  );
 
-  if (showHidden === 'true') {
-    qb.where('stock.isHidden = true');
-  } else {
-    qb.where('stock.isHidden = false');
-  }
+  const skip =
+    (pageNumber - 1) *
+    limitNumber;
 
-  if (branch?.trim()) {
-    qb.andWhere('LOWER(stock.branchName) LIKE LOWER(:branch)', {
-      branch: `%${branch.trim()}%`,
-    });
-  }
+  /*
+   * Common filters are applied separately
+   * to the paginated list and full summary.
+   */
+  const applyStockFilters = (
+    qb: any,
+  ) => {
+    if (showHidden === 'true') {
+      qb.where(
+        'stock.isHidden = true',
+      );
+    } else {
+      qb.where(
+        'stock.isHidden = false',
+      );
+    }
 
-  if (material?.trim()) {
-    qb.andWhere(
-      `(
-        LOWER(stock.materialName) LIKE LOWER(:material)
-        OR LOWER(stock.category) LIKE LOWER(:material)
-        OR LOWER(stock.brand) LIKE LOWER(:material)
-      )`,
-      {
-        material: `%${material.trim()}%`,
-      },
+    if (branch?.trim()) {
+      qb.andWhere(
+        'LOWER(stock.branchName) LIKE LOWER(:branch)',
+        {
+          branch:
+            `%${branch.trim()}%`,
+        },
+      );
+    }
+
+    if (material?.trim()) {
+      qb.andWhere(
+        `(
+          LOWER(stock.materialName)
+            LIKE LOWER(:material)
+          OR LOWER(stock.category)
+            LIKE LOWER(:material)
+          OR LOWER(stock.brand)
+            LIKE LOWER(:material)
+        )`,
+        {
+          material:
+            `%${material.trim()}%`,
+        },
+      );
+    }
+
+    return qb;
+  };
+
+  const listQuery =
+    applyStockFilters(
+      this.projectStockItemRepository
+        .createQueryBuilder('stock'),
+    )
+      .orderBy(
+        'stock.createdAt',
+        'DESC',
+      )
+      .skip(skip)
+      .take(limitNumber);
+
+  const [data, total] =
+    await listQuery.getManyAndCount();
+
+  /*
+   * Summary is calculated across every
+   * stock row matching the current filters,
+   * not only the current page.
+   */
+  const summaryQuery =
+    applyStockFilters(
+      this.projectStockItemRepository
+        .createQueryBuilder('stock'),
     );
-  }
 
-  const [data, total] = await qb.getManyAndCount();
+  const rawSummary =
+    await summaryQuery
+      .select(
+        'COUNT(stock.id)',
+        'totalItems',
+      )
+      .addSelect(
+        `
+        COALESCE(
+          SUM(stock.currentQuantity),
+          0
+        )
+        `,
+        'totalCurrentQuantity',
+      )
+      .addSelect(
+        `
+        COALESCE(
+          SUM(stock.reservedQuantity),
+          0
+        )
+        `,
+        'totalReservedQuantity',
+      )
+      .addSelect(
+        `
+        COALESCE(
+          SUM(
+            GREATEST(
+              stock.currentQuantity -
+              stock.reservedQuantity,
+              0
+            )
+          ),
+          0
+        )
+        `,
+        'totalAvailableQuantity',
+      )
+      .addSelect(
+        `
+        COALESCE(
+          SUM(stock.stockValue),
+          0
+        )
+        `,
+        'totalStockValue',
+      )
+      .getRawOne();
 
   const materialIds = data
-  .map((item) => Number(item.materialId || 0))
-  .filter(Boolean);
+    .map((item) =>
+      Number(
+        item.materialId || 0,
+      ),
+    )
+    .filter(Boolean);
 
-const materials = materialIds.length
-  ? await this.projectMaterialMasterRepository.find({
-      where: {
-        id: In(materialIds),
-      },
-    })
-  : [];
+  const materials =
+    materialIds.length
+      ? await this.projectMaterialMasterRepository.find(
+          {
+            where: {
+              id: In(materialIds),
+            },
+          },
+        )
+      : [];
 
-const materialMap = new Map(
-  materials.map((material) => [material.id, material]),
-);
+  const materialMap = new Map(
+    materials.map((material) => [
+      material.id,
+      material,
+    ]),
+  );
 
-const enrichedData = data.map((item: any) => {
-  const currentQuantity = Number(
-  item.currentQuantity || 0,
-);
+  const enrichedData = data.map(
+    (item: any) => {
+      const currentQuantity =
+        Number(
+          item.currentQuantity || 0,
+        );
 
-const reservedQuantity = Number(
-  item.reservedQuantity || 0,
-);
+      const reservedQuantity =
+        Math.max(
+          Number(
+            item.reservedQuantity || 0,
+          ),
+          0,
+        );
 
-/*
- * Reservation is no longer part of the
- * active inventory workflow.
- *
- * Physical stock itself is available stock.
- */
-const availableQuantity =
-  currentQuantity;
+      const availableQuantity =
+        Math.max(
+          currentQuantity -
+            reservedQuantity,
+          0,
+        );
 
-  const material = materialMap.get(Number(item.materialId || 0));
+      const material =
+        materialMap.get(
+          Number(
+            item.materialId || 0,
+          ),
+        );
 
-  const minimumStockLevel = Number(
-    (material as any)?.minimumStockLevel || 0,
+      const minimumStockLevel =
+        Number(
+          (material as any)
+            ?.minimumStockLevel || 0,
+        );
+
+      return {
+        ...item,
+
+        reservedQuantity,
+        availableQuantity,
+        minimumStockLevel,
+
+        isLowStock:
+          minimumStockLevel > 0 &&
+          availableQuantity <=
+            minimumStockLevel,
+      };
+    },
   );
 
   return {
-    ...item,
-    reservedQuantity,
-    availableQuantity,
-    minimumStockLevel,
-    isLowStock:
-      minimumStockLevel > 0 &&
-      availableQuantity <= minimumStockLevel,
-  };
-});
+    data: enrichedData,
 
-return {
-  data: enrichedData,
-  pagination: {
-    page: pageNumber,
-    limit: limitNumber,
-    total,
-    totalPages: Math.ceil(total / limitNumber),
-  },
-};
+    summary: {
+      totalItems: Number(
+        rawSummary?.totalItems || 0,
+      ),
+
+      totalCurrentQuantity: Number(
+        rawSummary
+          ?.totalCurrentQuantity || 0,
+      ),
+
+      totalReservedQuantity: Number(
+        rawSummary
+          ?.totalReservedQuantity || 0,
+      ),
+
+      totalAvailableQuantity: Number(
+        rawSummary
+          ?.totalAvailableQuantity || 0,
+      ),
+
+      totalStockValue: Number(
+        rawSummary
+          ?.totalStockValue || 0,
+      ),
+    },
+
+    pagination: {
+      page: pageNumber,
+      limit: limitNumber,
+      total,
+
+      totalPages:
+        Math.ceil(
+          total / limitNumber,
+        ) || 1,
+    },
+  };
 }
 
 async updateStockItemDealerVisibility(
@@ -4551,17 +4707,23 @@ async receiveProjectStock(body: any, currentUser: any) {
 
   if (!stockItem) {
     stockItem = this.projectStockItemRepository.create({
-      materialId,
-      materialName: material.name,
-      category: material.category,
-      brand: material.brand,
-      unit: material.unit,
-      branchId: branchId || undefined,
-branchName: branch?.name || body?.branchName || undefined,
-      currentQuantity: 0,
-      averageRate: 0,
-      stockValue: 0,
-    });
+  materialId,
+  materialName: material.name,
+  category: material.category,
+  brand: material.brand,
+  unit: material.unit,
+  branchId: branchId || undefined,
+  branchName:
+    branch?.name ||
+    body?.branchName ||
+    undefined,
+
+  currentQuantity: 0,
+  reservedQuantity: 0,
+
+  averageRate: 0,
+  stockValue: 0,
+});
   }
 
   const oldQty = Number(stockItem.currentQuantity || 0);
@@ -4599,259 +4761,902 @@ createdBy: currentUser?.id || currentUser?.userId || undefined,
   return savedStock;
 }
 
-async issueProjectStock(body: any, currentUser: any) {
-  const stockItemId = Number(body?.stockItemId || 0);
-  const quantity = Number(body?.quantity || 0);
+async issueProjectStock(
+  body: any,
+  currentUser: any,
+) {
+  if (!this.canManageStock(currentUser)) {
+    throw new ForbiddenException(
+      'You are not allowed to manage stock',
+    );
+  }
+
+  const stockItemId = Number(
+    body?.stockItemId || 0,
+  );
+
+  const quantity = Number(
+    body?.quantity || 0,
+  );
+
+  const deductFrom =
+    String(
+      body?.deductFrom || 'AVAILABLE',
+    )
+      .trim()
+      .toUpperCase() === 'RESERVED'
+      ? 'RESERVED'
+      : 'AVAILABLE';
+
+  const sourceType = String(
+    body?.sourceType || 'MANUAL',
+  )
+    .trim()
+    .toUpperCase();
+
+  const projectId = body?.projectId
+    ? Number(body.projectId)
+    : null;
+
+  const dealerId = body?.dealerId
+    ? Number(body.dealerId)
+    : null;
+
+  const dealerName = String(
+    body?.dealerName || '',
+  ).trim();
+
+  const dealerPhone = String(
+    body?.dealerPhone || '',
+  ).trim();
+
+  const remarks = String(
+    body?.remarks || '',
+  ).trim();
 
   if (!stockItemId) {
-    throw new BadRequestException('Stock item is required');
+    throw new BadRequestException(
+      'Stock item is required',
+    );
   }
 
-  if (!quantity || quantity <= 0) {
-    throw new BadRequestException('Valid quantity is required');
+  if (
+    !Number.isFinite(quantity) ||
+    quantity <= 0
+  ) {
+    throw new BadRequestException(
+      'Valid quantity is required',
+    );
   }
 
-  if (body?.sourceType === 'DEALER' && !body?.dealerName) {
-  throw new BadRequestException(
-    'Dealer name is required for dealer sale',
-  );
-}
-
-  const stockItem = await this.projectStockItemRepository.findOne({
-    where: {
-      id: stockItemId,
-      isHidden: false,
-    },
-  });
-
-  if (!stockItem) {
-    throw new NotFoundException('Stock item not found');
+  if (
+    sourceType === 'PROJECT' &&
+    !projectId
+  ) {
+    throw new BadRequestException(
+      'Project is required for project stock issue',
+    );
   }
 
-  const currentQuantity = Number(
-  stockItem.currentQuantity || 0,
-);
-
-if (currentQuantity < quantity) {
-  throw new BadRequestException(
-    `Insufficient stock quantity. Available quantity is ${currentQuantity}`,
-  );
-}
-
-  const rate = Number(stockItem.averageRate || 0);
-  const totalAmount = quantity * rate;
-
-  stockItem.currentQuantity =
-  currentQuantity - quantity;
-
-  stockItem.stockValue =
-    Number(stockItem.currentQuantity || 0) * rate;
-
-  await this.projectStockItemRepository.save(stockItem);
-
-  await this.projectStockMovementRepository.save(
-    this.projectStockMovementRepository.create({
-      stockItemId: stockItem.id,
-      materialId: stockItem.materialId,
-      materialName: stockItem.materialName,
-      branchId: stockItem.branchId,
-      branchName: stockItem.branchName,
-      movementType: ProjectStockMovementType.ISSUE,
-      quantity,
-      rate,
-      totalAmount,
-      sourceType: body?.sourceType || 'MANUAL',
-      sourceId: body?.sourceId ? Number(body.sourceId) : undefined,
-      dealerId:
-  body?.dealerId ? Number(body.dealerId) : undefined,
-
-dealerName:
-  body?.dealerName || undefined,
-
-dealerPhone:
-  body?.dealerPhone || undefined,
-projectId: body?.projectId ? Number(body.projectId) : undefined,
-remarks: body?.remarks || undefined,
-createdBy: currentUser?.id || currentUser?.userId || undefined,
-      createdByName: currentUser?.name || '',
-    }),
-  );
-
-  return stockItem;
-}
-
-async transferProjectStock(body: any, currentUser: any) {
-  const sourceStockItemId = Number(body?.sourceStockItemId || 0);
-  const destinationBranchId = Number(body?.destinationBranchId || 0);
-  const quantity = Number(body?.quantity || 0);
-
-  if (!sourceStockItemId) {
-    throw new BadRequestException('Source stock item is required');
-  }
-
-  if (!destinationBranchId) {
-    throw new BadRequestException('Destination branch is required');
-  }
-
-  if (!quantity || quantity <= 0) {
-    throw new BadRequestException('Valid quantity is required');
+  if (
+    sourceType === 'DEALER' &&
+    !dealerName
+  ) {
+    throw new BadRequestException(
+      'Dealer name is required for dealer sale',
+    );
   }
 
   return this.projectStockItemRepository.manager.transaction(
     async (manager) => {
-      const stockRepo = manager.getRepository(ProjectStockItem);
-      const movementRepo = manager.getRepository(ProjectStockMovement);
-      const branchRepo = manager.getRepository(ProjectBranch);
+      const stockRepository =
+        manager.getRepository(
+          ProjectStockItem,
+        );
 
-      const sourceStock = await stockRepo.findOne({
-        where: {
-          id: sourceStockItemId,
-          isHidden: false,
-        },
-      });
+      const movementRepository =
+        manager.getRepository(
+          ProjectStockMovement,
+        );
 
-      if (!sourceStock) {
-        throw new NotFoundException('Source stock item not found');
+      const consumptionRepository =
+        manager.getRepository(
+          ProjectConsumption,
+        );
+
+      const stockItem =
+  await stockRepository.findOne({
+    where: {
+      id: stockItemId,
+      isHidden: false,
+    },
+
+    lock: {
+      mode: 'pessimistic_write',
+    },
+  });
+
+      if (!stockItem) {
+        throw new NotFoundException(
+          'Stock item not found',
+        );
       }
 
-      const sourceCurrentQuantity = Number(
-  sourceStock.currentQuantity || 0,
-);
+      const currentQuantity = Number(
+        stockItem.currentQuantity || 0,
+      );
 
-if (sourceCurrentQuantity < quantity) {
-  throw new BadRequestException(
-    `Insufficient stock quantity. Available quantity is ${sourceCurrentQuantity}`,
+      const reservedQuantity = Math.max(
+        Number(
+          stockItem.reservedQuantity || 0,
+        ),
+        0,
+      );
+
+      if (
+        reservedQuantity >
+        currentQuantity
+      ) {
+        throw new BadRequestException(
+          'Existing stock quantities are inconsistent. Reserved quantity cannot exceed current quantity.',
+        );
+      }
+
+      const availableQuantity = Math.max(
+        currentQuantity -
+          reservedQuantity,
+        0,
+      );
+
+      if (
+        deductFrom === 'RESERVED' &&
+        quantity > reservedQuantity
+      ) {
+        throw new BadRequestException(
+          `Insufficient reserved stock. Reserved quantity is ${reservedQuantity}.`,
+        );
+      }
+
+      if (
+        deductFrom === 'AVAILABLE' &&
+        quantity > availableQuantity
+      ) {
+        throw new BadRequestException(
+          `Insufficient available stock. Available quantity is ${availableQuantity}.`,
+        );
+      }
+
+      if (
+        sourceType === 'PROJECT'
+      ) {
+        const projectRepository =
+          manager.getRepository(Project);
+
+        const project =
+          await projectRepository.findOne({
+            where: {
+              id: Number(projectId),
+              isHidden: false,
+            },
+          });
+
+        if (!project) {
+          throw new NotFoundException(
+            'Project not found',
+          );
+        }
+      }
+
+      const rate = Number(
+        stockItem.averageRate || 0,
+      );
+
+      const totalAmount =
+        quantity * rate;
+
+      stockItem.currentQuantity =
+        currentQuantity - quantity;
+
+      if (deductFrom === 'RESERVED') {
+        stockItem.reservedQuantity =
+          reservedQuantity - quantity;
+      } else {
+        stockItem.reservedQuantity =
+          reservedQuantity;
+      }
+
+      stockItem.stockValue =
+        Number(
+          stockItem.currentQuantity || 0,
+        ) * rate;
+
+      const savedStockItem =
+        await stockRepository.save(
+          stockItem,
+        );
+
+      const movementType =
+        deductFrom === 'RESERVED'
+          ? ProjectStockMovementType
+              .ISSUE_FROM_RESERVED
+          : ProjectStockMovementType
+              .ISSUE_FROM_AVAILABLE;
+
+      const movement =
+        await movementRepository.save(
+          movementRepository.create({
+            stockItemId:
+              savedStockItem.id,
+
+            materialId:
+              savedStockItem.materialId,
+
+            materialName:
+              savedStockItem.materialName,
+
+            branchId:
+              savedStockItem.branchId ||
+              undefined,
+
+            branchName:
+              savedStockItem.branchName ||
+              undefined,
+
+            movementType,
+
+            quantity,
+            rate,
+            totalAmount,
+
+            sourceType:
+              sourceType || 'MANUAL',
+
+            sourceId:
+              body?.sourceId
+                ? Number(body.sourceId)
+                : undefined,
+
+            projectId:
+              projectId || undefined,
+
+            dealerId:
+              dealerId || undefined,
+
+            dealerName:
+              dealerName || undefined,
+
+            dealerPhone:
+              dealerPhone || undefined,
+
+            remarks:
+              remarks ||
+              `Issued from ${deductFrom.toLowerCase()} quantity`,
+
+            createdBy:
+              currentUser?.id ||
+              currentUser?.userId ||
+              currentUser?.sub ||
+              undefined,
+
+            createdByName:
+              currentUser?.name ||
+              currentUser?.email ||
+              '',
+          }),
+        );
+
+      let consumption:
+        | ProjectConsumption
+        | null = null;
+
+      /*
+       * Preserve the existing project
+       * consumption register behaviour.
+       *
+       * Dealer/manual/damage issues should
+       * not create project consumption.
+       */
+      if (
+        sourceType === 'PROJECT' &&
+        projectId
+      ) {
+        const projectRepository =
+          manager.getRepository(Project);
+
+        const project =
+          await projectRepository.findOne({
+            where: {
+              id: projectId,
+            },
+          });
+
+        consumption =
+          await consumptionRepository.save(
+            consumptionRepository.create({
+              projectId,
+
+              projectName:
+                project?.customerName ||
+                `Project #${projectId}`,
+
+              stockItemId:
+                savedStockItem.id,
+
+              materialId:
+                savedStockItem.materialId,
+
+              materialName:
+                savedStockItem.materialName,
+
+              branchId:
+                savedStockItem.branchId ||
+                undefined,
+
+              branchName:
+                savedStockItem.branchName ||
+                undefined,
+
+              quantity,
+              rate,
+              totalAmount,
+
+              issuedBy:
+                currentUser?.id ||
+                currentUser?.userId ||
+                currentUser?.sub ||
+                undefined,
+
+              issuedByName:
+                currentUser?.name ||
+                currentUser?.email ||
+                '',
+
+              remarks:
+                remarks ||
+                `Issued from ${deductFrom.toLowerCase()} quantity`,
+            } as Partial<ProjectConsumption>),
+          );
+      }
+
+      const finalCurrentQuantity =
+        Number(
+          savedStockItem.currentQuantity ||
+            0,
+        );
+
+      const finalReservedQuantity =
+        Math.max(
+          Number(
+            savedStockItem
+              .reservedQuantity || 0,
+          ),
+          0,
+        );
+
+      const finalAvailableQuantity =
+        Math.max(
+          finalCurrentQuantity -
+            finalReservedQuantity,
+          0,
+        );
+
+      return {
+        message:
+          deductFrom === 'RESERVED'
+            ? 'Stock issued from reserved quantity successfully'
+            : 'Stock issued from available quantity successfully',
+
+        stockItem: savedStockItem,
+
+        quantities: {
+          currentQuantity:
+            finalCurrentQuantity,
+
+          reservedQuantity:
+            finalReservedQuantity,
+
+          availableQuantity:
+            finalAvailableQuantity,
+        },
+
+        deductedFrom: deductFrom,
+
+        movement,
+
+        consumption,
+      };
+    },
   );
 }
 
+async transferProjectStock(
+  body: any,
+  currentUser: any,
+) {
+  if (!this.canManageStock(currentUser)) {
+    throw new ForbiddenException(
+      'You are not allowed to manage stock',
+    );
+  }
+
+  const sourceStockItemId = Number(
+    body?.sourceStockItemId || 0,
+  );
+
+  const destinationBranchId = Number(
+    body?.destinationBranchId || 0,
+  );
+
+  const quantity = Number(
+    body?.quantity || 0,
+  );
+
+  const deductFrom =
+    String(
+      body?.deductFrom || 'AVAILABLE',
+    )
+      .trim()
+      .toUpperCase() === 'RESERVED'
+      ? 'RESERVED'
+      : 'AVAILABLE';
+
+  const remarks = String(
+    body?.remarks || '',
+  ).trim();
+
+  if (!sourceStockItemId) {
+    throw new BadRequestException(
+      'Source stock item is required',
+    );
+  }
+
+  if (!destinationBranchId) {
+    throw new BadRequestException(
+      'Destination branch is required',
+    );
+  }
+
+  if (
+    !Number.isFinite(quantity) ||
+    quantity <= 0
+  ) {
+    throw new BadRequestException(
+      'Valid quantity is required',
+    );
+  }
+
+  return this.projectStockItemRepository.manager.transaction(
+    async (manager) => {
+      const stockRepository =
+        manager.getRepository(
+          ProjectStockItem,
+        );
+
+      const movementRepository =
+        manager.getRepository(
+          ProjectStockMovement,
+        );
+
+      const branchRepository =
+        manager.getRepository(
+          ProjectBranch,
+        );
+
+      const sourceStock =
+  await stockRepository.findOne({
+    where: {
+      id: sourceStockItemId,
+      isHidden: false,
+    },
+
+    lock: {
+      mode: 'pessimistic_write',
+    },
+  });
+
+      if (!sourceStock) {
+        throw new NotFoundException(
+          'Source stock item not found',
+        );
+      }
+
+      const destinationBranch =
+        await branchRepository.findOne({
+          where: {
+            id: destinationBranchId,
+          },
+        });
+
+      if (!destinationBranch) {
+        throw new NotFoundException(
+          'Destination branch not found',
+        );
+      }
+
       if (
         sourceStock.branchId &&
-        Number(sourceStock.branchId) === destinationBranchId
+        Number(
+          sourceStock.branchId,
+        ) === destinationBranchId
       ) {
         throw new BadRequestException(
           'Source and destination branch cannot be same',
         );
       }
 
-      const destinationBranch = await branchRepo.findOne({
-        where: {
-          id: destinationBranchId,
-        },
-      });
+      const sourceCurrentQuantity =
+        Number(
+          sourceStock.currentQuantity || 0,
+        );
 
-      if (!destinationBranch) {
-        throw new NotFoundException('Destination branch not found');
+      const sourceReservedQuantity =
+        Math.max(
+          Number(
+            sourceStock.reservedQuantity ||
+              0,
+          ),
+          0,
+        );
+
+      if (
+        sourceReservedQuantity >
+        sourceCurrentQuantity
+      ) {
+        throw new BadRequestException(
+          'Existing source stock quantities are inconsistent. Reserved quantity cannot exceed current quantity.',
+        );
       }
 
-      const rate = Number(sourceStock.averageRate || 0);
-      const transferValue = quantity * rate;
+      const sourceAvailableQuantity =
+        Math.max(
+          sourceCurrentQuantity -
+            sourceReservedQuantity,
+          0,
+        );
+
+      if (
+        deductFrom === 'RESERVED' &&
+        quantity >
+          sourceReservedQuantity
+      ) {
+        throw new BadRequestException(
+          `Insufficient reserved stock. Reserved quantity is ${sourceReservedQuantity}.`,
+        );
+      }
+
+      if (
+        deductFrom === 'AVAILABLE' &&
+        quantity >
+          sourceAvailableQuantity
+      ) {
+        throw new BadRequestException(
+          `Insufficient available stock. Available quantity is ${sourceAvailableQuantity}.`,
+        );
+      }
+
+      const rate = Number(
+        sourceStock.averageRate || 0,
+      );
+
+      const transferValue =
+        quantity * rate;
 
       sourceStock.currentQuantity =
-  sourceCurrentQuantity - quantity;
+        sourceCurrentQuantity -
+        quantity;
 
-      sourceStock.stockValue =
-        Number(sourceStock.currentQuantity || 0) * rate;
-
-      const savedSourceStock = await stockRepo.save(sourceStock);
-
-      let destinationStock = await stockRepo.findOne({
-        where: {
-          materialId: savedSourceStock.materialId,
-          branchId: destinationBranchId,
-          isHidden: false,
-        },
-      });
-
-      if (!destinationStock) {
-        destinationStock = stockRepo.create({
-          materialId: savedSourceStock.materialId,
-          materialName: savedSourceStock.materialName,
-          category: savedSourceStock.category,
-          brand: savedSourceStock.brand,
-          unit: savedSourceStock.unit,
-          branchId: destinationBranch.id,
-          branchName: destinationBranch.name,
-          currentQuantity: 0,
-          averageRate: 0,
-          stockValue: 0,
-        });
+      if (
+        deductFrom === 'RESERVED'
+      ) {
+        sourceStock.reservedQuantity =
+          sourceReservedQuantity -
+          quantity;
+      } else {
+        sourceStock.reservedQuantity =
+          sourceReservedQuantity;
       }
 
-      const destinationOldQty = Number(
-        destinationStock.currentQuantity || 0,
-      );
-      const destinationOldValue = Number(
-        destinationStock.stockValue || 0,
-      );
+      sourceStock.stockValue =
+        Number(
+          sourceStock.currentQuantity ||
+            0,
+        ) * rate;
 
-      const destinationNewQty = destinationOldQty + quantity;
-      const destinationNewValue = destinationOldValue + transferValue;
+      const savedSourceStock =
+        await stockRepository.save(
+          sourceStock,
+        );
 
-      destinationStock.currentQuantity = destinationNewQty;
-      destinationStock.stockValue = destinationNewValue;
+      let destinationStock =
+  await stockRepository.findOne({
+    where: {
+      materialId:
+        savedSourceStock.materialId,
+
+      branchId:
+        destinationBranchId,
+
+      isHidden: false,
+    },
+
+    lock: {
+      mode: 'pessimistic_write',
+    },
+  });
+
+      if (!destinationStock) {
+        destinationStock =
+          stockRepository.create({
+            materialId:
+              savedSourceStock.materialId,
+
+            materialName:
+              savedSourceStock.materialName,
+
+            category:
+              savedSourceStock.category,
+
+            brand:
+              savedSourceStock.brand,
+
+            unit:
+              savedSourceStock.unit,
+
+            branchId:
+              destinationBranch.id,
+
+            branchName:
+              destinationBranch.name,
+
+            currentQuantity: 0,
+            reservedQuantity: 0,
+
+            averageRate: 0,
+            stockValue: 0,
+          });
+      }
+
+      const destinationOldQuantity =
+        Number(
+          destinationStock.currentQuantity ||
+            0,
+        );
+
+      const destinationOldValue =
+        Number(
+          destinationStock.stockValue || 0,
+        );
+
+      const destinationNewQuantity =
+        destinationOldQuantity +
+        quantity;
+
+      const destinationNewValue =
+        destinationOldValue +
+        transferValue;
+
+      destinationStock.currentQuantity =
+        destinationNewQuantity;
+
+      /*
+       * Transferred stock enters the
+       * destination branch as available.
+       *
+       * Existing destination reservation
+       * remains unchanged.
+       */
+      destinationStock.reservedQuantity =
+        Math.max(
+          Number(
+            destinationStock
+              .reservedQuantity || 0,
+          ),
+          0,
+        );
+
+      destinationStock.stockValue =
+        destinationNewValue;
+
       destinationStock.averageRate =
-        destinationNewQty > 0
-          ? destinationNewValue / destinationNewQty
+        destinationNewQuantity > 0
+          ? destinationNewValue /
+            destinationNewQuantity
           : 0;
 
       const savedDestinationStock =
-        await stockRepo.save(destinationStock);
+        await stockRepository.save(
+          destinationStock,
+        );
 
       const transferRemarks =
-        body?.remarks ||
+        remarks ||
         `Stock transferred from ${
-          savedSourceStock.branchName || 'source branch'
-        } to ${savedDestinationStock.branchName || 'destination branch'}`;
+          savedSourceStock.branchName ||
+          'source branch'
+        } to ${
+          savedDestinationStock.branchName ||
+          'destination branch'
+        } from ${deductFrom.toLowerCase()} quantity`;
 
-      const transferOutMovement = await movementRepo.save(
-        movementRepo.create({
-          stockItemId: savedSourceStock.id,
-          materialId: savedSourceStock.materialId,
-          materialName: savedSourceStock.materialName,
-          branchId: savedSourceStock.branchId || undefined,
-          branchName: savedSourceStock.branchName || undefined,
-          movementType: ProjectStockMovementType.TRANSFER_OUT,
-          quantity,
-          rate,
-          totalAmount: transferValue,
-          sourceType: 'BRANCH_TRANSFER',
-          remarks: transferRemarks,
-          createdBy:
-            currentUser?.id ||
-            currentUser?.userId ||
-            undefined,
-          createdByName: currentUser?.name || '',
-        }),
-      );
+      const transferOutMovementType =
+        deductFrom === 'RESERVED'
+          ? ProjectStockMovementType
+              .TRANSFER_OUT_FROM_RESERVED
+          : ProjectStockMovementType
+              .TRANSFER_OUT_FROM_AVAILABLE;
 
-      const transferInMovement = await movementRepo.save(
-        movementRepo.create({
-          stockItemId: savedDestinationStock.id,
-          materialId: savedDestinationStock.materialId,
-          materialName: savedDestinationStock.materialName,
-          branchId: savedDestinationStock.branchId || undefined,
-          branchName: savedDestinationStock.branchName || undefined,
-          movementType: ProjectStockMovementType.TRANSFER_IN,
-          quantity,
-          rate,
-          totalAmount: transferValue,
-          sourceType: 'BRANCH_TRANSFER',
-          remarks: transferRemarks,
-          createdBy:
-            currentUser?.id ||
-            currentUser?.userId ||
-            undefined,
-          createdByName: currentUser?.name || '',
-        }),
-      );
+      const transferOutMovement =
+        await movementRepository.save(
+          movementRepository.create({
+            stockItemId:
+              savedSourceStock.id,
+
+            materialId:
+              savedSourceStock.materialId,
+
+            materialName:
+              savedSourceStock.materialName,
+
+            branchId:
+              savedSourceStock.branchId ||
+              undefined,
+
+            branchName:
+              savedSourceStock.branchName ||
+              undefined,
+
+            movementType:
+              transferOutMovementType,
+
+            quantity,
+            rate,
+            totalAmount:
+              transferValue,
+
+            sourceType:
+              'BRANCH_TRANSFER',
+
+            remarks:
+              transferRemarks,
+
+            createdBy:
+              currentUser?.id ||
+              currentUser?.userId ||
+              currentUser?.sub ||
+              undefined,
+
+            createdByName:
+              currentUser?.name ||
+              currentUser?.email ||
+              '',
+          }),
+        );
+
+      const transferInMovement =
+        await movementRepository.save(
+          movementRepository.create({
+            stockItemId:
+              savedDestinationStock.id,
+
+            materialId:
+              savedDestinationStock.materialId,
+
+            materialName:
+              savedDestinationStock.materialName,
+
+            branchId:
+              savedDestinationStock.branchId ||
+              undefined,
+
+            branchName:
+              savedDestinationStock.branchName ||
+              undefined,
+
+            movementType:
+              ProjectStockMovementType
+                .TRANSFER_IN,
+
+            quantity,
+            rate,
+            totalAmount:
+              transferValue,
+
+            sourceType:
+              'BRANCH_TRANSFER',
+
+            remarks:
+              transferRemarks,
+
+            createdBy:
+              currentUser?.id ||
+              currentUser?.userId ||
+              currentUser?.sub ||
+              undefined,
+
+            createdByName:
+              currentUser?.name ||
+              currentUser?.email ||
+              '',
+          }),
+        );
+
+      const finalSourceCurrent =
+        Number(
+          savedSourceStock
+            .currentQuantity || 0,
+        );
+
+      const finalSourceReserved =
+        Number(
+          savedSourceStock
+            .reservedQuantity || 0,
+        );
+
+      const finalDestinationCurrent =
+        Number(
+          savedDestinationStock
+            .currentQuantity || 0,
+        );
+
+      const finalDestinationReserved =
+        Number(
+          savedDestinationStock
+            .reservedQuantity || 0,
+        );
 
       return {
-        message: 'Stock transferred successfully',
-        sourceStock: savedSourceStock,
-        destinationStock: savedDestinationStock,
+        message:
+          deductFrom === 'RESERVED'
+            ? 'Reserved stock transferred successfully'
+            : 'Available stock transferred successfully',
+
+        deductedFrom:
+          deductFrom,
+
+        sourceStock:
+          savedSourceStock,
+
+        destinationStock:
+          savedDestinationStock,
+
+        quantities: {
+          source: {
+            currentQuantity:
+              finalSourceCurrent,
+
+            reservedQuantity:
+              finalSourceReserved,
+
+            availableQuantity:
+              Math.max(
+                finalSourceCurrent -
+                  finalSourceReserved,
+                0,
+              ),
+          },
+
+          destination: {
+            currentQuantity:
+              finalDestinationCurrent,
+
+            reservedQuantity:
+              finalDestinationReserved,
+
+            availableQuantity:
+              Math.max(
+                finalDestinationCurrent -
+                  finalDestinationReserved,
+                0,
+              ),
+          },
+        },
+
         movements: {
-          transferOut: transferOutMovement,
-          transferIn: transferInMovement,
+          transferOut:
+            transferOutMovement,
+
+          transferIn:
+            transferInMovement,
         },
       };
     },
@@ -5943,6 +6748,15 @@ async issueMaterialRequestItemStock(
     body?.quantity || 0,
   );
 
+  const deductFrom =
+  String(
+    body?.deductFrom || 'AVAILABLE',
+  )
+    .trim()
+    .toUpperCase() === 'RESERVED'
+    ? 'RESERVED'
+    : 'AVAILABLE';
+
   if (!stockItemId) {
     throw new BadRequestException(
       'Stock item is required',
@@ -6057,12 +6871,16 @@ async issueMaterialRequestItemStock(
        * No previous reservation is required.
        */
       const stockItem =
-        await stockItemRepository.findOne({
-          where: {
-            id: stockItemId,
-            isHidden: false,
-          },
-        });
+  await stockItemRepository.findOne({
+    where: {
+      id: stockItemId,
+      isHidden: false,
+    },
+
+    lock: {
+      mode: 'pessimistic_write',
+    },
+  });
 
       if (!stockItem) {
         throw new NotFoundException(
@@ -6082,14 +6900,48 @@ async issueMaterialRequestItemStock(
       }
 
       const currentQuantity = Number(
-        stockItem.currentQuantity || 0,
-      );
+  stockItem.currentQuantity || 0,
+);
 
-      if (currentQuantity < quantity) {
-        throw new BadRequestException(
-          `Insufficient stock quantity. Available quantity is ${currentQuantity}`,
-        );
-      }
+const reservedQuantity = Math.max(
+  Number(
+    stockItem.reservedQuantity || 0,
+  ),
+  0,
+);
+
+if (
+  reservedQuantity >
+  currentQuantity
+) {
+  throw new BadRequestException(
+    'Existing stock quantities are inconsistent. Reserved quantity cannot exceed current quantity.',
+  );
+}
+
+const availableQuantity = Math.max(
+  currentQuantity -
+    reservedQuantity,
+  0,
+);
+
+if (
+  deductFrom === 'RESERVED' &&
+  quantity > reservedQuantity
+) {
+  throw new BadRequestException(
+    `Insufficient reserved stock. Reserved quantity is ${reservedQuantity}.`,
+  );
+}
+
+if (
+  deductFrom === 'AVAILABLE' &&
+  quantity > availableQuantity
+) {
+  throw new BadRequestException(
+    `Insufficient available stock. Available quantity is ${availableQuantity}.`,
+  );
+}
 
       const rate = Number(
         stockItem.averageRate || 0,
@@ -6099,16 +6951,29 @@ async issueMaterialRequestItemStock(
         quantity * rate;
 
       /*
-       * Actual Stock Out:
-       * only current physical quantity changes.
-       */
-      stockItem.currentQuantity =
-        currentQuantity - quantity;
+ * Actual physical stock always decreases.
+ *
+ * When issuing from Reserved Quantity,
+ * Reserved Quantity also decreases.
+ *
+ * When issuing from Available Quantity,
+ * Reserved Quantity remains unchanged.
+ */
+stockItem.currentQuantity =
+  currentQuantity - quantity;
 
-      stockItem.stockValue =
-        Number(
-          stockItem.currentQuantity || 0,
-        ) * rate;
+if (deductFrom === 'RESERVED') {
+  stockItem.reservedQuantity =
+    reservedQuantity - quantity;
+} else {
+  stockItem.reservedQuantity =
+    reservedQuantity;
+}
+
+stockItem.stockValue =
+  Number(
+    stockItem.currentQuantity || 0,
+  ) * rate;
 
       const savedStock =
         await stockItemRepository.save(
@@ -6136,7 +7001,11 @@ async issueMaterialRequestItemStock(
               undefined,
 
             movementType:
-              ProjectStockMovementType.ISSUE,
+  deductFrom === 'RESERVED'
+    ? ProjectStockMovementType
+        .ISSUE_FROM_RESERVED
+    : ProjectStockMovementType
+        .ISSUE_FROM_AVAILABLE,
 
             quantity,
             rate,
@@ -6152,8 +7021,8 @@ async issueMaterialRequestItemStock(
               request.projectId,
 
             remarks:
-              body?.remarks ||
-              `Issued against material request #${request.id}`,
+  body?.remarks ||
+  `Issued against material request #${request.id} from ${deductFrom.toLowerCase()} quantity`,
 
             createdBy:
               currentUser?.id ||
@@ -23150,97 +24019,692 @@ consumption.remarks = body?.remarks || '';
 
 async adjustStock(body: any, user: any) {
   if (!this.canManageStock(user)) {
-    throw new ForbiddenException('You are not allowed to manage stock');
+    throw new ForbiddenException(
+      'You are not allowed to manage stock',
+    );
   }
 
-  const stockItemId = Number(body?.stockItemId || 0);
-  const adjustmentType = String(body?.adjustmentType || '').trim();
-  const quantity = Number(body?.quantity || 0);
-  const remarks = String(body?.remarks || '').trim();
+  const stockItemId = Number(
+    body?.stockItemId || 0,
+  );
+
+  const adjustmentType = String(
+    body?.adjustmentType || '',
+  ).trim();
+
+  const quantity = Number(
+    body?.quantity || 0,
+  );
+
+  const remarks = String(
+    body?.remarks || '',
+  ).trim();
 
   if (!stockItemId) {
-    throw new BadRequestException('Stock item is required');
+    throw new BadRequestException(
+      'Stock item is required',
+    );
   }
 
-  if (!['ADJUST_IN', 'ADJUST_OUT'].includes(adjustmentType)) {
-    throw new BadRequestException('Valid adjustment type is required');
+  if (
+    !['ADJUST_IN', 'ADJUST_OUT'].includes(
+      adjustmentType,
+    )
+  ) {
+    throw new BadRequestException(
+      'Valid adjustment type is required',
+    );
   }
 
-  if (quantity <= 0) {
-    throw new BadRequestException('Quantity must be greater than 0');
+  if (
+    !Number.isFinite(quantity) ||
+    quantity <= 0
+  ) {
+    throw new BadRequestException(
+      'Quantity must be greater than 0',
+    );
   }
 
   if (!remarks) {
-    throw new BadRequestException('Remarks are required for stock adjustment');
+    throw new BadRequestException(
+      'Remarks are required for stock adjustment',
+    );
   }
 
-  const stockItem = await this.projectStockItemRepository.findOne({
+  return this.projectStockItemRepository.manager.transaction(
+    async (manager) => {
+      const stockRepository =
+        manager.getRepository(
+          ProjectStockItem,
+        );
+
+      const movementRepository =
+        manager.getRepository(
+          ProjectStockMovement,
+        );
+
+      const stockItem =
+        await stockRepository.findOne({
+          where: {
+            id: stockItemId,
+            isHidden: false,
+          },
+
+          lock: {
+            mode: 'pessimistic_write',
+          },
+        });
+
+      if (!stockItem) {
+        throw new NotFoundException(
+          'Stock item not found',
+        );
+      }
+
+      const currentQuantity = Number(
+        stockItem.currentQuantity || 0,
+      );
+
+      const reservedQuantity = Math.max(
+        Number(
+          stockItem.reservedQuantity || 0,
+        ),
+        0,
+      );
+
+      if (
+        reservedQuantity >
+        currentQuantity
+      ) {
+        throw new BadRequestException(
+          'Existing stock quantities are inconsistent. Reserved quantity cannot exceed current quantity.',
+        );
+      }
+
+      const availableQuantity = Math.max(
+        currentQuantity -
+          reservedQuantity,
+        0,
+      );
+
+      const averageRate = Number(
+        stockItem.averageRate || 0,
+      );
+
+      if (
+        adjustmentType ===
+          ProjectStockMovementType.ADJUST_OUT &&
+        quantity > availableQuantity
+      ) {
+        throw new BadRequestException(
+          `Adjustment quantity cannot exceed available quantity ${availableQuantity}. Reserved quantity is ${reservedQuantity}.`,
+        );
+      }
+
+      const newQuantity =
+        adjustmentType ===
+        ProjectStockMovementType.ADJUST_IN
+          ? currentQuantity + quantity
+          : currentQuantity - quantity;
+
+      stockItem.currentQuantity =
+        newQuantity;
+
+      stockItem.reservedQuantity =
+        reservedQuantity;
+
+      stockItem.stockValue =
+        newQuantity * averageRate;
+
+      const savedStockItem =
+        await stockRepository.save(
+          stockItem,
+        );
+
+      const movement =
+        movementRepository.create({
+          stockItemId:
+            savedStockItem.id,
+
+          materialId:
+            savedStockItem.materialId,
+
+          materialName:
+            savedStockItem.materialName,
+
+          branchId:
+            savedStockItem.branchId as any,
+
+          branchName:
+            savedStockItem.branchName || '',
+
+          movementType:
+            adjustmentType ===
+            'ADJUST_IN'
+              ? ProjectStockMovementType.ADJUST_IN
+              : ProjectStockMovementType.ADJUST_OUT,
+
+          quantity,
+          rate: averageRate,
+
+          totalAmount:
+            quantity * averageRate,
+
+          sourceType:
+            'STOCK_ADJUSTMENT',
+
+          remarks,
+
+          createdBy: Number(
+            user?.id ||
+              user?.userId ||
+              user?.sub ||
+              0,
+          ),
+
+          createdByName:
+            user?.name ||
+            user?.email ||
+            '',
+        });
+
+      const savedMovement =
+        await movementRepository.save(
+          movement,
+        );
+
+      return {
+        message:
+          'Stock adjusted successfully',
+
+        stockItem:
+          savedStockItem,
+
+        quantities: {
+          currentQuantity:
+            Number(
+              savedStockItem
+                .currentQuantity || 0,
+            ),
+
+          reservedQuantity:
+            Number(
+              savedStockItem
+                .reservedQuantity || 0,
+            ),
+
+          availableQuantity:
+            Math.max(
+              Number(
+                savedStockItem
+                  .currentQuantity || 0,
+              ) -
+                Number(
+                  savedStockItem
+                    .reservedQuantity || 0,
+                ),
+              0,
+            ),
+        },
+
+        movement:
+          savedMovement,
+      };
+    },
+  );
+}
+
+async reserveProjectStock(
+  body: any,
+  user: any,
+) {
+  if (!this.canManageStock(user)) {
+    throw new ForbiddenException(
+      'You are not allowed to manage stock',
+    );
+  }
+
+  const stockItemId = Number(
+    body?.stockItemId || 0,
+  );
+
+  const quantity = Number(
+    body?.quantity || 0,
+  );
+
+  const projectId = body?.projectId
+    ? Number(body.projectId)
+    : null;
+
+  const sourceId = body?.sourceId
+    ? Number(body.sourceId)
+    : null;
+
+  const sourceType = String(
+    body?.sourceType ||
+      (projectId
+        ? 'PROJECT'
+        : 'MANUAL_RESERVATION'),
+  ).trim();
+
+  const remarks = String(
+    body?.remarks || '',
+  ).trim();
+
+  if (!stockItemId) {
+    throw new BadRequestException(
+      'Stock item is required',
+    );
+  }
+
+  if (
+    !Number.isFinite(quantity) ||
+    quantity <= 0
+  ) {
+    throw new BadRequestException(
+      'Quantity must be greater than 0',
+    );
+  }
+
+  if (!remarks) {
+    throw new BadRequestException(
+      'Remarks are required for stock reservation',
+    );
+  }
+
+  return this.projectStockItemRepository.manager.transaction(
+    async (manager) => {
+      const stockRepository =
+        manager.getRepository(
+          ProjectStockItem,
+        );
+
+      const movementRepository =
+        manager.getRepository(
+          ProjectStockMovement,
+        );
+
+      const stockItem =
+  await stockRepository.findOne({
     where: {
       id: stockItemId,
       isHidden: false,
     },
+
+    lock: {
+      mode: 'pessimistic_write',
+    },
   });
 
-  if (!stockItem) {
-    throw new NotFoundException('Stock item not found');
-  }
+      if (!stockItem) {
+        throw new NotFoundException(
+          'Stock item not found',
+        );
+      }
 
-  const currentQuantity = Number(
-  stockItem.currentQuantity || 0,
-);
+      const currentQuantity = Number(
+        stockItem.currentQuantity || 0,
+      );
 
-const averageRate = Number(
-  stockItem.averageRate || 0,
-);
+      const reservedQuantity = Math.max(
+        Number(
+          stockItem.reservedQuantity || 0,
+        ),
+        0,
+      );
 
-if (
-  adjustmentType ===
-    ProjectStockMovementType.ADJUST_OUT &&
-  currentQuantity < quantity
-) {
-  throw new BadRequestException(
-    `Insufficient stock quantity. Available quantity is ${currentQuantity}`,
+      const availableQuantity = Math.max(
+        currentQuantity -
+          reservedQuantity,
+        0,
+      );
+
+      if (
+        reservedQuantity >
+        currentQuantity
+      ) {
+        throw new BadRequestException(
+          'Existing stock quantities are inconsistent. Reserved quantity cannot exceed current quantity.',
+        );
+      }
+
+      if (quantity > availableQuantity) {
+        throw new BadRequestException(
+          `Insufficient available stock. Available quantity is ${availableQuantity}.`,
+        );
+      }
+
+      if (projectId) {
+        const projectRepository =
+          manager.getRepository(Project);
+
+        const project =
+          await projectRepository.findOne({
+            where: {
+              id: projectId,
+              isHidden: false,
+            },
+          });
+
+        if (!project) {
+          throw new NotFoundException(
+            'Project not found',
+          );
+        }
+      }
+
+      stockItem.reservedQuantity =
+        reservedQuantity + quantity;
+
+      const savedStockItem =
+        await stockRepository.save(
+          stockItem,
+        );
+
+      const rate = Number(
+        savedStockItem.averageRate || 0,
+      );
+
+      const movement =
+        await movementRepository.save(
+          movementRepository.create({
+            stockItemId:
+              savedStockItem.id,
+
+            materialId:
+              savedStockItem.materialId,
+
+            materialName:
+              savedStockItem.materialName,
+
+            branchId:
+              savedStockItem.branchId ||
+              undefined,
+
+            branchName:
+              savedStockItem.branchName ||
+              undefined,
+
+            movementType:
+              ProjectStockMovementType.RESERVE,
+
+            quantity,
+            rate,
+
+            /*
+             * Reservation does not change
+             * physical stock value.
+             *
+             * totalAmount is only the value
+             * represented by this allocation.
+             */
+            totalAmount:
+              quantity * rate,
+
+            sourceType:
+              sourceType ||
+              'MANUAL_RESERVATION',
+
+            sourceId:
+              sourceId ||
+              undefined,
+
+            projectId:
+              projectId ||
+              undefined,
+
+            remarks,
+
+            createdBy:
+              user?.id ||
+              user?.userId ||
+              user?.sub ||
+              undefined,
+
+            createdByName:
+              user?.name ||
+              user?.email ||
+              '',
+          }),
+        );
+
+      return {
+        message:
+          'Stock reserved successfully',
+
+        stockItem: savedStockItem,
+
+        quantities: {
+          currentQuantity,
+
+          reservedQuantity: Number(
+            savedStockItem
+              .reservedQuantity || 0,
+          ),
+
+          availableQuantity: Math.max(
+            Number(
+              savedStockItem
+                .currentQuantity || 0,
+            ) -
+              Number(
+                savedStockItem
+                  .reservedQuantity || 0,
+              ),
+            0,
+          ),
+        },
+
+        movement,
+      };
+    },
   );
 }
 
-  const newQuantity =
-    adjustmentType === ProjectStockMovementType.ADJUST_IN
-      ? currentQuantity + quantity
-      : currentQuantity - quantity;
+async releaseReservedProjectStock(
+  body: any,
+  user: any,
+) {
+  if (!this.canManageStock(user)) {
+    throw new ForbiddenException(
+      'You are not allowed to manage stock',
+    );
+  }
 
-  stockItem.currentQuantity = newQuantity;
-  stockItem.stockValue = newQuantity * averageRate;
+  const stockItemId = Number(
+    body?.stockItemId || 0,
+  );
 
-  const savedStockItem =
-    await this.projectStockItemRepository.save(stockItem);
+  const quantity = Number(
+    body?.quantity || 0,
+  );
 
-  const movement = new ProjectStockMovement();
+  const projectId = body?.projectId
+    ? Number(body.projectId)
+    : null;
 
-  movement.stockItemId = savedStockItem.id;
-  movement.materialId = savedStockItem.materialId;
-  movement.materialName = savedStockItem.materialName;
-  movement.branchId = savedStockItem.branchId as any;
-  movement.branchName = savedStockItem.branchName || '';
-  movement.movementType =
-    adjustmentType === 'ADJUST_IN'
-      ? ProjectStockMovementType.ADJUST_IN
-      : ProjectStockMovementType.ADJUST_OUT;
-  movement.quantity = quantity;
-  movement.rate = averageRate;
-  movement.totalAmount = quantity * averageRate;
-  movement.sourceType = 'STOCK_ADJUSTMENT';
-  movement.remarks = remarks;
-  movement.createdBy = Number(user?.id || user?.userId || user?.sub || 0);
-  movement.createdByName = user?.name || user?.email || '';
+  const sourceId = body?.sourceId
+    ? Number(body.sourceId)
+    : null;
 
-  const savedMovement =
-    await this.projectStockMovementRepository.save(movement);
+  const sourceType = String(
+    body?.sourceType ||
+      (projectId
+        ? 'PROJECT'
+        : 'MANUAL_RESERVATION'),
+  ).trim();
 
-  return {
-    message: 'Stock adjusted successfully',
-    stockItem: savedStockItem,
-    movement: savedMovement,
-  };
+  const remarks = String(
+    body?.remarks || '',
+  ).trim();
+
+  if (!stockItemId) {
+    throw new BadRequestException(
+      'Stock item is required',
+    );
+  }
+
+  if (
+    !Number.isFinite(quantity) ||
+    quantity <= 0
+  ) {
+    throw new BadRequestException(
+      'Quantity must be greater than 0',
+    );
+  }
+
+  if (!remarks) {
+    throw new BadRequestException(
+      'Remarks are required for releasing reserved stock',
+    );
+  }
+
+  return this.projectStockItemRepository.manager.transaction(
+    async (manager) => {
+      const stockRepository =
+        manager.getRepository(
+          ProjectStockItem,
+        );
+
+      const movementRepository =
+        manager.getRepository(
+          ProjectStockMovement,
+        );
+
+      const stockItem =
+  await stockRepository.findOne({
+    where: {
+      id: stockItemId,
+      isHidden: false,
+    },
+
+    lock: {
+      mode: 'pessimistic_write',
+    },
+  });
+
+      if (!stockItem) {
+        throw new NotFoundException(
+          'Stock item not found',
+        );
+      }
+
+      const currentQuantity = Number(
+        stockItem.currentQuantity || 0,
+      );
+
+      const reservedQuantity = Math.max(
+        Number(
+          stockItem.reservedQuantity || 0,
+        ),
+        0,
+      );
+
+      if (quantity > reservedQuantity) {
+        throw new BadRequestException(
+          `Release quantity cannot exceed reserved quantity ${reservedQuantity}.`,
+        );
+      }
+
+      stockItem.reservedQuantity =
+        reservedQuantity - quantity;
+
+      const savedStockItem =
+        await stockRepository.save(
+          stockItem,
+        );
+
+      const rate = Number(
+        savedStockItem.averageRate || 0,
+      );
+
+      const movement =
+        await movementRepository.save(
+          movementRepository.create({
+            stockItemId:
+              savedStockItem.id,
+
+            materialId:
+              savedStockItem.materialId,
+
+            materialName:
+              savedStockItem.materialName,
+
+            branchId:
+              savedStockItem.branchId ||
+              undefined,
+
+            branchName:
+              savedStockItem.branchName ||
+              undefined,
+
+            movementType:
+              ProjectStockMovementType
+                .RELEASE_RESERVED,
+
+            quantity,
+            rate,
+            totalAmount:
+              quantity * rate,
+
+            sourceType:
+              sourceType ||
+              'MANUAL_RESERVATION',
+
+            sourceId:
+              sourceId ||
+              undefined,
+
+            projectId:
+              projectId ||
+              undefined,
+
+            remarks,
+
+            createdBy:
+              user?.id ||
+              user?.userId ||
+              user?.sub ||
+              undefined,
+
+            createdByName:
+              user?.name ||
+              user?.email ||
+              '',
+          }),
+        );
+
+      return {
+        message:
+          'Reserved stock released successfully',
+
+        stockItem: savedStockItem,
+
+        quantities: {
+          currentQuantity,
+
+          reservedQuantity: Number(
+            savedStockItem
+              .reservedQuantity || 0,
+          ),
+
+          availableQuantity: Math.max(
+            Number(
+              savedStockItem
+                .currentQuantity || 0,
+            ) -
+              Number(
+                savedStockItem
+                  .reservedQuantity || 0,
+              ),
+            0,
+          ),
+        },
+
+        movement,
+      };
+    },
+  );
 }
 
 private async reserveStockForDealerOrder(
