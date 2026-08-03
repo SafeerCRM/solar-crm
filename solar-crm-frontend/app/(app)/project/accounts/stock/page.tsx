@@ -1620,7 +1620,7 @@ const getFilteredSelectableStockItems = (searchText: string) => {
 };
 
   return (
-    <div className="mx-auto max-w-7xl space-y-5">
+    <div className="mx-auto w-full max-w-7xl min-w-0 space-y-5 overflow-x-hidden">
       <div className="rounded-2xl bg-white p-5 shadow">
         <h1 className="text-2xl font-bold text-gray-800">
           Stock Management
@@ -1631,7 +1631,7 @@ const getFilteredSelectableStockItems = (searchText: string) => {
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-7">
+      <div className="grid min-w-0 gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
         <div className="rounded-2xl bg-white p-5 shadow">
           <p className="text-sm text-gray-500">
             Filtered Stock Items
@@ -1680,9 +1680,9 @@ const getFilteredSelectableStockItems = (searchText: string) => {
             Stock Value
           </p>
 
-          <p className="mt-2 text-2xl font-bold text-green-700">
-            {formatCurrency(totalStockValue)}
-          </p>
+          <p className="mt-2 break-words text-xl font-bold text-green-700 xl:text-2xl">
+  {formatCurrency(totalStockValue)}
+</p>
         </div>
 
         <div className="rounded-2xl bg-white p-5 shadow">
@@ -2106,10 +2106,10 @@ const getFilteredSelectableStockItems = (searchText: string) => {
     </p>
   </div>
 
-  <div className="mt-5 grid gap-5 xl:grid-cols-2">
-    <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+  <div className="mt-5 grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+    <div className="min-w-0 overflow-hidden rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1">
           <h3 className="font-bold text-blue-900">
             Reserve Stock
           </h3>
@@ -2123,7 +2123,7 @@ const getFilteredSelectableStockItems = (searchText: string) => {
           type="button"
           onClick={reserveStock}
           disabled={reserveLoading}
-          className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+          className="shrink-0 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
         >
           {reserveLoading
             ? 'Reserving...'
@@ -2131,7 +2131,7 @@ const getFilteredSelectableStockItems = (searchText: string) => {
         </button>
       </div>
 
-      <div className="mt-4 grid gap-3">
+      <div className="mt-4 grid min-w-0 gap-3">
         <input
           type="text"
           placeholder="Search stock item by material, branch or brand"
@@ -2142,7 +2142,7 @@ const getFilteredSelectableStockItems = (searchText: string) => {
               reserve: e.target.value,
             })
           }
-          className="rounded-xl border bg-white p-3 text-sm"
+          className="w-full min-w-0 max-w-full rounded-xl border bg-white p-3 text-sm"
         />
 
         <select
@@ -2153,7 +2153,7 @@ const getFilteredSelectableStockItems = (searchText: string) => {
               stockItemId: e.target.value,
             })
           }
-          className="rounded-xl border bg-white p-3 text-sm"
+          className="block w-0 min-w-full max-w-full rounded-xl border bg-white p-3 text-sm"
         >
           <option value="">
             Select Stock Item
@@ -2195,7 +2195,7 @@ const getFilteredSelectableStockItems = (searchText: string) => {
               quantity: e.target.value,
             })
           }
-          className="rounded-xl border bg-white p-3 text-sm"
+          className="w-full min-w-0 max-w-full rounded-xl border bg-white p-3 text-sm"
         />
 
         <input
@@ -2209,7 +2209,7 @@ const getFilteredSelectableStockItems = (searchText: string) => {
               projectId: e.target.value,
             })
           }
-          className="rounded-xl border bg-white p-3 text-sm"
+          className="w-full min-w-0 max-w-full rounded-xl border bg-white p-3 text-sm"
         />
 
         <input
@@ -2222,14 +2222,14 @@ const getFilteredSelectableStockItems = (searchText: string) => {
               remarks: e.target.value,
             })
           }
-          className="rounded-xl border bg-white p-3 text-sm"
+          className="w-full min-w-0 max-w-full rounded-xl border bg-white p-3 text-sm"
         />
       </div>
     </div>
 
-    <div className="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+    <div className="min-w-0 overflow-hidden rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4">
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1">
           <h3 className="font-bold text-emerald-900">
             Release Reserved Stock
           </h3>
@@ -2243,7 +2243,7 @@ const getFilteredSelectableStockItems = (searchText: string) => {
           type="button"
           onClick={releaseReservedStock}
           disabled={releaseReservedLoading}
-          className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+          className="shrink-0 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
         >
           {releaseReservedLoading
             ? 'Releasing...'
@@ -2251,7 +2251,7 @@ const getFilteredSelectableStockItems = (searchText: string) => {
         </button>
       </div>
 
-      <div className="mt-4 grid gap-3">
+      <div className="mt-4 grid min-w-0 gap-3">
         <input
           type="text"
           placeholder="Search stock item by material, branch or brand"
@@ -2265,7 +2265,7 @@ const getFilteredSelectableStockItems = (searchText: string) => {
                 e.target.value,
             })
           }
-          className="rounded-xl border bg-white p-3 text-sm"
+          className="w-full min-w-0 max-w-full rounded-xl border bg-white p-3 text-sm"
         />
 
         <select
@@ -2278,7 +2278,7 @@ const getFilteredSelectableStockItems = (searchText: string) => {
               stockItemId: e.target.value,
             })
           }
-          className="rounded-xl border bg-white p-3 text-sm"
+          className="block w-0 min-w-full max-w-full rounded-xl border bg-white p-3 text-sm"
         >
           <option value="">
             Select Stock Item
@@ -2328,7 +2328,7 @@ const getFilteredSelectableStockItems = (searchText: string) => {
               quantity: e.target.value,
             })
           }
-          className="rounded-xl border bg-white p-3 text-sm"
+          className="w-full min-w-0 max-w-full rounded-xl border bg-white p-3 text-sm"
         />
 
         <input
@@ -2344,7 +2344,7 @@ const getFilteredSelectableStockItems = (searchText: string) => {
               projectId: e.target.value,
             })
           }
-          className="rounded-xl border bg-white p-3 text-sm"
+          className="w-full min-w-0 max-w-full rounded-xl border bg-white p-3 text-sm"
         />
 
         <input
@@ -2359,7 +2359,7 @@ const getFilteredSelectableStockItems = (searchText: string) => {
               remarks: e.target.value,
             })
           }
-          className="rounded-xl border bg-white p-3 text-sm"
+          className="w-full min-w-0 max-w-full rounded-xl border bg-white p-3 text-sm"
         />
       </div>
     </div>
