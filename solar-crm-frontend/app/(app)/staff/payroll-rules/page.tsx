@@ -27,7 +27,7 @@ MenuItem,
 import { getAuthHeaders } from '@/lib/authHeaders';
 
 const API =
-  process.env.NEXT_PUBLIC_API_URL;
+  process.env.NEXT_PUBLIC_API_BASE_URL;
 
   const PAYROLL_ROLES = [
   'TELECALLING_MANAGER',
