@@ -2563,7 +2563,7 @@ const approvedPaymentAmountSql = `
       SELECT SUM(
         COALESCE(payment_filter."paidAmount", 0)
       )
-      FROM project_payment_installment payment_filter
+      FROM project_payment_installments payment_filter
       WHERE payment_filter."projectId" = project.id
         AND COALESCE(
           payment_filter."isHidden",
