@@ -217,6 +217,20 @@ const [branchFilter, setBranchFilter] = useState('');
 const [ownerFilter, setOwnerFilter] = useState('');
 const [fromDate, setFromDate] = useState('');
 const [toDate, setToDate] = useState('');
+
+const [monthFilter, setMonthFilter] =
+  useState('');
+
+const [
+  minPaymentPercentage,
+  setMinPaymentPercentage,
+] = useState('');
+
+const [
+  maxPaymentPercentage,
+  setMaxPaymentPercentage,
+] = useState('');
+
 const [legacyFilter, setLegacyFilter] = useState('');
 const [legacyYear, setLegacyYear] = useState('');
 const [filtersLoaded, setFiltersLoaded] = useState(false);
@@ -294,8 +308,21 @@ setLoanStatusFilter(
     setBranchFilter(parsed.branchFilter || '');
     setOwnerFilter(parsed.ownerFilter || '');
     setFromDate(parsed.fromDate || '');
-    setToDate(parsed.toDate || '');
-    setLegacyFilter(parsed.legacyFilter || '');
+setToDate(parsed.toDate || '');
+
+setMonthFilter(
+  parsed.monthFilter || '',
+);
+
+setMinPaymentPercentage(
+  parsed.minPaymentPercentage || '',
+);
+
+setMaxPaymentPercentage(
+  parsed.maxPaymentPercentage || '',
+);
+
+setLegacyFilter(parsed.legacyFilter || '');
 setLegacyYear(parsed.legacyYear || '');
 setLoanActivityFilter(
   parsed.loanActivityFilter || '',
@@ -343,8 +370,14 @@ loanStatusFilter,
       projectWorkStateFilter,
       subsidyCategoryFilter,
       ownerFilter,
-      fromDate,
+            fromDate,
       toDate,
+
+      monthFilter,
+
+      minPaymentPercentage,
+      maxPaymentPercentage,
+
       legacyFilter,
 legacyYear,
 loanActivityFilter,
@@ -366,8 +399,14 @@ loanStatusFilter,
   subsidyCategoryFilter,
   branchFilter,
   ownerFilter,
-  fromDate,
+    fromDate,
   toDate,
+
+  monthFilter,
+
+  minPaymentPercentage,
+  maxPaymentPercentage,
+
   legacyFilter,
 legacyYear,
 loanActivityFilter,
@@ -409,6 +448,9 @@ showAdvancedActivityFilters,
     owner: ownerFilter,
     fromDate,
 toDate,
+monthFilter,
+minPaymentPercentage,
+maxPaymentPercentage,
 legacyFilter,
 legacyYear,
 loanActivity:
@@ -474,8 +516,12 @@ setTotalPages(res.data?.totalPages || 1);
             projectWorkStateFilter,
           branch: branchFilter,
           owner: ownerFilter,
-          fromDate,
+                    fromDate,
           toDate,
+
+          minPaymentPercentage,
+          maxPaymentPercentage,
+
           legacyFilter,
           legacyYear,
           loanActivity:
@@ -616,18 +662,35 @@ activityMatchMode,
         'Branch Filter',
         branchFilter || 'All',
       ],
+            [
+        'Selected Month',
+        monthFilter || 'All',
+      ],
+
       [
         'From Date',
         fromDate || 'All',
       ],
+
       [
         'To Date',
         toDate || 'All',
       ],
+
       [
-  'Activity Match Mode',
-  activityMatchMode,
-],
+        'Minimum Payment Received %',
+        minPaymentPercentage || 'All',
+      ],
+
+      [
+        'Maximum Payment Received %',
+        maxPaymentPercentage || 'All',
+      ],
+
+      [
+        'Activity Match Mode',
+        activityMatchMode,
+      ],
 [
   'Loan Activity Filter',
   loanActivityFilter || 'All',
@@ -892,8 +955,12 @@ const restoreProject = async (projectId: number) => {
   projectWorkStateFilter,
   branchFilter,
   ownerFilter,
-  fromDate,
+    fromDate,
   toDate,
+
+  minPaymentPercentage,
+  maxPaymentPercentage,
+
   legacyFilter,
 legacyYear,
 loanActivityFilter,
@@ -1076,10 +1143,68 @@ const isMeetingManager =
     />
 
     <input
+  type="month"
+  value={monthFilter}
+  onChange={(e) => {
+    const selectedMonth =
+      e.target.value;
+
+    setMonthFilter(
+      selectedMonth,
+    );
+
+    if (!selectedMonth) {
+      setFromDate('');
+      setToDate('');
+      setPage(1);
+      return;
+    }
+
+    const [
+      selectedYear,
+      selectedMonthNumber,
+    ] = selectedMonth
+      .split('-')
+      .map(Number);
+
+    const firstDay =
+      `${selectedYear}-${String(
+        selectedMonthNumber,
+      ).padStart(2, '0')}-01`;
+
+    const lastDate =
+      new Date(
+        selectedYear,
+        selectedMonthNumber,
+        0,
+      ).getDate();
+
+    const lastDay =
+      `${selectedYear}-${String(
+        selectedMonthNumber,
+      ).padStart(2, '0')}-${String(
+        lastDate,
+      ).padStart(2, '0')}`;
+
+    setFromDate(firstDay);
+    setToDate(lastDay);
+    setPage(1);
+  }}
+  className="rounded-xl border p-3"
+/>
+
+<input
   type="date"
   value={fromDate}
   onChange={(e) => {
     setFromDate(e.target.value);
+
+    /*
+     * Manual date selection should not continue
+     * showing an old selected month.
+     */
+    setMonthFilter('');
+
     setPage(1);
   }}
   className="rounded-xl border p-3"
@@ -1090,6 +1215,85 @@ const isMeetingManager =
   value={toDate}
   onChange={(e) => {
     setToDate(e.target.value);
+
+    /*
+     * Manual date selection should not continue
+     * showing an old selected month.
+     */
+    setMonthFilter('');
+
+    setPage(1);
+  }}
+  className="rounded-xl border p-3"
+/>
+
+<input
+  type="number"
+  min="0"
+  max="100"
+  step="1"
+  placeholder="Minimum Payment Received %"
+  value={minPaymentPercentage}
+  onChange={(e) => {
+    const value =
+      e.target.value;
+
+    if (
+      value !== '' &&
+      Number(value) > 100
+    ) {
+      setMinPaymentPercentage(
+        '100',
+      );
+    } else if (
+      value !== '' &&
+      Number(value) < 0
+    ) {
+      setMinPaymentPercentage(
+        '0',
+      );
+    } else {
+      setMinPaymentPercentage(
+        value,
+      );
+    }
+
+    setPage(1);
+  }}
+  className="rounded-xl border p-3"
+/>
+
+<input
+  type="number"
+  min="0"
+  max="100"
+  step="1"
+  placeholder="Maximum Payment Received %"
+  value={maxPaymentPercentage}
+  onChange={(e) => {
+    const value =
+      e.target.value;
+
+    if (
+      value !== '' &&
+      Number(value) > 100
+    ) {
+      setMaxPaymentPercentage(
+        '100',
+      );
+    } else if (
+      value !== '' &&
+      Number(value) < 0
+    ) {
+      setMaxPaymentPercentage(
+        '0',
+      );
+    } else {
+      setMaxPaymentPercentage(
+        value,
+      );
+    }
+
     setPage(1);
   }}
   className="rounded-xl border p-3"
@@ -1469,21 +1673,62 @@ const isMeetingManager =
   )}
 </div>
 
+{minPaymentPercentage !== '' &&
+maxPaymentPercentage !== '' &&
+Number(minPaymentPercentage) >
+  Number(maxPaymentPercentage) && (
+  <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
+    Minimum payment percentage cannot be greater
+    than maximum payment percentage.
+  </div>
+)}
+
   <div className="mt-3 flex flex-wrap gap-2">
   <button
     type="button"
     onClick={() => {
-      const now = new Date();
-      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
-      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const now = new Date();
 
-      const formatDate = (date: Date) =>
-        date.toISOString().slice(0, 10);
+  const year =
+    now.getFullYear();
 
-      setFromDate(formatDate(firstDay));
-      setToDate(formatDate(lastDay));
-      setPage(1);
-    }}
+  const monthNumber =
+    now.getMonth() + 1;
+
+  const monthValue =
+    `${year}-${String(
+      monthNumber,
+    ).padStart(2, '0')}`;
+
+  const firstDay =
+    `${monthValue}-01`;
+
+  const lastDate =
+    new Date(
+      year,
+      monthNumber,
+      0,
+    ).getDate();
+
+  const lastDay =
+    `${monthValue}-${String(
+      lastDate,
+    ).padStart(2, '0')}`;
+
+  setMonthFilter(
+    monthValue,
+  );
+
+  setFromDate(
+    firstDay,
+  );
+
+  setToDate(
+    lastDay,
+  );
+
+  setPage(1);
+}}
     className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
   >
     This Month
@@ -1501,8 +1746,14 @@ setLoanStatusFilter('');
       setProjectWorkStateFilter('');
       setSubsidyCategoryFilter('');
       setOwnerFilter('');
-      setFromDate('');
+            setFromDate('');
       setToDate('');
+
+      setMonthFilter('');
+
+      setMinPaymentPercentage('');
+      setMaxPaymentPercentage('');
+
       setLegacyFilter('');
 setLegacyYear('');
 setLoanActivityFilter('');
