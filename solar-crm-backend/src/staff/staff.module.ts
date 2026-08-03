@@ -22,11 +22,59 @@ import { AttendanceLocation } from './attendance-location.entity';
 import { StaffAttendancePolicy } from './staff-attendance-policy.entity';
 import { StaffAttendanceOverride } from './staff-attendance-override.entity';
 import { StaffAttendanceException } from './staff-attendance-exception.entity';
+import {
+  Project,
+} from '../project/project.entity';
+
+import {
+  ProjectPaymentReceipt,
+} from '../project/project-payment-receipt.entity';
+
+import {
+  Lead,
+} from '../leads/lead.entity';
+
+import {
+  StaffPayrollCalculatorService,
+} from './staff-payroll-calculator.service';
+import {
+  Meeting,
+} from '../meeting/meeting.entity';
+import {
+  StaffPayrollRule,
+} from './staff-payroll-rule.entity';
+import {
+  StaffPayrollMetricCatalogueService,
+} from './staff-payroll-metric-catalogue.service';
+import { StaffPayrollMetricResolverService } from './staff-payroll-metric-resolver.service';
+import {
+  ProjectTradingMeeting,
+} from '../project/project-trading-meeting.entity';
+
+import {
+  ProjectDealerOrder,
+} from '../project/project-dealer-order.entity';
+import {
+  ProjectDealerOrderItem,
+} from '../project/project-dealer-order-item.entity';
+
+import {
+  ProjectStockItem,
+} from '../project/project-stock-item.entity';
+
+import { CallLog } from '../telecalling/call-log.entity';
+
+
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([
-      StaffMember,
+  Project,
+  ProjectPaymentReceipt,
+  Meeting,
+  Lead,
+  StaffMember,
+  StaffPayrollRule,
       StaffDocument,
       StaffAsset,
       StaffAttendance,
@@ -45,9 +93,19 @@ AttendanceLocation,
 StaffAttendancePolicy,
 StaffAttendanceOverride,
 StaffAttendanceException,
+ProjectTradingMeeting,
+ProjectDealerOrder,
+ProjectDealerOrderItem,
+ProjectStockItem,
+CallLog,
     ]),
   ],
   controllers: [StaffController, StaffSelfController],
-  providers: [StaffService],
+  providers: [
+  StaffService,
+  StaffPayrollCalculatorService,
+  StaffPayrollMetricCatalogueService,
+  StaffPayrollMetricResolverService,
+],
 })
 export class StaffModule {}

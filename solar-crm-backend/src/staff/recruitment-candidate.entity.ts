@@ -95,6 +95,22 @@ interviewTime: string;
   @Column({ nullable: true })
   joiningDate: Date;
 
+  /*
+ * Permanent payroll attribution captured when
+ * the candidate is officially marked JOINED.
+ *
+ * Later candidate edits must not change these
+ * values automatically.
+ */
+@Column({ nullable: true })
+joinedBy: number;
+
+@Column({ nullable: true })
+joinedByName: string;
+
+@Column({ type: 'timestamp', nullable: true })
+joinedAt: Date;
+
   @Column({ type: 'text', nullable: true })
   offerLetterUrl: string;
 

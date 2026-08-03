@@ -1042,7 +1042,10 @@ private readonly userRepository: Repository<User>,
 
   ) {}
 
-  private async buildProjectJourneySnapshot(data: any, user?: any) {
+  private async buildProjectJourneySnapshot(
+  data: any,
+  user?: any,
+) {
   const snapshot: any = {
     telecallerId: null,
     telecallerName: '',
@@ -1061,143 +1064,716 @@ private readonly userRepository: Repository<User>,
     meetingManagerRole: '',
   };
 
-  let leadId = data?.leadId ? Number(data.leadId) : null;
-  let lead: any = null;
+  /*
+   * Returns every role currently assigned to a CRM user.
+   *
+   * This supports both:
+   * - old users with a single `role`
+   * - users with a `roles` array
+   */
+  const getUserRoles = (crmUser: any): string[] => {
+    const roles = new Set<string>();
 
-  if (data?.meetingId) {
-    const meeting = await this.meetingRepository.findOne({
-      where: { id: Number(data.meetingId) },
-    });
+    if (crmUser?.role) {
+      roles.add(
+        String(crmUser.role)
+          .trim()
+          .toUpperCase(),
+      );
+    }
 
-    if (meeting) {
-      leadId = meeting.leadId ? Number(meeting.leadId) : leadId;
+    if (Array.isArray(crmUser?.roles)) {
+      for (const roleEntry of crmUser.roles) {
+        const roleValue =
+          typeof roleEntry === 'string'
+            ? roleEntry
+            : roleEntry?.name ||
+              roleEntry?.role ||
+              roleEntry?.code;
 
-      if (meeting.assignedTo) {
-        snapshot.meetingManagerId = Number(meeting.assignedTo);
-        snapshot.meetingManagerName = meeting.assignedToName || '';
-        snapshot.meetingManagerRole = 'MEETING_MANAGER';
-      } else if (meeting.createdBy) {
-        snapshot.meetingManagerId = Number(meeting.createdBy);
-        snapshot.meetingManagerName = meeting.createdByName || '';
-        snapshot.meetingManagerRole = 'MEETING_MANAGER';
+        if (roleValue) {
+          roles.add(
+            String(roleValue)
+              .trim()
+              .toUpperCase(),
+          );
+        }
       }
     }
-  }
 
-  if (leadId) {
-    lead = await this.leadRepository.findOne({
-      where: { id: Number(leadId) },
-    });
-  }
+    return Array.from(roles);
+  };
 
-  let contact: any = null;
+  const findUserWithRole = async (
+    userId: any,
+    requiredRole: string,
+  ) => {
+    const normalizedUserId = Number(userId || 0);
 
-  if (lead?.phone) {
-    contact = await this.telecallingContactRepository.findOne({
-      where: { phone: lead.phone },
-      order: { updatedAt: 'DESC' },
-    });
-  }
-
-  if (contact) {
-    if (contact.assignedTo) {
-      snapshot.telecallerId = Number(contact.assignedTo);
-      snapshot.telecallerName = contact.assignedToName || '';
-      snapshot.telecallerRole = 'TELECALLER';
+    if (!normalizedUserId) {
+      return null;
     }
 
-    if (contact.reviewAssignedTo) {
-      snapshot.telecallingAssistantId = Number(
-        contact.reviewAssignedTo,
+    const crmUser = await this.userRepository.findOne({
+      where: {
+        id: normalizedUserId,
+      },
+    });
+
+    if (!crmUser) {
+      return null;
+    }
+
+    const userRoles = getUserRoles(crmUser);
+
+    if (
+      !userRoles.includes(
+        requiredRole
+          .trim()
+          .toUpperCase(),
+      )
+    ) {
+      return null;
+    }
+
+    return crmUser;
+  };
+
+  let leadId = data?.leadId
+    ? Number(data.leadId)
+    : null;
+
+  let lead: any = null;
+  let meeting: any = null;
+
+  /*
+ * Preserve journey attribution already frozen on the Meeting.
+ *
+ * This is especially important for direct Meeting routes where
+ * there may be no originating Contact lookup available here.
+ *
+ * Every stored user is verified against their actual CRM role
+ * before being placed into the Project journey snapshot.
+ */
+if (data?.meetingId) {
+  meeting = await this.meetingRepository.findOne({
+    where: {
+      id: Number(data.meetingId),
+    },
+  });
+
+  if (meeting) {
+    leadId = meeting.leadId
+      ? Number(meeting.leadId)
+      : leadId;
+
+    /*
+     * Telecaller preserved on Meeting.
+     */
+    if (meeting.telecallerId) {
+      const actualTelecaller =
+        await findUserWithRole(
+          meeting.telecallerId,
+          'TELECALLER',
+        );
+
+      if (actualTelecaller) {
+        snapshot.telecallerId = Number(
+          actualTelecaller.id,
+        );
+
+        snapshot.telecallerName =
+          meeting.telecallerName ||
+          actualTelecaller.name ||
+          actualTelecaller.email ||
+          '';
+
+        snapshot.telecallerRole =
+          'TELECALLER';
+      }
+    }
+
+    /*
+     * Telecalling Assistant preserved on Meeting.
+     */
+    if (meeting.telecallingAssistantId) {
+      const actualTelecallingAssistant =
+        await findUserWithRole(
+          meeting.telecallingAssistantId,
+          'TELECALLING_ASSISTANT',
+        );
+
+      if (actualTelecallingAssistant) {
+        snapshot.telecallingAssistantId =
+          Number(
+            actualTelecallingAssistant.id,
+          );
+
+        snapshot.telecallingAssistantName =
+          meeting.telecallingAssistantName ||
+          actualTelecallingAssistant.name ||
+          actualTelecallingAssistant.email ||
+          '';
+
+        snapshot.telecallingAssistantRole =
+          'TELECALLING_ASSISTANT';
+      }
+    }
+
+    /*
+     * Lead Manager preserved on Meeting.
+     */
+    if (meeting.leadManagerId) {
+      const actualLeadManager =
+        await findUserWithRole(
+          meeting.leadManagerId,
+          'LEAD_MANAGER',
+        );
+
+      if (actualLeadManager) {
+        snapshot.leadManagerId = Number(
+          actualLeadManager.id,
+        );
+
+        snapshot.leadManagerName =
+          meeting.leadManagerName ||
+          actualLeadManager.name ||
+          actualLeadManager.email ||
+          '';
+
+        snapshot.leadManagerRole =
+          'LEAD_MANAGER';
+      }
+    }
+
+    /*
+ * Meeting Manager priority:
+ *
+ * 1. Dedicated Meeting journey field
+ * 2. Current Meeting assignee
+ *
+ * The Meeting creator must not be used as
+ * attribution merely because they created
+ * the record.
+ *
+ * Each candidate must genuinely have the
+ * MEETING_MANAGER role.
+ */
+    const meetingManagerCandidates = [
+  {
+    id: meeting.meetingManagerId,
+    fallbackName:
+      meeting.meetingManagerName || '',
+  },
+  {
+    id: meeting.assignedTo,
+    fallbackName:
+      meeting.assignedToName || '',
+  },
+];
+
+    for (
+      const candidate of meetingManagerCandidates
+    ) {
+      if (!candidate.id) {
+        continue;
+      }
+
+      const actualMeetingManager =
+        await findUserWithRole(
+          candidate.id,
+          'MEETING_MANAGER',
+        );
+
+      if (!actualMeetingManager) {
+        continue;
+      }
+
+      snapshot.meetingManagerId = Number(
+        actualMeetingManager.id,
       );
+
+      snapshot.meetingManagerName =
+        candidate.fallbackName ||
+        actualMeetingManager.name ||
+        actualMeetingManager.email ||
+        '';
+
+      snapshot.meetingManagerRole =
+        'MEETING_MANAGER';
+
+      break;
+    }
+  }
+}
+
+  /*
+   * Load the related lead when one is genuinely linked.
+   *
+   * A lead record may also have been generated internally during
+   * a direct Meeting route, so its assigned user must not
+   * automatically be labelled as a Lead Manager.
+   */
+  if (leadId) {
+    lead = await this.leadRepository.findOne({
+      where: {
+        id: Number(leadId),
+      },
+    });
+  }
+
+  /*
+ * Preserve journey attribution already frozen on the Lead.
+ *
+ * These fields are safer than searching Contacts by phone because
+ * the same phone number may appear in multiple Contact records over
+ * time. Contact and Call Log lookups remain fallbacks only.
+ */
+if (lead) {
+  if (!snapshot.telecallerId) {
+  const leadTelecallerCandidates = [
+    {
+      id: lead.telecallerId,
+      fallbackName:
+        lead.telecallerName || '',
+    },
+    {
+      id: lead.originTelecallerId,
+      fallbackName:
+        lead.originTelecallerName || '',
+    },
+  ];
+
+  for (
+    const candidate of
+      leadTelecallerCandidates
+  ) {
+    if (!candidate.id) {
+      continue;
+    }
+
+    const actualTelecaller =
+      await findUserWithRole(
+        candidate.id,
+        'TELECALLER',
+      );
+
+    if (!actualTelecaller) {
+      continue;
+    }
+
+    snapshot.telecallerId = Number(
+      actualTelecaller.id,
+    );
+
+    snapshot.telecallerName =
+      candidate.fallbackName ||
+      actualTelecaller.name ||
+      actualTelecaller.email ||
+      '';
+
+    snapshot.telecallerRole =
+      'TELECALLER';
+
+    break;
+  }
+}
+
+  const leadAssistantId = Number(
+    lead.telecallingAssistantId || 0,
+  );
+
+  if (
+  !snapshot.telecallingAssistantId &&
+  leadAssistantId
+) {
+    const actualTelecallingAssistant =
+      await findUserWithRole(
+        leadAssistantId,
+        'TELECALLING_ASSISTANT',
+      );
+
+    if (actualTelecallingAssistant) {
+      snapshot.telecallingAssistantId =
+        Number(
+          actualTelecallingAssistant.id,
+        );
+
       snapshot.telecallingAssistantName =
-        contact.reviewAssignedToName || '';
+        lead.telecallingAssistantName ||
+        actualTelecallingAssistant.name ||
+        actualTelecallingAssistant.email ||
+        '';
+
       snapshot.telecallingAssistantRole =
         'TELECALLING_ASSISTANT';
     }
   }
 
-  if (lead) {
-    if (lead.assignedTo) {
-      snapshot.leadManagerId = Number(lead.assignedTo);
-      snapshot.leadManagerRole = 'LEAD_MANAGER';
+  const storedLeadManagerId = Number(
+    lead.leadManagerId || 0,
+  );
 
-      const leadManager = await this.userRepository.findOne({
-        where: { id: Number(lead.assignedTo) },
-      });
+  if (
+  !snapshot.leadManagerId &&
+  storedLeadManagerId
+) {
+    const actualStoredLeadManager =
+      await findUserWithRole(
+        storedLeadManagerId,
+        'LEAD_MANAGER',
+      );
+
+    if (actualStoredLeadManager) {
+      snapshot.leadManagerId = Number(
+        actualStoredLeadManager.id,
+      );
 
       snapshot.leadManagerName =
-        leadManager?.name || leadManager?.email || '';
-    } else if (lead.createdBy) {
-      snapshot.leadManagerId = Number(lead.createdBy);
-      snapshot.leadManagerName = lead.createdByName || '';
-      snapshot.leadManagerRole = 'LEAD_MANAGER';
-    }
+        lead.leadManagerName ||
+        actualStoredLeadManager.name ||
+        actualStoredLeadManager.email ||
+        '';
 
-    if (!snapshot.telecallerId && lead.originTelecallerId) {
-      snapshot.telecallerId = Number(lead.originTelecallerId);
-      snapshot.telecallerName = lead.originTelecallerName || '';
-      snapshot.telecallerRole = 'TELECALLER';
+      snapshot.leadManagerRole =
+        'LEAD_MANAGER';
+    }
+  }
+}
+
+  let contact: any = null;
+
+  /*
+   * Locate the originating Telecalling Contact.
+   */
+  if (
+  lead?.phone &&
+  (
+    !snapshot.telecallerId ||
+    !snapshot.telecallingAssistantId
+  )
+) {
+    contact =
+      await this.telecallingContactRepository.findOne({
+        where: {
+          phone: lead.phone,
+        },
+        order: {
+          updatedAt: 'DESC',
+        },
+      });
+  }
+
+  /*
+   * Telecaller and Telecalling Assistant contribution.
+   *
+   * The assistant is preserved even when the assistant scheduled
+   * a Meeting directly without converting the Contact to a Lead.
+   */
+  if (contact) {
+  /*
+   * Contact attribution is fallback-only.
+   *
+   * Validate the actual CRM role before
+   * placing anyone into the frozen Project
+   * journey snapshot.
+   */
+  if (
+    !snapshot.telecallerId &&
+    contact.assignedTo
+  ) {
+    const actualTelecaller =
+      await findUserWithRole(
+        contact.assignedTo,
+        'TELECALLER',
+      );
+
+    if (actualTelecaller) {
+      snapshot.telecallerId = Number(
+        actualTelecaller.id,
+      );
+
+      snapshot.telecallerName =
+        contact.assignedToName ||
+        actualTelecaller.name ||
+        actualTelecaller.email ||
+        '';
+
+      snapshot.telecallerRole =
+        'TELECALLER';
     }
   }
 
-  if (leadId) {
-    const latestCallLog = await this.callLogRepository.findOne({
-      where: { leadId: Number(leadId) },
-      order: { createdAt: 'DESC' },
-    });
+  if (
+    !snapshot.telecallingAssistantId &&
+    contact.reviewAssignedTo
+  ) {
+    const actualTelecallingAssistant =
+      await findUserWithRole(
+        contact.reviewAssignedTo,
+        'TELECALLING_ASSISTANT',
+      );
 
-    if (latestCallLog) {
-      if (!snapshot.telecallerId && latestCallLog.telecallerId) {
-        snapshot.telecallerId = Number(latestCallLog.telecallerId);
-        snapshot.telecallerRole = 'TELECALLER';
+    if (actualTelecallingAssistant) {
+      snapshot.telecallingAssistantId =
+        Number(
+          actualTelecallingAssistant.id,
+        );
+
+      snapshot.telecallingAssistantName =
+        contact.reviewAssignedToName ||
+        actualTelecallingAssistant.name ||
+        actualTelecallingAssistant.email ||
+        '';
+
+      snapshot.telecallingAssistantRole =
+        'TELECALLING_ASSISTANT';
+    }
+  }
+}
+
+  /*
+   * Lead Manager contribution.
+   *
+   * IMPORTANT:
+   * Never assume lead.assignedTo or lead.createdBy is a
+   * Lead Manager merely because the ID exists.
+   *
+   * Directly scheduled Meetings can contain a linked Lead record
+   * whose assigned user or creator is actually a Meeting Manager.
+   *
+   * We therefore check the real CRM roles before placing anyone
+   * in the Lead Manager journey position.
+   */
+  if (lead) {
+
+    /*
+ * Telecalling Assistant contribution from a directly created
+ * fresh Lead.
+ *
+ * A Telecalling Assistant may create a Lead without an
+ * originating Telecalling Contact or Call Log. In that route,
+ * lead.createdBy is the only reliable journey source.
+ *
+ * Only store the creator when the user's real CRM role includes
+ * TELECALLING_ASSISTANT.
+ */
+if (
+  !snapshot.telecallingAssistantId &&
+  lead.createdBy
+) {
+  const actualTelecallingAssistant =
+    await findUserWithRole(
+      lead.createdBy,
+      'TELECALLING_ASSISTANT',
+    );
+
+  if (actualTelecallingAssistant) {
+    snapshot.telecallingAssistantId = Number(
+      actualTelecallingAssistant.id,
+    );
+
+    snapshot.telecallingAssistantName =
+      actualTelecallingAssistant.name ||
+      actualTelecallingAssistant.email ||
+      lead.createdByName ||
+      '';
+
+    snapshot.telecallingAssistantRole =
+      'TELECALLING_ASSISTANT';
+  }
+}
+
+if (!snapshot.leadManagerId) {
+    const leadManagerCandidates = [
+      {
+        id: lead.assignedTo,
+        fallbackName: '',
+      },
+      {
+        id: lead.createdBy,
+        fallbackName:
+          lead.createdByName || '',
+      },
+    ];
+
+    for (const candidate of leadManagerCandidates) {
+      if (!candidate.id) {
+        continue;
       }
 
-      if (
-        !snapshot.telecallingAssistantId &&
-        latestCallLog.reviewAssignedTo
-      ) {
-        snapshot.telecallingAssistantId = Number(
-          latestCallLog.reviewAssignedTo,
+      const actualLeadManager =
+        await findUserWithRole(
+          candidate.id,
+          'LEAD_MANAGER',
         );
+
+      if (!actualLeadManager) {
+        continue;
+      }
+
+      snapshot.leadManagerId = Number(
+        actualLeadManager.id,
+      );
+
+      snapshot.leadManagerName =
+        actualLeadManager.name ||
+        actualLeadManager.email ||
+        candidate.fallbackName ||
+        '';
+
+      snapshot.leadManagerRole =
+        'LEAD_MANAGER';
+
+      break;
+    }
+  }
+
+  }
+
+  /*
+ * Call-log fallbacks for Telecaller and
+ * Telecalling Assistant attribution.
+ *
+ * Call Log data is fallback-only, and every
+ * candidate must match the expected CRM role.
+ */
+if (
+  leadId &&
+  (
+    !snapshot.telecallerId ||
+    !snapshot.telecallingAssistantId
+  )
+) {
+  const latestCallLog =
+    await this.callLogRepository.findOne({
+      where: {
+        leadId: Number(leadId),
+      },
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+
+  if (latestCallLog) {
+    if (
+      !snapshot.telecallerId &&
+      latestCallLog.telecallerId
+    ) {
+      const actualTelecaller =
+        await findUserWithRole(
+          latestCallLog.telecallerId,
+          'TELECALLER',
+        );
+
+      if (actualTelecaller) {
+        snapshot.telecallerId = Number(
+          actualTelecaller.id,
+        );
+
+        snapshot.telecallerName =
+          actualTelecaller.name ||
+          actualTelecaller.email ||
+          '';
+
+        snapshot.telecallerRole =
+          'TELECALLER';
+      }
+    }
+
+    if (
+      !snapshot.telecallingAssistantId &&
+      latestCallLog.reviewAssignedTo
+    ) {
+      const actualTelecallingAssistant =
+        await findUserWithRole(
+          latestCallLog.reviewAssignedTo,
+          'TELECALLING_ASSISTANT',
+        );
+
+      if (actualTelecallingAssistant) {
+        snapshot.telecallingAssistantId =
+          Number(
+            actualTelecallingAssistant.id,
+          );
+
         snapshot.telecallingAssistantName =
-          latestCallLog.reviewAssignedToName || '';
+          latestCallLog.reviewAssignedToName ||
+          actualTelecallingAssistant.name ||
+          actualTelecallingAssistant.email ||
+          '';
+
         snapshot.telecallingAssistantRole =
           'TELECALLING_ASSISTANT';
       }
+    }
 
-      if (
-        latestCallLog.contactId &&
-        (!snapshot.telecallerId ||
-          !snapshot.telecallingAssistantId)
-      ) {
-        const contactFromCall =
-          await this.telecallingContactRepository.findOne({
-            where: { id: Number(latestCallLog.contactId) },
-          });
+    if (
+      latestCallLog.contactId &&
+      (
+        !snapshot.telecallerId ||
+        !snapshot.telecallingAssistantId
+      )
+    ) {
+      const contactFromCall =
+        await this.telecallingContactRepository.findOne({
+          where: {
+            id: Number(
+              latestCallLog.contactId,
+            ),
+          },
+        });
 
-        if (contactFromCall) {
-          if (
-            !snapshot.telecallerId &&
-            contactFromCall.assignedTo
-          ) {
-            snapshot.telecallerId = Number(
+      if (contactFromCall) {
+        if (
+          !snapshot.telecallerId &&
+          contactFromCall.assignedTo
+        ) {
+          const actualTelecaller =
+            await findUserWithRole(
               contactFromCall.assignedTo,
+              'TELECALLER',
             );
-            snapshot.telecallerName =
-              contactFromCall.assignedToName || '';
-            snapshot.telecallerRole = 'TELECALLER';
-          }
 
-          if (
-            !snapshot.telecallingAssistantId &&
-            contactFromCall.reviewAssignedTo
-          ) {
-            snapshot.telecallingAssistantId = Number(
-              contactFromCall.reviewAssignedTo,
+          if (actualTelecaller) {
+            snapshot.telecallerId = Number(
+              actualTelecaller.id,
             );
+
+            snapshot.telecallerName =
+              contactFromCall.assignedToName ||
+              actualTelecaller.name ||
+              actualTelecaller.email ||
+              '';
+
+            snapshot.telecallerRole =
+              'TELECALLER';
+          }
+        }
+
+        if (
+          !snapshot.telecallingAssistantId &&
+          contactFromCall.reviewAssignedTo
+        ) {
+          const actualTelecallingAssistant =
+            await findUserWithRole(
+              contactFromCall.reviewAssignedTo,
+              'TELECALLING_ASSISTANT',
+            );
+
+          if (actualTelecallingAssistant) {
+            snapshot.telecallingAssistantId =
+              Number(
+                actualTelecallingAssistant.id,
+              );
+
             snapshot.telecallingAssistantName =
-              contactFromCall.reviewAssignedToName || '';
+              contactFromCall
+                .reviewAssignedToName ||
+              actualTelecallingAssistant.name ||
+              actualTelecallingAssistant.email ||
+              '';
+
             snapshot.telecallingAssistantRole =
               'TELECALLING_ASSISTANT';
           }
@@ -1205,6 +1781,7 @@ private readonly userRepository: Repository<User>,
       }
     }
   }
+}
 
   return snapshot;
 }
@@ -1384,12 +1961,17 @@ projectWorkStateUpdatedByName:
   ),
 
   marginMoney: this.toNumberOrZero(
-    (data as any).marginMoney,
+  (data as any).marginMoney,
+),
+
+applicableMargin:
+  this.toNumberOrZero(
+    (data as any).applicableMargin,
   ),
 
-  loanAmount: this.toNumberOrZero(
-    (data as any).loanAmount,
-  ),
+loanAmount: this.toNumberOrZero(
+  (data as any).loanAmount,
+),
 
   finalCost: this.toNumberOrZero(
   (data as any).finalCost,
@@ -1551,6 +2133,11 @@ projectWorkStateUpdatedByName:
       projectType: data?.projectType,
 
       marginMoney: Number(data?.marginMoney || 0),
+
+      applicableMargin:
+  Number(
+    calculation.marginAmount || 0,
+  ),
 
       loanAmount: Number(data?.loanAmount || 0),
 
@@ -2675,6 +3262,7 @@ const currentUserId = Number(user?.id || user?.sub);
     'discomExpenditureAmount',
     'expectedLagat',
     'expectedProfit',
+    'applicableMargin',
     'status',
     'projectWorkState',
 'projectWorkStateReason',
@@ -2760,7 +3348,19 @@ const currentUserId = Number(user?.id || user?.sub);
     );
   }
 
-  allowedFields = editableFieldsForProjectManager;
+  /*
+   * Solar Franchise may edit its own project,
+   * but cannot alter the margin used for its
+   * own payout calculation.
+   *
+   * Owner and Project Manager retain access.
+   */
+  allowedFields =
+    editableFieldsForProjectManager.filter(
+      (field) =>
+        field !==
+        'applicableMargin',
+    );
 }
 
   const safeData: Partial<Project> = {};
@@ -2864,6 +3464,7 @@ const numberFields = [
   'discomExpenditureAmount',
   'expectedLagat',
   'expectedProfit',
+  'applicableMargin',
   'gpsLatitude',
 'gpsLongitude',
 ];

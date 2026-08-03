@@ -13,8 +13,21 @@ import { StaffLeave } from './staff-leave.entity';
 import { EmployeePolicy } from './employee-policy.entity';
 import { HrPolicy, HrPolicyType } from './hr-policy.entity';
 import { StaffPayroll } from './staff-payroll.entity';
+import {
+  StaffPayrollConditionFailureAction,
+  StaffPayrollConditionOperator,
+  StaffPayrollIncentiveCalculationType,
+  StaffPayrollMetricType,
+  StaffPayrollRule,
+  StaffPayrollRuleScope,
+  StaffPayrollSalaryMode,
+  StaffPayrollTargetCalculationMode,
+} from './staff-payroll-rule.entity';
 import { IncentiveRule } from './incentive-rule.entity';
-import { RecruitmentCandidate } from './recruitment-candidate.entity';
+import {
+  RecruitmentCandidate,
+  RecruitmentStage,
+} from './recruitment-candidate.entity';
 import { RecruitmentCandidateDocument } from './recruitment-candidate-document.entity';
 import { PerformanceTemplate } from './performance-template.entity';
 import { PerformanceTemplateMetric } from './performance-template-metric.entity';
@@ -33,6 +46,9 @@ import {
   StaffAttendanceExceptionPunchType,
   StaffAttendanceExceptionStatus,
 } from './staff-attendance-exception.entity';
+import {
+  StaffPayrollCalculatorService,
+} from './staff-payroll-calculator.service';
 
 @Injectable()
 export class StaffService {
@@ -60,6 +76,10 @@ private readonly hrPolicyRepo: Repository<HrPolicy>,
 
 @InjectRepository(StaffPayroll)
 private readonly payrollRepo: Repository<StaffPayroll>,
+
+@InjectRepository(StaffPayrollRule)
+private readonly staffPayrollRuleRepo:
+  Repository<StaffPayrollRule>,
 
 @InjectRepository(IncentiveRule)
 private readonly incentiveRuleRepo: Repository<IncentiveRule>,
@@ -89,8 +109,12 @@ private readonly attendancePolicyRepo: Repository<StaffAttendancePolicy>,
 private readonly attendanceOverrideRepo: Repository<StaffAttendanceOverride>,
 
 @InjectRepository(StaffAttendanceException)
-private readonly attendanceExceptionRepo: Repository<StaffAttendanceException>,
-  ) {}
+private readonly attendanceExceptionRepo:
+  Repository<StaffAttendanceException>,
+
+private readonly payrollCalculator:
+  StaffPayrollCalculatorService,
+) {}
 
   async findAll(query: any) {
     const page = Math.max(Number(query.page || 1), 1);
@@ -1509,6 +1533,1763 @@ async restoreHrSetting(id: number, body: any, user: any) {
   return this.hrPolicyRepo.save(policy);
 }
 
+private validateStaffPayrollRulePayload(
+  body: any,
+) {
+  const ruleName = String(
+    body.ruleName || '',
+  ).trim();
+
+  if (!ruleName) {
+    throw new BadRequestException(
+      'Payroll rule name is required',
+    );
+  }
+
+  const scope =
+    body.scope ||
+    StaffPayrollRuleScope.ROLE;
+
+  if (
+    !Object.values(
+      StaffPayrollRuleScope,
+    ).includes(scope)
+  ) {
+    throw new BadRequestException(
+      'Invalid payroll rule scope',
+    );
+  }
+
+  const applicableRole = String(
+    body.applicableRole || '',
+  )
+    .trim()
+    .toUpperCase();
+
+  const staffId =
+    body.staffId === null ||
+    body.staffId === undefined ||
+    body.staffId === ''
+      ? null
+      : Number(body.staffId);
+
+  if (
+    scope ===
+      StaffPayrollRuleScope.ROLE &&
+    !applicableRole
+  ) {
+    throw new BadRequestException(
+      'Applicable role is required for a role-based payroll rule',
+    );
+  }
+
+  if (
+    scope ===
+      StaffPayrollRuleScope.STAFF &&
+    (
+      !Number.isInteger(staffId) ||
+      Number(staffId) <= 0
+    )
+  ) {
+    throw new BadRequestException(
+      'Valid staff is required for a staff-specific payroll rule',
+    );
+  }
+
+  const salaryMode =
+    body.salaryMode ||
+    StaffPayrollSalaryMode.MANUAL;
+
+  if (
+    !Object.values(
+      StaffPayrollSalaryMode,
+    ).includes(salaryMode)
+  ) {
+    throw new BadRequestException(
+      'Invalid payroll salary mode',
+    );
+  }
+
+  const targetCalculationMode =
+    body.targetCalculationMode ||
+    StaffPayrollTargetCalculationMode
+      .FIXED;
+
+  if (
+    !Object.values(
+      StaffPayrollTargetCalculationMode,
+    ).includes(
+      targetCalculationMode,
+    )
+  ) {
+    throw new BadRequestException(
+      'Invalid target calculation mode',
+    );
+  }
+
+  const maximumSalaryPercentage =
+    Number(
+      body.maximumSalaryPercentage ??
+        100,
+    );
+
+  if (
+    !Number.isFinite(
+      maximumSalaryPercentage,
+    ) ||
+    maximumSalaryPercentage < 0 ||
+    maximumSalaryPercentage > 100
+  ) {
+    throw new BadRequestException(
+      'Maximum salary percentage must be between 0 and 100',
+    );
+  }
+
+  const nonNegativeFields = [
+    {
+      key: 'salaryTargetValue',
+      label: 'Salary target',
+    },
+    {
+      key: 'teamMemberTargetValue',
+      label: 'Team member target',
+    },
+    {
+      key: 'attendanceTargetHours',
+      label: 'Attendance target hours',
+    },
+    {
+      key: 'attendanceTargetDays',
+      label: 'Attendance target days',
+    },
+    {
+      key: 'attendanceTargetPercentage',
+      label:
+        'Attendance target percentage',
+    },
+    {
+      key: 'maximumSalaryAmount',
+      label: 'Maximum salary amount',
+      nullable: true,
+    },
+    {
+      key: 'maximumIncentiveAmount',
+      label: 'Maximum incentive amount',
+      nullable: true,
+    },
+  ];
+
+  for (
+    const field of
+      nonNegativeFields
+  ) {
+    const rawValue =
+      body[field.key];
+
+    if (
+      field.nullable === true &&
+      (
+        rawValue === null ||
+        rawValue === undefined ||
+        rawValue === ''
+      )
+    ) {
+      continue;
+    }
+
+    const value = Number(
+      rawValue || 0,
+    );
+
+    if (
+      !Number.isFinite(value) ||
+      value < 0
+    ) {
+      throw new BadRequestException(
+        `${field.label} must be a valid non-negative number`,
+      );
+    }
+  }
+
+  if (
+    salaryMode ===
+      StaffPayrollSalaryMode
+        .PROPORTIONAL_TO_TARGET &&
+    !body.salaryMetricType
+  ) {
+    throw new BadRequestException(
+      'Salary metric is required for proportional salary calculation',
+    );
+  }
+
+  if (
+    targetCalculationMode ===
+      StaffPayrollTargetCalculationMode
+        .TEAM_SIZE_MULTIPLIER
+  ) {
+    if (
+      !body.targetMultiplierMetricType
+    ) {
+      throw new BadRequestException(
+        'Target multiplier metric is required for team-size calculation',
+      );
+    }
+
+    const teamMemberTargetValue =
+      Number(
+        body.teamMemberTargetValue ||
+          0,
+      );
+
+    if (
+      !Number.isFinite(
+        teamMemberTargetValue,
+      ) ||
+      teamMemberTargetValue <= 0
+    ) {
+      throw new BadRequestException(
+        'Target per team member must be greater than zero',
+      );
+    }
+  }
+
+  const eligibilityConditions =
+    Array.isArray(
+      body.eligibilityConditions,
+    )
+      ? body.eligibilityConditions
+      : [];
+
+  for (
+    let index = 0;
+    index <
+    eligibilityConditions.length;
+    index += 1
+  ) {
+    const condition =
+      eligibilityConditions[index];
+
+    if (
+      condition?.isEnabled !== true
+    ) {
+      continue;
+    }
+
+    const conditionLabel =
+      String(
+        condition.label ||
+          `Condition ${index + 1}`,
+      ).trim();
+
+    if (
+      !condition.metricType ||
+      !Object.values(
+        StaffPayrollMetricType,
+      ).includes(
+        condition.metricType,
+      )
+    ) {
+      throw new BadRequestException(
+        `${conditionLabel}: invalid metric type`,
+      );
+    }
+
+    if (
+      !condition.operator ||
+      !Object.values(
+        StaffPayrollConditionOperator,
+      ).includes(
+        condition.operator,
+      )
+    ) {
+      throw new BadRequestException(
+        `${conditionLabel}: invalid comparison operator`,
+      );
+    }
+
+    if (
+      !condition.failureAction ||
+      !Object.values(
+        StaffPayrollConditionFailureAction,
+      ).includes(
+        condition.failureAction,
+      )
+    ) {
+      throw new BadRequestException(
+        `${conditionLabel}: invalid failure action`,
+      );
+    }
+
+    const targetValue =
+      Number(
+        condition.targetValue ||
+          0,
+      );
+
+    if (
+      !Number.isFinite(
+        targetValue,
+      ) ||
+      targetValue < 0
+    ) {
+      throw new BadRequestException(
+        `${conditionLabel}: target value must be a valid non-negative number`,
+      );
+    }
+  }
+
+  const incentiveComponents =
+    Array.isArray(
+      body.incentiveComponents,
+    )
+      ? body.incentiveComponents
+      : [];
+
+  for (
+    let componentIndex = 0;
+    componentIndex <
+    incentiveComponents.length;
+    componentIndex += 1
+  ) {
+    const component =
+      incentiveComponents[
+        componentIndex
+      ];
+
+    if (
+      component?.isEnabled !== true
+    ) {
+      continue;
+    }
+
+    const componentLabel =
+      String(
+        component.label ||
+          `Incentive ${
+            componentIndex + 1
+          }`,
+      ).trim();
+
+    if (
+      !component.metricType ||
+      !Object.values(
+        StaffPayrollMetricType,
+      ).includes(
+        component.metricType,
+      )
+    ) {
+      throw new BadRequestException(
+        `${componentLabel}: invalid metric type`,
+      );
+    }
+
+    if (
+      !component.calculationType ||
+      !Object.values(
+        StaffPayrollIncentiveCalculationType,
+      ).includes(
+        component.calculationType,
+      )
+    ) {
+      throw new BadRequestException(
+        `${componentLabel}: invalid calculation type`,
+      );
+    }
+
+    const numericComponentFields = [
+      'rateAmount',
+      'percentageRate',
+      'baselineTarget',
+      'poolAmountPerCompanyUnit',
+      'fixedPoolDivisor',
+      'minimumPersonalMetricValue',
+      'maximumAmount',
+    ];
+
+    for (
+      const key of
+        numericComponentFields
+    ) {
+      const rawValue =
+        component[key];
+
+      if (
+        rawValue === null ||
+        rawValue === undefined ||
+        rawValue === ''
+      ) {
+        continue;
+      }
+
+      const value =
+        Number(rawValue);
+
+      if (
+        !Number.isFinite(value) ||
+        value < 0
+      ) {
+        throw new BadRequestException(
+          `${componentLabel}: ${key} must be a valid non-negative number`,
+        );
+      }
+    }
+
+    if (
+      component.calculationType ===
+        StaffPayrollIncentiveCalculationType
+          .PERCENTAGE
+    ) {
+      const percentageRate =
+        Number(
+          component.percentageRate ||
+            0,
+        );
+
+      if (
+        percentageRate < 0 ||
+        percentageRate > 100
+      ) {
+        throw new BadRequestException(
+          `${componentLabel}: percentage rate must be between 0 and 100`,
+        );
+      }
+    }
+
+    if (
+      component.calculationType ===
+        StaffPayrollIncentiveCalculationType
+          .SLAB
+    ) {
+      const slabRules =
+        Array.isArray(
+          component.slabRules,
+        )
+          ? component.slabRules
+          : [];
+
+      if (!slabRules.length) {
+        throw new BadRequestException(
+          `${componentLabel}: at least one slab is required`,
+        );
+      }
+
+      const normalizedSlabs =
+        slabRules
+          .map(
+            (
+              slab: any,
+              slabIndex: number,
+            ) => {
+              const minimumValue =
+                Number(
+                  slab.minimumValue,
+                );
+
+              const maximumValue =
+                slab.maximumValue ===
+                  null ||
+                slab.maximumValue ===
+                  undefined ||
+                slab.maximumValue ===
+                  ''
+                  ? null
+                  : Number(
+                      slab.maximumValue,
+                    );
+
+              if (
+                !Number.isFinite(
+                  minimumValue,
+                ) ||
+                minimumValue < 0
+              ) {
+                throw new BadRequestException(
+                  `${componentLabel}: slab ${
+                    slabIndex + 1
+                  } minimum value is invalid`,
+                );
+              }
+
+              if (
+                maximumValue !==
+                  null &&
+                (
+                  !Number.isFinite(
+                    maximumValue,
+                  ) ||
+                  maximumValue <
+                    minimumValue
+                )
+              ) {
+                throw new BadRequestException(
+                  `${componentLabel}: slab ${
+                    slabIndex + 1
+                  } maximum value must be greater than or equal to its minimum value`,
+                );
+              }
+
+              const percentageRate =
+                slab.percentageRate ===
+                  null ||
+                slab.percentageRate ===
+                  undefined ||
+                slab.percentageRate ===
+                  ''
+                  ? 0
+                  : Number(
+                      slab.percentageRate,
+                    );
+
+              if (
+                !Number.isFinite(
+                  percentageRate,
+                ) ||
+                percentageRate < 0 ||
+                percentageRate > 100
+              ) {
+                throw new BadRequestException(
+                  `${componentLabel}: slab ${
+                    slabIndex + 1
+                  } percentage must be between 0 and 100`,
+                );
+              }
+
+              const rateAmount =
+                Number(
+                  slab.rateAmount ||
+                    0,
+                );
+
+              const flatAmount =
+                Number(
+                  slab.flatAmount ||
+                    0,
+                );
+
+              if (
+                !Number.isFinite(
+                  rateAmount,
+                ) ||
+                rateAmount < 0 ||
+                !Number.isFinite(
+                  flatAmount,
+                ) ||
+                flatAmount < 0
+              ) {
+                throw new BadRequestException(
+                  `${componentLabel}: slab ${
+                    slabIndex + 1
+                  } contains an invalid amount`,
+                );
+              }
+
+              if (
+                percentageRate <= 0 &&
+                rateAmount <= 0 &&
+                flatAmount <= 0
+              ) {
+                throw new BadRequestException(
+                  `${componentLabel}: slab ${
+                    slabIndex + 1
+                  } must contain a percentage, rate, or flat amount`,
+                );
+              }
+
+              return {
+                minimumValue,
+                maximumValue,
+              };
+            },
+          )
+          .sort(
+            (first, second) =>
+              first.minimumValue -
+              second.minimumValue,
+          );
+
+      for (
+        let slabIndex = 1;
+        slabIndex <
+        normalizedSlabs.length;
+        slabIndex += 1
+      ) {
+        const previous =
+          normalizedSlabs[
+            slabIndex - 1
+          ];
+
+        const current =
+          normalizedSlabs[
+            slabIndex
+          ];
+
+        if (
+          previous.maximumValue ===
+          null
+        ) {
+          throw new BadRequestException(
+            `${componentLabel}: an open-ended slab must be the final slab`,
+          );
+        }
+
+        if (
+          current.minimumValue <=
+          previous.maximumValue
+        ) {
+          throw new BadRequestException(
+            `${componentLabel}: slab ranges cannot overlap`,
+          );
+        }
+      }
+
+      if (
+        component
+          .slabCalculationMode ===
+          'SEQUENTIAL_PROJECT_MARGIN'
+      ) {
+        if (
+          !component
+            .slabSelectorMetricType
+        ) {
+          throw new BadRequestException(
+            `${componentLabel}: slab selector metric is required for sequential project-margin calculation`,
+          );
+        }
+      }
+    }
+
+    if (
+      component.calculationType ===
+        StaffPayrollIncentiveCalculationType
+          .POOL_SHARE
+    ) {
+      if (
+        !component
+          .poolCompanyMetricType
+      ) {
+        throw new BadRequestException(
+          `${componentLabel}: company pool metric is required`,
+        );
+      }
+
+      if (
+        !component
+          .poolDivisorMode
+      ) {
+        throw new BadRequestException(
+          `${componentLabel}: pool divisor mode is required`,
+        );
+      }
+
+      if (
+        component.poolDivisorMode ===
+          'FIXED_DIVISOR' &&
+        Number(
+          component.fixedPoolDivisor ||
+            0,
+        ) <= 0
+      ) {
+        throw new BadRequestException(
+          `${componentLabel}: fixed pool divisor must be greater than zero`,
+        );
+      }
+    }
+  }
+
+  const effectiveFrom =
+    body.effectiveFrom
+      ? String(
+          body.effectiveFrom,
+        )
+      : null;
+
+  const effectiveTo =
+    body.effectiveTo
+      ? String(body.effectiveTo)
+      : null;
+
+  if (
+    effectiveFrom &&
+    effectiveTo &&
+    effectiveTo < effectiveFrom
+  ) {
+    throw new BadRequestException(
+      'Effective-to date cannot be earlier than effective-from date',
+    );
+  }
+
+  return {
+    ruleName,
+    scope,
+    applicableRole:
+      applicableRole || null,
+    staffId,
+    salaryMode,
+    targetCalculationMode,
+    maximumSalaryPercentage,
+    eligibilityConditions,
+    incentiveComponents,
+    effectiveFrom,
+    effectiveTo,
+  };
+}
+
+async listStaffPayrollRules(
+  query: any,
+) {
+  const page = Math.max(
+    Number(query.page || 1),
+    1,
+  );
+
+  const limit = Math.min(
+    Math.max(
+      Number(query.limit || 20),
+      1,
+    ),
+    100,
+  );
+
+  const showHidden =
+    String(query.showHidden) ===
+    'true';
+
+  const qb =
+    this.staffPayrollRuleRepo
+      .createQueryBuilder('rule')
+      .where(
+        'rule.isHidden = :isHidden',
+        {
+          isHidden: showHidden,
+        },
+      );
+
+  if (query.applicableRole) {
+    qb.andWhere(
+      `
+      UPPER(
+        TRIM(
+          COALESCE(
+            rule.applicableRole,
+            ''
+          )
+        )
+      ) = :applicableRole
+      `,
+      {
+        applicableRole: String(
+          query.applicableRole,
+        )
+          .trim()
+          .toUpperCase(),
+      },
+    );
+  }
+
+  if (
+    query.isActive !== undefined &&
+    query.isActive !== ''
+  ) {
+    qb.andWhere(
+      'rule.isActive = :isActive',
+      {
+        isActive:
+          String(query.isActive) ===
+          'true',
+      },
+    );
+  }
+
+  if (query.search) {
+    qb.andWhere(
+      `(
+        rule.ruleName ILIKE :search
+        OR COALESCE(
+          rule.description,
+          ''
+        ) ILIKE :search
+        OR COALESCE(
+          rule.applicableRole,
+          ''
+        ) ILIKE :search
+      )`,
+      {
+        search:
+          `%${String(
+            query.search,
+          ).trim()}%`,
+      },
+    );
+  }
+
+  const [data, total] =
+    await qb
+      .orderBy(
+        'rule.isActive',
+        'DESC',
+      )
+      .addOrderBy(
+        'rule.effectiveFrom',
+        'DESC',
+        'NULLS LAST',
+      )
+      .addOrderBy(
+        'rule.updatedAt',
+        'DESC',
+      )
+      .skip(
+        (page - 1) * limit,
+      )
+      .take(limit)
+      .getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages:
+      Math.ceil(total / limit) ||
+      1,
+  };
+}
+
+async getStaffPayrollRule(
+  id: number,
+) {
+  const rule =
+    await this
+      .staffPayrollRuleRepo
+      .findOne({
+        where: {
+          id: Number(id),
+        },
+      });
+
+  if (!rule) {
+    throw new NotFoundException(
+      'Payroll rule not found',
+    );
+  }
+
+  return rule;
+}
+
+async createStaffPayrollRule(
+  body: any,
+  user: any,
+) {
+  const validated =
+    this.validateStaffPayrollRulePayload(
+      body,
+    );
+
+  const duplicateQuery =
+    this.staffPayrollRuleRepo
+      .createQueryBuilder('rule')
+      .where(
+        'rule.isHidden = false',
+      )
+      .andWhere(
+        'rule.isActive = true',
+      );
+
+  if (
+    validated.scope ===
+    StaffPayrollRuleScope.ROLE
+  ) {
+    duplicateQuery
+      .andWhere(
+        'rule.scope = :scope',
+        {
+          scope:
+            StaffPayrollRuleScope.ROLE,
+        },
+      )
+      .andWhere(
+        `
+        UPPER(
+          TRIM(
+            COALESCE(
+              rule.applicableRole,
+              ''
+            )
+          )
+        ) = :applicableRole
+        `,
+        {
+          applicableRole:
+            validated.applicableRole,
+        },
+      );
+  } else {
+    duplicateQuery
+      .andWhere(
+        'rule.scope = :scope',
+        {
+          scope:
+            StaffPayrollRuleScope.STAFF,
+        },
+      )
+      .andWhere(
+        'rule.staffId = :staffId',
+        {
+          staffId:
+            validated.staffId,
+        },
+      );
+  }
+
+  const activeRules =
+    await duplicateQuery.getMany();
+
+  const nextEffectiveFrom =
+    validated.effectiveFrom;
+
+  const nextEffectiveTo =
+    validated.effectiveTo;
+
+  const hasDateOverlap =
+    activeRules.some(
+      (existingRule) => {
+        const existingFrom =
+          existingRule.effectiveFrom ||
+          null;
+
+        const existingTo =
+          existingRule.effectiveTo ||
+          null;
+
+        return (
+          (
+            nextEffectiveTo === null ||
+            existingFrom === null ||
+            existingFrom <=
+              nextEffectiveTo
+          ) &&
+          (
+            existingTo === null ||
+            nextEffectiveFrom === null ||
+            existingTo >=
+              nextEffectiveFrom
+          )
+        );
+      },
+    );
+
+  if (
+    body.isActive !== false &&
+    hasDateOverlap
+  ) {
+    throw new BadRequestException(
+      validated.scope ===
+        StaffPayrollRuleScope.ROLE
+        ? `An active payroll rule already overlaps this date range for ${validated.applicableRole}`
+        : 'An active payroll rule already overlaps this date range for the selected staff member',
+    );
+  }
+
+  const rule =
+    this.staffPayrollRuleRepo.create({
+      ...body,
+
+      ruleName:
+        validated.ruleName,
+
+      scope:
+        validated.scope,
+
+      applicableRole:
+        validated.applicableRole,
+
+      staffId:
+        validated.staffId,
+
+      staffName:
+        String(
+          body.staffName || '',
+        ).trim() || null,
+
+      effectiveFrom:
+        validated.effectiveFrom,
+
+      effectiveTo:
+        validated.effectiveTo,
+
+      salaryMode:
+        validated.salaryMode,
+
+      salaryMetricType:
+        body.salaryMetricType ||
+        null,
+
+      salaryCustomMetricName:
+        String(
+          body.salaryCustomMetricName ||
+            '',
+        ).trim() || null,
+
+      salaryTargetValue:
+        Number(
+          body.salaryTargetValue ||
+            0,
+        ),
+
+      targetCalculationMode:
+        validated.targetCalculationMode,
+
+      targetMultiplierMetricType:
+        body.targetMultiplierMetricType ||
+        null,
+
+      teamMemberTargetValue:
+        Number(
+          body.teamMemberTargetValue ||
+            0,
+        ),
+
+      maximumSalaryPercentage:
+        validated
+          .maximumSalaryPercentage,
+
+      attendanceTargetHours:
+        Number(
+          body.attendanceTargetHours ||
+            0,
+        ),
+
+      attendanceTargetDays:
+        Number(
+          body.attendanceTargetDays ||
+            0,
+        ),
+
+      attendanceTargetPercentage:
+        Number(
+          body
+            .attendanceTargetPercentage ||
+            0,
+        ),
+
+      eligibilityConditions:
+        validated
+          .eligibilityConditions,
+
+      incentiveComponents:
+        validated
+          .incentiveComponents,
+
+      requireAllEligibilityConditions:
+        body
+          .requireAllEligibilityConditions !==
+        false,
+
+      allowProportionalSalaryOnEligibilityFailure:
+        body
+          .allowProportionalSalaryOnEligibilityFailure ===
+        true,
+
+      maximumSalaryAmount:
+        body.maximumSalaryAmount ===
+          null ||
+        body.maximumSalaryAmount ===
+          undefined ||
+        body.maximumSalaryAmount ===
+          ''
+          ? null
+          : Number(
+              body.maximumSalaryAmount,
+            ),
+
+      maximumIncentiveAmount:
+        body.maximumIncentiveAmount ===
+          null ||
+        body.maximumIncentiveAmount ===
+          undefined ||
+        body.maximumIncentiveAmount ===
+          ''
+          ? null
+          : Number(
+              body.maximumIncentiveAmount,
+            ),
+
+      additionalSettings:
+        body.additionalSettings &&
+        typeof body.additionalSettings ===
+          'object'
+          ? body.additionalSettings
+          : {},
+
+      version:
+        Math.max(
+          Number(body.version || 1),
+          1,
+        ),
+
+      description:
+        String(
+          body.description || '',
+        ).trim() || null,
+
+      isActive:
+        body.isActive !== false,
+
+      isHidden: false,
+
+      createdBy:
+        user?.id || null,
+
+      createdByName:
+        user?.name || '',
+
+      updatedBy:
+        user?.id || null,
+
+      updatedByName:
+        user?.name || '',
+    });
+
+  return this.staffPayrollRuleRepo.save(
+    rule,
+  );
+}
+
+async updateStaffPayrollRule(
+  id: number,
+  body: any,
+  user: any,
+) {
+  const rule =
+    await this.staffPayrollRuleRepo
+      .findOne({
+        where: {
+          id: Number(id),
+        },
+      });
+
+  if (!rule) {
+    throw new NotFoundException(
+      'Payroll rule not found',
+    );
+  }
+
+  const mergedPayload = {
+    ...rule,
+    ...body,
+
+    eligibilityConditions:
+      body.eligibilityConditions ===
+      undefined
+        ? rule.eligibilityConditions
+        : body.eligibilityConditions,
+
+    incentiveComponents:
+      body.incentiveComponents ===
+      undefined
+        ? rule.incentiveComponents
+        : body.incentiveComponents,
+  };
+
+  const validated =
+    this.validateStaffPayrollRulePayload(
+      mergedPayload,
+    );
+
+  const nextIsActive =
+    body.isActive === undefined
+      ? rule.isActive
+      : Boolean(body.isActive);
+
+  const duplicateQuery =
+    this.staffPayrollRuleRepo
+      .createQueryBuilder('otherRule')
+      .where(
+        'otherRule.id != :ruleId',
+        {
+          ruleId: rule.id,
+        },
+      )
+      .andWhere(
+        'otherRule.isHidden = false',
+      )
+      .andWhere(
+        'otherRule.isActive = true',
+      );
+
+  if (
+    validated.scope ===
+    StaffPayrollRuleScope.ROLE
+  ) {
+    duplicateQuery
+      .andWhere(
+        'otherRule.scope = :scope',
+        {
+          scope:
+            StaffPayrollRuleScope.ROLE,
+        },
+      )
+      .andWhere(
+        `
+        UPPER(
+          TRIM(
+            COALESCE(
+              otherRule.applicableRole,
+              ''
+            )
+          )
+        ) = :applicableRole
+        `,
+        {
+          applicableRole:
+            validated.applicableRole,
+        },
+      );
+  } else {
+    duplicateQuery
+      .andWhere(
+        'otherRule.scope = :scope',
+        {
+          scope:
+            StaffPayrollRuleScope.STAFF,
+        },
+      )
+      .andWhere(
+        'otherRule.staffId = :staffId',
+        {
+          staffId:
+            validated.staffId,
+        },
+      );
+  }
+
+  const activeRules =
+    await duplicateQuery.getMany();
+
+  const hasDateOverlap =
+    activeRules.some(
+      (existingRule) => {
+        const existingFrom =
+          existingRule.effectiveFrom ||
+          null;
+
+        const existingTo =
+          existingRule.effectiveTo ||
+          null;
+
+        return (
+          (
+            validated.effectiveTo ===
+              null ||
+            existingFrom === null ||
+            existingFrom <=
+              validated.effectiveTo
+          ) &&
+          (
+            existingTo === null ||
+            validated.effectiveFrom ===
+              null ||
+            existingTo >=
+              validated.effectiveFrom
+          )
+        );
+      },
+    );
+
+  if (
+    nextIsActive &&
+    hasDateOverlap
+  ) {
+    throw new BadRequestException(
+      validated.scope ===
+        StaffPayrollRuleScope.ROLE
+        ? `Another active payroll rule overlaps this date range for ${validated.applicableRole}`
+        : 'Another active payroll rule overlaps this date range for the selected staff member',
+    );
+  }
+
+  Object.assign(rule, {
+    ruleName:
+      validated.ruleName,
+
+    description:
+      String(
+        mergedPayload.description ||
+          '',
+      ).trim() || null,
+
+    scope:
+      validated.scope,
+
+    applicableRole:
+      validated.applicableRole,
+
+    staffId:
+      validated.staffId,
+
+    staffName:
+      String(
+        mergedPayload.staffName ||
+          '',
+      ).trim() || null,
+
+    effectiveFrom:
+      validated.effectiveFrom,
+
+    effectiveTo:
+      validated.effectiveTo,
+
+    salaryMode:
+      validated.salaryMode,
+
+    salaryMetricType:
+      mergedPayload
+        .salaryMetricType ||
+      null,
+
+    salaryCustomMetricName:
+      String(
+        mergedPayload
+          .salaryCustomMetricName ||
+          '',
+      ).trim() || null,
+
+    salaryTargetValue:
+      Number(
+        mergedPayload
+          .salaryTargetValue ||
+          0,
+      ),
+
+    targetCalculationMode:
+      validated
+        .targetCalculationMode,
+
+    targetMultiplierMetricType:
+      mergedPayload
+        .targetMultiplierMetricType ||
+      null,
+
+    teamMemberTargetValue:
+      Number(
+        mergedPayload
+          .teamMemberTargetValue ||
+          0,
+      ),
+
+    maximumSalaryPercentage:
+      validated
+        .maximumSalaryPercentage,
+
+    attendanceTargetHours:
+      Number(
+        mergedPayload
+          .attendanceTargetHours ||
+          0,
+      ),
+
+    attendanceTargetDays:
+      Number(
+        mergedPayload
+          .attendanceTargetDays ||
+          0,
+      ),
+
+    attendanceTargetPercentage:
+      Number(
+        mergedPayload
+          .attendanceTargetPercentage ||
+          0,
+      ),
+
+    eligibilityConditions:
+      validated
+        .eligibilityConditions,
+
+    incentiveComponents:
+      validated
+        .incentiveComponents,
+
+    requireAllEligibilityConditions:
+      mergedPayload
+        .requireAllEligibilityConditions !==
+      false,
+
+    allowProportionalSalaryOnEligibilityFailure:
+      mergedPayload
+        .allowProportionalSalaryOnEligibilityFailure ===
+      true,
+
+    maximumSalaryAmount:
+      mergedPayload
+          .maximumSalaryAmount ===
+        null ||
+      mergedPayload
+          .maximumSalaryAmount ===
+        undefined ||
+      mergedPayload
+          .maximumSalaryAmount ===
+        ''
+        ? null
+        : Number(
+            mergedPayload
+              .maximumSalaryAmount,
+          ),
+
+    maximumIncentiveAmount:
+      mergedPayload
+          .maximumIncentiveAmount ===
+        null ||
+      mergedPayload
+          .maximumIncentiveAmount ===
+        undefined ||
+      mergedPayload
+          .maximumIncentiveAmount ===
+        ''
+        ? null
+        : Number(
+            mergedPayload
+              .maximumIncentiveAmount,
+          ),
+
+    additionalSettings:
+      mergedPayload
+        .additionalSettings &&
+      typeof mergedPayload
+        .additionalSettings ===
+        'object'
+        ? mergedPayload
+            .additionalSettings
+        : {},
+
+    version:
+      Number(rule.version || 1) +
+      1,
+
+    isActive:
+      nextIsActive,
+
+    updatedBy:
+      user?.id || null,
+
+    updatedByName:
+      user?.name || '',
+  });
+
+  return this.staffPayrollRuleRepo.save(
+    rule,
+  );
+}
+
+async hideStaffPayrollRule(
+  id: number,
+  body: any,
+  user: any,
+) {
+  const rule =
+    await this.staffPayrollRuleRepo.findOne({
+      where: {
+        id: Number(id),
+      },
+    });
+
+  if (!rule) {
+    throw new NotFoundException(
+      'Payroll rule not found',
+    );
+  }
+
+  rule.isHidden = true;
+  rule.isActive = false;
+
+  rule.hiddenAt = new Date();
+  rule.hiddenBy =
+    user?.id || null;
+  rule.hiddenByName =
+    user?.name || '';
+  rule.hiddenReason =
+    String(
+      body?.reason || '',
+    ).trim();
+
+  return this.staffPayrollRuleRepo.save(
+    rule,
+  );
+}
+
+async restoreStaffPayrollRule(
+  id: number,
+  body: any,
+  user: any,
+) {
+  const rule =
+    await this.staffPayrollRuleRepo.findOne({
+      where: {
+        id: Number(id),
+      },
+    });
+
+  if (!rule) {
+    throw new NotFoundException(
+      'Payroll rule not found',
+    );
+  }
+
+  const restoredPayload = {
+    ...rule,
+    isHidden: false,
+    isActive:
+      body?.isActive === undefined
+        ? true
+        : Boolean(body.isActive),
+  };
+
+  const validated =
+    this.validateStaffPayrollRulePayload(
+      restoredPayload,
+    );
+
+  if (
+    restoredPayload.isActive === true
+  ) {
+    const duplicateQuery =
+      this.staffPayrollRuleRepo
+        .createQueryBuilder(
+          'otherRule',
+        )
+        .where(
+          'otherRule.id != :ruleId',
+          {
+            ruleId: rule.id,
+          },
+        )
+        .andWhere(
+          'otherRule.isHidden = false',
+        )
+        .andWhere(
+          'otherRule.isActive = true',
+        );
+
+    if (
+      validated.scope ===
+      StaffPayrollRuleScope.ROLE
+    ) {
+      duplicateQuery
+        .andWhere(
+          'otherRule.scope = :scope',
+          {
+            scope:
+              StaffPayrollRuleScope.ROLE,
+          },
+        )
+        .andWhere(
+          `
+          UPPER(
+            TRIM(
+              COALESCE(
+                otherRule.applicableRole,
+                ''
+              )
+            )
+          ) = :applicableRole
+          `,
+          {
+            applicableRole:
+              validated.applicableRole,
+          },
+        );
+    } else {
+      duplicateQuery
+        .andWhere(
+          'otherRule.scope = :scope',
+          {
+            scope:
+              StaffPayrollRuleScope.STAFF,
+          },
+        )
+        .andWhere(
+          'otherRule.staffId = :staffId',
+          {
+            staffId:
+              validated.staffId,
+          },
+        );
+    }
+
+    const activeRules =
+      await duplicateQuery.getMany();
+
+    const hasDateOverlap =
+      activeRules.some(
+        (existingRule) => {
+          const existingFrom =
+            existingRule
+              .effectiveFrom ||
+            null;
+
+          const existingTo =
+            existingRule
+              .effectiveTo ||
+            null;
+
+          return (
+            (
+              validated.effectiveTo ===
+                null ||
+              existingFrom === null ||
+              existingFrom <=
+                validated.effectiveTo
+            ) &&
+            (
+              existingTo === null ||
+              validated.effectiveFrom ===
+                null ||
+              existingTo >=
+                validated.effectiveFrom
+            )
+          );
+        },
+      );
+
+    if (hasDateOverlap) {
+      throw new BadRequestException(
+        validated.scope ===
+          StaffPayrollRuleScope.ROLE
+          ? `Another active payroll rule overlaps this date range for ${validated.applicableRole}`
+          : 'Another active payroll rule overlaps this date range for the selected staff member',
+      );
+    }
+  }
+
+  rule.isHidden = false;
+  rule.isActive =
+    restoredPayload.isActive;
+
+  rule.restoredAt =
+    new Date();
+  rule.restoredBy =
+    user?.id || null;
+  rule.restoredByName =
+    user?.name || '';
+  rule.restoreReason =
+    String(
+      body?.reason || '',
+    ).trim();
+
+  return this.staffPayrollRuleRepo.save(
+    rule,
+  );
+}
+
+private async calculateStaffPayrollByRole(
+  staff: StaffMember,
+  payrollMonth: string,
+  basicSalary: number,
+) {
+  const linkedUserId = Number(
+    staff.linkedUserId || 0,
+  );
+
+  /*
+   * Supporting staff use their own payroll rule,
+   * regardless of the CRM role stored against them.
+   */
+  if (staff.isSupportingStaff === true) {
+    return this.payrollCalculator
+      .calculateSupportingStaffPayroll(
+        payrollMonth,
+        linkedUserId,
+        basicSalary,
+      );
+  }
+
+  const normalizedRole = String(
+    staff.staffRole || '',
+  )
+    .trim()
+    .toUpperCase();
+
+  switch (normalizedRole) {
+    case 'MEETING_MANAGER':
+      return this.payrollCalculator
+        .calculateMeetingManagerPayroll(
+          payrollMonth,
+          linkedUserId,
+          basicSalary,
+        );
+
+    case 'LEAD_MANAGER':
+      return this.payrollCalculator
+        .calculateLeadManagerPayroll(
+          payrollMonth,
+          linkedUserId,
+          basicSalary,
+        );
+
+        case 'TELECALLING_MANAGER':
+  return this.payrollCalculator
+    .calculateTelecallingManagerPayroll(
+      payrollMonth,
+      linkedUserId,
+      basicSalary,
+    );
+
+    case 'TELECALLER':
+      return this.payrollCalculator
+        .calculateTelecallerPayroll(
+          payrollMonth,
+          linkedUserId,
+          basicSalary,
+        );
+
+    case 'MEETING_ASSISTANT':
+      return this.payrollCalculator
+        .calculateMeetingAssistantPayroll(
+          payrollMonth,
+          linkedUserId,
+          basicSalary,
+        );
+
+    case 'TRADING_MANAGER':
+      return this.payrollCalculator
+        .calculateTradingManagerPayroll(
+          payrollMonth,
+          linkedUserId,
+          basicSalary,
+        );
+
+    case 'TRADING_HEAD':
+      return this.payrollCalculator
+        .calculateTradingHeadPayroll(
+          payrollMonth,
+          linkedUserId,
+          basicSalary,
+        );
+
+    case 'HR_MANAGER':
+      return this.payrollCalculator
+        .calculateHrPayroll(
+          payrollMonth,
+          linkedUserId,
+          basicSalary,
+        );
+
+    case 'SOLAR_FRANCHISE':
+      return this.payrollCalculator
+        .calculateSolarFranchisePayroll(
+          payrollMonth,
+          linkedUserId,
+          basicSalary,
+        );
+
+    default:
+      throw new BadRequestException(
+        `Payroll calculation is not configured for staff role: ${
+          normalizedRole || 'UNASSIGNED'
+        }`,
+      );
+  }
+}
+
 private calculateMonthDays(payrollMonth: string) {
   const [year, month] = String(payrollMonth).split('-').map(Number);
 
@@ -1545,35 +3326,106 @@ async generatePayroll(body: any, user: any) {
   }
 
   const basicSalary = Number(body.basicSalary || 0);
-  const monthDays = this.calculateMonthDays(body.payrollMonth);
-  const perDaySalary = monthDays > 0 ? basicSalary / monthDays : 0;
+  const payrollCalculation =
+  await this.calculateStaffPayrollByRole(
+    staff,
+    body.payrollMonth,
+    basicSalary,
+  );
+  const calculation: any = payrollCalculation;
 
-  const presentDays = Number(body.presentDays || 0);
-  const halfDays = Number(body.halfDays || 0);
-  const absentDays = Number(body.absentDays || 0);
-  const leaveDays = Number(body.leaveDays || 0);
+  const eligibilityMet = Boolean(
+  calculation?.eligibility?.met ??
+    calculation?.eligibility?.eligible ??
+    calculation?.eligibility?.isEligible ??
+    false,
+);
 
-  const attendanceDeduction =
-    absentDays * perDaySalary + halfDays * (perDaySalary / 2);
+const eligibilityReason = String(
+  calculation?.eligibility?.reason || '',
+);
 
-  const leaveDeduction = Number(body.leaveDeduction || 0);
-  const penaltyAmount = Number(body.penaltyAmount || 0);
-  const incentiveAmount = Number(body.incentiveAmount || 0);
-  const otherAllowance = Number(body.otherAllowance || 0);
-  const otherDeduction = Number(body.otherDeduction || 0);
+const salaryPercentage = Number(
+  calculation?.salary?.salaryPercentage ??
+    calculation?.salary?.percentage ??
+    0,
+);
 
-  const grossSalary = basicSalary + incentiveAmount + otherAllowance;
+const actualMetrics =
+  calculation?.actualMetrics || {};
 
-  const netSalary =
-    grossSalary -
-    attendanceDeduction -
-    leaveDeduction -
-    penaltyAmount -
-    otherDeduction;
+const calculatedSalaryAmount = Number(
+  calculation?.salary?.salaryAmount ??
+    calculation?.salary?.amount ??
+    0,
+);
+
+const incentiveAmount = Number(
+  calculation?.incentives?.totalAmount ??
+    calculation?.incentives?.amount ??
+    0,
+);
+
+const monthDays =
+  this.calculateMonthDays(body.payrollMonth);
+
+const perDaySalary =
+  monthDays > 0
+    ? calculatedSalaryAmount / monthDays
+    : 0;
+
+const presentDays = Number(
+  body.presentDays || 0,
+);
+
+const halfDays = Number(
+  body.halfDays || 0,
+);
+
+const absentDays = Number(
+  body.absentDays || 0,
+);
+
+const leaveDays = Number(
+  body.leaveDays || 0,
+);
+
+const attendanceDeduction =
+  absentDays * perDaySalary +
+  halfDays * (perDaySalary / 2);
+
+const leaveDeduction = Number(
+  body.leaveDeduction || 0,
+);
+
+const penaltyAmount = Number(
+  body.penaltyAmount || 0,
+);
+
+const otherAllowance = Number(
+  body.otherAllowance || 0,
+);
+
+const otherDeduction = Number(
+  body.otherDeduction || 0,
+);
+
+const grossSalary =
+  calculatedSalaryAmount +
+  incentiveAmount +
+  otherAllowance;
+
+const netSalary =
+  grossSalary -
+  attendanceDeduction -
+  leaveDeduction -
+  penaltyAmount -
+  otherDeduction;
 
   const payroll = this.payrollRepo.create({
     staffId: staff.id,
-    staffName: staff.fullName,
+linkedUserId: staff.linkedUserId || undefined,
+staffName: staff.fullName,
     employeeCode: staff.employeeCode || '',
     staffRole: staff.staffRole || '',
     department: staff.department || '',
@@ -1585,7 +3437,67 @@ async generatePayroll(body: any, user: any) {
     absentDays,
     leaveDays,
     workingHours: Number(body.workingHours || 0),
-    attendanceDeduction,
+
+eligibilityMet,
+eligibilityReason,
+salaryPercentage,
+
+actualLeads: Number(
+  actualMetrics.actualLeads ??
+    actualMetrics.leads ??
+    0,
+),
+
+actualMeetings: Number(
+  actualMetrics.actualMeetings ??
+    actualMetrics.meetings ??
+    0,
+),
+
+actualGpsMeetings: Number(
+  actualMetrics.actualGpsMeetings ??
+    actualMetrics.gpsMeetings ??
+    0,
+),
+
+actualScheduledMeetings: Number(
+  actualMetrics.actualScheduledMeetings ??
+    actualMetrics.scheduledMeetings ??
+    0,
+),
+
+actualOrders: Number(
+  actualMetrics.actualOrders ??
+    actualMetrics.orders ??
+    0,
+),
+
+actualSales: Number(
+  actualMetrics.actualSales ??
+    actualMetrics.sales ??
+    0,
+),
+
+actualNetProfit: Number(
+  actualMetrics.actualNetProfit ??
+    actualMetrics.netProfit ??
+    0,
+),
+
+actualJoinings: Number(
+  actualMetrics.actualJoinings ??
+    actualMetrics.joinings ??
+    0,
+),
+
+actualWorkingHours: Number(
+  actualMetrics.actualWorkingHours ??
+    actualMetrics.workingHours ??
+    body.workingHours ??
+    0,
+),
+
+attendanceDeduction,
     leaveDeduction,
     penaltyAmount,
     incentiveAmount,
@@ -1595,7 +3507,14 @@ async generatePayroll(body: any, user: any) {
     netSalary,
     status: 'GENERATED' as any,
     remarks: body.remarks || '',
-    generatedBy: user?.id || null,
+
+calculationSnapshot:
+  payrollCalculation.calculationSnapshot || null,
+
+ruleSnapshot:
+  payrollCalculation.ruleSnapshot || null,
+
+generatedBy: user?.id || null,
     generatedByName: user?.name || '',
     isHidden: false,
   });
@@ -2013,6 +3932,23 @@ async updateRecruitmentCandidate(id: number, body: any, user: any) {
     throw new NotFoundException('Candidate not found');
   }
 
+  const previousStage =
+  item.stage;
+
+const nextStage =
+  body.stage ??
+  item.stage;
+
+const nextJoiningDate =
+  body.joiningDate ??
+  item.joiningDate;
+
+const isNewlyMarkedJoined =
+  previousStage !==
+    RecruitmentStage.JOINED &&
+  nextStage ===
+    RecruitmentStage.JOINED;
+
   Object.assign(item, {
     candidateName: body.candidateName ?? item.candidateName,
     mobile: body.mobile ?? item.mobile,
@@ -2051,6 +3987,29 @@ async updateRecruitmentCandidate(id: number, body: any, user: any) {
     updatedBy: user?.id || null,
     updatedByName: user?.name || '',
   });
+
+  /*
+ * Capture permanent HR payroll credit only
+ * when the candidate first becomes JOINED.
+ *
+ * Later edits must not overwrite this credit.
+ */
+if (isNewlyMarkedJoined) {
+  if (!nextJoiningDate) {
+    throw new BadRequestException(
+      'Joining date is required when marking candidate as joined',
+    );
+  }
+
+  item.joinedBy =
+    user?.id || null;
+
+  item.joinedByName =
+    user?.name || '';
+
+  item.joinedAt =
+    new Date();
+}
 
   return this.recruitmentRepo.save(item);
 }

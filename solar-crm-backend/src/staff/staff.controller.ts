@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   Patch,
+  Req,
   ParseIntPipe,
   Post,
   Query,
@@ -13,6 +14,16 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { StaffService } from './staff.service';
+import {
+  StaffPayrollMetricCatalogueService,
+} from './staff-payroll-metric-catalogue.service';
+import {
+  StaffPayrollMetricResolverService,
+} from './staff-payroll-metric-resolver.service';
+
+import {
+  StaffPayrollMetricType,
+} from './staff-payroll-rule.entity';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -23,7 +34,174 @@ import { FilesInterceptor } from '@nestjs/platform-express';
 @Roles('OWNER', 'HR_MANAGER')
 @Controller('staff')
 export class StaffController {
-  constructor(private readonly staffService: StaffService) {}
+  constructor(
+  private readonly staffService:
+    StaffService,
+
+  private readonly payrollMetricCatalogueService:
+    StaffPayrollMetricCatalogueService,
+
+  private readonly payrollMetricResolverService:
+    StaffPayrollMetricResolverService,
+) {}
+
+@Get('payroll-metric-catalogue')
+getPayrollMetricCatalogue(
+  @Query('role') role?: string,
+) {
+  const normalizedRole = String(
+    role || '',
+  )
+    .trim()
+    .toUpperCase();
+
+  if (normalizedRole) {
+    return {
+      role: normalizedRole,
+
+      data:
+        this.payrollMetricCatalogueService.getForRole(
+          normalizedRole,
+        ),
+    };
+  }
+
+  return {
+    role: null,
+
+    data:
+      this.payrollMetricCatalogueService.getAll(),
+  };
+}
+
+@Get('payroll-metric-preview')
+async previewPayrollMetric(
+  @Query('metricType')
+  metricType?: string,
+
+  @Query('staffId')
+  staffId?: string,
+
+  @Query('linkedUserId')
+  linkedUserId?: string,
+
+  @Query('staffRole')
+  staffRole?: string,
+
+  @Query('periodStart')
+  periodStart?: string,
+
+  @Query('periodEnd')
+  periodEnd?: string,
+) {
+  const normalizedMetricType =
+    String(metricType || '')
+      .trim()
+      .toUpperCase();
+
+  if (
+    !Object.values(
+      StaffPayrollMetricType,
+    ).includes(
+      normalizedMetricType as
+        StaffPayrollMetricType,
+    )
+  ) {
+    throw new BadRequestException(
+      'Valid payroll metric type is required',
+    );
+  }
+
+  const normalizedStaffId =
+    Number(staffId || 0);
+
+  if (
+    !Number.isInteger(
+      normalizedStaffId,
+    ) ||
+    normalizedStaffId <= 0
+  ) {
+    throw new BadRequestException(
+      'Valid staff ID is required',
+    );
+  }
+
+  const normalizedLinkedUserId =
+    Number(linkedUserId || 0);
+
+  const startDate =
+    new Date(
+      String(periodStart || ''),
+    );
+
+  const endDate =
+    new Date(
+      String(periodEnd || ''),
+    );
+
+  if (
+    Number.isNaN(
+      startDate.getTime(),
+    ) ||
+    Number.isNaN(
+      endDate.getTime(),
+    )
+  ) {
+    throw new BadRequestException(
+      'Valid periodStart and periodEnd are required',
+    );
+  }
+
+  const value =
+    await this.payrollMetricResolverService.resolve({
+      metricType:
+        normalizedMetricType as
+          StaffPayrollMetricType,
+
+      staffId:
+        normalizedStaffId,
+
+      linkedUserId:
+        normalizedLinkedUserId ||
+        null,
+
+      staffRole:
+        String(staffRole || '')
+          .trim()
+          .toUpperCase(),
+
+      periodStart:
+        startDate,
+
+      periodEnd:
+        endDate,
+    });
+
+  return {
+    metricType:
+      normalizedMetricType,
+
+    staffId:
+      normalizedStaffId,
+
+    linkedUserId:
+      normalizedLinkedUserId ||
+      null,
+
+    staffRole:
+      String(staffRole || '')
+        .trim()
+        .toUpperCase(),
+
+    periodStart:
+      startDate,
+
+    periodEnd:
+      endDate,
+
+    value,
+  };
+}
 
   @Get()
   findAll(@Query() query: any) {
@@ -455,6 +633,80 @@ restoreHrSetting(
   @CurrentUser() user: any,
 ) {
   return this.staffService.restoreHrSetting(Number(id), body, user);
+}
+
+@Get('payroll-rules')
+listStaffPayrollRules(
+  @Query() query: any,
+) {
+  return this.staffService
+    .listStaffPayrollRules(
+      query,
+    );
+}
+
+@Get('payroll-rule/:id')
+getStaffPayrollRule(
+  @Param('id') id: string,
+) {
+  return this.staffService
+    .getStaffPayrollRule(
+      Number(id),
+    );
+}
+
+@Post('payroll-rule')
+createStaffPayrollRule(
+  @Body() body: any,
+  @Req() req: any,
+) {
+  return this.staffService
+    .createStaffPayrollRule(
+      body,
+      req.user,
+    );
+}
+
+@Patch('payroll-rule/:id')
+updateStaffPayrollRule(
+  @Param('id') id: string,
+  @Body() body: any,
+  @Req() req: any,
+) {
+  return this.staffService
+    .updateStaffPayrollRule(
+      Number(id),
+      body,
+      req.user,
+    );
+}
+
+@Patch('payroll-rule/:id/hide')
+hideStaffPayrollRule(
+  @Param('id') id: string,
+  @Body() body: any,
+  @Req() req: any,
+) {
+  return this.staffService
+    .hideStaffPayrollRule(
+      Number(id),
+      body,
+      req.user,
+    );
+}
+
+@Patch('payroll-rule/:id/restore')
+restoreStaffPayrollRule(
+  @Param('id') id: string,
+  @Body() body: any,
+  @Req() req: any,
+) {
+  return this.staffService
+    .restoreStaffPayrollRule(
+      Number(id),
+      body,
+      req.user,
+    );
 }
 
 @Get('payrolls')

@@ -287,6 +287,23 @@ finalCost: number;
   @Column({ nullable: true, default: 0 })
   expectedProfit: number;
 
+  /*
+ * Final applicable business margin saved
+ * against this project.
+ *
+ * It may originate from the calculator or be
+ * entered/adjusted by an authorized project user.
+ *
+ * Solar Franchise payout uses this value.
+ */
+@Column({
+  type: 'decimal',
+  precision: 14,
+  scale: 2,
+  default: 0,
+})
+applicableMargin: number;
+
   @Column({
     type: 'enum',
     enum: ProjectStatus,
