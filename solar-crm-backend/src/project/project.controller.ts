@@ -1409,6 +1409,444 @@ recordVendorPayment(
   );
 }
 
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+)
+@Post('vendor-management/companies')
+createVendorManagementCompany(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService
+    .createVendorManagementCompany(
+      body,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+)
+@Get('vendor-management/companies')
+listVendorManagementCompanies(
+  @Query() query: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService
+    .listVendorManagementCompanies(
+      query,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+)
+@Patch('vendor-management/companies/:id')
+updateVendorManagementCompany(
+  @Param('id', ParseIntPipe)
+  id: number,
+
+  @Body()
+  body: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .updateVendorManagementCompany(
+      id,
+      body,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+)
+@Patch(
+  'vendor-management/companies/:id/hide',
+)
+hideVendorManagementCompany(
+  @Param('id', ParseIntPipe)
+  id: number,
+
+  @Body()
+  body: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .hideVendorManagementCompany(
+      id,
+      body,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+)
+@Patch(
+  'vendor-management/companies/:id/restore',
+)
+restoreVendorManagementCompany(
+  @Param('id', ParseIntPipe)
+  id: number,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .restoreVendorManagementCompany(
+      id,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+)
+@Get('vendor-management/vendors')
+listVendorManagementVendors(
+  @Query()
+  query: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .listVendorManagementVendors(
+      query,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+)
+@Get('vendor-management/purchase-orders')
+listVendorManagementPurchaseOrders(
+  @Query()
+  query: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .listVendorManagementPurchaseOrders(
+      query,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+)
+@Post('vendor-management/bills')
+createVendorManagementBill(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService
+    .createVendorManagementBill(
+      body,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+)
+@Get('vendor-management/bills')
+listVendorManagementBills(
+  @Query() query: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService
+    .listVendorManagementBills(
+      query,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+)
+@Get('vendor-management/bills/:id')
+getVendorManagementBill(
+  @Param('id', ParseIntPipe)
+  id: number,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .getVendorManagementBill(
+      id,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+)
+@Patch('vendor-management/bills/:id')
+updateVendorManagementBill(
+  @Param('id', ParseIntPipe)
+  id: number,
+
+  @Body()
+  body: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .updateVendorManagementBill(
+      id,
+      body,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+)
+@Patch(
+  'vendor-management/bills/:id/hide',
+)
+hideVendorManagementBill(
+  @Param('id', ParseIntPipe)
+  id: number,
+
+  @Body()
+  body: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .hideVendorManagementBill(
+      id,
+      body,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+)
+@Patch(
+  'vendor-management/bills/:id/restore',
+)
+restoreVendorManagementBill(
+  @Param('id', ParseIntPipe)
+  id: number,
+
+  @Body()
+  body: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .restoreVendorManagementBill(
+      id,
+      body,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+)
+@Post('vendor-management/payments')
+createVendorManagementPayment(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService
+    .createVendorManagementPayment(
+      body,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+)
+@Get('vendor-management/payments')
+listVendorManagementPayments(
+  @Query() query: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService
+    .listVendorManagementPayments(
+      query,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+)
+@Get('vendor-management/payments/:id')
+getVendorManagementPayment(
+  @Param('id', ParseIntPipe)
+  id: number,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .getVendorManagementPayment(
+      id,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+)
+@Patch(
+  'vendor-management/payments/:id/hide',
+)
+hideVendorManagementPayment(
+  @Param('id', ParseIntPipe)
+  id: number,
+
+  @Body()
+  body: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .hideVendorManagementPayment(
+      id,
+      body,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+)
+@Patch(
+  'vendor-management/payments/:id/restore',
+)
+restoreVendorManagementPayment(
+  @Param('id', ParseIntPipe)
+  id: number,
+
+  @Body()
+  body: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .restoreVendorManagementPayment(
+      id,
+      body,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+)
+@Post(
+  'vendor-management/bills/documents/upload',
+)
+@UseInterceptors(
+  FilesInterceptor(
+    'files',
+    10,
+    {
+      limits: {
+        fileSize:
+          12 * 1024 * 1024,
+      },
+    },
+  ),
+)
+uploadVendorManagementBillDocuments(
+  @UploadedFiles()
+  files: any[],
+
+  @Body()
+  body: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .uploadVendorManagementBillDocuments(
+      files,
+      body,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+)
+@Post(
+  'vendor-management/payments/receipts/upload',
+)
+@UseInterceptors(
+  FilesInterceptor(
+    'files',
+    10,
+    {
+      limits: {
+        fileSize:
+          12 * 1024 * 1024,
+      },
+    },
+  ),
+)
+uploadVendorManagementPaymentReceipts(
+  @UploadedFiles()
+  files: any[],
+
+  @Body()
+  body: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .uploadVendorManagementPaymentReceipts(
+      files,
+      body,
+      user,
+    );
+}
+
 @Get('ledger/party-outstanding')
 getPartyOutstanding(@Query() query: any) {
   return this.projectService.getPartyOutstandingPaginated(query);

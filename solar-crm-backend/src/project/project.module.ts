@@ -22,6 +22,11 @@ import { ProjectPaymentReminderUserState } from './project-payment-reminder-user
 import { ProjectReminderUserState } from './project-reminder-user-state.entity';
 import { ProjectEditHistory } from './project-edit-history.entity';
 import { ProjectVendor } from './project-vendor.entity';
+import { ProjectVendorCompany } from './project-vendor-company.entity';
+import { ProjectVendorBill } from './project-vendor-bill.entity';
+import { ProjectVendorDocument } from './project-vendor-document.entity';
+import { ProjectVendorPayment } from './project-vendor-payment.entity';
+import { ProjectVendorPaymentReceipt } from './project-vendor-payment-receipt.entity';
 import { ProjectPurchaseOrder } from './project-purchase-order.entity';
 import { ProjectPurchaseOrderItem } from './project-purchase-order-item.entity';
 import { ProjectProformaInvoice } from './project-proforma-invoice.entity';
@@ -65,7 +70,14 @@ import { ProjectEpcCustomerInvoiceItem } from './project-epc-customer-invoice-it
   imports: [
     TypeOrmModule.forFeature([Project, ProjectDocument, CustomerNotification, ProjectComment, ProjectMaterialMaster, ProjectMaterialRequest,
 ProjectMaterialRequestItem, ProjectBranch, ProjectLoanDetail, ProjectSubsidyDetail, ProjectElectricityDetail, ProjectExecutionActivity, ProjectExecutionProof, ProjectExecutionReminder, ProjectExecutionReminderUserState, ProjectPaymentInstallment, ProjectPaymentReminderUserState, ProjectReminderUserState, ProjectEditHistory,
- ProjectVendor, ProjectPurchaseOrder, ProjectStockItem,
+ ProjectVendor,
+ProjectVendorCompany,
+ProjectVendorBill,
+ProjectVendorDocument,
+ProjectVendorPayment,
+ProjectVendorPaymentReceipt,
+ProjectPurchaseOrder,
+ProjectStockItem,
 ProjectStockMovement, ProjectPurchaseOrderItem, ProjectProformaInvoice,
 ProjectProformaInvoiceItem, ProjectFinalInvoice, ProjectFinalInvoiceItem, ProjectEpcCustomerInvoice,
 ProjectEpcCustomerInvoiceItem, ProjectPartyLedger, ProjectContractorAssignment,

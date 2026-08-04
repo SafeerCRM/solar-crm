@@ -93,6 +93,28 @@ import { ProjectEditHistory } from './project-edit-history.entity';
 
 import { ProjectVendor } from './project-vendor.entity';
 
+import { ProjectVendorCompany } from './project-vendor-company.entity';
+
+import {
+  ProjectVendorBill,
+  ProjectVendorBillStatus,
+} from './project-vendor-bill.entity';
+
+import {
+  ProjectVendorDocument,
+  ProjectVendorDocumentType,
+} from './project-vendor-document.entity';
+
+import {
+  ProjectVendorPayment,
+  ProjectVendorPaymentMode,
+} from './project-vendor-payment.entity';
+
+import {
+  ProjectVendorPaymentReceipt,
+  ProjectVendorPaymentReceiptType,
+} from './project-vendor-payment-receipt.entity';
+
 import {
   ProjectPurchaseOrder,
   ProjectPurchaseOrderStatus,
@@ -742,6 +764,79 @@ private assertOwnerOnly(user: any) {
   }
 }
 
+private assertVendorManagementAccess(user: any) {
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : user?.role
+      ? [user.role]
+      : [];
+
+  const allowed =
+    roles.includes('OWNER') ||
+    roles.includes('ACCOUNT_MANAGER');
+
+  if (!allowed) {
+    throw new ForbiddenException(
+      'Only Owner and Account Manager can access Vendor Management',
+    );
+  }
+}
+
+private async recalculateVendorBillPayment(
+  vendorBillId: number,
+) {
+  const bill =
+    await this.projectVendorBillRepository.findOne({
+      where: {
+        id: vendorBillId,
+        isHidden: false,
+      } as any,
+    });
+
+  if (!bill) {
+    return null;
+  }
+
+  const payments =
+    await this.projectVendorPaymentRepository.find({
+      where: {
+        vendorBillId,
+        isHidden: false,
+      } as any,
+    });
+
+  const paidAmount = payments.reduce(
+    (sum, payment) =>
+      sum + Number(payment.amount || 0),
+    0,
+  );
+
+  const totalAmount =
+    Number(bill.totalAmount || 0);
+
+  bill.paidAmount = paidAmount;
+
+  bill.pendingAmount = Math.max(
+    totalAmount - paidAmount,
+    0,
+  );
+
+  if (bill.pendingAmount <= 0 && totalAmount > 0) {
+    bill.status =
+      ProjectVendorBillStatus.PAID;
+  } else if (paidAmount > 0) {
+    bill.status =
+      ProjectVendorBillStatus.PARTIALLY_PAID;
+  } else {
+    bill.status =
+      ProjectVendorBillStatus.UNPAID;
+  }
+
+  return this.projectVendorBillRepository.save(
+    bill,
+  );
+}
+
 private async assertRequiredProjectCreationDocumentsUploaded(
   projectId: number,
 ) {
@@ -929,6 +1024,26 @@ private readonly projectEditHistoryRepository: Repository<ProjectEditHistory>,
 
 @InjectRepository(ProjectVendor)
 private readonly projectVendorRepository: Repository<ProjectVendor>,
+
+@InjectRepository(ProjectVendorCompany)
+private readonly projectVendorCompanyRepository:
+  Repository<ProjectVendorCompany>,
+
+@InjectRepository(ProjectVendorBill)
+private readonly projectVendorBillRepository:
+  Repository<ProjectVendorBill>,
+
+@InjectRepository(ProjectVendorDocument)
+private readonly projectVendorDocumentRepository:
+  Repository<ProjectVendorDocument>,
+
+@InjectRepository(ProjectVendorPayment)
+private readonly projectVendorPaymentRepository:
+  Repository<ProjectVendorPayment>,
+
+@InjectRepository(ProjectVendorPaymentReceipt)
+private readonly projectVendorPaymentReceiptRepository:
+  Repository<ProjectVendorPaymentReceipt>,
 
 @InjectRepository(ProjectStockItem)
 private readonly projectStockItemRepository: Repository<ProjectStockItem>,
@@ -26927,6 +27042,2711 @@ async restoreEpcCustomerInvoice(
   return {
     message:
       'Tax invoice restored successfully',
+  };
+}
+
+async createVendorManagementCompany(
+  body: any,
+  user: any,
+) {
+  this.assertVendorManagementAccess(user);
+
+  const companyName = String(
+    body?.companyName || '',
+  ).trim();
+
+  if (!companyName) {
+    throw new BadRequestException(
+      'Firm name is required',
+    );
+  }
+
+  const existing =
+    await this.projectVendorCompanyRepository
+      .createQueryBuilder('company')
+      .where(
+        'LOWER(TRIM(company.companyName)) = :companyName',
+        {
+          companyName:
+            companyName.toLowerCase(),
+        },
+      )
+      .andWhere('company.isHidden = false')
+      .getOne();
+
+  if (existing) {
+    throw new BadRequestException(
+      'This firm already exists',
+    );
+  }
+
+  const company =
+    this.projectVendorCompanyRepository.create({
+      companyName,
+      legalName:
+        String(body?.legalName || '').trim(),
+      gstNumber:
+        String(body?.gstNumber || '').trim(),
+      panNumber:
+        String(body?.panNumber || '').trim(),
+      email:
+        String(body?.email || '').trim(),
+      phone:
+        String(body?.phone || '').trim(),
+      alternatePhone:
+        String(body?.alternatePhone || '').trim(),
+      address:
+        String(body?.address || '').trim(),
+      city:
+        String(body?.city || '').trim(),
+      state:
+        String(body?.state || '').trim(),
+      pinCode:
+        String(body?.pinCode || '').trim(),
+      bankName:
+        String(body?.bankName || '').trim(),
+      bankAccountName:
+        String(
+          body?.bankAccountName || '',
+        ).trim(),
+      bankAccountNumber:
+        String(
+          body?.bankAccountNumber || '',
+        ).trim(),
+      bankIfsc:
+        String(body?.bankIfsc || '').trim(),
+      upiId:
+        String(body?.upiId || '').trim(),
+      remarks:
+        String(body?.remarks || '').trim(),
+      isActive:
+        body?.isActive !== false,
+      isHidden: false,
+      createdBy:
+        user?.id ||
+        user?.userId ||
+        user?.sub ||
+        null,
+      createdByName:
+        user?.name ||
+        user?.email ||
+        '',
+    } as Partial<ProjectVendorCompany>);
+
+  return this.projectVendorCompanyRepository.save(
+    company,
+  );
+}
+
+async listVendorManagementCompanies(
+  query: any,
+  user: any,
+) {
+  this.assertVendorManagementAccess(user);
+
+  const qb =
+    this.projectVendorCompanyRepository
+      .createQueryBuilder('company')
+      .orderBy(
+        'company.companyName',
+        'ASC',
+      );
+
+  if (query?.showHidden === 'true') {
+    // Include both active and hidden firms.
+  } else {
+    qb.where('company.isHidden = false');
+  }
+
+  if (query?.activeOnly === 'true') {
+    qb.andWhere('company.isActive = true');
+  }
+
+  if (query?.search) {
+    const search =
+      `%${String(query.search)
+        .trim()
+        .toLowerCase()}%`;
+
+    qb.andWhere(
+      `(
+        LOWER(company.companyName) LIKE :search
+        OR LOWER(company.legalName) LIKE :search
+        OR LOWER(company.gstNumber) LIKE :search
+        OR LOWER(company.phone) LIKE :search
+      )`,
+      { search },
+    );
+  }
+
+  return qb.getMany();
+}
+
+async updateVendorManagementCompany(
+  id: number,
+  body: any,
+  user: any,
+) {
+  this.assertVendorManagementAccess(user);
+
+  const company =
+    await this.projectVendorCompanyRepository.findOne({
+      where: { id },
+    });
+
+  if (!company) {
+    throw new NotFoundException(
+      'Firm not found',
+    );
+  }
+
+  const companyName = String(
+    body?.companyName ??
+      company.companyName ??
+      '',
+  ).trim();
+
+  if (!companyName) {
+    throw new BadRequestException(
+      'Firm name is required',
+    );
+  }
+
+  const duplicate =
+    await this.projectVendorCompanyRepository
+      .createQueryBuilder('company')
+      .where(
+        'LOWER(TRIM(company.companyName)) = :companyName',
+        {
+          companyName:
+            companyName.toLowerCase(),
+        },
+      )
+      .andWhere('company.id != :id', { id })
+      .andWhere('company.isHidden = false')
+      .getOne();
+
+  if (duplicate) {
+    throw new BadRequestException(
+      'Another firm already uses this name',
+    );
+  }
+
+  company.companyName = companyName;
+
+  company.legalName =
+    body?.legalName !== undefined
+      ? String(body.legalName || '').trim()
+      : company.legalName;
+
+  company.gstNumber =
+    body?.gstNumber !== undefined
+      ? String(body.gstNumber || '').trim()
+      : company.gstNumber;
+
+  company.panNumber =
+    body?.panNumber !== undefined
+      ? String(body.panNumber || '').trim()
+      : company.panNumber;
+
+  company.email =
+    body?.email !== undefined
+      ? String(body.email || '').trim()
+      : company.email;
+
+  company.phone =
+    body?.phone !== undefined
+      ? String(body.phone || '').trim()
+      : company.phone;
+
+  company.alternatePhone =
+    body?.alternatePhone !== undefined
+      ? String(
+          body.alternatePhone || '',
+        ).trim()
+      : company.alternatePhone;
+
+  company.address =
+    body?.address !== undefined
+      ? String(body.address || '').trim()
+      : company.address;
+
+  company.city =
+    body?.city !== undefined
+      ? String(body.city || '').trim()
+      : company.city;
+
+  company.state =
+    body?.state !== undefined
+      ? String(body.state || '').trim()
+      : company.state;
+
+  company.pinCode =
+    body?.pinCode !== undefined
+      ? String(body.pinCode || '').trim()
+      : company.pinCode;
+
+  company.bankName =
+    body?.bankName !== undefined
+      ? String(body.bankName || '').trim()
+      : company.bankName;
+
+  company.bankAccountName =
+    body?.bankAccountName !== undefined
+      ? String(
+          body.bankAccountName || '',
+        ).trim()
+      : company.bankAccountName;
+
+  company.bankAccountNumber =
+    body?.bankAccountNumber !== undefined
+      ? String(
+          body.bankAccountNumber || '',
+        ).trim()
+      : company.bankAccountNumber;
+
+  company.bankIfsc =
+    body?.bankIfsc !== undefined
+      ? String(body.bankIfsc || '').trim()
+      : company.bankIfsc;
+
+  company.upiId =
+    body?.upiId !== undefined
+      ? String(body.upiId || '').trim()
+      : company.upiId;
+
+  company.remarks =
+    body?.remarks !== undefined
+      ? String(body.remarks || '').trim()
+      : company.remarks;
+
+  if (body?.isActive !== undefined) {
+    company.isActive =
+      body.isActive === true;
+  }
+
+  return this.projectVendorCompanyRepository.save(
+    company,
+  );
+}
+
+async hideVendorManagementCompany(
+  id: number,
+  body: any,
+  user: any,
+) {
+  this.assertVendorManagementAccess(user);
+
+  const company =
+    await this.projectVendorCompanyRepository.findOne({
+      where: { id },
+    });
+
+  if (!company) {
+    throw new NotFoundException(
+      'Firm not found',
+    );
+  }
+
+  company.isHidden = true;
+  company.isActive = false;
+  company.hiddenAt = new Date();
+
+  company.hiddenBy =
+    user?.id ||
+    user?.userId ||
+    user?.sub ||
+    null;
+
+  company.hiddenByName =
+    user?.name ||
+    user?.email ||
+    '';
+
+  company.hiddenReason = String(
+    body?.reason ||
+      body?.hiddenReason ||
+      '',
+  ).trim();
+
+  return this.projectVendorCompanyRepository.save(
+    company,
+  );
+}
+
+async restoreVendorManagementCompany(
+  id: number,
+  user: any,
+) {
+  this.assertVendorManagementAccess(user);
+
+  const company =
+    await this.projectVendorCompanyRepository.findOne({
+      where: { id },
+    });
+
+  if (!company) {
+    throw new NotFoundException(
+      'Firm not found',
+    );
+  }
+
+  company.isHidden = false;
+  company.isActive = true;
+  company.hiddenAt = null as any;
+  company.hiddenBy = null as any;
+  company.hiddenByName = '';
+  company.hiddenReason = '';
+
+  return this.projectVendorCompanyRepository.save(
+    company,
+  );
+}
+
+async listVendorManagementVendors(
+  query: any,
+  user: any,
+) {
+  this.assertVendorManagementAccess(user);
+
+  const qb =
+    this.projectVendorRepository
+      .createQueryBuilder('vendor')
+      .where('vendor.isHidden = false')
+      .orderBy(
+        'vendor.vendorName',
+        'ASC',
+      );
+
+  if (query?.activeOnly !== 'false') {
+    qb.andWhere('vendor.isActive = true');
+  }
+
+  if (query?.search) {
+    const search =
+      `%${String(query.search)
+        .trim()
+        .toLowerCase()}%`;
+
+    qb.andWhere(
+      `(
+        LOWER(vendor.vendorName) LIKE :search
+        OR LOWER(vendor.firmName) LIKE :search
+        OR LOWER(vendor.contactPerson) LIKE :search
+        OR LOWER(vendor.phone) LIKE :search
+        OR LOWER(vendor.gstNumber) LIKE :search
+      )`,
+      { search },
+    );
+  }
+
+  return qb.getMany();
+}
+
+async listVendorManagementPurchaseOrders(
+  query: any,
+  user: any,
+) {
+  this.assertVendorManagementAccess(user);
+
+  const page = Math.max(
+    Number(query?.page || 1),
+    1,
+  );
+
+  const limit = Math.min(
+    Math.max(
+      Number(query?.limit || 20),
+      1,
+    ),
+    100,
+  );
+
+  const skip = (page - 1) * limit;
+
+  const qb =
+    this.projectPurchaseOrderRepository
+      .createQueryBuilder('po')
+      .where('po.isHidden = false')
+      .orderBy('po.createdAt', 'DESC');
+
+  if (query?.vendorId) {
+    qb.andWhere(
+      'po.vendorId = :vendorId',
+      {
+        vendorId:
+          Number(query.vendorId),
+      },
+    );
+  }
+
+  if (query?.projectId) {
+    qb.andWhere(
+      'po.projectId = :projectId',
+      {
+        projectId:
+          Number(query.projectId),
+      },
+    );
+  }
+
+  if (query?.status) {
+    qb.andWhere(
+      'po.status = :status',
+      {
+        status:
+          String(query.status),
+      },
+    );
+  }
+
+  if (query?.fromDate) {
+    qb.andWhere(
+      'po.createdAt >= :fromDate',
+      {
+        fromDate: new Date(
+          `${query.fromDate}T00:00:00`,
+        ),
+      },
+    );
+  }
+
+  if (query?.toDate) {
+    qb.andWhere(
+      'po.createdAt <= :toDate',
+      {
+        toDate: new Date(
+          `${query.toDate}T23:59:59`,
+        ),
+      },
+    );
+  }
+
+  if (query?.search) {
+    const search =
+      `%${String(query.search)
+        .trim()
+        .toLowerCase()}%`;
+
+    qb.andWhere(
+      `(
+        LOWER(po.poNumber) LIKE :search
+        OR LOWER(po.vendorName) LIKE :search
+        OR CAST(po.id AS TEXT) LIKE :search
+        OR CAST(po.projectId AS TEXT) LIKE :search
+      )`,
+      { search },
+    );
+  }
+
+  const [purchaseOrders, total] =
+    await qb
+      .skip(skip)
+      .take(limit)
+      .getManyAndCount();
+
+  const data = purchaseOrders.map(
+    (po: any) => ({
+      id: po.id,
+      poNumber: po.poNumber || '',
+      vendorId: po.vendorId || null,
+      vendorName: po.vendorName || '',
+      projectId: po.projectId || null,
+      status: po.status || '',
+      subtotalAmount:
+        Number(po.subtotalAmount || 0),
+      gstAmount:
+        Number(po.gstAmount || 0),
+      totalAmount:
+        Number(po.totalAmount || 0),
+      orderDate:
+        po.orderDate || null,
+      expectedDeliveryDate:
+        po.expectedDeliveryDate || null,
+      createdAt:
+        po.createdAt || null,
+    }),
+  );
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages:
+      Math.ceil(total / limit) || 1,
+  };
+}
+
+async createVendorManagementBill(
+  body: any,
+  user: any,
+) {
+  this.assertVendorManagementAccess(user);
+
+  const companyId = Number(
+    body?.companyId || 0,
+  );
+
+  const vendorId = Number(
+    body?.vendorId || 0,
+  );
+
+  const billNumber = String(
+    body?.billNumber || '',
+  ).trim();
+
+  const billDate = String(
+    body?.billDate || '',
+  ).trim();
+
+  const totalAmount = Number(
+    body?.totalAmount || 0,
+  );
+
+  if (!companyId) {
+    throw new BadRequestException(
+      'Firm is required',
+    );
+  }
+
+  if (!vendorId) {
+    throw new BadRequestException(
+      'Vendor is required',
+    );
+  }
+
+  if (!billNumber) {
+    throw new BadRequestException(
+      'Bill number is required',
+    );
+  }
+
+  if (!billDate) {
+    throw new BadRequestException(
+      'Bill date is required',
+    );
+  }
+
+  if (
+    !Number.isFinite(totalAmount) ||
+    totalAmount <= 0
+  ) {
+    throw new BadRequestException(
+      'Valid bill amount is required',
+    );
+  }
+
+  const company =
+    await this.projectVendorCompanyRepository.findOne({
+      where: {
+        id: companyId,
+        isHidden: false,
+        isActive: true,
+      } as any,
+    });
+
+  if (!company) {
+    throw new NotFoundException(
+      'Selected firm not found',
+    );
+  }
+
+  const vendor =
+    await this.projectVendorRepository.findOne({
+      where: {
+        id: vendorId,
+        isHidden: false,
+        isActive: true,
+      } as any,
+    });
+
+  if (!vendor) {
+    throw new NotFoundException(
+      'Selected vendor not found',
+    );
+  }
+
+  let purchaseOrder: any = null;
+
+  const purchaseOrderId = Number(
+    body?.purchaseOrderId || 0,
+  );
+
+  if (purchaseOrderId) {
+    purchaseOrder =
+      await this.projectPurchaseOrderRepository.findOne({
+        where: {
+          id: purchaseOrderId,
+          isHidden: false,
+        } as any,
+      });
+
+    if (!purchaseOrder) {
+      throw new NotFoundException(
+        'Selected purchase order not found',
+      );
+    }
+
+    if (
+      purchaseOrder.vendorId &&
+      Number(purchaseOrder.vendorId) !== vendorId
+    ) {
+      throw new BadRequestException(
+        'Selected purchase order belongs to another vendor',
+      );
+    }
+  }
+
+  const duplicate =
+    await this.projectVendorBillRepository
+      .createQueryBuilder('bill')
+      .where('bill.companyId = :companyId', {
+        companyId,
+      })
+      .andWhere('bill.vendorId = :vendorId', {
+        vendorId,
+      })
+      .andWhere(
+        'LOWER(TRIM(bill.billNumber)) = :billNumber',
+        {
+          billNumber:
+            billNumber.toLowerCase(),
+        },
+      )
+      .andWhere('bill.isHidden = false')
+      .getOne();
+
+  if (duplicate) {
+    throw new BadRequestException(
+      'This bill number already exists for the selected firm and vendor',
+    );
+  }
+
+  const taxableAmount = Number(
+    body?.taxableAmount || 0,
+  );
+
+  const gstAmount = Number(
+    body?.gstAmount || 0,
+  );
+
+  const initialPaidAmount = Math.max(
+    Number(body?.paidAmount || 0),
+    0,
+  );
+
+  if (initialPaidAmount > totalAmount) {
+    throw new BadRequestException(
+      'Paid amount cannot be greater than total bill amount',
+    );
+  }
+
+  const pendingAmount = Math.max(
+    totalAmount - initialPaidAmount,
+    0,
+  );
+
+  let status =
+    ProjectVendorBillStatus.UNPAID;
+
+  if (
+    initialPaidAmount > 0 &&
+    pendingAmount > 0
+  ) {
+    status =
+      ProjectVendorBillStatus.PARTIALLY_PAID;
+  }
+
+  if (
+    totalAmount > 0 &&
+    pendingAmount <= 0
+  ) {
+    status =
+      ProjectVendorBillStatus.PAID;
+  }
+
+  const bill =
+    this.projectVendorBillRepository.create({
+      companyId: company.id,
+      companyName: company.companyName,
+
+      vendorId: vendor.id,
+      vendorName:
+        vendor.vendorName ||
+        vendor.firmName ||
+        '',
+
+      purchaseOrderId:
+        purchaseOrder?.id || null,
+
+      purchaseOrderNumber:
+        purchaseOrder?.poNumber || '',
+
+      projectId:
+        Number(
+          body?.projectId ||
+            purchaseOrder?.projectId ||
+            0,
+        ) || null,
+
+      branchName:
+        String(
+          body?.branchName ||
+            purchaseOrder?.branchName ||
+            '',
+        ).trim(),
+
+      billNumber,
+
+      billDate:
+        new Date(`${billDate}T00:00:00`),
+
+      dueDate:
+        body?.dueDate
+          ? new Date(
+              `${body.dueDate}T00:00:00`,
+            )
+          : null,
+
+      taxableAmount:
+        Number.isFinite(taxableAmount)
+          ? Math.max(taxableAmount, 0)
+          : 0,
+
+      gstAmount:
+        Number.isFinite(gstAmount)
+          ? Math.max(gstAmount, 0)
+          : 0,
+
+      totalAmount,
+      paidAmount:
+        initialPaidAmount,
+      pendingAmount,
+      status,
+
+      remarks:
+        String(body?.remarks || '').trim(),
+
+      createdBy:
+        user?.id ||
+        user?.userId ||
+        user?.sub ||
+        null,
+
+      createdByName:
+        user?.name ||
+        user?.email ||
+        '',
+    } as Partial<ProjectVendorBill>);
+
+  return this.projectVendorBillRepository.save(
+    bill,
+  );
+}
+
+async listVendorManagementBills(
+  query: any,
+  user: any,
+) {
+  this.assertVendorManagementAccess(user);
+
+  const page = Math.max(
+    Number(query?.page || 1),
+    1,
+  );
+
+  const limit = Math.min(
+    Math.max(
+      Number(query?.limit || 20),
+      1,
+    ),
+    100,
+  );
+
+  const skip = (page - 1) * limit;
+
+  const qb =
+    this.projectVendorBillRepository
+      .createQueryBuilder('bill')
+      .where('bill.isHidden = false')
+      .orderBy('bill.billDate', 'DESC')
+      .addOrderBy('bill.createdAt', 'DESC');
+
+  if (query?.companyId) {
+    qb.andWhere(
+      'bill.companyId = :companyId',
+      {
+        companyId:
+          Number(query.companyId),
+      },
+    );
+  }
+
+  if (query?.vendorId) {
+    qb.andWhere(
+      'bill.vendorId = :vendorId',
+      {
+        vendorId:
+          Number(query.vendorId),
+      },
+    );
+  }
+
+  if (query?.purchaseOrderId) {
+    qb.andWhere(
+      'bill.purchaseOrderId = :purchaseOrderId',
+      {
+        purchaseOrderId:
+          Number(query.purchaseOrderId),
+      },
+    );
+  }
+
+  if (query?.projectId) {
+    qb.andWhere(
+      'bill.projectId = :projectId',
+      {
+        projectId:
+          Number(query.projectId),
+      },
+    );
+  }
+
+  if (query?.status) {
+    qb.andWhere(
+      'bill.status = :status',
+      {
+        status:
+          String(query.status),
+      },
+    );
+  }
+
+  if (query?.branchName) {
+    qb.andWhere(
+      'LOWER(bill.branchName) LIKE :branchName',
+      {
+        branchName:
+          `%${String(
+            query.branchName,
+          )
+            .trim()
+            .toLowerCase()}%`,
+      },
+    );
+  }
+
+  if (query?.month) {
+    const monthText =
+      String(query.month);
+
+    const [
+      year,
+      monthNumber,
+    ] = monthText
+      .split('-')
+      .map(Number);
+
+    if (
+      year &&
+      monthNumber >= 1 &&
+      monthNumber <= 12
+    ) {
+      const monthStart =
+        `${year}-${String(
+          monthNumber,
+        ).padStart(2, '0')}-01`;
+
+      const lastDay =
+        new Date(
+          year,
+          monthNumber,
+          0,
+        ).getDate();
+
+      const monthEnd =
+        `${year}-${String(
+          monthNumber,
+        ).padStart(2, '0')}-${String(
+          lastDay,
+        ).padStart(2, '0')}`;
+
+      qb.andWhere(
+        'bill.billDate >= :monthStart',
+        {
+          monthStart:
+            new Date(
+              `${monthStart}T00:00:00`,
+            ),
+        },
+      );
+
+      qb.andWhere(
+        'bill.billDate <= :monthEnd',
+        {
+          monthEnd:
+            new Date(
+              `${monthEnd}T23:59:59`,
+            ),
+        },
+      );
+    }
+  } else {
+    if (query?.fromDate) {
+      qb.andWhere(
+        'bill.billDate >= :fromDate',
+        {
+          fromDate:
+            new Date(
+              `${query.fromDate}T00:00:00`,
+            ),
+        },
+      );
+    }
+
+    if (query?.toDate) {
+      qb.andWhere(
+        'bill.billDate <= :toDate',
+        {
+          toDate:
+            new Date(
+              `${query.toDate}T23:59:59`,
+            ),
+        },
+      );
+    }
+  }
+
+  if (query?.minAmount) {
+    qb.andWhere(
+      'bill.totalAmount >= :minAmount',
+      {
+        minAmount:
+          Number(query.minAmount),
+      },
+    );
+  }
+
+  if (query?.maxAmount) {
+    qb.andWhere(
+      'bill.totalAmount <= :maxAmount',
+      {
+        maxAmount:
+          Number(query.maxAmount),
+      },
+    );
+  }
+
+  if (query?.minPendingAmount) {
+    qb.andWhere(
+      'bill.pendingAmount >= :minPendingAmount',
+      {
+        minPendingAmount:
+          Number(
+            query.minPendingAmount,
+          ),
+      },
+    );
+  }
+
+  if (query?.maxPendingAmount) {
+    qb.andWhere(
+      'bill.pendingAmount <= :maxPendingAmount',
+      {
+        maxPendingAmount:
+          Number(
+            query.maxPendingAmount,
+          ),
+      },
+    );
+  }
+
+  if (query?.overdueOnly === 'true') {
+    qb.andWhere(
+      'bill.dueDate IS NOT NULL',
+    );
+
+    qb.andWhere(
+      'bill.dueDate < :today',
+      {
+        today: new Date(),
+      },
+    );
+
+    qb.andWhere(
+      'bill.pendingAmount > 0',
+    );
+  }
+
+  if (query?.search) {
+    const search =
+      `%${String(query.search)
+        .trim()
+        .toLowerCase()}%`;
+
+    qb.andWhere(
+      `(
+        LOWER(bill.billNumber) LIKE :search
+        OR LOWER(bill.vendorName) LIKE :search
+        OR LOWER(bill.companyName) LIKE :search
+        OR LOWER(bill.purchaseOrderNumber) LIKE :search
+        OR LOWER(bill.branchName) LIKE :search
+        OR CAST(bill.id AS TEXT) LIKE :search
+        OR CAST(bill.projectId AS TEXT) LIKE :search
+      )`,
+      { search },
+    );
+  }
+
+  const [data, total] =
+    await qb
+      .skip(skip)
+      .take(limit)
+      .getManyAndCount();
+
+  const summaryQb =
+    this.projectVendorBillRepository
+      .createQueryBuilder('bill')
+      .select(
+        'COALESCE(SUM(bill.totalAmount), 0)',
+        'totalBillAmount',
+      )
+      .addSelect(
+        'COALESCE(SUM(bill.paidAmount), 0)',
+        'totalPaidAmount',
+      )
+      .addSelect(
+        'COALESCE(SUM(bill.pendingAmount), 0)',
+        'totalPendingAmount',
+      )
+      .addSelect(
+        'COUNT(bill.id)',
+        'totalBills',
+      )
+      .where('bill.isHidden = false');
+
+  if (query?.companyId) {
+    summaryQb.andWhere(
+      'bill.companyId = :companyId',
+      {
+        companyId:
+          Number(query.companyId),
+      },
+    );
+  }
+
+  if (query?.vendorId) {
+    summaryQb.andWhere(
+      'bill.vendorId = :vendorId',
+      {
+        vendorId:
+          Number(query.vendorId),
+      },
+    );
+  }
+
+  const summaryRaw =
+    await summaryQb.getRawOne();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages:
+      Math.ceil(total / limit) || 1,
+
+    summary: {
+      totalBills:
+        Number(
+          summaryRaw?.totalBills || 0,
+        ),
+
+      totalBillAmount:
+        Number(
+          summaryRaw?.totalBillAmount || 0,
+        ),
+
+      totalPaidAmount:
+        Number(
+          summaryRaw?.totalPaidAmount || 0,
+        ),
+
+      totalPendingAmount:
+        Number(
+          summaryRaw?.totalPendingAmount || 0,
+        ),
+    },
+  };
+}
+
+async getVendorManagementBill(
+  id: number,
+  user: any,
+) {
+  this.assertVendorManagementAccess(user);
+
+  const bill =
+    await this.projectVendorBillRepository.findOne({
+      where: {
+        id,
+        isHidden: false,
+      } as any,
+    });
+
+  if (!bill) {
+    throw new NotFoundException(
+      'Vendor bill not found',
+    );
+  }
+
+  const documents =
+    await this.projectVendorDocumentRepository.find({
+      where: {
+        vendorBillId: bill.id,
+        isHidden: false,
+      } as any,
+      order: {
+        createdAt: 'DESC',
+      } as any,
+    });
+
+  const payments =
+    await this.projectVendorPaymentRepository.find({
+      where: {
+        vendorBillId: bill.id,
+        isHidden: false,
+      } as any,
+      order: {
+        paymentDate: 'DESC',
+        createdAt: 'DESC',
+      } as any,
+    });
+
+  return {
+    bill,
+    documents,
+    payments,
+  };
+}
+
+async updateVendorManagementBill(
+  id: number,
+  body: any,
+  user: any,
+) {
+  this.assertVendorManagementAccess(user);
+
+  const bill =
+    await this.projectVendorBillRepository.findOne({
+      where: {
+        id,
+        isHidden: false,
+      } as any,
+    });
+
+  if (!bill) {
+    throw new NotFoundException(
+      'Vendor bill not found',
+    );
+  }
+
+  if (body?.companyId !== undefined) {
+    const companyId = Number(
+      body.companyId || 0,
+    );
+
+    const company =
+      await this.projectVendorCompanyRepository.findOne({
+        where: {
+          id: companyId,
+          isHidden: false,
+          isActive: true,
+        } as any,
+      });
+
+    if (!company) {
+      throw new NotFoundException(
+        'Selected firm not found',
+      );
+    }
+
+    bill.companyId =
+      company.id;
+
+    bill.companyName =
+      company.companyName;
+  }
+
+  if (body?.vendorId !== undefined) {
+    const vendorId = Number(
+      body.vendorId || 0,
+    );
+
+    const vendor =
+      await this.projectVendorRepository.findOne({
+        where: {
+          id: vendorId,
+          isHidden: false,
+          isActive: true,
+        } as any,
+      });
+
+    if (!vendor) {
+      throw new NotFoundException(
+        'Selected vendor not found',
+      );
+    }
+
+    bill.vendorId =
+      vendor.id;
+
+    bill.vendorName =
+      vendor.vendorName ||
+      vendor.firmName ||
+      '';
+  }
+
+  if (body?.purchaseOrderId !== undefined) {
+    const purchaseOrderId = Number(
+      body.purchaseOrderId || 0,
+    );
+
+    if (!purchaseOrderId) {
+      bill.purchaseOrderId =
+        null as any;
+
+      bill.purchaseOrderNumber = '';
+    } else {
+      const purchaseOrder =
+        await this.projectPurchaseOrderRepository.findOne({
+          where: {
+            id: purchaseOrderId,
+            isHidden: false,
+          } as any,
+        });
+
+      if (!purchaseOrder) {
+        throw new NotFoundException(
+          'Selected purchase order not found',
+        );
+      }
+
+      if (
+        purchaseOrder.vendorId &&
+        Number(purchaseOrder.vendorId) !==
+          Number(bill.vendorId)
+      ) {
+        throw new BadRequestException(
+          'Selected purchase order belongs to another vendor',
+        );
+      }
+
+      bill.purchaseOrderId =
+        purchaseOrder.id;
+
+      bill.purchaseOrderNumber =
+        purchaseOrder.poNumber || '';
+
+      if (!bill.projectId) {
+  bill.projectId =
+    Number(purchaseOrder.projectId || 0) ||
+    undefined as any;
+}
+    }
+  }
+
+  if (body?.billNumber !== undefined) {
+    const billNumber = String(
+      body.billNumber || '',
+    ).trim();
+
+    if (!billNumber) {
+      throw new BadRequestException(
+        'Bill number is required',
+      );
+    }
+
+    bill.billNumber =
+      billNumber;
+  }
+
+  if (body?.billDate !== undefined) {
+    if (!body.billDate) {
+      throw new BadRequestException(
+        'Bill date is required',
+      );
+    }
+
+    bill.billDate =
+      new Date(
+        `${body.billDate}T00:00:00`,
+      );
+  }
+
+  if (body?.dueDate !== undefined) {
+    bill.dueDate =
+      body.dueDate
+        ? new Date(
+            `${body.dueDate}T00:00:00`,
+          )
+        : null as any;
+  }
+
+  if (body?.projectId !== undefined) {
+  bill.projectId =
+    Number(body.projectId || 0) ||
+    undefined as any;
+}
+
+  if (body?.branchName !== undefined) {
+    bill.branchName =
+      String(
+        body.branchName || '',
+      ).trim();
+  }
+
+  if (body?.taxableAmount !== undefined) {
+    bill.taxableAmount = Math.max(
+      Number(body.taxableAmount || 0),
+      0,
+    );
+  }
+
+  if (body?.gstAmount !== undefined) {
+    bill.gstAmount = Math.max(
+      Number(body.gstAmount || 0),
+      0,
+    );
+  }
+
+  if (body?.totalAmount !== undefined) {
+    const totalAmount = Number(
+      body.totalAmount || 0,
+    );
+
+    if (
+      !Number.isFinite(totalAmount) ||
+      totalAmount <= 0
+    ) {
+      throw new BadRequestException(
+        'Valid bill amount is required',
+      );
+    }
+
+    bill.totalAmount =
+      totalAmount;
+  }
+
+  if (body?.remarks !== undefined) {
+    bill.remarks =
+      String(body.remarks || '').trim();
+  }
+
+  await this.projectVendorBillRepository.save(
+    bill,
+  );
+
+  return this.recalculateVendorBillPayment(
+    bill.id,
+  );
+}
+
+async hideVendorManagementBill(
+  id: number,
+  body: any,
+  user: any,
+) {
+  this.assertVendorManagementAccess(user);
+
+  const bill =
+    await this.projectVendorBillRepository.findOne({
+      where: { id },
+    });
+
+  if (!bill) {
+    throw new NotFoundException(
+      'Vendor bill not found',
+    );
+  }
+
+  bill.isHidden = true;
+  bill.hiddenAt = new Date();
+
+  bill.hiddenBy =
+    user?.id ||
+    user?.userId ||
+    user?.sub ||
+    null;
+
+  bill.hiddenByName =
+    user?.name ||
+    user?.email ||
+    '';
+
+  bill.hiddenReason =
+    String(
+      body?.reason ||
+        body?.hiddenReason ||
+        '',
+    ).trim();
+
+  return this.projectVendorBillRepository.save(
+    bill,
+  );
+}
+
+async restoreVendorManagementBill(
+  id: number,
+  body: any,
+  user: any,
+) {
+  this.assertVendorManagementAccess(user);
+
+  const bill =
+    await this.projectVendorBillRepository.findOne({
+      where: { id },
+    });
+
+  if (!bill) {
+    throw new NotFoundException(
+      'Vendor bill not found',
+    );
+  }
+
+  bill.isHidden = false;
+  bill.hiddenAt = null as any;
+  bill.hiddenBy = null as any;
+  bill.hiddenByName = '';
+  bill.hiddenReason = '';
+
+  bill.restoredAt = new Date();
+
+  bill.restoredBy =
+    user?.id ||
+    user?.userId ||
+    user?.sub ||
+    null;
+
+  bill.restoredByName =
+    user?.name ||
+    user?.email ||
+    '';
+
+  bill.restoreReason =
+    String(
+      body?.reason ||
+        body?.restoreReason ||
+        '',
+    ).trim();
+
+  await this.projectVendorBillRepository.save(
+    bill,
+  );
+
+  return this.recalculateVendorBillPayment(
+    bill.id,
+  );
+}
+
+async createVendorManagementPayment(
+  body: any,
+  user: any,
+) {
+  this.assertVendorManagementAccess(user);
+
+  const companyId = Number(
+    body?.companyId || 0,
+  );
+
+  const vendorId = Number(
+    body?.vendorId || 0,
+  );
+
+  const vendorBillId = Number(
+    body?.vendorBillId || 0,
+  );
+
+  const paymentDate = String(
+    body?.paymentDate || '',
+  ).trim();
+
+  const amount = Number(
+    body?.amount || 0,
+  );
+
+  if (!companyId) {
+    throw new BadRequestException(
+      'Firm is required',
+    );
+  }
+
+  if (!vendorId) {
+    throw new BadRequestException(
+      'Vendor is required',
+    );
+  }
+
+  if (!paymentDate) {
+    throw new BadRequestException(
+      'Payment date is required',
+    );
+  }
+
+  if (
+    !Number.isFinite(amount) ||
+    amount <= 0
+  ) {
+    throw new BadRequestException(
+      'Valid payment amount is required',
+    );
+  }
+
+  const company =
+    await this.projectVendorCompanyRepository.findOne({
+      where: {
+        id: companyId,
+        isHidden: false,
+        isActive: true,
+      } as any,
+    });
+
+  if (!company) {
+    throw new NotFoundException(
+      'Selected firm not found',
+    );
+  }
+
+  const vendor =
+    await this.projectVendorRepository.findOne({
+      where: {
+        id: vendorId,
+        isHidden: false,
+        isActive: true,
+      } as any,
+    });
+
+  if (!vendor) {
+    throw new NotFoundException(
+      'Selected vendor not found',
+    );
+  }
+
+  let bill: ProjectVendorBill | null = null;
+
+  if (vendorBillId) {
+    bill =
+      await this.projectVendorBillRepository.findOne({
+        where: {
+          id: vendorBillId,
+          isHidden: false,
+        } as any,
+      });
+
+    if (!bill) {
+      throw new NotFoundException(
+        'Selected vendor bill not found',
+      );
+    }
+
+    if (
+      Number(bill.companyId) !== companyId
+    ) {
+      throw new BadRequestException(
+        'Selected bill belongs to another firm',
+      );
+    }
+
+    if (
+      Number(bill.vendorId) !== vendorId
+    ) {
+      throw new BadRequestException(
+        'Selected bill belongs to another vendor',
+      );
+    }
+
+    if (
+      amount >
+      Number(bill.pendingAmount || 0)
+    ) {
+      throw new BadRequestException(
+        'Payment amount cannot be greater than bill pending amount',
+      );
+    }
+  }
+
+  const requestedPaymentMode = String(
+    body?.paymentMode ||
+      ProjectVendorPaymentMode.BANK_TRANSFER,
+  ).trim();
+
+  const allowedPaymentModes =
+    Object.values(
+      ProjectVendorPaymentMode,
+    ) as string[];
+
+  const paymentMode =
+    allowedPaymentModes.includes(
+      requestedPaymentMode,
+    )
+      ? requestedPaymentMode
+      : ProjectVendorPaymentMode.BANK_TRANSFER;
+
+  const payment =
+    this.projectVendorPaymentRepository.create({
+      companyId:
+        company.id,
+
+      companyName:
+        company.companyName,
+
+      vendorId:
+        vendor.id,
+
+      vendorName:
+        vendor.vendorName ||
+        vendor.firmName ||
+        '',
+
+      vendorBillId:
+        bill?.id || null,
+
+      billNumber:
+        bill?.billNumber || '',
+
+      purchaseOrderId:
+        bill?.purchaseOrderId || null,
+
+      purchaseOrderNumber:
+        bill?.purchaseOrderNumber || '',
+
+      paymentDate:
+        new Date(
+          `${paymentDate}T00:00:00`,
+        ),
+
+      amount,
+
+      paymentMode:
+        paymentMode as ProjectVendorPaymentMode,
+
+      transactionId:
+        String(
+          body?.transactionId || '',
+        ).trim(),
+
+      bankName:
+        String(
+          body?.bankName || '',
+        ).trim(),
+
+      remarks:
+        String(
+          body?.remarks || '',
+        ).trim(),
+
+      createdBy:
+        user?.id ||
+        user?.userId ||
+        user?.sub ||
+        null,
+
+      createdByName:
+        user?.name ||
+        user?.email ||
+        '',
+    } as Partial<ProjectVendorPayment>);
+
+  const savedPayment =
+    await this.projectVendorPaymentRepository.save(
+      payment,
+    );
+
+  if (bill) {
+    await this.recalculateVendorBillPayment(
+      bill.id,
+    );
+  }
+
+  return savedPayment;
+}
+
+async listVendorManagementPayments(
+  query: any,
+  user: any,
+) {
+  this.assertVendorManagementAccess(user);
+
+  const page = Math.max(
+    Number(query?.page || 1),
+    1,
+  );
+
+  const limit = Math.min(
+    Math.max(
+      Number(query?.limit || 20),
+      1,
+    ),
+    100,
+  );
+
+  const skip = (page - 1) * limit;
+
+  const qb =
+    this.projectVendorPaymentRepository
+      .createQueryBuilder('payment')
+      .where('payment.isHidden = false')
+      .orderBy(
+        'payment.paymentDate',
+        'DESC',
+      )
+      .addOrderBy(
+        'payment.createdAt',
+        'DESC',
+      );
+
+  if (query?.companyId) {
+    qb.andWhere(
+      'payment.companyId = :companyId',
+      {
+        companyId:
+          Number(query.companyId),
+      },
+    );
+  }
+
+  if (query?.vendorId) {
+    qb.andWhere(
+      'payment.vendorId = :vendorId',
+      {
+        vendorId:
+          Number(query.vendorId),
+      },
+    );
+  }
+
+  if (query?.vendorBillId) {
+    qb.andWhere(
+      'payment.vendorBillId = :vendorBillId',
+      {
+        vendorBillId:
+          Number(query.vendorBillId),
+      },
+    );
+  }
+
+  if (query?.purchaseOrderId) {
+    qb.andWhere(
+      'payment.purchaseOrderId = :purchaseOrderId',
+      {
+        purchaseOrderId:
+          Number(query.purchaseOrderId),
+      },
+    );
+  }
+
+  if (query?.paymentMode) {
+    qb.andWhere(
+      'payment.paymentMode = :paymentMode',
+      {
+        paymentMode:
+          String(query.paymentMode),
+      },
+    );
+  }
+
+  if (query?.month) {
+    const [
+      year,
+      monthNumber,
+    ] = String(query.month)
+      .split('-')
+      .map(Number);
+
+    if (
+      year &&
+      monthNumber >= 1 &&
+      monthNumber <= 12
+    ) {
+      const monthStart =
+        `${year}-${String(
+          monthNumber,
+        ).padStart(2, '0')}-01`;
+
+      const lastDay =
+        new Date(
+          year,
+          monthNumber,
+          0,
+        ).getDate();
+
+      const monthEnd =
+        `${year}-${String(
+          monthNumber,
+        ).padStart(2, '0')}-${String(
+          lastDay,
+        ).padStart(2, '0')}`;
+
+      qb.andWhere(
+        'payment.paymentDate >= :monthStart',
+        {
+          monthStart:
+            new Date(
+              `${monthStart}T00:00:00`,
+            ),
+        },
+      );
+
+      qb.andWhere(
+        'payment.paymentDate <= :monthEnd',
+        {
+          monthEnd:
+            new Date(
+              `${monthEnd}T23:59:59`,
+            ),
+        },
+      );
+    }
+  } else {
+    if (query?.fromDate) {
+      qb.andWhere(
+        'payment.paymentDate >= :fromDate',
+        {
+          fromDate:
+            new Date(
+              `${query.fromDate}T00:00:00`,
+            ),
+        },
+      );
+    }
+
+    if (query?.toDate) {
+      qb.andWhere(
+        'payment.paymentDate <= :toDate',
+        {
+          toDate:
+            new Date(
+              `${query.toDate}T23:59:59`,
+            ),
+        },
+      );
+    }
+  }
+
+  if (
+    query?.minAmount !== undefined &&
+    query?.minAmount !== ''
+  ) {
+    qb.andWhere(
+      'payment.amount >= :minAmount',
+      {
+        minAmount:
+          Number(query.minAmount),
+      },
+    );
+  }
+
+  if (
+    query?.maxAmount !== undefined &&
+    query?.maxAmount !== ''
+  ) {
+    qb.andWhere(
+      'payment.amount <= :maxAmount',
+      {
+        maxAmount:
+          Number(query.maxAmount),
+      },
+    );
+  }
+
+  if (query?.search) {
+    const search =
+      `%${String(query.search)
+        .trim()
+        .toLowerCase()}%`;
+
+    qb.andWhere(
+      `(
+        LOWER(payment.vendorName) LIKE :search
+        OR LOWER(payment.companyName) LIKE :search
+        OR LOWER(payment.billNumber) LIKE :search
+        OR LOWER(payment.purchaseOrderNumber) LIKE :search
+        OR LOWER(payment.transactionId) LIKE :search
+        OR LOWER(payment.bankName) LIKE :search
+        OR CAST(payment.id AS TEXT) LIKE :search
+      )`,
+      { search },
+    );
+  }
+
+  const [data, total] =
+    await qb
+      .skip(skip)
+      .take(limit)
+      .getManyAndCount();
+
+  const summaryQb =
+    this.projectVendorPaymentRepository
+      .createQueryBuilder('payment')
+      .select(
+        'COALESCE(SUM(payment.amount), 0)',
+        'totalPaidAmount',
+      )
+      .addSelect(
+        'COUNT(payment.id)',
+        'totalPayments',
+      )
+      .where(
+        'payment.isHidden = false',
+      );
+
+  if (query?.companyId) {
+    summaryQb.andWhere(
+      'payment.companyId = :companyId',
+      {
+        companyId:
+          Number(query.companyId),
+      },
+    );
+  }
+
+  if (query?.vendorId) {
+    summaryQb.andWhere(
+      'payment.vendorId = :vendorId',
+      {
+        vendorId:
+          Number(query.vendorId),
+      },
+    );
+  }
+
+  const summaryRaw =
+    await summaryQb.getRawOne();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages:
+      Math.ceil(total / limit) || 1,
+
+    summary: {
+      totalPayments:
+        Number(
+          summaryRaw?.totalPayments || 0,
+        ),
+
+      totalPaidAmount:
+        Number(
+          summaryRaw?.totalPaidAmount || 0,
+        ),
+    },
+  };
+}
+
+async getVendorManagementPayment(
+  id: number,
+  user: any,
+) {
+  this.assertVendorManagementAccess(user);
+
+  const payment =
+    await this.projectVendorPaymentRepository.findOne({
+      where: {
+        id,
+        isHidden: false,
+      } as any,
+    });
+
+  if (!payment) {
+    throw new NotFoundException(
+      'Vendor payment not found',
+    );
+  }
+
+  const receipts =
+    await this.projectVendorPaymentReceiptRepository.find({
+      where: {
+        vendorPaymentId:
+          payment.id,
+        isHidden: false,
+      } as any,
+      order: {
+        createdAt: 'DESC',
+      } as any,
+    });
+
+  return {
+    payment,
+    receipts,
+  };
+}
+
+async hideVendorManagementPayment(
+  id: number,
+  body: any,
+  user: any,
+) {
+  this.assertVendorManagementAccess(user);
+
+  const payment =
+    await this.projectVendorPaymentRepository.findOne({
+      where: { id },
+    });
+
+  if (!payment) {
+    throw new NotFoundException(
+      'Vendor payment not found',
+    );
+  }
+
+  payment.isHidden = true;
+  payment.hiddenAt = new Date();
+
+  payment.hiddenBy =
+    user?.id ||
+    user?.userId ||
+    user?.sub ||
+    null;
+
+  payment.hiddenByName =
+    user?.name ||
+    user?.email ||
+    '';
+
+  payment.hiddenReason =
+    String(
+      body?.reason ||
+        body?.hiddenReason ||
+        '',
+    ).trim();
+
+  await this.projectVendorPaymentRepository.save(
+    payment,
+  );
+
+  if (payment.vendorBillId) {
+    await this.recalculateVendorBillPayment(
+      Number(payment.vendorBillId),
+    );
+  }
+
+  return payment;
+}
+
+async restoreVendorManagementPayment(
+  id: number,
+  body: any,
+  user: any,
+) {
+  this.assertVendorManagementAccess(user);
+
+  const payment =
+    await this.projectVendorPaymentRepository.findOne({
+      where: { id },
+    });
+
+  if (!payment) {
+    throw new NotFoundException(
+      'Vendor payment not found',
+    );
+  }
+
+  if (payment.vendorBillId) {
+    const bill =
+      await this.projectVendorBillRepository.findOne({
+        where: {
+          id:
+            Number(
+              payment.vendorBillId,
+            ),
+          isHidden: false,
+        } as any,
+      });
+
+    if (!bill) {
+      throw new BadRequestException(
+        'Related vendor bill is unavailable',
+      );
+    }
+
+    const activePayments =
+      await this.projectVendorPaymentRepository.find({
+        where: {
+          vendorBillId:
+            bill.id,
+          isHidden: false,
+        } as any,
+      });
+
+    const activePaidAmount =
+      activePayments.reduce(
+        (sum, item) =>
+          sum +
+          Number(item.amount || 0),
+        0,
+      );
+
+    const restoredTotal =
+      activePaidAmount +
+      Number(payment.amount || 0);
+
+    if (
+      restoredTotal >
+      Number(bill.totalAmount || 0)
+    ) {
+      throw new BadRequestException(
+        'This payment cannot be restored because it would exceed the bill total amount',
+      );
+    }
+  }
+
+  payment.isHidden = false;
+  payment.hiddenAt = null as any;
+  payment.hiddenBy = null as any;
+  payment.hiddenByName = '';
+  payment.hiddenReason = '';
+
+  payment.restoredAt = new Date();
+
+  payment.restoredBy =
+    user?.id ||
+    user?.userId ||
+    user?.sub ||
+    null;
+
+  payment.restoredByName =
+    user?.name ||
+    user?.email ||
+    '';
+
+  payment.restoreReason =
+    String(
+      body?.reason ||
+        body?.restoreReason ||
+        '',
+    ).trim();
+
+  await this.projectVendorPaymentRepository.save(
+    payment,
+  );
+
+  if (payment.vendorBillId) {
+    await this.recalculateVendorBillPayment(
+      Number(payment.vendorBillId),
+    );
+  }
+
+  return payment;
+}
+
+async uploadVendorManagementBillDocuments(
+  files: any[],
+  body: any,
+  user: any,
+) {
+  this.assertVendorManagementAccess(user);
+
+  if (
+    !Array.isArray(files) ||
+    files.length === 0
+  ) {
+    throw new BadRequestException(
+      'At least one vendor document is required',
+    );
+  }
+
+  const vendorBillId = Number(
+    body?.vendorBillId || 0,
+  );
+
+  if (!vendorBillId) {
+    throw new BadRequestException(
+      'Vendor bill is required',
+    );
+  }
+
+  const bill =
+    await this.projectVendorBillRepository.findOne({
+      where: {
+        id: vendorBillId,
+        isHidden: false,
+      } as any,
+    });
+
+  if (!bill) {
+    throw new NotFoundException(
+      'Vendor bill not found',
+    );
+  }
+
+  const requestedDocumentType = String(
+    body?.documentType ||
+      ProjectVendorDocumentType.BILL,
+  )
+    .trim()
+    .toUpperCase();
+
+  const allowedDocumentTypes =
+    Object.values(
+      ProjectVendorDocumentType,
+    ) as string[];
+
+  const documentType =
+    allowedDocumentTypes.includes(
+      requestedDocumentType,
+    )
+      ? requestedDocumentType
+      : ProjectVendorDocumentType.OTHER;
+
+  const allowedMimeTypes = [
+    'application/pdf',
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/webp',
+  ];
+
+  /*
+   * Frontend compression will normally keep image
+   * uploads much smaller. This backend limit remains
+   * as a final safety check.
+   */
+  const maxFileSize =
+    12 * 1024 * 1024;
+
+  const supabaseUrl =
+    process.env.SUPABASE_URL;
+
+  const serviceKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  const bucket =
+    process.env
+      .SUPABASE_PROJECT_DOCUMENTS_BUCKET ||
+    'project-documents';
+
+  if (
+    !supabaseUrl ||
+    !serviceKey
+  ) {
+    throw new BadRequestException(
+      'Supabase storage is not configured',
+    );
+  }
+
+  const supabase = createClient(
+    supabaseUrl,
+    serviceKey,
+  );
+
+  const uploadedDocuments:
+    ProjectVendorDocument[] = [];
+
+  for (const file of files) {
+    if (!file) {
+      continue;
+    }
+
+    const mimeType = String(
+      file.mimetype || '',
+    ).toLowerCase();
+
+    if (
+      !allowedMimeTypes.includes(
+        mimeType,
+      )
+    ) {
+      throw new BadRequestException(
+        'Only PDF, JPG, PNG and WEBP vendor documents are allowed',
+      );
+    }
+
+    if (
+      Number(file.size || 0) >
+      maxFileSize
+    ) {
+      throw new BadRequestException(
+        'Each vendor document must be less than 12 MB after compression',
+      );
+    }
+
+    const originalName = String(
+      file.originalname ||
+        'vendor-document',
+    );
+
+    const originalExtension =
+      originalName.includes('.')
+        ? originalName
+            .split('.')
+            .pop()
+        : mimeType.split('/')[1] ||
+          'file';
+
+    const safeExtension = String(
+      originalExtension || 'file',
+    )
+      .replace(
+        /[^a-zA-Z0-9]/g,
+        '',
+      )
+      .toLowerCase();
+
+    const filePath =
+      `vendor-management/bills/firm-${bill.companyId}` +
+      `/vendor-${bill.vendorId}` +
+      `/bill-${bill.id}` +
+      `/${Date.now()}-${randomUUID()}.${safeExtension}`;
+
+    const uploadResult =
+      await supabase.storage
+        .from(bucket)
+        .upload(
+          filePath,
+          file.buffer,
+          {
+            contentType:
+              mimeType,
+            upsert: false,
+          },
+        );
+
+    if (uploadResult.error) {
+      throw new BadRequestException(
+        uploadResult.error.message,
+      );
+    }
+
+    const publicUrlResult =
+      supabase.storage
+        .from(bucket)
+        .getPublicUrl(filePath);
+
+    const document =
+      this.projectVendorDocumentRepository.create({
+        companyId:
+          bill.companyId,
+
+        companyName:
+          bill.companyName,
+
+        vendorId:
+          bill.vendorId,
+
+        vendorName:
+          bill.vendorName,
+
+        vendorBillId:
+          bill.id,
+
+        purchaseOrderId:
+          bill.purchaseOrderId ||
+          null,
+
+        documentType:
+          documentType as ProjectVendorDocumentType,
+
+        fileName:
+          originalName,
+
+        fileUrl:
+          publicUrlResult
+            .data
+            .publicUrl,
+
+        filePath,
+
+        mimeType,
+
+        fileSize:
+          Number(file.size || 0),
+
+        remarks:
+          String(
+            body?.remarks || '',
+          ).trim(),
+
+        uploadedBy:
+          user?.id ||
+          user?.userId ||
+          user?.sub ||
+          null,
+
+        uploadedByName:
+          user?.name ||
+          user?.email ||
+          '',
+      } as Partial<ProjectVendorDocument>);
+
+    const savedDocument =
+      await this
+        .projectVendorDocumentRepository
+        .save(document);
+
+    uploadedDocuments.push(
+      savedDocument,
+    );
+  }
+
+  return {
+    message:
+      `${uploadedDocuments.length} vendor document(s) uploaded successfully`,
+
+    documents:
+      uploadedDocuments,
+  };
+}
+
+async uploadVendorManagementPaymentReceipts(
+  files: any[],
+  body: any,
+  user: any,
+) {
+  this.assertVendorManagementAccess(user);
+
+  if (
+    !Array.isArray(files) ||
+    files.length === 0
+  ) {
+    throw new BadRequestException(
+      'At least one payment receipt is required',
+    );
+  }
+
+  const vendorPaymentId = Number(
+    body?.vendorPaymentId || 0,
+  );
+
+  if (!vendorPaymentId) {
+    throw new BadRequestException(
+      'Vendor payment is required',
+    );
+  }
+
+  const payment =
+    await this.projectVendorPaymentRepository.findOne({
+      where: {
+        id: vendorPaymentId,
+        isHidden: false,
+      } as any,
+    });
+
+  if (!payment) {
+    throw new NotFoundException(
+      'Vendor payment not found',
+    );
+  }
+
+  const requestedReceiptType = String(
+    body?.receiptType ||
+      ProjectVendorPaymentReceiptType
+        .PAYMENT_RECEIPT,
+  )
+    .trim()
+    .toUpperCase();
+
+  const allowedReceiptTypes =
+    Object.values(
+      ProjectVendorPaymentReceiptType,
+    ) as string[];
+
+  const receiptType =
+    allowedReceiptTypes.includes(
+      requestedReceiptType,
+    )
+      ? requestedReceiptType
+      : ProjectVendorPaymentReceiptType.OTHER;
+
+  const allowedMimeTypes = [
+    'application/pdf',
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/webp',
+  ];
+
+  const maxFileSize =
+    12 * 1024 * 1024;
+
+  const supabaseUrl =
+    process.env.SUPABASE_URL;
+
+  const serviceKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  const bucket =
+    process.env
+      .SUPABASE_PROJECT_DOCUMENTS_BUCKET ||
+    'project-documents';
+
+  if (
+    !supabaseUrl ||
+    !serviceKey
+  ) {
+    throw new BadRequestException(
+      'Supabase storage is not configured',
+    );
+  }
+
+  const supabase = createClient(
+    supabaseUrl,
+    serviceKey,
+  );
+
+  const uploadedReceipts:
+    ProjectVendorPaymentReceipt[] = [];
+
+  for (const file of files) {
+    if (!file) {
+      continue;
+    }
+
+    const mimeType = String(
+      file.mimetype || '',
+    ).toLowerCase();
+
+    if (
+      !allowedMimeTypes.includes(
+        mimeType,
+      )
+    ) {
+      throw new BadRequestException(
+        'Only PDF, JPG, PNG and WEBP payment receipts are allowed',
+      );
+    }
+
+    if (
+      Number(file.size || 0) >
+      maxFileSize
+    ) {
+      throw new BadRequestException(
+        'Each payment receipt must be less than 12 MB after compression',
+      );
+    }
+
+    const originalName = String(
+      file.originalname ||
+        'vendor-payment-receipt',
+    );
+
+    const originalExtension =
+      originalName.includes('.')
+        ? originalName
+            .split('.')
+            .pop()
+        : mimeType.split('/')[1] ||
+          'file';
+
+    const safeExtension = String(
+      originalExtension || 'file',
+    )
+      .replace(
+        /[^a-zA-Z0-9]/g,
+        '',
+      )
+      .toLowerCase();
+
+    const filePath =
+      `vendor-management/payments/firm-${payment.companyId}` +
+      `/vendor-${payment.vendorId}` +
+      `/payment-${payment.id}` +
+      `/${Date.now()}-${randomUUID()}.${safeExtension}`;
+
+    const uploadResult =
+      await supabase.storage
+        .from(bucket)
+        .upload(
+          filePath,
+          file.buffer,
+          {
+            contentType:
+              mimeType,
+            upsert: false,
+          },
+        );
+
+    if (uploadResult.error) {
+      throw new BadRequestException(
+        uploadResult.error.message,
+      );
+    }
+
+    const publicUrlResult =
+      supabase.storage
+        .from(bucket)
+        .getPublicUrl(filePath);
+
+    const receipt =
+      this.projectVendorPaymentReceiptRepository.create({
+        companyId:
+          payment.companyId,
+
+        companyName:
+          payment.companyName,
+
+        vendorId:
+          payment.vendorId,
+
+        vendorName:
+          payment.vendorName,
+
+        vendorPaymentId:
+          payment.id,
+
+        receiptType:
+          receiptType as ProjectVendorPaymentReceiptType,
+
+        fileName:
+          originalName,
+
+        fileUrl:
+          publicUrlResult
+            .data
+            .publicUrl,
+
+        filePath,
+
+        mimeType,
+
+        fileSize:
+          Number(file.size || 0),
+
+        remarks:
+          String(
+            body?.remarks || '',
+          ).trim(),
+
+        uploadedBy:
+          user?.id ||
+          user?.userId ||
+          user?.sub ||
+          null,
+
+        uploadedByName:
+          user?.name ||
+          user?.email ||
+          '',
+      } as Partial<ProjectVendorPaymentReceipt>);
+
+    const savedReceipt =
+      await this
+        .projectVendorPaymentReceiptRepository
+        .save(receipt);
+
+    uploadedReceipts.push(
+      savedReceipt,
+    );
+  }
+
+  return {
+    message:
+      `${uploadedReceipts.length} vendor payment receipt(s) uploaded successfully`,
+
+    receipts:
+      uploadedReceipts,
   };
 }
 }

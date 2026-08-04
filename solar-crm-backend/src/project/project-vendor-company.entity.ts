@@ -7,33 +7,30 @@ import {
 } from 'typeorm';
 
 @Entity()
-export class ProjectVendor {
+export class ProjectVendorCompany {
   @PrimaryGeneratedColumn()
   id: number;
 
   @Column()
-  vendorName: string;
+  companyName: string;
 
   @Column({ nullable: true })
-  firmName: string;
-
-  @Column({ nullable: true })
-  contactPerson: string;
-
-  @Column({ nullable: true })
-  phone: string;
-
-  @Column({ nullable: true })
-  alternatePhone: string;
-
-  @Column({ nullable: true })
-  email: string;
+  legalName: string;
 
   @Column({ nullable: true })
   gstNumber: string;
 
   @Column({ nullable: true })
   panNumber: string;
+
+  @Column({ nullable: true })
+  email: string;
+
+  @Column({ nullable: true })
+  phone: string;
+
+  @Column({ nullable: true })
+  alternatePhone: string;
 
   @Column({ type: 'text', nullable: true })
   address: string;
@@ -46,27 +43,6 @@ export class ProjectVendor {
 
   @Column({ nullable: true })
   pinCode: string;
-
-  @Column({ nullable: true })
-  materialCategory: string;
-
-  @Column({ nullable: true })
-  partyType: string;
-
-  @Column({ default: true })
-  canSellToUs: boolean;
-
-  @Column({ default: false })
-  canBuyFromUs: boolean;
-
-  @Column({ type: 'float', default: 0 })
-  openingBalance: number;
-
-  @Column({ type: 'int', default: 0 })
-  creditDays: number;
-
-  @Column({ type: 'float', default: 0 })
-  creditLimit: number;
 
   @Column({ nullable: true })
   bankName: string;
@@ -104,17 +80,11 @@ export class ProjectVendor {
   @Column({ type: 'text', nullable: true })
   hiddenReason: string;
 
-  @Column({ type: 'timestamp', nullable: true })
-  restoredAt: Date;
+  @Column({ nullable: true })
+  createdBy: number;
 
   @Column({ nullable: true })
-  restoredBy: number;
-
-  @Column({ nullable: true })
-  restoredByName: string;
-
-  @Column({ type: 'text', nullable: true })
-  restoreReason: string;
+  createdByName: string;
 
   @CreateDateColumn()
   createdAt: Date;
