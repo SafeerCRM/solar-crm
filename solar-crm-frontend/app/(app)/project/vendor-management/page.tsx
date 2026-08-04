@@ -432,6 +432,30 @@ export default function VendorManagementPage() {
   );
 
   const [
+  billDocumentModalOpen,
+  setBillDocumentModalOpen,
+] = useState(false);
+
+const [
+  paymentReceiptModalOpen,
+  setPaymentReceiptModalOpen,
+] = useState(false);
+
+const [
+  selectedBillForDocuments,
+  setSelectedBillForDocuments,
+] = useState<VendorBill | null>(
+  null,
+);
+
+const [
+  selectedPaymentForReceipts,
+  setSelectedPaymentForReceipts,
+] = useState<VendorPayment | null>(
+  null,
+);
+
+  const [
     billDocumentType,
     setBillDocumentType,
   ] = useState('BILL');
@@ -1015,11 +1039,25 @@ export default function VendorManagementPage() {
         } saved`,
       );
 
-      setSelectedBillId(
-        createdBill?.id || null,
-      );
-
       setActiveTab('BILLS');
+
+if (createdBill?.id) {
+  setSelectedBillForDocuments(
+    createdBill,
+  );
+
+  setSelectedBillId(
+    createdBill.id,
+  );
+
+  setSelectedBillDocuments(
+    [],
+  );
+
+  setBillDocumentModalOpen(
+    true,
+  );
+}
     } catch (error: any) {
       console.error(error);
 
@@ -1097,18 +1135,31 @@ export default function VendorManagementPage() {
           fetchPayments(),
         ]);
 
-        setSelectedPaymentId(
-          createdPayment?.id ||
-            null,
-        );
-
         setActiveTab(
-          'PAYMENTS',
-        );
+  'PAYMENTS',
+);
 
-        alert(
-          'Vendor payment saved',
-        );
+if (createdPayment?.id) {
+  setSelectedPaymentForReceipts(
+    createdPayment,
+  );
+
+  setSelectedPaymentId(
+    createdPayment.id,
+  );
+
+  setSelectedPaymentReceipts(
+    [],
+  );
+
+  setPaymentReceiptModalOpen(
+    true,
+  );
+}
+
+alert(
+  'Vendor payment saved',
+);
       } catch (error: any) {
         console.error(error);
 
@@ -1123,70 +1174,116 @@ export default function VendorManagementPage() {
     };
 
   const openBillDetail =
-    async (
-      billId: number,
-    ) => {
-      try {
-        const response =
-          await axios.get(
-            `${API_BASE_URL}/project/vendor-management/bills/${billId}`,
-            {
-              headers:
-                getAuthHeaders(),
-            },
-          );
+  async (
+    billId: number,
+  ) => {
+    try {
+      const selectedBill =
+        bills.find(
+          (bill) =>
+            Number(bill.id) ===
+            Number(billId),
+        ) || null;
 
-        setSelectedBillId(
-          billId,
+      setSelectedBillId(
+        billId,
+      );
+
+      setSelectedBillForDocuments(
+        selectedBill,
+      );
+
+      setBillDocumentModalOpen(
+        true,
+      );
+
+      setSelectedBillDocuments(
+        [],
+      );
+
+      const response =
+        await axios.get(
+          `${API_BASE_URL}/project/vendor-management/bills/${billId}`,
+          {
+            headers:
+              getAuthHeaders(),
+          },
         );
 
-        setSelectedBillDocuments(
-          response.data
-            ?.documents || [],
-        );
-      } catch (error: any) {
-        console.error(error);
+      setSelectedBillDocuments(
+        response.data?.documents ||
+          [],
+      );
+    } catch (error: any) {
+      console.error(error);
 
-        alert(
-          error?.response?.data
-            ?.message ||
-            'Failed to load bill documents',
-        );
-      }
-    };
+      setBillDocumentModalOpen(
+        false,
+      );
+
+      alert(
+        error?.response?.data
+          ?.message ||
+          'Failed to load bill documents',
+      );
+    }
+  };
 
   const openPaymentDetail =
-    async (
-      paymentId: number,
-    ) => {
-      try {
-        const response =
-          await axios.get(
-            `${API_BASE_URL}/project/vendor-management/payments/${paymentId}`,
-            {
-              headers:
-                getAuthHeaders(),
-            },
-          );
+  async (
+    paymentId: number,
+  ) => {
+    try {
+      const selectedPayment =
+        payments.find(
+          (payment) =>
+            Number(payment.id) ===
+            Number(paymentId),
+        ) || null;
 
-        setSelectedPaymentId(
-          paymentId,
+      setSelectedPaymentId(
+        paymentId,
+      );
+
+      setSelectedPaymentForReceipts(
+        selectedPayment,
+      );
+
+      setPaymentReceiptModalOpen(
+        true,
+      );
+
+      setSelectedPaymentReceipts(
+        [],
+      );
+
+      const response =
+        await axios.get(
+          `${API_BASE_URL}/project/vendor-management/payments/${paymentId}`,
+          {
+            headers:
+              getAuthHeaders(),
+          },
         );
 
-        setSelectedPaymentReceipts(
-          response.data
-            ?.receipts || [],
-        );
-      } catch (error: any) {
-        console.error(error);
+      setSelectedPaymentReceipts(
+        response.data?.receipts ||
+          [],
+      );
+    } catch (error: any) {
+      console.error(error);
 
-        alert(
-          error?.response?.data
-            ?.message ||
-            'Failed to load payment receipts',
-        );
-      }
-    };
+      setPaymentReceiptModalOpen(
+        false,
+      );
+
+      alert(
+        error?.response?.data
+          ?.message ||
+          'Failed to load payment receipts',
+      );
+    }
+  };
 
   const uploadBillDocuments =
     async () => {
@@ -2510,114 +2607,6 @@ export default function VendorManagementPage() {
               </button>
             </div>
 
-            {selectedBillId && (
-              <div className="rounded-2xl bg-white p-5 shadow">
-                <h2 className="text-lg font-bold text-gray-900">
-                  Upload Bill Documents
-                </h2>
-
-                <p className="mt-1 text-sm text-gray-500">
-                  Selected Bill ID:{' '}
-                  {selectedBillId}
-                </p>
-
-                <div className="mt-4 grid gap-3 md:grid-cols-3">
-                  <select
-                    value={
-                      billDocumentType
-                    }
-                    onChange={(
-                      event,
-                    ) =>
-                      setBillDocumentType(
-                        event.target
-                          .value,
-                      )
-                    }
-                    className="rounded-xl border p-3"
-                  >
-                    <option value="BILL">
-                      Bill
-                    </option>
-
-                    <option value="INVOICE">
-                      Invoice
-                    </option>
-
-                    <option value="DELIVERY_CHALLAN">
-                      Delivery Challan
-                    </option>
-
-                    <option value="EWAY_BILL">
-                      E-Way Bill
-                    </option>
-
-                    <option value="TRANSPORT_RECEIPT">
-                      Transport Receipt
-                    </option>
-
-                    <option value="OTHER">
-                      Other
-                    </option>
-                  </select>
-
-                  <input
-                    type="file"
-                    multiple
-                    accept=".pdf,.jpg,.jpeg,.png,.webp"
-                    onChange={(
-                      event,
-                    ) =>
-                      setBillDocumentFiles(
-                        Array.from(
-                          event.target
-                            .files ||
-                            [],
-                        ),
-                      )
-                    }
-                    className="rounded-xl border p-3"
-                  />
-
-                  <button
-                    type="button"
-                    onClick={
-                      uploadBillDocuments
-                    }
-                    disabled={
-                      uploading
-                    }
-                    className="rounded-xl bg-green-600 px-4 py-3 font-semibold text-white disabled:opacity-50"
-                  >
-                    {uploading
-                      ? 'Uploading...'
-                      : 'Upload Document'}
-                  </button>
-                </div>
-
-                <textarea
-                  placeholder="Document Remarks"
-                  value={
-                    billDocumentRemarks
-                  }
-                  onChange={(
-                    event,
-                  ) =>
-                    setBillDocumentRemarks(
-                      event.target
-                        .value,
-                    )
-                  }
-                  className="mt-3 w-full rounded-xl border p-3"
-                />
-
-                <DocumentList
-                  documents={
-                    selectedBillDocuments
-                  }
-                />
-              </div>
-            )}
 
             <div className="rounded-2xl bg-white p-5 shadow">
               <h2 className="text-lg font-bold text-gray-900">
@@ -2961,114 +2950,6 @@ export default function VendorManagementPage() {
               </button>
             </div>
 
-            {selectedPaymentId && (
-              <div className="rounded-2xl bg-white p-5 shadow">
-                <h2 className="text-lg font-bold text-gray-900">
-                  Upload Payment Receipt
-                </h2>
-
-                <p className="mt-1 text-sm text-gray-500">
-                  Selected Payment ID:{' '}
-                  {selectedPaymentId}
-                </p>
-
-                <div className="mt-4 grid gap-3 md:grid-cols-3">
-                  <select
-                    value={
-                      paymentReceiptType
-                    }
-                    onChange={(
-                      event,
-                    ) =>
-                      setPaymentReceiptType(
-                        event.target
-                          .value,
-                      )
-                    }
-                    className="rounded-xl border p-3"
-                  >
-                    <option value="PAYMENT_RECEIPT">
-                      Payment Receipt
-                    </option>
-
-                    <option value="BANK_SCREENSHOT">
-                      Bank Screenshot
-                    </option>
-
-                    <option value="UTR_PROOF">
-                      UTR Proof
-                    </option>
-
-                    <option value="CHEQUE_COPY">
-                      Cheque Copy
-                    </option>
-
-                    <option value="VENDOR_ACKNOWLEDGEMENT">
-                      Vendor Acknowledgement
-                    </option>
-
-                    <option value="OTHER">
-                      Other
-                    </option>
-                  </select>
-
-                  <input
-                    type="file"
-                    multiple
-                    accept=".pdf,.jpg,.jpeg,.png,.webp"
-                    onChange={(
-                      event,
-                    ) =>
-                      setPaymentReceiptFiles(
-                        Array.from(
-                          event.target
-                            .files ||
-                            [],
-                        ),
-                      )
-                    }
-                    className="rounded-xl border p-3"
-                  />
-
-                  <button
-                    type="button"
-                    onClick={
-                      uploadPaymentReceipts
-                    }
-                    disabled={
-                      uploading
-                    }
-                    className="rounded-xl bg-green-600 px-4 py-3 font-semibold text-white disabled:opacity-50"
-                  >
-                    {uploading
-                      ? 'Uploading...'
-                      : 'Upload Receipt'}
-                  </button>
-                </div>
-
-                <textarea
-                  placeholder="Receipt Remarks"
-                  value={
-                    paymentReceiptRemarks
-                  }
-                  onChange={(
-                    event,
-                  ) =>
-                    setPaymentReceiptRemarks(
-                      event.target
-                        .value,
-                    )
-                  }
-                  className="mt-3 w-full rounded-xl border p-3"
-                />
-
-                <ReceiptList
-                  receipts={
-                    selectedPaymentReceipts
-                  }
-                />
-              </div>
-            )}
 
             <div className="grid gap-4 md:grid-cols-2">
               <SummaryCard
@@ -3233,6 +3114,383 @@ export default function VendorManagementPage() {
             </div>
           </div>
         )}
+
+        {billDocumentModalOpen &&
+  selectedBillId && (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-3">
+      <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
+        <div className="sticky top-0 z-10 flex items-start justify-between border-b bg-white p-5">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">
+              Bill Documents
+            </h2>
+
+            <p className="mt-1 text-sm text-gray-500">
+              Bill:{' '}
+              {selectedBillForDocuments?.billNumber ||
+                `#${selectedBillId}`}
+            </p>
+
+            <p className="text-sm text-gray-500">
+              {selectedBillForDocuments?.companyName ||
+                '-'}{' '}
+              |{' '}
+              {selectedBillForDocuments?.vendorName ||
+                '-'}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setBillDocumentModalOpen(
+                false,
+              );
+
+              setBillDocumentFiles(
+                [],
+              );
+
+              setBillDocumentRemarks(
+                '',
+              );
+            }}
+            className="rounded-xl bg-gray-100 px-4 py-2 font-bold text-gray-700 hover:bg-gray-200"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="space-y-5 p-5">
+          <div className="rounded-2xl border bg-gray-50 p-4">
+            <h3 className="font-bold text-gray-900">
+              Upload New Document
+            </h3>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <select
+                value={
+                  billDocumentType
+                }
+                onChange={(event) =>
+                  setBillDocumentType(
+                    event.target.value,
+                  )
+                }
+                className="rounded-xl border bg-white p-3"
+              >
+                <option value="BILL">
+                  Bill
+                </option>
+
+                <option value="INVOICE">
+                  Invoice
+                </option>
+
+                <option value="DELIVERY_CHALLAN">
+                  Delivery Challan
+                </option>
+
+                <option value="EWAY_BILL">
+                  E-Way Bill
+                </option>
+
+                <option value="TRANSPORT_RECEIPT">
+                  Transport Receipt
+                </option>
+
+                <option value="OTHER">
+                  Other
+                </option>
+              </select>
+
+              <input
+                type="file"
+                multiple
+                accept=".pdf,.jpg,.jpeg,.png,.webp"
+                onChange={(event) =>
+                  setBillDocumentFiles(
+                    Array.from(
+                      event.target.files ||
+                        [],
+                    ),
+                  )
+                }
+                className="rounded-xl border bg-white p-3"
+              />
+            </div>
+
+            <textarea
+              placeholder="Document remarks"
+              value={
+                billDocumentRemarks
+              }
+              onChange={(event) =>
+                setBillDocumentRemarks(
+                  event.target.value,
+                )
+              }
+              rows={3}
+              className="mt-3 w-full rounded-xl border bg-white p-3"
+            />
+
+            {billDocumentFiles.length >
+              0 && (
+              <p className="mt-2 text-sm font-medium text-blue-700">
+                {
+                  billDocumentFiles.length
+                }{' '}
+                file(s) selected
+              </p>
+            )}
+
+            <button
+              type="button"
+              onClick={
+                uploadBillDocuments
+              }
+              disabled={
+                uploading ||
+                billDocumentFiles.length ===
+                  0
+              }
+              className="mt-4 rounded-xl bg-green-600 px-5 py-3 font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+            >
+              {uploading
+                ? 'Compressing & Uploading...'
+                : 'Upload Document'}
+            </button>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-gray-900">
+                Uploaded Documents
+              </h3>
+
+              <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">
+                {
+                  selectedBillDocuments.length
+                }{' '}
+                file(s)
+              </span>
+            </div>
+
+            <DocumentList
+              documents={
+                selectedBillDocuments
+              }
+            />
+          </div>
+        </div>
+
+        <div className="sticky bottom-0 border-t bg-white p-4 text-right">
+          <button
+            type="button"
+            onClick={() =>
+              setBillDocumentModalOpen(
+                false,
+              )
+            }
+            className="rounded-xl bg-gray-700 px-5 py-3 font-semibold text-white hover:bg-gray-800"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  )}
+
+  {paymentReceiptModalOpen &&
+  selectedPaymentId && (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-3">
+      <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
+        <div className="sticky top-0 z-10 flex items-start justify-between border-b bg-white p-5">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">
+              Payment Receipts
+            </h2>
+
+            <p className="mt-1 text-sm text-gray-500">
+              Payment #
+              {selectedPaymentId}
+            </p>
+
+            <p className="text-sm text-gray-500">
+              {selectedPaymentForReceipts?.companyName ||
+                '-'}{' '}
+              |{' '}
+              {selectedPaymentForReceipts?.vendorName ||
+                '-'}
+            </p>
+
+            <p className="text-sm font-semibold text-green-700">
+              {formatCurrency(
+                selectedPaymentForReceipts?.amount,
+              )}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setPaymentReceiptModalOpen(
+                false,
+              );
+
+              setPaymentReceiptFiles(
+                [],
+              );
+
+              setPaymentReceiptRemarks(
+                '',
+              );
+            }}
+            className="rounded-xl bg-gray-100 px-4 py-2 font-bold text-gray-700 hover:bg-gray-200"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="space-y-5 p-5">
+          <div className="rounded-2xl border bg-gray-50 p-4">
+            <h3 className="font-bold text-gray-900">
+              Upload New Receipt
+            </h3>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <select
+                value={
+                  paymentReceiptType
+                }
+                onChange={(event) =>
+                  setPaymentReceiptType(
+                    event.target.value,
+                  )
+                }
+                className="rounded-xl border bg-white p-3"
+              >
+                <option value="PAYMENT_RECEIPT">
+                  Payment Receipt
+                </option>
+
+                <option value="BANK_SCREENSHOT">
+                  Bank Screenshot
+                </option>
+
+                <option value="UTR_PROOF">
+                  UTR Proof
+                </option>
+
+                <option value="CHEQUE_COPY">
+                  Cheque Copy
+                </option>
+
+                <option value="VENDOR_ACKNOWLEDGEMENT">
+                  Vendor Acknowledgement
+                </option>
+
+                <option value="OTHER">
+                  Other
+                </option>
+              </select>
+
+              <input
+                type="file"
+                multiple
+                accept=".pdf,.jpg,.jpeg,.png,.webp"
+                onChange={(event) =>
+                  setPaymentReceiptFiles(
+                    Array.from(
+                      event.target.files ||
+                        [],
+                    ),
+                  )
+                }
+                className="rounded-xl border bg-white p-3"
+              />
+            </div>
+
+            <textarea
+              placeholder="Receipt remarks"
+              value={
+                paymentReceiptRemarks
+              }
+              onChange={(event) =>
+                setPaymentReceiptRemarks(
+                  event.target.value,
+                )
+              }
+              rows={3}
+              className="mt-3 w-full rounded-xl border bg-white p-3"
+            />
+
+            {paymentReceiptFiles.length >
+              0 && (
+              <p className="mt-2 text-sm font-medium text-blue-700">
+                {
+                  paymentReceiptFiles.length
+                }{' '}
+                file(s) selected
+              </p>
+            )}
+
+            <button
+              type="button"
+              onClick={
+                uploadPaymentReceipts
+              }
+              disabled={
+                uploading ||
+                paymentReceiptFiles.length ===
+                  0
+              }
+              className="mt-4 rounded-xl bg-green-600 px-5 py-3 font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+            >
+              {uploading
+                ? 'Compressing & Uploading...'
+                : 'Upload Receipt'}
+            </button>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-gray-900">
+                Uploaded Receipts
+              </h3>
+
+              <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">
+                {
+                  selectedPaymentReceipts.length
+                }{' '}
+                file(s)
+              </span>
+            </div>
+
+            <ReceiptList
+              receipts={
+                selectedPaymentReceipts
+              }
+            />
+          </div>
+        </div>
+
+        <div className="sticky bottom-0 border-t bg-white p-4 text-right">
+          <button
+            type="button"
+            onClick={() =>
+              setPaymentReceiptModalOpen(
+                false,
+              )
+            }
+            className="rounded-xl bg-gray-700 px-5 py-3 font-semibold text-white hover:bg-gray-800"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  )}
     </div>
   );
 }
@@ -3355,7 +3613,7 @@ function BillCard({
             onClick={onView}
             className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
           >
-            Documents
+            Documents / Upload
           </button>
 
           <button
@@ -3458,7 +3716,7 @@ function PaymentCard({
             onClick={onView}
             className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
           >
-            Receipts
+            Receipts / Upload
           </button>
 
           <button
