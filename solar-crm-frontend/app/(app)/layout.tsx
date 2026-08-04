@@ -371,6 +371,15 @@ const navItems = [
 },
 
 {
+  name: 'Vendor Management',
+  href: '/project/vendor-management',
+  roles: [
+    'OWNER',
+    'ACCOUNT_MANAGER',
+  ],
+},
+
+{
   name: 'Project Contractors',
   href: '/project/contractors',
   roles: ['OWNER', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER',],
