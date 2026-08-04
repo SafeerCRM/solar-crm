@@ -284,11 +284,27 @@ createMaterialMaster(@Body() body: any) {
 
 @Get('material-master')
 getMaterialMasters(
+  @Query('page') page?: string,
+  @Query('limit') limit?: string,
+  @Query('search') search?: string,
+  @Query('category') category?: string,
+  @Query('showHidden') showHidden?: string,
   @Query('activeOnly') activeOnly?: string,
 ) {
-  return this.projectService.getMaterialMasters(
-    activeOnly === 'true',
-  );
+  return this.projectService.getMaterialMasters({
+    page: Number(page || 1),
+    limit: Number(limit || 20),
+    search: search || '',
+    category: category || '',
+    showHidden:
+      showHidden === 'true'
+        ? 'true'
+        : 'false',
+    activeOnly:
+      activeOnly === 'true'
+        ? 'true'
+        : 'false',
+  });
 }
 
 @Roles('OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER', 'STOCK_MANAGER')

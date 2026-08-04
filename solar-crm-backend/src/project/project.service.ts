@@ -4264,17 +4264,164 @@ async projectManagerApproval(
   return this.projectMaterialMasterRepository.save(item);
 }
 
-async getMaterialMasters(activeOnly = false) {
+async getMaterialMasters(query: any = {}) {
+  const page = Math.max(
+    Number(query?.page || 1),
+    1,
+  );
+
+  const limit = Math.min(
+    Math.max(
+      Number(query?.limit || 20),
+      1,
+    ),
+    100,
+  );
+
+  const skip = (page - 1) * limit;
+
+  const search = String(
+    query?.search || '',
+  ).trim();
+
+  const category = String(
+    query?.category || '',
+  ).trim();
+
+  const showHidden =
+    String(query?.showHidden || 'false') ===
+    'true';
+
+  const activeOnly =
+  String(query?.activeOnly || 'false') ===
+  'true';
+
+/*
+ * Preserve the old response format for
+ * existing material dropdowns.
+ */
+if (activeOnly) {
   return this.projectMaterialMasterRepository.find({
-    where: activeOnly
-      ? {
-          isActive: true,
-        }
-      : {},
+    where: {
+      isActive: true,
+    },
     order: {
       createdAt: 'DESC',
     },
   });
+}
+
+const materialQuery =
+  this.projectMaterialMasterRepository
+    .createQueryBuilder('material');
+
+  /*
+   * Default behaviour:
+   * Show only active/visible materials.
+   *
+   * showHidden=true:
+   * Show only hidden/disabled materials.
+   */
+  if (showHidden) {
+    materialQuery.where(
+      'material.isActive = false',
+    );
+  } else {
+    materialQuery.where(
+      'material.isActive = true',
+    );
+  }
+
+
+  if (search) {
+    materialQuery.andWhere(
+      `(
+        LOWER(material.name)
+          LIKE LOWER(:search)
+        OR LOWER(
+          COALESCE(material.brand, '')
+        ) LIKE LOWER(:search)
+        OR LOWER(
+          COALESCE(material.hsnCode, '')
+        ) LIKE LOWER(:search)
+        OR LOWER(
+          COALESCE(
+            material.vendorPreferredName,
+            ''
+          )
+        ) LIKE LOWER(:search)
+      )`,
+      {
+        search: `%${search}%`,
+      },
+    );
+  }
+
+  if (category) {
+    materialQuery.andWhere(
+      'LOWER(material.category) = LOWER(:category)',
+      {
+        category,
+      },
+    );
+  }
+
+  materialQuery
+    .orderBy(
+      'material.createdAt',
+      'DESC',
+    )
+    .skip(skip)
+    .take(limit);
+
+  const [data, total] =
+    await materialQuery.getManyAndCount();
+
+  /*
+   * Category options should not be restricted
+   * to only the current pagination page.
+   */
+  const categoryRows =
+    await this.projectMaterialMasterRepository
+      .createQueryBuilder('material')
+      .select(
+        'DISTINCT TRIM(material.category)',
+        'category',
+      )
+      .where(
+        `TRIM(
+          COALESCE(material.category, '')
+        ) != ''`,
+      )
+      .andWhere(
+        showHidden
+          ? 'material.isActive = false'
+          : 'material.isActive = true',
+      )
+      .orderBy(
+        'TRIM(material.category)',
+        'ASC',
+      )
+      .getRawMany();
+
+  return {
+    data,
+
+    categories: categoryRows
+      .map((row: any) =>
+        String(row.category || '').trim(),
+      )
+      .filter(Boolean),
+
+    pagination: {
+      page,
+      limit,
+      total,
+
+      totalPages:
+        Math.ceil(total / limit) || 1,
+    },
+  };
 }
 
 async updateMaterialMaster(id: number, data: Partial<ProjectMaterialMaster>) {
