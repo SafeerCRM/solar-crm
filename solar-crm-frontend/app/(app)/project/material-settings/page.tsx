@@ -31,10 +31,30 @@ export default function MaterialSettingsPage() {
 
   const [searchText, setSearchText] = useState('');
 const [categoryFilter, setCategoryFilter] = useState('');
-const [statusFilter, setStatusFilter] = useState('');
+
+const [showHidden, setShowHidden] =
+  useState(false);
+
+const [page, setPage] =
+  useState(1);
+
+const [limit, setLimit] =
+  useState(20);
+
+const [total, setTotal] =
+  useState(0);
+
+const [totalPages, setTotalPages] =
+  useState(1);
+
+const [categoryOptions, setCategoryOptions] =
+  useState<string[]>([]);
 
   const [loading, setLoading] =
     useState(false);
+
+    const [csvLoading, setCsvLoading] =
+  useState(false);
 
     const [userRoles, setUserRoles] =
   useState<string[]>([]);
@@ -59,35 +79,75 @@ const [statusFilter, setStatusFilter] = useState('');
   });
 
   const fetchItems = async () => {
-    try {
-      setLoading(true);
+  try {
+    setLoading(true);
 
-      const token =
-        localStorage.getItem('token');
+    const token =
+      localStorage.getItem('token');
 
-      const res = await axios.get(
-        `${API_BASE_URL}/project/material-master`,
-        {
-          headers: token
-            ? {
-                Authorization: `Bearer ${token}`,
-              }
-            : {},
+    const res = await axios.get(
+      `${API_BASE_URL}/project/material-master`,
+      {
+        params: {
+          page,
+          limit,
+
+          search:
+            searchText.trim() || undefined,
+
+          category:
+            categoryFilter || undefined,
+
+          showHidden:
+            showHidden
+              ? 'true'
+              : 'false',
         },
-      );
 
-      setItems(res.data || []);
-    } catch (error) {
-      console.error(error);
-      alert('Failed to load materials');
-    } finally {
-      setLoading(false);
-    }
-  };
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setItems(
+      Array.isArray(res.data?.data)
+        ? res.data.data
+        : [],
+    );
+
+    setCategoryOptions(
+      Array.isArray(res.data?.categories)
+        ? res.data.categories
+        : [],
+    );
+
+    setTotal(
+      Number(
+        res.data?.pagination?.total || 0,
+      ),
+    );
+
+    setTotalPages(
+      Math.max(
+        Number(
+          res.data?.pagination?.totalPages ||
+            1,
+        ),
+        1,
+      ),
+    );
+  } catch (error) {
+    console.error(error);
+    alert('Failed to load materials');
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
-  fetchItems();
-
   try {
     const storedUser =
       localStorage.getItem('user');
@@ -96,12 +156,33 @@ const [statusFilter, setStatusFilter] = useState('');
       const parsed =
         JSON.parse(storedUser);
 
-      setUserRoles(parsed?.roles || []);
+      setUserRoles(
+        Array.isArray(parsed?.roles)
+          ? parsed.roles
+          : [],
+      );
     }
   } catch (error) {
     console.error(error);
   }
 }, []);
+
+useEffect(() => {
+  const timeoutId =
+    window.setTimeout(() => {
+      fetchItems();
+    }, 300);
+
+  return () => {
+    window.clearTimeout(timeoutId);
+  };
+}, [
+  page,
+  limit,
+  searchText,
+  categoryFilter,
+  showHidden,
+]);
 
   const saveItem = async () => {
   if (!form.name.trim()) {
@@ -242,8 +323,8 @@ remarks: '',
     const confirmed =
       window.confirm(
         item.isActive
-  ? 'Disable this material?'
-  : 'Enable this material?',
+  ? 'Hide this material?'
+  : 'Restore this material?',
       );
 
     if (!confirmed) {
@@ -270,17 +351,24 @@ remarks: '',
 
       alert(
   item.isActive
-    ? 'Material disabled'
-    : 'Material enabled',
+  ? 'Material hidden'
+  : 'Material restored',
 );
 
-      fetchItems();
+      if (
+  items.length === 1 &&
+  page > 1
+) {
+  setPage(page - 1);
+} else {
+  fetchItems();
+}
     } catch (error: any) {
       console.error(error);
 
       alert(
         error?.response?.data?.message ||
-          'Failed to delete material',
+          'Failed to update material visibility',
       );
     }
   };
@@ -297,117 +385,311 @@ remarks: '',
   userRoles.includes('STOCK_MANAGER');
 
 
-  const categoryOptions = Array.from(
-  new Set(
-    items
-      .map((item) => item.category || '')
-      .filter(Boolean),
-  ),
-);
+  const filteredItems = items;
 
-const filteredItems = items.filter((item) => {
-  const matchesSearch = searchText
-    ? `${item.name || ''} ${item.brand || ''}`
-        .toLowerCase()
-        .includes(searchText.toLowerCase())
-    : true;
+const downloadMaterialCsv = async () => {
+  try {
+    setCsvLoading(true);
 
-  const matchesCategory = categoryFilter
-    ? item.category === categoryFilter
-    : true;
+    const token =
+      localStorage.getItem('token');
 
-  const matchesStatus = statusFilter
-    ? statusFilter === 'ACTIVE'
-      ? item.isActive !== false
-      : item.isActive === false
-    : true;
+    /*
+     * First request determines how many
+     * matching material pages exist.
+     */
+    const firstResponse = await axios.get(
+      `${API_BASE_URL}/project/material-master`,
+      {
+        params: {
+          page: 1,
+          limit: 100,
 
-  return matchesSearch && matchesCategory && matchesStatus;
-});
+          search:
+            searchText.trim() || undefined,
 
-const downloadMaterialCsv = () => {
-  const rows = filteredItems.map((item) => {
-    const rate = Number(item.rate || 0);
-    const gstPercent = Number(item.gstPercent || 0);
-    const purchaseWithGst =
-      rate + (rate * gstPercent) / 100;
+          category:
+            categoryFilter || undefined,
 
-    const sellingWithoutGst = Number(
-      item.sellingRate && item.sellingRate > 0
-        ? item.sellingRate
-        : purchaseWithGst +
-            (item.marginType === 'PERCENT'
-              ? (rate * Number(item.expectedMargin || 0)) / 100
-              : Number(item.expectedMargin || 0)),
+          showHidden:
+            showHidden
+              ? 'true'
+              : 'false',
+        },
+
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
     );
 
-    const sellingWithGst =
-      sellingWithoutGst +
-      (sellingWithoutGst * gstPercent) / 100;
+    const allItems: MaterialItem[] =
+      Array.isArray(firstResponse.data?.data)
+        ? [...firstResponse.data.data]
+        : [];
 
-    return {
-      Name: item.name || '',
-      Category: item.category || '',
-      Brand: item.brand || '',
-      Unit: item.unit || '',
-      HSN: item.hsnCode || '',
-      Vendor: item.vendorPreferredName || '',
-      'Purchase Without GST': rate,
-      'GST %': gstPercent,
-      'Purchase With GST': purchaseWithGst,
-      'Selling Without GST': sellingWithoutGst,
-      'Selling With GST': sellingWithGst,
-      'Margin Type': item.marginType || '',
-      'Expected Margin': item.expectedMargin || 0,
-      Status: item.isActive === false ? 'Disabled' : 'Active',
-    };
-  });
+    const exportTotalPages = Math.max(
+      Number(
+        firstResponse.data?.pagination
+          ?.totalPages || 1,
+      ),
+      1,
+    );
 
-  const headers = Object.keys(rows[0] || {
-    Name: '',
-    Category: '',
-    Brand: '',
-    Unit: '',
-    HSN: '',
-    Vendor: '',
-    'Purchase Without GST': '',
-    'GST %': '',
-    'Purchase With GST': '',
-    'Selling Without GST': '',
-    'Selling With GST': '',
-    'Margin Type': '',
-    'Expected Margin': '',
-    Status: '',
-  });
+    /*
+     * Load every remaining filtered page.
+     * The backend safely limits each request
+     * to a maximum of 100 materials.
+     */
+    if (exportTotalPages > 1) {
+      const pageNumbers = Array.from(
+        {
+          length:
+            exportTotalPages - 1,
+        },
+        (_, index) => index + 2,
+      );
 
-  const csv = [
-    headers.join(','),
-    ...rows.map((row: any) =>
+      /*
+       * Small batches avoid sending too many
+       * API requests at the same time.
+       */
+      const batchSize = 5;
+
+      for (
+        let index = 0;
+        index < pageNumbers.length;
+        index += batchSize
+      ) {
+        const currentBatch =
+          pageNumbers.slice(
+            index,
+            index + batchSize,
+          );
+
+        const responses =
+          await Promise.all(
+            currentBatch.map(
+              (exportPage) =>
+                axios.get(
+                  `${API_BASE_URL}/project/material-master`,
+                  {
+                    params: {
+                      page: exportPage,
+                      limit: 100,
+
+                      search:
+                        searchText.trim() ||
+                        undefined,
+
+                      category:
+                        categoryFilter ||
+                        undefined,
+
+                      showHidden:
+                        showHidden
+                          ? 'true'
+                          : 'false',
+                    },
+
+                    headers: token
+                      ? {
+                          Authorization:
+                            `Bearer ${token}`,
+                        }
+                      : {},
+                  },
+                ),
+            ),
+          );
+
+        for (const response of responses) {
+          if (
+            Array.isArray(
+              response.data?.data,
+            )
+          ) {
+            allItems.push(
+              ...response.data.data,
+            );
+          }
+        }
+      }
+    }
+
+    if (allItems.length === 0) {
+      alert(
+        showHidden
+          ? 'No hidden materials available to export'
+          : 'No visible materials available to export',
+      );
+
+      return;
+    }
+
+    const rows = allItems.map((item) => {
+      const rate = Number(
+        item.rate || 0,
+      );
+
+      const gstPercent = Number(
+        item.gstPercent || 0,
+      );
+
+      const purchaseWithGst =
+        rate +
+        (rate * gstPercent) / 100;
+
+      const sellingWithoutGst =
+        Number(
+          item.sellingRate &&
+            item.sellingRate > 0
+            ? item.sellingRate
+            : purchaseWithGst +
+                (item.marginType ===
+                'PERCENT'
+                  ? (rate *
+                      Number(
+                        item.expectedMargin ||
+                          0,
+                      )) /
+                    100
+                  : Number(
+                      item.expectedMargin ||
+                        0,
+                    )),
+        );
+
+      const sellingWithGst =
+        sellingWithoutGst +
+        (sellingWithoutGst *
+          gstPercent) /
+          100;
+
+      return {
+        Name: item.name || '',
+        Category:
+          item.category || '',
+        Brand: item.brand || '',
+        Unit: item.unit || '',
+        HSN: item.hsnCode || '',
+
+        Vendor:
+          item.vendorPreferredName ||
+          '',
+
+        'Purchase Without GST':
+          rate,
+
+        'GST %':
+          gstPercent,
+
+        'Purchase With GST':
+          purchaseWithGst,
+
+        'Selling Without GST':
+          sellingWithoutGst,
+
+        'Selling With GST':
+          sellingWithGst,
+
+        'Margin Type':
+          item.marginType || '',
+
+        'Expected Margin':
+          item.expectedMargin || 0,
+
+        'Minimum Stock Level':
+          item.minimumStockLevel || 0,
+
+        Status:
+          item.isActive === false
+            ? 'Hidden'
+            : 'Visible',
+
+        Remarks:
+          item.remarks || '',
+      };
+    });
+
+    const headers = Object.keys(
+      rows[0],
+    );
+
+    const csv = [
       headers
-        .map((header) =>
-          `"${String(row[header] ?? '').replace(/"/g, '""')}"`,
+        .map(
+          (header) =>
+            `"${String(
+              header,
+            ).replace(/"/g, '""')}"`,
         )
         .join(','),
-    ),
-  ].join('\n');
 
-  const blob = new Blob([csv], {
-    type: 'text/csv;charset=utf-8;',
-  });
+      ...rows.map((row: any) =>
+        headers
+          .map(
+            (header) =>
+              `"${String(
+                row[header] ?? '',
+              ).replace(
+                /"/g,
+                '""',
+              )}"`,
+          )
+          .join(','),
+      ),
+    ].join('\n');
 
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
+    /*
+     * UTF-8 BOM preserves special characters
+     * and ₹ values when opened in Excel.
+     */
+    const blob = new Blob(
+      ['\uFEFF', csv],
+      {
+        type:
+          'text/csv;charset=utf-8;',
+      },
+    );
 
-  link.href = url;
-  link.download = `material-list-${new Date()
-    .toISOString()
-    .slice(0, 10)}.csv`;
+    const url =
+      URL.createObjectURL(blob);
 
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
+    const link =
+      document.createElement('a');
 
-  URL.revokeObjectURL(url);
+    link.href = url;
+
+    link.download =
+      `${
+        showHidden
+          ? 'hidden-material-list'
+          : 'visible-material-list'
+      }-${new Date()
+        .toISOString()
+        .slice(0, 10)}.csv`;
+
+    document.body.appendChild(
+      link,
+    );
+
+    link.click();
+    link.remove();
+
+    URL.revokeObjectURL(url);
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to download material list',
+    );
+  } finally {
+    setCsvLoading(false);
+  }
 };
 
   return (
@@ -624,42 +906,98 @@ const downloadMaterialCsv = () => {
         </h2>
 
         <button
+  type="button"
   onClick={downloadMaterialCsv}
-  className="mb-4 rounded-xl bg-green-600 px-5 py-3 font-semibold text-white hover:bg-green-700"
+  disabled={csvLoading}
+  className="mb-4 rounded-xl bg-green-600 px-5 py-3 font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
 >
-  Download Material List CSV
+  {csvLoading
+    ? 'Preparing CSV...'
+    : showHidden
+      ? 'Download Hidden Materials CSV'
+      : 'Download Visible Materials CSV'}
 </button>
 
-        <div className="mb-4 grid gap-3 md:grid-cols-3">
+        <div className="mb-4 grid gap-3 md:grid-cols-4">
   <input
-    placeholder="Search material or brand"
+    placeholder="Search material, brand, HSN or vendor"
     value={searchText}
-    onChange={(e) => setSearchText(e.target.value)}
+    onChange={(e) => {
+      setSearchText(e.target.value);
+      setPage(1);
+    }}
     className="rounded-xl border p-3"
   />
 
   <select
     value={categoryFilter}
-    onChange={(e) => setCategoryFilter(e.target.value)}
+    onChange={(e) => {
+      setCategoryFilter(e.target.value);
+      setPage(1);
+    }}
     className="rounded-xl border p-3"
   >
-    <option value="">All Categories</option>
+    <option value="">
+      All Categories
+    </option>
 
     {categoryOptions.map((category) => (
-      <option key={category} value={category}>
+      <option
+        key={category}
+        value={category}
+      >
         {category}
       </option>
     ))}
   </select>
 
   <select
-    value={statusFilter}
-    onChange={(e) => setStatusFilter(e.target.value)}
+    value={showHidden ? 'HIDDEN' : 'VISIBLE'}
+    onChange={(e) => {
+      setShowHidden(
+        e.target.value === 'HIDDEN',
+      );
+
+      setCategoryFilter('');
+      setPage(1);
+    }}
     className="rounded-xl border p-3"
   >
-    <option value="">All Status</option>
-    <option value="ACTIVE">Active</option>
-    <option value="DISABLED">Disabled</option>
+    <option value="VISIBLE">
+      Visible Materials
+    </option>
+
+    <option value="HIDDEN">
+      Hidden Materials
+    </option>
+  </select>
+
+  <select
+    value={limit}
+    onChange={(e) => {
+      setLimit(
+        Number(e.target.value),
+      );
+
+      setPage(1);
+    }}
+    className="rounded-xl border p-3"
+  >
+    <option value={10}>
+      10 per page
+    </option>
+
+    <option value={20}>
+      20 per page
+    </option>
+
+    <option value={50}>
+      50 per page
+    </option>
+
+    <option value={100}>
+      100 per page
+    </option>
   </select>
 </div>
 
@@ -787,7 +1125,7 @@ const downloadMaterialCsv = () => {
       : 'bg-green-600 hover:bg-green-700'
   }`}
 >
-  {item.isActive ? 'Disable' : 'Enable'}
+  {item.isActive ? 'Hide' : 'Restore'}
 </button>
 </div>
 )}
@@ -796,6 +1134,69 @@ const downloadMaterialCsv = () => {
             ))}
           </div>
         )}
+
+        {!loading && total > 0 && (
+  <div className="mt-5 flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+    <p className="text-sm text-gray-600">
+      Showing{' '}
+      {Math.min(
+        (page - 1) * limit + 1,
+        total,
+      )}
+      {' - '}
+      {Math.min(
+        page * limit,
+        total,
+      )}{' '}
+      of{' '}
+      {total.toLocaleString('en-IN')}
+    </p>
+
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        disabled={
+          page <= 1 ||
+          loading
+        }
+        onClick={() =>
+          setPage((current) =>
+            Math.max(
+              current - 1,
+              1,
+            ),
+          )
+        }
+        className="rounded-xl border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        Previous
+      </button>
+
+      <span className="rounded-xl bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700">
+        Page {page} of {totalPages}
+      </span>
+
+      <button
+        type="button"
+        disabled={
+          page >= totalPages ||
+          loading
+        }
+        onClick={() =>
+          setPage((current) =>
+            Math.min(
+              current + 1,
+              totalPages,
+            ),
+          )
+        }
+        className="rounded-xl border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        Next
+      </button>
+    </div>
+  </div>
+)}
       </div>
       )}
     </div>
