@@ -16369,7 +16369,7 @@ doc
   .fontSize(8)
   .fillColor(muted)
   .text(
-    'ADITYA SOLARS | adityasolarsraj01@gmail.com | 8306170662, 9887634474',
+    'ADITYA TRADING | adityasolarsraj01@gmail.com | 8306170662, 9887634474',
     pageLeft,
     doc.y,
     {
@@ -16382,7 +16382,7 @@ doc
   .fontSize(8)
   .fillColor(muted)
   .text(
-    'GSTIN: 08CVFPM5354P1ZV',
+    'GSTIN: 08ABCHR1453D1ZE',
     pageLeft,
     doc.y + 12,
     {
@@ -16690,7 +16690,7 @@ if (doc.y + requiredFooterSpace > 760) {
   doc
   .fontSize(10)
   .fillColor(blue)
-  .text('For Aditya Solars', pageLeft + 277, footerY + 10);
+  .text('For Aditya Trading', pageLeft + 277, footerY + 10);
 
 doc
   .fontSize(8)
@@ -17522,7 +17522,7 @@ async generateFinalInvoicePdf(
     .fontSize(8)
     .fillColor(muted)
     .text(
-      'ADITYA SOLARS | adityasolarsraj01@gmail.com | 8306170662, 9887634474',
+      'ADITYA TRADING | adityasolarsraj01@gmail.com | 8306170662, 9887634474',
       pageLeft,
       doc.y,
       {
@@ -17535,7 +17535,7 @@ async generateFinalInvoicePdf(
     .fontSize(8)
     .fillColor(muted)
     .text(
-      'GSTIN: 08CVFPM5354P1ZV',
+      'GSTIN: 08ABCHR1453D1ZE',
       pageLeft,
       doc.y + 12,
       {
@@ -17845,7 +17845,7 @@ if (doc.y + requiredFooterSpace > 760) {
   doc
     .fontSize(10)
     .fillColor(blue)
-    .text('For Aditya Solars', pageLeft + 277, footerY + 10);
+    .text('For Aditya Trading', pageLeft + 277, footerY + 10);
 
   doc
     .fontSize(8)
