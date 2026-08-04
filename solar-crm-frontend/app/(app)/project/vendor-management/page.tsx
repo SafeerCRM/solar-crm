@@ -7,6 +7,7 @@ import {
 } from 'react';
 
 import axios from 'axios';
+import TextField from '@mui/material/TextField';
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -1753,50 +1754,81 @@ alert(
             </option>
           </select>
 
-          <input
-            type="month"
-            value={filters.month}
-            onChange={(event) =>
-              setFilters({
-                ...filters,
-                month:
-                  event.target.value,
-                fromDate: '',
-                toDate: '',
-              })
-            }
-            className="rounded-xl border p-3"
-          />
+          <TextField
+  label="Month"
+  type="month"
+  fullWidth
+  value={filters.month}
+  onChange={(event) =>
+    setFilters({
+      ...filters,
+      month: event.target.value,
+      fromDate: '',
+      toDate: '',
+    })
+  }
+  slotProps={{
+    inputLabel: {
+      shrink: true,
+    },
+  }}
+  sx={{
+    '& .MuiOutlinedInput-root': {
+      borderRadius: '0.75rem',
+      height: '54px',
+    },
+  }}
+/>
 
-          <input
-            type="date"
-            value={
-              filters.fromDate
-            }
-            onChange={(event) =>
-              setFilters({
-                ...filters,
-                fromDate:
-                  event.target.value,
-                month: '',
-              })
-            }
-            className="rounded-xl border p-3"
-          />
+          <TextField
+  label="From Date"
+  type="date"
+  fullWidth
+  value={filters.fromDate}
+  onChange={(event) =>
+    setFilters({
+      ...filters,
+      fromDate: event.target.value,
+      month: '',
+    })
+  }
+  slotProps={{
+    inputLabel: {
+      shrink: true,
+    },
+  }}
+  sx={{
+    '& .MuiOutlinedInput-root': {
+      borderRadius: '0.75rem',
+      height: '54px',
+    },
+  }}
+/>
 
-          <input
-            type="date"
-            value={filters.toDate}
-            onChange={(event) =>
-              setFilters({
-                ...filters,
-                toDate:
-                  event.target.value,
-                month: '',
-              })
-            }
-            className="rounded-xl border p-3"
-          />
+          <TextField
+  label="To Date"
+  type="date"
+  fullWidth
+  value={filters.toDate}
+  onChange={(event) =>
+    setFilters({
+      ...filters,
+      toDate: event.target.value,
+      month: '',
+    })
+  }
+  slotProps={{
+    inputLabel: {
+      shrink: true,
+    },
+  }}
+  sx={{
+    '& .MuiOutlinedInput-root': {
+      borderRadius: '0.75rem',
+      height: '54px',
+    },
+  }}
+/>
 
           <select
             value={
@@ -2448,41 +2480,53 @@ alert(
                   className="rounded-xl border p-3"
                 />
 
-                <input
-                  type="date"
-                  value={
-                    billForm.billDate
-                  }
-                  onChange={(
-                    event,
-                  ) =>
-                    setBillForm({
-                      ...billForm,
-                      billDate:
-                        event.target
-                          .value,
-                    })
-                  }
-                  className="rounded-xl border p-3"
-                />
+                <TextField
+  label="Bill Date"
+  type="date"
+  fullWidth
+  value={billForm.billDate}
+  onChange={(event) =>
+    setBillForm({
+      ...billForm,
+      billDate: event.target.value,
+    })
+  }
+  slotProps={{
+    inputLabel: {
+      shrink: true,
+    },
+  }}
+  sx={{
+    '& .MuiOutlinedInput-root': {
+      borderRadius: '0.75rem',
+      height: '54px',
+    },
+  }}
+/>
 
-                <input
-                  type="date"
-                  value={
-                    billForm.dueDate
-                  }
-                  onChange={(
-                    event,
-                  ) =>
-                    setBillForm({
-                      ...billForm,
-                      dueDate:
-                        event.target
-                          .value,
-                    })
-                  }
-                  className="rounded-xl border p-3"
-                />
+                <TextField
+  label="Due Date"
+  type="date"
+  fullWidth
+  value={billForm.dueDate}
+  onChange={(event) =>
+    setBillForm({
+      ...billForm,
+      dueDate: event.target.value,
+    })
+  }
+  slotProps={{
+    inputLabel: {
+      shrink: true,
+    },
+  }}
+  sx={{
+    '& .MuiOutlinedInput-root': {
+      borderRadius: '0.75rem',
+      height: '54px',
+    },
+  }}
+/>
 
                 <input
                   type="number"
@@ -2798,23 +2842,29 @@ alert(
                   )}
                 </select>
 
-                <input
-                  type="date"
-                  value={
-                    paymentForm.paymentDate
-                  }
-                  onChange={(
-                    event,
-                  ) =>
-                    setPaymentForm({
-                      ...paymentForm,
-                      paymentDate:
-                        event.target
-                          .value,
-                    })
-                  }
-                  className="rounded-xl border p-3"
-                />
+                <TextField
+  label="Payment Date"
+  type="date"
+  fullWidth
+  value={paymentForm.paymentDate}
+  onChange={(event) =>
+    setPaymentForm({
+      ...paymentForm,
+      paymentDate: event.target.value,
+    })
+  }
+  slotProps={{
+    inputLabel: {
+      shrink: true,
+    },
+  }}
+  sx={{
+    '& .MuiOutlinedInput-root': {
+      borderRadius: '0.75rem',
+      height: '54px',
+    },
+  }}
+/>
 
                 <input
                   type="number"
