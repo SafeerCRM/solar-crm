@@ -178,7 +178,6 @@ const initialBillForm = {
   taxableAmount: '',
   gstAmount: '',
   totalAmount: '',
-  paidAmount: '',
   remarks: '',
 };
 
@@ -2438,25 +2437,6 @@ export default function VendorManagementPage() {
                     setBillForm({
                       ...billForm,
                       totalAmount:
-                        event.target
-                          .value,
-                    })
-                  }
-                  className="rounded-xl border p-3"
-                />
-
-                <input
-                  type="number"
-                  placeholder="Already Paid Amount"
-                  value={
-                    billForm.paidAmount
-                  }
-                  onChange={(
-                    event,
-                  ) =>
-                    setBillForm({
-                      ...billForm,
-                      paidAmount:
                         event.target
                           .value,
                     })
