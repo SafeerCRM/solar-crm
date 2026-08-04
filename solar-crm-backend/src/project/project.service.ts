@@ -27731,40 +27731,13 @@ async createVendorManagementBill(
     body?.gstAmount || 0,
   );
 
-  const initialPaidAmount = Math.max(
-    Number(body?.paidAmount || 0),
-    0,
-  );
+  const initialPaidAmount = 0;
 
-  if (initialPaidAmount > totalAmount) {
-    throw new BadRequestException(
-      'Paid amount cannot be greater than total bill amount',
-    );
-  }
+const pendingAmount =
+  totalAmount;
 
-  const pendingAmount = Math.max(
-    totalAmount - initialPaidAmount,
-    0,
-  );
-
-  let status =
-    ProjectVendorBillStatus.UNPAID;
-
-  if (
-    initialPaidAmount > 0 &&
-    pendingAmount > 0
-  ) {
-    status =
-      ProjectVendorBillStatus.PARTIALLY_PAID;
-  }
-
-  if (
-    totalAmount > 0 &&
-    pendingAmount <= 0
-  ) {
-    status =
-      ProjectVendorBillStatus.PAID;
-  }
+const status =
+  ProjectVendorBillStatus.UNPAID;
 
   const bill =
     this.projectVendorBillRepository.create({
