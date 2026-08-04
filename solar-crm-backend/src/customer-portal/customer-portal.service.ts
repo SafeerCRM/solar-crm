@@ -1848,9 +1848,23 @@ if (!existingContact) {
   }
 
   async createPaymentReceipt(body: any) {
+  const receiptUrl = String(
+    body?.receiptUrl || '',
+  ).trim();
+
+  const receiptFileName = String(
+    body?.receiptFileName || '',
+  ).trim();
+
+  if (!receiptUrl || !receiptFileName) {
+    throw new BadRequestException(
+      'Payment receipt document is required.',
+    );
+  }
+
   const receipt = new CustomerPaymentReceipt();
 
-Object.assign(receipt, {
+  Object.assign(receipt, {
   ...body,
   customerId: Number(body.customerId),
   projectId: Number(body.projectId),
