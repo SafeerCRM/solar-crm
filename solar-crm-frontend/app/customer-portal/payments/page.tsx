@@ -247,11 +247,18 @@ const uploadReceiptFile = async () => {
     }
 
     if (!form.paymentDate) {
-      alert('Please select payment date');
-      return;
-    }
+  alert('Please select payment date');
+  return;
+}
 
-    try {
+if (!selectedReceipt) {
+  alert(
+    'Payment receipt document is required. Please upload an image or PDF before submitting.',
+  );
+  return;
+}
+
+try {
       setSaving(true);
 
       const token = localStorage.getItem('customer_token');
@@ -260,10 +267,17 @@ const uploadReceiptFile = async () => {
         (project: any) => String(project.id) === String(form.projectId),
       );
 
-      let receiptData = null;
+      const receiptData =
+  await uploadReceiptFile();
 
-if (selectedReceipt) {
-  receiptData = await uploadReceiptFile();
+if (
+  !receiptData?.fileUrl ||
+  !receiptData?.fileName
+) {
+  alert(
+    'Receipt upload was not completed. Please upload the receipt again.',
+  );
+  return;
 }
 
       const res = await fetch(`${API_BASE_URL}/customer-auth/payment-receipts`, {
@@ -607,8 +621,12 @@ setReceiptPreview('');
 
                 <div>
   <label className="mb-2 block text-sm font-bold text-gray-700">
-    Receipt Upload
+    Receipt Upload *
   </label>
+
+  <p className="mb-2 text-xs font-semibold text-red-600">
+  Required for every payment mode. Upload an image or PDF.
+</p>
 
   <input
     type="file"
@@ -664,7 +682,11 @@ setReceiptPreview('');
 
                 <button
                   onClick={submitReceipt}
-                  disabled={saving}
+                  disabled={
+  saving ||
+  uploadingReceipt ||
+  !selectedReceipt
+}
                   className="w-full rounded-2xl bg-orange-500 py-3 font-black text-white hover:bg-orange-600 disabled:opacity-50"
                 >
                   {uploadingReceipt
