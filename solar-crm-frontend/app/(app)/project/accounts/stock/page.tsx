@@ -26,6 +26,8 @@ export default function StockManagementPage() {
   const [loading, setLoading] = useState(false);
 
   const [materials, setMaterials] = useState<any[]>([]);
+  const [incomingMaterialSearch, setIncomingMaterialSearch] =
+  useState('');
 const [branches, setBranches] = useState<any[]>([]);
 const [projectSearch, setProjectSearch] = useState('');
 const [projectSearchResults, setProjectSearchResults] =
@@ -735,6 +737,12 @@ await loadProjectConsumptions(1, normalFilters);
     const res = await axios.get(
       `${API_BASE_URL}/project/material-master`,
       {
+        params: {
+          page: 1,
+          limit: 1000,
+          activeOnly: 'true',
+          showHidden: 'false',
+        },
         headers: token
           ? {
               Authorization: `Bearer ${token}`,
@@ -743,9 +751,20 @@ await loadProjectConsumptions(1, normalFilters);
       },
     );
 
-    setMaterials(Array.isArray(res.data) ? res.data : []);
+    const materialRows = Array.isArray(res.data)
+      ? res.data
+      : Array.isArray(res.data?.data)
+        ? res.data.data
+        : [];
+
+    setMaterials(materialRows);
   } catch (error) {
-    console.error(error);
+    console.error(
+      'Failed to load materials:',
+      error,
+    );
+
+    setMaterials([]);
   }
 };
 
@@ -1619,6 +1638,31 @@ const getFilteredSelectableStockItems = (searchText: string) => {
   );
 };
 
+const filteredIncomingMaterials =
+  materials.filter((material: any) => {
+    const search =
+      incomingMaterialSearch
+        .trim()
+        .toLowerCase();
+
+    if (!search) {
+      return true;
+    }
+
+    const searchableText = [
+      material.name,
+      material.category,
+      material.brand,
+      material.unit,
+      material.hsnCode,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+
+    return searchableText.includes(search);
+  });
+
   return (
     <div className="mx-auto w-full max-w-7xl min-w-0 space-y-5 overflow-x-hidden">
       <div className="rounded-2xl bg-white p-5 shadow">
@@ -1719,6 +1763,18 @@ const getFilteredSelectableStockItems = (searchText: string) => {
   </div>
 
   <div className="mt-4 grid gap-3 md:grid-cols-3">
+
+    <input
+  type="text"
+  placeholder="Search material by name, category or brand"
+  value={incomingMaterialSearch}
+  onChange={(e) =>
+    setIncomingMaterialSearch(
+      e.target.value,
+    )
+  }
+  className="min-w-0 rounded-xl border p-3 text-sm md:col-span-3"
+/>
     <select
       value={receiveForm.materialId}
       onChange={(e) =>
@@ -1731,7 +1787,8 @@ const getFilteredSelectableStockItems = (searchText: string) => {
     >
       <option value="">Select Material</option>
 
-      {materials.map((material: any) => (
+      {filteredIncomingMaterials.map(
+  (material: any) => (
         <option
           key={material.id}
           value={material.id}
