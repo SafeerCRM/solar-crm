@@ -200,6 +200,7 @@ private getHighestCalculatorRole(roles: string[] = []) {
 
   'STOCK_MANAGER',
   'TRADING_MANAGER',
+  'TRADING_HEAD',
   'CUSTOMER_MANAGER',
   'MAINTENANCE_MANAGER',
   'HR_MANAGER',
