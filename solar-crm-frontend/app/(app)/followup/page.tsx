@@ -697,6 +697,22 @@ const getSourceOpenLabel = (f: FollowUp) => {
   return 'Open Source';
 };
 
+const canConvertFollowupToMeeting = (f: FollowUp) => {
+  const source = String(
+    f.sourceModule || 'FOLLOWUP',
+  ).toUpperCase();
+
+  if (source === 'MEETING') {
+    return false;
+  }
+
+  if (source === 'TRADING') {
+    return false;
+  }
+
+  return Boolean(f.leadId);
+};
+
   const filteredAllFollowups =
   allFollowups;
 
@@ -964,14 +980,18 @@ const filteredSelectedFollowups = selectedFollowups.filter((f) => {
   </button>
 )}
 
-            <button
-              type="button"
-              onClick={() => handleConvertToMeeting(f.id)}
-              disabled={convertingId === f.id}
-              className="rounded bg-purple-600 px-3 py-2 text-sm text-white"
-            >
-              {convertingId === f.id ? 'Opening...' : 'Convert to Meeting'}
-            </button>
+            {canConvertFollowupToMeeting(f) && (
+  <button
+    type="button"
+    onClick={() => handleConvertToMeeting(f.id)}
+    disabled={convertingId === f.id}
+    className="rounded bg-purple-600 px-3 py-2 text-sm text-white disabled:opacity-50"
+  >
+    {convertingId === f.id
+      ? 'Opening...'
+      : 'Convert to Meeting'}
+  </button>
+)}
           </div>
         </div>
       ))}
@@ -1460,18 +1480,18 @@ setStaffFilterId('');
                   </button>
                 )}
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    handleConvertToMeeting(f.id)
-                  }
-                  disabled={convertingId === f.id}
-                  className="rounded bg-purple-600 px-3 py-2 text-sm text-white disabled:opacity-50"
-                >
-                  {convertingId === f.id
-                    ? 'Opening...'
-                    : 'Convert to Meeting'}
-                </button>
+                {canConvertFollowupToMeeting(f) && (
+  <button
+    type="button"
+    onClick={() => handleConvertToMeeting(f.id)}
+    disabled={convertingId === f.id}
+    className="rounded bg-purple-600 px-3 py-2 text-sm text-white disabled:opacity-50"
+  >
+    {convertingId === f.id
+      ? 'Opening...'
+      : 'Convert to Meeting'}
+  </button>
+)}
               </div>
             </div>
           );
@@ -1605,15 +1625,18 @@ setStaffFilterId('');
   </button>
 )}
 
-                  <button
-                    onClick={() => handleConvertToMeeting(f.id)}
-                    disabled={convertingId === f.id}
-                    className="rounded bg-purple-600 px-3 py-2 text-sm text-white"
-                  >
-                    {convertingId === f.id
-                      ? 'Opening...'
-                      : 'Convert to Meeting'}
-                  </button>
+                  {canConvertFollowupToMeeting(f) && (
+  <button
+    type="button"
+    onClick={() => handleConvertToMeeting(f.id)}
+    disabled={convertingId === f.id}
+    className="rounded bg-purple-600 px-3 py-2 text-sm text-white disabled:opacity-50"
+  >
+    {convertingId === f.id
+      ? 'Opening...'
+      : 'Convert to Meeting'}
+  </button>
+)}
                 </div>
               </div>
             ))}

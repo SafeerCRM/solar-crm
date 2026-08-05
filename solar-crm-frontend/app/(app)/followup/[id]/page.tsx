@@ -15,18 +15,29 @@ import dayjs, { Dayjs } from 'dayjs';
 
 type FollowUp = {
   id: number;
-  leadId: number;
+  leadId?: number | null;
+  meetingId?: number | null;
+  contactId?: number | null;
+  tradingMeetingId?: number | null;
+
+  customerName?: string | null;
+  customerPhone?: string | null;
+
+  sourceModule?: string;
+  sourceStage?: string;
+
   assignedTo?: number;
   followUpDate: string;
   status: 'PENDING' | 'COMPLETED' | 'MISSED';
   note?: string;
   remarks?: string;
+
   lead?: {
     id: number;
     name: string;
     phone: string;
     city?: string;
-  };
+  } | null;
 };
 
 const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -43,7 +54,6 @@ export default function FollowupDetailPage() {
   );
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
-  const [converted, setConverted] = useState(false);
 
   useEffect(() => {
     if (id) fetchFollowup();
@@ -112,31 +122,87 @@ export default function FollowupDetailPage() {
     }
   };
 
-  const handleConvertToLead = async () => {
-    if (!followup?.lead) return;
+  const getCustomerName = () => {
+  return (
+    String(followup?.lead?.name || '').trim() ||
+    String(followup?.customerName || '').trim() ||
+    (followup?.meetingId
+      ? `Meeting ID: ${followup.meetingId}`
+      : '') ||
+    (followup?.contactId
+      ? `Contact ID: ${followup.contactId}`
+      : '') ||
+    `Followup ${followup?.id || ''}`
+  );
+};
 
-    try {
-      setLoading(true);
-      setMessage('');
+const getCustomerPhone = () => {
+  return (
+    String(followup?.lead?.phone || '').trim() ||
+    String(followup?.customerPhone || '').trim()
+  );
+};
 
-      await axios.post(
-        `${backendUrl}/leads`,
-        {
-          name: followup.lead.name,
-          phone: followup.lead.phone,
-          city: followup.lead.city,
-        },
-        { headers: getAuthHeaders() }
-      );
+const getSourcePath = () => {
+  const source = String(
+    followup?.sourceModule || '',
+  ).toUpperCase();
 
-      setConverted(true);
-      setMessage('Converted to Lead successfully');
-    } catch (error: any) {
-      setMessage(error?.response?.data?.message || 'Conversion failed');
-    } finally {
-      setLoading(false);
-    }
-  };
+  if (
+    source === 'MEETING' &&
+    followup?.meetingId
+  ) {
+    return `/meeting/${followup.meetingId}`;
+  }
+
+  if (
+    source === 'TELECALLING' &&
+    followup?.contactId
+  ) {
+    return `/telecalling/contacts/${followup.contactId}`;
+  }
+
+  if (
+    source === 'TRADING' &&
+    followup?.tradingMeetingId
+  ) {
+    return `/trading-meeting/${followup.tradingMeetingId}`;
+  }
+
+  if (followup?.leadId) {
+    return `/leads/${followup.leadId}`;
+  }
+
+  return '';
+};
+
+const getSourceLabel = () => {
+  const source = String(
+    followup?.sourceModule || '',
+  ).toUpperCase();
+
+  if (source === 'MEETING') {
+    return 'Open Meeting';
+  }
+
+  if (source === 'TELECALLING') {
+    return 'Open Contact';
+  }
+
+  if (source === 'TRADING') {
+    return 'Open Trading Meeting';
+  }
+
+  if (followup?.leadId) {
+    return 'Open Lead';
+  }
+
+  return 'Open Source';
+};
+
+const customerName = getCustomerName();
+const customerPhone = getCustomerPhone();
+const sourcePath = getSourcePath();
 
   const followUpDateValue = followUpDate ? dayjs(followUpDate) : null;
   const followUpTimeValue = followUpDate ? dayjs(followUpDate) : null;
@@ -191,35 +257,45 @@ export default function FollowupDetailPage() {
 
       <div className="rounded-2xl bg-white p-6 shadow">
         <h2 className="text-xl font-semibold">
-          {followup.lead?.name || 'Lead'}
-        </h2>
+  {customerName}
+</h2>
 
-        <p className="text-gray-600">{followup.lead?.phone}</p>
+{customerPhone && (
+  <p className="text-gray-600">
+    {customerPhone}
+  </p>
+)}
 
         <div className="mt-4 flex flex-wrap gap-2">
-          <a
-            href={`tel:${followup.lead?.phone}`}
-            className="rounded bg-green-600 px-4 py-2 text-white"
-          >
-            📞 Call
-          </a>
+  {customerPhone && (
+    <a
+      href={`tel:${customerPhone}`}
+      className="rounded bg-green-600 px-4 py-2 text-white"
+    >
+      📞 Call
+    </a>
+  )}
 
-          <button
-            onClick={handleComplete}
-            className="rounded bg-blue-600 px-4 py-2 text-white"
-          >
-            Complete
-          </button>
+  {sourcePath && (
+    <Link
+      href={sourcePath}
+      className="rounded bg-gray-700 px-4 py-2 text-white"
+    >
+      {getSourceLabel()}
+    </Link>
+  )}
 
-          {!converted && (
-            <button
-              onClick={handleConvertToLead}
-              className="rounded bg-purple-600 px-4 py-2 text-white"
-            >
-              Convert to Lead
-            </button>
-          )}
-        </div>
+  {String(followup.status).toUpperCase() !==
+    'COMPLETED' && (
+    <button
+      type="button"
+      onClick={handleComplete}
+      className="rounded bg-blue-600 px-4 py-2 text-white"
+    >
+      Complete
+    </button>
+  )}
+</div>
 
         <div className="mt-4 space-y-4">
           <select
