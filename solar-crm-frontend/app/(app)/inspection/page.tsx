@@ -109,8 +109,60 @@ type InspectionAnalytics = {
   managerWise: ManagerAnalytics[];
   cityWise: CityAnalytics[];
   componentWise: ComponentAnalytics[];
-  inspections: any[];
-  defects: any[];
+  inspections:
+  InspectionVisit[];
+
+visitPagination:
+  VisitPagination;
+
+defects: any[];
+};
+
+type InspectionVisit = {
+  id: number;
+  projectId: number;
+
+  customerId?: number;
+  customerCode?: string;
+  customerName?: string;
+  customerPhone?: string;
+
+  city?: string;
+  zone?: string;
+  branchName?: string;
+
+  projectStatus?: string;
+  projectWorkState?: string;
+
+  inspectionManagerId?: number;
+  inspectionManagerName?: string;
+  inspectionManagerRole?: string;
+
+  status?: string;
+  overallCondition?: string;
+
+  inspectionDate?: string;
+  startedAt?: string;
+  completedAt?: string;
+
+  visitAddress?: string;
+  visitLatitude?: number;
+  visitLongitude?: number;
+
+  comments?: string;
+
+  defectsFound?: boolean;
+  followUpRequired?: boolean;
+  nextInspectionDate?: string;
+
+  createdAt?: string;
+};
+
+type VisitPagination = {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
 };
 
 const emptyAnalytics: InspectionAnalytics = {
@@ -129,7 +181,15 @@ const emptyAnalytics: InspectionAnalytics = {
   cityWise: [],
   componentWise: [],
   inspections: [],
-  defects: [],
+
+visitPagination: {
+  page: 1,
+  limit: 20,
+  total: 0,
+  totalPages: 1,
+},
+
+defects: [],
 };
 
 const emptyPagination: Pagination = {
@@ -193,6 +253,16 @@ const [
   analyticsLoading,
   setAnalyticsLoading,
 ] = useState(false);
+
+const [
+  visitPage,
+  setVisitPage,
+] = useState(1);
+
+const [
+  visitLimit,
+  setVisitLimit,
+] = useState(20);
 
 const [
   managerOptions,
@@ -518,6 +588,9 @@ const [
                 analyticsFilters
                   .resolutionStatus ||
                 undefined,
+
+                visitPage,
+visitLimit,
             },
 
             headers:
@@ -561,15 +634,50 @@ const [
             : [],
 
         inspections:
-          Array.isArray(
-            response.data
-              ?.inspections,
-          )
-            ? response.data
-                .inspections
-            : [],
+  Array.isArray(
+    response.data
+      ?.inspections,
+  )
+    ? response.data
+        .inspections
+    : [],
 
-        defects:
+visitPagination: {
+  page:
+    Number(
+      response.data
+        ?.visitPagination
+        ?.page || 1,
+    ),
+
+  limit:
+    Number(
+      response.data
+        ?.visitPagination
+        ?.limit ||
+        visitLimit,
+    ),
+
+  total:
+    Number(
+      response.data
+        ?.visitPagination
+        ?.total || 0,
+    ),
+
+  totalPages:
+    Math.max(
+      Number(
+        response.data
+          ?.visitPagination
+          ?.totalPages ||
+          1,
+      ),
+      1,
+    ),
+},
+
+defects:
           Array.isArray(
             response.data
               ?.defects,
@@ -672,6 +780,7 @@ const [
       severity: '',
       resolutionStatus: '',
     });
+    setVisitPage(1);
   };
 
   const openNavigation = (
@@ -762,6 +871,27 @@ const [
     );
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [
+  analyticsFilters.month,
+  analyticsFilters.fromDate,
+  analyticsFilters.toDate,
+  analyticsFilters.inspectionManagerId,
+  analyticsFilters.city,
+  analyticsFilters.zone,
+  analyticsFilters.branchName,
+  analyticsFilters.projectStatus,
+  analyticsFilters.overallCondition,
+  analyticsFilters.inspectionStatus,
+  analyticsFilters.componentType,
+  analyticsFilters.qualityStatus,
+  analyticsFilters.severity,
+  analyticsFilters.resolutionStatus,
+  visitPage,
+visitLimit,
+]);
+
+useEffect(() => {
+  setVisitPage(1);
 }, [
   analyticsFilters.month,
   analyticsFilters.fromDate,
@@ -1696,6 +1826,403 @@ const [
           </button>
         </div>
       </div>
+
+      <div className="rounded-2xl bg-white p-5 shadow">
+  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <h2 className="text-xl font-bold text-gray-900">
+        Inspection Visit Register
+      </h2>
+
+      <p className="mt-1 text-sm text-gray-500">
+        Complete date-wise record of
+        inspected sites and submitted
+        work.
+      </p>
+    </div>
+
+    <div className="flex items-center gap-3">
+      <p className="text-sm font-semibold text-gray-600">
+        {analytics
+          .visitPagination
+          .total
+          .toLocaleString(
+            'en-IN',
+          )}{' '}
+        visit(s)
+      </p>
+
+      <select
+        value={visitLimit}
+        onChange={(event) => {
+          setVisitLimit(
+            Number(
+              event.target
+                .value,
+            ),
+          );
+
+          setVisitPage(1);
+        }}
+        className="rounded-xl border p-2 text-sm"
+      >
+        <option value={10}>
+          10 per page
+        </option>
+
+        <option value={20}>
+          20 per page
+        </option>
+
+        <option value={50}>
+          50 per page
+        </option>
+
+        <option value={100}>
+          100 per page
+        </option>
+      </select>
+    </div>
+  </div>
+
+  <div className="mt-5 overflow-x-auto">
+    {analyticsLoading ? (
+      <p className="py-5 text-sm text-gray-500">
+        Loading inspection visits...
+      </p>
+    ) : analytics.inspections
+        .length === 0 ? (
+      <p className="py-5 text-sm text-gray-500">
+        No inspection visits found
+        for the selected filters.
+      </p>
+    ) : (
+      <table className="min-w-full border text-sm">
+        <thead className="bg-gray-100 text-left">
+          <tr>
+            <th className="border p-3">
+              Inspection
+            </th>
+
+            <th className="border p-3">
+              Date & Time
+            </th>
+
+            <th className="border p-3">
+              Inspector
+            </th>
+
+            <th className="border p-3">
+              Customer / Project
+            </th>
+
+            <th className="border p-3">
+              City
+            </th>
+
+            <th className="border p-3">
+              Condition
+            </th>
+
+            <th className="border p-3">
+              Defect
+            </th>
+
+            <th className="border p-3">
+              Status
+            </th>
+
+            <th className="border p-3">
+              Follow-up
+            </th>
+
+            <th className="border p-3">
+              Action
+            </th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {analytics.inspections.map(
+            (inspection) => (
+              <tr
+                key={
+                  inspection.id
+                }
+                className="align-top hover:bg-gray-50"
+              >
+                <td className="border p-3 font-bold text-gray-800">
+                  #
+                  {
+                    inspection.id
+                  }
+                </td>
+
+                <td className="border p-3 whitespace-nowrap">
+                  {formatDate(
+                    inspection
+                      .inspectionDate ||
+                      inspection
+                        .createdAt,
+                  )}
+                </td>
+
+                <td className="border p-3">
+                  <p className="font-semibold text-gray-800">
+                    {inspection
+                      .inspectionManagerName ||
+                      '-'}
+                  </p>
+
+                  {inspection
+                    .inspectionManagerRole && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      {formatLabel(
+                        inspection
+                          .inspectionManagerRole,
+                      )}
+                    </p>
+                  )}
+                </td>
+
+                <td className="border p-3">
+                  <p className="font-semibold text-gray-800">
+                    {inspection
+                      .customerName ||
+                      'Customer'}
+                  </p>
+
+                  <p className="mt-1 text-xs text-gray-500">
+                    Project #
+                    {
+                      inspection.projectId
+                    }
+                    {inspection
+                      .customerCode
+                      ? ` · ${inspection.customerCode}`
+                      : ''}
+                  </p>
+
+                  {inspection
+                    .customerPhone && (
+                    <a
+                      href={`tel:${inspection.customerPhone}`}
+                      className="mt-1 inline-block text-xs font-semibold text-green-700"
+                    >
+                      {
+                        inspection.customerPhone
+                      }
+                    </a>
+                  )}
+                </td>
+
+                <td className="border p-3">
+                  <p>
+                    {inspection.city ||
+                      '-'}
+                  </p>
+
+                  {inspection
+                    .branchName && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      {
+                        inspection.branchName
+                      }
+                    </p>
+                  )}
+                </td>
+
+                <td className="border p-3">
+                  <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">
+                    {formatLabel(
+                      inspection
+                        .overallCondition,
+                    )}
+                  </span>
+                </td>
+
+                <td className="border p-3">
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-bold ${
+                      inspection
+                        .defectsFound
+                        ? 'bg-red-100 text-red-700'
+                        : 'bg-green-100 text-green-700'
+                    }`}
+                  >
+                    {inspection
+                      .defectsFound
+                      ? 'Found'
+                      : 'None'}
+                  </span>
+                </td>
+
+                <td className="border p-3">
+                  <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-700">
+                    {formatLabel(
+                      inspection.status,
+                    )}
+                  </span>
+                </td>
+
+                <td className="border p-3">
+                  {inspection
+                    .followUpRequired ? (
+                    <div>
+                      <span className="rounded-full bg-yellow-100 px-3 py-1 text-xs font-bold text-yellow-700">
+                        Required
+                      </span>
+
+                      {inspection
+                        .nextInspectionDate && (
+                        <p className="mt-2 whitespace-nowrap text-xs text-gray-500">
+                          {new Date(
+                            inspection
+                              .nextInspectionDate,
+                          ).toLocaleDateString(
+                            'en-IN',
+                          )}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-gray-500">
+                      Not required
+                    </span>
+                  )}
+                </td>
+
+                <td className="border p-3">
+                  <Link
+                    href={`/inspection/${inspection.projectId}`}
+                    className="inline-flex rounded-xl bg-orange-500 px-3 py-2 text-xs font-bold text-white hover:bg-orange-600"
+                  >
+                    View Inspection
+                  </Link>
+                </td>
+              </tr>
+            ),
+          )}
+        </tbody>
+      </table>
+    )}
+  </div>
+
+  {!analyticsLoading &&
+    analytics
+      .visitPagination
+      .total > 0 && (
+      <div className="mt-5 flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-gray-600">
+          Showing{' '}
+          {Math.min(
+            (analytics
+              .visitPagination
+              .page -
+              1) *
+              analytics
+                .visitPagination
+                .limit +
+              1,
+            analytics
+              .visitPagination
+              .total,
+          )}
+          {' - '}
+          {Math.min(
+            analytics
+              .visitPagination
+              .page *
+              analytics
+                .visitPagination
+                .limit,
+            analytics
+              .visitPagination
+              .total,
+          )}{' '}
+          of{' '}
+          {analytics
+            .visitPagination
+            .total
+            .toLocaleString(
+              'en-IN',
+            )}
+        </p>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={
+              analytics
+                .visitPagination
+                .page <= 1 ||
+              analyticsLoading
+            }
+            onClick={() =>
+              setVisitPage(
+                (
+                  current,
+                ) =>
+                  Math.max(
+                    current -
+                      1,
+                    1,
+                  ),
+              )
+            }
+            className="rounded-xl border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Previous
+          </button>
+
+          <span className="rounded-xl bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700">
+            Page{' '}
+            {
+              analytics
+                .visitPagination
+                .page
+            }{' '}
+            of{' '}
+            {
+              analytics
+                .visitPagination
+                .totalPages
+            }
+          </span>
+
+          <button
+            type="button"
+            disabled={
+              analytics
+                .visitPagination
+                .page >=
+                analytics
+                  .visitPagination
+                  .totalPages ||
+              analyticsLoading
+            }
+            onClick={() =>
+              setVisitPage(
+                (
+                  current,
+                ) =>
+                  Math.min(
+                    current +
+                      1,
+                    analytics
+                      .visitPagination
+                      .totalPages,
+                  ),
+              )
+            }
+            className="rounded-xl border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    )}
+</div>
 
       <div className="rounded-2xl bg-white p-5 shadow">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
