@@ -460,21 +460,36 @@ async listDealerKits(query: any) {
     } as any,
   });
 
-  const result: any[] = [];
-
-  for (const kit of kits) {
-    const items = await this.dealerKitItemRepository.find({
-      where: { kitId: kit.id },
-      order: { sortOrder: 'ASC', id: 'ASC' } as any,
-    });
-
-    result.push({
-      ...kit,
-      items,
-    });
+  if (!kits.length) {
+    return [];
   }
 
-  return result;
+  const kitIds = kits.map((kit) => kit.id);
+
+  const items = await this.dealerKitItemRepository
+    .createQueryBuilder('item')
+    .where('item.kitId IN (:...kitIds)', {
+      kitIds,
+    })
+    .orderBy('item.kitId', 'ASC')
+    .addOrderBy('item.sortOrder', 'ASC')
+    .addOrderBy('item.id', 'ASC')
+    .getMany();
+
+  const itemsByKitId = new Map<number, DealerKitItem[]>();
+
+  for (const item of items) {
+    const existingItems =
+      itemsByKitId.get(item.kitId) || [];
+
+    existingItems.push(item);
+    itemsByKitId.set(item.kitId, existingItems);
+  }
+
+  return kits.map((kit) => ({
+    ...kit,
+    items: itemsByKitId.get(kit.id) || [],
+  }));
 }
 
 async listDealerKitsForPortal() {
@@ -488,21 +503,36 @@ async listDealerKitsForPortal() {
     } as any,
   });
 
-  const result: any[] = [];
-
-  for (const kit of kits) {
-    const items = await this.dealerKitItemRepository.find({
-      where: { kitId: kit.id },
-      order: { sortOrder: 'ASC', id: 'ASC' } as any,
-    });
-
-    result.push({
-      ...kit,
-      items,
-    });
+  if (!kits.length) {
+    return [];
   }
 
-  return result;
+  const kitIds = kits.map((kit) => kit.id);
+
+  const items = await this.dealerKitItemRepository
+    .createQueryBuilder('item')
+    .where('item.kitId IN (:...kitIds)', {
+      kitIds,
+    })
+    .orderBy('item.kitId', 'ASC')
+    .addOrderBy('item.sortOrder', 'ASC')
+    .addOrderBy('item.id', 'ASC')
+    .getMany();
+
+  const itemsByKitId = new Map<number, DealerKitItem[]>();
+
+  for (const item of items) {
+    const existingItems =
+      itemsByKitId.get(item.kitId) || [];
+
+    existingItems.push(item);
+    itemsByKitId.set(item.kitId, existingItems);
+  }
+
+  return kits.map((kit) => ({
+    ...kit,
+    items: itemsByKitId.get(kit.id) || [],
+  }));
 }
 
 async saveDealerKit(body: any, user: any) {
