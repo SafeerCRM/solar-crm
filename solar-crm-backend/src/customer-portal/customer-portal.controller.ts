@@ -20,13 +20,13 @@ import { CurrentUser } from '../auth/current-user.decorator';
 export class CustomerPortalController {
   constructor(private readonly service: CustomerPortalService) {}
 
-  @Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'CUSTOMER')
+  @Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'CUSTOMER', 'INSPECTION_MANAGER',)
   @Get('dashboard/:customerId')
   getDashboard(@Param('customerId', ParseIntPipe) customerId: number) {
     return this.service.getCustomerDashboard(customerId);
   }
 
-  @Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'CUSTOMER', 'MAINTENANCE_MANAGER',)
+  @Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'CUSTOMER', 'MAINTENANCE_MANAGER', 'INSPECTION_MANAGER',)
   @Post('complaints')
   createComplaint(@Body() body: any, @CurrentUser() user: any) {
     return this.service.createComplaint(body, user);
@@ -40,6 +40,7 @@ export class CustomerPortalController {
   'MEETING_MANAGER',
   'MARKETING_HEAD',
   'MAINTENANCE_MANAGER',
+  'INSPECTION_MANAGER',
 )
 @Get('complaints/:id/proofs')
 listComplaintWorkProofs(
@@ -54,6 +55,7 @@ listComplaintWorkProofs(
   'PROJECT_MANAGER',
   'PROJECT_EXECUTIVE',
   'MAINTENANCE_MANAGER',
+  'INSPECTION_MANAGER',
 )
 @Post('complaints/:id/proofs')
 addComplaintWorkProof(
@@ -76,6 +78,7 @@ addComplaintWorkProof(
     'MEETING_MANAGER',
     'MARKETING_HEAD',
     'MAINTENANCE_MANAGER',
+    'INSPECTION_MANAGER',
   )
   @Get('complaints')
   listComplaints(@Query() query: any) {
@@ -83,7 +86,7 @@ addComplaintWorkProof(
   }
 
 
-  @Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE', 'MAINTENANCE_MANAGER',)
+  @Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE', 'MAINTENANCE_MANAGER', 'INSPECTION_MANAGER',)
   @Patch('complaints/:id')
   updateComplaint(
     @Param('id', ParseIntPipe) id: number,
@@ -171,7 +174,7 @@ assignReferral(
     return this.service.createPaymentReceipt(body);
   }
 
-  @Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE', 'MARKETING_HEAD')
+  @Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE', 'MARKETING_HEAD', 'INSPECTION_MANAGER',)
 @Get('work-date-requests')
 listWorkDateRequests(@Query() query: any) {
   return this.service.listWorkDateRequests(query);
@@ -194,6 +197,7 @@ updateWorkDateRequest(
   'PAYMENT_MANAGER',
   'ACCOUNT_MANAGER',
   'MARKETING_HEAD',
+  'INSPECTION_MANAGER',
 )
 @Get('payment-receipts')
 listPaymentReceipts(@Query() query: any) {
@@ -216,13 +220,13 @@ updatePaymentReceipt(
   return this.service.updatePaymentReceipt(id, body, user);
 }
 
-@Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'MAINTENANCE_MANAGER')
+@Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'MAINTENANCE_MANAGER', 'INSPECTION_MANAGER',)
 @Get('cleaning-reminders')
 listCleaningReminders(@Query() query: any) {
   return this.service.listCleaningReminders(query);
 }
 
-@Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'MAINTENANCE_MANAGER')
+@Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'MAINTENANCE_MANAGER', 'INSPECTION_MANAGER',)
 @Patch('cleaning-reminders/:id')
 updateCleaningReminder(
   @Param('id', ParseIntPipe) id: number,
@@ -260,6 +264,7 @@ restoreCleaningReminder(
   'MEETING_MANAGER',
   'MARKETING_HEAD',
   'MAINTENANCE_MANAGER',
+  'INSPECTION_MANAGER',
 )
 @Get('complaints/:id/activities')
 getComplaintActivities(@Param('id', ParseIntPipe) id: number) {
@@ -272,6 +277,7 @@ getComplaintActivities(@Param('id', ParseIntPipe) id: number) {
   'PROJECT_MANAGER',
   'MARKETING_HEAD',
   'LEAD_MANAGER',
+  'INSPECTION_MANAGER',
 )
 @Get('referrals')
 listReferrals(@Query() query: any) {
@@ -294,7 +300,7 @@ updateReferral(
   return this.service.updateReferral(id, body, user);
 }
 
-@Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'MAINTENANCE_MANAGER')
+@Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'MAINTENANCE_MANAGER', 'INSPECTION_MANAGER',)
 @Get('after-sales-services')
 listAfterSalesServices(@Query() query: any) {
   return this.service.listAfterSalesServices(query);
@@ -322,13 +328,13 @@ restoreAfterSalesService(@Param('id', ParseIntPipe) id: number) {
   return this.service.restoreAfterSalesService(id);
 }
 
-@Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'MAINTENANCE_MANAGER')
+@Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'MAINTENANCE_MANAGER', 'INSPECTION_MANAGER',)
 @Get('after-sales-requests')
 listAfterSalesRequests(@Query() query: any) {
   return this.service.listAfterSalesRequests(query);
 }
 
-@Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'MAINTENANCE_MANAGER')
+@Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'MAINTENANCE_MANAGER', 'INSPECTION_MANAGER',)
 @Patch('after-sales-requests/:id')
 updateAfterSalesRequest(
   @Param('id', ParseIntPipe) id: number,
@@ -338,19 +344,19 @@ updateAfterSalesRequest(
   return this.service.updateAfterSalesRequest(id, body, user);
 }
 
-@Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'MAINTENANCE_MANAGER')
+@Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'MAINTENANCE_MANAGER', 'INSPECTION_MANAGER',)
 @Get('after-sales-requests/:id/activities')
 getAfterSalesRequestActivities(@Param('id', ParseIntPipe) id: number) {
   return this.service.getAfterSalesRequestActivities(id);
 }
 
-@Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'MAINTENANCE_MANAGER')
+@Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'MAINTENANCE_MANAGER', 'INSPECTION_MANAGER',)
 @Get('after-sales-requests/:id/proofs')
 listAfterSalesRequestProofs(@Param('id', ParseIntPipe) id: number) {
   return this.service.listAfterSalesRequestProofs(id);
 }
 
-@Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'MAINTENANCE_MANAGER')
+@Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'MAINTENANCE_MANAGER', 'INSPECTION_MANAGER',)
 @Post('after-sales-requests/:id/proofs')
 addAfterSalesRequestProof(
   @Param('id', ParseIntPipe) id: number,
@@ -366,6 +372,7 @@ addAfterSalesRequestProof(
   'PROJECT_MANAGER',
   'MARKETING_HEAD',
   'LEAD_MANAGER',
+  'INSPECTION_MANAGER',
 )
 @Get('referrals/:id/activities')
 getReferralActivities(@Param('id', ParseIntPipe) id: number) {

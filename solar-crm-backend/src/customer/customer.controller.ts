@@ -34,6 +34,7 @@ export class CustomerController {
     'MEETING_MANAGER',
     'LEAD_MANAGER',
     'CUSTOMER_MANAGER',
+    'INSPECTION_MANAGER',
   )
   @Get()
   findAll(
@@ -72,6 +73,7 @@ export class CustomerController {
     'MEETING_MANAGER',
     'LEAD_MANAGER',
     'CUSTOMER_MANAGER',
+    'INSPECTION_MANAGER',
   )
   @Get('search')
   search(@Query('query') query: string) {
@@ -86,6 +88,7 @@ export class CustomerController {
   'MEETING_MANAGER',
   'LEAD_MANAGER',
   'CUSTOMER_MANAGER',
+  'INSPECTION_MANAGER',
 )
 @Get('summary')
 getSummary() {
@@ -145,6 +148,7 @@ resetPortalPassword(
   'MEETING_MANAGER',
   'LEAD_MANAGER',
   'CUSTOMER_MANAGER',
+  'INSPECTION_MANAGER',
 )
 @Get(':id/projects')
 getCustomerProjects(@Param('id', ParseIntPipe) id: number) {
@@ -159,6 +163,7 @@ getCustomerProjects(@Param('id', ParseIntPipe) id: number) {
     'MEETING_MANAGER',
     'LEAD_MANAGER',
     'CUSTOMER_MANAGER',
+    'INSPECTION_MANAGER',
   )
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
