@@ -48,6 +48,17 @@ const [panelBrand, setPanelBrand] = useState('');
 const [inverterBrand, setInverterBrand] = useState('');
 const [batteryBrand, setBatteryBrand] = useState('');
 
+const [materialCategory, setMaterialCategory] =
+  useState<
+    | 'ALL'
+    | 'PANELS'
+    | 'INVERTERS'
+    | 'STRUCTURE'
+    | 'ELECTRICAL'
+    | 'BATTERIES'
+    | 'OTHER'
+  >('ALL');
+
 const [paymentType, setPaymentType] = useState('CASH');
   const [deliveryMode, setDeliveryMode] = useState('SELF_COLLECTION');
 const [deliveryAddress, setDeliveryAddress] = useState('');
@@ -64,7 +75,8 @@ const [deliveryLocationSource, setDeliveryLocationSource] =
   const [pickupStaffPhone, setPickupStaffPhone] = useState('');
   const [dealer, setDealer] = useState<any>(null);
   const [message, setMessage] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [stockLoading, setStockLoading] = useState(true);
+const [kitsLoading, setKitsLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
 
@@ -83,30 +95,48 @@ const [deliveryLocationSource, setDeliveryLocationSource] =
   }, []);
 
   const loadStock = async (token: string) => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/dealer-auth/stock`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+  try {
+    setStockLoading(true);
 
-      const data = await res.json();
-      setStock(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    const res = await fetch(
+      `${API_BASE_URL}/dealer-auth/stock`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+
+    const data = await res.json();
+
+    setStock(Array.isArray(data) ? data : []);
+  } catch (error) {
+    console.error(error);
+  } finally {
+    setStockLoading(false);
+  }
+};
 
   const loadKits = async (token: string) => {
   try {
-    const res = await fetch(`${API_BASE_URL}/dealer-auth/kits`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    setKitsLoading(true);
+
+    const res = await fetch(
+      `${API_BASE_URL}/dealer-auth/kits`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
 
     const data = await res.json();
+
     setKits(Array.isArray(data) ? data : []);
   } catch (error) {
     console.error(error);
+  } finally {
+    setKitsLoading(false);
   }
 };
 
@@ -284,6 +314,48 @@ const materialSections = [
       'Materials awaiting dealer-category assignment',
   },
 ];
+
+const materialCategoryOptions = [
+  {
+    key: 'ALL',
+    label: 'All',
+  },
+  {
+    key: 'PANELS',
+    label: 'Panels',
+  },
+  {
+    key: 'INVERTERS',
+    label: 'Inverters',
+  },
+  {
+    key: 'STRUCTURE',
+    label: 'Structure',
+  },
+  {
+    key: 'ELECTRICAL',
+    label: 'Electrical',
+  },
+  {
+    key: 'BATTERIES',
+    label: 'Batteries',
+  },
+  {
+    key: 'OTHER',
+    label: 'Other',
+  },
+] as const;
+
+const visibleMaterialSections = useMemo(() => {
+  if (materialCategory === 'ALL') {
+    return materialSections;
+  }
+
+  return materialSections.filter(
+    (section) =>
+      section.key === materialCategory,
+  );
+}, [materialCategory]);
 
   const totals = useMemo(() => {
     return cart.reduce(
@@ -654,11 +726,14 @@ deliveryDistanceKm:
       <button
         type="button"
         onClick={() => {
-          setViewMode('MATERIALS');
-          setPanelBrand('');
-          setInverterBrand('');
-          setBatteryBrand('');
-        }}
+  setViewMode('MATERIALS');
+
+  setPanelBrand('');
+  setInverterBrand('');
+  setBatteryBrand('');
+
+  setMaterialCategory('ALL');
+}}
         className={`rounded-2xl px-4 py-3 text-sm font-black ${
           viewMode === 'MATERIALS'
             ? 'bg-orange-400 text-slate-950'
@@ -760,23 +835,31 @@ deliveryDistanceKm:
   </div>
 
   <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm font-bold text-slate-600">
-    Showing{' '}
-    {viewMode === 'KITS'
-      ? filteredKits.length
-      : filteredStock.length}{' '}
-    of{' '}
-    {viewMode === 'KITS'
-      ? kits.length
-      : stock.length}{' '}
-    items
-  </div>
+  {viewMode === 'KITS' && kitsLoading
+    ? 'Loading kits...'
+    : viewMode === 'MATERIALS' && stockLoading
+      ? 'Loading materials...'
+      : `Showing ${
+          viewMode === 'KITS'
+            ? filteredKits.length
+            : filteredStock.length
+        } of ${
+          viewMode === 'KITS'
+            ? kits.length
+            : stock.length
+        } items`}
+</div>
 </div>
 
-            {loading ? (
-              <div className="rounded-3xl bg-slate-50 p-8 text-center font-black">
-                Loading materials...
-              </div>
-            ) : (
+            {(viewMode === 'KITS'
+  ? kitsLoading
+  : stockLoading) ? (
+  <div className="rounded-3xl bg-slate-50 p-8 text-center font-black">
+    {viewMode === 'KITS'
+      ? 'Loading kits...'
+      : 'Loading materials...'}
+  </div>
+) : (
               <div>
   {viewMode === 'KITS' && (
     <div className="grid gap-4 md:grid-cols-2">
@@ -805,8 +888,47 @@ deliveryDistanceKm:
   )}
 
   {viewMode === 'MATERIALS' && (
+  <div className="space-y-5">
+    <div className="flex gap-2 overflow-x-auto pb-2">
+      {materialCategoryOptions.map(
+        (option) => {
+          const categoryCount =
+            option.key === 'ALL'
+              ? filteredStock.length
+              : (
+                  groupedMaterials[
+                    option.key
+                  ] || []
+                ).length;
+
+          return (
+            <button
+              key={option.key}
+              type="button"
+              onClick={() =>
+                setMaterialCategory(
+                  option.key,
+                )
+              }
+              className={`shrink-0 rounded-2xl px-4 py-3 text-sm font-black transition ${
+                materialCategory ===
+                option.key
+                  ? 'bg-orange-400 text-slate-950'
+                  : 'border border-slate-200 bg-white text-slate-700'
+              }`}
+            >
+              {option.label}
+              <span className="ml-2 rounded-full bg-black/10 px-2 py-0.5 text-xs">
+                {categoryCount}
+              </span>
+            </button>
+          );
+        },
+      )}
+    </div>
+
     <div className="space-y-7">
-      {materialSections.map((section) => {
+      {visibleMaterialSections.map((section) => {
         const sectionItems =
           groupedMaterials[section.key] || [];
 
@@ -850,13 +972,27 @@ deliveryDistanceKm:
         );
       })}
 
-      {!filteredStock.length && (
+            {!filteredStock.length && (
         <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm font-semibold text-slate-500">
           No material found.
         </div>
       )}
+
+      {filteredStock.length > 0 &&
+        materialCategory !== 'ALL' &&
+        !(
+          groupedMaterials[
+            materialCategory
+          ] || []
+        ).length && (
+          <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm font-semibold text-slate-500">
+            No material is assigned to this
+            category yet.
+          </div>
+        )}
     </div>
-  )}
+  </div>
+)}
 </div>
             )}
           </section>
