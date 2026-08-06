@@ -70,6 +70,23 @@ addComplaintWorkProof(
   );
 }
 
+@Roles(
+  'OWNER',
+  'CUSTOMER_MANAGER',
+  'PROJECT_MANAGER',
+  'PROJECT_EXECUTIVE',
+  'PAYMENT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'MARKETING_HEAD',
+  'MAINTENANCE_MANAGER',
+  'LEAD_MANAGER',
+  'INSPECTION_MANAGER',
+)
+@Get('management-summary')
+getManagementSummary() {
+  return this.service.getManagementSummary();
+}
+
   @Roles(
     'OWNER',
     'CUSTOMER_MANAGER',

@@ -729,6 +729,68 @@ async listComplaintWorkProofs(
   });
 }
 
+async getManagementSummary() {
+  const [
+    openComplaints,
+    pendingReceipts,
+    pendingWorkRequests,
+    pendingCleaning,
+    afterSalesRequests,
+    pendingReferrals,
+  ] = await Promise.all([
+    this.complaintRepository.count({
+      where: {
+        isHidden: false,
+        status: 'OPEN',
+      } as any,
+    }),
+
+    this.paymentReceiptRepository.count({
+      where: {
+        isHidden: false,
+        status: 'SUBMITTED',
+      } as any,
+    }),
+
+    this.workDateRequestRepository.count({
+      where: {
+        isHidden: false,
+        status: 'PENDING',
+      } as any,
+    }),
+
+    this.cleaningReminderRepository.count({
+      where: {
+        isHidden: false,
+        status: 'PENDING',
+      } as any,
+    }),
+
+    this.afterSalesRequestRepository.count({
+      where: {
+        isHidden: false,
+        status: CustomerAfterSalesRequestStatus.NEW,
+      } as any,
+    }),
+
+    this.referralRepository.count({
+      where: {
+        isHidden: false,
+        status: CustomerReferralStatus.REFERRED,
+      } as any,
+    }),
+  ]);
+
+  return {
+    openComplaints,
+    pendingReceipts,
+    pendingWorkRequests,
+    pendingCleaning,
+    afterSalesRequests,
+    pendingReferrals,
+  };
+}
+
   async listComplaints(query: any) {
   const page = Number(query?.page || 1);
   const limit = Math.min(Number(query?.limit || 20), 100);
