@@ -1857,6 +1857,265 @@ uploadVendorManagementPaymentReceipts(
     );
 }
 
+@Roles(
+  'OWNER',
+  'INSPECTION_MANAGER',
+  'MAINTENANCE_MANAGER',
+  'CUSTOMER_MANAGER',
+)
+@Get('inspections/projects')
+listInspectionProjects(
+  @Query('page') page?: string,
+  @Query('limit') limit?: string,
+  @Query('search') search?: string,
+  @Query('city') city?: string,
+  @Query('zone') zone?: string,
+  @Query('branchName') branchName?: string,
+  @Query('projectStatus') projectStatus?: string,
+  @Query('projectWorkState') projectWorkState?: string,
+  @Query('projectType') projectType?: string,
+  @Query('legacyYear') legacyYear?: string,
+  @CurrentUser() user?: any,
+) {
+  return this.projectService.listInspectionProjects(
+    {
+      page: Number(page || 1),
+      limit: Number(limit || 20),
+      search: search || '',
+      city: city || '',
+      zone: zone || '',
+      branchName: branchName || '',
+      projectStatus:
+        projectStatus || '',
+      projectWorkState:
+        projectWorkState || '',
+      projectType:
+        projectType || '',
+      legacyYear:
+        legacyYear || '',
+    },
+    user,
+  );
+}
+
+@Roles(
+  'OWNER',
+  'INSPECTION_MANAGER',
+  'MAINTENANCE_MANAGER',
+  'CUSTOMER_MANAGER',
+)
+@Post('inspections')
+createProjectInspection(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.createProjectInspection(
+    body,
+    user,
+  );
+}
+
+@Roles(
+  'OWNER',
+  'INSPECTION_MANAGER',
+  'MAINTENANCE_MANAGER',
+  'CUSTOMER_MANAGER',
+)
+@Post('inspections/:inspectionId/findings')
+saveProjectInspectionFindings(
+  @Param('inspectionId')
+  inspectionId: string,
+
+  @Body() body: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService.saveProjectInspectionDefects(
+    Number(inspectionId),
+    body,
+    user,
+  );
+}
+
+@Roles(
+  'OWNER',
+  'INSPECTION_MANAGER',
+  'MAINTENANCE_MANAGER',
+  'CUSTOMER_MANAGER',
+)
+@Get(':projectId/inspections')
+getProjectInspectionHistory(
+  @Param('projectId')
+  projectId: string,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService.getProjectInspectionHistory(
+    Number(projectId),
+    user,
+  );
+}
+
+@Roles(
+  'OWNER',
+  'INSPECTION_MANAGER',
+  'MAINTENANCE_MANAGER',
+  'CUSTOMER_MANAGER',
+)
+@Post(
+  'inspections/:inspectionId/photos/upload',
+)
+@UseInterceptors(
+  FilesInterceptor(
+    'files',
+    30,
+  ),
+)
+uploadProjectInspectionPhotos(
+  @Param('inspectionId')
+  inspectionId: string,
+
+  @Body()
+  body: any,
+
+  @UploadedFiles()
+  files: any[],
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService.uploadProjectInspectionPhotos(
+    Number(inspectionId),
+    body,
+    files,
+    user,
+  );
+}
+
+@Roles(
+  'OWNER',
+  'INSPECTION_MANAGER',
+  'MAINTENANCE_MANAGER',
+  'CUSTOMER_MANAGER',
+)
+@Get('inspections/analytics')
+getInspectionAnalytics(
+  @Query('fromDate')
+  fromDate?: string,
+
+  @Query('toDate')
+  toDate?: string,
+
+  @Query('inspectionManagerId')
+  inspectionManagerId?: string,
+
+  @Query('city')
+  city?: string,
+
+  @Query('zone')
+  zone?: string,
+
+  @Query('branchName')
+  branchName?: string,
+
+  @Query('projectStatus')
+  projectStatus?: string,
+
+  @Query('overallCondition')
+  overallCondition?: string,
+
+  @Query('inspectionStatus')
+  inspectionStatus?: string,
+
+  @Query('componentType')
+  componentType?: string,
+
+  @Query('qualityStatus')
+  qualityStatus?: string,
+
+  @Query('severity')
+  severity?: string,
+
+  @Query('resolutionStatus')
+  resolutionStatus?: string,
+
+  @CurrentUser()
+  user?: any,
+) {
+  return this.projectService.getInspectionAnalytics(
+    {
+      fromDate:
+        fromDate || '',
+
+      toDate:
+        toDate || '',
+
+      inspectionManagerId:
+        inspectionManagerId ||
+        '',
+
+      city:
+        city || '',
+
+      zone:
+        zone || '',
+
+      branchName:
+        branchName || '',
+
+      projectStatus:
+        projectStatus || '',
+
+      overallCondition:
+        overallCondition || '',
+
+      inspectionStatus:
+        inspectionStatus || '',
+
+      componentType:
+        componentType || '',
+
+      qualityStatus:
+        qualityStatus || '',
+
+      severity:
+        severity || '',
+
+      resolutionStatus:
+        resolutionStatus || '',
+    },
+    user,
+  );
+}
+
+@Roles(
+  'OWNER',
+  'INSPECTION_MANAGER',
+  'MAINTENANCE_MANAGER',
+  'CUSTOMER_MANAGER',
+)
+@Patch(
+  'inspection-defects/:defectId',
+)
+updateInspectionDefect(
+  @Param('defectId')
+  defectId: string,
+
+  @Body()
+  body: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService.updateInspectionDefect(
+    Number(defectId),
+    body,
+    user,
+  );
+}
+
 @Get('ledger/party-outstanding')
 getPartyOutstanding(@Query() query: any) {
   return this.projectService.getPartyOutstandingPaginated(query);

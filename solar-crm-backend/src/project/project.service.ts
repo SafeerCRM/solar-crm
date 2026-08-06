@@ -228,6 +228,23 @@ import { Meeting } from '../meeting/meeting.entity';
 import { CallLog } from '../telecalling/call-log.entity';
 import { TelecallingContact } from '../telecalling/telecalling-contact.entity';
 import { User } from '../users/user.entity';
+import {
+  ProjectInspection,
+  ProjectInspectionCondition,
+  ProjectInspectionStatus,
+} from './project-inspection.entity';
+
+import {
+  ProjectInspectionComponentType,
+  ProjectInspectionDefect,
+  ProjectInspectionQualityStatus,
+  ProjectInspectionResolutionStatus,
+  ProjectInspectionSeverity,
+} from './project-inspection-defect.entity';
+
+import {
+  ProjectInspectionPhoto,
+} from './project-inspection-photo.entity';
 
 @Injectable()
 export class ProjectService {
@@ -961,9 +978,87 @@ const loanRequiredGroups = [
   }
 }
 
+private getUserRoles(user: any): string[] {
+  if (Array.isArray(user?.roles)) {
+    return user.roles.map((role: any) =>
+      String(role || '').trim().toUpperCase(),
+    );
+  }
+
+  if (user?.role) {
+    return [
+      String(user.role)
+        .trim()
+        .toUpperCase(),
+    ];
+  }
+
+  return [];
+}
+
+private assertInspectionViewAccess(
+  user: any,
+) {
+  const roles =
+    this.getUserRoles(user);
+
+  const allowedRoles = [
+    'OWNER',
+    'INSPECTION_MANAGER',
+    'MAINTENANCE_MANAGER',
+    'CUSTOMER_MANAGER',
+  ];
+
+  if (
+    !roles.some((role) =>
+      allowedRoles.includes(role),
+    )
+  ) {
+    throw new ForbiddenException(
+      'You do not have access to Inspection Management',
+    );
+  }
+}
+
+private assertInspectionManageAccess(
+  user: any,
+) {
+  const roles =
+    this.getUserRoles(user);
+
+  const allowedRoles = [
+    'OWNER',
+    'INSPECTION_MANAGER',
+    'MAINTENANCE_MANAGER',
+    'CUSTOMER_MANAGER',
+  ];
+
+  if (
+    !roles.some((role) =>
+      allowedRoles.includes(role),
+    )
+  ) {
+    throw new ForbiddenException(
+      'You are not allowed to create or update inspections',
+    );
+  }
+}
+
   constructor(
     @InjectRepository(Project)
     private readonly projectRepository: Repository<Project>,
+
+    @InjectRepository(ProjectInspection)
+private readonly projectInspectionRepository:
+  Repository<ProjectInspection>,
+
+@InjectRepository(ProjectInspectionDefect)
+private readonly projectInspectionDefectRepository:
+  Repository<ProjectInspectionDefect>,
+
+@InjectRepository(ProjectInspectionPhoto)
+private readonly projectInspectionPhotoRepository:
+  Repository<ProjectInspectionPhoto>,
 
     @InjectRepository(ProjectDocument)
     private readonly projectDocumentRepository: Repository<ProjectDocument>,
@@ -2348,7 +2443,8 @@ const canViewAll =
   roles.includes('PAYMENT_COLLECTION_EXECUTIVE') ||
   roles.includes('PAYMENT_MANAGER') ||
   roles.includes('ACCOUNT_MANAGER') ||
-  roles.includes('STOCK_MANAGER') ;
+  roles.includes('STOCK_MANAGER') ||
+  roles.includes('INSPECTION_MANAGER');
 
 if (roles.includes('SOLAR_FRANCHISE')) {
   query.andWhere(
@@ -3285,7 +3381,8 @@ const canViewAll =
   roles.includes('PAYMENT_COLLECTION_EXECUTIVE') ||
   roles.includes('PAYMENT_MANAGER') ||
   roles.includes('ACCOUNT_MANAGER') ||
-  roles.includes('STOCK_MANAGER');
+  roles.includes('STOCK_MANAGER') ||
+  roles.includes('INSPECTION_MANAGER');
 
   let isAssignedContractor = false;
 
@@ -3351,12 +3448,41 @@ async updateProjectLocation(
     });
 
   if (!project) {
-    throw new NotFoundException(
-      'Project not found',
-    );
-  }
+  throw new NotFoundException(
+    'Project not found',
+  );
+}
 
-  const address = String(
+const roles =
+  this.getUserRoles(user);
+
+const currentUserId = Number(
+  user?.id ||
+    user?.userId ||
+    user?.sub ||
+    0,
+);
+
+const isProjectOwner =
+  currentUserId > 0 &&
+  Number(project.projectOwnerId) ===
+    currentUserId;
+
+const canUpdateLocation =
+  roles.includes('OWNER') ||
+  roles.includes('MARKETING_HEAD') ||
+  roles.includes('PROJECT_MANAGER') ||
+  roles.includes('PROJECT_EXECUTIVE') ||
+  roles.includes('INSPECTION_MANAGER') ||
+  isProjectOwner;
+
+if (!canUpdateLocation) {
+  throw new ForbiddenException(
+    'You are not allowed to update this project location',
+  );
+}
+
+const address = String(
     data?.address || '',
   ).trim();
 
@@ -3400,13 +3526,6 @@ async updateProjectLocation(
       'Project site address is required',
     );
   }
-
-  const currentUserId = Number(
-    user?.id ||
-      user?.userId ||
-      user?.sub ||
-      0,
-  );
 
   const currentUserName = String(
     user?.name ||
@@ -4019,7 +4138,8 @@ const isProjectOwner =
   roles.includes('ELECTRICITY_MANAGER') ||
   roles.includes('MAINTENANCE_MANAGER') ||
   roles.includes('CUSTOMER_MANAGER') ||
-  roles.includes('STOCK_MANAGER');
+  roles.includes('STOCK_MANAGER') ||
+  roles.includes('INSPECTION_MANAGER');
 
   let allowedDepartments: string[] = [];
 
@@ -29722,5 +29842,2019 @@ async uploadVendorManagementPaymentReceipts(
     receipts:
       uploadedReceipts,
   };
+}
+
+async listInspectionProjects(
+  query: any = {},
+  user?: any,
+) {
+  this.assertInspectionViewAccess(
+    user,
+  );
+
+  const page = Math.max(
+    Number(query?.page || 1),
+    1,
+  );
+
+  const limit = Math.min(
+    Math.max(
+      Number(query?.limit || 20),
+      1,
+    ),
+    100,
+  );
+
+  const skip =
+    (page - 1) * limit;
+
+  const qb =
+    this.projectRepository
+      .createQueryBuilder('project')
+      .where(
+        'COALESCE(project.isHidden, false) = false',
+      );
+
+  if (query?.search) {
+    const search =
+      `%${String(
+        query.search,
+      )
+        .trim()
+        .toLowerCase()}%`;
+
+    qb.andWhere(
+      `(
+        LOWER(
+          COALESCE(
+            project.customerName,
+            ''
+          )
+        ) LIKE :search
+
+        OR LOWER(
+          COALESCE(
+            project.customerPhone,
+            ''
+          )
+        ) LIKE :search
+
+        OR LOWER(
+          COALESCE(
+            project.customerCode,
+            ''
+          )
+        ) LIKE :search
+
+        OR LOWER(
+          COALESCE(
+            project.electricityKNumber,
+            ''
+          )
+        ) LIKE :search
+
+        OR CAST(
+          project.id AS TEXT
+        ) LIKE :search
+      )`,
+      {
+        search,
+      },
+    );
+  }
+
+  if (query?.city) {
+    qb.andWhere(
+      `LOWER(
+        COALESCE(
+          project.city,
+          ''
+        )
+      ) LIKE :city`,
+      {
+        city:
+          `%${String(
+            query.city,
+          )
+            .trim()
+            .toLowerCase()}%`,
+      },
+    );
+  }
+
+  if (query?.zone) {
+    qb.andWhere(
+      `LOWER(
+        COALESCE(
+          project.zone,
+          ''
+        )
+      ) LIKE :zone`,
+      {
+        zone:
+          `%${String(
+            query.zone,
+          )
+            .trim()
+            .toLowerCase()}%`,
+      },
+    );
+  }
+
+  if (query?.branchName) {
+    qb.andWhere(
+      `LOWER(
+        COALESCE(
+          project.branchName,
+          ''
+        )
+      ) LIKE :branchName`,
+      {
+        branchName:
+          `%${String(
+            query.branchName,
+          )
+            .trim()
+            .toLowerCase()}%`,
+      },
+    );
+  }
+
+  if (query?.projectStatus) {
+    qb.andWhere(
+      'project.status = :projectStatus',
+      {
+        projectStatus:
+          query.projectStatus,
+      },
+    );
+  }
+
+  if (query?.projectWorkState) {
+    qb.andWhere(
+      `project.projectWorkState =
+        :projectWorkState`,
+      {
+        projectWorkState:
+          query.projectWorkState,
+      },
+    );
+  }
+
+  if (
+    String(query?.projectType || '')
+      .toUpperCase() === 'LEGACY'
+  ) {
+    qb.andWhere(
+      'project.isLegacyProject = true',
+    );
+  }
+
+  if (
+    String(query?.projectType || '')
+      .toUpperCase() === 'CRM'
+  ) {
+    qb.andWhere(
+      `(
+        project.isLegacyProject = false
+        OR project.isLegacyProject IS NULL
+      )`,
+    );
+  }
+
+  if (query?.legacyYear) {
+    qb.andWhere(
+      'project.legacyYear = :legacyYear',
+      {
+        legacyYear: Number(
+          query.legacyYear,
+        ),
+      },
+    );
+  }
+
+  qb.orderBy(
+    'project.createdAt',
+    'DESC',
+  )
+    .skip(skip)
+    .take(limit);
+
+  const [projects, total] =
+    await qb.getManyAndCount();
+
+  const projectIds =
+    projects.map(
+      (project) => project.id,
+    );
+
+  const inspections =
+    projectIds.length
+      ? await this
+          .projectInspectionRepository
+          .createQueryBuilder(
+            'inspection',
+          )
+          .where(
+            `inspection.projectId
+              IN (:...projectIds)`,
+            {
+              projectIds,
+            },
+          )
+          .andWhere(
+            `inspection.isHidden =
+              false`,
+          )
+          .orderBy(
+            'inspection.inspectionDate',
+            'DESC',
+          )
+          .addOrderBy(
+            'inspection.createdAt',
+            'DESC',
+          )
+          .getMany()
+      : [];
+
+  const data =
+    projects.map(
+      (project: any) => {
+        const projectInspections =
+          inspections.filter(
+            (inspection) =>
+              Number(
+                inspection.projectId,
+              ) ===
+              Number(project.id),
+          );
+
+        const latestInspection =
+          projectInspections[0] ||
+          null;
+
+        const pendingDefects =
+          projectInspections.filter(
+            (inspection) =>
+              inspection.defectsFound &&
+              inspection.status !==
+                ProjectInspectionStatus
+                  .COMPLETED,
+          ).length;
+
+        return {
+          id: project.id,
+
+          customerId:
+            project.customerId ||
+            null,
+
+          customerCode:
+            project.customerCode ||
+            '',
+
+          customerName:
+            project.customerName ||
+            '',
+
+          customerPhone:
+            project.customerPhone ||
+            '',
+
+          city:
+            project.city || '',
+
+          zone:
+            project.zone || '',
+
+          branchName:
+            project.branchName ||
+            '',
+
+          address:
+            project.address || '',
+
+          gpsAddress:
+            project.gpsAddress ||
+            '',
+
+          gpsLatitude:
+            project.gpsLatitude ??
+            null,
+
+          gpsLongitude:
+            project.gpsLongitude ??
+            null,
+
+          projectStatus:
+            project.status || '',
+
+          projectWorkState:
+            project.projectWorkState ||
+            '',
+
+          projectSource:
+            project.projectSource ||
+            '',
+
+          isLegacyProject:
+            Boolean(
+              project.isLegacyProject,
+            ),
+
+          legacyYear:
+            project.legacyYear ||
+            null,
+
+          panelBrand:
+            project.panelBrand || '',
+
+          dcrPanelCount:
+            Number(
+              project.dcrPanelCount ||
+                0,
+            ),
+
+          nonDcrPanelCount:
+            Number(
+              project
+                .nonDcrPanelCount ||
+                0,
+            ),
+
+          converterBrand:
+            project.converterBrand ||
+            '',
+
+          converterCapacity:
+            project
+              .converterCapacity ||
+            '',
+
+          structureType:
+            project.structureType ||
+            '',
+
+          structureCapacityKw:
+            project
+              .structureCapacityKw ||
+            '',
+
+          projectSize:
+            project.projectSize ||
+            '',
+
+          finalCost:
+            Number(
+              project.finalCost || 0,
+            ),
+
+          projectCost:
+            Number(
+              project.projectCost ||
+                0,
+            ),
+
+          netAmount:
+            Number(
+              project.netAmount || 0,
+            ),
+
+          inspectionCount:
+            projectInspections.length,
+
+          lastInspection:
+            latestInspection,
+
+          pendingDefects,
+        };
+      },
+    );
+
+  return {
+    data,
+
+    pagination: {
+      page,
+      limit,
+      total,
+
+      totalPages:
+        Math.ceil(
+          total / limit,
+        ) || 1,
+    },
+  };
+}
+
+async createProjectInspection(
+  body: any,
+  user: any,
+) {
+  this.assertInspectionManageAccess(
+    user,
+  );
+
+  const projectId =
+    Number(
+      body?.projectId || 0,
+    );
+
+  if (!projectId) {
+    throw new BadRequestException(
+      'Project is required',
+    );
+  }
+
+  const project =
+    await this.projectRepository
+      .findOne({
+        where: {
+          id: projectId,
+          isHidden: false,
+        } as any,
+      });
+
+  if (!project) {
+    throw new NotFoundException(
+      'Project not found',
+    );
+  }
+
+  const userId =
+    Number(
+      user?.id ||
+        user?.userId ||
+        user?.sub ||
+        0,
+    ) || null;
+
+  const roles =
+    this.getUserRoles(user);
+
+  const inspectionDate =
+    body?.inspectionDate
+      ? new Date(
+          body.inspectionDate,
+        )
+      : new Date();
+
+  if (
+    Number.isNaN(
+      inspectionDate.getTime(),
+    )
+  ) {
+    throw new BadRequestException(
+      'Invalid inspection date',
+    );
+  }
+
+  const requestedStatus =
+    String(
+      body?.status ||
+        ProjectInspectionStatus
+          .IN_PROGRESS,
+    )
+      .trim()
+      .toUpperCase();
+
+  const status =
+    Object.values(
+      ProjectInspectionStatus,
+    ).includes(
+      requestedStatus as
+        ProjectInspectionStatus,
+    )
+      ? requestedStatus as
+          ProjectInspectionStatus
+      : ProjectInspectionStatus
+          .IN_PROGRESS;
+
+  const requestedCondition =
+    String(
+      body?.overallCondition ||
+        ProjectInspectionCondition
+          .PASS,
+    )
+      .trim()
+      .toUpperCase();
+
+  const overallCondition =
+    Object.values(
+      ProjectInspectionCondition,
+    ).includes(
+      requestedCondition as
+        ProjectInspectionCondition,
+    )
+      ? requestedCondition as
+          ProjectInspectionCondition
+      : ProjectInspectionCondition
+          .PASS;
+
+  const inspection =
+    this.projectInspectionRepository
+      .create({
+        projectId:
+          project.id,
+
+        customerId:
+          project.customerId,
+
+        customerCode:
+          project.customerCode ||
+          '',
+
+        customerName:
+          project.customerName ||
+          '',
+
+        customerPhone:
+          project.customerPhone ||
+          '',
+
+        city:
+          project.city || '',
+
+        zone:
+          project.zone || '',
+
+        branchName:
+          project.branchName ||
+          '',
+
+        projectStatus:
+          project.status,
+
+        projectWorkState:
+          project.projectWorkState ||
+          '',
+
+        projectSource:
+          project.projectSource ||
+          '',
+
+        isLegacyProject:
+          Boolean(
+            project.isLegacyProject,
+          ),
+
+        legacyYear:
+          project.legacyYear,
+
+        inspectionManagerId:
+          userId as any,
+
+        inspectionManagerName:
+          user?.name ||
+          user?.email ||
+          '',
+
+        inspectionManagerRole:
+          roles.join(', '),
+
+        status,
+
+        overallCondition,
+
+        inspectionDate,
+
+        startedAt:
+          body?.startedAt
+            ? new Date(
+                body.startedAt,
+              )
+            : new Date(),
+
+        completedAt:
+          status ===
+          ProjectInspectionStatus
+            .COMPLETED
+            ? new Date()
+            : undefined,
+
+        visitLatitude:
+          body?.visitLatitude ===
+            '' ||
+          body?.visitLatitude ===
+            null ||
+          body?.visitLatitude ===
+            undefined
+            ? undefined
+            : Number(
+                body.visitLatitude,
+              ),
+
+        visitLongitude:
+          body?.visitLongitude ===
+            '' ||
+          body?.visitLongitude ===
+            null ||
+          body?.visitLongitude ===
+            undefined
+            ? undefined
+            : Number(
+                body.visitLongitude,
+              ),
+
+        visitAddress:
+          String(
+            body?.visitAddress ||
+              project.gpsAddress ||
+              project.address ||
+              '',
+          ).trim(),
+
+        comments:
+          String(
+            body?.comments || '',
+          ).trim(),
+
+        defectsFound:
+          Boolean(
+            body?.defectsFound,
+          ),
+
+        followUpRequired:
+          Boolean(
+            body
+              ?.followUpRequired,
+          ),
+
+        nextInspectionDate:
+          body?.nextInspectionDate
+            ? new Date(
+                body.nextInspectionDate,
+              )
+            : undefined,
+
+        followUpRemarks:
+          String(
+            body?.followUpRemarks ||
+              '',
+          ).trim(),
+
+        isHidden: false,
+      } as any);
+
+  return this
+    .projectInspectionRepository
+    .save(inspection);
+}
+
+async saveProjectInspectionDefects(
+  inspectionId: number,
+  body: any,
+  user: any,
+) {
+  this.assertInspectionManageAccess(
+    user,
+  );
+
+  const inspection =
+    await this
+      .projectInspectionRepository
+      .findOne({
+        where: {
+          id: inspectionId,
+          isHidden: false,
+        } as any,
+      });
+
+  if (!inspection) {
+    throw new NotFoundException(
+      'Inspection not found',
+    );
+  }
+
+  const findings =
+    Array.isArray(
+      body?.findings,
+    )
+      ? body.findings
+      : [];
+
+  if (!findings.length) {
+    throw new BadRequestException(
+      'At least one inspection finding is required',
+    );
+  }
+
+  const savedFindings:
+    ProjectInspectionDefect[] = [];
+
+  for (
+    const finding of findings
+  ) {
+    const componentType =
+      String(
+        finding
+          ?.componentType || '',
+      )
+        .trim()
+        .toUpperCase() as
+        ProjectInspectionComponentType;
+
+    if (
+      !Object.values(
+        ProjectInspectionComponentType,
+      ).includes(
+        componentType,
+      )
+    ) {
+      throw new BadRequestException(
+        `Invalid inspection component: ${componentType || '-'}`,
+      );
+    }
+
+    const qualityStatus =
+      String(
+        finding
+          ?.qualityStatus ||
+          ProjectInspectionQualityStatus
+            .NOT_INSPECTED,
+      )
+        .trim()
+        .toUpperCase() as
+        ProjectInspectionQualityStatus;
+
+    if (
+      !Object.values(
+        ProjectInspectionQualityStatus,
+      ).includes(
+        qualityStatus,
+      )
+    ) {
+      throw new BadRequestException(
+        `Invalid quality status for ${componentType}`,
+      );
+    }
+
+    const defaultSeverity =
+      qualityStatus ===
+        ProjectInspectionQualityStatus
+          .GOOD ||
+      qualityStatus ===
+        ProjectInspectionQualityStatus
+          .NOT_INSPECTED
+        ? ProjectInspectionSeverity
+            .NONE
+        : ProjectInspectionSeverity
+            .MINOR;
+
+    const severity =
+      String(
+        finding?.severity ||
+          defaultSeverity,
+      )
+        .trim()
+        .toUpperCase() as
+        ProjectInspectionSeverity;
+
+    if (
+      !Object.values(
+        ProjectInspectionSeverity,
+      ).includes(severity)
+    ) {
+      throw new BadRequestException(
+        `Invalid defect severity for ${componentType}`,
+      );
+    }
+
+    const defaultResolutionStatus =
+      qualityStatus ===
+        ProjectInspectionQualityStatus
+          .DEFECTIVE ||
+      qualityStatus ===
+        ProjectInspectionQualityStatus
+          .NON_QUALITY
+        ? ProjectInspectionResolutionStatus
+            .PENDING
+        : ProjectInspectionResolutionStatus
+            .NOT_REQUIRED;
+
+    const resolutionStatus =
+      String(
+        finding
+          ?.resolutionStatus ||
+          defaultResolutionStatus,
+      )
+        .trim()
+        .toUpperCase() as
+        ProjectInspectionResolutionStatus;
+
+    if (
+      !Object.values(
+        ProjectInspectionResolutionStatus,
+      ).includes(
+        resolutionStatus,
+      )
+    ) {
+      throw new BadRequestException(
+        `Invalid resolution status for ${componentType}`,
+      );
+    }
+
+    const defect =
+      this
+        .projectInspectionDefectRepository
+        .create({
+          inspectionId:
+            inspection.id,
+
+          projectId:
+            inspection.projectId,
+
+          componentType,
+
+          qualityStatus,
+
+          severity,
+
+          resolutionStatus,
+
+          remarks:
+            String(
+              finding?.remarks ||
+                '',
+            ).trim(),
+
+          resolutionRemarks:
+            String(
+              finding
+                ?.resolutionRemarks ||
+                '',
+            ).trim(),
+        });
+
+    savedFindings.push(
+      await this
+        .projectInspectionDefectRepository
+        .save(defect),
+    );
+  }
+
+  const hasDefect =
+    savedFindings.some(
+      (finding) =>
+        finding.qualityStatus ===
+          ProjectInspectionQualityStatus
+            .DEFECTIVE ||
+        finding.qualityStatus ===
+          ProjectInspectionQualityStatus
+            .NON_QUALITY,
+    );
+
+  inspection.defectsFound =
+    hasDefect;
+
+  if (
+    hasDefect &&
+    inspection.overallCondition ===
+      ProjectInspectionCondition
+        .PASS
+  ) {
+    inspection.overallCondition =
+      ProjectInspectionCondition
+        .MINOR_DEFECT;
+  }
+
+  await this
+    .projectInspectionRepository
+    .save(inspection);
+
+  return savedFindings;
+}
+
+async getProjectInspectionHistory(
+  projectId: number,
+  user: any,
+) {
+  this.assertInspectionViewAccess(
+    user,
+  );
+
+  const project =
+    await this.projectRepository
+      .findOne({
+        where: {
+          id: projectId,
+          isHidden: false,
+        } as any,
+      });
+
+  if (!project) {
+    throw new NotFoundException(
+      'Project not found',
+    );
+  }
+
+  const inspections =
+    await this
+      .projectInspectionRepository
+      .find({
+        where: {
+          projectId,
+          isHidden: false,
+        } as any,
+
+        order: {
+          inspectionDate: 'DESC',
+          createdAt: 'DESC',
+        } as any,
+      });
+
+  const inspectionIds =
+    inspections.map(
+      (inspection) =>
+        inspection.id,
+    );
+
+  const defects =
+    inspectionIds.length
+      ? await this
+          .projectInspectionDefectRepository
+          .createQueryBuilder(
+            'defect',
+          )
+          .where(
+            `defect.inspectionId
+              IN (:...inspectionIds)`,
+            {
+              inspectionIds,
+            },
+          )
+          .orderBy(
+            'defect.createdAt',
+            'ASC',
+          )
+          .getMany()
+      : [];
+
+  const photos =
+    inspectionIds.length
+      ? await this
+          .projectInspectionPhotoRepository
+          .createQueryBuilder(
+            'photo',
+          )
+          .where(
+            `photo.inspectionId
+              IN (:...inspectionIds)`,
+            {
+              inspectionIds,
+            },
+          )
+          .orderBy(
+            'photo.createdAt',
+            'DESC',
+          )
+          .getMany()
+      : [];
+
+  return inspections.map(
+    (inspection) => ({
+      ...inspection,
+
+      findings:
+        defects.filter(
+          (defect) =>
+            defect.inspectionId ===
+            inspection.id,
+        ),
+
+      photos:
+        photos.filter(
+          (photo) =>
+            photo.inspectionId ===
+            inspection.id,
+        ),
+    }),
+  );
+}
+
+async uploadProjectInspectionPhotos(
+  inspectionId: number,
+  body: any,
+  files: any[],
+  user: any,
+) {
+  this.assertInspectionManageAccess(
+    user,
+  );
+
+  const inspection =
+    await this
+      .projectInspectionRepository
+      .findOne({
+        where: {
+          id: inspectionId,
+          isHidden: false,
+        } as any,
+      });
+
+  if (!inspection) {
+    throw new NotFoundException(
+      'Inspection not found',
+    );
+  }
+
+  if (
+    !Array.isArray(files) ||
+    files.length === 0
+  ) {
+    throw new BadRequestException(
+      'At least one inspection photo is required',
+    );
+  }
+
+  const componentType =
+    String(
+      body
+        ?.componentType || '',
+    )
+      .trim()
+      .toUpperCase() as
+      ProjectInspectionComponentType;
+
+  if (
+    !Object.values(
+      ProjectInspectionComponentType,
+    ).includes(componentType)
+  ) {
+    throw new BadRequestException(
+      'Valid inspection component type is required',
+    );
+  }
+
+  const defectId =
+    Number(
+      body?.defectId || 0,
+    ) || null;
+
+  if (defectId) {
+    const defect =
+      await this
+        .projectInspectionDefectRepository
+        .findOne({
+          where: {
+            id: defectId,
+            inspectionId:
+              inspection.id,
+          } as any,
+        });
+
+    if (!defect) {
+      throw new BadRequestException(
+        'Selected inspection finding does not belong to this inspection',
+      );
+    }
+  }
+
+  const allowedTypes = [
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+  ];
+
+  const maximumSize =
+    5 * 1024 * 1024;
+
+  const supabaseUrl =
+    process.env.SUPABASE_URL;
+
+  const serviceKey =
+    process.env
+      .SUPABASE_SERVICE_ROLE_KEY;
+
+  const bucket =
+    process.env
+      .SUPABASE_PROJECT_DOCUMENTS_BUCKET ||
+    'project-documents';
+
+  if (
+    !supabaseUrl ||
+    !serviceKey
+  ) {
+    throw new BadRequestException(
+      'Supabase storage is not configured',
+    );
+  }
+
+  const supabase =
+    createClient(
+      supabaseUrl,
+      serviceKey,
+    );
+
+  const uploadedPhotos:
+    ProjectInspectionPhoto[] = [];
+
+  for (const file of files) {
+    if (!file) {
+      continue;
+    }
+
+    const mimeType =
+      String(
+        file.mimetype || '',
+      );
+
+    if (
+      !allowedTypes.includes(
+        mimeType,
+      )
+    ) {
+      throw new BadRequestException(
+        'Only JPG, PNG and WEBP inspection photos are allowed',
+      );
+    }
+
+    if (
+      Number(file.size || 0) >
+      maximumSize
+    ) {
+      throw new BadRequestException(
+        'Each inspection photo must be less than 5 MB after compression',
+      );
+    }
+
+    const originalName =
+      String(
+        file.originalname ||
+          'inspection-photo',
+      );
+
+    const extension =
+      originalName.includes('.')
+        ? originalName
+            .split('.')
+            .pop()
+        : mimeType
+            .split('/')[1] ||
+          'jpg';
+
+    const safeExtension =
+      String(
+        extension || 'jpg',
+      ).replace(
+        /[^a-zA-Z0-9]/g,
+        '',
+      );
+
+    const filePath =
+      `project-inspections/project-${
+        inspection.projectId
+      }/inspection-${
+        inspection.id
+      }/${componentType.toLowerCase()}/${Date.now()}-${randomUUID()}.${safeExtension}`;
+
+    const uploadResult =
+      await supabase.storage
+        .from(bucket)
+        .upload(
+          filePath,
+          file.buffer,
+          {
+            contentType:
+              mimeType,
+            upsert: false,
+          },
+        );
+
+    if (
+      uploadResult.error
+    ) {
+      throw new BadRequestException(
+        uploadResult.error
+          .message,
+      );
+    }
+
+    const publicUrlResult =
+      supabase.storage
+        .from(bucket)
+        .getPublicUrl(
+          filePath,
+        );
+
+    const photo =
+      this
+        .projectInspectionPhotoRepository
+        .create({
+          inspectionId:
+            inspection.id,
+
+          defectId:
+            defectId ||
+            undefined,
+
+          projectId:
+            inspection.projectId,
+
+          componentType,
+
+          fileUrl:
+            publicUrlResult
+              .data.publicUrl,
+
+          fileName:
+            originalName,
+
+          fileSize:
+            Number(
+              file.size || 0,
+            ),
+
+          mimeType,
+
+          filePath,
+
+          remarks:
+            String(
+              body?.remarks ||
+                '',
+            ).trim(),
+
+          uploadedBy:
+            Number(
+              user?.id ||
+                user?.userId ||
+                user?.sub ||
+                0,
+            ) ||
+            undefined,
+
+          uploadedByName:
+            user?.name ||
+            user?.email ||
+            '',
+
+          uploadedByRole:
+            this
+              .getUserRoles(user)
+              .join(', '),
+        });
+
+    uploadedPhotos.push(
+      await this
+        .projectInspectionPhotoRepository
+        .save(photo),
+    );
+  }
+
+  return {
+    message:
+      `${uploadedPhotos.length} inspection photo(s) uploaded successfully`,
+
+    photos:
+      uploadedPhotos,
+  };
+}
+
+async getInspectionAnalytics(
+  query: any = {},
+  user?: any,
+) {
+  this.assertInspectionViewAccess(user);
+
+  const inspectionQb =
+    this.projectInspectionRepository
+      .createQueryBuilder('inspection')
+      .where('inspection.isHidden = false');
+
+  if (query?.fromDate) {
+    const fromDate =
+      new Date(query.fromDate);
+
+    fromDate.setHours(
+      0,
+      0,
+      0,
+      0,
+    );
+
+    inspectionQb.andWhere(
+      'inspection.inspectionDate >= :fromDate',
+      {
+        fromDate,
+      },
+    );
+  }
+
+  if (query?.toDate) {
+    const toDate =
+      new Date(query.toDate);
+
+    toDate.setHours(
+      23,
+      59,
+      59,
+      999,
+    );
+
+    inspectionQb.andWhere(
+      'inspection.inspectionDate <= :toDate',
+      {
+        toDate,
+      },
+    );
+  }
+
+  if (query?.inspectionManagerId) {
+    inspectionQb.andWhere(
+      `inspection.inspectionManagerId =
+        :inspectionManagerId`,
+      {
+        inspectionManagerId:
+          Number(
+            query
+              .inspectionManagerId,
+          ),
+      },
+    );
+  }
+
+  if (query?.city) {
+    inspectionQb.andWhere(
+      `LOWER(
+        COALESCE(
+          inspection.city,
+          ''
+        )
+      ) LIKE :city`,
+      {
+        city:
+          `%${String(
+            query.city,
+          )
+            .trim()
+            .toLowerCase()}%`,
+      },
+    );
+  }
+
+  if (query?.zone) {
+    inspectionQb.andWhere(
+      `LOWER(
+        COALESCE(
+          inspection.zone,
+          ''
+        )
+      ) LIKE :zone`,
+      {
+        zone:
+          `%${String(
+            query.zone,
+          )
+            .trim()
+            .toLowerCase()}%`,
+      },
+    );
+  }
+
+  if (query?.branchName) {
+    inspectionQb.andWhere(
+      `LOWER(
+        COALESCE(
+          inspection.branchName,
+          ''
+        )
+      ) LIKE :branchName`,
+      {
+        branchName:
+          `%${String(
+            query.branchName,
+          )
+            .trim()
+            .toLowerCase()}%`,
+      },
+    );
+  }
+
+  if (query?.projectStatus) {
+    inspectionQb.andWhere(
+      `inspection.projectStatus =
+        :projectStatus`,
+      {
+        projectStatus:
+          query.projectStatus,
+      },
+    );
+  }
+
+  if (query?.overallCondition) {
+    inspectionQb.andWhere(
+      `inspection.overallCondition =
+        :overallCondition`,
+      {
+        overallCondition:
+          query.overallCondition,
+      },
+    );
+  }
+
+  if (query?.inspectionStatus) {
+    inspectionQb.andWhere(
+      `inspection.status =
+        :inspectionStatus`,
+      {
+        inspectionStatus:
+          query.inspectionStatus,
+      },
+    );
+  }
+
+  const inspections =
+    await inspectionQb
+      .orderBy(
+        'inspection.inspectionDate',
+        'DESC',
+      )
+      .getMany();
+
+  const inspectionIds =
+    inspections.map(
+      (inspection) =>
+        inspection.id,
+    );
+
+  const defectQb =
+    this.projectInspectionDefectRepository
+      .createQueryBuilder('defect');
+
+  if (inspectionIds.length) {
+    defectQb.where(
+      `defect.inspectionId
+        IN (:...inspectionIds)`,
+      {
+        inspectionIds,
+      },
+    );
+  } else {
+    defectQb.where('1 = 0');
+  }
+
+  if (query?.componentType) {
+    defectQb.andWhere(
+      `defect.componentType =
+        :componentType`,
+      {
+        componentType:
+          query.componentType,
+      },
+    );
+  }
+
+  if (query?.severity) {
+    defectQb.andWhere(
+      'defect.severity = :severity',
+      {
+        severity:
+          query.severity,
+      },
+    );
+  }
+
+  if (query?.resolutionStatus) {
+    defectQb.andWhere(
+      `defect.resolutionStatus =
+        :resolutionStatus`,
+      {
+        resolutionStatus:
+          query.resolutionStatus,
+      },
+    );
+  }
+
+  if (query?.qualityStatus) {
+    defectQb.andWhere(
+      `defect.qualityStatus =
+        :qualityStatus`,
+      {
+        qualityStatus:
+          query.qualityStatus,
+      },
+    );
+  }
+
+  const defects =
+    await defectQb.getMany();
+
+  const defectiveFindings =
+    defects.filter(
+      (defect) =>
+        defect.qualityStatus ===
+          ProjectInspectionQualityStatus.DEFECTIVE ||
+        defect.qualityStatus ===
+          ProjectInspectionQualityStatus.NON_QUALITY,
+    );
+
+  const uniqueProjectIds =
+    new Set(
+      inspections.map(
+        (inspection) =>
+          inspection.projectId,
+      ),
+    );
+
+  const completedVisits =
+    inspections.filter(
+      (inspection) =>
+        inspection.status ===
+        ProjectInspectionStatus.COMPLETED,
+    );
+
+  const pendingDefects =
+    defectiveFindings.filter(
+      (defect) =>
+        defect.resolutionStatus ===
+          ProjectInspectionResolutionStatus.PENDING ||
+        defect.resolutionStatus ===
+          ProjectInspectionResolutionStatus.IN_PROGRESS,
+    );
+
+  const resolvedDefects =
+    defectiveFindings.filter(
+      (defect) =>
+        defect.resolutionStatus ===
+        ProjectInspectionResolutionStatus.RESOLVED,
+    );
+
+  const managerMap =
+    new Map<
+      string,
+      {
+        inspectionManagerId:
+          number | null;
+        inspectionManagerName:
+          string;
+        totalVisits: number;
+        uniqueSites: Set<number>;
+        defectsFound: number;
+      }
+    >();
+
+  for (const inspection of inspections) {
+    const managerKey =
+      String(
+        inspection.inspectionManagerId ||
+          inspection.inspectionManagerName ||
+          'UNKNOWN',
+      );
+
+    if (!managerMap.has(managerKey)) {
+      managerMap.set(managerKey, {
+        inspectionManagerId:
+          inspection.inspectionManagerId ||
+          null,
+
+        inspectionManagerName:
+          inspection.inspectionManagerName ||
+          'Unknown',
+
+        totalVisits: 0,
+        uniqueSites:
+          new Set<number>(),
+
+        defectsFound: 0,
+      });
+    }
+
+    const manager =
+      managerMap.get(
+        managerKey,
+      )!;
+
+    manager.totalVisits += 1;
+
+    manager.uniqueSites.add(
+      inspection.projectId,
+    );
+
+    if (
+      inspection.defectsFound
+    ) {
+      manager.defectsFound += 1;
+    }
+  }
+
+  const cityMap =
+    new Map<
+      string,
+      {
+        city: string;
+        totalVisits: number;
+        uniqueSites: Set<number>;
+        defectsFound: number;
+      }
+    >();
+
+  for (const inspection of inspections) {
+    const cityName =
+      String(
+        inspection.city ||
+          'Unknown',
+      ).trim() || 'Unknown';
+
+    const cityKey =
+      cityName.toLowerCase();
+
+    if (!cityMap.has(cityKey)) {
+      cityMap.set(cityKey, {
+        city: cityName,
+        totalVisits: 0,
+        uniqueSites:
+          new Set<number>(),
+        defectsFound: 0,
+      });
+    }
+
+    const cityEntry =
+      cityMap.get(cityKey)!;
+
+    cityEntry.totalVisits += 1;
+
+    cityEntry.uniqueSites.add(
+      inspection.projectId,
+    );
+
+    if (
+      inspection.defectsFound
+    ) {
+      cityEntry.defectsFound += 1;
+    }
+  }
+
+  const componentMap =
+    new Map<
+      string,
+      {
+        componentType: string;
+        totalDefects: number;
+        pending: number;
+        resolved: number;
+      }
+    >();
+
+  for (
+    const defect of
+      defectiveFindings
+  ) {
+    const componentType =
+      defect.componentType;
+
+    if (
+      !componentMap.has(
+        componentType,
+      )
+    ) {
+      componentMap.set(
+        componentType,
+        {
+          componentType,
+          totalDefects: 0,
+          pending: 0,
+          resolved: 0,
+        },
+      );
+    }
+
+    const component =
+      componentMap.get(
+        componentType,
+      )!;
+
+    component.totalDefects += 1;
+
+    if (
+      defect.resolutionStatus ===
+      ProjectInspectionResolutionStatus.RESOLVED
+    ) {
+      component.resolved += 1;
+    } else {
+      component.pending += 1;
+    }
+  }
+
+  return {
+    summary: {
+      totalVisits:
+        inspections.length,
+
+      completedVisits:
+        completedVisits.length,
+
+      uniqueSitesVisited:
+        uniqueProjectIds.size,
+
+      defectsFound:
+        defectiveFindings.length,
+
+      pendingDefects:
+        pendingDefects.length,
+
+      resolvedDefects:
+        resolvedDefects.length,
+
+      followUpRequired:
+        inspections.filter(
+          (inspection) =>
+            inspection.followUpRequired,
+        ).length,
+
+      criticalInspections:
+        inspections.filter(
+          (inspection) =>
+            inspection.overallCondition ===
+            ProjectInspectionCondition.CRITICAL,
+        ).length,
+    },
+
+    managerWise:
+      Array.from(
+        managerMap.values(),
+      )
+        .map((item) => ({
+          inspectionManagerId:
+            item.inspectionManagerId,
+
+          inspectionManagerName:
+            item.inspectionManagerName,
+
+          totalVisits:
+            item.totalVisits,
+
+          uniqueSites:
+            item.uniqueSites.size,
+
+          defectsFound:
+            item.defectsFound,
+        }))
+        .sort(
+          (a, b) =>
+            b.totalVisits -
+            a.totalVisits,
+        ),
+
+    cityWise:
+      Array.from(
+        cityMap.values(),
+      )
+        .map((item) => ({
+          city: item.city,
+
+          totalVisits:
+            item.totalVisits,
+
+          uniqueSites:
+            item.uniqueSites.size,
+
+          defectsFound:
+            item.defectsFound,
+        }))
+        .sort(
+          (a, b) =>
+            b.totalVisits -
+            a.totalVisits,
+        ),
+
+    componentWise:
+      Array.from(
+        componentMap.values(),
+      ).sort(
+        (a, b) =>
+          b.totalDefects -
+          a.totalDefects,
+      ),
+
+    inspections,
+    defects,
+  };
+}
+
+async updateInspectionDefect(
+  defectId: number,
+  body: any,
+  user: any,
+) {
+  this.assertInspectionManageAccess(
+    user,
+  );
+
+  const defect =
+    await this
+      .projectInspectionDefectRepository
+      .findOne({
+        where: {
+          id: defectId,
+        },
+      });
+
+  if (!defect) {
+    throw new NotFoundException(
+      'Inspection defect not found',
+    );
+  }
+
+  if (body?.qualityStatus) {
+    const qualityStatus =
+      String(
+        body.qualityStatus,
+      )
+        .trim()
+        .toUpperCase() as
+        ProjectInspectionQualityStatus;
+
+    if (
+      !Object.values(
+        ProjectInspectionQualityStatus,
+      ).includes(
+        qualityStatus,
+      )
+    ) {
+      throw new BadRequestException(
+        'Invalid quality status',
+      );
+    }
+
+    defect.qualityStatus =
+      qualityStatus;
+  }
+
+  if (body?.severity) {
+    const severity =
+      String(
+        body.severity,
+      )
+        .trim()
+        .toUpperCase() as
+        ProjectInspectionSeverity;
+
+    if (
+      !Object.values(
+        ProjectInspectionSeverity,
+      ).includes(severity)
+    ) {
+      throw new BadRequestException(
+        'Invalid defect severity',
+      );
+    }
+
+    defect.severity =
+      severity;
+  }
+
+  if (
+    body?.resolutionStatus
+  ) {
+    const resolutionStatus =
+      String(
+        body.resolutionStatus,
+      )
+        .trim()
+        .toUpperCase() as
+        ProjectInspectionResolutionStatus;
+
+    if (
+      !Object.values(
+        ProjectInspectionResolutionStatus,
+      ).includes(
+        resolutionStatus,
+      )
+    ) {
+      throw new BadRequestException(
+        'Invalid resolution status',
+      );
+    }
+
+    defect.resolutionStatus =
+      resolutionStatus;
+
+    if (
+      resolutionStatus ===
+      ProjectInspectionResolutionStatus.RESOLVED
+    ) {
+      defect.resolvedAt =
+        new Date();
+
+      defect.resolvedBy =
+        Number(
+          user?.id ||
+            user?.userId ||
+            user?.sub ||
+            0,
+        ) || undefined as any;
+
+      defect.resolvedByName =
+        user?.name ||
+        user?.email ||
+        '';
+    } else {
+      defect.resolvedAt =
+        undefined as any;
+
+      defect.resolvedBy =
+        undefined as any;
+
+      defect.resolvedByName =
+        '';
+    }
+  }
+
+  if (
+    body?.remarks !==
+    undefined
+  ) {
+    defect.remarks =
+      String(
+        body.remarks || '',
+      ).trim();
+  }
+
+  if (
+    body?.resolutionRemarks !==
+    undefined
+  ) {
+    defect.resolutionRemarks =
+      String(
+        body.resolutionRemarks ||
+          '',
+      ).trim();
+  }
+
+  const savedDefect =
+    await this
+      .projectInspectionDefectRepository
+      .save(defect);
+
+  const inspectionDefects =
+    await this
+      .projectInspectionDefectRepository
+      .find({
+        where: {
+          inspectionId:
+            defect.inspectionId,
+        },
+      });
+
+  const stillHasPendingDefect =
+    inspectionDefects.some(
+      (item) =>
+        (
+          item.qualityStatus ===
+            ProjectInspectionQualityStatus.DEFECTIVE ||
+          item.qualityStatus ===
+            ProjectInspectionQualityStatus.NON_QUALITY
+        ) &&
+        item.resolutionStatus !==
+          ProjectInspectionResolutionStatus.RESOLVED,
+    );
+
+  const inspection =
+    await this
+      .projectInspectionRepository
+      .findOne({
+        where: {
+          id:
+            defect.inspectionId,
+        },
+      });
+
+  if (inspection) {
+    inspection.defectsFound =
+      inspectionDefects.some(
+        (item) =>
+          item.qualityStatus ===
+            ProjectInspectionQualityStatus.DEFECTIVE ||
+          item.qualityStatus ===
+            ProjectInspectionQualityStatus.NON_QUALITY,
+      );
+
+    inspection.followUpRequired =
+      stillHasPendingDefect ||
+      inspection.followUpRequired;
+
+    if (
+      !stillHasPendingDefect &&
+      inspection.status ===
+        ProjectInspectionStatus.FOLLOW_UP_REQUIRED
+    ) {
+      inspection.status =
+        ProjectInspectionStatus.COMPLETED;
+
+      inspection.followUpRequired =
+        false;
+
+      inspection.completedAt =
+        inspection.completedAt ||
+        new Date();
+    }
+
+    await this
+      .projectInspectionRepository
+      .save(inspection);
+  }
+
+  return savedDefect;
 }
 }

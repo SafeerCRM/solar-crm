@@ -65,10 +65,24 @@ import { TelecallingContact } from '../telecalling/telecalling-contact.entity';
 import { User } from '../users/user.entity';
 import { ProjectEpcCustomerInvoice } from './project-epc-customer-invoice.entity';
 import { ProjectEpcCustomerInvoiceItem } from './project-epc-customer-invoice-item.entity';
+import {
+  ProjectInspection,
+} from './project-inspection.entity';
+
+import {
+  ProjectInspectionDefect,
+} from './project-inspection-defect.entity';
+
+import {
+  ProjectInspectionPhoto,
+} from './project-inspection-photo.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Project, ProjectDocument, CustomerNotification, ProjectComment, ProjectMaterialMaster, ProjectMaterialRequest,
+    TypeOrmModule.forFeature([Project, 
+     ProjectInspection,
+ProjectInspectionDefect,
+ProjectInspectionPhoto, ProjectDocument, CustomerNotification, ProjectComment, ProjectMaterialMaster, ProjectMaterialRequest,
 ProjectMaterialRequestItem, ProjectBranch, ProjectLoanDetail, ProjectSubsidyDetail, ProjectElectricityDetail, ProjectExecutionActivity, ProjectExecutionProof, ProjectExecutionReminder, ProjectExecutionReminderUserState, ProjectPaymentInstallment, ProjectPaymentReminderUserState, ProjectReminderUserState, ProjectEditHistory,
  ProjectVendor,
 ProjectVendorCompany,
