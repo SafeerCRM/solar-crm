@@ -25,6 +25,12 @@ export class ProjectMaterialMaster {
   category: string;
 
   @Column({ nullable: true })
+dealerCategory: string;
+
+@Column({ type: 'float', default: 0 })
+ratePerWatt: number;
+
+  @Column({ nullable: true })
   unit: string;
 
   @Column({ nullable: true })

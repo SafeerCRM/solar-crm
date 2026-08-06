@@ -4466,11 +4466,44 @@ async projectManagerApproval(
     throw new BadRequestException('Material name is required');
   }
 
+  const requestedDealerCategory = String(
+  (data as any).dealerCategory || '',
+)
+  .trim()
+  .toUpperCase();
+
+const allowedDealerCategories = [
+  'PANELS',
+  'INVERTERS',
+  'STRUCTURE',
+  'ELECTRICAL',
+  'BATTERIES',
+];
+
+const dealerCategory =
+  allowedDealerCategories.includes(
+    requestedDealerCategory,
+  )
+    ? requestedDealerCategory
+    : '';
+
   const item = this.projectMaterialMasterRepository.create({
     name: String(data.name).trim(),
     category: data.category || '',
-    unit: data.unit || '',
-    brand: data.brand || '',
+
+/*
+ * Separate dealer-portal grouping.
+ * Existing category remains untouched.
+ */
+dealerCategory,
+
+ratePerWatt: Math.max(
+  Number((data as any).ratePerWatt || 0),
+  0,
+),
+
+unit: data.unit || '',
+brand: data.brand || '',
 
     hsnCode: (data as any).hsnCode || '',
     vendorPreferredName: (data as any).vendorPreferredName || '',
@@ -4668,8 +4701,52 @@ async updateMaterialMaster(id: number, data: Partial<ProjectMaterialMaster>) {
     throw new NotFoundException('Material item not found');
   }
 
+  const requestedDealerCategory =
+  (data as any).dealerCategory !== undefined
+    ? String(
+        (data as any).dealerCategory || '',
+      )
+        .trim()
+        .toUpperCase()
+    : undefined;
+
+const allowedDealerCategories = [
+  'PANELS',
+  'INVERTERS',
+  'STRUCTURE',
+  'ELECTRICAL',
+  'BATTERIES',
+];
+
+const dealerCategory =
+  requestedDealerCategory === undefined
+    ? (item as any).dealerCategory
+    : allowedDealerCategories.includes(
+          requestedDealerCategory,
+        )
+      ? requestedDealerCategory
+      : '';
+
   Object.assign(item, {
     ...data,
+
+    /*
+ * Never allow free-text dealer categories.
+ * This protects grouping consistency.
+ */
+dealerCategory,
+
+ratePerWatt:
+  (data as any).ratePerWatt !== undefined
+    ? Math.max(
+        Number(
+          (data as any).ratePerWatt || 0,
+        ),
+        0,
+      )
+    : Number(
+        (item as any).ratePerWatt || 0,
+      ),
 
     hsnCode:
       (data as any).hsnCode !== undefined

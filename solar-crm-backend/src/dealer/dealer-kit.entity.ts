@@ -23,6 +23,15 @@ export class DealerKit {
   @Column({ type: 'text', nullable: true })
   displayCapacity: string;
 
+  @Column({ type: 'text', nullable: true })
+panelBrand: string;
+
+@Column({ type: 'text', nullable: true })
+inverterBrand: string;
+
+@Column({ type: 'text', nullable: true })
+batteryBrand: string;
+
   @Column({ type: 'numeric', default: 0 })
   sellingPrice: number;
 

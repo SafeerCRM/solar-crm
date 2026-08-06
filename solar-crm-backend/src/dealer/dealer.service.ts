@@ -526,10 +526,36 @@ async saveDealerKit(body: any, user: any) {
   }
 
   kit.kitName = String(body.kitName || '').trim();
-  kit.shortDescription = body.shortDescription || '';
-  kit.displayBrand = body.displayBrand || '';
-  kit.displayCapacity = body.displayCapacity || '';
-  kit.sellingPrice = Number(body.sellingPrice || 0);
+kit.shortDescription = String(
+  body.shortDescription || '',
+).trim();
+
+kit.displayBrand = String(
+  body.displayBrand || '',
+).trim();
+
+kit.displayCapacity = String(
+  body.displayCapacity || '',
+).trim();
+
+/*
+ * Structured dealer-portal filters.
+ * These fields are separate from displayBrand
+ * so filtering never depends on marketing text.
+ */
+kit.panelBrand = String(
+  body.panelBrand || '',
+).trim();
+
+kit.inverterBrand = String(
+  body.inverterBrand || '',
+).trim();
+
+kit.batteryBrand = String(
+  body.batteryBrand || '',
+).trim();
+
+kit.sellingPrice = Number(body.sellingPrice || 0);
   kit.gstPercent = Number(body.gstPercent || 0);
   kit.gstMode =
   body.gstMode === 'INCLUDING' ? 'INCLUDING' : 'EXCLUDING';
@@ -738,12 +764,35 @@ async toggleDealerKitAvailability(id: number, body: any) {
           (sellingRateWithoutGst * gstPercent) / 100;
 
         return {
-          materialId: material.id,
-          materialName: material.name,
-          category: material.category,
-          brand: material.brand,
-          unit: material.unit,
-          hsnCode: material.hsnCode,
+  materialId: material.id,
+  materialName: material.name,
+
+  /*
+   * Existing technical category is preserved.
+   */
+  category: material.category,
+
+  /*
+   * New clean grouping used only by the
+   * dealer stock and order interfaces.
+   */
+  dealerCategory:
+    String(
+      (material as any).dealerCategory || '',
+    )
+      .trim()
+      .toUpperCase(),
+
+  /*
+   * Applicable mainly to solar-panel materials.
+   */
+  ratePerWatt: Number(
+    (material as any).ratePerWatt || 0,
+  ),
+
+  brand: material.brand,
+  unit: material.unit,
+  hsnCode: material.hsnCode,
           branchId: stock.branchId,
           branchName: stock.branchName,
           availableQuantity: Math.max(
@@ -945,17 +994,6 @@ async savePortalCompanySetting(body: any) {
 
     const paymentType = body.paymentType || ProjectDealerPaymentType.CASH;
 
-    if (!body.expectedDeliveryAt) {
-  throw new BadRequestException(
-    'Expected delivery date is required',
-  );
-}
-
-if (!String(body.remarks || '').trim()) {
-  throw new BadRequestException(
-    'Order remarks are required',
-  );
-}
 
 if (
   body.deliveryMode === 'DELIVERY' &&
