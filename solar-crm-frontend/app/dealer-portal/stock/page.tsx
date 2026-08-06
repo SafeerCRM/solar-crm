@@ -4,6 +4,33 @@ import { useEffect, useMemo, useState } from 'react';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
+const splitBrandTags = (value: any) => {
+  return String(value || '')
+    .split(/[,/|+]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+};
+
+const normalizeDealerCategory = (value: any) => {
+  const category = String(value || '')
+    .trim()
+    .toUpperCase();
+
+  if (
+    [
+      'PANELS',
+      'INVERTERS',
+      'STRUCTURE',
+      'ELECTRICAL',
+      'BATTERIES',
+    ].includes(category)
+  ) {
+    return category;
+  }
+
+  return 'OTHER';
+};
+
 export default function DealerStockPage() {
   const [stock, setStock] = useState<any[]>([]);
   const [kits, setKits] = useState<any[]>([]);
@@ -11,8 +38,13 @@ const [viewMode, setViewMode] = useState<'KITS' | 'MATERIALS'>('KITS');
 const [expandedKitId, setExpandedKitId] = useState<number | null>(null);
   const [dealer, setDealer] = useState<any>(null);
   const [search, setSearch] = useState('');
-  const [branch, setBranch] = useState('');
-  const [loading, setLoading] = useState(true);
+const [branch, setBranch] = useState('');
+
+const [panelBrand, setPanelBrand] = useState('');
+const [inverterBrand, setInverterBrand] = useState('');
+const [batteryBrand, setBatteryBrand] = useState('');
+
+const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const token = localStorage.getItem('dealer_token');
@@ -62,6 +94,36 @@ const [expandedKitId, setExpandedKitId] = useState<number | null>(null);
     );
   }, [stock]);
 
+  const panelBrandOptions = useMemo(() => {
+  return Array.from(
+    new Set(
+      kits.flatMap((kit) =>
+        splitBrandTags(kit.panelBrand),
+      ),
+    ),
+  ).sort((a, b) => a.localeCompare(b));
+}, [kits]);
+
+const inverterBrandOptions = useMemo(() => {
+  return Array.from(
+    new Set(
+      kits.flatMap((kit) =>
+        splitBrandTags(kit.inverterBrand),
+      ),
+    ),
+  ).sort((a, b) => a.localeCompare(b));
+}, [kits]);
+
+const batteryBrandOptions = useMemo(() => {
+  return Array.from(
+    new Set(
+      kits.flatMap((kit) =>
+        splitBrandTags(kit.batteryBrand),
+      ),
+    ),
+  ).sort((a, b) => a.localeCompare(b));
+}, [kits]);
+
   const filteredStock = useMemo(() => {
     const q = search.toLowerCase();
 
@@ -80,18 +142,131 @@ const [expandedKitId, setExpandedKitId] = useState<number | null>(null);
   }, [stock, search, branch]);
 
   const filteredKits = useMemo(() => {
-  const q = search.toLowerCase();
+  const q = search.trim().toLowerCase();
 
   return kits.filter((kit) => {
+    const searchableText = [
+      kit.kitName,
+      kit.shortDescription,
+      kit.displayBrand,
+      kit.displayCapacity,
+      kit.panelBrand,
+      kit.inverterBrand,
+      kit.batteryBrand,
+      ...(Array.isArray(kit.items)
+        ? kit.items.flatMap((item: any) => [
+            item.material,
+            item.brandSizeType,
+            item.quantity,
+          ])
+        : []),
+    ]
+      .map((value) =>
+        String(value || '').toLowerCase(),
+      )
+      .join(' ');
+
+    const kitPanelBrands = splitBrandTags(
+      kit.panelBrand,
+    ).map((item) => item.toLowerCase());
+
+    const kitInverterBrands = splitBrandTags(
+      kit.inverterBrand,
+    ).map((item) => item.toLowerCase());
+
+    const kitBatteryBrands = splitBrandTags(
+      kit.batteryBrand,
+    ).map((item) => item.toLowerCase());
+
+    const matchesSearch =
+      !q || searchableText.includes(q);
+
+    const matchesPanel =
+      !panelBrand ||
+      kitPanelBrands.includes(
+        panelBrand.toLowerCase(),
+      );
+
+    const matchesInverter =
+      !inverterBrand ||
+      kitInverterBrands.includes(
+        inverterBrand.toLowerCase(),
+      );
+
+    const matchesBattery =
+      !batteryBrand ||
+      kitBatteryBrands.includes(
+        batteryBrand.toLowerCase(),
+      );
+
     return (
-      !q ||
-      String(kit.kitName || '').toLowerCase().includes(q) ||
-      String(kit.shortDescription || '').toLowerCase().includes(q) ||
-      String(kit.displayBrand || '').toLowerCase().includes(q) ||
-      String(kit.displayCapacity || '').toLowerCase().includes(q)
+      matchesSearch &&
+      matchesPanel &&
+      matchesInverter &&
+      matchesBattery
     );
   });
-}, [kits, search]);
+}, [
+  kits,
+  search,
+  panelBrand,
+  inverterBrand,
+  batteryBrand,
+]);
+
+const groupedMaterials = useMemo(() => {
+  const groups: Record<string, any[]> = {
+    PANELS: [],
+    INVERTERS: [],
+    STRUCTURE: [],
+    ELECTRICAL: [],
+    BATTERIES: [],
+    OTHER: [],
+  };
+
+  for (const item of filteredStock) {
+    const category = normalizeDealerCategory(
+      item.dealerCategory,
+    );
+
+    groups[category].push(item);
+  }
+
+  return groups;
+}, [filteredStock]);
+
+const materialSections = [
+  {
+    key: 'PANELS',
+    title: 'Panels',
+    description: 'DC solar modules and panel stock',
+  },
+  {
+    key: 'INVERTERS',
+    title: 'Inverters',
+    description: 'Solar and hybrid inverter stock',
+  },
+  {
+    key: 'STRUCTURE',
+    title: 'Structure',
+    description: 'Pipes, mounting and structural accessories',
+  },
+  {
+    key: 'ELECTRICAL',
+    title: 'Electrical',
+    description: 'Wires, cables, earthing and electrical accessories',
+  },
+  {
+    key: 'BATTERIES',
+    title: 'Batteries',
+    description: 'Battery stock for hybrid systems',
+  },
+  {
+    key: 'OTHER',
+    title: 'Other Materials',
+    description: 'Materials awaiting dealer-category assignment',
+  },
+];
 
   return (
     <main className="min-h-screen w-screen max-w-full overflow-x-hidden bg-slate-950 text-white">
@@ -123,37 +298,130 @@ const [expandedKitId, setExpandedKitId] = useState<number | null>(null);
             </a>
           </div>
 
-          <div className="mt-5 grid gap-3 md:grid-cols-3">
-            <input
-              type="text"
-              placeholder="Search material, brand, HSN..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="rounded-2xl border border-white/10 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none"
-            />
+          <div
+  className={`mt-5 grid gap-3 ${
+    viewMode === 'KITS'
+      ? 'md:grid-cols-2 xl:grid-cols-5'
+      : 'md:grid-cols-3'
+  }`}
+>
+  <input
+    type="text"
+    placeholder={
+      viewMode === 'KITS'
+        ? 'Search kit, brand, capacity...'
+        : 'Search material, brand, HSN...'
+    }
+    value={search}
+    onChange={(e) => setSearch(e.target.value)}
+    className="rounded-2xl border border-white/10 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none"
+  />
 
-            <select
-              value={branch}
-              onChange={(e) => setBranch(e.target.value)}
-              className="rounded-2xl border border-white/10 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none"
-            >
-              <option value="">All Branches</option>
-              {branches.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
+  {viewMode === 'KITS' && (
+    <>
+      <select
+        value={panelBrand}
+        onChange={(e) =>
+          setPanelBrand(e.target.value)
+        }
+        className="rounded-2xl border border-white/10 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none"
+      >
+        <option value="">
+          All Panel Brands
+        </option>
 
-            <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-black">
-              Showing {viewMode === 'KITS' ? filteredKits.length : filteredStock.length} / {viewMode === 'KITS' ? kits.length : stock.length} items
-            </div>
-          </div>
+        {panelBrandOptions.map((brandName) => (
+          <option
+            key={brandName}
+            value={brandName}
+          >
+            {brandName}
+          </option>
+        ))}
+      </select>
+
+      <select
+        value={inverterBrand}
+        onChange={(e) =>
+          setInverterBrand(e.target.value)
+        }
+        className="rounded-2xl border border-white/10 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none"
+      >
+        <option value="">
+          All Inverter Brands
+        </option>
+
+        {inverterBrandOptions.map((brandName) => (
+          <option
+            key={brandName}
+            value={brandName}
+          >
+            {brandName}
+          </option>
+        ))}
+      </select>
+
+      <select
+        value={batteryBrand}
+        onChange={(e) =>
+          setBatteryBrand(e.target.value)
+        }
+        className="rounded-2xl border border-white/10 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none"
+      >
+        <option value="">
+          All Battery Brands
+        </option>
+
+        {batteryBrandOptions.map((brandName) => (
+          <option
+            key={brandName}
+            value={brandName}
+          >
+            {brandName}
+          </option>
+        ))}
+      </select>
+    </>
+  )}
+
+  {viewMode === 'MATERIALS' && (
+    <select
+      value={branch}
+      onChange={(e) =>
+        setBranch(e.target.value)
+      }
+      className="rounded-2xl border border-white/10 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none"
+    >
+      <option value="">All Branches</option>
+
+      {branches.map((item) => (
+        <option key={item} value={item}>
+          {item}
+        </option>
+      ))}
+    </select>
+  )}
+
+  <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-black">
+    Showing{' '}
+    {viewMode === 'KITS'
+      ? filteredKits.length
+      : filteredStock.length}{' '}
+    /{' '}
+    {viewMode === 'KITS'
+      ? kits.length
+      : stock.length}{' '}
+    items
+  </div>
+</div>
         </header>
 
         <div className="mt-6 flex gap-2">
   <button
-    onClick={() => setViewMode('KITS')}
+    onClick={() => {
+  setViewMode('KITS');
+  setBranch('');
+}}
     className={`rounded-2xl px-5 py-3 text-sm font-black ${
       viewMode === 'KITS'
         ? 'bg-orange-400 text-slate-950'
@@ -164,7 +432,12 @@ const [expandedKitId, setExpandedKitId] = useState<number | null>(null);
   </button>
 
   <button
-    onClick={() => setViewMode('MATERIALS')}
+    onClick={() => {
+  setViewMode('MATERIALS');
+  setPanelBrand('');
+  setInverterBrand('');
+  setBatteryBrand('');
+}}
     className={`rounded-2xl px-5 py-3 text-sm font-black ${
       viewMode === 'MATERIALS'
         ? 'bg-orange-400 text-slate-950'
@@ -180,36 +453,83 @@ const [expandedKitId, setExpandedKitId] = useState<number | null>(null);
             Loading stock...
           </div>
         ) : (
-          <section className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-  {viewMode === 'KITS' &&
-    filteredKits.map((kit) => (
-      <KitCard
-        key={kit.id}
-        kit={kit}
-        expanded={expandedKitId === kit.id}
-        onToggle={() =>
-          setExpandedKitId(expandedKitId === kit.id ? null : kit.id)
+          <div className="mt-6">
+  {viewMode === 'KITS' && (
+    <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+      {filteredKits.map((kit) => (
+        <KitCard
+          key={kit.id}
+          kit={kit}
+          expanded={expandedKitId === kit.id}
+          onToggle={() =>
+            setExpandedKitId(
+              expandedKitId === kit.id
+                ? null
+                : kit.id,
+            )
+          }
+        />
+      ))}
+
+      {!filteredKits.length && (
+        <div className="rounded-3xl border border-dashed border-white/20 bg-white/10 p-8 text-center text-white/70 md:col-span-2 xl:col-span-3">
+          No kit found for the selected brands.
+        </div>
+      )}
+    </section>
+  )}
+
+  {viewMode === 'MATERIALS' && (
+    <div className="space-y-8">
+      {materialSections.map((section) => {
+        const sectionItems =
+          groupedMaterials[section.key] || [];
+
+        if (!sectionItems.length) {
+          return null;
         }
-      />
-    ))}
 
-  {viewMode === 'MATERIALS' &&
-    filteredStock.map((item) => (
-      <StockCard key={`${item.materialId}-${item.branchName}`} item={item} />
-    ))}
+        return (
+          <section
+            key={section.key}
+            className="rounded-[2rem] border border-white/10 bg-white/5 p-4 md:p-5"
+          >
+            <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="text-2xl font-black">
+                  {section.title}
+                </h2>
 
-  {viewMode === 'KITS' && !filteredKits.length && (
-    <div className="rounded-3xl border border-dashed border-white/20 bg-white/10 p-8 text-center text-white/70 md:col-span-2 xl:col-span-3">
-      No kit found.
+                <p className="mt-1 text-sm text-white/60">
+                  {section.description}
+                </p>
+              </div>
+
+              <span className="rounded-full bg-white/10 px-4 py-2 text-xs font-black">
+                {sectionItems.length} items
+              </span>
+            </div>
+
+            <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+              {sectionItems.map((item) => (
+                <StockCard
+                  key={`${item.materialId}-${item.branchName}`}
+                  item={item}
+                />
+              ))}
+            </div>
+          </section>
+        );
+      })}
+
+      {!filteredStock.length && (
+        <div className="rounded-3xl border border-dashed border-white/20 bg-white/10 p-8 text-center text-white/70">
+          No stock item found.
+        </div>
+      )}
     </div>
   )}
-
-  {viewMode === 'MATERIALS' && !filteredStock.length && (
-    <div className="rounded-3xl border border-dashed border-white/20 bg-white/10 p-8 text-center text-white/70 md:col-span-2 xl:col-span-3">
-      No stock item found.
-    </div>
-  )}
-</section>
+</div>
         )}
       </div>
     </main>
@@ -239,6 +559,26 @@ function KitCard({
             <p className="mt-1 text-xs font-semibold text-slate-500">
               {kit.displayBrand || '-'} · {kit.displayCapacity || '-'}
             </p>
+
+            <div className="mt-2 flex flex-wrap gap-1.5">
+  {kit.panelBrand && (
+    <span className="rounded-full bg-blue-100 px-2 py-1 text-[10px] font-black text-blue-700">
+      Panel: {kit.panelBrand}
+    </span>
+  )}
+
+  {kit.inverterBrand && (
+    <span className="rounded-full bg-purple-100 px-2 py-1 text-[10px] font-black text-purple-700">
+      Inverter: {kit.inverterBrand}
+    </span>
+  )}
+
+  {kit.batteryBrand && (
+    <span className="rounded-full bg-amber-100 px-2 py-1 text-[10px] font-black text-amber-700">
+      Battery: {kit.batteryBrand}
+    </span>
+  )}
+</div>
           </div>
 
           <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-700">
@@ -331,11 +671,49 @@ function StockCard({ item }: { item: any }) {
         </div>
 
         <div className="mt-5 grid grid-cols-2 gap-3">
-          <InfoBox label="Without GST" value={`₹${Number(item.sellingRateWithoutGst || 0).toLocaleString('en-IN')}`} />
-          <InfoBox label="With GST" value={`₹${Number(item.sellingRateWithGst || 0).toLocaleString('en-IN')}`} />
-          <InfoBox label="GST" value={`${Number(item.gstPercent || 0)}%`} />
-          <InfoBox label="HSN" value={item.hsnCode || '-'} />
-        </div>
+  {item.dealerCategory === 'PANELS' &&
+    Number(item.ratePerWatt || 0) > 0 && (
+      <div className="col-span-2 rounded-2xl bg-green-50 p-3">
+        <p className="text-xs font-bold text-green-600">
+          Dealer Panel Rate
+        </p>
+
+        <p className="mt-1 text-lg font-black text-green-700">
+          ₹
+          {Number(
+            item.ratePerWatt || 0,
+          ).toLocaleString('en-IN')}
+          /Watt + GST
+        </p>
+      </div>
+    )}
+
+  <InfoBox
+    label="Without GST"
+    value={`₹${Number(
+      item.sellingRateWithoutGst || 0,
+    ).toLocaleString('en-IN')}`}
+  />
+
+  <InfoBox
+    label="With GST"
+    value={`₹${Number(
+      item.sellingRateWithGst || 0,
+    ).toLocaleString('en-IN')}`}
+  />
+
+  <InfoBox
+    label="GST"
+    value={`${Number(
+      item.gstPercent || 0,
+    )}%`}
+  />
+
+  <InfoBox
+    label="HSN"
+    value={item.hsnCode || '-'}
+  />
+</div>
 
         <div className="mt-5 rounded-2xl bg-slate-50 p-4">
           <p className="text-xs font-bold text-slate-400">Branch</p>

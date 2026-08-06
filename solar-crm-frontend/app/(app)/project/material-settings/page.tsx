@@ -9,7 +9,22 @@ const API_BASE_URL =
 type MaterialItem = {
   id: number;
   name: string;
+
+  /*
+   * Existing technical category.
+   */
   category?: string;
+
+  /*
+   * Clean dealer-portal grouping.
+   */
+  dealerCategory?: string;
+
+  /*
+   * Applicable mainly to panel materials.
+   */
+  ratePerWatt?: number;
+
   unit?: string;
   brand?: string;
   rate?: number;
@@ -63,9 +78,13 @@ const [categoryOptions, setCategoryOptions] =
   useState<number | null>(null);
 
   const [form, setForm] = useState({
-    name: '',
-    category: '',
-    unit: '',
+  name: '',
+  category: '',
+
+  dealerCategory: '',
+  ratePerWatt: '',
+
+  unit: '',
     brand: '',
     rate: '',
     gstPercent: '',
@@ -195,6 +214,14 @@ useEffect(() => {
 
     const payload = {
   ...form,
+
+  dealerCategory:
+    form.dealerCategory || '',
+
+  ratePerWatt: Number(
+    form.ratePerWatt || 0,
+  ),
+
   rate: Number(form.rate || 0),
   gstPercent: Number(form.gstPercent || 0),
   expectedMargin: Number(form.expectedMargin || 0),
@@ -241,6 +268,10 @@ useEffect(() => {
     setForm({
   name: '',
   category: '',
+
+  dealerCategory: '',
+  ratePerWatt: '',
+
   unit: '',
   brand: '',
   hsnCode: '',
@@ -273,6 +304,14 @@ const startEdit = (item: MaterialItem) => {
   setForm({
   name: item.name || '',
   category: item.category || '',
+
+  dealerCategory:
+    item.dealerCategory || '',
+
+  ratePerWatt: String(
+    item.ratePerWatt || '',
+  ),
+
   unit: item.unit || '',
   brand: item.brand || '',
   hsnCode: item.hsnCode || '',
@@ -303,6 +342,10 @@ const cancelEdit = () => {
   setForm({
   name: '',
   category: '',
+
+  dealerCategory: '',
+  ratePerWatt: '',
+
   unit: '',
   brand: '',
   hsnCode: '',
@@ -569,10 +612,18 @@ const downloadMaterialCsv = async () => {
           100;
 
       return {
-        Name: item.name || '',
-        Category:
-          item.category || '',
-        Brand: item.brand || '',
+  Name: item.name || '',
+
+  'Technical Category':
+    item.category || '',
+
+  'Dealer Category':
+    item.dealerCategory || '',
+
+  'Rate Per Watt':
+    Number(item.ratePerWatt || 0),
+
+  Brand: item.brand || '',
         Unit: item.unit || '',
         HSN: item.hsnCode || '',
 
@@ -740,6 +791,58 @@ const downloadMaterialCsv = async () => {
             }
             className="rounded-xl border p-3"
           />
+
+          <select
+  value={form.dealerCategory}
+  onChange={(e) =>
+    setForm({
+      ...form,
+      dealerCategory: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+>
+  <option value="">
+    Dealer Category — Not Assigned
+  </option>
+
+  <option value="PANELS">
+    Panels
+  </option>
+
+  <option value="INVERTERS">
+    Inverters
+  </option>
+
+  <option value="STRUCTURE">
+    Structure
+  </option>
+
+  <option value="ELECTRICAL">
+    Electrical
+  </option>
+
+  <option value="BATTERIES">
+    Batteries
+  </option>
+</select>
+
+{form.dealerCategory === 'PANELS' && (
+  <input
+    type="number"
+    min="0"
+    step="any"
+    placeholder="Rate Per Watt"
+    value={form.ratePerWatt}
+    onChange={(e) =>
+      setForm({
+        ...form,
+        ratePerWatt: e.target.value,
+      })
+    }
+    className="rounded-xl border p-3"
+  />
+)}
 
           <input
             placeholder="Unit"
@@ -1039,6 +1142,25 @@ const downloadMaterialCsv = async () => {
                       {item.brand || '-'} |{' '}
                       {item.unit || '-'}
                     </p>
+
+                    <div className="mt-2 flex flex-wrap gap-2">
+  {item.dealerCategory && (
+    <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">
+      Dealer: {item.dealerCategory}
+    </span>
+  )}
+
+  {item.dealerCategory === 'PANELS' &&
+    Number(item.ratePerWatt || 0) > 0 && (
+      <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700">
+        ₹
+        {Number(
+          item.ratePerWatt || 0,
+        ).toLocaleString('en-IN')}
+        /Watt + GST
+      </span>
+    )}
+</div>
 
                     <p className="text-sm text-gray-500">
   HSN: {item.hsnCode || '-'} | Vendor:{' '}

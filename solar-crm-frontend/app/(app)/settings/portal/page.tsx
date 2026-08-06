@@ -47,6 +47,14 @@ const emptyKitForm = {
   shortDescription: '',
   displayBrand: '',
   displayCapacity: '',
+
+  /*
+   * Structured dealer-portal filter tags.
+   */
+  panelBrand: '',
+  inverterBrand: '',
+  batteryBrand: '',
+
   sellingPrice: '',
   gstPercent: '',
   gstMode: 'EXCLUDING',
@@ -412,8 +420,13 @@ const startEditKit = (kit: any) => {
     kitName: kit.kitName || '',
     shortDescription: kit.shortDescription || '',
     displayBrand: kit.displayBrand || '',
-    displayCapacity: kit.displayCapacity || '',
-    sellingPrice: String(kit.sellingPrice || ''),
+displayCapacity: kit.displayCapacity || '',
+
+panelBrand: kit.panelBrand || '',
+inverterBrand: kit.inverterBrand || '',
+batteryBrand: kit.batteryBrand || '',
+
+sellingPrice: String(kit.sellingPrice || ''),
     gstPercent: String(kit.gstPercent || ''),
     gstMode: kit.gstMode || 'EXCLUDING',
     isAvailable: kit.isAvailable !== false,
@@ -1081,6 +1094,60 @@ const restoreAfterSalesService = async (item: any) => {
         className="rounded-xl border p-3"
       />
 
+      <div className="rounded-xl border p-3">
+  <label className="mb-1 block text-xs font-semibold text-gray-500">
+    Panel Brand
+  </label>
+
+  <input
+    placeholder="Example: TATA, GOLDI, WAAREE"
+    value={kitForm.panelBrand}
+    onChange={(e) =>
+      setKitForm({
+        ...kitForm,
+        panelBrand: e.target.value,
+      })
+    }
+    className="w-full outline-none"
+  />
+</div>
+
+<div className="rounded-xl border p-3">
+  <label className="mb-1 block text-xs font-semibold text-gray-500">
+    Inverter Brand
+  </label>
+
+  <input
+    placeholder="Example: SELEC, FOX, GOODWE"
+    value={kitForm.inverterBrand}
+    onChange={(e) =>
+      setKitForm({
+        ...kitForm,
+        inverterBrand: e.target.value,
+      })
+    }
+    className="w-full outline-none"
+  />
+</div>
+
+<div className="rounded-xl border p-3">
+  <label className="mb-1 block text-xs font-semibold text-gray-500">
+    Battery Brand
+  </label>
+
+  <input
+    placeholder="Optional for hybrid kits"
+    value={kitForm.batteryBrand}
+    onChange={(e) =>
+      setKitForm({
+        ...kitForm,
+        batteryBrand: e.target.value,
+      })
+    }
+    className="w-full outline-none"
+  />
+</div>
+
       <input
         type="number"
         placeholder="Selling Price"
@@ -1212,6 +1279,26 @@ const restoreAfterSalesService = async (item: any) => {
             <p className="mt-1 text-sm text-gray-500">
               {kit.displayBrand || '-'} | {kit.displayCapacity || '-'}
             </p>
+
+            <div className="mt-2 flex flex-wrap gap-2">
+  {kit.panelBrand && (
+    <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">
+      Panel: {kit.panelBrand}
+    </span>
+  )}
+
+  {kit.inverterBrand && (
+    <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-bold text-purple-700">
+      Inverter: {kit.inverterBrand}
+    </span>
+  )}
+
+  {kit.batteryBrand && (
+    <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700">
+      Battery: {kit.batteryBrand}
+    </span>
+  )}
+</div>
             <p className="mt-2 font-bold text-green-700">
               ₹{Number(kit.sellingPrice || 0).toLocaleString('en-IN')} 
 {kit.gstMode === 'INCLUDING' ? ' GST Included' : ` + GST ${kit.gstPercent || 0}%`}

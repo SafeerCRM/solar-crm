@@ -9,6 +9,33 @@ import dayjs, { Dayjs } from 'dayjs';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
+const splitBrandTags = (value: any) => {
+  return String(value || '')
+    .split(/[,/|+]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+};
+
+const normalizeDealerCategory = (value: any) => {
+  const category = String(value || '')
+    .trim()
+    .toUpperCase();
+
+  if (
+    [
+      'PANELS',
+      'INVERTERS',
+      'STRUCTURE',
+      'ELECTRICAL',
+      'BATTERIES',
+    ].includes(category)
+  ) {
+    return category;
+  }
+
+  return 'OTHER';
+};
+
 export default function CreateDealerOrderPage() {
   const [stock, setStock] = useState<any[]>([]);
   const [kits, setKits] = useState<any[]>([]);
@@ -16,7 +43,12 @@ const [viewMode, setViewMode] = useState<'KITS' | 'MATERIALS'>('KITS');
 const [expandedKitId, setExpandedKitId] = useState<number | null>(null);
   const [cart, setCart] = useState<any[]>([]);
   const [search, setSearch] = useState('');
-  const [paymentType, setPaymentType] = useState('CASH');
+
+const [panelBrand, setPanelBrand] = useState('');
+const [inverterBrand, setInverterBrand] = useState('');
+const [batteryBrand, setBatteryBrand] = useState('');
+
+const [paymentType, setPaymentType] = useState('CASH');
   const [deliveryMode, setDeliveryMode] = useState('SELF_COLLECTION');
 const [deliveryAddress, setDeliveryAddress] = useState('');
 const [deliveryDistanceKm, setDeliveryDistanceKm] = useState('');
@@ -78,6 +110,36 @@ const [deliveryLocationSource, setDeliveryLocationSource] =
   }
 };
 
+const panelBrandOptions = useMemo(() => {
+  return Array.from(
+    new Set(
+      kits.flatMap((kit) =>
+        splitBrandTags(kit.panelBrand),
+      ),
+    ),
+  ).sort((a, b) => a.localeCompare(b));
+}, [kits]);
+
+const inverterBrandOptions = useMemo(() => {
+  return Array.from(
+    new Set(
+      kits.flatMap((kit) =>
+        splitBrandTags(kit.inverterBrand),
+      ),
+    ),
+  ).sort((a, b) => a.localeCompare(b));
+}, [kits]);
+
+const batteryBrandOptions = useMemo(() => {
+  return Array.from(
+    new Set(
+      kits.flatMap((kit) =>
+        splitBrandTags(kit.batteryBrand),
+      ),
+    ),
+  ).sort((a, b) => a.localeCompare(b));
+}, [kits]);
+
   const filteredStock = useMemo(() => {
     const q = search.toLowerCase();
 
@@ -93,18 +155,135 @@ const [deliveryLocationSource, setDeliveryLocationSource] =
   }, [stock, search]);
 
   const filteredKits = useMemo(() => {
-  const q = search.toLowerCase();
+  const q = search.trim().toLowerCase();
 
   return kits.filter((kit) => {
+    const searchableText = [
+      kit.kitName,
+      kit.shortDescription,
+      kit.displayBrand,
+      kit.displayCapacity,
+      kit.panelBrand,
+      kit.inverterBrand,
+      kit.batteryBrand,
+      ...(Array.isArray(kit.items)
+        ? kit.items.flatMap((item: any) => [
+            item.material,
+            item.brandSizeType,
+            item.quantity,
+          ])
+        : []),
+    ]
+      .map((value) =>
+        String(value || '').toLowerCase(),
+      )
+      .join(' ');
+
+    const kitPanelBrands = splitBrandTags(
+      kit.panelBrand,
+    ).map((item) => item.toLowerCase());
+
+    const kitInverterBrands = splitBrandTags(
+      kit.inverterBrand,
+    ).map((item) => item.toLowerCase());
+
+    const kitBatteryBrands = splitBrandTags(
+      kit.batteryBrand,
+    ).map((item) => item.toLowerCase());
+
+    const matchesSearch =
+      !q || searchableText.includes(q);
+
+    const matchesPanel =
+      !panelBrand ||
+      kitPanelBrands.includes(
+        panelBrand.toLowerCase(),
+      );
+
+    const matchesInverter =
+      !inverterBrand ||
+      kitInverterBrands.includes(
+        inverterBrand.toLowerCase(),
+      );
+
+    const matchesBattery =
+      !batteryBrand ||
+      kitBatteryBrands.includes(
+        batteryBrand.toLowerCase(),
+      );
+
     return (
-      !q ||
-      String(kit.kitName || '').toLowerCase().includes(q) ||
-      String(kit.shortDescription || '').toLowerCase().includes(q) ||
-      String(kit.displayBrand || '').toLowerCase().includes(q) ||
-      String(kit.displayCapacity || '').toLowerCase().includes(q)
+      matchesSearch &&
+      matchesPanel &&
+      matchesInverter &&
+      matchesBattery
     );
   });
-}, [kits, search]);
+}, [
+  kits,
+  search,
+  panelBrand,
+  inverterBrand,
+  batteryBrand,
+]);
+
+const groupedMaterials = useMemo(() => {
+  const groups: Record<string, any[]> = {
+    PANELS: [],
+    INVERTERS: [],
+    STRUCTURE: [],
+    ELECTRICAL: [],
+    BATTERIES: [],
+    OTHER: [],
+  };
+
+  for (const item of filteredStock) {
+    const category = normalizeDealerCategory(
+      item.dealerCategory,
+    );
+
+    groups[category].push(item);
+  }
+
+  return groups;
+}, [filteredStock]);
+
+const materialSections = [
+  {
+    key: 'PANELS',
+    title: 'Panels',
+    description: 'DC solar modules and panel stock',
+  },
+  {
+    key: 'INVERTERS',
+    title: 'Inverters',
+    description: 'Solar and hybrid inverter stock',
+  },
+  {
+    key: 'STRUCTURE',
+    title: 'Structure',
+    description:
+      'Pipes, mounting hardware and structural accessories',
+  },
+  {
+    key: 'ELECTRICAL',
+    title: 'Electrical',
+    description:
+      'Wires, cables, earthing and electrical accessories',
+  },
+  {
+    key: 'BATTERIES',
+    title: 'Batteries',
+    description:
+      'Battery stock for hybrid solar systems',
+  },
+  {
+    key: 'OTHER',
+    title: 'Other Materials',
+    description:
+      'Materials awaiting dealer-category assignment',
+  },
+];
 
   const totals = useMemo(() => {
     return cart.reduce(
@@ -290,16 +469,6 @@ const updateExpectedDeliveryTimePart = (newTime: Dayjs | null) => {
   return;
 }
 
-if (!expectedDeliveryAt) {
-  alert('Please select expected delivery date');
-  return;
-}
-
-if (!remarks.trim()) {
-  alert('Please enter order remarks');
-  return;
-}
-
 if (
   deliveryMode === 'DELIVERY' &&
   !deliveryAddress.trim()
@@ -453,88 +622,239 @@ deliveryDistanceKm:
 
         <form onSubmit={submitOrder} className="mt-6 grid w-full gap-6 overflow-x-hidden lg:grid-cols-3">
           <section className="rounded-[2rem] bg-white p-5 text-slate-900 shadow-xl lg:col-span-2">
-            <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h2 className="text-xl font-black">
-  {viewMode === 'KITS' ? 'Available Kits' : 'Available Materials'}
-</h2>
-<p className="text-sm text-slate-500">
-  Add kits or materials to your dealer order.
-</p>
-              </div>
+            <div className="mb-5 space-y-4">
+  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <div>
+      <h2 className="text-xl font-black">
+        {viewMode === 'KITS'
+          ? 'Available Kits'
+          : 'Available Materials'}
+      </h2>
 
-              <div className="flex gap-2">
-  <button
-    type="button"
-    onClick={() => setViewMode('KITS')}
-    className={`rounded-2xl px-4 py-3 text-sm font-black ${
+      <p className="text-sm text-slate-500">
+        Add kits or materials to your dealer order.
+      </p>
+    </div>
+
+    <div className="flex gap-2">
+      <button
+        type="button"
+        onClick={() => {
+          setViewMode('KITS');
+        }}
+        className={`rounded-2xl px-4 py-3 text-sm font-black ${
+          viewMode === 'KITS'
+            ? 'bg-orange-400 text-slate-950'
+            : 'bg-slate-100 text-slate-700'
+        }`}
+      >
+        Kits
+      </button>
+
+      <button
+        type="button"
+        onClick={() => {
+          setViewMode('MATERIALS');
+          setPanelBrand('');
+          setInverterBrand('');
+          setBatteryBrand('');
+        }}
+        className={`rounded-2xl px-4 py-3 text-sm font-black ${
+          viewMode === 'MATERIALS'
+            ? 'bg-orange-400 text-slate-950'
+            : 'bg-slate-100 text-slate-700'
+        }`}
+      >
+        Materials
+      </button>
+    </div>
+  </div>
+
+  <div
+    className={`grid gap-3 ${
       viewMode === 'KITS'
-        ? 'bg-orange-400 text-slate-950'
-        : 'bg-slate-100 text-slate-700'
+        ? 'md:grid-cols-2 xl:grid-cols-4'
+        : 'md:grid-cols-1'
     }`}
   >
-    Kits
-  </button>
+    <input
+      type="text"
+      placeholder={
+        viewMode === 'KITS'
+          ? 'Search kit, brand, capacity...'
+          : 'Search material, brand, HSN...'
+      }
+      value={search}
+      onChange={(e) =>
+        setSearch(e.target.value)
+      }
+      className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:bg-white"
+    />
 
-  <button
-    type="button"
-    onClick={() => setViewMode('MATERIALS')}
-    className={`rounded-2xl px-4 py-3 text-sm font-black ${
-      viewMode === 'MATERIALS'
-        ? 'bg-orange-400 text-slate-950'
-        : 'bg-slate-100 text-slate-700'
-    }`}
-  >
-    Materials
-  </button>
+    {viewMode === 'KITS' && (
+      <>
+        <select
+          value={panelBrand}
+          onChange={(e) =>
+            setPanelBrand(e.target.value)
+          }
+          className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none"
+        >
+          <option value="">
+            All Panel Brands
+          </option>
+
+          {panelBrandOptions.map((brandName) => (
+            <option
+              key={brandName}
+              value={brandName}
+            >
+              {brandName}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={inverterBrand}
+          onChange={(e) =>
+            setInverterBrand(e.target.value)
+          }
+          className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none"
+        >
+          <option value="">
+            All Inverter Brands
+          </option>
+
+          {inverterBrandOptions.map((brandName) => (
+            <option
+              key={brandName}
+              value={brandName}
+            >
+              {brandName}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={batteryBrand}
+          onChange={(e) =>
+            setBatteryBrand(e.target.value)
+          }
+          className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none"
+        >
+          <option value="">
+            All Battery Brands
+          </option>
+
+          {batteryBrandOptions.map((brandName) => (
+            <option
+              key={brandName}
+              value={brandName}
+            >
+              {brandName}
+            </option>
+          ))}
+        </select>
+      </>
+    )}
+  </div>
+
+  <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm font-bold text-slate-600">
+    Showing{' '}
+    {viewMode === 'KITS'
+      ? filteredKits.length
+      : filteredStock.length}{' '}
+    of{' '}
+    {viewMode === 'KITS'
+      ? kits.length
+      : stock.length}{' '}
+    items
+  </div>
 </div>
-
-              <input
-                type="text"
-                placeholder={viewMode === 'KITS' ? 'Search kit, brand, capacity...' : 'Search material, brand, HSN...'}
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold outline-none focus:border-blue-500 focus:bg-white"
-              />
-            </div>
 
             {loading ? (
               <div className="rounded-3xl bg-slate-50 p-8 text-center font-black">
                 Loading materials...
               </div>
             ) : (
-              <div className="grid gap-4 md:grid-cols-2">
-  {viewMode === 'KITS' &&
-    filteredKits.map((kit) => (
-      <KitOrderCard
-        key={kit.id}
-        kit={kit}
-        expanded={expandedKitId === kit.id}
-        onToggle={() =>
-          setExpandedKitId(expandedKitId === kit.id ? null : kit.id)
-        }
-        onAdd={() => addKitToCart(kit)}
-      />
-    ))}
+              <div>
+  {viewMode === 'KITS' && (
+    <div className="grid gap-4 md:grid-cols-2">
+      {filteredKits.map((kit) => (
+        <KitOrderCard
+          key={kit.id}
+          kit={kit}
+          expanded={expandedKitId === kit.id}
+          onToggle={() =>
+            setExpandedKitId(
+              expandedKitId === kit.id
+                ? null
+                : kit.id,
+            )
+          }
+          onAdd={() => addKitToCart(kit)}
+        />
+      ))}
 
-  {viewMode === 'MATERIALS' &&
-    filteredStock.map((item) => (
-      <MaterialCard
-        key={`${item.materialId}-${item.branchName}`}
-        item={item}
-        onAdd={() => addMaterialToCart(item)}
-      />
-    ))}
-
-  {viewMode === 'KITS' && !filteredKits.length && (
-    <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm font-semibold text-slate-500 md:col-span-2">
-      No kit found.
+      {!filteredKits.length && (
+        <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm font-semibold text-slate-500 md:col-span-2">
+          No kit found for the selected brands.
+        </div>
+      )}
     </div>
   )}
 
-  {viewMode === 'MATERIALS' && !filteredStock.length && (
-    <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm font-semibold text-slate-500 md:col-span-2">
-      No material found.
+  {viewMode === 'MATERIALS' && (
+    <div className="space-y-7">
+      {materialSections.map((section) => {
+        const sectionItems =
+          groupedMaterials[section.key] || [];
+
+        if (!sectionItems.length) {
+          return null;
+        }
+
+        return (
+          <section
+            key={section.key}
+            className="rounded-[1.7rem] border border-slate-100 bg-slate-50/60 p-4"
+          >
+            <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-black text-slate-900">
+                  {section.title}
+                </h3>
+
+                <p className="mt-1 text-xs font-semibold text-slate-500">
+                  {section.description}
+                </p>
+              </div>
+
+              <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-slate-700 shadow-sm">
+                {sectionItems.length} items
+              </span>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              {sectionItems.map((item) => (
+                <MaterialCard
+                  key={`${item.materialId}-${item.branchName}`}
+                  item={item}
+                  onAdd={() =>
+                    addMaterialToCart(item)
+                  }
+                />
+              ))}
+            </div>
+          </section>
+        );
+      })}
+
+      {!filteredStock.length && (
+        <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm font-semibold text-slate-500">
+          No material found.
+        </div>
+      )}
     </div>
   )}
 </div>
@@ -853,6 +1173,26 @@ function KitOrderCard({
           <p className="mt-1 text-xs font-semibold text-slate-500">
             {kit.displayBrand || '-'} · {kit.displayCapacity || '-'}
           </p>
+
+          <div className="mt-2 flex flex-wrap gap-1.5">
+  {kit.panelBrand && (
+    <span className="rounded-full bg-blue-100 px-2 py-1 text-[10px] font-black text-blue-700">
+      Panel: {kit.panelBrand}
+    </span>
+  )}
+
+  {kit.inverterBrand && (
+    <span className="rounded-full bg-purple-100 px-2 py-1 text-[10px] font-black text-purple-700">
+      Inverter: {kit.inverterBrand}
+    </span>
+  )}
+
+  {kit.batteryBrand && (
+    <span className="rounded-full bg-amber-100 px-2 py-1 text-[10px] font-black text-amber-700">
+      Battery: {kit.batteryBrand}
+    </span>
+  )}
+</div>
         </div>
 
         <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-700">
@@ -940,20 +1280,49 @@ function MaterialCard({ item, onAdd }: { item: any; onAdd: () => void }) {
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2">
-        <div className="rounded-2xl bg-white p-3">
-          <p className="text-xs font-bold text-slate-400">Without GST</p>
-          <p className="font-black">
-            ₹{Number(item.sellingRateWithoutGst || 0).toLocaleString('en-IN')}
-          </p>
-        </div>
+  {item.dealerCategory === 'PANELS' &&
+    Number(item.ratePerWatt || 0) > 0 && (
+      <div className="col-span-2 rounded-2xl bg-green-50 p-3">
+        <p className="text-xs font-bold text-green-600">
+          Dealer Panel Rate
+        </p>
 
-        <div className="rounded-2xl bg-white p-3">
-          <p className="text-xs font-bold text-slate-400">With GST</p>
-          <p className="font-black">
-            ₹{Number(item.sellingRateWithGst || 0).toLocaleString('en-IN')}
-          </p>
-        </div>
+        <p className="mt-1 text-lg font-black text-green-700">
+          ₹
+          {Number(
+            item.ratePerWatt || 0,
+          ).toLocaleString('en-IN')}
+          /Watt + GST
+        </p>
       </div>
+    )}
+
+  <div className="rounded-2xl bg-white p-3">
+    <p className="text-xs font-bold text-slate-400">
+      Without GST
+    </p>
+
+    <p className="font-black">
+      ₹
+      {Number(
+        item.sellingRateWithoutGst || 0,
+      ).toLocaleString('en-IN')}
+    </p>
+  </div>
+
+  <div className="rounded-2xl bg-white p-3">
+    <p className="text-xs font-bold text-slate-400">
+      With GST
+    </p>
+
+    <p className="font-black">
+      ₹
+      {Number(
+        item.sellingRateWithGst || 0,
+      ).toLocaleString('en-IN')}
+    </p>
+  </div>
+</div>
 
       <button
         type="button"
