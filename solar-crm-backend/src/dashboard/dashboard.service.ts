@@ -542,334 +542,486 @@ private readonly projectRepository: Repository<Project>,
   const { start, end } = this.getTodayIndiaRange();
 
   const now = new Date();
-const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
-  const meetingManagers =
-  await this.userRepository.find({
+  const monthStart = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    1,
+    0,
+    0,
+    0,
+    0,
+  );
+
+  const monthEnd = new Date(
+    now.getFullYear(),
+    now.getMonth() + 1,
+    0,
+    23,
+    59,
+    59,
+    999,
+  );
+
+  const meetingManagers = await this.userRepository.find({
     where: {
       isHidden: false,
     },
   });
 
   let filteredManagers = meetingManagers.filter(
-  (u: any) =>
-    Array.isArray(u.roles) &&
-    u.roles.includes(UserRole.MEETING_MANAGER),
-);
+    (user: any) =>
+      Array.isArray(user.roles) &&
+      user.roles.includes(UserRole.MEETING_MANAGER),
+  );
 
-if (
-  userRoles.includes(UserRole.MEETING_MANAGER) &&
-  !userRoles.includes(UserRole.OWNER) &&
-  !userRoles.includes(UserRole.MARKETING_HEAD)
-) {
-  const currentManager =
-    meetingManagers.find(
-      (manager: any) =>
-        Number(manager.id) === Number(currentUserId),
-    ) || {
-      id: Number(currentUserId),
-      name: 'My Analytics',
-      roles: [UserRole.MEETING_MANAGER],
-    };
+  if (
+    userRoles.includes(UserRole.MEETING_MANAGER) &&
+    !userRoles.includes(UserRole.OWNER) &&
+    !userRoles.includes(UserRole.MARKETING_HEAD)
+  ) {
+    const currentManager =
+      meetingManagers.find(
+        (manager: any) =>
+          Number(manager.id) === Number(currentUserId),
+      ) || {
+        id: Number(currentUserId),
+        name: 'My Analytics',
+        roles: [UserRole.MEETING_MANAGER],
+      };
 
-  filteredManagers = [currentManager as any];
-}
+    filteredManagers = [currentManager as any];
+  }
 
-  const result: any[] = [];
+  const managerIds = filteredManagers
+    .map((manager: any) => Number(manager.id))
+    .filter((id: number) => Number.isFinite(id) && id > 0);
 
-  for (const manager of filteredManagers) {
-    const totalMeetingsRaw = await this.meetingRepository
-  .createQueryBuilder('meeting')
-  .select(
-    'COUNT(DISTINCT COALESCE(meeting.meetingGroupId, meeting.id))',
-    'count',
-  )
-  .where('meeting.assignedTo = :managerId', { managerId: manager.id })
-  .andWhere('meeting.scheduledAt BETWEEN :monthStart AND :monthEnd', {
-    monthStart,
-    monthEnd,
-  })
-  .getRawOne();
+  if (managerIds.length === 0) {
+    return [];
+  }
 
-const totalMeetings = Number(totalMeetingsRaw?.count || 0);
+  /*
+   * Query 1:
+   * Counts based on meeting.assignedTo.
+   */
+  const assignedMeetingRows: any[] =
+    await this.meetingRepository.query(
+      `
+      SELECT
+        meeting."assignedTo" AS "managerId",
 
-    const todayMeetings = await this.meetingRepository.count({
-      where: {
-        assignedTo: manager.id,
-        scheduledAt: Between(start, end),
-      },
-    });
+        COUNT(
+          DISTINCT COALESCE(
+            meeting."meetingGroupId",
+            meeting.id
+          )
+        ) FILTER (
+          WHERE meeting."scheduledAt"
+            BETWEEN $1 AND $2
+        ) AS "totalMeetings",
 
-    const companyMeetingsToday = await this.meetingRepository.count({
-      where: {
-        assignedTo: manager.id,
-        meetingCategory: MeetingCategory.COMPANY_MEETING,
-        scheduledAt: Between(start, end),
-      },
-    });
+        COUNT(*) FILTER (
+          WHERE meeting."scheduledAt"
+            BETWEEN $3 AND $4
+        ) AS "todayMeetings",
 
-    const selfMeetingsToday = await this.meetingRepository.count({
-      where: {
-        assignedTo: manager.id,
-        meetingCategory: MeetingCategory.SELF_MEETING,
-        scheduledAt: Between(start, end),
-      },
-    });
+        COUNT(*) FILTER (
+          WHERE meeting."meetingCategory" = $5
+            AND meeting."scheduledAt"
+              BETWEEN $3 AND $4
+        ) AS "companyMeetingsToday",
 
-    const siteVisitsTodayRaw = await this.meetingRepository
-  .createQueryBuilder('meeting')
-  .select('COUNT(DISTINCT COALESCE(meeting.meetingGroupId, meeting.id))', 'count')
-  .where('meeting.updatedBy = :managerId', { managerId: manager.id })
-  .andWhere('meeting.meetingType = :meetingType', {
-    meetingType: MeetingType.SITE_VISIT,
-  })
-  .andWhere('meeting.updatedAt BETWEEN :start AND :end', { start, end })
-  .getRawOne();
+        COUNT(*) FILTER (
+          WHERE meeting."meetingCategory" = $6
+            AND meeting."scheduledAt"
+              BETWEEN $3 AND $4
+        ) AS "selfMeetingsToday",
 
-const siteVisitsToday = Number(siteVisitsTodayRaw?.count || 0);
+        COUNT(*) FILTER (
+          WHERE meeting.status = $7
+            AND meeting."updatedAt"
+              BETWEEN $3 AND $4
+        ) AS "completedMeetingsToday",
 
-const companySiteVisitsTodayRaw = await this.meetingRepository
-  .createQueryBuilder('meeting')
-  .select('COUNT(DISTINCT COALESCE(meeting.meetingGroupId, meeting.id))', 'count')
-  .where('meeting.updatedBy = :managerId', { managerId: manager.id })
-  .andWhere('meeting.meetingType = :meetingType', {
-    meetingType: MeetingType.SITE_VISIT,
-  })
-  .andWhere('meeting.meetingCategory = :category', {
-    category: MeetingCategory.COMPANY_MEETING,
-  })
-  .andWhere('meeting.updatedAt BETWEEN :start AND :end', { start, end })
-  .getRawOne();
+        COUNT(
+          DISTINCT COALESCE(
+            meeting."meetingGroupId",
+            meeting.id
+          )
+        ) FILTER (
+          WHERE (
+            meeting."convertToProject" = true
+            OR meeting.status = $8
+          )
+          AND meeting."updatedAt"
+            BETWEEN $3 AND $4
+        ) AS "convertedMeetingsToday"
 
-const companySiteVisitsToday = Number(companySiteVisitsTodayRaw?.count || 0);
+      FROM meetings meeting
 
-const selfSiteVisitsTodayRaw = await this.meetingRepository
-  .createQueryBuilder('meeting')
-  .select('COUNT(DISTINCT COALESCE(meeting.meetingGroupId, meeting.id))', 'count')
-  .where('meeting.updatedBy = :managerId', { managerId: manager.id })
-  .andWhere('meeting.meetingType = :meetingType', {
-    meetingType: MeetingType.SITE_VISIT,
-  })
-  .andWhere('meeting.meetingCategory = :category', {
-    category: MeetingCategory.SELF_MEETING,
-  })
-  .andWhere('meeting.updatedAt BETWEEN :start AND :end', { start, end })
-  .getRawOne();
+      WHERE meeting."assignedTo" =
+        ANY($9::int[])
 
-const selfSiteVisitsToday = Number(selfSiteVisitsTodayRaw?.count || 0);
+      GROUP BY meeting."assignedTo"
+      `,
+      [
+        monthStart,
+        monthEnd,
+        start,
+        end,
+        MeetingCategory.COMPANY_MEETING,
+        MeetingCategory.SELF_MEETING,
+        MeetingStatus.COMPLETED,
+        MeetingStatus.CONVERTED_TO_PROJECT,
+        managerIds,
+      ],
+    );
 
-    const meetingFormsCreatedToday = await this.meetingRepository.count({
-      where: {
-        createdBy: manager.id,
-        createdAt: Between(start, end),
-      },
-    });
+  /*
+   * Query 2:
+   * Site visits based on meeting.updatedBy.
+   */
+  const siteVisitRows: any[] =
+    await this.meetingRepository.query(
+      `
+      SELECT
+        meeting."updatedBy" AS "managerId",
 
-    const companyMeetingsCreatedToday = await this.meetingRepository.count({
-  where: {
-    createdBy: manager.id,
-    meetingCategory: MeetingCategory.COMPANY_MEETING,
-    createdAt: Between(start, end),
-  },
-});
+        COUNT(
+          DISTINCT COALESCE(
+            meeting."meetingGroupId",
+            meeting.id
+          )
+        ) FILTER (
+          WHERE meeting."meetingType" = $1
+            AND meeting."updatedAt"
+              BETWEEN $2 AND $3
+        ) AS "siteVisitsToday",
 
-const selfMeetingsCreatedToday = await this.meetingRepository.count({
-  where: {
-    createdBy: manager.id,
-    meetingCategory: MeetingCategory.SELF_MEETING,
-    createdAt: Between(start, end),
-  },
-});
+        COUNT(
+          DISTINCT COALESCE(
+            meeting."meetingGroupId",
+            meeting.id
+          )
+        ) FILTER (
+          WHERE meeting."meetingType" = $1
+            AND meeting."meetingCategory" = $4
+            AND meeting."updatedAt"
+              BETWEEN $2 AND $3
+        ) AS "companySiteVisitsToday",
 
-const companyMeetingsCreatedThisMonth = await this.meetingRepository.count({
-  where: {
-    createdBy: manager.id,
-    meetingCategory: MeetingCategory.COMPANY_MEETING,
-    createdAt: Between(monthStart, monthEnd),
-  },
-});
+        COUNT(
+          DISTINCT COALESCE(
+            meeting."meetingGroupId",
+            meeting.id
+          )
+        ) FILTER (
+          WHERE meeting."meetingType" = $1
+            AND meeting."meetingCategory" = $5
+            AND meeting."updatedAt"
+              BETWEEN $2 AND $3
+        ) AS "selfSiteVisitsToday"
 
-const selfMeetingsCreatedThisMonth = await this.meetingRepository.count({
-  where: {
-    createdBy: manager.id,
-    meetingCategory: MeetingCategory.SELF_MEETING,
-    createdAt: Between(monthStart, monthEnd),
-  },
-});
+      FROM meetings meeting
 
-const solarMiterMeetingsCreatedToday = await this.meetingRepository.count({
-  where: {
-    createdBy: manager.id,
-    meetingCategory: MeetingCategory.SOLARMITER,
-    createdAt: Between(start, end),
-  },
-});
+      WHERE meeting."updatedBy" =
+        ANY($6::int[])
 
-    const completedMeetingsToday = await this.meetingRepository.count({
-      where: {
-        assignedTo: manager.id,
-        status: MeetingStatus.COMPLETED,
-        updatedAt: Between(start, end),
-      },
-    });
+      GROUP BY meeting."updatedBy"
+      `,
+      [
+        MeetingType.SITE_VISIT,
+        start,
+        end,
+        MeetingCategory.COMPANY_MEETING,
+        MeetingCategory.SELF_MEETING,
+        managerIds,
+      ],
+    );
 
-    const convertedMeetingsTodayRaw = await this.meetingRepository
-  .createQueryBuilder('meeting')
-  .select(
-    'COUNT(DISTINCT COALESCE(meeting.meetingGroupId, meeting.id))',
-    'count',
-  )
-  .where('meeting.assignedTo = :managerId', {
-    managerId: manager.id,
-  })
-  .andWhere(
-    '(meeting.convertToProject = true OR meeting.status = :convertedStatus)',
-    {
-      convertedStatus: MeetingStatus.CONVERTED_TO_PROJECT,
-    },
-  )
-  .andWhere('meeting.updatedAt BETWEEN :start AND :end', {
-    start,
-    end,
-  })
-  .getRawOne();
+  /*
+   * Query 3:
+   * Meeting-form creation counts based on meeting.createdBy.
+   */
+  const createdMeetingRows: any[] =
+    await this.meetingRepository.query(
+      `
+      SELECT
+        meeting."createdBy" AS "managerId",
 
-const convertedMeetingsToday = Number(convertedMeetingsTodayRaw?.count || 0);
+        COUNT(*) FILTER (
+          WHERE meeting."createdAt"
+            BETWEEN $1 AND $2
+        ) AS "meetingFormsCreatedToday",
 
-const loanProjectsCreatedThisMonth =
-  await this.projectRepository.count({
-    where: {
-      projectOwnerId: manager.id,
-      projectType: ProjectType.LOAN,
-      isHidden: false,
-      createdAt: Between(monthStart, monthEnd),
-    },
-  });
+        COUNT(*) FILTER (
+          WHERE meeting."meetingCategory" = $3
+            AND meeting."createdAt"
+              BETWEEN $1 AND $2
+        ) AS "companyMeetingsCreatedToday",
 
-const cashProjectsCreatedThisMonth =
-  await this.projectRepository.count({
-    where: {
-      projectOwnerId: manager.id,
-      projectType: ProjectType.CASH,
-      isHidden: false,
-      createdAt: Between(monthStart, monthEnd),
-    },
-  });
+        COUNT(*) FILTER (
+          WHERE meeting."meetingCategory" = $4
+            AND meeting."createdAt"
+              BETWEEN $1 AND $2
+        ) AS "selfMeetingsCreatedToday",
 
-  const runningProjects =
-  await this.projectRepository.count({
-    where: {
-      projectOwnerId: manager.id,
-      projectWorkState: 'RUNNING',
-      isHidden: false,
-    },
-  });
+        COUNT(*) FILTER (
+          WHERE meeting."meetingCategory" = $5
+            AND meeting."createdAt"
+              BETWEEN $1 AND $2
+        ) AS "solarMiterMeetingsCreatedToday",
 
-const runningCashProjects =
-  await this.projectRepository.count({
-    where: {
-      projectOwnerId: manager.id,
-      projectType: ProjectType.CASH,
-      projectWorkState: 'RUNNING',
-      isHidden: false,
-    },
-  });
+        COUNT(*) FILTER (
+          WHERE meeting."meetingCategory" = $3
+            AND meeting."createdAt"
+              BETWEEN $6 AND $7
+        ) AS "companyMeetingsCreatedThisMonth",
 
-const runningLoanProjects =
-  await this.projectRepository.count({
-    where: {
-      projectOwnerId: manager.id,
-      projectType: ProjectType.LOAN,
-      projectWorkState: 'RUNNING',
-      isHidden: false,
-    },
-  });
+        COUNT(*) FILTER (
+          WHERE meeting."meetingCategory" = $4
+            AND meeting."createdAt"
+              BETWEEN $6 AND $7
+        ) AS "selfMeetingsCreatedThisMonth"
 
-const cashProjectsCancelledRejectedThisMonth =
-  await this.projectRepository
-    .createQueryBuilder('project')
-    .where('project.projectOwnerId = :managerId', {
-      managerId: manager.id,
-    })
-    .andWhere('project.projectType = :projectType', {
-      projectType: ProjectType.CASH,
-    })
-    .andWhere('project.isHidden = false')
-    .andWhere('project.status IN (:...statuses)', {
-      statuses: [
+      FROM meetings meeting
+
+      WHERE meeting."createdBy" =
+        ANY($8::int[])
+
+      GROUP BY meeting."createdBy"
+      `,
+      [
+        start,
+        end,
+        MeetingCategory.COMPANY_MEETING,
+        MeetingCategory.SELF_MEETING,
+        MeetingCategory.SOLARMITER,
+        monthStart,
+        monthEnd,
+        managerIds,
+      ],
+    );
+
+  /*
+   * Query 4:
+   * Project counts based on project.projectOwnerId.
+   */
+  const projectRows: any[] =
+    await this.projectRepository.query(
+      `
+      SELECT
+        project."projectOwnerId" AS "managerId",
+
+        COUNT(*) FILTER (
+          WHERE project."projectType" = $1
+            AND project."createdAt"
+              BETWEEN $3 AND $4
+        ) AS "loanProjectsCreatedThisMonth",
+
+        COUNT(*) FILTER (
+          WHERE project."projectType" = $2
+            AND project."createdAt"
+              BETWEEN $3 AND $4
+        ) AS "cashProjectsCreatedThisMonth",
+
+        COUNT(*) FILTER (
+          WHERE project."projectWorkState" = 'RUNNING'
+        ) AS "runningProjects",
+
+        COUNT(*) FILTER (
+          WHERE project."projectType" = $2
+            AND project."projectWorkState" = 'RUNNING'
+        ) AS "runningCashProjects",
+
+        COUNT(*) FILTER (
+          WHERE project."projectType" = $1
+            AND project."projectWorkState" = 'RUNNING'
+        ) AS "runningLoanProjects",
+
+        COUNT(*) FILTER (
+          WHERE project."projectType" = $2
+            AND project.status IN ($5, $6)
+            AND project."cancelledAt"
+              BETWEEN $3 AND $4
+        ) AS "cashProjectsCancelledRejectedThisMonth",
+
+        COUNT(*) FILTER (
+          WHERE project."projectType" = $1
+            AND project.status IN ($5, $6)
+            AND project."cancelledAt"
+              BETWEEN $3 AND $4
+        ) AS "loanProjectsCancelledRejectedThisMonth"
+
+      FROM project project
+
+      WHERE project."isHidden" = false
+        AND project."projectOwnerId" =
+          ANY($7::int[])
+
+      GROUP BY project."projectOwnerId"
+      `,
+      [
+        ProjectType.LOAN,
+        ProjectType.CASH,
+        monthStart,
+        monthEnd,
         ProjectStatus.CANCELLED,
         ProjectStatus.REJECTED,
+        managerIds,
       ],
-    })
-    .andWhere('project.cancelledAt BETWEEN :monthStart AND :monthEnd', {
-      monthStart,
-      monthEnd,
-    })
-    .getCount();
+    );
 
-const loanProjectsCancelledRejectedThisMonth =
-  await this.projectRepository
-    .createQueryBuilder('project')
-    .where('project.projectOwnerId = :managerId', {
-      managerId: manager.id,
-    })
-    .andWhere('project.projectType = :projectType', {
-      projectType: ProjectType.LOAN,
-    })
-    .andWhere('project.isHidden = false')
-    .andWhere('project.status IN (:...statuses)', {
-      statuses: [
-        ProjectStatus.CANCELLED,
-        ProjectStatus.REJECTED,
-      ],
-    })
-    .andWhere('project.cancelledAt BETWEEN :monthStart AND :monthEnd', {
-      monthStart,
-      monthEnd,
-    })
-    .getCount();
+  const createRowMap = (rows: any[]) =>
+    new Map<number, any>(
+      rows.map((row: any) => [
+        Number(row.managerId),
+        row,
+      ]),
+    );
 
-    result.push({
-      managerId: manager.id,
+  const assignedMeetingMap =
+    createRowMap(assignedMeetingRows);
+
+  const siteVisitMap =
+    createRowMap(siteVisitRows);
+
+  const createdMeetingMap =
+    createRowMap(createdMeetingRows);
+
+  const projectMap =
+    createRowMap(projectRows);
+
+  const toNumber = (value: any) =>
+    Number(value || 0);
+
+  return filteredManagers.map((manager: any) => {
+    const managerId = Number(manager.id);
+
+    const assigned =
+      assignedMeetingMap.get(managerId) || {};
+
+    const siteVisits =
+      siteVisitMap.get(managerId) || {};
+
+    const created =
+      createdMeetingMap.get(managerId) || {};
+
+    const projects =
+      projectMap.get(managerId) || {};
+
+    const totalMeetings =
+      toNumber(assigned.totalMeetings);
+
+    const todayMeetings =
+      toNumber(assigned.todayMeetings);
+
+    const companyMeetingsToday =
+      toNumber(assigned.companyMeetingsToday);
+
+    const selfMeetingsToday =
+      toNumber(assigned.selfMeetingsToday);
+
+    const completedMeetingsToday =
+      toNumber(assigned.completedMeetingsToday);
+
+    const convertedMeetingsToday =
+      toNumber(assigned.convertedMeetingsToday);
+
+    const siteVisitsToday =
+      toNumber(siteVisits.siteVisitsToday);
+
+    const companySiteVisitsToday =
+      toNumber(siteVisits.companySiteVisitsToday);
+
+    const selfSiteVisitsToday =
+      toNumber(siteVisits.selfSiteVisitsToday);
+
+    const meetingFormsCreatedToday =
+      toNumber(created.meetingFormsCreatedToday);
+
+    const companyMeetingsCreatedToday =
+      toNumber(created.companyMeetingsCreatedToday);
+
+    const selfMeetingsCreatedToday =
+      toNumber(created.selfMeetingsCreatedToday);
+
+    const solarMiterMeetingsCreatedToday =
+      toNumber(created.solarMiterMeetingsCreatedToday);
+
+    const companyMeetingsCreatedThisMonth =
+      toNumber(created.companyMeetingsCreatedThisMonth);
+
+    const selfMeetingsCreatedThisMonth =
+      toNumber(created.selfMeetingsCreatedThisMonth);
+
+    const loanProjectsCreatedThisMonth =
+      toNumber(projects.loanProjectsCreatedThisMonth);
+
+    const cashProjectsCreatedThisMonth =
+      toNumber(projects.cashProjectsCreatedThisMonth);
+
+    const runningProjects =
+      toNumber(projects.runningProjects);
+
+    const runningCashProjects =
+      toNumber(projects.runningCashProjects);
+
+    const runningLoanProjects =
+      toNumber(projects.runningLoanProjects);
+
+    const cashProjectsCancelledRejectedThisMonth =
+      toNumber(
+        projects.cashProjectsCancelledRejectedThisMonth,
+      );
+
+    const loanProjectsCancelledRejectedThisMonth =
+      toNumber(
+        projects.loanProjectsCancelledRejectedThisMonth,
+      );
+
+    return {
+      managerId,
       managerName: manager.name,
 
-      // existing-safe
       totalMeetings,
 
-      // today figures
       todayMeetings,
       companyMeetingsToday,
       selfMeetingsToday,
+
       siteVisitsToday,
       companySiteVisitsToday,
       selfSiteVisitsToday,
+
       meetingFormsCreatedToday,
       completedMeetingsToday,
       convertedMeetingsToday,
+
       companyMeetingsCreatedToday,
-selfMeetingsCreatedToday,
-solarMiterMeetingsCreatedToday,
-companyMeetingsCreatedThisMonth,
-selfMeetingsCreatedThisMonth,
-loanProjectsCreatedThisMonth,
-cashProjectsCreatedThisMonth,
+      selfMeetingsCreatedToday,
+      solarMiterMeetingsCreatedToday,
 
-runningProjects,
-runningCashProjects,
-runningLoanProjects,
+      companyMeetingsCreatedThisMonth,
+      selfMeetingsCreatedThisMonth,
 
-cashProjectsCancelledRejectedThisMonth,
-loanProjectsCancelledRejectedThisMonth,
+      loanProjectsCreatedThisMonth,
+      cashProjectsCreatedThisMonth,
 
-      // old names kept for frontend safety
+      runningProjects,
+      runningCashProjects,
+      runningLoanProjects,
+
+      cashProjectsCancelledRejectedThisMonth,
+      loanProjectsCancelledRejectedThisMonth,
+
+      // Existing frontend aliases remain unchanged.
       companyMeetings: companyMeetingsToday,
       selfMeetings: selfMeetingsToday,
       convertedMeetings: convertedMeetingsToday,
-    });
-  }
-
-  return result;
+    };
+  });
 }
 
 async getLeadManagerAnalytics() {
