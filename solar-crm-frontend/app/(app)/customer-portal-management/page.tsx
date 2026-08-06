@@ -73,75 +73,54 @@ export default function CustomerPortalManagementPage() {
   const [loading, setLoading] = useState(false);
 
   const loadStats = async () => {
-    try {
-      setLoading(true);
+  if (loading) return;
 
-      const [
-  complaintsRes,
-  receiptsRes,
-  workRequestsRes,
-  cleaningRes,
-  afterSalesRes,
-  referralsRes
-] = await Promise.allSettled([
-        axios.get(`${API_BASE_URL}/customer-portal/complaints`, {
-          params: { page: 1, limit: 1, status: 'OPEN' },
-          headers: getAuthHeaders(),
-        }),
-        axios.get(`${API_BASE_URL}/customer-portal/payment-receipts`, {
-          params: { page: 1, limit: 1, status: 'SUBMITTED' },
-          headers: getAuthHeaders(),
-        }),
-        axios.get(`${API_BASE_URL}/customer-portal/work-date-requests`, {
-          params: { page: 1, limit: 1, status: 'PENDING' },
-          headers: getAuthHeaders(),
-        }),
-        axios.get(`${API_BASE_URL}/customer-portal/cleaning-reminders`, {
-          params: { page: 1, limit: 1, status: 'PENDING' },
-          headers: getAuthHeaders(),
-        }),
-        axios.get(`${API_BASE_URL}/customer-portal/after-sales-requests`, {
-  params: { page: 1, limit: 1, status: 'NEW' },
-  headers: getAuthHeaders(),
-}),
-axios.get(`${API_BASE_URL}/customer-portal/referrals`, {
-  params: { page: 1, limit: 1, status: 'REFERRED' },
-  headers: getAuthHeaders(),
-}),
-      ]);
+  try {
+    setLoading(true);
 
-      setStats({
-        openComplaints:
-          complaintsRes.status === 'fulfilled'
-            ? Number(complaintsRes.value.data?.total || 0)
-            : 0,
-        pendingReceipts:
-          receiptsRes.status === 'fulfilled'
-            ? Number(receiptsRes.value.data?.total || 0)
-            : 0,
-        pendingWorkRequests:
-          workRequestsRes.status === 'fulfilled'
-            ? Number(workRequestsRes.value.data?.total || 0)
-            : 0,
-        pendingCleaning:
-          cleaningRes.status === 'fulfilled'
-            ? Number(cleaningRes.value.data?.total || 0)
-            : 0,
-            afterSalesRequests:
-  afterSalesRes.status === 'fulfilled'
-    ? Number(afterSalesRes.value.data?.total || 0)
-    : 0,
-    pendingReferrals:
-  referralsRes.status === 'fulfilled'
-    ? Number(referralsRes.value.data?.total || 0)
-    : 0,
-      });
-    } catch (error) {
-      console.error('Customer portal stats error:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    const response = await axios.get(
+      `${API_BASE_URL}/customer-portal/management-summary`,
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+
+    setStats({
+      openComplaints: Number(
+        response.data?.openComplaints || 0,
+      ),
+
+      pendingReceipts: Number(
+        response.data?.pendingReceipts || 0,
+      ),
+
+      pendingWorkRequests: Number(
+        response.data?.pendingWorkRequests || 0,
+      ),
+
+      pendingCleaning: Number(
+        response.data?.pendingCleaning || 0,
+      ),
+
+      afterSalesRequests: Number(
+        response.data?.afterSalesRequests || 0,
+      ),
+
+      pendingReferrals: Number(
+        response.data?.pendingReferrals || 0,
+      ),
+
+      portal: 'Live',
+    });
+  } catch (error) {
+    console.error(
+      'Customer portal stats error:',
+      error,
+    );
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
     loadStats();
@@ -165,9 +144,11 @@ axios.get(`${API_BASE_URL}/customer-portal/referrals`, {
           </div>
 
           <button
-            onClick={loadStats}
-            className="rounded-2xl bg-white/20 px-5 py-3 text-sm font-black backdrop-blur hover:bg-white/30"
-          >
+  type="button"
+  onClick={loadStats}
+  disabled={loading}
+  className="rounded-2xl bg-white/20 px-5 py-3 text-sm font-black backdrop-blur hover:bg-white/30 disabled:cursor-not-allowed disabled:opacity-60"
+>
             {loading ? 'Refreshing...' : 'Refresh'}
           </button>
         </div>
