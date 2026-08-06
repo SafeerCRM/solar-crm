@@ -3958,6 +3958,11 @@ const hasRole = (allowedRoles: string[]) => {
 
 const isSolarFranchise = hasRole(['SOLAR_FRANCHISE']);
 
+const isInspectionManager =
+  hasRole([
+    'INSPECTION_MANAGER',
+  ]);
+
 const nextSiteWork = executionActivities
   .filter((item) => item.scheduledDate)
   .sort(
@@ -4070,12 +4075,23 @@ const isCurrentUserProjectOwner =
         Number(currentUserId),
   );
 
+  const canManageProjectLocation =
+  hasRole([
+    'OWNER',
+    'MARKETING_HEAD',
+    'PROJECT_MANAGER',
+    'PROJECT_EXECUTIVE',
+    'INSPECTION_MANAGER',
+  ]) ||
+  isCurrentUserProjectOwner;
+
 const canViewContractorWork =
   hasRole([
     'OWNER',
     'PROJECT_MANAGER',
     'PROJECT_EXECUTIVE',
     'SUBSIDY_MANAGER',
+    'INSPECTION_MANAGER',
   ]) ||
   isCurrentUserProjectOwner;
 
@@ -4416,14 +4432,37 @@ const isLoanProcessCompleted =
 
         <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-800">
-              Project #{project.id} - {project.customerName || 'Unnamed Customer'}
-            </h1>
-            <p className="mt-1 text-sm text-gray-500">
-              {project.customerPhone || 'No phone'} | {project.city || 'No city'} |{' '}
-              {project.zone || 'No zone'}
-            </p>
-          </div>
+  <h1 className="text-2xl font-bold text-gray-800">
+    Project #{project.id} - {project.customerName || 'Unnamed Customer'}
+  </h1>
+
+  <p className="mt-1 text-sm text-gray-500">
+    {project.customerPhone || 'No phone'} | {project.city || 'No city'} |{' '}
+    {project.zone || 'No zone'}
+  </p>
+</div>
+
+{isInspectionManager && (
+  <div className="mt-4 rounded-xl border border-orange-200 bg-orange-50 p-4">
+    <p className="font-bold text-orange-800">
+      Inspection Manager — Read-Only Project View
+    </p>
+
+    <p className="mt-1 text-sm text-orange-700">
+      Project information, documents, execution history,
+      contractor proofs and customer updates are available
+      for inspection purposes. General project, finance,
+      approval and workflow changes are disabled.
+    </p>
+
+    <Link
+      href={`/inspection/${project.id}`}
+      className="mt-3 inline-flex rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600"
+    >
+      Open Inspection Workspace
+    </Link>
+  </div>
+)}
 
           <div className="flex flex-wrap items-center gap-2">
   <span className="rounded-full bg-blue-100 px-4 py-2 text-sm font-semibold text-blue-700">
@@ -4479,7 +4518,7 @@ const isLoanProcessCompleted =
         }
         rows={3}
         placeholder="Enter the permanent project installation address"
-        className="w-full rounded-xl border border-gray-300 p-3 outline-none focus:border-blue-500"
+        className="w-full rounded-xl border border-gray-300 p-3 outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
       />
     </div>
 
@@ -4498,7 +4537,7 @@ const isLoanProcessCompleted =
         }
         rows={2}
         placeholder="Address captured from GPS or Google Maps"
-        className="w-full rounded-xl border border-gray-300 p-3 outline-none focus:border-blue-500"
+        className="w-full rounded-xl border border-gray-300 p-3 outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
       />
     </div>
 
@@ -4518,7 +4557,7 @@ const isLoanProcessCompleted =
           }))
         }
         placeholder="Example: 25.2138"
-        className="w-full rounded-xl border border-gray-300 p-3 outline-none focus:border-blue-500"
+        className="w-full rounded-xl border border-gray-300 p-3 outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
       />
     </div>
 
@@ -4538,12 +4577,14 @@ const isLoanProcessCompleted =
           }))
         }
         placeholder="Example: 75.8648"
-        className="w-full rounded-xl border border-gray-300 p-3 outline-none focus:border-blue-500"
+        className="w-full rounded-xl border border-gray-300 p-3 outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
       />
     </div>
   </div>
 
   <div className="mt-5 flex flex-wrap gap-3">
+    {canManageProjectLocation && (
+      <>
     <button
       type="button"
       onClick={captureProjectSiteLocation}
@@ -4574,6 +4615,8 @@ const isLoanProcessCompleted =
           ? 'Save / Update Project Location'
           : 'Save Project Location'}
     </button>
+    </>
+    )}
 
     {project?.locationUpdatedAt && (
   <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-4">
@@ -5745,8 +5788,30 @@ const isLoanProcessCompleted =
   ];
 
   let visibleTabs = allTabs;
-
-  if (hasRole(['LOAN_MANAGER'])) {
+if (
+  hasRole([
+    'INSPECTION_MANAGER',
+  ])
+) {
+  visibleTabs =
+    allTabs.filter(
+      (tab) =>
+        [
+          'PROJECT_CREATION',
+          'PROJECT_EXECUTION',
+          'CONTRACTOR_WORK',
+          'CUSTOMER_UPDATES',
+          'DOCUMENTS',
+          'PROJECT_HISTORY',
+        ].includes(
+          tab.key,
+        ),
+    );
+} else if (
+  hasRole([
+    'LOAN_MANAGER',
+  ])
+) {
     visibleTabs = allTabs.filter((tab) =>
       [
         'PROJECT_CREATION',
