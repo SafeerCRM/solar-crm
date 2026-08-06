@@ -31117,6 +31117,46 @@ async getInspectionAnalytics(
 ) {
   this.assertInspectionViewAccess(user);
 
+  const currentUserRoles =
+  this.getUserRoles(user);
+
+const currentUserId =
+  Number(
+    user?.id ||
+      user?.userId ||
+      user?.sub ||
+      0,
+  );
+
+const isInspectionManagerOnly =
+  currentUserRoles.includes(
+    'INSPECTION_MANAGER',
+  ) &&
+  !currentUserRoles.includes(
+    'OWNER',
+  );
+
+  const visitPage =
+  Math.max(
+    Number(
+      query?.visitPage ||
+        1,
+    ),
+    1,
+  );
+
+const visitLimit =
+  Math.min(
+    Math.max(
+      Number(
+        query?.visitLimit ||
+          20,
+      ),
+      1,
+    ),
+    100,
+  );
+
   const inspectionQb =
     this.projectInspectionRepository
       .createQueryBuilder('inspection')
@@ -31160,19 +31200,38 @@ async getInspectionAnalytics(
     );
   }
 
-  if (query?.inspectionManagerId) {
-    inspectionQb.andWhere(
-      `inspection.inspectionManagerId =
-        :inspectionManagerId`,
-      {
-        inspectionManagerId:
-          Number(
-            query
-              .inspectionManagerId,
-          ),
-      },
+  if (
+  isInspectionManagerOnly
+) {
+  if (!currentUserId) {
+    throw new ForbiddenException(
+      'Inspection Manager user ID is missing',
     );
   }
+
+  inspectionQb.andWhere(
+    `inspection."inspectionManagerId" =
+      :inspectionManagerId`,
+    {
+      inspectionManagerId:
+        currentUserId,
+    },
+  );
+} else if (
+  query?.inspectionManagerId
+) {
+  inspectionQb.andWhere(
+    `inspection."inspectionManagerId" =
+      :inspectionManagerId`,
+    {
+      inspectionManagerId:
+        Number(
+          query
+            .inspectionManagerId,
+        ),
+    },
+  );
+}
 
   if (query?.city) {
     inspectionQb.andWhere(
@@ -31536,6 +31595,35 @@ async getInspectionAnalytics(
     }
   }
 
+  const visitTotal =
+  inspections.length;
+
+const visitTotalPages =
+  Math.max(
+    Math.ceil(
+      visitTotal /
+        visitLimit,
+    ),
+    1,
+  );
+
+const safeVisitPage =
+  Math.min(
+    visitPage,
+    visitTotalPages,
+  );
+
+const visitStart =
+  (safeVisitPage - 1) *
+  visitLimit;
+
+const visitHistory =
+  inspections.slice(
+    visitStart,
+    visitStart +
+      visitLimit,
+  );
+
   return {
     summary: {
       totalVisits:
@@ -31627,8 +31715,29 @@ async getInspectionAnalytics(
           a.totalDefects,
       ),
 
-    inspections,
-    defects,
+    /*
+ * Keep the old property name for
+ * frontend compatibility, but return
+ * only the current visit-register page.
+ */
+inspections:
+  visitHistory,
+
+visitPagination: {
+  page:
+    safeVisitPage,
+
+  limit:
+    visitLimit,
+
+  total:
+    visitTotal,
+
+  totalPages:
+    visitTotalPages,
+},
+
+defects,
   };
 }
 

@@ -2041,6 +2041,12 @@ getInspectionAnalytics(
   @Query('resolutionStatus')
   resolutionStatus?: string,
 
+  @Query('visitPage')
+visitPage?: string,
+
+@Query('visitLimit')
+visitLimit?: string,
+
   @CurrentUser()
   user?: any,
 ) {
@@ -2085,6 +2091,16 @@ getInspectionAnalytics(
 
       resolutionStatus:
         resolutionStatus || '',
+
+        visitPage:
+  Number(
+    visitPage || 1,
+  ),
+
+visitLimit:
+  Number(
+    visitLimit || 20,
+  ),
     },
     user,
   );
