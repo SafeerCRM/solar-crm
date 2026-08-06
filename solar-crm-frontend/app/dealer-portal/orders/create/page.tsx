@@ -692,8 +692,11 @@ deliveryDistanceKm:
           </div>
         </header>
 
-        <form onSubmit={submitOrder} className="mt-6 grid w-full gap-6 overflow-x-hidden lg:grid-cols-3">
-          <section className="rounded-[2rem] bg-white p-5 text-slate-900 shadow-xl lg:col-span-2">
+        <form
+  onSubmit={submitOrder}
+  className="mt-6 grid w-full min-w-0 gap-6 overflow-x-hidden lg:grid-cols-3"
+>
+          <section className="min-w-0 overflow-hidden rounded-[2rem] bg-white p-5 text-slate-900 shadow-xl lg:col-span-2">
             <div className="mb-5 space-y-4">
   <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
     <div>
@@ -889,7 +892,10 @@ deliveryDistanceKm:
 
   {viewMode === 'MATERIALS' && (
   <div className="space-y-5">
-    <div className="flex gap-2 overflow-x-auto pb-2">
+    <div
+  className="flex w-full min-w-0 gap-2 overflow-x-auto overscroll-x-contain pb-2"
+  style={{ WebkitOverflowScrolling: 'touch' }}
+>
       {materialCategoryOptions.map(
         (option) => {
           const categoryCount =
@@ -927,7 +933,7 @@ deliveryDistanceKm:
       )}
     </div>
 
-    <div className="space-y-7">
+    <div className="min-w-0 space-y-7">
       {visibleMaterialSections.map((section) => {
         const sectionItems =
           groupedMaterials[section.key] || [];
@@ -938,11 +944,11 @@ deliveryDistanceKm:
 
         return (
           <section
-            key={section.key}
-            className="rounded-[1.7rem] border border-slate-100 bg-slate-50/60 p-4"
-          >
-            <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-              <div>
+  key={section.key}
+  className="min-w-0 overflow-hidden rounded-[1.7rem] border border-slate-100 bg-slate-50/60 p-4"
+>
+            <div className="mb-4 flex min-w-0 flex-wrap items-end justify-between gap-3">
+              <div className="min-w-0">
                 <h3 className="text-lg font-black text-slate-900">
                   {section.title}
                 </h3>
@@ -957,7 +963,7 @@ deliveryDistanceKm:
               </span>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid min-w-0 gap-4 md:grid-cols-2">
               {sectionItems.map((item) => (
                 <MaterialCard
                   key={`${item.materialId}-${item.branchName}`}
@@ -997,7 +1003,7 @@ deliveryDistanceKm:
             )}
           </section>
 
-          <aside className="space-y-5">
+          <aside className="min-w-0 space-y-5">
             <section className="rounded-[2rem] bg-white p-5 text-slate-900 shadow-xl">
               <h2 className="text-xl font-black">Order Cart</h2>
 
@@ -1401,13 +1407,15 @@ function MaterialCard({ item, onAdd }: { item: any; onAdd: () => void }) {
   const available = Number(item.availableQuantity || 0);
 
   return (
-    <div className="rounded-[1.7rem] border border-slate-100 bg-slate-50 p-4 transition hover:-translate-y-1 hover:bg-white hover:shadow-xl">
+    <div className="min-w-0 overflow-hidden rounded-[1.7rem] border border-slate-100 bg-slate-50 p-4 transition hover:-translate-y-1 hover:bg-white hover:shadow-xl">
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="font-black">{item.materialName}</p>
-          <p className="mt-1 text-xs font-semibold text-slate-500">
-            {item.brand || 'No brand'} · HSN {item.hsnCode || '-'}
-          </p>
+        <div className="min-w-0">
+  <p className="break-words font-black">
+    {item.materialName}
+  </p>
+          <p className="mt-1 break-words text-xs font-semibold text-slate-500">
+  {item.brand || 'No brand'} · HSN {item.hsnCode || '-'}
+</p>
         </div>
 
         <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-700">
