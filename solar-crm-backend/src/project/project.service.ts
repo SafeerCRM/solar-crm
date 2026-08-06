@@ -30056,12 +30056,12 @@ async listInspectionProjects(
             'inspection',
           )
           .where(
-            `inspection.projectId
-              IN (:...projectIds)`,
-            {
-              projectIds,
-            },
-          )
+  `inspection."projectId"
+    IN (:...projectIds)`,
+  {
+    projectIds,
+  },
+)
           .andWhere(
             `inspection.isHidden =
               false`,
@@ -30777,12 +30777,12 @@ async getProjectInspectionHistory(
             'defect',
           )
           .where(
-            `defect.inspectionId
-              IN (:...inspectionIds)`,
-            {
-              inspectionIds,
-            },
-          )
+  `defect."inspectionId"
+    IN (:...inspectionIds)`,
+  {
+    inspectionIds,
+  },
+)
           .orderBy(
             'defect.createdAt',
             'ASC',
@@ -30798,12 +30798,12 @@ async getProjectInspectionHistory(
             'photo',
           )
           .where(
-            `photo.inspectionId
-              IN (:...inspectionIds)`,
-            {
-              inspectionIds,
-            },
-          )
+  `photo."inspectionId"
+    IN (:...inspectionIds)`,
+  {
+    inspectionIds,
+  },
+)
           .orderBy(
             'photo.createdAt',
             'DESC',
@@ -31284,12 +31284,12 @@ async getInspectionAnalytics(
 
   if (inspectionIds.length) {
     defectQb.where(
-      `defect.inspectionId
-        IN (:...inspectionIds)`,
-      {
-        inspectionIds,
-      },
-    );
+  `defect."inspectionId"
+    IN (:...inspectionIds)`,
+  {
+    inspectionIds,
+  },
+);
   } else {
     defectQb.where('1 = 0');
   }
