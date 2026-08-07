@@ -146,6 +146,8 @@ const [movementFilters, setMovementFilters] = useState({
   material: '',
   branch: '',
   movementType: '',
+  projectSearch: '',
+  dealerName: '',
   showHidden: false,
 });
 
@@ -311,11 +313,13 @@ setPagination({
   const loadStockMovements = async (
   overridePage?: number,
   overrideFilters?: {
-    material: string;
-    branch: string;
-    movementType: string;
-    showHidden: boolean;
-  },
+  material: string;
+  branch: string;
+  movementType: string;
+  projectSearch: string;
+  dealerName: string;
+  showHidden: boolean;
+},
 ) => {
   try {
     setMovementLoading(true);
@@ -337,7 +341,15 @@ setPagination({
   material: activeFilters.material || undefined,
   branch: activeFilters.branch || undefined,
   movementType: activeFilters.movementType || undefined,
-  showHidden: activeFilters.showHidden ? 'true' : 'false',
+
+  projectSearch:
+    activeFilters.projectSearch.trim() || undefined,
+
+  dealerName:
+    activeFilters.dealerName.trim() || undefined,
+
+  showHidden:
+    activeFilters.showHidden ? 'true' : 'false',
 },
         headers: token
           ? {
@@ -3526,11 +3538,13 @@ const filteredIncomingMaterials =
         type="button"
         onClick={() => {
           const emptyFilters = {
-            material: '',
-            branch: '',
-            movementType: '',
-            showHidden: false,
-          };
+  material: '',
+  branch: '',
+  movementType: '',
+  projectSearch: '',
+  dealerName: '',
+  showHidden: false,
+};
 
           setMovementFilters(emptyFilters);
           loadStockMovements(1, emptyFilters);
@@ -3542,7 +3556,33 @@ const filteredIncomingMaterials =
     </div>
   </div>
 
-  <div className="mt-4 grid gap-3 md:grid-cols-4">
+  <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+
+    <input
+  type="text"
+  placeholder="Project ID / Project Name"
+  value={movementFilters.projectSearch}
+  onChange={(e) =>
+    setMovementFilters({
+      ...movementFilters,
+      projectSearch: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3 text-sm"
+/>
+
+<input
+  type="text"
+  placeholder="Dealer Name"
+  value={movementFilters.dealerName}
+  onChange={(e) =>
+    setMovementFilters({
+      ...movementFilters,
+      dealerName: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3 text-sm"
+/>
     <input
       type="text"
       placeholder="Material"
