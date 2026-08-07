@@ -8,6 +8,7 @@ import {
   Res,
   Param,
   UploadedFiles,
+  UploadedFile,
 UseGuards,
 UseInterceptors,
 Query,
@@ -16,7 +17,7 @@ ParseIntPipe,
 
 import { ProjectService } from './project.service';
 import {
-  FilesInterceptor,
+  FilesInterceptor, FileInterceptor,
 } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -4090,6 +4091,75 @@ moveProjectStatus(
   );
 }
 
+@Post('global-document-vault/upload')
+@UseInterceptors(FileInterceptor('file'))
+uploadGlobalDocumentVaultFile(
+  @UploadedFile() file: any,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService
+    .uploadGlobalDocumentVaultFile(
+      file,
+      body,
+      user,
+    );
+}
+
+@Get('global-document-vault')
+listGlobalDocumentVault(
+  @Query() query: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService
+    .listGlobalDocumentVault(
+      query,
+      user,
+    );
+}
+
+@Get('global-document-vault/suggestions')
+getGlobalDocumentVaultSuggestions(
+  @Query() query: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService
+    .getGlobalDocumentVaultSuggestions(
+      query,
+      user,
+    );
+}
+
+@Patch('global-document-vault/:id/hide')
+hideGlobalDocumentVaultItem(
+  @Param('id', ParseIntPipe)
+  id: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService
+    .hideGlobalDocumentVaultItem(
+      id,
+      body,
+      user,
+    );
+}
+
+@Patch('global-document-vault/:id/restore')
+restoreGlobalDocumentVaultItem(
+  @Param('id', ParseIntPipe)
+  id: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService
+    .restoreGlobalDocumentVaultItem(
+      id,
+      body,
+      user,
+    );
+}
+
 @Roles('OWNER', 'MARKETING_HEAD', 'PROJECT_MANAGER')
 @Patch(':id/cancel')
 cancelProject(
@@ -4183,75 +4253,6 @@ uploadProjectDocument(
   body,
   user,
 );
-}
-
-@Post('global-document-vault/upload')
-@UseInterceptors(FilesInterceptor('file'))
-uploadGlobalDocumentVaultFile(
-  @UploadedFiles() file: any,
-  @Body() body: any,
-  @CurrentUser() user: any,
-) {
-  return this.projectService
-    .uploadGlobalDocumentVaultFile(
-      file,
-      body,
-      user,
-    );
-}
-
-@Get('global-document-vault')
-listGlobalDocumentVault(
-  @Query() query: any,
-  @CurrentUser() user: any,
-) {
-  return this.projectService
-    .listGlobalDocumentVault(
-      query,
-      user,
-    );
-}
-
-@Get('global-document-vault/suggestions')
-getGlobalDocumentVaultSuggestions(
-  @Query() query: any,
-  @CurrentUser() user: any,
-) {
-  return this.projectService
-    .getGlobalDocumentVaultSuggestions(
-      query,
-      user,
-    );
-}
-
-@Patch('global-document-vault/:id/hide')
-hideGlobalDocumentVaultItem(
-  @Param('id', ParseIntPipe)
-  id: number,
-  @Body() body: any,
-  @CurrentUser() user: any,
-) {
-  return this.projectService
-    .hideGlobalDocumentVaultItem(
-      id,
-      body,
-      user,
-    );
-}
-
-@Patch('global-document-vault/:id/restore')
-restoreGlobalDocumentVaultItem(
-  @Param('id', ParseIntPipe)
-  id: number,
-  @Body() body: any,
-  @CurrentUser() user: any,
-) {
-  return this.projectService
-    .restoreGlobalDocumentVaultItem(
-      id,
-      body,
-      user,
-    );
 }
 
 @Patch(':id/location')
