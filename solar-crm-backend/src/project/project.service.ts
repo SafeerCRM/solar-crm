@@ -6129,6 +6129,8 @@ async listProjectStockMovements(query: any) {
     material,
     branch,
     movementType,
+    projectSearch,
+    dealerName,
     showHidden,
   } = query || {};
 
@@ -6142,14 +6144,19 @@ async listProjectStockMovements(query: any) {
     (pageNumber - 1) * limitNumber;
 
   const qb =
-    this.projectStockMovementRepository
-      .createQueryBuilder('movement')
-      .orderBy(
-        'movement.createdAt',
-        'DESC',
-      )
-      .skip(skip)
-      .take(limitNumber);
+  this.projectStockMovementRepository
+    .createQueryBuilder('movement')
+    .leftJoin(
+      Project,
+      'movementProject',
+      'movementProject.id = movement.projectId',
+    )
+    .orderBy(
+      'movement.createdAt',
+      'DESC',
+    )
+    .skip(skip)
+    .take(limitNumber);
 
   if (showHidden === 'true') {
     qb.where(
@@ -6189,6 +6196,47 @@ async listProjectStockMovements(query: any) {
       },
     );
   }
+
+  if (dealerName?.trim()) {
+  qb.andWhere(
+    `LOWER(COALESCE(movement.dealerName, ''))
+     LIKE LOWER(:dealerName)`,
+    {
+      dealerName: `%${dealerName.trim()}%`,
+    },
+  );
+}
+
+if (projectSearch?.trim()) {
+  const value = projectSearch.trim();
+
+  const numericProjectId =
+    /^\d+$/.test(value)
+      ? Number(value)
+      : null;
+
+  if (numericProjectId) {
+    qb.andWhere(
+      `(
+        movement.projectId = :numericProjectId
+        OR LOWER(COALESCE(movementProject.customerName, ''))
+           LIKE LOWER(:projectName)
+      )`,
+      {
+        numericProjectId,
+        projectName: `%${value}%`,
+      },
+    );
+  } else {
+    qb.andWhere(
+      `LOWER(COALESCE(movementProject.customerName, ''))
+       LIKE LOWER(:projectName)`,
+      {
+        projectName: `%${value}%`,
+      },
+    );
+  }
+}
 
   const [data, total] =
     await qb.getManyAndCount();
