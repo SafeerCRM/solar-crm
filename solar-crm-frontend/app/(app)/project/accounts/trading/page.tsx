@@ -1499,7 +1499,7 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
       )}
 
       {activeTab === 'catalog' && (
-        <div className="grid min-w-0 gap-5 xl:grid-cols-2">
+        <div className="grid min-w-0 gap-4 lg:grid-cols-2">
           <div className="min-w-0 rounded-2xl bg-white p-4 shadow sm:p-5">
             <h2 className="text-lg font-bold text-gray-800">Dealer Catalog</h2>
 
@@ -1517,67 +1517,94 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
             <Pagination page={catalogPage} totalPages={catalogTotalPages} setPage={setCatalogPage} />
           </div>
 
-          <div className="rounded-2xl bg-white p-5 shadow">
-            <h2 className="text-lg font-bold text-gray-800">Create Dealer Order</h2>
+          <div className="w-full max-w-full min-w-0 overflow-hidden rounded-2xl bg-white p-4 shadow sm:p-5">
+  <h2 className="text-lg font-bold text-gray-800">
+    Create Dealer Order
+  </h2>
 
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <select value={orderForm.dealerId} onChange={(e) => setOrderForm({ ...orderForm, dealerId: e.target.value })} className="rounded-xl border p-3">
+            <div className="mt-4 grid min-w-0 grid-cols-2 gap-3">
+              <select value={orderForm.dealerId} onChange={(e) => setOrderForm({ ...orderForm, dealerId: e.target.value })} className="w-full min-w-0 rounded-xl border p-3">
                 <option value="">Select Dealer</option>
                 {dealers.map((dealer) => (
                   <option key={dealer.id} value={dealer.id}>{dealer.vendorName} - {dealer.city || ''}</option>
                 ))}
               </select>
 
-              <select value={orderForm.paymentType} onChange={(e) => setOrderForm({ ...orderForm, paymentType: e.target.value })} className="rounded-xl border p-3">
+              <select value={orderForm.paymentType} onChange={(e) => setOrderForm({ ...orderForm, paymentType: e.target.value })} className="w-full min-w-0 rounded-xl border p-3">
                 <option value="CASH">Cash</option>
                 <option value="CREDIT">Credit</option>
                 <option value="ONLINE">Online</option>
                 <option value="CHEQUE">Cheque</option>
               </select>
 
-              <LocalizationProvider dateAdapter={AdapterDayjs}>
-  <DatePicker
-    label="Credit Due Date"
-    value={creditDueDateValue}
-    onChange={updateOrderCreditDate}
-    slotProps={{
-      textField: {
-        fullWidth: true,
-      },
-    }}
-  />
-</LocalizationProvider>
-
-              <LocalizationProvider dateAdapter={AdapterDayjs}>
-  <div className="grid gap-3 md:grid-cols-2">
+              <div className="col-span-2 min-w-0">
+  <LocalizationProvider dateAdapter={AdapterDayjs}>
     <DatePicker
-      label="Expected Delivery Date"
-      value={orderDeliveryDateValue}
-      onChange={updateOrderDeliveryDatePart}
+      label="Credit Due Date"
+      value={creditDueDateValue}
+      onChange={updateOrderCreditDate}
       slotProps={{
         textField: {
           fullWidth: true,
         },
       }}
     />
+  </LocalizationProvider>
+</div>
 
-    <MobileTimePicker
-      label="Expected Delivery Time"
-      value={orderDeliveryTimeValue}
-      onChange={updateOrderDeliveryTimePart}
-      ampm
-      ampmInClock
-      slotProps={{
-        textField: {
-          fullWidth: true,
-        },
-      }}
-    />
-  </div>
-</LocalizationProvider>
+              <div className="col-span-2 min-w-0">
+  <LocalizationProvider dateAdapter={AdapterDayjs}>
+    <div className="grid min-w-0 grid-cols-2 gap-3">
+      <DatePicker
+        label="Expected Delivery Date"
+        value={orderDeliveryDateValue}
+        onChange={updateOrderDeliveryDatePart}
+        slotProps={{
+          textField: {
+            fullWidth: true,
+          },
+        }}
+      />
 
-              <input placeholder="Assigned Staff Name" value={orderForm.assignedStaffName} onChange={(e) => setOrderForm({ ...orderForm, assignedStaffName: e.target.value })} className="rounded-xl border p-3" />
-              <input placeholder="Assigned Staff Phone" value={orderForm.assignedStaffPhone} onChange={(e) => setOrderForm({ ...orderForm, assignedStaffPhone: e.target.value })} className="rounded-xl border p-3" />
+      <MobileTimePicker
+        label="Expected Delivery Time"
+        value={orderDeliveryTimeValue}
+        onChange={updateOrderDeliveryTimePart}
+        ampm
+        ampmInClock
+        slotProps={{
+          textField: {
+            fullWidth: true,
+          },
+        }}
+      />
+    </div>
+  </LocalizationProvider>
+</div>
+
+              <input
+  placeholder="Assigned Staff Name"
+  value={orderForm.assignedStaffName}
+  onChange={(e) =>
+    setOrderForm({
+      ...orderForm,
+      assignedStaffName: e.target.value,
+    })
+  }
+  className="w-full min-w-0 rounded-xl border p-3"
+/>
+
+<input
+  placeholder="Assigned Staff Phone"
+  value={orderForm.assignedStaffPhone}
+  onChange={(e) =>
+    setOrderForm({
+      ...orderForm,
+      assignedStaffPhone: e.target.value,
+    })
+  }
+  className="w-full min-w-0 rounded-xl border p-3"
+/>
             </div>
 
             <textarea placeholder="Order Remarks" value={orderForm.remarks} onChange={(e) => setOrderForm({ ...orderForm, remarks: e.target.value })} className="mt-3 w-full rounded-xl border p-3" />
@@ -1587,19 +1614,57 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
                 const item = catalog.find((mat) => String(mat.id) === String(row.materialId));
 
                 return (
-                  <div key={index} className="rounded-xl border p-3">
-                    <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                      <select value={row.materialId} onChange={(e) => updateOrderRow(index, 'materialId', e.target.value)} className="min-w-0 rounded-xl border p-3">
-                        <option value="">Select Material</option>
-                        {catalog.map((mat) => (
-                          <option key={mat.id} value={mat.id}>{mat.name} - {money(mat.sellingRateWithGst)}</option>
-                        ))}
-                      </select>
+                  <div
+  key={index}
+  className="min-w-0 rounded-xl border bg-gray-50/40 p-3"
+>
+                    <div className="grid min-w-0 grid-cols-2 gap-2">
+  <select
+    value={row.materialId}
+    onChange={(e) =>
+      updateOrderRow(index, 'materialId', e.target.value)
+    }
+    className="col-span-2 w-full min-w-0 rounded-xl border p-3"
+  >
+    <option value="">Select Material</option>
 
-                      <input type="number" placeholder="Quantity" value={row.quantity} onChange={(e) => updateOrderRow(index, 'quantity', e.target.value)} className="rounded-xl border p-3" />
-                      <input type="number" placeholder="Discount" value={row.discountAmount} onChange={(e) => updateOrderRow(index, 'discountAmount', e.target.value)} className="rounded-xl border p-3" />
-                      <button onClick={() => removeOrderRow(index)} className="rounded-xl bg-red-100 px-3 py-2 text-sm font-semibold text-red-700">Remove</button>
-                    </div>
+    {catalog.map((mat) => (
+      <option key={mat.id} value={mat.id}>
+        {mat.name} - {money(mat.sellingRateWithGst)}
+      </option>
+    ))}
+  </select>
+
+  <input
+    type="number"
+    placeholder="Quantity"
+    value={row.quantity}
+    onChange={(e) =>
+      updateOrderRow(index, 'quantity', e.target.value)
+    }
+    className="w-full min-w-0 rounded-xl border p-3"
+  />
+
+  <input
+    type="number"
+    placeholder="Discount"
+    value={row.discountAmount}
+    onChange={(e) =>
+      updateOrderRow(index, 'discountAmount', e.target.value)
+    }
+    className="w-full min-w-0 rounded-xl border p-3"
+  />
+
+  <div className="col-span-2 flex justify-end">
+    <button
+      type="button"
+      onClick={() => removeOrderRow(index)}
+      className="rounded-lg bg-red-100 px-4 py-2 text-xs font-semibold text-red-700"
+    >
+      Remove
+    </button>
+  </div>
+</div>
 
                     {item && <p className="mt-2 text-xs text-gray-500">Rate without GST {money(item.sellingRate)} | GST {item.gstPercent || 0}% | Stock {item.availableQuantity || 0}</p>}
                   </div>
