@@ -268,6 +268,53 @@ const navItems = [
 },
 
 {
+  name: 'Global Document Vault',
+  href: '/global-document-vault',
+  roles: [
+    'OWNER',
+
+    'TELECALLING_MANAGER',
+    'TELECALLING_ASSISTANT',
+    'TELECALLER',
+
+    'LEAD_MANAGER',
+    'LEAD_EXECUTIVE',
+
+    'MARKETING_HEAD',
+
+    'MEETING_MANAGER',
+    'MEETING_ASSISTANT',
+
+    'PROJECT_MANAGER',
+    'PROJECT_EXECUTIVE',
+
+    'LOAN_MANAGER',
+    'SUBSIDY_MANAGER',
+    'ELECTRICITY_MANAGER',
+
+    'PAYMENT_COLLECTION_EXECUTIVE',
+    'PAYMENT_MANAGER',
+    'ACCOUNT_MANAGER',
+
+    'STOCK_MANAGER',
+
+    'MAINTENANCE_MANAGER',
+    'INSPECTION_MANAGER',
+    'CUSTOMER_MANAGER',
+
+    'HR_MANAGER',
+
+    'TRADING_MANAGER',
+    'TRADING_HEAD',
+
+    'OFFICE_ASSISTANT',
+
+    'CUSTOMER',
+    'DEALER',
+  ],
+},
+
+{
   name: 'My Expense Requests',
   href: '/project/my-expense-requests',
   roles: [
