@@ -259,7 +259,13 @@ private async resolvePayrollMetric(
   linkedUserId: number,
   staffRole: string,
   attendanceTargetDays?: number | null,
+  attendanceTargetHours?: number | null,
   salaryTargetValue?: number | null,
+  minimumProjectPaymentPercentage?:
+  number | null,
+
+applyProjectPaymentQualification =
+  false,
 ): Promise<number> {
   const userId = Number(
     linkedUserId || 0,
@@ -309,10 +315,23 @@ attendanceTargetDays:
     attendanceTargetDays || 0,
   ),
 
+  attendanceTargetHours:
+  Number(
+    attendanceTargetHours || 0,
+  ),
+
   salaryTargetValue:
   Number(
     salaryTargetValue || 0,
   ),
+
+  minimumProjectPaymentPercentage:
+  Number(
+    minimumProjectPaymentPercentage ||
+      0,
+  ),
+
+applyProjectPaymentQualification,
     });
 
   const normalizedValue =
@@ -327,6 +346,57 @@ attendanceTargetDays:
   }
 
   return normalizedValue;
+}
+
+private async resolveRulePayrollMetric(
+  rule: StaffPayrollRule,
+  metricType: StaffPayrollMetricType,
+  payrollMonth: string,
+  linkedUserId: number,
+  staffRole: string,
+  salaryTargetValueOverride?:
+    number | null,
+): Promise<number> {
+  const minimumProjectPaymentPercentage =
+    Math.max(
+      Number(
+        rule.minimumProjectPaymentPercentage ||
+          0,
+      ),
+      0,
+    );
+
+  /*
+   * Payment qualification is universal.
+   *
+   * If a payroll rule has a minimum project
+   * payment percentage greater than zero,
+   * every project-based metric resolved through
+   * this helper receives that qualification.
+   *
+   * Non-project metrics simply ignore these
+   * payment settings inside the metric resolver.
+   */
+  return this.resolvePayrollMetric(
+    metricType,
+    payrollMonth,
+    linkedUserId,
+    staffRole,
+
+    rule.attendanceTargetDays,
+    rule.attendanceTargetHours,
+
+    salaryTargetValueOverride !==
+        undefined &&
+      salaryTargetValueOverride !==
+        null
+      ? salaryTargetValueOverride
+      : rule.salaryTargetValue,
+
+    minimumProjectPaymentPercentage,
+
+    minimumProjectPaymentPercentage > 0,
+  );
 }
 
 private async evaluateRuleEligibility(
@@ -376,6 +446,7 @@ private async evaluateRuleEligibility(
   const actualMetrics =
   existingMetrics;
 
+
   const conditionResults: Array<{
     id: string;
     label: string;
@@ -406,17 +477,20 @@ private async evaluateRuleEligibility(
     );
 
     if (
-      actualMetrics[metricKey] ===
-      undefined
-    ) {
-      actualMetrics[metricKey] =
-        await this.resolvePayrollMetric(
-          condition.metricType,
-          payrollMonth,
-          linkedUserId,
-          staffRole,
-        );
-    }
+  actualMetrics[metricKey] ===
+  undefined
+) {
+  actualMetrics[metricKey] =
+    await this.resolveRulePayrollMetric(
+      rule,
+      condition.metricType,
+      payrollMonth,
+      linkedUserId,
+      staffRole,
+    );
+}
+
+    
 
     const actualValue =
       actualMetrics[metricKey];
@@ -517,6 +591,7 @@ private async calculateRuleSalaryPercentage(
 }> {
   const actualMetrics =
   existingMetrics;
+
 
   const maximumSalaryPercentage =
     Math.max(
@@ -679,14 +754,13 @@ private async calculateRuleSalaryPercentage(
       actualMetrics[
         multiplierMetricKey
       ] =
-        await this.resolvePayrollMetric(
-          multiplierMetricType,
-          payrollMonth,
-          linkedUserId,
-          staffRole,
-          rule.attendanceTargetDays,
-          rule.salaryTargetValue,
-        );
+        await this.resolveRulePayrollMetric(
+  rule,
+  multiplierMetricType,
+  payrollMonth,
+  linkedUserId,
+  staffRole,
+);
     }
 
     const teamMemberCount =
@@ -740,25 +814,24 @@ private async calculateRuleSalaryPercentage(
 
   const metricKey = String(metricType);
 
-  if (
-    actualMetrics[metricKey] ===
-    undefined
-  ) {
-    actualMetrics[metricKey] =
-  await this.resolvePayrollMetric(
+  let salaryMetricValue = 0;
+
+/*
+ * Resolve salary metric through one
+ * rule-aware path.
+ */
+salaryMetricValue =
+  await this.resolveRulePayrollMetric(
+    rule,
     metricType,
     payrollMonth,
     linkedUserId,
     staffRole,
-    rule.attendanceTargetDays,
-    rule.salaryTargetValue,
+    targetValue,
   );
-  }
 
-  const salaryMetricValue =
-    Number(
-      actualMetrics[metricKey] || 0,
-    );
+actualMetrics[metricKey] =
+  salaryMetricValue;
 
   const calculatedPercentage =
     Math.min(
@@ -1051,6 +1124,7 @@ private async calculateRuleIncentives(
   const actualMetrics =
   existingMetrics;
 
+
   let effectiveSalaryTargetValue =
   Number(
     rule.salaryTargetValue || 0,
@@ -1097,14 +1171,13 @@ if (
     actualMetrics[
       multiplierMetricKey
     ] =
-      await this.resolvePayrollMetric(
-        multiplierMetricType,
-        payrollMonth,
-        linkedUserId,
-        staffRole,
-        rule.attendanceTargetDays,
-        rule.salaryTargetValue,
-      );
+      await this.resolveRulePayrollMetric(
+  rule,
+  multiplierMetricType,
+  payrollMonth,
+  linkedUserId,
+  staffRole,
+);
   }
 
   const teamMemberCount =
@@ -1174,27 +1247,21 @@ if (
     }
 
     const metricKey = String(
-      component.metricType,
-    );
-
-    if (
-  actualMetrics[metricKey] ===
-  undefined
-) {
-  actualMetrics[metricKey] =
-    await this.resolvePayrollMetric(
-      component.metricType,
-      payrollMonth,
-      linkedUserId,
-      staffRole,
-      rule.attendanceTargetDays,
-      effectiveSalaryTargetValue,
-    );
-}
-
-    const metricValue = Number(
-  actualMetrics[metricKey] || 0,
+  component.metricType,
 );
+
+const metricValue =
+  await this.resolveRulePayrollMetric(
+    rule,
+    component.metricType,
+    payrollMonth,
+    linkedUserId,
+    staffRole,
+    effectiveSalaryTargetValue,
+  );
+
+actualMetrics[metricKey] =
+  metricValue;
 
 let baselineTargetOverride:
   number | null = null;
@@ -1264,14 +1331,13 @@ if (
     actualMetrics[
       multiplierMetricKey
     ] =
-      await this.resolvePayrollMetric(
-        multiplierMetricType,
-        payrollMonth,
-        linkedUserId,
-        staffRole,
-        rule.attendanceTargetDays,
-        rule.salaryTargetValue,
-      );
+      await this.resolveRulePayrollMetric(
+  rule,
+  multiplierMetricType,
+  payrollMonth,
+  linkedUserId,
+  staffRole,
+);
   }
 
   const teamMemberCount =
@@ -1336,10 +1402,21 @@ if (
     endDate,
 
   attendanceTargetDays:
-    rule.attendanceTargetDays,
+  rule.attendanceTargetDays,
 
-  salaryTargetValue:
-    effectiveSalaryTargetValue,
+attendanceTargetHours:
+  rule.attendanceTargetHours,
+
+salaryTargetValue:
+  effectiveSalaryTargetValue,
+
+minimumProjectPaymentPercentage:
+  rule.minimumProjectPaymentPercentage,
+
+applyProjectPaymentQualification:
+  Number(
+    rule.minimumProjectPaymentPercentage || 0,
+  ) > 0,
 },
         component,
       );
@@ -1377,14 +1454,14 @@ if (
     actualMetrics[
       companyMetricKey
     ] =
-      await this.resolvePayrollMetric(
-        companyMetricType,
-        payrollMonth,
-        linkedUserId,
-        staffRole,
-        rule.attendanceTargetDays,
-        effectiveSalaryTargetValue,
-      );
+      await this.resolveRulePayrollMetric(
+  rule,
+  companyMetricType,
+  payrollMonth,
+  linkedUserId,
+  staffRole,
+  effectiveSalaryTargetValue,
+);
   }
 
   const companyUnits =
@@ -1434,14 +1511,14 @@ if (
         actualMetrics[
           supportingStaffMetricKey
         ] =
-          await this.resolvePayrollMetric(
-            supportingStaffMetricType,
-            payrollMonth,
-            linkedUserId,
-            staffRole,
-            rule.attendanceTargetDays,
-            effectiveSalaryTargetValue,
-          );
+          await this.resolveRulePayrollMetric(
+  rule,
+  supportingStaffMetricType,
+  payrollMonth,
+  linkedUserId,
+  staffRole,
+  effectiveSalaryTargetValue,
+);
       }
 
       poolDivisor =
@@ -1694,6 +1771,7 @@ if (
     payrollMonth,
   );
 
+
   const sharedMetrics:
   Record<string, number> = {};
 
@@ -1707,7 +1785,8 @@ const eligibilityEvaluation =
   );
 
 const actualOrders =
-  await this.resolvePayrollMetric(
+  await this.resolveRulePayrollMetric(
+    rule,
     StaffPayrollMetricType
       .APPROVED_PROJECTS,
     payrollMonth,
@@ -1728,13 +1807,14 @@ const actualGpsMeetings =
           gpsMetricKey
         ] || 0,
       )
-    : await this.resolvePayrollMetric(
-        StaffPayrollMetricType
-          .GPS_SITE_VISITS_COMPLETED,
-        payrollMonth,
-        userId,
-        'MEETING_MANAGER',
-      );
+    : await this.resolveRulePayrollMetric(
+    rule,
+    StaffPayrollMetricType
+      .GPS_SITE_VISITS_COMPLETED,
+    payrollMonth,
+    userId,
+    'MEETING_MANAGER',
+  );
 
 const eligibilityMet =
   eligibilityEvaluation

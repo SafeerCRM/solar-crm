@@ -626,6 +626,46 @@ teamMemberTargetValue: number;
   maximumSalaryPercentage: number;
 
   /*
+ * Optional project-payment qualification.
+ *
+ * Example:
+ * minimumProjectPaymentPercentage = 20
+ *
+ * Project-based payroll metrics may count
+ * only projects that have collected at least
+ * the configured percentage.
+ *
+ * Zero means this qualification is disabled.
+ */
+@Column({
+  type: 'decimal',
+  precision: 8,
+  scale: 4,
+  default: 0,
+})
+minimumProjectPaymentPercentage: number;
+
+/*
+ * Controls where the project-payment
+ * qualification applies.
+ *
+ * NONE      = no payment qualification
+ * SALARY    = salary metric only
+ * INCENTIVE = incentive metrics only
+ * BOTH      = salary and incentive metrics
+ */
+@Column({
+  type: 'varchar',
+  length: 20,
+  default: 'NONE',
+})
+applyProjectPaymentQualificationTo:
+  | 'NONE'
+  | 'SALARY'
+  | 'INCENTIVE'
+  | 'BOTH';
+
+  /*
    * For attendance-hour salary mode.
    */
   @Column({

@@ -1655,6 +1655,10 @@ private validateStaffPayrollRulePayload(
       label: 'Team member target',
     },
     {
+  key: 'minimumProjectPaymentPercentage',
+  label: 'Minimum project payment percentage',
+},
+    {
       key: 'attendanceTargetHours',
       label: 'Attendance target hours',
     },
@@ -1710,6 +1714,39 @@ private validateStaffPayrollRulePayload(
       );
     }
   }
+
+  const minimumProjectPaymentPercentage =
+  Number(
+    body.minimumProjectPaymentPercentage ??
+      0,
+  );
+
+if (
+  !Number.isFinite(
+    minimumProjectPaymentPercentage,
+  ) ||
+  minimumProjectPaymentPercentage < 0 ||
+  minimumProjectPaymentPercentage > 100
+) {
+  throw new BadRequestException(
+    'Minimum project payment percentage must be between 0 and 100',
+  );
+}
+
+/*
+ * Project payment qualification is universal.
+ *
+ * 0% = disabled
+ * >0 = applies to every project-based payroll
+ * metric: eligibility, salary and incentive.
+ *
+ * The old target column is retained only for
+ * backward database compatibility.
+ */
+const applyProjectPaymentQualificationTo =
+  minimumProjectPaymentPercentage > 0
+    ? 'BOTH'
+    : 'NONE';
 
   if (
     salaryMode ===
@@ -2227,6 +2264,9 @@ private validateStaffPayrollRulePayload(
     salaryMode,
     targetCalculationMode,
     maximumSalaryPercentage,
+    minimumProjectPaymentPercentage,
+
+applyProjectPaymentQualificationTo,
     eligibilityConditions,
     incentiveComponents,
     effectiveFrom,
@@ -2551,6 +2591,14 @@ async createStaffPayrollRule(
       maximumSalaryPercentage:
         validated
           .maximumSalaryPercentage,
+
+          minimumProjectPaymentPercentage:
+  validated
+    .minimumProjectPaymentPercentage,
+
+applyProjectPaymentQualificationTo:
+  validated
+    .applyProjectPaymentQualificationTo,
 
       attendanceTargetHours:
         Number(
@@ -2879,6 +2927,14 @@ async updateStaffPayrollRule(
     maximumSalaryPercentage:
       validated
         .maximumSalaryPercentage,
+
+        minimumProjectPaymentPercentage:
+  validated
+    .minimumProjectPaymentPercentage,
+
+applyProjectPaymentQualificationTo:
+  validated
+    .applyProjectPaymentQualificationTo,
 
     attendanceTargetHours:
       Number(

@@ -115,12 +115,25 @@ periodEnd: Date;
  */
 attendanceTargetDays?: number | null;
 
+attendanceTargetHours?:
+  number | null;
+
 /*
  * Owner-configured salary target used by
  * percentage-based payroll metrics such as
  * payment collection percentage.
  */
 salaryTargetValue?: number | null;
+
+/*
+ * Optional project payment qualification
+ * supplied by the active payroll rule.
+ */
+minimumProjectPaymentPercentage?:
+  number | null;
+
+applyProjectPaymentQualification?:
+  boolean;
 };
 
 @Injectable()
@@ -272,166 +285,225 @@ private readonly recruitmentCandidateRepository:
   }
 
   private createPayrollEligibleProjectQuery(
-    request: StaffPayrollMetricRequest,
-  ): SelectQueryBuilder<Project> {
-    const {
-      periodStart,
-      periodEnd,
-    } = this.validateMetricPeriod(
-      request,
+  request: StaffPayrollMetricRequest,
+): SelectQueryBuilder<Project> {
+  const {
+    periodStart,
+    periodEnd,
+  } = this.validateMetricPeriod(
+    request,
+  );
+
+  const minimumProjectPaymentPercentage =
+    Math.max(
+      Number(
+        request
+          .minimumProjectPaymentPercentage ||
+          0,
+      ),
+      0,
     );
 
-    /*
- * Payroll project eligibility rule:
- *
- * A project becomes eligible on the exact date when
- * cumulative approved payment receipts first reach
- * at least 20% of the project amount.
- *
- * Project amount priority:
- * finalCost -> netAmount -> projectCost
- *
- * Receipt approval compatibility:
- *
- * 1. Receipts directly marked APPROVED are counted.
- *
- * 2. Older receipts still marked PENDING are also
- *    counted when their parent installment was later
- *    approved. The existing payment approval workflow
- *    approves the installment but does not always update
- *    the receipt's approvalStatus.
- *
- * The project is attributed only to the payroll month
- * in which the running approved receipt total first
- * crosses the 20% threshold.
- */
-const projectAmountSql = `
-  COALESCE(
-    NULLIF(project."finalCost", 0),
-    NULLIF(project."netAmount", 0),
-    NULLIF(project."projectCost", 0),
-    0
-  )
-`;
+  const applyProjectPaymentQualification =
+    request
+      .applyProjectPaymentQualification ===
+      true &&
+    minimumProjectPaymentPercentage > 0;
 
-const paymentEligibilityDateSql = `
-  (
-    SELECT
-      MIN(threshold_row."eligibilityDate")
+  const projectAmountSql = `
+    COALESCE(
+      NULLIF(project."finalCost", 0),
+      NULLIF(project."netAmount", 0),
+      NULLIF(project."projectCost", 0),
+      0
+    )
+  `;
 
-    FROM (
+  const query =
+    this.projectRepository
+      .createQueryBuilder('project')
+      .where(
+        'project.ownerApprovalStatus = :ownerApprovalStatus',
+        {
+          ownerApprovalStatus:
+            ProjectApprovalStatus.APPROVED,
+        },
+      )
+      .andWhere(
+        'COALESCE(project.isHidden, false) = false',
+      )
+      .andWhere(
+        `project.status NOT IN (:...excludedStatuses)`,
+        {
+          excludedStatuses: [
+            ProjectStatus.CANCELLED,
+            ProjectStatus.REJECTED,
+          ],
+        },
+      )
+      .andWhere(
+        'COALESCE(project.isLegacyProject, false) = false',
+      );
+
+  /*
+   * When payment qualification is disabled,
+   * preserve the normal approved-project
+   * payroll date.
+   */
+  if (
+    !applyProjectPaymentQualification
+  ) {
+    query
+      .andWhere(
+        `
+        COALESCE(
+          project.orderDate,
+          project.ownerApprovedAt
+        ) >= :periodStart
+        `,
+        {
+          periodStart,
+        },
+      )
+      .andWhere(
+        `
+        COALESCE(
+          project.orderDate,
+          project.ownerApprovedAt
+        ) < :periodEnd
+        `,
+        {
+          periodEnd,
+        },
+      );
+
+    return query;
+  }
+
+  /*
+   * Payment-qualified project:
+   *
+   * Determine the exact date on which
+   * cumulative approved receipts first reach
+   * the configured percentage of the project
+   * value.
+   *
+   * No percentage is hardcoded here.
+   */
+  const minimumProjectPaymentFraction =
+    minimumProjectPaymentPercentage /
+    100;
+
+  const paymentEligibilityDateSql = `
+    (
       SELECT
-        approved_receipt."eligibilityDate",
-
-        SUM(
-          approved_receipt."receivedAmount"
-        ) OVER (
-          ORDER BY
-            approved_receipt."eligibilityDate" ASC,
-            approved_receipt."receiptId" ASC
-
-          ROWS BETWEEN
-            UNBOUNDED PRECEDING
-            AND CURRENT ROW
-        ) AS "runningTotal"
+        MIN(
+          threshold_row."eligibilityDate"
+        )
 
       FROM (
         SELECT
-          receipt.id AS "receiptId",
+          approved_receipt."eligibilityDate",
 
-          COALESCE(
-            receipt."receivedAmount",
-            0
-          ) AS "receivedAmount",
+          SUM(
+            approved_receipt."receivedAmount"
+          ) OVER (
+            ORDER BY
+              approved_receipt."eligibilityDate" ASC,
+              approved_receipt."receiptId" ASC
 
-          COALESCE(
-            receipt."approvedAt",
-            installment."approvedAt",
-            receipt."paymentDate",
-            receipt."createdAt"
-          ) AS "eligibilityDate"
+            ROWS BETWEEN
+              UNBOUNDED PRECEDING
+              AND CURRENT ROW
+          ) AS "runningTotal"
 
-        FROM project_payment_receipts receipt
+        FROM (
+          SELECT
+            receipt.id AS "receiptId",
 
-        INNER JOIN project_payment_installments installment
-          ON installment.id =
-            receipt."installmentId"
+            COALESCE(
+              receipt."receivedAmount",
+              0
+            ) AS "receivedAmount",
 
-        WHERE
-          receipt."projectId" = project.id
+            COALESCE(
+              receipt."approvedAt",
+              installment."approvedAt",
+              receipt."paymentDate",
+              receipt."createdAt"
+            ) AS "eligibilityDate"
 
-          AND COALESCE(
-            receipt."isHidden",
-            false
-          ) = false
+          FROM project_payment_receipts receipt
 
-          AND COALESCE(
-            installment."isHidden",
-            false
-          ) = false
+          INNER JOIN project_payment_installments installment
+            ON installment.id =
+              receipt."installmentId"
 
-          AND COALESCE(
-            receipt."receivedAmount",
-            0
-          ) > 0
+          WHERE
+            receipt."projectId" =
+              project.id
 
-          AND (
-            receipt."approvalStatus" = 'APPROVED'
+            AND COALESCE(
+              receipt."isHidden",
+              false
+            ) = false
 
-            OR (
-              receipt."approvalStatus" = 'PENDING'
-              AND installment."approvalStatus" = 'APPROVED'
+            AND COALESCE(
+              installment."isHidden",
+              false
+            ) = false
+
+            AND COALESCE(
+              receipt."receivedAmount",
+              0
+            ) > 0
+
+            AND (
+              receipt."approvalStatus" =
+                'APPROVED'
+
+              OR (
+                receipt."approvalStatus" =
+                  'PENDING'
+
+                AND installment."approvalStatus" =
+                  'APPROVED'
+              )
             )
+        ) approved_receipt
+      ) threshold_row
+
+      WHERE
+        threshold_row."runningTotal" >=
+          (
+            ${projectAmountSql}
+            *
+            :minimumProjectPaymentFraction
           )
-      ) approved_receipt
-    ) threshold_row
+    )
+  `;
 
-    WHERE
-      threshold_row."runningTotal" >=
-        (${projectAmountSql} * 0.20)
-  )
-`;
+  query
+    .andWhere(
+      `${projectAmountSql} > 0`,
+    )
+    .andWhere(
+      `${paymentEligibilityDateSql} >= :periodStart`,
+      {
+        periodStart,
+        minimumProjectPaymentFraction,
+      },
+    )
+    .andWhere(
+      `${paymentEligibilityDateSql} < :periodEnd`,
+      {
+        periodEnd,
+        minimumProjectPaymentFraction,
+      },
+    );
 
-return this.projectRepository
-  .createQueryBuilder('project')
-  .where(
-    'project.ownerApprovalStatus = :ownerApprovalStatus',
-    {
-      ownerApprovalStatus:
-        ProjectApprovalStatus.APPROVED,
-    },
-  )
-  .andWhere(
-    'COALESCE(project.isHidden, false) = false',
-  )
-  .andWhere(
-    `project.status NOT IN (:...excludedStatuses)`,
-    {
-      excludedStatuses: [
-        ProjectStatus.CANCELLED,
-        ProjectStatus.REJECTED,
-      ],
-    },
-  )
-  .andWhere(
-    'COALESCE(project.isLegacyProject, false) = false',
-  )
-  .andWhere(
-    `${projectAmountSql} > 0`,
-  )
-  .andWhere(
-    `${paymentEligibilityDateSql} >= :periodStart`,
-    {
-      periodStart,
-    },
-  )
-  .andWhere(
-    `${paymentEligibilityDateSql} < :periodEnd`,
-    {
-      periodEnd,
-    },
-  );
-  }
+  return query;
+}
 
   private applyApprovedProjectStaffAttribution(
     query:
@@ -2708,9 +2780,9 @@ private async resolveDealerProfitAboveSalesTarget(
   request: StaffPayrollMetricRequest,
 ): Promise<number> {
   const staffId =
-  await this.getStaffMemberId(
-    request,
-  );
+    await this.getStaffMemberId(
+      request,
+    );
 
   const {
     periodStart,
@@ -2719,13 +2791,85 @@ private async resolveDealerProfitAboveSalesTarget(
     request,
   );
 
-  const result =
-    await this.staffAttendanceRepository
-      .createQueryBuilder('attendance')
-      .select(
-        'COALESCE(SUM(attendance.workingHours), 0)',
-        'workingHours',
+  const attendanceTargetDays =
+    Math.max(
+      Number(
+        request.attendanceTargetDays || 0,
+      ),
+      0,
+    );
+
+  const attendanceTargetHours =
+    Math.max(
+      Number(
+        request.attendanceTargetHours || 0,
+      ),
+      0,
+    );
+
+  /*
+   * Example:
+   *
+   * 208 hours
+   * ÷
+   * 26 attendance days
+   *
+   * =
+   * 8 hours maximum payroll credit
+   * for a single attendance day.
+   */
+  const dailyHourCap =
+    attendanceTargetDays > 0 &&
+    attendanceTargetHours > 0
+      ? attendanceTargetHours /
+        attendanceTargetDays
+      : 0;
+
+  const query =
+    this.staffAttendanceRepository
+      .createQueryBuilder(
+        'attendance',
+      );
+
+  if (dailyHourCap > 0) {
+    query.select(
+      `
+      COALESCE(
+        SUM(
+          LEAST(
+            COALESCE(
+              attendance.workingHours,
+              0
+            ),
+            :dailyHourCap
+          )
+        ),
+        0
       )
+      `,
+      'workingHours',
+    );
+
+    query.setParameter(
+      'dailyHourCap',
+      dailyHourCap,
+    );
+  } else {
+    query.select(
+      `
+      COALESCE(
+        SUM(
+          attendance.workingHours
+        ),
+        0
+      )
+      `,
+      'workingHours',
+    );
+  }
+
+  const result =
+    await query
       .where(
         'attendance.staffId = :staffId',
         {
@@ -2753,14 +2897,18 @@ private async resolveDealerProfitAboveSalesTarget(
           string | number | null;
       }>();
 
-  const workingHours = Number(
-    result?.workingHours || 0,
-  );
+  const workingHours =
+    Number(
+      result?.workingHours || 0,
+    );
 
   return Number.isFinite(
     workingHours,
   )
-    ? workingHours
+    ? Math.max(
+        workingHours,
+        0,
+      )
     : 0;
 }
   private async resolveAttendancePercentage(
