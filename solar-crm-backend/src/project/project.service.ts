@@ -4191,17 +4191,13 @@ async listGlobalDocumentVault(
   );
 
   const page = Math.max(
-    Number(
-      query?.page || 1,
-    ),
+    Number(query?.page || 1),
     1,
   );
 
   const limit = Math.min(
     Math.max(
-      Number(
-        query?.limit || 20,
-      ),
+      Number(query?.limit || 20),
       1,
     ),
     100,
@@ -4252,33 +4248,40 @@ async listGlobalDocumentVault(
 
   if (showHidden) {
     qb.where(
-      'document.isHidden = true',
+      '"document"."isHidden" = true',
     );
   } else {
     qb.where(
-      'document.isHidden = false',
+      '"document"."isHidden" = false',
     );
   }
 
   if (search) {
     qb.andWhere(
       `(
-        LOWER(document.title)
+        LOWER("document"."title")
           LIKE LOWER(:search)
-        OR LOWER(document.category)
+
+        OR LOWER("document"."category")
           LIKE LOWER(:search)
+
         OR LOWER(
           COALESCE(
-            document.remarks,
+            "document"."remarks",
             ''
           )
         ) LIKE LOWER(:search)
-        OR LOWER(
-          document.fileName
-        ) LIKE LOWER(:search)
+
         OR LOWER(
           COALESCE(
-            document.tags,
+            "document"."fileName",
+            ''
+          )
+        ) LIKE LOWER(:search)
+
+        OR LOWER(
+          COALESCE(
+            "document"."tags",
             ''
           )
         ) LIKE LOWER(:search)
@@ -4292,7 +4295,8 @@ async listGlobalDocumentVault(
 
   if (category) {
     qb.andWhere(
-      'LOWER(document.category) = LOWER(:category)',
+      `LOWER("document"."category")
+        = LOWER(:category)`,
       {
         category,
       },
@@ -4303,7 +4307,7 @@ async listGlobalDocumentVault(
     qb.andWhere(
       `LOWER(
         COALESCE(
-          document.tags,
+          "document"."tags",
           ''
         )
       ) LIKE LOWER(:tag)`,
@@ -4316,7 +4320,7 @@ async listGlobalDocumentVault(
 
   if (uploadedBy) {
     qb.andWhere(
-      'document.uploadedBy = :uploadedBy',
+      '"document"."uploadedBy" = :uploadedBy',
       {
         uploadedBy,
       },
@@ -4326,7 +4330,7 @@ async listGlobalDocumentVault(
   if (month) {
     qb.andWhere(
       `TO_CHAR(
-        document.createdAt,
+        "document"."createdAt",
         'YYYY-MM'
       ) = :month`,
       {
@@ -4340,7 +4344,7 @@ async listGlobalDocumentVault(
     fromDate
   ) {
     qb.andWhere(
-      'document.createdAt >= :fromDate',
+      '"document"."createdAt" >= :fromDate',
       {
         fromDate:
           new Date(
@@ -4355,7 +4359,7 @@ async listGlobalDocumentVault(
     toDate
   ) {
     qb.andWhere(
-      'document.createdAt <= :toDate',
+      '"document"."createdAt" <= :toDate',
       {
         toDate:
           new Date(
@@ -4367,11 +4371,11 @@ async listGlobalDocumentVault(
 
   qb
     .orderBy(
-      'document.createdAt',
+      '"document"."createdAt"',
       'DESC',
     )
     .addOrderBy(
-      'document.id',
+      '"document"."id"',
       'DESC',
     )
     .skip(skip)
@@ -4434,16 +4438,16 @@ async getGlobalDocumentVaultSuggestions(
           'document',
         )
         .select(
-          'document.tags',
+          '"document"."tags"',
           'tags',
         )
         .where(
-          'document.isHidden = false',
+          '"document"."isHidden" = false',
         )
         .andWhere(
           `TRIM(
             COALESCE(
-              document.tags,
+              "document"."tags",
               ''
             )
           ) != ''`,
@@ -4496,8 +4500,8 @@ async getGlobalDocumentVaultSuggestions(
 
   const column =
     type === 'title'
-      ? 'document.title'
-      : 'document.category';
+      ? '"document"."title"'
+      : '"document"."category"';
 
   const qb =
     this.globalDocumentVaultRepository
@@ -4509,7 +4513,7 @@ async getGlobalDocumentVaultSuggestions(
         'value',
       )
       .where(
-        'document.isHidden = false',
+        '"document"."isHidden" = false',
       )
       .andWhere(
         `TRIM(
