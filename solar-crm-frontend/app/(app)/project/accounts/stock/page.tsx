@@ -953,57 +953,139 @@ const issueStock = async () => {
   }
 
   if (
-  issueForm.sourceType === 'PROJECT' &&
-  !issueForm.projectId
-) {
-  alert(
-    'Please search and select a project',
-  );
-  return;
-}
+    issueForm.sourceType === 'PROJECT' &&
+    !issueForm.projectId
+  ) {
+    alert(
+      'Please search and select a project',
+    );
+    return;
+  }
 
   try {
     setIssueLoading(true);
 
-    const token = localStorage.getItem('token');
+    const token =
+      localStorage.getItem('token');
 
-    await axios.post(
-      `${API_BASE_URL}/project/stock/issue`,
-      {
-  stockItemId: issueForm.stockItemId,
-  quantity: issueForm.quantity,
-  sourceType: issueForm.sourceType,
-  deductFrom: issueForm.deductFrom,
-  projectId: issueForm.projectId || undefined,
-  dealerName: issueForm.dealerName,
-  dealerPhone: issueForm.dealerPhone,
-  remarks: issueForm.remarks,
-},
-      {
-        headers: token
-          ? {
-              Authorization: `Bearer ${token}`,
-            }
-          : {},
-      },
+    const submitIssue = async (
+      confirmDuplicate = false,
+    ) => {
+      return axios.post(
+        `${API_BASE_URL}/project/stock/issue`,
+        {
+          stockItemId:
+            issueForm.stockItemId,
+
+          quantity:
+            issueForm.quantity,
+
+          sourceType:
+            issueForm.sourceType,
+
+          deductFrom:
+            issueForm.deductFrom,
+
+          projectId:
+            issueForm.projectId ||
+            undefined,
+
+          dealerName:
+            issueForm.dealerName,
+
+          dealerPhone:
+            issueForm.dealerPhone,
+
+          remarks:
+            issueForm.remarks,
+
+          confirmDuplicate,
+        },
+        {
+          headers: token
+            ? {
+                Authorization:
+                  `Bearer ${token}`,
+              }
+            : {},
+        },
+      );
+    };
+
+    let response =
+      await submitIssue(false);
+
+    if (
+      response.data
+        ?.requiresDuplicateConfirmation ===
+      true
+    ) {
+      const duplicate =
+        response.data?.duplicate;
+
+      const previousDate =
+        duplicate?.createdAt
+          ? new Date(
+              duplicate.createdAt,
+            ).toLocaleString(
+              'en-IN',
+            )
+          : 'Unknown';
+
+      const shouldProceed =
+        window.confirm(
+          `Possible Previous Stock Issue\n\n` +
+            `${Number(
+              duplicate?.quantity || 0,
+            ).toLocaleString(
+              'en-IN',
+            )} units of ${
+              duplicate?.materialName ||
+              'this material'
+            } were already issued to Project #${
+              duplicate?.projectId ||
+              issueForm.projectId
+            }.\n\n` +
+            `Previous entry: ${previousDate}\n` +
+            `Created by: ${
+              duplicate?.createdByName ||
+              '-'
+            }\n` +
+            `${
+              duplicate?.remarks
+                ? `Remarks: ${duplicate.remarks}\n`
+                : ''
+            }\n` +
+            `Do you want to proceed with another issue?`,
+        );
+
+      if (!shouldProceed) {
+        return;
+      }
+
+      response =
+        await submitIssue(true);
+    }
+
+    alert(
+      response.data?.message ||
+        'Stock issued successfully',
     );
 
-    alert('Stock issued successfully');
-
     setIssueForm({
-  stockItemId: '',
-  quantity: '',
-  sourceType: 'MANUAL',
-  deductFrom: 'AVAILABLE',
-  projectId: '',
-  dealerName: '',
-  dealerPhone: '',
-  remarks: '',
-});
+      stockItemId: '',
+      quantity: '',
+      sourceType: 'MANUAL',
+      deductFrom: 'AVAILABLE',
+      projectId: '',
+      dealerName: '',
+      dealerPhone: '',
+      remarks: '',
+    });
 
     setSelectedProject(null);
-setProjectSearch('');
-setProjectSearchResults([]);
+    setProjectSearch('');
+    setProjectSearchResults([]);
 
     await loadStockItems(1);
     await loadSelectableStockItems();
