@@ -195,6 +195,8 @@ const createEmptyRuleForm = () => ({
   salaryCustomMetricName: '',
   salaryTargetValue: '0',
 
+  minimumProjectPaymentPercentage: '0',
+
   targetCalculationMode: 'FIXED',
   targetMultiplierMetricType: '',
   teamMemberTargetValue: '0',
@@ -392,6 +394,12 @@ async function openEditRule(
         String(
           rule.salaryTargetValue ?? 0,
         ),
+
+        minimumProjectPaymentPercentage:
+  String(
+    rule.minimumProjectPaymentPercentage ??
+      0,
+  ),
 
       targetCalculationMode:
         String(
@@ -934,6 +942,14 @@ async function saveRule() {
           ruleForm.salaryTargetValue ||
             0,
         ),
+
+        minimumProjectPaymentPercentage:
+  Number(
+    ruleForm
+      .minimumProjectPaymentPercentage ||
+      0,
+  ),
+
 
       targetCalculationMode:
         ruleForm.targetCalculationMode,
@@ -1863,6 +1879,64 @@ async function restoreRule(
               }
               fullWidth
             />
+
+            <TextField
+  label="Minimum Project Payment %"
+  disabled={
+  Number(
+    ruleForm.minimumProjectPaymentPercentage || 0,
+  ) <= 0
+}
+  type="number"
+  value={
+    ruleForm
+      .minimumProjectPaymentPercentage
+  }
+  onChange={(e) =>
+    setRuleForm({
+      ...ruleForm,
+      minimumProjectPaymentPercentage:
+        e.target.value,
+    })
+  }
+  helperText="0 disables payment-based project qualification."
+  fullWidth
+/>
+
+<div className="rounded-xl border border-gray-200 p-4">
+  <label className="flex items-center gap-3">
+    <input
+      type="checkbox"
+      checked={
+        Number(
+          ruleForm.minimumProjectPaymentPercentage || 0,
+        ) > 0
+      }
+      onChange={(e) =>
+        setRuleForm({
+          ...ruleForm,
+          minimumProjectPaymentPercentage:
+            e.target.checked
+              ? ruleForm.minimumProjectPaymentPercentage === '0'
+                ? '20'
+                : ruleForm.minimumProjectPaymentPercentage
+              : '0',
+        })
+      }
+      className="h-4 w-4"
+    />
+
+    <span className="font-medium">
+      Require Minimum Project Payment Before Project Counts For Payroll
+    </span>
+  </label>
+
+  <p className="mt-2 text-sm text-gray-500">
+    When enabled, every project-based payroll metric
+    (eligibility, salary and incentive) counts only after
+    the configured payment percentage has been received.
+  </p>
+</div>
 
             <TextField
               select
