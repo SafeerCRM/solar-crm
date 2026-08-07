@@ -246,6 +246,10 @@ import {
   ProjectInspectionPhoto,
 } from './project-inspection-photo.entity';
 
+import {
+  GlobalDocumentVault,
+} from './global-document-vault.entity';
+
 @Injectable()
 export class ProjectService {
 
@@ -996,6 +1000,26 @@ private getUserRoles(user: any): string[] {
   return [];
 }
 
+private assertGlobalDocumentVaultAccess(
+  user: any,
+) {
+  const roles =
+    this.getUserRoles(user);
+
+  if (
+    roles.includes(
+      'SOLAR_FRANCHISE',
+    ) ||
+    roles.includes(
+      'PROJECT_CONTRACTOR',
+    )
+  ) {
+    throw new ForbiddenException(
+      'You do not have access to Global Document Vault',
+    );
+  }
+}
+
 private assertInspectionViewAccess(
   user: any,
 ) {
@@ -1059,6 +1083,10 @@ private readonly projectInspectionDefectRepository:
 @InjectRepository(ProjectInspectionPhoto)
 private readonly projectInspectionPhotoRepository:
   Repository<ProjectInspectionPhoto>,
+
+  @InjectRepository(GlobalDocumentVault)
+private readonly globalDocumentVaultRepository:
+  Repository<GlobalDocumentVault>,
 
     @InjectRepository(ProjectDocument)
     private readonly projectDocumentRepository: Repository<ProjectDocument>,
@@ -3926,6 +3954,732 @@ if (historyRows.length > 0) {
 }
 
 return updatedProject;
+}
+
+async uploadGlobalDocumentVaultFile(
+  file: any,
+  body: any,
+  user: any,
+) {
+  this.assertGlobalDocumentVaultAccess(
+    user,
+  );
+
+  if (!file) {
+    throw new BadRequestException(
+      'Document file is required',
+    );
+  }
+
+  const title = String(
+    body?.title || '',
+  ).trim();
+
+  const category = String(
+    body?.category || '',
+  ).trim();
+
+  const remarks = String(
+    body?.remarks || '',
+  ).trim();
+
+  const tags = String(
+    body?.tags || '',
+  )
+    .split(',')
+    .map((tag) =>
+      tag.trim(),
+    )
+    .filter(Boolean);
+
+  if (!title) {
+    throw new BadRequestException(
+      'Document title is required',
+    );
+  }
+
+  if (!category) {
+    throw new BadRequestException(
+      'Document category is required',
+    );
+  }
+
+  const mimeType = String(
+    file.mimetype || '',
+  );
+
+  const allowedTypes = [
+    'application/pdf',
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+  ];
+
+  if (
+    !allowedTypes.includes(
+      mimeType,
+    )
+  ) {
+    throw new BadRequestException(
+      'Only PDF, JPG, PNG and WEBP files are allowed',
+    );
+  }
+
+  const maximumSize =
+    12 * 1024 * 1024;
+
+  if (
+    Number(
+      file.size || 0,
+    ) > maximumSize
+  ) {
+    throw new BadRequestException(
+      'Document file must be less than 12 MB after compression',
+    );
+  }
+
+  const supabaseUrl =
+    process.env.SUPABASE_URL;
+
+  const serviceKey =
+    process.env
+      .SUPABASE_SERVICE_ROLE_KEY;
+
+  const bucket =
+    process.env
+      .SUPABASE_PROJECT_DOCUMENTS_BUCKET ||
+    'project-documents';
+
+  if (
+    !supabaseUrl ||
+    !serviceKey
+  ) {
+    throw new BadRequestException(
+      'Supabase storage is not configured',
+    );
+  }
+
+  const supabase =
+    createClient(
+      supabaseUrl,
+      serviceKey,
+    );
+
+  const originalName =
+    String(
+      file.originalname ||
+        'document',
+    );
+
+  const extension =
+    originalName.includes('.')
+      ? originalName
+          .split('.')
+          .pop()
+      : mimeType
+          .split('/')[1] ||
+        'file';
+
+  const safeExtension =
+    String(
+      extension || 'file',
+    ).replace(
+      /[^a-zA-Z0-9]/g,
+      '',
+    );
+
+  const currentUserId =
+    Number(
+      user?.id ||
+        user?.userId ||
+        user?.sub ||
+        0,
+    );
+
+  const filePath =
+    `global-document-vault/user-${
+      currentUserId || 'unknown'
+    }/${Date.now()}-${randomUUID()}.${safeExtension}`;
+
+  const uploadResult =
+    await supabase.storage
+      .from(bucket)
+      .upload(
+        filePath,
+        file.buffer,
+        {
+          contentType:
+            mimeType,
+          upsert: false,
+        },
+      );
+
+  if (uploadResult.error) {
+    throw new BadRequestException(
+      uploadResult.error.message,
+    );
+  }
+
+  const publicUrlResult =
+    supabase.storage
+      .from(bucket)
+      .getPublicUrl(
+        filePath,
+      );
+
+  const document =
+    this.globalDocumentVaultRepository
+      .create({
+        title,
+        category,
+        tags,
+        remarks,
+
+        fileName:
+          originalName,
+
+        fileUrl:
+          publicUrlResult
+            .data.publicUrl,
+
+        filePath,
+
+        mimeType,
+
+        fileSize:
+          Number(
+            file.size || 0,
+          ),
+
+        uploadedBy:
+          currentUserId ||
+          undefined,
+
+        uploadedByName:
+          user?.name ||
+          user?.email ||
+          '',
+
+        uploadedByRole:
+          this.getUserRoles(
+            user,
+          ).join(', '),
+
+        isHidden: false,
+      });
+
+  const savedDocument =
+    await this
+      .globalDocumentVaultRepository
+      .save(document);
+
+  return {
+    message:
+      'Document uploaded successfully',
+
+    document:
+      savedDocument,
+  };
+}
+
+async listGlobalDocumentVault(
+  query: any = {},
+  user?: any,
+) {
+  this.assertGlobalDocumentVaultAccess(
+    user,
+  );
+
+  const page = Math.max(
+    Number(
+      query?.page || 1,
+    ),
+    1,
+  );
+
+  const limit = Math.min(
+    Math.max(
+      Number(
+        query?.limit || 20,
+      ),
+      1,
+    ),
+    100,
+  );
+
+  const skip =
+    (page - 1) * limit;
+
+  const search = String(
+    query?.search || '',
+  ).trim();
+
+  const category = String(
+    query?.category || '',
+  ).trim();
+
+  const tag = String(
+    query?.tag || '',
+  ).trim();
+
+  const month = String(
+    query?.month || '',
+  ).trim();
+
+  const fromDate = String(
+    query?.fromDate || '',
+  ).trim();
+
+  const toDate = String(
+    query?.toDate || '',
+  ).trim();
+
+  const uploadedBy = Number(
+    query?.uploadedBy || 0,
+  );
+
+  const showHidden =
+    String(
+      query?.showHidden ||
+        'false',
+    ) === 'true';
+
+  const qb =
+    this.globalDocumentVaultRepository
+      .createQueryBuilder(
+        'document',
+      );
+
+  if (showHidden) {
+    qb.where(
+      'document.isHidden = true',
+    );
+  } else {
+    qb.where(
+      'document.isHidden = false',
+    );
+  }
+
+  if (search) {
+    qb.andWhere(
+      `(
+        LOWER(document.title)
+          LIKE LOWER(:search)
+        OR LOWER(document.category)
+          LIKE LOWER(:search)
+        OR LOWER(
+          COALESCE(
+            document.remarks,
+            ''
+          )
+        ) LIKE LOWER(:search)
+        OR LOWER(
+          document.fileName
+        ) LIKE LOWER(:search)
+        OR LOWER(
+          COALESCE(
+            document.tags,
+            ''
+          )
+        ) LIKE LOWER(:search)
+      )`,
+      {
+        search:
+          `%${search}%`,
+      },
+    );
+  }
+
+  if (category) {
+    qb.andWhere(
+      'LOWER(document.category) = LOWER(:category)',
+      {
+        category,
+      },
+    );
+  }
+
+  if (tag) {
+    qb.andWhere(
+      `LOWER(
+        COALESCE(
+          document.tags,
+          ''
+        )
+      ) LIKE LOWER(:tag)`,
+      {
+        tag:
+          `%${tag}%`,
+      },
+    );
+  }
+
+  if (uploadedBy) {
+    qb.andWhere(
+      'document.uploadedBy = :uploadedBy',
+      {
+        uploadedBy,
+      },
+    );
+  }
+
+  if (month) {
+    qb.andWhere(
+      `TO_CHAR(
+        document.createdAt,
+        'YYYY-MM'
+      ) = :month`,
+      {
+        month,
+      },
+    );
+  }
+
+  if (
+    !month &&
+    fromDate
+  ) {
+    qb.andWhere(
+      'document.createdAt >= :fromDate',
+      {
+        fromDate:
+          new Date(
+            `${fromDate}T00:00:00`,
+          ),
+      },
+    );
+  }
+
+  if (
+    !month &&
+    toDate
+  ) {
+    qb.andWhere(
+      'document.createdAt <= :toDate',
+      {
+        toDate:
+          new Date(
+            `${toDate}T23:59:59`,
+          ),
+      },
+    );
+  }
+
+  qb
+    .orderBy(
+      'document.createdAt',
+      'DESC',
+    )
+    .addOrderBy(
+      'document.id',
+      'DESC',
+    )
+    .skip(skip)
+    .take(limit);
+
+  const [data, total] =
+    await qb.getManyAndCount();
+
+  return {
+    data,
+
+    pagination: {
+      page,
+      limit,
+      total,
+
+      totalPages:
+        Math.ceil(
+          total / limit,
+        ) || 1,
+    },
+  };
+}
+
+async getGlobalDocumentVaultSuggestions(
+  query: any = {},
+  user?: any,
+) {
+  this.assertGlobalDocumentVaultAccess(
+    user,
+  );
+
+  const type = String(
+    query?.type || '',
+  )
+    .trim()
+    .toLowerCase();
+
+  const search = String(
+    query?.search || '',
+  ).trim();
+
+  if (
+    ![
+      'title',
+      'category',
+      'tag',
+    ].includes(type)
+  ) {
+    throw new BadRequestException(
+      'Suggestion type must be title, category or tag',
+    );
+  }
+
+  if (type === 'tag') {
+    const rows =
+      await this
+        .globalDocumentVaultRepository
+        .createQueryBuilder(
+          'document',
+        )
+        .select(
+          'document.tags',
+          'tags',
+        )
+        .where(
+          'document.isHidden = false',
+        )
+        .andWhere(
+          `TRIM(
+            COALESCE(
+              document.tags,
+              ''
+            )
+          ) != ''`,
+        )
+        .getRawMany();
+
+    const tagSet =
+      new Set<string>();
+
+    for (const row of rows) {
+      const values =
+        String(
+          row.tags || '',
+        )
+          .split(',')
+          .map((value) =>
+            value.trim(),
+          )
+          .filter(Boolean);
+
+      for (const value of values) {
+        if (
+          !search ||
+          value
+            .toLowerCase()
+            .includes(
+              search
+                .toLowerCase(),
+            )
+        ) {
+          tagSet.add(
+            value,
+          );
+        }
+      }
+    }
+
+    return Array.from(
+      tagSet,
+    )
+      .sort(
+        (a, b) =>
+          a.localeCompare(b),
+      )
+      .slice(
+        0,
+        20,
+      );
+  }
+
+  const column =
+    type === 'title'
+      ? 'document.title'
+      : 'document.category';
+
+  const qb =
+    this.globalDocumentVaultRepository
+      .createQueryBuilder(
+        'document',
+      )
+      .select(
+        `DISTINCT TRIM(${column})`,
+        'value',
+      )
+      .where(
+        'document.isHidden = false',
+      )
+      .andWhere(
+        `TRIM(
+          COALESCE(
+            ${column},
+            ''
+          )
+        ) != ''`,
+      );
+
+  if (search) {
+    qb.andWhere(
+      `LOWER(${column})
+        LIKE LOWER(:search)`,
+      {
+        search:
+          `%${search}%`,
+      },
+    );
+  }
+
+  const rows =
+    await qb
+      .orderBy(
+        `TRIM(${column})`,
+        'ASC',
+      )
+      .limit(20)
+      .getRawMany();
+
+  return rows
+    .map(
+      (row: any) =>
+        String(
+          row.value || '',
+        ).trim(),
+    )
+    .filter(Boolean);
+}
+
+async hideGlobalDocumentVaultItem(
+  id: number,
+  body: any,
+  user: any,
+) {
+  this.assertGlobalDocumentVaultAccess(
+    user,
+  );
+
+  const roles =
+    this.getUserRoles(user);
+
+  if (
+    !roles.includes('OWNER')
+  ) {
+    throw new ForbiddenException(
+      'Only Owner can hide Global Document Vault files',
+    );
+  }
+
+  const document =
+    await this
+      .globalDocumentVaultRepository
+      .findOne({
+        where: {
+          id,
+          isHidden: false,
+        } as any,
+      });
+
+  if (!document) {
+    throw new NotFoundException(
+      'Document not found',
+    );
+  }
+
+  document.isHidden = true;
+
+  document.hiddenAt =
+    new Date();
+
+  document.hiddenBy =
+  Number(
+    user?.id ||
+      user?.userId ||
+      user?.sub ||
+      0,
+  );
+
+  document.hiddenByName =
+    user?.name ||
+    user?.email ||
+    '';
+
+  document.hiddenReason =
+    String(
+      body?.reason ||
+        body?.hiddenReason ||
+        '',
+    ).trim();
+
+  return this
+    .globalDocumentVaultRepository
+    .save(document);
+}
+
+async restoreGlobalDocumentVaultItem(
+  id: number,
+  body: any,
+  user: any,
+) {
+  this.assertGlobalDocumentVaultAccess(
+    user,
+  );
+
+  const roles =
+    this.getUserRoles(user);
+
+  if (
+    !roles.includes('OWNER')
+  ) {
+    throw new ForbiddenException(
+      'Only Owner can restore Global Document Vault files',
+    );
+  }
+
+  const document =
+    await this
+      .globalDocumentVaultRepository
+      .findOne({
+        where: {
+          id,
+          isHidden: true,
+        } as any,
+      });
+
+  if (!document) {
+    throw new NotFoundException(
+      'Hidden document not found',
+    );
+  }
+
+  document.isHidden = false;
+
+  document.restoredAt =
+    new Date();
+
+  document.restoredBy =
+  Number(
+    user?.id ||
+      user?.userId ||
+      user?.sub ||
+      0,
+  );
+
+  document.restoredByName =
+    user?.name ||
+    user?.email ||
+    '';
+
+  document.restoreReason =
+    String(
+      body?.reason ||
+        body?.restoreReason ||
+        '',
+    ).trim();
+
+  return this
+    .globalDocumentVaultRepository
+    .save(document);
 }
 
 async uploadProjectDocument(file: any, body: any, user: any) {

@@ -77,12 +77,16 @@ import {
   ProjectInspectionPhoto,
 } from './project-inspection-photo.entity';
 
+import {
+  GlobalDocumentVault,
+} from './global-document-vault.entity';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([Project, 
      ProjectInspection,
 ProjectInspectionDefect,
-ProjectInspectionPhoto, ProjectDocument, CustomerNotification, ProjectComment, ProjectMaterialMaster, ProjectMaterialRequest,
+ProjectInspectionPhoto, GlobalDocumentVault, ProjectDocument, CustomerNotification, ProjectComment, ProjectMaterialMaster, ProjectMaterialRequest,
 ProjectMaterialRequestItem, ProjectBranch, ProjectLoanDetail, ProjectSubsidyDetail, ProjectElectricityDetail, ProjectExecutionActivity, ProjectExecutionProof, ProjectExecutionReminder, ProjectExecutionReminderUserState, ProjectPaymentInstallment, ProjectPaymentReminderUserState, ProjectReminderUserState, ProjectEditHistory,
  ProjectVendor,
 ProjectVendorCompany,
