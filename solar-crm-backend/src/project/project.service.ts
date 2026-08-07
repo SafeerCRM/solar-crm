@@ -5273,6 +5273,9 @@ async issueProjectStock(
     body?.remarks || '',
   ).trim();
 
+  const confirmDuplicate =
+  body?.confirmDuplicate === true;
+
   if (!stockItemId) {
     throw new BadRequestException(
       'Stock item is required',
@@ -5386,29 +5389,143 @@ async issueProjectStock(
       }
 
       if (
-        sourceType === 'PROJECT'
-      ) {
-        const projectRepository =
-          manager.getRepository(Project);
+  sourceType === 'PROJECT'
+) {
+  const projectRepository =
+    manager.getRepository(Project);
 
-        const project =
-          await projectRepository.findOne({
-            where: {
-              id: Number(projectId),
-              isHidden: false,
-            },
-          });
+  const project =
+    await projectRepository.findOne({
+      where: {
+        id: Number(projectId),
+        isHidden: false,
+      },
+    });
 
-        if (!project) {
-          throw new NotFoundException(
-            'Project not found',
-          );
-        }
-      }
+  if (!project) {
+    throw new NotFoundException(
+      'Project not found',
+    );
+  }
 
-      const rate = Number(
-        stockItem.averageRate || 0,
-      );
+  /*
+   * Duplicate / repeat dispatch safeguard.
+   *
+   * Search complete non-hidden stock movement
+   * history. There is intentionally NO time
+   * limit here.
+   *
+   * Same:
+   * - Project
+   * - Stock item / material
+   * - Quantity
+   * - Outgoing issue movement
+   *
+   * If a previous matching issue exists, do
+   * not modify stock until the frontend sends
+   * confirmDuplicate = true.
+   */
+  if (!confirmDuplicate) {
+    const existingMovement =
+      await movementRepository
+        .createQueryBuilder(
+          'movement',
+        )
+        .where(
+          'movement.projectId = :projectId',
+          {
+            projectId:
+              Number(projectId),
+          },
+        )
+        .andWhere(
+          'movement.stockItemId = :stockItemId',
+          {
+            stockItemId,
+          },
+        )
+        .andWhere(
+          'movement.quantity = :quantity',
+          {
+            quantity,
+          },
+        )
+        .andWhere(
+          'COALESCE(movement.isHidden, false) = false',
+        )
+        .andWhere(
+          'movement.movementType IN (:...issueTypes)',
+          {
+            issueTypes: [
+              ProjectStockMovementType
+                .ISSUE,
+
+              ProjectStockMovementType
+                .ISSUE_FROM_AVAILABLE,
+
+              ProjectStockMovementType
+                .ISSUE_FROM_RESERVED,
+            ],
+          },
+        )
+        .orderBy(
+          'movement.createdAt',
+          'DESC',
+        )
+        .addOrderBy(
+          'movement.id',
+          'DESC',
+        )
+        .getOne();
+
+    if (existingMovement) {
+      return {
+        requiresDuplicateConfirmation:
+          true,
+
+        message:
+          'A similar stock issue already exists for this project.',
+
+        duplicate: {
+          id:
+            existingMovement.id,
+
+          projectId:
+            existingMovement.projectId,
+
+          stockItemId:
+            existingMovement.stockItemId,
+
+          materialName:
+            existingMovement
+              .materialName,
+
+          quantity:
+            existingMovement.quantity,
+
+          movementType:
+            existingMovement
+              .movementType,
+
+          createdAt:
+            existingMovement.createdAt,
+
+          createdByName:
+            existingMovement
+              .createdByName,
+
+          remarks:
+            existingMovement
+              .remarks || '',
+        },
+      };
+    }
+  }
+}
+
+const rate = Number(
+  stockItem.averageRate || 0,
+);
 
       const totalAmount =
         quantity * rate;
@@ -6152,11 +6269,15 @@ async listProjectStockMovements(query: any) {
       'movementProject.id = movement.projectId',
     )
     .orderBy(
-      'movement.createdAt',
-      'DESC',
-    )
-    .skip(skip)
-    .take(limitNumber);
+  'movement.createdAt',
+  'DESC',
+)
+.addOrderBy(
+  'movement.id',
+  'DESC',
+)
+.skip(skip)
+.take(limitNumber);
 
   if (showHidden === 'true') {
     qb.where(
