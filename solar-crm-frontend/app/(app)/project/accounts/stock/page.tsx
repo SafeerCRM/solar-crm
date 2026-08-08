@@ -25,6 +25,16 @@ export default function StockManagementPage() {
   });
   const [loading, setLoading] = useState(false);
 
+  const [
+  dealerQuantityInputs,
+  setDealerQuantityInputs,
+] = useState<Record<number, string>>({});
+
+const [
+  dealerQuantitySavingId,
+  setDealerQuantitySavingId,
+] = useState<number | null>(null);
+
   const [materials, setMaterials] = useState<any[]>([]);
   const [incomingMaterialSearch, setIncomingMaterialSearch] =
   useState('');
@@ -1544,6 +1554,89 @@ const updateDealerVisibility = async (
     );
   }
 };
+
+const updateDealerDisplayQuantity =
+  async (
+    stockItemId: number,
+    value: string,
+  ) => {
+    try {
+      const token =
+        localStorage.getItem('token');
+
+      const trimmedValue =
+        value.trim();
+
+      if (trimmedValue) {
+        const quantity =
+          Number(trimmedValue);
+
+        if (
+          !Number.isFinite(quantity) ||
+          quantity < 0
+        ) {
+          alert(
+            'Dealer quantity must be 0 or greater',
+          );
+          return;
+        }
+      }
+
+      setDealerQuantitySavingId(
+        stockItemId,
+      );
+
+      await axios.patch(
+        `${API_BASE_URL}/project/stock/items/${stockItemId}/dealer-visibility`,
+        {
+          dealerDisplayQuantity:
+            trimmedValue === ''
+              ? null
+              : Number(
+                  trimmedValue,
+                ),
+        },
+        {
+          headers: token
+            ? {
+                Authorization:
+                  `Bearer ${token}`,
+              }
+            : {},
+        },
+      );
+
+      setDealerQuantityInputs(
+        (prev) => {
+          const next = {
+            ...prev,
+          };
+
+          delete next[
+            stockItemId
+          ];
+
+          return next;
+        },
+      );
+
+      await loadStockItems(
+        pagination.page,
+      );
+    } catch (error: any) {
+      console.error(error);
+
+      alert(
+        error?.response?.data
+          ?.message ||
+          'Failed to update dealer quantity',
+      );
+    } finally {
+      setDealerQuantitySavingId(
+        null,
+      );
+    }
+  };
 
 const hideStockMovement = async (movementId: number) => {
   const hiddenReason = window.prompt(
@@ -3203,9 +3296,14 @@ const filteredIncomingMaterials =
                 <th className="p-2 text-left">
   Dealer Visibility
 </th>
-                <th className="p-2 text-left">
-                  Action
-                </th>
+
+<th className="p-2 text-left">
+  Dealer Qty
+</th>
+
+<th className="p-2 text-left">
+  Action
+</th>
               </tr>
             </thead>
 
@@ -3213,7 +3311,7 @@ const filteredIncomingMaterials =
               {stockItems.length === 0 && (
                 <tr>
                   <td
-                    colSpan={12}
+                    colSpan={13}
                     className="p-4 text-center text-gray-500"
                   >
                     No stock items found.
@@ -3331,6 +3429,77 @@ const filteredIncomingMaterials =
   )}
 </div>
   )}
+</td>
+
+<td className="p-2">
+  <div className="min-w-[140px]">
+    <input
+      type="number"
+      min="0"
+      step="any"
+      placeholder="Actual qty"
+      value={
+        dealerQuantityInputs[
+          item.id
+        ] !== undefined
+          ? dealerQuantityInputs[
+              item.id
+            ]
+          : item.dealerDisplayQuantity ??
+            ''
+      }
+      onChange={(e) =>
+        setDealerQuantityInputs(
+          (prev) => ({
+            ...prev,
+            [item.id]:
+              e.target.value,
+          }),
+        )
+      }
+      className="w-32 rounded-lg border p-2 text-xs"
+    />
+
+    <p className="mt-1 text-[11px] text-gray-500">
+      Blank = actual available
+    </p>
+
+    <button
+      type="button"
+      disabled={
+        dealerQuantitySavingId ===
+        item.id
+      }
+      onClick={() =>
+        updateDealerDisplayQuantity(
+          item.id,
+          dealerQuantityInputs[
+            item.id
+          ] !== undefined
+            ? dealerQuantityInputs[
+                item.id
+              ]
+            : item
+                .dealerDisplayQuantity ===
+              null ||
+              item
+                .dealerDisplayQuantity ===
+                undefined
+              ? ''
+              : String(
+                  item
+                    .dealerDisplayQuantity,
+                ),
+        )
+      }
+      className="mt-2 rounded-lg bg-blue-600 px-3 py-1 text-xs font-semibold text-white disabled:opacity-50"
+    >
+      {dealerQuantitySavingId ===
+      item.id
+        ? 'Saving...'
+        : 'Save Qty'}
+    </button>
+  </div>
 </td>
 
                   <td className="p-2">
