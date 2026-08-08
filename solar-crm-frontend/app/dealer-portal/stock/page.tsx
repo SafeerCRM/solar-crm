@@ -802,8 +802,10 @@ function StockCard({ item }: { item: any }) {
           </div>
 
           <span className={`rounded-full px-3 py-1 text-xs font-black ${stockTone}`}>
-            {available > 0 ? `${available} ${item.unit || ''}` : 'Out of Stock'}
-          </span>
+  {available > 0
+    ? `Qty: ${available}`
+    : 'Out of Stock'}
+</span>
         </div>
 
         <div className="mt-5 grid grid-cols-2 gap-3">
