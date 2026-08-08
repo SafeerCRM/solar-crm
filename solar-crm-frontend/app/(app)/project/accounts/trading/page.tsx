@@ -1687,15 +1687,27 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
       )}
 
       {activeTab === 'orders' && (
-        <div className="grid min-w-0 gap-5 xl:grid-cols-2">
+        <div className="grid w-full max-w-full min-w-0 gap-5 overflow-hidden xl:grid-cols-2">
           <div className="w-full max-w-full min-w-0 overflow-hidden rounded-2xl bg-white p-4 shadow sm:p-5">
             <h2 className="text-lg font-bold">Dealer Orders</h2>
 
-            <div className="mt-4 space-y-3">
+            <div className="mt-4 min-w-0 space-y-3">
               {orders.map((order) => (
-                <div key={order.id} className={`rounded-xl border p-4 ${order.isHidden ? 'bg-gray-100 opacity-70' : 'bg-white'}`}>
-                  <button onClick={() => openOrder(order.id)} className="block w-full text-left">
-                    <p className="font-bold">{order.orderNumber || `Order #${order.id}`} - {order.dealerName}</p>
+                <div
+  key={order.id}
+  className={`w-full max-w-full min-w-0 overflow-hidden rounded-xl border p-4 ${
+    order.isHidden
+      ? 'bg-gray-100 opacity-70'
+      : 'bg-white'
+  }`}
+>
+                  <button
+  onClick={() => openOrder(order.id)}
+  className="block w-full min-w-0 text-left"
+>
+                    <p className="break-words font-bold">
+  {order.orderNumber || `Order #${order.id}`} - {order.dealerName}
+</p>
                     <p className="text-sm text-gray-500">{order.status} | {order.paymentType} | {order.branchName || '-'}</p>
                     <p className="text-sm">Total {money(order.totalAmount)} | Paid {money(order.paidAmount)} | Pending {money(order.pendingAmount)}</p>
                     {order.expectedDeliveryAt && <p className="text-xs text-blue-700">Delivery: {new Date(order.expectedDeliveryAt).toLocaleString('en-IN')}</p>}
@@ -1711,13 +1723,15 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
             <Pagination page={orderPage} totalPages={orderTotalPages} setPage={setOrderPage} />
           </div>
 
-          <div className="rounded-2xl bg-white p-5 shadow">
+          <div className="w-full max-w-full min-w-0 overflow-hidden rounded-2xl bg-white p-4 shadow sm:p-5">
             {!selectedOrder ? (
               <p className="text-sm text-gray-500">Select an order to view details</p>
             ) : (
-              <div className="space-y-4">
-                <div>
-                  <h2 className="text-lg font-bold">{selectedOrder.order?.orderNumber} - {selectedOrder.order?.dealerName}</h2>
+              <div className="w-full max-w-full min-w-0 space-y-4">
+                <div className="min-w-0">
+  <h2 className="break-words text-lg font-bold">
+    {selectedOrder.order?.orderNumber} - {selectedOrder.order?.dealerName}
+  </h2>
                   <p className="text-sm text-gray-500">Total {money(selectedOrder.order?.totalAmount)} | Pending {money(selectedOrder.order?.pendingAmount)}</p>
 
                   <div className="mt-3 rounded-xl bg-gray-50 p-3 text-sm">
@@ -1833,15 +1847,17 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
 </div>
                 </div>
 
-                <div className="rounded-xl border p-3">
-  <h3 className="font-bold">Review / Edit Items Before Final Invoice</h3>
+                <div className="w-full max-w-full min-w-0 overflow-hidden rounded-xl border p-3">
+  <h3 className="break-words font-bold">
+    Review / Edit Items Before Final Invoice
+  </h3>
 
   {selectedOrder.items?.map((item: any) => (
     <div
-      key={item.id}
-      className="mt-3 rounded-xl border bg-gray-50 p-3 text-sm"
-    >
-      <p className="font-semibold">
+  key={item.id}
+  className="mt-3 w-full max-w-full min-w-0 overflow-hidden rounded-xl border bg-gray-50 p-3 text-sm"
+>
+      <p className="break-words font-semibold">
         {item.materialName}
         {item.itemType === 'KIT' && (
           <span className="ml-2 rounded-full bg-orange-100 px-2 py-1 text-[10px] font-bold text-orange-700">
@@ -1855,7 +1871,7 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
         {item.gstPercent || 0}% | Current Total: {money(item.totalAmount)}
       </p>
 
-      <div className="mt-3 grid gap-2 md:grid-cols-3">
+      <div className="mt-3 grid min-w-0 gap-2 md:grid-cols-3">
         <input
           type="number"
           min="0"
@@ -1864,7 +1880,7 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
           onChange={(e) => {
             item.acceptedQuantity = e.target.value;
           }}
-          className="rounded-lg border p-2 text-sm"
+          className="w-full min-w-0 rounded-lg border p-2 text-sm"
           placeholder="Accepted / Final Qty"
         />
 
@@ -1875,7 +1891,7 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
           onChange={(e) => {
             item.discountAmount = e.target.value;
           }}
-          className="rounded-lg border p-2 text-sm"
+          className="w-full min-w-0 rounded-lg border p-2 text-sm"
           placeholder="Item Discount"
         />
 
@@ -1885,13 +1901,13 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
           onChange={(e) => {
             item.remarks = e.target.value;
           }}
-          className="rounded-lg border p-2 text-sm"
+          className="w-full min-w-0 rounded-lg border p-2 text-sm"
           placeholder="Item Remarks"
         />
       </div>
 
       {item.kitSpecification && (
-        <pre className="mt-3 whitespace-pre-wrap rounded-lg bg-white p-3 text-xs text-gray-600">
+        <pre className="mt-3 w-full max-w-full overflow-hidden whitespace-pre-wrap break-words rounded-lg bg-white p-3 text-xs text-gray-600">
           {item.kitSpecification}
         </pre>
       )}
@@ -1915,7 +1931,7 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
 
                 <div className="rounded-xl border p-3">
                   <h3 className="font-bold">Update Status</h3>
-                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <div className="mt-3 grid min-w-0 gap-3 md:grid-cols-2">
                     <select value={adminStatus} onChange={(e) => setAdminStatus(e.target.value)} className="rounded-xl border p-3">
                       <option value="SUBMITTED">Submitted</option>
                       <option value="ACCEPTED">Accepted</option>
@@ -1928,7 +1944,7 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
                     </select>
 
                     <LocalizationProvider dateAdapter={AdapterDayjs}>
-  <div className="grid gap-3 md:grid-cols-2">
+  <div className="grid min-w-0 gap-3 md:grid-cols-2">
     <DatePicker
       label="Expected Delivery Date"
       value={adminDeliveryDateValue}
@@ -1962,22 +1978,22 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
 
                 <div className="rounded-xl border p-3">
                   <h3 className="font-bold">Add Payment</h3>
-                  <div className="mt-3 grid gap-3 md:grid-cols-2">
-                    <input type="number" placeholder="Amount" value={paymentForm.amount} onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })} className="rounded-xl border p-3" />
-                    <select value={paymentForm.paymentMode} onChange={(e) => setPaymentForm({ ...paymentForm, paymentMode: e.target.value })} className="rounded-xl border p-3">
+                  <div className="mt-3 grid min-w-0 gap-3 md:grid-cols-2">
+                    <input type="number" placeholder="Amount" value={paymentForm.amount} onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })} className="w-full min-w-0 rounded-xl border p-3" />
+                    <select value={paymentForm.paymentMode} onChange={(e) => setPaymentForm({ ...paymentForm, paymentMode: e.target.value })} className="w-full min-w-0 rounded-xl border p-3">
                       <option value="CASH">Cash</option>
 <option value="CREDIT">Credit</option>
 <option value="ONLINE">Online</option>
 <option value="CHEQUE">Cheque</option>
                     </select>
-                    <input placeholder="Transaction ID" value={paymentForm.transactionId} onChange={(e) => setPaymentForm({ ...paymentForm, transactionId: e.target.value })} className="rounded-xl border p-3" />
+                    <input placeholder="Transaction ID" value={paymentForm.transactionId} onChange={(e) => setPaymentForm({ ...paymentForm, transactionId: e.target.value })} className="w-full min-w-0 rounded-xl border p-3" />
                     <input
   type="file"
   accept="image/*,application/pdf"
   onChange={(e) =>
     setPaymentReceiptFile(e.target.files?.[0] || null)
   }
-  className="rounded-xl border p-3"
+  className="w-full min-w-0 rounded-xl border p-3"
 />
                   </div>
                   <textarea placeholder="Payment remarks" value={paymentForm.remarks} onChange={(e) => setPaymentForm({ ...paymentForm, remarks: e.target.value })} className="mt-3 w-full rounded-xl border p-3" />
@@ -2062,8 +2078,11 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
 
                   <div className="mt-3 space-y-2">
                     {selectedOrder.comments?.map((comment: any) => (
-                      <div key={comment.id} className="rounded-lg bg-gray-50 p-3 text-sm">
-                        <p>{comment.comment}</p>
+                      <div
+  key={comment.id}
+  className="w-full max-w-full min-w-0 overflow-hidden rounded-lg bg-gray-50 p-3 text-sm"
+>
+  <p className="break-words">{comment.comment}</p>
                         <p className="text-xs text-gray-500">{comment.createdByName || '-'} | {comment.createdByRole || '-'}</p>
                       </div>
                     ))}
@@ -2078,7 +2097,7 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
       selectedOrderInvoices.proformaInvoices.map((pi: any) => (
         <div
           key={pi.id}
-          className="rounded-lg bg-blue-50 p-3 text-sm"
+          className="w-full max-w-full min-w-0 overflow-hidden rounded-lg bg-blue-50 p-3 text-sm"
         >
           <p className="font-semibold">
             PI: {pi.invoiceNumber || `#${pi.id}`}
@@ -2099,7 +2118,7 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
       selectedOrderInvoices.finalInvoices.map((invoice: any) => (
         <div
           key={invoice.id}
-          className="rounded-lg bg-green-50 p-3 text-sm"
+          className="w-full max-w-full min-w-0 overflow-hidden rounded-lg bg-green-50 p-3 text-sm"
         >
           <p className="font-semibold">
             Final Invoice:{' '}
