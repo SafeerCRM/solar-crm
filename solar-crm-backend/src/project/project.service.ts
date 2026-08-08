@@ -5880,14 +5880,69 @@ async updateStockItemDealerVisibility(
     });
 
   if (!stockItem) {
-    throw new NotFoundException('Stock item not found');
+    throw new NotFoundException(
+      'Stock item not found',
+    );
   }
 
-  stockItem.dealerVisible =
-    body?.dealerVisible === true ||
-    body?.dealerVisible === 'true';
+  /*
+   * Preserve existing visibility behaviour.
+   * Only change it when explicitly supplied.
+   */
+  if (
+    body?.dealerVisible !== undefined
+  ) {
+    stockItem.dealerVisible =
+      body?.dealerVisible === true ||
+      body?.dealerVisible === 'true';
+  }
 
-  return this.projectStockItemRepository.save(stockItem);
+  /*
+   * Dealer display quantity is presentation-only.
+   *
+   * null / blank:
+   * dealer sees actual available quantity.
+   *
+   * 0 or positive number:
+   * dealer sees the lower of actual available
+   * and configured dealer quantity.
+   */
+  if (
+    body?.dealerDisplayQuantity !==
+    undefined
+  ) {
+    const rawValue =
+      body.dealerDisplayQuantity;
+
+    if (
+      rawValue === null ||
+      rawValue === ''
+    ) {
+      stockItem.dealerDisplayQuantity =
+        null;
+    } else {
+      const dealerDisplayQuantity =
+        Number(rawValue);
+
+      if (
+        !Number.isFinite(
+          dealerDisplayQuantity,
+        ) ||
+        dealerDisplayQuantity < 0
+      ) {
+        throw new BadRequestException(
+          'Dealer display quantity must be 0 or greater',
+        );
+      }
+
+      stockItem.dealerDisplayQuantity =
+        dealerDisplayQuantity;
+    }
+  }
+
+  return this.projectStockItemRepository.save(
+    stockItem,
+  );
 }
 
 async receiveProjectStock(body: any, currentUser: any) {

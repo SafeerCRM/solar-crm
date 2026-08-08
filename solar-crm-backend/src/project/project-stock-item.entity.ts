@@ -79,4 +79,10 @@ restoredByName: string;
 
   @Column({ default: true })
 dealerVisible: boolean;
+
+@Column({
+  type: 'float',
+  nullable: true,
+})
+dealerDisplayQuantity: number | null;
 }

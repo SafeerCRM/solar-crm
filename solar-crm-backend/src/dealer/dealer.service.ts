@@ -793,6 +793,37 @@ async toggleDealerKitAvailability(id: number, body: any) {
           sellingRateWithoutGst +
           (sellingRateWithoutGst * gstPercent) / 100;
 
+          const actualAvailableQuantity =
+  Math.max(
+    Number(
+      stock.currentQuantity || 0,
+    ) -
+      Number(
+        stock.reservedQuantity || 0,
+      ),
+    0,
+  );
+
+const configuredDealerQuantity =
+  (stock as any)
+    .dealerDisplayQuantity;
+
+const dealerAvailableQuantity =
+  configuredDealerQuantity === null ||
+  configuredDealerQuantity ===
+    undefined
+    ? actualAvailableQuantity
+    : Math.min(
+        actualAvailableQuantity,
+        Math.max(
+          Number(
+            configuredDealerQuantity ||
+              0,
+          ),
+          0,
+        ),
+      );
+
         return {
   materialId: material.id,
   materialName: material.name,
@@ -824,15 +855,16 @@ async toggleDealerKitAvailability(id: number, body: any) {
   unit: material.unit,
   hsnCode: material.hsnCode,
           branchId: stock.branchId,
-          branchName: stock.branchName,
-          availableQuantity: Math.max(
-            Number(stock.currentQuantity || 0) -
-              Number(stock.reservedQuantity || 0),
-            0,
-          ),
-          sellingRateWithoutGst,
-          gstPercent,
-          sellingRateWithGst,
+branchName: stock.branchName,
+
+availableQuantity:
+  dealerAvailableQuantity,
+
+actualAvailableQuantity,
+
+sellingRateWithoutGst,
+gstPercent,
+sellingRateWithGst,
         };
       })
       .filter(Boolean);
