@@ -29,12 +29,18 @@ type CatalogItem = {
   id: number;
   name?: string;
   category?: string;
+  dealerCategory?: string;
   brand?: string;
   unit?: string;
   hsnCode?: string;
+  vendorPreferredName?: string;
+
+  rate?: number;
   gstPercent?: number;
+
   sellingRate?: number;
   sellingRateWithGst?: number;
+
   availableQuantity?: number;
 };
 
@@ -119,8 +125,22 @@ export default function TradingAccountPage() {
     >('dealers');
 
   const [dealers, setDealers] = useState<Dealer[]>([]);
-  const [catalog, setCatalog] = useState<CatalogItem[]>([]);
-  const [orders, setOrders] = useState<DealerOrder[]>([]);
+
+const [catalog, setCatalog] =
+  useState<CatalogItem[]>([]);
+
+/*
+ * Full active Material Master list used only
+ * by Create Dealer Order.
+ *
+ * Do not use the paginated catalog array for
+ * order material selection.
+ */
+const [orderMaterials, setOrderMaterials] =
+  useState<CatalogItem[]>([]);
+
+const [orders, setOrders] =
+  useState<DealerOrder[]>([]);
 
   const [analytics, setAnalytics] = useState({
     totalOrders: 0,
@@ -202,6 +222,12 @@ const [showPortalPassword, setShowPortalPassword] = useState(false);
     { materialId: '', quantity: '', discountAmount: '0', remarks: '' },
   ]);
 
+  const [orderMaterialSearches, setOrderMaterialSearches] =
+  useState<Record<number, string>>({});
+
+const [openMaterialSearchIndex, setOpenMaterialSearchIndex] =
+  useState<number | null>(null);
+
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [selectedOrderInvoices, setSelectedOrderInvoices] =
   useState<any>(null);
@@ -266,6 +292,74 @@ const [finalInvoiceForm, setFinalInvoiceForm] = useState({
     setCatalog(res.data?.data || []);
     setCatalogTotalPages(res.data?.totalPages || 1);
   };
+
+  const fetchOrderMaterials = async () => {
+  const res = await axios.get(
+    `${API_BASE_URL}/project/material-master`,
+    {
+      params: {
+        activeOnly: 'true',
+      },
+      headers: headers(),
+    },
+  );
+
+  const rawMaterials = Array.isArray(res.data)
+    ? res.data
+    : [];
+
+  const preparedMaterials: CatalogItem[] =
+    rawMaterials.map((material: any) => {
+      /*
+       * Dealer-order backend uses:
+       * sellingRate || rate
+       *
+       * Match that rule here so frontend preview
+       * stays consistent with order creation.
+       */
+      const sellingRate = Number(
+        material.sellingRate ||
+          material.rate ||
+          0,
+      );
+
+      const gstPercent = Number(
+        material.gstPercent || 0,
+      );
+
+      const sellingRateWithGst =
+        sellingRate +
+        (sellingRate * gstPercent) / 100;
+
+      return {
+        id: Number(material.id),
+
+        name: material.name || '',
+        category: material.category || '',
+        dealerCategory:
+          material.dealerCategory || '',
+        brand: material.brand || '',
+        unit: material.unit || '',
+        hsnCode: material.hsnCode || '',
+        vendorPreferredName:
+          material.vendorPreferredName || '',
+
+        rate: Number(material.rate || 0),
+        gstPercent,
+
+        sellingRate,
+        sellingRateWithGst,
+      };
+    });
+
+  preparedMaterials.sort((a, b) =>
+    String(a.name || '').localeCompare(
+      String(b.name || ''),
+    ),
+  );
+
+  setOrderMaterials(preparedMaterials);
+};
 
   const fetchOrders = async () => {
     const res = await axios.get(`${API_BASE_URL}/project/dealer-orders`, {
@@ -359,15 +453,22 @@ const fetchDealerLedger = async () => {
     try {
       setLoading(true);
       await Promise.all([
-        fetchDealers(),
-        fetchCatalog(),
-        fetchOrders(),
-        fetchAnalytics(),
-        fetchNotifications(),
-        fetchMonthlyRequirements(),
-        fetchCreditReminders(),
-        fetchDealerComplaints(),
-      ]);
+  fetchDealers(),
+  fetchCatalog(),
+
+  /*
+   * Full non-paginated list used by
+   * Create Dealer Order material search.
+   */
+  fetchOrderMaterials(),
+
+  fetchOrders(),
+  fetchAnalytics(),
+  fetchNotifications(),
+  fetchMonthlyRequirements(),
+  fetchCreditReminders(),
+  fetchDealerComplaints(),
+]);
     } catch (error: any) {
       console.error(error);
       alert(error?.response?.data?.message || 'Failed to load trading data');
@@ -450,7 +551,11 @@ useEffect(() => {
     let total = 0;
 
     for (const row of orderRows) {
-      const item = catalog.find((mat) => String(mat.id) === String(row.materialId));
+      const item = orderMaterials.find(
+  (mat) =>
+    String(mat.id) ===
+    String(row.materialId),
+);
       if (!item) continue;
 
       const qty = Number(row.quantity || 0);
@@ -467,7 +572,7 @@ useEffect(() => {
     }
 
     return { subtotal, discount, gst, total };
-  }, [orderRows, catalog]);
+  }, [orderRows, orderMaterials]);
 
   const resetDealerForm = () => {
     setEditingDealerId(null);
@@ -707,8 +812,19 @@ const generateDealerFinalInvoice = async () => {
         remarks: '',
       });
 
-      setOrderRows([{ materialId: '', quantity: '', discountAmount: '0', remarks: '' }]);
-      await refreshAll();
+      setOrderRows([
+  {
+    materialId: '',
+    quantity: '',
+    discountAmount: '0',
+    remarks: '',
+  },
+]);
+
+setOrderMaterialSearches({});
+setOpenMaterialSearchIndex(null);
+
+await refreshAll();
       setActiveTab('orders');
     } catch (error: any) {
       console.error(error);
@@ -1611,7 +1727,11 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
 
             <div className="mt-4 space-y-3">
               {orderRows.map((row, index) => {
-                const item = catalog.find((mat) => String(mat.id) === String(row.materialId));
+                const item = orderMaterials.find(
+  (mat) =>
+    String(mat.id) ===
+    String(row.materialId),
+);
 
                 return (
                   <div
@@ -1619,21 +1739,196 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
   className="min-w-0 rounded-xl border bg-gray-50/40 p-3"
 >
                     <div className="grid min-w-0 grid-cols-2 gap-2">
-  <select
-    value={row.materialId}
-    onChange={(e) =>
-      updateOrderRow(index, 'materialId', e.target.value)
-    }
-    className="col-span-2 w-full min-w-0 rounded-xl border p-3"
-  >
-    <option value="">Select Material</option>
+  <div className="relative col-span-2 min-w-0">
+  {(() => {
+    const selectedMaterial =
+      orderMaterials.find(
+        (mat) =>
+          String(mat.id) ===
+          String(row.materialId),
+      );
 
-    {catalog.map((mat) => (
-      <option key={mat.id} value={mat.id}>
-        {mat.name} - {money(mat.sellingRateWithGst)}
-      </option>
-    ))}
-  </select>
+    const currentSearch =
+      orderMaterialSearches[index] ?? '';
+
+    const normalizedSearch =
+      currentSearch
+        .trim()
+        .toLowerCase();
+
+    const filteredOrderMaterials =
+      orderMaterials
+        .filter((mat) => {
+          if (!normalizedSearch) {
+            return true;
+          }
+
+          const searchableText = [
+            mat.name,
+            mat.brand,
+            mat.category,
+            mat.dealerCategory,
+            mat.hsnCode,
+            mat.vendorPreferredName,
+          ]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+
+          return searchableText.includes(
+            normalizedSearch,
+          );
+        })
+        .slice(0, 50);
+
+    return (
+      <>
+        <label className="mb-1 block text-xs font-semibold text-gray-500">
+          Material
+        </label>
+
+        <input
+          type="text"
+          value={
+            openMaterialSearchIndex === index
+              ? currentSearch
+              : selectedMaterial
+                ? selectedMaterial.name || ''
+                : currentSearch
+          }
+          placeholder="Search material, brand, category or HSN..."
+          onFocus={() => {
+            setOpenMaterialSearchIndex(index);
+
+            /*
+             * Start with an empty search when
+             * opening an already selected material.
+             */
+            if (selectedMaterial) {
+              setOrderMaterialSearches(
+                (prev) => ({
+                  ...prev,
+                  [index]: '',
+                }),
+              );
+            }
+          }}
+          onChange={(e) => {
+            setOrderMaterialSearches(
+              (prev) => ({
+                ...prev,
+                [index]:
+                  e.target.value,
+              }),
+            );
+
+            setOpenMaterialSearchIndex(
+              index,
+            );
+          }}
+          className="w-full min-w-0 rounded-xl border p-3"
+        />
+
+        {selectedMaterial &&
+          openMaterialSearchIndex !== index && (
+            <div className="mt-2 rounded-lg bg-blue-50 px-3 py-2 text-xs">
+              <p className="break-words font-semibold text-blue-900">
+                {selectedMaterial.name}
+              </p>
+
+              <p className="mt-1 break-words text-blue-700">
+                {selectedMaterial.brand ||
+                  'No brand'}
+
+                {' • '}
+
+                {selectedMaterial.category ||
+                  selectedMaterial.dealerCategory ||
+                  'No category'}
+
+                {' • HSN '}
+
+                {selectedMaterial.hsnCode ||
+                  '-'}
+              </p>
+            </div>
+          )}
+
+        {openMaterialSearchIndex === index && (
+          <div className="absolute left-0 right-0 z-30 mt-1 max-h-72 overflow-y-auto rounded-xl border bg-white shadow-xl">
+            {filteredOrderMaterials.length >
+            0 ? (
+              filteredOrderMaterials.map(
+                (mat) => (
+                  <button
+                    key={mat.id}
+                    type="button"
+                    onMouseDown={(e) => {
+                      /*
+                       * Prevent input blur before
+                       * material selection executes.
+                       */
+                      e.preventDefault();
+                    }}
+                    onClick={() => {
+                      updateOrderRow(
+                        index,
+                        'materialId',
+                        String(mat.id),
+                      );
+
+                      setOrderMaterialSearches(
+                        (prev) => ({
+                          ...prev,
+                          [index]: '',
+                        }),
+                      );
+
+                      setOpenMaterialSearchIndex(
+                        null,
+                      );
+                    }}
+                    className="block w-full border-b px-3 py-3 text-left last:border-b-0 hover:bg-blue-50"
+                  >
+                    <p className="break-words text-sm font-semibold text-gray-900">
+                      {mat.name || 'Unnamed Material'}
+                    </p>
+
+                    <p className="mt-1 break-words text-xs text-gray-500">
+                      {mat.brand ||
+                        'No brand'}
+
+                      {' • '}
+
+                      {mat.category ||
+                        mat.dealerCategory ||
+                        'No category'}
+
+                      {' • HSN '}
+
+                      {mat.hsnCode || '-'}
+                    </p>
+
+                    <p className="mt-1 text-xs font-semibold text-blue-700">
+                      {money(
+                        mat.sellingRateWithGst,
+                      )}
+                      {' incl. GST'}
+                    </p>
+                  </button>
+                ),
+              )
+            ) : (
+              <div className="p-4 text-center text-sm text-gray-500">
+                No matching material found
+              </div>
+            )}
+          </div>
+        )}
+      </>
+    );
+  })()}
+</div>
 
   <input
     type="number"
@@ -1655,10 +1950,37 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
     className="w-full min-w-0 rounded-xl border p-3"
   />
 
-  <div className="col-span-2 flex justify-end">
+  <div className="col-span-2 flex flex-wrap justify-end gap-2">
+  {row.materialId && (
     <button
       type="button"
-      onClick={() => removeOrderRow(index)}
+      onClick={() => {
+        updateOrderRow(
+          index,
+          'materialId',
+          '',
+        );
+
+        setOrderMaterialSearches(
+          (prev) => ({
+            ...prev,
+            [index]: '',
+          }),
+        );
+
+        setOpenMaterialSearchIndex(
+          null,
+        );
+      }}
+      className="rounded-lg bg-gray-200 px-4 py-2 text-xs font-semibold text-gray-700"
+    >
+      Change Material
+    </button>
+  )}
+
+  <button
+    type="button"
+    onClick={() => removeOrderRow(index)}
       className="rounded-lg bg-red-100 px-4 py-2 text-xs font-semibold text-red-700"
     >
       Remove
