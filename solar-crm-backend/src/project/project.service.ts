@@ -2472,7 +2472,9 @@ const canViewAll =
   roles.includes('PAYMENT_MANAGER') ||
   roles.includes('ACCOUNT_MANAGER') ||
   roles.includes('STOCK_MANAGER') ||
-  roles.includes('INSPECTION_MANAGER');
+  roles.includes('INSPECTION_MANAGER') ||
+  roles.includes('MAINTENANCE_MANAGER') ||
+  roles.includes('CUSTOMER_MANAGER');
 
 if (roles.includes('SOLAR_FRANCHISE')) {
   query.andWhere(
@@ -3410,7 +3412,9 @@ const canViewAll =
   roles.includes('PAYMENT_MANAGER') ||
   roles.includes('ACCOUNT_MANAGER') ||
   roles.includes('STOCK_MANAGER') ||
-  roles.includes('INSPECTION_MANAGER');
+  roles.includes('INSPECTION_MANAGER') ||
+  roles.includes('MAINTENANCE_MANAGER') ||
+  roles.includes('CUSTOMER_MANAGER');
 
   let isAssignedContractor = false;
 
@@ -3502,6 +3506,8 @@ const canUpdateLocation =
   roles.includes('PROJECT_MANAGER') ||
   roles.includes('PROJECT_EXECUTIVE') ||
   roles.includes('INSPECTION_MANAGER') ||
+  roles.includes('MAINTENANCE_MANAGER') ||
+  roles.includes('CUSTOMER_MANAGER') ||
   isProjectOwner;
 
 if (!canUpdateLocation) {
