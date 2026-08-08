@@ -32121,25 +32121,6 @@ async getInspectionAnalytics(
 ) {
   this.assertInspectionViewAccess(user);
 
-  const currentUserRoles =
-  this.getUserRoles(user);
-
-const currentUserId =
-  Number(
-    user?.id ||
-      user?.userId ||
-      user?.sub ||
-      0,
-  );
-
-const isInspectionManagerOnly =
-  currentUserRoles.includes(
-    'INSPECTION_MANAGER',
-  ) &&
-  !currentUserRoles.includes(
-    'OWNER',
-  );
-
   const visitPage =
   Math.max(
     Number(
@@ -32205,23 +32186,6 @@ const visitLimit =
   }
 
   if (
-  isInspectionManagerOnly
-) {
-  if (!currentUserId) {
-    throw new ForbiddenException(
-      'Inspection Manager user ID is missing',
-    );
-  }
-
-  inspectionQb.andWhere(
-    `inspection."inspectionManagerId" =
-      :inspectionManagerId`,
-    {
-      inspectionManagerId:
-        currentUserId,
-    },
-  );
-} else if (
   query?.inspectionManagerId
 ) {
   inspectionQb.andWhere(
