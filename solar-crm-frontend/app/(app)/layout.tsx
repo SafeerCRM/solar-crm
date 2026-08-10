@@ -572,6 +572,8 @@ const navItems = [
     'ACCOUNT_MANAGER',
     'PAYMENT_MANAGER',
     'STOCK_MANAGER',
+    'TRADING_MANAGER',
+ 'TRADING_HEAD',
   ],
 },
 
