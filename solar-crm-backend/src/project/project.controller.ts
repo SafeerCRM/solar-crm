@@ -2177,6 +2177,8 @@ getMaterialWiseStockSummary(
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
   'STOCK_MANAGER',
+  'TRADING_MANAGER',
+'TRADING_HEAD',
 )
 @Get('stock/items')
 listProjectStockItems(@Query() query: any) {
@@ -2213,6 +2215,8 @@ issueProjectStock(
   'PROJECT_EXECUTIVE',
   'ACCOUNT_MANAGER',
   'STOCK_MANAGER',
+  'TRADING_MANAGER',
+'TRADING_HEAD',
 )
 @Get('stock/movements')
 listProjectStockMovements(
@@ -2312,6 +2316,8 @@ restoreProjectStockItem(
   'ACCOUNT_MANAGER',
   'PAYMENT_MANAGER',
   'STOCK_MANAGER',
+  'TRADING_MANAGER',
+'TRADING_HEAD',
 )
 @Get('stock/branch-wise')
 getBranchWiseStockReport(@Query() query: any) {
@@ -2338,6 +2344,8 @@ issueStockToProject(
   'PROJECT_EXECUTIVE',
   'ACCOUNT_MANAGER',
   'STOCK_MANAGER',
+  'TRADING_MANAGER',
+'TRADING_HEAD',
 )
 @Get('consumptions')
 listProjectConsumptions(@Query() query: any) {
@@ -2473,7 +2481,7 @@ buyMaterialRequestItem(
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE', 'STOCK_MANAGER',)
+@Roles('OWNER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE', 'STOCK_MANAGER', 'TRADING_MANAGER', 'TRADING_HEAD',)
 @Get('material-requests/approved-for-issue')
 listApprovedMaterialRequestsForIssue(
   @Query() query: any,
