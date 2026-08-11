@@ -8870,13 +8870,34 @@ const computedPaymentStatusSql = `
 }
 
   if (status?.trim()) {
-  qb.andWhere(
-    `${computedPaymentStatusSql} = :status`,
-    {
-      status:
-        status.trim().toUpperCase(),
-    },
-  );
+  const normalizedStatus =
+    status.trim().toUpperCase();
+
+  if (normalizedStatus === 'OVERDUE') {
+    qb.andWhere(
+      `payment.status NOT IN ('PAID', 'CANCELLED')`,
+    );
+
+    qb.andWhere(
+      `COALESCE(payment."pendingAmount", 0) > 0`,
+    );
+
+    qb.andWhere(
+      `payment."dueDate" IS NOT NULL`,
+    );
+
+    qb.andWhere(
+      `payment."dueDate"::date <
+       (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date`,
+    );
+  } else {
+    qb.andWhere(
+      'payment.status = :status',
+      {
+        status: normalizedStatus,
+      },
+    );
+  }
 }
 
   if (approvalStatus?.trim()) {
@@ -9023,13 +9044,34 @@ if (projectIds.length > 0) {
 }
 
   if (status?.trim()) {
-  countQb.andWhere(
-    `${computedPaymentStatusSql} = :status`,
-    {
-      status:
-        status.trim().toUpperCase(),
-    },
-  );
+  const normalizedStatus =
+    status.trim().toUpperCase();
+
+  if (normalizedStatus === 'OVERDUE') {
+    countQb.andWhere(
+      `payment.status NOT IN ('PAID', 'CANCELLED')`,
+    );
+
+    countQb.andWhere(
+      `COALESCE(payment."pendingAmount", 0) > 0`,
+    );
+
+    countQb.andWhere(
+      `payment."dueDate" IS NOT NULL`,
+    );
+
+    countQb.andWhere(
+      `payment."dueDate"::date <
+       (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date`,
+    );
+  } else {
+    countQb.andWhere(
+      'payment.status = :status',
+      {
+        status: normalizedStatus,
+      },
+    );
+  }
 }
 
   if (approvalStatus?.trim()) {
@@ -9133,13 +9175,34 @@ if (customerName?.trim()) {
 }
 
 if (status?.trim()) {
-  summaryQb.andWhere(
-    `${computedPaymentStatusSql} = :status`,
-    {
-      status:
-        status.trim().toUpperCase(),
-    },
-  );
+  const normalizedStatus =
+    status.trim().toUpperCase();
+
+  if (normalizedStatus === 'OVERDUE') {
+    summaryQb.andWhere(
+      `payment.status NOT IN ('PAID', 'CANCELLED')`,
+    );
+
+    summaryQb.andWhere(
+      `COALESCE(payment."pendingAmount", 0) > 0`,
+    );
+
+    summaryQb.andWhere(
+      `payment."dueDate" IS NOT NULL`,
+    );
+
+    summaryQb.andWhere(
+      `payment."dueDate"::date <
+       (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date`,
+    );
+  } else {
+    summaryQb.andWhere(
+      'payment.status = :status',
+      {
+        status: normalizedStatus,
+      },
+    );
+  }
 }
 
 if (approvalStatus?.trim()) {
