@@ -14,6 +14,21 @@ import { Share } from '@capacitor/share';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
+const EXECUTION_ACTIVITY_OPTIONS = [
+  'STRUCTURE_WORK',
+  'STRUCTURE_INSPECTION',
+  'PILLAR_WORK',
+  'PILLAR_INSPECTION',
+  'PANEL_INSTALLED',
+  'INVERTER_INSTALLED',
+  'WIRING',
+  'EARTHING_PACKING',
+  'GENERATION_STARTED',
+  'GENERATION_INSPECTION',
+  'INVOICE_FILE_GIVEN',
+  'NON_DCR_PENDING',
+];
+
 type PaymentRow = {
   id: number;
   projectId: number;
@@ -39,6 +54,8 @@ projectReceivedAmount?: number;
 projectPendingAmount?: number;
 paymentReceivedPercentage?: number;
 projectStatus?: string;
+projectWorkState?: string;
+currentExecutionActivity?: string;
 };
 
 type BranchOption = {
@@ -78,6 +95,16 @@ const [summary, setSummary] = useState({
   const [toDate, setToDate] = useState('');
   const [status, setStatus] = useState('');
   const [pendingOnly, setPendingOnly] = useState(false);
+
+  const [
+  projectWorkState,
+  setProjectWorkState,
+] = useState('');
+
+const [
+  executionActivity,
+  setExecutionActivity,
+] = useState('');
 
   const fetchFilterOptions = async () => {
   try {
@@ -121,6 +148,8 @@ const [summary, setSummary] = useState({
           status,
           approvalStatus,
           pendingOnly: pendingOnly ? 'true' : '',
+          projectWorkState,
+          executionActivity,
           page,
 limit: 20,
         },
@@ -169,6 +198,8 @@ setSummary({
     setStatus('');
     setApprovalStatus('');
     setPendingOnly(false);
+    setProjectWorkState('');
+  setExecutionActivity('');
     setPage(1);
     setTimeout(fetchPayments, 0);
   };
@@ -206,6 +237,9 @@ setSummary({
               pendingOnly
                 ? 'true'
                 : '',
+
+                projectWorkState,
+executionActivity,
           },
 
           headers: token
@@ -468,6 +502,53 @@ setSummary({
             />
             Pending only
           </label>
+
+          <select
+  value={projectWorkState}
+  onChange={(e) =>
+    setProjectWorkState(
+      e.target.value,
+    )
+  }
+  className="rounded-xl border p-3"
+>
+  <option value="">
+    All Work States
+  </option>
+
+  <option value="IN_PROCESS">
+    In Process
+  </option>
+
+  <option value="RUNNING">
+    Running
+  </option>
+</select>
+
+<select
+  value={executionActivity}
+  onChange={(e) =>
+    setExecutionActivity(
+      e.target.value,
+    )
+  }
+  className="rounded-xl border p-3"
+>
+  <option value="">
+    All Current Execution Activities
+  </option>
+
+  {EXECUTION_ACTIVITY_OPTIONS.map(
+    (item) => (
+      <option
+        key={item}
+        value={item}
+      >
+        {formatLabel(item)}
+      </option>
+    ),
+  )}
+</select>
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
@@ -560,6 +641,33 @@ setSummary({
                       <Info label="Payment Mode" value={item.paymentMode || '-'} />
                       <Info label="Transaction ID" value={item.transactionId || '-'} />
                     </div>
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+    <p className="text-xs font-semibold text-amber-700">
+      Project Work State
+    </p>
+
+    <p className="mt-1 font-bold text-gray-900">
+      {formatLabel(
+        item.projectWorkState ||
+          'IN_PROCESS',
+      )}
+    </p>
+  </div>
+
+  <div className="rounded-xl border border-purple-200 bg-purple-50 p-3">
+    <p className="text-xs font-semibold text-purple-700">
+      Current Execution Activity
+    </p>
+
+    <p className="mt-1 font-bold text-gray-900">
+      {formatLabel(
+        item.currentExecutionActivity ||
+          'NOT_STARTED',
+      )}
+    </p>
+  </div>
+</div>
 
                     {item.remarks && (
                       <p className="mt-3 rounded-xl bg-gray-50 p-3 text-sm text-gray-600">
