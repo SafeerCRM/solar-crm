@@ -8719,6 +8719,8 @@ async getPaymentCollectionList(query: any, currentUser: any) {
   month,
   status,
   pendingOnly,
+  projectWorkState,
+    executionActivity,
   page = 1,
   limit = 50,
 } = query;
@@ -8771,6 +8773,40 @@ const projectPendingSql = `
   )
 `;
 
+const applyProjectOperationalFilters = (
+  queryBuilder: any,
+) => {
+  if (projectWorkState?.trim()) {
+    queryBuilder.andWhere(
+      'project.projectWorkState = :projectWorkState',
+      {
+        projectWorkState:
+          projectWorkState.trim(),
+      },
+    );
+  }
+
+  if (executionActivity?.trim()) {
+    queryBuilder.andWhere(
+      `EXISTS (
+        SELECT 1
+        FROM project_execution_activity execution_activity
+        WHERE execution_activity."projectId" = project.id
+          AND execution_activity."activityType" = :executionActivity
+          AND execution_activity.status IN (
+            'PENDING',
+            'IN_PROGRESS',
+            'OVERDUE'
+          )
+      )`,
+      {
+        executionActivity:
+          executionActivity.trim(),
+      },
+    );
+  }
+};
+
 /*
  * The card status is date-aware.
  * Use the exact same calculation for filtering,
@@ -8819,6 +8855,27 @@ const computedPaymentStatusSql = `
       'project.projectOwnerId AS "projectOwnerId"',
       'project.projectOwnerName AS "projectOwnerName"',
       'project.projectSerial AS "projectSerial"',
+      'project.projectWorkState AS "projectWorkState"',
+
+`(
+  SELECT execution_activity."activityType"
+  FROM project_execution_activity execution_activity
+  WHERE execution_activity."projectId" = project.id
+    AND execution_activity.status IN (
+      'IN_PROGRESS',
+      'OVERDUE',
+      'PENDING'
+    )
+  ORDER BY
+    CASE
+      WHEN execution_activity.status = 'IN_PROGRESS' THEN 1
+      WHEN execution_activity.status = 'OVERDUE' THEN 2
+      WHEN execution_activity.status = 'PENDING' THEN 3
+      ELSE 4
+    END,
+    execution_activity.id ASC
+  LIMIT 1
+) AS "currentExecutionActivity"`,
       `${projectTotalSql} AS "finalCost"`,
       'project.status AS "projectStatus"',
     ])
@@ -8834,6 +8891,8 @@ const computedPaymentStatusSql = `
   if (!canSeeAll) {
     qb.andWhere('project.projectOwnerId = :userId', { userId });
   }
+
+  applyProjectOperationalFilters(qb);
 
   if (projectId) {
   qb.andWhere('payment.projectId = :projectId', {
@@ -9009,6 +9068,8 @@ if (projectIds.length > 0) {
     countQb.andWhere('project.projectOwnerId = :userId', { userId });
   }
 
+  applyProjectOperationalFilters(countQb);
+
   if (projectId) {
   countQb.andWhere('payment.projectId = :projectId', {
     projectId: Number(projectId),
@@ -9133,6 +9194,8 @@ if (!canSeeAll) {
     userId,
   });
 }
+
+applyProjectOperationalFilters(summaryQb);
 
 if (projectId) {
   summaryQb.andWhere('payment.projectId = :projectId', {
