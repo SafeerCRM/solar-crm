@@ -268,7 +268,7 @@ const navItems = [
 },
 
 {
-  name: 'Global Document Vault',
+  name: 'Document Vault',
   href: '/global-document-vault',
   roles: [
     'OWNER',
@@ -382,6 +382,7 @@ const navItems = [
     'TRADING_MANAGER',
     'OFFICE_ASSISTANT',
     'TRADING_HEAD',
+    'PROJECT_CONTRACTOR'
   ],
 },
 

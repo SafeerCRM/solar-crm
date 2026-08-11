@@ -29,6 +29,39 @@ const EXECUTION_ACTIVITY_OPTIONS = [
   'NON_DCR_PENDING',
 ];
 
+const LOAN_ACTIVITY_OPTIONS = [
+  'DOCUMENT_PENDING',
+  'DOCUMENT_COMPLETED',
+  'REGISTRATION_COMPLETED',
+  'IN_PRINCIPAL_GENERATED',
+  'QUOTATION_SUBMITTED',
+  'BANK_VISITED',
+  'LOAN_DISBURSED',
+  'FILE_REJECTED',
+  'LOAN_REAPPLY',
+];
+
+const SUBSIDY_ACTIVITY_OPTIONS = [
+  'DOCUMENT_PENDING',
+  'PLANT_IMAGES_RECEIVED',
+  'DCR_CERTIFICATE_READY',
+  'SUBMISSION_DONE',
+  'SUBSIDY_REQUESTED',
+  'SUBSIDY_DISBURSED',
+  'REJECTED',
+];
+
+const ELECTRICITY_ACTIVITY_OPTIONS = [
+  'DOCUMENT_PENDING',
+  'FILE_SUBMITTED',
+  'SITE_VISIT_DONE',
+  'DEMAND_DEPOSITED',
+  'METER_TESTING_DONE',
+  'NET_METER_INSTALLED',
+  'CONNECTION_ACTIVE',
+  'REJECTED',
+];
+
 type PaymentRow = {
   id: number;
   projectId: number;
@@ -56,6 +89,19 @@ paymentReceivedPercentage?: number;
 projectStatus?: string;
 projectWorkState?: string;
 currentExecutionActivity?: string;
+loanStatus?: string;
+subsidyStatus?: string;
+electricityStatus?: string;
+
+executionSummary?: {
+  totalActivities?: number;
+  completedActivities?: number;
+  percentage?: number;
+
+  runningActivity?: string;
+  latestCompletedActivity?: string;
+  nextPendingActivity?: string;
+};
 };
 
 type BranchOption = {
@@ -106,6 +152,21 @@ const [
   setExecutionActivity,
 ] = useState('');
 
+const [
+  loanActivity,
+  setLoanActivity,
+] = useState('');
+
+const [
+  subsidyActivity,
+  setSubsidyActivity,
+] = useState('');
+
+const [
+  electricityActivity,
+  setElectricityActivity,
+] = useState('');
+
   const fetchFilterOptions = async () => {
   try {
     const [branchRes, ownerRes] = await Promise.all([
@@ -150,6 +211,9 @@ const [
           pendingOnly: pendingOnly ? 'true' : '',
           projectWorkState,
           executionActivity,
+          loanActivity,
+subsidyActivity,
+electricityActivity,
           page,
 limit: 20,
         },
@@ -200,6 +264,10 @@ setSummary({
     setPendingOnly(false);
     setProjectWorkState('');
   setExecutionActivity('');
+  setLoanActivity('');
+setSubsidyActivity('');
+setElectricityActivity('');
+
     setPage(1);
     setTimeout(fetchPayments, 0);
   };
@@ -240,6 +308,9 @@ setSummary({
 
                 projectWorkState,
 executionActivity,
+loanActivity,
+subsidyActivity,
+electricityActivity,
           },
 
           headers: token
@@ -549,6 +620,81 @@ executionActivity,
     ),
   )}
 </select>
+
+<select
+  value={loanActivity}
+  onChange={(e) =>
+    setLoanActivity(
+      e.target.value,
+    )
+  }
+  className="rounded-xl border p-3"
+>
+  <option value="">
+    All Loan Activities
+  </option>
+
+  {LOAN_ACTIVITY_OPTIONS.map(
+    (item) => (
+      <option
+        key={item}
+        value={item}
+      >
+        {formatLabel(item)}
+      </option>
+    ),
+  )}
+</select>
+
+<select
+  value={subsidyActivity}
+  onChange={(e) =>
+    setSubsidyActivity(
+      e.target.value,
+    )
+  }
+  className="rounded-xl border p-3"
+>
+  <option value="">
+    All Subsidy Activities
+  </option>
+
+  {SUBSIDY_ACTIVITY_OPTIONS.map(
+    (item) => (
+      <option
+        key={item}
+        value={item}
+      >
+        {formatLabel(item)}
+      </option>
+    ),
+  )}
+</select>
+
+<select
+  value={electricityActivity}
+  onChange={(e) =>
+    setElectricityActivity(
+      e.target.value,
+    )
+  }
+  className="rounded-xl border p-3"
+>
+  <option value="">
+    All Electricity Activities
+  </option>
+
+  {ELECTRICITY_ACTIVITY_OPTIONS.map(
+    (item) => (
+      <option
+        key={item}
+        value={item}
+      >
+        {formatLabel(item)}
+      </option>
+    ),
+  )}
+</select>
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
@@ -666,6 +812,142 @@ executionActivity,
           'NOT_STARTED',
       )}
     </p>
+  </div>
+</div>
+
+<div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+  <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
+    <p className="text-xs font-bold text-blue-700">
+      Loan Process
+    </p>
+
+    <p className="mt-1 font-semibold text-gray-900">
+      {formatLabel(
+        item.loanStatus ||
+          'NOT_STARTED',
+      )}
+    </p>
+  </div>
+
+  <div className="rounded-xl border border-green-200 bg-green-50 p-3">
+    <p className="text-xs font-bold text-green-700">
+      Subsidy Process
+    </p>
+
+    <p className="mt-1 font-semibold text-gray-900">
+      {formatLabel(
+        item.subsidyStatus ||
+          'NOT_STARTED',
+      )}
+    </p>
+  </div>
+
+  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+    <p className="text-xs font-bold text-amber-700">
+      Electricity Process
+    </p>
+
+    <p className="mt-1 font-semibold text-gray-900">
+      {formatLabel(
+        item.electricityStatus ||
+          'NOT_STARTED',
+      )}
+    </p>
+  </div>
+
+  <div className="rounded-xl border border-purple-200 bg-purple-50 p-3">
+    <p className="text-xs font-bold text-purple-700">
+      Execution Activity
+    </p>
+
+    <p className="mt-1 font-semibold text-gray-900">
+      {formatLabel(
+        item.currentExecutionActivity ||
+          'NOT_STARTED',
+      )}
+    </p>
+  </div>
+</div>
+
+<div className="mt-3 rounded-xl bg-blue-50 p-3">
+  <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+    <p className="font-semibold text-gray-900">
+      Execution Work
+    </p>
+
+    <p className="text-xs font-bold text-blue-700">
+      {item.executionSummary
+        ?.completedActivities || 0}
+      /
+      {item.executionSummary
+        ?.totalActivities || 0}
+      {' '}done ·{' '}
+      {item.executionSummary
+        ?.percentage || 0}
+      %
+    </p>
+  </div>
+
+  <div className="mt-2 h-2 overflow-hidden rounded-full bg-blue-100">
+    <div
+      className="h-full rounded-full bg-blue-600"
+      style={{
+        width: `${
+          item.executionSummary
+            ?.percentage || 0
+        }%`,
+      }}
+    />
+  </div>
+
+  <div className="mt-3 grid gap-2 text-xs md:grid-cols-3">
+    <div className="rounded-lg bg-white p-2">
+      <p className="text-gray-500">
+        Running
+      </p>
+
+      <p className="mt-1 font-semibold">
+        {item.executionSummary
+          ?.runningActivity
+          ? formatLabel(
+              item.executionSummary
+                .runningActivity,
+            )
+          : '-'}
+      </p>
+    </div>
+
+    <div className="rounded-lg bg-white p-2">
+      <p className="text-gray-500">
+        Done
+      </p>
+
+      <p className="mt-1 font-semibold">
+        {item.executionSummary
+          ?.latestCompletedActivity
+          ? formatLabel(
+              item.executionSummary
+                .latestCompletedActivity,
+            )
+          : '-'}
+      </p>
+    </div>
+
+    <div className="rounded-lg bg-white p-2">
+      <p className="text-gray-500">
+        Next
+      </p>
+
+      <p className="mt-1 font-semibold">
+        {item.executionSummary
+          ?.nextPendingActivity
+          ? formatLabel(
+              item.executionSummary
+                .nextPendingActivity,
+            )
+          : '-'}
+      </p>
+    </div>
   </div>
 </div>
 
