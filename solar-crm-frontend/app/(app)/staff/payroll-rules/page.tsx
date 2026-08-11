@@ -1917,9 +1917,11 @@ async function restoreRule(
           ...ruleForm,
           minimumProjectPaymentPercentage:
             e.target.checked
-              ? ruleForm.minimumProjectPaymentPercentage === '0'
-                ? '20'
-                : ruleForm.minimumProjectPaymentPercentage
+              ? Number(
+                  ruleForm.minimumProjectPaymentPercentage || 0,
+                ) > 0
+                ? ruleForm.minimumProjectPaymentPercentage
+                : '20'
               : '0',
         })
       }
