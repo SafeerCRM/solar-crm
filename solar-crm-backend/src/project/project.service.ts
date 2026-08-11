@@ -8719,8 +8719,13 @@ async getPaymentCollectionList(query: any, currentUser: any) {
   month,
   status,
   pendingOnly,
+
   projectWorkState,
-    executionActivity,
+  loanActivity,
+  subsidyActivity,
+  electricityActivity,
+  executionActivity,
+
   page = 1,
   limit = 50,
 } = query;
@@ -8782,6 +8787,51 @@ const applyProjectOperationalFilters = (
       {
         projectWorkState:
           projectWorkState.trim(),
+      },
+    );
+  }
+
+  if (loanActivity?.trim()) {
+    queryBuilder.andWhere(
+      `EXISTS (
+        SELECT 1
+        FROM project_loan_detail loan_activity
+        WHERE loan_activity."projectId" = project.id
+          AND loan_activity.status = :loanActivity
+      )`,
+      {
+        loanActivity:
+          loanActivity.trim(),
+      },
+    );
+  }
+
+  if (subsidyActivity?.trim()) {
+    queryBuilder.andWhere(
+      `EXISTS (
+        SELECT 1
+        FROM project_subsidy_detail subsidy_activity
+        WHERE subsidy_activity."projectId" = project.id
+          AND subsidy_activity.status = :subsidyActivity
+      )`,
+      {
+        subsidyActivity:
+          subsidyActivity.trim(),
+      },
+    );
+  }
+
+  if (electricityActivity?.trim()) {
+    queryBuilder.andWhere(
+      `EXISTS (
+        SELECT 1
+        FROM project_electricity_detail electricity_activity
+        WHERE electricity_activity."projectId" = project.id
+          AND electricity_activity.status = :electricityActivity
+      )`,
+      {
+        electricityActivity:
+          electricityActivity.trim(),
       },
     );
   }
@@ -8854,8 +8904,11 @@ const computedPaymentStatusSql = `
       'project.branchName AS "branchName"',
       'project.projectOwnerId AS "projectOwnerId"',
       'project.projectOwnerName AS "projectOwnerName"',
-      'project.projectSerial AS "projectSerial"',
-      'project.projectWorkState AS "projectWorkState"',
+'project.projectSerial AS "projectSerial"',
+
+'project.projectType AS "projectType"',
+'project.subsidyCategory AS "subsidyCategory"',
+'project.projectWorkState AS "projectWorkState"',
 
 `(
   SELECT execution_activity."activityType"
@@ -8876,6 +8929,29 @@ const computedPaymentStatusSql = `
     execution_activity.id ASC
   LIMIT 1
 ) AS "currentExecutionActivity"`,
+ `(
+  SELECT loan_detail.status
+  FROM project_loan_detail loan_detail
+  WHERE loan_detail."projectId" = project.id
+  ORDER BY loan_detail."createdAt" DESC
+  LIMIT 1
+) AS "loanStatus"`,
+
+`(
+  SELECT subsidy_detail.status
+  FROM project_subsidy_detail subsidy_detail
+  WHERE subsidy_detail."projectId" = project.id
+  ORDER BY subsidy_detail."createdAt" DESC
+  LIMIT 1
+) AS "subsidyStatus"`,
+
+`(
+  SELECT electricity_detail.status
+  FROM project_electricity_detail electricity_detail
+  WHERE electricity_detail."projectId" = project.id
+  ORDER BY electricity_detail."createdAt" DESC
+  LIMIT 1
+) AS "electricityStatus"`,
       `${projectTotalSql} AS "finalCost"`,
       'project.status AS "projectStatus"',
     ])
@@ -9027,6 +9103,15 @@ const receipts = installmentIds.length
       .filter(Boolean),
   ),
 );
+
+const executionActivities =
+  projectIds.length
+    ? await this.projectExecutionActivityRepository.find({
+        where: {
+          projectId: In(projectIds),
+        },
+      })
+    : [];
 
 let projectApprovedPaymentMap: Record<number, number> = {};
 
@@ -9375,6 +9460,89 @@ const {
   data: rows.map((row) => {
     const finalCost = Number(row.finalCost || 0);
 
+    const rowProjectId =
+  Number(row.projectId);
+
+const projectActivities =
+  executionActivities.filter(
+    (activity) =>
+      Number(activity.projectId) ===
+      rowProjectId,
+  );
+
+const completedActivities =
+  projectActivities.filter(
+    (activity) =>
+      String(activity.status) ===
+      'COMPLETED',
+  );
+
+const runningActivities =
+  projectActivities.filter(
+    (activity) =>
+      String(activity.status) ===
+      'IN_PROGRESS',
+  );
+
+const pendingActivities =
+  projectActivities.filter(
+    (activity) =>
+      String(activity.status) ===
+        'PENDING' ||
+      String(activity.status) ===
+        'OVERDUE',
+  );
+
+const totalExecutionActivities =
+  projectActivities.length;
+
+const completedExecutionActivities =
+  completedActivities.length;
+
+const executionPercentage =
+  totalExecutionActivities > 0
+    ? Math.round(
+        (
+          completedExecutionActivities /
+          totalExecutionActivities
+        ) * 100,
+      )
+    : 0;
+
+const runningActivity =
+  runningActivities[0]
+    ?.activityType || '';
+
+const latestCompletedActivity =
+  [...completedActivities]
+    .sort(
+      (a, b) =>
+        new Date(
+          b.completedDate ||
+            b.updatedAt ||
+            b.createdAt,
+        ).getTime() -
+        new Date(
+          a.completedDate ||
+            a.updatedAt ||
+            a.createdAt,
+        ).getTime(),
+    )[0]?.activityType || '';
+
+const nextPendingActivity =
+  [...pendingActivities]
+    .sort(
+      (a, b) =>
+        new Date(
+          a.scheduledDate ||
+            a.createdAt,
+        ).getTime() -
+        new Date(
+          b.scheduledDate ||
+            b.createdAt,
+        ).getTime(),
+    )[0]?.activityType || '';
+
     const projectReceivedAmount =
       projectApprovedPaymentMap[Number(row.projectId)] || 0;
 
@@ -9423,15 +9591,82 @@ const {
       projectOwnerId: row.projectOwnerId
         ? Number(row.projectOwnerId)
         : null,
-      projectOwnerName: row.projectOwnerName,
-      projectSerial: row.projectSerial,
+      projectOwnerName:
+  row.projectOwnerName,
 
-      finalCost,
+projectSerial:
+  row.projectSerial,
+
+projectType:
+  row.projectType,
+
+subsidyCategory:
+  row.subsidyCategory,
+
+projectWorkState:
+  row.projectWorkState ||
+  'IN_PROCESS',
+
+currentExecutionActivity:
+  row.currentExecutionActivity ||
+  '',
+
+departmentStatusSummary: {
+  loanStatus:
+    row.projectType ===
+    ProjectType.LOAN
+      ? row.loanStatus ||
+        'NOT_STARTED'
+      : 'NOT_APPLICABLE',
+
+  subsidyStatus:
+    row.subsidyCategory ===
+    'NON_SUBSIDY'
+      ? 'NOT_APPLICABLE'
+      : row.subsidyStatus ||
+        'NOT_STARTED',
+
+  electricityStatus:
+    row.electricityStatus ||
+    'NOT_STARTED',
+
+  executionStatus:
+    runningActivity ||
+    latestCompletedActivity ||
+    nextPendingActivity ||
+    'NOT_STARTED',
+},
+
+executionSummary: {
+  totalActivities:
+    totalExecutionActivities,
+
+  completedActivities:
+    completedExecutionActivities,
+
+  pendingActivities:
+    pendingActivities.length,
+
+  runningActivities:
+    runningActivities.length,
+
+  percentage:
+    executionPercentage,
+
+  runningActivity,
+
+  latestCompletedActivity,
+
+  nextPendingActivity,
+},
+
+finalCost,
 projectReceivedAmount,
 projectPendingAmount,
 paymentReceivedPercentage,
 
-projectStatus: row.projectStatus,
+projectStatus:
+  row.projectStatus,
 
       receipts: receipts
   .filter((receipt) => Number(receipt.installmentId) === Number(row.id))
