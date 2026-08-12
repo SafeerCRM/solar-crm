@@ -33791,32 +33791,34 @@ async listInsurancePlans(
     );
 
     qb.where(
-      'plan.isHidden = true',
+      '"plan"."isHidden" = true',
     );
   } else {
     qb.where(
-      'plan.isHidden = false',
+      '"plan"."isHidden" = false',
     );
   }
 
   if (activeOnly) {
     qb.andWhere(
-      'plan.isActive = true',
+      '"plan"."isActive" = true',
     );
   }
 
   if (search) {
     qb.andWhere(
       `(
-        LOWER(plan.companyName)
-          LIKE LOWER(:search)
+        LOWER(
+          "plan"."companyName"
+        ) LIKE LOWER(:search)
 
-        OR LOWER(plan.policyName)
-          LIKE LOWER(:search)
+        OR LOWER(
+          "plan"."policyName"
+        ) LIKE LOWER(:search)
 
         OR LOWER(
           COALESCE(
-            plan.description,
+            "plan"."description",
             ''
           )
         ) LIKE LOWER(:search)
@@ -33831,7 +33833,9 @@ async listInsurancePlans(
   if (companyName) {
     qb.andWhere(
       `LOWER(
-        TRIM(plan.companyName)
+        TRIM(
+          "plan"."companyName"
+        )
       ) = LOWER(
         TRIM(:companyName)
       )`,
@@ -33843,11 +33847,11 @@ async listInsurancePlans(
 
   qb
     .orderBy(
-      'plan.companyName',
+      '"plan"."companyName"',
       'ASC',
     )
     .addOrderBy(
-      'plan.durationMonths',
+      '"plan"."durationMonths"',
       'ASC',
     )
     .skip(skip)
@@ -34542,7 +34546,7 @@ async listProjectInsurance(
         'insurance',
       )
       .where(
-        'insurance.isHidden = false',
+        '"insurance"."isHidden" = false',
       );
 
   if (search) {
@@ -34550,48 +34554,48 @@ async listProjectInsurance(
       `(
         LOWER(
           COALESCE(
-            insurance.customerName,
+            "insurance"."customerName",
             ''
           )
         ) LIKE LOWER(:search)
 
         OR LOWER(
           COALESCE(
-            insurance.customerPhone,
+            "insurance"."customerPhone",
             ''
           )
         ) LIKE LOWER(:search)
 
         OR LOWER(
           COALESCE(
-            insurance.customerCode,
+            "insurance"."customerCode",
             ''
           )
         ) LIKE LOWER(:search)
 
         OR LOWER(
           COALESCE(
-            insurance.companyName,
+            "insurance"."companyName",
             ''
           )
         ) LIKE LOWER(:search)
 
         OR LOWER(
           COALESCE(
-            insurance.policyName,
+            "insurance"."policyName",
             ''
           )
         ) LIKE LOWER(:search)
 
         OR LOWER(
           COALESCE(
-            insurance.policyNumber,
+            "insurance"."policyNumber",
             ''
           )
         ) LIKE LOWER(:search)
 
         OR CAST(
-          insurance.projectId
+          "insurance"."projectId"
           AS TEXT
         ) LIKE :search
       )`,
@@ -34617,7 +34621,7 @@ async listProjectInsurance(
     }
 
     qb.andWhere(
-      'insurance.status = :status',
+      '"insurance"."status" = :status',
       {
         status,
       },
@@ -34628,7 +34632,7 @@ async listProjectInsurance(
     qb.andWhere(
       `LOWER(
         TRIM(
-          insurance.companyName
+          "insurance"."companyName"
         )
       ) = LOWER(
         TRIM(:companyName)
@@ -34644,7 +34648,7 @@ async listProjectInsurance(
       `LOWER(
         TRIM(
           COALESCE(
-            insurance.city,
+            "insurance"."city",
             ''
           )
         )
@@ -34662,7 +34666,7 @@ async listProjectInsurance(
       `LOWER(
         TRIM(
           COALESCE(
-            insurance.branchName,
+            "insurance"."branchName",
             ''
           )
         )
@@ -34677,29 +34681,25 @@ async listProjectInsurance(
 
   if (projectId) {
     qb.andWhere(
-      'insurance.projectId = :projectId',
+      '"insurance"."projectId" = :projectId',
       {
         projectId,
       },
     );
   }
 
-  /*
-   * Use database CURRENT_DATE so comparisons
-   * remain date-only and are not affected by
-   * JS server timezone conversions.
-   */
   if (
     expiryFilter ===
     'WITHIN_7_DAYS'
   ) {
     qb.andWhere(
       `
-      insurance.expiryDate
+      "insurance"."expiryDate"
         > CURRENT_DATE
 
-      AND insurance.expiryDate
-        <= CURRENT_DATE + INTERVAL '7 days'
+      AND "insurance"."expiryDate"
+        <= CURRENT_DATE
+          + INTERVAL '7 days'
       `,
     );
   }
@@ -34709,7 +34709,7 @@ async listProjectInsurance(
     'EXPIRING_TODAY'
   ) {
     qb.andWhere(
-      'insurance.expiryDate = CURRENT_DATE',
+      '"insurance"."expiryDate" = CURRENT_DATE',
     );
   }
 
@@ -34718,26 +34718,22 @@ async listProjectInsurance(
     'EXPIRED'
   ) {
     qb.andWhere(
-      'insurance.expiryDate < CURRENT_DATE',
+      '"insurance"."expiryDate" < CURRENT_DATE',
     );
   }
 
-  if (
-    fromDate
-  ) {
+  if (fromDate) {
     qb.andWhere(
-      'insurance.expiryDate >= :fromDate',
+      '"insurance"."expiryDate" >= :fromDate',
       {
         fromDate,
       },
     );
   }
 
-  if (
-    toDate
-  ) {
+  if (toDate) {
     qb.andWhere(
-      'insurance.expiryDate <= :toDate',
+      '"insurance"."expiryDate" <= :toDate',
       {
         toDate,
       },
@@ -34746,11 +34742,11 @@ async listProjectInsurance(
 
   qb
     .orderBy(
-      'insurance.expiryDate',
+      '"insurance"."expiryDate"',
       'ASC',
     )
     .addOrderBy(
-      'insurance.id',
+      '"insurance"."id"',
       'DESC',
     )
     .skip(skip)
@@ -34858,7 +34854,7 @@ async getInsuranceDashboard(
         'insurance',
       )
       .where(
-        'insurance.isHidden = false',
+        '"insurance"."isHidden" = false',
       );
 
   const total =
@@ -34871,7 +34867,7 @@ async getInsuranceDashboard(
       .clone()
       .andWhere(
         `
-        insurance.status = :activeStatus
+        "insurance"."status" = :activeStatus
         `,
         {
           activeStatus:
@@ -34879,7 +34875,7 @@ async getInsuranceDashboard(
         },
       )
       .andWhere(
-        'insurance.expiryDate >= CURRENT_DATE',
+        '"insurance"."expiryDate" >= CURRENT_DATE',
       )
       .getCount();
 
@@ -34887,7 +34883,7 @@ async getInsuranceDashboard(
     await baseQb
       .clone()
       .andWhere(
-        'insurance.expiryDate < CURRENT_DATE',
+        '"insurance"."expiryDate" < CURRENT_DATE',
       )
       .getCount();
 
@@ -34896,13 +34892,13 @@ async getInsuranceDashboard(
       .clone()
       .andWhere(
         `
-        insurance.expiryDate
+        "insurance"."expiryDate"
           > CURRENT_DATE
         `,
       )
       .andWhere(
         `
-        insurance.expiryDate
+        "insurance"."expiryDate"
           <= CURRENT_DATE
             + INTERVAL '7 days'
         `,
@@ -34913,7 +34909,7 @@ async getInsuranceDashboard(
     await baseQb
       .clone()
       .andWhere(
-        'insurance.expiryDate = CURRENT_DATE',
+        '"insurance"."expiryDate" = CURRENT_DATE',
       )
       .getCount();
 
@@ -34921,7 +34917,7 @@ async getInsuranceDashboard(
     await baseQb
       .clone()
       .andWhere(
-        'insurance.status = :renewalStatus',
+        '"insurance"."status" = :renewalStatus',
         {
           renewalStatus:
             ProjectInsuranceStatus
@@ -35030,46 +35026,46 @@ async listInsuranceRequests(
   );
 
   const qb =
-    this.projectInsuranceRequestRepository
-      .createQueryBuilder('request')
-      .where(
-        'request.isHidden = false',
-      );
+  this.projectInsuranceRequestRepository
+    .createQueryBuilder('request')
+    .where(
+      '"request"."isHidden" = false',
+    );
 
   if (search) {
-    qb.andWhere(
-      `(
-        LOWER(
-          COALESCE(
-            request.customerName,
-            ''
-          )
-        ) LIKE LOWER(:search)
+  qb.andWhere(
+    `(
+      LOWER(
+        COALESCE(
+          "request"."customerName",
+          ''
+        )
+      ) LIKE LOWER(:search)
 
-        OR LOWER(
-          COALESCE(
-            request.customerPhone,
-            ''
-          )
-        ) LIKE LOWER(:search)
+      OR LOWER(
+        COALESCE(
+          "request"."customerPhone",
+          ''
+        )
+      ) LIKE LOWER(:search)
 
-        OR LOWER(
-          COALESCE(
-            request.customerCode,
-            ''
-          )
-        ) LIKE LOWER(:search)
+      OR LOWER(
+        COALESCE(
+          "request"."customerCode",
+          ''
+        )
+      ) LIKE LOWER(:search)
 
-        OR CAST(
-          request.projectId
-          AS TEXT
-        ) LIKE :search
-      )`,
-      {
-        search: `%${search}%`,
-      },
-    );
-  }
+      OR CAST(
+        "request"."projectId"
+        AS TEXT
+      ) LIKE :search
+    )`,
+    {
+      search: `%${search}%`,
+    },
+  );
+}
 
   if (status) {
     if (
@@ -35085,11 +35081,11 @@ async listInsuranceRequests(
     }
 
     qb.andWhere(
-      'request.status = :status',
-      {
-        status,
-      },
-    );
+  '"request"."status" = :status',
+  {
+    status,
+  },
+);
   }
 
   if (requestType) {
@@ -35106,31 +35102,31 @@ async listInsuranceRequests(
     }
 
     qb.andWhere(
-      'request.requestType = :requestType',
-      {
-        requestType,
-      },
-    );
+  '"request"."requestType" = :requestType',
+  {
+    requestType,
+  },
+);
   }
 
   if (projectId) {
     qb.andWhere(
-      'request.projectId = :projectId',
-      {
-        projectId,
-      },
-    );
+  '"request"."projectId" = :projectId',
+  {
+    projectId,
+  },
+);
   }
 
   qb
-    .orderBy(
-      'request.requestedAt',
-      'DESC',
-    )
-    .addOrderBy(
-      'request.id',
-      'DESC',
-    )
+  .orderBy(
+    '"request"."requestedAt"',
+    'DESC',
+  )
+  .addOrderBy(
+    '"request"."id"',
+    'DESC',
+  )
     .skip(skip)
     .take(limit);
 
@@ -35261,40 +35257,38 @@ async createInsuranceRequest(
     }
   }
 
-  /*
-   * Prevent repeated pending requests for
-   * exactly the same project/request type.
-   */
   const duplicateQb =
     this.projectInsuranceRequestRepository
-      .createQueryBuilder('request')
+      .createQueryBuilder(
+        'request',
+      )
       .where(
-        'request.projectId = :projectId',
+        '"request"."projectId" = :projectId',
         {
           projectId,
         },
       )
       .andWhere(
-        'request.customerId = :customerId',
+        '"request"."customerId" = :customerId',
         {
           customerId,
         },
       )
       .andWhere(
-        'request.requestType = :requestType',
+        '"request"."requestType" = :requestType',
         {
           requestType,
         },
       )
       .andWhere(
-        'request.status = :pendingStatus',
+        '"request"."status" = :pendingStatus',
         {
           pendingStatus:
             ProjectInsuranceRequestStatus.PENDING,
         },
       )
       .andWhere(
-        'request.isHidden = false',
+        '"request"."isHidden" = false',
       );
 
   if (
@@ -35303,7 +35297,7 @@ async createInsuranceRequest(
     existingInsuranceId
   ) {
     duplicateQb.andWhere(
-      'request.existingInsuranceId = :existingInsuranceId',
+      '"request"."existingInsuranceId" = :existingInsuranceId',
       {
         existingInsuranceId,
       },
@@ -36419,13 +36413,6 @@ async restoreInsuranceDocument(
 }
 
 async processInsuranceExpiryReminders() {
-  /*
-   * STEP 1:
-   * Mark genuinely expired ACTIVE policies.
-   *
-   * Do NOT mark RENEWED or CANCELLED policies
-   * as EXPIRED.
-   */
   await this.projectInsuranceRepository
     .createQueryBuilder()
     .update(ProjectInsurance)
@@ -36434,7 +36421,7 @@ async processInsuranceExpiryReminders() {
         ProjectInsuranceStatus.EXPIRED,
     })
     .where(
-      'status = :activeStatus',
+      '"status" = :activeStatus',
       {
         activeStatus:
           ProjectInsuranceStatus.ACTIVE,
@@ -36445,22 +36432,17 @@ async processInsuranceExpiryReminders() {
     )
     .execute();
 
-  /*
-   * STEP 2:
-   * Find policies exactly 7 days from expiry
-   * OR expiring today.
-   */
   const dueInsurance =
     await this.projectInsuranceRepository
       .createQueryBuilder(
         'insurance',
       )
       .where(
-        'insurance.isHidden = false',
+        '"insurance"."isHidden" = false',
       )
       .andWhere(
         `
-        insurance.status NOT IN (
+        "insurance"."status" NOT IN (
           :...excludedStatuses
         )
         `,
@@ -36473,16 +36455,16 @@ async processInsuranceExpiryReminders() {
       )
       .andWhere(
         `(
-          insurance.expiryDate =
+          "insurance"."expiryDate" =
             CURRENT_DATE
               + INTERVAL '7 days'
 
-          OR insurance.expiryDate =
+          OR "insurance"."expiryDate" =
             CURRENT_DATE
         )`,
       )
       .orderBy(
-        'insurance.expiryDate',
+        '"insurance"."expiryDate"',
         'ASC',
       )
       .getMany();
@@ -36502,13 +36484,6 @@ async processInsuranceExpiryReminders() {
         insurance.expiryDate,
       );
 
-    /*
-     * Determine whether this policy is
-     * exactly 7 days away or expiring today.
-     *
-     * Using date-only values avoids time
-     * differences between Render and India.
-     */
     const rawExpiry =
       String(
         insurance.expiryDate,
@@ -36580,11 +36555,6 @@ async processInsuranceExpiryReminders() {
       rawExpiry ===
       indiaToday;
 
-    /*
-     * --------------------------------
-     * 7-DAY ADMIN REMINDER
-     * --------------------------------
-     */
     if (
       isSevenDayReminder
     ) {
@@ -36626,11 +36596,6 @@ async processInsuranceExpiryReminders() {
       }
     }
 
-    /*
-     * --------------------------------
-     * CUSTOMER 7-DAY REMINDER
-     * --------------------------------
-     */
     if (
       isSevenDayReminder &&
       insurance.customerId
@@ -36691,13 +36656,6 @@ async processInsuranceExpiryReminders() {
             notification,
           );
 
-        /*
-         * Only write the reminder log AFTER
-         * the customer notification succeeds.
-         *
-         * If notification creation fails,
-         * the next processing run may retry.
-         */
         await this
           .projectInsuranceReminderLogRepository
           .save(
@@ -36719,11 +36677,6 @@ async processInsuranceExpiryReminders() {
       }
     }
 
-    /*
-     * --------------------------------
-     * EXACT-DAY ADMIN REMINDER
-     * --------------------------------
-     */
     if (
       isExpiryDay
     ) {
@@ -36818,41 +36771,41 @@ async getInsuranceReminderList(
   );
 
   const reminders =
-    await this.projectInsuranceRepository
-      .createQueryBuilder(
-        'insurance',
+  await this.projectInsuranceRepository
+    .createQueryBuilder(
+      'insurance',
+    )
+    .where(
+      '"insurance"."isHidden" = false',
+    )
+    .andWhere(
+      `
+      "insurance"."status" NOT IN (
+        :...excludedStatuses
       )
-      .where(
-        'insurance.isHidden = false',
-      )
-      .andWhere(
-        `
-        insurance.status NOT IN (
-          :...excludedStatuses
-        )
-        `,
-        {
-          excludedStatuses: [
-            ProjectInsuranceStatus.RENEWED,
-            ProjectInsuranceStatus.CANCELLED,
-          ],
-        },
-      )
-      .andWhere(
-        `(
-          insurance.expiryDate =
-            CURRENT_DATE
+      `,
+      {
+        excludedStatuses: [
+          ProjectInsuranceStatus.RENEWED,
+          ProjectInsuranceStatus.CANCELLED,
+        ],
+      },
+    )
+    .andWhere(
+      `(
+        "insurance"."expiryDate" =
+          CURRENT_DATE
 
-          OR insurance.expiryDate =
-            CURRENT_DATE
-              + INTERVAL '7 days'
-        )`,
-      )
-      .orderBy(
-        'insurance.expiryDate',
-        'ASC',
-      )
-      .getMany();
+        OR "insurance"."expiryDate" =
+          CURRENT_DATE
+            + INTERVAL '7 days'
+      )`,
+    )
+    .orderBy(
+      '"insurance"."expiryDate"',
+      'ASC',
+    )
+    .getMany();
 
   const reminderIds =
     reminders.map(

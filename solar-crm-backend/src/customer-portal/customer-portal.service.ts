@@ -3523,16 +3523,16 @@ private async getCustomerCompletedProject(
         'project',
       )
       .where(
-        'project.customerId = :customerId',
+        '"project"."customerId" = :customerId',
         {
           customerId,
         },
       )
       .andWhere(
-        'project.isHidden = false',
+        '"project"."isHidden" = false',
       )
       .andWhere(
-        'project.status = :completedStatus',
+        '"project"."status" = :completedStatus',
         {
           completedStatus:
             'COMPLETED',
@@ -3541,18 +3541,17 @@ private async getCustomerCompletedProject(
 
   if (projectId) {
     query.andWhere(
-      'project.id = :projectId',
+      '"project"."id" = :projectId',
       {
         projectId,
       },
     );
   }
 
-  query
-    .orderBy(
-      'project.createdAt',
-      'DESC',
-    );
+  query.orderBy(
+    '"project"."createdAt"',
+    'DESC',
+  );
 
   const project =
     await query.getOne();
@@ -3629,26 +3628,26 @@ async getMyInsuranceOverview(
         'insurance',
       )
       .where(
-        'insurance.customerId = :customerId',
+        '"insurance"."customerId" = :customerId',
         {
           customerId,
         },
       )
       .andWhere(
-        'insurance.projectId IN (:...projectIds)',
+        '"insurance"."projectId" IN (:...projectIds)',
         {
           projectIds,
         },
       )
       .andWhere(
-        'insurance.isHidden = false',
+        '"insurance"."isHidden" = false',
       )
       .orderBy(
-        'insurance.startDate',
+        '"insurance"."startDate"',
         'DESC',
       )
       .addOrderBy(
-        'insurance.id',
+        '"insurance"."id"',
         'DESC',
       )
       .getMany();
@@ -3660,22 +3659,22 @@ async getMyInsuranceOverview(
         'request',
       )
       .where(
-        'request.customerId = :customerId',
+        '"request"."customerId" = :customerId',
         {
           customerId,
         },
       )
       .andWhere(
-        'request.projectId IN (:...projectIds)',
+        '"request"."projectId" IN (:...projectIds)',
         {
           projectIds,
         },
       )
       .andWhere(
-        'request.isHidden = false',
+        '"request"."isHidden" = false',
       )
       .andWhere(
-        'request.status IN (:...statuses)',
+        '"request"."status" IN (:...statuses)',
         {
           statuses: [
             ProjectInsuranceRequestStatus
@@ -3687,7 +3686,7 @@ async getMyInsuranceOverview(
         },
       )
       .orderBy(
-        'request.requestedAt',
+        '"request"."requestedAt"',
         'DESC',
       )
       .getMany();
@@ -3724,10 +3723,6 @@ async getMyAvailableInsurancePlans(
       user,
     );
 
-  /*
-   * Customer must have at least
-   * one completed project.
-   */
   await this
     .getCustomerCompletedProject(
       customerId,
@@ -3739,17 +3734,17 @@ async getMyAvailableInsurancePlans(
       'plan',
     )
     .where(
-      'plan.isHidden = false',
+      '"plan"."isHidden" = false',
     )
     .andWhere(
-      'plan.isActive = true',
+      '"plan"."isActive" = true',
     )
     .orderBy(
-      'plan.companyName',
+      '"plan"."companyName"',
       'ASC',
     )
     .addOrderBy(
-      'plan.durationMonths',
+      '"plan"."durationMonths"',
       'ASC',
     )
     .getMany();
