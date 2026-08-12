@@ -30,13 +30,25 @@ const executionActivities = dashboard?.executionActivities || [];
 const activityFeed = [
   ...notifications.map((item: any) => ({
   id: `notification-${item.id}`,
-  type: item.relatedEntityType === 'AFTER_SALES_REQUEST' ? '🧰' : '🔔',
+  type:
+  item.relatedEntityType === 'AFTER_SALES_REQUEST'
+    ? '🧰'
+    : item.relatedEntityType === 'PROJECT_INSURANCE' ||
+        item.relatedEntityType === 'PROJECT_INSURANCE_REQUEST' ||
+        item.relatedEntityType === 'PROJECT_INSURANCE_DOCUMENT'
+      ? '🛡️'
+      : '🔔',
   title: item.title || 'Notification',
   text: item.message || '',
   date: item.createdAt,
   link:
-    item.relatedEntityType === 'AFTER_SALES_REQUEST' && item.relatedEntityId
-      ? `/customer-portal/after-sales-services?requestId=${item.relatedEntityId}`
+  item.relatedEntityType === 'AFTER_SALES_REQUEST' &&
+  item.relatedEntityId
+    ? `/customer-portal/after-sales-services?requestId=${item.relatedEntityId}`
+    : item.relatedEntityType === 'PROJECT_INSURANCE' ||
+        item.relatedEntityType === 'PROJECT_INSURANCE_REQUEST' ||
+        item.relatedEntityType === 'PROJECT_INSURANCE_DOCUMENT'
+      ? '/customer-portal/insurance'
       : '/customer-portal/notifications',
 })),
 
@@ -584,6 +596,16 @@ const projectTrackerLabel = sectionLabels?.projectTracker || {};
       icon="🧰"
       title="After-Sales Service"
       text="Request maintenance, warranty service, AMC and paid services."
+    />
+  </a>
+)}
+
+{enabledSections.insurance && (
+  <a href="/customer-portal/insurance">
+    <ActionCard
+      icon="🛡️"
+      title="Insurance"
+      text="View insurance plans, current policy, policy documents and submit renewal requests."
     />
   </a>
 )}

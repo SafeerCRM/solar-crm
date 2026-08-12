@@ -7,7 +7,16 @@ import { getAuthHeaders } from '@/lib/authHeaders';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
-const cards = [
+type ManagementCard = {
+  title: string;
+  description: string;
+  href: string;
+  icon: string;
+  key?: string;
+  label: string;
+};
+
+const cards: ManagementCard[] = [
   {
     title: 'Customer Complaints',
     description: 'View, assign, update and close customer complaints.',
@@ -47,6 +56,15 @@ const cards = [
   href: '/customer-after-sales-requests',
   icon: '🧰',
   key: 'afterSalesRequests',
+  label: 'Open',
+},
+
+{
+  title: 'Insurance Management',
+  description:
+    'Manage insurance plans, customer policies, renewals, expiry reminders and policy documents for completed projects.',
+  href: '/customer-portal-management/insurance',
+  icon: '🛡️',
   label: 'Open',
 },
 
@@ -138,8 +156,8 @@ export default function CustomerPortalManagementPage() {
 
             <p className="mt-3 max-w-3xl text-sm font-medium text-white/90">
               Manage customer complaints, payment receipts, work date requests,
-              cleaning reminders, referrals and customer-facing portal testing from
-              one place.
+cleaning reminders, after-sales services, insurance, referrals and
+customer-facing portal operations from one place.
             </p>
           </div>
 
@@ -199,8 +217,10 @@ export default function CustomerPortalManagementPage() {
                     </h3>
 
                     <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-black text-orange-700">
-                      {item.label}: {stats[item.key]}
-                    </span>
+  {item.key && stats[item.key] !== undefined
+    ? `${item.label}: ${stats[item.key]}`
+    : item.label}
+</span>
                   </div>
 
                   <p className="mt-2 text-sm text-gray-600">
@@ -224,6 +244,7 @@ export default function CustomerPortalManagementPage() {
           <ChecklistItem text="Payment receipt upload and verification flow tested" />
           <ChecklistItem text="Work date request approval/rejection visible to customer" />
           <ChecklistItem text="Cleaning reminder request and status update tested" />
+          <ChecklistItem text="Insurance plans, customer policies, renewals, documents and expiry reminders tested" />
           <ChecklistItem text="Notifications read/unread counts tested" />
           <ChecklistItem text="Documents open/download on web and APK" />
           <ChecklistItem text="Customer APK created and tested separately" />
