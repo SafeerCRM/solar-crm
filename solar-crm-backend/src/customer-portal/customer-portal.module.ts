@@ -32,6 +32,18 @@ import { LeadsService } from 'src/leads/leads.service';
 import { TelecallingContact } from '../telecalling/telecalling-contact.entity';
 import { Lead } from '../leads/lead.entity';
 import { Meeting } from '../meeting/meeting.entity';
+import { CustomerAnnouncement } from './customer-announcement.entity';
+import { CustomerAnnouncementDelivery } from './customer-announcement-delivery.entity';
+import { ProjectInsurancePlan } from '../project/project-insurance-plan.entity';
+import {
+  ProjectInsurance,
+} from '../project/project-insurance.entity';
+import {
+  ProjectInsuranceDocument,
+} from '../project/project-insurance-document.entity';
+import {
+  ProjectInsuranceRequest,
+} from '../project/project-insurance-request.entity';
 
 @Module({
   imports: [
@@ -64,6 +76,12 @@ CustomerComplaintAttachment,
       TelecallingContact,
       Lead,
       Meeting,
+      CustomerAnnouncement,
+CustomerAnnouncementDelivery,
+ProjectInsurancePlan,
+ProjectInsurance,
+ProjectInsuranceDocument,
+ProjectInsuranceRequest,
     ]),
   ],
   controllers: [CustomerPortalController, CustomerAuthController],

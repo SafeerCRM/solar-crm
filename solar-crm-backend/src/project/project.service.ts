@@ -3,7 +3,10 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
+
+import { Cron } from '@nestjs/schedule';
 
 import { InjectRepository } from '@nestjs/typeorm';
 
@@ -247,11 +250,39 @@ import {
 } from './project-inspection-photo.entity';
 
 import {
+  ProjectInsurance,
+  ProjectInsuranceStatus,
+} from './project-insurance.entity';
+
+import {
+  ProjectInsurancePlan,
+} from './project-insurance-plan.entity';
+
+import {
+  ProjectInsuranceDocument,
+  ProjectInsuranceDocumentType,
+} from './project-insurance-document.entity';
+
+import {
+  ProjectInsuranceRequest,
+  ProjectInsuranceRequestStatus,
+  ProjectInsuranceRequestType,
+} from './project-insurance-request.entity';
+
+import {
+  ProjectInsuranceReminderLog,
+  InsuranceReminderType,
+} from './project-insurance-reminder-log.entity';
+
+import {
   GlobalDocumentVault,
 } from './global-document-vault.entity';
 
 @Injectable()
 export class ProjectService {
+
+  private readonly logger =
+  new Logger(ProjectService.name);
 
   private toNumberOrZero(value: any): number {
   if (value === '' || value === null || value === undefined) {
@@ -1068,6 +1099,95 @@ private assertInspectionManageAccess(
   }
 }
 
+private assertInsuranceManagementAccess(
+  user: any,
+) {
+  const roles =
+    this.getUserRoles(user);
+
+  const allowedRoles = [
+    'OWNER',
+    'ACCOUNT_MANAGER',
+    'CUSTOMER_MANAGER',
+  ];
+
+  if (
+    !roles.some((role) =>
+      allowedRoles.includes(role),
+    )
+  ) {
+    throw new ForbiddenException(
+      'You do not have access to Insurance Management',
+    );
+  }
+}
+
+private async getCompletedProjectForInsurance(
+  projectId: number,
+) {
+  if (
+    !Number.isInteger(projectId) ||
+    projectId <= 0
+  ) {
+    throw new BadRequestException(
+      'Valid Project ID is required',
+    );
+  }
+
+  const project =
+    await this.projectRepository.findOne({
+      where: {
+        id: projectId,
+        isHidden: false,
+      } as any,
+    });
+
+  if (!project) {
+    throw new NotFoundException(
+      'Project not found',
+    );
+  }
+
+  if (
+    project.status !==
+    ProjectStatus.COMPLETED
+  ) {
+    throw new BadRequestException(
+      'Insurance is available only for completed projects',
+    );
+  }
+
+  return project;
+}
+
+private formatInsuranceDate(
+  value: Date | string,
+) {
+  const date =
+    value instanceof Date
+      ? value
+      : new Date(value);
+
+  if (
+    Number.isNaN(
+      date.getTime(),
+    )
+  ) {
+    return '';
+  }
+
+  return new Intl.DateTimeFormat(
+    'en-IN',
+    {
+      timeZone:
+        'Asia/Kolkata',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    },
+  ).format(date);
+}
+
   constructor(
     @InjectRepository(Project)
     private readonly projectRepository: Repository<Project>,
@@ -1087,6 +1207,26 @@ private readonly projectInspectionPhotoRepository:
   @InjectRepository(GlobalDocumentVault)
 private readonly globalDocumentVaultRepository:
   Repository<GlobalDocumentVault>,
+
+  @InjectRepository(ProjectInsurancePlan)
+private readonly projectInsurancePlanRepository:
+  Repository<ProjectInsurancePlan>,
+
+@InjectRepository(ProjectInsurance)
+private readonly projectInsuranceRepository:
+  Repository<ProjectInsurance>,
+
+@InjectRepository(ProjectInsuranceDocument)
+private readonly projectInsuranceDocumentRepository:
+  Repository<ProjectInsuranceDocument>,
+
+@InjectRepository(ProjectInsuranceRequest)
+private readonly projectInsuranceRequestRepository:
+  Repository<ProjectInsuranceRequest>,
+
+@InjectRepository(ProjectInsuranceReminderLog)
+private readonly projectInsuranceReminderLogRepository:
+  Repository<ProjectInsuranceReminderLog>,
 
     @InjectRepository(ProjectDocument)
     private readonly projectDocumentRepository: Repository<ProjectDocument>,
@@ -33424,5 +33564,3693 @@ async updateInspectionDefect(
   }
 
   return savedDefect;
+}
+
+async createInsurancePlan(
+  body: any,
+  user: any,
+) {
+  this.assertInsuranceManagementAccess(
+    user,
+  );
+
+  const companyName = String(
+    body?.companyName || '',
+  ).trim();
+
+  const policyName = String(
+    body?.policyName || '',
+  ).trim();
+
+  const durationMonths = Number(
+    body?.durationMonths || 0,
+  );
+
+  const price = Number(
+    body?.price || 0,
+  );
+
+  const coverageAmount =
+    body?.coverageAmount === '' ||
+    body?.coverageAmount === null ||
+    body?.coverageAmount === undefined
+      ? undefined
+      : Number(
+          body.coverageAmount,
+        );
+
+  if (!companyName) {
+    throw new BadRequestException(
+      'Insurance company name is required',
+    );
+  }
+
+  if (!policyName) {
+    throw new BadRequestException(
+      'Policy name is required',
+    );
+  }
+
+  if (
+    !Number.isInteger(
+      durationMonths,
+    ) ||
+    durationMonths <= 0
+  ) {
+    throw new BadRequestException(
+      'Policy duration must be greater than 0 months',
+    );
+  }
+
+  if (
+    !Number.isFinite(price) ||
+    price < 0
+  ) {
+    throw new BadRequestException(
+      'Please provide a valid policy price',
+    );
+  }
+
+  if (
+    coverageAmount !== undefined &&
+    (
+      !Number.isFinite(
+        coverageAmount,
+      ) ||
+      coverageAmount < 0
+    )
+  ) {
+    throw new BadRequestException(
+      'Please provide a valid coverage amount',
+    );
+  }
+
+  const existing =
+    await this
+      .projectInsurancePlanRepository
+      .createQueryBuilder('plan')
+      .where(
+        'LOWER(TRIM(plan.companyName)) = LOWER(:companyName)',
+        {
+          companyName,
+        },
+      )
+      .andWhere(
+        'LOWER(TRIM(plan.policyName)) = LOWER(:policyName)',
+        {
+          policyName,
+        },
+      )
+      .andWhere(
+        'plan.durationMonths = :durationMonths',
+        {
+          durationMonths,
+        },
+      )
+      .andWhere(
+        'plan.isHidden = false',
+      )
+      .getOne();
+
+  if (existing) {
+    throw new BadRequestException(
+      'An insurance plan with the same company, policy name and duration already exists',
+    );
+  }
+
+  const plan =
+    this.projectInsurancePlanRepository.create({
+      companyName,
+      policyName,
+
+      durationMonths,
+
+      price,
+
+      coverageAmount,
+
+      description:
+        String(
+          body?.description || '',
+        ).trim() || undefined,
+
+      benefits:
+        String(
+          body?.benefits || '',
+        ).trim() || undefined,
+
+      terms:
+        String(
+          body?.terms || '',
+        ).trim() || undefined,
+
+      isActive:
+        body?.isActive === false ||
+        body?.isActive === 'false'
+          ? false
+          : true,
+
+      isHidden: false,
+
+      createdBy:
+        Number(
+          user?.id ||
+            user?.userId ||
+            user?.sub ||
+            0,
+        ) || undefined,
+
+      createdByName:
+        user?.name ||
+        user?.email ||
+        '',
+    });
+
+  const saved =
+    await this
+      .projectInsurancePlanRepository
+      .save(plan);
+
+  return {
+    message:
+      'Insurance plan created successfully',
+
+    plan: saved,
+  };
+}
+
+async listInsurancePlans(
+  query: any = {},
+  user?: any,
+) {
+  const page = Math.max(
+    Number(query?.page || 1),
+    1,
+  );
+
+  const limit = Math.min(
+    Math.max(
+      Number(query?.limit || 20),
+      1,
+    ),
+    100,
+  );
+
+  const skip =
+    (page - 1) * limit;
+
+  const search = String(
+    query?.search || '',
+  ).trim();
+
+  const companyName = String(
+    query?.companyName || '',
+  ).trim();
+
+  const activeOnly =
+    String(
+      query?.activeOnly ||
+        'false',
+    ) === 'true';
+
+  const showHidden =
+    String(
+      query?.showHidden ||
+        'false',
+    ) === 'true';
+
+  const qb =
+    this.projectInsurancePlanRepository
+      .createQueryBuilder(
+        'plan',
+      );
+
+  if (showHidden) {
+    this.assertInsuranceManagementAccess(
+      user,
+    );
+
+    qb.where(
+      'plan.isHidden = true',
+    );
+  } else {
+    qb.where(
+      'plan.isHidden = false',
+    );
+  }
+
+  if (activeOnly) {
+    qb.andWhere(
+      'plan.isActive = true',
+    );
+  }
+
+  if (search) {
+    qb.andWhere(
+      `(
+        LOWER(plan.companyName)
+          LIKE LOWER(:search)
+
+        OR LOWER(plan.policyName)
+          LIKE LOWER(:search)
+
+        OR LOWER(
+          COALESCE(
+            plan.description,
+            ''
+          )
+        ) LIKE LOWER(:search)
+      )`,
+      {
+        search:
+          `%${search}%`,
+      },
+    );
+  }
+
+  if (companyName) {
+    qb.andWhere(
+      `LOWER(
+        TRIM(plan.companyName)
+      ) = LOWER(
+        TRIM(:companyName)
+      )`,
+      {
+        companyName,
+      },
+    );
+  }
+
+  qb
+    .orderBy(
+      'plan.companyName',
+      'ASC',
+    )
+    .addOrderBy(
+      'plan.durationMonths',
+      'ASC',
+    )
+    .skip(skip)
+    .take(limit);
+
+  const [data, total] =
+    await qb.getManyAndCount();
+
+  return {
+    data,
+
+    pagination: {
+      page,
+      limit,
+      total,
+
+      totalPages:
+        Math.ceil(
+          total / limit,
+        ) || 1,
+    },
+  };
+}
+
+async updateInsurancePlan(
+  id: number,
+  body: any,
+  user: any,
+) {
+  this.assertInsuranceManagementAccess(
+    user,
+  );
+
+  const plan =
+    await this
+      .projectInsurancePlanRepository
+      .findOne({
+        where: {
+          id,
+          isHidden: false,
+        } as any,
+      });
+
+  if (!plan) {
+    throw new NotFoundException(
+      'Insurance plan not found',
+    );
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(
+      body,
+      'companyName',
+    )
+  ) {
+    const companyName = String(
+      body.companyName || '',
+    ).trim();
+
+    if (!companyName) {
+      throw new BadRequestException(
+        'Insurance company name is required',
+      );
+    }
+
+    plan.companyName =
+      companyName;
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(
+      body,
+      'policyName',
+    )
+  ) {
+    const policyName = String(
+      body.policyName || '',
+    ).trim();
+
+    if (!policyName) {
+      throw new BadRequestException(
+        'Policy name is required',
+      );
+    }
+
+    plan.policyName =
+      policyName;
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(
+      body,
+      'durationMonths',
+    )
+  ) {
+    const durationMonths =
+      Number(
+        body.durationMonths,
+      );
+
+    if (
+      !Number.isInteger(
+        durationMonths,
+      ) ||
+      durationMonths <= 0
+    ) {
+      throw new BadRequestException(
+        'Policy duration must be greater than 0 months',
+      );
+    }
+
+    plan.durationMonths =
+      durationMonths;
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(
+      body,
+      'price',
+    )
+  ) {
+    const price =
+      Number(body.price);
+
+    if (
+      !Number.isFinite(price) ||
+      price < 0
+    ) {
+      throw new BadRequestException(
+        'Please provide a valid policy price',
+      );
+    }
+
+    plan.price = price;
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(
+      body,
+      'coverageAmount',
+    )
+  ) {
+    const value =
+      body.coverageAmount;
+
+    if (
+      value === '' ||
+      value === null ||
+      value === undefined
+    ) {
+      plan.coverageAmount =
+        undefined;
+    } else {
+      const coverageAmount =
+        Number(value);
+
+      if (
+        !Number.isFinite(
+          coverageAmount,
+        ) ||
+        coverageAmount < 0
+      ) {
+        throw new BadRequestException(
+          'Please provide a valid coverage amount',
+        );
+      }
+
+      plan.coverageAmount =
+        coverageAmount;
+    }
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(
+      body,
+      'description',
+    )
+  ) {
+    plan.description =
+      String(
+        body.description || '',
+      ).trim() || undefined;
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(
+      body,
+      'benefits',
+    )
+  ) {
+    plan.benefits =
+      String(
+        body.benefits || '',
+      ).trim() || undefined;
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(
+      body,
+      'terms',
+    )
+  ) {
+    plan.terms =
+      String(
+        body.terms || '',
+      ).trim() || undefined;
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(
+      body,
+      'isActive',
+    )
+  ) {
+    plan.isActive =
+      body.isActive === true ||
+      body.isActive === 'true';
+  }
+
+  const saved =
+    await this
+      .projectInsurancePlanRepository
+      .save(plan);
+
+  return {
+    message:
+      'Insurance plan updated successfully',
+
+    plan: saved,
+  };
+}
+
+async hideInsurancePlan(
+  id: number,
+  user: any,
+) {
+  this.assertInsuranceManagementAccess(
+    user,
+  );
+
+  const plan =
+    await this
+      .projectInsurancePlanRepository
+      .findOne({
+        where: {
+          id,
+          isHidden: false,
+        } as any,
+      });
+
+  if (!plan) {
+    throw new NotFoundException(
+      'Insurance plan not found',
+    );
+  }
+
+  plan.isHidden = true;
+  plan.isActive = false;
+
+  await this
+    .projectInsurancePlanRepository
+    .save(plan);
+
+  return {
+    message:
+      'Insurance plan hidden successfully',
+  };
+}
+
+async restoreInsurancePlan(
+  id: number,
+  user: any,
+) {
+  this.assertInsuranceManagementAccess(
+    user,
+  );
+
+  const plan =
+    await this
+      .projectInsurancePlanRepository
+      .findOne({
+        where: {
+          id,
+          isHidden: true,
+        } as any,
+      });
+
+  if (!plan) {
+    throw new NotFoundException(
+      'Hidden insurance plan not found',
+    );
+  }
+
+  plan.isHidden = false;
+
+  await this
+    .projectInsurancePlanRepository
+    .save(plan);
+
+  return {
+    message:
+      'Insurance plan restored successfully',
+
+    plan,
+  };
+}
+
+async createProjectInsurance(
+  body: any,
+  user: any,
+) {
+  this.assertInsuranceManagementAccess(
+    user,
+  );
+
+  const projectId =
+    Number(
+      body?.projectId || 0,
+    );
+
+  const project =
+    await this
+      .getCompletedProjectForInsurance(
+        projectId,
+      );
+
+  const customerId =
+    Number(
+      project.customerId || 0,
+    );
+
+  if (!customerId) {
+    throw new BadRequestException(
+      'This completed project is not linked to a customer account',
+    );
+  }
+
+  const insurancePlanId =
+    Number(
+      body?.insurancePlanId || 0,
+    );
+
+  let plan:
+    | ProjectInsurancePlan
+    | null = null;
+
+  if (insurancePlanId) {
+    plan =
+      await this
+        .projectInsurancePlanRepository
+        .findOne({
+          where: {
+            id: insurancePlanId,
+            isHidden: false,
+          } as any,
+        });
+
+    if (!plan) {
+      throw new NotFoundException(
+        'Insurance plan not found',
+      );
+    }
+  }
+
+  const companyName = String(
+    body?.companyName ||
+      plan?.companyName ||
+      '',
+  ).trim();
+
+  const policyName = String(
+    body?.policyName ||
+      plan?.policyName ||
+      '',
+  ).trim();
+
+  const policyNumber = String(
+    body?.policyNumber || '',
+  ).trim();
+
+  if (!companyName) {
+    throw new BadRequestException(
+      'Insurance company name is required',
+    );
+  }
+
+  if (!policyName) {
+    throw new BadRequestException(
+      'Policy name is required',
+    );
+  }
+
+  const startDate =
+    new Date(
+      body?.startDate,
+    );
+
+  const expiryDate =
+    new Date(
+      body?.expiryDate,
+    );
+
+  if (
+    Number.isNaN(
+      startDate.getTime(),
+    )
+  ) {
+    throw new BadRequestException(
+      'Valid insurance start date is required',
+    );
+  }
+
+  if (
+    Number.isNaN(
+      expiryDate.getTime(),
+    )
+  ) {
+    throw new BadRequestException(
+      'Valid insurance expiry date is required',
+    );
+  }
+
+  if (
+    expiryDate.getTime() <=
+    startDate.getTime()
+  ) {
+    throw new BadRequestException(
+      'Insurance expiry date must be after the start date',
+    );
+  }
+
+  const policyCost =
+    body?.policyCost === '' ||
+    body?.policyCost === null ||
+    body?.policyCost === undefined
+      ? Number(
+          plan?.price || 0,
+        )
+      : Number(
+          body.policyCost,
+        );
+
+  if (
+    !Number.isFinite(
+      policyCost,
+    ) ||
+    policyCost < 0
+  ) {
+    throw new BadRequestException(
+      'Please provide a valid policy cost',
+    );
+  }
+
+  const coverageAmount =
+    body?.coverageAmount === '' ||
+    body?.coverageAmount === null ||
+    body?.coverageAmount === undefined
+      ? plan?.coverageAmount
+      : Number(
+          body.coverageAmount,
+        );
+
+  if (
+    coverageAmount !== undefined &&
+    coverageAmount !== null &&
+    (
+      !Number.isFinite(
+        Number(
+          coverageAmount,
+        ),
+      ) ||
+      Number(
+        coverageAmount,
+      ) < 0
+    )
+  ) {
+    throw new BadRequestException(
+      'Please provide a valid coverage amount',
+    );
+  }
+
+  let status =
+    String(
+      body?.status ||
+        ProjectInsuranceStatus.ACTIVE,
+    )
+      .trim()
+      .toUpperCase() as
+      ProjectInsuranceStatus;
+
+  if (
+    !Object.values(
+      ProjectInsuranceStatus,
+    ).includes(status)
+  ) {
+    throw new BadRequestException(
+      'Invalid insurance status',
+    );
+  }
+
+  /*
+   * A manually entered insurance record
+   * whose expiry has already passed should
+   * not remain ACTIVE.
+   */
+  const today =
+    new Date();
+
+  today.setHours(
+    0,
+    0,
+    0,
+    0,
+  );
+
+  const normalizedExpiry =
+    new Date(expiryDate);
+
+  normalizedExpiry.setHours(
+    0,
+    0,
+    0,
+    0,
+  );
+
+  if (
+    normalizedExpiry.getTime() <
+      today.getTime() &&
+    status ===
+      ProjectInsuranceStatus.ACTIVE
+  ) {
+    status =
+      ProjectInsuranceStatus.EXPIRED;
+  }
+
+  const insurance =
+    this.projectInsuranceRepository.create({
+      projectId:
+        project.id,
+
+      customerId,
+
+      customerCode:
+        project.customerCode ||
+        undefined,
+
+      customerName:
+        project.customerName ||
+        undefined,
+
+      customerPhone:
+        project.customerPhone ||
+        undefined,
+
+      city:
+        project.city ||
+        undefined,
+
+      branchName:
+        project.branchName ||
+        undefined,
+
+      insurancePlanId:
+        insurancePlanId ||
+        undefined,
+
+      companyName,
+      policyName,
+
+      policyNumber:
+        policyNumber ||
+        undefined,
+
+      policyCost,
+
+      coverageAmount:
+        coverageAmount ===
+          undefined ||
+        coverageAmount === null
+          ? undefined
+          : Number(
+              coverageAmount,
+            ),
+
+      startDate,
+
+      expiryDate,
+
+      status,
+
+      remarks:
+        String(
+          body?.remarks || '',
+        ).trim() || undefined,
+
+      isHidden: false,
+
+      createdBy:
+        Number(
+          user?.id ||
+            user?.userId ||
+            user?.sub ||
+            0,
+        ) || undefined,
+
+      createdByName:
+        user?.name ||
+        user?.email ||
+        '',
+    });
+
+  const saved =
+    await this
+      .projectInsuranceRepository
+      .save(insurance);
+
+  return {
+    message:
+      'Customer insurance added successfully',
+
+    insurance: saved,
+  };
+}
+
+async listProjectInsurance(
+  query: any = {},
+  user?: any,
+) {
+  this.assertInsuranceManagementAccess(
+    user,
+  );
+
+  const page = Math.max(
+    Number(query?.page || 1),
+    1,
+  );
+
+  const limit = Math.min(
+    Math.max(
+      Number(query?.limit || 20),
+      1,
+    ),
+    100,
+  );
+
+  const skip =
+    (page - 1) * limit;
+
+  const search = String(
+    query?.search || '',
+  ).trim();
+
+  const status = String(
+    query?.status || '',
+  )
+    .trim()
+    .toUpperCase();
+
+  const companyName = String(
+    query?.companyName || '',
+  ).trim();
+
+  const city = String(
+    query?.city || '',
+  ).trim();
+
+  const branchName = String(
+    query?.branchName || '',
+  ).trim();
+
+  const projectId = Number(
+    query?.projectId || 0,
+  );
+
+  const expiryFilter = String(
+    query?.expiryFilter || '',
+  )
+    .trim()
+    .toUpperCase();
+
+  const fromDate = String(
+    query?.fromDate || '',
+  ).trim();
+
+  const toDate = String(
+    query?.toDate || '',
+  ).trim();
+
+  const qb =
+    this.projectInsuranceRepository
+      .createQueryBuilder(
+        'insurance',
+      )
+      .where(
+        'insurance.isHidden = false',
+      );
+
+  if (search) {
+    qb.andWhere(
+      `(
+        LOWER(
+          COALESCE(
+            insurance.customerName,
+            ''
+          )
+        ) LIKE LOWER(:search)
+
+        OR LOWER(
+          COALESCE(
+            insurance.customerPhone,
+            ''
+          )
+        ) LIKE LOWER(:search)
+
+        OR LOWER(
+          COALESCE(
+            insurance.customerCode,
+            ''
+          )
+        ) LIKE LOWER(:search)
+
+        OR LOWER(
+          COALESCE(
+            insurance.companyName,
+            ''
+          )
+        ) LIKE LOWER(:search)
+
+        OR LOWER(
+          COALESCE(
+            insurance.policyName,
+            ''
+          )
+        ) LIKE LOWER(:search)
+
+        OR LOWER(
+          COALESCE(
+            insurance.policyNumber,
+            ''
+          )
+        ) LIKE LOWER(:search)
+
+        OR CAST(
+          insurance.projectId
+          AS TEXT
+        ) LIKE :search
+      )`,
+      {
+        search:
+          `%${search}%`,
+      },
+    );
+  }
+
+  if (status) {
+    if (
+      !Object.values(
+        ProjectInsuranceStatus,
+      ).includes(
+        status as
+          ProjectInsuranceStatus,
+      )
+    ) {
+      throw new BadRequestException(
+        'Invalid insurance status',
+      );
+    }
+
+    qb.andWhere(
+      'insurance.status = :status',
+      {
+        status,
+      },
+    );
+  }
+
+  if (companyName) {
+    qb.andWhere(
+      `LOWER(
+        TRIM(
+          insurance.companyName
+        )
+      ) = LOWER(
+        TRIM(:companyName)
+      )`,
+      {
+        companyName,
+      },
+    );
+  }
+
+  if (city) {
+    qb.andWhere(
+      `LOWER(
+        TRIM(
+          COALESCE(
+            insurance.city,
+            ''
+          )
+        )
+      ) = LOWER(
+        TRIM(:city)
+      )`,
+      {
+        city,
+      },
+    );
+  }
+
+  if (branchName) {
+    qb.andWhere(
+      `LOWER(
+        TRIM(
+          COALESCE(
+            insurance.branchName,
+            ''
+          )
+        )
+      ) = LOWER(
+        TRIM(:branchName)
+      )`,
+      {
+        branchName,
+      },
+    );
+  }
+
+  if (projectId) {
+    qb.andWhere(
+      'insurance.projectId = :projectId',
+      {
+        projectId,
+      },
+    );
+  }
+
+  /*
+   * Use database CURRENT_DATE so comparisons
+   * remain date-only and are not affected by
+   * JS server timezone conversions.
+   */
+  if (
+    expiryFilter ===
+    'WITHIN_7_DAYS'
+  ) {
+    qb.andWhere(
+      `
+      insurance.expiryDate
+        > CURRENT_DATE
+
+      AND insurance.expiryDate
+        <= CURRENT_DATE + INTERVAL '7 days'
+      `,
+    );
+  }
+
+  if (
+    expiryFilter ===
+    'EXPIRING_TODAY'
+  ) {
+    qb.andWhere(
+      'insurance.expiryDate = CURRENT_DATE',
+    );
+  }
+
+  if (
+    expiryFilter ===
+    'EXPIRED'
+  ) {
+    qb.andWhere(
+      'insurance.expiryDate < CURRENT_DATE',
+    );
+  }
+
+  if (
+    fromDate
+  ) {
+    qb.andWhere(
+      'insurance.expiryDate >= :fromDate',
+      {
+        fromDate,
+      },
+    );
+  }
+
+  if (
+    toDate
+  ) {
+    qb.andWhere(
+      'insurance.expiryDate <= :toDate',
+      {
+        toDate,
+      },
+    );
+  }
+
+  qb
+    .orderBy(
+      'insurance.expiryDate',
+      'ASC',
+    )
+    .addOrderBy(
+      'insurance.id',
+      'DESC',
+    )
+    .skip(skip)
+    .take(limit);
+
+  const [data, total] =
+    await qb.getManyAndCount();
+
+  const today = new Date();
+
+  today.setHours(
+    0,
+    0,
+    0,
+    0,
+  );
+
+  const enrichedData =
+    data.map(
+      (
+        insurance: any,
+      ) => {
+        const expiry =
+          new Date(
+            insurance.expiryDate,
+          );
+
+        expiry.setHours(
+          0,
+          0,
+          0,
+          0,
+        );
+
+        const diffMs =
+          expiry.getTime() -
+          today.getTime();
+
+        const daysToExpiry =
+          Math.ceil(
+            diffMs /
+              (
+                1000 *
+                60 *
+                60 *
+                24
+              ),
+          );
+
+        let computedExpiryState =
+          'ACTIVE';
+
+        if (daysToExpiry < 0) {
+          computedExpiryState =
+            'EXPIRED';
+        } else if (
+          daysToExpiry === 0
+        ) {
+          computedExpiryState =
+            'EXPIRING_TODAY';
+        } else if (
+          daysToExpiry <= 7
+        ) {
+          computedExpiryState =
+            'EXPIRING_WITHIN_7_DAYS';
+        }
+
+        return {
+          ...insurance,
+
+          daysToExpiry,
+
+          computedExpiryState,
+        };
+      },
+    );
+
+  return {
+    data:
+      enrichedData,
+
+    pagination: {
+      page,
+      limit,
+      total,
+
+      totalPages:
+        Math.ceil(
+          total / limit,
+        ) || 1,
+    },
+  };
+}
+
+async getInsuranceDashboard(
+  user: any,
+) {
+  this.assertInsuranceManagementAccess(
+    user,
+  );
+
+  const baseQb =
+    this.projectInsuranceRepository
+      .createQueryBuilder(
+        'insurance',
+      )
+      .where(
+        'insurance.isHidden = false',
+      );
+
+  const total =
+    await baseQb
+      .clone()
+      .getCount();
+
+  const active =
+    await baseQb
+      .clone()
+      .andWhere(
+        `
+        insurance.status = :activeStatus
+        `,
+        {
+          activeStatus:
+            ProjectInsuranceStatus.ACTIVE,
+        },
+      )
+      .andWhere(
+        'insurance.expiryDate >= CURRENT_DATE',
+      )
+      .getCount();
+
+  const expired =
+    await baseQb
+      .clone()
+      .andWhere(
+        'insurance.expiryDate < CURRENT_DATE',
+      )
+      .getCount();
+
+  const expiringWithin7Days =
+    await baseQb
+      .clone()
+      .andWhere(
+        `
+        insurance.expiryDate
+          > CURRENT_DATE
+        `,
+      )
+      .andWhere(
+        `
+        insurance.expiryDate
+          <= CURRENT_DATE
+            + INTERVAL '7 days'
+        `,
+      )
+      .getCount();
+
+  const expiringToday =
+    await baseQb
+      .clone()
+      .andWhere(
+        'insurance.expiryDate = CURRENT_DATE',
+      )
+      .getCount();
+
+  const renewalRequested =
+    await baseQb
+      .clone()
+      .andWhere(
+        'insurance.status = :renewalStatus',
+        {
+          renewalStatus:
+            ProjectInsuranceStatus
+              .RENEWAL_REQUESTED,
+        },
+      )
+      .getCount();
+
+  const pendingRequests =
+    await this
+      .projectInsuranceRequestRepository
+      .count({
+        where: {
+          status:
+            ProjectInsuranceRequestStatus
+              .PENDING,
+          isHidden: false,
+        } as any,
+      });
+
+  return {
+    total,
+    active,
+    expired,
+    expiringWithin7Days,
+    expiringToday,
+    renewalRequested,
+    pendingRequests,
+  };
+}
+
+async getProjectInsuranceHistory(
+  projectId: number,
+  user: any,
+) {
+  this.assertInsuranceManagementAccess(
+    user,
+  );
+
+  const project =
+    await this.projectRepository.findOne({
+      where: {
+        id: projectId,
+        isHidden: false,
+      } as any,
+    });
+
+  if (!project) {
+    throw new NotFoundException(
+      'Project not found',
+    );
+  }
+
+  return this.projectInsuranceRepository.find({
+    where: {
+      projectId,
+      isHidden: false,
+    } as any,
+
+    order: {
+      startDate: 'DESC',
+      id: 'DESC',
+    },
+  });
+}
+
+async listInsuranceRequests(
+  query: any = {},
+  user?: any,
+) {
+  this.assertInsuranceManagementAccess(user);
+
+  const page = Math.max(
+    Number(query?.page || 1),
+    1,
+  );
+
+  const limit = Math.min(
+    Math.max(
+      Number(query?.limit || 20),
+      1,
+    ),
+    100,
+  );
+
+  const skip = (page - 1) * limit;
+
+  const search = String(
+    query?.search || '',
+  ).trim();
+
+  const status = String(
+    query?.status || '',
+  )
+    .trim()
+    .toUpperCase();
+
+  const requestType = String(
+    query?.requestType || '',
+  )
+    .trim()
+    .toUpperCase();
+
+  const projectId = Number(
+    query?.projectId || 0,
+  );
+
+  const qb =
+    this.projectInsuranceRequestRepository
+      .createQueryBuilder('request')
+      .where(
+        'request.isHidden = false',
+      );
+
+  if (search) {
+    qb.andWhere(
+      `(
+        LOWER(
+          COALESCE(
+            request.customerName,
+            ''
+          )
+        ) LIKE LOWER(:search)
+
+        OR LOWER(
+          COALESCE(
+            request.customerPhone,
+            ''
+          )
+        ) LIKE LOWER(:search)
+
+        OR LOWER(
+          COALESCE(
+            request.customerCode,
+            ''
+          )
+        ) LIKE LOWER(:search)
+
+        OR CAST(
+          request.projectId
+          AS TEXT
+        ) LIKE :search
+      )`,
+      {
+        search: `%${search}%`,
+      },
+    );
+  }
+
+  if (status) {
+    if (
+      !Object.values(
+        ProjectInsuranceRequestStatus,
+      ).includes(
+        status as ProjectInsuranceRequestStatus,
+      )
+    ) {
+      throw new BadRequestException(
+        'Invalid insurance request status',
+      );
+    }
+
+    qb.andWhere(
+      'request.status = :status',
+      {
+        status,
+      },
+    );
+  }
+
+  if (requestType) {
+    if (
+      !Object.values(
+        ProjectInsuranceRequestType,
+      ).includes(
+        requestType as ProjectInsuranceRequestType,
+      )
+    ) {
+      throw new BadRequestException(
+        'Invalid insurance request type',
+      );
+    }
+
+    qb.andWhere(
+      'request.requestType = :requestType',
+      {
+        requestType,
+      },
+    );
+  }
+
+  if (projectId) {
+    qb.andWhere(
+      'request.projectId = :projectId',
+      {
+        projectId,
+      },
+    );
+  }
+
+  qb
+    .orderBy(
+      'request.requestedAt',
+      'DESC',
+    )
+    .addOrderBy(
+      'request.id',
+      'DESC',
+    )
+    .skip(skip)
+    .take(limit);
+
+  const [data, total] =
+    await qb.getManyAndCount();
+
+  return {
+    data,
+
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages:
+        Math.ceil(
+          total / limit,
+        ) || 1,
+    },
+  };
+}
+
+async createInsuranceRequest(
+  body: any,
+  user?: any,
+) {
+  const projectId = Number(
+    body?.projectId || 0,
+  );
+
+  const project =
+    await this.getCompletedProjectForInsurance(
+      projectId,
+    );
+
+  const customerId =
+    Number(
+      project.customerId || 0,
+    );
+
+  if (!customerId) {
+    throw new BadRequestException(
+      'This completed project is not linked to a customer account',
+    );
+  }
+
+  const requestType = String(
+    body?.requestType ||
+      ProjectInsuranceRequestType.NEW,
+  )
+    .trim()
+    .toUpperCase() as
+    ProjectInsuranceRequestType;
+
+  if (
+    !Object.values(
+      ProjectInsuranceRequestType,
+    ).includes(requestType)
+  ) {
+    throw new BadRequestException(
+      'Invalid insurance request type',
+    );
+  }
+
+  const insurancePlanId = Number(
+    body?.insurancePlanId || 0,
+  );
+
+  if (
+    requestType ===
+      ProjectInsuranceRequestType.NEW &&
+    !insurancePlanId
+  ) {
+    throw new BadRequestException(
+      'Insurance plan is required',
+    );
+  }
+
+  if (insurancePlanId) {
+    const plan =
+      await this
+        .projectInsurancePlanRepository
+        .findOne({
+          where: {
+            id: insurancePlanId,
+            isHidden: false,
+            isActive: true,
+          } as any,
+        });
+
+    if (!plan) {
+      throw new NotFoundException(
+        'Active insurance plan not found',
+      );
+    }
+  }
+
+  const existingInsuranceId =
+    Number(
+      body?.existingInsuranceId || 0,
+    );
+
+  if (
+    requestType ===
+    ProjectInsuranceRequestType.RENEWAL
+  ) {
+    if (!existingInsuranceId) {
+      throw new BadRequestException(
+        'Existing insurance ID is required for renewal',
+      );
+    }
+
+    const existingInsurance =
+      await this
+        .projectInsuranceRepository
+        .findOne({
+          where: {
+            id: existingInsuranceId,
+            projectId,
+            customerId,
+            isHidden: false,
+          } as any,
+        });
+
+    if (!existingInsurance) {
+      throw new NotFoundException(
+        'Existing customer insurance not found',
+      );
+    }
+  }
+
+  /*
+   * Prevent repeated pending requests for
+   * exactly the same project/request type.
+   */
+  const duplicateQb =
+    this.projectInsuranceRequestRepository
+      .createQueryBuilder('request')
+      .where(
+        'request.projectId = :projectId',
+        {
+          projectId,
+        },
+      )
+      .andWhere(
+        'request.customerId = :customerId',
+        {
+          customerId,
+        },
+      )
+      .andWhere(
+        'request.requestType = :requestType',
+        {
+          requestType,
+        },
+      )
+      .andWhere(
+        'request.status = :pendingStatus',
+        {
+          pendingStatus:
+            ProjectInsuranceRequestStatus.PENDING,
+        },
+      )
+      .andWhere(
+        'request.isHidden = false',
+      );
+
+  if (
+    requestType ===
+      ProjectInsuranceRequestType.RENEWAL &&
+    existingInsuranceId
+  ) {
+    duplicateQb.andWhere(
+      'request.existingInsuranceId = :existingInsuranceId',
+      {
+        existingInsuranceId,
+      },
+    );
+  }
+
+  const duplicateRequest =
+    await duplicateQb.getOne();
+
+  if (duplicateRequest) {
+    throw new BadRequestException(
+      'A pending insurance request already exists',
+    );
+  }
+
+  const request =
+    this.projectInsuranceRequestRepository
+      .create({
+        projectId,
+        customerId,
+
+        customerCode:
+          project.customerCode ||
+          undefined,
+
+        customerName:
+          project.customerName ||
+          undefined,
+
+        customerPhone:
+          project.customerPhone ||
+          undefined,
+
+        insurancePlanId:
+          insurancePlanId ||
+          undefined,
+
+        existingInsuranceId:
+          existingInsuranceId ||
+          undefined,
+
+        requestType,
+
+        status:
+          ProjectInsuranceRequestStatus.PENDING,
+
+        customerRemarks:
+          String(
+            body?.remarks ||
+              body?.customerRemarks ||
+              '',
+          ).trim() || undefined,
+
+        isHidden: false,
+      });
+
+  const saved =
+    await this
+      .projectInsuranceRequestRepository
+      .save(request);
+
+  return {
+    message:
+      requestType ===
+      ProjectInsuranceRequestType.RENEWAL
+        ? 'Insurance renewal request submitted successfully'
+        : 'Insurance request submitted successfully',
+
+    request: saved,
+  };
+}
+
+async approveInsuranceRequest(
+  id: number,
+  body: any,
+  user: any,
+) {
+  this.assertInsuranceManagementAccess(
+    user,
+  );
+
+  const request =
+    await this
+      .projectInsuranceRequestRepository
+      .findOne({
+        where: {
+          id,
+          isHidden: false,
+        } as any,
+      });
+
+  if (!request) {
+    throw new NotFoundException(
+      'Insurance request not found',
+    );
+  }
+
+  if (
+    request.status !==
+    ProjectInsuranceRequestStatus.PENDING
+  ) {
+    throw new BadRequestException(
+      'Only pending insurance requests can be approved',
+    );
+  }
+
+  request.status =
+    ProjectInsuranceRequestStatus.APPROVED;
+
+  request.adminRemarks =
+    String(
+      body?.remarks ||
+        body?.adminRemarks ||
+        '',
+    ).trim() || undefined;
+
+  request.processedBy =
+    Number(
+      user?.id ||
+        user?.userId ||
+        user?.sub ||
+        0,
+    ) || undefined;
+
+  request.processedByName =
+    user?.name ||
+    user?.email ||
+    '';
+
+  request.processedAt =
+    new Date();
+
+  const saved =
+    await this
+      .projectInsuranceRequestRepository
+      .save(request);
+
+  return {
+    message:
+      'Insurance request approved successfully',
+
+    request: saved,
+  };
+}
+
+async rejectInsuranceRequest(
+  id: number,
+  body: any,
+  user: any,
+) {
+  this.assertInsuranceManagementAccess(
+    user,
+  );
+
+  const request =
+    await this
+      .projectInsuranceRequestRepository
+      .findOne({
+        where: {
+          id,
+          isHidden: false,
+        } as any,
+      });
+
+  if (!request) {
+    throw new NotFoundException(
+      'Insurance request not found',
+    );
+  }
+
+  if (
+    request.status !==
+    ProjectInsuranceRequestStatus.PENDING
+  ) {
+    throw new BadRequestException(
+      'Only pending insurance requests can be rejected',
+    );
+  }
+
+  request.status =
+    ProjectInsuranceRequestStatus.REJECTED;
+
+  request.adminRemarks =
+    String(
+      body?.remarks ||
+        body?.adminRemarks ||
+        '',
+    ).trim() || undefined;
+
+  request.processedBy =
+    Number(
+      user?.id ||
+        user?.userId ||
+        user?.sub ||
+        0,
+    ) || undefined;
+
+  request.processedByName =
+    user?.name ||
+    user?.email ||
+    '';
+
+  request.processedAt =
+    new Date();
+
+  const saved =
+    await this
+      .projectInsuranceRequestRepository
+      .save(request);
+
+  return {
+    message:
+      'Insurance request rejected successfully',
+
+    request: saved,
+  };
+}
+
+async completeNewInsuranceRequest(
+  requestId: number,
+  body: any,
+  user: any,
+) {
+  this.assertInsuranceManagementAccess(
+    user,
+  );
+
+  const request =
+    await this
+      .projectInsuranceRequestRepository
+      .findOne({
+        where: {
+          id: requestId,
+          isHidden: false,
+        } as any,
+      });
+
+  if (!request) {
+    throw new NotFoundException(
+      'Insurance request not found',
+    );
+  }
+
+  if (
+    request.requestType !==
+    ProjectInsuranceRequestType.NEW
+  ) {
+    throw new BadRequestException(
+      'This is not a new insurance request',
+    );
+  }
+
+  if (
+    request.status !==
+    ProjectInsuranceRequestStatus.APPROVED
+  ) {
+    throw new BadRequestException(
+      'Insurance request must be approved first',
+    );
+  }
+
+  const result =
+    await this.createProjectInsurance(
+      {
+        ...body,
+
+        projectId:
+          request.projectId,
+
+        insurancePlanId:
+          body?.insurancePlanId ||
+          request.insurancePlanId,
+      },
+      user,
+    );
+
+  request.status =
+    ProjectInsuranceRequestStatus.COMPLETED;
+
+  request.processedBy =
+    Number(
+      user?.id ||
+        user?.userId ||
+        user?.sub ||
+        0,
+    ) || undefined;
+
+  request.processedByName =
+    user?.name ||
+    user?.email ||
+    '';
+
+  request.processedAt =
+    new Date();
+
+  request.adminRemarks =
+    String(
+      body?.adminRemarks ||
+        request.adminRemarks ||
+        '',
+    ).trim() || undefined;
+
+  await this
+    .projectInsuranceRequestRepository
+    .save(request);
+
+  return {
+    message:
+      'Insurance request completed successfully',
+
+    insurance:
+      result.insurance,
+
+    request,
+  };
+}
+
+async completeInsuranceRenewal(
+  requestId: number,
+  body: any,
+  user: any,
+) {
+  this.assertInsuranceManagementAccess(
+    user,
+  );
+
+  const request =
+    await this
+      .projectInsuranceRequestRepository
+      .findOne({
+        where: {
+          id: requestId,
+          isHidden: false,
+        } as any,
+      });
+
+  if (!request) {
+    throw new NotFoundException(
+      'Insurance request not found',
+    );
+  }
+
+  if (
+    request.requestType !==
+    ProjectInsuranceRequestType.RENEWAL
+  ) {
+    throw new BadRequestException(
+      'This is not an insurance renewal request',
+    );
+  }
+
+  if (
+    request.status !==
+    ProjectInsuranceRequestStatus.APPROVED
+  ) {
+    throw new BadRequestException(
+      'Renewal request must be approved first',
+    );
+  }
+
+  const existingInsuranceId =
+    Number(
+      request.existingInsuranceId ||
+        0,
+    );
+
+  if (!existingInsuranceId) {
+    throw new BadRequestException(
+      'Existing insurance reference is missing',
+    );
+  }
+
+  const previousInsurance =
+    await this
+      .projectInsuranceRepository
+      .findOne({
+        where: {
+          id: existingInsuranceId,
+          projectId:
+            request.projectId,
+          customerId:
+            request.customerId,
+          isHidden: false,
+        } as any,
+      });
+
+  if (!previousInsurance) {
+    throw new NotFoundException(
+      'Existing insurance record not found',
+    );
+  }
+
+  const project =
+    await this
+      .getCompletedProjectForInsurance(
+        request.projectId,
+      );
+
+  let plan:
+    | ProjectInsurancePlan
+    | null = null;
+
+  const insurancePlanId =
+    Number(
+      body?.insurancePlanId ||
+        request.insurancePlanId ||
+        previousInsurance.insurancePlanId ||
+        0,
+    );
+
+  if (insurancePlanId) {
+    plan =
+      await this
+        .projectInsurancePlanRepository
+        .findOne({
+          where: {
+            id: insurancePlanId,
+            isHidden: false,
+          } as any,
+        });
+  }
+
+  const companyName = String(
+    body?.companyName ||
+      plan?.companyName ||
+      previousInsurance.companyName ||
+      '',
+  ).trim();
+
+  const policyName = String(
+    body?.policyName ||
+      plan?.policyName ||
+      previousInsurance.policyName ||
+      '',
+  ).trim();
+
+  const startDate =
+    new Date(
+      body?.startDate,
+    );
+
+  const expiryDate =
+    new Date(
+      body?.expiryDate,
+    );
+
+  if (
+    Number.isNaN(
+      startDate.getTime(),
+    )
+  ) {
+    throw new BadRequestException(
+      'Valid renewal start date is required',
+    );
+  }
+
+  if (
+    Number.isNaN(
+      expiryDate.getTime(),
+    )
+  ) {
+    throw new BadRequestException(
+      'Valid renewal expiry date is required',
+    );
+  }
+
+  if (
+    expiryDate.getTime() <=
+    startDate.getTime()
+  ) {
+    throw new BadRequestException(
+      'Renewal expiry date must be after the start date',
+    );
+  }
+
+  const policyCost =
+    body?.policyCost === '' ||
+    body?.policyCost === null ||
+    body?.policyCost === undefined
+      ? Number(
+          plan?.price ||
+            previousInsurance.policyCost ||
+            0,
+        )
+      : Number(
+          body.policyCost,
+        );
+
+  if (
+    !Number.isFinite(policyCost) ||
+    policyCost < 0
+  ) {
+    throw new BadRequestException(
+      'Please provide a valid policy cost',
+    );
+  }
+
+  const rawCoverageAmount =
+    body?.coverageAmount === '' ||
+    body?.coverageAmount === null ||
+    body?.coverageAmount === undefined
+      ? (
+          plan?.coverageAmount ??
+          previousInsurance.coverageAmount
+        )
+      : Number(
+          body.coverageAmount,
+        );
+
+  const renewedInsurance =
+    this.projectInsuranceRepository
+      .create({
+        projectId:
+          project.id,
+
+        customerId:
+          request.customerId,
+
+        customerCode:
+          project.customerCode ||
+          undefined,
+
+        customerName:
+          project.customerName ||
+          undefined,
+
+        customerPhone:
+          project.customerPhone ||
+          undefined,
+
+        city:
+          project.city ||
+          undefined,
+
+        branchName:
+          project.branchName ||
+          undefined,
+
+        insurancePlanId:
+          insurancePlanId ||
+          undefined,
+
+        previousInsuranceId:
+          previousInsurance.id,
+
+        companyName,
+        policyName,
+
+        policyNumber:
+          String(
+            body?.policyNumber ||
+              '',
+          ).trim() ||
+          undefined,
+
+        policyCost,
+
+        coverageAmount:
+          rawCoverageAmount ===
+            undefined ||
+          rawCoverageAmount === null
+            ? undefined
+            : Number(
+                rawCoverageAmount,
+              ),
+
+        startDate,
+        expiryDate,
+
+        status:
+          ProjectInsuranceStatus.ACTIVE,
+
+        remarks:
+          String(
+            body?.remarks || '',
+          ).trim() ||
+          undefined,
+
+        isHidden: false,
+
+        createdBy:
+          Number(
+            user?.id ||
+              user?.userId ||
+              user?.sub ||
+              0,
+          ) || undefined,
+
+        createdByName:
+          user?.name ||
+          user?.email ||
+          '',
+      });
+
+  const savedRenewal =
+    await this
+      .projectInsuranceRepository
+      .save(
+        renewedInsurance,
+      );
+
+  /*
+   * Preserve the old record rather than
+   * overwriting it.
+   */
+  previousInsurance.status =
+    ProjectInsuranceStatus.RENEWED;
+
+  previousInsurance.updatedBy =
+    Number(
+      user?.id ||
+        user?.userId ||
+        user?.sub ||
+        0,
+    ) || undefined;
+
+  previousInsurance.updatedByName =
+    user?.name ||
+    user?.email ||
+    '';
+
+  await this
+    .projectInsuranceRepository
+    .save(
+      previousInsurance,
+    );
+
+  request.status =
+    ProjectInsuranceRequestStatus.COMPLETED;
+
+  request.processedBy =
+    Number(
+      user?.id ||
+        user?.userId ||
+        user?.sub ||
+        0,
+    ) || undefined;
+
+  request.processedByName =
+    user?.name ||
+    user?.email ||
+    '';
+
+  request.processedAt =
+    new Date();
+
+  await this
+    .projectInsuranceRequestRepository
+    .save(request);
+
+  return {
+    message:
+      'Insurance renewed successfully',
+
+    previousInsurance,
+
+    renewedInsurance:
+      savedRenewal,
+
+    request,
+  };
+}
+
+async uploadInsuranceDocument(
+  insuranceId: number,
+  file: any,
+  body: any,
+  user: any,
+) {
+  this.assertInsuranceManagementAccess(
+    user,
+  );
+
+  if (!file) {
+    throw new BadRequestException(
+      'Insurance document file is required',
+    );
+  }
+
+  const insurance =
+    await this.projectInsuranceRepository.findOne({
+      where: {
+        id: insuranceId,
+        isHidden: false,
+      } as any,
+    });
+
+  if (!insurance) {
+    throw new NotFoundException(
+      'Insurance record not found',
+    );
+  }
+
+  /*
+   * Safety check:
+   * insurance must still belong to a real
+   * completed project.
+   */
+  const project =
+    await this.getCompletedProjectForInsurance(
+      Number(
+        insurance.projectId,
+      ),
+    );
+
+  const mimeType =
+    String(
+      file.mimetype || '',
+    );
+
+  const allowedTypes = [
+    'application/pdf',
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+  ];
+
+  if (
+    !allowedTypes.includes(
+      mimeType,
+    )
+  ) {
+    throw new BadRequestException(
+      'Only PDF, JPG, PNG and WEBP files are allowed',
+    );
+  }
+
+  const maximumSize =
+    12 * 1024 * 1024;
+
+  if (
+    Number(
+      file.size || 0,
+    ) > maximumSize
+  ) {
+    throw new BadRequestException(
+      'Insurance document must be less than 12 MB',
+    );
+  }
+
+  const documentType =
+    String(
+      body?.documentType ||
+        ProjectInsuranceDocumentType.POLICY,
+    )
+      .trim()
+      .toUpperCase() as
+      ProjectInsuranceDocumentType;
+
+  if (
+    !Object.values(
+      ProjectInsuranceDocumentType,
+    ).includes(
+      documentType,
+    )
+  ) {
+    throw new BadRequestException(
+      'Invalid insurance document type',
+    );
+  }
+
+  const supabaseUrl =
+    process.env.SUPABASE_URL;
+
+  const serviceKey =
+    process.env
+      .SUPABASE_SERVICE_ROLE_KEY;
+
+  const bucket =
+    process.env
+      .SUPABASE_PROJECT_DOCUMENTS_BUCKET ||
+    'project-documents';
+
+  if (
+    !supabaseUrl ||
+    !serviceKey
+  ) {
+    throw new BadRequestException(
+      'Supabase storage is not configured',
+    );
+  }
+
+  const supabase =
+    createClient(
+      supabaseUrl,
+      serviceKey,
+    );
+
+  const originalName =
+    String(
+      file.originalname ||
+        'insurance-document',
+    );
+
+  const extension =
+    originalName.includes('.')
+      ? originalName
+          .split('.')
+          .pop()
+      : mimeType
+          .split('/')[1] ||
+        'file';
+
+  const safeExtension =
+    String(
+      extension || 'file',
+    ).replace(
+      /[^a-zA-Z0-9]/g,
+      '',
+    );
+
+  const currentUserId =
+    Number(
+      user?.id ||
+        user?.userId ||
+        user?.sub ||
+        0,
+    );
+
+  const filePath =
+    `insurance/project-${insurance.projectId}/insurance-${insurance.id}/user-${
+      currentUserId || 'unknown'
+    }/${Date.now()}-${randomUUID()}.${safeExtension}`;
+
+  const uploadResult =
+    await supabase.storage
+      .from(bucket)
+      .upload(
+        filePath,
+        file.buffer,
+        {
+          contentType:
+            mimeType,
+          upsert: false,
+        },
+      );
+
+  if (uploadResult.error) {
+    throw new BadRequestException(
+      uploadResult.error.message,
+    );
+  }
+
+  const publicUrlResult =
+    supabase.storage
+      .from(bucket)
+      .getPublicUrl(
+        filePath,
+      );
+
+  const visibleToCustomer =
+    body?.visibleToCustomer === true ||
+    body?.visibleToCustomer === 'true';
+
+  const document =
+    this.projectInsuranceDocumentRepository
+      .create({
+        insuranceId:
+          insurance.id,
+
+        documentType,
+
+        fileName:
+          originalName,
+
+        fileUrl:
+          publicUrlResult
+            .data.publicUrl,
+
+        mimeType,
+
+        fileSize:
+          Number(
+            file.size || 0,
+          ),
+
+        visibleToCustomer,
+
+        isHidden:
+          false,
+
+        uploadedBy:
+          currentUserId ||
+          undefined,
+
+        uploadedByName:
+          user?.name ||
+          user?.email ||
+          '',
+      });
+
+  const savedDocument =
+    await this.projectInsuranceDocumentRepository
+      .save(document);
+
+  /*
+   * Reuse existing customer notification
+   * infrastructure when the document is
+   * customer-visible.
+   */
+  if (
+    visibleToCustomer &&
+    insurance.customerId
+  ) {
+    await this.customerNotificationRepository.save(
+      this.customerNotificationRepository.create({
+        customerId:
+          Number(
+            insurance.customerId,
+          ),
+
+        customerCode:
+          insurance.customerCode ||
+          project.customerCode ||
+          '',
+
+        projectId:
+          Number(
+            insurance.projectId,
+          ),
+
+        notificationType:
+          'INSURANCE_DOCUMENT',
+
+        title:
+          'Insurance Document Available',
+
+        message:
+          `${String(
+            documentType,
+          ).replaceAll(
+            '_',
+            ' ',
+          )} is now available in your insurance section.`,
+
+        relatedEntityType:
+          'PROJECT_INSURANCE_DOCUMENT',
+
+        relatedEntityId:
+          savedDocument.id,
+      } as any),
+    );
+  }
+
+  return {
+    message:
+      'Insurance document uploaded successfully',
+
+    document:
+      savedDocument,
+
+    fileUrl:
+      savedDocument.fileUrl,
+  };
+}
+
+async getInsuranceDocuments(
+  insuranceId: number,
+  user: any,
+) {
+  this.assertInsuranceManagementAccess(
+    user,
+  );
+
+  const insurance =
+    await this.projectInsuranceRepository.findOne({
+      where: {
+        id: insuranceId,
+        isHidden: false,
+      } as any,
+    });
+
+  if (!insurance) {
+    throw new NotFoundException(
+      'Insurance record not found',
+    );
+  }
+
+  return this.projectInsuranceDocumentRepository.find({
+    where: {
+      insuranceId,
+      isHidden: false,
+    } as any,
+
+    order: {
+      createdAt:
+        'DESC',
+    },
+  });
+}
+
+async updateInsuranceDocumentCustomerVisibility(
+  id: number,
+  body: any,
+  user: any,
+) {
+  this.assertInsuranceManagementAccess(
+    user,
+  );
+
+  const document =
+    await this.projectInsuranceDocumentRepository.findOne({
+      where: {
+        id,
+        isHidden: false,
+      } as any,
+    });
+
+  if (!document) {
+    throw new NotFoundException(
+      'Insurance document not found',
+    );
+  }
+
+  const visibleToCustomer =
+    body?.visibleToCustomer === true ||
+    body?.visibleToCustomer === 'true';
+
+  document.visibleToCustomer =
+    visibleToCustomer;
+
+  const saved =
+    await this.projectInsuranceDocumentRepository.save(
+      document,
+    );
+
+  return {
+    message:
+      visibleToCustomer
+        ? 'Document is now visible to customer'
+        : 'Document hidden from customer',
+
+    document:
+      saved,
+  };
+}
+
+async hideInsuranceDocument(
+  id: number,
+  user: any,
+) {
+  this.assertInsuranceManagementAccess(
+    user,
+  );
+
+  const document =
+    await this.projectInsuranceDocumentRepository.findOne({
+      where: {
+        id,
+        isHidden: false,
+      } as any,
+    });
+
+  if (!document) {
+    throw new NotFoundException(
+      'Insurance document not found',
+    );
+  }
+
+  document.isHidden =
+    true;
+
+  document.visibleToCustomer =
+    false;
+
+  await this.projectInsuranceDocumentRepository.save(
+    document,
+  );
+
+  return {
+    message:
+      'Insurance document hidden successfully',
+  };
+}
+
+async restoreInsuranceDocument(
+  id: number,
+  user: any,
+) {
+  this.assertInsuranceManagementAccess(
+    user,
+  );
+
+  const document =
+    await this.projectInsuranceDocumentRepository.findOne({
+      where: {
+        id,
+        isHidden: true,
+      } as any,
+    });
+
+  if (!document) {
+    throw new NotFoundException(
+      'Hidden insurance document not found',
+    );
+  }
+
+  document.isHidden =
+    false;
+
+  const saved =
+    await this.projectInsuranceDocumentRepository.save(
+      document,
+    );
+
+  return {
+    message:
+      'Insurance document restored successfully',
+
+    document:
+      saved,
+  };
+}
+
+async processInsuranceExpiryReminders() {
+  /*
+   * STEP 1:
+   * Mark genuinely expired ACTIVE policies.
+   *
+   * Do NOT mark RENEWED or CANCELLED policies
+   * as EXPIRED.
+   */
+  await this.projectInsuranceRepository
+    .createQueryBuilder()
+    .update(ProjectInsurance)
+    .set({
+      status:
+        ProjectInsuranceStatus.EXPIRED,
+    })
+    .where(
+      'status = :activeStatus',
+      {
+        activeStatus:
+          ProjectInsuranceStatus.ACTIVE,
+      },
+    )
+    .andWhere(
+      '"expiryDate" < CURRENT_DATE',
+    )
+    .execute();
+
+  /*
+   * STEP 2:
+   * Find policies exactly 7 days from expiry
+   * OR expiring today.
+   */
+  const dueInsurance =
+    await this.projectInsuranceRepository
+      .createQueryBuilder(
+        'insurance',
+      )
+      .where(
+        'insurance.isHidden = false',
+      )
+      .andWhere(
+        `
+        insurance.status NOT IN (
+          :...excludedStatuses
+        )
+        `,
+        {
+          excludedStatuses: [
+            ProjectInsuranceStatus.RENEWED,
+            ProjectInsuranceStatus.CANCELLED,
+          ],
+        },
+      )
+      .andWhere(
+        `(
+          insurance.expiryDate =
+            CURRENT_DATE
+              + INTERVAL '7 days'
+
+          OR insurance.expiryDate =
+            CURRENT_DATE
+        )`,
+      )
+      .orderBy(
+        'insurance.expiryDate',
+        'ASC',
+      )
+      .getMany();
+
+  let customerNotificationsCreated =
+    0;
+
+  let adminRemindersCreated =
+    0;
+
+  for (
+    const insurance
+    of dueInsurance
+  ) {
+    const expiryDate =
+      this.formatInsuranceDate(
+        insurance.expiryDate,
+      );
+
+    /*
+     * Determine whether this policy is
+     * exactly 7 days away or expiring today.
+     *
+     * Using date-only values avoids time
+     * differences between Render and India.
+     */
+    const rawExpiry =
+      String(
+        insurance.expiryDate,
+      ).slice(
+        0,
+        10,
+      );
+
+    const indiaToday =
+      new Intl.DateTimeFormat(
+        'en-CA',
+        {
+          timeZone:
+            'Asia/Kolkata',
+
+          year:
+            'numeric',
+
+          month:
+            '2-digit',
+
+          day:
+            '2-digit',
+        },
+      ).format(
+        new Date(),
+      );
+
+    const todayDate =
+      new Date(
+        `${indiaToday}T00:00:00+05:30`,
+      );
+
+    const sevenDaysLater =
+      new Date(
+        todayDate,
+      );
+
+    sevenDaysLater.setDate(
+      sevenDaysLater.getDate() +
+        7,
+    );
+
+    const sevenDayDate =
+      new Intl.DateTimeFormat(
+        'en-CA',
+        {
+          timeZone:
+            'Asia/Kolkata',
+
+          year:
+            'numeric',
+
+          month:
+            '2-digit',
+
+          day:
+            '2-digit',
+        },
+      ).format(
+        sevenDaysLater,
+      );
+
+    const isSevenDayReminder =
+      rawExpiry ===
+      sevenDayDate;
+
+    const isExpiryDay =
+      rawExpiry ===
+      indiaToday;
+
+    /*
+     * --------------------------------
+     * 7-DAY ADMIN REMINDER
+     * --------------------------------
+     */
+    if (
+      isSevenDayReminder
+    ) {
+      const existingAdminLog =
+        await this
+          .projectInsuranceReminderLogRepository
+          .findOne({
+            where: {
+              insuranceId:
+                insurance.id,
+
+              reminderType:
+                InsuranceReminderType
+                  .ADMIN_7_DAY,
+            } as any,
+          });
+
+      if (
+        !existingAdminLog
+      ) {
+        await this
+          .projectInsuranceReminderLogRepository
+          .save(
+            this.projectInsuranceReminderLogRepository
+              .create({
+                insuranceId:
+                  insurance.id,
+
+                reminderType:
+                  InsuranceReminderType
+                    .ADMIN_7_DAY,
+
+                expiryDate:
+                  insurance.expiryDate,
+              }),
+          );
+
+        adminRemindersCreated++;
+      }
+    }
+
+    /*
+     * --------------------------------
+     * CUSTOMER 7-DAY REMINDER
+     * --------------------------------
+     */
+    if (
+      isSevenDayReminder &&
+      insurance.customerId
+    ) {
+      const existingCustomerLog =
+        await this
+          .projectInsuranceReminderLogRepository
+          .findOne({
+            where: {
+              insuranceId:
+                insurance.id,
+
+              reminderType:
+                InsuranceReminderType
+                  .CUSTOMER_7_DAY,
+            } as any,
+          });
+
+      if (
+        !existingCustomerLog
+      ) {
+        const notification =
+          this.customerNotificationRepository
+            .create({
+              customerId:
+                Number(
+                  insurance.customerId,
+                ),
+
+              customerCode:
+                insurance.customerCode ||
+                '',
+
+              projectId:
+                Number(
+                  insurance.projectId,
+                ),
+
+              notificationType:
+                'INSURANCE_EXPIRY_REMINDER',
+
+              title:
+                'Insurance Expiring Soon',
+
+              message:
+                `Your ${insurance.companyName} ${insurance.policyName} insurance will expire on ${expiryDate}. Please submit a renewal request if you wish to continue the coverage.`,
+
+              relatedEntityType:
+                'PROJECT_INSURANCE',
+
+              relatedEntityId:
+                insurance.id,
+            } as any);
+
+        await this
+          .customerNotificationRepository
+          .save(
+            notification,
+          );
+
+        /*
+         * Only write the reminder log AFTER
+         * the customer notification succeeds.
+         *
+         * If notification creation fails,
+         * the next processing run may retry.
+         */
+        await this
+          .projectInsuranceReminderLogRepository
+          .save(
+            this.projectInsuranceReminderLogRepository
+              .create({
+                insuranceId:
+                  insurance.id,
+
+                reminderType:
+                  InsuranceReminderType
+                    .CUSTOMER_7_DAY,
+
+                expiryDate:
+                  insurance.expiryDate,
+              }),
+          );
+
+        customerNotificationsCreated++;
+      }
+    }
+
+    /*
+     * --------------------------------
+     * EXACT-DAY ADMIN REMINDER
+     * --------------------------------
+     */
+    if (
+      isExpiryDay
+    ) {
+      const existingExpiryLog =
+        await this
+          .projectInsuranceReminderLogRepository
+          .findOne({
+            where: {
+              insuranceId:
+                insurance.id,
+
+              reminderType:
+                InsuranceReminderType
+                  .ADMIN_EXPIRY_DAY,
+            } as any,
+          });
+
+      if (
+        !existingExpiryLog
+      ) {
+        await this
+          .projectInsuranceReminderLogRepository
+          .save(
+            this.projectInsuranceReminderLogRepository
+              .create({
+                insuranceId:
+                  insurance.id,
+
+                reminderType:
+                  InsuranceReminderType
+                    .ADMIN_EXPIRY_DAY,
+
+                expiryDate:
+                  insurance.expiryDate,
+              }),
+          );
+
+        adminRemindersCreated++;
+      }
+    }
+  }
+
+  return {
+    message:
+      'Insurance expiry processing completed',
+
+    matchedPolicies:
+      dueInsurance.length,
+
+    customerNotificationsCreated,
+
+    adminRemindersCreated,
+  };
+}
+
+@Cron(
+  '0 5 9 * * *',
+  {
+    name:
+      'insurance-expiry-reminders',
+
+    timeZone:
+      'Asia/Kolkata',
+
+    waitForCompletion:
+      true,
+  },
+)
+async handleInsuranceExpiryCron() {
+  try {
+    const result =
+      await this.processInsuranceExpiryReminders();
+
+    this.logger.log(
+      `Insurance expiry cron completed. Matched: ${result.matchedPolicies}, Customer notifications: ${result.customerNotificationsCreated}, Admin reminders: ${result.adminRemindersCreated}`,
+    );
+  } catch (error: any) {
+    this.logger.error(
+      'Insurance expiry cron failed',
+      error?.stack ||
+        error?.message ||
+        error,
+    );
+  }
+}
+
+async getInsuranceReminderList(
+  user: any,
+) {
+  this.assertInsuranceManagementAccess(
+    user,
+  );
+
+  const reminders =
+    await this.projectInsuranceRepository
+      .createQueryBuilder(
+        'insurance',
+      )
+      .where(
+        'insurance.isHidden = false',
+      )
+      .andWhere(
+        `
+        insurance.status NOT IN (
+          :...excludedStatuses
+        )
+        `,
+        {
+          excludedStatuses: [
+            ProjectInsuranceStatus.RENEWED,
+            ProjectInsuranceStatus.CANCELLED,
+          ],
+        },
+      )
+      .andWhere(
+        `(
+          insurance.expiryDate =
+            CURRENT_DATE
+
+          OR insurance.expiryDate =
+            CURRENT_DATE
+              + INTERVAL '7 days'
+        )`,
+      )
+      .orderBy(
+        'insurance.expiryDate',
+        'ASC',
+      )
+      .getMany();
+
+  const reminderIds =
+    reminders.map(
+      (item) =>
+        item.id,
+    );
+
+  const stateMap =
+    await this
+      .getUnifiedReminderStateMap(
+        user,
+        'INSURANCE',
+        reminderIds,
+      );
+
+  const today =
+    new Intl.DateTimeFormat(
+      'en-CA',
+      {
+        timeZone:
+          'Asia/Kolkata',
+
+        year:
+          'numeric',
+
+        month:
+          '2-digit',
+
+        day:
+          '2-digit',
+      },
+    ).format(
+      new Date(),
+    );
+
+  return reminders
+    .map(
+      (
+        insurance: any,
+      ) => {
+        const expiryDate =
+          String(
+            insurance.expiryDate,
+          ).slice(
+            0,
+            10,
+          );
+
+        const reminderType =
+          expiryDate ===
+          today
+            ? 'INSURANCE_EXPIRY_TODAY'
+            : 'INSURANCE_EXPIRING_7_DAYS';
+
+        return {
+          id:
+            insurance.id,
+
+          insuranceId:
+            insurance.id,
+
+          projectId:
+            insurance.projectId,
+
+          customerId:
+            insurance.customerId,
+
+          customerName:
+            insurance.customerName ||
+            '',
+
+          customerPhone:
+            insurance.customerPhone ||
+            '',
+
+          customerCode:
+            insurance.customerCode ||
+            '',
+
+          companyName:
+            insurance.companyName,
+
+          policyName:
+            insurance.policyName,
+
+          policyNumber:
+            insurance.policyNumber ||
+            '',
+
+          city:
+            insurance.city ||
+            '',
+
+          branchName:
+            insurance.branchName ||
+            '',
+
+          expiryDate:
+            insurance.expiryDate,
+
+          reminderSource:
+            'INSURANCE',
+
+          reminderType,
+
+          title:
+            reminderType ===
+            'INSURANCE_EXPIRY_TODAY'
+              ? 'Insurance Expires Today'
+              : 'Insurance Expiring in 7 Days',
+
+          message:
+            reminderType ===
+            'INSURANCE_EXPIRY_TODAY'
+              ? `${insurance.customerName || 'Customer'}'s ${insurance.companyName} insurance expires today.`
+              : `${insurance.customerName || 'Customer'}'s ${insurance.companyName} insurance expires in 7 days.`,
+
+          userReminderStatus:
+            stateMap[
+              String(
+                insurance.id,
+              )
+            ]?.status ||
+            'UNREAD',
+        };
+      },
+    )
+    .filter(
+      (item) =>
+        item
+          .userReminderStatus !==
+        ProjectReminderUserStateStatus
+          .DISMISSED,
+    );
+}
+
+async getUnreadInsuranceReminderCount(
+  user: any,
+) {
+  const reminders =
+    await this.getInsuranceReminderList(
+      user,
+    );
+
+  return {
+    count:
+      reminders.filter(
+        (item: any) =>
+          item.userReminderStatus ===
+          'UNREAD',
+      ).length,
+  };
+}
+
+async getProjectInsuranceById(
+  id: number,
+  user: any,
+) {
+  this.assertInsuranceManagementAccess(
+    user,
+  );
+
+  const insurance =
+    await this.projectInsuranceRepository.findOne({
+      where: {
+        id,
+        isHidden: false,
+      } as any,
+    });
+
+  if (!insurance) {
+    throw new NotFoundException(
+      'Insurance record not found',
+    );
+  }
+
+  const project =
+    await this.projectRepository.findOne({
+      where: {
+        id: Number(
+          insurance.projectId,
+        ),
+      },
+    });
+
+  const documents =
+    await this.projectInsuranceDocumentRepository.find({
+      where: {
+        insuranceId:
+          insurance.id,
+
+        isHidden: false,
+      } as any,
+
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+
+  const history =
+    await this.projectInsuranceRepository.find({
+      where: {
+        projectId:
+          insurance.projectId,
+
+        isHidden: false,
+      } as any,
+
+      order: {
+        startDate: 'DESC',
+        id: 'DESC',
+      },
+    });
+
+  return {
+    insurance,
+    project,
+    documents,
+    history,
+  };
+}
+
+async updateProjectInsurance(
+  insuranceId: number,
+  body: any,
+  user: any,
+) {
+  this.assertInsuranceManagementAccess(
+    user,
+  );
+
+  const insurance =
+    await this.projectInsuranceRepository.findOne({
+      where: {
+        id: insuranceId,
+        isHidden: false,
+      } as any,
+    });
+
+  if (!insurance) {
+    throw new NotFoundException(
+      'Insurance record not found',
+    );
+  }
+
+  await this.getCompletedProjectForInsurance(
+    Number(
+      insurance.projectId,
+    ),
+  );
+
+  if (
+    body?.companyName !==
+    undefined
+  ) {
+    insurance.companyName =
+      String(
+        body.companyName,
+      ).trim();
+  }
+
+  if (
+    body?.policyName !==
+    undefined
+  ) {
+    insurance.policyName =
+      String(
+        body.policyName,
+      ).trim();
+  }
+
+  if (
+    body?.policyNumber !==
+    undefined
+  ) {
+    insurance.policyNumber =
+      String(
+        body.policyNumber,
+      ).trim() ||
+      undefined;
+  }
+
+  if (
+    body?.policyCost !==
+    undefined
+  ) {
+    const policyCost =
+      Number(
+        body.policyCost,
+      );
+
+    if (
+      !Number.isFinite(
+        policyCost,
+      ) ||
+      policyCost < 0
+    ) {
+      throw new BadRequestException(
+        'Invalid policy cost',
+      );
+    }
+
+    insurance.policyCost =
+      policyCost;
+  }
+
+  if (
+    body?.coverageAmount !==
+    undefined
+  ) {
+    if (
+      body.coverageAmount ===
+        null ||
+      body.coverageAmount ===
+        ''
+    ) {
+      insurance.coverageAmount =
+        undefined;
+    } else {
+      const coverageAmount =
+        Number(
+          body.coverageAmount,
+        );
+
+      if (
+        !Number.isFinite(
+          coverageAmount,
+        ) ||
+        coverageAmount < 0
+      ) {
+        throw new BadRequestException(
+          'Invalid coverage amount',
+        );
+      }
+
+      insurance.coverageAmount =
+        coverageAmount;
+    }
+  }
+
+  if (
+    body?.startDate !==
+    undefined
+  ) {
+    insurance.startDate =
+      body.startDate;
+  }
+
+  if (
+    body?.expiryDate !==
+    undefined
+  ) {
+    insurance.expiryDate =
+      body.expiryDate;
+  }
+
+  if (
+    body?.status !==
+    undefined
+  ) {
+    insurance.status =
+      body.status;
+  }
+
+  if (
+    body?.remarks !==
+    undefined
+  ) {
+    insurance.remarks =
+      String(
+        body.remarks,
+      ).trim() ||
+      undefined;
+  }
+
+  if (
+    body?.insurancePlanId !==
+    undefined
+  ) {
+    insurance.insurancePlanId =
+      body.insurancePlanId
+        ? Number(
+            body.insurancePlanId,
+          )
+        : undefined;
+  }
+
+  const saved =
+    await this.projectInsuranceRepository.save(
+      insurance,
+    );
+
+  return {
+    message:
+      'Insurance policy updated successfully',
+
+    insurance:
+      saved,
+  };
 }
 }

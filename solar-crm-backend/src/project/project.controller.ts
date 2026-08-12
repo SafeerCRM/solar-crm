@@ -2133,6 +2133,586 @@ updateInspectionDefect(
   );
 }
 
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+  'CUSTOMER_MANAGER',
+)
+@Post('insurance/plans')
+createInsurancePlan(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService
+    .createInsurancePlan(
+      body,
+      user,
+    );
+}
+
+@Get('insurance/plans')
+listInsurancePlans(
+  @Query() query: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService
+    .listInsurancePlans(
+      query,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+  'CUSTOMER_MANAGER',
+)
+@Patch('insurance/plans/:id')
+updateInsurancePlan(
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+
+  @Body()
+  body: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .updateInsurancePlan(
+      id,
+      body,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+  'CUSTOMER_MANAGER',
+)
+@Patch(
+  'insurance/plans/:id/hide',
+)
+hideInsurancePlan(
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .hideInsurancePlan(
+      id,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+  'CUSTOMER_MANAGER',
+)
+@Patch(
+  'insurance/plans/:id/restore',
+)
+restoreInsurancePlan(
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .restoreInsurancePlan(
+      id,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+  'CUSTOMER_MANAGER',
+)
+@Post('insurance/customer-policy')
+createProjectInsurance(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService
+    .createProjectInsurance(
+      body,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+  'CUSTOMER_MANAGER',
+)
+@Get('insurance/register')
+listProjectInsurance(
+  @Query() query: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService
+    .listProjectInsurance(
+      query,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+  'CUSTOMER_MANAGER',
+)
+@Get('insurance/dashboard')
+getInsuranceDashboard(
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .getInsuranceDashboard(
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+  'CUSTOMER_MANAGER',
+)
+@Get(
+  ':projectId/insurance/history',
+)
+getProjectInsuranceHistory(
+  @Param(
+    'projectId',
+    ParseIntPipe,
+  )
+  projectId: number,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .getProjectInsuranceHistory(
+      projectId,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+  'CUSTOMER_MANAGER',
+)
+@Get('insurance/requests')
+listInsuranceRequests(
+  @Query() query: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService
+    .listInsuranceRequests(
+      query,
+      user,
+    );
+}
+
+@Post('insurance/requests')
+createInsuranceRequest(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService
+    .createInsuranceRequest(
+      body,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+  'CUSTOMER_MANAGER',
+)
+@Patch(
+  'insurance/requests/:id/approve',
+)
+approveInsuranceRequest(
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+
+  @Body()
+  body: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .approveInsuranceRequest(
+      id,
+      body,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+  'CUSTOMER_MANAGER',
+)
+@Patch(
+  'insurance/requests/:id/reject',
+)
+rejectInsuranceRequest(
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+
+  @Body()
+  body: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .rejectInsuranceRequest(
+      id,
+      body,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+  'CUSTOMER_MANAGER',
+)
+@Post(
+  'insurance/requests/:id/complete',
+)
+completeNewInsuranceRequest(
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+
+  @Body()
+  body: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .completeNewInsuranceRequest(
+      id,
+      body,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+  'CUSTOMER_MANAGER',
+)
+@Post(
+  'insurance/requests/:id/complete-renewal',
+)
+completeInsuranceRenewal(
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+
+  @Body()
+  body: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .completeInsuranceRenewal(
+      id,
+      body,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+  'CUSTOMER_MANAGER',
+)
+@Post(
+  'insurance/:insuranceId/documents/upload',
+)
+@UseInterceptors(
+  FileInterceptor(
+    'file',
+    {
+      limits: {
+        fileSize:
+          12 * 1024 * 1024,
+      },
+    },
+  ),
+)
+uploadInsuranceDocument(
+  @Param(
+    'insuranceId',
+    ParseIntPipe,
+  )
+  insuranceId: number,
+
+  @UploadedFile()
+  file: any,
+
+  @Body()
+  body: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .uploadInsuranceDocument(
+      insuranceId,
+      file,
+      body,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+  'CUSTOMER_MANAGER',
+)
+@Get(
+  'insurance/:insuranceId/documents',
+)
+getInsuranceDocuments(
+  @Param(
+    'insuranceId',
+    ParseIntPipe,
+  )
+  insuranceId: number,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .getInsuranceDocuments(
+      insuranceId,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+  'CUSTOMER_MANAGER',
+)
+@Patch(
+  'insurance/documents/:id/customer-visibility',
+)
+updateInsuranceDocumentCustomerVisibility(
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+
+  @Body()
+  body: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .updateInsuranceDocumentCustomerVisibility(
+      id,
+      body,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+  'CUSTOMER_MANAGER',
+)
+@Patch(
+  'insurance/documents/:id/hide',
+)
+hideInsuranceDocument(
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .hideInsuranceDocument(
+      id,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+  'CUSTOMER_MANAGER',
+)
+@Patch(
+  'insurance/documents/:id/restore',
+)
+restoreInsuranceDocument(
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .restoreInsuranceDocument(
+      id,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+  'CUSTOMER_MANAGER',
+)
+@Post(
+  'insurance/process-expiry-reminders',
+)
+processInsuranceExpiryReminders(
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .processInsuranceExpiryReminders();
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+  'CUSTOMER_MANAGER',
+)
+@Get(
+  'insurance/reminders',
+)
+getInsuranceReminderList(
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .getInsuranceReminderList(
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+  'CUSTOMER_MANAGER',
+)
+@Get(
+  'insurance/reminders/unread-count',
+)
+getUnreadInsuranceReminderCount(
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .getUnreadInsuranceReminderCount(
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+  'CUSTOMER_MANAGER',
+)
+@Get(
+  'insurance/:insuranceId',
+)
+getProjectInsuranceById(
+  @Param(
+    'insuranceId',
+    ParseIntPipe,
+  )
+  insuranceId: number,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .getProjectInsuranceById(
+      insuranceId,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+  'CUSTOMER_MANAGER',
+)
+@Patch(
+  'insurance/:insuranceId',
+)
+updateProjectInsurance(
+  @Param(
+    'insuranceId',
+    ParseIntPipe,
+  )
+  insuranceId: number,
+
+  @Body()
+  body: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .updateProjectInsurance(
+      insuranceId,
+      body,
+      user,
+    );
+}
+
 @Get('ledger/party-outstanding')
 getPartyOutstanding(@Query() query: any) {
   return this.projectService.getPartyOutstandingPaginated(query);

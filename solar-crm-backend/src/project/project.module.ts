@@ -81,12 +81,23 @@ import {
   GlobalDocumentVault,
 } from './global-document-vault.entity';
 
+import { ProjectInsurancePlan } from './project-insurance-plan.entity';
+import { ProjectInsurance } from './project-insurance.entity';
+import { ProjectInsuranceDocument } from './project-insurance-document.entity';
+import { ProjectInsuranceRequest } from './project-insurance-request.entity';
+import { ProjectInsuranceReminderLog } from './project-insurance-reminder-log.entity';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([Project, 
      ProjectInspection,
 ProjectInspectionDefect,
-ProjectInspectionPhoto, GlobalDocumentVault, ProjectDocument, CustomerNotification, ProjectComment, ProjectMaterialMaster, ProjectMaterialRequest,
+ProjectInspectionPhoto, GlobalDocumentVault,
+ProjectInsurancePlan,
+ProjectInsurance,
+ProjectInsuranceDocument,
+ProjectInsuranceRequest,
+ProjectInsuranceReminderLog, ProjectDocument, CustomerNotification, ProjectComment, ProjectMaterialMaster, ProjectMaterialRequest,
 ProjectMaterialRequestItem, ProjectBranch, ProjectLoanDetail, ProjectSubsidyDetail, ProjectElectricityDetail, ProjectExecutionActivity, ProjectExecutionProof, ProjectExecutionReminder, ProjectExecutionReminderUserState, ProjectPaymentInstallment, ProjectPaymentReminderUserState, ProjectReminderUserState, ProjectEditHistory,
  ProjectVendor,
 ProjectVendorCompany,

@@ -473,6 +473,351 @@ async submitAfterSalesRequestRating(
   );
 }
 
+@Get('insurance/my')
+async getMyInsuranceOverview(
+  @Req() req: any,
+) {
+  const authHeader =
+    req.headers?.authorization || '';
+
+  const token =
+    authHeader.replace(
+      'Bearer ',
+      '',
+    );
+
+  if (!token) {
+    throw new UnauthorizedException(
+      'Customer token missing',
+    );
+  }
+
+  const payload: any =
+    jwt.verify(
+      token,
+      'mysecretkey',
+    );
+
+  if (!payload?.customerId) {
+    throw new UnauthorizedException(
+      'Invalid customer token',
+    );
+  }
+
+  return this.service
+    .getMyInsuranceOverview({
+      id: Number(
+        payload.customerId,
+      ),
+      customerId: Number(
+        payload.customerId,
+      ),
+      customerCode:
+        payload.customerCode,
+      roles: ['CUSTOMER'],
+    });
+}
+
+@Get('insurance/plans')
+async getMyAvailableInsurancePlans(
+  @Req() req: any,
+) {
+  const authHeader =
+    req.headers?.authorization || '';
+
+  const token =
+    authHeader.replace(
+      'Bearer ',
+      '',
+    );
+
+  if (!token) {
+    throw new UnauthorizedException(
+      'Customer token missing',
+    );
+  }
+
+  const payload: any =
+    jwt.verify(
+      token,
+      'mysecretkey',
+    );
+
+  if (!payload?.customerId) {
+    throw new UnauthorizedException(
+      'Invalid customer token',
+    );
+  }
+
+  return this.service
+    .getMyAvailableInsurancePlans({
+      id: Number(
+        payload.customerId,
+      ),
+      customerId: Number(
+        payload.customerId,
+      ),
+      customerCode:
+        payload.customerCode,
+      roles: ['CUSTOMER'],
+    });
+}
+
+@Get(
+  'insurance/:insuranceId/documents',
+)
+async getMyInsuranceDocuments(
+  @Req() req: any,
+
+  @Param(
+    'insuranceId',
+    ParseIntPipe,
+  )
+  insuranceId: number,
+) {
+  const authHeader =
+    req.headers?.authorization || '';
+
+  const token =
+    authHeader.replace(
+      'Bearer ',
+      '',
+    );
+
+  if (!token) {
+    throw new UnauthorizedException(
+      'Customer token missing',
+    );
+  }
+
+  const payload: any =
+    jwt.verify(
+      token,
+      'mysecretkey',
+    );
+
+  if (!payload?.customerId) {
+    throw new UnauthorizedException(
+      'Invalid customer token',
+    );
+  }
+
+  return this.service
+    .getMyInsuranceDocuments(
+      insuranceId,
+      {
+        id: Number(
+          payload.customerId,
+        ),
+        customerId: Number(
+          payload.customerId,
+        ),
+        customerCode:
+          payload.customerCode,
+        roles: ['CUSTOMER'],
+      },
+    );
+}
+
+@Post('insurance/request')
+async createMyInsuranceRequest(
+  @Req() req: any,
+
+  @Body()
+  body: any,
+) {
+  const authHeader =
+    req.headers?.authorization || '';
+
+  const token =
+    authHeader.replace(
+      'Bearer ',
+      '',
+    );
+
+  if (!token) {
+    throw new UnauthorizedException(
+      'Customer token missing',
+    );
+  }
+
+  const payload: any =
+    jwt.verify(
+      token,
+      'mysecretkey',
+    );
+
+  if (!payload?.customerId) {
+    throw new UnauthorizedException(
+      'Invalid customer token',
+    );
+  }
+
+  return this.service
+    .createMyInsuranceRequest(
+      body,
+      {
+        id: Number(
+          payload.customerId,
+        ),
+        customerId: Number(
+          payload.customerId,
+        ),
+        customerCode:
+          payload.customerCode,
+        roles: ['CUSTOMER'],
+      },
+    );
+}
+
+@Post(
+  'insurance/:insuranceId/renew',
+)
+async createMyInsuranceRenewalRequest(
+  @Req() req: any,
+
+  @Param(
+    'insuranceId',
+    ParseIntPipe,
+  )
+  insuranceId: number,
+
+  @Body()
+  body: any,
+) {
+  const authHeader =
+    req.headers?.authorization || '';
+
+  const token =
+    authHeader.replace(
+      'Bearer ',
+      '',
+    );
+
+  if (!token) {
+    throw new UnauthorizedException(
+      'Customer token missing',
+    );
+  }
+
+  const payload: any =
+    jwt.verify(
+      token,
+      'mysecretkey',
+    );
+
+  if (!payload?.customerId) {
+    throw new UnauthorizedException(
+      'Invalid customer token',
+    );
+  }
+
+  return this.service
+    .createMyInsuranceRenewalRequest(
+      insuranceId,
+      body,
+      {
+        id: Number(
+          payload.customerId,
+        ),
+        customerId: Number(
+          payload.customerId,
+        ),
+        customerCode:
+          payload.customerCode,
+        roles: ['CUSTOMER'],
+      },
+    );
+}
+
+@Post(
+  'insurance/:insuranceId/documents/upload',
+)
+@UseInterceptors(
+  FilesInterceptor(
+    'files',
+    5,
+    {
+      limits: {
+        fileSize:
+          12 * 1024 * 1024,
+      },
+    },
+  ),
+)
+async uploadMyInsuranceDocuments(
+  @Req()
+  req: any,
+
+  @Param(
+    'insuranceId',
+    ParseIntPipe,
+  )
+  insuranceId: number,
+
+  @UploadedFiles()
+  files: any[],
+
+  @Body()
+  body: any,
+) {
+  const authHeader =
+    req.headers
+      ?.authorization ||
+    '';
+
+  const token =
+    authHeader.replace(
+      'Bearer ',
+      '',
+    );
+
+  if (!token) {
+    throw new UnauthorizedException(
+      'Customer token missing',
+    );
+  }
+
+  const payload: any =
+    jwt.verify(
+      token,
+      'mysecretkey',
+    );
+
+  if (
+    !payload
+      ?.customerId
+  ) {
+    throw new UnauthorizedException(
+      'Invalid customer token',
+    );
+  }
+
+  return this.service
+    .uploadMyInsuranceDocuments(
+      insuranceId,
+      files,
+      body,
+      {
+        id: Number(
+          payload.customerId,
+        ),
+
+        customerId:
+          Number(
+            payload.customerId,
+          ),
+
+        customerCode:
+          payload.customerCode,
+
+        roles: [
+          'CUSTOMER',
+        ],
+      },
+    );
+}
+
 @Get('payment-receipts/:id/activities')
 async getPaymentReceiptActivities(
   @Req() req: any,

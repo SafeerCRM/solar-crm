@@ -56,6 +56,23 @@ import { CustomerReferralStatus } from './customer-referral.entity';
 import { TelecallingContact, ContactStatus } from '../telecalling/telecalling-contact.entity';
 import { Lead } from '../leads/lead.entity';
 import { Meeting } from '../meeting/meeting.entity';
+import {
+  ProjectInsurancePlan,
+} from '../project/project-insurance-plan.entity';
+
+import {
+  ProjectInsurance,
+} from '../project/project-insurance.entity';
+
+import {
+  ProjectInsuranceDocument,
+} from '../project/project-insurance-document.entity';
+
+import {
+  ProjectInsuranceRequest,
+  ProjectInsuranceRequestStatus,
+  ProjectInsuranceRequestType,
+} from '../project/project-insurance-request.entity';
 
 @Injectable()
 export class CustomerPortalService {
@@ -65,6 +82,22 @@ export class CustomerPortalService {
 
     @InjectRepository(Project)
     private readonly projectRepository: Repository<Project>,
+
+    @InjectRepository(ProjectInsurancePlan)
+private readonly projectInsurancePlanRepository:
+  Repository<ProjectInsurancePlan>,
+
+@InjectRepository(ProjectInsurance)
+private readonly projectInsuranceRepository:
+  Repository<ProjectInsurance>,
+
+@InjectRepository(ProjectInsuranceDocument)
+private readonly projectInsuranceDocumentRepository:
+  Repository<ProjectInsuranceDocument>,
+
+@InjectRepository(ProjectInsuranceRequest)
+private readonly projectInsuranceRequestRepository:
+  Repository<ProjectInsuranceRequest>,
 
     @InjectRepository(ProjectDocument)
 private readonly projectDocumentRepository: Repository<ProjectDocument>,
@@ -203,6 +236,7 @@ sectionLabels: {
           complaints: false,
           cleaning: true,
           afterSalesServices: true,
+          insurance: true,
           referrals: true,
           policies: true,
           staffDirectory: true,
@@ -239,6 +273,7 @@ sectionLabels: {
             complaints: true,
             cleaning: true,
             afterSalesServices: false,
+            insurance: false,
             referrals: true,
             policies: true,
             staffDirectory: true,
@@ -273,6 +308,7 @@ sectionLabels: {
             complaints: true,
             cleaning: false,
             afterSalesServices: false,
+            insurance: false,
             referrals: true,
             policies: true,
             staffDirectory: true,
@@ -3449,6 +3485,1013 @@ async updateProjectSiteLocation(
     message:
       'Project site location updated successfully.',
     project,
+  };
+}
+
+private getPortalCustomerId(
+  user: any,
+) {
+  const customerId =
+    Number(
+      user?.customerId ||
+        user?.id ||
+        user?.sub ||
+        0,
+    );
+
+  if (
+    !Number.isInteger(
+      customerId,
+    ) ||
+    customerId <= 0
+  ) {
+    throw new UnauthorizedException(
+      'Invalid customer session',
+    );
+  }
+
+  return customerId;
+}
+
+private async getCustomerCompletedProject(
+  customerId: number,
+  projectId?: number,
+) {
+  const query =
+    this.projectRepository
+      .createQueryBuilder(
+        'project',
+      )
+      .where(
+        'project.customerId = :customerId',
+        {
+          customerId,
+        },
+      )
+      .andWhere(
+        'project.isHidden = false',
+      )
+      .andWhere(
+        'project.status = :completedStatus',
+        {
+          completedStatus:
+            'COMPLETED',
+        },
+      );
+
+  if (projectId) {
+    query.andWhere(
+      'project.id = :projectId',
+      {
+        projectId,
+      },
+    );
+  }
+
+  query
+    .orderBy(
+      'project.createdAt',
+      'DESC',
+    );
+
+  const project =
+    await query.getOne();
+
+  if (!project) {
+    throw new BadRequestException(
+      'Insurance is available only for your completed projects',
+    );
+  }
+
+  return project;
+}
+
+async getMyInsuranceOverview(
+  user: any,
+) {
+  const customerId =
+    this.getPortalCustomerId(
+      user,
+    );
+
+  const projects =
+    await this.projectRepository.find({
+      where: {
+        customerId,
+        isHidden: false,
+      } as any,
+
+      order: {
+        createdAt:
+          'DESC',
+      },
+    });
+
+  const completedProjects =
+    projects.filter(
+      (project: any) =>
+        project.status ===
+        'COMPLETED',
+    );
+
+  if (
+    completedProjects.length ===
+    0
+  ) {
+    return {
+      eligible: false,
+
+      message:
+        'Insurance becomes available after project completion.',
+
+      projects: [],
+
+      activeInsurance: [],
+
+      history: [],
+
+      pendingRequests: [],
+    };
+  }
+
+  const projectIds =
+    completedProjects.map(
+      (project) =>
+        Number(
+          project.id,
+        ),
+    );
+
+  const insurance =
+    await this
+      .projectInsuranceRepository
+      .createQueryBuilder(
+        'insurance',
+      )
+      .where(
+        'insurance.customerId = :customerId',
+        {
+          customerId,
+        },
+      )
+      .andWhere(
+        'insurance.projectId IN (:...projectIds)',
+        {
+          projectIds,
+        },
+      )
+      .andWhere(
+        'insurance.isHidden = false',
+      )
+      .orderBy(
+        'insurance.startDate',
+        'DESC',
+      )
+      .addOrderBy(
+        'insurance.id',
+        'DESC',
+      )
+      .getMany();
+
+  const pendingRequests =
+    await this
+      .projectInsuranceRequestRepository
+      .createQueryBuilder(
+        'request',
+      )
+      .where(
+        'request.customerId = :customerId',
+        {
+          customerId,
+        },
+      )
+      .andWhere(
+        'request.projectId IN (:...projectIds)',
+        {
+          projectIds,
+        },
+      )
+      .andWhere(
+        'request.isHidden = false',
+      )
+      .andWhere(
+        'request.status IN (:...statuses)',
+        {
+          statuses: [
+            ProjectInsuranceRequestStatus
+              .PENDING,
+
+            ProjectInsuranceRequestStatus
+              .APPROVED,
+          ],
+        },
+      )
+      .orderBy(
+        'request.requestedAt',
+        'DESC',
+      )
+      .getMany();
+
+  const activeInsurance =
+    insurance.filter(
+      (item) =>
+        item.status ===
+          'ACTIVE' ||
+        item.status ===
+          'RENEWAL_REQUESTED',
+    );
+
+  return {
+    eligible: true,
+
+    projects:
+      completedProjects,
+
+    activeInsurance,
+
+    history:
+      insurance,
+
+    pendingRequests,
+  };
+}
+
+async getMyAvailableInsurancePlans(
+  user: any,
+) {
+  const customerId =
+    this.getPortalCustomerId(
+      user,
+    );
+
+  /*
+   * Customer must have at least
+   * one completed project.
+   */
+  await this
+    .getCustomerCompletedProject(
+      customerId,
+    );
+
+  return this
+    .projectInsurancePlanRepository
+    .createQueryBuilder(
+      'plan',
+    )
+    .where(
+      'plan.isHidden = false',
+    )
+    .andWhere(
+      'plan.isActive = true',
+    )
+    .orderBy(
+      'plan.companyName',
+      'ASC',
+    )
+    .addOrderBy(
+      'plan.durationMonths',
+      'ASC',
+    )
+    .getMany();
+}
+
+async getMyInsuranceDocuments(
+  insuranceId: number,
+  user: any,
+) {
+  const customerId =
+    this.getPortalCustomerId(
+      user,
+    );
+
+  const insurance =
+    await this
+      .projectInsuranceRepository
+      .findOne({
+        where: {
+          id:
+            insuranceId,
+
+          customerId,
+
+          isHidden:
+            false,
+        } as any,
+      });
+
+  if (!insurance) {
+    throw new NotFoundException(
+      'Insurance record not found',
+    );
+  }
+
+  await this
+    .getCustomerCompletedProject(
+      customerId,
+      Number(
+        insurance.projectId,
+      ),
+    );
+
+  return this
+    .projectInsuranceDocumentRepository
+    .find({
+      where: {
+        insuranceId:
+          insurance.id,
+
+        visibleToCustomer:
+          true,
+
+        isHidden:
+          false,
+      } as any,
+
+      order: {
+        createdAt:
+          'DESC',
+      },
+    });
+}
+
+async createMyInsuranceRequest(
+  body: any,
+  user: any,
+) {
+  const customerId =
+    this.getPortalCustomerId(
+      user,
+    );
+
+  const projectId =
+    Number(
+      body?.projectId ||
+        0,
+    );
+
+  const project =
+    await this
+      .getCustomerCompletedProject(
+        customerId,
+        projectId,
+      );
+
+  const insurancePlanId =
+    Number(
+      body?.insurancePlanId ||
+        0,
+    );
+
+  if (!insurancePlanId) {
+    throw new BadRequestException(
+      'Please select an insurance plan',
+    );
+  }
+
+  const plan =
+    await this
+      .projectInsurancePlanRepository
+      .findOne({
+        where: {
+          id:
+            insurancePlanId,
+
+          isHidden:
+            false,
+
+          isActive:
+            true,
+        } as any,
+      });
+
+  if (!plan) {
+    throw new NotFoundException(
+      'Insurance plan is not available',
+    );
+  }
+
+  const existingRequest =
+    await this
+      .projectInsuranceRequestRepository
+      .findOne({
+        where: {
+          projectId:
+            project.id,
+
+          customerId,
+
+          requestType:
+            ProjectInsuranceRequestType
+              .NEW,
+
+          status:
+            ProjectInsuranceRequestStatus
+              .PENDING,
+
+          isHidden:
+            false,
+        } as any,
+      });
+
+  if (existingRequest) {
+    throw new BadRequestException(
+      'A pending insurance request already exists for this project',
+    );
+  }
+
+  const request =
+    this
+      .projectInsuranceRequestRepository
+      .create({
+        projectId:
+          project.id,
+
+        customerId,
+
+        customerCode:
+          (project as any)
+            .customerCode ||
+          undefined,
+
+        customerName:
+          (project as any)
+            .customerName ||
+          undefined,
+
+        customerPhone:
+          (project as any)
+            .customerPhone ||
+          undefined,
+
+        insurancePlanId:
+          plan.id,
+
+        requestType:
+          ProjectInsuranceRequestType
+            .NEW,
+
+        status:
+          ProjectInsuranceRequestStatus
+            .PENDING,
+
+        customerRemarks:
+          String(
+            body
+              ?.customerRemarks ||
+              body?.remarks ||
+              '',
+          ).trim() ||
+          undefined,
+
+        isHidden:
+          false,
+      });
+
+  const saved =
+    await this
+      .projectInsuranceRequestRepository
+      .save(
+        request,
+      );
+
+  await this
+    .notificationRepository
+    .save(
+      this
+        .notificationRepository
+        .create({
+          customerId,
+
+          customerCode:
+            (project as any)
+              .customerCode ||
+            '',
+
+          projectId:
+            project.id,
+
+          notificationType:
+            'INSURANCE_REQUEST',
+
+          title:
+            'Insurance Request Submitted',
+
+          message:
+            `Your request for ${plan.companyName} ${plan.policyName} has been submitted successfully.`,
+
+          relatedEntityType:
+            'PROJECT_INSURANCE_REQUEST',
+
+          relatedEntityId:
+            saved.id,
+        } as any),
+    );
+
+  return {
+    message:
+      'Insurance request submitted successfully',
+
+    request:
+      saved,
+  };
+}
+
+async createMyInsuranceRenewalRequest(
+  insuranceId: number,
+  body: any,
+  user: any,
+) {
+  const customerId =
+    this.getPortalCustomerId(
+      user,
+    );
+
+  const insurance =
+    await this
+      .projectInsuranceRepository
+      .findOne({
+        where: {
+          id:
+            insuranceId,
+
+          customerId,
+
+          isHidden:
+            false,
+        } as any,
+      });
+
+  if (!insurance) {
+    throw new NotFoundException(
+      'Insurance record not found',
+    );
+  }
+
+  const project =
+    await this
+      .getCustomerCompletedProject(
+        customerId,
+
+        Number(
+          insurance.projectId,
+        ),
+      );
+
+  const selectedPlanId =
+    Number(
+      body?.insurancePlanId ||
+        insurance.insurancePlanId ||
+        0,
+    );
+
+  if (
+    selectedPlanId
+  ) {
+    const plan =
+      await this
+        .projectInsurancePlanRepository
+        .findOne({
+          where: {
+            id:
+              selectedPlanId,
+
+            isHidden:
+              false,
+
+            isActive:
+              true,
+          } as any,
+        });
+
+    if (!plan) {
+      throw new NotFoundException(
+        'Selected insurance plan is not available',
+      );
+    }
+  }
+
+  const duplicate =
+    await this
+      .projectInsuranceRequestRepository
+      .findOne({
+        where: {
+          projectId:
+            project.id,
+
+          customerId,
+
+          existingInsuranceId:
+            insurance.id,
+
+          requestType:
+            ProjectInsuranceRequestType
+              .RENEWAL,
+
+          status:
+            ProjectInsuranceRequestStatus
+              .PENDING,
+
+          isHidden:
+            false,
+        } as any,
+      });
+
+  if (duplicate) {
+    throw new BadRequestException(
+      'A renewal request is already pending for this policy',
+    );
+  }
+
+  const request =
+    this
+      .projectInsuranceRequestRepository
+      .create({
+        projectId:
+          project.id,
+
+        customerId,
+
+        customerCode:
+          insurance.customerCode ||
+          undefined,
+
+        customerName:
+          insurance.customerName ||
+          undefined,
+
+        customerPhone:
+          insurance.customerPhone ||
+          undefined,
+
+        insurancePlanId:
+          selectedPlanId ||
+          undefined,
+
+        existingInsuranceId:
+          insurance.id,
+
+        requestType:
+          ProjectInsuranceRequestType
+            .RENEWAL,
+
+        status:
+          ProjectInsuranceRequestStatus
+            .PENDING,
+
+        customerRemarks:
+          String(
+            body
+              ?.customerRemarks ||
+              body?.remarks ||
+              '',
+          ).trim() ||
+          undefined,
+
+        isHidden:
+          false,
+      });
+
+  const saved =
+    await this
+      .projectInsuranceRequestRepository
+      .save(
+        request,
+      );
+
+  /*
+   * Make the policy visibly show
+   * that renewal has been requested.
+   */
+  if (
+    insurance.status ===
+    'ACTIVE'
+  ) {
+    (insurance as any)
+      .status =
+      'RENEWAL_REQUESTED';
+
+    await this
+      .projectInsuranceRepository
+      .save(
+        insurance,
+      );
+  }
+
+  await this
+    .notificationRepository
+    .save(
+      this
+        .notificationRepository
+        .create({
+          customerId,
+
+          customerCode:
+            insurance.customerCode ||
+            '',
+
+          projectId:
+            project.id,
+
+          notificationType:
+            'INSURANCE_RENEWAL_REQUEST',
+
+          title:
+            'Insurance Renewal Requested',
+
+          message:
+            'Your insurance renewal request has been submitted successfully.',
+
+          relatedEntityType:
+            'PROJECT_INSURANCE_REQUEST',
+
+          relatedEntityId:
+            saved.id,
+        } as any),
+    );
+
+  return {
+    message:
+      'Insurance renewal request submitted successfully',
+
+    request:
+      saved,
+  };
+}
+
+async uploadMyInsuranceDocuments(
+  insuranceId: number,
+  files: any[],
+  body: any,
+  user: any,
+) {
+  const customerId =
+    this.getPortalCustomerId(
+      user,
+    );
+
+  if (
+    !Array.isArray(files) ||
+    files.length === 0
+  ) {
+    throw new BadRequestException(
+      'Please select at least one insurance document',
+    );
+  }
+
+  const insurance =
+    await this.projectInsuranceRepository.findOne({
+      where: {
+        id: insuranceId,
+        customerId,
+        isHidden: false,
+      } as any,
+    });
+
+  if (!insurance) {
+    throw new NotFoundException(
+      'Insurance record not found',
+    );
+  }
+
+  /*
+   * Confirms:
+   * 1. project belongs to logged-in customer
+   * 2. project is COMPLETED
+   */
+  await this.getCustomerCompletedProject(
+    customerId,
+    Number(
+      insurance.projectId,
+    ),
+  );
+
+  const allowedTypes = [
+    'application/pdf',
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+  ];
+
+  const maximumSize =
+    12 * 1024 * 1024;
+
+  const requestedType =
+    String(
+      body?.documentType ||
+        'OTHER',
+    )
+      .trim()
+      .toUpperCase();
+
+  /*
+   * Customer should not upload files
+   * pretending to be an insurer-issued
+   * POLICY / INVOICE.
+   *
+   * Staff can still upload those from CRM.
+   */
+  const allowedCustomerDocumentTypes = [
+    'CLAIM_DOCUMENT',
+    'RENEWAL_DOCUMENT',
+    'OTHER',
+  ];
+
+  if (
+    !allowedCustomerDocumentTypes.includes(
+      requestedType,
+    )
+  ) {
+    throw new BadRequestException(
+      'Invalid customer insurance document type',
+    );
+  }
+
+  const supabaseUrl =
+    process.env.SUPABASE_URL;
+
+  const serviceKey =
+    process.env
+      .SUPABASE_SERVICE_ROLE_KEY;
+
+  const bucket =
+    process.env
+      .SUPABASE_PROJECT_DOCUMENTS_BUCKET ||
+    'project-documents';
+
+  if (
+    !supabaseUrl ||
+    !serviceKey
+  ) {
+    throw new BadRequestException(
+      'Supabase storage is not configured',
+    );
+  }
+
+  const supabase =
+    createClient(
+      supabaseUrl,
+      serviceKey,
+    );
+
+  const savedDocuments: any[] =
+    [];
+
+  for (
+    const file of files
+  ) {
+    if (!file) {
+      continue;
+    }
+
+    const mimeType =
+      String(
+        file.mimetype ||
+          '',
+      );
+
+    if (
+      !allowedTypes.includes(
+        mimeType,
+      )
+    ) {
+      throw new BadRequestException(
+        'Only PDF, JPG, PNG and WEBP files are allowed',
+      );
+    }
+
+    if (
+      Number(
+        file.size || 0,
+      ) > maximumSize
+    ) {
+      throw new BadRequestException(
+        'Each insurance document must be less than 12 MB',
+      );
+    }
+
+    const originalName =
+      String(
+        file.originalname ||
+          'insurance-document',
+      );
+
+    const extension =
+      originalName.includes(
+        '.',
+      )
+        ? originalName
+            .split('.')
+            .pop()
+        : mimeType
+            .split('/')[1] ||
+          'file';
+
+    const safeExtension =
+      String(
+        extension ||
+          'file',
+      ).replace(
+        /[^a-zA-Z0-9]/g,
+        '',
+      );
+
+    const filePath =
+      `insurance/project-${insurance.projectId}/insurance-${insurance.id}/customer-${customerId}/${Date.now()}-${randomUUID()}.${safeExtension}`;
+
+    const uploadResult =
+      await supabase.storage
+        .from(bucket)
+        .upload(
+          filePath,
+          file.buffer,
+          {
+            contentType:
+              mimeType,
+
+            upsert:
+              false,
+          },
+        );
+
+    if (
+      uploadResult.error
+    ) {
+      throw new BadRequestException(
+        uploadResult
+          .error.message,
+      );
+    }
+
+    const publicUrlResult =
+      supabase.storage
+        .from(bucket)
+        .getPublicUrl(
+          filePath,
+        );
+
+    const document =
+      this
+        .projectInsuranceDocumentRepository
+        .create({
+          insuranceId:
+            insurance.id,
+
+          documentType:
+            requestedType as any,
+
+          fileName:
+            originalName,
+
+          fileUrl:
+            publicUrlResult
+              .data.publicUrl,
+
+          mimeType,
+
+          fileSize:
+            Number(
+              file.size || 0,
+            ),
+
+          /*
+           * Customer obviously needs to
+           * continue seeing their upload.
+           */
+          visibleToCustomer:
+            true,
+
+          isHidden:
+            false,
+
+          uploadedBy:
+            customerId,
+
+          uploadedByName:
+            `Customer Portal${
+              insurance.customerName
+                ? ` - ${insurance.customerName}`
+                : ''
+            }`,
+        } as any);
+
+    const saved =
+      await this
+        .projectInsuranceDocumentRepository
+        .save(
+          document,
+        );
+
+    savedDocuments.push(
+      saved,
+    );
+  }
+
+  return {
+    message:
+      `${savedDocuments.length} insurance document(s) uploaded successfully`,
+
+    documents:
+      savedDocuments,
   };
 }
 }
