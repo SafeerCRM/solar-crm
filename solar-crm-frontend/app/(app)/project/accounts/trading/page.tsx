@@ -98,6 +98,99 @@ function money(value?: number) {
   return `₹${Number(value || 0).toLocaleString('en-IN')}`;
 }
 
+const compressDealerOrderDocumentImage = async (
+  file: File,
+): Promise<File> => {
+  if (!file.type.startsWith('image/')) {
+    return file;
+  }
+
+  if (file.size <= 1024 * 1024) {
+    return file;
+  }
+
+  return new Promise((resolve) => {
+    const image = new Image();
+
+    const objectUrl =
+      URL.createObjectURL(file);
+
+    image.onload = () => {
+      const maxWidth = 1600;
+
+      const scale = Math.min(
+        1,
+        maxWidth / image.width,
+      );
+
+      const canvas =
+        document.createElement('canvas');
+
+      canvas.width = Math.round(
+        image.width * scale,
+      );
+
+      canvas.height = Math.round(
+        image.height * scale,
+      );
+
+      const context =
+        canvas.getContext('2d');
+
+      if (!context) {
+        URL.revokeObjectURL(objectUrl);
+        resolve(file);
+        return;
+      }
+
+      context.drawImage(
+        image,
+        0,
+        0,
+        canvas.width,
+        canvas.height,
+      );
+
+      canvas.toBlob(
+        (blob) => {
+          URL.revokeObjectURL(objectUrl);
+
+          if (!blob) {
+            resolve(file);
+            return;
+          }
+
+          const safeName =
+            file.name.replace(
+              /\.(png|jpg|jpeg|webp)$/i,
+              '.jpg',
+            );
+
+          resolve(
+            new File(
+              [blob],
+              safeName,
+              {
+                type: 'image/jpeg',
+                lastModified: Date.now(),
+              },
+            ),
+          );
+        },
+        'image/jpeg',
+        0.78,
+      );
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(file);
+    };
+
+    image.src = objectUrl;
+  });
+};
+
 const emptyDealerForm = {
   vendorName: '',
   contactPerson: '',
@@ -155,6 +248,17 @@ const [monthlyRequirements, setMonthlyRequirements] = useState<DealerMonthlyRequ
 const [creditReminders, setCreditReminders] = useState<CreditReminder[]>([]);
 const [dealerLedger, setDealerLedger] = useState<any>(null);
 const [ledgerDealerId, setLedgerDealerId] = useState('');
+
+const [
+  ledgerDealerOptions,
+  setLedgerDealerOptions,
+] = useState<Dealer[]>([]);
+
+const [
+  selectedDealerIdsForCsv,
+  setSelectedDealerIdsForCsv,
+] = useState<number[]>([]);
+
 const [dealerComplaints, setDealerComplaints] = useState<any[]>([]);
 const [complaintPage, setComplaintPage] = useState(1);
 const [complaintTotalPages, setComplaintTotalPages] = useState(1);
@@ -231,6 +335,67 @@ const [openMaterialSearchIndex, setOpenMaterialSearchIndex] =
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [selectedOrderInvoices, setSelectedOrderInvoices] =
   useState<any>(null);
+
+  const [
+  dealerOrderDocuments,
+  setDealerOrderDocuments,
+] = useState<any[]>([]);
+
+const [
+  dealerOrderDocumentsLoading,
+  setDealerOrderDocumentsLoading,
+] = useState(false);
+
+const [
+  dealerOrderDocumentUploading,
+  setDealerOrderDocumentUploading,
+] = useState(false);
+
+const [
+  dealerOrderDocumentFiles,
+  setDealerOrderDocumentFiles,
+] = useState<File[]>([]);
+
+const [
+  editingDealerOrderDocumentId,
+  setEditingDealerOrderDocumentId,
+] = useState<number | null>(null);
+
+const [
+  showHiddenDealerOrderDocuments,
+  setShowHiddenDealerOrderDocuments,
+] = useState(false);
+
+const [
+  dealerOrderDocumentForm,
+  setDealerOrderDocumentForm,
+] = useState({
+  title: '',
+  category: '',
+  documentType: '',
+  tags: '',
+  remarks: '',
+});
+
+const [
+  dealerOrderDocumentTitleSuggestions,
+  setDealerOrderDocumentTitleSuggestions,
+] = useState<string[]>([]);
+
+const [
+  dealerOrderDocumentCategorySuggestions,
+  setDealerOrderDocumentCategorySuggestions,
+] = useState<string[]>([]);
+
+const [
+  dealerOrderDocumentTypeSuggestions,
+  setDealerOrderDocumentTypeSuggestions,
+] = useState<string[]>([]);
+
+const [
+  dealerOrderDocumentTagSuggestions,
+  setDealerOrderDocumentTagSuggestions,
+] = useState<string[]>([]);
 
   const [paymentForm, setPaymentForm] = useState({
     amount: '',
@@ -449,6 +614,1236 @@ const fetchDealerLedger = async () => {
   setDealerLedger(res.data || null);
 };
 
+const fetchAllDealerOptionsForLedger =
+  async () => {
+    try {
+      const firstResponse =
+        await axios.get(
+          `${API_BASE_URL}/project/dealer/list`,
+          {
+            params: {
+              page: 1,
+              limit: 100,
+              search: '',
+              branch: '',
+              showHidden: false,
+            },
+
+            headers:
+              headers(),
+          },
+        );
+
+      const allDealers: Dealer[] =
+        Array.isArray(
+          firstResponse.data?.data,
+        )
+          ? [
+              ...firstResponse.data.data,
+            ]
+          : [];
+
+      const totalPages =
+        Math.max(
+          Number(
+            firstResponse.data
+              ?.totalPages || 1,
+          ),
+          1,
+        );
+
+      for (
+        let page = 2;
+        page <= totalPages;
+        page += 1
+      ) {
+        const response =
+          await axios.get(
+            `${API_BASE_URL}/project/dealer/list`,
+            {
+              params: {
+                page,
+                limit: 100,
+                search: '',
+                branch: '',
+                showHidden:
+                  false,
+              },
+
+              headers:
+                headers(),
+            },
+          );
+
+        if (
+          Array.isArray(
+            response.data?.data,
+          )
+        ) {
+          allDealers.push(
+            ...response.data.data,
+          );
+        }
+      }
+
+      setLedgerDealerOptions(
+        allDealers,
+      );
+    } catch (error) {
+      console.error(
+        'Failed to load all dealer options',
+        error,
+      );
+    }
+  };
+
+const escapeCsvValue = (value: any) => {
+  return `"${String(value ?? '').replace(/"/g, '""')}"`;
+};
+
+const formatDealerCsvDate = (
+  value: any,
+) => {
+  if (!value) {
+    return '';
+  }
+
+  const date =
+    new Date(value);
+
+  if (
+    Number.isNaN(
+      date.getTime(),
+    )
+  ) {
+    return '';
+  }
+
+  return date.toLocaleString(
+    'en-IN',
+    {
+      timeZone:
+        'Asia/Kolkata',
+    },
+  );
+};
+
+const downloadSelectedDealerLedgerCsv = () => {
+  if (!dealerLedger?.dealer) {
+    alert('Please load a dealer ledger first');
+    return;
+  }
+
+  const row = {
+  'Dealer Name':
+    dealerLedger.dealer?.dealerName || '',
+
+  'Contact Person':
+    dealerLedger.dealer?.contactPerson || '',
+
+  Phone:
+    dealerLedger.dealer?.phone || '',
+
+  City:
+    dealerLedger.dealer?.city || '',
+
+  'Total Orders':
+    Number(
+      dealerLedger.summary?.totalOrders || 0,
+    ),
+
+  'Total Order Value':
+    Number(
+      dealerLedger.summary?.totalOrderValue || 0,
+    ),
+
+  'Total Paid':
+    Number(
+      dealerLedger.summary?.totalPaid || 0,
+    ),
+
+  'Total Pending':
+    Number(
+      dealerLedger.summary?.totalPending || 0,
+    ),
+
+  'Last Order Date':
+    formatDealerCsvDate(
+      dealerLedger.summary?.lastOrderDate,
+    ),
+
+  'Last Approved Payment Date':
+    formatDealerCsvDate(
+      dealerLedger.summary?.lastApprovedPaymentDate,
+    ),
+};
+
+  const headers = Object.keys(row);
+
+  const csv = [
+    headers
+      .map(escapeCsvValue)
+      .join(','),
+
+    headers
+      .map((header) =>
+        escapeCsvValue(
+          (row as any)[header],
+        ),
+      )
+      .join(','),
+  ].join('\n');
+
+  const blob = new Blob(
+    ['\uFEFF', csv],
+    {
+      type:
+        'text/csv;charset=utf-8;',
+    },
+  );
+
+  const url =
+    URL.createObjectURL(blob);
+
+  const link =
+    document.createElement('a');
+
+  link.href = url;
+
+  const dealerName =
+    String(
+      dealerLedger.dealer?.dealerName ||
+        'dealer',
+    )
+      .trim()
+      .replace(
+        /[^a-zA-Z0-9-_]+/g,
+        '-',
+      );
+
+  link.download =
+    `dealer-ledger-${dealerName}-${new Date()
+      .toISOString()
+      .slice(0, 10)}.csv`;
+
+  document.body.appendChild(link);
+
+  link.click();
+  link.remove();
+
+  URL.revokeObjectURL(url);
+};
+
+const downloadSelectedDealersLedgerCsv =
+  async () => {
+    if (
+      selectedDealerIdsForCsv.length ===
+      0
+    ) {
+      alert(
+        'Please select at least one dealer',
+      );
+
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const rows: any[] = [];
+
+      const batchSize = 5;
+
+      for (
+        let index = 0;
+        index <
+        selectedDealerIdsForCsv.length;
+        index += batchSize
+      ) {
+        const batch =
+          selectedDealerIdsForCsv.slice(
+            index,
+            index + batchSize,
+          );
+
+        const results =
+          await Promise.all(
+            batch.map(
+              async (
+                dealerId,
+              ) => {
+                try {
+                  const response =
+                    await axios.get(
+                      `${API_BASE_URL}/project/dealer-ledger-history`,
+                      {
+                        params: {
+                          dealerId,
+                        },
+
+                        headers:
+                          headers(),
+                      },
+                    );
+
+                  return {
+                    dealerId,
+                    ledger:
+                      response.data ||
+                      null,
+                  };
+                } catch (
+                  error
+                ) {
+                  console.error(
+                    `Failed to load ledger for dealer ${dealerId}`,
+                    error,
+                  );
+
+                  return {
+                    dealerId,
+                    ledger:
+                      null,
+                  };
+                }
+              },
+            ),
+          );
+
+        for (
+          const result of
+            results
+        ) {
+          const dealer =
+  ledgerDealerOptions.find(
+    (item) =>
+      Number(
+        item.id,
+      ) ===
+      Number(
+        result.dealerId,
+      ),
+  );
+
+          rows.push({
+  'Dealer Name':
+    result.ledger?.dealer
+      ?.dealerName ||
+    dealer?.vendorName ||
+    `Dealer #${result.dealerId}`,
+
+  'Contact Person':
+    result.ledger?.dealer
+      ?.contactPerson ||
+    dealer?.contactPerson ||
+    '',
+
+  Phone:
+    result.ledger?.dealer
+      ?.phone ||
+    dealer?.phone ||
+    '',
+
+  City:
+    result.ledger?.dealer
+      ?.city ||
+    dealer?.city ||
+    '',
+
+  'Total Orders':
+    Number(
+      result.ledger?.summary
+        ?.totalOrders ||
+        0,
+    ),
+
+  'Total Order Value':
+    Number(
+      result.ledger?.summary
+        ?.totalOrderValue ||
+        0,
+    ),
+
+  'Total Paid':
+    Number(
+      result.ledger?.summary
+        ?.totalPaid ||
+        0,
+    ),
+
+  'Total Pending':
+    Number(
+      result.ledger?.summary
+        ?.totalPending ||
+        0,
+    ),
+
+  'Last Order Date':
+    formatDealerCsvDate(
+      result.ledger?.summary
+        ?.lastOrderDate,
+    ),
+
+  'Last Approved Payment Date':
+    formatDealerCsvDate(
+      result.ledger?.summary
+        ?.lastApprovedPaymentDate,
+    ),
+});
+        }
+      }
+
+      if (
+        rows.length ===
+        0
+      ) {
+        alert(
+          'No dealer ledger data available',
+        );
+
+        return;
+      }
+
+      const csvHeaders =
+        Object.keys(
+          rows[0],
+        );
+
+      const csv = [
+        csvHeaders
+          .map(
+            escapeCsvValue,
+          )
+          .join(','),
+
+        ...rows.map(
+          (row) =>
+            csvHeaders
+              .map(
+                (
+                  header,
+                ) =>
+                  escapeCsvValue(
+                    row[
+                      header
+                    ],
+                  ),
+              )
+              .join(','),
+        ),
+      ].join('\n');
+
+      const blob =
+        new Blob(
+          [
+            '\uFEFF',
+            csv,
+          ],
+          {
+            type:
+              'text/csv;charset=utf-8;',
+          },
+        );
+
+      const url =
+        URL.createObjectURL(
+          blob,
+        );
+
+      const link =
+        document.createElement(
+          'a',
+        );
+
+      link.href =
+        url;
+
+      link.download =
+        `selected-dealer-ledgers-${new Date()
+          .toISOString()
+          .slice(
+            0,
+            10,
+          )}.csv`;
+
+      document.body.appendChild(
+        link,
+      );
+
+      link.click();
+
+      link.remove();
+
+      URL.revokeObjectURL(
+        url,
+      );
+    } catch (
+      error: any
+    ) {
+      console.error(
+        error,
+      );
+
+      alert(
+        error?.response
+          ?.data
+          ?.message ||
+          'Failed to download selected dealer CSV',
+      );
+    } finally {
+      setLoading(
+        false,
+      );
+    }
+  };
+
+const downloadAllDealerLedgersCsv = async () => {
+  try {
+    setLoading(true);
+
+    /*
+     * STEP 1:
+     * Load EVERY visible dealer from backend.
+     *
+     * Do not use the current `dealers` state because
+     * that contains only the currently loaded page.
+     */
+    const firstDealerResponse =
+      await axios.get(
+        `${API_BASE_URL}/project/dealer/list`,
+        {
+          params: {
+            page: 1,
+            limit: 100,
+
+            /*
+             * Export all normal/visible dealers,
+             * irrespective of current screen filters.
+             */
+            search: '',
+            branch: '',
+            showHidden: false,
+          },
+
+          headers: headers(),
+        },
+      );
+
+    const allDealers: Dealer[] =
+      Array.isArray(
+        firstDealerResponse.data?.data,
+      )
+        ? [
+            ...firstDealerResponse.data.data,
+          ]
+        : [];
+
+    const dealerTotalPages =
+      Math.max(
+        Number(
+          firstDealerResponse.data
+            ?.totalPages || 1,
+        ),
+        1,
+      );
+
+    /*
+     * Load all remaining dealer pages.
+     */
+    if (dealerTotalPages > 1) {
+      for (
+        let page = 2;
+        page <= dealerTotalPages;
+        page += 1
+      ) {
+        const response =
+          await axios.get(
+            `${API_BASE_URL}/project/dealer/list`,
+            {
+              params: {
+                page,
+                limit: 100,
+                search: '',
+                branch: '',
+                showHidden: false,
+              },
+
+              headers: headers(),
+            },
+          );
+
+        if (
+          Array.isArray(
+            response.data?.data,
+          )
+        ) {
+          allDealers.push(
+            ...response.data.data,
+          );
+        }
+      }
+    }
+
+    if (!allDealers.length) {
+      alert(
+        'No dealers available to export',
+      );
+
+      return;
+    }
+
+    /*
+     * STEP 2:
+     * Load ledger of every dealer.
+     *
+     * Small batches protect the backend from a
+     * large number of simultaneous requests.
+     */
+    const rows: any[] = [];
+
+    const batchSize = 5;
+
+    for (
+      let index = 0;
+      index < allDealers.length;
+      index += batchSize
+    ) {
+      const batch =
+        allDealers.slice(
+          index,
+          index + batchSize,
+        );
+
+      const results =
+        await Promise.all(
+          batch.map(
+            async (dealer) => {
+              try {
+                const response =
+                  await axios.get(
+                    `${API_BASE_URL}/project/dealer-ledger-history`,
+                    {
+                      params: {
+                        dealerId:
+                          dealer.id,
+                      },
+
+                      headers:
+                        headers(),
+                    },
+                  );
+
+                return {
+                  dealer,
+                  ledger:
+                    response.data ||
+                    null,
+                };
+              } catch (error) {
+                console.error(
+                  `Failed to load ledger for dealer ${dealer.id}`,
+                  error,
+                );
+
+                /*
+                 * Keep dealer in CSV even if one
+                 * ledger request unexpectedly fails.
+                 */
+                return {
+                  dealer,
+                  ledger: null,
+                };
+              }
+            },
+          ),
+        );
+
+      for (const result of results) {
+        rows.push({
+  'Dealer Name':
+    result.ledger?.dealer
+      ?.dealerName ||
+    result.dealer
+      ?.vendorName ||
+    '',
+
+  'Contact Person':
+    result.ledger?.dealer
+      ?.contactPerson ||
+    result.dealer
+      ?.contactPerson ||
+    '',
+
+  Phone:
+    result.ledger?.dealer
+      ?.phone ||
+    result.dealer
+      ?.phone ||
+    '',
+
+  City:
+    result.ledger?.dealer
+      ?.city ||
+    result.dealer
+      ?.city ||
+    '',
+
+  'Total Orders':
+    Number(
+      result.ledger?.summary
+        ?.totalOrders ||
+        0,
+    ),
+
+  'Total Order Value':
+    Number(
+      result.ledger?.summary
+        ?.totalOrderValue ||
+        0,
+    ),
+
+  'Total Paid':
+    Number(
+      result.ledger?.summary
+        ?.totalPaid ||
+        0,
+    ),
+
+  'Total Pending':
+    Number(
+      result.ledger?.summary
+        ?.totalPending ||
+        0,
+    ),
+
+  'Last Order Date':
+    formatDealerCsvDate(
+      result.ledger?.summary
+        ?.lastOrderDate,
+    ),
+
+  'Last Approved Payment Date':
+    formatDealerCsvDate(
+      result.ledger?.summary
+        ?.lastApprovedPaymentDate,
+    ),
+});
+      }
+    }
+
+    /*
+     * STEP 3:
+     * Create CSV.
+     */
+    const csvHeaders =
+      Object.keys(rows[0]);
+
+    const csv = [
+      csvHeaders
+        .map(
+          escapeCsvValue,
+        )
+        .join(','),
+
+      ...rows.map((row) =>
+        csvHeaders
+          .map((header) =>
+            escapeCsvValue(
+              row[header],
+            ),
+          )
+          .join(','),
+      ),
+    ].join('\n');
+
+    /*
+     * UTF-8 BOM keeps Excel-friendly encoding.
+     */
+    const blob =
+      new Blob(
+        [
+          '\uFEFF',
+          csv,
+        ],
+        {
+          type:
+            'text/csv;charset=utf-8;',
+        },
+      );
+
+    const url =
+      URL.createObjectURL(
+        blob,
+      );
+
+    const link =
+      document.createElement(
+        'a',
+      );
+
+    link.href = url;
+
+    link.download =
+      `all-dealer-ledgers-${new Date()
+        .toISOString()
+        .slice(0, 10)}.csv`;
+
+    document.body.appendChild(
+      link,
+    );
+
+    link.click();
+
+    link.remove();
+
+    URL.revokeObjectURL(
+      url,
+    );
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data
+        ?.message ||
+        'Failed to download all dealer ledgers CSV',
+    );
+  } finally {
+    setLoading(false);
+  }
+};
+
+const toggleDealerCsvSelection = (
+  dealerId: number,
+) => {
+  setSelectedDealerIdsForCsv(
+    (current) => {
+      if (
+        current.includes(
+          dealerId,
+        )
+      ) {
+        return current.filter(
+          (id) =>
+            id !== dealerId,
+        );
+      }
+
+      return [
+        ...current,
+        dealerId,
+      ];
+    },
+  );
+};
+
+const fetchDealerOrderDocuments = async (
+  orderId: number,
+  showHidden =
+    showHiddenDealerOrderDocuments,
+) => {
+  try {
+    setDealerOrderDocumentsLoading(true);
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/dealer-order/${orderId}/documents`,
+      {
+        params: {
+          showHidden:
+            showHidden
+              ? 'true'
+              : 'false',
+        },
+
+        headers: headers(),
+      },
+    );
+
+    setDealerOrderDocuments(
+      Array.isArray(res.data?.documents)
+        ? res.data.documents
+        : [],
+    );
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to load order documents',
+    );
+  } finally {
+    setDealerOrderDocumentsLoading(false);
+  }
+};
+
+const fetchDealerOrderDocumentSuggestions =
+  async (
+    type:
+      | 'title'
+      | 'category'
+      | 'documentType'
+      | 'tag',
+
+    search = '',
+  ) => {
+    try {
+      const res = await axios.get(
+        `${API_BASE_URL}/project/dealer-order-documents/suggestions`,
+        {
+          params: {
+            type,
+            search:
+              search.trim() ||
+              undefined,
+          },
+
+          headers: headers(),
+        },
+      );
+
+      const values =
+        Array.isArray(res.data)
+          ? res.data
+          : [];
+
+      if (type === 'title') {
+        setDealerOrderDocumentTitleSuggestions(
+          values,
+        );
+      }
+
+      if (type === 'category') {
+        setDealerOrderDocumentCategorySuggestions(
+          values,
+        );
+      }
+
+      if (type === 'documentType') {
+        setDealerOrderDocumentTypeSuggestions(
+          values,
+        );
+      }
+
+      if (type === 'tag') {
+        setDealerOrderDocumentTagSuggestions(
+          values,
+        );
+      }
+    } catch (error) {
+      console.error(
+        'Failed to load order document suggestions',
+        error,
+      );
+    }
+  };
+
+  const resetDealerOrderDocumentForm = () => {
+  setDealerOrderDocumentForm({
+    title: '',
+    category: '',
+    documentType: '',
+    tags: '',
+    remarks: '',
+  });
+
+  setDealerOrderDocumentFiles([]);
+  setEditingDealerOrderDocumentId(null);
+
+  const input =
+    document.getElementById(
+      'dealer-order-document-files',
+    ) as HTMLInputElement | null;
+
+  if (input) {
+    input.value = '';
+  }
+};
+
+const uploadDealerOrderDocuments = async () => {
+  const orderId =
+    Number(
+      selectedOrder?.order?.id || 0,
+    );
+
+  if (!orderId) {
+    alert('Dealer order not selected');
+    return;
+  }
+
+  const title =
+    dealerOrderDocumentForm.title.trim();
+
+  const category =
+    dealerOrderDocumentForm.category.trim();
+
+  const documentType =
+    dealerOrderDocumentForm.documentType.trim();
+
+  if (!title) {
+    alert('Document title is required');
+    return;
+  }
+
+  if (!category) {
+    alert('Document category is required');
+    return;
+  }
+
+  if (!documentType) {
+    alert('Document type is required');
+    return;
+  }
+
+  /*
+   * Metadata edit does not require
+   * re-uploading the physical document.
+   */
+  if (editingDealerOrderDocumentId) {
+    try {
+      setDealerOrderDocumentUploading(true);
+
+      await axios.patch(
+        `${API_BASE_URL}/project/dealer-order-documents/${editingDealerOrderDocumentId}`,
+        {
+          title,
+          category,
+          documentType,
+
+          tags:
+            dealerOrderDocumentForm.tags,
+
+          remarks:
+            dealerOrderDocumentForm.remarks,
+        },
+        {
+          headers: headers(),
+        },
+      );
+
+      alert(
+        'Document details updated successfully',
+      );
+
+      resetDealerOrderDocumentForm();
+
+      await fetchDealerOrderDocuments(
+        orderId,
+      );
+
+      return;
+    } catch (error: any) {
+      console.error(error);
+
+      alert(
+        error?.response?.data?.message ||
+          'Failed to update document',
+      );
+
+      return;
+    } finally {
+      setDealerOrderDocumentUploading(
+        false,
+      );
+    }
+  }
+
+  if (
+    dealerOrderDocumentFiles.length === 0
+  ) {
+    alert(
+      'Select at least one document',
+    );
+
+    return;
+  }
+
+  try {
+    setDealerOrderDocumentUploading(true);
+
+    for (
+      const file of
+        dealerOrderDocumentFiles
+    ) {
+      const preparedFile =
+        await compressDealerOrderDocumentImage(
+          file,
+        );
+
+      const formData =
+        new FormData();
+
+      formData.append(
+        'file',
+        preparedFile,
+      );
+
+      formData.append(
+        'title',
+        title,
+      );
+
+      formData.append(
+        'category',
+        category,
+      );
+
+      formData.append(
+        'documentType',
+        documentType,
+      );
+
+      formData.append(
+        'tags',
+        dealerOrderDocumentForm.tags.trim(),
+      );
+
+      formData.append(
+        'remarks',
+        dealerOrderDocumentForm.remarks.trim(),
+      );
+
+      await axios.post(
+        `${API_BASE_URL}/project/dealer-order/${orderId}/documents/upload`,
+        formData,
+        {
+          headers: {
+            ...headers(),
+
+            'Content-Type':
+              'multipart/form-data',
+          },
+        },
+      );
+    }
+
+    alert(
+      dealerOrderDocumentFiles.length === 1
+        ? 'Document uploaded successfully'
+        : `${dealerOrderDocumentFiles.length} documents uploaded successfully`,
+    );
+
+    resetDealerOrderDocumentForm();
+
+    await Promise.all([
+      fetchDealerOrderDocuments(
+        orderId,
+      ),
+
+      fetchDealerOrderDocumentSuggestions(
+        'title',
+      ),
+
+      fetchDealerOrderDocumentSuggestions(
+        'category',
+      ),
+
+      fetchDealerOrderDocumentSuggestions(
+        'documentType',
+      ),
+
+      fetchDealerOrderDocumentSuggestions(
+        'tag',
+      ),
+    ]);
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to upload order document',
+    );
+  } finally {
+    setDealerOrderDocumentUploading(false);
+  }
+};
+
+const editDealerOrderDocument = (
+  item: any,
+) => {
+  setEditingDealerOrderDocumentId(
+    Number(item.id),
+  );
+
+  setDealerOrderDocumentForm({
+    title:
+      item.title || '',
+
+    category:
+      item.category || '',
+
+    documentType:
+      item.documentType || '',
+
+    tags:
+      Array.isArray(item.tags)
+        ? item.tags.join(', ')
+        : String(item.tags || ''),
+
+    remarks:
+      item.remarks || '',
+  });
+
+  setDealerOrderDocumentFiles([]);
+};
+
+const hideOrRestoreDealerOrderDocument =
+  async (
+    item: any,
+    restore = false,
+  ) => {
+    if (!selectedOrder?.order?.id) {
+      return;
+    }
+
+    const reason =
+      window.prompt(
+        restore
+          ? 'Reason for restoring this document?'
+          : 'Reason for hiding this document?',
+
+        restore
+          ? 'Valid document'
+          : 'Wrong / duplicate document',
+      );
+
+    if (reason === null) {
+      return;
+    }
+
+    try {
+      await axios.patch(
+        `${API_BASE_URL}/project/dealer-order-documents/${item.id}/${
+          restore
+            ? 'restore'
+            : 'hide'
+        }`,
+        {
+          reason,
+        },
+        {
+          headers: headers(),
+        },
+      );
+
+      alert(
+        restore
+          ? 'Document restored'
+          : 'Document hidden',
+      );
+
+      await fetchDealerOrderDocuments(
+        selectedOrder.order.id,
+        showHiddenDealerOrderDocuments,
+      );
+    } catch (error: any) {
+      console.error(error);
+
+      alert(
+        error?.response?.data?.message ||
+          'Failed to update document',
+      );
+    }
+  };
+
   const refreshAll = async () => {
     try {
       setLoading(true);
@@ -492,6 +1887,17 @@ const fetchDealerLedger = async () => {
   complaintPage,
 complaintStatus,
 ]);
+
+useEffect(() => {
+  if (
+    activeTab ===
+    'ledger'
+  ) {
+    fetchAllDealerOptionsForLedger();
+  }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [activeTab]);
 
 useEffect(() => {
   const raw = localStorage.getItem('tradingMeetingConversionData');
@@ -906,6 +2312,32 @@ const saveDealerPortalPassword = async () => {
 );
 
 setSelectedOrderInvoices(invoiceRes.data || null);
+await fetchDealerOrderDocuments(
+  id,
+  false,
+);
+
+setShowHiddenDealerOrderDocuments(
+  false,
+);
+
+resetDealerOrderDocumentForm();
+
+fetchDealerOrderDocumentSuggestions(
+  'title',
+);
+
+fetchDealerOrderDocumentSuggestions(
+  'category',
+);
+
+fetchDealerOrderDocumentSuggestions(
+  'documentType',
+);
+
+fetchDealerOrderDocumentSuggestions(
+  'tag',
+);
       setAdminStatus(res.data?.order?.status || '');
       setAdminExpectedDeliveryAt(
         res.data?.order?.expectedDeliveryAt
@@ -2460,6 +3892,462 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
     )}
   </div>
 </div>
+
+<div className="rounded-xl border p-3">
+  <div className="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <h3 className="font-bold">
+        Order Documents
+      </h3>
+
+      <p className="mt-1 text-xs text-gray-500">
+        Permanent documents linked to this
+        Dealer Order. Title, category and type
+        remain flexible for future document
+        requirements.
+      </p>
+    </div>
+
+    <label className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 text-xs font-semibold">
+      <input
+        type="checkbox"
+        checked={
+          showHiddenDealerOrderDocuments
+        }
+        onChange={async (e) => {
+          const checked =
+            e.target.checked;
+
+          setShowHiddenDealerOrderDocuments(
+            checked,
+          );
+
+          if (
+            selectedOrder?.order?.id
+          ) {
+            await fetchDealerOrderDocuments(
+              selectedOrder.order.id,
+              checked,
+            );
+          }
+        }}
+      />
+
+      View Hidden
+    </label>
+  </div>
+
+  <div className="mt-4 rounded-xl bg-gray-50 p-4">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <p className="font-semibold text-gray-800">
+          {editingDealerOrderDocumentId
+            ? 'Edit Document Details'
+            : 'Upload Order Document'}
+        </p>
+
+        <p className="mt-1 text-xs text-gray-500">
+          Images larger than 1 MB are
+          automatically compressed. PDFs are
+          uploaded unchanged.
+        </p>
+      </div>
+
+      {editingDealerOrderDocumentId && (
+        <button
+          type="button"
+          onClick={
+            resetDealerOrderDocumentForm
+          }
+          className="rounded-lg bg-gray-200 px-3 py-2 text-xs font-semibold text-gray-700"
+        >
+          Cancel Edit
+        </button>
+      )}
+    </div>
+
+    <div className="mt-4 grid min-w-0 gap-3 md:grid-cols-2">
+      <div className="min-w-0">
+        <input
+          list="dealer-order-document-title-suggestions"
+          placeholder="Document Title"
+          value={
+            dealerOrderDocumentForm.title
+          }
+          onChange={(e) => {
+            const value =
+              e.target.value;
+
+            setDealerOrderDocumentForm({
+              ...dealerOrderDocumentForm,
+              title: value,
+            });
+
+            fetchDealerOrderDocumentSuggestions(
+              'title',
+              value,
+            );
+          }}
+          className="w-full min-w-0 rounded-xl border bg-white p-3"
+        />
+
+        <datalist id="dealer-order-document-title-suggestions">
+          {dealerOrderDocumentTitleSuggestions.map(
+            (value) => (
+              <option
+                key={value}
+                value={value}
+              />
+            ),
+          )}
+        </datalist>
+      </div>
+
+      <div className="min-w-0">
+        <input
+          list="dealer-order-document-category-suggestions"
+          placeholder="Document Category"
+          value={
+            dealerOrderDocumentForm.category
+          }
+          onChange={(e) => {
+            const value =
+              e.target.value;
+
+            setDealerOrderDocumentForm({
+              ...dealerOrderDocumentForm,
+              category: value,
+            });
+
+            fetchDealerOrderDocumentSuggestions(
+              'category',
+              value,
+            );
+          }}
+          className="w-full min-w-0 rounded-xl border bg-white p-3"
+        />
+
+        <datalist id="dealer-order-document-category-suggestions">
+          {dealerOrderDocumentCategorySuggestions.map(
+            (value) => (
+              <option
+                key={value}
+                value={value}
+              />
+            ),
+          )}
+        </datalist>
+      </div>
+
+      <div className="min-w-0">
+        <input
+          list="dealer-order-document-type-suggestions"
+          placeholder="Document Type"
+          value={
+            dealerOrderDocumentForm.documentType
+          }
+          onChange={(e) => {
+            const value =
+              e.target.value;
+
+            setDealerOrderDocumentForm({
+              ...dealerOrderDocumentForm,
+              documentType:
+                value,
+            });
+
+            fetchDealerOrderDocumentSuggestions(
+              'documentType',
+              value,
+            );
+          }}
+          className="w-full min-w-0 rounded-xl border bg-white p-3"
+        />
+
+        <datalist id="dealer-order-document-type-suggestions">
+          {dealerOrderDocumentTypeSuggestions.map(
+            (value) => (
+              <option
+                key={value}
+                value={value}
+              />
+            ),
+          )}
+        </datalist>
+      </div>
+
+      {!editingDealerOrderDocumentId && (
+        <input
+          id="dealer-order-document-files"
+          type="file"
+          multiple
+          accept=".pdf,.jpg,.jpeg,.png,.webp"
+          onChange={(e) =>
+            setDealerOrderDocumentFiles(
+              Array.from(
+                e.target.files || [],
+              ),
+            )
+          }
+          className="w-full min-w-0 rounded-xl border bg-white p-3"
+        />
+      )}
+
+      <div className="min-w-0 md:col-span-2">
+        <input
+          list="dealer-order-document-tag-suggestions"
+          placeholder="Tags separated by commas"
+          value={
+            dealerOrderDocumentForm.tags
+          }
+          onChange={(e) => {
+            const value =
+              e.target.value;
+
+            setDealerOrderDocumentForm({
+              ...dealerOrderDocumentForm,
+              tags: value,
+            });
+
+            const currentTag =
+              value
+                .split(',')
+                .pop()
+                ?.trim() ||
+              '';
+
+            fetchDealerOrderDocumentSuggestions(
+              'tag',
+              currentTag,
+            );
+          }}
+          className="w-full min-w-0 rounded-xl border bg-white p-3"
+        />
+
+        <datalist id="dealer-order-document-tag-suggestions">
+          {dealerOrderDocumentTagSuggestions.map(
+            (value) => (
+              <option
+                key={value}
+                value={value}
+              />
+            ),
+          )}
+        </datalist>
+      </div>
+
+      <textarea
+        placeholder="Remarks / Notes"
+        value={
+          dealerOrderDocumentForm.remarks
+        }
+        onChange={(e) =>
+          setDealerOrderDocumentForm({
+            ...dealerOrderDocumentForm,
+            remarks:
+              e.target.value,
+          })
+        }
+        rows={3}
+        className="w-full min-w-0 rounded-xl border bg-white p-3 md:col-span-2"
+      />
+    </div>
+
+    {dealerOrderDocumentFiles.length >
+      0 && (
+      <p className="mt-3 rounded-lg bg-blue-50 p-3 text-xs font-semibold text-blue-700">
+        {
+          dealerOrderDocumentFiles.length
+        }{' '}
+        file(s) selected
+      </p>
+    )}
+
+    <button
+      type="button"
+      onClick={
+        uploadDealerOrderDocuments
+      }
+      disabled={
+        dealerOrderDocumentUploading
+      }
+      className="mt-4 rounded-xl bg-green-600 px-5 py-3 text-sm font-semibold text-white disabled:opacity-60"
+    >
+      {dealerOrderDocumentUploading
+        ? editingDealerOrderDocumentId
+          ? 'Saving...'
+          : 'Uploading...'
+        : editingDealerOrderDocumentId
+          ? 'Update Document Details'
+          : 'Upload Document'}
+    </button>
+  </div>
+
+  <div className="mt-4 space-y-3">
+    {dealerOrderDocumentsLoading ? (
+      <p className="rounded-xl bg-gray-50 p-4 text-sm text-gray-500">
+        Loading order documents...
+      </p>
+    ) : dealerOrderDocuments.length ===
+      0 ? (
+      <p className="rounded-xl bg-gray-50 p-4 text-sm text-gray-500">
+        No documents attached to this order.
+      </p>
+    ) : (
+      dealerOrderDocuments.map(
+        (item: any) => (
+          <div
+            key={item.id}
+            className={`rounded-xl border p-4 ${
+              item.isHidden
+                ? 'border-red-200 bg-red-50'
+                : 'bg-white'
+            }`}
+          >
+            <div className="flex min-w-0 flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="break-words font-bold text-gray-900">
+                    {item.title}
+                  </p>
+
+                  <span className="rounded-full bg-blue-100 px-2 py-1 text-[10px] font-bold text-blue-700">
+                    {item.category}
+                  </span>
+
+                  <span className="rounded-full bg-purple-100 px-2 py-1 text-[10px] font-bold text-purple-700">
+                    {item.documentType}
+                  </span>
+
+                  {item.isHidden && (
+                    <span className="rounded-full bg-red-100 px-2 py-1 text-[10px] font-bold text-red-700">
+                      HIDDEN
+                    </span>
+                  )}
+                </div>
+
+                <p className="mt-2 break-all text-xs font-semibold text-gray-600">
+                  {item.fileName}
+                </p>
+
+                <p className="mt-1 text-xs text-gray-500">
+                  Uploaded by:{' '}
+                  {item.uploadedByName ||
+                    '-'}
+                  {' · '}
+                  {item.uploadedSource ||
+                    '-'}
+                  {' · '}
+                  {item.createdAt
+                    ? new Date(
+                        item.createdAt,
+                      ).toLocaleString(
+                        'en-IN',
+                      )
+                    : '-'}
+                </p>
+
+                {Array.isArray(
+                  item.tags,
+                ) &&
+                  item.tags.length >
+                    0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {item.tags.map(
+                        (
+                          tag: string,
+                          index: number,
+                        ) => (
+                          <span
+                            key={`${item.id}-${tag}-${index}`}
+                            className="rounded-full bg-gray-100 px-2 py-1 text-[10px] font-semibold text-gray-700"
+                          >
+                            #{tag}
+                          </span>
+                        ),
+                      )}
+                    </div>
+                  )}
+
+                {item.remarks && (
+                  <p className="mt-2 whitespace-pre-wrap break-words text-sm text-gray-600">
+                    {item.remarks}
+                  </p>
+                )}
+
+                {item.isHidden &&
+                  item.hiddenReason && (
+                    <p className="mt-2 text-xs font-semibold text-red-700">
+                      Hidden reason:{' '}
+                      {
+                        item.hiddenReason
+                      }
+                    </p>
+                  )}
+              </div>
+
+              <div className="flex shrink-0 flex-wrap gap-2">
+                <a
+                  href={item.fileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white"
+                >
+                  View
+                </a>
+
+                <a
+                  href={item.fileUrl}
+                  download={
+                    item.fileName
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-lg bg-slate-800 px-3 py-2 text-xs font-semibold text-white"
+                >
+                  Download
+                </a>
+
+                {!item.isHidden && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      editDealerOrderDocument(
+                        item,
+                      )
+                    }
+                    className="rounded-lg bg-orange-500 px-3 py-2 text-xs font-semibold text-white"
+                  >
+                    Edit
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    hideOrRestoreDealerOrderDocument(
+                      item,
+                      !!item.isHidden,
+                    )
+                  }
+                  className={`rounded-lg px-3 py-2 text-xs font-semibold text-white ${
+                    item.isHidden
+                      ? 'bg-green-600'
+                      : 'bg-red-600'
+                  }`}
+                >
+                  {item.isHidden
+                    ? 'Restore'
+                    : 'Hide'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ),
+      )
+    )}
+  </div>
+</div>
               </div>
             )}
           </div>
@@ -2808,19 +4696,146 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
           className="w-full rounded-xl border p-3"
         >
           <option value="">Select Dealer</option>
-          {dealers.map((dealer) => (
-            <option key={dealer.id} value={dealer.id}>
-              {dealer.vendorName}
-            </option>
-          ))}
+{ledgerDealerOptions.map((dealer) => (
+  <option key={dealer.id} value={dealer.id}>
+    {dealer.vendorName}
+  </option>
+))}
         </select>
 
-        <button
-          onClick={fetchDealerLedger}
-          className="rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white"
+        <div className="mt-5 rounded-xl border bg-gray-50 p-4">
+  <div className="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <p className="font-bold text-gray-800">
+        Multi Dealer CSV
+      </p>
+
+      <p className="mt-1 text-xs text-gray-500">
+        Select any number of dealers and download one combined summary CSV.
+      </p>
+    </div>
+
+    <div className="flex flex-wrap gap-2">
+      <button
+  type="button"
+  onClick={() =>
+    setSelectedDealerIdsForCsv(
+      ledgerDealerOptions.map(
+        (dealer) =>
+          dealer.id,
+      ),
+    )
+  }
+  className="rounded-lg bg-blue-100 px-3 py-2 text-xs font-semibold text-blue-700"
+>
+  Select All
+</button>
+
+      <button
+        type="button"
+        onClick={() =>
+          setSelectedDealerIdsForCsv(
+            [],
+          )
+        }
+        className="rounded-lg bg-gray-200 px-3 py-2 text-xs font-semibold text-gray-700"
+      >
+        Clear
+      </button>
+    </div>
+  </div>
+
+  <div className="mt-4 max-h-72 space-y-2 overflow-y-auto">
+    {ledgerDealerOptions.map(
+  (dealer) => (
+        <label
+          key={
+            dealer.id
+          }
+          className="flex cursor-pointer items-center gap-3 rounded-lg border bg-white p-3"
         >
-          Load Ledger
-        </button>
+          <input
+            type="checkbox"
+            checked={selectedDealerIdsForCsv.includes(
+              dealer.id,
+            )}
+            onChange={() =>
+              toggleDealerCsvSelection(
+                dealer.id,
+              )
+            }
+          />
+
+          <div className="min-w-0">
+            <p className="break-words text-sm font-semibold text-gray-800">
+              {dealer.vendorName ||
+                `Dealer #${dealer.id}`}
+            </p>
+
+            <p className="text-xs text-gray-500">
+              {dealer.phone ||
+                '-'}
+              {' | '}
+              {dealer.city ||
+                '-'}
+            </p>
+          </div>
+        </label>
+      ),
+    )}
+  </div>
+
+  <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+    <p className="text-sm font-semibold text-gray-600">
+      {
+        selectedDealerIdsForCsv.length
+      }{' '}
+      dealer(s) selected
+    </p>
+
+    <button
+      type="button"
+      onClick={
+        downloadSelectedDealersLedgerCsv
+      }
+      disabled={
+        selectedDealerIdsForCsv.length ===
+          0
+      }
+      className="rounded-xl bg-purple-600 px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      Download Selected Dealers CSV
+    </button>
+  </div>
+</div>
+
+        <div className="flex flex-wrap gap-2">
+  <button
+    onClick={fetchDealerLedger}
+    className="rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white"
+  >
+    Load Ledger
+  </button>
+
+  <button
+    onClick={
+      downloadSelectedDealerLedgerCsv
+    }
+    disabled={!dealerLedger}
+    className="rounded-xl bg-green-600 px-5 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+  >
+    Download Selected CSV
+  </button>
+
+  <button
+    onClick={
+      downloadAllDealerLedgersCsv
+    }
+    className="rounded-xl bg-slate-800 px-5 py-3 font-semibold text-white"
+  >
+    Download All Dealers CSV
+  </button>
+</div>
       </div>
 
       {!dealerLedger ? (

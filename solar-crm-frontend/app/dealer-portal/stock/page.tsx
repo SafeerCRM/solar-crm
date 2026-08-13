@@ -16,10 +16,20 @@ const normalizeDealerCategory = (value: any) => {
     .trim()
     .toUpperCase();
 
+  /*
+   * Backward compatibility:
+   * old INVERTERS records are treated as
+   * Ongrid Inverters until database cleanup.
+   */
+  if (category === 'INVERTERS') {
+    return 'ONGRID_INVERTERS';
+  }
+
   if (
     [
       'PANELS',
-      'INVERTERS',
+      'ONGRID_INVERTERS',
+      'HYBRID_INVERTERS',
       'STRUCTURE',
       'ELECTRICAL',
       'BATTERIES',
@@ -48,7 +58,8 @@ const [materialCategory, setMaterialCategory] =
   useState<
     | 'ALL'
     | 'PANELS'
-    | 'INVERTERS'
+    | 'ONGRID_INVERTERS'
+    | 'HYBRID_INVERTERS'
     | 'STRUCTURE'
     | 'ELECTRICAL'
     | 'BATTERIES'
@@ -246,13 +257,14 @@ const batteryBrandOptions = useMemo(() => {
 
 const groupedMaterials = useMemo(() => {
   const groups: Record<string, any[]> = {
-    PANELS: [],
-    INVERTERS: [],
-    STRUCTURE: [],
-    ELECTRICAL: [],
-    BATTERIES: [],
-    OTHER: [],
-  };
+  PANELS: [],
+  ONGRID_INVERTERS: [],
+  HYBRID_INVERTERS: [],
+  STRUCTURE: [],
+  ELECTRICAL: [],
+  BATTERIES: [],
+  OTHER: [],
+};
 
   for (const item of filteredStock) {
     const category = normalizeDealerCategory(
@@ -272,10 +284,17 @@ const materialSections = [
     description: 'DC solar modules and panel stock',
   },
   {
-    key: 'INVERTERS',
-    title: 'Inverters',
-    description: 'Solar and hybrid inverter stock',
-  },
+  key: 'ONGRID_INVERTERS',
+  title: 'Ongrid Inverter',
+  description:
+    'Grid-connected solar inverter stock',
+},
+{
+  key: 'HYBRID_INVERTERS',
+  title: 'Hybrid Inverter',
+  description:
+    'Hybrid solar inverter stock for battery-supported systems',
+},
   {
     key: 'STRUCTURE',
     title: 'Structure',
@@ -308,9 +327,13 @@ const materialCategoryOptions = [
     label: 'Panels',
   },
   {
-    key: 'INVERTERS',
-    label: 'Inverters',
-  },
+  key: 'ONGRID_INVERTERS',
+  label: 'Ongrid Inverter',
+},
+{
+  key: 'HYBRID_INVERTERS',
+  label: 'Hybrid Inverter',
+},
   {
     key: 'STRUCTURE',
     label: 'Structure',

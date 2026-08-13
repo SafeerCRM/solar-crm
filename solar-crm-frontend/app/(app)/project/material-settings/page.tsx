@@ -306,7 +306,11 @@ const startEdit = (item: MaterialItem) => {
   category: item.category || '',
 
   dealerCategory:
-    item.dealerCategory || '',
+  String(item.dealerCategory || '')
+    .trim()
+    .toUpperCase() === 'INVERTERS'
+    ? 'ONGRID_INVERTERS'
+    : item.dealerCategory || '',
 
   ratePerWatt: String(
     item.ratePerWatt || '',
@@ -810,9 +814,13 @@ const downloadMaterialCsv = async () => {
     Panels
   </option>
 
-  <option value="INVERTERS">
-    Inverters
-  </option>
+  <option value="ONGRID_INVERTERS">
+  Ongrid Inverter
+</option>
+
+<option value="HYBRID_INVERTERS">
+  Hybrid Inverter
+</option>
 
   <option value="STRUCTURE">
     Structure

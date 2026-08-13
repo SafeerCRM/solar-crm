@@ -5,6 +5,100 @@ import { useParams } from 'next/navigation';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
+const compressDealerOrderDocumentImage = async (
+  file: File,
+): Promise<File> => {
+  if (!file.type.startsWith('image/')) {
+    return file;
+  }
+
+  if (file.size <= 1024 * 1024) {
+    return file;
+  }
+
+  return new Promise((resolve) => {
+    const image = new Image();
+
+    const objectUrl =
+      URL.createObjectURL(file);
+
+    image.onload = () => {
+      const maxWidth = 1600;
+
+      const scale = Math.min(
+        1,
+        maxWidth / image.width,
+      );
+
+      const canvas =
+        document.createElement('canvas');
+
+      canvas.width = Math.round(
+        image.width * scale,
+      );
+
+      canvas.height = Math.round(
+        image.height * scale,
+      );
+
+      const context =
+        canvas.getContext('2d');
+
+      if (!context) {
+        URL.revokeObjectURL(objectUrl);
+        resolve(file);
+        return;
+      }
+
+      context.drawImage(
+        image,
+        0,
+        0,
+        canvas.width,
+        canvas.height,
+      );
+
+      canvas.toBlob(
+        (blob) => {
+          URL.revokeObjectURL(objectUrl);
+
+          if (!blob) {
+            resolve(file);
+            return;
+          }
+
+          const safeName =
+            file.name.replace(
+              /\.(png|jpg|jpeg|webp)$/i,
+              '.jpg',
+            );
+
+          resolve(
+            new File(
+              [blob],
+              safeName,
+              {
+                type: 'image/jpeg',
+                lastModified:
+                  Date.now(),
+              },
+            ),
+          );
+        },
+        'image/jpeg',
+        0.78,
+      );
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(file);
+    };
+
+    image.src = objectUrl;
+  });
+};
+
 export default function DealerOrderDetailPage() {
   const params = useParams();
   const orderId = String(params?.id || '');
@@ -16,6 +110,52 @@ export default function DealerOrderDetailPage() {
   const [comment, setComment] = useState('');
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+
+  const [documents, setDocuments] =
+  useState<any[]>([]);
+
+const [documentsLoading, setDocumentsLoading] =
+  useState(false);
+
+const [documentUploading, setDocumentUploading] =
+  useState(false);
+
+const [documentFiles, setDocumentFiles] =
+  useState<File[]>([]);
+
+const [
+  editingDocumentId,
+  setEditingDocumentId,
+] = useState<number | null>(null);
+
+const [documentForm, setDocumentForm] =
+  useState({
+    title: '',
+    category: '',
+    documentType: '',
+    tags: '',
+    remarks: '',
+  });
+
+const [
+  titleSuggestions,
+  setTitleSuggestions,
+] = useState<string[]>([]);
+
+const [
+  categorySuggestions,
+  setCategorySuggestions,
+] = useState<string[]>([]);
+
+const [
+  typeSuggestions,
+  setTypeSuggestions,
+] = useState<string[]>([]);
+
+const [
+  tagSuggestions,
+  setTagSuggestions,
+] = useState<string[]>([]);
 
   useEffect(() => {
     loadDetail();
@@ -31,6 +171,362 @@ export default function DealerOrderDetailPage() {
 
     return { Authorization: `Bearer ${token}` };
   };
+
+  const loadDocuments = async () => {
+  if (!orderId) {
+    return;
+  }
+
+  try {
+    setDocumentsLoading(true);
+
+    const res = await fetch(
+      `${API_BASE_URL}/dealer-auth/orders/${orderId}/documents`,
+      {
+        headers: authHeaders(),
+      },
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(
+        data?.message ||
+          'Failed to load documents',
+      );
+    }
+
+    setDocuments(
+      Array.isArray(data?.documents)
+        ? data.documents
+        : [],
+    );
+  } catch (error) {
+    console.error(error);
+  } finally {
+    setDocumentsLoading(false);
+  }
+};
+
+const loadDocumentSuggestions = async (
+  type:
+    | 'title'
+    | 'category'
+    | 'documentType'
+    | 'tag',
+
+  search = '',
+) => {
+  if (!orderId) {
+    return;
+  }
+
+  try {
+    const params =
+      new URLSearchParams();
+
+    params.set('type', type);
+
+    if (search.trim()) {
+      params.set(
+        'search',
+        search.trim(),
+      );
+    }
+
+    const res = await fetch(
+      `${API_BASE_URL}/dealer-auth/orders/${orderId}/documents/suggestions?${params}`,
+      {
+        headers: authHeaders(),
+      },
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      return;
+    }
+
+    const values =
+      Array.isArray(data)
+        ? data
+        : [];
+
+    if (type === 'title') {
+      setTitleSuggestions(values);
+    }
+
+    if (type === 'category') {
+      setCategorySuggestions(values);
+    }
+
+    if (type === 'documentType') {
+      setTypeSuggestions(values);
+    }
+
+    if (type === 'tag') {
+      setTagSuggestions(values);
+    }
+  } catch (error) {
+    console.error(error);
+  }
+};
+
+const resetDocumentForm = () => {
+  setEditingDocumentId(null);
+
+  setDocumentForm({
+    title: '',
+    category: '',
+    documentType: '',
+    tags: '',
+    remarks: '',
+  });
+
+  setDocumentFiles([]);
+
+  const input =
+    document.getElementById(
+      'dealer-order-document-files',
+    ) as HTMLInputElement | null;
+
+  if (input) {
+    input.value = '';
+  }
+};
+
+const saveDocuments = async () => {
+  const title =
+    documentForm.title.trim();
+
+  const category =
+    documentForm.category.trim();
+
+  const documentType =
+    documentForm.documentType.trim();
+
+  if (!title) {
+    alert('Document title is required');
+    return;
+  }
+
+  if (!category) {
+    alert('Document category is required');
+    return;
+  }
+
+  if (!documentType) {
+    alert('Document type is required');
+    return;
+  }
+
+  const token =
+    localStorage.getItem(
+      'dealer_token',
+    );
+
+  if (!token) {
+    window.location.href =
+      '/dealer-login';
+
+    return;
+  }
+
+  try {
+    setDocumentUploading(true);
+
+    if (editingDocumentId) {
+      const res = await fetch(
+        `${API_BASE_URL}/dealer-auth/orders/${orderId}/documents/${editingDocumentId}`,
+        {
+          method: 'PATCH',
+
+          headers: {
+            Authorization:
+              `Bearer ${token}`,
+
+            'Content-Type':
+              'application/json',
+          },
+
+          body: JSON.stringify({
+            title,
+            category,
+            documentType,
+            tags:
+              documentForm.tags,
+            remarks:
+              documentForm.remarks,
+          }),
+        },
+      );
+
+      const data =
+        await res.json();
+
+      if (!res.ok) {
+        throw new Error(
+          data?.message ||
+            'Failed to update document',
+        );
+      }
+
+      alert(
+        'Document details updated successfully',
+      );
+
+      resetDocumentForm();
+
+      await loadDocuments();
+
+      return;
+    }
+
+    if (!documentFiles.length) {
+      alert(
+        'Select at least one document',
+      );
+
+      return;
+    }
+
+    for (
+      const file of
+        documentFiles
+    ) {
+      const preparedFile =
+        await compressDealerOrderDocumentImage(
+          file,
+        );
+
+      const formData =
+        new FormData();
+
+      formData.append(
+        'file',
+        preparedFile,
+      );
+
+      formData.append(
+        'title',
+        title,
+      );
+
+      formData.append(
+        'category',
+        category,
+      );
+
+      formData.append(
+        'documentType',
+        documentType,
+      );
+
+      formData.append(
+        'tags',
+        documentForm.tags.trim(),
+      );
+
+      formData.append(
+        'remarks',
+        documentForm.remarks.trim(),
+      );
+
+      const res = await fetch(
+        `${API_BASE_URL}/dealer-auth/orders/${orderId}/documents/upload`,
+        {
+          method: 'POST',
+
+          headers: {
+            Authorization:
+              `Bearer ${token}`,
+          },
+
+          body:
+            formData,
+        },
+      );
+
+      const data =
+        await res.json();
+
+      if (!res.ok) {
+        throw new Error(
+          data?.message ||
+            'Document upload failed',
+        );
+      }
+    }
+
+    alert(
+      documentFiles.length === 1
+        ? 'Document uploaded successfully'
+        : `${documentFiles.length} documents uploaded successfully`,
+    );
+
+    resetDocumentForm();
+
+    await loadDocuments();
+
+    await Promise.all([
+      loadDocumentSuggestions(
+        'title',
+      ),
+
+      loadDocumentSuggestions(
+        'category',
+      ),
+
+      loadDocumentSuggestions(
+        'documentType',
+      ),
+
+      loadDocumentSuggestions(
+        'tag',
+      ),
+    ]);
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.message ||
+        'Failed to save document',
+    );
+  } finally {
+    setDocumentUploading(false);
+  }
+};
+
+const startEditDocument = (
+  item: any,
+) => {
+  setEditingDocumentId(
+    Number(item.id),
+  );
+
+  setDocumentForm({
+    title:
+      item.title || '',
+
+    category:
+      item.category || '',
+
+    documentType:
+      item.documentType || '',
+
+    tags:
+      Array.isArray(item.tags)
+        ? item.tags.join(', ')
+        : String(
+            item.tags || '',
+          ),
+
+    remarks:
+      item.remarks || '',
+  });
+
+  setDocumentFiles([]);
+};
 
   const loadDetail = async () => {
     try {
@@ -72,6 +568,25 @@ export default function DealerOrderDetailPage() {
     setInvoice(latestFinalInvoice ? { invoice: latestFinalInvoice } : null);
   }
 } catch {}
+await loadDocuments();
+
+await Promise.all([
+  loadDocumentSuggestions(
+    'title',
+  ),
+
+  loadDocumentSuggestions(
+    'category',
+  ),
+
+  loadDocumentSuggestions(
+    'documentType',
+  ),
+
+  loadDocumentSuggestions(
+    'tag',
+  ),
+]);
     } catch (error) {
       console.error(error);
     } finally {
@@ -350,6 +865,390 @@ export default function DealerOrderDetailPage() {
             </div>
           </aside>
         </section>
+
+        <section className="mt-6 rounded-[2rem] bg-white p-6 text-slate-900 shadow-xl">
+  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+    <div>
+      <h2 className="text-xl font-black">
+        Order Documents
+      </h2>
+
+      <p className="mt-1 text-sm text-slate-500">
+        View and store certificates,
+        warranty documents, reports and
+        other files permanently against
+        this Dealer Order.
+      </p>
+    </div>
+
+    {editingDocumentId && (
+      <button
+        type="button"
+        onClick={
+          resetDocumentForm
+        }
+        className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-black text-slate-700"
+      >
+        Cancel Edit
+      </button>
+    )}
+  </div>
+
+  <div className="mt-5 rounded-[1.5rem] bg-slate-50 p-4">
+    <p className="font-black">
+      {editingDocumentId
+        ? 'Edit Document Details'
+        : 'Upload Document'}
+    </p>
+
+    <p className="mt-1 text-xs font-semibold text-slate-500">
+      Document names, categories and
+      types are flexible. Images larger
+      than 1 MB are compressed before
+      upload.
+    </p>
+
+    <div className="mt-4 grid gap-3 md:grid-cols-2">
+      <div>
+        <input
+          list="dealer-document-title-suggestions"
+          value={
+            documentForm.title
+          }
+          onChange={(e) => {
+            const value =
+              e.target.value;
+
+            setDocumentForm({
+              ...documentForm,
+              title: value,
+            });
+
+            loadDocumentSuggestions(
+              'title',
+              value,
+            );
+          }}
+          placeholder="Document Title"
+          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold"
+        />
+
+        <datalist id="dealer-document-title-suggestions">
+          {titleSuggestions.map(
+            (value) => (
+              <option
+                key={value}
+                value={value}
+              />
+            ),
+          )}
+        </datalist>
+      </div>
+
+      <div>
+        <input
+          list="dealer-document-category-suggestions"
+          value={
+            documentForm.category
+          }
+          onChange={(e) => {
+            const value =
+              e.target.value;
+
+            setDocumentForm({
+              ...documentForm,
+              category:
+                value,
+            });
+
+            loadDocumentSuggestions(
+              'category',
+              value,
+            );
+          }}
+          placeholder="Document Category"
+          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold"
+        />
+
+        <datalist id="dealer-document-category-suggestions">
+          {categorySuggestions.map(
+            (value) => (
+              <option
+                key={value}
+                value={value}
+              />
+            ),
+          )}
+        </datalist>
+      </div>
+
+      <div>
+        <input
+          list="dealer-document-type-suggestions"
+          value={
+            documentForm.documentType
+          }
+          onChange={(e) => {
+            const value =
+              e.target.value;
+
+            setDocumentForm({
+              ...documentForm,
+              documentType:
+                value,
+            });
+
+            loadDocumentSuggestions(
+              'documentType',
+              value,
+            );
+          }}
+          placeholder="Document Type"
+          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold"
+        />
+
+        <datalist id="dealer-document-type-suggestions">
+          {typeSuggestions.map(
+            (value) => (
+              <option
+                key={value}
+                value={value}
+              />
+            ),
+          )}
+        </datalist>
+      </div>
+
+      {!editingDocumentId && (
+        <input
+          id="dealer-order-document-files"
+          type="file"
+          multiple
+          accept=".pdf,.jpg,.jpeg,.png,.webp"
+          onChange={(e) =>
+            setDocumentFiles(
+              Array.from(
+                e.target.files ||
+                  [],
+              ),
+            )
+          }
+          className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold"
+        />
+      )}
+
+      <div className="md:col-span-2">
+        <input
+          list="dealer-document-tag-suggestions"
+          value={
+            documentForm.tags
+          }
+          onChange={(e) => {
+            const value =
+              e.target.value;
+
+            setDocumentForm({
+              ...documentForm,
+              tags: value,
+            });
+
+            const currentTag =
+              value
+                .split(',')
+                .pop()
+                ?.trim() ||
+              '';
+
+            loadDocumentSuggestions(
+              'tag',
+              currentTag,
+            );
+          }}
+          placeholder="Tags separated by commas"
+          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold"
+        />
+
+        <datalist id="dealer-document-tag-suggestions">
+          {tagSuggestions.map(
+            (value) => (
+              <option
+                key={value}
+                value={value}
+              />
+            ),
+          )}
+        </datalist>
+      </div>
+
+      <textarea
+        value={
+          documentForm.remarks
+        }
+        onChange={(e) =>
+          setDocumentForm({
+            ...documentForm,
+            remarks:
+              e.target.value,
+          })
+        }
+        placeholder="Remarks / Notes"
+        rows={3}
+        className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold md:col-span-2"
+      />
+    </div>
+
+    {documentFiles.length >
+      0 && (
+      <p className="mt-3 rounded-xl bg-blue-50 p-3 text-sm font-bold text-blue-700">
+        {documentFiles.length}{' '}
+        file(s) selected
+      </p>
+    )}
+
+    <button
+      type="button"
+      onClick={saveDocuments}
+      disabled={
+        documentUploading
+      }
+      className="mt-4 rounded-xl bg-gradient-to-r from-blue-700 to-sky-500 px-5 py-3 text-sm font-black text-white disabled:opacity-60"
+    >
+      {documentUploading
+        ? editingDocumentId
+          ? 'Saving...'
+          : 'Uploading...'
+        : editingDocumentId
+          ? 'Update Document'
+          : 'Upload Document'}
+    </button>
+  </div>
+
+  <div className="mt-5 space-y-3">
+    {documentsLoading ? (
+      <div className="rounded-xl bg-slate-50 p-5 text-center text-sm font-bold text-slate-500">
+        Loading documents...
+      </div>
+    ) : !documents.length ? (
+      <div className="rounded-xl bg-slate-50 p-5 text-center text-sm font-bold text-slate-500">
+        No documents uploaded for this
+        order yet.
+      </div>
+    ) : (
+      documents.map(
+        (item: any) => (
+          <div
+            key={item.id}
+            className="rounded-[1.3rem] border border-slate-100 bg-slate-50 p-4"
+          >
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="break-words font-black">
+                    {item.title}
+                  </p>
+
+                  <span className="rounded-full bg-blue-100 px-3 py-1 text-[10px] font-black text-blue-700">
+                    {item.category}
+                  </span>
+
+                  <span className="rounded-full bg-purple-100 px-3 py-1 text-[10px] font-black text-purple-700">
+                    {
+                      item.documentType
+                    }
+                  </span>
+                </div>
+
+                <p className="mt-2 break-all text-xs font-semibold text-slate-500">
+                  {item.fileName}
+                </p>
+
+                <p className="mt-1 text-xs text-slate-400">
+                  Uploaded by:{' '}
+                  {item.uploadedByName ||
+                    '-'}
+                  {' · '}
+                  {item.uploadedSource ||
+                    '-'}
+                  {' · '}
+                  {item.createdAt
+                    ? new Date(
+                        item.createdAt,
+                      ).toLocaleString(
+                        'en-IN',
+                      )
+                    : '-'}
+                </p>
+
+                {Array.isArray(
+                  item.tags,
+                ) &&
+                  item.tags.length >
+                    0 && (
+                    <div className="mt-3 flex flex-wrap gap-1">
+                      {item.tags.map(
+                        (
+                          tag: string,
+                          index: number,
+                        ) => (
+                          <span
+                            key={`${item.id}-${tag}-${index}`}
+                            className="rounded-full bg-white px-2 py-1 text-[10px] font-bold text-slate-600"
+                          >
+                            #{tag}
+                          </span>
+                        ),
+                      )}
+                    </div>
+                  )}
+
+                {item.remarks && (
+                  <p className="mt-3 whitespace-pre-wrap break-words text-sm font-semibold text-slate-600">
+                    {item.remarks}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex shrink-0 flex-wrap gap-2">
+                <a
+                  href={item.fileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-black text-white"
+                >
+                  View
+                </a>
+
+                <a
+                  href={item.fileUrl}
+                  download={
+                    item.fileName
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-black text-white"
+                >
+                  Download
+                </a>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    startEditDocument(
+                      item,
+                    )
+                  }
+                  className="rounded-xl bg-orange-500 px-4 py-2 text-xs font-black text-white"
+                >
+                  Edit Details
+                </button>
+              </div>
+            </div>
+          </div>
+        ),
+      )
+    )}
+  </div>
+</section>
 
         <section className="mt-6 rounded-[2rem] border border-white/10 bg-white/10 p-6 shadow-xl backdrop-blur-xl">
           <h2 className="text-xl font-black">Order Comments</h2>
