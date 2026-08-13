@@ -187,6 +187,7 @@ import {
   ProjectDealerPaymentType,
 } from './project-dealer-order.entity';
 import { ProjectDealerOrderItem } from './project-dealer-order-item.entity';
+import { ProjectDealerOrderDocument } from './project-dealer-order-document.entity';
 import {
   ProjectDealerPayment,
   ProjectDealerPaymentStatus,
@@ -1376,6 +1377,10 @@ private readonly projectDealerOrderRepository: Repository<ProjectDealerOrder>,
 
 @InjectRepository(ProjectDealerOrderItem)
 private readonly projectDealerOrderItemRepository: Repository<ProjectDealerOrderItem>,
+
+@InjectRepository(ProjectDealerOrderDocument)
+private readonly projectDealerOrderDocumentRepository:
+  Repository<ProjectDealerOrderDocument>,
 
 @InjectRepository(ProjectDealerPayment)
 private readonly projectDealerPaymentRepository: Repository<ProjectDealerPayment>,
@@ -24870,6 +24875,15 @@ async getDealerLedgerHistory(query: any) {
       new Date(a.date).getTime(),
   );
 
+  const lastApprovedPayment =
+  payments.find(
+    (payment: any) =>
+      String(payment.status || '')
+        .trim()
+        .toUpperCase() ===
+      'APPROVED',
+  );
+
   return {
     dealer: {
       id: dealer.id,
@@ -24884,15 +24898,24 @@ async getDealerLedgerHistory(query: any) {
       openingBalance: dealer.openingBalance || 0,
     },
     summary: {
-      totalOrders: orders.length,
-      totalOrderValue,
-      totalPaid,
-      totalPending,
-      overdueOrders: overdueOrders.length,
-      totalPi: proformaInvoices.length,
-      totalFinalInvoices: finalInvoices.length,
-      totalPayments: payments.length,
-    },
+    totalOrders: orders.length,
+    totalOrderValue,
+    totalPaid,
+    totalPending,
+    overdueOrders: overdueOrders.length,
+    totalPi: proformaInvoices.length,
+    totalFinalInvoices: finalInvoices.length,
+    totalPayments: payments.length,
+
+    lastOrderDate:
+      orders.length > 0
+        ? orders[0].createdAt
+        : null,
+
+    lastApprovedPaymentDate:
+      lastApprovedPayment?.createdAt ||
+      null,
+  },
     orders,
     materialSummary: Array.from(materialSummaryMap.values()),
     timeline,
@@ -25036,6 +25059,941 @@ async uploadAccountExpenseProof(file: any) {
   return {
     fileUrl: publicUrl,
   };
+}
+
+private async getDealerOrderForDocuments(
+  dealerOrderId: number,
+) {
+  if (
+    !Number.isInteger(dealerOrderId) ||
+    dealerOrderId <= 0
+  ) {
+    throw new BadRequestException(
+      'Valid Dealer Order ID is required',
+    );
+  }
+
+  const order =
+    await this.projectDealerOrderRepository.findOne({
+      where: {
+        id: dealerOrderId,
+        isHidden: false,
+      },
+    });
+
+  if (!order) {
+    throw new NotFoundException(
+      'Dealer order not found',
+    );
+  }
+
+  return order;
+}
+
+private parseDealerOrderDocumentTags(
+  value: any,
+): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) =>
+        String(item || '').trim(),
+      )
+      .filter(Boolean);
+  }
+
+  return String(value || '')
+    .split(',')
+    .map((item) =>
+      item.trim(),
+    )
+    .filter(Boolean);
+}
+
+async uploadDealerOrderDocument(
+  file: any,
+  body: any,
+  user: any,
+  uploadedSource: 'CRM' | 'DEALER' = 'CRM',
+) {
+  const dealerOrderId =
+    Number(
+      body?.dealerOrderId || 0,
+    );
+
+  const order =
+    await this.getDealerOrderForDocuments(
+      dealerOrderId,
+    );
+
+  const title =
+    String(
+      body?.title || '',
+    ).trim();
+
+  const category =
+    String(
+      body?.category || '',
+    ).trim();
+
+  const documentType =
+    String(
+      body?.documentType || '',
+    ).trim();
+
+  if (!title) {
+    throw new BadRequestException(
+      'Document title is required',
+    );
+  }
+
+  if (!category) {
+    throw new BadRequestException(
+      'Document category is required',
+    );
+  }
+
+  if (!documentType) {
+    throw new BadRequestException(
+      'Document type is required',
+    );
+  }
+
+  if (!file) {
+    throw new BadRequestException(
+      'Document file is required',
+    );
+  }
+
+  const allowedTypes = [
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'application/pdf',
+  ];
+
+  const mimeType =
+    String(
+      file.mimetype || '',
+    ).trim();
+
+  if (
+    !allowedTypes.includes(
+      mimeType,
+    )
+  ) {
+    throw new BadRequestException(
+      'Only JPG, PNG, WEBP and PDF documents are allowed',
+    );
+  }
+
+  /*
+   * Frontend image compression will normally
+   * reduce images before they reach here.
+   *
+   * Backend limit remains as final protection.
+   */
+  const maxSize =
+    10 *
+    1024 *
+    1024;
+
+  if (
+    Number(file.size || 0) >
+    maxSize
+  ) {
+    throw new BadRequestException(
+      'Document file must be less than 10 MB',
+    );
+  }
+
+  const supabaseUrl =
+    process.env.SUPABASE_URL;
+
+  const serviceKey =
+    process.env
+      .SUPABASE_SERVICE_ROLE_KEY;
+
+  const bucket =
+    process.env
+      .SUPABASE_PROJECT_DOCUMENTS_BUCKET ||
+    'project-documents';
+
+  if (
+    !supabaseUrl ||
+    !serviceKey
+  ) {
+    throw new BadRequestException(
+      'Supabase storage is not configured',
+    );
+  }
+
+  const supabase =
+    createClient(
+      supabaseUrl,
+      serviceKey,
+    );
+
+  const originalName =
+    String(
+      file.originalname ||
+        'dealer-order-document',
+    );
+
+  const extension =
+    originalName.includes('.')
+      ? originalName
+          .split('.')
+          .pop()
+      : mimeType
+          .split('/')[1] ||
+        'file';
+
+  const safeExtension =
+    String(
+      extension || 'file',
+    ).replace(
+      /[^a-zA-Z0-9]/g,
+      '',
+    );
+
+  const filePath =
+    `dealer-order-documents/order-${order.id}/` +
+    `${Date.now()}-${randomUUID()}.${safeExtension}`;
+
+  const uploadResult =
+    await supabase.storage
+      .from(bucket)
+      .upload(
+        filePath,
+        file.buffer,
+        {
+          contentType:
+            mimeType,
+
+          upsert: false,
+        },
+      );
+
+  if (
+    uploadResult.error
+  ) {
+    throw new BadRequestException(
+      uploadResult.error.message,
+    );
+  }
+
+  const publicUrlResult =
+    supabase.storage
+      .from(bucket)
+      .getPublicUrl(
+        filePath,
+      );
+
+  const roles =
+    Array.isArray(
+      user?.roles,
+    )
+      ? user.roles
+      : user?.role
+        ? [user.role]
+        : [];
+
+  const document =
+    this.projectDealerOrderDocumentRepository.create({
+      dealerOrderId:
+        order.id,
+
+      dealerId:
+        order.dealerId,
+
+      dealerName:
+        order.dealerName ||
+        '',
+
+      title,
+
+      category,
+
+      documentType,
+
+      tags:
+        this.parseDealerOrderDocumentTags(
+          body?.tags,
+        ),
+
+      remarks:
+        String(
+          body?.remarks || '',
+        ).trim(),
+
+      fileName:
+        originalName,
+
+      fileUrl:
+        publicUrlResult
+          .data
+          .publicUrl,
+
+      filePath,
+
+      mimeType,
+
+      fileSize:
+        Number(
+          file.size || 0,
+        ),
+
+      uploadedBy:
+        user?.id ||
+        user?.userId ||
+        user?.sub ||
+        null,
+
+      uploadedByName:
+        user?.name ||
+        user?.dealerName ||
+        user?.email ||
+        order.dealerName ||
+        '',
+
+      uploadedByRole:
+        roles.length
+          ? roles.join(', ')
+          : uploadedSource,
+
+      uploadedSource,
+
+      isHidden: false,
+    } as Partial<ProjectDealerOrderDocument>);
+
+  const savedDocument =
+    await this.projectDealerOrderDocumentRepository.save(
+      document,
+    );
+
+  return {
+    message:
+      'Dealer order document uploaded successfully',
+
+    document:
+      savedDocument,
+  };
+}
+
+async listDealerOrderDocuments(
+  dealerOrderId: number,
+  query: any = {},
+) {
+  const order =
+    await this.getDealerOrderForDocuments(
+      dealerOrderId,
+    );
+
+  const showHidden =
+    String(
+      query?.showHidden ||
+        'false',
+    ) === 'true';
+
+  const search =
+    String(
+      query?.search || '',
+    ).trim();
+
+  const category =
+    String(
+      query?.category || '',
+    ).trim();
+
+  const documentType =
+    String(
+      query?.documentType || '',
+    ).trim();
+
+  const qb =
+    this.projectDealerOrderDocumentRepository
+      .createQueryBuilder(
+        'document',
+      )
+      .where(
+        '"document"."dealerOrderId" = :dealerOrderId',
+        {
+          dealerOrderId:
+            order.id,
+        },
+      );
+
+  if (showHidden) {
+    qb.andWhere(
+      '"document"."isHidden" = true',
+    );
+  } else {
+    qb.andWhere(
+      '"document"."isHidden" = false',
+    );
+  }
+
+  if (search) {
+    qb.andWhere(
+      `(
+        LOWER(
+          "document"."title"
+        ) LIKE LOWER(:search)
+
+        OR LOWER(
+          "document"."category"
+        ) LIKE LOWER(:search)
+
+        OR LOWER(
+          "document"."documentType"
+        ) LIKE LOWER(:search)
+
+        OR LOWER(
+          COALESCE(
+            "document"."remarks",
+            ''
+          )
+        ) LIKE LOWER(:search)
+
+        OR LOWER(
+          COALESCE(
+            "document"."fileName",
+            ''
+          )
+        ) LIKE LOWER(:search)
+
+        OR LOWER(
+          COALESCE(
+            "document"."tags",
+            ''
+          )
+        ) LIKE LOWER(:search)
+      )`,
+      {
+        search:
+          `%${search}%`,
+      },
+    );
+  }
+
+  if (category) {
+    qb.andWhere(
+      `LOWER(
+        "document"."category"
+      ) = LOWER(:category)`,
+      {
+        category,
+      },
+    );
+  }
+
+  if (documentType) {
+    qb.andWhere(
+      `LOWER(
+        "document"."documentType"
+      ) = LOWER(:documentType)`,
+      {
+        documentType,
+      },
+    );
+  }
+
+  qb
+    .orderBy(
+      '"document"."createdAt"',
+      'DESC',
+    )
+    .addOrderBy(
+      '"document"."id"',
+      'DESC',
+    );
+
+  const documents =
+    await qb.getMany();
+
+  return {
+    orderId:
+      order.id,
+
+    orderNumber:
+      order.orderNumber,
+
+    dealerId:
+      order.dealerId,
+
+    dealerName:
+      order.dealerName,
+
+    total:
+      documents.length,
+
+    documents,
+  };
+}
+
+async getDealerOrderDocumentSuggestions(
+  query: any = {},
+) {
+  const type =
+    String(
+      query?.type || '',
+    )
+      .trim()
+      .toLowerCase();
+
+  const search =
+    String(
+      query?.search || '',
+    ).trim();
+
+  if (
+    ![
+      'title',
+      'category',
+      'documenttype',
+      'tag',
+    ].includes(type)
+  ) {
+    throw new BadRequestException(
+      'Suggestion type must be title, category, documentType or tag',
+    );
+  }
+
+  let column:
+    | 'title'
+    | 'category'
+    | 'documentType'
+    | 'tags';
+
+  if (
+    type ===
+    'documenttype'
+  ) {
+    column =
+      'documentType';
+  } else if (
+    type === 'tag'
+  ) {
+    column =
+      'tags';
+  } else {
+    column =
+      type as
+        | 'title'
+        | 'category';
+  }
+
+  const qb =
+    this.projectDealerOrderDocumentRepository
+      .createQueryBuilder(
+        'document',
+      )
+      .select(
+        `DISTINCT "document"."${column}"`,
+        'value',
+      )
+      .where(
+        '"document"."isHidden" = false',
+      )
+      .andWhere(
+        `"document"."${column}" IS NOT NULL`,
+      )
+      .andWhere(
+        `TRIM(
+          "document"."${column}"
+        ) != ''`,
+      );
+
+  if (search) {
+    qb.andWhere(
+      `LOWER(
+        "document"."${column}"
+      ) LIKE LOWER(:search)`,
+      {
+        search:
+          `%${search}%`,
+      },
+    );
+  }
+
+  qb
+    .orderBy(
+      `"document"."${column}"`,
+      'ASC',
+    )
+    .limit(50);
+
+  const rows =
+    await qb.getRawMany();
+
+  /*
+   * Tags are stored as simple-array,
+   * so a row may contain comma-separated tags.
+   */
+  if (
+    column === 'tags'
+  ) {
+    const values =
+      rows
+        .flatMap(
+          (row: any) =>
+            String(
+              row.value || '',
+            )
+              .split(',')
+              .map(
+                (item) =>
+                  item.trim(),
+              )
+              .filter(Boolean),
+        );
+
+    return Array.from(
+      new Set(values),
+    )
+      .filter(
+        (value) =>
+          !search ||
+          value
+            .toLowerCase()
+            .includes(
+              search.toLowerCase(),
+            ),
+      )
+      .sort(
+        (a, b) =>
+          a.localeCompare(b),
+      )
+      .slice(0, 50);
+  }
+
+  return rows
+    .map(
+      (row: any) =>
+        String(
+          row.value || '',
+        ).trim(),
+    )
+    .filter(Boolean);
+}
+
+async updateDealerOrderDocumentMetadata(
+  id: number,
+  body: any,
+  user: any,
+) {
+  const document =
+    await this.projectDealerOrderDocumentRepository.findOne({
+      where: {
+        id,
+      },
+    });
+
+  if (!document) {
+    throw new NotFoundException(
+      'Dealer order document not found',
+    );
+  }
+
+  const title =
+    body?.title !==
+    undefined
+      ? String(
+          body.title || '',
+        ).trim()
+      : document.title;
+
+  const category =
+    body?.category !==
+    undefined
+      ? String(
+          body.category || '',
+        ).trim()
+      : document.category;
+
+  const documentType =
+    body?.documentType !==
+    undefined
+      ? String(
+          body.documentType ||
+            '',
+        ).trim()
+      : document.documentType;
+
+  if (!title) {
+    throw new BadRequestException(
+      'Document title is required',
+    );
+  }
+
+  if (!category) {
+    throw new BadRequestException(
+      'Document category is required',
+    );
+  }
+
+  if (!documentType) {
+    throw new BadRequestException(
+      'Document type is required',
+    );
+  }
+
+  document.title =
+    title;
+
+  document.category =
+    category;
+
+  document.documentType =
+    documentType;
+
+  if (
+    body?.tags !==
+    undefined
+  ) {
+    document.tags =
+      this.parseDealerOrderDocumentTags(
+        body.tags,
+      );
+  }
+
+  if (
+    body?.remarks !==
+    undefined
+  ) {
+    document.remarks =
+      String(
+        body.remarks || '',
+      ).trim();
+  }
+
+  return this.projectDealerOrderDocumentRepository.save(
+    document,
+  );
+}
+
+async hideDealerOrderDocument(
+  id: number,
+  body: any,
+  user: any,
+) {
+  const document =
+    await this.projectDealerOrderDocumentRepository.findOne({
+      where: {
+        id,
+      },
+    });
+
+  if (!document) {
+    throw new NotFoundException(
+      'Dealer order document not found',
+    );
+  }
+
+  document.isHidden =
+    true;
+
+  document.hiddenAt =
+    new Date();
+
+  document.hiddenBy =
+    user?.id ||
+    user?.userId ||
+    user?.sub ||
+    null;
+
+  document.hiddenByName =
+    user?.name ||
+    user?.dealerName ||
+    user?.email ||
+    '';
+
+  document.hiddenReason =
+    String(
+      body?.reason ||
+        body?.hiddenReason ||
+        '',
+    ).trim();
+
+  return this.projectDealerOrderDocumentRepository.save(
+    document,
+  );
+}
+
+async restoreDealerOrderDocument(
+  id: number,
+  body: any,
+  user: any,
+) {
+  const document =
+    await this.projectDealerOrderDocumentRepository.findOne({
+      where: {
+        id,
+      },
+    });
+
+  if (!document) {
+    throw new NotFoundException(
+      'Dealer order document not found',
+    );
+  }
+
+  document.isHidden =
+    false;
+
+  document.restoredAt =
+    new Date();
+
+  document.restoredBy =
+    user?.id ||
+    user?.userId ||
+    user?.sub ||
+    null;
+
+  document.restoredByName =
+    user?.name ||
+    user?.dealerName ||
+    user?.email ||
+    '';
+
+  document.restoreReason =
+    String(
+      body?.reason ||
+        body?.restoreReason ||
+        '',
+    ).trim();
+
+  document.hiddenAt =
+    null as any;
+
+  document.hiddenBy =
+    null as any;
+
+  document.hiddenByName =
+    null as any;
+
+  document.hiddenReason =
+    null as any;
+
+  return this.projectDealerOrderDocumentRepository.save(
+    document,
+  );
+}
+
+async listDealerOrderDocumentsForPortal(
+  dealerId: number,
+  dealerOrderId: number,
+) {
+  const order =
+    await this.projectDealerOrderRepository.findOne({
+      where: {
+        id:
+          dealerOrderId,
+
+        dealerId,
+
+        isHidden:
+          false,
+      },
+    });
+
+  if (!order) {
+    throw new NotFoundException(
+      'Dealer order not found',
+    );
+  }
+
+  const documents =
+    await this.projectDealerOrderDocumentRepository.find({
+      where: {
+        dealerOrderId:
+          order.id,
+
+        dealerId:
+          order.dealerId,
+
+        isHidden:
+          false,
+      },
+
+      order: {
+        createdAt:
+          'DESC',
+
+        id:
+          'DESC',
+      },
+    });
+
+  return {
+    orderId:
+      order.id,
+
+    orderNumber:
+      order.orderNumber,
+
+    documents,
+  };
+}
+
+async uploadDealerOrderDocumentForPortal(
+  dealerId: number,
+  file: any,
+  body: any,
+  user: any,
+) {
+  const dealerOrderId =
+    Number(
+      body?.dealerOrderId || 0,
+    );
+
+  const order =
+    await this.projectDealerOrderRepository.findOne({
+      where: {
+        id:
+          dealerOrderId,
+
+        dealerId,
+
+        isHidden:
+          false,
+      },
+    });
+
+  if (!order) {
+    throw new NotFoundException(
+      'Dealer order not found',
+    );
+  }
+
+  return this.uploadDealerOrderDocument(
+    file,
+    {
+      ...body,
+
+      /*
+       * Force validated order ID.
+       */
+      dealerOrderId:
+        order.id,
+    },
+    {
+      ...user,
+
+      id:
+        dealerId,
+
+      dealerName:
+        user?.dealerName ||
+        order.dealerName ||
+        '',
+
+      roles: [
+        'DEALER',
+      ],
+    },
+    'DEALER',
+  );
 }
 
 private isTradingManager(user: any): boolean {

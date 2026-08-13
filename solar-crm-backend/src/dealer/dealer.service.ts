@@ -1466,6 +1466,121 @@ return {
     };
   }
 
+  async getDealerOrderDocumentsForPortal(
+  dealerId: number,
+  orderId: number,
+) {
+  return this.projectService
+    .listDealerOrderDocumentsForPortal(
+      dealerId,
+      orderId,
+    );
+}
+
+async uploadDealerOrderDocumentForPortal(
+  dealerId: number,
+  orderId: number,
+  file: any,
+  body: any,
+  user: any,
+) {
+  return this.projectService
+    .uploadDealerOrderDocumentForPortal(
+      dealerId,
+      file,
+      {
+        ...body,
+
+        /*
+         * Route is authoritative.
+         */
+        dealerOrderId:
+          orderId,
+      },
+      {
+        ...user,
+
+        id:
+          dealerId,
+
+        roles: [
+          'DEALER',
+        ],
+      },
+    );
+}
+
+async getDealerOrderDocumentSuggestionsForPortal(
+  dealerId: number,
+  orderId: number,
+  query: any,
+) {
+  /*
+   * First verify that this order
+   * belongs to this logged-in dealer.
+   */
+  await this.getDealerOrderDetail(
+    dealerId,
+    orderId,
+  );
+
+  return this.projectService
+    .getDealerOrderDocumentSuggestions(
+      query,
+    );
+}
+
+async updateDealerOrderDocumentForPortal(
+  dealerId: number,
+  orderId: number,
+  documentId: number,
+  body: any,
+  user: any,
+) {
+  const result =
+    await this.projectService
+      .listDealerOrderDocumentsForPortal(
+        dealerId,
+        orderId,
+      );
+
+  const documents =
+    Array.isArray(
+      result?.documents,
+    )
+      ? result.documents
+      : [];
+
+  const document =
+    documents.find(
+      (item: any) =>
+        Number(item.id) ===
+        Number(documentId),
+    );
+
+  if (!document) {
+    throw new NotFoundException(
+      'Dealer order document not found',
+    );
+  }
+
+  return this.projectService
+    .updateDealerOrderDocumentMetadata(
+      documentId,
+      body,
+      {
+        ...user,
+
+        id:
+          dealerId,
+
+        roles: [
+          'DEALER',
+        ],
+      },
+    );
+}
+
   async updateDealerOrderDelivery(orderId: number, body: any) {
   const order = await this.dealerOrderRepository.findOne({
     where: {

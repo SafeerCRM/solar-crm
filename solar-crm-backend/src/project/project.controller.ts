@@ -4096,6 +4096,210 @@ getDealerOrderInvoices(
 
 @Roles(
   'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'PAYMENT_MANAGER',
+  'TRADING_MANAGER',
+  'TRADING_HEAD',
+  'STOCK_MANAGER',
+)
+@Post('dealer-order/:id/documents/upload')
+@UseInterceptors(
+  FileInterceptor(
+    'file',
+    {
+      limits: {
+        fileSize:
+          10 * 1024 * 1024,
+      },
+    },
+  ),
+)
+uploadDealerOrderDocument(
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+
+  @UploadedFile()
+  file: any,
+
+  @Body()
+  body: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .uploadDealerOrderDocument(
+      file,
+      {
+        ...body,
+
+        /*
+         * Order ID always comes from route.
+         * Never trust a second order ID
+         * supplied by frontend body.
+         */
+        dealerOrderId:
+          id,
+      },
+      user,
+      'CRM',
+    );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'PAYMENT_MANAGER',
+  'TRADING_MANAGER',
+  'TRADING_HEAD',
+  'STOCK_MANAGER',
+)
+@Get('dealer-order/:id/documents')
+getDealerOrderDocuments(
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+
+  @Query()
+  query: any,
+) {
+  return this.projectService
+    .listDealerOrderDocuments(
+      id,
+      query,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'PAYMENT_MANAGER',
+  'TRADING_MANAGER',
+  'TRADING_HEAD',
+  'STOCK_MANAGER',
+)
+@Get(
+  'dealer-order-documents/suggestions',
+)
+getDealerOrderDocumentSuggestions(
+  @Query()
+  query: any,
+) {
+  return this.projectService
+    .getDealerOrderDocumentSuggestions(
+      query,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'PAYMENT_MANAGER',
+  'TRADING_MANAGER',
+  'TRADING_HEAD',
+  'STOCK_MANAGER',
+)
+@Patch(
+  'dealer-order-documents/:id',
+)
+updateDealerOrderDocumentMetadata(
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+
+  @Body()
+  body: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .updateDealerOrderDocumentMetadata(
+      id,
+      body,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'PAYMENT_MANAGER',
+  'TRADING_MANAGER',
+  'TRADING_HEAD',
+  'STOCK_MANAGER',
+)
+@Patch(
+  'dealer-order-documents/:id/hide',
+)
+hideDealerOrderDocument(
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+
+  @Body()
+  body: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .hideDealerOrderDocument(
+      id,
+      body,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'PAYMENT_MANAGER',
+  'TRADING_MANAGER',
+  'TRADING_HEAD',
+  'STOCK_MANAGER',
+)
+@Patch(
+  'dealer-order-documents/:id/restore',
+)
+restoreDealerOrderDocument(
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+
+  @Body()
+  body: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .restoreDealerOrderDocument(
+      id,
+      body,
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
   'ACCOUNT_MANAGER',
 )
 @Get('tax-invoices/register')

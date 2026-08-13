@@ -86,6 +86,7 @@ import { ProjectInsurance } from './project-insurance.entity';
 import { ProjectInsuranceDocument } from './project-insurance-document.entity';
 import { ProjectInsuranceRequest } from './project-insurance-request.entity';
 import { ProjectInsuranceReminderLog } from './project-insurance-reminder-log.entity';
+import { ProjectDealerOrderDocument } from './project-dealer-order-document.entity';
 
 @Module({
   imports: [
@@ -112,6 +113,7 @@ ProjectProformaInvoiceItem, ProjectFinalInvoice, ProjectFinalInvoiceItem, Projec
 ProjectEpcCustomerInvoiceItem, ProjectPartyLedger, ProjectContractorAssignment,
 ProjectContractorProof, ProjectCleaningAssignment, ProjectContractor, ProjectContractorComment, ProjectContractorRescheduleRequest, ProjectLoanCoApplicant, ProjectAccountExpense, ProjectConsumption, ProjectCustomerUpdate, ProjectDealerOrder,
 ProjectDealerOrderItem,
+ProjectDealerOrderDocument,
 ProjectDealerPayment,
 ProjectDealerComment, ProjectDealerNotification,
 ProjectDealerMonthlyRequirement, ProjectTradingMeeting, FollowUp, ProjectFranchisePayoutRequest, Dealer, ProjectPaymentReceipt, Lead,

@@ -11,11 +11,12 @@ Query,
   Res,
   UnauthorizedException,
   UploadedFiles,
+  UploadedFile,
 UseInterceptors,
 } from '@nestjs/common';
 import { DealerService } from './dealer.service';
 import * as jwt from 'jsonwebtoken';
-import { FilesInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 
 @Controller('dealer-auth')
@@ -85,6 +86,182 @@ async policies(@Req() req: any) {
 
     return this.service.getDealerOrderDetail(Number(payload.dealerId), id);
   }
+
+  @Get('orders/:id/documents')
+async getOrderDocuments(
+  @Req()
+  req: any,
+
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+) {
+  const payload =
+    this.getDealerPayload(
+      req,
+    );
+
+  return this.service
+    .getDealerOrderDocumentsForPortal(
+      Number(
+        payload.dealerId,
+      ),
+      id,
+    );
+}
+
+@Post(
+  'orders/:id/documents/upload',
+)
+@UseInterceptors(
+  FileInterceptor(
+    'file',
+    {
+      limits: {
+        fileSize:
+          10 * 1024 * 1024,
+      },
+    },
+  ),
+)
+async uploadOrderDocument(
+  @Req()
+  req: any,
+
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+
+  @UploadedFile()
+  file: any,
+
+  @Body()
+  body: any,
+) {
+  const payload =
+    this.getDealerPayload(
+      req,
+    );
+
+  return this.service
+    .uploadDealerOrderDocumentForPortal(
+      Number(
+        payload.dealerId,
+      ),
+      id,
+      file,
+      body,
+      {
+        id:
+          Number(
+            payload.dealerId,
+          ),
+
+        name:
+          payload.dealerName ||
+          '',
+
+        dealerName:
+          payload.dealerName ||
+          '',
+
+        roles: [
+          'DEALER',
+        ],
+      },
+    );
+}
+
+@Get(
+  'orders/:id/documents/suggestions',
+)
+async getOrderDocumentSuggestions(
+  @Req()
+  req: any,
+
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+
+  @Query()
+  query: any,
+) {
+  const payload =
+    this.getDealerPayload(
+      req,
+    );
+
+  return this.service
+    .getDealerOrderDocumentSuggestionsForPortal(
+      Number(
+        payload.dealerId,
+      ),
+      id,
+      query,
+    );
+}
+
+@Patch(
+  'orders/:id/documents/:documentId',
+)
+async updateOrderDocument(
+  @Req()
+  req: any,
+
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+
+  @Param(
+    'documentId',
+    ParseIntPipe,
+  )
+  documentId: number,
+
+  @Body()
+  body: any,
+) {
+  const payload =
+    this.getDealerPayload(
+      req,
+    );
+
+  return this.service
+    .updateDealerOrderDocumentForPortal(
+      Number(
+        payload.dealerId,
+      ),
+      id,
+      documentId,
+      body,
+      {
+        id:
+          Number(
+            payload.dealerId,
+          ),
+
+        name:
+          payload.dealerName ||
+          '',
+
+        dealerName:
+          payload.dealerName ||
+          '',
+
+        roles: [
+          'DEALER',
+        ],
+      },
+    );
+}
 
     @Get('orders/:id/proforma-invoice')
   async getOrderProformaInvoice(
