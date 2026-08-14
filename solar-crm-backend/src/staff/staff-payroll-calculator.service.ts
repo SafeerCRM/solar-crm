@@ -1943,6 +1943,9 @@ const incentiveAmount =
   salaryTargetValue:
     rule.salaryTargetValue,
 
+    minimumProjectPaymentPercentage:
+  rule.minimumProjectPaymentPercentage,
+
   maximumSalaryPercentage:
     rule.maximumSalaryPercentage,
 
@@ -2119,6 +2122,9 @@ return {
     salaryTargetValue:
       rule.salaryTargetValue,
 
+      minimumProjectPaymentPercentage:
+  rule.minimumProjectPaymentPercentage,
+
     maximumSalaryPercentage:
       rule.maximumSalaryPercentage,
 
@@ -2294,6 +2300,9 @@ async calculateTelecallingManagerPayroll(
 
       salaryTargetValue:
         rule.salaryTargetValue,
+
+        minimumProjectPaymentPercentage:
+  rule.minimumProjectPaymentPercentage,
 
       targetCalculationMode:
         rule.targetCalculationMode,
@@ -2480,6 +2489,9 @@ async calculateTelecallingManagerPayroll(
     salaryTargetValue:
       rule.salaryTargetValue,
 
+      minimumProjectPaymentPercentage:
+  rule.minimumProjectPaymentPercentage,
+
     maximumSalaryPercentage:
       rule.maximumSalaryPercentage,
 
@@ -2655,6 +2667,9 @@ async calculateTelecallingManagerPayroll(
 
       salaryTargetValue:
         rule.salaryTargetValue,
+
+        minimumProjectPaymentPercentage:
+  rule.minimumProjectPaymentPercentage,
 
       maximumSalaryPercentage:
         rule.maximumSalaryPercentage,
@@ -2832,6 +2847,9 @@ async calculateTelecallingManagerPayroll(
       salaryTargetValue:
         rule.salaryTargetValue,
 
+        minimumProjectPaymentPercentage:
+  rule.minimumProjectPaymentPercentage,
+
       maximumSalaryPercentage:
         rule.maximumSalaryPercentage,
 
@@ -3007,6 +3025,9 @@ async calculateTelecallingManagerPayroll(
 
       salaryTargetValue:
         rule.salaryTargetValue,
+
+        minimumProjectPaymentPercentage:
+  rule.minimumProjectPaymentPercentage,
 
       maximumSalaryPercentage:
         rule.maximumSalaryPercentage,
@@ -3184,6 +3205,9 @@ async calculateTelecallingManagerPayroll(
       salaryTargetValue:
         rule.salaryTargetValue,
 
+        minimumProjectPaymentPercentage:
+  rule.minimumProjectPaymentPercentage,
+
       maximumSalaryPercentage:
         rule.maximumSalaryPercentage,
 
@@ -3360,6 +3384,9 @@ async calculateTelecallingManagerPayroll(
       salaryTargetValue:
         rule.salaryTargetValue,
 
+        minimumProjectPaymentPercentage:
+  rule.minimumProjectPaymentPercentage,
+
       maximumSalaryPercentage:
         rule.maximumSalaryPercentage,
 
@@ -3535,6 +3562,9 @@ async calculateTelecallingManagerPayroll(
 
       salaryTargetValue:
         rule.salaryTargetValue,
+
+        minimumProjectPaymentPercentage:
+  rule.minimumProjectPaymentPercentage,
 
       maximumSalaryPercentage:
         rule.maximumSalaryPercentage,

@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Req,
+  Res,
   ParseIntPipe,
   Post,
   Query,
@@ -13,6 +14,7 @@ import {
   UploadedFiles,
   UseInterceptors,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { StaffService } from './staff.service';
 import {
   StaffPayrollMetricCatalogueService,
@@ -712,6 +714,24 @@ restoreStaffPayrollRule(
 @Get('payrolls')
 listPayrolls(@Query() query: any) {
   return this.staffService.listPayrolls(query);
+}
+
+@Get('payroll/:id/salary-slip')
+generatePayrollSalarySlip(
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+
+  @Res()
+  res: Response,
+) {
+  return this.staffService
+    .generatePayrollSalarySlipPdf(
+      id,
+      res,
+    );
 }
 
 @Post('payroll/generate')

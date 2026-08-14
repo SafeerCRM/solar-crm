@@ -3,6 +3,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import PDFDocument = require('pdfkit');
+import type { Response } from 'express';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, ILike } from 'typeorm';
 import { StaffMember } from './staff-member.entity';
@@ -889,7 +891,10 @@ async getMyAttendance(query: any, user: any) {
   };
 }
 
-private async getLeaveSummary(staffId?: number) {
+private async getLeaveSummary(
+  staffId?: number,
+  payrollMonth?: string,
+) {
   const qb = this.leaveRepo
     .createQueryBuilder('leave')
     .select(
@@ -939,30 +944,102 @@ private async getLeaveSummary(staffId?: number) {
       `,
       'cancelledRequests',
     )
-    .where('leave.isHidden = false');
+    .where(
+      'COALESCE(leave.isHidden, false) = false',
+    );
 
   if (staffId) {
-    qb.andWhere('leave.staffId = :staffId', {
-      staffId,
-    });
+    qb.andWhere(
+      'leave.staffId = :staffId',
+      {
+        staffId,
+      },
+    );
   }
 
-  const raw = await qb.getRawOne();
+  const normalizedMonth =
+    String(payrollMonth || '').trim();
+
+  if (
+    normalizedMonth &&
+    /^\d{4}-\d{2}$/.test(
+      normalizedMonth,
+    )
+  ) {
+    const [
+      year,
+      month,
+    ] = normalizedMonth
+      .split('-')
+      .map(Number);
+
+    const monthStart =
+      `${year}-${String(month).padStart(2, '0')}-01`;
+
+    const nextMonthDate =
+      new Date(
+        Date.UTC(
+          year,
+          month,
+          1,
+        ),
+      );
+
+    const nextMonthStart =
+      nextMonthDate
+        .toISOString()
+        .slice(0, 10);
+
+    /*
+     * Count leave requests that overlap
+     * the selected month.
+     */
+    qb
+      .andWhere(
+        'leave.fromDate < :nextMonthStart',
+        {
+          nextMonthStart,
+        },
+      )
+      .andWhere(
+        'leave.toDate >= :monthStart',
+        {
+          monthStart,
+        },
+      );
+  }
+
+  const raw =
+    await qb.getRawOne();
 
   return {
-    approvedDays: Number(raw?.approvedDays || 0),
-    approvedRequests: Number(
-      raw?.approvedRequests || 0,
-    ),
-    pendingRequests: Number(
-      raw?.pendingRequests || 0,
-    ),
-    rejectedRequests: Number(
-      raw?.rejectedRequests || 0,
-    ),
-    cancelledRequests: Number(
-      raw?.cancelledRequests || 0,
-    ),
+    payrollMonth:
+      normalizedMonth || null,
+
+    approvedDays:
+      Number(
+        raw?.approvedDays || 0,
+      ),
+
+    approvedRequests:
+      Number(
+        raw?.approvedRequests || 0,
+      ),
+
+    pendingRequests:
+      Number(
+        raw?.pendingRequests || 0,
+      ),
+
+    rejectedRequests:
+      Number(
+        raw?.rejectedRequests || 0,
+      ),
+
+    cancelledRequests:
+      Number(
+        raw?.cancelledRequests || 0,
+      ),
   };
 }
 
@@ -1043,11 +1120,16 @@ async listLeaves(query: any) {
     take: limit,
   });
 
-  const summary = await this.getLeaveSummary(
-  query.staffId
-    ? Number(query.staffId)
-    : undefined,
-);
+  const summary =
+  await this.getLeaveSummary(
+    query.staffId
+      ? Number(query.staffId)
+      : undefined,
+
+    query.payrollMonth
+      ? String(query.payrollMonth)
+      : undefined,
+  );
 
 return {
   data,
@@ -1187,9 +1269,14 @@ async listMyLeaves(query: any, user: any) {
     take: limit,
   });
 
-  const summary = await this.getLeaveSummary(
-  staff.id,
-);
+  const summary =
+  await this.getLeaveSummary(
+    staff.id,
+
+    query.payrollMonth
+      ? String(query.payrollMonth)
+      : undefined,
+  );
 
 return {
   staff,
@@ -3603,6 +3690,787 @@ async listPayrolls(query: any) {
     limit,
     totalPages: Math.ceil(total / limit) || 1,
   };
+}
+
+async listMyPayrolls(
+  query: any,
+  user: any,
+) {
+  const staff =
+    await this.getMyStaffProfile(
+      user,
+    );
+
+  const page = Math.max(
+    Number(query.page || 1),
+    1,
+  );
+
+  const limit = Math.min(
+    Math.max(
+      Number(query.limit || 12),
+      1,
+    ),
+    100,
+  );
+
+  const qb =
+    this.payrollRepo
+      .createQueryBuilder('payroll')
+      .where(
+        'payroll.staffId = :staffId',
+        {
+          staffId:
+            Number(staff.id),
+        },
+      )
+      .andWhere(
+        'COALESCE(payroll.isHidden, false) = false',
+      );
+
+  if (query.payrollMonth) {
+    qb.andWhere(
+      'payroll.payrollMonth = :payrollMonth',
+      {
+        payrollMonth:
+          String(
+            query.payrollMonth,
+          ),
+      },
+    );
+  }
+
+  /*
+   * GENERATED payroll is also visible.
+   *
+   * This matches your requirement that once
+   * Owner/HR generates payroll, the employee
+   * should immediately be able to inspect it.
+   */
+  const [data, total] =
+    await qb
+      .orderBy(
+        'payroll.payrollMonth',
+        'DESC',
+      )
+      .addOrderBy(
+        'payroll.createdAt',
+        'DESC',
+      )
+      .skip(
+        (page - 1) * limit,
+      )
+      .take(limit)
+      .getManyAndCount();
+
+  return {
+    staff,
+
+    data,
+
+    total,
+    page,
+    limit,
+
+    totalPages:
+      Math.ceil(
+        total / limit,
+      ) || 1,
+  };
+}
+
+async getMyPayroll(
+  id: number,
+  user: any,
+) {
+  const staff =
+    await this.getMyStaffProfile(
+      user,
+    );
+
+  const payroll =
+    await this.payrollRepo.findOne({
+      where: {
+        id: Number(id),
+        staffId:
+          Number(staff.id),
+        isHidden: false,
+      },
+    });
+
+  if (!payroll) {
+    throw new NotFoundException(
+      'Payroll not found',
+    );
+  }
+
+  return {
+    staff,
+    payroll,
+  };
+}
+
+async generatePayrollSalarySlipPdf(
+  payrollId: number,
+  res: Response,
+  user?: any,
+  selfOnly = false,
+) {
+  let payroll =
+    await this.payrollRepo.findOne({
+      where: {
+        id: Number(payrollId),
+        isHidden: false,
+      },
+    });
+
+  if (!payroll) {
+    throw new NotFoundException(
+      'Payroll not found',
+    );
+  }
+
+  /*
+   * Employee self-service download must never
+   * expose another employee's payroll.
+   */
+  if (selfOnly) {
+    const staff =
+      await this.getMyStaffProfile(
+        user,
+      );
+
+    if (
+      Number(payroll.staffId) !==
+      Number(staff.id)
+    ) {
+      throw new NotFoundException(
+        'Payroll not found',
+      );
+    }
+  }
+
+  const calculationSnapshot =
+    payroll.calculationSnapshot || {};
+
+  const ruleSnapshot =
+    payroll.ruleSnapshot || {};
+
+  const eligibilityConditions =
+    Array.isArray(
+      calculationSnapshot
+        .eligibilityConditions,
+    )
+      ? calculationSnapshot
+          .eligibilityConditions
+      : [];
+
+  const incentiveComponents =
+    Array.isArray(
+      calculationSnapshot
+        .incentiveComponents,
+    )
+      ? calculationSnapshot
+          .incentiveComponents
+      : [];
+
+  const actualMetrics =
+    calculationSnapshot.actualMetrics &&
+    typeof calculationSnapshot
+      .actualMetrics === 'object'
+      ? calculationSnapshot.actualMetrics
+      : {};
+
+  const formatMoney = (
+    value: any,
+  ) =>
+    `Rs. ${Number(
+      value || 0,
+    ).toLocaleString(
+      'en-IN',
+      {
+        maximumFractionDigits: 2,
+      },
+    )}`;
+
+  const formatLabel = (
+    value: any,
+  ) =>
+    String(value || '')
+      .replace(/_/g, ' ')
+      .toLowerCase()
+      .replace(
+        /\b\w/g,
+        (char) =>
+          char.toUpperCase(),
+      );
+
+  const safeName =
+    String(
+      payroll.staffName ||
+        `Staff-${payroll.staffId}`,
+    )
+      .replace(
+        /[\/\\:*?"<>|]/g,
+        '-',
+      )
+      .trim();
+
+  const safeMonth =
+    String(
+      payroll.payrollMonth ||
+        'payroll',
+    ).replace(
+      /[\/\\:*?"<>|]/g,
+      '-',
+    );
+
+  const doc =
+    new PDFDocument({
+      size: 'A4',
+      margin: 36,
+    });
+
+  res.setHeader(
+    'Content-Type',
+    'application/pdf',
+  );
+
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="${safeName}-${safeMonth}-salary-slip.pdf"`,
+  );
+
+  doc.pipe(res);
+
+  const pageLeft = 36;
+  const pageRight = 559;
+  const pageWidth =
+    pageRight - pageLeft;
+
+  const drawSectionTitle = (
+    title: string,
+  ) => {
+    if (doc.y > 740) {
+      doc.addPage();
+    }
+
+    doc
+      .moveDown(0.6)
+      .font('Helvetica-Bold')
+      .fontSize(12)
+      .text(title);
+
+    doc
+      .moveTo(
+        pageLeft,
+        doc.y + 3,
+      )
+      .lineTo(
+        pageRight,
+        doc.y + 3,
+      )
+      .strokeColor('#d1d5db')
+      .stroke();
+
+    doc.moveDown(0.7);
+  };
+
+  const drawKeyValue = (
+    label: string,
+    value: any,
+  ) => {
+    if (doc.y > 760) {
+      doc.addPage();
+    }
+
+    const y = doc.y;
+
+    doc
+      .font('Helvetica')
+      .fontSize(9)
+      .fillColor('#4b5563')
+      .text(
+        label,
+        pageLeft,
+        y,
+        {
+          width: 210,
+        },
+      );
+
+    doc
+      .font('Helvetica-Bold')
+      .fillColor('#111827')
+      .text(
+        String(
+          value ?? '-',
+        ),
+        pageLeft + 220,
+        y,
+        {
+          width:
+            pageWidth - 220,
+        },
+      );
+
+    doc.moveDown(0.45);
+  };
+
+  /*
+   * HEADER
+   */
+  doc
+    .font('Helvetica-Bold')
+    .fontSize(20)
+    .fillColor('#111827')
+    .text(
+      'SALARY SLIP',
+      {
+        align: 'center',
+      },
+    );
+
+  doc
+    .moveDown(0.2)
+    .font('Helvetica')
+    .fontSize(10)
+    .fillColor('#6b7280')
+    .text(
+      payroll.payrollMonth ||
+        '-',
+      {
+        align: 'center',
+      },
+    );
+
+  doc.moveDown(1);
+
+  drawSectionTitle(
+    'Employee Details',
+  );
+
+  drawKeyValue(
+    'Employee Name',
+    payroll.staffName || '-',
+  );
+
+  drawKeyValue(
+    'Employee Code',
+    payroll.employeeCode || '-',
+  );
+
+  drawKeyValue(
+    'Role',
+    formatLabel(
+      payroll.staffRole,
+    ) || '-',
+  );
+
+  drawKeyValue(
+    'Department',
+    payroll.department || '-',
+  );
+
+  drawKeyValue(
+    'Branch',
+    payroll.branchName || '-',
+  );
+
+  drawKeyValue(
+    'Payroll Status',
+    payroll.status || '-',
+  );
+
+  /*
+   * ATTENDANCE
+   */
+  drawSectionTitle(
+    'Attendance Summary',
+  );
+
+  drawKeyValue(
+    'Present Days',
+    payroll.presentDays,
+  );
+
+  drawKeyValue(
+    'Half Days',
+    payroll.halfDays,
+  );
+
+  drawKeyValue(
+    'Absent Days',
+    payroll.absentDays,
+  );
+
+  drawKeyValue(
+    'Leave Days',
+    payroll.leaveDays,
+  );
+
+  drawKeyValue(
+    'Working Hours',
+    Number(
+      payroll.workingHours || 0,
+    ).toFixed(2),
+  );
+
+  /*
+   * ELIGIBILITY
+   */
+  drawSectionTitle(
+    'Payroll Eligibility',
+  );
+
+  drawKeyValue(
+    'Eligibility',
+    payroll.eligibilityMet
+      ? 'Eligible'
+      : 'Not Eligible',
+  );
+
+  drawKeyValue(
+    'Eligibility Reason',
+    payroll.eligibilityReason ||
+      '-',
+  );
+
+  drawKeyValue(
+    'Salary Percentage',
+    `${Number(
+      payroll.salaryPercentage ||
+        0,
+    ).toFixed(2)}%`,
+  );
+
+  /*
+   * TARGETS
+   */
+  if (
+    eligibilityConditions.length >
+    0
+  ) {
+    drawSectionTitle(
+      'Eligibility Targets',
+    );
+
+    eligibilityConditions.forEach(
+      (
+        condition: any,
+      ) => {
+        const label =
+          condition.label ||
+          formatLabel(
+            condition.metricType,
+          );
+
+        drawKeyValue(
+          label,
+          `${Number(
+            condition.actualValue ||
+              0,
+          ).toLocaleString(
+            'en-IN',
+          )} / ${Number(
+            condition.targetValue ||
+              0,
+          ).toLocaleString(
+            'en-IN',
+          )} - ${
+            condition.passed
+              ? 'Achieved'
+              : 'Not Achieved'
+          }`,
+        );
+      },
+    );
+  }
+
+  /*
+   * ACTUAL METRICS
+   */
+  if (
+    Object.keys(
+      actualMetrics,
+    ).length > 0
+  ) {
+    drawSectionTitle(
+      'Performance Metrics',
+    );
+
+    Object.entries(
+      actualMetrics,
+    ).forEach(
+      ([key, value]) => {
+        drawKeyValue(
+          formatLabel(key),
+          Number(
+            value || 0,
+          ).toLocaleString(
+            'en-IN',
+            {
+              maximumFractionDigits:
+                2,
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  /*
+   * INCENTIVES
+   */
+  if (
+    incentiveComponents.length >
+    0
+  ) {
+    drawSectionTitle(
+      'Incentive Breakdown',
+    );
+
+    incentiveComponents.forEach(
+      (
+        component: any,
+      ) => {
+        drawKeyValue(
+          component.label ||
+            'Incentive',
+          `${formatLabel(
+            component.metricType,
+          )} | Achieved: ${Number(
+            component.metricValue ||
+              0,
+          ).toLocaleString(
+            'en-IN',
+            {
+              maximumFractionDigits:
+                2,
+            },
+          )} | Amount: ${formatMoney(
+            component.amount,
+          )}`,
+        );
+      },
+    );
+  }
+
+  /*
+   * RULE
+   */
+  drawSectionTitle(
+    'Applied Payroll Rule',
+  );
+
+  drawKeyValue(
+    'Rule Name',
+    ruleSnapshot.ruleName ||
+      '-',
+  );
+
+  drawKeyValue(
+    'Rule Version',
+    ruleSnapshot.version ??
+      '-',
+  );
+
+  drawKeyValue(
+    'Salary Mode',
+    formatLabel(
+      ruleSnapshot.salaryMode,
+    ) || '-',
+  );
+
+  drawKeyValue(
+    'Salary Metric',
+    ruleSnapshot
+      .salaryMetricType
+      ? formatLabel(
+          ruleSnapshot
+            .salaryMetricType,
+        )
+      : '-',
+  );
+
+  drawKeyValue(
+    'Salary Target',
+    ruleSnapshot
+      .salaryTargetValue ??
+      '-',
+  );
+
+  drawKeyValue(
+    'Minimum Project Payment',
+    `${Number(
+      ruleSnapshot
+        .minimumProjectPaymentPercentage ||
+        0,
+    )}%`,
+  );
+
+  /*
+   * SALARY STATEMENT
+   */
+  drawSectionTitle(
+    'Salary Statement',
+  );
+
+  drawKeyValue(
+    'Basic Salary',
+    formatMoney(
+      payroll.basicSalary,
+    ),
+  );
+
+  drawKeyValue(
+    'Earned Salary Percentage',
+    `${Number(
+      payroll.salaryPercentage ||
+        0,
+    ).toFixed(2)}%`,
+  );
+
+  drawKeyValue(
+    'Incentive',
+    formatMoney(
+      payroll.incentiveAmount,
+    ),
+  );
+
+  drawKeyValue(
+    'Other Allowance',
+    formatMoney(
+      payroll.otherAllowance,
+    ),
+  );
+
+  drawKeyValue(
+    'Gross Salary',
+    formatMoney(
+      payroll.grossSalary,
+    ),
+  );
+
+  drawKeyValue(
+    'Attendance Deduction',
+    formatMoney(
+      payroll.attendanceDeduction,
+    ),
+  );
+
+  drawKeyValue(
+    'Leave Deduction',
+    formatMoney(
+      payroll.leaveDeduction,
+    ),
+  );
+
+  drawKeyValue(
+    'Penalty',
+    formatMoney(
+      payroll.penaltyAmount,
+    ),
+  );
+
+  drawKeyValue(
+    'Other Deduction',
+    formatMoney(
+      payroll.otherDeduction,
+    ),
+  );
+
+  if (
+    payroll.ownerOverrideApplied
+  ) {
+    drawKeyValue(
+      'Owner Override',
+      formatMoney(
+        payroll.ownerOverrideNetSalary,
+      ),
+    );
+
+    drawKeyValue(
+      'Override Reason',
+      payroll.ownerOverrideReason ||
+        '-',
+    );
+  }
+
+  drawKeyValue(
+    'Net Salary',
+    formatMoney(
+      payroll.netSalary,
+    ),
+  );
+
+  /*
+   * APPROVAL / PAYMENT
+   */
+  drawSectionTitle(
+    'Approval & Payment',
+  );
+
+  drawKeyValue(
+    'Generated By',
+    payroll.generatedByName ||
+      '-',
+  );
+
+  drawKeyValue(
+    'Approved By',
+    payroll.approvedByName ||
+      '-',
+  );
+
+  drawKeyValue(
+    'Approved At',
+    payroll.approvedAt
+      ? new Date(
+          payroll.approvedAt,
+        ).toLocaleString(
+          'en-IN',
+        )
+      : '-',
+  );
+
+  drawKeyValue(
+    'Paid By',
+    payroll.paidByName ||
+      '-',
+  );
+
+  drawKeyValue(
+    'Paid At',
+    payroll.paidAt
+      ? new Date(
+          payroll.paidAt,
+        ).toLocaleString(
+          'en-IN',
+        )
+      : '-',
+  );
+
+  if (payroll.paymentRemarks) {
+    drawKeyValue(
+      'Payment Remarks',
+      payroll.paymentRemarks,
+    );
+  }
+
+  doc
+    .moveDown(1)
+    .font('Helvetica')
+    .fontSize(8)
+    .fillColor('#6b7280')
+    .text(
+      'This salary slip is generated from the payroll calculation snapshot stored in the CRM.',
+      {
+        align: 'center',
+      },
+    );
+
+  doc.end();
 }
 
 async updatePayroll(id: number, body: any) {

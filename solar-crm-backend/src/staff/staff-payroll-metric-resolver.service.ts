@@ -549,7 +549,17 @@ private readonly recruitmentCandidateRepository:
 
       case 'MEETING_MANAGER':
   query.andWhere(
-    'project.meetingManagerId = :linkedUserId',
+    `
+    (
+      project.meetingManagerId = :linkedUserId
+
+      OR (
+        project.projectOwnerId = :linkedUserId
+        AND project.leadId IS NULL
+        AND project.meetingId IS NULL
+      )
+    )
+    `,
     {
       linkedUserId,
     },
@@ -1526,25 +1536,40 @@ case StaffPayrollMetricType.TEAM_TELECALLER_APPROVED_PROJECTS:
   }
 
   private async resolveSelfApprovedProjects(
-    request: StaffPayrollMetricRequest,
-  ): Promise<number> {
-    const linkedUserId =
-      this.getLinkedUserId(request);
+  request: StaffPayrollMetricRequest,
+): Promise<number> {
+  const linkedUserId =
+    this.getLinkedUserId(request);
 
-    const query =
-      this.createPayrollEligibleProjectQuery(
-        request,
-      );
+  const query =
+    this.createPayrollEligibleProjectQuery(
+      request,
+    );
 
-    query.andWhere(
+  /*
+   * SELF_APPROVED_PROJECTS means a genuinely
+   * direct project owned by this staff member.
+   *
+   * A journey project must continue to be
+   * credited through APPROVED_PROJECTS and its
+   * role-specific journey attribution.
+   */
+  query
+    .andWhere(
       'project.projectOwnerId = :linkedUserId',
       {
         linkedUserId,
       },
+    )
+    .andWhere(
+      'project.leadId IS NULL',
+    )
+    .andWhere(
+      'project.meetingId IS NULL',
     );
 
-    return query.getCount();
-  }
+  return query.getCount();
+}
 
   private async resolveCompanyApprovedProjects(
     request: StaffPayrollMetricRequest,

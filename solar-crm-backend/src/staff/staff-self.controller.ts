@@ -6,11 +6,13 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Res,
   Query,
   UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { StaffService } from './staff.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -126,6 +128,52 @@ cancelMyAttendanceExceptionRequest(
   @Get('leaves')
 listMyLeaves(@Query() query: any, @CurrentUser() user: any) {
   return this.staffService.listMyLeaves(query, user);
+}
+
+@Get('payrolls')
+listMyPayrolls(
+  @Query() query: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffService.listMyPayrolls(
+    query,
+    user,
+  );
+}
+
+@Get('payroll/:id')
+getMyPayroll(
+  @Param('id', ParseIntPipe)
+  id: number,
+  @CurrentUser() user: any,
+) {
+  return this.staffService.getMyPayroll(
+    id,
+    user,
+  );
+}
+
+@Get('payroll/:id/salary-slip')
+generateMyPayrollSalarySlip(
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+
+  @CurrentUser()
+  user: any,
+
+  @Res()
+  res: Response,
+) {
+  return this.staffService
+    .generatePayrollSalarySlipPdf(
+      id,
+      res,
+      user,
+      true,
+    );
 }
 
 @Post('leave')
