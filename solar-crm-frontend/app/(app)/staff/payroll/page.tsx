@@ -36,6 +36,15 @@ function money(value: any) {
   return `₹${Number(value || 0).toLocaleString('en-IN')}`;
 }
 
+function payrollLabel(value: any) {
+  return String(value || '')
+    .replace(/_/g, ' ')
+    .toLowerCase()
+    .replace(/\b\w/g, (char) =>
+      char.toUpperCase(),
+    );
+}
+
 export default function StaffPayrollPage() {
   const [staff, setStaff] = useState<Staff[]>([]);
   const [payrolls, setPayrolls] = useState<any[]>([]);
@@ -211,6 +220,44 @@ const [viewCalculationOpen, setViewCalculationOpen] =
 
     fetchPayrolls();
   };
+
+  const downloadSalarySlip = async (id: number) => {
+  try {
+    const response = await axios.get(
+      `${API_BASE_URL}/staff/payroll/${id}/salary-slip`,
+      {
+        headers: headers(),
+        responseType: 'blob',
+      },
+    );
+
+    const blob = new Blob([response.data], {
+      type: 'application/pdf',
+    });
+
+    const url = window.URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.download = `Salary-Slip-${id}.pdf`;
+
+    document.body.appendChild(link);
+
+    link.click();
+
+    link.remove();
+
+    window.URL.revokeObjectURL(url);
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Unable to download salary slip',
+    );
+  }
+};
 
   const hideRestore = async (item: any, restore = false) => {
     const reason = window.prompt(
@@ -732,6 +779,15 @@ item.ruleSnapshot ? (
                   <div className="flex flex-wrap gap-2">
 
                     <button
+  onClick={() =>
+    downloadSalarySlip(item.id)
+  }
+  className="rounded-xl bg-indigo-600 px-3 py-2 text-sm font-semibold text-white"
+>
+  Salary Slip
+</button>
+
+                    <button
   onClick={() => {
     setViewPayroll(item);
     setViewCalculationOpen(true);
@@ -887,6 +943,158 @@ item.ruleSnapshot ? (
         </div>
 
         <div className="rounded-xl border p-4">
+  <h3 className="font-bold text-gray-800">
+    Salary Statement
+  </h3>
+
+  <div className="mt-4 space-y-3 text-sm">
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-gray-600">
+        Basic Salary
+      </span>
+
+      <span className="font-semibold">
+        {money(viewPayroll.basicSalary)}
+      </span>
+    </div>
+
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-gray-600">
+        Salary Percentage
+      </span>
+
+      <span className="font-semibold">
+        {Number(
+          viewPayroll.salaryPercentage ||
+            0,
+        ).toFixed(2)}
+        %
+      </span>
+    </div>
+
+    <div className="flex items-center justify-between gap-3 border-t pt-3">
+      <span className="font-semibold text-gray-800">
+        Earned Salary
+      </span>
+
+      <span className="font-bold text-blue-700">
+        {money(
+          viewPayroll.calculationSnapshot
+            ?.salaryAmount ??
+            (
+              Number(
+                viewPayroll.basicSalary ||
+                  0,
+              ) *
+              Number(
+                viewPayroll.salaryPercentage ||
+                  0,
+              )
+            ) /
+              100,
+        )}
+      </span>
+    </div>
+
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-gray-600">
+        Incentive
+      </span>
+
+      <span className="font-semibold text-green-700">
+        + {money(
+          viewPayroll.incentiveAmount,
+        )}
+      </span>
+    </div>
+
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-gray-600">
+        Other Allowance
+      </span>
+
+      <span className="font-semibold text-green-700">
+        + {money(
+          viewPayroll.otherAllowance,
+        )}
+      </span>
+    </div>
+
+    <div className="flex items-center justify-between gap-3 border-t pt-3">
+      <span className="font-semibold text-gray-800">
+        Gross Salary
+      </span>
+
+      <span className="font-bold">
+        {money(
+          viewPayroll.grossSalary,
+        )}
+      </span>
+    </div>
+
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-gray-600">
+        Attendance Deduction
+      </span>
+
+      <span className="font-semibold text-red-700">
+        - {money(
+          viewPayroll.attendanceDeduction,
+        )}
+      </span>
+    </div>
+
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-gray-600">
+        Leave Deduction
+      </span>
+
+      <span className="font-semibold text-red-700">
+        - {money(
+          viewPayroll.leaveDeduction,
+        )}
+      </span>
+    </div>
+
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-gray-600">
+        Penalty
+      </span>
+
+      <span className="font-semibold text-red-700">
+        - {money(
+          viewPayroll.penaltyAmount,
+        )}
+      </span>
+    </div>
+
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-gray-600">
+        Other Deduction
+      </span>
+
+      <span className="font-semibold text-red-700">
+        - {money(
+          viewPayroll.otherDeduction,
+        )}
+      </span>
+    </div>
+
+    <div className="flex items-center justify-between gap-3 border-t pt-3">
+      <span className="text-base font-bold text-gray-900">
+        Net Salary
+      </span>
+
+      <span className="text-xl font-bold text-green-700">
+        {money(
+          viewPayroll.netSalary,
+        )}
+      </span>
+    </div>
+  </div>
+</div>
+
+        <div className="rounded-xl border p-4">
           <h3 className="font-bold text-gray-800">
             Eligibility Reason
           </h3>
@@ -896,33 +1104,342 @@ item.ruleSnapshot ? (
           </p>
         </div>
 
-        <div>
-          <h3 className="mb-2 font-bold text-gray-800">
-            Calculation Snapshot
-          </h3>
+        <div className="space-y-4">
+  <h3 className="font-bold text-gray-800">
+    Targets & Achievements
+  </h3>
 
-          <pre className="max-h-96 overflow-auto rounded-xl bg-gray-100 p-4 text-xs">
-            {JSON.stringify(
-              viewPayroll.calculationSnapshot || {},
-              null,
-              2,
-            )}
-          </pre>
+  {Object.keys(
+    viewPayroll.calculationSnapshot?.actualMetrics ||
+      {},
+  ).length === 0 ? (
+    <p className="text-sm text-gray-500">
+      No performance metrics were recorded.
+    </p>
+  ) : (
+    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+      {Object.entries(
+        viewPayroll.calculationSnapshot
+          ?.actualMetrics || {},
+      ).map(([key, value]) => (
+        <div
+          key={key}
+          className="rounded-xl border bg-gray-50 p-4"
+        >
+          <p className="text-xs font-semibold uppercase text-gray-500">
+            {payrollLabel(key)}
+          </p>
+
+          <p className="mt-2 text-xl font-bold text-gray-900">
+            {Number(
+              value || 0,
+            ).toLocaleString('en-IN', {
+              maximumFractionDigits: 2,
+            })}
+          </p>
         </div>
+      ))}
+    </div>
+  )}
 
-        <div>
-          <h3 className="mb-2 font-bold text-gray-800">
-            Rule Snapshot
-          </h3>
+  {Array.isArray(
+    viewPayroll.calculationSnapshot
+      ?.eligibilityConditions,
+  ) &&
+    viewPayroll.calculationSnapshot
+      .eligibilityConditions.length > 0 && (
+      <div>
+        <h3 className="mb-3 font-bold text-gray-800">
+          Eligibility Conditions
+        </h3>
 
-          <pre className="max-h-96 overflow-auto rounded-xl bg-gray-100 p-4 text-xs">
-            {JSON.stringify(
-              viewPayroll.ruleSnapshot || {},
-              null,
-              2,
+        <div className="space-y-3">
+          {viewPayroll.calculationSnapshot
+            .eligibilityConditions.map(
+              (condition: any) => (
+                <div
+                  key={
+                    condition.id ||
+                    condition.label
+                  }
+                  className="rounded-xl border p-4"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-gray-900">
+                        {condition.label ||
+                          payrollLabel(
+                            condition.metricType,
+                          )}
+                      </p>
+
+                      <p className="mt-1 text-sm text-gray-500">
+                        {payrollLabel(
+                          condition.metricType,
+                        )}
+                      </p>
+                    </div>
+
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-bold ${
+                        condition.passed
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-red-100 text-red-800'
+                      }`}
+                    >
+                      {condition.passed
+                        ? 'Achieved'
+                        : 'Not Achieved'}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-lg bg-gray-50 p-3">
+                      <p className="text-xs text-gray-500">
+                        Achieved
+                      </p>
+
+                      <p className="font-bold text-gray-900">
+                        {Number(
+                          condition.actualValue ||
+                            0,
+                        ).toLocaleString(
+                          'en-IN',
+                        )}
+                      </p>
+                    </div>
+
+                    <div className="rounded-lg bg-gray-50 p-3">
+                      <p className="text-xs text-gray-500">
+                        Required
+                      </p>
+
+                      <p className="font-bold text-gray-900">
+                        {Number(
+                          condition.targetValue ||
+                            0,
+                        ).toLocaleString(
+                          'en-IN',
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ),
             )}
-          </pre>
         </div>
+      </div>
+    )}
+</div>
+
+{Array.isArray(
+  viewPayroll.calculationSnapshot
+    ?.incentiveComponents,
+) &&
+  viewPayroll.calculationSnapshot
+    .incentiveComponents.length > 0 && (
+    <div>
+      <h3 className="mb-3 font-bold text-gray-800">
+        Incentive Breakdown
+      </h3>
+
+      <div className="space-y-3">
+        {viewPayroll.calculationSnapshot
+          .incentiveComponents.map(
+            (component: any) => (
+              <div
+                key={
+                  component.id ||
+                  component.label
+                }
+                className="rounded-xl border p-4"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-gray-900">
+                      {component.label ||
+                        'Incentive'}
+                    </p>
+
+                    <p className="mt-1 text-sm text-gray-500">
+                      {payrollLabel(
+                        component.metricType,
+                      )}
+                      {' · '}
+                      {payrollLabel(
+                        component.calculationType,
+                      )}
+                    </p>
+                  </div>
+
+                  <p className="text-lg font-bold text-green-700">
+                    {money(
+                      component.amount,
+                    )}
+                  </p>
+                </div>
+
+                <div className="mt-3 rounded-lg bg-gray-50 p-3">
+                  <p className="text-xs text-gray-500">
+                    Achieved Metric Value
+                  </p>
+
+                  <p className="mt-1 font-bold text-gray-900">
+                    {Number(
+                      component.metricValue ||
+                        0,
+                    ).toLocaleString(
+                      'en-IN',
+                      {
+                        maximumFractionDigits:
+                          2,
+                      },
+                    )}
+                  </p>
+                </div>
+              </div>
+            ),
+          )}
+      </div>
+
+      <div className="mt-3 flex items-center justify-between rounded-xl bg-green-50 p-4">
+        <p className="font-semibold text-green-900">
+          Total Incentive
+        </p>
+
+        <p className="text-xl font-bold text-green-700">
+          {money(
+            viewPayroll.incentiveAmount,
+          )}
+        </p>
+      </div>
+    </div>
+  )}
+
+        {viewPayroll.ruleSnapshot && (
+  <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+    <h3 className="font-bold text-blue-900">
+      Applied Payroll Rule
+    </h3>
+
+    <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+      <div>
+        <p className="text-xs font-semibold uppercase text-blue-600">
+          Rule
+        </p>
+
+        <p className="mt-1 font-semibold text-blue-950">
+          {viewPayroll.ruleSnapshot
+            .ruleName || '-'}
+        </p>
+      </div>
+
+      <div>
+        <p className="text-xs font-semibold uppercase text-blue-600">
+          Role
+        </p>
+
+        <p className="mt-1 font-semibold text-blue-950">
+          {payrollLabel(
+            viewPayroll.ruleSnapshot.role,
+          ) || '-'}
+        </p>
+      </div>
+
+      <div>
+        <p className="text-xs font-semibold uppercase text-blue-600">
+          Rule Version
+        </p>
+
+        <p className="mt-1 font-semibold text-blue-950">
+          {viewPayroll.ruleSnapshot
+            .version ?? '-'}
+        </p>
+      </div>
+
+      <div>
+        <p className="text-xs font-semibold uppercase text-blue-600">
+          Salary Mode
+        </p>
+
+        <p className="mt-1 font-semibold text-blue-950">
+          {payrollLabel(
+            viewPayroll.ruleSnapshot
+              .salaryMode,
+          ) || '-'}
+        </p>
+      </div>
+
+      <div>
+        <p className="text-xs font-semibold uppercase text-blue-600">
+          Salary Metric
+        </p>
+
+        <p className="mt-1 font-semibold text-blue-950">
+          {viewPayroll.ruleSnapshot
+            .salaryMetricType
+            ? payrollLabel(
+                viewPayroll.ruleSnapshot
+                  .salaryMetricType,
+              )
+            : '-'}
+        </p>
+      </div>
+
+      <div>
+        <p className="text-xs font-semibold uppercase text-blue-600">
+          Salary Target
+        </p>
+
+        <p className="mt-1 font-semibold text-blue-950">
+          {viewPayroll.ruleSnapshot
+            .salaryTargetValue ?? '-'}
+        </p>
+      </div>
+
+      <div>
+        <p className="text-xs font-semibold uppercase text-blue-600">
+          Maximum Salary
+        </p>
+
+        <p className="mt-1 font-semibold text-blue-950">
+          {Number(
+            viewPayroll.ruleSnapshot
+              .maximumSalaryPercentage ||
+              0,
+          ).toFixed(2)}
+          %
+        </p>
+      </div>
+
+      <div>
+        <p className="text-xs font-semibold uppercase text-blue-600">
+          Minimum Project Payment
+        </p>
+
+        <p className="mt-1 font-semibold text-blue-950">
+          {Number(
+            viewPayroll.ruleSnapshot
+              .minimumProjectPaymentPercentage ||
+              0,
+          )}
+          %
+        </p>
+      </div>
+
+      <div>
+        <p className="text-xs font-semibold uppercase text-blue-600">
+          Effective From
+        </p>
+
+        <p className="mt-1 font-semibold text-blue-950">
+          {viewPayroll.ruleSnapshot
+            .effectiveFrom || '-'}
+        </p>
+      </div>
+    </div>
+  </div>
+)}
 
         {viewPayroll.ownerOverrideApplied ? (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">

@@ -38,6 +38,12 @@ export default function StaffLeavesPage() {
 
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [statusFilter, setStatusFilter] = useState('');
+  const [leaveMonth, setLeaveMonth] =
+  useState(
+    new Date()
+      .toISOString()
+      .slice(0, 7),
+  );
   const [showHidden, setShowHidden] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -60,11 +66,18 @@ export default function StaffLeavesPage() {
   const fetchLeaves = async () => {
     const res = await axios.get(`${API_BASE_URL}/staff/leaves`, {
       params: {
-        page,
-        limit: 20,
-        status: statusFilter,
-        showHidden,
-      },
+  page,
+  limit: 20,
+
+  status: statusFilter,
+
+  showHidden,
+
+  payrollMonth: leaveMonth,
+
+  staffId:
+    selectedStaffId || undefined,
+},
       headers: headers(),
     });
 
@@ -91,10 +104,17 @@ setLeaveSummary({
   };
 
   useEffect(() => {
-    fetchStaff();
-    fetchLeaves();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, statusFilter, showHidden]);
+  fetchStaff();
+  fetchLeaves();
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [
+  page,
+  statusFilter,
+  showHidden,
+  leaveMonth,
+  selectedStaffId,
+]);
 
   const filteredStaff = staff.filter((item) => {
     const text = `${item.fullName || ''} ${item.employeeCode || ''} ${item.department || ''} ${item.branchName || ''}`.toLowerCase();
@@ -102,7 +122,6 @@ setLeaveSummary({
   });
 
   const resetForm = () => {
-    setSelectedStaffId('');
     setSelectedStaffName('');
     setStaffSearch('');
     setShowStaffOptions(false);
@@ -223,6 +242,39 @@ setLeaveSummary({
         <p className="mt-1 text-sm text-gray-500">
           Create, edit, approve, reject, hide and restore staff leave records.
         </p>
+        <div className="mt-5 flex flex-wrap items-end gap-4">
+  <div>
+    <label className="mb-1 block text-xs font-semibold uppercase text-gray-500">
+      Leave Summary Month
+    </label>
+
+    <input
+      type="month"
+      value={leaveMonth}
+      onChange={(e) =>
+        setLeaveMonth(
+          e.target.value,
+        )
+      }
+      className="rounded-xl border p-3"
+    />
+  </div>
+
+  <div>
+    <p className="text-sm font-semibold text-gray-600">
+      Summary for{' '}
+      {new Date(
+        `${leaveMonth}-01`,
+      ).toLocaleDateString(
+        'en-IN',
+        {
+          month: 'long',
+          year: 'numeric',
+        },
+      )}
+    </p>
+  </div>
+</div>
       </div>
 
       <div className="rounded-2xl bg-white p-5 shadow">
@@ -253,6 +305,7 @@ setLeaveSummary({
                     type="button"
                     onClick={() => {
                       setSelectedStaffId(String(item.id));
+                      setPage(1);
                       setSelectedStaffName(`${item.fullName || 'Staff'} ${item.employeeCode ? `(${item.employeeCode})` : ''}`);
                       setStaffSearch('');
                       setShowStaffOptions(false);
@@ -330,6 +383,12 @@ setLeaveSummary({
           )}
         </div>
       </div>
+
+      <p className="text-sm font-semibold text-gray-600">
+  {selectedStaffName
+    ? `Summary for ${selectedStaffName}`
+    : 'Summary for All Staff'}
+</p>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
   <div className="rounded-2xl bg-white p-5 shadow">

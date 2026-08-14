@@ -8,7 +8,11 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 export default function EmployeePortalPage() {
   const [activeTab, setActiveTab] = useState<
-  'dashboard' | 'attendance' | 'leave' | 'policies'
+  | 'dashboard'
+  | 'attendance'
+  | 'leave'
+  | 'payroll'
+  | 'policies'
 >('dashboard');
   const [staff, setStaff] = useState<any>(null);
   const [attendance, setAttendance] = useState<any[]>([]);
@@ -41,6 +45,26 @@ const [attendanceExceptionRequests, setAttendanceExceptionRequests] =
   useState<any[]>([]);
   const [policies, setPolicies] = useState<any[]>([]);
 
+  const [payrolls, setPayrolls] =
+  useState<any[]>([]);
+
+const [selectedPayroll, setSelectedPayroll] =
+  useState<any>(null);
+
+const [payrollMonth, setPayrollMonth] =
+  useState(
+    new Date()
+      .toISOString()
+      .slice(0, 7),
+  );
+
+  const [leaveMonth, setLeaveMonth] =
+  useState(
+    new Date()
+      .toISOString()
+      .slice(0, 7),
+  );
+
   const [leaveForm, setLeaveForm] = useState({
     leaveType: 'CASUAL',
     fromDate: '',
@@ -59,6 +83,7 @@ const [attendanceExceptionRequests, setAttendanceExceptionRequests] =
   meRes,
   attendanceRes,
   leavesRes,
+  payrollRes,
   policiesRes,
   attendanceExceptionRes,
 ] = await Promise.all([
@@ -67,10 +92,26 @@ const [attendanceExceptionRequests, setAttendanceExceptionRequests] =
           params: { date: attendanceDate, limit: 20 },
           headers: headers(),
         }),
-        axios.get(`${API_BASE_URL}/staff/self/leaves`, {
-          params: { limit: 20 },
-          headers: headers(),
-        }),
+        axios.get(
+  `${API_BASE_URL}/staff/self/leaves`,
+  {
+    params: {
+      limit: 20,
+      payrollMonth: leaveMonth,
+    },
+    headers: headers(),
+  },
+),
+        axios.get(
+  `${API_BASE_URL}/staff/self/payrolls`,
+  {
+    params: {
+      payrollMonth,
+      limit: 12,
+    },
+    headers: headers(),
+  },
+),
         axios.get(`${API_BASE_URL}/staff/self/employee-policies`, {
   params: { limit: 50 },
   headers: headers(),
@@ -106,6 +147,9 @@ axios.get(
     leavesRes.data?.summary?.cancelledRequests || 0,
   ),
 });
+setPayrolls(
+  payrollRes.data?.data || [],
+);
       setPolicies(policiesRes.data?.data || []);
       setAttendanceExceptionRequests(
   attendanceExceptionRes.data?.data || [],
@@ -120,6 +164,26 @@ axios.get(
     loadPortal();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+  if (activeTab !== 'payroll') {
+    return;
+  }
+
+  loadPortal();
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [payrollMonth]);
+
+useEffect(() => {
+  if (activeTab !== 'leave') {
+    return;
+  }
+
+  loadPortal();
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [leaveMonth]);
 
   const getLocation = () =>
     new Promise<GeolocationPosition>((resolve, reject) => {
@@ -356,6 +420,92 @@ const startSelfiePunch = (type: 'punch-in' | 'punch-out') => {
     }
   };
 
+  const openPayroll = async (payrollId: number) => {
+  try {
+    setLoading(true);
+
+    const response = await axios.get(
+      `${API_BASE_URL}/staff/self/payroll/${payrollId}`,
+      {
+        headers: headers(),
+      },
+    );
+
+    setSelectedPayroll(
+      response.data?.payroll || null,
+    );
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Unable to load payroll details',
+    );
+  } finally {
+    setLoading(false);
+  }
+};
+
+const downloadSalarySlip = async (
+  payrollId: number,
+) => {
+  try {
+    const response = await axios.get(
+      `${API_BASE_URL}/staff/self/payroll/${payrollId}/salary-slip`,
+      {
+        headers: headers(),
+        responseType: 'blob',
+      },
+    );
+
+    const blob = new Blob([response.data], {
+      type: 'application/pdf',
+    });
+
+    const url =
+      window.URL.createObjectURL(blob);
+
+    const link =
+      document.createElement('a');
+
+    link.href = url;
+    link.download = `Salary-Slip-${payrollId}.pdf`;
+
+    document.body.appendChild(link);
+
+    link.click();
+
+    link.remove();
+
+    window.URL.revokeObjectURL(url);
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Unable to download salary slip',
+    );
+  }
+};
+
+const formatMoney = (value: any) =>
+  Number(value || 0).toLocaleString(
+    'en-IN',
+    {
+      maximumFractionDigits: 2,
+    },
+  );
+
+const formatMetricLabel = (
+  value: string,
+) =>
+  String(value || '')
+    .replace(/_/g, ' ')
+    .toLowerCase()
+    .replace(/\b\w/g, (char) =>
+      char.toUpperCase(),
+    );
+
   const todayAttendance = attendance[0];
 
   return (
@@ -396,6 +546,7 @@ const startSelfiePunch = (type: 'punch-in' | 'punch-out') => {
           ['dashboard', 'Dashboard'],
           ['attendance', 'Attendance'],
           ['leave', 'Leave'],
+          ['payroll','Payroll'],
           ['policies', 'Policies'],
         ].map(([key, label]) => (
           <button
@@ -426,7 +577,7 @@ const startSelfiePunch = (type: 'punch-in' | 'punch-out') => {
 
           <div className="rounded-2xl bg-white p-5 shadow">
   <p className="text-sm text-gray-500">
-    Approved Leave Days
+    Approved Leave Days This Month
   </p>
 
   <p className="mt-2 text-xl font-bold text-green-700">
@@ -854,6 +1005,47 @@ const startSelfiePunch = (type: 'punch-in' | 'punch-out') => {
 
       {activeTab === 'leave' && (
         <div className="space-y-5">
+            <div className="rounded-2xl bg-white p-5 shadow">
+  <div className="flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <h2 className="text-lg font-bold text-gray-800">
+        My Leave Summary
+      </h2>
+
+      <p className="mt-1 text-sm text-gray-500">
+        View your leave requests and approved leave for the selected month.
+      </p>
+    </div>
+
+    <div>
+      <label className="mb-1 block text-xs font-semibold uppercase text-gray-500">
+        Month
+      </label>
+
+      <input
+        type="month"
+        value={leaveMonth}
+        onChange={(e) =>
+          setLeaveMonth(e.target.value)
+        }
+        className="rounded-xl border p-3"
+      />
+    </div>
+  </div>
+</div>
+
+<p className="text-sm font-semibold text-gray-600">
+  Summary for{' '}
+  {new Date(
+    `${leaveMonth}-01T00:00:00`,
+  ).toLocaleDateString(
+    'en-IN',
+    {
+      month: 'long',
+      year: 'numeric',
+    },
+  )}
+</p>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
   <div className="rounded-2xl bg-white p-5 shadow">
     <p className="text-sm text-gray-500">
@@ -989,6 +1181,490 @@ const startSelfiePunch = (type: 'punch-in' | 'punch-out') => {
           </div>
         </div>
       )}
+
+      {activeTab === 'payroll' && (
+  <div className="space-y-5">
+    <div className="rounded-2xl bg-white p-5 shadow">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-bold text-gray-800">
+            My Payroll
+          </h2>
+
+          <p className="mt-1 text-sm text-gray-500">
+            View generated salary, targets, achievements,
+            incentives and payroll calculation details.
+          </p>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-semibold uppercase text-gray-500">
+            Payroll Month
+          </label>
+
+          <input
+            type="month"
+            value={payrollMonth}
+            onChange={(e) => {
+              setPayrollMonth(
+                e.target.value,
+              );
+
+              setSelectedPayroll(null);
+            }}
+            className="rounded-xl border p-3"
+          />
+        </div>
+      </div>
+    </div>
+
+    {payrolls.length === 0 ? (
+      <div className="rounded-2xl bg-white p-5 shadow">
+        <p className="text-sm text-gray-500">
+          No payroll has been generated for this month.
+        </p>
+      </div>
+    ) : (
+      payrolls.map((payroll) => (
+        <div
+          key={payroll.id}
+          className="rounded-2xl bg-white p-5 shadow"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-lg font-bold text-gray-900">
+                {payroll.payrollMonth}
+              </p>
+
+              <p className="mt-1 text-sm text-gray-500">
+                Status: {payroll.status || '-'}
+              </p>
+            </div>
+
+            <div className="flex gap-2">
+  <button
+    type="button"
+    disabled={loading}
+    onClick={() =>
+      openPayroll(
+        Number(payroll.id),
+      )
+    }
+    className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+  >
+    View Calculation
+  </button>
+
+  <button
+    type="button"
+    disabled={loading}
+    onClick={() =>
+      downloadSalarySlip(
+        Number(payroll.id),
+      )
+    }
+    className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+  >
+    Salary Slip
+  </button>
+</div>
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-xl bg-gray-50 p-4">
+              <p className="text-xs font-semibold uppercase text-gray-500">
+                Basic Salary
+              </p>
+
+              <p className="mt-1 text-lg font-bold text-gray-900">
+                ₹{formatMoney(
+                  payroll.basicSalary,
+                )}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-gray-50 p-4">
+              <p className="text-xs font-semibold uppercase text-gray-500">
+                Salary %
+              </p>
+
+              <p className="mt-1 text-lg font-bold text-blue-700">
+                {Number(
+                  payroll.salaryPercentage ||
+                    0,
+                ).toFixed(2)}
+                %
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-gray-50 p-4">
+              <p className="text-xs font-semibold uppercase text-gray-500">
+                Salary Amount
+              </p>
+
+              <p className="mt-1 text-lg font-bold text-green-700">
+                ₹{formatMoney(
+                  payroll.salaryAmount,
+                )}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-gray-50 p-4">
+              <p className="text-xs font-semibold uppercase text-gray-500">
+                Incentive
+              </p>
+
+              <p className="mt-1 text-lg font-bold text-emerald-700">
+                ₹{formatMoney(
+                  payroll.incentiveAmount,
+                )}
+              </p>
+            </div>
+          </div>
+        </div>
+      ))
+    )}
+
+    {selectedPayroll && (
+      <div className="rounded-2xl border border-blue-200 bg-white p-5 shadow">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">
+              Payroll Calculation
+            </h2>
+
+            <p className="mt-1 text-sm text-gray-500">
+              {selectedPayroll.payrollMonth}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() =>
+              setSelectedPayroll(null)
+            }
+            className="rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-xl bg-gray-50 p-4">
+            <p className="text-xs font-semibold uppercase text-gray-500">
+              Salary
+            </p>
+
+            <p className="mt-1 text-lg font-bold">
+              ₹{formatMoney(
+                selectedPayroll.salaryAmount,
+              )}
+            </p>
+          </div>
+
+          <div className="rounded-xl bg-gray-50 p-4">
+            <p className="text-xs font-semibold uppercase text-gray-500">
+              Incentive
+            </p>
+
+            <p className="mt-1 text-lg font-bold text-green-700">
+              ₹{formatMoney(
+                selectedPayroll.incentiveAmount,
+              )}
+            </p>
+          </div>
+
+          <div className="rounded-xl bg-gray-50 p-4">
+            <p className="text-xs font-semibold uppercase text-gray-500">
+              Salary %
+            </p>
+
+            <p className="mt-1 text-lg font-bold text-blue-700">
+              {Number(
+                selectedPayroll.salaryPercentage ||
+                  0,
+              ).toFixed(2)}
+              %
+            </p>
+          </div>
+
+          <div className="rounded-xl bg-gray-50 p-4">
+            <p className="text-xs font-semibold uppercase text-gray-500">
+              Eligibility
+            </p>
+
+            <p
+              className={`mt-1 text-lg font-bold ${
+                selectedPayroll
+                  .calculationSnapshot
+                  ?.eligibilityMet
+                  ? 'text-green-700'
+                  : 'text-red-700'
+              }`}
+            >
+              {selectedPayroll
+                .calculationSnapshot
+                ?.eligibilityMet
+                ? 'Eligible'
+                : 'Not Eligible'}
+            </p>
+          </div>
+        </div>
+
+        {selectedPayroll
+          .calculationSnapshot
+          ?.eligibilityReason && (
+          <div className="mt-4 rounded-xl bg-gray-50 p-4">
+            <p className="text-xs font-semibold uppercase text-gray-500">
+              Eligibility Result
+            </p>
+
+            <p className="mt-2 text-sm text-gray-800">
+              {
+                selectedPayroll
+                  .calculationSnapshot
+                  .eligibilityReason
+              }
+            </p>
+          </div>
+        )}
+
+        <div className="mt-5">
+          <h3 className="font-bold text-gray-900">
+            Targets & Achievements
+          </h3>
+
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            {Object.entries(
+              selectedPayroll
+                .calculationSnapshot
+                ?.actualMetrics ||
+                selectedPayroll.actualMetrics ||
+                {},
+            ).map(
+              ([key, value]) => (
+                <div
+                  key={key}
+                  className="rounded-xl border p-4"
+                >
+                  <p className="text-xs font-semibold uppercase text-gray-500">
+                    {formatMetricLabel(key)}
+                  </p>
+
+                  <p className="mt-1 text-lg font-bold text-gray-900">
+                    {Number(
+                      value || 0,
+                    ).toLocaleString(
+                      'en-IN',
+                      {
+                        maximumFractionDigits:
+                          2,
+                      },
+                    )}
+                  </p>
+                </div>
+              ),
+            )}
+          </div>
+        </div>
+
+        {Array.isArray(
+          selectedPayroll
+            .calculationSnapshot
+            ?.eligibilityConditions,
+        ) &&
+          selectedPayroll
+            .calculationSnapshot
+            .eligibilityConditions
+            .length > 0 && (
+            <div className="mt-5">
+              <h3 className="font-bold text-gray-900">
+                Eligibility Conditions
+              </h3>
+
+              <div className="mt-3 space-y-3">
+                {selectedPayroll
+                  .calculationSnapshot
+                  .eligibilityConditions
+                  .map(
+                    (
+                      condition: any,
+                    ) => (
+                      <div
+                        key={
+                          condition.id ||
+                          condition.label
+                        }
+                        className="rounded-xl border p-4"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-gray-900">
+                              {condition.label}
+                            </p>
+
+                            <p className="mt-1 text-sm text-gray-500">
+                              Achieved:{' '}
+                              {condition.actualValue}{' '}
+                              / Target:{' '}
+                              {condition.targetValue}
+                            </p>
+                          </div>
+
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs font-bold ${
+                              condition.passed
+                                ? 'bg-green-100 text-green-800'
+                                : 'bg-red-100 text-red-800'
+                            }`}
+                          >
+                            {condition.passed
+                              ? 'Achieved'
+                              : 'Not Achieved'}
+                          </span>
+                        </div>
+                      </div>
+                    ),
+                  )}
+              </div>
+            </div>
+          )}
+
+        {Array.isArray(
+          selectedPayroll
+            .calculationSnapshot
+            ?.incentiveComponents,
+        ) &&
+          selectedPayroll
+            .calculationSnapshot
+            .incentiveComponents
+            .length > 0 && (
+            <div className="mt-5">
+              <h3 className="font-bold text-gray-900">
+                Incentive Breakdown
+              </h3>
+
+              <div className="mt-3 space-y-3">
+                {selectedPayroll
+                  .calculationSnapshot
+                  .incentiveComponents
+                  .map(
+                    (
+                      component: any,
+                    ) => (
+                      <div
+                        key={
+                          component.id ||
+                          component.label
+                        }
+                        className="rounded-xl border p-4"
+                      >
+                        <p className="font-semibold text-gray-900">
+                          {component.label}
+                        </p>
+
+                        <div className="mt-2 grid gap-2 text-sm sm:grid-cols-3">
+                          <p className="text-gray-600">
+                            Metric:{' '}
+                            <span className="font-semibold text-gray-900">
+                              {formatMetricLabel(
+                                component.metricType,
+                              )}
+                            </span>
+                          </p>
+
+                          <p className="text-gray-600">
+                            Achieved:{' '}
+                            <span className="font-semibold text-gray-900">
+                              {
+                                component.metricValue
+                              }
+                            </span>
+                          </p>
+
+                          <p className="text-gray-600">
+                            Incentive:{' '}
+                            <span className="font-semibold text-green-700">
+                              ₹
+                              {formatMoney(
+                                component.amount,
+                              )}
+                            </span>
+                          </p>
+                        </div>
+                      </div>
+                    ),
+                  )}
+              </div>
+            </div>
+          )}
+
+        {selectedPayroll.ruleSnapshot && (
+          <div className="mt-5 rounded-xl border border-blue-100 bg-blue-50 p-4">
+            <h3 className="font-bold text-blue-900">
+              Applied Payroll Rule
+            </h3>
+
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <p className="text-sm text-blue-900">
+                Rule:{' '}
+                <span className="font-semibold">
+                  {selectedPayroll
+                    .ruleSnapshot
+                    .ruleName || '-'}
+                </span>
+              </p>
+
+              <p className="text-sm text-blue-900">
+                Version:{' '}
+                <span className="font-semibold">
+                  {selectedPayroll
+                    .ruleSnapshot
+                    .version || '-'}
+                </span>
+              </p>
+
+              <p className="text-sm text-blue-900">
+                Salary Mode:{' '}
+                <span className="font-semibold">
+                  {formatMetricLabel(
+                    selectedPayroll
+                      .ruleSnapshot
+                      .salaryMode ||
+                      '',
+                  )}
+                </span>
+              </p>
+
+              <p className="text-sm text-blue-900">
+                Salary Target:{' '}
+                <span className="font-semibold">
+                  {selectedPayroll
+                    .ruleSnapshot
+                    .salaryTargetValue ??
+                    '-'}
+                </span>
+              </p>
+
+              <p className="text-sm text-blue-900">
+                Minimum Project Payment:{' '}
+                <span className="font-semibold">
+                  {Number(
+                    selectedPayroll
+                      .ruleSnapshot
+                      .minimumProjectPaymentPercentage ||
+                      0,
+                  )}
+                  %
+                </span>
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+    )}
+  </div>
+)}
 
       {activeTab === 'policies' && (
   <div className="rounded-2xl bg-white p-5 shadow">
