@@ -286,6 +286,16 @@ const [monthlyForm, setMonthlyForm] = useState({
   remarks: '',
 });
 
+const [
+  monthlyMaterialSearch,
+  setMonthlyMaterialSearch,
+] = useState('');
+
+const [
+  monthlyMaterialSearchOpen,
+  setMonthlyMaterialSearchOpen,
+] = useState(false);
+
   const [loading, setLoading] = useState(false);
 
   const [dealerSearch, setDealerSearch] = useState('');
@@ -728,91 +738,420 @@ const formatDealerCsvDate = (
   );
 };
 
-const downloadSelectedDealerLedgerCsv = () => {
-  if (!dealerLedger?.dealer) {
-    alert('Please load a dealer ledger first');
+const buildDealerLedgerCsvRows = (
+  ledger: any,
+  fallbackDealer?: Dealer,
+) => {
+  const dealer =
+    ledger?.dealer || {};
+
+  const summary =
+    ledger?.summary || {};
+
+  const orders = Array.isArray(
+    ledger?.orders,
+  )
+    ? ledger.orders
+    : [];
+
+  const baseDealerData = {
+    'Dealer Name':
+      dealer.dealerName ||
+      fallbackDealer?.vendorName ||
+      '',
+
+    'Contact Person':
+      dealer.contactPerson ||
+      fallbackDealer?.contactPerson ||
+      '',
+
+    Phone:
+      dealer.phone ||
+      fallbackDealer?.phone ||
+      '',
+
+    Email:
+      dealer.email ||
+      fallbackDealer?.email ||
+      '',
+
+    'GST Number':
+      dealer.gstNumber ||
+      fallbackDealer?.gstNumber ||
+      '',
+
+    City:
+      dealer.city ||
+      fallbackDealer?.city ||
+      '',
+
+    State:
+      dealer.state ||
+      fallbackDealer?.state ||
+      '',
+
+    Address:
+      dealer.address ||
+      fallbackDealer?.address ||
+      '',
+
+    'Opening Balance':
+      Number(
+        dealer.openingBalance ||
+          fallbackDealer?.openingBalance ||
+          0,
+      ),
+
+    'Dealer Total Orders':
+      Number(
+        summary.totalOrders ||
+          0,
+      ),
+
+    'Dealer Total Order Value':
+      Number(
+        summary.totalOrderValue ||
+          0,
+      ),
+
+    'Dealer Total Paid':
+      Number(
+        summary.totalPaid ||
+          0,
+      ),
+
+    'Dealer Total Pending':
+      Number(
+        summary.totalPending ||
+          0,
+      ),
+
+    'Overdue Credit Orders':
+      Number(
+        summary.overdueOrders ||
+          0,
+      ),
+
+    'Total PI':
+      Number(
+        summary.totalPi ||
+          0,
+      ),
+
+    'Total Final Invoices':
+      Number(
+        summary.totalFinalInvoices ||
+          0,
+      ),
+
+    'Total Payments':
+      Number(
+        summary.totalPayments ||
+          0,
+      ),
+
+    'Last Order Date':
+      formatDealerCsvDate(
+        summary.lastOrderDate,
+      ),
+
+    'Last Approved Payment Date':
+      formatDealerCsvDate(
+        summary.lastApprovedPaymentDate,
+      ),
+  };
+
+  /*
+   * Dealer with no order should still
+   * appear in the exported CSV.
+   */
+  if (orders.length === 0) {
+    return [
+      {
+        ...baseDealerData,
+
+        'Order Number': '',
+        'Order Date': '',
+        'Order Status': '',
+        'Payment Type': '',
+
+        Materials: '',
+        'Material Quantity Details': '',
+        'Total Material Quantity': 0,
+
+        'Order Value': 0,
+        'Paid Amount': 0,
+        'Pending Amount': 0,
+
+        'Credit Due Date': '',
+        'Expected Delivery Date': '',
+
+        Branch: '',
+        'Assigned Staff': '',
+        'Assigned Staff Phone': '',
+
+        'Order Remarks': '',
+      },
+    ];
+  }
+
+  return orders.map(
+    (order: any) => {
+      const items =
+        Array.isArray(
+          order?.items,
+        )
+          ? order.items
+          : [];
+
+      /*
+       * Human-readable material names.
+       *
+       * Example:
+       * Panel 550W | 5KW Inverter
+       */
+      const materialNames =
+        items
+          .map(
+            (item: any) =>
+              String(
+                item?.materialName ||
+                  '',
+              ).trim(),
+          )
+          .filter(Boolean)
+          .join(' | ');
+
+      /*
+       * Detailed quantity string.
+       *
+       * Example:
+       * Panel 550W x 20 NOS |
+       * 5KW Inverter x 2 NOS
+       */
+      const materialQuantityDetails =
+        order?.materialDetails ||
+        items
+          .map(
+            (item: any) => {
+              const name =
+                item?.materialName ||
+                `Material #${
+                  item?.materialId ||
+                  ''
+                }`;
+
+              const quantity =
+                Number(
+                  item?.quantity ||
+                    0,
+                );
+
+              const unit =
+                String(
+                  item?.unit ||
+                    '',
+                ).trim();
+
+              return `${name} x ${quantity}${
+                unit
+                  ? ` ${unit}`
+                  : ''
+              }`;
+            },
+          )
+          .join(' | ');
+
+      return {
+        ...baseDealerData,
+
+        'Order Number':
+          order?.orderNumber ||
+          `Order #${
+            order?.id ||
+            ''
+          }`,
+
+        'Order Date':
+          formatDealerCsvDate(
+            order?.createdAt,
+          ),
+
+        'Order Status':
+          order?.status ||
+          '',
+
+        'Payment Type':
+          order?.paymentType ||
+          '',
+
+        Materials:
+          materialNames,
+
+        'Material Quantity Details':
+          materialQuantityDetails,
+
+        'Total Material Quantity':
+          Number(
+            order?.totalMaterialQuantity ||
+              items.reduce(
+                (
+                  sum: number,
+                  item: any,
+                ) =>
+                  sum +
+                  Number(
+                    item?.quantity ||
+                      0,
+                  ),
+                0,
+              ),
+          ),
+
+        'Order Value':
+          Number(
+            order?.totalAmount ||
+              0,
+          ),
+
+        'Paid Amount':
+          Number(
+            order?.paidAmount ||
+              0,
+          ),
+
+        'Pending Amount':
+          Number(
+            order?.pendingAmount ||
+              0,
+          ),
+
+        'Credit Due Date':
+          formatDealerCsvDate(
+            order?.creditDueDate,
+          ),
+
+        'Expected Delivery Date':
+          formatDealerCsvDate(
+            order?.expectedDeliveryAt,
+          ),
+
+        Branch:
+          order?.branchName ||
+          '',
+
+        'Assigned Staff':
+          order?.assignedStaffName ||
+          '',
+
+        'Assigned Staff Phone':
+          order?.assignedStaffPhone ||
+          '',
+
+        'Order Remarks':
+          order?.remarks ||
+          '',
+      };
+    },
+  );
+};
+
+const downloadDealerLedgerRowsCsv = (
+  rows: any[],
+  fileName: string,
+) => {
+  if (!rows.length) {
+    alert(
+      'No dealer ledger data available',
+    );
+
     return;
   }
 
-  const row = {
-  'Dealer Name':
-    dealerLedger.dealer?.dealerName || '',
-
-  'Contact Person':
-    dealerLedger.dealer?.contactPerson || '',
-
-  Phone:
-    dealerLedger.dealer?.phone || '',
-
-  City:
-    dealerLedger.dealer?.city || '',
-
-  'Total Orders':
-    Number(
-      dealerLedger.summary?.totalOrders || 0,
-    ),
-
-  'Total Order Value':
-    Number(
-      dealerLedger.summary?.totalOrderValue || 0,
-    ),
-
-  'Total Paid':
-    Number(
-      dealerLedger.summary?.totalPaid || 0,
-    ),
-
-  'Total Pending':
-    Number(
-      dealerLedger.summary?.totalPending || 0,
-    ),
-
-  'Last Order Date':
-    formatDealerCsvDate(
-      dealerLedger.summary?.lastOrderDate,
-    ),
-
-  'Last Approved Payment Date':
-    formatDealerCsvDate(
-      dealerLedger.summary?.lastApprovedPaymentDate,
-    ),
-};
-
-  const headers = Object.keys(row);
+  const csvHeaders =
+    Object.keys(
+      rows[0],
+    );
 
   const csv = [
-    headers
-      .map(escapeCsvValue)
-      .join(','),
-
-    headers
-      .map((header) =>
-        escapeCsvValue(
-          (row as any)[header],
-        ),
+    csvHeaders
+      .map(
+        escapeCsvValue,
       )
       .join(','),
+
+    ...rows.map(
+      (row) =>
+        csvHeaders
+          .map(
+            (header) =>
+              escapeCsvValue(
+                row[header],
+              ),
+          )
+          .join(','),
+    ),
   ].join('\n');
 
-  const blob = new Blob(
-    ['\uFEFF', csv],
-    {
-      type:
-        'text/csv;charset=utf-8;',
-    },
-  );
+  const blob =
+    new Blob(
+      [
+        '\uFEFF',
+        csv,
+      ],
+      {
+        type:
+          'text/csv;charset=utf-8;',
+      },
+    );
 
   const url =
-    URL.createObjectURL(blob);
+    URL.createObjectURL(
+      blob,
+    );
 
   const link =
-    document.createElement('a');
+    document.createElement(
+      'a',
+    );
 
-  link.href = url;
+  link.href =
+    url;
+
+  link.download =
+    fileName;
+
+  document.body.appendChild(
+    link,
+  );
+
+  link.click();
+
+  link.remove();
+
+  URL.revokeObjectURL(
+    url,
+  );
+};
+
+const downloadSelectedDealerLedgerCsv = () => {
+  if (!dealerLedger?.dealer) {
+    alert(
+      'Please load a dealer ledger first',
+    );
+
+    return;
+  }
+
+  const rows =
+    buildDealerLedgerCsvRows(
+      dealerLedger,
+    );
 
   const dealerName =
     String(
-      dealerLedger.dealer?.dealerName ||
+      dealerLedger.dealer
+        ?.dealerName ||
         'dealer',
     )
       .trim()
@@ -821,17 +1160,13 @@ const downloadSelectedDealerLedgerCsv = () => {
         '-',
       );
 
-  link.download =
+  downloadDealerLedgerRowsCsv(
+    rows,
+
     `dealer-ledger-${dealerName}-${new Date()
       .toISOString()
-      .slice(0, 10)}.csv`;
-
-  document.body.appendChild(link);
-
-  link.click();
-  link.remove();
-
-  URL.revokeObjectURL(url);
+      .slice(0, 10)}.csv`,
+  );
 };
 
 const downloadSelectedDealersLedgerCsv =
@@ -850,8 +1185,13 @@ const downloadSelectedDealersLedgerCsv =
     try {
       setLoading(true);
 
-      const rows: any[] = [];
+      const rows: any[] =
+        [];
 
+      /*
+       * Small batches avoid sending too many
+       * requests to backend simultaneously.
+       */
       const batchSize = 5;
 
       for (
@@ -914,168 +1254,55 @@ const downloadSelectedDealersLedgerCsv =
           const result of
             results
         ) {
-          const dealer =
-  ledgerDealerOptions.find(
-    (item) =>
-      Number(
-        item.id,
-      ) ===
-      Number(
-        result.dealerId,
-      ),
-  );
+          const fallbackDealer =
+            ledgerDealerOptions.find(
+              (item) =>
+                Number(
+                  item.id,
+                ) ===
+                Number(
+                  result.dealerId,
+                ),
+            );
 
-          rows.push({
-  'Dealer Name':
-    result.ledger?.dealer
-      ?.dealerName ||
-    dealer?.vendorName ||
-    `Dealer #${result.dealerId}`,
+          /*
+           * Keep dealer in CSV even if
+           * ledger unexpectedly contains
+           * zero orders.
+           */
+          if (
+            result.ledger
+          ) {
+            rows.push(
+              ...buildDealerLedgerCsvRows(
+                result.ledger,
+                fallbackDealer,
+              ),
+            );
+          } else if (
+            fallbackDealer
+          ) {
+            rows.push(
+              ...buildDealerLedgerCsvRows(
+                {
+                  dealer: {},
+                  summary: {},
+                  orders: [],
+                },
 
-  'Contact Person':
-    result.ledger?.dealer
-      ?.contactPerson ||
-    dealer?.contactPerson ||
-    '',
-
-  Phone:
-    result.ledger?.dealer
-      ?.phone ||
-    dealer?.phone ||
-    '',
-
-  City:
-    result.ledger?.dealer
-      ?.city ||
-    dealer?.city ||
-    '',
-
-  'Total Orders':
-    Number(
-      result.ledger?.summary
-        ?.totalOrders ||
-        0,
-    ),
-
-  'Total Order Value':
-    Number(
-      result.ledger?.summary
-        ?.totalOrderValue ||
-        0,
-    ),
-
-  'Total Paid':
-    Number(
-      result.ledger?.summary
-        ?.totalPaid ||
-        0,
-    ),
-
-  'Total Pending':
-    Number(
-      result.ledger?.summary
-        ?.totalPending ||
-        0,
-    ),
-
-  'Last Order Date':
-    formatDealerCsvDate(
-      result.ledger?.summary
-        ?.lastOrderDate,
-    ),
-
-  'Last Approved Payment Date':
-    formatDealerCsvDate(
-      result.ledger?.summary
-        ?.lastApprovedPaymentDate,
-    ),
-});
+                fallbackDealer,
+              ),
+            );
+          }
         }
       }
 
-      if (
-        rows.length ===
-        0
-      ) {
-        alert(
-          'No dealer ledger data available',
-        );
+      downloadDealerLedgerRowsCsv(
+        rows,
 
-        return;
-      }
-
-      const csvHeaders =
-        Object.keys(
-          rows[0],
-        );
-
-      const csv = [
-        csvHeaders
-          .map(
-            escapeCsvValue,
-          )
-          .join(','),
-
-        ...rows.map(
-          (row) =>
-            csvHeaders
-              .map(
-                (
-                  header,
-                ) =>
-                  escapeCsvValue(
-                    row[
-                      header
-                    ],
-                  ),
-              )
-              .join(','),
-        ),
-      ].join('\n');
-
-      const blob =
-        new Blob(
-          [
-            '\uFEFF',
-            csv,
-          ],
-          {
-            type:
-              'text/csv;charset=utf-8;',
-          },
-        );
-
-      const url =
-        URL.createObjectURL(
-          blob,
-        );
-
-      const link =
-        document.createElement(
-          'a',
-        );
-
-      link.href =
-        url;
-
-      link.download =
         `selected-dealer-ledgers-${new Date()
           .toISOString()
-          .slice(
-            0,
-            10,
-          )}.csv`;
-
-      document.body.appendChild(
-        link,
-      );
-
-      link.click();
-
-      link.remove();
-
-      URL.revokeObjectURL(
-        url,
+          .slice(0, 10)}.csv`,
       );
     } catch (
       error: any
@@ -1097,63 +1324,60 @@ const downloadSelectedDealersLedgerCsv =
     }
   };
 
-const downloadAllDealerLedgersCsv = async () => {
-  try {
-    setLoading(true);
+const downloadAllDealerLedgersCsv =
+  async () => {
+    try {
+      setLoading(true);
 
-    /*
-     * STEP 1:
-     * Load EVERY visible dealer from backend.
-     *
-     * Do not use the current `dealers` state because
-     * that contains only the currently loaded page.
-     */
-    const firstDealerResponse =
-      await axios.get(
-        `${API_BASE_URL}/project/dealer/list`,
-        {
-          params: {
-            page: 1,
-            limit: 100,
+      /*
+       * STEP 1:
+       * Load every visible dealer.
+       */
+      const firstDealerResponse =
+        await axios.get(
+          `${API_BASE_URL}/project/dealer/list`,
+          {
+            params: {
+              page: 1,
+              limit: 100,
+              search: '',
+              branch: '',
+              showHidden:
+                false,
+            },
 
-            /*
-             * Export all normal/visible dealers,
-             * irrespective of current screen filters.
-             */
-            search: '',
-            branch: '',
-            showHidden: false,
+            headers:
+              headers(),
           },
+        );
 
-          headers: headers(),
-        },
-      );
-
-    const allDealers: Dealer[] =
-      Array.isArray(
-        firstDealerResponse.data?.data,
-      )
-        ? [
-            ...firstDealerResponse.data.data,
-          ]
-        : [];
-
-    const dealerTotalPages =
-      Math.max(
-        Number(
+      const allDealers: Dealer[] =
+        Array.isArray(
           firstDealerResponse.data
-            ?.totalPages || 1,
-        ),
-        1,
-      );
+            ?.data,
+        )
+          ? [
+              ...firstDealerResponse
+                .data.data,
+            ]
+          : [];
 
-    /*
-     * Load all remaining dealer pages.
-     */
-    if (dealerTotalPages > 1) {
+      const totalPages =
+        Math.max(
+          Number(
+            firstDealerResponse.data
+              ?.totalPages ||
+              1,
+          ),
+          1,
+        );
+
+      /*
+       * Load remaining dealer pages.
+       */
       for (
         let page = 2;
-        page <= dealerTotalPages;
+        page <= totalPages;
         page += 1
       ) {
         const response =
@@ -1165,252 +1389,170 @@ const downloadAllDealerLedgersCsv = async () => {
                 limit: 100,
                 search: '',
                 branch: '',
-                showHidden: false,
+                showHidden:
+                  false,
               },
 
-              headers: headers(),
+              headers:
+                headers(),
             },
           );
 
         if (
           Array.isArray(
-            response.data?.data,
+            response.data
+              ?.data,
           )
         ) {
           allDealers.push(
-            ...response.data.data,
+            ...response.data
+              .data,
           );
         }
       }
-    }
 
-    if (!allDealers.length) {
-      alert(
-        'No dealers available to export',
-      );
-
-      return;
-    }
-
-    /*
-     * STEP 2:
-     * Load ledger of every dealer.
-     *
-     * Small batches protect the backend from a
-     * large number of simultaneous requests.
-     */
-    const rows: any[] = [];
-
-    const batchSize = 5;
-
-    for (
-      let index = 0;
-      index < allDealers.length;
-      index += batchSize
-    ) {
-      const batch =
-        allDealers.slice(
-          index,
-          index + batchSize,
+      if (
+        allDealers.length ===
+        0
+      ) {
+        alert(
+          'No dealers available to export',
         );
 
-      const results =
-        await Promise.all(
-          batch.map(
-            async (dealer) => {
-              try {
-                const response =
-                  await axios.get(
-                    `${API_BASE_URL}/project/dealer-ledger-history`,
-                    {
-                      params: {
-                        dealerId:
-                          dealer.id,
-                      },
+        return;
+      }
 
-                      headers:
-                        headers(),
-                    },
+      /*
+       * STEP 2:
+       * Fetch complete ledger for
+       * every dealer.
+       */
+      const rows: any[] =
+        [];
+
+      const batchSize = 5;
+
+      for (
+        let index = 0;
+        index <
+        allDealers.length;
+        index += batchSize
+      ) {
+        const batch =
+          allDealers.slice(
+            index,
+            index + batchSize,
+          );
+
+        const results =
+          await Promise.all(
+            batch.map(
+              async (
+                dealer,
+              ) => {
+                try {
+                  const response =
+                    await axios.get(
+                      `${API_BASE_URL}/project/dealer-ledger-history`,
+                      {
+                        params: {
+                          dealerId:
+                            dealer.id,
+                        },
+
+                        headers:
+                          headers(),
+                      },
+                    );
+
+                  return {
+                    dealer,
+                    ledger:
+                      response.data ||
+                      null,
+                  };
+                } catch (
+                  error
+                ) {
+                  console.error(
+                    `Failed to load ledger for dealer ${dealer.id}`,
+                    error,
                   );
 
-                return {
-                  dealer,
-                  ledger:
-                    response.data ||
-                    null,
-                };
-              } catch (error) {
-                console.error(
-                  `Failed to load ledger for dealer ${dealer.id}`,
-                  error,
-                );
-
-                /*
-                 * Keep dealer in CSV even if one
-                 * ledger request unexpectedly fails.
-                 */
-                return {
-                  dealer,
-                  ledger: null,
-                };
-              }
-            },
-          ),
-        );
-
-      for (const result of results) {
-        rows.push({
-  'Dealer Name':
-    result.ledger?.dealer
-      ?.dealerName ||
-    result.dealer
-      ?.vendorName ||
-    '',
-
-  'Contact Person':
-    result.ledger?.dealer
-      ?.contactPerson ||
-    result.dealer
-      ?.contactPerson ||
-    '',
-
-  Phone:
-    result.ledger?.dealer
-      ?.phone ||
-    result.dealer
-      ?.phone ||
-    '',
-
-  City:
-    result.ledger?.dealer
-      ?.city ||
-    result.dealer
-      ?.city ||
-    '',
-
-  'Total Orders':
-    Number(
-      result.ledger?.summary
-        ?.totalOrders ||
-        0,
-    ),
-
-  'Total Order Value':
-    Number(
-      result.ledger?.summary
-        ?.totalOrderValue ||
-        0,
-    ),
-
-  'Total Paid':
-    Number(
-      result.ledger?.summary
-        ?.totalPaid ||
-        0,
-    ),
-
-  'Total Pending':
-    Number(
-      result.ledger?.summary
-        ?.totalPending ||
-        0,
-    ),
-
-  'Last Order Date':
-    formatDealerCsvDate(
-      result.ledger?.summary
-        ?.lastOrderDate,
-    ),
-
-  'Last Approved Payment Date':
-    formatDealerCsvDate(
-      result.ledger?.summary
-        ?.lastApprovedPaymentDate,
-    ),
-});
-      }
-    }
-
-    /*
-     * STEP 3:
-     * Create CSV.
-     */
-    const csvHeaders =
-      Object.keys(rows[0]);
-
-    const csv = [
-      csvHeaders
-        .map(
-          escapeCsvValue,
-        )
-        .join(','),
-
-      ...rows.map((row) =>
-        csvHeaders
-          .map((header) =>
-            escapeCsvValue(
-              row[header],
+                  return {
+                    dealer,
+                    ledger:
+                      null,
+                  };
+                }
+              },
             ),
-          )
-          .join(','),
-      ),
-    ].join('\n');
+          );
 
-    /*
-     * UTF-8 BOM keeps Excel-friendly encoding.
-     */
-    const blob =
-      new Blob(
-        [
-          '\uFEFF',
-          csv,
-        ],
-        {
-          type:
-            'text/csv;charset=utf-8;',
-        },
+        for (
+          const result of
+            results
+        ) {
+          if (
+            result.ledger
+          ) {
+            rows.push(
+              ...buildDealerLedgerCsvRows(
+                result.ledger,
+                result.dealer,
+              ),
+            );
+          } else {
+            /*
+             * Do not silently drop a dealer
+             * from All Dealer CSV if their
+             * ledger request fails.
+             */
+            rows.push(
+              ...buildDealerLedgerCsvRows(
+                {
+                  dealer: {},
+                  summary: {},
+                  orders: [],
+                },
+
+                result.dealer,
+              ),
+            );
+          }
+        }
+      }
+
+      /*
+       * STEP 3:
+       * Download combined order-wise CSV.
+       */
+      downloadDealerLedgerRowsCsv(
+        rows,
+
+        `all-dealer-ledgers-${new Date()
+          .toISOString()
+          .slice(0, 10)}.csv`,
+      );
+    } catch (
+      error: any
+    ) {
+      console.error(
+        error,
       );
 
-    const url =
-      URL.createObjectURL(
-        blob,
+      alert(
+        error?.response
+          ?.data
+          ?.message ||
+          'Failed to download all dealer ledgers CSV',
       );
-
-    const link =
-      document.createElement(
-        'a',
+    } finally {
+      setLoading(
+        false,
       );
-
-    link.href = url;
-
-    link.download =
-      `all-dealer-ledgers-${new Date()
-        .toISOString()
-        .slice(0, 10)}.csv`;
-
-    document.body.appendChild(
-      link,
-    );
-
-    link.click();
-
-    link.remove();
-
-    URL.revokeObjectURL(
-      url,
-    );
-  } catch (error: any) {
-    console.error(error);
-
-    alert(
-      error?.response?.data
-        ?.message ||
-        'Failed to download all dealer ledgers CSV',
-    );
-  } finally {
-    setLoading(false);
-  }
-};
+    }
+  };
 
 const toggleDealerCsvSelection = (
   dealerId: number,
@@ -2646,6 +2788,9 @@ const addMonthlyRequirement = async () => {
       expectedQuantity: '',
       remarks: '',
     });
+
+    setMonthlyMaterialSearch('');
+setMonthlyMaterialSearchOpen(false);
 
     fetchMonthlyRequirements();
   } catch (error: any) {
@@ -4562,18 +4707,173 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
           ))}
         </select>
 
-        <select
-          value={monthlyForm.materialId}
-          onChange={(e) => setMonthlyForm({ ...monthlyForm, materialId: e.target.value })}
-          className="w-full rounded-xl border p-3"
-        >
-          <option value="">Select Material</option>
-          {catalog.map((material) => (
-            <option key={material.id} value={material.id}>
-              {material.name}
-            </option>
-          ))}
-        </select>
+        <div className="relative min-w-0">
+  {(() => {
+    const selectedMaterial =
+      orderMaterials.find(
+        (material) =>
+          String(material.id) ===
+          String(
+            monthlyForm.materialId,
+          ),
+      );
+
+    const normalizedSearch =
+      monthlyMaterialSearch
+        .trim()
+        .toLowerCase();
+
+    const filteredMaterials =
+      orderMaterials
+        .filter((material) => {
+          if (!normalizedSearch) {
+            return true;
+          }
+
+          const searchableText = [
+            material.name,
+            material.brand,
+            material.category,
+            material.dealerCategory,
+            material.hsnCode,
+            material.vendorPreferredName,
+          ]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+
+          return searchableText.includes(
+            normalizedSearch,
+          );
+        })
+        .slice(0, 50);
+
+    return (
+      <>
+        <input
+          type="text"
+          value={
+            monthlyMaterialSearchOpen
+              ? monthlyMaterialSearch
+              : selectedMaterial
+                ? selectedMaterial.name || ''
+                : monthlyMaterialSearch
+          }
+          placeholder="Search material, brand, category or HSN..."
+          onFocus={() => {
+            setMonthlyMaterialSearchOpen(
+              true,
+            );
+
+            if (selectedMaterial) {
+              setMonthlyMaterialSearch('');
+            }
+          }}
+          onChange={(e) => {
+            setMonthlyMaterialSearch(
+              e.target.value,
+            );
+
+            setMonthlyMaterialSearchOpen(
+              true,
+            );
+          }}
+          className="w-full min-w-0 rounded-xl border p-3"
+        />
+
+        {selectedMaterial &&
+          !monthlyMaterialSearchOpen && (
+            <div className="mt-2 rounded-lg bg-blue-50 px-3 py-2 text-xs">
+              <p className="break-words font-semibold text-blue-900">
+                {selectedMaterial.name}
+              </p>
+
+              <p className="mt-1 break-words text-blue-700">
+                {selectedMaterial.brand ||
+                  'No brand'}
+
+                {' • '}
+
+                {selectedMaterial.category ||
+                  selectedMaterial.dealerCategory ||
+                  'No category'}
+
+                {' • HSN '}
+
+                {selectedMaterial.hsnCode ||
+                  '-'}
+              </p>
+            </div>
+          )}
+
+        {monthlyMaterialSearchOpen && (
+          <div className="absolute left-0 right-0 z-40 mt-1 max-h-72 overflow-y-auto rounded-xl border bg-white shadow-xl">
+            {filteredMaterials.length >
+            0 ? (
+              filteredMaterials.map(
+                (material) => (
+                  <button
+                    key={material.id}
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                    }}
+                    onClick={() => {
+                      setMonthlyForm(
+                        (prev) => ({
+                          ...prev,
+
+                          materialId:
+                            String(
+                              material.id,
+                            ),
+                        }),
+                      );
+
+                      setMonthlyMaterialSearch(
+                        '',
+                      );
+
+                      setMonthlyMaterialSearchOpen(
+                        false,
+                      );
+                    }}
+                    className="block w-full border-b px-3 py-3 text-left last:border-b-0 hover:bg-blue-50"
+                  >
+                    <p className="break-words text-sm font-semibold text-gray-900">
+                      {material.name ||
+                        'Unnamed Material'}
+                    </p>
+
+                    <p className="mt-1 break-words text-xs text-gray-500">
+                      {material.brand ||
+                        'No brand'}
+
+                      {' • '}
+
+                      {material.category ||
+                        material.dealerCategory ||
+                        'No category'}
+
+                      {' • HSN '}
+
+                      {material.hsnCode ||
+                        '-'}
+                    </p>
+                  </button>
+                ),
+              )
+            ) : (
+              <div className="p-4 text-center text-sm text-gray-500">
+                No matching material found
+              </div>
+            )}
+          </div>
+        )}
+      </>
+    );
+  })()}
+</div>
 
         <input
           type="month"
@@ -4711,7 +5011,7 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
       </p>
 
       <p className="mt-1 text-xs text-gray-500">
-        Select any number of dealers and download one combined summary CSV.
+        Select any number of dealers and download complete dealer-wise order, material and payment history.
       </p>
     </div>
 
