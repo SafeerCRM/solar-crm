@@ -24716,246 +24716,818 @@ async getDealerCreditReminders() {
 }
 
 async getDealerLedgerHistory(query: any) {
-  const dealerId = Number(query?.dealerId || 0);
+  const dealerId = Number(
+    query?.dealerId || 0,
+  );
 
   if (!dealerId) {
-    throw new BadRequestException('Dealer is required');
+    throw new BadRequestException(
+      'Dealer is required',
+    );
   }
 
-  const dealer = await this.projectVendorRepository.findOne({
-    where: { id: dealerId },
-  });
+  const dealer =
+    await this.projectVendorRepository.findOne({
+      where: {
+        id: dealerId,
+      },
+    });
 
   if (!dealer) {
-    throw new NotFoundException('Dealer not found');
+    throw new NotFoundException(
+      'Dealer not found',
+    );
   }
 
-  const orders = await this.projectDealerOrderRepository.find({
-    where: {
-      dealerId,
-      isHidden: false,
-    },
-    order: {
-      createdAt: 'DESC',
-    },
-  });
+  /*
+   * All visible dealer orders.
+   *
+   * Latest order stays first so the frontend
+   * can directly use orders[0] as the latest
+   * order when needed.
+   */
+  const orders =
+    await this.projectDealerOrderRepository.find({
+      where: {
+        dealerId,
+        isHidden: false,
+      },
 
-  const orderIds = orders.map((order) => order.id);
+      order: {
+        createdAt: 'DESC',
+      },
+    });
 
-  const items = orderIds.length
-    ? await this.projectDealerOrderItemRepository.find({
-        where: {
-          dealerOrderId: In(orderIds),
-        },
-        order: {
-          id: 'ASC',
-        },
-      })
-    : [];
+  const orderIds =
+    orders.map(
+      (order) =>
+        Number(order.id),
+    );
 
-  const payments = orderIds.length
-    ? await this.projectDealerPaymentRepository.find({
-        where: {
-          dealerOrderId: In(orderIds),
-        },
-        order: {
-          createdAt: 'DESC',
-        },
-      })
-    : [];
+  /*
+   * Load every material/order item belonging
+   * to the dealer's orders in one query.
+   */
+  const items =
+    orderIds.length
+      ? await this.projectDealerOrderItemRepository.find({
+          where: {
+            dealerOrderId:
+              In(orderIds),
+          },
+
+          order: {
+            id: 'ASC',
+          },
+        })
+      : [];
+
+  /*
+   * Load dealer payments belonging to these
+   * orders.
+   */
+  const payments =
+    orderIds.length
+      ? await this.projectDealerPaymentRepository.find({
+          where: {
+            dealerOrderId:
+              In(orderIds),
+          },
+
+          order: {
+            createdAt:
+              'DESC',
+          },
+        })
+      : [];
 
   const proformaInvoices =
     await this.projectProformaInvoiceRepository.find({
       where: {
-        invoiceType: 'DEALER',
+        invoiceType:
+          'DEALER',
+
         dealerId,
-        isHidden: false,
+
+        isHidden:
+          false,
       } as any,
+
       order: {
-        createdAt: 'DESC',
+        createdAt:
+          'DESC',
       },
     });
 
   const finalInvoices =
     await this.projectFinalInvoiceRepository.find({
       where: {
-        invoiceType: 'DEALER',
+        invoiceType:
+          'DEALER',
+
         dealerId,
-        isHidden: false,
+
+        isHidden:
+          false,
       } as any,
+
       order: {
-        createdAt: 'DESC',
+        createdAt:
+          'DESC',
       },
     });
 
-  const totalOrderValue = orders.reduce(
-    (sum, order) => sum + Number(order.totalAmount || 0),
-    0,
-  );
+  /*
+   * Overall dealer summary.
+   */
+  const totalOrderValue =
+    orders.reduce(
+      (
+        sum,
+        order,
+      ) =>
+        sum +
+        Number(
+          order.totalAmount ||
+            0,
+        ),
+      0,
+    );
 
-  const totalPaid = orders.reduce(
-    (sum, order) => sum + Number(order.paidAmount || 0),
-    0,
-  );
+  const totalPaid =
+    orders.reduce(
+      (
+        sum,
+        order,
+      ) =>
+        sum +
+        Number(
+          order.paidAmount ||
+            0,
+        ),
+      0,
+    );
 
-  const totalPending = orders.reduce(
-    (sum, order) => sum + Number(order.pendingAmount || 0),
-    0,
-  );
+  const totalPending =
+    orders.reduce(
+      (
+        sum,
+        order,
+      ) =>
+        sum +
+        Number(
+          order.pendingAmount ||
+            0,
+        ),
+      0,
+    );
 
-  const overdueOrders = orders.filter((order) => {
-    if (order.paymentType !== ProjectDealerPaymentType.CREDIT) {
-      return false;
+  const overdueOrders =
+    orders.filter(
+      (order) => {
+        if (
+          order.paymentType !==
+          ProjectDealerPaymentType.CREDIT
+        ) {
+          return false;
+        }
+
+        if (
+          !order.creditDueDate
+        ) {
+          return false;
+        }
+
+        if (
+          Number(
+            order.pendingAmount ||
+              0,
+          ) <= 0
+        ) {
+          return false;
+        }
+
+        return (
+          new Date(
+            order.creditDueDate,
+          ).getTime() <
+          Date.now()
+        );
+      },
+    );
+
+  /*
+   * Build a lookup so every order can contain
+   * its own exact material history.
+   *
+   * This is the main addition required for
+   * detailed Dealer Ledger CSV export.
+   */
+  const itemsByOrderId =
+    new Map<
+      number,
+      any[]
+    >();
+
+  for (
+    const item of items
+  ) {
+    const orderId =
+      Number(
+        item.dealerOrderId ||
+          0,
+      );
+
+    if (
+      !itemsByOrderId.has(
+        orderId,
+      )
+    ) {
+      itemsByOrderId.set(
+        orderId,
+        [],
+      );
     }
 
-    if (!order.creditDueDate) {
-      return false;
-    }
+    itemsByOrderId
+      .get(orderId)!
+      .push({
+        id:
+          Number(
+            item.id ||
+              0,
+          ),
 
-    if (Number(order.pendingAmount || 0) <= 0) {
-      return false;
-    }
+        dealerOrderId:
+          orderId,
 
-    return new Date(order.creditDueDate).getTime() < Date.now();
-  });
+        materialId:
+          Number(
+            item.materialId ||
+              0,
+          ),
 
-  const materialSummaryMap = new Map<
-    string,
-    {
-      materialId: number;
-      materialName: string;
-      category: string;
-      brand: string;
-      unit: string;
-      totalQuantity: number;
-      totalAmount: number;
-    }
-  >();
+        materialName:
+          item.materialName ||
+          '',
 
-  for (const item of items) {
-    const key = `${item.materialId}`;
+        category:
+          item.category ||
+          '',
+
+        brand:
+          item.brand ||
+          '',
+
+        unit:
+          item.unit ||
+          '',
+
+        hsnCode:
+          (item as any)
+            .hsnCode ||
+          '',
+
+        itemType:
+          (item as any)
+            .itemType ||
+          'MATERIAL',
+
+        quantity:
+          Number(
+            item.quantity ||
+              0,
+          ),
+
+        acceptedQuantity:
+          Number(
+            (
+              item as any
+            )
+              .acceptedQuantity ||
+              0,
+          ),
+
+        dispatchedQuantity:
+          Number(
+            (
+              item as any
+            )
+              .dispatchedQuantity ||
+              0,
+          ),
+
+        sellingRate:
+          Number(
+            (
+              item as any
+            )
+              .sellingRate ||
+              0,
+          ),
+
+        gstPercent:
+          Number(
+            (
+              item as any
+            )
+              .gstPercent ||
+              0,
+          ),
+
+        discountAmount:
+          Number(
+            (
+              item as any
+            )
+              .discountAmount ||
+              0,
+          ),
+
+        subtotalAmount:
+          Number(
+            (
+              item as any
+            )
+              .subtotalAmount ||
+              0,
+          ),
+
+        gstAmount:
+          Number(
+            (
+              item as any
+            )
+              .gstAmount ||
+              0,
+          ),
+
+        totalAmount:
+          Number(
+            item.totalAmount ||
+              0,
+          ),
+
+        remarks:
+          (
+            item as any
+          ).remarks ||
+          '',
+      });
+  }
+
+  /*
+   * Attach material items to the corresponding
+   * dealer order.
+   */
+  const detailedOrders =
+    orders.map(
+      (order) => {
+        const orderItems =
+          itemsByOrderId.get(
+            Number(
+              order.id,
+            ),
+          ) || [];
+
+        const totalMaterialQuantity =
+          orderItems.reduce(
+            (
+              sum,
+              item,
+            ) =>
+              sum +
+              Number(
+                item.quantity ||
+                  0,
+              ),
+            0,
+          );
+
+        const materialNames =
+          orderItems
+            .map(
+              (
+                item,
+              ) =>
+                item.materialName ||
+                '',
+            )
+            .filter(
+              Boolean,
+            );
+
+        const materialDetails =
+          orderItems
+            .map(
+              (
+                item,
+              ) => {
+                const materialName =
+                  item.materialName ||
+                  `Material #${item.materialId}`;
+
+                const unit =
+                  item.unit
+                    ? ` ${item.unit}`
+                    : '';
+
+                return `${materialName} x ${Number(
+                  item.quantity ||
+                    0,
+                )}${unit}`;
+              },
+            )
+            .join(
+              ' | ',
+            );
+
+        return {
+          ...order,
+
+          items:
+            orderItems,
+
+          totalMaterialQuantity,
+
+          materialNames,
+
+          materialDetails,
+        };
+      },
+    );
+
+  /*
+   * Overall material summary across all orders
+   * is preserved for the existing Dealer Ledger
+   * screen and for future reporting.
+   */
+  const materialSummaryMap =
+    new Map<
+      string,
+      {
+        materialId: number;
+        materialName: string;
+        category: string;
+        brand: string;
+        unit: string;
+        totalQuantity: number;
+        totalAmount: number;
+      }
+    >();
+
+  for (
+    const item of items
+  ) {
+    const key =
+      `${item.materialId}`;
 
     const existing =
-      materialSummaryMap.get(key) ||
+      materialSummaryMap.get(
+        key,
+      ) ||
       {
-        materialId: item.materialId,
-        materialName: item.materialName || '',
-        category: item.category || '',
-        brand: item.brand || '',
-        unit: item.unit || '',
-        totalQuantity: 0,
-        totalAmount: 0,
+        materialId:
+          Number(
+            item.materialId ||
+              0,
+          ),
+
+        materialName:
+          item.materialName ||
+          '',
+
+        category:
+          item.category ||
+          '',
+
+        brand:
+          item.brand ||
+          '',
+
+        unit:
+          item.unit ||
+          '',
+
+        totalQuantity:
+          0,
+
+        totalAmount:
+          0,
       };
 
-    existing.totalQuantity += Number(item.quantity || 0);
-    existing.totalAmount += Number(item.totalAmount || 0);
+    existing.totalQuantity +=
+      Number(
+        item.quantity ||
+          0,
+      );
 
-    materialSummaryMap.set(key, existing);
+    existing.totalAmount +=
+      Number(
+        item.totalAmount ||
+          0,
+      );
+
+    materialSummaryMap.set(
+      key,
+      existing,
+    );
   }
 
-  const timeline: any[] = [];
+  /*
+   * Existing ledger timeline is preserved.
+   */
+  const timeline: any[] =
+    [];
 
-  for (const order of orders) {
+  for (
+    const order of
+      detailedOrders
+  ) {
     timeline.push({
-      date: order.createdAt,
-      type: 'ORDER',
-      title: order.orderNumber || `Order #${order.id}`,
-      amount: Number(order.totalAmount || 0),
-      status: order.status,
-      description: `Dealer order created. Pending: ₹${Number(
-        order.pendingAmount || 0,
-      ).toLocaleString('en-IN')}`,
-      referenceId: order.id,
+      date:
+        order.createdAt,
+
+      type:
+        'ORDER',
+
+      title:
+        order.orderNumber ||
+        `Order #${order.id}`,
+
+      amount:
+        Number(
+          order.totalAmount ||
+            0,
+        ),
+
+      status:
+        order.status,
+
+      description:
+        order.materialDetails
+          ? `Materials: ${order.materialDetails}. Pending: ₹${Number(
+              order.pendingAmount ||
+                0,
+            ).toLocaleString(
+              'en-IN',
+            )}`
+          : `Dealer order created. Pending: ₹${Number(
+              order.pendingAmount ||
+                0,
+            ).toLocaleString(
+              'en-IN',
+            )}`,
+
+      referenceId:
+        order.id,
     });
   }
 
-  for (const pi of proformaInvoices) {
+  for (
+    const pi of
+      proformaInvoices
+  ) {
     timeline.push({
-      date: pi.createdAt,
-      type: 'PROFORMA_INVOICE',
-      title: pi.invoiceNumber || `PI #${pi.id}`,
-      amount: Number(pi.totalAmount || 0),
-      status: pi.status,
-      description: 'Dealer proforma invoice generated',
-      referenceId: pi.id,
+      date:
+        pi.createdAt,
+
+      type:
+        'PROFORMA_INVOICE',
+
+      title:
+        pi.invoiceNumber ||
+        `PI #${pi.id}`,
+
+      amount:
+        Number(
+          pi.totalAmount ||
+            0,
+        ),
+
+      status:
+        pi.status,
+
+      description:
+        'Dealer proforma invoice generated',
+
+      referenceId:
+        pi.id,
     });
   }
 
-  for (const invoice of finalInvoices) {
+  for (
+    const invoice of
+      finalInvoices
+  ) {
     timeline.push({
-      date: invoice.createdAt,
-      type: 'FINAL_INVOICE',
-      title: invoice.invoiceNumber || `Invoice #${invoice.id}`,
-      amount: Number(invoice.totalAmount || 0),
-      status: invoice.status,
-      description: 'Dealer final invoice generated',
-      referenceId: invoice.id,
+      date:
+        invoice.createdAt,
+
+      type:
+        'FINAL_INVOICE',
+
+      title:
+        invoice.invoiceNumber ||
+        `Invoice #${invoice.id}`,
+
+      amount:
+        Number(
+          invoice.totalAmount ||
+            0,
+        ),
+
+      status:
+        invoice.status,
+
+      description:
+        'Dealer final invoice generated',
+
+      referenceId:
+        invoice.id,
     });
   }
 
-  for (const payment of payments) {
+  for (
+    const payment of
+      payments
+  ) {
     timeline.push({
-      date: payment.createdAt,
-      type: 'PAYMENT',
-      title: payment.paymentMode || 'Payment',
-      amount: Number(payment.amount || 0),
-      status: payment.status,
-      description: payment.transactionId
-        ? `Transaction: ${payment.transactionId}`
-        : payment.remarks || 'Dealer payment received',
-      referenceId: payment.id,
+      date:
+        payment.createdAt,
+
+      type:
+        'PAYMENT',
+
+      title:
+        payment.paymentMode ||
+        'Payment',
+
+      amount:
+        Number(
+          payment.amount ||
+            0,
+        ),
+
+      status:
+        payment.status,
+
+      description:
+        payment.transactionId
+          ? `Transaction: ${payment.transactionId}`
+          : payment.remarks ||
+            'Dealer payment received',
+
+      referenceId:
+        payment.id,
     });
   }
 
   timeline.sort(
-    (a, b) =>
-      new Date(b.date).getTime() -
-      new Date(a.date).getTime(),
+    (
+      a,
+      b,
+    ) =>
+      new Date(
+        b.date,
+      ).getTime() -
+      new Date(
+        a.date,
+      ).getTime(),
   );
 
   const lastApprovedPayment =
-  payments.find(
-    (payment: any) =>
-      String(payment.status || '')
-        .trim()
-        .toUpperCase() ===
-      'APPROVED',
-  );
+    payments.find(
+      (
+        payment: any,
+      ) =>
+        String(
+          payment.status ||
+            '',
+        )
+          .trim()
+          .toUpperCase() ===
+        'APPROVED',
+    );
+
+  const latestOrder =
+    detailedOrders.length >
+    0
+      ? detailedOrders[0]
+      : null;
 
   return {
     dealer: {
-      id: dealer.id,
-      dealerName: dealer.vendorName,
-      contactPerson: dealer.contactPerson,
-      phone: dealer.phone,
-      email: dealer.email,
-      gstNumber: dealer.gstNumber,
-      city: dealer.city,
-      state: dealer.state,
-      address: dealer.address,
-      openingBalance: dealer.openingBalance || 0,
+      id:
+        dealer.id,
+
+      dealerName:
+        dealer.vendorName,
+
+      contactPerson:
+        dealer.contactPerson,
+
+      phone:
+        dealer.phone,
+
+      email:
+        dealer.email,
+
+      gstNumber:
+        dealer.gstNumber,
+
+      city:
+        dealer.city,
+
+      state:
+        dealer.state,
+
+      address:
+        dealer.address,
+
+      openingBalance:
+        Number(
+          dealer.openingBalance ||
+            0,
+        ),
     },
+
     summary: {
-    totalOrders: orders.length,
-    totalOrderValue,
-    totalPaid,
-    totalPending,
-    overdueOrders: overdueOrders.length,
-    totalPi: proformaInvoices.length,
-    totalFinalInvoices: finalInvoices.length,
-    totalPayments: payments.length,
+      totalOrders:
+        detailedOrders.length,
 
-    lastOrderDate:
-      orders.length > 0
-        ? orders[0].createdAt
-        : null,
+      totalOrderValue,
 
-    lastApprovedPaymentDate:
-      lastApprovedPayment?.createdAt ||
-      null,
-  },
-    orders,
-    materialSummary: Array.from(materialSummaryMap.values()),
+      totalPaid,
+
+      totalPending,
+
+      overdueOrders:
+        overdueOrders.length,
+
+      totalPi:
+        proformaInvoices.length,
+
+      totalFinalInvoices:
+        finalInvoices.length,
+
+      totalPayments:
+        payments.length,
+
+      lastOrderDate:
+        latestOrder?.createdAt ||
+        null,
+
+      lastOrderNumber:
+        latestOrder?.orderNumber ||
+        null,
+
+      lastOrderStatus:
+        latestOrder?.status ||
+        null,
+
+      lastOrderValue:
+        Number(
+          latestOrder?.totalAmount ||
+            0,
+        ),
+
+      lastOrderPaid:
+        Number(
+          latestOrder?.paidAmount ||
+            0,
+        ),
+
+      lastOrderPending:
+        Number(
+          latestOrder?.pendingAmount ||
+            0,
+        ),
+
+      lastOrderMaterials:
+        latestOrder?.materialDetails ||
+        '',
+
+      lastApprovedPaymentDate:
+        lastApprovedPayment?.createdAt ||
+        null,
+    },
+
+    /*
+     * IMPORTANT:
+     * `orders` now contains its own `items`,
+     * `materialDetails`,
+     * `materialNames`,
+     * and `totalMaterialQuantity`.
+     */
+    orders:
+      detailedOrders,
+
+    materialSummary:
+      Array.from(
+        materialSummaryMap.values(),
+      ),
+
     timeline,
   };
 }
