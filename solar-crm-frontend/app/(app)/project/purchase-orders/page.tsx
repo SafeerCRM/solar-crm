@@ -26,6 +26,9 @@ projectOwnerName?: string;
 projectOwnerRole?: string;
 projectCity?: string;
 projectZone?: string;
+projectWorkState?: string;
+projectWorkStateReason?: string;
+projectWorkStateUpdatedAt?: string;
   createdAt?: string;
     materialId?: number;
   gstPercent?: number;
@@ -202,6 +205,10 @@ const [materialFilter, setMaterialFilter] = useState('');
 const [statusFilter, setStatusFilter] = useState('');
 const [branchFilter, setBranchFilter] = useState('');
 const [ownerFilter, setOwnerFilter] = useState('');
+const [
+  workStateFilter,
+  setWorkStateFilter,
+] = useState('');
 const [documentTypeFilter, setDocumentTypeFilter] = useState('PO');
 const [vendorFilterId, setVendorFilterId] = useState('');
 const [vendorSearch, setVendorSearch] = useState('');
@@ -371,8 +378,10 @@ const filteredPartyOptions = partyOptions.filter((party) =>
           limit: 20,
           search: `${projectFilter} ${materialFilter}`.trim(),
           status: statusFilter,
-          branch: branchFilter,
-          owner: ownerFilter,
+branch: branchFilter,
+owner: ownerFilter,
+projectWorkState:
+  workStateFilter,
         },
         headers: token
           ? {
@@ -1003,7 +1012,15 @@ const hideProformaInvoice = async (piId: number) => {
 
   useEffect(() => {
   fetchPurchaseOrders();
-}, [page, projectFilter, materialFilter, statusFilter, branchFilter, ownerFilter]);
+}, [
+  page,
+  projectFilter,
+  materialFilter,
+  statusFilter,
+  branchFilter,
+  ownerFilter,
+  workStateFilter,
+]);
 
 useEffect(() => {
   fetchProjectOwners();
@@ -1058,15 +1075,45 @@ const projectWiseSummary = Object.values(
 
     if (!acc[key]) {
       acc[key] = {
-        projectId: item.projectId,
-        customerName: item.projectCustomerName || '-',
-        branchName: item.projectBranchName || '-',
-        city: item.projectCity || '-',
-        pendingItems: 0,
-        pendingQuantity: 0,
-        pendingAmount: 0,
-        materials: [] as string[],
-      };
+  projectId:
+    item.projectId,
+
+  customerName:
+    item.projectCustomerName ||
+    '-',
+
+  branchName:
+    item.projectBranchName ||
+    '-',
+
+  city:
+    item.projectCity ||
+    '-',
+
+  projectOwnerName:
+    item.projectOwnerName ||
+    'Not Assigned',
+
+  projectWorkState:
+    item.projectWorkState ||
+    'IN_PROCESS',
+
+  projectWorkStateReason:
+    item.projectWorkStateReason ||
+    '',
+
+  pendingItems:
+    0,
+
+  pendingQuantity:
+    0,
+
+  pendingAmount:
+    0,
+
+  materials:
+    [] as string[],
+};
     }
 
     acc[key].pendingItems += 1;
@@ -1961,7 +2008,7 @@ const generateProformaInvoice = async () => {
 </div>
 
       <div className="rounded-2xl bg-white p-5 shadow">
-        <div className="mb-5 grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <div className="mb-5 grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
   <input
     placeholder="Filter by Project ID / Customer Name"
     value={projectFilter}
@@ -2013,6 +2060,30 @@ const generateProformaInvoice = async () => {
         : ''}
     </option>
   ))}
+</select>
+
+<select
+  value={workStateFilter}
+  onChange={(e) => {
+    setWorkStateFilter(
+      e.target.value,
+    );
+
+    setPage(1);
+  }}
+  className="rounded-xl border p-3"
+>
+  <option value="">
+    All Work States
+  </option>
+
+  <option value="RUNNING">
+    Running
+  </option>
+
+  <option value="IN_PROCESS">
+    In Process
+  </option>
 </select>
 
   <select
@@ -3170,6 +3241,35 @@ onChange={(e) =>
                 {project.branchName} | {project.city}
               </p>
 
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+  <span
+    className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${
+      project.projectWorkState ===
+      'RUNNING'
+        ? 'bg-green-100 text-green-700'
+        : 'bg-orange-100 text-orange-700'
+    }`}
+  >
+    {project.projectWorkState ===
+    'RUNNING'
+      ? 'RUNNING'
+      : 'IN PROCESS'}
+  </span>
+
+  <span className="text-xs text-gray-500">
+    Owner:{' '}
+    {project.projectOwnerName ||
+      'Not Assigned'}
+  </span>
+</div>
+
+{project.projectWorkStateReason && (
+  <p className="mt-2 text-xs text-gray-500">
+    Work State Note:{' '}
+    {project.projectWorkStateReason}
+  </p>
+)}
+
               <p className="mt-2 text-sm text-gray-600">
                 Materials:{' '}
                 {Array.from(new Set(project.materials))
@@ -3264,6 +3364,33 @@ onChange={(e) =>
     {item.projectOwnerName || 'Not Assigned'}
   </span>
 </p>
+
+<div className="mt-2 flex flex-wrap items-center gap-2">
+  <span className="text-xs font-semibold text-gray-500">
+    Project Work State:
+  </span>
+
+  <span
+    className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${
+      item.projectWorkState ===
+      'RUNNING'
+        ? 'bg-green-100 text-green-700'
+        : 'bg-orange-100 text-orange-700'
+    }`}
+  >
+    {item.projectWorkState ===
+    'RUNNING'
+      ? 'RUNNING'
+      : 'IN PROCESS'}
+  </span>
+</div>
+
+{item.projectWorkStateReason && (
+  <p className="mt-1 text-xs text-gray-500">
+    Work State Note:{' '}
+    {item.projectWorkStateReason}
+  </p>
+)}
 
 <p className="mt-1 text-sm text-gray-500">
   {item.category || '-'} |{' '}
