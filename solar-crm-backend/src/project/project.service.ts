@@ -15020,31 +15020,44 @@ async getExecutionActivityProofs(
 async refreshExecutionOverdueStatuses() {
   const now = new Date();
 
-  const overdueActivities =
-    await this.projectExecutionActivityRepository
-      .createQueryBuilder('activity')
-      .where('activity.inspectionDeadline IS NOT NULL')
-      .andWhere('activity.inspectionDeadline < :now', {
+  await this.projectExecutionActivityRepository
+    .createQueryBuilder()
+    .update(ProjectExecutionActivity)
+    .set({
+      status:
+        ProjectExecutionActivityStatus.OVERDUE,
+    })
+    .where(
+      '"inspectionDeadline" IS NOT NULL',
+    )
+    .andWhere(
+      '"inspectionDeadline" < :now',
+      {
         now,
-      })
-      .andWhere('activity.status != :completed', {
+      },
+    )
+    .andWhere(
+      'status != :completed',
+      {
         completed:
           ProjectExecutionActivityStatus.COMPLETED,
-      })
-      .andWhere('activity.status != :cancelled', {
+      },
+    )
+    .andWhere(
+      'status != :cancelled',
+      {
         cancelled:
           ProjectExecutionActivityStatus.CANCELLED,
-      })
-      .getMany();
-
-  for (const activity of overdueActivities) {
-    activity.status =
-      ProjectExecutionActivityStatus.OVERDUE;
-
-    await this.projectExecutionActivityRepository.save(
-      activity,
-    );
-  }
+      },
+    )
+    .andWhere(
+      'status != :overdue',
+      {
+        overdue:
+          ProjectExecutionActivityStatus.OVERDUE,
+      },
+    )
+    .execute();
 }
 
 async completeProject(
