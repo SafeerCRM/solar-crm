@@ -16473,6 +16473,7 @@ async getPurchaseOrders(filters: {
   status?: string;
   branch?: string;
   owner?: string;
+  projectWorkState?: string;
 }) {
   const page =
     Number(filters.page) > 0
@@ -16499,6 +16500,12 @@ async getPurchaseOrders(filters: {
 
     const owner = String(filters.owner || '')
   .trim();
+
+  const projectWorkState = String(
+  filters.projectWorkState || '',
+)
+  .trim()
+  .toUpperCase();
 
   const activeProcurementRequests =
   await this.projectMaterialRequestRepository.find({
@@ -16560,20 +16567,46 @@ const allPendingItems =
 
     return {
   ...item,
+
   projectCustomerName:
     project?.customerName || '',
+
   projectBranchName:
     project?.branchName || '',
+
   projectCity:
     project?.city || '',
+
   projectZone:
     project?.zone || '',
+
   projectOwnerId:
     project?.projectOwnerId || null,
+
   projectOwnerName:
     project?.projectOwnerName || '',
+
   projectOwnerRole:
     project?.projectOwnerRole || '',
+
+  /*
+   * Project operational work state.
+   *
+   * Used by Procurement so pending material
+   * requirements can be prioritised according
+   * to whether the project is currently running.
+   */
+  projectWorkState:
+    project?.projectWorkState ||
+    'IN_PROCESS',
+
+  projectWorkStateReason:
+    project?.projectWorkStateReason ||
+    '',
+
+  projectWorkStateUpdatedAt:
+    project?.projectWorkStateUpdatedAt ||
+    null,
 };
   })
   .filter((item: any) => item.projectId && projectMap.has(Number(item.projectId)));
@@ -16599,11 +16632,22 @@ const allPendingItems =
   ? String(item.projectOwnerId || '') === owner
   : true;
 
+  const matchesProjectWorkState =
+  projectWorkState
+    ? String(
+        item.projectWorkState || '',
+      )
+        .trim()
+        .toUpperCase() ===
+      projectWorkState
+    : true;
+
     return (
   matchesSearch &&
   matchesStatus &&
   matchesBranch &&
-  matchesOwner
+  matchesOwner &&
+  matchesProjectWorkState
 );
   });
 

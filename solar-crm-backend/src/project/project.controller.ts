@@ -718,20 +718,48 @@ deleteBranch(
 
 @Get('purchase-orders')
 getPurchaseOrders(
-  @Query('page') page?: string,
-  @Query('limit') limit?: string,
-  @Query('search') search?: string,
-  @Query('status') status?: string,
-  @Query('branch') branch?: string,
-  @Query('owner') owner?: string,
+  @Query('page')
+  page?: string,
+
+  @Query('limit')
+  limit?: string,
+
+  @Query('search')
+  search?: string,
+
+  @Query('status')
+  status?: string,
+
+  @Query('branch')
+  branch?: string,
+
+  @Query('owner')
+  owner?: string,
+
+  @Query('projectWorkState')
+  projectWorkState?: string,
 ) {
   return this.projectService.getPurchaseOrders({
-    page: Number(page || 1),
-    limit: Number(limit || 20),
-    search: search || '',
-    status: status || '',
-    branch: branch || '',
-    owner: owner || '',
+    page:
+      Number(page || 1),
+
+    limit:
+      Number(limit || 20),
+
+    search:
+      search || '',
+
+    status:
+      status || '',
+
+    branch:
+      branch || '',
+
+    owner:
+      owner || '',
+
+    projectWorkState:
+      projectWorkState || '',
   });
 }
 
