@@ -3297,9 +3297,15 @@ const uploadExecutionProofs = async (
 
     const formData = new FormData();
 
-    files.forEach((file) => {
-      formData.append('files', file);
-    });
+for (const file of files) {
+  const uploadFile =
+    await compressImageFile(file);
+
+  formData.append(
+    'files',
+    uploadFile,
+  );
+}
 
     formData.append('activityId', String(activity.id));
     formData.append('projectId', String(projectId));
