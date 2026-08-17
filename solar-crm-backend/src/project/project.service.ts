@@ -3121,20 +3121,45 @@ const runningActivity =
   runningActivities[0]?.activityType || '';
 
 const latestCompletedActivity =
-  completedActivities
-    .sort(
-      (a, b) =>
-        new Date(
-          b.completedDate ||
-            b.updatedAt ||
-            b.createdAt,
-        ).getTime() -
-        new Date(
-          a.completedDate ||
-            a.updatedAt ||
-            a.createdAt,
-        ).getTime(),
-    )[0]?.activityType || '';
+  [...completedActivities]
+    .sort((a, b) => {
+      const aCompletedDate =
+        a.completedDate
+          ? new Date(a.completedDate).getTime()
+          : 0;
+
+      const bCompletedDate =
+        b.completedDate
+          ? new Date(b.completedDate).getTime()
+          : 0;
+
+      /*
+       * First compare the actual completion date.
+       */
+      if (aCompletedDate !== bCompletedDate) {
+        return bCompletedDate - aCompletedDate;
+      }
+
+      /*
+       * Multiple activities can be completed on the
+       * same date because completedDate stores only
+       * YYYY-MM-DD.
+       *
+       * updatedAt gives us the actual latest update
+       * within that day.
+       */
+      const aUpdatedTime = new Date(
+        a.updatedAt ||
+          a.createdAt,
+      ).getTime();
+
+      const bUpdatedTime = new Date(
+        b.updatedAt ||
+          b.createdAt,
+      ).getTime();
+
+      return bUpdatedTime - aUpdatedTime;
+    })[0]?.activityType || '';
 
 const nextPendingActivity =
   pendingActivities
