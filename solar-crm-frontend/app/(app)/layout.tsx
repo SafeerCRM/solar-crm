@@ -469,7 +469,7 @@ const navItems = [
 {
   name: 'Contractor Assignments',
   href: '/project/contractor-assignments',
-  roles: ['OWNER', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER',],
+  roles: ['OWNER', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER', 'INSPECTION_MANAGER',],
 },
 
 {
