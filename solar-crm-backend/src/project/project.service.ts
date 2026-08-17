@@ -22346,8 +22346,9 @@ async getContractorAssignmentRegister(filters: any, user: any) {
   const roles = Array.isArray(user?.roles) ? user.roles : [];
 
   const canView =
-    roles.includes('OWNER') ||
-    roles.includes('PROJECT_MANAGER');
+  roles.includes('OWNER') ||
+  roles.includes('PROJECT_MANAGER') ||
+  roles.includes('INSPECTION_MANAGER');
 
   if (!canView) {
     throw new ForbiddenException(
@@ -22860,6 +22861,7 @@ async getContractorProofs(
     roles.includes('PROJECT_MANAGER') ||
     roles.includes('PROJECT_EXECUTIVE') ||
     roles.includes('SUBSIDY_MANAGER') ||
+    roles.includes('INSPECTION_MANAGER') ||
     isProjectOwner ||
     Number(assignment.contractorId) ===
       currentUserId;
@@ -22919,6 +22921,7 @@ async addContractorComment(
   const isAllowed =
     roles.includes('OWNER') ||
     roles.includes('PROJECT_MANAGER') ||
+    roles.includes('INSPECTION_MANAGER') ||
     Number(assignment.contractorId) === currentUserId;
 
   if (!isAllowed) {
@@ -22994,6 +22997,7 @@ async getContractorComments(
     roles.includes('PROJECT_MANAGER') ||
     roles.includes('PROJECT_EXECUTIVE') ||
     roles.includes('SUBSIDY_MANAGER') ||
+    roles.includes('INSPECTION_MANAGER') ||
     isProjectOwner ||
     Number(assignment.contractorId) ===
       currentUserId;

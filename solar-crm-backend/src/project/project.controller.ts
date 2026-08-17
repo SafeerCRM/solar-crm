@@ -604,7 +604,7 @@ uploadContractorProofs(
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER')
+@Roles('OWNER', 'PROJECT_MANAGER', 'INSPECTION_MANAGER',)
 @Get('contractor-assignments/register')
 getContractorAssignmentRegister(
   @Query('page') page?: string,
