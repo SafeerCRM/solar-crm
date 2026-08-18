@@ -443,7 +443,18 @@ private formatBillingInvoiceNumber(
       invoiceDate,
     );
 
-  return `${prefix}/${financialYear}/${sequence}`;
+  const formattedSequence =
+    String(
+      Math.max(
+        Number(sequence || 1),
+        1,
+      ),
+    ).padStart(
+      3,
+      '0',
+    );
+
+  return `${prefix}/${financialYear}/${formattedSequence}`;
 }
 
 private async getBillingEntityOrFail(
