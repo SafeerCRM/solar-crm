@@ -49,6 +49,25 @@ type VendorItem = {
   isActive?: boolean;
 };
 
+type BillingEntity = {
+  id: number;
+  companyName: string;
+  legalName?: string;
+  gstNumber?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  stateCode?: string;
+  pinCode?: string;
+  isBillingEntity?: boolean;
+  billingEntityCode?: string;
+  invoicePrefix?: string;
+  nextInvoiceNumber?: number;
+  logoUrl?: string;
+};
+
 type GeneratedPurchaseOrder = {
   id: number;
   poNumber?: string;
@@ -89,6 +108,19 @@ type ProformaInvoice = {
   totalAmount?: number;
   status?: string;
   createdAt?: string;
+    buyerType?: string;
+
+  sellerCompanyId?: number;
+  sellerCompanyCode?: string;
+  sellerCompanyName?: string;
+  sellerLegalName?: string;
+  sellerGstNumber?: string;
+
+  buyerCompanyId?: number;
+  buyerCompanyCode?: string;
+  buyerCompanyName?: string;
+  buyerLegalName?: string;
+  buyerGstNumber?: string;
 };
 
 type ProformaInvoiceItem = {
@@ -124,6 +156,19 @@ type FinalInvoice = {
   pendingAmount?: number;
   status?: string;
   createdAt?: string;
+    buyerType?: string;
+
+  sellerCompanyId?: number;
+  sellerCompanyCode?: string;
+  sellerCompanyName?: string;
+  sellerLegalName?: string;
+  sellerGstNumber?: string;
+
+  buyerCompanyId?: number;
+  buyerCompanyCode?: string;
+  buyerCompanyName?: string;
+  buyerLegalName?: string;
+  buyerGstNumber?: string;
 };
 
 type FinalInvoiceItem = {
@@ -196,6 +241,15 @@ type ManualInvoiceItem = {
   discountAmount: string;
 };
 
+type InvoiceNumberPreview = {
+  companyId: number;
+  companyName?: string;
+  billingEntityCode?: string;
+  invoicePrefix?: string;
+  nextInvoiceNumber?: number;
+  suggestedInvoiceNumber?: string;
+};
+
 export default function PurchaseOrdersPage() {
   const [items, setItems] = useState<PurchaseItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -220,6 +274,8 @@ const [totalPages, setTotalPages] = useState(1);
 const [projects, setProjects] = useState<ProjectOption[]>([]);
 
 const [vendors, setVendors] = useState<VendorItem[]>([]);
+const [billingEntities, setBillingEntities] =
+  useState<BillingEntity[]>([]);
 const [selectedVendorId, setSelectedVendorId] = useState('');
 const [materials, setMaterials] = useState<MaterialMasterItem[]>([]);
 const [selectedItemIds, setSelectedItemIds] = useState<Record<number, boolean>>({});
@@ -248,8 +304,12 @@ const [creatingManualPo, setCreatingManualPo] =
   useState(false);
 
   const [manualPi, setManualPi] = useState({
+  invoiceType: 'PROJECT',
+  sellerCompanyId: '',
   projectId: '',
   dealerId: '',
+  buyerCompanyId: '',
+
   materialId: '',
   itemName: '',
   category: '',
@@ -273,7 +333,12 @@ const [manualInvoiceItems, setManualInvoiceItems] = useState<ManualInvoiceItem[]
 
   const [manualInvoice, setManualInvoice] =
   useState({
+    invoiceType: 'PROJECT',
+    sellerCompanyId: '',
     projectId: '',
+    dealerId: '',
+    buyerCompanyId: '',
+
     itemName: '',
     category: '',
     brand: '',
@@ -335,6 +400,106 @@ const [selectedPartyName, setSelectedPartyName] = useState('');
 const [documentNumberSearch, setDocumentNumberSearch] = useState('');
 const [fromDateFilter, setFromDateFilter] = useState('');
 const [toDateFilter, setToDateFilter] = useState('');
+
+const [currentUser, setCurrentUser] =
+  useState<any>(null);
+
+const [
+  manualInvoiceNumberPreview,
+  setManualInvoiceNumberPreview,
+] = useState<InvoiceNumberPreview | null>(null);
+
+const [
+  manualInvoiceNumber,
+  setManualInvoiceNumber,
+] = useState('');
+
+const [
+  loadingManualInvoiceNumber,
+  setLoadingManualInvoiceNumber,
+] = useState(false);
+
+const [
+  piFinalInvoiceNumberState,
+  setPiFinalInvoiceNumberState,
+] = useState<{
+  piId: number;
+  sellerCompanyId: number;
+  suggestedInvoiceNumber: string;
+  invoiceNumber: string;
+} | null>(null);
+
+const [
+  loadingPiFinalInvoiceNumberId,
+  setLoadingPiFinalInvoiceNumberId,
+] = useState<number | null>(null);
+
+const currentUserRoles =
+  currentUser?.roles || [];
+
+const canEditInvoiceNumber =
+  currentUserRoles.includes(
+    'OWNER',
+  );
+
+  const adityaSolarsBillingEntity =
+  billingEntities.find(
+    (company) =>
+      String(
+        company.billingEntityCode ||
+          '',
+      )
+        .trim()
+        .toUpperCase() ===
+      'ADITYA_SOLARS',
+  );
+
+  useEffect(() => {
+  if (
+    !adityaSolarsBillingEntity
+  ) {
+    return;
+  }
+
+  if (
+    manualPi.invoiceType ===
+      'PROJECT' &&
+    !manualPi
+      .sellerCompanyId
+  ) {
+    setManualPi(
+      (prev) => ({
+        ...prev,
+        sellerCompanyId:
+          String(
+            adityaSolarsBillingEntity.id,
+          ),
+      }),
+    );
+  }
+
+  if (
+    manualInvoice.invoiceType ===
+      'PROJECT' &&
+    !manualInvoice
+      .sellerCompanyId
+  ) {
+    setManualInvoice(
+      (prev) => ({
+        ...prev,
+        sellerCompanyId:
+          String(
+            adityaSolarsBillingEntity.id,
+          ),
+      }),
+    );
+  }
+}, [
+  adityaSolarsBillingEntity
+    ?.id,
+  manualPi.invoiceType,
+  manualInvoice.invoiceType,
+]);
 
 const filteredVendors = vendors.filter((vendor) =>
   String(vendor.vendorName || '')
@@ -476,6 +641,42 @@ const fetchVendors = async () => {
     setVendors(res.data || []);
   } catch (error) {
     console.error('Failed to load vendors:', error);
+  }
+};
+
+const fetchBillingEntities = async () => {
+  try {
+    const token =
+      localStorage.getItem(
+        'token',
+      );
+
+    const res =
+      await axios.get(
+        `${API_BASE_URL}/project/billing-entities`,
+        {
+          headers:
+            token
+              ? {
+                  Authorization:
+                    `Bearer ${token}`,
+                }
+              : {},
+        },
+      );
+
+    setBillingEntities(
+      Array.isArray(
+        res.data,
+      )
+        ? res.data
+        : [],
+    );
+  } catch (error) {
+    console.error(
+      'Failed to load billing entities:',
+      error,
+    );
   }
 };
 
@@ -677,43 +878,334 @@ const fetchFinalInvoiceDetail = async (id: number) => {
   }
 };
 
-const createFinalInvoiceFromPi = async (piId: number) => {
-  const confirmed = window.confirm(
-    'Create final invoice from this proforma invoice?',
-  );
+const fetchInvoiceNumberPreview =
+  async (
+    companyId: number,
+  ): Promise<InvoiceNumberPreview> => {
+    const token =
+      localStorage.getItem(
+        'token',
+      );
 
-  if (!confirmed) return;
+    const res =
+      await axios.get(
+        `${API_BASE_URL}/project/billing-entities/${companyId}/invoice-number-preview`,
+        {
+          headers:
+            token
+              ? {
+                  Authorization:
+                    `Bearer ${token}`,
+                }
+              : {},
+        },
+      );
 
-  try {
-    setCreatingFinalInvoiceId(piId);
+    return res.data;
+  };
 
-    const token = localStorage.getItem('token');
-
-    await axios.post(
-      `${API_BASE_URL}/project/proforma-invoice/${piId}/final-invoice`,
-      {},
-      {
-        headers: token
-          ? {
-              Authorization: `Bearer ${token}`,
-            }
-          : {},
-      },
+  useEffect(() => {
+  const sellerCompanyId =
+    Number(
+      manualInvoice
+        .sellerCompanyId ||
+        0,
     );
 
-    alert('Final invoice created successfully');
-    fetchFinalInvoices();
-  } catch (error: any) {
-    console.error(error);
-
-    alert(
-      error?.response?.data?.message ||
-        'Failed to create final invoice',
+  if (!sellerCompanyId) {
+    setManualInvoiceNumberPreview(
+      null,
     );
-  } finally {
-    setCreatingFinalInvoiceId(null);
+
+    setManualInvoiceNumber(
+      '',
+    );
+
+    return;
   }
-};
+
+  let cancelled =
+    false;
+
+  const loadPreview =
+    async () => {
+      try {
+        setLoadingManualInvoiceNumber(
+          true,
+        );
+
+        const preview =
+          await fetchInvoiceNumberPreview(
+            sellerCompanyId,
+          );
+
+        if (cancelled) {
+          return;
+        }
+
+        setManualInvoiceNumberPreview(
+          preview,
+        );
+
+        setManualInvoiceNumber(
+          String(
+            preview
+              ?.suggestedInvoiceNumber ||
+              '',
+          ),
+        );
+      } catch (
+        error: any
+      ) {
+        console.error(
+          'Invoice number preview error:',
+          error,
+        );
+
+        if (!cancelled) {
+          setManualInvoiceNumberPreview(
+            null,
+          );
+
+          setManualInvoiceNumber(
+            '',
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingManualInvoiceNumber(
+            false,
+          );
+        }
+      }
+    };
+
+  loadPreview();
+
+  return () => {
+    cancelled =
+      true;
+  };
+}, [
+  manualInvoice
+    .sellerCompanyId,
+]);
+
+const createFinalInvoiceFromPi =
+  async (
+    pi:
+      ProformaInvoice,
+  ) => {
+    /*
+     * Legacy PI created before seller snapshots.
+     *
+     * Keep its existing generation behavior.
+     */
+    if (
+      !pi.sellerCompanyId
+    ) {
+      const confirmed =
+        window.confirm(
+          'This is a legacy PI without issuing-company snapshot. Create final invoice using the legacy compatibility flow?',
+        );
+
+      if (!confirmed) {
+        return;
+      }
+
+      try {
+        setCreatingFinalInvoiceId(
+          pi.id,
+        );
+
+        const token =
+          localStorage.getItem(
+            'token',
+          );
+
+        await axios.post(
+          `${API_BASE_URL}/project/proforma-invoice/${pi.id}/final-invoice`,
+          {},
+          {
+            headers:
+              token
+                ? {
+                    Authorization:
+                      `Bearer ${token}`,
+                  }
+                : {},
+          },
+        );
+
+        alert(
+          'Final invoice created successfully',
+        );
+
+        fetchFinalInvoices();
+        fetchGeneratedPis();
+      } catch (
+        error: any
+      ) {
+        console.error(
+          error,
+        );
+
+        alert(
+          error?.response
+            ?.data
+            ?.message ||
+            'Failed to create final invoice',
+        );
+      } finally {
+        setCreatingFinalInvoiceId(
+          null,
+        );
+      }
+
+      return;
+    }
+
+    try {
+      setLoadingPiFinalInvoiceNumberId(
+        pi.id,
+      );
+
+      const preview =
+        await fetchInvoiceNumberPreview(
+          Number(
+            pi.sellerCompanyId,
+          ),
+        );
+
+      const suggested =
+        String(
+          preview
+            ?.suggestedInvoiceNumber ||
+            '',
+        );
+
+      setPiFinalInvoiceNumberState(
+        {
+          piId:
+            pi.id,
+
+          sellerCompanyId:
+            Number(
+              pi.sellerCompanyId,
+            ),
+
+          suggestedInvoiceNumber:
+            suggested,
+
+          invoiceNumber:
+            suggested,
+        },
+      );
+    } catch (
+      error: any
+    ) {
+      console.error(
+        error,
+      );
+
+      alert(
+        error?.response
+          ?.data
+          ?.message ||
+          'Failed to load next invoice number',
+      );
+    } finally {
+      setLoadingPiFinalInvoiceNumberId(
+        null,
+      );
+    }
+  };
+
+  const confirmFinalInvoiceFromPi =
+  async () => {
+    if (
+      !piFinalInvoiceNumberState
+    ) {
+      return;
+    }
+
+    const {
+      piId,
+      invoiceNumber,
+    } =
+      piFinalInvoiceNumberState;
+
+    if (
+      !String(
+        invoiceNumber ||
+          '',
+      ).trim()
+    ) {
+      alert(
+        'Invoice number is required',
+      );
+
+      return;
+    }
+
+    try {
+      setCreatingFinalInvoiceId(
+        piId,
+      );
+
+      const token =
+        localStorage.getItem(
+          'token',
+        );
+
+      await axios.post(
+        `${API_BASE_URL}/project/proforma-invoice/${piId}/final-invoice`,
+        {
+          invoiceNumber:
+            String(
+              invoiceNumber,
+            ).trim(),
+        },
+        {
+          headers:
+            token
+              ? {
+                  Authorization:
+                    `Bearer ${token}`,
+                }
+              : {},
+        },
+      );
+
+      alert(
+        'Final invoice created successfully',
+      );
+
+      setPiFinalInvoiceNumberState(
+        null,
+      );
+
+      fetchFinalInvoices();
+      fetchGeneratedPis();
+    } catch (
+      error: any
+    ) {
+      console.error(
+        error,
+      );
+
+      alert(
+        error?.response
+          ?.data
+          ?.message ||
+          'Failed to create final invoice',
+      );
+    } finally {
+      setCreatingFinalInvoiceId(
+        null,
+      );
+    }
+  };
 
 const handlePurchasePdf = async (
   endpoint: string,
@@ -1025,6 +1517,7 @@ const hideProformaInvoice = async (piId: number) => {
 useEffect(() => {
   fetchProjectOwners();
   fetchVendors();
+  fetchBillingEntities();
   fetchMaterials();
   fetchGeneratedPos();
   fetchGeneratedPis();
@@ -1036,6 +1529,29 @@ useEffect(() => {
   fetchProjectsForManualForms();
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [ownerFilter]);
+
+useEffect(() => {
+  const storedUser =
+    localStorage.getItem(
+      'user',
+    );
+
+  if (!storedUser) {
+    return;
+  }
+
+  try {
+    setCurrentUser(
+      JSON.parse(
+        storedUser,
+      ),
+    );
+  } catch {
+    setCurrentUser(
+      null,
+    );
+  }
+}, []);
 
   const filteredItems = items;
 
@@ -1455,109 +1971,350 @@ const addManualPiItem = () => {
   });
 };
 
-const createManualPi = async () => {
-  if (!manualPi.projectId && !manualPi.dealerId) {
-    alert('Project or Dealer is required');
-    return;
-  }
+const createManualPi =
+  async () => {
+    const invoiceType =
+      String(
+        manualPi.invoiceType ||
+          'PROJECT',
+      );
 
-  const itemsToSubmit =
-    manualPiItems.length > 0
-      ? manualPiItems
-      : manualPi.itemName
-        ? [
-            {
-              materialId: manualPi.materialId,
-              itemName: manualPi.itemName,
-              category: manualPi.category,
-              brand: manualPi.brand,
-              unit: manualPi.unit,
-              hsnCode: manualPi.hsnCode,
-              quantity: manualPi.quantity,
-              sellingRate: manualPi.sellingRate,
-              gstPercent: manualPi.gstPercent,
-              discountAmount: manualPi.discountAmount,
-            },
-          ]
-        : [];
+    if (
+  !manualPi
+    .sellerCompanyId
+) {
+  alert(
+    'Issuing company is required',
+  );
 
-  if (itemsToSubmit.length === 0) {
-    alert('Please add at least one material');
-    return;
-  }
+  return;
+}
 
-  try {
-    setCreatingManualPi(true);
+    if (
+      invoiceType ===
+        'PROJECT' &&
+      !manualPi.projectId
+    ) {
+      alert(
+        'Project is required',
+      );
 
-    const token = localStorage.getItem('token');
+      return;
+    }
 
-    await axios.post(
-      `${API_BASE_URL}/project/proforma-invoice/manual`,
-      {
-        projectId: manualPi.projectId
-          ? Number(manualPi.projectId)
-          : undefined,
+    if (
+      invoiceType ===
+        'DEALER' &&
+      !manualPi.dealerId
+    ) {
+      alert(
+        'Dealer is required',
+      );
 
-        dealerId: manualPi.dealerId
-          ? Number(manualPi.dealerId)
-          : undefined,
+      return;
+    }
 
-        remarks: manualPi.remarks,
+    if (
+      invoiceType ===
+        'INTER_COMPANY' &&
+      !manualPi
+        .buyerCompanyId
+    ) {
+      alert(
+        'Buyer company is required',
+      );
 
-        items: itemsToSubmit.map((item) => ({
-          materialId: item.materialId ? Number(item.materialId) : undefined,
-          itemName: item.itemName,
-          category: item.category,
-          brand: item.brand,
-          unit: item.unit,
-          hsnCode: item.hsnCode || '',
-          quantity: Number(item.quantity || 0),
-          sellingRate: Number(item.sellingRate || 0),
-          gstPercent: Number(item.gstPercent || 0),
-          discountAmount: Number(item.discountAmount || 0),
-        })),
-      },
-      {
-        headers: token
-          ? {
-              Authorization: `Bearer ${token}`,
-            }
-          : {},
-      },
-    );
+      return;
+    }
 
-    alert('Manual PI created successfully');
+    if (
+      invoiceType ===
+        'INTER_COMPANY' &&
+      manualPi
+        .sellerCompanyId &&
+      manualPi
+        .sellerCompanyId ===
+        manualPi
+          .buyerCompanyId
+    ) {
+      alert(
+        'Seller and buyer cannot be the same company',
+      );
 
-    setManualPi({
-      projectId: '',
-      dealerId: '',
-      materialId: '',
-      itemName: '',
-      category: '',
-      brand: '',
-      unit: '',
-      hsnCode: '',
-      quantity: '',
-      sellingRate: '',
-      gstPercent: '18',
-      discountAmount: '0',
-      remarks: '',
-    });
+      return;
+    }
 
-    setManualPiItems([]);
+    const itemsToSubmit =
+      manualPiItems.length >
+      0
+        ? manualPiItems
+        : manualPi.itemName
+          ? [
+              {
+                materialId:
+                  manualPi
+                    .materialId,
 
-    fetchGeneratedPis();
-  } catch (error: any) {
-    console.error(error);
+                itemName:
+                  manualPi
+                    .itemName,
 
-    alert(
-      error?.response?.data?.message ||
-        'Failed to create manual PI',
-    );
-  } finally {
-    setCreatingManualPi(false);
-  }
-};
+                category:
+                  manualPi
+                    .category,
+
+                brand:
+                  manualPi
+                    .brand,
+
+                unit:
+                  manualPi
+                    .unit,
+
+                hsnCode:
+                  manualPi
+                    .hsnCode,
+
+                quantity:
+                  manualPi
+                    .quantity,
+
+                sellingRate:
+                  manualPi
+                    .sellingRate,
+
+                gstPercent:
+                  manualPi
+                    .gstPercent,
+
+                discountAmount:
+                  manualPi
+                    .discountAmount,
+              },
+            ]
+          : [];
+
+    if (
+      itemsToSubmit.length ===
+      0
+    ) {
+      alert(
+        'Please add at least one material',
+      );
+
+      return;
+    }
+
+    try {
+      setCreatingManualPi(
+        true,
+      );
+
+      const token =
+        localStorage.getItem(
+          'token',
+        );
+
+      await axios.post(
+        `${API_BASE_URL}/project/proforma-invoice/manual`,
+        {
+          invoiceType,
+
+          sellerCompanyId:
+            manualPi
+              .sellerCompanyId
+              ? Number(
+                  manualPi
+                    .sellerCompanyId,
+                )
+              : undefined,
+
+          projectId:
+            invoiceType ===
+              'PROJECT' &&
+            manualPi
+              .projectId
+              ? Number(
+                  manualPi
+                    .projectId,
+                )
+              : undefined,
+
+          dealerId:
+            invoiceType ===
+              'DEALER' &&
+            manualPi
+              .dealerId
+              ? Number(
+                  manualPi
+                    .dealerId,
+                )
+              : undefined,
+
+          buyerCompanyId:
+            invoiceType ===
+              'INTER_COMPANY' &&
+            manualPi
+              .buyerCompanyId
+              ? Number(
+                  manualPi
+                    .buyerCompanyId,
+                )
+              : undefined,
+
+          remarks:
+            manualPi.remarks,
+
+          items:
+            itemsToSubmit.map(
+              (
+                item,
+              ) => ({
+                materialId:
+                  item.materialId
+                    ? Number(
+                        item
+                          .materialId,
+                      )
+                    : undefined,
+
+                itemName:
+                  item.itemName,
+
+                category:
+                  item.category,
+
+                brand:
+                  item.brand,
+
+                unit:
+                  item.unit,
+
+                hsnCode:
+                  item.hsnCode ||
+                  '',
+
+                quantity:
+                  Number(
+                    item.quantity ||
+                      0,
+                  ),
+
+                sellingRate:
+                  Number(
+                    item.sellingRate ||
+                      0,
+                  ),
+
+                gstPercent:
+                  Number(
+                    item.gstPercent ||
+                      0,
+                  ),
+
+                discountAmount:
+                  Number(
+                    item.discountAmount ||
+                      0,
+                  ),
+              }),
+            ),
+        },
+        {
+          headers:
+            token
+              ? {
+                  Authorization:
+                    `Bearer ${token}`,
+                }
+              : {},
+        },
+      );
+
+      alert(
+        invoiceType ===
+          'INTER_COMPANY'
+          ? 'Inter-company PI created successfully'
+          : invoiceType ===
+              'DEALER'
+            ? 'Dealer PI created successfully'
+            : 'Manual PI created successfully',
+      );
+
+      setManualPi({
+        invoiceType:
+          'PROJECT',
+
+        sellerCompanyId:
+          '',
+
+        projectId:
+          '',
+
+        dealerId:
+          '',
+
+        buyerCompanyId:
+          '',
+
+        materialId:
+          '',
+
+        itemName:
+          '',
+
+        category:
+          '',
+
+        brand:
+          '',
+
+        unit:
+          '',
+
+        hsnCode:
+          '',
+
+        quantity:
+          '',
+
+        sellingRate:
+          '',
+
+        gstPercent:
+          '18',
+
+        discountAmount:
+          '0',
+
+        remarks:
+          '',
+      });
+
+      setManualPiItems(
+        [],
+      );
+
+      fetchGeneratedPis();
+    } catch (
+      error: any
+    ) {
+      console.error(
+        error,
+      );
+
+      alert(
+        error?.response
+          ?.data
+          ?.message ||
+          'Failed to create manual PI',
+      );
+    } finally {
+      setCreatingManualPi(
+        false,
+      );
+    }
+  };
 
 const addManualInvoiceItem = () => {
   if (!manualInvoice.itemName) {
@@ -1586,101 +2343,368 @@ const addManualInvoiceItem = () => {
   ]);
 
   setManualInvoice({
-    ...manualInvoice,
-    itemName: '',
-    category: '',
-    brand: '',
-    unit: '',
-    quantity: '',
-    finalRate: '',
-    gstPercent: '18',
-    discountAmount: '0',
-  });
+  ...manualInvoice,
+  itemName: '',
+  category: '',
+  brand: '',
+  unit: '',
+  hsnCode: '',
+  quantity: '',
+  finalRate: '',
+  gstPercent: '18',
+  discountAmount: '0',
+});
 };
 
-const createManualInvoice = async () => {
-  if (!manualInvoice.projectId) {
-    alert('Project is required');
-    return;
-  }
+const createManualInvoice =
+  async () => {
+    const invoiceType =
+      String(
+        manualInvoice
+          .invoiceType ||
+          'PROJECT',
+      );
 
-  const itemsToSubmit =
-    manualInvoiceItems.length > 0
-      ? manualInvoiceItems
-      : manualInvoice.itemName
-        ? [
-            {
-              itemName: manualInvoice.itemName,
-              category: manualInvoice.category,
-              brand: manualInvoice.brand,
-              unit: manualInvoice.unit,
-              quantity: manualInvoice.quantity,
-              finalRate: manualInvoice.finalRate,
-              gstPercent: manualInvoice.gstPercent,
-              discountAmount: manualInvoice.discountAmount,
-            },
-          ]
-        : [];
+    if (
+  !manualInvoice
+    .sellerCompanyId
+) {
+      alert(
+        'Issuing company is required',
+      );
 
-  if (itemsToSubmit.length === 0) {
-    alert('Please add at least one item');
-    return;
-  }
+      return;
+    }
 
-  try {
-    setCreatingManualInvoice(true);
+    if (
+      invoiceType ===
+        'PROJECT' &&
+      !manualInvoice
+        .projectId
+    ) {
+      alert(
+        'Project is required',
+      );
 
-    const token = localStorage.getItem('token');
+      return;
+    }
 
-    await axios.post(
-      `${API_BASE_URL}/project/final-invoice/manual`,
-      {
-        projectId: Number(manualInvoice.projectId),
-        remarks: manualInvoice.remarks,
+    if (
+      invoiceType ===
+        'DEALER' &&
+      !manualInvoice
+        .dealerId
+    ) {
+      alert(
+        'Dealer is required',
+      );
 
-        items: itemsToSubmit.map((item) => ({
-          itemName: item.itemName,
-          category: item.category,
-          brand: item.brand,
-          unit: item.unit,
-          hsnCode: item.hsnCode || '',
-          quantity: Number(item.quantity || 0),
-          finalRate: Number(item.finalRate || 0),
-          gstPercent: Number(item.gstPercent || 0),
-          discountAmount: Number(item.discountAmount || 0),
-        })),
-      },
-      {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      },
-    );
+      return;
+    }
 
-    alert('Manual final invoice created successfully');
+    if (
+      invoiceType ===
+        'INTER_COMPANY' &&
+      !manualInvoice
+        .buyerCompanyId
+    ) {
+      alert(
+        'Buyer company is required',
+      );
 
-    setManualInvoice({
-      projectId: '',
-      itemName: '',
-      category: '',
-      brand: '',
-      unit: '',
-      hsnCode: '',
-      quantity: '',
-      finalRate: '',
-      gstPercent: '18',
-      discountAmount: '0',
-      remarks: '',
-    });
+      return;
+    }
 
-    setManualInvoiceItems([]);
+    if (
+      invoiceType ===
+        'INTER_COMPANY' &&
+      manualInvoice
+        .sellerCompanyId &&
+      manualInvoice
+        .sellerCompanyId ===
+        manualInvoice
+          .buyerCompanyId
+    ) {
+      alert(
+        'Seller and buyer cannot be the same company',
+      );
 
-    fetchFinalInvoices();
-  } catch (error: any) {
-    console.error(error);
-    alert(error?.response?.data?.message || 'Failed to create manual invoice');
-  } finally {
-    setCreatingManualInvoice(false);
-  }
-};
+      return;
+    }
+
+    const itemsToSubmit =
+      manualInvoiceItems.length >
+      0
+        ? manualInvoiceItems
+        : manualInvoice
+            .itemName
+          ? [
+              {
+                itemName:
+                  manualInvoice
+                    .itemName,
+
+                category:
+                  manualInvoice
+                    .category,
+
+                brand:
+                  manualInvoice
+                    .brand,
+
+                unit:
+                  manualInvoice
+                    .unit,
+
+                hsnCode:
+                  manualInvoice
+                    .hsnCode,
+
+                quantity:
+                  manualInvoice
+                    .quantity,
+
+                finalRate:
+                  manualInvoice
+                    .finalRate,
+
+                gstPercent:
+                  manualInvoice
+                    .gstPercent,
+
+                discountAmount:
+                  manualInvoice
+                    .discountAmount,
+              },
+            ]
+          : [];
+
+    if (
+      itemsToSubmit.length ===
+      0
+    ) {
+      alert(
+        'Please add at least one item',
+      );
+
+      return;
+    }
+
+    try {
+      setCreatingManualInvoice(
+        true,
+      );
+
+      const token =
+        localStorage.getItem(
+          'token',
+        );
+
+      await axios.post(
+        `${API_BASE_URL}/project/final-invoice/manual`,
+        {
+          invoiceType,
+
+          sellerCompanyId:
+            manualInvoice
+              .sellerCompanyId
+              ? Number(
+                  manualInvoice
+                    .sellerCompanyId,
+                )
+              : undefined,
+
+              invoiceNumber:
+  manualInvoice
+    .sellerCompanyId &&
+  manualInvoiceNumber
+    ? manualInvoiceNumber.trim()
+    : undefined,
+
+          projectId:
+            invoiceType ===
+              'PROJECT' &&
+            manualInvoice
+              .projectId
+              ? Number(
+                  manualInvoice
+                    .projectId,
+                )
+              : undefined,
+
+          dealerId:
+            invoiceType ===
+              'DEALER' &&
+            manualInvoice
+              .dealerId
+              ? Number(
+                  manualInvoice
+                    .dealerId,
+                )
+              : undefined,
+
+          buyerCompanyId:
+            invoiceType ===
+              'INTER_COMPANY' &&
+            manualInvoice
+              .buyerCompanyId
+              ? Number(
+                  manualInvoice
+                    .buyerCompanyId,
+                )
+              : undefined,
+
+          remarks:
+            manualInvoice
+              .remarks,
+
+          items:
+            itemsToSubmit.map(
+              (
+                item,
+              ) => ({
+                itemName:
+                  item.itemName,
+
+                category:
+                  item.category,
+
+                brand:
+                  item.brand,
+
+                unit:
+                  item.unit,
+
+                hsnCode:
+                  item.hsnCode ||
+                  '',
+
+                quantity:
+                  Number(
+                    item.quantity ||
+                      0,
+                  ),
+
+                finalRate:
+                  Number(
+                    item.finalRate ||
+                      0,
+                  ),
+
+                gstPercent:
+                  Number(
+                    item.gstPercent ||
+                      0,
+                  ),
+
+                discountAmount:
+                  Number(
+                    item.discountAmount ||
+                      0,
+                  ),
+              }),
+            ),
+        },
+        {
+          headers:
+            token
+              ? {
+                  Authorization:
+                    `Bearer ${token}`,
+                }
+              : {},
+        },
+      );
+
+      alert(
+        invoiceType ===
+          'INTER_COMPANY'
+          ? 'Internal Tax Invoice created successfully'
+          : invoiceType ===
+              'DEALER'
+            ? 'Dealer Tax Invoice created successfully'
+            : 'Manual final invoice created successfully',
+      );
+
+      setManualInvoice({
+        invoiceType:
+          'PROJECT',
+
+        sellerCompanyId:
+          '',
+
+        projectId:
+          '',
+
+        dealerId:
+          '',
+
+        buyerCompanyId:
+          '',
+
+        itemName:
+          '',
+
+        category:
+          '',
+
+        brand:
+          '',
+
+        unit:
+          '',
+
+        hsnCode:
+          '',
+
+        quantity:
+          '',
+
+        finalRate:
+          '',
+
+        gstPercent:
+          '18',
+
+        discountAmount:
+          '0',
+
+        remarks:
+          '',
+      });
+
+      setManualInvoiceItems(
+        [],
+      );
+
+      setManualInvoiceNumberPreview(
+  null,
+);
+
+setManualInvoiceNumber(
+  '',
+);
+
+      fetchFinalInvoices();
+    } catch (
+      error: any
+    ) {
+      console.error(
+        error,
+      );
+
+      alert(
+        error?.response
+          ?.data
+          ?.message ||
+          'Failed to create manual invoice',
+      );
+    } finally {
+      setCreatingManualInvoice(
+        false,
+      );
+    }
+  };
 
 const generateProformaInvoice = async () => {
   if (!selectedItems.length) {
@@ -1692,6 +2716,16 @@ const generateProformaInvoice = async () => {
     alert('Please select items from only one project for one PI');
     return;
   }
+
+  if (
+  !adityaSolarsBillingEntity
+) {
+  alert(
+    'Aditya Solars billing entity is not configured',
+  );
+
+  return;
+}
 
   const confirmed = window.confirm(
     'Generate proforma invoice snapshot for selected items?',
@@ -1707,7 +2741,13 @@ const generateProformaInvoice = async () => {
     await axios.post(
       `${API_BASE_URL}/project/proforma-invoice`,
       {
-        projectId: selectedProjectIds[0],
+  projectId:
+    selectedProjectIds[0],
+
+  sellerCompanyId:
+    Number(
+      adityaSolarsBillingEntity.id,
+    ),
         items: selectedItems.map((item) => ({
           materialId: item.materialId || null,
           itemName: item.materialName,
@@ -2458,6 +3498,84 @@ const generateProformaInvoice = async () => {
   </p>
 
   <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
+
+    <select
+  value={
+    manualPi.invoiceType
+  }
+  onChange={(e) =>
+    setManualPi({
+      ...manualPi,
+
+      invoiceType:
+        e.target.value,
+
+      projectId:
+        '',
+
+      dealerId:
+        '',
+
+      buyerCompanyId:
+        '',
+    })
+  }
+  className="rounded-xl border p-3"
+>
+  <option value="PROJECT">
+    Project PI
+  </option>
+
+  <option value="DEALER">
+    Dealer PI
+  </option>
+
+  <option value="INTER_COMPANY">
+    Inter-Company PI
+  </option>
+</select>
+
+<select
+  value={
+    manualPi
+      .sellerCompanyId
+  }
+  onChange={(e) =>
+    setManualPi({
+      ...manualPi,
+
+      sellerCompanyId:
+        e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+>
+  <option value="">
+    Select Issuing Company
+  </option>
+
+  {billingEntities.map(
+    (
+      company,
+    ) => (
+      <option
+        key={
+          company.id
+        }
+        value={
+          company.id
+        }
+      >
+        {company.companyName}
+        {company.gstNumber
+          ? ` - ${company.gstNumber}`
+          : ''}
+      </option>
+    ),
+  )}
+</select>
+
+{manualPi.invoiceType === 'PROJECT' && (
     <select
   value={manualPi.projectId}
   onChange={(e) =>
@@ -2477,7 +3595,9 @@ const generateProformaInvoice = async () => {
     </option>
   ))}
 </select>
+)}
 
+{manualPi.invoiceType === 'DEALER' && (
 <select
   value={manualPi.dealerId}
   onChange={(e) =>
@@ -2489,8 +3609,8 @@ const generateProformaInvoice = async () => {
   className="rounded-xl border p-3"
 >
   <option value="">
-    Select Dealer (Optional)
-  </option>
+  Select Dealer
+</option>
 
   {vendors
   .filter(
@@ -2508,6 +3628,63 @@ const generateProformaInvoice = async () => {
     </option>
   ))}
 </select>
+)}
+
+{manualPi.invoiceType ===
+  'INTER_COMPANY' && (
+  <select
+    value={
+      manualPi
+        .buyerCompanyId
+    }
+    onChange={(e) =>
+      setManualPi({
+        ...manualPi,
+
+        buyerCompanyId:
+          e.target.value,
+      })
+    }
+    className="rounded-xl border p-3"
+  >
+    <option value="">
+      Select Buyer Company
+    </option>
+
+    {billingEntities
+      .filter(
+        (
+          company,
+        ) =>
+          String(
+            company.id,
+          ) !==
+          String(
+            manualPi
+              .sellerCompanyId,
+          ),
+      )
+      .map(
+        (
+          company,
+        ) => (
+          <option
+            key={
+              company.id
+            }
+            value={
+              company.id
+            }
+          >
+            {company.companyName}
+            {company.gstNumber
+              ? ` - ${company.gstNumber}`
+              : ''}
+          </option>
+        ),
+      )}
+  </select>
+)}
 
     <select
   value={manualPi.itemName}
@@ -2736,6 +3913,85 @@ const generateProformaInvoice = async () => {
   </p>
 
   <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
+
+    <select
+  value={
+    manualInvoice
+      .invoiceType
+  }
+  onChange={(e) =>
+    setManualInvoice({
+      ...manualInvoice,
+
+      invoiceType:
+        e.target.value,
+
+      projectId:
+        '',
+
+      dealerId:
+        '',
+
+      buyerCompanyId:
+        '',
+    })
+  }
+  className="rounded-xl border p-3"
+>
+  <option value="PROJECT">
+    Project Invoice
+  </option>
+
+  <option value="DEALER">
+    Dealer Tax Invoice
+  </option>
+
+  <option value="INTER_COMPANY">
+    Internal Tax Invoice
+  </option>
+</select>
+
+<select
+  value={
+    manualInvoice
+      .sellerCompanyId
+  }
+  onChange={(e) =>
+    setManualInvoice({
+      ...manualInvoice,
+
+      sellerCompanyId:
+        e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+>
+  <option value="">
+    Select Issuing Company
+  </option>
+
+  {billingEntities.map(
+    (
+      company,
+    ) => (
+      <option
+        key={
+          company.id
+        }
+        value={
+          company.id
+        }
+      >
+        {company.companyName}
+        {company.gstNumber
+          ? ` - ${company.gstNumber}`
+          : ''}
+      </option>
+    ),
+  )}
+</select>
+
+{manualInvoice.invoiceType === 'PROJECT' && (
     <select
   value={manualInvoice.projectId}
 
@@ -2756,6 +4012,174 @@ onChange={(e) =>
     </option>
   ))}
 </select>
+)}
+
+{manualInvoice.invoiceType ===
+  'DEALER' && (
+  <select
+    value={
+      manualInvoice
+        .dealerId
+    }
+    onChange={(e) =>
+      setManualInvoice({
+        ...manualInvoice,
+
+        dealerId:
+          e.target.value,
+      })
+    }
+    className="rounded-xl border p-3"
+  >
+    <option value="">
+      Select Dealer
+    </option>
+
+    {vendors
+      .filter(
+        (
+          vendor,
+        ) =>
+          vendor
+            .canBuyFromUs ===
+            true ||
+          vendor.partyType ===
+            'DEALER' ||
+          vendor.partyType ===
+            'BOTH',
+      )
+      .map(
+        (
+          vendor,
+        ) => (
+          <option
+            key={
+              vendor.id
+            }
+            value={
+              vendor.id
+            }
+          >
+            {vendor.vendorName}
+          </option>
+        ),
+      )}
+  </select>
+)}
+
+{manualInvoice.invoiceType ===
+  'INTER_COMPANY' && (
+  <select
+    value={
+      manualInvoice
+        .buyerCompanyId
+    }
+    onChange={(e) =>
+      setManualInvoice({
+        ...manualInvoice,
+
+        buyerCompanyId:
+          e.target.value,
+      })
+    }
+    className="rounded-xl border p-3"
+  >
+    <option value="">
+      Select Buyer Company
+    </option>
+
+    {billingEntities
+      .filter(
+        (
+          company,
+        ) =>
+          String(
+            company.id,
+          ) !==
+          String(
+            manualInvoice
+              .sellerCompanyId,
+          ),
+      )
+      .map(
+        (
+          company,
+        ) => (
+          <option
+            key={
+              company.id
+            }
+            value={
+              company.id
+            }
+          >
+            {company.companyName}
+            {company.gstNumber
+              ? ` - ${company.gstNumber}`
+              : ''}
+          </option>
+        ),
+      )}
+  </select>
+)}
+
+{manualInvoice.sellerCompanyId && (
+  <div className="rounded-xl border bg-white p-3">
+    <p className="text-xs font-semibold text-gray-500">
+      Tax Invoice Number
+    </p>
+
+    {loadingManualInvoiceNumber ? (
+      <p className="mt-1 text-sm text-gray-500">
+        Loading next invoice number...
+      </p>
+    ) : canEditInvoiceNumber ? (
+      <>
+        <input
+          value={
+            manualInvoiceNumber
+          }
+          onChange={(e) =>
+            setManualInvoiceNumber(
+              e.target.value,
+            )
+          }
+          className="mt-1 w-full rounded-lg border px-3 py-2 font-semibold text-gray-800"
+          placeholder="Invoice Number"
+        />
+
+        {manualInvoiceNumberPreview
+          ?.suggestedInvoiceNumber &&
+          manualInvoiceNumber !==
+            manualInvoiceNumberPreview
+              .suggestedInvoiceNumber && (
+            <p className="mt-1 text-xs font-semibold text-orange-600">
+              Auto number:{' '}
+              {
+                manualInvoiceNumberPreview
+                  .suggestedInvoiceNumber
+              }
+            </p>
+          )}
+
+        <p className="mt-1 text-xs text-gray-500">
+          Owner can override this number before generation.
+        </p>
+      </>
+    ) : (
+      <>
+        <p className="mt-1 font-semibold text-gray-800">
+          {manualInvoiceNumber ||
+            '-'}
+        </p>
+
+        <p className="mt-1 text-xs text-gray-500">
+          Invoice number is generated automatically.
+        </p>
+      </>
+    )}
+  </div>
+)}
 
     <select
   value={manualInvoice.itemName}
@@ -2963,6 +4387,11 @@ onChange={(e) =>
   <p className="mt-1 text-sm text-gray-500">
     Dealer: {pi.dealerName || '-'}
   </p>
+) : pi.invoiceType === 'INTER_COMPANY' ? (
+  <p className="mt-1 text-sm text-gray-500">
+    {pi.sellerCompanyName || 'Seller'} →{' '}
+    {pi.buyerCompanyName || 'Buyer Company'}
+  </p>
 ) : (
   <p className="mt-1 text-sm text-gray-500">
     Project #{pi.projectId || '-'}
@@ -3002,14 +4431,106 @@ onChange={(e) =>
 </button>
 
 <button
-  onClick={() => createFinalInvoiceFromPi(pi.id)}
-  disabled={creatingFinalInvoiceId === pi.id}
+  onClick={() =>
+    createFinalInvoiceFromPi(
+      pi,
+    )
+  }
+  disabled={
+    creatingFinalInvoiceId ===
+      pi.id ||
+    loadingPiFinalInvoiceNumberId ===
+      pi.id
+  }
   className="mt-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
 >
-  {creatingFinalInvoiceId === pi.id
+  {creatingFinalInvoiceId ===
+  pi.id
     ? 'Creating...'
-    : 'Create Final Invoice'}
+    : loadingPiFinalInvoiceNumberId ===
+        pi.id
+      ? 'Loading Number...'
+      : 'Create Final Invoice'}
 </button>
+
+{piFinalInvoiceNumberState
+  ?.piId ===
+  pi.id && (
+  <div className="mt-3 rounded-xl border border-green-200 bg-green-50 p-3 text-left">
+    <p className="text-xs font-semibold text-gray-500">
+      Final Tax Invoice Number
+    </p>
+
+    {canEditInvoiceNumber ? (
+      <input
+        value={
+          piFinalInvoiceNumberState
+            .invoiceNumber
+        }
+        onChange={(e) =>
+          setPiFinalInvoiceNumberState(
+            {
+              ...piFinalInvoiceNumberState,
+
+              invoiceNumber:
+                e.target.value,
+            },
+          )
+        }
+        className="mt-2 w-full rounded-lg border bg-white px-3 py-2 text-sm font-semibold text-gray-800"
+      />
+    ) : (
+      <p className="mt-2 text-sm font-bold text-gray-800">
+        {
+          piFinalInvoiceNumberState
+            .invoiceNumber
+        }
+      </p>
+    )}
+
+    {canEditInvoiceNumber &&
+      piFinalInvoiceNumberState
+        .invoiceNumber !==
+        piFinalInvoiceNumberState
+          .suggestedInvoiceNumber && (
+        <p className="mt-1 text-xs font-semibold text-orange-600">
+          Auto number:{' '}
+          {
+            piFinalInvoiceNumberState
+              .suggestedInvoiceNumber
+          }
+        </p>
+      )}
+
+    <div className="mt-3 flex flex-wrap gap-2">
+      <button
+        type="button"
+        onClick={
+          confirmFinalInvoiceFromPi
+        }
+        disabled={
+          creatingFinalInvoiceId ===
+          pi.id
+        }
+        className="rounded-lg bg-green-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+      >
+        Generate Tax Invoice
+      </button>
+
+      <button
+        type="button"
+        onClick={() =>
+          setPiFinalInvoiceNumberState(
+            null,
+          )
+        }
+        className="rounded-lg bg-gray-600 px-3 py-2 text-xs font-semibold text-white"
+      >
+        Cancel
+      </button>
+    </div>
+  </div>
+)}
 
 <div className="mt-2 flex flex-wrap gap-2">
   <button
@@ -3079,6 +4600,11 @@ onChange={(e) =>
               {invoice.invoiceType === 'DEALER' ? (
   <p className="mt-1 text-sm text-gray-500">
     Dealer: {invoice.dealerName || '-'}
+  </p>
+) : invoice.invoiceType === 'INTER_COMPANY' ? (
+  <p className="mt-1 text-sm text-gray-500">
+    {invoice.sellerCompanyName || 'Seller'} →{' '}
+    {invoice.buyerCompanyName || 'Buyer Company'}
   </p>
 ) : (
   <p className="mt-1 text-sm text-gray-500">
