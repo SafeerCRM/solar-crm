@@ -26,17 +26,32 @@ type VendorCompany = {
   gstNumber?: string;
   panNumber?: string;
   email?: string;
-  phone?: string;
-  address?: string;
-  city?: string;
-  state?: string;
-  bankName?: string;
+phone?: string;
+alternatePhone?: string;
+
+address?: string;
+city?: string;
+state?: string;
+stateCode?: string;
+pinCode?: string;
+
+bankName?: string;
   bankAccountName?: string;
   bankAccountNumber?: string;
   bankIfsc?: string;
-  remarks?: string;
+upiId?: string;
+
+remarks?: string;
   isActive?: boolean;
   isHidden?: boolean;
+
+  isBillingEntity?: boolean;
+  billingEntityCode?: string;
+
+  invoicePrefix?: string;
+  nextInvoiceNumber?: number;
+
+  logoUrl?: string;
 };
 
 type Vendor = {
@@ -164,6 +179,15 @@ const initialCompanyForm = {
   bankIfsc: '',
   upiId: '',
   remarks: '',
+    stateCode: '',
+
+  isBillingEntity: false,
+  billingEntityCode: '',
+
+  invoicePrefix: '',
+  nextInvoiceNumber: '1',
+
+  logoUrl: '',
   isActive: true,
 };
 
@@ -503,6 +527,14 @@ const [
       overdueOnly: false,
     });
 
+    const [userRoles, setUserRoles] =
+  useState<string[]>([]);
+
+  const isOwner =
+  userRoles.includes(
+    'OWNER',
+  );
+
   const selectedVendorBills =
     useMemo(() => {
       return bills.filter(
@@ -781,6 +813,31 @@ const [
   }, []);
 
   useEffect(() => {
+  try {
+    const storedUser =
+      localStorage.getItem(
+        'user',
+      );
+
+    if (storedUser) {
+      const parsed =
+        JSON.parse(
+          storedUser,
+        );
+
+      setUserRoles(
+        parsed?.roles ||
+          [],
+      );
+    }
+  } catch (error) {
+    console.error(
+      error,
+    );
+  }
+}, []);
+
+  useEffect(() => {
     if (loading) {
       return;
     }
@@ -833,12 +890,21 @@ const [
       }
 
       try {
-        setSaving(true);
+  setSaving(true);
 
-        if (editingCompanyId) {
+  const payload: any = {
+    ...companyForm,
+  };
+
+  if (!isOwner) {
+    delete payload
+      .nextInvoiceNumber;
+  }
+
+  if (editingCompanyId) {
           await axios.patch(
             `${API_BASE_URL}/project/vendor-management/companies/${editingCompanyId}`,
-            companyForm,
+            payload,
             {
               headers:
                 getAuthHeaders(),
@@ -849,7 +915,7 @@ const [
         } else {
           await axios.post(
             `${API_BASE_URL}/project/vendor-management/companies`,
-            companyForm,
+            payload,
             {
               headers:
                 getAuthHeaders(),
@@ -901,14 +967,18 @@ const [
         company.email || '',
       phone:
         company.phone || '',
-      alternatePhone: '',
+      alternatePhone:
+  company.alternatePhone ||
+  '',
       address:
         company.address || '',
       city:
         company.city || '',
       state:
         company.state || '',
-      pinCode: '',
+      pinCode:
+  company.pinCode ||
+  '',
       bankName:
         company.bankName || '',
       bankAccountName:
@@ -919,9 +989,36 @@ const [
         '',
       bankIfsc:
         company.bankIfsc || '',
-      upiId: '',
+      upiId:
+  company.upiId ||
+  '',
       remarks:
         company.remarks || '',
+        stateCode:
+  company.stateCode ||
+  '',
+
+isBillingEntity:
+  company.isBillingEntity ===
+  true,
+
+billingEntityCode:
+  company.billingEntityCode ||
+  '',
+
+invoicePrefix:
+  company.invoicePrefix ||
+  '',
+
+nextInvoiceNumber:
+  String(
+    company.nextInvoiceNumber ||
+      1,
+  ),
+
+logoUrl:
+  company.logoUrl ||
+  '',
       isActive:
         company.isActive !== false,
     });
@@ -2182,6 +2279,177 @@ alert(
                 className="mt-3 w-full rounded-xl border p-3"
               />
 
+              <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+  <h3 className="font-bold text-gray-900">
+    Billing Configuration
+  </h3>
+
+  <p className="mt-1 text-sm text-gray-500">
+    Configure this firm as an issuing entity for Tax Invoices.
+  </p>
+
+  <label className="mt-4 flex items-center gap-3 rounded-xl border bg-white p-3">
+    <input
+      type="checkbox"
+      checked={
+        companyForm
+          .isBillingEntity
+      }
+      onChange={(event) =>
+        setCompanyForm({
+          ...companyForm,
+
+          isBillingEntity:
+            event.target
+              .checked,
+        })
+      }
+    />
+
+    <span className="text-sm font-semibold">
+      Billing Entity
+    </span>
+  </label>
+
+  {companyForm.isBillingEntity && (
+    <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      <input
+        placeholder="Billing Entity Code"
+        value={
+          companyForm
+            .billingEntityCode
+        }
+        onChange={(event) =>
+          setCompanyForm({
+            ...companyForm,
+
+            billingEntityCode:
+              event.target.value,
+          })
+        }
+        className="rounded-xl border bg-white p-3"
+      />
+
+      <input
+        placeholder="Invoice Prefix"
+        value={
+          companyForm
+            .invoicePrefix
+        }
+        onChange={(event) =>
+          setCompanyForm({
+            ...companyForm,
+
+            invoicePrefix:
+              event.target.value,
+          })
+        }
+        className="rounded-xl border bg-white p-3"
+      />
+
+      <div className="rounded-xl border bg-white p-3">
+        <p className="text-xs font-semibold text-gray-500">
+          Next Tax Invoice Number
+        </p>
+
+        {isOwner ? (
+          <input
+            type="number"
+            min="1"
+            value={
+              companyForm
+                .nextInvoiceNumber
+            }
+            onChange={(event) =>
+              setCompanyForm({
+                ...companyForm,
+
+                nextInvoiceNumber:
+                  event.target.value,
+              })
+            }
+            className="mt-1 w-full rounded-lg border px-3 py-2 font-semibold"
+          />
+        ) : (
+          <p className="mt-1 font-bold text-gray-800">
+            {
+              companyForm
+                .nextInvoiceNumber
+            }
+          </p>
+        )}
+
+        <p className="mt-1 text-xs text-gray-500">
+          Only Owner can change the running sequence.
+        </p>
+      </div>
+
+      <input
+        placeholder="Logo URL / Asset Path"
+        value={
+          companyForm.logoUrl
+        }
+        onChange={(event) =>
+          setCompanyForm({
+            ...companyForm,
+
+            logoUrl:
+              event.target.value,
+          })
+        }
+        className="rounded-xl border bg-white p-3"
+      />
+
+      <input
+        placeholder="State Code"
+        value={
+          companyForm
+            .stateCode
+        }
+        onChange={(event) =>
+          setCompanyForm({
+            ...companyForm,
+
+            stateCode:
+              event.target.value,
+          })
+        }
+        className="rounded-xl border bg-white p-3"
+      />
+    </div>
+  )}
+
+  <div className="mt-4 rounded-xl border border-green-200 bg-green-50 p-3">
+  <p className="text-xs font-semibold text-gray-500">
+    Current Tax Invoice Preview
+  </p>
+
+  <p className="mt-1 text-lg font-bold text-green-800">
+    {`${(
+      companyForm.invoicePrefix ||
+      companyForm.billingEntityCode ||
+      'INV'
+    ).toUpperCase()}/26-27/${String(
+      Math.max(
+        Number(
+          companyForm.nextInvoiceNumber ||
+            1,
+        ),
+        1,
+      ),
+    ).padStart(
+      3,
+      '0',
+    )}`}
+  </p>
+
+  <p className="mt-1 text-xs text-gray-500">
+    Financial year is generated automatically by backend.
+  </p>
+</div>
+
+</div>
+
               <textarea
                 placeholder="Remarks"
                 value={
@@ -2277,6 +2545,30 @@ alert(
                             {company.state ||
                               '-'}
                           </p>
+
+                          {company.isBillingEntity && (
+  <div className="mt-2 rounded-lg bg-blue-50 p-2">
+    <p className="text-xs font-bold text-blue-800">
+      Billing Entity
+    </p>
+
+    <p className="text-xs text-gray-600">
+      Code:{' '}
+      {company.billingEntityCode ||
+        '-'}
+      {' | '}
+      Prefix:{' '}
+      {company.invoicePrefix ||
+        '-'}
+    </p>
+
+    <p className="text-xs text-gray-600">
+      Next Tax Invoice:{' '}
+      {company.nextInvoiceNumber ||
+        1}
+    </p>
+  </div>
+)}
                         </div>
 
                         <div className="flex gap-2">
