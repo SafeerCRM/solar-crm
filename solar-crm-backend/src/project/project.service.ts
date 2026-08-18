@@ -20142,8 +20142,8 @@ if (
    */
 
   const sellerDisplayName =
-    sellerLegalName ||
-    sellerCompanyName;
+  sellerCompanyName ||
+  sellerLegalName;
 
   const sellerLocation =
     [
@@ -23427,8 +23427,8 @@ if (
     38;
 
   const sellerDisplayName =
-    sellerLegalName ||
-    sellerCompanyName;
+  sellerCompanyName ||
+  sellerLegalName;
 
   const sellerLocation =
     [
