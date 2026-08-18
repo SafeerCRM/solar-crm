@@ -42,7 +42,62 @@ export class ProjectVendorCompany {
   state: string;
 
   @Column({ nullable: true })
+  stateCode: string;
+
+  @Column({ nullable: true })
   pinCode: string;
+
+  /*
+   * Marks firms which can issue CRM invoices.
+   *
+   * Examples:
+   * - Aditya Solars
+   * - Aditya Trading
+   *
+   * Normal vendor companies do not need this enabled.
+   */
+  @Column({ default: false })
+  isBillingEntity: boolean;
+
+  /*
+   * Stable internal identifier for billing logic.
+   *
+   * Recommended:
+   * ADITYA_SOLARS
+   * ADITYA_TRADING
+   */
+  @Column({ nullable: true })
+  billingEntityCode: string;
+
+  /*
+   * Prefix used while generating Tax Invoice numbers.
+   *
+   * Example:
+   * AS
+   * AT
+   */
+  @Column({ nullable: true })
+  invoicePrefix: string;
+
+  /*
+   * The next sequential Tax Invoice number.
+   *
+   * Owner may adjust this from CRM settings later.
+   *
+   * Example:
+   * Aditya Solars -> 456
+   * Aditya Trading -> 1
+   */
+  @Column({ type: 'int', default: 1 })
+  nextInvoiceNumber: number;
+
+  /*
+   * Optional logo reference used by dynamic PDF templates.
+   *
+   * We will wire upload/selection in a later step.
+   */
+  @Column({ type: 'text', nullable: true })
+  logoUrl: string;
 
   @Column({ nullable: true })
   bankName: string;

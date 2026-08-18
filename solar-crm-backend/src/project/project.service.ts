@@ -355,6 +355,559 @@ private generateDealerOrderNumber() {
   return `DO-${Date.now()}`;
 }
 
+private getInvoiceFinancialYear(
+  value: Date = new Date(),
+) {
+  const indiaDateParts =
+    new Intl.DateTimeFormat(
+      'en-CA',
+      {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      },
+    )
+      .format(value)
+      .split('-');
+
+  const year = Number(
+    indiaDateParts[0] || 0,
+  );
+
+  const month = Number(
+    indiaDateParts[1] || 0,
+  );
+
+  const startYear =
+    month >= 4
+      ? year
+      : year - 1;
+
+  const endYear =
+    startYear + 1;
+
+  return `${String(startYear).slice(-2)}-${String(
+    endYear,
+  ).slice(-2)}`;
+}
+
+private normalizeBillingEntityCode(
+  value: any,
+) {
+  return String(
+    value || '',
+  )
+    .trim()
+    .toUpperCase()
+    .replace(
+      /[^A-Z0-9]+/g,
+      '_',
+    )
+    .replace(
+      /^_+|_+$/g,
+      '',
+    );
+}
+
+private normalizeInvoicePrefix(
+  value: any,
+) {
+  return String(
+    value || '',
+  )
+    .trim()
+    .toUpperCase()
+    .replace(
+      /[^A-Z0-9/-]/g,
+      '',
+    );
+}
+
+private formatBillingInvoiceNumber(
+  company:
+    ProjectVendorCompany,
+  sequence: number,
+  invoiceDate:
+    Date = new Date(),
+) {
+  const prefix =
+    this.normalizeInvoicePrefix(
+      company.invoicePrefix ||
+        company.billingEntityCode ||
+        'INV',
+    );
+
+  const financialYear =
+    this.getInvoiceFinancialYear(
+      invoiceDate,
+    );
+
+  return `${prefix}/${financialYear}/${sequence}`;
+}
+
+private async getBillingEntityOrFail(
+  companyId: number,
+) {
+  const normalizedId =
+    Number(companyId || 0);
+
+  if (
+    !Number.isInteger(
+      normalizedId,
+    ) ||
+    normalizedId <= 0
+  ) {
+    throw new BadRequestException(
+      'Valid issuing company is required',
+    );
+  }
+
+  const company =
+    await this
+      .projectVendorCompanyRepository
+      .findOne({
+        where: {
+          id: normalizedId,
+          isHidden: false,
+          isActive: true,
+          isBillingEntity: true,
+        } as any,
+      });
+
+  if (!company) {
+    throw new BadRequestException(
+      'Selected company is not an active billing entity',
+    );
+  }
+
+  if (
+    !String(
+      company.companyName || '',
+    ).trim()
+  ) {
+    throw new BadRequestException(
+      'Billing entity company name is missing',
+    );
+  }
+
+  if (
+    !String(
+      company.gstNumber || '',
+    ).trim()
+  ) {
+    throw new BadRequestException(
+      `GST number is missing for ${company.companyName}`,
+    );
+  }
+
+  if (
+    !String(
+      company.invoicePrefix || '',
+    ).trim()
+  ) {
+    throw new BadRequestException(
+      `Invoice prefix is missing for ${company.companyName}`,
+    );
+  }
+
+  return company;
+}
+
+private buildSellerCompanySnapshot(
+  company:
+    ProjectVendorCompany,
+) {
+  return {
+    sellerCompanyId:
+      Number(company.id),
+
+    sellerCompanyCode:
+      String(
+        company.billingEntityCode ||
+          '',
+      ),
+
+    sellerCompanyName:
+      String(
+        company.companyName ||
+          '',
+      ),
+
+    sellerLegalName:
+      String(
+        company.legalName ||
+          company.companyName ||
+          '',
+      ),
+
+    sellerGstNumber:
+      String(
+        company.gstNumber ||
+          '',
+      ),
+
+    sellerAddress:
+      String(
+        company.address ||
+          '',
+      ),
+
+    sellerCity:
+      String(
+        company.city ||
+          '',
+      ),
+
+    sellerState:
+      String(
+        company.state ||
+          '',
+      ),
+
+    sellerStateCode:
+      String(
+        company.stateCode ||
+          '',
+      ),
+
+    sellerPinCode:
+      String(
+        company.pinCode ||
+          '',
+      ),
+
+    sellerPhone:
+      String(
+        company.phone ||
+          '',
+      ),
+
+    sellerEmail:
+      String(
+        company.email ||
+          '',
+      ),
+
+    sellerLogoUrl:
+      String(
+        company.logoUrl ||
+          '',
+      ),
+  };
+}
+
+private buildBuyerCompanySnapshot(
+  company:
+    ProjectVendorCompany,
+) {
+  return {
+    buyerCompanyId:
+      Number(company.id),
+
+    buyerCompanyCode:
+      String(
+        company.billingEntityCode ||
+          '',
+      ),
+
+    buyerCompanyName:
+      String(
+        company.companyName ||
+          '',
+      ),
+
+    buyerLegalName:
+      String(
+        company.legalName ||
+          company.companyName ||
+          '',
+      ),
+
+    buyerGstNumber:
+      String(
+        company.gstNumber ||
+          '',
+      ),
+
+    buyerAddress:
+      String(
+        company.address ||
+          '',
+      ),
+
+    buyerCity:
+      String(
+        company.city ||
+          '',
+      ),
+
+    buyerState:
+      String(
+        company.state ||
+          '',
+      ),
+
+    buyerStateCode:
+      String(
+        company.stateCode ||
+          '',
+      ),
+
+    buyerPinCode:
+      String(
+        company.pinCode ||
+          '',
+      ),
+
+    buyerPhone:
+      String(
+        company.phone ||
+          '',
+      ),
+
+    buyerEmail:
+      String(
+        company.email ||
+          '',
+      ),
+  };
+}
+
+private assertDifferentBillingEntities(
+  seller:
+    ProjectVendorCompany,
+  buyer:
+    ProjectVendorCompany,
+) {
+  if (
+    Number(seller.id) ===
+    Number(buyer.id)
+  ) {
+    throw new BadRequestException(
+      'Seller and buyer cannot be the same company',
+    );
+  }
+}
+
+private isOwnerUser(
+  user: any,
+) {
+  return this
+    .getUserRoles(user)
+    .includes('OWNER');
+}
+
+private async reserveBillingInvoiceNumber(
+  companyId: number,
+  user: any,
+  requestedInvoiceNumber?: any,
+  invoiceDate:
+    Date = new Date(),
+) {
+  const requested =
+    String(
+      requestedInvoiceNumber ||
+        '',
+    ).trim();
+
+  return this
+    .projectVendorCompanyRepository
+    .manager
+    .transaction(
+      async (
+        manager,
+      ) => {
+        const company =
+          await manager
+            .getRepository(
+              ProjectVendorCompany,
+            )
+            .createQueryBuilder(
+              'company',
+            )
+            .setLock(
+              'pessimistic_write',
+            )
+            .where(
+              'company.id = :companyId',
+              {
+                companyId:
+                  Number(
+                    companyId,
+                  ),
+              },
+            )
+            .andWhere(
+              'company.isHidden = false',
+            )
+            .andWhere(
+              'company.isActive = true',
+            )
+            .andWhere(
+              'company.isBillingEntity = true',
+            )
+            .getOne();
+
+        if (!company) {
+          throw new BadRequestException(
+            'Selected issuing company is not an active billing entity',
+          );
+        }
+
+        const currentSequence =
+          Math.max(
+            Number(
+              company
+                .nextInvoiceNumber ||
+                1,
+            ),
+            1,
+          );
+
+        const suggested =
+          this
+            .formatBillingInvoiceNumber(
+              company,
+              currentSequence,
+              invoiceDate,
+            );
+
+        let finalInvoiceNumber =
+          suggested;
+
+        let overridden =
+          false;
+
+        if (
+          requested &&
+          requested !==
+            suggested
+        ) {
+          if (
+            !this.isOwnerUser(
+              user,
+            )
+          ) {
+            throw new ForbiddenException(
+              'Only Owner can override invoice number',
+            );
+          }
+
+          finalInvoiceNumber =
+            requested;
+
+          overridden = true;
+        }
+
+        const duplicate =
+          await manager
+            .getRepository(
+              ProjectFinalInvoice,
+            )
+            .createQueryBuilder(
+              'invoice',
+            )
+            .where(
+              'LOWER(TRIM(invoice.invoiceNumber)) = LOWER(TRIM(:invoiceNumber))',
+              {
+                invoiceNumber:
+                  finalInvoiceNumber,
+              },
+            )
+            .andWhere(
+              'invoice.isHidden = false',
+            )
+            .getOne();
+
+        if (duplicate) {
+          throw new BadRequestException(
+            `Invoice number ${finalInvoiceNumber} already exists`,
+          );
+        }
+
+        /*
+         * Sequence advances once a number
+         * has been reserved for generation.
+         *
+         * Even if Owner manually overrides
+         * the displayed invoice number,
+         * the company's normal automatic
+         * sequence still progresses by one.
+         */
+        company.nextInvoiceNumber =
+          currentSequence + 1;
+
+        await manager
+          .getRepository(
+            ProjectVendorCompany,
+          )
+          .save(
+            company,
+          );
+
+        return {
+          invoiceNumber:
+            finalInvoiceNumber,
+
+          suggestedInvoiceNumber:
+            suggested,
+
+          sequence:
+            currentSequence,
+
+          overridden,
+
+          company,
+        };
+      },
+    );
+}
+
+async getBillingInvoiceNumberPreview(
+  companyId: number,
+) {
+  const company =
+    await this.getBillingEntityOrFail(
+      companyId,
+    );
+
+  const sequence =
+    Math.max(
+      Number(
+        company.nextInvoiceNumber ||
+          1,
+      ),
+      1,
+    );
+
+  return {
+    companyId:
+      company.id,
+
+    companyName:
+      company.companyName,
+
+    billingEntityCode:
+      company.billingEntityCode ||
+      '',
+
+    invoicePrefix:
+      company.invoicePrefix ||
+      '',
+
+    nextInvoiceNumber:
+      sequence,
+
+    suggestedInvoiceNumber:
+      this.formatBillingInvoiceNumber(
+        company,
+        sequence,
+        new Date(),
+      ),
+  };
+}
+
 private getRequiredContractorProofTypesByScope(workScope: string) {
   if (workScope === ProjectContractorWorkScope.STRUCTURE_TEAM) {
     return [
@@ -17713,83 +18266,267 @@ async createProformaInvoice(
   body: any,
   user: any,
 ) {
-  const items = Array.isArray(body?.items)
-    ? body.items
-    : [];
+  const items =
+    Array.isArray(
+      body?.items,
+    )
+      ? body.items
+      : [];
 
-  if (!body?.projectId) {
-  throw new BadRequestException(
-    'Project ID is required',
-  );
-}
+  const projectId =
+    Number(
+      body?.projectId ||
+        0,
+    );
 
-  if (items.length === 0) {
+  if (
+    !Number.isInteger(
+      projectId,
+    ) ||
+    projectId <= 0
+  ) {
+    throw new BadRequestException(
+      'Project ID is required',
+    );
+  }
+
+  const project =
+    await this
+      .projectRepository
+      .findOne({
+        where: {
+          id:
+            projectId,
+        },
+      });
+
+  if (!project) {
+    throw new NotFoundException(
+      'Project not found',
+    );
+  }
+
+  if (
+    items.length === 0
+  ) {
     throw new BadRequestException(
       'At least one invoice item is required',
     );
   }
 
-  let subtotalAmount = 0;
-  let discountAmount = 0;
-  let gstAmount = 0;
-  let totalAmount = 0;
+  /*
+   * Seller is optional here temporarily
+   * for backwards compatibility with the
+   * existing Procurement "Generate PI" button.
+   *
+   * Once frontend seller selection is added,
+   * new PIs will carry seller snapshot.
+   */
+  const sellerCompanyId =
+  Number(
+    body?.sellerCompanyId ||
+      0,
+  );
 
-  const preparedItems: any[] = [];
+if (
+  !Number.isInteger(
+    sellerCompanyId,
+  ) ||
+  sellerCompanyId <= 0
+) {
+  throw new BadRequestException(
+    'Issuing company is required',
+  );
+}
 
-  for (const item of items) {
-    const sellingRate = Number(
-      item.sellingRate || 0,
+const sellerCompany =
+  await this
+    .getBillingEntityOrFail(
+      sellerCompanyId,
     );
 
-    const quantity = Number(
-      item.quantity || 0,
-    );
+  let subtotalAmount =
+    0;
 
-    const gstPercent = Number(
-      item.gstPercent || 0,
-    );
+  let discountAmount =
+    0;
 
-    const itemDiscount = Number(
-      item.discountAmount || 0,
-    );
+  let gstAmount =
+    0;
+
+  let totalAmount =
+    0;
+
+  const preparedItems:
+    any[] = [];
+
+  for (
+    const item of
+    items
+  ) {
+    const sellingRate =
+      Number(
+        item.sellingRate ||
+          0,
+      );
+
+    const quantity =
+      Number(
+        item.quantity ||
+          0,
+      );
+
+    const gstPercent =
+      Number(
+        item.gstPercent ||
+          0,
+      );
+
+    const itemDiscount =
+      Number(
+        item.discountAmount ||
+          0,
+      );
+
+    if (
+      !Number.isFinite(
+        quantity,
+      ) ||
+      quantity <= 0
+    ) {
+      throw new BadRequestException(
+        `Valid quantity is required for ${
+          item?.itemName ||
+          'invoice item'
+        }`,
+      );
+    }
+
+    if (
+      !Number.isFinite(
+        sellingRate,
+      ) ||
+      sellingRate < 0
+    ) {
+      throw new BadRequestException(
+        `Valid selling rate is required for ${
+          item?.itemName ||
+          'invoice item'
+        }`,
+      );
+    }
+
+    if (
+      !Number.isFinite(
+        gstPercent,
+      ) ||
+      gstPercent < 0
+    ) {
+      throw new BadRequestException(
+        `Valid GST percentage is required for ${
+          item?.itemName ||
+          'invoice item'
+        }`,
+      );
+    }
+
+    if (
+      !Number.isFinite(
+        itemDiscount,
+      ) ||
+      itemDiscount < 0
+    ) {
+      throw new BadRequestException(
+        `Invalid discount for ${
+          item?.itemName ||
+          'invoice item'
+        }`,
+      );
+    }
 
     const subtotal =
-      sellingRate * quantity;
+      sellingRate *
+      quantity;
+
+    if (
+      itemDiscount >
+      subtotal
+    ) {
+      throw new BadRequestException(
+        `Discount cannot exceed item value for ${
+          item?.itemName ||
+          'invoice item'
+        }`,
+      );
+    }
 
     const taxable =
-      subtotal - itemDiscount;
+      subtotal -
+      itemDiscount;
 
     const gst =
-      (taxable * gstPercent) / 100;
+      (
+        taxable *
+        gstPercent
+      ) /
+      100;
 
-    const total = taxable + gst;
+    const total =
+      taxable +
+      gst;
 
-    subtotalAmount += subtotal;
-    discountAmount += itemDiscount;
-    gstAmount += gst;
-    totalAmount += total;
+    subtotalAmount +=
+      subtotal;
+
+    discountAmount +=
+      itemDiscount;
+
+    gstAmount +=
+      gst;
+
+    totalAmount +=
+      total;
 
     preparedItems.push({
       ...item,
+
       sellingRate,
+
       quantity,
+
       gstPercent,
-      discountAmount: itemDiscount,
-      subtotalAmount: subtotal,
-      gstAmount: gst,
-      totalAmount: total,
+
+      discountAmount:
+        itemDiscount,
+
+      subtotalAmount:
+        subtotal,
+
+      gstAmount:
+        gst,
+
+      totalAmount:
+        total,
     });
   }
 
-  const invoice =
-    this.projectProformaInvoiceRepository.create({
-      projectId: Number(body.projectId),
+  const invoicePayload:
+    Partial<ProjectProformaInvoice> =
+    {
+      projectId,
+
+      invoiceType:
+        'PROJECT',
+
+      buyerType:
+        'PROJECT' as any,
 
       invoiceNumber:
         this.generatePiNumber(),
 
       status:
-        ProjectProformaInvoiceStatus.DRAFT,
+        ProjectProformaInvoiceStatus
+          .DRAFT,
 
       subtotalAmount,
 
@@ -17799,98 +18536,162 @@ async createProformaInvoice(
 
       totalAmount,
 
-      invoiceDate: body.invoiceDate
-        ? new Date(body.invoiceDate)
-        : new Date(),
+      invoiceDate:
+        body?.invoiceDate
+          ? new Date(
+              body.invoiceDate,
+            )
+          : new Date(),
 
-      validUntil: body.validUntil
-        ? new Date(body.validUntil)
-        : null,
+      validUntil:
+        body?.validUntil
+          ? new Date(
+              body.validUntil,
+            )
+          : undefined,
 
-      remarks: body.remarks || '',
-
-      createdBy:
-        user?.id || user?.userId || null,
-
-      createdByName:
-        user?.name || '',
-
-      createdByRole:
-        Array.isArray(user?.roles)
-          ? user.roles.join(', ')
-          : '',
-    } as Partial<ProjectProformaInvoice>);
-
-  const savedInvoice =
-    await this.projectProformaInvoiceRepository.save(
-      invoice as ProjectProformaInvoice,
-    );
-
-  const invoiceItems =
-    preparedItems.map((item) =>
-      this.projectProformaInvoiceItemRepository.create({
-        proformaInvoiceId:
-          savedInvoice.id,
-
-        projectId: Number(
-          body.projectId,
+      remarks:
+        String(
+          body?.remarks ||
+            '',
         ),
 
-        materialId:
-          item.materialId
-            ? Number(item.materialId)
-            : null,
+      createdBy:
+        user?.id ||
+        user?.userId ||
+        user?.sub ||
+        undefined,
 
-        itemName:
-          item.itemName || '',
+      createdByName:
+        user?.name ||
+        user?.email ||
+        '',
 
-        category:
-          item.category || '',
+      createdByRole:
+        this
+          .getUserRoles(
+            user,
+          )
+          .join(
+            ', ',
+          ),
+    };
 
-        brand:
-          item.brand || '',
+  Object.assign(
+  invoicePayload,
+  this
+    .buildSellerCompanySnapshot(
+      sellerCompany,
+    ),
+);
 
-        unit:
-          item.unit || '',
+  const invoice =
+    this
+      .projectProformaInvoiceRepository
+      .create(
+        invoicePayload,
+      );
 
-          hsnCode:
-  item.hsnCode || '',
+  const savedInvoice:
+    ProjectProformaInvoice =
+    await this
+      .projectProformaInvoiceRepository
+      .save(
+        invoice,
+      );
 
-        sellingRate:
-          item.sellingRate,
+  const invoiceItems =
+    preparedItems.map(
+      (
+        item: any,
+      ) =>
+        this
+          .projectProformaInvoiceItemRepository
+          .create({
+            proformaInvoiceId:
+              savedInvoice.id,
 
-        gstPercent:
-          item.gstPercent,
+            projectId,
 
-        quantity:
-          item.quantity,
+            materialId:
+              item.materialId
+                ? Number(
+                    item
+                      .materialId,
+                  )
+                : undefined,
 
-        discountAmount:
-          item.discountAmount,
+            itemName:
+              String(
+                item.itemName ||
+                  '',
+              ),
 
-        subtotalAmount:
-          item.subtotalAmount,
+            category:
+              String(
+                item.category ||
+                  '',
+              ),
 
-        gstAmount:
-          item.gstAmount,
+            brand:
+              String(
+                item.brand ||
+                  '',
+              ),
 
-        totalAmount:
-          item.totalAmount,
+            unit:
+              String(
+                item.unit ||
+                  '',
+              ),
 
-        remarks:
-          item.remarks || '',
-      } as Partial<ProjectProformaInvoiceItem>),
+            hsnCode:
+              String(
+                item.hsnCode ||
+                  '',
+              ),
+
+            sellingRate:
+              item.sellingRate,
+
+            gstPercent:
+              item.gstPercent,
+
+            quantity:
+              item.quantity,
+
+            discountAmount:
+              item.discountAmount,
+
+            subtotalAmount:
+              item.subtotalAmount,
+
+            gstAmount:
+              item.gstAmount,
+
+            totalAmount:
+              item.totalAmount,
+
+            remarks:
+              String(
+                item.remarks ||
+                  '',
+              ),
+          } as Partial<ProjectProformaInvoiceItem>),
     );
 
-  await this.projectProformaInvoiceItemRepository.save(
-    invoiceItems,
-  );
+  await this
+    .projectProformaInvoiceItemRepository
+    .save(
+      invoiceItems,
+    );
 
   return {
     message:
       'Proforma invoice created successfully',
 
-    invoice: savedInvoice,
+    invoice:
+      savedInvoice,
   };
 }
 
@@ -18038,240 +18839,775 @@ async createManualProformaInvoice(
   body: any,
   currentUser: any,
 ) {
-  const projectId = body?.projectId ? Number(body.projectId) : null;
-  const dealerId = body?.dealerId ? Number(body.dealerId) : null;
+  const projectId =
+    body?.projectId
+      ? Number(
+          body.projectId,
+        )
+      : 0;
 
-  if (!projectId && !dealerId) {
+  const dealerId =
+    body?.dealerId
+      ? Number(
+          body.dealerId,
+        )
+      : 0;
+
+  const buyerCompanyId =
+    body?.buyerCompanyId
+      ? Number(
+          body.buyerCompanyId,
+        )
+      : 0;
+
+  const sellerCompanyId =
+    body?.sellerCompanyId
+      ? Number(
+          body.sellerCompanyId,
+        )
+      : 0;
+
+  const invoiceType =
+    String(
+      body?.invoiceType ||
+        (
+          buyerCompanyId
+            ? 'INTER_COMPANY'
+            : dealerId
+              ? 'DEALER'
+              : 'PROJECT'
+        ),
+    )
+      .trim()
+      .toUpperCase();
+
+  if (
+    ![
+      'PROJECT',
+      'DEALER',
+      'INTER_COMPANY',
+    ].includes(
+      invoiceType,
+    )
+  ) {
     throw new BadRequestException(
-      'Please select either Project or Dealer',
+      'Invalid proforma invoice type',
     );
   }
 
-  let dealer: ProjectVendor | null = null;
+  /*
+   * =========================================================
+   * BUYER VALIDATION
+   * =========================================================
+   */
 
-  if (dealerId) {
-    dealer = await this.projectVendorRepository.findOne({
-      where: { id: dealerId },
-    });
+  let project:
+    Project | null =
+    null;
 
-    if (!dealer) {
-      throw new NotFoundException('Dealer not found');
+  let dealer:
+    ProjectVendor | null =
+    null;
+
+  let buyerCompany:
+    ProjectVendorCompany | null =
+    null;
+
+  if (
+    invoiceType ===
+    'PROJECT'
+  ) {
+    if (
+      !Number.isInteger(
+        projectId,
+      ) ||
+      projectId <= 0
+    ) {
+      throw new BadRequestException(
+        'Please select Project',
+      );
     }
 
-    if ((dealer as any).canBuyFromUs !== true) {
-      throw new BadRequestException(
-        'Selected party is not marked as dealer/customer buyer',
+    project =
+      await this
+        .projectRepository
+        .findOne({
+          where: {
+            id:
+              projectId,
+          },
+        });
+
+    if (!project) {
+      throw new NotFoundException(
+        'Project not found',
       );
     }
   }
 
-  const items = Array.isArray(body?.items)
-    ? body.items
-    : [];
+  if (
+    invoiceType ===
+    'DEALER'
+  ) {
+    if (
+      !Number.isInteger(
+        dealerId,
+      ) ||
+      dealerId <= 0
+    ) {
+      throw new BadRequestException(
+        'Please select Dealer',
+      );
+    }
 
-  if (items.length === 0) {
+    dealer =
+      await this
+        .projectVendorRepository
+        .findOne({
+          where: {
+            id:
+              dealerId,
+          },
+        });
+
+    if (!dealer) {
+      throw new NotFoundException(
+        'Dealer not found',
+      );
+    }
+
+    const canBuyFromUs =
+      (dealer as any)
+        .canBuyFromUs ===
+        true;
+
+    const partyType =
+      String(
+        (dealer as any)
+          .partyType ||
+          '',
+      )
+        .trim()
+        .toUpperCase();
+
+    if (
+      !canBuyFromUs &&
+      partyType !==
+        'DEALER' &&
+      partyType !==
+        'BOTH'
+    ) {
+      throw new BadRequestException(
+        'Selected party is not configured as dealer/customer buyer',
+      );
+    }
+  }
+
+  if (
+    invoiceType ===
+    'INTER_COMPANY'
+  ) {
+    if (
+      !buyerCompanyId
+    ) {
+      throw new BadRequestException(
+        'Please select buyer company',
+      );
+    }
+
+    buyerCompany =
+      await this
+        .getBillingEntityOrFail(
+          buyerCompanyId,
+        );
+  }
+
+  /*
+   * =========================================================
+   * SELLER
+   * =========================================================
+   *
+   * New Dealer and Inter-Company PIs MUST
+   * explicitly specify seller.
+   *
+   * PROJECT remains backward-compatible
+   * because old project PI buttons do not
+   * yet send sellerCompanyId.
+   */
+
+  let sellerCompany:
+    ProjectVendorCompany | null =
+    null;
+
+  if (
+  !sellerCompanyId
+) {
+  throw new BadRequestException(
+    'Issuing company is required',
+  );
+}
+
+sellerCompany =
+  await this
+    .getBillingEntityOrFail(
+      sellerCompanyId,
+    );
+
+  if (
+    invoiceType ===
+      'INTER_COMPANY' &&
+    sellerCompany &&
+    buyerCompany
+  ) {
+    this
+      .assertDifferentBillingEntities(
+        sellerCompany,
+        buyerCompany,
+      );
+  }
+
+  /*
+   * =========================================================
+   * ITEMS
+   * =========================================================
+   */
+
+  const items =
+    Array.isArray(
+      body?.items,
+    )
+      ? body.items
+      : [];
+
+  if (
+    items.length === 0
+  ) {
     throw new BadRequestException(
       'At least one item is required',
     );
   }
 
-  let subtotalAmount = 0;
-  let discountAmount = 0;
-  let gstAmount = 0;
-  let totalAmount = 0;
+  let subtotalAmount =
+    0;
 
-  for (const item of items) {
-    const quantity = Number(item.quantity || 0);
-    const sellingRate = Number(item.sellingRate || 0);
-    const gstPercent = Number(item.gstPercent || 0);
-    const rowDiscount = Number(item.discountAmount || 0);
+  let discountAmount =
+    0;
 
-    const rowSubtotal = quantity * sellingRate;
-    const taxableAmount = rowSubtotal - rowDiscount;
-    const rowGst = (taxableAmount * gstPercent) / 100;
-    const rowTotal = taxableAmount + rowGst;
+  let gstAmount =
+    0;
 
-    subtotalAmount += rowSubtotal;
-    discountAmount += rowDiscount;
-    gstAmount += rowGst;
-    totalAmount += rowTotal;
+  let totalAmount =
+    0;
+
+  const preparedItems:
+    any[] = [];
+
+  for (
+    const item of
+    items
+  ) {
+    const quantity =
+      Number(
+        item.quantity ||
+          0,
+      );
+
+    const sellingRate =
+      Number(
+        item.sellingRate ||
+          0,
+      );
+
+    const gstPercent =
+      Number(
+        item.gstPercent ||
+          0,
+      );
+
+    const rowDiscount =
+      Number(
+        item.discountAmount ||
+          0,
+      );
+
+    if (
+      !Number.isFinite(
+        quantity,
+      ) ||
+      quantity <= 0
+    ) {
+      throw new BadRequestException(
+        `Valid quantity is required for ${
+          item?.itemName ||
+          'invoice item'
+        }`,
+      );
+    }
+
+    if (
+      !Number.isFinite(
+        sellingRate,
+      ) ||
+      sellingRate < 0
+    ) {
+      throw new BadRequestException(
+        `Valid selling rate is required for ${
+          item?.itemName ||
+          'invoice item'
+        }`,
+      );
+    }
+
+    if (
+      !Number.isFinite(
+        gstPercent,
+      ) ||
+      gstPercent < 0
+    ) {
+      throw new BadRequestException(
+        `Valid GST percentage is required for ${
+          item?.itemName ||
+          'invoice item'
+        }`,
+      );
+    }
+
+    if (
+      !Number.isFinite(
+        rowDiscount,
+      ) ||
+      rowDiscount < 0
+    ) {
+      throw new BadRequestException(
+        `Invalid discount for ${
+          item?.itemName ||
+          'invoice item'
+        }`,
+      );
+    }
+
+    const rowSubtotal =
+      quantity *
+      sellingRate;
+
+    if (
+      rowDiscount >
+      rowSubtotal
+    ) {
+      throw new BadRequestException(
+        `Discount cannot exceed item value for ${
+          item?.itemName ||
+          'invoice item'
+        }`,
+      );
+    }
+
+    const taxableAmount =
+      rowSubtotal -
+      rowDiscount;
+
+    const rowGst =
+      (
+        taxableAmount *
+        gstPercent
+      ) /
+      100;
+
+    const rowTotal =
+      taxableAmount +
+      rowGst;
+
+    subtotalAmount +=
+      rowSubtotal;
+
+    discountAmount +=
+      rowDiscount;
+
+    gstAmount +=
+      rowGst;
+
+    totalAmount +=
+      rowTotal;
+
+    preparedItems.push({
+      ...item,
+
+      quantity,
+
+      sellingRate,
+
+      gstPercent,
+
+      discountAmount:
+        rowDiscount,
+
+      subtotalAmount:
+        rowSubtotal,
+
+      gstAmount:
+        rowGst,
+
+      totalAmount:
+        rowTotal,
+    });
   }
 
-  const invoice: any =
-    this.projectProformaInvoiceRepository.create({
-      projectId: projectId || undefined,
+  /*
+   * Resolve HSN from Material Master where
+   * frontend did not send one.
+   */
 
-      invoiceNumber: this.generatePiNumber(),
+  const materialIds =
+    preparedItems
+      .map(
+        (
+          item: any,
+        ) =>
+          Number(
+            item.materialId ||
+              0,
+          ),
+      )
+      .filter(
+        (
+          id: number,
+        ) =>
+          id > 0,
+      );
+
+  const matchedMaterials =
+    materialIds.length
+      ? await this
+          .projectMaterialMasterRepository
+          .find({
+            where: {
+              id:
+                In(
+                  materialIds,
+                ),
+            },
+          })
+      : [];
+
+  const materialHsnById =
+    new Map<
+      number,
+      string
+    >(
+      matchedMaterials.map(
+        (
+          material: any,
+        ) => [
+          Number(
+            material.id,
+          ),
+
+          String(
+            material.hsnCode ||
+              '',
+          ).trim(),
+        ],
+      ),
+    );
+
+  /*
+   * =========================================================
+   * PI HEADER
+   * =========================================================
+   */
+
+  const invoicePayload:
+    Partial<ProjectProformaInvoice> =
+    {
+      projectId:
+        invoiceType ===
+          'PROJECT'
+          ? projectId
+          : undefined,
+
+      /*
+       * PI numbering remains separate from
+       * statutory Final Tax Invoice numbering.
+       */
+      invoiceNumber:
+        this.generatePiNumber(),
+
+      invoiceType,
+
+      buyerType:
+        (
+          invoiceType ===
+          'INTER_COMPANY'
+            ? 'INTERNAL_COMPANY'
+            : invoiceType
+        ) as any,
 
       subtotalAmount,
+
       discountAmount,
+
       gstAmount,
+
       totalAmount,
 
-      status: ProjectProformaInvoiceStatus.DRAFT,
+      status:
+        ProjectProformaInvoiceStatus
+          .DRAFT,
 
-      invoiceDate: new Date(),
+      invoiceDate:
+        body?.invoiceDate
+          ? new Date(
+              body.invoiceDate,
+            )
+          : new Date(),
 
-      remarks: body?.remarks || '',
+      validUntil:
+        body?.validUntil
+          ? new Date(
+              body.validUntil,
+            )
+          : undefined,
+
+      remarks:
+        String(
+          body?.remarks ||
+            '',
+        ),
 
       createdBy:
         currentUser?.id ||
-        currentUser?.userId ||
-        null,
+        currentUser
+          ?.userId ||
+        currentUser?.sub ||
+        undefined,
 
       createdByName:
-        currentUser?.name || '',
-    } as Partial<ProjectProformaInvoice>);
+        currentUser?.name ||
+        currentUser?.email ||
+        '',
 
-  invoice.invoiceType = dealerId ? 'DEALER' : 'PROJECT';
-  invoice.dealerId = dealer?.id || undefined;
-  invoice.dealerName = dealer?.vendorName || '';
-  invoice.dealerPhone = (dealer as any)?.phone || '';
-  invoice.dealerGstNumber = (dealer as any)?.gstNumber || '';
-  invoice.dealerAddress = (dealer as any)?.address || '';
+      createdByRole:
+        this
+          .getUserRoles(
+            currentUser,
+          )
+          .join(
+            ', ',
+          ),
+    };
 
-  const savedInvoice =
-    await this.projectProformaInvoiceRepository.save(
-      invoice as ProjectProformaInvoice,
+  /*
+   * Seller snapshot.
+   */
+  if (
+    sellerCompany
+  ) {
+    Object.assign(
+      invoicePayload,
+      this
+        .buildSellerCompanySnapshot(
+          sellerCompany,
+        ),
+    );
+  }
+
+  /*
+   * Dealer buyer snapshot.
+   */
+  if (
+    invoiceType ===
+      'DEALER' &&
+    dealer
+  ) {
+    invoicePayload
+      .dealerId =
+      Number(
+        dealer.id,
+      );
+
+    invoicePayload
+      .dealerName =
+      String(
+        dealer.vendorName ||
+          '',
+      );
+
+    invoicePayload
+      .dealerPhone =
+      String(
+        (dealer as any)
+          .phone ||
+          '',
+      );
+
+    invoicePayload
+      .dealerGstNumber =
+      String(
+        (dealer as any)
+          .gstNumber ||
+          '',
+      );
+
+    invoicePayload
+      .dealerAddress =
+      String(
+        (dealer as any)
+          .address ||
+          '',
+      );
+  }
+
+  /*
+   * Internal company buyer snapshot.
+   */
+  if (
+    invoiceType ===
+      'INTER_COMPANY' &&
+    buyerCompany
+  ) {
+    Object.assign(
+      invoicePayload,
+      this
+        .buildBuyerCompanySnapshot(
+          buyerCompany,
+        ),
+    );
+  }
+
+  const invoice =
+    this
+      .projectProformaInvoiceRepository
+      .create(
+        invoicePayload,
+      );
+
+  const savedInvoice:
+    ProjectProformaInvoice =
+    await this
+      .projectProformaInvoiceRepository
+      .save(
+        invoice,
+      );
+
+  /*
+   * =========================================================
+   * PI ITEMS
+   * =========================================================
+   */
+
+  const invoiceItems =
+    preparedItems.map(
+      (
+        item: any,
+      ) => {
+        const resolvedHsnCode =
+          String(
+            item.hsnCode ||
+              '',
+          ).trim() ||
+          materialHsnById.get(
+            Number(
+              item.materialId ||
+                0,
+            ),
+          ) ||
+          '';
+
+        return this
+          .projectProformaInvoiceItemRepository
+          .create({
+            proformaInvoiceId:
+              savedInvoice.id,
+
+            projectId:
+              invoiceType ===
+                'PROJECT'
+                ? projectId
+                : undefined,
+
+            materialId:
+              item.materialId
+                ? Number(
+                    item
+                      .materialId,
+                  )
+                : undefined,
+
+            itemName:
+              String(
+                item.itemName ||
+                  '',
+              ),
+
+            category:
+              String(
+                item.category ||
+                  '',
+              ),
+
+            brand:
+              String(
+                item.brand ||
+                  '',
+              ),
+
+            unit:
+              String(
+                item.unit ||
+                  '',
+              ),
+
+            hsnCode:
+              resolvedHsnCode,
+
+            sellingRate:
+              item.sellingRate,
+
+            gstPercent:
+              item.gstPercent,
+
+            quantity:
+              item.quantity,
+
+            discountAmount:
+              item.discountAmount,
+
+            subtotalAmount:
+              item.subtotalAmount,
+
+            gstAmount:
+              item.gstAmount,
+
+            totalAmount:
+              item.totalAmount,
+
+            remarks:
+              String(
+                item.remarks ||
+                  '',
+              ),
+          } as Partial<ProjectProformaInvoiceItem>);
+      },
     );
 
-    const materialIds = items
-  .map((item: any) => Number(item.materialId || 0))
-  .filter((id: number) => id > 0);
-
-const matchedMaterialsById = materialIds.length
-  ? await this.projectMaterialMasterRepository.find({
-      where: {
-        id: In(materialIds),
-      },
-    })
-  : [];
-
-const materialHsnById = new Map(
-  matchedMaterialsById.map((material: any) => [
-    Number(material.id),
-    String((material as any).hsnCode || '').trim(),
-  ]),
-);
-
-console.log('MANUAL_PI_HSN_DEBUG', {
-  materialIds,
-  matchedMaterialsById,
-  materialHsnById: Array.from(
-    materialHsnById.entries(),
-  ),
-});
-
-console.log(
-  'PI_ENTITY_COLUMNS',
-  this.projectProformaInvoiceItemRepository.metadata.columns.map(
-    (c) => c.propertyName,
-  ),
-);
-
-  const invoiceItems = items.map(
-    (item: any) => {
-      const quantity = Number(item.quantity || 0);
-      const sellingRate = Number(item.sellingRate || 0);
-      const gstPercent = Number(item.gstPercent || 0);
-      const rowDiscount = Number(item.discountAmount || 0);
-
-      const rowSubtotal = quantity * sellingRate;
-      const taxableAmount = rowSubtotal - rowDiscount;
-      const rowGst = (taxableAmount * gstPercent) / 100;
-      const rowTotal = taxableAmount + rowGst;
-
-      const resolvedHsnCode =
-  String(item.hsnCode || '').trim() ||
-  materialHsnById.get(Number(item.materialId || 0)) ||
-  '';
-
-console.log('RESOLVED_HSN', {
-  materialId: item.materialId,
-  resolvedHsnCode,
-});
-
-      return this.projectProformaInvoiceItemRepository.create(
-        {
-          proformaInvoiceId: savedInvoice.id,
-          projectId: projectId || undefined,
-
-          materialId:
-            item.materialId
-              ? Number(item.materialId)
-              : undefined,
-
-          itemName:
-            item.itemName || '',
-
-          category:
-            item.category || '',
-
-          brand:
-            item.brand || '',
-
-          unit:
-            item.unit || '',
-
-          sellingRate,
-          gstPercent,
-          quantity,
-
-          discountAmount:
-            rowDiscount,
-
-            hsnCode: resolvedHsnCode,
-
-          subtotalAmount:
-            rowSubtotal,
-
-          gstAmount:
-            rowGst,
-
-          totalAmount:
-            rowTotal,
-
-          remarks:
-            item.remarks || '',
-        } as Partial<ProjectProformaInvoiceItem>,
-      );
-    },
-  );
-
-  console.log(
-  'MANUAL_PI_SAVE_ITEMS',
-  JSON.stringify(invoiceItems, null, 2),
-);
-
-  console.log(
-  'MANUAL_PI_SAVE_ITEMS',
-  invoiceItems.map((i: any) => ({
-    materialId: i.materialId,
-    hsnCode: i.hsnCode,
-    itemName: i.itemName,
-  })),
-);
-
-const savedItems =
-  await this.projectProformaInvoiceItemRepository.save(
-    invoiceItems as ProjectProformaInvoiceItem[],
-  );
-
-console.log(
-  'MANUAL_PI_SAVED_ITEMS',
-  savedItems.map((i: any) => ({
-    id: i.id,
-    materialId: i.materialId,
-    hsnCode: i.hsnCode,
-    itemName: i.itemName,
-  })),
-);
+  await this
+    .projectProformaInvoiceItemRepository
+    .save(
+      invoiceItems,
+    );
 
   return {
     message:
-      'Manual proforma invoice created successfully',
+      invoiceType ===
+      'INTER_COMPANY'
+        ? 'Inter-company proforma invoice created successfully'
+        : invoiceType ===
+            'DEALER'
+          ? 'Dealer proforma invoice created successfully'
+          : 'Manual proforma invoice created successfully',
 
-    invoice: savedInvoice,
+    invoice:
+      savedInvoice,
   };
 }
 
@@ -18326,424 +19662,1501 @@ async generateProformaInvoicePdf(
   id: number,
   res: Response,
 ) {
-  const pi = await this.getProformaInvoiceById(id);
+  const pi =
+    await this.getProformaInvoiceById(
+      id,
+    );
+
+  const invoiceType =
+    String(
+      (pi as any).invoiceType ||
+        (
+          (pi as any).buyerCompanyId
+            ? 'INTER_COMPANY'
+            : (pi as any).dealerId
+              ? 'DEALER'
+              : 'PROJECT'
+        ),
+    )
+      .trim()
+      .toUpperCase();
 
   const isDealerInvoice =
-    (pi as any).invoiceType === 'DEALER' ||
-    !!(pi as any).dealerId;
+    invoiceType ===
+    'DEALER';
 
-  const project = !isDealerInvoice && pi.projectId
-    ? await this.projectRepository.findOne({
-        where: { id: Number(pi.projectId) },
-      })
-    : null;
+  const isInterCompanyInvoice =
+    invoiceType ===
+    'INTER_COMPANY';
 
-  const doc = new PDFDocument({
-    margin: 40,
-    size: 'A4',
-  });
+  const isProjectInvoice =
+    invoiceType ===
+    'PROJECT';
 
-  const logoPath = path.join(
-    process.cwd(),
-    'src',
-    'assets',
-    'aditya-logo.jpg',
+  const project =
+    isProjectInvoice &&
+    pi.projectId
+      ? await this
+          .projectRepository
+          .findOne({
+            where: {
+              id:
+                Number(
+                  pi.projectId,
+                ),
+            },
+          })
+      : null;
+
+  /*
+   * =========================================================
+   * SELLER SNAPSHOT
+   * =========================================================
+   *
+   * New invoices use stored snapshot.
+   *
+   * Legacy invoices created before multi-entity
+   * support may have blank seller fields.
+   */
+
+  const sellerCompanyName =
+  String(
+    (pi as any)
+      .sellerCompanyName ||
+      '',
+  ).trim();
+
+const sellerLegalName =
+  String(
+    (pi as any)
+      .sellerLegalName ||
+      sellerCompanyName,
+  ).trim();
+
+const sellerGstNumber =
+  String(
+    (pi as any)
+      .sellerGstNumber ||
+      '',
+  ).trim();
+
+const sellerAddress =
+  String(
+    (pi as any)
+      .sellerAddress ||
+      '',
+  ).trim();
+
+const sellerCity =
+  String(
+    (pi as any)
+      .sellerCity ||
+      '',
+  ).trim();
+
+const sellerState =
+  String(
+    (pi as any)
+      .sellerState ||
+      '',
+  ).trim();
+
+const sellerPinCode =
+  String(
+    (pi as any)
+      .sellerPinCode ||
+      '',
+  ).trim();
+
+const sellerPhone =
+  String(
+    (pi as any)
+      .sellerPhone ||
+      '',
+  ).trim();
+
+const sellerEmail =
+  String(
+    (pi as any)
+      .sellerEmail ||
+      '',
+  ).trim();
+
+const sellerLogoUrl =
+  String(
+    (pi as any)
+      .sellerLogoUrl ||
+      '',
+  ).trim();
+
+if (
+  !sellerCompanyName ||
+  !sellerGstNumber
+) {
+  throw new BadRequestException(
+    'Seller company snapshot is missing from this proforma invoice',
   );
+}
 
-  const fileName = `${pi.invoiceNumber || `PI-${pi.id}`}.pdf`;
+  /*
+   * =========================================================
+   * BUYER SNAPSHOT
+   * =========================================================
+   */
+
+  let buyerName =
+    '-';
+
+  let buyerPhone =
+    '-';
+
+  let buyerGstNumber =
+    '-';
+
+  let buyerAddress =
+    '-';
+
+  if (
+    isDealerInvoice
+  ) {
+    buyerName =
+      String(
+        (pi as any)
+          .dealerName ||
+          '-',
+      );
+
+    buyerPhone =
+      String(
+        (pi as any)
+          .dealerPhone ||
+          '-',
+      );
+
+    buyerGstNumber =
+      String(
+        (pi as any)
+          .dealerGstNumber ||
+          '-',
+      );
+
+    buyerAddress =
+      String(
+        (pi as any)
+          .dealerAddress ||
+          '-',
+      );
+  }
+
+  if (
+    isInterCompanyInvoice
+  ) {
+    buyerName =
+      String(
+        (pi as any)
+          .buyerLegalName ||
+          (pi as any)
+            .buyerCompanyName ||
+          '-',
+      );
+
+    buyerPhone =
+      String(
+        (pi as any)
+          .buyerPhone ||
+          '-',
+      );
+
+    buyerGstNumber =
+      String(
+        (pi as any)
+          .buyerGstNumber ||
+          '-',
+      );
+
+    const companyAddressParts =
+      [
+        String(
+          (pi as any)
+            .buyerAddress ||
+            '',
+        ).trim(),
+
+        String(
+          (pi as any)
+            .buyerCity ||
+            '',
+        ).trim(),
+
+        String(
+          (pi as any)
+            .buyerState ||
+            '',
+        ).trim(),
+
+        String(
+          (pi as any)
+            .buyerPinCode ||
+            '',
+        ).trim(),
+      ].filter(
+        Boolean,
+      );
+
+    buyerAddress =
+      companyAddressParts
+        .join(', ') ||
+      '-';
+  }
+
+  if (
+    isProjectInvoice
+  ) {
+    buyerName =
+      String(
+        (project as any)
+          ?.customerName ||
+          '-',
+      );
+
+    buyerPhone =
+      String(
+        (project as any)
+          ?.customerPhone ||
+          '-',
+      );
+
+    buyerGstNumber =
+      String(
+        (project as any)
+          ?.gstNumber ||
+          '-',
+      );
+
+    buyerAddress =
+      String(
+        (project as any)
+          ?.address ||
+          (project as any)
+            ?.gpsAddress ||
+          '-',
+      );
+  }
+
+  const doc =
+    new PDFDocument({
+      margin:
+        40,
+
+      size:
+        'A4',
+    });
+
+
+  const fileName =
+    `${
+      pi.invoiceNumber ||
+      `PI-${pi.id}`
+    }.pdf`;
 
   res.setHeader(
     'Content-Disposition',
     `inline; filename="${fileName}"`,
   );
 
-  res.setHeader('Content-Type', 'application/pdf');
-
-  doc.pipe(res);
-
-  const pageLeft = 40;
-  const pageRight = 555;
-  const pageWidth = pageRight - pageLeft;
-
-  const blue = '#1e40af';
-  const orange = '#f97316';
-  const lightBlue = '#eff6ff';
-  const lightOrange = '#fff7ed';
-  const border = '#d1d5db';
-  const dark = '#111827';
-  const muted = '#6b7280';
-
-  const invoiceDate = pi.invoiceDate
-    ? new Date(pi.invoiceDate).toLocaleDateString('en-IN')
-    : new Date(pi.createdAt).toLocaleDateString('en-IN');
-
-  // Logo unchanged: same image, same fit, same width.
-  doc.image(logoPath, 40, 20, {
-    fit: [515, 110],
-    align: 'center',
-  });
-
-  doc.y = 132;
-
-  // Title bar
-  doc
-    .roundedRect(pageLeft, doc.y, pageWidth, 32, 6)
-    .fill(blue);
-
-  doc
-    .fillColor('#ffffff')
-    .fontSize(17)
-    .text('PROFORMA INVOICE', pageLeft, doc.y + 8, {
-      width: pageWidth,
-      align: 'center',
-    });
-
-  doc.y += 38;
-
-doc
-  .fontSize(8)
-  .fillColor(muted)
-  .text(
-    'ADITYA TRADING | adityasolarsraj01@gmail.com | 8306170662, 9887634474',
-    pageLeft,
-    doc.y,
-    {
-      width: pageWidth,
-      align: 'center',
-    },
+  res.setHeader(
+    'Content-Type',
+    'application/pdf',
   );
 
-doc
-  .fontSize(8)
-  .fillColor(muted)
-  .text(
-    'GSTIN: 08ABCHR1453D1ZE',
-    pageLeft,
-    doc.y + 12,
-    {
-      width: pageWidth,
-      align: 'center',
-    },
+  doc.pipe(
+    res,
   );
 
-doc.y += 26;
+  const pageLeft =
+    40;
 
-// Bill to and details cards
+  const pageRight =
+    555;
 
-  // Bill to and details cards
-  const cardY = doc.y;
-  const cardW = 250;
-  const cardH = 88;
+  const pageWidth =
+    pageRight -
+    pageLeft;
 
-  doc
-    .roundedRect(pageLeft, cardY, cardW, cardH, 6)
-    .fill(lightBlue)
-    .strokeColor(border)
-    .stroke();
+  const blue =
+    '#1e40af';
 
-  doc
-    .roundedRect(pageLeft + 265, cardY, cardW, cardH, 6)
-    .fill('#f9fafb')
-    .strokeColor(border)
-    .stroke();
+  const orange =
+    '#f97316';
 
-  doc
-    .fontSize(10)
-    .fillColor(blue)
-    .text('BILL TO', pageLeft + 12, cardY + 10);
+  const lightBlue =
+    '#eff6ff';
 
-  if (isDealerInvoice) {
-    doc
-      .fontSize(9)
-      .fillColor(dark)
-      .text(`Name: ${(pi as any).dealerName || '-'}`, pageLeft + 12, cardY + 28, {
-        width: 225,
-      })
-      .text(`Phone: ${(pi as any).dealerPhone || '-'}`, pageLeft + 12, cardY + 43, {
-        width: 225,
-      })
-      .text(`GST: ${(pi as any).dealerGstNumber || '-'}`, pageLeft + 12, cardY + 58, {
-        width: 225,
-      })
-      .text(`Address: ${(pi as any).dealerAddress || '-'}`, pageLeft + 12, cardY + 73, {
-        width: 225,
-        height: 15,
-      });
-  } else {
-    doc
-      .fontSize(9)
-      .fillColor(dark)
-      .text(`Name: ${(project as any)?.customerName || '-'}`, pageLeft + 12, cardY + 28, {
-        width: 225,
-      })
-      .text(`Phone: ${(project as any)?.customerPhone || '-'}`, pageLeft + 12, cardY + 43, {
-        width: 225,
-      })
-      .text(`Address: ${(project as any)?.address || (project as any)?.gpsAddress || '-'}`, pageLeft + 12, cardY + 58, {
-        width: 225,
-        height: 28,
-      });
+  const lightOrange =
+    '#fff7ed';
+
+  const border =
+    '#d1d5db';
+
+  const dark =
+    '#111827';
+
+  const muted =
+    '#6b7280';
+
+  const invoiceDate =
+    pi.invoiceDate
+      ? new Date(
+          pi.invoiceDate,
+        )
+          .toLocaleDateString(
+            'en-IN',
+          )
+      : new Date(
+          pi.createdAt,
+        )
+          .toLocaleDateString(
+            'en-IN',
+          );
+
+  /*
+   * =========================================================
+   * LOGO
+   * =========================================================
+   *
+   * sellerLogoUrl may later point to a stored company
+   * logo. PDFKit cannot reliably fetch remote URLs
+   * directly, so for now:
+   *
+   * - local stored path -> use it
+   * - otherwise -> legacy logo fallback
+   *
+   * We will wire actual uploaded logo files in the
+   * logo-upload step.
+   */
+
+  let resolvedLogoPath:
+  string | null =
+  null;
+
+if (
+  sellerLogoUrl &&
+  !sellerLogoUrl.startsWith(
+    'http',
+  )
+) {
+  const possiblePath =
+    path.isAbsolute(
+      sellerLogoUrl,
+    )
+      ? sellerLogoUrl
+      : path.join(
+          process.cwd(),
+          sellerLogoUrl,
+        );
+
+  try {
+    if (
+      require('fs').existsSync(
+        possiblePath,
+      )
+    ) {
+      resolvedLogoPath =
+        possiblePath;
+    }
+  } catch {
+    resolvedLogoPath =
+      null;
   }
+}
+
+if (
+  resolvedLogoPath
+) {
+  try {
+    doc.image(
+      resolvedLogoPath,
+      40,
+      20,
+      {
+        fit: [
+          515,
+          110,
+        ],
+        align:
+          'center',
+      },
+    );
+  } catch {
+    /*
+     * PDF generation should still succeed
+     * without a logo.
+     */
+  }
+}
+
+  doc.y =
+    132;
+
+  /*
+   * TITLE
+   */
 
   doc
-    .fontSize(10)
-    .fillColor(orange)
-    .text('DOCUMENT DETAILS', pageLeft + 277, cardY + 10);
+    .roundedRect(
+      pageLeft,
+      doc.y,
+      pageWidth,
+      32,
+      6,
+    )
+    .fill(
+      blue,
+    );
 
   doc
-  .fontSize(9)
-  .fillColor(dark)
-  .text(`PI No: ${pi.invoiceNumber || '-'}`, pageLeft + 277, cardY + 28, {
-    width: 220,
-  })
-  .text(`Date: ${invoiceDate}`, pageLeft + 277, cardY + 43, {
-    width: 220,
-  })
-  .text(`Status: ${pi.status || '-'}`, pageLeft + 277, cardY + 58, {
-    width: 220,
-  })
-  .text(`Type: ${isDealerInvoice ? 'Dealer / Trading' : 'Project'}`, pageLeft + 277, cardY + 73, {
-    width: 220,
-  });
+    .fillColor(
+      '#ffffff',
+    )
+    .fontSize(
+      17,
+    )
+    .text(
+      'PROFORMA INVOICE',
+      pageLeft,
+      doc.y + 8,
+      {
+        width:
+          pageWidth,
 
-  doc.y = cardY + cardH + 16;
+        align:
+          'center',
+      },
+    );
 
-  // Table title
+  doc.y +=
+    38;
+
+  /*
+   * SELLER DETAILS
+   */
+
+  const sellerDisplayName =
+    sellerLegalName ||
+    sellerCompanyName;
+
+  const sellerLocation =
+    [
+      sellerAddress,
+      sellerCity,
+      sellerState,
+      sellerPinCode,
+    ]
+      .filter(
+        Boolean,
+      )
+      .join(', ');
+
+  const sellerContactLine =
+    [
+      sellerDisplayName,
+      sellerEmail,
+      sellerPhone,
+    ]
+      .filter(
+        Boolean,
+      )
+      .join(' | ');
+
   doc
-    .fontSize(12)
-    .fillColor(dark)
-    .text('Item Details', pageLeft, doc.y);
+    .fontSize(
+      8,
+    )
+    .fillColor(
+      muted,
+    )
+    .text(
+      sellerContactLine ||
+        sellerDisplayName,
+      pageLeft,
+      doc.y,
+      {
+        width:
+          pageWidth,
 
-  doc.y += 18;
+        align:
+          'center',
+      },
+    );
 
-  const drawTableHeader = () => {
-    const y = doc.y;
+  doc
+    .fontSize(
+      8,
+    )
+    .fillColor(
+      muted,
+    )
+    .text(
+      `GSTIN: ${
+        sellerGstNumber ||
+        '-'
+      }${
+        sellerLocation
+          ? ` | ${sellerLocation}`
+          : ''
+      }`,
+      pageLeft,
+      doc.y + 12,
+      {
+        width:
+          pageWidth,
 
-    doc
-      .rect(pageLeft, y, pageWidth, 22)
-      .fill(blue);
+        align:
+          'center',
+      },
+    );
 
-    doc
-      .fontSize(8)
-      .fillColor('#ffffff')
-      .text('Sr', 42, y + 7, { width: 22 })
-      .text('Item Name', 65, y + 7, { width: 165 })
-.text('HSN', 230, y + 7, { width: 45 })
-.text('Qty', 255, y + 7, { width: 30, align: 'right' })
-.text('Unit', 292, y + 7, { width: 70 })
-.text('Rate', 365, y + 7, { width: 45, align: 'right' })
-.text('GST%', 412, y + 7, { width: 30, align: 'right' })
-.text('GST Amt', 445, y + 7, { width: 48, align: 'right' })
-.text('Total', 495, y + 7, { width: 57, align: 'right' })
+  doc.y +=
+    26;
 
-    doc.y = y + 22;
-  };
+  /*
+   * BILL TO + DOCUMENT DETAILS
+   */
+
+  const cardY =
+    doc.y;
+
+  const cardW =
+    250;
+
+  const cardH =
+    88;
+
+  doc
+    .roundedRect(
+      pageLeft,
+      cardY,
+      cardW,
+      cardH,
+      6,
+    )
+    .fill(
+      lightBlue,
+    )
+    .strokeColor(
+      border,
+    )
+    .stroke();
+
+  doc
+    .roundedRect(
+      pageLeft + 265,
+      cardY,
+      cardW,
+      cardH,
+      6,
+    )
+    .fill(
+      '#f9fafb',
+    )
+    .strokeColor(
+      border,
+    )
+    .stroke();
+
+  doc
+    .fontSize(
+      10,
+    )
+    .fillColor(
+      blue,
+    )
+    .text(
+      'BILL TO',
+      pageLeft + 12,
+      cardY + 10,
+    );
+
+  doc
+    .fontSize(
+      9,
+    )
+    .fillColor(
+      dark,
+    )
+    .text(
+      `Name: ${
+        buyerName ||
+        '-'
+      }`,
+      pageLeft + 12,
+      cardY + 28,
+      {
+        width:
+          225,
+      },
+    )
+    .text(
+      `Phone: ${
+        buyerPhone ||
+        '-'
+      }`,
+      pageLeft + 12,
+      cardY + 43,
+      {
+        width:
+          225,
+      },
+    )
+    .text(
+      `GST: ${
+        buyerGstNumber ||
+        '-'
+      }`,
+      pageLeft + 12,
+      cardY + 58,
+      {
+        width:
+          225,
+      },
+    )
+    .text(
+      `Address: ${
+        buyerAddress ||
+        '-'
+      }`,
+      pageLeft + 12,
+      cardY + 73,
+      {
+        width:
+          225,
+
+        height:
+          15,
+      },
+    );
+
+  doc
+    .fontSize(
+      10,
+    )
+    .fillColor(
+      orange,
+    )
+    .text(
+      'DOCUMENT DETAILS',
+      pageLeft + 277,
+      cardY + 10,
+    );
+
+  const typeLabel =
+    isInterCompanyInvoice
+      ? 'Inter-Company'
+      : isDealerInvoice
+        ? 'Dealer / Trading'
+        : 'Project';
+
+  doc
+    .fontSize(
+      9,
+    )
+    .fillColor(
+      dark,
+    )
+    .text(
+      `PI No: ${
+        pi.invoiceNumber ||
+        '-'
+      }`,
+      pageLeft + 277,
+      cardY + 28,
+      {
+        width:
+          220,
+      },
+    )
+    .text(
+      `Date: ${invoiceDate}`,
+      pageLeft + 277,
+      cardY + 43,
+      {
+        width:
+          220,
+      },
+    )
+    .text(
+      `Status: ${
+        pi.status ||
+        '-'
+      }`,
+      pageLeft + 277,
+      cardY + 58,
+      {
+        width:
+          220,
+      },
+    )
+    .text(
+      `Type: ${typeLabel}`,
+      pageLeft + 277,
+      cardY + 73,
+      {
+        width:
+          220,
+      },
+    );
+
+  doc.y =
+    cardY +
+    cardH +
+    16;
+
+  doc
+    .fontSize(
+      12,
+    )
+    .fillColor(
+      dark,
+    )
+    .text(
+      'Item Details',
+      pageLeft,
+      doc.y,
+    );
+
+  doc.y +=
+    18;
+
+  const drawTableHeader =
+    () => {
+      const y =
+        doc.y;
+
+      doc
+        .rect(
+          pageLeft,
+          y,
+          pageWidth,
+          22,
+        )
+        .fill(
+          blue,
+        );
+
+      doc
+        .fontSize(
+          8,
+        )
+        .fillColor(
+          '#ffffff',
+        )
+        .text(
+          'Sr',
+          42,
+          y + 7,
+          {
+            width:
+              22,
+          },
+        )
+        .text(
+          'Item Name',
+          65,
+          y + 7,
+          {
+            width:
+              165,
+          },
+        )
+        .text(
+          'HSN',
+          230,
+          y + 7,
+          {
+            width:
+              45,
+          },
+        )
+        .text(
+          'Qty',
+          255,
+          y + 7,
+          {
+            width:
+              30,
+
+            align:
+              'right',
+          },
+        )
+        .text(
+          'Unit',
+          292,
+          y + 7,
+          {
+            width:
+              70,
+          },
+        )
+        .text(
+          'Rate',
+          365,
+          y + 7,
+          {
+            width:
+              45,
+
+            align:
+              'right',
+          },
+        )
+        .text(
+          'GST%',
+          412,
+          y + 7,
+          {
+            width:
+              30,
+
+            align:
+              'right',
+          },
+        )
+        .text(
+          'GST Amt',
+          445,
+          y + 7,
+          {
+            width:
+              48,
+
+            align:
+              'right',
+          },
+        )
+        .text(
+          'Total',
+          495,
+          y + 7,
+          {
+            width:
+              57,
+
+            align:
+              'right',
+          },
+        );
+
+      doc.y =
+        y + 22;
+    };
 
   drawTableHeader();
 
-  (pi.items || []).forEach((item: any, index: number) => {
-    const itemName = item.itemName || '-';
-    const rowHeight = Math.max(
-      28,
-      Math.min(
-        46,
-        doc.fontSize(8).heightOfString(itemName, {
-  width: 140,
-}) + 10,
-      ),
+  (
+    pi.items ||
+    []
+  ).forEach(
+    (
+      item: any,
+      index: number,
+    ) => {
+      const itemName =
+        item.itemName ||
+        '-';
+
+      const rowHeight =
+        Math.max(
+          28,
+          Math.min(
+            46,
+            doc
+              .fontSize(
+                8,
+              )
+              .heightOfString(
+                itemName,
+                {
+                  width:
+                    140,
+                },
+              ) +
+              10,
+          ),
+        );
+
+      if (
+        doc.y +
+          rowHeight >
+        700
+      ) {
+        doc.addPage();
+
+        doc.y =
+          40;
+
+        drawTableHeader();
+      }
+
+      const y =
+        doc.y;
+
+      doc
+        .rect(
+          pageLeft,
+          y,
+          pageWidth,
+          rowHeight,
+        )
+        .fill(
+          index %
+            2 ===
+            0
+            ? '#f9fafb'
+            : '#ffffff',
+        );
+
+      doc
+        .strokeColor(
+          border,
+        )
+        .lineWidth(
+          0.4,
+        )
+        .rect(
+          pageLeft,
+          y,
+          pageWidth,
+          rowHeight,
+        )
+        .stroke();
+
+      doc
+        .fontSize(
+          8,
+        )
+        .fillColor(
+          dark,
+        )
+        .text(
+          String(
+            index +
+              1,
+          ),
+          42,
+          y + 7,
+          {
+            width:
+              22,
+          },
+        )
+        .text(
+          itemName,
+          65,
+          y + 7,
+          {
+            width:
+              160,
+
+            height:
+              rowHeight -
+              8,
+          },
+        )
+        .text(
+          String(
+            item.hsnCode ||
+              '-',
+          ),
+          230,
+          y + 7,
+          {
+            width:
+              45,
+          },
+        )
+        .text(
+          String(
+            item.quantity ||
+              0,
+          ),
+          255,
+          y + 7,
+          {
+            width:
+              30,
+
+            align:
+              'right',
+          },
+        )
+        .text(
+          String(
+            item.unit ||
+              '-',
+          ).replace(
+            /\s*-\s*/g,
+            '-',
+          ),
+          292,
+          y + 7,
+          {
+            width:
+              70,
+
+            height:
+              rowHeight -
+              8,
+          },
+        )
+        .text(
+          this.formatInr(
+            item.finalRate ||
+              item.sellingRate ||
+              0,
+          ),
+          365,
+          y + 7,
+          {
+            width:
+              45,
+
+            align:
+              'right',
+          },
+        )
+        .text(
+          `${
+            item.gstPercent ||
+            0
+          }%`,
+          412,
+          y + 7,
+          {
+            width:
+              30,
+
+            align:
+              'right',
+          },
+        )
+        .text(
+          this.formatInr(
+            item.gstAmount ||
+              0,
+          ),
+          445,
+          y + 7,
+          {
+            width:
+              48,
+
+            align:
+              'right',
+          },
+        )
+        .text(
+          this.formatInr(
+            item.totalAmount ||
+              0,
+          ),
+          495,
+          y + 7,
+          {
+            width:
+              57,
+
+            align:
+              'right',
+          },
+        );
+
+      doc.y =
+        y +
+        rowHeight;
+    },
+  );
+
+  doc.y +=
+    14;
+
+  const requiredFooterSpace =
+  isDealerInvoice ? 190 : 180;
+
+  if (
+    doc.y +
+      requiredFooterSpace >
+    760
+  ) {
+    doc.addPage();
+
+    doc.y =
+      40;
+  }
+
+  const summaryX =
+    345;
+
+  const summaryY =
+    doc.y;
+
+  const summaryW =
+    210;
+
+  doc
+    .roundedRect(
+      summaryX,
+      summaryY,
+      summaryW,
+      94,
+      6,
+    )
+    .fill(
+      '#f8fafc',
+    )
+    .strokeColor(
+      border,
+    )
+    .stroke();
+
+  const summaryLine =
+    (
+      label:
+        string,
+      value:
+        any,
+      yOffset:
+        number,
+      bold =
+        false,
+      color =
+        dark,
+    ) => {
+      doc
+        .fontSize(
+          bold
+            ? 11
+            : 9,
+        )
+        .fillColor(
+          color,
+        )
+        .text(
+          label,
+          summaryX +
+            12,
+          summaryY +
+            yOffset,
+          {
+            width:
+              85,
+          },
+        )
+        .text(
+          this.formatInr(
+            value,
+          ),
+          summaryX +
+            100,
+          summaryY +
+            yOffset,
+          {
+            width:
+              95,
+
+            align:
+              'right',
+          },
+        );
+    };
+
+  summaryLine(
+    'Subtotal',
+    pi.subtotalAmount,
+    12,
+  );
+
+  summaryLine(
+    'Discount',
+    pi.discountAmount,
+    30,
+  );
+
+  summaryLine(
+    'GST',
+    pi.gstAmount,
+    48,
+  );
+
+  doc
+    .moveTo(
+      summaryX +
+        10,
+      summaryY +
+        67,
+    )
+    .lineTo(
+      summaryX +
+        summaryW -
+        10,
+      summaryY +
+        67,
+    )
+    .strokeColor(
+      orange,
+    )
+    .lineWidth(
+      1,
+    )
+    .stroke();
+
+  summaryLine(
+    'Grand Total',
+    pi.totalAmount,
+    74,
+    true,
+    '#16a34a',
+  );
+
+  doc.y =
+    summaryY +
+    108;
+
+  doc
+    .roundedRect(
+      pageLeft,
+      doc.y,
+      pageWidth,
+      34,
+      6,
+    )
+    .fill(
+      lightOrange,
+    )
+    .strokeColor(
+      border,
+    )
+    .stroke();
+
+  doc
+    .fontSize(
+      9,
+    )
+    .fillColor(
+      orange,
+    )
+    .text(
+      'Amount in Words',
+      pageLeft +
+        12,
+      doc.y +
+        8,
     );
 
-    if (doc.y + rowHeight > 700) {
-      doc.addPage();
-      doc.y = 40;
-      drawTableHeader();
-    }
+  doc
+    .fontSize(
+      10,
+    )
+    .fillColor(
+      dark,
+    )
+    .text(
+      this
+        .numberToWordsIndian(
+          Number(
+            pi.totalAmount ||
+              0,
+          ),
+        ),
+      pageLeft +
+        12,
+      doc.y +
+        20,
+      {
+        width:
+          pageWidth -
+          24,
+      },
+    );
 
-    const y = doc.y;
+  doc.y +=
+    46;
 
-    if (index % 2 === 0) {
-      doc.rect(pageLeft, y, pageWidth, rowHeight).fill('#f9fafb');
-    } else {
-      doc.rect(pageLeft, y, pageWidth, rowHeight).fill('#ffffff');
-    }
+  if (
+    doc.y +
+      95 >
+    760
+  ) {
+    doc.addPage();
 
-    doc
-      .strokeColor(border)
-      .lineWidth(0.4)
-      .rect(pageLeft, y, pageWidth, rowHeight)
-      .stroke();
+    doc.y =
+      40;
+  }
 
-    doc
-      .fontSize(8)
-      .fillColor(dark)
-      .text(String(index + 1), 42, y + 7, { width: 22 })
-      .text(itemName, 65, y + 7, {
-  width: 160,
-  height: rowHeight - 8,
-})
-.text(String((item as any).hsnCode || '-'), 230, y + 7, {
-  width: 45,
-})
-.text(String(item.quantity || 0), 255, y + 7, {
-  width: 30,
-  align: 'right',
-})
-.text(String(item.unit || '-').replace(/\s*-\s*/g, '-'), 292, y + 7, {
-  width: 70,
-  height: rowHeight - 8,
-})
-.text(this.formatInr(item.finalRate || item.sellingRate || 0), 365, y + 7, {
-  width: 45,
-  align: 'right',
-})
-.text(`${item.gstPercent || 0}%`, 412, y + 7, {
-  width: 30,
-  align: 'right',
-})
-.text(this.formatInr(item.gstAmount || 0), 445, y + 7, {
-  width: 48,
-  align: 'right',
-})
-.text(this.formatInr(item.totalAmount || 0), 495, y + 7, {
-  width: 57,
-  align: 'right',
-})
-
-    doc.y = y + rowHeight;
-  });
-
-  doc.y += 14;
-
-const requiredFooterSpace = isDealerInvoice ? 190 : 180;
-
-if (doc.y + requiredFooterSpace > 760) {
-  doc.addPage();
-  doc.y = 40;
-}
-
-  const summaryX = 345;
-  const summaryY = doc.y;
-  const summaryW = 210;
+  const footerY =
+    doc.y;
 
   doc
-    .roundedRect(summaryX, summaryY, summaryW, 94, 6)
-    .fill('#f8fafc')
-    .strokeColor(border)
-    .stroke();
-
-  const summaryLine = (
-    label: string,
-    value: any,
-    yOffset: number,
-    bold = false,
-    color = dark,
-  ) => {
-    doc
-      .fontSize(bold ? 11 : 9)
-      .fillColor(color)
-      .text(label, summaryX + 12, summaryY + yOffset, {
-        width: 85,
-      })
-      .text(this.formatInr(value), summaryX + 100, summaryY + yOffset, {
-        width: 95,
-        align: 'right',
-      });
-  };
-
-  summaryLine('Subtotal', pi.subtotalAmount, 12);
-  summaryLine('Discount', pi.discountAmount, 30);
-  summaryLine('GST', pi.gstAmount, 48);
-
-  doc
-    .moveTo(summaryX + 10, summaryY + 67)
-    .lineTo(summaryX + summaryW - 10, summaryY + 67)
-    .strokeColor(orange)
-    .lineWidth(1)
-    .stroke();
-
-  summaryLine('Grand Total', pi.totalAmount, 74, true, '#16a34a');
-
-  doc.y = summaryY + 108;
-
-  doc
-  .roundedRect(pageLeft, doc.y, pageWidth, 34, 6)
-    .fill(lightOrange)
-    .strokeColor(border)
+    .roundedRect(
+      pageLeft,
+      footerY,
+      250,
+      82,
+      6,
+    )
+    .fill(
+      '#f9fafb',
+    )
+    .strokeColor(
+      border,
+    )
     .stroke();
 
   doc
-    .fontSize(9)
-    .fillColor(orange)
-    .text('Amount in Words', pageLeft + 12, doc.y + 8);
+    .fontSize(
+      10,
+    )
+    .fillColor(
+      blue,
+    )
+    .text(
+      'Terms & Conditions',
+      pageLeft +
+        12,
+      footerY +
+        10,
+    );
 
   doc
-    .fontSize(10)
-    .fillColor(dark)
-    .text(this.numberToWordsIndian(Number(pi.totalAmount || 0)), pageLeft + 12, doc.y + 20, {
-      width: pageWidth - 24,
-    });
-
-  doc.y += 46;
-
-  if (doc.y + 95 > 760) {
-  doc.addPage();
-  doc.y = 40;
-}
-
-  const footerY = doc.y;
+    .fontSize(
+      8,
+    )
+    .fillColor(
+      dark,
+    )
+    .text(
+      '1. This is a system-generated proforma invoice.',
+      pageLeft +
+        12,
+      footerY +
+        28,
+      {
+        width:
+          225,
+      },
+    )
+    .text(
+      '2. Prices are subject to final approval and availability.',
+      pageLeft +
+        12,
+      footerY +
+        42,
+      {
+        width:
+          225,
+      },
+    )
+    .text(
+      '3. Warranty as per manufacturer/company policy.',
+      pageLeft +
+        12,
+      footerY +
+        56,
+      {
+        width:
+          225,
+      },
+    );
 
   doc
-    .roundedRect(pageLeft, footerY, 250, 82, 6)
-    .fill('#f9fafb')
-    .strokeColor(border)
+    .roundedRect(
+      pageLeft +
+        265,
+      footerY,
+      250,
+      82,
+      6,
+    )
+    .fill(
+      '#f9fafb',
+    )
+    .strokeColor(
+      border,
+    )
     .stroke();
 
   doc
-    .fontSize(10)
-    .fillColor(blue)
-    .text('Terms & Conditions', pageLeft + 12, footerY + 10);
+    .fontSize(
+      10,
+    )
+    .fillColor(
+      blue,
+    )
+    .text(
+      `For ${
+        sellerDisplayName ||
+        sellerCompanyName
+      }`,
+      pageLeft +
+        277,
+      footerY +
+        10,
+    );
 
   doc
-    .fontSize(8)
-    .fillColor(dark)
-    .text('1. This is a system-generated proforma invoice.', pageLeft + 12, footerY + 28, {
-      width: 225,
-    })
-    .text('2. Prices are subject to final approval and availability.', pageLeft + 12, footerY + 42, {
-      width: 225,
-    })
-    .text('3. Warranty as per manufacturer/company policy.', pageLeft + 12, footerY + 56, {
-      width: 225,
-    });
+    .fontSize(
+      8,
+    )
+    .fillColor(
+      dark,
+    )
+    .text(
+      `Generated On: ${invoiceDate}`,
+      pageLeft +
+        277,
+      footerY +
+        28,
+      {
+        width:
+          220,
+      },
+    )
+    .text(
+      `Prepared By: ${
+        pi.createdByName ||
+        'System'
+      }`,
+      pageLeft +
+        277,
+      footerY +
+        42,
+      {
+        width:
+          220,
+      },
+    );
 
   doc
-    .roundedRect(pageLeft + 265, footerY, 250, 82, 6)
-    .fill('#f9fafb')
-    .strokeColor(border)
-    .stroke();
+    .fontSize(
+      8,
+    )
+    .fillColor(
+      muted,
+    )
+    .text(
+      'Authorized Signatory',
+      pageLeft +
+        277,
+      footerY +
+        62,
+      {
+        width:
+          220,
 
-  doc
-  .fontSize(10)
-  .fillColor(blue)
-  .text('For Aditya Trading', pageLeft + 277, footerY + 10);
-
-doc
-  .fontSize(8)
-  .fillColor(dark)
-  .text(`Generated On: ${invoiceDate}`, pageLeft + 277, footerY + 28, {
-    width: 220,
-  })
-  .text('Prepared By: System', pageLeft + 277, footerY + 42, {
-    width: 220,
-  });
-
-doc
-  .fontSize(8)
-  .fillColor(muted)
-  .text('Authorized Signatory', pageLeft + 277, footerY + 62, {
-    width: 220,
-    align: 'right',
-  });
+        align:
+          'right',
+      },
+    );
 
   doc.end();
 }
@@ -18756,234 +21169,1218 @@ async createFinalInvoice(
     ? body.items
     : [];
 
-  if (!body?.projectId) {
-    throw new BadRequestException(
-      'Project ID is required',
-    );
-  }
-
   if (items.length === 0) {
     throw new BadRequestException(
       'At least one invoice item is required',
     );
   }
 
-  let subtotalAmount = 0;
-  let discountAmount = 0;
-  let gstAmount = 0;
-  let totalAmount = 0;
+  const invoiceType =
+    String(
+      body?.invoiceType ||
+        (
+          body?.buyerCompanyId
+            ? 'INTER_COMPANY'
+            : body?.dealerId
+              ? 'DEALER'
+              : 'PROJECT'
+        ),
+    )
+      .trim()
+      .toUpperCase();
 
-  const preparedItems: any[] = [];
+  if (
+    ![
+      'PROJECT',
+      'DEALER',
+      'INTER_COMPANY',
+    ].includes(invoiceType)
+  ) {
+    throw new BadRequestException(
+      'Invalid invoice type',
+    );
+  }
 
-  for (const item of items) {
-    const finalRate = Number(
-      item.finalRate || 0,
+  /*
+   * =========================================================
+   * BUYER VALIDATION
+   * =========================================================
+   */
+
+  let project: Project | null =
+    null;
+
+  let dealer:
+    ProjectVendor | null =
+    null;
+
+  let buyerCompany:
+    ProjectVendorCompany | null =
+    null;
+
+  if (
+    invoiceType ===
+    'PROJECT'
+  ) {
+    const projectId =
+      Number(
+        body?.projectId ||
+          0,
+      );
+
+    if (
+      !Number.isInteger(
+        projectId,
+      ) ||
+      projectId <= 0
+    ) {
+      throw new BadRequestException(
+        'Project ID is required',
+      );
+    }
+
+    project =
+      await this
+        .projectRepository
+        .findOne({
+          where: {
+            id:
+              projectId,
+          },
+        });
+
+    if (!project) {
+      throw new NotFoundException(
+        'Project not found',
+      );
+    }
+  }
+
+  if (
+    invoiceType ===
+    'DEALER'
+  ) {
+    const dealerId =
+      Number(
+        body?.dealerId ||
+          0,
+      );
+
+    if (
+      !Number.isInteger(
+        dealerId,
+      ) ||
+      dealerId <= 0
+    ) {
+      throw new BadRequestException(
+        'Dealer is required',
+      );
+    }
+
+    dealer =
+      await this
+        .projectVendorRepository
+        .findOne({
+          where: {
+            id:
+              dealerId,
+          },
+        });
+
+    if (
+      !dealer ||
+      dealer.isActive ===
+        false
+    ) {
+      throw new BadRequestException(
+        'Selected dealer is not active',
+      );
+    }
+
+    const isDealerParty =
+      String(
+        dealer.partyType ||
+          '',
+      ) ===
+        'DEALER' ||
+      dealer.canBuyFromUs ===
+        true ||
+      String(
+        dealer.partyType ||
+          '',
+      ) ===
+        'BOTH';
+
+    if (
+      !isDealerParty
+    ) {
+      throw new BadRequestException(
+        'Selected party is not configured as a dealer',
+      );
+    }
+  }
+
+  if (
+    invoiceType ===
+    'INTER_COMPANY'
+  ) {
+    const buyerCompanyId =
+      Number(
+        body?.buyerCompanyId ||
+          0,
+      );
+
+    if (
+      !Number.isInteger(
+        buyerCompanyId,
+      ) ||
+      buyerCompanyId <= 0
+    ) {
+      throw new BadRequestException(
+        'Buyer company is required for inter-company invoice',
+      );
+    }
+
+    buyerCompany =
+      await this
+        .getBillingEntityOrFail(
+          buyerCompanyId,
+        );
+  }
+
+  /*
+   * =========================================================
+   * SELLER
+   * =========================================================
+   *
+   * B2B invoices require an issuing entity.
+   *
+   * Legacy Project invoice generation remains
+   * compatible if sellerCompanyId is not supplied.
+   */
+
+  const sellerCompanyId =
+    Number(
+      body?.sellerCompanyId ||
+        0,
     );
 
-    const quantity = Number(
-      item.quantity || 0,
-    );
+  let sellerCompany:
+    ProjectVendorCompany | null =
+    null;
 
-    const gstPercent = Number(
-      item.gstPercent || 0,
-    );
+  if (
+    invoiceType !==
+      'PROJECT' ||
+    sellerCompanyId
+  ) {
+    sellerCompany =
+      await this
+        .getBillingEntityOrFail(
+          sellerCompanyId,
+        );
+  }
 
-    const itemDiscount = Number(
-      item.discountAmount || 0,
-    );
+  if (
+    invoiceType ===
+      'INTER_COMPANY' &&
+    sellerCompany &&
+    buyerCompany
+  ) {
+    this
+      .assertDifferentBillingEntities(
+        sellerCompany,
+        buyerCompany,
+      );
+  }
+
+  /*
+   * =========================================================
+   * ITEM CALCULATION
+   * =========================================================
+   */
+
+  let subtotalAmount =
+    0;
+
+  let discountAmount =
+    0;
+
+  let gstAmount =
+    0;
+
+  let totalAmount =
+    0;
+
+  const preparedItems:
+    any[] = [];
+
+  for (
+    const item of
+    items
+  ) {
+    const finalRate =
+      Number(
+        item.finalRate ||
+          0,
+      );
+
+    const quantity =
+      Number(
+        item.quantity ||
+          0,
+      );
+
+    const gstPercent =
+      Number(
+        item.gstPercent ||
+          0,
+      );
+
+    const itemDiscount =
+      Number(
+        item.discountAmount ||
+          0,
+      );
+
+    if (
+      !Number.isFinite(
+        quantity,
+      ) ||
+      quantity <= 0
+    ) {
+      throw new BadRequestException(
+        `Valid quantity is required for ${
+          item.itemName ||
+          'invoice item'
+        }`,
+      );
+    }
+
+    if (
+      !Number.isFinite(
+        finalRate,
+      ) ||
+      finalRate < 0
+    ) {
+      throw new BadRequestException(
+        `Valid rate is required for ${
+          item.itemName ||
+          'invoice item'
+        }`,
+      );
+    }
+
+    if (
+      !Number.isFinite(
+        gstPercent,
+      ) ||
+      gstPercent < 0
+    ) {
+      throw new BadRequestException(
+        `Valid GST percentage is required for ${
+          item.itemName ||
+          'invoice item'
+        }`,
+      );
+    }
+
+    if (
+      !Number.isFinite(
+        itemDiscount,
+      ) ||
+      itemDiscount < 0
+    ) {
+      throw new BadRequestException(
+        `Invalid discount for ${
+          item.itemName ||
+          'invoice item'
+        }`,
+      );
+    }
 
     const subtotal =
-      finalRate * quantity;
+      finalRate *
+      quantity;
+
+    if (
+      itemDiscount >
+      subtotal
+    ) {
+      throw new BadRequestException(
+        `Discount cannot exceed item value for ${
+          item.itemName ||
+          'invoice item'
+        }`,
+      );
+    }
 
     const taxable =
-      subtotal - itemDiscount;
+      subtotal -
+      itemDiscount;
 
     const gst =
-      (taxable * gstPercent) / 100;
+      (
+        taxable *
+        gstPercent
+      ) /
+      100;
 
-    const total = taxable + gst;
+    const total =
+      taxable +
+      gst;
 
-    subtotalAmount += subtotal;
-    discountAmount += itemDiscount;
-    gstAmount += gst;
-    totalAmount += total;
+    subtotalAmount +=
+      subtotal;
+
+    discountAmount +=
+      itemDiscount;
+
+    gstAmount +=
+      gst;
+
+    totalAmount +=
+      total;
 
     preparedItems.push({
       ...item,
+
+      materialId:
+        item?.materialId
+          ? Number(
+              item.materialId,
+            )
+          : null,
+
+      itemName:
+        String(
+          item?.itemName ||
+            '',
+        ),
+
+      category:
+        String(
+          item?.category ||
+            '',
+        ),
+
+      brand:
+        String(
+          item?.brand ||
+            '',
+        ),
+
+      unit:
+        String(
+          item?.unit ||
+            '',
+        ),
+
+      hsnCode:
+        String(
+          item?.hsnCode ||
+            '',
+        ),
+
       finalRate,
+
       quantity,
+
       gstPercent,
-      discountAmount: itemDiscount,
-      subtotalAmount: subtotal,
-      gstAmount: gst,
-      totalAmount: total,
+
+      discountAmount:
+        itemDiscount,
+
+      subtotalAmount:
+        subtotal,
+
+      gstAmount:
+        gst,
+
+      totalAmount:
+        total,
+
+      remarks:
+        String(
+          item?.remarks ||
+            '',
+        ),
     });
   }
 
-  const invoice =
-    this.projectFinalInvoiceRepository.create({
-      projectId: Number(body.projectId),
+  const invoiceDate =
+    body?.invoiceDate
+      ? new Date(
+          body.invoiceDate,
+        )
+      : new Date();
 
-      invoiceNumber:
-        this.generateFinalInvoiceNumber(),
-
-      status:
-        ProjectFinalInvoiceStatus.GENERATED,
-
-      subtotalAmount,
-
-      discountAmount,
-
-      gstAmount,
-
-      totalAmount,
-
-      paidAmount: 0,
-
-      pendingAmount: totalAmount,
-
-      invoiceDate: body.invoiceDate
-        ? new Date(body.invoiceDate)
-        : new Date(),
-
-      dueDate: body.dueDate
-        ? new Date(body.dueDate)
-        : null,
-
-      remarks: body.remarks || '',
-
-      createdBy:
-        user?.id || user?.userId || null,
-
-      createdByName:
-        user?.name || '',
-
-      createdByRole:
-        Array.isArray(user?.roles)
-          ? user.roles.join(', ')
-          : '',
-    } as Partial<ProjectFinalInvoice>);
-
-  const savedInvoice =
-    await this.projectFinalInvoiceRepository.save(
-      invoice as ProjectFinalInvoice,
+  if (
+    Number.isNaN(
+      invoiceDate.getTime(),
+    )
+  ) {
+    throw new BadRequestException(
+      'Invalid invoice date',
     );
+  }
 
-    const invoiceProject =
-  await this.projectRepository.findOne({
-    where: {
-      id: Number(savedInvoice.projectId),
-    },
-  });
+  const dueDate =
+    body?.dueDate
+      ? new Date(
+          body.dueDate,
+        )
+      : null;
 
-await this.projectPartyLedgerRepository.save(
-  this.projectPartyLedgerRepository.create({
-    partyId: undefined,
+  if (
+    dueDate &&
+    Number.isNaN(
+      dueDate.getTime(),
+    )
+  ) {
+    throw new BadRequestException(
+      'Invalid due date',
+    );
+  }
 
-    partyName:
-      invoiceProject?.customerName ||
-      'Customer',
+  /*
+   * =========================================================
+   * LEGACY PROJECT FLOW
+   * =========================================================
+   *
+   * Existing Project final invoice behaviour is preserved
+   * when no sellerCompanyId is supplied.
+   */
 
-    partyType: 'CUSTOMER',
+  if (
+    invoiceType ===
+      'PROJECT' &&
+    !sellerCompany
+  ) {
+    const invoice =
+      this
+        .projectFinalInvoiceRepository
+        .create({
+          projectId:
+            Number(
+              project!.id,
+            ),
 
-    projectId: savedInvoice.projectId,
+          invoiceType:
+            'PROJECT',
 
-    entryType:
-      ProjectLedgerEntryType.DEBIT,
+          buyerType:
+            'PROJECT' as any,
 
-    sourceType:
-      ProjectLedgerSourceType.FINAL_INVOICE,
+          invoiceNumber:
+            this
+              .generateFinalInvoiceNumber(),
 
-    sourceId: savedInvoice.id,
+          status:
+            ProjectFinalInvoiceStatus
+              .GENERATED,
 
-    amount: Number(
-      savedInvoice.totalAmount || 0,
+          subtotalAmount,
+
+          discountAmount,
+
+          gstAmount,
+
+          totalAmount,
+
+          paidAmount:
+            0,
+
+          pendingAmount:
+            totalAmount,
+
+          invoiceDate,
+
+          dueDate:
+            dueDate as any,
+
+          remarks:
+            String(
+              body?.remarks ||
+                '',
+            ),
+
+          createdBy:
+            user?.id ||
+            user?.userId ||
+            user?.sub ||
+            null,
+
+          createdByName:
+            user?.name ||
+            user?.email ||
+            '',
+
+          createdByRole:
+            this
+              .getUserRoles(
+                user,
+              )
+              .join(
+                ', ',
+              ),
+        } as Partial<ProjectFinalInvoice>);
+
+    const savedInvoice =
+      await this
+        .projectFinalInvoiceRepository
+        .save(
+          invoice as
+            ProjectFinalInvoice,
+        );
+
+    const invoiceItems =
+      preparedItems.map(
+        (
+          item: any,
+        ) =>
+          this
+            .projectFinalInvoiceItemRepository
+            .create({
+              finalInvoiceId:
+                savedInvoice
+                  .id,
+
+              projectId:
+                Number(
+                  project!.id,
+                ),
+
+              materialId:
+                item
+                  .materialId ||
+                null,
+
+              itemName:
+                item
+                  .itemName,
+
+              category:
+                item
+                  .category,
+
+              brand:
+                item
+                  .brand,
+
+              unit:
+                item.unit,
+
+              hsnCode:
+                item
+                  .hsnCode,
+
+              finalRate:
+                item
+                  .finalRate,
+
+              gstPercent:
+                item
+                  .gstPercent,
+
+              quantity:
+                item
+                  .quantity,
+
+              discountAmount:
+                item
+                  .discountAmount,
+
+              subtotalAmount:
+                item
+                  .subtotalAmount,
+
+              gstAmount:
+                item
+                  .gstAmount,
+
+              totalAmount:
+                item
+                  .totalAmount,
+
+              remarks:
+                item
+                  .remarks,
+            } as Partial<ProjectFinalInvoiceItem>),
+      );
+
+    await this
+      .projectFinalInvoiceItemRepository
+      .save(
+        invoiceItems,
+      );
+
+    return {
+      message:
+        'Final invoice created successfully',
+
+      invoice:
+        savedInvoice,
+    };
+  }
+
+  /*
+   * =========================================================
+   * MULTI-ENTITY FLOW
+   * =========================================================
+   *
+   * Seller sequence increment + invoice + items
+   * are saved inside ONE transaction.
+   *
+   * This is safer than consuming an invoice
+   * number before the invoice itself is saved.
+   */
+
+  return this
+    .projectVendorCompanyRepository
+    .manager
+    .transaction(
+      async (
+        manager,
+      ) => {
+        const lockedSeller =
+          await manager
+            .getRepository(
+              ProjectVendorCompany,
+            )
+            .createQueryBuilder(
+              'company',
+            )
+            .setLock(
+              'pessimistic_write',
+            )
+            .where(
+              'company.id = :companyId',
+              {
+                companyId:
+                  Number(
+                    sellerCompany!
+                      .id,
+                  ),
+              },
+            )
+            .andWhere(
+              'company.isHidden = false',
+            )
+            .andWhere(
+              'company.isActive = true',
+            )
+            .andWhere(
+              'company.isBillingEntity = true',
+            )
+            .getOne();
+
+        if (
+          !lockedSeller
+        ) {
+          throw new BadRequestException(
+            'Issuing company is no longer available',
+          );
+        }
+
+        const sequence =
+          Math.max(
+            Number(
+              lockedSeller
+                .nextInvoiceNumber ||
+                1,
+            ),
+            1,
+          );
+
+        const suggestedInvoiceNumber =
+          this
+            .formatBillingInvoiceNumber(
+              lockedSeller,
+              sequence,
+              invoiceDate,
+            );
+
+        const requestedInvoiceNumber =
+          String(
+            body?.invoiceNumber ||
+              '',
+          ).trim();
+
+        let invoiceNumber =
+          suggestedInvoiceNumber;
+
+        let invoiceNumberOverridden =
+          false;
+
+        if (
+          requestedInvoiceNumber &&
+          requestedInvoiceNumber !==
+            suggestedInvoiceNumber
+        ) {
+          if (
+            !this
+              .isOwnerUser(
+                user,
+              )
+          ) {
+            throw new ForbiddenException(
+              'Only Owner can override invoice number',
+            );
+          }
+
+          invoiceNumber =
+            requestedInvoiceNumber;
+
+          invoiceNumberOverridden =
+            true;
+        }
+
+        const duplicate =
+          await manager
+            .getRepository(
+              ProjectFinalInvoice,
+            )
+            .createQueryBuilder(
+              'invoice',
+            )
+            .where(
+              'LOWER(TRIM(invoice.invoiceNumber)) = LOWER(TRIM(:invoiceNumber))',
+              {
+                invoiceNumber,
+              },
+            )
+            .andWhere(
+              'invoice.isHidden = false',
+            )
+            .getOne();
+
+        if (
+          duplicate
+        ) {
+          throw new BadRequestException(
+            `Invoice number ${invoiceNumber} already exists`,
+          );
+        }
+
+        const invoicePayload:
+  Partial<ProjectFinalInvoice> = {
+  projectId:
+    invoiceType ===
+      'PROJECT'
+      ? Number(
+          project!.id,
+        )
+      : undefined,
+
+  invoiceType,
+
+  buyerType:
+    (
+      invoiceType ===
+      'INTER_COMPANY'
+        ? 'INTERNAL_COMPANY'
+        : invoiceType
+    ) as any,
+
+  invoiceNumber,
+
+  status:
+    ProjectFinalInvoiceStatus
+      .GENERATED,
+
+  ...this
+    .buildSellerCompanySnapshot(
+      lockedSeller,
     ),
 
-    remarks: `Final Invoice ${
-      savedInvoice.invoiceNumber ||
-      savedInvoice.id
-    }`,
+  subtotalAmount,
 
-    createdBy:
-      user?.id || user?.userId || null,
+  discountAmount,
 
-    createdByName:
-      user?.name || '',
-  } as Partial<ProjectPartyLedger>),
-);
+  gstAmount,
 
-  const invoiceItems =
-    preparedItems.map((item) =>
-      this.projectFinalInvoiceItemRepository.create({
-        finalInvoiceId:
-          savedInvoice.id,
+  totalAmount,
 
-        projectId: Number(
-          body.projectId,
-        ),
+  paidAmount:
+    0,
 
-        materialId:
-          item.materialId
-            ? Number(item.materialId)
-            : null,
+  pendingAmount:
+    totalAmount,
 
-        itemName:
-          item.itemName || '',
+  invoiceDate,
 
-        category:
-          item.category || '',
+  dueDate:
+    dueDate ||
+    undefined,
 
-        brand:
-          item.brand || '',
+  remarks:
+    String(
+      body?.remarks ||
+        '',
+    ),
 
-        unit:
-          item.unit || '',
+  invoiceNumberOverridden,
 
-          hsnCode:
-  item.hsnCode || '',
+  invoiceNumberOverriddenBy:
+    invoiceNumberOverridden
+      ? (
+          user?.id ||
+          user?.userId ||
+          user?.sub ||
+          undefined
+        )
+      : undefined,
 
-        finalRate:
-          item.finalRate,
+  invoiceNumberOverriddenByName:
+    invoiceNumberOverridden
+      ? (
+          user?.name ||
+          user?.email ||
+          ''
+        )
+      : '',
 
-        gstPercent:
-          item.gstPercent,
+  invoiceNumberOverriddenAt:
+    invoiceNumberOverridden
+      ? new Date()
+      : undefined,
 
-        quantity:
-          item.quantity,
+  createdBy:
+    user?.id ||
+    user?.userId ||
+    user?.sub ||
+    undefined,
 
-        discountAmount:
-          item.discountAmount,
+  createdByName:
+    user?.name ||
+    user?.email ||
+    '',
 
-        subtotalAmount:
-          item.subtotalAmount,
+  createdByRole:
+    this
+      .getUserRoles(
+        user,
+      )
+      .join(
+        ', ',
+      ),
+};
 
-        gstAmount:
-          item.gstAmount,
+        /*
+         * Project buyer
+         */
+        if (
+          invoiceType ===
+          'PROJECT'
+        ) {
+          invoicePayload
+            .projectId =
+            Number(
+              project!.id,
+            );
+        }
 
-        totalAmount:
-          item.totalAmount,
+        /*
+         * Dealer buyer
+         */
+        if (
+          invoiceType ===
+          'DEALER'
+        ) {
+          invoicePayload
+            .dealerId =
+            Number(
+              dealer!.id,
+            );
 
-        remarks:
-          item.remarks || '',
-      } as Partial<ProjectFinalInvoiceItem>),
-    );
+          invoicePayload
+            .dealerName =
+            String(
+              dealer!
+                .vendorName ||
+                '',
+            );
 
-  await this.projectFinalInvoiceItemRepository.save(
-    invoiceItems,
+          invoicePayload
+            .dealerPhone =
+            String(
+              dealer!
+                .phone ||
+                '',
+            );
+
+          invoicePayload
+            .dealerGstNumber =
+            String(
+              dealer!
+                .gstNumber ||
+                '',
+            );
+
+          invoicePayload
+            .dealerAddress =
+            String(
+              dealer!
+                .address ||
+                '',
+            );
+        }
+
+        /*
+         * Internal company buyer
+         */
+        if (
+          invoiceType ===
+          'INTER_COMPANY'
+        ) {
+          Object.assign(
+            invoicePayload,
+            this
+              .buildBuyerCompanySnapshot(
+                buyerCompany!,
+              ),
+          );
+        }
+
+        const invoiceRepo =
+          manager
+            .getRepository(
+              ProjectFinalInvoice,
+            );
+
+        const invoiceEntity =
+  invoiceRepo.create(
+    invoicePayload,
   );
 
-  return {
-    message:
-      'Final invoice created successfully',
+const savedInvoice:
+  ProjectFinalInvoice =
+  await invoiceRepo.save(
+    invoiceEntity,
+  );
 
-    invoice: savedInvoice,
-  };
+        const itemRepo =
+          manager
+            .getRepository(
+              ProjectFinalInvoiceItem,
+            );
+
+        const invoiceItems =
+          preparedItems.map(
+            (
+              item: any,
+            ) =>
+              itemRepo
+                .create({
+                  finalInvoiceId:
+                    savedInvoice
+                      .id,
+
+                  projectId:
+                    invoiceType ===
+                    'PROJECT'
+                      ? Number(
+                          project!
+                            .id,
+                        )
+                      : null,
+
+                  materialId:
+                    item
+                      .materialId ||
+                    null,
+
+                  itemName:
+                    item
+                      .itemName,
+
+                  category:
+                    item
+                      .category,
+
+                  brand:
+                    item
+                      .brand,
+
+                  unit:
+                    item
+                      .unit,
+
+                  hsnCode:
+                    item
+                      .hsnCode,
+
+                  finalRate:
+                    item
+                      .finalRate,
+
+                  gstPercent:
+                    item
+                      .gstPercent,
+
+                  quantity:
+                    item
+                      .quantity,
+
+                  discountAmount:
+                    item
+                      .discountAmount,
+
+                  subtotalAmount:
+                    item
+                      .subtotalAmount,
+
+                  gstAmount:
+                    item
+                      .gstAmount,
+
+                  totalAmount:
+                    item
+                      .totalAmount,
+
+                  remarks:
+                    item
+                      .remarks,
+                } as Partial<ProjectFinalInvoiceItem>),
+          );
+
+        await itemRepo
+          .save(
+            invoiceItems,
+          );
+
+        /*
+         * Dealer invoice should continue feeding
+         * dealer outstanding / ledger.
+         *
+         * Existing PI -> Dealer Final Invoice
+         * already does this today. :contentReference[oaicite:1]{index=1}
+         */
+        if (
+          invoiceType ===
+          'DEALER'
+        ) {
+          const ledgerRepo =
+            manager
+              .getRepository(
+                ProjectPartyLedger,
+              );
+
+          await ledgerRepo
+            .save(
+              ledgerRepo
+                .create({
+                  partyId:
+                    Number(
+                      dealer!.id,
+                    ),
+
+                  partyName:
+                    String(
+                      dealer!
+                        .vendorName ||
+                        'Dealer',
+                    ),
+
+                  partyType:
+                    'DEALER',
+
+                  projectId:
+  undefined,
+
+                  entryType:
+                    ProjectLedgerEntryType
+                      .DEBIT,
+
+                  sourceType:
+                    ProjectLedgerSourceType
+                      .FINAL_INVOICE,
+
+                  sourceId:
+                    savedInvoice
+                      .id,
+
+                  amount:
+                    Number(
+                      savedInvoice
+                        .totalAmount ||
+                        0,
+                    ),
+
+                  remarks:
+                    `Dealer Final Invoice ${
+                      savedInvoice
+                        .invoiceNumber ||
+                      savedInvoice
+                        .id
+                    }`,
+
+                  createdBy:
+                    user?.id ||
+                    user?.userId ||
+                    user?.sub ||
+                    null,
+
+                  createdByName:
+                    user?.name ||
+                    user?.email ||
+                    '',
+                } as Partial<ProjectPartyLedger>),
+            );
+        }
+
+        /*
+         * Internal invoice intentionally does NOT
+         * alter physical stock.
+         *
+         * This matches the confirmed centralized
+         * inventory model.
+         *
+         * We are also not creating an automatic
+         * party-ledger entry for the internal company
+         * in this step. We can wire that explicitly
+         * once we decide how the client wants the
+         * inter-company outstanding reflected.
+         */
+
+        lockedSeller
+          .nextInvoiceNumber =
+          sequence + 1;
+
+        await manager
+          .getRepository(
+            ProjectVendorCompany,
+          )
+          .save(
+            lockedSeller,
+          );
+
+        return {
+          message:
+            invoiceType ===
+            'INTER_COMPANY'
+              ? 'Internal tax invoice created successfully'
+              : invoiceType ===
+                  'DEALER'
+                ? 'Dealer tax invoice created successfully'
+                : 'Final invoice created successfully',
+
+          invoice:
+            savedInvoice,
+
+          suggestedInvoiceNumber,
+
+          invoiceNumberOverridden,
+        };
+      },
+    );
 }
 
 async createFinalInvoiceFromProforma(
   proformaInvoiceId: number,
   user: any,
+  body: any = {},
 ) {
   const pi =
     await this.getProformaInvoiceById(
@@ -18996,258 +22393,350 @@ async createFinalInvoiceFromProforma(
     );
   }
 
-  const isDealerInvoice =
-    (pi as any).invoiceType === 'DEALER' ||
-    !!(pi as any).dealerId;
+  const invoiceType =
+    String(
+      (pi as any).invoiceType ||
+        (
+          (pi as any).buyerCompanyId
+            ? 'INTER_COMPANY'
+            : (pi as any).dealerId
+              ? 'DEALER'
+              : 'PROJECT'
+        ),
+    )
+      .trim()
+      .toUpperCase();
 
-  if (isDealerInvoice) {
-    const existingDealerInvoice =
-  await this.projectFinalInvoiceRepository
-    .createQueryBuilder('invoice')
-    .where('invoice.dealerId = :dealerId', {
-      dealerId: Number((pi as any).dealerId),
-    })
-    .andWhere('invoice.invoiceType = :invoiceType', {
-      invoiceType: 'DEALER',
-    })
-    .andWhere('invoice.isHidden = false')
-    .andWhere('invoice.remarks LIKE :remarks', {
-      remarks: `%Generated from ${pi.invoiceNumber}%`,
-    })
-    .getOne();
+  if (
+    ![
+      'PROJECT',
+      'DEALER',
+      'INTER_COMPANY',
+    ].includes(invoiceType)
+  ) {
+    throw new BadRequestException(
+      'Unsupported proforma invoice type',
+    );
+  }
 
-if (existingDealerInvoice) {
-  throw new BadRequestException(
-    'Final invoice already exists for this dealer proforma invoice',
-  );
-}
-
-    const items = Array.isArray((pi as any).items)
+  const items =
+    Array.isArray(
+      (pi as any).items,
+    )
       ? (pi as any).items
       : [];
 
-    if (items.length === 0) {
+  if (
+    items.length === 0
+  ) {
+    throw new BadRequestException(
+      'Proforma invoice has no items',
+    );
+  }
+
+  /*
+   * Prevent generating more than one visible
+   * Final Invoice from the same PI.
+   *
+   * We continue using the source PI number in
+   * remarks because the current schema does not
+   * yet have a dedicated proformaInvoiceId field.
+   */
+  const existingInvoice =
+    await this
+      .projectFinalInvoiceRepository
+      .createQueryBuilder(
+        'invoice',
+      )
+      .where(
+        'invoice.isHidden = false',
+      )
+      .andWhere(
+        'invoice.remarks LIKE :sourcePi',
+        {
+          sourcePi:
+            `%Generated from ${pi.invoiceNumber}%`,
+        },
+      )
+      .getOne();
+
+  if (
+    existingInvoice
+  ) {
+    throw new BadRequestException(
+      'Final invoice already exists for this proforma invoice',
+    );
+  }
+
+  /*
+   * =========================================================
+   * SELLER ENTITY
+   * =========================================================
+   *
+   * New PI records will carry sellerCompanyId.
+   *
+   * Existing Dealer PIs created before this
+   * multi-entity implementation will not.
+   *
+   * For those old Dealer PIs only, fall back to
+   * the configured ADITYA_TRADING billing entity.
+   */
+
+  let sellerCompanyId =
+    Number(
+      (pi as any)
+        .sellerCompanyId ||
+        body
+          ?.sellerCompanyId ||
+        0,
+    );
+
+  if (
+  !sellerCompanyId
+) {
+  throw new BadRequestException(
+    'Issuing company is missing from this proforma invoice',
+  );
+}
+
+  /*
+   * For PROJECT PI:
+   *
+   * Existing project invoices may still use
+   * the legacy flow without sellerCompanyId.
+   *
+   * Once we migrate project PI creation later,
+   * sellerCompanyId will automatically carry
+   * forward too.
+   */
+
+  const requestPayload:
+    any = {
+    invoiceType,
+
+    sellerCompanyId:
+      sellerCompanyId ||
+      undefined,
+
+    invoiceDate:
+      body?.invoiceDate ||
+      new Date(),
+
+    dueDate:
+      body?.dueDate ||
+      undefined,
+
+    /*
+     * Owner may submit the edited number from
+     * the preview modal.
+     *
+     * createFinalInvoice() performs the actual
+     * Owner-only permission check and duplicate
+     * protection.
+     */
+    invoiceNumber:
+      String(
+        body?.invoiceNumber ||
+          '',
+      ).trim() ||
+      undefined,
+
+    remarks:
+      `Generated from ${pi.invoiceNumber}`,
+
+    items:
+      items.map(
+        (
+          item: any,
+        ) => ({
+          materialId:
+            item.materialId
+              ? Number(
+                  item.materialId,
+                )
+              : undefined,
+
+          itemName:
+            String(
+              item.itemName ||
+                '',
+            ),
+
+          category:
+            String(
+              item.category ||
+                '',
+            ),
+
+          brand:
+            String(
+              item.brand ||
+                '',
+            ),
+
+          unit:
+            String(
+              item.unit ||
+                '',
+            ),
+
+          hsnCode:
+            String(
+              item.hsnCode ||
+                '',
+            ),
+
+          finalRate:
+            Number(
+              item.sellingRate ||
+                0,
+            ),
+
+          gstPercent:
+            Number(
+              item.gstPercent ||
+                0,
+            ),
+
+          quantity:
+            Number(
+              item.quantity ||
+                0,
+            ),
+
+          discountAmount:
+            Number(
+              item.discountAmount ||
+                0,
+            ),
+
+          remarks:
+            String(
+              item.remarks ||
+                '',
+            ),
+        }),
+      ),
+  };
+
+  /*
+   * =========================================================
+   * PROJECT
+   * =========================================================
+   */
+
+  if (
+    invoiceType ===
+    'PROJECT'
+  ) {
+    const projectId =
+      Number(
+        pi.projectId ||
+          0,
+      );
+
+    if (
+      !projectId
+    ) {
       throw new BadRequestException(
-        'Proforma invoice has no items',
+        'Project is missing from this proforma invoice',
       );
     }
 
-    let subtotalAmount = 0;
-    let discountAmount = 0;
-    let gstAmount = 0;
-    let totalAmount = 0;
+    const existingProjectInvoice =
+      await this
+        .projectFinalInvoiceRepository
+        .findOne({
+          where: {
+            projectId,
+            isHidden:
+              false,
+          } as any,
+        });
 
-    const preparedItems = items.map((item: any) => {
-      const finalRate = Number(item.sellingRate || 0);
-      const quantity = Number(item.quantity || 0);
-      const gstPercent = Number(item.gstPercent || 0);
-      const itemDiscount = Number(item.discountAmount || 0);
-
-      const subtotal = finalRate * quantity;
-      const taxable = subtotal - itemDiscount;
-      const gst = (taxable * gstPercent) / 100;
-      const total = taxable + gst;
-
-      subtotalAmount += subtotal;
-      discountAmount += itemDiscount;
-      gstAmount += gst;
-      totalAmount += total;
-
-      return {
-        ...item,
-        finalRate,
-        quantity,
-        gstPercent,
-        discountAmount: itemDiscount,
-        subtotalAmount: subtotal,
-        gstAmount: gst,
-        totalAmount: total,
-      };
-    });
-
-    const invoice: any =
-      this.projectFinalInvoiceRepository.create({
-        projectId: undefined,
-
-        invoiceNumber:
-          this.generateFinalInvoiceNumber(),
-
-        status:
-          ProjectFinalInvoiceStatus.GENERATED,
-
-        subtotalAmount,
-        discountAmount,
-        gstAmount,
-        totalAmount,
-
-        paidAmount: 0,
-        pendingAmount: totalAmount,
-
-        invoiceDate: new Date(),
-
-        remarks: `Generated from ${pi.invoiceNumber}`,
-
-        createdBy:
-          user?.id || user?.userId || null,
-
-        createdByName:
-          user?.name || '',
-
-        createdByRole:
-          Array.isArray(user?.roles)
-            ? user.roles.join(', ')
-            : '',
-      } as Partial<ProjectFinalInvoice>);
-
-    invoice.invoiceType = 'DEALER';
-    invoice.dealerId = Number((pi as any).dealerId);
-    invoice.dealerName = (pi as any).dealerName || '';
-    invoice.dealerPhone = (pi as any).dealerPhone || '';
-    invoice.dealerGstNumber = (pi as any).dealerGstNumber || '';
-    invoice.dealerAddress = (pi as any).dealerAddress || '';
-
-    const savedInvoice =
-      await this.projectFinalInvoiceRepository.save(
-        invoice as ProjectFinalInvoice,
+    if (
+      existingProjectInvoice
+    ) {
+      throw new BadRequestException(
+        'Final invoice already exists for this project',
       );
+    }
 
-    await this.projectPartyLedgerRepository.save(
-      this.projectPartyLedgerRepository.create({
-        partyId: Number((pi as any).dealerId),
+    requestPayload.projectId =
+      projectId;
 
-        partyName:
-          (pi as any).dealerName ||
-          'Dealer',
-
-        partyType: 'DEALER',
-
-        projectId: undefined,
-
-        entryType:
-          ProjectLedgerEntryType.DEBIT,
-
-        sourceType:
-          ProjectLedgerSourceType.FINAL_INVOICE,
-
-        sourceId: savedInvoice.id,
-
-        amount: Number(
-          savedInvoice.totalAmount || 0,
-        ),
-
-        remarks: `Dealer Final Invoice ${
-          savedInvoice.invoiceNumber ||
-          savedInvoice.id
-        }`,
-
-        createdBy:
-          user?.id || user?.userId || null,
-
-        createdByName:
-          user?.name || '',
-      } as Partial<ProjectPartyLedger>),
-    );
-
-    const invoiceItems =
-      preparedItems.map((item: any) =>
-        this.projectFinalInvoiceItemRepository.create({
-          finalInvoiceId:
-            savedInvoice.id,
-
-          projectId: undefined,
-
-          materialId:
-            item.materialId
-              ? Number(item.materialId)
-              : null,
-
-          itemName:
-            item.itemName || '',
-
-          category:
-            item.category || '',
-
-          brand:
-            item.brand || '',
-
-          unit:
-  item.unit || '',
-
-hsnCode:
-  item.hsnCode || '',
-
-finalRate:
-  item.finalRate,
-
-          gstPercent:
-            item.gstPercent,
-
-          quantity:
-            item.quantity,
-
-          discountAmount:
-            item.discountAmount,
-
-          subtotalAmount:
-            item.subtotalAmount,
-
-          gstAmount:
-            item.gstAmount,
-
-          totalAmount:
-            item.totalAmount,
-
-          remarks:
-            item.remarks || '',
-        } as Partial<ProjectFinalInvoiceItem>),
+    return this
+      .createFinalInvoice(
+        requestPayload,
+        user,
       );
-
-    await this.projectFinalInvoiceItemRepository.save(
-      invoiceItems,
-    );
-
-    return {
-      message:
-        'Dealer final invoice created successfully',
-
-      invoice: savedInvoice,
-    };
   }
 
-  const existingInvoice =
-    await this.projectFinalInvoiceRepository.findOne({
-      where: {
-        projectId: Number(pi.projectId),
-      },
-    });
+  /*
+   * =========================================================
+   * DEALER
+   * =========================================================
+   */
 
-  if (existingInvoice) {
+  if (
+    invoiceType ===
+    'DEALER'
+  ) {
+    const dealerId =
+      Number(
+        (pi as any)
+          .dealerId ||
+          0,
+      );
+
+    if (
+      !dealerId
+    ) {
+      throw new BadRequestException(
+        'Dealer is missing from this proforma invoice',
+      );
+    }
+
+    requestPayload.dealerId =
+      dealerId;
+
+    return this
+      .createFinalInvoice(
+        requestPayload,
+        user,
+      );
+  }
+
+  /*
+   * =========================================================
+   * INTER COMPANY
+   * =========================================================
+   */
+
+  const buyerCompanyId =
+    Number(
+      (pi as any)
+        .buyerCompanyId ||
+        0,
+    );
+
+  if (
+    !buyerCompanyId
+  ) {
     throw new BadRequestException(
-      'Final invoice already exists for this project',
+      'Buyer company is missing from this inter-company proforma invoice',
     );
   }
 
-  return this.createFinalInvoice(
-    {
-      projectId: pi.projectId,
-      invoiceDate: new Date(),
-      remarks: `Generated from ${pi.invoiceNumber}`,
-      items: (pi.items || []).map((item: any) => ({
-        materialId: item.materialId || null,
-        itemName: item.itemName || '',
-        category: item.category || '',
-        brand: item.brand || '',
-        unit: item.unit || '',
-hsnCode: item.hsnCode || '',
-finalRate: Number(item.sellingRate || 0),
-        gstPercent: Number(item.gstPercent || 0),
-        quantity: Number(item.quantity || 0),
-        discountAmount: Number(item.discountAmount || 0),
-        remarks: item.remarks || '',
-      })),
-    },
-    user,
-  );
+  requestPayload
+    .buyerCompanyId =
+    buyerCompanyId;
+
+  return this
+    .createFinalInvoice(
+      requestPayload,
+      user,
+    );
 }
 
 async hideProformaInvoice(
@@ -19482,423 +22971,1480 @@ async generateFinalInvoicePdf(
   id: number,
   res: Response,
 ) {
-  const invoice = await this.getFinalInvoiceById(id);
+  const invoice =
+    await this.getFinalInvoiceById(
+      id,
+    );
+
+  const invoiceType =
+    String(
+      (invoice as any)
+        .invoiceType ||
+        (
+          (invoice as any)
+            .buyerCompanyId
+            ? 'INTER_COMPANY'
+            : (invoice as any)
+                .dealerId
+              ? 'DEALER'
+              : 'PROJECT'
+        ),
+    )
+      .trim()
+      .toUpperCase();
 
   const isDealerInvoice =
-    (invoice as any).invoiceType === 'DEALER' ||
-    !!(invoice as any).dealerId;
+    invoiceType ===
+    'DEALER';
 
-  const project = !isDealerInvoice && invoice.projectId
-    ? await this.projectRepository.findOne({
-        where: { id: Number(invoice.projectId) },
-      })
-    : null;
+  const isInterCompanyInvoice =
+    invoiceType ===
+    'INTER_COMPANY';
 
-  const doc = new PDFDocument({
-    margin: 40,
-    size: 'A4',
-  });
+  const isProjectInvoice =
+    invoiceType ===
+    'PROJECT';
 
-  const logoPath = path.join(
-    process.cwd(),
-    'src',
-    'assets',
-    'aditya-logo.jpg',
+  const project =
+    isProjectInvoice &&
+    invoice.projectId
+      ? await this
+          .projectRepository
+          .findOne({
+            where: {
+              id:
+                Number(
+                  invoice.projectId,
+                ),
+            },
+          })
+      : null;
+
+  /*
+   * =========================================================
+   * SELLER SNAPSHOT
+   * =========================================================
+   */
+
+  const sellerCompanyName =
+  String(
+    (invoice as any)
+      .sellerCompanyName ||
+      '',
+  ).trim();
+
+const sellerLegalName =
+  String(
+    (invoice as any)
+      .sellerLegalName ||
+      sellerCompanyName,
+  ).trim();
+
+const sellerGstNumber =
+  String(
+    (invoice as any)
+      .sellerGstNumber ||
+      '',
+  ).trim();
+
+const sellerAddress =
+  String(
+    (invoice as any)
+      .sellerAddress ||
+      '',
+  ).trim();
+
+const sellerCity =
+  String(
+    (invoice as any)
+      .sellerCity ||
+      '',
+  ).trim();
+
+const sellerState =
+  String(
+    (invoice as any)
+      .sellerState ||
+      '',
+  ).trim();
+
+const sellerPinCode =
+  String(
+    (invoice as any)
+      .sellerPinCode ||
+      '',
+  ).trim();
+
+const sellerPhone =
+  String(
+    (invoice as any)
+      .sellerPhone ||
+      '',
+  ).trim();
+
+const sellerEmail =
+  String(
+    (invoice as any)
+      .sellerEmail ||
+      '',
+  ).trim();
+
+const sellerLogoUrl =
+  String(
+    (invoice as any)
+      .sellerLogoUrl ||
+      '',
+  ).trim();
+
+if (
+  !sellerCompanyName ||
+  !sellerGstNumber
+) {
+  throw new BadRequestException(
+    'Seller company snapshot is missing from this final invoice',
   );
+}
 
-  const fileName = `${invoice.invoiceNumber || `INV-${invoice.id}`}.pdf`;
+  /*
+   * =========================================================
+   * BUYER
+   * =========================================================
+   */
+
+  let buyerName =
+    '-';
+
+  let buyerPhone =
+    '-';
+
+  let buyerGstNumber =
+    '-';
+
+  let buyerAddress =
+    '-';
+
+  if (
+    isDealerInvoice
+  ) {
+    buyerName =
+      String(
+        (invoice as any)
+          .dealerName ||
+          '-',
+      );
+
+    buyerPhone =
+      String(
+        (invoice as any)
+          .dealerPhone ||
+          '-',
+      );
+
+    buyerGstNumber =
+      String(
+        (invoice as any)
+          .dealerGstNumber ||
+          '-',
+      );
+
+    buyerAddress =
+      String(
+        (invoice as any)
+          .dealerAddress ||
+          '-',
+      );
+  }
+
+  if (
+    isInterCompanyInvoice
+  ) {
+    buyerName =
+      String(
+        (invoice as any)
+          .buyerLegalName ||
+          (invoice as any)
+            .buyerCompanyName ||
+          '-',
+      );
+
+    buyerPhone =
+      String(
+        (invoice as any)
+          .buyerPhone ||
+          '-',
+      );
+
+    buyerGstNumber =
+      String(
+        (invoice as any)
+          .buyerGstNumber ||
+          '-',
+      );
+
+    buyerAddress =
+      [
+        String(
+          (invoice as any)
+            .buyerAddress ||
+            '',
+        ).trim(),
+
+        String(
+          (invoice as any)
+            .buyerCity ||
+            '',
+        ).trim(),
+
+        String(
+          (invoice as any)
+            .buyerState ||
+            '',
+        ).trim(),
+
+        String(
+          (invoice as any)
+            .buyerPinCode ||
+            '',
+        ).trim(),
+      ]
+        .filter(
+          Boolean,
+        )
+        .join(', ') ||
+      '-';
+  }
+
+  if (
+    isProjectInvoice
+  ) {
+    buyerName =
+      String(
+        (project as any)
+          ?.customerName ||
+          '-',
+      );
+
+    buyerPhone =
+      String(
+        (project as any)
+          ?.customerPhone ||
+          '-',
+      );
+
+    buyerGstNumber =
+      String(
+        (project as any)
+          ?.gstNumber ||
+          '-',
+      );
+
+    buyerAddress =
+      String(
+        (project as any)
+          ?.address ||
+          (project as any)
+            ?.gpsAddress ||
+          '-',
+      );
+  }
+
+  const doc =
+    new PDFDocument({
+      margin:
+        40,
+
+      size:
+        'A4',
+    });
+
+
+  const fileName =
+    `${
+      invoice.invoiceNumber ||
+      `INV-${invoice.id}`
+    }.pdf`;
 
   res.setHeader(
     'Content-Disposition',
     `inline; filename="${fileName}"`,
   );
-  res.setHeader('Content-Type', 'application/pdf');
 
-  doc.pipe(res);
+  res.setHeader(
+    'Content-Type',
+    'application/pdf',
+  );
 
-  const pageLeft = 40;
-  const pageRight = 555;
-  const pageWidth = pageRight - pageLeft;
+  doc.pipe(
+    res,
+  );
 
-  const blue = '#1e40af';
-  const orange = '#f97316';
-  const lightBlue = '#eff6ff';
-  const lightOrange = '#fff7ed';
-  const border = '#d1d5db';
-  const dark = '#111827';
-  const muted = '#6b7280';
+  const pageLeft =
+    40;
 
-  const invoiceDate = invoice.invoiceDate
-    ? new Date(invoice.invoiceDate).toLocaleDateString('en-IN')
-    : new Date(invoice.createdAt).toLocaleDateString('en-IN');
+  const pageRight =
+    555;
 
-  doc.image(logoPath, 40, 20, {
-    fit: [515, 110],
-    align: 'center',
-  });
+  const pageWidth =
+    pageRight -
+    pageLeft;
 
-  doc.y = 132;
+  const blue =
+    '#1e40af';
+
+  const orange =
+    '#f97316';
+
+  const lightBlue =
+    '#eff6ff';
+
+  const lightOrange =
+    '#fff7ed';
+
+  const border =
+    '#d1d5db';
+
+  const dark =
+    '#111827';
+
+  const muted =
+    '#6b7280';
+
+  const invoiceDate =
+    invoice.invoiceDate
+      ? new Date(
+          invoice.invoiceDate,
+        )
+          .toLocaleDateString(
+            'en-IN',
+          )
+      : new Date(
+          invoice.createdAt,
+        )
+          .toLocaleDateString(
+            'en-IN',
+          );
+
+  /*
+   * Logo
+   */
+
+  let resolvedLogoPath:
+  string | null =
+  null;
+
+if (
+  sellerLogoUrl &&
+  !sellerLogoUrl.startsWith(
+    'http',
+  )
+) {
+  const possiblePath =
+    path.isAbsolute(
+      sellerLogoUrl,
+    )
+      ? sellerLogoUrl
+      : path.join(
+          process.cwd(),
+          sellerLogoUrl,
+        );
+
+  try {
+    if (
+      require('fs').existsSync(
+        possiblePath,
+      )
+    ) {
+      resolvedLogoPath =
+        possiblePath;
+    }
+  } catch {
+    resolvedLogoPath =
+      null;
+  }
+}
+
+if (
+  resolvedLogoPath
+) {
+  try {
+    doc.image(
+      resolvedLogoPath,
+      40,
+      20,
+      {
+        fit: [
+          515,
+          110,
+        ],
+        align:
+          'center',
+      },
+    );
+  } catch {
+    /*
+     * PDF generation should still succeed
+     * without a logo.
+     */
+  }
+}
+
+  doc.y =
+    132;
 
   doc
-    .roundedRect(pageLeft, doc.y, pageWidth, 32, 6)
-    .fill(blue);
+    .roundedRect(
+      pageLeft,
+      doc.y,
+      pageWidth,
+      32,
+      6,
+    )
+    .fill(
+      blue,
+    );
 
   doc
-    .fillColor('#ffffff')
-    .fontSize(17)
-    .text('TAX INVOICE', pageLeft, doc.y + 8, {
-      width: pageWidth,
-      align: 'center',
-    });
-
-  doc.y += 38;
-
-  doc
-    .fontSize(8)
-    .fillColor(muted)
+    .fillColor(
+      '#ffffff',
+    )
+    .fontSize(
+      17,
+    )
     .text(
-      'ADITYA TRADING | adityasolarsraj01@gmail.com | 8306170662, 9887634474',
+      'TAX INVOICE',
+      pageLeft,
+      doc.y + 8,
+      {
+        width:
+          pageWidth,
+
+        align:
+          'center',
+      },
+    );
+
+  doc.y +=
+    38;
+
+  const sellerDisplayName =
+    sellerLegalName ||
+    sellerCompanyName;
+
+  const sellerLocation =
+    [
+      sellerAddress,
+      sellerCity,
+      sellerState,
+      sellerPinCode,
+    ]
+      .filter(
+        Boolean,
+      )
+      .join(', ');
+
+  const sellerContactLine =
+    [
+      sellerDisplayName,
+      sellerEmail,
+      sellerPhone,
+    ]
+      .filter(
+        Boolean,
+      )
+      .join(' | ');
+
+  doc
+    .fontSize(
+      8,
+    )
+    .fillColor(
+      muted,
+    )
+    .text(
+      sellerContactLine ||
+        sellerDisplayName,
       pageLeft,
       doc.y,
       {
-        width: pageWidth,
-        align: 'center',
+        width:
+          pageWidth,
+
+        align:
+          'center',
       },
     );
 
   doc
-    .fontSize(8)
-    .fillColor(muted)
+    .fontSize(
+      8,
+    )
+    .fillColor(
+      muted,
+    )
     .text(
-      'GSTIN: 08ABCHR1453D1ZE',
+      `GSTIN: ${
+        sellerGstNumber ||
+        '-'
+      }${
+        sellerLocation
+          ? ` | ${sellerLocation}`
+          : ''
+      }`,
       pageLeft,
       doc.y + 12,
       {
-        width: pageWidth,
-        align: 'center',
+        width:
+          pageWidth,
+
+        align:
+          'center',
       },
     );
 
-  doc.y += 26;
+  doc.y +=
+    26;
 
-  const cardY = doc.y;
-  const cardW = 250;
-  const cardH = 88;
+  const cardY =
+    doc.y;
+
+  const cardW =
+    250;
+
+  const cardH =
+    88;
 
   doc
-    .roundedRect(pageLeft, cardY, cardW, cardH, 6)
-    .fill(lightBlue)
-    .strokeColor(border)
+    .roundedRect(
+      pageLeft,
+      cardY,
+      cardW,
+      cardH,
+      6,
+    )
+    .fill(
+      lightBlue,
+    )
+    .strokeColor(
+      border,
+    )
     .stroke();
 
   doc
-    .roundedRect(pageLeft + 265, cardY, cardW, cardH, 6)
-    .fill('#f9fafb')
-    .strokeColor(border)
+    .roundedRect(
+      pageLeft + 265,
+      cardY,
+      cardW,
+      cardH,
+      6,
+    )
+    .fill(
+      '#f9fafb',
+    )
+    .strokeColor(
+      border,
+    )
     .stroke();
 
   doc
-    .fontSize(10)
-    .fillColor(blue)
-    .text('BILL TO', pageLeft + 12, cardY + 10);
-
-  if (isDealerInvoice) {
-    doc
-      .fontSize(9)
-      .fillColor(dark)
-      .text(`Name: ${(invoice as any).dealerName || '-'}`, pageLeft + 12, cardY + 28, {
-        width: 225,
-      })
-      .text(`Phone: ${(invoice as any).dealerPhone || '-'}`, pageLeft + 12, cardY + 43, {
-        width: 225,
-      })
-      .text(`GST: ${(invoice as any).dealerGstNumber || '-'}`, pageLeft + 12, cardY + 58, {
-        width: 225,
-      })
-      .text(`Address: ${(invoice as any).dealerAddress || '-'}`, pageLeft + 12, cardY + 73, {
-        width: 225,
-        height: 15,
-      });
-  } else {
-    doc
-      .fontSize(9)
-      .fillColor(dark)
-      .text(`Name: ${(project as any)?.customerName || '-'}`, pageLeft + 12, cardY + 28, {
-        width: 225,
-      })
-      .text(`Phone: ${(project as any)?.customerPhone || '-'}`, pageLeft + 12, cardY + 43, {
-        width: 225,
-      })
-      .text(`Address: ${(project as any)?.address || (project as any)?.gpsAddress || '-'}`, pageLeft + 12, cardY + 58, {
-        width: 225,
-        height: 28,
-      });
-  }
+    .fontSize(
+      10,
+    )
+    .fillColor(
+      blue,
+    )
+    .text(
+      'BILL TO',
+      pageLeft + 12,
+      cardY + 10,
+    );
 
   doc
-    .fontSize(10)
-    .fillColor(orange)
-    .text('DOCUMENT DETAILS', pageLeft + 277, cardY + 10);
+    .fontSize(
+      9,
+    )
+    .fillColor(
+      dark,
+    )
+    .text(
+      `Name: ${
+        buyerName ||
+        '-'
+      }`,
+      pageLeft + 12,
+      cardY + 28,
+      {
+        width:
+          225,
+      },
+    )
+    .text(
+      `Phone: ${
+        buyerPhone ||
+        '-'
+      }`,
+      pageLeft + 12,
+      cardY + 43,
+      {
+        width:
+          225,
+      },
+    )
+    .text(
+      `GST: ${
+        buyerGstNumber ||
+        '-'
+      }`,
+      pageLeft + 12,
+      cardY + 58,
+      {
+        width:
+          225,
+      },
+    )
+    .text(
+      `Address: ${
+        buyerAddress ||
+        '-'
+      }`,
+      pageLeft + 12,
+      cardY + 73,
+      {
+        width:
+          225,
+
+        height:
+          15,
+      },
+    );
 
   doc
-    .fontSize(9)
-    .fillColor(dark)
-    .text(`Invoice No: ${invoice.invoiceNumber || '-'}`, pageLeft + 277, cardY + 28, {
-      width: 220,
-    })
-    .text(`Date: ${invoiceDate}`, pageLeft + 277, cardY + 43, {
-      width: 220,
-    })
-    .text(`Status: ${invoice.status || '-'}`, pageLeft + 277, cardY + 58, {
-      width: 220,
-    })
-    .text(`Type: ${isDealerInvoice ? 'Dealer / Trading' : 'Project'}`, pageLeft + 277, cardY + 73, {
-      width: 220,
-    });
+    .fontSize(
+      10,
+    )
+    .fillColor(
+      orange,
+    )
+    .text(
+      'DOCUMENT DETAILS',
+      pageLeft + 277,
+      cardY + 10,
+    );
 
-  doc.y = cardY + cardH + 16;
+  const typeLabel =
+    isInterCompanyInvoice
+      ? 'Inter-Company'
+      : isDealerInvoice
+        ? 'Dealer / Trading'
+        : 'Project';
 
   doc
-    .fontSize(12)
-    .fillColor(dark)
-    .text('Invoice Items', pageLeft, doc.y);
+    .fontSize(
+      9,
+    )
+    .fillColor(
+      dark,
+    )
+    .text(
+      `Invoice No: ${
+        invoice.invoiceNumber ||
+        '-'
+      }`,
+      pageLeft + 277,
+      cardY + 28,
+      {
+        width:
+          220,
+      },
+    )
+    .text(
+      `Date: ${invoiceDate}`,
+      pageLeft + 277,
+      cardY + 43,
+      {
+        width:
+          220,
+      },
+    )
+    .text(
+      `Status: ${
+        invoice.status ||
+        '-'
+      }`,
+      pageLeft + 277,
+      cardY + 58,
+      {
+        width:
+          220,
+      },
+    )
+    .text(
+      `Type: ${typeLabel}`,
+      pageLeft + 277,
+      cardY + 73,
+      {
+        width:
+          220,
+      },
+    );
 
-  doc.y += 18;
+  doc.y =
+    cardY +
+    cardH +
+    16;
 
-  const drawTableHeader = () => {
-    const y = doc.y;
+  doc
+    .fontSize(
+      12,
+    )
+    .fillColor(
+      dark,
+    )
+    .text(
+      'Invoice Items',
+      pageLeft,
+      doc.y,
+    );
 
-    doc
-      .rect(pageLeft, y, pageWidth, 22)
-      .fill(blue);
+  doc.y +=
+    18;
 
-    doc
-      .fontSize(8)
-      .fillColor('#ffffff')
-      .text('Sr', 42, y + 7, { width: 22 })
-      .text('Item Name', 65, y + 7, { width: 165 })
-      .text('HSN', 230, y + 7, { width: 45 })
-      .text('Qty', 255, y + 7, { width: 30, align: 'right' })
-      .text('Unit', 292, y + 7, { width: 70 })
-.text('Rate', 365, y + 7, { width: 45, align: 'right' })
-.text('GST%', 412, y + 7, { width: 30, align: 'right' })
-.text('GST Amt', 445, y + 7, { width: 48, align: 'right' })
-.text('Total', 495, y + 7, { width: 57, align: 'right' })
+  const drawTableHeader =
+    () => {
+      const y =
+        doc.y;
 
-    doc.y = y + 22;
-  };
+      doc
+        .rect(
+          pageLeft,
+          y,
+          pageWidth,
+          22,
+        )
+        .fill(
+          blue,
+        );
+
+      doc
+        .fontSize(
+          8,
+        )
+        .fillColor(
+          '#ffffff',
+        )
+        .text(
+          'Sr',
+          42,
+          y + 7,
+          {
+            width:
+              22,
+          },
+        )
+        .text(
+          'Item Name',
+          65,
+          y + 7,
+          {
+            width:
+              165,
+          },
+        )
+        .text(
+          'HSN',
+          230,
+          y + 7,
+          {
+            width:
+              45,
+          },
+        )
+        .text(
+          'Qty',
+          255,
+          y + 7,
+          {
+            width:
+              30,
+
+            align:
+              'right',
+          },
+        )
+        .text(
+          'Unit',
+          292,
+          y + 7,
+          {
+            width:
+              70,
+          },
+        )
+        .text(
+          'Rate',
+          365,
+          y + 7,
+          {
+            width:
+              45,
+
+            align:
+              'right',
+          },
+        )
+        .text(
+          'GST%',
+          412,
+          y + 7,
+          {
+            width:
+              30,
+
+            align:
+              'right',
+          },
+        )
+        .text(
+          'GST Amt',
+          445,
+          y + 7,
+          {
+            width:
+              48,
+
+            align:
+              'right',
+          },
+        )
+        .text(
+          'Total',
+          495,
+          y + 7,
+          {
+            width:
+              57,
+
+            align:
+              'right',
+          },
+        );
+
+      doc.y =
+        y + 22;
+    };
 
   drawTableHeader();
 
-  (invoice.items || []).forEach((item: any, index: number) => {
-    const itemName = item.itemName || '-';
+  (
+    invoice.items ||
+    []
+  ).forEach(
+    (
+      item: any,
+      index: number,
+    ) => {
+      const itemName =
+        item.itemName ||
+        '-';
 
-    const rowHeight = Math.max(
-      28,
-      Math.min(
-        46,
-        doc.fontSize(8).heightOfString(itemName, {
-          width: 160,
-        }) + 10,
-      ),
-    );
+      const rowHeight =
+        Math.max(
+          28,
+          Math.min(
+            46,
+            doc
+              .fontSize(
+                8,
+              )
+              .heightOfString(
+                itemName,
+                {
+                  width:
+                    160,
+                },
+              ) +
+              10,
+          ),
+        );
 
-    if (doc.y + rowHeight > 700) {
-      doc.addPage();
-      doc.y = 40;
-      drawTableHeader();
-    }
+      if (
+        doc.y +
+          rowHeight >
+        700
+      ) {
+        doc.addPage();
 
-    const y = doc.y;
+        doc.y =
+          40;
 
-    doc
-      .rect(pageLeft, y, pageWidth, rowHeight)
-      .fill(index % 2 === 0 ? '#f9fafb' : '#ffffff');
+        drawTableHeader();
+      }
 
-    doc
-      .strokeColor(border)
-      .lineWidth(0.4)
-      .rect(pageLeft, y, pageWidth, rowHeight)
-      .stroke();
+      const y =
+        doc.y;
 
-    doc
-      .fontSize(8)
-      .fillColor(dark)
-      .text(String(index + 1), 42, y + 7, { width: 22 })
-      .text(itemName, 65, y + 7, {
-        width: 160,
-        height: rowHeight - 8,
-      })
-      .text(String((item as any).hsnCode || '-'), 230, y + 7, {
-        width: 45,
-      })
-      .text(String(item.quantity || 0), 255, y + 7, {
-        width: 30,
-        align: 'right',
-      })
-      .text(String(item.unit || '-').replace(/\s*-\s*/g, '-'), 292, y + 7, {
-  width: 70,
-  height: rowHeight - 8,
-})
-      .text(this.formatInr(item.finalRate || 0), 365, y + 7, {
-        width: 45,
-        align: 'right',
-      })
-      .text(`${item.gstPercent || 0}%`, 412, y + 7, {
-  width: 30,
-  align: 'right',
-})
-.text(this.formatInr(item.gstAmount || 0), 445, y + 7, {
-  width: 48,
-  align: 'right',
-})
-.text(this.formatInr(item.totalAmount || 0), 495, y + 7, {
-  width: 57,
-  align: 'right',
-})
+      doc
+        .rect(
+          pageLeft,
+          y,
+          pageWidth,
+          rowHeight,
+        )
+        .fill(
+          index %
+            2 ===
+            0
+            ? '#f9fafb'
+            : '#ffffff',
+        );
 
-    doc.y = y + rowHeight;
-  });
+      doc
+        .strokeColor(
+          border,
+        )
+        .lineWidth(
+          0.4,
+        )
+        .rect(
+          pageLeft,
+          y,
+          pageWidth,
+          rowHeight,
+        )
+        .stroke();
 
-  doc.y += 14;
+      doc
+        .fontSize(
+          8,
+        )
+        .fillColor(
+          dark,
+        )
+        .text(
+          String(
+            index +
+              1,
+          ),
+          42,
+          y + 7,
+          {
+            width:
+              22,
+          },
+        )
+        .text(
+          itemName,
+          65,
+          y + 7,
+          {
+            width:
+              160,
 
-const requiredFooterSpace = isDealerInvoice ? 190 : 180;
+            height:
+              rowHeight -
+              8,
+          },
+        )
+        .text(
+          String(
+            item.hsnCode ||
+              '-',
+          ),
+          230,
+          y + 7,
+          {
+            width:
+              45,
+          },
+        )
+        .text(
+          String(
+            item.quantity ||
+              0,
+          ),
+          255,
+          y + 7,
+          {
+            width:
+              30,
+
+            align:
+              'right',
+          },
+        )
+        .text(
+          String(
+            item.unit ||
+              '-',
+          ).replace(
+            /\s*-\s*/g,
+            '-',
+          ),
+          292,
+          y + 7,
+          {
+            width:
+              70,
+
+            height:
+              rowHeight -
+              8,
+          },
+        )
+        .text(
+          this.formatInr(
+            item.finalRate ||
+              0,
+          ),
+          365,
+          y + 7,
+          {
+            width:
+              45,
+
+            align:
+              'right',
+          },
+        )
+        .text(
+          `${
+            item.gstPercent ||
+            0
+          }%`,
+          412,
+          y + 7,
+          {
+            width:
+              30,
+
+            align:
+              'right',
+          },
+        )
+        .text(
+          this.formatInr(
+            item.gstAmount ||
+              0,
+          ),
+          445,
+          y + 7,
+          {
+            width:
+              48,
+
+            align:
+              'right',
+          },
+        )
+        .text(
+          this.formatInr(
+            item.totalAmount ||
+              0,
+          ),
+          495,
+          y + 7,
+          {
+            width:
+              57,
+
+            align:
+              'right',
+          },
+        );
+
+      doc.y =
+        y +
+        rowHeight;
+    },
+  );
+
+  doc.y +=
+    14;
+
+  const requiredFooterSpace =
+  isDealerInvoice ? 190 : 180;
 
 if (doc.y + requiredFooterSpace > 760) {
   doc.addPage();
   doc.y = 40;
 }
 
-  const summaryX = 345;
-  const summaryY = doc.y;
-  const summaryW = 210;
+  const summaryX =
+    345;
+
+  const summaryY =
+    doc.y;
+
+  const summaryW =
+    210;
 
   doc
-    .roundedRect(summaryX, summaryY, summaryW, 130, 6)
-    .fill('#f8fafc')
-    .strokeColor(border)
+    .roundedRect(
+      summaryX,
+      summaryY,
+      summaryW,
+      130,
+      6,
+    )
+    .fill(
+      '#f8fafc',
+    )
+    .strokeColor(
+      border,
+    )
     .stroke();
 
-  const summaryLine = (
-    label: string,
-    value: any,
-    yOffset: number,
-    bold = false,
-    color = dark,
-  ) => {
-    doc
-      .fontSize(bold ? 11 : 9)
-      .fillColor(color)
-      .text(label, summaryX + 12, summaryY + yOffset, {
-        width: 85,
-      })
-      .text(this.formatInr(value), summaryX + 100, summaryY + yOffset, {
-        width: 95,
-        align: 'right',
-      });
-  };
+  const summaryLine =
+    (
+      label:
+        string,
+      value:
+        any,
+      yOffset:
+        number,
+      bold =
+        false,
+      color =
+        dark,
+    ) => {
+      doc
+        .fontSize(
+          bold
+            ? 11
+            : 9,
+        )
+        .fillColor(
+          color,
+        )
+        .text(
+          label,
+          summaryX +
+            12,
+          summaryY +
+            yOffset,
+          {
+            width:
+              85,
+          },
+        )
+        .text(
+          this.formatInr(
+            value,
+          ),
+          summaryX +
+            100,
+          summaryY +
+            yOffset,
+          {
+            width:
+              95,
 
-  summaryLine('Subtotal', invoice.subtotalAmount, 12);
-  summaryLine('Discount', invoice.discountAmount, 30);
-  summaryLine('GST', invoice.gstAmount, 48);
+            align:
+              'right',
+          },
+        );
+    };
+
+  summaryLine(
+    'Subtotal',
+    invoice.subtotalAmount,
+    12,
+  );
+
+  summaryLine(
+    'Discount',
+    invoice.discountAmount,
+    30,
+  );
+
+  summaryLine(
+    'GST',
+    invoice.gstAmount,
+    48,
+  );
 
   doc
-    .moveTo(summaryX + 10, summaryY + 67)
-    .lineTo(summaryX + summaryW - 10, summaryY + 67)
-    .strokeColor(orange)
-    .lineWidth(1)
+    .moveTo(
+      summaryX +
+        10,
+      summaryY +
+        67,
+    )
+    .lineTo(
+      summaryX +
+        summaryW -
+        10,
+      summaryY +
+        67,
+    )
+    .strokeColor(
+      orange,
+    )
+    .lineWidth(
+      1,
+    )
     .stroke();
 
-  summaryLine('Grand Total', invoice.totalAmount, 74, true, '#16a34a');
-  summaryLine('Paid', invoice.paidAmount, 96);
-  summaryLine('Pending', invoice.pendingAmount, 112, true, '#dc2626');
+  summaryLine(
+    'Grand Total',
+    invoice.totalAmount,
+    74,
+    true,
+    '#16a34a',
+  );
 
-  doc.y = summaryY + 144;
+  summaryLine(
+    'Paid',
+    invoice.paidAmount,
+    96,
+  );
+
+  summaryLine(
+    'Pending',
+    invoice.pendingAmount,
+    112,
+    true,
+    '#dc2626',
+  );
+
+  doc.y =
+    summaryY +
+    144;
 
   doc
-    .roundedRect(pageLeft, doc.y, pageWidth, 34, 6)
-    .fill(lightOrange)
-    .strokeColor(border)
+    .roundedRect(
+      pageLeft,
+      doc.y,
+      pageWidth,
+      34,
+      6,
+    )
+    .fill(
+      lightOrange,
+    )
+    .strokeColor(
+      border,
+    )
     .stroke();
 
   doc
-    .fontSize(9)
-    .fillColor(orange)
-    .text('Amount in Words', pageLeft + 12, doc.y + 8);
-
-  doc
-    .fontSize(10)
-    .fillColor(dark)
+    .fontSize(
+      9,
+    )
+    .fillColor(
+      orange,
+    )
     .text(
-      this.numberToWordsIndian(Number(invoice.totalAmount || 0)),
-      pageLeft + 12,
-      doc.y + 20,
+      'Amount in Words',
+      pageLeft +
+        12,
+      doc.y +
+        8,
+    );
+
+  doc
+    .fontSize(
+      10,
+    )
+    .fillColor(
+      dark,
+    )
+    .text(
+      this
+        .numberToWordsIndian(
+          Number(
+            invoice.totalAmount ||
+              0,
+          ),
+        ),
+      pageLeft +
+        12,
+      doc.y +
+        20,
       {
-        width: pageWidth - 24,
+        width:
+          pageWidth -
+          24,
       },
     );
 
-  doc.y += 46;
+  doc.y +=
+    46;
 
-  if (doc.y + 95 > 760) {
-  doc.addPage();
-  doc.y = 40;
-}
+  if (
+    doc.y +
+      95 >
+    760
+  ) {
+    doc.addPage();
 
-  const footerY = doc.y;
+    doc.y =
+      40;
+  }
+
+  const footerY =
+    doc.y;
 
   doc
-    .roundedRect(pageLeft, footerY, 250, 82, 6)
-    .fill('#f9fafb')
-    .strokeColor(border)
+    .roundedRect(
+      pageLeft,
+      footerY,
+      250,
+      82,
+      6,
+    )
+    .fill(
+      '#f9fafb',
+    )
+    .strokeColor(
+      border,
+    )
     .stroke();
 
   doc
-    .fontSize(10)
-    .fillColor(blue)
-    .text('Terms & Conditions', pageLeft + 12, footerY + 10);
+    .fontSize(
+      10,
+    )
+    .fillColor(
+      blue,
+    )
+    .text(
+      'Terms & Conditions',
+      pageLeft +
+        12,
+      footerY +
+        10,
+    );
 
   doc
-    .fontSize(8)
-    .fillColor(dark)
-    .text('1. This is a system-generated tax invoice.', pageLeft + 12, footerY + 28, {
-      width: 225,
-    })
-    .text('2. Payment and warranty terms as per company policy.', pageLeft + 12, footerY + 42, {
-      width: 225,
-    })
-    .text('3. Subject to applicable GST rules.', pageLeft + 12, footerY + 56, {
-      width: 225,
-    });
+    .fontSize(
+      8,
+    )
+    .fillColor(
+      dark,
+    )
+    .text(
+      '1. This is a system-generated tax invoice.',
+      pageLeft +
+        12,
+      footerY +
+        28,
+      {
+        width:
+          225,
+      },
+    )
+    .text(
+      '2. Payment and warranty terms as per company policy.',
+      pageLeft +
+        12,
+      footerY +
+        42,
+      {
+        width:
+          225,
+      },
+    )
+    .text(
+      '3. Subject to applicable GST rules.',
+      pageLeft +
+        12,
+      footerY +
+        56,
+      {
+        width:
+          225,
+      },
+    );
 
   doc
-    .roundedRect(pageLeft + 265, footerY, 250, 82, 6)
-    .fill('#f9fafb')
-    .strokeColor(border)
+    .roundedRect(
+      pageLeft +
+        265,
+      footerY,
+      250,
+      82,
+      6,
+    )
+    .fill(
+      '#f9fafb',
+    )
+    .strokeColor(
+      border,
+    )
     .stroke();
 
   doc
-    .fontSize(10)
-    .fillColor(blue)
-    .text('For Aditya Trading', pageLeft + 277, footerY + 10);
+    .fontSize(
+      10,
+    )
+    .fillColor(
+      blue,
+    )
+    .text(
+      `For ${
+        sellerDisplayName ||
+        sellerCompanyName
+      }`,
+      pageLeft +
+        277,
+      footerY +
+        10,
+    );
 
   doc
-    .fontSize(8)
-    .fillColor(dark)
-    .text(`Generated On: ${invoiceDate}`, pageLeft + 277, footerY + 28, {
-      width: 220,
-    })
-    .text('Prepared By: System', pageLeft + 277, footerY + 42, {
-      width: 220,
-    });
+    .fontSize(
+      8,
+    )
+    .fillColor(
+      dark,
+    )
+    .text(
+      `Generated On: ${invoiceDate}`,
+      pageLeft +
+        277,
+      footerY +
+        28,
+      {
+        width:
+          220,
+      },
+    )
+    .text(
+      `Prepared By: ${
+        invoice.createdByName ||
+        'System'
+      }`,
+      pageLeft +
+        277,
+      footerY +
+        42,
+      {
+        width:
+          220,
+      },
+    );
 
   doc
-    .fontSize(8)
-    .fillColor(muted)
-    .text('Authorized Signatory', pageLeft + 277, footerY + 62, {
-      width: 220,
-      align: 'right',
-    });
+    .fontSize(
+      8,
+    )
+    .fillColor(
+      muted,
+    )
+    .text(
+      'Authorized Signatory',
+      pageLeft +
+        277,
+      footerY +
+        62,
+      {
+        width:
+          220,
+
+        align:
+          'right',
+      },
+    );
 
   doc.end();
 }
@@ -30421,11 +34967,15 @@ async createVendorManagementCompany(
   body: any,
   user: any,
 ) {
-  this.assertVendorManagementAccess(user);
+  this.assertVendorManagementAccess(
+    user,
+  );
 
-  const companyName = String(
-    body?.companyName || '',
-  ).trim();
+  const companyName =
+    String(
+      body?.companyName ||
+        '',
+    ).trim();
 
   if (!companyName) {
     throw new BadRequestException(
@@ -30434,16 +34984,22 @@ async createVendorManagementCompany(
   }
 
   const existing =
-    await this.projectVendorCompanyRepository
-      .createQueryBuilder('company')
+    await this
+      .projectVendorCompanyRepository
+      .createQueryBuilder(
+        'company',
+      )
       .where(
         'LOWER(TRIM(company.companyName)) = :companyName',
         {
           companyName:
-            companyName.toLowerCase(),
+            companyName
+              .toLowerCase(),
         },
       )
-      .andWhere('company.isHidden = false')
+      .andWhere(
+        'company.isHidden = false',
+      )
       .getOne();
 
   if (existing) {
@@ -30452,62 +35008,237 @@ async createVendorManagementCompany(
     );
   }
 
-  const company =
-    this.projectVendorCompanyRepository.create({
-      companyName,
-      legalName:
-        String(body?.legalName || '').trim(),
-      gstNumber:
-        String(body?.gstNumber || '').trim(),
-      panNumber:
-        String(body?.panNumber || '').trim(),
-      email:
-        String(body?.email || '').trim(),
-      phone:
-        String(body?.phone || '').trim(),
-      alternatePhone:
-        String(body?.alternatePhone || '').trim(),
-      address:
-        String(body?.address || '').trim(),
-      city:
-        String(body?.city || '').trim(),
-      state:
-        String(body?.state || '').trim(),
-      pinCode:
-        String(body?.pinCode || '').trim(),
-      bankName:
-        String(body?.bankName || '').trim(),
-      bankAccountName:
-        String(
-          body?.bankAccountName || '',
-        ).trim(),
-      bankAccountNumber:
-        String(
-          body?.bankAccountNumber || '',
-        ).trim(),
-      bankIfsc:
-        String(body?.bankIfsc || '').trim(),
-      upiId:
-        String(body?.upiId || '').trim(),
-      remarks:
-        String(body?.remarks || '').trim(),
-      isActive:
-        body?.isActive !== false,
-      isHidden: false,
-      createdBy:
-        user?.id ||
-        user?.userId ||
-        user?.sub ||
-        null,
-      createdByName:
-        user?.name ||
-        user?.email ||
-        '',
-    } as Partial<ProjectVendorCompany>);
+  const isBillingEntity =
+    body?.isBillingEntity ===
+    true;
 
-  return this.projectVendorCompanyRepository.save(
-    company,
-  );
+  const billingEntityCode =
+    this
+      .normalizeBillingEntityCode(
+        body?.billingEntityCode ||
+          companyName,
+      );
+
+  const invoicePrefix =
+    this
+      .normalizeInvoicePrefix(
+        body?.invoicePrefix ||
+          '',
+      );
+
+  if (
+    isBillingEntity &&
+    !billingEntityCode
+  ) {
+    throw new BadRequestException(
+      'Billing entity code is required',
+    );
+  }
+
+  if (
+    isBillingEntity &&
+    !invoicePrefix
+  ) {
+    throw new BadRequestException(
+      'Invoice prefix is required for billing entity',
+    );
+  }
+
+  if (
+    isBillingEntity
+  ) {
+    const duplicateCode =
+      await this
+        .projectVendorCompanyRepository
+        .createQueryBuilder(
+          'company',
+        )
+        .where(
+          'company.isHidden = false',
+        )
+        .andWhere(
+          'company.isBillingEntity = true',
+        )
+        .andWhere(
+          'UPPER(TRIM(company.billingEntityCode)) = :billingEntityCode',
+          {
+            billingEntityCode,
+          },
+        )
+        .getOne();
+
+    if (
+      duplicateCode
+    ) {
+      throw new BadRequestException(
+        'This billing entity code is already in use',
+      );
+    }
+  }
+
+  const nextInvoiceNumber =
+    Math.max(
+      Number(
+        body?.nextInvoiceNumber ||
+          1,
+      ),
+      1,
+    );
+
+  const company =
+    this
+      .projectVendorCompanyRepository
+      .create({
+        companyName,
+
+        legalName:
+          String(
+            body?.legalName ||
+              '',
+          ).trim(),
+
+        gstNumber:
+          String(
+            body?.gstNumber ||
+              '',
+          ).trim(),
+
+        panNumber:
+          String(
+            body?.panNumber ||
+              '',
+          ).trim(),
+
+        email:
+          String(
+            body?.email ||
+              '',
+          ).trim(),
+
+        phone:
+          String(
+            body?.phone ||
+              '',
+          ).trim(),
+
+        alternatePhone:
+          String(
+            body?.alternatePhone ||
+              '',
+          ).trim(),
+
+        address:
+          String(
+            body?.address ||
+              '',
+          ).trim(),
+
+        city:
+          String(
+            body?.city ||
+              '',
+          ).trim(),
+
+        state:
+          String(
+            body?.state ||
+              '',
+          ).trim(),
+
+        stateCode:
+          String(
+            body?.stateCode ||
+              '',
+          ).trim(),
+
+        pinCode:
+          String(
+            body?.pinCode ||
+              '',
+          ).trim(),
+
+        isBillingEntity,
+
+        billingEntityCode:
+          isBillingEntity
+            ? billingEntityCode
+            : '',
+
+        invoicePrefix:
+          isBillingEntity
+            ? invoicePrefix
+            : '',
+
+        nextInvoiceNumber,
+
+        logoUrl:
+          String(
+            body?.logoUrl ||
+              '',
+          ).trim(),
+
+        bankName:
+          String(
+            body?.bankName ||
+              '',
+          ).trim(),
+
+        bankAccountName:
+          String(
+            body
+              ?.bankAccountName ||
+              '',
+          ).trim(),
+
+        bankAccountNumber:
+          String(
+            body
+              ?.bankAccountNumber ||
+              '',
+          ).trim(),
+
+        bankIfsc:
+          String(
+            body?.bankIfsc ||
+              '',
+          ).trim(),
+
+        upiId:
+          String(
+            body?.upiId ||
+              '',
+          ).trim(),
+
+        remarks:
+          String(
+            body?.remarks ||
+              '',
+          ).trim(),
+
+        isActive:
+          body?.isActive !==
+          false,
+
+        isHidden:
+          false,
+
+        createdBy:
+          user?.id ||
+          user?.userId ||
+          user?.sub ||
+          null,
+
+        createdByName:
+          user?.name ||
+          user?.email ||
+          '',
+      } as Partial<ProjectVendorCompany>);
+
+  return this
+    .projectVendorCompanyRepository
+    .save(
+      company,
+    );
 }
 
 async listVendorManagementCompanies(
@@ -30554,17 +35285,43 @@ async listVendorManagementCompanies(
   return qb.getMany();
 }
 
+async listBillingEntities() {
+  return this
+    .projectVendorCompanyRepository
+    .find({
+      where: {
+        isBillingEntity:
+          true,
+        isActive:
+          true,
+        isHidden:
+          false,
+      } as any,
+
+      order: {
+        companyName:
+          'ASC',
+      },
+    });
+}
+
 async updateVendorManagementCompany(
   id: number,
   body: any,
   user: any,
 ) {
-  this.assertVendorManagementAccess(user);
+  this.assertVendorManagementAccess(
+    user,
+  );
 
   const company =
-    await this.projectVendorCompanyRepository.findOne({
-      where: { id },
-    });
+    await this
+      .projectVendorCompanyRepository
+      .findOne({
+        where: {
+          id,
+        },
+      });
 
   if (!company) {
     throw new NotFoundException(
@@ -30572,11 +35329,12 @@ async updateVendorManagementCompany(
     );
   }
 
-  const companyName = String(
-    body?.companyName ??
-      company.companyName ??
-      '',
-  ).trim();
+  const companyName =
+    String(
+      body?.companyName ??
+        company.companyName ??
+        '',
+    ).trim();
 
   if (!companyName) {
     throw new BadRequestException(
@@ -30585,17 +35343,28 @@ async updateVendorManagementCompany(
   }
 
   const duplicate =
-    await this.projectVendorCompanyRepository
-      .createQueryBuilder('company')
+    await this
+      .projectVendorCompanyRepository
+      .createQueryBuilder(
+        'company',
+      )
       .where(
         'LOWER(TRIM(company.companyName)) = :companyName',
         {
           companyName:
-            companyName.toLowerCase(),
+            companyName
+              .toLowerCase(),
         },
       )
-      .andWhere('company.id != :id', { id })
-      .andWhere('company.isHidden = false')
+      .andWhere(
+        'company.id != :id',
+        {
+          id,
+        },
+      )
+      .andWhere(
+        'company.isHidden = false',
+      )
       .getOne();
 
   if (duplicate) {
@@ -30604,102 +35373,329 @@ async updateVendorManagementCompany(
     );
   }
 
-  company.companyName = companyName;
+  const nextIsBillingEntity =
+    body?.isBillingEntity !==
+    undefined
+      ? body.isBillingEntity ===
+        true
+      : company.isBillingEntity ===
+        true;
+
+  const nextBillingEntityCode =
+    this
+      .normalizeBillingEntityCode(
+        body?.billingEntityCode !==
+        undefined
+          ? body
+              .billingEntityCode
+          : company
+              .billingEntityCode ||
+              companyName,
+      );
+
+  const nextInvoicePrefix =
+    this
+      .normalizeInvoicePrefix(
+        body?.invoicePrefix !==
+        undefined
+          ? body.invoicePrefix
+          : company
+              .invoicePrefix ||
+              '',
+      );
+
+  if (
+    nextIsBillingEntity &&
+    !nextBillingEntityCode
+  ) {
+    throw new BadRequestException(
+      'Billing entity code is required',
+    );
+  }
+
+  if (
+    nextIsBillingEntity &&
+    !nextInvoicePrefix
+  ) {
+    throw new BadRequestException(
+      'Invoice prefix is required for billing entity',
+    );
+  }
+
+  if (
+    nextIsBillingEntity
+  ) {
+    const duplicateCode =
+      await this
+        .projectVendorCompanyRepository
+        .createQueryBuilder(
+          'company',
+        )
+        .where(
+          'company.id != :id',
+          {
+            id,
+          },
+        )
+        .andWhere(
+          'company.isHidden = false',
+        )
+        .andWhere(
+          'company.isBillingEntity = true',
+        )
+        .andWhere(
+          'UPPER(TRIM(company.billingEntityCode)) = :billingEntityCode',
+          {
+            billingEntityCode:
+              nextBillingEntityCode,
+          },
+        )
+        .getOne();
+
+    if (
+      duplicateCode
+    ) {
+      throw new BadRequestException(
+        'Another billing entity already uses this code',
+      );
+    }
+  }
+
+  company.companyName =
+    companyName;
 
   company.legalName =
-    body?.legalName !== undefined
-      ? String(body.legalName || '').trim()
+    body?.legalName !==
+    undefined
+      ? String(
+          body.legalName ||
+            '',
+        ).trim()
       : company.legalName;
 
   company.gstNumber =
-    body?.gstNumber !== undefined
-      ? String(body.gstNumber || '').trim()
+    body?.gstNumber !==
+    undefined
+      ? String(
+          body.gstNumber ||
+            '',
+        ).trim()
       : company.gstNumber;
 
   company.panNumber =
-    body?.panNumber !== undefined
-      ? String(body.panNumber || '').trim()
+    body?.panNumber !==
+    undefined
+      ? String(
+          body.panNumber ||
+            '',
+        ).trim()
       : company.panNumber;
 
   company.email =
-    body?.email !== undefined
-      ? String(body.email || '').trim()
+    body?.email !==
+    undefined
+      ? String(
+          body.email ||
+            '',
+        ).trim()
       : company.email;
 
   company.phone =
-    body?.phone !== undefined
-      ? String(body.phone || '').trim()
+    body?.phone !==
+    undefined
+      ? String(
+          body.phone ||
+            '',
+        ).trim()
       : company.phone;
 
   company.alternatePhone =
-    body?.alternatePhone !== undefined
+    body?.alternatePhone !==
+    undefined
       ? String(
-          body.alternatePhone || '',
+          body
+            .alternatePhone ||
+            '',
         ).trim()
       : company.alternatePhone;
 
   company.address =
-    body?.address !== undefined
-      ? String(body.address || '').trim()
+    body?.address !==
+    undefined
+      ? String(
+          body.address ||
+            '',
+        ).trim()
       : company.address;
 
   company.city =
-    body?.city !== undefined
-      ? String(body.city || '').trim()
+    body?.city !==
+    undefined
+      ? String(
+          body.city ||
+            '',
+        ).trim()
       : company.city;
 
   company.state =
-    body?.state !== undefined
-      ? String(body.state || '').trim()
+    body?.state !==
+    undefined
+      ? String(
+          body.state ||
+            '',
+        ).trim()
       : company.state;
 
+  company.stateCode =
+    body?.stateCode !==
+    undefined
+      ? String(
+          body.stateCode ||
+            '',
+        ).trim()
+      : company.stateCode;
+
   company.pinCode =
-    body?.pinCode !== undefined
-      ? String(body.pinCode || '').trim()
+    body?.pinCode !==
+    undefined
+      ? String(
+          body.pinCode ||
+            '',
+        ).trim()
       : company.pinCode;
 
+  company.isBillingEntity =
+    nextIsBillingEntity;
+
+  company.billingEntityCode =
+    nextIsBillingEntity
+      ? nextBillingEntityCode
+      : '';
+
+  company.invoicePrefix =
+    nextIsBillingEntity
+      ? nextInvoicePrefix
+      : '';
+
+  if (
+    body?.nextInvoiceNumber !==
+    undefined
+  ) {
+    /*
+     * Client specifically requested that
+     * Owner can manage the running sequence.
+     */
+    if (
+      !this.isOwnerUser(
+        user,
+      )
+    ) {
+      throw new ForbiddenException(
+        'Only Owner can change the next invoice number',
+      );
+    }
+
+    const requestedSequence =
+      Number(
+        body
+          .nextInvoiceNumber,
+      );
+
+    if (
+      !Number.isInteger(
+        requestedSequence,
+      ) ||
+      requestedSequence <= 0
+    ) {
+      throw new BadRequestException(
+        'Next invoice number must be a positive integer',
+      );
+    }
+
+    company.nextInvoiceNumber =
+      requestedSequence;
+  }
+
+  company.logoUrl =
+    body?.logoUrl !==
+    undefined
+      ? String(
+          body.logoUrl ||
+            '',
+        ).trim()
+      : company.logoUrl;
+
   company.bankName =
-    body?.bankName !== undefined
-      ? String(body.bankName || '').trim()
+    body?.bankName !==
+    undefined
+      ? String(
+          body.bankName ||
+            '',
+        ).trim()
       : company.bankName;
 
   company.bankAccountName =
-    body?.bankAccountName !== undefined
+    body?.bankAccountName !==
+    undefined
       ? String(
-          body.bankAccountName || '',
+          body
+            .bankAccountName ||
+            '',
         ).trim()
       : company.bankAccountName;
 
   company.bankAccountNumber =
-    body?.bankAccountNumber !== undefined
+    body?.bankAccountNumber !==
+    undefined
       ? String(
-          body.bankAccountNumber || '',
+          body
+            .bankAccountNumber ||
+            '',
         ).trim()
-      : company.bankAccountNumber;
+      : company
+          .bankAccountNumber;
 
   company.bankIfsc =
-    body?.bankIfsc !== undefined
-      ? String(body.bankIfsc || '').trim()
+    body?.bankIfsc !==
+    undefined
+      ? String(
+          body.bankIfsc ||
+            '',
+        ).trim()
       : company.bankIfsc;
 
   company.upiId =
-    body?.upiId !== undefined
-      ? String(body.upiId || '').trim()
+    body?.upiId !==
+    undefined
+      ? String(
+          body.upiId ||
+            '',
+        ).trim()
       : company.upiId;
 
   company.remarks =
-    body?.remarks !== undefined
-      ? String(body.remarks || '').trim()
+    body?.remarks !==
+    undefined
+      ? String(
+          body.remarks ||
+            '',
+        ).trim()
       : company.remarks;
 
-  if (body?.isActive !== undefined) {
+  if (
+    body?.isActive !==
+    undefined
+  ) {
     company.isActive =
-      body.isActive === true;
+      body.isActive ===
+      true;
   }
 
-  return this.projectVendorCompanyRepository.save(
-    company,
-  );
+  return this
+    .projectVendorCompanyRepository
+    .save(
+      company,
+    );
 }
 
 async hideVendorManagementCompany(

@@ -960,11 +960,13 @@ getFinalInvoiceById(
 @Post('proforma-invoice/:id/final-invoice')
 createFinalInvoiceFromProforma(
   @Param('id') id: string,
+  @Body() body: any,
   @CurrentUser() user: any,
 ) {
   return this.projectService.createFinalInvoiceFromProforma(
     Number(id),
     user,
+    body,
   );
 }
 
@@ -1883,6 +1885,44 @@ uploadVendorManagementPaymentReceipts(
       files,
       body,
       user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'STOCK_MANAGER',
+  'TRADING_MANAGER',
+  'TRADING_HEAD',
+)
+@Get('billing-entities')
+listBillingEntities() {
+  return this.projectService
+    .listBillingEntities();
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'STOCK_MANAGER',
+  'TRADING_MANAGER',
+  'TRADING_HEAD',
+)
+@Get(
+  'billing-entities/:id/invoice-number-preview',
+)
+getBillingInvoiceNumberPreview(
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+) {
+  return this.projectService
+    .getBillingInvoiceNumberPreview(
+      id,
     );
 }
 
