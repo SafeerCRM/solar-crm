@@ -4682,15 +4682,67 @@ if (hasProjectLocationUpdate) {
     new Date();
 }
 
-Object.assign(project, safeData);
+Object.assign(
+  project,
+  safeData,
+);
 
 const updatedProject =
-  await this.projectRepository.save(project);
+  await this.projectRepository.save(
+    project,
+  );
 
-if (historyRows.length > 0) {
+if (
+  historyRows.length >
+  0
+) {
   await this.projectEditHistoryRepository.save(
     historyRows,
   );
+}
+
+/*
+ * Once Owner has approved a Project,
+ * technical-detail edits must keep its
+ * automatic procurement requirement in sync.
+ */
+if (
+  updatedProject.ownerApprovalStatus ===
+  ProjectApprovalStatus.APPROVED
+) {
+  const procurementRelevantFields =
+    [
+      'panelBrand',
+      'dcrPanelCount',
+      'nonDcrPanelCount',
+      'converterBrand',
+      'converterCapacity',
+      'converterPhase',
+      'structureType',
+      'structureCapacityKw',
+      'buildingHeight',
+    ];
+
+  const procurementDetailsChanged =
+    historyRows.some(
+      (
+        history,
+      ) =>
+        procurementRelevantFields.includes(
+          String(
+            history.fieldName ||
+              '',
+          ),
+        ),
+    );
+
+  if (
+    procurementDetailsChanged
+  ) {
+    await this.createAutomaticProjectProcurement(
+      updatedProject,
+    );
+  }
 }
 
 return updatedProject;
@@ -16466,23 +16518,13 @@ private async createAutomaticProjectProcurement(
   project: Project,
 ) {
   /*
-   * Duplicate protection:
-   * only one automatic procurement request
-   * may exist for a Project.
+   * Build the latest procurement requirement
+   * directly from the current Project fields.
+   *
+   * If an automatic procurement request already
+   * exists, its items are synchronised instead
+   * of returning the old snapshot.
    */
-  const existingRequest =
-    await this.projectMaterialRequestRepository.findOne({
-      where: {
-        projectId: project.id,
-        requestType:
-          ProjectMaterialRequestType.AUTO_PROJECT_PROCUREMENT,
-      },
-    });
-
-  if (existingRequest) {
-    return existingRequest;
-  }
-
   const automaticItems: Array<{
     materialName: string;
     category: string;
@@ -16492,90 +16534,145 @@ private async createAutomaticProjectProcurement(
     remarks: string;
   }> = [];
 
-  const dcrPanelCount = Number(
-    project.dcrPanelCount || 0,
+  const dcrPanelCount = Math.max(
+    Number(
+      project.dcrPanelCount ||
+        0,
+    ),
+    0,
   );
 
   if (dcrPanelCount > 0) {
     automaticItems.push({
-      materialName: 'DCR Solar Panel',
-      category: 'PANEL',
-      unit: 'NOS',
-      brand: String(
-        project.panelBrand || '',
-      ).trim(),
-      quantity: dcrPanelCount,
+      materialName:
+        'DCR Solar Panel',
+
+      category:
+        'PANEL',
+
+      unit:
+        'NOS',
+
+      brand:
+        String(
+          project.panelBrand ||
+            '',
+        ).trim(),
+
+      quantity:
+        dcrPanelCount,
+
       remarks:
         'Automatically generated from approved Project details',
     });
   }
 
-  const nonDcrPanelCount = Number(
-    project.nonDcrPanelCount || 0,
-  );
+  const nonDcrPanelCount =
+    Math.max(
+      Number(
+        project.nonDcrPanelCount ||
+          0,
+      ),
+      0,
+    );
 
-  if (nonDcrPanelCount > 0) {
+  if (
+    nonDcrPanelCount > 0
+  ) {
     automaticItems.push({
-      materialName: 'Non-DCR Solar Panel',
-      category: 'PANEL',
-      unit: 'NOS',
-      brand: String(
-        project.panelBrand || '',
-      ).trim(),
-      quantity: nonDcrPanelCount,
+      materialName:
+        'Non-DCR Solar Panel',
+
+      category:
+        'PANEL',
+
+      unit:
+        'NOS',
+
+      brand:
+        String(
+          project.panelBrand ||
+            '',
+        ).trim(),
+
+      quantity:
+        nonDcrPanelCount,
+
       remarks:
         'Automatically generated from approved Project details',
     });
   }
 
-  const converterBrand = String(
-    project.converterBrand || '',
-  ).trim();
+  const converterBrand =
+    String(
+      project.converterBrand ||
+        '',
+    ).trim();
 
-  const converterCapacity = String(
-    project.converterCapacity || '',
-  ).trim();
+  const converterCapacity =
+    String(
+      project.converterCapacity ||
+        '',
+    ).trim();
 
   /*
-   * Create an inverter requirement when either
-   * its brand or capacity is available.
+   * Current Project model has no inverter-count
+   * field, therefore one inverter requirement is
+   * preserved exactly as the existing system does.
    */
   if (
     converterBrand ||
     converterCapacity
   ) {
     automaticItems.push({
-      materialName: 'Solar Inverter',
-      category: 'INVERTER',
-      unit: 'NOS',
-      brand: converterBrand,
-      quantity: 1,
-      remarks: [
-        converterCapacity
-          ? `Capacity: ${converterCapacity}`
-          : '',
-        project.converterPhase
-          ? `Phase: ${project.converterPhase}`
-          : '',
-        'Automatically generated from approved Project details',
-      ]
-        .filter(Boolean)
-        .join(' | '),
+      materialName:
+        'Solar Inverter',
+
+      category:
+        'INVERTER',
+
+      unit:
+        'NOS',
+
+      brand:
+        converterBrand,
+
+      quantity:
+        1,
+
+      remarks:
+        [
+          converterCapacity
+            ? `Capacity: ${converterCapacity}`
+            : '',
+
+          project.converterPhase
+            ? `Phase: ${project.converterPhase}`
+            : '',
+
+          'Automatically generated from approved Project details',
+        ]
+          .filter(
+            Boolean,
+          )
+          .join(
+            ' | ',
+          ),
     });
   }
 
-  const structureType = String(
-    project.structureType || '',
-  ).trim();
+  const structureType =
+    String(
+      project.structureType ||
+        '',
+    ).trim();
 
-  const structureCapacityKw = String(
-    project.structureCapacityKw || '',
-  ).trim();
+  const structureCapacityKw =
+    String(
+      project.structureCapacityKw ||
+        '',
+    ).trim();
 
-  /*
-   * Create a structure requirement when either
-   * structure type or capacity is available.
-   */
   if (
     structureType ||
     structureCapacityKw
@@ -16583,136 +16680,523 @@ private async createAutomaticProjectProcurement(
     automaticItems.push({
       materialName:
         'Module Mounting Structure',
-      category: 'STRUCTURE',
-      unit: 'SET',
-      brand: '',
-      quantity: 1,
-      remarks: [
-        structureType
-          ? `Type: ${structureType}`
-          : '',
-        structureCapacityKw
-          ? `Capacity: ${structureCapacityKw}`
-          : '',
-        project.buildingHeight
-          ? `Building Height: ${project.buildingHeight}`
-          : '',
-        'Automatically generated from approved Project details',
-      ]
-        .filter(Boolean)
-        .join(' | '),
+
+      category:
+        'STRUCTURE',
+
+      unit:
+        'SET',
+
+      brand:
+        '',
+
+      quantity:
+        1,
+
+      remarks:
+        [
+          structureType
+            ? `Type: ${structureType}`
+            : '',
+
+          structureCapacityKw
+            ? `Capacity: ${structureCapacityKw}`
+            : '',
+
+          project.buildingHeight
+            ? `Building Height: ${project.buildingHeight}`
+            : '',
+
+          'Automatically generated from approved Project details',
+        ]
+          .filter(
+            Boolean,
+          )
+          .join(
+            ' | ',
+          ),
     });
+  }
+
+  let request =
+    await this.projectMaterialRequestRepository.findOne({
+      where: {
+        projectId:
+          project.id,
+
+        requestType:
+          ProjectMaterialRequestType.AUTO_PROJECT_PROCUREMENT,
+      },
+    });
+
+  /*
+   * Nothing to procure.
+   *
+   * If an old automatic request exists,
+   * deactivate it rather than deleting history.
+   */
+  if (
+    automaticItems.length ===
+    0
+  ) {
+    if (request) {
+      request.isProcurementActive =
+        false;
+
+      request.procurementDeactivatedAt =
+        new Date();
+
+      request.procurementDeactivationReason =
+        'No automatic procurement requirement remains in current Project technical details';
+
+      await this.projectMaterialRequestRepository.save(
+        request,
+      );
+    }
+
+    return request || null;
   }
 
   /*
-   * Do not create an empty request when the
-   * Project has no usable material details.
+   * Create request only when one does not
+   * already exist.
    */
-  if (automaticItems.length === 0) {
-    return null;
-  }
+  if (!request) {
+    request =
+      this.projectMaterialRequestRepository.create({
+        projectId:
+          project.id,
 
-  const request =
-    this.projectMaterialRequestRepository.create({
-      projectId: project.id,
-
-      title:
-        'Automatic Project Procurement Requirement',
-
-      remarks:
-        'Panels, inverter and structure generated automatically from approved Project details.',
-
-      requestedBy:
-  project.ownerApprovedBy || undefined,
-
-      requestedByName:
-        'Owner Approval',
-
-      requestedByRole:
-        'OWNER',
-
-      totalAmount: 0,
-
-      status:
-        ProjectMaterialRequestStatus.SUBMITTED,
-
-      requestType:
-        ProjectMaterialRequestType.AUTO_PROJECT_PROCUREMENT,
-
-      isProcurementActive: true,
-
-      procurementDeactivatedAt: undefined,
-
-procurementDeactivationReason: undefined,
-    });
-
-  const savedRequest =
-    await this.projectMaterialRequestRepository.save(
-      request,
-    );
-
-  const requestItems =
-    automaticItems.map((item) =>
-      this.projectMaterialRequestItemRepository.create({
-        requestId: savedRequest.id,
-
-        projectId: project.id,
-
-        /*
-         * These items are generated from Project
-         * fields, not selected from Material Master.
-         */
-        materialId: undefined,
-
-        materialName:
-          item.materialName,
-
-        category:
-          item.category,
-
-        unit:
-          item.unit,
-
-        brand:
-          item.brand,
-
-        rate: 0,
-
-        quantity:
-          item.quantity,
-
-        reservedQuantity: 0,
-
-        purchasedQuantity: 0,
-
-        pendingQuantity:
-          item.quantity,
-
-        purchaseStatus:
-          ProjectMaterialPurchaseStatus.PENDING,
-
-        gstPercent: 0,
-
-        totalAmount: 0,
+        title:
+          'Automatic Project Procurement Requirement',
 
         remarks:
-          item.remarks,
+          'Panels, inverter and structure generated automatically from approved Project details.',
 
-        issuedQuantity: 0,
+        requestedBy:
+          project.ownerApprovedBy ||
+          undefined,
 
-        issuePendingQuantity:
-          item.quantity,
+        requestedByName:
+          'Owner Approval',
 
-        issueStatus:
-          ProjectMaterialIssueStatus.PENDING,
-      }),
+        requestedByRole:
+          'OWNER',
+
+        totalAmount:
+          0,
+
+        status:
+          ProjectMaterialRequestStatus.SUBMITTED,
+
+        requestType:
+          ProjectMaterialRequestType.AUTO_PROJECT_PROCUREMENT,
+
+        isProcurementActive:
+          true,
+
+        procurementDeactivatedAt:
+          undefined,
+
+        procurementDeactivationReason:
+          undefined,
+      });
+
+    request =
+      await this.projectMaterialRequestRepository.save(
+        request,
+      );
+  } else {
+    /*
+     * Reactivate an existing automatic request
+     * if the Project is still approved and its
+     * technical requirement exists.
+     */
+    request.isProcurementActive =
+  true;
+
+request.procurementDeactivatedAt =
+  null as any;
+
+request.procurementDeactivationReason =
+  null as any;
+
+request =
+  await this.projectMaterialRequestRepository.save(
+    request,
+  );
+  }
+
+  const existingItems =
+    await this.projectMaterialRequestItemRepository.find({
+      where: {
+        requestId:
+          request.id,
+      },
+    });
+
+  /*
+   * Match only the automatic item identities
+   * that this function itself generates.
+   */
+  const requirementKey = (
+    item: {
+      materialName?: string;
+      category?: string;
+    },
+  ) =>
+    `${String(
+      item.category ||
+        '',
+    )
+      .trim()
+      .toUpperCase()}::${String(
+      item.materialName ||
+        '',
+    )
+      .trim()
+      .toUpperCase()}`;
+
+  const requiredKeys =
+    new Set(
+      automaticItems.map(
+        (
+          item,
+        ) =>
+          requirementKey(
+            item,
+          ),
+      ),
     );
 
-  await this.projectMaterialRequestItemRepository.save(
-    requestItems,
-  );
+  for (
+    const requirement of
+      automaticItems
+  ) {
+    const key =
+      requirementKey(
+        requirement,
+      );
 
-  return savedRequest;
+    const existingItem =
+      existingItems.find(
+        (
+          item,
+        ) =>
+          requirementKey(
+            item,
+          ) === key,
+      );
+
+    if (!existingItem) {
+      const newItem =
+        this.projectMaterialRequestItemRepository.create({
+          requestId:
+            request.id,
+
+          projectId:
+            project.id,
+
+          materialId:
+            undefined,
+
+          materialName:
+            requirement.materialName,
+
+          category:
+            requirement.category,
+
+          unit:
+            requirement.unit,
+
+          brand:
+            requirement.brand,
+
+          rate:
+            0,
+
+          quantity:
+            requirement.quantity,
+
+          reservedQuantity:
+            0,
+
+          purchasedQuantity:
+            0,
+
+          pendingQuantity:
+            requirement.quantity,
+
+          purchaseStatus:
+            ProjectMaterialPurchaseStatus.PENDING,
+
+          gstPercent:
+            0,
+
+          totalAmount:
+            0,
+
+          remarks:
+            requirement.remarks,
+
+          issuedQuantity:
+            0,
+
+          issuePendingQuantity:
+            requirement.quantity,
+
+          issueStatus:
+            ProjectMaterialIssueStatus.PENDING,
+        });
+
+      await this.projectMaterialRequestItemRepository.save(
+        newItem,
+      );
+
+      continue;
+    }
+
+    const purchasedQuantity =
+      Math.max(
+        Number(
+          existingItem.purchasedQuantity ||
+            0,
+        ),
+        0,
+      );
+
+    const reservedQuantity =
+      Math.max(
+        Number(
+          existingItem.reservedQuantity ||
+            0,
+        ),
+        0,
+      );
+
+    const issuedQuantity =
+      Math.max(
+        Number(
+          existingItem.issuedQuantity ||
+            0,
+        ),
+        0,
+      );
+
+    const newRequiredQuantity =
+      Math.max(
+        Number(
+          requirement.quantity ||
+            0,
+        ),
+        0,
+      );
+
+    /*
+     * Never erase historical purchased quantity.
+     *
+     * Example:
+     * Project changes 5 → 40
+     * purchased = 3
+     * pending becomes 37.
+     */
+    existingItem.quantity =
+      newRequiredQuantity;
+
+    existingItem.purchasedQuantity =
+      purchasedQuantity;
+
+    existingItem.pendingQuantity =
+      Math.max(
+        newRequiredQuantity -
+          purchasedQuantity,
+        0,
+      );
+
+    /*
+     * Reservation / issued history is preserved.
+     */
+    existingItem.reservedQuantity =
+      reservedQuantity;
+
+    existingItem.issuedQuantity =
+      issuedQuantity;
+
+    existingItem.issuePendingQuantity =
+      Math.max(
+        newRequiredQuantity -
+          issuedQuantity,
+        0,
+      );
+
+    existingItem.materialName =
+      requirement.materialName;
+
+    existingItem.category =
+      requirement.category;
+
+    existingItem.unit =
+      requirement.unit;
+
+    existingItem.brand =
+      requirement.brand;
+
+    existingItem.remarks =
+      requirement.remarks;
+
+    /*
+     * Recalculate procurement status from
+     * purchased vs latest required quantity.
+     */
+    if (
+      newRequiredQuantity <=
+        0 ||
+      purchasedQuantity >=
+        newRequiredQuantity
+    ) {
+      existingItem.purchaseStatus =
+        ProjectMaterialPurchaseStatus.PURCHASED;
+
+      existingItem.pendingQuantity =
+        0;
+    } else if (
+      purchasedQuantity >
+      0
+    ) {
+      existingItem.purchaseStatus =
+        ProjectMaterialPurchaseStatus.PARTIALLY_PURCHASED;
+    } else {
+      existingItem.purchaseStatus =
+        ProjectMaterialPurchaseStatus.PENDING;
+    }
+
+    /*
+     * Recalculate issue status without losing
+     * issued quantity history.
+     */
+    if (
+      newRequiredQuantity <=
+        0 ||
+      issuedQuantity >=
+        newRequiredQuantity
+    ) {
+      existingItem.issueStatus =
+        ProjectMaterialIssueStatus.ISSUED;
+
+      existingItem.issuePendingQuantity =
+        0;
+    } else if (
+      issuedQuantity >
+      0
+    ) {
+      existingItem.issueStatus =
+        ProjectMaterialIssueStatus.PARTIALLY_ISSUED;
+    } else {
+      existingItem.issueStatus =
+        ProjectMaterialIssueStatus.PENDING;
+    }
+
+    await this.projectMaterialRequestItemRepository.save(
+      existingItem,
+    );
+  }
+
+  /*
+   * A requirement that no longer exists in the
+   * Project must not continue appearing as
+   * pending procurement.
+   *
+   * We preserve the row for history, but remove
+   * its remaining procurement/issue demand.
+   */
+  for (
+    const existingItem of
+      existingItems
+  ) {
+    const key =
+      requirementKey(
+        existingItem,
+      );
+
+    if (
+      requiredKeys.has(
+        key,
+      )
+    ) {
+      continue;
+    }
+
+    existingItem.quantity =
+      Math.max(
+        Number(
+          existingItem.purchasedQuantity ||
+            0,
+        ),
+        Number(
+          existingItem.issuedQuantity ||
+            0,
+        ),
+        0,
+      );
+
+    existingItem.pendingQuantity =
+      0;
+
+    existingItem.issuePendingQuantity =
+      0;
+
+    if (
+      Number(
+        existingItem.purchasedQuantity ||
+          0,
+      ) > 0
+    ) {
+      existingItem.purchaseStatus =
+        ProjectMaterialPurchaseStatus.PURCHASED;
+    } else {
+      /*
+       * Row remains historical, but zero pending
+       * means it will not appear on Purchase Orders.
+       */
+      existingItem.purchaseStatus =
+        ProjectMaterialPurchaseStatus.PURCHASED;
+    }
+
+    if (
+      Number(
+        existingItem.issuedQuantity ||
+          0,
+      ) > 0
+    ) {
+      existingItem.issueStatus =
+        ProjectMaterialIssueStatus.ISSUED;
+    } else {
+      existingItem.issueStatus =
+        ProjectMaterialIssueStatus.ISSUED;
+    }
+
+    existingItem.remarks =
+      [
+        String(
+          existingItem.remarks ||
+            '',
+        ).trim(),
+
+        'Automatic requirement removed because current Project technical details no longer require this item',
+      ]
+        .filter(
+          Boolean,
+        )
+        .join(
+          ' | ',
+        );
+
+    await this.projectMaterialRequestItemRepository.save(
+      existingItem,
+    );
+  }
+
+  return request;
 }
 
 private async deactivateAutomaticProjectProcurement(
@@ -17021,7 +17505,15 @@ async deleteBranch(id: number) {
 async getPurchaseOrders(filters: {
   page?: number;
   limit?: number;
+
+  /*
+   * Keep search for backward compatibility.
+   */
   search?: string;
+
+  projectSearch?: string;
+  materialSearch?: string;
+
   status?: string;
   branch?: string;
   owner?: string;
@@ -17042,6 +17534,18 @@ async getPurchaseOrders(filters: {
   const search = String(filters.search || '')
     .trim()
     .toLowerCase();
+
+    const projectSearch = String(
+  filters.projectSearch || '',
+)
+  .trim()
+  .toLowerCase();
+
+const materialSearch = String(
+  filters.materialSearch || '',
+)
+  .trim()
+  .toLowerCase();
 
   const status = String(filters.status || '')
     .trim();
@@ -17164,11 +17668,101 @@ const allPendingItems =
   .filter((item: any) => item.projectId && projectMap.has(Number(item.projectId)));
 
   const filteredItems = enrichedItems.filter((item: any) => {
-    const matchesSearch = search
-      ? `${item.projectId} ${item.projectCustomerName || ''} ${item.materialName || ''}`
-          .toLowerCase()
-          .includes(search)
-      : true;
+    const projectText =
+  `${item.projectId || ''} ${item.projectCustomerName || ''}`
+    .trim()
+    .toLowerCase();
+
+const materialName =
+  String(
+    item.materialName || '',
+  )
+    .trim()
+    .toLowerCase();
+
+const materialCategory =
+  String(
+    item.category || '',
+  )
+    .trim()
+    .toLowerCase();
+
+const materialBrand =
+  String(
+    item.brand || '',
+  )
+    .trim()
+    .toLowerCase();
+
+/*
+ * Legacy combined search remains available
+ * for any older caller still using `search`.
+ */
+const matchesLegacySearch =
+  search
+    ? `${projectText} ${materialName} ${materialCategory} ${materialBrand}`
+        .includes(search)
+    : true;
+
+const matchesProjectSearch =
+  projectSearch
+    ? projectText.includes(
+        projectSearch,
+      )
+    : true;
+
+/*
+ * Material search is handled independently.
+ *
+ * Special handling prevents DCR search from
+ * accidentally including Non-DCR panels.
+ */
+let matchesMaterialSearch =
+  true;
+
+if (materialSearch) {
+  if (
+    materialSearch === 'dcr' ||
+    materialSearch ===
+      'dcr panel' ||
+    materialSearch ===
+      'dcr solar panel'
+  ) {
+    matchesMaterialSearch =
+      materialName.includes(
+        'dcr',
+      ) &&
+      !materialName.includes(
+        'non-dcr',
+      ) &&
+      !materialName.includes(
+        'non dcr',
+      );
+  } else if (
+    materialSearch ===
+      'non-dcr' ||
+    materialSearch ===
+      'non dcr' ||
+    materialSearch ===
+      'non-dcr panel' ||
+    materialSearch ===
+      'non dcr panel'
+  ) {
+    matchesMaterialSearch =
+      materialName.includes(
+        'non-dcr',
+      ) ||
+      materialName.includes(
+        'non dcr',
+      );
+  } else {
+    matchesMaterialSearch =
+      `${materialName} ${materialCategory} ${materialBrand}`
+        .includes(
+          materialSearch,
+        );
+  }
+}
 
     const matchesStatus = status
       ? String(item.purchaseStatus || '') === status
@@ -17195,7 +17789,9 @@ const allPendingItems =
     : true;
 
     return (
-  matchesSearch &&
+  matchesLegacySearch &&
+  matchesProjectSearch &&
+  matchesMaterialSearch &&
   matchesStatus &&
   matchesBranch &&
   matchesOwner &&
@@ -17235,19 +17831,347 @@ const allPendingItems =
         'PARTIALLY_PURCHASED',
     ).length;
 
+    const getCriticalMaterialSummary = (
+  matcher: (
+    item: any,
+  ) => boolean,
+) => {
+  const matched =
+    filteredItems.filter(
+      matcher,
+    );
+
   return {
-    data: paginatedItems,
-    summary: {
-      totalPendingItems,
-      totalPendingQuantity,
-      totalPendingAmount,
-      partiallyPurchasedCount,
-    },
-    total,
-    page,
-    limit,
-    totalPages: Math.ceil(total / limit) || 1,
+    pendingItems:
+      matched.length,
+
+    pendingQuantity:
+      matched.reduce(
+        (
+          sum: number,
+          item: any,
+        ) =>
+          sum +
+          Number(
+            item.pendingQuantity ||
+              0,
+          ),
+        0,
+      ),
+
+    pendingAmount:
+      matched.reduce(
+        (
+          sum: number,
+          item: any,
+        ) =>
+          sum +
+          Number(
+            item.pendingQuantity ||
+              0,
+          ) *
+            Number(
+              item.rate ||
+                0,
+            ),
+        0,
+      ),
   };
+};
+
+const isDcrPanel = (
+  item: any,
+) => {
+  const name =
+    String(
+      item.materialName ||
+        '',
+    )
+      .trim()
+      .toLowerCase();
+
+  return (
+    String(
+      item.category ||
+        '',
+    )
+      .trim()
+      .toUpperCase() ===
+      'PANEL' &&
+    name.includes(
+      'dcr',
+    ) &&
+    !name.includes(
+      'non-dcr',
+    ) &&
+    !name.includes(
+      'non dcr',
+    )
+  );
+};
+
+const isNonDcrPanel = (
+  item: any,
+) => {
+  const name =
+    String(
+      item.materialName ||
+        '',
+    )
+      .trim()
+      .toLowerCase();
+
+  return (
+    String(
+      item.category ||
+        '',
+    )
+      .trim()
+      .toUpperCase() ===
+      'PANEL' &&
+    (
+      name.includes(
+        'non-dcr',
+      ) ||
+      name.includes(
+        'non dcr',
+      )
+    )
+  );
+};
+
+const isAnyPanel = (
+  item: any,
+) =>
+  String(
+    item.category ||
+      '',
+  )
+    .trim()
+    .toUpperCase() ===
+    'PANEL';
+
+const isInverter = (
+  item: any,
+) =>
+  String(
+    item.category ||
+      '',
+  )
+    .trim()
+    .toUpperCase() ===
+    'INVERTER';
+
+const isStructure = (
+  item: any,
+) =>
+  String(
+    item.category ||
+      '',
+  )
+    .trim()
+    .toUpperCase() ===
+    'STRUCTURE';
+
+const criticalProcurementSummary = {
+  panels:
+    getCriticalMaterialSummary(
+      isAnyPanel,
+    ),
+
+  dcrPanels:
+    getCriticalMaterialSummary(
+      isDcrPanel,
+    ),
+
+  nonDcrPanels:
+    getCriticalMaterialSummary(
+      isNonDcrPanel,
+    ),
+
+  inverters:
+    getCriticalMaterialSummary(
+      isInverter,
+    ),
+
+  structures:
+    getCriticalMaterialSummary(
+      isStructure,
+    ),
+};
+
+const projectWiseSummaryMap =
+  new Map<
+    number,
+    {
+      projectId: number;
+      customerName: string;
+      branchName: string;
+      city: string;
+      projectOwnerName: string;
+      projectWorkState: string;
+      projectWorkStateReason: string;
+      pendingItems: number;
+      pendingQuantity: number;
+      pendingAmount: number;
+      materials: string[];
+    }
+  >();
+
+for (
+  const item of
+    filteredItems
+) {
+  const projectId =
+    Number(
+      item.projectId ||
+        0,
+    );
+
+  if (!projectId) {
+    continue;
+  }
+
+  let row =
+    projectWiseSummaryMap.get(
+      projectId,
+    );
+
+  if (!row) {
+    row = {
+      projectId,
+
+      customerName:
+        item.projectCustomerName ||
+        '-',
+
+      branchName:
+        item.projectBranchName ||
+        '-',
+
+      city:
+        item.projectCity ||
+        '-',
+
+      projectOwnerName:
+        item.projectOwnerName ||
+        'Not Assigned',
+
+      projectWorkState:
+        item.projectWorkState ||
+        'IN_PROCESS',
+
+      projectWorkStateReason:
+        item.projectWorkStateReason ||
+        '',
+
+      pendingItems:
+        0,
+
+      pendingQuantity:
+        0,
+
+      pendingAmount:
+        0,
+
+      materials:
+        [],
+    };
+
+    projectWiseSummaryMap.set(
+      projectId,
+      row,
+    );
+  }
+
+  row.pendingItems +=
+    1;
+
+  row.pendingQuantity +=
+    Number(
+      item.pendingQuantity ||
+        0,
+    );
+
+  row.pendingAmount +=
+    Number(
+      item.pendingQuantity ||
+        0,
+    ) *
+    Number(
+      item.rate ||
+        0,
+    );
+
+  const materialDescription =
+    [
+      item.materialName,
+
+      Number(
+        item.pendingQuantity ||
+          0,
+      )
+        ? `Pending ${Number(
+            item.pendingQuantity ||
+              0,
+          )}`
+        : '',
+    ]
+      .filter(
+        Boolean,
+      )
+      .join(
+        ' - ',
+      );
+
+  if (
+    materialDescription &&
+    !row.materials.includes(
+      materialDescription,
+    )
+  ) {
+    row.materials.push(
+      materialDescription,
+    );
+  }
+}
+
+const projectWiseSummary =
+  Array.from(
+    projectWiseSummaryMap.values(),
+  );
+
+  return {
+  data:
+    paginatedItems,
+
+  summary: {
+    totalPendingItems,
+    totalPendingQuantity,
+    totalPendingAmount,
+    partiallyPurchasedCount,
+  },
+
+  /*
+   * These summaries represent the complete
+   * filtered result set, not only current page.
+   */
+  criticalProcurementSummary,
+
+  projectWiseSummary,
+
+  total,
+
+  page,
+
+  limit,
+
+  totalPages:
+    Math.ceil(
+      total /
+        limit,
+    ) || 1,
+};
 }
 
 async buyMaterialRequestItem(

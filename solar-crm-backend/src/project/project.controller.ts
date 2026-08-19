@@ -727,6 +727,12 @@ getPurchaseOrders(
   @Query('search')
   search?: string,
 
+  @Query('projectSearch')
+projectSearch?: string,
+
+@Query('materialSearch')
+materialSearch?: string,
+
   @Query('status')
   status?: string,
 
@@ -748,6 +754,12 @@ getPurchaseOrders(
 
     search:
       search || '',
+
+      projectSearch:
+  projectSearch || '',
+
+materialSearch:
+  materialSearch || '',
 
     status:
       status || '',
