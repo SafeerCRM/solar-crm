@@ -571,7 +571,7 @@ electricityActivity,
               checked={pendingOnly}
               onChange={(e) => setPendingOnly(e.target.checked)}
             />
-            Pending only
+            Projects with Pending Balance Only
           </label>
 
           <select
@@ -700,9 +700,12 @@ electricityActivity,
         <div className="mt-4 flex flex-wrap gap-2">
   <button
     onClick={() => {
-      setPage(1);
-      fetchPayments();
-    }}
+  if (page === 1) {
+    fetchPayments();
+  } else {
+    setPage(1);
+  }
+}}
     disabled={loading}
     className="rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
   >
@@ -747,8 +750,8 @@ electricityActivity,
           </h2>
 
           <p className="text-sm text-gray-500">
-            {rows.length} record(s)
-          </p>
+  {totalRecords} matching record(s)
+</p>
         </div>
 
         {loading ? (
