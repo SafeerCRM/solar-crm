@@ -435,6 +435,14 @@ const [
   setProjectWiseSummary,
 ] = useState<any[]>([]);
 
+const [
+  projectSummaryPage,
+  setProjectSummaryPage,
+] = useState(1);
+
+const projectSummaryPageSize =
+  10;
+
 const [partySearch, setPartySearch] = useState('');
 const [selectedPartyName, setSelectedPartyName] = useState('');
 const [documentNumberSearch, setDocumentNumberSearch] = useState('');
@@ -1610,6 +1618,17 @@ const hideProformaInvoice = async (piId: number) => {
 ]);
 
 useEffect(() => {
+  setProjectSummaryPage(1);
+}, [
+  projectFilter,
+  materialFilter,
+  statusFilter,
+  branchFilter,
+  ownerFilter,
+  workStateFilter,
+]);
+
+useEffect(() => {
   fetchProjectOwners();
   fetchVendors();
   fetchBillingEntities();
@@ -1649,6 +1668,24 @@ useEffect(() => {
 }, []);
 
   const filteredItems = items;
+
+  const projectSummaryTotalPages =
+  Math.max(
+    Math.ceil(
+      projectWiseSummary.length /
+        projectSummaryPageSize,
+    ),
+    1,
+  );
+
+const paginatedProjectWiseSummary =
+  projectWiseSummary.slice(
+    (projectSummaryPage - 1) *
+      projectSummaryPageSize,
+
+    projectSummaryPage *
+      projectSummaryPageSize,
+  );
 
   const selectedItems = filteredItems.filter(
   (item) => selectedItemIds[item.id],
@@ -4813,7 +4850,8 @@ onChange={(e) =>
     </p>
   ) : (
     <div className="space-y-3">
-      {projectWiseSummary.map((project: any) => (
+      {paginatedProjectWiseSummary.map(
+  (project: any) => (
         <div
           key={project.projectId}
           className="rounded-xl bg-gray-50 p-4"
@@ -4886,6 +4924,61 @@ onChange={(e) =>
       ))}
     </div>
   )}
+
+  {projectWiseSummary.length >
+  projectSummaryPageSize && (
+  <div className="mt-5 flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+    <p className="text-sm text-gray-600">
+      Project Summary Page{' '}
+      {projectSummaryPage} of{' '}
+      {projectSummaryTotalPages}
+      {' '}| Total Projects:{' '}
+      {projectWiseSummary.length}
+    </p>
+
+    <div className="flex gap-2">
+      <button
+        type="button"
+        onClick={() =>
+          setProjectSummaryPage(
+            (prev) =>
+              Math.max(
+                prev - 1,
+                1,
+              ),
+          )
+        }
+        disabled={
+          projectSummaryPage <=
+          1
+        }
+        className="rounded-xl bg-gray-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+      >
+        Previous
+      </button>
+
+      <button
+        type="button"
+        onClick={() =>
+          setProjectSummaryPage(
+            (prev) =>
+              Math.min(
+                prev + 1,
+                projectSummaryTotalPages,
+              ),
+          )
+        }
+        disabled={
+          projectSummaryPage >=
+          projectSummaryTotalPages
+        }
+        className="rounded-xl bg-gray-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+      >
+        Next
+      </button>
+    </div>
+  </div>
+)}
 </div>
 
         {loading ? (
