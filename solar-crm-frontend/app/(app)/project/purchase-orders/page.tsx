@@ -395,6 +395,46 @@ const [summary, setSummary] = useState({
   partiallyPurchasedCount: 0,
 });
 
+const [
+  criticalProcurementSummary,
+  setCriticalProcurementSummary,
+] = useState({
+  panels: {
+    pendingItems: 0,
+    pendingQuantity: 0,
+    pendingAmount: 0,
+  },
+
+  dcrPanels: {
+    pendingItems: 0,
+    pendingQuantity: 0,
+    pendingAmount: 0,
+  },
+
+  nonDcrPanels: {
+    pendingItems: 0,
+    pendingQuantity: 0,
+    pendingAmount: 0,
+  },
+
+  inverters: {
+    pendingItems: 0,
+    pendingQuantity: 0,
+    pendingAmount: 0,
+  },
+
+  structures: {
+    pendingItems: 0,
+    pendingQuantity: 0,
+    pendingAmount: 0,
+  },
+});
+
+const [
+  projectWiseSummary,
+  setProjectWiseSummary,
+] = useState<any[]>([]);
+
 const [partySearch, setPartySearch] = useState('');
 const [selectedPartyName, setSelectedPartyName] = useState('');
 const [documentNumberSearch, setDocumentNumberSearch] = useState('');
@@ -539,15 +579,28 @@ const filteredPartyOptions = partyOptions.filter((party) =>
       `${API_BASE_URL}/project/purchase-orders`,
       {
         params: {
-          page,
-          limit: 20,
-          search: `${projectFilter} ${materialFilter}`.trim(),
-          status: statusFilter,
-branch: branchFilter,
-owner: ownerFilter,
-projectWorkState:
-  workStateFilter,
-        },
+  page,
+
+  limit: 20,
+
+  projectSearch:
+    projectFilter,
+
+  materialSearch:
+    materialFilter,
+
+  status:
+    statusFilter,
+
+  branch:
+    branchFilter,
+
+  owner:
+    ownerFilter,
+
+  projectWorkState:
+    workStateFilter,
+},
         headers: token
           ? {
               Authorization: `Bearer ${token}`,
@@ -566,6 +619,48 @@ projectWorkState:
         partiallyPurchasedCount: 0,
       },
     );
+
+    setCriticalProcurementSummary(
+  res.data?.criticalProcurementSummary || {
+    panels: {
+      pendingItems: 0,
+      pendingQuantity: 0,
+      pendingAmount: 0,
+    },
+
+    dcrPanels: {
+      pendingItems: 0,
+      pendingQuantity: 0,
+      pendingAmount: 0,
+    },
+
+    nonDcrPanels: {
+      pendingItems: 0,
+      pendingQuantity: 0,
+      pendingAmount: 0,
+    },
+
+    inverters: {
+      pendingItems: 0,
+      pendingQuantity: 0,
+      pendingAmount: 0,
+    },
+
+    structures: {
+      pendingItems: 0,
+      pendingQuantity: 0,
+      pendingAmount: 0,
+    },
+  },
+);
+
+setProjectWiseSummary(
+  Array.isArray(
+    res.data?.projectWiseSummary,
+  )
+    ? res.data.projectWiseSummary
+    : [],
+);
 
     setTotalPages(res.data?.totalPages || 1);
   } catch (error) {
@@ -1554,122 +1649,6 @@ useEffect(() => {
 }, []);
 
   const filteredItems = items;
-
-const getCategoryPendingSummary = (keyword: string) => {
-  const matchedItems = filteredItems.filter((item) =>
-    String(item.category || item.materialName || '')
-      .toLowerCase()
-      .includes(keyword.toLowerCase()),
-  );
-
-  const pendingQuantity = matchedItems.reduce(
-    (sum, item) => sum + Number(item.pendingQuantity || 0),
-    0,
-  );
-
-  const pendingAmount = matchedItems.reduce(
-    (sum, item) =>
-      sum +
-      Number(item.pendingQuantity || 0) *
-        Number(item.rate || 0),
-    0,
-  );
-
-  return {
-    pendingQuantity,
-    pendingAmount,
-  };
-};
-
-const panelSummary = getCategoryPendingSummary('panel');
-const structureSummary = getCategoryPendingSummary('structure');
-const inverterSummary = getCategoryPendingSummary('inverter');
-
-const projectWiseSummary = Object.values(
-  filteredItems.reduce((acc: any, item) => {
-    const key = String(item.projectId);
-
-    if (!acc[key]) {
-      acc[key] = {
-  projectId:
-    item.projectId,
-
-  customerName:
-    item.projectCustomerName ||
-    '-',
-
-  branchName:
-    item.projectBranchName ||
-    '-',
-
-  city:
-    item.projectCity ||
-    '-',
-
-  projectOwnerName:
-    item.projectOwnerName ||
-    'Not Assigned',
-
-  projectWorkState:
-    item.projectWorkState ||
-    'IN_PROCESS',
-
-  projectWorkStateReason:
-    item.projectWorkStateReason ||
-    '',
-
-  pendingItems:
-    0,
-
-  pendingQuantity:
-    0,
-
-  pendingAmount:
-    0,
-
-  materials:
-    [] as string[],
-};
-    }
-
-    acc[key].pendingItems += 1;
-
-    acc[key].pendingQuantity += Number(
-      item.pendingQuantity || 0,
-    );
-
-    acc[key].pendingAmount +=
-      Number(item.pendingQuantity || 0) *
-      Number(item.rate || 0);
-
-    if (item.materialName) {
-      acc[key].materials.push(item.materialName);
-    }
-
-    return acc;
-  }, {}),
-);
-
-const totalPendingItems = filteredItems.length;
-
-const totalPendingQuantity = filteredItems.reduce(
-  (sum, item) => sum + Number(item.pendingQuantity || 0),
-  0,
-);
-
-const totalPendingAmount = filteredItems.reduce(
-  (sum, item) =>
-    sum +
-    Number(item.pendingQuantity || 0) *
-      Number(item.rate || 0),
-  0,
-);
-
-const partiallyPurchasedCount =
-  filteredItems.filter(
-    (item) =>
-      item.purchaseStatus === 'PARTIALLY_PURCHASED',
-  ).length;
 
   const selectedItems = filteredItems.filter(
   (item) => selectedItemIds[item.id],
@@ -4689,21 +4668,67 @@ onChange={(e) =>
 </div>
 
 <div className="mb-5 rounded-2xl border p-4">
-  <h2 className="mb-4 text-lg font-bold text-gray-800">
-    Critical Procurement Summary
-  </h2>
+  <div className="mb-4">
+    <h2 className="text-lg font-bold text-gray-800">
+      Critical Procurement Summary
+    </h2>
 
-  <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+    <p className="mt-1 text-sm text-gray-500">
+      Complete pending requirement across all matching projects,
+      not only the current page.
+    </p>
+  </div>
+
+  <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
     <div className="rounded-xl bg-gray-50 p-4">
       <p className="text-sm text-gray-500">
-        Panels Pending
+        DCR Panels Pending
       </p>
+
       <p className="mt-1 text-2xl font-bold text-gray-800">
-        {panelSummary.pendingQuantity}
+        {Number(
+          criticalProcurementSummary
+            .dcrPanels
+            ?.pendingQuantity ||
+            0,
+        )}
       </p>
+
       <p className="mt-1 text-sm font-semibold text-green-700">
         ₹
-        {panelSummary.pendingAmount.toLocaleString(
+        {Number(
+          criticalProcurementSummary
+            .dcrPanels
+            ?.pendingAmount ||
+            0,
+        ).toLocaleString(
+          'en-IN',
+        )}
+      </p>
+    </div>
+
+    <div className="rounded-xl bg-gray-50 p-4">
+      <p className="text-sm text-gray-500">
+        Non-DCR Panels Pending
+      </p>
+
+      <p className="mt-1 text-2xl font-bold text-gray-800">
+        {Number(
+          criticalProcurementSummary
+            .nonDcrPanels
+            ?.pendingQuantity ||
+            0,
+        )}
+      </p>
+
+      <p className="mt-1 text-sm font-semibold text-green-700">
+        ₹
+        {Number(
+          criticalProcurementSummary
+            .nonDcrPanels
+            ?.pendingAmount ||
+            0,
+        ).toLocaleString(
           'en-IN',
         )}
       </p>
@@ -4713,12 +4738,24 @@ onChange={(e) =>
       <p className="text-sm text-gray-500">
         Structure Pending
       </p>
+
       <p className="mt-1 text-2xl font-bold text-gray-800">
-        {structureSummary.pendingQuantity}
+        {Number(
+          criticalProcurementSummary
+            .structures
+            ?.pendingQuantity ||
+            0,
+        )}
       </p>
+
       <p className="mt-1 text-sm font-semibold text-green-700">
         ₹
-        {structureSummary.pendingAmount.toLocaleString(
+        {Number(
+          criticalProcurementSummary
+            .structures
+            ?.pendingAmount ||
+            0,
+        ).toLocaleString(
           'en-IN',
         )}
       </p>
@@ -4728,16 +4765,40 @@ onChange={(e) =>
       <p className="text-sm text-gray-500">
         Inverters Pending
       </p>
+
       <p className="mt-1 text-2xl font-bold text-gray-800">
-        {inverterSummary.pendingQuantity}
+        {Number(
+          criticalProcurementSummary
+            .inverters
+            ?.pendingQuantity ||
+            0,
+        )}
       </p>
+
       <p className="mt-1 text-sm font-semibold text-green-700">
         ₹
-        {inverterSummary.pendingAmount.toLocaleString(
+        {Number(
+          criticalProcurementSummary
+            .inverters
+            ?.pendingAmount ||
+            0,
+        ).toLocaleString(
           'en-IN',
         )}
       </p>
     </div>
+  </div>
+
+  <div className="mt-3 rounded-xl bg-blue-50 p-3 text-sm text-blue-800">
+    Total Panels Pending:{' '}
+    <span className="font-bold">
+      {Number(
+        criticalProcurementSummary
+          .panels
+          ?.pendingQuantity ||
+          0,
+      )}
+    </span>
   </div>
 </div>
 
