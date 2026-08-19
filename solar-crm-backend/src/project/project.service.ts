@@ -9742,28 +9742,24 @@ const computedPaymentStatusSql = `
   const normalizedStatus =
     status.trim().toUpperCase();
 
-  if (normalizedStatus === 'OVERDUE') {
-    qb.andWhere(
-      `payment.status NOT IN ('PAID', 'CANCELLED')`,
-    );
+  const allowedStatuses = [
+    'PENDING',
+    'PARTIAL',
+    'PAID',
+    'OVERDUE',
+    'CANCELLED',
+  ];
 
+  if (
+    allowedStatuses.includes(
+      normalizedStatus,
+    )
+  ) {
     qb.andWhere(
-      `COALESCE(payment."pendingAmount", 0) > 0`,
-    );
-
-    qb.andWhere(
-      `payment."dueDate" IS NOT NULL`,
-    );
-
-    qb.andWhere(
-      `payment."dueDate"::date <
-       (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date`,
-    );
-  } else {
-    qb.andWhere(
-      'payment.status = :status',
+      `(${computedPaymentStatusSql}) = :paymentStatus`,
       {
-        status: normalizedStatus,
+        paymentStatus:
+          normalizedStatus,
       },
     );
   }
@@ -9927,28 +9923,24 @@ if (projectIds.length > 0) {
   const normalizedStatus =
     status.trim().toUpperCase();
 
-  if (normalizedStatus === 'OVERDUE') {
-    countQb.andWhere(
-      `payment.status NOT IN ('PAID', 'CANCELLED')`,
-    );
+  const allowedStatuses = [
+    'PENDING',
+    'PARTIAL',
+    'PAID',
+    'OVERDUE',
+    'CANCELLED',
+  ];
 
+  if (
+    allowedStatuses.includes(
+      normalizedStatus,
+    )
+  ) {
     countQb.andWhere(
-      `COALESCE(payment."pendingAmount", 0) > 0`,
-    );
-
-    countQb.andWhere(
-      `payment."dueDate" IS NOT NULL`,
-    );
-
-    countQb.andWhere(
-      `payment."dueDate"::date <
-       (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date`,
-    );
-  } else {
-    countQb.andWhere(
-      'payment.status = :status',
+      `(${computedPaymentStatusSql}) = :paymentStatus`,
       {
-        status: normalizedStatus,
+        paymentStatus:
+          normalizedStatus,
       },
     );
   }
@@ -10060,28 +10052,24 @@ if (status?.trim()) {
   const normalizedStatus =
     status.trim().toUpperCase();
 
-  if (normalizedStatus === 'OVERDUE') {
-    summaryQb.andWhere(
-      `payment.status NOT IN ('PAID', 'CANCELLED')`,
-    );
+  const allowedStatuses = [
+    'PENDING',
+    'PARTIAL',
+    'PAID',
+    'OVERDUE',
+    'CANCELLED',
+  ];
 
+  if (
+    allowedStatuses.includes(
+      normalizedStatus,
+    )
+  ) {
     summaryQb.andWhere(
-      `COALESCE(payment."pendingAmount", 0) > 0`,
-    );
-
-    summaryQb.andWhere(
-      `payment."dueDate" IS NOT NULL`,
-    );
-
-    summaryQb.andWhere(
-      `payment."dueDate"::date <
-       (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date`,
-    );
-  } else {
-    summaryQb.andWhere(
-      'payment.status = :status',
+      `(${computedPaymentStatusSql}) = :paymentStatus`,
       {
-        status: normalizedStatus,
+        paymentStatus:
+          normalizedStatus,
       },
     );
   }
