@@ -486,6 +486,7 @@ const navItems = [
     'TELECALLER',
     'TELECALLING_ASSISTANT',
     'TELECALLING_MANAGER',
+    'SUBSIDY_MANAGER',
   ],
 },
 

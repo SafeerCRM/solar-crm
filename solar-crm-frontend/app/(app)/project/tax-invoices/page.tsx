@@ -38,6 +38,7 @@ type TaxInvoiceRow = {
 
   customerName?: string;
   customerPhone?: string;
+  electricityKNumber?: string;
 
   billToName?: string;
   billToPhone?: string;
@@ -957,7 +958,7 @@ export default function ProjectTaxInvoicesPage() {
                 applyFilters();
               }
             }}
-            placeholder="Invoice no. / project ID / customer / phone"
+            placeholder="Invoice no. / Project ID / K No. / customer / phone"
             className="min-w-0 rounded-xl border border-gray-300 p-3"
           />
 
@@ -1267,26 +1268,32 @@ export default function ProjectTaxInvoicesPage() {
 
                 <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   <div className="rounded-xl bg-gray-50 p-3">
-                    <p className="text-xs text-gray-500">
-                      Project
-                    </p>
+  <p className="text-xs text-gray-500">
+    Project
+  </p>
 
-                    <p className="mt-1 font-semibold text-gray-800">
-                      Project #
-                      {
-                        invoice.projectId
-                      }
-                    </p>
+  <p className="mt-1 font-semibold text-gray-800">
+    Project #{invoice.projectId}
+  </p>
 
-                    <p className="mt-1 text-xs text-gray-500">
-                      {invoice.projectType
-                        ? invoice.projectType.replaceAll(
-                            '_',
-                            ' ',
-                          )
-                        : '-'}
-                    </p>
-                  </div>
+  <p className="mt-1 text-xs text-gray-500">
+    {invoice.projectType
+      ? invoice.projectType.replaceAll(
+          '_',
+          ' ',
+        )
+      : '-'}
+  </p>
+
+  <p className="mt-2 text-xs text-gray-500">
+    K No.
+  </p>
+
+  <p className="mt-1 break-words text-sm font-semibold text-blue-700">
+    {invoice.electricityKNumber ||
+      '-'}
+  </p>
+</div>
 
                   <div className="rounded-xl bg-gray-50 p-3">
                     <p className="text-xs text-gray-500">
