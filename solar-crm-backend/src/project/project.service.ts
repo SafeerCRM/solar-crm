@@ -15920,7 +15920,8 @@ async getExecutionCalendarActivities(
   const canViewAll =
     roles.includes('OWNER') ||
     roles.includes('MARKETING_HEAD') ||
-    roles.includes('PROJECT_MANAGER');
+    roles.includes('PROJECT_MANAGER') ||
+    roles.includes('SUBSIDY_MANAGER');
 
   const query =
     this.projectExecutionActivityRepository
@@ -16100,7 +16101,8 @@ async getExecutionReminderSummary(currentUser: any) {
   const canSeeAll =
     roles.includes('OWNER') ||
     roles.includes('MARKETING_HEAD') ||
-    roles.includes('PROJECT_MANAGER');
+    roles.includes('PROJECT_MANAGER') ||
+    roles.includes('SUBSIDY_MANAGER');
 
   const activityQuery = this.projectExecutionActivityRepository
   .createQueryBuilder('activity')
@@ -16217,7 +16219,8 @@ async getExecutionReminderList(currentUser: any) {
   const canSeeAll =
     roles.includes('OWNER') ||
     roles.includes('MARKETING_HEAD') ||
-    roles.includes('PROJECT_MANAGER');
+    roles.includes('PROJECT_MANAGER') ||
+    roles.includes('SUBSIDY_MANAGER');
 
   const activityQuery = this.projectExecutionActivityRepository
     .createQueryBuilder('activity')
@@ -34629,8 +34632,9 @@ async getEpcCustomerInvoiceRegister(
         'invoice.updatedAt AS "updatedAt"',
 
         'project.customerName AS "customerName"',
-        'project.customerPhone AS "customerPhone"',
-        'project.branchName AS "branchName"',
+'project.customerPhone AS "customerPhone"',
+'project.electricityKNumber AS "electricityKNumber"',
+'project.branchName AS "branchName"',
         'project.projectOwnerId AS "projectOwnerId"',
         'project.projectOwnerName AS "projectOwnerName"',
         'project.projectOwnerRole AS "projectOwnerRole"',
@@ -34702,15 +34706,21 @@ async getEpcCustomerInvoiceRegister(
           )
         ) LIKE :search
         OR LOWER(
-          COALESCE(
-            project."customerPhone",
-            ''
-          )
-        ) LIKE :search
-        OR CAST(
-          invoice."projectId"
-          AS TEXT
-        ) LIKE :search
+  COALESCE(
+    project."customerPhone",
+    ''
+  )
+) LIKE :search
+OR LOWER(
+  COALESCE(
+    project."electricityKNumber",
+    ''
+  )
+) LIKE :search
+OR CAST(
+  invoice."projectId"
+  AS TEXT
+) LIKE :search
         OR CAST(
           invoice.id
           AS TEXT
