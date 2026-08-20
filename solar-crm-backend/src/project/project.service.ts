@@ -34882,6 +34882,10 @@ OR CAST(
           row.billToPhone ||
           '',
 
+          electricityKNumber:
+  row.electricityKNumber ||
+  '',
+
         billToName:
           row.billToName || '',
 
