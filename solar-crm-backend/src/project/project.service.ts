@@ -28952,50 +28952,64 @@ async getProjectTimelineFilterOptions(
       );
 
   const ownerQb =
-    this.projectRepository
-      .createQueryBuilder(
-        'project',
-      )
-      .select(
-        'DISTINCT project."projectOwnerId"',
-        'projectOwnerId',
-      )
-      .addSelect(
-        'project."projectOwnerName"',
-        'projectOwnerName',
-      )
-      .where(
-        'project."isHidden" = false',
-      )
-      .andWhere(
-        `
-        project.status NOT IN (
-          :cancelledStatus,
-          :rejectedStatus
+  this.projectRepository
+    .createQueryBuilder(
+      'project',
+    )
+    .select(
+      'project."projectOwnerId"',
+      'projectOwnerId',
+    )
+    .addSelect(
+      `
+      MAX(
+        TRIM(
+          COALESCE(
+            project."projectOwnerName",
+            ''
+          )
         )
-        `,
-        {
-          cancelledStatus:
-            ProjectStatus.CANCELLED,
+      )
+      `,
+      'projectOwnerName',
+    )
+    .where(
+      'project."isHidden" = false',
+    )
+    .andWhere(
+      `
+      project.status NOT IN (
+        :cancelledStatus,
+        :rejectedStatus
+      )
+      `,
+      {
+        cancelledStatus:
+          ProjectStatus.CANCELLED,
 
-          rejectedStatus:
-            ProjectStatus.REJECTED,
-        },
-      )
-      .andWhere(
-        `
-        project."projectOwnerId"
-          IS NOT NULL
-        `,
-      )
-      .andWhere(
-        `
-        COALESCE(
-          project."projectOwnerName",
-          ''
-        ) != ''
-        `,
-      );
+        rejectedStatus:
+          ProjectStatus.REJECTED,
+      },
+    )
+    .andWhere(
+      `
+      project."projectOwnerId"
+        IS NOT NULL
+      `,
+    )
+    .andWhere(
+      `
+      COALESCE(
+        TRIM(
+          project."projectOwnerName"
+        ),
+        ''
+      ) != ''
+      `,
+    )
+    .groupBy(
+      'project."projectOwnerId"',
+    );
 
   if (
     !canSeeAll &&
@@ -29035,11 +29049,11 @@ async getProjectTimelineFilterOptions(
         .getRawMany(),
 
       ownerQb
-        .orderBy(
-          'project."projectOwnerName"',
-          'ASC',
-        )
-        .getRawMany(),
+  .orderBy(
+    '"projectOwnerName"',
+    'ASC',
+  )
+  .getRawMany(),
     ]);
 
   return {
