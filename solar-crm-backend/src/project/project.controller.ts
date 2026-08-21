@@ -3641,6 +3641,202 @@ async getUnreadLoanReminderCount(
   );
 }
 
+/*
+ * Timeline configuration options.
+ *
+ * Returns the real CRM modules and their
+ * available activities/statuses for the
+ * OWNER timeline-rule searchable dropdown.
+ */
+@Get('timeline/options')
+getProjectTimelineOptions() {
+  return this.projectService
+    .getProjectTimelineOptions();
+}
+
+@Get('timeline/rules')
+getProjectTimelineRules(
+  @Query() query: any,
+) {
+  return this.projectService
+    .listProjectTimelineRules(
+      query,
+    );
+}
+
+@Get('timeline/tracking')
+getProjectTimelineTracking(
+  @Query() query: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService
+    .getProjectTimelineTracking(
+      query,
+      user,
+    );
+}
+
+@Post(
+  'timeline/:projectId/rules/:ruleId/delay-note',
+)
+addProjectTimelineDelayNote(
+  @Param(
+    'projectId',
+    ParseIntPipe,
+  )
+  projectId: number,
+
+  @Param(
+    'ruleId',
+    ParseIntPipe,
+  )
+  ruleId: number,
+
+  @Body()
+  body: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .addProjectTimelineDelayNote(
+      projectId,
+      ruleId,
+      body,
+      user,
+    );
+}
+
+@Get(
+  'timeline/:projectId/rules/:ruleId/delay-notes',
+)
+getProjectTimelineDelayNotes(
+  @Param(
+    'projectId',
+    ParseIntPipe,
+  )
+  projectId: number,
+
+  @Param(
+    'ruleId',
+    ParseIntPipe,
+  )
+  ruleId: number,
+) {
+  return this.projectService
+    .getProjectTimelineDelayNotes(
+      projectId,
+      ruleId,
+    );
+}
+
+@Post(
+  'timeline/:projectId/rules/:ruleId/delay-notes/:delayNoteId/proofs',
+)
+@UseInterceptors(
+  FilesInterceptor(
+    'files',
+    10,
+  ),
+)
+uploadProjectTimelineDelayProofs(
+  @UploadedFiles()
+  files: any[],
+
+  @Param(
+    'projectId',
+    ParseIntPipe,
+  )
+  projectId: number,
+
+  @Param(
+    'ruleId',
+    ParseIntPipe,
+  )
+  ruleId: number,
+
+  @Param(
+    'delayNoteId',
+    ParseIntPipe,
+  )
+  delayNoteId: number,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .uploadProjectTimelineDelayProofs(
+      files,
+      projectId,
+      ruleId,
+      delayNoteId,
+      user,
+    );
+}
+
+@Roles('OWNER')
+@Post('timeline/rules')
+createProjectTimelineRule(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService
+    .createProjectTimelineRule(
+      body,
+      user,
+    );
+}
+
+@Roles('OWNER')
+@Patch('timeline/rules/:ruleId')
+updateProjectTimelineRule(
+  @Param(
+    'ruleId',
+    ParseIntPipe,
+  )
+  ruleId: number,
+
+  @Body()
+  body: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .updateProjectTimelineRule(
+      ruleId,
+      body,
+      user,
+    );
+}
+
+@Roles('OWNER')
+@Patch(
+  'timeline/rules/:ruleId/active',
+)
+setProjectTimelineRuleActiveState(
+  @Param(
+    'ruleId',
+    ParseIntPipe,
+  )
+  ruleId: number,
+
+  @Body()
+  body: {
+    isActive: boolean;
+  },
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .setProjectTimelineRuleActiveState(
+      ruleId,
+      body?.isActive === true,
+      user,
+    );
+}
+
 @Get(':id/loan-co-applicants')
 getProjectLoanCoApplicants(
   @Param('id') id: string,

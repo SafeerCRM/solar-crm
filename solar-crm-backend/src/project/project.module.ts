@@ -87,6 +87,21 @@ import { ProjectInsuranceDocument } from './project-insurance-document.entity';
 import { ProjectInsuranceRequest } from './project-insurance-request.entity';
 import { ProjectInsuranceReminderLog } from './project-insurance-reminder-log.entity';
 import { ProjectDealerOrderDocument } from './project-dealer-order-document.entity';
+import {
+  ProjectTimelineRule,
+} from './project-timeline-rule.entity';
+
+import {
+  ProjectTimelineEvent,
+} from './project-timeline-event.entity';
+
+import {
+  ProjectTimelineDelayNote,
+} from './project-timeline-delay-note.entity';
+
+import {
+  ProjectTimelineDelayProof,
+} from './project-timeline-delay-proof.entity';
 
 @Module({
   imports: [
@@ -119,7 +134,11 @@ ProjectDealerComment, ProjectDealerNotification,
 ProjectDealerMonthlyRequirement, ProjectTradingMeeting, FollowUp, ProjectFranchisePayoutRequest, Dealer, ProjectPaymentReceipt, Lead,
 Meeting,
 CallLog,
-TelecallingContact, User,]),
+TelecallingContact,
+ProjectTimelineRule,
+ProjectTimelineEvent,
+ProjectTimelineDelayNote,
+ProjectTimelineDelayProof, User,]),
     CalculatorModule,
   ],
   controllers: [ProjectController],

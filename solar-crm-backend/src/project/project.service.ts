@@ -279,6 +279,25 @@ import {
   GlobalDocumentVault,
 } from './global-document-vault.entity';
 
+import {
+  ProjectTimelineRule,
+  ProjectTimelineModule,
+  ProjectTimelineTriggerType,
+  ProjectTimelineApplicableProjectType,
+} from './project-timeline-rule.entity';
+
+import {
+  ProjectTimelineEvent,
+} from './project-timeline-event.entity';
+
+import {
+  ProjectTimelineDelayNote,
+} from './project-timeline-delay-note.entity';
+
+import {
+  ProjectTimelineDelayProof,
+} from './project-timeline-delay-proof.entity';
+
 @Injectable()
 export class ProjectService {
 
@@ -1963,6 +1982,22 @@ private readonly projectTradingMeetingRepository: Repository<ProjectTradingMeeti
 
 @InjectRepository(ProjectPaymentReceipt)
 private readonly projectPaymentReceiptRepository: Repository<ProjectPaymentReceipt>,
+
+@InjectRepository(ProjectTimelineRule)
+private readonly projectTimelineRuleRepository:
+  Repository<ProjectTimelineRule>,
+
+@InjectRepository(ProjectTimelineEvent)
+private readonly projectTimelineEventRepository:
+  Repository<ProjectTimelineEvent>,
+
+@InjectRepository(ProjectTimelineDelayNote)
+private readonly projectTimelineDelayNoteRepository:
+  Repository<ProjectTimelineDelayNote>,
+
+@InjectRepository(ProjectTimelineDelayProof)
+private readonly projectTimelineDelayProofRepository:
+  Repository<ProjectTimelineDelayProof>,
 
 @InjectRepository(FollowUp)
 private readonly followUpRepository: Repository<FollowUp>,
@@ -15434,9 +15469,53 @@ async createExecutionActivity(
       createdByName: user?.name || '',
     } as Partial<ProjectExecutionActivity>);
 
-  return this.projectExecutionActivityRepository.save(
-    activity,
-  );
+  const savedActivity =
+  await this
+    .projectExecutionActivityRepository
+    .save(activity);
+
+if (
+  savedActivity.status ===
+    ProjectExecutionActivityStatus.COMPLETED
+) {
+  const achievedAt =
+    savedActivity.completedDate
+      ? new Date(
+          savedActivity.completedDate,
+        )
+      : new Date();
+
+  await this
+    .recordProjectTimelineEventIfMissing({
+      projectId:
+        Number(
+          savedActivity.projectId,
+        ),
+
+      module:
+        ProjectTimelineModule.EXECUTION,
+
+      milestone:
+        savedActivity.activityType,
+
+      achievedAt,
+
+      sourceId:
+        Number(savedActivity.id),
+
+      recordedBy:
+        user?.id ||
+        user?.userId ||
+        null,
+
+      recordedByName:
+        user?.name ||
+        user?.email ||
+        '',
+    });
+}
+
+return savedActivity;
 }
 
 async getProjectExecutionActivities(
@@ -15468,6 +15547,9 @@ async updateExecutionActivity(
       'Execution activity not found',
     );
   }
+
+  const previousExecutionStatus =
+  activity.status;
 
   const inspectionTypes = [
   ProjectExecutionActivityType.STRUCTURE_INSPECTION,
@@ -15505,9 +15587,55 @@ if (
     updatedByName: user?.name || '',
   });
 
-  return this.projectExecutionActivityRepository.save(
-    activity,
-  );
+  const savedActivity =
+  await this
+    .projectExecutionActivityRepository
+    .save(activity);
+
+if (
+  savedActivity.status ===
+    ProjectExecutionActivityStatus.COMPLETED &&
+  previousExecutionStatus !==
+    ProjectExecutionActivityStatus.COMPLETED
+) {
+  const achievedAt =
+    savedActivity.completedDate
+      ? new Date(
+          savedActivity.completedDate,
+        )
+      : new Date();
+
+  await this
+    .recordProjectTimelineEventIfMissing({
+      projectId:
+        Number(
+          savedActivity.projectId,
+        ),
+
+      module:
+        ProjectTimelineModule.EXECUTION,
+
+      milestone:
+        savedActivity.activityType,
+
+      achievedAt,
+
+      sourceId:
+        Number(savedActivity.id),
+
+      recordedBy:
+        user?.id ||
+        user?.userId ||
+        null,
+
+      recordedByName:
+        user?.name ||
+        user?.email ||
+        '',
+    });
+}
+
+return savedActivity;
 }
 
 async uploadExecutionProof(
@@ -26214,6 +26342,3782 @@ async getPurchasableMaterialRequestItems(
   return query.getMany();
 }
 
+private formatProjectTimelineOptionLabel(
+  value: string,
+): string {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .split('_')
+    .filter(Boolean)
+    .map(
+      (word) =>
+        word.charAt(0).toUpperCase() +
+        word.slice(1),
+    )
+    .join(' ');
+}
+
+getProjectTimelineOptions() {
+  const buildOptions = (
+    values: string[],
+  ) =>
+    values.map((value) => ({
+      value,
+
+      label:
+        this.formatProjectTimelineOptionLabel(
+          value,
+        ),
+    }));
+
+  /*
+   * These values come directly from the
+   * existing CRM enums.
+   *
+   * The frontend must use these values rather
+   * than allowing arbitrary activity/status
+   * text to be entered.
+   */
+  const executionOptions =
+    buildOptions(
+      Object.values(
+        ProjectExecutionActivityType,
+      ),
+    );
+
+  const loanOptions =
+    buildOptions(
+      Object.values(
+        ProjectLoanStatus,
+      ),
+    );
+
+  const subsidyOptions =
+    buildOptions(
+      Object.values(
+        ProjectSubsidyStatus,
+      ),
+    );
+
+  const electricityOptions =
+    buildOptions(
+      Object.values(
+        ProjectElectricityStatus,
+      ),
+    );
+
+  /*
+   * Payment is different from the department
+   * status modules.
+   *
+   * Its milestone is measurable as a percentage
+   * of the applicable project amount.
+   */
+  const paymentOptions = [
+    {
+      value:
+        'PAYMENT_PERCENT_REACHED',
+
+      label:
+        'Payment Percentage Reached',
+
+      requiresTargetValue:
+        true,
+
+      targetValueType:
+        'PERCENTAGE',
+
+      minimumTargetValue:
+        0,
+
+      maximumTargetValue:
+        100,
+    },
+  ];
+
+  return {
+    triggerTypes: [
+      {
+        value:
+          ProjectTimelineTriggerType
+            .PAYMENT_PERCENT_REACHED,
+
+        label:
+          'Payment Percentage Reached',
+
+        requiresValue:
+          true,
+
+        valueType:
+          'PERCENTAGE',
+
+        minimumValue:
+          0,
+
+        maximumValue:
+          100,
+      },
+    ],
+
+    applicableProjectTypes:
+      Object.values(
+        ProjectTimelineApplicableProjectType,
+      ).map((value) => ({
+        value,
+
+        label:
+          this.formatProjectTimelineOptionLabel(
+            value,
+          ),
+      })),
+
+    modules: [
+      {
+        value:
+          ProjectTimelineModule.EXECUTION,
+
+        label:
+          'Execution',
+      },
+
+      {
+        value:
+          ProjectTimelineModule.LOAN,
+
+        label:
+          'Loan',
+      },
+
+      {
+        value:
+          ProjectTimelineModule.SUBSIDY,
+
+        label:
+          'Subsidy',
+      },
+
+      {
+        value:
+          ProjectTimelineModule.ELECTRICITY,
+
+        label:
+          'Electricity',
+      },
+
+      {
+        value:
+          ProjectTimelineModule.PAYMENT,
+
+        label:
+          'Payment',
+      },
+    ],
+
+    milestones: {
+      [ProjectTimelineModule.EXECUTION]:
+        executionOptions,
+
+      [ProjectTimelineModule.LOAN]:
+        loanOptions,
+
+      [ProjectTimelineModule.SUBSIDY]:
+        subsidyOptions,
+
+      [ProjectTimelineModule.ELECTRICITY]:
+        electricityOptions,
+
+      [ProjectTimelineModule.PAYMENT]:
+        paymentOptions,
+    },
+  };
+}
+
+private validateProjectTimelineRulePayload(
+  body: any,
+) {
+  const name = String(
+    body?.name || '',
+  ).trim();
+
+  if (!name) {
+    throw new BadRequestException(
+      'Timeline rule name is required',
+    );
+  }
+
+  const triggerType =
+    body?.triggerType ||
+    ProjectTimelineTriggerType
+      .PAYMENT_PERCENT_REACHED;
+
+  if (
+    !Object.values(
+      ProjectTimelineTriggerType,
+    ).includes(triggerType)
+  ) {
+    throw new BadRequestException(
+      'Invalid timeline trigger type',
+    );
+  }
+
+  const triggerValue = Number(
+    body?.triggerValue || 0,
+  );
+
+  if (
+    !Number.isFinite(triggerValue) ||
+    triggerValue <= 0 ||
+    triggerValue > 100
+  ) {
+    throw new BadRequestException(
+      'Payment trigger percentage must be greater than 0 and not more than 100',
+    );
+  }
+
+  const targetModule =
+    body?.targetModule;
+
+  if (
+    !Object.values(
+      ProjectTimelineModule,
+    ).includes(targetModule)
+  ) {
+    throw new BadRequestException(
+      'Valid timeline target module is required',
+    );
+  }
+
+  const targetMilestone = String(
+    body?.targetMilestone || '',
+  )
+    .trim()
+    .toUpperCase();
+
+  if (!targetMilestone) {
+    throw new BadRequestException(
+      'Timeline target milestone is required',
+    );
+  }
+
+  /*
+   * Validate the selected milestone against
+   * the actual CRM enum belonging to the
+   * selected department/module.
+   */
+  let validMilestones: string[] = [];
+
+  switch (targetModule) {
+    case ProjectTimelineModule.EXECUTION:
+      validMilestones = Object.values(
+        ProjectExecutionActivityType,
+      );
+      break;
+
+    case ProjectTimelineModule.LOAN:
+      validMilestones = Object.values(
+        ProjectLoanStatus,
+      );
+      break;
+
+    case ProjectTimelineModule.SUBSIDY:
+      validMilestones = Object.values(
+        ProjectSubsidyStatus,
+      );
+      break;
+
+    case ProjectTimelineModule.ELECTRICITY:
+      validMilestones = Object.values(
+        ProjectElectricityStatus,
+      );
+      break;
+
+    case ProjectTimelineModule.PAYMENT:
+      validMilestones = [
+        'PAYMENT_PERCENT_REACHED',
+      ];
+      break;
+
+    default:
+      validMilestones = [];
+  }
+
+  if (
+    !validMilestones.includes(
+      targetMilestone,
+    )
+  ) {
+    throw new BadRequestException(
+      `Invalid milestone for ${targetModule}`,
+    );
+  }
+
+  let targetValue: number | null =
+    null;
+
+  if (
+    targetModule ===
+      ProjectTimelineModule.PAYMENT
+  ) {
+    targetValue = Number(
+      body?.targetValue || 0,
+    );
+
+    if (
+      !Number.isFinite(targetValue) ||
+      targetValue <= 0 ||
+      targetValue > 100
+    ) {
+      throw new BadRequestException(
+        'Payment target percentage must be greater than 0 and not more than 100',
+      );
+    }
+
+    /*
+     * A target that is already satisfied when
+     * the timeline starts cannot create a
+     * meaningful SLA.
+     *
+     * Example:
+     * trigger 20%, target 10%.
+     */
+    if (
+      targetValue <=
+      triggerValue
+    ) {
+      throw new BadRequestException(
+        'Payment target percentage must be greater than the trigger percentage',
+      );
+    }
+  }
+
+  const applicableProjectType =
+    body?.applicableProjectType ||
+    ProjectTimelineApplicableProjectType
+      .ALL;
+
+  if (
+    !Object.values(
+      ProjectTimelineApplicableProjectType,
+    ).includes(
+      applicableProjectType,
+    )
+  ) {
+    throw new BadRequestException(
+      'Invalid applicable project type',
+    );
+  }
+
+  /*
+   * Loan milestones only make business sense
+   * against LOAN projects.
+   *
+   * If ALL is submitted, normalize it to LOAN
+   * rather than creating misleading CASH rows.
+   */
+  const normalizedApplicableProjectType =
+    targetModule ===
+    ProjectTimelineModule.LOAN
+      ? ProjectTimelineApplicableProjectType
+          .LOAN
+      : applicableProjectType;
+
+  const allowedDays = Number(
+    body?.allowedDays,
+  );
+
+  if (
+    !Number.isInteger(allowedDays) ||
+    allowedDays < 0
+  ) {
+    throw new BadRequestException(
+      'Allowed days must be a valid non-negative whole number',
+    );
+  }
+
+  const sortOrder = Number(
+    body?.sortOrder || 0,
+  );
+
+  if (
+    !Number.isInteger(sortOrder) ||
+    sortOrder < 0
+  ) {
+    throw new BadRequestException(
+      'Sort order must be a valid non-negative whole number',
+    );
+  }
+
+  return {
+    name,
+
+    triggerType,
+
+    triggerValue,
+
+    targetModule,
+
+    targetMilestone,
+
+    targetValue,
+
+    applicableProjectType:
+      normalizedApplicableProjectType,
+
+    allowedDays,
+
+    requireDelayExplanation:
+      body?.requireDelayExplanation !==
+      false,
+
+    requireDelayPhoto:
+      body?.requireDelayPhoto === true,
+
+    sortOrder,
+
+    isActive:
+      body?.isActive !== false,
+  };
+}
+
+async listProjectTimelineRules(
+  query: any = {},
+) {
+  const showInactive =
+    String(
+      query?.showInactive || '',
+    ) === 'true';
+
+  const qb =
+    this.projectTimelineRuleRepository
+      .createQueryBuilder('rule');
+
+  if (!showInactive) {
+    qb.where(
+      'rule.isActive = :isActive',
+      {
+        isActive: true,
+      },
+    );
+  }
+
+  if (query?.targetModule) {
+    qb.andWhere(
+      'rule.targetModule = :targetModule',
+      {
+        targetModule:
+          String(
+            query.targetModule,
+          )
+            .trim()
+            .toUpperCase(),
+      },
+    );
+  }
+
+  return qb
+    .orderBy(
+      'rule.sortOrder',
+      'ASC',
+    )
+    .addOrderBy(
+      'rule.createdAt',
+      'ASC',
+    )
+    .addOrderBy(
+      'rule.id',
+      'ASC',
+    )
+    .getMany();
+}
+
+async createProjectTimelineRule(
+  body: any,
+  user: any,
+) {
+  const validated =
+    this.validateProjectTimelineRulePayload(
+      body,
+    );
+
+  /*
+   * Prevent an accidental exact duplicate
+   * active rule.
+   *
+   * Different timelines may still target the
+   * same milestone if their trigger/project
+   * applicability differs.
+   */
+  const duplicate =
+    await this.projectTimelineRuleRepository
+      .findOne({
+        where: {
+          name:
+            validated.name,
+
+          triggerType:
+            validated.triggerType,
+
+          targetModule:
+            validated.targetModule,
+
+          targetMilestone:
+            validated.targetMilestone,
+
+          applicableProjectType:
+            validated
+              .applicableProjectType,
+
+          isActive: true,
+        },
+      });
+
+  if (
+    duplicate &&
+    validated.isActive
+  ) {
+    throw new BadRequestException(
+      'An active timeline rule with the same name and milestone already exists',
+    );
+  }
+
+  const rule =
+    this.projectTimelineRuleRepository
+      .create({
+        name:
+          validated.name,
+
+        triggerType:
+          validated.triggerType,
+
+        triggerValue:
+          validated.triggerValue,
+
+        targetModule:
+          validated.targetModule,
+
+        targetMilestone:
+          validated.targetMilestone,
+
+        applicableProjectType:
+          validated
+            .applicableProjectType,
+
+        allowedDays:
+          validated.allowedDays,
+
+        requireDelayExplanation:
+          validated
+            .requireDelayExplanation,
+
+        requireDelayPhoto:
+          validated
+            .requireDelayPhoto,
+
+        sortOrder:
+          validated.sortOrder,
+
+        isActive:
+          validated.isActive,
+
+        createdBy:
+          user?.id ||
+          user?.userId ||
+          null,
+
+        createdByName:
+          user?.name ||
+          user?.email ||
+          '',
+
+        updatedBy:
+          user?.id ||
+          user?.userId ||
+          null,
+
+        updatedByName:
+          user?.name ||
+          user?.email ||
+          '',
+      });
+
+  /*
+   * targetValue is nullable in PostgreSQL.
+   * Assign through the entity object so
+   * non-payment rules keep it NULL.
+   */
+  (rule as any).targetValue =
+    validated.targetValue;
+
+  return this
+    .projectTimelineRuleRepository
+    .save(rule);
+}
+
+async updateProjectTimelineRule(
+  ruleId: number,
+  body: any,
+  user: any,
+) {
+  const rule =
+    await this.projectTimelineRuleRepository
+      .findOne({
+        where: {
+          id: Number(ruleId),
+        },
+      });
+
+  if (!rule) {
+    throw new NotFoundException(
+      'Timeline rule not found',
+    );
+  }
+
+  const mergedPayload = {
+    ...rule,
+    ...body,
+  };
+
+  const validated =
+    this.validateProjectTimelineRulePayload(
+      mergedPayload,
+    );
+
+  rule.name =
+    validated.name;
+
+  rule.triggerType =
+    validated.triggerType;
+
+  rule.triggerValue =
+    validated.triggerValue;
+
+  rule.targetModule =
+    validated.targetModule;
+
+  rule.targetMilestone =
+    validated.targetMilestone;
+
+  (rule as any).targetValue =
+    validated.targetValue;
+
+  rule.applicableProjectType =
+    validated
+      .applicableProjectType;
+
+  rule.allowedDays =
+    validated.allowedDays;
+
+  rule.requireDelayExplanation =
+    validated
+      .requireDelayExplanation;
+
+  rule.requireDelayPhoto =
+    validated.requireDelayPhoto;
+
+  rule.sortOrder =
+    validated.sortOrder;
+
+  /*
+   * Preserve active state unless OWNER
+   * explicitly supplied isActive.
+   */
+  if (
+    body?.isActive !==
+    undefined
+  ) {
+    rule.isActive =
+      validated.isActive;
+  }
+
+  rule.updatedBy =
+    user?.id ||
+    user?.userId ||
+    null;
+
+  rule.updatedByName =
+    user?.name ||
+    user?.email ||
+    '';
+
+  return this
+    .projectTimelineRuleRepository
+    .save(rule);
+}
+
+async setProjectTimelineRuleActiveState(
+  ruleId: number,
+  isActive: boolean,
+  user: any,
+) {
+  const rule =
+    await this.projectTimelineRuleRepository
+      .findOne({
+        where: {
+          id: Number(ruleId),
+        },
+      });
+
+  if (!rule) {
+    throw new NotFoundException(
+      'Timeline rule not found',
+    );
+  }
+
+  rule.isActive =
+    isActive === true;
+
+  rule.updatedBy =
+    user?.id ||
+    user?.userId ||
+    null;
+
+  rule.updatedByName =
+    user?.name ||
+    user?.email ||
+    '';
+
+  return this
+    .projectTimelineRuleRepository
+    .save(rule);
+}
+
+private getIndiaCalendarDayIndex(
+  value: Date | string,
+): number {
+  const date =
+    value instanceof Date
+      ? value
+      : new Date(value);
+
+  if (
+    Number.isNaN(
+      date.getTime(),
+    )
+  ) {
+    throw new BadRequestException(
+      'Invalid timeline date',
+    );
+  }
+
+  const parts =
+    new Intl.DateTimeFormat(
+      'en-CA',
+      {
+        timeZone:
+          'Asia/Kolkata',
+
+        year:
+          'numeric',
+
+        month:
+          '2-digit',
+
+        day:
+          '2-digit',
+      },
+    ).formatToParts(date);
+
+  const year =
+    Number(
+      parts.find(
+        (part) =>
+          part.type ===
+          'year',
+      )?.value || 0,
+    );
+
+  const month =
+    Number(
+      parts.find(
+        (part) =>
+          part.type ===
+          'month',
+      )?.value || 0,
+    );
+
+  const day =
+    Number(
+      parts.find(
+        (part) =>
+          part.type ===
+          'day',
+      )?.value || 0,
+    );
+
+  return Math.floor(
+    Date.UTC(
+      year,
+      month - 1,
+      day,
+    ) /
+      (
+        24 *
+        60 *
+        60 *
+        1000
+      ),
+  );
+}
+
+private getCalendarDateFromDayIndex(
+  dayIndex: number,
+): string {
+  return new Date(
+    dayIndex *
+      24 *
+      60 *
+      60 *
+      1000,
+  )
+    .toISOString()
+    .slice(0, 10);
+}
+
+private async getProjectPaymentThresholdReachedDate(
+  projectId: number,
+  percentage: number,
+): Promise<{
+  reached: boolean;
+
+  reachedAt: Date | null;
+
+  projectAmount: number;
+
+  thresholdPercentage: number;
+
+  thresholdAmount: number;
+
+  cumulativeAmount: number;
+}> {
+  const normalizedProjectId =
+    Number(projectId);
+
+  const normalizedPercentage =
+    Number(percentage);
+
+  if (
+    !Number.isInteger(
+      normalizedProjectId,
+    ) ||
+    normalizedProjectId <= 0
+  ) {
+    throw new BadRequestException(
+      'Valid project ID is required',
+    );
+  }
+
+  if (
+    !Number.isFinite(
+      normalizedPercentage,
+    ) ||
+    normalizedPercentage <= 0 ||
+    normalizedPercentage > 100
+  ) {
+    throw new BadRequestException(
+      'Payment percentage must be greater than 0 and not more than 100',
+    );
+  }
+
+  const project =
+    await this.projectRepository.findOne({
+      where: {
+        id: normalizedProjectId,
+      },
+      select: {
+        id: true,
+
+        finalCost: true,
+
+        netAmount: true,
+
+        projectCost: true,
+      },
+    });
+
+  if (!project) {
+    throw new NotFoundException(
+      'Project not found',
+    );
+  }
+
+  /*
+   * Keep this exactly aligned with the
+   * existing Payment Collection / Payroll
+   * project-value fallback:
+   *
+   * finalCost
+   * -> netAmount
+   * -> projectCost
+   */
+  const projectAmount =
+    Number(project.finalCost || 0) > 0
+      ? Number(project.finalCost)
+      : Number(project.netAmount || 0) > 0
+        ? Number(project.netAmount)
+        : Number(
+            project.projectCost || 0,
+          );
+
+  if (
+    !Number.isFinite(projectAmount) ||
+    projectAmount <= 0
+  ) {
+    return {
+      reached: false,
+
+      reachedAt: null,
+
+      projectAmount: 0,
+
+      thresholdPercentage:
+        normalizedPercentage,
+
+      thresholdAmount: 0,
+
+      cumulativeAmount: 0,
+    };
+  }
+
+  const thresholdAmount =
+    projectAmount *
+    (
+      normalizedPercentage /
+      100
+    );
+
+  /*
+   * Important:
+   *
+   * This intentionally follows the existing
+   * payroll payment-qualification behaviour.
+   *
+   * A receipt qualifies when:
+   *
+   * 1. receipt itself is APPROVED
+   *
+   * OR
+   *
+   * 2. receipt is still PENDING but its
+   *    installment was later APPROVED.
+   *
+   * This is required because the existing
+   * approvePaymentInstallment() flow approves
+   * the installment but does not rewrite old
+   * receipt approvalStatus values.
+   */
+  const receiptRows =
+    await this.projectPaymentReceiptRepository
+      .createQueryBuilder('receipt')
+
+      .innerJoin(
+        ProjectPaymentInstallment,
+        'installment',
+        `
+        installment.id =
+          receipt."installmentId"
+        `,
+      )
+
+      .select(
+        'receipt.id',
+        'receiptId',
+      )
+
+      .addSelect(
+        `
+        COALESCE(
+          receipt."receivedAmount",
+          0
+        )
+        `,
+        'receivedAmount',
+      )
+
+      .addSelect(
+        `
+        COALESCE(
+          receipt."approvedAt",
+          installment."approvedAt",
+          receipt."paymentDate",
+          receipt."createdAt"
+        )
+        `,
+        'eligibilityDate',
+      )
+
+      .where(
+        `
+        receipt."projectId" =
+          :projectId
+        `,
+        {
+          projectId:
+            normalizedProjectId,
+        },
+      )
+
+      .andWhere(
+        `
+        COALESCE(
+          receipt."isHidden",
+          false
+        ) = false
+        `,
+      )
+
+      .andWhere(
+        `
+        COALESCE(
+          installment."isHidden",
+          false
+        ) = false
+        `,
+      )
+
+      .andWhere(
+        `
+        COALESCE(
+          receipt."receivedAmount",
+          0
+        ) > 0
+        `,
+      )
+
+      .andWhere(
+        `
+        (
+          receipt."approvalStatus" =
+            :approvedStatus
+
+          OR (
+            receipt."approvalStatus" =
+              :pendingStatus
+
+            AND
+            installment."approvalStatus" =
+              :approvedStatus
+          )
+        )
+        `,
+        {
+          approvedStatus:
+            'APPROVED',
+
+          pendingStatus:
+            'PENDING',
+        },
+      )
+
+      .orderBy(
+        `
+        COALESCE(
+          receipt."approvedAt",
+          installment."approvedAt",
+          receipt."paymentDate",
+          receipt."createdAt"
+        )
+        `,
+        'ASC',
+      )
+
+      .addOrderBy(
+        'receipt.id',
+        'ASC',
+      )
+
+      .getRawMany<{
+        receiptId:
+          string | number;
+
+        receivedAmount:
+          string | number | null;
+
+        eligibilityDate:
+          string | Date | null;
+      }>();
+
+  let cumulativeAmount = 0;
+
+  for (
+    const receipt of
+      receiptRows
+  ) {
+    const receivedAmount =
+      Number(
+        receipt.receivedAmount ||
+          0,
+      );
+
+    if (
+      !Number.isFinite(
+        receivedAmount,
+      ) ||
+      receivedAmount <= 0
+    ) {
+      continue;
+    }
+
+    cumulativeAmount +=
+      receivedAmount;
+
+    if (
+      cumulativeAmount >=
+      thresholdAmount
+    ) {
+      const reachedAt =
+        receipt.eligibilityDate
+          ? new Date(
+              receipt.eligibilityDate,
+            )
+          : null;
+
+      return {
+        reached:
+          reachedAt !== null &&
+          !Number.isNaN(
+            reachedAt.getTime(),
+          ),
+
+        reachedAt:
+          reachedAt &&
+          !Number.isNaN(
+            reachedAt.getTime(),
+          )
+            ? reachedAt
+            : null,
+
+        projectAmount,
+
+        thresholdPercentage:
+          normalizedPercentage,
+
+        thresholdAmount,
+
+        cumulativeAmount,
+      };
+    }
+  }
+
+  return {
+    reached: false,
+
+    reachedAt: null,
+
+    projectAmount,
+
+    thresholdPercentage:
+      normalizedPercentage,
+
+    thresholdAmount,
+
+    cumulativeAmount,
+  };
+}
+
+private async getProjectTimelineRecordedEvent(
+  projectId: number,
+  module: ProjectTimelineModule,
+  milestone: string,
+): Promise<ProjectTimelineEvent | null> {
+  return this.projectTimelineEventRepository.findOne({
+    where: {
+      projectId: Number(projectId),
+      module,
+      milestone: String(
+        milestone || '',
+      )
+        .trim()
+        .toUpperCase(),
+    },
+    order: {
+      achievedAt: 'ASC',
+      id: 'ASC',
+    },
+  });
+}
+
+private async recordProjectTimelineEventIfMissing(
+  data: {
+    projectId: number;
+
+    module:
+      ProjectTimelineModule;
+
+    milestone: string;
+
+    achievedAt?: Date | string | null;
+
+    sourceId?: number | null;
+
+    recordedBy?: number | null;
+
+    recordedByName?: string | null;
+
+    value?: number | null;
+  },
+): Promise<ProjectTimelineEvent> {
+  const projectId =
+    Number(data.projectId);
+
+  const milestone =
+    String(
+      data.milestone || '',
+    )
+      .trim()
+      .toUpperCase();
+
+  if (
+    !Number.isInteger(
+      projectId,
+    ) ||
+    projectId <= 0
+  ) {
+    throw new BadRequestException(
+      'Valid project ID is required for timeline event',
+    );
+  }
+
+  if (!milestone) {
+    throw new BadRequestException(
+      'Timeline milestone is required',
+    );
+  }
+
+  const existing =
+    await this
+      .projectTimelineEventRepository
+      .findOne({
+        where: {
+          projectId,
+
+          module:
+            data.module,
+
+          milestone,
+        },
+
+        order: {
+          achievedAt: 'ASC',
+          id: 'ASC',
+        },
+      });
+
+  /*
+   * First achievement wins.
+   *
+   * We do not overwrite historical milestone
+   * dates just because the same status is saved
+   * again later.
+   */
+  if (existing) {
+    return existing;
+  }
+
+  const achievedAt =
+    data.achievedAt
+      ? new Date(
+          data.achievedAt,
+        )
+      : new Date();
+
+  if (
+    Number.isNaN(
+      achievedAt.getTime(),
+    )
+  ) {
+    throw new BadRequestException(
+      'Invalid timeline achievement date',
+    );
+  }
+
+  const event =
+  this
+    .projectTimelineEventRepository
+    .create({
+      projectId,
+
+      module:
+        data.module,
+
+      milestone,
+
+      achievedAt,
+
+      sourceId:
+        data.sourceId ===
+          null ||
+        data.sourceId ===
+          undefined
+          ? undefined
+          : Number(
+              data.sourceId,
+            ),
+
+      recordedBy:
+        data.recordedBy ===
+          null ||
+        data.recordedBy ===
+          undefined
+          ? undefined
+          : Number(
+              data.recordedBy,
+            ),
+
+      recordedByName:
+        String(
+          data.recordedByName ||
+            '',
+        ).trim(),
+
+      value:
+        data.value ===
+          null ||
+        data.value ===
+          undefined
+          ? undefined
+          : Number(
+              data.value,
+            ),
+    });
+
+  return this
+    .projectTimelineEventRepository
+    .save(event);
+}
+
+private async resolveProjectTimelineMilestoneAchievement(
+  projectId: number,
+  rule: ProjectTimelineRule,
+): Promise<{
+  achieved: boolean;
+
+  achievedAt: Date | null;
+
+  dateReliable: boolean;
+
+  source:
+    | 'TIMELINE_EVENT'
+    | 'EXECUTION_ACTIVITY'
+    | 'LOAN_DETAIL'
+    | 'SUBSIDY_DETAIL'
+    | 'ELECTRICITY_DETAIL'
+    | 'PAYMENT_HISTORY'
+    | 'CURRENT_STATUS_DATE_UNAVAILABLE'
+    | 'NOT_ACHIEVED';
+
+  sourceId: number | null;
+}> {
+  const normalizedProjectId =
+    Number(projectId);
+
+  if (
+    !Number.isInteger(
+      normalizedProjectId,
+    ) ||
+    normalizedProjectId <= 0
+  ) {
+    throw new BadRequestException(
+      'Valid project ID is required',
+    );
+  }
+
+  const module =
+    rule.targetModule;
+
+  const milestone = String(
+    rule.targetMilestone || '',
+  )
+    .trim()
+    .toUpperCase();
+
+  /*
+   * Payment milestones are reconstructable
+   * directly from payment history.
+   */
+  if (
+    module ===
+    ProjectTimelineModule.PAYMENT
+  ) {
+    const targetPercentage =
+      Number(
+        rule.targetValue || 0,
+      );
+
+    const paymentResult =
+      await this
+        .getProjectPaymentThresholdReachedDate(
+          normalizedProjectId,
+          targetPercentage,
+        );
+
+    return {
+      achieved:
+        paymentResult.reached,
+
+      achievedAt:
+        paymentResult.reachedAt,
+
+      dateReliable:
+        paymentResult.reached &&
+        paymentResult.reachedAt !==
+          null,
+
+      source:
+        paymentResult.reached
+          ? 'PAYMENT_HISTORY'
+          : 'NOT_ACHIEVED',
+
+      sourceId: null,
+    };
+  }
+
+  /*
+   * First preference for status-based modules:
+   * permanent Timeline Event history.
+   *
+   * This becomes the reliable source for
+   * future status transitions that would
+   * otherwise be overwritten.
+   */
+  const recordedEvent =
+    await this
+      .getProjectTimelineRecordedEvent(
+        normalizedProjectId,
+        module,
+        milestone,
+      );
+
+  if (recordedEvent) {
+    return {
+      achieved: true,
+
+      achievedAt:
+        recordedEvent.achievedAt
+          ? new Date(
+              recordedEvent.achievedAt,
+            )
+          : null,
+
+      dateReliable:
+        Boolean(
+          recordedEvent.achievedAt,
+        ),
+
+      source:
+        'TIMELINE_EVENT',
+
+      sourceId:
+        recordedEvent.sourceId
+          ? Number(
+              recordedEvent.sourceId,
+            )
+          : null,
+    };
+  }
+
+  /*
+   * EXECUTION
+   *
+   * Execution already stores one activity
+   * record per actual project activity and has
+   * completedDate, so we can use existing data
+   * without fabricating timeline history.
+   */
+  if (
+    module ===
+    ProjectTimelineModule.EXECUTION
+  ) {
+    const activity =
+      await this
+        .projectExecutionActivityRepository
+        .findOne({
+          where: {
+            projectId:
+              normalizedProjectId,
+
+            activityType:
+              milestone as
+                ProjectExecutionActivityType,
+          },
+
+          order: {
+            completedDate:
+              'ASC',
+
+            id:
+              'ASC',
+          },
+        });
+
+    if (!activity) {
+      return {
+        achieved: false,
+        achievedAt: null,
+        dateReliable: false,
+        source:
+          'NOT_ACHIEVED',
+        sourceId: null,
+      };
+    }
+
+    const isCompleted =
+      activity.status ===
+      ProjectExecutionActivityStatus
+        .COMPLETED;
+
+    if (!isCompleted) {
+      return {
+        achieved: false,
+        achievedAt: null,
+        dateReliable: false,
+        source:
+          'NOT_ACHIEVED',
+        sourceId:
+          Number(activity.id),
+      };
+    }
+
+    const completedAt =
+      activity.completedDate
+        ? new Date(
+            activity.completedDate,
+          )
+        : null;
+
+    return {
+      achieved: true,
+
+      achievedAt:
+        completedAt &&
+        !Number.isNaN(
+          completedAt.getTime(),
+        )
+          ? completedAt
+          : null,
+
+      dateReliable:
+        Boolean(
+          completedAt &&
+          !Number.isNaN(
+            completedAt.getTime(),
+          ),
+        ),
+
+      source:
+        completedAt
+          ? 'EXECUTION_ACTIVITY'
+          : 'CURRENT_STATUS_DATE_UNAVAILABLE',
+
+      sourceId:
+        Number(activity.id),
+    };
+  }
+
+  /*
+   * LOAN
+   *
+   * Existing Loan Detail overwrites status.
+   *
+   * LOAN_DISBURSED has a dedicated
+   * firstEmiDisbursementDate, so that milestone
+   * can be reconstructed historically.
+   *
+   * Other statuses require Timeline Events for
+   * a reliable achievement date going forward.
+   */
+  if (
+    module ===
+    ProjectTimelineModule.LOAN
+  ) {
+    const detail =
+      await this
+        .projectLoanDetailRepository
+        .findOne({
+          where: {
+            projectId:
+              normalizedProjectId,
+          },
+
+          order: {
+            createdAt:
+              'DESC',
+          },
+        });
+
+    if (!detail) {
+      return {
+        achieved: false,
+        achievedAt: null,
+        dateReliable: false,
+        source:
+          'NOT_ACHIEVED',
+        sourceId: null,
+      };
+    }
+
+    if (
+      milestone ===
+        ProjectLoanStatus
+          .LOAN_DISBURSED &&
+      detail
+        .firstEmiDisbursementDate
+    ) {
+      const achievedAt =
+        new Date(
+          detail
+            .firstEmiDisbursementDate,
+        );
+
+      return {
+        achieved: true,
+
+        achievedAt,
+
+        dateReliable:
+          !Number.isNaN(
+            achievedAt.getTime(),
+          ),
+
+        source:
+          'LOAN_DETAIL',
+
+        sourceId:
+          Number(detail.id),
+      };
+    }
+
+    if (
+      String(detail.status) ===
+      milestone
+    ) {
+      return {
+        achieved: true,
+
+        achievedAt: null,
+
+        dateReliable: false,
+
+        source:
+          'CURRENT_STATUS_DATE_UNAVAILABLE',
+
+        sourceId:
+          Number(detail.id),
+      };
+    }
+
+    return {
+      achieved: false,
+      achievedAt: null,
+      dateReliable: false,
+      source:
+        'NOT_ACHIEVED',
+      sourceId:
+        Number(detail.id),
+    };
+  }
+
+  /*
+   * SUBSIDY
+   *
+   * Use dedicated existing milestone dates
+   * wherever the entity genuinely stores one.
+   */
+  if (
+    module ===
+    ProjectTimelineModule.SUBSIDY
+  ) {
+    const detail =
+      await this
+        .projectSubsidyDetailRepository
+        .findOne({
+          where: {
+            projectId:
+              normalizedProjectId,
+          },
+
+          order: {
+            createdAt:
+              'DESC',
+          },
+        });
+
+    if (!detail) {
+      return {
+        achieved: false,
+        achievedAt: null,
+        dateReliable: false,
+        source:
+          'NOT_ACHIEVED',
+        sourceId: null,
+      };
+    }
+
+    let achievedAt:
+      Date | null = null;
+
+    if (
+      milestone ===
+        ProjectSubsidyStatus
+          .SUBMISSION_DONE &&
+      detail.portalSubmissionDate
+    ) {
+      achievedAt =
+        new Date(
+          detail.portalSubmissionDate,
+        );
+    }
+
+    if (
+      milestone ===
+        ProjectSubsidyStatus
+          .SUBSIDY_REQUESTED &&
+      detail.subsidyRequestedDate
+    ) {
+      achievedAt =
+        new Date(
+          detail.subsidyRequestedDate,
+        );
+    }
+
+    if (
+      milestone ===
+        ProjectSubsidyStatus
+          .SUBSIDY_DISBURSED &&
+      detail.subsidyDisbursedDate
+    ) {
+      achievedAt =
+        new Date(
+          detail.subsidyDisbursedDate,
+        );
+    }
+
+    if (
+      achievedAt &&
+      !Number.isNaN(
+        achievedAt.getTime(),
+      )
+    ) {
+      return {
+        achieved: true,
+
+        achievedAt,
+
+        dateReliable: true,
+
+        source:
+          'SUBSIDY_DETAIL',
+
+        sourceId:
+          Number(detail.id),
+      };
+    }
+
+    if (
+      String(detail.status) ===
+      milestone
+    ) {
+      return {
+        achieved: true,
+
+        achievedAt: null,
+
+        dateReliable: false,
+
+        source:
+          'CURRENT_STATUS_DATE_UNAVAILABLE',
+
+        sourceId:
+          Number(detail.id),
+      };
+    }
+
+    return {
+      achieved: false,
+      achievedAt: null,
+      dateReliable: false,
+      source:
+        'NOT_ACHIEVED',
+      sourceId:
+        Number(detail.id),
+    };
+  }
+
+  /*
+   * ELECTRICITY
+   *
+   * Several existing statuses already have
+   * dedicated milestone dates.
+   */
+  if (
+    module ===
+    ProjectTimelineModule.ELECTRICITY
+  ) {
+    const detail =
+      await this
+        .projectElectricityDetailRepository
+        .findOne({
+          where: {
+            projectId:
+              normalizedProjectId,
+          },
+
+          order: {
+            createdAt:
+              'DESC',
+          },
+        });
+
+    if (!detail) {
+      return {
+        achieved: false,
+        achievedAt: null,
+        dateReliable: false,
+        source:
+          'NOT_ACHIEVED',
+        sourceId: null,
+      };
+    }
+
+    let achievedAt:
+      Date | null = null;
+
+    switch (milestone) {
+      case ProjectElectricityStatus
+        .FILE_SUBMITTED:
+        achievedAt =
+          detail.fileSubmissionDate
+            ? new Date(
+                detail
+                  .fileSubmissionDate,
+              )
+            : null;
+        break;
+
+      case ProjectElectricityStatus
+        .SITE_VISIT_DONE:
+        achievedAt =
+          detail.siteVisitDate
+            ? new Date(
+                detail
+                  .siteVisitDate,
+              )
+            : null;
+        break;
+
+      case ProjectElectricityStatus
+        .DEMAND_DEPOSITED:
+        achievedAt =
+          detail.demandDepositDate
+            ? new Date(
+                detail
+                  .demandDepositDate,
+              )
+            : null;
+        break;
+
+      case ProjectElectricityStatus
+        .METER_TESTING_DONE:
+        achievedAt =
+          detail.meterTestingDate
+            ? new Date(
+                detail
+                  .meterTestingDate,
+              )
+            : null;
+        break;
+
+      case ProjectElectricityStatus
+        .NET_METER_INSTALLED:
+        achievedAt =
+          detail
+            .netMeterInstallationDate
+            ? new Date(
+                detail
+                  .netMeterInstallationDate,
+              )
+            : null;
+        break;
+
+      default:
+        achievedAt = null;
+    }
+
+    if (
+      achievedAt &&
+      !Number.isNaN(
+        achievedAt.getTime(),
+      )
+    ) {
+      return {
+        achieved: true,
+
+        achievedAt,
+
+        dateReliable: true,
+
+        source:
+          'ELECTRICITY_DETAIL',
+
+        sourceId:
+          Number(detail.id),
+      };
+    }
+
+    if (
+      String(detail.status) ===
+      milestone
+    ) {
+      return {
+        achieved: true,
+
+        achievedAt: null,
+
+        dateReliable: false,
+
+        source:
+          'CURRENT_STATUS_DATE_UNAVAILABLE',
+
+        sourceId:
+          Number(detail.id),
+      };
+    }
+
+    return {
+      achieved: false,
+      achievedAt: null,
+      dateReliable: false,
+      source:
+        'NOT_ACHIEVED',
+      sourceId:
+        Number(detail.id),
+    };
+  }
+
+  return {
+    achieved: false,
+    achievedAt: null,
+    dateReliable: false,
+    source:
+      'NOT_ACHIEVED',
+    sourceId: null,
+  };
+}
+
+private async calculateProjectTimelineRuleStatus(
+  project: Project,
+  rule: ProjectTimelineRule,
+  triggerResult?: {
+    reached: boolean;
+
+    reachedAt: Date | null;
+
+    projectAmount: number;
+
+    thresholdPercentage: number;
+
+    thresholdAmount: number;
+
+    cumulativeAmount: number;
+  },
+) {
+  const projectId =
+    Number(project.id);
+
+  /*
+   * Rule applicability.
+   */
+  if (
+    rule.applicableProjectType ===
+      ProjectTimelineApplicableProjectType
+        .CASH &&
+    project.projectType !==
+      ProjectType.CASH
+  ) {
+    return null;
+  }
+
+  if (
+    rule.applicableProjectType ===
+      ProjectTimelineApplicableProjectType
+        .LOAN &&
+    project.projectType !==
+      ProjectType.LOAN
+  ) {
+    return null;
+  }
+
+  /*
+   * At present timeline rules start from
+   * payment percentage reached.
+   *
+   * The percentage is OWNER-configured.
+   */
+  const paymentTrigger =
+    triggerResult ||
+    await this
+      .getProjectPaymentThresholdReachedDate(
+        projectId,
+        Number(
+          rule.triggerValue || 0,
+        ),
+      );
+
+  /*
+   * Timeline has not started yet.
+   */
+  if (
+    !paymentTrigger.reached ||
+    !paymentTrigger.reachedAt
+  ) {
+    return {
+      projectId,
+
+      ruleId:
+        Number(rule.id),
+
+      ruleName:
+        rule.name,
+
+      targetModule:
+        rule.targetModule,
+
+      targetMilestone:
+        rule.targetMilestone,
+
+      triggerType:
+        rule.triggerType,
+
+      triggerValue:
+        Number(
+          rule.triggerValue || 0,
+        ),
+
+      triggerReached:
+        false,
+
+      triggerDate:
+        null,
+
+      dueDate:
+        null,
+
+      allowedDays:
+        Number(
+          rule.allowedDays || 0,
+        ),
+
+      status:
+        'NOT_STARTED',
+
+      daysRemaining:
+        null,
+
+      delayDays:
+        0,
+
+      completedDate:
+        null,
+
+      completionDateReliable:
+        false,
+
+      completionSource:
+        'NOT_ACHIEVED',
+
+      projectAmount:
+        paymentTrigger
+          .projectAmount,
+
+      triggerThresholdAmount:
+        paymentTrigger
+          .thresholdAmount,
+
+      triggerCumulativeAmount:
+        paymentTrigger
+          .cumulativeAmount,
+    };
+  }
+
+  const triggerDayIndex =
+    this.getIndiaCalendarDayIndex(
+      paymentTrigger.reachedAt,
+    );
+
+  const allowedDays =
+    Math.max(
+      Number(
+        rule.allowedDays || 0,
+      ),
+      0,
+    );
+
+  const dueDayIndex =
+    triggerDayIndex +
+    allowedDays;
+
+  const dueDate =
+    this.getCalendarDateFromDayIndex(
+      dueDayIndex,
+    );
+
+  const achievement =
+    await this
+      .resolveProjectTimelineMilestoneAchievement(
+        projectId,
+        rule,
+      );
+
+  /*
+   * Historical status exists, but exact date
+   * cannot safely be reconstructed.
+   *
+   * Do NOT falsely classify this as on-time
+   * or late.
+   */
+  if (
+    achievement.achieved &&
+    (
+      !achievement.achievedAt ||
+      !achievement.dateReliable
+    )
+  ) {
+    return {
+      projectId,
+
+      ruleId:
+        Number(rule.id),
+
+      ruleName:
+        rule.name,
+
+      targetModule:
+        rule.targetModule,
+
+      targetMilestone:
+        rule.targetMilestone,
+
+      triggerType:
+        rule.triggerType,
+
+      triggerValue:
+        Number(
+          rule.triggerValue || 0,
+        ),
+
+      triggerReached:
+        true,
+
+      triggerDate:
+        paymentTrigger
+          .reachedAt,
+
+      dueDate,
+
+      allowedDays,
+
+      status:
+        'COMPLETED_DATE_UNAVAILABLE',
+
+      daysRemaining:
+        null,
+
+      delayDays:
+        null,
+
+      completedDate:
+        null,
+
+      completionDateReliable:
+        false,
+
+      completionSource:
+        achievement.source,
+
+      sourceId:
+        achievement.sourceId,
+
+      projectAmount:
+        paymentTrigger
+          .projectAmount,
+
+      triggerThresholdAmount:
+        paymentTrigger
+          .thresholdAmount,
+
+      triggerCumulativeAmount:
+        paymentTrigger
+          .cumulativeAmount,
+    };
+  }
+
+  /*
+   * Completed milestone.
+   */
+  if (
+    achievement.achieved &&
+    achievement.achievedAt
+  ) {
+    const completedDayIndex =
+      this.getIndiaCalendarDayIndex(
+        achievement.achievedAt,
+      );
+
+    const completedLate =
+      completedDayIndex >
+      dueDayIndex;
+
+    const delayDays =
+      completedLate
+        ? completedDayIndex -
+          dueDayIndex
+        : 0;
+
+    return {
+      projectId,
+
+      ruleId:
+        Number(rule.id),
+
+      ruleName:
+        rule.name,
+
+      targetModule:
+        rule.targetModule,
+
+      targetMilestone:
+        rule.targetMilestone,
+
+      triggerType:
+        rule.triggerType,
+
+      triggerValue:
+        Number(
+          rule.triggerValue || 0,
+        ),
+
+      triggerReached:
+        true,
+
+      triggerDate:
+        paymentTrigger
+          .reachedAt,
+
+      dueDate,
+
+      allowedDays,
+
+      status:
+        completedLate
+          ? 'COMPLETED_LATE'
+          : 'COMPLETED_ON_TIME',
+
+      daysRemaining:
+        0,
+
+      delayDays,
+
+      completedDate:
+        achievement.achievedAt,
+
+      completionDateReliable:
+        true,
+
+      completionSource:
+        achievement.source,
+
+      sourceId:
+        achievement.sourceId,
+
+      projectAmount:
+        paymentTrigger
+          .projectAmount,
+
+      triggerThresholdAmount:
+        paymentTrigger
+          .thresholdAmount,
+
+      triggerCumulativeAmount:
+        paymentTrigger
+          .cumulativeAmount,
+    };
+  }
+
+  /*
+   * Target not completed yet.
+   */
+  const todayDayIndex =
+    this.getIndiaCalendarDayIndex(
+      new Date(),
+    );
+
+  if (
+    todayDayIndex <
+    dueDayIndex
+  ) {
+    return {
+      projectId,
+
+      ruleId:
+        Number(rule.id),
+
+      ruleName:
+        rule.name,
+
+      targetModule:
+        rule.targetModule,
+
+      targetMilestone:
+        rule.targetMilestone,
+
+      triggerType:
+        rule.triggerType,
+
+      triggerValue:
+        Number(
+          rule.triggerValue || 0,
+        ),
+
+      triggerReached:
+        true,
+
+      triggerDate:
+        paymentTrigger
+          .reachedAt,
+
+      dueDate,
+
+      allowedDays,
+
+      status:
+        'IN_TIMELINE',
+
+      daysRemaining:
+        dueDayIndex -
+        todayDayIndex,
+
+      delayDays:
+        0,
+
+      completedDate:
+        null,
+
+      completionDateReliable:
+        false,
+
+      completionSource:
+        achievement.source,
+
+      sourceId:
+        achievement.sourceId,
+
+      projectAmount:
+        paymentTrigger
+          .projectAmount,
+
+      triggerThresholdAmount:
+        paymentTrigger
+          .thresholdAmount,
+
+      triggerCumulativeAmount:
+        paymentTrigger
+          .cumulativeAmount,
+    };
+  }
+
+  if (
+    todayDayIndex ===
+    dueDayIndex
+  ) {
+    return {
+      projectId,
+
+      ruleId:
+        Number(rule.id),
+
+      ruleName:
+        rule.name,
+
+      targetModule:
+        rule.targetModule,
+
+      targetMilestone:
+        rule.targetMilestone,
+
+      triggerType:
+        rule.triggerType,
+
+      triggerValue:
+        Number(
+          rule.triggerValue || 0,
+        ),
+
+      triggerReached:
+        true,
+
+      triggerDate:
+        paymentTrigger
+          .reachedAt,
+
+      dueDate,
+
+      allowedDays,
+
+      status:
+        'DUE_TODAY',
+
+      daysRemaining:
+        0,
+
+      delayDays:
+        0,
+
+      completedDate:
+        null,
+
+      completionDateReliable:
+        false,
+
+      completionSource:
+        achievement.source,
+
+      sourceId:
+        achievement.sourceId,
+
+      projectAmount:
+        paymentTrigger
+          .projectAmount,
+
+      triggerThresholdAmount:
+        paymentTrigger
+          .thresholdAmount,
+
+      triggerCumulativeAmount:
+        paymentTrigger
+          .cumulativeAmount,
+    };
+  }
+
+  return {
+    projectId,
+
+    ruleId:
+      Number(rule.id),
+
+    ruleName:
+      rule.name,
+
+    targetModule:
+      rule.targetModule,
+
+    targetMilestone:
+      rule.targetMilestone,
+
+    triggerType:
+      rule.triggerType,
+
+    triggerValue:
+      Number(
+        rule.triggerValue || 0,
+      ),
+
+    triggerReached:
+      true,
+
+    triggerDate:
+      paymentTrigger
+        .reachedAt,
+
+    dueDate,
+
+    allowedDays,
+
+    status:
+      'DELAYED',
+
+    daysRemaining:
+      0,
+
+    delayDays:
+      todayDayIndex -
+      dueDayIndex,
+
+    completedDate:
+      null,
+
+    completionDateReliable:
+      false,
+
+    completionSource:
+      achievement.source,
+
+    sourceId:
+      achievement.sourceId,
+
+    projectAmount:
+      paymentTrigger
+        .projectAmount,
+
+    triggerThresholdAmount:
+      paymentTrigger
+        .thresholdAmount,
+
+    triggerCumulativeAmount:
+      paymentTrigger
+        .cumulativeAmount,
+  };
+}
+
+async getProjectTimelineTracking(
+  query: any = {},
+  currentUser?: any,
+) {
+  const page =
+    Math.max(
+      Number(
+        query?.page || 1,
+      ),
+      1,
+    );
+
+  const limit =
+    Math.min(
+      Math.max(
+        Number(
+          query?.limit || 20,
+        ),
+        1,
+      ),
+      100,
+    );
+
+  const search =
+    String(
+      query?.search || '',
+    ).trim();
+
+  const targetModule =
+    String(
+      query?.targetModule || '',
+    )
+      .trim()
+      .toUpperCase();
+
+  const timelineStatus =
+    String(
+      query?.timelineStatus || '',
+    )
+      .trim()
+      .toUpperCase();
+
+  const projectType =
+    String(
+      query?.projectType || '',
+    )
+      .trim()
+      .toUpperCase();
+
+  const branch =
+    String(
+      query?.branch || '',
+    ).trim();
+
+  const projectWorkState =
+    String(
+      query?.projectWorkState || '',
+    )
+      .trim()
+      .toUpperCase();
+
+  const projectOwnerId =
+    Number(
+      query?.projectOwnerId || 0,
+    );
+
+  const ruleId =
+    Number(
+      query?.ruleId || 0,
+    );
+
+  /*
+   * Active rules only for operational
+   * tracking.
+   */
+  const ruleQb =
+    this
+      .projectTimelineRuleRepository
+      .createQueryBuilder('rule')
+      .where(
+        'rule.isActive = :isActive',
+        {
+          isActive: true,
+        },
+      );
+
+  if (
+    ruleId > 0
+  ) {
+    ruleQb.andWhere(
+      'rule.id = :ruleId',
+      {
+        ruleId,
+      },
+    );
+  }
+
+  if (targetModule) {
+    ruleQb.andWhere(
+      'rule.targetModule = :targetModule',
+      {
+        targetModule,
+      },
+    );
+  }
+
+  const rules =
+    await ruleQb
+      .orderBy(
+        'rule.sortOrder',
+        'ASC',
+      )
+      .addOrderBy(
+        'rule.id',
+        'ASC',
+      )
+      .getMany();
+
+  if (!rules.length) {
+    return {
+      data: [],
+
+      summary: {
+        total:
+          0,
+
+        notStarted:
+          0,
+
+        inTimeline:
+          0,
+
+        dueToday:
+          0,
+
+        delayed:
+          0,
+
+        completedOnTime:
+          0,
+
+        completedLate:
+          0,
+
+        completedDateUnavailable:
+          0,
+      },
+
+      pagination: {
+        page,
+        limit,
+        total:
+          0,
+
+        totalPages:
+          1,
+      },
+    };
+  }
+
+  const projectQb =
+    this.projectRepository
+      .createQueryBuilder(
+        'project',
+      )
+      .where(
+        'project."isHidden" = false',
+      )
+      .andWhere(
+        `
+        project.status NOT IN (
+          :cancelledStatus,
+          :rejectedStatus
+        )
+        `,
+        {
+          cancelledStatus:
+            ProjectStatus.CANCELLED,
+
+          rejectedStatus:
+            ProjectStatus.REJECTED,
+        },
+      );
+
+  if (search) {
+    projectQb.andWhere(
+      `(
+        CAST(
+          project.id
+          AS TEXT
+        ) ILIKE :search
+
+        OR COALESCE(
+          project."customerName",
+          ''
+        ) ILIKE :search
+
+        OR COALESCE(
+          project."customerPhone",
+          ''
+        ) ILIKE :search
+
+        OR COALESCE(
+          project."electricityKNumber",
+          ''
+        ) ILIKE :search
+
+        OR COALESCE(
+          project."projectSerial",
+          ''
+        ) ILIKE :search
+      )`,
+      {
+        search:
+          `%${search}%`,
+      },
+    );
+  }
+
+  if (
+    projectType ===
+      ProjectType.CASH ||
+    projectType ===
+      ProjectType.LOAN
+  ) {
+    projectQb.andWhere(
+      'project."projectType" = :projectType',
+      {
+        projectType,
+      },
+    );
+  }
+
+  if (branch) {
+    projectQb.andWhere(
+      `
+      COALESCE(
+        project."branchName",
+        ''
+      ) ILIKE :branch
+      `,
+      {
+        branch:
+          `%${branch}%`,
+      },
+    );
+  }
+
+  if (projectWorkState) {
+    projectQb.andWhere(
+      `
+      project."projectWorkState" =
+        :projectWorkState
+      `,
+      {
+        projectWorkState,
+      },
+    );
+  }
+
+  if (
+    Number.isInteger(
+      projectOwnerId,
+    ) &&
+    projectOwnerId > 0
+  ) {
+    projectQb.andWhere(
+      `
+      project."projectOwnerId" =
+        :projectOwnerId
+      `,
+      {
+        projectOwnerId,
+      },
+    );
+  }
+
+  /*
+   * Keep the same operational ownership
+   * principle as other project lists.
+   *
+   * Management roles may see all.
+   */
+  const roles =
+    Array.isArray(
+      currentUser?.roles,
+    )
+      ? currentUser.roles
+      : [];
+
+  const currentUserId =
+    Number(
+      currentUser?.id ||
+      currentUser?.userId ||
+      0,
+    );
+
+  const canSeeAll =
+    roles.includes(
+      'OWNER',
+    ) ||
+    roles.includes(
+      'MARKETING_HEAD',
+    ) ||
+    roles.includes(
+      'PROJECT_MANAGER',
+    ) ||
+    roles.includes(
+      'PAYMENT_MANAGER',
+    ) ||
+    roles.includes(
+      'ACCOUNT_MANAGER',
+    ) ||
+    roles.includes(
+      'LOAN_MANAGER',
+    ) ||
+    roles.includes(
+      'SUBSIDY_MANAGER',
+    ) ||
+    roles.includes(
+      'ELECTRICITY_MANAGER',
+    );
+
+  if (
+    !canSeeAll &&
+    currentUserId > 0
+  ) {
+    projectQb.andWhere(
+      `
+      project."projectOwnerId" =
+        :currentUserId
+      `,
+      {
+        currentUserId,
+      },
+    );
+  }
+
+  const projects =
+    await projectQb
+      .orderBy(
+        'project."createdAt"',
+        'DESC',
+      )
+      .getMany();
+
+  /*
+   * Cache trigger calculation inside this
+   * request.
+   *
+   * Five rules using the same 20% trigger
+   * should calculate that payment threshold
+   * only once per project.
+   */
+  const triggerCache =
+    new Map<
+      string,
+      {
+        reached: boolean;
+
+        reachedAt:
+          Date | null;
+
+        projectAmount:
+          number;
+
+        thresholdPercentage:
+          number;
+
+        thresholdAmount:
+          number;
+
+        cumulativeAmount:
+          number;
+      }
+    >();
+
+  const results:
+    any[] = [];
+
+  for (
+    const project of projects
+  ) {
+    for (
+      const rule of rules
+    ) {
+      /*
+       * Skip obviously non-applicable rules
+       * before doing payment/milestone work.
+       */
+      if (
+        rule.applicableProjectType ===
+          ProjectTimelineApplicableProjectType
+            .CASH &&
+        project.projectType !==
+          ProjectType.CASH
+      ) {
+        continue;
+      }
+
+      if (
+        rule.applicableProjectType ===
+          ProjectTimelineApplicableProjectType
+            .LOAN &&
+        project.projectType !==
+          ProjectType.LOAN
+      ) {
+        continue;
+      }
+
+      const triggerKey =
+        `${project.id}:${Number(
+          rule.triggerValue || 0,
+        )}`;
+
+      let triggerResult =
+        triggerCache.get(
+          triggerKey,
+        );
+
+      if (!triggerResult) {
+        triggerResult =
+          await this
+            .getProjectPaymentThresholdReachedDate(
+              Number(
+                project.id,
+              ),
+
+              Number(
+                rule.triggerValue ||
+                  0,
+              ),
+            );
+
+        triggerCache.set(
+          triggerKey,
+          triggerResult,
+        );
+      }
+
+      const timeline =
+        await this
+          .calculateProjectTimelineRuleStatus(
+            project,
+            rule,
+            triggerResult,
+          );
+
+      if (!timeline) {
+        continue;
+      }
+
+      if (
+        timelineStatus &&
+        timeline.status !==
+          timelineStatus
+      ) {
+        continue;
+      }
+
+      results.push({
+        ...timeline,
+
+        customerName:
+          project.customerName ||
+          '',
+
+        customerPhone:
+          project.customerPhone ||
+          '',
+
+        electricityKNumber:
+          project
+            .electricityKNumber ||
+          '',
+
+        projectSerial:
+          project.projectSerial ||
+          '',
+
+        projectType:
+          project.projectType ||
+          null,
+
+        projectStatus:
+          project.status ||
+          null,
+
+        projectWorkState:
+          project.projectWorkState ||
+          'IN_PROCESS',
+
+        branchName:
+          project.branchName ||
+          '',
+
+        city:
+          project.city ||
+          '',
+
+        projectOwnerId:
+          project.projectOwnerId ||
+          null,
+
+        projectOwnerName:
+          project
+            .projectOwnerName ||
+          '',
+      });
+    }
+  }
+
+  /*
+   * Operational priority:
+   *
+   * Delayed first, then due today,
+   * then currently in timeline.
+   */
+  const statusPriority:
+    Record<
+      string,
+      number
+    > = {
+      DELAYED:
+        1,
+
+      DUE_TODAY:
+        2,
+
+      IN_TIMELINE:
+        3,
+
+      COMPLETED_LATE:
+        4,
+
+      COMPLETED_DATE_UNAVAILABLE:
+        5,
+
+      NOT_STARTED:
+        6,
+
+      COMPLETED_ON_TIME:
+        7,
+    };
+
+  results.sort(
+    (first, second) => {
+      const statusDiff =
+        Number(
+          statusPriority[
+            first.status
+          ] || 99,
+        ) -
+        Number(
+          statusPriority[
+            second.status
+          ] || 99,
+        );
+
+      if (statusDiff !== 0) {
+        return statusDiff;
+      }
+
+      return (
+        Number(
+          second.delayDays ||
+            0,
+        ) -
+        Number(
+          first.delayDays ||
+            0,
+        )
+      );
+    },
+  );
+
+  const total =
+    results.length;
+
+  const start =
+    (page - 1) *
+    limit;
+
+  const paginatedResults =
+  results.slice(
+    start,
+    start + limit,
+  );
+
+/*
+ * Delay explanation enrichment.
+ *
+ * Only enrich the current page so we do not
+ * fetch delay-note/proof data for every
+ * timeline row in the complete result set.
+ */
+const paginatedProjectIds =
+  Array.from(
+    new Set(
+      paginatedResults
+        .map(
+          (item) =>
+            Number(
+              item.projectId,
+            ),
+        )
+        .filter(
+          (id) =>
+            Number.isInteger(
+              id,
+            ) &&
+            id > 0,
+        ),
+    ),
+  );
+
+const paginatedRuleIds =
+  Array.from(
+    new Set(
+      paginatedResults
+        .map(
+          (item) =>
+            Number(
+              item.ruleId,
+            ),
+        )
+        .filter(
+          (id) =>
+            Number.isInteger(
+              id,
+            ) &&
+            id > 0,
+        ),
+    ),
+  );
+
+let delayNotes:
+  ProjectTimelineDelayNote[] =
+  [];
+
+if (
+  paginatedProjectIds.length >
+    0 &&
+  paginatedRuleIds.length >
+    0
+) {
+  delayNotes =
+    await this
+      .projectTimelineDelayNoteRepository
+      .find({
+        where: {
+          projectId:
+            In(
+              paginatedProjectIds,
+            ),
+
+          timelineRuleId:
+            In(
+              paginatedRuleIds,
+            ),
+        },
+
+        order: {
+          createdAt:
+            'DESC',
+        },
+      });
+}
+
+/*
+ * Keep the newest delay explanation for
+ * each exact project + rule combination.
+ */
+const latestDelayNoteMap =
+  new Map<
+    string,
+    ProjectTimelineDelayNote
+  >();
+
+for (
+  const note of delayNotes
+) {
+  const key =
+    `${Number(
+      note.projectId,
+    )}:${Number(
+      note.timelineRuleId,
+    )}`;
+
+  if (
+    !latestDelayNoteMap.has(
+      key,
+    )
+  ) {
+    latestDelayNoteMap.set(
+      key,
+      note,
+    );
+  }
+}
+
+const delayNoteIds =
+  Array.from(
+    latestDelayNoteMap.values(),
+  )
+    .map(
+      (note) =>
+        Number(note.id),
+    )
+    .filter(
+      (id) =>
+        Number.isInteger(
+          id,
+        ) &&
+        id > 0,
+    );
+
+const delayProofCountMap =
+  new Map<
+    number,
+    number
+  >();
+
+if (
+  delayNoteIds.length > 0
+) {
+  const delayProofs =
+    await this
+      .projectTimelineDelayProofRepository
+      .find({
+        where: {
+          delayNoteId:
+            In(
+              delayNoteIds,
+            ),
+        },
+      });
+
+  for (
+    const proof of delayProofs
+  ) {
+    const delayNoteId =
+      Number(
+        proof.delayNoteId,
+      );
+
+    delayProofCountMap.set(
+      delayNoteId,
+      (
+        delayProofCountMap.get(
+          delayNoteId,
+        ) || 0
+      ) + 1,
+    );
+  }
+}
+
+const data =
+  paginatedResults.map(
+    (item) => {
+      const key =
+        `${Number(
+          item.projectId,
+        )}:${Number(
+          item.ruleId,
+        )}`;
+
+      const latestNote =
+        latestDelayNoteMap.get(
+          key,
+        );
+
+      if (!latestNote) {
+        return {
+          ...item,
+
+          hasDelayExplanation:
+            false,
+
+          latestDelayRemark:
+            null,
+
+          expectedResolutionDate:
+            null,
+
+          latestDelayNoteCreatedAt:
+            null,
+
+          latestDelayNoteCreatedByName:
+            null,
+
+          delayProofCount:
+            0,
+        };
+      }
+
+      return {
+        ...item,
+
+        hasDelayExplanation:
+          true,
+
+        latestDelayRemark:
+          latestNote.remark ||
+          null,
+
+        expectedResolutionDate:
+          latestNote
+            .expectedResolutionDate ||
+          null,
+
+        latestDelayNoteCreatedAt:
+          latestNote.createdAt ||
+          null,
+
+        latestDelayNoteCreatedByName:
+          latestNote.createdByName ||
+          null,
+
+        delayProofCount:
+          delayProofCountMap.get(
+            Number(
+              latestNote.id,
+            ),
+          ) || 0,
+      };
+    },
+  );
+
+  return {
+    data,
+
+    summary: {
+      total,
+
+      notStarted:
+        results.filter(
+          (item) =>
+            item.status ===
+            'NOT_STARTED',
+        ).length,
+
+      inTimeline:
+        results.filter(
+          (item) =>
+            item.status ===
+            'IN_TIMELINE',
+        ).length,
+
+      dueToday:
+        results.filter(
+          (item) =>
+            item.status ===
+            'DUE_TODAY',
+        ).length,
+
+      delayed:
+        results.filter(
+          (item) =>
+            item.status ===
+            'DELAYED',
+        ).length,
+
+      completedOnTime:
+        results.filter(
+          (item) =>
+            item.status ===
+            'COMPLETED_ON_TIME',
+        ).length,
+
+      completedLate:
+        results.filter(
+          (item) =>
+            item.status ===
+            'COMPLETED_LATE',
+        ).length,
+
+      completedDateUnavailable:
+        results.filter(
+          (item) =>
+            item.status ===
+            'COMPLETED_DATE_UNAVAILABLE',
+        ).length,
+    },
+
+    pagination: {
+      page,
+      limit,
+      total,
+
+      totalPages:
+        Math.ceil(
+          total / limit,
+        ) || 1,
+    },
+  };
+}
+
+async addProjectTimelineDelayNote(
+  projectId: number,
+  ruleId: number,
+  body: any,
+  user: any,
+) {
+  const project =
+    await this.projectRepository.findOne({
+      where: {
+        id: Number(projectId),
+        isHidden: false,
+      },
+    });
+
+  if (!project) {
+    throw new NotFoundException(
+      'Project not found',
+    );
+  }
+
+  const rule =
+    await this.projectTimelineRuleRepository.findOne({
+      where: {
+        id: Number(ruleId),
+      },
+    });
+
+  if (!rule) {
+    throw new NotFoundException(
+      'Timeline rule not found',
+    );
+  }
+
+  const remark =
+    String(
+      body?.remark || '',
+    ).trim();
+
+  if (!remark) {
+    throw new BadRequestException(
+      'Delay remark is required',
+    );
+  }
+
+  const expectedResolutionDate =
+    body?.expectedResolutionDate
+      ? String(
+          body.expectedResolutionDate,
+        ).trim()
+      : null;
+
+  const note =
+    this.projectTimelineDelayNoteRepository.create({
+      projectId:
+        Number(projectId),
+
+      timelineRuleId:
+        Number(ruleId),
+
+      remark,
+
+      expectedResolutionDate:
+        expectedResolutionDate ||
+        undefined,
+
+      createdBy:
+        user?.id ||
+        user?.userId ||
+        undefined,
+
+      createdByName:
+        user?.name ||
+        user?.email ||
+        '',
+
+      updatedBy:
+        user?.id ||
+        user?.userId ||
+        undefined,
+
+      updatedByName:
+        user?.name ||
+        user?.email ||
+        '',
+    });
+
+  return this
+    .projectTimelineDelayNoteRepository
+    .save(note);
+}
+
+async getProjectTimelineDelayNotes(
+  projectId: number,
+  ruleId: number,
+) {
+  const notes =
+    await this
+      .projectTimelineDelayNoteRepository
+      .find({
+        where: {
+          projectId:
+            Number(projectId),
+
+          timelineRuleId:
+            Number(ruleId),
+        },
+
+        order: {
+          createdAt:
+            'DESC',
+        },
+      });
+
+  if (!notes.length) {
+    return [];
+  }
+
+  const noteIds =
+    notes.map(
+      (note) =>
+        Number(note.id),
+    );
+
+  const proofs =
+    await this
+      .projectTimelineDelayProofRepository
+      .find({
+        where: {
+          delayNoteId:
+            In(noteIds),
+        },
+
+        order: {
+          createdAt:
+            'DESC',
+        },
+      });
+
+  const proofMap =
+    new Map<
+      number,
+      ProjectTimelineDelayProof[]
+    >();
+
+  for (
+    const proof of proofs
+  ) {
+    const key =
+      Number(
+        proof.delayNoteId,
+      );
+
+    const existing =
+      proofMap.get(key) ||
+      [];
+
+    existing.push(proof);
+
+    proofMap.set(
+      key,
+      existing,
+    );
+  }
+
+  return notes.map(
+    (note) => ({
+      ...note,
+
+      proofs:
+        proofMap.get(
+          Number(note.id),
+        ) || [],
+    }),
+  );
+}
+
+async uploadProjectTimelineDelayProofs(
+  files: any[],
+  projectId: number,
+  ruleId: number,
+  delayNoteId: number,
+  user: any,
+) {
+  if (
+    !files ||
+    files.length === 0
+  ) {
+    throw new BadRequestException(
+      'Delay proof photo(s) are required',
+    );
+  }
+
+  const note =
+    await this
+      .projectTimelineDelayNoteRepository
+      .findOne({
+        where: {
+          id:
+            Number(delayNoteId),
+
+          projectId:
+            Number(projectId),
+
+          timelineRuleId:
+            Number(ruleId),
+        },
+      });
+
+  if (!note) {
+    throw new NotFoundException(
+      'Timeline delay note not found',
+    );
+  }
+
+  const supabaseUrl =
+    process.env.SUPABASE_URL;
+
+  const serviceKey =
+    process.env
+      .SUPABASE_SERVICE_ROLE_KEY;
+
+  const bucket =
+    process.env
+      .SUPABASE_PROJECT_DOCUMENTS_BUCKET ||
+    'project-documents';
+
+  if (
+    !supabaseUrl ||
+    !serviceKey
+  ) {
+    throw new BadRequestException(
+      'Supabase storage is not configured',
+    );
+  }
+
+  const supabase =
+    createClient(
+      supabaseUrl,
+      serviceKey,
+    );
+
+  const uploadedProofs:
+    ProjectTimelineDelayProof[] =
+    [];
+
+  for (
+    const file of files
+  ) {
+    const mimeType =
+      String(
+        file.mimetype || '',
+      );
+
+    if (
+      !mimeType.startsWith(
+        'image/',
+      )
+    ) {
+      throw new BadRequestException(
+        'Only image files are allowed',
+      );
+    }
+
+    const extension =
+      String(
+        file.originalname ||
+          '',
+      )
+        .split('.')
+        .pop() ||
+      'jpg';
+
+    const filePath =
+      `timeline-delay-proofs/project-${projectId}/rule-${ruleId}/note-${delayNoteId}/${Date.now()}-${randomUUID()}.${extension}`;
+
+    const uploadResult =
+      await supabase.storage
+        .from(bucket)
+        .upload(
+          filePath,
+          file.buffer,
+          {
+            contentType:
+              mimeType,
+          },
+        );
+
+    if (
+      uploadResult.error
+    ) {
+      throw new BadRequestException(
+        uploadResult
+          .error
+          .message,
+      );
+    }
+
+    const fileUrl =
+      supabase.storage
+        .from(bucket)
+        .getPublicUrl(
+          filePath,
+        ).data.publicUrl;
+
+    const proof =
+      this
+        .projectTimelineDelayProofRepository
+        .create({
+          delayNoteId:
+            Number(
+              delayNoteId,
+            ),
+
+          projectId:
+            Number(
+              projectId,
+            ),
+
+          timelineRuleId:
+            Number(
+              ruleId,
+            ),
+
+          fileUrl,
+
+          uploadedBy:
+            user?.id ||
+            user?.userId ||
+            undefined,
+
+          uploadedByName:
+            user?.name ||
+            user?.email ||
+            '',
+        });
+
+    uploadedProofs.push(
+      await this
+        .projectTimelineDelayProofRepository
+        .save(proof),
+    );
+  }
+
+  return {
+    message:
+      'Timeline delay proof uploaded successfully',
+
+    data:
+      uploadedProofs,
+  };
+}
+
 async getProjectLoanDetail(projectId: number) {
   const project = await this.projectRepository.findOne({
     where: { id: projectId },
@@ -26261,6 +30165,9 @@ async saveProjectLoanDetail(
     });
   }
 
+  const previousLoanStatus =
+  detail?.status || null;
+
   Object.assign(detail, {
     loanType: body.loanType || detail.loanType || null,
     bankName: body.bankName || '',
@@ -26286,7 +30193,69 @@ coApplicantReason:
     updatedByName: user?.name || user?.email || '',
   });
 
-  return this.projectLoanDetailRepository.save(detail);
+  const savedDetail =
+  await this
+    .projectLoanDetailRepository
+    .save(detail);
+
+const currentLoanStatus =
+  savedDetail.status || null;
+
+if (
+  currentLoanStatus &&
+  currentLoanStatus !==
+    previousLoanStatus
+) {
+  let achievedAt:
+    Date | null = null;
+
+  if (
+    currentLoanStatus ===
+      ProjectLoanStatus
+        .LOAN_DISBURSED &&
+    savedDetail
+      .firstEmiDisbursementDate
+  ) {
+    achievedAt =
+      new Date(
+        savedDetail
+          .firstEmiDisbursementDate,
+      );
+  }
+
+  await this
+    .recordProjectTimelineEventIfMissing({
+      projectId:
+        Number(projectId),
+
+      module:
+        ProjectTimelineModule.LOAN,
+
+      milestone:
+        currentLoanStatus,
+
+      achievedAt:
+        achievedAt ||
+        new Date(),
+
+      sourceId:
+        Number(
+          savedDetail.id,
+        ),
+
+      recordedBy:
+        user?.id ||
+        user?.userId ||
+        null,
+
+      recordedByName:
+        user?.name ||
+        user?.email ||
+        '',
+    });
+}
+
+return savedDetail;
 }
 
 async getProjectLoanCoApplicants(projectId: number) {
@@ -26517,6 +30486,9 @@ async saveProjectSubsidyDetail(
     });
   }
 
+  const previousSubsidyStatus =
+  detail?.status || null;
+
   Object.assign(detail, {
     status: body.status || detail.status,
     dcrCertificateReady:
@@ -26549,7 +30521,99 @@ async saveProjectSubsidyDetail(
     updatedByName: user?.name || user?.email || '',
   });
 
-  return this.projectSubsidyDetailRepository.save(detail);
+  const savedDetail =
+  await this
+    .projectSubsidyDetailRepository
+    .save(detail);
+
+const currentSubsidyStatus =
+  savedDetail.status || null;
+
+if (
+  currentSubsidyStatus &&
+  currentSubsidyStatus !==
+    previousSubsidyStatus
+) {
+  let achievedAt:
+    Date | null = null;
+
+  switch (
+    currentSubsidyStatus
+  ) {
+    case ProjectSubsidyStatus
+      .SUBMISSION_DONE:
+      achievedAt =
+        savedDetail
+          .portalSubmissionDate
+          ? new Date(
+              savedDetail
+                .portalSubmissionDate,
+            )
+          : null;
+      break;
+
+    case ProjectSubsidyStatus
+      .SUBSIDY_REQUESTED:
+      achievedAt =
+        savedDetail
+          .subsidyRequestedDate
+          ? new Date(
+              savedDetail
+                .subsidyRequestedDate,
+            )
+          : null;
+      break;
+
+    case ProjectSubsidyStatus
+      .SUBSIDY_DISBURSED:
+      achievedAt =
+        savedDetail
+          .subsidyDisbursedDate
+          ? new Date(
+              savedDetail
+                .subsidyDisbursedDate,
+            )
+          : null;
+      break;
+
+    default:
+      achievedAt = null;
+  }
+
+  await this
+    .recordProjectTimelineEventIfMissing({
+      projectId:
+        Number(projectId),
+
+      module:
+        ProjectTimelineModule
+          .SUBSIDY,
+
+      milestone:
+        currentSubsidyStatus,
+
+      achievedAt:
+        achievedAt ||
+        new Date(),
+
+      sourceId:
+        Number(
+          savedDetail.id,
+        ),
+
+      recordedBy:
+        user?.id ||
+        user?.userId ||
+        null,
+
+      recordedByName:
+        user?.name ||
+        user?.email ||
+        '',
+    });
+}
+
+return savedDetail;
 }
 
 async getProjectElectricityDetail(projectId: number) {
@@ -26600,6 +30664,9 @@ async saveProjectElectricityDetail(
       });
   }
 
+  const previousElectricityStatus =
+  detail?.status || null;
+
   Object.assign(detail, {
     discomName: body.discomName || '',
     status: body.status || detail.status,
@@ -26628,9 +30695,123 @@ async saveProjectElectricityDetail(
       user?.name || user?.email || '',
   });
 
-  return this.projectElectricityDetailRepository.save(
-    detail,
-  );
+  const savedDetail =
+  await this
+    .projectElectricityDetailRepository
+    .save(detail);
+
+const currentElectricityStatus =
+  savedDetail.status || null;
+
+if (
+  currentElectricityStatus &&
+  currentElectricityStatus !==
+    previousElectricityStatus
+) {
+  let achievedAt:
+    Date | null = null;
+
+  switch (
+    currentElectricityStatus
+  ) {
+    case ProjectElectricityStatus
+      .FILE_SUBMITTED:
+      achievedAt =
+        savedDetail
+          .fileSubmissionDate
+          ? new Date(
+              savedDetail
+                .fileSubmissionDate,
+            )
+          : null;
+      break;
+
+    case ProjectElectricityStatus
+      .SITE_VISIT_DONE:
+      achievedAt =
+        savedDetail
+          .siteVisitDate
+          ? new Date(
+              savedDetail
+                .siteVisitDate,
+            )
+          : null;
+      break;
+
+    case ProjectElectricityStatus
+      .DEMAND_DEPOSITED:
+      achievedAt =
+        savedDetail
+          .demandDepositDate
+          ? new Date(
+              savedDetail
+                .demandDepositDate,
+            )
+          : null;
+      break;
+
+    case ProjectElectricityStatus
+      .METER_TESTING_DONE:
+      achievedAt =
+        savedDetail
+          .meterTestingDate
+          ? new Date(
+              savedDetail
+                .meterTestingDate,
+            )
+          : null;
+      break;
+
+    case ProjectElectricityStatus
+      .NET_METER_INSTALLED:
+      achievedAt =
+        savedDetail
+          .netMeterInstallationDate
+          ? new Date(
+              savedDetail
+                .netMeterInstallationDate,
+            )
+          : null;
+      break;
+
+    default:
+      achievedAt = null;
+  }
+
+  await this
+    .recordProjectTimelineEventIfMissing({
+      projectId:
+        Number(projectId),
+
+      module:
+        ProjectTimelineModule
+          .ELECTRICITY,
+
+      milestone:
+        currentElectricityStatus,
+
+      achievedAt:
+        achievedAt ||
+        new Date(),
+
+      sourceId:
+        Number(
+          savedDetail.id,
+        ),
+
+      recordedBy:
+        user?.id ||
+        user?.userId ||
+        null,
+
+      recordedByName:
+        user?.name ||
+        user?.email ||
+        '',
+    });
+}
+
+return savedDetail;
 }
 
 async assignContractorToProject(body: any, user: any) {
