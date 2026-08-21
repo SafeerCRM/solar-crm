@@ -28320,6 +28320,25 @@ private async calculateProjectTimelineRuleStatus(
 
     cumulativeAmount: number;
   },
+  achievementResult?: {
+    achieved: boolean;
+
+    achievedAt: Date | null;
+
+    dateReliable: boolean;
+
+    source:
+      | 'TIMELINE_EVENT'
+      | 'EXECUTION_ACTIVITY'
+      | 'LOAN_DETAIL'
+      | 'SUBSIDY_DETAIL'
+      | 'ELECTRICITY_DETAIL'
+      | 'PAYMENT_HISTORY'
+      | 'CURRENT_STATUS_DATE_UNAVAILABLE'
+      | 'NOT_ACHIEVED';
+
+    sourceId: number | null;
+  },
 ) {
   const projectId =
     Number(project.id);
@@ -28462,11 +28481,12 @@ private async calculateProjectTimelineRuleStatus(
     );
 
   const achievement =
-    await this
-      .resolveProjectTimelineMilestoneAchievement(
-        projectId,
-        rule,
-      );
+  achievementResult ||
+  await this
+    .resolveProjectTimelineMilestoneAchievement(
+      projectId,
+      rule,
+    );
 
   /*
    * Historical status exists, but exact date
@@ -29214,6 +29234,609 @@ async getProjectTimelineTracking(
       )
       .getMany();
 
+        /*
+   * Bulk timeline payment history.
+   *
+   * Timeline rules commonly share the same
+   * payment trigger percentage (for example
+   * 20%). Do not query payment history once
+   * per project.
+   */
+  const timelineProjectIds =
+    projects
+      .map(
+        (project) =>
+          Number(project.id),
+      )
+      .filter(
+        (id) =>
+          Number.isInteger(id) &&
+          id > 0,
+      );
+
+  const timelinePaymentReceipts =
+    timelineProjectIds.length > 0
+      ? await this
+          .projectPaymentReceiptRepository
+          .createQueryBuilder(
+            'receipt',
+          )
+          .innerJoin(
+            ProjectPaymentInstallment,
+            'installment',
+            `
+            installment.id =
+              receipt."installmentId"
+            `,
+          )
+          .select([
+            'receipt.id AS "receiptId"',
+            'receipt."projectId" AS "projectId"',
+            'receipt."receivedAmount" AS "receivedAmount"',
+            'receipt."paymentDate" AS "paymentDate"',
+            'receipt."createdAt" AS "receiptCreatedAt"',
+            'receipt."approvedAt" AS "receiptApprovedAt"',
+            'receipt."approvalStatus" AS "receiptApprovalStatus"',
+            'installment."approvedAt" AS "installmentApprovedAt"',
+            'installment."approvalStatus" AS "installmentApprovalStatus"',
+          ])
+          .where(
+            `
+            receipt."projectId"
+              IN (:...timelineProjectIds)
+            `,
+            {
+              timelineProjectIds,
+            },
+          )
+          .andWhere(
+            'receipt."isHidden" = false',
+          )
+          .andWhere(
+  `
+  COALESCE(
+    installment."isHidden",
+    false
+  ) = false
+  `,
+)
+          .andWhere(
+            `
+            (
+              receipt."approvalStatus" =
+                :timelineApprovedStatus
+
+              OR (
+                receipt."approvalStatus" =
+                  :timelinePendingStatus
+
+                AND
+                installment."approvalStatus" =
+                  :timelineApprovedStatus
+              )
+            )
+            `,
+            {
+              timelineApprovedStatus:
+                'APPROVED',
+
+              timelinePendingStatus:
+                'PENDING',
+            },
+          )
+          .orderBy(
+            `
+            COALESCE(
+              receipt."approvedAt",
+              installment."approvedAt",
+              receipt."paymentDate",
+              receipt."createdAt"
+            )
+            `,
+            'ASC',
+          )
+          .addOrderBy(
+            'receipt.id',
+            'ASC',
+          )
+          .getRawMany()
+      : [];
+
+  const timelinePaymentReceiptMap =
+    new Map<
+      number,
+      Array<{
+        amount: number;
+        effectiveDate: Date;
+      }>
+    >();
+
+  for (
+    const row of
+      timelinePaymentReceipts
+  ) {
+    const paymentProjectId =
+      Number(
+        row.projectId,
+      );
+
+    const amount =
+      Number(
+        row.receivedAmount ||
+          0,
+      );
+
+    const rawEffectiveDate =
+      row.receiptApprovedAt ||
+      row.installmentApprovedAt ||
+      row.paymentDate ||
+      row.receiptCreatedAt;
+
+    if (
+      !Number.isInteger(
+        paymentProjectId,
+      ) ||
+      paymentProjectId <= 0 ||
+      amount <= 0 ||
+      !rawEffectiveDate
+    ) {
+      continue;
+    }
+
+    const effectiveDate =
+      new Date(
+        rawEffectiveDate,
+      );
+
+    if (
+      Number.isNaN(
+        effectiveDate.getTime(),
+      )
+    ) {
+      continue;
+    }
+
+    const existingPayments =
+      timelinePaymentReceiptMap.get(
+        paymentProjectId,
+      ) || [];
+
+    existingPayments.push({
+      amount,
+      effectiveDate,
+    });
+
+    timelinePaymentReceiptMap.set(
+      paymentProjectId,
+      existingPayments,
+    );
+  }
+
+  const timelineProjectAmountMap =
+  new Map<
+    number,
+    number
+  >();
+
+for (
+  const project of projects
+) {
+  const projectAmount =
+    Number(
+      project.finalCost ||
+        0,
+    ) > 0
+      ? Number(
+          project.finalCost,
+        )
+      : Number(
+            project.netAmount ||
+              0,
+          ) > 0
+        ? Number(
+            project.netAmount,
+          )
+        : Number(
+            project.projectCost ||
+              0,
+          );
+
+  timelineProjectAmountMap.set(
+    Number(project.id),
+    projectAmount,
+  );
+}
+
+/*
+ * Bulk timeline milestone sources.
+ *
+ * These replace per-project/per-rule database
+ * lookups inside timeline tracking.
+ */
+const timelineEvents =
+  timelineProjectIds.length > 0
+    ? await this
+        .projectTimelineEventRepository
+        .find({
+          where: {
+            projectId:
+              In(
+                timelineProjectIds,
+              ),
+          },
+
+          order: {
+            achievedAt:
+              'ASC',
+
+            id:
+              'ASC',
+          },
+        })
+    : [];
+
+const timelineExecutionActivities =
+  timelineProjectIds.length > 0
+    ? await this
+        .projectExecutionActivityRepository
+        .find({
+          where: {
+            projectId:
+              In(
+                timelineProjectIds,
+              ),
+          },
+
+          order: {
+            completedDate:
+              'ASC',
+
+            id:
+              'ASC',
+          },
+        })
+    : [];
+
+const timelineLoanDetails =
+  timelineProjectIds.length > 0
+    ? await this
+        .projectLoanDetailRepository
+        .find({
+          where: {
+            projectId:
+              In(
+                timelineProjectIds,
+              ),
+          },
+
+          order: {
+            createdAt:
+              'DESC',
+
+            id:
+              'DESC',
+          },
+        })
+    : [];
+
+const timelineSubsidyDetails =
+  timelineProjectIds.length > 0
+    ? await this
+        .projectSubsidyDetailRepository
+        .find({
+          where: {
+            projectId:
+              In(
+                timelineProjectIds,
+              ),
+          },
+
+          order: {
+            createdAt:
+              'DESC',
+
+            id:
+              'DESC',
+          },
+        })
+    : [];
+
+const timelineElectricityDetails =
+  timelineProjectIds.length > 0
+    ? await this
+        .projectElectricityDetailRepository
+        .find({
+          where: {
+            projectId:
+              In(
+                timelineProjectIds,
+              ),
+          },
+
+          order: {
+            createdAt:
+              'DESC',
+
+            id:
+              'DESC',
+          },
+        })
+    : [];
+
+/*
+ * Earliest recorded Timeline Event wins.
+ */
+const timelineEventMap =
+  new Map<
+    string,
+    ProjectTimelineEvent
+  >();
+
+for (
+  const event of timelineEvents
+) {
+  const key =
+    `${Number(
+      event.projectId,
+    )}:${String(
+      event.module || '',
+    )}:${String(
+      event.milestone || '',
+    )
+      .trim()
+      .toUpperCase()}`;
+
+  if (
+    !timelineEventMap.has(
+      key,
+    )
+  ) {
+    timelineEventMap.set(
+      key,
+      event,
+    );
+  }
+}
+
+/*
+ * Execution resolver must behave like the
+ * existing findOne(projectId + activityType)
+ * ordered by completedDate ASC, id ASC.
+ */
+const timelineExecutionMap =
+  new Map<
+    string,
+    ProjectExecutionActivity
+  >();
+
+for (
+  const activity of
+    timelineExecutionActivities
+) {
+  const key =
+    `${Number(
+      activity.projectId,
+    )}:${String(
+      activity.activityType ||
+        '',
+    )}`;
+
+  const existing =
+    timelineExecutionMap.get(
+      key,
+    );
+
+  if (!existing) {
+    timelineExecutionMap.set(
+      key,
+      activity,
+    );
+
+    continue;
+  }
+
+  const existingDate =
+    existing.completedDate
+      ? new Date(
+          existing.completedDate,
+        ).getTime()
+      : Number.POSITIVE_INFINITY;
+
+  const activityDate =
+    activity.completedDate
+      ? new Date(
+          activity.completedDate,
+        ).getTime()
+      : Number.POSITIVE_INFINITY;
+
+  if (
+    activityDate <
+      existingDate ||
+    (
+      activityDate ===
+        existingDate &&
+      Number(activity.id) <
+        Number(existing.id)
+    )
+  ) {
+    timelineExecutionMap.set(
+      key,
+      activity,
+    );
+  }
+}
+
+/*
+ * Detail repositories use latest created row
+ * per project.
+ *
+ * Arrays above are already ordered newest
+ * first, therefore first project occurrence
+ * is the same row the old findOne() selected.
+ */
+const timelineLoanMap =
+  new Map<
+    number,
+    ProjectLoanDetail
+  >();
+
+for (
+  const detail of
+    timelineLoanDetails
+) {
+  const key =
+    Number(
+      detail.projectId,
+    );
+
+  if (
+    !timelineLoanMap.has(
+      key,
+    )
+  ) {
+    timelineLoanMap.set(
+      key,
+      detail,
+    );
+  }
+}
+
+const timelineSubsidyMap =
+  new Map<
+    number,
+    ProjectSubsidyDetail
+  >();
+
+for (
+  const detail of
+    timelineSubsidyDetails
+) {
+  const key =
+    Number(
+      detail.projectId,
+    );
+
+  if (
+    !timelineSubsidyMap.has(
+      key,
+    )
+  ) {
+    timelineSubsidyMap.set(
+      key,
+      detail,
+    );
+  }
+}
+
+const timelineElectricityMap =
+  new Map<
+    number,
+    ProjectElectricityDetail
+  >();
+
+for (
+  const detail of
+    timelineElectricityDetails
+) {
+  const key =
+    Number(
+      detail.projectId,
+    );
+
+  if (
+    !timelineElectricityMap.has(
+      key,
+    )
+  ) {
+    timelineElectricityMap.set(
+      key,
+      detail,
+    );
+  }
+}
+
+const resolveBulkPaymentPercentage =
+  (
+    projectId: number,
+    percentage: number,
+  ) => {
+    const normalizedProjectId =
+      Number(projectId);
+
+    const normalizedPercentage =
+      Number(percentage);
+
+    const projectAmount =
+      Number(
+        timelineProjectAmountMap.get(
+          normalizedProjectId,
+        ) || 0,
+      );
+
+    const thresholdAmount =
+      projectAmount > 0 &&
+      normalizedPercentage > 0
+        ? (
+            projectAmount *
+            normalizedPercentage
+          ) / 100
+        : 0;
+
+    const payments =
+      timelinePaymentReceiptMap.get(
+        normalizedProjectId,
+      ) || [];
+
+    let cumulativeAmount =
+      0;
+
+    let reachedAt:
+      Date | null =
+      null;
+
+    if (
+      projectAmount > 0 &&
+      normalizedPercentage > 0 &&
+      normalizedPercentage <=
+        100
+    ) {
+      for (
+        const payment of payments
+      ) {
+        cumulativeAmount +=
+          Number(
+            payment.amount || 0,
+          );
+
+        if (
+          cumulativeAmount >=
+          thresholdAmount
+        ) {
+          reachedAt =
+            payment.effectiveDate;
+
+          break;
+        }
+      }
+    }
+
+    return {
+      reached:
+        reachedAt !== null,
+
+      reachedAt,
+
+      projectAmount,
+
+      thresholdPercentage:
+        normalizedPercentage,
+
+      thresholdAmount,
+
+      cumulativeAmount,
+    };
+  };
+
   /*
    * Cache trigger calculation inside this
    * request.
@@ -29283,38 +29906,645 @@ async getProjectTimelineTracking(
           rule.triggerValue || 0,
         )}`;
 
-      let triggerResult =
-        triggerCache.get(
-          triggerKey,
+            let triggerResult =
+  triggerCache.get(
+    triggerKey,
+  );
+
+if (!triggerResult) {
+  triggerResult =
+    resolveBulkPaymentPercentage(
+      Number(
+        project.id,
+      ),
+
+      Number(
+        rule.triggerValue ||
+          0,
+      ),
+    );
+
+  triggerCache.set(
+    triggerKey,
+    triggerResult,
+  );
+}
+
+let achievementResult:
+  {
+    achieved: boolean;
+
+    achievedAt:
+      Date | null;
+
+    dateReliable:
+      boolean;
+
+    source:
+      | 'TIMELINE_EVENT'
+      | 'EXECUTION_ACTIVITY'
+      | 'LOAN_DETAIL'
+      | 'SUBSIDY_DETAIL'
+      | 'ELECTRICITY_DETAIL'
+      | 'PAYMENT_HISTORY'
+      | 'CURRENT_STATUS_DATE_UNAVAILABLE'
+      | 'NOT_ACHIEVED';
+
+    sourceId:
+      number | null;
+  };
+
+const timelineProjectId =
+  Number(
+    project.id,
+  );
+
+const milestone =
+  String(
+    rule.targetMilestone ||
+      '',
+  )
+    .trim()
+    .toUpperCase();
+
+/*
+ * PAYMENT
+ */
+if (
+  rule.targetModule ===
+    ProjectTimelineModule.PAYMENT
+) {
+  const paymentTarget =
+    resolveBulkPaymentPercentage(
+      timelineProjectId,
+
+      Number(
+        rule.targetValue ||
+          0,
+      ),
+    );
+
+  achievementResult = {
+    achieved:
+      paymentTarget.reached,
+
+    achievedAt:
+      paymentTarget.reachedAt,
+
+    dateReliable:
+      paymentTarget.reached &&
+      paymentTarget.reachedAt !==
+        null,
+
+    source:
+      paymentTarget.reached
+        ? 'PAYMENT_HISTORY'
+        : 'NOT_ACHIEVED',
+
+    sourceId:
+      null,
+  };
+} else {
+  /*
+   * Permanent event history always has first
+   * priority for non-payment modules.
+   */
+  const eventKey =
+    `${timelineProjectId}:${String(
+      rule.targetModule,
+    )}:${milestone}`;
+
+  const recordedEvent =
+    timelineEventMap.get(
+      eventKey,
+    );
+
+  if (recordedEvent) {
+    const achievedAt =
+      recordedEvent.achievedAt
+        ? new Date(
+            recordedEvent
+              .achievedAt,
+          )
+        : null;
+
+    achievementResult = {
+      achieved:
+        true,
+
+      achievedAt,
+
+      dateReliable:
+        Boolean(
+          achievedAt &&
+          !Number.isNaN(
+            achievedAt.getTime(),
+          ),
+        ),
+
+      source:
+        'TIMELINE_EVENT',
+
+      sourceId:
+        recordedEvent.sourceId
+          ? Number(
+              recordedEvent
+                .sourceId,
+            )
+          : null,
+    };
+  } else if (
+    rule.targetModule ===
+      ProjectTimelineModule.EXECUTION
+  ) {
+    const activity =
+      timelineExecutionMap.get(
+        `${timelineProjectId}:${milestone}`,
+      );
+
+    if (
+      !activity ||
+      activity.status !==
+        ProjectExecutionActivityStatus
+          .COMPLETED
+    ) {
+      achievementResult = {
+        achieved:
+          false,
+
+        achievedAt:
+          null,
+
+        dateReliable:
+          false,
+
+        source:
+          'NOT_ACHIEVED',
+
+        sourceId:
+          activity
+            ? Number(
+                activity.id,
+              )
+            : null,
+      };
+    } else {
+      const completedAt =
+        activity.completedDate
+          ? new Date(
+              activity
+                .completedDate,
+            )
+          : null;
+
+      const validCompletedAt =
+        Boolean(
+          completedAt &&
+          !Number.isNaN(
+            completedAt.getTime(),
+          ),
         );
 
-      if (!triggerResult) {
-        triggerResult =
-          await this
-            .getProjectPaymentThresholdReachedDate(
-              Number(
-                project.id,
-              ),
+      achievementResult = {
+        achieved:
+          true,
 
-              Number(
-                rule.triggerValue ||
-                  0,
-              ),
-            );
+        achievedAt:
+          validCompletedAt
+            ? completedAt
+            : null,
 
-        triggerCache.set(
-          triggerKey,
-          triggerResult,
+        dateReliable:
+          validCompletedAt,
+
+        source:
+          validCompletedAt
+            ? 'EXECUTION_ACTIVITY'
+            : 'CURRENT_STATUS_DATE_UNAVAILABLE',
+
+        sourceId:
+          Number(
+            activity.id,
+          ),
+      };
+    }
+  } else if (
+    rule.targetModule ===
+      ProjectTimelineModule.LOAN
+  ) {
+    const detail =
+      timelineLoanMap.get(
+        timelineProjectId,
+      );
+
+    if (!detail) {
+      achievementResult = {
+        achieved:
+          false,
+
+        achievedAt:
+          null,
+
+        dateReliable:
+          false,
+
+        source:
+          'NOT_ACHIEVED',
+
+        sourceId:
+          null,
+      };
+    } else if (
+      milestone ===
+        ProjectLoanStatus
+          .LOAN_DISBURSED &&
+      detail
+        .firstEmiDisbursementDate
+    ) {
+      const achievedAt =
+        new Date(
+          detail
+            .firstEmiDisbursementDate,
         );
+
+      achievementResult = {
+        achieved:
+          true,
+
+        achievedAt,
+
+        dateReliable:
+          !Number.isNaN(
+            achievedAt.getTime(),
+          ),
+
+        source:
+          'LOAN_DETAIL',
+
+        sourceId:
+          Number(
+            detail.id,
+          ),
+      };
+    } else if (
+      String(
+        detail.status,
+      ) === milestone
+    ) {
+      achievementResult = {
+        achieved:
+          true,
+
+        achievedAt:
+          null,
+
+        dateReliable:
+          false,
+
+        source:
+          'CURRENT_STATUS_DATE_UNAVAILABLE',
+
+        sourceId:
+          Number(
+            detail.id,
+          ),
+      };
+    } else {
+      achievementResult = {
+        achieved:
+          false,
+
+        achievedAt:
+          null,
+
+        dateReliable:
+          false,
+
+        source:
+          'NOT_ACHIEVED',
+
+        sourceId:
+          Number(
+            detail.id,
+          ),
+      };
+    }
+  } else if (
+    rule.targetModule ===
+      ProjectTimelineModule.SUBSIDY
+  ) {
+    const detail =
+      timelineSubsidyMap.get(
+        timelineProjectId,
+      );
+
+    let achievedAt:
+      Date | null =
+      null;
+
+    if (detail) {
+      if (
+        milestone ===
+          ProjectSubsidyStatus
+            .SUBMISSION_DONE &&
+        detail
+          .portalSubmissionDate
+      ) {
+        achievedAt =
+          new Date(
+            detail
+              .portalSubmissionDate,
+          );
       }
 
-      const timeline =
-        await this
-          .calculateProjectTimelineRuleStatus(
-            project,
-            rule,
-            triggerResult,
+      if (
+        milestone ===
+          ProjectSubsidyStatus
+            .SUBSIDY_REQUESTED &&
+        detail
+          .subsidyRequestedDate
+      ) {
+        achievedAt =
+          new Date(
+            detail
+              .subsidyRequestedDate,
           );
+      }
+
+      if (
+        milestone ===
+          ProjectSubsidyStatus
+            .SUBSIDY_DISBURSED &&
+        detail
+          .subsidyDisbursedDate
+      ) {
+        achievedAt =
+          new Date(
+            detail
+              .subsidyDisbursedDate,
+          );
+      }
+    }
+
+    const reliableDate =
+      Boolean(
+        achievedAt &&
+        !Number.isNaN(
+          achievedAt.getTime(),
+        ),
+      );
+
+    if (
+      detail &&
+      reliableDate
+    ) {
+      achievementResult = {
+        achieved:
+          true,
+
+        achievedAt,
+
+        dateReliable:
+          true,
+
+        source:
+          'SUBSIDY_DETAIL',
+
+        sourceId:
+          Number(
+            detail.id,
+          ),
+      };
+    } else if (
+      detail &&
+      String(
+        detail.status,
+      ) === milestone
+    ) {
+      achievementResult = {
+        achieved:
+          true,
+
+        achievedAt:
+          null,
+
+        dateReliable:
+          false,
+
+        source:
+          'CURRENT_STATUS_DATE_UNAVAILABLE',
+
+        sourceId:
+          Number(
+            detail.id,
+          ),
+      };
+    } else {
+      achievementResult = {
+        achieved:
+          false,
+
+        achievedAt:
+          null,
+
+        dateReliable:
+          false,
+
+        source:
+          'NOT_ACHIEVED',
+
+        sourceId:
+          detail
+            ? Number(
+                detail.id,
+              )
+            : null,
+      };
+    }
+  } else if (
+    rule.targetModule ===
+      ProjectTimelineModule.ELECTRICITY
+  ) {
+    const detail =
+      timelineElectricityMap.get(
+        timelineProjectId,
+      );
+
+    let achievedAt:
+      Date | null =
+      null;
+
+    if (detail) {
+      switch (milestone) {
+        case ProjectElectricityStatus
+          .FILE_SUBMITTED:
+          achievedAt =
+            detail
+              .fileSubmissionDate
+              ? new Date(
+                  detail
+                    .fileSubmissionDate,
+                )
+              : null;
+          break;
+
+        case ProjectElectricityStatus
+          .SITE_VISIT_DONE:
+          achievedAt =
+            detail
+              .siteVisitDate
+              ? new Date(
+                  detail
+                    .siteVisitDate,
+                )
+              : null;
+          break;
+
+        case ProjectElectricityStatus
+          .DEMAND_DEPOSITED:
+          achievedAt =
+            detail
+              .demandDepositDate
+              ? new Date(
+                  detail
+                    .demandDepositDate,
+                )
+              : null;
+          break;
+
+        case ProjectElectricityStatus
+          .METER_TESTING_DONE:
+          achievedAt =
+            detail
+              .meterTestingDate
+              ? new Date(
+                  detail
+                    .meterTestingDate,
+                )
+              : null;
+          break;
+
+        case ProjectElectricityStatus
+          .NET_METER_INSTALLED:
+          achievedAt =
+            detail
+              .netMeterInstallationDate
+              ? new Date(
+                  detail
+                    .netMeterInstallationDate,
+                )
+              : null;
+          break;
+
+        default:
+          achievedAt =
+            null;
+      }
+    }
+
+    const reliableDate =
+      Boolean(
+        achievedAt &&
+        !Number.isNaN(
+          achievedAt.getTime(),
+        ),
+      );
+
+    if (
+      detail &&
+      reliableDate
+    ) {
+      achievementResult = {
+        achieved:
+          true,
+
+        achievedAt,
+
+        dateReliable:
+          true,
+
+        source:
+          'ELECTRICITY_DETAIL',
+
+        sourceId:
+          Number(
+            detail.id,
+          ),
+      };
+    } else if (
+      detail &&
+      String(
+        detail.status,
+      ) === milestone
+    ) {
+      achievementResult = {
+        achieved:
+          true,
+
+        achievedAt:
+          null,
+
+        dateReliable:
+          false,
+
+        source:
+          'CURRENT_STATUS_DATE_UNAVAILABLE',
+
+        sourceId:
+          Number(
+            detail.id,
+          ),
+      };
+    } else {
+      achievementResult = {
+        achieved:
+          false,
+
+        achievedAt:
+          null,
+
+        dateReliable:
+          false,
+
+        source:
+          'NOT_ACHIEVED',
+
+        sourceId:
+          detail
+            ? Number(
+                detail.id,
+              )
+            : null,
+      };
+    }
+  } else {
+    achievementResult = {
+      achieved:
+        false,
+
+      achievedAt:
+        null,
+
+      dateReliable:
+        false,
+
+      source:
+        'NOT_ACHIEVED',
+
+      sourceId:
+        null,
+    };
+  }
+}
+
+      const timeline =
+  await this
+    .calculateProjectTimelineRuleStatus(
+      project,
+      rule,
+      triggerResult,
+      achievementResult,
+    );
 
       if (!timeline) {
         continue;
