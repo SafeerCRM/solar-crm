@@ -28888,6 +28888,201 @@ private async calculateProjectTimelineRuleStatus(
   };
 }
 
+async getProjectTimelineFilterOptions(
+  currentUser?: any,
+) {
+  const roles =
+    Array.isArray(
+      currentUser?.roles,
+    )
+      ? currentUser.roles
+      : [];
+
+  const currentUserId =
+    Number(
+      currentUser?.id ||
+      currentUser?.userId ||
+      0,
+    );
+
+  const canSeeAll =
+    roles.includes('OWNER') ||
+    roles.includes('MARKETING_HEAD') ||
+    roles.includes('PROJECT_MANAGER') ||
+    roles.includes('PAYMENT_MANAGER') ||
+    roles.includes('ACCOUNT_MANAGER') ||
+    roles.includes('LOAN_MANAGER') ||
+    roles.includes('SUBSIDY_MANAGER') ||
+    roles.includes('ELECTRICITY_MANAGER');
+
+  const branchQb =
+    this.projectRepository
+      .createQueryBuilder(
+        'project',
+      )
+      .select(
+        'DISTINCT project."branchName"',
+        'branchName',
+      )
+      .where(
+        'project."isHidden" = false',
+      )
+      .andWhere(
+        `
+        project.status NOT IN (
+          :cancelledStatus,
+          :rejectedStatus
+        )
+        `,
+        {
+          cancelledStatus:
+            ProjectStatus.CANCELLED,
+
+          rejectedStatus:
+            ProjectStatus.REJECTED,
+        },
+      )
+      .andWhere(
+        `
+        COALESCE(
+          project."branchName",
+          ''
+        ) != ''
+        `,
+      );
+
+  const ownerQb =
+    this.projectRepository
+      .createQueryBuilder(
+        'project',
+      )
+      .select(
+        'DISTINCT project."projectOwnerId"',
+        'projectOwnerId',
+      )
+      .addSelect(
+        'project."projectOwnerName"',
+        'projectOwnerName',
+      )
+      .where(
+        'project."isHidden" = false',
+      )
+      .andWhere(
+        `
+        project.status NOT IN (
+          :cancelledStatus,
+          :rejectedStatus
+        )
+        `,
+        {
+          cancelledStatus:
+            ProjectStatus.CANCELLED,
+
+          rejectedStatus:
+            ProjectStatus.REJECTED,
+        },
+      )
+      .andWhere(
+        `
+        project."projectOwnerId"
+          IS NOT NULL
+        `,
+      )
+      .andWhere(
+        `
+        COALESCE(
+          project."projectOwnerName",
+          ''
+        ) != ''
+        `,
+      );
+
+  if (
+    !canSeeAll &&
+    currentUserId > 0
+  ) {
+    branchQb.andWhere(
+      `
+      project."projectOwnerId" =
+        :currentUserId
+      `,
+      {
+        currentUserId,
+      },
+    );
+
+    ownerQb.andWhere(
+      `
+      project."projectOwnerId" =
+        :currentUserId
+      `,
+      {
+        currentUserId,
+      },
+    );
+  }
+
+  const [
+    branchRows,
+    ownerRows,
+  ] =
+    await Promise.all([
+      branchQb
+        .orderBy(
+          'project."branchName"',
+          'ASC',
+        )
+        .getRawMany(),
+
+      ownerQb
+        .orderBy(
+          'project."projectOwnerName"',
+          'ASC',
+        )
+        .getRawMany(),
+    ]);
+
+  return {
+    branches:
+      branchRows
+        .map(
+          (row: any) =>
+            String(
+              row.branchName ||
+                '',
+            ).trim(),
+        )
+        .filter(Boolean),
+
+    projectOwners:
+      ownerRows
+        .map(
+          (row: any) => ({
+            id:
+              Number(
+                row.projectOwnerId,
+              ),
+
+            name:
+              String(
+                row.projectOwnerName ||
+                  '',
+              ).trim(),
+          }),
+        )
+        .filter(
+          (item) =>
+            Number.isInteger(
+              item.id,
+            ) &&
+            item.id > 0 &&
+            Boolean(
+              item.name,
+            ),
+        ),
+  };
+}
+
 async getProjectTimelineTracking(
   query: any = {},
   currentUser?: any,

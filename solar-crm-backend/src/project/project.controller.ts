@@ -3664,6 +3664,16 @@ getProjectTimelineRules(
     );
 }
 
+@Get('timeline/filter-options')
+getProjectTimelineFilterOptions(
+  @CurrentUser() user: any,
+) {
+  return this.projectService
+    .getProjectTimelineFilterOptions(
+      user,
+    );
+}
+
 @Get('timeline/tracking')
 getProjectTimelineTracking(
   @Query() query: any,
