@@ -491,6 +491,23 @@ const navItems = [
 },
 
 {
+  name: 'Timeline Tracking',
+  href: '/project/timeline',
+  roles: [
+    'OWNER',
+    'MARKETING_HEAD',
+    'PROJECT_MANAGER',
+    'PROJECT_EXECUTIVE',
+    'LOAN_MANAGER',
+    'SUBSIDY_MANAGER',
+    'ELECTRICITY_MANAGER',
+    'PAYMENT_COLLECTION_EXECUTIVE',
+    'PAYMENT_MANAGER',
+    'ACCOUNT_MANAGER',
+  ],
+},
+
+{
   name: 'Reminder Center',
   href: '/project/reminders',
   roles: [
