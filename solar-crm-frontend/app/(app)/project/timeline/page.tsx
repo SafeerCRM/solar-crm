@@ -475,6 +475,21 @@ export default function ProjectTimelinePage() {
   ] = useState(false);
 
   const [
+  branchOptions,
+  setBranchOptions,
+] = useState<string[]>([]);
+
+const [
+  ownerOptions,
+  setOwnerOptions,
+] = useState<
+  {
+    id: number;
+    name: string;
+  }[]
+>([]);
+
+  const [
     rows,
     setRows,
   ] = useState<TrackingRow[]>(
@@ -732,6 +747,43 @@ export default function ProjectTimelinePage() {
       }
     };
 
+    const fetchFilterOptions =
+  async () => {
+    try {
+      const res =
+        await axios.get(
+          `${API_BASE_URL}/project/timeline/filter-options`,
+          {
+            headers:
+              authHeaders(),
+          },
+        );
+
+      setBranchOptions(
+        Array.isArray(
+          res.data?.branches,
+        )
+          ? res.data.branches
+          : [],
+      );
+
+      setOwnerOptions(
+        Array.isArray(
+          res.data
+            ?.projectOwners,
+        )
+          ? res.data
+              .projectOwners
+          : [],
+      );
+    } catch (error) {
+      console.error(
+        'Failed to load timeline filter options',
+        error,
+      );
+    }
+  };
+
   const fetchRules =
     async () => {
       try {
@@ -884,8 +936,9 @@ export default function ProjectTimelinePage() {
     };
 
   useEffect(() => {
-    fetchOptions();
-  }, []);
+  fetchOptions();
+  fetchFilterOptions();
+}, []);
 
   useEffect(() => {
     fetchRules();
@@ -912,61 +965,6 @@ export default function ProjectTimelinePage() {
       ],
     );
 
-  const branchOptions =
-    useMemo(
-      () =>
-        Array.from(
-          new Set(
-            rows
-              .map(
-                (row) =>
-                  row.branchName ||
-                  '',
-              )
-              .filter(
-                Boolean,
-              ),
-          ),
-        ).sort(),
-      [rows],
-    );
-
-  const ownerOptions =
-    useMemo(() => {
-      const map =
-        new Map<
-          number,
-          string
-        >();
-
-      for (
-        const row of rows
-      ) {
-        if (
-          row.projectOwnerId &&
-          row.projectOwnerName
-        ) {
-          map.set(
-            Number(
-              row.projectOwnerId,
-            ),
-            row.projectOwnerName,
-          );
-        }
-      }
-
-      return Array.from(
-        map.entries(),
-      ).map(
-        ([
-          id,
-          name,
-        ]) => ({
-          id,
-          name,
-        }),
-      );
-    }, [rows]);
 
   const applyFilters =
     () => {
@@ -2523,6 +2521,10 @@ export default function ProjectTimelinePage() {
                 </div>
               ) : null}
 
+<div>
+  <p className="mb-1 text-xs font-semibold text-gray-600">
+    Applicable Project Type
+  </p>
               <select
                 disabled={
                   ruleForm.targetModule ===
@@ -2566,6 +2568,7 @@ export default function ProjectTimelinePage() {
                     ),
                   )}
               </select>
+              </div>
 
               <div>
                 <p className="mb-1 text-xs font-semibold text-gray-600">
