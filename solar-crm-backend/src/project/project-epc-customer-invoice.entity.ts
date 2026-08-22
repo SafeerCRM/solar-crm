@@ -82,10 +82,13 @@ ewayBillNumber: string;
   billToAddress: string;
 
   @Column({ type: 'text', nullable: true })
-  billToPhone: string;
+billToPhone: string;
 
-  @Column({ type: 'text', nullable: true })
-  shipToName: string;
+@Column({ type: 'text', nullable: true })
+billToKNumber: string;
+
+@Column({ type: 'text', nullable: true })
+shipToName: string;
 
   @Column({ type: 'text', nullable: true })
   shipToAddress: string;

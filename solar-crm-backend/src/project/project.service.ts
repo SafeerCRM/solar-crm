@@ -39883,6 +39883,28 @@ if (!project) {
   );
 }
 
+if (
+  !String(
+    existing.billToKNumber ||
+      '',
+  ).trim()
+) {
+  const projectKNumber =
+    String(
+      project.electricityKNumber ||
+        '',
+    ).trim();
+
+  if (projectKNumber) {
+    existing.billToKNumber =
+      projectKNumber;
+
+    await this
+      .projectEpcCustomerInvoiceRepository
+      .save(existing);
+  }
+}
+
 const finalAmount = Number(
   (project as any).finalCost ||
     (project as any).netAmount ||
@@ -40123,6 +40145,12 @@ ewayBillNumber: '',
         billToName: project.customerName || '',
         billToAddress: project.address || project.gpsAddress || '',
         billToPhone: project.customerPhone || '',
+
+        billToKNumber:
+  String(
+    project.electricityKNumber ||
+      '',
+  ).trim(),
 
         shipToName: project.customerName || '',
         shipToAddress: project.address || project.gpsAddress || '',
@@ -40730,6 +40758,12 @@ invoice.ewayBillNumber = body.ewayBillNumber || '';
   invoice.billToAddress = body.billToAddress || '';
   invoice.billToPhone = body.billToPhone || '';
 
+  invoice.billToKNumber =
+  String(
+    body.billToKNumber ||
+      '',
+  ).trim();
+
   invoice.shipToName = body.shipToName || '';
   invoice.shipToAddress = body.shipToAddress || '';
   invoice.shipToPhone = body.shipToPhone || '';
@@ -41001,18 +41035,33 @@ text(
 );
 
 text(
-  `MOB NO ${invoice.billToPhone || '-'}`,
+  `MOB NO ${
+    invoice.billToPhone || '-'
+  }`,
   left + 5,
-  buyerY + 42,
+  buyerY + 40,
   leftW - 10,
 );
 
 text(
-  `State Name : ${invoice.placeOfSupply || 'Rajasthan'}, Code : ${
-    invoice.stateCode || '08'
+  `K NO : ${
+    invoice.billToKNumber || '-'
   }`,
   left + 5,
-  buyerY + 51,
+  buyerY + 48,
+  leftW - 10,
+);
+
+text(
+  `State Name : ${
+    invoice.placeOfSupply ||
+    'Rajasthan'
+  }, Code : ${
+    invoice.stateCode ||
+    '08'
+  }`,
+  left + 5,
+  buyerY + 55,
   leftW - 10,
 );
 
