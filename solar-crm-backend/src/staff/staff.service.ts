@@ -1126,7 +1126,7 @@ private async getEmployeeWiseLeaveSummary(
       .addSelect(
         `
         MAX(
-          leave.staffName
+          leave."staffName"
         )
         `,
         'staffName',
@@ -1134,7 +1134,7 @@ private async getEmployeeWiseLeaveSummary(
       .addSelect(
         `
         MAX(
-          leave.employeeCode
+          leave."employeeCode"
         )
         `,
         'employeeCode',
@@ -1232,7 +1232,7 @@ private async getEmployeeWiseLeaveSummary(
       .orderBy(
         `
         MAX(
-          leave.staffName
+          leave."staffName"
         )
         `,
         'ASC',
