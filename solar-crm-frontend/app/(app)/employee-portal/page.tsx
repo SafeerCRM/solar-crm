@@ -18,6 +18,7 @@ export default function EmployeePortalPage() {
   const [attendance, setAttendance] = useState<any[]>([]);
   const [leaves, setLeaves] = useState<any[]>([]);
   const [leaveSummary, setLeaveSummary] = useState({
+  totalRequests: 0,
   approvedDays: 0,
   approvedRequests: 0,
   pendingRequests: 0,
@@ -131,6 +132,9 @@ axios.get(
       setAttendance(attendanceRes.data?.data || []);
       setLeaves(leavesRes.data?.data || []);
       setLeaveSummary({
+  totalRequests: Number(
+    leavesRes.data?.summary?.totalRequests || 0,
+  ),
   approvedDays: Number(
     leavesRes.data?.summary?.approvedDays || 0,
   ),
@@ -394,16 +398,27 @@ const startSelfiePunch = (type: 'punch-in' | 'punch-out') => {
         });
       }
 
-      await axios.post(
-        `${API_BASE_URL}/staff/self/leave`,
-        {
-          ...leaveForm,
-          proofUrl,
-        },
-        { headers: headers() },
-      );
+      const response = await axios.post(
+  `${API_BASE_URL}/staff/self/leave`,
+  {
+    ...leaveForm,
+    proofUrl,
+  },
+  {
+    headers: headers(),
+  },
+);
 
-      alert('Leave request submitted');
+const requestNumber =
+  Number(
+    response.data?.monthRequestNumber || 0,
+  );
+
+alert(
+  requestNumber > 0
+    ? `Leave Request #${requestNumber} submitted successfully`
+    : 'Leave request submitted successfully',
+);
       setLeaveForm({
         leaveType: 'CASUAL',
         fromDate: '',
@@ -1046,7 +1061,16 @@ const formatMetricLabel = (
     },
   )}
 </p>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                <div className="rounded-2xl bg-white p-5 shadow">
+  <p className="text-sm text-gray-500">
+    Total Applications
+  </p>
+
+  <p className="mt-2 text-2xl font-bold text-indigo-700">
+    {leaveSummary.totalRequests}
+  </p>
+</div>
   <div className="rounded-2xl bg-white p-5 shadow">
     <p className="text-sm text-gray-500">
       Approved Leave Days
@@ -1089,6 +1113,20 @@ const formatMetricLabel = (
 </div>
           <div className="rounded-2xl bg-white p-5 shadow">
             <h2 className="text-lg font-bold text-gray-800">Apply Leave</h2>
+            <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 p-4">
+  <p className="text-sm text-blue-700">
+    Leave applications in selected month
+  </p>
+
+  <p className="mt-1 text-xl font-bold text-blue-900">
+    {leaveSummary.totalRequests}
+  </p>
+
+  <p className="mt-2 text-sm font-semibold text-blue-800">
+    Your next leave application will be Request #
+    {leaveSummary.totalRequests + 1}
+  </p>
+</div>
 
             <div className="mt-4 grid gap-3 md:grid-cols-3">
               <select
@@ -1153,8 +1191,11 @@ const formatMetricLabel = (
                 leaves.map((leave) => (
                   <div key={leave.id} className="rounded-xl border p-4">
                     <p className="font-bold">
-                      {leave.leaveType} | {leave.status} | {leave.totalDays} day(s)
-                    </p>
+  {leave.monthRequestNumber
+    ? `Request #${leave.monthRequestNumber} | `
+    : ''}
+  {leave.leaveType} | {leave.status} | {leave.totalDays} day(s)
+</p>
                     <p className="text-sm text-gray-500">
                       {leave.fromDate} to {leave.toDate}
                     </p>

@@ -17,7 +17,12 @@ type Staff = {
 export default function StaffLeavesPage() {
   const [staff, setStaff] = useState<Staff[]>([]);
   const [leaves, setLeaves] = useState<any[]>([]);
+  const [
+  employeeWiseSummary,
+  setEmployeeWiseSummary,
+] = useState<any[]>([]);
   const [leaveSummary, setLeaveSummary] = useState({
+  totalRequests: 0,
   approvedDays: 0,
   approvedRequests: 0,
   pendingRequests: 0,
@@ -81,10 +86,22 @@ export default function StaffLeavesPage() {
       headers: headers(),
     });
 
-    setLeaves(res.data?.data || []);
-setTotalPages(res.data?.totalPages || 1);
+    setLeaves(
+  res.data?.data || [],
+);
+
+setTotalPages(
+  res.data?.totalPages || 1,
+);
+
+setEmployeeWiseSummary(
+  res.data?.employeeWiseSummary || [],
+);
 
 setLeaveSummary({
+  totalRequests: Number(
+    res.data?.summary?.totalRequests || 0,
+  ),
   approvedDays: Number(
     res.data?.summary?.approvedDays || 0,
   ),
@@ -390,7 +407,16 @@ setLeaveSummary({
     : 'Summary for All Staff'}
 </p>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="rounded-2xl bg-white p-5 shadow">
+  <p className="text-sm text-gray-500">
+    Total Applications
+  </p>
+
+  <p className="mt-2 text-2xl font-bold text-indigo-700">
+    {leaveSummary.totalRequests}
+  </p>
+</div>
   <div className="rounded-2xl bg-white p-5 shadow">
     <p className="text-sm text-gray-500">
       Approved Leave Days
@@ -425,6 +451,155 @@ setLeaveSummary({
     <p className="mt-2 text-2xl font-bold text-red-600">
       {leaveSummary.rejectedRequests}
     </p>
+  </div>
+</div>
+
+<div className="rounded-2xl bg-white p-5 shadow">
+  <div className="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <h2 className="text-lg font-bold text-gray-800">
+        Employee-wise Monthly Leave
+      </h2>
+
+      <p className="mt-1 text-sm text-gray-500">
+        Leave applications submitted by each employee for the selected month.
+      </p>
+    </div>
+
+    {selectedStaffId && (
+      <button
+        type="button"
+        onClick={() => {
+          setSelectedStaffId('');
+          setSelectedStaffName('');
+          setStaffSearch('');
+          setPage(1);
+        }}
+        className="rounded-xl border bg-white px-4 py-2 text-sm font-semibold text-gray-700"
+      >
+        View All Employees
+      </button>
+    )}
+  </div>
+
+  <div className="mt-4 overflow-x-auto">
+    <table className="min-w-full border-collapse text-sm">
+      <thead>
+        <tr className="border-b bg-gray-50 text-left">
+          <th className="px-4 py-3 font-semibold text-gray-700">
+            Employee
+          </th>
+
+          <th className="px-4 py-3 font-semibold text-gray-700">
+            Total
+          </th>
+
+          <th className="px-4 py-3 font-semibold text-gray-700">
+            Approved
+          </th>
+
+          <th className="px-4 py-3 font-semibold text-gray-700">
+            Pending
+          </th>
+
+          <th className="px-4 py-3 font-semibold text-gray-700">
+            Rejected
+          </th>
+
+          <th className="px-4 py-3 font-semibold text-gray-700">
+            Cancelled
+          </th>
+
+          <th className="px-4 py-3 font-semibold text-gray-700">
+            Approved Days
+          </th>
+
+          <th className="px-4 py-3 font-semibold text-gray-700">
+            Action
+          </th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {employeeWiseSummary.length === 0 ? (
+          <tr>
+            <td
+              colSpan={8}
+              className="px-4 py-8 text-center text-gray-500"
+            >
+              No leave applications found for this month.
+            </td>
+          </tr>
+        ) : (
+          employeeWiseSummary.map((item) => (
+            <tr
+              key={item.staffId}
+              className="border-b"
+            >
+              <td className="px-4 py-3">
+                <p className="font-semibold text-gray-900">
+                  {item.staffName || `Staff #${item.staffId}`}
+                </p>
+
+                <p className="text-xs text-gray-500">
+                  {item.employeeCode || '-'}
+                </p>
+              </td>
+
+              <td className="px-4 py-3 font-bold text-indigo-700">
+                {item.totalRequests}
+              </td>
+
+              <td className="px-4 py-3 font-semibold text-green-700">
+                {item.approvedRequests}
+              </td>
+
+              <td className="px-4 py-3 font-semibold text-amber-600">
+                {item.pendingRequests}
+              </td>
+
+              <td className="px-4 py-3 font-semibold text-red-600">
+                {item.rejectedRequests}
+              </td>
+
+              <td className="px-4 py-3 text-gray-600">
+                {item.cancelledRequests}
+              </td>
+
+              <td className="px-4 py-3 font-semibold text-green-700">
+                {item.approvedDays}
+              </td>
+
+              <td className="px-4 py-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedStaffId(
+                      String(item.staffId),
+                    );
+
+                    setSelectedStaffName(
+                      `${item.staffName || 'Staff'} ${
+                        item.employeeCode
+                          ? `(${item.employeeCode})`
+                          : ''
+                      }`,
+                    );
+
+                    setStaffSearch('');
+                    setShowStaffOptions(false);
+                    setPage(1);
+                  }}
+                  className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white"
+                >
+                  View Leaves
+                </button>
+              </td>
+            </tr>
+          ))
+        )}
+      </tbody>
+    </table>
   </div>
 </div>
 
@@ -481,8 +656,11 @@ setLeaveSummary({
                       {leave.staffName || `Staff #${leave.staffId}`}
                     </p>
                     <p className="text-sm text-gray-500">
-                      {leave.leaveType} | {leave.status} | {leave.totalDays} day(s)
-                    </p>
+  {leave.monthRequestNumber
+    ? `Request #${leave.monthRequestNumber} | `
+    : ''}
+  {leave.leaveType} | {leave.status} | {leave.totalDays} day(s)
+</p>
                     <p className="text-sm text-gray-500">
                       {leave.fromDate} to {leave.toDate}
                     </p>
