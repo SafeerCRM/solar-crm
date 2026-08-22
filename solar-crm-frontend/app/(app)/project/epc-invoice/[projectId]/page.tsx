@@ -335,6 +335,21 @@ const liveRoundOff =
               className="w-full rounded-xl border p-3"
             />
 
+            <input
+  value={
+    invoice.billToKNumber ||
+    ''
+  }
+  onChange={(e) =>
+    updateInvoice(
+      'billToKNumber',
+      e.target.value,
+    )
+  }
+  placeholder="Electricity K Number"
+  className="w-full rounded-xl border p-3"
+/>
+
             <textarea
               value={invoice.billToAddress || ''}
               onChange={(e) => updateInvoice('billToAddress', e.target.value)}
