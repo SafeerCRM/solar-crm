@@ -40949,7 +40949,7 @@ const rX = left + leftW;
 const rCol = rightW / 2;
 
 const companyH = 82;
-const buyerH = 58;
+const buyerH = 66;
 const consigneeH = 64;
 const topTotalH = companyH + buyerH + consigneeH;
 
@@ -41061,7 +41061,7 @@ text(
     '08'
   }`,
   left + 5,
-  buyerY + 55,
+  buyerY + 56,
   leftW - 10,
 );
 
