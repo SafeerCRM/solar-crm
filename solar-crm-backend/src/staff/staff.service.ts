@@ -891,118 +891,174 @@ async getMyAttendance(query: any, user: any) {
   };
 }
 
+private getLeaveMonthRange(
+  payrollMonth?: string,
+) {
+  const normalizedMonth = String(
+    payrollMonth || '',
+  ).trim();
+
+  if (
+    !normalizedMonth ||
+    !/^\d{4}-\d{2}$/.test(
+      normalizedMonth,
+    )
+  ) {
+    return {
+      payrollMonth: null,
+      monthStart: null,
+      nextMonthStart: null,
+    };
+  }
+
+  const [year, month] =
+    normalizedMonth
+      .split('-')
+      .map(Number);
+
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    month < 1 ||
+    month > 12
+  ) {
+    throw new BadRequestException(
+      'Payroll month must be in YYYY-MM format',
+    );
+  }
+
+  const monthStart =
+    `${year}-${String(
+      month,
+    ).padStart(2, '0')}-01`;
+
+  const nextMonthDate =
+    new Date(
+      Date.UTC(
+        year,
+        month,
+        1,
+      ),
+    );
+
+  const nextMonthStart =
+    nextMonthDate
+      .toISOString()
+      .slice(0, 10);
+
+  return {
+    payrollMonth:
+      normalizedMonth,
+    monthStart,
+    nextMonthStart,
+  };
+}
+
 private async getLeaveSummary(
   staffId?: number,
   payrollMonth?: string,
 ) {
-  const qb = this.leaveRepo
-    .createQueryBuilder('leave')
-    .select(
-      `
-      COUNT(*) FILTER (
-        WHERE leave.status = 'APPROVED'
+  const {
+    payrollMonth:
+      normalizedMonth,
+    monthStart,
+    nextMonthStart,
+  } = this.getLeaveMonthRange(
+    payrollMonth,
+  );
+
+  const qb =
+    this.leaveRepo
+      .createQueryBuilder('leave')
+      .select(
+        'COUNT(*)',
+        'totalRequests',
       )
-      `,
-      'approvedRequests',
-    )
-    .addSelect(
-      `
-      COALESCE(
-        SUM(
-          CASE
-            WHEN leave.status = 'APPROVED'
-            THEN leave."totalDays"
-            ELSE 0
-          END
-        ),
-        0
+      .addSelect(
+        `
+        COUNT(*) FILTER (
+          WHERE leave.status = 'APPROVED'
+        )
+        `,
+        'approvedRequests',
       )
-      `,
-      'approvedDays',
-    )
-    .addSelect(
-      `
-      COUNT(*) FILTER (
-        WHERE leave.status = 'PENDING'
+      .addSelect(
+        `
+        COALESCE(
+          SUM(
+            CASE
+              WHEN leave.status = 'APPROVED'
+              THEN leave."totalDays"
+              ELSE 0
+            END
+          ),
+          0
+        )
+        `,
+        'approvedDays',
       )
-      `,
-      'pendingRequests',
-    )
-    .addSelect(
-      `
-      COUNT(*) FILTER (
-        WHERE leave.status = 'REJECTED'
+      .addSelect(
+        `
+        COUNT(*) FILTER (
+          WHERE leave.status = 'PENDING'
+        )
+        `,
+        'pendingRequests',
       )
-      `,
-      'rejectedRequests',
-    )
-    .addSelect(
-      `
-      COUNT(*) FILTER (
-        WHERE leave.status = 'CANCELLED'
+      .addSelect(
+        `
+        COUNT(*) FILTER (
+          WHERE leave.status = 'REJECTED'
+        )
+        `,
+        'rejectedRequests',
       )
-      `,
-      'cancelledRequests',
-    )
-    .where(
-      'COALESCE(leave.isHidden, false) = false',
-    );
+      .addSelect(
+        `
+        COUNT(*) FILTER (
+          WHERE leave.status = 'CANCELLED'
+        )
+        `,
+        'cancelledRequests',
+      )
+      .where(
+        `
+        COALESCE(
+          leave.isHidden,
+          false
+        ) = false
+        `,
+      );
 
   if (staffId) {
     qb.andWhere(
       'leave.staffId = :staffId',
       {
-        staffId,
+        staffId:
+          Number(staffId),
       },
     );
   }
 
-  const normalizedMonth =
-    String(payrollMonth || '').trim();
-
   if (
-    normalizedMonth &&
-    /^\d{4}-\d{2}$/.test(
-      normalizedMonth,
-    )
+    monthStart &&
+    nextMonthStart
   ) {
-    const [
-      year,
-      month,
-    ] = normalizedMonth
-      .split('-')
-      .map(Number);
-
-    const monthStart =
-      `${year}-${String(month).padStart(2, '0')}-01`;
-
-    const nextMonthDate =
-      new Date(
-        Date.UTC(
-          year,
-          month,
-          1,
-        ),
-      );
-
-    const nextMonthStart =
-      nextMonthDate
-        .toISOString()
-        .slice(0, 10);
-
-    /*
-     * Count leave requests that overlap
-     * the selected month.
-     */
     qb
       .andWhere(
-        'leave.fromDate < :nextMonthStart',
+        `
+        leave.fromDate <
+        :nextMonthStart
+        `,
         {
           nextMonthStart,
         },
       )
       .andWhere(
-        'leave.toDate >= :monthStart',
+        `
+        leave.toDate >=
+        :monthStart
+        `,
         {
           monthStart,
         },
@@ -1014,7 +1070,12 @@ private async getLeaveSummary(
 
   return {
     payrollMonth:
-      normalizedMonth || null,
+      normalizedMonth,
+
+    totalRequests:
+      Number(
+        raw?.totalRequests || 0,
+      ),
 
     approvedDays:
       Number(
@@ -1041,6 +1102,322 @@ private async getLeaveSummary(
         raw?.cancelledRequests || 0,
       ),
   };
+}
+
+private async getEmployeeWiseLeaveSummary(
+  payrollMonth?: string,
+) {
+  const {
+    payrollMonth:
+      normalizedMonth,
+    monthStart,
+    nextMonthStart,
+  } = this.getLeaveMonthRange(
+    payrollMonth,
+  );
+
+  const qb =
+    this.leaveRepo
+      .createQueryBuilder('leave')
+      .select(
+        'leave.staffId',
+        'staffId',
+      )
+      .addSelect(
+        `
+        MAX(
+          leave.staffName
+        )
+        `,
+        'staffName',
+      )
+      .addSelect(
+        `
+        MAX(
+          leave.employeeCode
+        )
+        `,
+        'employeeCode',
+      )
+      .addSelect(
+        'COUNT(*)',
+        'totalRequests',
+      )
+      .addSelect(
+        `
+        COUNT(*) FILTER (
+          WHERE leave.status = 'APPROVED'
+        )
+        `,
+        'approvedRequests',
+      )
+      .addSelect(
+        `
+        COUNT(*) FILTER (
+          WHERE leave.status = 'PENDING'
+        )
+        `,
+        'pendingRequests',
+      )
+      .addSelect(
+        `
+        COUNT(*) FILTER (
+          WHERE leave.status = 'REJECTED'
+        )
+        `,
+        'rejectedRequests',
+      )
+      .addSelect(
+        `
+        COUNT(*) FILTER (
+          WHERE leave.status = 'CANCELLED'
+        )
+        `,
+        'cancelledRequests',
+      )
+      .addSelect(
+        `
+        COALESCE(
+          SUM(
+            CASE
+              WHEN leave.status = 'APPROVED'
+              THEN leave."totalDays"
+              ELSE 0
+            END
+          ),
+          0
+        )
+        `,
+        'approvedDays',
+      )
+      .where(
+        `
+        COALESCE(
+          leave.isHidden,
+          false
+        ) = false
+        `,
+      );
+
+  if (
+    monthStart &&
+    nextMonthStart
+  ) {
+    qb
+      .andWhere(
+        `
+        leave.fromDate <
+        :nextMonthStart
+        `,
+        {
+          nextMonthStart,
+        },
+      )
+      .andWhere(
+        `
+        leave.toDate >=
+        :monthStart
+        `,
+        {
+          monthStart,
+        },
+      );
+  }
+
+  const rows =
+    await qb
+      .groupBy(
+        'leave.staffId',
+      )
+      .orderBy(
+        `
+        MAX(
+          leave.staffName
+        )
+        `,
+        'ASC',
+      )
+      .getRawMany();
+
+  return rows.map(
+    (row) => ({
+      payrollMonth:
+        normalizedMonth,
+
+      staffId:
+        Number(
+          row.staffId || 0,
+        ),
+
+      staffName:
+        String(
+          row.staffName || '',
+        ),
+
+      employeeCode:
+        String(
+          row.employeeCode || '',
+        ),
+
+      totalRequests:
+        Number(
+          row.totalRequests || 0,
+        ),
+
+      approvedRequests:
+        Number(
+          row.approvedRequests ||
+            0,
+        ),
+
+      pendingRequests:
+        Number(
+          row.pendingRequests ||
+            0,
+        ),
+
+      rejectedRequests:
+        Number(
+          row.rejectedRequests ||
+            0,
+        ),
+
+      cancelledRequests:
+        Number(
+          row.cancelledRequests ||
+            0,
+        ),
+
+      approvedDays:
+        Number(
+          row.approvedDays || 0,
+        ),
+    }),
+  );
+}
+
+private async getLeaveRequestNumberMap(
+  payrollMonth?: string,
+  staffId?: number,
+) {
+  const {
+    monthStart,
+    nextMonthStart,
+  } = this.getLeaveMonthRange(
+    payrollMonth,
+  );
+
+  if (
+    !monthStart ||
+    !nextMonthStart
+  ) {
+    return new Map<
+      number,
+      number
+    >();
+  }
+
+  const qb =
+    this.leaveRepo
+      .createQueryBuilder('leave')
+      .select(
+        'leave.id',
+        'id',
+      )
+      .addSelect(
+        'leave.staffId',
+        'staffId',
+      )
+      .where(
+        `
+        COALESCE(
+          leave.isHidden,
+          false
+        ) = false
+        `,
+      )
+      .andWhere(
+        `
+        leave.fromDate <
+        :nextMonthStart
+        `,
+        {
+          nextMonthStart,
+        },
+      )
+      .andWhere(
+        `
+        leave.toDate >=
+        :monthStart
+        `,
+        {
+          monthStart,
+        },
+      );
+
+  if (staffId) {
+    qb.andWhere(
+      'leave.staffId = :staffId',
+      {
+        staffId:
+          Number(staffId),
+      },
+    );
+  }
+
+  const rows =
+    await qb
+      .orderBy(
+        'leave.staffId',
+        'ASC',
+      )
+      .addOrderBy(
+        'leave.createdAt',
+        'ASC',
+      )
+      .addOrderBy(
+        'leave.id',
+        'ASC',
+      )
+      .getRawMany();
+
+  const numberMap =
+    new Map<
+      number,
+      number
+    >();
+
+  const counters =
+    new Map<
+      number,
+      number
+    >();
+
+  for (const row of rows) {
+    const rowStaffId =
+      Number(
+        row.staffId || 0,
+      );
+
+    const nextNumber =
+      Number(
+        counters.get(
+          rowStaffId,
+        ) || 0,
+      ) + 1;
+
+    counters.set(
+      rowStaffId,
+      nextNumber,
+    );
+
+    numberMap.set(
+      Number(row.id),
+      nextNumber,
+    );
+  }
+
+  return numberMap;
 }
 
 private calculateLeaveDays(fromDate: string, toDate: string) {
@@ -1097,48 +1474,222 @@ async createLeave(body: any, user: any) {
     isHidden: false,
   });
 
-  return this.leaveRepo.save(leave);
-}
+  const savedLeave =
+  await this.leaveRepo.save(
+    leave,
+  );
 
-async listLeaves(query: any) {
-  const page = Math.max(Number(query.page || 1), 1);
-  const limit = Math.min(Math.max(Number(query.limit || 20), 1), 100);
-  const showHidden = query.showHidden === 'true';
+const leaveMonth =
+  String(
+    savedLeave.fromDate,
+  ).slice(0, 7);
 
-  const where: any = {
-    isHidden: showHidden,
-  };
-
-  if (query.staffId) where.staffId = Number(query.staffId);
-  if (query.status) where.status = query.status;
-  if (query.leaveType) where.leaveType = query.leaveType;
-
-  const [data, total] = await this.leaveRepo.findAndCount({
-    where,
-    order: { createdAt: 'DESC' },
-    skip: (page - 1) * limit,
-    take: limit,
-  });
-
-  const summary =
-  await this.getLeaveSummary(
-    query.staffId
-      ? Number(query.staffId)
-      : undefined,
-
-    query.payrollMonth
-      ? String(query.payrollMonth)
-      : undefined,
+const requestNumberMap =
+  await this.getLeaveRequestNumberMap(
+    leaveMonth,
+    savedLeave.staffId,
   );
 
 return {
-  data,
-  total,
-  page,
-  limit,
-  totalPages: Math.ceil(total / limit) || 1,
-  summary,
+  ...savedLeave,
+
+  monthRequestNumber:
+    requestNumberMap.get(
+      Number(
+        savedLeave.id,
+      ),
+    ) || null,
 };
+}
+
+async listLeaves(query: any) {
+  const page = Math.max(
+    Number(
+      query.page || 1,
+    ),
+    1,
+  );
+
+  const limit = Math.min(
+    Math.max(
+      Number(
+        query.limit || 20,
+      ),
+      1,
+    ),
+    100,
+  );
+
+  const showHidden =
+    String(
+      query.showHidden,
+    ) === 'true';
+
+  const {
+    monthStart,
+    nextMonthStart,
+  } = this.getLeaveMonthRange(
+    query.payrollMonth
+      ? String(
+          query.payrollMonth,
+        )
+      : undefined,
+  );
+
+  const qb =
+    this.leaveRepo
+      .createQueryBuilder('leave')
+      .where(
+        'leave.isHidden = :showHidden',
+        {
+          showHidden,
+        },
+      );
+
+  if (query.staffId) {
+    qb.andWhere(
+      'leave.staffId = :staffId',
+      {
+        staffId:
+          Number(
+            query.staffId,
+          ),
+      },
+    );
+  }
+
+  if (query.status) {
+    qb.andWhere(
+      'leave.status = :status',
+      {
+        status:
+          query.status,
+      },
+    );
+  }
+
+  if (query.leaveType) {
+    qb.andWhere(
+      `
+      leave.leaveType =
+      :leaveType
+      `,
+      {
+        leaveType:
+          query.leaveType,
+      },
+    );
+  }
+
+  if (
+    monthStart &&
+    nextMonthStart
+  ) {
+    qb
+      .andWhere(
+        `
+        leave.fromDate <
+        :nextMonthStart
+        `,
+        {
+          nextMonthStart,
+        },
+      )
+      .andWhere(
+        `
+        leave.toDate >=
+        :monthStart
+        `,
+        {
+          monthStart,
+        },
+      );
+  }
+
+  const [
+    leaves,
+    total,
+  ] =
+    await qb
+      .orderBy(
+        'leave.createdAt',
+        'DESC',
+      )
+      .skip(
+        (page - 1) *
+          limit,
+      )
+      .take(limit)
+      .getManyAndCount();
+
+  const summary =
+    await this.getLeaveSummary(
+      query.staffId
+        ? Number(
+            query.staffId,
+          )
+        : undefined,
+
+      query.payrollMonth
+        ? String(
+            query.payrollMonth,
+          )
+        : undefined,
+    );
+
+  const employeeWiseSummary =
+    await this.getEmployeeWiseLeaveSummary(
+      query.payrollMonth
+        ? String(
+            query.payrollMonth,
+          )
+        : undefined,
+    );
+
+  const requestNumberMap =
+    await this.getLeaveRequestNumberMap(
+      query.payrollMonth
+        ? String(
+            query.payrollMonth,
+          )
+        : undefined,
+
+      query.staffId
+        ? Number(
+            query.staffId,
+          )
+        : undefined,
+    );
+
+  const data =
+    leaves.map(
+      (leave) => ({
+        ...leave,
+
+        monthRequestNumber:
+          requestNumberMap.get(
+            Number(
+              leave.id,
+            ),
+          ) || null,
+      }),
+    );
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+
+    totalPages:
+      Math.ceil(
+        total / limit,
+      ) || 1,
+
+    summary,
+
+    employeeWiseSummary,
+  };
 }
 
 async updateLeave(id: number, body: any) {
@@ -1245,48 +1796,168 @@ async createMyLeave(body: any, user: any) {
   );
 }
 
-async listMyLeaves(query: any, user: any) {
-  const staff = await this.getMyStaffProfile(user);
+async listMyLeaves(
+  query: any,
+  user: any,
+) {
+  const staff =
+    await this.getMyStaffProfile(
+      user,
+    );
 
-  const page = Math.max(Number(query.page || 1), 1);
-  const limit = Math.min(Math.max(Number(query.limit || 20), 1), 100);
+  const page = Math.max(
+    Number(
+      query.page || 1,
+    ),
+    1,
+  );
 
-  const where: any = {
-    staffId: staff.id,
-    isHidden: false,
-  };
+  const limit = Math.min(
+    Math.max(
+      Number(
+        query.limit || 20,
+      ),
+      1,
+    ),
+    100,
+  );
 
-  if (query.status) {
-    where.status = query.status;
-  }
-
-  const [data, total] = await this.leaveRepo.findAndCount({
-    where,
-    order: {
-      createdAt: 'DESC',
-    },
-    skip: (page - 1) * limit,
-    take: limit,
-  });
-
-  const summary =
-  await this.getLeaveSummary(
-    staff.id,
-
+  const {
+    monthStart,
+    nextMonthStart,
+  } = this.getLeaveMonthRange(
     query.payrollMonth
-      ? String(query.payrollMonth)
+      ? String(
+          query.payrollMonth,
+        )
       : undefined,
   );
 
-return {
-  staff,
-  data,
-  total,
-  page,
-  limit,
-  totalPages: Math.ceil(total / limit) || 1,
-  summary,
-};
+  const qb =
+    this.leaveRepo
+      .createQueryBuilder('leave')
+      .where(
+        `
+        leave.staffId =
+        :staffId
+        `,
+        {
+          staffId:
+            staff.id,
+        },
+      )
+      .andWhere(
+        `
+        COALESCE(
+          leave.isHidden,
+          false
+        ) = false
+        `,
+      );
+
+  if (query.status) {
+    qb.andWhere(
+      'leave.status = :status',
+      {
+        status:
+          query.status,
+      },
+    );
+  }
+
+  if (
+    monthStart &&
+    nextMonthStart
+  ) {
+    qb
+      .andWhere(
+        `
+        leave.fromDate <
+        :nextMonthStart
+        `,
+        {
+          nextMonthStart,
+        },
+      )
+      .andWhere(
+        `
+        leave.toDate >=
+        :monthStart
+        `,
+        {
+          monthStart,
+        },
+      );
+  }
+
+  const [
+    leaves,
+    total,
+  ] =
+    await qb
+      .orderBy(
+        'leave.createdAt',
+        'DESC',
+      )
+      .skip(
+        (page - 1) *
+          limit,
+      )
+      .take(limit)
+      .getManyAndCount();
+
+  const summary =
+    await this.getLeaveSummary(
+      staff.id,
+
+      query.payrollMonth
+        ? String(
+            query.payrollMonth,
+          )
+        : undefined,
+    );
+
+  const requestNumberMap =
+    await this.getLeaveRequestNumberMap(
+      query.payrollMonth
+        ? String(
+            query.payrollMonth,
+          )
+        : undefined,
+
+      staff.id,
+    );
+
+  const data =
+    leaves.map(
+      (leave) => ({
+        ...leave,
+
+        monthRequestNumber:
+          requestNumberMap.get(
+            Number(
+              leave.id,
+            ),
+          ) || null,
+      }),
+    );
+
+  return {
+    staff,
+
+    data,
+
+    total,
+    page,
+    limit,
+
+    totalPages:
+      Math.ceil(
+        total / limit,
+      ) || 1,
+
+    summary,
+  };
 }
 
 async uploadEmployeePolicyFile(file: any) {
