@@ -169,8 +169,11 @@ export class StaffPenalty {
   /*
    * Approval / rejection audit.
    */
-  @Column({ nullable: true })
-  reviewedBy: number | null;
+  @Column({
+  type: 'int',
+  nullable: true,
+})
+reviewedBy: number | null;
 
   @Column({ default: '' })
   reviewedByName: string;
@@ -190,8 +193,11 @@ export class StaffPenalty {
    * Once payroll consumes this penalty,
    * its payroll ID is stored here.
    */
-  @Column({ nullable: true })
-  payrollId: number | null;
+  @Column({
+  type: 'int',
+  nullable: true,
+})
+payrollId: number | null;
 
   @Column({
     type: 'timestamp',
@@ -202,8 +208,11 @@ export class StaffPenalty {
   /*
    * Creation audit.
    */
-  @Column({ nullable: true })
-  createdBy: number | null;
+  @Column({
+  type: 'int',
+  nullable: true,
+})
+createdBy: number | null;
 
   @Column({ default: '' })
   createdByName: string;
@@ -220,8 +229,11 @@ export class StaffPenalty {
   })
   hiddenAt: Date | null;
 
-  @Column({ nullable: true })
-  hiddenBy: number | null;
+  @Column({
+  type: 'int',
+  nullable: true,
+})
+hiddenBy: number | null;
 
   @Column({ default: '' })
   hiddenByName: string;
@@ -235,8 +247,11 @@ export class StaffPenalty {
   })
   restoredAt: Date | null;
 
-  @Column({ nullable: true })
-  restoredBy: number | null;
+  @Column({
+  type: 'int',
+  nullable: true,
+})
+restoredBy: number | null;
 
   @Column({ default: '' })
   restoredByName: string;
