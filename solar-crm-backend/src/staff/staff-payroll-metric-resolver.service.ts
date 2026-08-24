@@ -222,13 +222,13 @@ private readonly recruitmentCandidateRepository:
         'staff.id',
       ])
       .where(
-        'staff.linkedUserId = :linkedUserId',
+        'staff."linkedUserId" = :linkedUserId',
         {
           linkedUserId,
         },
       )
       .andWhere(
-        'COALESCE(staff.isHidden, false) = false',
+        'COALESCE(staff."isHidden", false) = false',
       )
       .getOne();
 
@@ -323,15 +323,15 @@ private readonly recruitmentCandidateRepository:
     this.projectRepository
       .createQueryBuilder('project')
       .where(
-        'project.ownerApprovalStatus = :ownerApprovalStatus',
+  'project."ownerApprovalStatus" = :ownerApprovalStatus',
         {
           ownerApprovalStatus:
             ProjectApprovalStatus.APPROVED,
         },
       )
       .andWhere(
-        'COALESCE(project.isHidden, false) = false',
-      )
+  'COALESCE(project."isHidden", false) = false',
+)
       .andWhere(
         `project.status NOT IN (:...excludedStatuses)`,
         {
@@ -342,8 +342,8 @@ private readonly recruitmentCandidateRepository:
         },
       )
       .andWhere(
-        'COALESCE(project.isLegacyProject, false) = false',
-      );
+  'COALESCE(project."isLegacyProject", false) = false',
+);
 
   /*
    * When payment qualification is disabled,
@@ -357,9 +357,9 @@ private readonly recruitmentCandidateRepository:
       .andWhere(
         `
         COALESCE(
-          project.orderDate,
-          project.ownerApprovedAt
-        ) >= :periodStart
+  project."orderDate",
+  project."ownerApprovedAt"
+) >= :periodStart
         `,
         {
           periodStart,
@@ -368,9 +368,9 @@ private readonly recruitmentCandidateRepository:
       .andWhere(
         `
         COALESCE(
-          project.orderDate,
-          project.ownerApprovedAt
-        ) < :periodEnd
+  project."orderDate",
+  project."ownerApprovedAt"
+) < :periodEnd
         `,
         {
           periodEnd,
@@ -521,7 +521,7 @@ private readonly recruitmentCandidateRepository:
     switch (role) {
       case 'TELECALLER':
         query.andWhere(
-          'project.telecallerId = :linkedUserId',
+          'project."telecallerId" = :linkedUserId',
           {
             linkedUserId,
           },
@@ -530,7 +530,7 @@ private readonly recruitmentCandidateRepository:
 
       case 'TELECALLING_ASSISTANT':
         query.andWhere(
-          'project.telecallingAssistantId = :linkedUserId',
+          'project."telecallingAssistantId" = :linkedUserId',
           {
             linkedUserId,
           },
@@ -540,7 +540,7 @@ private readonly recruitmentCandidateRepository:
       case 'LEAD_MANAGER':
       case 'LEAD_EXECUTIVE':
         query.andWhere(
-          'project.leadManagerId = :linkedUserId',
+          'project."leadManagerId"= :linkedUserId',
           {
             linkedUserId,
           },
@@ -551,12 +551,12 @@ private readonly recruitmentCandidateRepository:
   query.andWhere(
     `
     (
-      project.meetingManagerId = :linkedUserId
+      project."meetingManagerId" = :linkedUserId
 
       OR (
-        project.projectOwnerId = :linkedUserId
-        AND project.leadId IS NULL
-        AND project.meetingId IS NULL
+        project."projectOwnerId" = :linkedUserId
+        AND project."leadId" IS NULL
+        AND project."meetingId" IS NULL
       )
     )
     `,
@@ -587,14 +587,14 @@ case 'MEETING_ASSISTANT':
       case 'SOLAR_FRANCHISE':
         query.andWhere(
           `(
-            project.solarFranchiseUserId = :linkedUserId
+            project."solarFranchiseUserId" = :linkedUserId
 
             OR (
-              project.projectOwnerId = :linkedUserId
+              project."projectOwnerId" = :linkedUserId
               AND UPPER(
                 TRIM(
                   COALESCE(
-                    project.projectOwnerRole,
+                    project."projectOwnerRole",
                     ''
                   )
                 )
