@@ -1490,8 +1490,8 @@ const [
         </h1>
 
         <p className="mt-1 text-sm text-gray-500">
-          Track configured project milestones from the required payment trigger, monitor due dates and delays, and document genuine delay reasons.
-        </p>
+  Track configured project milestones from the selected trigger, monitor due dates and delays, and document genuine delay reasons.
+</p>
       </div>
 
       <div className="flex flex-wrap gap-2 rounded-2xl bg-white p-3 shadow">
@@ -1577,7 +1577,7 @@ const [
               value={
                 summary.notStarted
               }
-              detail="Configured payment trigger not reached"
+              detail="Configured timeline trigger not reached"
             />
 
             <SummaryCard
@@ -2113,23 +2113,44 @@ const [
                         </div>
 
                         <div className="rounded-xl bg-gray-50 p-3">
-                          <p className="text-xs text-gray-500">
-                            Payment Trigger
-                          </p>
+  <p className="text-xs text-gray-500">
+    {row.triggerType ===
+    'PROJECT_CREATED'
+      ? 'Trigger Basis'
+      : 'Payment Trigger'}
+  </p>
 
-                          <p className="mt-1 font-semibold">
-                            {formatCurrency(
-                              row.triggerThresholdAmount,
-                            )}
-                          </p>
+  {row.triggerType ===
+  'PROJECT_CREATED' ? (
+    <>
+      <p className="mt-1 font-semibold">
+        Project Creation
+      </p>
 
-                          <p className="text-xs text-gray-500">
-                            Project:{' '}
-                            {formatCurrency(
-                              row.projectAmount,
-                            )}
-                          </p>
-                        </div>
+      <p className="text-xs text-gray-500">
+        Project:{' '}
+        {formatCurrency(
+          row.projectAmount,
+        )}
+      </p>
+    </>
+  ) : (
+    <>
+      <p className="mt-1 font-semibold">
+        {formatCurrency(
+          row.triggerThresholdAmount,
+        )}
+      </p>
+
+      <p className="text-xs text-gray-500">
+        Project:{' '}
+        {formatCurrency(
+          row.projectAmount,
+        )}
+      </p>
+    </>
+  )}
+</div>
                       </div>
 
                       {row.hasDelayExplanation ? (
