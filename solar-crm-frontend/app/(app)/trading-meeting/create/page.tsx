@@ -313,9 +313,9 @@ const updateTimePart = (
 };
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5 overflow-x-hidden">
-      <div className="rounded-2xl bg-white p-5 shadow">
-        <h1 className="text-2xl font-bold text-gray-800">
+    <div className="mx-auto w-full min-w-0 max-w-5xl space-y-5 px-1 sm:px-0">
+      <div className="min-w-0 rounded-2xl bg-white p-4 shadow sm:p-5">
+        <h1 className="text-xl font-bold text-gray-800 sm:text-2xl">
           Create Trading Meeting
         </h1>
         <p className="mt-1 text-sm text-gray-500">
@@ -323,9 +323,9 @@ const updateTimePart = (
         </p>
       </div>
 
-      <div className="rounded-2xl bg-white p-5 shadow">
-        <div className="grid gap-3 md:grid-cols-2">
-          <div className="grid gap-3 md:grid-cols-2">
+      <div className="min-w-0 rounded-2xl bg-white p-4 shadow sm:p-5">
+  <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2">
+          <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2">
   <select
     value={form.dealerMode}
     onChange={(e) =>
@@ -338,7 +338,7 @@ const updateTimePart = (
         manualDealerCity: '',
       })
     }
-    className="rounded-xl border p-3"
+    className="w-full min-w-0 rounded-xl border p-3"
   >
     <option value="EXISTING">Existing Dealer</option>
     <option value="MANUAL">New / Manual Dealer</option>
@@ -353,7 +353,7 @@ const updateTimePart = (
           dealerId: e.target.value,
         })
       }
-      className="rounded-xl border p-3"
+      className="w-full min-w-0 rounded-xl border p-3"
     >
       <option value="">Select Dealer</option>
       {dealers.map((dealer) => (
@@ -373,7 +373,7 @@ const updateTimePart = (
           manualDealerName: e.target.value,
         })
       }
-      className="rounded-xl border p-3"
+      className="w-full min-w-0 rounded-xl border p-3"
     />
   )}
 
@@ -389,7 +389,7 @@ const updateTimePart = (
             manualDealerPhone: e.target.value,
           })
         }
-        className="rounded-xl border p-3"
+        className="w-full min-w-0 rounded-xl border p-3"
       />
 
       <input
@@ -402,14 +402,14 @@ const updateTimePart = (
             manualDealerCity: e.target.value,
           })
         }
-        className="rounded-xl border p-3"
+        className="w-full min-w-0 rounded-xl border p-3"
       />
     </>
   )}
 </div>
 
           <LocalizationProvider dateAdapter={AdapterDayjs}>
-  <div className="grid gap-3 md:grid-cols-2">
+  <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2">
     <DatePicker
       label="Meeting Date"
       value={meetingDateValue}
@@ -417,10 +417,14 @@ const updateTimePart = (
         updateDateTimePart('scheduledAt', value)
       }
       slotProps={{
-        textField: {
-          fullWidth: true,
-        },
-      }}
+  textField: {
+    fullWidth: true,
+    sx: {
+      minWidth: 0,
+      width: '100%',
+    },
+  },
+}}
     />
 
     <MobileTimePicker
@@ -432,10 +436,14 @@ const updateTimePart = (
       ampm
       ampmInClock
       slotProps={{
-        textField: {
-          fullWidth: true,
-        },
-      }}
+  textField: {
+    fullWidth: true,
+    sx: {
+      minWidth: 0,
+      width: '100%',
+    },
+  },
+}}
     />
   </div>
 </LocalizationProvider>
@@ -443,7 +451,7 @@ const updateTimePart = (
           <select
             value={form.expectedMaterialName}
             onChange={(e) => onMaterialChange(e.target.value)}
-            className="rounded-xl border p-3"
+            className="w-full min-w-0 rounded-xl border p-3"
           >
             <option value="">Expected Material</option>
             {catalog.map((item) => (
@@ -458,7 +466,7 @@ const updateTimePart = (
             placeholder="Expected Quantity"
             value={form.expectedQuantity}
             onChange={(e) => onQuantityChange(e.target.value)}
-            className="rounded-xl border p-3"
+            className="w-full min-w-0 rounded-xl border p-3"
           />
 
           <input
@@ -471,11 +479,11 @@ const updateTimePart = (
                 expectedOrderValue: e.target.value,
               })
             }
-            className="rounded-xl border p-3"
+            className="w-full min-w-0 rounded-xl border p-3"
           />
 
           <LocalizationProvider dateAdapter={AdapterDayjs}>
-  <div className="grid gap-3 md:grid-cols-2">
+  <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2">
     <DatePicker
       label="Next Follow-up Date"
       value={followupDateValue}
@@ -483,10 +491,14 @@ const updateTimePart = (
         updateDateTimePart('nextFollowUpDate', value)
       }
       slotProps={{
-        textField: {
-          fullWidth: true,
-        },
-      }}
+  textField: {
+    fullWidth: true,
+    sx: {
+      minWidth: 0,
+      width: '100%',
+    },
+  },
+}}
     />
 
     <MobileTimePicker
@@ -498,10 +510,14 @@ const updateTimePart = (
       ampm
       ampmInClock
       slotProps={{
-        textField: {
-          fullWidth: true,
-        },
-      }}
+  textField: {
+    fullWidth: true,
+    sx: {
+      minWidth: 0,
+      width: '100%',
+    },
+  },
+}}
     />
   </div>
 </LocalizationProvider>
@@ -513,7 +529,7 @@ const updateTimePart = (
           onChange={(e) =>
             setForm({ ...form, meetingNotes: e.target.value })
           }
-          className="mt-3 w-full rounded-xl border p-3"
+          className="mt-3 w-full min-w-0 rounded-xl border p-3"
         />
 
         <textarea
@@ -522,23 +538,23 @@ const updateTimePart = (
           onChange={(e) =>
             setForm({ ...form, nextAction: e.target.value })
           }
-          className="mt-3 w-full rounded-xl border p-3"
+          className="mt-3 w-full min-w-0 rounded-xl border p-3"
         />
       </div>
 
-      <div className="rounded-2xl bg-white p-5 shadow">
+      <div className="min-w-0 rounded-2xl bg-white p-4 shadow sm:p-5">
         <h2 className="text-lg font-bold text-gray-800">
           GPS / Proof
         </h2>
 
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <div className="mt-4 grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2">
           <input
             placeholder="GPS Latitude"
             value={form.gpsLatitude}
             onChange={(e) =>
               setForm({ ...form, gpsLatitude: e.target.value })
             }
-            className="rounded-xl border p-3"
+            className="w-full min-w-0 rounded-xl border p-3"
           />
 
           <input
@@ -547,7 +563,7 @@ const updateTimePart = (
             onChange={(e) =>
               setForm({ ...form, gpsLongitude: e.target.value })
             }
-            className="rounded-xl border p-3"
+            className="w-full min-w-0 rounded-xl border p-3"
           />
 
           <textarea
@@ -556,10 +572,10 @@ const updateTimePart = (
             onChange={(e) =>
               setForm({ ...form, gpsAddress: e.target.value })
             }
-            className="rounded-xl border p-3 md:col-span-2"
+            className="w-full min-w-0 rounded-xl border p-3 md:col-span-2"
           />
 
-          <label className="rounded-xl border p-3 text-sm">
+          <label className="min-w-0 overflow-hidden rounded-xl border p-3 text-sm">
             GPS Photo
             <input
               type="file"
@@ -567,11 +583,11 @@ const updateTimePart = (
               onChange={(e) =>
                 setGpsPhotoFile(e.target.files?.[0] || null)
               }
-              className="mt-2 block w-full"
+              className="mt-2 block w-full min-w-0 max-w-full text-sm"
             />
           </label>
 
-          <label className="rounded-xl border p-3 text-sm">
+          <label className="min-w-0 overflow-hidden rounded-xl border p-3 text-sm">
             Audio Note
             <input
               type="file"
@@ -579,7 +595,7 @@ const updateTimePart = (
               onChange={(e) =>
                 setAudioFile(e.target.files?.[0] || null)
               }
-              className="mt-2 block w-full"
+              className="mt-2 block w-full min-w-0 max-w-full text-sm"
             />
           </label>
         </div>
@@ -593,18 +609,18 @@ const updateTimePart = (
         </button>
       </div>
 
-      <div className="flex flex-wrap gap-3">
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap">
         <button
           onClick={createMeeting}
           disabled={loading}
-          className="rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white disabled:opacity-50"
+          className="w-full rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white disabled:opacity-50 sm:w-auto"
         >
           {loading ? 'Creating...' : 'Create Trading Meeting'}
         </button>
 
         <button
           onClick={() => router.push('/trading-meeting')}
-          className="rounded-xl bg-gray-200 px-6 py-3 font-semibold"
+          className="w-full rounded-xl bg-gray-200 px-6 py-3 font-semibold sm:w-auto"
         >
           Cancel
         </button>
