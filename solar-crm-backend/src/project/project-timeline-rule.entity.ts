@@ -17,6 +17,9 @@ export enum ProjectTimelineModule {
 export enum ProjectTimelineTriggerType {
   PAYMENT_PERCENT_REACHED =
     'PAYMENT_PERCENT_REACHED',
+
+  PROJECT_CREATED =
+    'PROJECT_CREATED',
 }
 
 export enum ProjectTimelineApplicableProjectType {
@@ -42,12 +45,17 @@ export class ProjectTimelineRule {
   name: string;
 
   /*
-   * What starts the timeline.
-   *
-   * Currently the client's requirement is
-   * payment percentage reached, but this is
-   * kept as a type rather than hardcoding 20%.
-   */
+ * What starts the timeline.
+ *
+ * Supported triggers:
+ *
+ * PAYMENT_PERCENT_REACHED
+ * -> starts when approved project payment
+ *    reaches the configured percentage.
+ *
+ * PROJECT_CREATED
+ * -> starts from the project's createdAt date.
+ */
   @Column({
     type: 'enum',
     enum: ProjectTimelineTriggerType,

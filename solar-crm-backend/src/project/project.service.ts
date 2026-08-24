@@ -26438,27 +26438,42 @@ getProjectTimelineOptions() {
 
   return {
     triggerTypes: [
-      {
-        value:
-          ProjectTimelineTriggerType
-            .PAYMENT_PERCENT_REACHED,
+  {
+    value:
+      ProjectTimelineTriggerType
+        .PAYMENT_PERCENT_REACHED,
 
-        label:
-          'Payment Percentage Reached',
+    label:
+      'Payment Percentage Reached',
 
-        requiresValue:
-          true,
+    requiresValue:
+      true,
 
-        valueType:
-          'PERCENTAGE',
+    valueType:
+      'PERCENTAGE',
 
-        minimumValue:
-          0,
+    minimumValue:
+      0,
 
-        maximumValue:
-          100,
-      },
-    ],
+    maximumValue:
+      100,
+  },
+
+  {
+    value:
+      ProjectTimelineTriggerType
+        .PROJECT_CREATED,
+
+    label:
+      'Project Creation Date',
+
+    requiresValue:
+      false,
+
+    valueType:
+      'NONE',
+  },
+],
 
     applicableProjectTypes:
       Object.values(
@@ -26561,12 +26576,21 @@ private validateProjectTimelineRulePayload(
     );
   }
 
-  const triggerValue = Number(
+  let triggerValue = 0;
+
+if (
+  triggerType ===
+  ProjectTimelineTriggerType
+    .PAYMENT_PERCENT_REACHED
+) {
+  triggerValue = Number(
     body?.triggerValue || 0,
   );
 
   if (
-    !Number.isFinite(triggerValue) ||
+    !Number.isFinite(
+      triggerValue,
+    ) ||
     triggerValue <= 0 ||
     triggerValue > 100
   ) {
@@ -26574,6 +26598,15 @@ private validateProjectTimelineRulePayload(
       'Payment trigger percentage must be greater than 0 and not more than 100',
     );
   }
+}
+
+if (
+  triggerType ===
+  ProjectTimelineTriggerType
+    .PROJECT_CREATED
+) {
+  triggerValue = 0;
+}
 
   const targetModule =
     body?.targetModule;
@@ -26682,13 +26715,16 @@ private validateProjectTimelineRulePayload(
      * trigger 20%, target 10%.
      */
     if (
-      targetValue <=
-      triggerValue
-    ) {
-      throw new BadRequestException(
-        'Payment target percentage must be greater than the trigger percentage',
-      );
-    }
+  triggerType ===
+    ProjectTimelineTriggerType
+      .PAYMENT_PERCENT_REACHED &&
+  targetValue <=
+    triggerValue
+) {
+  throw new BadRequestException(
+    'Payment target percentage must be greater than the trigger percentage',
+  );
+}
   }
 
   const applicableProjectType =
@@ -28367,20 +28403,89 @@ private async calculateProjectTimelineRuleStatus(
   }
 
   /*
-   * At present timeline rules start from
-   * payment percentage reached.
-   *
-   * The percentage is OWNER-configured.
-   */
-  const paymentTrigger =
-    triggerResult ||
-    await this
-      .getProjectPaymentThresholdReachedDate(
-        projectId,
-        Number(
-          rule.triggerValue || 0,
+ * Resolve the configured timeline trigger.
+ *
+ * PAYMENT_PERCENT_REACHED
+ * -> starts when qualifying approved payment
+ *    reaches the configured percentage.
+ *
+ * PROJECT_CREATED
+ * -> starts from the project's createdAt date.
+ */
+let paymentTrigger =
+  triggerResult;
+
+if (!paymentTrigger) {
+  if (
+    rule.triggerType ===
+    ProjectTimelineTriggerType
+      .PROJECT_CREATED
+  ) {
+    const createdAt =
+      project.createdAt
+        ? new Date(
+            project.createdAt,
+          )
+        : null;
+
+    const validCreatedAt =
+      Boolean(
+        createdAt &&
+        !Number.isNaN(
+          createdAt.getTime(),
         ),
       );
+
+    const projectAmount =
+      Number(
+        project.finalCost || 0,
+      ) > 0
+        ? Number(
+            project.finalCost,
+          )
+        : Number(
+              project.netAmount || 0,
+            ) > 0
+          ? Number(
+              project.netAmount,
+            )
+          : Number(
+              project.projectCost ||
+                0,
+            );
+
+    paymentTrigger = {
+      reached:
+        validCreatedAt,
+
+      reachedAt:
+        validCreatedAt
+          ? createdAt
+          : null,
+
+      projectAmount,
+
+      thresholdPercentage:
+        0,
+
+      thresholdAmount:
+        0,
+
+      cumulativeAmount:
+        0,
+    };
+  } else {
+    paymentTrigger =
+      await this
+        .getProjectPaymentThresholdReachedDate(
+          projectId,
+          Number(
+            rule.triggerValue ||
+              0,
+          ),
+        );
+  }
+}
 
   /*
    * Timeline has not started yet.
@@ -30111,27 +30216,78 @@ const resolveBulkPaymentPercentage =
       }
 
       const triggerKey =
-        `${project.id}:${Number(
-          rule.triggerValue || 0,
-        )}`;
+  `${project.id}:${String(
+    rule.triggerType,
+  )}:${Number(
+    rule.triggerValue || 0,
+  )}`;
 
-            let triggerResult =
+           let triggerResult =
   triggerCache.get(
     triggerKey,
   );
 
 if (!triggerResult) {
-  triggerResult =
-    resolveBulkPaymentPercentage(
-      Number(
-        project.id,
-      ),
+  if (
+    rule.triggerType ===
+      ProjectTimelineTriggerType
+        .PROJECT_CREATED
+  ) {
+    const createdAt =
+      project.createdAt
+        ? new Date(
+            project.createdAt,
+          )
+        : null;
 
-      Number(
-        rule.triggerValue ||
-          0,
-      ),
-    );
+    const validCreatedAt =
+      Boolean(
+        createdAt &&
+        !Number.isNaN(
+          createdAt.getTime(),
+        ),
+      );
+
+    triggerResult = {
+      reached:
+        validCreatedAt,
+
+      reachedAt:
+        validCreatedAt
+          ? createdAt
+          : null,
+
+      projectAmount:
+        Number(
+          timelineProjectAmountMap.get(
+            Number(
+              project.id,
+            ),
+          ) || 0,
+        ),
+
+      thresholdPercentage:
+        0,
+
+      thresholdAmount:
+        0,
+
+      cumulativeAmount:
+        0,
+    };
+  } else {
+    triggerResult =
+      resolveBulkPaymentPercentage(
+        Number(
+          project.id,
+        ),
+
+        Number(
+          rule.triggerValue ||
+            0,
+        ),
+      );
+  }
 
   triggerCache.set(
     triggerKey,
