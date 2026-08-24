@@ -919,6 +919,168 @@ restorePerformanceTemplate(@Param('id') id: string) {
   return this.staffService.restorePerformanceTemplate(Number(id));
 }
 
+@Get('performance-evaluations')
+listStaffPerformanceEvaluations(
+  @Query() query: any,
+) {
+  return this.staffService
+    .listStaffPerformanceEvaluations(
+      query,
+    );
+}
+
+@Get('performance-evaluation/:id')
+getStaffPerformanceEvaluation(
+  @Param('id', ParseIntPipe)
+  id: number,
+) {
+  return this.staffService
+    .getStaffPerformanceEvaluation(
+      id,
+    );
+}
+
+@Post('performance-evaluation/generate')
+generateStaffPerformanceEvaluation(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffService
+    .generateStaffPerformanceEvaluation(
+      body,
+      user,
+    );
+}
+
+@Patch(
+  'performance-evaluation/:id/metric/:metricId',
+)
+updateStaffPerformanceMetric(
+  @Param('id', ParseIntPipe)
+  id: number,
+
+  @Param(
+    'metricId',
+    ParseIntPipe,
+  )
+  metricId: number,
+
+  @Body()
+  body: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.staffService
+    .updateStaffPerformanceMetric(
+      id,
+      metricId,
+      body,
+      user,
+    );
+}
+
+@Patch(
+  'performance-evaluation/:id/refresh-crm',
+)
+refreshStaffPerformanceCrmMetrics(
+  @Param('id', ParseIntPipe)
+  id: number,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.staffService
+    .refreshStaffPerformanceCrmMetrics(
+      id,
+      user,
+    );
+}
+
+@Patch(
+  'performance-evaluation/:id/review',
+)
+reviewStaffPerformanceEvaluation(
+  @Param('id', ParseIntPipe)
+  id: number,
+
+  @Body()
+  body: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.staffService
+    .reviewStaffPerformanceEvaluation(
+      id,
+      body,
+      user,
+    );
+}
+
+@Patch(
+  'performance-evaluation/:id/approve',
+)
+approveStaffPerformanceEvaluation(
+  @Param('id', ParseIntPipe)
+  id: number,
+
+  @Body()
+  body: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.staffService
+    .approveStaffPerformanceEvaluation(
+      id,
+      body,
+      user,
+    );
+}
+
+@Patch(
+  'performance-evaluation/:id/hide',
+)
+hideStaffPerformanceEvaluation(
+  @Param('id', ParseIntPipe)
+  id: number,
+
+  @Body()
+  body: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.staffService
+    .hideStaffPerformanceEvaluation(
+      id,
+      body,
+      user,
+    );
+}
+
+@Patch(
+  'performance-evaluation/:id/restore',
+)
+restoreStaffPerformanceEvaluation(
+  @Param('id', ParseIntPipe)
+  id: number,
+
+  @Body()
+  body: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.staffService
+    .restoreStaffPerformanceEvaluation(
+      id,
+      body,
+      user,
+    );
+}
+
 @Get('penalty-rules')
 listPenaltyRules(@Query() query: any) {
   return this.staffService.listPenaltyRules(query);

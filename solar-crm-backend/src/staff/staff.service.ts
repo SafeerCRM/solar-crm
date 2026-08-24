@@ -31,8 +31,24 @@ import {
   RecruitmentStage,
 } from './recruitment-candidate.entity';
 import { RecruitmentCandidateDocument } from './recruitment-candidate-document.entity';
+
+import {
+  StaffPerformance,
+  StaffPerformanceStatus,
+} from './staff-performance.entity';
+
+import {
+  StaffPayrollMetricResolverService,
+} from './staff-payroll-metric-resolver.service';
+
+import {
+  StaffPerformanceMetric,
+} from './staff-performance-metric.entity';
+
 import { PerformanceTemplate } from './performance-template.entity';
+
 import { PerformanceTemplateMetric } from './performance-template-metric.entity';
+
 import {
   PenaltyRule,
   PenaltyCalculationType,
@@ -94,13 +110,24 @@ private readonly incentiveRuleRepo: Repository<IncentiveRule>,
 private readonly recruitmentRepo: Repository<RecruitmentCandidate>,
 
 @InjectRepository(RecruitmentCandidateDocument)
-private readonly recruitmentDocumentRepo: Repository<RecruitmentCandidateDocument>,
+private readonly recruitmentDocumentRepo:
+  Repository<RecruitmentCandidateDocument>,
+
+@InjectRepository(StaffPerformance)
+private readonly staffPerformanceRepo:
+  Repository<StaffPerformance>,
+
+@InjectRepository(StaffPerformanceMetric)
+private readonly staffPerformanceMetricRepo:
+  Repository<StaffPerformanceMetric>,
 
 @InjectRepository(PerformanceTemplate)
-private readonly performanceTemplateRepo: Repository<PerformanceTemplate>,
+private readonly performanceTemplateRepo:
+  Repository<PerformanceTemplate>,
 
 @InjectRepository(PerformanceTemplateMetric)
-private readonly performanceTemplateMetricRepo: Repository<PerformanceTemplateMetric>,
+private readonly performanceTemplateMetricRepo:
+  Repository<PerformanceTemplateMetric>,
 
 @InjectRepository(PenaltyRule)
 private readonly penaltyRuleRepository:
@@ -126,6 +153,9 @@ private readonly attendanceExceptionRepo:
 
 private readonly payrollCalculator:
   StaffPayrollCalculatorService,
+
+private readonly payrollMetricResolverService:
+  StaffPayrollMetricResolverService,
 ) {}
 
   async findAll(query: any) {
@@ -6117,14 +6147,55 @@ async createPerformanceTemplate(body: any, user: any) {
     if (!String(metric.metricName || '').trim()) continue;
 
     const metricRow = this.performanceTemplateMetricRepo.create({
-      templateId: saved.id,
-      metricName: String(metric.metricName).trim(),
-      targetValue: Number(metric.targetValue || 0),
-      metricType: metric.metricType || 'NUMBER',
-      metricUnit: metric.metricUnit || 'COUNT',
-      mandatory: metric.mandatory === true,
-      weightage: Number(metric.weightage || 1),
-    });
+  templateId: saved.id,
+
+  metricName:
+    String(
+      metric.metricName || '',
+    ).trim(),
+
+  targetValue:
+    Number(
+      metric.targetValue || 0,
+    ),
+
+  metricType:
+    metric.metricType ||
+    'NUMBER',
+
+  metricUnit:
+    metric.metricUnit ||
+    'COUNT',
+
+  sourceType:
+    metric.sourceType ||
+    'MANUAL',
+
+  crmMetricType:
+    String(
+      metric.crmMetricType || '',
+    )
+      .trim()
+      .toUpperCase(),
+
+  customMetricName:
+    String(
+      metric.customMetricName ||
+        '',
+    ).trim(),
+
+  mandatory:
+    metric.mandatory === true,
+
+  weightage:
+    Number(
+      metric.weightage || 1,
+    ),
+
+  capScoreAtTarget:
+    metric.capScoreAtTarget !==
+    false,
+});
 
     await this.performanceTemplateMetricRepo.save(metricRow);
   }
@@ -6203,14 +6274,55 @@ async updatePerformanceTemplate(id: number, body: any, user: any) {
 
       await this.performanceTemplateMetricRepo.save(
         this.performanceTemplateMetricRepo.create({
-          templateId: id,
-          metricName: String(metric.metricName).trim(),
-          targetValue: Number(metric.targetValue || 0),
-          metricType: metric.metricType || 'NUMBER',
-          metricUnit: metric.metricUnit || 'COUNT',
-          mandatory: metric.mandatory === true,
-          weightage: Number(metric.weightage || 1),
-        }),
+  templateId: id,
+
+  metricName:
+    String(
+      metric.metricName || '',
+    ).trim(),
+
+  targetValue:
+    Number(
+      metric.targetValue || 0,
+    ),
+
+  metricType:
+    metric.metricType ||
+    'NUMBER',
+
+  metricUnit:
+    metric.metricUnit ||
+    'COUNT',
+
+  sourceType:
+    metric.sourceType ||
+    'MANUAL',
+
+  crmMetricType:
+    String(
+      metric.crmMetricType || '',
+    )
+      .trim()
+      .toUpperCase(),
+
+  customMetricName:
+    String(
+      metric.customMetricName ||
+        '',
+    ).trim(),
+
+  mandatory:
+    metric.mandatory === true,
+
+  weightage:
+    Number(
+      metric.weightage || 1,
+    ),
+
+  capScoreAtTarget:
+    metric.capScoreAtTarget !==
+    false,
+}),
       );
     }
   }
@@ -6242,6 +6354,1865 @@ async restorePerformanceTemplate(id: number) {
   template.isActive = true;
 
   return this.performanceTemplateRepo.save(template);
+}
+
+// =====================================================
+// STAFF PERFORMANCE EVALUATIONS
+// =====================================================
+
+private getPerformanceMonthRange(
+  performanceMonth: string,
+) {
+  if (
+    !/^\d{4}-\d{2}$/.test(
+      String(
+        performanceMonth || '',
+      ),
+    )
+  ) {
+    throw new BadRequestException(
+      'Performance month must be in YYYY-MM format',
+    );
+  }
+
+  const [year, month] =
+    performanceMonth
+      .split('-')
+      .map(Number);
+
+  if (
+    !year ||
+    !month ||
+    month < 1 ||
+    month > 12
+  ) {
+    throw new BadRequestException(
+      'Invalid performance month',
+    );
+  }
+
+  /*
+   * Resolver uses an exclusive end date.
+   *
+   * Example August:
+   * start = 2026-08-01
+   * end   = 2026-09-01
+   */
+  const periodStart =
+    new Date(
+      Date.UTC(
+        year,
+        month - 1,
+        1,
+      ),
+    );
+
+  const periodEnd =
+    new Date(
+      Date.UTC(
+        year,
+        month,
+        1,
+      ),
+    );
+
+  return {
+    periodStart,
+    periodEnd,
+
+    periodStartDate:
+      periodStart
+        .toISOString()
+        .slice(0, 10),
+
+    /*
+     * StaffPerformance stores an inclusive
+     * human-readable periodEnd date.
+     */
+    periodEndDate:
+      new Date(
+        periodEnd.getTime() -
+          24 * 60 * 60 * 1000,
+      )
+        .toISOString()
+        .slice(0, 10),
+  };
+}
+
+private normalizePerformanceRole(
+  staff: StaffMember,
+) {
+  return String(
+    staff.staffRole ||
+      staff.designation ||
+      '',
+  )
+    .trim()
+    .toUpperCase()
+    .replaceAll(' ', '_');
+}
+
+private async findApplicablePerformanceTemplate(
+  staff: StaffMember,
+) {
+  const staffRole =
+    this.normalizePerformanceRole(
+      staff,
+    );
+
+  if (!staffRole) {
+    throw new BadRequestException(
+      'Staff role is required to resolve performance template',
+    );
+  }
+
+  /*
+   * Avoid raw QueryBuilder SQL here.
+   *
+   * This also avoids camelCase quoting
+   * problems in PostgreSQL.
+   */
+  const templates =
+    await this.performanceTemplateRepo.find({
+      where: {
+        isActive: true,
+        isHidden: false,
+      },
+      order: {
+        isDefault: 'DESC',
+        createdAt: 'DESC',
+      },
+    });
+
+  const applicable =
+    templates.filter(
+      (template) => {
+        const templateRole =
+          String(
+            template.applicableRole ||
+              '',
+          )
+            .trim()
+            .toUpperCase()
+            .replaceAll(' ', '_');
+
+        if (
+          templateRole !==
+          staffRole
+        ) {
+          return false;
+        }
+
+        if (
+          String(
+            template.department ||
+              '',
+          ).trim() &&
+          String(
+            template.department,
+          )
+            .trim()
+            .toLowerCase() !==
+            String(
+              staff.department ||
+                '',
+            )
+              .trim()
+              .toLowerCase()
+        ) {
+          return false;
+        }
+
+        if (
+          String(
+            template.branchName ||
+              '',
+          ).trim() &&
+          String(
+            template.branchName,
+          )
+            .trim()
+            .toLowerCase() !==
+            String(
+              staff.branchName ||
+                '',
+            )
+              .trim()
+              .toLowerCase()
+        ) {
+          return false;
+        }
+
+        return true;
+      },
+    );
+
+  if (applicable.length === 0) {
+    throw new NotFoundException(
+      `No active performance template is configured for ${staffRole}`,
+    );
+  }
+
+  /*
+   * More specific template wins:
+   *
+   * branch + department
+   * then department/branch
+   * then generic role default.
+   */
+  applicable.sort(
+    (a, b) => {
+      const specificity = (
+        template: any,
+      ) =>
+        (
+          String(
+            template.department ||
+              '',
+          ).trim()
+            ? 1
+            : 0
+        ) +
+        (
+          String(
+            template.branchName ||
+              '',
+          ).trim()
+            ? 1
+            : 0
+        );
+
+      const specificityDiff =
+        specificity(b) -
+        specificity(a);
+
+      if (
+        specificityDiff !== 0
+      ) {
+        return specificityDiff;
+      }
+
+      if (
+        b.isDefault !==
+        a.isDefault
+      ) {
+        return b.isDefault
+          ? 1
+          : -1;
+      }
+
+      return (
+        new Date(
+          b.createdAt,
+        ).getTime() -
+        new Date(
+          a.createdAt,
+        ).getTime()
+      );
+    },
+  );
+
+  return applicable[0];
+}
+
+private calculatePerformanceMetricScore(
+  targetValue: number,
+  actualValue: number,
+  weightage: number,
+  capScoreAtTarget: boolean,
+) {
+  const target =
+    Number(targetValue || 0);
+
+  const actual =
+    Number(actualValue || 0);
+
+  const weight =
+    Number(weightage || 0);
+
+  let achievementPercent = 0;
+
+  if (target > 0) {
+    achievementPercent =
+      (actual / target) * 100;
+  } else if (
+    target === 0 &&
+    actual >= 0
+  ) {
+    achievementPercent = 100;
+  }
+
+  if (
+    !Number.isFinite(
+      achievementPercent,
+    )
+  ) {
+    achievementPercent = 0;
+  }
+
+  const scorePercent =
+    capScoreAtTarget
+      ? Math.min(
+          achievementPercent,
+          100,
+        )
+      : achievementPercent;
+
+  const weightedScore =
+    weight *
+    (scorePercent / 100);
+
+  return {
+    achievementPercent:
+      Number(
+        achievementPercent.toFixed(
+          2,
+        ),
+      ),
+
+    weightedScore:
+      Number(
+        weightedScore.toFixed(2),
+      ),
+  };
+}
+
+async generateStaffPerformanceEvaluation(
+  body: any,
+  user: any,
+) {
+  const staffId =
+    Number(body.staffId);
+
+  const performanceMonth =
+    String(
+      body.performanceMonth ||
+        '',
+    ).trim();
+
+  if (
+    !Number.isInteger(staffId) ||
+    staffId <= 0
+  ) {
+    throw new BadRequestException(
+      'Valid staff member is required',
+    );
+  }
+
+  const staff =
+    await this.staffRepo.findOne({
+      where: {
+        id: staffId,
+        isHidden: false,
+      },
+    });
+
+  if (!staff) {
+    throw new NotFoundException(
+      'Staff member not found',
+    );
+  }
+
+  const {
+    periodStart,
+    periodEnd,
+    periodStartDate,
+    periodEndDate,
+  } =
+    this.getPerformanceMonthRange(
+      performanceMonth,
+    );
+
+  const existing =
+    await this.staffPerformanceRepo.findOne({
+      where: {
+        staffId:
+          staff.id,
+
+        performanceMonth,
+
+        isHidden: false,
+      },
+    });
+
+  if (existing) {
+    throw new BadRequestException(
+      'Performance evaluation already exists for this employee and month',
+    );
+  }
+
+  const template =
+    body.templateId
+      ? await this.performanceTemplateRepo.findOne({
+          where: {
+            id: Number(
+              body.templateId,
+            ),
+            isActive: true,
+            isHidden: false,
+          },
+        })
+      : await this.findApplicablePerformanceTemplate(
+          staff,
+        );
+
+  if (!template) {
+    throw new NotFoundException(
+      'Performance template not found',
+    );
+  }
+
+  /*
+   * If HR explicitly chooses a template,
+   * still validate role applicability.
+   */
+  const staffRole =
+    this.normalizePerformanceRole(
+      staff,
+    );
+
+  const templateRole =
+    String(
+      template.applicableRole ||
+        '',
+    )
+      .trim()
+      .toUpperCase()
+      .replaceAll(' ', '_');
+
+  if (
+    templateRole &&
+    templateRole !== staffRole
+  ) {
+    throw new BadRequestException(
+      'Selected performance template is not applicable to this employee role',
+    );
+  }
+
+  const templateMetrics =
+    await this.performanceTemplateMetricRepo.find({
+      where: {
+        templateId:
+          template.id,
+      },
+      order: {
+        id: 'ASC',
+      },
+    });
+
+  if (
+    templateMetrics.length ===
+    0
+  ) {
+    throw new BadRequestException(
+      'Selected performance template has no KPI metrics',
+    );
+  }
+
+  const resolvedMetrics: any[] =
+    [];
+
+  for (
+    const metric of
+    templateMetrics
+  ) {
+    const sourceType =
+      String(
+        metric.sourceType ||
+          'MANUAL',
+      )
+        .trim()
+        .toUpperCase();
+
+    let actualValue = 0;
+
+    let calculationSnapshot:
+      | Record<string, any>
+      | null = null;
+
+    if (
+      sourceType ===
+      'CRM_METRIC'
+    ) {
+      const crmMetricType =
+        String(
+          metric.crmMetricType ||
+            '',
+        )
+          .trim()
+          .toUpperCase();
+
+      if (
+        !Object.values(
+          StaffPayrollMetricType,
+        ).includes(
+          crmMetricType as
+            StaffPayrollMetricType,
+        )
+      ) {
+        throw new BadRequestException(
+          `Invalid CRM metric "${crmMetricType || 'blank'}" for KPI "${metric.metricName}"`,
+        );
+      }
+
+      if (
+        crmMetricType ===
+        StaffPayrollMetricType
+          .MANUAL_NUMBER
+      ) {
+        throw new BadRequestException(
+          `Manual Number cannot be used as CRM source for KPI "${metric.metricName}"`,
+        );
+      }
+
+      actualValue =
+        Number(
+          await this.payrollMetricResolverService.resolve({
+            metricType:
+              crmMetricType as
+                StaffPayrollMetricType,
+
+            staffId:
+              staff.id,
+
+            linkedUserId:
+              staff.linkedUserId ||
+              null,
+
+            staffRole,
+
+            periodStart,
+            periodEnd,
+          }),
+        ) || 0;
+
+      calculationSnapshot = {
+        source:
+          'CRM_METRIC',
+
+        crmMetricType,
+
+        periodStart:
+          periodStart.toISOString(),
+
+        periodEnd:
+          periodEnd.toISOString(),
+
+        resolvedValue:
+          actualValue,
+      };
+    }
+
+    /*
+     * MANUAL / MANAGER_RATING /
+     * BOOLEAN start at zero and are filled
+     * during evaluation review.
+     */
+    const targetValue =
+      Number(
+        metric.targetValue || 0,
+      );
+
+    const weightage =
+      Number(
+        metric.weightage || 0,
+      );
+
+    const capScoreAtTarget =
+      metric.capScoreAtTarget !==
+      false;
+
+    const {
+      achievementPercent,
+      weightedScore,
+    } =
+      this.calculatePerformanceMetricScore(
+        targetValue,
+        actualValue,
+        weightage,
+        capScoreAtTarget,
+      );
+
+    const mandatoryMet =
+      metric.mandatory
+        ? actualValue >=
+          targetValue
+        : true;
+
+    resolvedMetrics.push({
+      templateMetric:
+        metric,
+
+      sourceType,
+      actualValue,
+      achievementPercent,
+      weightedScore,
+      mandatoryMet,
+      calculationSnapshot,
+    });
+  }
+
+  const totalWeight =
+    resolvedMetrics.reduce(
+      (
+        total,
+        item,
+      ) =>
+        total +
+        Number(
+          item.templateMetric
+            .weightage || 0,
+        ),
+      0,
+    );
+
+  const currentWeightedScore =
+    resolvedMetrics.reduce(
+      (
+        total,
+        item,
+      ) =>
+        total +
+        Number(
+          item.weightedScore ||
+            0,
+        ),
+      0,
+    );
+
+  const overallScore =
+    totalWeight > 0
+      ? Number(
+          (
+            (
+              currentWeightedScore /
+              totalWeight
+            ) *
+            100
+          ).toFixed(2),
+        )
+      : 0;
+
+  const mandatoryMetricsMet =
+    resolvedMetrics.every(
+      (item) =>
+        item.mandatoryMet !==
+        false,
+    );
+
+  /*
+   * Do not treat this band as final yet
+   * because manual/rating KPIs may still
+   * need values.
+   */
+  const performanceBand =
+    overallScore >= 90
+      ? 'EXCELLENT'
+      : overallScore >= 75
+        ? 'GOOD'
+        : overallScore >= 60
+          ? 'SATISFACTORY'
+          : 'NEEDS_IMPROVEMENT';
+
+  const templateSnapshot = {
+    id:
+      template.id,
+
+    templateName:
+      template.templateName,
+
+    applicableRole:
+      template.applicableRole,
+
+    department:
+      template.department,
+
+    branchName:
+      template.branchName,
+
+    description:
+      template.description,
+
+    metrics:
+      templateMetrics.map(
+        (metric) => ({
+          id:
+            metric.id,
+
+          metricName:
+            metric.metricName,
+
+          targetValue:
+            Number(
+              metric.targetValue ||
+                0,
+            ),
+
+          metricType:
+            metric.metricType,
+
+          metricUnit:
+            metric.metricUnit,
+
+          sourceType:
+            metric.sourceType,
+
+          crmMetricType:
+            metric.crmMetricType,
+
+          customMetricName:
+            metric.customMetricName,
+
+          mandatory:
+            metric.mandatory,
+
+          weightage:
+            Number(
+              metric.weightage ||
+                0,
+            ),
+
+          capScoreAtTarget:
+            metric.capScoreAtTarget !==
+            false,
+        }),
+      ),
+  };
+
+  return this.staffPerformanceRepo.manager.transaction(
+    async (manager) => {
+      const performance =
+        manager.create(
+          StaffPerformance,
+          {
+            staffId:
+              staff.id,
+
+            staffName:
+              staff.fullName || '',
+
+            employeeCode:
+              staff.employeeCode ||
+              '',
+
+            staffRole:
+              staff.staffRole ||
+              staff.designation ||
+              '',
+
+            department:
+              staff.department || '',
+
+            branchName:
+              staff.branchName || '',
+
+            performanceMonth,
+
+            templateId:
+              template.id,
+
+            templateName:
+              template.templateName ||
+              '',
+
+            periodStart:
+              periodStartDate,
+
+            periodEnd:
+              periodEndDate,
+
+            overallScore,
+
+            mandatoryMetricsMet,
+
+            performanceBand,
+
+            templateSnapshot,
+
+            /*
+             * Keep legacy summary fields
+             * populated safely.
+             */
+            targetType:
+              'TEMPLATE',
+
+            customTargetName:
+              template.templateName ||
+              '',
+
+            targetValue:
+              totalWeight,
+
+            achievedValue:
+              currentWeightedScore,
+
+            achievementPercent:
+              overallScore,
+
+            rating:
+              Number(
+                (
+                  overallScore / 20
+                ).toFixed(2),
+              ),
+
+            reviewRemarks:
+              '',
+
+            managerRemarks:
+              '',
+
+            employeeRemarks:
+              '',
+
+            incentiveEligible:
+              false,
+
+            salaryEligible:
+              false,
+
+            status:
+              StaffPerformanceStatus.DRAFT,
+
+            isActive: true,
+            isHidden: false,
+
+            createdBy:
+              user?.id || null,
+
+            createdByName:
+              user?.name || '',
+          },
+        );
+
+      const savedPerformance =
+        await manager.save(
+          performance,
+        );
+
+      const metricRows =
+        resolvedMetrics.map(
+          (item) =>
+            manager.create(
+              StaffPerformanceMetric,
+              {
+                performanceId:
+                  savedPerformance.id,
+
+                staffId:
+                  staff.id,
+
+                performanceMonth,
+
+                templateMetricId:
+                  item.templateMetric
+                    .id,
+
+                metricName:
+                  item.templateMetric
+                    .metricName,
+
+                metricType:
+                  item.templateMetric
+                    .metricType ||
+                  'NUMBER',
+
+                metricUnit:
+                  item.templateMetric
+                    .metricUnit ||
+                  'COUNT',
+
+                sourceType:
+                  item.sourceType,
+
+                crmMetricType:
+                  item.templateMetric
+                    .crmMetricType ||
+                  '',
+
+                customMetricName:
+                  item.templateMetric
+                    .customMetricName ||
+                  '',
+
+                targetValue:
+                  Number(
+                    item.templateMetric
+                      .targetValue ||
+                      0,
+                  ),
+
+                actualValue:
+                  item.actualValue,
+
+                achievementPercent:
+                  item
+                    .achievementPercent,
+
+                weightage:
+                  Number(
+                    item.templateMetric
+                      .weightage ||
+                      0,
+                  ),
+
+                weightedScore:
+                  item.weightedScore,
+
+                mandatory:
+                  item.templateMetric
+                    .mandatory ===
+                  true,
+
+                mandatoryMet:
+                  item.mandatoryMet,
+
+                capScoreAtTarget:
+                  item.templateMetric
+                    .capScoreAtTarget !==
+                  false,
+
+                remarks: '',
+
+                calculationSnapshot:
+                  item.calculationSnapshot,
+              },
+            ),
+        );
+
+      await manager.save(
+        metricRows,
+      );
+
+      return {
+        ...savedPerformance,
+
+        metrics:
+          metricRows,
+      };
+    },
+  );
+}
+
+private async recalculateStaffPerformance(
+  performanceId: number,
+) {
+  const performance =
+    await this.staffPerformanceRepo.findOne({
+      where: {
+        id: performanceId,
+      },
+    });
+
+  if (!performance) {
+    throw new NotFoundException(
+      'Performance evaluation not found',
+    );
+  }
+
+  const metrics =
+    await this.staffPerformanceMetricRepo.find({
+      where: {
+        performanceId,
+      },
+      order: {
+        id: 'ASC',
+      },
+    });
+
+  const totalWeight =
+    metrics.reduce(
+      (total, metric) =>
+        total +
+        Number(
+          metric.weightage || 0,
+        ),
+      0,
+    );
+
+  let totalWeightedScore = 0;
+
+  let mandatoryMetricsMet =
+    true;
+
+  for (const metric of metrics) {
+    const targetValue =
+      Number(
+        metric.targetValue || 0,
+      );
+
+    const actualValue =
+      Number(
+        metric.actualValue || 0,
+      );
+
+    const weightage =
+      Number(
+        metric.weightage || 0,
+      );
+
+    const {
+      achievementPercent,
+      weightedScore,
+    } =
+      this.calculatePerformanceMetricScore(
+        targetValue,
+        actualValue,
+        weightage,
+        metric.capScoreAtTarget !==
+          false,
+      );
+
+    metric.achievementPercent =
+      achievementPercent;
+
+    metric.weightedScore =
+      weightedScore;
+
+    metric.mandatoryMet =
+      metric.mandatory
+        ? actualValue >=
+          targetValue
+        : true;
+
+    if (
+      metric.mandatory &&
+      !metric.mandatoryMet
+    ) {
+      mandatoryMetricsMet =
+        false;
+    }
+
+    totalWeightedScore +=
+      weightedScore;
+  }
+
+  const overallScore =
+    totalWeight > 0
+      ? Number(
+          (
+            (
+              totalWeightedScore /
+              totalWeight
+            ) *
+            100
+          ).toFixed(2),
+        )
+      : 0;
+
+  const performanceBand =
+    overallScore >= 90
+      ? 'EXCELLENT'
+      : overallScore >= 75
+        ? 'GOOD'
+        : overallScore >= 60
+          ? 'SATISFACTORY'
+          : 'NEEDS_IMPROVEMENT';
+
+  performance.overallScore =
+    overallScore;
+
+  performance.mandatoryMetricsMet =
+    mandatoryMetricsMet;
+
+  performance.performanceBand =
+    performanceBand;
+
+  /*
+   * Maintain legacy summary fields.
+   */
+  performance.achievedValue =
+    Number(
+      totalWeightedScore.toFixed(
+        2,
+      ),
+    );
+
+  performance.achievementPercent =
+    overallScore;
+
+  performance.rating =
+    Number(
+      (
+        overallScore / 20
+      ).toFixed(2),
+    );
+
+  await this.staffPerformanceMetricRepo.save(
+    metrics,
+  );
+
+  await this.staffPerformanceRepo.save(
+    performance,
+  );
+
+  return {
+    performance,
+    metrics,
+  };
+}
+
+async listStaffPerformanceEvaluations(
+  query: any,
+) {
+  const page = Math.max(
+    Number(query.page || 1),
+    1,
+  );
+
+  const limit = Math.min(
+    Math.max(
+      Number(query.limit || 20),
+      1,
+    ),
+    100,
+  );
+
+  const showHidden =
+    query.showHidden === 'true';
+
+  const qb =
+    this.staffPerformanceRepo
+      .createQueryBuilder(
+        'performance',
+      )
+      .where(
+        'performance."isHidden" = :showHidden',
+        {
+          showHidden,
+        },
+      );
+
+  if (query.staffId) {
+    qb.andWhere(
+      'performance."staffId" = :staffId',
+      {
+        staffId:
+          Number(query.staffId),
+      },
+    );
+  }
+
+  if (
+    query.performanceMonth
+  ) {
+    qb.andWhere(
+      'performance."performanceMonth" = :performanceMonth',
+      {
+        performanceMonth:
+          String(
+            query.performanceMonth,
+          ),
+      },
+    );
+  }
+
+  if (query.status) {
+    qb.andWhere(
+      'performance.status = :status',
+      {
+        status:
+          String(query.status),
+      },
+    );
+  }
+
+  if (query.search) {
+    qb.andWhere(
+      `(
+        performance."staffName" ILIKE :search
+        OR performance."employeeCode" ILIKE :search
+        OR performance."templateName" ILIKE :search
+      )`,
+      {
+        search:
+          `%${String(
+            query.search,
+          ).trim()}%`,
+      },
+    );
+  }
+
+  const [data, total] =
+    await qb
+      .orderBy(
+        'performance."performanceMonth"',
+        'DESC',
+      )
+      .addOrderBy(
+        'performance."createdAt"',
+        'DESC',
+      )
+      .skip(
+        (page - 1) * limit,
+      )
+      .take(limit)
+      .getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages:
+      Math.ceil(
+        total / limit,
+      ) || 1,
+  };
+}
+
+async getStaffPerformanceEvaluation(
+  id: number,
+) {
+  const performance =
+    await this.staffPerformanceRepo.findOne({
+      where: {
+        id,
+      },
+    });
+
+  if (!performance) {
+    throw new NotFoundException(
+      'Performance evaluation not found',
+    );
+  }
+
+  const metrics =
+    await this.staffPerformanceMetricRepo.find({
+      where: {
+        performanceId: id,
+      },
+      order: {
+        id: 'ASC',
+      },
+    });
+
+  return {
+    ...performance,
+    metrics,
+  };
+}
+
+async updateStaffPerformanceMetric(
+  performanceId: number,
+  metricId: number,
+  body: any,
+  user: any,
+) {
+  const performance =
+    await this.staffPerformanceRepo.findOne({
+      where: {
+        id: performanceId,
+      },
+    });
+
+  if (!performance) {
+    throw new NotFoundException(
+      'Performance evaluation not found',
+    );
+  }
+
+  if (
+    performance.status ===
+    StaffPerformanceStatus.APPROVED
+  ) {
+    throw new BadRequestException(
+      'Approved performance evaluation cannot be edited',
+    );
+  }
+
+  if (
+    performance.isHidden
+  ) {
+    throw new BadRequestException(
+      'Hidden performance evaluation cannot be edited',
+    );
+  }
+
+  const metric =
+    await this.staffPerformanceMetricRepo.findOne({
+      where: {
+        id: metricId,
+        performanceId,
+      },
+    });
+
+  if (!metric) {
+    throw new NotFoundException(
+      'Performance metric not found',
+    );
+  }
+
+  const sourceType =
+    String(
+      metric.sourceType ||
+        'MANUAL',
+    )
+      .trim()
+      .toUpperCase();
+
+  /*
+   * CRM_METRIC is system-calculated.
+   *
+   * HR should not manually overwrite
+   * operational CRM data.
+   */
+  if (
+    sourceType ===
+    'CRM_METRIC'
+  ) {
+    throw new BadRequestException(
+      'CRM-based performance metric cannot be edited manually',
+    );
+  }
+
+  if (
+    body.actualValue !==
+    undefined
+  ) {
+    let actualValue =
+      Number(
+        body.actualValue,
+      );
+
+    if (
+      !Number.isFinite(
+        actualValue,
+      ) ||
+      actualValue < 0
+    ) {
+      throw new BadRequestException(
+        'Actual value must be a valid non-negative number',
+      );
+    }
+
+    if (
+      sourceType ===
+      'BOOLEAN'
+    ) {
+      actualValue =
+        actualValue > 0
+          ? 1
+          : 0;
+    }
+
+    if (
+      sourceType ===
+      'MANAGER_RATING'
+    ) {
+      if (
+        actualValue < 0 ||
+        actualValue > 5
+      ) {
+        throw new BadRequestException(
+          'Manager rating must be between 0 and 5',
+        );
+      }
+    }
+
+    metric.actualValue =
+      actualValue;
+  }
+
+  if (
+    body.remarks !==
+    undefined
+  ) {
+    metric.remarks =
+      String(
+        body.remarks || '',
+      ).trim();
+  }
+
+  /*
+   * Manual edits replace any previous
+   * calculation snapshot with an audit
+   * snapshot describing the input source.
+   */
+  metric.calculationSnapshot = {
+    source:
+      sourceType,
+
+    updatedBy:
+      user?.id || null,
+
+    updatedByName:
+      user?.name || '',
+
+    updatedAt:
+      new Date().toISOString(),
+
+    actualValue:
+      Number(
+        metric.actualValue || 0,
+      ),
+  };
+
+  await this.staffPerformanceMetricRepo.save(
+    metric,
+  );
+
+  performance.updatedBy =
+    user?.id || null;
+
+  performance.updatedByName =
+    user?.name || '';
+
+  await this.staffPerformanceRepo.save(
+    performance,
+  );
+
+  return this.recalculateStaffPerformance(
+    performanceId,
+  );
+}
+
+async refreshStaffPerformanceCrmMetrics(
+  id: number,
+  user: any,
+) {
+  const performance =
+    await this.staffPerformanceRepo.findOne({
+      where: {
+        id,
+      },
+    });
+
+  if (!performance) {
+    throw new NotFoundException(
+      'Performance evaluation not found',
+    );
+  }
+
+  if (
+    performance.status ===
+    StaffPerformanceStatus.APPROVED
+  ) {
+    throw new BadRequestException(
+      'Approved performance evaluation cannot be refreshed',
+    );
+  }
+
+  if (
+    performance.isHidden
+  ) {
+    throw new BadRequestException(
+      'Hidden performance evaluation cannot be refreshed',
+    );
+  }
+
+  const staff =
+    await this.staffRepo.findOne({
+      where: {
+        id:
+          performance.staffId,
+        isHidden: false,
+      },
+    });
+
+  if (!staff) {
+    throw new NotFoundException(
+      'Staff member not found',
+    );
+  }
+
+  const metrics =
+    await this.staffPerformanceMetricRepo.find({
+      where: {
+        performanceId: id,
+      },
+      order: {
+        id: 'ASC',
+      },
+    });
+
+  const {
+    periodStart,
+    periodEnd,
+  } =
+    this.getPerformanceMonthRange(
+      performance.performanceMonth,
+    );
+
+  const staffRole =
+    this.normalizePerformanceRole(
+      staff,
+    );
+
+  for (const metric of metrics) {
+    if (
+      String(
+        metric.sourceType ||
+          '',
+      )
+        .trim()
+        .toUpperCase() !==
+      'CRM_METRIC'
+    ) {
+      continue;
+    }
+
+    const crmMetricType =
+      String(
+        metric.crmMetricType ||
+          '',
+      )
+        .trim()
+        .toUpperCase();
+
+    if (
+      !Object.values(
+        StaffPayrollMetricType,
+      ).includes(
+        crmMetricType as
+          StaffPayrollMetricType,
+      )
+    ) {
+      throw new BadRequestException(
+        `Invalid CRM metric "${crmMetricType}"`,
+      );
+    }
+
+    const actualValue =
+      Number(
+        await this.payrollMetricResolverService.resolve({
+          metricType:
+            crmMetricType as
+              StaffPayrollMetricType,
+
+          staffId:
+            staff.id,
+
+          linkedUserId:
+            staff.linkedUserId ||
+            null,
+
+          staffRole,
+
+          periodStart,
+
+          periodEnd,
+        }),
+      ) || 0;
+
+    metric.actualValue =
+      actualValue;
+
+    metric.calculationSnapshot = {
+      source:
+        'CRM_METRIC',
+
+      crmMetricType,
+
+      periodStart:
+        periodStart.toISOString(),
+
+      periodEnd:
+        periodEnd.toISOString(),
+
+      resolvedValue:
+        actualValue,
+
+      refreshedBy:
+        user?.id || null,
+
+      refreshedByName:
+        user?.name || '',
+
+      refreshedAt:
+        new Date().toISOString(),
+    };
+  }
+
+  await this.staffPerformanceMetricRepo.save(
+    metrics,
+  );
+
+  performance.updatedBy =
+    user?.id || null;
+
+  performance.updatedByName =
+    user?.name || '';
+
+  await this.staffPerformanceRepo.save(
+    performance,
+  );
+
+  return this.recalculateStaffPerformance(
+    id,
+  );
+}
+
+async reviewStaffPerformanceEvaluation(
+  id: number,
+  body: any,
+  user: any,
+) {
+  const performance =
+    await this.staffPerformanceRepo.findOne({
+      where: {
+        id,
+      },
+    });
+
+  if (!performance) {
+    throw new NotFoundException(
+      'Performance evaluation not found',
+    );
+  }
+
+  if (
+    performance.status ===
+    StaffPerformanceStatus.APPROVED
+  ) {
+    throw new BadRequestException(
+      'Approved performance evaluation cannot be reviewed again',
+    );
+  }
+
+  if (
+    performance.isHidden
+  ) {
+    throw new BadRequestException(
+      'Hidden performance evaluation cannot be reviewed',
+    );
+  }
+
+  const result =
+    await this.recalculateStaffPerformance(
+      id,
+    );
+
+  performance.reviewRemarks =
+    String(
+      body.reviewRemarks ||
+        performance.reviewRemarks ||
+        '',
+    ).trim();
+
+  performance.managerRemarks =
+    String(
+      body.managerRemarks ||
+        performance.managerRemarks ||
+        '',
+    ).trim();
+
+  performance.employeeRemarks =
+    String(
+      body.employeeRemarks ||
+        performance.employeeRemarks ||
+        '',
+    ).trim();
+
+  performance.status =
+    StaffPerformanceStatus.REVIEWED;
+
+  performance.reviewedBy =
+    user?.id || null;
+
+  performance.reviewedByName =
+    user?.name || '';
+
+  performance.reviewedAt =
+    new Date();
+
+  performance.updatedBy =
+    user?.id || null;
+
+  performance.updatedByName =
+    user?.name || '';
+
+  /*
+   * Do not automatically link this
+   * to salary/incentive eligibility.
+   *
+   * Those remain payroll responsibilities.
+   */
+  performance.salaryEligible =
+    false;
+
+  performance.incentiveEligible =
+    false;
+
+  Object.assign(
+    performance,
+    result.performance,
+  );
+
+  return this.staffPerformanceRepo.save(
+    performance,
+  );
+}
+
+async approveStaffPerformanceEvaluation(
+  id: number,
+  body: any,
+  user: any,
+) {
+  const performance =
+    await this.staffPerformanceRepo.findOne({
+      where: {
+        id,
+      },
+    });
+
+  if (!performance) {
+    throw new NotFoundException(
+      'Performance evaluation not found',
+    );
+  }
+
+  if (
+    performance.status !==
+    StaffPerformanceStatus.REVIEWED
+  ) {
+    throw new BadRequestException(
+      'Performance evaluation must be reviewed before approval',
+    );
+  }
+
+  const result =
+    await this.recalculateStaffPerformance(
+      id,
+    );
+
+  if (
+    body.managerRemarks !==
+    undefined
+  ) {
+    performance.managerRemarks =
+      String(
+        body.managerRemarks ||
+          '',
+      ).trim();
+  }
+
+  if (
+    body.reviewRemarks !==
+    undefined
+  ) {
+    performance.reviewRemarks =
+      String(
+        body.reviewRemarks ||
+          '',
+      ).trim();
+  }
+
+  performance.status =
+    StaffPerformanceStatus.APPROVED;
+
+  performance.approvedBy =
+    user?.id || null;
+
+  performance.approvedByName =
+    user?.name || '';
+
+  performance.approvedAt =
+    new Date();
+
+  performance.updatedBy =
+    user?.id || null;
+
+  performance.updatedByName =
+    user?.name || '';
+
+  Object.assign(
+    performance,
+    result.performance,
+  );
+
+  return this.staffPerformanceRepo.save(
+    performance,
+  );
+}
+
+async hideStaffPerformanceEvaluation(
+  id: number,
+  body: any,
+  user: any,
+) {
+  const performance =
+    await this.staffPerformanceRepo.findOne({
+      where: {
+        id,
+      },
+    });
+
+  if (!performance) {
+    throw new NotFoundException(
+      'Performance evaluation not found',
+    );
+  }
+
+  if (
+    performance.status ===
+    StaffPerformanceStatus.APPROVED
+  ) {
+    throw new BadRequestException(
+      'Approved performance evaluation cannot be hidden',
+    );
+  }
+
+  performance.isHidden =
+    true;
+
+  performance.hiddenAt =
+    new Date();
+
+  performance.hiddenBy =
+    user?.id || null;
+
+  performance.hiddenByName =
+    user?.name || '';
+
+  performance.hiddenReason =
+    String(
+      body?.reason || '',
+    );
+
+  return this.staffPerformanceRepo.save(
+    performance,
+  );
+}
+
+async restoreStaffPerformanceEvaluation(
+  id: number,
+  body: any,
+  user: any,
+) {
+  const performance =
+    await this.staffPerformanceRepo.findOne({
+      where: {
+        id,
+      },
+    });
+
+  if (!performance) {
+    throw new NotFoundException(
+      'Performance evaluation not found',
+    );
+  }
+
+  performance.isHidden =
+    false;
+
+  performance.restoredAt =
+    new Date();
+
+  performance.restoredBy =
+    user?.id || null;
+
+  performance.restoredByName =
+    user?.name || '';
+
+  performance.restoreReason =
+    String(
+      body?.reason || '',
+    );
+
+  return this.staffPerformanceRepo.save(
+    performance,
+  );
 }
 
 // =====================================================

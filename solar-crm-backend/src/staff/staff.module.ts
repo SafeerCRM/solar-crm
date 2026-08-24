@@ -17,6 +17,9 @@ import { RecruitmentCandidateDocument } from './recruitment-candidate-document.e
 import { StaffPerformance } from './staff-performance.entity';
 import { PerformanceTemplate } from './performance-template.entity';
 import { PerformanceTemplateMetric } from './performance-template-metric.entity';
+import {
+  StaffPerformanceMetric,
+} from './staff-performance-metric.entity';
 import { PenaltyRule } from './penalty-rule.entity';
 import { StaffPenalty } from './staff-penalty.entity';
 import { AttendanceLocation } from './attendance-location.entity';
@@ -87,7 +90,11 @@ import { CallLog } from '../telecalling/call-log.entity';
       RecruitmentCandidate,
       RecruitmentCandidateDocument,
       StaffPerformance,
-      PerformanceTemplate,
+
+StaffPerformanceMetric,
+
+PerformanceTemplate,
+
 PerformanceTemplateMetric,
 
 PenaltyRule,
