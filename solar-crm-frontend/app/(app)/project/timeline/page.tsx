@@ -1185,10 +1185,13 @@ const [
               .triggerType,
 
           triggerValue:
-            Number(
-              ruleForm
-                .triggerValue,
-            ),
+  ruleForm.triggerType ===
+  'PAYMENT_PERCENT_REACHED'
+    ? Number(
+        ruleForm
+          .triggerValue,
+      )
+    : 0,
 
           targetModule:
             ruleForm
@@ -1989,11 +1992,11 @@ const [
                           </p>
 
                           <p className="mt-1 font-semibold text-gray-800">
-                            {
-                              row.triggerValue
-                            }
-                            % Payment
-                          </p>
+  {row.triggerType ===
+  'PROJECT_CREATED'
+    ? 'Project Creation Date'
+    : `${row.triggerValue}% Payment`}
+</p>
 
                           <p className="mt-1 text-sm text-gray-600">
                             {formatDate(
@@ -2321,18 +2324,27 @@ const [
                   ruleForm
                     .triggerType
                 }
-                onChange={(e) =>
-                  setRuleForm(
-                    (
-                      current,
-                    ) => ({
-                      ...current,
-                      triggerType:
-                        e.target
-                          .value,
-                    }),
-                  )
-                }
+                onChange={(e) => {
+  const triggerType =
+    e.target.value;
+
+  setRuleForm(
+    (
+      current,
+    ) => ({
+      ...current,
+
+      triggerType,
+
+      triggerValue:
+        triggerType ===
+        'PAYMENT_PERCENT_REACHED'
+          ? current.triggerValue ||
+            '20'
+          : '0',
+    }),
+  );
+}}
                 className="rounded-xl border p-3"
               >
                 {options
@@ -2355,34 +2367,37 @@ const [
                   )}
               </select>
 
-              <div>
-                <p className="mb-1 text-xs font-semibold text-gray-600">
-                  Trigger Payment %
-                </p>
+              {ruleForm.triggerType ===
+'PAYMENT_PERCENT_REACHED' ? (
+  <div>
+    <p className="mb-1 text-xs font-semibold text-gray-600">
+      Trigger Payment %
+    </p>
 
-                <input
-                  type="number"
-                  min="1"
-                  max="100"
-                  value={
-                    ruleForm
-                      .triggerValue
-                  }
-                  onChange={(e) =>
-                    setRuleForm(
-                      (
-                        current,
-                      ) => ({
-                        ...current,
-                        triggerValue:
-                          e.target
-                            .value,
-                      }),
-                    )
-                  }
-                  className="w-full rounded-xl border p-3"
-                />
-              </div>
+    <input
+      type="number"
+      min="1"
+      max="100"
+      value={
+        ruleForm
+          .triggerValue
+      }
+      onChange={(e) =>
+        setRuleForm(
+          (
+            current,
+          ) => ({
+            ...current,
+            triggerValue:
+              e.target
+                .value,
+          }),
+        )
+      }
+      className="w-full rounded-xl border p-3"
+    />
+  </div>
+) : null}
 
               <select
                 value={
@@ -2789,14 +2804,14 @@ const [
                           <p className="mt-2 text-sm text-gray-700">
                             Trigger:{' '}
                             <strong>
-                              {
-                                Number(
-                                  rule.triggerValue ||
-                                    0,
-                                )
-                              }
-                              % Payment
-                            </strong>
+  {rule.triggerType ===
+  'PROJECT_CREATED'
+    ? 'Project Creation Date'
+    : `${Number(
+        rule.triggerValue ||
+          0,
+      )}% Payment`}
+</strong>
                             {' → '}
                             {formatLabel(
                               rule.targetModule,
