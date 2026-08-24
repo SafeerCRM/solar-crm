@@ -23,7 +23,6 @@ const emptyForm = {
   leaveDays: '',
   workingHours: '',
   leaveDeduction: '',
-  penaltyAmount: '',
   incentiveAmount: '',
   otherAllowance: '',
   otherDeduction: '',
@@ -139,7 +138,6 @@ const [viewCalculationOpen, setViewCalculationOpen] =
         leaveDays: Number(form.leaveDays || 0),
         workingHours: Number(form.workingHours || 0),
         leaveDeduction: Number(form.leaveDeduction || 0),
-        penaltyAmount: Number(form.penaltyAmount || 0),
         incentiveAmount: Number(form.incentiveAmount || 0),
         otherAllowance: Number(form.otherAllowance || 0),
         otherDeduction: Number(form.otherDeduction || 0),
@@ -182,7 +180,6 @@ const [viewCalculationOpen, setViewCalculationOpen] =
       leaveDays: String(item.leaveDays || ''),
       workingHours: String(item.workingHours || ''),
       leaveDeduction: String(item.leaveDeduction || ''),
-      penaltyAmount: String(item.penaltyAmount || ''),
       incentiveAmount: String(item.incentiveAmount || ''),
       otherAllowance: String(item.otherAllowance || ''),
       otherDeduction: String(item.otherDeduction || ''),
@@ -420,13 +417,22 @@ const [viewCalculationOpen, setViewCalculationOpen] =
             className="rounded-xl border p-3"
           />
 
-          <input
-            type="number"
-            placeholder="Penalty Amount"
-            value={form.penaltyAmount}
-            onChange={(e) => setForm({ ...form, penaltyAmount: e.target.value })}
-            className="rounded-xl border p-3"
-          />
+          <div className="rounded-xl border border-red-200 bg-red-50 p-3">
+  <p className="text-xs font-semibold uppercase text-red-700">
+    Penalty Deduction
+  </p>
+
+  <p className="mt-1 text-sm font-semibold text-red-900">
+    Calculated Automatically
+  </p>
+
+  <p className="mt-1 text-xs text-red-700">
+    Approved penalty cases marked
+    &quot;Include in Payroll&quot; for this
+    employee and payroll month will be
+    deducted automatically.
+  </p>
+</div>
 
           <input
             type="number"
@@ -573,6 +579,23 @@ const [viewCalculationOpen, setViewCalculationOpen] =
                       Deduction {money(Number(item.attendanceDeduction || 0) + Number(item.leaveDeduction || 0) + Number(item.penaltyAmount || 0) + Number(item.otherDeduction || 0))}
                       {' '}| Incentive {money(item.incentiveAmount)}
                     </p>
+
+                    {Number(
+  item.penaltyAmount || 0,
+) > 0 && (
+  <p className="mt-1 text-sm font-semibold text-red-700">
+    Penalty Deduction:{' '}
+    {money(
+      item.penaltyAmount,
+    )}
+    {' · '}
+    {Number(
+      item.calculationSnapshot
+        ?.penalties?.count || 0,
+    )}{' '}
+    case(s)
+  </p>
+)}
 
                     {item.eligibilityMet !== undefined && (
   <div className="mt-3 rounded-xl border bg-gray-50 p-3">
@@ -1092,6 +1115,144 @@ item.ruleSnapshot ? (
       </span>
     </div>
   </div>
+</div>
+
+<div className="rounded-xl border border-red-100 p-4">
+  <div className="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <h3 className="font-bold text-gray-800">
+        Payroll Penalties
+      </h3>
+
+      <p className="mt-1 text-sm text-gray-500">
+        Approved staff penalty cases
+        included in this payroll.
+      </p>
+    </div>
+
+    <div className="text-right">
+      <p className="text-xs font-semibold uppercase text-gray-500">
+        Total Penalty
+      </p>
+
+      <p className="text-lg font-bold text-red-700">
+        {money(
+          viewPayroll.penaltyAmount,
+        )}
+      </p>
+    </div>
+  </div>
+
+  {Array.isArray(
+    viewPayroll.calculationSnapshot
+      ?.penalties?.cases,
+  ) &&
+  viewPayroll.calculationSnapshot
+    .penalties.cases.length >
+    0 ? (
+    <div className="mt-4 space-y-3">
+      {viewPayroll.calculationSnapshot.penalties.cases.map(
+        (
+          penalty: any,
+          index: number,
+        ) => (
+          <div
+            key={
+              penalty.id ||
+              `${penalty.penaltyRuleId}-${index}`
+            }
+            className="rounded-xl border bg-red-50/40 p-4"
+          >
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <p className="font-semibold text-gray-900">
+                  {penalty.penaltyRuleName ||
+                    'Penalty'}
+                </p>
+
+                <p className="mt-1 text-xs text-gray-500">
+                  {payrollLabel(
+                    penalty.penaltyType ||
+                      '',
+                  )}
+                  {' · '}
+                  {payrollLabel(
+                    penalty.calculationType ||
+                      '',
+                  )}
+                </p>
+              </div>
+
+              <p className="font-bold text-red-700">
+                -{' '}
+                {money(
+                  penalty.approvedAmount ||
+                    0,
+                )}
+              </p>
+            </div>
+
+            <div className="mt-3 grid gap-3 text-sm md:grid-cols-2">
+              <div>
+                <p className="text-xs font-semibold uppercase text-gray-500">
+                  Incident Date
+                </p>
+
+                <p className="mt-1 text-gray-800">
+                  {penalty.incidentDate ||
+                    '-'}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold uppercase text-gray-500">
+                  Proposed Amount
+                </p>
+
+                <p className="mt-1 text-gray-800">
+                  {money(
+                    penalty.proposedAmount ||
+                      0,
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-3 rounded-lg bg-white p-3">
+              <p className="text-xs font-semibold uppercase text-gray-500">
+                Reason
+              </p>
+
+              <p className="mt-1 text-sm text-gray-700">
+                {penalty.reason || '-'}
+              </p>
+            </div>
+
+            {penalty.reviewRemarks && (
+              <div className="mt-2 rounded-lg bg-white p-3">
+                <p className="text-xs font-semibold uppercase text-gray-500">
+                  Approval Remark
+                </p>
+
+                <p className="mt-1 text-sm text-gray-700">
+                  {
+                    penalty.reviewRemarks
+                  }
+                </p>
+              </div>
+            )}
+          </div>
+        ),
+      )}
+    </div>
+  ) : (
+    <div className="mt-4 rounded-xl bg-gray-50 p-4">
+      <p className="text-sm text-gray-500">
+        No payroll-linked penalty cases
+        were included in this payroll.
+      </p>
+    </div>
+  )}
 </div>
 
         <div className="rounded-xl border p-4">
