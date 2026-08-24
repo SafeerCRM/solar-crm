@@ -26436,6 +26436,18 @@ getProjectTimelineOptions() {
     },
   ];
 
+  const contractorOptions =
+  Object.values(
+    ProjectContractorWorkScope,
+  ).map((value) => ({
+    value,
+
+    label:
+      this.formatProjectTimelineOptionLabel(
+        value,
+      ),
+  }));
+
   return {
     triggerTypes: [
   {
@@ -26527,6 +26539,14 @@ getProjectTimelineOptions() {
         label:
           'Payment',
       },
+
+      {
+  value:
+    ProjectTimelineModule.CONTRACTOR,
+
+  label:
+    'Contractor Work',
+},
     ],
 
     milestones: {
@@ -26544,6 +26564,9 @@ getProjectTimelineOptions() {
 
       [ProjectTimelineModule.PAYMENT]:
         paymentOptions,
+
+        [ProjectTimelineModule.CONTRACTOR]:
+  contractorOptions,
     },
   };
 }
@@ -26670,6 +26693,13 @@ if (
         'PAYMENT_PERCENT_REACHED',
       ];
       break;
+
+      case ProjectTimelineModule.CONTRACTOR:
+  validMilestones =
+    Object.values(
+      ProjectContractorWorkScope,
+    );
+  break;
 
     default:
       validMilestones = [];
@@ -27738,6 +27768,7 @@ private async resolveProjectTimelineMilestoneAchievement(
     | 'LOAN_DETAIL'
     | 'SUBSIDY_DETAIL'
     | 'ELECTRICITY_DETAIL'
+    | 'CONTRACTOR_ASSIGNMENT'
     | 'PAYMENT_HISTORY'
     | 'CURRENT_STATUS_DATE_UNAVAILABLE'
     | 'NOT_ACHIEVED';
@@ -28361,6 +28392,104 @@ if (
     };
   }
 
+  /*
+ * CONTRACTOR WORK
+ *
+ * Timeline milestone represents the
+ * contractor work scope.
+ *
+ * The first successfully completed
+ * assignment for that project + work scope
+ * satisfies the milestone.
+ */
+if (
+  module ===
+  ProjectTimelineModule.CONTRACTOR
+) {
+  const assignments =
+    await this
+      .projectContractorAssignmentRepository
+      .find({
+        where: {
+          projectId:
+            normalizedProjectId,
+
+          workScope:
+            milestone as
+              ProjectContractorWorkScope,
+
+          status:
+            ProjectContractorWorkStatus
+              .COMPLETED,
+        },
+
+        order: {
+          completedAt:
+            'ASC',
+
+          id:
+            'ASC',
+        },
+      });
+
+  const completedAssignment =
+    assignments.find(
+      (assignment) => {
+        if (
+          !assignment.completedAt
+        ) {
+          return false;
+        }
+
+        const completedAt =
+          new Date(
+            assignment.completedAt,
+          );
+
+        return !Number.isNaN(
+          completedAt.getTime(),
+        );
+      },
+    );
+
+  if (!completedAssignment) {
+    return {
+      achieved: false,
+
+      achievedAt: null,
+
+      dateReliable: false,
+
+      source:
+        'NOT_ACHIEVED',
+
+      sourceId: null,
+    };
+  }
+
+  const achievedAt =
+    new Date(
+      completedAssignment
+        .completedAt,
+    );
+
+  return {
+    achieved: true,
+
+    achievedAt,
+
+    dateReliable: true,
+
+    source:
+      'CONTRACTOR_ASSIGNMENT',
+
+    sourceId:
+      Number(
+        completedAssignment.id,
+      ),
+  };
+}
+
   return {
     achieved: false,
     achievedAt: null,
@@ -28400,6 +28529,7 @@ private async calculateProjectTimelineRuleStatus(
       | 'LOAN_DETAIL'
       | 'SUBSIDY_DETAIL'
       | 'ELECTRICITY_DETAIL'
+      | 'CONTRACTOR_ASSIGNMENT'
       | 'PAYMENT_HISTORY'
       | 'CURRENT_STATUS_DATE_UNAVAILABLE'
       | 'NOT_ACHIEVED';
@@ -29908,6 +30038,32 @@ const timelineElectricityDetails =
         })
     : [];
 
+    const timelineContractorAssignments =
+  timelineProjectIds.length > 0
+    ? await this
+        .projectContractorAssignmentRepository
+        .find({
+          where: {
+            projectId:
+              In(
+                timelineProjectIds,
+              ),
+
+            status:
+              ProjectContractorWorkStatus
+                .COMPLETED,
+          },
+
+          order: {
+            completedAt:
+              'ASC',
+
+            id:
+              'ASC',
+          },
+        })
+    : [];
+
 /*
  * Earliest recorded Timeline Event wins.
  */
@@ -30096,6 +30252,95 @@ for (
     timelineElectricityMap.set(
       key,
       detail,
+    );
+  }
+}
+
+/*
+ * Contractor timeline resolver.
+ *
+ * One project may have multiple contractor
+ * assignments for the same work scope.
+ *
+ * The earliest valid COMPLETED assignment
+ * satisfies that contractor work milestone.
+ */
+const timelineContractorMap =
+  new Map<
+    string,
+    ProjectContractorAssignment
+  >();
+
+for (
+  const assignment of
+    timelineContractorAssignments
+) {
+  if (
+    !assignment.completedAt
+  ) {
+    continue;
+  }
+
+  const completedAt =
+    new Date(
+      assignment.completedAt,
+    );
+
+  if (
+    Number.isNaN(
+      completedAt.getTime(),
+    )
+  ) {
+    continue;
+  }
+
+  const key =
+    `${Number(
+      assignment.projectId,
+    )}:${String(
+      assignment.workScope ||
+        '',
+    )
+      .trim()
+      .toUpperCase()}`;
+
+  const existing =
+    timelineContractorMap.get(
+      key,
+    );
+
+  if (!existing) {
+    timelineContractorMap.set(
+      key,
+      assignment,
+    );
+
+    continue;
+  }
+
+  const existingCompletedAt =
+    existing.completedAt
+      ? new Date(
+          existing.completedAt,
+        ).getTime()
+      : Number.POSITIVE_INFINITY;
+
+  const assignmentCompletedAt =
+    completedAt.getTime();
+
+  if (
+    assignmentCompletedAt <
+      existingCompletedAt ||
+    (
+      assignmentCompletedAt ===
+        existingCompletedAt &&
+      Number(assignment.id) <
+        Number(existing.id)
+    )
+  ) {
+    timelineContractorMap.set(
+      key,
+      assignment,
     );
   }
 }
@@ -30342,6 +30587,7 @@ let achievementResult:
       | 'LOAN_DETAIL'
       | 'SUBSIDY_DETAIL'
       | 'ELECTRICITY_DETAIL'
+      | 'CONTRACTOR_ASSIGNMENT'
       | 'PAYMENT_HISTORY'
       | 'CURRENT_STATUS_DATE_UNAVAILABLE'
       | 'NOT_ACHIEVED';
@@ -30966,6 +31212,73 @@ if (
                 detail.id,
               )
             : null,
+      };
+        }
+  } else if (
+    rule.targetModule ===
+      ProjectTimelineModule.CONTRACTOR
+  ) {
+    const assignment =
+      timelineContractorMap.get(
+        `${timelineProjectId}:${milestone}`,
+      );
+
+    if (
+      !assignment ||
+      !assignment.completedAt
+    ) {
+      achievementResult = {
+        achieved:
+          false,
+
+        achievedAt:
+          null,
+
+        dateReliable:
+          false,
+
+        source:
+          'NOT_ACHIEVED',
+
+        sourceId:
+          assignment
+            ? Number(
+                assignment.id,
+              )
+            : null,
+      };
+    } else {
+      const completedAt =
+        new Date(
+          assignment.completedAt,
+        );
+
+      const validCompletedAt =
+        !Number.isNaN(
+          completedAt.getTime(),
+        );
+
+      achievementResult = {
+        achieved:
+          validCompletedAt,
+
+        achievedAt:
+          validCompletedAt
+            ? completedAt
+            : null,
+
+        dateReliable:
+          validCompletedAt,
+
+        source:
+          validCompletedAt
+            ? 'CONTRACTOR_ASSIGNMENT'
+            : 'NOT_ACHIEVED',
+
+        sourceId:
+          Number(
+            assignment.id,
+          ),
       };
     }
   } else {

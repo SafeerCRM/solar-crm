@@ -12,6 +12,7 @@ export enum ProjectTimelineModule {
   SUBSIDY = 'SUBSIDY',
   ELECTRICITY = 'ELECTRICITY',
   PAYMENT = 'PAYMENT',
+  CONTRACTOR = 'CONTRACTOR',
 }
 
 export enum ProjectTimelineTriggerType {
