@@ -18,6 +18,7 @@ import { StaffPerformance } from './staff-performance.entity';
 import { PerformanceTemplate } from './performance-template.entity';
 import { PerformanceTemplateMetric } from './performance-template-metric.entity';
 import { PenaltyRule } from './penalty-rule.entity';
+import { StaffPenalty } from './staff-penalty.entity';
 import { AttendanceLocation } from './attendance-location.entity';
 import { StaffAttendancePolicy } from './staff-attendance-policy.entity';
 import { StaffAttendanceOverride } from './staff-attendance-override.entity';
@@ -88,7 +89,11 @@ import { CallLog } from '../telecalling/call-log.entity';
       StaffPerformance,
       PerformanceTemplate,
 PerformanceTemplateMetric,
+
 PenaltyRule,
+
+StaffPenalty,
+
 AttendanceLocation,
 StaffAttendancePolicy,
 StaffAttendanceOverride,

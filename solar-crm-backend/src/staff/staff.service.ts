@@ -37,6 +37,10 @@ import {
   PenaltyRule,
   PenaltyCalculationType,
 } from './penalty-rule.entity';
+import {
+  StaffPenalty,
+  StaffPenaltyStatus,
+} from './staff-penalty.entity';
 import { AttendanceLocation } from './attendance-location.entity';
 import {
   StaffAttendanceLocationRule,
@@ -99,10 +103,16 @@ private readonly performanceTemplateRepo: Repository<PerformanceTemplate>,
 private readonly performanceTemplateMetricRepo: Repository<PerformanceTemplateMetric>,
 
 @InjectRepository(PenaltyRule)
-private readonly penaltyRuleRepository: Repository<PenaltyRule>,
+private readonly penaltyRuleRepository:
+  Repository<PenaltyRule>,
+
+@InjectRepository(StaffPenalty)
+private readonly staffPenaltyRepository:
+  Repository<StaffPenalty>,
 
 @InjectRepository(AttendanceLocation)
-private readonly attendanceLocationRepo: Repository<AttendanceLocation>,
+private readonly attendanceLocationRepo:
+  Repository<AttendanceLocation>,
 
 @InjectRepository(StaffAttendancePolicy)
 private readonly attendancePolicyRepo: Repository<StaffAttendancePolicy>,
@@ -4112,26 +4122,154 @@ private calculateMonthDays(payrollMonth: string) {
   return new Date(year, month, 0).getDate();
 }
 
-async generatePayroll(body: any, user: any) {
-  if (!body.staffId || !body.payrollMonth) {
-    throw new BadRequestException('Staff and payroll month are required');
+private async getPayrollPenaltyCases(
+  staffId: number,
+  payrollMonth: string,
+) {
+  const pending =
+    await this.staffPenaltyRepository.find({
+      where: {
+        staffId: Number(staffId),
+        payrollMonth:
+          String(payrollMonth),
+        status:
+          StaffPenaltyStatus.PENDING,
+        includeInPayroll: true,
+        isHidden: false,
+      },
+      order: {
+        incidentDate: 'ASC',
+        createdAt: 'ASC',
+      },
+    });
+
+  if (pending.length > 0) {
+    throw new BadRequestException(
+      `${pending.length} payroll-linked penalty case(s) are still pending review for this employee and month. Approve or reject them before generating payroll.`,
+    );
   }
 
-  const staff = await this.staffRepo.findOne({
-    where: { id: Number(body.staffId), isHidden: false },
-  });
+  const approved =
+    await this.staffPenaltyRepository.find({
+      where: {
+        staffId: Number(staffId),
+        payrollMonth:
+          String(payrollMonth),
+        status:
+          StaffPenaltyStatus.APPROVED,
+        includeInPayroll: true,
+        isHidden: false,
+      },
+      order: {
+        incidentDate: 'ASC',
+        createdAt: 'ASC',
+      },
+    });
+
+  const totalAmount =
+    Number(
+      approved
+        .reduce(
+          (
+            total,
+            penalty,
+          ) =>
+            total +
+            Number(
+              penalty.approvedAmount ||
+                0,
+            ),
+          0,
+        )
+        .toFixed(2),
+    );
+
+  return {
+    approved,
+    totalAmount,
+
+    snapshot:
+      approved.map(
+        (penalty) => ({
+          id: penalty.id,
+
+          penaltyRuleId:
+            penalty.penaltyRuleId,
+
+          penaltyRuleName:
+            penalty.penaltyRuleName,
+
+          penaltyType:
+            penalty.penaltyType,
+
+          calculationType:
+            penalty.calculationType,
+
+          incidentDate:
+            penalty.incidentDate,
+
+          payrollMonth:
+            penalty.payrollMonth,
+
+          proposedAmount:
+            Number(
+              penalty.proposedAmount ||
+                0,
+            ),
+
+          approvedAmount:
+            Number(
+              penalty.approvedAmount ||
+                0,
+            ),
+
+          reason:
+            penalty.reason || '',
+
+          reviewRemarks:
+            penalty.reviewRemarks ||
+            '',
+        }),
+      ),
+  };
+}
+
+async generatePayroll(
+  body: any,
+  user: any,
+) {
+  if (
+    !body.staffId ||
+    !body.payrollMonth
+  ) {
+    throw new BadRequestException(
+      'Staff and payroll month are required',
+    );
+  }
+
+  const staff =
+    await this.staffRepo.findOne({
+      where: {
+        id: Number(body.staffId),
+        isHidden: false,
+      },
+    });
 
   if (!staff) {
-    throw new NotFoundException('Staff not found');
+    throw new NotFoundException(
+      'Staff not found',
+    );
   }
 
-  const existing = await this.payrollRepo.findOne({
-    where: {
-      staffId: staff.id,
-      payrollMonth: body.payrollMonth,
-      isHidden: false,
-    },
-  });
+  const existing =
+    await this.payrollRepo.findOne({
+      where: {
+        staffId: staff.id,
+        payrollMonth:
+          body.payrollMonth,
+        isHidden: false,
+      },
+    });
 
   if (existing) {
     throw new BadRequestException(
@@ -4139,201 +4277,371 @@ async generatePayroll(body: any, user: any) {
     );
   }
 
-  const basicSalary = Number(body.basicSalary || 0);
+  /*
+   * Resolve all approved payroll-linked
+   * penalties before salary calculation.
+   *
+   * Pending cases block payroll generation.
+   */
+  const penaltyResult =
+    await this.getPayrollPenaltyCases(
+      staff.id,
+      body.payrollMonth,
+    );
+
+  const basicSalary =
+    Number(
+      body.basicSalary || 0,
+    );
+
   const payrollCalculation =
-  await this.calculateStaffPayrollByRole(
-    staff,
-    body.payrollMonth,
-    basicSalary,
+    await this.calculateStaffPayrollByRole(
+      staff,
+      body.payrollMonth,
+      basicSalary,
+    );
+
+  const calculation: any =
+    payrollCalculation;
+
+  const eligibilityMet =
+    Boolean(
+      calculation?.eligibility?.met ??
+        calculation?.eligibility
+          ?.eligible ??
+        calculation?.eligibility
+          ?.isEligible ??
+        false,
+    );
+
+  const eligibilityReason =
+    String(
+      calculation?.eligibility
+        ?.reason || '',
+    );
+
+  const salaryPercentage =
+    Number(
+      calculation?.salary
+        ?.salaryPercentage ??
+        calculation?.salary
+          ?.percentage ??
+        0,
+    );
+
+  const actualMetrics =
+    calculation?.actualMetrics ||
+    {};
+
+  const calculatedSalaryAmount =
+    Number(
+      calculation?.salary
+        ?.salaryAmount ??
+        calculation?.salary?.amount ??
+        0,
+    );
+
+  const incentiveAmount =
+    Number(
+      calculation?.incentives
+        ?.totalAmount ??
+        calculation?.incentives
+          ?.amount ??
+        0,
+    );
+
+  const monthDays =
+    this.calculateMonthDays(
+      body.payrollMonth,
+    );
+
+  const perDaySalary =
+    monthDays > 0
+      ? calculatedSalaryAmount /
+        monthDays
+      : 0;
+
+  const presentDays =
+    Number(
+      body.presentDays || 0,
+    );
+
+  const halfDays =
+    Number(
+      body.halfDays || 0,
+    );
+
+  const absentDays =
+    Number(
+      body.absentDays || 0,
+    );
+
+  const leaveDays =
+    Number(
+      body.leaveDays || 0,
+    );
+
+  const attendanceDeduction =
+    absentDays * perDaySalary +
+    halfDays *
+      (perDaySalary / 2);
+
+  const leaveDeduction =
+    Number(
+      body.leaveDeduction || 0,
+    );
+
+  /*
+   * IMPORTANT:
+   *
+   * Penalty is no longer accepted from
+   * the frontend during payroll generation.
+   *
+   * It comes only from APPROVED
+   * StaffPenalty cases for this month.
+   */
+  const penaltyAmount =
+    penaltyResult.totalAmount;
+
+  const otherAllowance =
+    Number(
+      body.otherAllowance || 0,
+    );
+
+  const otherDeduction =
+    Number(
+      body.otherDeduction || 0,
+    );
+
+  const grossSalary =
+    calculatedSalaryAmount +
+    incentiveAmount +
+    otherAllowance;
+
+  const netSalary =
+    grossSalary -
+    attendanceDeduction -
+    leaveDeduction -
+    penaltyAmount -
+    otherDeduction;
+
+  const originalCalculationSnapshot =
+    payrollCalculation
+      .calculationSnapshot;
+
+  const calculationSnapshot = {
+    ...(
+      originalCalculationSnapshot &&
+      typeof originalCalculationSnapshot ===
+        'object' &&
+      !Array.isArray(
+        originalCalculationSnapshot,
+      )
+        ? originalCalculationSnapshot
+        : {}
+    ),
+
+    penalties: {
+      totalAmount:
+        penaltyAmount,
+
+      count:
+        penaltyResult.approved
+          .length,
+
+      cases:
+        penaltyResult.snapshot,
+    },
+  };
+
+  const payroll =
+    this.payrollRepo.create({
+      staffId:
+        staff.id,
+
+      linkedUserId:
+        staff.linkedUserId ||
+        undefined,
+
+      staffName:
+        staff.fullName,
+
+      employeeCode:
+        staff.employeeCode || '',
+
+      staffRole:
+        staff.staffRole || '',
+
+      department:
+        staff.department || '',
+
+      branchName:
+        staff.branchName || '',
+
+      payrollMonth:
+        body.payrollMonth,
+
+      basicSalary,
+
+      presentDays,
+      halfDays,
+      absentDays,
+      leaveDays,
+
+      workingHours:
+        Number(
+          body.workingHours || 0,
+        ),
+
+      eligibilityMet,
+      eligibilityReason,
+      salaryPercentage,
+
+      actualLeads:
+        Number(
+          actualMetrics.actualLeads ??
+            actualMetrics.leads ??
+            0,
+        ),
+
+      actualMeetings:
+        Number(
+          actualMetrics.actualMeetings ??
+            actualMetrics.meetings ??
+            0,
+        ),
+
+      actualGpsMeetings:
+        Number(
+          actualMetrics.actualGpsMeetings ??
+            actualMetrics.gpsMeetings ??
+            0,
+        ),
+
+      actualScheduledMeetings:
+        Number(
+          actualMetrics
+            .actualScheduledMeetings ??
+            actualMetrics
+              .scheduledMeetings ??
+            0,
+        ),
+
+      actualOrders:
+        Number(
+          actualMetrics.actualOrders ??
+            actualMetrics.orders ??
+            0,
+        ),
+
+      actualSales:
+        Number(
+          actualMetrics.actualSales ??
+            actualMetrics.sales ??
+            0,
+        ),
+
+      actualNetProfit:
+        Number(
+          actualMetrics.actualNetProfit ??
+            actualMetrics.netProfit ??
+            0,
+        ),
+
+      actualJoinings:
+        Number(
+          actualMetrics.actualJoinings ??
+            actualMetrics.joinings ??
+            0,
+        ),
+
+      actualWorkingHours:
+        Number(
+          actualMetrics
+            .actualWorkingHours ??
+            actualMetrics
+              .workingHours ??
+            body.workingHours ??
+            0,
+        ),
+
+      attendanceDeduction,
+      leaveDeduction,
+
+      penaltyAmount,
+
+      incentiveAmount,
+      otherAllowance,
+      otherDeduction,
+
+      grossSalary,
+      netSalary,
+
+      status:
+        'GENERATED' as any,
+
+      remarks:
+        body.remarks || '',
+
+      calculationSnapshot,
+
+      ruleSnapshot:
+        payrollCalculation
+          .ruleSnapshot ||
+        null,
+
+      generatedBy:
+        user?.id || null,
+
+      generatedByName:
+        user?.name || '',
+
+      isHidden: false,
+    });
+
+  /*
+   * Save payroll and consume the approved
+   * penalty cases atomically.
+   *
+   * If either operation fails,
+   * neither change is committed.
+   */
+  return this.payrollRepo.manager.transaction(
+    async (manager) => {
+      const savedPayroll =
+        await manager.save(
+          payroll,
+        );
+
+      if (
+        penaltyResult.approved
+          .length > 0
+      ) {
+        const appliedAt =
+          new Date();
+
+        for (
+          const penalty of
+          penaltyResult.approved
+        ) {
+          penalty.status =
+            StaffPenaltyStatus.APPLIED_TO_PAYROLL;
+
+          penalty.payrollId =
+            savedPayroll.id;
+
+          penalty.appliedToPayrollAt =
+            appliedAt;
+        }
+
+        await manager.save(
+          penaltyResult.approved,
+        );
+      }
+
+      return savedPayroll;
+    },
   );
-  const calculation: any = payrollCalculation;
-
-  const eligibilityMet = Boolean(
-  calculation?.eligibility?.met ??
-    calculation?.eligibility?.eligible ??
-    calculation?.eligibility?.isEligible ??
-    false,
-);
-
-const eligibilityReason = String(
-  calculation?.eligibility?.reason || '',
-);
-
-const salaryPercentage = Number(
-  calculation?.salary?.salaryPercentage ??
-    calculation?.salary?.percentage ??
-    0,
-);
-
-const actualMetrics =
-  calculation?.actualMetrics || {};
-
-const calculatedSalaryAmount = Number(
-  calculation?.salary?.salaryAmount ??
-    calculation?.salary?.amount ??
-    0,
-);
-
-const incentiveAmount = Number(
-  calculation?.incentives?.totalAmount ??
-    calculation?.incentives?.amount ??
-    0,
-);
-
-const monthDays =
-  this.calculateMonthDays(body.payrollMonth);
-
-const perDaySalary =
-  monthDays > 0
-    ? calculatedSalaryAmount / monthDays
-    : 0;
-
-const presentDays = Number(
-  body.presentDays || 0,
-);
-
-const halfDays = Number(
-  body.halfDays || 0,
-);
-
-const absentDays = Number(
-  body.absentDays || 0,
-);
-
-const leaveDays = Number(
-  body.leaveDays || 0,
-);
-
-const attendanceDeduction =
-  absentDays * perDaySalary +
-  halfDays * (perDaySalary / 2);
-
-const leaveDeduction = Number(
-  body.leaveDeduction || 0,
-);
-
-const penaltyAmount = Number(
-  body.penaltyAmount || 0,
-);
-
-const otherAllowance = Number(
-  body.otherAllowance || 0,
-);
-
-const otherDeduction = Number(
-  body.otherDeduction || 0,
-);
-
-const grossSalary =
-  calculatedSalaryAmount +
-  incentiveAmount +
-  otherAllowance;
-
-const netSalary =
-  grossSalary -
-  attendanceDeduction -
-  leaveDeduction -
-  penaltyAmount -
-  otherDeduction;
-
-  const payroll = this.payrollRepo.create({
-    staffId: staff.id,
-linkedUserId: staff.linkedUserId || undefined,
-staffName: staff.fullName,
-    employeeCode: staff.employeeCode || '',
-    staffRole: staff.staffRole || '',
-    department: staff.department || '',
-    branchName: staff.branchName || '',
-    payrollMonth: body.payrollMonth,
-    basicSalary,
-    presentDays,
-    halfDays,
-    absentDays,
-    leaveDays,
-    workingHours: Number(body.workingHours || 0),
-
-eligibilityMet,
-eligibilityReason,
-salaryPercentage,
-
-actualLeads: Number(
-  actualMetrics.actualLeads ??
-    actualMetrics.leads ??
-    0,
-),
-
-actualMeetings: Number(
-  actualMetrics.actualMeetings ??
-    actualMetrics.meetings ??
-    0,
-),
-
-actualGpsMeetings: Number(
-  actualMetrics.actualGpsMeetings ??
-    actualMetrics.gpsMeetings ??
-    0,
-),
-
-actualScheduledMeetings: Number(
-  actualMetrics.actualScheduledMeetings ??
-    actualMetrics.scheduledMeetings ??
-    0,
-),
-
-actualOrders: Number(
-  actualMetrics.actualOrders ??
-    actualMetrics.orders ??
-    0,
-),
-
-actualSales: Number(
-  actualMetrics.actualSales ??
-    actualMetrics.sales ??
-    0,
-),
-
-actualNetProfit: Number(
-  actualMetrics.actualNetProfit ??
-    actualMetrics.netProfit ??
-    0,
-),
-
-actualJoinings: Number(
-  actualMetrics.actualJoinings ??
-    actualMetrics.joinings ??
-    0,
-),
-
-actualWorkingHours: Number(
-  actualMetrics.actualWorkingHours ??
-    actualMetrics.workingHours ??
-    body.workingHours ??
-    0,
-),
-
-attendanceDeduction,
-    leaveDeduction,
-    penaltyAmount,
-    incentiveAmount,
-    otherAllowance,
-    otherDeduction,
-    grossSalary,
-    netSalary,
-    status: 'GENERATED' as any,
-    remarks: body.remarks || '',
-
-calculationSnapshot:
-  payrollCalculation.calculationSnapshot || null,
-
-ruleSnapshot:
-  payrollCalculation.ruleSnapshot || null,
-
-generatedBy: user?.id || null,
-    generatedByName: user?.name || '',
-    isHidden: false,
-  });
-
-  return this.payrollRepo.save(payroll);
 }
 
 async listPayrolls(query: any) {
@@ -5163,7 +5471,6 @@ async updatePayroll(id: number, body: any) {
     leaveDays: Number(body.leaveDays ?? payroll.leaveDays),
     workingHours: Number(body.workingHours ?? payroll.workingHours),
     leaveDeduction: Number(body.leaveDeduction ?? payroll.leaveDeduction),
-    penaltyAmount: Number(body.penaltyAmount ?? payroll.penaltyAmount),
     incentiveAmount: Number(body.incentiveAmount ?? payroll.incentiveAmount),
     otherAllowance: Number(body.otherAllowance ?? payroll.otherAllowance),
     otherDeduction: Number(body.otherDeduction ?? payroll.otherDeduction),
@@ -5232,20 +5539,100 @@ async markPayrollPaid(id: number, body: any, user: any) {
   return this.payrollRepo.save(payroll);
 }
 
-async hidePayroll(id: number, body: any, user: any) {
-  const payroll = await this.payrollRepo.findOne({ where: { id } });
+async hidePayroll(
+  id: number,
+  body: any,
+  user: any,
+) {
+  const payroll =
+    await this.payrollRepo.findOne({
+      where: {
+        id,
+      },
+    });
 
   if (!payroll) {
-    throw new NotFoundException('Payroll not found');
+    throw new NotFoundException(
+      'Payroll not found',
+    );
   }
 
-  payroll.isHidden = true;
-  payroll.hiddenAt = new Date();
-  payroll.hiddenBy = user?.id || null;
-  payroll.hiddenByName = user?.name || '';
-  payroll.hiddenReason = body?.reason || '';
+  if (
+    payroll.status === 'PAID'
+  ) {
+    throw new BadRequestException(
+      'Paid payroll cannot be hidden',
+    );
+  }
 
-  return this.payrollRepo.save(payroll);
+  return this.payrollRepo.manager.transaction(
+    async (manager) => {
+      payroll.isHidden = true;
+
+      payroll.hiddenAt =
+        new Date();
+
+      payroll.hiddenBy =
+        user?.id || null;
+
+      payroll.hiddenByName =
+        user?.name || '';
+
+      payroll.hiddenReason =
+        body?.reason || '';
+
+      const savedPayroll =
+        await manager.save(
+          payroll,
+        );
+
+      /*
+       * Release penalty cases so a corrected
+       * payroll can consume them again.
+       */
+      const linkedPenalties =
+        await manager.find(
+          StaffPenalty,
+          {
+            where: {
+              payrollId:
+                payroll.id,
+
+              status:
+                StaffPenaltyStatus
+                  .APPLIED_TO_PAYROLL,
+
+              isHidden: false,
+            },
+          },
+        );
+
+      if (
+        linkedPenalties.length >
+        0
+      ) {
+        for (
+          const penalty of
+          linkedPenalties
+        ) {
+          penalty.status =
+            StaffPenaltyStatus.APPROVED;
+
+          penalty.payrollId =
+            null;
+
+          penalty.appliedToPayrollAt =
+            null;
+        }
+
+        await manager.save(
+          linkedPenalties,
+        );
+      }
+
+      return savedPayroll;
+    },
+  );
 }
 
 async restorePayroll(id: number, body: any, user: any) {
@@ -6003,6 +6390,809 @@ async restorePenaltyRule(id: number, body: any, user: any) {
   item.restoreReason = body?.reason || '';
 
   return this.penaltyRuleRepository.save(item);
+}
+
+// =====================================================
+// STAFF PENALTY CASES
+// =====================================================
+
+async listStaffPenalties(query: any) {
+  const page = Math.max(
+    Number(query.page || 1),
+    1,
+  );
+
+  const limit = Math.min(
+    Math.max(
+      Number(query.limit || 20),
+      1,
+    ),
+    100,
+  );
+
+  const showHidden =
+    query.showHidden === 'true';
+
+  const qb =
+    this.staffPenaltyRepository
+      .createQueryBuilder('penalty')
+      .where(
+        'penalty."isHidden" = :showHidden',
+        {
+          showHidden,
+        },
+      );
+
+  if (query.staffId) {
+    qb.andWhere(
+      'penalty."staffId" = :staffId',
+      {
+        staffId: Number(
+          query.staffId,
+        ),
+      },
+    );
+  }
+
+  if (query.penaltyRuleId) {
+    qb.andWhere(
+      'penalty."penaltyRuleId" = :penaltyRuleId',
+      {
+        penaltyRuleId: Number(
+          query.penaltyRuleId,
+        ),
+      },
+    );
+  }
+
+  if (query.status) {
+    qb.andWhere(
+      'penalty.status = :status',
+      {
+        status: String(
+          query.status,
+        ),
+      },
+    );
+  }
+
+  if (query.penaltyType) {
+    qb.andWhere(
+      'penalty."penaltyType" = :penaltyType',
+      {
+        penaltyType: String(
+          query.penaltyType,
+        ),
+      },
+    );
+  }
+
+  if (query.payrollMonth) {
+    qb.andWhere(
+      'penalty."payrollMonth" = :payrollMonth',
+      {
+        payrollMonth: String(
+          query.payrollMonth,
+        ),
+      },
+    );
+  }
+
+  if (query.incidentDate) {
+    qb.andWhere(
+      'penalty."incidentDate" = :incidentDate',
+      {
+        incidentDate: String(
+          query.incidentDate,
+        ),
+      },
+    );
+  }
+
+  if (query.search) {
+    qb.andWhere(
+      `(
+        penalty.staffName ILIKE :search
+        OR penalty.employeeCode ILIKE :search
+        OR penalty.penaltyRuleName ILIKE :search
+        OR penalty.reason ILIKE :search
+      )`,
+      {
+        search: `%${String(
+          query.search,
+        ).trim()}%`,
+      },
+    );
+  }
+
+  const [data, total] =
+    await qb
+      .orderBy(
+  'penalty."incidentDate"',
+  'DESC',
+)
+.addOrderBy(
+  'penalty."createdAt"',
+  'DESC',
+)
+      .skip(
+        (page - 1) * limit,
+      )
+      .take(limit)
+      .getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages:
+      Math.ceil(total / limit) ||
+      1,
+  };
+}
+
+async getStaffPenalty(id: number) {
+  const penalty =
+    await this.staffPenaltyRepository.findOne({
+      where: {
+        id,
+      },
+    });
+
+  if (!penalty) {
+    throw new NotFoundException(
+      'Staff penalty not found',
+    );
+  }
+
+  return penalty;
+}
+
+async createStaffPenalty(
+  body: any,
+  user: any,
+) {
+  const staffId = Number(
+    body.staffId,
+  );
+
+  const penaltyRuleId = Number(
+    body.penaltyRuleId,
+  );
+
+  if (
+    !Number.isInteger(staffId) ||
+    staffId <= 0
+  ) {
+    throw new BadRequestException(
+      'Valid staff member is required',
+    );
+  }
+
+  if (
+    !Number.isInteger(
+      penaltyRuleId,
+    ) ||
+    penaltyRuleId <= 0
+  ) {
+    throw new BadRequestException(
+      'Valid penalty rule is required',
+    );
+  }
+
+  const incidentDate = String(
+    body.incidentDate || '',
+  ).trim();
+
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(
+      incidentDate,
+    )
+  ) {
+    throw new BadRequestException(
+      'Valid incident date is required',
+    );
+  }
+
+  const payrollMonth =
+    String(
+      body.payrollMonth ||
+        incidentDate.slice(0, 7),
+    ).trim();
+
+  if (
+    !/^\d{4}-\d{2}$/.test(
+      payrollMonth,
+    )
+  ) {
+    throw new BadRequestException(
+      'Payroll month must be in YYYY-MM format',
+    );
+  }
+
+  const reason = String(
+    body.reason || '',
+  ).trim();
+
+  if (!reason) {
+    throw new BadRequestException(
+      'Penalty reason is required',
+    );
+  }
+
+  const staff =
+    await this.staffRepo.findOne({
+      where: {
+        id: staffId,
+        isHidden: false,
+      },
+    });
+
+  if (!staff) {
+    throw new NotFoundException(
+      'Staff member not found',
+    );
+  }
+
+  const rule =
+    await this.penaltyRuleRepository.findOne({
+      where: {
+        id: penaltyRuleId,
+        isHidden: false,
+      },
+    });
+
+  if (!rule) {
+    throw new NotFoundException(
+      'Penalty rule not found',
+    );
+  }
+
+  if (!rule.isActive) {
+    throw new BadRequestException(
+      'Selected penalty rule is inactive',
+    );
+  }
+
+  /*
+   * Validate role applicability.
+   *
+   * Empty applicableRoles means
+   * rule is not restricted by role.
+   */
+  const applicableRoles =
+    Array.isArray(
+      rule.applicableRoles,
+    )
+      ? rule.applicableRoles.map(
+          (item) =>
+            String(item)
+              .trim()
+              .toUpperCase(),
+        )
+      : [];
+
+  const staffRole =
+    String(
+      staff.staffRole ||
+        staff.designation ||
+        '',
+    )
+      .trim()
+      .toUpperCase();
+
+  if (
+    applicableRoles.length > 0 &&
+    !applicableRoles.includes(
+      staffRole,
+    )
+  ) {
+    throw new BadRequestException(
+      `This penalty rule is not applicable to ${staff.fullName || 'the selected employee'}'s role`,
+    );
+  }
+
+  /*
+   * Department / branch restrictions
+   * are enforced only when configured
+   * on the rule.
+   */
+  if (
+    String(rule.department || '')
+      .trim() &&
+    String(
+      rule.department,
+    )
+      .trim()
+      .toLowerCase() !==
+      String(
+        staff.department || '',
+      )
+        .trim()
+        .toLowerCase()
+  ) {
+    throw new BadRequestException(
+      'This penalty rule is not applicable to the selected employee department',
+    );
+  }
+
+  if (
+    String(rule.branchName || '')
+      .trim() &&
+    String(
+      rule.branchName,
+    )
+      .trim()
+      .toLowerCase() !==
+      String(
+        staff.branchName || '',
+      )
+        .trim()
+        .toLowerCase()
+  ) {
+    throw new BadRequestException(
+      'This penalty rule is not applicable to the selected employee branch',
+    );
+  }
+
+  const calculationType =
+    String(
+      rule.calculationType ||
+        'MANUAL',
+    )
+      .trim()
+      .toUpperCase();
+
+  const ruleAmount = Number(
+    rule.amount || 0,
+  );
+
+  const percentageRate =
+    Number(
+      rule.percentageRate || 0,
+    );
+
+  let calculationBaseAmount = 0;
+  let proposedAmount = 0;
+
+  if (
+    calculationType ===
+    'WARNING_ONLY'
+  ) {
+    proposedAmount = 0;
+    calculationBaseAmount = 0;
+  } else if (
+    calculationType === 'FIXED'
+  ) {
+    proposedAmount =
+      Math.max(
+        ruleAmount,
+        0,
+      );
+  } else if (
+    calculationType ===
+    'PERCENTAGE'
+  ) {
+    /*
+     * Percentage penalties default
+     * to employee monthly basic salary.
+     *
+     * HR may explicitly provide another
+     * calculation base when required.
+     */
+    calculationBaseAmount =
+      body.calculationBaseAmount ===
+        undefined ||
+      body.calculationBaseAmount ===
+        null ||
+      body.calculationBaseAmount ===
+        ''
+        ? Number(
+            staff.monthlyBasicSalary ||
+              0,
+          )
+        : Number(
+            body.calculationBaseAmount,
+          );
+
+    if (
+      !Number.isFinite(
+        calculationBaseAmount,
+      ) ||
+      calculationBaseAmount < 0
+    ) {
+      throw new BadRequestException(
+        'Percentage calculation base amount must be a valid non-negative amount',
+      );
+    }
+
+    if (
+      !Number.isFinite(
+        percentageRate,
+      ) ||
+      percentageRate < 0
+    ) {
+      throw new BadRequestException(
+        'Penalty percentage rate is invalid',
+      );
+    }
+
+    proposedAmount =
+      calculationBaseAmount *
+      (percentageRate / 100);
+  } else {
+    /*
+     * MANUAL penalties require HR
+     * to enter the proposed amount.
+     */
+    proposedAmount = Number(
+      body.proposedAmount || 0,
+    );
+
+    if (
+      !Number.isFinite(
+        proposedAmount,
+      ) ||
+      proposedAmount < 0
+    ) {
+      throw new BadRequestException(
+        'Manual penalty amount must be a valid non-negative amount',
+      );
+    }
+  }
+
+  proposedAmount =
+    Number(
+      proposedAmount.toFixed(2),
+    );
+
+  calculationBaseAmount =
+    Number(
+      calculationBaseAmount.toFixed(
+        2,
+      ),
+    );
+
+  const requiresApproval =
+    rule.requiresApproval !== false;
+
+  const initialStatus =
+    requiresApproval
+      ? StaffPenaltyStatus.PENDING
+      : StaffPenaltyStatus.APPROVED;
+
+  const approvedAmount =
+    requiresApproval
+      ? 0
+      : proposedAmount;
+
+  const penalty =
+    this.staffPenaltyRepository.create({
+      staffId: staff.id,
+
+      staffName:
+        staff.fullName || '',
+
+      employeeCode:
+        staff.employeeCode || '',
+
+      staffRole:
+        staff.staffRole ||
+        staff.designation ||
+        '',
+
+      department:
+        staff.department || '',
+
+      branchName:
+        staff.branchName || '',
+
+      penaltyRuleId:
+        rule.id,
+
+      penaltyRuleName:
+        rule.ruleName || '',
+
+      penaltyType:
+        String(
+          rule.penaltyType ||
+            'CUSTOM',
+        ),
+
+      calculationType,
+
+      ruleAmount:
+        Number(
+          ruleAmount.toFixed(2),
+        ),
+
+      percentageRate,
+
+      calculationBaseAmount,
+
+      proposedAmount,
+
+      approvedAmount,
+
+      incidentDate,
+
+      payrollMonth,
+
+      reason,
+
+      evidenceUrl:
+        String(
+          body.evidenceUrl || '',
+        ),
+
+      evidenceRemarks:
+        String(
+          body.evidenceRemarks ||
+            '',
+        ),
+
+      requiresApproval,
+
+includeInPayroll:
+  typeof body.includeInPayroll ===
+  'boolean'
+    ? body.includeInPayroll
+    : rule.includeInPayroll !==
+      false,
+
+status:
+  initialStatus,
+
+      reviewedBy:
+        requiresApproval
+          ? null
+          : user?.id || null,
+
+      reviewedByName:
+        requiresApproval
+          ? ''
+          : user?.name || '',
+
+      reviewedAt:
+        requiresApproval
+          ? null
+          : new Date(),
+
+      reviewRemarks:
+        requiresApproval
+          ? ''
+          : 'Auto-approved because this penalty rule does not require approval',
+
+      payrollId: null,
+
+      appliedToPayrollAt:
+        null,
+
+      createdBy:
+        user?.id || null,
+
+      createdByName:
+        user?.name || '',
+
+      isHidden: false,
+    });
+
+  return this.staffPenaltyRepository.save(
+    penalty,
+  );
+}
+
+async reviewStaffPenalty(
+  id: number,
+  body: any,
+  user: any,
+) {
+  const penalty =
+    await this.staffPenaltyRepository.findOne({
+      where: {
+        id,
+      },
+    });
+
+  if (!penalty) {
+    throw new NotFoundException(
+      'Staff penalty not found',
+    );
+  }
+
+  if (penalty.isHidden) {
+    throw new BadRequestException(
+      'Hidden penalty cannot be reviewed',
+    );
+  }
+
+  if (
+    penalty.status !==
+    StaffPenaltyStatus.PENDING
+  ) {
+    throw new BadRequestException(
+      'Only pending penalties can be reviewed',
+    );
+  }
+
+  const decision =
+    String(
+      body.status || '',
+    )
+      .trim()
+      .toUpperCase();
+
+  if (
+    decision !==
+      StaffPenaltyStatus.APPROVED &&
+    decision !==
+      StaffPenaltyStatus.REJECTED
+  ) {
+    throw new BadRequestException(
+      'Status must be APPROVED or REJECTED',
+    );
+  }
+
+  const reviewRemarks =
+    String(
+      body.reviewRemarks || '',
+    ).trim();
+
+  if (
+    decision ===
+      StaffPenaltyStatus.REJECTED &&
+    !reviewRemarks
+  ) {
+    throw new BadRequestException(
+      'Rejection remarks are required',
+    );
+  }
+
+  if (
+    decision ===
+    StaffPenaltyStatus.APPROVED
+  ) {
+    const approvedAmount =
+      body.approvedAmount ===
+        undefined ||
+      body.approvedAmount ===
+        null ||
+      body.approvedAmount ===
+        ''
+        ? Number(
+            penalty.proposedAmount ||
+              0,
+          )
+        : Number(
+            body.approvedAmount,
+          );
+
+    if (
+      !Number.isFinite(
+        approvedAmount,
+      ) ||
+      approvedAmount < 0
+    ) {
+      throw new BadRequestException(
+        'Approved penalty amount must be a valid non-negative amount',
+      );
+    }
+
+    penalty.approvedAmount =
+      Number(
+        approvedAmount.toFixed(2),
+      );
+  } else {
+    penalty.approvedAmount = 0;
+  }
+
+  penalty.status =
+    decision as
+      StaffPenaltyStatus;
+
+  penalty.reviewedBy =
+    user?.id || null;
+
+  penalty.reviewedByName =
+    user?.name || '';
+
+  penalty.reviewedAt =
+    new Date();
+
+  penalty.reviewRemarks =
+    reviewRemarks;
+
+  return this.staffPenaltyRepository.save(
+    penalty,
+  );
+}
+
+async hideStaffPenalty(
+  id: number,
+  body: any,
+  user: any,
+) {
+  const penalty =
+    await this.staffPenaltyRepository.findOne({
+      where: {
+        id,
+      },
+    });
+
+  if (!penalty) {
+    throw new NotFoundException(
+      'Staff penalty not found',
+    );
+  }
+
+  if (
+    penalty.status ===
+    StaffPenaltyStatus.APPLIED_TO_PAYROLL
+  ) {
+    throw new BadRequestException(
+      'Penalty already applied to payroll cannot be hidden',
+    );
+  }
+
+  penalty.isHidden = true;
+
+  penalty.hiddenAt =
+    new Date();
+
+  penalty.hiddenBy =
+    user?.id || null;
+
+  penalty.hiddenByName =
+    user?.name || '';
+
+  penalty.hiddenReason =
+    String(
+      body?.reason || '',
+    );
+
+  return this.staffPenaltyRepository.save(
+    penalty,
+  );
+}
+
+async restoreStaffPenalty(
+  id: number,
+  body: any,
+  user: any,
+) {
+  const penalty =
+    await this.staffPenaltyRepository.findOne({
+      where: {
+        id,
+      },
+    });
+
+  if (!penalty) {
+    throw new NotFoundException(
+      'Staff penalty not found',
+    );
+  }
+
+  penalty.isHidden = false;
+
+  penalty.restoredAt =
+    new Date();
+
+  penalty.restoredBy =
+    user?.id || null;
+
+  penalty.restoredByName =
+    user?.name || '';
+
+  penalty.restoreReason =
+    String(
+      body?.reason || '',
+    );
+
+  return this.staffPenaltyRepository.save(
+    penalty,
+  );
 }
 
 async createAttendanceLocation(body: any, user: any) {

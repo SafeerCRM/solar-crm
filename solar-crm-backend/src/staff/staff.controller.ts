@@ -970,4 +970,92 @@ restorePenaltyRule(
     user,
   );
 }
+
+@Get('penalties')
+listStaffPenalties(
+  @Query() query: any,
+) {
+  return this.staffService
+    .listStaffPenalties(
+      query,
+    );
+}
+
+@Get('penalty/:id')
+getStaffPenalty(
+  @Param('id', ParseIntPipe)
+  id: number,
+) {
+  return this.staffService
+    .getStaffPenalty(id);
+}
+
+@Post('penalty')
+createStaffPenalty(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.staffService
+    .createStaffPenalty(
+      body,
+      user,
+    );
+}
+
+@Patch('penalty/:id/review')
+reviewStaffPenalty(
+  @Param('id', ParseIntPipe)
+  id: number,
+
+  @Body()
+  body: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.staffService
+    .reviewStaffPenalty(
+      id,
+      body,
+      user,
+    );
+}
+
+@Patch('penalty/:id/hide')
+hideStaffPenalty(
+  @Param('id', ParseIntPipe)
+  id: number,
+
+  @Body()
+  body: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.staffService
+    .hideStaffPenalty(
+      id,
+      body,
+      user,
+    );
+}
+
+@Patch('penalty/:id/restore')
+restoreStaffPenalty(
+  @Param('id', ParseIntPipe)
+  id: number,
+
+  @Body()
+  body: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.staffService
+    .restoreStaffPenalty(
+      id,
+      body,
+      user,
+    );
+}
 }
