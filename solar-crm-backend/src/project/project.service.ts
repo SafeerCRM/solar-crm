@@ -28128,6 +28128,37 @@ private async resolveProjectTimelineMilestoneAchievement(
         );
     }
 
+    /*
+ * Historical DCR checkbox records may predate
+ * Timeline Event tracking.
+ *
+ * If the checkbox is already true, the
+ * milestone is achieved, but the exact
+ * achievement date cannot be reconstructed
+ * safely.
+ */
+if (
+  milestone ===
+    ProjectSubsidyStatus
+      .DCR_CERTIFICATE_READY &&
+  detail.dcrCertificateReady ===
+    true
+) {
+  return {
+    achieved: true,
+
+    achievedAt: null,
+
+    dateReliable: false,
+
+    source:
+      'CURRENT_STATUS_DATE_UNAVAILABLE',
+
+    sourceId:
+      Number(detail.id),
+  };
+}
+
     if (
       achievedAt &&
       !Number.isNaN(
@@ -30652,17 +30683,72 @@ if (
     }
 
     const reliableDate =
-      Boolean(
-        achievedAt &&
-        !Number.isNaN(
-          achievedAt.getTime(),
-        ),
-      );
+  Boolean(
+    achievedAt &&
+    !Number.isNaN(
+      achievedAt.getTime(),
+    ),
+  );
 
-    if (
-      detail &&
-      reliableDate
-    ) {
+const historicalDcrAchieved =
+  Boolean(
+    detail &&
+    milestone ===
+      ProjectSubsidyStatus
+        .DCR_CERTIFICATE_READY &&
+    detail.dcrCertificateReady ===
+      true,
+  );
+
+if (
+  detail &&
+  reliableDate
+) {
+  achievementResult = {
+    achieved:
+      true,
+
+    achievedAt,
+
+    dateReliable:
+      true,
+
+    source:
+      'SUBSIDY_DETAIL',
+
+    sourceId:
+      Number(
+        detail.id,
+      ),
+  };
+} else if (
+  detail &&
+  historicalDcrAchieved
+) {
+  achievementResult = {
+    achieved:
+      true,
+
+    achievedAt:
+      null,
+
+    dateReliable:
+      false,
+
+    source:
+      'CURRENT_STATUS_DATE_UNAVAILABLE',
+
+    sourceId:
+      Number(
+        detail.id,
+      ),
+  };
+} else if (
+  detail &&
+  String(
+    detail.status,
+  ) === milestone
+) {
       achievementResult = {
         achieved:
           true,
@@ -32084,6 +32170,9 @@ async saveProjectSubsidyDetail(
   const previousSubsidyStatus =
   detail?.status || null;
 
+const previousDcrCertificateReady =
+  detail?.dcrCertificateReady === true;
+
   Object.assign(detail, {
     status: body.status || detail.status,
     dcrCertificateReady:
@@ -32195,6 +32284,49 @@ if (
         Number(
           savedDetail.id,
         ),
+
+      recordedBy:
+        user?.id ||
+        user?.userId ||
+        null,
+
+      recordedByName:
+        user?.name ||
+        user?.email ||
+        '',
+    });
+}
+
+/*
+ * DCR Certificate Ready is stored separately
+ * as a boolean field.
+ *
+ * Record the first false -> true transition
+ * so Timeline Tracking gets a genuine
+ * achievement timestamp going forward.
+ */
+if (
+  !previousDcrCertificateReady &&
+  savedDetail.dcrCertificateReady ===
+    true
+) {
+  await this
+    .recordProjectTimelineEventIfMissing({
+      projectId:
+        Number(projectId),
+
+      module:
+        ProjectTimelineModule.SUBSIDY,
+
+      milestone:
+        ProjectSubsidyStatus
+          .DCR_CERTIFICATE_READY,
+
+      achievedAt:
+        new Date(),
+
+      sourceId:
+        Number(savedDetail.id),
 
       recordedBy:
         user?.id ||
