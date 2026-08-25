@@ -3776,31 +3776,101 @@ if (deliveryCharge > 0) {
   }
 
       async generateDealerProformaInvoicePdf(
-    dealerId: number,
-    invoiceId: number,
-    res: any,
-  ) {
-    const invoiceData: any = await this.projectService.getProformaInvoiceById(
-      invoiceId,
+  dealerId: number,
+  invoiceId: number,
+  res: any,
+) {
+  const portalDealer =
+    await this
+      .dealerRepository
+      .findOne({
+        where: {
+          id:
+            Number(
+              dealerId,
+            ),
+          isHidden:
+            false,
+        },
+      });
+
+  if (!portalDealer) {
+    throw new UnauthorizedException(
+      'Dealer portal access not found',
     );
-
-    if (!invoiceData?.id) {
-      throw new NotFoundException('Proforma invoice not found');
-    }
-
-    const invoiceDealerId = Number(
-      invoiceData.dealerId ||
-        invoiceData.customerId ||
-        invoiceData.partyId ||
-        0,
-    );
-
-    if (invoiceDealerId && invoiceDealerId !== Number(dealerId)) {
-      throw new UnauthorizedException('This invoice does not belong to dealer');
-    }
-
-    return this.projectService.generateProformaInvoicePdf(invoiceId, res);
   }
+
+  const invoiceData: any =
+    await this
+      .projectService
+      .getProformaInvoiceById(
+        invoiceId,
+      );
+
+  if (!invoiceData?.id) {
+    throw new NotFoundException(
+      'Proforma invoice not found',
+    );
+  }
+
+  const portalPhone =
+    String(
+      portalDealer.phone ||
+        '',
+    ).trim();
+
+  const portalGst =
+    String(
+      portalDealer.gstNumber ||
+        '',
+    ).trim();
+
+  const invoicePhone =
+    String(
+      invoiceData.dealerPhone ||
+        '',
+    ).trim();
+
+  const invoiceGst =
+    String(
+      invoiceData.dealerGstNumber ||
+        '',
+    ).trim();
+
+  const phoneMatches =
+    Boolean(
+      portalPhone &&
+        invoicePhone,
+    ) &&
+    portalPhone ===
+      invoicePhone;
+
+  const gstMatches =
+    Boolean(
+      portalGst &&
+        invoiceGst,
+    ) &&
+    portalGst
+      .toUpperCase() ===
+      invoiceGst
+        .toUpperCase();
+
+  if (
+    !phoneMatches &&
+    !gstMatches
+  ) {
+    throw new UnauthorizedException(
+      'This invoice does not belong to dealer',
+    );
+  }
+
+  return this
+    .projectService
+    .generateProformaInvoicePdf(
+      invoiceId,
+      res,
+    );
+}
 
   async generateDealerFinalInvoicePdf(
   dealerId: number,
