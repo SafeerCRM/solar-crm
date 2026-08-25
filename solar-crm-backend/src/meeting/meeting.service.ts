@@ -665,6 +665,18 @@ solarMiterPhone: this.isSolarFranchise(user)
       query?.latestOnly || 'true',
     ) !== 'false';
 
+    const hasPendingAgeFilter =
+  (
+    query?.pendingFromDays !== undefined &&
+    query?.pendingFromDays !== null &&
+    String(query.pendingFromDays).trim() !== ''
+  ) ||
+  (
+    query?.pendingToDays !== undefined &&
+    query?.pendingToDays !== null &&
+    String(query.pendingToDays).trim() !== ''
+  );
+
   /*
    * Preserve the existing Follow-up section flow.
    *
@@ -673,11 +685,15 @@ solarMiterPhone: this.isSolarFranchise(user)
    * requesting one specific follow-up meeting.
    */
   if (!includeHistory && !query?.followupId) {
-    const requestedFollowUpFilter = String(
-      query?.followUpFilter || 'WITHOUT',
-    )
-      .trim()
-      .toUpperCase();
+    const requestedFollowUpFilter =
+  hasPendingAgeFilter
+    ? 'WITHOUT'
+    : String(
+        query?.followUpFilter ||
+          'WITHOUT',
+      )
+        .trim()
+        .toUpperCase();
 
     const allowedFollowUpFilters = [
       'WITHOUT',
@@ -931,7 +947,74 @@ solarMiterPhone: this.isSolarFranchise(user)
     );
   }
 
-  return qb;
+  const pendingAgeDaysSql = `
+  (
+    CURRENT_DATE -
+    (
+      SELECT MIN(
+        "pendingMeeting"."createdAt"::date
+      )
+      FROM "meeting" "pendingMeeting"
+      WHERE COALESCE(
+        "pendingMeeting"."meetingGroupId",
+        "pendingMeeting"."id"
+      ) = COALESCE(
+        "meeting"."meetingGroupId",
+        "meeting"."id"
+      )
+    )
+  )
+`;
+
+if (
+  query?.pendingFromDays !== undefined &&
+  query?.pendingFromDays !== null &&
+  String(
+    query.pendingFromDays,
+  ).trim() !== ''
+) {
+  const pendingFromDays = Number(
+    query.pendingFromDays,
+  );
+
+  if (
+    !Number.isNaN(pendingFromDays) &&
+    pendingFromDays >= 0
+  ) {
+    qb.andWhere(
+      `${pendingAgeDaysSql} >= :pendingFromDays`,
+      {
+        pendingFromDays,
+      },
+    );
+  }
+}
+
+if (
+  query?.pendingToDays !== undefined &&
+  query?.pendingToDays !== null &&
+  String(
+    query.pendingToDays,
+  ).trim() !== ''
+) {
+  const pendingToDays = Number(
+    query.pendingToDays,
+  );
+
+  if (
+    !Number.isNaN(pendingToDays) &&
+    pendingToDays >= 0
+  ) {
+    qb.andWhere(
+      `${pendingAgeDaysSql} <= :pendingToDays`,
+      {
+        pendingToDays,
+      },
+    );
+  }
+}
+
+return qb;
 }
 
   async findAll(
@@ -964,28 +1047,156 @@ solarMiterPhone: this.isSolarFranchise(user)
   );
 
   const [data, total] = await qb
-    .orderBy(
-      'meeting.scheduledAt',
-      'DESC',
-    )
-    .addOrderBy(
-      'meeting.updatedAt',
-      'DESC',
-    )
-    .addOrderBy(
-      'meeting.id',
-      'DESC',
-    )
-    .skip(skip)
-    .take(limit)
-    .getManyAndCount();
+  .orderBy(
+    'meeting.scheduledAt',
+    'DESC',
+  )
+  .addOrderBy(
+    'meeting.updatedAt',
+    'DESC',
+  )
+  .addOrderBy(
+    'meeting.id',
+    'DESC',
+  )
+  .skip(skip)
+  .take(limit)
+  .getManyAndCount();
 
-  return {
-    data,
-    total,
-    page,
-    limit,
-  };
+const groupIds = Array.from(
+  new Set(
+    data.map((meeting) =>
+      Number(
+        meeting.meetingGroupId ||
+          meeting.id,
+      ),
+    ),
+  ),
+).filter(
+  (groupId) =>
+    groupId &&
+    !Number.isNaN(groupId),
+);
+
+const pendingAgeMap = new Map<
+  number,
+  {
+    pendingSince: string | null;
+    pendingDays: number;
+  }
+>();
+
+if (groupIds.length > 0) {
+  const pendingRows =
+    await this.meetingRepository
+      .createQueryBuilder(
+        'pendingMeeting',
+      )
+      .select(
+        `
+          COALESCE(
+            "pendingMeeting"."meetingGroupId",
+            "pendingMeeting"."id"
+          )
+        `,
+        'groupId',
+      )
+      .addSelect(
+        `
+          MIN(
+            "pendingMeeting"."createdAt"
+          )
+        `,
+        'pendingSince',
+      )
+      .addSelect(
+        `
+          CURRENT_DATE -
+          MIN(
+            "pendingMeeting"."createdAt"::date
+          )
+        `,
+        'pendingDays',
+      )
+      .where(
+        `
+          COALESCE(
+            "pendingMeeting"."meetingGroupId",
+            "pendingMeeting"."id"
+          ) IN (:...groupIds)
+        `,
+        {
+          groupIds,
+        },
+      )
+      .groupBy(
+        `
+          COALESCE(
+            "pendingMeeting"."meetingGroupId",
+            "pendingMeeting"."id"
+          )
+        `,
+      )
+      .getRawMany();
+
+  for (const row of pendingRows) {
+    const groupId = Number(
+      row.groupId,
+    );
+
+    if (
+      !groupId ||
+      Number.isNaN(groupId)
+    ) {
+      continue;
+    }
+
+    pendingAgeMap.set(
+      groupId,
+      {
+        pendingSince:
+          row.pendingSince || null,
+
+        pendingDays: Math.max(
+          Number(
+            row.pendingDays || 0,
+          ),
+          0,
+        ),
+      },
+    );
+  }
+}
+
+const dataWithPendingAge = data.map(
+  (meeting) => {
+    const groupId = Number(
+      meeting.meetingGroupId ||
+        meeting.id,
+    );
+
+    const pendingInfo =
+      pendingAgeMap.get(groupId);
+
+    return {
+      ...meeting,
+      pendingSince:
+        pendingInfo?.pendingSince ||
+        null,
+
+      pendingDays:
+        pendingInfo?.pendingDays ??
+        0,
+    };
+  },
+);
+
+return {
+  data: dataWithPendingAge,
+  total,
+  page,
+  limit,
+};
 }
 
 async exportCsv(
@@ -1279,13 +1490,15 @@ async bulkReassignMeetings(
   }
 
   const hasAnyFilter =
-    !!String(filters.assignedTo || '').trim() ||
-    !!String(filters.status || '').trim() ||
-    !!String(filters.meetingCategory || '').trim() ||
-    !!String(filters.month || '').trim() ||
-    !!String(filters.customerName || '').trim() ||
-    !!String(filters.mobile || '').trim() ||
-    !!String(filters.location || '').trim();
+  !!String(filters.assignedTo || '').trim() ||
+  !!String(filters.status || '').trim() ||
+  !!String(filters.meetingCategory || '').trim() ||
+  !!String(filters.month || '').trim() ||
+  !!String(filters.customerName || '').trim() ||
+  !!String(filters.mobile || '').trim() ||
+  !!String(filters.location || '').trim() ||
+  !!String(filters.pendingFromDays || '').trim() ||
+  !!String(filters.pendingToDays || '').trim();
 
   if (!hasAnyFilter) {
     throw new BadRequestException(
@@ -1342,6 +1555,92 @@ async bulkReassignMeetings(
     );
     params.location = `%${filters.location}%`;
   }
+
+  const hasPendingAgeFilter =
+  !!String(
+    filters.pendingFromDays || '',
+  ).trim() ||
+  !!String(
+    filters.pendingToDays || '',
+  ).trim();
+
+if (hasPendingAgeFilter) {
+  conditions.push(`
+    NOT EXISTS (
+      SELECT 1
+      FROM "follow_up" "existingFollowUp"
+      INNER JOIN "meeting" "followUpMeeting"
+        ON "followUpMeeting"."id" =
+          "existingFollowUp"."meetingId"
+      WHERE
+        "existingFollowUp"."meetingId"
+          IS NOT NULL
+        AND COALESCE(
+          "followUpMeeting"."meetingGroupId",
+          "followUpMeeting"."id"
+        ) = COALESCE(
+          "Meeting"."meetingGroupId",
+          "Meeting"."id"
+        )
+    )
+  `);
+}
+
+if (
+  String(
+    filters.pendingFromDays || '',
+  ).trim()
+) {
+  conditions.push(`
+    (
+      CURRENT_DATE -
+      (
+        SELECT MIN(
+          "pendingMeeting"."createdAt"::date
+        )
+        FROM "meeting" "pendingMeeting"
+        WHERE COALESCE(
+          "pendingMeeting"."meetingGroupId",
+          "pendingMeeting"."id"
+        ) = COALESCE(
+          "Meeting"."meetingGroupId",
+          "Meeting"."id"
+        )
+      )
+    ) >= :pendingFromDays
+  `);
+
+  params.pendingFromDays =
+    Number(filters.pendingFromDays);
+}
+
+if (
+  String(
+    filters.pendingToDays || '',
+  ).trim()
+) {
+  conditions.push(`
+    (
+      CURRENT_DATE -
+      (
+        SELECT MIN(
+          "pendingMeeting"."createdAt"::date
+        )
+        FROM "meeting" "pendingMeeting"
+        WHERE COALESCE(
+          "pendingMeeting"."meetingGroupId",
+          "pendingMeeting"."id"
+        ) = COALESCE(
+          "Meeting"."meetingGroupId",
+          "Meeting"."id"
+        )
+      )
+    ) <= :pendingToDays
+  `);
+
+  params.pendingToDays =
+    Number(filters.pendingToDays);
+}
 
   qb.where(conditions.join(' AND '), params);
 
