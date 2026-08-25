@@ -29,6 +29,9 @@ import { DealerDeliverySetting } from './dealer-delivery-setting.entity';
 import { DealerKit } from './dealer-kit.entity';
 import { DealerKitItem } from './dealer-kit-item.entity';
 import { PortalPolicy } from './portal-policy.entity';
+import {
+  ProjectVendorCompany,
+} from '../project/project-vendor-company.entity';
 
 @Module({
   imports: [
@@ -45,6 +48,7 @@ import { PortalPolicy } from './portal-policy.entity';
       ProjectDealerNotification,
       ProjectDealerMonthlyRequirement,
       User,
+      ProjectVendorCompany,
       ProjectProformaInvoice,
 ProjectProformaInvoiceItem,
 ProjectFinalInvoice,

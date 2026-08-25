@@ -55,6 +55,10 @@ import {
   PortalPolicyType,
 } from './portal-policy.entity';
 
+import {
+  ProjectVendorCompany,
+} from '../project/project-vendor-company.entity';
+
 @Injectable()
 export class DealerService {
   constructor(
@@ -106,6 +110,12 @@ export class DealerService {
     @InjectRepository(ProjectFinalInvoiceItem)
     private readonly finalInvoiceItemRepository: Repository<ProjectFinalInvoiceItem>,
 
+    @InjectRepository(
+  ProjectVendorCompany,
+)
+private readonly projectVendorCompanyRepository:
+  Repository<ProjectVendorCompany>,
+
     @InjectRepository(StaffMember)
 private readonly staffMemberRepository: Repository<StaffMember>,
 
@@ -126,6 +136,42 @@ private readonly portalPolicyRepository: Repository<PortalPolicy>,
 
     private readonly projectService: ProjectService,
   ) {}
+
+  private async getAdityaTradingBillingEntity() {
+  const company =
+    await this
+      .projectVendorCompanyRepository
+      .createQueryBuilder(
+        'company',
+      )
+      .where(
+        'company.isHidden = false',
+      )
+      .andWhere(
+        'company.isActive = true',
+      )
+      .andWhere(
+        'company.isBillingEntity = true',
+      )
+      .andWhere(
+        'UPPER(TRIM(company.billingEntityCode)) = :code',
+        {
+          code:
+            'ADITYA_TRADING',
+        },
+      )
+      .getOne();
+
+  if (
+    !company
+  ) {
+    throw new BadRequestException(
+      'Aditya Trading billing entity is not configured',
+    );
+  }
+
+  return company;
+}
 
   healthCheck() {
     return {
@@ -888,10 +934,104 @@ sellingRateWithGst,
       throw new BadRequestException('Dealer order has no items');
     }
 
+    const tradingCompany =
+  await this
+    .getAdityaTradingBillingEntity();
+
     const invoice = new ProjectProformaInvoice();
 
     invoice.projectId = 0;
     invoice.invoiceType = 'DEALER';
+    invoice.sellerCompanyId =
+  Number(
+    tradingCompany.id,
+  );
+
+invoice.sellerCompanyCode =
+  String(
+    tradingCompany
+      .billingEntityCode ||
+      '',
+  );
+
+invoice.sellerCompanyName =
+  String(
+    tradingCompany
+      .companyName ||
+      '',
+  );
+
+invoice.sellerLegalName =
+  String(
+    tradingCompany
+      .legalName ||
+      tradingCompany
+        .companyName ||
+      '',
+  );
+
+invoice.sellerGstNumber =
+  String(
+    tradingCompany
+      .gstNumber ||
+      '',
+  );
+
+invoice.sellerAddress =
+  String(
+    tradingCompany
+      .address ||
+      '',
+  );
+
+invoice.sellerCity =
+  String(
+    tradingCompany
+      .city ||
+      '',
+  );
+
+invoice.sellerState =
+  String(
+    tradingCompany
+      .state ||
+      '',
+  );
+
+invoice.sellerStateCode =
+  String(
+    tradingCompany
+      .stateCode ||
+      '',
+  );
+
+invoice.sellerPinCode =
+  String(
+    tradingCompany
+      .pinCode ||
+      '',
+  );
+
+invoice.sellerPhone =
+  String(
+    tradingCompany
+      .phone ||
+      '',
+  );
+
+invoice.sellerEmail =
+  String(
+    tradingCompany
+      .email ||
+      '',
+  );
+
+invoice.sellerLogoUrl =
+  String(
+    tradingCompany
+      .logoUrl ||
+      '',
+  );
     invoice.dealerId = order.dealerId;
     invoice.dealerName = order.dealerName;
     invoice.dealerPhone = order.dealerPhone;

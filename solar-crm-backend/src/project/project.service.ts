@@ -704,6 +704,182 @@ private buildBuyerCompanySnapshot(
   };
 }
 
+private async resolveProjectVendorDealerForInvoice(
+  data: {
+    dealerId?: any;
+    dealerPhone?: any;
+    dealerGstNumber?: any;
+  },
+) {
+  const rawDealerId =
+    Number(
+      data?.dealerId ||
+        0,
+    );
+
+  /*
+   * First try the existing ProjectVendor ID.
+   *
+   * This preserves all current CRM Trading Account
+   * dealer orders where dealerId already points to
+   * ProjectVendor.
+   */
+  if (
+    Number.isInteger(
+      rawDealerId,
+    ) &&
+    rawDealerId > 0
+  ) {
+    const byId =
+      await this
+        .projectVendorRepository
+        .findOne({
+          where: {
+            id:
+              rawDealerId,
+          },
+        });
+
+    if (
+      byId &&
+      byId.isActive !==
+        false
+    ) {
+      const partyType =
+        String(
+          byId.partyType ||
+            '',
+        )
+          .trim()
+          .toUpperCase();
+
+      const isDealer =
+        partyType ===
+          'DEALER' ||
+        partyType ===
+          'BOTH' ||
+        byId.canBuyFromUs ===
+          true;
+
+      if (
+        isDealer
+      ) {
+        return byId;
+      }
+    }
+  }
+
+  /*
+   * Dealer Portal orders may store Dealer.id
+   * rather than ProjectVendor.id.
+   *
+   * Resolve the corresponding CRM dealer using
+   * GST first, then phone.
+   */
+
+  const gstNumber =
+    String(
+      data
+        ?.dealerGstNumber ||
+        '',
+    ).trim();
+
+  const phone =
+    String(
+      data?.dealerPhone ||
+        '',
+    ).trim();
+
+  const qb =
+    this
+      .projectVendorRepository
+      .createQueryBuilder(
+        'dealer',
+      )
+      .where(
+        'dealer.isActive = true',
+      )
+      .andWhere(
+        'dealer.isHidden = false',
+      )
+      .andWhere(
+        `(
+          UPPER(TRIM(COALESCE(dealer.partyType, ''))) IN ('DEALER', 'BOTH')
+          OR dealer.canBuyFromUs = true
+        )`,
+      );
+
+  if (
+    gstNumber
+  ) {
+    qb.andWhere(
+      'UPPER(TRIM(COALESCE(dealer.gstNumber, \'\'))) = UPPER(TRIM(:gstNumber))',
+      {
+        gstNumber,
+      },
+    );
+
+    const byGst =
+      await qb.getOne();
+
+    if (
+      byGst
+    ) {
+      return byGst;
+    }
+  }
+
+  if (
+    phone
+  ) {
+    const byPhone =
+      await this
+        .projectVendorRepository
+        .createQueryBuilder(
+          'dealer',
+        )
+        .where(
+          'dealer.isActive = true',
+        )
+        .andWhere(
+          'dealer.isHidden = false',
+        )
+        .andWhere(
+          `(
+            UPPER(TRIM(COALESCE(dealer.partyType, ''))) IN ('DEALER', 'BOTH')
+            OR dealer.canBuyFromUs = true
+          )`,
+        )
+        .andWhere(
+          `REGEXP_REPLACE(
+            COALESCE(dealer.phone, ''),
+            '[^0-9]',
+            '',
+            'g'
+          ) = REGEXP_REPLACE(
+            :phone,
+            '[^0-9]',
+            '',
+            'g'
+          )`,
+          {
+            phone,
+          },
+        )
+        .getOne();
+
+    if (
+      byPhone
+    ) {
+      return byPhone;
+    }
+  }
+
+  throw new BadRequestException(
+    'Dealer is active in portal/order but matching CRM dealer record could not be resolved. Please ensure dealer phone or GST matches Vendor Master.',
+  );
+}
+
 private assertDifferentBillingEntities(
   seller:
     ProjectVendorCompany,
@@ -23775,33 +23951,38 @@ async createFinalInvoiceFromProforma(
    */
 
   if (
-    invoiceType ===
-    'DEALER'
-  ) {
-    const dealerId =
-      Number(
-        (pi as any)
-          .dealerId ||
-          0,
+  invoiceType ===
+  'DEALER'
+) {
+  const resolvedDealer =
+    await this
+      .resolveProjectVendorDealerForInvoice(
+        {
+          dealerId:
+            (pi as any)
+              .dealerId,
+
+          dealerPhone:
+            (pi as any)
+              .dealerPhone,
+
+          dealerGstNumber:
+            (pi as any)
+              .dealerGstNumber,
+        },
       );
 
-    if (
-      !dealerId
-    ) {
-      throw new BadRequestException(
-        'Dealer is missing from this proforma invoice',
-      );
-    }
+  requestPayload.dealerId =
+    Number(
+      resolvedDealer.id,
+    );
 
-    requestPayload.dealerId =
-      dealerId;
-
-    return this
-      .createFinalInvoice(
-        requestPayload,
-        user,
-      );
-  }
+  return this
+    .createFinalInvoice(
+      requestPayload,
+      user,
+    );
+}
 
   /*
    * =========================================================
@@ -35678,6 +35859,36 @@ const requestedQuantity = Number(
     );
   }
 
+  const tradingCompany =
+  await this
+    .projectVendorCompanyRepository
+    .createQueryBuilder(
+      'company',
+    )
+    .where(
+      'company.isHidden = false',
+    )
+    .andWhere(
+      'company.isActive = true',
+    )
+    .andWhere(
+      'company.isBillingEntity = true',
+    )
+    .andWhere(
+      'UPPER(TRIM(company.billingEntityCode)) = :code',
+      {
+        code:
+          'ADITYA_TRADING',
+      },
+    )
+    .getOne();
+
+if (!tradingCompany) {
+  throw new BadRequestException(
+    'Aditya Trading billing entity is not configured',
+  );
+}
+
   const subtotalAmount = preparedItems.reduce(
     (sum, item) => sum + Number(item.subtotalAmount || 0),
     0,
@@ -35722,6 +35933,9 @@ const requestedQuantity = Number(
         ? user.roles.join(', ')
         : '',
       invoiceType: 'DEALER',
+      ...this.buildSellerCompanySnapshot(
+  tradingCompany,
+),
       dealerId: order.dealerId,
       dealerName: order.dealerName,
       dealerPhone: order.dealerPhone,
@@ -35939,10 +36153,19 @@ pi.totalAmount = piTotal;
 await this.projectProformaInvoiceRepository.save(pi);
 
   const finalInvoiceResult =
-    await this.createFinalInvoiceFromProforma(
-      Number(pi.id),
-      user,
-    );
+  await this.createFinalInvoiceFromProforma(
+    Number(pi.id),
+    user,
+    {
+      invoiceNumber:
+        String(
+          body
+            ?.invoiceNumber ||
+            '',
+        ).trim() ||
+        undefined,
+    },
+  );
 
   const finalInvoice = (finalInvoiceResult as any)?.invoice || finalInvoiceResult;
 
@@ -35965,8 +36188,13 @@ if (savedInvoiceForOrder) {
     0,
   );
 
-  savedInvoiceForOrder.invoiceNumber =
-    manualInvoiceNumber || `DINV-${order.id}`;
+  if (
+  manualInvoiceNumber
+) {
+  savedInvoiceForOrder
+    .invoiceNumber =
+    manualInvoiceNumber;
+}
 
   savedInvoiceForOrder.remarks = [
     savedInvoiceForOrder.remarks || '',
