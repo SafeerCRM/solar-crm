@@ -23548,9 +23548,51 @@ async createFinalInvoiceFromProforma(
   if (
   !sellerCompanyId
 ) {
-  throw new BadRequestException(
-    'Issuing company is missing from this proforma invoice',
-  );
+  if (
+    invoiceType ===
+    'DEALER'
+  ) {
+    const tradingCompany =
+      await this
+        .projectVendorCompanyRepository
+        .createQueryBuilder(
+          'company',
+        )
+        .where(
+          'company.isHidden = false',
+        )
+        .andWhere(
+          'company.isActive = true',
+        )
+        .andWhere(
+          'company.isBillingEntity = true',
+        )
+        .andWhere(
+          'UPPER(TRIM(company.billingEntityCode)) = :code',
+          {
+            code:
+              'ADITYA_TRADING',
+          },
+        )
+        .getOne();
+
+    if (
+      !tradingCompany
+    ) {
+      throw new BadRequestException(
+        'Aditya Trading billing entity is not configured',
+      );
+    }
+
+    sellerCompanyId =
+      Number(
+        tradingCompany.id,
+      );
+  } else {
+    throw new BadRequestException(
+      'Issuing company is missing from this proforma invoice',
+    );
+  }
 }
 
   /*
