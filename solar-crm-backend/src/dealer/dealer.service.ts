@@ -3860,21 +3860,55 @@ if (deliveryCharge > 0) {
     .orderBy('pi.createdAt', 'DESC')
     .getMany();
 
-  const finalInvoices = await this.finalInvoiceRepository
-    .createQueryBuilder('invoice')
-    .where('invoice.dealerId = :dealerId', { dealerId })
-    .andWhere('invoice.invoiceType = :invoiceType', {
-      invoiceType: 'DEALER',
-    })
-    .andWhere('invoice.isHidden = false')
-    .andWhere(
-      '(invoice.invoiceNumber = :invoiceNumber OR invoice.remarks LIKE :remarks)',
+  const finalInvoices =
+  await this
+    .finalInvoiceRepository
+    .createQueryBuilder(
+      'invoice',
+    )
+    .where(
+      'invoice.invoiceType = :invoiceType',
       {
-        invoiceNumber: `DINV-${order.id}`,
-        remarks: `%${searchText}%`,
+        invoiceType:
+          'DEALER',
       },
     )
-    .orderBy('invoice.createdAt', 'DESC')
+    .andWhere(
+      'invoice.isHidden = false',
+    )
+    .andWhere(
+      'invoice.remarks LIKE :remarks',
+      {
+        remarks:
+          `%${searchText}%`,
+      },
+    )
+    .andWhere(
+      `(
+        LOWER(TRIM(COALESCE(invoice.dealerPhone, ''))) =
+          LOWER(TRIM(:dealerPhone))
+        OR
+        LOWER(TRIM(COALESCE(invoice.dealerGstNumber, ''))) =
+          LOWER(TRIM(:dealerGstNumber))
+      )`,
+      {
+        dealerPhone:
+          String(
+            order.dealerPhone ||
+              '',
+          ).trim(),
+
+        dealerGstNumber:
+          String(
+            order.dealerGstNumber ||
+              '',
+          ).trim(),
+      },
+    )
+    .orderBy(
+      'invoice.createdAt',
+      'DESC',
+    )
     .getMany();
 
   return {
