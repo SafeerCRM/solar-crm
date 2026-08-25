@@ -50,7 +50,10 @@ type Meeting = {
   updatedBy?: number | null;
   updatedByName?: string | null;
   createdAt: string;
-  updatedAt: string;
+updatedAt: string;
+
+pendingSince?: string | null;
+pendingDays?: number | null;
 };
 
 type User = {
@@ -95,6 +98,16 @@ const [meetingCategory, setMeetingCategory] = useState('');
 const [meetingStatus, setMeetingStatus] = useState('');
 const [month, setMonth] = useState('');
 
+const [
+  pendingFromDays,
+  setPendingFromDays,
+] = useState('');
+
+const [
+  pendingToDays,
+  setPendingToDays,
+] = useState('');
+
 const [followUpFilter, setFollowUpFilter] =
   useState<FollowUpFilter>('WITHOUT');
 
@@ -138,6 +151,13 @@ const [calledMeetingIds, setCalledMeetingIds] = useState<number[]>([]);
       setMeetingCategory(parsed.meetingCategory || '');
       setMeetingStatus(parsed.meetingStatus || '');
       setMonth(parsed.month || '');
+      setPendingFromDays(
+  parsed.pendingFromDays || '',
+);
+
+setPendingToDays(
+  parsed.pendingToDays || '',
+);
 
       const savedFollowUpFilter = String(
   parsed.followUpFilter || 'WITHOUT',
@@ -181,10 +201,12 @@ const saveMeetingFilters = (
       meetingManagerName,
       meetingManagerId,
       meetingCategory,
-      meetingStatus,
-      month,
-      followUpFilter,
-      meetingPage: pageNumber,
+meetingStatus,
+month,
+pendingFromDays,
+pendingToDays,
+followUpFilter,
+meetingPage: pageNumber,
     }),
   );
 };
@@ -197,17 +219,20 @@ const saveMeetingFilters = (
     setLoading(true);
     setMessage('');
 
-    const activeFilters = overrideFilters || {
-  searchName,
-  searchPhone,
-  searchLocation,
-  meetingManagerName,
-  meetingManagerId,
-  meetingCategory,
-  meetingStatus,
-  month,
-  followUpFilter,
-};
+   const activeFilters =
+  overrideFilters || {
+    searchName,
+    searchPhone,
+    searchLocation,
+    meetingManagerName,
+    meetingManagerId,
+    meetingCategory,
+    meetingStatus,
+    month,
+    pendingFromDays,
+    pendingToDays,
+    followUpFilter,
+  };
 
     const params: Record<string, string | number> = {
       page: pageNumber,
@@ -270,6 +295,28 @@ params.followUpFilter = String(
     if (String(activeFilters.month || '').trim()) {
       params.month = String(activeFilters.month).trim();
     }
+
+    if (
+  String(
+    activeFilters.pendingFromDays ||
+      '',
+  ).trim()
+) {
+  params.pendingFromDays = String(
+    activeFilters.pendingFromDays,
+  ).trim();
+}
+
+if (
+  String(
+    activeFilters.pendingToDays ||
+      '',
+  ).trim()
+) {
+  params.pendingToDays = String(
+    activeFilters.pendingToDays,
+  ).trim();
+}
 
     const res = await axios.get(`${backendUrl}/meetings`, {
       headers: getAuthHeaders(),
@@ -373,9 +420,21 @@ const exportFilteredMeetings = async () => {
             meetingStatus || undefined,
 
           month:
-            month || undefined,
+  month || undefined,
 
-          followUpFilter,
+pendingFromDays:
+  pendingFromDays ||
+  undefined,
+
+pendingToDays:
+  pendingToDays ||
+  undefined,
+
+followUpFilter:
+  pendingFromDays ||
+  pendingToDays
+    ? 'WITHOUT'
+    : followUpFilter,
         },
 
         responseType: 'blob',
@@ -626,6 +685,8 @@ const bulkAssignFilteredMeetings = async () => {
   !!searchName.trim() ||
   !!searchPhone.trim() ||
   !!searchLocation.trim() ||
+  !!pendingFromDays ||
+!!pendingToDays ||
   followUpFilter !== 'WITHOUT';
 
   if (!hasAnyFilter) {
@@ -656,6 +717,11 @@ const bulkAssignFilteredMeetings = async () => {
           customerName: searchName.trim() || undefined,
           mobile: searchPhone.trim() || undefined,
           location: searchLocation.trim() || undefined,
+          pendingFromDays:
+  pendingFromDays || undefined,
+
+pendingToDays:
+  pendingToDays || undefined,
           followUpFilter,
         },
       },
@@ -694,8 +760,12 @@ const bulkAssignFilteredMeetings = async () => {
   setMeetingCategory('');
   setMeetingStatus('');
   setMonth('');
-  setFollowUpFilter('WITHOUT');
-  setMeetingPage(1);
+
+setPendingFromDays('');
+setPendingToDays('');
+
+setFollowUpFilter('WITHOUT');
+setMeetingPage(1);
 
   fetchMeetings(1, {
     searchName: '',
@@ -706,7 +776,9 @@ const bulkAssignFilteredMeetings = async () => {
     meetingCategory: '',
     meetingStatus: '',
     month: '',
-    followUpFilter: 'WITHOUT',
+pendingFromDays: '',
+pendingToDays: '',
+followUpFilter: 'WITHOUT',
   });
 };
 
@@ -785,7 +857,7 @@ const bulkAssignFilteredMeetings = async () => {
         />
       </div>
 
-      <div className="mb-4 grid gap-3 md:grid-cols-4 xl:grid-cols-5">
+      <div className="mb-4 grid gap-3 md:grid-cols-4 xl:grid-cols-6">
   <select
     value={meetingManagerId}
     onChange={(e) => {
@@ -841,11 +913,26 @@ const bulkAssignFilteredMeetings = async () => {
         {isOwner && (
   <select
     value={followUpFilter}
-    onChange={(e) =>
-      setFollowUpFilter(
-        e.target.value as FollowUpFilter,
-      )
-    }
+    onChange={(e) => {
+  if (
+    pendingFromDays ||
+    pendingToDays
+  ) {
+    setFollowUpFilter(
+      'WITHOUT',
+    );
+
+    setMessage(
+      'Pending day filter applies only to meetings without follow-up.',
+    );
+
+    return;
+  }
+
+  setFollowUpFilter(
+    e.target.value as FollowUpFilter,
+  );
+}}
     className="rounded border p-2"
   >
     <option value="WITHOUT">
@@ -860,6 +947,62 @@ const bulkAssignFilteredMeetings = async () => {
       All
     </option>
   </select>
+)}
+
+{isOwner && (
+  <>
+    <input
+      type="number"
+      min="0"
+      step="1"
+      placeholder="Pending From Days"
+      value={pendingFromDays}
+      onChange={(e) => {
+        const value =
+          e.target.value;
+
+        setPendingFromDays(
+          value,
+        );
+
+        if (
+          value ||
+          pendingToDays
+        ) {
+          setFollowUpFilter(
+            'WITHOUT',
+          );
+        }
+      }}
+      className="rounded border p-2"
+    />
+
+    <input
+      type="number"
+      min="0"
+      step="1"
+      placeholder="Pending To Days"
+      value={pendingToDays}
+      onChange={(e) => {
+        const value =
+          e.target.value;
+
+        setPendingToDays(
+          value,
+        );
+
+        if (
+          value ||
+          pendingFromDays
+        ) {
+          setFollowUpFilter(
+            'WITHOUT',
+          );
+        }
+      }}
+      className="rounded border p-2"
+    />
+  </>
 )}
       </div>
 
@@ -982,6 +1125,19 @@ const bulkAssignFilteredMeetings = async () => {
                 {new Date(m.scheduledAt).toLocaleString()}
               </div>
 
+              {followUpFilter ===
+  'WITHOUT' &&
+  typeof m.pendingDays ===
+    'number' && (
+    <div className="mt-1 text-xs font-semibold text-orange-700">
+      Pending for{' '}
+      {m.pendingDays}{' '}
+      {m.pendingDays === 1
+        ? 'day'
+        : 'days'}
+    </div>
+  )}
+
               <Link
                 href={`/meeting/${m.id}`}
                 className="mt-2 inline-block rounded bg-blue-600 px-3 py-1 text-white text-sm"
@@ -1075,6 +1231,29 @@ const bulkAssignFilteredMeetings = async () => {
                     <span className="font-medium">Scheduled:</span>{' '}
                     {m.scheduledAt ? new Date(m.scheduledAt).toLocaleString() : '-'}
                   </p>
+
+                  {followUpFilter ===
+  'WITHOUT' &&
+  typeof m.pendingDays ===
+    'number' && (
+    <div>
+      <span
+        className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+          m.pendingDays >= 10
+            ? 'bg-red-100 text-red-700'
+            : m.pendingDays >= 5
+              ? 'bg-orange-100 text-orange-700'
+              : 'bg-blue-100 text-blue-700'
+        }`}
+      >
+        Pending for{' '}
+        {m.pendingDays}{' '}
+        {m.pendingDays === 1
+          ? 'day'
+          : 'days'}
+      </span>
+    </div>
+  )}
 
                   <p>
                     <span className="font-medium">Type:</span> {m.meetingType || '-'}
