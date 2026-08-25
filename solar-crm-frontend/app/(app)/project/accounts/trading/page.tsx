@@ -2280,17 +2280,93 @@ alert('Dealer added successfully');
   }
 };
 
-const openFinalInvoiceModal = () => {
-  if (!selectedOrder?.order?.id) return;
+const openFinalInvoiceModal =
+  async () => {
+    if (
+      !selectedOrder?.order?.id
+    ) {
+      return;
+    }
 
-  setFinalInvoiceForm({
-    invoiceNumber: `DINV-${selectedOrder.order.id}`,
-    invoiceDiscountAmount: '',
-    invoiceRemarks: '',
-  });
+    try {
+      const companiesResponse =
+        await axios.get(
+          `${API_BASE_URL}/project/billing-entities`,
+          {
+            headers:
+              headers(),
+          },
+        );
 
-  setFinalInvoiceModalOpen(true);
-};
+      const billingEntities =
+        Array.isArray(
+          companiesResponse.data,
+        )
+          ? companiesResponse.data
+          : [];
+
+      const tradingCompany =
+        billingEntities.find(
+          (company: any) =>
+            String(
+              company
+                ?.billingEntityCode ||
+                '',
+            )
+              .trim()
+              .toUpperCase() ===
+            'ADITYA_TRADING',
+        );
+
+      if (!tradingCompany) {
+        alert(
+          'Aditya Trading billing entity is not configured',
+        );
+
+        return;
+      }
+
+      const previewResponse =
+        await axios.get(
+          `${API_BASE_URL}/project/billing-entities/${tradingCompany.id}/invoice-number-preview`,
+          {
+            headers:
+              headers(),
+          },
+        );
+
+      setFinalInvoiceForm({
+        invoiceNumber:
+          previewResponse
+            .data
+            ?.suggestedInvoiceNumber ||
+          '',
+
+        invoiceDiscountAmount:
+          '',
+
+        invoiceRemarks:
+          '',
+      });
+
+      setFinalInvoiceModalOpen(
+        true,
+      );
+    } catch (
+      error: any
+    ) {
+      console.error(
+        error,
+      );
+
+      alert(
+        error?.response
+          ?.data
+          ?.message ||
+          'Failed to load invoice number',
+      );
+    }
+  };
 
 const generateDealerFinalInvoice = async () => {
   if (!selectedOrder?.order?.id) return;
