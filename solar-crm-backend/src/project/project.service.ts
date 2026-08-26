@@ -3339,6 +3339,9 @@ const project = this.projectRepository.create(projectData);
 subsidyActivity?: string;
 electricityActivity?: string;
 executionActivity?: string;
+executionStatus?: string;
+executionScheduledFrom?: string;
+executionScheduledTo?: string;
 activityMatchMode?: 'ALL' | 'ANY';
     branch?: string;
     owner?: string;
@@ -3558,23 +3561,75 @@ if (filters?.electricityActivity) {
     filters.electricityActivity;
 }
 
-if (filters?.executionActivity) {
+if (
+  filters?.executionActivity ||
+  filters?.executionStatus ||
+  filters?.executionScheduledFrom ||
+  filters?.executionScheduledTo
+) {
+  const executionConditions = [
+    `execution_activity."projectId" = project.id`,
+  ];
+
+  if (filters?.executionActivity) {
+    executionConditions.push(
+      `execution_activity."activityType" = :executionActivity`,
+    );
+
+    departmentActivityParams.executionActivity =
+      filters.executionActivity;
+  }
+
+  if (filters?.executionStatus) {
+    executionConditions.push(
+      `execution_activity.status = :executionStatus`,
+    );
+
+    departmentActivityParams.executionStatus =
+      filters.executionStatus;
+  } else if (filters?.executionActivity) {
+    /*
+     * Preserve existing behaviour when only an
+     * execution activity is selected.
+     */
+    executionConditions.push(`
+      execution_activity.status IN (
+        'PENDING',
+        'IN_PROGRESS',
+        'OVERDUE'
+      )
+    `);
+  }
+
+  if (filters?.executionScheduledFrom) {
+    executionConditions.push(
+      `execution_activity."scheduledDate" >= :executionScheduledFrom`,
+    );
+
+    departmentActivityParams.executionScheduledFrom =
+      new Date(
+        `${filters.executionScheduledFrom}T00:00:00`,
+      );
+  }
+
+  if (filters?.executionScheduledTo) {
+    executionConditions.push(
+      `execution_activity."scheduledDate" <= :executionScheduledTo`,
+    );
+
+    departmentActivityParams.executionScheduledTo =
+      new Date(
+        `${filters.executionScheduledTo}T23:59:59`,
+      );
+  }
+
   departmentActivityConditions.push(`
     EXISTS (
       SELECT 1
       FROM project_execution_activity execution_activity
-      WHERE execution_activity."projectId" = project.id
-        AND execution_activity."activityType" = :executionActivity
-        AND execution_activity.status IN (
-          'PENDING',
-          'IN_PROGRESS',
-          'OVERDUE'
-        )
+      WHERE ${executionConditions.join('\n AND ')}
     )
   `);
-
-  departmentActivityParams.executionActivity =
-    filters.executionActivity;
 }
 
 if (departmentActivityConditions.length > 0) {
@@ -4050,6 +4105,9 @@ async getProjectExportData(
 subsidyActivity?: string;
 electricityActivity?: string;
 executionActivity?: string;
+executionStatus?: string;
+executionScheduledFrom?: string;
+executionScheduledTo?: string;
 activityMatchMode?: 'ALL' | 'ANY';
     subsidyCategory?: string;
     branch?: string;
@@ -34327,12 +34385,57 @@ async getContractorAssignmentRegister(filters: any, user: any) {
   query.andWhere(
     'LOWER(project.customerName) LIKE :projectName',
     {
-      projectName: `%${String(filters.projectName).toLowerCase()}%`,
+      projectName:
+        `%${String(filters.projectName).toLowerCase()}%`,
     },
   );
 }
 
-    return query;
+if (filters?.branch) {
+  query.andWhere(
+    'LOWER(project.branchName) LIKE :branch',
+    {
+      branch:
+        `%${String(filters.branch).toLowerCase()}%`,
+    },
+  );
+}
+
+if (filters?.projectOwnerId) {
+  query.andWhere(
+    'project.projectOwnerId = :projectOwnerId',
+    {
+      projectOwnerId:
+        Number(filters.projectOwnerId),
+    },
+  );
+}
+
+if (filters?.scheduledFrom) {
+  query.andWhere(
+    'assignment.scheduledDate >= :scheduledFrom',
+    {
+      scheduledFrom:
+        new Date(
+          `${filters.scheduledFrom}T00:00:00`,
+        ),
+    },
+  );
+}
+
+if (filters?.scheduledTo) {
+  query.andWhere(
+    'assignment.scheduledDate <= :scheduledTo',
+    {
+      scheduledTo:
+        new Date(
+          `${filters.scheduledTo}T23:59:59`,
+        ),
+    },
+  );
+}
+
+return query;
   };
 
   const dataQuery =

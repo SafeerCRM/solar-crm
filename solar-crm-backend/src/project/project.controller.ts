@@ -72,6 +72,15 @@ electricityActivity?: string,
 @Query('executionActivity')
 executionActivity?: string,
 
+@Query('executionStatus')
+executionStatus?: string,
+
+@Query('executionScheduledFrom')
+executionScheduledFrom?: string,
+
+@Query('executionScheduledTo')
+executionScheduledTo?: string,
+
 @Query('activityMatchMode')
 activityMatchMode?: string,
   @Query('subsidyCategory')
@@ -115,6 +124,15 @@ electricityActivity:
 
 executionActivity:
   executionActivity || '',
+
+executionStatus:
+  executionStatus || '',
+
+executionScheduledFrom:
+  executionScheduledFrom || '',
+
+executionScheduledTo:
+  executionScheduledTo || '',
 
 activityMatchMode:
   activityMatchMode === 'ANY'
@@ -163,6 +181,15 @@ electricityActivity?: string,
 
 @Query('executionActivity')
 executionActivity?: string,
+
+@Query('executionStatus')
+executionStatus?: string,
+
+@Query('executionScheduledFrom')
+executionScheduledFrom?: string,
+
+@Query('executionScheduledTo')
+executionScheduledTo?: string,
 
 @Query('activityMatchMode')
 activityMatchMode?: string,
@@ -215,6 +242,15 @@ electricityActivity:
 
 executionActivity:
   executionActivity || '',
+
+executionStatus:
+  executionStatus || '',
+
+executionScheduledFrom:
+  executionScheduledFrom || '',
+
+executionScheduledTo:
+  executionScheduledTo || '',
 
 activityMatchMode:
   activityMatchMode === 'ANY'
@@ -614,8 +650,21 @@ getContractorAssignmentRegister(
   @Query('workScope') workScope?: string,
   @Query('contractorId') contractorId?: string,
   @Query('projectId') projectId?: string,
-  @Query('projectName') projectName?: string,
-  @CurrentUser() user?: any,
+@Query('projectName') projectName?: string,
+
+@Query('branch')
+branch?: string,
+
+@Query('projectOwnerId')
+projectOwnerId?: string,
+
+@Query('scheduledFrom')
+scheduledFrom?: string,
+
+@Query('scheduledTo')
+scheduledTo?: string,
+
+@CurrentUser() user?: any,
 ) {
   return this.projectService.getContractorAssignmentRegister(
     {
@@ -626,7 +675,18 @@ getContractorAssignmentRegister(
       workScope: workScope || '',
       contractorId: contractorId || '',
       projectId: projectId || '',
-      projectName: projectName || '',
+projectName: projectName || '',
+
+branch: branch || '',
+
+projectOwnerId:
+  projectOwnerId || '',
+
+scheduledFrom:
+  scheduledFrom || '',
+
+scheduledTo:
+  scheduledTo || '',
     },
     user,
   );
