@@ -472,23 +472,6 @@ const navItems = [
   roles: ['OWNER', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER', 'INSPECTION_MANAGER',],
 },
 
-{
-  name: 'Execution Calendar',
-  href: '/project/execution-calendar',
-  roles: [
-    'OWNER',
-    'MARKETING_HEAD',
-    'PROJECT_MANAGER',
-    'MEETING_MANAGER',
-    'PROJECT_EXECUTIVE',
-    'LEAD_MANAGER',
-    'LEAD_EXECUTIVE',
-    'TELECALLER',
-    'TELECALLING_ASSISTANT',
-    'TELECALLING_MANAGER',
-    'SUBSIDY_MANAGER',
-  ],
-},
 
 {
   name: 'Timeline Tracking',

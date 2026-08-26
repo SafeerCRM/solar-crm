@@ -46,6 +46,12 @@ type Summary = {
   completed: number;
 };
 
+type ProjectOwner = {
+  projectOwnerId: number;
+  projectOwnerName?: string;
+  projectOwnerRole?: string;
+};
+
 const emptySummary: Summary = {
   totalAssignments: 0,
   totalProjects: 0,
@@ -99,8 +105,24 @@ export default function ContractorAssignmentRegisterPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [scopeFilter, setScopeFilter] = useState('');
   const [projectIdFilter, setProjectIdFilter] = useState('');
-  const [projectNameFilter, setProjectNameFilter] = useState('');
-  const [pendingRescheduleRequests, setPendingRescheduleRequests] =
+const [projectNameFilter, setProjectNameFilter] = useState('');
+
+const [branchFilter, setBranchFilter] =
+  useState('');
+
+const [projectOwnerIdFilter, setProjectOwnerIdFilter] =
+  useState('');
+
+const [scheduledFrom, setScheduledFrom] =
+  useState('');
+
+const [scheduledTo, setScheduledTo] =
+  useState('');
+
+const [projectOwners, setProjectOwners] =
+  useState<ProjectOwner[]>([]);
+
+const [pendingRescheduleRequests, setPendingRescheduleRequests] =
   useState<any[]>([]);
 
   const fetchAssignments = async () => {
@@ -113,14 +135,32 @@ export default function ContractorAssignmentRegisterPage() {
         `${API_BASE_URL}/project/contractor-assignments/register`,
         {
           params: {
-            page,
-            limit: 20,
-            search,
-            status: statusFilter,
-            workScope: scopeFilter,
-            projectId: projectIdFilter,
-            projectName: projectNameFilter,
-          },
+  page,
+  limit: 20,
+  search,
+
+  status:
+    statusFilter,
+
+  workScope:
+    scopeFilter,
+
+  projectId:
+    projectIdFilter,
+
+  projectName:
+    projectNameFilter,
+
+  branch:
+    branchFilter,
+
+  projectOwnerId:
+    projectOwnerIdFilter,
+
+  scheduledFrom,
+
+  scheduledTo,
+},
           headers: token
             ? {
                 Authorization: `Bearer ${token}`,
@@ -142,6 +182,37 @@ export default function ContractorAssignmentRegisterPage() {
       setLoading(false);
     }
   };
+
+  const fetchProjectOwners = async () => {
+  try {
+    const token =
+      localStorage.getItem('token');
+
+    const res =
+      await axios.get(
+        `${API_BASE_URL}/project/owners/list`,
+        {
+          headers: token
+            ? {
+                Authorization:
+                  `Bearer ${token}`,
+              }
+            : {},
+        },
+      );
+
+    setProjectOwners(
+      Array.isArray(res.data)
+        ? res.data
+        : [],
+    );
+  } catch (error) {
+    console.error(
+      'Failed to load project owners',
+      error,
+    );
+  }
+};
 
   const fetchPendingRescheduleRequests = async () => {
   try {
@@ -204,21 +275,35 @@ const rejectRescheduleRequest = async (id: number) => {
 };
 
   const resetFilters = () => {
-    setSearch('');
-    setStatusFilter('');
-    setScopeFilter('');
-    setProjectIdFilter('');
-    setProjectNameFilter('');
-    setPage(1);
+  setSearch('');
+  setStatusFilter('');
+  setScopeFilter('');
+  setProjectIdFilter('');
+  setProjectNameFilter('');
 
-    setTimeout(fetchAssignments, 0);
-  };
+  setBranchFilter('');
+  setProjectOwnerIdFilter('');
+  setScheduledFrom('');
+  setScheduledTo('');
+
+  setPage(1);
+
+  setTimeout(
+    fetchAssignments,
+    50,
+  );
+};
 
   useEffect(() => {
-    fetchAssignments();
-    fetchPendingRescheduleRequests();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
+  fetchAssignments();
+  fetchPendingRescheduleRequests();
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [page]);
+
+useEffect(() => {
+  fetchProjectOwners();
+}, []);
 
   return (
     <div className="mx-auto min-w-0 max-w-7xl space-y-4 overflow-x-hidden px-2 pb-4 md:px-0">
@@ -267,7 +352,7 @@ const rejectRescheduleRequest = async (id: number) => {
       <div className="rounded-2xl bg-white p-5 shadow">
         <h2 className="text-lg font-bold text-gray-800">Filters</h2>
 
-        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
           <input
             placeholder="Search contractor / phone / project ID"
             value={search}
@@ -314,6 +399,84 @@ const rejectRescheduleRequest = async (id: number) => {
   onChange={(e) => setProjectNameFilter(e.target.value)}
   className="rounded-xl border p-3"
 />
+
+<input
+  placeholder="Filter by Branch"
+  value={branchFilter}
+  onChange={(e) =>
+    setBranchFilter(
+      e.target.value,
+    )
+  }
+  className="rounded-xl border p-3"
+/>
+
+<select
+  value={projectOwnerIdFilter}
+  onChange={(e) =>
+    setProjectOwnerIdFilter(
+      e.target.value,
+    )
+  }
+  className="rounded-xl border p-3"
+>
+  <option value="">
+    All Project Owners
+  </option>
+
+  {projectOwners.map(
+    (owner) => (
+      <option
+        key={
+          owner.projectOwnerId
+        }
+        value={
+          owner.projectOwnerId
+        }
+      >
+        {owner.projectOwnerName ||
+          'Unnamed Owner'}
+        {owner.projectOwnerRole
+          ? ` (${owner.projectOwnerRole})`
+          : ''}
+      </option>
+    ),
+  )}
+</select>
+
+<div>
+  <p className="mb-1 text-xs font-semibold text-gray-600">
+    Scheduled From
+  </p>
+
+  <input
+    type="date"
+    value={scheduledFrom}
+    onChange={(e) =>
+      setScheduledFrom(
+        e.target.value,
+      )
+    }
+    className="w-full rounded-xl border p-3"
+  />
+</div>
+
+<div>
+  <p className="mb-1 text-xs font-semibold text-gray-600">
+    Scheduled To
+  </p>
+
+  <input
+    type="date"
+    value={scheduledTo}
+    onChange={(e) =>
+      setScheduledTo(
+        e.target.value,
+      )
+    }
+    className="w-full rounded-xl border p-3"
+  />
+</div>
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
@@ -334,6 +497,28 @@ const rejectRescheduleRequest = async (id: number) => {
           >
             Reset
           </button>
+
+          <button
+  type="button"
+  onClick={() => {
+    const today =
+      new Date()
+        .toISOString()
+        .slice(0, 10);
+
+    setScheduledFrom(today);
+    setScheduledTo(today);
+    setPage(1);
+
+    setTimeout(
+      fetchAssignments,
+      50,
+    );
+  }}
+  className="rounded-xl bg-amber-500 px-5 py-3 font-semibold text-white hover:bg-amber-600"
+>
+  Scheduled Today
+</button>
         </div>
       </div>
 

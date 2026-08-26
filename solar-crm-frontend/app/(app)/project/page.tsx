@@ -264,6 +264,15 @@ const [electricityActivityFilter, setElectricityActivityFilter] =
 const [executionActivityFilter, setExecutionActivityFilter] =
   useState('');
 
+const [executionStatusFilter, setExecutionStatusFilter] =
+  useState('');
+
+const [executionScheduledFrom, setExecutionScheduledFrom] =
+  useState('');
+
+const [executionScheduledTo, setExecutionScheduledTo] =
+  useState('');
+
 const [activityMatchMode, setActivityMatchMode] =
   useState<'ALL' | 'ANY'>('ALL');
 
@@ -340,6 +349,18 @@ setExecutionActivityFilter(
   parsed.executionActivityFilter || '',
 );
 
+setExecutionStatusFilter(
+  parsed.executionStatusFilter || '',
+);
+
+setExecutionScheduledFrom(
+  parsed.executionScheduledFrom || '',
+);
+
+setExecutionScheduledTo(
+  parsed.executionScheduledTo || '',
+);
+
 setActivityMatchMode(
   parsed.activityMatchMode === 'ANY'
     ? 'ANY'
@@ -384,6 +405,9 @@ loanActivityFilter,
 subsidyActivityFilter,
 electricityActivityFilter,
 executionActivityFilter,
+executionStatusFilter,
+executionScheduledFrom,
+executionScheduledTo,
 activityMatchMode,
 showAdvancedActivityFilters,
       page,
@@ -413,6 +437,9 @@ loanActivityFilter,
 subsidyActivityFilter,
 electricityActivityFilter,
 executionActivityFilter,
+executionStatusFilter,
+executionScheduledFrom,
+executionScheduledTo,
 activityMatchMode,
 showAdvancedActivityFilters,
   page,
@@ -464,6 +491,12 @@ electricityActivity:
 
 executionActivity:
   executionActivityFilter,
+
+executionStatus:
+  executionStatusFilter,
+
+executionScheduledFrom,
+executionScheduledTo,
 
 activityMatchMode,
   },
@@ -535,6 +568,12 @@ electricityActivity:
 
 executionActivity:
   executionActivityFilter,
+
+executionStatus:
+  executionStatusFilter,
+
+executionScheduledFrom,
+executionScheduledTo,
 
 activityMatchMode,
         },
@@ -706,6 +745,18 @@ activityMatchMode,
 [
   'Execution Activity Filter',
   executionActivityFilter || 'All',
+],
+[
+  'Execution Status Filter',
+  executionStatusFilter || 'All',
+],
+[
+  'Execution Scheduled From',
+  executionScheduledFrom || 'All',
+],
+[
+  'Execution Scheduled To',
+  executionScheduledTo || 'All',
 ],
       [],
     ];
@@ -967,6 +1018,9 @@ loanActivityFilter,
 subsidyActivityFilter,
 electricityActivityFilter,
 executionActivityFilter,
+executionStatusFilter,
+executionScheduledFrom,
+executionScheduledTo,
 activityMatchMode,
 ]);
 
@@ -1522,7 +1576,7 @@ const isMeetingManager =
 
   {showAdvancedActivityFilters && (
     <div className="border-t border-slate-200 p-4">
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <select
           value={activityMatchMode}
           onChange={(e) => {
@@ -1647,22 +1701,96 @@ const isMeetingManager =
             ),
           )}
         </select>
+
+        <select
+  value={executionStatusFilter}
+  onChange={(e) => {
+    setExecutionStatusFilter(
+      e.target.value,
+    );
+    setPage(1);
+  }}
+  className="rounded-xl border bg-white p-3"
+>
+  <option value="">
+    All Execution Status
+  </option>
+
+  <option value="PENDING">
+    Pending
+  </option>
+
+  <option value="IN_PROGRESS">
+    In Progress
+  </option>
+
+  <option value="OVERDUE">
+    Overdue
+  </option>
+
+  <option value="COMPLETED">
+    Completed
+  </option>
+
+  <option value="CANCELLED">
+    Cancelled
+  </option>
+</select>
+
+<div>
+  <p className="mb-1 text-xs font-semibold text-slate-600">
+    Execution Scheduled From
+  </p>
+
+  <input
+    type="date"
+    value={executionScheduledFrom}
+    onChange={(e) => {
+      setExecutionScheduledFrom(
+        e.target.value,
+      );
+      setPage(1);
+    }}
+    className="w-full rounded-xl border bg-white p-3"
+  />
+</div>
+
+<div>
+  <p className="mb-1 text-xs font-semibold text-slate-600">
+    Execution Scheduled To
+  </p>
+
+  <input
+    type="date"
+    value={executionScheduledTo}
+    onChange={(e) => {
+      setExecutionScheduledTo(
+        e.target.value,
+      );
+      setPage(1);
+    }}
+    className="w-full rounded-xl border bg-white p-3"
+  />
+</div>
       </div>
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <p className="text-xs text-slate-500">
-          Execution matches only activities currently Pending, In Progress or Overdue.
-        </p>
+  If no Execution Status is selected, an Execution Activity filter defaults to Pending, In Progress or Overdue.
+</p>
 
         <button
           type="button"
           onClick={() => {
             setLoanActivityFilter('');
-            setSubsidyActivityFilter('');
-            setElectricityActivityFilter('');
-            setExecutionActivityFilter('');
-            setActivityMatchMode('ALL');
-            setPage(1);
+setSubsidyActivityFilter('');
+setElectricityActivityFilter('');
+setExecutionActivityFilter('');
+setExecutionStatusFilter('');
+setExecutionScheduledFrom('');
+setExecutionScheduledTo('');
+setActivityMatchMode('ALL');
+setPage(1);
           }}
           className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-100"
         >
@@ -1760,8 +1888,11 @@ setLoanActivityFilter('');
 setSubsidyActivityFilter('');
 setElectricityActivityFilter('');
 setExecutionActivityFilter('');
+setExecutionStatusFilter('');
+setExecutionScheduledFrom('');
+setExecutionScheduledTo('');
 setActivityMatchMode('ALL');
-      setPage(1);
+setPage(1);
       localStorage.removeItem('projectListFilters');
     }}
     className="rounded-xl bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-700"
