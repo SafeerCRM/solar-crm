@@ -358,6 +358,117 @@ private getRequiredContractorProofTypesByScopeForRegister(workScope: string) {
   ];
 }
 
+private getContractorExecutionActivityType(
+  workItem: string,
+): ProjectExecutionActivityType | null {
+  const normalized =
+    String(workItem || '')
+      .trim()
+      .toUpperCase();
+
+  const map: Record<
+    string,
+    ProjectExecutionActivityType
+  > = {
+    STRUCTURE_WORK:
+      ProjectExecutionActivityType.STRUCTURE_WORK,
+
+    STRUCTURE_INSPECTION:
+      ProjectExecutionActivityType.STRUCTURE_INSPECTION,
+
+    PILLAR_WORK:
+      ProjectExecutionActivityType.PILLAR_WORK,
+
+    PILLAR_INSPECTION:
+      ProjectExecutionActivityType.PILLAR_INSPECTION,
+
+    PANEL_INSTALLATION:
+      ProjectExecutionActivityType.PANEL_INSTALLED,
+
+    INVERTER_INSTALLATION:
+      ProjectExecutionActivityType.INVERTER_INSTALLED,
+
+    WIRING:
+      ProjectExecutionActivityType.WIRING,
+
+    EARTHING:
+      ProjectExecutionActivityType.EARTHING_PACKING,
+
+    GENERATION_WORK:
+      ProjectExecutionActivityType.GENERATION_STARTED,
+  };
+
+  return map[normalized] || null;
+}
+
+private getDefaultContractorWorkItemsByScope(
+  workScope: string,
+): string[] {
+  const normalized =
+    String(
+      workScope || 'FULL_PROJECT',
+    )
+      .trim()
+      .toUpperCase();
+
+  if (
+    normalized ===
+    ProjectContractorWorkScope.STRUCTURE_TEAM
+  ) {
+    return [
+      'STRUCTURE_WORK',
+      'STRUCTURE_INSPECTION',
+      'PILLAR_WORK',
+      'PILLAR_INSPECTION',
+    ];
+  }
+
+  if (
+    normalized ===
+    ProjectContractorWorkScope.ELECTRICAL_TEAM
+  ) {
+    return [
+      'INVERTER_INSTALLATION',
+      'WIRING',
+      'EARTHING',
+      'SOLAR_METER_WORK',
+      'NET_METER_WORK',
+      'GENERATION_WORK',
+    ];
+  }
+
+  if (
+    normalized ===
+    ProjectContractorWorkScope.INSTALLATION_TEAM
+  ) {
+    return [
+      'PANEL_INSTALLATION',
+      'INVERTER_INSTALLATION',
+    ];
+  }
+
+  if (
+    normalized ===
+    ProjectContractorWorkScope.OTHER
+  ) {
+    return ['OTHER'];
+  }
+
+  return [
+    'STRUCTURE_WORK',
+    'STRUCTURE_INSPECTION',
+    'PILLAR_WORK',
+    'PILLAR_INSPECTION',
+    'PANEL_INSTALLATION',
+    'INVERTER_INSTALLATION',
+    'WIRING',
+    'EARTHING',
+    'SOLAR_METER_WORK',
+    'NET_METER_WORK',
+    'GENERATION_WORK',
+  ];
+}
+
 private generatePoNumber() {
   return `PO-${Date.now()}`;
 }
@@ -35490,6 +35601,17 @@ const proofs = assignmentIds.length
     })
   : [];
 
+  const executionActivities =
+  projectIds.length
+    ? await this
+        .projectExecutionActivityRepository
+        .find({
+          where: {
+            projectId: In(projectIds),
+          },
+        })
+    : [];
+
 const dataWithProgress = data.map((assignment) => {
   const requiredProofs =
     this.getRequiredContractorProofTypesByScopeForRegister(
@@ -35518,24 +35640,242 @@ const dataWithProgress = data.map((assignment) => {
   (item) => item.id === assignment.projectId,
 );
 
+const explicitlyAssignedWorkItems =
+  Array.isArray(
+    (assignment as any)
+      .assignedWorkItems,
+  )
+    ? (
+        assignment as any
+      ).assignedWorkItems
+        .map((item: any) =>
+          String(item || '')
+            .trim()
+            .toUpperCase(),
+        )
+        .filter(Boolean)
+    : [];
+
+const assignedWorkItems =
+  explicitlyAssignedWorkItems.length
+    ? explicitlyAssignedWorkItems
+    : this
+        .getDefaultContractorWorkItemsByScope(
+          String(
+            (assignment as any)
+              .workScope ||
+              ProjectContractorWorkScope
+                .FULL_PROJECT,
+          ),
+        );
+
+const projectExecutionActivities =
+  executionActivities.filter(
+    (activity) =>
+      Number(
+        activity.projectId,
+      ) ===
+      Number(
+        assignment.projectId,
+      ),
+  );
+
+const activityItems =
+  assignedWorkItems.map(
+    (workItem) => {
+      const executionActivityType =
+        this.getContractorExecutionActivityType(
+          workItem,
+        );
+
+      /*
+       * Some contractor work items currently
+       * do not have an equivalent
+       * ProjectExecutionActivity enum.
+       *
+       * Keep them visible on the register,
+       * but don't invent an execution status.
+       */
+      if (!executionActivityType) {
+        return {
+          workItem,
+          activityType: null,
+          status: 'NOT_TRACKED',
+          scheduledDate: null,
+          completedDate: null,
+          remarks: '',
+        };
+      }
+
+      const matchingActivities =
+        projectExecutionActivities
+          .filter(
+            (activity) =>
+              String(
+                activity.activityType,
+              ) ===
+              String(
+                executionActivityType,
+              ),
+          )
+          .sort((a, b) => {
+            /*
+             * Prefer the newest activity record
+             * when the same activity type exists
+             * multiple times for a project.
+             */
+            return (
+              new Date(
+                b.updatedAt ||
+                  b.createdAt,
+              ).getTime() -
+              new Date(
+                a.updatedAt ||
+                  a.createdAt,
+              ).getTime()
+            );
+          });
+
+      const activity =
+        matchingActivities[0];
+
+      if (!activity) {
+        return {
+          workItem,
+          activityType:
+            executionActivityType,
+
+          /*
+           * Assigned to contractor but execution
+           * activity has not yet been created.
+           */
+          status: 'PENDING',
+
+          scheduledDate: null,
+          completedDate: null,
+          remarks: '',
+        };
+      }
+
+      return {
+        workItem,
+
+        activityType:
+          activity.activityType,
+
+        status:
+          String(
+            activity.status ||
+              ProjectExecutionActivityStatus
+                .PENDING,
+          ),
+
+        scheduledDate:
+          activity.scheduledDate ||
+          null,
+
+        completedDate:
+          activity.completedDate ||
+          null,
+
+        remarks:
+          activity.remarks || '',
+      };
+    },
+  );
+
+const trackedActivityItems =
+  activityItems.filter(
+    (item) =>
+      item.status !==
+      'NOT_TRACKED',
+  );
+
+const completedActivityItems =
+  trackedActivityItems.filter(
+    (item) =>
+      item.status ===
+      ProjectExecutionActivityStatus.COMPLETED,
+  );
+
+const inProgressActivityItems =
+  trackedActivityItems.filter(
+    (item) =>
+      item.status ===
+      ProjectExecutionActivityStatus.IN_PROGRESS,
+  );
+
+const pendingActivityItems =
+  trackedActivityItems.filter(
+    (item) =>
+      item.status ===
+        ProjectExecutionActivityStatus.PENDING ||
+      item.status ===
+        ProjectExecutionActivityStatus.OVERDUE,
+  );
+
+const activityPercentage =
+  trackedActivityItems.length > 0
+    ? Math.round(
+        (
+          completedActivityItems.length /
+          trackedActivityItems.length
+        ) * 100,
+      )
+    : 0;
+
   return {
   ...assignment,
+
   project: project
     ? {
         id: project.id,
-        customerName: project.customerName || '',
-        customerPhone: project.customerPhone || '',
-        branchName: project.branchName || '',
-        city: project.city || '',
-        projectOwnerName: project.projectOwnerName || '',
+        customerName:
+          project.customerName || '',
+
+        customerPhone:
+          project.customerPhone || '',
+
+        branchName:
+          project.branchName || '',
+
+        city:
+          project.city || '',
+
+        projectOwnerName:
+          project.projectOwnerName || '',
       }
     : null,
+
+  activityProgress: {
+    totalAssigned:
+      activityItems.length,
+
+    totalTracked:
+      trackedActivityItems.length,
+
+    completed:
+      completedActivityItems.length,
+
+    inProgress:
+      inProgressActivityItems.length,
+
+    pending:
+      pendingActivityItems.length,
+
+    percentage:
+      activityPercentage,
+
+    activities:
+      activityItems,
+  },
+
   proofProgress: {
-      uploadedRequiredCount,
-      totalRequired,
-      percentage,
-    },
-  };
+    uploadedRequiredCount,
+    totalRequired,
+    percentage,
+  },
+};
 });
 
   const summaryBaseQuery =
