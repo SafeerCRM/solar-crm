@@ -7116,9 +7116,25 @@ if (
           <option value="PILLAR_INSPECTION">Pillar Inspection</option>
           <option value="PANEL_INSTALLED">Panel Installed</option>
           <option value="INVERTER_INSTALLED">Inverter Installed</option>
-          <option value="WIRING">Wiring</option>
-<option value="EARTHING_PACKING">Earthing / Packing</option>
-<option value="GENERATION_STARTED">Generation Started</option>
+          <option value="WIRING">
+  Wiring
+</option>
+
+<option value="EARTHING_PACKING">
+  Earthing / Packing
+</option>
+
+<option value="SOLAR_METER_WORK">
+  Solar Meter Work
+</option>
+
+<option value="NET_METER_WORK">
+  Net Meter Work
+</option>
+
+<option value="GENERATION_STARTED">
+  Generation Started
+</option>
 <option value="GENERATION_INSPECTION">Generation Inspection</option>
 <option value="INVOICE_FILE_GIVEN">Invoice File Given</option>
 <option value="SUBSIDY_REDEEMED">Subsidy Redeemed</option>
