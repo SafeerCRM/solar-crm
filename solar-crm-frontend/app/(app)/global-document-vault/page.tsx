@@ -7,14 +7,6 @@ import {
 
 import axios from 'axios';
 
-import {
-  FFmpeg,
-} from '@ffmpeg/ffmpeg';
-
-import {
-  fetchFile,
-  toBlobURL,
-} from '@ffmpeg/util';
 
 import {
   LocalizationProvider,
@@ -259,6 +251,29 @@ const compressVideoFile = async (
   ) {
     return file;
   }
+
+  if (
+  typeof window === 'undefined'
+) {
+  throw new Error(
+    'Video compression is only available in the browser',
+  );
+}
+
+const {
+  FFmpeg,
+} =
+  await import(
+    '@ffmpeg/ffmpeg'
+  );
+
+const {
+  fetchFile,
+  toBlobURL,
+} =
+  await import(
+    '@ffmpeg/util'
+  );
 
   const ffmpeg =
     new FFmpeg();
