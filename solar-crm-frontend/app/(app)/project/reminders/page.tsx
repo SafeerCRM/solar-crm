@@ -406,6 +406,9 @@ const [paymentTotalPages, setPaymentTotalPages] =
   const [filter, setFilter] = useState<
   | 'ALL'
   | 'EXECUTION'
+  | 'EXECUTION_OVERDUE'
+  | 'EXECUTION_TODAY'
+  | 'EXECUTION_UPCOMING'
   | 'PAYMENT'
   | 'APPROVAL'
   | 'PURCHASE'
@@ -445,6 +448,9 @@ const [paymentTotalPages, setPaymentTotalPages] =
   selectedFilter:
     | 'ALL'
     | 'EXECUTION'
+    | 'EXECUTION_OVERDUE'
+    | 'EXECUTION_TODAY'
+    | 'EXECUTION_UPCOMING'
     | 'PAYMENT'
     | 'APPROVAL'
     | 'PURCHASE'
@@ -463,12 +469,15 @@ const [paymentTotalPages, setPaymentTotalPages] =
 
 
     if (
-      selectedFilter === 'ALL' ||
-      selectedFilter === 'EXECUTION' ||
-      selectedFilter === 'OVERDUE' ||
-      selectedFilter === 'TODAY' ||
-      selectedFilter === 'UPCOMING'
-    ) {
+  selectedFilter === 'ALL' ||
+  selectedFilter === 'EXECUTION' ||
+  selectedFilter === 'EXECUTION_OVERDUE' ||
+  selectedFilter === 'EXECUTION_TODAY' ||
+  selectedFilter === 'EXECUTION_UPCOMING' ||
+  selectedFilter === 'OVERDUE' ||
+  selectedFilter === 'TODAY' ||
+  selectedFilter === 'UPCOMING'
+) {
       const listRes = await axios.get(
         `${apiBaseUrl}/project/execution-reminders`,
         {
@@ -1027,6 +1036,9 @@ const changeFilter = (
   nextFilter:
     | 'ALL'
     | 'EXECUTION'
+    | 'EXECUTION_OVERDUE'
+    | 'EXECUTION_TODAY'
+    | 'EXECUTION_UPCOMING'
     | 'PAYMENT'
     | 'APPROVAL'
     | 'PURCHASE'
@@ -1069,27 +1081,107 @@ useEffect(() => {
   paymentPage,
 ]);
 
-  const filteredExecutionItems = items.filter((item) => {
-  if (filter === 'ALL' || filter === 'EXECUTION') return true;
-  if (filter === 'PAYMENT') return false;
+  const filteredExecutionItems =
+  items.filter((item) => {
+    if (
+      filter === 'ALL' ||
+      filter === 'EXECUTION'
+    ) {
+      return true;
+    }
 
-  if (filter === 'OVERDUE') return item.reminderType === 'OVERDUE_INSPECTION';
-  if (filter === 'TODAY') return item.reminderType === 'TODAY_WORK';
-  if (filter === 'UPCOMING') return item.reminderType === 'UPCOMING_DEADLINE';
+    if (
+      filter === 'EXECUTION_OVERDUE'
+    ) {
+      return (
+        item.reminderType ===
+        'OVERDUE_INSPECTION'
+      );
+    }
 
-  return true;
-});
+    if (
+      filter === 'EXECUTION_TODAY'
+    ) {
+      return (
+        item.reminderType ===
+        'TODAY_WORK'
+      );
+    }
 
-const filteredPaymentItems = paymentItems.filter((item) => {
-  if (filter === 'ALL' || filter === 'PAYMENT') return true;
-  if (filter === 'EXECUTION') return false;
+    if (
+      filter === 'EXECUTION_UPCOMING'
+    ) {
+      return (
+        item.reminderType ===
+        'UPCOMING_DEADLINE'
+      );
+    }
 
-  if (filter === 'OVERDUE') return item.reminderType === 'PAYMENT_OVERDUE';
-  if (filter === 'TODAY') return item.reminderType === 'PAYMENT_DUE_TODAY';
-  if (filter === 'UPCOMING') return item.reminderType === 'PAYMENT_UPCOMING';
+    if (filter === 'OVERDUE') {
+      return (
+        item.reminderType ===
+        'OVERDUE_INSPECTION'
+      );
+    }
 
-  return true;
-});
+    if (filter === 'TODAY') {
+      return (
+        item.reminderType ===
+        'TODAY_WORK'
+      );
+    }
+
+    if (filter === 'UPCOMING') {
+      return (
+        item.reminderType ===
+        'UPCOMING_DEADLINE'
+      );
+    }
+
+    return false;
+  });
+
+const filteredPaymentItems =
+  paymentItems.filter((item) => {
+    if (
+      filter === 'ALL' ||
+      filter === 'PAYMENT'
+    ) {
+      return true;
+    }
+
+    if (
+      filter === 'EXECUTION' ||
+      filter === 'EXECUTION_OVERDUE' ||
+      filter === 'EXECUTION_TODAY' ||
+      filter === 'EXECUTION_UPCOMING'
+    ) {
+      return false;
+    }
+
+    if (filter === 'OVERDUE') {
+      return (
+        item.reminderType ===
+        'PAYMENT_OVERDUE'
+      );
+    }
+
+    if (filter === 'TODAY') {
+      return (
+        item.reminderType ===
+        'PAYMENT_DUE_TODAY'
+      );
+    }
+
+    if (filter === 'UPCOMING') {
+      return (
+        item.reminderType ===
+        'PAYMENT_UPCOMING'
+      );
+    }
+
+    return false;
+  });
 
 const filteredApprovalItems = approvalItems.filter((item) => {
   if (filter === 'ALL' || filter === 'APPROVAL') return true;
@@ -1226,7 +1318,9 @@ const totalVisibleReminders =
   value={summary?.executionUrgency?.overdue || 0}
   description="Inspection activities past deadline"
   tone="red"
-  onClick={() => changeFilter('EXECUTION')}
+  onClick={() =>
+  changeFilter('EXECUTION_OVERDUE')
+}
 />
 
             <ReminderCard
@@ -1234,7 +1328,9 @@ const totalVisibleReminders =
   value={summary?.executionUrgency?.today || 0}
   description="Execution activities scheduled for today"
   tone="blue"
-  onClick={() => changeFilter('EXECUTION')}
+  onClick={() =>
+    changeFilter('EXECUTION_TODAY')
+  }
 />
 
             <ReminderCard
@@ -1242,7 +1338,9 @@ const totalVisibleReminders =
   value={summary?.executionUrgency?.upcoming || 0}
   description="Deadlines within the next 7 days"
   tone="amber"
-  onClick={() => changeFilter('EXECUTION')}
+  onClick={() =>
+    changeFilter('EXECUTION_UPCOMING')
+  }
 />
 
             <ReminderCard
@@ -1428,6 +1526,24 @@ const totalVisibleReminders =
   onClick={() => changeFilter('UPCOMING')}
 />
 </div>
+
+{filter === 'EXECUTION_OVERDUE' && (
+  <div className="mb-4 rounded-xl border border-red-100 bg-red-50 p-3 text-sm font-medium text-red-700">
+    Showing overdue execution inspections only.
+  </div>
+)}
+
+{filter === 'EXECUTION_TODAY' && (
+  <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm font-medium text-blue-700">
+    Showing execution work scheduled for today only.
+  </div>
+)}
+
+{filter === 'EXECUTION_UPCOMING' && (
+  <div className="mb-4 rounded-xl border border-amber-100 bg-amber-50 p-3 text-sm font-medium text-amber-700">
+    Showing execution deadlines within the next 7 days only.
+  </div>
+)}
 
 {(
   filter === 'OVERDUE' ||
