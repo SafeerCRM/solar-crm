@@ -2,18 +2,34 @@
 
 import {
   useEffect,
-  useRef,
   useState,
 } from 'react';
 import Link from 'next/link';
 import axios from 'axios';
 import { getAuthHeaders } from '@/lib/authHeaders';
 
-type ReminderSummary = {
-  overdueInspections: number;
-  todaysExecutionWork: number;
-  upcomingDeadlines: number;
-  totalPendingReminders: number;
+type ReminderCenterSummary = {
+  totalActive: number;
+
+  categories: {
+    execution: number;
+    payment: number;
+    approval: number;
+    purchase: number;
+    document: number;
+    loan: number;
+    subsidy: number;
+    electricity: number;
+    finalClosure: number;
+  };
+
+  executionUrgency: {
+    overdue: number;
+    today: number;
+    upcoming: number;
+  };
+
+  generatedAt?: string;
 };
 
 type ReminderItem = {
@@ -78,10 +94,7 @@ type FinalClosureReminderItem = {
   projectId: number;
 
   reminderType:
-    | 'PROJECT_COMPLETION_PENDING'
-    | 'PROJECT_OVERDUE'
-    | 'PAYMENT_CLOSURE_PENDING'
-    | 'FINAL_STATUS_UPDATE_PENDING';
+  | 'FINAL_STATUS_UPDATE_PENDING';
 
   customerName: string | null;
   customerPhone: string | null;
@@ -166,7 +179,8 @@ type SubsidyReminderItem = {
   reminderType:
     | 'SUBSIDY_DOCUMENT_PENDING'
     | 'SUBSIDY_PROCESS_PENDING'
-    | 'SUBSIDY_REQUEST_PENDING';
+    | 'SUBSIDY_REQUEST_PENDING'
+    | 'SUBSIDY_DISBURSEMENT_PENDING';
 
   subsidyStatus: string | null;
 
@@ -336,11 +350,46 @@ type PaymentReminderItem = {
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 export default function ProjectRemindersPage() {
-  const [summary, setSummary] = useState<ReminderSummary | null>(null);
+  const [summary, setSummary] =
+  useState<ReminderCenterSummary | null>(null);
   const [approvalPage, setApprovalPage] =
   useState(1);
 
 const [approvalTotalPages, setApprovalTotalPages] =
+  useState(1);
+  const [purchasePage, setPurchasePage] =
+  useState(1);
+const [purchaseTotalPages, setPurchaseTotalPages] =
+  useState(1);
+
+const [documentPage, setDocumentPage] =
+  useState(1);
+const [documentTotalPages, setDocumentTotalPages] =
+  useState(1);
+
+const [loanPage, setLoanPage] =
+  useState(1);
+const [loanTotalPages, setLoanTotalPages] =
+  useState(1);
+
+const [subsidyPage, setSubsidyPage] =
+  useState(1);
+const [subsidyTotalPages, setSubsidyTotalPages] =
+  useState(1);
+
+const [electricityPage, setElectricityPage] =
+  useState(1);
+const [electricityTotalPages, setElectricityTotalPages] =
+  useState(1);
+
+const [finalClosurePage, setFinalClosurePage] =
+  useState(1);
+const [finalClosureTotalPages, setFinalClosureTotalPages] =
+  useState(1);
+
+const [paymentPage, setPaymentPage] =
+  useState(1);
+const [paymentTotalPages, setPaymentTotalPages] =
   useState(1);
   const [items, setItems] = useState<ReminderItem[]>([]);
   const [paymentItems, setPaymentItems] = useState<PaymentReminderItem[]>([]);
@@ -370,8 +419,27 @@ const [approvalTotalPages, setApprovalTotalPages] =
   | 'UPCOMING'
 >('APPROVAL');
 
-const approvalPaginationInitialized =
-  useRef(false);
+
+
+  const fetchReminderSummary = async () => {
+  try {
+    const res = await axios.get(
+      `${apiBaseUrl}/project/reminders/center-summary`,
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+
+    setSummary(
+      res.data || null,
+    );
+  } catch (error) {
+    console.error(
+      'Reminder summary error:',
+      error,
+    );
+  }
+};
 
   const fetchReminders = async (
   selectedFilter:
@@ -393,14 +461,6 @@ const approvalPaginationInitialized =
     setLoading(true);
     setMessage('');
 
-    const summaryRes = await axios.get(
-      `${apiBaseUrl}/project/execution-reminders/summary`,
-      {
-        headers: getAuthHeaders(),
-      },
-    );
-
-    setSummary(summaryRes.data || null);
 
     if (
       selectedFilter === 'ALL' ||
@@ -431,17 +491,23 @@ const approvalPaginationInitialized =
   selectedFilter === 'UPCOMING'
 ) {
       const paymentRes = await axios.get(
-        `${apiBaseUrl}/project/payment-reminders`,
+        `${apiBaseUrl}/project/payment-reminders?page=${paymentPage}&limit=20`,
         {
           headers: getAuthHeaders(),
         },
       );
 
       setPaymentItems(
-        Array.isArray(paymentRes.data)
-          ? paymentRes.data
-          : [],
-      );
+  Array.isArray(paymentRes.data?.data)
+    ? paymentRes.data.data
+    : [],
+);
+
+setPaymentTotalPages(
+  Number(
+    paymentRes.data?.totalPages || 1,
+  ),
+);
     }
 
     if (
@@ -475,17 +541,23 @@ setApprovalTotalPages(
       selectedFilter === 'PURCHASE'
     ) {
       const purchaseRes = await axios.get(
-        `${apiBaseUrl}/project/purchase-reminders`,
+        `${apiBaseUrl}/project/purchase-reminders?page=${purchasePage}&limit=20`,
         {
           headers: getAuthHeaders(),
         },
       );
 
       setPurchaseItems(
-        Array.isArray(purchaseRes.data)
-          ? purchaseRes.data
-          : [],
-      );
+  Array.isArray(purchaseRes.data?.data)
+    ? purchaseRes.data.data
+    : [],
+);
+
+setPurchaseTotalPages(
+  Number(
+    purchaseRes.data?.totalPages || 1,
+  ),
+);
     }
 
     if (
@@ -493,17 +565,23 @@ setApprovalTotalPages(
       selectedFilter === 'DOCUMENT'
     ) {
       const documentRes = await axios.get(
-        `${apiBaseUrl}/project/document-reminders`,
+        `${apiBaseUrl}/project/document-reminders?page=${documentPage}&limit=20`,
         {
           headers: getAuthHeaders(),
         },
       );
 
       setDocumentItems(
-        Array.isArray(documentRes.data)
-          ? documentRes.data
-          : [],
-      );
+  Array.isArray(documentRes.data?.data)
+    ? documentRes.data.data
+    : [],
+);
+
+setDocumentTotalPages(
+  Number(
+    documentRes.data?.totalPages || 1,
+  ),
+);
     }
 
     if (
@@ -511,17 +589,23 @@ setApprovalTotalPages(
       selectedFilter === 'LOAN'
     ) {
       const loanRes = await axios.get(
-        `${apiBaseUrl}/project/loan-reminders`,
+        `${apiBaseUrl}/project/loan-reminders?page=${loanPage}&limit=20`,
         {
           headers: getAuthHeaders(),
         },
       );
 
       setLoanItems(
-        Array.isArray(loanRes.data)
-          ? loanRes.data
-          : [],
-      );
+  Array.isArray(loanRes.data?.data)
+    ? loanRes.data.data
+    : [],
+);
+
+setLoanTotalPages(
+  Number(
+    loanRes.data?.totalPages || 1,
+  ),
+);
     }
 
     if (
@@ -529,17 +613,23 @@ setApprovalTotalPages(
       selectedFilter === 'SUBSIDY'
     ) {
       const subsidyRes = await axios.get(
-        `${apiBaseUrl}/project/subsidy-reminders`,
+        `${apiBaseUrl}/project/subsidy-reminders?page=${subsidyPage}&limit=20`,
         {
           headers: getAuthHeaders(),
         },
       );
 
       setSubsidyItems(
-        Array.isArray(subsidyRes.data)
-          ? subsidyRes.data
-          : [],
-      );
+  Array.isArray(subsidyRes.data?.data)
+    ? subsidyRes.data.data
+    : [],
+);
+
+setSubsidyTotalPages(
+  Number(
+    subsidyRes.data?.totalPages || 1,
+  ),
+);
     }
 
     if (
@@ -547,36 +637,47 @@ setApprovalTotalPages(
       selectedFilter === 'ELECTRICITY'
     ) {
       const electricityRes = await axios.get(
-        `${apiBaseUrl}/project/electricity-reminders`,
+        `${apiBaseUrl}/project/electricity-reminders?page=${electricityPage}&limit=20`,
         {
           headers: getAuthHeaders(),
         },
       );
 
       setElectricityItems(
-        Array.isArray(electricityRes.data)
-          ? electricityRes.data
-          : [],
-      );
+  Array.isArray(electricityRes.data?.data)
+    ? electricityRes.data.data
+    : [],
+);
+
+setElectricityTotalPages(
+  Number(
+    electricityRes.data?.totalPages || 1,
+  ),
+);
     }
 
     if (
   selectedFilter === 'ALL' ||
-  selectedFilter === 'FINAL_CLOSURE' ||
-  selectedFilter === 'OVERDUE'
+  selectedFilter === 'FINAL_CLOSURE'
 ) {
   const finalClosureRes = await axios.get(
-    `${apiBaseUrl}/project/final-closure-reminders`,
+    `${apiBaseUrl}/project/final-closure-reminders?page=${finalClosurePage}&limit=20`,
     {
       headers: getAuthHeaders(),
     },
   );
 
   setFinalClosureItems(
-    Array.isArray(finalClosureRes.data)
-      ? finalClosureRes.data
-      : [],
-  );
+  Array.isArray(finalClosureRes.data?.data)
+    ? finalClosureRes.data.data
+    : [],
+);
+
+setFinalClosureTotalPages(
+  Number(
+    finalClosureRes.data?.totalPages || 1,
+  ),
+);
 }
   } catch (error: any) {
     console.error('Reminder error:', error);
@@ -769,6 +870,7 @@ const dismissUnifiedReminder = async (body: {
       body.reminderSource,
       body.referenceId,
     );
+    fetchReminderSummary();
   } catch (error: any) {
     console.error(
       'Dismiss unified reminder error:',
@@ -805,6 +907,7 @@ const dismissUnifiedReminder = async (body: {
     (item) => item.id !== activityId,
   ),
 );
+fetchReminderSummary();
   } catch (error: any) {
     console.error('Dismiss reminder error:', error);
     alert(
@@ -906,6 +1009,7 @@ const dismissPaymentReminder = async (
         (item) => item.id !== installmentId,
       ),
     );
+    fetchReminderSummary();
   } catch (error: any) {
     console.error(
       'Dismiss payment reminder error:',
@@ -936,25 +1040,34 @@ const changeFilter = (
     | 'UPCOMING',
 ) => {
   setApprovalPage(1);
+  setPurchasePage(1);
+  setDocumentPage(1);
+  setLoanPage(1);
+  setSubsidyPage(1);
+  setElectricityPage(1);
+  setFinalClosurePage(1);
+  setPaymentPage(1);
+
   setFilter(nextFilter);
 };
 
   useEffect(() => {
-  fetchReminders(filter);
-}, [filter]);
+  fetchReminderSummary();
+}, []);
 
 useEffect(() => {
-  if (!approvalPaginationInitialized.current) {
-    approvalPaginationInitialized.current = true;
-    return;
-  }
-
-  if (filter !== 'APPROVAL') {
-    return;
-  }
-
-  fetchReminders('APPROVAL');
-}, [approvalPage]);
+  fetchReminders(filter);
+}, [
+  filter,
+  approvalPage,
+  purchasePage,
+  documentPage,
+  loanPage,
+  subsidyPage,
+  electricityPage,
+  finalClosurePage,
+  paymentPage,
+]);
 
   const filteredExecutionItems = items.filter((item) => {
   if (filter === 'ALL' || filter === 'EXECUTION') return true;
@@ -1068,28 +1181,11 @@ const filteredElectricityItems = electricityItems.filter((item) => {
 });
 
 const filteredFinalClosureItems =
-  finalClosureItems.filter((item) => {
-    if (
+  finalClosureItems.filter(() => {
+    return (
       filter === 'ALL' ||
       filter === 'FINAL_CLOSURE'
-    )
-      return true;
-
-    if (
-      filter === 'OVERDUE' &&
-      item.reminderType === 'PROJECT_OVERDUE'
-    ) {
-      return true;
-    }
-
-    if (
-      filter === 'TODAY' ||
-      filter === 'UPCOMING'
-    ) {
-      return false;
-    }
-
-    return false;
+    );
   });
 
 const totalVisibleReminders =
@@ -1110,7 +1206,7 @@ const totalVisibleReminders =
           🔔 Reminder Center
         </h1>
         <p className="mt-1 text-sm text-gray-500">
-          Execution reminders, overdue inspections, and upcoming project deadlines.
+          Central work queue for project approvals, payments, execution, procurement, documents and department follow-ups.
         </p>
       </div>
 
@@ -1126,87 +1222,110 @@ const totalVisibleReminders =
         <>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
             <ReminderCard
-              title="Overdue Inspections"
-              value={summary?.overdueInspections || 0}
-              description="Inspection activities past deadline"
-              tone="red"
-            />
+  title="Overdue Execution Inspections"
+  value={summary?.executionUrgency?.overdue || 0}
+  description="Inspection activities past deadline"
+  tone="red"
+  onClick={() => changeFilter('EXECUTION')}
+/>
 
             <ReminderCard
-              title="Today’s Execution Work"
-              value={summary?.todaysExecutionWork || 0}
-              description="Execution activities scheduled for today"
-              tone="blue"
-            />
+  title="Execution Work Today"
+  value={summary?.executionUrgency?.today || 0}
+  description="Execution activities scheduled for today"
+  tone="blue"
+  onClick={() => changeFilter('EXECUTION')}
+/>
 
             <ReminderCard
-              title="Upcoming Deadlines"
-              value={summary?.upcomingDeadlines || 0}
-              description="Deadlines within the next 7 days"
-              tone="amber"
-            />
+  title="Execution Deadlines Upcoming"
+  value={summary?.executionUrgency?.upcoming || 0}
+  description="Deadlines within the next 7 days"
+  tone="amber"
+  onClick={() => changeFilter('EXECUTION')}
+/>
 
             <ReminderCard
               title="Total Pending Reminders"
-              value={summary?.totalPendingReminders || 0}
+              value={summary?.totalActive || 0}
               description="All active reminders requiring attention"
               tone="purple"
             />
 
             <ReminderCard
   title="Approval Pending"
-  value={approvalItems.length}
+  value={summary?.categories?.approval || 0}
   description="Projects waiting for approvals"
   tone="amber"
+  onClick={() => changeFilter('APPROVAL')}
 />
 
 <ReminderCard
   title="Purchase Pending"
-  value={purchaseItems.length}
+  value={summary?.categories?.purchase || 0}
   description="Pending procurement and partial purchases"
   tone="purple"
+  onClick={() => changeFilter('PURCHASE')}
 />
 
 <ReminderCard
   title="Document Pending"
-  value={documentItems.length}
+  value={summary?.categories?.document || 0}
   description="Projects with missing mandatory documents"
   tone="red"
+  onClick={() => changeFilter('DOCUMENT')}
 />
 
 <ReminderCard
-  title="Loan Pending"
-  value={loanItems.length}
-  description="Loan process and disbursement reminders"
+  title="Loan Work Pending"
+  value={summary?.categories?.loan || 0}
+  description="Active loan documentation, processing and disbursement work"
   tone="blue"
+  onClick={() => changeFilter('LOAN')}
 />
 
 <ReminderCard
-  title="Subsidy Pending"
-  value={subsidyItems.length}
-  description="Subsidy process and request reminders"
+  title="Subsidy Work Pending"
+  value={summary?.categories?.subsidy || 0}
+  description="Active subsidy process, request and disbursement work"
   tone="amber"
+  onClick={() => changeFilter('SUBSIDY')}
 />
 
 <ReminderCard
-  title="Electricity Pending"
-  value={electricityItems.length}
-  description="DISCOM and net meter reminders"
+  title="Electricity Work Pending"
+  value={summary?.categories?.electricity || 0}
+  description="Active DISCOM, meter and connection work"
   tone="purple"
+  onClick={() => changeFilter('ELECTRICITY')}
 />
 
 <ReminderCard
-  title="Final Closure"
-  value={finalClosureItems.length}
-  description="Project completion and closure reminders"
+  title="Closure Status Pending"
+  value={
+    summary?.categories?.finalClosure || 0
+  }
+  description="Completion date recorded but project not formally closed"
   tone="green"
+  onClick={() =>
+    changeFilter('FINAL_CLOSURE')
+  }
 />
 
             <ReminderCard
   title="Payment Reminders"
-  value={paymentItems.length}
-  description="Due, overdue, and upcoming payment reminders"
+  value={summary?.categories?.payment || 0}
+  description="Outstanding installments overdue, due today or due within 7 days"
   tone="green"
+  onClick={() => changeFilter('PAYMENT')}
+/>
+
+<ReminderCard
+  title="Execution"
+  value={summary?.categories?.execution || 0}
+  description="Active execution reminders"
+  tone="blue"
+  onClick={() => changeFilter('EXECUTION')}
 />
           </div>
 
@@ -1217,12 +1336,17 @@ const totalVisibleReminders =
                   Reminder Work List
                 </h2>
                 <p className="text-sm text-gray-500">
-                  Active execution work, overdue inspections, and upcoming deadlines.
+                  View and act on active reminders by department and workflow.
                 </p>
               </div>
 
               <button
-                onClick={() => fetchReminders(filter)}
+                onClick={async () => {
+  await Promise.all([
+    fetchReminderSummary(),
+    fetchReminders(filter),
+  ]);
+}}
                 className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white"
               >
                 Refresh
@@ -1230,11 +1354,7 @@ const totalVisibleReminders =
             </div>
 
             <div className="mb-4 flex flex-wrap gap-2">
-  <FilterButton
-    label="All"
-    active={filter === 'ALL'}
-    onClick={() => changeFilter('ALL')}
-  />
+  
 
   <FilterButton
     label="Execution"
@@ -1285,29 +1405,42 @@ const totalVisibleReminders =
   />
 
   <FilterButton
-    label="Final Closure"
+    label="Closure Status"
     active={filter === 'FINAL_CLOSURE'}
     onClick={() => changeFilter('FINAL_CLOSURE')}
   />
 
   <FilterButton
-    label="Overdue"
-    active={filter === 'OVERDUE'}
-    onClick={() => changeFilter('OVERDUE')}
-  />
+  label="Overdue Actions"
+  active={filter === 'OVERDUE'}
+  onClick={() => changeFilter('OVERDUE')}
+/>
 
-  <FilterButton
-    label="Today"
-    active={filter === 'TODAY'}
-    onClick={() => changeFilter('TODAY')}
-  />
+<FilterButton
+  label="Due Today"
+  active={filter === 'TODAY'}
+  onClick={() => changeFilter('TODAY')}
+/>
 
-  <FilterButton
-    label="Upcoming"
-    active={filter === 'UPCOMING'}
-    onClick={() => changeFilter('UPCOMING')}
-  />
+<FilterButton
+  label="Upcoming Actions"
+  active={filter === 'UPCOMING'}
+  onClick={() => changeFilter('UPCOMING')}
+/>
 </div>
+
+{(
+  filter === 'OVERDUE' ||
+  filter === 'TODAY' ||
+  filter === 'UPCOMING'
+) && (
+  <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-blue-700">
+  Urgency filters currently include Execution and
+  Payment reminders. Loan, Subsidy, Electricity,
+  Purchase, Document, Approval, and Closure reminders
+  are available through their department filters.
+</div>
+)}
 
 {totalVisibleReminders === 0 ? (
   <div className="rounded-xl bg-gray-50 p-4 text-sm text-gray-500">
@@ -1334,44 +1467,14 @@ onDismiss={dismissUnifiedReminder}
 />
 ))}
 
-{filter === 'APPROVAL' &&
-  approvalTotalPages > 1 && (
-    <div className="mt-6 flex items-center justify-center gap-4">
-      <button
-        disabled={approvalPage <= 1}
-        onClick={() =>
-          setApprovalPage((prev) =>
-            Math.max(prev - 1, 1),
-          )
-        }
-        className="rounded-xl bg-gray-200 px-4 py-2 text-sm font-semibold disabled:opacity-50"
-      >
-        Previous
-      </button>
+{filter === 'APPROVAL' && (
+  <ReminderPagination
+    page={approvalPage}
+    totalPages={approvalTotalPages}
+    onPageChange={setApprovalPage}
+  />
+)}
 
-      <div className="text-sm font-semibold text-gray-700">
-        Page {approvalPage} of{' '}
-        {approvalTotalPages}
-      </div>
-
-      <button
-        disabled={
-          approvalPage >= approvalTotalPages
-        }
-        onClick={() =>
-          setApprovalPage((prev) =>
-            Math.min(
-              prev + 1,
-              approvalTotalPages,
-            ),
-          )
-        }
-        className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-      >
-        Next
-      </button>
-    </div>
-  )}
 
 {filteredFinalClosureItems.map((item) => (
   <FinalClosureReminderListItem
@@ -1383,6 +1486,14 @@ onDismiss={dismissUnifiedReminder}
   />
 ))}
 
+{filter === 'FINAL_CLOSURE' && (
+  <ReminderPagination
+    page={finalClosurePage}
+    totalPages={finalClosureTotalPages}
+    onPageChange={setFinalClosurePage}
+  />
+)}
+
 {filteredElectricityItems.map((item) => (
   <ElectricityReminderListItem
     key={`electricity-${item.id}`}
@@ -1392,6 +1503,14 @@ onDismiss={dismissUnifiedReminder}
     actionLoadingId={actionLoadingId}
   />
 ))}
+
+{filter === 'ELECTRICITY' && (
+  <ReminderPagination
+    page={electricityPage}
+    totalPages={electricityTotalPages}
+    onPageChange={setElectricityPage}
+  />
+)}
 
 {filteredSubsidyItems.map((item) => (
   <SubsidyReminderListItem
@@ -1403,6 +1522,14 @@ onDismiss={dismissUnifiedReminder}
   />
 ))}
 
+{filter === 'SUBSIDY' && (
+  <ReminderPagination
+    page={subsidyPage}
+    totalPages={subsidyTotalPages}
+    onPageChange={setSubsidyPage}
+  />
+)}
+
 {filteredLoanItems.map((item) => (
   <LoanReminderListItem
     key={`loan-${item.id}`}
@@ -1412,6 +1539,14 @@ onDismiss={dismissUnifiedReminder}
     actionLoadingId={actionLoadingId}
   />
 ))}
+
+{filter === 'LOAN' && (
+  <ReminderPagination
+    page={loanPage}
+    totalPages={loanTotalPages}
+    onPageChange={setLoanPage}
+  />
+)}
 
 {filteredDocumentItems.map((item) => (
   <DocumentReminderListItem
@@ -1423,6 +1558,14 @@ onDismiss={dismissUnifiedReminder}
   />
 ))}
 
+{filter === 'DOCUMENT' && (
+  <ReminderPagination
+    page={documentPage}
+    totalPages={documentTotalPages}
+    onPageChange={setDocumentPage}
+  />
+)}
+
 {filteredPurchaseItems.map((item) => (
   <PurchaseReminderListItem
   key={`purchase-${item.id}`}
@@ -1433,6 +1576,14 @@ onDismiss={dismissUnifiedReminder}
 />
 ))}
 
+{filter === 'PURCHASE' && (
+  <ReminderPagination
+    page={purchasePage}
+    totalPages={purchaseTotalPages}
+    onPageChange={setPurchasePage}
+  />
+)}
+
     {filteredPaymentItems.map((item) => (
       <PaymentReminderListItem
         key={`payment-${item.id}`}
@@ -1441,6 +1592,14 @@ onDismiss={dismissUnifiedReminder}
         onRead={markPaymentReminderAsRead}
       />
     ))}
+
+    {filter === 'PAYMENT' && (
+  <ReminderPagination
+    page={paymentPage}
+    totalPages={paymentTotalPages}
+    onPageChange={setPaymentPage}
+  />
+)}
   </div>
 )}
           </div>
@@ -1455,11 +1614,13 @@ function ReminderCard({
   value,
   description,
   tone,
+  onClick,
 }: {
   title: string;
   value: number;
   description: string;
   tone: 'red' | 'blue' | 'amber' | 'purple' | 'green';
+  onClick?: () => void;
 }) {
   const toneClasses = {
     red: 'border-red-200 bg-red-50 text-red-700',
@@ -1470,11 +1631,22 @@ function ReminderCard({
   };
 
   return (
-    <div className={`rounded-2xl border p-4 shadow ${toneClasses[tone]}`}>
+  <button
+    type="button"
+    onClick={onClick}
+    disabled={!onClick}
+    className={`w-full rounded-2xl border p-4 text-left shadow transition ${
+      toneClasses[tone]
+    } ${
+      onClick
+        ? 'cursor-pointer hover:-translate-y-0.5 hover:shadow-md'
+        : 'cursor-default'
+    }`}
+  >
       <p className="text-sm font-medium">{title}</p>
       <p className="mt-2 text-3xl font-bold">{value}</p>
       <p className="mt-2 text-xs opacity-80">{description}</p>
-    </div>
+    </button>
   );
 }
 
@@ -1799,15 +1971,15 @@ function FinalClosureReminderListItem({
             />
 
             <InfoLine
-              label="Expected Completion"
-              value={
-                item.expectedCompletionDate
-                  ? new Date(
-                      item.expectedCompletionDate,
-                    ).toLocaleDateString('en-IN')
-                  : 'Not added'
-              }
-            />
+  label="Actual Completion"
+  value={
+    item.actualCompletionDate
+      ? new Date(
+          item.actualCompletionDate,
+        ).toLocaleDateString('en-IN')
+      : 'Not added'
+  }
+/>
           </div>
         </div>
 
@@ -2721,27 +2893,6 @@ function getReminderBadge(type: ReminderItem['reminderType']) {
 function getFinalClosureReminderBadge(
   type: FinalClosureReminderItem['reminderType'],
 ) {
-  if (type === 'PROJECT_OVERDUE') {
-    return {
-      label: 'Project Overdue',
-      className: 'bg-red-100 text-red-700',
-    };
-  }
-
-  if (type === 'PAYMENT_CLOSURE_PENDING') {
-    return {
-      label: 'Payment Closure Pending',
-      className: 'bg-amber-100 text-amber-700',
-    };
-  }
-
-  if (type === 'PROJECT_COMPLETION_PENDING') {
-    return {
-      label: 'Project Completion Pending',
-      className: 'bg-blue-100 text-blue-700',
-    };
-  }
-
   return {
     label: 'Final Status Update Pending',
     className: 'bg-green-100 text-green-700',
@@ -2781,23 +2932,47 @@ function getElectricityReminderBadge(
 function getSubsidyReminderBadge(
   type: SubsidyReminderItem['reminderType'],
 ) {
-  if (type === 'SUBSIDY_DOCUMENT_PENDING') {
+  if (
+    type ===
+    'SUBSIDY_DOCUMENT_PENDING'
+  ) {
     return {
-      label: 'Subsidy Document Pending',
-      className: 'bg-red-100 text-red-700',
+      label:
+        'Subsidy Document Pending',
+      className:
+        'bg-red-100 text-red-700',
     };
   }
 
-  if (type === 'SUBSIDY_REQUEST_PENDING') {
+  if (
+    type ===
+    'SUBSIDY_REQUEST_PENDING'
+  ) {
     return {
-      label: 'Subsidy Request Pending',
-      className: 'bg-amber-100 text-amber-700',
+      label:
+        'Subsidy Request Pending',
+      className:
+        'bg-amber-100 text-amber-700',
+    };
+  }
+
+  if (
+    type ===
+    'SUBSIDY_DISBURSEMENT_PENDING'
+  ) {
+    return {
+      label:
+        'Subsidy Disbursement Pending',
+      className:
+        'bg-green-100 text-green-700',
     };
   }
 
   return {
-    label: 'Subsidy Process Pending',
-    className: 'bg-blue-100 text-blue-700',
+    label:
+      'Subsidy Process Pending',
+    className:
+      'bg-blue-100 text-blue-700',
   };
 }
 
@@ -2945,6 +3120,57 @@ function InfoLine({
     <div className="rounded-lg bg-white p-2">
       <p className="text-xs text-gray-500">{label}</p>
       <p className="truncate font-semibold text-gray-900">{value}</p>
+    </div>
+  );
+}
+
+function ReminderPagination({
+  page,
+  totalPages,
+  onPageChange,
+}: {
+  page: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+}) {
+  if (totalPages <= 1) {
+    return null;
+  }
+
+  return (
+    <div className="mt-6 flex flex-wrap items-center justify-center gap-4 rounded-xl border bg-white p-3">
+      <button
+        type="button"
+        disabled={page <= 1}
+        onClick={() =>
+          onPageChange(
+            Math.max(page - 1, 1),
+          )
+        }
+        className="rounded-xl bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        Previous
+      </button>
+
+      <div className="text-sm font-semibold text-gray-700">
+        Page {page} of {totalPages}
+      </div>
+
+      <button
+        type="button"
+        disabled={page >= totalPages}
+        onClick={() =>
+          onPageChange(
+            Math.min(
+              page + 1,
+              totalPages,
+            ),
+          )
+        }
+        className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        Next
+      </button>
     </div>
   );
 }

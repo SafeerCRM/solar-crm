@@ -8,6 +8,15 @@ import {
 import axios from 'axios';
 
 import {
+  FFmpeg,
+} from '@ffmpeg/ffmpeg';
+
+import {
+  fetchFile,
+  toBlobURL,
+} from '@ffmpeg/util';
+
+import {
   LocalizationProvider,
 } from '@mui/x-date-pickers/LocalizationProvider';
 
@@ -59,6 +68,10 @@ type VaultDocument = {
   restoredBy?: number;
   restoredByName?: string;
   restoreReason?: string;
+
+  lastEditedAt?: string;
+lastEditedBy?: number;
+lastEditedByName?: string;
 
   createdAt?: string;
   updatedAt?: string;
@@ -217,6 +230,217 @@ const compressImageFile = async (
   );
 };
 
+const compressVideoFile = async (
+  file: File,
+  onProgress?: (
+    progress: number,
+  ) => void,
+): Promise<File> => {
+  if (
+    !VIDEO_TYPES.includes(
+      file.type,
+    )
+  ) {
+    return file;
+  }
+
+  if (
+    file.size >
+    MAX_ORIGINAL_VIDEO_SIZE
+  ) {
+    throw new Error(
+      'Video must be 250 MB or smaller before compression',
+    );
+  }
+
+  if (
+    file.size <=
+    VIDEO_COMPRESSION_THRESHOLD
+  ) {
+    return file;
+  }
+
+  const ffmpeg =
+    new FFmpeg();
+
+  ffmpeg.on(
+    'progress',
+    ({
+      progress,
+    }) => {
+      const percentage =
+        Math.max(
+          0,
+          Math.min(
+            100,
+            Math.round(
+              progress * 100,
+            ),
+          ),
+        );
+
+      onProgress?.(
+        percentage,
+      );
+    },
+  );
+
+  /*
+   * Load FFmpeg only when a video actually needs compression.
+   * This prevents the heavy WASM runtime from loading merely
+   * because someone opened the Document Vault page.
+   */
+  const baseURL =
+    'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd';
+
+  await ffmpeg.load({
+    coreURL:
+      await toBlobURL(
+        `${baseURL}/ffmpeg-core.js`,
+        'text/javascript',
+      ),
+
+    wasmURL:
+      await toBlobURL(
+        `${baseURL}/ffmpeg-core.wasm`,
+        'application/wasm',
+      ),
+  });
+
+  const extension =
+    file.name
+      .split('.')
+      .pop()
+      ?.toLowerCase() ||
+    'mp4';
+
+  const inputName =
+    `input-${Date.now()}.${extension}`;
+
+  const outputName =
+    `compressed-${Date.now()}.mp4`;
+
+  await ffmpeg.writeFile(
+    inputName,
+    await fetchFile(file),
+  );
+
+  const exitCode =
+    await ffmpeg.exec([
+      '-i',
+      inputName,
+
+      '-vf',
+      'scale=-2:min(720\\,ih)',
+
+      '-c:v',
+      'libx264',
+
+      '-preset',
+      'veryfast',
+
+      '-crf',
+      '28',
+
+      '-c:a',
+      'aac',
+
+      '-b:a',
+      '96k',
+
+      '-movflags',
+      '+faststart',
+
+      outputName,
+    ]);
+
+  if (
+    exitCode !== 0
+  ) {
+    throw new Error(
+      'Video compression failed',
+    );
+  }
+
+  const outputData =
+    await ffmpeg.readFile(
+      outputName,
+    );
+
+  await ffmpeg.deleteFile(
+    inputName,
+  );
+
+  await ffmpeg.deleteFile(
+    outputName,
+  );
+
+  ffmpeg.terminate();
+
+  const outputBytes =
+    outputData instanceof Uint8Array
+      ? new Uint8Array(
+          outputData,
+        )
+      : new TextEncoder().encode(
+          outputData,
+        );
+
+  const blob =
+    new Blob(
+      [outputBytes],
+      {
+        type:
+          'video/mp4',
+      },
+    );
+
+  if (
+    blob.size >
+    MAX_FINAL_VIDEO_SIZE
+  ) {
+    throw new Error(
+      'Compressed video is still larger than 100 MB',
+    );
+  }
+
+  const originalBaseName =
+    file.name.replace(
+      /\.[^/.]+$/,
+      '',
+    );
+
+  return new File(
+    [blob],
+    `${originalBaseName}-compressed.mp4`,
+    {
+      type:
+        'video/mp4',
+
+      lastModified:
+        Date.now(),
+    },
+  );
+};
+
+const MB =
+  1024 * 1024;
+
+const MAX_ORIGINAL_VIDEO_SIZE =
+  250 * MB;
+
+const VIDEO_COMPRESSION_THRESHOLD =
+  25 * MB;
+
+const MAX_FINAL_VIDEO_SIZE =
+  100 * MB;
+
+const VIDEO_TYPES = [
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+];
+
 const formatDateTime = (
   value?: string,
 ) => {
@@ -298,6 +522,20 @@ export default function GlobalDocumentVaultPage() {
   ] =
     useState(false);
 
+    const [
+  videoCompressionProgress,
+  setVideoCompressionProgress,
+] =
+  useState<number | null>(
+    null,
+  );
+
+const [
+  processingFileName,
+  setProcessingFileName,
+] =
+  useState('');
+
   const [
     uploadForm,
     setUploadForm,
@@ -330,6 +568,31 @@ export default function GlobalDocumentVaultPage() {
       total: 0,
       totalPages: 1,
     });
+
+    const [
+  editingDocument,
+  setEditingDocument,
+] =
+  useState<VaultDocument | null>(
+    null,
+  );
+
+const [
+  editForm,
+  setEditForm,
+] =
+  useState({
+    title: '',
+    category: '',
+    tags: '',
+    remarks: '',
+  });
+
+const [
+  savingEdit,
+  setSavingEdit,
+] =
+  useState(false);
 
   const [
     titleSuggestions,
@@ -746,150 +1009,402 @@ export default function GlobalDocumentVaultPage() {
   };
 
   const uploadDocuments =
-    async () => {
-      const title =
-        uploadForm.title.trim();
+  async () => {
+    const title =
+      uploadForm.title.trim();
 
-      const category =
-        uploadForm.category.trim();
+    const category =
+      uploadForm.category.trim();
 
-      if (!title) {
-        alert(
-          'Document title is required',
-        );
+    if (!title) {
+      alert(
+        'Document title is required',
+      );
 
-        return;
-      }
+      return;
+    }
 
-      if (!category) {
-        alert(
-          'Document category is required',
-        );
+    if (!category) {
+      alert(
+        'Document category is required',
+      );
 
-        return;
-      }
+      return;
+    }
 
-      if (
-        selectedFiles.length ===
-        0
+    if (
+      selectedFiles.length ===
+      0
+    ) {
+      alert(
+        'Select at least one document',
+      );
+
+      return;
+    }
+
+    try {
+      setUploading(true);
+
+      setVideoCompressionProgress(
+        null,
+      );
+
+      setProcessingFileName(
+        '',
+      );
+
+      for (
+        const file of
+          selectedFiles
       ) {
-        alert(
-          'Select at least one document',
+        setProcessingFileName(
+          file.name,
         );
 
-        return;
-      }
+        let processedFile =
+          file;
 
-      try {
-        setUploading(true);
+        // ============================
+        // IMAGE
+        // ============================
 
-        for (
-          const file of
-            selectedFiles
+        if (
+          file.type.startsWith(
+            'image/',
+          )
         ) {
-          const compressedFile =
+          processedFile =
             await compressImageFile(
               file,
             );
+        }
 
-          const formData =
-            new FormData();
+        // ============================
+        // VIDEO
+        // ============================
 
-          formData.append(
-            'file',
-            compressedFile,
+        else if (
+          VIDEO_TYPES.includes(
+            file.type,
+          )
+        ) {
+          if (
+            file.size >
+            MAX_ORIGINAL_VIDEO_SIZE
+          ) {
+            throw new Error(
+              `"${file.name}" is larger than 250 MB`,
+            );
+          }
+
+          if (
+            file.size >
+            VIDEO_COMPRESSION_THRESHOLD
+          ) {
+            setVideoCompressionProgress(
+              0,
+            );
+
+            processedFile =
+              await compressVideoFile(
+                file,
+
+                (
+                  progress,
+                ) => {
+                  setVideoCompressionProgress(
+                    progress,
+                  );
+                },
+              );
+          } else {
+            setVideoCompressionProgress(
+              null,
+            );
+          }
+        }
+
+        // ============================
+        // FINAL CLIENT-SIDE CHECKS
+        // ============================
+
+        if (
+          processedFile.type.startsWith(
+            'image/',
+          ) &&
+          processedFile.size >
+            8 * MB
+        ) {
+          throw new Error(
+            `"${file.name}" is still larger than 8 MB after image compression`,
           );
+        }
 
-          formData.append(
-            'title',
-            title,
+        if (
+          processedFile.type ===
+            'application/pdf' &&
+          processedFile.size >
+            25 * MB
+        ) {
+          throw new Error(
+            `"${file.name}" exceeds the 25 MB PDF limit`,
           );
+        }
 
-          formData.append(
-            'category',
-            category,
+        if (
+          VIDEO_TYPES.includes(
+            processedFile.type,
+          ) &&
+          processedFile.size >
+            MAX_FINAL_VIDEO_SIZE
+        ) {
+          throw new Error(
+            `"${file.name}" exceeds the 100 MB final video limit`,
           );
+        }
 
-          formData.append(
-            'tags',
-            uploadForm.tags.trim(),
-          );
+        setVideoCompressionProgress(
+          null,
+        );
 
-          formData.append(
-            'remarks',
-            uploadForm.remarks.trim(),
-          );
+        const formData =
+          new FormData();
 
-          await axios.post(
-            `${API_BASE_URL}/project/global-document-vault/upload`,
-            formData,
-            {
-              headers: {
-                ...getHeaders(),
+        formData.append(
+          'file',
+          processedFile,
+        );
 
-                'Content-Type':
-                  'multipart/form-data',
-              },
+        formData.append(
+          'title',
+          title,
+        );
+
+        formData.append(
+          'category',
+          category,
+        );
+
+        formData.append(
+          'tags',
+          uploadForm.tags.trim(),
+        );
+
+        formData.append(
+          'remarks',
+          uploadForm.remarks.trim(),
+        );
+
+        await axios.post(
+          `${API_BASE_URL}/project/global-document-vault/upload`,
+          formData,
+          {
+            headers: {
+              ...getHeaders(),
+
+              'Content-Type':
+                'multipart/form-data',
             },
-          );
-        }
-
-        alert(
-          selectedFiles.length ===
-            1
-            ? 'Document uploaded successfully'
-            : `${selectedFiles.length} documents uploaded successfully`,
+          },
         );
-
-        setUploadForm(
-          initialUploadForm,
-        );
-
-        setSelectedFiles(
-          [],
-        );
-
-        const fileInput =
-          document.getElementById(
-            'global-document-vault-files',
-          ) as HTMLInputElement | null;
-
-        if (fileInput) {
-          fileInput.value =
-            '';
-        }
-
-        await Promise.all([
-          fetchDocuments(1),
-
-          fetchSuggestions(
-            'title',
-          ),
-
-          fetchSuggestions(
-            'category',
-          ),
-
-          fetchSuggestions(
-            'tag',
-          ),
-        ]);
-      } catch (
-        error: any
-      ) {
-        console.error(
-          error,
-        );
-
-        alert(
-          error?.response?.data
-            ?.message ||
-            'Failed to upload document',
-        );
-      } finally {
-        setUploading(false);
       }
-    };
+
+      alert(
+        selectedFiles.length ===
+          1
+          ? 'Document uploaded successfully'
+          : `${selectedFiles.length} documents uploaded successfully`,
+      );
+
+      setUploadForm(
+        initialUploadForm,
+      );
+
+      setSelectedFiles(
+        [],
+      );
+
+      setProcessingFileName(
+        '',
+      );
+
+      setVideoCompressionProgress(
+        null,
+      );
+
+      const fileInput =
+        document.getElementById(
+          'global-document-vault-files',
+        ) as HTMLInputElement | null;
+
+      if (fileInput) {
+        fileInput.value =
+          '';
+      }
+
+      await Promise.all([
+        fetchDocuments(1),
+
+        fetchSuggestions(
+          'title',
+        ),
+
+        fetchSuggestions(
+          'category',
+        ),
+
+        fetchSuggestions(
+          'tag',
+        ),
+      ]);
+    } catch (
+      error: any
+    ) {
+      console.error(
+        error,
+      );
+
+      alert(
+        error?.response?.data
+          ?.message ||
+          error?.message ||
+          'Failed to upload document',
+      );
+    } finally {
+      setUploading(false);
+
+      setVideoCompressionProgress(
+        null,
+      );
+
+      setProcessingFileName(
+        '',
+      );
+    }
+  };
+
+  const startEditingDocument = (
+  documentItem: VaultDocument,
+) => {
+  setEditingDocument(
+    documentItem,
+  );
+
+  setEditForm({
+    title:
+      documentItem.title ||
+      '',
+
+    category:
+      documentItem.category ||
+      '',
+
+    tags:
+      Array.isArray(
+        documentItem.tags,
+      )
+        ? documentItem.tags.join(
+            ', ',
+          )
+        : '',
+
+    remarks:
+      documentItem.remarks ||
+      '',
+  });
+};
+
+const saveDocumentEdit =
+  async () => {
+    if (!editingDocument) {
+      return;
+    }
+
+    const title =
+      editForm.title.trim();
+
+    const category =
+      editForm.category.trim();
+
+    if (!title) {
+      alert(
+        'Document title is required',
+      );
+
+      return;
+    }
+
+    if (!category) {
+      alert(
+        'Document category is required',
+      );
+
+      return;
+    }
+
+    try {
+      setSavingEdit(true);
+
+      await axios.patch(
+        `${API_BASE_URL}/project/global-document-vault/${editingDocument.id}`,
+        {
+          title,
+          category,
+
+          tags:
+            editForm.tags.trim(),
+
+          remarks:
+            editForm.remarks.trim(),
+        },
+        {
+          headers:
+            getHeaders(),
+        },
+      );
+
+      setEditingDocument(
+        null,
+      );
+
+      await Promise.all([
+        fetchDocuments(
+          pagination.page,
+        ),
+
+        fetchSuggestions(
+          'title',
+        ),
+
+        fetchSuggestions(
+          'category',
+        ),
+
+        fetchSuggestions(
+          'tag',
+        ),
+      ]);
+
+      alert(
+        'Document details updated successfully',
+      );
+    } catch (
+      error: any
+    ) {
+      console.error(
+        error,
+      );
+
+      alert(
+        error?.response?.data
+          ?.message ||
+          'Failed to update document',
+      );
+    } finally {
+      setSavingEdit(false);
+    }
+  };
 
   const hideDocument =
     async (
@@ -1051,8 +1566,11 @@ export default function GlobalDocumentVaultPage() {
               className="shrink-0 rounded-xl bg-green-600 px-5 py-3 text-sm font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {uploading
-                ? 'Compressing & Uploading...'
-                : 'Upload Document'}
+  ? videoCompressionProgress !==
+    null
+    ? `Compressing Video ${videoCompressionProgress}%`
+    : 'Uploading...'
+  : 'Upload Document'}
             </button>
           </div>
 
@@ -1129,7 +1647,7 @@ export default function GlobalDocumentVaultPage() {
               id="global-document-vault-files"
               type="file"
               multiple
-              accept=".pdf,.jpg,.jpeg,.png,.webp"
+              accept=".pdf,.jpg,.jpeg,.png,.webp,.mp4,.mov,.webm"
               onChange={(event) =>
                 setSelectedFiles(
                   Array.from(
@@ -1207,10 +1725,35 @@ export default function GlobalDocumentVaultPage() {
               {
                 selectedFiles.length
               }{' '}
-              file(s) selected. Image files larger than 1 MB
-              will be automatically compressed before upload.
+              {selectedFiles.length}{' '}
+file(s) selected. Images larger than 1 MB and videos larger than 25 MB will be automatically compressed before upload.
             </div>
           )}
+
+          {uploading &&
+  processingFileName && (
+    <div className="mt-3 rounded-xl bg-yellow-50 p-3 text-sm text-yellow-800">
+      <div className="font-semibold">
+        {videoCompressionProgress !==
+        null
+          ? `Compressing video: ${processingFileName}`
+          : `Processing: ${processingFileName}`}
+      </div>
+
+      {videoCompressionProgress !==
+        null && (
+        <div className="mt-2 h-2 overflow-hidden rounded-full bg-yellow-200">
+          <div
+            className="h-full bg-yellow-600 transition-all duration-300"
+            style={{
+              width:
+                `${videoCompressionProgress}%`,
+            }}
+          />
+        </div>
+      )}
+    </div>
+  )}
         </div>
 
         <div className="rounded-2xl bg-white p-5 shadow">
@@ -1483,171 +2026,378 @@ export default function GlobalDocumentVaultPage() {
           ) : (
             <div className="mt-5 space-y-3">
               {documents.map(
-                (
-                  documentItem,
-                ) => (
-                  <div
-                    key={
-                      documentItem.id
-                    }
-                    className={`rounded-2xl border p-4 ${
-                      documentItem.isHidden
-                        ? 'border-red-200 bg-red-50/40'
-                        : 'bg-white'
-                    }`}
-                  >
-                    <div className="flex min-w-0 flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="break-words text-base font-bold text-gray-900">
-                            {
-                              documentItem.title
-                            }
-                          </h3>
+  (
+    documentItem,
+  ) => {
+    const canEditDocument =
+      isOwner ||
+      (
+        Number(
+          documentItem.uploadedBy ||
+            0,
+        ) > 0 &&
+        Number(
+          documentItem.uploadedBy,
+        ) ===
+          Number(
+            currentUser?.id ||
+              0,
+          )
+      );
 
-                          <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">
-                            {
-                              documentItem.category
-                            }
-                          </span>
+    const isEditing =
+      editingDocument?.id ===
+      documentItem.id;
 
-                          {documentItem.isHidden && (
-                            <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700">
-                              HIDDEN
-                            </span>
-                          )}
-                        </div>
+    return (
+      <div
+        key={
+          documentItem.id
+        }
+        className={`rounded-2xl border p-4 ${
+          documentItem.isHidden
+            ? 'border-red-200 bg-red-50/40'
+            : 'bg-white'
+        }`}
+      >
+        <div className="flex min-w-0 flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="break-words text-base font-bold text-gray-900">
+                {
+                  documentItem.title
+                }
+              </h3>
 
-                        <p className="mt-2 break-all text-sm font-semibold text-gray-700">
-                          {
-                            documentItem.fileName
-                          }
-                        </p>
+              <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">
+                {
+                  documentItem.category
+                }
+              </span>
 
-                        <p className="mt-1 text-xs text-gray-500">
-                          Uploaded by:{' '}
-                          <span className="font-semibold">
-                            {documentItem.uploadedByName ||
-                              '-'}
-                          </span>
-                          {' · '}
-                          {formatDateTime(
-                            documentItem.createdAt,
-                          )}
-                          {' · '}
-                          {formatFileSize(
-                            documentItem.fileSize,
-                          )}
-                        </p>
-
-                        {documentItem.uploadedByRole && (
-                          <p className="mt-1 text-xs text-gray-500">
-                            Role:{' '}
-                            {documentItem.uploadedByRole.replaceAll(
-                              '_',
-                              ' ',
-                            )}
-                          </p>
-                        )}
-
-                        {Array.isArray(
-                          documentItem.tags,
-                        ) &&
-                          documentItem.tags.length >
-                            0 && (
-                            <div className="mt-3 flex flex-wrap gap-2">
-                              {documentItem.tags.map(
-                                (
-                                  tag,
-                                  index,
-                                ) => (
-                                  <span
-                                    key={`${documentItem.id}-${tag}-${index}`}
-                                    className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700"
-                                  >
-                                    #{tag}
-                                  </span>
-                                ),
-                              )}
-                            </div>
-                          )}
-
-                        {documentItem.remarks && (
-                          <p className="mt-3 whitespace-pre-wrap text-sm text-gray-700">
-                            {
-                              documentItem.remarks
-                            }
-                          </p>
-                        )}
-
-                        {documentItem.isHidden &&
-                          documentItem.hiddenReason && (
-                            <div className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">
-                              Hidden reason:{' '}
-                              {
-                                documentItem.hiddenReason
-                              }
-                            </div>
-                          )}
-                      </div>
-
-                      <div className="flex shrink-0 flex-wrap gap-2">
-                        <a
-                          href={
-                            documentItem.fileUrl
-                          }
-                          target="_blank"
-                          rel="noreferrer"
-                          className="rounded-xl bg-blue-600 px-4 py-2 text-center text-sm font-semibold text-white hover:bg-blue-700"
-                        >
-                          View
-                        </a>
-
-                        <a
-                          href={
-                            documentItem.fileUrl
-                          }
-                          download={
-                            documentItem.fileName
-                          }
-                          target="_blank"
-                          rel="noreferrer"
-                          className="rounded-xl bg-gray-700 px-4 py-2 text-center text-sm font-semibold text-white hover:bg-gray-800"
-                        >
-                          Download
-                        </a>
-
-                        {isOwner &&
-                          (filters.showHidden ? (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                restoreDocument(
-                                  documentItem,
-                                )
-                              }
-                              className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
-                            >
-                              Restore
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                hideDocument(
-                                  documentItem,
-                                )
-                              }
-                              className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
-                            >
-                              Hide
-                            </button>
-                          ))}
-                      </div>
-                    </div>
-                  </div>
-                ),
+              {documentItem.isHidden && (
+                <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700">
+                  HIDDEN
+                </span>
               )}
+            </div>
+
+            <p className="mt-2 break-all text-sm font-semibold text-gray-700">
+              {
+                documentItem.fileName
+              }
+            </p>
+
+            <p className="mt-1 text-xs text-gray-500">
+              Uploaded by:{' '}
+              <span className="font-semibold">
+                {documentItem.uploadedByName ||
+                  '-'}
+              </span>
+
+              {' · '}
+
+              {formatDateTime(
+                documentItem.createdAt,
+              )}
+
+              {' · '}
+
+              {formatFileSize(
+                documentItem.fileSize,
+              )}
+            </p>
+
+            {documentItem.uploadedByRole && (
+              <p className="mt-1 text-xs text-gray-500">
+                Role:{' '}
+                {documentItem.uploadedByRole.replaceAll(
+                  '_',
+                  ' ',
+                )}
+              </p>
+            )}
+
+            {documentItem.lastEditedAt && (
+              <p className="mt-1 text-xs text-gray-500">
+                Last edited by:{' '}
+                <span className="font-semibold">
+                  {documentItem.lastEditedByName ||
+                    '-'}
+                </span>
+
+                {' · '}
+
+                {formatDateTime(
+                  documentItem.lastEditedAt,
+                )}
+              </p>
+            )}
+
+            {Array.isArray(
+              documentItem.tags,
+            ) &&
+              documentItem.tags.length >
+                0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {documentItem.tags.map(
+                    (
+                      tag,
+                      index,
+                    ) => (
+                      <span
+                        key={`${documentItem.id}-${tag}-${index}`}
+                        className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700"
+                      >
+                        #{tag}
+                      </span>
+                    ),
+                  )}
+                </div>
+              )}
+
+            {documentItem.remarks && (
+              <p className="mt-3 whitespace-pre-wrap text-sm text-gray-700">
+                {
+                  documentItem.remarks
+                }
+              </p>
+            )}
+
+            {documentItem.isHidden &&
+              documentItem.hiddenReason && (
+                <div className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">
+                  Hidden reason:{' '}
+                  {
+                    documentItem.hiddenReason
+                  }
+                </div>
+              )}
+          </div>
+
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <a
+              href={
+                documentItem.fileUrl
+              }
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-xl bg-blue-600 px-4 py-2 text-center text-sm font-semibold text-white hover:bg-blue-700"
+            >
+              View
+            </a>
+
+            <a
+              href={
+                documentItem.fileUrl
+              }
+              download={
+                documentItem.fileName
+              }
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-xl bg-gray-700 px-4 py-2 text-center text-sm font-semibold text-white hover:bg-gray-800"
+            >
+              Download
+            </a>
+
+            {canEditDocument &&
+              !documentItem.isHidden && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    startEditingDocument(
+                      documentItem,
+                    )
+                  }
+                  className="rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600"
+                >
+                  Edit
+                </button>
+              )}
+
+            {isOwner &&
+              (filters.showHidden ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    restoreDocument(
+                      documentItem,
+                    )
+                  }
+                  className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
+                >
+                  Restore
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() =>
+                    hideDocument(
+                      documentItem,
+                    )
+                  }
+                  className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+                >
+                  Hide
+                </button>
+              ))}
+          </div>
+        </div>
+
+        {isEditing && (
+          <div className="mt-5 border-t pt-5">
+            <div className="mb-4">
+              <h4 className="text-base font-bold text-gray-900">
+                Edit Document Details
+              </h4>
+
+              <p className="mt-1 text-xs text-gray-500">
+                You can edit the document details. The uploaded
+                file itself will remain unchanged.
+              </p>
+            </div>
+
+            <div className="grid min-w-0 gap-3 md:grid-cols-2">
+              <div className="min-w-0">
+                <input
+                  list="vault-edit-title-suggestions"
+                  placeholder="Document Title"
+                  value={
+                    editForm.title
+                  }
+                  onChange={(event) =>
+                    setEditForm({
+                      ...editForm,
+
+                      title:
+                        event.target.value,
+                    })
+                  }
+                  className="w-full min-w-0 rounded-xl border p-3"
+                />
+
+                <datalist id="vault-edit-title-suggestions">
+                  {titleSuggestions.map(
+                    (value) => (
+                      <option
+                        key={
+                          value
+                        }
+                        value={
+                          value
+                        }
+                      />
+                    ),
+                  )}
+                </datalist>
+              </div>
+
+              <div className="min-w-0">
+                <input
+                  list="vault-edit-category-suggestions"
+                  placeholder="Document Category"
+                  value={
+                    editForm.category
+                  }
+                  onChange={(event) =>
+                    setEditForm({
+                      ...editForm,
+
+                      category:
+                        event.target.value,
+                    })
+                  }
+                  className="w-full min-w-0 rounded-xl border p-3"
+                />
+
+                <datalist id="vault-edit-category-suggestions">
+                  {categorySuggestions.map(
+                    (value) => (
+                      <option
+                        key={
+                          value
+                        }
+                        value={
+                          value
+                        }
+                      />
+                    ),
+                  )}
+                </datalist>
+              </div>
+
+              <input
+                placeholder="Tags separated by commas"
+                value={
+                  editForm.tags
+                }
+                onChange={(event) =>
+                  setEditForm({
+                    ...editForm,
+
+                    tags:
+                      event.target.value,
+                  })
+                }
+                className="min-w-0 rounded-xl border p-3 md:col-span-2"
+              />
+
+              <textarea
+                placeholder="Document Remarks / Notes"
+                value={
+                  editForm.remarks
+                }
+                onChange={(event) =>
+                  setEditForm({
+                    ...editForm,
+
+                    remarks:
+                      event.target.value,
+                  })
+                }
+                rows={3}
+                className="min-w-0 rounded-xl border p-3 md:col-span-2"
+              />
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={
+                  saveDocumentEdit
+                }
+                disabled={
+                  savingEdit
+                }
+                className="rounded-xl bg-green-600 px-5 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {savingEdit
+                  ? 'Saving...'
+                  : 'Save Changes'}
+              </button>
+
+              <button
+                type="button"
+                disabled={
+                  savingEdit
+                }
+                onClick={() =>
+                  setEditingDocument(
+                    null,
+                  )
+                }
+                className="rounded-xl border px-5 py-2 text-sm font-semibold text-gray-700 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  },
+)}
             </div>
           )}
 
