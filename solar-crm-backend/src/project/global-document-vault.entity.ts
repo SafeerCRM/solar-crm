@@ -115,6 +115,22 @@ export class GlobalDocumentVault {
   })
   restoreReason: string;
 
+  @Column({
+  type: 'timestamp',
+  nullable: true,
+})
+lastEditedAt: Date;
+
+@Column({
+  nullable: true,
+})
+lastEditedBy: number;
+
+@Column({
+  nullable: true,
+})
+lastEditedByName: string;
+
   @CreateDateColumn()
   createdAt: Date;
 

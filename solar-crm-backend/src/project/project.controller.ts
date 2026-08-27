@@ -3650,10 +3650,24 @@ async getUnreadApprovalReminderCount(@Req() req: any) {
 @Get('purchase-reminders')
 async getPurchaseReminderList(
   @Req() req: any,
+
+  @Query('page')
+  page?: string,
+
+  @Query('limit')
+  limit?: string,
 ) {
-  return this.projectService.getPurchaseReminderList(
-    req.user,
-  );
+  return this.projectService
+    .getPurchaseReminderList(
+      req.user,
+      {
+        page:
+          Number(page || 1),
+
+        limit:
+          Number(limit || 20),
+      },
+    );
 }
 
 @Get('purchase-reminders/unread-count')
@@ -3668,9 +3682,22 @@ async getUnreadPurchaseReminderCount(
 @Get('document-reminders')
 async getDocumentReminderList(
   @Req() req: any,
+
+  @Query('page')
+  page?: string,
+
+  @Query('limit')
+  limit?: string,
 ) {
   return this.projectService.getDocumentReminderList(
     req.user,
+    {
+      page:
+        Number(page || 1),
+
+      limit:
+        Number(limit || 20),
+    },
   );
 }
 
@@ -3686,9 +3713,15 @@ async getUnreadDocumentReminderCount(
 @Get('loan-reminders')
 async getLoanReminderList(
   @Req() req: any,
+  @Query('page') page?: string,
+  @Query('limit') limit?: string,
 ) {
   return this.projectService.getLoanReminderList(
     req.user,
+    {
+      page: Number(page || 1),
+      limit: Number(limit || 20),
+    },
   );
 }
 
@@ -3959,9 +3992,15 @@ deleteProjectLoanCoApplicant(
 @Get('subsidy-reminders')
 async getSubsidyReminderList(
   @Req() req: any,
+  @Query('page') page?: string,
+  @Query('limit') limit?: string,
 ) {
   return this.projectService.getSubsidyReminderList(
     req.user,
+    {
+      page: Number(page || 1),
+      limit: Number(limit || 20),
+    },
   );
 }
 
@@ -3977,9 +4016,15 @@ async getUnreadSubsidyReminderCount(
 @Get('electricity-reminders')
 async getElectricityReminderList(
   @Req() req: any,
+  @Query('page') page?: string,
+  @Query('limit') limit?: string,
 ) {
   return this.projectService.getElectricityReminderList(
     req.user,
+    {
+      page: Number(page || 1),
+      limit: Number(limit || 20),
+    },
   );
 }
 
@@ -3995,9 +4040,15 @@ async getUnreadElectricityReminderCount(
 @Get('final-closure-reminders')
 async getFinalClosureReminderList(
   @Req() req: any,
+  @Query('page') page?: string,
+  @Query('limit') limit?: string,
 ) {
   return this.projectService.getFinalClosureReminderList(
     req.user,
+    {
+      page: Number(page || 1),
+      limit: Number(limit || 20),
+    },
   );
 }
 
@@ -4008,6 +4059,16 @@ async getUnreadFinalClosureReminderCount(
   return this.projectService.getUnreadFinalClosureReminderCount(
     req.user,
   );
+}
+
+@Get('reminders/center-summary')
+async getReminderCenterSummary(
+  @Req() req: any,
+) {
+  return this.projectService
+    .getReminderCenterSummary(
+      req.user,
+    );
 }
 
 @Post('reminders/mark-read')
@@ -4033,8 +4094,25 @@ async dismissUnifiedReminderForUser(
 }
 
 @Get('payment-reminders')
-async getPaymentReminderList(@Req() req: any) {
-  return this.projectService.getPaymentReminderList(req.user);
+async getPaymentReminderList(
+  @Req() req: any,
+
+  @Query('page')
+  page?: string,
+
+  @Query('limit')
+  limit?: string,
+) {
+  return this.projectService.getPaymentReminderList(
+    req.user,
+    {
+      page:
+        Number(page || 1),
+
+      limit:
+        Number(limit || 20),
+    },
+  );
 }
 
 @Get('payment-reminders/unread-count')
@@ -5264,6 +5342,21 @@ getGlobalDocumentVaultSuggestions(
   return this.projectService
     .getGlobalDocumentVaultSuggestions(
       query,
+      user,
+    );
+}
+
+@Patch('global-document-vault/:id')
+updateGlobalDocumentVaultItem(
+  @Param('id', ParseIntPipe)
+  id: number,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService
+    .updateGlobalDocumentVaultItem(
+      id,
+      body,
       user,
     );
 }

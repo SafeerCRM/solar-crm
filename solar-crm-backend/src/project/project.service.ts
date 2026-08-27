@@ -5069,35 +5069,76 @@ async uploadGlobalDocumentVaultFile(
     file.mimetype || '',
   );
 
-  const allowedTypes = [
-    'application/pdf',
-    'image/jpeg',
-    'image/png',
-    'image/webp',
-  ];
+  const imageTypes = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+];
 
-  if (
-    !allowedTypes.includes(
-      mimeType,
-    )
-  ) {
-    throw new BadRequestException(
-      'Only PDF, JPG, PNG and WEBP files are allowed',
-    );
-  }
+const videoTypes = [
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+];
 
-  const maximumSize =
-    12 * 1024 * 1024;
+const isImage =
+  imageTypes.includes(
+    mimeType,
+  );
 
-  if (
-    Number(
-      file.size || 0,
-    ) > maximumSize
-  ) {
-    throw new BadRequestException(
-      'Document file must be less than 12 MB after compression',
-    );
-  }
+const isPdf =
+  mimeType ===
+  'application/pdf';
+
+const isVideo =
+  videoTypes.includes(
+    mimeType,
+  );
+
+if (
+  !isImage &&
+  !isPdf &&
+  !isVideo
+) {
+  throw new BadRequestException(
+    'Only PDF, JPG, PNG, WEBP, MP4, MOV and WEBM files are allowed',
+  );
+}
+
+const fileSize =
+  Number(
+    file.size || 0,
+  );
+
+const MB =
+  1024 * 1024;
+
+if (
+  isImage &&
+  fileSize > 8 * MB
+) {
+  throw new BadRequestException(
+    'Image must be less than 8 MB after compression',
+  );
+}
+
+if (
+  isPdf &&
+  fileSize > 25 * MB
+) {
+  throw new BadRequestException(
+    'PDF must be less than 25 MB',
+  );
+}
+
+if (
+  isVideo &&
+  fileSize > 100 * MB
+) {
+  throw new BadRequestException(
+    'Video must be less than 100 MB after compression',
+  );
+}
 
   const supabaseUrl =
     process.env.SUPABASE_URL;
@@ -5613,6 +5654,129 @@ async getGlobalDocumentVaultSuggestions(
         ).trim(),
     )
     .filter(Boolean);
+}
+
+async updateGlobalDocumentVaultItem(
+  id: number,
+  body: any,
+  user: any,
+) {
+  this.assertGlobalDocumentVaultAccess(
+    user,
+  );
+
+  const document =
+    await this
+      .globalDocumentVaultRepository
+      .findOne({
+        where: {
+          id,
+          isHidden: false,
+        } as any,
+      });
+
+  if (!document) {
+    throw new NotFoundException(
+      'Document not found',
+    );
+  }
+
+  const currentUserId =
+    Number(
+      user?.id ||
+        user?.userId ||
+        user?.sub ||
+        0,
+    );
+
+  const roles =
+    this.getUserRoles(user);
+
+  const isOwner =
+    roles.includes('OWNER');
+
+  const isUploader =
+    Number(
+      document.uploadedBy || 0,
+    ) === currentUserId;
+
+  if (
+    !isOwner &&
+    !isUploader
+  ) {
+    throw new ForbiddenException(
+      'Only Owner or the original uploader can edit this document',
+    );
+  }
+
+  const title = String(
+    body?.title || '',
+  ).trim();
+
+  const category = String(
+    body?.category || '',
+  ).trim();
+
+  const remarks = String(
+    body?.remarks || '',
+  ).trim();
+
+  const tags = Array.isArray(
+    body?.tags,
+  )
+    ? body.tags
+        .map((tag: any) =>
+          String(tag || '').trim(),
+        )
+        .filter(Boolean)
+    : String(
+        body?.tags || '',
+      )
+        .split(',')
+        .map((tag) =>
+          tag.trim(),
+        )
+        .filter(Boolean);
+
+  if (!title) {
+    throw new BadRequestException(
+      'Document title is required',
+    );
+  }
+
+  if (!category) {
+    throw new BadRequestException(
+      'Document category is required',
+    );
+  }
+
+  document.title = title;
+  document.category = category;
+  document.tags = tags;
+  document.remarks = remarks;
+
+  document.lastEditedAt =
+    new Date();
+
+  document.lastEditedBy =
+    currentUserId;
+
+  document.lastEditedByName =
+    user?.name ||
+    user?.email ||
+    '';
+
+  const saved =
+    await this
+      .globalDocumentVaultRepository
+      .save(document);
+
+  return {
+    message:
+      'Document details updated successfully',
+
+    document: saved,
+  };
 }
 
 async hideGlobalDocumentVaultItem(
@@ -13777,7 +13941,13 @@ async rejectAccountExpense(
   );
 }
 
-async getPaymentReminderList(currentUser: any) {
+async getPaymentReminderList(
+  currentUser: any,
+  pagination?: {
+    page?: number;
+    limit?: number;
+  },
+) {
   const todayIndia = new Date().toLocaleDateString('en-CA', {
     timeZone: 'Asia/Kolkata',
   });
@@ -13789,11 +13959,31 @@ async getPaymentReminderList(currentUser: any) {
   const roles = currentUser?.roles || [];
   const userId = currentUser?.id || currentUser?.userId;
 
+  const page =
+  Number(pagination?.page) > 0
+    ? Number(pagination?.page)
+    : 1;
+
+const limit =
+  Number(pagination?.limit) > 0
+    ? Math.min(
+        Number(pagination?.limit),
+        100,
+      )
+    : 20;
+
+const skip =
+  (page - 1) * limit;
+
   const canSeeAll =
-    roles.includes('OWNER') ||
-    roles.includes('MARKETING_HEAD') ||
-    roles.includes('PROJECT_MANAGER') ||
-    roles.includes('PAYMENT_COLLECTION_EXECUTIVE');
+  roles.includes('OWNER') ||
+  roles.includes('MARKETING_HEAD') ||
+  roles.includes('PROJECT_MANAGER') ||
+  roles.includes(
+    'PAYMENT_COLLECTION_EXECUTIVE',
+  ) ||
+  roles.includes('PAYMENT_MANAGER') ||
+  roles.includes('ACCOUNT_MANAGER');
 
   const qb = this.projectPaymentInstallmentRepository
     .createQueryBuilder('payment')
@@ -13825,6 +14015,15 @@ async getPaymentReminderList(currentUser: any) {
     .where('payment.pendingAmount > 0')
 .andWhere('payment.isHidden = false')
 .andWhere('project.isHidden = false')
+.andWhere(
+  'project.status NOT IN (:...inactivePaymentProjectStatuses)',
+  {
+    inactivePaymentProjectStatuses: [
+      ProjectStatus.REJECTED,
+      ProjectStatus.CANCELLED,
+    ],
+  },
+)
     .andWhere('payment.status != :paidStatus', {
       paidStatus: ProjectPaymentInstallmentStatus.PAID,
     })
@@ -13849,61 +14048,91 @@ async getPaymentReminderList(currentUser: any) {
     qb.andWhere('project.projectOwnerId = :userId', { userId });
   }
 
+  const total =
+  await qb.clone().getCount();
+
+qb
+  .offset(skip)
+  .limit(limit);
+
   const rows = await qb.getRawMany();
 
-  return rows
-    .map((row) => {
-      const dueDate = row.dueDate
-        ? String(row.dueDate).split('T')[0]
-        : null;
+  const data = rows
+  .map((row) => {
+    const dueDate = row.dueDate
+      ? String(row.dueDate).split('T')[0]
+      : null;
 
-      if (!dueDate) return null;
+    if (!dueDate) return null;
 
-      let reminderType:
-        | 'PAYMENT_OVERDUE'
-        | 'PAYMENT_DUE_TODAY'
-        | 'PAYMENT_UPCOMING'
-        | null = null;
+    let reminderType:
+      | 'PAYMENT_OVERDUE'
+      | 'PAYMENT_DUE_TODAY'
+      | 'PAYMENT_UPCOMING'
+      | null = null;
 
-      if (dueDate < todayIndia) {
-        reminderType = 'PAYMENT_OVERDUE';
-      } else if (dueDate === todayIndia) {
-        reminderType = 'PAYMENT_DUE_TODAY';
-      } else if (dueDate > todayIndia) {
-        reminderType = 'PAYMENT_UPCOMING';
-      }
+    if (dueDate < todayIndia) {
+      reminderType = 'PAYMENT_OVERDUE';
+    } else if (dueDate === todayIndia) {
+      reminderType = 'PAYMENT_DUE_TODAY';
+    } else if (dueDate > todayIndia) {
+      reminderType = 'PAYMENT_UPCOMING';
+    }
 
-      if (!reminderType) return null;
+    if (!reminderType) return null;
 
-      return {
-        id: Number(row.id),
-        projectId: Number(row.projectId),
-        label: row.label,
-        amount: Number(row.amount || 0),
-        paidAmount: Number(row.paidAmount || 0),
-        pendingAmount: Number(row.pendingAmount || 0),
-        dueDate: row.dueDate,
-        status: this.getComputedPaymentStatus(
-          row.status,
-          row.dueDate,
-          Number(row.pendingAmount || 0),
-        ),
-        reminderType,
+    return {
+      id: Number(row.id),
+      projectId: Number(row.projectId),
+      label: row.label,
+      amount: Number(row.amount || 0),
+      paidAmount: Number(row.paidAmount || 0),
+      pendingAmount: Number(row.pendingAmount || 0),
+      dueDate: row.dueDate,
+      status: this.getComputedPaymentStatus(
+        row.status,
+        row.dueDate,
+        Number(row.pendingAmount || 0),
+      ),
+      reminderType,
 
-        customerName: row.customerName || null,
-        customerPhone: row.customerPhone || null,
-        branchName: row.branchName || null,
-        projectOwnerId: row.projectOwnerId
+      customerName:
+        row.customerName || null,
+
+      customerPhone:
+        row.customerPhone || null,
+
+      branchName:
+        row.branchName || null,
+
+      projectOwnerId:
+        row.projectOwnerId
           ? Number(row.projectOwnerId)
           : null,
-        projectOwnerName: row.projectOwnerName || null,
-        projectSerial: row.projectSerial || null,
 
-        userReminderStatus: row.userReminderStatus || 'UNREAD',
-        userReadAt: row.userReadAt || null,
-      };
-    })
-    .filter(Boolean);
+      projectOwnerName:
+        row.projectOwnerName || null,
+
+      projectSerial:
+        row.projectSerial || null,
+
+      userReminderStatus:
+        row.userReminderStatus || 'UNREAD',
+
+      userReadAt:
+        row.userReadAt || null,
+    };
+  })
+  .filter(Boolean);
+
+return {
+  data,
+  total,
+  page,
+  limit,
+  totalPages:
+    Math.ceil(total / limit) || 1,
+};
 }
 
 async getApprovalReminderList(
@@ -13937,8 +14166,20 @@ const skip = (page - 1) * limit;
     roles.includes('PROJECT_MANAGER');
 
   if (!canSeeApprovalReminders) {
-    return [];
-  }
+  return {
+    data: [],
+    total: 0,
+    page,
+    limit,
+    totalPages: 1,
+  };
+}
+
+const dismissedIds =
+  await this.getDismissedUnifiedReminderReferenceIds(
+    currentUser,
+    'APPROVAL',
+  );
 
   const qb = this.projectRepository
     .createQueryBuilder('project')
@@ -13957,11 +14198,22 @@ const skip = (page - 1) * limit;
       'project.createdAt AS "createdAt"',
     ])
     .where('project.isHidden = false')
+    .andWhere(
+  'project.status NOT IN (:...inactiveProjectStatuses)',
+  {
+    inactiveProjectStatuses: [
+      ProjectStatus.COMPLETED,
+      ProjectStatus.REJECTED,
+      ProjectStatus.CANCELLED,
+    ],
+  },
+)
     .andWhere('project.status NOT IN (:...closedStatuses)', {
   closedStatuses: [
-    ProjectStatus.REJECTED,
-    ProjectStatus.COMPLETED,
-  ],
+  ProjectStatus.REJECTED,
+  ProjectStatus.COMPLETED,
+  ProjectStatus.CANCELLED,
+],
 })
     .andWhere(
   `(
@@ -13977,16 +14229,36 @@ const skip = (page - 1) * limit;
 .offset(skip)
 .limit(limit);
 
+if (dismissedIds.length > 0) {
+  qb.andWhere(
+    'project.id NOT IN (:...dismissedIds)',
+    {
+      dismissedIds,
+    },
+  );
+}
+
   const rows = await qb.getRawMany();
 
   const totalQb = this.projectRepository
   .createQueryBuilder('project')
   .where('project.isHidden = false')
+  .andWhere(
+  'project.status NOT IN (:...inactiveProjectStatuses)',
+  {
+    inactiveProjectStatuses: [
+      ProjectStatus.COMPLETED,
+      ProjectStatus.REJECTED,
+      ProjectStatus.CANCELLED,
+    ],
+  },
+)
   .andWhere('project.status NOT IN (:...closedStatuses)', {
   closedStatuses: [
-    ProjectStatus.REJECTED,
-    ProjectStatus.COMPLETED,
-  ],
+  ProjectStatus.REJECTED,
+  ProjectStatus.COMPLETED,
+  ProjectStatus.CANCELLED,
+],
 })
   .andWhere(
     `(
@@ -13998,6 +14270,15 @@ const skip = (page - 1) * limit;
       pendingStatus: ProjectApprovalStatus.PENDING,
     },
   );
+
+  if (dismissedIds.length > 0) {
+  totalQb.andWhere(
+    'project.id NOT IN (:...dismissedIds)',
+    {
+      dismissedIds,
+    },
+  );
+}
 
 const total = await totalQb.getCount();
 
@@ -14098,7 +14379,13 @@ return {
 };
 }
 
-async getPurchaseReminderList(currentUser: any) {
+async getPurchaseReminderList(
+  currentUser: any,
+  pagination?: {
+    page?: number;
+    limit?: number;
+  },
+) {
   const roles = Array.isArray(currentUser?.roles)
     ? currentUser.roles
     : [];
@@ -14106,10 +14393,33 @@ async getPurchaseReminderList(currentUser: any) {
   const userId =
     currentUser?.id || currentUser?.userId;
 
+    const page =
+  Number(pagination?.page) > 0
+    ? Number(pagination?.page)
+    : 1;
+
+const limit =
+  Number(pagination?.limit) > 0
+    ? Math.min(
+        Number(pagination?.limit),
+        100,
+      )
+    : 20;
+
+const skip =
+  (page - 1) * limit;
+
+  const dismissedIds =
+  await this.getDismissedUnifiedReminderReferenceIds(
+    currentUser,
+    'PURCHASE',
+  );
+
   const canSeeAll =
-    roles.includes('OWNER') ||
-    roles.includes('PROJECT_MANAGER') ||
-    roles.includes('MARKETING_HEAD');
+  roles.includes('OWNER') ||
+  roles.includes('PROJECT_MANAGER') ||
+  roles.includes('MARKETING_HEAD') ||
+  roles.includes('STOCK_MANAGER');
 
   const qb =
     this.projectMaterialRequestItemRepository
@@ -14145,9 +14455,12 @@ async getPurchaseReminderList(currentUser: any) {
 
       .andWhere('project.isHidden = false')
 
-      .orderBy('item.createdAt', 'ASC')
-
-      .limit(50);
+      .orderBy(
+  'item.createdAt',
+  'ASC',
+)
+.offset(skip)
+.limit(limit);
 
   if (!canSeeAll) {
     qb.andWhere(
@@ -14158,7 +14471,61 @@ async getPurchaseReminderList(currentUser: any) {
     );
   }
 
-  const rows = await qb.getRawMany();
+  
+
+  const totalQb =
+  this.projectMaterialRequestItemRepository
+    .createQueryBuilder('item')
+    .leftJoin(
+      Project,
+      'project',
+      'project.id = item.projectId',
+    )
+    .where(
+      'item.pendingQuantity > 0',
+    )
+    .andWhere(
+      'project.isHidden = false',
+    );
+
+if (!canSeeAll) {
+  totalQb.andWhere(
+    'project.projectOwnerId = :userId',
+    {
+      userId,
+    },
+  );
+}
+
+/*
+ * A dismissed reminder should disappear only
+ * for the user who dismissed it.
+ *
+ * Apply the same exclusion to both:
+ * - the visible reminder query
+ * - the total count query
+ */
+if (dismissedIds.length > 0) {
+  qb.andWhere(
+    'item.id NOT IN (:...dismissedIds)',
+    {
+      dismissedIds,
+    },
+  );
+
+  totalQb.andWhere(
+    'item.id NOT IN (:...dismissedIds)',
+    {
+      dismissedIds,
+    },
+  );
+}
+
+const total =
+  await totalQb.getCount();
+
+const rows =
+  await qb.getRawMany();
 
 const reminderIds = rows.map((row) =>
   Number(row.id),
@@ -14171,7 +14538,7 @@ const stateMap =
     reminderIds,
   );
 
-  return rows
+  const data = rows
   .map((row) => {
     const reminderType =
       row.purchaseStatus ===
@@ -14235,15 +14602,20 @@ const stateMap =
 
       createdAt: row.createdAt,
     };
-    })
-  .filter((item) => {
-    if (!item) return false;
-
-    return (
-      item.userReminderStatus !==
-      ProjectReminderUserStateStatus.DISMISSED
-    );
+    
   });
+
+  return {
+  data,
+  total,
+  page,
+  limit,
+  totalPages:
+    Math.ceil(
+      total / limit,
+    ) || 1,
+};
+  
 }
 
 private getRequiredProjectDocumentTypes(project: Project) {
@@ -14295,6 +14667,249 @@ private async getUnifiedReminderStateMap(
   }
 
   return map;
+}
+
+private async getDismissedUnifiedReminderReferenceIds(
+  currentUser: any,
+  reminderSource: string,
+) {
+  const userId =
+    currentUser?.id || currentUser?.userId;
+
+  if (!userId) {
+    return [];
+  }
+
+  const states =
+    await this.projectReminderUserStateRepository.find({
+      where: {
+        userId,
+        reminderSource,
+        status:
+          ProjectReminderUserStateStatus.DISMISSED,
+      },
+      select: {
+        referenceId: true,
+      },
+    });
+
+  return states
+    .map((item) =>
+      Number(item.referenceId),
+    )
+    .filter((id) =>
+      Number.isFinite(id),
+    );
+}
+
+async getReminderCenterSummary(
+  currentUser: any,
+) {
+  const [
+    execution,
+    approval,
+    purchase,
+    document,
+    loan,
+    subsidy,
+    electricity,
+    finalClosure,
+    payment,
+  ] = await Promise.all([
+    this.getExecutionReminderSummary(
+      currentUser,
+    ),
+
+    this.getApprovalReminderList(
+      currentUser,
+      {
+        page: 1,
+        limit: 1,
+      },
+    ),
+
+    this.getPurchaseReminderList(
+      currentUser,
+      {
+        page: 1,
+        limit: 1,
+      },
+    ),
+
+    this.getDocumentReminderList(
+      currentUser,
+      {
+        page: 1,
+        limit: 1,
+      },
+    ),
+
+    this.getLoanReminderList(
+      currentUser,
+      {
+        page: 1,
+        limit: 1,
+      },
+    ),
+
+    this.getSubsidyReminderList(
+      currentUser,
+      {
+        page: 1,
+        limit: 1,
+      },
+    ),
+
+    this.getElectricityReminderList(
+      currentUser,
+      {
+        page: 1,
+        limit: 1,
+      },
+    ),
+
+    this.getFinalClosureReminderList(
+      currentUser,
+      {
+        page: 1,
+        limit: 1,
+      },
+    ),
+
+    this.getPaymentReminderList(
+      currentUser,
+      {
+        page: 1,
+        limit: 1,
+      },
+    ),
+  ]);
+
+  const getTotal = (
+    result: any,
+  ) => {
+    if (
+      result &&
+      !Array.isArray(result) &&
+      Number.isFinite(
+        Number(result.total),
+      )
+    ) {
+      return Number(
+        result.total,
+      );
+    }
+
+    if (
+      Array.isArray(result)
+    ) {
+      return result.length;
+    }
+
+    return 0;
+  };
+
+  const executionTotal =
+    Number(
+      execution
+        ?.totalPendingReminders ||
+        0,
+    );
+
+  const approvalTotal =
+    getTotal(approval);
+
+  const purchaseTotal =
+    getTotal(purchase);
+
+  const documentTotal =
+    getTotal(document);
+
+  const loanTotal =
+    getTotal(loan);
+
+  const subsidyTotal =
+    getTotal(subsidy);
+
+  const electricityTotal =
+    getTotal(electricity);
+
+  const finalClosureTotal =
+    getTotal(finalClosure);
+
+  const paymentTotal =
+    getTotal(payment);
+
+  const totalActive =
+    executionTotal +
+    approvalTotal +
+    purchaseTotal +
+    documentTotal +
+    loanTotal +
+    subsidyTotal +
+    electricityTotal +
+    finalClosureTotal +
+    paymentTotal;
+
+  return {
+    totalActive,
+
+    categories: {
+      execution:
+        executionTotal,
+
+      payment:
+        paymentTotal,
+
+      approval:
+        approvalTotal,
+
+      purchase:
+        purchaseTotal,
+
+      document:
+        documentTotal,
+
+      loan:
+        loanTotal,
+
+      subsidy:
+        subsidyTotal,
+
+      electricity:
+        electricityTotal,
+
+      finalClosure:
+        finalClosureTotal,
+    },
+
+    executionUrgency: {
+      overdue:
+        Number(
+          execution
+            ?.overdueInspections ||
+            0,
+        ),
+
+      today:
+        Number(
+          execution
+            ?.todaysExecutionWork ||
+            0,
+        ),
+
+      upcoming:
+        Number(
+          execution
+            ?.upcomingDeadlines ||
+            0,
+        ),
+    },
+
+    generatedAt:
+      new Date()
+        .toISOString(),
+  };
 }
 
 async markUnifiedReminderAsRead(
@@ -14452,13 +15067,41 @@ async dismissUnifiedReminderForUser(
   );
 }
 
-async getDocumentReminderList(currentUser: any) {
+async getDocumentReminderList(
+  currentUser: any,
+  pagination?: {
+    page?: number;
+    limit?: number;
+  },
+) {
   const roles = Array.isArray(currentUser?.roles)
     ? currentUser.roles
     : [];
 
   const userId =
     currentUser?.id || currentUser?.userId;
+
+    const page =
+  Number(pagination?.page) > 0
+    ? Number(pagination?.page)
+    : 1;
+
+const limit =
+  Number(pagination?.limit) > 0
+    ? Math.min(
+        Number(pagination?.limit),
+        100,
+      )
+    : 20;
+
+const skip =
+  (page - 1) * limit;
+
+const dismissedIds =
+  await this.getDismissedUnifiedReminderReferenceIds(
+    currentUser,
+    'DOCUMENT',
+  );
 
   const canSeeAll =
     roles.includes('OWNER') ||
@@ -14487,8 +15130,23 @@ async getDocumentReminderList(currentUser: any) {
       .andWhere('project.status != :rejectedStatus', {
         rejectedStatus: ProjectStatus.REJECTED,
       })
-      .orderBy('project.createdAt', 'ASC')
-      .limit(50);
+
+      .andWhere(
+  `(
+    project.status = :pendingApprovalProjectStatus
+    OR project.projectManagerApprovalStatus = :pendingApprovalStatus
+    OR project.marketingHeadApprovalStatus = :pendingApprovalStatus
+    OR project.ownerApprovalStatus = :pendingApprovalStatus
+  )`,
+  {
+    pendingApprovalProjectStatus:
+      ProjectStatus.PENDING_APPROVAL,
+
+    pendingApprovalStatus:
+      ProjectApprovalStatus.PENDING,
+  },
+)
+      
 
   if (!canSeeAll) {
     projectQuery.andWhere(
@@ -14499,11 +15157,31 @@ async getDocumentReminderList(currentUser: any) {
     );
   }
 
+  if (dismissedIds.length > 0) {
+  projectQuery.andWhere(
+    'project.id NOT IN (:...dismissedIds)',
+    {
+      dismissedIds,
+    },
+  );
+}
+
+projectQuery.orderBy(
+  'project.createdAt',
+  'ASC',
+);
+
   const projects = await projectQuery.getMany();
 
   if (projects.length === 0) {
-    return [];
-  }
+  return {
+    data: [],
+    total: 0,
+    page,
+    limit,
+    totalPages: 1,
+  };
+}
 
   const projectIds = projects.map((project) => project.id);
 
@@ -14583,35 +15261,66 @@ async getDocumentReminderList(currentUser: any) {
       reminderIds,
     );
 
-  return reminders
-    .map((item) => ({
-      ...item,
-      userReminderStatus:
-        stateMap[String(item.projectId)]?.status ||
-        'UNREAD',
-    }))
-    .filter((item) => {
-      return (
-        item.userReminderStatus !==
-        ProjectReminderUserStateStatus.DISMISSED
-      );
-    });
+  const activeReminders =
+  reminders.map((item) => ({
+    ...item,
+
+    userReminderStatus:
+      stateMap[String(item.projectId)]
+        ?.status ||
+      ProjectReminderUserStateStatus.UNREAD,
+  }));
+
+const total =
+  activeReminders.length;
+
+const data =
+  activeReminders.slice(
+    skip,
+    skip + limit,
+  );
+
+return {
+  data,
+  total,
+  page,
+  limit,
+  totalPages:
+    Math.ceil(total / limit) || 1,
+};
 }
 
-async getUnreadDocumentReminderCount(currentUser: any) {
-  const list =
-    await this.getDocumentReminderList(currentUser);
+async getUnreadDocumentReminderCount(
+  currentUser: any,
+) {
+  const result =
+    await this.getDocumentReminderList(
+      currentUser,
+      {
+        page: 1,
+        limit: 100,
+      },
+    );
 
-  const unreadCount = list.filter((item: any) => {
-    return item.userReminderStatus !== 'READ';
-  }).length;
+  const unreadCount =
+    result.data.filter(
+      (item: any) =>
+        item.userReminderStatus ===
+        ProjectReminderUserStateStatus.UNREAD,
+    ).length;
 
   return {
     unreadCount,
   };
 }
 
-async getLoanReminderList(currentUser: any) {
+async getLoanReminderList(
+  currentUser: any,
+  pagination?: {
+    page?: number;
+    limit?: number;
+  },
+) {
   const roles = Array.isArray(currentUser?.roles)
     ? currentUser.roles
     : [];
@@ -14624,6 +15333,28 @@ async getLoanReminderList(currentUser: any) {
     roles.includes('MARKETING_HEAD') ||
     roles.includes('PROJECT_MANAGER') ||
     roles.includes('LOAN_MANAGER');
+
+  const page =
+    Number(pagination?.page) > 0
+      ? Number(pagination?.page)
+      : 1;
+
+  const limit =
+    Number(pagination?.limit) > 0
+      ? Math.min(
+          Number(pagination?.limit),
+          100,
+        )
+      : 20;
+
+  const skip =
+    (page - 1) * limit;
+
+  const dismissedIds =
+    await this.getDismissedUnifiedReminderReferenceIds(
+      currentUser,
+      'LOAN',
+    );
 
   const qb =
     this.projectLoanDetailRepository
@@ -14657,35 +15388,69 @@ async getLoanReminderList(currentUser: any) {
         'project.status AS "projectStatus"',
       ])
       .where('project.isHidden = false')
-      .andWhere('project.projectType = :loanProjectType', {
-        loanProjectType: ProjectType.LOAN,
-      })
-      .andWhere('project.status != :completedStatus', {
-        completedStatus: ProjectStatus.COMPLETED,
-      })
-      .andWhere('project.status != :rejectedStatus', {
-        rejectedStatus: ProjectStatus.REJECTED,
-      })
-      .andWhere('loan.status NOT IN (:...excludedLoanStatuses)', {
-        excludedLoanStatuses: [
-          ProjectLoanStatus.LOAN_DISBURSED,
-          ProjectLoanStatus.FILE_REJECTED,
-        ],
-      })
-      .orderBy('loan.updatedAt', 'ASC')
-      .limit(50);
+      .andWhere(
+        'project.projectType = :loanProjectType',
+        {
+          loanProjectType:
+            ProjectType.LOAN,
+        },
+      )
+      .andWhere(
+  'project.status NOT IN (:...inactiveProjectStatuses)',
+  {
+    inactiveProjectStatuses: [
+      ProjectStatus.COMPLETED,
+      ProjectStatus.REJECTED,
+      ProjectStatus.CANCELLED,
+    ],
+  },
+)
+      .andWhere(
+        'loan.status NOT IN (:...excludedLoanStatuses)',
+        {
+          excludedLoanStatuses: [
+            ProjectLoanStatus.LOAN_DISBURSED,
+            ProjectLoanStatus.FILE_REJECTED,
+          ],
+        },
+      );
 
   if (!canSeeAll) {
-    qb.andWhere('project.projectOwnerId = :userId', {
-      userId,
-    });
+    qb.andWhere(
+      'project.projectOwnerId = :userId',
+      {
+        userId,
+      },
+    );
   }
 
-  const rows = await qb.getRawMany();
+  if (dismissedIds.length > 0) {
+    qb.andWhere(
+      'loan.id NOT IN (:...dismissedIds)',
+      {
+        dismissedIds,
+      },
+    );
+  }
 
-  const reminderIds = rows.map((row) =>
-    Number(row.id),
-  );
+  const total =
+    await qb.clone().getCount();
+
+  qb
+    .orderBy(
+      'loan.updatedAt',
+      'ASC',
+    )
+    .offset(skip)
+    .limit(limit);
+
+  const rows =
+    await qb.getRawMany();
+
+  const reminderIds =
+    rows.map((row) =>
+      Number(row.id),
+    );
 
   const stateMap =
     await this.getUnifiedReminderStateMap(
@@ -14694,98 +15459,146 @@ async getLoanReminderList(currentUser: any) {
       reminderIds,
     );
 
-  return rows
-    .map((row) => {
-      let reminderType = 'LOAN_PROCESS_PENDING';
+  const data = rows.map((row) => {
+    let reminderType =
+      'LOAN_PROCESS_PENDING';
 
-      if (
-        row.loanStatus ===
-        ProjectLoanStatus.DOCUMENT_PENDING
-      ) {
-        reminderType = 'LOAN_DOCUMENT_PENDING';
-      } else if (
-        row.loanStatus ===
-          ProjectLoanStatus.IN_PRINCIPAL_GENERATED ||
-        row.loanStatus ===
-          ProjectLoanStatus.QUOTATION_SUBMITTED ||
-        row.loanStatus ===
-          ProjectLoanStatus.BANK_VISITED
-      ) {
-        reminderType = 'LOAN_DISBURSEMENT_PENDING';
-      }
+    if (
+      row.loanStatus ===
+      ProjectLoanStatus.DOCUMENT_PENDING
+    ) {
+      reminderType =
+        'LOAN_DOCUMENT_PENDING';
+    } else if (
+      row.loanStatus ===
+        ProjectLoanStatus.IN_PRINCIPAL_GENERATED ||
+      row.loanStatus ===
+        ProjectLoanStatus.QUOTATION_SUBMITTED ||
+      row.loanStatus ===
+        ProjectLoanStatus.BANK_VISITED
+    ) {
+      reminderType =
+        'LOAN_DISBURSEMENT_PENDING';
+    }
 
-      return {
-        id: Number(row.id),
-        projectId: Number(row.projectId),
+    return {
+      id: Number(row.id),
+      projectId:
+        Number(row.projectId),
 
-        reminderType,
+      reminderType,
 
-        loanType: row.loanType || null,
-        bankName: row.bankName || null,
-        applicationNumber:
-          row.applicationNumber || null,
+      loanType:
+        row.loanType || null,
 
-        marginMoney: Number(row.marginMoney || 0),
-        sanctionAmount: Number(
+      bankName:
+        row.bankName || null,
+
+      applicationNumber:
+        row.applicationNumber || null,
+
+      marginMoney:
+        Number(
+          row.marginMoney || 0,
+        ),
+
+      sanctionAmount:
+        Number(
           row.sanctionAmount || 0,
         ),
-        firstEmiDisbursementAmount: Number(
-          row.firstEmiDisbursementAmount || 0,
+
+      firstEmiDisbursementAmount:
+        Number(
+          row.firstEmiDisbursementAmount ||
+            0,
         ),
-        firstEmiDisbursementDate:
-          row.firstEmiDisbursementDate || null,
 
-        loanStatus: row.loanStatus || null,
-        remarks: row.remarks || null,
-        updatedAt: row.updatedAt,
+      firstEmiDisbursementDate:
+        row.firstEmiDisbursementDate ||
+        null,
 
-        customerName: row.customerName || null,
-        customerPhone: row.customerPhone || null,
-        branchName: row.branchName || null,
+      loanStatus:
+        row.loanStatus || null,
 
-        projectOwnerId: row.projectOwnerId
+      remarks:
+        row.remarks || null,
+
+      updatedAt:
+        row.updatedAt,
+
+      customerName:
+        row.customerName || null,
+
+      customerPhone:
+        row.customerPhone || null,
+
+      branchName:
+        row.branchName || null,
+
+      projectOwnerId:
+        row.projectOwnerId
           ? Number(row.projectOwnerId)
           : null,
 
-        projectOwnerName:
-          row.projectOwnerName || null,
+      projectOwnerName:
+        row.projectOwnerName || null,
 
-        projectSerial:
-          row.projectSerial || null,
+      projectSerial:
+        row.projectSerial || null,
 
-        projectType:
-          row.projectType || null,
+      projectType:
+        row.projectType || null,
 
-        projectStatus:
-          row.projectStatus || null,
+      projectStatus:
+        row.projectStatus || null,
 
-        userReminderStatus:
-          stateMap[String(row.id)]?.status ||
-          'UNREAD',
-      };
-    })
-    .filter((item) => {
-      return (
-        item.userReminderStatus !==
-        ProjectReminderUserStateStatus.DISMISSED
-      );
-    });
+      userReminderStatus:
+        stateMap[String(row.id)]
+          ?.status || 'UNREAD',
+    };
+  });
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages:
+      Math.ceil(total / limit) || 1,
+  };
 }
 
-async getUnreadLoanReminderCount(currentUser: any) {
-  const list =
-    await this.getLoanReminderList(currentUser);
+async getUnreadLoanReminderCount(
+  currentUser: any,
+) {
+  const result =
+    await this.getLoanReminderList(
+      currentUser,
+      {
+        page: 1,
+        limit: 100,
+      },
+    );
 
-  const unreadCount = list.filter((item: any) => {
-    return item.userReminderStatus !== 'READ';
-  }).length;
+  const unreadCount =
+    result.data.filter(
+      (item: any) =>
+        item.userReminderStatus ===
+        ProjectReminderUserStateStatus.UNREAD,
+    ).length;
 
   return {
     unreadCount,
   };
 }
 
-async getSubsidyReminderList(currentUser: any) {
+async getSubsidyReminderList(
+  currentUser: any,
+  pagination?: {
+    page?: number;
+    limit?: number;
+  },
+) {
   const roles = Array.isArray(currentUser?.roles)
     ? currentUser.roles
     : [];
@@ -14798,6 +15611,28 @@ async getSubsidyReminderList(currentUser: any) {
     roles.includes('MARKETING_HEAD') ||
     roles.includes('PROJECT_MANAGER') ||
     roles.includes('SUBSIDY_MANAGER');
+
+    const page =
+  Number(pagination?.page) > 0
+    ? Number(pagination?.page)
+    : 1;
+
+const limit =
+  Number(pagination?.limit) > 0
+    ? Math.min(
+        Number(pagination?.limit),
+        100,
+      )
+    : 20;
+
+const skip =
+  (page - 1) * limit;
+
+const dismissedIds =
+  await this.getDismissedUnifiedReminderReferenceIds(
+    currentUser,
+    'SUBSIDY',
+  );
 
   const qb =
     this.projectSubsidyDetailRepository
@@ -14833,26 +15668,48 @@ async getSubsidyReminderList(currentUser: any) {
         'project.status AS "projectStatus"',
       ])
       .where('project.isHidden = false')
-      .andWhere('project.status != :completedStatus', {
-        completedStatus: ProjectStatus.COMPLETED,
-      })
-      .andWhere('project.status != :rejectedStatus', {
-        rejectedStatus: ProjectStatus.REJECTED,
-      })
+      .andWhere(
+  'project.status NOT IN (:...inactiveProjectStatuses)',
+  {
+    inactiveProjectStatuses: [
+      ProjectStatus.COMPLETED,
+      ProjectStatus.REJECTED,
+      ProjectStatus.CANCELLED,
+    ],
+  },
+)
       .andWhere('subsidy.status NOT IN (:...excludedSubsidyStatuses)', {
         excludedSubsidyStatuses: [
           ProjectSubsidyStatus.SUBSIDY_DISBURSED,
           ProjectSubsidyStatus.REJECTED,
         ],
       })
-      .orderBy('subsidy.updatedAt', 'ASC')
-      .limit(50);
 
   if (!canSeeAll) {
     qb.andWhere('project.projectOwnerId = :userId', {
       userId,
     });
   }
+
+  if (dismissedIds.length > 0) {
+  qb.andWhere(
+    'subsidy.id NOT IN (:...dismissedIds)',
+    {
+      dismissedIds,
+    },
+  );
+}
+
+const total =
+  await qb.clone().getCount();
+
+qb
+  .orderBy(
+    'subsidy.updatedAt',
+    'ASC',
+  )
+  .offset(skip)
+  .limit(limit);
 
   const rows = await qb.getRawMany();
 
@@ -14867,23 +15724,32 @@ async getSubsidyReminderList(currentUser: any) {
       reminderIds,
     );
 
-  return rows
-    .map((row) => {
-      let reminderType = 'SUBSIDY_PROCESS_PENDING';
+  const data = rows
+  .map((row) => {
+      let reminderType =
+  'SUBSIDY_PROCESS_PENDING';
 
-      if (
-        row.subsidyStatus ===
-        ProjectSubsidyStatus.DOCUMENT_PENDING
-      ) {
-        reminderType = 'SUBSIDY_DOCUMENT_PENDING';
-      } else if (
-        row.subsidyStatus ===
-          ProjectSubsidyStatus.SUBMISSION_DONE ||
-        row.subsidyStatus ===
-          ProjectSubsidyStatus.SUBSIDY_REQUESTED
-      ) {
-        reminderType = 'SUBSIDY_REQUEST_PENDING';
-      }
+if (
+  row.subsidyStatus ===
+  ProjectSubsidyStatus.DOCUMENT_PENDING
+) {
+  reminderType =
+    'SUBSIDY_DOCUMENT_PENDING';
+} else if (
+  row.subsidyStatus ===
+  ProjectSubsidyStatus.SUBMISSION_DONE
+) {
+  reminderType =
+    'SUBSIDY_REQUEST_PENDING';
+} else if (
+  row.subsidyStatus ===
+    ProjectSubsidyStatus.SUBSIDY_REQUESTED ||
+  row.subsidyStatus ===
+    ProjectSubsidyStatus.SUBSIDY_REDEEMED
+) {
+  reminderType =
+    'SUBSIDY_DISBURSEMENT_PENDING';
+}
 
       return {
         id: Number(row.id),
@@ -14947,29 +15813,49 @@ async getSubsidyReminderList(currentUser: any) {
           stateMap[String(row.id)]?.status ||
           'UNREAD',
       };
-    })
-    .filter((item) => {
-      return (
-        item.userReminderStatus !==
-        ProjectReminderUserStateStatus.DISMISSED
-      );
     });
+
+    return {
+  data,
+  total,
+  page,
+  limit,
+  totalPages:
+    Math.ceil(total / limit) || 1,
+};
 }
 
-async getUnreadSubsidyReminderCount(currentUser: any) {
-  const list =
-    await this.getSubsidyReminderList(currentUser);
+async getUnreadSubsidyReminderCount(
+  currentUser: any,
+) {
+  const result =
+    await this.getSubsidyReminderList(
+      currentUser,
+      {
+        page: 1,
+        limit: 100,
+      },
+    );
 
-  const unreadCount = list.filter((item: any) => {
-    return item.userReminderStatus !== 'READ';
-  }).length;
+  const unreadCount =
+    result.data.filter(
+      (item: any) =>
+        item.userReminderStatus ===
+        ProjectReminderUserStateStatus.UNREAD,
+    ).length;
 
   return {
     unreadCount,
   };
 }
 
-async getElectricityReminderList(currentUser: any) {
+async getElectricityReminderList(
+  currentUser: any,
+  pagination?: {
+    page?: number;
+    limit?: number;
+  },
+) {
   const roles = Array.isArray(currentUser?.roles)
     ? currentUser.roles
     : [];
@@ -14982,6 +15868,28 @@ async getElectricityReminderList(currentUser: any) {
     roles.includes('MARKETING_HEAD') ||
     roles.includes('PROJECT_MANAGER') ||
     roles.includes('ELECTRICITY_MANAGER');
+
+    const page =
+  Number(pagination?.page) > 0
+    ? Number(pagination?.page)
+    : 1;
+
+const limit =
+  Number(pagination?.limit) > 0
+    ? Math.min(
+        Number(pagination?.limit),
+        100,
+      )
+    : 20;
+
+const skip =
+  (page - 1) * limit;
+
+const dismissedIds =
+  await this.getDismissedUnifiedReminderReferenceIds(
+    currentUser,
+    'ELECTRICITY',
+  );
 
   const qb =
     this.projectElectricityDetailRepository
@@ -15015,26 +15923,49 @@ async getElectricityReminderList(currentUser: any) {
         'project.status AS "projectStatus"',
       ])
       .where('project.isHidden = false')
-      .andWhere('project.status != :completedStatus', {
-        completedStatus: ProjectStatus.COMPLETED,
-      })
-      .andWhere('project.status != :rejectedStatus', {
-        rejectedStatus: ProjectStatus.REJECTED,
-      })
+      .andWhere(
+  'project.status NOT IN (:...inactiveProjectStatuses)',
+  {
+    inactiveProjectStatuses: [
+      ProjectStatus.COMPLETED,
+      ProjectStatus.REJECTED,
+      ProjectStatus.CANCELLED,
+    ],
+  },
+)
       .andWhere('electricity.status NOT IN (:...excludedElectricityStatuses)', {
         excludedElectricityStatuses: [
           ProjectElectricityStatus.CONNECTION_ACTIVE,
           ProjectElectricityStatus.REJECTED,
         ],
       })
-      .orderBy('electricity.updatedAt', 'ASC')
-      .limit(50);
+      
 
   if (!canSeeAll) {
     qb.andWhere('project.projectOwnerId = :userId', {
       userId,
     });
   }
+
+  if (dismissedIds.length > 0) {
+  qb.andWhere(
+    'electricity.id NOT IN (:...dismissedIds)',
+    {
+      dismissedIds,
+    },
+  );
+}
+
+const total =
+  await qb.clone().getCount();
+
+qb
+  .orderBy(
+    'electricity.updatedAt',
+    'ASC',
+  )
+  .offset(skip)
+  .limit(limit);
 
   const rows = await qb.getRawMany();
 
@@ -15049,8 +15980,8 @@ async getElectricityReminderList(currentUser: any) {
       reminderIds,
     );
 
-  return rows
-    .map((row) => {
+  const data = rows
+  .map((row) => {
       let reminderType = 'DISCOM_PROCESS_PENDING';
 
       if (
@@ -15126,29 +16057,48 @@ async getElectricityReminderList(currentUser: any) {
           stateMap[String(row.id)]?.status ||
           'UNREAD',
       };
-    })
-    .filter((item) => {
-      return (
-        item.userReminderStatus !==
-        ProjectReminderUserStateStatus.DISMISSED
-      );
     });
+    return {
+  data,
+  total,
+  page,
+  limit,
+  totalPages:
+    Math.ceil(total / limit) || 1,
+};
 }
 
-async getUnreadElectricityReminderCount(currentUser: any) {
-  const list =
-    await this.getElectricityReminderList(currentUser);
+async getUnreadElectricityReminderCount(
+  currentUser: any,
+) {
+  const result =
+    await this.getElectricityReminderList(
+      currentUser,
+      {
+        page: 1,
+        limit: 100,
+      },
+    );
 
-  const unreadCount = list.filter((item: any) => {
-    return item.userReminderStatus !== 'READ';
-  }).length;
+  const unreadCount =
+    result.data.filter(
+      (item: any) =>
+        item.userReminderStatus ===
+        ProjectReminderUserStateStatus.UNREAD,
+    ).length;
 
   return {
     unreadCount,
   };
 }
 
-async getFinalClosureReminderList(currentUser: any) {
+async getFinalClosureReminderList(
+  currentUser: any,
+  pagination?: {
+    page?: number;
+    limit?: number;
+  },
+) {
   const roles = Array.isArray(currentUser?.roles)
     ? currentUser.roles
     : [];
@@ -15161,9 +16111,28 @@ async getFinalClosureReminderList(currentUser: any) {
     roles.includes('MARKETING_HEAD') ||
     roles.includes('PROJECT_MANAGER');
 
-  const todayIndia = new Date().toLocaleDateString('en-CA', {
-    timeZone: 'Asia/Kolkata',
-  });
+    const page =
+  Number(pagination?.page) > 0
+    ? Number(pagination?.page)
+    : 1;
+
+const limit =
+  Number(pagination?.limit) > 0
+    ? Math.min(
+        Number(pagination?.limit),
+        100,
+      )
+    : 20;
+
+const skip =
+  (page - 1) * limit;
+
+const dismissedIds =
+  await this.getDismissedUnifiedReminderReferenceIds(
+    currentUser,
+    'FINAL_CLOSURE',
+  );
+
 
   const qb =
     this.projectRepository
@@ -15185,35 +16154,50 @@ async getFinalClosureReminderList(currentUser: any) {
         'project.createdAt AS "createdAt"',
       ])
       .where('project.isHidden = false')
-      .andWhere('project.status != :completedStatus', {
-        completedStatus: ProjectStatus.COMPLETED,
-      })
-      .andWhere('project.status != :rejectedStatus', {
-        rejectedStatus: ProjectStatus.REJECTED,
-      })
       .andWhere(
-        `(
-          project.expectedCompletionDate IS NOT NULL
-          OR project.status IN (:...closureStatuses)
-          OR project.paymentStatus IS NOT NULL
-        )`,
-        {
-          closureStatuses: [
-            ProjectStatus.PROJECT_MANAGEMENT,
-            ProjectStatus.SUBSIDY_PROCESS,
-            ProjectStatus.ELECTRICITY_PROCESS,
-          ],
-        },
-      )
-      .orderBy('project.expectedCompletionDate', 'ASC')
-      .addOrderBy('project.updatedAt', 'ASC')
-      .limit(50);
+  'project.status NOT IN (:...closedStatuses)',
+  {
+    closedStatuses: [
+      ProjectStatus.COMPLETED,
+      ProjectStatus.REJECTED,
+      ProjectStatus.CANCELLED,
+    ],
+  },
+)
+      .andWhere(
+  'project.actualCompletionDate IS NOT NULL',
+)
+      
 
   if (!canSeeAll) {
     qb.andWhere('project.projectOwnerId = :userId', {
       userId,
     });
   }
+
+  if (dismissedIds.length > 0) {
+  qb.andWhere(
+    'project.id NOT IN (:...dismissedIds)',
+    {
+      dismissedIds,
+    },
+  );
+}
+
+const total =
+  await qb.clone().getCount();
+
+qb
+  .orderBy(
+    'project.expectedCompletionDate',
+    'ASC',
+  )
+  .addOrderBy(
+    'project.updatedAt',
+    'ASC',
+  )
+  .offset(skip)
+  .limit(limit);
 
   const rows = await qb.getRawMany();
 
@@ -15228,31 +16212,10 @@ async getFinalClosureReminderList(currentUser: any) {
       reminderIds,
     );
 
-  return rows
-    .map((row) => {
-      const expectedDate = row.expectedCompletionDate
-        ? String(row.expectedCompletionDate).split('T')[0]
-        : null;
-
-      let reminderType = 'FINAL_STATUS_UPDATE_PENDING';
-
-      if (expectedDate && expectedDate < todayIndia) {
-        reminderType = 'PROJECT_OVERDUE';
-      } else if (
-        row.paymentStatus &&
-        String(row.paymentStatus).toUpperCase() !== 'PAID' &&
-        String(row.paymentStatus).toUpperCase() !== 'COMPLETED'
-      ) {
-        reminderType = 'PAYMENT_CLOSURE_PENDING';
-      } else if (
-        [
-          ProjectStatus.PROJECT_MANAGEMENT,
-          ProjectStatus.SUBSIDY_PROCESS,
-          ProjectStatus.ELECTRICITY_PROCESS,
-        ].includes(row.projectStatus)
-      ) {
-        reminderType = 'PROJECT_COMPLETION_PENDING';
-      }
+  const data = rows
+  .map((row) => {
+      const reminderType =
+  'FINAL_STATUS_UPDATE_PENDING';
 
       return {
         id: Number(row.id),
@@ -15296,22 +16259,35 @@ async getFinalClosureReminderList(currentUser: any) {
           stateMap[String(row.id)]?.status ||
           'UNREAD',
       };
-    })
-    .filter((item) => {
-      return (
-        item.userReminderStatus !==
-        ProjectReminderUserStateStatus.DISMISSED
-      );
     });
+    return {
+  data,
+  total,
+  page,
+  limit,
+  totalPages:
+    Math.ceil(total / limit) || 1,
+};
 }
 
-async getUnreadFinalClosureReminderCount(currentUser: any) {
-  const list =
-    await this.getFinalClosureReminderList(currentUser);
+async getUnreadFinalClosureReminderCount(
+  currentUser: any,
+) {
+  const result =
+    await this.getFinalClosureReminderList(
+      currentUser,
+      {
+        page: 1,
+        limit: 100,
+      },
+    );
 
-  const unreadCount = list.filter((item: any) => {
-    return item.userReminderStatus !== 'READ';
-  }).length;
+  const unreadCount =
+    result.data.filter(
+      (item: any) =>
+        item.userReminderStatus ===
+        ProjectReminderUserStateStatus.UNREAD,
+    ).length;
 
   return {
     unreadCount,
@@ -15321,13 +16297,20 @@ async getUnreadFinalClosureReminderCount(currentUser: any) {
 async getUnreadPurchaseReminderCount(
   currentUser: any,
 ) {
-  const list =
+  const result =
     await this.getPurchaseReminderList(
       currentUser,
+      {
+        page: 1,
+        limit: 1,
+      },
     );
 
   return {
-    unreadCount: list.length,
+    unreadCount:
+      Number(
+        result?.total || 0,
+      ),
   };
 }
 
@@ -15346,12 +16329,24 @@ return {
 };
 }
 
-async getUnreadPaymentReminderCount(currentUser: any) {
-  const list = await this.getPaymentReminderList(currentUser);
+async getUnreadPaymentReminderCount(
+  currentUser: any,
+) {
+  const result =
+    await this.getPaymentReminderList(
+      currentUser,
+      {
+        page: 1,
+        limit: 100,
+      },
+    );
 
-  const unreadCount = list.filter((item: any) => {
-    return item.userReminderStatus !== 'READ';
-  }).length;
+  const unreadCount =
+    result.data.filter(
+      (item: any) =>
+        item.userReminderStatus ===
+        ProjectPaymentReminderUserStateStatus.UNREAD,
+    ).length;
 
   return {
     unreadCount,
@@ -16461,10 +17456,9 @@ async getExecutionReminderSummary(currentUser: any) {
   const userId = currentUser?.id || currentUser?.userId;
 
   const canSeeAll =
-    roles.includes('OWNER') ||
-    roles.includes('MARKETING_HEAD') ||
-    roles.includes('PROJECT_MANAGER') ||
-    roles.includes('SUBSIDY_MANAGER');
+  roles.includes('OWNER') ||
+  roles.includes('MARKETING_HEAD') ||
+  roles.includes('PROJECT_MANAGER');
 
   const activityQuery = this.projectExecutionActivityRepository
   .createQueryBuilder('activity')
@@ -16500,6 +17494,16 @@ async getExecutionReminderSummary(currentUser: any) {
     })
 
     .andWhere('project.isHidden = false')
+    .andWhere(
+  'project.status NOT IN (:...inactiveProjectStatuses)',
+  {
+    inactiveProjectStatuses: [
+      ProjectStatus.COMPLETED,
+      ProjectStatus.REJECTED,
+      ProjectStatus.CANCELLED,
+    ],
+  },
+)
     .andWhere(
       'COALESCE(activity.inspectionDeadline, activity.scheduledDate) IS NOT NULL',
     )
@@ -16579,10 +17583,9 @@ async getExecutionReminderList(currentUser: any) {
   const userId = currentUser?.id || currentUser?.userId;
 
   const canSeeAll =
-    roles.includes('OWNER') ||
-    roles.includes('MARKETING_HEAD') ||
-    roles.includes('PROJECT_MANAGER') ||
-    roles.includes('SUBSIDY_MANAGER');
+  roles.includes('OWNER') ||
+  roles.includes('MARKETING_HEAD') ||
+  roles.includes('PROJECT_MANAGER');
 
   const activityQuery = this.projectExecutionActivityRepository
     .createQueryBuilder('activity')
@@ -16632,6 +17635,16 @@ async getExecutionReminderList(currentUser: any) {
       ],
     })
     .andWhere('project.isHidden = false')
+    .andWhere(
+  'project.status NOT IN (:...inactiveProjectStatuses)',
+  {
+    inactiveProjectStatuses: [
+      ProjectStatus.COMPLETED,
+      ProjectStatus.REJECTED,
+      ProjectStatus.CANCELLED,
+    ],
+  },
+)
     .andWhere(
       'COALESCE(activity.inspectionDeadline, activity.scheduledDate) IS NOT NULL',
     )
