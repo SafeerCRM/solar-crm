@@ -17536,7 +17536,9 @@ async getExecutionReminderSummary(currentUser: any) {
   });
 
   const todaysExecutionWork = rows.filter((activity) => {
-    const dateToCheck = activity.scheduledDate || activity.inspectionDeadline;
+    const dateToCheck =
+  activity.inspectionDeadline ||
+  activity.scheduledDate;
     if (!dateToCheck) return false;
 
     const checkDate = new Date(dateToCheck);
