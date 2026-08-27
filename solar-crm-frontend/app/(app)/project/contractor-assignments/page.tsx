@@ -20,6 +20,23 @@ type ContractorAssignment = {
   completedAt?: string;
   assignedByName?: string;
   createdAt?: string;
+  activityProgress?: {
+  totalAssigned: number;
+  totalTracked: number;
+  completed: number;
+  inProgress: number;
+  pending: number;
+  percentage: number;
+
+  activities: {
+    workItem: string;
+    activityType?: string | null;
+    status: string;
+    scheduledDate?: string | null;
+    completedDate?: string | null;
+    remarks?: string;
+  }[];
+};
   proofProgress?: {
     uploadedRequiredCount: number;
     totalRequired: number;
@@ -65,6 +82,53 @@ const emptySummary: Summary = {
 
 function formatLabel(value?: string) {
   return String(value || '-').replaceAll('_', ' ');
+}
+
+function getActivityStatusStyle(status?: string) {
+  switch (String(status || '').toUpperCase()) {
+    case 'COMPLETED':
+      return {
+        label: 'Completed',
+        className:
+          'border-green-200 bg-green-50 text-green-700',
+      };
+
+    case 'IN_PROGRESS':
+      return {
+        label: 'In Progress',
+        className:
+          'border-blue-200 bg-blue-50 text-blue-700',
+      };
+
+    case 'OVERDUE':
+      return {
+        label: 'Overdue',
+        className:
+          'border-red-200 bg-red-50 text-red-700',
+      };
+
+    case 'CANCELLED':
+      return {
+        label: 'Cancelled',
+        className:
+          'border-gray-300 bg-gray-100 text-gray-600',
+      };
+
+    case 'NOT_TRACKED':
+      return {
+        label: 'Not Linked',
+        className:
+          'border-amber-200 bg-amber-50 text-amber-700',
+      };
+
+    case 'PENDING':
+    default:
+      return {
+        label: 'Pending',
+        className:
+          'border-gray-200 bg-white text-gray-700',
+      };
+  }
 }
 
 function money(value?: number) {
@@ -546,6 +610,17 @@ useEffect(() => {
                 percentage: 0,
               };
 
+              const activityProgress =
+  item.activityProgress || {
+    totalAssigned: 0,
+    totalTracked: 0,
+    completed: 0,
+    inProgress: 0,
+    pending: 0,
+    percentage: 0,
+    activities: [],
+  };
+
               return (
                 <div
                   key={item.id}
@@ -591,6 +666,152 @@ useEffect(() => {
                         <Info label="Assigned By" value={item.assignedByName || '-'} />
                         <Info label="Created" value={formatDate(item.createdAt)} />
                       </div>
+
+                      {activityProgress.activities.length > 0 && (
+  <div className="mt-4 rounded-xl border bg-white p-4">
+    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+      <div>
+        <p className="text-sm font-bold text-gray-800">
+          Work Activity Progress
+        </p>
+
+        <p className="mt-1 text-xs text-gray-500">
+          Actual execution status of work assigned to this team
+        </p>
+      </div>
+
+      <p className="text-sm font-bold text-blue-700">
+        {activityProgress.completed} /{' '}
+        {activityProgress.totalTracked}{' '}
+        completed ({activityProgress.percentage}%)
+      </p>
+    </div>
+
+    {activityProgress.totalTracked > 0 && (
+      <div className="mt-3 h-3 overflow-hidden rounded-full bg-gray-200">
+        <div
+          className="h-full rounded-full bg-blue-600"
+          style={{
+            width: `${activityProgress.percentage}%`,
+          }}
+        />
+      </div>
+    )}
+
+    <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+      {activityProgress.activities.map(
+        (activity, activityIndex) => {
+          const statusStyle =
+            getActivityStatusStyle(
+              activity.status,
+            );
+
+          return (
+            <div
+              key={`${item.id}-${activity.workItem}-${activityIndex}`}
+              className="rounded-xl border bg-gray-50 p-3"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-sm font-semibold text-gray-800">
+                  {formatLabel(
+                    activity.workItem,
+                  )}
+                </p>
+
+                <span
+                  className={`shrink-0 rounded-full border px-2 py-1 text-[11px] font-bold ${statusStyle.className}`}
+                >
+                  {statusStyle.label}
+                </span>
+              </div>
+
+              {activity.activityType &&
+                activity.activityType !==
+                  activity.workItem && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Execution:{' '}
+                    {formatLabel(
+                      activity.activityType,
+                    )}
+                  </p>
+                )}
+
+              {activity.status ===
+                'IN_PROGRESS' && (
+                <p className="mt-2 text-xs font-semibold text-blue-700">
+                  Currently ongoing
+                </p>
+              )}
+
+              {activity.status ===
+                'COMPLETED' &&
+                activity.completedDate && (
+                  <p className="mt-2 text-xs text-gray-500">
+                    Completed:{' '}
+                    {formatDate(
+                      activity.completedDate,
+                    )}
+                  </p>
+                )}
+
+              {activity.status ===
+                'PENDING' && (
+                <p className="mt-2 text-xs text-gray-500">
+                  Remaining work
+                </p>
+              )}
+
+              {activity.status ===
+                'OVERDUE' && (
+                <p className="mt-2 text-xs font-semibold text-red-600">
+                  Pending beyond schedule
+                </p>
+              )}
+
+              {activity.status ===
+                'NOT_TRACKED' && (
+                <p className="mt-2 text-xs text-amber-700">
+                  Assigned contractor work;
+                  execution activity not available
+                  for this item.
+                </p>
+              )}
+
+              {activity.remarks && (
+                <p className="mt-2 text-xs text-gray-500">
+                  {activity.remarks}
+                </p>
+              )}
+            </div>
+          );
+        },
+      )}
+    </div>
+
+    <div className="mt-3 flex flex-wrap gap-2 text-xs">
+      {activityProgress.completed > 0 && (
+        <span className="rounded-full bg-green-50 px-3 py-1 font-semibold text-green-700">
+          Completed:{' '}
+          {activityProgress.completed}
+        </span>
+      )}
+
+      {activityProgress.inProgress > 0 && (
+        <span className="rounded-full bg-blue-50 px-3 py-1 font-semibold text-blue-700">
+          Ongoing:{' '}
+          {activityProgress.inProgress}
+        </span>
+      )}
+
+      {activityProgress.pending > 0 && (
+        <span className="rounded-full bg-gray-100 px-3 py-1 font-semibold text-gray-700">
+          Remaining:{' '}
+          {activityProgress.pending}
+        </span>
+      )}
+    </div>
+  </div>
+)}
 
                       <div className="mt-4 rounded-xl border bg-white p-4">
                         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
