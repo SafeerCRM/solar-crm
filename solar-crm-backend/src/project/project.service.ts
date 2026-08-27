@@ -392,10 +392,16 @@ private getContractorExecutionActivityType(
       ProjectExecutionActivityType.WIRING,
 
     EARTHING:
-      ProjectExecutionActivityType.EARTHING_PACKING,
+  ProjectExecutionActivityType.EARTHING_PACKING,
 
-    GENERATION_WORK:
-      ProjectExecutionActivityType.GENERATION_STARTED,
+SOLAR_METER_WORK:
+  ProjectExecutionActivityType.SOLAR_METER_WORK,
+
+NET_METER_WORK:
+  ProjectExecutionActivityType.NET_METER_WORK,
+
+GENERATION_WORK:
+  ProjectExecutionActivityType.GENERATION_STARTED,
   };
 
   return map[normalized] || null;
