@@ -3590,6 +3590,18 @@ const assignContractor = async () => {
     return;
   }
 
+  if (
+  !Array.isArray(
+    contractorForm.assignedWorkItems,
+  ) ||
+  contractorForm.assignedWorkItems.length === 0
+) {
+  alert(
+    'Please select at least one work activity for this contractor',
+  );
+  return;
+}
+
   try {
     setContractorLoading(true);
 
@@ -4833,8 +4845,13 @@ const isLoanProcessCompleted =
 
 <div className="md:col-span-3 rounded-xl border bg-gray-50 p-4">
   <p className="font-semibold text-gray-800">
-    Assign Work Items
-  </p>
+  Select Exact Work Activities
+</p>
+
+<p className="mt-1 text-xs text-gray-500">
+  Select only the activities actually assigned to this contractor.
+  Work scope controls required proofs separately.
+</p>
 
   <div className="mt-3 grid grid-cols-2 md:grid-cols-3 gap-2">
     {CONTRACTOR_WORK_ITEMS.map((item) => (
