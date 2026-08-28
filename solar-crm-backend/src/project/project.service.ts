@@ -407,73 +407,6 @@ GENERATION_WORK:
   return map[normalized] || null;
 }
 
-private getDefaultContractorWorkItemsByScope(
-  workScope: string,
-): string[] {
-  const normalized =
-    String(
-      workScope || 'FULL_PROJECT',
-    )
-      .trim()
-      .toUpperCase();
-
-  if (
-    normalized ===
-    ProjectContractorWorkScope.STRUCTURE_TEAM
-  ) {
-    return [
-      'STRUCTURE_WORK',
-      'STRUCTURE_INSPECTION',
-      'PILLAR_WORK',
-      'PILLAR_INSPECTION',
-    ];
-  }
-
-  if (
-    normalized ===
-    ProjectContractorWorkScope.ELECTRICAL_TEAM
-  ) {
-    return [
-      'INVERTER_INSTALLATION',
-      'WIRING',
-      'EARTHING',
-      'SOLAR_METER_WORK',
-      'NET_METER_WORK',
-      'GENERATION_WORK',
-    ];
-  }
-
-  if (
-    normalized ===
-    ProjectContractorWorkScope.INSTALLATION_TEAM
-  ) {
-    return [
-      'PANEL_INSTALLATION',
-      'INVERTER_INSTALLATION',
-    ];
-  }
-
-  if (
-    normalized ===
-    ProjectContractorWorkScope.OTHER
-  ) {
-    return ['OTHER'];
-  }
-
-  return [
-    'STRUCTURE_WORK',
-    'STRUCTURE_INSPECTION',
-    'PILLAR_WORK',
-    'PILLAR_INSPECTION',
-    'PANEL_INSTALLATION',
-    'INVERTER_INSTALLATION',
-    'WIRING',
-    'EARTHING',
-    'SOLAR_METER_WORK',
-    'NET_METER_WORK',
-    'GENERATION_WORK',
-  ];
-}
 
 private generatePoNumber() {
   return `PO-${Date.now()}`;
@@ -35646,7 +35579,7 @@ const dataWithProgress = data.map((assignment) => {
   (item) => item.id === assignment.projectId,
 );
 
-const explicitlyAssignedWorkItems =
+const assignedWorkItems =
   Array.isArray(
     (assignment as any)
       .assignedWorkItems,
@@ -35661,19 +35594,6 @@ const explicitlyAssignedWorkItems =
         )
         .filter(Boolean)
     : [];
-
-const assignedWorkItems =
-  explicitlyAssignedWorkItems.length
-    ? explicitlyAssignedWorkItems
-    : this
-        .getDefaultContractorWorkItemsByScope(
-          String(
-            (assignment as any)
-              .workScope ||
-              ProjectContractorWorkScope
-                .FULL_PROJECT,
-          ),
-        );
 
 const projectExecutionActivities =
   executionActivities.filter(
