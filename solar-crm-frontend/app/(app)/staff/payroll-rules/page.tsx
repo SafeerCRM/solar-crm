@@ -32,6 +32,7 @@ const API =
   const PAYROLL_ROLES = [
   'TELECALLING_MANAGER',
   'MEETING_MANAGER',
+  'MARKETING_HEAD',
   'LEAD_MANAGER',
   'TELECALLER',
   'MEETING_ASSISTANT',
@@ -64,6 +65,9 @@ const METRIC_TYPES = [
   'QUALIFIED_LEADS',
   'TEAM_TELECALLERS',
   'TEAM_TELECALLER_APPROVED_PROJECTS',
+  'TEAM_MEETING_MANAGERS',
+'TEAM_MEETING_MANAGER_APPROVED_PROJECTS',
+'TEAM_MEETING_MANAGER_GPS_SITE_VISITS_COMPLETED',
   'MEETINGS_SCHEDULED',
   'MEETINGS_COMPLETED',
   'GPS_SITE_VISITS_COMPLETED',
@@ -174,6 +178,11 @@ type EligibilityConditionForm = {
   customMetricName?: string;
   operator: string;
   targetValue: number;
+
+  targetCalculationMode?: string;
+  targetMultiplierMetricType?: string;
+  teamMemberTargetValue?: number;
+
   failureAction: string;
   isEnabled: boolean;
 };
@@ -546,17 +555,24 @@ function addEligibilityCondition() {
     getEligibilityConditions();
 
   conditions.push({
-    id: `condition-${Date.now()}`,
-    label: '',
-    metricType: '',
-    customMetricName: '',
-    operator:
-      'GREATER_THAN_OR_EQUAL',
-    targetValue: 0,
-    failureAction:
-      'ZERO_SALARY',
-    isEnabled: true,
-  });
+  id: `condition-${Date.now()}`,
+  label: '',
+  metricType: '',
+  customMetricName: '',
+  operator:
+    'GREATER_THAN_OR_EQUAL',
+  targetValue: 0,
+
+  targetCalculationMode:
+    'FIXED',
+  targetMultiplierMetricType:
+    '',
+  teamMemberTargetValue: 0,
+
+  failureAction:
+    'ZERO_SALARY',
+  isEnabled: true,
+});
 
   setEligibilityConditions(
     conditions,
@@ -2279,24 +2295,121 @@ async function restoreRule(
               </TextField>
 
               <TextField
-                label="Target Value"
-                type="number"
-                value={
-                  condition.targetValue ??
-                  0
-                }
-                onChange={(e) =>
-                  updateEligibilityCondition(
-                    index,
-                    'targetValue',
-                    Number(
-                      e.target.value ||
-                        0,
-                    ),
-                  )
-                }
-                fullWidth
-              />
+  label="Target Value"
+  type="number"
+  value={
+    condition.targetValue ??
+    0
+  }
+  onChange={(e) =>
+    updateEligibilityCondition(
+      index,
+      'targetValue',
+      Number(
+        e.target.value ||
+          0,
+      ),
+    )
+  }
+  disabled={
+    condition.targetCalculationMode ===
+    'TEAM_SIZE_MULTIPLIER'
+  }
+  helperText={
+    condition.targetCalculationMode ===
+    'TEAM_SIZE_MULTIPLIER'
+      ? 'Calculated automatically from team size.'
+      : ''
+  }
+  fullWidth
+/>
+
+              <TextField
+  select
+  label="Target Calculation Mode"
+  value={
+    condition.targetCalculationMode ||
+    'FIXED'
+  }
+  onChange={(e) =>
+    updateEligibilityCondition(
+      index,
+      'targetCalculationMode',
+      e.target.value,
+    )
+  }
+  fullWidth
+>
+  {TARGET_CALCULATION_MODES.map(
+    (mode) => (
+      <MenuItem
+        key={mode}
+        value={mode}
+      >
+        {mode}
+      </MenuItem>
+    ),
+  )}
+</TextField>
+
+{condition.targetCalculationMode ===
+'TEAM_SIZE_MULTIPLIER' ? (
+  <TextField
+    select
+    label="Target Multiplier Metric"
+    value={
+      condition.targetMultiplierMetricType ||
+      ''
+    }
+    onChange={(e) =>
+      updateEligibilityCondition(
+        index,
+        'targetMultiplierMetricType',
+        e.target.value,
+      )
+    }
+    fullWidth
+  >
+    <MenuItem value="">
+      Select Multiplier Metric
+    </MenuItem>
+
+    {METRIC_TYPES.map(
+      (metric) => (
+        <MenuItem
+          key={metric}
+          value={metric}
+        >
+          {metric}
+        </MenuItem>
+      ),
+    )}
+  </TextField>
+) : null}
+
+{condition.targetCalculationMode ===
+'TEAM_SIZE_MULTIPLIER' ? (
+  <TextField
+    label="Target Per Team Member"
+    type="number"
+    value={
+      condition.teamMemberTargetValue ??
+      0
+    }
+    onChange={(e) =>
+      updateEligibilityCondition(
+        index,
+        'teamMemberTargetValue',
+        Number(
+          e.target.value ||
+            0,
+        ),
+      )
+    }
+    helperText="Final target = active team members × this value."
+    fullWidth
+  />
+) : null}
 
               <TextField
                 select
