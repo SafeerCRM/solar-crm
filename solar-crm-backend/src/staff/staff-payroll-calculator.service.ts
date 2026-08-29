@@ -495,16 +495,111 @@ private async evaluateRuleEligibility(
     const actualValue =
       actualMetrics[metricKey];
 
-    const targetValue = Number(
-      condition.targetValue || 0,
+      let dynamicTargetHasValidTeam = true;
+
+    let targetValue = Number(
+  condition.targetValue || 0,
+);
+
+/*
+ * An individual eligibility condition may
+ * calculate its target from team size.
+ *
+ * Example:
+ * Marketing Head GPS requirement:
+ *
+ * TEAM_MEETING_MANAGERS ×
+ * configured GPS target per Meeting Manager.
+ *
+ * Existing conditions without this mode
+ * continue using their fixed targetValue.
+ */
+if (
+  condition.targetCalculationMode ===
+    StaffPayrollTargetCalculationMode
+      .TEAM_SIZE_MULTIPLIER
+) {
+  const multiplierMetricType =
+    condition.targetMultiplierMetricType;
+
+  if (!multiplierMetricType) {
+    throw new BadRequestException(
+      `Target multiplier metric is not configured for eligibility condition "${condition.label}"`,
+    );
+  }
+
+  if (
+    multiplierMetricType ===
+    StaffPayrollMetricType.MANUAL_NUMBER
+  ) {
+    throw new BadRequestException(
+      `Manual metric cannot be used as the eligibility target multiplier for condition "${condition.label}"`,
+    );
+  }
+
+  const perTeamMemberTarget =
+    Number(
+      condition.teamMemberTargetValue || 0,
     );
 
-    const passed =
-      this.evaluateConditionValue(
-        actualValue,
-        condition.operator,
-        targetValue,
+  if (
+    !Number.isFinite(
+      perTeamMemberTarget,
+    ) ||
+    perTeamMemberTarget <= 0
+  ) {
+    throw new BadRequestException(
+      `Valid target per team member is not configured for eligibility condition "${condition.label}"`,
+    );
+  }
+
+  const multiplierMetricKey =
+    String(
+      multiplierMetricType,
+    );
+
+  if (
+    actualMetrics[
+      multiplierMetricKey
+    ] === undefined
+  ) {
+    actualMetrics[
+      multiplierMetricKey
+    ] =
+      await this.resolveRulePayrollMetric(
+        rule,
+        multiplierMetricType,
+        payrollMonth,
+        linkedUserId,
+        staffRole,
       );
+  }
+
+  const teamMemberCount =
+  Math.max(
+    Number(
+      actualMetrics[
+        multiplierMetricKey
+      ] || 0,
+    ),
+    0,
+  );
+
+dynamicTargetHasValidTeam =
+  teamMemberCount > 0;
+
+targetValue =
+  teamMemberCount *
+  perTeamMemberTarget;
+}
+
+const passed =
+  dynamicTargetHasValidTeam &&
+  this.evaluateConditionValue(
+    actualValue,
+    condition.operator,
+    targetValue,
+  );
 
     conditionResults.push({
       id: String(
@@ -2303,6 +2398,194 @@ async calculateTelecallingManagerPayroll(
 
         minimumProjectPaymentPercentage:
   rule.minimumProjectPaymentPercentage,
+
+      targetCalculationMode:
+        rule.targetCalculationMode,
+
+      targetMultiplierMetricType:
+        rule.targetMultiplierMetricType,
+
+      teamMemberTargetValue:
+        rule.teamMemberTargetValue,
+
+      maximumSalaryPercentage:
+        rule.maximumSalaryPercentage,
+
+      allowProportionalSalaryOnEligibilityFailure:
+        rule
+          .allowProportionalSalaryOnEligibilityFailure,
+
+      incentiveComponents:
+        rule.incentiveComponents,
+    },
+  };
+}
+
+async calculateMarketingHeadPayroll(
+  payrollMonth: string,
+  linkedUserId: number,
+  basicSalary: number,
+): Promise<PayrollCalculationResult> {
+  const userId = Number(
+    linkedUserId || 0,
+  );
+
+  const normalizedBasicSalary =
+    Math.max(
+      Number(
+        basicSalary || 0,
+      ),
+      0,
+    );
+
+  if (
+    !Number.isInteger(userId) ||
+    userId <= 0
+  ) {
+    return this.createEmptyResult(
+      'MARKETING_HEAD',
+    );
+  }
+
+  const rule =
+    await this.getActivePayrollRule(
+      'MARKETING_HEAD',
+      payrollMonth,
+    );
+
+  const sharedMetrics:
+    Record<string, number> = {};
+
+  const eligibilityEvaluation =
+    await this.evaluateRuleEligibility(
+      rule,
+      payrollMonth,
+      userId,
+      'MARKETING_HEAD',
+      sharedMetrics,
+    );
+
+  const eligibilityReason =
+    this.buildEligibilityReason(
+      eligibilityEvaluation
+        .conditionResults,
+    );
+
+  const eligibilityMet =
+    eligibilityEvaluation
+      .eligibilityMet;
+
+  const salaryEvaluation =
+    await this
+      .calculateRuleSalaryPercentage(
+        rule,
+        payrollMonth,
+        userId,
+        'MARKETING_HEAD',
+        eligibilityMet,
+        sharedMetrics,
+      );
+
+  const salaryPercentage =
+    salaryEvaluation
+      .salaryPercentage;
+
+  const salaryAmount =
+    this.calculateSalaryAmount(
+      normalizedBasicSalary,
+      salaryPercentage,
+    );
+
+  const incentiveEvaluation =
+    await this.calculateRuleIncentives(
+      rule,
+      payrollMonth,
+      userId,
+      'MARKETING_HEAD',
+      sharedMetrics,
+    );
+
+  const incentiveAmount =
+    incentiveEvaluation
+      .incentiveAmount;
+
+  return {
+    eligibilityMet,
+    eligibilityReason,
+
+    salaryPercentage,
+    salaryAmount,
+    incentiveAmount,
+
+    actualMetrics: {
+      ...sharedMetrics,
+    },
+
+    calculationSnapshot: {
+      role: 'MARKETING_HEAD',
+
+      payrollMonth,
+      linkedUserId: userId,
+
+      basicSalary:
+        normalizedBasicSalary,
+
+      actualMetrics: {
+        ...sharedMetrics,
+      },
+
+      eligibilityMet,
+      eligibilityReason,
+
+      salaryPercentage,
+      salaryAmount,
+      incentiveAmount,
+
+      eligibilityConditions:
+        eligibilityEvaluation
+          .conditionResults,
+
+      incentiveComponents:
+        incentiveEvaluation
+          .componentResults,
+
+      calculatedAt:
+        new Date().toISOString(),
+    },
+
+    ruleSnapshot: {
+      role: 'MARKETING_HEAD',
+
+      ruleId: rule.id,
+      ruleName: rule.ruleName,
+      version: rule.version,
+
+      scope: rule.scope,
+
+      effectiveFrom:
+        rule.effectiveFrom,
+
+      effectiveTo:
+        rule.effectiveTo,
+
+      requireAllEligibilityConditions:
+        rule
+          .requireAllEligibilityConditions,
+
+      eligibilityConditions:
+        rule.eligibilityConditions,
+
+      salaryMode:
+        rule.salaryMode,
+
+      salaryMetricType:
+        rule.salaryMetricType,
+
+      salaryTargetValue:
+        rule.salaryTargetValue,
+
+      minimumProjectPaymentPercentage:
+        rule.minimumProjectPaymentPercentage,
 
       targetCalculationMode:
         rule.targetCalculationMode,

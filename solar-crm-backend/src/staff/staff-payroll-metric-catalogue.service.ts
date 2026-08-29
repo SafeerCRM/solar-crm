@@ -250,6 +250,97 @@ export class StaffPayrollMetricCatalogueService {
     /*
      * MEETINGS
      */
+
+    {
+  key:
+    StaffPayrollMetricType
+      .TEAM_MEETING_MANAGERS,
+
+  label:
+    'Team Meeting Managers',
+
+  description:
+    'Number of active Meeting Managers directly reporting to the selected Marketing Head.',
+
+  category:
+    StaffPayrollMetricCategory.MEETINGS,
+
+  valueType:
+    StaffPayrollMetricValueType.COUNT,
+
+  sourceType:
+    StaffPayrollMetricSourceType.AUTOMATIC,
+
+  supportedRoles: [
+    'MARKETING_HEAD',
+  ],
+
+  resolverKey:
+    'TEAM_MEETING_MANAGERS',
+
+  isActive: true,
+},
+
+{
+  key:
+    StaffPayrollMetricType
+      .TEAM_MEETING_MANAGER_APPROVED_PROJECTS,
+
+  label:
+    'Team Meeting Manager Approved Projects',
+
+  description:
+    'Total payroll-eligible approved CRM projects attributed to active Meeting Managers directly reporting to the selected Marketing Head.',
+
+  category:
+    StaffPayrollMetricCategory.PROJECTS,
+
+  valueType:
+    StaffPayrollMetricValueType.COUNT,
+
+  sourceType:
+    StaffPayrollMetricSourceType.AUTOMATIC,
+
+  supportedRoles: [
+    'MARKETING_HEAD',
+  ],
+
+  resolverKey:
+    'TEAM_MEETING_MANAGER_APPROVED_PROJECTS',
+
+  isActive: true,
+},
+
+{
+  key:
+    StaffPayrollMetricType
+      .TEAM_MEETING_MANAGER_GPS_SITE_VISITS_COMPLETED,
+
+  label:
+    'Team Meeting Manager GPS Site Visits',
+
+  description:
+    'Total completed GPS-backed site visits performed by active Meeting Managers directly reporting to the selected Marketing Head during the payroll period.',
+
+  category:
+    StaffPayrollMetricCategory.MEETINGS,
+
+  valueType:
+    StaffPayrollMetricValueType.COUNT,
+
+  sourceType:
+    StaffPayrollMetricSourceType.AUTOMATIC,
+
+  supportedRoles: [
+    'MARKETING_HEAD',
+  ],
+
+  resolverKey:
+    'TEAM_MEETING_MANAGER_GPS_SITE_VISITS_COMPLETED',
+
+  isActive: true,
+},
+
     {
       key:
         StaffPayrollMetricType.MEETINGS_SCHEDULED,

@@ -872,6 +872,25 @@ case StaffPayrollMetricType.TEAM_TELECALLER_APPROVED_PROJECTS:
       case StaffPayrollMetricType.GPS_SITE_VISITS_COMPLETED:
         return this.resolveGpsMeetings(request);
 
+        case StaffPayrollMetricType.TEAM_MEETING_MANAGERS:
+  return this.resolveTeamMeetingManagers(
+    request,
+  );
+
+case StaffPayrollMetricType
+  .TEAM_MEETING_MANAGER_APPROVED_PROJECTS:
+  return this
+    .resolveTeamMeetingManagerApprovedProjects(
+      request,
+    );
+
+case StaffPayrollMetricType
+  .TEAM_MEETING_MANAGER_GPS_SITE_VISITS_COMPLETED:
+  return this
+    .resolveTeamMeetingManagerGpsSiteVisits(
+      request,
+    );
+
       case StaffPayrollMetricType.DEALER_MEETINGS_COMPLETED:
         return this.resolveDealerMeetings(request);
 
@@ -3140,6 +3159,485 @@ private async resolveSelectedSupportingStaff(
   private resolveComplaintsAssigned(r: StaffPayrollMetricRequest) { return this.notImplemented(); }
   private resolveComplaintsResolved(r: StaffPayrollMetricRequest) { return this.notImplemented(); }
   private resolveComplaintResolutionPercentage(r: StaffPayrollMetricRequest) { return this.notImplemented(); }
+
+  private async resolveTeamMeetingManagers(
+  request: StaffPayrollMetricRequest,
+): Promise<number> {
+  const marketingHeadLinkedUserId =
+    Number(
+      request.linkedUserId || 0,
+    );
+
+  if (
+    !Number.isInteger(
+      marketingHeadLinkedUserId,
+    ) ||
+    marketingHeadLinkedUserId <= 0
+  ) {
+    return 0;
+  }
+
+  /*
+   * reportingManagerId stores the manager's
+   * StaffMember ID, not their CRM user ID.
+   *
+   * First resolve this Marketing Head's
+   * StaffMember record.
+   */
+  const marketingHeadStaff =
+    await this.staffMemberRepository
+      .createQueryBuilder('staff')
+      .select([
+        'staff.id',
+      ])
+      .where(
+        'staff.linkedUserId = :linkedUserId',
+        {
+          linkedUserId:
+            marketingHeadLinkedUserId,
+        },
+      )
+      .andWhere(
+        'staff.isActive = true',
+      )
+      .andWhere(
+        'COALESCE(staff.isHidden, false) = false',
+      )
+      .getOne();
+
+  if (!marketingHeadStaff?.id) {
+    return 0;
+  }
+
+  /*
+   * Only ACTIVE Meeting Managers directly
+   * assigned under this Marketing Head count
+   * towards the cumulative team target.
+   */
+  const teamCount =
+    await this.staffMemberRepository
+      .createQueryBuilder('staff')
+      .where(
+        'staff.reportingManagerId = :marketingHeadStaffId',
+        {
+          marketingHeadStaffId:
+            marketingHeadStaff.id,
+        },
+      )
+      .andWhere(
+        `
+        UPPER(
+          TRIM(
+            COALESCE(
+              staff.staffRole,
+              ''
+            )
+          )
+        ) = :meetingManagerRole
+        `,
+        {
+          meetingManagerRole:
+            'MEETING_MANAGER',
+        },
+      )
+      .andWhere(
+        'staff.isActive = true',
+      )
+      .andWhere(
+        'COALESCE(staff.isHidden, false) = false',
+      )
+      .getCount();
+
+  return Number(
+    teamCount || 0,
+  );
+}
+
+private async resolveTeamMeetingManagerApprovedProjects(
+  request: StaffPayrollMetricRequest,
+): Promise<number> {
+  const marketingHeadLinkedUserId =
+    Number(
+      request.linkedUserId || 0,
+    );
+
+  if (
+    !Number.isInteger(
+      marketingHeadLinkedUserId,
+    ) ||
+    marketingHeadLinkedUserId <= 0
+  ) {
+    return 0;
+  }
+
+  /*
+   * reportingManagerId stores StaffMember ID.
+   *
+   * First resolve the Marketing Head's
+   * active StaffMember record.
+   */
+  const marketingHeadStaff =
+    await this.staffMemberRepository
+      .createQueryBuilder('staff')
+      .select([
+        'staff.id',
+      ])
+      .where(
+        'staff.linkedUserId = :linkedUserId',
+        {
+          linkedUserId:
+            marketingHeadLinkedUserId,
+        },
+      )
+      .andWhere(
+        'staff.isActive = true',
+      )
+      .andWhere(
+        'COALESCE(staff.isHidden, false) = false',
+      )
+      .getOne();
+
+  if (!marketingHeadStaff?.id) {
+    return 0;
+  }
+
+  /*
+   * Find the active Meeting Managers directly
+   * reporting to this Marketing Head.
+   *
+   * Project journey attribution stores CRM
+   * user IDs, therefore linkedUserId is what
+   * we need from each Meeting Manager.
+   */
+  const teamMeetingManagers =
+    await this.staffMemberRepository
+      .createQueryBuilder('staff')
+      .select([
+        'staff.linkedUserId',
+      ])
+      .where(
+        'staff.reportingManagerId = :marketingHeadStaffId',
+        {
+          marketingHeadStaffId:
+            marketingHeadStaff.id,
+        },
+      )
+      .andWhere(
+        `
+        UPPER(
+          TRIM(
+            COALESCE(
+              staff.staffRole,
+              ''
+            )
+          )
+        ) = :meetingManagerRole
+        `,
+        {
+          meetingManagerRole:
+            'MEETING_MANAGER',
+        },
+      )
+      .andWhere(
+        'staff.isActive = true',
+      )
+      .andWhere(
+        'COALESCE(staff.isHidden, false) = false',
+      )
+      .andWhere(
+        'staff.linkedUserId IS NOT NULL',
+      )
+      .getMany();
+
+  const meetingManagerUserIds =
+    Array.from(
+      new Set(
+        teamMeetingManagers
+          .map((staff) =>
+            Number(
+              staff.linkedUserId || 0,
+            ),
+          )
+          .filter(
+            (userId) =>
+              Number.isInteger(userId) &&
+              userId > 0,
+          ),
+      ),
+    );
+
+  if (
+    meetingManagerUserIds.length === 0
+  ) {
+    return 0;
+  }
+
+  /*
+   * Reuse the central payroll-eligible project
+   * query.
+   *
+   * Therefore Marketing Head team projects
+   * automatically follow the same:
+   *
+   * - owner approval requirement
+   * - hidden/cancelled/rejected exclusion
+   * - legacy-project exclusion
+   * - payroll month attribution
+   * - configured minimum project payment %
+   *
+   * as the rest of the payroll engine.
+   */
+  const query =
+    this.createPayrollEligibleProjectQuery(
+      request,
+    );
+
+  /*
+   * Meeting Manager project attribution is
+   * stored in project.meetingManagerId.
+   *
+   * We intentionally aggregate the whole team.
+   * There is NO individual 4-project test here.
+   */
+  query.andWhere(
+  `(
+    project."meetingManagerId" IN (:...meetingManagerUserIds)
+    OR (
+      project."projectOwnerId" IN (:...meetingManagerUserIds)
+      AND project."leadId" IS NULL
+      AND project."meetingId" IS NULL
+    )
+  )`,
+  { meetingManagerUserIds },
+);
+
+  return query.getCount();
+}
+
+private async resolveTeamMeetingManagerGpsSiteVisits(
+  request: StaffPayrollMetricRequest,
+): Promise<number> {
+  const marketingHeadLinkedUserId =
+    Number(
+      request.linkedUserId || 0,
+    );
+
+  if (
+    !Number.isInteger(
+      marketingHeadLinkedUserId,
+    ) ||
+    marketingHeadLinkedUserId <= 0
+  ) {
+    return 0;
+  }
+
+  /*
+   * reportingManagerId stores the manager's
+   * StaffMember ID.
+   *
+   * First resolve the Marketing Head's
+   * active StaffMember record.
+   */
+  const marketingHeadStaff =
+    await this.staffMemberRepository
+      .createQueryBuilder('staff')
+      .select([
+        'staff.id',
+      ])
+      .where(
+        'staff.linkedUserId = :linkedUserId',
+        {
+          linkedUserId:
+            marketingHeadLinkedUserId,
+        },
+      )
+      .andWhere(
+        'staff.isActive = true',
+      )
+      .andWhere(
+        'COALESCE(staff.isHidden, false) = false',
+      )
+      .getOne();
+
+  if (!marketingHeadStaff?.id) {
+    return 0;
+  }
+
+  /*
+   * Get CRM user IDs of all active
+   * Meeting Managers directly reporting
+   * to this Marketing Head.
+   */
+  const teamMeetingManagers =
+    await this.staffMemberRepository
+      .createQueryBuilder('staff')
+      .select([
+        'staff.linkedUserId',
+      ])
+      .where(
+        'staff.reportingManagerId = :marketingHeadStaffId',
+        {
+          marketingHeadStaffId:
+            marketingHeadStaff.id,
+        },
+      )
+      .andWhere(
+        `
+        UPPER(
+          TRIM(
+            COALESCE(
+              staff.staffRole,
+              ''
+            )
+          )
+        ) = :meetingManagerRole
+        `,
+        {
+          meetingManagerRole:
+            'MEETING_MANAGER',
+        },
+      )
+      .andWhere(
+        'staff.isActive = true',
+      )
+      .andWhere(
+        'COALESCE(staff.isHidden, false) = false',
+      )
+      .andWhere(
+        'staff.linkedUserId IS NOT NULL',
+      )
+      .getMany();
+
+  const meetingManagerUserIds =
+    Array.from(
+      new Set(
+        teamMeetingManagers
+          .map((staff) =>
+            Number(
+              staff.linkedUserId || 0,
+            ),
+          )
+          .filter(
+            (userId) =>
+              Number.isInteger(userId) &&
+              userId > 0,
+          ),
+      ),
+    );
+
+  if (
+    meetingManagerUserIds.length === 0
+  ) {
+    return 0;
+  }
+
+  const {
+    periodStart,
+    periodEnd,
+  } = this.validateMetricPeriod(
+    request,
+  );
+
+  /*
+   * This deliberately follows the same
+   * definition as GPS_SITE_VISITS_COMPLETED:
+   *
+   * - assigned to a Meeting Manager
+   * - SITE_VISIT
+   * - COMPLETED
+   * - GPS photo present
+   * - latest meeting in the meeting group only
+   *
+   * The difference is that we aggregate all
+   * Meeting Managers under the Marketing Head.
+   */
+  return this.meetingRepository
+    .createQueryBuilder('meeting')
+    .where(
+      'meeting.assignedTo IN (:...meetingManagerUserIds)',
+      {
+        meetingManagerUserIds,
+      },
+    )
+    .andWhere(
+      'meeting.meetingType = :meetingType',
+      {
+        meetingType:
+          MeetingType.SITE_VISIT,
+      },
+    )
+    .andWhere(
+      'meeting.status = :meetingStatus',
+      {
+        meetingStatus:
+          MeetingStatus.COMPLETED,
+      },
+    )
+    .andWhere(
+      `
+      NULLIF(
+        TRIM(
+          COALESCE(
+            meeting.gpsPhotoUrl,
+            ''
+          )
+        ),
+        ''
+      ) IS NOT NULL
+      `,
+    )
+    .andWhere(
+      'meeting.createdAt >= :periodStart',
+      {
+        periodStart,
+      },
+    )
+    .andWhere(
+      'meeting.createdAt < :periodEnd',
+      {
+        periodEnd,
+      },
+    )
+    .andWhere(
+      `
+      NOT EXISTS (
+        SELECT 1
+        FROM meetings newerMeeting
+        WHERE
+          COALESCE(
+            newerMeeting."meetingGroupId",
+            newerMeeting.id
+          ) =
+          COALESCE(
+            meeting."meetingGroupId",
+            meeting.id
+          )
+
+          AND (
+            newerMeeting."updatedAt" >
+              meeting."updatedAt"
+
+            OR (
+              newerMeeting."updatedAt" =
+                meeting."updatedAt"
+              AND newerMeeting."createdAt" >
+                meeting."createdAt"
+            )
+
+            OR (
+              newerMeeting."updatedAt" =
+                meeting."updatedAt"
+              AND newerMeeting."createdAt" =
+                meeting."createdAt"
+              AND newerMeeting.id >
+                meeting.id
+            )
+          )
+      )
+      `,
+    )
+    .getCount();
+}
 
   private async resolveTeamTelecallers(
   request: StaffPayrollMetricRequest,

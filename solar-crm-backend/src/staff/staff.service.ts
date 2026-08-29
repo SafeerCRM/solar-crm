@@ -2671,6 +2671,69 @@ const applyProjectPaymentQualificationTo =
         `${conditionLabel}: target value must be a valid non-negative number`,
       );
     }
+
+    const conditionTargetCalculationMode =
+  condition.targetCalculationMode ||
+  StaffPayrollTargetCalculationMode
+    .FIXED;
+
+if (
+  !Object.values(
+    StaffPayrollTargetCalculationMode,
+  ).includes(
+    conditionTargetCalculationMode,
+  )
+) {
+  throw new BadRequestException(
+    `${conditionLabel}: invalid target calculation mode`,
+  );
+}
+
+if (
+  conditionTargetCalculationMode ===
+    StaffPayrollTargetCalculationMode
+      .TEAM_SIZE_MULTIPLIER
+) {
+  if (
+    !condition.targetMultiplierMetricType ||
+    !Object.values(
+      StaffPayrollMetricType,
+    ).includes(
+      condition.targetMultiplierMetricType,
+    )
+  ) {
+    throw new BadRequestException(
+      `${conditionLabel}: valid target multiplier metric is required for team-size calculation`,
+    );
+  }
+
+  if (
+    condition.targetMultiplierMetricType ===
+      StaffPayrollMetricType
+        .MANUAL_NUMBER
+  ) {
+    throw new BadRequestException(
+      `${conditionLabel}: manual number cannot be used as a team-size multiplier metric`,
+    );
+  }
+
+  const conditionTeamMemberTargetValue =
+    Number(
+      condition.teamMemberTargetValue ||
+        0,
+    );
+
+  if (
+    !Number.isFinite(
+      conditionTeamMemberTargetValue,
+    ) ||
+    conditionTeamMemberTargetValue <= 0
+  ) {
+    throw new BadRequestException(
+      `${conditionLabel}: target per team member must be greater than zero`,
+    );
+  }
+}
   }
 
   const incentiveComponents =
@@ -4078,6 +4141,14 @@ private async calculateStaffPayrollByRole(
           linkedUserId,
           basicSalary,
         );
+
+        case 'MARKETING_HEAD':
+  return this.payrollCalculator
+    .calculateMarketingHeadPayroll(
+      payrollMonth,
+      linkedUserId,
+      basicSalary,
+    );
 
         case 'TELECALLING_MANAGER':
   return this.payrollCalculator

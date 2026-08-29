@@ -104,6 +104,15 @@ TEAM_TELECALLER_APPROVED_PROJECTS =
   /*
    * MEETINGS
    */
+
+  TEAM_MEETING_MANAGERS = 'TEAM_MEETING_MANAGERS',
+
+TEAM_MEETING_MANAGER_APPROVED_PROJECTS =
+  'TEAM_MEETING_MANAGER_APPROVED_PROJECTS',
+
+TEAM_MEETING_MANAGER_GPS_SITE_VISITS_COMPLETED =
+  'TEAM_MEETING_MANAGER_GPS_SITE_VISITS_COMPLETED',
+
   MEETINGS_SCHEDULED =
     'MEETINGS_SCHEDULED',
 
@@ -323,7 +332,32 @@ export type StaffPayrollEligibilityCondition = {
   operator:
     StaffPayrollConditionOperator;
 
+    /*
+   * Fixed target used when no dynamic
+   * eligibility target is configured.
+   */
   targetValue: number;
+
+  /*
+   * Optional dynamic target calculation
+   * for this individual eligibility condition.
+   *
+   * Example:
+   * Marketing Head GPS requirement:
+   *
+   * TEAM_MEETING_MANAGERS ×
+   * configured GPS visits per Meeting Manager.
+   *
+   * Existing conditions remain FIXED because
+   * these fields are optional.
+   */
+  targetCalculationMode?:
+    StaffPayrollTargetCalculationMode;
+
+  targetMultiplierMetricType?:
+    StaffPayrollMetricType;
+
+  teamMemberTargetValue?: number;
 
   failureAction:
     StaffPayrollConditionFailureAction;
