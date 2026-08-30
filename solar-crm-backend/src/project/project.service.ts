@@ -6507,7 +6507,8 @@ async projectManagerApproval(
 
 const allowedDealerCategories = [
   'PANELS',
-  'INVERTERS',
+  'ONGRID_INVERTERS',
+  'HYBRID_INVERTERS',
   'STRUCTURE',
   'ELECTRICAL',
   'BATTERIES',
@@ -6745,7 +6746,8 @@ async updateMaterialMaster(id: number, data: Partial<ProjectMaterialMaster>) {
 
 const allowedDealerCategories = [
   'PANELS',
-  'INVERTERS',
+  'ONGRID_INVERTERS',
+  'HYBRID_INVERTERS',
   'STRUCTURE',
   'ELECTRICAL',
   'BATTERIES',
