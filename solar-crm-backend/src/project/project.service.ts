@@ -18307,6 +18307,51 @@ const historicalProjectItems =
     )
     .getMany();
 
+    const historicalStockMovements =
+  await this.projectStockMovementRepository
+    .createQueryBuilder(
+      'movement',
+    )
+    .leftJoinAndSelect(
+      ProjectStockItem,
+      'stock',
+      'stock.id = movement.stockItemId',
+    )
+    .where(
+      'movement.projectId = :projectId',
+      {
+        projectId:
+          project.id,
+      },
+    )
+    .andWhere(
+      'movement.movementType IN (:...issueTypes)',
+      {
+        issueTypes: [
+          ProjectStockMovementType
+            .ISSUE,
+
+          ProjectStockMovementType
+            .ISSUE_FROM_AVAILABLE,
+
+          ProjectStockMovementType
+            .ISSUE_FROM_RESERVED,
+        ],
+      },
+    )
+    .andWhere(
+      'COALESCE(movement.isHidden, false) = false',
+    )
+    .select([
+      'movement.id AS "id"',
+      'movement.materialName AS "materialName"',
+      'movement.quantity AS "quantity"',
+      'movement.createdAt AS "createdAt"',
+      'stock.category AS "category"',
+      'stock.brand AS "brand"',
+    ])
+    .getRawMany();
+
   /*
    * Match only the automatic item identities
    * that this function itself generates.
@@ -18748,6 +18793,159 @@ const isSafeHistoricalProcurementMatch = (
   return false;
 };
 
+const isSafeHistoricalStockMatch = (
+  requirement: {
+    materialName?: string;
+    category?: string;
+    brand?: string;
+    remarks?: string;
+  },
+
+  stockMovement: {
+    materialName?: string;
+    category?: string;
+    brand?: string;
+    quantity?: number;
+  },
+) => {
+  if (
+    Number(
+      stockMovement.quantity ||
+        0,
+    ) <= 0
+  ) {
+    return false;
+  }
+
+  const requirementGroup =
+    getAutomaticRequirementGroup(
+      requirement,
+    );
+
+  const stockGroup =
+    getHistoricalProcurementGroup({
+      materialName:
+        stockMovement.materialName,
+
+      category:
+        stockMovement.category,
+    });
+
+  if (
+    !requirementGroup ||
+    !stockGroup ||
+    requirementGroup !==
+      stockGroup
+  ) {
+    return false;
+  }
+
+  const requirementBrand =
+    normalizeProcurementText(
+      requirement.brand,
+    );
+
+  const stockBrand =
+    normalizeProcurementText(
+      stockMovement.brand,
+    );
+
+  if (
+    requirementGroup ===
+      'DCR_PANEL' ||
+    requirementGroup ===
+      'NON_DCR_PANEL'
+  ) {
+    if (
+      !requirementBrand ||
+      !stockBrand
+    ) {
+      return false;
+    }
+
+    return (
+      requirementBrand ===
+      stockBrand
+    );
+  }
+
+  if (
+    requirementGroup ===
+    'INVERTER'
+  ) {
+    if (
+      !requirementBrand ||
+      !stockBrand ||
+      requirementBrand !==
+        stockBrand
+    ) {
+      return false;
+    }
+
+    const requirementCapacity =
+      getCapacityValue(
+        [
+          requirement.remarks,
+          requirement.materialName,
+          requirement.category,
+        ]
+          .filter(Boolean)
+          .join(' '),
+      );
+
+    const stockCapacity =
+      getCapacityValue(
+        [
+          stockMovement.materialName,
+          stockMovement.category,
+        ]
+          .filter(Boolean)
+          .join(' '),
+      );
+
+    const requirementPhase =
+      getPhaseValue(
+        [
+          requirement.remarks,
+          requirement.materialName,
+          requirement.category,
+        ]
+          .filter(Boolean)
+          .join(' '),
+      );
+
+    const stockPhase =
+      getPhaseValue(
+        [
+          stockMovement.materialName,
+          stockMovement.category,
+        ]
+          .filter(Boolean)
+          .join(' '),
+      );
+
+    if (
+      requirementCapacity ===
+        null ||
+      stockCapacity ===
+        null ||
+      !requirementPhase ||
+      !stockPhase
+    ) {
+      return false;
+    }
+
+    return (
+      requirementCapacity ===
+        stockCapacity &&
+      requirementPhase ===
+        stockPhase
+    );
+  }
+
+  return false;
+};
+
   const requiredKeys =
     new Set(
       automaticItems.map(
@@ -18778,6 +18976,34 @@ const isSafeHistoricalProcurementMatch = (
             item,
           ) === key,
       );
+
+      const matchingStockMovements =
+  historicalStockMovements.filter(
+    (
+      movement,
+    ) =>
+      isSafeHistoricalStockMatch(
+        requirement,
+        movement,
+      ),
+  );
+
+const fulfilledFromStockQuantity =
+  matchingStockMovements.reduce(
+    (
+      total,
+      movement,
+    ) =>
+      total +
+      Math.max(
+        Number(
+          movement.quantity ||
+            0,
+        ),
+        0,
+      ),
+    0,
+  );
 
     if (!existingItem) {
   const matchingHistoricalItems =
@@ -18835,15 +19061,30 @@ const isSafeHistoricalProcurementMatch = (
       ),
     );
 
-  const inheritedPendingQuantity =
-    Math.max(
-      Number(
-        requirement.quantity ||
-          0,
-      ) -
-        inheritedPurchasedQuantity,
-      0,
-    );
+ const fulfilledQuantity =
+  Math.max(
+    inheritedPurchasedQuantity,
+    Math.min(
+      fulfilledFromStockQuantity,
+      Math.max(
+        Number(
+          requirement.quantity ||
+            0,
+        ),
+        0,
+      ),
+    ),
+  );
+
+const inheritedPendingQuantity =
+  Math.max(
+    Number(
+      requirement.quantity ||
+        0,
+    ) -
+      fulfilledQuantity,
+    0,
+  );
 
   const inheritedPurchaseStatus =
     inheritedPendingQuantity <=
@@ -19031,12 +19272,21 @@ const isSafeHistoricalProcurementMatch = (
     existingItem.purchasedQuantity =
       purchasedQuantity;
 
-    existingItem.pendingQuantity =
-      Math.max(
-        newRequiredQuantity -
-          purchasedQuantity,
-        0,
-      );
+    const fulfilledQuantity =
+  Math.max(
+    purchasedQuantity,
+    Math.min(
+      fulfilledFromStockQuantity,
+      newRequiredQuantity,
+    ),
+  );
+
+existingItem.pendingQuantity =
+  Math.max(
+    newRequiredQuantity -
+      fulfilledQuantity,
+    0,
+  );
 
     /*
      * Reservation / issued history is preserved.
@@ -19074,26 +19324,21 @@ const isSafeHistoricalProcurementMatch = (
      * purchased vs latest required quantity.
      */
     if (
-      newRequiredQuantity <=
-        0 ||
-      purchasedQuantity >=
-        newRequiredQuantity
-    ) {
-      existingItem.purchaseStatus =
-        ProjectMaterialPurchaseStatus.PURCHASED;
-
-      existingItem.pendingQuantity =
-        0;
-    } else if (
-      purchasedQuantity >
-      0
-    ) {
-      existingItem.purchaseStatus =
-        ProjectMaterialPurchaseStatus.PARTIALLY_PURCHASED;
-    } else {
-      existingItem.purchaseStatus =
-        ProjectMaterialPurchaseStatus.PENDING;
-    }
+  newRequiredQuantity <= 0 ||
+  purchasedQuantity >=
+    newRequiredQuantity
+) {
+  existingItem.purchaseStatus =
+    ProjectMaterialPurchaseStatus.PURCHASED;
+} else if (
+  purchasedQuantity > 0
+) {
+  existingItem.purchaseStatus =
+    ProjectMaterialPurchaseStatus.PARTIALLY_PURCHASED;
+} else {
+  existingItem.purchaseStatus =
+    ProjectMaterialPurchaseStatus.PENDING;
+}
 
     /*
      * Recalculate issue status without losing
