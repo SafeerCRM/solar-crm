@@ -290,9 +290,12 @@ setPagination({
     }
   };
 
-  const loadSelectableStockItems = async () => {
+  const loadSelectableStockItems = async (
+  searchText = '',
+) => {
   try {
-    const token = localStorage.getItem('token');
+    const token =
+      localStorage.getItem('token');
 
     const res = await axios.get(
       `${API_BASE_URL}/project/stock/items`,
@@ -300,11 +303,18 @@ setPagination({
         params: {
           page: 1,
           limit: 100,
+
+          search:
+            searchText.trim() ||
+            undefined,
+
           showHidden: 'false',
         },
+
         headers: token
           ? {
-              Authorization: `Bearer ${token}`,
+              Authorization:
+                `Bearer ${token}`,
             }
           : {},
       },
@@ -316,7 +326,12 @@ setPagination({
         : [],
     );
   } catch (error) {
-    console.error(error);
+    console.error(
+      'Failed to search selectable stock:',
+      error,
+    );
+
+    setSelectableStockItems([]);
   }
 };
 
@@ -2095,12 +2110,16 @@ const filteredIncomingMaterials =
   type="text"
   placeholder="Search stock item by material, branch, brand"
   value={stockSelectorSearch.issue}
-  onChange={(e) =>
-    setStockSelectorSearch({
-      ...stockSelectorSearch,
-      issue: e.target.value,
-    })
-  }
+  onChange={(e) => {
+  const value = e.target.value;
+
+  setStockSelectorSearch({
+    ...stockSelectorSearch,
+    issue: value,
+  });
+
+  loadSelectableStockItems(value);
+}}
   className="rounded-xl border p-3 text-sm"
 />
     <select
@@ -2380,12 +2399,16 @@ const filteredIncomingMaterials =
           type="text"
           placeholder="Search stock item by material, branch or brand"
           value={stockSelectorSearch.reserve}
-          onChange={(e) =>
-            setStockSelectorSearch({
-              ...stockSelectorSearch,
-              reserve: e.target.value,
-            })
-          }
+          onChange={(e) => {
+  const value = e.target.value;
+
+  setStockSelectorSearch({
+    ...stockSelectorSearch,
+    reserve: value,
+  });
+
+  loadSelectableStockItems(value);
+}}
           className="w-full min-w-0 max-w-full rounded-xl border bg-white p-3 text-sm"
         />
 
@@ -2502,13 +2525,16 @@ const filteredIncomingMaterials =
           value={
             stockSelectorSearch.releaseReserved
           }
-          onChange={(e) =>
-            setStockSelectorSearch({
-              ...stockSelectorSearch,
-              releaseReserved:
-                e.target.value,
-            })
-          }
+          onChange={(e) => {
+  const value = e.target.value;
+
+  setStockSelectorSearch({
+    ...stockSelectorSearch,
+    releaseReserved: value,
+  });
+
+  loadSelectableStockItems(value);
+}}
           className="w-full min-w-0 max-w-full rounded-xl border bg-white p-3 text-sm"
         />
 
@@ -2638,12 +2664,16 @@ const filteredIncomingMaterials =
   type="text"
   placeholder="Search stock item by material, branch, brand"
   value={stockSelectorSearch.adjust}
-  onChange={(e) =>
-    setStockSelectorSearch({
-      ...stockSelectorSearch,
-      adjust: e.target.value,
-    })
-  }
+  onChange={(e) => {
+  const value = e.target.value;
+
+  setStockSelectorSearch({
+    ...stockSelectorSearch,
+    adjust: value,
+  });
+
+  loadSelectableStockItems(value);
+}}
   className="rounded-xl border p-3 text-sm"
 />
     <select
@@ -2739,12 +2769,16 @@ const filteredIncomingMaterials =
   type="text"
   placeholder="Search source stock item"
   value={stockSelectorSearch.transfer}
-  onChange={(e) =>
-    setStockSelectorSearch({
-      ...stockSelectorSearch,
-      transfer: e.target.value,
-    })
-  }
+  onChange={(e) => {
+  const value = e.target.value;
+
+  setStockSelectorSearch({
+    ...stockSelectorSearch,
+    transfer: value,
+  });
+
+  loadSelectableStockItems(value);
+}}
   className="rounded-xl border p-3 text-sm"
 />
     <select
@@ -2927,12 +2961,16 @@ const filteredIncomingMaterials =
   type="text"
   placeholder="Search stock item for issue"
   value={stockSelectorSearch.requestIssue}
-  onChange={(e) =>
-    setStockSelectorSearch({
-      ...stockSelectorSearch,
-      requestIssue: e.target.value,
-    })
-  }
+  onChange={(e) => {
+  const value = e.target.value;
+
+  setStockSelectorSearch({
+    ...stockSelectorSearch,
+    requestIssue: value,
+  });
+
+  loadSelectableStockItems(value);
+}}
   className="rounded-xl border p-3 text-sm"
 />
     <select
