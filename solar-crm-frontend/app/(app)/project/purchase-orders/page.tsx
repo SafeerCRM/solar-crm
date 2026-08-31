@@ -250,6 +250,22 @@ type InvoiceNumberPreview = {
   suggestedInvoiceNumber?: string;
 };
 
+const getTodayDateInputValue = () => {
+  const now = new Date();
+
+  const localDate =
+    new Date(
+      now.getTime() -
+        now.getTimezoneOffset() *
+          60 *
+          1000,
+    );
+
+  return localDate
+    .toISOString()
+    .slice(0, 10);
+};
+
 export default function PurchaseOrdersPage() {
   const [items, setItems] = useState<PurchaseItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -289,6 +305,10 @@ const [selectedPo, setSelectedPo] =
   const [manualPo, setManualPo] = useState({
   projectId: '',
   vendorName: '',
+
+  orderDate:
+    getTodayDateInputValue(),
+
   materialName: '',
   category: '',
   brand: '',
@@ -309,6 +329,8 @@ const [creatingManualPo, setCreatingManualPo] =
   projectId: '',
   dealerId: '',
   buyerCompanyId: '',
+
+  invoiceDate: getTodayDateInputValue(),
 
   materialId: '',
   itemName: '',
@@ -338,6 +360,8 @@ const [manualInvoiceItems, setManualInvoiceItems] = useState<ManualInvoiceItem[]
     projectId: '',
     dealerId: '',
     buyerCompanyId: '',
+
+    invoiceDate: getTodayDateInputValue(),
 
     itemName: '',
     category: '',
@@ -1896,11 +1920,22 @@ const createManualPo = async () => {
     await axios.post(
       `${API_BASE_URL}/project/purchase-order/manual`,
       {
-        projectId: manualPo.projectId
-  ? Number(manualPo.projectId)
-  : undefined,
-        vendorName: manualPo.vendorName,
-        remarks: manualPo.remarks,
+  projectId:
+    manualPo.projectId
+      ? Number(
+          manualPo.projectId,
+        )
+      : undefined,
+
+  vendorName:
+    manualPo.vendorName,
+
+  orderDate:
+    manualPo.orderDate ||
+    undefined,
+
+  remarks:
+    manualPo.remarks,
 
         items: itemsToSubmit.map((item) => ({
           materialName: item.materialName,
@@ -1921,18 +1956,22 @@ const createManualPo = async () => {
     alert('Manual purchase order created successfully');
 
     setManualPo({
-      projectId: '',
-      vendorName: '',
-      materialName: '',
-      category: '',
-      brand: '',
-      unit: '',
-      hsnCode: '',
-      quantity: '',
-      purchaseRate: '',
-      gstPercent: '18',
-      remarks: '',
-    });
+  projectId: '',
+  vendorName: '',
+
+  orderDate:
+    getTodayDateInputValue(),
+
+  materialName: '',
+  category: '',
+  brand: '',
+  unit: '',
+  hsnCode: '',
+  quantity: '',
+  purchaseRate: '',
+  gstPercent: '18',
+  remarks: '',
+});
 
     setManualPoItems([]);
 
@@ -2167,6 +2206,10 @@ const createManualPi =
                 )
               : undefined,
 
+              invoiceDate:
+  manualPi.invoiceDate ||
+  undefined,
+
           buyerCompanyId:
             invoiceType ===
               'INTER_COMPANY' &&
@@ -2278,6 +2321,9 @@ const createManualPi =
 
         itemName:
           '',
+
+          invoiceDate:
+  getTodayDateInputValue(),
 
         category:
           '',
@@ -2570,6 +2616,10 @@ const createManualInvoice =
                 )
               : undefined,
 
+              invoiceDate:
+  manualInvoice.invoiceDate ||
+  undefined,
+
           remarks:
             manualInvoice
               .remarks,
@@ -2657,6 +2707,9 @@ const createManualInvoice =
 
         buyerCompanyId:
           '',
+
+          invoiceDate:
+  getTodayDateInputValue(),
 
         itemName:
           '',
@@ -3311,6 +3364,27 @@ const generateProformaInvoice = async () => {
   ))}
 </select>
 
+<div>
+  <label className="mb-1 block text-xs font-semibold text-gray-600">
+    PO Date
+  </label>
+
+  <input
+    type="date"
+    value={
+      manualPo.orderDate
+    }
+    onChange={(e) =>
+      setManualPo({
+        ...manualPo,
+        orderDate:
+          e.target.value,
+      })
+    }
+    className="w-full rounded-xl border p-3"
+  />
+</div>
+
     <select
   value={manualPo.materialName}
   onChange={(e) => {
@@ -3701,6 +3775,24 @@ const generateProformaInvoice = async () => {
       )}
   </select>
 )}
+
+<div>
+  <label className="mb-1 block text-xs font-semibold text-gray-600">
+    PI Date
+  </label>
+
+  <input
+    type="date"
+    value={manualPi.invoiceDate}
+    onChange={(e) =>
+      setManualPi({
+        ...manualPi,
+        invoiceDate: e.target.value,
+      })
+    }
+    className="w-full rounded-xl border p-3"
+  />
+</div>
 
     <select
   value={manualPi.itemName}
@@ -4196,6 +4288,24 @@ onChange={(e) =>
     )}
   </div>
 )}
+
+<div>
+  <label className="mb-1 block text-xs font-semibold text-gray-600">
+    Invoice Date
+  </label>
+
+  <input
+    type="date"
+    value={manualInvoice.invoiceDate}
+    onChange={(e) =>
+      setManualInvoice({
+        ...manualInvoice,
+        invoiceDate: e.target.value,
+      })
+    }
+    className="w-full rounded-xl border p-3"
+  />
+</div>
 
     <select
   value={manualInvoice.itemName}
