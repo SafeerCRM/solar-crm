@@ -301,15 +301,15 @@ setPagination({
       `${API_BASE_URL}/project/stock/items`,
       {
         params: {
-          page: 1,
-          limit: 100,
+  page: 1,
+  limit: 100,
 
-          search:
-            searchText.trim() ||
-            undefined,
+  material:
+    searchText.trim() ||
+    undefined,
 
-          showHidden: 'false',
-        },
+  showHidden: 'false',
+},
 
         headers: token
           ? {
