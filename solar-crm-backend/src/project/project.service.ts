@@ -18267,6 +18267,46 @@ request =
       },
     });
 
+    /*
+ * Historical procurement items for this Project.
+ *
+ * These are used only when a brand-new automatic
+ * procurement item is being created.
+ *
+ * We intentionally exclude the current automatic
+ * request itself so previously completed procurement
+ * from older/manual requests can be inherited safely.
+ */
+const historicalProjectItems =
+  await this.projectMaterialRequestItemRepository
+    .createQueryBuilder('historicalItem')
+    .where(
+      'historicalItem.projectId = :projectId',
+      {
+        projectId:
+          project.id,
+      },
+    )
+    .andWhere(
+      'historicalItem.requestId != :currentRequestId',
+      {
+        currentRequestId:
+          request.id,
+      },
+    )
+    .andWhere(
+      'COALESCE(historicalItem.purchasedQuantity, 0) > 0',
+    )
+    .orderBy(
+      'historicalItem.createdAt',
+      'DESC',
+    )
+    .addOrderBy(
+      'historicalItem.id',
+      'DESC',
+    )
+    .getMany();
+
   /*
    * Match only the automatic item identities
    * that this function itself generates.
@@ -18288,6 +18328,425 @@ request =
     )
       .trim()
       .toUpperCase()}`;
+
+      /*
+ * Convert old material rows into the same logical
+ * procurement groups used by automatic requirements.
+ *
+ * Historical material names are inconsistent, so
+ * exact name matching is intentionally avoided.
+ */
+const getHistoricalProcurementGroup = (
+  item: {
+    materialName?: string;
+    category?: string;
+  },
+):
+  | 'DCR_PANEL'
+| 'NON_DCR_PANEL'
+| 'INVERTER'
+| null => {
+  const materialName =
+    String(
+      item.materialName ||
+        '',
+    )
+      .trim()
+      .toUpperCase();
+
+  const category =
+    String(
+      item.category ||
+        '',
+    )
+      .trim()
+      .toUpperCase();
+
+  const combined =
+    `${category} ${materialName}`;
+
+  /*
+   * Check NON-DCR before DCR because
+   * NON-DCR also contains the text "DCR".
+   */
+  if (
+    combined.includes(
+      'NON-DCR',
+    ) ||
+    combined.includes(
+      'NONDCR',
+    ) ||
+    combined.includes(
+      'NON DCR',
+    )
+  ) {
+    return 'NON_DCR_PANEL';
+  }
+
+  if (
+    combined.includes(
+      'DCR',
+    ) &&
+    (
+      combined.includes(
+        'PANEL',
+      ) ||
+      combined.includes(
+        'SOLAR',
+      ) ||
+      category.includes(
+        'DCR',
+      )
+    )
+  ) {
+    return 'DCR_PANEL';
+  }
+
+  if (
+    combined.includes(
+      'INVERTER',
+    )
+  ) {
+    return 'INVERTER';
+  }
+
+  /*
+ * Do not automatically inherit STRUCTURE.
+ *
+ * Legacy structure rows can represent individual
+ * GI pipes/components and cannot safely satisfy
+ * one complete automatic structure SET.
+ */
+
+  return null;
+};
+
+const getAutomaticRequirementGroup = (
+  requirement: {
+    materialName?: string;
+    category?: string;
+  },
+):
+  | 'DCR_PANEL'
+  | 'NON_DCR_PANEL'
+  | 'INVERTER'
+  | 'STRUCTURE'
+  | null => {
+  const materialName =
+    String(
+      requirement.materialName ||
+        '',
+    )
+      .trim()
+      .toUpperCase();
+
+  const category =
+    String(
+      requirement.category ||
+        '',
+    )
+      .trim()
+      .toUpperCase();
+
+  if (
+    category ===
+      'PANEL' &&
+    (
+      materialName.includes(
+        'NON-DCR',
+      ) ||
+      materialName.includes(
+        'NONDCR',
+      ) ||
+      materialName.includes(
+        'NON DCR',
+      )
+    )
+  ) {
+    return 'NON_DCR_PANEL';
+  }
+
+  if (
+    category ===
+      'PANEL' &&
+    materialName.includes(
+      'DCR',
+    )
+  ) {
+    return 'DCR_PANEL';
+  }
+
+  if (
+    category ===
+    'INVERTER'
+  ) {
+    return 'INVERTER';
+  }
+
+  if (
+    category ===
+    'STRUCTURE'
+  ) {
+    return 'STRUCTURE';
+  }
+
+  return null;
+};
+
+const normalizeProcurementText = (
+  value: any,
+) =>
+  String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9.]+/g, '');
+
+
+const getCapacityValue = (
+  value: any,
+): number | null => {
+  const text =
+    String(value || '')
+      .trim()
+      .toUpperCase();
+
+  /*
+   * Current automatic remark:
+   *   Capacity: 5 kw
+   *   Capacity: 3.4
+   *
+   * Historical examples:
+   *   5 KW 1PH - SELEC INVERTER
+   *   3.4 KW- 1PH
+   */
+  const capacityLabelMatch =
+    text.match(
+      /CAPACITY\s*:\s*(\d+(?:\.\d+)?)/,
+    );
+
+  if (
+    capacityLabelMatch?.[1]
+  ) {
+    return Number(
+      capacityLabelMatch[1],
+    );
+  }
+
+  const kwMatch =
+    text.match(
+      /(\d+(?:\.\d+)?)\s*KW/,
+    );
+
+  if (
+    kwMatch?.[1]
+  ) {
+    return Number(
+      kwMatch[1],
+    );
+  }
+
+  return null;
+};
+
+
+const getPhaseValue = (
+  value: any,
+): '1PH' | '3PH' | null => {
+  const text =
+    String(value || '')
+      .trim()
+      .toUpperCase();
+
+  if (
+    /1\s*PH/.test(text) ||
+    /1\s*PHASE/.test(text)
+  ) {
+    return '1PH';
+  }
+
+  if (
+    /3\s*PH/.test(text) ||
+    /3\s*PHASE/.test(text)
+  ) {
+    return '3PH';
+  }
+
+  return null;
+};
+
+
+const isSafeHistoricalProcurementMatch = (
+  requirement: {
+    materialName?: string;
+    category?: string;
+    brand?: string;
+    remarks?: string;
+  },
+
+  historicalItem: {
+    materialName?: string;
+    category?: string;
+    brand?: string;
+    remarks?: string;
+    purchasedQuantity?: number;
+  },
+) => {
+  /*
+   * There must be a real historical purchase.
+   */
+  if (
+    Number(
+      historicalItem
+        .purchasedQuantity ||
+        0,
+    ) <= 0
+  ) {
+    return false;
+  }
+
+  const requirementGroup =
+    getAutomaticRequirementGroup(
+      requirement,
+    );
+
+  const historicalGroup =
+    getHistoricalProcurementGroup(
+      historicalItem,
+    );
+
+  if (
+    !requirementGroup ||
+    !historicalGroup ||
+    requirementGroup !==
+      historicalGroup
+  ) {
+    return false;
+  }
+
+  const requirementBrand =
+    normalizeProcurementText(
+      requirement.brand,
+    );
+
+  const historicalBrand =
+    normalizeProcurementText(
+      historicalItem.brand,
+    );
+
+  /*
+   * PANEL:
+   *
+   * DCR/NON-DCR group has already matched above.
+   * Brand must also exist and match.
+   */
+  if (
+    requirementGroup ===
+      'DCR_PANEL' ||
+    requirementGroup ===
+      'NON_DCR_PANEL'
+  ) {
+    if (
+      !requirementBrand ||
+      !historicalBrand
+    ) {
+      return false;
+    }
+
+    return (
+      requirementBrand ===
+      historicalBrand
+    );
+  }
+
+  /*
+   * INVERTER:
+   *
+   * Require:
+   * - same brand
+   * - same capacity
+   * - same phase
+   *
+   * If any specification is missing, do not
+   * inherit automatically.
+   */
+  if (
+    requirementGroup ===
+    'INVERTER'
+  ) {
+    if (
+      !requirementBrand ||
+      !historicalBrand ||
+      requirementBrand !==
+        historicalBrand
+    ) {
+      return false;
+    }
+
+    const requirementCapacity =
+      getCapacityValue(
+        [
+          requirement.remarks,
+          requirement.materialName,
+          requirement.category,
+        ]
+          .filter(Boolean)
+          .join(' '),
+      );
+
+    const historicalCapacity =
+      getCapacityValue(
+        [
+          historicalItem.materialName,
+          historicalItem.category,
+          historicalItem.remarks,
+        ]
+          .filter(Boolean)
+          .join(' '),
+      );
+
+    const requirementPhase =
+      getPhaseValue(
+        [
+          requirement.remarks,
+          requirement.materialName,
+          requirement.category,
+        ]
+          .filter(Boolean)
+          .join(' '),
+      );
+
+    const historicalPhase =
+      getPhaseValue(
+        [
+          historicalItem.materialName,
+          historicalItem.category,
+          historicalItem.remarks,
+        ]
+          .filter(Boolean)
+          .join(' '),
+      );
+
+    if (
+      requirementCapacity ===
+        null ||
+      historicalCapacity ===
+        null ||
+      !requirementPhase ||
+      !historicalPhase
+    ) {
+      return false;
+    }
+
+    return (
+      requirementCapacity ===
+        historicalCapacity &&
+      requirementPhase ===
+        historicalPhase
+    );
+  }
+
+  return false;
+};
 
   const requiredKeys =
     new Set(
@@ -18321,72 +18780,206 @@ request =
       );
 
     if (!existingItem) {
-      const newItem =
-        this.projectMaterialRequestItemRepository.create({
-          requestId:
-            request.id,
+  const matchingHistoricalItems =
+  historicalProjectItems.filter(
+    (
+      historicalItem,
+    ) =>
+      isSafeHistoricalProcurementMatch(
+        requirement,
+        historicalItem,
+      ),
+  );
 
-          projectId:
-            project.id,
+  /*
+   * Do NOT sum historical rows.
+   *
+   * Old projects can contain repeated/recreated
+   * material rows for the same logical requirement.
+   * Taking the maximum credible purchased quantity
+   * avoids double counting.
+   */
+  const historicalPurchasedQuantity =
+    matchingHistoricalItems.reduce(
+      (
+        maxPurchased,
+        historicalItem,
+      ) =>
+        Math.max(
+          maxPurchased,
+          Number(
+            historicalItem
+              .purchasedQuantity ||
+              0,
+          ),
+        ),
+      0,
+    );
 
-          materialId:
-            undefined,
-
-          materialName:
-            requirement.materialName,
-
-          category:
-            requirement.category,
-
-          unit:
-            requirement.unit,
-
-          brand:
-            requirement.brand,
-
-          rate:
+  /*
+   * Never inherit more than the Project currently
+   * requires.
+   */
+  const inheritedPurchasedQuantity =
+    Math.min(
+      Math.max(
+        historicalPurchasedQuantity,
+        0,
+      ),
+      Math.max(
+        Number(
+          requirement.quantity ||
             0,
+        ),
+        0,
+      ),
+    );
 
-          quantity:
-            requirement.quantity,
+  const inheritedPendingQuantity =
+    Math.max(
+      Number(
+        requirement.quantity ||
+          0,
+      ) -
+        inheritedPurchasedQuantity,
+      0,
+    );
 
-          reservedQuantity:
-            0,
+  const inheritedPurchaseStatus =
+    inheritedPendingQuantity <=
+      0 &&
+    Number(
+      requirement.quantity ||
+        0,
+    ) > 0
+      ? ProjectMaterialPurchaseStatus.PURCHASED
+      : inheritedPurchasedQuantity >
+          0
+        ? ProjectMaterialPurchaseStatus.PARTIALLY_PURCHASED
+        : ProjectMaterialPurchaseStatus.PENDING;
 
-          purchasedQuantity:
-            0,
+  /*
+   * Carry purchase audit from the strongest
+   * matching historical row when available.
+   */
+  const historicalAuditItem =
+    matchingHistoricalItems
+      .filter(
+        (
+          historicalItem,
+        ) =>
+          Number(
+            historicalItem
+              .purchasedQuantity ||
+              0,
+          ) ===
+          historicalPurchasedQuantity,
+      )
+      .sort(
+        (
+          a,
+          b,
+        ) =>
+          new Date(
+            b.purchasedAt ||
+              b.createdAt,
+          ).getTime() -
+          new Date(
+            a.purchasedAt ||
+              a.createdAt,
+          ).getTime(),
+      )[0];
 
-          pendingQuantity:
-            requirement.quantity,
+  const newItem =
+    this.projectMaterialRequestItemRepository.create({
+      requestId:
+        request.id,
 
-          purchaseStatus:
-            ProjectMaterialPurchaseStatus.PENDING,
+      projectId:
+        project.id,
 
-          gstPercent:
-            0,
+      materialId:
+        undefined,
 
-          totalAmount:
-            0,
+      materialName:
+        requirement.materialName,
 
-          remarks:
-            requirement.remarks,
+      category:
+        requirement.category,
 
-          issuedQuantity:
-            0,
+      unit:
+        requirement.unit,
 
-          issuePendingQuantity:
-            requirement.quantity,
+      brand:
+        requirement.brand,
 
-          issueStatus:
-            ProjectMaterialIssueStatus.PENDING,
-        });
+      rate:
+        0,
 
-      await this.projectMaterialRequestItemRepository.save(
-        newItem,
-      );
+      quantity:
+        requirement.quantity,
 
-      continue;
-    }
+      reservedQuantity:
+        0,
+
+      purchasedQuantity:
+        inheritedPurchasedQuantity,
+
+      pendingQuantity:
+        inheritedPendingQuantity,
+
+      purchaseStatus:
+        inheritedPurchaseStatus,
+
+      purchasedAt:
+        inheritedPurchasedQuantity >
+          0
+          ? historicalAuditItem
+              ?.purchasedAt ||
+            undefined
+          : undefined,
+
+      purchasedBy:
+        inheritedPurchasedQuantity >
+          0
+          ? historicalAuditItem
+              ?.purchasedBy ||
+            undefined
+          : undefined,
+
+      purchasedByName:
+        inheritedPurchasedQuantity >
+          0
+          ? historicalAuditItem
+              ?.purchasedByName ||
+            undefined
+          : undefined,
+
+      gstPercent:
+        0,
+
+      totalAmount:
+        0,
+
+      remarks:
+        requirement.remarks,
+
+      issuedQuantity:
+        0,
+
+      issuePendingQuantity:
+        requirement.quantity,
+
+      issueStatus:
+        ProjectMaterialIssueStatus.PENDING,
+    });
+
+  await this.projectMaterialRequestItemRepository.save(
+    newItem,
+  );
+
+  continue;
+}
 
     const purchasedQuantity =
       Math.max(
