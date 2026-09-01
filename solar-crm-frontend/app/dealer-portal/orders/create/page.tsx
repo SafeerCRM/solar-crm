@@ -1442,22 +1442,37 @@ function MaterialCard({ item, onAdd }: { item: any; onAdd: () => void }) {
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2">
-  {item.dealerCategory === 'PANELS' &&
-    Number(item.ratePerWatt || 0) > 0 && (
-      <div className="col-span-2 rounded-2xl bg-green-50 p-3">
-        <p className="text-xs font-bold text-green-600">
-          Dealer Panel Rate
-        </p>
+  {Number(
+  item.dealerUnitRate ||
+    item.ratePerWatt ||
+    0,
+) > 0 && (
+  <div className="col-span-2 rounded-2xl bg-green-50 p-3">
+    <p className="text-xs font-bold text-green-600">
+      Dealer Rate
+    </p>
 
-        <p className="mt-1 text-lg font-black text-green-700">
-          ₹
-          {Number(
-            item.ratePerWatt || 0,
-          ).toLocaleString('en-IN')}
-          /Watt + GST
-        </p>
-      </div>
-    )}
+    <p className="mt-1 text-lg font-black text-green-700">
+      ₹
+      {Number(
+        item.dealerUnitRate ||
+          item.ratePerWatt ||
+          0,
+      ).toLocaleString('en-IN')}
+      /
+      {String(
+        item.dealerRateUnit ||
+          item.unit ||
+          (
+            item.dealerCategory === 'PANELS'
+              ? 'WATT'
+              : 'UNIT'
+          ),
+      ).trim()}
+      {' + GST'}
+    </p>
+  </div>
+)}
 
   <div className="rounded-2xl bg-white p-3">
     <p className="text-xs font-bold text-slate-400">

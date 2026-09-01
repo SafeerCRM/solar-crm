@@ -25,6 +25,11 @@ type MaterialItem = {
    */
   ratePerWatt?: number;
 
+  /*
+ * Generic dealer rate per selected material unit.
+ */
+dealerUnitRate?: number;
+
   unit?: string;
   brand?: string;
   rate?: number;
@@ -82,9 +87,10 @@ const [categoryOptions, setCategoryOptions] =
   category: '',
 
   dealerCategory: '',
-  ratePerWatt: '',
+ratePerWatt: '',
+dealerUnitRate: '',
 
-  unit: '',
+unit: '',
     brand: '',
     rate: '',
     gstPercent: '',
@@ -222,6 +228,10 @@ useEffect(() => {
     form.ratePerWatt || 0,
   ),
 
+  dealerUnitRate: Number(
+  form.dealerUnitRate || 0,
+),
+
   rate: Number(form.rate || 0),
   gstPercent: Number(form.gstPercent || 0),
   expectedMargin: Number(form.expectedMargin || 0),
@@ -271,7 +281,7 @@ useEffect(() => {
 
   dealerCategory: '',
   ratePerWatt: '',
-
+dealerUnitRate: '',
   unit: '',
   brand: '',
   hsnCode: '',
@@ -313,10 +323,16 @@ const startEdit = (item: MaterialItem) => {
     : item.dealerCategory || '',
 
   ratePerWatt: String(
-    item.ratePerWatt || '',
-  ),
+  item.ratePerWatt || '',
+),
 
-  unit: item.unit || '',
+dealerUnitRate: String(
+  item.dealerUnitRate ||
+    item.ratePerWatt ||
+    '',
+),
+
+unit: item.unit || '',
   brand: item.brand || '',
   hsnCode: item.hsnCode || '',
   vendorPreferredName: item.vendorPreferredName || '',
@@ -349,6 +365,7 @@ const cancelEdit = () => {
 
   dealerCategory: '',
   ratePerWatt: '',
+  dealerUnitRate: '',
 
   unit: '',
   brand: '',
@@ -627,6 +644,13 @@ const downloadMaterialCsv = async () => {
   'Rate Per Watt':
     Number(item.ratePerWatt || 0),
 
+    'Dealer Unit Rate':
+  Number(
+    item.dealerUnitRate ||
+      item.ratePerWatt ||
+      0,
+  ),
+
   Brand: item.brand || '',
         Unit: item.unit || '',
         HSN: item.hsnCode || '',
@@ -833,19 +857,46 @@ const downloadMaterialCsv = async () => {
   <option value="BATTERIES">
     Batteries
   </option>
+
+  <option value="OTHER">
+  Other
+</option>
 </select>
 
-{form.dealerCategory === 'PANELS' && (
+{form.dealerCategory && (
   <input
     type="number"
     min="0"
     step="any"
-    placeholder="Rate Per Watt"
-    value={form.ratePerWatt}
+    placeholder={
+      form.unit.trim()
+        ? `Dealer Rate Per ${form.unit.trim()}`
+        : 'Dealer Rate Per Unit'
+    }
+    value={
+      form.dealerUnitRate ||
+      (
+        form.dealerCategory === 'PANELS'
+          ? form.ratePerWatt
+          : ''
+      )
+    }
     onChange={(e) =>
       setForm({
         ...form,
-        ratePerWatt: e.target.value,
+
+        dealerUnitRate:
+          e.target.value,
+
+        /*
+         * Preserve the legacy panel field too.
+         * Existing dealer APIs/pages using
+         * ratePerWatt therefore continue working.
+         */
+        ratePerWatt:
+          form.dealerCategory === 'PANELS'
+            ? e.target.value
+            : form.ratePerWatt,
       })
     }
     className="rounded-xl border p-3"
@@ -1158,16 +1209,31 @@ const downloadMaterialCsv = async () => {
     </span>
   )}
 
-  {item.dealerCategory === 'PANELS' &&
-    Number(item.ratePerWatt || 0) > 0 && (
-      <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700">
-        ₹
-        {Number(
-          item.ratePerWatt || 0,
-        ).toLocaleString('en-IN')}
-        /Watt + GST
-      </span>
-    )}
+  {Number(
+  item.dealerUnitRate ||
+    item.ratePerWatt ||
+    0,
+) > 0 && (
+  <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700">
+    ₹
+    {Number(
+      item.dealerUnitRate ||
+        item.ratePerWatt ||
+        0,
+    ).toLocaleString('en-IN')}
+    /
+    {String(
+      item.unit ||
+        (
+          item.dealerCategory ===
+          'PANELS'
+            ? 'Watt'
+            : 'Unit'
+        ),
+    ).trim()}
+    {' + GST'}
+  </span>
+)}
 </div>
 
                     <p className="text-sm text-gray-500">

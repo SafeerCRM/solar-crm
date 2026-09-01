@@ -832,22 +832,37 @@ function StockCard({ item }: { item: any }) {
         </div>
 
         <div className="mt-5 grid grid-cols-2 gap-3">
-  {item.dealerCategory === 'PANELS' &&
-    Number(item.ratePerWatt || 0) > 0 && (
-      <div className="col-span-2 rounded-2xl bg-green-50 p-3">
-        <p className="text-xs font-bold text-green-600">
-          Dealer Panel Rate
-        </p>
+  {Number(
+  item.dealerUnitRate ||
+    item.ratePerWatt ||
+    0,
+) > 0 && (
+  <div className="col-span-2 rounded-2xl bg-green-50 p-3">
+    <p className="text-xs font-bold text-green-600">
+      Dealer Rate
+    </p>
 
-        <p className="mt-1 text-lg font-black text-green-700">
-          ₹
-          {Number(
-            item.ratePerWatt || 0,
-          ).toLocaleString('en-IN')}
-          /Watt + GST
-        </p>
-      </div>
-    )}
+    <p className="mt-1 text-lg font-black text-green-700">
+      ₹
+      {Number(
+        item.dealerUnitRate ||
+          item.ratePerWatt ||
+          0,
+      ).toLocaleString('en-IN')}
+      /
+      {String(
+        item.dealerRateUnit ||
+          item.unit ||
+          (
+            item.dealerCategory === 'PANELS'
+              ? 'WATT'
+              : 'UNIT'
+          ),
+      ).trim()}
+      {' + GST'}
+    </p>
+  </div>
+)}
 
   <InfoBox
     label="Without GST"
