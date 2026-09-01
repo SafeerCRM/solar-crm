@@ -891,15 +891,46 @@ const dealerAvailableQuantity =
       .toUpperCase(),
 
   /*
-   * Applicable mainly to solar-panel materials.
-   */
-  ratePerWatt: Number(
-    (material as any).ratePerWatt || 0,
-  ),
+ * Legacy panel dealer rate.
+ * Preserved for backward compatibility.
+ */
+ratePerWatt: Number(
+  (material as any).ratePerWatt || 0,
+),
 
-  brand: material.brand,
-  unit: material.unit,
-  hsnCode: material.hsnCode,
+/*
+ * Generic dealer rate.
+ *
+ * New materials use dealerUnitRate.
+ * Existing panels can continue falling back
+ * to ratePerWatt until their data is migrated.
+ */
+dealerUnitRate: Number(
+  (material as any).dealerUnitRate ||
+    (material as any).ratePerWatt ||
+    0,
+),
+
+/*
+ * Unit against which dealerUnitRate applies.
+ * Examples: WATT, KGS, MTR, PCS, NOS.
+ */
+dealerRateUnit: String(
+  material.unit ||
+    (
+      String(
+        (material as any).dealerCategory || '',
+      )
+        .trim()
+        .toUpperCase() === 'PANELS'
+        ? 'WATT'
+        : 'UNIT'
+    ),
+).trim(),
+
+brand: material.brand,
+unit: material.unit,
+hsnCode: material.hsnCode,
           branchId: stock.branchId,
 branchName: stock.branchName,
 

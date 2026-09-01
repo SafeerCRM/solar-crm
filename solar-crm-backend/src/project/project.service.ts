@@ -6512,6 +6512,7 @@ const allowedDealerCategories = [
   'STRUCTURE',
   'ELECTRICAL',
   'BATTERIES',
+  'OTHER',
 ];
 
 const dealerCategory =
@@ -6533,6 +6534,13 @@ dealerCategory,
 
 ratePerWatt: Math.max(
   Number((data as any).ratePerWatt || 0),
+  0,
+),
+
+dealerUnitRate: Math.max(
+  Number(
+    (data as any).dealerUnitRate || 0,
+  ),
   0,
 ),
 
@@ -6751,6 +6759,7 @@ const allowedDealerCategories = [
   'STRUCTURE',
   'ELECTRICAL',
   'BATTERIES',
+  'OTHER',
 ];
 
 const dealerCategory =
@@ -6781,6 +6790,18 @@ ratePerWatt:
       )
     : Number(
         (item as any).ratePerWatt || 0,
+      ),
+
+      dealerUnitRate:
+  (data as any).dealerUnitRate !== undefined
+    ? Math.max(
+        Number(
+          (data as any).dealerUnitRate || 0,
+        ),
+        0,
+      )
+    : Number(
+        (item as any).dealerUnitRate || 0,
       ),
 
     hsnCode:

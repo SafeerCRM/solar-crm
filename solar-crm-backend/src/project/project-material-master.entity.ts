@@ -30,8 +30,22 @@ dealerCategory: string;
 @Column({ type: 'float', default: 0 })
 ratePerWatt: number;
 
-  @Column({ nullable: true })
-  unit: string;
+/*
+ * Generic dealer selling rate per material unit.
+ *
+ * Examples:
+ * ₹24.5 / Watt
+ * ₹68 / KGS
+ * ₹15 / MTR
+ * ₹350 / PCS
+ *
+ * ratePerWatt remains preserved for old panel data.
+ */
+@Column({ type: 'float', default: 0 })
+dealerUnitRate: number;
+
+@Column({ nullable: true })
+unit: string;
 
   @Column({ nullable: true })
   brand: string;
