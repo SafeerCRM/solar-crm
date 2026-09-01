@@ -346,6 +346,11 @@ export default function ProjectTaxInvoicesPage() {
   ] = useState(false);
 
   const [
+  canManageInvoice,
+  setCanManageInvoice,
+] = useState(false);
+
+  const [
     page,
     setPage,
   ] = useState(1);
@@ -588,16 +593,26 @@ export default function ProjectTaxInvoicesPage() {
 
   useEffect(() => {
     const roles =
-      getCurrentUserRoles();
+  getCurrentUserRoles();
 
-    setIsOwner(
-      roles.includes(
-        'OWNER',
-      ),
-    );
+setIsOwner(
+  roles.includes(
+    'OWNER',
+  ),
+);
 
-    fetchFilterOptions();
-    fetchTaxInvoices();
+setCanManageInvoice(
+  roles.some((role) =>
+    [
+      'OWNER',
+      'ACCOUNT_MANAGER',
+      'SUBSIDY_MANAGER',
+    ].includes(role),
+  ),
+);
+
+fetchFilterOptions();
+fetchTaxInvoices();
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1451,12 +1466,14 @@ export default function ProjectTaxInvoicesPage() {
                     Open Project
                   </Link>
 
-                  <Link
-                    href={`/project/epc-invoice/${invoice.projectId}`}
-                    className="rounded-xl border border-gray-300 bg-white px-4 py-2 font-semibold text-gray-700"
-                  >
-                    View Invoice
-                  </Link>
+                  {canManageInvoice && (
+  <Link
+    href={`/project/epc-invoice/${invoice.projectId}`}
+    className="rounded-xl border border-gray-300 bg-white px-4 py-2 font-semibold text-gray-700"
+  >
+    View Invoice
+  </Link>
+)}
 
                   {isOwner &&
                   !invoice.isHidden ? (
