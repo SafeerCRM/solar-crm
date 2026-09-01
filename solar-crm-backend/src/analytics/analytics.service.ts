@@ -87,6 +87,8 @@ import { ProjectLoanDetail } from '../project/project-loan-detail.entity';
 import { LoanManagerAnalyticsBuilder } from './builders/loan-manager.analytics';
 import { ProjectSubsidyDetail } from '../project/project-subsidy-detail.entity';
 import { SubsidyManagerAnalyticsBuilder } from './builders/subsidy-manager.analytics';
+import { ProjectElectricityDetail } from '../project/project-electricity-detail.entity';
+import { ElectricityManagerAnalyticsBuilder } from './builders/electricity-manager.analytics';
 
 type AnalyticsQuery = {
   month?: string;
@@ -133,8 +135,11 @@ private readonly loanDetailRepository: Repository<ProjectLoanDetail>,
 @InjectRepository(ProjectSubsidyDetail)
 private readonly subsidyDetailRepository: Repository<ProjectSubsidyDetail>,
 
-    @InjectRepository(ProjectPaymentInstallment)
-    private readonly paymentRepository: Repository<ProjectPaymentInstallment>,
+@InjectRepository(ProjectElectricityDetail)
+private readonly electricityDetailRepository: Repository<ProjectElectricityDetail>,
+
+@InjectRepository(ProjectPaymentInstallment)
+private readonly paymentRepository: Repository<ProjectPaymentInstallment>,
 
     @InjectRepository(ProjectAccountExpense)
     private readonly expenseRepository: Repository<ProjectAccountExpense>,
@@ -607,7 +612,9 @@ private readonly dealerRepository: Repository<Dealer>,
     }
 
     if (department === 'PROJECTS') {
-  const role = String(query.role || '').trim().toUpperCase();
+  const role = String(query.role || '')
+    .trim()
+    .toUpperCase();
 
   if (role === UserRole.LOAN_MANAGER) {
     return this.getLoanManagerReport(query, user);
@@ -615,6 +622,13 @@ private readonly dealerRepository: Repository<Dealer>,
 
   if (role === UserRole.SUBSIDY_MANAGER) {
     return this.getSubsidyManagerReport(query, user);
+  }
+
+  if (role === UserRole.ELECTRICITY_MANAGER) {
+    return this.getElectricityManagerReport(
+      query,
+      user,
+    );
   }
 
   return this.getProjectsReport(query, user);
@@ -722,6 +736,17 @@ private async getSubsidyManagerReport(
     this.userRepository,
     this.projectRepository,
     this.subsidyDetailRepository,
+  ).build(query, user);
+}
+
+private async getElectricityManagerReport(
+  query: AnalyticsQuery,
+  user: any,
+) {
+  return new ElectricityManagerAnalyticsBuilder(
+    this.userRepository,
+    this.projectRepository,
+    this.electricityDetailRepository,
   ).build(query, user);
 }
 

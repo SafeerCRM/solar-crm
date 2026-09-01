@@ -43,6 +43,7 @@ import { ProjectTradingMeeting } from '../project/project-trading-meeting.entity
 import { Dealer } from '../dealer/dealer.entity';
 import { ProjectLoanDetail } from '../project/project-loan-detail.entity';
 import { ProjectSubsidyDetail } from '../project/project-subsidy-detail.entity';
+import { ProjectElectricityDetail } from '../project/project-electricity-detail.entity';
 
 
 @Module({
@@ -58,11 +59,12 @@ import { ProjectSubsidyDetail } from '../project/project-subsidy-detail.entity';
       Meeting,
 
       Project,
-      ProjectPaymentInstallment,
-      ProjectLoanDetail,
-      ProjectSubsidyDetail,
-      ProjectAccountExpense,
-      ProjectPartyLedger,
+ProjectPaymentInstallment,
+ProjectLoanDetail,
+ProjectSubsidyDetail,
+ProjectElectricityDetail,
+ProjectAccountExpense,
+ProjectPartyLedger,
 
       ProjectPurchaseOrder,
 ProjectProformaInvoice,
