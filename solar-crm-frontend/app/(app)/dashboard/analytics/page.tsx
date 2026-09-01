@@ -91,8 +91,25 @@ function formatLabel(value: string) {
 }
 
 function isMoneyKey(key: string) {
-  const normalized = key.toLowerCase();
+  const normalized = key
+    .toLowerCase()
+    .replace(/\s+/g, '');
 
+  /*
+   * Data-quality / missing-field metrics are COUNTS,
+   * even if their names contain words such as
+   * "amount" or "payment".
+   */
+  if (
+    normalized.includes('without') ||
+    normalized.includes('missing')
+  ) {
+    return false;
+  }
+
+  /*
+   * Operational count metrics.
+   */
   if (
     normalized.includes('review') ||
     normalized.includes('calls') ||
@@ -102,9 +119,7 @@ function isMoneyKey(key: string) {
     normalized.includes('projects') ||
     normalized.includes('complaints') ||
     normalized.includes('assignments') ||
-    normalized.includes('converted') ||
-    normalized.includes('pending reviews') ||
-    normalized.includes('pendingreviews')
+    normalized.includes('converted')
   ) {
     return false;
   }
