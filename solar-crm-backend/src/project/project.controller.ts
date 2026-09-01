@@ -4725,6 +4725,12 @@ restoreDealerOrderDocument(
 @Roles(
   'OWNER',
   'ACCOUNT_MANAGER',
+  'MEETING_MANAGER',
+  'PAYMENT_COLLECTION_EXECUTIVE',
+  'PROJECT_EXECUTIVE',
+  'PROJECT_MANAGER',
+  'LOAN_MANAGER',
+  'SUBSIDY_MANAGER',
 )
 @Get('tax-invoices/register')
 getEpcCustomerInvoiceRegister(
@@ -4738,6 +4744,12 @@ getEpcCustomerInvoiceRegister(
 @Roles(
   'OWNER',
   'ACCOUNT_MANAGER',
+  'MEETING_MANAGER',
+  'PAYMENT_COLLECTION_EXECUTIVE',
+  'PROJECT_EXECUTIVE',
+  'PROJECT_MANAGER',
+  'LOAN_MANAGER',
+  'SUBSIDY_MANAGER',
 )
 @Get('tax-invoices/creators')
 getEpcCustomerInvoiceCreators() {
@@ -4781,8 +4793,13 @@ saveEpcCustomerInvoice(
 
 @Roles(
   'OWNER',
-  'SUBSIDY_MANAGER',
   'ACCOUNT_MANAGER',
+  'MEETING_MANAGER',
+  'PAYMENT_COLLECTION_EXECUTIVE',
+  'PROJECT_EXECUTIVE',
+  'PROJECT_MANAGER',
+  'LOAN_MANAGER',
+  'SUBSIDY_MANAGER',
 )
 @Get('epc-customer-invoice/:invoiceId/pdf')
 generateEpcCustomerInvoicePdf(
