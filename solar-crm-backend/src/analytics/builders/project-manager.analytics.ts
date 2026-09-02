@@ -139,7 +139,7 @@ export class ProjectManagerAnalyticsBuilder {
       qb.andWhere(
         `LOWER(
           COALESCE(
-            project.branchName,
+            "project"."branchName",
             ''
           )
         ) LIKE :branchName`,
@@ -154,7 +154,7 @@ export class ProjectManagerAnalyticsBuilder {
       qb.andWhere(
         `LOWER(
           COALESCE(
-            project.city,
+            "project"."city",
             ''
           )
         ) LIKE :city`,
@@ -168,7 +168,7 @@ export class ProjectManagerAnalyticsBuilder {
       qb.andWhere(
         `LOWER(
           COALESCE(
-            project.zone,
+            "project"."zone",
             ''
           )
         ) LIKE :zone`,
@@ -232,19 +232,19 @@ export class ProjectManagerAnalyticsBuilder {
           'activity',
         )
         .innerJoin(
-          Project,
-          'project',
-          `
-          project.id =
-            activity.projectId
-          AND project.isHidden = false
-          `,
-        )
+  Project,
+  'project',
+  `
+  "project"."id" =
+    "activity"."projectId"
+  AND "project"."isHidden" = false
+  `,
+)
         .where(
-          `
-          activity.createdAt
-          BETWEEN :start AND :end
-          `,
+  `
+  "activity"."createdAt"
+  BETWEEN :start AND :end
+  `,
           {
             start,
             end,
@@ -253,10 +253,10 @@ export class ProjectManagerAnalyticsBuilder {
 
     if (userIds.length) {
       executionCreatedQb.andWhere(
-        `
-        activity.createdBy
-        IN (:...userIds)
-        `,
+  `
+  "activity"."createdBy"
+  IN (:...userIds)
+  `,
         {
           userIds,
         },
@@ -288,19 +288,19 @@ export class ProjectManagerAnalyticsBuilder {
           'activity',
         )
         .innerJoin(
-          Project,
-          'project',
-          `
-          project.id =
-            activity.projectId
-          AND project.isHidden = false
-          `,
-        )
+  Project,
+  'project',
+  `
+  "project"."id" =
+    "activity"."projectId"
+  AND "project"."isHidden" = false
+  `,
+)
         .where(
-          `
-          activity.updatedAt
-          BETWEEN :start AND :end
-          `,
+  `
+  "activity"."updatedAt"
+  BETWEEN :start AND :end
+  `,
           {
             start,
             end,
@@ -309,10 +309,10 @@ export class ProjectManagerAnalyticsBuilder {
 
     if (userIds.length) {
       executionUpdatedQb.andWhere(
-        `
-        activity.updatedBy
-        IN (:...userIds)
-        `,
+  `
+  "activity"."updatedBy"
+  IN (:...userIds)
+  `,
         {
           userIds,
         },
@@ -342,17 +342,17 @@ export class ProjectManagerAnalyticsBuilder {
           'assignment',
         )
         .innerJoin(
-          Project,
-          'project',
-          `
-          project.id =
-            assignment.projectId
-          AND project.isHidden = false
-          `,
-        )
+  Project,
+  'project',
+  `
+  "project"."id" =
+    "assignment"."projectId"
+  AND "project"."isHidden" = false
+  `,
+)
         .where(
           `
-          assignment.createdAt
+          "assignment"."createdAt"
           BETWEEN :start AND :end
           `,
           {
@@ -364,7 +364,7 @@ export class ProjectManagerAnalyticsBuilder {
     if (userIds.length) {
       contractorQb.andWhere(
         `
-        assignment.assignedBy
+        "assignment"."assignedBy"
         IN (:...userIds)
         `,
         {
@@ -395,17 +395,17 @@ export class ProjectManagerAnalyticsBuilder {
           'delay',
         )
         .innerJoin(
-          Project,
-          'project',
-          `
-          project.id =
-            delay.projectId
-          AND project.isHidden = false
-          `,
-        )
+  Project,
+  'project',
+  `
+  "project"."id" =
+    "delay"."projectId"
+  AND "project"."isHidden" = false
+  `,
+)
         .where(
           `
-          delay.createdAt
+          "delay"."createdAt"
           BETWEEN :start AND :end
           `,
           {
@@ -417,7 +417,7 @@ export class ProjectManagerAnalyticsBuilder {
     if (userIds.length) {
       delayQb.andWhere(
         `
-        delay.createdBy
+        "delay"."createdBy"
         IN (:...userIds)
         `,
         {
@@ -679,7 +679,7 @@ export class ProjectManagerAnalyticsBuilder {
         .select(
           `
           COALESCE(
-            SUM(assignment.amount),
+            SUM("assignment"."amount"),
             0
           )
           `,
@@ -736,7 +736,7 @@ export class ProjectManagerAnalyticsBuilder {
         .clone()
         .andWhere(
           `
-          delay.expectedResolutionDate
+          "delay"."expectedResolutionDate"
           IS NOT NULL
           `,
         )
@@ -794,8 +794,8 @@ export class ProjectManagerAnalyticsBuilder {
         .addSelect(
           `
           COUNT(*) FILTER (
-            WHERE activity.status =
-              'COMPLETED'
+            WHERE "activity"."status" =
+  'COMPLETED'
           )
           `,
           'activitiesCompleted',
@@ -803,8 +803,8 @@ export class ProjectManagerAnalyticsBuilder {
         .addSelect(
           `
           COUNT(*) FILTER (
-            WHERE activity.status =
-              'OVERDUE'
+            WHERE "activity"."status" =
+  'OVERDUE'
           )
           `,
           'activitiesOverdue',
@@ -837,8 +837,8 @@ export class ProjectManagerAnalyticsBuilder {
         .addSelect(
           `
           COUNT(*) FILTER (
-            WHERE assignment.status =
-              'COMPLETED'
+            WHERE "assignment"."status" =
+  'COMPLETED'
           )
           `,
           'contractorCompleted',
@@ -846,7 +846,7 @@ export class ProjectManagerAnalyticsBuilder {
         .addSelect(
           `
           COALESCE(
-            SUM(assignment.amount),
+            SUM("assignment"."amount"),
             0
           )
           `,
@@ -880,7 +880,7 @@ export class ProjectManagerAnalyticsBuilder {
         .addSelect(
           `
           COUNT(*) FILTER (
-            WHERE delay.expectedResolutionDate
+            WHERE "delay"."expectedResolutionDate"
               IS NOT NULL
           )
           `,
