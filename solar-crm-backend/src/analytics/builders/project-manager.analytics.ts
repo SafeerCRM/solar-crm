@@ -212,11 +212,69 @@ export class ProjectManagerAnalyticsBuilder {
         user,
       );
 
+        /*
+     * =====================================================
+     * 1A. EXECUTION PLANNING / CREATION
+     *
+     * Measures work actually CREATED by Project Manager.
+     *
+     * Attribution:
+     * activity.createdBy
+     *
+     * Date attribution:
+     * activity.createdAt
+     * =====================================================
+     */
+
+    const executionCreatedQb =
+      this.executionActivityRepository
+        .createQueryBuilder(
+          'activity',
+        )
+        .innerJoin(
+          Project,
+          'project',
+          `
+          project.id =
+            activity.projectId
+          AND project.isHidden = false
+          `,
+        )
+        .where(
+          `
+          activity.createdAt
+          BETWEEN :start AND :end
+          `,
+          {
+            start,
+            end,
+          },
+        );
+
+    if (userIds.length) {
+      executionCreatedQb.andWhere(
+        `
+        activity.createdBy
+        IN (:...userIds)
+        `,
+        {
+          userIds,
+        },
+      );
+    }
+
+    this.applyProjectFilters(
+      executionCreatedQb,
+      query,
+    );
+
     /*
      * =====================================================
-     * 1. EXECUTION ACTIVITY
+     * 1B. EXECUTION UPDATES / COMPLETION
      *
-     * Project Manager work attribution:
+     * Measures work actually UPDATED by Project Manager.
+     *
+     * Attribution:
      * activity.updatedBy
      *
      * Date attribution:
@@ -224,7 +282,7 @@ export class ProjectManagerAnalyticsBuilder {
      * =====================================================
      */
 
-    const executionQb =
+    const executionUpdatedQb =
       this.executionActivityRepository
         .createQueryBuilder(
           'activity',
@@ -250,7 +308,7 @@ export class ProjectManagerAnalyticsBuilder {
         );
 
     if (userIds.length) {
-      executionQb.andWhere(
+      executionUpdatedQb.andWhere(
         `
         activity.updatedBy
         IN (:...userIds)
@@ -262,7 +320,7 @@ export class ProjectManagerAnalyticsBuilder {
     }
 
     this.applyProjectFilters(
-      executionQb,
+      executionUpdatedQb,
       query,
     );
 
@@ -373,25 +431,29 @@ export class ProjectManagerAnalyticsBuilder {
       query,
     );
 
-    /*
+        /*
      * =====================================================
      * AGGREGATED METRICS
      * =====================================================
      */
 
     const [
-      totalExecutionActivities,
+      activitiesCreated,
 
-      pendingActivities,
-      inProgressActivities,
-      completedActivities,
-      overdueActivities,
-      cancelledActivities,
+      projectsPlannedRows,
 
-      executionProjectRows,
+      createdActivityTypeRows,
 
-      executionStatusRows,
-      executionTypeRows,
+      activitiesUpdated,
+
+      updatedCompletedActivities,
+      updatedOverdueActivities,
+      updatedPendingActivities,
+      updatedInProgressActivities,
+      updatedCancelledActivities,
+
+      updatedActivityStatusRows,
+      updatedActivityTypeRows,
 
       contractorAssignments,
 
@@ -409,70 +471,20 @@ export class ProjectManagerAnalyticsBuilder {
       delayNotes,
       delayNotesWithResolutionDate,
 
-      executionManagerRows,
+      createdManagerRows,
+      updatedManagerRows,
       contractorManagerRows,
       delayManagerRows,
     ] = await Promise.all([
-      executionQb
+      /*
+       * Execution activities CREATED
+       * by Project Manager in period.
+       */
+      executionCreatedQb
         .clone()
         .getCount(),
 
-      executionQb
-        .clone()
-        .andWhere(
-          'activity.status = :pendingStatus',
-          {
-            pendingStatus:
-              ProjectExecutionActivityStatus.PENDING,
-          },
-        )
-        .getCount(),
-
-      executionQb
-        .clone()
-        .andWhere(
-          'activity.status = :inProgressStatus',
-          {
-            inProgressStatus:
-              ProjectExecutionActivityStatus.IN_PROGRESS,
-          },
-        )
-        .getCount(),
-
-      executionQb
-        .clone()
-        .andWhere(
-          'activity.status = :completedStatus',
-          {
-            completedStatus:
-              ProjectExecutionActivityStatus.COMPLETED,
-          },
-        )
-        .getCount(),
-
-      executionQb
-        .clone()
-        .andWhere(
-          'activity.status = :overdueStatus',
-          {
-            overdueStatus:
-              ProjectExecutionActivityStatus.OVERDUE,
-          },
-        )
-        .getCount(),
-
-      executionQb
-        .clone()
-        .andWhere(
-          'activity.status = :cancelledStatus',
-          {
-            cancelledStatus:
-              ProjectExecutionActivityStatus.CANCELLED,
-          },
-        )
-        .getCount(),
-
-      executionQb
+      executionCreatedQb
         .clone()
         .select(
           'DISTINCT activity.projectId',
@@ -480,26 +492,7 @@ export class ProjectManagerAnalyticsBuilder {
         )
         .getRawMany(),
 
-      executionQb
-        .clone()
-        .select(
-          'activity.status',
-          'label',
-        )
-        .addSelect(
-          'COUNT(*)',
-          'value',
-        )
-        .groupBy(
-          'activity.status',
-        )
-        .orderBy(
-          'COUNT(*)',
-          'DESC',
-        )
-        .getRawMany(),
-
-      executionQb
+      executionCreatedQb
         .clone()
         .select(
           'activity.activityType',
@@ -518,6 +511,110 @@ export class ProjectManagerAnalyticsBuilder {
         )
         .getRawMany(),
 
+      /*
+       * Execution activities UPDATED
+       * by Project Manager in period.
+       */
+      executionUpdatedQb
+        .clone()
+        .getCount(),
+
+      executionUpdatedQb
+        .clone()
+        .andWhere(
+          'activity.status = :updatedCompletedStatus',
+          {
+            updatedCompletedStatus:
+              ProjectExecutionActivityStatus.COMPLETED,
+          },
+        )
+        .getCount(),
+
+      executionUpdatedQb
+        .clone()
+        .andWhere(
+          'activity.status = :updatedOverdueStatus',
+          {
+            updatedOverdueStatus:
+              ProjectExecutionActivityStatus.OVERDUE,
+          },
+        )
+        .getCount(),
+
+      executionUpdatedQb
+        .clone()
+        .andWhere(
+          'activity.status = :updatedPendingStatus',
+          {
+            updatedPendingStatus:
+              ProjectExecutionActivityStatus.PENDING,
+          },
+        )
+        .getCount(),
+
+      executionUpdatedQb
+        .clone()
+        .andWhere(
+          'activity.status = :updatedInProgressStatus',
+          {
+            updatedInProgressStatus:
+              ProjectExecutionActivityStatus.IN_PROGRESS,
+          },
+        )
+        .getCount(),
+
+      executionUpdatedQb
+        .clone()
+        .andWhere(
+          'activity.status = :updatedCancelledStatus',
+          {
+            updatedCancelledStatus:
+              ProjectExecutionActivityStatus.CANCELLED,
+          },
+        )
+        .getCount(),
+
+      executionUpdatedQb
+        .clone()
+        .select(
+          'activity.status',
+          'label',
+        )
+        .addSelect(
+          'COUNT(*)',
+          'value',
+        )
+        .groupBy(
+          'activity.status',
+        )
+        .orderBy(
+          'COUNT(*)',
+          'DESC',
+        )
+        .getRawMany(),
+
+      executionUpdatedQb
+        .clone()
+        .select(
+          'activity.activityType',
+          'label',
+        )
+        .addSelect(
+          'COUNT(*)',
+          'value',
+        )
+        .groupBy(
+          'activity.activityType',
+        )
+        .orderBy(
+          'COUNT(*)',
+          'DESC',
+        )
+        .getRawMany(),
+
+      /*
+       * Contractor assignments
+       */
       contractorQb
         .clone()
         .getCount(),
@@ -628,6 +725,9 @@ export class ProjectManagerAnalyticsBuilder {
         )
         .getRawMany(),
 
+      /*
+       * Delay handling
+       */
       delayQb
         .clone()
         .getCount(),
@@ -642,7 +742,39 @@ export class ProjectManagerAnalyticsBuilder {
         )
         .getCount(),
 
-      executionQb
+      /*
+       * Manager-wise execution creation.
+       */
+      executionCreatedQb
+        .clone()
+        .andWhere(
+          'activity.createdBy IS NOT NULL',
+        )
+        .select(
+          'activity.createdBy',
+          'userId',
+        )
+        .addSelect(
+          'MAX(activity.createdByName)',
+          'userName',
+        )
+        .addSelect(
+          'COUNT(*)',
+          'activitiesCreated',
+        )
+        .addSelect(
+          'COUNT(DISTINCT activity.projectId)',
+          'projectsPlanned',
+        )
+        .groupBy(
+          'activity.createdBy',
+        )
+        .getRawMany(),
+
+      /*
+       * Manager-wise execution updates.
+       */
+      executionUpdatedQb
         .clone()
         .andWhere(
           'activity.updatedBy IS NOT NULL',
@@ -657,7 +789,7 @@ export class ProjectManagerAnalyticsBuilder {
         )
         .addSelect(
           'COUNT(*)',
-          'activitiesManaged',
+          'activitiesUpdated',
         )
         .addSelect(
           `
@@ -677,15 +809,14 @@ export class ProjectManagerAnalyticsBuilder {
           `,
           'activitiesOverdue',
         )
-        .addSelect(
-          'COUNT(DISTINCT activity.projectId)',
-          'projectsHandled',
-        )
         .groupBy(
           'activity.updatedBy',
         )
         .getRawMany(),
 
+      /*
+       * Manager-wise contractor assignment.
+       */
       contractorQb
         .clone()
         .andWhere(
@@ -726,6 +857,9 @@ export class ProjectManagerAnalyticsBuilder {
         )
         .getRawMany(),
 
+      /*
+       * Manager-wise delay notes.
+       */
       delayQb
         .clone()
         .andWhere(
@@ -743,27 +877,26 @@ export class ProjectManagerAnalyticsBuilder {
           'COUNT(*)',
           'delayNotes',
         )
+        .addSelect(
+          `
+          COUNT(*) FILTER (
+            WHERE delay.expectedResolutionDate
+              IS NOT NULL
+          )
+          `,
+          'delayNotesWithResolutionDate',
+        )
         .groupBy(
           'delay.createdBy',
         )
         .getRawMany(),
     ]);
 
-    const executionProjectsHandled =
+    const projectsPlanned =
       Array.isArray(
-        executionProjectRows,
+        projectsPlannedRows,
       )
-        ? executionProjectRows.length
-        : 0;
-
-    const completionPercent =
-      totalExecutionActivities > 0
-        ? Math.round(
-            (
-              completedActivities /
-              totalExecutionActivities
-            ) * 100,
-          )
+        ? projectsPlannedRows.length
         : 0;
 
     const contractorAmount =
@@ -772,15 +905,24 @@ export class ProjectManagerAnalyticsBuilder {
           0,
       );
 
-    /*
+    
+        /*
      * =====================================================
-     * MANAGER PERFORMANCE TABLE
+     * PROJECT MANAGER PERFORMANCE TABLE
      *
-     * Merge the three genuine attribution sources:
+     * Keep genuine responsibilities separate:
      *
-     * execution.updatedBy
-     * contractor.assignedBy
+     * activity.createdBy
+     *   = execution planning / activity creation
+     *
+     * activity.updatedBy
+     *   = execution activity updates
+     *
+     * assignment.assignedBy
+     *   = contractor assignment
+     *
      * delay.createdBy
+     *   = delay handling
      * =====================================================
      */
 
@@ -790,14 +932,20 @@ export class ProjectManagerAnalyticsBuilder {
         {
           userId: number;
           userName: string;
-          projectsHandled: number;
-          activitiesManaged: number;
+
+          projectsPlanned: number;
+          activitiesCreated: number;
+
+          activitiesUpdated: number;
           activitiesCompleted: number;
           activitiesOverdue: number;
+
           contractorAssignments: number;
           contractorCompleted: number;
           contractorAmount: number;
+
           delayNotes: number;
+          delayNotesWithResolutionDate: number;
         }
       >();
 
@@ -815,14 +963,20 @@ export class ProjectManagerAnalyticsBuilder {
             userName:
               userName ||
               `User #${userId}`,
-            projectsHandled: 0,
-            activitiesManaged: 0,
+
+            projectsPlanned: 0,
+            activitiesCreated: 0,
+
+            activitiesUpdated: 0,
             activitiesCompleted: 0,
             activitiesOverdue: 0,
+
             contractorAssignments: 0,
             contractorCompleted: 0,
             contractorAmount: 0,
+
             delayNotes: 0,
+            delayNotesWithResolutionDate: 0,
           },
         );
       }
@@ -846,9 +1000,12 @@ export class ProjectManagerAnalyticsBuilder {
       return row;
     };
 
+    /*
+     * Execution activities CREATED.
+     */
     for (
       const item of
-        executionManagerRows || []
+        createdManagerRows || []
     ) {
       const userId =
         Number(item.userId || 0);
@@ -863,15 +1020,42 @@ export class ProjectManagerAnalyticsBuilder {
           ),
         );
 
-      row.projectsHandled =
+      row.projectsPlanned =
         Number(
-          item.projectsHandled ||
+          item.projectsPlanned ||
             0,
         );
 
-      row.activitiesManaged =
+      row.activitiesCreated =
         Number(
-          item.activitiesManaged ||
+          item.activitiesCreated ||
+            0,
+        );
+    }
+
+    /*
+     * Execution activities UPDATED.
+     */
+    for (
+      const item of
+        updatedManagerRows || []
+    ) {
+      const userId =
+        Number(item.userId || 0);
+
+      if (!userId) continue;
+
+      const row =
+        ensureManager(
+          userId,
+          String(
+            item.userName || '',
+          ),
+        );
+
+      row.activitiesUpdated =
+        Number(
+          item.activitiesUpdated ||
             0,
         );
 
@@ -888,6 +1072,9 @@ export class ProjectManagerAnalyticsBuilder {
         );
     }
 
+    /*
+     * Contractor assignments.
+     */
     for (
       const item of
         contractorManagerRows || []
@@ -924,6 +1111,9 @@ export class ProjectManagerAnalyticsBuilder {
         );
     }
 
+    /*
+     * Delay handling.
+     */
     for (
       const item of
         delayManagerRows || []
@@ -944,6 +1134,12 @@ export class ProjectManagerAnalyticsBuilder {
       row.delayNotes =
         Number(
           item.delayNotes ||
+            0,
+        );
+
+      row.delayNotesWithResolutionDate =
+        Number(
+          item.delayNotesWithResolutionDate ||
             0,
         );
     }
@@ -977,12 +1173,14 @@ export class ProjectManagerAnalyticsBuilder {
       }
     }
 
-    const rows = [
+        const rows = [
       ...managerMap.values(),
     ].sort(
       (a, b) =>
-        b.activitiesManaged -
-          a.activitiesManaged ||
+        b.activitiesCreated -
+          a.activitiesCreated ||
+        b.activitiesUpdated -
+          a.activitiesUpdated ||
         b.contractorAssignments -
           a.contractorAssignments ||
         b.delayNotes -
@@ -1009,23 +1207,27 @@ export class ProjectManagerAnalyticsBuilder {
       title:
         'Project Manager Work Report',
 
-      cards: {
-        executionProjectsHandled,
+            cards: {
+        projectsPlanned,
 
-        totalExecutionActivities,
+        activitiesCreated,
 
-        pendingActivities,
+        activitiesUpdated,
 
-        inProgressActivities,
+        activitiesCompleted:
+          updatedCompletedActivities,
 
-        completedActivities,
+        activitiesOverdue:
+          updatedOverdueActivities,
 
-        overdueActivities,
+        activitiesPendingAfterUpdate:
+          updatedPendingActivities,
 
-        cancelledActivities,
+        activitiesInProgressAfterUpdate:
+          updatedInProgressActivities,
 
-        executionCompletionPercent:
-          completionPercent,
+        activitiesCancelledAfterUpdate:
+          updatedCancelledActivities,
 
         contractorAssignments,
 
@@ -1046,24 +1248,34 @@ export class ProjectManagerAnalyticsBuilder {
         delayNotesWithResolutionDate,
       },
 
-      charts: {
-        executionActivityStatus: {
+            charts: {
+        executionActivitiesCreated: {
           type: 'bar',
           title:
-            'Execution Activity Status',
+            'Execution Activities Created by Work Type',
           data:
             normalizeChartRows(
-              executionStatusRows,
+              createdActivityTypeRows,
             ),
         },
 
-        executionWorkType: {
+        executionActivitiesUpdated: {
           type: 'bar',
           title:
-            'Execution Work Type',
+            'Execution Activities Updated by Status',
           data:
             normalizeChartRows(
-              executionTypeRows,
+              updatedActivityStatusRows,
+            ),
+        },
+
+        executionUpdatedWorkType: {
+          type: 'bar',
+          title:
+            'Execution Activities Updated by Work Type',
+          data:
+            normalizeChartRows(
+              updatedActivityTypeRows,
             ),
         },
 
