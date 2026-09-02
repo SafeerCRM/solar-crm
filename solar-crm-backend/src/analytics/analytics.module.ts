@@ -44,6 +44,8 @@ import { Dealer } from '../dealer/dealer.entity';
 import { ProjectLoanDetail } from '../project/project-loan-detail.entity';
 import { ProjectSubsidyDetail } from '../project/project-subsidy-detail.entity';
 import { ProjectElectricityDetail } from '../project/project-electricity-detail.entity';
+import { ProjectExecutionActivity } from '../project/project-execution-activity.entity';
+import { ProjectTimelineDelayNote } from '../project/project-timeline-delay-note.entity';
 
 
 @Module({
@@ -63,6 +65,8 @@ ProjectPaymentInstallment,
 ProjectLoanDetail,
 ProjectSubsidyDetail,
 ProjectElectricityDetail,
+ProjectExecutionActivity,
+ProjectTimelineDelayNote,
 ProjectAccountExpense,
 ProjectPartyLedger,
 

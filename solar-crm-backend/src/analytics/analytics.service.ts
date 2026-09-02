@@ -89,6 +89,10 @@ import { ProjectSubsidyDetail } from '../project/project-subsidy-detail.entity';
 import { SubsidyManagerAnalyticsBuilder } from './builders/subsidy-manager.analytics';
 import { ProjectElectricityDetail } from '../project/project-electricity-detail.entity';
 import { ElectricityManagerAnalyticsBuilder } from './builders/electricity-manager.analytics';
+import { ProjectExecutionActivity } from '../project/project-execution-activity.entity';
+import { ProjectTimelineDelayNote } from '../project/project-timeline-delay-note.entity';
+
+import { ProjectManagerAnalyticsBuilder } from './builders/project-manager.analytics';
 
 type AnalyticsQuery = {
   month?: string;
@@ -137,6 +141,14 @@ private readonly subsidyDetailRepository: Repository<ProjectSubsidyDetail>,
 
 @InjectRepository(ProjectElectricityDetail)
 private readonly electricityDetailRepository: Repository<ProjectElectricityDetail>,
+
+@InjectRepository(ProjectExecutionActivity)
+private readonly executionActivityRepository:
+  Repository<ProjectExecutionActivity>,
+
+@InjectRepository(ProjectTimelineDelayNote)
+private readonly timelineDelayNoteRepository:
+  Repository<ProjectTimelineDelayNote>,
 
 @InjectRepository(ProjectPaymentInstallment)
 private readonly paymentRepository: Repository<ProjectPaymentInstallment>,
@@ -616,6 +628,10 @@ private readonly dealerRepository: Repository<Dealer>,
     .trim()
     .toUpperCase();
 
+    if (role === UserRole.PROJECT_MANAGER) {
+  return this.getProjectManagerReport(query, user);
+}
+
   if (role === UserRole.LOAN_MANAGER) {
     return this.getLoanManagerReport(query, user);
   }
@@ -747,6 +763,19 @@ private async getElectricityManagerReport(
     this.userRepository,
     this.projectRepository,
     this.electricityDetailRepository,
+  ).build(query, user);
+}
+
+private async getProjectManagerReport(
+  query: AnalyticsQuery,
+  user: any,
+) {
+  return new ProjectManagerAnalyticsBuilder(
+    this.userRepository,
+    this.projectRepository,
+    this.executionActivityRepository,
+    this.contractorAssignmentRepository,
+    this.timelineDelayNoteRepository,
   ).build(query, user);
 }
 
