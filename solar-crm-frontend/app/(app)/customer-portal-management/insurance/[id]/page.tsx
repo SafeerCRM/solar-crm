@@ -17,12 +17,23 @@ const API_BASE_URL =
 type InsuranceRecord = {
   id: number;
 
-  projectId: number;
-  customerId: number;
+  projectId?: number;
+  customerId?: number;
+
+  source?: 'CUSTOMER' | 'DEALER' | 'STAFF';
+
+  insuranceRequestId?: number;
+
+  dealerId?: number;
+  dealerName?: string;
 
   customerCode?: string;
   customerName?: string;
   customerPhone?: string;
+  customerEmail?: string;
+  aadhaarLinkedMobile?: string;
+
+  installationAddress?: string;
 
   city?: string;
   branchName?: string;
@@ -908,6 +919,10 @@ const [
   const project =
     detail.project;
 
+    const isDealerPolicy =
+  insurance.source ===
+  'DEALER';
+
   const documents =
     Array.isArray(
       detail.documents,
@@ -933,12 +948,14 @@ const [
         </Link>
 
         <div className="flex flex-wrap gap-2">
-          <Link
-            href={`/project/${insurance.projectId}`}
-            className="rounded-2xl border border-gray-300 bg-white px-4 py-2 text-sm font-black text-gray-700"
-          >
-            View Project
-          </Link>
+          {insurance.projectId && (
+  <Link
+    href={`/project/${insurance.projectId}`}
+    className="rounded-2xl border border-gray-300 bg-white px-4 py-2 text-sm font-black text-gray-700"
+  >
+    View Project
+  </Link>
+)}
 
           <Link
             href="/customer-portal-management/insurance/requests"
@@ -953,8 +970,10 @@ const [
         <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
           <div>
             <p className="text-sm font-black uppercase tracking-[0.16em] text-white/75">
-              Customer Insurance
-            </p>
+  {isDealerPolicy
+    ? 'Dealer Customer Insurance'
+    : 'Customer Insurance'}
+</p>
 
             <h1 className="mt-2 text-3xl font-black">
               {insurance.customerName ||
@@ -966,6 +985,16 @@ const [
               —{' '}
               {insurance.policyName}
             </p>
+
+            {isDealerPolicy && (
+  <p className="mt-2 text-xs font-black text-white/70">
+    Dealer:{' '}
+    {insurance.dealerName ||
+      (insurance.dealerId
+        ? `Dealer #${insurance.dealerId}`
+        : '-')}
+  </p>
+)}
           </div>
 
           <StatusBadge
@@ -991,8 +1020,10 @@ const [
       <section className="grid gap-5 lg:grid-cols-2">
         <div className="rounded-[2rem] bg-white p-5 shadow-xl">
           <h2 className="text-xl font-black text-gray-900">
-            Customer & Project
-          </h2>
+  {isDealerPolicy
+    ? 'Dealer Customer'
+    : 'Customer & Project'}
+</h2>
 
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <InfoItem
@@ -1004,34 +1035,65 @@ const [
             />
 
             <InfoItem
-              label="Phone"
-              value={
-                insurance.customerPhone ||
-                '-'
-              }
-            />
+  label="Phone"
+  value={
+    insurance.aadhaarLinkedMobile ||
+    insurance.customerPhone ||
+    '-'
+  }
+/>
 
-            <InfoItem
-              label="K Number / Customer Code"
-              value={
-                insurance.customerCode ||
-                project?.customerCode ||
-                '-'
-              }
-            />
+{isDealerPolicy && (
+  <InfoItem
+    label="Email"
+    value={
+      insurance.customerEmail ||
+      '-'
+    }
+  />
+)}
 
-            <InfoItem
-              label="Project ID"
-              value={`#${insurance.projectId}`}
-            />
+{isDealerPolicy && (
+  <InfoItem
+    label="Dealer"
+    value={
+      insurance.dealerName ||
+      (insurance.dealerId
+        ? `Dealer #${insurance.dealerId}`
+        : '-')
+    }
+  />
+)}
 
-            <InfoItem
-              label="Project Status"
-              value={
-                project?.status ||
-                '-'
-              }
-            />
+            {!isDealerPolicy && (
+  <>
+    <InfoItem
+      label="K Number / Customer Code"
+      value={
+        insurance.customerCode ||
+        project?.customerCode ||
+        '-'
+      }
+    />
+
+    <InfoItem
+      label="Project ID"
+      value={
+        insurance.projectId
+          ? `#${insurance.projectId}`
+          : '-'
+      }
+    />
+
+    <InfoItem
+      label="Project Status"
+      value={
+        project?.status ||
+        '-'
+      }
+    />
+  </>
+)}
 
             <InfoItem
               label="City"
@@ -1042,22 +1104,36 @@ const [
               }
             />
 
-            <InfoItem
-              label="Branch"
-              value={
-                insurance.branchName ||
-                project?.branchName ||
-                '-'
-              }
-            />
+            {!isDealerPolicy && (
+  <>
+    <InfoItem
+      label="Branch"
+      value={
+        insurance.branchName ||
+        project?.branchName ||
+        '-'
+      }
+    />
 
-            <InfoItem
-              label="Electricity K Number"
-              value={
-                project?.electricityKNumber ||
-                '-'
-              }
-            />
+    <InfoItem
+      label="Electricity K Number"
+      value={
+        project?.electricityKNumber ||
+        '-'
+      }
+    />
+  </>
+)}
+
+{isDealerPolicy &&
+  insurance.installationAddress && (
+    <InfoItem
+      label="Installation Address"
+      value={
+        insurance.installationAddress
+      }
+    />
+  )}
           </div>
         </div>
 
@@ -1514,8 +1590,10 @@ const [
               />
 
               <span className="text-sm font-black text-gray-700">
-                Visible to Customer
-              </span>
+  {isDealerPolicy
+    ? 'Visible to Dealer'
+    : 'Visible to Customer'}
+</span>
             </span>
           </label>
         </div>
@@ -1545,10 +1623,10 @@ const [
             </h2>
 
             <p className="mt-1 text-sm text-gray-500">
-              Control which files
-              can be viewed by the
-              customer.
-            </p>
+  {isDealerPolicy
+    ? 'Control which files can be viewed by the dealer.'
+    : 'Control which files can be viewed by the customer.'}
+</p>
           </div>
 
           <span className="rounded-2xl bg-gray-100 px-4 py-2 text-sm font-black text-gray-700">
@@ -1588,14 +1666,16 @@ const [
                       </span>
 
                       {document.visibleToCustomer ? (
-                        <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-800">
-                          Customer Visible
-                        </span>
-                      ) : (
-                        <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-black text-gray-700">
-                          Internal Only
-                        </span>
-                      )}
+  <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-800">
+    {isDealerPolicy
+      ? 'Dealer Visible'
+      : 'Customer Visible'}
+  </span>
+) : (
+  <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-black text-gray-700">
+    Internal Only
+  </span>
+)}
                     </div>
 
                     <p className="mt-2 truncate font-black text-gray-900">
@@ -1639,8 +1719,10 @@ const [
                       className="rounded-xl bg-amber-500 px-4 py-2 text-xs font-black text-white"
                     >
                       {document.visibleToCustomer
-                        ? 'Make Internal'
-                        : 'Show Customer'}
+  ? 'Make Internal'
+  : isDealerPolicy
+    ? 'Show Dealer'
+    : 'Show Customer'}
                     </button>
 
                     <button
@@ -1669,11 +1751,10 @@ const [
           </h2>
 
           <p className="mt-1 text-sm text-gray-500">
-            Previous and renewed
-            policies for this
-            project remain
-            preserved.
-          </p>
+  {isDealerPolicy
+    ? 'Previous and renewed policies for this dealer customer remain preserved.'
+    : 'Previous and renewed policies for this project remain preserved.'}
+</p>
         </div>
 
         {history.length ===

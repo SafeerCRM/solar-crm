@@ -14,15 +14,42 @@ const API_BASE_URL =
 type InsuranceRequest = {
   id: number;
 
-  projectId: number;
-  customerId: number;
+  projectId?: number;
+  customerId?: number;
+
+  source?:
+    | 'CUSTOMER'
+    | 'DEALER'
+    | 'STAFF';
+
+  dealerId?: number;
+  dealerName?: string;
 
   customerCode?: string;
   customerName?: string;
   customerPhone?: string;
+  customerEmail?: string;
+
+  aadhaarLinkedMobile?: string;
+  installationAddress?: string;
+  city?: string;
 
   insurancePlanId?: number;
   existingInsuranceId?: number;
+
+  payableAmount?: number;
+
+  paymentStatus?:
+    | 'PENDING'
+    | 'INITIATED'
+    | 'PAID'
+    | 'FAILED'
+    | 'REFUNDED';
+
+  gatewayOrderId?: string;
+  gatewayPaymentId?: string;
+  gatewayTransactionId?: string;
+  paidAt?: string;
 
   requestType:
     | 'NEW'
@@ -44,6 +71,35 @@ type InsuranceRequest = {
 
   requestedAt: string;
   updatedAt?: string;
+};
+
+type InsuranceRequestDocument = {
+  id: number;
+
+  insuranceRequestId: number;
+
+  documentType:
+    | 'AADHAAR_CARD'
+    | 'PAN_CARD'
+    | 'PROJECT_INVOICE'
+    | 'OTHER';
+
+  fileName: string;
+  fileUrl: string;
+  mimeType?: string;
+  fileSize?: number;
+  createdAt: string;
+};
+
+type InsuranceRequestDetail = {
+  request:
+    InsuranceRequest;
+
+  plan:
+    InsurancePlan | null;
+
+  documents:
+    InsuranceRequestDocument[];
 };
 
 type Pagination = {
@@ -220,6 +276,116 @@ function RequestTypeBadge({
   );
 }
 
+function SourceBadge({
+  source,
+}: {
+  source?: string;
+}) {
+  const isDealer =
+    source ===
+    'DEALER';
+
+  return (
+    <span
+      className={[
+        'inline-flex rounded-full px-3 py-1 text-xs font-black',
+        isDealer
+          ? 'bg-orange-100 text-orange-800'
+          : 'bg-indigo-100 text-indigo-800',
+      ].join(
+        ' ',
+      )}
+    >
+      {isDealer
+        ? 'Dealer Portal'
+        : source ===
+            'STAFF'
+          ? 'Staff'
+          : 'Customer Portal'}
+    </span>
+  );
+}
+
+function PaymentBadge({
+  status,
+}: {
+  status?: string;
+}) {
+  const normalized =
+    String(
+      status ||
+        'PENDING',
+    ).toUpperCase();
+
+  let classes =
+    'bg-amber-100 text-amber-800';
+
+  if (
+    normalized ===
+    'PAID'
+  ) {
+    classes =
+      'bg-emerald-100 text-emerald-800';
+  }
+
+  if (
+    normalized ===
+      'FAILED' ||
+    normalized ===
+      'REFUNDED'
+  ) {
+    classes =
+      'bg-red-100 text-red-800';
+  }
+
+  if (
+    normalized ===
+    'INITIATED'
+  ) {
+    classes =
+      'bg-blue-100 text-blue-800';
+  }
+
+  return (
+    <span
+      className={`inline-flex rounded-full px-3 py-1 text-xs font-black ${classes}`}
+    >
+      {formatLabel(
+        normalized,
+      )}
+    </span>
+  );
+}
+
+function DetailCard({
+  label,
+  value,
+}: {
+  label: string;
+  value?: any;
+}) {
+  return (
+    <div className="rounded-2xl bg-white p-4 ring-1 ring-gray-200">
+      <p className="text-xs font-black uppercase text-gray-400">
+        {label}
+      </p>
+
+      <p className="mt-2 break-words text-sm font-black text-gray-900">
+        {value ===
+          undefined ||
+        value ===
+          null ||
+        value ===
+          ''
+          ? '-'
+          : String(
+              value,
+            )}
+      </p>
+    </div>
+  );
+}
+
 export default function InsuranceRequestsPage() {
   const [
     items,
@@ -280,6 +446,20 @@ export default function InsuranceRequestsPage() {
     setError,
   ] =
     useState('');
+
+    const [
+  detail,
+  setDetail,
+] =
+  useState<
+    InsuranceRequestDetail | null
+  >(null);
+
+const [
+  detailLoading,
+  setDetailLoading,
+] =
+  useState(false);
 
   const [
     success,
@@ -408,6 +588,52 @@ const [
         projectId,
       ],
     );
+
+    const openRequestDetail =
+  async (
+    request: InsuranceRequest,
+  ) => {
+    try {
+      setDetailLoading(
+        true,
+      );
+
+      setError('');
+
+      const res =
+        await axios.get(
+          `${API_BASE_URL}/project/insurance/requests/${request.id}/detail`,
+          {
+            headers:
+              headers(),
+          },
+        );
+
+      setDetail(
+        res.data,
+      );
+    } catch (
+      error: any
+    ) {
+      setError(
+        error?.response
+          ?.data
+          ?.message ||
+          'Failed to load insurance request details',
+      );
+    } finally {
+      setDetailLoading(
+        false,
+      );
+    }
+  };
+
+  const closeRequestDetail =
+  () => {
+    setDetail(
+      null,
+    );
+  };
 
   useEffect(() => {
     loadRequests(1);
@@ -541,9 +767,18 @@ const [
       }
     };
 
-    const loadInsurancePlans =
-  async () => {
+
+  const openCompletion =
+  async (
+    request: InsuranceRequest,
+  ) => {
     try {
+      setError('');
+
+      setCompletionRequest(
+        request,
+      );
+
       setLoadingPlans(
         true,
       );
@@ -568,20 +803,74 @@ const [
           },
         );
 
-      setPlans(
+      const loadedPlans:
+        InsurancePlan[] =
         Array.isArray(
           res.data?.data,
         )
           ? res.data.data
-          : [],
+          : [];
+
+      setPlans(
+        loadedPlans,
       );
+
+      const selectedPlan =
+        request.insurancePlanId
+          ? loadedPlans.find(
+              (plan) =>
+                Number(
+                  plan.id,
+                ) ===
+                Number(
+                  request.insurancePlanId,
+                ),
+            )
+          : undefined;
+
+      setCompletionForm({
+        ...emptyCompletionForm,
+
+        insurancePlanId:
+          request.insurancePlanId
+            ? String(
+                request.insurancePlanId,
+              )
+            : '',
+
+        companyName:
+          selectedPlan
+            ?.companyName ||
+          '',
+
+        policyName:
+          selectedPlan
+            ?.policyName ||
+          '',
+
+        policyCost:
+          String(
+            request.payableAmount ??
+              selectedPlan?.price ??
+              '',
+          ),
+
+        coverageAmount:
+          selectedPlan
+            ?.coverageAmount ===
+            undefined ||
+          selectedPlan
+            ?.coverageAmount ===
+            null
+            ? ''
+            : String(
+                selectedPlan
+                  .coverageAmount,
+              ),
+      });
     } catch (
       error: any
     ) {
-      console.error(
-        error,
-      );
-
       setPlans([]);
 
       setError(
@@ -590,35 +879,15 @@ const [
           ?.message ||
           'Failed to load insurance plans',
       );
+
+      setCompletionRequest(
+        null,
+      );
     } finally {
       setLoadingPlans(
         false,
       );
     }
-  };
-
-  const openCompletion =
-  async (
-    request: InsuranceRequest,
-  ) => {
-    setError('');
-
-    setCompletionRequest(
-      request,
-    );
-
-    setCompletionForm({
-      ...emptyCompletionForm,
-
-      insurancePlanId:
-        request.insurancePlanId
-          ? String(
-              request.insurancePlanId,
-            )
-          : '',
-    });
-
-    await loadInsurancePlans();
   };
 
   const closeCompletion =
@@ -1016,15 +1285,15 @@ const [
                 <thead className="bg-gray-50">
                   <tr>
                     {[
-                      'Customer',
-                      'Project',
-                      'Type',
-                      'Request Date',
-                      'Remarks',
-                      'Status',
-                      'Processed',
-                      'Actions',
-                    ].map(
+  'Source',
+  'Customer',
+  'Project / Dealer',
+  'Type',
+  'Payment',
+  'Request Date',
+  'Status',
+  'Actions',
+].map(
                       (
                         heading,
                       ) => (
@@ -1055,45 +1324,91 @@ const [
                         className="align-top hover:bg-gray-50"
                       >
                         <td className="px-4 py-4">
-                          <p className="font-black text-gray-900">
-                            {item.customerName ||
-                              '-'}
-                          </p>
+  <SourceBadge
+    source={
+      item.source
+    }
+  />
+</td>
 
-                          <p className="mt-1 text-xs font-semibold text-gray-500">
-                            {item.customerPhone ||
-                              '-'}
-                          </p>
+<td className="px-4 py-4">
+  <p className="font-black text-gray-900">
+    {item.customerName ||
+      '-'}
+  </p>
 
-                          {item.customerCode && (
-                            <p className="mt-1 text-xs text-gray-400">
-                              {
-                                item.customerCode
-                              }
-                            </p>
-                          )}
-                        </td>
+  <p className="mt-1 text-xs font-semibold text-gray-500">
+    {item.aadhaarLinkedMobile ||
+      item.customerPhone ||
+      '-'}
+  </p>
 
-                        <td className="px-4 py-4">
-                          <Link
-                            href={`/project/${item.projectId}`}
-                            className="font-black text-blue-700 hover:underline"
-                          >
-                            #
-                            {
-                              item.projectId
-                            }
-                          </Link>
+  {item.customerEmail && (
+    <p className="mt-1 text-xs text-gray-500">
+      {
+        item.customerEmail
+      }
+    </p>
+  )}
 
-                          {item.existingInsuranceId && (
-                            <p className="mt-1 text-xs text-gray-400">
-                              Existing Insurance #
-                              {
-                                item.existingInsuranceId
-                              }
-                            </p>
-                          )}
-                        </td>
+  {item.customerCode && (
+    <p className="mt-1 text-xs text-gray-400">
+      {
+        item.customerCode
+      }
+    </p>
+  )}
+
+  {item.city && (
+    <p className="mt-1 text-xs text-gray-400">
+      📍{' '}
+      {
+        item.city
+      }
+    </p>
+  )}
+</td>
+
+<td className="px-4 py-4">
+  {item.source ===
+  'DEALER' ? (
+    <>
+      <p className="font-black text-orange-700">
+        {item.dealerName ||
+          `Dealer #${item.dealerId || '-'}`}
+      </p>
+
+      <p className="mt-1 text-xs font-semibold text-gray-500">
+        Dealer Customer
+      </p>
+    </>
+  ) : item.projectId ? (
+    <>
+      <Link
+        href={`/project/${item.projectId}`}
+        className="font-black text-blue-700 hover:underline"
+      >
+        #
+        {
+          item.projectId
+        }
+      </Link>
+
+      {item.existingInsuranceId && (
+        <p className="mt-1 text-xs text-gray-400">
+          Existing Insurance #
+          {
+            item.existingInsuranceId
+          }
+        </p>
+      )}
+    </>
+  ) : (
+    <span className="text-sm font-bold text-gray-400">
+      No CRM Project
+    </span>
+  )}
+</td>
 
                         <td className="px-4 py-4">
                           <RequestTypeBadge
@@ -1103,27 +1418,48 @@ const [
                           />
                         </td>
 
+                        <td className="px-4 py-4">
+  {item.source ===
+  'DEALER' ? (
+    <div>
+      <PaymentBadge
+        status={
+          item.paymentStatus
+        }
+      />
+
+      <p className="mt-2 text-sm font-black text-gray-900">
+        ₹
+        {Number(
+          item.payableAmount ||
+            0,
+        ).toLocaleString(
+          'en-IN',
+        )}
+      </p>
+
+      {item.paidAt && (
+        <p className="mt-1 text-xs text-gray-400">
+          {formatDate(
+            item.paidAt,
+          )}
+        </p>
+      )}
+    </div>
+  ) : (
+    <span className="text-xs font-bold text-gray-400">
+      Existing Customer Flow
+    </span>
+  )}
+</td>
+
                         <td className="whitespace-nowrap px-4 py-4 text-sm font-semibold text-gray-700">
                           {formatDate(
                             item.requestedAt,
                           )}
                         </td>
 
-                        <td className="max-w-xs px-4 py-4">
-                          <p className="text-sm text-gray-700">
-                            {item.customerRemarks ||
-                              '-'}
-                          </p>
-
-                          {item.adminRemarks && (
-                            <p className="mt-2 text-xs font-semibold text-gray-500">
-                              Admin:{' '}
-                              {
-                                item.adminRemarks
-                              }
-                            </p>
-                          )}
-                        </td>
+                        
 
                         <td className="px-4 py-4">
                           <RequestStatusBadge
@@ -1133,94 +1469,117 @@ const [
                           />
                         </td>
 
-                        <td className="px-4 py-4 text-sm text-gray-600">
-                          {item.processedByName ? (
-                            <>
-                              <p className="font-bold">
-                                {
-                                  item.processedByName
-                                }
-                              </p>
-
-                              <p className="mt-1 text-xs text-gray-400">
-                                {formatDate(
-                                  item.processedAt,
-                                )}
-                              </p>
-                            </>
-                          ) : (
-                            '-'
-                          )}
-                        </td>
+                        
 
                         <td className="px-4 py-4">
-                          <div className="flex flex-wrap gap-2">
-                            {item.status ===
-                              'PENDING' && (
-                              <>
-                                <button
-                                  type="button"
-                                  disabled={
-                                    actionLoadingId ===
-                                    item.id
-                                  }
-                                  onClick={() =>
-                                    approveRequest(
-                                      item,
-                                    )
-                                  }
-                                  className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white disabled:opacity-50"
-                                >
-                                  Approve
-                                </button>
+  <div className="flex flex-wrap gap-2">
+    <button
+      type="button"
+      onClick={() =>
+        openRequestDetail(
+          item,
+        )
+      }
+      disabled={
+        detailLoading
+      }
+      className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-black text-indigo-700 disabled:opacity-50"
+    >
+      View Details
+    </button>
 
-                                <button
-                                  type="button"
-                                  disabled={
-                                    actionLoadingId ===
-                                    item.id
-                                  }
-                                  onClick={() =>
-                                    rejectRequest(
-                                      item,
-                                    )
-                                  }
-                                  className="rounded-xl bg-red-600 px-3 py-2 text-xs font-black text-white disabled:opacity-50"
-                                >
-                                  Reject
-                                </button>
-                              </>
-                            )}
+    {item.status ===
+      'PENDING' && (
+      <>
+        <button
+          type="button"
+          disabled={
+            actionLoadingId ===
+            item.id
+          }
+          onClick={() =>
+            approveRequest(
+              item,
+            )
+          }
+          className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white disabled:opacity-50"
+        >
+          Approve
+        </button>
 
-                            {item.status ===
-                              'APPROVED' && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  openCompletion(
-                                    item,
-                                  )
-                                }
-                                className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-black text-white"
-                              >
-                                {item.requestType ===
-                                'RENEWAL'
-                                  ? 'Complete Renewal'
-                                  : 'Create Policy'}
-                              </button>
-                            )}
+        <button
+          type="button"
+          disabled={
+            actionLoadingId ===
+            item.id
+          }
+          onClick={() =>
+            rejectRequest(
+              item,
+            )
+          }
+          className="rounded-xl bg-red-600 px-3 py-2 text-xs font-black text-white disabled:opacity-50"
+        >
+          Reject
+        </button>
+      </>
+    )}
 
-                            {item.status ===
-                              'COMPLETED' && (
-                              <Link
-                                href={`/customer-portal-management/insurance?projectId=${item.projectId}`}
-                                className="rounded-xl bg-gray-900 px-3 py-2 text-xs font-black text-white"
-                              >
-                                View Policy
-                              </Link>
-                            )}
-                          </div>
-                        </td>
+    {item.status ===
+  'APPROVED' &&
+  (
+    item.source !==
+      'DEALER' ||
+    (
+      item.source ===
+        'DEALER' &&
+      item.requestType ===
+        'NEW' &&
+      item.paymentStatus ===
+        'PAID'
+    )
+  ) && (
+        <button
+          type="button"
+          onClick={() =>
+            openCompletion(
+              item,
+            )
+          }
+          className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-black text-white"
+        >
+          {item.requestType ===
+          'RENEWAL'
+            ? 'Complete Renewal'
+            : 'Create Policy'}
+        </button>
+      )}
+
+    {item.status ===
+      'COMPLETED' &&
+      item.source !==
+        'DEALER' &&
+      item.projectId && (
+        <Link
+          href={`/customer-portal-management/insurance?projectId=${item.projectId}`}
+          className="rounded-xl bg-gray-900 px-3 py-2 text-xs font-black text-white"
+        >
+          View Policy
+        </Link>
+      )}
+  </div>
+
+  {item.status ===
+  'APPROVED' &&
+  item.source ===
+    'DEALER' &&
+  item.paymentStatus !==
+    'PAID' && (
+    <p className="mt-2 max-w-[200px] text-xs font-bold text-orange-600">
+      Policy can be created after verified dealer payment.
+    </p>
+  )}
+</td>
                       </tr>
                     ),
                   )}
@@ -1247,9 +1606,10 @@ const [
                         </p>
 
                         <p className="mt-1 text-xs text-gray-500">
-                          {item.customerPhone ||
-                            '-'}
-                        </p>
+  {item.aadhaarLinkedMobile ||
+    item.customerPhone ||
+    '-'}
+</p>
                       </div>
 
                       <RequestStatusBadge
@@ -1260,19 +1620,54 @@ const [
                     </div>
 
                     <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <RequestTypeBadge
-                        requestType={
-                          item.requestType
-                        }
-                      />
+  <SourceBadge
+    source={
+      item.source
+    }
+  />
 
-                      <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-black text-gray-700">
-                        Project #
-                        {
-                          item.projectId
-                        }
-                      </span>
-                    </div>
+  <RequestTypeBadge
+    requestType={
+      item.requestType
+    }
+  />
+
+  {item.source ===
+  'DEALER' ? (
+    <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-black text-orange-800">
+      {item.dealerName ||
+        `Dealer #${item.dealerId || '-'}`}
+    </span>
+  ) : item.projectId ? (
+    <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-black text-gray-700">
+      Project #
+      {
+        item.projectId
+      }
+    </span>
+  ) : null}
+</div>
+
+{item.source ===
+  'DEALER' && (
+  <div className="mt-3 flex flex-wrap items-center gap-2">
+    <PaymentBadge
+      status={
+        item.paymentStatus
+      }
+    />
+
+    <span className="text-sm font-black text-gray-800">
+      ₹
+      {Number(
+        item.payableAmount ||
+          0,
+      ).toLocaleString(
+        'en-IN',
+      )}
+    </span>
+  </div>
+)}
 
                     <div className="mt-4 rounded-2xl bg-gray-50 p-4">
                       <p className="text-xs font-black uppercase text-gray-400">
@@ -1304,6 +1699,21 @@ const [
                     </div>
 
                     <div className="mt-4 flex flex-wrap gap-2">
+
+                        <button
+  type="button"
+  onClick={() =>
+    openRequestDetail(
+      item,
+    )
+  }
+  disabled={
+    detailLoading
+  }
+  className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-xs font-black text-indigo-700 disabled:opacity-50"
+>
+  View Details
+</button>
                       {item.status ===
                         'PENDING' && (
                         <>
@@ -1334,7 +1744,19 @@ const [
                       )}
 
                       {item.status ===
-                        'APPROVED' && (
+  'APPROVED' &&
+  (
+    item.source !==
+      'DEALER' ||
+    (
+      item.source ===
+        'DEALER' &&
+      item.requestType ===
+        'NEW' &&
+      item.paymentStatus ===
+        'PAID'
+    )
+  ) && (
                         <button
                           type="button"
                           onClick={() =>
@@ -1350,6 +1772,17 @@ const [
                             : 'Create Policy'}
                         </button>
                       )}
+
+                      {item.status ===
+  'APPROVED' &&
+  item.source ===
+    'DEALER' &&
+  item.paymentStatus !==
+    'PAID' && (
+    <p className="w-full text-xs font-bold text-orange-600">
+      Policy can be created after verified dealer payment.
+    </p>
+  )}
                     </div>
                   </div>
                 ),
@@ -1412,6 +1845,316 @@ const [
           )}
       </section>
 
+      {detail && (
+  <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4">
+    <div className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-[2rem] bg-white shadow-2xl">
+      <div className="sticky top-0 z-10 flex items-start justify-between border-b border-gray-200 bg-white p-5">
+        <div>
+          <p className="text-xs font-black uppercase tracking-wider text-indigo-600">
+            Insurance Application #
+            {
+              detail.request.id
+            }
+          </p>
+
+          <h2 className="mt-1 text-2xl font-black text-gray-900">
+            {detail.request.customerName ||
+              'Customer'}
+          </h2>
+
+          <div className="mt-2 flex flex-wrap gap-2">
+            <SourceBadge
+              source={
+                detail.request.source
+              }
+            />
+
+            <RequestStatusBadge
+              status={
+                detail.request.status
+              }
+            />
+
+            {detail.request.source ===
+              'DEALER' && (
+              <PaymentBadge
+                status={
+                  detail.request.paymentStatus
+                }
+              />
+            )}
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={
+            closeRequestDetail
+          }
+          className="rounded-xl bg-gray-100 px-4 py-2 font-black text-gray-600"
+        >
+          ✕
+        </button>
+      </div>
+
+      <div className="space-y-6 p-5">
+        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <DetailCard
+            label="Customer Name"
+            value={
+              detail.request.customerName
+            }
+          />
+
+          <DetailCard
+            label="Aadhaar-linked Mobile"
+            value={
+              detail.request.aadhaarLinkedMobile ||
+              detail.request.customerPhone
+            }
+          />
+
+          <DetailCard
+            label="Email"
+            value={
+              detail.request.customerEmail
+            }
+          />
+
+          <DetailCard
+            label="City"
+            value={
+              detail.request.city
+            }
+          />
+
+          <DetailCard
+            label="Source"
+            value={
+              formatLabel(
+                detail.request.source ||
+                  'CUSTOMER',
+              )
+            }
+          />
+
+          {detail.request.source ===
+            'DEALER' && (
+            <DetailCard
+              label="Dealer"
+              value={
+                detail.request.dealerName ||
+                `Dealer #${detail.request.dealerId || '-'}`
+              }
+            />
+          )}
+        </section>
+
+        {detail.request.installationAddress && (
+          <section className="rounded-2xl bg-gray-50 p-4">
+            <p className="text-xs font-black uppercase text-gray-400">
+              Installation Address
+            </p>
+
+            <p className="mt-2 text-sm font-bold text-gray-800">
+              {
+                detail.request.installationAddress
+              }
+            </p>
+          </section>
+        )}
+
+        <section className="rounded-2xl border border-blue-100 bg-blue-50 p-5">
+          <h3 className="font-black text-blue-900">
+            Selected Insurance Plan
+          </h3>
+
+          {detail.plan ? (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <DetailCard
+                label="Company"
+                value={
+                  detail.plan.companyName
+                }
+              />
+
+              <DetailCard
+                label="Policy"
+                value={
+                  detail.plan.policyName
+                }
+              />
+
+              <DetailCard
+                label="Duration"
+                value={`${Number(
+                  detail.plan.durationMonths ||
+                    0,
+                )} Months`}
+              />
+
+              <DetailCard
+                label="Application Amount"
+                value={`₹${Number(
+                  detail.request.payableAmount ??
+                    detail.plan.price ??
+                    0,
+                ).toLocaleString(
+                  'en-IN',
+                )}`}
+              />
+            </div>
+          ) : (
+            <p className="mt-3 text-sm font-bold text-gray-500">
+              Plan information unavailable.
+            </p>
+          )}
+        </section>
+
+        {detail.request.source ===
+          'DEALER' && (
+          <section className="rounded-2xl border border-emerald-100 bg-emerald-50 p-5">
+            <h3 className="font-black text-emerald-900">
+              Payment
+            </h3>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <DetailCard
+                label="Status"
+                value={
+                  formatLabel(
+                    detail.request.paymentStatus ||
+                      'PENDING',
+                  )
+                }
+              />
+
+              <DetailCard
+                label="Payable Amount"
+                value={`₹${Number(
+                  detail.request.payableAmount ||
+                    0,
+                ).toLocaleString(
+                  'en-IN',
+                )}`}
+              />
+
+              <DetailCard
+                label="Paid At"
+                value={
+                  formatDate(
+                    detail.request.paidAt,
+                  )
+                }
+              />
+            </div>
+          </section>
+        )}
+
+        <section>
+          <h3 className="text-lg font-black text-gray-900">
+            Customer Documents
+          </h3>
+
+          <p className="mt-1 text-sm font-semibold text-gray-500">
+            Documents submitted with this insurance application.
+          </p>
+
+          {detail.documents.length ===
+          0 ? (
+            <div className="mt-4 rounded-2xl border border-dashed border-gray-300 p-6 text-center text-sm font-bold text-gray-500">
+              No application documents uploaded.
+            </div>
+          ) : (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {detail.documents.map(
+                (
+                  document,
+                ) => (
+                  <div
+                    key={
+                      document.id
+                    }
+                    className="rounded-2xl border border-gray-200 p-4"
+                  >
+                    <p className="text-xs font-black uppercase text-indigo-600">
+                      {formatLabel(
+                        document.documentType,
+                      )}
+                    </p>
+
+                    <p className="mt-2 break-words text-sm font-black text-gray-900">
+                      {
+                        document.fileName
+                      }
+                    </p>
+
+                    <p className="mt-1 text-xs font-semibold text-gray-400">
+                      {formatDate(
+                        document.createdAt,
+                      )}
+                    </p>
+
+                    <a
+                      href={
+                        document.fileUrl
+                      }
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-4 inline-flex rounded-xl bg-gray-900 px-4 py-2 text-xs font-black text-white"
+                    >
+                      View Document
+                    </a>
+                  </div>
+                ),
+              )}
+            </div>
+          )}
+        </section>
+
+        {(detail.request.customerRemarks ||
+          detail.request.adminRemarks) && (
+          <section className="grid gap-3 sm:grid-cols-2">
+            <DetailCard
+              label="Customer / Dealer Remarks"
+              value={
+                detail.request.customerRemarks
+              }
+            />
+
+            <DetailCard
+              label="Admin Remarks"
+              value={
+                detail.request.adminRemarks
+              }
+            />
+          </section>
+        )}
+
+        {detail.request.processedByName && (
+          <section className="rounded-2xl bg-gray-50 p-4">
+            <p className="text-xs font-black uppercase text-gray-400">
+              Processed By
+            </p>
+
+            <p className="mt-2 font-black text-gray-900">
+              {
+                detail.request.processedByName
+              }
+            </p>
+
+            <p className="mt-1 text-xs font-semibold text-gray-500">
+              {formatDate(
+                detail.request.processedAt,
+              )}
+            </p>
+          </section>
+        )}
+      </div>
+    </div>
+  </div>
+)}
+
       {completionRequest && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[2rem] bg-white p-6 shadow-2xl">
@@ -1425,16 +2168,33 @@ const [
                 </p>
 
                 <h2 className="mt-1 text-2xl font-black text-gray-900">
-                  {completionRequest.customerName ||
-                    `Project #${completionRequest.projectId}`}
-                </h2>
+  {completionRequest.customerName ||
+    (completionRequest.source === 'DEALER'
+      ? 'Dealer Customer'
+      : completionRequest.projectId
+        ? `Project #${completionRequest.projectId}`
+        : 'Customer')}
+</h2>
 
-                <p className="mt-1 text-sm text-gray-500">
-                  Project #
-                  {
-                    completionRequest.projectId
-                  }
-                </p>
+<p className="mt-1 text-sm text-gray-500">
+  {completionRequest.source === 'DEALER' ? (
+    <>
+      Dealer Customer
+      {completionRequest.dealerName
+        ? ` • ${completionRequest.dealerName}`
+        : completionRequest.dealerId
+          ? ` • Dealer #${completionRequest.dealerId}`
+          : ''}
+    </>
+  ) : completionRequest.projectId ? (
+    <>
+      Project #
+      {completionRequest.projectId}
+    </>
+  ) : (
+    <>No CRM Project</>
+  )}
+</p>
               </div>
 
               <button

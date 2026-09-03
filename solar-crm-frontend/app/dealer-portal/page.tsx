@@ -214,6 +214,11 @@ export default function DealerPortalPage() {
   <QuickAction href="/dealer-portal/stock" icon="📦" title="Check Stock" />
   <QuickAction href="/dealer-portal/orders/create" icon="🛒" title="Create Material Order" />
   <QuickAction href="/dealer-portal/orders" icon="📋" title="Order History" />
+  <QuickAction
+  href="/dealer-portal/insurance"
+  icon="🛡️"
+  title="Customer Insurance"
+/>
   <QuickAction href="/dealer-portal/payments" icon="💳" title="Upload Payment" />
   <QuickAction href="/dealer-portal/complaints" icon="🛠️" title="Raise Complaint" />
   <QuickAction href="/dealer-portal/notifications" icon="🔔" title="Notifications" />

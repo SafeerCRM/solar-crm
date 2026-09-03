@@ -261,6 +261,15 @@ const [
 
 const [dealerComplaints, setDealerComplaints] = useState<any[]>([]);
 const [complaintPage, setComplaintPage] = useState(1);
+const [
+  complaintDealerId,
+  setComplaintDealerId,
+] = useState('');
+
+const [
+  complaintCity,
+  setComplaintCity,
+] = useState('');
 const [complaintTotalPages, setComplaintTotalPages] = useState(1);
 const [complaintStatus, setComplaintStatus] = useState('');
 
@@ -587,17 +596,37 @@ const fetchMonthlyRequirements = async () => {
 };
 
 const fetchDealerComplaints = async () => {
-  const res = await axios.get(`${API_BASE_URL}/dealer/complaints`, {
-    params: {
-      page: complaintPage,
-      limit: 20,
-      status: complaintStatus,
-    },
-    headers: headers(),
-  });
+  const res = await axios.get(
+    `${API_BASE_URL}/dealer/complaints`,
+    {
+      params: {
+        page: complaintPage,
+        limit: 20,
 
-  setDealerComplaints(res.data?.data || []);
-  setComplaintTotalPages(res.data?.totalPages || 1);
+        status:
+          complaintStatus ||
+          undefined,
+
+        dealerId:
+          complaintDealerId ||
+          undefined,
+
+        city:
+          complaintCity ||
+          undefined,
+      },
+
+      headers: headers(),
+    },
+  );
+
+  setDealerComplaints(
+    res.data?.data || [],
+  );
+
+  setComplaintTotalPages(
+    res.data?.totalPages || 1,
+  );
 };
 
 const fetchCreditReminders = async () => {
@@ -2028,6 +2057,8 @@ const hideOrRestoreDealerOrderDocument =
   showHiddenMonthly,
   complaintPage,
 complaintStatus,
+complaintDealerId,
+complaintCity,
 ]);
 
 useEffect(() => {
@@ -2121,6 +2152,22 @@ useEffect(() => {
 
     return { subtotal, discount, gst, total };
   }, [orderRows, orderMaterials]);
+
+  const complaintCityOptions = useMemo(() => {
+  return Array.from(
+    new Set(
+      ledgerDealerOptions
+        .map((dealer: any) =>
+          String(
+            dealer.city || '',
+          ).trim(),
+        )
+        .filter(Boolean),
+    ),
+  ).sort((a, b) =>
+    a.localeCompare(b),
+  );
+}, [ledgerDealerOptions]);
 
   const resetDealerForm = () => {
     setEditingDealerId(null);
@@ -4648,31 +4695,125 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
 
 {activeTab === 'complaints' && (
   <div className="w-full max-w-full min-w-0 overflow-hidden rounded-2xl bg-white p-4 shadow sm:p-5">
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <h2 className="text-lg font-bold text-gray-800">
-          Dealer Complaints
-        </h2>
-        <p className="mt-1 text-sm text-gray-500">
-          Complaints raised by dealers from Dealer Portal.
-        </p>
-      </div>
+    <div className="flex flex-wrap items-start justify-between gap-4">
+  <div>
+    <h2 className="text-lg font-bold text-gray-800">
+      Dealer Complaints
+    </h2>
 
-      <select
-        value={complaintStatus}
-        onChange={(e) => {
-          setComplaintStatus(e.target.value);
+    <p className="mt-1 text-sm text-gray-500">
+      Complaints raised by dealers from Dealer Portal.
+    </p>
+  </div>
+
+  <div className="flex w-full flex-wrap gap-2 lg:w-auto">
+    <select
+      value={complaintDealerId}
+      onChange={(e) => {
+        setComplaintDealerId(
+          e.target.value,
+        );
+        setComplaintPage(1);
+      }}
+      className="min-w-[220px] rounded-xl border p-3"
+    >
+      <option value="">
+        All Dealers
+      </option>
+
+      {ledgerDealerOptions.map(
+        (dealer: any) => (
+          <option
+            key={dealer.id}
+            value={dealer.id}
+          >
+            {dealer.dealerName ||
+              dealer.vendorName ||
+              dealer.firmName ||
+              `Dealer #${dealer.id}`}
+            {dealer.city
+              ? ` - ${dealer.city}`
+              : ''}
+          </option>
+        ),
+      )}
+    </select>
+
+    <select
+      value={complaintCity}
+      onChange={(e) => {
+        setComplaintCity(
+          e.target.value,
+        );
+        setComplaintPage(1);
+      }}
+      className="min-w-[170px] rounded-xl border p-3"
+    >
+      <option value="">
+        All Cities
+      </option>
+
+      {complaintCityOptions.map(
+        (city) => (
+          <option
+            key={city}
+            value={city}
+          >
+            {city}
+          </option>
+        ),
+      )}
+    </select>
+
+    <select
+      value={complaintStatus}
+      onChange={(e) => {
+        setComplaintStatus(
+          e.target.value,
+        );
+        setComplaintPage(1);
+      }}
+      className="min-w-[160px] rounded-xl border p-3"
+    >
+      <option value="">
+        All Status
+      </option>
+
+      <option value="OPEN">
+        Open
+      </option>
+
+      <option value="IN_PROGRESS">
+        In Progress
+      </option>
+
+      <option value="RESOLVED">
+        Resolved
+      </option>
+
+      <option value="CLOSED">
+        Closed
+      </option>
+    </select>
+
+    {(complaintDealerId ||
+      complaintCity ||
+      complaintStatus) && (
+      <button
+        type="button"
+        onClick={() => {
+          setComplaintDealerId('');
+          setComplaintCity('');
+          setComplaintStatus('');
           setComplaintPage(1);
         }}
-        className="rounded-xl border p-3"
+        className="rounded-xl border px-4 py-3 font-medium text-gray-700 hover:bg-gray-50"
       >
-        <option value="">All Status</option>
-        <option value="OPEN">Open</option>
-        <option value="IN_PROGRESS">In Progress</option>
-        <option value="RESOLVED">Resolved</option>
-        <option value="CLOSED">Closed</option>
-      </select>
-    </div>
+        Reset
+      </button>
+    )}
+  </div>
+</div>
 
     <div className="mt-4 space-y-3">
       {dealerComplaints.length === 0 ? (
@@ -4685,10 +4826,23 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
                 <p className="break-words font-bold">
                   #{item.id} - {item.subject}
                 </p>
-                <p className="text-sm text-gray-500">
-                  Dealer ID: {item.dealerId}
-                  {item.dealerOrderId ? ` | Order ID: ${item.dealerOrderId}` : ''}
-                </p>
+                <div className="mt-1">
+  <p className="text-sm font-semibold text-gray-700">
+    {item.dealerName ||
+      `Dealer #${item.dealerId}`}
+    {item.dealerCity
+      ? ` • ${item.dealerCity}`
+      : ''}
+  </p>
+
+  <p className="text-xs text-gray-500">
+    Dealer ID: {item.dealerId}
+
+    {item.dealerOrderId
+      ? ` | Order ID: ${item.dealerOrderId}`
+      : ''}
+  </p>
+</div>
                 <p className="mt-2 break-words text-sm">
                   {item.description}
                 </p>
