@@ -48,6 +48,10 @@ import {
   ProjectInsurance,
 } from '../project/project-insurance.entity';
 
+import {
+  ProjectInsuranceDocument,
+} from '../project/project-insurance-document.entity';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -78,6 +82,7 @@ ProjectInsurancePlan,
 ProjectInsuranceRequest,
 ProjectInsuranceRequestDocument,
 ProjectInsurance,
+ProjectInsuranceDocument,
     ]),
     ProjectModule,
   ],
