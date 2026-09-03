@@ -32,6 +32,21 @@ import { PortalPolicy } from './portal-policy.entity';
 import {
   ProjectVendorCompany,
 } from '../project/project-vendor-company.entity';
+import {
+  ProjectInsurancePlan,
+} from '../project/project-insurance-plan.entity';
+
+import {
+  ProjectInsuranceRequest,
+} from '../project/project-insurance-request.entity';
+
+import {
+  ProjectInsuranceRequestDocument,
+} from '../project/project-insurance-request-document.entity';
+
+import {
+  ProjectInsurance,
+} from '../project/project-insurance.entity';
 
 @Module({
   imports: [
@@ -59,6 +74,10 @@ DealerDeliverySetting,
 DealerKit,
 PortalPolicy,
 DealerKitItem,
+ProjectInsurancePlan,
+ProjectInsuranceRequest,
+ProjectInsuranceRequestDocument,
+ProjectInsurance,
     ]),
     ProjectModule,
   ],

@@ -483,6 +483,196 @@ async kits(@Req() req: any) {
     );
   }
 
+  @Get('insurance/plans')
+async insurancePlans(
+  @Req() req: any,
+) {
+  this.getDealerPayload(
+    req,
+  );
+
+  return this.service
+    .listDealerInsurancePlans();
+}
+
+@Post('insurance/requests')
+async createInsuranceRequest(
+  @Req() req: any,
+  @Body() body: any,
+) {
+  const payload =
+    this.getDealerPayload(
+      req,
+    );
+
+  return this.service
+    .createDealerInsuranceRequest(
+      Number(
+        payload.dealerId,
+      ),
+      body,
+    );
+}
+
+@Get('insurance/requests')
+async insuranceRequests(
+  @Req() req: any,
+  @Query() query: any,
+) {
+  const payload =
+    this.getDealerPayload(
+      req,
+    );
+
+  return this.service
+    .listDealerInsuranceRequests(
+      Number(
+        payload.dealerId,
+      ),
+      query,
+    );
+}
+
+@Get(
+  'insurance/policies',
+)
+listDealerInsurancePolicies(
+  @Req()
+  req: any,
+
+  @Query()
+  query: any,
+) {
+  const dealerId =
+    this.getDealerPayload(
+      req,
+    ).dealerId;
+
+  return this
+    .service
+    .listDealerInsurancePolicies(
+      Number(
+        dealerId,
+      ),
+      query,
+    );
+}
+
+@Get(
+  'insurance/policies/:id/documents',
+)
+getDealerInsurancePolicyDocuments(
+  @Req()
+  req: any,
+
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+) {
+  const dealerId =
+    this.getDealerPayload(
+      req,
+    ).dealerId;
+
+  return this
+    .service
+    .getDealerInsurancePolicyDocuments(
+      Number(
+        dealerId,
+      ),
+      Number(
+        id,
+      ),
+    );
+}
+
+@Get('insurance/requests/:id')
+async insuranceRequestDetail(
+  @Req() req: any,
+
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+) {
+  const payload =
+    this.getDealerPayload(
+      req,
+    );
+
+  return this.service
+    .getDealerInsuranceRequestDetail(
+      Number(
+        payload.dealerId,
+      ),
+      id,
+    );
+}
+
+@Post(
+  'insurance/requests/:id/documents/upload',
+)
+@UseInterceptors(
+  FileInterceptor(
+    'file',
+    {
+      limits: {
+        fileSize:
+          8 *
+          1024 *
+          1024,
+      },
+    },
+  ),
+)
+async uploadInsuranceRequestDocument(
+  @Req() req: any,
+
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+
+  @UploadedFile()
+  file: any,
+
+  @Body()
+  body: any,
+) {
+  const payload =
+    this.getDealerPayload(
+      req,
+    );
+
+  return this.service
+    .uploadDealerInsuranceRequestDocument(
+      Number(
+        payload.dealerId,
+      ),
+      id,
+      file,
+      body,
+      {
+        id:
+          Number(
+            payload.dealerId,
+          ),
+
+        name:
+          payload.dealerName ||
+          '',
+
+        roles: [
+          'DEALER',
+        ],
+      },
+    );
+}
+
   private getDealerPayload(req: any) {
     const authHeader = req.headers?.authorization || '';
 const headerToken = authHeader.replace('Bearer ', '');

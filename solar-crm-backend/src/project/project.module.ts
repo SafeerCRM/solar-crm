@@ -103,6 +103,10 @@ import {
   ProjectTimelineDelayProof,
 } from './project-timeline-delay-proof.entity';
 
+import {
+  ProjectInsuranceRequestDocument,
+} from './project-insurance-request-document.entity';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([Project, 
@@ -113,6 +117,7 @@ ProjectInsurancePlan,
 ProjectInsurance,
 ProjectInsuranceDocument,
 ProjectInsuranceRequest,
+ProjectInsuranceRequestDocument,
 ProjectInsuranceReminderLog, ProjectDocument, CustomerNotification, ProjectComment, ProjectMaterialMaster, ProjectMaterialRequest,
 ProjectMaterialRequestItem, ProjectBranch, ProjectLoanDetail, ProjectSubsidyDetail, ProjectElectricityDetail, ProjectExecutionActivity, ProjectExecutionProof, ProjectExecutionReminder, ProjectExecutionReminderUserState, ProjectPaymentInstallment, ProjectPaymentReminderUserState, ProjectReminderUserState, ProjectEditHistory,
  ProjectVendor,

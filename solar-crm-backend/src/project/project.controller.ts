@@ -2471,6 +2471,31 @@ listInsuranceRequests(
     );
 }
 
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+  'CUSTOMER_MANAGER',
+)
+@Get(
+  'insurance/requests/:id/detail',
+)
+getInsuranceRequestDetail(
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .getInsuranceRequestDetail(
+      id,
+      user,
+    );
+}
+
 @Post('insurance/requests')
 createInsuranceRequest(
   @Body() body: any,

@@ -1,10 +1,10 @@
 import {
+  Entity,
+  PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  Entity,
-  Index,
-  PrimaryGeneratedColumn,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 
 export enum ProjectInsuranceStatus {
@@ -16,20 +16,83 @@ export enum ProjectInsuranceStatus {
   CANCELLED = 'CANCELLED',
 }
 
+export enum ProjectInsuranceSource {
+  CUSTOMER = 'CUSTOMER',
+  DEALER = 'DEALER',
+  STAFF = 'STAFF',
+}
+
 @Entity()
 @Index(['projectId'])
 @Index(['customerId'])
 @Index(['expiryDate'])
 @Index(['status'])
+
+@Index(['source'])
+@Index(['dealerId'])
+@Index(['insuranceRequestId'])
 export class ProjectInsurance {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ type: 'int' })
-  projectId: number;
+  @Column({
+  type: 'int',
+  nullable: true,
+})
+projectId?: number;
 
-  @Column({ type: 'int' })
-  customerId: number;
+  @Column({
+  type: 'int',
+  nullable: true,
+})
+customerId?: number;
+
+@Column({
+  type: 'enum',
+  enum: ProjectInsuranceSource,
+  default:
+    ProjectInsuranceSource.CUSTOMER,
+})
+source: ProjectInsuranceSource;
+
+@Column({
+  type: 'int',
+  nullable: true,
+})
+insuranceRequestId?: number;
+
+@Column({
+  type: 'int',
+  nullable: true,
+})
+dealerId?: number;
+
+@Column({
+  type: 'varchar',
+  length: 200,
+  nullable: true,
+})
+dealerName?: string;
+
+@Column({
+  type: 'varchar',
+  length: 200,
+  nullable: true,
+})
+customerEmail?: string;
+
+@Column({
+  type: 'varchar',
+  length: 30,
+  nullable: true,
+})
+aadhaarLinkedMobile?: string;
+
+@Column({
+  type: 'text',
+  nullable: true,
+})
+installationAddress?: string;
 
   @Column({ type: 'varchar', length: 100, nullable: true })
   customerCode?: string;

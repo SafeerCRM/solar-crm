@@ -252,6 +252,7 @@ import {
 
 import {
   ProjectInsurance,
+  ProjectInsuranceSource,
   ProjectInsuranceStatus,
 } from './project-insurance.entity';
 
@@ -264,11 +265,20 @@ import {
   ProjectInsuranceDocumentType,
 } from './project-insurance-document.entity';
 
+
+
 import {
+  ProjectInsurancePaymentStatus,
   ProjectInsuranceRequest,
+  ProjectInsuranceRequestSource,
   ProjectInsuranceRequestStatus,
   ProjectInsuranceRequestType,
 } from './project-insurance-request.entity';
+
+import {
+  ProjectInsuranceRequestDocument,
+} from './project-insurance-request-document.entity';
+
 
 import {
   ProjectInsuranceReminderLog,
@@ -285,6 +295,7 @@ import {
   ProjectTimelineTriggerType,
   ProjectTimelineApplicableProjectType,
 } from './project-timeline-rule.entity';
+
 
 import {
   ProjectTimelineEvent,
@@ -2033,6 +2044,12 @@ private readonly projectInsuranceDocumentRepository:
 @InjectRepository(ProjectInsuranceRequest)
 private readonly projectInsuranceRequestRepository:
   Repository<ProjectInsuranceRequest>,
+
+  @InjectRepository(
+  ProjectInsuranceRequestDocument,
+)
+private readonly projectInsuranceRequestDocumentRepository:
+  Repository<ProjectInsuranceRequestDocument>,
 
 @InjectRepository(ProjectInsuranceReminderLog)
 private readonly projectInsuranceReminderLogRepository:
@@ -50728,6 +50745,9 @@ async createProjectInsurance(
 
       customerId,
 
+      source:
+  ProjectInsuranceSource.STAFF,
+
       customerCode:
         project.customerCode ||
         undefined,
@@ -51261,16 +51281,38 @@ async getInsuranceDashboard(
       .getCount();
 
   const pendingRequests =
-    await this
-      .projectInsuranceRequestRepository
-      .count({
-        where: {
-          status:
-            ProjectInsuranceRequestStatus
-              .PENDING,
-          isHidden: false,
-        } as any,
-      });
+  await this
+    .projectInsuranceRequestRepository
+    .createQueryBuilder(
+      'request',
+    )
+    .where(
+      '"request"."status" = :status',
+      {
+        status:
+          ProjectInsuranceRequestStatus
+            .PENDING,
+      },
+    )
+    .andWhere(
+      '"request"."isHidden" = false',
+    )
+    .andWhere(
+      `(
+        "request"."source" <> :dealerSource
+        OR "request"."paymentStatus" = :paidPaymentStatus
+      )`,
+      {
+        dealerSource:
+          ProjectInsuranceRequestSource
+            .DEALER,
+
+        paidPaymentStatus:
+          ProjectInsurancePaymentStatus
+            .PAID,
+      },
+    )
+    .getCount();
 
   return {
     total,
@@ -51365,6 +51407,29 @@ async listInsuranceRequests(
     .where(
       '"request"."isHidden" = false',
     );
+
+    /*
+ * Dealer Portal applications become actionable
+ * in CRM only after verified gateway payment.
+ *
+ * Customer/staff insurance requests keep
+ * their existing behaviour.
+ */
+qb.andWhere(
+  `(
+    "request"."source" <> :dealerSource
+    OR "request"."paymentStatus" = :paidPaymentStatus
+  )`,
+  {
+    dealerSource:
+      ProjectInsuranceRequestSource
+        .DEALER,
+
+    paidPaymentStatus:
+      ProjectInsurancePaymentStatus
+        .PAID,
+  },
+);
 
   if (search) {
   qb.andWhere(
@@ -51730,6 +51795,17 @@ async approveInsuranceRequest(
   }
 
   if (
+  request.source ===
+    ProjectInsuranceRequestSource.DEALER &&
+  request.paymentStatus !==
+    ProjectInsurancePaymentStatus.PAID
+) {
+  throw new BadRequestException(
+    'Dealer insurance request cannot be approved before verified payment',
+  );
+}
+
+  if (
     request.status !==
     ProjectInsuranceRequestStatus.PENDING
   ) {
@@ -51850,6 +51926,371 @@ async rejectInsuranceRequest(
   };
 }
 
+private async createDealerInsurancePolicyFromRequest(
+  request: ProjectInsuranceRequest,
+  body: any,
+  user: any,
+) {
+  if (
+    request.source !==
+    ProjectInsuranceRequestSource.DEALER
+  ) {
+    throw new BadRequestException(
+      'This is not a dealer insurance request',
+    );
+  }
+
+  if (
+    request.paymentStatus !==
+    ProjectInsurancePaymentStatus.PAID
+  ) {
+    throw new BadRequestException(
+      'Dealer insurance payment must be verified before policy issuance',
+    );
+  }
+
+  const existingPolicy =
+    await this
+      .projectInsuranceRepository
+      .findOne({
+        where: {
+          insuranceRequestId:
+            request.id,
+
+          source:
+            ProjectInsuranceSource.DEALER,
+
+          isHidden:
+            false,
+        } as any,
+      });
+
+  if (existingPolicy) {
+    throw new BadRequestException(
+      'Policy has already been created for this insurance request',
+    );
+  }
+
+  const insurancePlanId =
+    Number(
+      body?.insurancePlanId ||
+        request.insurancePlanId ||
+        0,
+    );
+
+  if (!insurancePlanId) {
+    throw new BadRequestException(
+      'Insurance plan is required',
+    );
+  }
+
+  const plan =
+    await this
+      .projectInsurancePlanRepository
+      .findOne({
+        where: {
+          id:
+            insurancePlanId,
+
+          isHidden:
+            false,
+
+          isActive:
+            true,
+        } as any,
+      });
+
+  if (!plan) {
+    throw new NotFoundException(
+      'Active insurance plan not found',
+    );
+  }
+
+  const companyName =
+    String(
+      body?.companyName ||
+        plan.companyName ||
+        '',
+    ).trim();
+
+  const policyName =
+    String(
+      body?.policyName ||
+        plan.policyName ||
+        '',
+    ).trim();
+
+  const policyNumber =
+    String(
+      body?.policyNumber ||
+        '',
+    ).trim();
+
+  if (!companyName) {
+    throw new BadRequestException(
+      'Insurance company name is required',
+    );
+  }
+
+  if (!policyName) {
+    throw new BadRequestException(
+      'Policy name is required',
+    );
+  }
+
+  const startDate =
+    new Date(
+      body?.startDate,
+    );
+
+  const expiryDate =
+    new Date(
+      body?.expiryDate,
+    );
+
+  if (
+    Number.isNaN(
+      startDate.getTime(),
+    )
+  ) {
+    throw new BadRequestException(
+      'Valid insurance start date is required',
+    );
+  }
+
+  if (
+    Number.isNaN(
+      expiryDate.getTime(),
+    )
+  ) {
+    throw new BadRequestException(
+      'Valid insurance expiry date is required',
+    );
+  }
+
+  if (
+    expiryDate.getTime() <=
+    startDate.getTime()
+  ) {
+    throw new BadRequestException(
+      'Insurance expiry date must be after the start date',
+    );
+  }
+
+  const policyCost =
+    body?.policyCost === '' ||
+    body?.policyCost === null ||
+    body?.policyCost === undefined
+      ? Number(
+          request.payableAmount ||
+            plan.price ||
+            0,
+        )
+      : Number(
+          body.policyCost,
+        );
+
+  if (
+    !Number.isFinite(
+      policyCost,
+    ) ||
+    policyCost < 0
+  ) {
+    throw new BadRequestException(
+      'Please provide a valid policy cost',
+    );
+  }
+
+  const coverageAmount =
+    body?.coverageAmount === '' ||
+    body?.coverageAmount === null ||
+    body?.coverageAmount === undefined
+      ? plan.coverageAmount
+      : Number(
+          body.coverageAmount,
+        );
+
+  if (
+    coverageAmount !==
+      undefined &&
+    coverageAmount !==
+      null &&
+    (
+      !Number.isFinite(
+        Number(
+          coverageAmount,
+        ),
+      ) ||
+      Number(
+        coverageAmount,
+      ) < 0
+    )
+  ) {
+    throw new BadRequestException(
+      'Please provide a valid coverage amount',
+    );
+  }
+
+  let status =
+    ProjectInsuranceStatus.ACTIVE;
+
+  const today =
+    new Date();
+
+  today.setHours(
+    0,
+    0,
+    0,
+    0,
+  );
+
+  const normalizedExpiry =
+    new Date(
+      expiryDate,
+    );
+
+  normalizedExpiry.setHours(
+    0,
+    0,
+    0,
+    0,
+  );
+
+  if (
+    normalizedExpiry.getTime() <
+    today.getTime()
+  ) {
+    status =
+      ProjectInsuranceStatus.EXPIRED;
+  }
+
+  const createdBy =
+    Number(
+      user?.id ||
+        user?.userId ||
+        user?.sub ||
+        0,
+    ) || undefined;
+
+  const createdByName =
+    user?.name ||
+    user?.email ||
+    '';
+
+  const insurance =
+    this
+      .projectInsuranceRepository
+      .create({
+        projectId:
+          undefined,
+
+        customerId:
+          undefined,
+
+        source:
+          ProjectInsuranceSource.DEALER,
+
+        insuranceRequestId:
+          request.id,
+
+        dealerId:
+          request.dealerId ||
+          undefined,
+
+        dealerName:
+          request.dealerName ||
+          undefined,
+
+        customerCode:
+          request.customerCode ||
+          undefined,
+
+        customerName:
+          request.customerName ||
+          undefined,
+
+        customerPhone:
+          request.customerPhone ||
+          request.aadhaarLinkedMobile ||
+          undefined,
+
+        customerEmail:
+          request.customerEmail ||
+          undefined,
+
+        aadhaarLinkedMobile:
+          request.aadhaarLinkedMobile ||
+          undefined,
+
+        installationAddress:
+          request.installationAddress ||
+          undefined,
+
+        city:
+          request.city ||
+          undefined,
+
+        branchName:
+          undefined,
+
+        insurancePlanId:
+          plan.id,
+
+        previousInsuranceId:
+          undefined,
+
+        companyName,
+
+        policyName,
+
+        policyNumber:
+          policyNumber ||
+          undefined,
+
+        policyCost,
+
+        coverageAmount:
+          coverageAmount ===
+            undefined ||
+          coverageAmount ===
+            null
+            ? undefined
+            : Number(
+                coverageAmount,
+              ),
+
+        startDate,
+
+        expiryDate,
+
+        status,
+
+        remarks:
+          String(
+            body?.remarks ||
+              body?.adminRemarks ||
+              '',
+          ).trim() ||
+          undefined,
+
+        isHidden:
+          false,
+
+        createdBy,
+
+        createdByName,
+      });
+
+  const saved =
+    await this
+      .projectInsuranceRepository
+      .save(
+        insurance,
+      );
+
+  return saved;
+}
+
 async completeNewInsuranceRequest(
   requestId: number,
   body: any,
@@ -51864,8 +52305,11 @@ async completeNewInsuranceRequest(
       .projectInsuranceRequestRepository
       .findOne({
         where: {
-          id: requestId,
-          isHidden: false,
+          id:
+            requestId,
+
+          isHidden:
+            false,
         } as any,
       });
 
@@ -51893,20 +52337,75 @@ async completeNewInsuranceRequest(
     );
   }
 
-  const result =
-    await this.createProjectInsurance(
-      {
-        ...body,
+  let insurance:
+    ProjectInsurance;
 
-        projectId:
-          request.projectId,
+  /*
+   * Dealer request:
+   * no CRM Project or Customer is created.
+   */
+  if (
+    request.source ===
+    ProjectInsuranceRequestSource.DEALER
+  ) {
+    if (
+      request.paymentStatus !==
+      ProjectInsurancePaymentStatus.PAID
+    ) {
+      throw new BadRequestException(
+        'Dealer insurance payment must be verified before policy issuance',
+      );
+    }
 
-        insurancePlanId:
-          body?.insurancePlanId ||
-          request.insurancePlanId,
-      },
-      user,
-    );
+    insurance =
+      await this
+        .createDealerInsurancePolicyFromRequest(
+          request,
+          body,
+          user,
+        );
+  } else {
+    /*
+     * Existing Aditya Solars customer/staff
+     * insurance flow remains unchanged.
+     */
+    const requestProjectId =
+      Number(
+        request.projectId ||
+          0,
+      );
+
+    if (!requestProjectId) {
+      throw new BadRequestException(
+        'Project reference is required for this insurance request',
+      );
+    }
+
+    const result =
+      await this
+        .createProjectInsurance(
+          {
+            ...body,
+
+            projectId:
+              requestProjectId,
+
+            insurancePlanId:
+              body?.insurancePlanId ||
+              request.insurancePlanId,
+
+              insuranceSource:
+  request.source ===
+    ProjectInsuranceRequestSource.CUSTOMER
+      ? ProjectInsuranceSource.CUSTOMER
+      : ProjectInsuranceSource.STAFF,
+          },
+          user,
+        );
+
+    insurance =
+      result.insurance;
+  }
 
   request.status =
     ProjectInsuranceRequestStatus.COMPLETED;
@@ -51932,18 +52431,23 @@ async completeNewInsuranceRequest(
       body?.adminRemarks ||
         request.adminRemarks ||
         '',
-    ).trim() || undefined;
+    ).trim() ||
+    undefined;
 
   await this
     .projectInsuranceRequestRepository
-    .save(request);
+    .save(
+      request,
+    );
 
   return {
     message:
-      'Insurance request completed successfully',
+      request.source ===
+      ProjectInsuranceRequestSource.DEALER
+        ? 'Dealer customer insurance policy created successfully'
+        : 'Insurance request completed successfully',
 
-    insurance:
-      result.insurance,
+    insurance,
 
     request,
   };
@@ -51975,6 +52479,15 @@ async completeInsuranceRenewal(
   }
 
   if (
+  request.source ===
+  ProjectInsuranceRequestSource.DEALER
+) {
+  throw new BadRequestException(
+    'Dealer insurance renewal issuance is not enabled yet',
+  );
+}
+
+  if (
     request.requestType !==
     ProjectInsuranceRequestType.RENEWAL
   ) {
@@ -51992,43 +52505,69 @@ async completeInsuranceRenewal(
     );
   }
 
-  const existingInsuranceId =
-    Number(
-      request.existingInsuranceId ||
-        0,
+ const existingInsuranceId =
+  Number(
+    request.existingInsuranceId ||
+      0,
+  );
+
+if (!existingInsuranceId) {
+  throw new BadRequestException(
+    'Existing insurance reference is missing',
+  );
+}
+
+const requestProjectId =
+  Number(
+    request.projectId ||
+      0,
+  );
+
+const requestCustomerId =
+  Number(
+    request.customerId ||
+      0,
+  );
+
+if (
+  !requestProjectId ||
+  !requestCustomerId
+) {
+  throw new BadRequestException(
+    'Project and customer references are required for this insurance renewal',
+  );
+}
+
+const previousInsurance =
+  await this
+    .projectInsuranceRepository
+    .findOne({
+      where: {
+        id:
+          existingInsuranceId,
+
+        projectId:
+          requestProjectId,
+
+        customerId:
+          requestCustomerId,
+
+        isHidden:
+          false,
+      } as any,
+    });
+
+if (!previousInsurance) {
+  throw new NotFoundException(
+    'Existing insurance record not found',
+  );
+}
+
+const project =
+  await this
+    .getCompletedProjectForInsurance(
+      requestProjectId,
     );
-
-  if (!existingInsuranceId) {
-    throw new BadRequestException(
-      'Existing insurance reference is missing',
-    );
-  }
-
-  const previousInsurance =
-    await this
-      .projectInsuranceRepository
-      .findOne({
-        where: {
-          id: existingInsuranceId,
-          projectId:
-            request.projectId,
-          customerId:
-            request.customerId,
-          isHidden: false,
-        } as any,
-      });
-
-  if (!previousInsurance) {
-    throw new NotFoundException(
-      'Existing insurance record not found',
-    );
-  }
-
-  const project =
-    await this
-      .getCompletedProjectForInsurance(
-        request.projectId,
-      );
 
   let plan:
     | ProjectInsurancePlan
@@ -52325,17 +52864,21 @@ async uploadInsuranceDocument(
     );
   }
 
-  /*
-   * Safety check:
-   * insurance must still belong to a real
-   * completed project.
-   */
-  const project =
-    await this.getCompletedProjectForInsurance(
-      Number(
-        insurance.projectId,
-      ),
-    );
+  let project:
+  Project | null =
+  null;
+
+if (
+  insurance.projectId
+) {
+  project =
+    await this
+      .getCompletedProjectForInsurance(
+        Number(
+          insurance.projectId,
+        ),
+      );
+}
 
   const mimeType =
     String(
@@ -52400,10 +52943,18 @@ async uploadInsuranceDocument(
     process.env
       .SUPABASE_SERVICE_ROLE_KEY;
 
-  const bucket =
-    process.env
-      .SUPABASE_PROJECT_DOCUMENTS_BUCKET ||
-    'project-documents';
+  const isDealerPolicy =
+  insurance.source ===
+    ProjectInsuranceSource.DEALER;
+
+const bucket =
+  isDealerPolicy
+    ? process.env
+        .SUPABASE_INSURANCE_POLICY_BUCKET ||
+      'insurance-policy-documents'
+    : process.env
+        .SUPABASE_PROJECT_DOCUMENTS_BUCKET ||
+      'project-documents';
 
   if (
     !supabaseUrl ||
@@ -52451,10 +53002,16 @@ async uploadInsuranceDocument(
         0,
     );
 
-  const filePath =
-    `insurance/project-${insurance.projectId}/insurance-${insurance.id}/user-${
-      currentUserId || 'unknown'
-    }/${Date.now()}-${randomUUID()}.${safeExtension}`;
+  const insuranceOwnerPath =
+  insurance.source ===
+    'DEALER'
+    ? `dealer-${insurance.dealerId || 'unknown'}`
+    : `project-${insurance.projectId || 'unknown'}`;
+
+const filePath =
+  `insurance/${insuranceOwnerPath}/insurance-${insurance.id}/user-${
+    currentUserId || 'unknown'
+  }/${Date.now()}-${randomUUID()}.${safeExtension}`;
 
   const uploadResult =
     await supabase.storage
@@ -52475,12 +53032,16 @@ async uploadInsuranceDocument(
     );
   }
 
-  const publicUrlResult =
-    supabase.storage
-      .from(bucket)
-      .getPublicUrl(
-        filePath,
-      );
+  const storedFileUrl =
+  isDealerPolicy
+    ? filePath
+    : supabase.storage
+        .from(bucket)
+        .getPublicUrl(
+          filePath,
+        )
+        .data
+        .publicUrl;
 
   const visibleToCustomer =
     body?.visibleToCustomer === true ||
@@ -52498,8 +53059,7 @@ async uploadInsuranceDocument(
           originalName,
 
         fileUrl:
-          publicUrlResult
-            .data.publicUrl,
+  storedFileUrl,
 
         mimeType,
 
@@ -52544,14 +53104,16 @@ async uploadInsuranceDocument(
           ),
 
         customerCode:
-          insurance.customerCode ||
-          project.customerCode ||
-          '',
+  insurance.customerCode ||
+  project?.customerCode ||
+  '',
 
         projectId:
-          Number(
-            insurance.projectId,
-          ),
+  insurance.projectId
+    ? Number(
+        insurance.projectId,
+      )
+    : undefined,
 
         notificationType:
           'INSURANCE_DOCUMENT',
@@ -52610,17 +53172,45 @@ async getInsuranceDocuments(
     );
   }
 
-  return this.projectInsuranceDocumentRepository.find({
-    where: {
-      insuranceId,
-      isHidden: false,
-    } as any,
+  const documents =
+  await this
+    .projectInsuranceDocumentRepository
+    .find({
+      where: {
+        insuranceId,
 
-    order: {
-      createdAt:
-        'DESC',
-    },
-  });
+        isHidden:
+          false,
+      } as any,
+
+      order: {
+        createdAt:
+          'DESC',
+      },
+    });
+
+if (
+  insurance.source !==
+    ProjectInsuranceSource.DEALER
+) {
+  return documents;
+}
+
+return Promise.all(
+  documents.map(
+    async (
+      document,
+    ) => ({
+      ...document,
+
+      fileUrl:
+        await this
+          .createInsurancePolicyDocumentSignedUrl(
+            document.fileUrl,
+          ),
+    }),
+  ),
+);
 }
 
 async updateInsuranceDocumentCustomerVisibility(
@@ -53317,13 +53907,17 @@ async getProjectInsuranceById(
   }
 
   const project =
-    await this.projectRepository.findOne({
-      where: {
-        id: Number(
-          insurance.projectId,
-        ),
-      },
-    });
+  insurance.projectId
+    ? await this
+        .projectRepository
+        .findOne({
+          where: {
+            id: Number(
+              insurance.projectId,
+            ),
+          },
+        })
+    : null;
 
   const documents =
     await this.projectInsuranceDocumentRepository.find({
@@ -53339,20 +53933,65 @@ async getProjectInsuranceById(
       },
     });
 
-  const history =
-    await this.projectInsuranceRepository.find({
-      where: {
-        projectId:
-          insurance.projectId,
+  let history:
+  ProjectInsurance[] =
+  [];
 
-        isHidden: false,
-      } as any,
+if (
+  insurance.projectId
+) {
+  history =
+    await this
+      .projectInsuranceRepository
+      .find({
+        where: {
+          projectId:
+            insurance.projectId,
 
-      order: {
-        startDate: 'DESC',
-        id: 'DESC',
-      },
-    });
+          isHidden:
+            false,
+        } as any,
+
+        order: {
+          startDate:
+            'DESC',
+
+          id:
+            'DESC',
+        },
+      });
+} else if (
+  insurance.source ===
+    'DEALER' &&
+  insurance.dealerId
+) {
+  history =
+    await this
+      .projectInsuranceRepository
+      .find({
+        where: {
+          dealerId:
+            insurance.dealerId,
+
+          customerPhone:
+            insurance.customerPhone,
+
+          source:
+            insurance.source,
+
+          isHidden:
+            false,
+        } as any,
+
+        order: {
+          startDate:
+            'DESC',
+
+          id:
+            'DESC',
+        },
+      });
+}
 
   return {
     insurance,
@@ -53385,11 +54024,16 @@ async updateProjectInsurance(
     );
   }
 
-  await this.getCompletedProjectForInsurance(
-    Number(
-      insurance.projectId,
-    ),
-  );
+  if (
+  insurance.projectId
+) {
+  await this
+    .getCompletedProjectForInsurance(
+      Number(
+        insurance.projectId,
+      ),
+    );
+}
 
   if (
     body?.companyName !==
@@ -53539,5 +54183,244 @@ async updateProjectInsurance(
     insurance:
       saved,
   };
+}
+
+private async createInsuranceKycSignedUrl(
+  storedValue: string,
+) {
+  const value =
+    String(
+      storedValue ||
+        '',
+    ).trim();
+
+  if (!value) {
+    return '';
+  }
+
+  /*
+   * Development/backward compatibility
+   * for KYC records uploaded before the
+   * private-bucket change.
+   */
+  if (
+    /^https?:\/\//i.test(
+      value,
+    )
+  ) {
+    return value;
+  }
+
+  const supabaseUrl =
+    process.env
+      .SUPABASE_URL;
+
+  const serviceKey =
+    process.env
+      .SUPABASE_SERVICE_ROLE_KEY;
+
+  const bucket =
+    process.env
+      .SUPABASE_INSURANCE_KYC_BUCKET ||
+    'insurance-kyc';
+
+  if (
+    !supabaseUrl ||
+    !serviceKey
+  ) {
+    throw new BadRequestException(
+      'Supabase storage is not configured',
+    );
+  }
+
+  const supabase =
+    createClient(
+      supabaseUrl,
+      serviceKey,
+    );
+
+  const signed =
+    await supabase.storage
+      .from(
+        bucket,
+      )
+      .createSignedUrl(
+        value,
+        60 * 10,
+      );
+
+  if (
+    signed.error ||
+    !signed.data?.signedUrl
+  ) {
+    throw new BadRequestException(
+      signed.error?.message ||
+        'Unable to open insurance document',
+    );
+  }
+
+  return signed.data.signedUrl;
+}
+
+private async createInsurancePolicyDocumentSignedUrl(
+  storedValue: string,
+) {
+  const value =
+    String(
+      storedValue ||
+        '',
+    ).trim();
+
+  if (!value) {
+    return '';
+  }
+
+  if (
+    value.startsWith(
+      'http://',
+    ) ||
+    value.startsWith(
+      'https://',
+    )
+  ) {
+    return value;
+  }
+
+  const supabaseUrl =
+    process.env
+      .SUPABASE_URL;
+
+  const serviceKey =
+    process.env
+      .SUPABASE_SERVICE_ROLE_KEY;
+
+  const bucket =
+    process.env
+      .SUPABASE_INSURANCE_POLICY_BUCKET ||
+    'insurance-policy-documents';
+
+  if (
+    !supabaseUrl ||
+    !serviceKey
+  ) {
+    throw new BadRequestException(
+      'Insurance policy storage is not configured',
+    );
+  }
+
+  const supabase =
+    createClient(
+      supabaseUrl,
+      serviceKey,
+    );
+
+  const {
+    data,
+    error,
+  } =
+    await supabase
+      .storage
+      .from(
+        bucket,
+      )
+      .createSignedUrl(
+        value,
+        600,
+      );
+
+  if (
+    error ||
+    !data?.signedUrl
+  ) {
+    throw new BadRequestException(
+      'Unable to access insurance policy document',
+    );
+  }
+
+  return data.signedUrl;
+}
+
+async getInsuranceRequestDetail(
+  requestId: number,
+  user: any,
+) {
+  this.assertInsuranceManagementAccess(
+    user,
+  );
+
+  const request =
+    await this
+      .projectInsuranceRequestRepository
+      .findOne({
+        where: {
+          id: Number(
+            requestId,
+          ),
+          isHidden: false,
+        } as any,
+      });
+
+  if (!request) {
+    throw new NotFoundException(
+      'Insurance request not found',
+    );
+  }
+
+  const plan =
+    request.insurancePlanId
+      ? await this
+          .projectInsurancePlanRepository
+          .findOne({
+            where: {
+              id:
+                Number(
+                  request.insurancePlanId,
+                ),
+            } as any,
+          })
+      : null;
+
+  const documents =
+    await this
+      .projectInsuranceRequestDocumentRepository
+      .find({
+        where: {
+          insuranceRequestId:
+            request.id,
+
+          isHidden:
+            false,
+        } as any,
+
+        order: {
+          createdAt:
+            'DESC',
+        } as any,
+      });
+
+      const safeDocuments =
+  await Promise.all(
+    documents.map(
+      async (
+        document,
+      ) => ({
+        ...document,
+
+        fileUrl:
+          await this
+            .createInsuranceKycSignedUrl(
+              document.fileUrl,
+            ),
+      }),
+    ),
+  );
+
+  return {
+  request,
+  plan,
+
+  documents:
+    safeDocuments,
+};
 }
 }

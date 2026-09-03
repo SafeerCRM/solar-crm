@@ -59,6 +59,32 @@ import {
   ProjectVendorCompany,
 } from '../project/project-vendor-company.entity';
 
+import {
+  ProjectInsurancePlan,
+} from '../project/project-insurance-plan.entity';
+
+import {
+  ProjectInsurancePaymentStatus,
+  ProjectInsuranceRequest,
+  ProjectInsuranceRequestSource,
+  ProjectInsuranceRequestStatus,
+  ProjectInsuranceRequestType,
+} from '../project/project-insurance-request.entity';
+
+import {
+  ProjectInsuranceRequestDocument,
+  ProjectInsuranceRequestDocumentType,
+} from '../project/project-insurance-request-document.entity';
+
+import {
+  ProjectInsurance,
+  ProjectInsuranceSource,
+} from '../project/project-insurance.entity';
+
+import {
+  ProjectInsuranceDocument,
+} from '../project/project-insurance-document.entity';
+
 @Injectable()
 export class DealerService {
   constructor(
@@ -133,6 +159,26 @@ private readonly deliverySettingRepository: Repository<DealerDeliverySetting>,
 
 @InjectRepository(PortalPolicy)
 private readonly portalPolicyRepository: Repository<PortalPolicy>,
+
+@InjectRepository(ProjectInsurancePlan)
+private readonly projectInsurancePlanRepository:
+  Repository<ProjectInsurancePlan>,
+
+@InjectRepository(ProjectInsuranceRequest)
+private readonly projectInsuranceRequestRepository:
+  Repository<ProjectInsuranceRequest>,
+
+@InjectRepository(ProjectInsuranceRequestDocument)
+private readonly projectInsuranceRequestDocumentRepository:
+  Repository<ProjectInsuranceRequestDocument>,
+
+  @InjectRepository(ProjectInsurance)
+private readonly projectInsuranceRepository:
+  Repository<ProjectInsurance>,
+
+  @InjectRepository(ProjectInsuranceDocument)
+private readonly projectInsuranceDocumentRepository:
+  Repository<ProjectInsuranceDocument>,
 
     private readonly projectService: ProjectService,
   ) {}
@@ -3397,54 +3443,174 @@ async getCustomerVisibleCompanyBankDetails() {
 }
 
     async listInternalDealerComplaints(query: any) {
-    const page = Number(query?.page || 1);
-    const limit = Math.min(Number(query?.limit || 20), 100);
-    const skip = (page - 1) * limit;
+  const page = Number(query?.page || 1);
+  const limit = Math.min(
+    Number(query?.limit || 20),
+    100,
+  );
+  const skip = (page - 1) * limit;
 
-    const qb = this.dealerComplaintRepository
+  const qb =
+    this.dealerComplaintRepository
       .createQueryBuilder('complaint')
-      .orderBy('complaint.createdAt', 'DESC');
 
-    if (query?.dealerId) {
-      qb.andWhere('complaint.dealerId = :dealerId', {
-        dealerId: Number(query.dealerId),
-      });
-    }
+      /*
+       * Dealer complaint stores dealerId,
+       * while dealer name/city live in Dealer.
+       *
+       * Join Dealer here so Trading UI gets
+       * the current dealer information.
+       */
+      .leftJoin(
+        Dealer,
+        'dealer',
+        'dealer.id = complaint.dealerId',
+      )
 
-    if (query?.dealerOrderId) {
-      qb.andWhere('complaint.dealerOrderId = :dealerOrderId', {
-        dealerOrderId: Number(query.dealerOrderId),
-      });
-    }
+      .select([
+        'complaint',
+      ])
 
-    if (query?.status) {
-      qb.andWhere('complaint.status = :status', {
-        status: query.status,
-      });
-    }
+      .addSelect(
+        'dealer.dealerName',
+        'dealerName',
+      )
 
-    if (query?.search) {
-      const search = `%${String(query.search).toLowerCase()}%`;
+      .addSelect(
+        'dealer.city',
+        'dealerCity',
+      )
 
-      qb.andWhere(
-        `
-        LOWER(complaint.subject) LIKE :search
-        OR LOWER(complaint.description) LIKE :search
-        `,
-        { search },
+      .orderBy(
+        'complaint.createdAt',
+        'DESC',
       );
-    }
 
-    const [data, total] = await qb.skip(skip).take(limit).getManyAndCount();
-
-    return {
-      data,
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit) || 1,
-    };
+  /*
+   * Exact dealer filter.
+   */
+  if (query?.dealerId) {
+    qb.andWhere(
+      'complaint.dealerId = :dealerId',
+      {
+        dealerId: Number(
+          query.dealerId,
+        ),
+      },
+    );
   }
+
+  /*
+   * City filter.
+   *
+   * Case-insensitive exact match after trim,
+   * so KOTA / Kota / kota behave consistently.
+   */
+  if (query?.city) {
+    qb.andWhere(
+      `
+      LOWER(TRIM(COALESCE(dealer.city, ''))) =
+      LOWER(TRIM(:city))
+      `,
+      {
+        city: String(
+          query.city,
+        ).trim(),
+      },
+    );
+  }
+
+  if (query?.dealerOrderId) {
+    qb.andWhere(
+      'complaint.dealerOrderId = :dealerOrderId',
+      {
+        dealerOrderId: Number(
+          query.dealerOrderId,
+        ),
+      },
+    );
+  }
+
+  if (query?.status) {
+    qb.andWhere(
+      'complaint.status = :status',
+      {
+        status: query.status,
+      },
+    );
+  }
+
+  if (query?.search) {
+    const search =
+      `%${String(
+        query.search,
+      )
+        .trim()
+        .toLowerCase()}%`;
+
+    qb.andWhere(
+      `
+      (
+        LOWER(COALESCE(complaint.subject, '')) LIKE :search
+        OR
+        LOWER(COALESCE(complaint.description, '')) LIKE :search
+        OR
+        LOWER(COALESCE(dealer.dealerName, '')) LIKE :search
+        OR
+        LOWER(COALESCE(dealer.city, '')) LIKE :search
+      )
+      `,
+      {
+        search,
+      },
+    );
+  }
+
+  /*
+   * getRawAndEntities is required because
+   * dealerName/dealerCity are selected from
+   * the joined Dealer table, not Complaint.
+   */
+  const total =
+    await qb.getCount();
+
+  const result =
+    await qb
+      .skip(skip)
+      .take(limit)
+      .getRawAndEntities();
+
+  const data =
+    result.entities.map(
+      (complaint: any, index: number) => {
+        const raw =
+          result.raw[index] || {};
+
+        return {
+          ...complaint,
+
+          dealerName:
+            raw.dealerName ||
+            '',
+
+          dealerCity:
+            raw.dealerCity ||
+            '',
+        };
+      },
+    );
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages:
+      Math.ceil(
+        total / limit,
+      ) || 1,
+  };
+}
 
   async updateInternalDealerComplaint(id: number, body: any, user: any) {
     const complaint = await this.dealerComplaintRepository.findOne({
@@ -4086,6 +4252,1475 @@ if (deliveryCharge > 0) {
     proformaInvoices,
     finalInvoices,
   };
+}
+
+async listDealerInsurancePlans() {
+  return this
+    .projectInsurancePlanRepository
+    .createQueryBuilder('plan')
+    .where(
+      '"plan"."isHidden" = false',
+    )
+    .andWhere(
+      '"plan"."isActive" = true',
+    )
+    .orderBy(
+      '"plan"."companyName"',
+      'ASC',
+    )
+    .addOrderBy(
+      '"plan"."policyName"',
+      'ASC',
+    )
+    .addOrderBy(
+      '"plan"."durationMonths"',
+      'ASC',
+    )
+    .getMany();
+}
+
+async createDealerInsuranceRequest(
+  dealerId: number,
+  body: any,
+) {
+  const dealer =
+    await this
+      .dealerRepository
+      .findOne({
+        where: {
+          id:
+            dealerId,
+
+          isHidden:
+            false,
+        },
+      });
+
+  if (!dealer) {
+    throw new NotFoundException(
+      'Dealer not found',
+    );
+  }
+
+  const insurancePlanId =
+    Number(
+      body?.insurancePlanId ||
+        0,
+    );
+
+  if (!insurancePlanId) {
+    throw new BadRequestException(
+      'Please select an insurance plan',
+    );
+  }
+
+  const plan =
+    await this
+      .projectInsurancePlanRepository
+      .findOne({
+        where: {
+          id:
+            insurancePlanId,
+
+          isActive:
+            true,
+
+          isHidden:
+            false,
+        } as any,
+      });
+
+  if (!plan) {
+    throw new NotFoundException(
+      'Selected insurance plan is not available',
+    );
+  }
+
+  const customerName =
+    String(
+      body?.customerName ||
+        '',
+    ).trim();
+
+  const customerEmail =
+    String(
+      body?.customerEmail ||
+        '',
+    ).trim();
+
+  const aadhaarLinkedMobile =
+    String(
+      body?.aadhaarLinkedMobile ||
+        '',
+    )
+      .replace(/\s+/g, '')
+      .trim();
+
+  const customerPhone =
+    String(
+      body?.customerPhone ||
+        aadhaarLinkedMobile ||
+        '',
+    )
+      .replace(/\s+/g, '')
+      .trim();
+
+  if (!customerName) {
+    throw new BadRequestException(
+      'Customer name is required',
+    );
+  }
+
+  if (!customerEmail) {
+    throw new BadRequestException(
+      'Email ID is required',
+    );
+  }
+
+  if (!aadhaarLinkedMobile) {
+    throw new BadRequestException(
+      'Aadhaar-linked mobile number is required',
+    );
+  }
+
+  /*
+   * Keep validation practical.
+   * We are not assuming an Indian-only regex
+   * beyond requiring a usable number.
+   */
+  if (
+    aadhaarLinkedMobile.length <
+    10
+  ) {
+    throw new BadRequestException(
+      'Please enter a valid Aadhaar-linked mobile number',
+    );
+  }
+
+  const duplicate =
+    await this
+      .projectInsuranceRequestRepository
+      .createQueryBuilder(
+        'request',
+      )
+      .where(
+        '"request"."dealerId" = :dealerId',
+        {
+          dealerId,
+        },
+      )
+      .andWhere(
+        '"request"."source" = :source',
+        {
+          source:
+            ProjectInsuranceRequestSource
+              .DEALER,
+        },
+      )
+      .andWhere(
+        '"request"."aadhaarLinkedMobile" = :aadhaarLinkedMobile',
+        {
+          aadhaarLinkedMobile,
+        },
+      )
+      .andWhere(
+        '"request"."insurancePlanId" = :insurancePlanId',
+        {
+          insurancePlanId:
+            plan.id,
+        },
+      )
+      .andWhere(
+        '"request"."status" IN (:...statuses)',
+        {
+          statuses: [
+            ProjectInsuranceRequestStatus
+              .PENDING,
+
+            ProjectInsuranceRequestStatus
+              .APPROVED,
+          ],
+        },
+      )
+      .andWhere(
+        '"request"."isHidden" = false',
+      )
+      .getOne();
+
+  if (duplicate) {
+    throw new BadRequestException(
+      'An active insurance application already exists for this customer and plan',
+    );
+  }
+
+  const request =
+    this
+      .projectInsuranceRequestRepository
+      .create({
+        projectId:
+          undefined,
+
+        customerId:
+          undefined,
+
+        source:
+          ProjectInsuranceRequestSource
+            .DEALER,
+
+        dealerId:
+          dealer.id,
+
+        dealerName:
+          dealer.dealerName,
+
+        customerCode:
+          undefined,
+
+        customerName,
+
+        customerPhone:
+          customerPhone ||
+          aadhaarLinkedMobile,
+
+        customerEmail,
+
+        aadhaarLinkedMobile,
+
+        installationAddress:
+          String(
+            body
+              ?.installationAddress ||
+              '',
+          ).trim() ||
+          undefined,
+
+        city:
+          String(
+            body?.city ||
+              dealer.city ||
+              '',
+          ).trim() ||
+          undefined,
+
+        insurancePlanId:
+          plan.id,
+
+        existingInsuranceId:
+          undefined,
+
+        requestType:
+          ProjectInsuranceRequestType
+            .NEW,
+
+        status:
+          ProjectInsuranceRequestStatus
+            .PENDING,
+
+        /*
+         * Snapshot plan price now.
+         */
+        payableAmount:
+          Number(
+            plan.price ||
+              0,
+          ),
+
+        /*
+         * Gateway is not integrated yet.
+         */
+        paymentStatus:
+          ProjectInsurancePaymentStatus
+            .PENDING,
+
+        customerRemarks:
+          String(
+            body
+              ?.customerRemarks ||
+              body?.remarks ||
+              '',
+          ).trim() ||
+          undefined,
+
+        isHidden:
+          false,
+      });
+
+  const saved =
+    await this
+      .projectInsuranceRequestRepository
+      .save(
+        request,
+      );
+
+  return {
+    message:
+      'Insurance application created successfully',
+
+    request:
+      saved,
+
+    plan: {
+      id:
+        plan.id,
+
+      companyName:
+        plan.companyName,
+
+      policyName:
+        plan.policyName,
+
+      durationMonths:
+        plan.durationMonths,
+
+      coverageAmount:
+        plan.coverageAmount,
+
+      payableAmount:
+        Number(
+          saved.payableAmount ||
+            0,
+        ),
+    },
+
+    requiredDocuments: [
+      ProjectInsuranceRequestDocumentType
+        .AADHAAR_CARD,
+
+      ProjectInsuranceRequestDocumentType
+        .PAN_CARD,
+
+      ProjectInsuranceRequestDocumentType
+        .PROJECT_INVOICE,
+    ],
+  };
+}
+
+async uploadDealerInsuranceRequestDocument(
+  dealerId: number,
+  requestId: number,
+  file: any,
+  body: any,
+  user: any,
+) {
+  if (!file) {
+    throw new BadRequestException(
+      'Document file is required',
+    );
+  }
+
+  const request =
+    await this
+      .projectInsuranceRequestRepository
+      .findOne({
+        where: {
+          id:
+            requestId,
+
+          dealerId,
+
+          source:
+            ProjectInsuranceRequestSource
+              .DEALER,
+
+          isHidden:
+            false,
+        } as any,
+      });
+
+  if (!request) {
+    throw new NotFoundException(
+      'Insurance application not found',
+    );
+  }
+
+  if (
+    request.status ===
+      ProjectInsuranceRequestStatus
+        .COMPLETED ||
+    request.status ===
+      ProjectInsuranceRequestStatus
+        .CANCELLED
+  ) {
+    throw new BadRequestException(
+      'Documents cannot be changed for this insurance application',
+    );
+  }
+
+  const documentType =
+    String(
+      body?.documentType ||
+        '',
+    )
+      .trim()
+      .toUpperCase() as
+      ProjectInsuranceRequestDocumentType;
+
+  const allowedDocumentTypes = [
+    ProjectInsuranceRequestDocumentType
+      .AADHAAR_CARD,
+
+    ProjectInsuranceRequestDocumentType
+      .PAN_CARD,
+
+    ProjectInsuranceRequestDocumentType
+      .PROJECT_INVOICE,
+
+    ProjectInsuranceRequestDocumentType
+      .OTHER,
+  ];
+
+  if (
+    !allowedDocumentTypes.includes(
+      documentType,
+    )
+  ) {
+    throw new BadRequestException(
+      'Invalid insurance document type',
+    );
+  }
+
+  const mimeType =
+    String(
+      file.mimetype ||
+        '',
+    );
+
+  const allowedMimeTypes = [
+    'application/pdf',
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/webp',
+  ];
+
+  if (
+    !allowedMimeTypes.includes(
+      mimeType,
+    )
+  ) {
+    throw new BadRequestException(
+      'Only PDF, JPG, PNG and WEBP documents are allowed',
+    );
+  }
+
+  const maxSize =
+    8 *
+    1024 *
+    1024;
+
+  if (
+    Number(
+      file.size ||
+        0,
+    ) >
+    maxSize
+  ) {
+    throw new BadRequestException(
+      'Insurance document must be less than 8 MB',
+    );
+  }
+
+  const supabaseUrl =
+    process.env
+      .SUPABASE_URL;
+
+  const serviceKey =
+    process.env
+      .SUPABASE_SERVICE_ROLE_KEY;
+
+  const bucket =
+  process.env
+    .SUPABASE_INSURANCE_KYC_BUCKET ||
+  'insurance-kyc';
+
+  if (
+    !supabaseUrl ||
+    !serviceKey
+  ) {
+    throw new BadRequestException(
+      'Supabase storage is not configured',
+    );
+  }
+
+  const supabase =
+    createClient(
+      supabaseUrl,
+      serviceKey,
+    );
+
+  const originalName =
+    String(
+      file.originalname ||
+        'insurance-document',
+    );
+
+  const extension =
+    originalName.includes('.')
+      ? originalName
+          .split('.')
+          .pop()
+      : mimeType
+          .split('/')
+          .pop() ||
+        'file';
+
+  const safeExtension =
+    String(
+      extension ||
+        'file',
+    ).replace(
+      /[^a-zA-Z0-9]/g,
+      '',
+    );
+
+  const filePath =
+    `dealer-insurance/dealer-${dealerId}/request-${request.id}/${Date.now()}-${randomUUID()}.${safeExtension}`;
+
+  const uploadResult =
+    await supabase.storage
+      .from(
+        bucket,
+      )
+      .upload(
+        filePath,
+        file.buffer,
+        {
+          contentType:
+            mimeType,
+
+          upsert:
+            false,
+        },
+      );
+
+  if (
+    uploadResult.error
+  ) {
+    throw new BadRequestException(
+      uploadResult
+        .error
+        .message,
+    );
+  }
+
+
+  /*
+   * Aadhaar, PAN and project invoice
+   * are single required document slots.
+   *
+   * Re-upload hides the previous copy
+   * rather than deleting history.
+   */
+  if (
+    documentType !==
+    ProjectInsuranceRequestDocumentType
+      .OTHER
+  ) {
+    await this
+      .projectInsuranceRequestDocumentRepository
+      .createQueryBuilder()
+      .update(
+        ProjectInsuranceRequestDocument,
+      )
+      .set({
+        isHidden:
+          true,
+      })
+      .where(
+        '"insuranceRequestId" = :requestId',
+        {
+          requestId:
+            request.id,
+        },
+      )
+      .andWhere(
+        '"documentType" = :documentType',
+        {
+          documentType,
+        },
+      )
+      .andWhere(
+        '"isHidden" = false',
+      )
+      .execute();
+  }
+
+  const document =
+    this
+      .projectInsuranceRequestDocumentRepository
+      .create({
+        insuranceRequestId:
+          request.id,
+
+        documentType,
+
+        fileName:
+          originalName,
+
+        /*
+ * For private KYC documents this field
+ * stores the Supabase object path,
+ * NOT a permanent public URL.
+ *
+ * A temporary signed URL is generated
+ * only when an authorized user opens
+ * the insurance application.
+ */
+fileUrl:
+  filePath,
+
+        mimeType,
+
+        fileSize:
+          Number(
+            file.size ||
+              0,
+          ),
+
+        isHidden:
+          false,
+
+        uploadedBy:
+          Number(
+            user?.id ||
+              dealerId,
+          ),
+
+        uploadedByName:
+          user?.name ||
+          request.dealerName ||
+          'Dealer',
+
+        uploadedByRole:
+          'DEALER',
+      });
+
+  const saved =
+    await this
+      .projectInsuranceRequestDocumentRepository
+      .save(
+        document,
+      );
+
+  const readiness =
+    await this
+      .getDealerInsuranceRequestReadiness(
+        dealerId,
+        request.id,
+      );
+
+  return {
+    message:
+      'Insurance document uploaded successfully',
+
+    document:
+      saved,
+
+    readiness,
+  };
+}
+
+private async getDealerInsuranceRequestReadiness(
+  dealerId: number,
+  requestId: number,
+) {
+  const request =
+    await this
+      .projectInsuranceRequestRepository
+      .findOne({
+        where: {
+          id:
+            requestId,
+
+          dealerId,
+
+          source:
+            ProjectInsuranceRequestSource
+              .DEALER,
+
+          isHidden:
+            false,
+        } as any,
+      });
+
+  if (!request) {
+    throw new NotFoundException(
+      'Insurance application not found',
+    );
+  }
+
+  const documents =
+    await this
+      .projectInsuranceRequestDocumentRepository
+      .find({
+        where: {
+          insuranceRequestId:
+            request.id,
+
+          isHidden:
+            false,
+        } as any,
+
+        order: {
+          createdAt:
+            'DESC',
+        } as any,
+      });
+
+  const documentTypes =
+    new Set(
+      documents.map(
+        (document) =>
+          document.documentType,
+      ),
+    );
+
+  const aadhaarUploaded =
+    documentTypes.has(
+      ProjectInsuranceRequestDocumentType
+        .AADHAAR_CARD,
+    );
+
+  const panUploaded =
+    documentTypes.has(
+      ProjectInsuranceRequestDocumentType
+        .PAN_CARD,
+    );
+
+  const invoiceUploaded =
+    documentTypes.has(
+      ProjectInsuranceRequestDocumentType
+        .PROJECT_INVOICE,
+    );
+
+  const detailsComplete =
+    Boolean(
+      String(
+        request.customerName ||
+          '',
+      ).trim() &&
+        String(
+          request.customerEmail ||
+            '',
+        ).trim() &&
+        String(
+          request
+            .aadhaarLinkedMobile ||
+            '',
+        ).trim() &&
+        request.insurancePlanId,
+    );
+
+  const documentsComplete =
+    aadhaarUploaded &&
+    panUploaded &&
+    invoiceUploaded;
+
+  const paymentComplete =
+    request.paymentStatus ===
+    ProjectInsurancePaymentStatus
+      .PAID;
+
+  return {
+    detailsComplete,
+
+    documentsComplete,
+
+    paymentComplete,
+
+    readyForPayment:
+      detailsComplete &&
+      documentsComplete,
+
+    readyForProcessing:
+      detailsComplete &&
+      documentsComplete &&
+      paymentComplete,
+
+    documents: {
+      aadhaarCard:
+        aadhaarUploaded,
+
+      panCard:
+        panUploaded,
+
+      projectInvoice:
+        invoiceUploaded,
+    },
+  };
+}
+
+private async createDealerInsuranceKycSignedUrl(
+  storedValue: string,
+) {
+  const value =
+    String(
+      storedValue ||
+        '',
+    ).trim();
+
+  if (!value) {
+    return '';
+  }
+
+  /*
+   * Backward compatibility:
+   *
+   * Old development records may already
+   * contain a full public URL because the
+   * first implementation used getPublicUrl().
+   *
+   * Do not try to sign those as storage paths.
+   */
+  if (
+    /^https?:\/\//i.test(
+      value,
+    )
+  ) {
+    return value;
+  }
+
+  const supabaseUrl =
+    process.env
+      .SUPABASE_URL;
+
+  const serviceKey =
+    process.env
+      .SUPABASE_SERVICE_ROLE_KEY;
+
+  const bucket =
+    process.env
+      .SUPABASE_INSURANCE_KYC_BUCKET ||
+    'insurance-kyc';
+
+  if (
+    !supabaseUrl ||
+    !serviceKey
+  ) {
+    throw new BadRequestException(
+      'Supabase storage is not configured',
+    );
+  }
+
+  const supabase =
+    createClient(
+      supabaseUrl,
+      serviceKey,
+    );
+
+  /*
+   * Signed URL valid for 10 minutes.
+   */
+  const signed =
+    await supabase.storage
+      .from(
+        bucket,
+      )
+      .createSignedUrl(
+        value,
+        60 * 10,
+      );
+
+  if (
+    signed.error ||
+    !signed.data?.signedUrl
+  ) {
+    throw new BadRequestException(
+      signed.error?.message ||
+        'Unable to open insurance document',
+    );
+  }
+
+  return signed.data.signedUrl;
+}
+
+private async createDealerInsurancePolicyDocumentSignedUrl(
+  storedValue: string,
+) {
+  const value =
+    String(
+      storedValue ||
+        '',
+    ).trim();
+
+  if (!value) {
+    return '';
+  }
+
+  /*
+   * Backward compatibility only.
+   * Older records may already contain
+   * complete URLs.
+   */
+  if (
+    value.startsWith(
+      'http://',
+    ) ||
+    value.startsWith(
+      'https://',
+    )
+  ) {
+    return value;
+  }
+
+  const supabaseUrl =
+    process.env
+      .SUPABASE_URL;
+
+  const serviceKey =
+    process.env
+      .SUPABASE_SERVICE_ROLE_KEY;
+
+  const bucket =
+    process.env
+      .SUPABASE_INSURANCE_POLICY_BUCKET ||
+    'insurance-policy-documents';
+
+  if (
+    !supabaseUrl ||
+    !serviceKey
+  ) {
+    throw new BadRequestException(
+      'Insurance policy storage is not configured',
+    );
+  }
+
+  const supabase =
+    createClient(
+      supabaseUrl,
+      serviceKey,
+    );
+
+  const {
+    data,
+    error,
+  } =
+    await supabase
+      .storage
+      .from(
+        bucket,
+      )
+      .createSignedUrl(
+        value,
+        600,
+      );
+
+  if (
+    error ||
+    !data?.signedUrl
+  ) {
+    throw new BadRequestException(
+      'Unable to access insurance policy document',
+    );
+  }
+
+  return data.signedUrl;
+}
+
+async listDealerInsuranceRequests(
+  dealerId: number,
+  query: any = {},
+) {
+  const page =
+    Math.max(
+      Number(
+        query?.page ||
+          1,
+      ),
+      1,
+    );
+
+  const limit =
+    Math.min(
+      Math.max(
+        Number(
+          query?.limit ||
+            20,
+        ),
+        1,
+      ),
+      100,
+    );
+
+  const skip =
+    (page - 1) *
+    limit;
+
+  const qb =
+    this
+      .projectInsuranceRequestRepository
+      .createQueryBuilder(
+        'request',
+      )
+      .where(
+        '"request"."dealerId" = :dealerId',
+        {
+          dealerId,
+        },
+      )
+      .andWhere(
+        '"request"."source" = :source',
+        {
+          source:
+            ProjectInsuranceRequestSource
+              .DEALER,
+        },
+      )
+      .andWhere(
+        '"request"."isHidden" = false',
+      );
+
+  if (
+    query?.status
+  ) {
+    qb.andWhere(
+      '"request"."status" = :status',
+      {
+        status:
+          String(
+            query.status,
+          )
+            .trim()
+            .toUpperCase(),
+      },
+    );
+  }
+
+  if (
+    query?.paymentStatus
+  ) {
+    qb.andWhere(
+      '"request"."paymentStatus" = :paymentStatus',
+      {
+        paymentStatus:
+          String(
+            query.paymentStatus,
+          )
+            .trim()
+            .toUpperCase(),
+      },
+    );
+  }
+
+  qb
+    .orderBy(
+      '"request"."requestedAt"',
+      'DESC',
+    )
+    .addOrderBy(
+      '"request"."id"',
+      'DESC',
+    )
+    .skip(
+      skip,
+    )
+    .take(
+      limit,
+    );
+
+  const [
+    data,
+    total,
+  ] =
+    await qb
+      .getManyAndCount();
+
+  return {
+    data,
+
+    pagination: {
+      page,
+      limit,
+      total,
+
+      totalPages:
+        Math.ceil(
+          total /
+            limit,
+        ) ||
+        1,
+    },
+  };
+}
+
+async listDealerInsurancePolicies(
+  dealerId: number,
+  query: any = {},
+) {
+  const page =
+    Math.max(
+      Number(
+        query?.page ||
+          1,
+      ),
+      1,
+    );
+
+  const limit =
+    Math.min(
+      Math.max(
+        Number(
+          query?.limit ||
+            20,
+        ),
+        1,
+      ),
+      100,
+    );
+
+  const skip =
+    (page - 1) *
+    limit;
+
+  const qb =
+    this
+      .projectInsuranceRepository
+      .createQueryBuilder(
+        'insurance',
+      )
+      .where(
+        '"insurance"."dealerId" = :dealerId',
+        {
+          dealerId,
+        },
+      )
+      .andWhere(
+        '"insurance"."source" = :source',
+        {
+          source:
+            ProjectInsuranceSource.DEALER,
+        },
+      )
+      .andWhere(
+        '"insurance"."isHidden" = false',
+      );
+
+  if (
+    query?.status
+  ) {
+    qb.andWhere(
+      '"insurance"."status" = :status',
+      {
+        status:
+          String(
+            query.status,
+          )
+            .trim()
+            .toUpperCase(),
+      },
+    );
+  }
+
+  if (
+    query?.search
+  ) {
+    const search =
+      `%${String(
+        query.search,
+      )
+        .trim()
+        .toLowerCase()}%`;
+
+    qb.andWhere(
+      `(
+        LOWER(
+          COALESCE(
+            "insurance"."customerName",
+            ''
+          )
+        ) LIKE :search
+
+        OR LOWER(
+          COALESCE(
+            "insurance"."customerPhone",
+            ''
+          )
+        ) LIKE :search
+
+        OR LOWER(
+          COALESCE(
+            "insurance"."companyName",
+            ''
+          )
+        ) LIKE :search
+
+        OR LOWER(
+          COALESCE(
+            "insurance"."policyName",
+            ''
+          )
+        ) LIKE :search
+
+        OR LOWER(
+          COALESCE(
+            "insurance"."policyNumber",
+            ''
+          )
+        ) LIKE :search
+      )`,
+      {
+        search,
+      },
+    );
+  }
+
+  qb
+    .orderBy(
+      '"insurance"."createdAt"',
+      'DESC',
+    )
+    .addOrderBy(
+      '"insurance"."id"',
+      'DESC',
+    )
+    .skip(
+      skip,
+    )
+    .take(
+      limit,
+    );
+
+  const [
+    data,
+    total,
+  ] =
+    await qb
+      .getManyAndCount();
+
+  return {
+    data,
+
+    pagination: {
+      page,
+      limit,
+      total,
+
+      totalPages:
+        Math.ceil(
+          total /
+            limit,
+        ) ||
+        1,
+    },
+  };
+}
+
+async getDealerInsurancePolicyDocuments(
+  dealerId: number,
+  insuranceId: number,
+) {
+  const insurance =
+    await this
+      .projectInsuranceRepository
+      .findOne({
+        where: {
+          id:
+            insuranceId,
+
+          dealerId,
+
+          source:
+            ProjectInsuranceSource.DEALER,
+
+          isHidden:
+            false,
+        } as any,
+      });
+
+  if (!insurance) {
+    throw new NotFoundException(
+      'Insurance policy not found',
+    );
+  }
+
+  const documents =
+    await this
+      .projectInsuranceDocumentRepository
+      .find({
+        where: {
+          insuranceId:
+            insurance.id,
+
+          visibleToCustomer:
+            true,
+
+          isHidden:
+            false,
+        } as any,
+
+        order: {
+          createdAt:
+            'DESC',
+        },
+      });
+
+  const safeDocuments =
+    await Promise.all(
+      documents.map(
+        async (
+          document,
+        ) => ({
+          ...document,
+
+          fileUrl:
+            await this
+              .createDealerInsurancePolicyDocumentSignedUrl(
+                document.fileUrl,
+              ),
+        }),
+      ),
+    );
+
+  return {
+    insurance,
+
+    documents:
+      safeDocuments,
+  };
+}
+
+async getDealerInsuranceRequestDetail(
+  dealerId: number,
+  requestId: number,
+) {
+  const request =
+    await this
+      .projectInsuranceRequestRepository
+      .findOne({
+        where: {
+          id:
+            requestId,
+
+          dealerId,
+
+          source:
+            ProjectInsuranceRequestSource
+              .DEALER,
+
+          isHidden:
+            false,
+        } as any,
+      });
+
+  if (!request) {
+    throw new NotFoundException(
+      'Insurance application not found',
+    );
+  }
+
+  const plan =
+    request.insurancePlanId
+      ? await this
+          .projectInsurancePlanRepository
+          .findOne({
+            where: {
+              id:
+                request
+                  .insurancePlanId,
+            } as any,
+          })
+      : null;
+
+  const documents =
+    await this
+      .projectInsuranceRequestDocumentRepository
+      .find({
+        where: {
+          insuranceRequestId:
+            request.id,
+
+          isHidden:
+            false,
+        } as any,
+
+        order: {
+          createdAt:
+            'DESC',
+        } as any,
+      });
+
+      const safeDocuments =
+  await Promise.all(
+    documents.map(
+      async (
+        document,
+      ) => ({
+        ...document,
+
+        /*
+         * Never expose the permanent
+         * private storage path as the
+         * clickable frontend URL.
+         */
+        fileUrl:
+          await this
+            .createDealerInsuranceKycSignedUrl(
+              document.fileUrl,
+            ),
+      }),
+    ),
+  );
+
+  const policy =
+  await this
+    .projectInsuranceRepository
+    .findOne({
+      where: {
+        insuranceRequestId:
+          request.id,
+
+        dealerId,
+
+        source:
+          ProjectInsuranceSource.DEALER,
+
+        isHidden:
+          false,
+      } as any,
+    });
+
+    let policyDocuments:
+  any[] = [];
+
+if (
+  policy?.id
+) {
+  const policyDocumentResult =
+    await this
+      .getDealerInsurancePolicyDocuments(
+        dealerId,
+        Number(
+          policy.id,
+        ),
+      );
+
+  policyDocuments =
+    policyDocumentResult
+      .documents ||
+    [];
+}
+
+  const readiness =
+    await this
+      .getDealerInsuranceRequestReadiness(
+        dealerId,
+        request.id,
+      );
+
+  return {
+  request,
+
+  plan,
+
+  documents:
+    safeDocuments,
+
+  readiness,
+
+  policy,
+
+  policyDocuments,
+};
 }
 
 private calculateDistanceKm(
