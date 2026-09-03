@@ -2063,8 +2063,8 @@ complaintCity,
 
 useEffect(() => {
   if (
-    activeTab ===
-    'ledger'
+    activeTab === 'ledger' ||
+    activeTab === 'complaints'
   ) {
     fetchAllDealerOptionsForLedger();
   }
