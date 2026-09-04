@@ -2,6 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import axios from 'axios';
+import { Capacitor } from '@capacitor/core';
+import {
+  Directory,
+  Encoding,
+  Filesystem,
+} from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -733,42 +740,82 @@ HSN: item.hsnCode || '',
     ].join('\n');
 
     /*
-     * UTF-8 BOM preserves special characters
-     * and ₹ values when opened in Excel.
-     */
-    const blob = new Blob(
-      ['\uFEFF', csv],
-      {
-        type:
-          'text/csv;charset=utf-8;',
-      },
-    );
+ * UTF-8 BOM preserves special characters
+ * and ₹ values when opened in Excel.
+ */
+const csvWithBom =
+  `\uFEFF${csv}`;
 
-    const url =
-      URL.createObjectURL(blob);
+const today =
+  new Date()
+    .toISOString()
+    .slice(0, 10);
 
-    const link =
-      document.createElement('a');
+const fileName =
+  `${
+    showHidden
+      ? 'hidden-material-list'
+      : 'visible-material-list'
+  }-${today}.csv`;
 
-    link.href = url;
+/*
+ * APK:
+ * Save in cache and open
+ * native Android share/save sheet.
+ */
+if (Capacitor.isNativePlatform()) {
+  const writeResult =
+    await Filesystem.writeFile({
+      path: fileName,
+      data: csvWithBom,
+      directory: Directory.Cache,
+      encoding: Encoding.UTF8,
+      recursive: true,
+    });
 
-    link.download =
-      `${
-        showHidden
-          ? 'hidden-material-list'
-          : 'visible-material-list'
-      }-${new Date()
-        .toISOString()
-        .slice(0, 10)}.csv`;
+  await Share.share({
+    title: 'Material List',
+    text:
+      showHidden
+        ? 'Hidden material list'
+        : 'Visible material list',
+    files: [
+      writeResult.uri,
+    ],
+    dialogTitle:
+      'Save or share material list',
+  });
 
-    document.body.appendChild(
-      link,
-    );
+  return;
+}
 
-    link.click();
-    link.remove();
+/*
+ * Web:
+ * Normal browser download.
+ */
+const blob = new Blob(
+  [csvWithBom],
+  {
+    type:
+      'text/csv;charset=utf-8;',
+  },
+);
 
-    URL.revokeObjectURL(url);
+const url =
+  URL.createObjectURL(blob);
+
+const link =
+  document.createElement('a');
+
+link.href = url;
+link.download = fileName;
+
+document.body.appendChild(link);
+
+link.click();
+link.remove();
+
+URL.revokeObjectURL(url);
   } catch (error: any) {
     console.error(error);
 

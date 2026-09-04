@@ -2,6 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import axios from 'axios';
+import { Capacitor } from '@capacitor/core';
+import {
+  Directory,
+  Encoding,
+  Filesystem,
+} from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -518,33 +525,70 @@ const exportCustomersCsv = async () => {
     const csvContent =
       '\uFEFF' + csvRows.join('\r\n');
 
-    const blob = new Blob(
-      [csvContent],
-      {
-        type: 'text/csv;charset=utf-8;',
-      },
-    );
-
-    const url =
-      URL.createObjectURL(blob);
-
-    const link =
-      document.createElement('a');
-
     const date =
-      new Date()
-        .toISOString()
-        .slice(0, 10);
+  new Date()
+    .toISOString()
+    .slice(0, 10);
 
-    link.href = url;
-    link.download =
-      `customers-${date}.csv`;
+const fileName =
+  `customers-${date}.csv`;
 
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+/*
+ * APK:
+ * Save to app cache and open
+ * Android share/save sheet.
+ */
+if (Capacitor.isNativePlatform()) {
+  const writeResult =
+    await Filesystem.writeFile({
+      path: fileName,
+      data: csvContent,
+      directory: Directory.Cache,
+      encoding: Encoding.UTF8,
+      recursive: true,
+    });
 
-    URL.revokeObjectURL(url);
+  await Share.share({
+    title: 'Customer List',
+    text:
+      `${rows.length} customer record${
+        rows.length === 1 ? '' : 's'
+      }`,
+    files: [
+      writeResult.uri,
+    ],
+    dialogTitle:
+      'Save or share customer list',
+  });
+
+  return;
+}
+
+/*
+ * Web:
+ * Normal browser download.
+ */
+const blob = new Blob(
+  [csvContent],
+  {
+    type: 'text/csv;charset=utf-8;',
+  },
+);
+
+const url =
+  URL.createObjectURL(blob);
+
+const link =
+  document.createElement('a');
+
+link.href = url;
+link.download = fileName;
+
+document.body.appendChild(link);
+link.click();
+link.remove();
+
+URL.revokeObjectURL(url);
   } catch (error: any) {
     console.error(error);
 
