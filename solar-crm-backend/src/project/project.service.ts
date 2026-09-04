@@ -31677,6 +31677,19 @@ async getProjectTimelineTracking(
       query?.ruleId || 0,
     );
 
+    const timelineProjectIdFilter =
+  Number(
+    query?.projectId || 0,
+  );
+
+  const isProjectPerformanceRequest =
+  query?.__projectPerformance ===
+    true &&
+  Number.isInteger(
+    timelineProjectIdFilter,
+  ) &&
+  timelineProjectIdFilter > 0;
+
   /*
    * Active rules only for operational
    * tracking.
@@ -31789,6 +31802,20 @@ async getProjectTimelineTracking(
             ProjectStatus.REJECTED,
         },
       );
+
+      if (
+  Number.isInteger(
+    timelineProjectIdFilter,
+  ) &&
+  timelineProjectIdFilter > 0
+) {
+  projectQb.andWhere(
+    'project.id = :timelineProjectIdFilter',
+    {
+      timelineProjectIdFilter,
+    },
+  );
+}
 
   if (search) {
     projectQb.andWhere(
@@ -33689,10 +33716,12 @@ if (
     limit;
 
   const paginatedResults =
-  results.slice(
-    start,
-    start + limit,
-  );
+  isProjectPerformanceRequest
+    ? results
+    : results.slice(
+        start,
+        start + limit,
+      );
 
 /*
  * Delay explanation enrichment.
@@ -33746,6 +33775,7 @@ let delayNotes:
   [];
 
 if (
+  !isProjectPerformanceRequest &&
   paginatedProjectIds.length >
     0 &&
   paginatedRuleIds.length >
@@ -34000,6 +34030,625 @@ const data =
           total / limit,
         ) || 1,
     },
+  };
+}
+
+async getProjectTimelinePerformance(
+  projectId: number,
+  currentUser?: any,
+) {
+  const normalizedProjectId =
+    Number(projectId);
+
+  if (
+    !Number.isInteger(
+      normalizedProjectId,
+    ) ||
+    normalizedProjectId <= 0
+  ) {
+    throw new BadRequestException(
+      'Valid project id is required',
+    );
+  }
+
+  /*
+   * Reuse the verified Timeline Tracking
+   * engine.
+   *
+   * Exact projectId means all bulk timeline
+   * source queries operate for this one
+   * project only.
+   *
+   * __projectPerformance is an internal
+   * boolean flag. HTTP query strings cannot
+   * accidentally enable it because they
+   * arrive as strings, not boolean true.
+   */
+  const tracking =
+    await this
+      .getProjectTimelineTracking(
+        {
+          projectId:
+            normalizedProjectId,
+
+          page:
+            1,
+
+          __projectPerformance:
+            true,
+        },
+
+        currentUser,
+      );
+
+  const rows =
+    Array.isArray(
+      tracking?.data,
+    )
+      ? tracking.data
+      : [];
+
+  /*
+   * Calendar-day difference using the same
+   * India calendar logic already used by
+   * Timeline Tracking.
+   *
+   * Therefore planned/actual visual numbers
+   * remain consistent with timeline status.
+   */
+  const getActualDays =
+    (
+      item: any,
+    ):
+      | number
+      | null => {
+      if (
+        !item?.triggerReached ||
+        !item?.triggerDate
+      ) {
+        return null;
+      }
+
+      /*
+       * We know the process is completed, but
+       * do not know its reliable completion
+       * date. Never invent an actual duration.
+       */
+      if (
+        item.status ===
+          'COMPLETED_DATE_UNAVAILABLE'
+      ) {
+        return null;
+      }
+
+      const triggerDate =
+        new Date(
+          item.triggerDate,
+        );
+
+      if (
+        Number.isNaN(
+          triggerDate.getTime(),
+        )
+      ) {
+        return null;
+      }
+
+      const triggerDayIndex =
+        this.getIndiaCalendarDayIndex(
+          triggerDate,
+        );
+
+      /*
+       * Completed process:
+       * actual duration =
+       * trigger -> reliable completion.
+       */
+      if (
+        item.completedDate &&
+        item.completionDateReliable ===
+          true
+      ) {
+        const completedDate =
+          new Date(
+            item.completedDate,
+          );
+
+        if (
+          Number.isNaN(
+            completedDate.getTime(),
+          )
+        ) {
+          return null;
+        }
+
+        return Math.max(
+          this.getIndiaCalendarDayIndex(
+            completedDate,
+          ) -
+            triggerDayIndex,
+          0,
+        );
+      }
+
+      /*
+       * Running process:
+       * actual elapsed duration =
+       * trigger -> today.
+       */
+      return Math.max(
+        this.getIndiaCalendarDayIndex(
+          new Date(),
+        ) -
+          triggerDayIndex,
+        0,
+      );
+    };
+
+  const activities =
+    rows.map(
+      (item: any) => {
+        const plannedDays =
+          Math.max(
+            Number(
+              item.allowedDays ||
+                0,
+            ),
+            0,
+          );
+
+        const actualDays =
+          getActualDays(
+            item,
+          );
+
+        const varianceDays =
+          actualDays === null
+            ? null
+            : actualDays -
+              plannedDays;
+
+        const completed =
+          item.status ===
+            'COMPLETED_ON_TIME' ||
+          item.status ===
+            'COMPLETED_LATE' ||
+          item.status ===
+            'COMPLETED_DATE_UNAVAILABLE';
+
+        const requiresAttention =
+          item.status ===
+            'DELAYED' ||
+          item.status ===
+            'DUE_TODAY' ||
+          item.status ===
+            'COMPLETED_LATE';
+
+        return {
+          ruleId:
+            Number(
+              item.ruleId,
+            ),
+
+          ruleName:
+            item.ruleName ||
+            '',
+
+          targetModule:
+            item.targetModule ||
+            null,
+
+          targetMilestone:
+            item.targetMilestone ||
+            null,
+
+          triggerType:
+            item.triggerType ||
+            null,
+
+          triggerValue:
+            Number(
+              item.triggerValue ||
+                0,
+            ),
+
+          triggerReached:
+            item.triggerReached ===
+            true,
+
+          triggerDate:
+            item.triggerDate ||
+            null,
+
+          dueDate:
+            item.dueDate ||
+            null,
+
+          completedDate:
+            item.completedDate ||
+            null,
+
+          completionDateReliable:
+            item
+              .completionDateReliable ===
+            true,
+
+          plannedDays,
+
+          actualDays,
+
+          varianceDays,
+
+          daysRemaining:
+            item.daysRemaining ??
+            null,
+
+          delayDays:
+            item.delayDays ??
+            null,
+
+          status:
+            item.status ||
+            'NOT_STARTED',
+
+          completed,
+
+          requiresAttention,
+        };
+      },
+    );
+
+  /*
+   * Group activities by Timeline module.
+   *
+   * Frontend can render these as compact,
+   * collapsible department sections without
+   * making another request per department.
+   */
+  const departmentMap =
+    new Map<
+      string,
+      {
+        module: string;
+
+        total: number;
+
+        completed: number;
+
+        completedOnTime: number;
+
+        completedLate: number;
+
+        running: number;
+
+        delayed: number;
+
+        dueToday: number;
+
+        notStarted: number;
+
+        dateUnavailable: number;
+
+        attentionRequired: number;
+
+        activities: any[];
+      }
+    >();
+
+  for (
+    const activity of activities
+  ) {
+    const module =
+      String(
+        activity.targetModule ||
+          'OTHER',
+      );
+
+    let department =
+      departmentMap.get(
+        module,
+      );
+
+    if (!department) {
+      department = {
+        module,
+
+        total:
+          0,
+
+        completed:
+          0,
+
+        completedOnTime:
+          0,
+
+        completedLate:
+          0,
+
+        running:
+          0,
+
+        delayed:
+          0,
+
+        dueToday:
+          0,
+
+        notStarted:
+          0,
+
+        dateUnavailable:
+          0,
+
+        attentionRequired:
+          0,
+
+        activities:
+          [],
+      };
+
+      departmentMap.set(
+        module,
+        department,
+      );
+    }
+
+    department.total +=
+      1;
+
+    department.activities.push(
+      activity,
+    );
+
+    if (
+      activity.completed
+    ) {
+      department.completed +=
+        1;
+    }
+
+    if (
+      activity.status ===
+        'COMPLETED_ON_TIME'
+    ) {
+      department
+        .completedOnTime +=
+        1;
+    }
+
+    if (
+      activity.status ===
+        'COMPLETED_LATE'
+    ) {
+      department
+        .completedLate +=
+        1;
+    }
+
+    if (
+      activity.status ===
+        'IN_TIMELINE'
+    ) {
+      department.running +=
+        1;
+    }
+
+    if (
+      activity.status ===
+        'DELAYED'
+    ) {
+      department.delayed +=
+        1;
+    }
+
+    if (
+      activity.status ===
+        'DUE_TODAY'
+    ) {
+      department.dueToday +=
+        1;
+    }
+
+    if (
+      activity.status ===
+        'NOT_STARTED'
+    ) {
+      department.notStarted +=
+        1;
+    }
+
+    if (
+      activity.status ===
+        'COMPLETED_DATE_UNAVAILABLE'
+    ) {
+      department
+        .dateUnavailable +=
+        1;
+    }
+
+    if (
+      activity.requiresAttention
+    ) {
+      department
+        .attentionRequired +=
+        1;
+    }
+  }
+
+  const completed =
+    activities.filter(
+      (item: any) =>
+        item.completed,
+    ).length;
+
+  const total =
+    activities.length;
+
+  const running =
+    activities.filter(
+      (item: any) =>
+        item.status ===
+          'IN_TIMELINE' ||
+        item.status ===
+          'DUE_TODAY' ||
+        item.status ===
+          'DELAYED',
+    ).length;
+
+  const attentionRequired =
+    activities.filter(
+      (item: any) =>
+        item.requiresAttention,
+    ).length;
+
+  /*
+   * All project header fields already come
+   * from the same authorised Timeline query.
+   *
+   * Avoid another project API call.
+   */
+  const firstRow =
+    rows[0] ||
+    null;
+
+  return {
+    project: firstRow
+      ? {
+          id:
+            normalizedProjectId,
+
+          customerName:
+            firstRow
+              .customerName ||
+            '',
+
+          customerPhone:
+            firstRow
+              .customerPhone ||
+            '',
+
+          electricityKNumber:
+            firstRow
+              .electricityKNumber ||
+            '',
+
+          projectSerial:
+            firstRow
+              .projectSerial ||
+            '',
+
+          projectType:
+            firstRow
+              .projectType ||
+            null,
+
+          projectStatus:
+            firstRow
+              .projectStatus ||
+            null,
+
+          projectWorkState:
+            firstRow
+              .projectWorkState ||
+            null,
+
+          branchName:
+            firstRow
+              .branchName ||
+            '',
+
+          city:
+            firstRow.city ||
+            '',
+
+          projectOwnerId:
+            firstRow
+              .projectOwnerId ||
+            null,
+
+          projectOwnerName:
+            firstRow
+              .projectOwnerName ||
+            '',
+        }
+      : {
+          id:
+            normalizedProjectId,
+        },
+
+    summary: {
+      total,
+
+      completed,
+
+      completedOnTime:
+        activities.filter(
+          (item: any) =>
+            item.status ===
+              'COMPLETED_ON_TIME',
+        ).length,
+
+      completedLate:
+        activities.filter(
+          (item: any) =>
+            item.status ===
+              'COMPLETED_LATE',
+        ).length,
+
+      running,
+
+      inTimeline:
+        activities.filter(
+          (item: any) =>
+            item.status ===
+              'IN_TIMELINE',
+        ).length,
+
+      delayed:
+        activities.filter(
+          (item: any) =>
+            item.status ===
+              'DELAYED',
+        ).length,
+
+      dueToday:
+        activities.filter(
+          (item: any) =>
+            item.status ===
+              'DUE_TODAY',
+        ).length,
+
+      notStarted:
+        activities.filter(
+          (item: any) =>
+            item.status ===
+              'NOT_STARTED',
+        ).length,
+
+      completedDateUnavailable:
+        activities.filter(
+          (item: any) =>
+            item.status ===
+              'COMPLETED_DATE_UNAVAILABLE',
+        ).length,
+
+      attentionRequired,
+
+      completionPercent:
+        total > 0
+          ? Math.round(
+              (
+                completed /
+                total
+              ) * 100,
+            )
+          : 0,
+    },
+
+    departments:
+      Array.from(
+        departmentMap.values(),
+      ),
   };
 }
 

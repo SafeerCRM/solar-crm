@@ -3804,6 +3804,26 @@ getProjectTimelineTracking(
     );
 }
 
+@Get(
+  'timeline/project/:projectId/performance',
+)
+getProjectTimelinePerformance(
+  @Param(
+    'projectId',
+    ParseIntPipe,
+  )
+  projectId: number,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .getProjectTimelinePerformance(
+      projectId,
+      user,
+    );
+}
+
 @Post(
   'timeline/:projectId/rules/:ruleId/delay-note',
 )
