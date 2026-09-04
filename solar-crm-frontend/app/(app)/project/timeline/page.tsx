@@ -669,6 +669,11 @@ const [
 ] = useState('');
 
 const [
+  performanceProjectOwnerSearch,
+  setPerformanceProjectOwnerSearch,
+] = useState('');
+
+const [
   performanceCity,
   setPerformanceCity,
 ] = useState('');
@@ -2934,121 +2939,134 @@ const selectPerformanceProject =
     </div>
 
     <div>
-      <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-400">
-        Project Owner
-      </label>
+  <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-400">
+    Project Owner
+  </label>
 
-      <select
-        value={
-          performanceProjectOwnerId
-        }
-        onChange={(e) =>
-          setPerformanceProjectOwnerId(
-            e.target.value,
-          )
-        }
-        className="w-full rounded-2xl border border-white/15 bg-slate-900 p-3 text-white outline-none"
-      >
-        <option value="">
-          All Project Owners
-        </option>
+  <input
+    type="text"
+    list="performance-owner-options"
+    value={
+      performanceProjectOwnerSearch
+    }
+    onChange={(e) => {
+      const value =
+        e.target.value;
 
-        {ownerOptions.map(
-          (owner) => (
-            <option
-              key={
-                owner.id
-              }
-              value={
-                owner.id
-              }
-            >
-              {
-                owner.name
-              }
-            </option>
-          ),
-        )}
-      </select>
-    </div>
+      setPerformanceProjectOwnerSearch(
+        value,
+      );
 
-    <div>
-      <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-400">
-        City
-      </label>
+      const matchedOwner =
+        ownerOptions.find(
+          (owner) =>
+            owner.name
+              .trim()
+              .toLowerCase() ===
+            value
+              .trim()
+              .toLowerCase(),
+        );
 
-      <select
-        value={
-          performanceCity
-        }
-        onChange={(e) =>
-          setPerformanceCity(
-            e.target.value,
-          )
-        }
-        className="w-full rounded-2xl border border-white/15 bg-slate-900 p-3 text-white outline-none"
-      >
-        <option value="">
-          All Cities
-        </option>
+      setPerformanceProjectOwnerId(
+        matchedOwner
+          ? String(
+              matchedOwner.id,
+            )
+          : '',
+      );
+    }}
+    placeholder="Search project owner"
+    className="w-full rounded-2xl border border-white/15 bg-slate-900 p-3 text-white outline-none placeholder:text-slate-400"
+  />
 
-        {cityOptions.map(
-          (city) => (
-            <option
-              key={
-                city
-              }
-              value={
-                city
-              }
-            >
-              {
-                city
-              }
-            </option>
-          ),
-        )}
-      </select>
-    </div>
+  <datalist id="performance-owner-options">
+    {ownerOptions.map(
+      (owner) => (
+        <option
+          key={
+            owner.id
+          }
+          value={
+            owner.name
+          }
+        />
+      ),
+    )}
+  </datalist>
+</div>
 
     <div>
-      <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-400">
-        Branch
-      </label>
+  <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-400">
+    City
+  </label>
 
-      <select
-        value={
-          performanceBranch
-        }
-        onChange={(e) =>
-          setPerformanceBranch(
-            e.target.value,
-          )
-        }
-        className="w-full rounded-2xl border border-white/15 bg-slate-900 p-3 text-white outline-none"
-      >
-        <option value="">
-          All Branches
-        </option>
+  <input
+    type="text"
+    list="performance-city-options"
+    value={
+      performanceCity
+    }
+    onChange={(e) =>
+      setPerformanceCity(
+        e.target.value,
+      )
+    }
+    placeholder="Search city"
+    className="w-full rounded-2xl border border-white/15 bg-slate-900 p-3 text-white outline-none placeholder:text-slate-400"
+  />
 
-        {branchOptions.map(
-          (branch) => (
-            <option
-              key={
-                branch
-              }
-              value={
-                branch
-              }
-            >
-              {
-                branch
-              }
-            </option>
-          ),
-        )}
-      </select>
-    </div>
+  <datalist id="performance-city-options">
+    {cityOptions.map(
+      (city) => (
+        <option
+          key={
+            city
+          }
+          value={
+            city
+          }
+        />
+      ),
+    )}
+  </datalist>
+</div>
+
+    <div>
+  <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-400">
+    Branch
+  </label>
+
+  <input
+    type="text"
+    list="performance-branch-options"
+    value={
+      performanceBranch
+    }
+    onChange={(e) =>
+      setPerformanceBranch(
+        e.target.value,
+      )
+    }
+    placeholder="Search branch"
+    className="w-full rounded-2xl border border-white/15 bg-slate-900 p-3 text-white outline-none placeholder:text-slate-400"
+  />
+
+  <datalist id="performance-branch-options">
+    {branchOptions.map(
+      (branch) => (
+        <option
+          key={
+            branch
+          }
+          value={
+            branch
+          }
+        />
+      ),
+    )}
+  </datalist>
+</div>
 
     <div>
       <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -3130,38 +3148,54 @@ const selectPerformanceProject =
     <button
       type="button"
       onClick={() => {
-        setPerformanceProjectSearch(
-          '',
-        );
+  setPerformanceProjectSearch(
+    '',
+  );
 
-        setPerformanceProjectOwnerId(
-          '',
-        );
+  setPerformanceProjectOwnerId(
+    '',
+  );
 
-        setPerformanceCity(
-          '',
-        );
+  setPerformanceProjectOwnerSearch(
+  '',
+);
 
-        setPerformanceBranch(
-          '',
-        );
+  setPerformanceCity(
+    '',
+  );
 
-        setPerformanceProjectType(
-          '',
-        );
+  setPerformanceBranch(
+    '',
+  );
 
-        setPerformanceProjectWorkState(
-          '',
-        );
+  setPerformanceProjectType(
+    '',
+  );
 
-        setPerformanceProjectResults(
-          [],
-        );
+  setPerformanceProjectWorkState(
+    '',
+  );
 
-        setPerformanceProjectSearchDone(
-          false,
-        );
-      }}
+  setPerformanceProjectResults(
+    [],
+  );
+
+  setPerformanceProjectSearchDone(
+    false,
+  );
+
+  setPerformanceProjectId(
+    '',
+  );
+
+  setPerformanceData(
+    null,
+  );
+
+  setPerformanceFilter(
+    'ALL',
+  );
+}}
       className="rounded-2xl border border-white/15 bg-white/10 px-5 py-3 font-bold text-white transition hover:bg-white/15"
     >
       Reset
