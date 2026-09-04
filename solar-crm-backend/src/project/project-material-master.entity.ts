@@ -48,10 +48,13 @@ dealerUnitRate: number;
 unit: string;
 
   @Column({ nullable: true })
-  brand: string;
+brand: string;
 
-  @Column({ nullable: true })
-  hsnCode: string;
+@Column({ nullable: true })
+warranty: string;
+
+@Column({ nullable: true })
+hsnCode: string;
 
   @Column({ nullable: true })
   vendorPreferredName: string;

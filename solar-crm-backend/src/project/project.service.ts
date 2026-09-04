@@ -6526,6 +6526,7 @@ const allowedDealerCategories = [
   'PANELS',
   'ONGRID_INVERTERS',
   'HYBRID_INVERTERS',
+  'MICRO_INVERTERS',
   'STRUCTURE',
   'ELECTRICAL',
   'BATTERIES',
@@ -6564,7 +6565,13 @@ dealerUnitRate: Math.max(
 unit: data.unit || '',
 brand: data.brand || '',
 
-    hsnCode: (data as any).hsnCode || '',
+warranty:
+  String(
+    (data as any).warranty || '',
+  ).trim(),
+
+hsnCode:
+  (data as any).hsnCode || '',
     vendorPreferredName: (data as any).vendorPreferredName || '',
 
     // Existing working field preserved
@@ -6773,6 +6780,7 @@ const allowedDealerCategories = [
   'PANELS',
   'ONGRID_INVERTERS',
   'HYBRID_INVERTERS',
+  'MICRO_INVERTERS',
   'STRUCTURE',
   'ELECTRICAL',
   'BATTERIES',
@@ -6796,6 +6804,15 @@ const dealerCategory =
  * This protects grouping consistency.
  */
 dealerCategory,
+
+warranty:
+  (data as any).warranty !== undefined
+    ? String(
+        (data as any).warranty || '',
+      ).trim()
+    : String(
+        (item as any).warranty || '',
+      ),
 
 ratePerWatt:
   (data as any).ratePerWatt !== undefined

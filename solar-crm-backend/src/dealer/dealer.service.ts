@@ -905,15 +905,12 @@ const dealerAvailableQuantity =
   configuredDealerQuantity ===
     undefined
     ? actualAvailableQuantity
-    : Math.min(
-        actualAvailableQuantity,
-        Math.max(
-          Number(
-            configuredDealerQuantity ||
-              0,
-          ),
-          0,
+    : Math.max(
+        Number(
+          configuredDealerQuantity ||
+            0,
         ),
+        0,
       );
 
         return {
@@ -975,6 +972,12 @@ dealerRateUnit: String(
 ).trim(),
 
 brand: material.brand,
+
+warranty:
+  String(
+    (material as any).warranty || '',
+  ).trim(),
+
 unit: material.unit,
 hsnCode: material.hsnCode,
           branchId: stock.branchId,
