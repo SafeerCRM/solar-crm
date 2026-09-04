@@ -27,13 +27,14 @@ const normalizeDealerCategory = (value: any) => {
 
   if (
     [
-      'PANELS',
-      'ONGRID_INVERTERS',
-      'HYBRID_INVERTERS',
-      'STRUCTURE',
-      'ELECTRICAL',
-      'BATTERIES',
-    ].includes(category)
+  'PANELS',
+  'ONGRID_INVERTERS',
+  'HYBRID_INVERTERS',
+  'MICRO_INVERTERS',
+  'STRUCTURE',
+  'ELECTRICAL',
+  'BATTERIES',
+].includes(category)
   ) {
     return category;
   }
@@ -59,8 +60,9 @@ const [materialCategory, setMaterialCategory] =
     | 'ALL'
     | 'PANELS'
     | 'ONGRID_INVERTERS'
-    | 'HYBRID_INVERTERS'
-    | 'STRUCTURE'
+| 'HYBRID_INVERTERS'
+| 'MICRO_INVERTERS'
+| 'STRUCTURE'
     | 'ELECTRICAL'
     | 'BATTERIES'
     | 'OTHER'
@@ -259,8 +261,9 @@ const groupedMaterials = useMemo(() => {
   const groups: Record<string, any[]> = {
   PANELS: [],
   ONGRID_INVERTERS: [],
-  HYBRID_INVERTERS: [],
-  STRUCTURE: [],
+HYBRID_INVERTERS: [],
+MICRO_INVERTERS: [],
+STRUCTURE: [],
   ELECTRICAL: [],
   BATTERIES: [],
   OTHER: [],
@@ -294,6 +297,12 @@ const materialSections = [
   title: 'Hybrid Inverter',
   description:
     'Hybrid solar inverter stock for battery-supported systems',
+},
+{
+  key: 'MICRO_INVERTERS',
+  title: 'Micro Inverter',
+  description:
+    'Micro inverter stock for module-level solar systems',
 },
   {
     key: 'STRUCTURE',
@@ -333,6 +342,10 @@ const materialCategoryOptions = [
 {
   key: 'HYBRID_INVERTERS',
   label: 'Hybrid Inverter',
+},
+{
+  key: 'MICRO_INVERTERS',
+  label: 'Micro Inverter',
 },
   {
     key: 'STRUCTURE',
@@ -822,6 +835,11 @@ function StockCard({ item }: { item: any }) {
             <p className="mt-1 text-xs font-semibold text-slate-500">
               {item.category || 'Uncategorized'} · {item.brand || 'No brand'}
             </p>
+            {item.warranty && (
+  <p className="mt-2 inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
+    Warranty: {item.warranty}
+  </p>
+)}
           </div>
 
           <span className={`rounded-full px-3 py-1 text-xs font-black ${stockTone}`}>

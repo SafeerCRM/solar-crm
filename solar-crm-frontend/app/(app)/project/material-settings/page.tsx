@@ -31,8 +31,9 @@ type MaterialItem = {
 dealerUnitRate?: number;
 
   unit?: string;
-  brand?: string;
-  rate?: number;
+brand?: string;
+warranty?: string;
+rate?: number;
   gstPercent?: number;
   expectedMargin?: number;
   remarks?: string;
@@ -91,8 +92,9 @@ ratePerWatt: '',
 dealerUnitRate: '',
 
 unit: '',
-    brand: '',
-    rate: '',
+brand: '',
+warranty: '',
+rate: '',
     gstPercent: '',
     expectedMargin: '',
     remarks: '',
@@ -283,8 +285,9 @@ useEffect(() => {
   ratePerWatt: '',
 dealerUnitRate: '',
   unit: '',
-  brand: '',
-  hsnCode: '',
+brand: '',
+warranty: '',
+hsnCode: '',
   vendorPreferredName: '',
   rate: '',
   gstPercent: '',
@@ -333,8 +336,9 @@ dealerUnitRate: String(
 ),
 
 unit: item.unit || '',
-  brand: item.brand || '',
-  hsnCode: item.hsnCode || '',
+brand: item.brand || '',
+warranty: item.warranty || '',
+hsnCode: item.hsnCode || '',
   vendorPreferredName: item.vendorPreferredName || '',
   rate: String(item.rate || ''),
   gstPercent: String(item.gstPercent || ''),
@@ -368,8 +372,9 @@ const cancelEdit = () => {
   dealerUnitRate: '',
 
   unit: '',
-  brand: '',
-  hsnCode: '',
+brand: '',
+warranty: '',
+hsnCode: '',
   vendorPreferredName: '',
   rate: '',
   gstPercent: '',
@@ -652,8 +657,13 @@ const downloadMaterialCsv = async () => {
   ),
 
   Brand: item.brand || '',
-        Unit: item.unit || '',
-        HSN: item.hsnCode || '',
+
+Warranty:
+  item.warranty || '',
+
+Unit: item.unit || '',
+
+HSN: item.hsnCode || '',
 
         Vendor:
           item.vendorPreferredName ||
@@ -846,9 +856,13 @@ const downloadMaterialCsv = async () => {
   Hybrid Inverter
 </option>
 
-  <option value="STRUCTURE">
-    Structure
-  </option>
+<option value="MICRO_INVERTERS">
+  Micro Inverter
+</option>
+
+<option value="STRUCTURE">
+  Structure
+</option>
 
   <option value="ELECTRICAL">
     Electrical
@@ -926,6 +940,18 @@ const downloadMaterialCsv = async () => {
             }
             className="rounded-xl border p-3"
           />
+
+          <input
+  placeholder="Warranty (e.g. 5 Years)"
+  value={form.warranty}
+  onChange={(e) =>
+    setForm({
+      ...form,
+      warranty: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+/>
 
           <input
   placeholder="HSN Code"
@@ -1201,6 +1227,12 @@ const downloadMaterialCsv = async () => {
                       {item.brand || '-'} |{' '}
                       {item.unit || '-'}
                     </p>
+
+                    {item.warranty && (
+  <p className="mt-1 text-sm font-medium text-amber-700">
+    Warranty: {item.warranty}
+  </p>
+)}
 
                     <div className="mt-2 flex flex-wrap gap-2">
   {item.dealerCategory && (

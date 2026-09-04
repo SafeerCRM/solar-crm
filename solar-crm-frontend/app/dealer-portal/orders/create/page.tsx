@@ -27,13 +27,14 @@ const normalizeDealerCategory = (value: any) => {
 
   if (
     [
-      'PANELS',
-      'ONGRID_INVERTERS',
-      'HYBRID_INVERTERS',
-      'STRUCTURE',
-      'ELECTRICAL',
-      'BATTERIES',
-    ].includes(category)
+  'PANELS',
+  'ONGRID_INVERTERS',
+  'HYBRID_INVERTERS',
+  'MICRO_INVERTERS',
+  'STRUCTURE',
+  'ELECTRICAL',
+  'BATTERIES',
+].includes(category)
   ) {
     return category;
   }
@@ -58,8 +59,9 @@ const [materialCategory, setMaterialCategory] =
     | 'ALL'
     | 'PANELS'
     | 'ONGRID_INVERTERS'
-    | 'HYBRID_INVERTERS'
-    | 'STRUCTURE'
+| 'HYBRID_INVERTERS'
+| 'MICRO_INVERTERS'
+| 'STRUCTURE'
     | 'ELECTRICAL'
     | 'BATTERIES'
     | 'OTHER'
@@ -266,9 +268,10 @@ const batteryBrandOptions = useMemo(() => {
 const groupedMaterials = useMemo(() => {
   const groups: Record<string, any[]> = {
   PANELS: [],
-  ONGRID_INVERTERS: [],
-  HYBRID_INVERTERS: [],
-  STRUCTURE: [],
+ONGRID_INVERTERS: [],
+HYBRID_INVERTERS: [],
+MICRO_INVERTERS: [],
+STRUCTURE: [],
   ELECTRICAL: [],
   BATTERIES: [],
   OTHER: [],
@@ -302,6 +305,12 @@ const materialSections = [
   title: 'Hybrid Inverter',
   description:
     'Hybrid inverter stock for battery-supported solar systems',
+},
+{
+  key: 'MICRO_INVERTERS',
+  title: 'Micro Inverter',
+  description:
+    'Micro inverter stock for module-level solar systems',
 },
   {
     key: 'STRUCTURE',
@@ -345,6 +354,10 @@ const materialCategoryOptions = [
 {
   key: 'HYBRID_INVERTERS',
   label: 'Hybrid Inverter',
+},
+{
+  key: 'MICRO_INVERTERS',
+  label: 'Micro Inverter',
 },
   {
     key: 'STRUCTURE',
@@ -1434,6 +1447,11 @@ function MaterialCard({ item, onAdd }: { item: any; onAdd: () => void }) {
           <p className="mt-1 break-words text-xs font-semibold text-slate-500">
   {item.brand || 'No brand'} · HSN {item.hsnCode || '-'}
 </p>
+{item.warranty && (
+  <p className="mt-2 inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
+    Warranty: {item.warranty}
+  </p>
+)}
         </div>
 
         <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-700">
