@@ -70,7 +70,8 @@ export default function CustomersPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
 
   const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
+const [saving, setSaving] = useState(false);
+const [exporting, setExporting] = useState(false);
   const [selectedCustomerProjects, setSelectedCustomerProjects] = useState<any[]>([]);
 const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 const [showProjectsModal, setShowProjectsModal] = useState(false);
@@ -452,6 +453,110 @@ const resetPortalPassword = async () => {
     setPage(1);
   };
 
+  const escapeCsvValue = (value: any) => {
+  const text = String(value ?? '');
+
+  return `"${text.replace(/"/g, '""')}"`;
+};
+
+const exportCustomersCsv = async () => {
+  try {
+    setExporting(true);
+
+    const res = await axios.get(
+      `${API_BASE_URL}/customers/export`,
+      {
+        params: {
+          search: appliedFilters.search,
+          city: appliedFilters.city,
+          zone: appliedFilters.zone,
+          branch: appliedFilters.branch,
+          status: appliedFilters.status,
+          customerSource:
+            appliedFilters.customerSource,
+          showHidden:
+            appliedFilters.showHidden
+              ? 'true'
+              : 'false',
+        },
+        headers: getAuthHeaders(),
+      },
+    );
+
+    const rows = Array.isArray(res.data)
+      ? res.data
+      : [];
+
+    if (!rows.length) {
+      alert(
+        'No customers found for the applied filters.',
+      );
+      return;
+    }
+
+    const headers = [
+      'Name',
+      'Contact Number',
+      'City',
+      'K Number',
+    ];
+
+    const csvRows = [
+      headers.map(escapeCsvValue).join(','),
+      ...rows.map((item: any) =>
+        [
+          item.customerName,
+          item.contactNumber,
+          item.city,
+          item.kNumber,
+        ]
+          .map(escapeCsvValue)
+          .join(','),
+      ),
+    ];
+
+    const csvContent =
+      '\uFEFF' + csvRows.join('\r\n');
+
+    const blob = new Blob(
+      [csvContent],
+      {
+        type: 'text/csv;charset=utf-8;',
+      },
+    );
+
+    const url =
+      URL.createObjectURL(blob);
+
+    const link =
+      document.createElement('a');
+
+    const date =
+      new Date()
+        .toISOString()
+        .slice(0, 10);
+
+    link.href = url;
+    link.download =
+      `customers-${date}.csv`;
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    URL.revokeObjectURL(url);
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to export customers',
+    );
+  } finally {
+    setExporting(false);
+  }
+};
+
   useEffect(() => {
     fetchSummary();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -698,20 +803,30 @@ const resetPortalPassword = async () => {
         </div>
 
         <div className="mt-4 flex flex-wrap gap-3">
-          <button
-            onClick={applyFilters}
-            className="rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700"
-          >
-            Apply Filters
-          </button>
+  <button
+    onClick={applyFilters}
+    className="rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700"
+  >
+    Apply Filters
+  </button>
 
-          <button
-            onClick={resetFilters}
-            className="rounded-xl bg-gray-600 px-5 py-3 font-semibold text-white hover:bg-gray-700"
-          >
-            Reset
-          </button>
-        </div>
+  <button
+    onClick={resetFilters}
+    className="rounded-xl bg-gray-600 px-5 py-3 font-semibold text-white hover:bg-gray-700"
+  >
+    Reset
+  </button>
+
+  <button
+    onClick={exportCustomersCsv}
+    disabled={exporting}
+    className="rounded-xl bg-green-600 px-5 py-3 font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+  >
+    {exporting
+      ? 'Exporting...'
+      : 'Download CSV'}
+  </button>
+</div>
       </div>
 
       <div className="rounded-2xl bg-white p-5 shadow">
