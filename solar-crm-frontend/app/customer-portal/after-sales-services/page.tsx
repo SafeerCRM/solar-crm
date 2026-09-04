@@ -5,6 +5,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { MobileDatePicker } from '@mui/x-date-pickers/MobileDatePicker';
 import dayjs from 'dayjs';
+import AudioRecorder from '@/components/AudioRecorder';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -22,6 +23,15 @@ const [ratingSavingId, setRatingSavingId] = useState<number | null>(null);
 const [requestStatusFilter, setRequestStatusFilter] = useState('ALL');
 const [requestPage, setRequestPage] = useState(1);
 const [requestTotalPages, setRequestTotalPages] = useState(1);
+
+const [selectedPhotos, setSelectedPhotos] = useState<File[]>([]);
+const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
+const [selectedAudio, setSelectedAudio] = useState<File | null>(null);
+const [audioPreview, setAudioPreview] = useState('');
+const [uploadingAttachments, setUploadingAttachments] = useState(false);
+
+const photoInputRef = useRef<HTMLInputElement | null>(null);
+const audioInputRef = useRef<HTMLInputElement | null>(null);
 
 
   const [selectedServiceId, setSelectedServiceId] = useState('');
@@ -166,6 +176,277 @@ const selectedService = services.find(
   (service) => String(service.id) === String(selectedServiceId),
 );
 
+const compressImage = (file: File): Promise<File> => {
+  return new Promise((resolve) => {
+    if (!file.type.startsWith('image/')) {
+      resolve(file);
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = (event) => {
+      const img = new Image();
+
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+
+        const maxWidth = 1280;
+        const maxHeight = 1280;
+
+        let { width, height } = img;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round(
+              (height * maxWidth) / width,
+            );
+            width = maxWidth;
+          }
+        } else if (height > maxHeight) {
+          width = Math.round(
+            (width * maxHeight) / height,
+          );
+          height = maxHeight;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+
+        if (!ctx) {
+          resolve(file);
+          return;
+        }
+
+        ctx.drawImage(
+          img,
+          0,
+          0,
+          width,
+          height,
+        );
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              resolve(file);
+              return;
+            }
+
+            const compressedFile =
+              new File(
+                [blob],
+                file.name.replace(
+                  /\.[^/.]+$/,
+                  '.jpg',
+                ),
+                {
+                  type: 'image/jpeg',
+                  lastModified:
+                    Date.now(),
+                },
+              );
+
+            resolve(compressedFile);
+          },
+          'image/jpeg',
+          0.72,
+        );
+      };
+
+      img.src = String(
+        event.target?.result || '',
+      );
+    };
+
+    reader.readAsDataURL(file);
+  });
+};
+
+const handlePhotoSelect = async (
+  event: React.ChangeEvent<HTMLInputElement>,
+) => {
+  const files =
+    Array.from(
+      event.target.files || [],
+    );
+
+  if (!files.length) return;
+
+  const remainingSlots =
+    10 - selectedPhotos.length;
+
+  if (remainingSlots <= 0) {
+    alert(
+      'Maximum 10 photos allowed',
+    );
+    event.target.value = '';
+    return;
+  }
+
+  const filesToProcess =
+    files.slice(0, remainingSlots);
+
+  const compressedFiles: File[] = [];
+
+  for (const file of filesToProcess) {
+    const compressed =
+      await compressImage(file);
+
+    compressedFiles.push(compressed);
+  }
+
+  const previews =
+    compressedFiles.map((file) =>
+      URL.createObjectURL(file),
+    );
+
+  setSelectedPhotos((prev) => [
+    ...prev,
+    ...compressedFiles,
+  ]);
+
+  setPhotoPreviews((prev) => [
+    ...prev,
+    ...previews,
+  ]);
+
+  if (files.length > remainingSlots) {
+    alert(
+      'Maximum 10 photos allowed',
+    );
+  }
+
+  event.target.value = '';
+};
+
+const removePhoto = (
+  index: number,
+) => {
+  setPhotoPreviews((prev) => {
+    const preview = prev[index];
+
+    if (preview) {
+      URL.revokeObjectURL(preview);
+    }
+
+    return prev.filter(
+      (_, i) => i !== index,
+    );
+  });
+
+  setSelectedPhotos((prev) =>
+    prev.filter(
+      (_, i) => i !== index,
+    ),
+  );
+};
+
+const handleAudioSelect = (
+  event: React.ChangeEvent<HTMLInputElement>,
+) => {
+  const file =
+    event.target.files?.[0] ||
+    null;
+
+  if (!file) return;
+
+  if (audioPreview) {
+    URL.revokeObjectURL(
+      audioPreview,
+    );
+  }
+
+  setSelectedAudio(file);
+
+  setAudioPreview(
+    URL.createObjectURL(file),
+  );
+
+  event.target.value = '';
+};
+
+const removeAudio = () => {
+  if (audioPreview) {
+    URL.revokeObjectURL(
+      audioPreview,
+    );
+  }
+
+  setSelectedAudio(null);
+  setAudioPreview('');
+};
+
+const uploadAfterSalesAttachments =
+  async () => {
+    if (
+      !selectedPhotos.length &&
+      !selectedAudio
+    ) {
+      return [];
+    }
+
+    const token =
+      localStorage.getItem(
+        'customer_token',
+      );
+
+    const formData =
+      new FormData();
+
+    selectedPhotos.forEach(
+      (file) => {
+        formData.append(
+          'files',
+          file,
+        );
+      },
+    );
+
+    if (selectedAudio) {
+      formData.append(
+        'files',
+        selectedAudio,
+      );
+    }
+
+    setUploadingAttachments(true);
+
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/customer-auth/after-sales-attachments/upload`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization:
+              `Bearer ${token}`,
+          },
+          body: formData,
+        },
+      );
+
+      const data =
+        await res.json();
+
+      if (!res.ok) {
+        throw new Error(
+          data?.message ||
+            'Attachment upload failed',
+        );
+      }
+
+      return (
+        data?.attachments || []
+      );
+    } finally {
+      setUploadingAttachments(
+        false,
+      );
+    }
+  };
+
   const submitRequest = async () => {
   const service = selectedService;
 
@@ -179,8 +460,21 @@ const selectedService = services.find(
     return;
   }
 
+  if (
+  !service.isPaidService &&
+  selectedPhotos.length === 0
+) {
+  alert(
+    'Please upload at least one photo for this free service',
+  );
+  return;
+}
+
   try {
     setSavingServiceId(service.id);
+
+    const uploadedAttachments =
+  await uploadAfterSalesAttachments();
 
     const res = await fetch(
       `${API_BASE_URL}/customer-auth/after-sales-requests`,
@@ -188,11 +482,23 @@ const selectedService = services.find(
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({
-          serviceId: service.id,
-          projectId: requestForm.projectId || projects[0]?.id || '',
-          preferredDate: requestForm.preferredDate,
-          customerRemarks: requestForm.customerRemarks || '',
-        }),
+  serviceId: service.id,
+
+  projectId:
+    requestForm.projectId ||
+    projects[0]?.id ||
+    '',
+
+  preferredDate:
+    requestForm.preferredDate,
+
+  customerRemarks:
+    requestForm.customerRemarks ||
+    '',
+
+  attachments:
+    uploadedAttachments,
+}),
       },
     );
 
@@ -212,6 +518,24 @@ const selectedService = services.find(
       preferredDate: '',
       customerRemarks: '',
     });
+
+    photoPreviews.forEach(
+  (preview) =>
+    URL.revokeObjectURL(
+      preview,
+    ),
+);
+
+if (audioPreview) {
+  URL.revokeObjectURL(
+    audioPreview,
+  );
+}
+
+setSelectedPhotos([]);
+setPhotoPreviews([]);
+setSelectedAudio(null);
+setAudioPreview('');
 
     await loadData();
   } catch (error) {
@@ -383,14 +707,33 @@ const filteredRequests =
     <button
       type="button"
       onClick={() => {
-        setSelectedServiceId('');
-        setServiceSearch('');
-        setRequestForm({
-          projectId: '',
-          preferredDate: '',
-          customerRemarks: '',
-        });
-      }}
+  setSelectedServiceId('');
+  setServiceSearch('');
+
+  setRequestForm({
+    projectId: '',
+    preferredDate: '',
+    customerRemarks: '',
+  });
+
+  photoPreviews.forEach(
+    (preview) =>
+      URL.revokeObjectURL(
+        preview,
+      ),
+  );
+
+  if (audioPreview) {
+    URL.revokeObjectURL(
+      audioPreview,
+    );
+  }
+
+  setSelectedPhotos([]);
+  setPhotoPreviews([]);
+  setSelectedAudio(null);
+  setAudioPreview('');
+}}
       className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-gray-200 px-2 py-1 text-xs font-bold hover:bg-gray-300"
     >
       ✕
@@ -538,12 +881,194 @@ const filteredRequests =
         className="rounded-2xl border bg-white p-3"
       />
 
+      <div className="rounded-[2rem] border-2 border-dashed border-orange-200 bg-orange-50 p-4">
+  <div className="flex items-center justify-between gap-3">
+    <div>
+      <p className="text-sm font-black text-orange-800">
+        📷 Add Service Photos
+        {selectedService &&
+          !selectedService.isPaidService && (
+            <span className="ml-1 text-red-600">
+              *
+            </span>
+          )}
+      </p>
+
+      <p className="mt-1 text-xs text-orange-700">
+        {selectedService &&
+        !selectedService.isPaidService
+          ? 'At least one photo is required for this free service.'
+          : 'Upload inverter, panel, meter, structure or site photos if relevant.'}
+        {' '}Images are compressed automatically.
+      </p>
+    </div>
+
+    <button
+      type="button"
+      onClick={() =>
+        photoInputRef.current?.click()
+      }
+      className="rounded-2xl bg-orange-500 px-4 py-3 text-xs font-black text-white shadow hover:bg-orange-600"
+    >
+      Add Photos
+    </button>
+
+    <input
+      ref={photoInputRef}
+      type="file"
+      accept="image/*"
+      multiple
+      capture="environment"
+      onChange={
+        handlePhotoSelect
+      }
+      className="hidden"
+    />
+  </div>
+
+  {photoPreviews.length > 0 && (
+    <div className="mt-4 grid grid-cols-3 gap-3">
+      {photoPreviews.map(
+        (preview, index) => (
+          <div
+            key={preview}
+            className="relative overflow-hidden rounded-2xl border bg-white shadow"
+          >
+            <img
+              src={preview}
+              alt={`Service photo ${
+                index + 1
+              }`}
+              className="h-24 w-full object-cover"
+            />
+
+            <button
+              type="button"
+              onClick={() =>
+                removePhoto(index)
+              }
+              className="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 text-xs font-black text-white"
+            >
+              ×
+            </button>
+          </div>
+        ),
+      )}
+    </div>
+  )}
+
+  {selectedPhotos.length > 0 && (
+    <p className="mt-3 text-xs font-semibold text-orange-700">
+      {selectedPhotos.length}{' '}
+      photo(s) selected. Maximum
+      10 photos allowed.
+    </p>
+  )}
+</div>
+
+<div className="rounded-[2rem] border-2 border-dashed border-blue-200 bg-blue-50 p-4">
+  <div className="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <p className="text-sm font-black text-blue-800">
+        🎙 Add Voice Note
+      </p>
+
+      <p className="mt-1 text-xs text-blue-700">
+        Record a voice note
+        directly or upload audio
+        from your phone recorder.
+        Optional.
+      </p>
+    </div>
+
+    <div className="flex flex-wrap gap-2">
+      <AudioRecorder
+        onRecordingReady={(
+          file,
+        ) => {
+          if (
+            audioPreview
+          ) {
+            URL.revokeObjectURL(
+              audioPreview,
+            );
+          }
+
+          setSelectedAudio(
+            file,
+          );
+
+          if (file) {
+            setAudioPreview(
+              URL.createObjectURL(
+                file,
+              ),
+            );
+          } else {
+            setAudioPreview(
+              '',
+            );
+          }
+        }}
+      />
+
+      <button
+        type="button"
+        onClick={() =>
+          audioInputRef.current?.click()
+        }
+        className="rounded-2xl bg-gray-900 px-4 py-3 text-xs font-black text-white"
+      >
+        Upload Audio File
+      </button>
+
+      <input
+        ref={audioInputRef}
+        type="file"
+        accept="audio/*"
+        capture
+        onChange={
+          handleAudioSelect
+        }
+        className="hidden"
+      />
+    </div>
+  </div>
+
+  {audioPreview && (
+    <div className="mt-4 rounded-2xl bg-white p-3">
+      <audio
+        controls
+        src={audioPreview}
+        className="w-full"
+      />
+
+      <button
+        type="button"
+        onClick={
+          removeAudio
+        }
+        className="mt-3 rounded-xl bg-red-100 px-4 py-2 text-xs font-black text-red-700"
+      >
+        Remove Audio
+      </button>
+    </div>
+  )}
+</div>
+
       <button
         onClick={submitRequest}
-        disabled={!!savingServiceId}
+        disabled={
+  !!savingServiceId ||
+  uploadingAttachments
+}
         className="rounded-2xl bg-orange-600 px-5 py-3 text-sm font-black text-white disabled:opacity-50"
       >
-        {savingServiceId ? 'Submitting...' : 'Submit Service Request'}
+        {uploadingAttachments
+  ? 'Uploading Attachments...'
+  : savingServiceId
+    ? 'Submitting...'
+    : 'Submit Service Request'}
       </button>
     </div>
   )}
@@ -634,6 +1159,106 @@ const filteredRequests =
                       {request.customerRemarks}
                     </p>
                   )}
+
+                  {Array.isArray(
+  request.customerAttachments,
+) &&
+  request.customerAttachments
+    .length > 0 && (
+    <div className="mt-4 rounded-2xl border bg-white p-4">
+      <p className="text-xs font-black uppercase tracking-wide text-gray-500">
+        Your Attachments
+      </p>
+
+      <div className="mt-3 grid grid-cols-3 gap-3">
+        {request.customerAttachments
+          .filter(
+            (
+              attachment: any,
+            ) =>
+              attachment.proofType ===
+                'CUSTOMER_PHOTO' ||
+              String(
+                attachment.mimeType ||
+                  '',
+              ).startsWith(
+                'image/',
+              ),
+          )
+          .map(
+            (
+              attachment: any,
+            ) => (
+              <a
+                key={
+                  attachment.id ||
+                  attachment.fileUrl
+                }
+                href={
+                  attachment.fileUrl
+                }
+                target="_blank"
+                rel="noreferrer"
+                className="overflow-hidden rounded-2xl border bg-white shadow-sm"
+              >
+                <img
+                  src={
+                    attachment.fileUrl
+                  }
+                  alt={
+                    attachment.fileName ||
+                    'Service photo'
+                  }
+                  className="h-24 w-full object-cover"
+                />
+              </a>
+            ),
+          )}
+      </div>
+
+      {request.customerAttachments
+        .filter(
+          (
+            attachment: any,
+          ) =>
+            attachment.proofType ===
+              'CUSTOMER_AUDIO' ||
+            String(
+              attachment.mimeType ||
+                '',
+            ).startsWith(
+              'audio/',
+            ) ||
+            attachment.mimeType ===
+              'video/webm',
+        )
+        .map(
+          (
+            attachment: any,
+          ) => (
+            <div
+              key={
+                attachment.id ||
+                attachment.fileUrl
+              }
+              className="mt-3 rounded-2xl bg-blue-50 p-3"
+            >
+              <p className="mb-2 text-xs font-black text-blue-700">
+                Voice Note
+              </p>
+
+              <audio
+                controls
+                src={
+                  attachment.fileUrl
+                }
+                className="w-full"
+              />
+            </div>
+          ),
+        )}
+    </div>
+  )}
 
                   {request.adminRemarks && (
                     <p className="mt-3 rounded-2xl bg-blue-50 p-3 text-sm font-semibold text-blue-800">

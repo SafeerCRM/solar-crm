@@ -531,7 +531,114 @@ loadRequests();
                   )}
                 </div>
 
-                <div className="rounded-[1.5rem] border bg-white p-4 shadow-sm xl:sticky xl:top-4">
+                {/* CUSTOMER ATTACHMENTS */}
+{Array.isArray(item.customerAttachments) &&
+  item.customerAttachments.length > 0 && (
+    <div className="mb-4 rounded-[1.5rem] border border-orange-200 bg-orange-50 p-4 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-lg font-black text-orange-900">
+            Customer Attachments
+          </p>
+
+          <p className="mt-1 text-xs font-semibold text-orange-700">
+            Photos and voice notes submitted by the customer with this
+            service request.
+          </p>
+        </div>
+
+        <span className="rounded-full bg-orange-200 px-3 py-1 text-xs font-black text-orange-800">
+          {item.customerAttachments.length} attachment(s)
+        </span>
+      </div>
+
+      {item.customerAttachments.some(
+        (attachment: any) =>
+          attachment.proofType === 'CUSTOMER_PHOTO' ||
+          String(attachment.mimeType || '').startsWith('image/'),
+      ) && (
+        <div className="mt-4">
+          <p className="mb-2 text-xs font-black uppercase tracking-wide text-orange-800">
+            Customer Photos
+          </p>
+
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {item.customerAttachments
+              .filter(
+                (attachment: any) =>
+                  attachment.proofType === 'CUSTOMER_PHOTO' ||
+                  String(attachment.mimeType || '').startsWith('image/'),
+              )
+              .map((attachment: any) => (
+                <a
+                  key={attachment.id || attachment.fileUrl}
+                  href={attachment.fileUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="overflow-hidden rounded-2xl border bg-white shadow-sm"
+                >
+                  <img
+                    src={attachment.fileUrl}
+                    alt={attachment.fileName || 'Customer service photo'}
+                    className="h-32 w-full object-cover"
+                  />
+
+                  {attachment.fileName && (
+                    <p className="truncate px-2 py-2 text-xs font-semibold text-gray-600">
+                      {attachment.fileName}
+                    </p>
+                  )}
+                </a>
+              ))}
+          </div>
+        </div>
+      )}
+
+      {item.customerAttachments.some(
+        (attachment: any) =>
+          attachment.proofType === 'CUSTOMER_AUDIO' ||
+          String(attachment.mimeType || '').startsWith('audio/') ||
+          String(attachment.mimeType || '') === 'video/webm',
+      ) && (
+        <div className="mt-4">
+          <p className="mb-2 text-xs font-black uppercase tracking-wide text-blue-800">
+            Customer Voice Notes
+          </p>
+
+          <div className="space-y-3">
+            {item.customerAttachments
+              .filter(
+                (attachment: any) =>
+                  attachment.proofType === 'CUSTOMER_AUDIO' ||
+                  String(attachment.mimeType || '').startsWith('audio/') ||
+                  String(attachment.mimeType || '') === 'video/webm',
+              )
+              .map((attachment: any) => (
+                <div
+                  key={attachment.id || attachment.fileUrl}
+                  className="rounded-2xl border bg-white p-3"
+                >
+                  {attachment.fileName && (
+                    <p className="mb-2 text-xs font-bold text-gray-600">
+                      {attachment.fileName}
+                    </p>
+                  )}
+
+                  <audio
+                    controls
+                    src={attachment.fileUrl}
+                    className="w-full"
+                  />
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )}
+
+{/* EXISTING WORK PROOFS - KEEP THIS AS IT IS */}
+<div className="rounded-[1.5rem] border bg-white p-4 shadow-sm xl:sticky xl:top-4">
   <div className="flex flex-wrap items-center justify-between gap-3">
     <div>
       <p className="text-lg font-black text-gray-900">
