@@ -95,6 +95,41 @@ getSummary() {
   return this.customerService.getSummary();
 }
 
+@Roles(
+  'OWNER',
+  'MARKETING_HEAD',
+  'PROJECT_MANAGER',
+  'PROJECT_EXECUTIVE',
+  'MEETING_MANAGER',
+  'LEAD_MANAGER',
+  'CUSTOMER_MANAGER',
+  'INSPECTION_MANAGER',
+)
+@Get('export')
+exportCustomers(
+  @Query('search') search?: string,
+  @Query('city') city?: string,
+  @Query('zone') zone?: string,
+  @Query('branch') branch?: string,
+  @Query('status') status?: string,
+  @Query('customerSource')
+  customerSource?: string,
+  @Query('showHidden')
+  showHidden?: string,
+) {
+  return this.customerService.exportCustomers({
+    search: search || '',
+    city: city || '',
+    zone: zone || '',
+    branch: branch || '',
+    status: status || '',
+    customerSource:
+      customerSource || '',
+    showHidden:
+      showHidden || 'false',
+  });
+}
+
 @Roles('OWNER', 'MARKETING_HEAD', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER')
 @Post('link-existing-projects')
 linkExistingProjects() {

@@ -222,6 +222,119 @@ private readonly projectRepository: Repository<Project>,
     };
   }
 
+  async exportCustomers(filters: any) {
+  const query =
+    this.customerRepository.createQueryBuilder(
+      'customer',
+    );
+
+  if (filters?.showHidden === 'true') {
+    query.where(
+      'customer.isHidden = true',
+    );
+  } else {
+    query.where(
+      'customer.isHidden = false',
+    );
+  }
+
+  if (filters?.search) {
+    const search =
+      `%${String(
+        filters.search,
+      ).toLowerCase()}%`;
+
+    query.andWhere(
+      `
+      (
+        LOWER(customer.customerCode) LIKE :search
+        OR LOWER(customer.customerName) LIKE :search
+        OR LOWER(customer.mobile) LIKE :search
+        OR LOWER(customer.alternateMobile) LIKE :search
+        OR LOWER(customer.email) LIKE :search
+        OR LOWER(customer.electricityKNumber) LIKE :search
+        OR LOWER(customer.city) LIKE :search
+        OR LOWER(customer.zone) LIKE :search
+      )
+      `,
+      { search },
+    );
+  }
+
+  if (filters?.city) {
+    query.andWhere(
+      'LOWER(customer.city) LIKE :city',
+      {
+        city:
+          `%${String(
+            filters.city,
+          ).toLowerCase()}%`,
+      },
+    );
+  }
+
+  if (filters?.zone) {
+    query.andWhere(
+      'LOWER(customer.zone) LIKE :zone',
+      {
+        zone:
+          `%${String(
+            filters.zone,
+          ).toLowerCase()}%`,
+      },
+    );
+  }
+
+  if (filters?.branch) {
+    query.andWhere(
+      'LOWER(customer.branchName) LIKE :branch',
+      {
+        branch:
+          `%${String(
+            filters.branch,
+          ).toLowerCase()}%`,
+      },
+    );
+  }
+
+  if (filters?.customerSource) {
+    query.andWhere(
+      'customer.customerSource = :customerSource',
+      {
+        customerSource:
+          filters.customerSource,
+      },
+    );
+  }
+
+  if (filters?.status) {
+    query.andWhere(
+      'customer.customerStatus = :status',
+      {
+        status: filters.status,
+      },
+    );
+  }
+
+  query.orderBy(
+    'customer.createdAt',
+    'DESC',
+  );
+
+  const customers = await query.getMany();
+
+  return customers.map((customer) => ({
+    customerName:
+      customer.customerName || '',
+    contactNumber:
+      customer.mobile || '',
+    city:
+      customer.city || '',
+    kNumber:
+      customer.electricityKNumber || '',
+  }));
+}
+
   async search(queryText: string) {
     const search = String(queryText || '').trim().toLowerCase();
 
