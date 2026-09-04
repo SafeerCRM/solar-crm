@@ -31,6 +31,7 @@ const normalizeDealerCategory = (value: any) => {
   'ONGRID_INVERTERS',
   'HYBRID_INVERTERS',
   'MICRO_INVERTERS',
+  'HOME_INVERTERS',
   'STRUCTURE',
   'ELECTRICAL',
   'BATTERIES',
@@ -62,6 +63,7 @@ const [materialCategory, setMaterialCategory] =
     | 'ONGRID_INVERTERS'
 | 'HYBRID_INVERTERS'
 | 'MICRO_INVERTERS'
+| 'HOME_INVERTERS'
 | 'STRUCTURE'
     | 'ELECTRICAL'
     | 'BATTERIES'
@@ -263,6 +265,7 @@ const groupedMaterials = useMemo(() => {
   ONGRID_INVERTERS: [],
 HYBRID_INVERTERS: [],
 MICRO_INVERTERS: [],
+HOME_INVERTERS: [],
 STRUCTURE: [],
   ELECTRICAL: [],
   BATTERIES: [],
@@ -303,6 +306,12 @@ const materialSections = [
   title: 'Micro Inverter',
   description:
     'Micro inverter stock for module-level solar systems',
+},
+{
+  key: 'HOME_INVERTERS',
+  title: 'Home Inverter',
+  description:
+    'Home inverter stock for residential power backup systems',
 },
   {
     key: 'STRUCTURE',
@@ -346,6 +355,10 @@ const materialCategoryOptions = [
 {
   key: 'MICRO_INVERTERS',
   label: 'Micro Inverter',
+},
+{
+  key: 'HOME_INVERTERS',
+  label: 'Home Inverter',
 },
   {
     key: 'STRUCTURE',

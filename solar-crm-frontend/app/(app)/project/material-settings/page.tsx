@@ -860,6 +860,10 @@ HSN: item.hsnCode || '',
   Micro Inverter
 </option>
 
+<option value="HOME_INVERTERS">
+  Home Inverter
+</option>
+
 <option value="STRUCTURE">
   Structure
 </option>
