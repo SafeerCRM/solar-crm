@@ -277,6 +277,133 @@ type DelayNote = {
   }[];
 };
 
+type PerformanceActivity = {
+  ruleId: number;
+  ruleName: string;
+
+  targetModule: string;
+  targetMilestone: string;
+
+  triggerType: string;
+  triggerValue: number;
+
+  triggerReached: boolean;
+
+  triggerDate: string | null;
+  dueDate: string | null;
+  completedDate: string | null;
+
+  completionDateReliable: boolean;
+
+  plannedDays: number;
+  actualDays: number | null;
+  varianceDays: number | null;
+
+  daysRemaining: number | null;
+  delayDays: number | null;
+
+  status: TimelineStatus;
+
+  completed: boolean;
+  requiresAttention: boolean;
+};
+
+type PerformanceDepartment = {
+  module: string;
+
+  total: number;
+  completed: number;
+  completedOnTime: number;
+  completedLate: number;
+
+  running: number;
+  delayed: number;
+  dueToday: number;
+  notStarted: number;
+
+  dateUnavailable: number;
+  attentionRequired: number;
+
+  activities: PerformanceActivity[];
+};
+
+type PerformanceProject = {
+  id: number;
+
+  customerName?: string;
+  customerPhone?: string;
+  electricityKNumber?: string;
+  projectSerial?: string;
+
+  projectType?: string | null;
+  projectStatus?: string | null;
+  projectWorkState?: string | null;
+
+  branchName?: string;
+  city?: string;
+
+  projectOwnerId?: number | null;
+  projectOwnerName?: string;
+};
+
+type PerformanceSummary = {
+  total: number;
+  completed: number;
+
+  completedOnTime: number;
+  completedLate: number;
+
+  running: number;
+  inTimeline: number;
+  delayed: number;
+  dueToday: number;
+  notStarted: number;
+
+  completedDateUnavailable: number;
+
+  attentionRequired: number;
+  completionPercent: number;
+};
+
+type ProjectPerformanceResponse = {
+  project: PerformanceProject;
+
+  summary: PerformanceSummary;
+
+  departments: PerformanceDepartment[];
+};
+
+type PerformanceProjectSearchItem = {
+  id: number;
+
+  customerName: string;
+  customerPhone: string;
+
+  electricityKNumber: string;
+  projectSerial: string;
+
+  projectType: string | null;
+  projectStatus: string | null;
+  projectWorkState: string | null;
+
+  branchName: string;
+  city: string;
+
+  projectOwnerId: number | null;
+  projectOwnerName: string;
+};
+
+type PerformanceProjectSearchResponse = {
+  data: PerformanceProjectSearchItem[];
+
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+};
+
 const emptySummary:
   TrackingSummary = {
   total: 0,
@@ -421,6 +548,59 @@ function getStatusClasses(
   }
 }
 
+function getPerformanceBarWidths(
+  plannedDays: number,
+  actualDays: number | null,
+) {
+  if (
+    actualDays === null
+  ) {
+    return {
+      plannedWidth: 100,
+      actualWidth: 0,
+    };
+  }
+
+  const safePlanned =
+    Math.max(
+      Number(plannedDays || 0),
+      0,
+    );
+
+  const safeActual =
+    Math.max(
+      Number(actualDays || 0),
+      0,
+    );
+
+  const scale =
+    Math.max(
+      safePlanned,
+      safeActual,
+      1,
+    );
+
+  return {
+    plannedWidth:
+      Math.max(
+        (safePlanned / scale) *
+          100,
+        safePlanned > 0
+          ? 4
+          : 0,
+      ),
+
+    actualWidth:
+      Math.max(
+        (safeActual / scale) *
+          100,
+        safeActual > 0
+          ? 4
+          : 0,
+      ),
+  };
+}
+
 function SummaryCard({
   title,
   value,
@@ -454,9 +634,86 @@ export default function ProjectTimelinePage() {
     useRouter();
 
   const [activeTab, setActiveTab] =
-    useState<
-      'TRACKING' | 'SETTINGS'
-    >('TRACKING');
+  useState<
+    | 'TRACKING'
+    | 'PERFORMANCE'
+    | 'SETTINGS'
+  >('TRACKING');
+
+  const [
+  performanceProjectId,
+  setPerformanceProjectId,
+] = useState('');
+
+const [
+  performanceLoading,
+  setPerformanceLoading,
+] = useState(false);
+
+const [
+  performanceData,
+  setPerformanceData,
+] =
+  useState<ProjectPerformanceResponse | null>(
+    null,
+  );
+
+  const [
+  performanceProjectSearch,
+  setPerformanceProjectSearch,
+] = useState('');
+
+const [
+  performanceProjectOwnerId,
+  setPerformanceProjectOwnerId,
+] = useState('');
+
+const [
+  performanceCity,
+  setPerformanceCity,
+] = useState('');
+
+const [
+  performanceBranch,
+  setPerformanceBranch,
+] = useState('');
+
+const [
+  performanceProjectType,
+  setPerformanceProjectType,
+] = useState('');
+
+const [
+  performanceProjectWorkState,
+  setPerformanceProjectWorkState,
+] = useState('');
+
+const [
+  performanceProjectResults,
+  setPerformanceProjectResults,
+] = useState<
+  PerformanceProjectSearchItem[]
+>([]);
+
+const [
+  performanceProjectSearchLoading,
+  setPerformanceProjectSearchLoading,
+] = useState(false);
+
+const [
+  performanceProjectSearchDone,
+  setPerformanceProjectSearchDone,
+] = useState(false);
+
+  const [
+  performanceFilter,
+  setPerformanceFilter,
+] = useState<
+  | 'ALL'
+  | 'ATTENTION'
+  | 'RUNNING'
+  | 'COMPLETED'
+>('ALL');
 
   const [userRoles, setUserRoles] =
     useState<string[]>([]);
@@ -477,6 +734,11 @@ export default function ProjectTimelinePage() {
   const [
   branchOptions,
   setBranchOptions,
+] = useState<string[]>([]);
+
+const [
+  cityOptions,
+  setCityOptions,
 ] = useState<string[]>([]);
 
 const [
@@ -767,6 +1029,14 @@ const [
           : [],
       );
 
+      setCityOptions(
+  Array.isArray(
+    res.data?.cities,
+  )
+    ? res.data.cities
+    : [],
+);
+
       setOwnerOptions(
         Array.isArray(
           res.data
@@ -935,6 +1205,240 @@ const [
       }
     };
 
+    const searchPerformanceProjects =
+  async () => {
+    try {
+      setPerformanceProjectSearchLoading(
+        true,
+      );
+
+      setPerformanceProjectSearchDone(
+        false,
+      );
+
+      const params =
+        new URLSearchParams();
+
+      params.set(
+        'page',
+        '1',
+      );
+
+      params.set(
+        'limit',
+        '20',
+      );
+
+      if (
+        performanceProjectSearch.trim()
+      ) {
+        params.set(
+          'search',
+          performanceProjectSearch.trim(),
+        );
+      }
+
+      if (
+        performanceProjectOwnerId
+      ) {
+        params.set(
+          'projectOwnerId',
+          performanceProjectOwnerId,
+        );
+      }
+
+      if (
+        performanceCity
+      ) {
+        params.set(
+          'city',
+          performanceCity,
+        );
+      }
+
+      if (
+        performanceBranch
+      ) {
+        params.set(
+          'branch',
+          performanceBranch,
+        );
+      }
+
+      if (
+        performanceProjectType
+      ) {
+        params.set(
+          'projectType',
+          performanceProjectType,
+        );
+      }
+
+      if (
+        performanceProjectWorkState
+      ) {
+        params.set(
+          'projectWorkState',
+          performanceProjectWorkState,
+        );
+      }
+
+      const res =
+        await axios.get(
+          `${API_BASE_URL}/project/timeline/project-search?${params.toString()}`,
+          {
+            headers:
+              authHeaders(),
+          },
+        );
+
+      const response =
+        res.data as
+          PerformanceProjectSearchResponse;
+
+      setPerformanceProjectResults(
+        Array.isArray(
+          response?.data,
+        )
+          ? response.data
+          : [],
+      );
+
+      setPerformanceProjectSearchDone(
+        true,
+      );
+    } catch (error: any) {
+      console.error(
+        'Failed to search projects for timeline performance',
+        error,
+      );
+
+      setPerformanceProjectResults(
+        [],
+      );
+
+      setPerformanceProjectSearchDone(
+        true,
+      );
+
+      alert(
+        error?.response?.data?.message ||
+          'Failed to search projects',
+      );
+    } finally {
+      setPerformanceProjectSearchLoading(
+        false,
+      );
+    }
+  };
+
+const selectPerformanceProject =
+  async (
+    project:
+      PerformanceProjectSearchItem,
+  ) => {
+    setPerformanceProjectId(
+      String(
+        project.id,
+      ),
+    );
+
+    setPerformanceData(
+      null,
+    );
+
+    try {
+      setPerformanceLoading(
+        true,
+      );
+
+      const res =
+        await axios.get(
+          `${API_BASE_URL}/project/timeline/project/${project.id}/performance`,
+          {
+            headers:
+              authHeaders(),
+          },
+        );
+
+      setPerformanceData(
+        res.data || null,
+      );
+    } catch (error: any) {
+      console.error(
+        'Failed to load project timeline performance',
+        error,
+      );
+
+      alert(
+        error?.response?.data?.message ||
+          'Failed to load project performance',
+      );
+    } finally {
+      setPerformanceLoading(
+        false,
+      );
+    }
+  };
+
+    const fetchProjectPerformance =
+  async () => {
+    const projectId =
+      Number(
+        performanceProjectId,
+      );
+
+    if (
+      !Number.isInteger(
+        projectId,
+      ) ||
+      projectId <= 0
+    ) {
+      alert(
+        'Please enter a valid project ID',
+      );
+
+      return;
+    }
+
+    try {
+      setPerformanceLoading(
+        true,
+      );
+
+      setPerformanceData(
+        null,
+      );
+
+      const res =
+        await axios.get(
+          `${API_BASE_URL}/project/timeline/project/${projectId}/performance`,
+          {
+            headers:
+              authHeaders(),
+          },
+        );
+
+      setPerformanceData(
+        res.data || null,
+      );
+    } catch (error: any) {
+      console.error(
+        'Failed to load project timeline performance',
+        error,
+      );
+
+      alert(
+        error?.response?.data?.message ||
+          'Failed to load project performance',
+      );
+    } finally {
+      setPerformanceLoading(
+        false,
+      );
+    }
+  };
+
   useEffect(() => {
   fetchOptions();
   fetchFilterOptions();
@@ -964,6 +1468,65 @@ const [
         ruleForm.targetModule,
       ],
     );
+
+    const filteredPerformanceDepartments =
+  useMemo(() => {
+    if (!performanceData) {
+      return [];
+    }
+
+    return performanceData.departments
+      .map((department) => {
+        const activities =
+          department.activities.filter(
+            (activity) => {
+              if (
+                performanceFilter ===
+                'ATTENTION'
+              ) {
+                return activity
+                  .requiresAttention;
+              }
+
+              if (
+                performanceFilter ===
+                'RUNNING'
+              ) {
+                return (
+                  activity.status ===
+                    'IN_TIMELINE' ||
+                  activity.status ===
+                    'DUE_TODAY' ||
+                  activity.status ===
+                    'DELAYED'
+                );
+              }
+
+              if (
+                performanceFilter ===
+                'COMPLETED'
+              ) {
+                return activity.completed;
+              }
+
+              return true;
+            },
+          );
+
+        return {
+          ...department,
+          activities,
+        };
+      })
+      .filter(
+        (department) =>
+          department.activities
+            .length > 0,
+      );
+  }, [
+    performanceData,
+    performanceFilter,
+  ]);
 
 
   const applyFilters =
@@ -1511,6 +2074,23 @@ const [
         >
           Timeline Tracking
         </button>
+
+        <button
+  type="button"
+  onClick={() =>
+    setActiveTab(
+      'PERFORMANCE',
+    )
+  }
+  className={`rounded-xl px-5 py-3 font-semibold ${
+    activeTab ===
+    'PERFORMANCE'
+      ? 'bg-blue-600 text-white'
+      : 'bg-gray-100 text-gray-700'
+  }`}
+>
+  Project Performance
+</button>
 
         {isOwner ? (
           <button
@@ -2303,6 +2883,1109 @@ const [
           </div>
         </>
       ) : null}
+
+      {activeTab ===
+'PERFORMANCE' ? (
+  <div className="space-y-4">
+    <div className="rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 p-5 text-white shadow-xl md:p-7">
+      <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-300">
+            Project Performance
+          </p>
+
+          <h2 className="mt-2 text-2xl font-bold md:text-3xl">
+            Planned vs Actual Timeline
+          </h2>
+
+          <p className="mt-2 max-w-2xl text-sm text-slate-300">
+            Select one project to see how each configured activity performed against its planned timeline.
+          </p>
+        </div>
+
+        <div className="w-full xl:max-w-5xl">
+  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+    <div className="md:col-span-2 xl:col-span-3">
+      <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-400">
+        Search Project
+      </label>
+
+      <input
+        type="text"
+        value={
+          performanceProjectSearch
+        }
+        onChange={(e) =>
+          setPerformanceProjectSearch(
+            e.target.value,
+          )
+        }
+        onKeyDown={(e) => {
+          if (
+            e.key ===
+            'Enter'
+          ) {
+            searchPerformanceProjects();
+          }
+        }}
+        placeholder="Customer name, K Number, phone, project ID or project serial..."
+        className="w-full rounded-2xl border border-white/15 bg-white/10 p-3 text-white outline-none placeholder:text-slate-400 focus:border-blue-400"
+      />
+    </div>
+
+    <div>
+      <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-400">
+        Project Owner
+      </label>
+
+      <select
+        value={
+          performanceProjectOwnerId
+        }
+        onChange={(e) =>
+          setPerformanceProjectOwnerId(
+            e.target.value,
+          )
+        }
+        className="w-full rounded-2xl border border-white/15 bg-slate-900 p-3 text-white outline-none"
+      >
+        <option value="">
+          All Project Owners
+        </option>
+
+        {ownerOptions.map(
+          (owner) => (
+            <option
+              key={
+                owner.id
+              }
+              value={
+                owner.id
+              }
+            >
+              {
+                owner.name
+              }
+            </option>
+          ),
+        )}
+      </select>
+    </div>
+
+    <div>
+      <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-400">
+        City
+      </label>
+
+      <select
+        value={
+          performanceCity
+        }
+        onChange={(e) =>
+          setPerformanceCity(
+            e.target.value,
+          )
+        }
+        className="w-full rounded-2xl border border-white/15 bg-slate-900 p-3 text-white outline-none"
+      >
+        <option value="">
+          All Cities
+        </option>
+
+        {cityOptions.map(
+          (city) => (
+            <option
+              key={
+                city
+              }
+              value={
+                city
+              }
+            >
+              {
+                city
+              }
+            </option>
+          ),
+        )}
+      </select>
+    </div>
+
+    <div>
+      <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-400">
+        Branch
+      </label>
+
+      <select
+        value={
+          performanceBranch
+        }
+        onChange={(e) =>
+          setPerformanceBranch(
+            e.target.value,
+          )
+        }
+        className="w-full rounded-2xl border border-white/15 bg-slate-900 p-3 text-white outline-none"
+      >
+        <option value="">
+          All Branches
+        </option>
+
+        {branchOptions.map(
+          (branch) => (
+            <option
+              key={
+                branch
+              }
+              value={
+                branch
+              }
+            >
+              {
+                branch
+              }
+            </option>
+          ),
+        )}
+      </select>
+    </div>
+
+    <div>
+      <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-400">
+        Project Type
+      </label>
+
+      <select
+        value={
+          performanceProjectType
+        }
+        onChange={(e) =>
+          setPerformanceProjectType(
+            e.target.value,
+          )
+        }
+        className="w-full rounded-2xl border border-white/15 bg-slate-900 p-3 text-white outline-none"
+      >
+        <option value="">
+          All Types
+        </option>
+
+        <option value="CASH">
+          Cash
+        </option>
+
+        <option value="LOAN">
+          Loan
+        </option>
+      </select>
+    </div>
+
+    <div>
+      <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-400">
+        Work State
+      </label>
+
+      <select
+        value={
+          performanceProjectWorkState
+        }
+        onChange={(e) =>
+          setPerformanceProjectWorkState(
+            e.target.value,
+          )
+        }
+        className="w-full rounded-2xl border border-white/15 bg-slate-900 p-3 text-white outline-none"
+      >
+        <option value="">
+          All Work States
+        </option>
+
+        <option value="RUNNING">
+          Running
+        </option>
+
+        <option value="IN_PROCESS">
+          In Process
+        </option>
+      </select>
+    </div>
+  </div>
+
+  <div className="mt-3 flex flex-wrap gap-3">
+    <button
+      type="button"
+      onClick={
+        searchPerformanceProjects
+      }
+      disabled={
+        performanceProjectSearchLoading
+      }
+      className="rounded-2xl bg-blue-500 px-6 py-3 font-bold text-white shadow-lg transition hover:bg-blue-400 disabled:opacity-60"
+    >
+      {performanceProjectSearchLoading
+        ? 'Searching...'
+        : 'Search Projects'}
+    </button>
+
+    <button
+      type="button"
+      onClick={() => {
+        setPerformanceProjectSearch(
+          '',
+        );
+
+        setPerformanceProjectOwnerId(
+          '',
+        );
+
+        setPerformanceCity(
+          '',
+        );
+
+        setPerformanceBranch(
+          '',
+        );
+
+        setPerformanceProjectType(
+          '',
+        );
+
+        setPerformanceProjectWorkState(
+          '',
+        );
+
+        setPerformanceProjectResults(
+          [],
+        );
+
+        setPerformanceProjectSearchDone(
+          false,
+        );
+      }}
+      className="rounded-2xl border border-white/15 bg-white/10 px-5 py-3 font-bold text-white transition hover:bg-white/15"
+    >
+      Reset
+    </button>
+  </div>
+</div>
+      </div>
+    </div>
+
+    {performanceProjectSearchDone ? (
+  <div className="rounded-3xl border bg-white p-5 shadow md:p-6">
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h3 className="text-lg font-black text-gray-950">
+          Matching Projects
+        </h3>
+
+        <p className="mt-1 text-sm text-gray-500">
+          Select a project to load its timeline performance.
+        </p>
+      </div>
+
+      <span className="w-fit rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-700">
+        {
+          performanceProjectResults.length
+        }{' '}
+        result(s)
+      </span>
+    </div>
+
+    {performanceProjectResults.length ===
+    0 ? (
+      <div className="mt-5 rounded-2xl border border-dashed bg-gray-50 p-6 text-center">
+        <p className="font-semibold text-gray-700">
+          No matching projects found.
+        </p>
+      </div>
+    ) : (
+      <div className="mt-5 grid gap-3 lg:grid-cols-2">
+        {performanceProjectResults.map(
+          (project) => (
+            <button
+              key={
+                project.id
+              }
+              type="button"
+              onClick={() =>
+                selectPerformanceProject(
+                  project,
+                )
+              }
+              disabled={
+                performanceLoading
+              }
+              className={`rounded-2xl border p-4 text-left transition hover:border-blue-300 hover:bg-blue-50 disabled:opacity-60 ${
+                Number(
+                  performanceProjectId,
+                ) ===
+                project.id
+                  ? 'border-blue-500 bg-blue-50'
+                  : 'bg-white'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-lg font-black text-gray-950">
+                    {project.customerName ||
+                      `Project #${project.id}`}
+                  </p>
+
+                  <p className="mt-1 text-xs font-semibold text-gray-500">
+                    Project #
+                    {
+                      project.id
+                    }
+                  </p>
+                </div>
+
+                {project.projectType ? (
+                  <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-bold text-white">
+                    {formatLabel(
+                      project.projectType,
+                    )}
+                  </span>
+                ) : null}
+              </div>
+
+              <div className="mt-4 grid gap-2 text-sm text-gray-600 sm:grid-cols-2">
+                <p>
+                  K No:{' '}
+                  <strong className="text-gray-900">
+                    {project.electricityKNumber ||
+                      '-'}
+                  </strong>
+                </p>
+
+                <p>
+                  Phone:{' '}
+                  <strong className="text-gray-900">
+                    {project.customerPhone ||
+                      '-'}
+                  </strong>
+                </p>
+
+                <p>
+                  City:{' '}
+                  <strong className="text-gray-900">
+                    {project.city ||
+                      '-'}
+                  </strong>
+                </p>
+
+                <p>
+                  Branch:{' '}
+                  <strong className="text-gray-900">
+                    {project.branchName ||
+                      '-'}
+                  </strong>
+                </p>
+
+                <p>
+                  Owner:{' '}
+                  <strong className="text-gray-900">
+                    {project.projectOwnerName ||
+                      '-'}
+                  </strong>
+                </p>
+
+                <p>
+                  State:{' '}
+                  <strong className="text-gray-900">
+                    {formatLabel(
+                      project.projectWorkState,
+                    )}
+                  </strong>
+                </p>
+              </div>
+
+              <div className="mt-4 flex justify-end">
+                <span className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white">
+                  View Performance
+                </span>
+              </div>
+            </button>
+          ),
+        )}
+      </div>
+    )}
+  </div>
+) : null}
+
+    {performanceData ? (
+      <>
+        <div className="rounded-3xl border bg-white p-5 shadow md:p-6">
+          <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">
+                  Project #
+                  {
+                    performanceData
+                      .project.id
+                  }
+                </span>
+
+                <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-700">
+                  {formatLabel(
+                    performanceData
+                      .project
+                      .projectType,
+                  )}
+                </span>
+
+                <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-700">
+                  {formatLabel(
+                    performanceData
+                      .project
+                      .projectWorkState,
+                  )}
+                </span>
+              </div>
+
+              <h3 className="mt-3 text-2xl font-bold text-gray-950">
+                {performanceData
+                  .project
+                  .customerName ||
+                  '-'}
+              </h3>
+
+              <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-gray-600">
+                <span>
+                  K No:{' '}
+                  <strong>
+                    {performanceData
+                      .project
+                      .electricityKNumber ||
+                      '-'}
+                  </strong>
+                </span>
+
+                <span>
+                  Branch:{' '}
+                  <strong>
+                    {performanceData
+                      .project
+                      .branchName ||
+                      '-'}
+                  </strong>
+                </span>
+
+                <span>
+                  City:{' '}
+                  <strong>
+                    {performanceData
+                      .project.city ||
+                      '-'}
+                  </strong>
+                </span>
+
+                <span>
+                  Owner:{' '}
+                  <strong>
+                    {performanceData
+                      .project
+                      .projectOwnerName ||
+                      '-'}
+                  </strong>
+                </span>
+              </div>
+            </div>
+
+            <div className="min-w-[220px] rounded-3xl bg-slate-950 p-5 text-white">
+              <div className="flex items-end justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                    Overall Completion
+                  </p>
+
+                  <p className="mt-1 text-4xl font-black">
+                    {
+                      performanceData
+                        .summary
+                        .completionPercent
+                    }
+                    %
+                  </p>
+                </div>
+
+                <p className="text-sm text-slate-300">
+                  {
+                    performanceData
+                      .summary.completed
+                  }
+                  /
+                  {
+                    performanceData
+                      .summary.total
+                  }
+                </p>
+              </div>
+
+              <div className="mt-4 h-3 overflow-hidden rounded-full bg-white/10">
+                <div
+                  className="h-full rounded-full bg-blue-400 transition-all"
+                  style={{
+                    width: `${Math.min(
+                      Math.max(
+                        performanceData
+                          .summary
+                          .completionPercent,
+                        0,
+                      ),
+                      100,
+                    )}%`,
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="rounded-2xl border bg-white p-4 shadow-sm">
+            <p className="text-xs font-bold uppercase tracking-wider text-gray-500">
+              Activities
+            </p>
+
+            <p className="mt-2 text-3xl font-black text-gray-950">
+              {
+                performanceData
+                  .summary.total
+              }
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-red-100 bg-red-50 p-4 shadow-sm">
+            <p className="text-xs font-bold uppercase tracking-wider text-red-600">
+              Attention
+            </p>
+
+            <p className="mt-2 text-3xl font-black text-red-700">
+              {
+                performanceData
+                  .summary
+                  .attentionRequired
+              }
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 shadow-sm">
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-600">
+              Running
+            </p>
+
+            <p className="mt-2 text-3xl font-black text-blue-700">
+              {
+                performanceData
+                  .summary.running
+              }
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4 shadow-sm">
+            <p className="text-xs font-bold uppercase tracking-wider text-amber-700">
+              Completed Late
+            </p>
+
+            <p className="mt-2 text-3xl font-black text-amber-800">
+              {
+                performanceData
+                  .summary
+                  .completedLate
+              }
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-green-100 bg-green-50 p-4 shadow-sm">
+            <p className="text-xs font-bold uppercase tracking-wider text-green-700">
+              On Time
+            </p>
+
+            <p className="mt-2 text-3xl font-black text-green-700">
+              {
+                performanceData
+                  .summary
+                  .completedOnTime
+              }
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-3xl border bg-white p-4 shadow md:p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h3 className="text-lg font-bold text-gray-950">
+                Department Overview
+              </h3>
+
+              <p className="mt-1 text-sm text-gray-500">
+                Each department is based on configured Timeline Settings rules applicable to this project.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {[
+                [
+                  'ALL',
+                  'All',
+                ],
+                [
+                  'ATTENTION',
+                  'Attention Required',
+                ],
+                [
+                  'RUNNING',
+                  'Running',
+                ],
+                [
+                  'COMPLETED',
+                  'Completed',
+                ],
+              ].map(
+                ([value, label]) => (
+                  <button
+                    key={
+                      value
+                    }
+                    type="button"
+                    onClick={() =>
+                      setPerformanceFilter(
+                        value as
+                          | 'ALL'
+                          | 'ATTENTION'
+                          | 'RUNNING'
+                          | 'COMPLETED',
+                      )
+                    }
+                    className={`rounded-xl px-4 py-2 text-sm font-bold ${
+                      performanceFilter ===
+                      value
+                        ? 'bg-slate-950 text-white'
+                        : 'bg-gray-100 text-gray-700'
+                    }`}
+                  >
+                    {
+                      label
+                    }
+                  </button>
+                ),
+              )}
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            {performanceData.departments.map(
+              (department) => (
+                <div
+                  key={
+                    department.module
+                  }
+                  className="rounded-2xl border bg-gray-50 p-4"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-bold text-gray-950">
+                        {formatLabel(
+                          department.module,
+                        )}
+                      </p>
+
+                      <p className="mt-1 text-xs text-gray-500">
+                        {
+                          department.total
+                        }{' '}
+                        activity(s)
+                      </p>
+                    </div>
+
+                    {department.attentionRequired >
+                    0 ? (
+                      <span className="rounded-full bg-red-100 px-2 py-1 text-xs font-bold text-red-700">
+                        {
+                          department.attentionRequired
+                        }{' '}
+                        attention
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-bold text-green-700">
+                        Healthy
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-4 flex gap-1">
+                    <div
+                      className="h-2 rounded-full bg-green-500"
+                      style={{
+                        width: `${
+                          department.total >
+                          0
+                            ? (department.completed /
+                                department.total) *
+                              100
+                            : 0
+                        }%`,
+                      }}
+                    />
+
+                    <div
+                      className="h-2 rounded-full bg-blue-500"
+                      style={{
+                        width: `${
+                          department.total >
+                          0
+                            ? (department.running /
+                                department.total) *
+                              100
+                            : 0
+                        }%`,
+                      }}
+                    />
+
+                    <div
+                      className="h-2 rounded-full bg-red-500"
+                      style={{
+                        width: `${
+                          department.total >
+                          0
+                            ? (department.delayed /
+                                department.total) *
+                              100
+                            : 0
+                        }%`,
+                      }}
+                    />
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-600">
+                    <span>
+                      Completed:{' '}
+                      <strong>
+                        {
+                          department.completed
+                        }
+                      </strong>
+                    </span>
+
+                    <span>
+                      Delayed:{' '}
+                      <strong>
+                        {
+                          department.delayed
+                        }
+                      </strong>
+                    </span>
+                  </div>
+                </div>
+              ),
+            )}
+          </div>
+        </div>
+
+        {filteredPerformanceDepartments.length ===
+        0 ? (
+          <div className="rounded-3xl border bg-white p-8 text-center shadow">
+            <p className="font-semibold text-gray-700">
+              No activities match this performance filter.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {filteredPerformanceDepartments.map(
+              (department) => (
+                <details
+                  key={
+                    department.module
+                  }
+                  open={
+                    department.attentionRequired >
+                      0 ||
+                    performanceFilter !==
+                      'ALL'
+                  }
+                  className="group overflow-hidden rounded-3xl border bg-white shadow"
+                >
+                  <summary className="cursor-pointer list-none p-5 md:p-6">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-[0.18em] text-gray-400">
+                          Department
+                        </p>
+
+                        <h3 className="mt-1 text-xl font-black text-gray-950">
+                          {formatLabel(
+                            department.module,
+                          )}
+                        </h3>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2 text-xs font-bold">
+                        <span className="rounded-full bg-gray-100 px-3 py-1.5 text-gray-700">
+                          {
+                            department.activities
+                              .length
+                          }{' '}
+                          shown
+                        </span>
+
+                        {department.attentionRequired >
+                        0 ? (
+                          <span className="rounded-full bg-red-100 px-3 py-1.5 text-red-700">
+                            {
+                              department.attentionRequired
+                            }{' '}
+                            attention
+                          </span>
+                        ) : null}
+
+                        <span className="rounded-full bg-slate-900 px-3 py-1.5 text-white">
+                          Expand / Collapse
+                        </span>
+                      </div>
+                    </div>
+                  </summary>
+
+                  <div className="border-t bg-gray-50 p-4 md:p-6">
+                    <div className="space-y-4">
+                      {department.activities.map(
+                        (activity) => {
+                          const {
+                            plannedWidth,
+                            actualWidth,
+                          } =
+                            getPerformanceBarWidths(
+                              activity.plannedDays,
+                              activity.actualDays,
+                            );
+
+                          return (
+                            <div
+                              key={
+                                activity.ruleId
+                              }
+                              className="rounded-3xl border bg-white p-4 shadow-sm md:p-5"
+                            >
+                              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                <div>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <h4 className="text-lg font-black text-gray-950">
+                                      {
+                                        activity.ruleName
+                                      }
+                                    </h4>
+
+                                    <span
+                                      className={`rounded-full px-3 py-1 text-xs font-bold ${getStatusClasses(
+                                        activity.status,
+                                      )}`}
+                                    >
+                                      {formatLabel(
+                                        activity.status,
+                                      )}
+                                    </span>
+                                  </div>
+
+                                  <p className="mt-1 text-sm text-gray-500">
+                                    {formatLabel(
+                                      activity.targetMilestone,
+                                    )}
+                                  </p>
+                                </div>
+
+                                {activity.varianceDays !==
+                                null ? (
+                                  <div className="text-left lg:text-right">
+                                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+                                      Variance
+                                    </p>
+
+                                    <p
+                                      className={`mt-1 text-xl font-black ${
+                                        activity.varianceDays >
+                                        0
+                                          ? 'text-red-600'
+                                          : activity.varianceDays <
+                                              0
+                                            ? 'text-green-600'
+                                            : 'text-gray-900'
+                                      }`}
+                                    >
+                                      {activity.varianceDays >
+                                      0
+                                        ? '+'
+                                        : ''}
+                                      {
+                                        activity.varianceDays
+                                      }{' '}
+                                      day(s)
+                                    </p>
+                                  </div>
+                                ) : null}
+                              </div>
+
+                              <div className="mt-5 grid gap-4 xl:grid-cols-[1fr_220px]">
+                                <div>
+                                  <div className="mb-2 flex items-center justify-between gap-4 text-xs font-semibold text-gray-500">
+                                    <span>
+                                      Planned vs Actual
+                                    </span>
+
+                                    <span>
+                                      {
+                                        activity.plannedDays
+                                      }{' '}
+                                      planned
+                                      {' / '}
+                                      {activity.actualDays ===
+                                      null
+                                        ? '-'
+                                        : activity.actualDays}{' '}
+                                      actual
+                                    </span>
+                                  </div>
+
+                                  <div className="space-y-2">
+                                    <div>
+                                      <div className="mb-1 flex items-center justify-between text-xs">
+                                        <span className="font-semibold text-gray-600">
+                                          Planned
+                                        </span>
+
+                                        <span className="font-bold text-gray-900">
+                                          {
+                                            activity.plannedDays
+                                          }{' '}
+                                          days
+                                        </span>
+                                      </div>
+
+                                      <div className="h-4 overflow-hidden rounded-full bg-gray-100">
+                                        <div
+                                          className="h-full rounded-full bg-slate-400"
+                                          style={{
+                                            width: `${plannedWidth}%`,
+                                          }}
+                                        />
+                                      </div>
+                                    </div>
+
+                                    <div>
+                                      <div className="mb-1 flex items-center justify-between text-xs">
+                                        <span className="font-semibold text-gray-600">
+                                          Actual
+                                        </span>
+
+                                        <span className="font-bold text-gray-900">
+                                          {activity.actualDays ===
+                                          null
+                                            ? '-'
+                                            : `${activity.actualDays} days`}
+                                        </span>
+                                      </div>
+
+                                      <div className="h-4 overflow-hidden rounded-full bg-gray-100">
+                                        <div
+                                          className={`h-full rounded-full ${
+                                            activity.varianceDays !==
+                                              null &&
+                                            activity.varianceDays >
+                                              0
+                                              ? 'bg-red-500'
+                                              : activity.completed
+                                                ? 'bg-green-500'
+                                                : 'bg-blue-500'
+                                          }`}
+                                          style={{
+                                            width: `${actualWidth}%`,
+                                          }}
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-2 xl:grid-cols-1">
+                                  <div className="rounded-2xl bg-gray-50 p-3">
+                                    <p className="text-xs text-gray-500">
+                                      Trigger
+                                    </p>
+
+                                    <p className="mt-1 font-bold text-gray-900">
+                                      {activity.triggerType ===
+                                      'PROJECT_CREATED'
+                                        ? 'Project Creation'
+                                        : `${activity.triggerValue}% Payment`}
+                                    </p>
+
+                                    <p className="mt-1 text-xs text-gray-500">
+                                      {formatDate(
+                                        activity.triggerDate,
+                                      )}
+                                    </p>
+                                  </div>
+
+                                  <div className="rounded-2xl bg-gray-50 p-3">
+                                    <p className="text-xs text-gray-500">
+                                      Due / Completion
+                                    </p>
+
+                                    <p className="mt-1 text-xs font-semibold text-gray-700">
+                                      Due:{' '}
+                                      {formatDate(
+                                        activity.dueDate,
+                                      )}
+                                    </p>
+
+                                    <p className="mt-1 text-xs font-semibold text-gray-700">
+                                      Done:{' '}
+                                      {formatDate(
+                                        activity.completedDate,
+                                      )}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        },
+                      )}
+                    </div>
+                  </div>
+                </details>
+              ),
+            )}
+          </div>
+        )}
+
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() =>
+              router.push(
+                `/project/${performanceData.project.id}`,
+              )
+            }
+            className="rounded-2xl bg-slate-950 px-6 py-3 font-bold text-white shadow hover:bg-slate-800"
+          >
+            Open Project
+          </button>
+        </div>
+      </>
+    ) : (
+      <div className="rounded-3xl border border-dashed bg-white p-10 text-center shadow-sm">
+        <p className="text-lg font-bold text-gray-800">
+          Select a project to view its timeline performance.
+        </p>
+
+        <p className="mt-2 text-sm text-gray-500">
+          The dashboard will compare configured planned days against actual elapsed or completion days for every applicable activity.
+        </p>
+      </div>
+    )}
+  </div>
+) : null}
 
       {activeTab ===
         'SETTINGS' &&

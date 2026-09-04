@@ -3766,6 +3766,24 @@ async getUnreadLoanReminderCount(
  * available activities/statuses for the
  * OWNER timeline-rule searchable dropdown.
  */
+
+@Get(
+  'timeline/project-search',
+)
+searchProjectTimelinePerformanceProjects(
+  @Query()
+  query: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .searchProjectTimelinePerformanceProjects(
+      query,
+      user,
+    );
+}
+
 @Get('timeline/options')
 getProjectTimelineOptions() {
   return this.projectService

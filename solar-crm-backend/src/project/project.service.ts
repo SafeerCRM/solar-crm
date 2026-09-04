@@ -31460,6 +31460,42 @@ async getProjectTimelineFilterOptions(
         `,
       );
 
+      const cityQb =
+  this.projectRepository
+    .createQueryBuilder(
+      'project',
+    )
+    .select(
+      'DISTINCT project.city',
+      'city',
+    )
+    .where(
+      'project."isHidden" = false',
+    )
+    .andWhere(
+      `
+      project.status NOT IN (
+        :cancelledStatus,
+        :rejectedStatus
+      )
+      `,
+      {
+        cancelledStatus:
+          ProjectStatus.CANCELLED,
+
+        rejectedStatus:
+          ProjectStatus.REJECTED,
+      },
+    )
+    .andWhere(
+      `
+      COALESCE(
+        project.city,
+        ''
+      ) != ''
+      `,
+    );
+
   const ownerQb =
   this.projectRepository
     .createQueryBuilder(
@@ -31534,6 +31570,16 @@ async getProjectTimelineFilterOptions(
       },
     );
 
+    cityQb.andWhere(
+  `
+  project."projectOwnerId" =
+    :currentUserId
+  `,
+  {
+    currentUserId,
+  },
+);
+
     ownerQb.andWhere(
       `
       project."projectOwnerId" =
@@ -31546,16 +31592,24 @@ async getProjectTimelineFilterOptions(
   }
 
   const [
-    branchRows,
-    ownerRows,
-  ] =
-    await Promise.all([
+  branchRows,
+  cityRows,
+  ownerRows,
+] =
+  await Promise.all([
       branchQb
         .orderBy(
           'project."branchName"',
           'ASC',
         )
         .getRawMany(),
+
+        cityQb
+  .orderBy(
+    'project.city',
+    'ASC',
+  )
+  .getRawMany(),
 
       ownerQb
   .orderBy(
@@ -31576,6 +31630,17 @@ async getProjectTimelineFilterOptions(
             ).trim(),
         )
         .filter(Boolean),
+
+        cities:
+  cityRows
+    .map(
+      (row: any) =>
+        String(
+          row.city ||
+            '',
+        ).trim(),
+    )
+    .filter(Boolean),
 
     projectOwners:
       ownerRows
@@ -34649,6 +34714,337 @@ async getProjectTimelinePerformance(
       Array.from(
         departmentMap.values(),
       ),
+  };
+}
+
+async searchProjectTimelinePerformanceProjects(
+  query: any = {},
+  currentUser?: any,
+) {
+  const page =
+    Math.max(
+      Number(query?.page || 1),
+      1,
+    );
+
+  const limit =
+    Math.min(
+      Math.max(
+        Number(query?.limit || 20),
+        1,
+      ),
+      50,
+    );
+
+  const search =
+    String(
+      query?.search || '',
+    ).trim();
+
+  const branch =
+    String(
+      query?.branch || '',
+    ).trim();
+
+  const city =
+    String(
+      query?.city || '',
+    ).trim();
+
+  const projectType =
+    String(
+      query?.projectType || '',
+    )
+      .trim()
+      .toUpperCase();
+
+  const projectWorkState =
+    String(
+      query?.projectWorkState || '',
+    )
+      .trim()
+      .toUpperCase();
+
+  const projectOwnerId =
+    Number(
+      query?.projectOwnerId || 0,
+    );
+
+  const qb =
+    this.projectRepository
+      .createQueryBuilder(
+        'project',
+      )
+      .where(
+        'project."isHidden" = false',
+      )
+      .andWhere(
+        `
+        project.status NOT IN (
+          :cancelledStatus,
+          :rejectedStatus
+        )
+        `,
+        {
+          cancelledStatus:
+            ProjectStatus.CANCELLED,
+
+          rejectedStatus:
+            ProjectStatus.REJECTED,
+        },
+      );
+
+  if (search) {
+    qb.andWhere(
+      `(
+        CAST(
+          project.id
+          AS TEXT
+        ) ILIKE :search
+
+        OR COALESCE(
+          project."customerName",
+          ''
+        ) ILIKE :search
+
+        OR COALESCE(
+          project."customerPhone",
+          ''
+        ) ILIKE :search
+
+        OR COALESCE(
+          project."electricityKNumber",
+          ''
+        ) ILIKE :search
+
+        OR COALESCE(
+          project."projectSerial",
+          ''
+        ) ILIKE :search
+      )`,
+      {
+        search:
+          `%${search}%`,
+      },
+    );
+  }
+
+  if (branch) {
+    qb.andWhere(
+      `
+      COALESCE(
+        project."branchName",
+        ''
+      ) ILIKE :branch
+      `,
+      {
+        branch:
+          `%${branch}%`,
+      },
+    );
+  }
+
+  if (city) {
+    qb.andWhere(
+      `
+      COALESCE(
+        project.city,
+        ''
+      ) ILIKE :city
+      `,
+      {
+        city:
+          `%${city}%`,
+      },
+    );
+  }
+
+  if (
+    projectType ===
+      ProjectType.CASH ||
+    projectType ===
+      ProjectType.LOAN
+  ) {
+    qb.andWhere(
+      `
+      project."projectType" =
+        :projectType
+      `,
+      {
+        projectType,
+      },
+    );
+  }
+
+  if (projectWorkState) {
+    qb.andWhere(
+      `
+      project."projectWorkState" =
+        :projectWorkState
+      `,
+      {
+        projectWorkState,
+      },
+    );
+  }
+
+  if (
+    Number.isInteger(
+      projectOwnerId,
+    ) &&
+    projectOwnerId > 0
+  ) {
+    qb.andWhere(
+      `
+      project."projectOwnerId" =
+        :projectOwnerId
+      `,
+      {
+        projectOwnerId,
+      },
+    );
+  }
+
+  const roles =
+    Array.isArray(
+      currentUser?.roles,
+    )
+      ? currentUser.roles
+      : [];
+
+  const currentUserId =
+    Number(
+      currentUser?.id ||
+      currentUser?.userId ||
+      currentUser?.sub ||
+      0,
+    );
+
+  const canSeeAll =
+    roles.includes('OWNER') ||
+    roles.includes('MARKETING_HEAD') ||
+    roles.includes('PROJECT_MANAGER') ||
+    roles.includes('PAYMENT_MANAGER') ||
+    roles.includes('ACCOUNT_MANAGER') ||
+    roles.includes('LOAN_MANAGER') ||
+    roles.includes('SUBSIDY_MANAGER') ||
+    roles.includes('ELECTRICITY_MANAGER');
+
+  if (
+    !canSeeAll &&
+    currentUserId > 0
+  ) {
+    qb.andWhere(
+      `
+      project."projectOwnerId" =
+        :currentUserId
+      `,
+      {
+        currentUserId,
+      },
+    );
+  }
+
+  qb.select([
+    'project.id',
+    'project.customerName',
+    'project.customerPhone',
+    'project.electricityKNumber',
+    'project.projectSerial',
+    'project.projectType',
+    'project.status',
+    'project.projectWorkState',
+    'project.branchName',
+    'project.city',
+    'project.projectOwnerId',
+    'project.projectOwnerName',
+    'project.createdAt',
+  ]);
+
+  qb.orderBy(
+    'project."createdAt"',
+    'DESC',
+  );
+
+  qb.skip(
+    (page - 1) *
+      limit,
+  );
+
+  qb.take(
+    limit,
+  );
+
+  const [
+    projects,
+    total,
+  ] =
+    await qb.getManyAndCount();
+
+  return {
+    data:
+      projects.map(
+        (project: any) => ({
+          id:
+            Number(
+              project.id,
+            ),
+
+          customerName:
+            project.customerName ||
+            '',
+
+          customerPhone:
+            project.customerPhone ||
+            '',
+
+          electricityKNumber:
+            project.electricityKNumber ||
+            '',
+
+          projectSerial:
+            project.projectSerial ||
+            '',
+
+          projectType:
+            project.projectType ||
+            null,
+
+          projectStatus:
+            project.status ||
+            null,
+
+          projectWorkState:
+            project.projectWorkState ||
+            null,
+
+          branchName:
+            project.branchName ||
+            '',
+
+          city:
+            project.city ||
+            '',
+
+          projectOwnerId:
+            project.projectOwnerId ||
+            null,
+
+          projectOwnerName:
+            project.projectOwnerName ||
+            '',
+        }),
+      ),
+
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages:
+        Math.ceil(
+          total / limit,
+        ) || 1,
+    },
   };
 }
 
