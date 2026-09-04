@@ -1306,11 +1306,54 @@ const ratings = requestIds.length
       .getMany()
   : [];
 
-const dataWithRatings = data.map((request) => ({
-  ...request,
-  rating:
-    ratings.find((rating) => rating.requestId === request.id) || null,
-}));
+  const customerAttachments =
+  requestIds.length
+    ? await this
+        .afterSalesRequestProofRepository
+        .createQueryBuilder('proof')
+        .where(
+          'proof.requestId IN (:...requestIds)',
+          {
+            requestIds,
+          },
+        )
+        .andWhere(
+          'proof.proofType IN (:...customerProofTypes)',
+          {
+            customerProofTypes: [
+              CustomerAfterSalesProofType
+                .CUSTOMER_PHOTO,
+
+              CustomerAfterSalesProofType
+                .CUSTOMER_AUDIO,
+            ],
+          },
+        )
+        .orderBy(
+          'proof.createdAt',
+          'DESC',
+        )
+        .getMany()
+    : [];
+
+const dataWithRatings =
+  data.map((request) => ({
+    ...request,
+
+    rating:
+      ratings.find(
+        (rating) =>
+          rating.requestId ===
+          request.id,
+      ) || null,
+
+    customerAttachments:
+      customerAttachments.filter(
+        (attachment) =>
+          attachment.requestId ===
+          request.id,
+      ),
+  }));
 
 return {
   data: dataWithRatings,
@@ -1369,6 +1412,31 @@ async createAfterSalesRequestFromCustomer(customerId: number, body: any) {
     throw new NotFoundException('Service not available');
   }
 
+  const attachments =
+  Array.isArray(body?.attachments)
+    ? body.attachments
+    : [];
+
+const customerPhotos =
+  attachments.filter(
+    (attachment: any) =>
+      String(
+        attachment?.mimeType || '',
+      ).startsWith('image/') ||
+      String(
+        attachment?.attachmentType || '',
+      ) === 'IMAGE',
+  );
+
+if (
+  !service.isPaidService &&
+  customerPhotos.length === 0
+) {
+  throw new BadRequestException(
+    'At least one photo is required for a free service request',
+  );
+}
+
   const projects = await this.projectRepository.find({
     where: {
       customerId,
@@ -1419,12 +1487,89 @@ request.status = CustomerAfterSalesRequestStatus.NEW;
   const savedRequest =
   await this.afterSalesRequestRepository.save(request);
 
+  for (const attachment of attachments) {
+  if (!attachment?.fileUrl) {
+    continue;
+  }
+
+  const mimeType =
+    String(
+      attachment.mimeType || '',
+    );
+
+  const isImage =
+    mimeType.startsWith('image/') ||
+    attachment.attachmentType ===
+      'IMAGE';
+
+  const isAudio =
+    mimeType.startsWith('audio/') ||
+    mimeType === 'video/webm' ||
+    attachment.attachmentType ===
+      'AUDIO';
+
+  if (!isImage && !isAudio) {
+    continue;
+  }
+
+  await this
+    .afterSalesRequestProofRepository
+    .save(
+      this
+        .afterSalesRequestProofRepository
+        .create({
+          requestId:
+            savedRequest.id,
+
+          proofType:
+            isImage
+              ? CustomerAfterSalesProofType
+                  .CUSTOMER_PHOTO
+              : CustomerAfterSalesProofType
+                  .CUSTOMER_AUDIO,
+
+          fileUrl:
+            String(
+              attachment.fileUrl,
+            ),
+
+          fileName:
+            String(
+              attachment.fileName ||
+                '',
+            ),
+
+          mimeType,
+
+          remarks: '',
+
+          uploadedBy:
+            customer.id,
+
+          uploadedByName:
+            customer.customerName ||
+            customer.customerCode ||
+            'Customer',
+        }),
+    );
+}
+
 await this.addAfterSalesRequestActivity(
   savedRequest.id,
   'REQUEST_CREATED',
   'Service Request Created',
   `Customer requested "${savedRequest.serviceName}".`,
 );
+
+if (attachments.length > 0) {
+  await this
+    .addAfterSalesRequestActivity(
+      savedRequest.id,
+      'CUSTOMER_ATTACHMENTS_UPLOADED',
+      'Customer Attachments Uploaded',
+      `${attachments.length} attachment(s) uploaded by customer.`,
+    );
+}
 
 await this.notifyAfterSalesCustomer(
   savedRequest,
@@ -2201,6 +2346,169 @@ async uploadComplaintAttachments(files: any[], user: any) {
   return {
     message: `${uploadedFiles.length} complaint attachment(s) uploaded successfully`,
     attachments: uploadedFiles,
+  };
+}
+
+async uploadAfterSalesAttachments(
+  files: any[],
+  user: any,
+) {
+  if (!Array.isArray(files) || files.length === 0) {
+    throw new BadRequestException(
+      'At least one after-sales attachment is required',
+    );
+  }
+
+  const uploadedFiles: any[] = [];
+
+  const allowedTypes = [
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'audio/mpeg',
+    'audio/mp3',
+    'audio/wav',
+    'audio/webm',
+    'audio/ogg',
+    'audio/mp4',
+    'video/webm',
+  ];
+
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const bucket =
+    process.env.SUPABASE_PROJECT_DOCUMENTS_BUCKET ||
+    'project-documents';
+
+  if (!supabaseUrl || !serviceKey) {
+    throw new BadRequestException(
+      'Supabase storage is not configured',
+    );
+  }
+
+  const supabase = createClient(
+    supabaseUrl,
+    serviceKey,
+  );
+
+  for (const file of files) {
+    if (!file) continue;
+
+    const mimeType = String(file.mimetype || '');
+
+    const isImage =
+      mimeType.startsWith('image/');
+
+    const isAudio =
+      mimeType.startsWith('audio/') ||
+      mimeType === 'video/webm';
+
+    if (!allowedTypes.includes(mimeType)) {
+      throw new BadRequestException(
+        'Only JPG, PNG, WEBP photos and MP3, WAV, WEBM, OGG audio files are allowed',
+      );
+    }
+
+    const maxImageSize =
+      5 * 1024 * 1024;
+
+    const maxAudioSize =
+      15 * 1024 * 1024;
+
+    if (
+      isImage &&
+      file.size > maxImageSize
+    ) {
+      throw new BadRequestException(
+        'After-sales photo must be less than 5 MB',
+      );
+    }
+
+    if (
+      isAudio &&
+      file.size > maxAudioSize
+    ) {
+      throw new BadRequestException(
+        'After-sales audio must be less than 15 MB',
+      );
+    }
+
+    const originalName = String(
+      file.originalname ||
+        'after-sales-attachment',
+    );
+
+    const extension =
+      originalName.includes('.')
+        ? originalName.split('.').pop()
+        : mimeType.split('/')[1] || 'file';
+
+    const safeExtension = String(
+      extension || 'file',
+    ).replace(
+      /[^a-zA-Z0-9]/g,
+      '',
+    );
+
+    const folder = isImage
+      ? 'customer-after-sales'
+      : 'customer-after-sales-audio';
+
+    const filePath =
+      `${folder}/customer-${
+        user?.id || 'unknown'
+      }/${Date.now()}-${randomUUID()}.${safeExtension}`;
+
+    const uploadResult =
+      await supabase.storage
+        .from(bucket)
+        .upload(
+          filePath,
+          file.buffer,
+          {
+            contentType: mimeType,
+            upsert: false,
+          },
+        );
+
+    if (uploadResult.error) {
+      throw new BadRequestException(
+        uploadResult.error.message,
+      );
+    }
+
+    const publicUrlResult =
+      supabase.storage
+        .from(bucket)
+        .getPublicUrl(filePath);
+
+    uploadedFiles.push({
+      fileUrl:
+        publicUrlResult.data.publicUrl,
+
+      fileName:
+        originalName,
+
+      fileSize:
+        file.size,
+
+      filePath,
+
+      mimeType,
+
+      attachmentType:
+        isImage
+          ? 'IMAGE'
+          : 'AUDIO',
+    });
+  }
+
+  return {
+    message:
+      `${uploadedFiles.length} after-sales attachment(s) uploaded successfully`,
+
+    attachments:
+      uploadedFiles,
   };
 }
 

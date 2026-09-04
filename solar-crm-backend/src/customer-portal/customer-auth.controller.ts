@@ -402,6 +402,52 @@ async getCustomerAfterSalesRequests(
 });
 }
 
+@Post('after-sales-attachments/upload')
+@UseInterceptors(
+  FilesInterceptor('files', 10),
+)
+async uploadAfterSalesAttachments(
+  @Req() req: any,
+  @UploadedFiles() files: any[],
+) {
+  const authHeader =
+    req.headers?.authorization || '';
+
+  const token =
+    authHeader.replace('Bearer ', '');
+
+  if (!token) {
+    throw new UnauthorizedException(
+      'Customer token missing',
+    );
+  }
+
+  const payload: any =
+    jwt.verify(
+      token,
+      'mysecretkey',
+    );
+
+  if (!payload?.customerId) {
+    throw new UnauthorizedException(
+      'Invalid customer token',
+    );
+  }
+
+  return this.service
+    .uploadAfterSalesAttachments(
+      files,
+      {
+        id: Number(
+          payload.customerId,
+        ),
+        name:
+          payload.customerCode,
+        roles: ['CUSTOMER'],
+      },
+    );
+}
+
 @Post('after-sales-requests')
 async createCustomerAfterSalesRequest(
   @Req() req: any,

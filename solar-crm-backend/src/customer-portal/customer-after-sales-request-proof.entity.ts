@@ -6,6 +6,9 @@ import {
 } from 'typeorm';
 
 export enum CustomerAfterSalesProofType {
+  CUSTOMER_PHOTO = 'CUSTOMER_PHOTO',
+  CUSTOMER_AUDIO = 'CUSTOMER_AUDIO',
+
   BEFORE_PHOTO = 'BEFORE_PHOTO',
   AFTER_PHOTO = 'AFTER_PHOTO',
   COMPLETION_PHOTO = 'COMPLETION_PHOTO',
@@ -22,11 +25,10 @@ export class CustomerAfterSalesRequestProof {
   requestId: number;
 
   @Column({
-    type: 'enum',
-    enum: CustomerAfterSalesProofType,
-    default: CustomerAfterSalesProofType.OTHER,
-  })
-  proofType: CustomerAfterSalesProofType;
+  type: 'varchar',
+  default: CustomerAfterSalesProofType.OTHER,
+})
+proofType: CustomerAfterSalesProofType;
 
   @Column({ type: 'text' })
   fileUrl: string;
