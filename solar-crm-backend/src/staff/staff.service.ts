@@ -11991,4 +11991,119 @@ async reviewAttendanceExceptionRequest(
     },
   );
 }
+
+async getTodaysBirthdays() {
+  /*
+   * Resolve today's calendar date explicitly in IST.
+   *
+   * Do not use:
+   * new Date().toISOString().slice(0, 10)
+   *
+   * because that uses UTC and can be one day behind
+   * during the first 5 hours 30 minutes of an IST day.
+   */
+  const now = new Date();
+
+  const istParts =
+    new Intl.DateTimeFormat(
+      'en-CA',
+      {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      },
+    ).formatToParts(now);
+
+  const part = (type: string) =>
+    istParts.find(
+      (item) =>
+        item.type === type,
+    )?.value || '';
+
+  const year =
+    part('year');
+
+  const month =
+    part('month');
+
+  const day =
+    part('day');
+
+  const today =
+    `${year}-${month}-${day}`;
+
+  const birthdays =
+    await this.staffRepo
+      .createQueryBuilder('staff')
+      .where(
+        'staff."isHidden" = false',
+      )
+      .andWhere(
+        'staff."isActive" = true',
+      )
+      .andWhere(
+        'staff."birthdayReminderEnabled" = true',
+      )
+      .andWhere(
+        'staff."dateOfBirth" IS NOT NULL',
+      )
+      .andWhere(
+        `
+        EXTRACT(
+          MONTH FROM staff."dateOfBirth"
+        ) = :month
+        `,
+        {
+          month:
+            Number(month),
+        },
+      )
+      .andWhere(
+        `
+        EXTRACT(
+          DAY FROM staff."dateOfBirth"
+        ) = :day
+        `,
+        {
+          day:
+            Number(day),
+        },
+      )
+      .orderBy(
+        'staff."fullName"',
+        'ASC',
+      )
+      .getMany();
+
+  return {
+    date: today,
+
+    birthdays:
+      birthdays.map(
+        (staff) => ({
+          id:
+            staff.id,
+
+          fullName:
+            staff.fullName,
+
+          designation:
+            staff.designation || '',
+
+          department:
+            staff.department || '',
+
+          staffRole:
+            staff.staffRole || '',
+
+          photoUrl:
+            staff.photoUrl || '',
+
+          birthdayRemarks:
+            staff.birthdayRemarks || '',
+        }),
+      ),
+  };
+}
 }

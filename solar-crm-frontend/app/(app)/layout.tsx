@@ -7,6 +7,7 @@ import axios from 'axios';
 import { getAuthHeaders } from '@/lib/authHeaders';
 import AppSecurityGate from '@/components/AppSecurityGate';
 import LiveLocationManager from '@/components/LiveLocationManager';
+import BirthdayPopupManager from '@/components/BirthdayPopupManager';
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -862,6 +863,7 @@ const [bellOpen, setBellOpen] = useState(false);
             <main className="min-w-0 flex-1 px-3 pb-4 pt-20 md:p-8">{children}</main>
     </div>
     <LiveLocationManager />
+<BirthdayPopupManager />
     </AppSecurityGate>
 
   );

@@ -5,6 +5,7 @@ import { StaffDocument } from './staff-document.entity';
 import { StaffAsset } from './staff-asset.entity';
 import { StaffService } from './staff.service';
 import { StaffController } from './staff.controller';
+import { StaffBirthdayController } from './staff-birthday.controller';
 import { StaffAttendance } from './staff-attendance.entity';
 import { StaffSelfController } from './staff-self.controller';
 import { StaffLeave } from './staff-leave.entity';
@@ -112,7 +113,7 @@ ProjectStockItem,
 CallLog,
     ]),
   ],
-  controllers: [StaffController, StaffSelfController],
+  controllers: [StaffController, StaffSelfController, StaffBirthdayController],
   providers: [
   StaffService,
   StaffPayrollCalculatorService,
