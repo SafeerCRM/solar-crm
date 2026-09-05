@@ -5736,20 +5736,218 @@ async hidePayroll(
   );
 }
 
-async restorePayroll(id: number, body: any, user: any) {
-  const payroll = await this.payrollRepo.findOne({ where: { id } });
+async restorePayroll(
+  id: number,
+  body: any,
+  user: any,
+) {
+  const payroll =
+    await this.payrollRepo.findOne({
+      where: {
+        id,
+      },
+    });
 
   if (!payroll) {
-    throw new NotFoundException('Payroll not found');
+    throw new NotFoundException(
+      'Payroll not found',
+    );
   }
 
-  payroll.isHidden = false;
-  payroll.restoredAt = new Date();
-  payroll.restoredBy = user?.id || null;
-  payroll.restoredByName = user?.name || '';
-  payroll.restoreReason = body?.reason || '';
+  if (!payroll.isHidden) {
+    throw new BadRequestException(
+      'Payroll is already active',
+    );
+  }
 
-  return this.payrollRepo.save(payroll);
+  return this.payrollRepo.manager.transaction(
+    async (manager) => {
+      /*
+       * Never restore an old payroll if a
+       * replacement payroll already exists
+       * for the same employee/month.
+       */
+      const conflictingPayroll =
+        await manager
+          .getRepository(
+            StaffPayroll,
+          )
+          .createQueryBuilder(
+            'otherPayroll',
+          )
+          .where(
+            'otherPayroll.id != :id',
+            {
+              id:
+                payroll.id,
+            },
+          )
+          .andWhere(
+            'otherPayroll."staffId" = :staffId',
+            {
+              staffId:
+                payroll.staffId,
+            },
+          )
+          .andWhere(
+            'otherPayroll."payrollMonth" = :payrollMonth',
+            {
+              payrollMonth:
+                payroll.payrollMonth,
+            },
+          )
+          .andWhere(
+            'COALESCE(otherPayroll."isHidden", false) = false',
+          )
+          .getOne();
+
+      if (conflictingPayroll) {
+        throw new BadRequestException(
+          'Another active payroll already exists for this employee and month. The old payroll cannot be restored.',
+        );
+      }
+
+      const snapshot: any =
+        payroll.calculationSnapshot ||
+        {};
+
+      const penaltyCases =
+        Array.isArray(
+          snapshot?.penalties?.cases,
+        )
+          ? snapshot.penalties.cases
+          : [];
+
+      const penaltyIds =
+        penaltyCases
+          .map(
+            (item: any) =>
+              Number(item.id),
+          )
+          .filter(
+            (penaltyId: number) =>
+              Number.isInteger(
+                penaltyId,
+              ) &&
+              penaltyId > 0,
+          );
+
+      if (
+        penaltyIds.length > 0
+      ) {
+        const penaltyRepo =
+          manager.getRepository(
+            StaffPenalty,
+          );
+
+        const penalties =
+          await penaltyRepo.findByIds(
+            penaltyIds,
+          );
+
+        if (
+          penalties.length !==
+          penaltyIds.length
+        ) {
+          throw new BadRequestException(
+            'One or more original payroll penalties no longer exist. Payroll cannot be restored safely.',
+          );
+        }
+
+        for (
+          const penalty of
+          penalties
+        ) {
+          if (
+            penalty.isHidden
+          ) {
+            throw new BadRequestException(
+              `Penalty #${penalty.id} is hidden. Payroll cannot be restored until the penalty record is resolved.`,
+            );
+          }
+
+          if (
+            penalty.status ===
+              StaffPenaltyStatus
+                .APPLIED_TO_PAYROLL &&
+            Number(
+              penalty.payrollId,
+            ) !==
+              Number(
+                payroll.id,
+              )
+          ) {
+            throw new BadRequestException(
+              `Penalty #${penalty.id} has already been applied to another payroll.`,
+            );
+          }
+
+          if (
+            penalty.status !==
+              StaffPenaltyStatus
+                .APPROVED &&
+            !(
+              penalty.status ===
+                StaffPenaltyStatus
+                  .APPLIED_TO_PAYROLL &&
+              Number(
+                penalty.payrollId,
+              ) ===
+                Number(
+                  payroll.id,
+                )
+            )
+          ) {
+            throw new BadRequestException(
+              `Penalty #${penalty.id} is currently ${penalty.status} and cannot be re-linked to this payroll.`,
+            );
+          }
+        }
+
+        const appliedAt =
+          new Date();
+
+        for (
+          const penalty of
+          penalties
+        ) {
+          penalty.status =
+            StaffPenaltyStatus
+              .APPLIED_TO_PAYROLL;
+
+          penalty.payrollId =
+            payroll.id;
+
+          penalty.appliedToPayrollAt =
+            appliedAt;
+        }
+
+        await penaltyRepo.save(
+          penalties,
+        );
+      }
+
+      payroll.isHidden = false;
+
+      payroll.restoredAt =
+        new Date();
+
+      payroll.restoredBy =
+        user?.id || null;
+
+      payroll.restoredByName =
+        user?.name || '';
+
+      payroll.restoreReason =
+        String(
+          body?.reason || '',
+        ).trim();
+
+      return manager.save(
+        payroll,
+      );
+    },
+  );
 }
 
 async createIncentiveRule(body: any, user: any) {
@@ -8333,71 +8531,313 @@ async listPenaltyRules(query: any) {
   };
 }
 
-async createPenaltyRule(body: any, user: any) {
-  if (!String(body.ruleName || '').trim()) {
-    throw new BadRequestException('Penalty rule name is required');
+private normalizePenaltyRulePayload(
+  body: any,
+  existing?: PenaltyRule,
+) {
+  const ruleName = String(
+    body.ruleName ??
+      existing?.ruleName ??
+      '',
+  ).trim();
+
+  if (!ruleName) {
+    throw new BadRequestException(
+      'Penalty rule name is required',
+    );
   }
 
-  const item = this.penaltyRuleRepository.create({
-    ruleName: String(body.ruleName).trim(),
-    description: body.description || '',
-    applicableRoles: Array.isArray(body.applicableRoles)
-      ? body.applicableRoles
-      : [],
-    department: body.department || '',
-    branchName: body.branchName || '',
-    penaltyType: body.penaltyType || 'CUSTOM',
-    calculationType: body.calculationType || 'MANUAL',
-    amount: Number(body.amount || 0),
-    percentageRate: Number(body.percentageRate || 0),
-    requiresApproval: body.requiresApproval !== false,
-    includeInPayroll: body.includeInPayroll !== false,
-    isActive: body.isActive !== false,
-    isHidden: false,
-    createdBy: user?.id || null,
-    createdByName: user?.name || '',
-  });
+  const calculationType =
+    String(
+      body.calculationType ??
+        existing?.calculationType ??
+        PenaltyCalculationType.MANUAL,
+    )
+      .trim()
+      .toUpperCase() as
+      PenaltyCalculationType;
 
-  return this.penaltyRuleRepository.save(item);
+  if (
+    !Object.values(
+      PenaltyCalculationType,
+    ).includes(
+      calculationType,
+    )
+  ) {
+    throw new BadRequestException(
+      'Invalid penalty calculation type',
+    );
+  }
+
+  let amount =
+    body.amount === undefined
+      ? Number(
+          existing?.amount || 0,
+        )
+      : Number(
+          body.amount || 0,
+        );
+
+  let percentageRate =
+    body.percentageRate ===
+      undefined
+      ? Number(
+          existing?.percentageRate ||
+            0,
+        )
+      : Number(
+          body.percentageRate || 0,
+        );
+
+  if (
+    !Number.isFinite(amount) ||
+    amount < 0
+  ) {
+    throw new BadRequestException(
+      'Penalty amount must be a valid non-negative amount',
+    );
+  }
+
+  if (
+    !Number.isFinite(
+      percentageRate,
+    ) ||
+    percentageRate < 0 ||
+    percentageRate > 100
+  ) {
+    throw new BadRequestException(
+      'Penalty percentage must be between 0 and 100',
+    );
+  }
+
+  /*
+   * Normalize irrelevant values so the
+   * rule has one clear calculation source.
+   */
+  if (
+    calculationType ===
+    PenaltyCalculationType.FIXED
+  ) {
+    percentageRate = 0;
+  }
+
+  if (
+    calculationType ===
+    PenaltyCalculationType.PERCENTAGE
+  ) {
+    amount = 0;
+  }
+
+  if (
+    calculationType ===
+      PenaltyCalculationType.MANUAL ||
+    calculationType ===
+      PenaltyCalculationType.WARNING_ONLY
+  ) {
+    amount = 0;
+    percentageRate = 0;
+  }
+
+  /*
+   * Warning-only cases are disciplinary
+   * records and must never block/deduct
+   * payroll.
+   */
+  const includeInPayroll =
+    calculationType ===
+    PenaltyCalculationType.WARNING_ONLY
+      ? false
+      : body.includeInPayroll ===
+          undefined
+        ? existing
+          ? existing.includeInPayroll
+          : true
+        : body.includeInPayroll ===
+          true;
+
+  return {
+    ruleName,
+    calculationType,
+    amount:
+      Number(
+        amount.toFixed(2),
+      ),
+    percentageRate:
+      Number(
+        percentageRate.toFixed(2),
+      ),
+    includeInPayroll,
+  };
 }
 
-async updatePenaltyRule(id: number, body: any, user: any) {
-  const item = await this.penaltyRuleRepository.findOne({ where: { id } });
+async createPenaltyRule(
+  body: any,
+  user: any,
+) {
+  const validated =
+    this.normalizePenaltyRulePayload(
+      body,
+    );
+
+  const item =
+    this.penaltyRuleRepository.create({
+      ruleName:
+        validated.ruleName,
+
+      description:
+        String(
+          body.description || '',
+        ).trim(),
+
+      applicableRoles:
+        Array.isArray(
+          body.applicableRoles,
+        )
+          ? body.applicableRoles
+          : [],
+
+      department:
+        String(
+          body.department || '',
+        ).trim(),
+
+      branchName:
+        String(
+          body.branchName || '',
+        ).trim(),
+
+      penaltyType:
+        body.penaltyType ||
+        'CUSTOM',
+
+      calculationType:
+        validated.calculationType,
+
+      amount:
+        validated.amount,
+
+      percentageRate:
+        validated.percentageRate,
+
+      requiresApproval:
+        body.requiresApproval !==
+        false,
+
+      includeInPayroll:
+        validated.includeInPayroll,
+
+      isActive:
+        body.isActive !== false,
+
+      isHidden: false,
+
+      createdBy:
+        user?.id || null,
+
+      createdByName:
+        user?.name || '',
+    });
+
+  return this.penaltyRuleRepository.save(
+    item,
+  );
+}
+
+async updatePenaltyRule(
+  id: number,
+  body: any,
+  user: any,
+) {
+  const item =
+    await this.penaltyRuleRepository.findOne({
+      where: {
+        id,
+      },
+    });
 
   if (!item) {
-    throw new NotFoundException('Penalty rule not found');
+    throw new NotFoundException(
+      'Penalty rule not found',
+    );
   }
 
+  const validated =
+    this.normalizePenaltyRulePayload(
+      body,
+      item,
+    );
+
   Object.assign(item, {
-    ruleName: body.ruleName ?? item.ruleName,
-    description: body.description ?? item.description,
-    applicableRoles: Array.isArray(body.applicableRoles)
-      ? body.applicableRoles
-      : item.applicableRoles,
-    department: body.department ?? item.department,
-    branchName: body.branchName ?? item.branchName,
-    penaltyType: body.penaltyType ?? item.penaltyType,
-    calculationType: body.calculationType ?? item.calculationType,
+    ruleName:
+      validated.ruleName,
+
+    description:
+      body.description ===
+        undefined
+        ? item.description
+        : String(
+            body.description || '',
+          ).trim(),
+
+    applicableRoles:
+      Array.isArray(
+        body.applicableRoles,
+      )
+        ? body.applicableRoles
+        : item.applicableRoles,
+
+    department:
+      body.department === undefined
+        ? item.department
+        : String(
+            body.department || '',
+          ).trim(),
+
+    branchName:
+      body.branchName === undefined
+        ? item.branchName
+        : String(
+            body.branchName || '',
+          ).trim(),
+
+    penaltyType:
+      body.penaltyType ??
+      item.penaltyType,
+
+    calculationType:
+      validated.calculationType,
+
     amount:
-      body.amount === undefined ? item.amount : Number(body.amount || 0),
+      validated.amount,
+
     percentageRate:
-      body.percentageRate === undefined
-        ? item.percentageRate
-        : Number(body.percentageRate || 0),
+      validated.percentageRate,
+
     requiresApproval:
-      body.requiresApproval === undefined
+      body.requiresApproval ===
+        undefined
         ? item.requiresApproval
-        : body.requiresApproval,
+        : body.requiresApproval ===
+          true,
+
     includeInPayroll:
-      body.includeInPayroll === undefined
-        ? item.includeInPayroll
-        : body.includeInPayroll,
-    isActive: body.isActive === undefined ? item.isActive : body.isActive,
-    updatedBy: user?.id || null,
-    updatedByName: user?.name || '',
+      validated.includeInPayroll,
+
+    isActive:
+      body.isActive === undefined
+        ? item.isActive
+        : body.isActive === true,
+
+    updatedBy:
+      user?.id || null,
+
+    updatedByName:
+      user?.name || '',
   });
 
-  return this.penaltyRuleRepository.save(item);
+  return this.penaltyRuleRepository.save(
+    item,
+  );
 }
 
 async hidePenaltyRule(id: number, body: any, user: any) {
@@ -8909,6 +9349,16 @@ async createStaffPenalty(
       ? 0
       : proposedAmount;
 
+      const caseIncludeInPayroll =
+  calculationType ===
+    PenaltyCalculationType.WARNING_ONLY
+    ? false
+    : typeof body.includeInPayroll ===
+        'boolean'
+      ? body.includeInPayroll
+      : rule.includeInPayroll !==
+        false;
+
   const penalty =
     this.staffPenaltyRepository.create({
       staffId: staff.id,
@@ -8977,11 +9427,7 @@ async createStaffPenalty(
       requiresApproval,
 
 includeInPayroll:
-  typeof body.includeInPayroll ===
-  'boolean'
-    ? body.includeInPayroll
-    : rule.includeInPayroll !==
-      false,
+  caseIncludeInPayroll,
 
 status:
   initialStatus,
@@ -9092,16 +9538,25 @@ async reviewStaffPenalty(
   }
 
   if (
-    decision ===
-    StaffPenaltyStatus.APPROVED
+  decision ===
+  StaffPenaltyStatus.APPROVED
+) {
+  if (
+    penalty.calculationType ===
+    PenaltyCalculationType
+      .WARNING_ONLY
   ) {
+    penalty.approvedAmount = 0;
+    penalty.includeInPayroll =
+      false;
+  } else {
     const approvedAmount =
       body.approvedAmount ===
-        undefined ||
-      body.approvedAmount ===
-        null ||
-      body.approvedAmount ===
-        ''
+          undefined ||
+        body.approvedAmount ===
+          null ||
+        body.approvedAmount ===
+          ''
         ? Number(
             penalty.proposedAmount ||
               0,
@@ -9125,9 +9580,10 @@ async reviewStaffPenalty(
       Number(
         approvedAmount.toFixed(2),
       );
-  } else {
-    penalty.approvedAmount = 0;
   }
+} else {
+  penalty.approvedAmount = 0;
+}
 
   penalty.status =
     decision as
@@ -9144,6 +9600,89 @@ async reviewStaffPenalty(
 
   penalty.reviewRemarks =
     reviewRemarks;
+
+  return this.staffPenaltyRepository.save(
+    penalty,
+  );
+}
+
+async cancelStaffPenalty(
+  id: number,
+  body: any,
+  user: any,
+) {
+  const penalty =
+    await this.staffPenaltyRepository.findOne({
+      where: {
+        id,
+      },
+    });
+
+  if (!penalty) {
+    throw new NotFoundException(
+      'Staff penalty not found',
+    );
+  }
+
+  if (penalty.isHidden) {
+    throw new BadRequestException(
+      'Hidden penalty cannot be cancelled',
+    );
+  }
+
+  if (
+    penalty.status ===
+    StaffPenaltyStatus
+      .APPLIED_TO_PAYROLL
+  ) {
+    throw new BadRequestException(
+      'Penalty already applied to payroll cannot be cancelled',
+    );
+  }
+
+  if (
+    penalty.status ===
+      StaffPenaltyStatus.REJECTED ||
+    penalty.status ===
+      StaffPenaltyStatus.CANCELLED
+  ) {
+    throw new BadRequestException(
+      `Penalty is already ${penalty.status.toLowerCase()}`,
+    );
+  }
+
+  const reason =
+    String(
+      body?.reason || '',
+    ).trim();
+
+  if (!reason) {
+    throw new BadRequestException(
+      'Cancellation reason is required',
+    );
+  }
+
+  /*
+   * Re-use the review audit fields so we
+   * retain who cancelled it and why,
+   * without adding another migration.
+   */
+  penalty.status =
+    StaffPenaltyStatus.CANCELLED;
+
+  penalty.approvedAmount = 0;
+
+  penalty.reviewedBy =
+    user?.id || null;
+
+  penalty.reviewedByName =
+    user?.name || '';
+
+  penalty.reviewedAt =
+    new Date();
+
+  penalty.reviewRemarks =
+    `Cancelled: ${reason}`;
 
   return this.staffPenaltyRepository.save(
     penalty,

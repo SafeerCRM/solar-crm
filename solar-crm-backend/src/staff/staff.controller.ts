@@ -1183,6 +1183,25 @@ reviewStaffPenalty(
     );
 }
 
+@Patch('penalty/:id/cancel')
+cancelStaffPenalty(
+  @Param('id', ParseIntPipe)
+  id: number,
+
+  @Body()
+  body: any,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.staffService
+    .cancelStaffPenalty(
+      id,
+      body,
+      user,
+    );
+}
+
 @Patch('penalty/:id/hide')
 hideStaffPenalty(
   @Param('id', ParseIntPipe)
