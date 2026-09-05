@@ -13,6 +13,15 @@ import { CustomerReferral } from './customer-referral.entity';
 import { CustomerPaymentReceipt } from './customer-payment-receipt.entity';
 import { CustomerWorkDateRequest } from './customer-work-date-request.entity';
 import { CustomerNotification } from './customer-notification.entity';
+import {
+  CustomerAnnouncement,
+  CustomerAnnouncementAudienceType,
+  CustomerAnnouncementPublishType,
+} from './customer-announcement.entity';
+
+import {
+  CustomerAnnouncementDelivery,
+} from './customer-announcement-delivery.entity';
 import { CustomerCleaningReminder } from './customer-cleaning-reminder.entity';
 import * as jwt from 'jsonwebtoken';
 import {
@@ -130,10 +139,20 @@ private readonly paymentReceiptActivityRepository: Repository<CustomerPaymentRec
     private readonly workDateRequestRepository: Repository<CustomerWorkDateRequest>,
 
     @InjectRepository(CustomerNotification)
-    private readonly notificationRepository: Repository<CustomerNotification>,
+private readonly notificationRepository:
+  Repository<CustomerNotification>,
 
-    @InjectRepository(CustomerCleaningReminder)
-    private readonly cleaningReminderRepository: Repository<CustomerCleaningReminder>,
+@InjectRepository(CustomerAnnouncement)
+private readonly customerAnnouncementRepository:
+  Repository<CustomerAnnouncement>,
+
+@InjectRepository(CustomerAnnouncementDelivery)
+private readonly customerAnnouncementDeliveryRepository:
+  Repository<CustomerAnnouncementDelivery>,
+
+@InjectRepository(CustomerCleaningReminder)
+private readonly cleaningReminderRepository:
+  Repository<CustomerCleaningReminder>,
 
     @InjectRepository(DealerCompanyBankDetail)
 private readonly companyBankDetailRepository: Repository<DealerCompanyBankDetail>,
@@ -4795,6 +4814,786 @@ async uploadMyInsuranceDocuments(
 
     documents:
       savedDocuments,
+  };
+}
+
+async createCustomerAnnouncement(
+  body: any,
+  user: any,
+) {
+  const title =
+    String(
+      body?.title || '',
+    ).trim();
+
+  const message =
+    String(
+      body?.message || '',
+    ).trim();
+
+  if (!title) {
+    throw new BadRequestException(
+      'Announcement title is required',
+    );
+  }
+
+  if (!message) {
+    throw new BadRequestException(
+      'Announcement message is required',
+    );
+  }
+
+  const audienceType =
+    String(
+      body?.audienceType ||
+        CustomerAnnouncementAudienceType.ALL,
+    ).trim() as CustomerAnnouncementAudienceType;
+
+  if (
+    !Object.values(
+      CustomerAnnouncementAudienceType,
+    ).includes(
+      audienceType,
+    )
+  ) {
+    throw new BadRequestException(
+      'Invalid customer announcement audience',
+    );
+  }
+
+  const publishType =
+    String(
+      body?.publishType ||
+        CustomerAnnouncementPublishType.NOW,
+    ).trim() as CustomerAnnouncementPublishType;
+
+  if (
+    !Object.values(
+      CustomerAnnouncementPublishType,
+    ).includes(
+      publishType,
+    )
+  ) {
+    throw new BadRequestException(
+      'Invalid publish type',
+    );
+  }
+
+  const cities =
+    Array.isArray(body?.cities)
+      ? body.cities
+          .map((item: any) =>
+            String(item || '').trim(),
+          )
+          .filter(Boolean)
+      : [];
+
+  const branches =
+    Array.isArray(body?.branches)
+      ? body.branches
+          .map((item: any) =>
+            String(item || '').trim(),
+          )
+          .filter(Boolean)
+      : [];
+
+  const projectStatuses =
+    Array.isArray(
+      body?.projectStatuses,
+    )
+      ? body.projectStatuses
+          .map((item: any) =>
+            String(item || '').trim(),
+          )
+          .filter(Boolean)
+      : [];
+
+  const specificCustomerIds =
+    Array.isArray(
+      body?.specificCustomerIds,
+    )
+      ? body.specificCustomerIds
+          .map((item: any) =>
+            Number(item),
+          )
+          .filter(
+            (item: number) =>
+              Number.isInteger(item) &&
+              item > 0,
+          )
+      : [];
+
+  if (
+    audienceType ===
+      CustomerAnnouncementAudienceType.SPECIFIC_CUSTOMERS &&
+    specificCustomerIds.length === 0
+  ) {
+    throw new BadRequestException(
+      'Please select at least one customer',
+    );
+  }
+
+  let publishAt: Date | undefined =
+    undefined;
+
+  if (
+    publishType ===
+    CustomerAnnouncementPublishType.SCHEDULED
+  ) {
+    if (!body?.publishAt) {
+      throw new BadRequestException(
+        'Publish date and time are required',
+      );
+    }
+
+    publishAt =
+      new Date(
+        body.publishAt,
+      );
+
+    if (
+      Number.isNaN(
+        publishAt.getTime(),
+      )
+    ) {
+      throw new BadRequestException(
+        'Invalid publish date and time',
+      );
+    }
+  } else {
+    publishAt =
+      new Date();
+  }
+
+  let expiresAt: Date | undefined =
+    undefined;
+
+  if (body?.expiresAt) {
+    expiresAt =
+      new Date(
+        body.expiresAt,
+      );
+
+    if (
+      Number.isNaN(
+        expiresAt.getTime(),
+      )
+    ) {
+      throw new BadRequestException(
+        'Invalid expiry date and time',
+      );
+    }
+  }
+
+  const announcement =
+    this.customerAnnouncementRepository.create({
+      title,
+      message,
+      audienceType,
+      cities,
+      branches,
+      projectStatuses,
+      specificCustomerIds,
+      popupRequired:
+        body?.popupRequired !== false,
+      pushRequired:
+        body?.pushRequired !== false,
+      publishType,
+      publishAt,
+      expiresAt,
+      isActive: true,
+      isHidden: false,
+
+      createdBy:
+        user?.id ||
+        user?.userId ||
+        null,
+
+      createdByName:
+        user?.name ||
+        user?.email ||
+        '',
+
+      createdByRole:
+        Array.isArray(
+          user?.roles,
+        )
+          ? user.roles.join(', ')
+          : String(
+              user?.role ||
+                '',
+            ),
+    });
+
+  const savedAnnouncement =
+    await this.customerAnnouncementRepository.save(
+      announcement,
+    );
+
+  const recipients =
+    await this.resolveCustomerAnnouncementRecipients(
+      savedAnnouncement,
+    );
+
+  if (
+    publishType ===
+    CustomerAnnouncementPublishType.NOW
+  ) {
+    for (
+      const recipient of recipients
+    ) {
+      await this.createCustomerAnnouncementDelivery(
+        savedAnnouncement,
+        recipient,
+      );
+    }
+  }
+
+  return {
+    message:
+      publishType ===
+      CustomerAnnouncementPublishType.NOW
+        ? 'Customer announcement published successfully'
+        : 'Customer announcement scheduled successfully',
+
+    announcement:
+      savedAnnouncement,
+
+    recipientCount:
+      recipients.length,
+  };
+}
+
+private async resolveCustomerAnnouncementRecipients(
+  announcement: CustomerAnnouncement,
+) {
+  const qb =
+    this.customerRepository
+      .createQueryBuilder(
+        'customer',
+      )
+      .where(
+        'customer.isHidden = false',
+      )
+      .andWhere(
+        'customer.isPortalEnabled = true',
+      );
+
+  if (
+    announcement
+      .audienceType ===
+    CustomerAnnouncementAudienceType.SPECIFIC_CUSTOMERS
+  ) {
+    if (
+      !Array.isArray(
+        announcement.specificCustomerIds,
+      ) ||
+      announcement.specificCustomerIds.length === 0
+    ) {
+      return [];
+    }
+
+    qb.andWhere(
+      'customer.id IN (:...specificCustomerIds)',
+      {
+        specificCustomerIds:
+          announcement.specificCustomerIds,
+      },
+    );
+  }
+
+  if (
+    Array.isArray(
+      announcement.cities,
+    ) &&
+    announcement.cities.length > 0
+  ) {
+    qb.andWhere(
+      'LOWER(customer.city) IN (:...cities)',
+      {
+        cities:
+          announcement.cities.map(
+            (city) =>
+              String(city)
+                .trim()
+                .toLowerCase(),
+          ),
+      },
+    );
+  }
+
+  if (
+    Array.isArray(
+      announcement.branches,
+    ) &&
+    announcement.branches.length > 0
+  ) {
+    qb.andWhere(
+      'LOWER(customer.branchName) IN (:...branches)',
+      {
+        branches:
+          announcement.branches.map(
+            (branch) =>
+              String(branch)
+                .trim()
+                .toLowerCase(),
+          ),
+      },
+    );
+  }
+
+  const customers =
+    await qb.getMany();
+
+  if (
+    announcement.audienceType ===
+      CustomerAnnouncementAudienceType.ALL ||
+    announcement.audienceType ===
+      CustomerAnnouncementAudienceType.SPECIFIC_CUSTOMERS
+  ) {
+    return this.filterCustomersByProjectStatus(
+      customers,
+      announcement.projectStatuses,
+    );
+  }
+
+  const customerIds =
+    customers.map(
+      (customer) =>
+        Number(
+          customer.id,
+        ),
+    );
+
+  if (
+    customerIds.length === 0
+  ) {
+    return [];
+  }
+
+  const projects =
+    await this.projectRepository
+      .createQueryBuilder(
+        'project',
+      )
+      .where(
+        'project.customerId IN (:...customerIds)',
+        {
+          customerIds,
+        },
+      )
+      .andWhere(
+        'project.isHidden = false',
+      )
+      .orderBy(
+        'project.createdAt',
+        'DESC',
+      )
+      .getMany();
+
+  const projectMap =
+    new Map<
+      number,
+      Project[]
+    >();
+
+  for (
+    const project of projects
+  ) {
+    const customerId =
+      Number(
+        project.customerId,
+      );
+
+    if (
+      !projectMap.has(
+        customerId,
+      )
+    ) {
+      projectMap.set(
+        customerId,
+        [],
+      );
+    }
+
+    projectMap
+      .get(customerId)!
+      .push(project);
+  }
+
+  const filteredCustomers =
+    customers.filter(
+      (customer) => {
+        const customerProjects =
+          projectMap.get(
+            Number(
+              customer.id,
+            ),
+          ) || [];
+
+        const hasActiveProject =
+          customerProjects.some(
+            (project: any) =>
+              project.status !==
+              'COMPLETED',
+          );
+
+        const hasCompletedProject =
+          customerProjects.some(
+            (project: any) =>
+              project.status ===
+              'COMPLETED',
+          );
+
+        if (
+          announcement
+            .audienceType ===
+          CustomerAnnouncementAudienceType.RUNNING_PROJECT
+        ) {
+          return hasActiveProject;
+        }
+
+        if (
+          announcement
+            .audienceType ===
+          CustomerAnnouncementAudienceType.AFTER_SALES
+        ) {
+          return (
+            !hasActiveProject &&
+            hasCompletedProject
+          );
+        }
+
+        if (
+          announcement
+            .audienceType ===
+          CustomerAnnouncementAudienceType.WITHOUT_PROJECT
+        ) {
+          return (
+            customerProjects.length ===
+            0
+          );
+        }
+
+        return false;
+      },
+    );
+
+  return this.filterCustomersByProjectStatus(
+    filteredCustomers,
+    announcement.projectStatuses,
+    projectMap,
+  );
+}
+
+private async filterCustomersByProjectStatus(
+  customers: Customer[],
+  projectStatuses?: string[],
+  existingProjectMap?: Map<
+    number,
+    Project[]
+  >,
+) {
+  if (
+    !Array.isArray(
+      projectStatuses,
+    ) ||
+    projectStatuses.length === 0
+  ) {
+    return customers;
+  }
+
+  const customerIds =
+    customers.map(
+      (customer) =>
+        Number(
+          customer.id,
+        ),
+    );
+
+  if (
+    customerIds.length === 0
+  ) {
+    return [];
+  }
+
+  let projectMap =
+    existingProjectMap;
+
+  if (!projectMap) {
+    const projects =
+      await this.projectRepository
+        .createQueryBuilder(
+          'project',
+        )
+        .where(
+          'project.customerId IN (:...customerIds)',
+          {
+            customerIds,
+          },
+        )
+        .andWhere(
+          'project.isHidden = false',
+        )
+        .getMany();
+
+    projectMap =
+      new Map<
+        number,
+        Project[]
+      >();
+
+    for (
+      const project of projects
+    ) {
+      const customerId =
+        Number(
+          project.customerId,
+        );
+
+      if (
+        !projectMap.has(
+          customerId,
+        )
+      ) {
+        projectMap.set(
+          customerId,
+          [],
+        );
+      }
+
+      projectMap
+        .get(customerId)!
+        .push(project);
+    }
+  }
+
+  const allowedStatuses =
+    projectStatuses.map(
+      (status) =>
+        String(status)
+          .trim()
+          .toUpperCase(),
+    );
+
+  return customers.filter(
+    (customer) => {
+      const customerProjects =
+        projectMap?.get(
+          Number(
+            customer.id,
+          ),
+        ) || [];
+
+      return customerProjects.some(
+        (project: any) =>
+          allowedStatuses.includes(
+            String(
+              project.status ||
+                '',
+            ).toUpperCase(),
+          ),
+      );
+    },
+  );
+}
+
+private async createCustomerAnnouncementDelivery(
+  announcement: CustomerAnnouncement,
+  customer: Customer,
+) {
+  const existing =
+    await this.customerAnnouncementDeliveryRepository.findOne({
+      where: {
+        announcementId:
+          announcement.id,
+        customerId:
+          customer.id,
+      },
+    });
+
+  if (existing) {
+    return existing;
+  }
+
+  const project =
+    await this.projectRepository.findOne({
+      where: {
+        customerId:
+          customer.id,
+        isHidden:
+          false,
+      } as any,
+
+      order: {
+        createdAt:
+          'DESC',
+      } as any,
+    });
+
+  const delivery =
+    this.customerAnnouncementDeliveryRepository.create({
+      announcementId:
+        announcement.id,
+
+      customerId:
+        customer.id,
+
+      projectId:
+        project?.id ||
+        undefined,
+
+      pushSent:
+        false,
+
+      deliveredAt:
+        new Date(),
+    });
+
+  const savedDelivery =
+    await this.customerAnnouncementDeliveryRepository.save(
+      delivery,
+    );
+
+  await this.createCustomerNotification({
+    customerId:
+      customer.id,
+
+    customerCode:
+      customer.customerCode ||
+      '',
+
+    projectId:
+      project?.id ||
+      null,
+
+    notificationType:
+      'GENERAL',
+
+    title:
+      announcement.title,
+
+    message:
+      announcement.message,
+
+    relatedEntityType:
+      'CUSTOMER_ANNOUNCEMENT',
+
+    relatedEntityId:
+      announcement.id,
+  });
+
+  return savedDelivery;
+}
+
+async listCustomerAnnouncements(
+  query: any,
+) {
+  const page =
+    Math.max(
+      Number(
+        query?.page || 1,
+      ),
+      1,
+    );
+
+  const limit =
+    Math.min(
+      Math.max(
+        Number(
+          query?.limit || 20,
+        ),
+        1,
+      ),
+      100,
+    );
+
+  const skip =
+    (page - 1) *
+    limit;
+
+  const qb =
+    this.customerAnnouncementRepository
+      .createQueryBuilder(
+        'announcement',
+      )
+      .orderBy(
+        'announcement.createdAt',
+        'DESC',
+      );
+
+  if (
+    query?.showHidden ===
+    'true'
+  ) {
+    qb.where(
+      'announcement.isHidden = true',
+    );
+  } else {
+    qb.where(
+      'announcement.isHidden = false',
+    );
+  }
+
+  if (query?.audienceType) {
+    qb.andWhere(
+      'announcement.audienceType = :audienceType',
+      {
+        audienceType:
+          query.audienceType,
+      },
+    );
+  }
+
+  if (query?.publishType) {
+    qb.andWhere(
+      'announcement.publishType = :publishType',
+      {
+        publishType:
+          query.publishType,
+      },
+    );
+  }
+
+  if (query?.search) {
+    const search =
+      `%${String(
+        query.search,
+      )
+        .trim()
+        .toLowerCase()}%`;
+
+    qb.andWhere(
+      `
+      LOWER(announcement.title)
+        LIKE :search
+      OR LOWER(announcement.message)
+        LIKE :search
+      `,
+      {
+        search,
+      },
+    );
+  }
+
+  qb.skip(skip)
+    .take(limit);
+
+  const [
+    data,
+    total,
+  ] =
+    await qb.getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages:
+      Math.ceil(
+        total / limit,
+      ) || 1,
   };
 }
 }

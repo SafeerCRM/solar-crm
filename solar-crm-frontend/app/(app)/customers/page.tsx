@@ -45,6 +45,27 @@ type Summary = {
   portalEnabledCustomers: number;
 };
 
+type CustomerAnnouncement = {
+  id: number;
+  title: string;
+  message: string;
+  audienceType: string;
+  cities?: string[];
+  branches?: string[];
+  projectStatuses?: string[];
+  specificCustomerIds?: number[];
+  popupRequired?: boolean;
+  pushRequired?: boolean;
+  publishType?: string;
+  publishAt?: string;
+  expiresAt?: string;
+  isActive?: boolean;
+  isHidden?: boolean;
+  createdByName?: string;
+  createdByRole?: string;
+  createdAt?: string;
+};
+
 const emptyForm = {
   customerName: '',
   mobile: '',
@@ -64,6 +85,10 @@ const emptyForm = {
 };
 
 export default function CustomersPage() {
+    const [activeSection, setActiveSection] =
+  useState<
+    'CUSTOMERS' | 'ANNOUNCEMENTS'
+  >('CUSTOMERS');
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [summary, setSummary] = useState<Summary>({
     totalCustomers: 0,
@@ -89,6 +114,41 @@ const [portalPasswordForm, setPortalPasswordForm] = useState({
   confirmPassword: '',
 });
 const [showPortalPassword, setShowPortalPassword] = useState(false);
+
+const [
+  announcements,
+  setAnnouncements,
+] = useState<CustomerAnnouncement[]>([]);
+
+const [
+  announcementsLoading,
+  setAnnouncementsLoading,
+] = useState(false);
+
+const [
+  announcementPage,
+  setAnnouncementPage,
+] = useState(1);
+
+const [
+  announcementTotalPages,
+  setAnnouncementTotalPages,
+] = useState(1);
+
+const [announcementSaving, setAnnouncementSaving] =
+  useState(false);
+
+const [announcementForm, setAnnouncementForm] = useState({
+  title: '',
+  message: '',
+  audienceType: 'ALL',
+  cities: '',
+  branches: '',
+  projectStatuses: '',
+  specificCustomerIds: '',
+  popupRequired: true,
+  pushRequired: true,
+});
 
   const [search, setSearch] = useState('');
   const [city, setCity] = useState('');
@@ -158,6 +218,185 @@ const [showPortalPassword, setShowPortalPassword] = useState(false);
       setLoading(false);
     }
   };
+
+  
+
+  const fetchAnnouncements = async (
+  targetPage = 1,
+) => {
+  try {
+    setAnnouncementsLoading(true);
+
+    const res =
+      await axios.get(
+        `${API_BASE_URL}/customer-portal/announcements`,
+        {
+          params: {
+            page: targetPage,
+            limit: 20,
+          },
+          headers:
+            getAuthHeaders(),
+        },
+      );
+
+    setAnnouncements(
+      res.data?.data || [],
+    );
+
+    setAnnouncementPage(
+      res.data?.page ||
+        targetPage,
+    );
+
+    setAnnouncementTotalPages(
+      res.data?.totalPages ||
+        1,
+    );
+  } catch (error: any) {
+    console.error(
+      'Failed to load customer announcements:',
+      error,
+    );
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to load customer announcements',
+    );
+  } finally {
+    setAnnouncementsLoading(
+      false,
+    );
+  }
+};
+
+const createAnnouncement = async () => {
+  const title =
+    announcementForm.title.trim();
+
+  const message =
+    announcementForm.message.trim();
+
+  if (!title) {
+    alert('Announcement title is required');
+    return;
+  }
+
+  if (!message) {
+    alert('Announcement message is required');
+    return;
+  }
+
+  const cities =
+    announcementForm.cities
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+  const branches =
+    announcementForm.branches
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+  const projectStatuses =
+    announcementForm.projectStatuses
+      .split(',')
+      .map((item) =>
+        item.trim().toUpperCase(),
+      )
+      .filter(Boolean);
+
+  const specificCustomerIds =
+    announcementForm.specificCustomerIds
+      .split(',')
+      .map((item) =>
+        Number(item.trim()),
+      )
+      .filter(
+        (item) =>
+          Number.isInteger(item) &&
+          item > 0,
+      );
+
+  if (
+    announcementForm.audienceType ===
+      'SPECIFIC_CUSTOMERS' &&
+    specificCustomerIds.length === 0
+  ) {
+    alert(
+      'Please enter at least one valid customer ID',
+    );
+    return;
+  }
+
+  try {
+    setAnnouncementSaving(true);
+
+    const res =
+      await axios.post(
+        `${API_BASE_URL}/customer-portal/announcements`,
+        {
+          title,
+          message,
+
+          audienceType:
+            announcementForm.audienceType,
+
+          cities,
+          branches,
+          projectStatuses,
+          specificCustomerIds,
+
+          popupRequired:
+            announcementForm.popupRequired,
+
+          pushRequired:
+            announcementForm.pushRequired,
+
+          publishType: 'NOW',
+        },
+        {
+          headers:
+            getAuthHeaders(),
+        },
+      );
+
+    alert(
+      `${res.data?.message || 'Announcement published successfully'}${
+        res.data?.recipientCount !== undefined
+          ? `\nRecipients: ${res.data.recipientCount}`
+          : ''
+      }`,
+    );
+
+    setAnnouncementForm({
+      title: '',
+      message: '',
+      audienceType: 'ALL',
+      cities: '',
+      branches: '',
+      projectStatuses: '',
+      specificCustomerIds: '',
+      popupRequired: true,
+      pushRequired: true,
+    });
+
+    fetchAnnouncements(1);
+  } catch (error: any) {
+    console.error(
+      'Failed to create customer announcement:',
+      error,
+    );
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to create customer announcement',
+    );
+  } finally {
+    setAnnouncementSaving(false);
+  }
+};
 
   const resetForm = () => {
     setForm(emptyForm);
@@ -611,6 +850,17 @@ URL.revokeObjectURL(url);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appliedFilters]);
 
+  useEffect(() => {
+  if (
+    activeSection ===
+    'ANNOUNCEMENTS'
+  ) {
+    fetchAnnouncements(1);
+  }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [activeSection]);
+
   return (
     <div className="mx-auto max-w-7xl space-y-5">
       <div className="rounded-2xl bg-white p-5 shadow">
@@ -619,6 +869,47 @@ URL.revokeObjectURL(url);
           Central customer database for leads, meetings, projects, complaints, service, warranty, and customer portal.
         </p>
       </div>
+
+      <div className="rounded-2xl bg-white p-2 shadow">
+  <div className="flex flex-wrap gap-2">
+    <button
+      type="button"
+      onClick={() =>
+        setActiveSection(
+          'CUSTOMERS',
+        )
+      }
+      className={`rounded-xl px-5 py-3 text-sm font-bold transition ${
+        activeSection ===
+        'CUSTOMERS'
+          ? 'bg-blue-600 text-white'
+          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+      }`}
+    >
+      Customer Management
+    </button>
+
+    <button
+      type="button"
+      onClick={() =>
+        setActiveSection(
+          'ANNOUNCEMENTS',
+        )
+      }
+      className={`rounded-xl px-5 py-3 text-sm font-bold transition ${
+        activeSection ===
+        'ANNOUNCEMENTS'
+          ? 'bg-blue-600 text-white'
+          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+      }`}
+    >
+      Customer Announcements
+    </button>
+  </div>
+</div>
+
+{activeSection === 'CUSTOMERS' && (
+  <>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <SummaryCard title="Total Customers" value={summary.totalCustomers} />
@@ -1078,6 +1369,408 @@ URL.revokeObjectURL(url);
           </div>
         </div>
             </div>
+              </>
+)}
+
+{activeSection === 'ANNOUNCEMENTS' && (
+  <div className="rounded-2xl bg-white p-5 shadow">
+    <h2 className="text-xl font-bold text-gray-800">
+      Customer Announcements
+    </h2>
+
+    <p className="mt-2 text-sm text-gray-500">
+      Create and manage announcements for customer portal users.
+    </p>
+
+    <div className="mt-5 rounded-2xl border bg-gray-50 p-5">
+  <h3 className="text-lg font-bold text-gray-800">
+    Create Announcement
+  </h3>
+
+  <p className="mt-1 text-sm text-gray-500">
+    Publish a notification to selected customer portal users.
+  </p>
+
+  <div className="mt-4 grid gap-3 md:grid-cols-2">
+    <input
+      type="text"
+      placeholder="Announcement Title *"
+      value={
+        announcementForm.title
+      }
+      onChange={(e) =>
+        setAnnouncementForm({
+          ...announcementForm,
+          title: e.target.value,
+        })
+      }
+      className="rounded-xl border bg-white p-3"
+    />
+
+    <select
+      value={
+        announcementForm.audienceType
+      }
+      onChange={(e) =>
+        setAnnouncementForm({
+          ...announcementForm,
+          audienceType:
+            e.target.value,
+        })
+      }
+      className="rounded-xl border bg-white p-3"
+    >
+      <option value="ALL">
+        All Customers
+      </option>
+
+      <option value="RUNNING_PROJECT">
+        Running Project
+      </option>
+
+      <option value="AFTER_SALES">
+        After Sales
+      </option>
+
+      <option value="WITHOUT_PROJECT">
+        Without Project
+      </option>
+
+      <option value="SPECIFIC_CUSTOMERS">
+        Specific Customers
+      </option>
+    </select>
+  </div>
+
+  <textarea
+    placeholder="Announcement Message *"
+    value={
+      announcementForm.message
+    }
+    onChange={(e) =>
+      setAnnouncementForm({
+        ...announcementForm,
+        message: e.target.value,
+      })
+    }
+    rows={4}
+    className="mt-3 w-full rounded-xl border bg-white p-3"
+  />
+
+  <div className="mt-3 grid gap-3 md:grid-cols-3">
+    <input
+      type="text"
+      placeholder="Cities (comma separated)"
+      value={
+        announcementForm.cities
+      }
+      onChange={(e) =>
+        setAnnouncementForm({
+          ...announcementForm,
+          cities: e.target.value,
+        })
+      }
+      className="rounded-xl border bg-white p-3"
+    />
+
+    <input
+      type="text"
+      placeholder="Branches (comma separated)"
+      value={
+        announcementForm.branches
+      }
+      onChange={(e) =>
+        setAnnouncementForm({
+          ...announcementForm,
+          branches: e.target.value,
+        })
+      }
+      className="rounded-xl border bg-white p-3"
+    />
+
+    <input
+      type="text"
+      placeholder="Project Statuses (comma separated)"
+      value={
+        announcementForm.projectStatuses
+      }
+      onChange={(e) =>
+        setAnnouncementForm({
+          ...announcementForm,
+          projectStatuses:
+            e.target.value,
+        })
+      }
+      className="rounded-xl border bg-white p-3"
+    />
+  </div>
+
+  {announcementForm.audienceType ===
+    'SPECIFIC_CUSTOMERS' && (
+    <div className="mt-3">
+      <input
+        type="text"
+        placeholder="Customer IDs, e.g. 12, 25, 31"
+        value={
+          announcementForm.specificCustomerIds
+        }
+        onChange={(e) =>
+          setAnnouncementForm({
+            ...announcementForm,
+            specificCustomerIds:
+              e.target.value,
+          })
+        }
+        className="w-full rounded-xl border bg-white p-3"
+      />
+
+      <p className="mt-1 text-xs text-gray-500">
+        Enter Customer Master IDs separated by commas.
+      </p>
+    </div>
+  )}
+
+  <div className="mt-4 flex flex-wrap gap-3">
+    <label className="flex items-center gap-2 rounded-xl border bg-white px-4 py-3">
+      <input
+        type="checkbox"
+        checked={
+          announcementForm.popupRequired
+        }
+        onChange={(e) =>
+          setAnnouncementForm({
+            ...announcementForm,
+            popupRequired:
+              e.target.checked,
+          })
+        }
+      />
+
+      <span className="text-sm font-semibold text-gray-700">
+        Popup Required
+      </span>
+    </label>
+
+    <label className="flex items-center gap-2 rounded-xl border bg-white px-4 py-3">
+      <input
+        type="checkbox"
+        checked={
+          announcementForm.pushRequired
+        }
+        onChange={(e) =>
+          setAnnouncementForm({
+            ...announcementForm,
+            pushRequired:
+              e.target.checked,
+          })
+        }
+      />
+
+      <span className="text-sm font-semibold text-gray-700">
+        Push Required
+      </span>
+    </label>
+  </div>
+
+  <div className="mt-4">
+    <button
+      type="button"
+      onClick={
+        createAnnouncement
+      }
+      disabled={
+        announcementSaving
+      }
+      className="rounded-xl bg-blue-600 px-5 py-3 font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+    >
+      {announcementSaving
+        ? 'Publishing...'
+        : 'Publish Announcement'}
+    </button>
+  </div>
+</div>
+
+    <div className="mt-5">
+  <div className="flex flex-wrap items-center justify-between gap-3">
+    <h3 className="text-lg font-bold text-gray-800">
+      Announcement History
+    </h3>
+
+    <button
+      type="button"
+      onClick={() =>
+        fetchAnnouncements(
+          announcementPage,
+        )
+      }
+      disabled={
+        announcementsLoading
+      }
+      className="rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700 disabled:opacity-50"
+    >
+      {announcementsLoading
+        ? 'Refreshing...'
+        : 'Refresh'}
+    </button>
+  </div>
+
+  {announcementsLoading ? (
+    <p className="mt-4 text-sm text-gray-500">
+      Loading announcements...
+    </p>
+  ) : announcements.length ===
+    0 ? (
+    <div className="mt-4 rounded-xl border border-dashed p-6 text-sm text-gray-500">
+      No customer announcements created yet.
+    </div>
+  ) : (
+    <div className="mt-4 overflow-x-auto">
+      <table className="min-w-full border text-sm">
+        <thead className="bg-gray-100 text-left">
+          <tr>
+            <th className="border p-3">
+              Title
+            </th>
+
+            <th className="border p-3">
+              Audience
+            </th>
+
+            <th className="border p-3">
+              Publish
+            </th>
+
+            <th className="border p-3">
+              Created By
+            </th>
+
+            <th className="border p-3">
+              Created
+            </th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {announcements.map(
+            (announcement) => (
+              <tr
+                key={
+                  announcement.id
+                }
+                className="align-top"
+              >
+                <td className="border p-3">
+                  <p className="font-semibold text-gray-800">
+                    {
+                      announcement.title
+                    }
+                  </p>
+
+                  <p className="mt-1 max-w-xl whitespace-pre-wrap text-xs text-gray-500">
+                    {
+                      announcement.message
+                    }
+                  </p>
+                </td>
+
+                <td className="border p-3">
+                  <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                    {announcement.audienceType ||
+                      '-'}
+                  </span>
+                </td>
+
+                <td className="border p-3">
+                  <p className="font-semibold text-gray-700">
+                    {announcement.publishType ||
+                      '-'}
+                  </p>
+
+                  {announcement.publishAt && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      {new Date(
+                        announcement.publishAt,
+                      ).toLocaleString(
+                        'en-IN',
+                      )}
+                    </p>
+                  )}
+                </td>
+
+                <td className="border p-3">
+                  {announcement.createdByName ||
+                    '-'}
+
+                  {announcement.createdByRole && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      {
+                        announcement.createdByRole
+                      }
+                    </p>
+                  )}
+                </td>
+
+                <td className="border p-3">
+                  {announcement.createdAt
+                    ? new Date(
+                        announcement.createdAt,
+                      ).toLocaleString(
+                        'en-IN',
+                      )
+                    : '-'}
+                </td>
+              </tr>
+            ),
+          )}
+        </tbody>
+      </table>
+    </div>
+  )}
+
+  <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+    <p className="text-sm text-gray-500">
+      Page {announcementPage} of{' '}
+      {announcementTotalPages}
+    </p>
+
+    <div className="flex gap-2">
+      <button
+        type="button"
+        disabled={
+          announcementPage <= 1 ||
+          announcementsLoading
+        }
+        onClick={() =>
+          fetchAnnouncements(
+            announcementPage - 1,
+          )
+        }
+        className="rounded-xl border px-4 py-2 text-sm font-semibold disabled:opacity-50"
+      >
+        Previous
+      </button>
+
+      <button
+        type="button"
+        disabled={
+          announcementPage >=
+            announcementTotalPages ||
+          announcementsLoading
+        }
+        onClick={() =>
+          fetchAnnouncements(
+            announcementPage + 1,
+          )
+        }
+        className="rounded-xl border px-4 py-2 text-sm font-semibold disabled:opacity-50"
+      >
+        Next
+      </button>
+    </div>
+  </div>
+</div>
+  </div>
+)}
 
       {showProjectsModal && selectedCustomer && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">

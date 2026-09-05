@@ -102,6 +102,28 @@ getManagementSummary() {
     return this.service.listComplaints(query);
   }
 
+  @Roles('OWNER')
+@Post('announcements')
+createCustomerAnnouncement(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.service.createCustomerAnnouncement(
+    body,
+    user,
+  );
+}
+
+@Roles('OWNER')
+@Get('announcements')
+listCustomerAnnouncements(
+  @Query() query: any,
+) {
+  return this.service.listCustomerAnnouncements(
+    query,
+  );
+}
+
 
   @Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE', 'MAINTENANCE_MANAGER', 'INSPECTION_MANAGER',)
   @Patch('complaints/:id')
