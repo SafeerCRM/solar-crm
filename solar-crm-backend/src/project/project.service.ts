@@ -4888,41 +4888,7 @@ if (
     user?.name || user?.email || '';
 }
 
-  const historyRows: Partial<ProjectEditHistory>[] = [];
-
-for (const key of Object.keys(safeData)) {
-  const oldValue = (project as any)[key];
-  const newValue = (safeData as any)[key];
-
-  const normalizedOld =
-    oldValue === null || oldValue === undefined
-      ? ''
-      : String(oldValue);
-
-  const normalizedNew =
-    newValue === null || newValue === undefined
-      ? ''
-      : String(newValue);
-
-  if (normalizedOld !== normalizedNew) {
-    historyRows.push({
-      projectId: project.id,
-      fieldName: key,
-      oldValue: normalizedOld,
-      newValue: normalizedNew,
-      changedBy:
-        user?.id || user?.userId || null,
-      changedByName:
-        user?.name || null,
-      changedByRole:
-        Array.isArray(user?.roles)
-          ? user.roles.join(', ')
-          : '',
-    });
-  }
-}
-
-const numberFields = [
+  const numberFields = [
   'projectOwnerId',
   'solarFranchiseUserId',
   'dcrPanelCount',
@@ -4939,17 +4905,94 @@ const numberFields = [
   'expectedProfit',
   'applicableMargin',
   'gpsLatitude',
-'gpsLongitude',
+  'gpsLongitude',
 ];
 
 for (const field of numberFields) {
-  if (Object.prototype.hasOwnProperty.call(safeData, field)) {
-    const value = (safeData as any)[field];
+  if (
+    Object.prototype.hasOwnProperty.call(
+      safeData,
+      field,
+    )
+  ) {
+    const value =
+      (safeData as any)[field];
 
-    (safeData as any)[field] =
-  value === '' || value === null || value === undefined
-    ? undefined
-    : Number(value);
+    if (
+      value === '' ||
+      value === null ||
+      value === undefined
+    ) {
+      /*
+       * Edit form may submit blank for an
+       * existing numeric field.
+       *
+       * Preserve the stored value so a fake
+       * change like 0 -> '' is not recorded.
+       */
+      (safeData as any)[field] =
+        (project as any)[field];
+    } else {
+      (safeData as any)[field] =
+        Number(value);
+    }
+  }
+}
+
+const historyRows: Partial<ProjectEditHistory>[] = [];
+
+for (const key of Object.keys(safeData)) {
+  const oldValue =
+    (project as any)[key];
+
+  const newValue =
+    (safeData as any)[key];
+
+  const normalizedOld =
+    oldValue === null ||
+    oldValue === undefined
+      ? ''
+      : String(oldValue);
+
+  const normalizedNew =
+    newValue === null ||
+    newValue === undefined
+      ? ''
+      : String(newValue);
+
+  if (
+    normalizedOld !==
+    normalizedNew
+  ) {
+    historyRows.push({
+      projectId:
+        project.id,
+
+      fieldName:
+        key,
+
+      oldValue:
+        normalizedOld,
+
+      newValue:
+        normalizedNew,
+
+      changedBy:
+        user?.id ||
+        user?.userId ||
+        null,
+
+      changedByName:
+        user?.name ||
+        null,
+
+      changedByRole:
+        Array.isArray(
+          user?.roles,
+        )
+          ? user.roles.join(', ')
+          : '',
+    });
   }
 }
 
