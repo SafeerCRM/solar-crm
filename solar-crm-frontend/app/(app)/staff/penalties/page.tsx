@@ -691,7 +691,11 @@ const reviewPenaltyCase =
       | number
       | undefined;
 
-    if (status === 'APPROVED') {
+    if (
+  status === 'APPROVED' &&
+  penalty.calculationType !==
+    'WARNING_ONLY'
+) {
       const input =
         window.prompt(
           'Approved penalty amount',
@@ -753,6 +757,61 @@ const reviewPenaltyCase =
         error?.response?.data
           ?.message ||
           'Failed to review penalty',
+      );
+    } finally {
+      setLoadingPenaltyAction(
+        false,
+      );
+    }
+  };
+
+  const cancelPenaltyCase =
+  async (penalty: any) => {
+    const reason =
+      window.prompt(
+        'Reason for cancelling penalty?',
+        '',
+      );
+
+    if (reason === null) {
+      return;
+    }
+
+    if (!reason.trim()) {
+      alert(
+        'Cancellation reason is required',
+      );
+      return;
+    }
+
+    try {
+      setLoadingPenaltyAction(
+        true,
+      );
+
+      await axios.patch(
+        `${API_BASE_URL}/staff/penalty/${penalty.id}/cancel`,
+        {
+          reason:
+            reason.trim(),
+        },
+        {
+          headers: headers(),
+        },
+      );
+
+      alert(
+        'Penalty cancelled',
+      );
+
+      await fetchPenalties();
+    } catch (error: any) {
+      console.error(error);
+
+      alert(
+        error?.response?.data
+          ?.message ||
+          'Failed to cancel penalty',
       );
     } finally {
       setLoadingPenaltyAction(
@@ -1192,37 +1251,56 @@ const hideRestorePenaltyCase =
     </div>
   )}
 
-  <label className="mt-4 flex items-start gap-3 rounded-xl border border-orange-200 bg-orange-50 p-4">
-  <input
-    type="checkbox"
-    checked={
-      penaltyForm.includeInPayroll
-    }
-    onChange={(e) =>
-      setPenaltyForm({
-        ...penaltyForm,
-        includeInPayroll:
-          e.target.checked,
-      })
-    }
-    className="mt-1"
-  />
-
-  <div>
-    <p className="font-semibold text-gray-900">
-      Include this penalty in payroll
+  {selectedPenaltyRule
+  ?.calculationType ===
+'WARNING_ONLY' ? (
+  <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4">
+    <p className="font-semibold text-blue-900">
+      Warning Only
     </p>
 
-    <p className="mt-1 text-sm text-gray-600">
-      If enabled, the approved penalty amount
-      will be deducted from the employee&apos;s
-      selected payroll month. If disabled, the
-      penalty will remain in the employee&apos;s
-      disciplinary history but will not reduce
-      salary.
+    <p className="mt-1 text-sm text-blue-800">
+      This case will remain in the
+      employee&apos;s disciplinary
+      history only. It will not deduct
+      salary or block payroll.
     </p>
   </div>
-</label>
+) : (
+  <label className="mt-4 flex items-start gap-3 rounded-xl border border-orange-200 bg-orange-50 p-4">
+    <input
+      type="checkbox"
+      checked={
+        penaltyForm.includeInPayroll
+      }
+      onChange={(e) =>
+        setPenaltyForm({
+          ...penaltyForm,
+          includeInPayroll:
+            e.target.checked,
+        })
+      }
+      className="mt-1"
+    />
+
+    <div>
+      <p className="font-semibold text-gray-900">
+        Include this penalty in payroll
+      </p>
+
+      <p className="mt-1 text-sm text-gray-600">
+        If enabled, the approved
+        penalty amount will be deducted
+        from the employee&apos;s
+        selected payroll month. If
+        disabled, the penalty will
+        remain in the employee&apos;s
+        disciplinary history but will
+        not reduce salary.
+      </p>
+    </div>
+  </label>
+)}
 
   <textarea
     placeholder="Reason / violation details *"
@@ -1342,23 +1420,44 @@ const hideRestorePenaltyCase =
             className="rounded-xl border p-3"
           />
 
-          <input
-            type="number"
-            placeholder="Fixed Amount"
-            value={form.amount}
-            onChange={(e) => setForm({ ...form, amount: e.target.value })}
-            className="rounded-xl border p-3"
-          />
+          {form.calculationType ===
+  'FIXED' && (
+  <input
+    type="number"
+    min="0"
+    placeholder="Fixed Amount"
+    value={form.amount}
+    onChange={(e) =>
+      setForm({
+        ...form,
+        amount:
+          e.target.value,
+      })
+    }
+    className="rounded-xl border p-3"
+  />
+)}
 
-          <input
-            type="number"
-            placeholder="Percentage Rate"
-            value={form.percentageRate}
-            onChange={(e) =>
-              setForm({ ...form, percentageRate: e.target.value })
-            }
-            className="rounded-xl border p-3"
-          />
+{form.calculationType ===
+  'PERCENTAGE' && (
+  <input
+    type="number"
+    min="0"
+    max="100"
+    placeholder="Percentage Rate"
+    value={
+      form.percentageRate
+    }
+    onChange={(e) =>
+      setForm({
+        ...form,
+        percentageRate:
+          e.target.value,
+      })
+    }
+    className="rounded-xl border p-3"
+  />
+)}
         </div>
 
         <div className="mt-4 rounded-xl border p-4">
@@ -1996,6 +2095,29 @@ const hideRestorePenaltyCase =
                         </button>
                       </>
                     )}
+
+                    {!penalty.isHidden &&
+  (
+    penalty.status ===
+      'PENDING' ||
+    penalty.status ===
+      'APPROVED'
+  ) && (
+    <button
+      type="button"
+      disabled={
+        loadingPenaltyAction
+      }
+      onClick={() =>
+        cancelPenaltyCase(
+          penalty,
+        )
+      }
+      className="rounded-xl bg-orange-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+    >
+      Cancel
+    </button>
+  )}
 
                   {penalty.evidenceUrl && (
                     <a
