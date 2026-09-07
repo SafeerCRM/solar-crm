@@ -336,29 +336,97 @@ private readonly projectRepository: Repository<Project>,
 }
 
   async search(queryText: string) {
-    const search = String(queryText || '').trim().toLowerCase();
+  const rawSearch =
+    String(queryText || '').trim();
 
-    if (!search || search.length < 2) {
-      return [];
-    }
+  const search =
+    rawSearch.toLowerCase();
 
-    return this.customerRepository
-      .createQueryBuilder('customer')
-      .where('customer.isHidden = false')
-      .andWhere(
-        `
-        LOWER(customer.customerCode) LIKE :search
-        OR LOWER(customer.customerName) LIKE :search
-        OR LOWER(customer.mobile) LIKE :search
-        OR LOWER(customer.email) LIKE :search
-        OR LOWER(customer.electricityKNumber) LIKE :search
-        `,
-        { search: `%${search}%` },
+  if (
+  !search ||
+  (
+    search.length < 2 &&
+    !/^\d+$/.test(search)
+  )
+) {
+  return [];
+}
+
+  const query =
+    this.customerRepository
+      .createQueryBuilder(
+        'customer',
       )
-      .orderBy('customer.customerName', 'ASC')
-      .take(20)
-      .getMany();
-  }
+      .where(
+        'customer.isHidden = false',
+      );
+
+  query.andWhere(
+    new Brackets((qb) => {
+      qb.where(
+        'LOWER(customer.customerCode) LIKE :search',
+        {
+          search:
+            `%${search}%`,
+        },
+      )
+        .orWhere(
+          'LOWER(customer.customerName) LIKE :search',
+          {
+            search:
+              `%${search}%`,
+          },
+        )
+        .orWhere(
+          'LOWER(customer.mobile) LIKE :search',
+          {
+            search:
+              `%${search}%`,
+          },
+        )
+        .orWhere(
+          'LOWER(customer.email) LIKE :search',
+          {
+            search:
+              `%${search}%`,
+          },
+        )
+        .orWhere(
+          'LOWER(customer.electricityKNumber) LIKE :search',
+          {
+            search:
+              `%${search}%`,
+          },
+        );
+
+      const numericId =
+        Number(rawSearch);
+
+      if (
+        Number.isInteger(
+          numericId,
+        ) &&
+        numericId > 0
+      ) {
+        qb.orWhere(
+          'customer.id = :customerId',
+          {
+            customerId:
+              numericId,
+          },
+        );
+      }
+    }),
+  );
+
+  return query
+    .orderBy(
+      'customer.customerName',
+      'ASC',
+    )
+    .take(20)
+    .getMany();
+}
 
   async findOne(id: number) {
     const customer = await this.customerRepository.findOne({

@@ -144,6 +144,18 @@ const [
 const [announcementSaving, setAnnouncementSaving] =
   useState(false);
 
+  const [customerSearch, setCustomerSearch] =
+  useState('');
+
+const [customerSearchResults, setCustomerSearchResults] =
+  useState<Customer[]>([]);
+
+const [customerSearchLoading, setCustomerSearchLoading] =
+  useState(false);
+
+const [selectedAnnouncementCustomers, setSelectedAnnouncementCustomers] =
+  useState<Customer[]>([]);
+
 const [announcementForm, setAnnouncementForm] = useState({
   title: '',
   message: '',
@@ -228,7 +240,112 @@ const [announcementForm, setAnnouncementForm] = useState({
     }
   };
 
-  
+  const searchAnnouncementCustomers = async (
+  value: string,
+) => {
+  setCustomerSearch(value);
+
+  const trimmed =
+    value.trim();
+
+  if (!trimmed) {
+    setCustomerSearchResults([]);
+    return;
+  }
+
+  try {
+    setCustomerSearchLoading(true);
+
+    const res =
+      await axios.get(
+        `${API_BASE_URL}/customers/search`,
+        {
+          params: {
+            q: trimmed,
+          },
+          headers:
+            getAuthHeaders(),
+        },
+      );
+
+    setCustomerSearchResults(
+      Array.isArray(res.data)
+        ? res.data
+        : [],
+    );
+  } catch (error) {
+    console.error(
+      'Failed to search customers:',
+      error,
+    );
+
+    setCustomerSearchResults([]);
+  } finally {
+    setCustomerSearchLoading(false);
+  }
+};
+
+const addAnnouncementCustomer = (
+  customer: Customer,
+) => {
+  const alreadySelected =
+    selectedAnnouncementCustomers.some(
+      (item) =>
+        item.id === customer.id,
+    );
+
+  if (alreadySelected) {
+    return;
+  }
+
+  const updated = [
+    ...selectedAnnouncementCustomers,
+    customer,
+  ];
+
+  setSelectedAnnouncementCustomers(
+    updated,
+  );
+
+  setAnnouncementForm({
+    ...announcementForm,
+
+    specificCustomerIds:
+      updated
+        .map((item) =>
+          item.id,
+        )
+        .join(','),
+  });
+
+  setCustomerSearch('');
+  setCustomerSearchResults([]);
+};
+
+const removeAnnouncementCustomer = (
+  customerId: number,
+) => {
+  const updated =
+    selectedAnnouncementCustomers.filter(
+      (item) =>
+        item.id !== customerId,
+    );
+
+  setSelectedAnnouncementCustomers(
+    updated,
+  );
+
+  setAnnouncementForm({
+    ...announcementForm,
+
+    specificCustomerIds:
+      updated
+        .map((item) =>
+          item.id,
+        )
+        .join(','),
+  });
+};
 
   const fetchAnnouncements = async (
   targetPage = 1,
@@ -521,6 +638,10 @@ publishAt:
   publishType: 'NOW',
   publishAt: '',
 });
+
+setSelectedAnnouncementCustomers([]);
+setCustomerSearch('');
+setCustomerSearchResults([]);
 
     fetchAnnouncements(1);
   } catch (error: any) {
@@ -1551,13 +1672,32 @@ URL.revokeObjectURL(url);
       value={
         announcementForm.audienceType
       }
-      onChange={(e) =>
-        setAnnouncementForm({
-          ...announcementForm,
-          audienceType:
-            e.target.value,
-        })
-      }
+      onChange={(e) => {
+  const value =
+    e.target.value;
+
+  setAnnouncementForm({
+    ...announcementForm,
+
+    audienceType:
+      value,
+
+    specificCustomerIds:
+      value ===
+      'SPECIFIC_CUSTOMERS'
+        ? announcementForm.specificCustomerIds
+        : '',
+  });
+
+  if (
+    value !==
+    'SPECIFIC_CUSTOMERS'
+  ) {
+    setSelectedAnnouncementCustomers([]);
+    setCustomerSearch('');
+    setCustomerSearchResults([]);
+  }
+}}
       className="rounded-xl border bg-white p-3"
     >
       <option value="ALL">
@@ -1646,29 +1786,148 @@ URL.revokeObjectURL(url);
   </div>
 
   {announcementForm.audienceType ===
-    'SPECIFIC_CUSTOMERS' && (
-    <div className="mt-3">
+  'SPECIFIC_CUSTOMERS' && (
+  <div className="mt-3 rounded-xl border bg-white p-4">
+    <label className="mb-2 block text-sm font-semibold text-gray-700">
+      Select Customers
+    </label>
+
+    <div className="relative">
       <input
         type="text"
-        placeholder="Customer IDs, e.g. 12, 25, 31"
-        value={
-          announcementForm.specificCustomerIds
-        }
+        placeholder="Search by ID, customer code, name, mobile or K number"
+        value={customerSearch}
         onChange={(e) =>
-          setAnnouncementForm({
-            ...announcementForm,
-            specificCustomerIds:
-              e.target.value,
-          })
+          searchAnnouncementCustomers(
+            e.target.value,
+          )
         }
-        className="w-full rounded-xl border bg-white p-3"
+        className="w-full rounded-xl border p-3"
       />
 
-      <p className="mt-1 text-xs text-gray-500">
-        Enter Customer Master IDs separated by commas.
-      </p>
+      {customerSearchLoading && (
+        <p className="mt-2 text-xs text-gray-500">
+          Searching...
+        </p>
+      )}
+
+      {!customerSearchLoading &&
+        customerSearchResults.length > 0 && (
+        <div className="mt-2 max-h-64 overflow-y-auto rounded-xl border bg-white shadow">
+          {customerSearchResults.map(
+            (customer) => {
+              const selected =
+                selectedAnnouncementCustomers.some(
+                  (item) =>
+                    item.id ===
+                    customer.id,
+                );
+
+              return (
+                <button
+                  key={
+                    customer.id
+                  }
+                  type="button"
+                  disabled={
+                    selected
+                  }
+                  onClick={() =>
+                    addAnnouncementCustomer(
+                      customer,
+                    )
+                  }
+                  className="flex w-full items-start justify-between gap-3 border-b p-3 text-left last:border-b-0 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  <div>
+                    <p className="font-semibold text-gray-800">
+                      {customer.customerName ||
+                        '-'}
+                    </p>
+
+                    <p className="mt-1 text-xs text-gray-500">
+                      ID: {customer.id}
+                      {' | '}
+                      {customer.customerCode ||
+                        'No Code'}
+                    </p>
+
+                    <p className="mt-1 text-xs text-gray-500">
+                      Mobile:{' '}
+                      {customer.mobile ||
+                        '-'}
+                      {' | '}
+                      K No:{' '}
+                      {customer.electricityKNumber ||
+                        '-'}
+                    </p>
+                  </div>
+
+                  <span className="rounded-lg bg-blue-600 px-3 py-1 text-xs font-semibold text-white">
+                    {selected
+                      ? 'Selected'
+                      : 'Select'}
+                  </span>
+                </button>
+              );
+            },
+          )}
+        </div>
+      )}
     </div>
-  )}
+
+    {selectedAnnouncementCustomers.length >
+      0 && (
+      <div className="mt-4">
+        <p className="mb-2 text-sm font-semibold text-gray-700">
+          Selected Customers (
+          {
+            selectedAnnouncementCustomers.length
+          }
+          )
+        </p>
+
+        <div className="flex flex-wrap gap-2">
+          {selectedAnnouncementCustomers.map(
+            (customer) => (
+              <div
+                key={
+                  customer.id
+                }
+                className="flex items-center gap-2 rounded-full bg-blue-50 px-3 py-2 text-sm text-blue-800"
+              >
+                <span>
+                  {customer.customerName ||
+                    customer.customerCode ||
+                    `Customer ${customer.id}`}
+                </span>
+
+                <span className="text-xs text-blue-600">
+                  #
+                  {
+                    customer.id
+                  }
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    removeAnnouncementCustomer(
+                      customer.id,
+                    )
+                  }
+                  className="font-bold text-red-600"
+                >
+                  ×
+                </button>
+              </div>
+            ),
+          )}
+        </div>
+      </div>
+    )}
+  </div>
+)}
 
   <div className="mt-4 grid gap-3 md:grid-cols-2">
   <div>
