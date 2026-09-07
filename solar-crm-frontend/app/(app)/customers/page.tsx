@@ -625,11 +625,14 @@ const startEditAnnouncement = async (
   }
 
   try {
-    const responses =
-      await Promise.all(
-        ids.map(
-          (customerId) =>
-            axios.get(
+  const selectedCustomers =
+    await Promise.all(
+      ids.map(
+        async (
+          customerId,
+        ) => {
+          const response =
+            await axios.get(
               `${API_BASE_URL}/customers/search`,
               {
                 params: {
@@ -642,51 +645,49 @@ const startEditAnnouncement = async (
                 headers:
                   getAuthHeaders(),
               },
-            ),
-        ),
-      );
+            );
 
-    const selectedCustomers =
-      responses
-        .flatMap(
-          (response) =>
+          const results:
+            Customer[] =
             Array.isArray(
               response.data,
             )
               ? response.data
-              : [],
-        )
-        .filter(
-          (
-            customer: Customer,
-            index: number,
-            all: Customer[],
-          ) =>
-            ids.includes(
-              Number(
-                customer.id,
-              ),
-            ) &&
-            all.findIndex(
-              (item) =>
-                item.id ===
-                customer.id,
-            ) === index,
-        );
+              : [];
 
-    setSelectedAnnouncementCustomers(
-      selectedCustomers,
-    );
-  } catch (error) {
-    console.error(
-      'Failed to load selected announcement customers:',
-      error,
+          return (
+            results.find(
+              (customer) =>
+                Number(
+                  customer.id,
+                ) ===
+                Number(
+                  customerId,
+                ),
+            ) || null
+          );
+        },
+      ),
     );
 
-    setSelectedAnnouncementCustomers(
-      [],
-    );
-  }
+  setSelectedAnnouncementCustomers(
+    selectedCustomers.filter(
+      (
+        customer,
+      ): customer is Customer =>
+        customer !== null,
+    ),
+  );
+} catch (error) {
+  console.error(
+    'Failed to load selected announcement customers:',
+    error,
+  );
+
+  setSelectedAnnouncementCustomers(
+    [],
+  );
+}
 
   window.scrollTo({
     top: 0,
