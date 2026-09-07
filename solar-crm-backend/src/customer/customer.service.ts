@@ -337,20 +337,28 @@ private readonly projectRepository: Repository<Project>,
 
   async search(queryText: string) {
   const rawSearch =
-    String(queryText || '').trim();
+    String(
+      queryText || '',
+    ).trim();
 
   const search =
     rawSearch.toLowerCase();
 
+  if (!search) {
+    return [];
+  }
+
+  const numericId =
+    /^\d+$/.test(rawSearch)
+      ? Number(rawSearch)
+      : null;
+
   if (
-  !search ||
-  (
-    search.length < 2 &&
-    !/^\d+$/.test(search)
-  )
-) {
-  return [];
-}
+    numericId === null &&
+    search.length < 2
+  ) {
+    return [];
+  }
 
   const query =
     this.customerRepository
@@ -362,61 +370,64 @@ private readonly projectRepository: Repository<Project>,
       );
 
   query.andWhere(
-    new Brackets((qb) => {
-      qb.where(
-        'LOWER(customer.customerCode) LIKE :search',
-        {
-          search:
-            `%${search}%`,
-        },
-      )
-        .orWhere(
+    new Brackets(
+      (qb) => {
+        if (
+          numericId !== null &&
+          Number.isInteger(
+            numericId,
+          ) &&
+          numericId > 0
+        ) {
+          qb.orWhere(
+            'customer.id = :numericId',
+            {
+              numericId,
+            },
+          );
+        }
+
+        qb.orWhere(
+          'LOWER(customer.customerCode) LIKE :search',
+          {
+            search:
+              `%${search}%`,
+          },
+        );
+
+        qb.orWhere(
           'LOWER(customer.customerName) LIKE :search',
           {
             search:
               `%${search}%`,
           },
-        )
-        .orWhere(
+        );
+
+        qb.orWhere(
           'LOWER(customer.mobile) LIKE :search',
           {
             search:
               `%${search}%`,
           },
-        )
-        .orWhere(
+        );
+
+        qb.orWhere(
           'LOWER(customer.email) LIKE :search',
           {
             search:
               `%${search}%`,
           },
-        )
-        .orWhere(
+        );
+
+        qb.orWhere(
           'LOWER(customer.electricityKNumber) LIKE :search',
           {
             search:
               `%${search}%`,
           },
         );
-
-      const numericId =
-        Number(rawSearch);
-
-      if (
-        Number.isInteger(
-          numericId,
-        ) &&
-        numericId > 0
-      ) {
-        qb.orWhere(
-          'customer.id = :customerId',
-          {
-            customerId:
-              numericId,
-          },
-        );
-      }
-    }),
+      },
+    ),
   );
 
   return query
