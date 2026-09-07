@@ -261,7 +261,7 @@ const [announcementForm, setAnnouncementForm] = useState({
         `${API_BASE_URL}/customers/search`,
         {
           params: {
-            q: trimmed,
+            query: trimmed,
           },
           headers:
             getAuthHeaders(),
