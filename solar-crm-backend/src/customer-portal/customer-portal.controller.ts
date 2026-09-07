@@ -124,6 +124,20 @@ listCustomerAnnouncements(
   );
 }
 
+@Roles('OWNER')
+@Patch('announcements/:id/hide')
+hideCustomerAnnouncement(
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+) {
+  return this.service.hideCustomerAnnouncement(
+    id,
+  );
+}
+
 
   @Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE', 'MAINTENANCE_MANAGER', 'INSPECTION_MANAGER',)
   @Patch('complaints/:id')

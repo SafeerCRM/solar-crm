@@ -5690,4 +5690,48 @@ async listCustomerAnnouncements(
       ) || 1,
   };
 }
+
+async hideCustomerAnnouncement(
+  id: number,
+) {
+  const announcement =
+    await this.customerAnnouncementRepository.findOne({
+      where: {
+        id,
+      },
+    });
+
+  if (!announcement) {
+    throw new NotFoundException(
+      'Customer announcement not found',
+    );
+  }
+
+  if (announcement.isHidden) {
+    return {
+      message:
+        'Customer announcement is already hidden',
+      announcement,
+    };
+  }
+
+  announcement.isHidden =
+    true;
+
+  announcement.isActive =
+    false;
+
+  const savedAnnouncement =
+    await this.customerAnnouncementRepository.save(
+      announcement,
+    );
+
+  return {
+    message:
+      'Customer announcement hidden successfully',
+
+    announcement:
+      savedAnnouncement,
+  };
+}
 }

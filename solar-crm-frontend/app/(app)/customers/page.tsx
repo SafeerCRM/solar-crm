@@ -659,6 +659,42 @@ setCustomerSearchResults([]);
   }
 };
 
+const hideAnnouncement = async (
+  announcementId: number,
+) => {
+  const confirmed = window.confirm(
+    'Hide this announcement?',
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    await axios.patch(
+      `${API_BASE_URL}/customer-portal/announcements/${announcementId}/hide`,
+      {},
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+
+    await fetchAnnouncements(
+      announcementPage,
+    );
+  } catch (error: any) {
+    console.error(
+      'Failed to hide announcement:',
+      error,
+    );
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to hide announcement',
+    );
+  }
+};
+
   const resetForm = () => {
     setForm(emptyForm);
     setEditingId(null);
@@ -2124,6 +2160,10 @@ URL.revokeObjectURL(url);
             <th className="border p-3">
               Created
             </th>
+
+            <th className="border px-3 py-2 text-left">
+  Actions
+</th>
           </tr>
         </thead>
 
@@ -2196,6 +2236,20 @@ URL.revokeObjectURL(url);
                       )
                     : '-'}
                 </td>
+
+                <td className="border px-3 py-2">
+  <button
+    type="button"
+    onClick={() =>
+      hideAnnouncement(
+        announcement.id,
+      )
+    }
+    className="rounded border border-red-300 px-3 py-1 text-sm font-medium text-red-600 hover:bg-red-50"
+  >
+    Hide
+  </button>
+</td>
               </tr>
             ),
           )}
