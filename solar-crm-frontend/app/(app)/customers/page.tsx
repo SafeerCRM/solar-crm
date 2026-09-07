@@ -488,7 +488,9 @@ const createAnnouncement = async () => {
 publishAt:
   announcementForm.publishType ===
     'SCHEDULED'
-    ? announcementForm.publishAt
+    ? new Date(
+        announcementForm.publishAt,
+      ).toISOString()
     : undefined,
         },
         {
