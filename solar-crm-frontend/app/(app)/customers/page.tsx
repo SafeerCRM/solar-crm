@@ -633,50 +633,20 @@ const startEditAnnouncement = async (
         ) => {
           const response =
             await axios.get(
-              `${API_BASE_URL}/customers/search`,
+              `${API_BASE_URL}/customers/${customerId}`,
               {
-                params: {
-                  query:
-                    String(
-                      customerId,
-                    ),
-                },
-
                 headers:
                   getAuthHeaders(),
               },
             );
 
-          const results:
-            Customer[] =
-            Array.isArray(
-              response.data,
-            )
-              ? response.data
-              : [];
-
-          return (
-            results.find(
-              (customer) =>
-                Number(
-                  customer.id,
-                ) ===
-                Number(
-                  customerId,
-                ),
-            ) || null
-          );
+          return response.data as Customer;
         },
       ),
     );
 
   setSelectedAnnouncementCustomers(
-    selectedCustomers.filter(
-      (
-        customer,
-      ): customer is Customer =>
-        customer !== null,
-    ),
+    selectedCustomers,
   );
 } catch (error) {
   console.error(

@@ -430,46 +430,13 @@ private readonly projectRepository: Repository<Project>,
     ),
   );
 
-  if (
-  numericId !== null &&
-  Number.isInteger(
-    numericId,
-  ) &&
-  numericId > 0
-) {
-  query
-    .addSelect(
-      `
-        CASE
-          WHEN customer.id = :numericId
-          THEN 0
-          ELSE 1
-        END
-      `,
-      'exactIdPriority',
-    )
-    .setParameter(
-      'numericId',
-      numericId,
-    )
+  return query
     .orderBy(
-      'exactIdPriority',
-      'ASC',
-    )
-    .addOrderBy(
       'customer.customerName',
       'ASC',
-    );
-} else {
-  query.orderBy(
-    'customer.customerName',
-    'ASC',
-  );
-}
-
-return query
-  .take(20)
-  .getMany();
+    )
+    .take(20)
+    .getMany();
 }
 
   async findOne(id: number) {
