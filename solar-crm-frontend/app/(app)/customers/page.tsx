@@ -64,6 +64,7 @@ type CustomerAnnouncement = {
   pushRequired?: boolean;
   publishType?: string;
   publishAt?: string;
+  publishedAt?: string;
   expiresAt?: string;
   isActive?: boolean;
   isHidden?: boolean;
@@ -143,6 +144,13 @@ const [
 
 const [announcementSaving, setAnnouncementSaving] =
   useState(false);
+
+  const [
+  editingAnnouncementId,
+  setEditingAnnouncementId,
+] = useState<number | null>(
+  null,
+);
 
   const [customerSearch, setCustomerSearch] =
   useState('');
@@ -475,6 +483,217 @@ const updateAnnouncementPublishTime = (
   });
 };
 
+const resetAnnouncementForm = () => {
+  setEditingAnnouncementId(
+    null,
+  );
+
+  setAnnouncementForm({
+    title: '',
+    message: '',
+    audienceType: 'ALL',
+    cities: '',
+    branches: '',
+    projectStatuses: '',
+    specificCustomerIds: '',
+    popupRequired: true,
+    pushRequired: true,
+    publishType: 'NOW',
+    publishAt: '',
+  });
+
+  setSelectedAnnouncementCustomers(
+    [],
+  );
+
+  setCustomerSearch('');
+  setCustomerSearchResults([]);
+};
+
+const startEditAnnouncement = async (
+  announcement: CustomerAnnouncement,
+) => {
+  if (
+    announcement.publishType !==
+      'SCHEDULED' ||
+    announcement.publishedAt
+  ) {
+    alert(
+      'Only unpublished scheduled announcements can be edited',
+    );
+
+    return;
+  }
+
+  setEditingAnnouncementId(
+    announcement.id,
+  );
+
+  setAnnouncementForm({
+    title:
+      announcement.title || '',
+
+    message:
+      announcement.message || '',
+
+    audienceType:
+      announcement.audienceType ||
+      'ALL',
+
+    cities:
+      Array.isArray(
+        announcement.cities,
+      )
+        ? announcement.cities.join(
+            ', ',
+          )
+        : '',
+
+    branches:
+      Array.isArray(
+        announcement.branches,
+      )
+        ? announcement.branches.join(
+            ', ',
+          )
+        : '',
+
+    projectStatuses:
+      Array.isArray(
+        announcement.projectStatuses,
+      )
+        ? announcement.projectStatuses.join(
+            ', ',
+          )
+        : '',
+
+    specificCustomerIds:
+      Array.isArray(
+        announcement.specificCustomerIds,
+      )
+        ? announcement.specificCustomerIds.join(
+            ',',
+          )
+        : '',
+
+    popupRequired:
+      announcement.popupRequired !==
+      false,
+
+    pushRequired:
+      announcement.pushRequired !==
+      false,
+
+    publishType:
+      'SCHEDULED',
+
+    publishAt:
+      announcement.publishAt
+        ? dayjs(
+            announcement.publishAt,
+          ).format(
+            'YYYY-MM-DDTHH:mm',
+          )
+        : '',
+  });
+
+  setCustomerSearch('');
+  setCustomerSearchResults([]);
+
+  const ids =
+    Array.isArray(
+      announcement.specificCustomerIds,
+    )
+      ? announcement.specificCustomerIds
+      : [];
+
+  if (
+    announcement.audienceType !==
+      'SPECIFIC_CUSTOMERS' ||
+    ids.length === 0
+  ) {
+    setSelectedAnnouncementCustomers(
+      [],
+    );
+
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth',
+    });
+
+    return;
+  }
+
+  try {
+    const responses =
+      await Promise.all(
+        ids.map(
+          (customerId) =>
+            axios.get(
+              `${API_BASE_URL}/customers/search`,
+              {
+                params: {
+                  query:
+                    String(
+                      customerId,
+                    ),
+                },
+
+                headers:
+                  getAuthHeaders(),
+              },
+            ),
+        ),
+      );
+
+    const selectedCustomers =
+      responses
+        .flatMap(
+          (response) =>
+            Array.isArray(
+              response.data,
+            )
+              ? response.data
+              : [],
+        )
+        .filter(
+          (
+            customer: Customer,
+            index: number,
+            all: Customer[],
+          ) =>
+            ids.includes(
+              Number(
+                customer.id,
+              ),
+            ) &&
+            all.findIndex(
+              (item) =>
+                item.id ===
+                customer.id,
+            ) === index,
+        );
+
+    setSelectedAnnouncementCustomers(
+      selectedCustomers,
+    );
+  } catch (error) {
+    console.error(
+      'Failed to load selected announcement customers:',
+      error,
+    );
+
+    setSelectedAnnouncementCustomers(
+      [],
+    );
+  }
+
+  window.scrollTo({
+    top: 0,
+    behavior: 'smooth',
+  });
+};
+
 const createAnnouncement = async () => {
   const title =
     announcementForm.title.trim();
@@ -578,38 +797,49 @@ const createAnnouncement = async () => {
   try {
     setAnnouncementSaving(true);
 
-    const res =
-      await axios.post(
-        `${API_BASE_URL}/customer-portal/announcements`,
+    const payload = {
+  title,
+  message,
+
+  audienceType:
+    announcementForm.audienceType,
+
+  cities,
+  branches,
+  projectStatuses,
+  specificCustomerIds,
+
+  popupRequired:
+    announcementForm.popupRequired,
+
+  pushRequired:
+    announcementForm.pushRequired,
+
+  publishType:
+    announcementForm.publishType,
+
+  publishAt:
+    announcementForm.publishType ===
+      'SCHEDULED'
+      ? new Date(
+          announcementForm.publishAt,
+        ).toISOString()
+      : undefined,
+};
+
+const res =
+  editingAnnouncementId
+    ? await axios.patch(
+        `${API_BASE_URL}/customer-portal/announcements/${editingAnnouncementId}`,
+        payload,
         {
-          title,
-          message,
-
-          audienceType:
-            announcementForm.audienceType,
-
-          cities,
-          branches,
-          projectStatuses,
-          specificCustomerIds,
-
-          popupRequired:
-            announcementForm.popupRequired,
-
-          pushRequired:
-            announcementForm.pushRequired,
-
-          publishType:
-  announcementForm.publishType,
-
-publishAt:
-  announcementForm.publishType ===
-    'SCHEDULED'
-    ? new Date(
-        announcementForm.publishAt,
-      ).toISOString()
-    : undefined,
+          headers:
+            getAuthHeaders(),
         },
+      )
+    : await axios.post(
+        `${API_BASE_URL}/customer-portal/announcements`,
+        payload,
         {
           headers:
             getAuthHeaders(),
@@ -617,33 +847,19 @@ publishAt:
       );
 
     alert(
-      `${res.data?.message || 'Announcement published successfully'}${
-        res.data?.recipientCount !== undefined
+  editingAnnouncementId
+    ? 'Announcement updated successfully'
+    : `${res.data?.message || 'Announcement published successfully'}${
+        res.data?.recipientCount !==
+        undefined
           ? `\nRecipients: ${res.data.recipientCount}`
           : ''
       }`,
-    );
+);
 
-    setAnnouncementForm({
-  title: '',
-  message: '',
-  audienceType: 'ALL',
-  cities: '',
-  branches: '',
-  projectStatuses: '',
-  specificCustomerIds: '',
-  popupRequired: true,
-  pushRequired: true,
+resetAnnouncementForm();
 
-  publishType: 'NOW',
-  publishAt: '',
-});
-
-setSelectedAnnouncementCustomers([]);
-setCustomerSearch('');
-setCustomerSearchResults([]);
-
-    fetchAnnouncements(1);
+fetchAnnouncements(1);
   } catch (error: any) {
     console.error(
       'Failed to create customer announcement:',
@@ -1681,12 +1897,16 @@ URL.revokeObjectURL(url);
 
     <div className="mt-5 rounded-2xl border bg-gray-50 p-5">
   <h3 className="text-lg font-bold text-gray-800">
-    Create Announcement
-  </h3>
+  {editingAnnouncementId
+    ? 'Edit Scheduled Announcement'
+    : 'Create Announcement'}
+</h3>
 
   <p className="mt-1 text-sm text-gray-500">
-    Publish a notification to selected customer portal users.
-  </p>
+  {editingAnnouncementId
+    ? 'Update this announcement before its scheduled publish time.'
+    : 'Publish a notification to selected customer portal users.'}
+</p>
 
   <div className="mt-4 grid gap-3 md:grid-cols-2">
     <input
@@ -1975,6 +2195,10 @@ URL.revokeObjectURL(url);
       value={
         announcementForm.publishType
       }
+      disabled={
+  editingAnnouncementId !==
+  null
+}
       onChange={(e) =>
         setAnnouncementForm({
           ...announcementForm,
@@ -1987,7 +2211,7 @@ URL.revokeObjectURL(url);
               : announcementForm.publishAt,
         })
       }
-      className="w-full rounded-xl border bg-white p-3"
+      className="w-full rounded-xl border bg-white p-3 disabled:bg-gray-100 disabled:text-gray-500"
     >
       <option value="NOW">
         Publish Now
@@ -2085,22 +2309,41 @@ URL.revokeObjectURL(url);
     </label>
   </div>
 
-  <div className="mt-4">
+  <div className="mt-4 flex flex-wrap gap-3">
+  <button
+    type="button"
+    onClick={
+      createAnnouncement
+    }
+    disabled={
+      announcementSaving
+    }
+    className="rounded-xl bg-blue-600 px-5 py-3 font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+  >
+    {announcementSaving
+      ? editingAnnouncementId
+        ? 'Updating...'
+        : 'Publishing...'
+      : editingAnnouncementId
+        ? 'Update Announcement'
+        : 'Publish Announcement'}
+  </button>
+
+  {editingAnnouncementId && (
     <button
       type="button"
       onClick={
-        createAnnouncement
+        resetAnnouncementForm
       }
       disabled={
         announcementSaving
       }
-      className="rounded-xl bg-blue-600 px-5 py-3 font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+      className="rounded-xl bg-gray-600 px-5 py-3 font-bold text-white hover:bg-gray-700 disabled:opacity-50"
     >
-      {announcementSaving
-        ? 'Publishing...'
-        : 'Publish Announcement'}
+      Cancel Edit
     </button>
-  </div>
+  )}
+</div>
 </div>
 
     <div className="mt-5">
@@ -2238,17 +2481,35 @@ URL.revokeObjectURL(url);
                 </td>
 
                 <td className="border px-3 py-2">
-  <button
-    type="button"
-    onClick={() =>
-      hideAnnouncement(
-        announcement.id,
-      )
-    }
-    className="rounded border border-red-300 px-3 py-1 text-sm font-medium text-red-600 hover:bg-red-50"
-  >
-    Hide
-  </button>
+  <div className="flex flex-wrap gap-2">
+    {announcement.publishType ===
+      'SCHEDULED' &&
+      !announcement.publishedAt && (
+        <button
+          type="button"
+          onClick={() =>
+            startEditAnnouncement(
+              announcement,
+            )
+          }
+          className="rounded border border-blue-300 px-3 py-1 text-sm font-medium text-blue-600 hover:bg-blue-50"
+        >
+          Edit
+        </button>
+      )}
+
+    <button
+      type="button"
+      onClick={() =>
+        hideAnnouncement(
+          announcement.id,
+        )
+      }
+      className="rounded border border-red-300 px-3 py-1 text-sm font-medium text-red-600 hover:bg-red-50"
+    >
+      Hide
+    </button>
+  </div>
 </td>
               </tr>
             ),

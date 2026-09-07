@@ -5691,6 +5691,194 @@ async listCustomerAnnouncements(
   };
 }
 
+async updateCustomerAnnouncement(
+  id: number,
+  body: any,
+) {
+  const announcement =
+    await this.customerAnnouncementRepository.findOne({
+      where: {
+        id,
+        isHidden: false,
+      },
+    });
+
+  if (!announcement) {
+    throw new NotFoundException(
+      'Customer announcement not found',
+    );
+  }
+
+  if (announcement.publishedAt) {
+    throw new BadRequestException(
+      'Published announcements cannot be edited',
+    );
+  }
+
+  const title =
+    String(
+      body?.title ?? announcement.title,
+    ).trim();
+
+  const message =
+    String(
+      body?.message ?? announcement.message,
+    ).trim();
+
+  if (!title) {
+    throw new BadRequestException(
+      'Announcement title is required',
+    );
+  }
+
+  if (!message) {
+    throw new BadRequestException(
+      'Announcement message is required',
+    );
+  }
+
+  const audienceType =
+    String(
+      body?.audienceType ??
+        announcement.audienceType,
+    ).trim() as CustomerAnnouncementAudienceType;
+
+  if (
+    !Object.values(
+      CustomerAnnouncementAudienceType,
+    ).includes(audienceType)
+  ) {
+    throw new BadRequestException(
+      'Invalid customer announcement audience',
+    );
+  }
+
+  const cities =
+    Array.isArray(body?.cities)
+      ? body.cities
+          .map((item: any) =>
+            String(item || '').trim(),
+          )
+          .filter(Boolean)
+      : announcement.cities || [];
+
+  const branches =
+    Array.isArray(body?.branches)
+      ? body.branches
+          .map((item: any) =>
+            String(item || '').trim(),
+          )
+          .filter(Boolean)
+      : announcement.branches || [];
+
+  const projectStatuses =
+    Array.isArray(body?.projectStatuses)
+      ? body.projectStatuses
+          .map((item: any) =>
+            String(item || '').trim(),
+          )
+          .filter(Boolean)
+      : announcement.projectStatuses || [];
+
+  const specificCustomerIds =
+    Array.isArray(
+      body?.specificCustomerIds,
+    )
+      ? body.specificCustomerIds
+          .map((item: any) =>
+            Number(item),
+          )
+          .filter(
+            (item: number) =>
+              Number.isInteger(item) &&
+              item > 0,
+          )
+      : announcement.specificCustomerIds || [];
+
+  if (
+    audienceType ===
+      CustomerAnnouncementAudienceType.SPECIFIC_CUSTOMERS &&
+    specificCustomerIds.length === 0
+  ) {
+    throw new BadRequestException(
+      'Please select at least one customer',
+    );
+  }
+
+  let publishAt =
+    announcement.publishAt;
+
+  if (body?.publishAt !== undefined) {
+    if (!body.publishAt) {
+      throw new BadRequestException(
+        'Publish date and time are required',
+      );
+    }
+
+    publishAt =
+      new Date(
+        body.publishAt,
+      );
+
+    if (
+      Number.isNaN(
+        publishAt.getTime(),
+      )
+    ) {
+      throw new BadRequestException(
+        'Invalid publish date and time',
+      );
+    }
+
+    if (
+      publishAt.getTime() <=
+      Date.now()
+    ) {
+      throw new BadRequestException(
+        'Scheduled publish time must be in the future',
+      );
+    }
+  }
+
+  announcement.title =
+    title;
+
+  announcement.message =
+    message;
+
+  announcement.audienceType =
+    audienceType;
+
+  announcement.cities =
+    cities;
+
+  announcement.branches =
+    branches;
+
+  announcement.projectStatuses =
+    projectStatuses;
+
+  announcement.specificCustomerIds =
+    specificCustomerIds;
+
+  announcement.popupRequired =
+    body?.popupRequired !== undefined
+      ? body.popupRequired !== false
+      : announcement.popupRequired;
+
+  announcement.pushRequired =
+    body?.pushRequired !== undefined
+      ? body.pushRequired !== false
+      : announcement.pushRequired;
+
+  announcement.publishAt =
+    publishAt;
+
+  return this.customerAnnouncementRepository.save(
+    announcement,
+  );
+}
+
 async hideCustomerAnnouncement(
   id: number,
 ) {

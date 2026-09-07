@@ -125,6 +125,22 @@ listCustomerAnnouncements(
 }
 
 @Roles('OWNER')
+@Patch('announcements/:id')
+updateCustomerAnnouncement(
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+  @Body() body: any,
+) {
+  return this.service.updateCustomerAnnouncement(
+    id,
+    body,
+  );
+}
+
+@Roles('OWNER')
 @Patch('announcements/:id/hide')
 hideCustomerAnnouncement(
   @Param(
