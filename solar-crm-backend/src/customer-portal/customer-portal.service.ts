@@ -4,6 +4,7 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Customer } from '../customer/customer.entity';
@@ -4999,8 +5000,15 @@ async createCustomerAnnouncement(
       pushRequired:
         body?.pushRequired !== false,
       publishType,
-      publishAt,
-      expiresAt,
+publishAt,
+
+publishedAt:
+  publishType ===
+  CustomerAnnouncementPublishType.NOW
+    ? new Date()
+    : undefined,
+
+expiresAt,
       isActive: true,
       isHidden: false,
 
@@ -5284,6 +5292,92 @@ private async resolveCustomerAnnouncementRecipients(
     announcement.projectStatuses,
     projectMap,
   );
+}
+
+@Cron('0 * * * * *')
+async publishDueCustomerAnnouncements() {
+  const now = new Date();
+
+  const announcements =
+    await this.customerAnnouncementRepository
+      .createQueryBuilder('announcement')
+      .where(
+        'announcement.publishType = :publishType',
+        {
+          publishType:
+            CustomerAnnouncementPublishType.SCHEDULED,
+        },
+      )
+      .andWhere(
+        'announcement.publishAt IS NOT NULL',
+      )
+      .andWhere(
+        'announcement.publishAt <= :now',
+        {
+          now,
+        },
+      )
+      .andWhere(
+        'announcement.publishedAt IS NULL',
+      )
+      .andWhere(
+        'announcement.isActive = true',
+      )
+      .andWhere(
+        'announcement.isHidden = false',
+      )
+      .andWhere(
+        `
+        (
+          announcement.expiresAt IS NULL
+          OR announcement.expiresAt > :now
+        )
+        `,
+        {
+          now,
+        },
+      )
+      .orderBy(
+        'announcement.publishAt',
+        'ASC',
+      )
+      .getMany();
+
+  for (
+    const announcement of announcements
+  ) {
+    try {
+      const recipients =
+        await this.resolveCustomerAnnouncementRecipients(
+          announcement,
+        );
+
+      for (
+        const recipient of recipients
+      ) {
+        await this.createCustomerAnnouncementDelivery(
+          announcement,
+          recipient,
+        );
+      }
+
+      announcement.publishedAt =
+        new Date();
+
+      await this.customerAnnouncementRepository.save(
+        announcement,
+      );
+
+      console.log(
+        `Customer announcement ${announcement.id} published to ${recipients.length} recipient(s)`,
+      );
+    } catch (error) {
+      console.error(
+        `Failed to publish customer announcement ${announcement.id}:`,
+        error,
+      );
+    }
+  }
 }
 
 private async filterCustomersByProjectStatus(

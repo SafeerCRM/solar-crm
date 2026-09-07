@@ -85,6 +85,9 @@ export class CustomerAnnouncement {
   publishAt?: Date;
 
   @Column({ type: 'timestamp', nullable: true })
+publishedAt?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
   expiresAt?: Date;
 
   @Column({ default: true })

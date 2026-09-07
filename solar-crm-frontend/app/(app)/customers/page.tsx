@@ -9,6 +9,12 @@ import {
   Filesystem,
 } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
+
+import dayjs, { Dayjs } from 'dayjs';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -148,6 +154,9 @@ const [announcementForm, setAnnouncementForm] = useState({
   specificCustomerIds: '',
   popupRequired: true,
   pushRequired: true,
+
+  publishType: 'NOW',
+  publishAt: '',
 });
 
   const [search, setSearch] = useState('');
@@ -270,6 +279,85 @@ const [announcementForm, setAnnouncementForm] = useState({
   }
 };
 
+const announcementPublishDateValue =
+  announcementForm.publishAt
+    ? dayjs(announcementForm.publishAt)
+    : null;
+
+const announcementPublishTimeValue =
+  announcementForm.publishAt
+    ? dayjs(announcementForm.publishAt)
+    : null;
+
+const updateAnnouncementPublishDate = (
+  newDate: Dayjs | null,
+) => {
+  if (!newDate) {
+    setAnnouncementForm({
+      ...announcementForm,
+      publishAt: '',
+    });
+
+    return;
+  }
+
+  const base =
+    announcementForm.publishAt
+      ? dayjs(
+          announcementForm.publishAt,
+        )
+      : dayjs();
+
+  const merged =
+    newDate
+      .hour(base.hour())
+      .minute(base.minute())
+      .second(0)
+      .millisecond(0);
+
+  setAnnouncementForm({
+    ...announcementForm,
+    publishAt:
+      merged.format(
+        'YYYY-MM-DDTHH:mm',
+      ),
+  });
+};
+
+const updateAnnouncementPublishTime = (
+  newTime: Dayjs | null,
+) => {
+  if (!newTime) {
+    return;
+  }
+
+  const base =
+    announcementForm.publishAt
+      ? dayjs(
+          announcementForm.publishAt,
+        )
+      : dayjs();
+
+  const merged =
+    base
+      .hour(
+        newTime.hour(),
+      )
+      .minute(
+        newTime.minute(),
+      )
+      .second(0)
+      .millisecond(0);
+
+  setAnnouncementForm({
+    ...announcementForm,
+    publishAt:
+      merged.format(
+        'YYYY-MM-DDTHH:mm',
+      ),
+  });
+};
+
 const createAnnouncement = async () => {
   const title =
     announcementForm.title.trim();
@@ -330,6 +418,46 @@ const createAnnouncement = async () => {
     return;
   }
 
+  if (
+  announcementForm.publishType ===
+  'SCHEDULED'
+) {
+  if (
+    !announcementForm.publishAt
+  ) {
+    alert(
+      'Please select publish date and time',
+    );
+    return;
+  }
+
+  const scheduledDate =
+    new Date(
+      announcementForm.publishAt,
+    );
+
+  if (
+    Number.isNaN(
+      scheduledDate.getTime(),
+    )
+  ) {
+    alert(
+      'Invalid publish date and time',
+    );
+    return;
+  }
+
+  if (
+    scheduledDate.getTime() <=
+    Date.now()
+  ) {
+    alert(
+      'Scheduled publish time must be in the future',
+    );
+    return;
+  }
+}
+
   try {
     setAnnouncementSaving(true);
 
@@ -354,7 +482,14 @@ const createAnnouncement = async () => {
           pushRequired:
             announcementForm.pushRequired,
 
-          publishType: 'NOW',
+          publishType:
+  announcementForm.publishType,
+
+publishAt:
+  announcementForm.publishType ===
+    'SCHEDULED'
+    ? announcementForm.publishAt
+    : undefined,
         },
         {
           headers:
@@ -371,16 +506,19 @@ const createAnnouncement = async () => {
     );
 
     setAnnouncementForm({
-      title: '',
-      message: '',
-      audienceType: 'ALL',
-      cities: '',
-      branches: '',
-      projectStatuses: '',
-      specificCustomerIds: '',
-      popupRequired: true,
-      pushRequired: true,
-    });
+  title: '',
+  message: '',
+  audienceType: 'ALL',
+  cities: '',
+  branches: '',
+  projectStatuses: '',
+  specificCustomerIds: '',
+  popupRequired: true,
+  pushRequired: true,
+
+  publishType: 'NOW',
+  publishAt: '',
+});
 
     fetchAnnouncements(1);
   } catch (error: any) {
@@ -1529,6 +1667,84 @@ URL.revokeObjectURL(url);
       </p>
     </div>
   )}
+
+  <div className="mt-4 grid gap-3 md:grid-cols-2">
+  <div>
+    <label className="mb-1 block text-sm font-semibold text-gray-700">
+      Publish
+    </label>
+
+    <select
+      value={
+        announcementForm.publishType
+      }
+      onChange={(e) =>
+        setAnnouncementForm({
+          ...announcementForm,
+          publishType:
+            e.target.value,
+          publishAt:
+            e.target.value ===
+            'NOW'
+              ? ''
+              : announcementForm.publishAt,
+        })
+      }
+      className="w-full rounded-xl border bg-white p-3"
+    >
+      <option value="NOW">
+        Publish Now
+      </option>
+
+      <option value="SCHEDULED">
+        Schedule for Later
+      </option>
+    </select>
+  </div>
+
+  {announcementForm.publishType ===
+  'SCHEDULED' && (
+  <div className="md:col-span-2">
+    <LocalizationProvider
+      dateAdapter={AdapterDayjs}
+    >
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <DatePicker
+          label="Publish Date"
+          value={
+            announcementPublishDateValue
+          }
+          onChange={
+            updateAnnouncementPublishDate
+          }
+          slotProps={{
+            textField: {
+              fullWidth: true,
+            },
+          }}
+        />
+
+        <MobileTimePicker
+          label="Publish Time"
+          value={
+            announcementPublishTimeValue
+          }
+          onChange={
+            updateAnnouncementPublishTime
+          }
+          ampm
+          ampmInClock
+          slotProps={{
+            textField: {
+              fullWidth: true,
+            },
+          }}
+        />
+      </div>
+    </LocalizationProvider>
+  </div>
+)}
+</div>
 
   <div className="mt-4 flex flex-wrap gap-3">
     <label className="flex items-center gap-2 rounded-xl border bg-white px-4 py-3">
