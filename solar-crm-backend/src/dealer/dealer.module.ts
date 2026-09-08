@@ -52,6 +52,8 @@ import {
   ProjectInsuranceDocument,
 } from '../project/project-insurance-document.entity';
 
+import { DealerAnnouncement } from './dealer-announcement.entity';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -83,6 +85,7 @@ ProjectInsuranceRequest,
 ProjectInsuranceRequestDocument,
 ProjectInsurance,
 ProjectInsuranceDocument,
+DealerAnnouncement,
     ]),
     ProjectModule,
   ],

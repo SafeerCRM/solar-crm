@@ -125,6 +125,78 @@ updateDealerOrderDelivery(
   return this.dealerService.updateDealerOrderDelivery(id, body);
 }
 
+@UseGuards(
+  JwtAuthGuard,
+  RolesGuard,
+)
+@Roles('OWNER')
+@Post('announcements')
+createDealerAnnouncement(
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.dealerService
+    .createDealerAnnouncement(
+      body,
+      user,
+    );
+}
+
+@UseGuards(
+  JwtAuthGuard,
+  RolesGuard,
+)
+@Roles('OWNER')
+@Get('announcements')
+listDealerAnnouncements(
+  @Query() query: any,
+) {
+  return this.dealerService
+    .listDealerAnnouncements(
+      query,
+    );
+}
+
+@UseGuards(
+  JwtAuthGuard,
+  RolesGuard,
+)
+@Roles('OWNER')
+@Patch('announcements/:id')
+updateDealerAnnouncement(
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+  @Body() body: any,
+) {
+  return this.dealerService
+    .updateDealerAnnouncement(
+      id,
+      body,
+    );
+}
+
+@UseGuards(
+  JwtAuthGuard,
+  RolesGuard,
+)
+@Roles('OWNER')
+@Patch('announcements/:id/hide')
+hideDealerAnnouncement(
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+) {
+  return this.dealerService
+    .hideDealerAnnouncement(
+      id,
+    );
+}
+
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('OWNER', 'ACCOUNT_MANAGER', 'TRADING_MANAGER', 'TRADING_HEAD')
 @Get('kits')

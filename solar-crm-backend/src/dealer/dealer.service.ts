@@ -85,6 +85,12 @@ import {
   ProjectInsuranceDocument,
 } from '../project/project-insurance-document.entity';
 
+import {
+  DealerAnnouncement,
+  DealerAnnouncementAudienceType,
+  DealerAnnouncementPublishType,
+} from './dealer-announcement.entity';
+
 @Injectable()
 export class DealerService {
   constructor(
@@ -179,6 +185,9 @@ private readonly projectInsuranceRepository:
   @InjectRepository(ProjectInsuranceDocument)
 private readonly projectInsuranceDocumentRepository:
   Repository<ProjectInsuranceDocument>,
+
+  @InjectRepository(DealerAnnouncement)
+private readonly dealerAnnouncementRepository: Repository<DealerAnnouncement>,
 
     private readonly projectService: ProjectService,
   ) {}
@@ -2832,6 +2841,102 @@ const bucket =
       order,
     };
   }
+
+  @Cron('0 * * * * *')
+async publishDueDealerAnnouncements() {
+  const now =
+    new Date();
+
+  const announcements =
+    await this
+      .dealerAnnouncementRepository
+      .createQueryBuilder(
+        'announcement',
+      )
+      .where(
+        'announcement.publishType = :publishType',
+        {
+          publishType:
+            DealerAnnouncementPublishType.SCHEDULED,
+        },
+      )
+      .andWhere(
+        'announcement.publishAt IS NOT NULL',
+      )
+      .andWhere(
+        'announcement.publishAt <= :now',
+        {
+          now,
+        },
+      )
+      .andWhere(
+        'announcement.publishedAt IS NULL',
+      )
+      .andWhere(
+        'announcement.isActive = true',
+      )
+      .andWhere(
+        'announcement.isHidden = false',
+      )
+      .andWhere(
+        `
+        (
+          announcement.expiresAt IS NULL
+          OR announcement.expiresAt > :now
+        )
+        `,
+        {
+          now,
+        },
+      )
+      .orderBy(
+        'announcement.publishAt',
+        'ASC',
+      )
+      .getMany();
+
+  for (
+    const announcement
+    of announcements
+  ) {
+    try {
+      const recipients =
+        await this
+          .resolveDealerAnnouncementRecipients(
+            announcement,
+          );
+
+      for (
+        const dealer
+        of recipients
+      ) {
+        await this
+          .createDealerAnnouncementNotification(
+            announcement,
+            dealer,
+          );
+      }
+
+      announcement.publishedAt =
+        new Date();
+
+      await this
+        .dealerAnnouncementRepository
+        .save(
+          announcement,
+        );
+
+      console.log(
+        `Dealer announcement ${announcement.id} published to ${recipients.length} recipient(s)`,
+      );
+    } catch (error) {
+      console.error(
+        `Failed to publish dealer announcement ${announcement.id}:`,
+        error,
+      );
+    }
+  }
+}
 
     @Cron(CronExpression.EVERY_DAY_AT_9AM)
   async sendDealerCreditOverdueReminders() {
@@ -5806,5 +5911,693 @@ private calculateDeliveryChargeFromSetting(
   const extraKm = distanceKm - baseKm;
 
   return Math.round(baseCharge + extraKm * perKmCharge);
+}
+
+async createDealerAnnouncement(
+  body: any,
+  user: any,
+) {
+  const title = String(
+    body?.title || '',
+  ).trim();
+
+  const message = String(
+    body?.message || '',
+  ).trim();
+
+  if (!title) {
+    throw new BadRequestException(
+      'Announcement title is required',
+    );
+  }
+
+  if (!message) {
+    throw new BadRequestException(
+      'Announcement message is required',
+    );
+  }
+
+  const audienceType =
+    String(
+      body?.audienceType ||
+        DealerAnnouncementAudienceType.ALL_DEALERS,
+    ) as DealerAnnouncementAudienceType;
+
+  if (
+    !Object.values(
+      DealerAnnouncementAudienceType,
+    ).includes(audienceType)
+  ) {
+    throw new BadRequestException(
+      'Invalid announcement audience type',
+    );
+  }
+
+  const publishType =
+    String(
+      body?.publishType ||
+        DealerAnnouncementPublishType.NOW,
+    ) as DealerAnnouncementPublishType;
+
+  if (
+    !Object.values(
+      DealerAnnouncementPublishType,
+    ).includes(publishType)
+  ) {
+    throw new BadRequestException(
+      'Invalid announcement publish type',
+    );
+  }
+
+  const specificDealerIds = Array.isArray(
+    body?.specificDealerIds,
+  )
+    ? body.specificDealerIds
+        .map((id: any) =>
+          Number(id),
+        )
+        .filter(
+          (id: number) =>
+            Number.isInteger(id) &&
+            id > 0,
+        )
+    : [];
+
+  if (
+    audienceType ===
+      DealerAnnouncementAudienceType.SPECIFIC_DEALERS &&
+    specificDealerIds.length === 0
+  ) {
+    throw new BadRequestException(
+      'At least one dealer is required for specific dealer announcement',
+    );
+  }
+
+  let publishAt: Date;
+
+  if (
+    publishType ===
+    DealerAnnouncementPublishType.SCHEDULED
+  ) {
+    if (!body?.publishAt) {
+      throw new BadRequestException(
+        'Publish date and time is required',
+      );
+    }
+
+    publishAt = new Date(
+      body.publishAt,
+    );
+
+    if (
+      Number.isNaN(
+        publishAt.getTime(),
+      )
+    ) {
+      throw new BadRequestException(
+        'Invalid publish date and time',
+      );
+    }
+
+    if (
+      publishAt.getTime() <=
+      Date.now()
+    ) {
+      throw new BadRequestException(
+        'Scheduled publish time must be in the future',
+      );
+    }
+  } else {
+    publishAt = new Date();
+  }
+
+  let expiresAt:
+    | Date
+    | null = null;
+
+  if (body?.expiresAt) {
+    expiresAt = new Date(
+      body.expiresAt,
+    );
+
+    if (
+      Number.isNaN(
+        expiresAt.getTime(),
+      )
+    ) {
+      throw new BadRequestException(
+        'Invalid expiry date and time',
+      );
+    }
+  }
+
+  const announcement =
+    this.dealerAnnouncementRepository.create({
+      title,
+      message,
+
+      audienceType,
+
+      specificDealerIds:
+        audienceType ===
+        DealerAnnouncementAudienceType.SPECIFIC_DEALERS
+          ? specificDealerIds
+          : null,
+
+      popupRequired:
+        body?.popupRequired !== false,
+
+      pushRequired:
+        body?.pushRequired !== false,
+
+      publishType,
+
+      publishAt,
+
+      publishedAt:
+        publishType ===
+        DealerAnnouncementPublishType.NOW
+          ? new Date()
+          : null,
+
+      expiresAt,
+
+      isActive: true,
+      isHidden: false,
+
+      createdBy:
+        user?.id
+          ? Number(user.id)
+          : null,
+
+      createdByName:
+        user?.name ||
+        user?.fullName ||
+        user?.username ||
+        null,
+
+      createdByRole:
+        user?.role
+          ? String(user.role)
+          : null,
+    });
+
+  const savedAnnouncement =
+  await this.dealerAnnouncementRepository.save(
+    announcement,
+  );
+
+let recipientCount = 0;
+
+if (
+  publishType ===
+  DealerAnnouncementPublishType.NOW
+) {
+  const recipients =
+    await this.resolveDealerAnnouncementRecipients(
+      savedAnnouncement,
+    );
+
+  recipientCount =
+    recipients.length;
+
+  for (const dealer of recipients) {
+    await this.createDealerAnnouncementNotification(
+      savedAnnouncement,
+      dealer,
+    );
+  }
+}
+
+return {
+  message:
+    publishType ===
+    DealerAnnouncementPublishType.NOW
+      ? 'Dealer announcement created successfully'
+      : 'Dealer announcement scheduled successfully',
+
+  announcement:
+    savedAnnouncement,
+
+  recipientCount,
+};
+}
+
+async listDealerAnnouncements(
+  query: any,
+) {
+  const page =
+    Math.max(
+      Number(query?.page || 1),
+      1,
+    );
+
+  const limit =
+    Math.min(
+      Math.max(
+        Number(query?.limit || 20),
+        1,
+      ),
+      100,
+    );
+
+  const skip =
+    (page - 1) * limit;
+
+  const showHidden =
+    query?.showHidden === 'true';
+
+  const qb =
+    this.dealerAnnouncementRepository
+      .createQueryBuilder(
+        'announcement',
+      );
+
+  if (showHidden) {
+    qb.where(
+      'announcement.isHidden = true',
+    );
+  } else {
+    qb.where(
+      'announcement.isHidden = false',
+    );
+  }
+
+  if (query?.audienceType) {
+    qb.andWhere(
+      'announcement.audienceType = :audienceType',
+      {
+        audienceType:
+          query.audienceType,
+      },
+    );
+  }
+
+  if (query?.publishType) {
+    qb.andWhere(
+      'announcement.publishType = :publishType',
+      {
+        publishType:
+          query.publishType,
+      },
+    );
+  }
+
+  if (query?.search) {
+    const search =
+      `%${String(
+        query.search,
+      )
+        .trim()
+        .toLowerCase()}%`;
+
+    qb.andWhere(
+      `
+      (
+        LOWER(announcement.title) LIKE :search
+        OR
+        LOWER(announcement.message) LIKE :search
+      )
+      `,
+      {
+        search,
+      },
+    );
+  }
+
+  const [
+    data,
+    total,
+  ] =
+    await qb
+      .orderBy(
+        'announcement.createdAt',
+        'DESC',
+      )
+      .skip(skip)
+      .take(limit)
+      .getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+
+    totalPages:
+      Math.ceil(
+        total / limit,
+      ) || 1,
+  };
+}
+
+async updateDealerAnnouncement(
+  id: number,
+  body: any,
+) {
+  const announcement =
+    await this.dealerAnnouncementRepository.findOne({
+      where: {
+        id,
+      },
+    });
+
+  if (!announcement) {
+    throw new NotFoundException(
+      'Dealer announcement not found',
+    );
+  }
+
+  if (announcement.isHidden) {
+    throw new BadRequestException(
+      'Hidden announcement cannot be edited',
+    );
+  }
+
+  if (announcement.publishedAt) {
+    throw new BadRequestException(
+      'Published announcement cannot be edited',
+    );
+  }
+
+  if (
+    announcement.publishType !==
+    DealerAnnouncementPublishType.SCHEDULED
+  ) {
+    throw new BadRequestException(
+      'Only scheduled announcements can be edited',
+    );
+  }
+
+  const title =
+    String(
+      body?.title ?? announcement.title,
+    ).trim();
+
+  const message =
+    String(
+      body?.message ?? announcement.message,
+    ).trim();
+
+  if (!title) {
+    throw new BadRequestException(
+      'Announcement title is required',
+    );
+  }
+
+  if (!message) {
+    throw new BadRequestException(
+      'Announcement message is required',
+    );
+  }
+
+  const audienceType =
+    String(
+      body?.audienceType ??
+        announcement.audienceType,
+    ) as DealerAnnouncementAudienceType;
+
+  if (
+    !Object.values(
+      DealerAnnouncementAudienceType,
+    ).includes(
+      audienceType,
+    )
+  ) {
+    throw new BadRequestException(
+      'Invalid announcement audience type',
+    );
+  }
+
+  const specificDealerIds =
+    Array.isArray(
+      body?.specificDealerIds,
+    )
+      ? body.specificDealerIds
+          .map(
+            (dealerId: any) =>
+              Number(dealerId),
+          )
+          .filter(
+            (dealerId: number) =>
+              Number.isInteger(
+                dealerId,
+              ) &&
+              dealerId > 0,
+          )
+      : (
+          announcement.specificDealerIds ||
+          []
+        );
+
+  if (
+    audienceType ===
+      DealerAnnouncementAudienceType.SPECIFIC_DEALERS &&
+    specificDealerIds.length === 0
+  ) {
+    throw new BadRequestException(
+      'At least one dealer is required for specific dealer announcement',
+    );
+  }
+
+  const publishAt =
+    body?.publishAt
+      ? new Date(
+          body.publishAt,
+        )
+      : announcement.publishAt;
+
+  if (
+    !publishAt ||
+    Number.isNaN(
+      publishAt.getTime(),
+    )
+  ) {
+    throw new BadRequestException(
+      'Valid publish date and time is required',
+    );
+  }
+
+  if (
+    publishAt.getTime() <=
+    Date.now()
+  ) {
+    throw new BadRequestException(
+      'Scheduled publish time must be in the future',
+    );
+  }
+
+  let expiresAt =
+    announcement.expiresAt;
+
+  if (
+    body?.expiresAt !==
+    undefined
+  ) {
+    expiresAt =
+      body.expiresAt
+        ? new Date(
+            body.expiresAt,
+          )
+        : null;
+
+    if (
+      expiresAt &&
+      Number.isNaN(
+        expiresAt.getTime(),
+      )
+    ) {
+      throw new BadRequestException(
+        'Invalid expiry date and time',
+      );
+    }
+  }
+
+  announcement.title =
+    title;
+
+  announcement.message =
+    message;
+
+  announcement.audienceType =
+    audienceType;
+
+  announcement.specificDealerIds =
+    audienceType ===
+    DealerAnnouncementAudienceType.SPECIFIC_DEALERS
+      ? specificDealerIds
+      : null;
+
+  announcement.publishAt =
+    publishAt;
+
+  announcement.expiresAt =
+    expiresAt;
+
+  if (
+    body?.popupRequired !==
+    undefined
+  ) {
+    announcement.popupRequired =
+      body.popupRequired !== false;
+  }
+
+  if (
+    body?.pushRequired !==
+    undefined
+  ) {
+    announcement.pushRequired =
+      body.pushRequired !== false;
+  }
+
+  const saved =
+    await this.dealerAnnouncementRepository.save(
+      announcement,
+    );
+
+  return {
+    message:
+      'Dealer announcement updated successfully',
+
+    announcement:
+      saved,
+  };
+}
+
+async hideDealerAnnouncement(
+  id: number,
+) {
+  const announcement =
+    await this.dealerAnnouncementRepository.findOne({
+      where: {
+        id,
+      },
+    });
+
+  if (!announcement) {
+    throw new NotFoundException(
+      'Dealer announcement not found',
+    );
+  }
+
+  if (announcement.isHidden) {
+    return {
+      message:
+        'Dealer announcement is already hidden',
+
+      announcement,
+    };
+  }
+
+  announcement.isHidden =
+    true;
+
+  announcement.isActive =
+    false;
+
+  const saved =
+    await this.dealerAnnouncementRepository.save(
+      announcement,
+    );
+
+  return {
+    message:
+      'Dealer announcement hidden successfully',
+
+    announcement:
+      saved,
+  };
+}
+
+private async resolveDealerAnnouncementRecipients(
+  announcement: DealerAnnouncement,
+) {
+  const query =
+    this.dealerRepository
+      .createQueryBuilder('dealer');
+
+  /*
+   * Keep only usable dealer accounts.
+   *
+   * We are intentionally not touching
+   * ProjectDealerNotification here.
+   */
+  query.where(
+    'dealer.isHidden = false',
+  );
+
+  if (
+    announcement.audienceType ===
+    DealerAnnouncementAudienceType.SPECIFIC_DEALERS
+  ) {
+    const dealerIds =
+      (
+        announcement.specificDealerIds ||
+        []
+      )
+        .map((id) =>
+          Number(id),
+        )
+        .filter(
+          (id) =>
+            Number.isInteger(id) &&
+            id > 0,
+        );
+
+    if (
+      dealerIds.length === 0
+    ) {
+      return [];
+    }
+
+    query.andWhere(
+      'dealer.id IN (:...dealerIds)',
+      {
+        dealerIds,
+      },
+    );
+  }
+
+  return query
+    .orderBy(
+      'dealer.id',
+      'ASC',
+    )
+    .getMany();
+}
+
+private async createDealerAnnouncementNotification(
+  announcement: DealerAnnouncement,
+  dealer: Dealer,
+) {
+  const notification =
+    this.dealerNotificationRepository.create({
+      dealerId:
+        dealer.id,
+
+      dealerName:
+        dealer.dealerName,
+
+      title:
+        announcement.title,
+
+      message:
+        announcement.message,
+
+      notificationType:
+        'ANNOUNCEMENT',
+
+      createdBy:
+  announcement.createdBy ||
+  undefined,
+
+      createdByName:
+        announcement.createdByName ||
+        'System',
+    });
+
+  return this.dealerNotificationRepository.save(
+    notification,
+  );
 }
 }

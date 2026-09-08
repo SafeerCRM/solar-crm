@@ -70,6 +70,34 @@ type DealerNotification = {
   createdAt?: string;
 };
 
+type DealerAnnouncement = {
+  id: number;
+  title?: string;
+  message?: string;
+  audienceType?: string;
+  specificDealerIds?: number[] | null;
+  popupRequired?: boolean;
+  pushRequired?: boolean;
+  publishType?: string;
+  publishAt?: string | null;
+  publishedAt?: string | null;
+  expiresAt?: string | null;
+  isActive?: boolean;
+  isHidden?: boolean;
+  createdByName?: string | null;
+  createdAt?: string;
+};
+
+type PortalDealerOption = {
+  id: number;
+  dealerName?: string;
+  firmName?: string;
+  phone?: string;
+  city?: string;
+  branchName?: string;
+  status?: string;
+};
+
 type DealerMonthlyRequirement = {
   id: number;
   dealerName?: string;
@@ -244,6 +272,26 @@ const [orders, setOrders] =
   });
 
   const [notifications, setNotifications] = useState<DealerNotification[]>([]);
+
+  const [
+  dealerAnnouncements,
+  setDealerAnnouncements,
+] = useState<DealerAnnouncement[]>([]);
+
+const [
+  dealerAnnouncementPage,
+  setDealerAnnouncementPage,
+] = useState(1);
+
+const [
+  dealerAnnouncementTotalPages,
+  setDealerAnnouncementTotalPages,
+] = useState(1);
+
+const [
+  showHiddenDealerAnnouncements,
+  setShowHiddenDealerAnnouncements,
+] = useState(false);
 const [monthlyRequirements, setMonthlyRequirements] = useState<DealerMonthlyRequirement[]>([]);
 const [creditReminders, setCreditReminders] = useState<CreditReminder[]>([]);
 const [dealerLedger, setDealerLedger] = useState<any>(null);
@@ -253,6 +301,13 @@ const [
   ledgerDealerOptions,
   setLedgerDealerOptions,
 ] = useState<Dealer[]>([]);
+
+const [
+  announcementDealerOptions,
+  setAnnouncementDealerOptions,
+] = useState<PortalDealerOption[]>(
+  [],
+);
 
 const [
   selectedDealerIdsForCsv,
@@ -286,6 +341,43 @@ const [notificationForm, setNotificationForm] = useState({
   message: '',
   notificationType: 'GENERAL',
 });
+
+const emptyDealerAnnouncementForm = {
+  title: '',
+  message: '',
+
+  audienceType:
+    'ALL_DEALERS',
+
+  specificDealerIds:
+    [] as number[],
+
+  popupRequired: true,
+  pushRequired: true,
+
+  publishType: 'NOW',
+
+  publishAt: '',
+};
+
+const [
+  dealerAnnouncementForm,
+  setDealerAnnouncementForm,
+] = useState(
+  emptyDealerAnnouncementForm,
+);
+
+const [
+  editingDealerAnnouncementId,
+  setEditingDealerAnnouncementId,
+] = useState<number | null>(
+  null,
+);
+
+const [
+  dealerAnnouncementSaving,
+  setDealerAnnouncementSaving,
+] = useState(false);
 
 const [monthlyForm, setMonthlyForm] = useState({
   dealerId: '',
@@ -447,6 +539,82 @@ const [finalInvoiceForm, setFinalInvoiceForm] = useState({
     return token ? { Authorization: `Bearer ${token}` } : {};
   };
 
+  const fetchAnnouncementDealerOptions =
+  async () => {
+    try {
+      const firstResponse =
+        await axios.get(
+          `${API_BASE_URL}/dealer`,
+          {
+            params: {
+              page: 1,
+              limit: 100,
+            },
+
+            headers:
+              headers(),
+          },
+        );
+
+      const allDealers: PortalDealerOption[] =
+        Array.isArray(
+          firstResponse.data?.data,
+        )
+          ? [
+              ...firstResponse.data.data,
+            ]
+          : [];
+
+      const totalPages =
+        Math.max(
+          Number(
+            firstResponse.data
+              ?.totalPages || 1,
+          ),
+          1,
+        );
+
+      for (
+        let page = 2;
+        page <= totalPages;
+        page += 1
+      ) {
+        const response =
+          await axios.get(
+            `${API_BASE_URL}/dealer`,
+            {
+              params: {
+                page,
+                limit: 100,
+              },
+
+              headers:
+                headers(),
+            },
+          );
+
+        if (
+          Array.isArray(
+            response.data?.data,
+          )
+        ) {
+          allDealers.push(
+            ...response.data.data,
+          );
+        }
+      }
+
+      setAnnouncementDealerOptions(
+        allDealers,
+      );
+    } catch (error) {
+      console.error(
+        'Failed to load dealer announcement options',
+        error,
+      );
+    }
+  };
+
   const fetchDealers = async () => {
     const res = await axios.get(`${API_BASE_URL}/project/dealer/list`, {
       params: {
@@ -580,6 +748,36 @@ const [finalInvoiceForm, setFinalInvoiceForm] = useState({
   setNotifications(res.data?.data || []);
   setNotificationTotalPages(res.data?.totalPages || 1);
 };
+
+const fetchDealerAnnouncements =
+  async () => {
+    const res =
+      await axios.get(
+        `${API_BASE_URL}/dealer/announcements`,
+        {
+          params: {
+            page:
+              dealerAnnouncementPage,
+
+            limit: 20,
+
+            showHidden:
+              showHiddenDealerAnnouncements,
+          },
+
+          headers:
+            headers(),
+        },
+      );
+
+    setDealerAnnouncements(
+      res.data?.data || [],
+    );
+
+    setDealerAnnouncementTotalPages(
+      res.data?.totalPages || 1,
+    );
+  };
 
 const fetchMonthlyRequirements = async () => {
   const res = await axios.get(`${API_BASE_URL}/project/dealer-monthly-requirements`, {
@@ -2031,8 +2229,8 @@ const hideOrRestoreDealerOrderDocument =
   fetchOrders(),
   fetchAnalytics(),
   fetchNotifications(),
-  fetchMonthlyRequirements(),
-  fetchCreditReminders(),
+fetchDealerAnnouncements(),
+fetchMonthlyRequirements(),
   fetchDealerComplaints(),
 ]);
     } catch (error: any) {
@@ -2051,6 +2249,8 @@ const hideOrRestoreDealerOrderDocument =
   catalogPage,
   orderPage,
   notificationPage,
+  dealerAnnouncementPage,
+showHiddenDealerAnnouncements,
   monthlyPage,
   showHiddenDealers,
   showHiddenOrders,
@@ -2067,6 +2267,13 @@ useEffect(() => {
     activeTab === 'complaints'
   ) {
     fetchAllDealerOptionsForLedger();
+  }
+
+  if (
+    activeTab ===
+    'notifications'
+  ) {
+    fetchAnnouncementDealerOptions();
   }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2888,6 +3095,293 @@ const updateDealerPaymentStatus = async (
     alert(error?.response?.data?.message || 'Failed to send notification');
   }
 };
+
+const saveDealerAnnouncement =
+  async () => {
+    const title =
+      dealerAnnouncementForm.title.trim();
+
+    const message =
+      dealerAnnouncementForm.message.trim();
+
+    if (!title) {
+      alert(
+        'Announcement title is required',
+      );
+
+      return;
+    }
+
+    if (!message) {
+      alert(
+        'Announcement message is required',
+      );
+
+      return;
+    }
+
+    if (
+      dealerAnnouncementForm.audienceType ===
+        'SPECIFIC_DEALERS' &&
+      dealerAnnouncementForm
+        .specificDealerIds.length === 0
+    ) {
+      alert(
+        'Please select at least one dealer',
+      );
+
+      return;
+    }
+
+    if (
+      dealerAnnouncementForm.publishType ===
+        'SCHEDULED' &&
+      !dealerAnnouncementForm.publishAt
+    ) {
+      alert(
+        'Please select publish date and time',
+      );
+
+      return;
+    }
+
+    try {
+      setDealerAnnouncementSaving(
+        true,
+      );
+
+      const payload = {
+        title,
+        message,
+
+        audienceType:
+          dealerAnnouncementForm.audienceType,
+
+        specificDealerIds:
+          dealerAnnouncementForm.audienceType ===
+          'SPECIFIC_DEALERS'
+            ? dealerAnnouncementForm
+                .specificDealerIds
+            : [],
+
+        popupRequired:
+          dealerAnnouncementForm.popupRequired,
+
+        pushRequired:
+          dealerAnnouncementForm.pushRequired,
+
+        publishType:
+          dealerAnnouncementForm.publishType,
+
+        publishAt:
+          dealerAnnouncementForm.publishType ===
+            'SCHEDULED'
+            ? new Date(
+                dealerAnnouncementForm.publishAt,
+              ).toISOString()
+            : undefined,
+      };
+
+      if (
+        editingDealerAnnouncementId
+      ) {
+        await axios.patch(
+          `${API_BASE_URL}/dealer/announcements/${editingDealerAnnouncementId}`,
+          payload,
+          {
+            headers:
+              headers(),
+          },
+        );
+
+        alert(
+          'Dealer announcement updated successfully',
+        );
+      } else {
+        await axios.post(
+          `${API_BASE_URL}/dealer/announcements`,
+          payload,
+          {
+            headers:
+              headers(),
+          },
+        );
+
+        alert(
+          dealerAnnouncementForm.publishType ===
+            'SCHEDULED'
+            ? 'Dealer announcement scheduled successfully'
+            : 'Dealer announcement published successfully',
+        );
+      }
+
+      setDealerAnnouncementForm({
+        ...emptyDealerAnnouncementForm,
+
+        specificDealerIds:
+          [],
+      });
+
+      setEditingDealerAnnouncementId(
+        null,
+      );
+
+      setDealerAnnouncementPage(
+        1,
+      );
+
+      await Promise.all([
+        fetchDealerAnnouncements(),
+
+        /*
+         * Publish Now also creates normal
+         * ProjectDealerNotification rows,
+         * so refresh existing notification
+         * history as well.
+         */
+        fetchNotifications(),
+      ]);
+    } catch (
+      error: any
+    ) {
+      console.error(
+        error,
+      );
+
+      alert(
+        error?.response?.data?.message ||
+          'Failed to save dealer announcement',
+      );
+    } finally {
+      setDealerAnnouncementSaving(
+        false,
+      );
+    }
+  };
+
+  const startEditDealerAnnouncement = (
+  announcement: DealerAnnouncement,
+) => {
+  if (
+    announcement.publishedAt ||
+    announcement.publishType !==
+      'SCHEDULED'
+  ) {
+    alert(
+      'Only unpublished scheduled announcements can be edited',
+    );
+
+    return;
+  }
+
+  setEditingDealerAnnouncementId(
+    announcement.id,
+  );
+
+  setDealerAnnouncementForm({
+    title:
+      announcement.title || '',
+
+    message:
+      announcement.message || '',
+
+    audienceType:
+      announcement.audienceType ||
+      'ALL_DEALERS',
+
+    specificDealerIds:
+      Array.isArray(
+        announcement.specificDealerIds,
+      )
+        ? announcement.specificDealerIds.map(
+            (id) => Number(id),
+          )
+        : [],
+
+    popupRequired:
+      announcement.popupRequired !==
+      false,
+
+    pushRequired:
+      announcement.pushRequired !==
+      false,
+
+    publishType:
+      'SCHEDULED',
+
+    publishAt:
+      announcement.publishAt
+        ? dayjs(
+            announcement.publishAt,
+          ).format(
+            'YYYY-MM-DDTHH:mm',
+          )
+        : '',
+  });
+
+  window.scrollTo({
+    top: 0,
+    behavior: 'smooth',
+  });
+};
+
+const hideDealerAnnouncement =
+  async (
+    announcement: DealerAnnouncement,
+  ) => {
+    const confirmed =
+      window.confirm(
+        announcement.publishedAt
+          ? 'Hide this announcement from admin history? Existing dealer notifications will remain available to dealers.'
+          : 'Hide this scheduled announcement? It will not be published.',
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await axios.patch(
+        `${API_BASE_URL}/dealer/announcements/${announcement.id}/hide`,
+        {},
+        {
+          headers:
+            headers(),
+        },
+      );
+
+      if (
+        editingDealerAnnouncementId ===
+        announcement.id
+      ) {
+        setEditingDealerAnnouncementId(
+          null,
+        );
+
+        setDealerAnnouncementForm({
+          ...emptyDealerAnnouncementForm,
+
+          specificDealerIds:
+            [],
+        });
+      }
+
+      await fetchDealerAnnouncements();
+
+      alert(
+        'Dealer announcement hidden successfully',
+      );
+    } catch (error: any) {
+      console.error(
+        error,
+      );
+
+      alert(
+        error?.response?.data?.message ||
+          'Failed to hide dealer announcement',
+      );
+    }
+  };
 
 const addMonthlyRequirement = async () => {
   if (!monthlyForm.dealerId || !monthlyForm.materialId || !monthlyForm.requirementMonth || !monthlyForm.expectedQuantity) {
@@ -4690,6 +5184,598 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
 
       <Pagination page={notificationPage} totalPages={notificationTotalPages} setPage={setNotificationPage} />
     </div>
+
+    <div className="w-full max-w-full min-w-0 overflow-hidden rounded-2xl bg-white p-4 shadow sm:p-5 xl:col-span-2">
+  <h2 className="text-lg font-bold text-gray-800">
+    {editingDealerAnnouncementId
+      ? 'Edit Dealer Announcement'
+      : 'Create Dealer Announcement'}
+  </h2>
+
+  <p className="mt-1 text-sm text-gray-500">
+    Send a general announcement to all dealers or selected dealers.
+  </p>
+
+  <div className="mt-4 grid gap-3 md:grid-cols-2">
+    <input
+      placeholder="Announcement Title"
+      value={
+        dealerAnnouncementForm.title
+      }
+      onChange={(e) =>
+        setDealerAnnouncementForm({
+          ...dealerAnnouncementForm,
+          title: e.target.value,
+        })
+      }
+      className="w-full rounded-xl border p-3 md:col-span-2"
+    />
+
+    <select
+      value={
+        dealerAnnouncementForm.audienceType
+      }
+      onChange={(e) =>
+        setDealerAnnouncementForm({
+          ...dealerAnnouncementForm,
+          audienceType:
+            e.target.value,
+          specificDealerIds:
+            e.target.value ===
+            'SPECIFIC_DEALERS'
+              ? dealerAnnouncementForm
+                  .specificDealerIds
+              : [],
+        })
+      }
+      className="w-full rounded-xl border p-3"
+    >
+      <option value="ALL_DEALERS">
+        All Dealers
+      </option>
+
+      <option value="SPECIFIC_DEALERS">
+        Specific Dealers
+      </option>
+    </select>
+
+    <select
+      value={
+        dealerAnnouncementForm.publishType
+      }
+      onChange={(e) =>
+        setDealerAnnouncementForm({
+          ...dealerAnnouncementForm,
+          publishType:
+            e.target.value,
+          publishAt:
+            e.target.value ===
+            'SCHEDULED'
+              ? dealerAnnouncementForm
+                  .publishAt
+              : '',
+        })
+      }
+      className="w-full rounded-xl border p-3"
+    >
+      <option value="NOW">
+        Publish Now
+      </option>
+
+      <option value="SCHEDULED">
+        Schedule for Later
+      </option>
+    </select>
+  </div>
+
+  <textarea
+    placeholder="Announcement Message"
+    value={
+      dealerAnnouncementForm.message
+    }
+    onChange={(e) =>
+      setDealerAnnouncementForm({
+        ...dealerAnnouncementForm,
+        message:
+          e.target.value,
+      })
+    }
+    rows={5}
+    className="mt-3 w-full rounded-xl border p-3"
+  />
+
+  {dealerAnnouncementForm
+    .audienceType ===
+    'SPECIFIC_DEALERS' && (
+    <div className="mt-4 rounded-xl border bg-gray-50 p-4">
+      <p className="text-sm font-bold text-gray-800">
+        Select Dealers
+      </p>
+
+      <div className="mt-3 max-h-72 space-y-2 overflow-y-auto">
+        {announcementDealerOptions.map(
+          (dealer) => {
+            const selected =
+              dealerAnnouncementForm
+                .specificDealerIds
+                .includes(
+                  dealer.id,
+                );
+
+            return (
+              <label
+                key={dealer.id}
+                className="flex cursor-pointer items-center gap-3 rounded-lg border bg-white p-3"
+              >
+                <input
+                  type="checkbox"
+                  checked={selected}
+                  onChange={() => {
+                    setDealerAnnouncementForm(
+                      (current) => ({
+                        ...current,
+
+                        specificDealerIds:
+                          selected
+                            ? current
+                                .specificDealerIds
+                                .filter(
+                                  (
+                                    id,
+                                  ) =>
+                                    id !==
+                                    dealer.id,
+                                )
+                            : [
+                                ...current
+                                  .specificDealerIds,
+
+                                dealer.id,
+                              ],
+                      }),
+                    );
+                  }}
+                />
+
+                <div className="min-w-0">
+                  <p className="break-words text-sm font-semibold text-gray-800">
+                    {dealer.dealerName ||
+  dealer.firmName ||
+  `Dealer #${dealer.id}`}
+                  </p>
+
+                  <p className="text-xs text-gray-500">
+                    {dealer.phone ||
+                      '-'}
+                    {' | '}
+                    {dealer.city ||
+                      '-'}
+                  </p>
+                </div>
+              </label>
+            );
+          },
+        )}
+      </div>
+
+      <p className="mt-3 text-xs font-semibold text-gray-600">
+        {
+          dealerAnnouncementForm
+            .specificDealerIds
+            .length
+        }{' '}
+        dealer(s) selected
+      </p>
+    </div>
+  )}
+
+  {dealerAnnouncementForm
+    .publishType ===
+    'SCHEDULED' && (
+    <div className="mt-4">
+      <LocalizationProvider
+        dateAdapter={AdapterDayjs}
+      >
+        <div className="grid gap-3 md:grid-cols-2">
+          <DatePicker
+            label="Publish Date"
+            value={
+              dealerAnnouncementForm.publishAt
+                ? dayjs(
+                    dealerAnnouncementForm.publishAt,
+                  )
+                : null
+            }
+            onChange={(
+              newDate,
+            ) => {
+              if (!newDate) {
+                setDealerAnnouncementForm(
+                  (current) => ({
+                    ...current,
+                    publishAt: '',
+                  }),
+                );
+
+                return;
+              }
+
+              const currentTime =
+                dealerAnnouncementForm.publishAt
+                  ? dayjs(
+                      dealerAnnouncementForm.publishAt,
+                    )
+                  : dayjs();
+
+              const merged =
+                newDate
+                  .hour(
+                    currentTime.hour(),
+                  )
+                  .minute(
+                    currentTime.minute(),
+                  )
+                  .second(0)
+                  .millisecond(0);
+
+              setDealerAnnouncementForm(
+                (current) => ({
+                  ...current,
+
+                  publishAt:
+                    merged.format(
+                      'YYYY-MM-DDTHH:mm',
+                    ),
+                }),
+              );
+            }}
+            slotProps={{
+              textField: {
+                fullWidth: true,
+              },
+            }}
+          />
+
+          <MobileTimePicker
+            label="Publish Time"
+            value={
+              dealerAnnouncementForm.publishAt
+                ? dayjs(
+                    dealerAnnouncementForm.publishAt,
+                  )
+                : null
+            }
+            onChange={(
+              newTime,
+            ) => {
+              if (!newTime) {
+                return;
+              }
+
+              const currentDate =
+                dealerAnnouncementForm.publishAt
+                  ? dayjs(
+                      dealerAnnouncementForm.publishAt,
+                    )
+                  : dayjs();
+
+              const merged =
+                currentDate
+                  .hour(
+                    newTime.hour(),
+                  )
+                  .minute(
+                    newTime.minute(),
+                  )
+                  .second(0)
+                  .millisecond(0);
+
+              setDealerAnnouncementForm(
+                (current) => ({
+                  ...current,
+
+                  publishAt:
+                    merged.format(
+                      'YYYY-MM-DDTHH:mm',
+                    ),
+                }),
+              );
+            }}
+            ampm
+            ampmInClock
+            slotProps={{
+              textField: {
+                fullWidth: true,
+              },
+            }}
+          />
+        </div>
+      </LocalizationProvider>
+    </div>
+  )}
+
+  <div className="mt-4 flex flex-wrap gap-4">
+    <label className="flex items-center gap-2 text-sm font-medium">
+      <input
+        type="checkbox"
+        checked={
+          dealerAnnouncementForm.popupRequired
+        }
+        onChange={(e) =>
+          setDealerAnnouncementForm({
+            ...dealerAnnouncementForm,
+
+            popupRequired:
+              e.target.checked,
+          })
+        }
+      />
+
+      Popup Required
+    </label>
+
+    <label className="flex items-center gap-2 text-sm font-medium">
+      <input
+        type="checkbox"
+        checked={
+          dealerAnnouncementForm.pushRequired
+        }
+        onChange={(e) =>
+          setDealerAnnouncementForm({
+            ...dealerAnnouncementForm,
+
+            pushRequired:
+              e.target.checked,
+          })
+        }
+      />
+
+      Push Required
+    </label>
+  </div>
+
+  <div className="mt-5 flex flex-wrap gap-3">
+    <button
+      type="button"
+      onClick={
+        saveDealerAnnouncement
+      }
+      disabled={
+        dealerAnnouncementSaving
+      }
+      className="rounded-xl bg-purple-600 px-5 py-3 font-semibold text-white disabled:opacity-60"
+    >
+      {dealerAnnouncementSaving
+        ? 'Saving...'
+        : editingDealerAnnouncementId
+          ? 'Update Announcement'
+          : dealerAnnouncementForm.publishType ===
+              'SCHEDULED'
+            ? 'Schedule Announcement'
+            : 'Publish Announcement'}
+    </button>
+
+    {editingDealerAnnouncementId && (
+      <button
+        type="button"
+        onClick={() => {
+          setEditingDealerAnnouncementId(
+            null,
+          );
+
+          setDealerAnnouncementForm({
+            ...emptyDealerAnnouncementForm,
+            specificDealerIds:
+              [],
+          });
+        }}
+        className="rounded-xl bg-gray-200 px-5 py-3 font-semibold text-gray-700"
+      >
+        Cancel Edit
+      </button>
+    )}
+  </div>
+</div>
+
+    <div className="w-full max-w-full min-w-0 overflow-hidden rounded-2xl bg-white p-4 shadow sm:p-5 xl:col-span-2">
+  <div className="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h2 className="text-lg font-bold text-gray-800">
+        Dealer Announcement History
+      </h2>
+
+      <p className="mt-1 text-sm text-gray-500">
+        Bulk announcements created for all dealers
+        or selected dealers.
+      </p>
+    </div>
+
+    <label className="flex items-center gap-2 rounded-xl border px-3 py-2 text-sm">
+      <input
+        type="checkbox"
+        checked={
+          showHiddenDealerAnnouncements
+        }
+        onChange={(e) => {
+          setShowHiddenDealerAnnouncements(
+            e.target.checked,
+          );
+
+          setDealerAnnouncementPage(
+            1,
+          );
+        }}
+      />
+
+      View Hidden
+    </label>
+  </div>
+
+  <div className="mt-4 space-y-3">
+    {dealerAnnouncements.length ===
+    0 ? (
+      <p className="text-sm text-gray-500">
+        No dealer announcements found.
+      </p>
+    ) : (
+      dealerAnnouncements.map(
+        (announcement) => (
+          <div
+            key={
+              announcement.id
+            }
+            className={`rounded-xl border p-4 ${
+              announcement.isHidden
+                ? 'bg-gray-100 opacity-70'
+                : ''
+            }`}
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="break-words font-bold text-gray-900">
+                  {
+                    announcement.title
+                  }
+                </p>
+
+                <p className="mt-1 text-xs text-gray-500">
+                  Audience:{' '}
+                  {announcement.audienceType ||
+                    '-'}
+                  {' | '}
+                  Publish:{' '}
+                  {announcement.publishType ||
+                    '-'}
+                </p>
+
+                <p className="mt-2 whitespace-pre-wrap break-words text-sm text-gray-700">
+                  {
+                    announcement.message
+                  }
+                </p>
+
+                <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                  <span className="rounded-full bg-blue-100 px-2 py-1 font-semibold text-blue-700">
+                    Popup:{' '}
+                    {announcement.popupRequired
+                      ? 'Yes'
+                      : 'No'}
+                  </span>
+
+                  <span className="rounded-full bg-purple-100 px-2 py-1 font-semibold text-purple-700">
+                    Push:{' '}
+                    {announcement.pushRequired
+                      ? 'Yes'
+                      : 'No'}
+                  </span>
+
+                  {announcement.isHidden && (
+                    <span className="rounded-full bg-red-100 px-2 py-1 font-semibold text-red-700">
+                      Hidden
+                    </span>
+                  )}
+
+                  {announcement.publishedAt ? (
+                    <span className="rounded-full bg-green-100 px-2 py-1 font-semibold text-green-700">
+                      Published
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-orange-100 px-2 py-1 font-semibold text-orange-700">
+                      Pending
+                    </span>
+                  )}
+                </div>
+
+                {announcement.publishAt && (
+                  <p className="mt-3 text-xs text-gray-500">
+                    Scheduled / Publish
+                    Time:{' '}
+                    {new Date(
+                      announcement.publishAt,
+                    ).toLocaleString(
+                      'en-IN',
+                    )}
+                  </p>
+                )}
+
+                {announcement.publishedAt && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Published At:{' '}
+                    {new Date(
+                      announcement.publishedAt,
+                    ).toLocaleString(
+                      'en-IN',
+                    )}
+                  </p>
+                )}
+
+                <p className="mt-1 text-xs text-gray-400">
+                  Created:{' '}
+                  {announcement.createdAt
+                    ? new Date(
+                        announcement.createdAt,
+                      ).toLocaleString(
+                        'en-IN',
+                      )
+                    : '-'}
+                  {' | '}
+                  By:{' '}
+                  {announcement.createdByName ||
+                    '-'}
+                </p>
+              </div>
+
+              <div className="flex shrink-0 flex-wrap gap-2">
+  {!announcement.isHidden &&
+    !announcement.publishedAt &&
+    announcement.publishType ===
+      'SCHEDULED' && (
+      <button
+        type="button"
+        onClick={() =>
+          startEditDealerAnnouncement(
+            announcement,
+          )
+        }
+        className="rounded-lg bg-blue-100 px-3 py-2 text-xs font-semibold text-blue-700"
+      >
+        Edit
+      </button>
+    )}
+
+  {!announcement.isHidden && (
+    <button
+      type="button"
+      onClick={() =>
+        hideDealerAnnouncement(
+          announcement,
+        )
+      }
+      className="rounded-lg bg-red-100 px-3 py-2 text-xs font-semibold text-red-700"
+    >
+      Hide
+    </button>
+  )}
+</div>
+            </div>
+          </div>
+        ),
+      )
+    )}
+  </div>
+
+  <Pagination
+    page={
+      dealerAnnouncementPage
+    }
+    totalPages={
+      dealerAnnouncementTotalPages
+    }
+    setPage={
+      setDealerAnnouncementPage
+    }
+  />
+</div>
   </div>
 )}
 
