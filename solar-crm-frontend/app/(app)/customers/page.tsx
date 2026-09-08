@@ -2492,35 +2492,41 @@ URL.revokeObjectURL(url);
                 </td>
 
                 <td className="border px-3 py-2">
-  <div className="flex flex-wrap gap-2">
-    {announcement.publishType ===
-      'SCHEDULED' &&
-      !announcement.publishedAt && (
-        <button
-          type="button"
-          onClick={() =>
-            startEditAnnouncement(
-              announcement,
-            )
-          }
-          className="rounded border border-blue-300 px-3 py-1 text-sm font-medium text-blue-600 hover:bg-blue-50"
-        >
-          Edit
-        </button>
-      )}
+  {announcement.isHidden ? (
+    <span className="text-sm text-gray-400">
+      —
+    </span>
+  ) : (
+    <div className="flex flex-wrap gap-2">
+      {announcement.publishType ===
+        'SCHEDULED' &&
+        !announcement.publishedAt && (
+          <button
+            type="button"
+            onClick={() =>
+              startEditAnnouncement(
+                announcement,
+              )
+            }
+            className="rounded border border-blue-300 px-3 py-1 text-sm font-medium text-blue-600 hover:bg-blue-50"
+          >
+            Edit
+          </button>
+        )}
 
-    <button
-      type="button"
-      onClick={() =>
-        hideAnnouncement(
-          announcement.id,
-        )
-      }
-      className="rounded border border-red-300 px-3 py-1 text-sm font-medium text-red-600 hover:bg-red-50"
-    >
-      Hide
-    </button>
-  </div>
+      <button
+        type="button"
+        onClick={() =>
+          hideAnnouncement(
+            announcement.id,
+          )
+        }
+        className="rounded border border-red-300 px-3 py-1 text-sm font-medium text-red-600 hover:bg-red-50"
+      >
+        Hide
+      </button>
+    </div>
+  )}
 </td>
               </tr>
             ),
