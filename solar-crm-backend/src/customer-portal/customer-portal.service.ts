@@ -13,7 +13,7 @@ import { CustomerComplaint } from './customer-complaint.entity';
 import { CustomerReferral } from './customer-referral.entity';
 import { CustomerPaymentReceipt } from './customer-payment-receipt.entity';
 import { CustomerWorkDateRequest } from './customer-work-date-request.entity';
-import { CustomerNotification } from './customer-notification.entity';
+import { CustomerNotification, CustomerNotificationType } from './customer-notification.entity';
 import {
   CustomerAnnouncement,
   CustomerAnnouncementAudienceType,
@@ -5580,28 +5580,228 @@ private async deliverCustomerAnnouncementNotifications(
   announcement: CustomerAnnouncement,
   customers: Customer[],
 ) {
-  const batchSize = 25;
+  if (customers.length === 0) {
+    return;
+  }
 
-  for (
-    let index = 0;
-    index < customers.length;
-    index += batchSize
-  ) {
-    const batch =
-      customers.slice(
-        index,
-        index + batchSize,
-      );
+  const customerIds =
+    customers.map(
+      (customer) =>
+        Number(customer.id),
+    );
 
-    await Promise.all(
-      batch.map(
-        (customer) =>
-          this.createCustomerAnnouncementDelivery(
-            announcement,
-            customer,
+  /*
+   * Fetch existing deliveries once.
+   * This preserves duplicate protection
+   * without one query per customer.
+   */
+  const existingDeliveries =
+    await this
+      .customerAnnouncementDeliveryRepository
+      .createQueryBuilder('delivery')
+      .where(
+        'delivery.announcementId = :announcementId',
+        {
+          announcementId:
+            announcement.id,
+        },
+      )
+      .andWhere(
+        'delivery.customerId IN (:...customerIds)',
+        {
+          customerIds,
+        },
+      )
+      .getMany();
+
+  const existingCustomerIds =
+    new Set(
+      existingDeliveries.map(
+        (delivery) =>
+          Number(
+            delivery.customerId,
           ),
       ),
     );
+
+  const pendingCustomers =
+    customers.filter(
+      (customer) =>
+        !existingCustomerIds.has(
+          Number(customer.id),
+        ),
+    );
+
+  if (
+    pendingCustomers.length === 0
+  ) {
+    return;
+  }
+
+  const pendingCustomerIds =
+    pendingCustomers.map(
+      (customer) =>
+        Number(customer.id),
+    );
+
+  /*
+   * Fetch all projects in one query.
+   * Ordering lets us keep only the latest
+   * project for each customer.
+   */
+  const projects =
+    await this.projectRepository
+      .createQueryBuilder('project')
+      .where(
+        'project.customerId IN (:...customerIds)',
+        {
+          customerIds:
+            pendingCustomerIds,
+        },
+      )
+      .andWhere(
+        'project.isHidden = false',
+      )
+      .orderBy(
+        'project.customerId',
+        'ASC',
+      )
+      .addOrderBy(
+        'project.createdAt',
+        'DESC',
+      )
+      .getMany();
+
+  const latestProjectByCustomer =
+    new Map<number, Project>();
+
+  for (const project of projects) {
+    const customerId =
+      Number(
+        project.customerId,
+      );
+
+    if (
+      !latestProjectByCustomer.has(
+        customerId,
+      )
+    ) {
+      latestProjectByCustomer.set(
+        customerId,
+        project,
+      );
+    }
+  }
+
+  /*
+   * Process writes in moderate chunks.
+   * This avoids thousands of concurrent
+   * DB operations.
+   */
+  const chunkSize = 250;
+
+  for (
+    let index = 0;
+    index < pendingCustomers.length;
+    index += chunkSize
+  ) {
+    const chunk =
+      pendingCustomers.slice(
+        index,
+        index + chunkSize,
+      );
+
+    const now =
+      new Date();
+
+    const deliveries =
+      chunk.map(
+        (customer) => {
+          const project =
+            latestProjectByCustomer.get(
+              Number(customer.id),
+            );
+
+          return this
+            .customerAnnouncementDeliveryRepository
+            .create({
+              announcementId:
+                announcement.id,
+
+              customerId:
+                customer.id,
+
+              projectId:
+                project?.id ||
+                undefined,
+
+              pushSent:
+                false,
+
+              deliveredAt:
+                now,
+            });
+        },
+      );
+
+    await this
+      .customerAnnouncementDeliveryRepository
+      .save(
+        deliveries,
+        {
+          chunk: 250,
+        },
+      );
+
+    const notifications: CustomerNotification[] =
+  chunk.map(
+    (customer) => {
+      const project =
+        latestProjectByCustomer.get(
+          Number(customer.id),
+        );
+
+      const notification =
+  new CustomerNotification();
+
+notification.customerId =
+  customer.id;
+
+notification.customerCode =
+  customer.customerCode ||
+  '';
+
+notification.projectId =
+  project?.id ||
+  0;
+
+notification.notificationType =
+  CustomerNotificationType.GENERAL;
+
+notification.title =
+  announcement.title;
+
+notification.message =
+  announcement.message;
+
+notification.relatedEntityType =
+  'CUSTOMER_ANNOUNCEMENT';
+
+notification.relatedEntityId =
+  announcement.id;
+
+return notification;
+    },
+  );
+
+    await this
+      .notificationRepository
+      .save(
+        notifications,
+        {
+          chunk: 250,
+        },
+      );
   }
 }
 
