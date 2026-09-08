@@ -5044,18 +5044,14 @@ expiresAt,
     );
 
   if (
-    publishType ===
-    CustomerAnnouncementPublishType.NOW
-  ) {
-    for (
-      const recipient of recipients
-    ) {
-      await this.createCustomerAnnouncementDelivery(
-        savedAnnouncement,
-        recipient,
-      );
-    }
-  }
+  publishType ===
+  CustomerAnnouncementPublishType.NOW
+) {
+  await this.deliverCustomerAnnouncementNotifications(
+    savedAnnouncement,
+    recipients,
+  );
+}
 
   return {
     message:
@@ -5578,6 +5574,35 @@ private async createCustomerAnnouncementDelivery(
   });
 
   return savedDelivery;
+}
+
+private async deliverCustomerAnnouncementNotifications(
+  announcement: CustomerAnnouncement,
+  customers: Customer[],
+) {
+  const batchSize = 25;
+
+  for (
+    let index = 0;
+    index < customers.length;
+    index += batchSize
+  ) {
+    const batch =
+      customers.slice(
+        index,
+        index + batchSize,
+      );
+
+    await Promise.all(
+      batch.map(
+        (customer) =>
+          this.createCustomerAnnouncementDelivery(
+            announcement,
+            customer,
+          ),
+      ),
+    );
+  }
 }
 
 async listCustomerAnnouncements(
