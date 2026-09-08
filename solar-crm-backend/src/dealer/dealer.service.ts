@@ -2906,16 +2906,10 @@ async publishDueDealerAnnouncements() {
             announcement,
           );
 
-      for (
-        const dealer
-        of recipients
-      ) {
-        await this
-          .createDealerAnnouncementNotification(
-            announcement,
-            dealer,
-          );
-      }
+      await this.deliverDealerAnnouncementNotifications(
+  announcement,
+  recipients,
+);
 
       announcement.publishedAt =
         new Date();
@@ -6121,12 +6115,10 @@ if (
   recipientCount =
     recipients.length;
 
-  for (const dealer of recipients) {
-    await this.createDealerAnnouncementNotification(
-      savedAnnouncement,
-      dealer,
-    );
-  }
+  await this.deliverDealerAnnouncementNotifications(
+  savedAnnouncement,
+  recipients,
+);
 }
 
 return {
@@ -6599,5 +6591,34 @@ private async createDealerAnnouncementNotification(
   return this.dealerNotificationRepository.save(
     notification,
   );
+}
+
+private async deliverDealerAnnouncementNotifications(
+  announcement: DealerAnnouncement,
+  dealers: Dealer[],
+) {
+  const batchSize = 25;
+
+  for (
+    let index = 0;
+    index < dealers.length;
+    index += batchSize
+  ) {
+    const batch =
+      dealers.slice(
+        index,
+        index + batchSize,
+      );
+
+    await Promise.all(
+      batch.map(
+        (dealer) =>
+          this.createDealerAnnouncementNotification(
+            announcement,
+            dealer,
+          ),
+      ),
+    );
+  }
 }
 }
