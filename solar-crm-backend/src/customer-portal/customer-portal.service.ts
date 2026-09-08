@@ -5348,14 +5348,10 @@ async publishDueCustomerAnnouncements() {
           announcement,
         );
 
-      for (
-        const recipient of recipients
-      ) {
-        await this.createCustomerAnnouncementDelivery(
-          announcement,
-          recipient,
-        );
-      }
+      await this.deliverCustomerAnnouncementNotifications(
+  announcement,
+  recipients,
+);
 
       announcement.publishedAt =
         new Date();
