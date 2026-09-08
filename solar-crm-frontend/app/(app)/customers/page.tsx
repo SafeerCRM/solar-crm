@@ -142,6 +142,11 @@ const [
   setAnnouncementTotalPages,
 ] = useState(1);
 
+const [
+  showHiddenAnnouncements,
+  setShowHiddenAnnouncements,
+] = useState(false);
+
 const [announcementSaving, setAnnouncementSaving] =
   useState(false);
 
@@ -366,9 +371,13 @@ const removeAnnouncementCustomer = (
         `${API_BASE_URL}/customer-portal/announcements`,
         {
           params: {
-            page: targetPage,
-            limit: 20,
-          },
+  page: targetPage,
+  limit: 20,
+  showHidden:
+    showHiddenAnnouncements
+      ? 'true'
+      : 'false',
+},
           headers:
             getAuthHeaders(),
         },
@@ -1334,7 +1343,7 @@ URL.revokeObjectURL(url);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appliedFilters]);
 
-  useEffect(() => {
+ useEffect(() => {
   if (
     activeSection ===
     'ANNOUNCEMENTS'
@@ -1343,7 +1352,10 @@ URL.revokeObjectURL(url);
   }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [activeSection]);
+}, [
+  activeSection,
+  showHiddenAnnouncements,
+]);
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">
@@ -2323,22 +2335,50 @@ URL.revokeObjectURL(url);
       Announcement History
     </h3>
 
-    <button
-      type="button"
-      onClick={() =>
-        fetchAnnouncements(
-          announcementPage,
-        )
-      }
-      disabled={
-        announcementsLoading
-      }
-      className="rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700 disabled:opacity-50"
-    >
-      {announcementsLoading
-        ? 'Refreshing...'
-        : 'Refresh'}
-    </button>
+    <div className="flex flex-wrap gap-2">
+  <button
+    type="button"
+    onClick={() => {
+      const nextValue =
+        !showHiddenAnnouncements;
+
+      setShowHiddenAnnouncements(
+        nextValue,
+      );
+
+      setAnnouncementPage(1);
+    }}
+    disabled={
+      announcementsLoading
+    }
+    className={`rounded-xl border px-4 py-2 text-sm font-semibold disabled:opacity-50 ${
+      showHiddenAnnouncements
+        ? 'border-blue-600 bg-blue-600 text-white'
+        : 'text-gray-700'
+    }`}
+  >
+    {showHiddenAnnouncements
+      ? 'View Active'
+      : 'View Hidden'}
+  </button>
+
+  <button
+    type="button"
+    onClick={() =>
+      fetchAnnouncements(
+        announcementPage,
+      )
+    }
+    disabled={
+      announcementsLoading
+    }
+    className="rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700 disabled:opacity-50"
+  >
+    {announcementsLoading
+      ? 'Refreshing...'
+      : 'Refresh'}
+  </button>
+</div>
   </div>
 
   {announcementsLoading ? (
