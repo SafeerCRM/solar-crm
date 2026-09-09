@@ -585,56 +585,6 @@ async registerDealerDeviceToken(
   );
 }
 
-async sendDealerTestPush(
-  dealerId: number,
-) {
-  const deviceToken =
-    await this.portalDeviceTokenRepository.findOne({
-      where: {
-        portalType:
-          PortalDeviceType.DEALER,
-
-        portalUserId:
-          dealerId,
-
-        isActive:
-          true,
-      },
-
-      order: {
-        lastRegisteredAt:
-          'DESC',
-      },
-    });
-
-  if (!deviceToken) {
-    throw new NotFoundException(
-      'No active dealer device token found',
-    );
-  }
-
-  const messageId =
-    await this.pushNotificationService.sendToToken(
-      deviceToken.fcmToken,
-      'Aditya Solars',
-      'Dealer push notification test successful.',
-      {
-        portalType:
-          'DEALER',
-
-        dealerId:
-          String(dealerId),
-      },
-    );
-
-  return {
-    success: true,
-    message:
-      'Dealer test push sent successfully',
-    messageId,
-  };
-}
-
 async getDealerDeliverySetting() {
   let setting = await this.deliverySettingRepository.findOne({
     where: { isActive: true },
