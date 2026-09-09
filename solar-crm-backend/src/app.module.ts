@@ -26,6 +26,7 @@ import { StaffModule } from './staff/staff.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AppSettingsModule } from './app-settings/app-settings.module';
 import { StaffLocationModule } from './staff-location/staff-location.module';
+import { PushNotificationModule } from './push-notification/push-notification.module';
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { StaffLocationModule } from './staff-location/staff-location.module';
     DealerModule,
     AppSettingsModule,
     StaffLocationModule,
+    PushNotificationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

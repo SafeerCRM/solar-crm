@@ -90,6 +90,8 @@ import {
   PortalDevicePlatform,
 } from './portal-device-token.entity';
 
+import { PushNotificationService } from '../push-notification/push-notification.service';
+
 @Injectable()
 export class CustomerPortalService {
   constructor(
@@ -202,7 +204,8 @@ private readonly meetingRepository: Repository<Meeting>,
 
 private readonly leadService: LeadsService,
 private readonly meetingService: MeetingService,
-  ) {}
+private readonly pushNotificationService: PushNotificationService,
+) {}
 
   async getCustomerDashboard(customerId: number) {
     const customer = await this.customerRepository.findOne({
@@ -2368,6 +2371,41 @@ async registerCustomerDeviceToken(
   return this.portalDeviceTokenRepository.save(
     token,
   );
+}
+
+async sendCustomerTestPush(
+  customerId: number,
+) {
+  const deviceToken =
+    await this.portalDeviceTokenRepository.findOne({
+      where: {
+        portalType: PortalDeviceType.CUSTOMER,
+        portalUserId: customerId,
+        isActive: true,
+      },
+      order: {
+        lastRegisteredAt: 'DESC',
+      },
+    });
+
+  if (!deviceToken) {
+    throw new NotFoundException(
+      'No active push notification device found',
+    );
+  }
+
+  const messageId =
+    await this.pushNotificationService.sendToToken(
+      deviceToken.fcmToken,
+      'Aditya Solars',
+      'Push notification test successful.',
+    );
+
+  return {
+    success: true,
+    message: 'Test push notification sent',
+    messageId,
+  };
 }
 
 async uploadComplaintAttachments(files: any[], user: any) {

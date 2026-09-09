@@ -45,11 +45,13 @@ import {
   ProjectInsuranceRequest,
 } from '../project/project-insurance-request.entity';
 import { PortalDeviceToken } from './portal-device-token.entity';
+import { PushNotificationModule } from '../push-notification/push-notification.module';
 
 @Module({
   imports: [
   LeadsModule,
   MeetingModule,
+  PushNotificationModule,
   TypeOrmModule.forFeature([
       CustomerComplaint,
 CustomerComplaintAttachment,
