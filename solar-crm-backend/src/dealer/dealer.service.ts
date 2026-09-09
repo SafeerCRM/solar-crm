@@ -96,6 +96,7 @@ import {
   PortalDeviceType,
   PortalDevicePlatform,
 } from '../customer-portal/portal-device-token.entity';
+import { PushNotificationService } from '../push-notification/push-notification.service';
 
 @Injectable()
 export class DealerService {
@@ -199,6 +200,7 @@ private readonly dealerAnnouncementRepository: Repository<DealerAnnouncement>,
 private readonly portalDeviceTokenRepository: Repository<PortalDeviceToken>,
 
     private readonly projectService: ProjectService,
+private readonly pushNotificationService: PushNotificationService,
   ) {}
 
   private async getAdityaTradingBillingEntity() {
@@ -581,6 +583,56 @@ async registerDealerDeviceToken(
   return this.portalDeviceTokenRepository.save(
     token,
   );
+}
+
+async sendDealerTestPush(
+  dealerId: number,
+) {
+  const deviceToken =
+    await this.portalDeviceTokenRepository.findOne({
+      where: {
+        portalType:
+          PortalDeviceType.DEALER,
+
+        portalUserId:
+          dealerId,
+
+        isActive:
+          true,
+      },
+
+      order: {
+        lastRegisteredAt:
+          'DESC',
+      },
+    });
+
+  if (!deviceToken) {
+    throw new NotFoundException(
+      'No active dealer device token found',
+    );
+  }
+
+  const messageId =
+    await this.pushNotificationService.sendToToken(
+      deviceToken.fcmToken,
+      'Aditya Solars',
+      'Dealer push notification test successful.',
+      {
+        portalType:
+          'DEALER',
+
+        dealerId:
+          String(dealerId),
+      },
+    );
+
+  return {
+    success: true,
+    message:
+      'Dealer test push sent successfully',
+    messageId,
+  };
 }
 
 async getDealerDeliverySetting() {
