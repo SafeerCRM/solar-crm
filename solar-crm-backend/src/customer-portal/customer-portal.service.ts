@@ -5999,6 +5999,9 @@ return notification;
       if (
   announcement.pushRequired
 ) {
+  const pushSuccessfulCustomerIds:
+    number[] = [];
+
   for (const customer of chunk) {
     const customerTokens =
       deviceTokensByCustomer.get(
@@ -6010,6 +6013,9 @@ return notification;
     ) {
       continue;
     }
+
+    let customerPushSent =
+      false;
 
     for (
       const deviceToken of customerTokens
@@ -6028,6 +6034,9 @@ return notification;
               ),
           },
         );
+
+        customerPushSent =
+          true;
       } catch (error) {
         console.error(
           `Failed to send customer announcement push for announcement ${announcement.id}, customer ${customer.id}:`,
@@ -6035,6 +6044,45 @@ return notification;
         );
       }
     }
+
+    if (customerPushSent) {
+      pushSuccessfulCustomerIds.push(
+        Number(customer.id),
+      );
+    }
+  }
+
+  if (
+    pushSuccessfulCustomerIds.length >
+    0
+  ) {
+    await this
+      .customerAnnouncementDeliveryRepository
+      .createQueryBuilder()
+      .update(
+        CustomerAnnouncementDelivery,
+      )
+      .set({
+        pushSent:
+          true,
+        pushSentAt:
+          new Date(),
+      })
+      .where(
+        'announcementId = :announcementId',
+        {
+          announcementId:
+            announcement.id,
+        },
+      )
+      .andWhere(
+        'customerId IN (:...customerIds)',
+        {
+          customerIds:
+            pushSuccessfulCustomerIds,
+        },
+      )
+      .execute();
   }
 }
   }
