@@ -687,6 +687,18 @@ async registerDealerDeviceToken(
   );
 }
 
+@Post('test-push')
+async testDealerPush(
+  @Req() req: any,
+) {
+  const payload =
+    this.getDealerPayload(req);
+
+  return this.service.sendDealerTestPush(
+    Number(payload.dealerId),
+  );
+}
+
   private getDealerPayload(req: any) {
     const authHeader = req.headers?.authorization || '';
 const headerToken = authHeader.replace('Bearer ', '');
