@@ -6753,6 +6753,72 @@ private async deliverDealerAnnouncementNotifications(
 ) {
   const batchSize = 25;
 
+  const dealerIds =
+  dealers
+    .map((dealer) =>
+      Number(dealer.id),
+    )
+    .filter(
+      (id) =>
+        Number.isInteger(id) &&
+        id > 0,
+    );
+
+const activeDeviceTokens =
+  dealerIds.length > 0
+    ? await this.portalDeviceTokenRepository
+        .createQueryBuilder(
+          'deviceToken',
+        )
+        .where(
+          'deviceToken.portalType = :portalType',
+          {
+            portalType:
+              PortalDeviceType.DEALER,
+          },
+        )
+        .andWhere(
+          'deviceToken.portalUserId IN (:...dealerIds)',
+          {
+            dealerIds,
+          },
+        )
+        .andWhere(
+          'deviceToken.isActive = true',
+        )
+        .getMany()
+    : [];
+
+const deviceTokensByDealer =
+  new Map<
+    number,
+    PortalDeviceToken[]
+  >();
+
+for (
+  const deviceToken
+  of activeDeviceTokens
+) {
+  const dealerId =
+    Number(
+      deviceToken.portalUserId,
+    );
+
+  const existingTokens =
+    deviceTokensByDealer.get(
+      dealerId,
+    ) || [];
+
+  existingTokens.push(
+    deviceToken,
+  );
+
+  deviceTokensByDealer.set(
+    dealerId,
+    existingTokens,
+  );
+}
+
   for (
     let index = 0;
     index < dealers.length;
@@ -6765,14 +6831,54 @@ private async deliverDealerAnnouncementNotifications(
       );
 
     await Promise.all(
-      batch.map(
-        (dealer) =>
-          this.createDealerAnnouncementNotification(
-            announcement,
-            dealer,
-          ),
-      ),
-    );
+  batch.map(
+    async (dealer) => {
+      // Inbox notification remains the source of truth.
+      await this.createDealerAnnouncementNotification(
+        announcement,
+        dealer,
+      );
+
+      if (
+        !announcement.pushRequired
+      ) {
+        return;
+      }
+
+      const deviceTokens =
+        deviceTokensByDealer.get(
+          Number(dealer.id),
+        ) || [];
+
+      for (
+        const deviceToken
+        of deviceTokens
+      ) {
+        try {
+          await this.pushNotificationService.sendToToken(
+            deviceToken.fcmToken,
+            announcement.title,
+            announcement.message,
+            {
+              relatedEntityType:
+                'DEALER_ANNOUNCEMENT',
+
+              relatedEntityId:
+                String(
+                  announcement.id,
+                ),
+            },
+          );
+        } catch (error) {
+          console.error(
+            `Failed to send dealer announcement push to dealer ${dealer.id}`,
+            error,
+          );
+        }
+      }
+    },
+  ),
+);
   }
 }
 }
