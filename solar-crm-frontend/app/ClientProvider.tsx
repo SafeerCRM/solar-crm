@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { setupAxiosInterceptor } from '@/lib/axiosInterceptor';
 import CustomerPushManager from '@/components/CustomerPushManager';
+import DealerPushManager from '@/components/DealerPushManager';
 
 export default function ClientProvider({
   children,
@@ -16,6 +17,7 @@ export default function ClientProvider({
   return (
   <>
     <CustomerPushManager />
+    <DealerPushManager />
     {children}
   </>
 );
