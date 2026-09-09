@@ -673,6 +673,20 @@ async uploadInsuranceRequestDocument(
     );
 }
 
+@Post('device-token')
+async registerDealerDeviceToken(
+  @Req() req: any,
+  @Body() body: any,
+) {
+  const payload =
+    this.getDealerPayload(req);
+
+  return this.service.registerDealerDeviceToken(
+    Number(payload.dealerId),
+    body,
+  );
+}
+
   private getDealerPayload(req: any) {
     const authHeader = req.headers?.authorization || '';
 const headerToken = authHeader.replace('Bearer ', '');
