@@ -11,6 +11,7 @@ const API_BASE_URL =
 export default function CustomerPushManager() {
   useEffect(() => {
     let registrationListener: any;
+let actionPerformedListener: any;
 
     const setupPush = async () => {
       try {
@@ -92,6 +93,23 @@ export default function CustomerPushManager() {
             },
           );
 
+          actionPerformedListener =
+  await PushNotifications.addListener(
+    'pushNotificationActionPerformed',
+    (action) => {
+      const data =
+        action.notification.data || {};
+
+      if (
+        data.relatedEntityType ===
+        'CUSTOMER_ANNOUNCEMENT'
+      ) {
+        window.location.href =
+          '/customer-portal/notifications';
+      }
+    },
+  );
+
         await PushNotifications.register();
       } catch (error) {
         console.error(
@@ -104,8 +122,9 @@ export default function CustomerPushManager() {
     setupPush();
 
     return () => {
-      registrationListener?.remove();
-    };
+  registrationListener?.remove();
+  actionPerformedListener?.remove();
+};
   }, []);
 
   return null;
