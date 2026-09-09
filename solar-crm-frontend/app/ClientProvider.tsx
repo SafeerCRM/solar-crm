@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { setupAxiosInterceptor } from '@/lib/axiosInterceptor';
+import CustomerPushManager from '@/components/CustomerPushManager';
 
 export default function ClientProvider({
   children,
@@ -12,5 +13,10 @@ export default function ClientProvider({
     setupAxiosInterceptor();
   }, []);
 
-  return <>{children}</>;
+  return (
+  <>
+    <CustomerPushManager />
+    {children}
+  </>
+);
 }
