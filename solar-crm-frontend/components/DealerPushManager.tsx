@@ -11,6 +11,7 @@ const API_BASE_URL =
 export default function DealerPushManager() {
   useEffect(() => {
     let registrationListener: any;
+let actionPerformedListener: any;
 
     const setupPush = async () => {
       try {
@@ -93,6 +94,23 @@ export default function DealerPushManager() {
             },
           );
 
+          actionPerformedListener =
+  await PushNotifications.addListener(
+    'pushNotificationActionPerformed',
+    (action) => {
+      const data =
+        action.notification.data || {};
+
+      if (
+        data.relatedEntityType ===
+        'DEALER_ANNOUNCEMENT'
+      ) {
+        window.location.href =
+          '/dealer-portal/notifications';
+      }
+    },
+  );
+
         await PushNotifications.register();
       } catch (error) {
         console.error(
@@ -105,8 +123,9 @@ export default function DealerPushManager() {
     setupPush();
 
     return () => {
-      registrationListener?.remove();
-    };
+  registrationListener?.remove();
+  actionPerformedListener?.remove();
+};
   }, []);
 
   return null;
