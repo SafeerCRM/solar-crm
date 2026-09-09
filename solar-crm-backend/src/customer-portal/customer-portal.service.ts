@@ -5731,6 +5731,58 @@ private async deliverCustomerAnnouncementNotifications(
         Number(customer.id),
     );
 
+    const activeDeviceTokens =
+  await this.portalDeviceTokenRepository
+    .createQueryBuilder(
+      'deviceToken',
+    )
+    .where(
+      'deviceToken.portalType = :portalType',
+      {
+        portalType:
+          PortalDeviceType.CUSTOMER,
+      },
+    )
+    .andWhere(
+      'deviceToken.portalUserId IN (:...customerIds)',
+      {
+        customerIds,
+      },
+    )
+    .andWhere(
+      'deviceToken.isActive = true',
+    )
+    .getMany();
+
+const deviceTokensByCustomer =
+  new Map<
+    number,
+    PortalDeviceToken[]
+  >();
+
+for (
+  const deviceToken of activeDeviceTokens
+) {
+  const customerId =
+    Number(
+      deviceToken.portalUserId,
+    );
+
+  const existingTokens =
+    deviceTokensByCustomer.get(
+      customerId,
+    ) || [];
+
+  existingTokens.push(
+    deviceToken,
+  );
+
+  deviceTokensByCustomer.set(
+    customerId,
+    existingTokens,
+  );
+}
+
   /*
    * Fetch existing deliveries once.
    * This preserves duplicate protection
@@ -5943,6 +5995,48 @@ return notification;
           chunk: 250,
         },
       );
+
+      if (
+  announcement.pushRequired
+) {
+  for (const customer of chunk) {
+    const customerTokens =
+      deviceTokensByCustomer.get(
+        Number(customer.id),
+      ) || [];
+
+    if (
+      customerTokens.length === 0
+    ) {
+      continue;
+    }
+
+    for (
+      const deviceToken of customerTokens
+    ) {
+      try {
+        await this.pushNotificationService.sendToToken(
+          deviceToken.fcmToken,
+          announcement.title,
+          announcement.message,
+          {
+            relatedEntityType:
+              'CUSTOMER_ANNOUNCEMENT',
+            relatedEntityId:
+              String(
+                announcement.id,
+              ),
+          },
+        );
+      } catch (error) {
+        console.error(
+          `Failed to send customer announcement push for announcement ${announcement.id}, customer ${customer.id}:`,
+          error,
+        );
+      }
+    }
+  }
+}
   }
 }
 
