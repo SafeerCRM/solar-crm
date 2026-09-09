@@ -198,6 +198,19 @@ hideDealerAnnouncement(
 }
 
 @UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('DEALER')
+@Post('device-token')
+registerDealerDeviceToken(
+  @CurrentUser() user: any,
+  @Body() body: any,
+) {
+  return this.dealerService.registerDealerDeviceToken(
+    Number(user.id),
+    body,
+  );
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('OWNER', 'ACCOUNT_MANAGER', 'TRADING_MANAGER', 'TRADING_HEAD')
 @Get('kits')
 listDealerKits(@Query() query: any) {

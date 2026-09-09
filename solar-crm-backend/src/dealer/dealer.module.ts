@@ -54,6 +54,8 @@ import {
 
 import { DealerAnnouncement } from './dealer-announcement.entity';
 
+import { PortalDeviceToken } from '../customer-portal/portal-device-token.entity';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -86,6 +88,7 @@ ProjectInsuranceRequestDocument,
 ProjectInsurance,
 ProjectInsuranceDocument,
 DealerAnnouncement,
+PortalDeviceToken,
     ]),
     ProjectModule,
   ],

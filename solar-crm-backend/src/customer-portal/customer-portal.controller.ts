@@ -155,6 +155,7 @@ hideCustomerAnnouncement(
 }
 
 
+
   @Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE', 'MAINTENANCE_MANAGER', 'INSPECTION_MANAGER',)
   @Patch('complaints/:id')
   updateComplaint(

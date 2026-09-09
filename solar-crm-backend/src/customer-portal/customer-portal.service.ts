@@ -84,6 +84,12 @@ import {
   ProjectInsuranceRequestType,
 } from '../project/project-insurance-request.entity';
 
+import {
+  PortalDeviceToken,
+  PortalDeviceType,
+  PortalDevicePlatform,
+} from './portal-device-token.entity';
+
 @Injectable()
 export class CustomerPortalService {
   constructor(
@@ -178,6 +184,9 @@ private readonly afterSalesRequestRatingRepository: Repository<CustomerAfterSale
 
 @InjectRepository(CustomerReferralActivity)
 private readonly referralActivityRepository: Repository<CustomerReferralActivity>,
+
+@InjectRepository(PortalDeviceToken)
+private readonly portalDeviceTokenRepository: Repository<PortalDeviceToken>,
 
     @InjectRepository(StaffMember)
 private readonly staffMemberRepository: Repository<StaffMember>,
@@ -2261,6 +2270,104 @@ async changeCustomerPortalPassword(customerId: number, body: any) {
     success: true,
     message: 'Password changed successfully',
   };
+}
+
+async registerCustomerDeviceToken(
+  customerId: number,
+  body: {
+    fcmToken?: string;
+    platform?: string;
+    deviceId?: string;
+  },
+) {
+  const fcmToken =
+    String(
+      body?.fcmToken || '',
+    ).trim();
+
+  if (!fcmToken) {
+    throw new BadRequestException(
+      'FCM token is required',
+    );
+  }
+
+  const platform =
+    String(
+      body?.platform || '',
+    )
+      .trim()
+      .toUpperCase();
+
+  if (
+    platform !== 'ANDROID' &&
+    platform !== 'IOS'
+  ) {
+    throw new BadRequestException(
+      'Platform must be ANDROID or IOS',
+    );
+  }
+
+  const existing =
+    await this.portalDeviceTokenRepository.findOne({
+      where: {
+        fcmToken,
+      },
+    });
+
+  if (existing) {
+    existing.portalType =
+      PortalDeviceType.CUSTOMER;
+
+    existing.portalUserId =
+      customerId;
+
+    existing.platform =
+      platform as PortalDevicePlatform;
+
+    existing.deviceId =
+      body?.deviceId
+        ? String(body.deviceId)
+        : null;
+
+    existing.isActive =
+      true;
+
+    existing.lastRegisteredAt =
+      new Date();
+
+    return this.portalDeviceTokenRepository.save(
+      existing,
+    );
+  }
+
+  const token =
+    this.portalDeviceTokenRepository.create({
+      portalType:
+        PortalDeviceType.CUSTOMER,
+
+      portalUserId:
+        customerId,
+
+      platform:
+        platform as PortalDevicePlatform,
+
+      fcmToken,
+
+      deviceId:
+        body?.deviceId
+          ? String(body.deviceId)
+          : null,
+
+      isActive:
+        true,
+
+      lastRegisteredAt:
+        new Date(),
+    });
+
+  return this.portalDeviceTokenRepository.save(
+    token,
+  );
 }
 
 async uploadComplaintAttachments(files: any[], user: any) {

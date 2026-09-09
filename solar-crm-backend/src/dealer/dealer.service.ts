@@ -91,6 +91,12 @@ import {
   DealerAnnouncementPublishType,
 } from './dealer-announcement.entity';
 
+import {
+  PortalDeviceToken,
+  PortalDeviceType,
+  PortalDevicePlatform,
+} from '../customer-portal/portal-device-token.entity';
+
 @Injectable()
 export class DealerService {
   constructor(
@@ -188,6 +194,9 @@ private readonly projectInsuranceDocumentRepository:
 
   @InjectRepository(DealerAnnouncement)
 private readonly dealerAnnouncementRepository: Repository<DealerAnnouncement>,
+
+@InjectRepository(PortalDeviceToken)
+private readonly portalDeviceTokenRepository: Repository<PortalDeviceToken>,
 
     private readonly projectService: ProjectService,
   ) {}
@@ -479,6 +488,99 @@ if (!dealer && body?.email) {
   (dealer as any).portalPassword = newPassword;
 
   return this.dealerRepository.save(dealer);
+}
+
+async registerDealerDeviceToken(
+  dealerId: number,
+  body: {
+    fcmToken?: string;
+    platform?: string;
+    deviceId?: string;
+  },
+) {
+  const fcmToken = String(
+    body?.fcmToken || '',
+  ).trim();
+
+  if (!fcmToken) {
+    throw new BadRequestException(
+      'FCM token is required',
+    );
+  }
+
+  const platform = String(
+    body?.platform || '',
+  )
+    .trim()
+    .toUpperCase();
+
+  if (
+    platform !== 'ANDROID' &&
+    platform !== 'IOS'
+  ) {
+    throw new BadRequestException(
+      'Platform must be ANDROID or IOS',
+    );
+  }
+
+  const existing =
+    await this.portalDeviceTokenRepository.findOne({
+      where: {
+        fcmToken,
+      },
+    });
+
+  if (existing) {
+    existing.portalType =
+      PortalDeviceType.DEALER;
+
+    existing.portalUserId =
+      dealerId;
+
+    existing.platform =
+      platform as PortalDevicePlatform;
+
+    existing.deviceId =
+      body?.deviceId
+        ? String(body.deviceId)
+        : null;
+
+    existing.isActive = true;
+
+    existing.lastRegisteredAt =
+      new Date();
+
+    return this.portalDeviceTokenRepository.save(
+      existing,
+    );
+  }
+
+  const token =
+    this.portalDeviceTokenRepository.create({
+      portalType:
+        PortalDeviceType.DEALER,
+
+      portalUserId: dealerId,
+
+      platform:
+        platform as PortalDevicePlatform,
+
+      fcmToken,
+
+      deviceId:
+        body?.deviceId
+          ? String(body.deviceId)
+          : null,
+
+      isActive: true,
+
+      lastRegisteredAt:
+        new Date(),
+    });
+
+  return this.portalDeviceTokenRepository.save(
+    token,
+  );
 }
 
 async getDealerDeliverySetting() {

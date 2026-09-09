@@ -44,6 +44,7 @@ import {
 import {
   ProjectInsuranceRequest,
 } from '../project/project-insurance-request.entity';
+import { PortalDeviceToken } from './portal-device-token.entity';
 
 @Module({
   imports: [
@@ -82,6 +83,7 @@ ProjectInsurancePlan,
 ProjectInsurance,
 ProjectInsuranceDocument,
 ProjectInsuranceRequest,
+PortalDeviceToken,
     ]),
   ],
   controllers: [CustomerPortalController, CustomerAuthController],
