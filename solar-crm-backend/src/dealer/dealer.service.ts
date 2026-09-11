@@ -450,46 +450,157 @@ async listPortalPoliciesForDealer() {
     };
   }
 
-  async updateDealerPortalPassword(id: number, body: any) {
-  const newPassword = String(body?.portalPassword || '');
+  async updateDealerPortalPassword(
+  id: number,
+  body: any,
+) {
+  const newPassword = String(
+    body?.portalPassword || '',
+  );
 
   if (!newPassword.trim()) {
-    throw new BadRequestException('Password is required');
+    throw new BadRequestException(
+      'Password is required',
+    );
   }
 
   if (newPassword.length < 4) {
-    throw new BadRequestException('Password must be at least 4 characters');
+    throw new BadRequestException(
+      'Password must be at least 4 characters',
+    );
   }
 
-  let dealer = await this.dealerRepository.findOne({
-  where: { id, isHidden: false },
-});
+  const phone = String(
+    body?.phone || '',
+  ).trim();
 
-if (!dealer && body?.phone) {
-  dealer = await this.dealerRepository.findOne({
-    where: { phone: String(body.phone).trim(), isHidden: false },
-  });
-}
+  const gstNumber = String(
+    body?.gstNumber || '',
+  ).trim();
 
-if (!dealer && body?.gstNumber) {
-  dealer = await this.dealerRepository.findOne({
-    where: { gstNumber: String(body.gstNumber).trim(), isHidden: false },
-  });
-}
+  const email = String(
+    body?.email || '',
+  ).trim();
 
-if (!dealer && body?.email) {
-  dealer = await this.dealerRepository.findOne({
-    where: { email: String(body.email).trim(), isHidden: false },
-  });
-}
-
-  if (!dealer) {
-    throw new NotFoundException('Dealer not found');
+  if (
+    !phone &&
+    !gstNumber &&
+    !email
+  ) {
+    throw new BadRequestException(
+      'Dealer phone, GST number or email is required',
+    );
   }
 
-  (dealer as any).portalPassword = newPassword;
+  const qb =
+    this.dealerRepository
+      .createQueryBuilder(
+        'dealer',
+      )
+      .where(
+        'dealer.isHidden = false',
+      );
 
-  return this.dealerRepository.save(dealer);
+  const matches: string[] = [];
+  const params: any = {};
+
+  if (phone) {
+    matches.push(`
+      REGEXP_REPLACE(
+        COALESCE(dealer.phone, ''),
+        '[^0-9]',
+        '',
+        'g'
+      ) =
+      REGEXP_REPLACE(
+        :phone,
+        '[^0-9]',
+        '',
+        'g'
+      )
+    `);
+
+    params.phone =
+      phone;
+  }
+
+  if (gstNumber) {
+    matches.push(`
+      UPPER(
+        TRIM(
+          COALESCE(
+            dealer.gstNumber,
+            ''
+          )
+        )
+      ) =
+      UPPER(
+        TRIM(
+          :gstNumber
+        )
+      )
+    `);
+
+    params.gstNumber =
+      gstNumber;
+  }
+
+  if (email) {
+    matches.push(`
+      LOWER(
+        TRIM(
+          COALESCE(
+            dealer.email,
+            ''
+          )
+        )
+      ) =
+      LOWER(
+        TRIM(
+          :email
+        )
+      )
+    `);
+
+    params.email =
+      email;
+  }
+
+  qb.andWhere(
+    `(${matches.join(' OR ')})`,
+    params,
+  );
+
+  const dealers =
+    await qb
+      .orderBy(
+        'dealer.id',
+        'ASC',
+      )
+      .getMany();
+
+  if (!dealers.length) {
+    throw new NotFoundException(
+      'Matching dealer portal account not found',
+    );
+  }
+
+  if (dealers.length > 1) {
+    throw new BadRequestException(
+      'Multiple dealer portal accounts match this dealer. Please resolve duplicate dealer records first.',
+    );
+  }
+
+  const dealer =
+    dealers[0];
+
+  (dealer as any)
+    .portalPassword =
+    newPassword;
+
+  return this.dealerRepository.save(
+    dealer,
+  );
 }
 
 async registerDealerDeviceToken(
