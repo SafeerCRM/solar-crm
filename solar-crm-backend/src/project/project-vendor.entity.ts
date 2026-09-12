@@ -90,6 +90,7 @@ export class ProjectVendor {
 tradingManagerId: number | null;
 
 @Column({
+  type: 'varchar',
   nullable: true,
 })
 tradingManagerName: string | null;
