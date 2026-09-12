@@ -1117,40 +1117,52 @@ private async getDealerIdentity(
   }
 
   const portalDealerId =
-    Number(dealer.id);
+    Number(
+      dealer.id,
+    );
 
   const projectVendorId =
     Number(
-      dealer.projectVendorId || 0,
+      dealer.projectVendorId ||
+        0,
     );
 
   /*
-   * During legacy compatibility:
+   * SECURITY / IDENTITY RULE
    *
-   * Old portal-created records:
-   * dealerId = Dealer.id
+   * If the portal Dealer is linked to a
+   * ProjectVendor, business records must
+   * use ONLY the canonical ProjectVendor.id.
    *
-   * New canonical records:
-   * dealerId = ProjectVendor.id
+   * Never blindly search both:
+   *
+   *   Dealer.id
+   *   ProjectVendor.id
+   *
+   * because the two numeric namespaces
+   * can collide with unrelated dealers.
+   *
+   * Unmapped legacy portal dealers can
+   * temporarily continue using Dealer.id.
    */
   const businessDealerIds =
-    Array.from(
-      new Set(
-        [
-          portalDealerId,
+    projectVendorId > 0
+      ? [
           projectVendorId,
-        ].filter(
-          (value) =>
-            Number(value) > 0,
-        ),
-      ),
-    );
+        ]
+      : [
+          portalDealerId,
+        ];
 
   return {
     dealer,
+
     portalDealerId,
+
     projectVendorId:
-      projectVendorId || null,
+      projectVendorId ||
+      null,
+
     businessDealerIds,
   };
 }
