@@ -391,24 +391,93 @@ async listPortalPoliciesForDealer() {
       throw new UnauthorizedException('Username and password are required');
     }
 
-    const dealer = await this.dealerRepository
-  .createQueryBuilder('dealer')
-  .where('dealer.isHidden = false')
-  .andWhere(
-    `(
-      dealer.email = :loginUsername
-      OR dealer.phone = :loginUsername
-      OR dealer.gstNumber = :loginUsername
-    )`,
-    { loginUsername },
-  )
-  .orderBy('dealer.portalPassword', 'DESC')
-.addOrderBy('dealer.id', 'ASC')
-  .getOne();
+    const dealers =
+  await this.dealerRepository
+    .createQueryBuilder('dealer')
+    .where(
+      'dealer.isHidden = false',
+    )
+    .andWhere(
+      'dealer.status = :activeStatus',
+      {
+        activeStatus:
+          'ACTIVE',
+      },
+    )
+    .andWhere(
+      `(
+        LOWER(
+          TRIM(
+            COALESCE(
+              dealer.email,
+              ''
+            )
+          )
+        ) =
+        LOWER(
+          TRIM(
+            :loginUsername
+          )
+        )
 
-    if (!dealer) {
-      throw new UnauthorizedException('Dealer portal access not found');
-    }
+        OR
+
+        REGEXP_REPLACE(
+          COALESCE(
+            dealer.phone,
+            ''
+          ),
+          '[^0-9]',
+          '',
+          'g'
+        ) =
+        REGEXP_REPLACE(
+          :loginUsername,
+          '[^0-9]',
+          '',
+          'g'
+        )
+
+        OR
+
+        UPPER(
+          TRIM(
+            COALESCE(
+              dealer.gstNumber,
+              ''
+            )
+          )
+        ) =
+        UPPER(
+          TRIM(
+            :loginUsername
+          )
+        )
+      )`,
+      {
+        loginUsername,
+      },
+    )
+    .orderBy(
+      'dealer.id',
+      'ASC',
+    )
+    .getMany();
+
+if (!dealers.length) {
+  throw new UnauthorizedException(
+    'Dealer portal access not found',
+  );
+}
+
+if (dealers.length > 1) {
+  throw new UnauthorizedException(
+    'Multiple active dealer portal accounts match this login. Please contact admin.',
+  );
+}
+
+const dealer =
+  dealers[0];
 
     const expectedPassword =
       (dealer as any).portalPassword ||
@@ -421,13 +490,31 @@ async listPortalPoliciesForDealer() {
     }
 
     const access_token = jwt.sign(
-      {
-        sub: dealer.id,
-        dealerId: dealer.id,
-        dealerName: dealer.dealerName,
-        roleType: 'DEALER_PORTAL',
-        roles: ['DEALER'],
-      },
+  {
+    sub: dealer.id,
+
+    /*
+     * Portal account identity.
+     */
+    dealerId:
+      dealer.id,
+
+    /*
+     * Canonical Trading / business identity.
+     */
+    projectVendorId:
+      dealer.projectVendorId || null,
+
+    dealerName:
+      dealer.dealerName,
+
+    roleType:
+      'DEALER_PORTAL',
+
+    roles: [
+      'DEALER',
+    ],
+  },
       'mysecretkey',
       { expiresIn: '7d' },
     );
@@ -436,6 +523,8 @@ async listPortalPoliciesForDealer() {
       access_token,
       dealer: {
         id: dealer.id,
+        projectVendorId:
+  dealer.projectVendorId || null,
         dealerName: dealer.dealerName,
         firmName: dealer.firmName,
         phone: dealer.phone,
@@ -1010,64 +1099,268 @@ async toggleDealerKitAvailability(id: number, body: any) {
   return this.dealerKitRepository.save(kit);
 }
 
-  async getDealerDashboard(dealerId: number) {
-    const dealer = await this.dealerRepository.findOne({
-      where: { id: dealerId, isHidden: false },
+private async getDealerIdentity(
+  dealerId: number,
+) {
+  const dealer =
+    await this.dealerRepository.findOne({
+      where: {
+        id: dealerId,
+        isHidden: false,
+      },
     });
 
-    if (!dealer) {
-      throw new NotFoundException('Dealer not found');
-    }
-
-    const recentOrders = await this.dealerOrderRepository.find({
-      where: { dealerId, isHidden: false },
-      order: { createdAt: 'DESC' },
-      take: 10,
-    });
-
-    const recentPayments = await this.dealerPaymentRepository.find({
-      where: { dealerId },
-      order: { createdAt: 'DESC' },
-      take: 10,
-    });
-
-    const notifications = await this.dealerNotificationRepository.find({
-      where: { dealerId },
-      order: { createdAt: 'DESC' },
-      take: 10,
-    });
-
-    const monthlyRequirements =
-      await this.dealerMonthlyRequirementRepository.find({
-        where: { dealerId, isHidden: false },
-        order: { createdAt: 'DESC' },
-        take: 10,
-      });
-
-    const totalOrders = recentOrders.length;
-    const totalOrderValue = recentOrders.reduce(
-      (sum, order) => sum + Number(order.totalAmount || 0),
-      0,
+  if (!dealer) {
+    throw new NotFoundException(
+      'Dealer not found',
     );
-    const pendingAmount = recentOrders.reduce(
-      (sum, order) => sum + Number(order.pendingAmount || 0),
-      0,
-    );
-
-    return {
-      dealer,
-      recentOrders,
-      recentPayments,
-      notifications,
-      monthlyRequirements,
-      totalOrders,
-      totalOrderValue,
-      pendingAmount,
-      unreadNotifications: notifications.filter(
-        (item) => item.status === 'UNREAD',
-      ).length,
-    };
   }
+
+  const portalDealerId =
+    Number(dealer.id);
+
+  const projectVendorId =
+    Number(
+      dealer.projectVendorId || 0,
+    );
+
+  /*
+   * During legacy compatibility:
+   *
+   * Old portal-created records:
+   * dealerId = Dealer.id
+   *
+   * New canonical records:
+   * dealerId = ProjectVendor.id
+   */
+  const businessDealerIds =
+    Array.from(
+      new Set(
+        [
+          portalDealerId,
+          projectVendorId,
+        ].filter(
+          (value) =>
+            Number(value) > 0,
+        ),
+      ),
+    );
+
+  return {
+    dealer,
+    portalDealerId,
+    projectVendorId:
+      projectVendorId || null,
+    businessDealerIds,
+  };
+}
+
+private async resolvePortalDealerFromBusinessDealerId(
+  businessDealerId: number,
+) {
+  const resolvedId =
+    Number(
+      businessDealerId || 0,
+    );
+
+  if (!resolvedId) {
+    return null;
+  }
+
+  return this.dealerRepository
+    .createQueryBuilder('dealer')
+    .where(
+      'dealer.isHidden = false',
+    )
+    .andWhere(
+      `(
+        dealer.projectVendorId = :projectVendorId
+        OR dealer.id = :legacyDealerId
+      )`,
+      {
+        projectVendorId:
+          resolvedId,
+
+        legacyDealerId:
+          resolvedId,
+      },
+    )
+    .orderBy(
+      `
+      CASE
+        WHEN dealer.projectVendorId = :preferredProjectVendorId
+        THEN 0
+        ELSE 1
+      END
+      `,
+      'ASC',
+    )
+    .setParameter(
+      'preferredProjectVendorId',
+      resolvedId,
+    )
+    .addOrderBy(
+      'dealer.id',
+      'ASC',
+    )
+    .getOne();
+}
+
+  async getDealerDashboard(
+  dealerId: number,
+) {
+  const identity =
+    await this.getDealerIdentity(
+      dealerId,
+    );
+
+  const dealer =
+    identity.dealer;
+
+  const recentOrders =
+    await this.dealerOrderRepository
+      .createQueryBuilder('order')
+      .where(
+        'order.dealerId IN (:...dealerIds)',
+        {
+          dealerIds:
+            identity.businessDealerIds,
+        },
+      )
+      .andWhere(
+        'order.isHidden = false',
+      )
+      .orderBy(
+        'order.createdAt',
+        'DESC',
+      )
+      .take(10)
+      .getMany();
+
+      const orderSummary =
+  await this.dealerOrderRepository
+    .createQueryBuilder('order')
+    .select(
+      'COUNT(order.id)',
+      'totalOrders',
+    )
+    .addSelect(
+      'COALESCE(SUM(order.totalAmount), 0)',
+      'totalOrderValue',
+    )
+    .addSelect(
+      'COALESCE(SUM(order.pendingAmount), 0)',
+      'pendingAmount',
+    )
+    .where(
+      'order.dealerId IN (:...dealerIds)',
+      {
+        dealerIds:
+          identity.businessDealerIds,
+      },
+    )
+    .andWhere(
+      'order.isHidden = false',
+    )
+    .getRawOne();
+
+  /*
+   * Payments can historically use either
+   * dealer ID namespace.
+   */
+  const recentPayments =
+    await this.dealerPaymentRepository
+      .createQueryBuilder('payment')
+      .where(
+        'payment.dealerId IN (:...dealerIds)',
+        {
+          dealerIds:
+            identity.businessDealerIds,
+        },
+      )
+      .orderBy(
+        'payment.createdAt',
+        'DESC',
+      )
+      .take(10)
+      .getMany();
+
+  /*
+   * Notifications are portal-account data.
+   * Keep Dealer.id here.
+   */
+  const notifications =
+    await this.dealerNotificationRepository.find({
+      where: {
+        dealerId:
+          identity.portalDealerId,
+      },
+      order: {
+        createdAt:
+          'DESC',
+      },
+      take: 10,
+    });
+
+  const monthlyRequirements =
+    await this
+      .dealerMonthlyRequirementRepository
+      .createQueryBuilder(
+        'requirement',
+      )
+      .where(
+        'requirement.dealerId IN (:...dealerIds)',
+        {
+          dealerIds:
+            identity.businessDealerIds,
+        },
+      )
+      .andWhere(
+        'requirement.isHidden = false',
+      )
+      .orderBy(
+        'requirement.createdAt',
+        'DESC',
+      )
+      .take(10)
+      .getMany();
+
+  const totalOrders =
+  Number(
+    orderSummary?.totalOrders ||
+      0,
+  );
+
+const totalOrderValue =
+  Number(
+    orderSummary?.totalOrderValue ||
+      0,
+  );
+
+const pendingAmount =
+  Number(
+    orderSummary?.pendingAmount ||
+      0,
+  );
+
+  return {
+    dealer,
+    recentOrders,
+    recentPayments,
+    notifications,
+    monthlyRequirements,
+    totalOrders,
+    totalOrderValue,
+    pendingAmount,
+
+    unreadNotifications:
+      notifications.filter(
+        (item) =>
+          item.status ===
+          'UNREAD',
+      ).length,
+  };
+}
 
     async getDealerStock() {
     const stockItems = await this.stockRepository.find({
@@ -1383,17 +1676,49 @@ invoice.sellerLogoUrl =
     order.status = ProjectDealerOrderStatus.SUBMITTED;
     await this.dealerOrderRepository.save(order);
 
-    const notification = this.dealerNotificationRepository.create({
-      dealerId: order.dealerId,
-      dealerName: order.dealerName,
-      title: 'Proforma Invoice Generated',
-      message: `Proforma Invoice ${savedInvoice.invoiceNumber} generated for order ${order.orderNumber}.`,
-      notificationType: 'DEALER_PI_GENERATED',
-      createdBy: user?.id || null,
-      createdByName: user?.name || user?.email || '',
-    });
+    const portalDealer =
+  await this.resolvePortalDealerFromBusinessDealerId(
+    Number(
+      order.dealerId,
+    ),
+  );
 
-    await this.dealerNotificationRepository.save(notification);
+if (portalDealer) {
+  const notification =
+    this.dealerNotificationRepository
+      .create({
+        dealerId:
+          portalDealer.id,
+
+        dealerName:
+          portalDealer.dealerName,
+
+        title:
+          'Proforma Invoice Generated',
+
+        message:
+          `Proforma Invoice ${savedInvoice.invoiceNumber} generated for order ${order.orderNumber}.`,
+
+        notificationType:
+          'DEALER_PI_GENERATED',
+
+        createdBy:
+          user?.id ||
+          user?.userId ||
+          null,
+
+        createdByName:
+          user?.name ||
+          user?.email ||
+          '',
+      });
+
+  await this
+    .dealerNotificationRepository
+    .save(
+      notification,
+    );
+}
 
     return {
       invoice: savedInvoice,
@@ -1483,14 +1808,28 @@ async savePortalCompanySetting(body: any) {
   });
 }
 
-    async createDealerOrder(dealerId: number, body: any) {
-    const dealer = await this.dealerRepository.findOne({
-      where: { id: dealerId, isHidden: false },
-    });
+    async createDealerOrder(
+  dealerId: number,
+  body: any,
+) {
+  const identity =
+    await this.getDealerIdentity(
+      dealerId,
+    );
 
-    if (!dealer) {
-      throw new NotFoundException('Dealer not found');
-    }
+  const dealer =
+    identity.dealer;
+
+  if (
+    !identity.projectVendorId
+  ) {
+    throw new BadRequestException(
+      'Dealer portal account is not linked to Trading dealer master. Please contact admin.',
+    );
+  }
+
+  const canonicalDealerId =
+    identity.projectVendorId;
 
     const items = Array.isArray(body.items) ? body.items : [];
 
@@ -1600,7 +1939,8 @@ if (
 
     const order = new ProjectDealerOrder();
 
-order.dealerId = dealer.id;
+order.dealerId =
+  canonicalDealerId;
 order.dealerName = dealer.dealerName;
 order.dealerPhone = dealer.phone;
 order.dealerGstNumber = dealer.gstNumber;
@@ -1848,75 +2188,192 @@ return {
 };
   }
 
-    async listDealerOrders(dealerId: number, query: any) {
-    const page = Number(query?.page || 1);
-    const limit = Math.min(Number(query?.limit || 20), 100);
-    const skip = (page - 1) * limit;
+    async listDealerOrders(
+  dealerId: number,
+  query: any,
+) {
+  const identity =
+    await this.getDealerIdentity(
+      dealerId,
+    );
 
-    const qb = this.dealerOrderRepository
-      .createQueryBuilder('order')
-      .where('order.dealerId = :dealerId', { dealerId })
-      .andWhere('order.isHidden = false')
-      .orderBy('order.createdAt', 'DESC');
+  const page =
+    Number(query?.page || 1);
 
-    if (query?.status) {
-      qb.andWhere('order.status = :status', { status: query.status });
-    }
+  const limit =
+    Math.min(
+      Number(
+        query?.limit || 20,
+      ),
+      100,
+    );
 
-    if (query?.paymentType) {
-      qb.andWhere('order.paymentType = :paymentType', {
-        paymentType: query.paymentType,
-      });
-    }
+  const skip =
+    (page - 1) * limit;
 
-    const [data, total] = await qb.skip(skip).take(limit).getManyAndCount();
+  const qb =
+    this.dealerOrderRepository
+      .createQueryBuilder(
+        'order',
+      )
+      .where(
+        'order.dealerId IN (:...dealerIds)',
+        {
+          dealerIds:
+            identity.businessDealerIds,
+        },
+      )
+      .andWhere(
+        'order.isHidden = false',
+      )
+      .orderBy(
+        'order.createdAt',
+        'DESC',
+      );
 
-    return {
-      data,
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit) || 1,
-    };
-  }
-
-  async getDealerOrderDetail(dealerId: number, orderId: number) {
-    const order = await this.dealerOrderRepository.findOne({
-      where: {
-        id: orderId,
-        dealerId,
-        isHidden: false,
+  if (
+    query?.status
+  ) {
+    qb.andWhere(
+      'order.status = :status',
+      {
+        status:
+          query.status,
       },
-    });
-
-    if (!order) {
-      throw new NotFoundException('Dealer order not found');
-    }
-
-    const items = await this.dealerOrderItemRepository.find({
-      where: { dealerOrderId: order.id },
-      order: { createdAt: 'ASC' },
-    });
-
-    const payments = await this.dealerPaymentRepository.find({
-      where: { dealerOrderId: order.id, dealerId },
-      order: { createdAt: 'DESC' },
-    });
-
-    return {
-      order,
-      items,
-      payments,
-    };
+    );
   }
+
+  if (
+    query?.paymentType
+  ) {
+    qb.andWhere(
+      'order.paymentType = :paymentType',
+      {
+        paymentType:
+          query.paymentType,
+      },
+    );
+  }
+
+  const [
+    data,
+    total,
+  ] =
+    await qb
+      .skip(skip)
+      .take(limit)
+      .getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+
+    totalPages:
+      Math.ceil(
+        total / limit,
+      ) || 1,
+  };
+}
+
+  async getDealerOrderDetail(
+  dealerId: number,
+  orderId: number,
+) {
+  const identity =
+    await this.getDealerIdentity(
+      dealerId,
+    );
+
+  const order =
+    await this.dealerOrderRepository
+      .createQueryBuilder(
+        'order',
+      )
+      .where(
+        'order.id = :orderId',
+        {
+          orderId,
+        },
+      )
+      .andWhere(
+        'order.dealerId IN (:...dealerIds)',
+        {
+          dealerIds:
+            identity.businessDealerIds,
+        },
+      )
+      .andWhere(
+        'order.isHidden = false',
+      )
+      .getOne();
+
+  if (!order) {
+    throw new NotFoundException(
+      'Dealer order not found',
+    );
+  }
+
+  const items =
+    await this
+      .dealerOrderItemRepository
+      .find({
+        where: {
+          dealerOrderId:
+            order.id,
+        },
+
+        order: {
+          createdAt:
+            'ASC',
+        },
+      });
+
+  /*
+   * Order ownership was already verified.
+   *
+   * Do not filter payment.dealerId here,
+   * because legacy payments can also use
+   * the old portal Dealer.id namespace.
+   */
+  const payments =
+    await this
+      .dealerPaymentRepository
+      .find({
+        where: {
+          dealerOrderId:
+            order.id,
+        },
+
+        order: {
+          createdAt:
+            'DESC',
+        },
+      });
+
+  return {
+    order,
+    items,
+    payments,
+  };
+}
 
   async getDealerOrderDocumentsForPortal(
   dealerId: number,
   orderId: number,
 ) {
+  const detail =
+    await this.getDealerOrderDetail(
+      dealerId,
+      orderId,
+    );
+
   return this.projectService
     .listDealerOrderDocumentsForPortal(
-      dealerId,
+      Number(
+        detail.order.dealerId,
+      ),
       orderId,
     );
 }
@@ -1928,24 +2385,41 @@ async uploadDealerOrderDocumentForPortal(
   body: any,
   user: any,
 ) {
+  const detail =
+    await this.getDealerOrderDetail(
+      dealerId,
+      orderId,
+    );
+
+  const order =
+    detail.order;
+
   return this.projectService
     .uploadDealerOrderDocumentForPortal(
-      dealerId,
+      Number(
+        order.dealerId,
+      ),
       file,
       {
         ...body,
 
-        /*
-         * Route is authoritative.
-         */
         dealerOrderId:
-          orderId,
+          order.id,
       },
       {
         ...user,
 
+        /*
+         * Keep portal user identity
+         * as the actor.
+         */
         id:
           dealerId,
+
+        dealerName:
+          user?.dealerName ||
+          order.dealerName ||
+          '',
 
         roles: [
           'DEALER',
@@ -1981,11 +2455,22 @@ async updateDealerOrderDocumentForPortal(
   body: any,
   user: any,
 ) {
+  const detail =
+    await this.getDealerOrderDetail(
+      dealerId,
+      orderId,
+    );
+
+  const order =
+    detail.order;
+
   const result =
     await this.projectService
       .listDealerOrderDocumentsForPortal(
-        dealerId,
-        orderId,
+        Number(
+          order.dealerId,
+        ),
+        order.id,
       );
 
   const documents =
@@ -2015,8 +2500,16 @@ async updateDealerOrderDocumentForPortal(
       {
         ...user,
 
+        /*
+         * Actor remains portal dealer.
+         */
         id:
           dealerId,
+
+        dealerName:
+          user?.dealerName ||
+          order.dealerName ||
+          '',
 
         roles: [
           'DEALER',
@@ -2154,7 +2647,6 @@ private async recalculateDealerOrderPaymentFromApprovedPayments(
   const approvedPayments = await this.dealerPaymentRepository.find({
     where: {
       dealerOrderId: order.id,
-      dealerId: order.dealerId,
       status: 'APPROVED' as any,
     },
   });
@@ -2173,71 +2665,177 @@ private async recalculateDealerOrderPaymentFromApprovedPayments(
   return this.dealerOrderRepository.save(order);
 }
 
-    async createDealerPayment(dealerId: number, body: any) {
-  const dealer = await this.dealerRepository.findOne({
-    where: { id: dealerId, isHidden: false },
-  });
+    async createDealerPayment(
+  dealerId: number,
+  body: any,
+) {
+  const identity =
+    await this.getDealerIdentity(
+      dealerId,
+    );
 
-  if (!dealer) {
-    throw new NotFoundException('Dealer not found');
-  }
+  const dealer =
+    identity.dealer;
 
-  const orderId = Number(body.dealerOrderId || 0);
+    /*
+ * Every NEW payment is shared business data,
+ * so it must use ProjectVendor.id.
+ */
+if (
+  !identity.projectVendorId
+) {
+  throw new BadRequestException(
+    'Dealer portal account is not linked to Trading dealer master. Please contact admin.',
+  );
+}
+
+  const orderId =
+    Number(
+      body.dealerOrderId || 0,
+    );
 
   if (!orderId) {
-    throw new NotFoundException('Dealer order is required');
+    throw new NotFoundException(
+      'Dealer order is required',
+    );
   }
 
-  const order = await this.dealerOrderRepository.findOne({
-    where: {
-      id: orderId,
-      dealerId,
-      isHidden: false,
-    },
-  });
+  const order =
+    await this.dealerOrderRepository
+      .createQueryBuilder(
+        'order',
+      )
+      .where(
+        'order.id = :orderId',
+        {
+          orderId,
+        },
+      )
+      .andWhere(
+        'order.dealerId IN (:...dealerIds)',
+        {
+          dealerIds:
+            identity.businessDealerIds,
+        },
+      )
+      .andWhere(
+        'order.isHidden = false',
+      )
+      .getOne();
 
   if (!order) {
-    throw new NotFoundException('Dealer order not found');
+    throw new NotFoundException(
+      'Dealer order not found',
+    );
   }
 
-  const amount = Number(body.amount || 0);
+  const amount =
+    Number(
+      body.amount || 0,
+    );
 
   if (amount <= 0) {
-    throw new NotFoundException('Payment amount is required');
+    throw new NotFoundException(
+      'Payment amount is required',
+    );
   }
 
-  const payment = this.dealerPaymentRepository.create({
-    dealerOrderId: order.id,
-    dealerId: dealer.id,
-    dealerName: dealer.dealerName,
-    amount,
-    paymentMode: body.paymentMode || order.paymentType || 'ONLINE',
-    transactionId: body.transactionId || '',
-    receiptUrl: body.receiptUrl || '',
-    remarks: body.remarks || '',
-    status: 'SUBMITTED' as any,
-    createdBy: dealer.id,
-    createdByName: dealer.dealerName,
-  });
+  const payment =
+    this.dealerPaymentRepository.create({
+      dealerOrderId:
+        order.id,
 
-  const savedPayment = await this.dealerPaymentRepository.save(payment);
+      /*
+ * Canonical business identity.
+ *
+ * Even if this is a historical order whose
+ * dealerId still contains old Dealer.id,
+ * every NEW payment must use ProjectVendor.id.
+ */
+dealerId:
+  identity.projectVendorId,
 
-  const notification = this.dealerNotificationRepository.create({
-    dealerId: dealer.id,
-    dealerName: dealer.dealerName,
-    title: 'Payment Submitted',
-    message: `Payment of ₹${amount} submitted for order ${order.orderNumber}.`,
-    notificationType: 'DEALER_PAYMENT',
-    createdBy: dealer.id,
-    createdByName: dealer.dealerName,
-  });
+      dealerName:
+        dealer.dealerName,
 
-  await this.dealerNotificationRepository.save(notification);
+      amount,
+
+      paymentMode:
+        body.paymentMode ||
+        order.paymentType ||
+        'ONLINE',
+
+      transactionId:
+        body.transactionId || '',
+
+      receiptUrl:
+        body.receiptUrl || '',
+
+      remarks:
+        body.remarks || '',
+
+      status:
+        'SUBMITTED' as any,
+
+      /*
+       * Creator is still portal Dealer.
+       */
+      createdBy:
+        dealer.id,
+
+      createdByName:
+        dealer.dealerName,
+    });
+
+  const savedPayment =
+    await this
+      .dealerPaymentRepository
+      .save(payment);
+
+  /*
+   * Notification belongs to
+   * portal Dealer identity.
+   *
+   * Do NOT change this to
+   * order.dealerId.
+   */
+  const notification =
+    this.dealerNotificationRepository
+      .create({
+        dealerId:
+          dealer.id,
+
+        dealerName:
+          dealer.dealerName,
+
+        title:
+          'Payment Submitted',
+
+        message:
+          `Payment of ₹${amount} submitted for order ${order.orderNumber}.`,
+
+        notificationType:
+          'DEALER_PAYMENT',
+
+        createdBy:
+          dealer.id,
+
+        createdByName:
+          dealer.dealerName,
+      });
+
+  await this
+    .dealerNotificationRepository
+    .save(notification);
 
   return {
-    payment: savedPayment,
+    payment:
+      savedPayment,
+
     order,
-    message: 'Payment submitted successfully',
+
+    message:
+      'Payment submitted successfully',
   };
 }
 
@@ -2578,86 +3176,192 @@ const bucket =
 }
 
     async createDealerOrderComment(
-    dealerId: number,
-    orderId: number,
-    body: any,
-    user: any,
-  ) {
-    const dealer = await this.dealerRepository.findOne({
-      where: { id: dealerId, isHidden: false },
-    });
+  dealerId: number,
+  orderId: number,
+  body: any,
+  user: any,
+) {
+  const identity =
+    await this.getDealerIdentity(
+      dealerId,
+    );
 
-    if (!dealer) {
-      throw new NotFoundException('Dealer not found');
-    }
+  const dealer =
+    identity.dealer;
 
-    const order = await this.dealerOrderRepository.findOne({
-      where: {
-        id: orderId,
-        dealerId,
-        isHidden: false,
-      },
-    });
+  const order =
+    await this.dealerOrderRepository
+      .createQueryBuilder('order')
+      .where(
+        'order.id = :orderId',
+        {
+          orderId,
+        },
+      )
+      .andWhere(
+        'order.dealerId IN (:...dealerIds)',
+        {
+          dealerIds:
+            identity.businessDealerIds,
+        },
+      )
+      .andWhere(
+        'order.isHidden = false',
+      )
+      .getOne();
 
-    if (!order) {
-      throw new NotFoundException('Dealer order not found');
-    }
-
-    const commentText = String(body.comment || '').trim();
-
-    if (!commentText) {
-      throw new NotFoundException('Comment is required');
-    }
-
-    const comment = this.dealerCommentRepository.create({
-      dealerOrderId: order.id,
-      dealerId: dealer.id,
-      dealerName: dealer.dealerName,
-      comment: commentText,
-      commentType: body.commentType || 'DEALER_COMMENT',
-      createdBy: user?.id || dealer.id,
-      createdByName: user?.name || dealer.dealerName,
-      createdByRole: 'DEALER',
-    });
-
-    const savedComment = await this.dealerCommentRepository.save(comment);
-
-    const notification = this.dealerNotificationRepository.create({
-      dealerId: dealer.id,
-      dealerName: dealer.dealerName,
-      title: 'Comment Added',
-      message: `A comment was added on order ${order.orderNumber}.`,
-      notificationType: 'DEALER_ORDER_COMMENT',
-      createdBy: dealer.id,
-      createdByName: dealer.dealerName,
-    });
-
-    await this.dealerNotificationRepository.save(notification);
-
-    return savedComment;
+  if (!order) {
+    throw new NotFoundException(
+      'Dealer order not found',
+    );
   }
 
-  async listDealerOrderComments(dealerId: number, orderId: number) {
-    const order = await this.dealerOrderRepository.findOne({
-      where: {
-        id: orderId,
-        dealerId,
-        isHidden: false,
-      },
-    });
+  const commentText =
+    String(
+      body.comment || '',
+    ).trim();
 
-    if (!order) {
-      throw new NotFoundException('Dealer order not found');
-    }
-
-    return this.dealerCommentRepository.find({
-      where: {
-        dealerOrderId: order.id,
-        dealerId,
-      },
-      order: { createdAt: 'ASC' },
-    });
+  if (!commentText) {
+    throw new NotFoundException(
+      'Comment is required',
+    );
   }
+
+  const comment =
+    this.dealerCommentRepository.create({
+      dealerOrderId:
+        order.id,
+
+      /*
+       * Comment follows the same business
+       * identity stored on the order.
+       */
+      dealerId:
+        order.dealerId,
+
+      dealerName:
+        dealer.dealerName,
+
+      comment:
+        commentText,
+
+      commentType:
+        body.commentType ||
+        'DEALER_COMMENT',
+
+      /*
+       * Actor remains the portal Dealer.
+       */
+      createdBy:
+        user?.id ||
+        dealer.id,
+
+      createdByName:
+        user?.name ||
+        dealer.dealerName,
+
+      createdByRole:
+        'DEALER',
+    });
+
+  const savedComment =
+    await this
+      .dealerCommentRepository
+      .save(comment);
+
+  /*
+   * Notification stays on the
+   * portal Dealer identity.
+   */
+  const notification =
+    this.dealerNotificationRepository
+      .create({
+        dealerId:
+          dealer.id,
+
+        dealerName:
+          dealer.dealerName,
+
+        title:
+          'Comment Added',
+
+        message:
+          `A comment was added on order ${order.orderNumber}.`,
+
+        notificationType:
+          'DEALER_ORDER_COMMENT',
+
+        createdBy:
+          dealer.id,
+
+        createdByName:
+          dealer.dealerName,
+      });
+
+  await this
+    .dealerNotificationRepository
+    .save(notification);
+
+  return savedComment;
+}
+
+  async listDealerOrderComments(
+  dealerId: number,
+  orderId: number,
+) {
+  const identity =
+    await this.getDealerIdentity(
+      dealerId,
+    );
+
+  const order =
+    await this.dealerOrderRepository
+      .createQueryBuilder('order')
+      .where(
+        'order.id = :orderId',
+        {
+          orderId,
+        },
+      )
+      .andWhere(
+        'order.dealerId IN (:...dealerIds)',
+        {
+          dealerIds:
+            identity.businessDealerIds,
+        },
+      )
+      .andWhere(
+        'order.isHidden = false',
+      )
+      .getOne();
+
+  if (!order) {
+    throw new NotFoundException(
+      'Dealer order not found',
+    );
+  }
+
+  /*
+   * Ownership is already verified
+   * through the order.
+   *
+   * Do not filter comments again
+   * by dealerId because historical
+   * comments may use the old namespace.
+   */
+  return this.dealerCommentRepository
+    .find({
+      where: {
+        dealerOrderId:
+          order.id,
+      },
+
+      order: {
+        createdAt:
+          'ASC',
+      },
+    });
+}
 
     async listDealerNotifications(dealerId: number, query: any) {
     const page = Number(query?.page || 1);
@@ -2703,81 +3407,208 @@ const bucket =
     return this.dealerNotificationRepository.save(notification);
   }
 
-    async createMonthlyRequirement(dealerId: number, body: any, user: any) {
-    const dealer = await this.dealerRepository.findOne({
-      where: { id: dealerId, isHidden: false },
-    });
+    async createMonthlyRequirement(
+  dealerId: number,
+  body: any,
+  user: any,
+) {
+  const identity =
+    await this.getDealerIdentity(
+      dealerId,
+    );
 
-    if (!dealer) {
-      throw new NotFoundException('Dealer not found');
-    }
+  const dealer =
+    identity.dealer;
 
-    const materialId = Number(body.materialId || 0);
-    const expectedQuantity = Number(body.expectedQuantity || 0);
-
-    if (!materialId) {
-      throw new NotFoundException('Material is required');
-    }
-
-    if (expectedQuantity <= 0) {
-      throw new NotFoundException('Expected quantity is required');
-    }
-
-    const material = await this.materialRepository.findOne({
-      where: { id: materialId, isActive: true },
-    });
-
-    if (!material) {
-      throw new NotFoundException('Material not found');
-    }
-
-    const requirement = this.dealerMonthlyRequirementRepository.create({
-      dealerId: dealer.id,
-      dealerName: dealer.dealerName,
-      materialId: material.id,
-      materialName: material.name,
-      category: material.category,
-      brand: material.brand,
-      unit: material.unit,
-      requirementMonth:
-        body.requirementMonth ||
-        `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`,
-      expectedQuantity,
-      remarks: body.remarks || '',
-      createdBy: user?.id || dealer.id,
-      createdByName: user?.name || dealer.dealerName,
-    });
-
-    return this.dealerMonthlyRequirementRepository.save(requirement);
+  /*
+   * New shared business records should
+   * always use ProjectVendor.id.
+   */
+  if (
+    !identity.projectVendorId
+  ) {
+    throw new BadRequestException(
+      'Dealer portal account is not linked to Trading dealer master. Please contact admin.',
+    );
   }
 
-  async listMonthlyRequirements(dealerId: number, query: any) {
-    const page = Number(query?.page || 1);
-    const limit = Math.min(Number(query?.limit || 20), 100);
-    const skip = (page - 1) * limit;
+  const materialId =
+    Number(
+      body.materialId || 0,
+    );
 
-    const qb = this.dealerMonthlyRequirementRepository
-      .createQueryBuilder('requirement')
-      .where('requirement.dealerId = :dealerId', { dealerId })
-      .andWhere('requirement.isHidden = false')
-      .orderBy('requirement.createdAt', 'DESC');
+  const expectedQuantity =
+    Number(
+      body.expectedQuantity || 0,
+    );
 
-    if (query?.requirementMonth) {
-      qb.andWhere('requirement.requirementMonth = :requirementMonth', {
-        requirementMonth: query.requirementMonth,
+  if (!materialId) {
+    throw new NotFoundException(
+      'Material is required',
+    );
+  }
+
+  if (
+    expectedQuantity <= 0
+  ) {
+    throw new NotFoundException(
+      'Expected quantity is required',
+    );
+  }
+
+  const material =
+    await this.materialRepository.findOne({
+      where: {
+        id:
+          materialId,
+
+        isActive:
+          true,
+      },
+    });
+
+  if (!material) {
+    throw new NotFoundException(
+      'Material not found',
+    );
+  }
+
+  const requirement =
+    this.dealerMonthlyRequirementRepository
+      .create({
+        /*
+         * Canonical business identity.
+         */
+        dealerId:
+          identity.projectVendorId,
+
+        dealerName:
+          dealer.dealerName,
+
+        materialId:
+          material.id,
+
+        materialName:
+          material.name,
+
+        category:
+          material.category,
+
+        brand:
+          material.brand,
+
+        unit:
+          material.unit,
+
+        requirementMonth:
+          body.requirementMonth ||
+          `${new Date().getFullYear()}-${String(
+            new Date().getMonth() +
+              1,
+          ).padStart(2, '0')}`,
+
+        expectedQuantity,
+
+        remarks:
+          body.remarks || '',
+
+        /*
+         * Creator remains portal Dealer.
+         */
+        createdBy:
+          user?.id ||
+          dealer.id,
+
+        createdByName:
+          user?.name ||
+          dealer.dealerName,
       });
-    }
 
-    const [data, total] = await qb.skip(skip).take(limit).getManyAndCount();
+  return this
+    .dealerMonthlyRequirementRepository
+    .save(
+      requirement,
+    );
+}
 
-    return {
-      data,
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit) || 1,
-    };
+  async listMonthlyRequirements(
+  dealerId: number,
+  query: any,
+) {
+  const identity =
+    await this.getDealerIdentity(
+      dealerId,
+    );
+
+  const page =
+    Number(
+      query?.page || 1,
+    );
+
+  const limit =
+    Math.min(
+      Number(
+        query?.limit || 20,
+      ),
+      100,
+    );
+
+  const skip =
+    (page - 1) * limit;
+
+  const qb =
+    this.dealerMonthlyRequirementRepository
+      .createQueryBuilder(
+        'requirement',
+      )
+      .where(
+        'requirement.dealerId IN (:...dealerIds)',
+        {
+          dealerIds:
+            identity.businessDealerIds,
+        },
+      )
+      .andWhere(
+        'requirement.isHidden = false',
+      )
+      .orderBy(
+        'requirement.createdAt',
+        'DESC',
+      );
+
+  if (
+    query?.requirementMonth
+  ) {
+    qb.andWhere(
+      'requirement.requirementMonth = :requirementMonth',
+      {
+        requirementMonth:
+          query.requirementMonth,
+      },
+    );
   }
+
+  const [
+    data,
+    total,
+  ] =
+    await qb
+      .skip(skip)
+      .take(limit)
+      .getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+
+    totalPages:
+      Math.ceil(
+        total / limit,
+      ) || 1,
+  };
+}
 
     async updateDealerOrderStatus(orderId: number, body: any, user: any) {
     const order = await this.dealerOrderRepository.findOne({
@@ -2804,21 +3635,62 @@ const bucket =
       order.deliveredAt = new Date();
     }
 
-    const savedOrder = await this.dealerOrderRepository.save(order);
+    const savedOrder =
+  await this.dealerOrderRepository.save(
+    order,
+  );
 
-    const notification = this.dealerNotificationRepository.create({
-      dealerId: savedOrder.dealerId,
-      dealerName: savedOrder.dealerName,
-      title: 'Order Status Updated',
-      message: `Your order ${savedOrder.orderNumber} status is now ${savedOrder.status}.`,
-      notificationType: 'DEALER_ORDER_STATUS',
-      createdBy: user?.id || null,
-      createdByName: user?.name || user?.email || '',
-    });
+/*
+ * Resolve the portal Dealer account.
+ *
+ * New orders store ProjectVendor.id in order.dealerId,
+ * but notifications must use Dealer.id.
+ */
+const portalDealer =
+  await this.resolvePortalDealerFromBusinessDealerId(
+    Number(
+      savedOrder.dealerId,
+    ),
+  );
 
-    await this.dealerNotificationRepository.save(notification);
+if (portalDealer) {
+  const notification =
+    this.dealerNotificationRepository
+      .create({
+        dealerId:
+          portalDealer.id,
 
-    return savedOrder;
+        dealerName:
+          portalDealer.dealerName,
+
+        title:
+          'Order Status Updated',
+
+        message:
+          `Your order ${savedOrder.orderNumber} status is now ${savedOrder.status}.`,
+
+        notificationType:
+          'DEALER_ORDER_STATUS',
+
+        createdBy:
+          user?.id ||
+          user?.userId ||
+          null,
+
+        createdByName:
+          user?.name ||
+          user?.email ||
+          '',
+      });
+
+  await this
+    .dealerNotificationRepository
+    .save(
+      notification,
+    );
+}
+
+return savedOrder;
   }
 
   async updateDealerOrderItem(
@@ -2967,17 +3839,48 @@ const bucket =
 
   await this.dealerOrderRepository.save(order);
 
-  const notification = this.dealerNotificationRepository.create({
-    dealerId: order.dealerId,
-    dealerName: order.dealerName,
-    title: 'Order Item Updated',
-    message: `Order item updated in order ${order.orderNumber}.`,
-    notificationType: 'DEALER_ORDER_ITEM',
-    createdBy: user?.id || null,
-    createdByName: user?.name || user?.email || '',
-  });
+  const portalDealer =
+  await this.resolvePortalDealerFromBusinessDealerId(
+    Number(
+      order.dealerId,
+    ),
+  );
 
-  await this.dealerNotificationRepository.save(notification);
+if (portalDealer) {
+  const notification =
+    this.dealerNotificationRepository.create({
+      dealerId:
+        portalDealer.id,
+
+      dealerName:
+        portalDealer.dealerName,
+
+      title:
+        'Order Item Updated',
+
+      message:
+        `Order item updated in order ${order.orderNumber}.`,
+
+      notificationType:
+        'DEALER_ORDER_ITEM',
+
+      createdBy:
+        user?.id ||
+        user?.userId ||
+        null,
+
+      createdByName:
+        user?.name ||
+        user?.email ||
+        '',
+    });
+
+  await this
+    .dealerNotificationRepository
+    .save(
+      notification,
+    );
+}
 
   return {
     order,
@@ -2986,76 +3889,183 @@ const bucket =
   };
 }
 
-    async approveDealerPayment(paymentId: number, body: any, user: any) {
-    const payment = await this.dealerPaymentRepository.findOne({
-      where: { id: paymentId },
-    });
-
-    if (!payment) {
-      throw new NotFoundException('Dealer payment not found');
-    }
-
-    const order = await this.dealerOrderRepository.findOne({
+    async approveDealerPayment(
+  paymentId: number,
+  body: any,
+  user: any,
+) {
+  const payment =
+    await this.dealerPaymentRepository.findOne({
       where: {
-        id: payment.dealerOrderId,
-        dealerId: payment.dealerId,
-        isHidden: false,
+        id: paymentId,
       },
     });
 
-    if (!order) {
-      throw new NotFoundException('Dealer order not found');
-    }
+  if (!payment) {
+    throw new NotFoundException(
+      'Dealer payment not found',
+    );
+  }
 
-    payment.status = body.status || 'APPROVED';
-    payment.approvalNote = body.approvalNote || payment.approvalNote;
-    payment.approvedBy = user?.id || null;
-    payment.approvedByName = user?.name || user?.email || '';
-    payment.approvedAt = new Date();
+  const order =
+    await this.dealerOrderRepository.findOne({
+      where: {
+        id:
+          payment.dealerOrderId,
 
-    const savedPayment = await this.dealerPaymentRepository.save(payment);
-
-    if (savedPayment.status === 'APPROVED') {
-      await this.recalculateDealerOrderPaymentFromApprovedPayments(
-  order.id,
-);
-
-      await this.projectService.postFinanceLedgerEntry({
-  partyId: Number(savedPayment.dealerId || 0) || null,
-  partyName:
-    savedPayment.dealerName ||
-    order.dealerName ||
-    `Dealer #${savedPayment.dealerId}`,
-  partyType: 'DEALER',
-  projectId: null,
-  entryType: ProjectLedgerEntryType.CREDIT,
-  sourceType: ProjectLedgerSourceType.CUSTOMER_PAYMENT,
-  sourceId: savedPayment.id,
-  amount: Number(savedPayment.amount || 0),
-  remarks: `Dealer payment approved - Order ${
-    order.orderNumber || order.id
-  }`,
-  user,
-});
-    }
-
-    const notification = this.dealerNotificationRepository.create({
-      dealerId: order.dealerId,
-      dealerName: order.dealerName,
-      title: 'Payment Updated',
-      message: `Your payment for order ${order.orderNumber} is now ${savedPayment.status}.`,
-      notificationType: 'DEALER_PAYMENT_STATUS',
-      createdBy: user?.id || null,
-      createdByName: user?.name || user?.email || '',
+        isHidden:
+          false,
+      },
     });
 
-    await this.dealerNotificationRepository.save(notification);
-
-    return {
-      payment: savedPayment,
-      order,
-    };
+  if (!order) {
+    throw new NotFoundException(
+      'Dealer order not found',
+    );
   }
+
+  payment.status =
+    body.status ||
+    'APPROVED';
+
+  payment.approvalNote =
+    body.approvalNote ||
+    payment.approvalNote;
+
+  payment.approvedBy =
+    user?.id ||
+    null;
+
+  payment.approvedByName =
+    user?.name ||
+    user?.email ||
+    '';
+
+  payment.approvedAt =
+    new Date();
+
+  const savedPayment =
+    await this.dealerPaymentRepository.save(
+      payment,
+    );
+
+  /*
+   * Resolve the portal dealer here,
+   * OUTSIDE the APPROVED block.
+   *
+   * This is needed both for:
+   * 1. canonical ledger party ID
+   * 2. portal notification
+   */
+  const portalDealer =
+    await this.resolvePortalDealerFromBusinessDealerId(
+      Number(
+        order.dealerId,
+      ),
+    );
+
+  const canonicalDealerId =
+    Number(
+      portalDealer?.projectVendorId ||
+      order.dealerId ||
+      0,
+    );
+
+  if (
+    savedPayment.status ===
+    'APPROVED'
+  ) {
+    await this
+      .recalculateDealerOrderPaymentFromApprovedPayments(
+        order.id,
+      );
+
+    await this.projectService
+      .postFinanceLedgerEntry({
+        partyId:
+          canonicalDealerId ||
+          null,
+
+        partyName:
+          savedPayment.dealerName ||
+          order.dealerName ||
+          `Dealer #${canonicalDealerId}`,
+
+        partyType:
+          'DEALER',
+
+        projectId:
+          null,
+
+        entryType:
+          ProjectLedgerEntryType.CREDIT,
+
+        sourceType:
+          ProjectLedgerSourceType.CUSTOMER_PAYMENT,
+
+        sourceId:
+          savedPayment.id,
+
+        amount:
+          Number(
+            savedPayment.amount ||
+            0,
+          ),
+
+        remarks:
+          `Dealer payment approved - Order ${
+            order.orderNumber ||
+            order.id
+          }`,
+
+        user,
+      });
+  }
+
+  if (portalDealer) {
+    const notification =
+      this.dealerNotificationRepository
+        .create({
+          dealerId:
+            portalDealer.id,
+
+          dealerName:
+            portalDealer.dealerName,
+
+          title:
+            'Payment Updated',
+
+          message:
+            `Your payment for order ${order.orderNumber} is now ${savedPayment.status}.`,
+
+          notificationType:
+            'DEALER_PAYMENT_STATUS',
+
+          createdBy:
+            user?.id ||
+            user?.userId ||
+            null,
+
+          createdByName:
+            user?.name ||
+            user?.email ||
+            '',
+        });
+
+    await this
+      .dealerNotificationRepository
+      .save(
+        notification,
+      );
+  }
+
+  return {
+    payment:
+      savedPayment,
+
+    order,
+  };
+}
 
   @Cron('0 * * * * *')
 async publishDueDealerAnnouncements() {
@@ -3164,11 +4174,22 @@ async publishDueDealerAnnouncements() {
       .getMany();
 
     for (const order of overdueOrders) {
+        const portalDealer =
+  await this.resolvePortalDealerFromBusinessDealerId(
+    Number(
+      order.dealerId,
+    ),
+  );
+
+if (!portalDealer) {
+  continue;
+}
       const alreadySentToday =
         await this.dealerNotificationRepository
           .createQueryBuilder('notification')
           .where('notification.dealerId = :dealerId', {
-            dealerId: order.dealerId,
+            dealerId:
+  portalDealer.id,
           })
           .andWhere('notification.notificationType = :type', {
             type: 'CREDIT_OVERDUE_REMINDER',
@@ -3184,8 +4205,11 @@ async publishDueDealerAnnouncements() {
       }
 
       const notification = this.dealerNotificationRepository.create({
-        dealerId: order.dealerId,
-        dealerName: order.dealerName,
+        dealerId:
+  portalDealer.id,
+
+dealerName:
+  portalDealer.dealerName,
         title: 'Credit Payment Overdue',
         message: `Credit payment for order ${order.orderNumber} is overdue. Pending amount: ₹${Number(
           order.pendingAmount || 0,
@@ -3214,10 +4238,21 @@ async publishDueDealerAnnouncements() {
       .orderBy('order.createdAt', 'DESC');
 
     if (query?.dealerId) {
-      qb.andWhere('order.dealerId = :dealerId', {
-        dealerId: Number(query.dealerId),
-      });
-    }
+  const identity =
+    await this.getDealerIdentity(
+      Number(
+        query.dealerId,
+      ),
+    );
+
+  qb.andWhere(
+    'order.dealerId IN (:...dealerIds)',
+    {
+      dealerIds:
+        identity.businessDealerIds,
+    },
+  );
+}
 
     if (query?.dealerSearch) {
       const search = `%${String(query.dealerSearch).toLowerCase()}%`;
@@ -3291,10 +4326,18 @@ async publishDueDealerAnnouncements() {
       order: { createdAt: 'ASC' },
     });
 
-    const payments = await this.dealerPaymentRepository.find({
-      where: { dealerOrderId: order.id, dealerId: order.dealerId },
-      order: { createdAt: 'DESC' },
-    });
+    const payments =
+  await this.dealerPaymentRepository.find({
+    where: {
+      dealerOrderId:
+        order.id,
+    },
+
+    order: {
+      createdAt:
+        'DESC',
+    },
+  });
 
     const comments = await this.dealerCommentRepository.find({
       where: { dealerOrderId: order.id },
@@ -3319,10 +4362,21 @@ async publishDueDealerAnnouncements() {
       .orderBy('payment.createdAt', 'DESC');
 
     if (query?.dealerId) {
-      qb.andWhere('payment.dealerId = :dealerId', {
-        dealerId: Number(query.dealerId),
-      });
-    }
+  const identity =
+    await this.getDealerIdentity(
+      Number(
+        query.dealerId,
+      ),
+    );
+
+  qb.andWhere(
+    'payment.dealerId IN (:...dealerIds)',
+    {
+      dealerIds:
+        identity.businessDealerIds,
+    },
+  );
+}
 
     if (query?.dealerSearch) {
       const search = `%${String(query.dealerSearch).toLowerCase()}%`;
@@ -3389,45 +4443,111 @@ async publishDueDealerAnnouncements() {
 
   let dealer: Dealer | null = null;
 
-  if (phone || email || gstNumber) {
-    const conditions: string[] = [];
-    const params: any = {};
+  if (
+  phone ||
+  email ||
+  gstNumber
+) {
+  const conditions: string[] =
+    [];
 
-    if (phone) {
-      conditions.push('dealer.phone = :phone');
-      params.phone = phone;
-    }
+  const params: any =
+    {};
 
-    if (email) {
-      conditions.push('dealer.email = :email');
-      params.email = email;
-    }
+  if (phone) {
+    conditions.push(`
+      REGEXP_REPLACE(
+        COALESCE(
+          dealer.phone,
+          ''
+        ),
+        '[^0-9]',
+        '',
+        'g'
+      ) =
+      REGEXP_REPLACE(
+        :phone,
+        '[^0-9]',
+        '',
+        'g'
+      )
+    `);
 
-    if (gstNumber) {
-      conditions.push('dealer.gstNumber = :gstNumber');
-      params.gstNumber = gstNumber;
-    }
+    params.phone =
+      phone;
+  }
 
-    const matchedDealers = await this.dealerRepository
-      .createQueryBuilder('dealer')
-      .where(`(${conditions.join(' OR ')})`, params)
-      .orderBy('dealer.isHidden', 'ASC')
-      .addOrderBy('dealer.id', 'ASC')
+  if (email) {
+    conditions.push(`
+      LOWER(
+        TRIM(
+          COALESCE(
+            dealer.email,
+            ''
+          )
+        )
+      ) =
+      LOWER(
+        TRIM(
+          :email
+        )
+      )
+    `);
+
+    params.email =
+      email;
+  }
+
+  if (gstNumber) {
+    conditions.push(`
+      UPPER(
+        TRIM(
+          COALESCE(
+            dealer.gstNumber,
+            ''
+          )
+        )
+      ) =
+      UPPER(
+        TRIM(
+          :gstNumber
+        )
+      )
+    `);
+
+    params.gstNumber =
+      gstNumber;
+  }
+
+  const matchedDealers =
+    await this.dealerRepository
+      .createQueryBuilder(
+        'dealer',
+      )
+      .where(
+        `(${conditions.join(
+          ' OR ',
+        )})`,
+        params,
+      )
+      .orderBy(
+        'dealer.id',
+        'ASC',
+      )
       .getMany();
 
-    dealer = matchedDealers[0] || null;
-
-    if (matchedDealers.length > 1) {
-      for (const duplicate of matchedDealers.slice(1)) {
-        duplicate.isHidden = true;
-        duplicate.hiddenReason =
-          'Duplicate dealer hidden automatically during dealer create';
-        duplicate.hiddenAt = new Date();
-
-        await this.dealerRepository.save(duplicate);
-      }
-    }
+  if (
+    matchedDealers.length > 1
+  ) {
+    throw new BadRequestException(
+      'Multiple dealer portal accounts match this phone, email or GST number. Please resolve duplicate dealer records first.',
+    );
   }
+
+  dealer =
+    matchedDealers[0] ||
+    null;
+}
 
   if (!dealer) {
     dealer = this.dealerRepository.create();
@@ -4114,17 +5234,53 @@ if (deliveryCharge > 0) {
 
     await this.dealerOrderRepository.save(order);
 
-    const notification = this.dealerNotificationRepository.create({
-      dealerId: order.dealerId,
-      dealerName: order.dealerName,
-      title: 'Final Invoice Generated',
-      message: `Final Invoice ${savedInvoice.invoiceNumber} generated for order ${order.orderNumber}.`,
-      notificationType: 'DEALER_FINAL_INVOICE',
-      createdBy: user?.id || null,
-      createdByName: user?.name || user?.email || '',
-    });
+    const portalDealer =
+  await this.resolvePortalDealerFromBusinessDealerId(
+    Number(
+      order.dealerId,
+    ),
+  );
 
-    await this.dealerNotificationRepository.save(notification);
+if (portalDealer) {
+  const notification =
+    this.dealerNotificationRepository
+      .create({
+        /*
+         * Notification always belongs
+         * to portal Dealer.id.
+         */
+        dealerId:
+          portalDealer.id,
+
+        dealerName:
+          portalDealer.dealerName,
+
+        title:
+          'Final Invoice Generated',
+
+        message:
+          `Final Invoice ${savedInvoice.invoiceNumber} generated for order ${order.orderNumber}.`,
+
+        notificationType:
+          'DEALER_FINAL_INVOICE_GENERATED',
+
+        createdBy:
+          user?.id ||
+          user?.userId ||
+          null,
+
+        createdByName:
+          user?.name ||
+          user?.email ||
+          '',
+      });
+
+  await this
+    .dealerNotificationRepository
+    .save(
+      notification,
+    );
+}
 
     return {
       invoice: savedInvoice,
@@ -4132,162 +5288,495 @@ if (deliveryCharge > 0) {
     };
   }
 
-    async getDealerOrderProformaInvoice(dealerId: number, orderId: number) {
-    const order = await this.dealerOrderRepository.findOne({
-      where: { id: orderId, dealerId, isHidden: false },
-    });
+    async getDealerOrderProformaInvoice(
+  dealerId: number,
+  orderId: number,
+) {
+  const detail =
+    await this.getDealerOrderDetail(
+      dealerId,
+      orderId,
+    );
 
-    if (!order) {
-      throw new NotFoundException('Dealer order not found');
-    }
+  const order =
+    detail.order;
 
-    const invoice = await this.proformaInvoiceRepository.findOne({
-      where: {
-        dealerId,
-        invoiceType: 'DEALER',
-        invoiceNumber: `DPI-${order.id}`,
-      } as any,
-    });
+  const invoice =
+    await this.proformaInvoiceRepository
+      .createQueryBuilder('invoice')
+      .where(
+        'invoice.invoiceType = :invoiceType',
+        {
+          invoiceType:
+            'DEALER',
+        },
+      )
+      .andWhere(
+        'invoice.isHidden = false',
+      )
+      .andWhere(
+        'invoice.dealerId = :dealerId',
+        {
+          dealerId:
+            Number(
+              order.dealerId,
+            ),
+        },
+      )
+      .andWhere(
+        `(
+          invoice.invoiceNumber = :invoiceNumber
+          OR invoice.remarks LIKE :remarks
+        )`,
+        {
+          invoiceNumber:
+            `DPI-${order.id}`,
 
-    if (!invoice) {
-      throw new NotFoundException('Dealer Proforma Invoice not found');
-    }
+          remarks:
+            `%Generated from dealer order ${
+              order.orderNumber ||
+              `DO-${order.id}`
+            }%`,
+        },
+      )
+      .orderBy(
+        'invoice.createdAt',
+        'DESC',
+      )
+      .getOne();
 
-    const items = await this.proformaInvoiceItemRepository.find({
-      where: { proformaInvoiceId: invoice.id } as any,
-      order: { createdAt: 'ASC' } as any,
-    });
-
-    return {
-      order,
-      invoice,
-      items,
-    };
+  if (!invoice) {
+    throw new NotFoundException(
+      'Dealer Proforma Invoice not found',
+    );
   }
 
-  async getDealerOrderFinalInvoice(dealerId: number, orderId: number) {
-    const order = await this.dealerOrderRepository.findOne({
-      where: { id: orderId, dealerId, isHidden: false },
-    });
+  const items =
+    await this.proformaInvoiceItemRepository
+      .find({
+        where: {
+          proformaInvoiceId:
+            invoice.id,
+        } as any,
 
-    if (!order) {
-      throw new NotFoundException('Dealer order not found');
-    }
-
-    const invoice = await this.finalInvoiceRepository.findOne({
-      where: {
-        dealerId,
-        invoiceType: 'DEALER',
-        invoiceNumber: `DINV-${order.id}`,
-      } as any,
-    });
-
-    if (!invoice) {
-      throw new NotFoundException('Dealer Final Invoice not found');
-    }
-
-    const items = await this.finalInvoiceItemRepository.find({
-      where: { finalInvoiceId: invoice.id } as any,
-      order: { createdAt: 'ASC' } as any,
-    });
-
-    return {
-      order,
-      invoice,
-      items,
-    };
-  }
-
-    async getDealerAnalytics(dealerId: number) {
-    const dealer = await this.dealerRepository.findOne({
-      where: { id: dealerId, isHidden: false },
-    });
-
-    if (!dealer) {
-      throw new NotFoundException('Dealer not found');
-    }
-
-    const orders = await this.dealerOrderRepository.find({
-      where: { dealerId, isHidden: false },
-      order: { createdAt: 'DESC' },
-    });
-
-    const payments = await this.dealerPaymentRepository.find({
-      where: { dealerId },
-      order: { createdAt: 'DESC' },
-    });
-
-    const monthlyRequirements =
-      await this.dealerMonthlyRequirementRepository.find({
-        where: { dealerId, isHidden: false },
-        order: { createdAt: 'DESC' },
+        order: {
+          createdAt:
+            'ASC',
+        } as any,
       });
 
-    const totalOrderValue = orders.reduce(
-      (sum, order) => sum + Number(order.totalAmount || 0),
+  return {
+    order,
+    invoice,
+    items,
+  };
+}
+
+  async getDealerOrderFinalInvoice(
+  dealerId: number,
+  orderId: number,
+) {
+  const detail =
+    await this.getDealerOrderDetail(
+      dealerId,
+      orderId,
+    );
+
+  const order =
+    detail.order;
+
+  const orderText =
+    order.orderNumber ||
+    `DO-${order.id}`;
+
+  const searchText =
+    `Generated from dealer order ${orderText}`;
+
+  const invoice =
+    await this.finalInvoiceRepository
+      .createQueryBuilder(
+        'invoice',
+      )
+      .where(
+        'invoice.invoiceType = :invoiceType',
+        {
+          invoiceType:
+            'DEALER',
+        },
+      )
+      .andWhere(
+        'invoice.isHidden = false',
+      )
+      .andWhere(
+        `(
+          invoice.dealerId = :dealerId
+          OR
+          (
+            NULLIF(
+              TRIM(
+                COALESCE(
+                  invoice.dealerPhone,
+                  ''
+                )
+              ),
+              ''
+            ) IS NOT NULL
+
+            AND
+
+            TRIM(
+              COALESCE(
+                invoice.dealerPhone,
+                ''
+              )
+            )
+            =
+            TRIM(
+              :dealerPhone
+            )
+          )
+          OR
+          (
+            NULLIF(
+              UPPER(
+                TRIM(
+                  COALESCE(
+                    invoice.dealerGstNumber,
+                    ''
+                  )
+                )
+              ),
+              ''
+            ) IS NOT NULL
+
+            AND
+
+            UPPER(
+              TRIM(
+                COALESCE(
+                  invoice.dealerGstNumber,
+                  ''
+                )
+              )
+            )
+            =
+            UPPER(
+              TRIM(
+                :dealerGstNumber
+              )
+            )
+          )
+        )`,
+        {
+          dealerId:
+            Number(
+              order.dealerId,
+            ),
+
+          dealerPhone:
+            String(
+              order.dealerPhone ||
+              '',
+            ).trim(),
+
+          dealerGstNumber:
+            String(
+              order.dealerGstNumber ||
+              '',
+            ).trim(),
+        },
+      )
+      .andWhere(
+        `(
+          invoice.invoiceNumber = :legacyInvoiceNumber
+          OR invoice.remarks LIKE :remarks
+        )`,
+        {
+          legacyInvoiceNumber:
+            `DINV-${order.id}`,
+
+          remarks:
+            `%${searchText}%`,
+        },
+      )
+      .orderBy(
+        'invoice.createdAt',
+        'DESC',
+      )
+      .getOne();
+
+  if (!invoice) {
+    throw new NotFoundException(
+      'Dealer Final Invoice not found',
+    );
+  }
+
+  const items =
+    await this.finalInvoiceItemRepository
+      .find({
+        where: {
+          finalInvoiceId:
+            invoice.id,
+        } as any,
+
+        order: {
+          createdAt:
+            'ASC',
+        } as any,
+      });
+
+  return {
+    order,
+    invoice,
+    items,
+  };
+}
+
+    async getDealerAnalytics(
+  dealerId: number,
+) {
+  const identity =
+    await this.getDealerIdentity(
+      dealerId,
+    );
+
+  const dealer =
+    identity.dealer;
+
+  const orders =
+    await this.dealerOrderRepository
+      .createQueryBuilder('order')
+      .where(
+        'order.dealerId IN (:...dealerIds)',
+        {
+          dealerIds:
+            identity.businessDealerIds,
+        },
+      )
+      .andWhere(
+        'order.isHidden = false',
+      )
+      .orderBy(
+        'order.createdAt',
+        'DESC',
+      )
+      .getMany();
+
+  const orderIds =
+    orders.map(
+      (order) =>
+        Number(order.id),
+    );
+
+  /*
+   * Prefer relationship through order.
+   *
+   * This avoids losing old payments whose
+   * dealerId used the previous namespace.
+   */
+  const payments =
+    orderIds.length
+      ? await this.dealerPaymentRepository
+          .createQueryBuilder(
+            'payment',
+          )
+          .where(
+            'payment.dealerOrderId IN (:...orderIds)',
+            {
+              orderIds,
+            },
+          )
+          .orderBy(
+            'payment.createdAt',
+            'DESC',
+          )
+          .getMany()
+      : [];
+
+  const monthlyRequirements =
+    await this
+      .dealerMonthlyRequirementRepository
+      .createQueryBuilder(
+        'requirement',
+      )
+      .where(
+        'requirement.dealerId IN (:...dealerIds)',
+        {
+          dealerIds:
+            identity.businessDealerIds,
+        },
+      )
+      .andWhere(
+        'requirement.isHidden = false',
+      )
+      .orderBy(
+        'requirement.createdAt',
+        'DESC',
+      )
+      .getMany();
+
+  const totalOrderValue =
+    orders.reduce(
+      (sum, order) =>
+        sum +
+        Number(
+          order.totalAmount || 0,
+        ),
       0,
     );
 
-    const paidAmount = orders.reduce(
-      (sum, order) => sum + Number(order.paidAmount || 0),
+  const paidAmount =
+    orders.reduce(
+      (sum, order) =>
+        sum +
+        Number(
+          order.paidAmount || 0,
+        ),
       0,
     );
 
-    const pendingAmount = orders.reduce(
-      (sum, order) => sum + Number(order.pendingAmount || 0),
+  const pendingAmount =
+    orders.reduce(
+      (sum, order) =>
+        sum +
+        Number(
+          order.pendingAmount || 0,
+        ),
       0,
     );
 
-    const creditPendingAmount = orders
-      .filter((order) => order.paymentType === ProjectDealerPaymentType.CREDIT)
-      .reduce((sum, order) => sum + Number(order.pendingAmount || 0), 0);
+  const creditPendingAmount =
+    orders
+      .filter(
+        (order) =>
+          order.paymentType ===
+          ProjectDealerPaymentType.CREDIT,
+      )
+      .reduce(
+        (sum, order) =>
+          sum +
+          Number(
+            order.pendingAmount || 0,
+          ),
+        0,
+      );
 
-    const ordersByStatus = orders.reduce((acc: any, order: any) => {
-      acc[order.status] = (acc[order.status] || 0) + 1;
-      return acc;
-    }, {});
-
-    const paymentsByStatus = payments.reduce((acc: any, payment: any) => {
-      acc[payment.status] = (acc[payment.status] || 0) + 1;
-      return acc;
-    }, {});
-
-    const monthlyRequirementSummary = monthlyRequirements.reduce(
-      (acc: any, item: any) => {
-        const key = item.requirementMonth || 'UNKNOWN';
-
-        if (!acc[key]) {
-          acc[key] = {
-            requirementMonth: key,
-            totalMaterials: 0,
-            totalExpectedQuantity: 0,
-          };
-        }
-
-        acc[key].totalMaterials += 1;
-        acc[key].totalExpectedQuantity += Number(item.expectedQuantity || 0);
+  const ordersByStatus =
+    orders.reduce(
+      (
+        acc: any,
+        order: any,
+      ) => {
+        acc[order.status] =
+          (
+            acc[
+              order.status
+            ] || 0
+          ) + 1;
 
         return acc;
       },
       {},
     );
 
-    return {
-      dealer,
-      totalOrders: orders.length,
-      totalOrderValue,
-      paidAmount,
-      pendingAmount,
-      creditPendingAmount,
-      totalPayments: payments.length,
-      totalMonthlyRequirements: monthlyRequirements.length,
-      ordersByStatus,
-      paymentsByStatus,
-      monthlyRequirementSummary: Object.values(monthlyRequirementSummary),
-      recentOrders: orders.slice(0, 10),
-      recentPayments: payments.slice(0, 10),
-    };
-  }
+  const paymentsByStatus =
+    payments.reduce(
+      (
+        acc: any,
+        payment: any,
+      ) => {
+        acc[payment.status] =
+          (
+            acc[
+              payment.status
+            ] || 0
+          ) + 1;
+
+        return acc;
+      },
+      {},
+    );
+
+  const monthlyRequirementSummary =
+    monthlyRequirements.reduce(
+      (
+        acc: any,
+        item: any,
+      ) => {
+        const key =
+          item.requirementMonth ||
+          'UNKNOWN';
+
+        if (!acc[key]) {
+          acc[key] = {
+            requirementMonth:
+              key,
+
+            totalMaterials:
+              0,
+
+            totalExpectedQuantity:
+              0,
+          };
+        }
+
+        acc[key].totalMaterials +=
+          1;
+
+        acc[key]
+          .totalExpectedQuantity +=
+          Number(
+            item.expectedQuantity ||
+              0,
+          );
+
+        return acc;
+      },
+      {},
+    );
+
+  return {
+    dealer,
+
+    totalOrders:
+      orders.length,
+
+    totalOrderValue,
+
+    paidAmount,
+
+    pendingAmount,
+
+    creditPendingAmount,
+
+    totalPayments:
+      payments.length,
+
+    totalMonthlyRequirements:
+      monthlyRequirements.length,
+
+    ordersByStatus,
+
+    paymentsByStatus,
+
+    monthlyRequirementSummary:
+      Object.values(
+        monthlyRequirementSummary,
+      ),
+
+    recentOrders:
+      orders.slice(
+        0,
+        10,
+      ),
+
+    recentPayments:
+      payments.slice(
+        0,
+        10,
+      ),
+  };
+}
 
       async generateDealerProformaInvoicePdf(
   dealerId: number,
@@ -4483,87 +5972,195 @@ if (deliveryCharge > 0) {
     );
 }
 
-        async getDealerOrderInvoicesForPortal(dealerId: number, orderId: number) {
-  const order = await this.dealerOrderRepository.findOne({
-    where: {
-      id: orderId,
+        async getDealerOrderInvoicesForPortal(
+  dealerId: number,
+  orderId: number,
+) {
+  /*
+   * First verify that this logged-in portal dealer
+   * owns the order using our legacy + canonical
+   * compatibility logic.
+   */
+  const detail =
+    await this.getDealerOrderDetail(
       dealerId,
-      isHidden: false,
-    },
-  });
+      orderId,
+    );
 
-  if (!order) {
-    throw new NotFoundException('Dealer order not found');
-  }
+  const order =
+    detail.order;
 
-  const orderText = order.orderNumber || `DO-${order.id}`;
-  const searchText = `Generated from dealer order ${orderText}`;
+  /*
+   * IMPORTANT:
+   * Use the dealer ID actually stored on this order.
+   *
+   * Old order:
+   *   order.dealerId = Dealer.id
+   *
+   * New order:
+   *   order.dealerId = ProjectVendor.id
+   */
+  const orderDealerId =
+    Number(
+      order.dealerId,
+    );
 
-  const proformaInvoices = await this.proformaInvoiceRepository
-    .createQueryBuilder('pi')
-    .where('pi.dealerId = :dealerId', { dealerId })
-    .andWhere('pi.invoiceType = :invoiceType', { invoiceType: 'DEALER' })
-    .andWhere('pi.isHidden = false')
-    .andWhere(
-      '(pi.invoiceNumber = :invoiceNumber OR pi.remarks LIKE :remarks)',
-      {
-        invoiceNumber: `DPI-${order.id}`,
-        remarks: `%${searchText}%`,
-      },
-    )
-    .orderBy('pi.createdAt', 'DESC')
-    .getMany();
+  const orderText =
+    order.orderNumber ||
+    `DO-${order.id}`;
+
+  const searchText =
+    `Generated from dealer order ${orderText}`;
+
+  const proformaInvoices =
+    await this.proformaInvoiceRepository
+      .createQueryBuilder('pi')
+      .where(
+        'pi.dealerId = :dealerId',
+        {
+          dealerId:
+            orderDealerId,
+        },
+      )
+      .andWhere(
+        'pi.invoiceType = :invoiceType',
+        {
+          invoiceType:
+            'DEALER',
+        },
+      )
+      .andWhere(
+        'pi.isHidden = false',
+      )
+      .andWhere(
+        `(
+          pi.invoiceNumber = :invoiceNumber
+          OR pi.remarks LIKE :remarks
+        )`,
+        {
+          invoiceNumber:
+            `DPI-${order.id}`,
+
+          remarks:
+            `%${searchText}%`,
+        },
+      )
+      .orderBy(
+        'pi.createdAt',
+        'DESC',
+      )
+      .getMany();
 
   const finalInvoices =
-  await this
-    .finalInvoiceRepository
-    .createQueryBuilder(
-      'invoice',
-    )
-    .where(
-      'invoice.invoiceType = :invoiceType',
-      {
-        invoiceType:
-          'DEALER',
-      },
-    )
-    .andWhere(
-      'invoice.isHidden = false',
-    )
-    .andWhere(
-      'invoice.remarks LIKE :remarks',
-      {
-        remarks:
-          `%${searchText}%`,
-      },
-    )
-    .andWhere(
-      `(
-        LOWER(TRIM(COALESCE(invoice.dealerPhone, ''))) =
-          LOWER(TRIM(:dealerPhone))
-        OR
-        LOWER(TRIM(COALESCE(invoice.dealerGstNumber, ''))) =
-          LOWER(TRIM(:dealerGstNumber))
-      )`,
-      {
-        dealerPhone:
-          String(
-            order.dealerPhone ||
-              '',
-          ).trim(),
+    await this.finalInvoiceRepository
+      .createQueryBuilder(
+        'invoice',
+      )
+      .where(
+        'invoice.invoiceType = :invoiceType',
+        {
+          invoiceType:
+            'DEALER',
+        },
+      )
+      .andWhere(
+        'invoice.isHidden = false',
+      )
+      .andWhere(
+  `(
+    invoice.invoiceNumber = :invoiceNumber
+    OR invoice.remarks LIKE :remarks
+  )`,
+  {
+    invoiceNumber:
+      `DINV-${order.id}`,
 
-        dealerGstNumber:
-          String(
-            order.dealerGstNumber ||
+    remarks:
+      `%${searchText}%`,
+  },
+)
+      .andWhere(
+        `(
+          invoice.dealerId = :dealerId
+          OR
+          (
+            NULLIF(
+              TRIM(
+                COALESCE(
+                  invoice.dealerPhone,
+                  ''
+                )
+              ),
+              ''
+            ) IS NOT NULL
+
+            AND
+
+            TRIM(
+              COALESCE(
+                invoice.dealerPhone,
+                ''
+              )
+            )
+            =
+            TRIM(
+              :dealerPhone
+            )
+          )
+          OR
+          (
+            NULLIF(
+              UPPER(
+                TRIM(
+                  COALESCE(
+                    invoice.dealerGstNumber,
+                    ''
+                  )
+                )
+              ),
+              ''
+            ) IS NOT NULL
+
+            AND
+
+            UPPER(
+              TRIM(
+                COALESCE(
+                  invoice.dealerGstNumber,
+                  ''
+                )
+              )
+            )
+            =
+            UPPER(
+              TRIM(
+                :dealerGstNumber
+              )
+            )
+          )
+        )`,
+        {
+          dealerId:
+            orderDealerId,
+
+          dealerPhone:
+            String(
+              order.dealerPhone ||
               '',
-          ).trim(),
-      },
-    )
-    .orderBy(
-      'invoice.createdAt',
-      'DESC',
-    )
-    .getMany();
+            ).trim(),
+
+          dealerGstNumber:
+            String(
+              order.dealerGstNumber ||
+              '',
+            ).trim(),
+        },
+      )
+      .orderBy(
+        'invoice.createdAt',
+        'DESC',
+      )
+      .getMany();
 
   return {
     proformaInvoices,

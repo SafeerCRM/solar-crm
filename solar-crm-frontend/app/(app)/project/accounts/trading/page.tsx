@@ -2402,38 +2402,23 @@ useEffect(() => {
 
         alert('Dealer updated successfully');
       } else {
-        await axios.post(`${API_BASE_URL}/project/dealer`, dealerForm, {
-  headers: headers(),
-});
-
-try {
   await axios.post(
-    `${API_BASE_URL}/dealer`,
+    `${API_BASE_URL}/project/dealer`,
     {
-      dealerName: dealerForm.vendorName,
-      firmName: dealerForm.vendorName,
-      phone: dealerForm.phone,
-      email: dealerForm.email,
-      gstNumber: dealerForm.gstNumber,
-      branchName: dealerForm.city,
-      city: dealerForm.city,
-      address: dealerForm.address,
-      creditEnabled: false,
-      creditLimit: 0,
-      creditDays: 0,
-      status: 'ACTIVE',
+      ...dealerForm,
+      partyType: 'DEALER',
+      canSellToUs: false,
+      canBuyFromUs: true,
     },
-    { headers: headers() },
+    {
+      headers: headers(),
+    },
   );
-} catch (syncError) {
-  console.error('Dealer portal sync failed', syncError);
+
   alert(
-    'Dealer added, but portal login sync failed. Please inform admin.',
+    'Dealer added successfully',
   );
 }
-
-alert('Dealer added successfully');
-      }
 
       resetDealerForm();
       fetchDealers();

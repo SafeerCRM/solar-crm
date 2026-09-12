@@ -17,6 +17,8 @@ type VendorItem = {
   city?: string;
   state?: string;
   materialCategory?: string;
+  tradingManagerId?: number | null;
+tradingManagerName?: string | null;
   remarks?: string;
   partyType?: string;
 canSellToUs?: boolean;
@@ -25,8 +27,20 @@ openingBalance?: number;
   isActive?: boolean;
 };
 
+type TradingManager = {
+  id: number;
+  name?: string;
+  email?: string;
+  roles?: string[];
+};
+
 export default function VendorMasterPage() {
   const [items, setItems] = useState<VendorItem[]>([]);
+
+  const [
+  tradingManagers,
+  setTradingManagers,
+] = useState<TradingManager[]>([]);
 
   const [loading, setLoading] =
     useState(false);
@@ -53,12 +67,52 @@ export default function VendorMasterPage() {
     city: '',
     state: '',
     materialCategory: '',
+    tradingManagerId: '',
     remarks: '',
     partyType: 'VENDOR',
 canSellToUs: true,
 canBuyFromUs: false,
 openingBalance: '',
   });
+
+  const fetchTradingManagers = async () => {
+  try {
+    const token =
+      localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/users`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    const rows = Array.isArray(res.data)
+      ? res.data
+      : [];
+
+    setTradingManagers(
+      rows.filter(
+        (user: TradingManager) =>
+          Array.isArray(user.roles) &&
+          user.roles.includes(
+            'TRADING_MANAGER',
+          ),
+      ),
+    );
+  } catch (error) {
+    console.error(
+      'Failed to load Trading Managers',
+      error,
+    );
+
+    setTradingManagers([]);
+  }
+};
 
   const fetchItems = async () => {
     try {
@@ -88,9 +142,10 @@ openingBalance: '',
   };
 
   useEffect(() => {
-    fetchItems();
+  fetchItems();
+  fetchTradingManagers();
 
-    try {
+  try {
       const storedUser =
         localStorage.getItem('user');
 
@@ -159,6 +214,7 @@ openingBalance: '',
         city: '',
         state: '',
         materialCategory: '',
+        tradingManagerId: '',
         remarks: '',
         partyType: 'VENDOR',
 canSellToUs: true,
@@ -194,6 +250,10 @@ openingBalance: '',
       state: item.state || '',
       materialCategory:
         item.materialCategory || '',
+        tradingManagerId:
+  item.tradingManagerId
+    ? String(item.tradingManagerId)
+    : '',
       remarks: item.remarks || '',
       partyType: item.partyType || 'VENDOR',
 canSellToUs: item.canSellToUs !== false,
@@ -222,6 +282,7 @@ openingBalance: String(
       city: '',
       state: '',
       materialCategory: '',
+      tradingManagerId: '',
       remarks: '',
       partyType: 'VENDOR',
 canSellToUs: true,
@@ -421,6 +482,35 @@ openingBalance: '',
             />
 
             <select
+  value={form.tradingManagerId}
+  onChange={(e) =>
+    setForm({
+      ...form,
+      tradingManagerId:
+        e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+>
+  <option value="">
+    Select Trading Manager
+  </option>
+
+  {tradingManagers.map(
+    (manager) => (
+      <option
+        key={manager.id}
+        value={String(manager.id)}
+      >
+        {manager.name ||
+          manager.email ||
+          `User #${manager.id}`}
+      </option>
+    ),
+  )}
+</select>
+
+            <select
   value={form.partyType}
   onChange={(e) =>
     setForm({
@@ -612,6 +702,12 @@ openingBalance: '',
                       }{' '}
                       | {item.city || '-'}
                     </p>
+
+                    <p className="text-sm text-gray-500">
+  Trading Manager:{' '}
+  {item.tradingManagerName ||
+    'Not Assigned'}
+</p>
 
                     {item.gstNumber && (
                       <p className="text-sm text-blue-700">

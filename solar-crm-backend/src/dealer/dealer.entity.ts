@@ -17,6 +17,12 @@ export class Dealer {
   @PrimaryGeneratedColumn()
   id: number;
 
+  @Column({
+  type: 'int',
+  nullable: true,
+})
+projectVendorId: number;
+
   @Column({ type: 'text' })
   dealerName: string;
 

@@ -83,6 +83,17 @@ export class ProjectVendor {
   @Column({ nullable: true })
   upiId: string;
 
+  @Column({
+  type: 'int',
+  nullable: true,
+})
+tradingManagerId: number | null;
+
+@Column({
+  nullable: true,
+})
+tradingManagerName: string | null;
+
   @Column({ type: 'text', nullable: true })
   remarks: string;
 

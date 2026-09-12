@@ -68,6 +68,14 @@ import {
   RecruitmentStage,
 } from './recruitment-candidate.entity';
 
+import {
+  Dealer,
+} from '../dealer/dealer.entity';
+
+import {
+  ProjectVendor,
+} from '../project/project-vendor.entity';
+
 
 export type StaffPayrollMetricRequest = {
   metricType: StaffPayrollMetricType;
@@ -1696,12 +1704,28 @@ case StaffPayrollMetricType
 
   return this.projectDealerOrderRepository
     .createQueryBuilder('dealerOrder')
-    .where(
-      'dealerOrder.createdBy = :linkedUserId',
-      {
-        linkedUserId,
-      },
-    )
+    .innerJoin(
+  Dealer,
+  'dealer',
+  `
+  dealer.id =
+    dealerOrder.dealerId
+  `,
+)
+.innerJoin(
+  ProjectVendor,
+  'projectVendor',
+  `
+  projectVendor.id =
+    dealer.projectVendorId
+  `,
+)
+.where(
+  'projectVendor.tradingManagerId = :linkedUserId',
+  {
+    linkedUserId,
+  },
+)
     .andWhere(
       'dealerOrder.status IN (:...eligibleStatuses)',
       {
@@ -1760,12 +1784,28 @@ case StaffPayrollMetricType
         `,
         'totalSales',
       )
-      .where(
-        'dealerOrder.createdBy = :linkedUserId',
-        {
-          linkedUserId,
-        },
-      )
+      .innerJoin(
+  Dealer,
+  'dealer',
+  `
+  dealer.id =
+    dealerOrder.dealerId
+  `,
+)
+.innerJoin(
+  ProjectVendor,
+  'projectVendor',
+  `
+  projectVendor.id =
+    dealer.projectVendorId
+  `,
+)
+.where(
+  'projectVendor.tradingManagerId = :linkedUserId',
+  {
+    linkedUserId,
+  },
+)
       .andWhere(
         'dealerOrder.status IN (:...eligibleStatuses)',
         {
@@ -1824,6 +1864,22 @@ case StaffPayrollMetricType
           dealerOrderItem.dealerOrderId
         `,
       )
+      .innerJoin(
+  Dealer,
+  'dealer',
+  `
+  dealer.id =
+    dealerOrder.dealerId
+  `,
+)
+.innerJoin(
+  ProjectVendor,
+  'projectVendor',
+  `
+  projectVendor.id =
+    dealer.projectVendorId
+  `,
+)
       .leftJoin(
         ProjectStockItem,
         'stockItem',
@@ -1866,11 +1922,11 @@ case StaffPayrollMetricType
         'totalProfit',
       )
       .where(
-        'dealerOrder.createdBy = :linkedUserId',
-        {
-          linkedUserId,
-        },
-      )
+  'projectVendor.tradingManagerId = :linkedUserId',
+  {
+    linkedUserId,
+  },
+)
       .andWhere(
         'dealerOrder.status IN (:...eligibleStatuses)',
         {
@@ -1985,12 +2041,28 @@ private async getTradingHeadTeamUserIds(
 
   return this.projectDealerOrderRepository
     .createQueryBuilder('dealerOrder')
-    .where(
-      'dealerOrder.createdBy IN (:...teamUserIds)',
-      {
-        teamUserIds,
-      },
-    )
+    .innerJoin(
+  Dealer,
+  'dealer',
+  `
+  dealer.id =
+    dealerOrder.dealerId
+  `,
+)
+.innerJoin(
+  ProjectVendor,
+  'projectVendor',
+  `
+  projectVendor.id =
+    dealer.projectVendorId
+  `,
+)
+.where(
+  'projectVendor.tradingManagerId IN (:...teamUserIds)',
+  {
+    teamUserIds,
+  },
+)
     .andWhere(
       'dealerOrder.status IN (:...eligibleStatuses)',
       {
@@ -2055,12 +2127,28 @@ private async getTradingHeadTeamUserIds(
         `,
         'totalSales',
       )
-      .where(
-        'dealerOrder.createdBy IN (:...teamUserIds)',
-        {
-          teamUserIds,
-        },
-      )
+      .innerJoin(
+  Dealer,
+  'dealer',
+  `
+  dealer.id =
+    dealerOrder.dealerId
+  `,
+)
+.innerJoin(
+  ProjectVendor,
+  'projectVendor',
+  `
+  projectVendor.id =
+    dealer.projectVendorId
+  `,
+)
+.where(
+  'projectVendor.tradingManagerId IN (:...teamUserIds)',
+  {
+    teamUserIds,
+  },
+)
       .andWhere(
         'dealerOrder.status IN (:...eligibleStatuses)',
         {
@@ -2126,6 +2214,22 @@ private async getTradingHeadTeamUserIds(
           dealerOrderItem.dealerOrderId
         `,
       )
+      .innerJoin(
+  Dealer,
+  'dealer',
+  `
+  dealer.id =
+    dealerOrder.dealerId
+  `,
+)
+.innerJoin(
+  ProjectVendor,
+  'projectVendor',
+  `
+  projectVendor.id =
+    dealer.projectVendorId
+  `,
+)
       .leftJoin(
         ProjectStockItem,
         'stockItem',
@@ -2168,11 +2272,11 @@ private async getTradingHeadTeamUserIds(
         'totalProfit',
       )
       .where(
-        'dealerOrder.createdBy IN (:...teamUserIds)',
-        {
-          teamUserIds,
-        },
-      )
+  'projectVendor.tradingManagerId IN (:...teamUserIds)',
+  {
+    teamUserIds,
+  },
+)
       .andWhere(
         'dealerOrder.status IN (:...eligibleStatuses)',
         {
@@ -2253,6 +2357,22 @@ private async resolveTeamDealerProfitAboveSalesTarget(
   const orderResults =
     await this.projectDealerOrderRepository
       .createQueryBuilder('dealerOrder')
+      .innerJoin(
+  Dealer,
+  'dealer',
+  `
+  dealer.id =
+    dealerOrder.dealerId
+  `,
+)
+.innerJoin(
+  ProjectVendor,
+  'projectVendor',
+  `
+  projectVendor.id =
+    dealer.projectVendorId
+  `,
+)
       .leftJoin(
         ProjectDealerOrderItem,
         'dealerOrderItem',
@@ -2320,11 +2440,11 @@ private async resolveTeamDealerProfitAboveSalesTarget(
         'orderProfit',
       )
       .where(
-        'dealerOrder.createdBy IN (:...teamUserIds)',
-        {
-          teamUserIds,
-        },
-      )
+  'projectVendor.tradingManagerId IN (:...teamUserIds)',
+  {
+    teamUserIds,
+  },
+)
       .andWhere(
         'dealerOrder.status IN (:...eligibleStatuses)',
         {
@@ -2502,6 +2622,22 @@ private async resolveDealerProfitAboveSalesTarget(
   const orderResults =
     await this.projectDealerOrderRepository
       .createQueryBuilder('dealerOrder')
+      .innerJoin(
+  Dealer,
+  'dealer',
+  `
+  dealer.id =
+    dealerOrder.dealerId
+  `,
+)
+.innerJoin(
+  ProjectVendor,
+  'projectVendor',
+  `
+  projectVendor.id =
+    dealer.projectVendorId
+  `,
+)
       .leftJoin(
         ProjectDealerOrderItem,
         'dealerOrderItem',
@@ -2569,11 +2705,11 @@ private async resolveDealerProfitAboveSalesTarget(
         'orderProfit',
       )
       .where(
-        'dealerOrder.createdBy = :linkedUserId',
-        {
-          linkedUserId,
-        },
-      )
+  'projectVendor.tradingManagerId = :linkedUserId',
+  {
+    linkedUserId,
+  },
+)
       .andWhere(
         'dealerOrder.status IN (:...eligibleStatuses)',
         {

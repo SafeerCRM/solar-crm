@@ -778,12 +778,157 @@ private async resolveProjectVendorDealerForInvoice(
         0,
     );
 
+  const gstNumber =
+    String(
+      data?.dealerGstNumber ||
+        '',
+    ).trim();
+
+  const phone =
+    String(
+      data?.dealerPhone ||
+        '',
+    ).trim();
+
+  const normalizedGst =
+    gstNumber.toUpperCase();
+
+  const normalizedPhone =
+    phone.replace(
+      /[^0-9]/g,
+      '',
+    );
+
   /*
-   * First try the existing ProjectVendor ID.
+   * Helper condition:
+   * only active CRM dealer/business records.
+   */
+  const buildDealerQb = () =>
+    this.projectVendorRepository
+      .createQueryBuilder(
+        'dealer',
+      )
+      .where(
+        'dealer.isActive = true',
+      )
+      .andWhere(
+        'dealer.isHidden = false',
+      )
+      .andWhere(
+        `(
+          UPPER(
+            TRIM(
+              COALESCE(
+                dealer.partyType,
+                ''
+              )
+            )
+          ) IN ('DEALER', 'BOTH')
+          OR dealer.canBuyFromUs = true
+        )`,
+      );
+
+  /*
+   * 1. GST is the strongest available
+   * business identifier.
    *
-   * This preserves all current CRM Trading Account
-   * dealer orders where dealerId already points to
-   * ProjectVendor.
+   * Historical order.dealerId may belong
+   * to the Dealer table, so do NOT trust
+   * the numeric ID before checking GST.
+   */
+  if (normalizedGst) {
+    const gstMatches =
+      await buildDealerQb()
+        .andWhere(
+          `
+          UPPER(
+            TRIM(
+              COALESCE(
+                dealer.gstNumber,
+                ''
+              )
+            )
+          ) = :gstNumber
+          `,
+          {
+            gstNumber:
+              normalizedGst,
+          },
+        )
+        .orderBy(
+          'dealer.id',
+          'ASC',
+        )
+        .getMany();
+
+    if (
+      gstMatches.length > 1
+    ) {
+      throw new BadRequestException(
+        'Multiple active CRM dealers have the same GST number. Please resolve duplicate dealer records before generating invoice.',
+      );
+    }
+
+    if (
+      gstMatches.length === 1
+    ) {
+      return gstMatches[0];
+    }
+  }
+
+  /*
+   * 2. Fall back to normalized phone.
+   */
+  if (normalizedPhone) {
+    const phoneMatches =
+      await buildDealerQb()
+        .andWhere(
+          `
+          REGEXP_REPLACE(
+            COALESCE(
+              dealer.phone,
+              ''
+            ),
+            '[^0-9]',
+            '',
+            'g'
+          ) = :phone
+          `,
+          {
+            phone:
+              normalizedPhone,
+          },
+        )
+        .orderBy(
+          'dealer.id',
+          'ASC',
+        )
+        .getMany();
+
+    if (
+      phoneMatches.length > 1
+    ) {
+      throw new BadRequestException(
+        'Multiple active CRM dealers have the same phone number. Please resolve duplicate dealer records before generating invoice.',
+      );
+    }
+
+    if (
+      phoneMatches.length === 1
+    ) {
+      return phoneMatches[0];
+    }
+  }
+
+  /*
+   * 3. Numeric dealerId fallback.
+   *
+   * This is safe for current Trading CRM
+   * flows where dealerId is ProjectVendor.id.
+   *
+   * But when phone/GST were supplied, the
+   * candidate must agree with those snapshot
+   * identifiers before we trust the ID.
    */
   if (
     Number.isInteger(
@@ -792,19 +937,16 @@ private async resolveProjectVendorDealerForInvoice(
     rawDealerId > 0
   ) {
     const byId =
-      await this
-        .projectVendorRepository
-        .findOne({
-          where: {
-            id:
-              rawDealerId,
-          },
-        });
+      await this.projectVendorRepository.findOne({
+        where: {
+          id:
+            rawDealerId,
+        },
+      });
 
     if (
       byId &&
-      byId.isActive !==
-        false
+      byId.isActive !== false
     ) {
       const partyType =
         String(
@@ -822,122 +964,70 @@ private async resolveProjectVendorDealerForInvoice(
         byId.canBuyFromUs ===
           true;
 
-      if (
-        isDealer
-      ) {
-        return byId;
+      if (isDealer) {
+        /*
+         * No snapshot identifiers:
+         * this is normally a direct Trading
+         * CRM selection, so the canonical
+         * ProjectVendor ID is sufficient.
+         */
+        if (
+          !normalizedGst &&
+          !normalizedPhone
+        ) {
+          return byId;
+        }
+
+        const candidateGst =
+          String(
+            byId.gstNumber ||
+              '',
+          )
+            .trim()
+            .toUpperCase();
+
+        const candidatePhone =
+          String(
+            byId.phone ||
+              '',
+          ).replace(
+            /[^0-9]/g,
+            '',
+          );
+
+        const gstMatches =
+          Boolean(
+            normalizedGst &&
+            candidateGst,
+          ) &&
+          normalizedGst ===
+            candidateGst;
+
+        const phoneMatches =
+          Boolean(
+            normalizedPhone &&
+            candidatePhone,
+          ) &&
+          normalizedPhone ===
+            candidatePhone;
+
+        if (
+          gstMatches ||
+          phoneMatches
+        ) {
+          return byId;
+        }
       }
     }
   }
 
   /*
-   * Dealer Portal orders may store Dealer.id
-   * rather than ProjectVendor.id.
-   *
-   * Resolve the corresponding CRM dealer using
-   * GST first, then phone.
+   * Never guess between Dealer.id and
+   * ProjectVendor.id when the identifiers
+   * disagree.
    */
-
-  const gstNumber =
-    String(
-      data
-        ?.dealerGstNumber ||
-        '',
-    ).trim();
-
-  const phone =
-    String(
-      data?.dealerPhone ||
-        '',
-    ).trim();
-
-  const qb =
-    this
-      .projectVendorRepository
-      .createQueryBuilder(
-        'dealer',
-      )
-      .where(
-        'dealer.isActive = true',
-      )
-      .andWhere(
-        'dealer.isHidden = false',
-      )
-      .andWhere(
-        `(
-          UPPER(TRIM(COALESCE(dealer.partyType, ''))) IN ('DEALER', 'BOTH')
-          OR dealer.canBuyFromUs = true
-        )`,
-      );
-
-  if (
-    gstNumber
-  ) {
-    qb.andWhere(
-      'UPPER(TRIM(COALESCE(dealer.gstNumber, \'\'))) = UPPER(TRIM(:gstNumber))',
-      {
-        gstNumber,
-      },
-    );
-
-    const byGst =
-      await qb.getOne();
-
-    if (
-      byGst
-    ) {
-      return byGst;
-    }
-  }
-
-  if (
-    phone
-  ) {
-    const byPhone =
-      await this
-        .projectVendorRepository
-        .createQueryBuilder(
-          'dealer',
-        )
-        .where(
-          'dealer.isActive = true',
-        )
-        .andWhere(
-          'dealer.isHidden = false',
-        )
-        .andWhere(
-          `(
-            UPPER(TRIM(COALESCE(dealer.partyType, ''))) IN ('DEALER', 'BOTH')
-            OR dealer.canBuyFromUs = true
-          )`,
-        )
-        .andWhere(
-          `REGEXP_REPLACE(
-            COALESCE(dealer.phone, ''),
-            '[^0-9]',
-            '',
-            'g'
-          ) = REGEXP_REPLACE(
-            :phone,
-            '[^0-9]',
-            '',
-            'g'
-          )`,
-          {
-            phone,
-          },
-        )
-        .getOne();
-
-    if (
-      byPhone
-    ) {
-      return byPhone;
-    }
-  }
-
   throw new BadRequestException(
-    'Dealer is active in portal/order but matching CRM dealer record could not be resolved. Please ensure dealer phone or GST matches Vendor Master.',
+    'Matching CRM dealer could not be resolved safely for this invoice. Please ensure dealer phone or GST matches Vendor Master.',
   );
 }
 
@@ -1351,37 +1441,134 @@ private async postDealerPaymentLedger(
   user?: any,
 ) {
   if (
-    String((payment as any).status || '') !==
+    String(
+      (payment as any).status || '',
+    ) !==
     ProjectDealerPaymentStatus.APPROVED
   ) {
     return null;
   }
 
-  const amount = Number(payment.amount || 0);
+  const amount =
+    Number(
+      payment.amount || 0,
+    );
 
-  if (!amount || amount <= 0) {
+  if (
+    !amount ||
+    amount <= 0
+  ) {
     return null;
   }
 
-  const order = await this.projectDealerOrderRepository.findOne({
-    where: { id: Number(payment.dealerOrderId) },
-  });
+  const order =
+    await this
+      .projectDealerOrderRepository
+      .findOne({
+        where: {
+          id:
+            Number(
+              payment.dealerOrderId,
+            ),
+        },
+      });
+
+  /*
+   * Resolve canonical ProjectVendor dealer ID.
+   *
+   * New orders already store ProjectVendor.id.
+   * Old portal orders may still store Dealer.id.
+   */
+  let canonicalDealerId =
+    Number(
+      order?.dealerId ||
+      payment.dealerId ||
+      0,
+    );
+
+  const linkedPortalDealer =
+    await this.dealerRepository
+      .createQueryBuilder('dealer')
+      .where(
+        'dealer.projectVendorId IS NOT NULL',
+      )
+      .andWhere(
+        `(
+          dealer.id = :legacyDealerId
+          OR dealer.projectVendorId = :businessDealerId
+        )`,
+        {
+          legacyDealerId:
+            canonicalDealerId,
+
+          businessDealerId:
+            canonicalDealerId,
+        },
+      )
+      .orderBy(
+        `
+        CASE
+          WHEN dealer.projectVendorId = :preferredProjectVendorId
+          THEN 0
+          ELSE 1
+        END
+        `,
+        'ASC',
+      )
+      .setParameter(
+        'preferredProjectVendorId',
+        canonicalDealerId,
+      )
+      .addOrderBy(
+        'dealer.id',
+        'ASC',
+      )
+      .getOne();
+
+  if (
+    linkedPortalDealer?.projectVendorId
+  ) {
+    canonicalDealerId =
+      Number(
+        linkedPortalDealer.projectVendorId,
+      );
+  }
 
   return this.postLedgerEntryOnce({
-    partyId: Number(payment.dealerId || 0) || null,
+    partyId:
+      canonicalDealerId ||
+      null,
+
     partyName:
       payment.dealerName ||
-      (order as any)?.dealerName ||
-      `Dealer #${payment.dealerId}`,
-    partyType: 'DEALER',
-    projectId: null,
-    entryType: ProjectLedgerEntryType.CREDIT,
-    sourceType: ProjectLedgerSourceType.CUSTOMER_PAYMENT,
-    sourceId: Number(payment.id),
+      order?.dealerName ||
+      `Dealer #${canonicalDealerId}`,
+
+    partyType:
+      'DEALER',
+
+    projectId:
+      null,
+
+    entryType:
+      ProjectLedgerEntryType.CREDIT,
+
+    sourceType:
+      ProjectLedgerSourceType.CUSTOMER_PAYMENT,
+
+    sourceId:
+      Number(
+        payment.id,
+      ),
+
     amount,
-    remarks: `Dealer payment approved - Order ${
-      (order as any)?.orderNumber || payment.dealerOrderId
-    }`,
+
+    remarks:
+      `Dealer payment approved - Order ${
+        order?.orderNumber ||
+        payment.dealerOrderId
+      }`,
+
     user,
   });
 }
@@ -9158,6 +9345,87 @@ async createVendor(data: Partial<ProjectVendor>) {
     throw new BadRequestException('Vendor name is required');
   }
 
+  let tradingManagerId: number | null = null;
+let tradingManagerName = '';
+
+if (
+  data.tradingManagerId !== undefined &&
+  data.tradingManagerId !== null
+) {
+  const requestedTradingManagerId =
+    Number(data.tradingManagerId);
+
+  if (
+    !Number.isInteger(
+      requestedTradingManagerId,
+    ) ||
+    requestedTradingManagerId <= 0
+  ) {
+    throw new BadRequestException(
+      'Invalid Trading Manager',
+    );
+  }
+
+  const tradingManager =
+    await this.userRepository.findOne({
+      where: {
+        id: requestedTradingManagerId,
+      },
+    });
+
+  if (
+    !tradingManager ||
+    tradingManager.isHidden === true
+  ) {
+    throw new BadRequestException(
+      'Trading Manager not found',
+    );
+  }
+
+  const assignedRoles = [
+  ...(Array.isArray(
+    tradingManager.roles,
+  )
+    ? tradingManager.roles
+    : String(
+        tradingManager.roles || '',
+      ).split(',')),
+]
+    .flatMap((roleEntry: any) =>
+      String(
+        roleEntry?.name ||
+          roleEntry?.role ||
+          roleEntry?.code ||
+          roleEntry ||
+          '',
+      ).split(','),
+    )
+    .map((role) =>
+      String(role)
+        .trim()
+        .toUpperCase(),
+    )
+    .filter(Boolean);
+
+  if (
+    !assignedRoles.includes(
+      'TRADING_MANAGER',
+    )
+  ) {
+    throw new BadRequestException(
+      'Selected user is not a Trading Manager',
+    );
+  }
+
+  tradingManagerId =
+    tradingManager.id;
+
+  tradingManagerName =
+    tradingManager.name ||
+    tradingManager.email ||
+    '';
+}
+
   const vendor = this.projectVendorRepository.create({
     vendorName: String(data.vendorName).trim(),
     contactPerson: data.contactPerson || '',
@@ -9168,6 +9436,8 @@ async createVendor(data: Partial<ProjectVendor>) {
     city: data.city || '',
     state: data.state || '',
     materialCategory: data.materialCategory || '',
+    tradingManagerId,
+tradingManagerName,
     remarks: data.remarks || '',
     isActive: data.isActive !== false,
     partyType: (data as any).partyType || 'VENDOR',
@@ -9201,6 +9471,94 @@ async updateVendor(id: number, data: Partial<ProjectVendor>) {
     throw new NotFoundException('Vendor not found');
   }
 
+  let tradingManagerId =
+  vendor.tradingManagerId;
+
+let tradingManagerName =
+  vendor.tradingManagerName || '';
+
+if (
+  data.tradingManagerId !== undefined
+) {
+  if (data.tradingManagerId === null) {
+    tradingManagerId = null;
+    tradingManagerName = '';
+  } else {
+    const requestedTradingManagerId =
+      Number(data.tradingManagerId);
+
+    if (
+      !Number.isInteger(
+        requestedTradingManagerId,
+      ) ||
+      requestedTradingManagerId <= 0
+    ) {
+      throw new BadRequestException(
+        'Invalid Trading Manager',
+      );
+    }
+
+    const tradingManager =
+      await this.userRepository.findOne({
+        where: {
+          id: requestedTradingManagerId,
+        },
+      });
+
+    if (
+      !tradingManager ||
+      tradingManager.isHidden === true
+    ) {
+      throw new BadRequestException(
+        'Trading Manager not found',
+      );
+    }
+
+    const assignedRoles = [
+      ...(Array.isArray(
+        tradingManager.roles,
+      )
+        ? tradingManager.roles
+        : String(
+            tradingManager.roles || '',
+          ).split(',')),
+    ]
+      .flatMap((roleEntry: any) =>
+        String(
+          roleEntry?.name ||
+            roleEntry?.role ||
+            roleEntry?.code ||
+            roleEntry ||
+            '',
+        ).split(','),
+      )
+      .map((role) =>
+        String(role)
+          .trim()
+          .toUpperCase(),
+      )
+      .filter(Boolean);
+
+    if (
+      !assignedRoles.includes(
+        'TRADING_MANAGER',
+      )
+    ) {
+      throw new BadRequestException(
+        'Selected user is not a Trading Manager',
+      );
+    }
+
+    tradingManagerId =
+      tradingManager.id;
+
+    tradingManagerName =
+      tradingManager.name ||
+      tradingManager.email ||
+      '';
+  }
+}
+
   Object.assign(vendor, {
     ...data,
     vendorName:
@@ -9226,48 +9584,222 @@ canBuyFromUs:
     ? (data as any).canBuyFromUs === true
     : (vendor as any).canBuyFromUs,
 
+    tradingManagerId,
+tradingManagerName,
+
 openingBalance:
   (data as any).openingBalance !== undefined
     ? Number((data as any).openingBalance || 0)
     : (vendor as any).openingBalance,
   });
 
-  return this.projectVendorRepository.save(vendor);
+  const savedVendor =
+  await this.projectVendorRepository.save(
+    vendor,
+  );
+
+/*
+ * Keep Dealer Portal profile in sync
+ * whenever this ProjectVendor is a dealer.
+ *
+ * ProjectVendor.id remains the canonical
+ * business dealer identity.
+ */
+const partyType =
+  String(
+    savedVendor.partyType ||
+      '',
+  )
+    .trim()
+    .toUpperCase();
+
+const isDealer =
+  partyType === 'DEALER' ||
+  partyType === 'BOTH' ||
+  savedVendor.canBuyFromUs === true;
+
+if (
+  isDealer &&
+  savedVendor.isActive !== false
+) {
+  await this.syncSingleDealerToPortal(
+    savedVendor,
+  );
 }
 
-async disableVendor(id: number) {
-  const vendor = await this.projectVendorRepository.findOne({
-    where: { id },
-  });
+return savedVendor;
+}
+
+async disableVendor(
+  id: number,
+) {
+  const vendor =
+    await this.projectVendorRepository.findOne({
+      where: {
+        id,
+      },
+    });
 
   if (!vendor) {
-    throw new NotFoundException('Vendor not found');
+    throw new NotFoundException(
+      'Vendor not found',
+    );
   }
 
   vendor.isActive = false;
 
-  await this.projectVendorRepository.save(vendor);
+  const savedVendor =
+    await this.projectVendorRepository.save(
+      vendor,
+    );
+
+  /*
+   * If this ProjectVendor has a linked
+   * Dealer Portal account, disable portal
+   * access as well.
+   *
+   * We use projectVendorId explicitly.
+   * Never assume Dealer.id === ProjectVendor.id.
+   */
+  const linkedPortalDealers =
+    await this.dealerRepository.find({
+      where: {
+        projectVendorId:
+          savedVendor.id,
+      } as any,
+    });
+
+  if (
+    linkedPortalDealers.length > 1
+  ) {
+    throw new BadRequestException(
+      'Multiple dealer portal accounts are linked to this Trading dealer. Please resolve duplicate dealer records first.',
+    );
+  }
+
+  const portalDealer =
+    linkedPortalDealers[0] ||
+    null;
+
+  if (portalDealer) {
+    portalDealer.isHidden =
+      true;
+
+    portalDealer.hiddenAt =
+      new Date();
+
+    portalDealer.hiddenReason =
+      'Trading dealer disabled';
+
+    await this.dealerRepository.save(
+      portalDealer,
+    );
+  }
 
   return {
-    message: 'Vendor disabled successfully',
+    message:
+      'Vendor disabled successfully',
   };
 }
 
-async enableVendor(id: number) {
-  const vendor = await this.projectVendorRepository.findOne({
-    where: { id },
-  });
+async enableVendor(
+  id: number,
+) {
+  const vendor =
+    await this.projectVendorRepository.findOne({
+      where: {
+        id,
+      },
+    });
 
   if (!vendor) {
-    throw new NotFoundException('Vendor not found');
+    throw new NotFoundException(
+      'Vendor not found',
+    );
   }
 
   vendor.isActive = true;
 
-  await this.projectVendorRepository.save(vendor);
+  const savedVendor =
+    await this.projectVendorRepository.save(
+      vendor,
+    );
+
+  /*
+   * Only dealer-type ProjectVendor records
+   * should control a Dealer Portal account.
+   */
+  const partyType =
+    String(
+      savedVendor.partyType ||
+        '',
+    )
+      .trim()
+      .toUpperCase();
+
+  const isDealer =
+    partyType === 'DEALER' ||
+    partyType === 'BOTH' ||
+    savedVendor.canBuyFromUs ===
+      true;
+
+  if (isDealer) {
+    /*
+     * First look up the explicitly linked
+     * portal account, including hidden rows.
+     *
+     * syncSingleDealerToPortal() itself only
+     * searches non-hidden rows, so we restore
+     * the linked account before calling it.
+     */
+    const linkedPortalDealers =
+      await this.dealerRepository.find({
+        where: {
+          projectVendorId:
+            savedVendor.id,
+        } as any,
+      });
+
+    if (
+      linkedPortalDealers.length > 1
+    ) {
+      throw new BadRequestException(
+        'Multiple dealer portal accounts are linked to this Trading dealer. Please resolve duplicate dealer records first.',
+      );
+    }
+
+    const portalDealer =
+      linkedPortalDealers[0] ||
+      null;
+
+    if (portalDealer) {
+      portalDealer.isHidden =
+        false;
+
+      portalDealer.status =
+        DealerStatus.ACTIVE;
+
+      portalDealer.hiddenReason =
+        '';
+
+      await this.dealerRepository.save(
+        portalDealer,
+      );
+    }
+
+    /*
+     * Refresh profile information and create
+     * the portal account if one does not yet
+     * exist.
+     */
+    await this.syncSingleDealerToPortal(
+      savedVendor,
+    );
+  }
 
   return {
-    message: 'Vendor enabled successfully',
+    message:
+      'Vendor enabled successfully',
   };
 }
 
@@ -38519,42 +39051,92 @@ private async syncSingleDealerToPortal(dealer: ProjectVendor) {
     .where('dealer.isHidden = false');
 
   const conditions: string[] = [];
-  const params: any = {};
+const params: any = {};
 
-  if (phone) {
-    conditions.push('dealer.phone = :phone');
-    params.phone = phone;
-  }
+if (phone) {
+  conditions.push(`
+    REGEXP_REPLACE(
+      COALESCE(
+        dealer.phone,
+        ''
+      ),
+      '[^0-9]',
+      '',
+      'g'
+    ) =
+    REGEXP_REPLACE(
+      :phone,
+      '[^0-9]',
+      '',
+      'g'
+    )
+  `);
 
-  if (email) {
-    conditions.push('dealer.email = :email');
-    params.email = email;
-  }
+  params.phone =
+    phone;
+}
 
-  if (gstNumber) {
-    conditions.push('dealer.gstNumber = :gstNumber');
-    params.gstNumber = gstNumber;
-  }
+if (email) {
+  conditions.push(`
+    LOWER(
+      TRIM(
+        COALESCE(
+          dealer.email,
+          ''
+        )
+      )
+    ) =
+    LOWER(
+      TRIM(
+        :email
+      )
+    )
+  `);
+
+  params.email =
+    email;
+}
+
+if (gstNumber) {
+  conditions.push(`
+    UPPER(
+      TRIM(
+        COALESCE(
+          dealer.gstNumber,
+          ''
+        )
+      )
+    ) =
+    UPPER(
+      TRIM(
+        :gstNumber
+      )
+    )
+  `);
+
+  params.gstNumber =
+    gstNumber;
+}
 
   const matchedDealers = await qb
     .andWhere(`(${conditions.join(' OR ')})`, params)
     .orderBy('dealer.id', 'ASC')
     .getMany();
 
-  let portalDealer: Dealer | null = matchedDealers[0] || null;
+  if (
+  matchedDealers.length > 1
+) {
+  throw new BadRequestException(
+    'Multiple dealer portal accounts match this phone, email or GST number. Please resolve duplicate dealer records first.',
+  );
+}
 
-  if (matchedDealers.length > 1) {
-    for (const duplicate of matchedDealers.slice(1)) {
-      duplicate.isHidden = true;
-      duplicate.hiddenReason =
-        'Duplicate dealer record hidden automatically during portal sync';
-      duplicate.hiddenAt = new Date();
-
-      await this.dealerRepository.save(duplicate);
-    }
-  }
+let portalDealer: Dealer | null =
+  matchedDealers[0] ||
+  null;
 
   if (portalDealer) {
+    portalDealer.projectVendorId = dealer.id;
     portalDealer.dealerName = dealer.vendorName;
     portalDealer.firmName = dealer.vendorName;
     portalDealer.phone = phone || portalDealer.phone;
@@ -38576,6 +39158,7 @@ private async syncSingleDealerToPortal(dealer: ProjectVendor) {
   }
 
   const newPortalDealer = this.dealerRepository.create({
+    projectVendorId: dealer.id,
     dealerName: dealer.vendorName,
     firmName: dealer.vendorName,
     phone,
@@ -39111,13 +39694,39 @@ async createDealerOrderProformaInvoice(
   }
 
   const existingPi =
-    await this.projectProformaInvoiceRepository.findOne({
-      where: {
-        dealerId: order.dealerId,
-        invoiceType: 'DEALER',
-        remarks: `Generated from dealer order ${order.orderNumber || order.id}`,
-      } as any,
-    });
+  await this.projectProformaInvoiceRepository
+    .createQueryBuilder('pi')
+    .where(
+      'pi.invoiceType = :invoiceType',
+      {
+        invoiceType:
+          'DEALER',
+      },
+    )
+    .andWhere(
+      'pi.isHidden = false',
+    )
+    .andWhere(
+      `(
+        pi.invoiceNumber = :invoiceNumber
+        OR pi.remarks = :remarks
+      )`,
+      {
+        invoiceNumber:
+          `DPI-${order.id}`,
+
+        remarks:
+          `Generated from dealer order ${
+            order.orderNumber ||
+            order.id
+          }`,
+      },
+    )
+    .orderBy(
+      'pi.createdAt',
+      'DESC',
+    )
+    .getOne();
 
   if (existingPi) {
     throw new BadRequestException(
@@ -39258,6 +39867,18 @@ if (!tradingCompany) {
   );
 }
 
+const resolvedDealer =
+  await this.resolveProjectVendorDealerForInvoice({
+    dealerId:
+      order.dealerId,
+
+    dealerPhone:
+      order.dealerPhone,
+
+    dealerGstNumber:
+      order.dealerGstNumber,
+  });
+
   const subtotalAmount = preparedItems.reduce(
     (sum, item) => sum + Number(item.subtotalAmount || 0),
     0,
@@ -39305,11 +39926,31 @@ if (!tradingCompany) {
       ...this.buildSellerCompanySnapshot(
   tradingCompany,
 ),
-      dealerId: order.dealerId,
-      dealerName: order.dealerName,
-      dealerPhone: order.dealerPhone,
-      dealerGstNumber: order.dealerGstNumber,
-      dealerAddress: order.dealerAddress,
+      /*
+ * All NEW invoice records must use the
+ * canonical ProjectVendor dealer identity.
+ *
+ * Order snapshot fields are still preserved
+ * for historical/document accuracy.
+ */
+dealerId:
+  resolvedDealer.id,
+
+dealerName:
+  order.dealerName ||
+  resolvedDealer.vendorName,
+
+dealerPhone:
+  order.dealerPhone ||
+  resolvedDealer.phone,
+
+dealerGstNumber:
+  order.dealerGstNumber ||
+  resolvedDealer.gstNumber,
+
+dealerAddress:
+  order.dealerAddress ||
+  resolvedDealer.address,
     } as Partial<ProjectProformaInvoice>);
 
   const savedInvoice =
@@ -39406,20 +40047,36 @@ async createDealerOrderFinalInvoice(
   }`;
 
   let pi =
-    await this.projectProformaInvoiceRepository
-      .createQueryBuilder('pi')
-      .where('pi.invoiceType = :invoiceType', {
-        invoiceType: 'DEALER',
-      })
-      .andWhere('pi.dealerId = :dealerId', {
-        dealerId: order.dealerId,
-      })
-      .andWhere('pi.remarks LIKE :remarks', {
-        remarks: `%${searchText}%`,
-      })
-      .andWhere('pi.isHidden = false')
-      .orderBy('pi.createdAt', 'DESC')
-      .getOne();
+  await this.projectProformaInvoiceRepository
+    .createQueryBuilder('pi')
+    .where(
+      'pi.invoiceType = :invoiceType',
+      {
+        invoiceType:
+          'DEALER',
+      },
+    )
+    .andWhere(
+      'pi.isHidden = false',
+    )
+    .andWhere(
+      `(
+        pi.invoiceNumber = :invoiceNumber
+        OR pi.remarks LIKE :remarks
+      )`,
+      {
+        invoiceNumber:
+          `DPI-${order.id}`,
+
+        remarks:
+          `%${searchText}%`,
+      },
+    )
+    .orderBy(
+      'pi.createdAt',
+      'DESC',
+    )
+    .getOne();
 
   if (!pi) {
     const piResult =
@@ -39440,6 +40097,58 @@ async createDealerOrderFinalInvoice(
       'Unable to find or create dealer PI',
     );
   }
+
+  /*
+ * One final invoice per dealer order.
+ *
+ * Do not compare dealerId here because
+ * historical orders may store Dealer.id
+ * while the final invoice stores the
+ * canonical ProjectVendor.id.
+ *
+ * The deterministic DINV number or the
+ * generated-from-order remark identifies
+ * the order safely.
+ */
+const existingFinalInvoice =
+  await this.projectFinalInvoiceRepository
+    .createQueryBuilder(
+      'invoice',
+    )
+    .where(
+      'invoice.invoiceType = :invoiceType',
+      {
+        invoiceType:
+          'DEALER',
+      },
+    )
+    .andWhere(
+      'invoice.isHidden = false',
+    )
+    .andWhere(
+      `(
+        invoice.invoiceNumber = :invoiceNumber
+        OR invoice.remarks LIKE :remarks
+      )`,
+      {
+        invoiceNumber:
+          `DINV-${order.id}`,
+
+        remarks:
+          `%${searchText}%`,
+      },
+    )
+    .orderBy(
+      'invoice.createdAt',
+      'DESC',
+    )
+    .getOne();
+
+if (existingFinalInvoice) {
+  throw new BadRequestException(
+    'Final invoice already generated for this dealer order',
+  );
+}
 
   const latestOrderItems =
   await this.projectDealerOrderItemRepository.find({
@@ -39665,34 +40374,91 @@ savedFinalInvoice.pendingAmount = Math.max(
     }
   }
 
-  const portalDealer = await this.dealerRepository.findOne({
-    where: [
-      { phone: order.dealerPhone, isHidden: false },
-      { gstNumber: order.dealerGstNumber, isHidden: false },
-    ] as any,
-  });
+  const portalDealer =
+  await this.dealerRepository
+    .createQueryBuilder('dealer')
+    .where(
+      'dealer.isHidden = false',
+    )
+    .andWhere(
+      `(
+        dealer.projectVendorId = :projectVendorId
+        OR dealer.id = :legacyDealerId
+      )`,
+      {
+        projectVendorId:
+          Number(
+            order.dealerId,
+          ),
 
-  const targetDealerId = portalDealer?.id || order.dealerId;
-  const targetDealerName =
-    portalDealer?.dealerName || order.dealerName;
+        legacyDealerId:
+          Number(
+            order.dealerId,
+          ),
+      },
+    )
+    .orderBy(
+      `
+      CASE
+        WHEN dealer.projectVendorId = :preferredProjectVendorId
+        THEN 0
+        ELSE 1
+      END
+      `,
+      'ASC',
+    )
+    .setParameter(
+      'preferredProjectVendorId',
+      Number(
+        order.dealerId,
+      ),
+    )
+    .addOrderBy(
+      'dealer.id',
+      'ASC',
+    )
+    .getOne();
 
+if (portalDealer) {
   const notification =
     this.projectDealerNotificationRepository.create({
-      dealerId: targetDealerId,
-      dealerName: targetDealerName,
-      title: 'Final Invoice Generated',
-      message: `Final Invoice generated for order ${
-        order.orderNumber || order.id
-      }.`,
-      notificationType: 'DEALER_FINAL_INVOICE',
-      status: ProjectDealerNotificationStatus.UNREAD,
-      createdBy: user?.id || user?.userId || null,
-      createdByName: user?.name || user?.email || '',
+      dealerId:
+        portalDealer.id,
+
+      dealerName:
+        portalDealer.dealerName ||
+        order.dealerName,
+
+      title:
+        'Final Invoice Generated',
+
+      message:
+        `Final Invoice generated for order ${
+          order.orderNumber ||
+          order.id
+        }.`,
+
+      notificationType:
+        'DEALER_FINAL_INVOICE',
+
+      status:
+        ProjectDealerNotificationStatus.UNREAD,
+
+      createdBy:
+        user?.id ||
+        user?.userId ||
+        null,
+
+      createdByName:
+        user?.name ||
+        user?.email ||
+        '',
     });
 
   await this.projectDealerNotificationRepository.save(
     notification,
   );
+}
 
   return {
     message:
@@ -39702,7 +40468,9 @@ savedFinalInvoice.pendingAmount = Math.max(
   };
 }
 
-async getDealerOrderInvoices(dealerOrderId: number) {
+async getDealerOrderInvoices(
+  dealerOrderId: number,
+) {
   const order =
     await this.projectDealerOrderRepository.findOne({
       where: {
@@ -39711,43 +40479,94 @@ async getDealerOrderInvoices(dealerOrderId: number) {
     });
 
   if (!order) {
-    throw new NotFoundException('Dealer order not found');
+    throw new NotFoundException(
+      'Dealer order not found',
+    );
   }
 
-  const searchText = `Generated from dealer order ${
-    order.orderNumber || order.id
-  }`;
+  const orderText =
+    order.orderNumber ||
+    `DO-${order.id}`;
 
+  const searchText =
+    `Generated from dealer order ${orderText}`;
+
+  /*
+   * Do not require invoice.dealerId to equal
+   * order.dealerId here.
+   *
+   * Historical orders may store Dealer.id,
+   * while newer invoices may store the
+   * canonical ProjectVendor.id.
+   *
+   * The order-specific invoice number /
+   * generated-from-order remark is the
+   * stronger relationship.
+   */
   const proformaInvoices =
     await this.projectProformaInvoiceRepository
       .createQueryBuilder('pi')
-      .where('pi.invoiceType = :invoiceType', {
-        invoiceType: 'DEALER',
-      })
-      .andWhere('pi.dealerId = :dealerId', {
-        dealerId: order.dealerId,
-      })
-      .andWhere('pi.remarks LIKE :remarks', {
-        remarks: `%${searchText}%`,
-      })
-      .andWhere('pi.isHidden = false')
-      .orderBy('pi.createdAt', 'DESC')
+      .where(
+        'pi.invoiceType = :invoiceType',
+        {
+          invoiceType:
+            'DEALER',
+        },
+      )
+      .andWhere(
+        'pi.isHidden = false',
+      )
+      .andWhere(
+        `(
+          pi.invoiceNumber = :invoiceNumber
+          OR pi.remarks LIKE :remarks
+        )`,
+        {
+          invoiceNumber:
+            `DPI-${order.id}`,
+
+          remarks:
+            `%${searchText}%`,
+        },
+      )
+      .orderBy(
+        'pi.createdAt',
+        'DESC',
+      )
       .getMany();
 
   const finalInvoices =
     await this.projectFinalInvoiceRepository
-      .createQueryBuilder('invoice')
-      .where('invoice.invoiceType = :invoiceType', {
-        invoiceType: 'DEALER',
-      })
-      .andWhere('invoice.dealerId = :dealerId', {
-        dealerId: order.dealerId,
-      })
-      .andWhere('invoice.remarks LIKE :remarks', {
-        remarks: `%${searchText}%`,
-      })
-      .andWhere('invoice.isHidden = false')
-      .orderBy('invoice.createdAt', 'DESC')
+      .createQueryBuilder(
+        'invoice',
+      )
+      .where(
+        'invoice.invoiceType = :invoiceType',
+        {
+          invoiceType:
+            'DEALER',
+        },
+      )
+      .andWhere(
+        'invoice.isHidden = false',
+      )
+      .andWhere(
+        `(
+          invoice.invoiceNumber = :invoiceNumber
+          OR invoice.remarks LIKE :remarks
+        )`,
+        {
+          invoiceNumber:
+            `DINV-${order.id}`,
+
+          remarks:
+            `%${searchText}%`,
+        },
+      )
+      .orderBy(
+        'invoice.createdAt',
+        'DESC',
+      )
       .getMany();
 
   return {
@@ -39757,55 +40576,145 @@ async getDealerOrderInvoices(dealerOrderId: number) {
   };
 }
 
-async createDealerNotification(body: any, user: any) {
-  const dealerId = Number(body?.dealerId || 0);
+async createDealerNotification(
+  body: any,
+  user: any,
+) {
+  const dealerId =
+    Number(
+      body?.dealerId ||
+        0,
+    );
 
   if (!dealerId) {
-    throw new BadRequestException('Dealer is required');
+    throw new BadRequestException(
+      'Dealer is required',
+    );
   }
 
-  if (!String(body?.title || '').trim()) {
-    throw new BadRequestException('Notification title is required');
+  const title =
+    String(
+      body?.title ||
+        '',
+    ).trim();
+
+  if (!title) {
+    throw new BadRequestException(
+      'Notification title is required',
+    );
   }
 
-  if (!String(body?.message || '').trim()) {
-    throw new BadRequestException('Notification message is required');
+  const message =
+    String(
+      body?.message ||
+        '',
+    ).trim();
+
+  if (!message) {
+    throw new BadRequestException(
+      'Notification message is required',
+    );
   }
 
+  /*
+   * This endpoint is called from Trading CRM.
+   * Therefore body.dealerId is ProjectVendor.id.
+   */
   const dealer =
     await this.projectVendorRepository.findOne({
       where: {
-        id: dealerId,
+        id:
+          dealerId,
       },
     });
 
   if (!dealer) {
-    throw new NotFoundException('Dealer not found');
+    throw new NotFoundException(
+      'Dealer not found',
+    );
   }
 
-  const portalDealer = await this.dealerRepository.findOne({
-    where: [
-      { phone: dealer.phone, isHidden: false },
-      { gstNumber: dealer.gstNumber, isHidden: false },
-      { email: dealer.email, isHidden: false },
-    ] as any,
-  });
+  /*
+   * Notification records belong to the
+   * Dealer Portal identity.
+   *
+   * Resolve it ONLY through the explicit
+   * ProjectVendor -> Dealer link.
+   *
+   * Never use:
+   *   Dealer.id === ProjectVendor.id
+   *
+   * because those numeric IDs can collide.
+   */
+  const portalDealers =
+    await this.dealerRepository.find({
+      where: {
+        projectVendorId:
+          dealer.id,
 
-  const targetDealerId = portalDealer?.id || dealerId;
-  const targetDealerName =
-    portalDealer?.dealerName || dealer.vendorName;
+        isHidden:
+          false,
+      } as any,
+
+      order: {
+        id:
+          'ASC',
+      } as any,
+    });
+
+  if (
+    portalDealers.length === 0
+  ) {
+    throw new BadRequestException(
+      'Dealer portal account is not linked to this Trading dealer. Please sync the dealer to portal first.',
+    );
+  }
+
+  if (
+    portalDealers.length > 1
+  ) {
+    throw new BadRequestException(
+      'Multiple dealer portal accounts are linked to this Trading dealer. Please resolve duplicate dealer records first.',
+    );
+  }
+
+  const portalDealer =
+    portalDealers[0];
 
   const notification =
     this.projectDealerNotificationRepository.create({
-      dealerId: targetDealerId,
-      dealerName: targetDealerName,
-      title: String(body.title || '').trim(),
-      message: String(body.message || '').trim(),
+      /*
+       * IMPORTANT:
+       * Notification recipient is Dealer.id,
+       * not ProjectVendor.id.
+       */
+      dealerId:
+        portalDealer.id,
+
+      dealerName:
+        portalDealer.dealerName ||
+        dealer.vendorName,
+
+      title,
+
+      message,
+
       notificationType:
-        body?.notificationType || 'GENERAL',
-      status: ProjectDealerNotificationStatus.UNREAD,
-      createdBy: user?.id || user?.userId || null,
-      createdByName: user?.name || user?.email || '',
+        body?.notificationType ||
+        'GENERAL',
+
+      status:
+        ProjectDealerNotificationStatus.UNREAD,
+
+      createdBy:
+        user?.id ||
+        user?.userId ||
+        null,
+
+      createdByName:
+        user?.name ||
+        user?.email ||
+        '',
     });
 
   return this.projectDealerNotificationRepository.save(
@@ -39814,46 +40723,140 @@ async createDealerNotification(body: any, user: any) {
 }
 
 async getDealerNotifications(query: any) {
-  const page = Math.max(Number(query?.page || 1), 1);
+  const page = Math.max(
+    Number(query?.page || 1),
+    1,
+  );
+
   const limit = Math.min(
-    Math.max(Number(query?.limit || 20), 1),
+    Math.max(
+      Number(query?.limit || 20),
+      1,
+    ),
     100,
   );
 
-  const skip = (page - 1) * limit;
+  const skip =
+    (page - 1) * limit;
 
-  const dealerId = Number(query?.dealerId || 0);
-  const status = String(query?.status || '').trim();
+  const projectVendorId =
+    Number(
+      query?.dealerId || 0,
+    );
+
+  const status =
+    String(
+      query?.status || '',
+    ).trim();
 
   const qb =
     this.projectDealerNotificationRepository
-      .createQueryBuilder('notification')
-      .orderBy('notification.createdAt', 'DESC')
+      .createQueryBuilder(
+        'notification',
+      )
+      .orderBy(
+        'notification.createdAt',
+        'DESC',
+      )
       .skip(skip)
       .take(limit);
 
-  if (dealerId) {
-    qb.where('notification.dealerId = :dealerId', {
-      dealerId,
-    });
+  if (projectVendorId) {
+    /*
+     * Trading UI supplies ProjectVendor.id,
+     * but notification.dealerId stores
+     * portal Dealer.id.
+     */
+    const portalDealers =
+      await this.dealerRepository.find({
+        where: {
+          projectVendorId:
+            projectVendorId,
+        } as any,
+
+        order: {
+          id:
+            'ASC',
+        } as any,
+      });
+
+    const portalDealerIds =
+      Array.from(
+        new Set(
+          portalDealers
+            .map(
+              (
+                dealer,
+              ) =>
+                Number(
+                  dealer.id ||
+                    0,
+                ),
+            )
+            .filter(
+              (
+                id,
+              ) =>
+                Number.isInteger(
+                  id,
+                ) &&
+                id > 0,
+            ),
+        ),
+      );
+
+    /*
+     * Do NOT fall back to using
+     * ProjectVendor.id as Dealer.id.
+     * Those numeric namespaces can collide.
+     */
+    if (
+      portalDealerIds.length === 0
+    ) {
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit,
+        totalPages: 1,
+      };
+    }
+
+    qb.where(
+      'notification.dealerId IN (:...dealerIds)',
+      {
+        dealerIds:
+          portalDealerIds,
+      },
+    );
   } else {
     qb.where('1=1');
   }
 
   if (status) {
-    qb.andWhere('notification.status = :status', {
-      status,
-    });
+    qb.andWhere(
+      'notification.status = :status',
+      {
+        status,
+      },
+    );
   }
 
-  const [data, total] = await qb.getManyAndCount();
+  const [
+    data,
+    total,
+  ] =
+    await qb.getManyAndCount();
 
   return {
     data,
     total,
     page,
     limit,
-    totalPages: Math.ceil(total / limit) || 1,
+    totalPages:
+      Math.ceil(
+        total / limit,
+      ) || 1,
   };
 }
 
@@ -40120,6 +41123,56 @@ async getDealerLedgerHistory(query: any) {
   }
 
   /*
+ * Trading UI sends ProjectVendor.id.
+ *
+ * Historical dealer business records may
+ * still contain the old Dealer.id.
+ *
+ * Collect only portal Dealer IDs that are
+ * explicitly linked to this ProjectVendor.
+ * Do NOT use arbitrary numeric-ID fallback,
+ * because Dealer.id and ProjectVendor.id
+ * can collide across different dealers.
+ */
+const linkedPortalDealers =
+  await this.dealerRepository.find({
+    where: {
+      projectVendorId:
+        dealer.id,
+    } as any,
+  });
+
+const compatibleDealerIds =
+  Array.from(
+    new Set(
+      [
+        Number(
+          dealer.id,
+        ),
+
+        ...linkedPortalDealers
+          .map(
+            (
+              portalDealer,
+            ) =>
+              Number(
+                portalDealer.id ||
+                  0,
+              ),
+          ),
+      ].filter(
+        (
+          value,
+        ) =>
+          Number.isInteger(
+            value,
+          ) &&
+          value > 0,
+      ),
+    ),
+  );
+
+  /*
    * All visible dealer orders.
    *
    * Latest order stays first so the frontend
@@ -40127,16 +41180,22 @@ async getDealerLedgerHistory(query: any) {
    * order when needed.
    */
   const orders =
-    await this.projectDealerOrderRepository.find({
-      where: {
-        dealerId,
-        isHidden: false,
-      },
+  await this.projectDealerOrderRepository.find({
+    where: {
+      dealerId:
+        In(
+          compatibleDealerIds,
+        ),
 
-      order: {
-        createdAt: 'DESC',
-      },
-    });
+      isHidden:
+        false,
+    } as any,
+
+    order: {
+      createdAt:
+        'DESC',
+    },
+  });
 
   const orderIds =
     orders.map(
@@ -40182,40 +41241,46 @@ async getDealerLedgerHistory(query: any) {
       : [];
 
   const proformaInvoices =
-    await this.projectProformaInvoiceRepository.find({
-      where: {
-        invoiceType:
-          'DEALER',
+  await this.projectProformaInvoiceRepository.find({
+    where: {
+      invoiceType:
+        'DEALER',
 
-        dealerId,
+      dealerId:
+        In(
+          compatibleDealerIds,
+        ),
 
-        isHidden:
-          false,
-      } as any,
+      isHidden:
+        false,
+    } as any,
 
-      order: {
-        createdAt:
-          'DESC',
-      },
-    });
+    order: {
+      createdAt:
+        'DESC',
+    },
+  });
 
   const finalInvoices =
-    await this.projectFinalInvoiceRepository.find({
-      where: {
-        invoiceType:
-          'DEALER',
+  await this.projectFinalInvoiceRepository.find({
+    where: {
+      invoiceType:
+        'DEALER',
 
-        dealerId,
+      dealerId:
+        In(
+          compatibleDealerIds,
+        ),
 
-        isHidden:
-          false,
-      } as any,
+      isHidden:
+        false,
+    } as any,
 
-      order: {
-        createdAt:
-          'DESC',
-      },
-    });
+    order: {
+      createdAt:
+        'DESC',
+    },
+  });
 
   /*
    * Overall dealer summary.
