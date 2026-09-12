@@ -4615,25 +4615,39 @@ const incentiveAmount =
       salaryPercentage,
 
       actualLeads:
-        Number(
-          actualMetrics.actualLeads ??
-            actualMetrics.leads ??
-            0,
-        ),
+  Number(
+    actualMetrics
+      ?.LEADS_CREATED ??
+      actualMetrics
+        ?.actualLeads ??
+      actualMetrics
+        ?.leads ??
+      0,
+  ),
 
       actualMeetings:
-        Number(
-          actualMetrics.actualMeetings ??
-            actualMetrics.meetings ??
-            0,
-        ),
+  Number(
+    actualMetrics
+      ?.MEETINGS_COMPLETED ??
+      actualMetrics
+        ?.actualMeetings ??
+      actualMetrics
+        ?.meetings ??
+      0,
+  ),
 
       actualGpsMeetings:
-        Number(
-          actualMetrics.actualGpsMeetings ??
-            actualMetrics.gpsMeetings ??
-            0,
-        ),
+  Number(
+    actualMetrics
+      ?.GPS_SITE_VISITS_COMPLETED ??
+      actualMetrics
+        ?.TEAM_MEETING_MANAGER_GPS_SITE_VISITS_COMPLETED ??
+      actualMetrics
+        ?.actualGpsMeetings ??
+      actualMetrics
+        ?.gpsMeetings ??
+      0,
+  ),
 
       actualScheduledMeetings:
   Number(
@@ -4647,32 +4661,56 @@ const incentiveAmount =
   ),
 
       actualOrders:
-        Number(
-          actualMetrics.actualOrders ??
-            actualMetrics.orders ??
-            0,
-        ),
+  Number(
+    actualMetrics
+      ?.APPROVED_PROJECTS ??
+      actualMetrics
+        ?.TEAM_TELECALLER_APPROVED_PROJECTS ??
+      actualMetrics
+        ?.TEAM_MEETING_MANAGER_APPROVED_PROJECTS ??
+      actualMetrics
+        ?.actualOrders ??
+      actualMetrics
+        ?.approvedProjects ??
+      0,
+  ),
 
       actualSales:
-        Number(
-          actualMetrics.actualSales ??
-            actualMetrics.sales ??
-            0,
-        ),
+  Number(
+    actualMetrics
+      ?.DEALER_SALES_AMOUNT ??
+      actualMetrics
+        ?.TEAM_DEALER_SALES_AMOUNT ??
+      actualMetrics
+        ?.actualSales ??
+      actualMetrics
+        ?.sales ??
+      0,
+  ),
 
       actualNetProfit:
-        Number(
-          actualMetrics.actualNetProfit ??
-            actualMetrics.netProfit ??
-            0,
-        ),
+  Number(
+    actualMetrics
+      ?.DEALER_NET_PROFIT ??
+      actualMetrics
+        ?.TEAM_DEALER_NET_PROFIT ??
+      actualMetrics
+        ?.actualNetProfit ??
+      actualMetrics
+        ?.netProfit ??
+      0,
+  ),
 
       actualJoinings:
-        Number(
-          actualMetrics.actualJoinings ??
-            actualMetrics.joinings ??
-            0,
-        ),
+  Number(
+    actualMetrics
+      ?.STAFF_JOININGS ??
+      actualMetrics
+        ?.actualJoinings ??
+      actualMetrics
+        ?.joinings ??
+      0,
+  ),
 
       actualWorkingHours:
   resolvedWorkingHours,

@@ -3055,6 +3055,30 @@ async calculateMarketingHeadPayroll(
     incentiveEvaluation
       .incentiveAmount;
 
+      const dealerNetProfitMetricKey =
+  String(
+    StaffPayrollMetricType
+      .DEALER_NET_PROFIT,
+  );
+
+if (
+  sharedMetrics[
+    dealerNetProfitMetricKey
+  ] === undefined
+) {
+  sharedMetrics[
+    dealerNetProfitMetricKey
+  ] =
+    await this.resolveRulePayrollMetric(
+      rule,
+      StaffPayrollMetricType
+        .DEALER_NET_PROFIT,
+      payrollMonth,
+      userId,
+      'TRADING_MANAGER',
+    );
+}
+
   return {
     eligibilityMet,
     eligibilityReason,
