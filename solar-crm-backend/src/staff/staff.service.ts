@@ -4406,50 +4406,68 @@ async generatePayroll(
     payrollCalculation;
 
   const eligibilityMet =
-    Boolean(
+  Boolean(
+    calculation?.eligibilityMet ??
       calculation?.eligibility?.met ??
-        calculation?.eligibility
-          ?.eligible ??
-        calculation?.eligibility
-          ?.isEligible ??
-        false,
-    );
-
-  const eligibilityReason =
-    String(
       calculation?.eligibility
-        ?.reason || '',
-    );
+        ?.eligible ??
+      calculation?.eligibility
+        ?.isEligible ??
+      false,
+  );
 
-  const salaryPercentage =
-    Number(
+const eligibilityReason =
+  String(
+    calculation?.eligibilityReason ??
+      calculation?.eligibility
+        ?.reason ??
+      '',
+  );
+
+const salaryPercentage =
+  Number(
+    calculation?.salaryPercentage ??
       calculation?.salary
         ?.salaryPercentage ??
-        calculation?.salary
-          ?.percentage ??
-        0,
-    );
+      calculation?.salary
+        ?.percentage ??
+      0,
+  );
 
-  const actualMetrics =
-    calculation?.actualMetrics ||
-    {};
+const actualMetrics =
+  calculation?.actualMetrics ||
+  {};
 
-  const calculatedSalaryAmount =
-    Number(
+  const resolvedWorkingHours =
+  Number(
+    actualMetrics
+      ?.WORKING_HOURS ??
+      actualMetrics
+        ?.actualWorkingHours ??
+      actualMetrics
+        ?.workingHours ??
+      body.workingHours ??
+      0,
+  );
+
+const calculatedSalaryAmount =
+  Number(
+    calculation?.salaryAmount ??
       calculation?.salary
         ?.salaryAmount ??
-        calculation?.salary?.amount ??
-        0,
-    );
+      calculation?.salary?.amount ??
+      0,
+  );
 
-  const incentiveAmount =
-    Number(
+const incentiveAmount =
+  Number(
+    calculation?.incentiveAmount ??
       calculation?.incentives
         ?.totalAmount ??
-        calculation?.incentives
-          ?.amount ??
-        0,
-    );
+      calculation?.incentives
+        ?.amount ??
+      0,
+  );
 
   const monthDays =
     this.calculateMonthDays(
@@ -4590,9 +4608,7 @@ async generatePayroll(
       leaveDays,
 
       workingHours:
-        Number(
-          body.workingHours || 0,
-        ),
+  resolvedWorkingHours,
 
       eligibilityMet,
       eligibilityReason,
@@ -4657,14 +4673,7 @@ async generatePayroll(
         ),
 
       actualWorkingHours:
-        Number(
-          actualMetrics
-            .actualWorkingHours ??
-            actualMetrics
-              .workingHours ??
-            body.workingHours ??
-            0,
-        ),
+  resolvedWorkingHours,
 
       attendanceDeduction,
       leaveDeduction,
