@@ -4636,13 +4636,15 @@ const incentiveAmount =
         ),
 
       actualScheduledMeetings:
-        Number(
-          actualMetrics
-            .actualScheduledMeetings ??
-            actualMetrics
-              .scheduledMeetings ??
-            0,
-        ),
+  Number(
+    actualMetrics
+      ?.MEETINGS_SCHEDULED ??
+      actualMetrics
+        ?.actualScheduledMeetings ??
+      actualMetrics
+        ?.scheduledMeetings ??
+      0,
+  ),
 
       actualOrders:
         Number(
