@@ -32430,17 +32430,21 @@ async getProjectTimelineTracking(
       .andWhere(
         `
         project.status NOT IN (
-          :cancelledStatus,
-          :rejectedStatus
-        )
+  :cancelledStatus,
+  :rejectedStatus,
+  :completedStatus
+)
         `,
         {
-          cancelledStatus:
-            ProjectStatus.CANCELLED,
+  cancelledStatus:
+    ProjectStatus.CANCELLED,
 
-          rejectedStatus:
-            ProjectStatus.REJECTED,
-        },
+  rejectedStatus:
+    ProjectStatus.REJECTED,
+
+  completedStatus:
+    ProjectStatus.COMPLETED,
+},
       );
 
       if (
