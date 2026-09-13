@@ -264,7 +264,7 @@ sectionLabels: {
           projectTracker: false,
           workCalendar: false,
           payments: true,
-          documents: false,
+          documents: true,
           complaints: false,
           cleaning: true,
           afterSalesServices: true,
