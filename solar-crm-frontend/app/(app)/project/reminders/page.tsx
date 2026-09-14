@@ -338,9 +338,7 @@ type PaymentReminderItem = {
   reminderType:
   | 'PAYMENT_OVERDUE'
   | 'PAYMENT_DUE_TODAY'
-  | 'PAYMENT_UPCOMING'
-  | 'PAYMENT_SCHEDULED'
-  | 'PAYMENT_UNSCHEDULED';
+  | 'PAYMENT_UPCOMING';
 
   customerName: string | null;
   customerPhone: string | null;
@@ -1416,11 +1414,16 @@ const totalVisibleReminders =
 />
 
             <ReminderCard
-  title="Payment Work Pending"
-  value={summary?.categories?.payment || 0}
-  description="All outstanding payment installments requiring collection or follow-up"
+  title="Payment Reminders"
+  value={
+    summary?.categories
+      ?.payment || 0
+  }
+  description="Overdue installments and payments due within the next 7 days"
   tone="green"
-  onClick={() => changeFilter('PAYMENT')}
+  onClick={() =>
+    changeFilter('PAYMENT')
+  }
 />
 
 <ReminderCard
@@ -3167,14 +3170,18 @@ function getApprovalReminderBadge(
 }
 
 function getPaymentReminderBadge(
-  type: PaymentReminderItem['reminderType'],
+  type:
+    PaymentReminderItem[
+      'reminderType'
+    ],
 ) {
   if (
     type ===
     'PAYMENT_OVERDUE'
   ) {
     return {
-      label: 'Payment Overdue',
+      label:
+        'Payment Overdue',
       className:
         'bg-red-100 text-red-700',
     };
@@ -3185,39 +3192,18 @@ function getPaymentReminderBadge(
     'PAYMENT_DUE_TODAY'
   ) {
     return {
-      label: 'Payment Due Today',
+      label:
+        'Payment Due Today',
       className:
         'bg-blue-100 text-blue-700',
     };
   }
 
-  if (
-    type ===
-    'PAYMENT_UPCOMING'
-  ) {
-    return {
-      label: 'Payment Upcoming',
-      className:
-        'bg-amber-100 text-amber-700',
-    };
-  }
-
-  if (
-  type ===
-  'PAYMENT_UNSCHEDULED'
-) {
   return {
     label:
-      'Payment Due Date Missing',
+      'Payment Upcoming',
     className:
-      'bg-slate-100 text-slate-700',
-  };
-}
-
-  return {
-    label: 'Payment Scheduled',
-    className:
-      'bg-gray-100 text-gray-700',
+      'bg-amber-100 text-amber-700',
   };
 }
 
