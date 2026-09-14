@@ -14636,8 +14636,7 @@ async getPaymentReminderList(
     new Date().toLocaleDateString(
       'en-CA',
       {
-        timeZone:
-          'Asia/Kolkata',
+        timeZone: 'Asia/Kolkata',
       },
     );
 
@@ -14650,17 +14649,13 @@ async getPaymentReminderList(
 
   const page =
     Number(pagination?.page) > 0
-      ? Number(
-          pagination?.page,
-        )
+      ? Number(pagination?.page)
       : 1;
 
   const limit =
     Number(pagination?.limit) > 0
       ? Math.min(
-          Number(
-            pagination?.limit,
-          ),
+          Number(pagination?.limit),
           100,
         )
       : 20;
@@ -14670,32 +14665,14 @@ async getPaymentReminderList(
 
   const canSeeAll =
     roles.includes('OWNER') ||
-    roles.includes(
-      'MARKETING_HEAD',
-    ) ||
-    roles.includes(
-      'PROJECT_MANAGER',
-    ) ||
+    roles.includes('MARKETING_HEAD') ||
+    roles.includes('PROJECT_MANAGER') ||
     roles.includes(
       'PAYMENT_COLLECTION_EXECUTIVE',
     ) ||
-    roles.includes(
-      'PAYMENT_MANAGER',
-    ) ||
-    roles.includes(
-      'ACCOUNT_MANAGER',
-    );
+    roles.includes('PAYMENT_MANAGER') ||
+    roles.includes('ACCOUNT_MANAGER');
 
-  /*
-   * Upcoming means:
-   *
-   * today + next 7 calendar days.
-   *
-   * Anything later remains visible
-   * in Payment tab as SCHEDULED,
-   * but does not appear in the
-   * Upcoming Actions filter.
-   */
   const upcomingWindowEnd =
     new Date(
       `${todayIndia}T00:00:00+05:30`,
@@ -14709,16 +14686,13 @@ async getPaymentReminderList(
     upcomingWindowEnd.toLocaleDateString(
       'en-CA',
       {
-        timeZone:
-          'Asia/Kolkata',
+        timeZone: 'Asia/Kolkata',
       },
     );
 
   const qb =
     this.projectPaymentInstallmentRepository
-      .createQueryBuilder(
-        'payment',
-      )
+      .createQueryBuilder('payment')
       .leftJoin(
         Project,
         'project',
@@ -14727,10 +14701,7 @@ async getPaymentReminderList(
       .leftJoin(
         ProjectPaymentReminderUserState,
         'userState',
-        `
-          userState.installmentId = payment.id
-          AND userState.userId = :userId
-        `,
+        'userState.installmentId = payment.id AND userState.userId = :userId',
         {
           userId,
         },
@@ -14764,30 +14735,15 @@ async getPaymentReminderList(
       .andWhere(
         'project.isHidden = false',
       )
-
-      /*
-       * Do NOT exclude COMPLETED
-       * projects here.
-       *
-       * A physically completed
-       * project can still have
-       * outstanding payment.
-       */
       .andWhere(
-        `
-          project.status NOT IN (
-            :...inactivePaymentProjectStatuses
-          )
-        `,
+        'project.status NOT IN (:...inactivePaymentProjectStatuses)',
         {
-          inactivePaymentProjectStatuses:
-            [
-              ProjectStatus.REJECTED,
-              ProjectStatus.CANCELLED,
-            ],
+          inactivePaymentProjectStatuses: [
+            ProjectStatus.REJECTED,
+            ProjectStatus.CANCELLED,
+          ],
         },
       )
-
       .andWhere(
         'payment.status != :paidStatus',
         {
@@ -14796,10 +14752,7 @@ async getPaymentReminderList(
         },
       )
       .andWhere(
-        `
-          payment.status
-          != :cancelledStatus
-        `,
+        'payment.status != :cancelledStatus',
         {
           cancelledStatus:
             ProjectPaymentInstallmentStatus.CANCELLED,
@@ -14809,14 +14762,7 @@ async getPaymentReminderList(
         'payment.dueDate IS NOT NULL',
       )
       .andWhere(
-        `
-          (
-            userState.id IS NULL
-            OR
-            userState.status
-              != :dismissedStatus
-          )
-        `,
+        '("userState"."id" IS NULL OR "userState"."status" != :dismissedStatus)',
         {
           dismissedStatus:
             ProjectPaymentReminderUserStateStatus.DISMISSED,
@@ -14831,28 +14777,15 @@ async getPaymentReminderList(
         'DESC',
       );
 
-  /*
-   * Users without global payment
-   * visibility see only projects
-   * assigned to them.
-   */
   if (!canSeeAll) {
     qb.andWhere(
-      `
-        project.projectOwnerId
-        = :userId
-      `,
+      'project.projectOwnerId = :userId',
       {
         userId,
       },
     );
   }
 
-  /*
-   * Count BEFORE applying
-   * offset/limit so pagination
-   * remains accurate.
-   */
   const total =
     await qb
       .clone()
@@ -14868,20 +14801,9 @@ async getPaymentReminderList(
   const data =
     rows
       .map((row) => {
-        /*
-         * PostgreSQL / TypeORM may
-         * return this either as a
-         * Date or as a string.
-         *
-         * Convert it to an India
-         * calendar date before
-         * comparing.
-         */
         const dueDateValue =
           row.dueDate
-            ? new Date(
-                row.dueDate,
-              )
+            ? new Date(row.dueDate)
             : null;
 
         if (
@@ -14894,14 +14816,13 @@ async getPaymentReminderList(
         }
 
         const dueDateIndia =
-          dueDateValue
-            .toLocaleDateString(
-              'en-CA',
-              {
-                timeZone:
-                  'Asia/Kolkata',
-              },
-            );
+          dueDateValue.toLocaleDateString(
+            'en-CA',
+            {
+              timeZone:
+                'Asia/Kolkata',
+            },
+          );
 
         let reminderType:
           | 'PAYMENT_OVERDUE'
@@ -14956,8 +14877,7 @@ async getPaymentReminderList(
 
           pendingAmount:
             Number(
-              row.pendingAmount ||
-                0,
+              row.pendingAmount || 0,
             ),
 
           dueDate:
@@ -14968,8 +14888,7 @@ async getPaymentReminderList(
               row.status,
               row.dueDate,
               Number(
-                row.pendingAmount ||
-                  0,
+                row.pendingAmount || 0,
               ),
             ),
 
