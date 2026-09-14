@@ -14649,13 +14649,17 @@ async getPaymentReminderList(
 
   const page =
     Number(pagination?.page) > 0
-      ? Number(pagination?.page)
+      ? Number(
+          pagination?.page,
+        )
       : 1;
 
   const limit =
     Number(pagination?.limit) > 0
       ? Math.min(
-          Number(pagination?.limit),
+          Number(
+            pagination?.limit,
+          ),
           100,
         )
       : 20;
@@ -14665,13 +14669,21 @@ async getPaymentReminderList(
 
   const canSeeAll =
     roles.includes('OWNER') ||
-    roles.includes('MARKETING_HEAD') ||
-    roles.includes('PROJECT_MANAGER') ||
+    roles.includes(
+      'MARKETING_HEAD',
+    ) ||
+    roles.includes(
+      'PROJECT_MANAGER',
+    ) ||
     roles.includes(
       'PAYMENT_COLLECTION_EXECUTIVE',
     ) ||
-    roles.includes('PAYMENT_MANAGER') ||
-    roles.includes('ACCOUNT_MANAGER');
+    roles.includes(
+      'PAYMENT_MANAGER',
+    ) ||
+    roles.includes(
+      'ACCOUNT_MANAGER',
+    );
 
   const upcomingWindowEnd =
     new Date(
@@ -14686,13 +14698,16 @@ async getPaymentReminderList(
     upcomingWindowEnd.toLocaleDateString(
       'en-CA',
       {
-        timeZone: 'Asia/Kolkata',
+        timeZone:
+          'Asia/Kolkata',
       },
     );
 
   const qb =
     this.projectPaymentInstallmentRepository
-      .createQueryBuilder('payment')
+      .createQueryBuilder(
+        'payment',
+      )
       .leftJoin(
         Project,
         'project',
@@ -14738,10 +14753,11 @@ async getPaymentReminderList(
       .andWhere(
         'project.status NOT IN (:...inactivePaymentProjectStatuses)',
         {
-          inactivePaymentProjectStatuses: [
-            ProjectStatus.REJECTED,
-            ProjectStatus.CANCELLED,
-          ],
+          inactivePaymentProjectStatuses:
+            [
+              ProjectStatus.REJECTED,
+              ProjectStatus.CANCELLED,
+            ],
         },
       )
       .andWhere(
@@ -14759,9 +14775,6 @@ async getPaymentReminderList(
         },
       )
       .andWhere(
-        'payment.dueDate IS NOT NULL',
-      )
-      .andWhere(
         '("userState"."id" IS NULL OR "userState"."status" != :dismissedStatus)',
         {
           dismissedStatus:
@@ -14769,6 +14782,16 @@ async getPaymentReminderList(
         },
       )
       .orderBy(
+        `
+          CASE
+            WHEN payment.dueDate IS NULL
+            THEN 1
+            ELSE 0
+          END
+        `,
+        'ASC',
+      )
+      .addOrderBy(
         'payment.dueDate',
         'ASC',
       )
@@ -14799,63 +14822,81 @@ async getPaymentReminderList(
     await qb.getRawMany();
 
   const data =
-    rows
-      .map((row) => {
-        const dueDateValue =
-          row.dueDate
-            ? new Date(row.dueDate)
-            : null;
-
-        if (
-          !dueDateValue ||
-          Number.isNaN(
-            dueDateValue.getTime(),
-          )
-        ) {
-          return null;
-        }
-
-        const dueDateIndia =
-          dueDateValue.toLocaleDateString(
-            'en-CA',
-            {
-              timeZone:
-                'Asia/Kolkata',
-            },
-          );
-
+    rows.map(
+      (row) => {
         let reminderType:
           | 'PAYMENT_OVERDUE'
           | 'PAYMENT_DUE_TODAY'
           | 'PAYMENT_UPCOMING'
-          | 'PAYMENT_SCHEDULED';
+          | 'PAYMENT_SCHEDULED'
+          | 'PAYMENT_UNSCHEDULED';
 
-        if (
-          dueDateIndia <
-          todayIndia
-        ) {
+        /*
+         * Payment is still active work
+         * even when no due date exists.
+         */
+        if (!row.dueDate) {
           reminderType =
-            'PAYMENT_OVERDUE';
-        } else if (
-          dueDateIndia ===
-          todayIndia
-        ) {
-          reminderType =
-            'PAYMENT_DUE_TODAY';
-        } else if (
-          dueDateIndia <
-          upcomingWindowEndIndia
-        ) {
-          reminderType =
-            'PAYMENT_UPCOMING';
+            'PAYMENT_UNSCHEDULED';
         } else {
-          reminderType =
-            'PAYMENT_SCHEDULED';
+          const dueDateValue =
+            new Date(
+              row.dueDate,
+            );
+
+          if (
+            Number.isNaN(
+              dueDateValue.getTime(),
+            )
+          ) {
+            /*
+             * Bad/missing usable date
+             * should not make an
+             * outstanding installment
+             * disappear.
+             */
+            reminderType =
+              'PAYMENT_UNSCHEDULED';
+          } else {
+            const dueDateIndia =
+              dueDateValue.toLocaleDateString(
+                'en-CA',
+                {
+                  timeZone:
+                    'Asia/Kolkata',
+                },
+              );
+
+            if (
+              dueDateIndia <
+              todayIndia
+            ) {
+              reminderType =
+                'PAYMENT_OVERDUE';
+            } else if (
+              dueDateIndia ===
+              todayIndia
+            ) {
+              reminderType =
+                'PAYMENT_DUE_TODAY';
+            } else if (
+              dueDateIndia <
+              upcomingWindowEndIndia
+            ) {
+              reminderType =
+                'PAYMENT_UPCOMING';
+            } else {
+              reminderType =
+                'PAYMENT_SCHEDULED';
+            }
+          }
         }
 
         return {
           id:
-            Number(row.id),
+            Number(
+              row.id,
+            ),
 
           projectId:
             Number(
@@ -14877,18 +14918,21 @@ async getPaymentReminderList(
 
           pendingAmount:
             Number(
-              row.pendingAmount || 0,
+              row.pendingAmount ||
+                0,
             ),
 
           dueDate:
-            row.dueDate,
+            row.dueDate ||
+            null,
 
           status:
             this.getComputedPaymentStatus(
               row.status,
               row.dueDate,
               Number(
-                row.pendingAmount || 0,
+                row.pendingAmount ||
+                  0,
               ),
             ),
 
@@ -14929,8 +14973,8 @@ async getPaymentReminderList(
             row.userReadAt ||
             null,
         };
-      })
-      .filter(Boolean);
+      },
+    );
 
   return {
     data,

@@ -339,7 +339,8 @@ type PaymentReminderItem = {
   | 'PAYMENT_OVERDUE'
   | 'PAYMENT_DUE_TODAY'
   | 'PAYMENT_UPCOMING'
-  | 'PAYMENT_SCHEDULED';
+  | 'PAYMENT_SCHEDULED'
+  | 'PAYMENT_UNSCHEDULED';
 
   customerName: string | null;
   customerPhone: string | null;
@@ -3200,6 +3201,18 @@ function getPaymentReminderBadge(
         'bg-amber-100 text-amber-700',
     };
   }
+
+  if (
+  type ===
+  'PAYMENT_UNSCHEDULED'
+) {
+  return {
+    label:
+      'Payment Due Date Missing',
+    className:
+      'bg-slate-100 text-slate-700',
+  };
+}
 
   return {
     label: 'Payment Scheduled',
