@@ -16407,24 +16407,79 @@ async getLoanReminderList(
   };
 }
 
+private async countUnreadFromPaginatedReminderList(
+  fetchPage: (
+    page: number,
+    limit: number,
+  ) => Promise<any>,
+) {
+  const limit = 100;
+
+  const countUnread = (items: any[]) =>
+    items.filter(
+      (item: any) =>
+        item?.userReminderStatus === 'UNREAD',
+    ).length;
+
+  const firstResult =
+    await fetchPage(1, limit);
+
+  // Safety for any non-paginated reminder method
+  if (Array.isArray(firstResult)) {
+    return countUnread(firstResult);
+  }
+
+  const firstData =
+    Array.isArray(firstResult?.data)
+      ? firstResult.data
+      : [];
+
+  let unreadCount =
+    countUnread(firstData);
+
+  const total =
+    Number(firstResult?.total || 0);
+
+  const totalPages =
+    Math.max(
+      Math.ceil(total / limit),
+      1,
+    );
+
+  for (
+    let page = 2;
+    page <= totalPages;
+    page += 1
+  ) {
+    const result =
+      await fetchPage(page, limit);
+
+    const data =
+      Array.isArray(result?.data)
+        ? result.data
+        : [];
+
+    unreadCount +=
+      countUnread(data);
+  }
+
+  return unreadCount;
+}
+
 async getUnreadLoanReminderCount(
   currentUser: any,
 ) {
-  const result =
-    await this.getLoanReminderList(
-      currentUser,
-      {
-        page: 1,
-        limit: 100,
-      },
-    );
-
   const unreadCount =
-    result.data.filter(
-      (item: any) =>
-        item.userReminderStatus ===
-        ProjectReminderUserStateStatus.UNREAD,
-    ).length;
+    await this.countUnreadFromPaginatedReminderList(
+      (page, limit) =>
+        this.getLoanReminderList(
+          currentUser,
+          {
+            page,
+            limit,
+          },
+        ),
+    );
 
   return {
     unreadCount,
@@ -16667,21 +16722,17 @@ if (
 async getUnreadSubsidyReminderCount(
   currentUser: any,
 ) {
-  const result =
-    await this.getSubsidyReminderList(
-      currentUser,
-      {
-        page: 1,
-        limit: 100,
-      },
-    );
-
   const unreadCount =
-    result.data.filter(
-      (item: any) =>
-        item.userReminderStatus ===
-        ProjectReminderUserStateStatus.UNREAD,
-    ).length;
+    await this.countUnreadFromPaginatedReminderList(
+      (page, limit) =>
+        this.getSubsidyReminderList(
+          currentUser,
+          {
+            page,
+            limit,
+          },
+        ),
+    );
 
   return {
     unreadCount,
@@ -16910,21 +16961,17 @@ qb
 async getUnreadElectricityReminderCount(
   currentUser: any,
 ) {
-  const result =
-    await this.getElectricityReminderList(
-      currentUser,
-      {
-        page: 1,
-        limit: 100,
-      },
-    );
-
   const unreadCount =
-    result.data.filter(
-      (item: any) =>
-        item.userReminderStatus ===
-        ProjectReminderUserStateStatus.UNREAD,
-    ).length;
+    await this.countUnreadFromPaginatedReminderList(
+      (page, limit) =>
+        this.getElectricityReminderList(
+          currentUser,
+          {
+            page,
+            limit,
+          },
+        ),
+    );
 
   return {
     unreadCount,
@@ -17112,21 +17159,17 @@ qb
 async getUnreadFinalClosureReminderCount(
   currentUser: any,
 ) {
-  const result =
-    await this.getFinalClosureReminderList(
-      currentUser,
-      {
-        page: 1,
-        limit: 100,
-      },
-    );
-
   const unreadCount =
-    result.data.filter(
-      (item: any) =>
-        item.userReminderStatus ===
-        ProjectReminderUserStateStatus.UNREAD,
-    ).length;
+    await this.countUnreadFromPaginatedReminderList(
+      (page, limit) =>
+        this.getFinalClosureReminderList(
+          currentUser,
+          {
+            page,
+            limit,
+          },
+        ),
+    );
 
   return {
     unreadCount,
@@ -17136,56 +17179,57 @@ async getUnreadFinalClosureReminderCount(
 async getUnreadPurchaseReminderCount(
   currentUser: any,
 ) {
-  const result =
-    await this.getPurchaseReminderList(
-      currentUser,
-      {
-        page: 1,
-        limit: 1,
-      },
+  const unreadCount =
+    await this.countUnreadFromPaginatedReminderList(
+      (page, limit) =>
+        this.getPurchaseReminderList(
+          currentUser,
+          {
+            page,
+            limit,
+          },
+        ),
     );
 
   return {
-    unreadCount:
-      Number(
-        result?.total || 0,
-      ),
+    unreadCount,
   };
 }
 
-async getUnreadApprovalReminderCount(currentUser: any) {
-  const result = await this.getApprovalReminderList(currentUser, {
-  page: 1,
-  limit: 100,
-});
+async getUnreadApprovalReminderCount(
+  currentUser: any,
+) {
+  const unreadCount =
+    await this.countUnreadFromPaginatedReminderList(
+      (page, limit) =>
+        this.getApprovalReminderList(
+          currentUser,
+          {
+            page,
+            limit,
+          },
+        ),
+    );
 
-const list = Array.isArray(result)
-  ? result
-  : result.data || [];
-
-return {
-  unreadCount: list.length,
-};
+  return {
+    unreadCount,
+  };
 }
 
 async getUnreadPaymentReminderCount(
   currentUser: any,
 ) {
-  const result =
-    await this.getPaymentReminderList(
-      currentUser,
-      {
-        page: 1,
-        limit: 100,
-      },
-    );
-
   const unreadCount =
-    result.data.filter(
-      (item: any) =>
-        item.userReminderStatus ===
-        ProjectPaymentReminderUserStateStatus.UNREAD,
-    ).length;
+    await this.countUnreadFromPaginatedReminderList(
+      (page, limit) =>
+        this.getPaymentReminderList(
+          currentUser,
+          {
+            page,
+            limit,
+          },
+        ),
+    );
 
   return {
     unreadCount,
