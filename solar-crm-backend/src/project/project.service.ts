@@ -15007,6 +15007,13 @@ const dismissedIds =
     ])
     .where('project.isHidden = false')
     .andWhere(
+  'project.status = :pendingApprovalProjectStatus',
+  {
+    pendingApprovalProjectStatus:
+      ProjectStatus.PENDING_APPROVAL,
+  },
+)
+    .andWhere(
   'project.status NOT IN (:...inactiveProjectStatuses)',
   {
     inactiveProjectStatuses: [
@@ -15051,6 +15058,13 @@ if (dismissedIds.length > 0) {
   const totalQb = this.projectRepository
   .createQueryBuilder('project')
   .where('project.isHidden = false')
+  .andWhere(
+  'project.status = :pendingApprovalProjectStatus',
+  {
+    pendingApprovalProjectStatus:
+      ProjectStatus.PENDING_APPROVAL,
+  },
+)
   .andWhere(
   'project.status NOT IN (:...inactiveProjectStatuses)',
   {
@@ -15263,6 +15277,17 @@ const skip =
 
       .andWhere('project.isHidden = false')
 
+      .andWhere(
+  'project.status NOT IN (:...inactiveProjectStatuses)',
+  {
+    inactiveProjectStatuses: [
+      ProjectStatus.COMPLETED,
+      ProjectStatus.REJECTED,
+      ProjectStatus.CANCELLED,
+    ],
+  },
+)
+
       .orderBy(
   'item.createdAt',
   'ASC',
@@ -15294,6 +15319,16 @@ const skip =
     )
     .andWhere(
       'project.isHidden = false',
+    )
+    .andWhere(
+      'project.status NOT IN (:...inactiveProjectStatuses)',
+      {
+        inactiveProjectStatuses: [
+          ProjectStatus.COMPLETED,
+          ProjectStatus.REJECTED,
+          ProjectStatus.CANCELLED,
+        ],
+      },
     );
 
 if (!canSeeAll) {
