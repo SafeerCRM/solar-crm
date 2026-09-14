@@ -319,12 +319,17 @@ const [
   ] = useState('');
 
   const [
-    legacyYear,
-    setLegacyYear,
-  ] = useState('');
+  legacyYear,
+  setLegacyYear,
+] = useState('');
 
-  const [page, setPage] =
-    useState(1);
+const [
+  inspectionState,
+  setInspectionState,
+] = useState('');
+
+const [page, setPage] =
+  useState(1);
 
   const [limit, setLimit] =
     useState(20);
@@ -452,6 +457,10 @@ const [
                 legacyYear:
                   legacyYear ||
                   undefined,
+
+                  inspectionState:
+  inspectionState ||
+  undefined,
               },
 
               headers:
@@ -751,16 +760,17 @@ defects:
   };
 
   const resetFilters = () => {
-    setSearch('');
-    setCity('');
-    setZone('');
-    setBranchName('');
-    setProjectStatus('');
-    setProjectWorkState('');
-    setProjectType('');
-    setLegacyYear('');
-    setPage(1);
-  };
+  setSearch('');
+  setCity('');
+  setZone('');
+  setBranchName('');
+  setProjectStatus('');
+  setProjectWorkState('');
+  setProjectType('');
+  setLegacyYear('');
+  setInspectionState('');
+  setPage(1);
+};
 
   const resetAnalyticsFilters =
   () => {
@@ -847,17 +857,18 @@ defects:
         timeoutId,
       );
   }, [
-    page,
-    limit,
-    search,
-    city,
-    zone,
-    branchName,
-    projectStatus,
-    projectWorkState,
-    projectType,
-    legacyYear,
-  ]);
+  page,
+  limit,
+  search,
+  city,
+  zone,
+  branchName,
+  projectStatus,
+  projectWorkState,
+  projectType,
+  legacyYear,
+  inspectionState,
+]);
 
   useEffect(() => {
   const timeoutId =
@@ -1785,6 +1796,30 @@ useEffect(() => {
             }}
             className="rounded-xl border p-3 disabled:bg-gray-100"
           />
+
+          <select
+  value={inspectionState}
+  onChange={(event) => {
+    setInspectionState(
+      event.target.value,
+    );
+
+    setPage(1);
+  }}
+  className="rounded-xl border p-3"
+>
+  <option value="">
+    All Inspection History
+  </option>
+
+  <option value="NOT_INSPECTED">
+    Never Inspected
+  </option>
+
+  <option value="INSPECTED">
+    Inspected
+  </option>
+</select>
 
           <select
             value={limit}

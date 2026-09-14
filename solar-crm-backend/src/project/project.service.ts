@@ -50394,6 +50394,41 @@ async listInspectionProjects(
     );
   }
 
+  const inspectionState =
+  String(
+    query?.inspectionState || '',
+  )
+    .trim()
+    .toUpperCase();
+
+if (
+  inspectionState ===
+  'NOT_INSPECTED'
+) {
+  qb.andWhere(`
+    NOT EXISTS (
+      SELECT 1
+      FROM project_inspection pi
+      WHERE pi."projectId" = project.id
+        AND pi."isHidden" = false
+    )
+  `);
+}
+
+if (
+  inspectionState ===
+  'INSPECTED'
+) {
+  qb.andWhere(`
+    EXISTS (
+      SELECT 1
+      FROM project_inspection pi
+      WHERE pi."projectId" = project.id
+        AND pi."isHidden" = false
+    )
+  `);
+}
+
   qb.orderBy(
     'project.createdAt',
     'DESC',

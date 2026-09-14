@@ -2016,6 +2016,8 @@ listInspectionProjects(
   @Query('projectWorkState') projectWorkState?: string,
   @Query('projectType') projectType?: string,
   @Query('legacyYear') legacyYear?: string,
+  @Query('inspectionState')
+inspectionState?: string,
   @CurrentUser() user?: any,
 ) {
   return this.projectService.listInspectionProjects(
@@ -2034,6 +2036,8 @@ listInspectionProjects(
         projectType || '',
       legacyYear:
         legacyYear || '',
+        inspectionState:
+  inspectionState || '',
     },
     user,
   );
