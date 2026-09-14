@@ -27,6 +27,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { AppSettingsModule } from './app-settings/app-settings.module';
 import { StaffLocationModule } from './staff-location/staff-location.module';
 import { PushNotificationModule } from './push-notification/push-notification.module';
+import { WhatsappModule } from './whatsapp/whatsapp.module';
 
 @Module({
   imports: [
@@ -65,6 +66,7 @@ import { PushNotificationModule } from './push-notification/push-notification.mo
     AppSettingsModule,
     StaffLocationModule,
     PushNotificationModule,
+    WhatsappModule,
   ],
   controllers: [AppController],
   providers: [AppService],
