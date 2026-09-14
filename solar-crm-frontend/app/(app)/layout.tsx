@@ -687,7 +687,6 @@ const [bellOpen, setBellOpen] = useState(false);
       '/project/payment-reminders/unread-count',
       '/project/approval-reminders/unread-count',
       '/project/purchase-reminders/unread-count',
-      '/project/document-reminders/unread-count',
       '/project/loan-reminders/unread-count',
       '/project/subsidy-reminders/unread-count',
       '/project/electricity-reminders/unread-count',

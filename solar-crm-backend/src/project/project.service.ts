@@ -15687,7 +15687,6 @@ async getReminderCenterSummary(
     executionTotal +
     approvalTotal +
     purchaseTotal +
-    documentTotal +
     loanTotal +
     subsidyTotal +
     electricityTotal +
@@ -15709,9 +15708,6 @@ async getReminderCenterSummary(
 
       purchase:
         purchaseTotal,
-
-      document:
-        documentTotal,
 
       loan:
         loanTotal,

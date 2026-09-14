@@ -1369,6 +1369,7 @@ const totalVisibleReminders =
   onClick={() => changeFilter('PURCHASE')}
 />
 
+{/* Document reminder intentionally hidden
 <ReminderCard
   title="Document Pending"
   value={summary?.categories?.document || 0}
@@ -1376,6 +1377,7 @@ const totalVisibleReminders =
   tone="red"
   onClick={() => changeFilter('DOCUMENT')}
 />
+*/}
 
 <ReminderCard
   title="Loan Work Pending"
@@ -1486,11 +1488,13 @@ const totalVisibleReminders =
     onClick={() => changeFilter('PURCHASE')}
   />
 
+{/* Document reminder intentionally hidden
   <FilterButton
     label="Document"
     active={filter === 'DOCUMENT'}
     onClick={() => changeFilter('DOCUMENT')}
   />
+  */}
 
   <FilterButton
     label="Loan"
@@ -1561,7 +1565,7 @@ const totalVisibleReminders =
   <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-blue-700">
   Urgency filters currently include Execution and
   Payment reminders. Loan, Subsidy, Electricity,
-  Purchase, Document, Approval, and Closure reminders
+  Purchase, Approval, and Closure reminders
   are available through their department filters.
 </div>
 )}
