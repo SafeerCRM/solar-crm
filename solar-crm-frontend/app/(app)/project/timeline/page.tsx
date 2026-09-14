@@ -883,6 +883,11 @@ const [
   const [page, setPage] =
     useState(1);
 
+    const [
+  timelineFiltersLoaded,
+  setTimelineFiltersLoaded,
+] = useState(false);
+
   /*
    * Delay modal.
    */
@@ -990,6 +995,175 @@ const [
       );
     }
   }, []);
+
+  useEffect(() => {
+  const saved =
+    localStorage.getItem(
+      'projectTimelineFilters',
+    );
+
+  if (!saved) {
+    setTimelineFiltersLoaded(
+      true,
+    );
+    return;
+  }
+
+  try {
+    const parsed =
+      JSON.parse(saved);
+
+    const restoredFilters = {
+      search:
+        parsed.search || '',
+
+      ruleId:
+        parsed.ruleId || '',
+
+      targetModule:
+        parsed.targetModule || '',
+
+      timelineStatus:
+        parsed.timelineStatus || '',
+
+      projectType:
+        parsed.projectType || '',
+
+      branch:
+        parsed.branch || '',
+
+      projectWorkState:
+        parsed.projectWorkState || '',
+
+      projectOwnerId:
+        parsed.projectOwnerId || '',
+    };
+
+    /*
+     * Restore the visible filter controls.
+     */
+    setSearch(
+      restoredFilters.search,
+    );
+
+    setRuleIdFilter(
+      restoredFilters.ruleId,
+    );
+
+    setModuleFilter(
+      restoredFilters.targetModule,
+    );
+
+    setStatusFilter(
+      restoredFilters.timelineStatus,
+    );
+
+    setProjectTypeFilter(
+      restoredFilters.projectType,
+    );
+
+    setBranchFilter(
+      restoredFilters.branch,
+    );
+
+    setWorkStateFilter(
+      restoredFilters.projectWorkState,
+    );
+
+    setOwnerIdFilter(
+      restoredFilters.projectOwnerId,
+    );
+
+    /*
+     * Restore the filters that actually drive
+     * the tracking API.
+     */
+    setAppliedFilters(
+      restoredFilters,
+    );
+
+    setPage(
+      Math.max(
+        Number(
+          parsed.page || 1,
+        ),
+        1,
+      ),
+    );
+
+    if (
+      parsed.activeTab ===
+        'TRACKING' ||
+      parsed.activeTab ===
+        'PERFORMANCE' ||
+      parsed.activeTab ===
+        'SETTINGS'
+    ) {
+      setActiveTab(
+        parsed.activeTab,
+      );
+    }
+  } catch (error) {
+    console.error(
+      'Failed to restore timeline filters',
+      error,
+    );
+
+    localStorage.removeItem(
+      'projectTimelineFilters',
+    );
+  } finally {
+    setTimelineFiltersLoaded(
+      true,
+    );
+  }
+}, []);
+
+useEffect(() => {
+  if (
+    !timelineFiltersLoaded
+  ) {
+    return;
+  }
+
+  localStorage.setItem(
+    'projectTimelineFilters',
+    JSON.stringify({
+      search:
+        appliedFilters.search,
+
+      ruleId:
+        appliedFilters.ruleId,
+
+      targetModule:
+        appliedFilters.targetModule,
+
+      timelineStatus:
+        appliedFilters.timelineStatus,
+
+      projectType:
+        appliedFilters.projectType,
+
+      branch:
+        appliedFilters.branch,
+
+      projectWorkState:
+        appliedFilters.projectWorkState,
+
+      projectOwnerId:
+        appliedFilters.projectOwnerId,
+
+      page,
+
+      activeTab,
+    }),
+  );
+}, [
+  timelineFiltersLoaded,
+  appliedFilters,
+  page,
+  activeTab,
+]);
 
   const fetchOptions =
     async () => {
@@ -1454,11 +1628,18 @@ const selectPerformanceProject =
   }, [isOwner]);
 
   useEffect(() => {
-    fetchTracking();
-  }, [
-    page,
-    appliedFilters,
-  ]);
+  if (
+    !timelineFiltersLoaded
+  ) {
+    return;
+  }
+
+  fetchTracking();
+}, [
+  timelineFiltersLoaded,
+  page,
+  appliedFilters,
+]);
 
   const milestoneOptions =
     useMemo(
@@ -1588,6 +1769,9 @@ const selectPerformanceProject =
       });
 
       setPage(1);
+      localStorage.removeItem(
+  'projectTimelineFilters',
+);
     };
 
   const resetRuleForm =
