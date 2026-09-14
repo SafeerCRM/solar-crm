@@ -335,7 +335,11 @@ type PaymentReminderItem = {
   pendingAmount: number;
   dueDate: string | null;
   status: string;
-  reminderType: 'PAYMENT_OVERDUE' | 'PAYMENT_DUE_TODAY' | 'PAYMENT_UPCOMING';
+  reminderType:
+  | 'PAYMENT_OVERDUE'
+  | 'PAYMENT_DUE_TODAY'
+  | 'PAYMENT_UPCOMING'
+  | 'PAYMENT_SCHEDULED';
 
   customerName: string | null;
   customerPhone: string | null;
@@ -1411,9 +1415,9 @@ const totalVisibleReminders =
 />
 
             <ReminderCard
-  title="Payment Reminders"
+  title="Payment Work Pending"
   value={summary?.categories?.payment || 0}
-  description="Outstanding installments overdue, due today or due within 7 days"
+  description="All outstanding payment installments requiring collection or follow-up"
   tone="green"
   onClick={() => changeFilter('PAYMENT')}
 />
@@ -3161,24 +3165,46 @@ function getApprovalReminderBadge(
   };
 }
 
-function getPaymentReminderBadge(type: PaymentReminderItem['reminderType']) {
-  if (type === 'PAYMENT_OVERDUE') {
+function getPaymentReminderBadge(
+  type: PaymentReminderItem['reminderType'],
+) {
+  if (
+    type ===
+    'PAYMENT_OVERDUE'
+  ) {
     return {
       label: 'Payment Overdue',
-      className: 'bg-red-100 text-red-700',
+      className:
+        'bg-red-100 text-red-700',
     };
   }
 
-  if (type === 'PAYMENT_DUE_TODAY') {
+  if (
+    type ===
+    'PAYMENT_DUE_TODAY'
+  ) {
     return {
       label: 'Payment Due Today',
-      className: 'bg-blue-100 text-blue-700',
+      className:
+        'bg-blue-100 text-blue-700',
+    };
+  }
+
+  if (
+    type ===
+    'PAYMENT_UPCOMING'
+  ) {
+    return {
+      label: 'Payment Upcoming',
+      className:
+        'bg-amber-100 text-amber-700',
     };
   }
 
   return {
-    label: 'Payment Upcoming',
-    className: 'bg-amber-100 text-amber-700',
+    label: 'Payment Scheduled',
+    className:
+      'bg-gray-100 text-gray-700',
   };
 }
 

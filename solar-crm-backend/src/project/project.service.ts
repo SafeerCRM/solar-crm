@@ -14632,191 +14632,397 @@ async getPaymentReminderList(
     limit?: number;
   },
 ) {
-  const todayIndia = new Date().toLocaleDateString('en-CA', {
-    timeZone: 'Asia/Kolkata',
-  });
+  const todayIndia =
+    new Date().toLocaleDateString(
+      'en-CA',
+      {
+        timeZone:
+          'Asia/Kolkata',
+      },
+    );
 
-  const today = new Date(`${todayIndia}T00:00:00`);
-  const reminderWindowEnd = new Date(today);
-  reminderWindowEnd.setDate(reminderWindowEnd.getDate() + 8);
+  const roles =
+    currentUser?.roles || [];
 
-  const roles = currentUser?.roles || [];
-  const userId = currentUser?.id || currentUser?.userId;
+  const userId =
+    currentUser?.id ||
+    currentUser?.userId;
 
   const page =
-  Number(pagination?.page) > 0
-    ? Number(pagination?.page)
-    : 1;
+    Number(pagination?.page) > 0
+      ? Number(
+          pagination?.page,
+        )
+      : 1;
 
-const limit =
-  Number(pagination?.limit) > 0
-    ? Math.min(
-        Number(pagination?.limit),
-        100,
-      )
-    : 20;
+  const limit =
+    Number(pagination?.limit) > 0
+      ? Math.min(
+          Number(
+            pagination?.limit,
+          ),
+          100,
+        )
+      : 20;
 
-const skip =
-  (page - 1) * limit;
+  const skip =
+    (page - 1) * limit;
 
   const canSeeAll =
-  roles.includes('OWNER') ||
-  roles.includes('MARKETING_HEAD') ||
-  roles.includes('PROJECT_MANAGER') ||
-  roles.includes(
-    'PAYMENT_COLLECTION_EXECUTIVE',
-  ) ||
-  roles.includes('PAYMENT_MANAGER') ||
-  roles.includes('ACCOUNT_MANAGER');
+    roles.includes('OWNER') ||
+    roles.includes(
+      'MARKETING_HEAD',
+    ) ||
+    roles.includes(
+      'PROJECT_MANAGER',
+    ) ||
+    roles.includes(
+      'PAYMENT_COLLECTION_EXECUTIVE',
+    ) ||
+    roles.includes(
+      'PAYMENT_MANAGER',
+    ) ||
+    roles.includes(
+      'ACCOUNT_MANAGER',
+    );
 
-  const qb = this.projectPaymentInstallmentRepository
-    .createQueryBuilder('payment')
-    .leftJoin(Project, 'project', 'project.id = payment.projectId')
-    .leftJoin(
-      ProjectPaymentReminderUserState,
-      'userState',
-      'userState.installmentId = payment.id AND userState.userId = :userId',
-      { userId },
-    )
-    .select([
-      'payment.id AS "id"',
-      'payment.projectId AS "projectId"',
-      'payment.label AS "label"',
-      'payment.amount AS "amount"',
-      'payment.paidAmount AS "paidAmount"',
-      'payment.pendingAmount AS "pendingAmount"',
-      'payment.dueDate AS "dueDate"',
-      'payment.status AS "status"',
-      'project.customerName AS "customerName"',
-      'project.customerPhone AS "customerPhone"',
-      'project.branchName AS "branchName"',
-      'project.projectOwnerId AS "projectOwnerId"',
-      'project.projectOwnerName AS "projectOwnerName"',
-      'project.projectSerial AS "projectSerial"',
-      'userState.status AS "userReminderStatus"',
-      'userState.readAt AS "userReadAt"',
-    ])
-    .where('payment.pendingAmount > 0')
-.andWhere('payment.isHidden = false')
-.andWhere('project.isHidden = false')
-.andWhere(
-  'project.status NOT IN (:...inactivePaymentProjectStatuses)',
-  {
-    inactivePaymentProjectStatuses: [
-      ProjectStatus.REJECTED,
-      ProjectStatus.CANCELLED,
-    ],
-  },
-)
-    .andWhere('payment.status != :paidStatus', {
-      paidStatus: ProjectPaymentInstallmentStatus.PAID,
-    })
-    .andWhere('payment.status != :cancelledStatus', {
-      cancelledStatus: ProjectPaymentInstallmentStatus.CANCELLED,
-    })
-    .andWhere('payment.dueDate IS NOT NULL')
-    .andWhere('payment.dueDate < :windowEnd', {
-      windowEnd: reminderWindowEnd,
-    })
-    .andWhere(
-      '(userState.id IS NULL OR userState.status != :dismissedStatus)',
+  /*
+   * Upcoming means:
+   *
+   * today + next 7 calendar days.
+   *
+   * Anything later remains visible
+   * in Payment tab as SCHEDULED,
+   * but does not appear in the
+   * Upcoming Actions filter.
+   */
+  const upcomingWindowEnd =
+    new Date(
+      `${todayIndia}T00:00:00+05:30`,
+    );
+
+  upcomingWindowEnd.setDate(
+    upcomingWindowEnd.getDate() + 8,
+  );
+
+  const upcomingWindowEndIndia =
+    upcomingWindowEnd.toLocaleDateString(
+      'en-CA',
       {
-        dismissedStatus:
-          ProjectPaymentReminderUserStateStatus.DISMISSED,
+        timeZone:
+          'Asia/Kolkata',
       },
-    )
-    .orderBy('payment.dueDate', 'ASC')
-    .addOrderBy('payment.id', 'DESC');
+    );
 
+  const qb =
+    this.projectPaymentInstallmentRepository
+      .createQueryBuilder(
+        'payment',
+      )
+      .leftJoin(
+        Project,
+        'project',
+        'project.id = payment.projectId',
+      )
+      .leftJoin(
+        ProjectPaymentReminderUserState,
+        'userState',
+        `
+          userState.installmentId = payment.id
+          AND userState.userId = :userId
+        `,
+        {
+          userId,
+        },
+      )
+      .select([
+        'payment.id AS "id"',
+        'payment.projectId AS "projectId"',
+        'payment.label AS "label"',
+        'payment.amount AS "amount"',
+        'payment.paidAmount AS "paidAmount"',
+        'payment.pendingAmount AS "pendingAmount"',
+        'payment.dueDate AS "dueDate"',
+        'payment.status AS "status"',
+
+        'project.customerName AS "customerName"',
+        'project.customerPhone AS "customerPhone"',
+        'project.branchName AS "branchName"',
+        'project.projectOwnerId AS "projectOwnerId"',
+        'project.projectOwnerName AS "projectOwnerName"',
+        'project.projectSerial AS "projectSerial"',
+
+        'userState.status AS "userReminderStatus"',
+        'userState.readAt AS "userReadAt"',
+      ])
+      .where(
+        'payment.pendingAmount > 0',
+      )
+      .andWhere(
+        'payment.isHidden = false',
+      )
+      .andWhere(
+        'project.isHidden = false',
+      )
+
+      /*
+       * Do NOT exclude COMPLETED
+       * projects here.
+       *
+       * A physically completed
+       * project can still have
+       * outstanding payment.
+       */
+      .andWhere(
+        `
+          project.status NOT IN (
+            :...inactivePaymentProjectStatuses
+          )
+        `,
+        {
+          inactivePaymentProjectStatuses:
+            [
+              ProjectStatus.REJECTED,
+              ProjectStatus.CANCELLED,
+            ],
+        },
+      )
+
+      .andWhere(
+        'payment.status != :paidStatus',
+        {
+          paidStatus:
+            ProjectPaymentInstallmentStatus.PAID,
+        },
+      )
+      .andWhere(
+        `
+          payment.status
+          != :cancelledStatus
+        `,
+        {
+          cancelledStatus:
+            ProjectPaymentInstallmentStatus.CANCELLED,
+        },
+      )
+      .andWhere(
+        'payment.dueDate IS NOT NULL',
+      )
+      .andWhere(
+        `
+          (
+            userState.id IS NULL
+            OR
+            userState.status
+              != :dismissedStatus
+          )
+        `,
+        {
+          dismissedStatus:
+            ProjectPaymentReminderUserStateStatus.DISMISSED,
+        },
+      )
+      .orderBy(
+        'payment.dueDate',
+        'ASC',
+      )
+      .addOrderBy(
+        'payment.id',
+        'DESC',
+      );
+
+  /*
+   * Users without global payment
+   * visibility see only projects
+   * assigned to them.
+   */
   if (!canSeeAll) {
-    qb.andWhere('project.projectOwnerId = :userId', { userId });
+    qb.andWhere(
+      `
+        project.projectOwnerId
+        = :userId
+      `,
+      {
+        userId,
+      },
+    );
   }
 
+  /*
+   * Count BEFORE applying
+   * offset/limit so pagination
+   * remains accurate.
+   */
   const total =
-  await qb.clone().getCount();
+    await qb
+      .clone()
+      .getCount();
 
-qb
-  .offset(skip)
-  .limit(limit);
+  qb
+    .offset(skip)
+    .limit(limit);
 
-  const rows = await qb.getRawMany();
+  const rows =
+    await qb.getRawMany();
 
-  const data = rows
-  .map((row) => {
-    const dueDate = row.dueDate
-      ? String(row.dueDate).split('T')[0]
-      : null;
+  const data =
+    rows
+      .map((row) => {
+        /*
+         * PostgreSQL / TypeORM may
+         * return this either as a
+         * Date or as a string.
+         *
+         * Convert it to an India
+         * calendar date before
+         * comparing.
+         */
+        const dueDateValue =
+          row.dueDate
+            ? new Date(
+                row.dueDate,
+              )
+            : null;
 
-    if (!dueDate) return null;
+        if (
+          !dueDateValue ||
+          Number.isNaN(
+            dueDateValue.getTime(),
+          )
+        ) {
+          return null;
+        }
 
-    let reminderType:
-      | 'PAYMENT_OVERDUE'
-      | 'PAYMENT_DUE_TODAY'
-      | 'PAYMENT_UPCOMING'
-      | null = null;
+        const dueDateIndia =
+          dueDateValue
+            .toLocaleDateString(
+              'en-CA',
+              {
+                timeZone:
+                  'Asia/Kolkata',
+              },
+            );
 
-    if (dueDate < todayIndia) {
-      reminderType = 'PAYMENT_OVERDUE';
-    } else if (dueDate === todayIndia) {
-      reminderType = 'PAYMENT_DUE_TODAY';
-    } else if (dueDate > todayIndia) {
-      reminderType = 'PAYMENT_UPCOMING';
-    }
+        let reminderType:
+          | 'PAYMENT_OVERDUE'
+          | 'PAYMENT_DUE_TODAY'
+          | 'PAYMENT_UPCOMING'
+          | 'PAYMENT_SCHEDULED';
 
-    if (!reminderType) return null;
+        if (
+          dueDateIndia <
+          todayIndia
+        ) {
+          reminderType =
+            'PAYMENT_OVERDUE';
+        } else if (
+          dueDateIndia ===
+          todayIndia
+        ) {
+          reminderType =
+            'PAYMENT_DUE_TODAY';
+        } else if (
+          dueDateIndia <
+          upcomingWindowEndIndia
+        ) {
+          reminderType =
+            'PAYMENT_UPCOMING';
+        } else {
+          reminderType =
+            'PAYMENT_SCHEDULED';
+        }
 
-    return {
-      id: Number(row.id),
-      projectId: Number(row.projectId),
-      label: row.label,
-      amount: Number(row.amount || 0),
-      paidAmount: Number(row.paidAmount || 0),
-      pendingAmount: Number(row.pendingAmount || 0),
-      dueDate: row.dueDate,
-      status: this.getComputedPaymentStatus(
-        row.status,
-        row.dueDate,
-        Number(row.pendingAmount || 0),
-      ),
-      reminderType,
+        return {
+          id:
+            Number(row.id),
 
-      customerName:
-        row.customerName || null,
+          projectId:
+            Number(
+              row.projectId,
+            ),
 
-      customerPhone:
-        row.customerPhone || null,
+          label:
+            row.label,
 
-      branchName:
-        row.branchName || null,
+          amount:
+            Number(
+              row.amount || 0,
+            ),
 
-      projectOwnerId:
-        row.projectOwnerId
-          ? Number(row.projectOwnerId)
-          : null,
+          paidAmount:
+            Number(
+              row.paidAmount || 0,
+            ),
 
-      projectOwnerName:
-        row.projectOwnerName || null,
+          pendingAmount:
+            Number(
+              row.pendingAmount ||
+                0,
+            ),
 
-      projectSerial:
-        row.projectSerial || null,
+          dueDate:
+            row.dueDate,
 
-      userReminderStatus:
-        row.userReminderStatus || 'UNREAD',
+          status:
+            this.getComputedPaymentStatus(
+              row.status,
+              row.dueDate,
+              Number(
+                row.pendingAmount ||
+                  0,
+              ),
+            ),
 
-      userReadAt:
-        row.userReadAt || null,
-    };
-  })
-  .filter(Boolean);
+          reminderType,
 
-return {
-  data,
-  total,
-  page,
-  limit,
-  totalPages:
-    Math.ceil(total / limit) || 1,
-};
+          customerName:
+            row.customerName ||
+            null,
+
+          customerPhone:
+            row.customerPhone ||
+            null,
+
+          branchName:
+            row.branchName ||
+            null,
+
+          projectOwnerId:
+            row.projectOwnerId
+              ? Number(
+                  row.projectOwnerId,
+                )
+              : null,
+
+          projectOwnerName:
+            row.projectOwnerName ||
+            null,
+
+          projectSerial:
+            row.projectSerial ||
+            null,
+
+          userReminderStatus:
+            row.userReminderStatus ||
+            'UNREAD',
+
+          userReadAt:
+            row.userReadAt ||
+            null,
+        };
+      })
+      .filter(Boolean);
+
+  return {
+    data,
+    total,
+    page,
+    limit,
+    totalPages:
+      Math.ceil(
+        total / limit,
+      ) || 1,
+  };
 }
 
 async getApprovalReminderList(
