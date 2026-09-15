@@ -1708,24 +1708,24 @@ case StaffPayrollMetricType
   ProjectVendor,
   'directProjectVendor',
   `
-  directProjectVendor.id =
-    dealerOrder.dealerId
+  "directProjectVendor"."id" =
+    "dealerOrder"."dealerId"
   `,
 )
 .leftJoin(
   Dealer,
   'portalDealer',
   `
-  portalDealer.id =
-    dealerOrder.dealerId
+  "portalDealer"."id" =
+    "dealerOrder"."dealerId"
   `,
 )
 .leftJoin(
   ProjectVendor,
   'mappedProjectVendor',
   `
-  mappedProjectVendor.id =
-    portalDealer.projectVendorId
+  "mappedProjectVendor"."id" =
+    "portalDealer"."projectVendorId"
   `,
 )
 .where(
@@ -1888,24 +1888,24 @@ case StaffPayrollMetricType
   ProjectVendor,
   'directProjectVendor',
   `
-  directProjectVendor.id =
-    dealerOrder.dealerId
+  "directProjectVendor"."id" =
+    "dealerOrder"."dealerId"
   `,
 )
 .leftJoin(
   Dealer,
   'portalDealer',
   `
-  portalDealer.id =
-    dealerOrder.dealerId
+  "portalDealer"."id" =
+    "dealerOrder"."dealerId"
   `,
 )
 .leftJoin(
   ProjectVendor,
   'mappedProjectVendor',
   `
-  mappedProjectVendor.id =
-    portalDealer.projectVendorId
+  "mappedProjectVendor"."id" =
+    "portalDealer"."projectVendorId"
   `,
 )
 .where(
@@ -2068,24 +2068,24 @@ case StaffPayrollMetricType
   ProjectVendor,
   'directProjectVendor',
   `
-  directProjectVendor.id =
-    dealerOrder.dealerId
+  "directProjectVendor"."id" =
+    "dealerOrder"."dealerId"
   `,
 )
 .leftJoin(
   Dealer,
   'portalDealer',
   `
-  portalDealer.id =
-    dealerOrder.dealerId
+  "portalDealer"."id" =
+    "dealerOrder"."dealerId"
   `,
 )
 .leftJoin(
   ProjectVendor,
   'mappedProjectVendor',
   `
-  mappedProjectVendor.id =
-    portalDealer.projectVendorId
+  "mappedProjectVendor"."id" =
+    "portalDealer"."projectVendorId"
   `,
 )
       .leftJoin(
@@ -2345,24 +2345,24 @@ private async getTradingHeadTeamUserIds(
   ProjectVendor,
   'directProjectVendor',
   `
-  directProjectVendor.id =
-    dealerOrder.dealerId
+  "directProjectVendor"."id" =
+    "dealerOrder"."dealerId"
   `,
 )
 .leftJoin(
   Dealer,
   'portalDealer',
   `
-  portalDealer.id =
-    dealerOrder.dealerId
+  "portalDealer"."id" =
+    "dealerOrder"."dealerId"
   `,
 )
 .leftJoin(
   ProjectVendor,
   'mappedProjectVendor',
   `
-  mappedProjectVendor.id =
-    portalDealer.projectVendorId
+  "mappedProjectVendor"."id" =
+    "portalDealer"."projectVendorId"
   `,
 )
 .where(
@@ -2531,24 +2531,24 @@ private async getTradingHeadTeamUserIds(
   ProjectVendor,
   'directProjectVendor',
   `
-  directProjectVendor.id =
-    dealerOrder.dealerId
+  "directProjectVendor"."id" =
+    "dealerOrder"."dealerId"
   `,
 )
 .leftJoin(
   Dealer,
   'portalDealer',
   `
-  portalDealer.id =
-    dealerOrder.dealerId
+  "portalDealer"."id" =
+    "dealerOrder"."dealerId"
   `,
 )
 .leftJoin(
   ProjectVendor,
   'mappedProjectVendor',
   `
-  mappedProjectVendor.id =
-    portalDealer.projectVendorId
+  "mappedProjectVendor"."id" =
+    "portalDealer"."projectVendorId"
   `,
 )
 .where(
@@ -2718,24 +2718,24 @@ private async getTradingHeadTeamUserIds(
   ProjectVendor,
   'directProjectVendor',
   `
-  directProjectVendor.id =
-    dealerOrder.dealerId
+  "directProjectVendor"."id" =
+    "dealerOrder"."dealerId"
   `,
 )
 .leftJoin(
   Dealer,
   'portalDealer',
   `
-  portalDealer.id =
-    dealerOrder.dealerId
+  "portalDealer"."id" =
+    "dealerOrder"."dealerId"
   `,
 )
 .leftJoin(
   ProjectVendor,
   'mappedProjectVendor',
   `
-  mappedProjectVendor.id =
-    portalDealer.projectVendorId
+  "mappedProjectVendor"."id" =
+    "portalDealer"."projectVendorId"
   `,
 )
       .leftJoin(
@@ -2961,24 +2961,24 @@ private async resolveTeamDealerProfitAboveSalesTarget(
   ProjectVendor,
   'directProjectVendor',
   `
-  directProjectVendor.id =
-    dealerOrder.dealerId
+  "directProjectVendor"."id" =
+    "dealerOrder"."dealerId"
   `,
 )
 .leftJoin(
   Dealer,
   'portalDealer',
   `
-  portalDealer.id =
-    dealerOrder.dealerId
+  "portalDealer"."id" =
+    "dealerOrder"."dealerId"
   `,
 )
 .leftJoin(
   ProjectVendor,
   'mappedProjectVendor',
   `
-  mappedProjectVendor.id =
-    portalDealer.projectVendorId
+  "mappedProjectVendor"."id" =
+    "portalDealer"."projectVendorId"
   `,
 )
       .leftJoin(
@@ -3326,24 +3326,24 @@ private async resolveDealerProfitAboveSalesTarget(
   ProjectVendor,
   'directProjectVendor',
   `
-  directProjectVendor.id =
-    dealerOrder.dealerId
+  "directProjectVendor"."id" =
+    "dealerOrder"."dealerId"
   `,
 )
 .leftJoin(
   Dealer,
   'portalDealer',
   `
-  portalDealer.id =
-    dealerOrder.dealerId
+  "portalDealer"."id" =
+    "dealerOrder"."dealerId"
   `,
 )
 .leftJoin(
   ProjectVendor,
   'mappedProjectVendor',
   `
-  mappedProjectVendor.id =
-    portalDealer.projectVendorId
+  "mappedProjectVendor"."id" =
+    "portalDealer"."projectVendorId"
   `,
 )
       .leftJoin(
