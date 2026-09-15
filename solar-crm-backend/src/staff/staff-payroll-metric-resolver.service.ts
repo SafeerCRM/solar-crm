@@ -2092,8 +2092,8 @@ case StaffPayrollMetricType
         ProjectStockItem,
         'stockItem',
         `
-        stockItem.id =
-          dealerOrderItem.stockItemId
+        "stockItem"."id" =
+  "dealerOrderItem"."stockItemId"
         `,
       )
       .select(
@@ -2742,8 +2742,8 @@ private async getTradingHeadTeamUserIds(
         ProjectStockItem,
         'stockItem',
         `
-        stockItem.id =
-          dealerOrderItem.stockItemId
+        "stockItem"."id" =
+  "dealerOrderItem"."stockItemId"
         `,
       )
       .select(
@@ -2985,16 +2985,16 @@ private async resolveTeamDealerProfitAboveSalesTarget(
         ProjectDealerOrderItem,
         'dealerOrderItem',
         `
-        dealerOrderItem.dealerOrderId =
-          dealerOrder.id
+        "dealerOrderItem"."dealerOrderId" =
+  "dealerOrder"."id"
         `,
       )
       .leftJoin(
         ProjectStockItem,
         'stockItem',
         `
-        stockItem.id =
-          dealerOrderItem.stockItemId
+        "stockItem"."id" =
+  "dealerOrderItem"."stockItemId"
         `,
       )
       .select(
@@ -3350,16 +3350,16 @@ private async resolveDealerProfitAboveSalesTarget(
         ProjectDealerOrderItem,
         'dealerOrderItem',
         `
-        dealerOrderItem.dealerOrderId =
-          dealerOrder.id
+        "dealerOrderItem"."dealerOrderId" =
+  "dealerOrder"."id"
         `,
       )
       .leftJoin(
         ProjectStockItem,
         'stockItem',
         `
-        stockItem.id =
-          dealerOrderItem.stockItemId
+        "stockItem"."id" =
+  "dealerOrderItem"."stockItemId"
         `,
       )
       .select(
