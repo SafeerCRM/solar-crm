@@ -2060,8 +2060,8 @@ case StaffPayrollMetricType
         ProjectDealerOrder,
         'dealerOrder',
         `
-        dealerOrder.id =
-          dealerOrderItem.dealerOrderId
+        "dealerOrder"."id" =
+  "dealerOrderItem"."dealerOrderId"
         `,
       )
       .leftJoin(
@@ -2710,8 +2710,8 @@ private async getTradingHeadTeamUserIds(
         ProjectDealerOrder,
         'dealerOrder',
         `
-        dealerOrder.id =
-          dealerOrderItem.dealerOrderId
+        "dealerOrder"."id" =
+  "dealerOrderItem"."dealerOrderId"
         `,
       )
       .leftJoin(
