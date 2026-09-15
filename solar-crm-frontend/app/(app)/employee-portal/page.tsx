@@ -16,6 +16,15 @@ export default function EmployeePortalPage() {
 >('dashboard');
   const [staff, setStaff] = useState<any>(null);
   const [attendance, setAttendance] = useState<any[]>([]);
+  const [calendarAttendance, setCalendarAttendance] =
+  useState<any[]>([]);
+
+const [attendanceMonth, setAttendanceMonth] =
+  useState(
+    new Date()
+      .toISOString()
+      .slice(0, 7),
+  );
   const [leaves, setLeaves] = useState<any[]>([]);
   const [leaveSummary, setLeaveSummary] = useState({
   totalRequests: 0,
@@ -77,6 +86,83 @@ const [payrollMonth, setPayrollMonth] =
     const token = localStorage.getItem('token');
     return token ? { Authorization: `Bearer ${token}` } : {};
   };
+
+  const loadAttendanceCalendar = async (
+  month = attendanceMonth,
+) => {
+  try {
+    const [year, monthNumber] =
+      month.split('-').map(Number);
+
+    const lastDay =
+      new Date(
+        year,
+        monthNumber,
+        0,
+      ).getDate();
+
+    const fromDate =
+      `${month}-01`;
+
+    const toDate =
+      `${month}-${String(
+        lastDay,
+      ).padStart(2, '0')}`;
+
+    const response =
+      await axios.get(
+        `${API_BASE_URL}/staff/self/attendance`,
+        {
+          params: {
+            fromDate,
+            toDate,
+            limit: 100,
+          },
+          headers: headers(),
+        },
+      );
+
+    setCalendarAttendance(
+      response.data?.data || [],
+    );
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Unable to load attendance calendar',
+    );
+  }
+};
+
+const loadAttendanceDate = async (
+  date: string,
+) => {
+  try {
+    const response =
+      await axios.get(
+        `${API_BASE_URL}/staff/self/attendance`,
+        {
+          params: {
+            date,
+            limit: 20,
+          },
+          headers: headers(),
+        },
+      );
+
+    setAttendance(
+      response.data?.data || [],
+    );
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Unable to load attendance details',
+    );
+  }
+};
 
   const loadPortal = async () => {
     try {
@@ -189,6 +275,16 @@ useEffect(() => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [leaveMonth]);
 
+useEffect(() => {
+  if (activeTab !== 'attendance') {
+    return;
+  }
+
+  loadAttendanceCalendar();
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [activeTab, attendanceMonth]);
+
   const getLocation = () =>
     new Promise<GeolocationPosition>((resolve, reject) => {
       if (!navigator.geolocation) {
@@ -254,6 +350,7 @@ useEffect(() => {
     setAttendanceExceptionReason('');
 
     await loadPortal();
+    await loadAttendanceCalendar();
   } catch (error: any) {
     console.error(error);
 
@@ -521,6 +618,176 @@ const formatMetricLabel = (
       char.toUpperCase(),
     );
 
+    const getAttendanceStatusStyle = (
+  status?: string,
+) => {
+  switch (status) {
+    case 'PRESENT':
+      return 'bg-green-500 text-white';
+
+    case 'HALF_DAY':
+      return 'bg-amber-400 text-white';
+
+    case 'ABSENT':
+      return 'bg-red-500 text-white';
+
+    case 'LEAVE':
+      return 'bg-blue-500 text-white';
+
+    case 'WEEKLY_OFF':
+      return 'bg-gray-400 text-white';
+
+    case 'HOLIDAY':
+      return 'bg-purple-500 text-white';
+
+    default:
+      return 'bg-gray-100 text-gray-700';
+  }
+};
+
+const getAttendanceStatusLabel = (
+  status?: string,
+) => {
+  switch (status) {
+    case 'PRESENT':
+      return 'Present';
+
+    case 'HALF_DAY':
+      return 'Half Day';
+
+    case 'ABSENT':
+      return 'Absent';
+
+    case 'LEAVE':
+      return 'Leave';
+
+    case 'WEEKLY_OFF':
+      return 'Weekly Off';
+
+    case 'HOLIDAY':
+      return 'Holiday';
+
+    default:
+      return 'No Record';
+  }
+};
+
+const getCalendarDays = () => {
+  const [year, month] =
+    attendanceMonth
+      .split('-')
+      .map(Number);
+
+  const daysInMonth =
+    new Date(
+      year,
+      month,
+      0,
+    ).getDate();
+
+  const firstDay =
+    new Date(
+      year,
+      month - 1,
+      1,
+    ).getDay();
+
+  // Convert Sunday-first JS indexing
+  // into Monday-first calendar indexing.
+  const leadingEmptyDays =
+    (firstDay + 6) % 7;
+
+  const days: Array<
+    | null
+    | {
+        day: number;
+        date: string;
+        attendance: any;
+      }
+  > = [];
+
+  for (
+    let index = 0;
+    index < leadingEmptyDays;
+    index += 1
+  ) {
+    days.push(null);
+  }
+
+  for (
+    let day = 1;
+    day <= daysInMonth;
+    day += 1
+  ) {
+    const date =
+      `${attendanceMonth}-${String(
+        day,
+      ).padStart(2, '0')}`;
+
+    const record =
+      calendarAttendance.find(
+        (item) =>
+          item.attendanceDate ===
+          date,
+      );
+
+    days.push({
+      day,
+      date,
+      attendance: record || null,
+    });
+  }
+
+  return days;
+};
+
+const changeAttendanceMonth = (
+  offset: number,
+) => {
+  const [year, month] =
+    attendanceMonth
+      .split('-')
+      .map(Number);
+
+  const nextMonth =
+    new Date(
+      year,
+      month - 1 + offset,
+      1,
+    );
+
+  const nextYear =
+    nextMonth.getFullYear();
+
+  const nextMonthNumber =
+    String(
+      nextMonth.getMonth() + 1,
+    ).padStart(2, '0');
+
+  setAttendanceMonth(
+    `${nextYear}-${nextMonthNumber}`,
+  );
+};
+
+const calendarDays =
+  getCalendarDays();
+
+const attendanceMonthLabel =
+  new Date(
+    `${attendanceMonth}-01T00:00:00`,
+  ).toLocaleDateString(
+    'en-IN',
+    {
+      month: 'long',
+      year: 'numeric',
+    },
+  );
+
+const todayDate =
+  new Date()
+    .toISOString()
+    .slice(0, 10);
+
   const todayAttendance = attendance[0];
 
   return (
@@ -615,16 +882,234 @@ const formatMetricLabel = (
 
       {activeTab === 'attendance' && (
         <div className="space-y-5">
+
+            <div className="rounded-2xl bg-white p-5 shadow">
+  <div className="flex flex-wrap items-center justify-between gap-4">
+    <div>
+      <h2 className="text-lg font-bold text-gray-800">
+        My Attendance Calendar
+      </h2>
+
+      <p className="mt-1 text-sm text-gray-500">
+        Monthly attendance overview
+      </p>
+    </div>
+
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={() =>
+          changeAttendanceMonth(-1)
+        }
+        className="rounded-xl border bg-white px-4 py-2 font-bold text-gray-700"
+      >
+        ←
+      </button>
+
+      <div className="min-w-40 text-center font-bold text-gray-900">
+        {attendanceMonthLabel}
+      </div>
+
+      <button
+        type="button"
+        onClick={() =>
+          changeAttendanceMonth(1)
+        }
+        className="rounded-xl border bg-white px-4 py-2 font-bold text-gray-700"
+      >
+        →
+      </button>
+    </div>
+  </div>
+
+  <div className="mt-6 grid grid-cols-7 gap-1 text-center sm:gap-2">
+    {[
+      'Mon',
+      'Tue',
+      'Wed',
+      'Thu',
+      'Fri',
+      'Sat',
+      'Sun',
+    ].map((day) => (
+      <div
+        key={day}
+        className="pb-2 text-xs font-bold uppercase text-gray-500"
+      >
+        {day}
+      </div>
+    ))}
+
+    {calendarDays.map(
+      (calendarDay, index) => {
+        if (!calendarDay) {
+          return (
+            <div
+              key={`empty-${index}`}
+              className="aspect-square"
+            />
+          );
+        }
+
+        const record =
+          calendarDay.attendance;
+
+        const isSelected =
+          calendarDay.date ===
+          attendanceDate;
+
+        const isToday =
+          calendarDay.date ===
+          todayDate;
+
+        const isFuture =
+          calendarDay.date >
+          todayDate;
+
+        return (
+          <button
+            key={calendarDay.date}
+            type="button"
+            disabled={isFuture}
+            onClick={async () => {
+              setAttendanceDate(
+                calendarDay.date,
+              );
+
+              await loadAttendanceDate(
+                calendarDay.date,
+              );
+            }}
+            className={`relative flex aspect-square flex-col items-center justify-center rounded-xl border p-1 transition ${
+              isSelected
+                ? 'border-blue-600 ring-2 ring-blue-100'
+                : 'border-gray-100'
+            } ${
+              isFuture
+                ? 'cursor-default opacity-40'
+                : 'hover:border-blue-300 hover:bg-gray-50'
+            }`}
+          >
+            <span
+              className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold sm:h-10 sm:w-10 ${
+                record
+                  ? getAttendanceStatusStyle(
+                      record.status,
+                    )
+                  : isToday
+                    ? 'border-2 border-blue-500 bg-white text-blue-700'
+                    : 'bg-gray-100 text-gray-700'
+              }`}
+            >
+              {calendarDay.day}
+            </span>
+
+            <span className="mt-1 hidden max-w-full truncate text-[10px] font-semibold text-gray-500 sm:block">
+              {isFuture
+                ? ''
+                : getAttendanceStatusLabel(
+                    record?.status,
+                  )}
+            </span>
+
+            {record?.isLate && (
+              <span
+                className="absolute right-1 top-1 h-2 w-2 rounded-full bg-orange-500"
+                title="Late"
+              />
+            )}
+
+            {record?.isEarlyCheckout && (
+              <span
+                className="absolute bottom-1 right-1 h-2 w-2 rounded-full bg-rose-500"
+                title="Early Checkout"
+              />
+            )}
+          </button>
+        );
+      },
+    )}
+  </div>
+
+  <div className="mt-6 flex flex-wrap gap-x-5 gap-y-3 border-t pt-4">
+    {[
+      [
+        'bg-green-500',
+        'Present',
+      ],
+      [
+        'bg-amber-400',
+        'Half Day',
+      ],
+      [
+        'bg-red-500',
+        'Absent',
+      ],
+      [
+        'bg-blue-500',
+        'Leave',
+      ],
+      [
+        'bg-gray-400',
+        'Weekly Off',
+      ],
+      [
+        'bg-purple-500',
+        'Holiday',
+      ],
+      [
+        'bg-gray-100 border',
+        'No Record',
+      ],
+    ].map(
+      ([className, label]) => (
+        <div
+          key={label}
+          className="flex items-center gap-2 text-xs font-semibold text-gray-600"
+        >
+          <span
+            className={`h-3 w-3 rounded-full ${className}`}
+          />
+
+          {label}
+        </div>
+      ),
+    )}
+  </div>
+
+  <div className="mt-3 flex flex-wrap gap-4 text-xs text-gray-500">
+    <span className="flex items-center gap-2">
+      <span className="h-2 w-2 rounded-full bg-orange-500" />
+      Late
+    </span>
+
+    <span className="flex items-center gap-2">
+      <span className="h-2 w-2 rounded-full bg-rose-500" />
+      Early Checkout
+    </span>
+  </div>
+</div>
           <div className="rounded-2xl bg-white p-5 shadow">
             <h2 className="text-lg font-bold text-gray-800">Mark Attendance</h2>
 
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               <input
-                type="date"
-                value={attendanceDate}
-                onChange={(e) => setAttendanceDate(e.target.value)}
-                className="rounded-xl border p-3"
-              />
+  type="date"
+  value={attendanceDate}
+  onChange={async (e) => {
+    const date =
+      e.target.value;
+
+    setAttendanceDate(date);
+
+    if (date) {
+      await loadAttendanceDate(
+        date,
+      );
+    }
+  }}
+  className="rounded-xl border p-3"
+/>
 
               <input
   ref={selfieInputRef}

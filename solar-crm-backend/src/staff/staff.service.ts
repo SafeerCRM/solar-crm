@@ -854,29 +854,74 @@ async punchOut(body: any, user: any) {
 
 async getAttendance(query: any) {
   const page = Math.max(Number(query.page || 1), 1);
-  const limit = Math.min(Math.max(Number(query.limit || 20), 1), 100);
 
-  const where: any = {};
+  const limit = Math.min(
+    Math.max(Number(query.limit || 20), 1),
+    100,
+  );
 
-  if (query.staffId) where.staffId = Number(query.staffId);
-  if (query.date) where.attendanceDate = query.date;
+  const queryBuilder =
+    this.attendanceRepo
+      .createQueryBuilder('attendance');
 
-  const [data, total] = await this.attendanceRepo.findAndCount({
-    where,
-    order: {
-      attendanceDate: 'DESC',
-      createdAt: 'DESC',
-    },
-    skip: (page - 1) * limit,
-    take: limit,
-  });
+  if (query.staffId) {
+    queryBuilder.andWhere(
+      'attendance.staffId = :staffId',
+      {
+        staffId: Number(query.staffId),
+      },
+    );
+  }
+
+  if (query.date) {
+    queryBuilder.andWhere(
+      'attendance.attendanceDate = :date',
+      {
+        date: query.date,
+      },
+    );
+  } else {
+    if (query.fromDate) {
+      queryBuilder.andWhere(
+        'attendance.attendanceDate >= :fromDate',
+        {
+          fromDate: query.fromDate,
+        },
+      );
+    }
+
+    if (query.toDate) {
+      queryBuilder.andWhere(
+        'attendance.attendanceDate <= :toDate',
+        {
+          toDate: query.toDate,
+        },
+      );
+    }
+  }
+
+  queryBuilder
+    .orderBy(
+      'attendance.attendanceDate',
+      'DESC',
+    )
+    .addOrderBy(
+      'attendance.createdAt',
+      'DESC',
+    )
+    .skip((page - 1) * limit)
+    .take(limit);
+
+  const [data, total] =
+    await queryBuilder.getManyAndCount();
 
   return {
     data,
     total,
     page,
     limit,
-    totalPages: Math.ceil(total / limit) || 1,
+    totalPages:
+      Math.ceil(total / limit) || 1,
   };
 }
 
@@ -897,29 +942,74 @@ async getMyStaffProfile(user: any) {
   return staff;
 }
 
-async getMyAttendance(query: any, user: any) {
-  const staff = await this.getMyStaffProfile(user);
+async getMyAttendance(
+  query: any,
+  user: any,
+) {
+  const staff =
+    await this.getMyStaffProfile(user);
 
-  const page = Math.max(Number(query.page || 1), 1);
-  const limit = Math.min(Math.max(Number(query.limit || 20), 1), 100);
+  const page = Math.max(
+    Number(query.page || 1),
+    1,
+  );
 
-  const where: any = {
-    staffId: staff.id,
-  };
+  const limit = Math.min(
+    Math.max(Number(query.limit || 20), 1),
+    100,
+  );
+
+  const queryBuilder =
+    this.attendanceRepo
+      .createQueryBuilder('attendance')
+      .where(
+        'attendance.staffId = :staffId',
+        {
+          staffId: staff.id,
+        },
+      );
 
   if (query.date) {
-    where.attendanceDate = query.date;
+    queryBuilder.andWhere(
+      'attendance.attendanceDate = :date',
+      {
+        date: query.date,
+      },
+    );
+  } else {
+    if (query.fromDate) {
+      queryBuilder.andWhere(
+        'attendance.attendanceDate >= :fromDate',
+        {
+          fromDate: query.fromDate,
+        },
+      );
+    }
+
+    if (query.toDate) {
+      queryBuilder.andWhere(
+        'attendance.attendanceDate <= :toDate',
+        {
+          toDate: query.toDate,
+        },
+      );
+    }
   }
 
-  const [data, total] = await this.attendanceRepo.findAndCount({
-    where,
-    order: {
-      attendanceDate: 'DESC',
-      createdAt: 'DESC',
-    },
-    skip: (page - 1) * limit,
-    take: limit,
-  });
+  queryBuilder
+    .orderBy(
+      'attendance.attendanceDate',
+      'DESC',
+    )
+    .addOrderBy(
+      'attendance.createdAt',
+      'DESC',
+    )
+    .skip((page - 1) * limit)
+    .take(limit);
+
+  const [data, total] =
+    await queryBuilder.getManyAndCount();
 
   return {
     staff,
@@ -927,7 +1017,8 @@ async getMyAttendance(query: any, user: any) {
     total,
     page,
     limit,
-    totalPages: Math.ceil(total / limit) || 1,
+    totalPages:
+      Math.ceil(total / limit) || 1,
   };
 }
 
