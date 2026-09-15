@@ -1502,6 +1502,11 @@ dealerRateUnit: String(
 
 brand: material.brand,
 
+imageUrl:
+  String(
+    (material as any).imageUrl || '',
+  ).trim(),
+
 warranty:
   String(
     (material as any).warranty || '',

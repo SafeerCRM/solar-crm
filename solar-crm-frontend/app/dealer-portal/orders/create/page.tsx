@@ -1447,99 +1447,181 @@ function KitOrderCard({
   );
 }
 
-function MaterialCard({ item, onAdd }: { item: any; onAdd: () => void }) {
-  const available = Number(item.availableQuantity || 0);
+function MaterialCard({
+  item,
+  onAdd,
+}: {
+  item: any;
+  onAdd: () => void;
+}) {
+  const available = Math.max(
+    Number(
+      item.availableQuantity || 0,
+    ),
+    0,
+  );
+
+  const dealerRate = Number(
+    item.dealerUnitRate ||
+      item.ratePerWatt ||
+      0,
+  );
+
+  const dealerRateUnit =
+    String(
+      item.dealerRateUnit ||
+        item.unit ||
+        (item.dealerCategory ===
+        'PANELS'
+          ? 'WATT'
+          : 'UNIT'),
+    ).trim();
+
+  const imageUrl =
+    String(
+      item.imageUrl || '',
+    ).trim();
 
   return (
-    <div className="min-w-0 overflow-hidden rounded-[1.7rem] border border-slate-100 bg-slate-50 p-4 transition hover:-translate-y-1 hover:bg-white hover:shadow-xl">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-  <p className="break-words font-black">
-    {item.materialName}
-  </p>
-          <p className="mt-1 break-words text-xs font-semibold text-slate-500">
-  {item.brand || 'No brand'} · HSN {item.hsnCode || '-'}
-</p>
-{item.warranty && (
-  <p className="mt-2 inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
-    Warranty: {item.warranty}
-  </p>
-)}
-        </div>
+    <div className="group min-w-0 overflow-hidden rounded-[1.7rem] border border-slate-100 bg-white shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-xl">
+      {/* Product image */}
+      <div className="relative flex h-52 items-center justify-center overflow-hidden bg-slate-50">
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={
+              item.materialName ||
+              'Material'
+            }
+            loading="lazy"
+            className="h-full w-full object-contain p-4 transition duration-300 group-hover:scale-[1.04]"
+          />
+        ) : (
+          <div className="flex h-full w-full flex-col items-center justify-center px-6 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white text-3xl shadow-sm">
+              ☀️
+            </div>
 
-        <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-700">
-          Qty: {available}
+            <p className="mt-3 text-xs font-bold text-slate-400">
+              Product image coming soon
+            </p>
+          </div>
+        )}
+
+        {/* Stock badge */}
+        <span
+          className={`absolute right-3 top-3 rounded-full px-3 py-1.5 text-xs font-black shadow-sm ${
+            available > 0
+              ? 'bg-emerald-100 text-emerald-700'
+              : 'bg-red-100 text-red-700'
+          }`}
+        >
+          {available > 0
+            ? `Qty: ${available}`
+            : 'Out of Stock'}
         </span>
+
+        {item.brand && (
+          <span className="absolute bottom-3 left-3 max-w-[75%] truncate rounded-full bg-slate-950/90 px-3 py-1.5 text-xs font-black text-white shadow-sm">
+            {item.brand}
+          </span>
+        )}
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-2">
-  {Number(
-  item.dealerUnitRate ||
-    item.ratePerWatt ||
-    0,
-) > 0 && (
-  <div className="col-span-2 rounded-2xl bg-green-50 p-3">
-    <p className="text-xs font-bold text-green-600">
-      Dealer Rate
-    </p>
+      {/* Product information */}
+      <div className="p-4">
+        <p className="break-words text-base font-black leading-snug text-slate-900">
+          {item.materialName}
+        </p>
 
-    <p className="mt-1 text-lg font-black text-green-700">
-      ₹
-      {Number(
-        item.dealerUnitRate ||
-          item.ratePerWatt ||
-          0,
-      ).toLocaleString('en-IN')}
-      /
-      {String(
-        item.dealerRateUnit ||
-          item.unit ||
-          (
-            item.dealerCategory === 'PANELS'
-              ? 'WATT'
-              : 'UNIT'
-          ),
-      ).trim()}
-      {' + GST'}
-    </p>
-  </div>
-)}
+        <div className="mt-2 flex flex-wrap gap-2">
+          {item.hsnCode && (
+            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600">
+              HSN {item.hsnCode}
+            </span>
+          )}
 
-  <div className="rounded-2xl bg-white p-3">
-    <p className="text-xs font-bold text-slate-400">
-      Without GST
-    </p>
+          {item.warranty && (
+            <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-black text-blue-700">
+              Warranty: {item.warranty}
+            </span>
+          )}
 
-    <p className="font-black">
-      ₹
-      {Number(
-        item.sellingRateWithoutGst || 0,
-      ).toLocaleString('en-IN')}
-    </p>
-  </div>
+          {item.branchName && (
+            <span className="rounded-full bg-orange-50 px-2.5 py-1 text-[11px] font-bold text-orange-700">
+              {item.branchName}
+            </span>
+          )}
+        </div>
 
-  <div className="rounded-2xl bg-white p-3">
-    <p className="text-xs font-bold text-slate-400">
-      With GST
-    </p>
+        {/* Dealer price */}
+        {dealerRate > 0 && (
+          <div className="mt-4 rounded-2xl bg-green-50 p-3">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-green-600">
+              Dealer Rate
+            </p>
 
-    <p className="font-black">
-      ₹
-      {Number(
-        item.sellingRateWithGst || 0,
-      ).toLocaleString('en-IN')}
-    </p>
-  </div>
-</div>
+            <div className="mt-1 flex flex-wrap items-end gap-1">
+              <p className="text-xl font-black text-green-700">
+                ₹
+                {dealerRate.toLocaleString(
+                  'en-IN',
+                )}
+              </p>
 
-      <button
-        type="button"
-        onClick={onAdd}
-        disabled={available <= 0}
-        className="mt-4 w-full rounded-2xl bg-slate-950 py-3 text-sm font-black text-white transition hover:scale-[1.01] disabled:bg-slate-300"
-      >
-        {available <= 0 ? 'Out of Stock' : 'Add to Cart'}
-      </button>
+              <p className="pb-0.5 text-xs font-black text-green-600">
+                /{dealerRateUnit} + GST
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Existing selling prices */}
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="rounded-2xl bg-slate-50 p-3">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+              Without GST
+            </p>
+
+            <p className="mt-1 font-black text-slate-900">
+              ₹
+              {Number(
+                item.sellingRateWithoutGst ||
+                  0,
+              ).toLocaleString(
+                'en-IN',
+              )}
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-slate-50 p-3">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+              With GST
+            </p>
+
+            <p className="mt-1 font-black text-slate-900">
+              ₹
+              {Number(
+                item.sellingRateWithGst ||
+                  0,
+              ).toLocaleString(
+                'en-IN',
+              )}
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={onAdd}
+          disabled={available <= 0}
+          className="mt-4 w-full rounded-2xl bg-slate-950 py-3 text-sm font-black text-white shadow-sm transition hover:scale-[1.01] hover:bg-orange-500 hover:text-slate-950 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500 disabled:hover:scale-100"
+        >
+          {available <= 0
+            ? 'Out of Stock'
+            : 'Add to Cart'}
+        </button>
+      </div>
     </div>
   );
 }
