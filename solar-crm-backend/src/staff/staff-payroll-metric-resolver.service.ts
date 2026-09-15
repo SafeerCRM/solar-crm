@@ -69,12 +69,12 @@ import {
 } from './recruitment-candidate.entity';
 
 import {
-  Dealer,
-} from '../dealer/dealer.entity';
-
-import {
   ProjectVendor,
 } from '../project/project-vendor.entity';
+
+import {
+  Dealer,
+} from '../dealer/dealer.entity';
 
 
 export type StaffPayrollMetricRequest = {
@@ -1704,24 +1704,124 @@ case StaffPayrollMetricType
 
   return this.projectDealerOrderRepository
     .createQueryBuilder('dealerOrder')
-    .innerJoin(
-  Dealer,
-  'dealer',
+    .leftJoin(
+  ProjectVendor,
+  'directProjectVendor',
   `
-  dealer.id =
+  directProjectVendor.id =
     dealerOrder.dealerId
   `,
 )
-.innerJoin(
-  ProjectVendor,
-  'projectVendor',
+.leftJoin(
+  Dealer,
+  'portalDealer',
   `
-  projectVendor.id =
-    dealer.projectVendorId
+  portalDealer.id =
+    dealerOrder.dealerId
+  `,
+)
+.leftJoin(
+  ProjectVendor,
+  'mappedProjectVendor',
+  `
+  mappedProjectVendor.id =
+    portalDealer.projectVendorId
   `,
 )
 .where(
-  'projectVendor.tradingManagerId = :linkedUserId',
+  `
+  (
+    (
+      directProjectVendor.tradingManagerId = :linkedUserId
+      AND
+      (
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerGstNumber),
+            ''
+          ) IS NOT NULL
+          AND
+          UPPER(
+            TRIM(dealerOrder.dealerGstNumber)
+          ) =
+          UPPER(
+            TRIM(directProjectVendor.gstNumber)
+          )
+        )
+        OR
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerPhone),
+            ''
+          ) IS NOT NULL
+          AND
+          TRIM(dealerOrder.dealerPhone) =
+          TRIM(directProjectVendor.phone)
+        )
+        OR
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerName),
+            ''
+          ) IS NOT NULL
+          AND
+          UPPER(
+            TRIM(dealerOrder.dealerName)
+          ) =
+          UPPER(
+            TRIM(directProjectVendor.vendorName)
+          )
+        )
+      )
+    )
+    OR
+    (
+      mappedProjectVendor.tradingManagerId = :linkedUserId
+      AND
+      portalDealer.projectVendorId IS NOT NULL
+      AND
+      (
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerGstNumber),
+            ''
+          ) IS NOT NULL
+          AND
+          UPPER(
+            TRIM(dealerOrder.dealerGstNumber)
+          ) =
+          UPPER(
+            TRIM(portalDealer.gstNumber)
+          )
+        )
+        OR
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerPhone),
+            ''
+          ) IS NOT NULL
+          AND
+          TRIM(dealerOrder.dealerPhone) =
+          TRIM(portalDealer.phone)
+        )
+        OR
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerName),
+            ''
+          ) IS NOT NULL
+          AND
+          UPPER(
+            TRIM(dealerOrder.dealerName)
+          ) =
+          UPPER(
+            TRIM(portalDealer.dealerName)
+          )
+        )
+      )
+    )
+  )
+  `,
   {
     linkedUserId,
   },
@@ -1784,24 +1884,124 @@ case StaffPayrollMetricType
         `,
         'totalSales',
       )
-      .innerJoin(
-  Dealer,
-  'dealer',
+      .leftJoin(
+  ProjectVendor,
+  'directProjectVendor',
   `
-  dealer.id =
+  directProjectVendor.id =
     dealerOrder.dealerId
   `,
 )
-.innerJoin(
-  ProjectVendor,
-  'projectVendor',
+.leftJoin(
+  Dealer,
+  'portalDealer',
   `
-  projectVendor.id =
-    dealer.projectVendorId
+  portalDealer.id =
+    dealerOrder.dealerId
+  `,
+)
+.leftJoin(
+  ProjectVendor,
+  'mappedProjectVendor',
+  `
+  mappedProjectVendor.id =
+    portalDealer.projectVendorId
   `,
 )
 .where(
-  'projectVendor.tradingManagerId = :linkedUserId',
+  `
+  (
+    (
+      directProjectVendor.tradingManagerId = :linkedUserId
+      AND
+      (
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerGstNumber),
+            ''
+          ) IS NOT NULL
+          AND
+          UPPER(
+            TRIM(dealerOrder.dealerGstNumber)
+          ) =
+          UPPER(
+            TRIM(directProjectVendor.gstNumber)
+          )
+        )
+        OR
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerPhone),
+            ''
+          ) IS NOT NULL
+          AND
+          TRIM(dealerOrder.dealerPhone) =
+          TRIM(directProjectVendor.phone)
+        )
+        OR
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerName),
+            ''
+          ) IS NOT NULL
+          AND
+          UPPER(
+            TRIM(dealerOrder.dealerName)
+          ) =
+          UPPER(
+            TRIM(directProjectVendor.vendorName)
+          )
+        )
+      )
+    )
+    OR
+    (
+      mappedProjectVendor.tradingManagerId = :linkedUserId
+      AND
+      portalDealer.projectVendorId IS NOT NULL
+      AND
+      (
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerGstNumber),
+            ''
+          ) IS NOT NULL
+          AND
+          UPPER(
+            TRIM(dealerOrder.dealerGstNumber)
+          ) =
+          UPPER(
+            TRIM(portalDealer.gstNumber)
+          )
+        )
+        OR
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerPhone),
+            ''
+          ) IS NOT NULL
+          AND
+          TRIM(dealerOrder.dealerPhone) =
+          TRIM(portalDealer.phone)
+        )
+        OR
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerName),
+            ''
+          ) IS NOT NULL
+          AND
+          UPPER(
+            TRIM(dealerOrder.dealerName)
+          ) =
+          UPPER(
+            TRIM(portalDealer.dealerName)
+          )
+        )
+      )
+    )
+  )
+  `,
   {
     linkedUserId,
   },
@@ -1864,20 +2064,28 @@ case StaffPayrollMetricType
           dealerOrderItem.dealerOrderId
         `,
       )
-      .innerJoin(
-  Dealer,
-  'dealer',
+      .leftJoin(
+  ProjectVendor,
+  'directProjectVendor',
   `
-  dealer.id =
+  directProjectVendor.id =
     dealerOrder.dealerId
   `,
 )
-.innerJoin(
-  ProjectVendor,
-  'projectVendor',
+.leftJoin(
+  Dealer,
+  'portalDealer',
   `
-  projectVendor.id =
-    dealer.projectVendorId
+  portalDealer.id =
+    dealerOrder.dealerId
+  `,
+)
+.leftJoin(
+  ProjectVendor,
+  'mappedProjectVendor',
+  `
+  mappedProjectVendor.id =
+    portalDealer.projectVendorId
   `,
 )
       .leftJoin(
@@ -1922,7 +2130,99 @@ case StaffPayrollMetricType
         'totalProfit',
       )
       .where(
-  'projectVendor.tradingManagerId = :linkedUserId',
+  `
+  (
+    (
+      directProjectVendor.tradingManagerId = :linkedUserId
+      AND
+      (
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerGstNumber),
+            ''
+          ) IS NOT NULL
+          AND
+          UPPER(
+            TRIM(dealerOrder.dealerGstNumber)
+          ) =
+          UPPER(
+            TRIM(directProjectVendor.gstNumber)
+          )
+        )
+        OR
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerPhone),
+            ''
+          ) IS NOT NULL
+          AND
+          TRIM(dealerOrder.dealerPhone) =
+          TRIM(directProjectVendor.phone)
+        )
+        OR
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerName),
+            ''
+          ) IS NOT NULL
+          AND
+          UPPER(
+            TRIM(dealerOrder.dealerName)
+          ) =
+          UPPER(
+            TRIM(directProjectVendor.vendorName)
+          )
+        )
+      )
+    )
+    OR
+    (
+      mappedProjectVendor.tradingManagerId = :linkedUserId
+      AND
+      portalDealer.projectVendorId IS NOT NULL
+      AND
+      (
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerGstNumber),
+            ''
+          ) IS NOT NULL
+          AND
+          UPPER(
+            TRIM(dealerOrder.dealerGstNumber)
+          ) =
+          UPPER(
+            TRIM(portalDealer.gstNumber)
+          )
+        )
+        OR
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerPhone),
+            ''
+          ) IS NOT NULL
+          AND
+          TRIM(dealerOrder.dealerPhone) =
+          TRIM(portalDealer.phone)
+        )
+        OR
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerName),
+            ''
+          ) IS NOT NULL
+          AND
+          UPPER(
+            TRIM(dealerOrder.dealerName)
+          ) =
+          UPPER(
+            TRIM(portalDealer.dealerName)
+          )
+        )
+      )
+    )
+  )
+  `,
   {
     linkedUserId,
   },
@@ -2041,24 +2341,124 @@ private async getTradingHeadTeamUserIds(
 
   return this.projectDealerOrderRepository
     .createQueryBuilder('dealerOrder')
-    .innerJoin(
-  Dealer,
-  'dealer',
+    .leftJoin(
+  ProjectVendor,
+  'directProjectVendor',
   `
-  dealer.id =
+  directProjectVendor.id =
     dealerOrder.dealerId
   `,
 )
-.innerJoin(
-  ProjectVendor,
-  'projectVendor',
+.leftJoin(
+  Dealer,
+  'portalDealer',
   `
-  projectVendor.id =
-    dealer.projectVendorId
+  portalDealer.id =
+    dealerOrder.dealerId
+  `,
+)
+.leftJoin(
+  ProjectVendor,
+  'mappedProjectVendor',
+  `
+  mappedProjectVendor.id =
+    portalDealer.projectVendorId
   `,
 )
 .where(
-  'projectVendor.tradingManagerId IN (:...teamUserIds)',
+  `
+  (
+    (
+      directProjectVendor.tradingManagerId IN (:...teamUserIds)
+      AND
+      (
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerGstNumber),
+            ''
+          ) IS NOT NULL
+          AND
+          UPPER(
+            TRIM(dealerOrder.dealerGstNumber)
+          ) =
+          UPPER(
+            TRIM(directProjectVendor.gstNumber)
+          )
+        )
+        OR
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerPhone),
+            ''
+          ) IS NOT NULL
+          AND
+          TRIM(dealerOrder.dealerPhone) =
+          TRIM(directProjectVendor.phone)
+        )
+        OR
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerName),
+            ''
+          ) IS NOT NULL
+          AND
+          UPPER(
+            TRIM(dealerOrder.dealerName)
+          ) =
+          UPPER(
+            TRIM(directProjectVendor.vendorName)
+          )
+        )
+      )
+    )
+    OR
+    (
+      mappedProjectVendor.tradingManagerId IN (:...teamUserIds)
+      AND
+      portalDealer.projectVendorId IS NOT NULL
+      AND
+      (
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerGstNumber),
+            ''
+          ) IS NOT NULL
+          AND
+          UPPER(
+            TRIM(dealerOrder.dealerGstNumber)
+          ) =
+          UPPER(
+            TRIM(portalDealer.gstNumber)
+          )
+        )
+        OR
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerPhone),
+            ''
+          ) IS NOT NULL
+          AND
+          TRIM(dealerOrder.dealerPhone) =
+          TRIM(portalDealer.phone)
+        )
+        OR
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerName),
+            ''
+          ) IS NOT NULL
+          AND
+          UPPER(
+            TRIM(dealerOrder.dealerName)
+          ) =
+          UPPER(
+            TRIM(portalDealer.dealerName)
+          )
+        )
+      )
+    )
+  )
+  `,
   {
     teamUserIds,
   },
@@ -2127,24 +2527,124 @@ private async getTradingHeadTeamUserIds(
         `,
         'totalSales',
       )
-      .innerJoin(
-  Dealer,
-  'dealer',
+      .leftJoin(
+  ProjectVendor,
+  'directProjectVendor',
   `
-  dealer.id =
+  directProjectVendor.id =
     dealerOrder.dealerId
   `,
 )
-.innerJoin(
-  ProjectVendor,
-  'projectVendor',
+.leftJoin(
+  Dealer,
+  'portalDealer',
   `
-  projectVendor.id =
-    dealer.projectVendorId
+  portalDealer.id =
+    dealerOrder.dealerId
+  `,
+)
+.leftJoin(
+  ProjectVendor,
+  'mappedProjectVendor',
+  `
+  mappedProjectVendor.id =
+    portalDealer.projectVendorId
   `,
 )
 .where(
-  'projectVendor.tradingManagerId IN (:...teamUserIds)',
+  `
+  (
+    (
+      directProjectVendor.tradingManagerId IN (:...teamUserIds)
+      AND
+      (
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerGstNumber),
+            ''
+          ) IS NOT NULL
+          AND
+          UPPER(
+            TRIM(dealerOrder.dealerGstNumber)
+          ) =
+          UPPER(
+            TRIM(directProjectVendor.gstNumber)
+          )
+        )
+        OR
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerPhone),
+            ''
+          ) IS NOT NULL
+          AND
+          TRIM(dealerOrder.dealerPhone) =
+          TRIM(directProjectVendor.phone)
+        )
+        OR
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerName),
+            ''
+          ) IS NOT NULL
+          AND
+          UPPER(
+            TRIM(dealerOrder.dealerName)
+          ) =
+          UPPER(
+            TRIM(directProjectVendor.vendorName)
+          )
+        )
+      )
+    )
+    OR
+    (
+      mappedProjectVendor.tradingManagerId IN (:...teamUserIds)
+      AND
+      portalDealer.projectVendorId IS NOT NULL
+      AND
+      (
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerGstNumber),
+            ''
+          ) IS NOT NULL
+          AND
+          UPPER(
+            TRIM(dealerOrder.dealerGstNumber)
+          ) =
+          UPPER(
+            TRIM(portalDealer.gstNumber)
+          )
+        )
+        OR
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerPhone),
+            ''
+          ) IS NOT NULL
+          AND
+          TRIM(dealerOrder.dealerPhone) =
+          TRIM(portalDealer.phone)
+        )
+        OR
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerName),
+            ''
+          ) IS NOT NULL
+          AND
+          UPPER(
+            TRIM(dealerOrder.dealerName)
+          ) =
+          UPPER(
+            TRIM(portalDealer.dealerName)
+          )
+        )
+      )
+    )
+  )
+  `,
   {
     teamUserIds,
   },
@@ -2214,20 +2714,28 @@ private async getTradingHeadTeamUserIds(
           dealerOrderItem.dealerOrderId
         `,
       )
-      .innerJoin(
-  Dealer,
-  'dealer',
+      .leftJoin(
+  ProjectVendor,
+  'directProjectVendor',
   `
-  dealer.id =
+  directProjectVendor.id =
     dealerOrder.dealerId
   `,
 )
-.innerJoin(
-  ProjectVendor,
-  'projectVendor',
+.leftJoin(
+  Dealer,
+  'portalDealer',
   `
-  projectVendor.id =
-    dealer.projectVendorId
+  portalDealer.id =
+    dealerOrder.dealerId
+  `,
+)
+.leftJoin(
+  ProjectVendor,
+  'mappedProjectVendor',
+  `
+  mappedProjectVendor.id =
+    portalDealer.projectVendorId
   `,
 )
       .leftJoin(
@@ -2272,7 +2780,99 @@ private async getTradingHeadTeamUserIds(
         'totalProfit',
       )
       .where(
-  'projectVendor.tradingManagerId IN (:...teamUserIds)',
+  `
+  (
+    (
+      directProjectVendor.tradingManagerId IN (:...teamUserIds)
+      AND
+      (
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerGstNumber),
+            ''
+          ) IS NOT NULL
+          AND
+          UPPER(
+            TRIM(dealerOrder.dealerGstNumber)
+          ) =
+          UPPER(
+            TRIM(directProjectVendor.gstNumber)
+          )
+        )
+        OR
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerPhone),
+            ''
+          ) IS NOT NULL
+          AND
+          TRIM(dealerOrder.dealerPhone) =
+          TRIM(directProjectVendor.phone)
+        )
+        OR
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerName),
+            ''
+          ) IS NOT NULL
+          AND
+          UPPER(
+            TRIM(dealerOrder.dealerName)
+          ) =
+          UPPER(
+            TRIM(directProjectVendor.vendorName)
+          )
+        )
+      )
+    )
+    OR
+    (
+      mappedProjectVendor.tradingManagerId IN (:...teamUserIds)
+      AND
+      portalDealer.projectVendorId IS NOT NULL
+      AND
+      (
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerGstNumber),
+            ''
+          ) IS NOT NULL
+          AND
+          UPPER(
+            TRIM(dealerOrder.dealerGstNumber)
+          ) =
+          UPPER(
+            TRIM(portalDealer.gstNumber)
+          )
+        )
+        OR
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerPhone),
+            ''
+          ) IS NOT NULL
+          AND
+          TRIM(dealerOrder.dealerPhone) =
+          TRIM(portalDealer.phone)
+        )
+        OR
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerName),
+            ''
+          ) IS NOT NULL
+          AND
+          UPPER(
+            TRIM(dealerOrder.dealerName)
+          ) =
+          UPPER(
+            TRIM(portalDealer.dealerName)
+          )
+        )
+      )
+    )
+  )
+  `,
   {
     teamUserIds,
   },
@@ -2357,20 +2957,28 @@ private async resolveTeamDealerProfitAboveSalesTarget(
   const orderResults =
     await this.projectDealerOrderRepository
       .createQueryBuilder('dealerOrder')
-      .innerJoin(
-  Dealer,
-  'dealer',
+      .leftJoin(
+  ProjectVendor,
+  'directProjectVendor',
   `
-  dealer.id =
+  directProjectVendor.id =
     dealerOrder.dealerId
   `,
 )
-.innerJoin(
-  ProjectVendor,
-  'projectVendor',
+.leftJoin(
+  Dealer,
+  'portalDealer',
   `
-  projectVendor.id =
-    dealer.projectVendorId
+  portalDealer.id =
+    dealerOrder.dealerId
+  `,
+)
+.leftJoin(
+  ProjectVendor,
+  'mappedProjectVendor',
+  `
+  mappedProjectVendor.id =
+    portalDealer.projectVendorId
   `,
 )
       .leftJoin(
@@ -2440,7 +3048,99 @@ private async resolveTeamDealerProfitAboveSalesTarget(
         'orderProfit',
       )
       .where(
-  'projectVendor.tradingManagerId IN (:...teamUserIds)',
+  `
+  (
+    (
+      directProjectVendor.tradingManagerId IN (:...teamUserIds)
+      AND
+      (
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerGstNumber),
+            ''
+          ) IS NOT NULL
+          AND
+          UPPER(
+            TRIM(dealerOrder.dealerGstNumber)
+          ) =
+          UPPER(
+            TRIM(directProjectVendor.gstNumber)
+          )
+        )
+        OR
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerPhone),
+            ''
+          ) IS NOT NULL
+          AND
+          TRIM(dealerOrder.dealerPhone) =
+          TRIM(directProjectVendor.phone)
+        )
+        OR
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerName),
+            ''
+          ) IS NOT NULL
+          AND
+          UPPER(
+            TRIM(dealerOrder.dealerName)
+          ) =
+          UPPER(
+            TRIM(directProjectVendor.vendorName)
+          )
+        )
+      )
+    )
+    OR
+    (
+      mappedProjectVendor.tradingManagerId IN (:...teamUserIds)
+      AND
+      portalDealer.projectVendorId IS NOT NULL
+      AND
+      (
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerGstNumber),
+            ''
+          ) IS NOT NULL
+          AND
+          UPPER(
+            TRIM(dealerOrder.dealerGstNumber)
+          ) =
+          UPPER(
+            TRIM(portalDealer.gstNumber)
+          )
+        )
+        OR
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerPhone),
+            ''
+          ) IS NOT NULL
+          AND
+          TRIM(dealerOrder.dealerPhone) =
+          TRIM(portalDealer.phone)
+        )
+        OR
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerName),
+            ''
+          ) IS NOT NULL
+          AND
+          UPPER(
+            TRIM(dealerOrder.dealerName)
+          ) =
+          UPPER(
+            TRIM(portalDealer.dealerName)
+          )
+        )
+      )
+    )
+  )
+  `,
   {
     teamUserIds,
   },
@@ -2622,20 +3322,28 @@ private async resolveDealerProfitAboveSalesTarget(
   const orderResults =
     await this.projectDealerOrderRepository
       .createQueryBuilder('dealerOrder')
-      .innerJoin(
-  Dealer,
-  'dealer',
+      .leftJoin(
+  ProjectVendor,
+  'directProjectVendor',
   `
-  dealer.id =
+  directProjectVendor.id =
     dealerOrder.dealerId
   `,
 )
-.innerJoin(
-  ProjectVendor,
-  'projectVendor',
+.leftJoin(
+  Dealer,
+  'portalDealer',
   `
-  projectVendor.id =
-    dealer.projectVendorId
+  portalDealer.id =
+    dealerOrder.dealerId
+  `,
+)
+.leftJoin(
+  ProjectVendor,
+  'mappedProjectVendor',
+  `
+  mappedProjectVendor.id =
+    portalDealer.projectVendorId
   `,
 )
       .leftJoin(
@@ -2705,7 +3413,99 @@ private async resolveDealerProfitAboveSalesTarget(
         'orderProfit',
       )
       .where(
-  'projectVendor.tradingManagerId = :linkedUserId',
+  `
+  (
+    (
+      directProjectVendor.tradingManagerId = :linkedUserId
+      AND
+      (
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerGstNumber),
+            ''
+          ) IS NOT NULL
+          AND
+          UPPER(
+            TRIM(dealerOrder.dealerGstNumber)
+          ) =
+          UPPER(
+            TRIM(directProjectVendor.gstNumber)
+          )
+        )
+        OR
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerPhone),
+            ''
+          ) IS NOT NULL
+          AND
+          TRIM(dealerOrder.dealerPhone) =
+          TRIM(directProjectVendor.phone)
+        )
+        OR
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerName),
+            ''
+          ) IS NOT NULL
+          AND
+          UPPER(
+            TRIM(dealerOrder.dealerName)
+          ) =
+          UPPER(
+            TRIM(directProjectVendor.vendorName)
+          )
+        )
+      )
+    )
+    OR
+    (
+      mappedProjectVendor.tradingManagerId = :linkedUserId
+      AND
+      portalDealer.projectVendorId IS NOT NULL
+      AND
+      (
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerGstNumber),
+            ''
+          ) IS NOT NULL
+          AND
+          UPPER(
+            TRIM(dealerOrder.dealerGstNumber)
+          ) =
+          UPPER(
+            TRIM(portalDealer.gstNumber)
+          )
+        )
+        OR
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerPhone),
+            ''
+          ) IS NOT NULL
+          AND
+          TRIM(dealerOrder.dealerPhone) =
+          TRIM(portalDealer.phone)
+        )
+        OR
+        (
+          NULLIF(
+            TRIM(dealerOrder.dealerName),
+            ''
+          ) IS NOT NULL
+          AND
+          UPPER(
+            TRIM(dealerOrder.dealerName)
+          ) =
+          UPPER(
+            TRIM(portalDealer.dealerName)
+          )
+        )
+      )
+    )
+  )
+  `,
   {
     linkedUserId,
   },

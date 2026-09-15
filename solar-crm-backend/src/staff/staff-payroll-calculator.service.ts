@@ -1202,6 +1202,7 @@ private async calculateRuleIncentives(
   staffRole: string,
   existingMetrics:
     Record<string, number> = {},
+  salaryEligibilityMet: boolean,
 ): Promise<{
   incentiveAmount: number;
 
@@ -1331,6 +1332,47 @@ if (
     const component of
       enabledComponents
   ) {
+
+    /*
+ * A component that depends on salary
+ * eligibility must not be paid when the
+ * staff member fails overall eligibility.
+ *
+ * Independent components remain payable.
+ */
+if (
+  !salaryEligibilityMet &&
+  component
+    .independentFromSalaryEligibility !==
+    true
+) {
+  componentResults.push({
+    id: String(
+      component.id || '',
+    ),
+
+    label:
+      component.label ||
+      String(component.metricType),
+
+    metricType:
+      component.metricType,
+
+    metricValue: Number(
+  actualMetrics[
+    String(component.metricType)
+  ] || 0,
+),
+
+    calculationType:
+      component.calculationType,
+
+    amount: 0,
+  });
+
+  continue;
+}
+
     if (
       component.metricType ===
       StaffPayrollMetricType
@@ -1953,6 +1995,7 @@ const salaryPercentage =
     userId,
     'MEETING_MANAGER',
     sharedMetrics,
+    eligibilityMet,
   );
 
 const incentiveAmount =
@@ -2136,6 +2179,7 @@ const incentiveEvaluation =
     userId,
     'LEAD_MANAGER',
     sharedMetrics,
+    eligibilityMet,
   );
 
 const incentiveAmount =
@@ -2315,6 +2359,7 @@ async calculateTelecallingManagerPayroll(
       userId,
       'TELECALLING_MANAGER',
       sharedMetrics,
+      eligibilityMet,
     );
 
   const incentiveAmount =
@@ -2503,6 +2548,7 @@ async calculateMarketingHeadPayroll(
       userId,
       'MARKETING_HEAD',
       sharedMetrics,
+      eligibilityMet,
     );
 
   const incentiveAmount =
@@ -2691,6 +2737,7 @@ async calculateMarketingHeadPayroll(
       userId,
       'TELECALLER',
       sharedMetrics,
+      eligibilityMet,
     );
 
   const incentiveAmount =
@@ -2870,6 +2917,7 @@ async calculateMarketingHeadPayroll(
       userId,
       'MEETING_ASSISTANT',
       sharedMetrics,
+      eligibilityMet,
     );
 
   const incentiveAmount =
@@ -3049,6 +3097,7 @@ async calculateMarketingHeadPayroll(
       userId,
       'TRADING_MANAGER',
       sharedMetrics,
+      eligibilityMet,
     );
 
   const incentiveAmount =
@@ -3252,11 +3301,36 @@ if (
       userId,
       'TRADING_HEAD',
       sharedMetrics,
+      eligibilityMet,
     );
 
   const incentiveAmount =
     incentiveEvaluation
       .incentiveAmount;
+
+        const teamDealerNetProfitMetricKey =
+    String(
+      StaffPayrollMetricType
+        .TEAM_DEALER_NET_PROFIT,
+    );
+
+  if (
+    sharedMetrics[
+      teamDealerNetProfitMetricKey
+    ] === undefined
+  ) {
+    sharedMetrics[
+      teamDealerNetProfitMetricKey
+    ] =
+      await this.resolveRulePayrollMetric(
+        rule,
+        StaffPayrollMetricType
+          .TEAM_DEALER_NET_PROFIT,
+        payrollMonth,
+        userId,
+        'TRADING_HEAD',
+      );
+  }
 
   return {
     eligibilityMet,
@@ -3431,6 +3505,7 @@ if (
       userId,
       'SUPPORTING_STAFF',
       sharedMetrics,
+      eligibilityMet,
     );
 
   const incentiveAmount =
@@ -3610,6 +3685,7 @@ if (
       userId,
       'HR_MANAGER',
       sharedMetrics,
+      eligibilityMet,
     );
 
   const incentiveAmount =
@@ -3789,6 +3865,7 @@ if (
       userId,
       'SOLAR_FRANCHISE',
       sharedMetrics,
+      eligibilityMet,
     );
 
   const incentiveAmount =
