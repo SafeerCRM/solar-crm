@@ -828,8 +828,18 @@ function KitCard({
   );
 }
 
-function StockCard({ item }: { item: any }) {
-  const available = Number(item.availableQuantity || 0);
+function StockCard({
+  item,
+}: {
+  item: any;
+}) {
+  const available = Math.max(
+    Number(
+      item.availableQuantity || 0,
+    ),
+    0,
+  );
+
   const stockTone =
     available <= 0
       ? 'bg-red-100 text-red-700'
@@ -837,94 +847,155 @@ function StockCard({ item }: { item: any }) {
         ? 'bg-yellow-100 text-yellow-800'
         : 'bg-emerald-100 text-emerald-700';
 
+  const dealerRate = Number(
+    item.dealerUnitRate ||
+      item.ratePerWatt ||
+      0,
+  );
+
+  const dealerRateUnit =
+    String(
+      item.dealerRateUnit ||
+        item.unit ||
+        (item.dealerCategory ===
+        'PANELS'
+          ? 'WATT'
+          : 'UNIT'),
+    ).trim();
+
+  const imageUrl =
+    String(
+      item.imageUrl || '',
+    ).trim();
+
   return (
-    <div className="group overflow-hidden rounded-[2rem] bg-white text-slate-900 shadow-xl transition hover:-translate-y-1 hover:shadow-2xl">
+    <div className="group overflow-hidden rounded-[2rem] bg-white text-slate-900 shadow-xl transition duration-300 hover:-translate-y-1 hover:shadow-2xl">
       <div className="h-2 bg-gradient-to-r from-blue-700 via-sky-500 to-orange-400" />
 
-      <div className="p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-lg font-black">{item.materialName}</p>
-            <p className="mt-1 text-xs font-semibold text-slate-500">
-              {item.category || 'Uncategorized'} · {item.brand || 'No brand'}
-            </p>
-            {item.warranty && (
-  <p className="mt-2 inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
-    Warranty: {item.warranty}
-  </p>
-)}
-          </div>
+      {/* Product Image */}
+      <div className="relative flex h-52 items-center justify-center overflow-hidden bg-slate-50">
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={
+              item.materialName ||
+              'Material'
+            }
+            loading="lazy"
+            className="h-full w-full object-contain p-4 transition duration-300 group-hover:scale-[1.04]"
+          />
+        ) : (
+          <div className="flex h-full w-full flex-col items-center justify-center px-6 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white text-3xl shadow-sm">
+              ☀️
+            </div>
 
-          <span className={`rounded-full px-3 py-1 text-xs font-black ${stockTone}`}>
-  {available > 0
-    ? `Qty: ${available}`
-    : 'Out of Stock'}
-</span>
+            <p className="mt-3 text-xs font-bold text-slate-400">
+              Product image coming soon
+            </p>
+          </div>
+        )}
+
+        <span
+          className={`absolute right-3 top-3 rounded-full px-3 py-1.5 text-xs font-black shadow-sm ${stockTone}`}
+        >
+          {available > 0
+            ? `Qty: ${available}`
+            : 'Out of Stock'}
+        </span>
+
+        {item.brand && (
+          <span className="absolute bottom-3 left-3 max-w-[75%] truncate rounded-full bg-slate-950/90 px-3 py-1.5 text-xs font-black text-white shadow-sm">
+            {item.brand}
+          </span>
+        )}
+      </div>
+
+      <div className="p-5">
+        <p className="break-words text-lg font-black leading-snug">
+          {item.materialName}
+        </p>
+
+        <div className="mt-2 flex flex-wrap gap-2">
+          {item.category && (
+            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600">
+              {item.category}
+            </span>
+          )}
+
+          {item.warranty && (
+            <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-black text-blue-700">
+              Warranty: {item.warranty}
+            </span>
+          )}
         </div>
 
-        <div className="mt-5 grid grid-cols-2 gap-3">
-  {Number(
-  item.dealerUnitRate ||
-    item.ratePerWatt ||
-    0,
-) > 0 && (
-  <div className="col-span-2 rounded-2xl bg-green-50 p-3">
-    <p className="text-xs font-bold text-green-600">
-      Dealer Rate
-    </p>
+        {dealerRate > 0 && (
+          <div className="mt-4 rounded-2xl bg-green-50 p-3">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-green-600">
+              Dealer Rate
+            </p>
 
-    <p className="mt-1 text-lg font-black text-green-700">
-      ₹
-      {Number(
-        item.dealerUnitRate ||
-          item.ratePerWatt ||
-          0,
-      ).toLocaleString('en-IN')}
-      /
-      {String(
-        item.dealerRateUnit ||
-          item.unit ||
-          (
-            item.dealerCategory === 'PANELS'
-              ? 'WATT'
-              : 'UNIT'
-          ),
-      ).trim()}
-      {' + GST'}
-    </p>
-  </div>
-)}
+            <div className="mt-1 flex flex-wrap items-end gap-1">
+              <p className="text-xl font-black text-green-700">
+                ₹
+                {dealerRate.toLocaleString(
+                  'en-IN',
+                )}
+              </p>
 
-  <InfoBox
-    label="Without GST"
-    value={`₹${Number(
-      item.sellingRateWithoutGst || 0,
-    ).toLocaleString('en-IN')}`}
-  />
+              <p className="pb-0.5 text-xs font-black text-green-600">
+                /{dealerRateUnit} + GST
+              </p>
+            </div>
+          </div>
+        )}
 
-  <InfoBox
-    label="With GST"
-    value={`₹${Number(
-      item.sellingRateWithGst || 0,
-    ).toLocaleString('en-IN')}`}
-  />
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <InfoBox
+            label="Without GST"
+            value={`₹${Number(
+              item.sellingRateWithoutGst ||
+                0,
+            ).toLocaleString(
+              'en-IN',
+            )}`}
+          />
 
-  <InfoBox
-    label="GST"
-    value={`${Number(
-      item.gstPercent || 0,
-    )}%`}
-  />
+          <InfoBox
+            label="With GST"
+            value={`₹${Number(
+              item.sellingRateWithGst ||
+                0,
+            ).toLocaleString(
+              'en-IN',
+            )}`}
+          />
 
-  <InfoBox
-    label="HSN"
-    value={item.hsnCode || '-'}
-  />
-</div>
+          <InfoBox
+            label="GST"
+            value={`${Number(
+              item.gstPercent || 0,
+            )}%`}
+          />
 
-        <div className="mt-5 rounded-2xl bg-slate-50 p-4">
-          <p className="text-xs font-bold text-slate-400">Branch</p>
-          <p className="mt-1 font-black">{item.branchName || 'Company Stock'}</p>
+          <InfoBox
+            label="HSN"
+            value={
+              item.hsnCode || '-'
+            }
+          />
+        </div>
+
+        <div className="mt-4 rounded-2xl bg-slate-50 p-4">
+          <p className="text-xs font-bold text-slate-400">
+            Branch
+          </p>
+
+          <p className="mt-1 break-words font-black">
+            {item.branchName ||
+              'Company Stock'}
+          </p>
         </div>
 
         <a
