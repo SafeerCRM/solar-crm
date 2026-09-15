@@ -1768,8 +1768,24 @@ URL.revokeObjectURL(url);
 }`}
               >
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <p className="font-bold text-gray-800">
+                  <div className="flex min-w-0 items-start gap-4">
+  <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
+    {item.imageUrl ? (
+      <img
+        src={item.imageUrl}
+        alt={item.name}
+        loading="lazy"
+        className="h-full w-full object-contain p-1"
+      />
+    ) : (
+      <div className="px-2 text-center text-xs font-medium text-gray-400">
+        No Image
+      </div>
+    )}
+  </div>
+
+  <div className="min-w-0">
+    <p className="font-bold text-gray-800">
   {item.name}
 
   <span
@@ -1891,13 +1907,15 @@ URL.revokeObjectURL(url);
 </p>
 
                     {item.remarks && (
-                      <p className="mt-1 text-sm text-gray-600">
-                        {item.remarks}
-                      </p>
-                    )}
-                  </div>
+  <p className="mt-1 text-sm text-gray-600">
+    {item.remarks}
+  </p>
+)}
 
-                  {canManageMaterials && (
+  </div>
+</div>
+
+{canManageMaterials && (
   <div className="flex gap-2">
   <button
     onClick={() => startEdit(item)}
