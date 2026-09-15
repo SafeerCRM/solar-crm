@@ -312,11 +312,46 @@ updateDocumentCustomerVisibility(
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER', 'STOCK_MANAGER')
-
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'STOCK_MANAGER',
+)
 @Post('material-master')
-createMaterialMaster(@Body() body: any) {
-  return this.projectService.createMaterialMaster(body);
+createMaterialMaster(
+  @Body() body: any,
+) {
+  return this.projectService
+    .createMaterialMaster(
+      body,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'STOCK_MANAGER',
+)
+@Post('material-master/image/upload')
+@UseInterceptors(
+  FilesInterceptor(
+    'files',
+    1,
+  ),
+)
+uploadMaterialMasterImage(
+  @UploadedFiles()
+  files: any[],
+) {
+  const file =
+    files?.[0];
+
+  return this.projectService
+    .uploadMaterialMasterImage(
+      file,
+    );
 }
 
 @Get('material-master')

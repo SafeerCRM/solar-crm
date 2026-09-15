@@ -84,7 +84,10 @@ hsnCode: string;
 minimumStockLevel: number;
 
   @Column({ type: 'text', nullable: true })
-  remarks: string;
+imageUrl: string;
+
+@Column({ type: 'text', nullable: true })
+remarks: string;
 
   @Column({ default: true })
   isActive: boolean;

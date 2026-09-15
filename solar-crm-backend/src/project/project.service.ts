@@ -7117,6 +7117,152 @@ ratePerWatt:
   return this.projectMaterialMasterRepository.save(item);
 }
 
+async uploadMaterialMasterImage(
+  file: any,
+) {
+  if (!file) {
+    throw new BadRequestException(
+      'Material image is required',
+    );
+  }
+
+  const mimeType = String(
+    file.mimetype || '',
+  )
+    .trim()
+    .toLowerCase();
+
+  const allowedTypes = [
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/webp',
+  ];
+
+  if (
+    !allowedTypes.includes(
+      mimeType,
+    )
+  ) {
+    throw new BadRequestException(
+      'Only JPG, JPEG, PNG and WEBP material images are allowed',
+    );
+  }
+
+  /*
+   * Frontend compresses catalogue images
+   * before upload.
+   *
+   * Backend limit is the final protection
+   * against unexpectedly large uploads.
+   */
+  const maxSize =
+    5 * 1024 * 1024;
+
+  if (
+    Number(file.size || 0) >
+    maxSize
+  ) {
+    throw new BadRequestException(
+      'Material image must be less than 5 MB after compression',
+    );
+  }
+
+  const supabaseUrl =
+    process.env.SUPABASE_URL;
+
+  const serviceKey =
+    process.env
+      .SUPABASE_SERVICE_ROLE_KEY;
+
+  const bucket =
+    process.env
+      .SUPABASE_PROJECT_DOCUMENTS_BUCKET ||
+    'project-documents';
+
+  if (
+    !supabaseUrl ||
+    !serviceKey
+  ) {
+    throw new BadRequestException(
+      'Supabase storage is not configured',
+    );
+  }
+
+  const supabase =
+    createClient(
+      supabaseUrl,
+      serviceKey,
+    );
+
+  const originalName =
+    String(
+      file.originalname ||
+        'material-image',
+    );
+
+  const extension =
+    originalName.includes('.')
+      ? originalName
+          .split('.')
+          .pop()
+          ?.toLowerCase()
+      : mimeType
+          .split('/')[1] ||
+        'jpg';
+
+  const safeExtension =
+    String(
+      extension || 'jpg',
+    ).replace(
+      /[^a-zA-Z0-9]/g,
+      '',
+    );
+
+  const filePath =
+    `material-master-images/` +
+    `${Date.now()}-${randomUUID()}.${safeExtension}`;
+
+  const uploadResult =
+    await supabase.storage
+      .from(bucket)
+      .upload(
+        filePath,
+        file.buffer,
+        {
+          contentType:
+            mimeType,
+          upsert: false,
+        },
+      );
+
+  if (
+    uploadResult.error
+  ) {
+    throw new BadRequestException(
+      uploadResult.error.message,
+    );
+  }
+
+  const publicUrlResult =
+    supabase.storage
+      .from(bucket)
+      .getPublicUrl(
+        filePath,
+      );
+
+  return {
+    message:
+      'Material image uploaded successfully',
+
+    imageUrl:
+      publicUrlResult
+        .data.publicUrl,
+
+    filePath,
+  };
+}
+
 async deleteMaterialMaster(id: number) {
   const item =
     await this.projectMaterialMasterRepository.findOne({

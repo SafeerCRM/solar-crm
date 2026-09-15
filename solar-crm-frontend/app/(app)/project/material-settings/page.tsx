@@ -50,6 +50,7 @@ rate?: number;
   marginType?: 'AMOUNT' | 'PERCENT';
   sellingRate?: number;
   minimumStockLevel?: number;
+imageUrl?: string | null;
 };
 
 export default function MaterialSettingsPage() {
@@ -109,8 +110,241 @@ rate: '',
     vendorPreferredName: '',
     marginType: 'AMOUNT',
     sellingRate: '',
-    minimumStockLevel: '',
-  });
+minimumStockLevel: '',
+imageUrl: '',
+});
+
+const [materialImageFile, setMaterialImageFile] =
+  useState<File | null>(null);
+
+const [materialImagePreview, setMaterialImagePreview] =
+  useState('');
+
+const [imageUploading, setImageUploading] =
+  useState(false);
+
+  const compressMaterialImage = async (
+  file: File,
+): Promise<File> => {
+  if (
+    ![
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/webp',
+    ].includes(file.type.toLowerCase())
+  ) {
+    throw new Error(
+      'Only JPG, JPEG, PNG and WEBP images are allowed',
+    );
+  }
+
+  return new Promise(
+    (resolve, reject) => {
+      const image = new Image();
+
+      const objectUrl =
+        URL.createObjectURL(file);
+
+      image.onload = () => {
+        try {
+          const maxDimension = 1200;
+
+          const scale = Math.min(
+            1,
+            maxDimension / image.width,
+            maxDimension / image.height,
+          );
+
+          const canvas =
+            document.createElement(
+              'canvas',
+            );
+
+          canvas.width =
+            Math.max(
+              1,
+              Math.round(
+                image.width * scale,
+              ),
+            );
+
+          canvas.height =
+            Math.max(
+              1,
+              Math.round(
+                image.height * scale,
+              ),
+            );
+
+          const context =
+            canvas.getContext('2d');
+
+          if (!context) {
+            URL.revokeObjectURL(
+              objectUrl,
+            );
+
+            reject(
+              new Error(
+                'Unable to process material image',
+              ),
+            );
+
+            return;
+          }
+
+          /*
+           * White background prevents transparent
+           * PNG areas becoming black when converted
+           * to JPEG.
+           */
+          context.fillStyle =
+            '#ffffff';
+
+          context.fillRect(
+            0,
+            0,
+            canvas.width,
+            canvas.height,
+          );
+
+          context.drawImage(
+            image,
+            0,
+            0,
+            canvas.width,
+            canvas.height,
+          );
+
+          canvas.toBlob(
+            (blob) => {
+              URL.revokeObjectURL(
+                objectUrl,
+              );
+
+              if (!blob) {
+                reject(
+                  new Error(
+                    'Unable to compress material image',
+                  ),
+                );
+
+                return;
+              }
+
+              const baseName =
+                file.name.replace(
+                  /\.[^.]+$/,
+                  '',
+                ) ||
+                'material-image';
+
+              const compressedFile =
+  new File(
+    [blob],
+    `${baseName}.jpg`,
+    {
+      type: 'image/jpeg',
+      lastModified:
+        Date.now(),
+    },
+  );
+
+/*
+ * Use the compressed version unless
+ * compression unexpectedly makes an
+ * already-small image larger.
+ */
+resolve(
+  compressedFile.size <
+    file.size
+    ? compressedFile
+    : file,
+);
+            },
+            'image/jpeg',
+            0.8,
+          );
+        } catch (error) {
+          URL.revokeObjectURL(
+            objectUrl,
+          );
+
+          reject(error);
+        }
+      };
+
+      image.onerror = () => {
+        URL.revokeObjectURL(
+          objectUrl,
+        );
+
+        reject(
+          new Error(
+            'Unable to read selected image',
+          ),
+        );
+      };
+
+      image.src = objectUrl;
+    },
+  );
+};
+
+const uploadMaterialImage = async (
+  file: File,
+): Promise<string> => {
+  const token =
+    localStorage.getItem('token');
+
+  setImageUploading(true);
+
+  try {
+    const compressedFile =
+      await compressMaterialImage(
+        file,
+      );
+
+    const formData =
+      new FormData();
+
+    formData.append(
+      'files',
+      compressedFile,
+    );
+
+    const response =
+      await axios.post(
+        `${API_BASE_URL}/project/material-master/image/upload`,
+        formData,
+        {
+          headers: token
+            ? {
+                Authorization:
+                  `Bearer ${token}`,
+              }
+            : {},
+        },
+      );
+
+    const imageUrl =
+      String(
+        response.data?.imageUrl ||
+          '',
+      ).trim();
+
+    if (!imageUrl) {
+      throw new Error(
+        'Image upload completed but no image URL was returned',
+      );
+    }
+
+    return imageUrl;
+  } finally {
+    setImageUploading(false);
+  }
+};
 
   const fetchItems = async () => {
   try {
@@ -224,35 +458,76 @@ useEffect(() => {
     return;
   }
 
+  if (imageUploading) {
+    alert(
+      'Please wait for the material image upload to finish',
+    );
+    return;
+  }
+
   try {
-    const token = localStorage.getItem('token');
+    const token =
+      localStorage.getItem('token');
+
+    /*
+     * Existing image remains unchanged unless
+     * the user has selected a replacement/new image.
+     */
+    let finalImageUrl =
+      form.imageUrl || '';
+
+    if (materialImageFile) {
+      finalImageUrl =
+        await uploadMaterialImage(
+          materialImageFile,
+        );
+    }
 
     const payload = {
-  ...form,
+      ...form,
 
-  dealerCategory:
-    form.dealerCategory || '',
+      imageUrl:
+        finalImageUrl,
 
-  ratePerWatt: Number(
-    form.ratePerWatt || 0,
-  ),
+      dealerCategory:
+        form.dealerCategory || '',
 
-  dealerUnitRate: Number(
-  form.dealerUnitRate || 0,
-),
+      ratePerWatt: Number(
+        form.ratePerWatt || 0,
+      ),
 
-  rate: Number(form.rate || 0),
-  gstPercent: Number(form.gstPercent || 0),
-  expectedMargin: Number(form.expectedMargin || 0),
-  sellingRate: Number(form.sellingRate || 0),
-  minimumStockLevel: Number(
-  form.minimumStockLevel || 0,
-),
-  marginType:
-    form.marginType === 'PERCENT'
-      ? 'PERCENT'
-      : 'AMOUNT',
-};
+      dealerUnitRate: Number(
+        form.dealerUnitRate || 0,
+      ),
+
+      rate: Number(
+        form.rate || 0,
+      ),
+
+      gstPercent: Number(
+        form.gstPercent || 0,
+      ),
+
+      expectedMargin: Number(
+        form.expectedMargin || 0,
+      ),
+
+      sellingRate: Number(
+        form.sellingRate || 0,
+      ),
+
+      minimumStockLevel:
+        Number(
+          form.minimumStockLevel ||
+            0,
+        ),
+
+      marginType:
+        form.marginType ===
+        'PERCENT'
+          ? 'PERCENT'
+          : 'AMOUNT',
+    };
 
     if (editingId) {
       await axios.patch(
@@ -261,7 +536,8 @@ useEffect(() => {
         {
           headers: token
             ? {
-                Authorization: `Bearer ${token}`,
+                Authorization:
+                  `Bearer ${token}`,
               }
             : {},
         },
@@ -275,7 +551,8 @@ useEffect(() => {
         {
           headers: token
             ? {
-                Authorization: `Bearer ${token}`,
+                Authorization:
+                  `Bearer ${token}`,
               }
             : {},
         },
@@ -285,27 +562,43 @@ useEffect(() => {
     }
 
     setForm({
-  name: '',
-  category: '',
+      name: '',
+      category: '',
 
-  dealerCategory: '',
-  ratePerWatt: '',
-dealerUnitRate: '',
-  unit: '',
-brand: '',
-warranty: '',
-hsnCode: '',
-  vendorPreferredName: '',
-  rate: '',
-  gstPercent: '',
-  marginType: 'AMOUNT',
-  expectedMargin: '',
-  sellingRate: '',
-  minimumStockLevel: '',
-  remarks: '',
-});
+      dealerCategory: '',
+      ratePerWatt: '',
+      dealerUnitRate: '',
 
-    setEditingId(null);
+      unit: '',
+      brand: '',
+      warranty: '',
+      hsnCode: '',
+      vendorPreferredName: '',
+      rate: '',
+      gstPercent: '',
+      marginType: 'AMOUNT',
+      expectedMargin: '',
+      sellingRate: '',
+      minimumStockLevel: '',
+      remarks: '',
+      imageUrl: '',
+    });
+
+    if (
+  materialImagePreview &&
+  materialImagePreview.startsWith(
+    'blob:',
+  )
+) {
+  URL.revokeObjectURL(
+    materialImagePreview,
+  );
+}
+
+setMaterialImageFile(null);
+setMaterialImagePreview('');
+
+setEditingId(null);
 
     fetchItems();
   } catch (error: any) {
@@ -313,6 +606,7 @@ hsnCode: '',
 
     alert(
       error?.response?.data?.message ||
+        error?.message ||
         'Failed to save material',
     );
   }
@@ -359,7 +653,14 @@ minimumStockLevel: String(
   item.minimumStockLevel || '',
 ),
 remarks: item.remarks || '',
+imageUrl: item.imageUrl || '',
 });
+
+setMaterialImageFile(null);
+
+setMaterialImagePreview(
+  item.imageUrl || '',
+);
 
   window.scrollTo({
     top: 0,
@@ -390,7 +691,22 @@ hsnCode: '',
   sellingRate: '',
 minimumStockLevel: '',
 remarks: '',
+imageUrl: '',
 });
+
+if (
+  materialImagePreview &&
+  materialImagePreview.startsWith(
+    'blob:',
+  )
+) {
+  URL.revokeObjectURL(
+    materialImagePreview,
+  );
+}
+
+setMaterialImageFile(null);
+setMaterialImagePreview('');
 };
 
   const toggleMaterialStatus = async (
@@ -1106,9 +1422,197 @@ URL.revokeObjectURL(url);
   }
   className="rounded-xl border p-3"
 />
-        </div>
+</div>
 
-        <textarea
+<div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+  <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+    <div className="flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-xl border bg-white">
+      {materialImagePreview ||
+      form.imageUrl ? (
+        <img
+          src={
+            materialImagePreview ||
+            form.imageUrl
+          }
+          alt="Material preview"
+          className="h-full w-full object-contain p-1"
+        />
+      ) : (
+        <div className="px-2 text-center text-xs text-gray-400">
+          No Product Image
+        </div>
+      )}
+    </div>
+
+    <div className="flex-1">
+      <p className="font-semibold text-gray-800">
+        Product Image
+      </p>
+
+      <p className="mt-1 text-xs text-gray-500">
+        JPG, JPEG, PNG or WEBP. Image
+        will be automatically compressed
+        and optimized before upload.
+      </p>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        <label
+          className={`cursor-pointer rounded-xl px-4 py-2 text-sm font-semibold text-white ${
+            imageUploading
+              ? 'cursor-not-allowed bg-gray-400'
+              : 'bg-blue-600 hover:bg-blue-700'
+          }`}
+        >
+          {materialImagePreview ||
+          form.imageUrl
+            ? 'Change Image'
+            : 'Choose Image'}
+
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            disabled={imageUploading}
+            onChange={(e) => {
+              const file =
+                e.target.files?.[0];
+
+              /*
+               * Allow selecting the same file
+               * again after removal/change.
+               */
+              e.currentTarget.value =
+                '';
+
+              if (!file) {
+                return;
+              }
+
+              const allowedTypes = [
+                'image/jpeg',
+                'image/jpg',
+                'image/png',
+                'image/webp',
+              ];
+
+              if (
+                !allowedTypes.includes(
+                  file.type.toLowerCase(),
+                )
+              ) {
+                alert(
+                  'Only JPG, JPEG, PNG and WEBP images are allowed',
+                );
+                return;
+              }
+
+              /*
+               * Reject abnormally large source
+               * files before loading them into
+               * browser memory for compression.
+               */
+              const maxOriginalSize =
+                20 * 1024 * 1024;
+
+              if (
+                file.size >
+                maxOriginalSize
+              ) {
+                alert(
+                  'Please select an image smaller than 20 MB',
+                );
+                return;
+              }
+
+              if (
+                materialImagePreview &&
+                materialImagePreview.startsWith(
+                  'blob:',
+                )
+              ) {
+                URL.revokeObjectURL(
+                  materialImagePreview,
+                );
+              }
+
+              const previewUrl =
+                URL.createObjectURL(
+                  file,
+                );
+
+              setMaterialImageFile(
+                file,
+              );
+
+              setMaterialImagePreview(
+                previewUrl,
+              );
+            }}
+          />
+        </label>
+
+        {(materialImagePreview ||
+          form.imageUrl) && (
+          <button
+            type="button"
+            disabled={imageUploading}
+            onClick={() => {
+              if (
+                materialImagePreview &&
+                materialImagePreview.startsWith(
+                  'blob:',
+                )
+              ) {
+                URL.revokeObjectURL(
+                  materialImagePreview,
+                );
+              }
+
+              setMaterialImageFile(
+                null,
+              );
+
+              setMaterialImagePreview(
+                '',
+              );
+
+              /*
+               * Clearing imageUrl means Save
+               * will remove the image from this
+               * material when editing.
+               */
+              setForm(
+                (current) => ({
+                  ...current,
+                  imageUrl: '',
+                }),
+              );
+            }}
+            className="rounded-xl bg-red-100 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-200 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Remove Image
+          </button>
+        )}
+      </div>
+
+      {materialImageFile && (
+        <p className="mt-2 text-xs font-medium text-green-700">
+          Selected:{' '}
+          {materialImageFile.name}
+        </p>
+      )}
+
+      {imageUploading && (
+        <p className="mt-2 text-xs font-semibold text-blue-700">
+          Compressing and uploading
+          image...
+        </p>
+      )}
+    </div>
+  </div>
+</div>
+
+<textarea
           placeholder="Remarks"
           value={form.remarks}
           onChange={(e) =>
@@ -1121,11 +1625,17 @@ URL.revokeObjectURL(url);
         />
 
         <button
-          onClick={saveItem}
-          className="mt-4 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700"
-        >
-          {editingId ? 'Update Material' : 'Add Material'}
-        </button>
+  type="button"
+  onClick={saveItem}
+  disabled={imageUploading}
+  className="mt-4 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+>
+  {imageUploading
+    ? 'Uploading Image...'
+    : editingId
+      ? 'Update Material'
+      : 'Add Material'}
+</button>
 
         {editingId && (
   <button
