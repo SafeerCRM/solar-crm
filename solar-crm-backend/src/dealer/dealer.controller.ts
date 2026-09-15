@@ -205,6 +205,30 @@ listDealerKits(@Query() query: any) {
   return this.dealerService.listDealerKits(query);
 }
 
+@UseGuards(
+  JwtAuthGuard,
+  RolesGuard,
+)
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+  'TRADING_MANAGER',
+  'TRADING_HEAD',
+)
+@Post('kits/image/upload')
+@UseInterceptors(
+  FileInterceptor('file'),
+)
+uploadDealerKitImage(
+  @UploadedFile()
+  file: any,
+) {
+  return this.dealerService
+    .uploadDealerKitImage(
+      file,
+    );
+}
+
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('OWNER', 'ACCOUNT_MANAGER', 'TRADING_MANAGER', 'TRADING_HEAD')
 @Post('kits')

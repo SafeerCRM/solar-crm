@@ -940,6 +940,142 @@ async listDealerKitsForPortal() {
   }));
 }
 
+async uploadDealerKitImage(
+  file: any,
+) {
+  if (!file) {
+    throw new BadRequestException(
+      'Kit image is required',
+    );
+  }
+
+  const mimeType = String(
+    file.mimetype || '',
+  )
+    .trim()
+    .toLowerCase();
+
+  const allowedTypes = [
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/webp',
+  ];
+
+  if (
+    !allowedTypes.includes(
+      mimeType,
+    )
+  ) {
+    throw new BadRequestException(
+      'Only JPG, JPEG, PNG and WEBP kit images are allowed',
+    );
+  }
+
+  const maxSize =
+    5 * 1024 * 1024;
+
+  if (
+    Number(file.size || 0) >
+    maxSize
+  ) {
+    throw new BadRequestException(
+      'Kit image must be less than 5 MB after compression',
+    );
+  }
+
+  const supabaseUrl =
+    process.env.SUPABASE_URL;
+
+  const serviceKey =
+    process.env
+      .SUPABASE_SERVICE_ROLE_KEY;
+
+  const bucket =
+    process.env
+      .SUPABASE_PROJECT_DOCUMENTS_BUCKET ||
+    'project-documents';
+
+  if (
+    !supabaseUrl ||
+    !serviceKey
+  ) {
+    throw new BadRequestException(
+      'Supabase storage is not configured',
+    );
+  }
+
+  const supabase =
+    createClient(
+      supabaseUrl,
+      serviceKey,
+    );
+
+  const originalName =
+    String(
+      file.originalname ||
+        'kit-image',
+    );
+
+  const extension =
+    originalName.includes('.')
+      ? originalName
+          .split('.')
+          .pop()
+          ?.toLowerCase()
+      : mimeType.split('/')[1] ||
+        'jpg';
+
+  const safeExtension =
+    String(
+      extension || 'jpg',
+    ).replace(
+      /[^a-zA-Z0-9]/g,
+      '',
+    );
+
+  const filePath =
+    `dealer-kit-images/${Date.now()}-${randomUUID()}.${safeExtension}`;
+
+  const uploadResult =
+    await supabase.storage
+      .from(bucket)
+      .upload(
+        filePath,
+        file.buffer,
+        {
+          contentType:
+            mimeType,
+          upsert: false,
+        },
+      );
+
+  if (uploadResult.error) {
+    throw new BadRequestException(
+      uploadResult.error
+        .message,
+    );
+  }
+
+  const publicUrlResult =
+    supabase.storage
+      .from(bucket)
+      .getPublicUrl(
+        filePath,
+      );
+
+  return {
+    message:
+      'Kit image uploaded successfully',
+
+    imageUrl:
+      publicUrlResult.data
+        .publicUrl,
+
+    filePath,
+  };
+}
+
 async saveDealerKit(body: any, user: any) {
   if (!String(body?.kitName || '').trim()) {
     throw new BadRequestException('Kit name is required');
@@ -990,7 +1126,13 @@ kit.batteryBrand = String(
   body.batteryBrand || '',
 ).trim();
 
-kit.sellingPrice = Number(body.sellingPrice || 0);
+kit.imageUrl = String(
+  body.imageUrl || '',
+).trim();
+
+kit.sellingPrice = Number(
+  body.sellingPrice || 0,
+);
   kit.gstPercent = Number(body.gstPercent || 0);
   kit.gstMode =
   body.gstMode === 'INCLUDING' ? 'INCLUDING' : 'EXCLUDING';

@@ -730,11 +730,50 @@ function KitCard({
   expanded: boolean;
   onToggle: () => void;
 }) {
-  return (
-    <div className="group overflow-hidden rounded-[2rem] bg-white text-slate-900 shadow-xl transition hover:-translate-y-1 hover:shadow-2xl">
-      <div className="h-2 bg-gradient-to-r from-orange-500 via-yellow-400 to-blue-600" />
+  const imageUrl = String(
+    kit.imageUrl || '',
+  ).trim();
 
-      <div className="p-5">
+  return (
+    <div className="group overflow-hidden rounded-[2rem] bg-white text-slate-900 shadow-xl transition duration-300 hover:-translate-y-1 hover:shadow-2xl">
+  <div className="h-2 bg-gradient-to-r from-orange-500 via-yellow-400 to-blue-600" />
+
+  {/* Kit Image */}
+  <div className="relative flex h-52 items-center justify-center overflow-hidden bg-slate-50">
+    {imageUrl ? (
+      <img
+        src={imageUrl}
+        alt={
+          kit.kitName ||
+          'Solar Kit'
+        }
+        loading="lazy"
+        className="h-full w-full object-contain p-4 transition duration-300 group-hover:scale-[1.04]"
+      />
+    ) : (
+      <div className="flex h-full w-full flex-col items-center justify-center px-6 text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white text-3xl shadow-sm">
+          ☀️
+        </div>
+
+        <p className="mt-3 text-xs font-bold text-slate-400">
+          Kit image coming soon
+        </p>
+      </div>
+    )}
+
+    <span className="absolute right-3 top-3 rounded-full bg-emerald-100 px-3 py-1.5 text-xs font-black text-emerald-700 shadow-sm">
+      Available
+    </span>
+
+    {kit.displayBrand && (
+      <span className="absolute bottom-3 left-3 max-w-[75%] truncate rounded-full bg-slate-950/90 px-3 py-1.5 text-xs font-black text-white shadow-sm">
+        {kit.displayBrand}
+      </span>
+    )}
+  </div>
+
+  <div className="p-5">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-lg font-black">{kit.kitName}</p>
@@ -766,9 +805,7 @@ function KitCard({
 </div>
           </div>
 
-          <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-700">
-            Available
-          </span>
+          
         </div>
 
         <div className="mt-5 grid grid-cols-2 gap-3">

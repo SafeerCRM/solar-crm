@@ -55,7 +55,9 @@ const emptyKitForm = {
   inverterBrand: '',
   batteryBrand: '',
 
-  sellingPrice: '',
+imageUrl: '',
+
+sellingPrice: '',
   gstPercent: '',
   gstMode: 'EXCLUDING',
   isAvailable: true,
@@ -108,6 +110,9 @@ const [deliverySaving, setDeliverySaving] = useState(false);
 const [kits, setKits] = useState<any[]>([]);
 const [kitForm, setKitForm] = useState<any>(emptyKitForm);
 const [kitSaving, setKitSaving] = useState(false);
+const [kitImageFile, setKitImageFile] = useState<File | null>(null);
+const [kitImagePreview, setKitImagePreview] = useState('');
+const [kitImageUploading, setKitImageUploading] = useState(false);
 const [showHiddenKits, setShowHiddenKits] = useState(false);
 const [expandedKitId, setExpandedKitId] = useState<number | null>(null);
 
@@ -382,33 +387,265 @@ const removeKitItem = (index: number) => {
   });
 };
 
+const compressKitImage = (
+  file: File,
+): Promise<File> => {
+  return new Promise(
+    (resolve, reject) => {
+      const image = new Image();
+      const objectUrl =
+        URL.createObjectURL(file);
+
+      image.onload = () => {
+        try {
+          const maxDimension = 1200;
+
+          let width = image.width;
+          let height = image.height;
+
+          if (
+            width > maxDimension ||
+            height > maxDimension
+          ) {
+            const ratio = Math.min(
+              maxDimension / width,
+              maxDimension / height,
+            );
+
+            width = Math.round(
+              width * ratio,
+            );
+
+            height = Math.round(
+              height * ratio,
+            );
+          }
+
+          const canvas =
+            document.createElement(
+              'canvas',
+            );
+
+          canvas.width = width;
+          canvas.height = height;
+
+          const context =
+            canvas.getContext('2d');
+
+          if (!context) {
+            URL.revokeObjectURL(
+              objectUrl,
+            );
+
+            reject(
+              new Error(
+                'Unable to process kit image',
+              ),
+            );
+
+            return;
+          }
+
+          context.drawImage(
+            image,
+            0,
+            0,
+            width,
+            height,
+          );
+
+          canvas.toBlob(
+            (blob) => {
+              URL.revokeObjectURL(
+                objectUrl,
+              );
+
+              if (!blob) {
+                reject(
+                  new Error(
+                    'Unable to compress kit image',
+                  ),
+                );
+
+                return;
+              }
+
+              const baseName =
+                file.name.replace(
+                  /\.[^/.]+$/,
+                  '',
+                ) || 'kit-image';
+
+              const compressedFile =
+                new File(
+                  [blob],
+                  `${baseName}.jpg`,
+                  {
+                    type: 'image/jpeg',
+                    lastModified:
+                      Date.now(),
+                  },
+                );
+
+              const needsResize =
+                image.width >
+                  maxDimension ||
+                image.height >
+                  maxDimension;
+
+              resolve(
+                needsResize ||
+                  compressedFile.size <
+                    file.size
+                  ? compressedFile
+                  : file,
+              );
+            },
+            'image/jpeg',
+            0.8,
+          );
+        } catch (error) {
+          URL.revokeObjectURL(
+            objectUrl,
+          );
+
+          reject(error);
+        }
+      };
+
+      image.onerror = () => {
+        URL.revokeObjectURL(
+          objectUrl,
+        );
+
+        reject(
+          new Error(
+            'Unable to read kit image',
+          ),
+        );
+      };
+
+      image.src = objectUrl;
+    },
+  );
+};
+
+const uploadKitImage = async (
+  file: File,
+) => {
+  try {
+    setKitImageUploading(true);
+
+    const compressedFile =
+      await compressKitImage(file);
+
+    const formData =
+      new FormData();
+
+    formData.append(
+      'file',
+      compressedFile,
+    );
+
+    const res = await axios.post(
+      `${API_BASE_URL}/dealer/kits/image/upload`,
+      formData,
+      {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem(
+            'token',
+          )}`,
+        },
+      },
+    );
+
+    const imageUrl = String(
+      res.data?.imageUrl || '',
+    ).trim();
+
+    if (!imageUrl) {
+      throw new Error(
+        'Kit image URL was not returned',
+      );
+    }
+
+    return imageUrl;
+  } finally {
+    setKitImageUploading(false);
+  }
+};
+
 const resetKitForm = () => {
+  if (
+    kitImagePreview.startsWith(
+      'blob:',
+    )
+  ) {
+    URL.revokeObjectURL(
+      kitImagePreview,
+    );
+  }
+
   setKitForm(emptyKitForm);
+  setKitImageFile(null);
+  setKitImagePreview('');
 };
 
 const saveKit = async () => {
-  if (!String(kitForm.kitName || '').trim()) {
+  if (
+    !String(
+      kitForm.kitName || '',
+    ).trim()
+  ) {
     alert('Kit name is required');
+    return;
+  }
+
+  if (kitImageUploading) {
     return;
   }
 
   try {
     setKitSaving(true);
 
+    let imageUrl = String(
+      kitForm.imageUrl || '',
+    ).trim();
+
+    if (kitImageFile) {
+      imageUrl =
+        await uploadKitImage(
+          kitImageFile,
+        );
+    }
+
     await axios.post(
       `${API_BASE_URL}/dealer/kits`,
-      kitForm,
+      {
+        ...kitForm,
+        imageUrl,
+      },
       {
         headers: headers(),
       },
     );
 
-    alert('Kit saved successfully');
+    alert(
+      'Kit saved successfully',
+    );
+
     resetKitForm();
+
     await loadKits();
   } catch (error: any) {
     console.error(error);
-    alert(error?.response?.data?.message || 'Failed to save kit');
+
+    alert(
+      error?.response?.data
+        ?.message ||
+        error?.message ||
+        'Failed to save kit',
+    );
   } finally {
     setKitSaving(false);
   }
@@ -425,6 +662,8 @@ displayCapacity: kit.displayCapacity || '',
 panelBrand: kit.panelBrand || '',
 inverterBrand: kit.inverterBrand || '',
 batteryBrand: kit.batteryBrand || '',
+
+imageUrl: kit.imageUrl || '',
 
 sellingPrice: String(kit.sellingPrice || ''),
     gstPercent: String(kit.gstPercent || ''),
@@ -445,6 +684,24 @@ sellingPrice: String(kit.sellingPrice || ''),
             },
           ],
   });
+
+  if (
+  kitImagePreview.startsWith(
+    'blob:',
+  )
+) {
+  URL.revokeObjectURL(
+    kitImagePreview,
+  );
+}
+
+setKitImageFile(null);
+
+setKitImagePreview(
+  String(
+    kit.imageUrl || '',
+  ).trim(),
+);
 
   window.scrollTo({ top: 0, behavior: 'smooth' });
 };
@@ -1181,6 +1438,136 @@ const restoreAfterSalesService = async (item: any) => {
 
     </div>
 
+    <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+  <label className="block text-sm font-bold text-gray-800">
+    Kit Image
+  </label>
+
+  <p className="mt-1 text-xs text-gray-500">
+    Upload the catalogue image shown to dealers for this kit.
+  </p>
+
+  <input
+    type="file"
+    accept="image/jpeg,image/jpg,image/png,image/webp"
+    className="mt-3 w-full rounded-xl border bg-white p-2 text-sm"
+    onChange={(event) => {
+      const file =
+        event.target.files?.[0];
+
+      if (!file) return;
+
+      const allowedTypes = [
+        'image/jpeg',
+        'image/jpg',
+        'image/png',
+        'image/webp',
+      ];
+
+      if (
+        !allowedTypes.includes(
+          file.type,
+        )
+      ) {
+        alert(
+          'Please select JPG, JPEG, PNG or WEBP image.',
+        );
+
+        event.target.value = '';
+        return;
+      }
+
+      const maxOriginalSize =
+        20 * 1024 * 1024;
+
+      if (
+        file.size >
+        maxOriginalSize
+      ) {
+        alert(
+          'Please select an image smaller than 20 MB.',
+        );
+
+        event.target.value = '';
+        return;
+      }
+
+      if (
+        kitImagePreview.startsWith(
+          'blob:',
+        )
+      ) {
+        URL.revokeObjectURL(
+          kitImagePreview,
+        );
+      }
+
+      setKitImageFile(file);
+
+      setKitImagePreview(
+        URL.createObjectURL(
+          file,
+        ),
+      );
+    }}
+  />
+
+  {(kitImagePreview ||
+    kitForm.imageUrl) && (
+    <div className="mt-4">
+      <p className="text-xs font-semibold text-gray-500">
+        Image Preview
+      </p>
+
+      <div className="mt-2 flex h-52 max-w-md items-center justify-center overflow-hidden rounded-2xl border bg-white">
+        <img
+          src={
+            kitImagePreview ||
+            kitForm.imageUrl
+          }
+          alt={
+            kitForm.kitName ||
+            'Kit preview'
+          }
+          className="h-full w-full object-contain p-3"
+        />
+      </div>
+
+      <button
+        type="button"
+        onClick={() => {
+          if (
+            kitImagePreview.startsWith(
+              'blob:',
+            )
+          ) {
+            URL.revokeObjectURL(
+              kitImagePreview,
+            );
+          }
+
+          setKitImageFile(null);
+          setKitImagePreview('');
+
+          setKitForm({
+            ...kitForm,
+            imageUrl: '',
+          });
+        }}
+        className="mt-3 rounded-xl bg-red-100 px-4 py-2 text-sm font-bold text-red-700"
+      >
+        Remove Image
+      </button>
+    </div>
+  )}
+
+  {kitImageUploading && (
+    <p className="mt-3 text-sm font-semibold text-blue-600">
+      Compressing and uploading kit image...
+    </p>
+  )}
+</div>
+
     <label className="mt-3 flex items-center gap-2 text-sm font-semibold">
       <input
         type="checkbox"
@@ -1245,10 +1632,17 @@ const restoreAfterSalesService = async (item: any) => {
     <div className="mt-5 flex flex-wrap gap-3">
       <button
         onClick={saveKit}
-        disabled={kitSaving}
+        disabled={
+  kitSaving ||
+  kitImageUploading
+}
         className="rounded-xl bg-blue-600 px-5 py-3 font-bold text-white disabled:opacity-60"
       >
-        {kitSaving ? 'Saving...' : 'Save Kit'}
+        {kitSaving
+  ? 'Saving...'
+  : kitImageUploading
+    ? 'Uploading Image...'
+    : 'Save Kit'}
       </button>
 
       {kitForm.id && (

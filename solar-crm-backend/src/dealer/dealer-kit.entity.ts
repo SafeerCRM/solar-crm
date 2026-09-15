@@ -32,8 +32,11 @@ inverterBrand: string;
 @Column({ type: 'text', nullable: true })
 batteryBrand: string;
 
-  @Column({ type: 'numeric', default: 0 })
-  sellingPrice: number;
+@Column({ type: 'text', nullable: true })
+imageUrl: string;
+
+@Column({ type: 'numeric', default: 0 })
+sellingPrice: number;
 
   @Column({ type: 'numeric', default: 0 })
   gstPercent: number;

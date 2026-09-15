@@ -1348,8 +1348,48 @@ function KitOrderCard({
   onToggle: () => void;
   onAdd: () => void;
 }) {
+    const imageUrl = String(
+  kit.imageUrl || '',
+).trim();
+
   return (
-    <div className="rounded-[1.7rem] border border-orange-100 bg-orange-50 p-4 transition hover:-translate-y-1 hover:bg-white hover:shadow-xl">
+  <div className="group overflow-hidden rounded-[1.7rem] border border-orange-100 bg-orange-50 transition hover:-translate-y-1 hover:bg-white hover:shadow-xl">
+    {/* Kit Image */}
+    <div className="relative flex h-52 items-center justify-center overflow-hidden bg-white">
+      {imageUrl ? (
+        <img
+          src={imageUrl}
+          alt={
+            kit.kitName ||
+            'Solar Kit'
+          }
+          loading="lazy"
+          className="h-full w-full object-contain p-4 transition duration-300 group-hover:scale-[1.04]"
+        />
+      ) : (
+        <div className="flex h-full w-full flex-col items-center justify-center px-6 text-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-orange-50 text-3xl shadow-sm">
+            ☀️
+          </div>
+
+          <p className="mt-3 text-xs font-bold text-slate-400">
+            Kit image coming soon
+          </p>
+        </div>
+      )}
+
+      <span className="absolute right-3 top-3 rounded-full bg-emerald-100 px-3 py-1.5 text-xs font-black text-emerald-700 shadow-sm">
+        Available
+      </span>
+
+      {kit.displayBrand && (
+        <span className="absolute bottom-3 left-3 max-w-[75%] truncate rounded-full bg-slate-950/90 px-3 py-1.5 text-xs font-black text-white shadow-sm">
+          {kit.displayBrand}
+        </span>
+      )}
+    </div>
+
+    <div className="p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="font-black">{kit.kitName}</p>
@@ -1442,8 +1482,9 @@ function KitOrderCard({
         >
           Add Kit
         </button>
-      </div>
+            </div>
     </div>
+  </div>
   );
 }
 
