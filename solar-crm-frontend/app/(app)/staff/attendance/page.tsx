@@ -19,6 +19,8 @@ export default function StaffAttendancePage() {
   const [staff, setStaff] = useState<Staff[]>([]);
   const [attendance, setAttendance] = useState<any[]>([]);
 
+  
+
   const [
   monthlyAttendance,
   setMonthlyAttendance,
@@ -517,10 +519,7 @@ const getCalendarStatusClasses = (
     item.status || '',
   ).toUpperCase();
 
-  if (
-    status === 'PRESENT' ||
-    status === 'FULL_DAY'
-  ) {
+  if (status === 'PRESENT') {
     return 'bg-green-600 text-white border-green-600';
   }
 
@@ -528,10 +527,7 @@ const getCalendarStatusClasses = (
     return 'bg-amber-500 text-white border-amber-500';
   }
 
-  if (
-    status === 'LEAVE' ||
-    status === 'ON_LEAVE'
-  ) {
+  if (status === 'LEAVE') {
     return 'bg-blue-600 text-white border-blue-600';
   }
 
@@ -539,7 +535,15 @@ const getCalendarStatusClasses = (
     return 'bg-red-600 text-white border-red-600';
   }
 
-  return 'bg-purple-600 text-white border-purple-600';
+  if (status === 'WEEKLY_OFF') {
+    return 'bg-gray-500 text-white border-gray-500';
+  }
+
+  if (status === 'HOLIDAY') {
+    return 'bg-purple-600 text-white border-purple-600';
+  }
+
+  return 'bg-gray-100 text-gray-600 border-gray-200';
 };
 
 const getCalendarDays = () => {
@@ -1029,14 +1033,24 @@ const changeCalendarMonth = (
             </span>
 
             <span className="flex items-center gap-2">
-              <span className="h-3 w-3 rounded-full bg-red-600" />
-              Absent
-            </span>
+  <span className="h-3 w-3 rounded-full bg-red-600" />
+  Absent
+</span>
 
-            <span className="flex items-center gap-2">
-              <span className="h-3 w-3 rounded-full bg-gray-100 ring-1 ring-gray-300" />
-              No Record
-            </span>
+<span className="flex items-center gap-2">
+  <span className="h-3 w-3 rounded-full bg-gray-500" />
+  Weekly Off
+</span>
+
+<span className="flex items-center gap-2">
+  <span className="h-3 w-3 rounded-full bg-purple-600" />
+  Holiday
+</span>
+
+<span className="flex items-center gap-2">
+  <span className="h-3 w-3 rounded-full bg-gray-100 ring-1 ring-gray-300" />
+  No Record
+</span>
           </div>
         </>
       )}
