@@ -13,6 +13,11 @@ export default function MyAttendancePage() {
   const [monthlyAttendance, setMonthlyAttendance] =
   useState<any[]>([]);
 
+  const [
+  monthlyApprovedLeaves,
+  setMonthlyApprovedLeaves,
+] = useState<any[]>([]);
+
 const [calendarMonth, setCalendarMonth] =
   useState(
     new Date().toISOString().slice(0, 7),
@@ -87,8 +92,12 @@ const [loadingCalendar, setLoadingCalendar] =
     );
 
     setMonthlyAttendance(
-      res.data?.data || [],
-    );
+  res.data?.data || [],
+);
+
+setMonthlyApprovedLeaves(
+  res.data?.approvedLeaves || [],
+);
   } catch (error) {
     console.error(
       'Failed to load monthly attendance',
@@ -96,6 +105,7 @@ const [loadingCalendar, setLoadingCalendar] =
     );
 
     setMonthlyAttendance([]);
+setMonthlyApprovedLeaves([]);
   } finally {
     setLoadingCalendar(false);
   }
@@ -120,6 +130,31 @@ const getAttendanceForDate = (
     (item) =>
       String(item.attendanceDate) ===
       date,
+  );
+};
+
+const getApprovedLeaveForDate = (
+  date: string,
+) => {
+  return monthlyApprovedLeaves.find(
+    (leave) => {
+      const fromDate =
+        String(
+          leave.fromDate || '',
+        ).slice(0, 10);
+
+      const toDate =
+        String(
+          leave.toDate || '',
+        ).slice(0, 10);
+
+      return (
+        fromDate &&
+        toDate &&
+        date >= fromDate &&
+        date <= toDate
+      );
+    },
   );
 };
 
@@ -177,10 +212,11 @@ const getCalendarDays = () => {
   const days: Array<
     | null
     | {
-        day: number;
-        date: string;
-        attendance: any;
-      }
+    day: number;
+    date: string;
+    attendance: any;
+    approvedLeave: any;
+  }
   > = [];
 
   for (
@@ -201,12 +237,24 @@ const getCalendarDays = () => {
         day,
       ).padStart(2, '0')}`;
 
-    days.push({
-      day,
-      date,
-      attendance:
-        getAttendanceForDate(date),
-    });
+    const attendance =
+  getAttendanceForDate(
+    date,
+  );
+
+const approvedLeave =
+  attendance
+    ? null
+    : getApprovedLeaveForDate(
+        date,
+      );
+
+days.push({
+  day,
+  date,
+  attendance,
+  approvedLeave,
+});
   }
 
   return days;
@@ -433,20 +481,48 @@ const changeCalendarMonth = (
               );
             }
 
-            const item =
-              calendarDay.attendance;
+            const attendanceItem =
+  calendarDay.attendance;
+
+const approvedLeave =
+  calendarDay.approvedLeave;
+
+const item =
+  attendanceItem ||
+  (approvedLeave
+    ? {
+        status: 'LEAVE',
+        isLeaveOverlay: true,
+        leave: approvedLeave,
+      }
+    : null);
 
             return (
               <button
                 key={calendarDay.date}
                 type="button"
                 onClick={() => {
-                  if (item) {
-                    setSelectedCalendarAttendance(
-                      item,
-                    );
-                  }
-                }}
+  if (attendanceItem) {
+    setSelectedCalendarAttendance(
+      attendanceItem,
+    );
+
+    return;
+  }
+
+  if (approvedLeave) {
+    setSelectedCalendarAttendance({
+      attendanceDate:
+        calendarDay.date,
+
+      status: 'LEAVE',
+
+      isLeaveOverlay: true,
+
+      leave: approvedLeave,
+    });
+  }
+}}
                 className={`flex aspect-square items-center justify-center rounded-full border text-sm font-bold transition sm:text-base ${
                   getCalendarStatusClasses(
                     item,
@@ -465,183 +541,249 @@ const changeCalendarMonth = (
       </div>
 
       <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 border-t pt-4 text-xs font-semibold text-gray-600">
-        <span className="flex items-center gap-2">
-          <span className="h-3 w-3 rounded-full bg-green-600" />
-          Present
-        </span>
+  <span className="flex items-center gap-2">
+    <span className="h-3 w-3 rounded-full bg-green-600" />
+    Present
+  </span>
 
-        <span className="flex items-center gap-2">
-          <span className="h-3 w-3 rounded-full bg-amber-500" />
-          Half Day
-        </span>
+  <span className="flex items-center gap-2">
+    <span className="h-3 w-3 rounded-full bg-amber-500" />
+    Half Day
+  </span>
 
-        <span className="flex items-center gap-2">
-          <span className="h-3 w-3 rounded-full bg-blue-600" />
-          Leave
-        </span>
+  <span className="flex items-center gap-2">
+    <span className="h-3 w-3 rounded-full bg-blue-600" />
+    Approved Leave
+  </span>
 
-        <span className="flex items-center gap-2">
-          <span className="h-3 w-3 rounded-full bg-red-600" />
-          Absent
-        </span>
-
-        <span className="flex items-center gap-2">
-          <span className="h-3 w-3 rounded-full bg-gray-100 ring-1 ring-gray-300" />
-          No Record
-        </span>
-      </div>
+  <span className="flex items-center gap-2">
+    <span className="h-3 w-3 rounded-full bg-gray-100 ring-1 ring-gray-300" />
+    No Record
+  </span>
+</div>
     </>
   )}
 
   {selectedCalendarAttendance && (
-    <div className="mt-5 rounded-2xl border bg-gray-50 p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="font-bold text-gray-900">
-            {new Date(
-              `${selectedCalendarAttendance.attendanceDate}T00:00:00`,
-            ).toLocaleDateString(
-              'en-IN',
-              {
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric',
-              },
-            )}
-          </p>
-
-          <p className="mt-1 text-sm font-semibold text-gray-600">
-            Status:{' '}
-            {selectedCalendarAttendance.status ||
-              '-'}
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={() =>
-            setSelectedCalendarAttendance(
-              null,
-            )
-          }
-          className="rounded-lg border bg-white px-3 py-1 text-sm font-semibold text-gray-600"
-        >
-          Close
-        </button>
-      </div>
-
-      <div className="mt-4 grid gap-3 sm:grid-cols-3">
-        <div className="rounded-xl bg-white p-3">
-          <p className="text-xs font-semibold uppercase text-gray-400">
-            Punch In
-          </p>
-
-          <p className="mt-1 text-sm font-bold text-gray-800">
-            {selectedCalendarAttendance.punchInTime
-              ? new Date(
-                  selectedCalendarAttendance.punchInTime,
-                ).toLocaleTimeString(
-                  'en-IN',
-                  {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  },
-                )
-              : '-'}
-          </p>
-        </div>
-
-        <div className="rounded-xl bg-white p-3">
-          <p className="text-xs font-semibold uppercase text-gray-400">
-            Punch Out
-          </p>
-
-          <p className="mt-1 text-sm font-bold text-gray-800">
-            {selectedCalendarAttendance.punchOutTime
-              ? new Date(
-                  selectedCalendarAttendance.punchOutTime,
-                ).toLocaleTimeString(
-                  'en-IN',
-                  {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  },
-                )
-              : '-'}
-          </p>
-        </div>
-
-        <div className="rounded-xl bg-white p-3">
-          <p className="text-xs font-semibold uppercase text-gray-400">
-            Working Hours
-          </p>
-
-          <p className="mt-1 text-sm font-bold text-green-700">
-            {selectedCalendarAttendance.workingHours ||
-              0}
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-4 flex flex-wrap gap-2">
-        {selectedCalendarAttendance.punchInPhotoUrl && (
-          <a
-            href={
-              selectedCalendarAttendance.punchInPhotoUrl
-            }
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded-xl bg-green-600 px-3 py-2 text-sm font-semibold text-white"
-          >
-            In Photo
-          </a>
-        )}
-
-        {selectedCalendarAttendance.punchOutPhotoUrl && (
-          <a
-            href={
-              selectedCalendarAttendance.punchOutPhotoUrl
-            }
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white"
-          >
-            Out Photo
-          </a>
-        )}
-
-        {selectedCalendarAttendance.punchInLatitude &&
-          selectedCalendarAttendance.punchInLongitude && (
-            <a
-              href={`https://www.google.com/maps?q=${selectedCalendarAttendance.punchInLatitude},${selectedCalendarAttendance.punchInLongitude}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-xl bg-gray-800 px-3 py-2 text-sm font-semibold text-white"
-            >
-              In GPS
-            </a>
+  <div className="mt-5 rounded-2xl border bg-gray-50 p-4">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <p className="font-bold text-gray-900">
+          {new Date(
+            `${selectedCalendarAttendance.attendanceDate}T00:00:00`,
+          ).toLocaleDateString(
+            'en-IN',
+            {
+              day: 'numeric',
+              month: 'long',
+              year: 'numeric',
+            },
           )}
-
-        {selectedCalendarAttendance.punchOutLatitude &&
-          selectedCalendarAttendance.punchOutLongitude && (
-            <a
-              href={`https://www.google.com/maps?q=${selectedCalendarAttendance.punchOutLatitude},${selectedCalendarAttendance.punchOutLongitude}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-xl bg-gray-800 px-3 py-2 text-sm font-semibold text-white"
-            >
-              Out GPS
-            </a>
-          )}
-      </div>
-
-      {selectedCalendarAttendance.remarks && (
-        <p className="mt-3 rounded-xl bg-white p-3 text-sm text-gray-600">
-          {selectedCalendarAttendance.remarks}
         </p>
-      )}
+
+        <p className="mt-1 text-sm font-semibold text-gray-600">
+          Status:{' '}
+          {selectedCalendarAttendance.status ||
+            '-'}
+        </p>
+      </div>
+
+      <button
+        type="button"
+        onClick={() =>
+          setSelectedCalendarAttendance(
+            null,
+          )
+        }
+        className="rounded-lg border bg-white px-3 py-1 text-sm font-semibold text-gray-600"
+      >
+        Close
+      </button>
     </div>
-  )}
+
+    {!selectedCalendarAttendance.isLeaveOverlay && (
+      <>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-xl bg-white p-3">
+            <p className="text-xs font-semibold uppercase text-gray-400">
+              Punch In
+            </p>
+
+            <p className="mt-1 text-sm font-bold text-gray-800">
+              {selectedCalendarAttendance.punchInTime
+                ? new Date(
+                    selectedCalendarAttendance.punchInTime,
+                  ).toLocaleTimeString(
+                    'en-IN',
+                    {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    },
+                  )
+                : '-'}
+            </p>
+          </div>
+
+          <div className="rounded-xl bg-white p-3">
+            <p className="text-xs font-semibold uppercase text-gray-400">
+              Punch Out
+            </p>
+
+            <p className="mt-1 text-sm font-bold text-gray-800">
+              {selectedCalendarAttendance.punchOutTime
+                ? new Date(
+                    selectedCalendarAttendance.punchOutTime,
+                  ).toLocaleTimeString(
+                    'en-IN',
+                    {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    },
+                  )
+                : '-'}
+            </p>
+          </div>
+
+          <div className="rounded-xl bg-white p-3">
+            <p className="text-xs font-semibold uppercase text-gray-400">
+              Working Hours
+            </p>
+
+            <p className="mt-1 text-sm font-bold text-green-700">
+              {selectedCalendarAttendance.workingHours ||
+                0}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          {selectedCalendarAttendance.punchInPhotoUrl && (
+            <a
+              href={
+                selectedCalendarAttendance.punchInPhotoUrl
+              }
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-xl bg-green-600 px-3 py-2 text-sm font-semibold text-white"
+            >
+              In Photo
+            </a>
+          )}
+
+          {selectedCalendarAttendance.punchOutPhotoUrl && (
+            <a
+              href={
+                selectedCalendarAttendance.punchOutPhotoUrl
+              }
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white"
+            >
+              Out Photo
+            </a>
+          )}
+
+          {selectedCalendarAttendance.punchInLatitude &&
+            selectedCalendarAttendance.punchInLongitude && (
+              <a
+                href={`https://www.google.com/maps?q=${selectedCalendarAttendance.punchInLatitude},${selectedCalendarAttendance.punchInLongitude}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-xl bg-gray-800 px-3 py-2 text-sm font-semibold text-white"
+              >
+                In GPS
+              </a>
+            )}
+
+          {selectedCalendarAttendance.punchOutLatitude &&
+            selectedCalendarAttendance.punchOutLongitude && (
+              <a
+                href={`https://www.google.com/maps?q=${selectedCalendarAttendance.punchOutLatitude},${selectedCalendarAttendance.punchOutLongitude}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-xl bg-gray-800 px-3 py-2 text-sm font-semibold text-white"
+              >
+                Out GPS
+              </a>
+            )}
+        </div>
+
+        {selectedCalendarAttendance.remarks && (
+          <p className="mt-3 rounded-xl bg-white p-3 text-sm text-gray-600">
+            {
+              selectedCalendarAttendance
+                .remarks
+            }
+          </p>
+        )}
+      </>
+    )}
+
+    {selectedCalendarAttendance.isLeaveOverlay &&
+      selectedCalendarAttendance.leave && (
+        <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4">
+          <p className="text-sm font-bold text-blue-900">
+            Approved Leave
+          </p>
+
+          <div className="mt-3 grid gap-2 text-sm text-blue-900 sm:grid-cols-2">
+            <p>
+              <span className="font-semibold">
+                From:
+              </span>{' '}
+              {String(
+                selectedCalendarAttendance
+                  .leave.fromDate || '-',
+              ).slice(0, 10)}
+            </p>
+
+            <p>
+              <span className="font-semibold">
+                To:
+              </span>{' '}
+              {String(
+                selectedCalendarAttendance
+                  .leave.toDate || '-',
+              ).slice(0, 10)}
+            </p>
+
+            {selectedCalendarAttendance.leave
+              .leaveType && (
+              <p>
+                <span className="font-semibold">
+                  Leave Type:
+                </span>{' '}
+                {
+                  selectedCalendarAttendance
+                    .leave.leaveType
+                }
+              </p>
+            )}
+
+            <p>
+              <span className="font-semibold">
+                Status:
+              </span>{' '}
+              APPROVED
+            </p>
+          </div>
+
+          {selectedCalendarAttendance.leave
+            .reason && (
+            <div className="mt-3 rounded-lg bg-white p-3 text-sm text-gray-700">
+              <span className="font-semibold">
+                Reason:
+              </span>{' '}
+              {
+                selectedCalendarAttendance
+                  .leave.reason
+              }
+            </div>
+          )}
+        </div>
+      )}
+  </div>
+)}
 </div>
 
       <div className="rounded-2xl bg-white p-5 shadow">
