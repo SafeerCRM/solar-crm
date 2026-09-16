@@ -28,6 +28,7 @@ import { AppSettingsModule } from './app-settings/app-settings.module';
 import { StaffLocationModule } from './staff-location/staff-location.module';
 import { PushNotificationModule } from './push-notification/push-notification.module';
 import { WhatsappModule } from './whatsapp/whatsapp.module';
+import { PaymentModule } from './payment/payment.module';
 
 @Module({
   imports: [
@@ -66,7 +67,8 @@ import { WhatsappModule } from './whatsapp/whatsapp.module';
     AppSettingsModule,
     StaffLocationModule,
     PushNotificationModule,
-    WhatsappModule,
+WhatsappModule,
+PaymentModule,
   ],
   controllers: [AppController],
   providers: [AppService],

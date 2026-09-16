@@ -9,6 +9,7 @@ Query,
   Post,
   Req,
   Res,
+  BadRequestException,
   UnauthorizedException,
   UploadedFiles,
   UploadedFile,
@@ -302,6 +303,40 @@ async kits(@Req() req: any) {
 
     return this.service.getDealerAnalytics(Number(payload.dealerId));
   }
+
+  @Post('payment-gateway/icici/trading-test')
+async initiateIciciTradingTestPayment(
+  @Req() req: any,
+) {
+  const payload =
+    this.getDealerPayload(req);
+
+  const returnUrl =
+    String(
+      process.env
+        .ICICI_PAYMENT_RETURN_URL ||
+        '',
+    ).trim();
+
+  if (
+    !returnUrl ||
+    !/^https:\/\//i.test(
+      returnUrl,
+    )
+  ) {
+    throw new BadRequestException(
+      'ICICI payment return URL is not configured',
+    );
+  }
+
+  return this.service
+    .initiateIciciTradingTestPayment(
+      Number(
+        payload.dealerId,
+      ),
+      returnUrl,
+    );
+}
 
     @Post('payments')
   async createPayment(@Req() req: any, @Body() body: any) {

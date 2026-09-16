@@ -56,6 +56,7 @@ import { DealerAnnouncement } from './dealer-announcement.entity';
 
 import { PortalDeviceToken } from '../customer-portal/portal-device-token.entity';
 import { PushNotificationModule } from '../push-notification/push-notification.module';
+import { PaymentModule } from '../payment/payment.module';
 
 @Module({
   imports: [
@@ -92,7 +93,8 @@ DealerAnnouncement,
 PortalDeviceToken,
     ]),
         ProjectModule,
-    PushNotificationModule,
+PushNotificationModule,
+PaymentModule,
   ],
   providers: [DealerService],
   controllers: [DealerController, DealerAuthController],

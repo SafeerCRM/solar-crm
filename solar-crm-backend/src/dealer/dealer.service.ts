@@ -97,6 +97,12 @@ import {
   PortalDevicePlatform,
 } from '../customer-portal/portal-device-token.entity';
 import { PushNotificationService } from '../push-notification/push-notification.service';
+import { IciciPaymentService } from '../payment/icici-payment.service';
+import {
+  IciciMerchantAccount,
+  IciciPaymentPurpose,
+} from '../payment/icici-payment-transaction.entity';
+
 
 @Injectable()
 export class DealerService {
@@ -199,8 +205,9 @@ private readonly dealerAnnouncementRepository: Repository<DealerAnnouncement>,
 @InjectRepository(PortalDeviceToken)
 private readonly portalDeviceTokenRepository: Repository<PortalDeviceToken>,
 
-    private readonly projectService: ProjectService,
+   private readonly projectService: ProjectService,
 private readonly pushNotificationService: PushNotificationService,
+private readonly iciciPaymentService: IciciPaymentService,
   ) {}
 
   private async getAdityaTradingBillingEntity() {
@@ -6325,6 +6332,53 @@ if (portalDealer) {
     proformaInvoices,
     finalInvoices,
   };
+}
+
+async initiateIciciTradingTestPayment(
+  dealerId: number,
+  returnUrl: string,
+) {
+  const dealer = await this.dealerRepository.findOne({
+    where: {
+      id: Number(dealerId),
+      isHidden: false,
+    },
+  });
+
+  if (!dealer) {
+    throw new NotFoundException('Dealer not found');
+  }
+
+  return this.iciciPaymentService.initiatePayment({
+    merchantAccount: IciciMerchantAccount.TRADING,
+
+    /*
+     * Temporary test purpose only.
+     *
+     * We are NOT connecting this payment
+     * to a real dealer order yet.
+     */
+    purpose: IciciPaymentPurpose.DEALER_ORDER,
+
+    referenceId: Number(dealer.id),
+    dealerId: Number(dealer.id),
+
+    amount: 1,
+
+    customerName:
+  dealer.dealerName ||
+  'Dealer',
+
+customerEmail:
+  dealer.email ||
+  undefined,
+
+customerMobile:
+  dealer.phone ||
+  undefined,
+
+    returnUrl,
+  });
 }
 
 async listDealerInsurancePlans() {
