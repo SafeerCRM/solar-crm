@@ -1032,39 +1032,123 @@ if (
   )
 ) {
   /*
-   * TEMPORARY DIAGNOSTIC LOG.
+   * ICICI production currently returns
+   * oth_charge as a JSON boolean.
    *
-   * Do not log:
-   * - secureHash
-   * - merchant secret
-   * - card/payment credentials
+   * Their hash documentation describes
+   * parameter values but does not define
+   * serialization of boolean false.
    *
-   * We only need the response shape
-   * returned by ICICI Status API.
+   * Test safe candidate serializations
+   * against ICICI's supplied signature.
+   *
+   * Do NOT log hashes or secret key.
    */
+
+  const withoutFalseValues =
+    Object.fromEntries(
+      Object.entries(
+        statusResponse,
+      ).filter(
+        ([key, value]) =>
+          key !==
+            'secureHash' &&
+          value !== false,
+      ),
+    );
+
+  const falseAsZero =
+    Object.fromEntries(
+      Object.entries(
+        statusResponse,
+      ).map(
+        ([key, value]) => [
+          key,
+          value === false
+            ? '0'
+            : value,
+        ],
+      ),
+    );
+
+  const falseAsEmpty =
+    Object.fromEntries(
+      Object.entries(
+        statusResponse,
+      ).map(
+        ([key, value]) => [
+          key,
+          value === false
+            ? ''
+            : value,
+        ],
+      ),
+    );
+
+  const withoutFalseHash =
+    this.createSecureHash(
+      withoutFalseValues,
+      merchant.secretKey,
+    );
+
+  const falseAsZeroHash =
+    this.createSecureHash(
+      falseAsZero,
+      merchant.secretKey,
+    );
+
+  const falseAsEmptyHash =
+    this.createSecureHash(
+      falseAsEmpty,
+      merchant.secretKey,
+    );
+
+  let matchedVariant =
+    'NONE';
+
+  if (
+    this.secureHashesMatch(
+      receivedSecureHash,
+      withoutFalseHash,
+    )
+  ) {
+    matchedVariant =
+      'OMIT_FALSE';
+  } else if (
+    this.secureHashesMatch(
+      receivedSecureHash,
+      falseAsZeroHash,
+    )
+  ) {
+    matchedVariant =
+      'FALSE_AS_ZERO';
+  } else if (
+    this.secureHashesMatch(
+      receivedSecureHash,
+      falseAsEmptyHash,
+    )
+  ) {
+    matchedVariant =
+      'FALSE_AS_EMPTY';
+  }
+
   console.error(
-    'ICICI STATUS SIGNATURE MISMATCH',
+    'ICICI STATUS HASH VARIANT',
     {
+      matchedVariant,
+
       keys:
         Object.keys(
           statusResponse,
         ).sort(),
 
-      merchantId:
-        statusResponse
-          ?.merchantId,
-
-      merchantTxnNo:
-        statusResponse
-          ?.merchantTxnNo,
-
-      originalTxnNo:
-        statusResponse
-          ?.originalTxnNo,
-
-      amount:
-        statusResponse
-          ?.amount,
+      hasBooleanFalse:
+        Object.values(
+          statusResponse,
+        ).some(
+          (value) =>
+            value === false,
+        ),
 
       txnStatus:
         statusResponse
@@ -1077,10 +1161,6 @@ if (
       responseCode:
         statusResponse
           ?.responseCode,
-
-      transactionType:
-        statusResponse
-          ?.transactionType,
     },
   );
 
