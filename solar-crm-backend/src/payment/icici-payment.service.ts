@@ -755,6 +755,80 @@ export class IciciPaymentService {
     }
   }
 
+  async reconcileTransactionById(
+  transactionId: number,
+) {
+  const id =
+    Number(
+      transactionId,
+    );
+
+  if (
+    !Number.isInteger(id) ||
+    id <= 0
+  ) {
+    throw new BadRequestException(
+      'Invalid ICICI transaction ID',
+    );
+  }
+
+  const transaction =
+    await this
+      .transactionRepository
+      .findOne({
+        where: {
+          id,
+        },
+      });
+
+  if (!transaction) {
+    throw new BadRequestException(
+      'ICICI payment transaction not found',
+    );
+  }
+
+  const reconciled =
+    await this
+      .reconcileTransactionStatus(
+        transaction,
+      );
+
+  return {
+    transactionId:
+      reconciled.id,
+
+    merchantTxnNo:
+      reconciled
+        .merchantTxnNo,
+
+    amount:
+      Number(
+        reconciled.amount,
+      ),
+
+    merchantAccount:
+      reconciled
+        .merchantAccount,
+
+    status:
+      reconciled.status,
+
+    responseCode:
+      reconciled
+        .responseCode ||
+      null,
+
+    responseDescription:
+      reconciled
+        .responseDescription ||
+      null,
+
+    paidAt:
+      reconciled.paidAt ||
+      null,
+  };
+}
+
   private async reconcileTransactionStatus(
   transaction: IciciPaymentTransaction,
 ) {

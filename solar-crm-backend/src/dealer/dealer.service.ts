@@ -6409,6 +6409,15 @@ async initiateIciciTradingWebsiteTestPayment(
   });
 }
 
+async reconcileIciciTestPayment(
+  transactionId: number,
+) {
+  return this.iciciPaymentService
+    .reconcileTransactionById(
+      transactionId,
+    );
+}
+
 async listDealerInsurancePlans() {
   return this
     .projectInsurancePlanRepository

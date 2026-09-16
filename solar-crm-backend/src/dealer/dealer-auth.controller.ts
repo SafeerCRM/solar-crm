@@ -349,6 +349,40 @@ async initiateIciciTradingWebsiteTestPayment(
     );
 }
 
+@Post('payment-gateway/icici/reconcile-test')
+async reconcileIciciTestPayment(
+  @Req() req: any,
+  @Body() body: any,
+) {
+  /*
+   * Require a valid Dealer Portal JWT.
+   * This endpoint is temporary and will
+   * be removed after gateway testing.
+   */
+  this.getDealerPayload(req);
+
+  const transactionId =
+    Number(
+      body?.transactionId,
+    );
+
+  if (
+    !Number.isInteger(
+      transactionId,
+    ) ||
+    transactionId <= 0
+  ) {
+    throw new BadRequestException(
+      'Valid transaction ID is required',
+    );
+  }
+
+  return this.service
+    .reconcileIciciTestPayment(
+      transactionId,
+    );
+}
+
   @Post('payment-gateway/icici/trading-test')
 async initiateIciciTradingTestPayment(
   @Req() req: any,
