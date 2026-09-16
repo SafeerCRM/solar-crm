@@ -6381,6 +6381,34 @@ customerMobile:
   });
 }
 
+async initiateIciciTradingWebsiteTestPayment(
+  returnUrl: string,
+) {
+  return this.iciciPaymentService.initiatePayment({
+    merchantAccount:
+      IciciMerchantAccount.TRADING,
+
+    /*
+     * TEMPORARY LIVE WEBSITE TEST ONLY.
+     *
+     * This does not represent a real
+     * dealer order and does not update
+     * any business payment record.
+     */
+    purpose:
+      IciciPaymentPurpose.DEALER_ORDER,
+
+    referenceId: 1,
+
+    amount: 1,
+
+    customerName:
+      'Aditya Trading Test',
+
+    returnUrl,
+  });
+}
+
 async listDealerInsurancePlans() {
   return this
     .projectInsurancePlanRepository

@@ -304,6 +304,51 @@ async kits(@Req() req: any) {
     return this.service.getDealerAnalytics(Number(payload.dealerId));
   }
 
+  @Post('payment-gateway/icici/website-test')
+async initiateIciciTradingWebsiteTestPayment(
+  @Req() req: any,
+) {
+  const origin =
+    String(
+      req.headers?.origin ||
+        '',
+    )
+      .trim()
+      .toLowerCase();
+
+  if (
+    origin !==
+    'https://adityasolars.co.in'
+  ) {
+    throw new UnauthorizedException(
+      'Website payment test not allowed',
+    );
+  }
+
+  const returnUrl =
+    String(
+      process.env
+        .ICICI_PAYMENT_RETURN_URL ||
+        '',
+    ).trim();
+
+  if (
+    !returnUrl ||
+    !/^https:\/\//i.test(
+      returnUrl,
+    )
+  ) {
+    throw new BadRequestException(
+      'ICICI payment return URL is not configured',
+    );
+  }
+
+  return this.service
+    .initiateIciciTradingWebsiteTestPayment(
+      returnUrl,
+    );
+}
+
   @Post('payment-gateway/icici/trading-test')
 async initiateIciciTradingTestPayment(
   @Req() req: any,
