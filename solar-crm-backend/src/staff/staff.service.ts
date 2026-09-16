@@ -853,22 +853,31 @@ async punchOut(body: any, user: any) {
 }
 
 async getAttendance(query: any) {
-  const page = Math.max(Number(query.page || 1), 1);
+  const page = Math.max(
+    Number(query.page || 1),
+    1,
+  );
 
   const limit = Math.min(
-    Math.max(Number(query.limit || 20), 1),
+    Math.max(
+      Number(query.limit || 20),
+      1,
+    ),
     100,
   );
 
   const queryBuilder =
     this.attendanceRepo
-      .createQueryBuilder('attendance');
+      .createQueryBuilder(
+        'attendance',
+      );
 
   if (query.staffId) {
     queryBuilder.andWhere(
       'attendance.staffId = :staffId',
       {
-        staffId: Number(query.staffId),
+        staffId:
+          Number(query.staffId),
       },
     );
   }
@@ -885,7 +894,8 @@ async getAttendance(query: any) {
       queryBuilder.andWhere(
         'attendance.attendanceDate >= :fromDate',
         {
-          fromDate: query.fromDate,
+          fromDate:
+            query.fromDate,
         },
       );
     }
@@ -894,7 +904,8 @@ async getAttendance(query: any) {
       queryBuilder.andWhere(
         'attendance.attendanceDate <= :toDate',
         {
-          toDate: query.toDate,
+          toDate:
+            query.toDate,
         },
       );
     }
@@ -909,19 +920,85 @@ async getAttendance(query: any) {
       'attendance.createdAt',
       'DESC',
     )
-    .skip((page - 1) * limit)
+    .skip(
+      (page - 1) *
+        limit,
+    )
     .take(limit);
 
   const [data, total] =
-    await queryBuilder.getManyAndCount();
+    await queryBuilder
+      .getManyAndCount();
+
+  let approvedLeaves: any[] = [];
+
+  if (
+    query.staffId &&
+    query.fromDate &&
+    query.toDate &&
+    !query.date
+  ) {
+    approvedLeaves =
+      await this.leaveRepo
+        .createQueryBuilder(
+          'leave',
+        )
+        .where(
+          'leave.staffId = :staffId',
+          {
+            staffId:
+              Number(
+                query.staffId,
+              ),
+          },
+        )
+        .andWhere(
+          'leave.status = :status',
+          {
+            status:
+              'APPROVED',
+          },
+        )
+        .andWhere(
+          `
+          COALESCE(
+            leave.isHidden,
+            false
+          ) = false
+          `,
+        )
+        .andWhere(
+          'leave.fromDate <= :toDate',
+          {
+            toDate:
+              query.toDate,
+          },
+        )
+        .andWhere(
+          'leave.toDate >= :fromDate',
+          {
+            fromDate:
+              query.fromDate,
+          },
+        )
+        .orderBy(
+          'leave.fromDate',
+          'ASC',
+        )
+        .getMany();
+  }
 
   return {
     data,
+    approvedLeaves,
     total,
     page,
     limit,
+
     totalPages:
-      Math.ceil(total / limit) || 1,
+      Math.ceil(
+        total / limit,
+      ) || 1,
   };
 }
 
@@ -947,7 +1024,9 @@ async getMyAttendance(
   user: any,
 ) {
   const staff =
-    await this.getMyStaffProfile(user);
+    await this.getMyStaffProfile(
+      user,
+    );
 
   const page = Math.max(
     Number(query.page || 1),
@@ -955,17 +1034,23 @@ async getMyAttendance(
   );
 
   const limit = Math.min(
-    Math.max(Number(query.limit || 20), 1),
+    Math.max(
+      Number(query.limit || 20),
+      1,
+    ),
     100,
   );
 
   const queryBuilder =
     this.attendanceRepo
-      .createQueryBuilder('attendance')
+      .createQueryBuilder(
+        'attendance',
+      )
       .where(
         'attendance.staffId = :staffId',
         {
-          staffId: staff.id,
+          staffId:
+            staff.id,
         },
       );
 
@@ -973,7 +1058,8 @@ async getMyAttendance(
     queryBuilder.andWhere(
       'attendance.attendanceDate = :date',
       {
-        date: query.date,
+        date:
+          query.date,
       },
     );
   } else {
@@ -981,7 +1067,8 @@ async getMyAttendance(
       queryBuilder.andWhere(
         'attendance.attendanceDate >= :fromDate',
         {
-          fromDate: query.fromDate,
+          fromDate:
+            query.fromDate,
         },
       );
     }
@@ -990,7 +1077,8 @@ async getMyAttendance(
       queryBuilder.andWhere(
         'attendance.attendanceDate <= :toDate',
         {
-          toDate: query.toDate,
+          toDate:
+            query.toDate,
         },
       );
     }
@@ -1005,20 +1093,83 @@ async getMyAttendance(
       'attendance.createdAt',
       'DESC',
     )
-    .skip((page - 1) * limit)
+    .skip(
+      (page - 1) *
+        limit,
+    )
     .take(limit);
 
   const [data, total] =
-    await queryBuilder.getManyAndCount();
+    await queryBuilder
+      .getManyAndCount();
+
+  let approvedLeaves: any[] = [];
+
+  if (
+    query.fromDate &&
+    query.toDate &&
+    !query.date
+  ) {
+    approvedLeaves =
+      await this.leaveRepo
+        .createQueryBuilder(
+          'leave',
+        )
+        .where(
+          'leave.staffId = :staffId',
+          {
+            staffId:
+              staff.id,
+          },
+        )
+        .andWhere(
+          'leave.status = :status',
+          {
+            status:
+              'APPROVED',
+          },
+        )
+        .andWhere(
+          `
+          COALESCE(
+            leave.isHidden,
+            false
+          ) = false
+          `,
+        )
+        .andWhere(
+          'leave.fromDate <= :toDate',
+          {
+            toDate:
+              query.toDate,
+          },
+        )
+        .andWhere(
+          'leave.toDate >= :fromDate',
+          {
+            fromDate:
+              query.fromDate,
+          },
+        )
+        .orderBy(
+          'leave.fromDate',
+          'ASC',
+        )
+        .getMany();
+  }
 
   return {
     staff,
     data,
+    approvedLeaves,
     total,
     page,
     limit,
+
     totalPages:
-      Math.ceil(total / limit) || 1,
+      Math.ceil(
+        total / limit,
+      ) || 1,
   };
 }
 
