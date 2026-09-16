@@ -1019,9 +1019,33 @@ export class IciciPaymentService {
     );
   }
 
-  const expectedSecureHash =
+  /*
+ * ICICI Status API can return JSON boolean false
+ * values such as:
+ *
+ *   oth_charge: false
+ *
+ * ICICI excludes those false-valued parameters
+ * when calculating the Status response secureHash.
+ *
+ * Do not modify statusResponse itself because the
+ * original response is still needed below for
+ * reconciliation and metadata.
+ */
+const statusHashPayload =
+  Object.fromEntries(
+    Object.entries(
+      statusResponse,
+    ).filter(
+      ([key, value]) =>
+        key !== 'secureHash' &&
+        value !== false,
+    ),
+  );
+
+const expectedSecureHash =
   this.createSecureHash(
-    statusResponse,
+    statusHashPayload,
     merchant.secretKey,
   );
 
@@ -1031,139 +1055,6 @@ if (
     expectedSecureHash,
   )
 ) {
-  /*
-   * ICICI production currently returns
-   * oth_charge as a JSON boolean.
-   *
-   * Their hash documentation describes
-   * parameter values but does not define
-   * serialization of boolean false.
-   *
-   * Test safe candidate serializations
-   * against ICICI's supplied signature.
-   *
-   * Do NOT log hashes or secret key.
-   */
-
-  const withoutFalseValues =
-    Object.fromEntries(
-      Object.entries(
-        statusResponse,
-      ).filter(
-        ([key, value]) =>
-          key !==
-            'secureHash' &&
-          value !== false,
-      ),
-    );
-
-  const falseAsZero =
-    Object.fromEntries(
-      Object.entries(
-        statusResponse,
-      ).map(
-        ([key, value]) => [
-          key,
-          value === false
-            ? '0'
-            : value,
-        ],
-      ),
-    );
-
-  const falseAsEmpty =
-    Object.fromEntries(
-      Object.entries(
-        statusResponse,
-      ).map(
-        ([key, value]) => [
-          key,
-          value === false
-            ? ''
-            : value,
-        ],
-      ),
-    );
-
-  const withoutFalseHash =
-    this.createSecureHash(
-      withoutFalseValues,
-      merchant.secretKey,
-    );
-
-  const falseAsZeroHash =
-    this.createSecureHash(
-      falseAsZero,
-      merchant.secretKey,
-    );
-
-  const falseAsEmptyHash =
-    this.createSecureHash(
-      falseAsEmpty,
-      merchant.secretKey,
-    );
-
-  let matchedVariant =
-    'NONE';
-
-  if (
-    this.secureHashesMatch(
-      receivedSecureHash,
-      withoutFalseHash,
-    )
-  ) {
-    matchedVariant =
-      'OMIT_FALSE';
-  } else if (
-    this.secureHashesMatch(
-      receivedSecureHash,
-      falseAsZeroHash,
-    )
-  ) {
-    matchedVariant =
-      'FALSE_AS_ZERO';
-  } else if (
-    this.secureHashesMatch(
-      receivedSecureHash,
-      falseAsEmptyHash,
-    )
-  ) {
-    matchedVariant =
-      'FALSE_AS_EMPTY';
-  }
-
-  console.error(
-    'ICICI STATUS HASH VARIANT',
-    {
-      matchedVariant,
-
-      keys:
-        Object.keys(
-          statusResponse,
-        ).sort(),
-
-      hasBooleanFalse:
-        Object.values(
-          statusResponse,
-        ).some(
-          (value) =>
-            value === false,
-        ),
-
-      txnStatus:
-        statusResponse
-          ?.txnStatus,
-
-      txnResponseCode:
-        statusResponse
-          ?.txnResponseCode,
-
-      responseCode:
-        statusResponse
-          ?.responseCode,
-    },
-  );
-
   throw new BadGatewayException(
     'Invalid ICICI status response signature',
   );
