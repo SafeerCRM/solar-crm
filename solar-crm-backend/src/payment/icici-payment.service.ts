@@ -946,21 +946,74 @@ export class IciciPaymentService {
   }
 
   const expectedSecureHash =
-    this.createSecureHash(
-      statusResponse,
-      merchant.secretKey,
-    );
+  this.createSecureHash(
+    statusResponse,
+    merchant.secretKey,
+  );
 
-  if (
-    !this.secureHashesMatch(
-      receivedSecureHash,
-      expectedSecureHash,
-    )
-  ) {
-    throw new BadGatewayException(
-      'Invalid ICICI status response signature',
-    );
-  }
+if (
+  !this.secureHashesMatch(
+    receivedSecureHash,
+    expectedSecureHash,
+  )
+) {
+  /*
+   * TEMPORARY DIAGNOSTIC LOG.
+   *
+   * Do not log:
+   * - secureHash
+   * - merchant secret
+   * - card/payment credentials
+   *
+   * We only need the response shape
+   * returned by ICICI Status API.
+   */
+  console.error(
+    'ICICI STATUS SIGNATURE MISMATCH',
+    {
+      keys:
+        Object.keys(
+          statusResponse,
+        ).sort(),
+
+      merchantId:
+        statusResponse
+          ?.merchantId,
+
+      merchantTxnNo:
+        statusResponse
+          ?.merchantTxnNo,
+
+      originalTxnNo:
+        statusResponse
+          ?.originalTxnNo,
+
+      amount:
+        statusResponse
+          ?.amount,
+
+      txnStatus:
+        statusResponse
+          ?.txnStatus,
+
+      txnResponseCode:
+        statusResponse
+          ?.txnResponseCode,
+
+      responseCode:
+        statusResponse
+          ?.responseCode,
+
+      transactionType:
+        statusResponse
+          ?.transactionType,
+    },
+  );
+
+  throw new BadGatewayException(
+    'Invalid ICICI status response signature',
+  );
+}
 
   /*
    * Cross-check merchant identity.
