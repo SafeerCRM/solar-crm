@@ -1825,8 +1825,19 @@ const currentUserId = this.getCurrentUserId(user);
   siteObservation?: string;
   convertToProject?: boolean;
   newScheduledAt?: string;
-  gpsPhotoUrl?: string;
-  audioUrl?: string;
+gpsPhotoUrl?: string;
+audioUrl?: string;
+
+panelGivenToCustomerKw?: number;
+panelOffered?: string;
+
+inverterCapacityKw?: number;
+inverterOffered?: string;
+
+structureKw?: number;
+structureOffered?: string;
+
+proposedSystemKw?: number;
 },
   user: any,
 ): Promise<Meeting> {
@@ -1923,6 +1934,49 @@ existingMeeting.nextAction = actionData.nextAction || existingMeeting.nextAction
 existingMeeting.managerRemarks =
   actionData.managerRemarks || existingMeeting.managerRemarks;
 existingMeeting.notes = actionData.notes ?? existingMeeting.notes;
+
+if (actionData.panelGivenToCustomerKw !== undefined) {
+  existingMeeting.panelGivenToCustomerKw =
+    this.normalizeDecimal(
+      actionData.panelGivenToCustomerKw,
+    );
+}
+
+if (actionData.panelOffered !== undefined) {
+  existingMeeting.panelOffered =
+    String(actionData.panelOffered).trim();
+}
+
+if (actionData.inverterCapacityKw !== undefined) {
+  existingMeeting.inverterCapacityKw =
+    this.normalizeDecimal(
+      actionData.inverterCapacityKw,
+    );
+}
+
+if (actionData.inverterOffered !== undefined) {
+  existingMeeting.inverterOffered =
+    String(actionData.inverterOffered).trim();
+}
+
+if (actionData.structureKw !== undefined) {
+  existingMeeting.structureKw =
+    this.normalizeDecimal(
+      actionData.structureKw,
+    );
+}
+
+if (actionData.structureOffered !== undefined) {
+  existingMeeting.structureOffered =
+    String(actionData.structureOffered).trim();
+}
+
+if (actionData.proposedSystemKw !== undefined) {
+  existingMeeting.proposedSystemKw =
+    this.normalizeDecimal(
+      actionData.proposedSystemKw,
+    );
+}
 
 (existingMeeting as any).gpsPhotoUrl =
   actionData.gpsPhotoUrl || (existingMeeting as any).gpsPhotoUrl;
