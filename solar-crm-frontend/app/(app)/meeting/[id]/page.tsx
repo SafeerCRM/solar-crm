@@ -45,9 +45,15 @@ audioUrl?: string | null;
   solarMiterAadharBackUrl?: string | null;
   solarMiterBankProofUrl?: string | null;
   panelGivenToCustomerKw?: number | null;
-  inverterCapacityKw?: number | null;
-  structureKw?: number | null;
-  proposedSystemKw?: number | null;
+panelOffered?: string | null;
+
+inverterCapacityKw?: number | null;
+inverterOffered?: string | null;
+
+structureKw?: number | null;
+structureOffered?: string | null;
+
+proposedSystemKw?: number | null;
   meetingCount?: number | null;
   convertToProject?: boolean | null;
   createdBy?: number | null;
@@ -123,6 +129,19 @@ export default function MeetingDetailPage() {
   const [latestMeeting, setLatestMeeting] = useState<Meeting | null>(null);
   const [history, setHistory] = useState<Meeting[]>([]);
   const [calculators, setCalculators] = useState<CalculatorResult[]>([]);
+  const [materialOptions, setMaterialOptions] = useState<{
+  panels: { id: number; label: string }[];
+  inverters: {
+    id: string;
+    label: string;
+    inverterType: string;
+  }[];
+  structures: { id: number; label: string }[];
+}>({
+  panels: [],
+  inverters: [],
+  structures: [],
+});
   const [reviewRemarks, setReviewRemarks] =
   useState<MeetingReviewRemark[]>([]);
 
@@ -158,10 +177,16 @@ const [creatingFollowUp, setCreatingFollowUp] = useState(false);
     nextAction: '',
     managerRemarks: '',
     siteObservation: '',
-    panelGivenToCustomerKw: '',
-    inverterCapacityKw: '',
-    structureKw: '',
-    proposedSystemKw: '',
+   panelGivenToCustomerKw: '',
+panelOffered: '',
+
+inverterCapacityKw: '',
+inverterOffered: '',
+
+structureKw: '',
+structureOffered: '',
+
+proposedSystemKw: '',
     meetingCount: '',
   });
 
@@ -204,15 +229,18 @@ const [creatingFollowUp, setCreatingFollowUp] = useState(false);
             latest.panelGivenToCustomerKw !== undefined
               ? String(latest.panelGivenToCustomerKw)
               : '',
+              panelOffered: latest.panelOffered || '',
           inverterCapacityKw:
             latest.inverterCapacityKw !== null &&
             latest.inverterCapacityKw !== undefined
               ? String(latest.inverterCapacityKw)
               : '',
+              inverterOffered: latest.inverterOffered || '',
           structureKw:
             latest.structureKw !== null && latest.structureKw !== undefined
               ? String(latest.structureKw)
               : '',
+              structureOffered: latest.structureOffered || '',
           proposedSystemKw:
             latest.proposedSystemKw !== null &&
             latest.proposedSystemKw !== undefined
@@ -287,6 +315,42 @@ const canReassignMeeting =
   currentUserRoles.includes('OWNER') ||
   currentUserRoles.includes('MARKETING_HEAD');
 
+  const fetchMaterialOptions = async () => {
+  try {
+    const res = await axios.get(
+      `${backendUrl}/calculator/meeting-material-options`,
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+
+    const data = res.data;
+
+    setMaterialOptions({
+      panels: Array.isArray(data?.panels)
+        ? data.panels
+        : [],
+      inverters: Array.isArray(data?.inverters)
+        ? data.inverters
+        : [],
+      structures: Array.isArray(data?.structures)
+        ? data.structures
+        : [],
+    });
+  } catch (err) {
+    console.error(
+      'Failed to fetch meeting material options:',
+      err,
+    );
+
+    setMaterialOptions({
+      panels: [],
+      inverters: [],
+      structures: [],
+    });
+  }
+};
+
 const fetchMeetingManagers = async () => {
   try {
     const res = await axios.get(`${backendUrl}/users/meeting-managers`, {
@@ -314,6 +378,7 @@ const fetchMeetingManagers = async () => {
 fetchCalculators();
 fetchReviewRemarks();
 fetchMeetingManagers();
+fetchMaterialOptions();
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [meetingId]);
@@ -589,15 +654,26 @@ const submitReviewRemark = async () => {
           managerRemarks: form.managerRemarks || undefined,
           siteObservation: form.siteObservation || undefined,
           panelGivenToCustomerKw: form.panelGivenToCustomerKw
-            ? Number(form.panelGivenToCustomerKw)
-            : undefined,
-          inverterCapacityKw: form.inverterCapacityKw
-            ? Number(form.inverterCapacityKw)
-            : undefined,
-          structureKw: form.structureKw ? Number(form.structureKw) : undefined,
-          proposedSystemKw: form.proposedSystemKw
-            ? Number(form.proposedSystemKw)
-            : undefined,
+  ? Number(form.panelGivenToCustomerKw)
+  : undefined,
+
+panelOffered: form.panelOffered.trim() || undefined,
+
+inverterCapacityKw: form.inverterCapacityKw
+  ? Number(form.inverterCapacityKw)
+  : undefined,
+
+inverterOffered: form.inverterOffered.trim() || undefined,
+
+structureKw: form.structureKw
+  ? Number(form.structureKw)
+  : undefined,
+
+structureOffered: form.structureOffered.trim() || undefined,
+
+proposedSystemKw: form.proposedSystemKw
+  ? Number(form.proposedSystemKw)
+  : undefined,
           meetingCount: form.meetingCount ? Number(form.meetingCount) : undefined,
         },
         {
@@ -641,32 +717,52 @@ const submitReviewRemark = async () => {
   const applyAction = async () => {
   if (!latestMeeting || !selectedAction) return;
 
-  const reasonOrRemarks = String(
-  form.reason || form.managerRemarks || '',
-).trim();
+  const actionReason = String(
+    form.reason || '',
+  ).trim();
 
-const isCompletedSiteVisit =
-  selectedAction === 'COMPLETED' &&
-  latestMeeting.meetingType === 'SITE_VISIT';
+  const isCompletedSiteVisit =
+    selectedAction === 'COMPLETED' &&
+    latestMeeting.meetingType === 'SITE_VISIT';
 
-if (isCompletedSiteVisit && !reschedulePhotoFile) {
-  setError('Please attach GPS/Site photo before completing site visit');
-  return;
-}
+  if (isCompletedSiteVisit && !reschedulePhotoFile) {
+    setError('Please attach GPS/Site photo before completing site visit');
+    return;
+  }
 
-if (selectedAction === 'CANCELLED' && !reasonOrRemarks) {
-  setError('Please enter reason or manager remarks before cancelling meeting');
-  return;
-}
+  if (selectedAction === 'CANCELLED' && !actionReason) {
+    setError('Please enter reason before cancelling meeting');
+    return;
+  }
 
-if (selectedAction === 'ON_HOLD' && !reasonOrRemarks) {
-  setError('Please enter reason or manager remarks before putting meeting on hold');
-  return;
-}
+  if (selectedAction === 'ON_HOLD' && !actionReason) {
+    setError('Please enter reason before putting meeting on hold');
+    return;
+  }
 
-if (selectedAction === 'CNR' && !reasonOrRemarks) {
+  if (selectedAction === 'CNR' && !actionReason) {
+    setError(
+      'Please enter reason before marking CNR',
+    );
+    return;
+  }
+
+  if (
+  selectedAction === 'RESCHEDULED' &&
+  !actionReason
+) {
   setError(
-    'Please enter reason or manager remarks before marking CNR',
+    'Please enter reason before rescheduling meeting',
+  );
+  return;
+}
+
+if (
+  selectedAction === 'COMPLETED' &&
+  !String(form.outcome || '').trim()
+) {
+  setError(
+    'Please enter outcome before completing meeting',
   );
   return;
 }
@@ -718,6 +814,44 @@ if (selectedAction === 'CNR' && !reasonOrRemarks) {
         nextAction: form.nextAction || undefined,
         managerRemarks: form.managerRemarks || undefined,
         notes: form.notes || undefined,
+        panelGivenToCustomerKw:
+  selectedAction === 'RESCHEDULED' &&
+  form.panelGivenToCustomerKw
+    ? Number(form.panelGivenToCustomerKw)
+    : undefined,
+
+panelOffered:
+  selectedAction === 'RESCHEDULED'
+    ? form.panelOffered.trim() || undefined
+    : undefined,
+
+inverterCapacityKw:
+  selectedAction === 'RESCHEDULED' &&
+  form.inverterCapacityKw
+    ? Number(form.inverterCapacityKw)
+    : undefined,
+
+inverterOffered:
+  selectedAction === 'RESCHEDULED'
+    ? form.inverterOffered.trim() || undefined
+    : undefined,
+
+structureKw:
+  selectedAction === 'RESCHEDULED' &&
+  form.structureKw
+    ? Number(form.structureKw)
+    : undefined,
+
+structureOffered:
+  selectedAction === 'RESCHEDULED'
+    ? form.structureOffered.trim() || undefined
+    : undefined,
+
+proposedSystemKw:
+  selectedAction === 'RESCHEDULED' &&
+  form.proposedSystemKw
+    ? Number(form.proposedSystemKw)
+    : undefined,
       },
       {
         headers: getAuthHeaders(),
@@ -1092,6 +1226,35 @@ fetchReviewRemarks();
           </div>
 
           <div>
+  <label className="mb-1 block text-sm font-medium">
+    Panel Offered / Discussed
+  </label>
+
+  <input
+    type="text"
+    name="panelOffered"
+    list="detail-panel-options"
+    value={form.panelOffered}
+    onChange={handleChange}
+    placeholder="Select or type panel"
+    className="w-full rounded border p-2"
+  />
+
+  <datalist id="detail-panel-options">
+    {materialOptions.panels.map((option) => (
+      <option
+        key={option.id}
+        value={option.label}
+      />
+    ))}
+  </datalist>
+
+  <p className="mt-1 text-xs text-gray-500">
+    Select from Calculator Settings or type manually.
+  </p>
+</div>
+
+          <div>
             <label className="mb-1 block text-sm font-medium">
               Inverter Capacity (kW)
             </label>
@@ -1104,6 +1267,35 @@ fetchReviewRemarks();
           </div>
 
           <div>
+  <label className="mb-1 block text-sm font-medium">
+    Inverter Offered / Discussed
+  </label>
+
+  <input
+    type="text"
+    name="inverterOffered"
+    list="detail-inverter-options"
+    value={form.inverterOffered}
+    onChange={handleChange}
+    placeholder="Select or type inverter"
+    className="w-full rounded border p-2"
+  />
+
+  <datalist id="detail-inverter-options">
+    {materialOptions.inverters.map((option) => (
+      <option
+        key={option.id}
+        value={option.label}
+      />
+    ))}
+  </datalist>
+
+  <p className="mt-1 text-xs text-gray-500">
+    On-grid and hybrid options are available, or type manually.
+  </p>
+</div>
+
+          <div>
             <label className="mb-1 block text-sm font-medium">Structure (kW)</label>
             <input
               name="structureKw"
@@ -1112,6 +1304,35 @@ fetchReviewRemarks();
               className="w-full rounded border p-2"
             />
           </div>
+
+          <div>
+  <label className="mb-1 block text-sm font-medium">
+    Structure Offered / Discussed
+  </label>
+
+  <input
+    type="text"
+    name="structureOffered"
+    list="detail-structure-options"
+    value={form.structureOffered}
+    onChange={handleChange}
+    placeholder="Select or type structure"
+    className="w-full rounded border p-2"
+  />
+
+  <datalist id="detail-structure-options">
+    {materialOptions.structures.map((option) => (
+      <option
+        key={option.id}
+        value={option.label}
+      />
+    ))}
+  </datalist>
+
+  <p className="mt-1 text-xs text-gray-500">
+    Select from Calculator Settings or type manually.
+  </p>
+</div>
 
           <div>
             <label className="mb-1 block text-sm font-medium">
@@ -1135,6 +1356,7 @@ fetchReviewRemarks();
             />
           </div>
 
+           {/*
           <div className="md:col-span-2">
             <label className="mb-1 block text-sm font-medium">Reason</label>
             <textarea
@@ -1155,7 +1377,9 @@ fetchReviewRemarks();
               className="w-full rounded border p-2"
             />
           </div>
+          */}
 
+         {/*
           <div>
             <label className="mb-1 block text-sm font-medium">Next Action</label>
             <input
@@ -1187,6 +1411,7 @@ fetchReviewRemarks();
               rows={3}
             />
           </div>
+          */}
 
           <div className="md:col-span-2">
             <label className="mb-1 block text-sm font-medium">Notes</label>
@@ -1467,6 +1692,45 @@ fetchReviewRemarks();
               <option value="RESCHEDULED">Rescheduled</option>
             </select>
           </div>
+
+          {(
+  selectedAction === 'CANCELLED' ||
+  selectedAction === 'ON_HOLD' ||
+  selectedAction === 'CNR' ||
+  selectedAction === 'RESCHEDULED'
+) && (
+  <div className="md:col-span-2">
+    <label className="mb-1 block text-sm font-medium">
+      Reason *
+    </label>
+
+    <textarea
+      name="reason"
+      value={form.reason}
+      onChange={handleChange}
+      rows={3}
+      placeholder="Enter reason"
+      className="w-full rounded border p-2"
+    />
+  </div>
+)}
+
+{selectedAction === 'COMPLETED' && (
+  <div className="md:col-span-2">
+    <label className="mb-1 block text-sm font-medium">
+      Outcome *
+    </label>
+
+    <textarea
+      name="outcome"
+      value={form.outcome}
+      onChange={handleChange}
+      rows={3}
+      placeholder="Enter meeting outcome"
+      className="w-full rounded border p-2"
+    />
+  </div>
+)}
 
           {(selectedAction === 'RESCHEDULED' ||
   (selectedAction === 'COMPLETED' && latestMeeting.meetingType === 'SITE_VISIT')) && (

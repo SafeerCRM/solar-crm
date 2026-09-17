@@ -43,12 +43,32 @@ export default function MeetingForm() {
     updatedBy: '',
 
     panelGivenToCustomerKw: '',
-    inverterCapacityKw: '',
-    structureKw: '',
-    proposedSystemKw: '',
+panelOffered: '',
+
+inverterCapacityKw: '',
+inverterOffered: '',
+
+structureKw: '',
+structureOffered: '',
+
+proposedSystemKw: '',
      electricityBill: '',
     meetingCount: '',
   });
+
+  const [materialOptions, setMaterialOptions] = useState<{
+  panels: { id: number; label: string }[];
+  inverters: {
+    id: string;
+    label: string;
+    inverterType: string;
+  }[];
+  structures: { id: number; label: string }[];
+}>({
+  panels: [],
+  inverters: [],
+  structures: [],
+});
 
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState('');
@@ -107,6 +127,54 @@ const [solarMiterBankProof, setSolarMiterBankProof] = useState<File | null>(null
       }));
     }
   }, [searchParams]);
+
+  useEffect(() => {
+  const fetchMaterialOptions = async () => {
+    try {
+      const token = localStorage.getItem('token');
+
+      if (!token) return;
+
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/calculator/meeting-material-options`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      if (!res.ok) {
+        console.error(
+          'Failed to fetch meeting material options:',
+          res.status,
+        );
+        return;
+      }
+
+      const data = await res.json();
+
+      setMaterialOptions({
+        panels: Array.isArray(data?.panels)
+          ? data.panels
+          : [],
+        inverters: Array.isArray(data?.inverters)
+          ? data.inverters
+          : [],
+        structures: Array.isArray(data?.structures)
+          ? data.structures
+          : [],
+      });
+    } catch (error) {
+      console.error(
+        'Failed to fetch meeting material options:',
+        error,
+      );
+    }
+  };
+
+  fetchMaterialOptions();
+}, []);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -333,15 +401,26 @@ if (form.meetingCategory === 'SOLARMITER') {
         createdByName: leadOwnerName || undefined,
 
         panelGivenToCustomerKw: form.panelGivenToCustomerKw
-          ? Number(form.panelGivenToCustomerKw)
-          : undefined,
-        inverterCapacityKw: form.inverterCapacityKw
-          ? Number(form.inverterCapacityKw)
-          : undefined,
-        structureKw: form.structureKw ? Number(form.structureKw) : undefined,
-        proposedSystemKw: form.proposedSystemKw
-          ? Number(form.proposedSystemKw)
-          : undefined,
+  ? Number(form.panelGivenToCustomerKw)
+  : undefined,
+
+panelOffered: form.panelOffered.trim() || undefined,
+
+inverterCapacityKw: form.inverterCapacityKw
+  ? Number(form.inverterCapacityKw)
+  : undefined,
+
+inverterOffered: form.inverterOffered.trim() || undefined,
+
+structureKw: form.structureKw
+  ? Number(form.structureKw)
+  : undefined,
+
+structureOffered: form.structureOffered.trim() || undefined,
+
+proposedSystemKw: form.proposedSystemKw
+  ? Number(form.proposedSystemKw)
+  : undefined,
                   electricityBill: form.electricityBill
           ? Number(form.electricityBill)
           : undefined,
@@ -541,6 +620,39 @@ solarMiterBankProofUrl,
         </div>
 
         <div>
+  <label className="block text-sm font-medium mb-1">
+    Panel Offered / Discussed
+  </label>
+
+  <input
+    type="text"
+    list="meeting-panel-options"
+    value={form.panelOffered}
+    onChange={(e) =>
+      setForm({
+        ...form,
+        panelOffered: e.target.value,
+      })
+    }
+    placeholder="Select or type panel, e.g. Adani 615W"
+    className="w-full border rounded px-3 py-2"
+  />
+
+  <datalist id="meeting-panel-options">
+    {materialOptions.panels.map((option) => (
+      <option
+        key={option.id}
+        value={option.label}
+      />
+    ))}
+  </datalist>
+
+  <p className="mt-1 text-xs text-gray-500">
+    Select from Calculator Settings or type manually.
+  </p>
+</div>
+
+        <div>
           <label className="mb-1 block text-sm font-medium">
             Inverter Capacity (kW)
           </label>
@@ -554,6 +666,39 @@ solarMiterBankProofUrl,
         </div>
 
         <div>
+  <label className="block text-sm font-medium mb-1">
+    Inverter Offered / Discussed
+  </label>
+
+  <input
+    type="text"
+    list="meeting-inverter-options"
+    value={form.inverterOffered}
+    onChange={(e) =>
+      setForm({
+        ...form,
+        inverterOffered: e.target.value,
+      })
+    }
+    placeholder="Select or type inverter"
+    className="w-full border rounded px-3 py-2"
+  />
+
+  <datalist id="meeting-inverter-options">
+    {materialOptions.inverters.map((option) => (
+      <option
+        key={option.id}
+        value={option.label}
+      />
+    ))}
+  </datalist>
+
+  <p className="mt-1 text-xs text-gray-500">
+    On-grid and hybrid options are available, or type manually.
+  </p>
+</div>
+
+        <div>
           <label className="mb-1 block text-sm font-medium">Structure (kW)</label>
           <input
             name="structureKw"
@@ -563,6 +708,39 @@ solarMiterBankProofUrl,
             placeholder="e.g. 5"
           />
         </div>
+
+        <div>
+  <label className="block text-sm font-medium mb-1">
+    Structure Offered / Discussed
+  </label>
+
+  <input
+    type="text"
+    list="meeting-structure-options"
+    value={form.structureOffered}
+    onChange={(e) =>
+      setForm({
+        ...form,
+        structureOffered: e.target.value,
+      })
+    }
+    placeholder="Select or type structure"
+    className="w-full border rounded px-3 py-2"
+  />
+
+  <datalist id="meeting-structure-options">
+    {materialOptions.structures.map((option) => (
+      <option
+        key={option.id}
+        value={option.label}
+      />
+    ))}
+  </datalist>
+
+  <p className="mt-1 text-xs text-gray-500">
+    Select from Calculator Settings or type manually.
+  </p>
+</div>
 
         <div>
           <label className="mb-1 block text-sm font-medium">
