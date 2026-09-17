@@ -739,6 +739,73 @@ async getStructureOptions(type?: string) {
   });
 }
 
+async getMeetingMaterialOptions() {
+  const [
+    panels,
+    ongridInverters,
+    hybridInverters,
+    structures,
+  ] = await Promise.all([
+    this.panelOptionRepository.find({
+      where: { isActive: true },
+      order: {
+        brandName: 'ASC',
+        capacityWatt: 'ASC',
+      },
+    }),
+
+    this.ongridOptionRepository.find({
+      where: { isActive: true },
+      order: {
+        brandName: 'ASC',
+        capacity: 'ASC',
+      },
+    }),
+
+    this.hybridOptionRepository.find({
+      where: { isActive: true },
+      order: {
+        brandName: 'ASC',
+        capacity: 'ASC',
+      },
+    }),
+
+    this.structureOptionRepository.find({
+      where: { isActive: true },
+      order: {
+        structureType: 'ASC',
+        capacityKw: 'ASC',
+      },
+    }),
+  ]);
+
+  return {
+    panels: panels.map((item) => ({
+      id: item.id,
+      label: `${item.brandName} ${item.capacityWatt}W`,
+    })),
+
+    inverters: [
+      ...ongridInverters.map((item) => ({
+        id: `ongrid-${item.id}`,
+        label: `${item.brandName} ${item.capacity}kW — ${item.phaseType}`,
+        inverterType: 'ONGRID',
+      })),
+
+      ...hybridInverters.map((item) => ({
+        id: `hybrid-${item.id}`,
+        label: `${item.brandName} ${item.capacity}kW — ${item.phase}`,
+        inverterType: 'HYBRID',
+      })),
+    ],
+
+    structures: structures.map((item) => ({
+      id: item.id,
+      label: `${item.structureType} — ${item.capacityKw}kW`,
+    })),
+  };
+}
+
 async createStructureOption(data: any) {
   const option = this.structureOptionRepository.create({
     structureType: data.structureType,

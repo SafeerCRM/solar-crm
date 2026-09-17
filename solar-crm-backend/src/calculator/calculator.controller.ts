@@ -53,6 +53,11 @@ async calculate(@Body() body: any, @Req() req: any) {
     return this.calculatorService.findByMeetingId(meetingId);
   }
 
+  @Get('meeting-material-options')
+getMeetingMaterialOptions() {
+  return this.calculatorService.getMeetingMaterialOptions();
+}
+
   @Get('panel-options')
 getPanelOptions(
   @Req() req: any,
