@@ -4494,6 +4494,8 @@ const isLoanProcessCompleted =
   )}
 </div>
 
+</div>
+
 {/* Permanent Project Site Location */}
 <div className="rounded-2xl border border-blue-100 bg-white p-5 shadow">
   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -4704,7 +4706,7 @@ const isLoanProcessCompleted =
 </div>
 
           {activeTab === 'CONTRACTOR_WORK' && (
-  <div className="space-y-5">
+  <div className="min-w-0 w-full space-y-5 overflow-x-hidden">
 
     {hasRole(['OWNER', 'PROJECT_MANAGER']) && (
   <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
@@ -5066,7 +5068,7 @@ const isLoanProcessCompleted =
   </h2>
 
   <div className="mt-4 grid gap-4 lg:grid-cols-2">
-    <div className="rounded-xl border p-3">
+    <div className="min-w-0 overflow-x-auto rounded-xl border p-2 sm:p-3">
       <LocalizationProvider dateAdapter={AdapterDayjs}>
         <DateCalendar
           value={selectedCleaningDate}
@@ -5183,9 +5185,9 @@ const isLoanProcessCompleted =
         ) : (
           contractorAssignments.map((item) => (
             <div
-              key={item.id}
-              className="rounded-xl border bg-gray-50 p-4"
-            >
+  key={item.id}
+  className="min-w-0 overflow-hidden rounded-xl border bg-gray-50 p-3 sm:p-4"
+>
               <div className="flex flex-col gap-5">
                 <div>
                   <p className="font-bold text-gray-800">
@@ -5574,8 +5576,7 @@ const isLoanProcessCompleted =
     Edit Project
   </button>
 )}
-        </div>
-      </div>
+                </div>
 
       {hasRole(['SOLAR_FRANCHISE']) && (
   <div className="mb-6 rounded-2xl border border-blue-100 bg-blue-50 p-5 shadow-sm">
