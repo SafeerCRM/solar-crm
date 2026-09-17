@@ -124,16 +124,25 @@ gpsPhotoUrl?: string;
 audioUrl?: string;
 
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
-  panelGivenToCustomerKw?: number;
+panelGivenToCustomerKw?: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
-  inverterCapacityKw?: number;
+@Column({ type: 'text', nullable: true })
+panelOffered?: string;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
-  structureKw?: number;
+@Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+inverterCapacityKw?: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
-  proposedSystemKw?: number;
+@Column({ type: 'text', nullable: true })
+inverterOffered?: string;
+
+@Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+structureKw?: number;
+
+@Column({ type: 'text', nullable: true })
+structureOffered?: string;
+
+@Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+proposedSystemKw?: number;
 
     @Column({ type: 'float', nullable: true })
   electricityBill?: number;

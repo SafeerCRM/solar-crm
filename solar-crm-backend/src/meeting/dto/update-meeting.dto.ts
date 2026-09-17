@@ -77,6 +77,34 @@ export class UpdateMeetingDto {
   gpsAddress?: string;
 
   @IsOptional()
+@IsNumber()
+panelGivenToCustomerKw?: number;
+
+@IsOptional()
+@IsString()
+panelOffered?: string;
+
+@IsOptional()
+@IsNumber()
+inverterCapacityKw?: number;
+
+@IsOptional()
+@IsString()
+inverterOffered?: string;
+
+@IsOptional()
+@IsNumber()
+structureKw?: number;
+
+@IsOptional()
+@IsString()
+structureOffered?: string;
+
+@IsOptional()
+@IsNumber()
+proposedSystemKw?: number;
+
+  @IsOptional()
   @IsNumber()
   createdBy?: number;
 

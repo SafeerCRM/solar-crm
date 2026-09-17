@@ -86,20 +86,32 @@ export class CreateMeetingDto {
   gpsAddress?: string;
 
   @IsOptional()
-  @IsNumber()
-  panelGivenToCustomerKw?: number;
+@IsNumber()
+panelGivenToCustomerKw?: number;
 
-  @IsOptional()
-  @IsNumber()
-  inverterCapacityKw?: number;
+@IsOptional()
+@IsString()
+panelOffered?: string;
 
-  @IsOptional()
-  @IsNumber()
-  structureKw?: number;
+@IsOptional()
+@IsNumber()
+inverterCapacityKw?: number;
 
-  @IsOptional()
-  @IsNumber()
-  proposedSystemKw?: number;
+@IsOptional()
+@IsString()
+inverterOffered?: string;
+
+@IsOptional()
+@IsNumber()
+structureKw?: number;
+
+@IsOptional()
+@IsString()
+structureOffered?: string;
+
+@IsOptional()
+@IsNumber()
+proposedSystemKw?: number;
 
   @IsOptional()
   @IsNumber()

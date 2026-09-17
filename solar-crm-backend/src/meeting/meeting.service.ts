@@ -438,21 +438,39 @@ audioUrl:
     ? (updates as any).audioUrl
     : (baseMeeting as any).audioUrl,
       panelGivenToCustomerKw:
-        updates.panelGivenToCustomerKw !== undefined
-          ? updates.panelGivenToCustomerKw
-          : baseMeeting.panelGivenToCustomerKw,
-      inverterCapacityKw:
-        updates.inverterCapacityKw !== undefined
-          ? updates.inverterCapacityKw
-          : baseMeeting.inverterCapacityKw,
-      structureKw:
-        updates.structureKw !== undefined
-          ? updates.structureKw
-          : baseMeeting.structureKw,
-      proposedSystemKw:
-        updates.proposedSystemKw !== undefined
-          ? updates.proposedSystemKw
-          : baseMeeting.proposedSystemKw,
+  updates.panelGivenToCustomerKw !== undefined
+    ? updates.panelGivenToCustomerKw
+    : baseMeeting.panelGivenToCustomerKw,
+
+panelOffered:
+  updates.panelOffered !== undefined
+    ? updates.panelOffered
+    : baseMeeting.panelOffered,
+
+inverterCapacityKw:
+  updates.inverterCapacityKw !== undefined
+    ? updates.inverterCapacityKw
+    : baseMeeting.inverterCapacityKw,
+
+inverterOffered:
+  updates.inverterOffered !== undefined
+    ? updates.inverterOffered
+    : baseMeeting.inverterOffered,
+
+structureKw:
+  updates.structureKw !== undefined
+    ? updates.structureKw
+    : baseMeeting.structureKw,
+
+structureOffered:
+  updates.structureOffered !== undefined
+    ? updates.structureOffered
+    : baseMeeting.structureOffered,
+
+proposedSystemKw:
+  updates.proposedSystemKw !== undefined
+    ? updates.proposedSystemKw
+    : baseMeeting.proposedSystemKw,
       meetingCount:
         updates.meetingCount !== undefined
           ? updates.meetingCount
