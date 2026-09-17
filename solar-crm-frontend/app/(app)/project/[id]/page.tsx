@@ -4784,7 +4784,7 @@ const isLoanProcessCompleted =
   </div>
 )}
     {canManageContractor && (
-      <div className="rounded-2xl bg-white p-5 shadow">
+      <div className="min-w-0 overflow-hidden rounded-2xl bg-white p-4 shadow sm:p-5">
         <h2 className="text-xl font-bold text-gray-800">
           Assign Project Contractor
         </h2>
@@ -4793,13 +4793,13 @@ const isLoanProcessCompleted =
           Assign full project contractor or separate teams like Structure Team, Electrical Team, and Installation Team.
         </p>
 
-        <div className="mt-5 grid gap-3 md:grid-cols-3">
+        <div className="mt-5 grid min-w-0 grid-cols-1 gap-3 md:grid-cols-3">
           <select
   value={contractorForm.contractorMasterId}
   onChange={(e) =>
     selectContractor(e.target.value)
   }
-  className="rounded-xl border p-3"
+  className="min-w-0 w-full max-w-full rounded-xl border p-3"
 >
   <option value="">
     Select Contractor
@@ -4819,13 +4819,13 @@ const isLoanProcessCompleted =
 <input
   value={contractorForm.contractorName}
   readOnly
-  className="rounded-xl border bg-gray-100 p-3"
+  className="min-w-0 w-full max-w-full rounded-xl border bg-gray-100 p-3"
 />
 
 <input
   value={contractorForm.contractorPhone}
   readOnly
-  className="rounded-xl border bg-gray-100 p-3"
+  className="min-w-0 w-full max-w-full rounded-xl border bg-gray-100 p-3"
 />
 
 <select
@@ -4836,7 +4836,7 @@ const isLoanProcessCompleted =
       workScope: e.target.value,
     })
   }
-  className="rounded-xl border p-3"
+  className="min-w-0 w-full max-w-full rounded-xl border p-3"
 >
   {CONTRACTOR_WORK_SCOPE_OPTIONS.map((scope) => (
     <option key={scope.value} value={scope.value}>
@@ -4845,7 +4845,7 @@ const isLoanProcessCompleted =
   ))}
 </select>
 
-<div className="md:col-span-3 rounded-xl border bg-gray-50 p-4">
+<div className="min-w-0 md:col-span-3 rounded-xl border bg-gray-50 p-3 sm:p-4">
   <p className="font-semibold text-gray-800">
   Select Exact Work Activities
 </p>
@@ -4855,11 +4855,11 @@ const isLoanProcessCompleted =
   Work scope controls required proofs separately.
 </p>
 
-  <div className="mt-3 grid grid-cols-2 md:grid-cols-3 gap-2">
+  <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3">
     {CONTRACTOR_WORK_ITEMS.map((item) => (
       <label
         key={item}
-        className="flex items-center gap-2 text-sm"
+        className="flex min-w-0 items-start gap-2 text-sm"
       >
         <input
           type="checkbox"
@@ -4900,7 +4900,7 @@ const isLoanProcessCompleted =
                 scheduledDate: e.target.value,
               })
             }
-            className="rounded-xl border p-3"
+            className="min-w-0 w-full max-w-full rounded-xl border p-3"
           />
 
           <input
@@ -4913,7 +4913,7 @@ const isLoanProcessCompleted =
                 amount: e.target.value,
               })
             }
-            className="rounded-xl border p-3"
+            className="min-w-0 w-full max-w-full rounded-xl border p-3"
           />
 
           <input
@@ -4925,7 +4925,7 @@ const isLoanProcessCompleted =
                 remarks: e.target.value,
               })
             }
-            className="rounded-xl border p-3"
+            className="min-w-0 w-full max-w-full rounded-xl border p-3"
           />
 
           <div className="md:col-span-3 rounded-xl border bg-blue-50 p-4">
@@ -4966,7 +4966,7 @@ const isLoanProcessCompleted =
       </div>
     )}
 
-    <div className="mt-6 rounded-2xl border border-green-100 bg-green-50 p-5">
+    <div className="mt-6 min-w-0 overflow-hidden rounded-2xl border border-green-100 bg-green-50 p-4 sm:p-5">
   <h2 className="text-xl font-bold text-gray-800">
     Assign Site Cleaning
   </h2>
@@ -4975,11 +4975,11 @@ const isLoanProcessCompleted =
     Customer Manager / Owner can assign cleaning work to project contractor with reminder date and wall-clock time.
   </p>
 
-  <div className="mt-5 grid gap-3 md:grid-cols-3">
+  <div className="mt-5 grid min-w-0 grid-cols-1 gap-3 md:grid-cols-3">
     <select
       value={cleaningForm.contractorMasterId}
       onChange={(e) => selectCleaningContractor(e.target.value)}
-      className="rounded-xl border p-3"
+      className="min-w-0 w-full max-w-full rounded-xl border p-3"
     >
       <option value="">Select Contractor</option>
 
@@ -4994,14 +4994,14 @@ const isLoanProcessCompleted =
       value={cleaningForm.contractorName}
       readOnly
       placeholder="Contractor Name"
-      className="rounded-xl border bg-gray-100 p-3"
+      className="min-w-0 w-full max-w-full rounded-xl border bg-gray-100 p-3"
     />
 
     <input
       value={cleaningForm.contractorPhone}
       readOnly
       placeholder="Contractor Phone"
-      className="rounded-xl border bg-gray-100 p-3"
+      className="min-w-0 w-full max-w-full rounded-xl border bg-gray-100 p-3"
     />
 
     <input
@@ -5013,11 +5013,12 @@ const isLoanProcessCompleted =
           cleaningDate: e.target.value,
         })
       }
-      className="rounded-xl border p-3"
+      className="min-w-0 w-full max-w-full rounded-xl border p-3"
     />
 
-    <LocalizationProvider dateAdapter={AdapterDayjs}>
-      <MobileTimePicker
+    <div className="min-w-0 w-full max-w-full">
+  <LocalizationProvider dateAdapter={AdapterDayjs}>
+    <MobileTimePicker
         label="Cleaning Time"
         ampm
         ampmInClock
@@ -5033,12 +5034,18 @@ const isLoanProcessCompleted =
           })
         }
         slotProps={{
-          textField: {
-            fullWidth: true,
-          },
-        }}
+  textField: {
+    fullWidth: true,
+    sx: {
+      minWidth: 0,
+      width: '100%',
+      maxWidth: '100%',
+    },
+  },
+}}
       />
     </LocalizationProvider>
+    </div>
 
     <input
       placeholder="Cleaning Remarks"
@@ -5049,7 +5056,7 @@ const isLoanProcessCompleted =
           remarks: e.target.value,
         })
       }
-      className="rounded-xl border p-3"
+      className="min-w-0 w-full max-w-full rounded-xl border p-3"
     />
   </div>
 
