@@ -91,6 +91,11 @@ const [
   const [submitting, setSubmitting] =
     useState(false);
 
+    const [
+  startingPayment,
+  setStartingPayment,
+] = useState(false);
+
   const [
     uploadingDocument,
     setUploadingDocument,
@@ -726,6 +731,156 @@ const [
       }
     };
 
+    const startInsurancePayment =
+  async () => {
+    if (
+      !activeRequest?.id
+    ) {
+      setMessage(
+        'Insurance application is not available.',
+      );
+
+      return;
+    }
+
+    if (
+  String(
+    activeRequest?.paymentStatus ||
+      '',
+  ).toUpperCase() ===
+    'PAID' ||
+  String(
+    activeRequest?.status ||
+      '',
+  ).toUpperCase() ===
+    'COMPLETED'
+) {
+  setMessage(
+    'This insurance application has already been paid.',
+  );
+
+  return;
+}
+
+if (
+  !currentReadiness
+    ?.readyForPayment
+) {
+  setMessage(
+    'Complete all required details and documents before payment.',
+  );
+
+  return;
+}
+
+    try {
+      setStartingPayment(
+        true,
+      );
+
+      setMessage('');
+
+      /*
+       * Authenticated Dealer Portal request.
+       *
+       * Backend creates the signed,
+       * short-lived, one-time launch token.
+       *
+       * No amount is supplied by frontend.
+       */
+      const res =
+        await fetch(
+          `${API_BASE_URL}/dealer-auth/insurance/requests/${activeRequest.id}/payment/launch`,
+          {
+            method:
+              'POST',
+
+            headers: {
+              ...authHeaders(),
+
+              'Content-Type':
+                'application/json',
+            },
+
+            body:
+              JSON.stringify({}),
+          },
+        );
+
+      const data =
+        await res.json();
+
+      if (!res.ok) {
+        const responseMessage =
+          Array.isArray(
+            data?.message,
+          )
+            ? data.message.join(
+                ', ',
+              )
+            : data?.message;
+
+        throw new Error(
+          responseMessage ||
+            'Unable to start payment.',
+        );
+      }
+
+      const launchUrl =
+        String(
+          data?.launchUrl ||
+            '',
+        ).trim();
+
+      /*
+       * Do not allow the Dealer Portal
+       * to navigate directly to an
+       * arbitrary URL returned here.
+       *
+       * Real payment handoff must first
+       * go through the registered
+       * Aditya Solars website.
+       */
+      const parsedUrl =
+        new URL(
+          launchUrl,
+        );
+
+      if (
+        parsedUrl.origin !==
+          'https://adityasolars.co.in' ||
+        parsedUrl.pathname !==
+          '/payment/launch'
+      ) {
+        throw new Error(
+          'Invalid payment launch destination.',
+        );
+      }
+
+      /*
+       * Leave the Dealer Portal and enter
+       * the registered merchant website.
+       */
+      window.location.href =
+        launchUrl;
+    } catch (
+      error: any
+    ) {
+      console.error(
+        error,
+      );
+
+      setMessage(
+        error?.message ||
+          'Unable to start payment.',
+      );
+
+      setStartingPayment(
+        false,
+      );
+    }
+  };
+
   const currentReadiness =
     requestDetail?.readiness;
 
@@ -935,14 +1090,20 @@ const [
               uploadedTypes
             }
             readiness={
-              currentReadiness
-            }
-            openPlans={() =>
-              setTab(
-                'PLANS',
-              )
-            }
-          />
+  currentReadiness
+}
+startingPayment={
+  startingPayment
+}
+startInsurancePayment={
+  startInsurancePayment
+}
+openPlans={() =>
+  setTab(
+    'PLANS',
+  )
+}
+/>
         )}
 
         {tab ===
@@ -1132,9 +1293,11 @@ function ApplicationSection({
   chooseFile,
   uploadDocument,
   uploadingDocument,
-  uploadedTypes,
-  readiness,
-  openPlans,
+uploadedTypes,
+readiness,
+startingPayment,
+startInsurancePayment,
+openPlans,
 }: any) {
   if (
     !selectedPlan &&
@@ -1652,23 +1815,44 @@ function ApplicationSection({
               </div>
 
               {readiness?.readyForPayment && (
-                <div className="mt-5 rounded-2xl border border-orange-300/20 bg-orange-500/10 p-4">
-                  <p className="font-black text-orange-200">
-                    Documents Complete
-                  </p>
+  <div className="mt-5 rounded-2xl border border-orange-300/20 bg-orange-500/10 p-4">
+    <p className="font-black text-orange-200">
+      Ready for Payment
+    </p>
 
-                  <p className="mt-1 text-sm font-semibold text-white/70">
-                    This application is ready for payment. Dealer payment gateway integration will be enabled once the bank provides the approved gateway credentials.
-                  </p>
-                </div>
-              )}
+    <p className="mt-1 text-sm font-semibold text-white/70">
+      All required details and documents are complete.
+      Continue to the secure payment gateway to pay the
+      insurance amount.
+    </p>
+  </div>
+)}
 
-              <button
-                disabled
-                className="mt-5 w-full rounded-2xl bg-white/10 py-4 font-black text-white/40"
-              >
-                Payment Gateway Coming Soon
-              </button>
+<button
+  type="button"
+  disabled={
+    !readiness?.readyForPayment ||
+    readiness?.paymentComplete ||
+    startingPayment
+  }
+  onClick={
+    startInsurancePayment
+  }
+  className="mt-5 w-full rounded-2xl bg-gradient-to-r from-orange-500 to-yellow-400 py-4 font-black text-slate-950 shadow-xl disabled:cursor-not-allowed disabled:bg-none disabled:bg-white/10 disabled:text-white/40 disabled:shadow-none"
+>
+  {startingPayment
+    ? 'Opening Secure Payment...'
+    : readiness?.paymentComplete
+      ? 'Payment Completed'
+      : readiness?.readyForPayment
+        ? `Pay ₹${Number(
+            activeRequest?.payableAmount ||
+              0,
+          ).toLocaleString(
+            'en-IN',
+          )}`
+        : 'Complete Required Documents'}
+</button>
             </div>
           </div>
         )}
