@@ -11,8 +11,12 @@ export class CalculatorBatteryOption {
   @Column()
   brandName: string;
 
-  @Column()
-  capacity: number;
+  @Column({
+  type: 'decimal',
+  precision: 12,
+  scale: 2,
+})
+capacity: number;
 
   @Column()
   rate: number;
