@@ -5186,7 +5186,7 @@ const isLoanProcessCompleted =
               key={item.id}
               className="rounded-xl border bg-gray-50 p-4"
             >
-              <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+              <div className="flex flex-col gap-5">
                 <div>
                   <p className="font-bold text-gray-800">
                     {item.contractorName || `Contractor #${item.contractorId}`}
@@ -5302,10 +5302,10 @@ const isLoanProcessCompleted =
                   )}
                 </div>
 
-                <div className="text-right">
-                  <p className="rounded-full bg-blue-100 px-3 py-1 text-sm font-semibold text-blue-700">
-                    {item.status || 'ASSIGNED'}
-                  </p>
+                <div className="min-w-0 text-left">
+                  <p className="inline-flex rounded-full bg-blue-100 px-3 py-1 text-sm font-semibold text-blue-700">
+  {item.status || 'ASSIGNED'}
+</p>
 
                   <p className="mt-2 text-lg font-bold text-green-700">
                     {money(item.amount)}
@@ -5396,24 +5396,24 @@ const isLoanProcessCompleted =
       No proofs uploaded yet.
     </p>
   ) : (
-    <div className="mt-3 grid gap-3 md:grid-cols-3">
+    <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {contractorProofs[item.id].map((proof) => (
         <a
-          key={proof.id}
-          href={proof.fileUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="rounded-xl border bg-white p-3 hover:bg-gray-50"
-        >
+  key={proof.id}
+  href={proof.fileUrl}
+  target="_blank"
+  rel="noreferrer"
+  className="min-w-0 overflow-hidden rounded-xl border bg-white p-3 transition hover:bg-gray-50 hover:shadow-sm"
+>
           {proof.fileUrl && (
             <img
               src={proof.fileUrl}
               alt={proof.proofType || 'Proof'}
-              className="h-32 w-full rounded-lg object-cover"
+              className="aspect-[4/3] w-full rounded-lg bg-gray-100 object-cover"
             />
           )}
 
-          <p className="mt-2 text-xs font-semibold text-gray-700">
+          <p className="mt-2 break-words text-sm font-semibold leading-5 text-gray-700">
             {(proof.proofType || 'OTHER').replaceAll(
               '_',
               ' ',
@@ -5425,18 +5425,20 @@ const isLoanProcessCompleted =
           </p>
 
           {proof.latitude &&
-            proof.longitude && (
-              <p className="text-xs text-gray-500">
-                GPS: {proof.latitude},{' '}
-                {proof.longitude}
-              </p>
-            )}
+  proof.longitude && (
+    <p className="mt-1 break-words text-xs leading-5 text-gray-500">
+      GPS:{' '}
+      <span className="whitespace-normal">
+        {proof.latitude}, {proof.longitude}
+      </span>
+    </p>
+  )}
 
           {proof.gpsAddress && (
-            <p className="mt-1 text-xs text-gray-500">
-              {proof.gpsAddress}
-            </p>
-          )}
+  <p className="mt-1 break-words text-xs leading-5 text-gray-500">
+    {proof.gpsAddress}
+  </p>
+)}
         </a>
       ))}
     </div>
