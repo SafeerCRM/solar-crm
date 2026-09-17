@@ -86,38 +86,114 @@ export class DealerPaymentLaunchController {
      * from this public request.
      */
     if (
-      launch.purpose ===
-      IciciPaymentLaunchPurpose
-        .DEALER_ORDER
-    ) {
-      return this.dealerService
-        .initiateDealerOrderIciciPayment(
-          Number(
-            launch.dealerId,
-          ),
-          Number(
-            launch.referenceId,
-          ),
-          returnUrl,
-        );
-    }
+  launch.purpose ===
+  IciciPaymentLaunchPurpose
+    .DEALER_ORDER
+) {
+  const payment =
+    await this.dealerService
+      .initiateDealerOrderIciciPayment(
+        Number(
+          launch.dealerId,
+        ),
+        Number(
+          launch.referenceId,
+        ),
+        returnUrl,
+      );
+
+  const paymentUrl =
+    String(
+      payment?.paymentUrl ||
+        '',
+    ).trim();
+
+  if (
+    !paymentUrl ||
+    !/^https:\/\//i.test(
+      paymentUrl,
+    )
+  ) {
+    throw new BadRequestException(
+      'Payment gateway did not return a valid payment page',
+    );
+  }
+
+  return {
+    success: true,
+
+    paymentUrl,
+
+    transactionId:
+      payment?.transactionId,
+
+    merchantTxnNo:
+      payment?.merchantTxnNo,
+
+    amount:
+      payment?.amount,
+
+    status:
+      payment?.status,
+  };
+}
 
     if (
-      launch.purpose ===
-      IciciPaymentLaunchPurpose
-        .DEALER_INSURANCE
-    ) {
-      return this.dealerService
-        .initiateDealerInsurancePayment(
-          Number(
-            launch.dealerId,
-          ),
-          Number(
-            launch.referenceId,
-          ),
-          returnUrl,
-        );
-    }
+  launch.purpose ===
+  IciciPaymentLaunchPurpose
+    .DEALER_INSURANCE
+) {
+  const result =
+    await this.dealerService
+      .initiateDealerInsurancePayment(
+        Number(
+          launch.dealerId,
+        ),
+        Number(
+          launch.referenceId,
+        ),
+        returnUrl,
+      );
+
+  const payment =
+    result?.payment ||
+    result;
+
+  const paymentUrl =
+    String(
+      payment?.paymentUrl ||
+        '',
+    ).trim();
+
+  if (
+    !paymentUrl ||
+    !/^https:\/\//i.test(
+      paymentUrl,
+    )
+  ) {
+    throw new BadRequestException(
+      'Payment gateway did not return a valid payment page',
+    );
+  }
+
+  return {
+    success: true,
+
+    paymentUrl,
+
+    transactionId:
+      payment?.transactionId,
+
+    merchantTxnNo:
+      payment?.merchantTxnNo,
+
+    amount:
+      payment?.amount,
+
+    status:
+      payment?.status,
+  };
+}
 
     throw new BadRequestException(
       'Unsupported payment launch purpose',
