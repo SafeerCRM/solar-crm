@@ -35,6 +35,13 @@ export class ProjectDealerPayment {
   @Column({ nullable: true })
   transactionId: string;
 
+  @Column({
+  type: 'varchar',
+  length: 20,
+  nullable: true,
+})
+gatewayMerchantTxnNo: string;
+
   @Column({ type: 'text', nullable: true })
   receiptUrl: string;
 

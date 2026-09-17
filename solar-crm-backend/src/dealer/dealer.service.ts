@@ -6334,6 +6334,211 @@ if (portalDealer) {
   };
 }
 
+async initiateDealerOrderIciciPayment(
+  dealerId: number,
+  orderId: number,
+  returnUrl: string,
+) {
+  /*
+   * Portal identity comes only from JWT dealerId.
+   */
+  const identity =
+    await this.getDealerIdentity(
+      Number(dealerId),
+    );
+
+  const dealer =
+    identity.dealer;
+
+  /*
+   * Every NEW shared dealer payment must use
+   * canonical ProjectVendor.id.
+   *
+   * This matches createDealerPayment().
+   */
+  if (
+    !identity.projectVendorId
+  ) {
+    throw new BadRequestException(
+      'Dealer portal account is not linked to Trading dealer master. Please contact admin.',
+    );
+  }
+
+  const resolvedOrderId =
+    Number(orderId || 0);
+
+  if (
+    !Number.isInteger(
+      resolvedOrderId,
+    ) ||
+    resolvedOrderId <= 0
+  ) {
+    throw new BadRequestException(
+      'Valid dealer order is required',
+    );
+  }
+
+  /*
+   * SECURITY:
+   *
+   * Order must belong to this dealer's
+   * canonical business identity.
+   */
+  const order =
+    await this.dealerOrderRepository
+      .createQueryBuilder(
+        'order',
+      )
+      .where(
+        'order.id = :orderId',
+        {
+          orderId:
+            resolvedOrderId,
+        },
+      )
+      .andWhere(
+        'order.dealerId IN (:...dealerIds)',
+        {
+          dealerIds:
+            identity.businessDealerIds,
+        },
+      )
+      .andWhere(
+        'order.isHidden = false',
+      )
+      .getOne();
+
+  if (!order) {
+    throw new NotFoundException(
+      'Dealer order not found',
+    );
+  }
+
+  /*
+   * Recalculate from APPROVED business
+   * payment records before deciding how
+   * much the dealer still owes.
+   *
+   * Never trust a frontend amount.
+   */
+  const recalculatedOrder =
+    await this
+      .recalculateDealerOrderPaymentFromApprovedPayments(
+        order.id,
+      );
+
+  if (!recalculatedOrder) {
+    throw new NotFoundException(
+      'Dealer order not found',
+    );
+  }
+
+  const pendingAmount =
+    Number(
+      recalculatedOrder
+        .pendingAmount ||
+        0,
+    );
+
+  if (
+    !Number.isFinite(
+      pendingAmount,
+    ) ||
+    pendingAmount <= 0
+  ) {
+    throw new BadRequestException(
+      'This dealer order has no pending payment',
+    );
+  }
+
+  /*
+   * Current business rule:
+   *
+   * NO CREDIT / FULL CURRENT OUTSTANDING
+   * PAYMENT.
+   *
+   * Dealer cannot choose the amount.
+   *
+   * If partial online payments are allowed
+   * later, this is the policy point we can
+   * change without redesigning settlement.
+   */
+  const amount =
+    Math.round(
+      pendingAmount * 100,
+    ) / 100;
+
+  const resolvedReturnUrl =
+    String(
+      returnUrl || '',
+    ).trim();
+
+  if (
+    !resolvedReturnUrl ||
+    !/^https:\/\//i.test(
+      resolvedReturnUrl,
+    )
+  ) {
+    throw new BadRequestException(
+      'ICICI payment return URL is not configured',
+    );
+  }
+
+  return this.iciciPaymentService
+  .initiateDealerOrderPayment({
+      merchantAccount:
+        IciciMerchantAccount.TRADING,
+
+      purpose:
+        IciciPaymentPurpose.DEALER_ORDER,
+
+      /*
+       * THIS is now the genuine business
+       * reference: ProjectDealerOrder.id.
+       */
+      referenceId:
+        recalculatedOrder.id,
+
+      /*
+       * Generic transaction keeps portal
+       * Dealer.id for authenticated ownership.
+       *
+       * Settlement resolves it back to
+       * canonical ProjectVendor.id.
+       */
+      dealerId:
+        identity.portalDealerId,
+
+      amount,
+
+      customerName:
+        dealer.dealerName ||
+        recalculatedOrder.dealerName ||
+        'Dealer',
+
+      customerEmail:
+        dealer.email ||
+        undefined,
+
+      customerMobile:
+        dealer.phone ||
+        undefined,
+
+      returnUrl:
+        resolvedReturnUrl,
+
+      /*
+       * CRITICAL settlement marker.
+       *
+       * Old ₹1 test transactions do not have
+       * this marker and therefore cannot
+       * settle against an order.
+       */
+      businessSettlementType:
+        'DEALER_ORDER',
+    });
+}
+
 async initiateIciciTradingTestPayment(
   dealerId: number,
   returnUrl: string,
@@ -6756,6 +6961,190 @@ async createDealerInsuranceRequest(
       ProjectInsuranceRequestDocumentType
         .PROJECT_INVOICE,
     ],
+  };
+}
+
+async initiateDealerInsurancePayment(
+  dealerId: number,
+  requestId: number,
+  returnUrl: string,
+) {
+  const request =
+    await this
+      .projectInsuranceRequestRepository
+      .findOne({
+        where: {
+          id:
+            Number(
+              requestId,
+            ),
+
+          dealerId:
+            Number(
+              dealerId,
+            ),
+
+          source:
+            ProjectInsuranceRequestSource
+              .DEALER,
+
+          isHidden:
+            false,
+        } as any,
+      });
+
+  if (!request) {
+    throw new NotFoundException(
+      'Insurance application not found',
+    );
+  }
+
+  if (
+    request.requestType !==
+    ProjectInsuranceRequestType.NEW
+  ) {
+    throw new BadRequestException(
+      'Dealer insurance payment is only available for new insurance applications',
+    );
+  }
+
+  if (
+    request.status ===
+      ProjectInsuranceRequestStatus.REJECTED ||
+    request.status ===
+      ProjectInsuranceRequestStatus.COMPLETED
+  ) {
+    throw new BadRequestException(
+      'This insurance application is not payable',
+    );
+  }
+
+  if (
+    request.paymentStatus ===
+    ProjectInsurancePaymentStatus.PAID
+  ) {
+    throw new BadRequestException(
+      'Insurance payment has already been completed',
+    );
+  }
+
+  const readiness =
+    await this
+      .getDealerInsuranceRequestReadiness(
+        Number(
+          dealerId,
+        ),
+        Number(
+          request.id,
+        ),
+      );
+
+  if (
+    !readiness.readyForPayment
+  ) {
+    throw new BadRequestException(
+      'Complete all required customer details and documents before payment',
+    );
+  }
+
+  const amount =
+    Number(
+      request.payableAmount ||
+        0,
+    );
+
+  if (
+    !Number.isFinite(
+      amount,
+    ) ||
+    amount <= 0
+  ) {
+    throw new BadRequestException(
+      'Insurance payable amount is invalid',
+    );
+  }
+
+  const payment =
+    await this
+      .iciciPaymentService
+      .initiateDealerInsurancePayment({
+        merchantAccount:
+  IciciMerchantAccount
+    .TRADING,
+
+        purpose:
+          IciciPaymentPurpose
+            .DEALER_INSURANCE,
+
+        referenceId:
+          Number(
+            request.id,
+          ),
+
+        dealerId:
+          Number(
+            dealerId,
+          ),
+
+        amount,
+
+        customerName:
+          String(
+            request.customerName ||
+              'Customer',
+          ).trim(),
+
+        customerEmail:
+          String(
+            request.customerEmail ||
+              '',
+          ).trim() ||
+          undefined,
+
+        customerMobile:
+          String(
+            request
+              .aadhaarLinkedMobile ||
+              request.customerPhone ||
+              '',
+          ).trim() ||
+          undefined,
+
+        returnUrl,
+      });
+
+  request.paymentStatus =
+    ProjectInsurancePaymentStatus
+      .INITIATED;
+
+  request.gatewayOrderId =
+    String(
+      payment
+        ?.merchantTxnNo ||
+        '',
+    ).trim() ||
+    undefined;
+
+  await this
+    .projectInsuranceRequestRepository
+    .save(
+      request,
+    );
+
+  return {
+    message:
+      'Insurance payment initiated successfully',
+
+    requestId:
+      request.id,
+
+    payableAmount:
+      amount,
+
+    paymentStatus:
+      request.paymentStatus,
+
+    payment,
   };
 }
 

@@ -57,6 +57,9 @@ import { DealerAnnouncement } from './dealer-announcement.entity';
 import { PortalDeviceToken } from '../customer-portal/portal-device-token.entity';
 import { PushNotificationModule } from '../push-notification/push-notification.module';
 import { PaymentModule } from '../payment/payment.module';
+import {
+  DealerPaymentLaunchController,
+} from './dealer-payment-launch.controller';
 
 @Module({
   imports: [
@@ -97,6 +100,6 @@ PushNotificationModule,
 PaymentModule,
   ],
   providers: [DealerService],
-  controllers: [DealerController, DealerAuthController],
+  controllers: [DealerController, DealerAuthController, DealerPaymentLaunchController],
 })
 export class DealerModule {}

@@ -1358,28 +1358,104 @@ private async postLedgerEntryOnce(data: {
     }
   }
 
-  return this.projectPartyLedgerRepository.save(
-    this.projectPartyLedgerRepository.create({
-      partyId: data.partyId || undefined,
-      partyName: data.partyName || '',
-      partyType: data.partyType || '',
-      projectId: data.projectId || undefined,
-      entryType: data.entryType,
-      sourceType: data.sourceType,
-      sourceId: data.sourceId || undefined,
-      amount,
-      remarks: data.remarks || '',
-      createdBy:
-        data.user?.id ||
-        data.user?.userId ||
-        data.user?.sub ||
-        null,
-      createdByName:
-        data.user?.name ||
-        data.user?.email ||
-        '',
-    } as Partial<ProjectPartyLedger>),
+  const ledgerEntry =
+  this.projectPartyLedgerRepository.create({
+    partyId:
+      data.partyId ||
+      undefined,
+
+    partyName:
+      data.partyName ||
+      '',
+
+    partyType:
+      data.partyType ||
+      '',
+
+    projectId:
+      data.projectId ||
+      undefined,
+
+    entryType:
+      data.entryType,
+
+    sourceType:
+      data.sourceType,
+
+    sourceId:
+      data.sourceId ||
+      undefined,
+
+    amount,
+
+    remarks:
+      data.remarks ||
+      '',
+
+    createdBy:
+      data.user?.id ||
+      data.user?.userId ||
+      data.user?.sub ||
+      null,
+
+    createdByName:
+      data.user?.name ||
+      data.user?.email ||
+      '',
+  } as Partial<ProjectPartyLedger>);
+
+try {
+  return await this.projectPartyLedgerRepository.save(
+    ledgerEntry,
   );
+} catch (error: any) {
+  /*
+   * DEALER_PAYMENT has a database-level
+   * partial unique index on:
+   *
+   *   sourceId + entryType
+   *
+   * for active ledger rows.
+   *
+   * Two simultaneous settlement paths may
+   * both pass the pre-insert lookup. In that
+   * case PostgreSQL allows one insert and
+   * rejects the other with 23505.
+   *
+   * Reload only the exact logical ledger
+   * entry. Do not swallow unrelated unique
+   * constraint errors.
+   */
+  if (
+    error?.code === '23505' &&
+    data.sourceType ===
+      ProjectLedgerSourceType.DEALER_PAYMENT &&
+    data.sourceId
+  ) {
+    const concurrentEntry =
+      await this.projectPartyLedgerRepository.findOne({
+        where: {
+          sourceType:
+            ProjectLedgerSourceType.DEALER_PAYMENT,
+
+          sourceId:
+            Number(data.sourceId),
+
+          entryType:
+            data.entryType,
+
+          isHidden:
+            false,
+        } as any,
+      });
+
+    if (concurrentEntry) {
+      return concurrentEntry;
+    }
+  }
+
+  throw error;
+}
 }
 
 async postFinanceLedgerEntry(data: {
@@ -1554,7 +1630,7 @@ private async postDealerPaymentLedger(
       ProjectLedgerEntryType.CREDIT,
 
     sourceType:
-      ProjectLedgerSourceType.CUSTOMER_PAYMENT,
+  ProjectLedgerSourceType.DEALER_PAYMENT,
 
     sourceId:
       Number(
@@ -21053,6 +21129,99 @@ if (materialSearch) {
     skip + limit,
   );
 
+  const pendingMaterialFilterOptions =
+  Array.from(
+    new Map(
+      filteredItems
+        .map((item: any) => {
+          const category = String(
+            item.category || '',
+          )
+            .trim()
+            .toUpperCase();
+
+          const brand = String(
+            item.brand || '',
+          ).trim();
+
+          const materialName = String(
+            item.materialName || '',
+          ).trim();
+
+          if (category === 'PANEL') {
+            const normalizedName =
+              materialName.toLowerCase();
+
+            let panelType = '';
+
+            if (
+              normalizedName.includes(
+                'non-dcr',
+              ) ||
+              normalizedName.includes(
+                'non dcr',
+              )
+            ) {
+              panelType = 'NON-DCR';
+            } else if (
+              normalizedName.includes(
+                'dcr',
+              )
+            ) {
+              panelType = 'DCR';
+            }
+
+            const key = [
+              'PANEL',
+              brand.toUpperCase(),
+              panelType,
+            ].join('|');
+
+            return {
+              type: 'PANEL',
+              key,
+              label: [
+                brand || 'Unbranded',
+                panelType,
+              ]
+                .filter(Boolean)
+                .join(' - '),
+            };
+          }
+
+          if (category === 'INVERTER') {
+            const key = [
+              'INVERTER',
+              brand.toUpperCase(),
+              materialName.toUpperCase(),
+            ].join('|');
+
+            return {
+              type: 'INVERTER',
+              key,
+              label: [
+                brand || 'Unbranded',
+                materialName,
+              ]
+                .filter(Boolean)
+                .join(' - '),
+            };
+          }
+
+          return null;
+        })
+        .filter(Boolean)
+        .map((option: any) => [
+          option.key,
+          option,
+        ]),
+    ).values(),
+  ).sort((a: any, b: any) =>
+    String(a.label).localeCompare(
+      String(b.label),
+    ),
+  );
+
   const totalPendingItems = filteredItems.length;
 
   const totalPendingQuantity =
@@ -21391,6 +21560,8 @@ const projectWiseSummary =
   return {
   data:
     paginatedItems,
+
+  pendingMaterialFilterOptions,
 
   summary: {
     totalPendingItems,

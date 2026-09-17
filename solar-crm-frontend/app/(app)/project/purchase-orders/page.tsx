@@ -268,10 +268,25 @@ const getTodayDateInputValue = () => {
 
 export default function PurchaseOrdersPage() {
   const [items, setItems] = useState<PurchaseItem[]>([]);
+  const [
+  pendingMaterialFilterOptions,
+  setPendingMaterialFilterOptions,
+] = useState<
+  {
+    type: string;
+    key: string;
+    label: string;
+  }[]
+>([]);
   const [loading, setLoading] = useState(false);
   const [buyQty, setBuyQty] = useState<Record<number, string>>({});
   const [projectFilter, setProjectFilter] = useState('');
 const [materialFilter, setMaterialFilter] = useState('');
+
+// Panel / Inverter pending material filters
+const [materialTypeFilter, setMaterialTypeFilter] = useState('');
+const [materialSpecFilter, setMaterialSpecFilter] = useState('');
+
 const [statusFilter, setStatusFilter] = useState('');
 const [branchFilter, setBranchFilter] = useState('');
 const [ownerFilter, setOwnerFilter] = useState('');
@@ -642,6 +657,10 @@ const filteredPartyOptions = partyOptions.filter((party) =>
     );
 
     setItems(res.data?.data || []);
+
+    setPendingMaterialFilterOptions(
+  res.data?.pendingMaterialFilterOptions || [],
+);
 
     setSummary(
       res.data?.summary || {
@@ -1691,7 +1710,118 @@ useEffect(() => {
   }
 }, []);
 
-  const filteredItems = items;
+  const getPendingMaterialSpec = (
+  item: PurchaseItem,
+) => {
+  const category = String(
+    item.category || '',
+  )
+    .trim()
+    .toUpperCase();
+
+  const materialName = String(
+    item.materialName || '',
+  ).trim();
+
+  const brand = String(
+    item.brand || '',
+  ).trim();
+
+  if (category === 'PANEL') {
+    const normalizedName =
+      materialName.toLowerCase();
+
+    let panelType = '';
+
+    if (
+      normalizedName.includes('non-dcr') ||
+      normalizedName.includes('non dcr')
+    ) {
+      panelType = 'NON-DCR';
+    } else if (
+      normalizedName.includes('dcr')
+    ) {
+      panelType = 'DCR';
+    }
+
+    return {
+      type: 'PANEL',
+      key: [
+        'PANEL',
+        brand.toUpperCase(),
+        panelType,
+      ].join('|'),
+      label: [
+        brand || 'Unbranded',
+        panelType,
+      ]
+        .filter(Boolean)
+        .join(' - '),
+    };
+  }
+
+  if (category === 'INVERTER') {
+    return {
+      type: 'INVERTER',
+      key: [
+        'INVERTER',
+        brand.toUpperCase(),
+        materialName.toUpperCase(),
+      ].join('|'),
+      label: [
+        brand || 'Unbranded',
+        materialName,
+      ]
+        .filter(Boolean)
+        .join(' - '),
+    };
+  }
+
+  return null;
+};
+
+const pendingMaterialSpecs =
+  pendingMaterialFilterOptions.filter(
+    (spec) =>
+      !materialTypeFilter ||
+      spec.type === materialTypeFilter,
+  );
+
+const filteredItems = items.filter(
+  (item) => {
+    if (
+      !materialTypeFilter &&
+      !materialSpecFilter
+    ) {
+      return true;
+    }
+
+    const spec =
+      getPendingMaterialSpec(item);
+
+    if (!spec) {
+      return false;
+    }
+
+    if (
+      materialTypeFilter &&
+      spec.type !==
+        materialTypeFilter
+    ) {
+      return false;
+    }
+
+    if (
+      materialSpecFilter &&
+      spec.key !==
+        materialSpecFilter
+    ) {
+      return false;
+    }
+
+    return true;
+  },
+);
 
   const projectSummaryTotalPages =
   Math.max(
@@ -2903,7 +3033,7 @@ const generateProformaInvoice = async () => {
       className="h-11 rounded-xl border px-3 text-sm"
     />
 
-    <div className="relative">
+    <div className="relative h-11">
       <input
         placeholder={
           documentTypeFilter === 'PO'
@@ -2915,7 +3045,7 @@ const generateProformaInvoice = async () => {
           setPartySearch(e.target.value);
           setSelectedPartyName('');
         }}
-        className="h-11 w-full rounded-xl border px-3 text-sm"
+        className="h-full w-full rounded-xl border px-3 text-sm"
       />
 
       {partySearch && filteredPartyOptions.length > 0 && (
@@ -3117,7 +3247,7 @@ const generateProformaInvoice = async () => {
 </div>
 
       <div className="rounded-2xl bg-white p-5 shadow">
-        <div className="mb-5 grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
+        <div className="mb-5 grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
   <input
     placeholder="Filter by Project ID / Customer Name"
     value={projectFilter}
@@ -3137,6 +3267,62 @@ const generateProformaInvoice = async () => {
 }}
     className="rounded-xl border p-3"
   />
+
+  <select
+  value={materialTypeFilter}
+  onChange={(e) => {
+    setMaterialTypeFilter(
+      e.target.value,
+    );
+    setMaterialSpecFilter('');
+    setPage(1);
+  }}
+  className="rounded-xl border p-3"
+>
+  <option value="">
+    All Material Types
+  </option>
+
+  <option value="PANEL">
+    Panels
+  </option>
+
+  <option value="INVERTER">
+    Inverters
+  </option>
+</select>
+
+<select
+  value={materialSpecFilter}
+  onChange={(e) => {
+    setMaterialSpecFilter(
+      e.target.value,
+    );
+    setPage(1);
+  }}
+  disabled={!materialTypeFilter}
+  className="rounded-xl border p-3 disabled:bg-gray-100 disabled:text-gray-400"
+>
+  <option value="">
+    {materialTypeFilter === 'PANEL'
+      ? 'All Pending Panel Types'
+      : materialTypeFilter ===
+          'INVERTER'
+        ? 'All Pending Inverter Types'
+        : 'Select Panel / Inverter First'}
+  </option>
+
+  {pendingMaterialSpecs.map(
+    (spec) => (
+      <option
+        key={spec.key}
+        value={spec.key}
+      >
+        {spec.label}
+      </option>
+    ),
+  )}
+</select>
 
   <input
   placeholder="Filter by Branch"

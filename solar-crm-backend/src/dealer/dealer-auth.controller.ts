@@ -16,13 +16,22 @@ Query,
 UseInterceptors,
 } from '@nestjs/common';
 import { DealerService } from './dealer.service';
+import { IciciPaymentLaunchService } from '../payment/icici-payment-launch.service';
+import {
+  IciciPaymentLaunchPurpose,
+} from '../payment/icici-payment-launch.entity';
 import * as jwt from 'jsonwebtoken';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 
 @Controller('dealer-auth')
 export class DealerAuthController {
-  constructor(private readonly service: DealerService) {}
+  constructor(
+  private readonly service: DealerService,
+
+  private readonly paymentLaunchService:
+    IciciPaymentLaunchService,
+) {}
 
   @Post('login')
   login(@Body() body: { username: string; password: string }) {
@@ -87,6 +96,141 @@ async policies(@Req() req: any) {
 
     return this.service.getDealerOrderDetail(Number(payload.dealerId), id);
   }
+
+  @Post(
+  'orders/:id/payment/launch',
+)
+async createDealerOrderPaymentLaunch(
+  @Req()
+  req: any,
+
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+) {
+  const payload =
+    this.getDealerPayload(
+      req,
+    );
+
+  const dealerId =
+    Number(
+      payload.dealerId,
+    );
+
+  /*
+   * Ownership validation.
+   *
+   * Reuse the existing Dealer Portal order
+   * detail access rule before issuing any
+   * payment-launch capability.
+   */
+  await this.service
+    .getDealerOrderDetail(
+      dealerId,
+      Number(id),
+    );
+
+  const token =
+  await this.paymentLaunchService
+    .createDealerLaunchToken({
+        purpose:
+  IciciPaymentLaunchPurpose
+    .DEALER_ORDER,
+
+        referenceId:
+          Number(id),
+
+        dealerId,
+      });
+
+  const websiteBaseUrl =
+    String(
+      process.env
+        .ICICI_PAYMENT_LAUNCH_BASE_URL ||
+        '',
+    )
+      .trim()
+      .replace(
+        /\/+$/,
+        '',
+      );
+
+  if (
+    websiteBaseUrl !==
+    'https://adityasolars.co.in'
+  ) {
+    throw new BadRequestException(
+      'Payment launch website is not configured',
+    );
+  }
+
+  return {
+    success: true,
+
+    launchUrl:
+  `${websiteBaseUrl}/payment/launch#token=${encodeURIComponent(
+    token,
+  )}`,
+  };
+}
+
+  @Post('orders/:id/payment/initiate')
+async initiateDealerOrderPayment(
+  @Req() req: any,
+
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+) {
+  /*
+   * Dealer identity comes only from the
+   * authenticated Dealer Portal JWT.
+   */
+  const payload =
+    this.getDealerPayload(
+      req,
+    );
+
+  /*
+   * Return URL is backend-controlled.
+   *
+   * Never accept this value from the
+   * Dealer Portal request.
+   */
+  const returnUrl =
+    String(
+      process.env
+        .ICICI_PAYMENT_RETURN_URL ||
+        '',
+    ).trim();
+
+  if (
+    !returnUrl ||
+    !/^https:\/\//i.test(
+      returnUrl,
+    )
+  ) {
+    throw new BadRequestException(
+      'ICICI payment return URL is not configured',
+    );
+  }
+
+  return this.service
+    .initiateDealerOrderIciciPayment(
+      Number(
+        payload.dealerId,
+      ),
+      Number(
+        id,
+      ),
+      returnUrl,
+    );
+}
 
   @Get('orders/:id/documents')
 async getOrderDocuments(
@@ -625,6 +769,134 @@ async createInsuranceRequest(
         payload.dealerId,
       ),
       body,
+    );
+}
+
+@Post(
+  'insurance/requests/:id/payment/launch',
+)
+async createDealerInsurancePaymentLaunch(
+  @Req()
+  req: any,
+
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+) {
+  const payload =
+    this.getDealerPayload(
+      req,
+    );
+
+  const dealerId =
+    Number(
+      payload.dealerId,
+    );
+
+  /*
+   * Ownership validation.
+   *
+   * The existing detail method already
+   * requires this request to belong to the
+   * authenticated Dealer Portal account.
+   */
+  await this.service
+    .getDealerInsuranceRequestDetail(
+      dealerId,
+      Number(id),
+    );
+
+  const token =
+  await this.paymentLaunchService
+    .createDealerLaunchToken({
+        purpose:
+  IciciPaymentLaunchPurpose
+    .DEALER_INSURANCE,
+
+        referenceId:
+          Number(id),
+
+        dealerId,
+      });
+
+  const websiteBaseUrl =
+    String(
+      process.env
+        .ICICI_PAYMENT_LAUNCH_BASE_URL ||
+        '',
+    )
+      .trim()
+      .replace(
+        /\/+$/,
+        '',
+      );
+
+  if (
+    websiteBaseUrl !==
+    'https://adityasolars.co.in'
+  ) {
+    throw new BadRequestException(
+      'Payment launch website is not configured',
+    );
+  }
+
+  return {
+    success: true,
+
+    launchUrl:
+  `${websiteBaseUrl}/payment/launch#token=${encodeURIComponent(
+    token,
+  )}`,
+  };
+}
+
+@Post(
+  'insurance/requests/:id/payment/initiate',
+)
+async initiateInsurancePayment(
+  @Req()
+  req: any,
+
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  id: number,
+) {
+  const payload =
+    this.getDealerPayload(
+      req,
+    );
+
+  const returnUrl =
+    String(
+      process.env
+        .ICICI_PAYMENT_RETURN_URL ||
+        '',
+    ).trim();
+
+  if (
+    !returnUrl ||
+    !/^https:\/\//i.test(
+      returnUrl,
+    )
+  ) {
+    throw new BadRequestException(
+      'ICICI payment return URL is not configured',
+    );
+  }
+
+  return this.service
+    .initiateDealerInsurancePayment(
+      Number(
+        payload.dealerId,
+      ),
+      Number(
+        id,
+      ),
+      returnUrl,
     );
 }
 

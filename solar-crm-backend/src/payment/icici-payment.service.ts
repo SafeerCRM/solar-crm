@@ -26,6 +26,28 @@ import {
   IciciPaymentTransactionStatus,
 } from './icici-payment-transaction.entity';
 
+import {
+  ProjectInsurancePaymentStatus,
+  ProjectInsuranceRequest,
+  ProjectInsuranceRequestSource,
+} from '../project/project-insurance-request.entity';
+
+import { ProjectDealerOrder } from '../project/project-dealer-order.entity';
+
+import {
+  ProjectDealerPayment,
+  ProjectDealerPaymentStatus,
+} from '../project/project-dealer-payment.entity';
+
+import { ProjectDealerNotification } from '../project/project-dealer-notification.entity';
+import { Dealer } from '../dealer/dealer.entity';
+import { ProjectService } from '../project/project.service';
+
+import {
+  ProjectLedgerEntryType,
+  ProjectLedgerSourceType,
+} from '../project/project-party-ledger.entity';
+
 type IciciMerchantConfig = {
   merchantId: string;
   aggregatorId: string;
@@ -46,6 +68,11 @@ type InitiatePaymentInput = {
   customerMobile?: string;
 
   returnUrl: string;
+
+  businessSettlementType?:
+    | 'DEALER_INSURANCE'
+    | 'DEALER_ORDER'
+    | 'CUSTOMER_PAYMENT';
 };
 
 @Injectable()
@@ -59,12 +86,37 @@ export class IciciPaymentService {
   'https://pgpay.icicibank.com/pg/api/command';
 
   constructor(
-    @InjectRepository(
-      IciciPaymentTransaction,
-    )
-    private readonly transactionRepository:
-      Repository<IciciPaymentTransaction>,
-  ) {}
+  @InjectRepository(
+    IciciPaymentTransaction,
+  )
+  private readonly transactionRepository:
+    Repository<IciciPaymentTransaction>,
+
+  @InjectRepository(
+    ProjectInsuranceRequest,
+  )
+  private readonly projectInsuranceRequestRepository:
+    Repository<ProjectInsuranceRequest>,
+
+    @InjectRepository(ProjectDealerOrder)
+private readonly projectDealerOrderRepository:
+  Repository<ProjectDealerOrder>,
+
+@InjectRepository(ProjectDealerPayment)
+private readonly projectDealerPaymentRepository:
+  Repository<ProjectDealerPayment>,
+
+@InjectRepository(ProjectDealerNotification)
+private readonly projectDealerNotificationRepository:
+  Repository<ProjectDealerNotification>,
+
+  @InjectRepository(Dealer)
+private readonly dealerRepository:
+  Repository<Dealer>,
+
+  private readonly projectService:
+  ProjectService,
+) {}
 
   private getMerchantConfig(
     account: IciciMerchantAccount,
@@ -376,6 +428,909 @@ export class IciciPaymentService {
     );
   }
 
+  async initiateDealerInsurancePayment(
+  input: InitiatePaymentInput,
+) {
+  if (
+    input.purpose !==
+      IciciPaymentPurpose.DEALER_INSURANCE ||
+    input.merchantAccount !==
+      IciciMerchantAccount.TRADING
+  ) {
+    throw new BadRequestException(
+      'Invalid dealer insurance payment configuration',
+    );
+  }
+
+  const referenceId =
+    Number(
+      input.referenceId,
+    );
+
+  const dealerId =
+    Number(
+      input.dealerId,
+    );
+
+  if (
+    !Number.isInteger(
+      referenceId,
+    ) ||
+    referenceId <= 0 ||
+    !Number.isInteger(
+      dealerId,
+    ) ||
+    dealerId <= 0
+  ) {
+    throw new BadRequestException(
+      'Invalid dealer insurance payment reference',
+    );
+  }
+
+  const previousTransaction =
+    await this
+      .transactionRepository
+      .createQueryBuilder(
+        'transaction',
+      )
+      .where(
+        'transaction.purpose = :purpose',
+        {
+          purpose:
+            IciciPaymentPurpose
+              .DEALER_INSURANCE,
+        },
+      )
+      .andWhere(
+        'transaction.referenceId = :referenceId',
+        {
+          referenceId,
+        },
+      )
+      .andWhere(
+        'transaction.dealerId = :dealerId',
+        {
+          dealerId,
+        },
+      )
+      .andWhere(
+        'transaction.merchantAccount = :merchantAccount',
+        {
+          merchantAccount:
+            IciciMerchantAccount
+              .TRADING,
+        },
+      )
+      .orderBy(
+        'transaction.createdAt',
+        'DESC',
+      )
+      .getOne();
+
+  if (
+    previousTransaction?.status ===
+    IciciPaymentTransactionStatus.SUCCESS
+  ) {
+    await this
+      .dispatchSuccessfulTransaction(
+        previousTransaction,
+      );
+
+    throw new BadRequestException(
+      'Insurance payment has already been completed',
+    );
+  }
+
+  /*
+   * A callback-verified transaction may be
+   * PENDING while awaiting/following Status
+   * reconciliation.
+   *
+   * Reconcile it before ever creating another
+   * charge attempt.
+   */
+  if (
+    previousTransaction?.status ===
+    IciciPaymentTransactionStatus.PENDING
+  ) {
+    const reconciled =
+      await this
+        .reconcileTransactionStatus(
+          previousTransaction,
+        );
+
+    if (
+      reconciled.status ===
+      IciciPaymentTransactionStatus.SUCCESS
+    ) {
+      throw new BadRequestException(
+        'Insurance payment has already been completed',
+      );
+    }
+
+    if (
+      reconciled.status ===
+      IciciPaymentTransactionStatus.PENDING
+    ) {
+      throw new BadRequestException(
+        'Previous insurance payment is still being processed. Please try again later.',
+      );
+    }
+
+    /*
+     * FAILED can continue below and create
+     * a fresh payment attempt.
+     */
+  }
+
+  /*
+   * INITIATED means ICICI successfully created
+   * the hosted-payment session but we have not
+   * received a callback yet.
+   *
+   * For a recent attempt, return the same safe
+   * hosted-payment URL instead of creating
+   * another charge attempt.
+   */
+  if (
+  previousTransaction?.status ===
+    IciciPaymentTransactionStatus.INITIATED
+) {
+  const initiatedAt =
+    previousTransaction.initiatedAt ||
+    previousTransaction.createdAt;
+
+  const ageMilliseconds =
+    Date.now() -
+    new Date(
+      initiatedAt,
+    ).getTime();
+
+  const reuseWindowMilliseconds =
+    15 * 60 * 1000;
+
+  /*
+   * A recent hosted-payment session can be
+   * safely reused.
+   */
+  if (
+    previousTransaction.redirectUri &&
+    previousTransaction.transactionContext &&
+    Number.isFinite(
+      ageMilliseconds,
+    ) &&
+    ageMilliseconds >= 0 &&
+    ageMilliseconds <=
+      reuseWindowMilliseconds
+  ) {
+    return {
+      success:
+        true,
+
+      transactionId:
+        previousTransaction.id,
+
+      merchantTxnNo:
+        previousTransaction
+          .merchantTxnNo,
+
+      amount:
+        Number(
+          previousTransaction
+            .amount,
+        ),
+
+      status:
+        previousTransaction
+          .status,
+
+      paymentUrl:
+        `${previousTransaction.redirectUri}?tranCtx=${encodeURIComponent(
+          previousTransaction
+            .transactionContext ||
+            '',
+        )}`,
+
+      reused:
+        true,
+    };
+  }
+
+  /*
+   * IMPORTANT:
+   *
+   * An old INITIATED transaction must never
+   * be assumed failed merely because the
+   * reuse window expired.
+   *
+   * The customer may already have paid while
+   * the callback was delayed or lost.
+   *
+   * Ask ICICI for the authoritative status
+   * before allowing another charge.
+   */
+  const reconciled =
+    await this
+      .reconcileTransactionStatus(
+        previousTransaction,
+      );
+
+  if (
+    reconciled.status ===
+    IciciPaymentTransactionStatus.SUCCESS
+  ) {
+    throw new BadRequestException(
+      'Insurance payment has already been completed',
+    );
+  }
+
+  if (
+    reconciled.status ===
+      IciciPaymentTransactionStatus.PENDING ||
+    reconciled.status ===
+      IciciPaymentTransactionStatus.INITIATED
+  ) {
+    throw new BadRequestException(
+      'Previous insurance payment is still being processed. Please try again later.',
+    );
+  }
+
+  /*
+   * Only a confirmed FAILED transaction may
+   * fall through and create a new attempt.
+   */
+  if (
+    reconciled.status !==
+    IciciPaymentTransactionStatus.FAILED
+  ) {
+    throw new BadRequestException(
+      'Previous insurance payment could not be confirmed as failed',
+    );
+  }
+}
+
+  /*
+ * A confirmed FAILED transaction, or another
+ * terminal non-success state, may continue
+ * to a fresh ICICI attempt.
+ *
+ * INITIATED/PENDING transactions never reach
+ * this point unless ICICI reconciliation has
+ * confirmed that the previous attempt failed.
+ */
+  try {
+  return await this.initiatePayment({
+    ...input,
+
+    businessSettlementType:
+      'DEALER_INSURANCE',
+  });
+} catch (error: any) {
+  /*
+   * The database partial unique index allows
+   * only one unresolved Dealer Insurance
+   * payment attempt for:
+   *
+   * purpose + referenceId + dealerId
+   * + merchantAccount
+   *
+   * Two simultaneous requests may both pass
+   * the lookup above. One inserts first and
+   * the other receives PostgreSQL 23505.
+   */
+  if (
+    error?.code !==
+    '23505'
+  ) {
+    throw error;
+  }
+
+  const concurrentTransaction =
+    await this.transactionRepository
+      .createQueryBuilder(
+        'transaction',
+      )
+      .where(
+        'transaction.purpose = :purpose',
+        {
+          purpose:
+            IciciPaymentPurpose
+              .DEALER_INSURANCE,
+        },
+      )
+      .andWhere(
+        'transaction.referenceId = :referenceId',
+        {
+          referenceId,
+        },
+      )
+      .andWhere(
+        'transaction.dealerId = :dealerId',
+        {
+          dealerId,
+        },
+      )
+      .andWhere(
+        'transaction.merchantAccount = :merchantAccount',
+        {
+          merchantAccount:
+            IciciMerchantAccount
+              .TRADING,
+        },
+      )
+      .andWhere(
+        'transaction.status IN (:...activeStatuses)',
+        {
+          activeStatuses: [
+            IciciPaymentTransactionStatus.CREATED,
+            IciciPaymentTransactionStatus.INITIATED,
+            IciciPaymentTransactionStatus.PENDING,
+          ],
+        },
+      )
+      .orderBy(
+        'transaction.createdAt',
+        'DESC',
+      )
+      .getOne();
+
+  if (
+    !concurrentTransaction
+  ) {
+    /*
+     * The 23505 came from something other
+     * than our active-attempt constraint.
+     */
+    throw error;
+  }
+
+  const businessSettlementType =
+    String(
+      concurrentTransaction
+        .gatewayMetadata
+        ?.businessSettlementType ||
+        '',
+    );
+
+  if (
+    businessSettlementType !==
+    'DEALER_INSURANCE'
+  ) {
+    throw error;
+  }
+
+  /*
+   * The winning request may already have
+   * completed ICICI initiation.
+   *
+   * In that case return exactly the same
+   * hosted-payment session.
+   */
+  if (
+    concurrentTransaction.status ===
+      IciciPaymentTransactionStatus.INITIATED &&
+    concurrentTransaction.redirectUri &&
+    concurrentTransaction.transactionContext
+  ) {
+    return {
+      success:
+        true,
+
+      transactionId:
+        concurrentTransaction.id,
+
+      merchantTxnNo:
+        concurrentTransaction
+          .merchantTxnNo,
+
+      amount:
+        Number(
+          concurrentTransaction.amount,
+        ),
+
+      status:
+        concurrentTransaction.status,
+
+      paymentUrl:
+        `${concurrentTransaction.redirectUri}?tranCtx=${encodeURIComponent(
+          concurrentTransaction
+            .transactionContext ||
+            '',
+        )}`,
+
+      reused:
+        true,
+    };
+  }
+
+  /*
+   * CREATED means the other request has
+   * created its durable transaction and may
+   * currently be contacting ICICI.
+   *
+   * PENDING also represents an unresolved
+   * payment.
+   *
+   * Never start another charge.
+   */
+  throw new BadRequestException(
+    'Insurance payment initiation is already in progress. Please try again shortly.',
+  );
+}
+}
+
+async initiateDealerOrderPayment(
+  input: InitiatePaymentInput,
+) {
+  /*
+   * This wrapper is ONLY for genuine
+   * Dealer Order business payments.
+   */
+  if (
+    input.purpose !==
+      IciciPaymentPurpose.DEALER_ORDER ||
+    input.merchantAccount !==
+      IciciMerchantAccount.TRADING
+  ) {
+    throw new BadRequestException(
+      'Invalid dealer order payment configuration',
+    );
+  }
+
+  const orderId =
+    Number(
+      input.referenceId,
+    );
+
+  const portalDealerId =
+    Number(
+      input.dealerId,
+    );
+
+  if (
+    !Number.isInteger(
+      orderId,
+    ) ||
+    orderId <= 0 ||
+    !Number.isInteger(
+      portalDealerId,
+    ) ||
+    portalDealerId <= 0
+  ) {
+    throw new BadRequestException(
+      'Invalid dealer order payment reference',
+    );
+  }
+
+  /*
+   * Look only at genuine Dealer Order
+   * payment attempts.
+   *
+   * The businessSettlementType marker is
+   * critical because old ₹1 test records
+   * also used purpose DEALER_ORDER.
+   */
+  const previousTransactions =
+    await this
+      .transactionRepository
+      .createQueryBuilder(
+        'transaction',
+      )
+      .where(
+        'transaction.purpose = :purpose',
+        {
+          purpose:
+            IciciPaymentPurpose
+              .DEALER_ORDER,
+        },
+      )
+      .andWhere(
+        'transaction.referenceId = :orderId',
+        {
+          orderId,
+        },
+      )
+      .andWhere(
+        'transaction.dealerId = :dealerId',
+        {
+          dealerId:
+            portalDealerId,
+        },
+      )
+      .andWhere(
+        'transaction.merchantAccount = :merchantAccount',
+        {
+          merchantAccount:
+            IciciMerchantAccount
+              .TRADING,
+        },
+      )
+      .orderBy(
+        'transaction.createdAt',
+        'DESC',
+      )
+      .getMany();
+
+  const previousTransaction =
+    previousTransactions.find(
+      (item) =>
+        String(
+          item.gatewayMetadata
+            ?.businessSettlementType ||
+            '',
+        ) ===
+        'DEALER_ORDER',
+    );
+
+  /*
+   * If the latest genuine attempt is already
+   * SUCCESS, run idempotent settlement again.
+   *
+   * Then do NOT create another payment session.
+   *
+   * DealerService will recalculate the order
+   * before a future legitimate payment attempt,
+   * so if money is still due later we can make
+   * that policy explicit separately.
+   */
+  if (
+    previousTransaction?.status ===
+    IciciPaymentTransactionStatus.SUCCESS
+  ) {
+    await this
+      .dispatchSuccessfulTransaction(
+        previousTransaction,
+      );
+
+    throw new BadRequestException(
+      'Previous dealer order payment has already been completed',
+    );
+  }
+
+  /*
+   * PENDING means we have an unresolved
+   * gateway transaction.
+   *
+   * Always reconcile it with ICICI before
+   * considering another charge.
+   */
+  if (
+    previousTransaction?.status ===
+    IciciPaymentTransactionStatus.PENDING
+  ) {
+    const reconciled =
+      await this
+        .reconcileTransactionStatus(
+          previousTransaction,
+        );
+
+    if (
+      reconciled.status ===
+      IciciPaymentTransactionStatus.SUCCESS
+    ) {
+      throw new BadRequestException(
+        'Previous dealer order payment has already been completed',
+      );
+    }
+
+    if (
+      reconciled.status ===
+      IciciPaymentTransactionStatus.PENDING
+    ) {
+      throw new BadRequestException(
+        'Previous dealer order payment is still being processed. Please try again later.',
+      );
+    }
+
+    /*
+     * FAILED can continue below.
+     */
+  }
+
+  /*
+   * INITIATED means ICICI created a hosted
+   * payment session, but we do not yet have
+   * a verified final result.
+   *
+   * Recent session:
+   * return exactly the same hosted URL.
+   */
+  if (
+    previousTransaction?.status ===
+      IciciPaymentTransactionStatus.INITIATED
+  ) {
+    const initiatedAt =
+      previousTransaction.initiatedAt ||
+      previousTransaction.createdAt;
+
+    const ageMilliseconds =
+      Date.now() -
+      new Date(
+        initiatedAt,
+      ).getTime();
+
+    const reuseWindowMilliseconds =
+      15 * 60 * 1000;
+
+    if (
+      previousTransaction.redirectUri &&
+      previousTransaction.transactionContext &&
+      Number.isFinite(
+        ageMilliseconds,
+      ) &&
+      ageMilliseconds >= 0 &&
+      ageMilliseconds <=
+        reuseWindowMilliseconds
+    ) {
+      return {
+        success:
+          true,
+
+        transactionId:
+          previousTransaction.id,
+
+        merchantTxnNo:
+          previousTransaction
+            .merchantTxnNo,
+
+        amount:
+          Number(
+            previousTransaction
+              .amount,
+          ),
+
+        status:
+          previousTransaction
+            .status,
+
+        paymentUrl:
+          `${previousTransaction.redirectUri}?tranCtx=${encodeURIComponent(
+            previousTransaction
+              .transactionContext ||
+              '',
+          )}`,
+
+        reused:
+          true,
+      };
+    }
+
+    /*
+     * IMPORTANT:
+     *
+     * An old INITIATED transaction is NOT
+     * assumed abandoned merely because
+     * 15 minutes elapsed.
+     *
+     * Ask ICICI for its actual status first.
+     */
+    const reconciled =
+      await this
+        .reconcileTransactionStatus(
+          previousTransaction,
+        );
+
+    if (
+      reconciled.status ===
+      IciciPaymentTransactionStatus.SUCCESS
+    ) {
+      throw new BadRequestException(
+        'Previous dealer order payment has already been completed',
+      );
+    }
+
+    if (
+      reconciled.status ===
+      IciciPaymentTransactionStatus.PENDING ||
+      reconciled.status ===
+        IciciPaymentTransactionStatus.INITIATED
+    ) {
+      throw new BadRequestException(
+        'Previous dealer order payment is still being processed. Please try again later.',
+      );
+    }
+
+    /*
+     * Only a final FAILED result may fall
+     * through and create another attempt.
+     */
+    if (
+      reconciled.status !==
+      IciciPaymentTransactionStatus.FAILED
+    ) {
+      throw new BadRequestException(
+        'Previous dealer order payment could not be confirmed as failed',
+      );
+    }
+  }
+
+  /*
+   * A CREATED record means our database
+   * transaction exists but initiation never
+   * reached a trustworthy final state.
+   *
+   * Do not silently create another charge.
+   */
+  if (
+    previousTransaction?.status ===
+    IciciPaymentTransactionStatus.CREATED
+  ) {
+    throw new BadRequestException(
+      'Previous dealer order payment initiation is incomplete. Please try again later.',
+    );
+  }
+
+  /*
+   * Current Dealer Order business policy:
+   *
+   * DealerService supplies the complete
+   * server-calculated outstanding amount.
+   *
+   * The frontend does not control amount.
+   */
+  try {
+  return await this.initiatePayment({
+    ...input,
+
+    businessSettlementType:
+      'DEALER_ORDER',
+  });
+} catch (error: any) {
+  /*
+   * PostgreSQL partial unique index allows
+   * only one unresolved Dealer Order payment
+   * attempt for:
+   *
+   * purpose + referenceId + dealerId
+   * + merchantAccount
+   *
+   * Two simultaneous requests can both pass
+   * the lookup above. One creates the active
+   * transaction; the other receives 23505.
+   *
+   * For that exact race, reload the active
+   * transaction instead of exposing a DB error.
+   */
+  if (
+    error?.code !==
+    '23505'
+  ) {
+    throw error;
+  }
+
+  const concurrentTransaction =
+    await this.transactionRepository
+      .createQueryBuilder(
+        'transaction',
+      )
+      .where(
+        'transaction.purpose = :purpose',
+        {
+          purpose:
+            IciciPaymentPurpose
+              .DEALER_ORDER,
+        },
+      )
+      .andWhere(
+        'transaction.referenceId = :orderId',
+        {
+          orderId,
+        },
+      )
+      .andWhere(
+        'transaction.dealerId = :dealerId',
+        {
+          dealerId:
+            portalDealerId,
+        },
+      )
+      .andWhere(
+        'transaction.merchantAccount = :merchantAccount',
+        {
+          merchantAccount:
+            IciciMerchantAccount
+              .TRADING,
+        },
+      )
+      .andWhere(
+        'transaction.status IN (:...activeStatuses)',
+        {
+          activeStatuses: [
+            IciciPaymentTransactionStatus.CREATED,
+            IciciPaymentTransactionStatus.INITIATED,
+            IciciPaymentTransactionStatus.PENDING,
+          ],
+        },
+      )
+      .orderBy(
+        'transaction.createdAt',
+        'DESC',
+      )
+      .getOne();
+
+  if (
+    !concurrentTransaction
+  ) {
+    /*
+     * Do not hide an unrelated unique
+     * constraint violation.
+     */
+    throw error;
+  }
+
+  const businessSettlementType =
+    String(
+      concurrentTransaction
+        .gatewayMetadata
+        ?.businessSettlementType ||
+        '',
+    );
+
+  if (
+    businessSettlementType !==
+    'DEALER_ORDER'
+  ) {
+    throw error;
+  }
+
+  /*
+   * If the winning request has already
+   * completed ICICI initiation, safely
+   * return exactly the same hosted session.
+   */
+  if (
+    concurrentTransaction.status ===
+      IciciPaymentTransactionStatus.INITIATED &&
+    concurrentTransaction.redirectUri &&
+    concurrentTransaction.transactionContext
+  ) {
+    return {
+      success:
+        true,
+
+      transactionId:
+        concurrentTransaction.id,
+
+      merchantTxnNo:
+        concurrentTransaction
+          .merchantTxnNo,
+
+      amount:
+        Number(
+          concurrentTransaction.amount,
+        ),
+
+      status:
+        concurrentTransaction.status,
+
+      paymentUrl:
+        `${concurrentTransaction.redirectUri}?tranCtx=${encodeURIComponent(
+          concurrentTransaction
+            .transactionContext ||
+            '',
+        )}`,
+
+      reused:
+        true,
+    };
+  }
+
+  /*
+   * CREATED means the winning request has
+   * inserted its durable transaction but
+   * may still be contacting ICICI.
+   *
+   * PENDING similarly means there is already
+   * an unresolved payment.
+   *
+   * Never start another charge here.
+   */
+  throw new BadRequestException(
+    'Dealer order payment initiation is already in progress. Please try again shortly.',
+  );
+}
+}
+
   async initiatePayment(
     input: InitiatePaymentInput,
   ) {
@@ -470,11 +1425,17 @@ export class IciciPaymentService {
           IciciPaymentTransactionStatus.CREATED,
 
         merchantId:
-          merchant.merchantId,
+  merchant.merchantId,
 
-        aggregatorId:
-          merchant.aggregatorId,
-      });
+aggregatorId:
+  merchant.aggregatorId,
+
+gatewayMetadata: {
+  businessSettlementType:
+    input.businessSettlementType ||
+    null,
+},
+});
 
     transaction =
       await this
@@ -622,11 +1583,12 @@ export class IciciPaymentService {
         transaction.failedAt =
           new Date();
 
-        transaction.gatewayMetadata =
-          {
-            httpStatus:
-              response.status,
-          };
+        transaction.gatewayMetadata = {
+  ...(transaction.gatewayMetadata || {}),
+
+  httpStatus:
+    response.status,
+};
 
         await this
           .transactionRepository
@@ -666,13 +1628,14 @@ export class IciciPaymentService {
       transaction.initiatedAt =
         new Date();
 
-      transaction.gatewayMetadata =
-        {
-          showOTPCapturePage:
-            gatewayResponse
-              ?.showOTPCapturePage ||
-            undefined,
-        };
+      transaction.gatewayMetadata = {
+  ...(transaction.gatewayMetadata || {}),
+
+  showOTPCapturePage:
+    gatewayResponse
+      ?.showOTPCapturePage ||
+    undefined,
+};
 
       transaction =
         await this
@@ -733,11 +1696,12 @@ export class IciciPaymentService {
       transaction.failedAt =
         new Date();
 
-      transaction.gatewayMetadata =
-        {
-          networkError:
-            true,
-        };
+      transaction.gatewayMetadata = {
+  ...(transaction.gatewayMetadata || {}),
+
+  networkError:
+    true,
+};
 
       await this
         .transactionRepository
@@ -827,6 +1791,820 @@ export class IciciPaymentService {
       reconciled.paidAt ||
       null,
   };
+}
+
+private async getDealerPaymentIdentity(
+  portalDealerId: number,
+) {
+  const dealer =
+    await this.dealerRepository.findOne({
+      where: {
+        id: portalDealerId,
+        isHidden: false,
+      },
+    });
+
+  if (!dealer) {
+    throw new BadRequestException(
+      'Dealer Portal account not found for payment transaction',
+    );
+  }
+
+  const resolvedPortalDealerId =
+    Number(dealer.id || 0);
+
+  const projectVendorId =
+    Number(
+      dealer.projectVendorId ||
+        0,
+    );
+
+  /*
+   * Keep exactly the same identity rule
+   * used by DealerService:
+   *
+   * linked dealer:
+   *   ONLY ProjectVendor.id is valid
+   *
+   * legacy unmapped dealer:
+   *   Dealer.id remains valid
+   *
+   * Never accept both namespaces together,
+   * because their numeric IDs can collide.
+   */
+  const businessDealerId =
+    projectVendorId > 0
+      ? projectVendorId
+      : resolvedPortalDealerId;
+
+  if (!businessDealerId) {
+    throw new BadRequestException(
+      'Dealer business identity could not be resolved',
+    );
+  }
+
+  return {
+    dealer,
+    portalDealerId:
+      resolvedPortalDealerId,
+    projectVendorId:
+      projectVendorId ||
+      null,
+    businessDealerId,
+  };
+}
+
+private async recalculateDealerOrderPaymentFromApprovedPayments(
+  orderId: number,
+) {
+  const order =
+    await this.projectDealerOrderRepository.findOne({
+      where: {
+        id: orderId,
+        isHidden: false,
+      },
+    });
+
+  if (!order) {
+    return null;
+  }
+
+  const approvedPayments =
+    await this.projectDealerPaymentRepository.find({
+      where: {
+        dealerOrderId:
+          order.id,
+
+        status:
+          ProjectDealerPaymentStatus.APPROVED,
+      },
+    });
+
+  const paidAmount =
+    approvedPayments.reduce(
+      (sum, item) =>
+        sum +
+        Number(item.amount || 0),
+      0,
+    );
+
+  order.paidAmount =
+    paidAmount;
+
+  order.pendingAmount =
+    Math.max(
+      Number(
+        order.totalAmount || 0,
+      ) - paidAmount,
+      0,
+    );
+
+  return this.projectDealerOrderRepository.save(
+    order,
+  );
+}
+
+private async postDealerOrderGatewayLedger(
+  payment: ProjectDealerPayment,
+  order: ProjectDealerOrder,
+) {
+  if (
+    payment.status !==
+    ProjectDealerPaymentStatus.APPROVED
+  ) {
+    return null;
+  }
+
+  return this.projectService.postFinanceLedgerEntry({
+    partyId:
+      Number(payment.dealerId || 0) ||
+      null,
+
+    partyName:
+      payment.dealerName ||
+      order.dealerName ||
+      `Dealer #${payment.dealerId}`,
+
+    partyType:
+      'DEALER',
+
+    projectId:
+      null,
+
+    entryType:
+      ProjectLedgerEntryType.CREDIT,
+
+    sourceType:
+  ProjectLedgerSourceType.DEALER_PAYMENT,
+
+    sourceId:
+      payment.id,
+
+    amount:
+      Number(payment.amount || 0),
+
+    remarks:
+      `Dealer payment approved - Order ${
+        order.orderNumber ||
+        order.id
+      }`,
+
+    user: {
+      id: null,
+      name:
+        'ICICI PAYMENT GATEWAY',
+    },
+  });
+}
+
+private async settleDealerOrderTransaction(
+  transaction: IciciPaymentTransaction,
+) {
+  if (
+    transaction.status !==
+    IciciPaymentTransactionStatus.SUCCESS
+  ) {
+    return;
+  }
+
+  const businessSettlementType =
+  String(
+    transaction.gatewayMetadata
+      ?.businessSettlementType ||
+      '',
+  );
+
+if (
+  businessSettlementType !==
+  'DEALER_ORDER'
+) {
+  return;
+}
+
+  if (
+    transaction.merchantAccount !==
+    IciciMerchantAccount.TRADING
+  ) {
+    throw new BadRequestException(
+      'Dealer Order payment must use ADITYA TRADING merchant account',
+    );
+  }
+
+  const orderId = Number(
+    transaction.referenceId || 0,
+  );
+
+  const portalDealerId = Number(
+  transaction.dealerId || 0,
+);
+
+if (!orderId || !portalDealerId) {
+  throw new BadRequestException(
+    'Invalid Dealer Order payment transaction reference',
+  );
+}
+
+const identity =
+  await this.getDealerPaymentIdentity(
+    portalDealerId,
+  );
+
+  /*
+ * Real Dealer Order ICICI payments are
+ * initiated only for portal dealers linked
+ * to the canonical Trading dealer master.
+ *
+ * Do not fall back to Dealer.id during
+ * settlement. That fallback exists only for
+ * legacy identity compatibility and the two
+ * numeric ID namespaces can collide.
+ */
+if (
+  !identity.projectVendorId
+) {
+  throw new BadRequestException(
+    'Dealer Portal account is not linked to Trading dealer master',
+  );
+}
+
+/*
+ * For a genuine Dealer Order gateway
+ * settlement the business identity must be
+ * exactly ProjectVendor.id.
+ */
+if (
+  Number(
+    identity.businessDealerId,
+  ) !==
+  Number(
+    identity.projectVendorId,
+  )
+) {
+  throw new BadRequestException(
+    'Dealer Order payment business identity mismatch',
+  );
+}
+
+const order =
+  await this.projectDealerOrderRepository.findOne({
+    where: {
+      id: orderId,
+      dealerId:
+        identity.businessDealerId,
+      isHidden: false,
+    },
+  });
+
+  if (!order) {
+    throw new BadRequestException(
+      'Dealer order not found for successful payment',
+    );
+  }
+
+  /*
+   * transaction.dealerId is the authenticated
+   * Dealer Portal account ID.
+   *
+   * order.dealerId is the business dealer identity
+   * used by Dealer Order / ProjectVendor records.
+   *
+   * Do NOT overwrite one with the other.
+   */
+
+  const existingPayment =
+  await this.projectDealerPaymentRepository.findOne({
+    where: {
+      gatewayMerchantTxnNo:
+        transaction.merchantTxnNo,
+    },
+  });
+
+  if (existingPayment) {
+
+    if (
+  Number(existingPayment.dealerOrderId) !==
+  Number(order.id)
+) {
+  throw new BadRequestException(
+    'ICICI transaction is already linked to another Dealer Order',
+  );
+}
+
+if (
+  Number(existingPayment.dealerId) !==
+  Number(identity.businessDealerId)
+) {
+  throw new BadRequestException(
+    'ICICI transaction is already linked to another dealer',
+  );
+}
+
+if (
+  Math.abs(
+    Number(existingPayment.amount || 0) -
+      Number(transaction.amount || 0),
+  ) > 0.009
+) {
+  throw new BadRequestException(
+    'ICICI transaction amount does not match existing Dealer Order payment',
+  );
+}
+    /*
+     * Idempotency:
+     * the same verified ICICI transaction must never
+     * create a second ProjectDealerPayment.
+     */
+    if (
+      existingPayment.status !==
+      ProjectDealerPaymentStatus.APPROVED
+    ) {
+      existingPayment.status =
+        ProjectDealerPaymentStatus.APPROVED;
+
+      existingPayment.approvedAt =
+        transaction.paidAt ||
+        new Date();
+
+      existingPayment.approvalNote =
+        'Automatically approved after verified ICICI payment success';
+
+      await this.projectDealerPaymentRepository.save(
+        existingPayment,
+      );
+    }
+
+    await this.recalculateDealerOrderPaymentFromApprovedPayments(
+  order.id,
+);
+
+await this.postDealerOrderGatewayLedger(
+  existingPayment,
+  order,
+);
+
+return existingPayment;
+  }
+
+  const amount = Number(
+    transaction.amount || 0,
+  );
+
+  if (amount <= 0) {
+    throw new BadRequestException(
+      'Invalid Dealer Order payment amount',
+    );
+  }
+
+  /*
+   * Never allow a verified transaction belonging
+   * to another order amount context to overpay the
+   * current outstanding balance.
+   *
+   * A tiny tolerance is allowed only for decimal
+   * conversion differences.
+   */
+  const currentPendingAmount = Math.max(
+    Number(order.totalAmount || 0) -
+      Number(order.paidAmount || 0),
+    0,
+  );
+
+  if (
+    amount >
+    currentPendingAmount + 0.009
+  ) {
+    throw new BadRequestException(
+      'ICICI payment amount exceeds Dealer Order pending amount',
+    );
+  }
+
+  const payment =
+    this.projectDealerPaymentRepository.create({
+      dealerOrderId:
+        order.id,
+
+      /*
+       * Business ledger identity.
+       * For current canonical orders this is
+       * ProjectVendor.id.
+       */
+      dealerId:
+  identity.businessDealerId,
+
+      dealerName:
+        order.dealerName ||
+        '',
+
+      amount,
+
+      paymentMode:
+        transaction.paymentMode ||
+        'ONLINE',
+
+      /*
+       * merchantTxnNo is our unique gateway-side
+       * transaction reference and is used for
+       * settlement idempotency.
+       */
+      transactionId:
+  transaction.bankTxnId ||
+  transaction.merchantTxnNo,
+
+gatewayMerchantTxnNo:
+  transaction.merchantTxnNo,
+
+receiptUrl:
+  '',
+
+      status:
+        ProjectDealerPaymentStatus.APPROVED,
+
+
+      approvedByName:
+        'ICICI PAYMENT GATEWAY',
+
+      approvedAt:
+        transaction.paidAt ||
+        new Date(),
+
+      approvalNote:
+        'Automatically approved after verified ICICI payment success',
+
+      createdBy:
+  identity.portalDealerId,
+
+createdByName:
+  identity.dealer.dealerName ||
+  order.dealerName ||
+  'Dealer Portal',
+
+      remarks:
+        `ICICI online payment - ${transaction.merchantTxnNo}`,
+    });
+
+  let savedPayment:
+  ProjectDealerPayment;
+
+try {
+  savedPayment =
+    await this
+      .projectDealerPaymentRepository
+      .save(
+        payment,
+      );
+} catch (error: any) {
+  /*
+   * PostgreSQL 23505 = unique violation.
+   *
+   * gatewayMerchantTxnNo has a gateway-specific
+   * unique index. If callback + reconciliation
+   * settle the same verified ICICI transaction
+   * concurrently, one insert may win while the
+   * other reaches this catch.
+   *
+   * Never treat an arbitrary unique violation as
+   * successful settlement. Reload and validate
+   * the exact ICICI merchant transaction.
+   */
+  if (
+    String(
+      error?.code ||
+      '',
+    ) !== '23505'
+  ) {
+    throw error;
+  }
+
+  const concurrentPayment =
+    await this
+      .projectDealerPaymentRepository
+      .findOne({
+        where: {
+          gatewayMerchantTxnNo:
+            transaction.merchantTxnNo,
+        },
+      });
+
+  /*
+   * If no row exists for this merchantTxnNo,
+   * then 23505 came from some other constraint.
+   * Do not hide that database problem.
+   */
+  if (!concurrentPayment) {
+    throw error;
+  }
+
+  /*
+   * The concurrently-created row must belong
+   * to exactly the same order, dealer and amount.
+   */
+  if (
+    Number(
+      concurrentPayment.dealerOrderId,
+    ) !==
+    Number(
+      order.id,
+    )
+  ) {
+    throw new BadRequestException(
+      'ICICI transaction is already linked to another Dealer Order',
+    );
+  }
+
+  if (
+    Number(
+      concurrentPayment.dealerId,
+    ) !==
+    Number(
+      identity.businessDealerId,
+    )
+  ) {
+    throw new BadRequestException(
+      'ICICI transaction is already linked to another dealer',
+    );
+  }
+
+  if (
+    Math.abs(
+      Number(
+        concurrentPayment.amount ||
+        0,
+      ) -
+        Number(
+          transaction.amount ||
+          0,
+        ),
+    ) > 0.009
+  ) {
+    throw new BadRequestException(
+      'ICICI transaction amount does not match existing Dealer Order payment',
+    );
+  }
+
+  /*
+   * The winning settlement should have created
+   * this gateway payment as APPROVED.
+   *
+   * Still repair the state if the row exists but
+   * approval was not completed for any reason.
+   */
+  if (
+    concurrentPayment.status !==
+    ProjectDealerPaymentStatus.APPROVED
+  ) {
+    concurrentPayment.status =
+      ProjectDealerPaymentStatus.APPROVED;
+
+    concurrentPayment.approvedAt =
+      transaction.paidAt ||
+      new Date();
+
+    concurrentPayment.approvalNote =
+      'Automatically approved after verified ICICI payment success';
+
+    savedPayment =
+      await this
+        .projectDealerPaymentRepository
+        .save(
+          concurrentPayment,
+        );
+  } else {
+    savedPayment =
+      concurrentPayment;
+  }
+}
+
+await this.recalculateDealerOrderPaymentFromApprovedPayments(
+  order.id,
+);
+
+await this.postDealerOrderGatewayLedger(
+  savedPayment,
+  order,
+);
+
+return savedPayment;
+}
+
+private async dispatchSuccessfulTransaction(
+  transaction: IciciPaymentTransaction,
+) {
+  if (
+    transaction.status !==
+    IciciPaymentTransactionStatus.SUCCESS
+  ) {
+    return;
+  }
+
+  /*
+   * Dealer Insurance
+   *
+   * Business rule:
+   * all Dealer Portal payments are received
+   * through ADITYA TRADING.
+   */
+  if (
+    transaction.purpose ===
+    IciciPaymentPurpose.DEALER_INSURANCE
+  ) {
+    if (
+      transaction.merchantAccount !==
+      IciciMerchantAccount.TRADING
+    ) {
+      throw new BadGatewayException(
+        'Dealer insurance payment merchant mismatch',
+      );
+    }
+
+    const requestId =
+      Number(
+        transaction.referenceId,
+      );
+
+    const dealerId =
+      Number(
+        transaction.dealerId,
+      );
+
+    if (
+      !Number.isInteger(
+        requestId,
+      ) ||
+      requestId <= 0 ||
+      !Number.isInteger(
+        dealerId,
+      ) ||
+      dealerId <= 0
+    ) {
+      throw new BadGatewayException(
+        'Dealer insurance payment reference is invalid',
+      );
+    }
+
+    const request =
+      await this
+        .projectInsuranceRequestRepository
+        .findOne({
+          where: {
+            id:
+              requestId,
+
+            dealerId,
+
+            source:
+              ProjectInsuranceRequestSource
+                .DEALER,
+
+            isHidden:
+              false,
+          } as any,
+        });
+
+    if (!request) {
+      throw new BadGatewayException(
+        'Dealer insurance application not found for payment',
+      );
+    }
+
+    const transactionAmount =
+      Number(
+        transaction.amount,
+      );
+
+    const payableAmount =
+      Number(
+        request.payableAmount,
+      );
+
+    if (
+      !Number.isFinite(
+        transactionAmount,
+      ) ||
+      !Number.isFinite(
+        payableAmount,
+      ) ||
+      Math.abs(
+        transactionAmount -
+          payableAmount,
+      ) > 0.009
+    ) {
+      throw new BadGatewayException(
+        'Dealer insurance payment amount mismatch',
+      );
+    }
+
+    /*
+     * Idempotency:
+     *
+     * Callback, Status reconciliation or a
+     * future repeated reconciliation must not
+     * credit the insurance application twice.
+     */
+    if (
+  request.paymentStatus ===
+  ProjectInsurancePaymentStatus.PAID
+) {
+  const existingMerchantTxnNo =
+    String(
+      request.gatewayOrderId ||
+      '',
+    ).trim();
+
+  const currentMerchantTxnNo =
+    String(
+      transaction.merchantTxnNo ||
+      '',
+    ).trim();
+
+  /*
+   * A PAID insurance request is idempotent
+   * only when it was settled by this exact
+   * ICICI merchant transaction.
+   *
+   * Callback/status reconciliation for the
+   * same transaction may safely run again.
+   */
+  if (
+    existingMerchantTxnNo &&
+    currentMerchantTxnNo &&
+    existingMerchantTxnNo ===
+      currentMerchantTxnNo
+  ) {
+    return;
+  }
+
+  /*
+   * Never silently accept a second SUCCESS
+   * transaction against an already-paid
+   * insurance request.
+   *
+   * Also fail closed for legacy/incomplete
+   * PAID records where gatewayOrderId is
+   * missing rather than overwriting their
+   * payment identity.
+   */
+  throw new BadGatewayException(
+    'Dealer insurance request is already paid by a different payment transaction',
+  );
+}
+
+    request.paymentStatus =
+      ProjectInsurancePaymentStatus.PAID;
+
+    request.gatewayOrderId =
+      transaction.merchantTxnNo;
+
+    request.gatewayPaymentId =
+      transaction.paymentId ||
+      undefined;
+
+    request.gatewayTransactionId =
+      transaction.bankTxnId ||
+      undefined;
+
+    request.paidAt =
+      transaction.paidAt ||
+      new Date();
+
+    await this
+      .projectInsuranceRequestRepository
+      .save(
+        request,
+      );
+
+    return;
+  }
+
+  /*
+ * Dealer Order settlement is intentionally
+ * handled separately from Dealer Insurance.
+ *
+ * Do not create ProjectDealerPayment here
+ * until the Dealer Order repositories and
+ * existing payment recalculation rules are
+ * registered in PaymentModule.
+ */
+if (
+  transaction.purpose ===
+  IciciPaymentPurpose.DEALER_ORDER
+) {
+  await this.settleDealerOrderTransaction(
+    transaction,
+  );
+
+  return;
+}
+
+/*
+ * Customer payment settlement will be
+ * connected separately after Dealer Order.
+ */
+if (
+  transaction.purpose ===
+  IciciPaymentPurpose.CUSTOMER_PAYMENT
+) {
+  return;
+}
 }
 
   private async reconcileTransactionStatus(
@@ -1252,11 +3030,24 @@ if (
       IciciPaymentTransactionStatus.PENDING;
   }
 
-  return this
+  const savedTransaction =
+  await this
     .transactionRepository
     .save(
       transaction,
     );
+
+if (
+  savedTransaction.status ===
+  IciciPaymentTransactionStatus.SUCCESS
+) {
+  await this
+    .dispatchSuccessfulTransaction(
+      savedTransaction,
+    );
+}
+
+return savedTransaction;
 }
 
   async handlePaymentReturn(
