@@ -185,6 +185,17 @@ const [branchStockFilters, setBranchStockFilters] = useState({
   material: '',
 });
 
+const [stockFiles, setStockFiles] = useState<any[]>([]);
+const [stockFilesLoading, setStockFilesLoading] =
+  useState(false);
+const [stockFileUploading, setStockFileUploading] =
+  useState(false);
+
+const [stockFileForm, setStockFileForm] = useState({
+  displayName: '',
+  file: null as File | null,
+});
+
 const [consumptions, setConsumptions] = useState<any[]>([]);
 const [consumptionLoading, setConsumptionLoading] =
   useState(false);
@@ -1731,11 +1742,151 @@ const restoreStockMovement = async (movementId: number) => {
   }
 };
 
+const loadStockFiles = async () => {
+  try {
+    setStockFilesLoading(true);
+
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/stock/files`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setStockFiles(
+      Array.isArray(res.data)
+        ? res.data
+        : [],
+    );
+  } catch (error) {
+    console.error(
+      'Failed to load stock files:',
+      error,
+    );
+    setStockFiles([]);
+  } finally {
+    setStockFilesLoading(false);
+  }
+};
+
+const uploadStockFile = async () => {
+  if (!stockFileForm.displayName.trim()) {
+    alert('Please enter file name/details');
+    return;
+  }
+
+  if (!stockFileForm.file) {
+    alert('Please choose a file');
+    return;
+  }
+
+  try {
+    setStockFileUploading(true);
+
+    const token = localStorage.getItem('token');
+
+    const formData = new FormData();
+
+    formData.append(
+      'displayName',
+      stockFileForm.displayName.trim(),
+    );
+
+    formData.append(
+      'file',
+      stockFileForm.file,
+    );
+
+    await axios.post(
+      `${API_BASE_URL}/project/stock/files/upload`,
+      formData,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Stock file uploaded successfully');
+
+    setStockFileForm({
+      displayName: '',
+      file: null,
+    });
+
+    const fileInput =
+      document.getElementById(
+        'stock-file-input',
+      ) as HTMLInputElement | null;
+
+    if (fileInput) {
+      fileInput.value = '';
+    }
+
+    await loadStockFiles();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to upload stock file',
+    );
+  } finally {
+    setStockFileUploading(false);
+  }
+};
+
+const viewStockFile = async (
+  fileId: number,
+) => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/stock/files/${fileId}/access`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    if (!res.data?.fileUrl) {
+      alert('File URL not available');
+      return;
+    }
+
+    window.open(
+      res.data.fileUrl,
+      '_blank',
+      'noopener,noreferrer',
+    );
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to open stock file',
+    );
+  }
+};
+
   useEffect(() => {
   loadStockItems(1);
   loadMaterialSummary();
   loadSelectableStockItems();
   loadStockMovements(1);
+  loadStockFiles();
   loadBranchWiseStock();
   loadApprovedRequestsForIssue();
   loadProjectConsumptions(1);
@@ -3801,6 +3952,169 @@ const filteredIncomingMaterials =
 
       <div className="rounded-2xl bg-white p-5 shadow">
   <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+
+    <div className="rounded-2xl bg-white p-5 shadow">
+  <div>
+    <h2 className="text-xl font-bold text-gray-800">
+      Stock Files / Serial Number Files
+    </h2>
+
+    <p className="mt-1 text-sm text-gray-500">
+      Upload and maintain scanned panel serial number
+      Excel or CSV files for historical records and
+      warranty reference.
+    </p>
+  </div>
+
+  <div className="mt-5 grid gap-4 md:grid-cols-2">
+    <div>
+      <label className="mb-1 block text-sm font-semibold text-gray-700">
+        File Name / Details
+      </label>
+
+      <input
+        type="text"
+        value={stockFileForm.displayName}
+        onChange={(e) =>
+          setStockFileForm((prev) => ({
+            ...prev,
+            displayName: e.target.value,
+          }))
+        }
+        placeholder="Example: GOLDI 620W Panel Serial Numbers - September Lot"
+        className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+      />
+    </div>
+
+    <div>
+      <label className="mb-1 block text-sm font-semibold text-gray-700">
+        Choose Excel / CSV File
+      </label>
+
+      <input
+        id="stock-file-input"
+        type="file"
+        accept=".xlsx,.xls,.xlsb,.csv"
+        onChange={(e) =>
+          setStockFileForm((prev) => ({
+            ...prev,
+            file:
+              e.target.files?.[0] ||
+              null,
+          }))
+        }
+        className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm"
+      />
+    </div>
+  </div>
+
+  <div className="mt-4">
+    <button
+      type="button"
+      onClick={uploadStockFile}
+      disabled={stockFileUploading}
+      className="rounded-xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      {stockFileUploading
+        ? 'Uploading...'
+        : 'Upload File'}
+    </button>
+  </div>
+
+  <div className="mt-6 overflow-x-auto">
+    <table className="min-w-full text-sm">
+      <thead>
+        <tr className="border-b bg-gray-50 text-left text-gray-600">
+          <th className="p-3">
+            Date
+          </th>
+
+          <th className="p-3">
+            File Name / Details
+          </th>
+
+          <th className="p-3">
+            Original File
+          </th>
+
+          <th className="p-3">
+            Uploaded By
+          </th>
+
+          <th className="p-3">
+            Actions
+          </th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {stockFilesLoading ? (
+          <tr>
+            <td
+              colSpan={5}
+              className="p-5 text-center text-gray-500"
+            >
+              Loading files...
+            </td>
+          </tr>
+        ) : stockFiles.length === 0 ? (
+          <tr>
+            <td
+              colSpan={5}
+              className="p-5 text-center text-gray-500"
+            >
+              No stock files uploaded yet.
+            </td>
+          </tr>
+        ) : (
+          stockFiles.map((item: any) => (
+            <tr
+              key={item.id}
+              className="border-b"
+            >
+              <td className="whitespace-nowrap p-3">
+                {item.createdAt
+                  ? new Date(
+                      item.createdAt,
+                    ).toLocaleString(
+                      'en-IN',
+                    )
+                  : '-'}
+              </td>
+
+              <td className="p-3 font-semibold text-gray-800">
+                {item.displayName}
+              </td>
+
+              <td className="p-3 text-gray-600">
+                {item.originalFileName}
+              </td>
+
+              <td className="p-3">
+                {item.uploadedByName || '-'}
+              </td>
+
+              <td className="p-3">
+                <button
+                  type="button"
+                  onClick={() =>
+                    viewStockFile(
+                      Number(item.id),
+                    )
+                  }
+                  className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                >
+                  View / Download
+                </button>
+              </td>
+            </tr>
+          ))
+        )}
+      </tbody>
+    </table>
+  </div>
+</div>
+
     <div>
       <h2 className="text-xl font-bold text-gray-800">
         Stock Movement History

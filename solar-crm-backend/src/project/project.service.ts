@@ -176,6 +176,7 @@ import {
   ProjectStockMovement,
   ProjectStockMovementType,
 } from './project-stock-movement.entity';
+import { ProjectStockFile } from './project-stock-file.entity';
 
 import { ProjectConsumption } from './project-consumption.entity';
 
@@ -2413,6 +2414,9 @@ private readonly projectStockItemRepository: Repository<ProjectStockItem>,
 
 @InjectRepository(ProjectStockMovement)
 private readonly projectStockMovementRepository: Repository<ProjectStockMovement>,
+
+@InjectRepository(ProjectStockFile)
+private readonly projectStockFileRepository: Repository<ProjectStockFile>,
 
 @InjectRepository(ProjectPurchaseOrder)
 private readonly projectPurchaseOrderRepository: Repository<ProjectPurchaseOrder>,
@@ -7657,6 +7661,275 @@ async listProjectStockItems(query: any) {
           total / limitNumber,
         ) || 1,
     },
+  };
+}
+
+async uploadStockFile(
+  file: any,
+  body: any,
+  user: any,
+) {
+  if (!this.canManageStock(user)) {
+    throw new ForbiddenException(
+      'You are not allowed to manage stock files',
+    );
+  }
+
+  if (!file) {
+    throw new BadRequestException(
+      'Stock file is required',
+    );
+  }
+
+  const displayName = String(
+    body?.displayName || '',
+  ).trim();
+
+  if (!displayName) {
+    throw new BadRequestException(
+      'File name/details is required',
+    );
+  }
+
+  const originalFileName = String(
+    file.originalname || '',
+  ).trim();
+
+  const extension = originalFileName
+    .split('.')
+    .pop()
+    ?.toLowerCase();
+
+  const allowedExtensions = [
+    'xlsx',
+    'xls',
+    'xlsb',
+    'csv',
+  ];
+
+  if (
+    !extension ||
+    !allowedExtensions.includes(extension)
+  ) {
+    throw new BadRequestException(
+      'Only XLSX, XLS, XLSB and CSV files are allowed',
+    );
+  }
+
+  const maximumSize =
+    20 * 1024 * 1024;
+
+  if (
+    Number(file.size || 0) >
+    maximumSize
+  ) {
+    throw new BadRequestException(
+      'Stock file must be less than 20 MB',
+    );
+  }
+
+  const supabaseUrl =
+    process.env.SUPABASE_URL;
+
+  const serviceKey =
+    process.env
+      .SUPABASE_SERVICE_ROLE_KEY;
+
+  const bucket =
+    process.env
+      .SUPABASE_PROJECT_DOCUMENTS_BUCKET ||
+    'project-documents';
+
+  if (
+    !supabaseUrl ||
+    !serviceKey
+  ) {
+    throw new BadRequestException(
+      'Supabase storage is not configured',
+    );
+  }
+
+  const supabase =
+    createClient(
+      supabaseUrl,
+      serviceKey,
+    );
+
+  const filePath =
+    `stock-files/${Date.now()}-${randomUUID()}.${extension}`;
+
+  const mimeType = String(
+    file.mimetype ||
+      'application/octet-stream',
+  );
+
+  const uploadResult =
+    await supabase.storage
+      .from(bucket)
+      .upload(
+        filePath,
+        file.buffer,
+        {
+          contentType: mimeType,
+          upsert: false,
+        },
+      );
+
+  if (uploadResult.error) {
+    throw new BadRequestException(
+      uploadResult.error.message,
+    );
+  }
+
+  const stockFile =
+    this.projectStockFileRepository.create({
+      displayName,
+
+      originalFileName,
+
+      filePath,
+
+      mimeType,
+
+      fileSize: Number(
+        file.size || 0,
+      ),
+
+      uploadedBy:
+        Number(
+          user?.id ||
+            user?.userId ||
+            user?.sub ||
+            0,
+        ) || undefined,
+
+      uploadedByName:
+        user?.name ||
+        user?.email ||
+        '',
+
+      isHidden: false,
+    });
+
+  const saved =
+    await this.projectStockFileRepository.save(
+      stockFile,
+    );
+
+  return {
+    message:
+      'Stock file uploaded successfully',
+
+    file: saved,
+  };
+}
+
+async getStockFiles(
+  user: any,
+) {
+  if (!this.canManageStock(user)) {
+    throw new ForbiddenException(
+      'You are not allowed to view stock files',
+    );
+  }
+
+  return this.projectStockFileRepository.find({
+    where: {
+      isHidden: false,
+    },
+
+    order: {
+      createdAt: 'DESC',
+    },
+  });
+}
+
+async getStockFileAccess(
+  id: number,
+  user: any,
+) {
+  if (!this.canManageStock(user)) {
+    throw new ForbiddenException(
+      'You are not allowed to view stock files',
+    );
+  }
+
+  const stockFile =
+    await this.projectStockFileRepository.findOne({
+      where: {
+        id,
+        isHidden: false,
+      },
+    });
+
+  if (!stockFile) {
+    throw new NotFoundException(
+      'Stock file not found',
+    );
+  }
+
+  const supabaseUrl =
+    process.env.SUPABASE_URL;
+
+  const serviceKey =
+    process.env
+      .SUPABASE_SERVICE_ROLE_KEY;
+
+  const bucket =
+    process.env
+      .SUPABASE_PROJECT_DOCUMENTS_BUCKET ||
+    'project-documents';
+
+  if (
+    !supabaseUrl ||
+    !serviceKey
+  ) {
+    throw new BadRequestException(
+      'Supabase storage is not configured',
+    );
+  }
+
+  const supabase =
+    createClient(
+      supabaseUrl,
+      serviceKey,
+    );
+
+  const signedUrlResult =
+    await supabase.storage
+      .from(bucket)
+      .createSignedUrl(
+        stockFile.filePath,
+        60 * 10,
+      );
+
+  if (
+    signedUrlResult.error ||
+    !signedUrlResult.data?.signedUrl
+  ) {
+    throw new BadRequestException(
+      signedUrlResult.error?.message ||
+        'Unable to access stock file',
+    );
+  }
+
+  return {
+    id: stockFile.id,
+
+    displayName:
+      stockFile.displayName,
+
+    originalFileName:
+      stockFile.originalFileName,
+
+    mimeType:
+      stockFile.mimeType,
+
+    fileSize:
+      Number(stockFile.fileSize || 0),
+
+    fileUrl:
+      signedUrlResult.data.signedUrl,
   };
 }
 

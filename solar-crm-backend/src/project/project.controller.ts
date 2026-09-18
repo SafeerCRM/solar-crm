@@ -3116,6 +3116,69 @@ listProjectStockMovements(
   );
 }
 
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'PROJECT_EXECUTIVE',
+  'ACCOUNT_MANAGER',
+  'STOCK_MANAGER',
+  'TRADING_MANAGER',
+  'TRADING_HEAD',
+)
+@Get('stock/files')
+listProjectStockFiles(
+  @CurrentUser() user: any,
+) {
+  return this.projectService.getStockFiles(
+  user,
+);
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'STOCK_MANAGER',
+)
+@Post('stock/files/upload')
+@UseInterceptors(
+  FileInterceptor('file', {
+    limits: {
+      fileSize: 12 * 1024 * 1024,
+    },
+  }),
+)
+uploadProjectStockFile(
+  @UploadedFile() file: any,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.uploadStockFile(
+  file,
+  body,
+  user,
+);
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'PROJECT_EXECUTIVE',
+  'ACCOUNT_MANAGER',
+  'STOCK_MANAGER',
+  'TRADING_MANAGER',
+  'TRADING_HEAD',
+)
+@Get('stock/files/:id/access')
+getProjectStockFileAccess(
+  @Param('id', ParseIntPipe) id: number,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.getStockFileAccess(
+    id,
+    user,
+  );
+}
+
 @Roles('OWNER', 'PROJECT_MANAGER', 'STOCK_MANAGER')
 @Patch('stock/items/:id/dealer-visibility')
 updateStockItemDealerVisibility(
