@@ -828,6 +828,12 @@ projectSearch?: string,
 @Query('materialSearch')
 materialSearch?: string,
 
+@Query('materialType')
+materialType?: string,
+
+@Query('materialSpec')
+materialSpec?: string,
+
   @Query('status')
   status?: string,
 
@@ -855,6 +861,12 @@ materialSearch?: string,
 
 materialSearch:
   materialSearch || '',
+
+  materialType:
+  materialType || '',
+
+materialSpec:
+  materialSpec || '',
 
     status:
       status || '',
