@@ -136,6 +136,24 @@ type CustomerMaster = {
   branchName?: string;
 };
 
+type ProjectPanelOption = {
+  id: number;
+  label: string;
+  brandName: string;
+  capacityWatt: number;
+  panelCategory: 'DCR' | 'NONDCR';
+  panelType: 'P Type' | 'N Type';
+};
+
+type ProjectInverterOption = {
+  id: string;
+  label: string;
+  inverterType: 'ONGRID' | 'HYBRID';
+  brandName: string;
+  capacity: number;
+  phase: string;
+};
+
 export default function CreateProjectPage() {
   const router = useRouter();
 
@@ -154,6 +172,20 @@ const [documentRemarks, setDocumentRemarks] = useState('');
 const [pendingDocuments, setPendingDocuments] = useState<PendingDocument[]>([]);
 
   const [branches, setBranches] = useState<Branch[]>([]);
+
+  const [projectMaterialOptions, setProjectMaterialOptions] = useState<{
+  panels: ProjectPanelOption[];
+  inverters: ProjectInverterOption[];
+}>({
+  panels: [],
+  inverters: [],
+});
+
+const [selectedPanelOptionId, setSelectedPanelOptionId] =
+  useState('');
+
+const [selectedInverterOptionId, setSelectedInverterOptionId] =
+  useState('');
 
   const [customerSearch, setCustomerSearch] = useState('');
 const [customerResults, setCustomerResults] = useState<CustomerMaster[]>([]);
@@ -218,6 +250,43 @@ projectWorkStateReason: '',
 remarks: '',
   });
 
+  const fetchProjectMaterialOptions = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/calculator/meeting-material-options`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setProjectMaterialOptions({
+      panels: Array.isArray(res.data?.panels)
+        ? res.data.panels
+        : [],
+
+      inverters: Array.isArray(res.data?.inverters)
+        ? res.data.inverters
+        : [],
+    });
+  } catch (error) {
+    console.error(
+      'Failed to load project material options:',
+      error,
+    );
+
+    setProjectMaterialOptions({
+      panels: [],
+      inverters: [],
+    });
+  }
+};
+
   const fetchLatestCalculatorForMeeting = async () => {
   if (!meetingIdFromUrl) return;
 
@@ -256,6 +325,32 @@ remarks: '',
         0,
     );
 
+    const calculatorPanelOptionId =
+  latestCalculator.panelOptionId
+    ? String(latestCalculator.panelOptionId)
+    : '';
+
+const calculatorInverterOptionId =
+  latestCalculator.ongridOptionId
+    ? `ongrid-${latestCalculator.ongridOptionId}`
+    : latestCalculator.hybridOptionId
+      ? `hybrid-${latestCalculator.hybridOptionId}`
+      : '';
+
+      const selectedCalculatorPanel =
+  projectMaterialOptions.panels.find(
+    (option) =>
+      String(option.id) ===
+      calculatorPanelOptionId,
+  );
+
+const selectedCalculatorInverter =
+  projectMaterialOptions.inverters.find(
+    (option) =>
+      String(option.id) ===
+      calculatorInverterOptionId,
+  );
+
     setForm((prev) => ({
       ...prev,
       meetingId: String(meetingIdFromUrl),
@@ -279,15 +374,9 @@ expectedProfit: String(
   latestCalculator.expectedProfit || '',
 ),
 
-panelBrand: [
-  latestCalculator.panelCategory,
-  latestCalculator.panelType,
-  latestCalculator.wattPerPanel
-    ? `${latestCalculator.wattPerPanel}W`
-    : '',
-]
-  .filter(Boolean)
-  .join(' | '),
+panelBrand:
+  selectedCalculatorPanel?.brandName ||
+  prev.panelBrand,
 
 dcrPanelCount:
   latestCalculator.panelCategory === 'DCR'
@@ -299,13 +388,22 @@ nonDcrPanelCount:
     ? String(latestCalculator.numberOfPanels || '')
     : '',
 
-converterBrand: String(
-  latestCalculator.ongridBrand || '',
-),
+converterBrand:
+  selectedCalculatorInverter?.brandName ||
+  String(latestCalculator.ongridBrand || ''),
 
-converterCapacity: latestCalculator.ongridWatt
-  ? `${latestCalculator.ongridWatt} kW`
-  : '',
+converterCapacity:
+  selectedCalculatorInverter?.capacity !==
+    undefined &&
+  selectedCalculatorInverter?.capacity !== null
+    ? String(selectedCalculatorInverter.capacity)
+    : latestCalculator.ongridWatt
+      ? String(latestCalculator.ongridWatt)
+      : '',
+
+converterPhase:
+  selectedCalculatorInverter?.phase ||
+  prev.converterPhase,
 
 structureType: String(
   latestCalculator.structureType || '',
@@ -319,15 +417,43 @@ structureCapacityKw: latestCalculator.structureWatt
         ? prev.remarks
         : `Project created from Meeting ${meetingIdFromUrl} using latest calculator #${latestCalculator.id}`,
     }));
+
+    if (calculatorPanelOptionId) {
+  setSelectedPanelOptionId(
+    calculatorPanelOptionId,
+  );
+}
+
+if (calculatorInverterOptionId) {
+  setSelectedInverterOptionId(
+    calculatorInverterOptionId,
+  );
+}
   } catch (error) {
     console.error('Failed to fetch latest calculator for meeting:', error);
   }
 };
 
 useEffect(() => {
+  if (!meetingIdFromUrl) {
+    return;
+  }
+
+  const materialOptionsLoaded =
+    projectMaterialOptions.panels.length > 0 ||
+    projectMaterialOptions.inverters.length > 0;
+
+  if (!materialOptionsLoaded) {
+    return;
+  }
+
   fetchLatestCalculatorForMeeting();
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [meetingIdFromUrl]);
+}, [
+  meetingIdFromUrl,
+  projectMaterialOptions,
+]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -403,6 +529,7 @@ const selectCustomer = (customer: CustomerMaster) => {
 
 useEffect(() => {
   fetchBranches();
+  fetchProjectMaterialOptions();
 }, []);
 
 const addPendingDocument = () => {
@@ -471,6 +598,61 @@ const fetchMeetingPrefill = async () => {
   } catch (error) {
     console.error('Failed to prefill meeting:', error);
   }
+};
+
+const handleProjectPanelSelection = (
+  optionId: string,
+) => {
+  setSelectedPanelOptionId(optionId);
+
+  const selected =
+    projectMaterialOptions.panels.find(
+      (option) =>
+        String(option.id) === optionId,
+    );
+
+  if (!selected) {
+    return;
+  }
+
+  setForm((prev) => ({
+    ...prev,
+
+    panelBrand:
+      selected.brandName || '',
+  }));
+};
+
+const handleProjectInverterSelection = (
+  optionId: string,
+) => {
+  setSelectedInverterOptionId(optionId);
+
+  const selected =
+    projectMaterialOptions.inverters.find(
+      (option) =>
+        String(option.id) === optionId,
+    );
+
+  if (!selected) {
+    return;
+  }
+
+  setForm((prev) => ({
+    ...prev,
+
+    converterBrand:
+      selected.brandName || '',
+
+    converterCapacity:
+      selected.capacity !== null &&
+      selected.capacity !== undefined
+        ? String(selected.capacity)
+        : '',
+
+    converterPhase:
+      selected.phase || '',
+  }));
 };
 
   const handleSubmit = async () => {
@@ -872,13 +1054,38 @@ if (directCreationBlocked) {
         </h2>
 
         <div className="grid gap-4 md:grid-cols-3">
-          <input
-            name="panelBrand"
-            placeholder="Panel Brand"
-            value={form.panelBrand}
-            onChange={handleChange}
-            className="rounded-xl border p-3"
-          />
+          <div className="space-y-1">
+  <label className="text-sm font-medium text-gray-700">
+    Panel
+  </label>
+
+  <select
+    value={selectedPanelOptionId}
+    onChange={(e) =>
+      handleProjectPanelSelection(e.target.value)
+    }
+    className="w-full rounded-xl border p-3"
+  >
+    <option value="">
+      Select Panel
+    </option>
+
+    {projectMaterialOptions.panels.map((option) => (
+      <option
+        key={option.id}
+        value={String(option.id)}
+      >
+        {option.label}
+      </option>
+    ))}
+  </select>
+
+  {form.panelBrand && !selectedPanelOptionId && (
+    <p className="text-xs text-gray-500">
+      Existing/Calculator value: {form.panelBrand}
+    </p>
+  )}
+</div>
 
           <input
             type="number"
@@ -898,31 +1105,50 @@ if (directCreationBlocked) {
             className="rounded-xl border p-3"
           />
 
-          <input
-            name="converterBrand"
-            placeholder="Converter Brand"
-            value={form.converterBrand}
-            onChange={handleChange}
-            className="rounded-xl border p-3"
-          />
+          <div className="space-y-1">
+  <label className="text-sm font-medium text-gray-700">
+    Inverter
+  </label>
 
-          <input
-            name="converterCapacity"
-            placeholder="Converter Capacity"
-            value={form.converterCapacity}
-            onChange={handleChange}
-            className="rounded-xl border p-3"
-          />
+  <select
+    value={selectedInverterOptionId}
+    onChange={(e) =>
+      handleProjectInverterSelection(e.target.value)
+    }
+    className="w-full rounded-xl border p-3"
+  >
+    <option value="">
+      Select Inverter
+    </option>
 
-          <select
-            name="converterPhase"
-            value={form.converterPhase}
-            onChange={handleChange}
-            className="rounded-xl border p-3"
-          >
-            <option value="1PH">1 PH</option>
-            <option value="3PH">3 PH</option>
-          </select>
+    {projectMaterialOptions.inverters.map((option) => (
+      <option
+        key={option.id}
+        value={String(option.id)}
+      >
+        {option.label}
+      </option>
+    ))}
+  </select>
+
+  {(form.converterBrand ||
+    form.converterCapacity ||
+    form.converterPhase) &&
+    !selectedInverterOptionId && (
+      <p className="text-xs text-gray-500">
+        Existing/Calculator value:{' '}
+        {[
+          form.converterBrand,
+          form.converterCapacity
+            ? `${form.converterCapacity} kW`
+            : '',
+          form.converterPhase,
+        ]
+          .filter(Boolean)
+          .join(' — ')}
+      </p>
+    )}
+</div>
 
           <select
   name="structureType"

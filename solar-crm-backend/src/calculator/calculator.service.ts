@@ -780,30 +780,59 @@ async getMeetingMaterialOptions() {
   ]);
 
   return {
-    panels: panels.map((item) => ({
-      id: item.id,
-      label: `${item.brandName} ${item.capacityWatt}W`,
+  panels: panels.map((item) => ({
+    id: item.id,
+
+    label:
+      `${item.brandName} ${item.capacityWatt}W — ` +
+      `${item.panelCategory} — ${item.panelType}`,
+
+    brandName: item.brandName,
+    capacityWatt: item.capacityWatt,
+    panelCategory: item.panelCategory,
+    panelType: item.panelType,
+  })),
+
+  inverters: [
+    ...ongridInverters.map((item) => ({
+      id: `ongrid-${item.id}`,
+
+      label:
+        `${item.brandName} ${item.capacity}kW — ` +
+        `${item.phaseType}`,
+
+      inverterType: 'ONGRID',
+
+      brandName: item.brandName,
+      capacity: item.capacity,
+      phase: item.phaseType,
     })),
 
-    inverters: [
-      ...ongridInverters.map((item) => ({
-        id: `ongrid-${item.id}`,
-        label: `${item.brandName} ${item.capacity}kW — ${item.phaseType}`,
-        inverterType: 'ONGRID',
-      })),
+    ...hybridInverters.map((item) => ({
+      id: `hybrid-${item.id}`,
 
-      ...hybridInverters.map((item) => ({
-        id: `hybrid-${item.id}`,
-        label: `${item.brandName} ${item.capacity}kW — ${item.phase}`,
-        inverterType: 'HYBRID',
-      })),
-    ],
+      label:
+        `${item.brandName} ${item.capacity}kW — ` +
+        `${item.phase}`,
 
-    structures: structures.map((item) => ({
-      id: item.id,
-      label: `${item.structureType} — ${item.capacityKw}kW`,
+      inverterType: 'HYBRID',
+
+      brandName: item.brandName,
+      capacity: item.capacity,
+      phase: item.phase,
     })),
-  };
+  ],
+
+  structures: structures.map((item) => ({
+    id: item.id,
+
+    label:
+      `${item.structureType} — ${item.capacityKw}kW`,
+
+    structureType: item.structureType,
+    capacityKw: item.capacityKw,
+  })),
+};
 }
 
 async createStructureOption(data: any) {
