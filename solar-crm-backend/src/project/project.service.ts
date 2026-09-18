@@ -21370,6 +21370,21 @@ projectConverterPhase:
   })
   .filter((item: any) => item.projectId && projectMap.has(Number(item.projectId)));
 
+  const activePendingBranches =
+  Array.from(
+    new Set(
+      enrichedItems
+        .map((item: any) =>
+          String(
+            item.projectBranchName || '',
+          ).trim(),
+        )
+        .filter(Boolean),
+    ),
+  ).sort((a, b) =>
+    a.localeCompare(b),
+  );
+
   const filteredItems = enrichedItems.filter((item: any) => {
     const projectText =
   `${item.projectId || ''} ${item.projectCustomerName || ''}`
@@ -22036,6 +22051,8 @@ const projectWiseSummary =
     paginatedItems,
 
   pendingMaterialFilterOptions,
+
+  activePendingBranches,
 
   summary: {
     totalPendingItems,

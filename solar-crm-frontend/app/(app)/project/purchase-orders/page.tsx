@@ -289,6 +289,10 @@ const [materialSpecFilter, setMaterialSpecFilter] = useState('');
 
 const [statusFilter, setStatusFilter] = useState('');
 const [branchFilter, setBranchFilter] = useState('');
+const [
+  activePendingBranches,
+  setActivePendingBranches,
+] = useState<string[]>([]);
 const [ownerFilter, setOwnerFilter] = useState('');
 const [
   workStateFilter,
@@ -649,6 +653,10 @@ const filteredPartyOptions = partyOptions.filter((party) =>
 
     setPendingMaterialFilterOptions(
   res.data?.pendingMaterialFilterOptions || [],
+);
+
+setActivePendingBranches(
+  res.data?.activePendingBranches || [],
 );
 
     setSummary(
@@ -3315,15 +3323,29 @@ const generateProformaInvoice = async () => {
   )}
 </select>
 
-  <input
-  placeholder="Filter by Branch"
+  <select
   value={branchFilter}
   onChange={(e) => {
-  setBranchFilter(e.target.value);
-  setPage(1);
-}}
+    setBranchFilter(e.target.value);
+    setPage(1);
+  }}
   className="rounded-xl border p-3"
-/>
+>
+  <option value="">
+    All Active Branches
+  </option>
+
+  {activePendingBranches.map(
+    (branch) => (
+      <option
+        key={branch}
+        value={branch}
+      >
+        {branch}
+      </option>
+    ),
+  )}
+</select>
 
 <select
   value={ownerFilter}
