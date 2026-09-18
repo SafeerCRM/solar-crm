@@ -20968,6 +20968,15 @@ const allPendingItems =
   projectOwnerRole:
     project?.projectOwnerRole || '',
 
+    projectConverterBrand:
+  project?.converterBrand || '',
+
+projectConverterCapacity:
+  project?.converterCapacity || '',
+
+projectConverterPhase:
+  project?.converterPhase || '',
+
   /*
    * Project operational work state.
    *
@@ -21190,23 +21199,41 @@ if (materialSearch) {
           }
 
           if (category === 'INVERTER') {
-            const key = [
-              'INVERTER',
-              brand.toUpperCase(),
-              materialName.toUpperCase(),
-            ].join('|');
+  const inverterBrand = String(
+    item.projectConverterBrand ||
+      brand ||
+      '',
+  ).trim();
 
-            return {
-              type: 'INVERTER',
-              key,
-              label: [
-                brand || 'Unbranded',
-                materialName,
-              ]
-                .filter(Boolean)
-                .join(' - '),
-            };
-          }
+  const inverterCapacity = String(
+    item.projectConverterCapacity ||
+      '',
+  ).trim();
+
+  const inverterPhase = String(
+    item.projectConverterPhase ||
+      '',
+  ).trim();
+
+  const key = [
+    'INVERTER',
+    inverterBrand.toUpperCase(),
+    inverterCapacity.toUpperCase(),
+    inverterPhase.toUpperCase(),
+  ].join('|');
+
+  return {
+    type: 'INVERTER',
+    key,
+    label: [
+      inverterBrand || 'Unbranded',
+      inverterCapacity,
+      inverterPhase,
+    ]
+      .filter(Boolean)
+      .join(' - '),
+  };
+}
 
           return null;
         })

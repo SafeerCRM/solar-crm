@@ -3394,6 +3394,24 @@ const generateProformaInvoice = async () => {
     <option value="PARTIALLY_PURCHASED">Partially Purchased</option>
     <option value="PURCHASED">Purchased</option>
   </select>
+
+  <button
+  type="button"
+  onClick={() => {
+    setProjectFilter('');
+    setMaterialFilter('');
+    setMaterialTypeFilter('');
+    setMaterialSpecFilter('');
+    setBranchFilter('');
+    setOwnerFilter('');
+    setStatusFilter('');
+    setWorkStateFilter('');
+    setPage(1);
+  }}
+  className="rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+>
+  Clear Filters
+</button>
 </div>
 
 <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
