@@ -429,6 +429,7 @@ const navItems = [
     'OFFICE_ASSISTANT',
     'TRADING_HEAD',
     'SOLAR_FRANCHISE',
+    'PROJECT_CONTRACTOR',
   ],
 },
 
