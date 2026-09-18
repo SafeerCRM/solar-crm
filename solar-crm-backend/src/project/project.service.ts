@@ -51660,17 +51660,15 @@ async getProjectInspectionHistory(
           'remainingMaterial',
         )
         .where(
-          `remainingMaterial."inspectionId"
+          `"remainingMaterial"."inspectionId"
             IN (:...inspectionIds)`,
-          {
-            inspectionIds,
-          },
+          { inspectionIds },
         )
         .andWhere(
-          `remainingMaterial."isHidden" = false`,
+          `"remainingMaterial"."isHidden" = false`,
         )
         .orderBy(
-          `remainingMaterial."createdAt"`,
+          `"remainingMaterial"."createdAt"`,
           'DESC',
         )
         .getMany()
