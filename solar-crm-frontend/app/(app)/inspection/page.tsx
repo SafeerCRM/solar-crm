@@ -71,6 +71,45 @@ type Pagination = {
   totalPages: number;
 };
 
+type RemainingMaterialItem = {
+  id: number;
+
+  inspectionId: number;
+  projectId: number;
+
+  customerId?: number | null;
+  customerCode?: string;
+  customerName?: string;
+  customerPhone?: string;
+
+  city?: string;
+  zone?: string;
+  branchName?: string;
+
+  projectStatus?: string;
+  projectWorkState?: string;
+
+  notes?: string;
+
+  photoUrls?: string[];
+
+  reportedBy?: number | null;
+  reportedByName?: string;
+  reportedByRole?: string;
+
+  inspectionDate?: string | null;
+  inspectionManagerName?: string;
+
+  createdAt?: string | null;
+};
+
+type RemainingMaterialPagination = {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+};
+
 type InspectionAnalyticsSummary = {
   totalVisits: number;
   completedVisits: number;
@@ -241,6 +280,49 @@ export default function InspectionPage() {
 
   const [loading, setLoading] =
     useState(false);
+
+    const [
+  remainingMaterials,
+  setRemainingMaterials,
+] = useState<
+  RemainingMaterialItem[]
+>([]);
+
+const [
+  remainingMaterialLoading,
+  setRemainingMaterialLoading,
+] = useState(false);
+
+const [
+  remainingMaterialSearch,
+  setRemainingMaterialSearch,
+] = useState('');
+
+const [
+  remainingMaterialCity,
+  setRemainingMaterialCity,
+] = useState('');
+
+const [
+  remainingMaterialPage,
+  setRemainingMaterialPage,
+] = useState(1);
+
+const [
+  remainingMaterialLimit,
+  setRemainingMaterialLimit,
+] = useState(10);
+
+const [
+  remainingMaterialPagination,
+  setRemainingMaterialPagination,
+] =
+  useState<RemainingMaterialPagination>({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 1,
+  });
 
     const [
   analytics,
@@ -518,6 +600,99 @@ const [page, setPage] =
         setLoading(false);
       }
     };
+
+    const fetchRemainingMaterials =
+  async () => {
+    try {
+      setRemainingMaterialLoading(
+        true,
+      );
+
+      const response =
+        await axios.get(
+          `${API_BASE_URL}/project/inspections/remaining-material`,
+          {
+            params: {
+              page:
+                remainingMaterialPage,
+
+              limit:
+                remainingMaterialLimit,
+
+              search:
+                remainingMaterialSearch
+                  .trim() ||
+                undefined,
+
+              city:
+                remainingMaterialCity
+                  .trim() ||
+                undefined,
+            },
+
+            headers:
+              getHeaders(),
+          },
+        );
+
+      setRemainingMaterials(
+        Array.isArray(
+          response.data?.data,
+        )
+          ? response.data.data
+          : [],
+      );
+
+      setRemainingMaterialPagination({
+        page:
+          Number(
+            response.data
+              ?.pagination
+              ?.page ||
+              remainingMaterialPage,
+          ),
+
+        limit:
+          Number(
+            response.data
+              ?.pagination
+              ?.limit ||
+              remainingMaterialLimit,
+          ),
+
+        total:
+          Number(
+            response.data
+              ?.pagination
+              ?.total ||
+              0,
+          ),
+
+        totalPages:
+          Math.max(
+            Number(
+              response.data
+                ?.pagination
+                ?.totalPages ||
+                1,
+            ),
+            1,
+          ),
+      });
+    } catch (error: any) {
+      console.error(error);
+
+      alert(
+        error?.response?.data
+          ?.message ||
+          'Failed to load remaining material',
+      );
+    } finally {
+      setRemainingMaterialLoading(
+        false,
+      );
+    }
+  };
 
     const fetchInspectionAnalytics =
   async () => {
@@ -870,6 +1045,35 @@ defects:
   inspectionState,
 ]);
 
+useEffect(() => {
+  const timeoutId =
+    window.setTimeout(() => {
+      fetchRemainingMaterials();
+    }, 300);
+
+  return () =>
+    window.clearTimeout(
+      timeoutId,
+    );
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [
+  remainingMaterialPage,
+  remainingMaterialLimit,
+  remainingMaterialSearch,
+  remainingMaterialCity,
+]);
+
+useEffect(() => {
+  setRemainingMaterialPage(
+    1,
+  );
+}, [
+  remainingMaterialSearch,
+  remainingMaterialCity,
+  remainingMaterialLimit,
+]);
+
   useEffect(() => {
   const timeoutId =
     window.setTimeout(() => {
@@ -933,6 +1137,355 @@ useEffect(() => {
           sites from one common list.
         </p>
       </div>
+
+      <div className="rounded-2xl border border-orange-200 bg-white p-5 shadow">
+  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+    <div>
+      <div className="flex flex-wrap items-center gap-3">
+        <h2 className="text-xl font-bold text-gray-900">
+          Remaining Material
+        </h2>
+
+        <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-bold text-orange-700">
+          {
+            remainingMaterialPagination.total
+          }{' '}
+          Reported
+        </span>
+      </div>
+
+      <p className="mt-1 text-sm text-gray-500">
+        Leftover or unused material
+        reported by site inspectors
+        during project inspections.
+      </p>
+    </div>
+
+    {remainingMaterialLoading && (
+      <p className="text-sm font-semibold text-orange-600">
+        Updating remaining material...
+      </p>
+    )}
+  </div>
+
+  <div className="mt-5 grid gap-3 md:grid-cols-2">
+    <TextField
+      size="small"
+      label="Search Remaining Material"
+      placeholder="Customer, phone, project, K-number, material or inspector"
+      value={
+        remainingMaterialSearch
+      }
+      onChange={(event) =>
+        setRemainingMaterialSearch(
+          event.target.value,
+        )
+      }
+      fullWidth
+    />
+
+    <TextField
+      size="small"
+      label="City"
+      placeholder="Filter by city"
+      value={
+        remainingMaterialCity
+      }
+      onChange={(event) =>
+        setRemainingMaterialCity(
+          event.target.value,
+        )
+      }
+      fullWidth
+    />
+  </div>
+
+  {!remainingMaterialLoading &&
+    remainingMaterials.length ===
+      0 && (
+      <div className="mt-5 rounded-xl border border-dashed border-gray-300 bg-gray-50 p-8 text-center">
+        <p className="font-semibold text-gray-700">
+          No remaining material
+          reported
+        </p>
+
+        <p className="mt-1 text-sm text-gray-500">
+          Material reported during
+          site inspections will appear
+          here.
+        </p>
+      </div>
+    )}
+
+  {remainingMaterials.length >
+    0 && (
+    <div className="mt-5 space-y-4">
+      {remainingMaterials.map(
+        (item) => (
+          <div
+            key={item.id}
+            className="rounded-2xl border border-orange-200 bg-orange-50 p-4"
+          >
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-base font-bold text-gray-900">
+                    {item.customerName ||
+                      `Project #${item.projectId}`}
+                  </h3>
+
+                  <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-bold text-orange-700">
+                    MATERIAL FOUND
+                  </span>
+                </div>
+
+                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-600">
+                  <span>
+                    Project #
+                    {item.projectId}
+                  </span>
+
+                  {item.customerCode && (
+                    <span>
+                      Customer:{' '}
+                      {
+                        item.customerCode
+                      }
+                    </span>
+                  )}
+
+                  {item.customerPhone && (
+                    <span>
+                      {
+                        item.customerPhone
+                      }
+                    </span>
+                  )}
+
+                  {item.city && (
+                    <span>
+                      {item.city}
+                    </span>
+                  )}
+
+                  {item.branchName && (
+                    <span>
+                      {
+                        item.branchName
+                      }
+                    </span>
+                  )}
+                </div>
+
+                <div className="mt-3 rounded-xl bg-white p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Material Details /
+                    Notes
+                  </p>
+
+                  <p className="mt-1 whitespace-pre-wrap text-sm text-gray-800">
+                    {item.notes ||
+                      '-'}
+                  </p>
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-gray-600">
+                  <span>
+                    Reported by:{' '}
+                    <strong className="text-gray-800">
+                      {item.reportedByName ||
+                        'Inspector'}
+                    </strong>
+                  </span>
+
+                  {item.inspectionManagerName && (
+                    <span>
+                      Inspection Manager:{' '}
+                      <strong className="text-gray-800">
+                        {
+                          item.inspectionManagerName
+                        }
+                      </strong>
+                    </span>
+                  )}
+
+                  <span>
+                    Reported:{' '}
+                    <strong className="text-gray-800">
+                      {formatDate(
+                        item.createdAt ||
+                          undefined,
+                      )}
+                    </strong>
+                  </span>
+
+                  {item.inspectionDate && (
+                    <span>
+                      Inspection:{' '}
+                      <strong className="text-gray-800">
+                        {formatDate(
+                          item.inspectionDate,
+                        )}
+                      </strong>
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex shrink-0 flex-wrap gap-2">
+                <Link
+                  href={`/inspection/${item.projectId}`}
+                  className="rounded-xl bg-orange-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-700"
+                >
+                  View Inspection
+                </Link>
+
+                <Link
+                  href={`/project/${item.projectId}`}
+                  className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-bold text-gray-700 transition hover:bg-gray-50"
+                >
+                  View Project
+                </Link>
+              </div>
+            </div>
+
+            {(item.photoUrls || [])
+              .length > 0 && (
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+                {(item.photoUrls || []).map(
+                  (
+                    photoUrl,
+                    photoIndex,
+                  ) => (
+                    <a
+                      key={`${item.id}-${photoIndex}`}
+                      href={photoUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="overflow-hidden rounded-xl border border-orange-200 bg-white"
+                    >
+                      <img
+                        src={photoUrl}
+                        alt={`Remaining material ${
+                          photoIndex + 1
+                        }`}
+                        className="h-28 w-full object-cover"
+                      />
+
+                      <p className="p-2 text-center text-xs font-semibold text-gray-600">
+                        Photo{' '}
+                        {photoIndex + 1}
+                      </p>
+                    </a>
+                  ),
+                )}
+              </div>
+            )}
+          </div>
+        ),
+      )}
+    </div>
+  )}
+
+  {remainingMaterialPagination.total >
+    0 && (
+    <div className="mt-5 flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-wrap items-center gap-3">
+        <p className="text-sm text-gray-600">
+          Page{' '}
+          {
+            remainingMaterialPagination.page
+          }{' '}
+          of{' '}
+          {
+            remainingMaterialPagination.totalPages
+          }{' '}
+          ·{' '}
+          {
+            remainingMaterialPagination.total
+          }{' '}
+          records
+        </p>
+
+        <select
+          value={
+            remainingMaterialLimit
+          }
+          onChange={(event) => {
+            setRemainingMaterialLimit(
+              Number(
+                event.target.value,
+              ),
+            );
+
+            setRemainingMaterialPage(
+              1,
+            );
+          }}
+          className="rounded-lg border bg-white px-3 py-2 text-sm"
+        >
+          <option value={5}>
+            5 / page
+          </option>
+
+          <option value={10}>
+            10 / page
+          </option>
+
+          <option value={20}>
+            20 / page
+          </option>
+
+          <option value={50}>
+            50 / page
+          </option>
+        </select>
+      </div>
+
+      <div className="flex gap-2">
+        <button
+          type="button"
+          disabled={
+            remainingMaterialPage <=
+            1
+          }
+          onClick={() =>
+            setRemainingMaterialPage(
+              (previous) =>
+                Math.max(
+                  previous - 1,
+                  1,
+                ),
+            )
+          }
+          className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Previous
+        </button>
+
+        <button
+          type="button"
+          disabled={
+            remainingMaterialPage >=
+            remainingMaterialPagination.totalPages
+          }
+          onClick={() =>
+            setRemainingMaterialPage(
+              (previous) =>
+                Math.min(
+                  previous + 1,
+                  remainingMaterialPagination.totalPages,
+                ),
+            )
+          }
+          className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  )}
+</div>
 
       <div className="rounded-2xl bg-white p-5 shadow">
   <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">

@@ -52219,6 +52219,283 @@ async saveProjectInspectionRemainingMaterial(
   };
 }
 
+async listProjectInspectionRemainingMaterials(
+  query: any = {},
+  user?: any,
+) {
+  this.assertInspectionViewAccess(
+    user,
+  );
+
+  const page = Math.max(
+    Number(query?.page || 1),
+    1,
+  );
+
+  const limit = Math.min(
+    Math.max(
+      Number(query?.limit || 10),
+      1,
+    ),
+    50,
+  );
+
+  const skip =
+    (page - 1) * limit;
+
+  const qb =
+    this
+      .projectInspectionRemainingMaterialRepository
+      .createQueryBuilder(
+        'remainingMaterial',
+      )
+      .leftJoin(
+        Project,
+        'project',
+        `project.id =
+          "remainingMaterial"."projectId"`,
+      )
+      .leftJoin(
+        ProjectInspection,
+        'inspection',
+        `inspection.id =
+          "remainingMaterial"."inspectionId"`,
+      )
+      .where(
+        `"remainingMaterial"."isHidden" = false`,
+      )
+      .andWhere(
+        `COALESCE(project."isHidden", false) = false`,
+      );
+
+  if (query?.search) {
+    const search =
+      `%${String(
+        query.search,
+      )
+        .trim()
+        .toLowerCase()}%`;
+
+    qb.andWhere(
+      `(
+        LOWER(
+          COALESCE(
+            project."customerName",
+            ''
+          )
+        ) LIKE :search
+
+        OR LOWER(
+          COALESCE(
+            project."customerPhone",
+            ''
+          )
+        ) LIKE :search
+
+        OR LOWER(
+          COALESCE(
+            project."customerCode",
+            ''
+          )
+        ) LIKE :search
+
+        OR LOWER(
+          COALESCE(
+            project."electricityKNumber",
+            ''
+          )
+        ) LIKE :search
+
+        OR LOWER(
+          COALESCE(
+            "remainingMaterial"."notes",
+            ''
+          )
+        ) LIKE :search
+
+        OR LOWER(
+          COALESCE(
+            "remainingMaterial"."reportedByName",
+            ''
+          )
+        ) LIKE :search
+
+        OR CAST(
+          project.id AS TEXT
+        ) LIKE :search
+      )`,
+      {
+        search,
+      },
+    );
+  }
+
+  if (query?.city) {
+    qb.andWhere(
+      `LOWER(
+        COALESCE(
+          project.city,
+          ''
+        )
+      ) LIKE :city`,
+      {
+        city:
+          `%${String(
+            query.city,
+          )
+            .trim()
+            .toLowerCase()}%`,
+      },
+    );
+  }
+
+  const total =
+    await qb.getCount();
+
+  const rows =
+    await qb
+      .select([
+        `"remainingMaterial"."id" AS "id"`,
+        `"remainingMaterial"."inspectionId" AS "inspectionId"`,
+        `"remainingMaterial"."projectId" AS "projectId"`,
+        `"remainingMaterial"."notes" AS "notes"`,
+        `"remainingMaterial"."photoUrls" AS "photoUrls"`,
+        `"remainingMaterial"."reportedBy" AS "reportedBy"`,
+        `"remainingMaterial"."reportedByName" AS "reportedByName"`,
+        `"remainingMaterial"."reportedByRole" AS "reportedByRole"`,
+        `"remainingMaterial"."createdAt" AS "createdAt"`,
+
+        `project."customerId" AS "customerId"`,
+        `project."customerCode" AS "customerCode"`,
+        `project."customerName" AS "customerName"`,
+        `project."customerPhone" AS "customerPhone"`,
+        `project.city AS "city"`,
+        `project.zone AS "zone"`,
+        `project."branchName" AS "branchName"`,
+        `project.status AS "projectStatus"`,
+        `project."projectWorkState" AS "projectWorkState"`,
+
+        `inspection."inspectionDate" AS "inspectionDate"`,
+        `inspection."inspectionManagerName" AS "inspectionManagerName"`,
+      ])
+      .orderBy(
+        `"remainingMaterial"."createdAt"`,
+        'DESC',
+      )
+      .offset(skip)
+      .limit(limit)
+      .getRawMany();
+
+  const data =
+    rows.map(
+      (row: any) => ({
+        id:
+          Number(row.id),
+
+        inspectionId:
+          Number(
+            row.inspectionId,
+          ),
+
+        projectId:
+          Number(
+            row.projectId,
+          ),
+
+        customerId:
+          row.customerId
+            ? Number(
+                row.customerId,
+              )
+            : null,
+
+        customerCode:
+          row.customerCode ||
+          '',
+
+        customerName:
+          row.customerName ||
+          '',
+
+        customerPhone:
+          row.customerPhone ||
+          '',
+
+        city:
+          row.city || '',
+
+        zone:
+          row.zone || '',
+
+        branchName:
+          row.branchName ||
+          '',
+
+        projectStatus:
+          row.projectStatus ||
+          '',
+
+        projectWorkState:
+          row.projectWorkState ||
+          '',
+
+        notes:
+          row.notes || '',
+
+        photoUrls:
+          row.photoUrls
+            ? String(
+                row.photoUrls,
+              )
+                .split(',')
+                .filter(Boolean)
+            : [],
+
+        reportedBy:
+          row.reportedBy
+            ? Number(
+                row.reportedBy,
+              )
+            : null,
+
+        reportedByName:
+          row.reportedByName ||
+          '',
+
+        reportedByRole:
+          row.reportedByRole ||
+          '',
+
+        inspectionDate:
+          row.inspectionDate ||
+          null,
+
+        inspectionManagerName:
+          row.inspectionManagerName ||
+          '',
+
+        createdAt:
+          row.createdAt ||
+          null,
+      }),
+    );
+
+  return {
+    data,
+
+    pagination: {
+      page,
+      limit,
+      total,
+
+      totalPages:
+        Math.ceil(
+          total / limit,
+        ) || 1,
+    },
+  };
+}
+
 async getInspectionAnalytics(
   query: any = {},
   user?: any,

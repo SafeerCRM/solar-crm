@@ -2235,6 +2235,55 @@ saveProjectInspectionRemainingMaterial(
   'CUSTOMER_MANAGER',
   'STOCK_MANAGER',
 )
+@Get(
+  'inspections/remaining-material',
+)
+listProjectInspectionRemainingMaterials(
+  @Query('page')
+  page?: string,
+
+  @Query('limit')
+  limit?: string,
+
+  @Query('search')
+  search?: string,
+
+  @Query('city')
+  city?: string,
+
+  @CurrentUser()
+  user?: any,
+) {
+  return this.projectService
+    .listProjectInspectionRemainingMaterials(
+      {
+        page:
+          Number(
+            page || 1,
+          ),
+
+        limit:
+          Number(
+            limit || 10,
+          ),
+
+        search:
+          search || '',
+
+        city:
+          city || '',
+      },
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'INSPECTION_MANAGER',
+  'MAINTENANCE_MANAGER',
+  'CUSTOMER_MANAGER',
+  'STOCK_MANAGER',
+)
 @Get('inspections/analytics')
 getInspectionAnalytics(
   @Query('fromDate')
