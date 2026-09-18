@@ -627,26 +627,15 @@ const filteredPartyOptions = partyOptions.filter((party) =>
       {
         params: {
   page,
-
   limit: 20,
-
-  projectSearch:
-    projectFilter,
-
-  materialSearch:
-    materialFilter,
-
-  status:
-    statusFilter,
-
-  branch:
-    branchFilter,
-
-  owner:
-    ownerFilter,
-
-  projectWorkState:
-    workStateFilter,
+  projectSearch: projectFilter,
+  materialSearch: materialFilter,
+  materialType: materialTypeFilter,
+  materialSpec: materialSpecFilter,
+  status: statusFilter,
+  branch: branchFilter,
+  owner: ownerFilter,
+  projectWorkState: workStateFilter,
 },
         headers: token
           ? {
@@ -1655,6 +1644,8 @@ const hideProformaInvoice = async (piId: number) => {
   projectFilter,
   materialFilter,
   statusFilter,
+  materialTypeFilter,
+materialSpecFilter,
   branchFilter,
   ownerFilter,
   workStateFilter,

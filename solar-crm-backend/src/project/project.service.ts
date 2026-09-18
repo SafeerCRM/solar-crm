@@ -20836,8 +20836,10 @@ async getPurchaseOrders(filters: {
 
   projectSearch?: string;
   materialSearch?: string;
+materialType?: string;
+materialSpec?: string;
 
-  status?: string;
+status?: string;
   branch?: string;
   owner?: string;
   projectWorkState?: string;
@@ -20869,6 +20871,18 @@ const materialSearch = String(
 )
   .trim()
   .toLowerCase();
+
+  const materialType = String(
+  filters.materialType || '',
+)
+  .trim()
+  .toUpperCase();
+
+const materialSpec = String(
+  filters.materialSpec || '',
+)
+  .trim()
+  .toUpperCase();
 
   const status = String(filters.status || '')
     .trim();
@@ -21026,6 +21040,80 @@ const materialBrand =
     .trim()
     .toLowerCase();
 
+    const normalizedCategory =
+  String(item.category || '')
+    .trim()
+    .toUpperCase();
+
+let itemMaterialSpec = '';
+
+if (normalizedCategory === 'PANEL') {
+  const normalizedName =
+    String(item.materialName || '')
+      .trim()
+      .toLowerCase();
+
+  let panelType = '';
+
+  if (
+    normalizedName.includes('non-dcr') ||
+    normalizedName.includes('non dcr')
+  ) {
+    panelType = 'NON-DCR';
+  } else if (
+    normalizedName.includes('dcr')
+  ) {
+    panelType = 'DCR';
+  }
+
+  itemMaterialSpec = [
+    'PANEL',
+    String(item.brand || '')
+      .trim()
+      .toUpperCase(),
+    panelType,
+  ].join('|');
+}
+
+if (normalizedCategory === 'INVERTER') {
+  const inverterBrand = String(
+    item.projectConverterBrand ||
+      item.brand ||
+      '',
+  )
+    .trim()
+    .toUpperCase();
+
+  const inverterCapacity = String(
+    item.projectConverterCapacity || '',
+  )
+    .trim()
+    .toUpperCase();
+
+  const inverterPhase = String(
+    item.projectConverterPhase || '',
+  )
+    .trim()
+    .toUpperCase();
+
+  itemMaterialSpec = [
+    'INVERTER',
+    inverterBrand,
+    inverterCapacity,
+    inverterPhase,
+  ].join('|');
+}
+
+const matchesMaterialType =
+  materialType
+    ? normalizedCategory === materialType
+    : true;
+
+const matchesMaterialSpec =
+  materialSpec
+    ? itemMaterialSpec === materialSpec
+    : true;
+
 /*
  * Legacy combined search remains available
  * for any older caller still using `search`.
@@ -21124,6 +21212,8 @@ if (materialSearch) {
   matchesLegacySearch &&
   matchesProjectSearch &&
   matchesMaterialSearch &&
+  matchesMaterialType &&
+  matchesMaterialSpec &&
   matchesStatus &&
   matchesBranch &&
   matchesOwner &&
