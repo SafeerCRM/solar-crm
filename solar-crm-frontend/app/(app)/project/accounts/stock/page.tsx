@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import axios from 'axios';
+import * as XLSX from 'xlsx';
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -198,6 +199,27 @@ const [stockFileForm, setStockFileForm] = useState({
   displayName: '',
   file: null as File | null,
 });
+
+const [stockFilePreviewOpen, setStockFilePreviewOpen] =
+  useState(false);
+
+const [stockFilePreviewLoading, setStockFilePreviewLoading] =
+  useState(false);
+
+const [stockFilePreviewName, setStockFilePreviewName] =
+  useState('');
+
+const [stockFilePreviewOriginalName, setStockFilePreviewOriginalName] =
+  useState('');
+
+const [stockFilePreviewWorkbook, setStockFilePreviewWorkbook] =
+  useState<XLSX.WorkBook | null>(null);
+
+const [stockFilePreviewSheet, setStockFilePreviewSheet] =
+  useState('');
+
+const [stockFilePreviewRows, setStockFilePreviewRows] =
+  useState<any[][]>([]);
 
 const [consumptions, setConsumptions] = useState<any[]>([]);
 const [consumptionLoading, setConsumptionLoading] =
@@ -1778,6 +1800,35 @@ const loadStockFiles = async () => {
   }
 };
 
+const showStockFileSheet = (
+  workbook: XLSX.WorkBook,
+  sheetName: string,
+) => {
+  const worksheet =
+    workbook.Sheets[sheetName];
+
+  if (!worksheet) {
+    setStockFilePreviewRows([]);
+    return;
+  }
+
+  const rows = XLSX.utils.sheet_to_json<any[]>(
+    worksheet,
+    {
+      header: 1,
+      defval: '',
+      raw: false,
+    },
+  );
+
+  setStockFilePreviewSheet(sheetName);
+
+  // Preview only. Original downloaded file remains untouched.
+  setStockFilePreviewRows(
+    rows.slice(0, 500),
+  );
+};
+
 const uploadStockFile = async () => {
   if (!stockFileForm.displayName.trim()) {
     alert('Please enter file name/details');
@@ -1848,13 +1899,30 @@ const uploadStockFile = async () => {
 };
 
 const viewStockFile = async (
-  fileId: number,
+  item: any,
 ) => {
   try {
-    const token = localStorage.getItem('token');
+    setStockFilePreviewLoading(true);
 
-    const res = await axios.get(
-      `${API_BASE_URL}/project/stock/files/${fileId}/access`,
+    setStockFilePreviewName(
+      item?.displayName || 'Stock File',
+    );
+
+    setStockFilePreviewOriginalName(
+      item?.originalFileName || '',
+    );
+
+    setStockFilePreviewWorkbook(null);
+    setStockFilePreviewSheet('');
+    setStockFilePreviewRows([]);
+
+    const token =
+      localStorage.getItem('token');
+
+    const accessRes = await axios.get(
+      `${API_BASE_URL}/project/stock/files/${Number(
+        item.id,
+      )}/access`,
       {
         headers: token
           ? {
@@ -1864,23 +1932,57 @@ const viewStockFile = async (
       },
     );
 
-    if (!res.data?.fileUrl) {
+    const fileUrl =
+      accessRes.data?.fileUrl;
+
+    if (!fileUrl) {
       alert('File URL not available');
       return;
     }
 
-    window.open(
-      res.data.fileUrl,
-      '_blank',
-      'noopener,noreferrer',
+    const fileRes = await axios.get(
+      fileUrl,
+      {
+        responseType: 'arraybuffer',
+      },
     );
+
+    const workbook = XLSX.read(
+      fileRes.data,
+      {
+        type: 'array',
+      },
+    );
+
+    if (
+      !workbook.SheetNames ||
+      workbook.SheetNames.length === 0
+    ) {
+      alert(
+        'No spreadsheet sheets found in this file',
+      );
+      return;
+    }
+
+    setStockFilePreviewWorkbook(
+      workbook,
+    );
+
+    showStockFileSheet(
+      workbook,
+      workbook.SheetNames[0],
+    );
+
+    setStockFilePreviewOpen(true);
   } catch (error: any) {
     console.error(error);
 
     alert(
       error?.response?.data?.message ||
-        'Failed to open stock file',
+        'Failed to preview stock file',
     );
+  } finally {
+    setStockFilePreviewLoading(false);
   }
 };
 
@@ -4168,16 +4270,15 @@ const filteredIncomingMaterials =
               <td className="p-3">
                 <div className="flex items-center gap-2">
   <button
-    type="button"
-    onClick={() =>
-      viewStockFile(
-        Number(item.id),
-      )
-    }
-    className="whitespace-nowrap rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
-  >
-    View
-  </button>
+  type="button"
+  disabled={stockFilePreviewLoading}
+  onClick={() =>
+    viewStockFile(item)
+  }
+  className="whitespace-nowrap rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+>
+  View
+</button>
 
   <button
     type="button"
@@ -4956,6 +5057,119 @@ const availableQty = Number(
   </div>
 
 </div>
+
+{stockFilePreviewOpen &&
+  stockFilePreviewWorkbook && (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4">
+      <div className="flex max-h-[95vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+
+        <div className="flex items-start justify-between gap-3 border-b p-4">
+          <div className="min-w-0">
+            <h2 className="truncate text-lg font-bold text-gray-900">
+              {stockFilePreviewName}
+            </h2>
+
+            <p className="mt-1 truncate text-xs text-gray-500">
+              {stockFilePreviewOriginalName}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() =>
+              setStockFilePreviewOpen(false)
+            }
+            className="shrink-0 rounded-lg border px-3 py-1.5 text-sm font-semibold text-gray-700"
+          >
+            Close
+          </button>
+        </div>
+
+        {stockFilePreviewWorkbook
+          .SheetNames.length > 1 && (
+          <div className="border-b p-3">
+            <label className="mb-1 block text-xs font-semibold text-gray-600">
+              Sheet
+            </label>
+
+            <select
+              value={stockFilePreviewSheet}
+              onChange={(e) =>
+                showStockFileSheet(
+                  stockFilePreviewWorkbook,
+                  e.target.value,
+                )
+              }
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm sm:w-72"
+            >
+              {stockFilePreviewWorkbook
+                .SheetNames.map(
+                  (sheetName) => (
+                    <option
+                      key={sheetName}
+                      value={sheetName}
+                    >
+                      {sheetName}
+                    </option>
+                  ),
+                )}
+            </select>
+          </div>
+        )}
+
+        <div className="flex-1 overflow-auto">
+          {stockFilePreviewRows.length ===
+          0 ? (
+            <div className="p-8 text-center text-sm text-gray-500">
+              No data found in this sheet.
+            </div>
+          ) : (
+            <table className="min-w-max border-collapse text-xs sm:text-sm">
+              <tbody>
+                {stockFilePreviewRows.map(
+                  (row, rowIndex) => (
+                    <tr
+                      key={rowIndex}
+                      className={
+                        rowIndex === 0
+                          ? 'bg-gray-100 font-semibold'
+                          : ''
+                      }
+                    >
+                      {row.map(
+                        (
+                          cell,
+                          cellIndex,
+                        ) => (
+                          <td
+                            key={
+                              cellIndex
+                            }
+                            className="max-w-[300px] whitespace-nowrap border border-gray-200 px-3 py-2"
+                          >
+                            {String(
+                              cell ?? '',
+                            )}
+                          </td>
+                        ),
+                      )}
+                    </tr>
+                  ),
+                )}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className="border-t bg-gray-50 px-4 py-2 text-xs text-gray-500">
+          Preview shows up to the first
+          500 rows of the selected sheet.
+          Download the file for the complete
+          original workbook.
+        </div>
+      </div>
+    </div>
+  )}
     </div>
   );
 }
