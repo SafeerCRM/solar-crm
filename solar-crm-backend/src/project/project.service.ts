@@ -7933,6 +7933,79 @@ async getStockFileAccess(
   };
 }
 
+async getStockFileDownload(
+  id: number,
+  user: any,
+) {
+  if (!this.canManageStock(user)) {
+    throw new ForbiddenException(
+      'You are not allowed to access stock files',
+    );
+  }
+
+  const stockFile =
+    await this.projectStockFileRepository.findOne({
+      where: {
+        id,
+        isHidden: false,
+      },
+    });
+
+  if (!stockFile) {
+    throw new NotFoundException(
+      'Stock file not found',
+    );
+  }
+
+  const supabaseUrl =
+    process.env.SUPABASE_URL;
+
+  const serviceKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  const bucket =
+    process.env
+      .SUPABASE_PROJECT_DOCUMENTS_BUCKET ||
+    'project-documents';
+
+  if (!supabaseUrl || !serviceKey) {
+    throw new BadRequestException(
+      'Supabase storage is not configured',
+    );
+  }
+
+  const supabase = createClient(
+    supabaseUrl,
+    serviceKey,
+  );
+
+  const { data, error } =
+    await supabase.storage
+      .from(bucket)
+      .createSignedUrl(
+        stockFile.filePath,
+        60 * 10,
+        {
+          download:
+            stockFile.originalFileName ||
+            true,
+        },
+      );
+
+  if (error || !data?.signedUrl) {
+    throw new BadRequestException(
+      error?.message ||
+        'Unable to generate stock file download URL',
+    );
+  }
+
+  return {
+    fileUrl: data.signedUrl,
+    fileName:
+      stockFile.originalFileName,
+  };
+}
+
 async updateStockItemDealerVisibility(
   stockItemId: number,
   body: any,

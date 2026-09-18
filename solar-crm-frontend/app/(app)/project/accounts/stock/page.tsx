@@ -145,6 +145,9 @@ const [receiveForm, setReceiveForm] = useState({
     totalStockValue: 0,
   });
 
+  const [stockFileSearch, setStockFileSearch] =
+  useState('');
+
   const [movements, setMovements] = useState<any[]>([]);
 const [movementLoading, setMovementLoading] = useState(false);
 
@@ -1881,6 +1884,41 @@ const viewStockFile = async (
   }
 };
 
+const downloadStockFile = async (
+  fileId: number,
+) => {
+  try {
+    const token =
+      localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/stock/files/${fileId}/download`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    if (!res.data?.fileUrl) {
+      alert('Download URL not available');
+      return;
+    }
+
+    window.location.href =
+      res.data.fileUrl;
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to download stock file',
+    );
+  }
+};
+
   useEffect(() => {
   loadStockItems(1);
   loadMaterialSummary();
@@ -2015,6 +2053,28 @@ const filteredIncomingMaterials =
 
     return searchableText.includes(search);
   });
+
+  const filteredStockFiles = stockFiles.filter(
+  (item: any) => {
+    const search =
+      stockFileSearch.trim().toLowerCase();
+
+    if (!search) {
+      return true;
+    }
+
+    const searchableText = [
+      item.displayName,
+      item.originalFileName,
+      item.uploadedByName,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+
+    return searchableText.includes(search);
+  },
+);
 
   return (
     <div className="mx-auto w-full max-w-7xl min-w-0 space-y-5 overflow-x-hidden">
@@ -3950,10 +4010,9 @@ const filteredIncomingMaterials =
   </div>
 </div>
 
-      <div className="rounded-2xl bg-white p-5 shadow">
-  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      
 
-    <div className="rounded-2xl bg-white p-5 shadow">
+    <div className="rounded-2xl bg-white p-4 shadow sm:p-5">
   <div>
     <h2 className="text-xl font-bold text-gray-800">
       Stock Files / Serial Number Files
@@ -4021,6 +4080,18 @@ const filteredIncomingMaterials =
     </button>
   </div>
 
+  <div className="mt-5">
+  <input
+    type="text"
+    value={stockFileSearch}
+    onChange={(e) =>
+      setStockFileSearch(e.target.value)
+    }
+    placeholder="Search by file name, original file or uploaded by..."
+    className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+  />
+</div>
+
   <div className="mt-6 overflow-x-auto">
     <table className="min-w-full text-sm">
       <thead>
@@ -4057,7 +4128,7 @@ const filteredIncomingMaterials =
               Loading files...
             </td>
           </tr>
-        ) : stockFiles.length === 0 ? (
+                ) : filteredStockFiles.length === 0 ? (
           <tr>
             <td
               colSpan={5}
@@ -4067,7 +4138,7 @@ const filteredIncomingMaterials =
             </td>
           </tr>
         ) : (
-          stockFiles.map((item: any) => (
+                    filteredStockFiles.map((item: any) => (
             <tr
               key={item.id}
               className="border-b"
@@ -4095,17 +4166,31 @@ const filteredIncomingMaterials =
               </td>
 
               <td className="p-3">
-                <button
-                  type="button"
-                  onClick={() =>
-                    viewStockFile(
-                      Number(item.id),
-                    )
-                  }
-                  className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
-                >
-                  View / Download
-                </button>
+                <div className="flex items-center gap-2">
+  <button
+    type="button"
+    onClick={() =>
+      viewStockFile(
+        Number(item.id),
+      )
+    }
+    className="whitespace-nowrap rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+  >
+    View
+  </button>
+
+  <button
+    type="button"
+    onClick={() =>
+      downloadStockFile(
+        Number(item.id),
+      )
+    }
+    className="whitespace-nowrap rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-200"
+  >
+    Download
+  </button>
+</div>
               </td>
             </tr>
           ))
@@ -4114,6 +4199,9 @@ const filteredIncomingMaterials =
     </table>
   </div>
 </div>
+
+<div className="rounded-2xl bg-white p-5 shadow">
+  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 
     <div>
       <h2 className="text-xl font-bold text-gray-800">

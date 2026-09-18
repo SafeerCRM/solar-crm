@@ -3143,7 +3143,7 @@ listProjectStockFiles(
 @UseInterceptors(
   FileInterceptor('file', {
     limits: {
-      fileSize: 12 * 1024 * 1024,
+      fileSize: 20 * 1024 * 1024,
     },
   }),
 )
@@ -3174,6 +3174,26 @@ getProjectStockFileAccess(
   @CurrentUser() user: any,
 ) {
   return this.projectService.getStockFileAccess(
+    id,
+    user,
+  );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'PROJECT_EXECUTIVE',
+  'ACCOUNT_MANAGER',
+  'STOCK_MANAGER',
+  'TRADING_MANAGER',
+  'TRADING_HEAD',
+)
+@Get('stock/files/:id/download')
+downloadProjectStockFile(
+  @Param('id', ParseIntPipe) id: number,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.getStockFileDownload(
     id,
     user,
   );
