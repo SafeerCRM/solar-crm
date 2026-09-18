@@ -961,65 +961,124 @@ electricityActivity,
                     )}
                   </div>
 
-                  <div className="w-full rounded-xl bg-gray-50 p-4 text-left md:w-[180px] md:text-right">
-                    <p className="text-sm text-gray-500">
-  Project Amount
-</p>
-
-<p className="text-lg font-bold text-gray-900">
-  {money(item.finalCost)}
-</p>
-
-<p className="mt-2 text-sm text-green-700">
-  Received:{' '}
-  <b>
-    {money(
-      item.projectReceivedAmount,
-    )}
-  </b>
-</p>
-
-<p className="mt-1 text-sm text-red-700">
-  Pending:{' '}
-  <b>
-    {money(
-      item.projectPendingAmount,
-    )}
-  </b>
-</p>
-
-                      <div className="mt-4 rounded-xl bg-white p-3 text-left">
-    <div className="flex items-center justify-between gap-2">
-      <p className="text-xs font-semibold text-gray-600">
-        Payment Received
-      </p>
-
-      <p className="text-xs font-bold text-green-700">
-        {item.paymentReceivedPercentage || 0}%
-      </p>
-    </div>
-
-    <div className="mt-2 h-2 overflow-hidden rounded-full bg-green-100">
-      <div
-        className="h-full rounded-full bg-green-600"
-        style={{
-          width: `${item.paymentReceivedPercentage || 0}%`,
-        }}
-      />
-    </div>
-
-    <p className="mt-2 text-xs text-gray-600">
-      {money(item.projectReceivedAmount)} / {money(item.finalCost)}
+                  <div className="w-full rounded-xl bg-gray-50 p-4 text-left md:w-[220px]">
+  {/* Current installment */}
+  <div>
+    <p className="text-xs font-bold uppercase tracking-wide text-blue-700">
+      {formatLabel(item.label)}
     </p>
+
+    <div className="mt-2 space-y-1 text-sm">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-gray-500">
+          Installment
+        </span>
+
+        <b className="text-gray-900">
+          {money(item.amount)}
+        </b>
+      </div>
+
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-gray-500">
+          Received
+        </span>
+
+        <b className="text-green-700">
+          {money(item.paidAmount)}
+        </b>
+      </div>
+
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-gray-500">
+          Pending
+        </span>
+
+        <b className="text-red-700">
+          {money(item.pendingAmount)}
+        </b>
+      </div>
+    </div>
   </div>
 
-                    <Link
-                      href={`/project/${item.projectId}`}
-                      className="mt-3 block rounded-xl bg-blue-600 px-4 py-2 text-center text-sm font-semibold text-white"
-                    >
-                      Open Project
-                    </Link>
-                  </div>
+  {/* Whole project */}
+  <div className="mt-4 border-t border-gray-200 pt-4">
+    <p className="text-xs font-bold uppercase tracking-wide text-gray-500">
+      Overall Project
+    </p>
+
+    <div className="mt-2 space-y-1 text-sm">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-gray-500">
+          Project Amount
+        </span>
+
+        <b className="text-gray-900">
+          {money(item.finalCost)}
+        </b>
+      </div>
+
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-gray-500">
+          Total Received
+        </span>
+
+        <b className="text-green-700">
+          {money(item.projectReceivedAmount)}
+        </b>
+      </div>
+
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-gray-500">
+          Total Pending
+        </span>
+
+        <b className="text-red-700">
+          {money(item.projectPendingAmount)}
+        </b>
+      </div>
+    </div>
+
+    <div className="mt-3 rounded-xl bg-white p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold text-gray-600">
+          Project Payment
+        </p>
+
+        <p className="text-xs font-bold text-green-700">
+          {item.paymentReceivedPercentage || 0}%
+        </p>
+      </div>
+
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-green-100">
+        <div
+          className="h-full rounded-full bg-green-600"
+          style={{
+            width: `${Math.min(
+              Number(
+                item.paymentReceivedPercentage || 0,
+              ),
+              100,
+            )}%`,
+          }}
+        />
+      </div>
+
+      <p className="mt-2 text-xs text-gray-600">
+        {money(item.projectReceivedAmount)}
+        {' / '}
+        {money(item.finalCost)}
+      </p>
+    </div>
+  </div>
+
+  <Link
+    href={`/project/${item.projectId}`}
+    className="mt-3 block rounded-xl bg-blue-600 px-4 py-2 text-center text-sm font-semibold text-white"
+  >
+    Open Project
+  </Link>
+</div>
                 </div>
               </div>
             ))}
