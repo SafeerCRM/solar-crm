@@ -390,6 +390,24 @@ type CustomerMaster = {
   branchName?: string;
 };
 
+type ProjectPanelOption = {
+  id: number;
+  label: string;
+  brandName: string;
+  capacityWatt: number;
+  panelCategory: 'DCR' | 'NONDCR';
+  panelType: 'P Type' | 'N Type';
+};
+
+type ProjectInverterOption = {
+  id: string;
+  label: string;
+  inverterType: 'ONGRID' | 'HYBRID';
+  brandName: string;
+  capacity: number;
+  phase: string;
+};
+
 function money(value?: number) {
   return `₹${Number(value || 0).toLocaleString('en-IN')}`;
 }
@@ -973,6 +991,25 @@ const [savingPaymentEdit, setSavingPaymentEdit] =
 const [editLoading, setEditLoading] =
   useState(false);
 
+  const [editMaterialOptions, setEditMaterialOptions] =
+  useState<{
+    panels: ProjectPanelOption[];
+    inverters: ProjectInverterOption[];
+  }>({
+    panels: [],
+    inverters: [],
+  });
+
+const [
+  selectedEditPanelOptionId,
+  setSelectedEditPanelOptionId,
+] = useState('');
+
+const [
+  selectedEditInverterOptionId,
+  setSelectedEditInverterOptionId,
+] = useState('');
+
   const [customerSearch, setCustomerSearch] = useState('');
 const [customerResults, setCustomerResults] = useState<CustomerMaster[]>([]);
 
@@ -1100,6 +1137,43 @@ setSiteLocationForm({
       setLoading(false);
     }
   };
+
+  const fetchEditMaterialOptions = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/calculator/meeting-material-options`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setEditMaterialOptions({
+      panels: Array.isArray(res.data?.panels)
+        ? res.data.panels
+        : [],
+
+      inverters: Array.isArray(res.data?.inverters)
+        ? res.data.inverters
+        : [],
+    });
+  } catch (error) {
+    console.error(
+      'Failed to load edit material options:',
+      error,
+    );
+
+    setEditMaterialOptions({
+      panels: [],
+      inverters: [],
+    });
+  }
+};
 
   const captureProjectSiteLocation =
   () => {
@@ -1865,6 +1939,65 @@ const formatDateForInput = (value?: string) => {
 const openEditProject = () => {
   if (!project) return;
 
+  const matchingPanelOptions =
+  editMaterialOptions.panels.filter(
+    (option) =>
+      String(option.brandName || '')
+        .trim()
+        .toLowerCase() ===
+      String(project.panelBrand || '')
+        .trim()
+        .toLowerCase(),
+  );
+
+const matchedPanelOption =
+  matchingPanelOptions.length === 1
+    ? matchingPanelOptions[0]
+    : undefined;
+
+const normalizeInverterCapacity = (
+  value: any,
+) =>
+  String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s*kw\s*$/i, '')
+    .trim();
+
+const normalizeInverterPhase = (
+  value: any,
+) =>
+  String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace('phase', 'ph');
+
+const matchedInverterOption =
+  editMaterialOptions.inverters.find(
+    (option) =>
+      String(option.brandName || '')
+        .trim()
+        .toLowerCase() ===
+        String(project.converterBrand || '')
+          .trim()
+          .toLowerCase() &&
+
+      normalizeInverterCapacity(
+        option.capacity,
+      ) ===
+        normalizeInverterCapacity(
+          project.converterCapacity,
+        ) &&
+
+      normalizeInverterPhase(
+        option.phase,
+      ) ===
+        normalizeInverterPhase(
+          project.converterPhase,
+        ),
+  );
+
   setEditForm({
     customerId: String((project as any).customerId || ''),
 customerCode: (project as any).customerCode || '',
@@ -1944,6 +2077,7 @@ solarFranchiseName: (project as any).solarFranchiseName || '',
 solarFranchisePhone: (project as any).solarFranchisePhone || '',
   });
 
+
   setCustomerSearch(
   (project as any).customerCode
     ? `${(project as any).customerCode} ${project.customerName || ''}`
@@ -1951,7 +2085,72 @@ solarFranchisePhone: (project as any).solarFranchisePhone || '',
 );
 setCustomerResults([]);
 
+setSelectedEditPanelOptionId(
+  matchedPanelOption
+    ? String(matchedPanelOption.id)
+    : '',
+);
+
+setSelectedEditInverterOptionId(
+  matchedInverterOption
+    ? String(matchedInverterOption.id)
+    : '',
+);
+
   setShowEditModal(true);
+};
+
+const handleEditPanelSelection = (
+  optionId: string,
+) => {
+  setSelectedEditPanelOptionId(optionId);
+
+  const selected =
+    editMaterialOptions.panels.find(
+      (option) =>
+        String(option.id) === optionId,
+    );
+
+  if (!selected) {
+    return;
+  }
+
+  setEditForm((prev) => ({
+    ...prev,
+    panelBrand: selected.brandName || '',
+  }));
+};
+
+const handleEditInverterSelection = (
+  optionId: string,
+) => {
+  setSelectedEditInverterOptionId(optionId);
+
+  const selected =
+    editMaterialOptions.inverters.find(
+      (option) =>
+        String(option.id) === optionId,
+    );
+
+  if (!selected) {
+    return;
+  }
+
+  setEditForm((prev) => ({
+    ...prev,
+
+    converterBrand:
+      selected.brandName || '',
+
+    converterCapacity:
+      selected.capacity !== undefined &&
+      selected.capacity !== null
+        ? String(selected.capacity)
+        : '',
+
+    converterPhase:
+      selected.phase || '',
+  }));
 };
 
 const saveEditProject = async () => {
@@ -4129,6 +4328,7 @@ const canWriteContractorComment =
   if (projectId) {
     fetchProject();
   }
+  fetchEditMaterialOptions();
 }, [projectId]);
 
 useEffect(() => {
@@ -6143,12 +6343,110 @@ if (
     Technical Details
   </h3>
 
-  <input placeholder="Panel Brand" value={editForm.panelBrand} onChange={(e) => setEditForm({ ...editForm, panelBrand: e.target.value })} className="rounded-xl border p-3" />
+  <div className="space-y-1">
+  <label className="text-sm font-medium text-gray-700">
+    Panel
+  </label>
+
+  <select
+    value={selectedEditPanelOptionId}
+    onChange={(e) =>
+      handleEditPanelSelection(e.target.value)
+    }
+    className="w-full rounded-xl border p-3"
+  >
+    {selectedEditPanelOptionId ? (
+      <option value="">
+        Select Panel
+      </option>
+    ) : editForm.panelBrand ? (
+      <option value="">
+        Current: {editForm.panelBrand}
+      </option>
+    ) : (
+      <option value="">
+        Select Panel
+      </option>
+    )}
+
+    {editMaterialOptions.panels.map((option) => (
+      <option
+        key={option.id}
+        value={String(option.id)}
+      >
+        {option.label}
+      </option>
+    ))}
+  </select>
+
+  {!selectedEditPanelOptionId &&
+    editForm.panelBrand && (
+      <p className="text-xs text-amber-700">
+        Current project value is preserved. Select a
+        Calculator Settings panel to replace it.
+      </p>
+    )}
+</div>
+
   <input placeholder="DCR Panel Count" value={editForm.dcrPanelCount} onChange={(e) => setEditForm({ ...editForm, dcrPanelCount: e.target.value })} className="rounded-xl border p-3" />
   <input placeholder="Non DCR Panel Count" value={editForm.nonDcrPanelCount} onChange={(e) => setEditForm({ ...editForm, nonDcrPanelCount: e.target.value })} className="rounded-xl border p-3" />
-  <input placeholder="Converter Brand" value={editForm.converterBrand} onChange={(e) => setEditForm({ ...editForm, converterBrand: e.target.value })} className="rounded-xl border p-3" />
-  <input placeholder="Converter Capacity" value={editForm.converterCapacity} onChange={(e) => setEditForm({ ...editForm, converterCapacity: e.target.value })} className="rounded-xl border p-3" />
-  <input placeholder="Converter Phase" value={editForm.converterPhase} onChange={(e) => setEditForm({ ...editForm, converterPhase: e.target.value })} className="rounded-xl border p-3" />
+  <div className="space-y-1">
+  <label className="text-sm font-medium text-gray-700">
+    Inverter
+  </label>
+
+  <select
+    value={selectedEditInverterOptionId}
+    onChange={(e) =>
+      handleEditInverterSelection(e.target.value)
+    }
+    className="w-full rounded-xl border p-3"
+  >
+    {selectedEditInverterOptionId ? (
+      <option value="">
+        Select Inverter
+      </option>
+    ) : (
+      <option value="">
+        {editForm.converterBrand ||
+        editForm.converterCapacity ||
+        editForm.converterPhase
+          ? `Current: ${[
+              editForm.converterBrand,
+              editForm.converterCapacity
+                ? `${editForm.converterCapacity} kW`
+                : '',
+              editForm.converterPhase,
+            ]
+              .filter(Boolean)
+              .join(' — ')}`
+          : 'Select Inverter'}
+      </option>
+    )}
+
+    {editMaterialOptions.inverters.map(
+      (option) => (
+        <option
+          key={option.id}
+          value={String(option.id)}
+        >
+          {option.label}
+        </option>
+      ),
+    )}
+  </select>
+
+  {!selectedEditInverterOptionId &&
+    (editForm.converterBrand ||
+      editForm.converterCapacity ||
+      editForm.converterPhase) && (
+      <p className="text-xs text-amber-700">
+        Current project value is preserved. Select a
+        Calculator Settings inverter to replace it.
+      </p>
+    )}
+</div>
+
   <input placeholder="Structure Type" value={editForm.structureType} onChange={(e) => setEditForm({ ...editForm, structureType: e.target.value })} className="rounded-xl border p-3" />
   <input placeholder="Structure Capacity KW" value={editForm.structureCapacityKw} onChange={(e) => setEditForm({ ...editForm, structureCapacityKw: e.target.value })} className="rounded-xl border p-3" />
   <input placeholder="Building Height" value={editForm.buildingHeight} onChange={(e) => setEditForm({ ...editForm, buildingHeight: e.target.value })} className="rounded-xl border p-3" />
