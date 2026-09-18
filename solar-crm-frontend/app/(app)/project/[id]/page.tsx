@@ -1939,15 +1939,16 @@ const formatDateForInput = (value?: string) => {
 const openEditProject = () => {
   if (!project) return;
 
-  const matchingPanelOptions =
+  const currentPanelBrand =
+  String(project.panelBrand || '').trim();
+
+const matchingPanelOptions =
   editMaterialOptions.panels.filter(
     (option) =>
       String(option.brandName || '')
         .trim()
         .toLowerCase() ===
-      String(project.panelBrand || '')
-        .trim()
-        .toLowerCase(),
+      currentPanelBrand.toLowerCase(),
   );
 
 const matchedPanelOption =
@@ -1973,8 +1974,8 @@ const normalizeInverterPhase = (
     .replace(/\s+/g, '')
     .replace('phase', 'ph');
 
-const matchedInverterOption =
-  editMaterialOptions.inverters.find(
+const matchingInverterOptions =
+  editMaterialOptions.inverters.filter(
     (option) =>
       String(option.brandName || '')
         .trim()
@@ -1997,6 +1998,11 @@ const matchedInverterOption =
           project.converterPhase,
         ),
   );
+
+const matchedInverterOption =
+  matchingInverterOptions.length === 1
+    ? matchingInverterOptions[0]
+    : undefined;
 
   setEditForm({
     customerId: String((project as any).customerId || ''),
@@ -2085,16 +2091,27 @@ solarFranchisePhone: (project as any).solarFranchisePhone || '',
 );
 setCustomerResults([]);
 
+const hasCurrentInverter =
+  Boolean(
+    String(project.converterBrand || '').trim() ||
+    String(project.converterCapacity || '').trim() ||
+    String(project.converterPhase || '').trim(),
+  );
+
 setSelectedEditPanelOptionId(
   matchedPanelOption
     ? String(matchedPanelOption.id)
-    : '',
+    : currentPanelBrand
+      ? '__legacy__'
+      : '',
 );
 
 setSelectedEditInverterOptionId(
   matchedInverterOption
     ? String(matchedInverterOption.id)
-    : '',
+    : hasCurrentInverter
+      ? '__legacy__'
+      : '',
 );
 
   setShowEditModal(true);
@@ -6355,19 +6372,16 @@ if (
     }
     className="w-full rounded-xl border p-3"
   >
-    {selectedEditPanelOptionId ? (
-      <option value="">
-        Select Panel
-      </option>
-    ) : editForm.panelBrand ? (
-      <option value="">
-        Current: {editForm.panelBrand}
-      </option>
-    ) : (
-      <option value="">
-        Select Panel
-      </option>
-    )}
+    <option value="">
+      Select Panel
+    </option>
+
+    {selectedEditPanelOptionId === '__legacy__' &&
+      editForm.panelBrand && (
+        <option value="__legacy__">
+          Current: {editForm.panelBrand}
+        </option>
+      )}
 
     {editMaterialOptions.panels.map((option) => (
       <option
@@ -6379,18 +6393,39 @@ if (
     ))}
   </select>
 
-  {!selectedEditPanelOptionId &&
-    editForm.panelBrand && (
-      <p className="text-xs text-amber-700">
-        Current project value is preserved. Select a
-        Calculator Settings panel to replace it.
-      </p>
-    )}
+  {selectedEditPanelOptionId === '__legacy__' && (
+    <p className="text-xs text-amber-700">
+      Current project value is preserved. Select a
+      Calculator Settings panel to replace it.
+    </p>
+  )}
 </div>
 
-  <input placeholder="DCR Panel Count" value={editForm.dcrPanelCount} onChange={(e) => setEditForm({ ...editForm, dcrPanelCount: e.target.value })} className="rounded-xl border p-3" />
-  <input placeholder="Non DCR Panel Count" value={editForm.nonDcrPanelCount} onChange={(e) => setEditForm({ ...editForm, nonDcrPanelCount: e.target.value })} className="rounded-xl border p-3" />
-  <div className="space-y-1">
+<input
+  placeholder="DCR Panel Count"
+  value={editForm.dcrPanelCount}
+  onChange={(e) =>
+    setEditForm({
+      ...editForm,
+      dcrPanelCount: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+/>
+
+<input
+  placeholder="Non DCR Panel Count"
+  value={editForm.nonDcrPanelCount}
+  onChange={(e) =>
+    setEditForm({
+      ...editForm,
+      nonDcrPanelCount: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+/>
+
+<div className="space-y-1">
   <label className="text-sm font-medium text-gray-700">
     Inverter
   </label>
@@ -6402,27 +6437,27 @@ if (
     }
     className="w-full rounded-xl border p-3"
   >
-    {selectedEditInverterOptionId ? (
-      <option value="">
-        Select Inverter
-      </option>
-    ) : (
-      <option value="">
-        {editForm.converterBrand ||
+    <option value="">
+      Select Inverter
+    </option>
+
+    {selectedEditInverterOptionId === '__legacy__' &&
+      (editForm.converterBrand ||
         editForm.converterCapacity ||
-        editForm.converterPhase
-          ? `Current: ${[
-              editForm.converterBrand,
-              editForm.converterCapacity
-                ? `${editForm.converterCapacity} kW`
-                : '',
-              editForm.converterPhase,
-            ]
-              .filter(Boolean)
-              .join(' — ')}`
-          : 'Select Inverter'}
-      </option>
-    )}
+        editForm.converterPhase) && (
+        <option value="__legacy__">
+          Current:{' '}
+          {[
+            editForm.converterBrand,
+            editForm.converterCapacity
+              ? `${editForm.converterCapacity} kW`
+              : '',
+            editForm.converterPhase,
+          ]
+            .filter(Boolean)
+            .join(' — ')}
+        </option>
+      )}
 
     {editMaterialOptions.inverters.map(
       (option) => (
@@ -6436,20 +6471,50 @@ if (
     )}
   </select>
 
-  {!selectedEditInverterOptionId &&
-    (editForm.converterBrand ||
-      editForm.converterCapacity ||
-      editForm.converterPhase) && (
-      <p className="text-xs text-amber-700">
-        Current project value is preserved. Select a
-        Calculator Settings inverter to replace it.
-      </p>
-    )}
+  {selectedEditInverterOptionId ===
+    '__legacy__' && (
+    <p className="text-xs text-amber-700">
+      Current project value is preserved. Select a
+      Calculator Settings inverter to replace it.
+    </p>
+  )}
 </div>
 
-  <input placeholder="Structure Type" value={editForm.structureType} onChange={(e) => setEditForm({ ...editForm, structureType: e.target.value })} className="rounded-xl border p-3" />
-  <input placeholder="Structure Capacity KW" value={editForm.structureCapacityKw} onChange={(e) => setEditForm({ ...editForm, structureCapacityKw: e.target.value })} className="rounded-xl border p-3" />
-  <input placeholder="Building Height" value={editForm.buildingHeight} onChange={(e) => setEditForm({ ...editForm, buildingHeight: e.target.value })} className="rounded-xl border p-3" />
+<input
+  placeholder="Structure Type"
+  value={editForm.structureType}
+  onChange={(e) =>
+    setEditForm({
+      ...editForm,
+      structureType: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+/>
+
+<input
+  placeholder="Structure Capacity KW"
+  value={editForm.structureCapacityKw}
+  onChange={(e) =>
+    setEditForm({
+      ...editForm,
+      structureCapacityKw: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+/>
+
+<input
+  placeholder="Building Height"
+  value={editForm.buildingHeight}
+  onChange={(e) =>
+    setEditForm({
+      ...editForm,
+      buildingHeight: e.target.value,
+    })
+  }
+  className="rounded-xl border p-3"
+/>
 
   <h3 className="col-span-full mt-4 text-lg font-bold text-gray-800">
     Finance Details
