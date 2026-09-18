@@ -251,6 +251,10 @@ import {
 } from './project-inspection-photo.entity';
 
 import {
+  ProjectInspectionRemainingMaterial,
+} from './project-inspection-remaining-material.entity';
+
+import {
   ProjectInsurance,
   ProjectInsuranceSource,
   ProjectInsuranceStatus,
@@ -2142,11 +2146,12 @@ private assertInspectionViewAccess(
     this.getUserRoles(user);
 
   const allowedRoles = [
-    'OWNER',
-    'INSPECTION_MANAGER',
-    'MAINTENANCE_MANAGER',
-    'CUSTOMER_MANAGER',
-  ];
+  'OWNER',
+  'INSPECTION_MANAGER',
+  'MAINTENANCE_MANAGER',
+  'CUSTOMER_MANAGER',
+  'STOCK_MANAGER',
+];
 
   if (
     !roles.some((role) =>
@@ -2166,11 +2171,12 @@ private assertInspectionManageAccess(
     this.getUserRoles(user);
 
   const allowedRoles = [
-    'OWNER',
-    'INSPECTION_MANAGER',
-    'MAINTENANCE_MANAGER',
-    'CUSTOMER_MANAGER',
-  ];
+  'OWNER',
+  'INSPECTION_MANAGER',
+  'MAINTENANCE_MANAGER',
+  'CUSTOMER_MANAGER',
+  'STOCK_MANAGER',
+];
 
   if (
     !roles.some((role) =>
@@ -2288,7 +2294,11 @@ private readonly projectInspectionDefectRepository:
 private readonly projectInspectionPhotoRepository:
   Repository<ProjectInspectionPhoto>,
 
-  @InjectRepository(GlobalDocumentVault)
+@InjectRepository(ProjectInspectionRemainingMaterial)
+private readonly projectInspectionRemainingMaterialRepository:
+  Repository<ProjectInspectionRemainingMaterial>,
+
+@InjectRepository(GlobalDocumentVault)
 private readonly globalDocumentVaultRepository:
   Repository<GlobalDocumentVault>,
 
@@ -4841,6 +4851,7 @@ const canUpdateLocation =
   roles.includes('INSPECTION_MANAGER') ||
   roles.includes('MAINTENANCE_MANAGER') ||
   roles.includes('CUSTOMER_MANAGER') ||
+  roles.includes('STOCK_MANAGER') ||
   isProjectOwner;
 
 if (!canUpdateLocation) {
@@ -51641,6 +51652,30 @@ async getProjectInspectionHistory(
           .getMany()
       : [];
 
+      const remainingMaterials =
+  inspectionIds.length
+    ? await this
+        .projectInspectionRemainingMaterialRepository
+        .createQueryBuilder(
+          'remainingMaterial',
+        )
+        .where(
+          `remainingMaterial."inspectionId"
+            IN (:...inspectionIds)`,
+          {
+            inspectionIds,
+          },
+        )
+        .andWhere(
+          `remainingMaterial."isHidden" = false`,
+        )
+        .orderBy(
+          `remainingMaterial."createdAt"`,
+          'DESC',
+        )
+        .getMany()
+    : [];
+
   return inspections.map(
     (inspection) => ({
       ...inspection,
@@ -51658,6 +51693,13 @@ async getProjectInspectionHistory(
             photo.inspectionId ===
             inspection.id,
         ),
+
+        remainingMaterials:
+  remainingMaterials.filter(
+    (remainingMaterial) =>
+      remainingMaterial.inspectionId ===
+      inspection.id,
+  ),
     }),
   );
 }
@@ -51938,6 +51980,244 @@ async uploadProjectInspectionPhotos(
 
     photos:
       uploadedPhotos,
+  };
+}
+
+async saveProjectInspectionRemainingMaterial(
+  inspectionId: number,
+  body: any,
+  files: any[],
+  user: any,
+) {
+  this.assertInspectionManageAccess(
+    user,
+  );
+
+  const inspection =
+    await this
+      .projectInspectionRepository
+      .findOne({
+        where: {
+          id: inspectionId,
+          isHidden: false,
+        } as any,
+      });
+
+  if (!inspection) {
+    throw new NotFoundException(
+      'Inspection not found',
+    );
+  }
+
+  const notes =
+    String(
+      body?.notes || '',
+    ).trim();
+
+  if (!notes) {
+    throw new BadRequestException(
+      'Remaining material notes are required',
+    );
+  }
+
+  if (
+    !Array.isArray(files) ||
+    files.length === 0
+  ) {
+    throw new BadRequestException(
+      'At least one remaining material photo is required',
+    );
+  }
+
+  const allowedTypes = [
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+  ];
+
+  const maximumSize =
+    5 * 1024 * 1024;
+
+  const supabaseUrl =
+    process.env.SUPABASE_URL;
+
+  const serviceKey =
+    process.env
+      .SUPABASE_SERVICE_ROLE_KEY;
+
+  const bucket =
+    process.env
+      .SUPABASE_PROJECT_DOCUMENTS_BUCKET ||
+    'project-documents';
+
+  if (
+    !supabaseUrl ||
+    !serviceKey
+  ) {
+    throw new BadRequestException(
+      'Supabase storage is not configured',
+    );
+  }
+
+  const supabase =
+    createClient(
+      supabaseUrl,
+      serviceKey,
+    );
+
+  const photoUrls: string[] = [];
+  const photoPaths: string[] = [];
+
+  for (const file of files) {
+    if (!file) {
+      continue;
+    }
+
+    const mimeType =
+      String(
+        file.mimetype || '',
+      );
+
+    if (
+      !allowedTypes.includes(
+        mimeType,
+      )
+    ) {
+      throw new BadRequestException(
+        'Only JPG, PNG and WEBP remaining material photos are allowed',
+      );
+    }
+
+    if (
+      Number(file.size || 0) >
+      maximumSize
+    ) {
+      throw new BadRequestException(
+        'Each remaining material photo must be less than 5 MB after compression',
+      );
+    }
+
+    const originalName =
+      String(
+        file.originalname ||
+          'remaining-material-photo',
+      );
+
+    const extension =
+      originalName.includes('.')
+        ? originalName
+            .split('.')
+            .pop()
+        : mimeType
+            .split('/')[1] ||
+          'jpg';
+
+    const safeExtension =
+      String(
+        extension || 'jpg',
+      ).replace(
+        /[^a-zA-Z0-9]/g,
+        '',
+      );
+
+    const filePath =
+      `project-inspections/project-${
+        inspection.projectId
+      }/inspection-${
+        inspection.id
+      }/remaining-material/${Date.now()}-${randomUUID()}.${safeExtension}`;
+
+    const uploadResult =
+      await supabase.storage
+        .from(bucket)
+        .upload(
+          filePath,
+          file.buffer,
+          {
+            contentType:
+              mimeType,
+            upsert: false,
+          },
+        );
+
+    if (uploadResult.error) {
+      throw new BadRequestException(
+        uploadResult.error.message,
+      );
+    }
+
+    const publicUrlResult =
+      supabase.storage
+        .from(bucket)
+        .getPublicUrl(
+          filePath,
+        );
+
+    photoUrls.push(
+      publicUrlResult.data.publicUrl,
+    );
+
+    photoPaths.push(
+      filePath,
+    );
+  }
+
+  if (!photoUrls.length) {
+    throw new BadRequestException(
+      'No remaining material photos were uploaded',
+    );
+  }
+
+  const remainingMaterial =
+    this
+      .projectInspectionRemainingMaterialRepository
+      .create({
+        inspectionId:
+          inspection.id,
+
+        projectId:
+          inspection.projectId,
+
+        notes,
+
+        photoUrls,
+
+        photoPaths,
+
+        reportedBy:
+          Number(
+            user?.id ||
+              user?.userId ||
+              user?.sub ||
+              0,
+          ) || undefined,
+
+        reportedByName:
+          user?.name ||
+          user?.email ||
+          '',
+
+        reportedByRole:
+          this
+            .getUserRoles(user)
+            .join(', '),
+
+        isHidden: false,
+      });
+
+  const saved =
+    await this
+      .projectInspectionRemainingMaterialRepository
+      .save(
+        remainingMaterial,
+      );
+
+  return {
+    message:
+      'Remaining material reported successfully',
+
+    remainingMaterial:
+      saved,
   };
 }
 

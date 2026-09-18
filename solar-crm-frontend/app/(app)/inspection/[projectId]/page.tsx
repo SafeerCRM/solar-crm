@@ -173,6 +173,23 @@ type InspectionPhoto = {
   createdAt?: string;
 };
 
+type InspectionRemainingMaterial = {
+  id: number;
+  inspectionId?: number;
+  projectId?: number;
+
+  notes?: string;
+
+  photoUrls?: string[];
+  photoPaths?: string[];
+
+  reportedBy?: number;
+  reportedByName?: string;
+  reportedByRole?: string;
+
+  createdAt?: string;
+};
+
 type InspectionHistory = {
   id: number;
 
@@ -199,7 +216,10 @@ type InspectionHistory = {
   followUpRemarks?: string;
 
   findings?: InspectionFinding[];
-  photos?: InspectionPhoto[];
+photos?: InspectionPhoto[];
+
+remainingMaterials?:
+  InspectionRemainingMaterial[];
 
   createdAt?: string;
 };
@@ -539,6 +559,21 @@ const [
     useState<FindingForm[]>(
       createInitialFindings(),
     );
+
+    const [
+  remainingMaterialFound,
+  setRemainingMaterialFound,
+] = useState(false);
+
+const [
+  remainingMaterialNotes,
+  setRemainingMaterialNotes,
+] = useState('');
+
+const [
+  remainingMaterialFiles,
+  setRemainingMaterialFiles,
+] = useState<File[]>([]);
 
   const getHeaders = () => {
     const token =
@@ -1167,6 +1202,28 @@ const longitude =
         return false;
       }
 
+      if (
+  remainingMaterialFound &&
+  !remainingMaterialNotes.trim()
+) {
+  alert(
+    'Please enter remaining material details',
+  );
+
+  return false;
+}
+
+if (
+  remainingMaterialFound &&
+  remainingMaterialFiles.length === 0
+) {
+  alert(
+    'Please upload at least one remaining material photo',
+  );
+
+  return false;
+}
+
       return true;
     };
 
@@ -1546,6 +1603,44 @@ const saveDefectUpdate =
           );
         }
 
+        if (remainingMaterialFound) {
+  const remainingMaterialFormData =
+    new FormData();
+
+  remainingMaterialFormData.append(
+    'notes',
+    remainingMaterialNotes.trim(),
+  );
+
+  for (
+    const file of
+    remainingMaterialFiles
+  ) {
+    const compressedFile =
+      await compressImageFile(
+        file,
+      );
+
+    remainingMaterialFormData.append(
+      'files',
+      compressedFile,
+    );
+  }
+
+  await axios.post(
+    `${API_BASE_URL}/project/inspections/${inspectionId}/remaining-material`,
+    remainingMaterialFormData,
+    {
+      headers: {
+        ...getHeaders(),
+
+        'Content-Type':
+          'multipart/form-data',
+      },
+    },
+  );
+}
+
         alert(
           'Site inspection submitted successfully',
         );
@@ -1581,10 +1676,22 @@ const saveDefectUpdate =
         );
 
         setFindings(
-          createInitialFindings(),
-        );
+  createInitialFindings(),
+);
 
-        await fetchInspectionHistory();
+setRemainingMaterialFound(
+  false,
+);
+
+setRemainingMaterialNotes(
+  '',
+);
+
+setRemainingMaterialFiles(
+  [],
+);
+
+await fetchInspectionHistory();
 
         window.scrollTo({
           top: 0,
@@ -2027,6 +2134,106 @@ const saveDefectUpdate =
           <h2 className="text-xl font-bold text-gray-900">
             New Site Inspection
           </h2>
+
+          <div className="mt-5 rounded-2xl border border-orange-200 bg-orange-50 p-4">
+  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <h3 className="font-bold text-gray-900">
+        Remaining Material
+      </h3>
+
+      <p className="mt-1 text-sm text-gray-600">
+        Report any unused or leftover
+        material found at the project site.
+      </p>
+    </div>
+
+    <label className="flex items-center gap-3 rounded-xl bg-white px-4 py-3">
+      <input
+        type="checkbox"
+        checked={
+          remainingMaterialFound
+        }
+        onChange={(event) => {
+          const checked =
+            event.target.checked;
+
+          setRemainingMaterialFound(
+            checked,
+          );
+
+          if (!checked) {
+            setRemainingMaterialNotes(
+              '',
+            );
+
+            setRemainingMaterialFiles(
+              [],
+            );
+          }
+        }}
+        className="h-5 w-5"
+      />
+
+      <span className="text-sm font-bold text-gray-800">
+        Remaining material found
+      </span>
+    </label>
+  </div>
+
+  {remainingMaterialFound && (
+    <div className="mt-4 grid gap-3 md:grid-cols-2">
+      <textarea
+        placeholder="Enter remaining material details, quantity and notes (e.g. 3 pipes, cable, structure pieces)"
+        value={
+          remainingMaterialNotes
+        }
+        onChange={(event) =>
+          setRemainingMaterialNotes(
+            event.target.value,
+          )
+        }
+        rows={4}
+        className="rounded-xl border bg-white p-3"
+      />
+
+      <div>
+        <input
+          type="file"
+          multiple
+          accept=".jpg,.jpeg,.png,.webp,image/*"
+          onChange={(event) =>
+            setRemainingMaterialFiles(
+              Array.from(
+                event.target.files ||
+                  [],
+              ),
+            )
+          }
+          className="w-full rounded-xl border bg-white p-3"
+        />
+
+        <p className="mt-2 text-xs text-gray-500">
+          Upload clear photos of the
+          remaining material. Multiple
+          photos are allowed.
+        </p>
+
+        {remainingMaterialFiles.length >
+          0 && (
+          <div className="mt-3 rounded-xl bg-white p-3 text-sm font-semibold text-gray-700">
+            {
+              remainingMaterialFiles.length
+            }{' '}
+            photo(s) selected. Photos
+            will be automatically
+            compressed before upload.
+          </div>
+        )}
+      </div>
+    </div>
+  )}
+</div>
 
           <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <DatePicker
@@ -2689,6 +2896,92 @@ function InspectionHistoryCard({
           </p>
         </div>
       )}
+
+      {(inspection.remainingMaterials || [])
+  .length > 0 && (
+  <div className="mt-4 space-y-3">
+    {(inspection.remainingMaterials || []).map(
+      (remainingMaterial) => (
+        <div
+          key={remainingMaterial.id}
+          className="rounded-xl border border-orange-200 bg-orange-50 p-4"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h4 className="font-bold text-gray-900">
+                Remaining Material
+              </h4>
+
+              <p className="mt-1 text-xs text-gray-500">
+                Reported by{' '}
+                <span className="font-semibold text-gray-700">
+                  {remainingMaterial.reportedByName ||
+                    'Inspector'}
+                </span>
+
+                {remainingMaterial.createdAt
+                  ? ` · ${formatDateTime(
+                      remainingMaterial.createdAt,
+                    )}`
+                  : ''}
+              </p>
+            </div>
+
+            <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-bold text-orange-700">
+              MATERIAL FOUND
+            </span>
+          </div>
+
+          {remainingMaterial.notes && (
+            <div className="mt-3 rounded-xl bg-white p-3">
+              <p className="text-xs font-semibold text-gray-500">
+                Material Details / Notes
+              </p>
+
+              <p className="mt-1 whitespace-pre-wrap text-sm text-gray-800">
+                {remainingMaterial.notes}
+              </p>
+            </div>
+          )}
+
+          {(remainingMaterial.photoUrls ||
+            []).length > 0 && (
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+              {(remainingMaterial.photoUrls ||
+                []).map(
+                (
+                  photoUrl,
+                  photoIndex,
+                ) => (
+                  <a
+                    key={`${remainingMaterial.id}-${photoIndex}`}
+                    href={photoUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="overflow-hidden rounded-xl border bg-white"
+                  >
+                    <img
+                      src={photoUrl}
+                      alt={`Remaining material photo ${
+                        photoIndex + 1
+                      }`}
+                      className="h-32 w-full object-cover"
+                    />
+
+                    <p className="p-2 text-xs font-semibold text-gray-600">
+                      Material Photo{' '}
+                      {photoIndex + 1}
+                    </p>
+                  </a>
+                ),
+              )}
+            </div>
+          )}
+        </div>
+      ),
+    )}
+  </div>
+)}
 
       <div className="mt-5 space-y-4">
         {(inspection.findings ||

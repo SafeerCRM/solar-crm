@@ -2050,6 +2050,7 @@ getBillingInvoiceNumberPreview(
   'INSPECTION_MANAGER',
   'MAINTENANCE_MANAGER',
   'CUSTOMER_MANAGER',
+  'STOCK_MANAGER',
 )
 @Get('inspections/projects')
 listInspectionProjects(
@@ -2095,6 +2096,7 @@ inspectionState?: string,
   'INSPECTION_MANAGER',
   'MAINTENANCE_MANAGER',
   'CUSTOMER_MANAGER',
+  'STOCK_MANAGER',
 )
 @Post('inspections')
 createProjectInspection(
@@ -2112,6 +2114,7 @@ createProjectInspection(
   'INSPECTION_MANAGER',
   'MAINTENANCE_MANAGER',
   'CUSTOMER_MANAGER',
+  'STOCK_MANAGER',
 )
 @Post('inspections/:inspectionId/findings')
 saveProjectInspectionFindings(
@@ -2135,6 +2138,7 @@ saveProjectInspectionFindings(
   'INSPECTION_MANAGER',
   'MAINTENANCE_MANAGER',
   'CUSTOMER_MANAGER',
+  'STOCK_MANAGER',
 )
 @Get(':projectId/inspections')
 getProjectInspectionHistory(
@@ -2155,6 +2159,7 @@ getProjectInspectionHistory(
   'INSPECTION_MANAGER',
   'MAINTENANCE_MANAGER',
   'CUSTOMER_MANAGER',
+  'STOCK_MANAGER',
 )
 @Post(
   'inspections/:inspectionId/photos/upload',
@@ -2191,6 +2196,44 @@ uploadProjectInspectionPhotos(
   'INSPECTION_MANAGER',
   'MAINTENANCE_MANAGER',
   'CUSTOMER_MANAGER',
+  'STOCK_MANAGER',
+)
+@Post(
+  'inspections/:inspectionId/remaining-material',
+)
+@UseInterceptors(
+  FilesInterceptor(
+    'files',
+    30,
+  ),
+)
+saveProjectInspectionRemainingMaterial(
+  @Param('inspectionId')
+  inspectionId: string,
+
+  @Body()
+  body: any,
+
+  @UploadedFiles()
+  files: any[],
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService.saveProjectInspectionRemainingMaterial(
+    Number(inspectionId),
+    body,
+    files,
+    user,
+  );
+}
+
+@Roles(
+  'OWNER',
+  'INSPECTION_MANAGER',
+  'MAINTENANCE_MANAGER',
+  'CUSTOMER_MANAGER',
+  'STOCK_MANAGER',
 )
 @Get('inspections/analytics')
 getInspectionAnalytics(
@@ -2303,6 +2346,7 @@ visitLimit:
   'INSPECTION_MANAGER',
   'MAINTENANCE_MANAGER',
   'CUSTOMER_MANAGER',
+  'STOCK_MANAGER',
 )
 @Patch(
   'inspection-defects/:defectId',

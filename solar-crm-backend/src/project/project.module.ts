@@ -78,6 +78,10 @@ import {
 } from './project-inspection-photo.entity';
 
 import {
+  ProjectInspectionRemainingMaterial,
+} from './project-inspection-remaining-material.entity';
+
+import {
   GlobalDocumentVault,
 } from './global-document-vault.entity';
 
@@ -112,7 +116,9 @@ import {
     TypeOrmModule.forFeature([Project, 
      ProjectInspection,
 ProjectInspectionDefect,
-ProjectInspectionPhoto, GlobalDocumentVault,
+ProjectInspectionPhoto,
+ProjectInspectionRemainingMaterial,
+ GlobalDocumentVault,
 ProjectInsurancePlan,
 ProjectInsurance,
 ProjectInsuranceDocument,
