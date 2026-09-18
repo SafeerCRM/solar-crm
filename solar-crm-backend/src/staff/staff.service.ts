@@ -163,24 +163,58 @@ private readonly payrollMetricResolverService:
     const limit = Math.min(Math.max(Number(query.limit || 20), 1), 100);
     const showHidden = query.showHidden === 'true';
 
-    const where: any = {
-      isHidden: showHidden,
-    };
+    const search =
+  String(query.search || '').trim();
 
-    if (query.search) {
-      where.fullName = ILike(`%${query.search}%`);
-    }
+const baseWhere: any = {
+  isHidden: showHidden,
+};
 
-    if (query.branchName) where.branchName = query.branchName;
-    if (query.department) where.department = query.department;
-    if (query.designation) where.designation = query.designation;
+if (query.branchName) {
+  baseWhere.branchName =
+    query.branchName;
+}
 
-    const [data, total] = await this.staffRepo.findAndCount({
-      where,
-      order: { createdAt: 'DESC' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+if (query.department) {
+  baseWhere.department =
+    query.department;
+}
+
+if (query.designation) {
+  baseWhere.designation =
+    query.designation;
+}
+
+const where = search
+  ? [
+      {
+        ...baseWhere,
+        fullName:
+          ILike(`%${search}%`),
+      },
+      {
+        ...baseWhere,
+        employeeCode:
+          ILike(`%${search}%`),
+      },
+      {
+        ...baseWhere,
+        mobile:
+          ILike(`%${search}%`),
+      },
+    ]
+  : baseWhere;
+
+const [data, total] =
+  await this.staffRepo.findAndCount({
+    where,
+    order: {
+      createdAt: 'DESC',
+    },
+    skip:
+      (page - 1) * limit,
+    take: limit,
+  });
 
     return {
       data,

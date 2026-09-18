@@ -191,14 +191,19 @@ const [
     setTotalPages(res.data?.totalPages || 1);
   };
 
-  const fetchStaff = async () => {
+  const fetchStaff = async (
+  searchValue = '',
+) => {
   const res = await axios.get(
     `${API_BASE_URL}/staff`,
     {
       params: {
         page: 1,
-        limit: 100,
+        limit: 20,
         showHidden: false,
+        search:
+          searchValue.trim() ||
+          undefined,
       },
       headers: headers(),
     },
@@ -285,6 +290,28 @@ useEffect(() => {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, []);
+
+useEffect(() => {
+  if (!showStaffOptions) {
+    return;
+  }
+
+  const timer = window.setTimeout(
+    () => {
+      fetchStaff(staffSearch);
+    },
+    300,
+  );
+
+  return () => {
+    window.clearTimeout(timer);
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [
+  staffSearch,
+  showStaffOptions,
+]);
 
 useEffect(() => {
   fetchPenalties();
