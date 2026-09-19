@@ -2205,6 +2205,8 @@ const addManualPiItem = () => {
     gstPercent: '18',
     discountAmount: '0',
   });
+
+  setManualPiMaterialSearch('');
 };
 
 const createManualPi =
@@ -2597,6 +2599,8 @@ const addManualInvoiceItem = () => {
   gstPercent: '18',
   discountAmount: '0',
 });
+
+setManualInvoiceMaterialSearch('');
 };
 
 const createManualInvoice =
@@ -4110,45 +4114,105 @@ const generateProformaInvoice = async () => {
   />
 </div>
 
-    <select
-  value={manualPi.itemName}
-  onChange={(e) => {
-    const selected = materials.find(
-      (material) =>
-        material.name === e.target.value,
-    );
+    <div className="relative">
+  <input
+    type="text"
+    value={manualPiMaterialSearch}
+    onChange={(e) =>
+      setManualPiMaterialSearch(
+        e.target.value,
+      )
+    }
+    placeholder={
+      manualPi.itemName
+        ? manualPi.itemName
+        : 'Search Material'
+    }
+    className="w-full rounded-xl border p-3"
+  />
 
-    setManualPi({
-      ...manualPi,
-      materialId: selected?.id ? String(selected.id) : '',
-      itemName: selected?.name || '',
-      category: selected?.category || '',
-      brand: selected?.brand || '',
-      unit: selected?.unit || '',
-      hsnCode: selected?.hsnCode || '',
-      sellingRate: String(
-        selected?.rate || '',
-      ),
-      gstPercent: String(
-        selected?.gstPercent || '18',
-      ),
-    });
-  }}
-  className="rounded-xl border p-3"
->
-  <option value="">
-    Select Material
-  </option>
+  {manualPiMaterialSearch.trim() && (
+    <div className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border bg-white shadow-lg">
+      {manualPiMaterialResults.length ===
+      0 ? (
+        <div className="p-3 text-sm text-gray-500">
+          No matching material found
+        </div>
+      ) : (
+        manualPiMaterialResults.map(
+          (material) => (
+            <button
+              key={material.id}
+              type="button"
+              onClick={() => {
+                setManualPi({
+                  ...manualPi,
 
-  {materials.map((material) => (
-    <option
-      key={material.id}
-      value={material.name}
-    >
-      {material.name}
-    </option>
-  ))}
-</select>
+                  materialId: String(
+                    material.id,
+                  ),
+
+                  itemName:
+                    material.name || '',
+
+                  category:
+                    material.category || '',
+
+                  brand:
+                    material.brand || '',
+
+                  unit:
+                    material.unit || '',
+
+                  hsnCode:
+                    material.hsnCode || '',
+
+                  sellingRate: String(
+                    material.rate || '',
+                  ),
+
+                  gstPercent: String(
+                    material.gstPercent ||
+                      '18',
+                  ),
+                });
+
+                setManualPiMaterialSearch(
+                  '',
+                );
+              }}
+              className="block w-full border-b px-4 py-3 text-left last:border-b-0 hover:bg-gray-50"
+            >
+              <p className="text-sm font-semibold text-gray-800">
+                {material.name}
+              </p>
+
+              <p className="mt-1 text-xs text-gray-500">
+                {[
+                  material.category,
+                  material.brand,
+                  material.unit,
+                  material.hsnCode
+                    ? `HSN: ${material.hsnCode}`
+                    : '',
+                ]
+                  .filter(Boolean)
+                  .join(' • ')}
+              </p>
+            </button>
+          ),
+        )
+      )}
+    </div>
+  )}
+
+  {manualPi.itemName &&
+    !manualPiMaterialSearch && (
+      <p className="mt-1 text-xs font-semibold text-green-700">
+        Selected: {manualPi.itemName}
+      </p>
+    )}
+</div>
 
     <input
       placeholder="Category"
@@ -4623,44 +4687,101 @@ onChange={(e) =>
   />
 </div>
 
-    <select
-  value={manualInvoice.itemName}
-  onChange={(e) => {
-    const selected = materials.find(
-      (material) =>
-        material.name === e.target.value,
-    );
+    <div className="relative">
+  <input
+    type="text"
+    value={manualInvoiceMaterialSearch}
+    onChange={(e) =>
+      setManualInvoiceMaterialSearch(
+        e.target.value,
+      )
+    }
+    placeholder={
+      manualInvoice.itemName
+        ? manualInvoice.itemName
+        : 'Search Material'
+    }
+    className="w-full rounded-xl border p-3"
+  />
 
-    setManualInvoice({
-      ...manualInvoice,
-      itemName: selected?.name || '',
-      category: selected?.category || '',
-      brand: selected?.brand || '',
-      unit: selected?.unit || '',
-      hsnCode: selected?.hsnCode || '',
-      finalRate: String(
-        selected?.rate || '',
-      ),
-      gstPercent: String(
-        selected?.gstPercent || '18',
-      ),
-    });
-  }}
-  className="rounded-xl border p-3"
->
-  <option value="">
-    Select Material
-  </option>
+  {manualInvoiceMaterialSearch.trim() && (
+    <div className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border bg-white shadow-lg">
+      {manualInvoiceMaterialResults.length ===
+      0 ? (
+        <div className="p-3 text-sm text-gray-500">
+          No matching material found
+        </div>
+      ) : (
+        manualInvoiceMaterialResults.map(
+          (material) => (
+            <button
+              key={material.id}
+              type="button"
+              onClick={() => {
+                setManualInvoice({
+                  ...manualInvoice,
 
-  {materials.map((material) => (
-    <option
-      key={material.id}
-      value={material.name}
-    >
-      {material.name}
-    </option>
-  ))}
-</select>
+                  itemName:
+                    material.name || '',
+
+                  category:
+                    material.category || '',
+
+                  brand:
+                    material.brand || '',
+
+                  unit:
+                    material.unit || '',
+
+                  hsnCode:
+                    material.hsnCode || '',
+
+                  finalRate: String(
+                    material.rate || '',
+                  ),
+
+                  gstPercent: String(
+                    material.gstPercent ||
+                      '18',
+                  ),
+                });
+
+                setManualInvoiceMaterialSearch(
+                  '',
+                );
+              }}
+              className="block w-full border-b px-4 py-3 text-left last:border-b-0 hover:bg-gray-50"
+            >
+              <p className="text-sm font-semibold text-gray-800">
+                {material.name}
+              </p>
+
+              <p className="mt-1 text-xs text-gray-500">
+                {[
+                  material.category,
+                  material.brand,
+                  material.unit,
+                  material.hsnCode
+                    ? `HSN: ${material.hsnCode}`
+                    : '',
+                ]
+                  .filter(Boolean)
+                  .join(' • ')}
+              </p>
+            </button>
+          ),
+        )
+      )}
+    </div>
+  )}
+
+  {manualInvoice.itemName &&
+    !manualInvoiceMaterialSearch && (
+      <p className="mt-1 text-xs font-semibold text-green-700">
+        Selected: {manualInvoice.itemName}
+      </p>
+    )}
+</div>
 
     <input
       placeholder="Category"
