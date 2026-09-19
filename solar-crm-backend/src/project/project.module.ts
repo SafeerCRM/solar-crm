@@ -112,6 +112,8 @@ import {
   ProjectInsuranceRequestDocument,
 } from './project-insurance-request-document.entity';
 
+import { StaffMember } from '../staff/staff-member.entity';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([Project, 
@@ -152,7 +154,7 @@ TelecallingContact,
 ProjectTimelineRule,
 ProjectTimelineEvent,
 ProjectTimelineDelayNote,
-ProjectTimelineDelayProof, User,]),
+ProjectTimelineDelayProof, User, StaffMember,]),
     CalculatorModule,
   ],
   controllers: [ProjectController],
