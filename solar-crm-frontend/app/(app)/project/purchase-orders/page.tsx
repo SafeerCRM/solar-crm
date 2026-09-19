@@ -313,6 +313,16 @@ const [billingEntities, setBillingEntities] =
   useState<BillingEntity[]>([]);
 const [selectedVendorId, setSelectedVendorId] = useState('');
 const [materials, setMaterials] = useState<MaterialMasterItem[]>([]);
+const [manualPoMaterialSearch, setManualPoMaterialSearch] =
+  useState('');
+
+const [manualPiMaterialSearch, setManualPiMaterialSearch] =
+  useState('');
+
+const [
+  manualInvoiceMaterialSearch,
+  setManualInvoiceMaterialSearch,
+] = useState('');
 const [selectedItemIds, setSelectedItemIds] = useState<Record<number, boolean>>({});
 const [generatingPo, setGeneratingPo] = useState(false);
 const [generatedPos, setGeneratedPos] = useState<
@@ -524,6 +534,46 @@ const [
   loadingPiFinalInvoiceNumberId,
   setLoadingPiFinalInvoiceNumberId,
 ] = useState<number | null>(null);
+
+const filterMaterialsBySearch = (
+  search: string,
+) => {
+  const query = search.trim().toLowerCase();
+
+  if (!query) {
+    return [];
+  }
+
+  return materials.filter((material) => {
+  const searchableText = [
+    material.name,
+    material.category,
+    material.brand,
+    material.unit,
+    material.hsnCode,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  return searchableText.includes(query);
+});
+};
+
+const manualPoMaterialResults =
+  filterMaterialsBySearch(
+    manualPoMaterialSearch,
+  );
+
+const manualPiMaterialResults =
+  filterMaterialsBySearch(
+    manualPiMaterialSearch,
+  );
+
+const manualInvoiceMaterialResults =
+  filterMaterialsBySearch(
+    manualInvoiceMaterialSearch,
+  );
 
 const currentUserRoles =
   currentUser?.roles || [];
@@ -2010,6 +2060,8 @@ const addManualPoItem = () => {
     purchaseRate: '',
     gstPercent: '18',
   });
+
+  setManualPoMaterialSearch('');
 };
 
 const createManualPo = async () => {
@@ -3602,34 +3654,81 @@ const generateProformaInvoice = async () => {
   />
 </div>
 
-    <select
-  value={manualPo.materialName}
-  onChange={(e) => {
-    const selected = materials.find(
-      (material) => material.name === e.target.value,
-    );
+    <div className="relative">
+  <input
+    type="text"
+    value={manualPoMaterialSearch}
+    onChange={(e) =>
+      setManualPoMaterialSearch(e.target.value)
+    }
+    placeholder={
+      manualPo.materialName
+        ? manualPo.materialName
+        : 'Search Material'
+    }
+    className="w-full rounded-xl border p-3"
+  />
 
-    setManualPo({
-      ...manualPo,
-      materialName: selected?.name || '',
-      category: selected?.category || '',
-      brand: selected?.brand || '',
-      unit: selected?.unit || '',
-      hsnCode: selected?.hsnCode || '',
-      purchaseRate: String(selected?.rate || ''),
-      gstPercent: String(selected?.gstPercent || '18'),
-    });
-  }}
-  className="rounded-xl border p-3"
->
-  <option value="">Select Material</option>
+  {manualPoMaterialSearch.trim() && (
+    <div className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border bg-white shadow-lg">
+      {manualPoMaterialResults.length === 0 ? (
+        <div className="p-3 text-sm text-gray-500">
+          No matching material found
+        </div>
+      ) : (
+        manualPoMaterialResults.map((material) => (
+          <button
+            key={material.id}
+            type="button"
+            onClick={() => {
+              setManualPo({
+                ...manualPo,
+                materialName: material.name || '',
+                category: material.category || '',
+                brand: material.brand || '',
+                unit: material.unit || '',
+                hsnCode: material.hsnCode || '',
+                purchaseRate: String(
+                  material.rate || '',
+                ),
+                gstPercent: String(
+                  material.gstPercent || '18',
+                ),
+              });
 
-  {materials.map((material) => (
-    <option key={material.id} value={material.name}>
-      {material.name}
-    </option>
-  ))}
-</select>
+              setManualPoMaterialSearch('');
+            }}
+            className="block w-full border-b px-4 py-3 text-left last:border-b-0 hover:bg-gray-50"
+          >
+            <p className="text-sm font-semibold text-gray-800">
+              {material.name}
+            </p>
+
+            <p className="mt-1 text-xs text-gray-500">
+              {[
+                material.category,
+                material.brand,
+                material.unit,
+                material.hsnCode
+                  ? `HSN: ${material.hsnCode}`
+                  : '',
+              ]
+                .filter(Boolean)
+                .join(' • ')}
+            </p>
+          </button>
+        ))
+      )}
+    </div>
+  )}
+
+  {manualPo.materialName &&
+    !manualPoMaterialSearch && (
+      <p className="mt-1 text-xs font-semibold text-green-700">
+        Selected: {manualPo.materialName}
+      </p>
+    )}
+</div>
 
     <input
       placeholder="Category"
