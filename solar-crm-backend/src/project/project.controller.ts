@@ -3126,13 +3126,31 @@ listProjectStockMovements(
   'TRADING_HEAD',
 )
 @Get('stock/files')
+
 listProjectStockFiles(
+
   @CurrentUser() user: any,
+
+  @Query('search')
+  search?: string,
+
+  @Query('showHidden')
+  showHidden?: string,
+
 ) {
+
   return this.projectService.getStockFiles(
-  user,
-);
+
+    user,
+
+    search || '',
+
+    showHidden === 'true',
+
+  );
+
 }
+
 
 @Roles(
   'OWNER',
@@ -3157,6 +3175,87 @@ uploadProjectStockFile(
   body,
   user,
 );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'STOCK_MANAGER',
+)
+@Patch('stock/files/:id/hide')
+hideProjectStockFile(
+  @Param('id', ParseIntPipe) id: number,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.hideStockFile(
+    id,
+    user,
+  );
+}
+
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'STOCK_MANAGER',
+)
+@Patch('stock/files/:id/restore')
+restoreProjectStockFile(
+  @Param('id', ParseIntPipe) id: number,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.restoreStockFile(
+    id,
+    user,
+  );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'PROJECT_EXECUTIVE',
+  'ACCOUNT_MANAGER',
+  'STOCK_MANAGER',
+  'TRADING_MANAGER',
+  'TRADING_HEAD',
+)
+@Get('stock/file-options/dealers')
+searchProjectStockFileDealers(
+  @Query('search')
+  search: string,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .searchStockFileDealers(
+      search || '',
+      user,
+    );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'PROJECT_EXECUTIVE',
+  'ACCOUNT_MANAGER',
+  'STOCK_MANAGER',
+  'TRADING_MANAGER',
+  'TRADING_HEAD',
+)
+@Get('stock/file-options/self-projects')
+searchProjectStockFileSelfProjects(
+  @Query('search')
+  search: string,
+
+  @CurrentUser()
+  user: any,
+) {
+  return this.projectService
+    .searchStockFileSelfProjects(
+      search || '',
+      user,
+    );
 }
 
 @Roles(

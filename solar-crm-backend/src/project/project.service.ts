@@ -7664,6 +7664,145 @@ async listProjectStockItems(query: any) {
   };
 }
 
+async searchStockFileDealers(
+  search: string,
+  user: any,
+) {
+  if (!this.canManageStock(user)) {
+    throw new ForbiddenException(
+      'You are not allowed to view stock file options',
+    );
+  }
+
+  const searchText =
+    String(search || '')
+      .trim()
+      .toLowerCase();
+
+  const query =
+    this.projectVendorRepository
+      .createQueryBuilder('dealer')
+      .where(
+        'dealer.isActive = true',
+      )
+      .andWhere(
+        `(
+          UPPER(COALESCE(dealer.partyType, '')) IN ('DEALER', 'BOTH')
+          OR dealer.canBuyFromUs = true
+        )`,
+      );
+
+  if (searchText) {
+    query.andWhere(
+      `LOWER(COALESCE(dealer.vendorName, ''))
+       LIKE :search`,
+      {
+        search: `%${searchText}%`,
+      },
+    );
+  }
+
+  const dealers =
+    await query
+      .orderBy(
+        'dealer.vendorName',
+        'ASC',
+      )
+      .take(50)
+      .getMany();
+
+  return dealers.map(
+    (dealer) => ({
+      id: dealer.id,
+      name: dealer.vendorName,
+    }),
+  );
+}
+
+async searchStockFileSelfProjects(
+  search: string,
+  user: any,
+) {
+  if (!this.canManageStock(user)) {
+    throw new ForbiddenException(
+      'You are not allowed to view stock file options',
+    );
+  }
+
+  const searchText =
+    String(search || '')
+      .trim()
+      .toLowerCase();
+
+  const query =
+    this.projectRepository
+      .createQueryBuilder('project')
+      .where(
+        'project.isHidden = false',
+      )
+      .andWhere(
+        'project.status != :completedStatus',
+        {
+          completedStatus:
+            ProjectStatus.COMPLETED,
+        },
+      )
+      .andWhere(
+        'project.status != :cancelledStatus',
+        {
+          cancelledStatus:
+            ProjectStatus.CANCELLED,
+        },
+      )
+      .andWhere(
+        'project.status != :rejectedStatus',
+        {
+          rejectedStatus:
+            ProjectStatus.REJECTED,
+        },
+      );
+
+  if (searchText) {
+    query.andWhere(
+      `(
+        LOWER(COALESCE(project.customerName, ''))
+          LIKE :search
+        OR LOWER(COALESCE(project.electricityKNumber, ''))
+          LIKE :search
+        OR CAST(project.id AS TEXT)
+          LIKE :search
+      )`,
+      {
+        search: `%${searchText}%`,
+      },
+    );
+  }
+
+  const projects =
+    await query
+      .orderBy(
+        'project.createdAt',
+        'DESC',
+      )
+      .take(50)
+      .getMany();
+
+  return projects.map(
+    (project) => ({
+      id: project.id,
+
+      projectName:
+        project.customerName,
+
+      kNumber:
+        project.electricityKNumber,
+
+      status:
+        project.status,
+    }),
+  );
+}
+
 async uploadStockFile(
   file: any,
   body: any,
@@ -7690,6 +7829,144 @@ async uploadStockFile(
       'File name/details is required',
     );
   }
+
+  const allocationType = String(
+  body?.allocationType || '',
+)
+  .trim()
+  .toUpperCase();
+
+if (
+  ![
+    'DEALER_PROJECT',
+    'SELF_PROJECT',
+  ].includes(allocationType)
+) {
+  throw new BadRequestException(
+    'Select Dealer Project or Self Project',
+  );
+}
+
+let dealerId: number | null = null;
+let dealerName: string | null = null;
+let dealerProjectReference:
+  string | null = null;
+
+let projectId: number | null = null;
+let projectName: string | null = null;
+let projectKNumber: string | null = null;
+
+if (
+  allocationType ===
+  'DEALER_PROJECT'
+) {
+  dealerId =
+    Number(body?.dealerId || 0) ||
+    null;
+
+  dealerProjectReference =
+    String(
+      body?.dealerProjectReference ||
+        '',
+    ).trim() || null;
+
+  if (!dealerId) {
+    throw new BadRequestException(
+      'Dealer is required',
+    );
+  }
+
+  if (!dealerProjectReference) {
+    throw new BadRequestException(
+      'Dealer project name or number is required',
+    );
+  }
+
+  const dealer =
+    await this.projectVendorRepository.findOne({
+      where: {
+        id: dealerId,
+        isActive: true,
+      } as any,
+    });
+
+  if (!dealer) {
+    throw new BadRequestException(
+      'Selected dealer not found',
+    );
+  }
+
+  const partyType = String(
+    dealer.partyType || '',
+  )
+    .trim()
+    .toUpperCase();
+
+  const isDealer =
+    partyType === 'DEALER' ||
+    partyType === 'BOTH' ||
+    dealer.canBuyFromUs === true;
+
+  if (!isDealer) {
+    throw new BadRequestException(
+      'Selected party is not a dealer',
+    );
+  }
+
+  dealerName =
+    String(
+      dealer.vendorName || '',
+    ).trim() || null;
+}
+
+if (
+  allocationType ===
+  'SELF_PROJECT'
+) {
+  projectId =
+    Number(body?.projectId || 0) ||
+    null;
+
+  if (!projectId) {
+    throw new BadRequestException(
+      'Self project is required',
+    );
+  }
+
+  const project =
+    await this.projectRepository.findOne({
+      where: {
+        id: projectId,
+        isHidden: false,
+      } as any,
+    });
+
+  if (!project) {
+    throw new BadRequestException(
+      'Selected project not found',
+    );
+  }
+
+  if (
+    String(project.status) ===
+    'COMPLETED'
+  ) {
+    throw new BadRequestException(
+      'Completed project cannot be selected as an active self project',
+    );
+  }
+
+  projectName =
+    String(
+      project.customerName || '',
+    ).trim() || null;
+
+  projectKNumber =
+    String(
+      project.electricityKNumber ||
+        '',
+    ).trim() || null;
+}
 
   const originalFileName = String(
     file.originalname || '',
@@ -7782,10 +8059,24 @@ async uploadStockFile(
   }
 
   const stockFile =
-    this.projectStockFileRepository.create({
-      displayName,
+  this.projectStockFileRepository.create({
+    displayName,
 
-      originalFileName,
+    allocationType,
+
+    dealerId,
+
+    dealerName,
+
+    dealerProjectReference,
+
+    projectId,
+
+    projectName,
+
+    projectKNumber,
+
+    originalFileName,
 
       filePath,
 
@@ -7826,6 +8117,8 @@ async uploadStockFile(
 
 async getStockFiles(
   user: any,
+  search?: string,
+  showHidden = false,
 ) {
   if (!this.canManageStock(user)) {
     throw new ForbiddenException(
@@ -7833,15 +8126,114 @@ async getStockFiles(
     );
   }
 
-  return this.projectStockFileRepository.find({
-    where: {
-      isHidden: false,
-    },
+  const query =
+  this.projectStockFileRepository
+    .createQueryBuilder('stockFile')
+    .where(
+      'stockFile.isHidden = :isHidden',
+      {
+        isHidden: showHidden,
+      },
+    );
 
-    order: {
-      createdAt: 'DESC',
-    },
-  });
+  const searchText =
+    String(search || '').trim();
+
+  if (searchText) {
+    query.andWhere(
+      `(
+        LOWER(stockFile.displayName) LIKE :search
+        OR LOWER(COALESCE(stockFile.dealerName, '')) LIKE :search
+        OR LOWER(COALESCE(stockFile.dealerProjectReference, '')) LIKE :search
+        OR LOWER(COALESCE(stockFile.projectName, '')) LIKE :search
+        OR LOWER(COALESCE(stockFile.projectKNumber, '')) LIKE :search
+        OR LOWER(stockFile.originalFileName) LIKE :search
+      )`,
+      {
+        search:
+          `%${searchText.toLowerCase()}%`,
+      },
+    );
+  }
+
+  return query
+    .orderBy(
+      'stockFile.createdAt',
+      'DESC',
+    )
+    .getMany();
+}
+
+async hideStockFile(
+  id: number,
+  user: any,
+) {
+  if (!this.canManageStock(user)) {
+    throw new ForbiddenException(
+      'You are not allowed to manage stock files',
+    );
+  }
+
+  const stockFile =
+    await this.projectStockFileRepository.findOne({
+      where: {
+        id,
+        isHidden: false,
+      },
+    });
+
+  if (!stockFile) {
+    throw new NotFoundException(
+      'Stock file not found',
+    );
+  }
+
+  stockFile.isHidden = true;
+
+  await this.projectStockFileRepository.save(
+    stockFile,
+  );
+
+  return {
+    message:
+      'Stock file hidden successfully',
+  };
+}
+
+async restoreStockFile(
+  id: number,
+  user: any,
+) {
+  if (!this.canManageStock(user)) {
+    throw new ForbiddenException(
+      'You are not allowed to manage stock files',
+    );
+  }
+
+  const stockFile =
+    await this.projectStockFileRepository.findOne({
+      where: {
+        id,
+        isHidden: true,
+      },
+    });
+
+  if (!stockFile) {
+    throw new NotFoundException(
+      'Hidden stock file not found',
+    );
+  }
+
+  stockFile.isHidden = false;
+
+  await this.projectStockFileRepository.save(
+    stockFile,
+  );
+
+  return {
+    message:
+      'Stock file restored successfully',
+  };
 }
 
 async getStockFileAccess(

@@ -13,6 +13,27 @@ export class ProjectStockFile {
   @Column({ type: 'text' })
   displayName: string;
 
+  @Column({ type: 'text', nullable: true })
+  allocationType: string | null;
+
+  @Column({ type: 'int', nullable: true })
+  dealerId: number | null;
+
+  @Column({ type: 'text', nullable: true })
+  dealerName: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  dealerProjectReference: string | null;
+
+  @Column({ type: 'int', nullable: true })
+  projectId: number | null;
+
+  @Column({ type: 'text', nullable: true })
+  projectName: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  projectKNumber: string | null;
+
   @Column({ type: 'text' })
   originalFileName: string;
 

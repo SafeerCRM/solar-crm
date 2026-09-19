@@ -195,10 +195,43 @@ const [stockFilesLoading, setStockFilesLoading] =
 const [stockFileUploading, setStockFileUploading] =
   useState(false);
 
+  
+
+  const [stockFilesShowHidden, setStockFilesShowHidden] =
+  useState(false);
+
+const [stockFileActionId, setStockFileActionId] =
+  useState<number | null>(null);
+
 const [stockFileForm, setStockFileForm] = useState({
   displayName: '',
+  allocationType: '',
+  dealerId: '',
+  dealerName: '',
+  dealerProjectReference: '',
+  projectId: '',
+  projectName: '',
+  projectKNumber: '',
   file: null as File | null,
 });
+
+const [stockFileDealerSearch, setStockFileDealerSearch] =
+  useState('');
+
+const [stockFileDealerOptions, setStockFileDealerOptions] =
+  useState<any[]>([]);
+
+const [stockFileDealerLoading, setStockFileDealerLoading] =
+  useState(false);
+
+const [stockFileProjectSearch, setStockFileProjectSearch] =
+  useState('');
+
+const [stockFileProjectOptions, setStockFileProjectOptions] =
+  useState<any[]>([]);
+
+const [stockFileProjectLoading, setStockFileProjectLoading] =
+  useState(false);
 
 const [stockFilePreviewOpen, setStockFilePreviewOpen] =
   useState(false);
@@ -1767,18 +1800,31 @@ const restoreStockMovement = async (movementId: number) => {
   }
 };
 
-const loadStockFiles = async () => {
+const loadStockFiles = async (
+  search = '',
+) => {
   try {
     setStockFilesLoading(true);
 
-    const token = localStorage.getItem('token');
+    const token =
+      localStorage.getItem('token');
 
     const res = await axios.get(
       `${API_BASE_URL}/project/stock/files`,
       {
+        params: {
+  search:
+    search.trim() ||
+    undefined,
+
+  showHidden:
+    stockFilesShowHidden,
+},
+
         headers: token
           ? {
-              Authorization: `Bearer ${token}`,
+              Authorization:
+                `Bearer ${token}`,
             }
           : {},
       },
@@ -1794,9 +1840,98 @@ const loadStockFiles = async () => {
       'Failed to load stock files:',
       error,
     );
+
     setStockFiles([]);
   } finally {
     setStockFilesLoading(false);
+  }
+};
+
+const loadStockFileDealers = async (
+  search = '',
+) => {
+  try {
+    setStockFileDealerLoading(true);
+
+    const token =
+      localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/stock/file-options/dealers`,
+      {
+        params: {
+          search:
+            search.trim() ||
+            undefined,
+        },
+
+        headers: token
+          ? {
+              Authorization:
+                `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setStockFileDealerOptions(
+      Array.isArray(res.data)
+        ? res.data
+        : [],
+    );
+  } catch (error) {
+    console.error(
+      'Failed to load dealers:',
+      error,
+    );
+
+    setStockFileDealerOptions([]);
+  } finally {
+    setStockFileDealerLoading(false);
+  }
+};
+
+const loadStockFileSelfProjects = async (
+  search = '',
+) => {
+  try {
+    setStockFileProjectLoading(true);
+
+    const token =
+      localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/stock/file-options/self-projects`,
+      {
+        params: {
+          search:
+            search.trim() ||
+            undefined,
+        },
+
+        headers: token
+          ? {
+              Authorization:
+                `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setStockFileProjectOptions(
+      Array.isArray(res.data)
+        ? res.data
+        : [],
+    );
+  } catch (error) {
+    console.error(
+      'Failed to load self projects:',
+      error,
+    );
+
+    setStockFileProjectOptions([]);
+  } finally {
+    setStockFileProjectLoading(false);
   }
 };
 
@@ -1835,6 +1970,42 @@ const uploadStockFile = async () => {
     return;
   }
 
+  if (!stockFileForm.allocationType) {
+    alert(
+      'Please select Dealer Project or Self Project',
+    );
+    return;
+  }
+
+  if (
+    stockFileForm.allocationType ===
+      'DEALER_PROJECT' &&
+    !stockFileForm.dealerId
+  ) {
+    alert('Please select a dealer');
+    return;
+  }
+
+  if (
+    stockFileForm.allocationType ===
+      'DEALER_PROJECT' &&
+    !stockFileForm.dealerProjectReference.trim()
+  ) {
+    alert(
+      'Please enter dealer project name / number',
+    );
+    return;
+  }
+
+  if (
+    stockFileForm.allocationType ===
+      'SELF_PROJECT' &&
+    !stockFileForm.projectId
+  ) {
+    alert('Please select a self project');
+    return;
+  }
+
   if (!stockFileForm.file) {
     alert('Please choose a file');
     return;
@@ -1848,14 +2019,44 @@ const uploadStockFile = async () => {
     const formData = new FormData();
 
     formData.append(
-      'displayName',
-      stockFileForm.displayName.trim(),
-    );
+  'displayName',
+  stockFileForm.displayName.trim(),
+);
 
-    formData.append(
-      'file',
-      stockFileForm.file,
-    );
+formData.append(
+  'allocationType',
+  stockFileForm.allocationType,
+);
+
+if (
+  stockFileForm.allocationType ===
+  'DEALER_PROJECT'
+) {
+  formData.append(
+    'dealerId',
+    stockFileForm.dealerId,
+  );
+
+  formData.append(
+    'dealerProjectReference',
+    stockFileForm.dealerProjectReference.trim(),
+  );
+}
+
+if (
+  stockFileForm.allocationType ===
+  'SELF_PROJECT'
+) {
+  formData.append(
+    'projectId',
+    stockFileForm.projectId,
+  );
+}
+
+formData.append(
+  'file',
+  stockFileForm.file,
+);
 
     await axios.post(
       `${API_BASE_URL}/project/stock/files/upload`,
@@ -1872,9 +2073,22 @@ const uploadStockFile = async () => {
     alert('Stock file uploaded successfully');
 
     setStockFileForm({
-      displayName: '',
-      file: null,
-    });
+  displayName: '',
+  allocationType: '',
+  dealerId: '',
+  dealerName: '',
+  dealerProjectReference: '',
+  projectId: '',
+  projectName: '',
+  projectKNumber: '',
+  file: null,
+});
+
+setStockFileDealerSearch('');
+setStockFileDealerOptions([]);
+
+setStockFileProjectSearch('');
+setStockFileProjectOptions([]);
 
     const fileInput =
       document.getElementById(
@@ -1885,7 +2099,9 @@ const uploadStockFile = async () => {
       fileInput.value = '';
     }
 
-    await loadStockFiles();
+    await loadStockFiles(
+  stockFileSearch,
+);
   } catch (error: any) {
     console.error(error);
 
@@ -2021,6 +2237,96 @@ const downloadStockFile = async (
   }
 };
 
+const hideStockFile = async (
+  fileId: number,
+) => {
+  const confirmed = window.confirm(
+    'Hide this stock file? You can restore it later.',
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    setStockFileActionId(fileId);
+
+    const token =
+      localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/stock/files/${fileId}/hide`,
+      {},
+      {
+        headers: token
+          ? {
+              Authorization:
+                `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    await loadStockFiles(
+      stockFileSearch,
+    );
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to hide stock file',
+    );
+  } finally {
+    setStockFileActionId(null);
+  }
+};
+
+const restoreStockFile = async (
+  fileId: number,
+) => {
+  const confirmed = window.confirm(
+    'Restore this stock file?',
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    setStockFileActionId(fileId);
+
+    const token =
+      localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/stock/files/${fileId}/restore`,
+      {},
+      {
+        headers: token
+          ? {
+              Authorization:
+                `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    await loadStockFiles(
+      stockFileSearch,
+    );
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to restore stock file',
+    );
+  } finally {
+    setStockFileActionId(null);
+  }
+};
+
   useEffect(() => {
   loadStockItems(1);
   loadMaterialSummary();
@@ -2033,6 +2339,23 @@ const downloadStockFile = async (
   loadMaterials();
   loadBranches();
 }, []);
+
+useEffect(() => {
+  const timer = window.setTimeout(
+    () => {
+      loadStockFiles(
+        stockFileSearch,
+      );
+    },
+    350,
+  );
+
+  return () =>
+    window.clearTimeout(timer);
+}, [
+  stockFileSearch,
+  stockFilesShowHidden,
+]);
 
   const totalQuantity =
   stockSummary.totalCurrentQuantity;
@@ -2156,27 +2479,6 @@ const filteredIncomingMaterials =
     return searchableText.includes(search);
   });
 
-  const filteredStockFiles = stockFiles.filter(
-  (item: any) => {
-    const search =
-      stockFileSearch.trim().toLowerCase();
-
-    if (!search) {
-      return true;
-    }
-
-    const searchableText = [
-      item.displayName,
-      item.originalFileName,
-      item.uploadedByName,
-    ]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase();
-
-    return searchableText.includes(search);
-  },
-);
 
   return (
     <div className="mx-auto w-full max-w-7xl min-w-0 space-y-5 overflow-x-hidden">
@@ -4148,6 +4450,272 @@ const filteredIncomingMaterials =
     </div>
 
     <div>
+  <label className="mb-1 block text-sm font-semibold text-gray-700">
+    Allocation Type
+  </label>
+
+  <select
+    value={stockFileForm.allocationType}
+    onChange={(e) => {
+      const value = e.target.value;
+
+      setStockFileForm((prev) => ({
+        ...prev,
+        allocationType: value,
+        dealerId: '',
+        dealerName: '',
+        dealerProjectReference: '',
+        projectId: '',
+        projectName: '',
+        projectKNumber: '',
+      }));
+
+      setStockFileDealerSearch('');
+      setStockFileDealerOptions([]);
+
+      setStockFileProjectSearch('');
+      setStockFileProjectOptions([]);
+    }}
+    className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+  >
+    <option value="">
+      Select allocation type
+    </option>
+
+    <option value="DEALER_PROJECT">
+      Dealer Project
+    </option>
+
+    <option value="SELF_PROJECT">
+      Self Project
+    </option>
+  </select>
+</div>
+
+{stockFileForm.allocationType ===
+  'DEALER_PROJECT' && (
+  <>
+    <div className="relative">
+      <label className="mb-1 block text-sm font-semibold text-gray-700">
+        Dealer
+      </label>
+
+      <input
+        type="text"
+        value={stockFileDealerSearch}
+        onFocus={() => {
+          loadStockFileDealers(
+            stockFileDealerSearch,
+          );
+        }}
+        onChange={(e) => {
+          const value = e.target.value;
+
+          setStockFileDealerSearch(value);
+
+          setStockFileForm((prev) => ({
+            ...prev,
+            dealerId: '',
+            dealerName: '',
+          }));
+
+          loadStockFileDealers(value);
+        }}
+        placeholder="Search dealer..."
+        className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+      />
+
+      {(stockFileDealerLoading ||
+        stockFileDealerOptions.length >
+          0) && (
+        <div className="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg">
+          {stockFileDealerLoading ? (
+            <div className="p-3 text-sm text-gray-500">
+              Loading dealers...
+            </div>
+          ) : (
+            stockFileDealerOptions.map(
+              (dealer: any) => (
+                <button
+                  key={dealer.id}
+                  type="button"
+                  onClick={() => {
+                    setStockFileForm(
+                      (prev) => ({
+                        ...prev,
+                        dealerId: String(
+                          dealer.id,
+                        ),
+                        dealerName:
+                          dealer.name || '',
+                      }),
+                    );
+
+                    setStockFileDealerSearch(
+                      dealer.name || '',
+                    );
+
+                    setStockFileDealerOptions(
+                      [],
+                    );
+                  }}
+                  className="block w-full border-b border-gray-100 px-3 py-2 text-left text-sm hover:bg-gray-50"
+                >
+                  {dealer.name}
+                </button>
+              ),
+            )
+          )}
+        </div>
+      )}
+
+      {stockFileForm.dealerId && (
+        <p className="mt-1 text-xs font-semibold text-green-700">
+          Selected: {stockFileForm.dealerName}
+        </p>
+      )}
+    </div>
+
+    <div>
+      <label className="mb-1 block text-sm font-semibold text-gray-700">
+        Dealer Project Name / Number
+      </label>
+
+      <input
+        type="text"
+        value={
+          stockFileForm.dealerProjectReference
+        }
+        onChange={(e) =>
+          setStockFileForm((prev) => ({
+            ...prev,
+            dealerProjectReference:
+              e.target.value,
+          }))
+        }
+        placeholder="Example: Project 125 / Sharma Residence"
+        className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+      />
+    </div>
+  </>
+)}
+
+{stockFileForm.allocationType ===
+  'SELF_PROJECT' && (
+  <div className="relative">
+    <label className="mb-1 block text-sm font-semibold text-gray-700">
+      Self Project
+    </label>
+
+    <input
+      type="text"
+      value={stockFileProjectSearch}
+      onFocus={() => {
+        loadStockFileSelfProjects(
+          stockFileProjectSearch,
+        );
+      }}
+      onChange={(e) => {
+        const value = e.target.value;
+
+        setStockFileProjectSearch(value);
+
+        setStockFileForm((prev) => ({
+          ...prev,
+          projectId: '',
+          projectName: '',
+          projectKNumber: '',
+        }));
+
+        loadStockFileSelfProjects(value);
+      }}
+      placeholder="Search customer, K-number or project ID..."
+      className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+    />
+
+    {(stockFileProjectLoading ||
+      stockFileProjectOptions.length >
+        0) && (
+      <div className="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg">
+        {stockFileProjectLoading ? (
+          <div className="p-3 text-sm text-gray-500">
+            Loading projects...
+          </div>
+        ) : (
+          stockFileProjectOptions.map(
+            (project: any) => (
+              <button
+                key={project.id}
+                type="button"
+                onClick={() => {
+                  const label = [
+                    project.projectName,
+                    project.kNumber
+                      ? `K: ${project.kNumber}`
+                      : `Project #${project.id}`,
+                  ]
+                    .filter(Boolean)
+                    .join(' — ');
+
+                  setStockFileForm(
+                    (prev) => ({
+                      ...prev,
+                      projectId: String(
+                        project.id,
+                      ),
+                      projectName:
+                        project.projectName ||
+                        '',
+                      projectKNumber:
+                        project.kNumber ||
+                        '',
+                    }),
+                  );
+
+                  setStockFileProjectSearch(
+                    label,
+                  );
+
+                  setStockFileProjectOptions(
+                    [],
+                  );
+                }}
+                className="block w-full border-b border-gray-100 px-3 py-2 text-left text-sm hover:bg-gray-50"
+              >
+                <div className="font-semibold text-gray-800">
+                  {project.projectName ||
+                    `Project #${project.id}`}
+                </div>
+
+                <div className="text-xs text-gray-500">
+                  {project.kNumber
+                    ? `K: ${project.kNumber}`
+                    : `Project ID: ${project.id}`}
+                  {project.status
+                    ? ` • ${project.status}`
+                    : ''}
+                </div>
+              </button>
+            ),
+          )
+        )}
+      </div>
+    )}
+
+    {stockFileForm.projectId && (
+      <p className="mt-1 text-xs font-semibold text-green-700">
+        Selected:{' '}
+        {stockFileForm.projectName ||
+          `Project #${stockFileForm.projectId}`}
+        {stockFileForm.projectKNumber
+          ? ` — K: ${stockFileForm.projectKNumber}`
+          : ''}
+      </p>
+    )}
+  </div>
+)}
+
+    <div>
       <label className="mb-1 block text-sm font-semibold text-gray-700">
         Choose Excel / CSV File
       </label>
@@ -4182,14 +4750,44 @@ const filteredIncomingMaterials =
     </button>
   </div>
 
-  <div className="mt-5">
+  <div className="mt-5 flex flex-wrap gap-2">
+  <button
+    type="button"
+    onClick={() =>
+      setStockFilesShowHidden(false)
+    }
+    className={`rounded-xl px-4 py-2 text-sm font-semibold ${
+      !stockFilesShowHidden
+        ? 'bg-blue-600 text-white'
+        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+    }`}
+  >
+    Active Files
+  </button>
+
+  <button
+    type="button"
+    onClick={() =>
+      setStockFilesShowHidden(true)
+    }
+    className={`rounded-xl px-4 py-2 text-sm font-semibold ${
+      stockFilesShowHidden
+        ? 'bg-gray-800 text-white'
+        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+    }`}
+  >
+    Hidden Files
+  </button>
+</div>
+
+<div className="mt-3">
   <input
     type="text"
     value={stockFileSearch}
     onChange={(e) =>
       setStockFileSearch(e.target.value)
     }
-    placeholder="Search by file name, original file or uploaded by..."
+    placeholder="Search file, dealer, dealer project, self project or K-number..."
     className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
   />
 </div>
@@ -4205,6 +4803,10 @@ const filteredIncomingMaterials =
           <th className="p-3">
             File Name / Details
           </th>
+
+          <th className="p-3">
+  Association
+</th>
 
           <th className="p-3">
             Original File
@@ -4224,23 +4826,25 @@ const filteredIncomingMaterials =
         {stockFilesLoading ? (
           <tr>
             <td
-              colSpan={5}
+              colSpan={6}
               className="p-5 text-center text-gray-500"
             >
               Loading files...
             </td>
           </tr>
-                ) : filteredStockFiles.length === 0 ? (
+                ) : stockFiles.length === 0 ? (
           <tr>
             <td
-              colSpan={5}
+              colSpan={6}
               className="p-5 text-center text-gray-500"
             >
-              No stock files uploaded yet.
+              {stockFilesShowHidden
+  ? 'No hidden stock files.'
+  : 'No stock files uploaded yet.'}
             </td>
           </tr>
         ) : (
-                    filteredStockFiles.map((item: any) => (
+                    stockFiles.map((item: any) => (
             <tr
               key={item.id}
               className="border-b"
@@ -4258,6 +4862,48 @@ const filteredIncomingMaterials =
               <td className="p-3 font-semibold text-gray-800">
                 {item.displayName}
               </td>
+
+              <td className="p-3">
+  {item.allocationType ===
+  'DEALER_PROJECT' ? (
+    <div>
+      <div className="font-semibold text-gray-800">
+        {item.dealerName || 'Dealer'}
+      </div>
+
+      <div className="mt-0.5 text-xs text-gray-500">
+        {item.dealerProjectReference ||
+          '-'}
+      </div>
+
+      <div className="mt-1 text-[11px] font-semibold text-blue-600">
+        Dealer Project
+      </div>
+    </div>
+  ) : item.allocationType ===
+    'SELF_PROJECT' ? (
+    <div>
+      <div className="font-semibold text-gray-800">
+        {item.projectName ||
+          `Project #${item.projectId}`}
+      </div>
+
+      {item.projectKNumber && (
+        <div className="mt-0.5 text-xs text-gray-500">
+          K: {item.projectKNumber}
+        </div>
+      )}
+
+      <div className="mt-1 text-[11px] font-semibold text-green-700">
+        Self Project
+      </div>
+    </div>
+  ) : (
+    <span className="text-gray-400">
+      —
+    </span>
+  )}
+</td>
 
               <td className="p-3 text-gray-600">
                 {item.originalFileName}
@@ -4291,6 +4937,46 @@ const filteredIncomingMaterials =
   >
     Download
   </button>
+
+  {stockFilesShowHidden ? (
+  <button
+    type="button"
+    disabled={
+      stockFileActionId ===
+      Number(item.id)
+    }
+    onClick={() =>
+      restoreStockFile(
+        Number(item.id),
+      )
+    }
+    className="whitespace-nowrap rounded-lg bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-100 disabled:cursor-not-allowed disabled:opacity-50"
+  >
+    {stockFileActionId ===
+    Number(item.id)
+      ? 'Restoring...'
+      : 'Restore'}
+  </button>
+) : (
+  <button
+    type="button"
+    disabled={
+      stockFileActionId ===
+      Number(item.id)
+    }
+    onClick={() =>
+      hideStockFile(
+        Number(item.id),
+      )
+    }
+    className="whitespace-nowrap rounded-lg bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+  >
+    {stockFileActionId ===
+    Number(item.id)
+      ? 'Hiding...'
+      : 'Hide'}
+  </button>
+)}
 </div>
               </td>
             </tr>
