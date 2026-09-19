@@ -314,6 +314,8 @@ import {
   ProjectTimelineDelayProof,
 } from './project-timeline-delay-proof.entity';
 
+import { StaffMember } from '../staff/staff-member.entity';
+
 @Injectable()
 export class ProjectService {
 
@@ -2540,7 +2542,10 @@ private readonly telecallingContactRepository: Repository<TelecallingContact>,
 @InjectRepository(User)
 private readonly userRepository: Repository<User>,
 
-    private readonly calculatorService: CalculatorService,
+@InjectRepository(StaffMember)
+private readonly staffMemberRepository: Repository<StaffMember>,
+
+private readonly calculatorService: CalculatorService,
 
   ) {}
 
@@ -10311,10 +10316,107 @@ async restoreProjectConsumption(
   return this.projectConsumptionRepository.save(consumption);
 }
 
+private async resolveReferral(data: any) {
+  const referredByType = String(
+    data?.referredByType || '',
+  )
+    .trim()
+    .toUpperCase();
+
+  if (!referredByType) {
+    return {
+      referredByType: null,
+      referredByStaffId: null,
+      referredByStaffName: null,
+      referredByStaffRole: null,
+      referredByExternalName: null,
+      referredByExternalPhone: null,
+    };
+  }
+
+  if (referredByType === 'STAFF') {
+    const staffId = Number(
+      data?.referredByStaffId || 0,
+    );
+
+    if (!staffId) {
+      throw new BadRequestException(
+        'Referred By staff is required',
+      );
+    }
+
+    const staff =
+      await this.staffMemberRepository.findOne({
+        where: {
+          id: staffId,
+          isActive: true,
+          isHidden: false,
+        },
+      });
+
+    if (!staff) {
+      throw new BadRequestException(
+        'Selected referral staff not found or inactive',
+      );
+    }
+
+    return {
+      referredByType: 'STAFF',
+      referredByStaffId: staff.id,
+      referredByStaffName:
+        staff.fullName || '',
+      referredByStaffRole:
+        staff.designation ||
+        staff.staffRole ||
+        '',
+      referredByExternalName: null,
+      referredByExternalPhone: null,
+    };
+  }
+
+  if (referredByType === 'EXTERNAL') {
+    const name = String(
+      data?.referredByExternalName || '',
+    ).trim();
+
+    const phone = String(
+      data?.referredByExternalPhone || '',
+    ).trim();
+
+    if (!name) {
+      throw new BadRequestException(
+        'External referral name is required',
+      );
+    }
+
+    if (!phone) {
+      throw new BadRequestException(
+        'External referral phone is required',
+      );
+    }
+
+    return {
+      referredByType: 'EXTERNAL',
+      referredByStaffId: null,
+      referredByStaffName: null,
+      referredByStaffRole: null,
+      referredByExternalName: name,
+      referredByExternalPhone: phone,
+    };
+  }
+
+  throw new BadRequestException(
+    'Invalid Referred By type',
+  );
+}
+
 async createVendor(data: Partial<ProjectVendor>) {
   if (!data.vendorName || !String(data.vendorName).trim()) {
     throw new BadRequestException('Vendor name is required');
   }
+
+  const referral =
+  await this.resolveReferral(data);
 
   let tradingManagerId: number | null = null;
 let tradingManagerName = '';
@@ -10409,7 +10511,10 @@ if (
     materialCategory: data.materialCategory || '',
     tradingManagerId,
 tradingManagerName,
-    remarks: data.remarks || '',
+
+...referral,
+
+remarks: data.remarks || '',
     isActive: data.isActive !== false,
     partyType: (data as any).partyType || 'VENDOR',
 canSellToUs: (data as any).canSellToUs !== false,
@@ -10431,6 +10536,147 @@ async getVendors(activeOnly = false) {
       createdAt: 'DESC',
     },
   });
+}
+
+async searchTradingDealers(
+  search = '',
+) {
+  const query =
+    this.projectVendorRepository
+      .createQueryBuilder('vendor')
+      .where(
+        'vendor.isActive = :isActive',
+        {
+          isActive: true,
+        },
+      )
+      .andWhere(
+        'vendor.isHidden = :isHidden',
+        {
+          isHidden: false,
+        },
+      )
+      .andWhere(
+        `(
+          UPPER(COALESCE(vendor.partyType, '')) IN (:...partyTypes)
+          OR vendor.canBuyFromUs = :canBuyFromUs
+        )`,
+        {
+          partyTypes: [
+            'DEALER',
+            'BOTH',
+          ],
+          canBuyFromUs: true,
+        },
+      );
+
+  const term =
+    String(search || '').trim();
+
+  if (term) {
+    query.andWhere(
+      `(
+        LOWER(COALESCE(vendor.vendorName, '')) LIKE :search
+        OR LOWER(COALESCE(vendor.firmName, '')) LIKE :search
+        OR LOWER(COALESCE(vendor.contactPerson, '')) LIKE :search
+        OR COALESCE(vendor.phone, '') LIKE :rawSearch
+        OR COALESCE(vendor.alternatePhone, '') LIKE :rawSearch
+      )`,
+      {
+        search:
+          `%${term.toLowerCase()}%`,
+        rawSearch:
+          `%${term}%`,
+      },
+    );
+  }
+
+  const dealers =
+    await query
+      .orderBy(
+        'vendor.vendorName',
+        'ASC',
+      )
+      .getMany();
+
+  return dealers.map(
+  (dealer) => ({
+    id: dealer.id,
+    name:
+      dealer.vendorName,
+    firmName:
+      dealer.firmName || '',
+    contactPerson:
+      dealer.contactPerson || '',
+    phone:
+      dealer.phone || '',
+    city:
+      dealer.city || '',
+  }),
+);
+}
+
+async searchReferralStaff(
+  search = '',
+) {
+  const query =
+    this.staffMemberRepository
+      .createQueryBuilder('staff')
+      .where(
+        'staff.isActive = :isActive',
+        {
+          isActive: true,
+        },
+      )
+      .andWhere(
+        'staff.isHidden = :isHidden',
+        {
+          isHidden: false,
+        },
+      );
+
+  const term =
+    String(search || '').trim();
+
+  if (term) {
+    query.andWhere(
+      `(
+        LOWER(COALESCE(staff.fullName, '')) LIKE :search
+        OR COALESCE(staff.mobile, '') LIKE :rawSearch
+        OR LOWER(COALESCE(staff.employeeCode, '')) LIKE :search
+        OR LOWER(COALESCE(staff.designation, '')) LIKE :search
+        OR LOWER(COALESCE(staff.staffRole, '')) LIKE :search
+      )`,
+      {
+        search:
+          `%${term.toLowerCase()}%`,
+        rawSearch:
+          `%${term}%`,
+      },
+    );
+  }
+
+  const staff =
+    await query
+      .orderBy(
+        'staff.fullName',
+        'ASC',
+      )
+      .getMany();
+
+  return staff.map(
+    (member) => ({
+      id: member.id,
+      fullName:
+        member.fullName,
+      mobile:
+        member.mobile || '',
+      role:
+        member.designation ||
+        member.staffRole ||
+        '',
+    }),
+  );
 }
 
 async updateVendor(id: number, data: Partial<ProjectVendor>) {
@@ -10530,6 +10776,24 @@ if (
   }
 }
 
+const referral =
+  data.referredByType !== undefined
+    ? await this.resolveReferral(data)
+    : {
+        referredByType:
+          vendor.referredByType,
+        referredByStaffId:
+          vendor.referredByStaffId,
+        referredByStaffName:
+          vendor.referredByStaffName,
+        referredByStaffRole:
+          vendor.referredByStaffRole,
+        referredByExternalName:
+          vendor.referredByExternalName,
+        referredByExternalPhone:
+          vendor.referredByExternalPhone,
+      };
+
   Object.assign(vendor, {
     ...data,
     vendorName:
@@ -10557,6 +10821,8 @@ canBuyFromUs:
 
     tradingManagerId,
 tradingManagerName,
+
+...referral,
 
 openingBalance:
   (data as any).openingBalance !== undefined
@@ -40630,6 +40896,9 @@ async createDealer(body: any) {
     }
   }
 
+  const referral =
+  await this.resolveReferral(body);
+
   const dealer = this.projectVendorRepository.create({
     vendorName: String(body.vendorName || '').trim(),
     contactPerson: body?.contactPerson || '',
@@ -40645,7 +40914,10 @@ gstNumber,
     canSellToUs: false,
     canBuyFromUs: true,
     openingBalance: Number(body?.openingBalance || 0),
-    isActive: true,
+
+...referral,
+
+isActive: true,
   });
 
   const savedDealer =
@@ -40840,6 +41112,37 @@ async syncDealersToPortal() {
   };
 }
 
+async updateDealerOrderReferral(
+  id: number,
+  body: any,
+) {
+  const order =
+    await this.projectDealerOrderRepository.findOne({
+      where: {
+        id,
+        isHidden: false,
+      },
+    });
+
+  if (!order) {
+    throw new NotFoundException(
+      'Dealer order not found',
+    );
+  }
+
+  const referral =
+    await this.resolveReferral(body);
+
+  Object.assign(
+    order,
+    referral,
+  );
+
+  return this.projectDealerOrderRepository.save(
+    order,
+  );
+}
+
 async createDealerOrder(body: any, user: any) {
   const dealerId = Number(body?.dealerId || 0);
 
@@ -40864,11 +41167,14 @@ async createDealerOrder(body: any, user: any) {
   }
 
   let subtotalAmount = 0;
-  let discountAmount = 0;
-  let gstAmount = 0;
-  let totalAmount = 0;
+let discountAmount = 0;
+let gstAmount = 0;
+let totalAmount = 0;
 
-  const order = this.projectDealerOrderRepository.create({
+const referral =
+  await this.resolveReferral(body);
+
+const order = this.projectDealerOrderRepository.create({
     orderNumber: this.generateDealerOrderNumber(),
     dealerId: dealer.id,
     dealerName: dealer.vendorName,
@@ -40890,8 +41196,11 @@ async createDealerOrder(body: any, user: any) {
       ? new Date(body.expectedDeliveryAt)
       : null,
     assignedStaffName: body?.assignedStaffName || '',
-    assignedStaffPhone: body?.assignedStaffPhone || '',
-    createdBy: user?.id || user?.userId || null,
+assignedStaffPhone: body?.assignedStaffPhone || '',
+
+...referral,
+
+createdBy: user?.id || user?.userId || null,
     createdByName: user?.name || user?.email || '',
     remarks: body?.remarks || '',
     } as Partial<ProjectDealerOrder>);

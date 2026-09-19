@@ -22,7 +22,31 @@ type Dealer = {
   city?: string;
   state?: string;
   openingBalance?: number;
+  remarks?: string;
   isActive?: boolean;
+
+  referredByType?: string | null;
+  referredByStaffId?: number | null;
+  referredByStaffName?: string | null;
+  referredByStaffRole?: string | null;
+  referredByExternalName?: string | null;
+  referredByExternalPhone?: string | null;
+};
+
+type TradingDealerOption = {
+  id: number;
+  name: string;
+  firmName?: string;
+  contactPerson?: string;
+  phone?: string;
+  city?: string;
+};
+
+type ReferralStaffOption = {
+  id: number;
+  fullName: string;
+  mobile?: string;
+  role?: string;
 };
 
 type CatalogItem = {
@@ -230,6 +254,13 @@ const emptyDealerForm = {
   state: '',
   openingBalance: '',
   remarks: '',
+
+  referredByType: '',
+  referredByStaffId: '',
+  referredByStaffName: '',
+  referredByStaffRole: '',
+  referredByExternalName: '',
+  referredByExternalPhone: '',
 };
 
 export default function TradingAccountPage() {
@@ -246,6 +277,50 @@ export default function TradingAccountPage() {
     >('dealers');
 
   const [dealers, setDealers] = useState<Dealer[]>([]);
+  const [
+  orderDealerSearch,
+  setOrderDealerSearch,
+] = useState('');
+
+const [
+  orderDealerOptions,
+  setOrderDealerOptions,
+] = useState<TradingDealerOption[]>([]);
+
+const [
+  orderDealerLoading,
+  setOrderDealerLoading,
+] = useState(false);
+
+const [
+  orderDealerDropdownOpen,
+  setOrderDealerDropdownOpen,
+] = useState(false);
+
+const [
+  selectedOrderDealer,
+  setSelectedOrderDealer,
+] = useState<TradingDealerOption | null>(null);
+
+const [
+  referralStaffSearch,
+  setReferralStaffSearch,
+] = useState('');
+
+const [
+  referralStaffOptions,
+  setReferralStaffOptions,
+] = useState<ReferralStaffOption[]>([]);
+
+const [
+  referralStaffLoading,
+  setReferralStaffLoading,
+] = useState(false);
+
+const [
+  referralStaffDropdownOpen,
+  setReferralStaffDropdownOpen,
+] = useState(false);
 
 const [catalog, setCatalog] =
   useState<CatalogItem[]>([]);
@@ -423,7 +498,7 @@ const [confirmPortalPassword, setConfirmPortalPassword] = useState('');
 const [passwordSaving, setPasswordSaving] = useState(false);
 const [showPortalPassword, setShowPortalPassword] = useState(false);
 
-  const [orderForm, setOrderForm] = useState({
+    const [orderForm, setOrderForm] = useState({
     dealerId: '',
     paymentType: 'CASH',
     creditDueDate: '',
@@ -431,6 +506,13 @@ const [showPortalPassword, setShowPortalPassword] = useState(false);
     assignedStaffName: '',
     assignedStaffPhone: '',
     remarks: '',
+
+    referredByType: '',
+    referredByStaffId: '',
+    referredByStaffName: '',
+    referredByStaffRole: '',
+    referredByExternalName: '',
+    referredByExternalPhone: '',
   });
 
   const [orderRows, setOrderRows] = useState<OrderItemRow[]>([
@@ -444,6 +526,23 @@ const [openMaterialSearchIndex, setOpenMaterialSearchIndex] =
   useState<number | null>(null);
 
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
+
+  const [
+  editingOrderReferral,
+  setEditingOrderReferral,
+] = useState(false);
+
+const [
+  orderReferralForm,
+  setOrderReferralForm,
+] = useState({
+  referredByType: '',
+  referredByStaffId: '',
+  referredByStaffName: '',
+  referredByStaffRole: '',
+  referredByExternalName: '',
+  referredByExternalPhone: '',
+});
   const [selectedOrderInvoices, setSelectedOrderInvoices] =
   useState<any>(null);
 
@@ -630,6 +729,74 @@ const [finalInvoiceForm, setFinalInvoiceForm] = useState({
     setDealers(res.data?.data || []);
     setDealerTotalPages(res.data?.totalPages || 1);
   };
+
+  const searchOrderDealers = async (
+  search = '',
+) => {
+  try {
+    setOrderDealerLoading(true);
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/trading/dealer-search`,
+      {
+        params: {
+          search:
+            search.trim() || undefined,
+        },
+        headers: headers(),
+      },
+    );
+
+    setOrderDealerOptions(
+      Array.isArray(res.data)
+        ? res.data
+        : [],
+    );
+  } catch (error) {
+    console.error(
+      'Failed to search dealers:',
+      error,
+    );
+
+    setOrderDealerOptions([]);
+  } finally {
+    setOrderDealerLoading(false);
+  }
+};
+
+const searchReferralStaff = async (
+  search = '',
+) => {
+  try {
+    setReferralStaffLoading(true);
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/trading/referral-staff`,
+      {
+        params: {
+          search:
+            search.trim() || undefined,
+        },
+        headers: headers(),
+      },
+    );
+
+    setReferralStaffOptions(
+      Array.isArray(res.data)
+        ? res.data
+        : [],
+    );
+  } catch (error) {
+    console.error(
+      'Failed to search referral staff:',
+      error,
+    );
+
+    setReferralStaffOptions([]);
+  } finally {
+    setReferralStaffLoading(false);
+  }
+};
 
   const fetchCatalog = async () => {
     const res = await axios.get(`${API_BASE_URL}/project/dealer/catalog`, {
@@ -2242,6 +2409,30 @@ fetchMonthlyRequirements(),
   };
 
   useEffect(() => {
+  if (activeTab !== 'catalog') {
+    return;
+  }
+
+  const timer = window.setTimeout(
+    () => {
+      searchOrderDealers(
+        orderDealerSearch,
+      );
+    },
+    300,
+  );
+
+  return () => {
+    window.clearTimeout(timer);
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [
+  orderDealerSearch,
+  activeTab,
+]);
+
+  useEffect(() => {
     refreshAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -2326,9 +2517,44 @@ useEffect(() => {
 }, []);
 
   const selectedDealer = useMemo(
-    () => dealers.find((item) => String(item.id) === String(orderForm.dealerId)),
-    [dealers, orderForm.dealerId],
-  );
+  () => {
+    if (
+      selectedOrderDealer &&
+      String(selectedOrderDealer.id) ===
+        String(orderForm.dealerId)
+    ) {
+      return selectedOrderDealer;
+    }
+
+    const existingDealer =
+      dealers.find(
+        (item) =>
+          String(item.id) ===
+          String(orderForm.dealerId),
+      );
+
+    if (!existingDealer) {
+      return undefined;
+    }
+
+    return {
+      id: existingDealer.id,
+      name:
+        existingDealer.vendorName || '',
+      contactPerson:
+        existingDealer.contactPerson || '',
+      phone:
+        existingDealer.phone || '',
+      city:
+        existingDealer.city || '',
+    };
+  },
+  [
+    dealers,
+    orderForm.dealerId,
+    selectedOrderDealer,
+  ],
+);
 
   const orderPreview = useMemo(() => {
     let subtotal = 0;
@@ -2377,9 +2603,13 @@ useEffect(() => {
 }, [ledgerDealerOptions]);
 
   const resetDealerForm = () => {
-    setEditingDealerId(null);
-    setDealerForm(emptyDealerForm);
-  };
+  setEditingDealerId(null);
+  setDealerForm(emptyDealerForm);
+
+  setReferralStaffSearch('');
+  setReferralStaffOptions([]);
+  setReferralStaffDropdownOpen(false);
+};
 
   const saveDealer = async () => {
     if (!dealerForm.vendorName.trim()) {
@@ -2429,21 +2659,52 @@ useEffect(() => {
   };
 
   const startEditDealer = (dealer: Dealer) => {
-    setEditingDealerId(dealer.id);
-    setDealerForm({
-      vendorName: dealer.vendorName || '',
-      contactPerson: dealer.contactPerson || '',
-      phone: dealer.phone || '',
-      email: dealer.email || '',
-      gstNumber: dealer.gstNumber || '',
-      address: dealer.address || '',
-      city: dealer.city || '',
-      state: dealer.state || '',
-      openingBalance: String(dealer.openingBalance || ''),
-      remarks: '',
-    });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  setEditingDealerId(dealer.id);
+
+  setDealerForm({
+    vendorName: dealer.vendorName || '',
+    contactPerson: dealer.contactPerson || '',
+    phone: dealer.phone || '',
+    email: dealer.email || '',
+    gstNumber: dealer.gstNumber || '',
+    address: dealer.address || '',
+    city: dealer.city || '',
+    state: dealer.state || '',
+    openingBalance: String(
+      dealer.openingBalance || '',
+    ),
+    remarks: dealer.remarks || '',
+
+    referredByType:
+      dealer.referredByType || '',
+
+    referredByStaffId:
+      dealer.referredByStaffId
+        ? String(dealer.referredByStaffId)
+        : '',
+
+    referredByStaffName:
+      dealer.referredByStaffName || '',
+
+    referredByStaffRole:
+      dealer.referredByStaffRole || '',
+
+    referredByExternalName:
+      dealer.referredByExternalName || '',
+
+    referredByExternalPhone:
+      dealer.referredByExternalPhone || '',
+  });
+
+  setReferralStaffSearch(
+  dealer.referredByType === 'STAFF'
+    ? dealer.referredByStaffName || ''
+    : '',
+);
+
+setReferralStaffOptions([]);
+setReferralStaffDropdownOpen(false);
+};
 
   const toggleDealer = async (dealer: Dealer) => {
     const confirmed = window.confirm(
@@ -2643,6 +2904,30 @@ const generateDealerFinalInvoice = async () => {
       return;
     }
 
+    if (
+  orderForm.referredByType === 'STAFF' &&
+  !orderForm.referredByStaffId
+) {
+  alert('Please select Referred By staff');
+  return;
+}
+
+if (
+  orderForm.referredByType === 'EXTERNAL' &&
+  !orderForm.referredByExternalName.trim()
+) {
+  alert('Please enter referral person name');
+  return;
+}
+
+if (
+  orderForm.referredByType === 'EXTERNAL' &&
+  !orderForm.referredByExternalPhone.trim()
+) {
+  alert('Please enter referral person phone');
+  return;
+}
+
     const validRows = orderRows.filter(
       (row) => row.materialId && Number(row.quantity || 0) > 0,
     );
@@ -2666,14 +2951,30 @@ const generateDealerFinalInvoice = async () => {
       alert('Dealer order created successfully');
 
       setOrderForm({
-        dealerId: '',
-        paymentType: 'CASH',
-        creditDueDate: '',
-        expectedDeliveryAt: '',
-        assignedStaffName: '',
-        assignedStaffPhone: '',
-        remarks: '',
-      });
+  dealerId: '',
+  paymentType: 'CASH',
+  creditDueDate: '',
+  expectedDeliveryAt: '',
+  assignedStaffName: '',
+  assignedStaffPhone: '',
+  remarks: '',
+
+  referredByType: '',
+  referredByStaffId: '',
+  referredByStaffName: '',
+  referredByStaffRole: '',
+  referredByExternalName: '',
+  referredByExternalPhone: '',
+});
+
+setOrderDealerSearch('');
+setOrderDealerOptions([]);
+setSelectedOrderDealer(null);
+setOrderDealerDropdownOpen(false);
+
+setReferralStaffSearch('');
+setReferralStaffOptions([]);
+setReferralStaffDropdownOpen(false);
 
       setOrderRows([
   {
@@ -2754,6 +3055,72 @@ const saveDealerPortalPassword = async () => {
   }
 };
 
+const saveOrderReferral = async () => {
+  const orderId =
+    selectedOrder?.order?.id;
+
+  if (!orderId) {
+    return;
+  }
+
+  if (
+    orderReferralForm.referredByType ===
+      'STAFF' &&
+    !orderReferralForm.referredByStaffId
+  ) {
+    alert('Please select Referred By staff');
+    return;
+  }
+
+  if (
+    orderReferralForm.referredByType ===
+      'EXTERNAL' &&
+    !orderReferralForm.referredByExternalName.trim()
+  ) {
+    alert('Please enter referral person name');
+    return;
+  }
+
+  if (
+    orderReferralForm.referredByType ===
+      'EXTERNAL' &&
+    !orderReferralForm.referredByExternalPhone.trim()
+  ) {
+    alert('Please enter referral person phone');
+    return;
+  }
+
+  try {
+    await axios.patch(
+      `${API_BASE_URL}/project/dealer-order/${orderId}/referral`,
+      orderReferralForm,
+      {
+        headers: headers(),
+      },
+    );
+
+    alert(
+      'Order referral updated successfully',
+    );
+
+    setEditingOrderReferral(false);
+
+    setReferralStaffSearch('');
+    setReferralStaffOptions([]);
+    setReferralStaffDropdownOpen(false);
+
+    await openOrder(orderId);
+    await fetchOrders();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to update order referral',
+    );
+  }
+};
+
   const openOrder = async (id: number) => {
     try {
       const res = await axios.get(`${API_BASE_URL}/project/dealer-order/${id}`, {
@@ -2761,6 +3128,10 @@ const saveDealerPortalPassword = async () => {
       });
 
       setSelectedOrder(res.data);
+      setEditingOrderReferral(false);
+setReferralStaffSearch('');
+setReferralStaffOptions([]);
+setReferralStaffDropdownOpen(false);
       const invoiceRes = await axios.get(
   `${API_BASE_URL}/project/dealer-order/${id}/invoices`,
   {
@@ -3734,6 +4105,202 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
             <textarea placeholder="Address" value={dealerForm.address} onChange={(e) => setDealerForm({ ...dealerForm, address: e.target.value })} className="mt-3 w-full rounded-xl border p-3" />
             <textarea placeholder="Remarks" value={dealerForm.remarks} onChange={(e) => setDealerForm({ ...dealerForm, remarks: e.target.value })} className="mt-3 w-full rounded-xl border p-3" />
 
+                <div className="mt-4 rounded-xl border bg-gray-50 p-4">
+  <p className="text-sm font-bold text-gray-800">
+    Referred By
+  </p>
+
+  <div className="mt-3 grid gap-3 md:grid-cols-2">
+    <select
+      value={dealerForm.referredByType}
+      onChange={(e) => {
+        const value = e.target.value;
+
+        setDealerForm((prev) => ({
+          ...prev,
+          referredByType: value,
+
+          referredByStaffId: '',
+          referredByStaffName: '',
+          referredByStaffRole: '',
+
+          referredByExternalName: '',
+          referredByExternalPhone: '',
+        }));
+
+        setReferralStaffSearch('');
+        setReferralStaffOptions([]);
+        setReferralStaffDropdownOpen(false);
+      }}
+      className="rounded-xl border bg-white p-3"
+    >
+      <option value="">
+        No Referral
+      </option>
+
+      <option value="STAFF">
+        Internal Staff
+      </option>
+
+      <option value="EXTERNAL">
+        External Person
+      </option>
+    </select>
+  </div>
+
+  {dealerForm.referredByType ===
+    'STAFF' && (
+    <div className="relative mt-3">
+      <input
+        type="text"
+        value={referralStaffSearch}
+        placeholder="Search staff by name / mobile / role"
+        onFocus={() => {
+          setReferralStaffDropdownOpen(
+            true,
+          );
+
+          searchReferralStaff(
+            referralStaffSearch,
+          );
+        }}
+        onChange={(e) => {
+          const value = e.target.value;
+
+          setReferralStaffSearch(value);
+          setReferralStaffDropdownOpen(
+            true,
+          );
+
+          setDealerForm((prev) => ({
+            ...prev,
+            referredByStaffId: '',
+            referredByStaffName: '',
+            referredByStaffRole: '',
+          }));
+
+          searchReferralStaff(value);
+        }}
+        className="w-full rounded-xl border bg-white p-3"
+      />
+
+      {dealerForm.referredByStaffId && (
+        <div className="mt-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm">
+          <span className="font-semibold text-green-800">
+            Selected:{' '}
+            {dealerForm.referredByStaffName}
+          </span>
+
+          {dealerForm.referredByStaffRole && (
+            <span className="text-green-700">
+              {' '}
+              — {dealerForm.referredByStaffRole}
+            </span>
+          )}
+        </div>
+      )}
+
+      {referralStaffDropdownOpen && (
+        <div className="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border bg-white shadow-lg">
+          {referralStaffLoading ? (
+            <div className="p-3 text-sm text-gray-500">
+              Searching staff...
+            </div>
+          ) : referralStaffOptions.length ? (
+            referralStaffOptions.map(
+              (staff) => (
+                <button
+                  key={staff.id}
+                  type="button"
+                  onClick={() => {
+                    setDealerForm(
+                      (prev) => ({
+                        ...prev,
+
+                        referredByStaffId:
+                          String(staff.id),
+
+                        referredByStaffName:
+                          staff.fullName,
+
+                        referredByStaffRole:
+                          staff.role || '',
+                      }),
+                    );
+
+                    setReferralStaffSearch(
+                      staff.fullName,
+                    );
+
+                    setReferralStaffDropdownOpen(
+                      false,
+                    );
+                  }}
+                  className="block w-full border-b px-3 py-3 text-left last:border-b-0 hover:bg-gray-50"
+                >
+                  <p className="font-semibold text-gray-800">
+                    {staff.fullName}
+                  </p>
+
+                  <p className="mt-1 text-xs text-gray-500">
+                    {[
+                      staff.role,
+                      staff.mobile,
+                    ]
+                      .filter(Boolean)
+                      .join(' • ')}
+                  </p>
+                </button>
+              ),
+            )
+          ) : (
+            <div className="p-3 text-sm text-gray-500">
+              No matching staff found
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )}
+
+  {dealerForm.referredByType ===
+    'EXTERNAL' && (
+    <div className="mt-3 grid gap-3 md:grid-cols-2">
+      <input
+        type="text"
+        placeholder="External Person Name"
+        value={
+          dealerForm.referredByExternalName
+        }
+        onChange={(e) =>
+          setDealerForm((prev) => ({
+            ...prev,
+            referredByExternalName:
+              e.target.value,
+          }))
+        }
+        className="rounded-xl border bg-white p-3"
+      />
+
+      <input
+        type="tel"
+        placeholder="External Person Phone"
+        value={
+          dealerForm.referredByExternalPhone
+        }
+        onChange={(e) =>
+          setDealerForm((prev) => ({
+            ...prev,
+            referredByExternalPhone:
+              e.target.value,
+          }))
+        }
+        className="rounded-xl border bg-white p-3"
+      />
+    </div>
+  )}
+</div>
+
             <button onClick={saveDealer} className="mt-4 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white">
               {editingDealerId ? 'Update Dealer' : 'Add Dealer'}
             </button>
@@ -3758,6 +4325,30 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
                     <p className="text-sm text-gray-500">{dealer.contactPerson || '-'} | {dealer.phone || '-'}</p>
                     <p className="text-sm text-gray-500">{dealer.city || '-'} | GST: {dealer.gstNumber || '-'}</p>
                     <p className="text-sm text-gray-500">Opening Balance: {money(dealer.openingBalance)}</p>
+
+                    {dealer.referredByType && (
+  <div className="mt-2 rounded-lg bg-gray-50 px-3 py-2 text-sm">
+    <span className="font-semibold text-gray-700">
+      Referred By:{' '}
+    </span>
+
+    {dealer.referredByType === 'STAFF' ? (
+      <span className="text-gray-600">
+        {dealer.referredByStaffName || '-'}
+        {dealer.referredByStaffRole
+          ? ` (${dealer.referredByStaffRole})`
+          : ''}
+      </span>
+    ) : (
+      <span className="text-gray-600">
+        {dealer.referredByExternalName || '-'}
+        {dealer.referredByExternalPhone
+          ? ` | ${dealer.referredByExternalPhone}`
+          : ''}
+      </span>
+    )}
+  </div>
+)}
 
                     <div className="mt-3 flex flex-wrap gap-2">
   <button
@@ -3818,12 +4409,113 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
   </h2>
 
             <div className="mt-4 grid min-w-0 grid-cols-2 gap-3">
-              <select value={orderForm.dealerId} onChange={(e) => setOrderForm({ ...orderForm, dealerId: e.target.value })} className="w-full min-w-0 rounded-xl border p-3">
-                <option value="">Select Dealer</option>
-                {dealers.map((dealer) => (
-                  <option key={dealer.id} value={dealer.id}>{dealer.vendorName} - {dealer.city || ''}</option>
-                ))}
-              </select>
+              <div className="relative min-w-0">
+  <input
+    type="text"
+    value={orderDealerSearch}
+    onFocus={() => {
+      setOrderDealerDropdownOpen(true);
+
+      if (!orderDealerOptions.length) {
+        searchOrderDealers(
+          orderDealerSearch,
+        );
+      }
+    }}
+    onChange={(e) => {
+      const value = e.target.value;
+
+      setOrderDealerSearch(value);
+      setOrderDealerDropdownOpen(true);
+
+      setOrderForm((prev) => ({
+        ...prev,
+        dealerId: '',
+      }));
+
+      setSelectedOrderDealer(null);
+    }}
+    placeholder="Search Dealer by name / firm / phone"
+    className="w-full min-w-0 rounded-xl border p-3"
+  />
+
+  {orderForm.dealerId &&
+    selectedOrderDealer && (
+      <div className="mt-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm">
+        <p className="font-semibold text-green-800">
+          Selected: {selectedOrderDealer.name}
+        </p>
+
+        <p className="text-xs text-green-700">
+          {[
+            selectedOrderDealer.firmName,
+            selectedOrderDealer.phone,
+          ]
+            .filter(Boolean)
+            .join(' • ')}
+        </p>
+      </div>
+    )}
+
+  {orderDealerDropdownOpen && (
+    <div className="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border bg-white shadow-lg">
+      {orderDealerLoading ? (
+        <div className="p-3 text-sm text-gray-500">
+          Searching dealers...
+        </div>
+      ) : orderDealerOptions.length ? (
+        orderDealerOptions.map(
+          (dealer) => (
+            <button
+              key={dealer.id}
+              type="button"
+              onClick={() => {
+                setOrderForm(
+                  (prev) => ({
+                    ...prev,
+                    dealerId:
+                      String(dealer.id),
+                  }),
+                );
+
+                setSelectedOrderDealer(
+                  dealer,
+                );
+
+                setOrderDealerSearch(
+                  dealer.name,
+                );
+
+                setOrderDealerDropdownOpen(
+                  false,
+                );
+              }}
+              className="block w-full border-b px-3 py-3 text-left last:border-b-0 hover:bg-gray-50"
+            >
+              <p className="font-semibold text-gray-800">
+                {dealer.name}
+              </p>
+
+              <p className="mt-1 text-xs text-gray-500">
+                {[
+                  dealer.firmName,
+                  dealer.contactPerson,
+                  dealer.phone,
+                ]
+                  .filter(Boolean)
+                  .join(' • ')}
+              </p>
+            </button>
+          ),
+        )
+      ) : (
+        <div className="p-3 text-sm text-gray-500">
+          No matching dealer found
+        </div>
+      )}
+    </div>
+  )}
+</div>
 
               <select value={orderForm.paymentType} onChange={(e) => setOrderForm({ ...orderForm, paymentType: e.target.value })} className="w-full min-w-0 rounded-xl border p-3">
                 <option value="CASH">Cash</option>
@@ -3903,6 +4595,191 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
             </div>
 
             <textarea placeholder="Order Remarks" value={orderForm.remarks} onChange={(e) => setOrderForm({ ...orderForm, remarks: e.target.value })} className="mt-3 w-full rounded-xl border p-3" />
+
+                <div className="mt-4 rounded-xl border bg-gray-50 p-4">
+  <p className="text-sm font-bold text-gray-800">
+    Referred By
+  </p>
+
+  <div className="mt-3">
+    <select
+      value={orderForm.referredByType}
+      onChange={(e) => {
+        const value = e.target.value;
+
+        setOrderForm((prev) => ({
+          ...prev,
+          referredByType: value,
+          referredByStaffId: '',
+          referredByStaffName: '',
+          referredByStaffRole: '',
+          referredByExternalName: '',
+          referredByExternalPhone: '',
+        }));
+
+        setReferralStaffSearch('');
+        setReferralStaffOptions([]);
+        setReferralStaffDropdownOpen(false);
+      }}
+      className="w-full rounded-xl border bg-white p-3"
+    >
+      <option value="">
+        No Referral
+      </option>
+
+      <option value="STAFF">
+        Internal Staff
+      </option>
+
+      <option value="EXTERNAL">
+        External Person
+      </option>
+    </select>
+  </div>
+
+  {orderForm.referredByType === 'STAFF' && (
+    <div className="relative mt-3">
+      <input
+        type="text"
+        value={referralStaffSearch}
+        placeholder="Search staff by name / mobile / role"
+        onFocus={() => {
+          setReferralStaffDropdownOpen(true);
+
+          searchReferralStaff(
+            referralStaffSearch,
+          );
+        }}
+        onChange={(e) => {
+          const value = e.target.value;
+
+          setReferralStaffSearch(value);
+          setReferralStaffDropdownOpen(true);
+
+          setOrderForm((prev) => ({
+            ...prev,
+            referredByStaffId: '',
+            referredByStaffName: '',
+            referredByStaffRole: '',
+          }));
+
+          searchReferralStaff(value);
+        }}
+        className="w-full rounded-xl border bg-white p-3"
+      />
+
+      {orderForm.referredByStaffId && (
+        <div className="mt-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm">
+          <span className="font-semibold text-green-800">
+            Selected:{' '}
+            {orderForm.referredByStaffName}
+          </span>
+
+          {orderForm.referredByStaffRole && (
+            <span className="text-green-700">
+              {' '}
+              — {orderForm.referredByStaffRole}
+            </span>
+          )}
+        </div>
+      )}
+
+      {referralStaffDropdownOpen && (
+        <div className="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border bg-white shadow-lg">
+          {referralStaffLoading ? (
+            <div className="p-3 text-sm text-gray-500">
+              Searching staff...
+            </div>
+          ) : referralStaffOptions.length ? (
+            referralStaffOptions.map(
+              (staff) => (
+                <button
+                  key={staff.id}
+                  type="button"
+                  onClick={() => {
+                    setOrderForm(
+                      (prev) => ({
+                        ...prev,
+                        referredByStaffId:
+                          String(staff.id),
+                        referredByStaffName:
+                          staff.fullName,
+                        referredByStaffRole:
+                          staff.role || '',
+                      }),
+                    );
+
+                    setReferralStaffSearch(
+                      staff.fullName,
+                    );
+
+                    setReferralStaffDropdownOpen(
+                      false,
+                    );
+                  }}
+                  className="block w-full border-b px-3 py-3 text-left last:border-b-0 hover:bg-gray-50"
+                >
+                  <p className="font-semibold text-gray-800">
+                    {staff.fullName}
+                  </p>
+
+                  <p className="mt-1 text-xs text-gray-500">
+                    {[
+                      staff.role,
+                      staff.mobile,
+                    ]
+                      .filter(Boolean)
+                      .join(' • ')}
+                  </p>
+                </button>
+              ),
+            )
+          ) : (
+            <div className="p-3 text-sm text-gray-500">
+              No matching staff found
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )}
+
+  {orderForm.referredByType === 'EXTERNAL' && (
+    <div className="mt-3 grid gap-3 md:grid-cols-2">
+      <input
+        type="text"
+        placeholder="External Person Name"
+        value={
+          orderForm.referredByExternalName
+        }
+        onChange={(e) =>
+          setOrderForm((prev) => ({
+            ...prev,
+            referredByExternalName:
+              e.target.value,
+          }))
+        }
+        className="rounded-xl border bg-white p-3"
+      />
+
+      <input
+        type="tel"
+        placeholder="External Person Phone"
+        value={
+          orderForm.referredByExternalPhone
+        }
+        onChange={(e) =>
+          setOrderForm((prev) => ({
+            ...prev,
+            referredByExternalPhone:
+              e.target.value,
+          }))
+        }
+        className="rounded-xl border bg-white p-3"
+      />
+    </div>
+  )}
+</div>
 
             <div className="mt-4 space-y-3">
               {orderRows.map((row, index) => {
@@ -4251,6 +5128,338 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
     >
       Call Staff
     </a>
+  )}
+</div>
+
+<div className="mt-3 rounded-xl border p-3 text-sm">
+  <div className="flex flex-wrap items-center justify-between gap-2">
+    <p className="font-semibold text-gray-700">
+      Referred By
+    </p>
+
+    {!editingOrderReferral && (
+      <button
+        type="button"
+        onClick={() => {
+          const order =
+            selectedOrder.order;
+
+          setOrderReferralForm({
+            referredByType:
+              order?.referredByType || '',
+
+            referredByStaffId:
+              order?.referredByStaffId
+                ? String(
+                    order.referredByStaffId,
+                  )
+                : '',
+
+            referredByStaffName:
+              order?.referredByStaffName ||
+              '',
+
+            referredByStaffRole:
+              order?.referredByStaffRole ||
+              '',
+
+            referredByExternalName:
+              order?.referredByExternalName ||
+              '',
+
+            referredByExternalPhone:
+              order?.referredByExternalPhone ||
+              '',
+          });
+
+          setReferralStaffSearch(
+            order?.referredByType ===
+              'STAFF'
+              ? order?.referredByStaffName ||
+                  ''
+              : '',
+          );
+
+          setReferralStaffOptions([]);
+          setReferralStaffDropdownOpen(
+            false,
+          );
+
+          setEditingOrderReferral(true);
+        }}
+        className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white"
+      >
+        Edit Referral
+      </button>
+    )}
+  </div>
+
+  {!editingOrderReferral ? (
+    <div className="mt-2 text-gray-600">
+      {!selectedOrder.order?.referredByType ? (
+        <p>No referral assigned</p>
+      ) : selectedOrder.order
+          ?.referredByType === 'STAFF' ? (
+        <p>
+          {
+            selectedOrder.order
+              ?.referredByStaffName
+          }
+          {selectedOrder.order
+            ?.referredByStaffRole
+            ? ` (${selectedOrder.order.referredByStaffRole})`
+            : ''}
+        </p>
+      ) : (
+        <p>
+          {
+            selectedOrder.order
+              ?.referredByExternalName
+          }
+          {selectedOrder.order
+            ?.referredByExternalPhone
+            ? ` | ${selectedOrder.order.referredByExternalPhone}`
+            : ''}
+        </p>
+      )}
+    </div>
+  ) : (
+    <div className="mt-3 space-y-3">
+      <select
+        value={
+          orderReferralForm.referredByType
+        }
+        onChange={(e) => {
+          const value = e.target.value;
+
+          setOrderReferralForm(
+            (prev) => ({
+              ...prev,
+              referredByType: value,
+              referredByStaffId: '',
+              referredByStaffName: '',
+              referredByStaffRole: '',
+              referredByExternalName: '',
+              referredByExternalPhone: '',
+            }),
+          );
+
+          setReferralStaffSearch('');
+          setReferralStaffOptions([]);
+          setReferralStaffDropdownOpen(
+            false,
+          );
+        }}
+        className="w-full rounded-xl border bg-white p-3"
+      >
+        <option value="">
+          No Referral
+        </option>
+
+        <option value="STAFF">
+          Internal Staff
+        </option>
+
+        <option value="EXTERNAL">
+          External Person
+        </option>
+      </select>
+
+      {orderReferralForm.referredByType ===
+        'STAFF' && (
+        <div className="relative">
+          <input
+            type="text"
+            value={referralStaffSearch}
+            placeholder="Search staff by name / mobile / role"
+            onFocus={() => {
+              setReferralStaffDropdownOpen(
+                true,
+              );
+
+              searchReferralStaff(
+                referralStaffSearch,
+              );
+            }}
+            onChange={(e) => {
+              const value =
+                e.target.value;
+
+              setReferralStaffSearch(
+                value,
+              );
+
+              setReferralStaffDropdownOpen(
+                true,
+              );
+
+              setOrderReferralForm(
+                (prev) => ({
+                  ...prev,
+                  referredByStaffId: '',
+                  referredByStaffName: '',
+                  referredByStaffRole: '',
+                }),
+              );
+
+              searchReferralStaff(value);
+            }}
+            className="w-full rounded-xl border bg-white p-3"
+          />
+
+          {orderReferralForm.referredByStaffId && (
+            <div className="mt-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2">
+              <span className="font-semibold text-green-800">
+                Selected:{' '}
+                {
+                  orderReferralForm.referredByStaffName
+                }
+              </span>
+
+              {orderReferralForm.referredByStaffRole && (
+                <span className="text-green-700">
+                  {' '}
+                  —{' '}
+                  {
+                    orderReferralForm.referredByStaffRole
+                  }
+                </span>
+              )}
+            </div>
+          )}
+
+          {referralStaffDropdownOpen && (
+            <div className="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border bg-white shadow-lg">
+              {referralStaffLoading ? (
+                <div className="p-3 text-gray-500">
+                  Searching staff...
+                </div>
+              ) : referralStaffOptions.length ? (
+                referralStaffOptions.map(
+                  (staff) => (
+                    <button
+                      key={staff.id}
+                      type="button"
+                      onClick={() => {
+                        setOrderReferralForm(
+                          (prev) => ({
+                            ...prev,
+                            referredByStaffId:
+                              String(
+                                staff.id,
+                              ),
+                            referredByStaffName:
+                              staff.fullName,
+                            referredByStaffRole:
+                              staff.role ||
+                              '',
+                          }),
+                        );
+
+                        setReferralStaffSearch(
+                          staff.fullName,
+                        );
+
+                        setReferralStaffDropdownOpen(
+                          false,
+                        );
+                      }}
+                      className="block w-full border-b px-3 py-3 text-left last:border-b-0 hover:bg-gray-50"
+                    >
+                      <p className="font-semibold">
+                        {staff.fullName}
+                      </p>
+
+                      <p className="text-xs text-gray-500">
+                        {[
+                          staff.role,
+                          staff.mobile,
+                        ]
+                          .filter(Boolean)
+                          .join(' • ')}
+                      </p>
+                    </button>
+                  ),
+                )
+              ) : (
+                <div className="p-3 text-gray-500">
+                  No matching staff found
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {orderReferralForm.referredByType ===
+        'EXTERNAL' && (
+        <div className="grid gap-3 md:grid-cols-2">
+          <input
+            type="text"
+            placeholder="External Person Name"
+            value={
+              orderReferralForm.referredByExternalName
+            }
+            onChange={(e) =>
+              setOrderReferralForm(
+                (prev) => ({
+                  ...prev,
+                  referredByExternalName:
+                    e.target.value,
+                }),
+              )
+            }
+            className="rounded-xl border p-3"
+          />
+
+          <input
+            type="tel"
+            placeholder="External Person Phone"
+            value={
+              orderReferralForm.referredByExternalPhone
+            }
+            onChange={(e) =>
+              setOrderReferralForm(
+                (prev) => ({
+                  ...prev,
+                  referredByExternalPhone:
+                    e.target.value,
+                }),
+              )
+            }
+            className="rounded-xl border p-3"
+          />
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={saveOrderReferral}
+          className="rounded-lg bg-green-600 px-3 py-2 font-semibold text-white"
+        >
+          Save Referral
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setEditingOrderReferral(
+              false,
+            );
+
+            setReferralStaffSearch('');
+            setReferralStaffOptions([]);
+            setReferralStaffDropdownOpen(
+              false,
+            );
+          }}
+          className="rounded-lg bg-gray-600 px-3 py-2 font-semibold text-white"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
   )}
 </div>
 

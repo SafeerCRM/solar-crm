@@ -95,8 +95,27 @@ tradingManagerId: number | null;
 })
 tradingManagerName: string | null;
 
-  @Column({ type: 'text', nullable: true })
-  remarks: string;
+// Referral details
+@Column({ type: 'varchar', nullable: true })
+referredByType: string | null;
+
+@Column({ type: 'int', nullable: true })
+referredByStaffId: number | null;
+
+@Column({ type: 'varchar', nullable: true })
+referredByStaffName: string | null;
+
+@Column({ type: 'varchar', nullable: true })
+referredByStaffRole: string | null;
+
+@Column({ type: 'varchar', nullable: true })
+referredByExternalName: string | null;
+
+@Column({ type: 'varchar', nullable: true })
+referredByExternalPhone: string | null;
+
+@Column({ type: 'text', nullable: true })
+remarks: string;
 
   @Column({ default: true })
   isActive: boolean;

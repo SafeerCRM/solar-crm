@@ -423,6 +423,44 @@ getVendors(
   );
 }
 
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'PAYMENT_MANAGER',
+  'TRADING_MANAGER',
+  'TRADING_HEAD',
+  'MEETING_MANAGER',
+  'STOCK_MANAGER',
+)
+@Get('trading/dealer-search')
+searchTradingDealers(
+  @Query('search') search?: string,
+) {
+  return this.projectService.searchTradingDealers(
+    search || '',
+  );
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'PAYMENT_MANAGER',
+  'TRADING_MANAGER',
+  'TRADING_HEAD',
+  'MEETING_MANAGER',
+  'STOCK_MANAGER',
+)
+@Get('trading/referral-staff')
+searchReferralStaff(
+  @Query('search') search?: string,
+) {
+  return this.projectService.searchReferralStaff(
+    search || '',
+  );
+}
+
 @Roles('OWNER', 'PROJECT_MANAGER')
 @Patch('vendor/:id')
 updateVendor(
@@ -4666,6 +4704,31 @@ syncDealersToPortal() {
 @Post('dealer')
 createDealer(@Body() body: any) {
   return this.projectService.createDealer(body);
+}
+
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'PAYMENT_MANAGER',
+  'TRADING_MANAGER',
+  'TRADING_HEAD',
+  'MEETING_MANAGER',
+  'STOCK_MANAGER',
+)
+@Patch('dealer-order/:id/referral')
+updateDealerOrderReferral(
+  @Param('id', ParseIntPipe)
+  id: number,
+
+  @Body()
+  body: any,
+) {
+  return this.projectService
+    .updateDealerOrderReferral(
+      id,
+      body,
+    );
 }
 
 @Roles(

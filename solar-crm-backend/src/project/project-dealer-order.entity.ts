@@ -117,10 +117,29 @@ export class ProjectDealerOrder {
   assignedStaffName: string;
 
   @Column({ nullable: true })
-  assignedStaffPhone: string;
+assignedStaffPhone: string;
 
-  @Column({ nullable: true })
-  createdBy: number;
+// Referral details
+@Column({ type: 'varchar', nullable: true })
+referredByType: string | null;
+
+@Column({ type: 'int', nullable: true })
+referredByStaffId: number | null;
+
+@Column({ type: 'varchar', nullable: true })
+referredByStaffName: string | null;
+
+@Column({ type: 'varchar', nullable: true })
+referredByStaffRole: string | null;
+
+@Column({ type: 'varchar', nullable: true })
+referredByExternalName: string | null;
+
+@Column({ type: 'varchar', nullable: true })
+referredByExternalPhone: string | null;
+
+@Column({ nullable: true })
+createdBy: number;
 
   @Column({ nullable: true })
   createdByName: string;
