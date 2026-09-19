@@ -25013,6 +25013,18 @@ const sellerLogoUrl =
       '',
   ).trim();
 
+const isAdityaTrading =
+  [
+    sellerCompanyName,
+    sellerLegalName,
+  ].some(
+    (value) =>
+      String(value || '')
+        .trim()
+        .toUpperCase() ===
+      'ADITYA TRADING',
+  );
+
 if (
   !sellerCompanyName ||
   !sellerGstNumber
@@ -26360,7 +26372,7 @@ if (
       },
     );
 
-  doc
+    doc
     .fontSize(
       8,
     )
@@ -26381,6 +26393,103 @@ if (
           'right',
       },
     );
+
+  /*
+   * =========================================================
+   * ADITYA TRADING BANK DETAILS
+   * =========================================================
+   */
+
+  if (isAdityaTrading) {
+    const bankY =
+      footerY + 96;
+
+    if (
+      bankY + 92 >
+      760
+    ) {
+      doc.addPage();
+      doc.y = 40;
+    }
+
+    const bankBlockY =
+      doc.y === 40
+        ? 40
+        : bankY;
+
+    doc
+      .roundedRect(
+        pageLeft,
+        bankBlockY,
+        pageWidth,
+        82,
+        6,
+      )
+      .fill(
+        '#f9fafb',
+      )
+      .strokeColor(
+        border,
+      )
+      .stroke();
+
+    doc
+      .fontSize(
+        10,
+      )
+      .fillColor(
+        blue,
+      )
+      .text(
+        'Bank Details',
+        pageLeft + 12,
+        bankBlockY + 10,
+      );
+
+    doc
+      .fontSize(
+        8,
+      )
+      .fillColor(
+        dark,
+      )
+      .text(
+        'Account Name: ADITYA TRADING',
+        pageLeft + 12,
+        bankBlockY + 28,
+      )
+      .text(
+        'Bank: ICICI BANK',
+        pageLeft + 12,
+        bankBlockY + 42,
+      )
+      .text(
+        'Account Number: 509105000023',
+        pageLeft + 12,
+        bankBlockY + 56,
+      );
+
+    doc
+      .fontSize(
+        8,
+      )
+      .fillColor(
+        dark,
+      )
+      .text(
+        'IFSC Code: ICIC0005091',
+        pageLeft + 270,
+        bankBlockY + 28,
+      )
+      .text(
+        'UPI ID: msadityatrading.eazypay1@icici',
+        pageLeft + 270,
+        bankBlockY + 42,
+        {
+          width: 230,
+        },
+      );
+  }
 
   doc.end();
 }
@@ -28367,6 +28476,18 @@ const sellerLogoUrl =
       '',
   ).trim();
 
+const isAdityaTrading =
+  [
+    sellerCompanyName,
+    sellerLegalName,
+  ].some(
+    (value) =>
+      String(value || '')
+        .trim()
+        .toUpperCase() ===
+      'ADITYA TRADING',
+  );
+
 if (
   !sellerCompanyName ||
   !sellerGstNumber
@@ -29695,7 +29816,7 @@ if (doc.y + requiredFooterSpace > 760) {
       },
     );
 
-  doc
+    doc
     .fontSize(
       8,
     )
@@ -29716,6 +29837,103 @@ if (doc.y + requiredFooterSpace > 760) {
           'right',
       },
     );
+
+  /*
+   * =========================================================
+   * ADITYA TRADING BANK DETAILS
+   * =========================================================
+   */
+
+  if (isAdityaTrading) {
+    const bankY =
+      footerY + 96;
+
+    if (
+      bankY + 92 >
+      760
+    ) {
+      doc.addPage();
+      doc.y = 40;
+    }
+
+    const bankBlockY =
+      doc.y === 40
+        ? 40
+        : bankY;
+
+    doc
+      .roundedRect(
+        pageLeft,
+        bankBlockY,
+        pageWidth,
+        82,
+        6,
+      )
+      .fill(
+        '#f9fafb',
+      )
+      .strokeColor(
+        border,
+      )
+      .stroke();
+
+    doc
+      .fontSize(
+        10,
+      )
+      .fillColor(
+        blue,
+      )
+      .text(
+        'Bank Details',
+        pageLeft + 12,
+        bankBlockY + 10,
+      );
+
+    doc
+      .fontSize(
+        8,
+      )
+      .fillColor(
+        dark,
+      )
+      .text(
+        'Account Name: ADITYA TRADING',
+        pageLeft + 12,
+        bankBlockY + 28,
+      )
+      .text(
+        'Bank: ICICI BANK',
+        pageLeft + 12,
+        bankBlockY + 42,
+      )
+      .text(
+        'Account Number: 509105000023',
+        pageLeft + 12,
+        bankBlockY + 56,
+      );
+
+    doc
+      .fontSize(
+        8,
+      )
+      .fillColor(
+        dark,
+      )
+      .text(
+        'IFSC Code: ICIC0005091',
+        pageLeft + 270,
+        bankBlockY + 28,
+      )
+      .text(
+        'UPI ID: msadityatrading.eazypay1@icici',
+        pageLeft + 270,
+        bankBlockY + 42,
+        {
+          width: 230,
+        },
+      );
+  }
 
   doc.end();
 }
