@@ -1497,26 +1497,68 @@ private async postCustomerPaymentInstallmentLedger(
     return null;
   }
 
-  const project = await this.projectRepository.findOne({
-    where: { id: Number(installment.projectId) },
+ const project = await this.projectRepository.findOne({
+  where: { id: Number(installment.projectId) },
+});
+
+const existingLedger =
+  await this.projectPartyLedgerRepository.findOne({
+    where: {
+      sourceType:
+        ProjectLedgerSourceType.CUSTOMER_PAYMENT,
+      sourceId: Number(installment.id),
+      entryType:
+        ProjectLedgerEntryType.CREDIT,
+      isHidden: false,
+    } as any,
   });
 
-  return this.postLedgerEntryOnce({
-    partyId: Number((project as any)?.customerId || 0) || null,
-    partyName:
-      (project as any)?.customerName ||
-      `Project #${installment.projectId}`,
-    partyType: 'CUSTOMER',
-    projectId: Number(installment.projectId),
-    entryType: ProjectLedgerEntryType.CREDIT,
-    sourceType: ProjectLedgerSourceType.CUSTOMER_PAYMENT,
-    sourceId: Number(installment.id),
-    amount: paidAmount,
-    remarks: `Customer payment approved - ${String(
+if (existingLedger) {
+  existingLedger.amount = paidAmount;
+
+  existingLedger.remarks =
+    `Customer payment approved - ${String(
+      installment.label || '',
+    ).replaceAll('_', ' ')}`;
+
+  return this.projectPartyLedgerRepository.save(
+    existingLedger,
+  );
+}
+
+return this.postLedgerEntryOnce({
+  partyId:
+    Number((project as any)?.customerId || 0) ||
+    null,
+
+  partyName:
+    (project as any)?.customerName ||
+    `Project #${installment.projectId}`,
+
+  partyType: 'CUSTOMER',
+
+  projectId:
+    Number(installment.projectId),
+
+  entryType:
+    ProjectLedgerEntryType.CREDIT,
+
+  sourceType:
+    ProjectLedgerSourceType.CUSTOMER_PAYMENT,
+
+  sourceId:
+    Number(installment.id),
+
+  amount:
+    paidAmount,
+
+  remarks:
+    `Customer payment approved - ${String(
       installment.label || '',
     ).replaceAll('_', ' ')}`,
-    user,
-  });
+
+  user,
+});
 }
 
 private async postDealerPaymentLedger(
@@ -13288,46 +13330,15 @@ const project =
     },
   });
 
-  if (savedInstallment.approvalStatus === 'APPROVED') {
-
-await this.projectPartyLedgerRepository.save(
-  this.projectPartyLedgerRepository.create({
-    partyId: undefined,
-
-    partyName:
-      project?.customerName || 'Customer',
-
-    partyType: 'CUSTOMER',
-
-    projectId:
-      Number(savedInstallment.projectId),
-
-    entryType:
-      ProjectLedgerEntryType.CREDIT,
-
-    sourceType:
-      ProjectLedgerSourceType.CUSTOMER_PAYMENT,
-
-    sourceId:
-      savedInstallment.id,
-
-    amount:
-      receivedAmount,
-
-    remarks:
-      body?.remarks ||
-      `Payment received for ${savedInstallment.label || 'installment'}`,
-
-    createdBy:
-      currentUser?.id ||
-      currentUser?.userId ||
-      null,
-
-    createdByName:
-      currentUser?.name || '',
-  } as Partial<ProjectPartyLedger>),
-);
-  }
+  if (
+  savedInstallment.approvalStatus ===
+  'APPROVED'
+) {
+  await this.postCustomerPaymentInstallmentLedger(
+    savedInstallment,
+    currentUser,
+  );
+}
 
 return savedInstallment;
 }
