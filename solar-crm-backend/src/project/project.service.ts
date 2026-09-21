@@ -4355,9 +4355,11 @@ const nextPendingActivity =
     )[0]?.activityType || '';
 
   const projectPayments =
-    paymentInstallments.filter(
-      (payment) => payment.projectId === project.id,
-    );
+  paymentInstallments.filter(
+    (payment) =>
+      payment.projectId === project.id &&
+      payment.isHidden !== true,
+  );
 
   const approvedReceivedAmount =
     projectPayments
