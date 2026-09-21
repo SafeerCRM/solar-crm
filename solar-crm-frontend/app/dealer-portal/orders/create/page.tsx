@@ -6,6 +6,8 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
 import dayjs, { Dayjs } from 'dayjs';
+import { Capacitor } from '@capacitor/core';
+import { Browser } from '@capacitor/browser';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -565,6 +567,82 @@ const updateExpectedDeliveryTimePart = (newTime: Dayjs | null) => {
   setExpectedDeliveryAt(merged.format('YYYY-MM-DDTHH:mm'));
 };
 
+const launchOnlineOrderPayment = async (
+  orderId: number,
+  token: string,
+) => {
+  const paymentSource =
+    Capacitor.isNativePlatform()
+      ? 'APP'
+      : 'WEB';
+
+  const res = await fetch(
+    `${API_BASE_URL}/dealer-auth/orders/${orderId}/payment/launch`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        paymentSource,
+      }),
+    },
+  );
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(
+      data?.message ||
+        'Unable to start online payment',
+    );
+  }
+
+  const launchUrl = String(
+    data?.launchUrl || '',
+  ).trim();
+
+  if (!launchUrl) {
+    throw new Error(
+      'Payment launch URL was not returned',
+    );
+  }
+
+  let parsedLaunchUrl: URL;
+
+  try {
+    parsedLaunchUrl =
+      new URL(launchUrl);
+  } catch {
+    throw new Error(
+      'Invalid payment launch URL',
+    );
+  }
+
+  if (
+    parsedLaunchUrl.origin !==
+      'https://adityasolars.co.in' ||
+    parsedLaunchUrl.pathname !==
+      '/payment/launch'
+  ) {
+    throw new Error(
+      'Unexpected payment launch URL',
+    );
+  }
+
+  if (
+    Capacitor.isNativePlatform()
+  ) {
+    await Browser.open({
+      url: launchUrl,
+    });
+  } else {
+    window.location.href =
+      launchUrl;
+  }
+};
+
   const submitOrder = async (e: FormEvent) => {
     e.preventDefault();
 
@@ -669,12 +747,38 @@ deliveryDistanceKm:
         return;
       }
 
-      setMessage('Order submitted successfully. Proforma Invoice generated.');
-      setCart([]);
+      const createdOrderId =
+  Number(data?.order?.id || 0);
 
-      setTimeout(() => {
-        window.location.href = '/dealer-portal/orders';
-      }, 800);
+if (!createdOrderId) {
+  throw new Error(
+    'Order was created but order ID was not returned',
+  );
+}
+
+setCart([]);
+
+if (paymentType === 'ONLINE') {
+  setMessage(
+    'Order submitted successfully. Opening secure payment...',
+  );
+
+  await launchOnlineOrderPayment(
+    createdOrderId,
+    token,
+  );
+
+  return;
+}
+
+setMessage(
+  'Order submitted successfully. Proforma Invoice generated.',
+);
+
+setTimeout(() => {
+  window.location.href =
+    '/dealer-portal/orders';
+}, 800);
     } catch (error) {
       console.error(error);
       setMessage('Order creation error. Please try again.');

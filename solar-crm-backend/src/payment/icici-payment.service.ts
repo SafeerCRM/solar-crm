@@ -70,9 +70,13 @@ type InitiatePaymentInput = {
   returnUrl: string;
 
   businessSettlementType?:
-    | 'DEALER_INSURANCE'
-    | 'DEALER_ORDER'
-    | 'CUSTOMER_PAYMENT';
+  | 'DEALER_INSURANCE'
+  | 'DEALER_ORDER'
+  | 'CUSTOMER_PAYMENT';
+
+paymentSource?:
+  | 'APP'
+  | 'WEB';
 };
 
 @Injectable()
@@ -428,6 +432,57 @@ private readonly dealerRepository:
     );
   }
 
+  private async updateActivePaymentSource(
+  transaction: IciciPaymentTransaction,
+  paymentSource?: 'APP' | 'WEB',
+) {
+  const source =
+    String(
+      paymentSource || 'WEB',
+    )
+      .trim()
+      .toUpperCase();
+
+  if (
+    source !== 'APP' &&
+    source !== 'WEB'
+  ) {
+    throw new BadRequestException(
+      'Invalid payment source',
+    );
+  }
+
+  if (
+    transaction.status !==
+      IciciPaymentTransactionStatus.CREATED &&
+    transaction.status !==
+      IciciPaymentTransactionStatus.INITIATED &&
+    transaction.status !==
+      IciciPaymentTransactionStatus.PENDING
+  ) {
+    return transaction;
+  }
+
+  const existingSource =
+    transaction.gatewayMetadata
+      ?.paymentSource;
+
+  if (
+    existingSource === source
+  ) {
+    return transaction;
+  }
+
+  transaction.gatewayMetadata = {
+    ...(transaction.gatewayMetadata || {}),
+    paymentSource: source,
+  };
+
+  return this.transactionRepository.save(
+    transaction,
+  );
+}
+
   async initiateDealerInsurancePayment(
   input: InitiatePaymentInput,
 ) {
@@ -506,6 +561,23 @@ private readonly dealerRepository:
         'DESC',
       )
       .getOne();
+
+      if (
+  previousTransaction &&
+  (
+    previousTransaction.status ===
+      IciciPaymentTransactionStatus.CREATED ||
+    previousTransaction.status ===
+      IciciPaymentTransactionStatus.INITIATED ||
+    previousTransaction.status ===
+      IciciPaymentTransactionStatus.PENDING
+  )
+) {
+  await this.updateActivePaymentSource(
+    previousTransaction,
+    input.paymentSource,
+  );
+}
 
   if (
     previousTransaction?.status ===
@@ -784,6 +856,11 @@ private readonly dealerRepository:
     throw error;
   }
 
+  await this.updateActivePaymentSource(
+  concurrentTransaction,
+  input.paymentSource,
+);
+
   const businessSettlementType =
     String(
       concurrentTransaction
@@ -961,6 +1038,23 @@ async initiateDealerOrderPayment(
         ) ===
         'DEALER_ORDER',
     );
+
+    if (
+  previousTransaction &&
+  (
+    previousTransaction.status ===
+      IciciPaymentTransactionStatus.CREATED ||
+    previousTransaction.status ===
+      IciciPaymentTransactionStatus.INITIATED ||
+    previousTransaction.status ===
+      IciciPaymentTransactionStatus.PENDING
+  )
+) {
+  await this.updateActivePaymentSource(
+    previousTransaction,
+    input.paymentSource,
+  );
+}
 
   /*
    * If the latest genuine attempt is already
@@ -1258,6 +1352,11 @@ async initiateDealerOrderPayment(
     throw error;
   }
 
+  await this.updateActivePaymentSource(
+  concurrentTransaction,
+  input.paymentSource,
+);
+
   const businessSettlementType =
     String(
       concurrentTransaction
@@ -1366,17 +1465,34 @@ async initiateDealerOrderPayment(
     }
 
     if (
-      !input.returnUrl ||
-      !/^https:\/\//i.test(
-        input.returnUrl,
-      )
-    ) {
-      throw new BadRequestException(
-        'A valid HTTPS payment return URL is required',
-      );
-    }
+  !input.returnUrl ||
+  !/^https:\/\//i.test(
+    input.returnUrl,
+  )
+) {
+  throw new BadRequestException(
+    'A valid HTTPS payment return URL is required',
+  );
+}
 
-    const merchant =
+const paymentSource =
+  String(
+    input.paymentSource ||
+      'WEB',
+  )
+    .trim()
+    .toUpperCase();
+
+if (
+  paymentSource !== 'APP' &&
+  paymentSource !== 'WEB'
+) {
+  throw new BadRequestException(
+    'Invalid payment source',
+  );
+}
+
+const merchant =
       this.getMerchantConfig(
         input.merchantAccount,
       );
@@ -1434,6 +1550,8 @@ gatewayMetadata: {
   businessSettlementType:
     input.businessSettlementType ||
     null,
+
+  paymentSource,
 },
 });
 
@@ -3251,6 +3369,92 @@ return {
     reconciledTransaction
       .status ===
     IciciPaymentTransactionStatus.SUCCESS,
+};
+}
+
+async getPublicPaymentResult(
+  transactionId: number,
+) {
+  const id =
+    Number(
+      transactionId,
+    );
+
+  if (
+    !Number.isInteger(id) ||
+    id <= 0
+  ) {
+    throw new BadRequestException(
+      'Invalid payment transaction',
+    );
+  }
+
+  const transaction =
+    await this
+      .transactionRepository
+      .findOne({
+        where: {
+          id,
+        },
+      });
+
+  if (!transaction) {
+    throw new BadRequestException(
+      'Payment transaction not found',
+    );
+  }
+
+  /*
+   * This endpoint is intentionally
+   * display-only.
+   *
+   * Do NOT expose:
+   * - dealerId
+   * - referenceId
+   * - merchant IDs
+   * - bank transaction IDs
+   * - payment IDs
+   * - gateway metadata
+   * - redirect URI / tranCtx
+   */
+  const gatewayMetadata =
+  transaction.gatewayMetadata &&
+  typeof transaction.gatewayMetadata ===
+    'object'
+    ? transaction.gatewayMetadata
+    : {};
+
+const paymentSource =
+  gatewayMetadata?.paymentSource ===
+  'APP'
+    ? 'APP'
+    : 'WEB';
+
+return {
+  transactionId:
+    transaction.id,
+
+  purpose:
+    transaction.purpose,
+
+  amount:
+    Number(
+      transaction.amount,
+    ),
+
+  status:
+    transaction.status,
+
+  paymentSuccessful:
+    transaction.status ===
+    IciciPaymentTransactionStatus
+      .SUCCESS,
+
+  paidAt:
+    transaction.paidAt ||
+    null,
+
+  paymentSource,
 };
 }
 }

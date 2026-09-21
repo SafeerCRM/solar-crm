@@ -109,6 +109,9 @@ async createDealerOrderPaymentLaunch(
     ParseIntPipe,
   )
   id: number,
+
+  @Body()
+  body: any,
 ) {
   const payload =
     this.getDealerPayload(
@@ -120,12 +123,25 @@ async createDealerOrderPaymentLaunch(
       payload.dealerId,
     );
 
+  const paymentSource =
+    String(
+      body?.paymentSource ||
+        'WEB',
+    )
+      .trim()
+      .toUpperCase();
+
+  if (
+    paymentSource !== 'APP' &&
+    paymentSource !== 'WEB'
+  ) {
+    throw new BadRequestException(
+      'Invalid payment source',
+    );
+  }
+
   /*
    * Ownership validation.
-   *
-   * Reuse the existing Dealer Portal order
-   * detail access rule before issuing any
-   * payment-launch capability.
    */
   await this.service
     .getDealerOrderDetail(
@@ -134,16 +150,18 @@ async createDealerOrderPaymentLaunch(
     );
 
   const token =
-  await this.paymentLaunchService
-    .createDealerLaunchToken({
+    await this.paymentLaunchService
+      .createDealerLaunchToken({
         purpose:
-  IciciPaymentLaunchPurpose
-    .DEALER_ORDER,
+          IciciPaymentLaunchPurpose
+            .DEALER_ORDER,
 
         referenceId:
           Number(id),
 
         dealerId,
+
+        paymentSource,
       });
 
   const websiteBaseUrl =
@@ -171,9 +189,9 @@ async createDealerOrderPaymentLaunch(
     success: true,
 
     launchUrl:
-  `${websiteBaseUrl}/payment/launch#token=${encodeURIComponent(
-    token,
-  )}`,
+      `${websiteBaseUrl}/payment/launch#token=${encodeURIComponent(
+        token,
+      )}`,
   };
 }
 
@@ -784,6 +802,9 @@ async createDealerInsurancePaymentLaunch(
     ParseIntPipe,
   )
   id: number,
+
+  @Body()
+  body: any,
 ) {
   const payload =
     this.getDealerPayload(
@@ -795,12 +816,25 @@ async createDealerInsurancePaymentLaunch(
       payload.dealerId,
     );
 
+  const paymentSource =
+    String(
+      body?.paymentSource ||
+        'WEB',
+    )
+      .trim()
+      .toUpperCase();
+
+  if (
+    paymentSource !== 'APP' &&
+    paymentSource !== 'WEB'
+  ) {
+    throw new BadRequestException(
+      'Invalid payment source',
+    );
+  }
+
   /*
    * Ownership validation.
-   *
-   * The existing detail method already
-   * requires this request to belong to the
-   * authenticated Dealer Portal account.
    */
   await this.service
     .getDealerInsuranceRequestDetail(
@@ -809,16 +843,18 @@ async createDealerInsurancePaymentLaunch(
     );
 
   const token =
-  await this.paymentLaunchService
-    .createDealerLaunchToken({
+    await this.paymentLaunchService
+      .createDealerLaunchToken({
         purpose:
-  IciciPaymentLaunchPurpose
-    .DEALER_INSURANCE,
+          IciciPaymentLaunchPurpose
+            .DEALER_INSURANCE,
 
         referenceId:
           Number(id),
 
         dealerId,
+
+        paymentSource,
       });
 
   const websiteBaseUrl =
@@ -846,9 +882,9 @@ async createDealerInsurancePaymentLaunch(
     success: true,
 
     launchUrl:
-  `${websiteBaseUrl}/payment/launch#token=${encodeURIComponent(
-    token,
-  )}`,
+      `${websiteBaseUrl}/payment/launch#token=${encodeURIComponent(
+        token,
+      )}`,
   };
 }
 

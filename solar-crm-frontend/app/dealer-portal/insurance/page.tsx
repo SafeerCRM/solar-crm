@@ -8,6 +8,12 @@ import {
   useState,
 } from 'react';
 
+import { Capacitor } from "@capacitor/core";
+
+import {
+  Browser,
+} from "@capacitor/browser";
+
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -788,6 +794,12 @@ if (
        *
        * No amount is supplied by frontend.
        */
+
+      const paymentSource =
+  Capacitor.isNativePlatform()
+    ? "APP"
+    : "WEB";
+
       const res =
         await fetch(
           `${API_BASE_URL}/dealer-auth/insurance/requests/${activeRequest.id}/payment/launch`,
@@ -802,8 +814,9 @@ if (
                 'application/json',
             },
 
-            body:
-              JSON.stringify({}),
+            body: JSON.stringify({
+  paymentSource,
+}),
           },
         );
 
@@ -861,8 +874,16 @@ if (
        * Leave the Dealer Portal and enter
        * the registered merchant website.
        */
-      window.location.href =
-        launchUrl;
+      if (
+  Capacitor.isNativePlatform()
+) {
+  await Browser.open({
+    url: launchUrl,
+  });
+} else {
+  window.location.href =
+    launchUrl;
+}
     } catch (
       error: any
     ) {

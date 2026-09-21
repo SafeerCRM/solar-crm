@@ -92,15 +92,19 @@ export class DealerPaymentLaunchController {
 ) {
   const payment =
     await this.dealerService
-      .initiateDealerOrderIciciPayment(
-        Number(
-          launch.dealerId,
-        ),
-        Number(
-          launch.referenceId,
-        ),
-        returnUrl,
-      );
+  .initiateDealerOrderIciciPayment(
+    Number(
+      launch.dealerId,
+    ),
+
+    Number(
+      launch.referenceId,
+    ),
+
+    returnUrl,
+
+    launch.paymentSource,
+  );
 
   const paymentUrl =
     String(
@@ -145,15 +149,19 @@ export class DealerPaymentLaunchController {
 ) {
   const result =
     await this.dealerService
-      .initiateDealerInsurancePayment(
-        Number(
-          launch.dealerId,
-        ),
-        Number(
-          launch.referenceId,
-        ),
-        returnUrl,
-      );
+  .initiateDealerInsurancePayment(
+    Number(
+      launch.dealerId,
+    ),
+
+    Number(
+      launch.referenceId,
+    ),
+
+    returnUrl,
+
+    launch.paymentSource,
+  );
 
   const payment =
     result?.payment ||

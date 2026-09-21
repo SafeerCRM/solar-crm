@@ -2,6 +2,8 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import { Capacitor } from '@capacitor/core';
+import { Browser } from '@capacitor/browser';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -110,6 +112,10 @@ export default function DealerOrderDetailPage() {
   const [comment, setComment] = useState('');
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [
+  startingOnlinePayment,
+  setStartingOnlinePayment,
+] = useState(false);
 
   const [documents, setDocuments] =
   useState<any[]>([]);
@@ -171,6 +177,131 @@ const [
 
     return { Authorization: `Bearer ${token}` };
   };
+
+  const startOnlinePayment = async () => {
+  const numericOrderId =
+    Number(orderId || 0);
+
+  const pendingAmount =
+    Number(
+      detail?.order?.pendingAmount ||
+        0,
+    );
+
+  if (!numericOrderId) {
+    setMessage(
+      'Invalid dealer order.',
+    );
+    return;
+  }
+
+  if (
+    !Number.isFinite(
+      pendingAmount,
+    ) ||
+    pendingAmount <= 0
+  ) {
+    setMessage(
+      'No pending amount is available for payment.',
+    );
+    return;
+  }
+
+  try {
+    setStartingOnlinePayment(
+      true,
+    );
+
+    setMessage('');
+
+    const paymentSource =
+      Capacitor.isNativePlatform()
+        ? 'APP'
+        : 'WEB';
+
+    const res = await fetch(
+      `${API_BASE_URL}/dealer-auth/orders/${numericOrderId}/payment/launch`,
+      {
+        method: 'POST',
+
+        headers: {
+          ...authHeaders(),
+          'Content-Type':
+            'application/json',
+        },
+
+        body: JSON.stringify({
+          paymentSource,
+        }),
+      },
+    );
+
+    const data =
+      await res.json();
+
+    if (!res.ok) {
+      throw new Error(
+        data?.message ||
+          'Unable to start online payment',
+      );
+    }
+
+    const launchUrl =
+      String(
+        data?.launchUrl || '',
+      ).trim();
+
+    if (!launchUrl) {
+      throw new Error(
+        'Payment launch URL was not returned',
+      );
+    }
+
+    let parsedLaunchUrl: URL;
+
+    try {
+      parsedLaunchUrl =
+        new URL(launchUrl);
+    } catch {
+      throw new Error(
+        'Invalid payment launch URL',
+      );
+    }
+
+    if (
+      parsedLaunchUrl.origin !==
+        'https://adityasolars.co.in' ||
+      parsedLaunchUrl.pathname !==
+        '/payment/launch'
+    ) {
+      throw new Error(
+        'Unexpected payment launch URL',
+      );
+    }
+
+    if (
+      Capacitor.isNativePlatform()
+    ) {
+      await Browser.open({
+        url: launchUrl,
+      });
+    } else {
+      window.location.href =
+        launchUrl;
+    }
+  } catch (error: any) {
+    console.error(error);
+
+    setMessage(
+      error?.message ||
+        'Unable to start online payment. Please try again.',
+    );
+  } finally {
+    setStartingOnlinePayment(
+      false,
+    );
+  }
+};
 
   const loadDocuments = async () => {
   if (!orderId) {
@@ -804,9 +935,54 @@ await Promise.all([
             </div>
 
             <div className="rounded-[2rem] bg-white p-6 text-slate-900 shadow-xl">
-              <h2 className="text-xl font-black">Payments</h2>
+  <h2 className="text-xl font-black">
+    Payments
+  </h2>
 
-              <div className="mt-4 space-y-3">
+  {Number(
+    detail?.order?.pendingAmount || 0,
+  ) > 0 && (
+    <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50 p-4">
+      <p className="text-xs font-black uppercase tracking-wide text-blue-600">
+        Pending Payment
+      </p>
+
+      <p className="mt-1 text-2xl font-black text-slate-900">
+        ₹
+        {Number(
+          detail?.order
+            ?.pendingAmount || 0,
+        ).toLocaleString(
+          'en-IN',
+        )}
+      </p>
+
+      <button
+        type="button"
+        onClick={
+          startOnlinePayment
+        }
+        disabled={
+          startingOnlinePayment
+        }
+        className="mt-3 w-full rounded-xl bg-gradient-to-r from-blue-700 to-sky-500 px-4 py-3 text-sm font-black text-white shadow disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {startingOnlinePayment
+          ? 'Opening Secure Payment...'
+          : 'Pay Pending Amount Online'}
+      </button>
+    </div>
+  )}
+
+  {Number(
+    detail?.order?.pendingAmount || 0,
+  ) <= 0 && (
+    <div className="mt-4 rounded-2xl bg-green-50 p-4 text-sm font-black text-green-700">
+      Payment Completed ✓
+    </div>
+  )}
+
+  <div className="mt-4 space-y-3">
                 {!payments.length && (
                   <p className="rounded-2xl bg-slate-50 p-4 text-sm font-semibold text-slate-500">
                     No payment submitted yet.

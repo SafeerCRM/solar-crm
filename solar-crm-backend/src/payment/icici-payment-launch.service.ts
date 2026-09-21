@@ -26,6 +26,9 @@ interface IciciPaymentLaunchPayload {
 
   dealerId: number;
 
+  paymentSource:
+    'APP' | 'WEB';
+
   expiresAt: number;
 
   nonce: string;
@@ -102,6 +105,9 @@ export class IciciPaymentLaunchService {
   referenceId: number;
 
   dealerId: number;
+
+  paymentSource:
+    'APP' | 'WEB';
 }) {
   const referenceId =
     Number(
@@ -135,7 +141,7 @@ export class IciciPaymentLaunchService {
     );
   }
 
-  if (
+    if (
     input.purpose !==
       IciciPaymentLaunchPurpose
         .DEALER_ORDER &&
@@ -145,6 +151,17 @@ export class IciciPaymentLaunchService {
   ) {
     throw new BadRequestException(
       'Invalid payment launch purpose',
+    );
+  }
+
+  if (
+    input.paymentSource !==
+      'APP' &&
+    input.paymentSource !==
+      'WEB'
+  ) {
+    throw new BadRequestException(
+      'Invalid payment source',
     );
   }
 
@@ -165,9 +182,12 @@ export class IciciPaymentLaunchService {
       purpose:
         input.purpose,
 
-      referenceId,
+            referenceId,
 
       dealerId,
+
+      paymentSource:
+        input.paymentSource,
 
       expiresAt,
 
@@ -333,18 +353,29 @@ export class IciciPaymentLaunchService {
       );
     }
 
+        if (
+      payload.purpose !==
+        IciciPaymentLaunchPurpose
+          .DEALER_ORDER &&
+      payload.purpose !==
+        IciciPaymentLaunchPurpose
+          .DEALER_INSURANCE
+    ) {
+      throw new BadRequestException(
+        'Invalid payment launch purpose',
+      );
+    }
+
     if (
-  payload.purpose !==
-    IciciPaymentLaunchPurpose
-      .DEALER_ORDER &&
-  payload.purpose !==
-    IciciPaymentLaunchPurpose
-      .DEALER_INSURANCE
-) {
-  throw new BadRequestException(
-    'Invalid payment launch purpose',
-  );
-}
+      payload.paymentSource !==
+        'APP' &&
+      payload.paymentSource !==
+        'WEB'
+    ) {
+      throw new BadRequestException(
+        'Invalid payment launch token',
+      );
+    }
 
     if (
       Date.now() >
@@ -366,10 +397,13 @@ export class IciciPaymentLaunchService {
           payload.referenceId,
         ),
 
-      dealerId:
+            dealerId:
         Number(
           payload.dealerId,
         ),
+
+      paymentSource:
+        payload.paymentSource,
 
       expiresAt:
         Number(
@@ -483,7 +517,7 @@ export class IciciPaymentLaunchService {
     );
   }
 
-  return {
+    return {
     purpose:
       payload.purpose,
 
@@ -492,6 +526,9 @@ export class IciciPaymentLaunchService {
 
     dealerId:
       payload.dealerId,
+
+    paymentSource:
+      payload.paymentSource,
   };
 }
 }

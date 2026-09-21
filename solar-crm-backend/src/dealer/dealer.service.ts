@@ -6338,6 +6338,7 @@ async initiateDealerOrderIciciPayment(
   dealerId: number,
   orderId: number,
   returnUrl: string,
+  paymentSource: 'APP' | 'WEB' = 'WEB',
 ) {
   /*
    * Portal identity comes only from JWT dealerId.
@@ -6534,8 +6535,10 @@ async initiateDealerOrderIciciPayment(
        * this marker and therefore cannot
        * settle against an order.
        */
-      businessSettlementType:
+            businessSettlementType:
         'DEALER_ORDER',
+
+      paymentSource,
     });
 }
 
@@ -6968,6 +6971,7 @@ async initiateDealerInsurancePayment(
   dealerId: number,
   requestId: number,
   returnUrl: string,
+  paymentSource: 'APP' | 'WEB' = 'WEB',
 ) {
   const request =
     await this
@@ -7110,7 +7114,9 @@ async initiateDealerInsurancePayment(
           ).trim() ||
           undefined,
 
-        returnUrl,
+                returnUrl,
+
+        paymentSource,
       });
 
   request.paymentStatus =
