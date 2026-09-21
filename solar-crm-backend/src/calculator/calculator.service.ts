@@ -1549,26 +1549,23 @@ async calculateWebsiteSolarEstimate(data: any) {
    * Pick the smallest configured capacity that can satisfy
    * the calculated requirement.
    */
-  let selectedSlab = activeSlabs.find(
-    (slab) =>
-      Number(slab.capacityKw) >= rawRequiredCapacityKw,
-  );
+  const selectedSlab = activeSlabs.find(
+  (slab) =>
+    Number(slab.capacityKw) >= rawRequiredCapacityKw,
+);
 
-  /*
-   * If the requirement is above every configured slab,
-   * use the largest available slab.
-   */
-  if (!selectedSlab) {
-    selectedSlab = activeSlabs[activeSlabs.length - 1];
-  }
+const requiresCustomQuotation = !selectedSlab;
+
+const effectiveSlab =
+  selectedSlab || activeSlabs[activeSlabs.length - 1];
 
   const recommendedCapacityKw = Number(
-    selectedSlab.capacityKw || 0,
-  );
+  effectiveSlab.capacityKw || 0,
+);
 
-  const projectCost = Number(
-    selectedSlab.projectCost || 0,
-  );
+const projectCost = Number(
+  effectiveSlab.projectCost || 0,
+);
 
   const estimatedMonthlyGeneration =
     recommendedCapacityKw * monthlyGenerationPerKw;
@@ -1620,6 +1617,12 @@ async calculateWebsiteSolarEstimate(data: any) {
       recommendedCapacityKw: Number(
         recommendedCapacityKw.toFixed(2),
       ),
+
+      requiredCapacityKw: Number(
+  rawRequiredCapacityKw.toFixed(2),
+),
+
+requiresCustomQuotation,
 
       estimatedMonthlyGeneration: Number(
         estimatedMonthlyGeneration.toFixed(2),
