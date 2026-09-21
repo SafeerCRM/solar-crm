@@ -18589,12 +18589,58 @@ async hidePaymentInstallment(
   }
 
   installment.isHidden = true;
-  installment.hiddenAt = new Date();
-  installment.hiddenBy = currentUser?.id || currentUser?.userId || null;
-  installment.hiddenByName = currentUser?.name || currentUser?.email || '';
-  installment.hiddenReason = body?.reason || 'Hidden by user';
+installment.hiddenAt = new Date();
+installment.hiddenBy =
+  currentUser?.id || currentUser?.userId || null;
+installment.hiddenByName =
+  currentUser?.name || currentUser?.email || '';
+installment.hiddenReason =
+  body?.reason || 'Hidden by user';
 
-  return this.projectPaymentInstallmentRepository.save(installment);
+const savedInstallment =
+  await this.projectPaymentInstallmentRepository.save(
+    installment,
+  );
+
+/*
+ * Keep Project Accounts / Party Ledger in sync
+ * with the visible payment-installment state.
+ *
+ * A hidden/duplicate installment must not continue
+ * contributing to Customer Payments.
+ */
+await this.projectPartyLedgerRepository
+  .createQueryBuilder()
+  .update(ProjectPartyLedger)
+  .set({
+    isHidden: true,
+  })
+  .where(
+    '"sourceType" = :sourceType',
+    {
+      sourceType:
+        ProjectLedgerSourceType.CUSTOMER_PAYMENT,
+    },
+  )
+  .andWhere(
+    '"sourceId" = :sourceId',
+    {
+      sourceId: savedInstallment.id,
+    },
+  )
+  .andWhere(
+    '"entryType" = :entryType',
+    {
+      entryType:
+        ProjectLedgerEntryType.CREDIT,
+    },
+  )
+  .andWhere(
+    '"isHidden" = false',
+  )
+  .execute();
+
+return savedInstallment;
 }
 
 async hideProject(id: number, body: any, user: any) {
