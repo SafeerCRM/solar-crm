@@ -472,6 +472,32 @@ const [
   setMonthlyMaterialSearchOpen,
 ] = useState(false);
 
+const [
+  monthlyDealerSearch,
+  setMonthlyDealerSearch,
+] = useState('');
+
+const [
+  monthlyDealerOptions,
+  setMonthlyDealerOptions,
+] = useState<TradingDealerOption[]>([]);
+
+const [
+  monthlyDealerLoading,
+  setMonthlyDealerLoading,
+] = useState(false);
+
+const [
+  monthlyDealerDropdownOpen,
+  setMonthlyDealerDropdownOpen,
+] = useState(false);
+
+const [
+  selectedMonthlyDealer,
+  setSelectedMonthlyDealer,
+] =
+  useState<TradingDealerOption | null>(null);
+
   const [loading, setLoading] = useState(false);
 
   const [dealerSearch, setDealerSearch] = useState('');
@@ -761,6 +787,40 @@ const [finalInvoiceForm, setFinalInvoiceForm] = useState({
     setOrderDealerOptions([]);
   } finally {
     setOrderDealerLoading(false);
+  }
+};
+
+const searchMonthlyDealers = async (
+  search = '',
+) => {
+  try {
+    setMonthlyDealerLoading(true);
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/trading/dealer-search`,
+      {
+        params: {
+          search:
+            search.trim() || undefined,
+        },
+        headers: headers(),
+      },
+    );
+
+    setMonthlyDealerOptions(
+      Array.isArray(res.data)
+        ? res.data
+        : [],
+    );
+  } catch (error) {
+    console.error(
+      'Failed to search monthly requirement dealers:',
+      error,
+    );
+
+    setMonthlyDealerOptions([]);
+  } finally {
+    setMonthlyDealerLoading(false);
   }
 };
 
@@ -3755,17 +3815,22 @@ const addMonthlyRequirement = async () => {
     alert('Monthly requirement added');
 
     setMonthlyForm({
-      dealerId: '',
-      materialId: '',
-      requirementMonth: '',
-      expectedQuantity: '',
-      remarks: '',
-    });
+  dealerId: '',
+  materialId: '',
+  requirementMonth: '',
+  expectedQuantity: '',
+  remarks: '',
+});
 
-    setMonthlyMaterialSearch('');
+setMonthlyDealerSearch('');
+setMonthlyDealerOptions([]);
+setSelectedMonthlyDealer(null);
+setMonthlyDealerDropdownOpen(false);
+
+setMonthlyMaterialSearch('');
 setMonthlyMaterialSearchOpen(false);
 
-    fetchMonthlyRequirements();
+fetchMonthlyRequirements();
   } catch (error: any) {
     console.error(error);
     alert(error?.response?.data?.message || 'Failed to add monthly requirement');
@@ -7204,18 +7269,116 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
       <h2 className="text-lg font-bold text-gray-800">Add Monthly Requirement</h2>
 
       <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <select
-          value={monthlyForm.dealerId}
-          onChange={(e) => setMonthlyForm({ ...monthlyForm, dealerId: e.target.value })}
-          className="w-full rounded-xl border p-3"
-        >
-          <option value="">Select Dealer</option>
-          {dealers.map((dealer) => (
-            <option key={dealer.id} value={dealer.id}>
-              {dealer.vendorName}
-            </option>
-          ))}
-        </select>
+        <div className="relative min-w-0">
+  <input
+    type="text"
+    value={monthlyDealerSearch}
+    placeholder="Search Dealer by name / firm / phone"
+    onFocus={() => {
+      setMonthlyDealerDropdownOpen(true);
+
+      if (!monthlyDealerOptions.length) {
+        searchMonthlyDealers(
+          monthlyDealerSearch,
+        );
+      }
+    }}
+    onChange={(e) => {
+      const value = e.target.value;
+
+      setMonthlyDealerSearch(value);
+      setMonthlyDealerDropdownOpen(true);
+
+      setMonthlyForm((prev) => ({
+        ...prev,
+        dealerId: '',
+      }));
+
+      setSelectedMonthlyDealer(null);
+
+      searchMonthlyDealers(value);
+    }}
+    className="w-full rounded-xl border p-3"
+  />
+
+  {monthlyForm.dealerId &&
+    selectedMonthlyDealer && (
+      <div className="mt-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm">
+        <p className="font-semibold text-green-800">
+          Selected:{' '}
+          {selectedMonthlyDealer.name}
+        </p>
+
+        <p className="text-xs text-green-700">
+          {[
+            selectedMonthlyDealer.firmName,
+            selectedMonthlyDealer.phone,
+          ]
+            .filter(Boolean)
+            .join(' • ')}
+        </p>
+      </div>
+    )}
+
+  {monthlyDealerDropdownOpen && (
+    <div className="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border bg-white shadow-lg">
+      {monthlyDealerLoading ? (
+        <div className="p-3 text-sm text-gray-500">
+          Searching dealers...
+        </div>
+      ) : monthlyDealerOptions.length ? (
+        monthlyDealerOptions.map(
+          (dealer) => (
+            <button
+              key={dealer.id}
+              type="button"
+              onClick={() => {
+                setMonthlyForm(
+                  (prev) => ({
+                    ...prev,
+                    dealerId:
+                      String(dealer.id),
+                  }),
+                );
+
+                setSelectedMonthlyDealer(
+                  dealer,
+                );
+
+                setMonthlyDealerSearch(
+                  dealer.name,
+                );
+
+                setMonthlyDealerDropdownOpen(
+                  false,
+                );
+              }}
+              className="block w-full border-b px-3 py-3 text-left last:border-b-0 hover:bg-gray-50"
+            >
+              <p className="font-semibold text-gray-800">
+                {dealer.name}
+              </p>
+
+              <p className="mt-1 text-xs text-gray-500">
+                {[
+                  dealer.firmName,
+                  dealer.contactPerson,
+                  dealer.phone,
+                ]
+                  .filter(Boolean)
+                  .join(' • ')}
+              </p>
+            </button>
+          ),
+        )
+      ) : (
+        <div className="p-3 text-sm text-gray-500">
+          No matching dealer found
+        </div>
+      )}
+    </div>
+  )}
+</div>
 
         <div className="relative min-w-0">
   {(() => {
