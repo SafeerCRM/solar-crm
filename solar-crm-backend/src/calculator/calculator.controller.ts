@@ -46,6 +46,56 @@ async calculate(@Body() body: any, @Req() req: any) {
     return this.calculatorService.updateSettings(body);
   }
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Get('website-settings')
+getWebsiteCalculatorSettings() {
+  return this.calculatorService.getWebsiteCalculatorSettings();
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Patch('website-settings')
+updateWebsiteCalculatorSettings(@Body() body: any) {
+  return this.calculatorService.updateWebsiteCalculatorSettings(body);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Get('website-price-slabs')
+getWebsiteCalculatorPriceSlabs() {
+  return this.calculatorService.getWebsiteCalculatorPriceSlabs();
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Post('website-price-slabs')
+createWebsiteCalculatorPriceSlab(@Body() body: any) {
+  return this.calculatorService.createWebsiteCalculatorPriceSlab(body);
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Patch('website-price-slabs/:id')
+updateWebsiteCalculatorPriceSlab(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+) {
+  return this.calculatorService.updateWebsiteCalculatorPriceSlab(
+    id,
+    body,
+  );
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('OWNER')
+@Delete('website-price-slabs/:id')
+deleteWebsiteCalculatorPriceSlab(
+  @Param('id', ParseIntPipe) id: number,
+) {
+  return this.calculatorService.deleteWebsiteCalculatorPriceSlab(id);
+}
+
   @Get('meeting/:meetingId')
   async findByMeetingId(
     @Param('meetingId', ParseIntPipe) meetingId: number,

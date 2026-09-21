@@ -207,6 +207,13 @@ export default function CalculatorSettingsPage() {
   href="/calculator/settings/discount"
 />
 
+<ManageCard
+  title="Website Solar Calculator"
+  count={0}
+  description="Control public website electricity assumptions, solar generation, displayed results and capacity-wise project prices."
+  href="/calculator/settings/website"
+/>
+
       <button
         onClick={handleSave}
         disabled={saving}

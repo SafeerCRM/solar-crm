@@ -15,6 +15,8 @@ import { CalculatorBatterySelection } from './calculator-battery-selection.entit
 import { CalculatorKitOption } from './calculator-kit-option.entity';
 import { CalculatorExpectedProfit } from './calculator-expected-profit.entity';
 import { CalculatorDiscountOption } from './calculator-discount-option.entity';
+import { WebsiteCalculatorSetting } from './website-calculator-setting.entity';
+import { WebsiteCalculatorPriceSlab } from './website-calculator-price-slab.entity';
 
 @Injectable()
 export class CalculatorService {
@@ -45,7 +47,13 @@ private readonly kitOptionRepository: Repository<CalculatorKitOption>,
 private readonly expectedProfitRepository: Repository<CalculatorExpectedProfit>,
 @InjectRepository(CalculatorDiscountOption)
 private readonly discountOptionRepository: Repository<CalculatorDiscountOption>,
-  ) {}
+
+@InjectRepository(WebsiteCalculatorSetting)
+private readonly websiteCalculatorSettingRepository: Repository<WebsiteCalculatorSetting>,
+
+@InjectRepository(WebsiteCalculatorPriceSlab)
+private readonly websiteCalculatorPriceSlabRepository: Repository<WebsiteCalculatorPriceSlab>,
+) {}
 
   private async resolveBatterySelections(data: any): Promise<{
   rows: Array<{
@@ -1258,5 +1266,191 @@ async updateSettings(data: any) {
   });
 
   return this.calculatorSettingRepository.save(settings);
+}
+
+async getWebsiteCalculatorSettings() {
+  let settings =
+    await this.websiteCalculatorSettingRepository.findOne({
+      where: { id: 1 },
+    });
+
+  if (!settings) {
+    settings =
+      this.websiteCalculatorSettingRepository.create({});
+
+    settings =
+      await this.websiteCalculatorSettingRepository.save(settings);
+  }
+
+  return settings;
+}
+
+async updateWebsiteCalculatorSettings(data: any) {
+  const settings = await this.getWebsiteCalculatorSettings();
+
+  Object.assign(settings, {
+    isEnabled:
+      data?.isEnabled !== undefined
+        ? Boolean(data.isEnabled)
+        : settings.isEnabled,
+
+    defaultElectricityRate:
+      data?.defaultElectricityRate !== undefined
+        ? Number(data.defaultElectricityRate)
+        : settings.defaultElectricityRate,
+
+    allowElectricityRateEdit:
+      data?.allowElectricityRateEdit !== undefined
+        ? Boolean(data.allowElectricityRateEdit)
+        : settings.allowElectricityRateEdit,
+
+    monthlyGenerationPerKw:
+      data?.monthlyGenerationPerKw !== undefined
+        ? Number(data.monthlyGenerationPerKw)
+        : settings.monthlyGenerationPerKw,
+
+    recommendedCoveragePercent:
+      data?.recommendedCoveragePercent !== undefined
+        ? Number(data.recommendedCoveragePercent)
+        : settings.recommendedCoveragePercent,
+
+    roofAreaSqftPerKw:
+      data?.roofAreaSqftPerKw !== undefined
+        ? Number(data.roofAreaSqftPerKw)
+        : settings.roofAreaSqftPerKw,
+
+    showProjectCost:
+      data?.showProjectCost !== undefined
+        ? Boolean(data.showProjectCost)
+        : settings.showProjectCost,
+
+    showMonthlySavings:
+      data?.showMonthlySavings !== undefined
+        ? Boolean(data.showMonthlySavings)
+        : settings.showMonthlySavings,
+
+    showAnnualSavings:
+      data?.showAnnualSavings !== undefined
+        ? Boolean(data.showAnnualSavings)
+        : settings.showAnnualSavings,
+
+    showPaybackPeriod:
+      data?.showPaybackPeriod !== undefined
+        ? Boolean(data.showPaybackPeriod)
+        : settings.showPaybackPeriod,
+
+    showRoofArea:
+      data?.showRoofArea !== undefined
+        ? Boolean(data.showRoofArea)
+        : settings.showRoofArea,
+
+    disclaimer:
+      data?.disclaimer !== undefined
+        ? String(data.disclaimer || '').trim()
+        : settings.disclaimer,
+  });
+
+  return this.websiteCalculatorSettingRepository.save(settings);
+}
+
+async getWebsiteCalculatorPriceSlabs() {
+  return this.websiteCalculatorPriceSlabRepository.find({
+    order: {
+      sortOrder: 'ASC',
+      capacityKw: 'ASC',
+    },
+  });
+}
+
+async createWebsiteCalculatorPriceSlab(data: any) {
+  const capacityKw = Number(data?.capacityKw || 0);
+  const projectCost = Number(data?.projectCost || 0);
+
+  if (capacityKw <= 0) {
+    throw new Error('Capacity must be greater than zero');
+  }
+
+  if (projectCost <= 0) {
+    throw new Error('Project cost must be greater than zero');
+  }
+
+  const slab =
+    this.websiteCalculatorPriceSlabRepository.create({
+      capacityKw,
+      projectCost,
+      isActive: data?.isActive !== false,
+      sortOrder: Number(data?.sortOrder || 0),
+    });
+
+  return this.websiteCalculatorPriceSlabRepository.save(slab);
+}
+
+async updateWebsiteCalculatorPriceSlab(
+  id: number,
+  data: any,
+) {
+  const slab =
+    await this.websiteCalculatorPriceSlabRepository.findOne({
+      where: { id },
+    });
+
+  if (!slab) {
+    throw new Error('Website calculator price slab not found');
+  }
+
+  if (
+    data?.capacityKw !== undefined &&
+    Number(data.capacityKw) <= 0
+  ) {
+    throw new Error('Capacity must be greater than zero');
+  }
+
+  if (
+    data?.projectCost !== undefined &&
+    Number(data.projectCost) <= 0
+  ) {
+    throw new Error('Project cost must be greater than zero');
+  }
+
+  Object.assign(slab, {
+    capacityKw:
+      data?.capacityKw !== undefined
+        ? Number(data.capacityKw)
+        : slab.capacityKw,
+
+    projectCost:
+      data?.projectCost !== undefined
+        ? Number(data.projectCost)
+        : slab.projectCost,
+
+    isActive:
+      data?.isActive !== undefined
+        ? Boolean(data.isActive)
+        : slab.isActive,
+
+    sortOrder:
+      data?.sortOrder !== undefined
+        ? Number(data.sortOrder)
+        : slab.sortOrder,
+  });
+
+  return this.websiteCalculatorPriceSlabRepository.save(slab);
+}
+
+async deleteWebsiteCalculatorPriceSlab(id: number) {
+  const slab =
+    await this.websiteCalculatorPriceSlabRepository.findOne({
+      where: { id },
+    });
+
+  if (!slab) {
+    throw new Error('Website calculator price slab not found');
+  }
+
+  await this.websiteCalculatorPriceSlabRepository.delete(id);
+
+  return {
+    message: 'Website calculator price slab deleted successfully',
+  };
 }
 }

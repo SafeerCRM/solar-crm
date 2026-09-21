@@ -15,6 +15,8 @@ import { CalculatorBatterySelection } from './calculator-battery-selection.entit
 import { CalculatorKitOption } from './calculator-kit-option.entity';
 import { CalculatorExpectedProfit } from './calculator-expected-profit.entity';
 import { CalculatorDiscountOption } from './calculator-discount-option.entity';
+import { WebsiteCalculatorSetting } from './website-calculator-setting.entity';
+import { WebsiteCalculatorPriceSlab } from './website-calculator-price-slab.entity';
 
 @Module({
   imports: [TypeOrmModule.forFeature([
@@ -31,6 +33,8 @@ import { CalculatorDiscountOption } from './calculator-discount-option.entity';
   CalculatorKitOption,
   CalculatorExpectedProfit,
   CalculatorDiscountOption,
+  WebsiteCalculatorSetting,
+WebsiteCalculatorPriceSlab,
 ])],
   controllers: [CalculatorController],
   providers: [CalculatorService],
