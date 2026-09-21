@@ -17,6 +17,7 @@ import { CalculatorExpectedProfit } from './calculator-expected-profit.entity';
 import { CalculatorDiscountOption } from './calculator-discount-option.entity';
 import { WebsiteCalculatorSetting } from './website-calculator-setting.entity';
 import { WebsiteCalculatorPriceSlab } from './website-calculator-price-slab.entity';
+import { WebsiteCalculatorPublicController } from './website-calculator-public.controller';
 
 @Module({
   imports: [TypeOrmModule.forFeature([
@@ -36,7 +37,10 @@ import { WebsiteCalculatorPriceSlab } from './website-calculator-price-slab.enti
   WebsiteCalculatorSetting,
 WebsiteCalculatorPriceSlab,
 ])],
-  controllers: [CalculatorController],
+  controllers: [
+  CalculatorController,
+  WebsiteCalculatorPublicController,
+],
   providers: [CalculatorService],
   exports: [CalculatorService],
 })

@@ -1453,4 +1453,221 @@ async deleteWebsiteCalculatorPriceSlab(id: number) {
     message: 'Website calculator price slab deleted successfully',
   };
 }
+
+async calculateWebsiteSolarEstimate(data: any) {
+  const settings = await this.getWebsiteCalculatorSettings();
+
+  if (!settings.isEnabled) {
+    throw new Error('Website solar calculator is currently disabled');
+  }
+
+  const monthlyBill = Number(data?.monthlyBill || 0);
+
+  if (!Number.isFinite(monthlyBill) || monthlyBill <= 0) {
+    throw new Error('Monthly electricity bill must be greater than zero');
+  }
+
+  const defaultElectricityRate = Number(
+    settings.defaultElectricityRate || 0,
+  );
+
+  let electricityRate = defaultElectricityRate;
+
+  /*
+   * Only accept a visitor-supplied electricity rate when OWNER
+   * has explicitly enabled public editing.
+   */
+  if (settings.allowElectricityRateEdit) {
+    const requestedRate = Number(data?.electricityRate || 0);
+
+    if (Number.isFinite(requestedRate) && requestedRate > 0) {
+      electricityRate = requestedRate;
+    }
+  }
+
+  if (electricityRate <= 0) {
+    throw new Error('Electricity rate is not configured');
+  }
+
+  const monthlyGenerationPerKw = Number(
+    settings.monthlyGenerationPerKw || 0,
+  );
+
+  if (monthlyGenerationPerKw <= 0) {
+    throw new Error(
+      'Monthly solar generation per kW is not configured',
+    );
+  }
+
+  const coveragePercent = Math.max(
+    Number(settings.recommendedCoveragePercent || 100),
+    0,
+  );
+
+  /*
+   * Estimated present electricity consumption.
+   */
+  const estimatedMonthlyUnits =
+    monthlyBill / electricityRate;
+
+  /*
+   * Units we want solar to cover according to OWNER setting.
+   *
+   * Example:
+   * 500 units × 100% = 500 target solar units.
+   */
+  const targetSolarUnits =
+    estimatedMonthlyUnits * (coveragePercent / 100);
+
+  /*
+   * Raw capacity requirement before matching it to one of the
+   * OWNER-configured website price slabs.
+   */
+  const rawRequiredCapacityKw =
+    targetSolarUnits / monthlyGenerationPerKw;
+
+  /*
+   * Only active slabs can be recommended publicly.
+   */
+  const activeSlabs =
+    await this.websiteCalculatorPriceSlabRepository.find({
+      where: {
+        isActive: true,
+      },
+      order: {
+        capacityKw: 'ASC',
+      },
+    });
+
+  if (activeSlabs.length === 0) {
+    throw new Error(
+      'Website calculator project prices are not configured',
+    );
+  }
+
+  /*
+   * Pick the smallest configured capacity that can satisfy
+   * the calculated requirement.
+   */
+  let selectedSlab = activeSlabs.find(
+    (slab) =>
+      Number(slab.capacityKw) >= rawRequiredCapacityKw,
+  );
+
+  /*
+   * If the requirement is above every configured slab,
+   * use the largest available slab.
+   */
+  if (!selectedSlab) {
+    selectedSlab = activeSlabs[activeSlabs.length - 1];
+  }
+
+  const recommendedCapacityKw = Number(
+    selectedSlab.capacityKw || 0,
+  );
+
+  const projectCost = Number(
+    selectedSlab.projectCost || 0,
+  );
+
+  const estimatedMonthlyGeneration =
+    recommendedCapacityKw * monthlyGenerationPerKw;
+
+  /*
+   * Savings must not exceed the visitor's estimated present
+   * consumption.
+   */
+  const usableSolarUnits = Math.min(
+    estimatedMonthlyUnits,
+    estimatedMonthlyGeneration,
+  );
+
+  const estimatedMonthlySavings =
+    usableSolarUnits * electricityRate;
+
+  const estimatedAnnualSavings =
+    estimatedMonthlySavings * 12;
+
+  const estimatedPaybackYears =
+    estimatedAnnualSavings > 0
+      ? projectCost / estimatedAnnualSavings
+      : 0;
+
+  const estimatedRoofAreaSqft =
+    recommendedCapacityKw *
+    Number(settings.roofAreaSqftPerKw || 0);
+
+  /*
+   * IMPORTANT:
+   * This is the public response.
+   *
+   * Do not add internal CRM costs, margin, expected profit,
+   * discount limits, equipment rates or internal breakdowns.
+   */
+  return {
+    calculatorEnabled: true,
+
+    inputs: {
+      monthlyBill: Number(monthlyBill.toFixed(2)),
+      electricityRate: Number(electricityRate.toFixed(2)),
+    },
+
+    estimate: {
+      estimatedMonthlyUnits: Number(
+        estimatedMonthlyUnits.toFixed(2),
+      ),
+
+      recommendedCapacityKw: Number(
+        recommendedCapacityKw.toFixed(2),
+      ),
+
+      estimatedMonthlyGeneration: Number(
+        estimatedMonthlyGeneration.toFixed(2),
+      ),
+
+      projectCost: Number(projectCost.toFixed(2)),
+
+      estimatedMonthlySavings: Number(
+        estimatedMonthlySavings.toFixed(2),
+      ),
+
+      estimatedAnnualSavings: Number(
+        estimatedAnnualSavings.toFixed(2),
+      ),
+
+      estimatedPaybackYears: Number(
+        estimatedPaybackYears.toFixed(1),
+      ),
+
+      estimatedRoofAreaSqft: Number(
+        estimatedRoofAreaSqft.toFixed(2),
+      ),
+    },
+
+    visibility: {
+      showProjectCost: Boolean(settings.showProjectCost),
+      showMonthlySavings: Boolean(
+        settings.showMonthlySavings,
+      ),
+      showAnnualSavings: Boolean(
+        settings.showAnnualSavings,
+      ),
+      showPaybackPeriod: Boolean(
+        settings.showPaybackPeriod,
+      ),
+      showRoofArea: Boolean(settings.showRoofArea),
+    },
+
+    configuration: {
+      allowElectricityRateEdit: Boolean(
+        settings.allowElectricityRateEdit,
+      ),
+      defaultElectricityRate: Number(
+        defaultElectricityRate.toFixed(2),
+      ),
+    },
+
+    disclaimer: String(settings.disclaimer || ''),
+  };
+}
 }
