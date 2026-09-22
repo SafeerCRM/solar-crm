@@ -13,6 +13,9 @@ import type {
 } from 'express';
 
 import { IciciPaymentService } from './icici-payment.service';
+import {
+  IciciMerchantAccount,
+} from './icici-payment-transaction.entity';
 
 @Controller('payment/icici')
 export class IciciPaymentController {
@@ -98,8 +101,33 @@ async handlePaymentReturn(
    * The website receives only our
    * internal transaction reference.
    */
-  const resultUrl =
-  `${resultBaseUrl}/payment/return/aditya-trading` +
+  const merchantAccount =
+  result?.merchantAccount;
+
+let resultPath: string;
+
+if (
+  merchantAccount ===
+  IciciMerchantAccount.TRADING
+) {
+  resultPath =
+    '/payment/return/aditya-trading';
+} else if (
+  merchantAccount ===
+  IciciMerchantAccount.SOLARS
+) {
+  resultPath =
+    '/payment/return/aditya-solars';
+} else {
+  return res.status(
+    500,
+  ).send(
+    'Unable to determine payment merchant',
+  );
+}
+
+const resultUrl =
+  `${resultBaseUrl}${resultPath}` +
   `#transaction=${encodeURIComponent(
     String(
       transactionId,

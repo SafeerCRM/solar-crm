@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CustomerPortalController } from './customer-portal.controller';
+import {
+  CustomerPaymentLaunchController,
+} from './customer-payment-launch.controller';
 import { CustomerPortalService } from './customer-portal.service';
 import { CustomerComplaint } from './customer-complaint.entity';
 import { CustomerReferral } from './customer-referral.entity';
@@ -46,12 +49,14 @@ import {
 } from '../project/project-insurance-request.entity';
 import { PortalDeviceToken } from './portal-device-token.entity';
 import { PushNotificationModule } from '../push-notification/push-notification.module';
+import { PaymentModule } from '../payment/payment.module';
 
 @Module({
   imports: [
   LeadsModule,
   MeetingModule,
   PushNotificationModule,
+  PaymentModule,
   TypeOrmModule.forFeature([
       CustomerComplaint,
 CustomerComplaintAttachment,
@@ -88,7 +93,11 @@ ProjectInsuranceRequest,
 PortalDeviceToken,
     ]),
   ],
-  controllers: [CustomerPortalController, CustomerAuthController],
+  controllers: [
+  CustomerPortalController,
+  CustomerAuthController,
+  CustomerPaymentLaunchController,
+],
   providers: [CustomerPortalService],
   exports: [CustomerPortalService],
 })

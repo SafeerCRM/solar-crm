@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
   UnauthorizedException,
+
 } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -91,6 +92,11 @@ import {
 } from './portal-device-token.entity';
 
 import { PushNotificationService } from '../push-notification/push-notification.service';
+import { IciciPaymentService } from '../payment/icici-payment.service';
+import {
+  IciciMerchantAccount,
+  IciciPaymentPurpose,
+} from '../payment/icici-payment-transaction.entity';
 
 @Injectable()
 export class CustomerPortalService {
@@ -205,7 +211,297 @@ private readonly meetingRepository: Repository<Meeting>,
 private readonly leadService: LeadsService,
 private readonly meetingService: MeetingService,
 private readonly pushNotificationService: PushNotificationService,
+private readonly iciciPaymentService: IciciPaymentService,
 ) {}
+
+private async getCustomerInstallmentPaymentDetails(
+  customerId: number,
+  installmentId: number,
+) {
+  const normalizedCustomerId =
+    Number(customerId);
+
+  const normalizedInstallmentId =
+    Number(installmentId);
+
+  if (
+    !Number.isInteger(normalizedCustomerId) ||
+    normalizedCustomerId <= 0 ||
+    !Number.isInteger(normalizedInstallmentId) ||
+    normalizedInstallmentId <= 0
+  ) {
+    throw new BadRequestException(
+      'Invalid customer payment reference',
+    );
+  }
+
+  const installment =
+    await this.paymentInstallmentRepository.findOne({
+      where: {
+        id: normalizedInstallmentId,
+        isHidden: false,
+      } as any,
+    });
+
+  if (!installment) {
+    throw new NotFoundException(
+      'Payment installment not found',
+    );
+  }
+
+  if (
+    String(installment.status || '') ===
+    'CANCELLED'
+  ) {
+    throw new BadRequestException(
+      'Cancelled installment cannot be paid',
+    );
+  }
+
+  if (
+    String(
+      installment.approvalStatus ||
+      '',
+    ) === 'REJECTED'
+  ) {
+    throw new BadRequestException(
+      'Rejected installment cannot be paid',
+    );
+  }
+
+  /*
+   * Security boundary:
+   *
+   * Never trust project/customer ownership
+   * from the browser. Resolve the project
+   * through the installment and then verify
+   * that it belongs to the authenticated
+   * Customer Portal customer.
+   */
+  const project =
+    await this.projectRepository.findOne({
+      where: {
+        id: Number(
+          installment.projectId,
+        ),
+        customerId:
+          normalizedCustomerId,
+        isHidden: false,
+      } as any,
+    });
+
+  if (!project) {
+    throw new NotFoundException(
+      'Customer project not found',
+    );
+  }
+
+  const installmentAmount =
+    Number(
+      installment.amount || 0,
+    );
+
+  const paidAmount =
+    Number(
+      installment.paidAmount || 0,
+    );
+
+  if (
+    !Number.isFinite(
+      installmentAmount,
+    ) ||
+    installmentAmount <= 0
+  ) {
+    throw new BadRequestException(
+      'Installment amount is not configured',
+    );
+  }
+
+  /*
+   * Recalculate from amount - paidAmount
+   * rather than trusting a stale
+   * pendingAmount column.
+   */
+  const pendingAmount =
+    Math.max(
+      installmentAmount -
+        paidAmount,
+      0,
+    );
+
+  if (
+    pendingAmount <= 0 ||
+    String(
+      installment.status || '',
+    ) === 'PAID'
+  ) {
+    throw new BadRequestException(
+      'No pending payment for this installment',
+    );
+  }
+
+  return {
+    project,
+    installment,
+    installmentAmount,
+    paidAmount,
+    pendingAmount,
+  };
+}
+
+async validateCustomerInstallmentPaymentLaunch(
+  customerId: number,
+  installmentId: number,
+) {
+  const details =
+    await this
+      .getCustomerInstallmentPaymentDetails(
+        customerId,
+        installmentId,
+      );
+
+  return {
+    installmentId:
+      Number(
+        details.installment.id,
+      ),
+
+    projectId:
+      Number(
+        details.project.id,
+      ),
+
+    pendingAmount:
+      Number(
+        details.pendingAmount,
+      ),
+  };
+}
+
+async initiateCustomerInstallmentPayment(
+  customerId: number,
+  installmentId: number,
+  returnUrl: string,
+  paymentSource: 'APP' | 'WEB' = 'WEB',
+) {
+  const source =
+    String(
+      paymentSource || 'WEB',
+    )
+      .trim()
+      .toUpperCase();
+
+  if (
+    source !== 'APP' &&
+    source !== 'WEB'
+  ) {
+    throw new BadRequestException(
+      'Invalid payment source',
+    );
+  }
+
+  /*
+   * Re-read the installment immediately
+   * before ICICI initiation.
+   *
+   * This makes the gateway amount
+   * server-authoritative even if another
+   * payment was recorded after the launch
+   * token was issued.
+   */
+  const details =
+    await this
+      .getCustomerInstallmentPaymentDetails(
+        customerId,
+        installmentId,
+      );
+
+  const customer =
+    await this.customerRepository.findOne({
+      where: {
+        id: Number(customerId),
+        isHidden: false,
+      } as any,
+    });
+
+  if (!customer) {
+    throw new NotFoundException(
+      'Customer not found',
+    );
+  }
+
+  return this.iciciPaymentService
+  .initiateCustomerPayment({
+      merchantAccount:
+        IciciMerchantAccount.SOLARS,
+
+      purpose:
+        IciciPaymentPurpose
+          .CUSTOMER_PAYMENT,
+
+      /*
+       * CUSTOMER_PAYMENT referenceId now
+       * means ProjectPaymentInstallment.id.
+       */
+      referenceId:
+  Number(
+    details.installment.id,
+  ),
+
+/*
+ * Authenticated Customer Portal
+ * identity. This is persisted on the
+ * gateway transaction and later used
+ * during settlement verification.
+ */
+customerId:
+  Number(customerId),
+
+/*
+ * Customer cannot choose or modify
+ * this amount. It comes from the
+ * current CRM installment state.
+ */
+amount:
+        Number(
+          details.pendingAmount,
+        ),
+
+      customerName:
+        String(
+          (customer as any).name ||
+          (details.project as any)
+            ?.customerName ||
+          '',
+        ).trim() ||
+        undefined,
+
+      customerEmail:
+        String(
+          (customer as any).email ||
+          '',
+        ).trim() ||
+        undefined,
+
+      customerMobile:
+        String(
+          (customer as any).phone ||
+          (customer as any).mobile ||
+          '',
+        ).trim() ||
+        undefined,
+
+      returnUrl,
+
+      businessSettlementType:
+        'CUSTOMER_PAYMENT',
+
+      paymentSource:
+        source as
+          | 'APP'
+          | 'WEB',
+    });
+}
 
   async getCustomerDashboard(customerId: number) {
     const customer = await this.customerRepository.findOne({

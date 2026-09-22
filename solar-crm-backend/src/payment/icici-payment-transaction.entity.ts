@@ -34,6 +34,7 @@ export enum IciciPaymentTransactionStatus {
 })
 @Index(['purpose', 'referenceId'])
 @Index(['dealerId'])
+@Index(['customerId'])
 @Index(['status'])
 @Index(['merchantAccount'])
 export class IciciPaymentTransaction {
@@ -54,14 +55,15 @@ export class IciciPaymentTransaction {
   merchantAccount: IciciMerchantAccount;
 
   /*
-   * Business purpose of the payment.
-   *
-   * referenceId points to the corresponding
-   * business record:
-   *
-   * DEALER_INSURANCE -> ProjectInsuranceRequest.id
-   * DEALER_ORDER     -> ProjectDealerOrder.id
-   */
+ * Business purpose of the payment.
+ *
+ * referenceId points to the corresponding
+ * business record:
+ *
+ * DEALER_INSURANCE -> ProjectInsuranceRequest.id
+ * DEALER_ORDER     -> ProjectDealerOrder.id
+ * CUSTOMER_PAYMENT -> ProjectPaymentInstallment.id
+ */
   @Column({
     type: 'enum',
     enum: IciciPaymentPurpose,
@@ -84,6 +86,19 @@ export class IciciPaymentTransaction {
     nullable: true,
   })
   dealerId?: number;
+
+  /*
+ * Customer Portal owner of this payment.
+ *
+ * Used only for customer-side gateway
+ * payments. Dealer payments continue to
+ * use dealerId.
+ */
+@Column({
+  type: 'int',
+  nullable: true,
+})
+customerId?: number;
 
   /*
    * ICICI merchantTxnNo.

@@ -2,6 +2,14 @@
 
 import { useEffect, useState } from 'react';
 
+import {
+  Browser,
+} from '@capacitor/browser';
+
+import {
+  Capacitor,
+} from '@capacitor/core';
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 export default function CustomerPaymentsPage() {
@@ -17,7 +25,14 @@ const [receiptPreview, setReceiptPreview] =
 const [uploadingReceipt, setUploadingReceipt] =
   useState(false);
 
-  const [receiptFilter, setReceiptFilter] = useState('ALL');
+const [
+  payingInstallmentId,
+  setPayingInstallmentId,
+] = useState<number | null>(
+  null,
+);
+
+const [receiptFilter, setReceiptFilter] = useState('ALL');
   const [selectedReceiptTimeline, setSelectedReceiptTimeline] = useState<any>(null);
 const [receiptActivities, setReceiptActivities] = useState<any[]>([]);
 const [timelineLoading, setTimelineLoading] = useState(false);
@@ -106,6 +121,115 @@ const filteredReceipts = receipts.filter((item: any) => {
       setLoading(false);
     }
   };
+
+  const payInstallmentOnline = async (
+  installmentId: number,
+) => {
+  if (
+    !Number.isInteger(
+      Number(installmentId),
+    ) ||
+    Number(installmentId) <= 0
+  ) {
+    alert(
+      'Invalid payment installment.',
+    );
+    return;
+  }
+
+  try {
+    setPayingInstallmentId(
+      Number(installmentId),
+    );
+
+    const token =
+      localStorage.getItem(
+        'customer_token',
+      );
+
+    if (!token) {
+      window.location.href =
+        '/customer-login';
+      return;
+    }
+
+    const paymentSource =
+      Capacitor.isNativePlatform()
+        ? 'APP'
+        : 'WEB';
+
+    const res = await fetch(
+      `${API_BASE_URL}/customer-auth/payments/installments/${installmentId}/launch`,
+      {
+        method: 'POST',
+
+        headers: {
+          Authorization:
+            `Bearer ${token}`,
+
+          'Content-Type':
+            'application/json',
+        },
+
+        body: JSON.stringify({
+          paymentSource,
+        }),
+      },
+    );
+
+    const data =
+      await res.json();
+
+    if (!res.ok) {
+      throw new Error(
+        data?.message ||
+          'Unable to start online payment.',
+      );
+    }
+
+    const launchUrl =
+      String(
+        data?.launchUrl || '',
+      ).trim();
+
+    if (
+      !launchUrl.startsWith(
+        'https://adityasolars.co.in/payment/launch',
+      )
+    ) {
+      throw new Error(
+        'Invalid payment launch URL received.',
+      );
+    }
+
+    if (
+      Capacitor.isNativePlatform()
+    ) {
+      await Browser.open({
+        url: launchUrl,
+      });
+
+      return;
+    }
+
+    window.location.href =
+      launchUrl;
+  } catch (error: any) {
+    console.error(
+      'Online payment error:',
+      error,
+    );
+
+    alert(
+      error?.message ||
+        'Unable to start online payment.',
+    );
+  } finally {
+    setPayingInstallmentId(
+      null,
+    );
+  }
+};
 
   const loadReceiptActivities = async (receiptId: number) => {
   try {
@@ -462,10 +586,61 @@ setReceiptPreview('');
                     </div>
 
                     <div className="mt-4 grid gap-3 md:grid-cols-3">
-                      <InfoCard label="Amount" value={formatCurrency(item.amount)} />
-                      <InfoCard label="Paid" value={formatCurrency(item.paidAmount)} />
-                      <InfoCard label="Pending" value={formatCurrency(item.pendingAmount)} />
-                    </div>
+  <InfoCard
+    label="Amount"
+    value={formatCurrency(
+      item.amount,
+    )}
+  />
+
+  <InfoCard
+    label="Paid"
+    value={formatCurrency(
+      item.paidAmount,
+    )}
+  />
+
+  <InfoCard
+    label="Pending"
+    value={formatCurrency(
+      item.pendingAmount,
+    )}
+  />
+</div>
+
+{Number(
+  item.pendingAmount || 0,
+) > 0 &&
+  item.status !== 'PAID' &&
+  item.status !== 'CANCELLED' && (
+    <div className="mt-4">
+      <button
+        type="button"
+        onClick={() =>
+          payInstallmentOnline(
+            Number(item.id),
+          )
+        }
+        disabled={
+          payingInstallmentId !==
+          null
+        }
+        className="w-full rounded-2xl bg-emerald-600 px-5 py-3 font-black text-white shadow-lg transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {payingInstallmentId ===
+        Number(item.id)
+          ? 'Starting Secure Payment...'
+          : `Pay ${formatCurrency(
+              item.pendingAmount,
+            )} Online`}
+      </button>
+
+      <p className="mt-2 text-center text-xs font-semibold text-gray-500">
+        Secure online payment via
+        ICICI Bank
+      </p>
+    </div>
+  )}
                   </div>
                 ))
               )}

@@ -34,6 +34,24 @@ interface IciciPaymentLaunchPayload {
   nonce: string;
 }
 
+interface IciciCustomerPaymentLaunchPayload {
+  version: 1;
+
+  purpose:
+    IciciPaymentLaunchPurpose.CUSTOMER_PAYMENT;
+
+  referenceId: number;
+
+  customerId: number;
+
+  paymentSource:
+    'APP' | 'WEB';
+
+  expiresAt: number;
+
+  nonce: string;
+}
+
 @Injectable()
 export class IciciPaymentLaunchService {
 
@@ -526,6 +544,390 @@ export class IciciPaymentLaunchService {
 
     dealerId:
       payload.dealerId,
+
+    paymentSource:
+      payload.paymentSource,
+  };
+}
+
+async createCustomerLaunchToken(input: {
+  referenceId: number;
+  customerId: number;
+  paymentSource:
+    'APP' | 'WEB';
+}) {
+  const referenceId =
+    Number(
+      input.referenceId,
+    );
+
+  const customerId =
+    Number(
+      input.customerId,
+    );
+
+  if (
+    !Number.isInteger(
+      referenceId,
+    ) ||
+    referenceId <= 0
+  ) {
+    throw new BadRequestException(
+      'Invalid payment reference',
+    );
+  }
+
+  if (
+    !Number.isInteger(
+      customerId,
+    ) ||
+    customerId <= 0
+  ) {
+    throw new BadRequestException(
+      'Invalid customer payment identity',
+    );
+  }
+
+  if (
+    input.paymentSource !==
+      'APP' &&
+    input.paymentSource !==
+      'WEB'
+  ) {
+    throw new BadRequestException(
+      'Invalid payment source',
+    );
+  }
+
+  const expiresAt =
+    Date.now() +
+    5 * 60 * 1000;
+
+  const nonce =
+    crypto
+      .randomBytes(16)
+      .toString('hex');
+
+  const payload:
+    IciciCustomerPaymentLaunchPayload =
+    {
+      version: 1,
+
+      purpose:
+        IciciPaymentLaunchPurpose
+          .CUSTOMER_PAYMENT,
+
+      referenceId,
+
+      customerId,
+
+      paymentSource:
+        input.paymentSource,
+
+      expiresAt,
+
+      nonce,
+    };
+
+  const launch =
+    this.launchRepository.create({
+      purpose:
+        IciciPaymentLaunchPurpose
+          .CUSTOMER_PAYMENT,
+
+      referenceId,
+
+      dealerId:
+        null,
+
+      customerId,
+
+      nonce,
+
+      status:
+        IciciPaymentLaunchStatus
+          .ISSUED,
+
+      expiresAt:
+        new Date(
+          expiresAt,
+        ),
+
+      consumedAt:
+        null,
+    });
+
+  await this.launchRepository.save(
+    launch,
+  );
+
+  const encodedPayload =
+    this.encodeBase64Url(
+      JSON.stringify(
+        payload,
+      ),
+    );
+
+  const signature =
+    this.sign(
+      encodedPayload,
+    );
+
+  return `${encodedPayload}.${signature}`;
+}
+
+verifyCustomerLaunchToken(
+  token: string,
+) {
+  const normalizedToken =
+    String(
+      token || '',
+    ).trim();
+
+  const parts =
+    normalizedToken.split(
+      '.',
+    );
+
+  if (
+    parts.length !== 2 ||
+    !parts[0] ||
+    !parts[1]
+  ) {
+    throw new BadRequestException(
+      'Invalid payment launch token',
+    );
+  }
+
+  const [
+    encodedPayload,
+    receivedSignature,
+  ] = parts;
+
+  const expectedSignature =
+    this.sign(
+      encodedPayload,
+    );
+
+  const receivedBuffer =
+    Buffer.from(
+      receivedSignature,
+      'utf8',
+    );
+
+  const expectedBuffer =
+    Buffer.from(
+      expectedSignature,
+      'utf8',
+    );
+
+  if (
+    receivedBuffer.length !==
+      expectedBuffer.length ||
+    !crypto.timingSafeEqual(
+      receivedBuffer,
+      expectedBuffer,
+    )
+  ) {
+    throw new BadRequestException(
+      'Invalid payment launch token',
+    );
+  }
+
+  let payload:
+    IciciCustomerPaymentLaunchPayload;
+
+  try {
+    payload =
+      JSON.parse(
+        this.decodeBase64Url(
+          encodedPayload,
+        ),
+      );
+  } catch {
+    throw new BadRequestException(
+      'Invalid payment launch token',
+    );
+  }
+
+  if (
+    payload?.version !== 1 ||
+    payload.purpose !==
+      IciciPaymentLaunchPurpose
+        .CUSTOMER_PAYMENT ||
+    !Number.isInteger(
+      Number(
+        payload.referenceId,
+      ),
+    ) ||
+    Number(
+      payload.referenceId,
+    ) <= 0 ||
+    !Number.isInteger(
+      Number(
+        payload.customerId,
+      ),
+    ) ||
+    Number(
+      payload.customerId,
+    ) <= 0 ||
+    !Number.isFinite(
+      Number(
+        payload.expiresAt,
+      ),
+    ) ||
+    !String(
+      payload.nonce || '',
+    ).trim()
+  ) {
+    throw new BadRequestException(
+      'Invalid payment launch token',
+    );
+  }
+
+  if (
+    payload.paymentSource !==
+      'APP' &&
+    payload.paymentSource !==
+      'WEB'
+  ) {
+    throw new BadRequestException(
+      'Invalid payment launch token',
+    );
+  }
+
+  if (
+    Date.now() >
+    Number(
+      payload.expiresAt,
+    )
+  ) {
+    throw new BadRequestException(
+      'Payment launch link has expired',
+    );
+  }
+
+  return {
+    purpose:
+      IciciPaymentLaunchPurpose
+        .CUSTOMER_PAYMENT,
+
+    referenceId:
+      Number(
+        payload.referenceId,
+      ),
+
+    customerId:
+      Number(
+        payload.customerId,
+      ),
+
+    paymentSource:
+      payload.paymentSource,
+
+    expiresAt:
+      Number(
+        payload.expiresAt,
+      ),
+
+    nonce:
+      String(
+        payload.nonce,
+      ),
+  };
+}
+
+async consumeCustomerLaunchToken(
+  token: string,
+) {
+  const payload =
+    this.verifyCustomerLaunchToken(
+      token,
+    );
+
+  const result =
+    await this.launchRepository
+      .createQueryBuilder()
+      .update(
+        IciciPaymentLaunch,
+      )
+      .set({
+        status:
+          IciciPaymentLaunchStatus
+            .CONSUMED,
+
+        consumedAt:
+          new Date(),
+      })
+      .where(
+        '"nonce" = :nonce',
+        {
+          nonce:
+            payload.nonce,
+        },
+      )
+      .andWhere(
+        '"purpose" = :purpose',
+        {
+          purpose:
+            IciciPaymentLaunchPurpose
+              .CUSTOMER_PAYMENT,
+        },
+      )
+      .andWhere(
+        '"referenceId" = :referenceId',
+        {
+          referenceId:
+            payload.referenceId,
+        },
+      )
+      .andWhere(
+        '"customerId" = :customerId',
+        {
+          customerId:
+            payload.customerId,
+        },
+      )
+      .andWhere(
+        '"dealerId" IS NULL',
+      )
+      .andWhere(
+        '"status" = :status',
+        {
+          status:
+            IciciPaymentLaunchStatus
+              .ISSUED,
+        },
+      )
+      .andWhere(
+        '"expiresAt" >= :now',
+        {
+          now:
+            new Date(),
+        },
+      )
+      .execute();
+
+  if (
+    Number(
+      result.affected || 0,
+    ) !== 1
+  ) {
+    throw new BadRequestException(
+      'Payment launch link is invalid or no longer available',
+    );
+  }
+
+  return {
+    purpose:
+      IciciPaymentLaunchPurpose
+        .CUSTOMER_PAYMENT,
+
+    referenceId:
+      payload.referenceId,
+
+    customerId:
+      payload.customerId,
 
     paymentSource:
       payload.paymentSource,

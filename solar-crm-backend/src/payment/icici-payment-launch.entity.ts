@@ -12,6 +12,9 @@ export enum IciciPaymentLaunchPurpose {
 
   DEALER_INSURANCE =
     'DEALER_INSURANCE',
+
+  CUSTOMER_PAYMENT =
+    'CUSTOMER_PAYMENT',
 }
 
 export enum IciciPaymentLaunchStatus {
@@ -41,6 +44,14 @@ export enum IciciPaymentLaunchStatus {
   ],
 )
 @Index(
+  'IDX_icici_payment_launch_customer_reference',
+  [
+    'purpose',
+    'referenceId',
+    'customerId',
+  ],
+)
+@Index(
   'IDX_icici_payment_launch_status_expiry',
   [
     'status',
@@ -64,21 +75,35 @@ export class IciciPaymentLaunch {
   referenceId: number;
 
   /*
-   * Dealer Portal Dealer.id.
-   *
-   * This is authentication identity,
-   * not ProjectVendor.id.
-   */
-  @Column({
-    type: 'int',
-  })
-  dealerId: number;
+ * Dealer Portal Dealer.id.
+ *
+ * This is authentication identity,
+ * not ProjectVendor.id.
+ *
+ * Null for Customer Portal launches.
+ */
+@Column({
+  type: 'int',
+  nullable: true,
+})
+dealerId: number | null;
 
-  @Column({
-    type: 'varchar',
-    length: 32,
-  })
-  nonce: string;
+/*
+ * Customer Portal Customer.id.
+ *
+ * Null for Dealer Portal launches.
+ */
+@Column({
+  type: 'int',
+  nullable: true,
+})
+customerId: number | null;
+
+@Column({
+  type: 'varchar',
+  length: 32,
+})
+nonce: string;
 
   @Column({
     type: 'varchar',

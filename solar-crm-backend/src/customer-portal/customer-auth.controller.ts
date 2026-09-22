@@ -11,14 +11,20 @@ Patch,
   UnauthorizedException,
   UploadedFiles,
   UseInterceptors,
+  BadRequestException,
+
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { CustomerPortalService } from './customer-portal.service';
 import * as jwt from 'jsonwebtoken';
+import { IciciPaymentLaunchService } from '../payment/icici-payment-launch.service';
 
 @Controller('customer-auth')
 export class CustomerAuthController {
-  constructor(private readonly service: CustomerPortalService) {}
+  constructor(
+  private readonly service: CustomerPortalService,
+  private readonly iciciPaymentLaunchService: IciciPaymentLaunchService,
+) {}
 
   @Post('login')
   login(@Body() body: { username: string; password: string }) {
@@ -240,6 +246,135 @@ async createCustomerWorkDateRequest(
     customerId: Number(payload.customerId),
     customerCode: payload.customerCode,
   });
+}
+
+@Post('payments/installments/:installmentId/launch')
+async createCustomerInstallmentPaymentLaunch(
+  @Req() req: any,
+  @Param('installmentId') installmentId: string,
+  @Body() body: any,
+) {
+  const authHeader =
+    req.headers?.authorization || '';
+
+  const token =
+    authHeader.replace(
+      'Bearer ',
+      '',
+    );
+
+  if (!token) {
+    throw new UnauthorizedException(
+      'Customer token missing',
+    );
+  }
+
+  const payload: any =
+    jwt.verify(
+      token,
+      'mysecretkey',
+    );
+
+  const customerId =
+    Number(
+      payload?.customerId,
+    );
+
+  const normalizedInstallmentId =
+    Number(
+      installmentId,
+    );
+
+  if (
+    !Number.isInteger(customerId) ||
+    customerId <= 0
+  ) {
+    throw new UnauthorizedException(
+      'Invalid customer token',
+    );
+  }
+
+  if (
+    !Number.isInteger(
+      normalizedInstallmentId,
+    ) ||
+    normalizedInstallmentId <= 0
+  ) {
+    throw new BadRequestException(
+      'Invalid payment installment',
+    );
+  }
+
+  const paymentSource =
+    String(
+      body?.paymentSource ||
+      'WEB',
+    )
+      .trim()
+      .toUpperCase();
+
+  if (
+    paymentSource !== 'APP' &&
+    paymentSource !== 'WEB'
+  ) {
+    throw new BadRequestException(
+      'Invalid payment source',
+    );
+  }
+
+  /*
+   * Validate customer ownership and the
+   * current installment state before
+   * issuing the public one-time token.
+   */
+  await this.service
+    .validateCustomerInstallmentPaymentLaunch(
+      customerId,
+      normalizedInstallmentId,
+    );
+
+  /*
+   * referenceId for CUSTOMER_PAYMENT is
+   * the ProjectPaymentInstallment.id.
+   */
+  const launchToken =
+    await this.iciciPaymentLaunchService
+      .createCustomerLaunchToken({
+        referenceId:
+          normalizedInstallmentId,
+
+        customerId,
+
+        paymentSource:
+          paymentSource as
+            | 'APP'
+            | 'WEB',
+      });
+
+  const websiteBaseUrl =
+    String(
+      process.env
+        .ICICI_PAYMENT_LAUNCH_BASE_URL ||
+      '',
+    )
+      .trim()
+      .replace(/\/+$/, '');
+
+  if (
+    websiteBaseUrl !==
+    'https://adityasolars.co.in'
+  ) {
+    throw new Error(
+      'ICICI_PAYMENT_LAUNCH_BASE_URL is not configured correctly',
+    );
+  }
+
+  return {
+    launchUrl:
+      `${websiteBaseUrl}/payment/launch#flow=customer&token=${encodeURIComponent(
+        launchToken,
+      )}`,
+  };
 }
 
 @Post('payment-receipts')

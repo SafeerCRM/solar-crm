@@ -60,8 +60,9 @@ type InitiatePaymentInput = {
   referenceId: number;
 
   dealerId?: number;
+customerId?: number;
 
-  amount: number;
+amount: number;
 
   customerName?: string;
   customerEmail?: string;
@@ -1430,6 +1431,436 @@ async initiateDealerOrderPayment(
 }
 }
 
+async initiateCustomerPayment(
+  input: InitiatePaymentInput,
+) {
+  /*
+   * This wrapper is only for genuine
+   * Customer Portal installment payments.
+   */
+  if (
+    input.purpose !==
+      IciciPaymentPurpose.CUSTOMER_PAYMENT ||
+    input.merchantAccount !==
+      IciciMerchantAccount.SOLARS
+  ) {
+    throw new BadRequestException(
+      'Invalid customer payment configuration',
+    );
+  }
+
+  const installmentId =
+    Number(
+      input.referenceId,
+    );
+
+  const customerId =
+    Number(
+      input.customerId,
+    );
+
+  if (
+    !Number.isInteger(
+      installmentId,
+    ) ||
+    installmentId <= 0 ||
+    !Number.isInteger(
+      customerId,
+    ) ||
+    customerId <= 0
+  ) {
+    throw new BadRequestException(
+      'Invalid customer payment reference',
+    );
+  }
+
+  /*
+   * Find the latest genuine payment attempt
+   * for this exact customer + installment.
+   */
+  const previousTransactions =
+    await this.transactionRepository
+      .createQueryBuilder(
+        'transaction',
+      )
+      .where(
+        'transaction.purpose = :purpose',
+        {
+          purpose:
+            IciciPaymentPurpose
+              .CUSTOMER_PAYMENT,
+        },
+      )
+      .andWhere(
+        'transaction.referenceId = :installmentId',
+        {
+          installmentId,
+        },
+      )
+      .andWhere(
+        'transaction.customerId = :customerId',
+        {
+          customerId,
+        },
+      )
+      .andWhere(
+        'transaction.merchantAccount = :merchantAccount',
+        {
+          merchantAccount:
+            IciciMerchantAccount
+              .SOLARS,
+        },
+      )
+      .orderBy(
+        'transaction.createdAt',
+        'DESC',
+      )
+      .getMany();
+
+  /*
+   * Keep the business-settlement marker
+   * check just like Dealer Order.
+   *
+   * This prevents unrelated or historical
+   * CUSTOMER_PAYMENT records from being
+   * treated as genuine installment attempts.
+   */
+  const previousTransaction =
+    previousTransactions.find(
+      (item) =>
+        String(
+          item.gatewayMetadata
+            ?.businessSettlementType ||
+            '',
+        ) ===
+        'CUSTOMER_PAYMENT',
+    );
+
+  if (
+    previousTransaction &&
+    (
+      previousTransaction.status ===
+        IciciPaymentTransactionStatus.CREATED ||
+      previousTransaction.status ===
+        IciciPaymentTransactionStatus.INITIATED ||
+      previousTransaction.status ===
+        IciciPaymentTransactionStatus.PENDING
+    )
+  ) {
+    await this.updateActivePaymentSource(
+      previousTransaction,
+      input.paymentSource,
+    );
+  }
+
+  /*
+   * SUCCESS must never create another
+   * gateway attempt for the same installment
+   * before its idempotent settlement has
+   * been checked again.
+   */
+  if (
+    previousTransaction?.status ===
+    IciciPaymentTransactionStatus.SUCCESS
+  ) {
+    await this.dispatchSuccessfulTransaction(
+      previousTransaction,
+    );
+
+    throw new BadRequestException(
+      'This installment payment has already been completed',
+    );
+  }
+
+  /*
+   * An unresolved PENDING payment must be
+   * reconciled with ICICI before another
+   * payment attempt is allowed.
+   */
+  if (
+    previousTransaction?.status ===
+    IciciPaymentTransactionStatus.PENDING
+  ) {
+    const reconciled =
+      await this.reconcileTransactionStatus(
+        previousTransaction,
+      );
+
+    if (
+      reconciled.status ===
+      IciciPaymentTransactionStatus.SUCCESS
+    ) {
+      throw new BadRequestException(
+        'This installment payment has already been completed',
+      );
+    }
+
+    if (
+      reconciled.status ===
+      IciciPaymentTransactionStatus.PENDING
+    ) {
+      throw new BadRequestException(
+        'Previous customer payment is still being processed. Please try again later.',
+      );
+    }
+  }
+
+  /*
+   * Reuse a recent hosted ICICI session.
+   */
+  if (
+    previousTransaction?.status ===
+    IciciPaymentTransactionStatus.INITIATED
+  ) {
+    const initiatedAt =
+      previousTransaction.initiatedAt ||
+      previousTransaction.createdAt;
+
+    const ageMilliseconds =
+      Date.now() -
+      new Date(
+        initiatedAt,
+      ).getTime();
+
+    const reuseWindowMilliseconds =
+      15 * 60 * 1000;
+
+    if (
+      previousTransaction.redirectUri &&
+      previousTransaction.transactionContext &&
+      Number.isFinite(
+        ageMilliseconds,
+      ) &&
+      ageMilliseconds >= 0 &&
+      ageMilliseconds <=
+        reuseWindowMilliseconds
+    ) {
+      return {
+        success:
+          true,
+
+        transactionId:
+          previousTransaction.id,
+
+        merchantTxnNo:
+          previousTransaction
+            .merchantTxnNo,
+
+        amount:
+          Number(
+            previousTransaction.amount,
+          ),
+
+        status:
+          previousTransaction.status,
+
+        paymentUrl:
+          `${previousTransaction.redirectUri}?tranCtx=${encodeURIComponent(
+            previousTransaction
+              .transactionContext ||
+              '',
+          )}`,
+
+        reused:
+          true,
+      };
+    }
+
+    /*
+     * An old hosted session is not assumed
+     * failed. ICICI remains authoritative.
+     */
+    const reconciled =
+      await this.reconcileTransactionStatus(
+        previousTransaction,
+      );
+
+    if (
+      reconciled.status ===
+      IciciPaymentTransactionStatus.SUCCESS
+    ) {
+      throw new BadRequestException(
+        'This installment payment has already been completed',
+      );
+    }
+
+    if (
+      reconciled.status ===
+        IciciPaymentTransactionStatus.PENDING ||
+      reconciled.status ===
+        IciciPaymentTransactionStatus.INITIATED
+    ) {
+      throw new BadRequestException(
+        'Previous customer payment is still being processed. Please try again later.',
+      );
+    }
+
+    if (
+      reconciled.status !==
+      IciciPaymentTransactionStatus.FAILED
+    ) {
+      throw new BadRequestException(
+        'Previous customer payment could not be confirmed as failed',
+      );
+    }
+  }
+
+  /*
+   * A CREATED record may represent another
+   * request that is currently contacting
+   * ICICI. Do not create another attempt.
+   */
+  if (
+    previousTransaction?.status ===
+    IciciPaymentTransactionStatus.CREATED
+  ) {
+    throw new BadRequestException(
+      'Previous customer payment initiation is incomplete. Please try again later.',
+    );
+  }
+
+  try {
+    return await this.initiatePayment({
+      ...input,
+
+      businessSettlementType:
+        'CUSTOMER_PAYMENT',
+    });
+  } catch (error: any) {
+    /*
+     * Once the customer active-attempt
+     * partial unique index is installed,
+     * simultaneous requests can race here.
+     */
+    if (
+      error?.code !==
+      '23505'
+    ) {
+      throw error;
+    }
+
+    const concurrentTransaction =
+      await this.transactionRepository
+        .createQueryBuilder(
+          'transaction',
+        )
+        .where(
+          'transaction.purpose = :purpose',
+          {
+            purpose:
+              IciciPaymentPurpose
+                .CUSTOMER_PAYMENT,
+          },
+        )
+        .andWhere(
+          'transaction.referenceId = :installmentId',
+          {
+            installmentId,
+          },
+        )
+        .andWhere(
+          'transaction.customerId = :customerId',
+          {
+            customerId,
+          },
+        )
+        .andWhere(
+          'transaction.merchantAccount = :merchantAccount',
+          {
+            merchantAccount:
+              IciciMerchantAccount
+                .SOLARS,
+          },
+        )
+        .andWhere(
+          'transaction.status IN (:...activeStatuses)',
+          {
+            activeStatuses: [
+              IciciPaymentTransactionStatus.CREATED,
+              IciciPaymentTransactionStatus.INITIATED,
+              IciciPaymentTransactionStatus.PENDING,
+            ],
+          },
+        )
+        .orderBy(
+          'transaction.createdAt',
+          'DESC',
+        )
+        .getOne();
+
+    if (
+      !concurrentTransaction
+    ) {
+      /*
+       * Do not swallow some unrelated
+       * unique-constraint violation.
+       */
+      throw error;
+    }
+
+    await this.updateActivePaymentSource(
+      concurrentTransaction,
+      input.paymentSource,
+    );
+
+    const businessSettlementType =
+      String(
+        concurrentTransaction
+          .gatewayMetadata
+          ?.businessSettlementType ||
+          '',
+      );
+
+    if (
+      businessSettlementType !==
+      'CUSTOMER_PAYMENT'
+    ) {
+      throw error;
+    }
+
+    if (
+      concurrentTransaction.status ===
+        IciciPaymentTransactionStatus.INITIATED &&
+      concurrentTransaction.redirectUri &&
+      concurrentTransaction.transactionContext
+    ) {
+      return {
+        success:
+          true,
+
+        transactionId:
+          concurrentTransaction.id,
+
+        merchantTxnNo:
+          concurrentTransaction
+            .merchantTxnNo,
+
+        amount:
+          Number(
+            concurrentTransaction.amount,
+          ),
+
+        status:
+          concurrentTransaction.status,
+
+        paymentUrl:
+          `${concurrentTransaction.redirectUri}?tranCtx=${encodeURIComponent(
+            concurrentTransaction
+              .transactionContext ||
+              '',
+          )}`,
+
+        reused:
+          true,
+      };
+    }
+
+    throw new BadRequestException(
+      'Customer payment initiation is already in progress. Please try again shortly.',
+    );
+  }
+}
+
   async initiatePayment(
     input: InitiatePaymentInput,
   ) {
@@ -1524,13 +1955,20 @@ const merchant =
           ),
 
         dealerId:
-          input.dealerId
-            ? Number(
-                input.dealerId,
-              )
-            : undefined,
+  input.dealerId
+    ? Number(
+        input.dealerId,
+      )
+    : undefined,
 
-        merchantTxnNo,
+customerId:
+  input.customerId
+    ? Number(
+        input.customerId,
+      )
+    : undefined,
+
+merchantTxnNo,
 
         amount,
 
@@ -2642,13 +3080,107 @@ if (
 }
 
 /*
- * Customer payment settlement will be
- * connected separately after Dealer Order.
+ * Customer installment payment
+ *
+ * Business rule:
+ * Customer Portal payments are received
+ * through ADITYA SOLARS.
+ *
+ * referenceId is the
+ * ProjectPaymentInstallment.id.
  */
 if (
   transaction.purpose ===
   IciciPaymentPurpose.CUSTOMER_PAYMENT
 ) {
+  if (
+    transaction.merchantAccount !==
+    IciciMerchantAccount.SOLARS
+  ) {
+    throw new BadGatewayException(
+      'Customer payment merchant mismatch',
+    );
+  }
+
+  const installmentId =
+    Number(
+      transaction.referenceId,
+    );
+
+  const customerId =
+    Number(
+      transaction.customerId,
+    );
+
+  const transactionAmount =
+    Number(
+      transaction.amount,
+    );
+
+  const merchantTxnNo =
+    String(
+      transaction.merchantTxnNo ||
+      '',
+    ).trim();
+
+  if (
+    !Number.isInteger(
+      installmentId,
+    ) ||
+    installmentId <= 0 ||
+    !Number.isInteger(
+      customerId,
+    ) ||
+    customerId <= 0 ||
+    !Number.isFinite(
+      transactionAmount,
+    ) ||
+    transactionAmount <= 0 ||
+    !merchantTxnNo
+  ) {
+    throw new BadGatewayException(
+      'Customer payment transaction reference is invalid',
+    );
+  }
+
+  /*
+   * Only transactions created by the
+   * hardened Customer Payment initiation
+   * path may settle an installment.
+   */
+  if (
+    String(
+      transaction
+        .gatewayMetadata
+        ?.businessSettlementType ||
+      '',
+    ) !==
+      'CUSTOMER_PAYMENT'
+  ) {
+    throw new BadGatewayException(
+      'Customer payment settlement marker is invalid',
+    );
+  }
+
+  await this
+    .projectService
+    .settleIciciCustomerInstallmentPayment({
+      installmentId,
+      customerId,
+      amount:
+        transactionAmount,
+      merchantTxnNo,
+      bankTxnId:
+        transaction.bankTxnId ||
+        null,
+      paymentId:
+        transaction.paymentId ||
+        null,
+      paidAt:
+        transaction.paidAt ||
+        new Date(),
+    });
+
   return;
 }
 }
@@ -3087,10 +3619,87 @@ if (
   savedTransaction.status ===
   IciciPaymentTransactionStatus.SUCCESS
 ) {
-  await this
-    .dispatchSuccessfulTransaction(
-      savedTransaction,
-    );
+  try {
+    await this
+      .dispatchSuccessfulTransaction(
+        savedTransaction,
+      );
+
+    savedTransaction.gatewayMetadata = {
+      ...(
+        savedTransaction
+          .gatewayMetadata ||
+        {}
+      ),
+
+      businessSettlementStatus:
+        'SETTLED',
+
+      businessSettlementAt:
+        new Date()
+          .toISOString(),
+
+      businessSettlementError:
+        null,
+    };
+
+    await this
+      .transactionRepository
+      .save(
+        savedTransaction,
+      );
+  } catch (error: any) {
+    /*
+     * IMPORTANT:
+     *
+     * ICICI payment SUCCESS and our internal
+     * business allocation are two different
+     * facts.
+     *
+     * Once ICICI Status has been securely
+     * verified as SUCCESS, never downgrade or
+     * hide that successful bank transaction
+     * merely because the business record could
+     * not be allocated automatically.
+     *
+     * Example:
+     * the installment balance changed while
+     * the customer was completing payment.
+     *
+     * Keep the bank transaction SUCCESS and
+     * retain the allocation failure for manual
+     * reconciliation.
+     */
+    savedTransaction.gatewayMetadata = {
+      ...(
+        savedTransaction
+          .gatewayMetadata ||
+        {}
+      ),
+
+      businessSettlementStatus:
+        'REQUIRES_RECONCILIATION',
+
+      businessSettlementFailedAt:
+        new Date()
+          .toISOString(),
+
+      businessSettlementError:
+        String(
+          error?.message ||
+          'Business settlement failed',
+        ).slice(
+          0,
+          500,
+        ),
+    };
+
+    await this
+      .transactionRepository
+      .save(
+        savedTransaction,
+      );
+  }
 }
 
 return savedTransaction;
@@ -3286,17 +3895,21 @@ return {
     reconciledTransaction.id,
 
   merchantTxnNo:
-    reconciledTransaction
-      .merchantTxnNo,
+  reconciledTransaction
+    .merchantTxnNo,
 
-  status:
-    reconciledTransaction
-      .status,
+merchantAccount:
+  reconciledTransaction
+    .merchantAccount,
 
-  paymentSuccessful:
-    reconciledTransaction
-      .status ===
-    IciciPaymentTransactionStatus.SUCCESS,
+status:
+  reconciledTransaction
+    .status,
+
+paymentSuccessful:
+  reconciledTransaction
+    .status ===
+  IciciPaymentTransactionStatus.SUCCESS,
 };
 }
 
@@ -3358,6 +3971,23 @@ const paymentSource =
     ? 'APP'
     : 'WEB';
 
+    const businessSettlementStatus =
+  String(
+    transaction
+      .gatewayMetadata
+      ?.businessSettlementStatus ||
+      '',
+  ).trim();
+
+const publicBusinessSettlementStatus =
+  businessSettlementStatus ===
+  'SETTLED'
+    ? 'SETTLED'
+    : businessSettlementStatus ===
+        'REQUIRES_RECONCILIATION'
+      ? 'REQUIRES_RECONCILIATION'
+      : null;
+
 return {
   transactionId:
     transaction.id,
@@ -3383,6 +4013,9 @@ return {
     null,
 
   paymentSource,
+
+  businessSettlementStatus:
+  publicBusinessSettlementStatus,
 };
 }
 }

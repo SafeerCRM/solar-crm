@@ -10,7 +10,7 @@ import { Cron } from '@nestjs/schedule';
 
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { In, MoreThan, Repository } from 'typeorm';
+import { In, MoreThan, Repository, DataSource, } from 'typeorm';
 
 import PDFDocument = require('pdfkit');
 import { Response } from 'express';
@@ -2326,6 +2326,9 @@ private formatInsuranceDate(
 }
 
   constructor(
+    private readonly dataSource:
+  DataSource,
+
     @InjectRepository(Project)
     private readonly projectRepository: Repository<Project>,
 
@@ -13184,165 +13187,959 @@ async updatePaymentInstallment(
   return this.projectPaymentInstallmentRepository.save(installment);
 }
 
+async settleIciciCustomerInstallmentPayment(input: {
+  installmentId: number;
+  customerId: number;
+  amount: number;
+  merchantTxnNo: string;
+  bankTxnId?: string | null;
+  paymentId?: string | null;
+  paidAt?: Date | null;
+}) {
+  const installmentId =
+    Number(input.installmentId);
+
+  const customerId =
+    Number(input.customerId);
+
+  const receivedAmount =
+    Number(input.amount);
+
+  const merchantTxnNo =
+    String(
+      input.merchantTxnNo || '',
+    ).trim();
+
+  if (
+    !Number.isInteger(installmentId) ||
+    installmentId <= 0 ||
+    !Number.isInteger(customerId) ||
+    customerId <= 0 ||
+    !Number.isFinite(receivedAmount) ||
+    receivedAmount <= 0 ||
+    !merchantTxnNo
+  ) {
+    throw new BadRequestException(
+      'Invalid ICICI customer payment settlement',
+    );
+  }
+
+  /*
+   * The complete business settlement is atomic:
+   *
+   * - gateway receipt
+   * - installment balance
+   * - cumulative customer ledger
+   *
+   * all use the same database transaction.
+   */
+  return this.dataSource.transaction(
+    async (manager) => {
+      const installmentRepository =
+        manager.getRepository(
+          ProjectPaymentInstallment,
+        );
+
+      const receiptRepository =
+        manager.getRepository(
+          ProjectPaymentReceipt,
+        );
+
+      const projectRepository =
+        manager.getRepository(
+          Project,
+        );
+
+      const ledgerRepository =
+        manager.getRepository(
+          ProjectPartyLedger,
+        );
+
+      /*
+       * Lock the installment first.
+       *
+       * This serializes gateway settlement
+       * against another transaction that also
+       * locks this installment.
+       */
+      const installment =
+        await installmentRepository
+          .createQueryBuilder(
+            'installment',
+          )
+          .setLock(
+            'pessimistic_write',
+          )
+          .where(
+            'installment.id = :installmentId',
+            {
+              installmentId,
+            },
+          )
+          .andWhere(
+            'installment.isHidden = false',
+          )
+          .getOne();
+
+      if (!installment) {
+        throw new NotFoundException(
+          'Payment installment not found',
+        );
+      }
+
+      /*
+       * Idempotency is checked after obtaining
+       * the installment lock.
+       *
+       * Re-dispatching the same successful
+       * ICICI transaction must never increase
+       * paidAmount twice.
+       */
+      const existingReceipt =
+        await receiptRepository.findOne({
+          where: {
+            gatewayMerchantTxnNo:
+              merchantTxnNo,
+            isHidden: false,
+          } as any,
+        });
+
+      if (existingReceipt) {
+        if (
+          Number(
+            existingReceipt.installmentId,
+          ) !== installmentId ||
+          Math.abs(
+            Number(
+              existingReceipt.receivedAmount ||
+                0,
+            ) - receivedAmount,
+          ) > 0.009
+        ) {
+          throw new BadRequestException(
+            'ICICI payment settlement identity mismatch',
+          );
+        }
+
+        return installment;
+      }
+
+      if (
+        installment.status ===
+        ProjectPaymentInstallmentStatus.CANCELLED
+      ) {
+        throw new BadRequestException(
+          'Cancelled installment cannot receive ICICI payment',
+        );
+      }
+
+      /*
+       * Revalidate Customer Portal ownership
+       * inside the same transaction.
+       */
+      const project =
+        await projectRepository.findOne({
+          where: {
+            id: Number(
+              installment.projectId,
+            ),
+            customerId,
+            isHidden: false,
+          } as any,
+        });
+
+      if (!project) {
+        throw new BadRequestException(
+          'ICICI customer payment ownership mismatch',
+        );
+      }
+
+      const totalAmount =
+        Number(
+          installment.amount || 0,
+        );
+
+      const currentPaid =
+        Number(
+          installment.paidAmount || 0,
+        );
+
+      if (
+        !Number.isFinite(totalAmount) ||
+        totalAmount <= 0 ||
+        !Number.isFinite(currentPaid) ||
+        currentPaid < 0
+      ) {
+        throw new BadRequestException(
+          'Invalid installment financial state',
+        );
+      }
+
+      const currentPending =
+        Math.max(
+          totalAmount -
+            currentPaid,
+          0,
+        );
+
+      /*
+       * The gateway amount was snapshotted
+       * before the customer entered ICICI.
+       *
+       * If the current balance differs now,
+       * automatic allocation is unsafe.
+       */
+      if (
+        receivedAmount -
+          currentPending >
+        0.009
+      ) {
+        throw new BadRequestException(
+          'ICICI payment exceeds the current pending installment amount and requires manual reconciliation',
+        );
+      }
+
+      if (
+        Math.abs(
+          receivedAmount -
+            currentPending,
+        ) > 0.009
+      ) {
+        throw new BadRequestException(
+          'Installment balance changed while the ICICI payment was in progress and requires manual reconciliation',
+        );
+      }
+
+      const newPaidAmount =
+        currentPaid +
+        receivedAmount;
+
+      const newPendingAmount =
+        Math.max(
+          totalAmount -
+            newPaidAmount,
+          0,
+        );
+
+      const settlementDate =
+        input.paidAt
+          ? new Date(
+              input.paidAt,
+            )
+          : new Date();
+
+      const bankReference =
+        String(
+          input.bankTxnId ||
+            input.paymentId ||
+            merchantTxnNo,
+        ).trim();
+
+      /*
+       * Create the genuine financial receipt.
+       *
+       * CustomerPaymentReceipt remains reserved
+       * for the manual proof/review workflow.
+       */
+      const paymentReceipt =
+        receiptRepository.create({
+          projectId:
+            Number(
+              installment.projectId,
+            ),
+
+          installmentId:
+            Number(
+              installment.id,
+            ),
+
+          receivedAmount,
+
+          paymentDate:
+            settlementDate,
+
+          paymentMode:
+            'ONLINE',
+
+          transactionId:
+            bankReference,
+
+          gatewayMerchantTxnNo:
+            merchantTxnNo,
+
+          remarks:
+            'Payment received through ICICI Payment Gateway',
+
+          collectedByName:
+            'ICICI Payment Gateway',
+
+          approvalStatus:
+            'APPROVED',
+
+          approvedByName:
+            'ICICI Payment Gateway',
+
+          approvedAt:
+            settlementDate,
+
+          approvalNote:
+            'Automatically approved after verified ICICI payment status',
+        } as Partial<ProjectPaymentReceipt>);
+
+      try {
+        await receiptRepository.save(
+          paymentReceipt,
+        );
+      } catch (error: any) {
+        if (
+          String(
+            error?.code || '',
+          ) !== '23505'
+        ) {
+          throw error;
+        }
+
+        /*
+         * The installment lock should normally
+         * prevent a same-installment race.
+         *
+         * The unique gateway reference remains
+         * the final database-level protection.
+         */
+        const concurrentReceipt =
+          await receiptRepository.findOne({
+            where: {
+              gatewayMerchantTxnNo:
+                merchantTxnNo,
+              isHidden: false,
+            } as any,
+          });
+
+        if (!concurrentReceipt) {
+          throw error;
+        }
+
+        if (
+          Number(
+            concurrentReceipt.installmentId,
+          ) !== installmentId ||
+          Math.abs(
+            Number(
+              concurrentReceipt.receivedAmount ||
+                0,
+            ) - receivedAmount,
+          ) > 0.009
+        ) {
+          throw new BadRequestException(
+            'ICICI payment settlement identity mismatch',
+          );
+        }
+
+        /*
+         * Another settlement already persisted
+         * this exact gateway transaction.
+         *
+         * Do not apply the amount again.
+         */
+        return installment;
+      }
+
+      installment.paidAmount =
+        newPaidAmount;
+
+      installment.pendingAmount =
+        newPendingAmount;
+
+      installment.paymentMode =
+        'ONLINE';
+
+      installment.transactionId =
+        bankReference;
+
+      installment.remarks =
+        'Payment received through ICICI Payment Gateway';
+
+      installment.collectedByName =
+        'ICICI Payment Gateway';
+
+      installment.paidDate =
+        settlementDate;
+
+      installment.approvalStatus =
+        'APPROVED';
+
+      installment.approvedByName =
+        'ICICI Payment Gateway';
+
+      installment.approvedAt =
+        settlementDate;
+
+      installment.approvalNote =
+        'Automatically approved after verified ICICI payment status';
+
+      if (
+        newPendingAmount <= 0
+      ) {
+        installment.status =
+          ProjectPaymentInstallmentStatus.PAID;
+      } else if (
+        newPaidAmount > 0
+      ) {
+        installment.status =
+          ProjectPaymentInstallmentStatus.PARTIAL;
+      } else {
+        installment.status =
+          ProjectPaymentInstallmentStatus.PENDING;
+      }
+
+      const savedInstallment =
+        await installmentRepository.save(
+          installment,
+        );
+
+      /*
+       * Preserve the existing cumulative ledger
+       * model:
+       *
+       * one CUSTOMER_PAYMENT CREDIT ledger row
+       * per installment, whose amount equals the
+       * installment's cumulative paidAmount.
+       *
+       * Do this directly through the transaction
+       * repository rather than calling
+       * postCustomerPaymentInstallmentLedger(),
+       * because that existing helper uses the
+       * service-level repositories.
+       */
+      const existingLedger =
+        await ledgerRepository.findOne({
+          where: {
+            sourceType:
+              ProjectLedgerSourceType.CUSTOMER_PAYMENT,
+
+            sourceId:
+              Number(
+                savedInstallment.id,
+              ),
+
+            entryType:
+              ProjectLedgerEntryType.CREDIT,
+
+            isHidden:
+              false,
+          } as any,
+        });
+
+      const ledgerRemarks =
+        `Customer payment approved - ${String(
+          savedInstallment.label || '',
+        ).replaceAll('_', ' ')}`;
+
+      if (existingLedger) {
+        existingLedger.amount =
+          Number(
+            savedInstallment.paidAmount ||
+              0,
+          );
+
+        existingLedger.remarks =
+          ledgerRemarks;
+
+        await ledgerRepository.save(
+          existingLedger,
+        );
+      } else {
+        const ledgerEntry =
+          ledgerRepository.create({
+            partyId:
+              Number(
+                (project as any)
+                  ?.customerId ||
+                  0,
+              ) || undefined,
+
+            partyName:
+              (project as any)
+                ?.customerName ||
+              `Project #${savedInstallment.projectId}`,
+
+            partyType:
+              'CUSTOMER',
+
+            projectId:
+              Number(
+                savedInstallment.projectId,
+              ),
+
+            entryType:
+              ProjectLedgerEntryType.CREDIT,
+
+            sourceType:
+              ProjectLedgerSourceType.CUSTOMER_PAYMENT,
+
+            sourceId:
+              Number(
+                savedInstallment.id,
+              ),
+
+            amount:
+              Number(
+                savedInstallment.paidAmount ||
+                  0,
+              ),
+
+            remarks:
+              ledgerRemarks,
+
+            createdByName:
+              'ICICI Payment Gateway',
+          } as Partial<ProjectPartyLedger>);
+
+        await ledgerRepository.save(
+          ledgerEntry,
+        );
+      }
+
+      return savedInstallment;
+    },
+  );
+}
+
 async receivePaymentInstallment(
   installmentId: number,
   body: any,
   currentUser: any,
 ) {
-  const installment =
-    await this.projectPaymentInstallmentRepository.findOne({
-      where: {
-        id: installmentId,
-      },
-    });
-
-  if (!installment) {
-    throw new NotFoundException('Payment installment not found');
-  }
+  const normalizedInstallmentId =
+    Number(installmentId);
 
   if (
-    installment.status ===
-    ProjectPaymentInstallmentStatus.CANCELLED
+    !Number.isInteger(
+      normalizedInstallmentId,
+    ) ||
+    normalizedInstallmentId <= 0
   ) {
     throw new BadRequestException(
-      'Cancelled installment cannot receive payment',
+      'Valid payment installment is required',
     );
   }
 
-  const receivedAmount = Number(body?.receivedAmount || 0);
+  const receivedAmount =
+    Number(
+      body?.receivedAmount ||
+        0,
+    );
 
-  if (!receivedAmount || receivedAmount <= 0) {
+  if (
+    !Number.isFinite(
+      receivedAmount,
+    ) ||
+    receivedAmount <= 0
+  ) {
     throw new BadRequestException(
       'Valid received amount is required',
     );
   }
 
-  const currentPaid = Number(installment.paidAmount || 0);
-  const totalAmount = Number(installment.amount || 0);
+  return this.dataSource.transaction(
+    async (manager) => {
+      const installmentRepository =
+        manager.getRepository(
+          ProjectPaymentInstallment,
+        );
 
-  const newPaidAmount = currentPaid + receivedAmount;
+      const receiptRepository =
+        manager.getRepository(
+          ProjectPaymentReceipt,
+        );
 
-  if (newPaidAmount > totalAmount) {
-    throw new BadRequestException(
-      'Received amount cannot exceed pending amount',
-    );
-  }
+      const projectRepository =
+        manager.getRepository(
+          Project,
+        );
 
-  const newPendingAmount = totalAmount - newPaidAmount;
+      const ledgerRepository =
+        manager.getRepository(
+          ProjectPartyLedger,
+        );
 
-  installment.paidAmount = newPaidAmount;
-  installment.pendingAmount = newPendingAmount;
+      /*
+       * Use the exact same row lock as the
+       * ICICI settlement path.
+       *
+       * Staff/manual receipt and customer
+       * gateway settlement therefore cannot
+       * calculate the installment balance
+       * concurrently from the same old value.
+       */
+      const installment =
+        await installmentRepository
+          .createQueryBuilder(
+            'installment',
+          )
+          .setLock(
+            'pessimistic_write',
+          )
+          .where(
+            'installment.id = :installmentId',
+            {
+              installmentId:
+                normalizedInstallmentId,
+            },
+          )
+          .getOne();
 
-  installment.paymentMode =
-    body?.paymentMode || installment.paymentMode || null;
+      if (!installment) {
+        throw new NotFoundException(
+          'Payment installment not found',
+        );
+      }
 
-  installment.transactionId =
-    body?.transactionId ||
-    installment.transactionId ||
-    null;
+      if (
+        installment.status ===
+        ProjectPaymentInstallmentStatus.CANCELLED
+      ) {
+        throw new BadRequestException(
+          'Cancelled installment cannot receive payment',
+        );
+      }
 
-  installment.remarks =
-    body?.remarks || installment.remarks || null;
+      const currentPaid =
+        Number(
+          installment.paidAmount ||
+            0,
+        );
 
-  installment.collectedBy =
-    currentUser?.id || currentUser?.userId || null;
+      const totalAmount =
+        Number(
+          installment.amount ||
+            0,
+        );
 
-  installment.collectedByName =
-    currentUser?.name || null;
+      if (
+        !Number.isFinite(
+          currentPaid,
+        ) ||
+        currentPaid < 0 ||
+        !Number.isFinite(
+          totalAmount,
+        ) ||
+        totalAmount <= 0
+      ) {
+        throw new BadRequestException(
+          'Invalid installment financial state',
+        );
+      }
 
-  installment.paidDate = new Date();
+      const newPaidAmount =
+        currentPaid +
+        receivedAmount;
 
-  const roles = Array.isArray(currentUser?.roles)
-  ? currentUser.roles
-  : [];
+      if (
+        newPaidAmount -
+          totalAmount >
+        0.009
+      ) {
+        throw new BadRequestException(
+          'Received amount cannot exceed pending amount',
+        );
+      }
 
-const canAutoApprovePayment =
-  roles.includes('OWNER') ||
-  roles.includes('ACCOUNT_MANAGER') ||
-  roles.includes('PAYMENT_MANAGER');
+      const newPendingAmount =
+        Math.max(
+          totalAmount -
+            newPaidAmount,
+          0,
+        );
 
-installment.approvalStatus =
-  canAutoApprovePayment ? 'APPROVED' : 'PENDING';
+      installment.paidAmount =
+        newPaidAmount;
 
-if (canAutoApprovePayment) {
-  installment.approvedBy =
-    currentUser?.id || currentUser?.userId || null;
+      installment.pendingAmount =
+        newPendingAmount;
 
-  installment.approvedByName =
-    currentUser?.name || '';
+      installment.paymentMode =
+        body?.paymentMode ||
+        installment.paymentMode ||
+        null;
 
-  installment.approvedAt = new Date();
+      installment.transactionId =
+        body?.transactionId ||
+        installment.transactionId ||
+        null;
 
-  installment.approvalNote =
-    'Auto approved by authorized role';
-}
+      installment.remarks =
+        body?.remarks ||
+        installment.remarks ||
+        null;
 
-const paymentReceipt = new ProjectPaymentReceipt();
+      installment.collectedBy =
+        currentUser?.id ||
+        currentUser?.userId ||
+        null;
 
-paymentReceipt.projectId = Number(installment.projectId);
-paymentReceipt.installmentId = Number(installment.id);
-paymentReceipt.receivedAmount = receivedAmount;
-paymentReceipt.paymentDate = new Date();
-paymentReceipt.paymentMode = body?.paymentMode || null;
-paymentReceipt.transactionId = body?.transactionId || null;
-paymentReceipt.proofUrl = body?.proofUrl || null;
-paymentReceipt.remarks = body?.remarks || null;
-paymentReceipt.collectedBy =
-  currentUser?.id || currentUser?.userId || null;
-paymentReceipt.collectedByName = currentUser?.name || null;
-paymentReceipt.approvalStatus = installment.approvalStatus;
-if (installment.approvedBy) {
-  paymentReceipt.approvedBy = installment.approvedBy;
-}
+      installment.collectedByName =
+        currentUser?.name ||
+        null;
 
-if (installment.approvedByName) {
-  paymentReceipt.approvedByName = installment.approvedByName;
-}
+      const paymentDate =
+        new Date();
 
-if (installment.approvedAt) {
-  paymentReceipt.approvedAt = installment.approvedAt;
-}
+      installment.paidDate =
+        paymentDate;
 
-if (installment.approvalNote) {
-  paymentReceipt.approvalNote = installment.approvalNote;
-}
+      const roles =
+        Array.isArray(
+          currentUser?.roles,
+        )
+          ? currentUser.roles
+          : [];
 
-await this.projectPaymentReceiptRepository.save(paymentReceipt);
+      const canAutoApprovePayment =
+        roles.includes(
+          'OWNER',
+        ) ||
+        roles.includes(
+          'ACCOUNT_MANAGER',
+        ) ||
+        roles.includes(
+          'PAYMENT_MANAGER',
+        );
 
-  if (newPendingAmount <= 0) {
-    installment.status =
-      ProjectPaymentInstallmentStatus.PAID;
-  } else if (newPaidAmount > 0) {
-    installment.status =
-      ProjectPaymentInstallmentStatus.PARTIAL;
-  } else {
-    installment.status =
-      ProjectPaymentInstallmentStatus.PENDING;
-  }
+      installment.approvalStatus =
+        canAutoApprovePayment
+          ? 'APPROVED'
+          : 'PENDING';
 
-  const savedInstallment =
-  await this.projectPaymentInstallmentRepository.save(
-    installment,
-  );
+      if (
+        canAutoApprovePayment
+      ) {
+        installment.approvedBy =
+          currentUser?.id ||
+          currentUser?.userId ||
+          null;
 
-const project =
-  await this.projectRepository.findOne({
-    where: {
-      id: Number(savedInstallment.projectId),
+        installment.approvedByName =
+          currentUser?.name ||
+          '';
+
+        installment.approvedAt =
+          paymentDate;
+
+        installment.approvalNote =
+          'Auto approved by authorized role';
+      }
+
+      /*
+       * Financial receipt is written through
+       * the transaction-scoped repository.
+       */
+      const paymentReceipt =
+        receiptRepository.create({
+          projectId:
+            Number(
+              installment.projectId,
+            ),
+
+          installmentId:
+            Number(
+              installment.id,
+            ),
+
+          receivedAmount,
+
+          paymentDate,
+
+          paymentMode:
+            body?.paymentMode ||
+            null,
+
+          transactionId:
+            body?.transactionId ||
+            null,
+
+          proofUrl:
+            body?.proofUrl ||
+            null,
+
+          remarks:
+            body?.remarks ||
+            null,
+
+          collectedBy:
+            currentUser?.id ||
+            currentUser?.userId ||
+            null,
+
+          collectedByName:
+            currentUser?.name ||
+            null,
+
+          approvalStatus:
+            installment.approvalStatus,
+
+          approvedBy:
+            installment.approvedBy ||
+            undefined,
+
+          approvedByName:
+            installment.approvedByName ||
+            undefined,
+
+          approvedAt:
+            installment.approvedAt ||
+            undefined,
+
+          approvalNote:
+            installment.approvalNote ||
+            undefined,
+        } as Partial<ProjectPaymentReceipt>);
+
+      await receiptRepository.save(
+        paymentReceipt,
+      );
+
+      if (
+        newPendingAmount <= 0
+      ) {
+        installment.status =
+          ProjectPaymentInstallmentStatus.PAID;
+      } else if (
+        newPaidAmount > 0
+      ) {
+        installment.status =
+          ProjectPaymentInstallmentStatus.PARTIAL;
+      } else {
+        installment.status =
+          ProjectPaymentInstallmentStatus.PENDING;
+      }
+
+      const savedInstallment =
+        await installmentRepository.save(
+          installment,
+        );
+
+      /*
+       * Preserve the existing behavior:
+       * only APPROVED installment payments
+       * affect the customer finance ledger.
+       */
+      if (
+        savedInstallment
+          .approvalStatus ===
+        'APPROVED'
+      ) {
+        const project =
+          await projectRepository.findOne({
+            where: {
+              id: Number(
+                savedInstallment.projectId,
+              ),
+            },
+          });
+
+        const existingLedger =
+          await ledgerRepository.findOne({
+            where: {
+              sourceType:
+                ProjectLedgerSourceType.CUSTOMER_PAYMENT,
+
+              sourceId:
+                Number(
+                  savedInstallment.id,
+                ),
+
+              entryType:
+                ProjectLedgerEntryType.CREDIT,
+
+              isHidden:
+                false,
+            } as any,
+          });
+
+        const paidAmount =
+          Number(
+            savedInstallment.paidAmount ||
+              0,
+          );
+
+        const ledgerRemarks =
+          `Customer payment approved - ${String(
+            savedInstallment.label ||
+              '',
+          ).replaceAll('_', ' ')}`;
+
+        if (
+          existingLedger
+        ) {
+          existingLedger.amount =
+            paidAmount;
+
+          existingLedger.remarks =
+            ledgerRemarks;
+
+          await ledgerRepository.save(
+            existingLedger,
+          );
+        } else {
+          const ledgerEntry =
+            ledgerRepository.create({
+              partyId:
+                Number(
+                  (project as any)
+                    ?.customerId ||
+                    0,
+                ) || undefined,
+
+              partyName:
+                (project as any)
+                  ?.customerName ||
+                `Project #${savedInstallment.projectId}`,
+
+              partyType:
+                'CUSTOMER',
+
+              projectId:
+                Number(
+                  savedInstallment.projectId,
+                ),
+
+              entryType:
+                ProjectLedgerEntryType.CREDIT,
+
+              sourceType:
+                ProjectLedgerSourceType.CUSTOMER_PAYMENT,
+
+              sourceId:
+                Number(
+                  savedInstallment.id,
+                ),
+
+              amount:
+                paidAmount,
+
+              remarks:
+                ledgerRemarks,
+
+              createdBy:
+                currentUser?.id ||
+                currentUser?.userId ||
+                undefined,
+
+              createdByName:
+                currentUser?.name ||
+                '',
+            } as Partial<ProjectPartyLedger>);
+
+          await ledgerRepository.save(
+            ledgerEntry,
+          );
+        }
+      }
+
+      return savedInstallment;
     },
-  });
-
-  if (
-  savedInstallment.approvalStatus ===
-  'APPROVED'
-) {
-  await this.postCustomerPaymentInstallmentLedger(
-    savedInstallment,
-    currentUser,
   );
-}
-
-return savedInstallment;
 }
 
 async createFranchisePayoutRequest(
