@@ -579,9 +579,8 @@ const currentUserRoles =
   currentUser?.roles || [];
 
 const canEditInvoiceNumber =
-  currentUserRoles.includes(
-    'OWNER',
-  );
+  currentUserRoles.includes('OWNER') ||
+  currentUserRoles.includes('ACCOUNT_MANAGER');
 
   const adityaSolarsBillingEntity =
   billingEntities.find(
@@ -4905,8 +4904,53 @@ onChange={(e) =>
   Add Item
 </button>
 
-  <button
-    onClick={createManualInvoice}
+{manualInvoiceItems.length > 0 && (
+  <div className="mt-4 rounded-xl bg-gray-50 p-4">
+    <p className="text-sm font-semibold text-gray-700">
+      Added Invoice Items
+    </p>
+
+    <div className="mt-3 space-y-2">
+      {manualInvoiceItems.map((item, index) => (
+        <div
+          key={`${item.itemName}-${index}`}
+          className="flex flex-col gap-2 rounded-lg border bg-white p-3 text-sm md:flex-row md:items-center md:justify-between"
+        >
+          <div>
+            <p className="font-semibold text-gray-800">
+              {item.itemName}
+            </p>
+
+            <p className="text-gray-500">
+              Qty: {item.quantity} {item.unit || ''}
+              {' '}| Rate: ₹
+              {Number(item.finalRate || 0).toLocaleString('en-IN')}
+              {' '}| GST: {item.gstPercent || 0}%
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() =>
+              setManualInvoiceItems(
+                manualInvoiceItems.filter(
+                  (_, itemIndex) =>
+                    itemIndex !== index,
+                ),
+              )
+            }
+            className="text-sm font-semibold text-red-600 hover:text-red-700"
+          >
+            Remove
+          </button>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
+
+<button
+  onClick={createManualInvoice}
     disabled={creatingManualInvoice}
     className="mt-4 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white disabled:opacity-50"
   >

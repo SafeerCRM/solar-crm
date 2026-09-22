@@ -1144,25 +1144,27 @@ private async reserveBillingInvoiceNumber(
           false;
 
         if (
-          requested &&
-          requested !==
-            suggested
-        ) {
-          if (
-            !this.isOwnerUser(
-              user,
-            )
-          ) {
-            throw new ForbiddenException(
-              'Only Owner can override invoice number',
-            );
-          }
+  requested &&
+  requested !==
+    suggested
+) {
+  const roles =
+    this.getUserRoles(user);
 
-          finalInvoiceNumber =
-            requested;
+  if (
+    !roles.includes('OWNER') &&
+    !roles.includes('ACCOUNT_MANAGER')
+  ) {
+    throw new ForbiddenException(
+      'Only Owner or Account Manager can override invoice number',
+    );
+  }
 
-          overridden = true;
-        }
+  finalInvoiceNumber =
+    requested;
+
+  overridden = true;
+}
 
         const duplicate =
           await manager
@@ -27572,27 +27574,28 @@ async createFinalInvoice(
           false;
 
         if (
-          requestedInvoiceNumber &&
-          requestedInvoiceNumber !==
-            suggestedInvoiceNumber
-        ) {
-          if (
-            !this
-              .isOwnerUser(
-                user,
-              )
-          ) {
-            throw new ForbiddenException(
-              'Only Owner can override invoice number',
-            );
-          }
+  requestedInvoiceNumber &&
+  requestedInvoiceNumber !==
+    suggestedInvoiceNumber
+) {
+  const roles =
+    this.getUserRoles(user);
 
-          invoiceNumber =
-            requestedInvoiceNumber;
+  if (
+    !roles.includes('OWNER') &&
+    !roles.includes('ACCOUNT_MANAGER')
+  ) {
+    throw new ForbiddenException(
+      'Only Owner or Account Manager can override invoice number',
+    );
+  }
 
-          invoiceNumberOverridden =
-            true;
-        }
+  invoiceNumber =
+    requestedInvoiceNumber;
+
+  invoiceNumberOverridden =
+    true;
+}
 
         const duplicate =
           await manager
@@ -45515,7 +45518,8 @@ private canManageStock(user: any): boolean {
     roles.includes('OWNER') ||
     roles.includes('PROJECT_MANAGER') ||
     roles.includes('ACCOUNT_MANAGER') ||
-    roles.includes('STOCK_MANAGER')
+    roles.includes('STOCK_MANAGER') ||
+    roles.includes('SUBSIDY_MANAGER')
   );
 }
 
@@ -47274,7 +47278,7 @@ if (shouldRepairInvoice) {
         `SOLAR POWER GENERATING SYSTEM\n` +
         `SPGS PLANT CONTAINING\n` +
         `${project.panelBrand || 'SOLAR PANEL'} ` +
-        `${project.dcrPanelCount || ''} NOS\n` +
+`${Number(project.dcrPanelCount || 0) + Number(project.nonDcrPanelCount || 0) || ''} NOS\n` +
         `${project.converterBrand || 'INVERTER'} ` +
         `${project.converterCapacity || ''}`,
       hsnSac: '85414300',
@@ -47379,7 +47383,7 @@ const installationRate = Number(
   const defaultItems = [
     {
       serialNumber: 1,
-      description: `SOLAR POWER GENERATING SYSTEM\nSPGS PLANT CONTAINING\n${project.panelBrand || 'SOLAR PANEL'} ${project.dcrPanelCount || ''} NOS\n${project.converterBrand || 'INVERTER'} ${project.converterCapacity || ''}`,
+      description: `SOLAR POWER GENERATING SYSTEM\nSPGS PLANT CONTAINING\n${project.panelBrand || 'SOLAR PANEL'} ${Number(project.dcrPanelCount || 0) + Number(project.nonDcrPanelCount || 0) || ''} NOS\n${project.converterBrand || 'INVERTER'} ${project.converterCapacity || ''}`,
       hsnSac: '85414300',
       quantity: 1,
       unit: 'Units',

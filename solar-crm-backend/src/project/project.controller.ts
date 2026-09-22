@@ -3105,14 +3105,15 @@ getMaterialWiseStockSummary(
   'PAYMENT_MANAGER',
   'STOCK_MANAGER',
   'TRADING_MANAGER',
-'TRADING_HEAD',
+  'TRADING_HEAD',
+  'SUBSIDY_MANAGER',
 )
 @Get('stock/items')
 listProjectStockItems(@Query() query: any) {
   return this.projectService.listProjectStockItems(query);
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE', 'STOCK_MANAGER')
+@Roles('OWNER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE', 'STOCK_MANAGER', 'SUBSIDY_MANAGER',)
 @Post('stock/receive')
 receiveProjectStock(
   @Body() body: any,
@@ -3124,7 +3125,7 @@ receiveProjectStock(
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE', 'STOCK_MANAGER')
+@Roles('OWNER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE', 'STOCK_MANAGER', 'SUBSIDY_MANAGER',)
 @Post('stock/issue')
 issueProjectStock(
   @Body() body: any,
@@ -3144,6 +3145,7 @@ issueProjectStock(
   'STOCK_MANAGER',
   'TRADING_MANAGER',
 'TRADING_HEAD',
+'SUBSIDY_MANAGER',
 )
 @Get('stock/movements')
 listProjectStockMovements(
@@ -3162,6 +3164,7 @@ listProjectStockMovements(
   'STOCK_MANAGER',
   'TRADING_MANAGER',
   'TRADING_HEAD',
+  'SUBSIDY_MANAGER',
 )
 @Get('stock/files')
 
@@ -3194,6 +3197,7 @@ listProjectStockFiles(
   'OWNER',
   'PROJECT_MANAGER',
   'STOCK_MANAGER',
+  'SUBSIDY_MANAGER',
 )
 @Post('stock/files/upload')
 @UseInterceptors(
@@ -3219,6 +3223,7 @@ uploadProjectStockFile(
   'OWNER',
   'PROJECT_MANAGER',
   'STOCK_MANAGER',
+  'SUBSIDY_MANAGER',
 )
 @Patch('stock/files/:id/hide')
 hideProjectStockFile(
@@ -3236,6 +3241,7 @@ hideProjectStockFile(
   'OWNER',
   'PROJECT_MANAGER',
   'STOCK_MANAGER',
+  'SUBSIDY_MANAGER',
 )
 @Patch('stock/files/:id/restore')
 restoreProjectStockFile(
@@ -3256,6 +3262,7 @@ restoreProjectStockFile(
   'STOCK_MANAGER',
   'TRADING_MANAGER',
   'TRADING_HEAD',
+  'SUBSIDY_MANAGER',
 )
 @Get('stock/file-options/dealers')
 searchProjectStockFileDealers(
@@ -3280,6 +3287,7 @@ searchProjectStockFileDealers(
   'STOCK_MANAGER',
   'TRADING_MANAGER',
   'TRADING_HEAD',
+  'SUBSIDY_MANAGER',
 )
 @Get('stock/file-options/self-projects')
 searchProjectStockFileSelfProjects(
@@ -3304,6 +3312,7 @@ searchProjectStockFileSelfProjects(
   'STOCK_MANAGER',
   'TRADING_MANAGER',
   'TRADING_HEAD',
+  'SUBSIDY_MANAGER',
 )
 @Get('stock/files/:id/access')
 getProjectStockFileAccess(
@@ -3324,6 +3333,7 @@ getProjectStockFileAccess(
   'STOCK_MANAGER',
   'TRADING_MANAGER',
   'TRADING_HEAD',
+  'SUBSIDY_MANAGER',
 )
 @Get('stock/files/:id/download')
 downloadProjectStockFile(
@@ -3336,7 +3346,7 @@ downloadProjectStockFile(
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER', 'STOCK_MANAGER')
+@Roles('OWNER', 'PROJECT_MANAGER', 'STOCK_MANAGER', 'SUBSIDY_MANAGER',)
 @Patch('stock/items/:id/dealer-visibility')
 updateStockItemDealerVisibility(
   @Param('id', ParseIntPipe) id: number,
@@ -3350,7 +3360,7 @@ updateStockItemDealerVisibility(
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER', 'STOCK_MANAGER')
+@Roles('OWNER', 'PROJECT_MANAGER', 'STOCK_MANAGER', 'SUBSIDY_MANAGER',)
 @Patch('stock/movements/:movementId/hide')
 hideProjectStockMovement(
   @Param('movementId', ParseIntPipe)
@@ -3367,7 +3377,7 @@ hideProjectStockMovement(
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER', 'STOCK_MANAGER')
+@Roles('OWNER', 'PROJECT_MANAGER', 'STOCK_MANAGER', 'SUBSIDY_MANAGER',)
 @Patch('stock/movements/:movementId/restore')
 restoreProjectStockMovement(
   @Param('movementId', ParseIntPipe)
@@ -3384,7 +3394,7 @@ restoreProjectStockMovement(
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER', 'STOCK_MANAGER')
+@Roles('OWNER', 'PROJECT_MANAGER', 'STOCK_MANAGER', 'SUBSIDY_MANAGER',)
 @Patch('stock/items/:stockItemId/hide')
 hideProjectStockItem(
   @Param('stockItemId', ParseIntPipe)
@@ -3401,7 +3411,7 @@ hideProjectStockItem(
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER', 'STOCK_MANAGER',)
+@Roles('OWNER', 'PROJECT_MANAGER', 'STOCK_MANAGER', 'SUBSIDY_MANAGER',)
 @Patch('stock/items/:stockItemId/restore')
 restoreProjectStockItem(
   @Param('stockItemId', ParseIntPipe)
@@ -3426,7 +3436,8 @@ restoreProjectStockItem(
   'PAYMENT_MANAGER',
   'STOCK_MANAGER',
   'TRADING_MANAGER',
-'TRADING_HEAD',
+  'TRADING_HEAD',
+  'SUBSIDY_MANAGER',
 )
 @Get('stock/branch-wise')
 getBranchWiseStockReport(@Query() query: any) {
@@ -3435,7 +3446,13 @@ getBranchWiseStockReport(@Query() query: any) {
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE', 'STOCK_MANAGER')
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'PROJECT_EXECUTIVE',
+  'STOCK_MANAGER',
+  'SUBSIDY_MANAGER',
+)
 @Post('stock/issue-to-project')
 issueStockToProject(
   @Body() body: any,
@@ -3600,7 +3617,7 @@ listApprovedMaterialRequestsForIssue(
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER', 'STOCK_MANAGER')
+@Roles('OWNER', 'PROJECT_MANAGER', 'STOCK_MANAGER', 'SUBSIDY_MANAGER',)
 @Post('material-requests/items/:itemId/issue-stock')
 issueMaterialRequestItemStock(
   @Param('itemId', ParseIntPipe)
@@ -3617,7 +3634,7 @@ issueMaterialRequestItemStock(
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE' , 'STOCK_MANAGER')
+@Roles('OWNER', 'PROJECT_MANAGER', 'PROJECT_EXECUTIVE' , 'STOCK_MANAGER', 'SUBSIDY_MANAGER',)
 @Post('stock/transfer')
 transferProjectStock(
   @Body() body: any,
@@ -3634,7 +3651,14 @@ getProjectLoanDetail(@Param('id') id: string) {
   return this.projectService.getProjectLoanDetail(Number(id));
 }
 
-@Roles('OWNER', 'MARKETING_HEAD', 'PROJECT_MANAGER', 'LOAN_MANAGER', 'SOLAR_FRANCHISE')
+@Roles(
+  'OWNER',
+  'MARKETING_HEAD',
+  'PROJECT_MANAGER',
+  'LOAN_MANAGER',
+  'SUBSIDY_MANAGER',
+  'SOLAR_FRANCHISE',
+)
 
 @Post(':id/loan-detail')
 saveProjectLoanDetail(
@@ -3654,7 +3678,14 @@ getProjectSubsidyDetail(@Param('id') id: string) {
   return this.projectService.getProjectSubsidyDetail(Number(id));
 }
 
-@Roles('OWNER', 'MARKETING_HEAD', 'PROJECT_MANAGER', 'SUBSIDY_MANAGER', 'SOLAR_FRANCHISE')
+@Roles(
+  'OWNER',
+  'MARKETING_HEAD',
+  'PROJECT_MANAGER',
+  'LOAN_MANAGER',
+  'SUBSIDY_MANAGER',
+  'SOLAR_FRANCHISE',
+)
 
 @Post(':id/subsidy-detail')
 saveProjectSubsidyDetail(
@@ -4376,7 +4407,13 @@ getProjectLoanCoApplicants(
   );
 }
 
-@Roles('OWNER', 'MARKETING_HEAD', 'PROJECT_MANAGER', 'LOAN_MANAGER')
+@Roles(
+  'OWNER',
+  'MARKETING_HEAD',
+  'PROJECT_MANAGER',
+  'LOAN_MANAGER',
+  'SUBSIDY_MANAGER',
+)
 @Post(':id/loan-co-applicants')
 saveProjectLoanCoApplicant(
   @Param('id') id: string,
@@ -4390,7 +4427,13 @@ saveProjectLoanCoApplicant(
   );
 }
 
-@Roles('OWNER', 'MARKETING_HEAD', 'PROJECT_MANAGER', 'LOAN_MANAGER')
+@Roles(
+  'OWNER',
+  'MARKETING_HEAD',
+  'PROJECT_MANAGER',
+  'LOAN_MANAGER',
+  'SUBSIDY_MANAGER',
+)
 @Patch('loan-co-applicants/:id')
 updateProjectLoanCoApplicant(
   @Param('id') id: string,
@@ -4404,7 +4447,13 @@ updateProjectLoanCoApplicant(
   );
 }
 
-@Roles('OWNER', 'MARKETING_HEAD', 'PROJECT_MANAGER', 'LOAN_MANAGER')
+@Roles(
+  'OWNER',
+  'MARKETING_HEAD',
+  'PROJECT_MANAGER',
+  'LOAN_MANAGER',
+  'SUBSIDY_MANAGER',
+)
 @Patch('loan-co-applicants/:id/delete')
 deleteProjectLoanCoApplicant(
   @Param('id') id: string,
@@ -5694,13 +5743,25 @@ updateFranchisePayoutRequestStatus(
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER', 'STOCK_MANAGER')
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'STOCK_MANAGER',
+  'SUBSIDY_MANAGER',
+)
 @Get('stock/dashboard')
 getStockDashboard(@CurrentUser() user: any) {
   return this.projectService.getStockDashboard(user);
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER', 'STOCK_MANAGER')
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'STOCK_MANAGER',
+  'SUBSIDY_MANAGER',
+)
 @Post('stock/receive')
 receiveStock(
   @Body() body: any,
@@ -5709,7 +5770,13 @@ receiveStock(
   return this.projectService.receiveStock(body, user);
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER', 'STOCK_MANAGER')
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'STOCK_MANAGER',
+  'SUBSIDY_MANAGER',
+)
 @Post('stock/issue')
 issueStock(
   @Body() body: any,
@@ -5874,7 +5941,13 @@ cancelProject(
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER', 'STOCK_MANAGER')
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+  'ACCOUNT_MANAGER',
+  'STOCK_MANAGER',
+  'SUBSIDY_MANAGER',
+)
 @Post('stock/adjust')
 adjustStock(
   @Body() body: any,
@@ -5905,7 +5978,7 @@ releaseReservedProjectStock(
   );
 }
 
-@Roles('OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER', 'STOCK_MANAGER')
+@Roles('OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER', 'STOCK_MANAGER', 'SUBSIDY_MANAGER',)
 @Patch('material-requests/:id/approve-stock')
 approveMaterialRequestForStock(
   @Param('id') id: string,

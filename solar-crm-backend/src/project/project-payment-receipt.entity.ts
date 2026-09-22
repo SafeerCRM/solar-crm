@@ -27,10 +27,24 @@ export class ProjectPaymentReceipt {
   paymentMode: string;
 
   @Column({ type: 'text', nullable: true })
-  transactionId: string;
+transactionId: string;
 
-  @Column({ type: 'text', nullable: true })
-  proofUrl: string;
+/*
+ * Internal ICICI merchant transaction
+ * reference for gateway-originated customer
+ * payments.
+ *
+ * Manual/offline receipts leave this NULL.
+ */
+@Column({
+  type: 'varchar',
+  length: 20,
+  nullable: true,
+})
+gatewayMerchantTxnNo: string;
+
+@Column({ type: 'text', nullable: true })
+proofUrl: string;
 
   @Column({ type: 'text', nullable: true })
   remarks: string;

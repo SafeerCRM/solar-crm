@@ -4239,6 +4239,7 @@ const canManageLoan = hasRole([
   'MARKETING_HEAD',
   'PROJECT_MANAGER',
   'LOAN_MANAGER',
+  'SUBSIDY_MANAGER',
   'SOLAR_FRANCHISE',
 ]);
 
@@ -4246,6 +4247,7 @@ const canManageSubsidy = hasRole([
   'OWNER',
   'MARKETING_HEAD',
   'PROJECT_MANAGER',
+  'LOAN_MANAGER',
   'SUBSIDY_MANAGER',
   'SOLAR_FRANCHISE',
 ]);
@@ -6062,27 +6064,29 @@ if (
     'LOAN_MANAGER',
   ])
 ) {
-    visibleTabs = allTabs.filter((tab) =>
-      [
-        'PROJECT_CREATION',
-        'LOAN_DEPARTMENT',
-        'DOCUMENTS',
-        'PROJECT_HISTORY',
-      ].includes(tab.key),
-    );
-  } else if (
-    hasRole(['SUBSIDY_MANAGER'])
-  ) {
-    visibleTabs = allTabs.filter((tab) =>
-      [
-        'PROJECT_CREATION',
-        'SUBSIDY_DEPARTMENT',
-        'CONTRACTOR_WORK',
-        'DOCUMENTS',
-        'PROJECT_HISTORY',
-      ].includes(tab.key),
-    );
-  } else if (
+  visibleTabs = allTabs.filter((tab) =>
+    [
+      'PROJECT_CREATION',
+      'LOAN_DEPARTMENT',
+      'SUBSIDY_DEPARTMENT',
+      'DOCUMENTS',
+      'PROJECT_HISTORY',
+    ].includes(tab.key),
+  );
+} else if (
+  hasRole(['SUBSIDY_MANAGER'])
+) {
+  visibleTabs = allTabs.filter((tab) =>
+    [
+      'PROJECT_CREATION',
+      'LOAN_DEPARTMENT',
+      'SUBSIDY_DEPARTMENT',
+      'CONTRACTOR_WORK',
+      'DOCUMENTS',
+      'PROJECT_HISTORY',
+    ].includes(tab.key),
+  );
+} else if (
     hasRole(['ELECTRICITY_MANAGER'])
   ) {
     visibleTabs = allTabs.filter((tab) =>
