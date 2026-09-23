@@ -7,6 +7,14 @@ import {
   useState,
 } from 'react';
 
+import {
+  Capacitor,
+} from '@capacitor/core';
+
+import {
+  Browser,
+} from '@capacitor/browser';
+
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -55,15 +63,18 @@ type InsuranceRequest = {
   projectId: number;
   insurancePlanId?: number;
   existingInsuranceId?: number;
-
-  requestType:
-    | 'NEW'
-    | 'RENEWAL';
-
+  requestType: 'NEW' | 'RENEWAL';
   status: string;
 
-  customerRemarks?: string;
+  payableAmount?: number;
+  paymentStatus?:
+    | 'PENDING'
+    | 'INITIATED'
+    | 'PAID'
+    | 'FAILED'
+    | 'REFUNDED';
 
+  customerRemarks?: string;
   requestedAt?: string;
 };
 
@@ -466,6 +477,14 @@ export default function CustomerInsurancePage() {
   ] =
     useState(false);
 
+    const [
+  payingRequestId,
+  setPayingRequestId,
+] =
+  useState<number | null>(
+    null,
+  );
+
   const [
     error,
     setError,
@@ -507,7 +526,119 @@ export default function CustomerInsurancePage() {
       `Bearer ${token()}`,
   });
 
-  const loadOverview =
+  
+
+  const payInsuranceOnline =
+  async (
+    requestId: number,
+  ) => {
+    try {
+      setPayingRequestId(
+        requestId,
+      );
+
+      setError('');
+      setSuccess('');
+
+      const customerToken =
+        token();
+
+      if (!customerToken) {
+        throw new Error(
+          'Customer session has expired. Please login again.',
+        );
+      }
+
+      const paymentSource:
+        | 'APP'
+        | 'WEB' =
+        Capacitor.isNativePlatform()
+          ? 'APP'
+          : 'WEB';
+
+      const response =
+        await fetch(
+          `${API_BASE_URL}/customer-auth/insurance/requests/${requestId}/launch`,
+          {
+            method: 'POST',
+
+            headers: {
+              Authorization:
+                `Bearer ${customerToken}`,
+
+              'Content-Type':
+                'application/json',
+            },
+
+            body:
+              JSON.stringify({
+                paymentSource,
+              }),
+          },
+        );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          Array.isArray(
+            data?.message,
+          )
+            ? data.message.join(
+                ', ',
+              )
+            : data?.message ||
+                'Unable to start insurance payment',
+        );
+      }
+
+      const launchUrl =
+        String(
+          data?.launchUrl ||
+          '',
+        ).trim();
+
+      /*
+       * Customer payments must always enter
+       * ICICI through the registered
+       * Aditya Solars website.
+       */
+      if (
+        !launchUrl.startsWith(
+          'https://adityasolars.co.in/payment/launch',
+        )
+      ) {
+        throw new Error(
+          'Invalid insurance payment launch URL',
+        );
+      }
+
+      if (
+        Capacitor.isNativePlatform()
+      ) {
+        await Browser.open({
+          url: launchUrl,
+        });
+
+        return;
+      }
+
+      window.location.href =
+        launchUrl;
+    } catch (err: any) {
+      setError(
+        err?.message ||
+          'Unable to start insurance payment',
+      );
+
+      setPayingRequestId(
+        null,
+      );
+    }
+  };
+
+const loadOverview =
     useCallback(
       async () => {
         try {
@@ -542,6 +673,10 @@ export default function CustomerInsurancePage() {
           setOverview(
             data,
           );
+
+          setPayingRequestId(
+  null,
+);
 
           if (
             !selectedProjectId &&
@@ -639,19 +774,58 @@ export default function CustomerInsurancePage() {
     );
 
   useEffect(() => {
-    const customerToken =
-      token();
+  const customerToken =
+    token();
 
-    if (!customerToken) {
-      window.location.href =
-        '/customer-login';
+  if (!customerToken) {
+    window.location.href =
+      '/customer-login';
 
-      return;
-    }
+    return;
+  }
 
+  loadOverview();
+  loadPlans();
+
+  const handleFocus = () => {
     loadOverview();
-    loadPlans();
-  }, []);
+  };
+
+  const handleVisibilityChange =
+    () => {
+      if (
+        document.visibilityState ===
+        'visible'
+      ) {
+        loadOverview();
+      }
+    };
+
+  window.addEventListener(
+    'focus',
+    handleFocus,
+  );
+
+  document.addEventListener(
+    'visibilitychange',
+    handleVisibilityChange,
+  );
+
+  return () => {
+    window.removeEventListener(
+      'focus',
+      handleFocus,
+    );
+
+    document.removeEventListener(
+      'visibilitychange',
+      handleVisibilityChange,
+    );
+  };
+}, [
+  loadOverview,
+  loadPlans,
+]);
 
   const pendingRequestForProject =
     useMemo(
@@ -1312,33 +1486,102 @@ export default function CustomerInsurancePage() {
             </p>
 
             {pendingRequestForProject ? (
-              <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-5">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="font-black text-amber-900">
-                      Insurance
-                      Request Already
-                      Submitted
-                    </p>
+  <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <p className="font-black text-amber-900">
+          Insurance Request Already Submitted
+        </p>
 
-                    <p className="mt-1 text-sm font-semibold text-amber-700">
-                      Your request is
-                      currently{' '}
-                      {formatLabel(
-                        pendingRequestForProject.status,
-                      )}
-                      .
-                    </p>
-                  </div>
+        <p className="mt-1 text-sm font-semibold text-amber-700">
+          Your request is currently{' '}
+          {formatLabel(
+            pendingRequestForProject.status,
+          )}
+          .
+        </p>
+      </div>
 
-                  <StatusBadge
-                    status={
-                      pendingRequestForProject.status
-                    }
-                  />
-                </div>
-              </div>
-            ) : (
+      <StatusBadge
+        status={
+          pendingRequestForProject.status
+        }
+      />
+    </div>
+
+    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      <div className="rounded-2xl bg-white/80 p-4">
+        <p className="text-xs font-black uppercase text-gray-500">
+          Payable Amount
+        </p>
+
+        <p className="mt-1 text-lg font-black text-gray-900">
+          {formatMoney(
+            Number(
+              pendingRequestForProject
+                .payableAmount ||
+                0,
+            ),
+          )}
+        </p>
+      </div>
+
+      <div className="rounded-2xl bg-white/80 p-4">
+        <p className="text-xs font-black uppercase text-gray-500">
+          Payment Status
+        </p>
+
+        <p className="mt-1 text-sm font-black text-gray-900">
+          {formatLabel(
+            pendingRequestForProject
+              .paymentStatus ||
+              'PENDING',
+          )}
+        </p>
+      </div>
+    </div>
+
+    {pendingRequestForProject.paymentStatus !==
+      'PAID' &&
+      Number(
+        pendingRequestForProject
+          .payableAmount ||
+          0,
+      ) > 0 && (
+        <button
+          type="button"
+          disabled={
+            payingRequestId ===
+            pendingRequestForProject.id
+          }
+          onClick={() =>
+            payInsuranceOnline(
+              pendingRequestForProject.id,
+            )
+          }
+          className="mt-4 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {payingRequestId ===
+          pendingRequestForProject.id
+            ? 'Opening Payment...'
+            : `Pay ${formatMoney(
+                Number(
+                  pendingRequestForProject
+                    .payableAmount ||
+                    0,
+                ),
+              )} Online`}
+        </button>
+      )}
+
+    {pendingRequestForProject.paymentStatus ===
+      'PAID' && (
+      <div className="mt-4 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm font-bold text-green-800">
+        Payment verified. Your insurance request is ready for processing.
+      </div>
+    )}
+  </div>
+) : (
               <>
                 <div className="mt-5 grid gap-4 md:grid-cols-2">
                   <label className="space-y-1">
