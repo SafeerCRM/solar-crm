@@ -258,8 +258,36 @@ const filteredReceipts = receipts.filter((item: any) => {
 };
 
   useEffect(() => {
-    loadDashboard();
-  }, []);
+  loadDashboard();
+
+  const refreshPayments = () => {
+    if (document.visibilityState === 'visible') {
+      loadDashboard();
+    }
+  };
+
+  window.addEventListener(
+    'focus',
+    refreshPayments,
+  );
+
+  document.addEventListener(
+    'visibilitychange',
+    refreshPayments,
+  );
+
+  return () => {
+    window.removeEventListener(
+      'focus',
+      refreshPayments,
+    );
+
+    document.removeEventListener(
+      'visibilitychange',
+      refreshPayments,
+    );
+  };
+}, []);
 
   const compressImageFile = async (file: File) => {
   if (!file.type.startsWith('image/')) {
