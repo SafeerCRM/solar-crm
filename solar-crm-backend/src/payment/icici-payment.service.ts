@@ -73,7 +73,9 @@ amount: number;
   businessSettlementType?:
   | 'DEALER_INSURANCE'
   | 'DEALER_ORDER'
-  | 'CUSTOMER_PAYMENT';
+  | 'CUSTOMER_PAYMENT'
+  | 'CUSTOMER_INSURANCE'
+  | 'CUSTOMER_AFTER_SALES';
 
 paymentSource?:
   | 'APP'
@@ -935,6 +937,414 @@ private readonly dealerRepository:
     'Insurance payment initiation is already in progress. Please try again shortly.',
   );
 }
+}
+
+async initiateCustomerInsurancePayment(
+  input: InitiatePaymentInput,
+) {
+  /*
+   * This wrapper is ONLY for Customer Portal
+   * insurance payments through ADITYA SOLARS.
+   */
+  if (
+    input.purpose !==
+      IciciPaymentPurpose.CUSTOMER_INSURANCE ||
+    input.merchantAccount !==
+      IciciMerchantAccount.SOLARS
+  ) {
+    throw new BadRequestException(
+      'Invalid customer insurance payment configuration',
+    );
+  }
+
+  const referenceId =
+    Number(
+      input.referenceId,
+    );
+
+  const customerId =
+    Number(
+      input.customerId,
+    );
+
+  if (
+    !Number.isInteger(
+      referenceId,
+    ) ||
+    referenceId <= 0 ||
+    !Number.isInteger(
+      customerId,
+    ) ||
+    customerId <= 0
+  ) {
+    throw new BadRequestException(
+      'Invalid customer insurance payment reference',
+    );
+  }
+
+  const previousTransaction =
+    await this
+      .transactionRepository
+      .createQueryBuilder(
+        'transaction',
+      )
+      .where(
+        'transaction.purpose = :purpose',
+        {
+          purpose:
+            IciciPaymentPurpose
+              .CUSTOMER_INSURANCE,
+        },
+      )
+      .andWhere(
+        'transaction.referenceId = :referenceId',
+        {
+          referenceId,
+        },
+      )
+      .andWhere(
+        'transaction.customerId = :customerId',
+        {
+          customerId,
+        },
+      )
+      .andWhere(
+        'transaction.merchantAccount = :merchantAccount',
+        {
+          merchantAccount:
+            IciciMerchantAccount
+              .SOLARS,
+        },
+      )
+      .orderBy(
+        'transaction.createdAt',
+        'DESC',
+      )
+      .getOne();
+
+  if (
+    previousTransaction &&
+    (
+      previousTransaction.status ===
+        IciciPaymentTransactionStatus.CREATED ||
+      previousTransaction.status ===
+        IciciPaymentTransactionStatus.INITIATED ||
+      previousTransaction.status ===
+        IciciPaymentTransactionStatus.PENDING
+    )
+  ) {
+    await this.updateActivePaymentSource(
+      previousTransaction,
+      input.paymentSource,
+    );
+  }
+
+  if (
+    previousTransaction?.status ===
+      IciciPaymentTransactionStatus.SUCCESS
+  ) {
+    await this
+      .dispatchSuccessfulTransaction(
+        previousTransaction,
+      );
+
+    throw new BadRequestException(
+      'Insurance payment has already been completed',
+    );
+  }
+
+  /*
+   * Never create another payment while an
+   * existing PENDING transaction may already
+   * represent a successful bank payment.
+   */
+  if (
+    previousTransaction?.status ===
+      IciciPaymentTransactionStatus.PENDING
+  ) {
+    const reconciled =
+      await this
+        .reconcileTransactionStatus(
+          previousTransaction,
+        );
+
+    if (
+      reconciled.status ===
+        IciciPaymentTransactionStatus.SUCCESS
+    ) {
+      throw new BadRequestException(
+        'Insurance payment has already been completed',
+      );
+    }
+
+    if (
+      reconciled.status ===
+        IciciPaymentTransactionStatus.PENDING
+    ) {
+      throw new BadRequestException(
+        'Previous insurance payment is still being processed. Please try again later.',
+      );
+    }
+
+    /*
+     * FAILED can continue below and create
+     * a fresh payment attempt.
+     */
+  }
+
+  /*
+   * A recent hosted-payment session should
+   * be reused instead of creating another
+   * ICICI transaction.
+   */
+  if (
+    previousTransaction?.status ===
+      IciciPaymentTransactionStatus.INITIATED
+  ) {
+    const initiatedAt =
+      previousTransaction.initiatedAt ||
+      previousTransaction.createdAt;
+
+    const ageMilliseconds =
+      Date.now() -
+      new Date(
+        initiatedAt,
+      ).getTime();
+
+    const reuseWindowMilliseconds =
+      15 * 60 * 1000;
+
+    if (
+      previousTransaction.redirectUri &&
+      previousTransaction.transactionContext &&
+      Number.isFinite(
+        ageMilliseconds,
+      ) &&
+      ageMilliseconds >= 0 &&
+      ageMilliseconds <=
+        reuseWindowMilliseconds
+    ) {
+      return {
+        success: true,
+
+        transactionId:
+          previousTransaction.id,
+
+        merchantTxnNo:
+          previousTransaction
+            .merchantTxnNo,
+
+        amount:
+          Number(
+            previousTransaction.amount,
+          ),
+
+        status:
+          previousTransaction.status,
+
+        paymentUrl:
+          `${previousTransaction.redirectUri}?tranCtx=${encodeURIComponent(
+            previousTransaction
+              .transactionContext ||
+              '',
+          )}`,
+
+        reused: true,
+      };
+    }
+
+    /*
+     * An old INITIATED transaction cannot
+     * simply be assumed failed. Reconcile
+     * with ICICI before allowing a retry.
+     */
+    const reconciled =
+      await this
+        .reconcileTransactionStatus(
+          previousTransaction,
+        );
+
+    if (
+      reconciled.status ===
+        IciciPaymentTransactionStatus.SUCCESS
+    ) {
+      throw new BadRequestException(
+        'Insurance payment has already been completed',
+      );
+    }
+
+    if (
+      reconciled.status ===
+        IciciPaymentTransactionStatus.PENDING ||
+      reconciled.status ===
+        IciciPaymentTransactionStatus.INITIATED
+    ) {
+      throw new BadRequestException(
+        'Previous insurance payment is still being processed. Please try again later.',
+      );
+    }
+
+    if (
+      reconciled.status !==
+        IciciPaymentTransactionStatus.FAILED
+    ) {
+      throw new BadRequestException(
+        'Previous insurance payment could not be confirmed as failed',
+      );
+    }
+  }
+
+  /*
+   * Only a confirmed failed/terminal previous
+   * attempt may reach a fresh ICICI initiation.
+   */
+  try {
+    return await this.initiatePayment({
+      ...input,
+
+      businessSettlementType:
+        'CUSTOMER_INSURANCE',
+    });
+  } catch (error: any) {
+    /*
+     * The DB active-attempt index will prevent
+     * two simultaneous Customer Insurance
+     * transactions for the same request.
+     *
+     * If two requests race, retrieve and reuse
+     * the transaction that won.
+     */
+    if (
+      error?.code !==
+        '23505'
+    ) {
+      throw error;
+    }
+
+    const concurrentTransaction =
+      await this.transactionRepository
+        .createQueryBuilder(
+          'transaction',
+        )
+        .where(
+          'transaction.purpose = :purpose',
+          {
+            purpose:
+              IciciPaymentPurpose
+                .CUSTOMER_INSURANCE,
+          },
+        )
+        .andWhere(
+          'transaction.referenceId = :referenceId',
+          {
+            referenceId,
+          },
+        )
+        .andWhere(
+          'transaction.customerId = :customerId',
+          {
+            customerId,
+          },
+        )
+        .andWhere(
+          'transaction.merchantAccount = :merchantAccount',
+          {
+            merchantAccount:
+              IciciMerchantAccount
+                .SOLARS,
+          },
+        )
+        .andWhere(
+          'transaction.status IN (:...activeStatuses)',
+          {
+            activeStatuses: [
+              IciciPaymentTransactionStatus.CREATED,
+              IciciPaymentTransactionStatus.INITIATED,
+              IciciPaymentTransactionStatus.PENDING,
+            ],
+          },
+        )
+        .orderBy(
+          'transaction.createdAt',
+          'DESC',
+        )
+        .getOne();
+
+    if (
+      !concurrentTransaction
+    ) {
+      throw error;
+    }
+
+    await this.updateActivePaymentSource(
+      concurrentTransaction,
+      input.paymentSource,
+    );
+
+    const businessSettlementType =
+      String(
+        concurrentTransaction
+          .gatewayMetadata
+          ?.businessSettlementType ||
+          '',
+      );
+
+    if (
+      businessSettlementType !==
+        'CUSTOMER_INSURANCE'
+    ) {
+      throw error;
+    }
+
+    /*
+     * If the winning request already finished
+     * ICICI initiation, return that same hosted
+     * payment session.
+     */
+    if (
+      concurrentTransaction.status ===
+        IciciPaymentTransactionStatus.INITIATED &&
+      concurrentTransaction.redirectUri &&
+      concurrentTransaction.transactionContext
+    ) {
+      return {
+        success: true,
+
+        transactionId:
+          concurrentTransaction.id,
+
+        merchantTxnNo:
+          concurrentTransaction
+            .merchantTxnNo,
+
+        amount:
+          Number(
+            concurrentTransaction.amount,
+          ),
+
+        status:
+          concurrentTransaction.status,
+
+        paymentUrl:
+          `${concurrentTransaction.redirectUri}?tranCtx=${encodeURIComponent(
+            concurrentTransaction
+              .transactionContext ||
+              '',
+          )}`,
+
+        reused: true,
+      };
+    }
+
+    /*
+     * CREATED means the concurrent request may
+     * still be contacting ICICI. PENDING is also
+     * unresolved. Never create another charge.
+     */
+    throw new BadRequestException(
+      'Insurance payment initiation is already in progress. Please try again shortly.',
+    );
+  }
 }
 
 async initiateDealerOrderPayment(
@@ -3031,6 +3441,191 @@ private async dispatchSuccessfulTransaction(
     'Dealer insurance request is already paid by a different payment transaction',
   );
 }
+
+    request.paymentStatus =
+      ProjectInsurancePaymentStatus.PAID;
+
+    request.gatewayOrderId =
+      transaction.merchantTxnNo;
+
+    request.gatewayPaymentId =
+      transaction.paymentId ||
+      undefined;
+
+    request.gatewayTransactionId =
+      transaction.bankTxnId ||
+      undefined;
+
+    request.paidAt =
+      transaction.paidAt ||
+      new Date();
+
+    await this
+      .projectInsuranceRequestRepository
+      .save(
+        request,
+      );
+
+    return;
+  }
+
+    /*
+   * Customer Insurance
+   *
+   * Business rule:
+   * Customer Portal insurance payments are
+   * received through ADITYA SOLARS.
+   *
+   * referenceId is the
+   * ProjectInsuranceRequest.id.
+   */
+  if (
+    transaction.purpose ===
+      IciciPaymentPurpose.CUSTOMER_INSURANCE
+  ) {
+    if (
+      transaction.merchantAccount !==
+        IciciMerchantAccount.SOLARS
+    ) {
+      throw new BadGatewayException(
+        'Customer insurance payment merchant mismatch',
+      );
+    }
+
+    const requestId =
+      Number(
+        transaction.referenceId,
+      );
+
+    const customerId =
+      Number(
+        transaction.customerId,
+      );
+
+    if (
+      !Number.isInteger(
+        requestId,
+      ) ||
+      requestId <= 0 ||
+      !Number.isInteger(
+        customerId,
+      ) ||
+      customerId <= 0
+    ) {
+      throw new BadGatewayException(
+        'Customer insurance payment reference is invalid',
+      );
+    }
+
+    /*
+     * Only a transaction created by the
+     * hardened Customer Insurance initiation
+     * path may settle an insurance request.
+     */
+    if (
+      String(
+        transaction
+          .gatewayMetadata
+          ?.businessSettlementType ||
+        '',
+      ) !==
+        'CUSTOMER_INSURANCE'
+    ) {
+      throw new BadGatewayException(
+        'Customer insurance payment settlement marker mismatch',
+      );
+    }
+
+    const request =
+      await this
+        .projectInsuranceRequestRepository
+        .findOne({
+          where: {
+            id:
+              requestId,
+
+            customerId,
+
+            source:
+              ProjectInsuranceRequestSource
+                .CUSTOMER,
+
+            isHidden:
+              false,
+          } as any,
+        });
+
+    if (!request) {
+      throw new BadGatewayException(
+        'Customer insurance application not found for payment',
+      );
+    }
+
+    const transactionAmount =
+      Number(
+        transaction.amount,
+      );
+
+    const payableAmount =
+      Number(
+        request.payableAmount,
+      );
+
+    if (
+      !Number.isFinite(
+        transactionAmount,
+      ) ||
+      !Number.isFinite(
+        payableAmount,
+      ) ||
+      Math.abs(
+        transactionAmount -
+          payableAmount,
+      ) > 0.009
+    ) {
+      throw new BadGatewayException(
+        'Customer insurance payment amount mismatch',
+      );
+    }
+
+    /*
+     * Idempotency:
+     *
+     * Repeated callback/status reconciliation
+     * for the exact same ICICI transaction is
+     * safe, but a different successful payment
+     * must never overwrite an already-paid
+     * insurance request.
+     */
+    if (
+      request.paymentStatus ===
+        ProjectInsurancePaymentStatus.PAID
+    ) {
+      const existingMerchantTxnNo =
+        String(
+          request.gatewayOrderId ||
+          '',
+        ).trim();
+
+      const currentMerchantTxnNo =
+        String(
+          transaction.merchantTxnNo ||
+          '',
+        ).trim();
+
+      if (
+        existingMerchantTxnNo &&
+        currentMerchantTxnNo &&
+        existingMerchantTxnNo ===
+          currentMerchantTxnNo
+      ) {
+        return;
+      }
+
+      throw new BadGatewayException(
+        'Customer insurance request is already paid by a different payment transaction',
+      );
+    }
 
     request.paymentStatus =
       ProjectInsurancePaymentStatus.PAID;

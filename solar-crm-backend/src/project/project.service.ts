@@ -57336,13 +57336,17 @@ async approveInsuranceRequest(
   }
 
   if (
-  request.source ===
-    ProjectInsuranceRequestSource.DEALER &&
+  (
+    request.source ===
+      ProjectInsuranceRequestSource.DEALER ||
+    request.source ===
+      ProjectInsuranceRequestSource.CUSTOMER
+  ) &&
   request.paymentStatus !==
     ProjectInsurancePaymentStatus.PAID
 ) {
   throw new BadRequestException(
-    'Dealer insurance request cannot be approved before verified payment',
+    'Insurance request cannot be approved before verified payment',
   );
 }
 
@@ -57906,6 +57910,17 @@ async completeNewInsuranceRequest(
           user,
         );
   } else {
+
+    if (
+  request.source ===
+    ProjectInsuranceRequestSource.CUSTOMER &&
+  request.paymentStatus !==
+    ProjectInsurancePaymentStatus.PAID
+) {
+  throw new BadRequestException(
+    'Customer insurance payment must be verified before policy issuance',
+  );
+}
     /*
      * Existing Aditya Solars customer/staff
      * insurance flow remains unchanged.

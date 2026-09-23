@@ -60,14 +60,17 @@ export class CustomerPaymentLaunchController {
         );
 
     if (
-      launch.purpose !==
-      IciciPaymentLaunchPurpose
-        .CUSTOMER_PAYMENT
-    ) {
-      throw new BadRequestException(
-        'Unsupported payment launch purpose',
-      );
-    }
+  launch.purpose !==
+    IciciPaymentLaunchPurpose
+      .CUSTOMER_PAYMENT &&
+  launch.purpose !==
+    IciciPaymentLaunchPurpose
+      .CUSTOMER_INSURANCE
+) {
+  throw new BadRequestException(
+    'Unsupported payment launch purpose',
+  );
+}
 
     const returnUrl =
       String(
@@ -97,13 +100,39 @@ export class CustomerPaymentLaunchController {
      *
      * Amount is recalculated server-side.
      */
-    const payment =
-      await this.customerPortalService.initiateCustomerInstallmentPayment(
-  Number(launch.customerId),
-  Number(launch.referenceId),
-  returnUrl,
-  launch.paymentSource,
-);
+    let payment;
+
+if (
+  launch.purpose ===
+    IciciPaymentLaunchPurpose
+      .CUSTOMER_PAYMENT
+) {
+  payment =
+    await this.customerPortalService
+      .initiateCustomerInstallmentPayment(
+        Number(launch.customerId),
+        Number(launch.referenceId),
+        returnUrl,
+        launch.paymentSource,
+      );
+} else if (
+  launch.purpose ===
+    IciciPaymentLaunchPurpose
+      .CUSTOMER_INSURANCE
+) {
+  payment =
+    await this.customerPortalService
+      .initiateCustomerInsurancePayment(
+        Number(launch.customerId),
+        Number(launch.referenceId),
+        returnUrl,
+        launch.paymentSource,
+      );
+} else {
+  throw new BadRequestException(
+    'Unsupported payment launch purpose',
+  );
+}
 
     const paymentUrl =
       String(

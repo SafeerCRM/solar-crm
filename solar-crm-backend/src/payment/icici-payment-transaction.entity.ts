@@ -16,6 +16,8 @@ export enum IciciPaymentPurpose {
   DEALER_INSURANCE = 'DEALER_INSURANCE',
   DEALER_ORDER = 'DEALER_ORDER',
   CUSTOMER_PAYMENT = 'CUSTOMER_PAYMENT',
+  CUSTOMER_INSURANCE = 'CUSTOMER_INSURANCE',
+  CUSTOMER_AFTER_SALES = 'CUSTOMER_AFTER_SALES',
 }
 
 export enum IciciPaymentTransactionStatus {
@@ -55,14 +57,14 @@ export class IciciPaymentTransaction {
   merchantAccount: IciciMerchantAccount;
 
   /*
- * Business purpose of the payment.
- *
  * referenceId points to the corresponding
  * business record:
  *
- * DEALER_INSURANCE -> ProjectInsuranceRequest.id
- * DEALER_ORDER     -> ProjectDealerOrder.id
- * CUSTOMER_PAYMENT -> ProjectPaymentInstallment.id
+ * DEALER_INSURANCE    -> ProjectInsuranceRequest.id
+ * DEALER_ORDER        -> ProjectDealerOrder.id
+ * CUSTOMER_PAYMENT    -> ProjectPaymentInstallment.id
+ * CUSTOMER_INSURANCE  -> ProjectInsuranceRequest.id
+ * CUSTOMER_AFTER_SALES -> AfterSalesRequest.id
  */
   @Column({
     type: 'enum',

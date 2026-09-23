@@ -15,6 +15,12 @@ export enum IciciPaymentLaunchPurpose {
 
   CUSTOMER_PAYMENT =
     'CUSTOMER_PAYMENT',
+
+  CUSTOMER_INSURANCE =
+    'CUSTOMER_INSURANCE',
+
+  CUSTOMER_AFTER_SALES =
+    'CUSTOMER_AFTER_SALES',
 }
 
 export enum IciciPaymentLaunchStatus {

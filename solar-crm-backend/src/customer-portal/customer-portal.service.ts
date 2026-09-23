@@ -83,6 +83,8 @@ import {
   ProjectInsuranceRequest,
   ProjectInsuranceRequestStatus,
   ProjectInsuranceRequestType,
+  ProjectInsuranceRequestSource,
+ProjectInsurancePaymentStatus,
 } from '../project/project-insurance-request.entity';
 
 import {
@@ -4578,6 +4580,225 @@ async getMyInsuranceDocuments(
     });
 }
 
+private async getCustomerInsurancePaymentDetails(
+  customerId: number,
+  requestId: number,
+) {
+  const normalizedCustomerId =
+    Number(customerId);
+
+  const normalizedRequestId =
+    Number(requestId);
+
+  if (
+    !Number.isInteger(normalizedCustomerId) ||
+    normalizedCustomerId <= 0 ||
+    !Number.isInteger(normalizedRequestId) ||
+    normalizedRequestId <= 0
+  ) {
+    throw new BadRequestException(
+      'Invalid insurance payment reference',
+    );
+  }
+
+  const request =
+    await this
+      .projectInsuranceRequestRepository
+      .findOne({
+        where: {
+          id: normalizedRequestId,
+          customerId:
+            normalizedCustomerId,
+          source:
+            ProjectInsuranceRequestSource
+              .CUSTOMER,
+          isHidden: false,
+        } as any,
+      });
+
+  if (!request) {
+    throw new NotFoundException(
+      'Insurance request not found',
+    );
+  }
+
+  if (
+    request.status ===
+      ProjectInsuranceRequestStatus.REJECTED ||
+    request.status ===
+      ProjectInsuranceRequestStatus.CANCELLED
+  ) {
+    throw new BadRequestException(
+      'This insurance request cannot be paid',
+    );
+  }
+
+  if (
+    request.paymentStatus ===
+      ProjectInsurancePaymentStatus.PAID
+  ) {
+    throw new BadRequestException(
+      'Insurance payment has already been completed',
+    );
+  }
+
+  const payableAmount =
+    Number(
+      request.payableAmount || 0,
+    );
+
+  if (
+    !Number.isFinite(payableAmount) ||
+    payableAmount <= 0
+  ) {
+    throw new BadRequestException(
+      'Insurance request has no payable amount',
+    );
+  }
+
+  return {
+    request,
+    payableAmount,
+  };
+}
+
+async validateCustomerInsurancePaymentLaunch(
+  customerId: number,
+  requestId: number,
+) {
+  const details =
+    await this
+      .getCustomerInsurancePaymentDetails(
+        customerId,
+        requestId,
+      );
+
+  return {
+    requestId:
+      Number(details.request.id),
+
+    payableAmount:
+      Number(details.payableAmount),
+  };
+}
+
+async initiateCustomerInsurancePayment(
+  customerId: number,
+  requestId: number,
+  returnUrl: string,
+  paymentSource: 'APP' | 'WEB' = 'WEB',
+) {
+  const source =
+    String(
+      paymentSource || 'WEB',
+    )
+      .trim()
+      .toUpperCase();
+
+  if (
+    source !== 'APP' &&
+    source !== 'WEB'
+  ) {
+    throw new BadRequestException(
+      'Invalid payment source',
+    );
+  }
+
+  /*
+   * Re-read immediately before ICICI
+   * initiation. The request snapshot is
+   * authoritative for the payable amount.
+   */
+  const details =
+    await this
+      .getCustomerInsurancePaymentDetails(
+        customerId,
+        requestId,
+      );
+
+  const customer =
+    await this.customerRepository.findOne({
+      where: {
+        id: Number(customerId),
+        isHidden: false,
+      } as any,
+    });
+
+  if (!customer) {
+    throw new NotFoundException(
+      'Customer not found',
+    );
+  }
+
+  return this.iciciPaymentService
+    .initiateCustomerInsurancePayment({
+      merchantAccount:
+        IciciMerchantAccount.SOLARS,
+
+      purpose:
+        IciciPaymentPurpose
+          .CUSTOMER_INSURANCE,
+
+      /*
+       * CUSTOMER_INSURANCE referenceId means
+       * ProjectInsuranceRequest.id.
+       */
+      referenceId:
+        Number(details.request.id),
+
+      customerId:
+        Number(customerId),
+
+      /*
+       * Customer cannot choose this amount.
+       * It is the price snapshot stored when
+       * the insurance request was created.
+       */
+      amount:
+        Number(
+          details.payableAmount,
+        ),
+
+      customerName:
+        String(
+          (customer as any).name ||
+          (details.request as any)
+            ?.customerName ||
+          '',
+        ).trim() ||
+        undefined,
+
+      customerEmail:
+        String(
+          (customer as any).email ||
+          (details.request as any)
+            ?.customerEmail ||
+          '',
+        ).trim() ||
+        undefined,
+
+      customerMobile:
+        String(
+          (customer as any).phone ||
+          (customer as any).mobile ||
+          (details.request as any)
+            ?.customerPhone ||
+          '',
+        ).trim() ||
+        undefined,
+
+      returnUrl,
+
+      businessSettlementType:
+        'CUSTOMER_INSURANCE',
+
+      paymentSource:
+        source as
+          | 'APP'
+          | 'WEB',
+    });
+}
+
 async createMyInsuranceRequest(
   body: any,
   user: any,
@@ -4664,15 +4885,28 @@ async createMyInsuranceRequest(
   }
 
   const request =
-    this
-      .projectInsuranceRequestRepository
-      .create({
-        projectId:
-          project.id,
+  this
+    .projectInsuranceRequestRepository
+    .create({
+      projectId:
+        project.id,
 
-        customerId,
+      customerId,
 
-        customerCode:
+      source:
+        ProjectInsuranceRequestSource
+          .CUSTOMER,
+
+      payableAmount:
+        Number(
+          plan.price || 0,
+        ),
+
+      paymentStatus:
+        ProjectInsurancePaymentStatus
+          .PENDING,
+
+      customerCode:
           (project as any)
             .customerCode ||
           undefined,
@@ -4808,31 +5042,35 @@ async createMyInsuranceRenewalRequest(
         0,
     );
 
-  if (
-    selectedPlanId
-  ) {
-    const plan =
-      await this
-        .projectInsurancePlanRepository
-        .findOne({
-          where: {
-            id:
-              selectedPlanId,
+  let selectedPlan:
+  ProjectInsurancePlan | null =
+  null;
 
-            isHidden:
-              false,
+if (
+  selectedPlanId
+) {
+  selectedPlan =
+    await this
+      .projectInsurancePlanRepository
+      .findOne({
+        where: {
+          id:
+            selectedPlanId,
 
-            isActive:
-              true,
-          } as any,
-        });
+          isHidden:
+            false,
 
-    if (!plan) {
-      throw new NotFoundException(
-        'Selected insurance plan is not available',
-      );
-    }
+          isActive:
+            true,
+        } as any,
+      });
+
+  if (!selectedPlan) {
+    throw new NotFoundException(
+      'Selected insurance plan is not available',
+    );
   }
+}
 
   const duplicate =
     await this
@@ -4867,15 +5105,30 @@ async createMyInsuranceRenewalRequest(
   }
 
   const request =
-    this
-      .projectInsuranceRequestRepository
-      .create({
-        projectId:
-          project.id,
+  this
+    .projectInsuranceRequestRepository
+    .create({
+      projectId:
+        project.id,
 
-        customerId,
+      customerId,
 
-        customerCode:
+      source:
+        ProjectInsuranceRequestSource
+          .CUSTOMER,
+
+      payableAmount:
+        Number(
+          selectedPlan?.price ||
+            insurance.policyCost ||
+            0,
+        ),
+
+      paymentStatus:
+        ProjectInsurancePaymentStatus
+          .PENDING,
+
+      customerCode:
           insurance.customerCode ||
           undefined,
 

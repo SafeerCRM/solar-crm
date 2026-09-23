@@ -18,6 +18,9 @@ import { FilesInterceptor } from '@nestjs/platform-express';
 import { CustomerPortalService } from './customer-portal.service';
 import * as jwt from 'jsonwebtoken';
 import { IciciPaymentLaunchService } from '../payment/icici-payment-launch.service';
+import {
+  IciciPaymentLaunchPurpose,
+} from '../payment/icici-payment-launch.entity';
 
 @Controller('customer-auth')
 export class CustomerAuthController {
@@ -340,7 +343,11 @@ async createCustomerInstallmentPaymentLaunch(
   const launchToken =
     await this.iciciPaymentLaunchService
       .createCustomerLaunchToken({
-        referenceId:
+  purpose:
+    IciciPaymentLaunchPurpose
+      .CUSTOMER_PAYMENT,
+
+  referenceId:
           normalizedInstallmentId,
 
         customerId,
@@ -372,6 +379,144 @@ async createCustomerInstallmentPaymentLaunch(
   return {
     launchUrl:
       `${websiteBaseUrl}/payment/launch#flow=customer&token=${encodeURIComponent(
+        launchToken,
+      )}`,
+  };
+}
+
+@Post('insurance/requests/:requestId/launch')
+async createCustomerInsurancePaymentLaunch(
+  @Req() req: any,
+  @Param('requestId') requestId: string,
+  @Body() body: any,
+) {
+  const authHeader =
+    req.headers?.authorization || '';
+
+  const token =
+    authHeader.replace(
+      'Bearer ',
+      '',
+    );
+
+  if (!token) {
+    throw new UnauthorizedException(
+      'Customer token missing',
+    );
+  }
+
+  const payload: any =
+    jwt.verify(
+      token,
+      'mysecretkey',
+    );
+
+  const customerId =
+    Number(
+      payload?.customerId,
+    );
+
+  const normalizedRequestId =
+    Number(
+      requestId,
+    );
+
+  if (
+    !Number.isInteger(customerId) ||
+    customerId <= 0
+  ) {
+    throw new UnauthorizedException(
+      'Invalid customer token',
+    );
+  }
+
+  if (
+    !Number.isInteger(
+      normalizedRequestId,
+    ) ||
+    normalizedRequestId <= 0
+  ) {
+    throw new BadRequestException(
+      'Invalid insurance request',
+    );
+  }
+
+  const paymentSource =
+    String(
+      body?.paymentSource ||
+      'WEB',
+    )
+      .trim()
+      .toUpperCase();
+
+  if (
+    paymentSource !== 'APP' &&
+    paymentSource !== 'WEB'
+  ) {
+    throw new BadRequestException(
+      'Invalid payment source',
+    );
+  }
+
+  /*
+   * Validate ownership, request state and
+   * payable amount before issuing the
+   * public one-time launch token.
+   */
+  await this.service
+    .validateCustomerInsurancePaymentLaunch(
+      customerId,
+      normalizedRequestId,
+    );
+
+  /*
+   * referenceId for CUSTOMER_INSURANCE is
+   * ProjectInsuranceRequest.id.
+   */
+  const launchToken =
+    await this.iciciPaymentLaunchService
+      .createCustomerLaunchToken({
+        purpose:
+          IciciPaymentLaunchPurpose
+            .CUSTOMER_INSURANCE,
+
+        referenceId:
+          normalizedRequestId,
+
+        customerId,
+
+        paymentSource:
+          paymentSource as
+            | 'APP'
+            | 'WEB',
+      });
+
+  const websiteBaseUrl =
+    String(
+      process.env
+        .ICICI_PAYMENT_LAUNCH_BASE_URL ||
+      '',
+    )
+      .trim()
+      .replace(/\/+$/, '');
+
+  if (
+    !websiteBaseUrl ||
+    !/^https:\/\//i.test(
+      websiteBaseUrl,
+    )
+  ) {
+    throw new BadRequestException(
+      'Payment launch website is not configured',
+    );
+  }
+
+  return {
+    success: true,
+
+    launchUrl:
+      `${websiteBaseUrl}/payment/launch` +
+      `#flow=customer&token=${encodeURIComponent(
         launchToken,
       )}`,
   };

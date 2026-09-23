@@ -38,7 +38,9 @@ interface IciciCustomerPaymentLaunchPayload {
   version: 1;
 
   purpose:
-    IciciPaymentLaunchPurpose.CUSTOMER_PAYMENT;
+    | IciciPaymentLaunchPurpose.CUSTOMER_PAYMENT
+    | IciciPaymentLaunchPurpose.CUSTOMER_INSURANCE
+    | IciciPaymentLaunchPurpose.CUSTOMER_AFTER_SALES;
 
   referenceId: number;
 
@@ -551,6 +553,10 @@ export class IciciPaymentLaunchService {
 }
 
 async createCustomerLaunchToken(input: {
+  purpose:
+    | IciciPaymentLaunchPurpose.CUSTOMER_PAYMENT
+    | IciciPaymentLaunchPurpose.CUSTOMER_INSURANCE
+    | IciciPaymentLaunchPurpose.CUSTOMER_AFTER_SALES;
   referenceId: number;
   customerId: number;
   paymentSource:
@@ -589,17 +595,33 @@ async createCustomerLaunchToken(input: {
   }
 
   if (
-    input.paymentSource !==
-      'APP' &&
-    input.paymentSource !==
-      'WEB'
-  ) {
-    throw new BadRequestException(
-      'Invalid payment source',
-    );
-  }
+  input.purpose !==
+    IciciPaymentLaunchPurpose
+      .CUSTOMER_PAYMENT &&
+  input.purpose !==
+    IciciPaymentLaunchPurpose
+      .CUSTOMER_INSURANCE &&
+  input.purpose !==
+    IciciPaymentLaunchPurpose
+      .CUSTOMER_AFTER_SALES
+) {
+  throw new BadRequestException(
+    'Invalid customer payment launch purpose',
+  );
+}
 
-  const expiresAt =
+if (
+  input.paymentSource !==
+    'APP' &&
+  input.paymentSource !==
+    'WEB'
+) {
+  throw new BadRequestException(
+    'Invalid payment source',
+  );
+}
+
+const expiresAt =
     Date.now() +
     5 * 60 * 1000;
 
@@ -614,8 +636,7 @@ async createCustomerLaunchToken(input: {
       version: 1,
 
       purpose:
-        IciciPaymentLaunchPurpose
-          .CUSTOMER_PAYMENT,
+  input.purpose,
 
       referenceId,
 
@@ -632,8 +653,7 @@ async createCustomerLaunchToken(input: {
   const launch =
     this.launchRepository.create({
       purpose:
-        IciciPaymentLaunchPurpose
-          .CUSTOMER_PAYMENT,
+  input.purpose,
 
       referenceId,
 
@@ -752,10 +772,18 @@ verifyCustomerLaunchToken(
 
   if (
     payload?.version !== 1 ||
-    payload.purpose !==
-      IciciPaymentLaunchPurpose
-        .CUSTOMER_PAYMENT ||
-    !Number.isInteger(
+(
+  payload.purpose !==
+    IciciPaymentLaunchPurpose
+      .CUSTOMER_PAYMENT &&
+  payload.purpose !==
+    IciciPaymentLaunchPurpose
+      .CUSTOMER_INSURANCE &&
+  payload.purpose !==
+    IciciPaymentLaunchPurpose
+      .CUSTOMER_AFTER_SALES
+) ||
+!Number.isInteger(
       Number(
         payload.referenceId,
       ),
@@ -808,11 +836,10 @@ verifyCustomerLaunchToken(
   }
 
   return {
-    purpose:
-      IciciPaymentLaunchPurpose
-        .CUSTOMER_PAYMENT,
+  purpose:
+    payload.purpose,
 
-    referenceId:
+  referenceId:
       Number(
         payload.referenceId,
       ),
@@ -867,13 +894,12 @@ async consumeCustomerLaunchToken(
         },
       )
       .andWhere(
-        '"purpose" = :purpose',
-        {
-          purpose:
-            IciciPaymentLaunchPurpose
-              .CUSTOMER_PAYMENT,
-        },
-      )
+  '"purpose" = :purpose',
+  {
+    purpose:
+      payload.purpose,
+  },
+)
       .andWhere(
         '"referenceId" = :referenceId',
         {
@@ -919,11 +945,10 @@ async consumeCustomerLaunchToken(
   }
 
   return {
-    purpose:
-      IciciPaymentLaunchPurpose
-        .CUSTOMER_PAYMENT,
+  purpose:
+    payload.purpose,
 
-    referenceId:
+  referenceId:
       payload.referenceId,
 
     customerId:
