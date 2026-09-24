@@ -48075,7 +48075,17 @@ if (shouldRepairInvoice) {
         `SOLAR POWER GENERATING SYSTEM\n` +
         `SPGS PLANT CONTAINING\n` +
         `${project.panelBrand || 'SOLAR PANEL'} ` +
-`${Number(project.dcrPanelCount || 0) + Number(project.nonDcrPanelCount || 0) || ''} NOS\n` +
+[
+  Number(project.dcrPanelCount || 0) > 0
+    ? `${Number(project.dcrPanelCount)} DCR`
+    : '',
+  Number(project.nonDcrPanelCount || 0) > 0
+    ? `${Number(project.nonDcrPanelCount)} NON-DCR`
+    : '',
+]
+  .filter(Boolean)
+  .join(' & ') +
+`\n` +
         `${project.converterBrand || 'INVERTER'} ` +
         `${project.converterCapacity || ''}`,
       hsnSac: '85414300',
@@ -48180,7 +48190,16 @@ const installationRate = Number(
   const defaultItems = [
     {
       serialNumber: 1,
-      description: `SOLAR POWER GENERATING SYSTEM\nSPGS PLANT CONTAINING\n${project.panelBrand || 'SOLAR PANEL'} ${Number(project.dcrPanelCount || 0) + Number(project.nonDcrPanelCount || 0) || ''} NOS\n${project.converterBrand || 'INVERTER'} ${project.converterCapacity || ''}`,
+      description: `SOLAR POWER GENERATING SYSTEM\nSPGS PLANT CONTAINING\n${project.panelBrand || 'SOLAR PANEL'} ${[
+  Number(project.dcrPanelCount || 0) > 0
+    ? `${Number(project.dcrPanelCount)} DCR`
+    : '',
+  Number(project.nonDcrPanelCount || 0) > 0
+    ? `${Number(project.nonDcrPanelCount)} NON-DCR`
+    : '',
+]
+  .filter(Boolean)
+  .join(' & ')}\n${project.converterBrand || 'INVERTER'} ${project.converterCapacity || ''}`,
       hsnSac: '85414300',
       quantity: 1,
       unit: 'Units',
