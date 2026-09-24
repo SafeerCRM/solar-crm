@@ -41193,15 +41193,16 @@ if (body?.amount !== undefined) {
 
   if (nextStatus === ProjectContractorWorkStatus.COMPLETED) {
     const proofs =
-      await this.projectContractorProofRepository.find({
-        where: {
-          assignmentId,
-        },
-      });
+  await this.projectContractorProofRepository.find({
+    where: {
+      assignmentId,
+      isHidden: false,
+    },
+  });
 
-    const uploadedTypes = new Set(
-      proofs.map((proof) => String(proof.proofType)),
-    );
+const uploadedTypes = new Set(
+  proofs.map((proof) => String(proof.proofType)),
+);
 
     const requiredTypes =
   this.getRequiredContractorProofTypesByScope(
@@ -41377,6 +41378,332 @@ uploadedProofs.push(saved);
   };
 }
 
+async hideContractorProof(
+  proofId: number,
+  body: any,
+  user: any,
+) {
+  const proof =
+    await this.projectContractorProofRepository.findOne({
+      where: {
+        id: proofId,
+      },
+    });
+
+  if (!proof) {
+    throw new NotFoundException(
+      'Contractor proof not found',
+    );
+  }
+
+  if (proof.isHidden) {
+    throw new BadRequestException(
+      'Contractor proof is already hidden',
+    );
+  }
+
+  const assignment =
+    await this.projectContractorAssignmentRepository.findOne({
+      where: {
+        id: Number(proof.assignmentId),
+      },
+    });
+
+  if (!assignment) {
+    throw new NotFoundException(
+      'Contractor assignment not found',
+    );
+  }
+
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  const currentUserId = Number(
+    user?.id ||
+      user?.userId ||
+      user?.sub,
+  );
+
+  const isAllowed =
+    roles.includes('OWNER') ||
+    roles.includes('PROJECT_MANAGER') ||
+    Number(assignment.contractorId) ===
+      currentUserId;
+
+  if (!isAllowed) {
+    throw new ForbiddenException(
+      'You are not allowed to hide this contractor proof',
+    );
+  }
+
+  proof.isHidden = true;
+
+  proof.hiddenBy =
+  currentUserId || null as any;
+
+  proof.hiddenByName =
+    user?.name ||
+    user?.email ||
+    '';
+
+  proof.hiddenReason =
+    String(
+      body?.reason ||
+        'Incorrect photo',
+    ).trim();
+
+  proof.hiddenAt = new Date();
+
+  await this.projectContractorProofRepository.save(
+    proof,
+  );
+
+  return {
+    message: 'Contractor proof hidden successfully',
+    proof,
+  };
+}
+
+async replaceContractorProof(
+  proofId: number,
+  file: any,
+  body: any,
+  user: any,
+) {
+  if (!file) {
+    throw new BadRequestException(
+      'Replacement proof photo is required',
+    );
+  }
+
+  const oldProof =
+    await this.projectContractorProofRepository.findOne({
+      where: {
+        id: proofId,
+      },
+    });
+
+  if (!oldProof) {
+    throw new NotFoundException(
+      'Contractor proof not found',
+    );
+  }
+
+  if (oldProof.isHidden) {
+    throw new BadRequestException(
+      'Hidden proof cannot be replaced',
+    );
+  }
+
+  const assignment =
+    await this.projectContractorAssignmentRepository.findOne({
+      where: {
+        id: Number(oldProof.assignmentId),
+      },
+    });
+
+  if (!assignment) {
+    throw new NotFoundException(
+      'Contractor assignment not found',
+    );
+  }
+
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  const currentUserId = Number(
+    user?.id ||
+      user?.userId ||
+      user?.sub,
+  );
+
+  const isAllowed =
+    roles.includes('OWNER') ||
+    roles.includes('PROJECT_MANAGER') ||
+    Number(assignment.contractorId) ===
+      currentUserId;
+
+  if (!isAllowed) {
+    throw new ForbiddenException(
+      'You are not allowed to replace this contractor proof',
+    );
+  }
+
+  const mimeType =
+    String(file.mimetype || '');
+
+  if (
+    ![
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+    ].includes(mimeType)
+  ) {
+    throw new BadRequestException(
+      'Only JPG, PNG, and WEBP proof photos are allowed',
+    );
+  }
+
+  const supabaseUrl =
+    process.env.SUPABASE_URL;
+
+  const serviceKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  const bucket =
+    process.env.SUPABASE_PROJECT_DOCUMENTS_BUCKET ||
+    'project-documents';
+
+  if (!supabaseUrl || !serviceKey) {
+    throw new BadRequestException(
+      'Supabase storage is not configured',
+    );
+  }
+
+  const supabase =
+    createClient(
+      supabaseUrl,
+      serviceKey,
+    );
+
+  const originalName =
+    String(
+      file.originalname ||
+        'proof',
+    );
+
+  const extension =
+    originalName.includes('.')
+      ? originalName.split('.').pop()
+      : mimeType.split('/')[1] ||
+        'jpg';
+
+  const safeExtension =
+    String(extension || 'jpg').replace(
+      /[^a-zA-Z0-9]/g,
+      '',
+    );
+
+  const filePath =
+    `projects/project-${oldProof.projectId}` +
+    `/contractor-proofs/assignment-${oldProof.assignmentId}` +
+    `/replacement-${Date.now()}-${randomUUID()}.${safeExtension}`;
+
+  const uploadResult =
+    await supabase.storage
+      .from(bucket)
+      .upload(
+        filePath,
+        file.buffer,
+        {
+          contentType: mimeType,
+          upsert: false,
+        },
+      );
+
+  if (uploadResult.error) {
+    throw new BadRequestException(
+      uploadResult.error.message,
+    );
+  }
+
+  const publicUrlResult =
+    supabase.storage
+      .from(bucket)
+      .getPublicUrl(filePath);
+
+  const replacementProof =
+    this.projectContractorProofRepository.create({
+      projectId:
+        Number(oldProof.projectId),
+
+      assignmentId:
+        Number(oldProof.assignmentId),
+
+      proofType:
+        oldProof.proofType,
+
+      fileUrl:
+        publicUrlResult.data.publicUrl,
+
+      latitude:
+        body?.latitude === '' ||
+        body?.latitude === undefined
+          ? oldProof.latitude
+          : Number(body.latitude),
+
+      longitude:
+        body?.longitude === '' ||
+        body?.longitude === undefined
+          ? oldProof.longitude
+          : Number(body.longitude),
+
+      gpsAddress:
+        body?.gpsAddress !== undefined
+          ? String(body.gpsAddress || '')
+          : oldProof.gpsAddress,
+
+      remarks:
+        body?.remarks !== undefined
+          ? String(body.remarks || '')
+          : oldProof.remarks,
+
+      uploadedBy:
+        currentUserId || undefined,
+
+      uploadedByName:
+        user?.name ||
+        user?.email ||
+        '',
+
+      isHidden: false,
+    });
+
+  const savedReplacement =
+    await this.projectContractorProofRepository.save(
+      replacementProof as ProjectContractorProof,
+    );
+
+  oldProof.isHidden = true;
+
+  oldProof.hiddenBy =
+  currentUserId || null as any;
+
+  oldProof.hiddenByName =
+    user?.name ||
+    user?.email ||
+    '';
+
+  oldProof.hiddenReason =
+    String(
+      body?.reason ||
+        'Replaced with corrected photo',
+    ).trim();
+
+  oldProof.hiddenAt =
+    new Date();
+
+  oldProof.replacedByProofId =
+    Number(savedReplacement.id);
+
+  await this.projectContractorProofRepository.save(
+    oldProof,
+  );
+
+  return {
+    message:
+      'Contractor proof replaced successfully',
+
+    proof:
+      savedReplacement,
+
+    replacedProofId:
+      oldProof.id,
+  };
+}
+
 async getContractorProofs(
   assignmentId: number,
   user: any,
@@ -41436,11 +41763,14 @@ async getContractorProofs(
   }
 
   return this.projectContractorProofRepository.find({
-    where: { assignmentId },
-    order: {
-      createdAt: 'DESC',
-    },
-  });
+  where: {
+    assignmentId,
+    isHidden: false,
+  },
+  order: {
+    createdAt: 'DESC',
+  },
+});
 }
 
 async addContractorComment(

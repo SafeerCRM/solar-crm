@@ -166,6 +166,12 @@ type ContractorProof = {
   remarks?: string;
   uploadedByName?: string;
   createdAt?: string;
+
+  isHidden?: boolean;
+  hiddenByName?: string;
+  hiddenReason?: string;
+  hiddenAt?: string;
+  replacedByProofId?: number;
 };
 
 type ContractorComment = {
@@ -333,6 +339,12 @@ const [gpsData, setGpsData] =
 
 const [uploadingProofId, setUploadingProofId] =
   useState<number | null>(null);
+
+  const [proofActionId, setProofActionId] =
+  useState<number | null>(null);
+
+const [replacementFiles, setReplacementFiles] =
+  useState<Record<number, File | null>>({});
   const [comments, setComments] =
   useState<Record<number, ContractorComment[]>>({});
 
@@ -671,6 +683,136 @@ for (const file of files) {
     );
   } finally {
     setUploadingProofId(null);
+  }
+};
+
+const hideContractorProof = async (
+  proof: ContractorProof,
+) => {
+  const confirmed = window.confirm(
+    'क्या आप इस गलत फोटो को हटाना चाहते हैं?',
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  const reason =
+    window.prompt(
+      'फोटो हटाने का कारण लिखें',
+      'गलत फोटो अपलोड हो गई',
+    ) || 'गलत फोटो अपलोड हो गई';
+
+  try {
+    setProofActionId(proof.id);
+
+    const token =
+      localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/contractor-proof/${proof.id}/hide`,
+      {
+        reason,
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('गलत फोटो हटा दी गई');
+
+    await fetchProofs(
+      proof.assignmentId,
+    );
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'फोटो हटाई नहीं जा सकी',
+    );
+  } finally {
+    setProofActionId(null);
+  }
+};
+
+const replaceContractorProof = async (
+  proof: ContractorProof,
+) => {
+  const selectedFile =
+    replacementFiles[proof.id];
+
+  if (!selectedFile) {
+    alert(
+      'कृपया नई सही फोटो चुनें',
+    );
+    return;
+  }
+
+  try {
+    setProofActionId(proof.id);
+
+    const token =
+      localStorage.getItem('token');
+
+    const uploadFile =
+      await compressImageFile(
+        selectedFile,
+      );
+
+    const formData =
+      new FormData();
+
+    formData.append(
+      'file',
+      uploadFile,
+    );
+
+    formData.append(
+      'reason',
+      'गलत फोटो को सही फोटो से बदला गया',
+    );
+
+    await axios.post(
+      `${API_BASE_URL}/project/contractor-proof/${proof.id}/replace`,
+      formData,
+      {
+        headers: {
+          Authorization:
+            `Bearer ${token}`,
+          'Content-Type':
+            'multipart/form-data',
+        },
+      },
+    );
+
+    alert(
+      'फोटो सफलतापूर्वक बदल दी गई',
+    );
+
+    setReplacementFiles(
+      (prev) => ({
+        ...prev,
+        [proof.id]: null,
+      }),
+    );
+
+    await fetchProofs(
+      proof.assignmentId,
+    );
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'फोटो बदली नहीं जा सकी',
+    );
+  } finally {
+    setProofActionId(null);
   }
 };
 
@@ -1318,8 +1460,10 @@ const selectedCleaningWorks = cleaningAssignments.filter(
       ] || []
     ).map((requiredProof) => {
       const uploaded = (proofs[item.id] || []).some(
-        (proof) => proof.proofType === requiredProof,
-      );
+  (proof) =>
+    proof.proofType === requiredProof &&
+    !proof.isHidden,
+);
 
       return (
         <span
@@ -1437,45 +1581,128 @@ const selectedCleaningWorks = cleaningAssignments.filter(
       अपलोड की गई फोटो
     </h4>
 
-    {(!proofs[item.id] || proofs[item.id].length === 0) ? (
-      <p className="mt-2 text-sm text-gray-500">
-        अभी कोई फोटो अपलोड नहीं हुई है।
-      </p>
-    ) : (
-      <div className="mt-3 grid gap-3 md:grid-cols-3">
-        {proofs[item.id].map((proof) => (
-          <a
-            key={proof.id}
-            href={proof.fileUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="rounded-xl border bg-white p-3 hover:bg-gray-50"
-          >
-            {proof.fileUrl && (
+    {(proofs[item.id] || []).filter(
+  (proof) => !proof.isHidden,
+).length === 0 ? (
+  <p className="mt-2 text-sm text-gray-500">
+    अभी कोई फोटो अपलोड नहीं हुई है।
+  </p>
+) : (
+  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+    {(proofs[item.id] || [])
+      .filter(
+        (proof) => !proof.isHidden,
+      )
+      .map((proof) => (
+        <div
+          key={proof.id}
+          className="min-w-0 overflow-hidden rounded-xl border bg-white p-3"
+        >
+          {proof.fileUrl && (
+            <a
+              href={proof.fileUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="block"
+            >
               <img
                 src={proof.fileUrl}
-                alt={proof.proofType || 'Proof'}
-                className="h-32 w-full rounded-lg object-cover"
+                alt={
+                  proof.proofType ||
+                  'Proof'
+                }
+                className="aspect-[4/3] w-full rounded-lg bg-gray-100 object-cover"
               />
+            </a>
+          )}
+
+          <p className="mt-2 break-words text-xs font-semibold text-gray-700">
+            {getHindiProof(
+              proof.proofType ||
+                'OTHER',
             )}
+          </p>
 
-            <p className="mt-2 text-xs font-semibold text-gray-700">
-              {getHindiProof(proof.proofType || 'OTHER')}
-            </p>
+          <p className="text-xs text-gray-500">
+            By:{' '}
+            {proof.uploadedByName ||
+              '-'}
+          </p>
 
-            <p className="text-xs text-gray-500">
-              By: {proof.uploadedByName || '-'}
-            </p>
-
-            {proof.latitude && proof.longitude && (
-              <p className="text-xs text-gray-500">
-                GPS: {proof.latitude}, {proof.longitude}
+          {proof.latitude &&
+            proof.longitude && (
+              <p className="break-words text-xs text-gray-500">
+                GPS: {proof.latitude},{' '}
+                {proof.longitude}
               </p>
             )}
-          </a>
-        ))}
-      </div>
-    )}
+
+          <div className="mt-3 border-t pt-3">
+            <p className="mb-2 text-xs font-semibold text-gray-600">
+              गलत फोटो है?
+            </p>
+
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) =>
+                setReplacementFiles(
+                  (prev) => ({
+                    ...prev,
+                    [proof.id]:
+                      e.target
+                        .files?.[0] ||
+                      null,
+                  }),
+                )
+              }
+              className="block w-full min-w-0 text-xs"
+            />
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  replaceContractorProof(
+                    proof,
+                  )
+                }
+                disabled={
+                  proofActionId ===
+                    proof.id ||
+                  !replacementFiles[
+                    proof.id
+                  ]
+                }
+                className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+              >
+                {proofActionId ===
+                proof.id
+                  ? 'कृपया प्रतीक्षा करें...'
+                  : 'फोटो बदलें'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  hideContractorProof(
+                    proof,
+                  )
+                }
+                disabled={
+                  proofActionId ===
+                  proof.id
+                }
+                className="rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+              >
+                फोटो हटाएं
+              </button>
+            </div>
+          </div>
+        </div>
+      ))}
+  </div>
+)}
   </div>
 </div>
 

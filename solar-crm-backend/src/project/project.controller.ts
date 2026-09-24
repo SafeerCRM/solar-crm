@@ -713,6 +713,37 @@ uploadContractorProofs(
   );
 }
 
+@Patch('contractor-proof/:id/hide')
+hideContractorProof(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.hideContractorProof(
+    Number(id),
+    body,
+    user,
+  );
+}
+
+@Post('contractor-proof/:id/replace')
+@UseInterceptors(
+  FileInterceptor('file'),
+)
+replaceContractorProof(
+  @Param('id') id: string,
+  @UploadedFile() file: any,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.replaceContractorProof(
+    Number(id),
+    file,
+    body,
+    user,
+  );
+}
+
 @Roles('OWNER', 'PROJECT_MANAGER', 'INSPECTION_MANAGER',)
 @Get('contractor-assignments/register')
 getContractorAssignmentRegister(

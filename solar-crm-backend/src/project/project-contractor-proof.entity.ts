@@ -3,6 +3,7 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  UpdateDateColumn,
 } from 'typeorm';
 
 export enum ProjectContractorProofType {
@@ -55,6 +56,27 @@ export class ProjectContractorProof {
 
   @Column({ type: 'text', nullable: true })
   uploadedByName: string;
+
+  @Column({ default: false })
+isHidden: boolean;
+
+@Column({ nullable: true })
+hiddenBy: number;
+
+@Column({ type: 'text', nullable: true })
+hiddenByName: string;
+
+@Column({ type: 'text', nullable: true })
+hiddenReason: string;
+
+@Column({ type: 'timestamp', nullable: true })
+hiddenAt: Date;
+
+@Column({ nullable: true })
+replacedByProofId: number;
+
+@UpdateDateColumn()
+updatedAt: Date;
 
   @CreateDateColumn()
   createdAt: Date;
