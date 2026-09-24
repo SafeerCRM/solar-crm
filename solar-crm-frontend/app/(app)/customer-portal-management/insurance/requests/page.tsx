@@ -1419,23 +1419,18 @@ const [
                         </td>
 
                         <td className="px-4 py-4">
-  {item.source ===
-  'DEALER' ? (
+  {item.source === 'DEALER' ||
+  item.source === 'CUSTOMER' ? (
     <div>
       <PaymentBadge
-        status={
-          item.paymentStatus
-        }
+        status={item.paymentStatus}
       />
 
       <p className="mt-2 text-sm font-black text-gray-900">
         ₹
         {Number(
-          item.payableAmount ||
-            0,
-        ).toLocaleString(
-          'en-IN',
-        )}
+          item.payableAmount || 0,
+        ).toLocaleString('en-IN')}
       </p>
 
       {item.paidAt && (
@@ -1448,7 +1443,7 @@ const [
     </div>
   ) : (
     <span className="text-xs font-bold text-gray-400">
-      Existing Customer Flow
+      Staff Managed
     </span>
   )}
 </td>
@@ -1492,20 +1487,32 @@ const [
       'PENDING' && (
       <>
         <button
-          type="button"
-          disabled={
-            actionLoadingId ===
-            item.id
-          }
-          onClick={() =>
-            approveRequest(
-              item,
-            )
-          }
-          className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white disabled:opacity-50"
-        >
-          Approve
-        </button>
+  type="button"
+  disabled={
+    actionLoadingId === item.id ||
+    ((item.source === 'CUSTOMER' ||
+      item.source === 'DEALER') &&
+      Number(item.payableAmount || 0) > 0 &&
+      item.paymentStatus !== 'PAID')
+  }
+  onClick={() =>
+    approveRequest(
+      item,
+    )
+  }
+  className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white disabled:opacity-50"
+>
+  Approve
+</button>
+
+{(item.source === 'CUSTOMER' ||
+  item.source === 'DEALER') &&
+  Number(item.payableAmount || 0) > 0 &&
+  item.paymentStatus !== 'PAID' && (
+    <p className="w-full max-w-[200px] text-xs font-bold text-orange-600">
+      Approval requires verified payment.
+    </p>
+  )}
 
         <button
           type="button"
@@ -1648,24 +1655,27 @@ const [
   ) : null}
 </div>
 
-{item.source ===
-  'DEALER' && (
+{(item.source === 'DEALER' ||
+  item.source === 'CUSTOMER') && (
   <div className="mt-3 flex flex-wrap items-center gap-2">
     <PaymentBadge
-      status={
-        item.paymentStatus
-      }
+      status={item.paymentStatus}
     />
 
     <span className="text-sm font-black text-gray-800">
       ₹
       {Number(
-        item.payableAmount ||
-          0,
-      ).toLocaleString(
-        'en-IN',
-      )}
+        item.payableAmount || 0,
+      ).toLocaleString('en-IN')}
     </span>
+
+    {item.paidAt && (
+      <span className="text-xs font-semibold text-gray-400">
+        {formatDate(
+          item.paidAt,
+        )}
+      </span>
+    )}
   </div>
 )}
 
@@ -1718,16 +1728,32 @@ const [
                         'PENDING' && (
                         <>
                           <button
-                            type="button"
-                            onClick={() =>
-                              approveRequest(
-                                item,
-                              )
-                            }
-                            className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-black text-white"
-                          >
-                            Approve
-                          </button>
+  type="button"
+  disabled={
+    actionLoadingId === item.id ||
+    ((item.source === 'CUSTOMER' ||
+      item.source === 'DEALER') &&
+      Number(item.payableAmount || 0) > 0 &&
+      item.paymentStatus !== 'PAID')
+  }
+  onClick={() =>
+    approveRequest(
+      item,
+    )
+  }
+  className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-black text-white disabled:opacity-50"
+>
+  Approve
+</button>
+
+{(item.source === 'CUSTOMER' ||
+  item.source === 'DEALER') &&
+  Number(item.payableAmount || 0) > 0 &&
+  item.paymentStatus !== 'PAID' && (
+    <p className="w-full text-xs font-bold text-orange-600">
+      Approval requires verified payment.
+    </p>
+  )}
 
                           <button
                             type="button"
@@ -1875,14 +1901,12 @@ const [
               }
             />
 
-            {detail.request.source ===
-              'DEALER' && (
-              <PaymentBadge
-                status={
-                  detail.request.paymentStatus
-                }
-              />
-            )}
+            {(detail.request.source === 'DEALER' ||
+  detail.request.source === 'CUSTOMER') && (
+  <PaymentBadge
+    status={detail.request.paymentStatus}
+  />
+)}
           </div>
         </div>
 
@@ -2011,8 +2035,8 @@ const [
           )}
         </section>
 
-        {detail.request.source ===
-          'DEALER' && (
+        {(detail.request.source === 'DEALER' ||
+  detail.request.source === 'CUSTOMER') && (
           <section className="rounded-2xl border border-emerald-100 bg-emerald-50 p-5">
             <h3 className="font-black text-emerald-900">
               Payment
