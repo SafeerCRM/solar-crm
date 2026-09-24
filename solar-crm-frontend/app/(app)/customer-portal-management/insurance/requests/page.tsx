@@ -2263,12 +2263,18 @@ const [
   </span>
 
   <select
-    disabled={
-      loadingPlans
-    }
-    value={
-      completionForm.insurancePlanId
-    }
+  disabled={
+    loadingPlans ||
+    (
+      (completionRequest?.source === 'CUSTOMER' ||
+        completionRequest?.source === 'DEALER') &&
+      Number(completionRequest?.payableAmount || 0) > 0 &&
+      completionRequest?.paymentStatus === 'PAID'
+    )
+  }
+  value={
+    completionForm.insurancePlanId
+  }
     onChange={(
       event,
     ) => {
@@ -2369,6 +2375,15 @@ const [
       ),
     )}
   </select>
+
+  {(completionRequest?.source === 'CUSTOMER' ||
+  completionRequest?.source === 'DEALER') &&
+  Number(completionRequest?.payableAmount || 0) > 0 &&
+  completionRequest?.paymentStatus === 'PAID' && (
+    <p className="text-xs font-semibold text-emerald-700">
+      This plan is locked because payment has already been verified for this insurance request.
+    </p>
+  )}
 </label>
 
               <label className="space-y-1">
