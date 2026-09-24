@@ -57517,11 +57517,10 @@ private async createDealerInsurancePolicyFromRequest(
   }
 
   const insurancePlanId =
-    Number(
-      body?.insurancePlanId ||
-        request.insurancePlanId ||
-        0,
-    );
+  Number(
+    request.insurancePlanId ||
+      0,
+  );
 
   if (!insurancePlanId) {
     throw new BadRequestException(
@@ -57937,30 +57936,72 @@ async completeNewInsuranceRequest(
       );
     }
 
-    const result =
-      await this
-        .createProjectInsurance(
-          {
-            ...body,
-
-            projectId:
-              requestProjectId,
-
-            insurancePlanId:
-              body?.insurancePlanId ||
-              request.insurancePlanId,
-
-              insuranceSource:
+    const isCustomerRequest =
   request.source ===
-    ProjectInsuranceRequestSource.CUSTOMER
-      ? ProjectInsuranceSource.CUSTOMER
-      : ProjectInsuranceSource.STAFF,
-          },
-          user,
-        );
+  ProjectInsuranceRequestSource.CUSTOMER;
 
-    insurance =
-      result.insurance;
+  if (isCustomerRequest) {
+  const existingPolicy =
+    await this
+      .projectInsuranceRepository
+      .findOne({
+        where: {
+          insuranceRequestId:
+            request.id,
+          source:
+            ProjectInsuranceSource.CUSTOMER,
+          isHidden: false,
+        } as any,
+      });
+
+  if (existingPolicy) {
+    throw new BadRequestException(
+      'Policy has already been created for this insurance request',
+    );
+  }
+
+  if (!request.insurancePlanId) {
+    throw new BadRequestException(
+      'Insurance plan is required for this customer insurance request',
+    );
+  }
+}
+
+const result =
+  await this
+    .createProjectInsurance(
+      {
+        ...body,
+        projectId:
+          requestProjectId,
+        insurancePlanId:
+          isCustomerRequest
+            ? request.insurancePlanId
+            : body?.insurancePlanId ||
+              request.insurancePlanId,
+        insuranceSource:
+          isCustomerRequest
+            ? ProjectInsuranceSource.CUSTOMER
+            : ProjectInsuranceSource.STAFF,
+      },
+      user,
+    );
+
+insurance =
+  result.insurance;
+
+if (isCustomerRequest) {
+  insurance.source =
+    ProjectInsuranceSource.CUSTOMER;
+
+  insurance.insuranceRequestId =
+    request.id;
+
+  insurance =
+    await this
+      .projectInsuranceRepository
+      .save(insurance);
+}
   }
 
   request.status =
