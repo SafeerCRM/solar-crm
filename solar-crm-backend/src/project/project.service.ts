@@ -58084,6 +58084,21 @@ async completeInsuranceRenewal(
   );
 }
 
+const isCustomerRequest =
+  request.source ===
+  ProjectInsuranceRequestSource.CUSTOMER;
+
+if (
+  isCustomerRequest &&
+  Number(request.payableAmount || 0) > 0 &&
+  request.paymentStatus !==
+    ProjectInsurancePaymentStatus.PAID
+) {
+  throw new BadRequestException(
+    'Customer insurance payment must be verified before renewal issuance',
+  );
+}
+
   if (
     request.requestType !==
     ProjectInsuranceRequestType.RENEWAL
@@ -58171,12 +58186,31 @@ const project =
     | null = null;
 
   const insurancePlanId =
-    Number(
-      body?.insurancePlanId ||
-        request.insurancePlanId ||
-        previousInsurance.insurancePlanId ||
-        0,
-    );
+  Number(
+    isCustomerRequest &&
+    Number(request.payableAmount || 0) > 0 &&
+    request.paymentStatus ===
+      ProjectInsurancePaymentStatus.PAID
+      ? request.insurancePlanId ||
+          previousInsurance.insurancePlanId ||
+          0
+      : body?.insurancePlanId ||
+          request.insurancePlanId ||
+          previousInsurance.insurancePlanId ||
+          0,
+  );
+
+  if (
+  isCustomerRequest &&
+  Number(request.payableAmount || 0) > 0 &&
+  request.paymentStatus ===
+    ProjectInsurancePaymentStatus.PAID &&
+  !request.insurancePlanId
+) {
+  throw new BadRequestException(
+    'Paid customer insurance renewal is missing its insurance plan',
+  );
+}
 
   if (insurancePlanId) {
     plan =
@@ -58281,12 +58315,18 @@ const project =
     this.projectInsuranceRepository
       .create({
         projectId:
-          project.id,
-
-        customerId:
-          request.customerId,
-
-        customerCode:
+  project.id,
+customerId:
+  request.customerId,
+source:
+  isCustomerRequest
+    ? ProjectInsuranceSource.CUSTOMER
+    : ProjectInsuranceSource.STAFF,
+insuranceRequestId:
+  isCustomerRequest
+    ? request.id
+    : undefined,
+customerCode:
           project.customerCode ||
           undefined,
 
