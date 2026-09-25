@@ -48,6 +48,11 @@ import {
   ProjectLedgerSourceType,
 } from '../project/project-party-ledger.entity';
 
+import {
+  CustomerAfterSalesPaymentStatus,
+  CustomerAfterSalesRequest,
+} from '../customer-portal/customer-after-sales-request.entity';
+
 type IciciMerchantConfig = {
   merchantId: string;
   aggregatorId: string;
@@ -121,7 +126,13 @@ private readonly projectDealerNotificationRepository:
 private readonly dealerRepository:
   Repository<Dealer>,
 
-  private readonly projectService:
+@InjectRepository(
+  CustomerAfterSalesRequest,
+)
+private readonly customerAfterSalesRequestRepository:
+  Repository<CustomerAfterSalesRequest>,
+
+private readonly projectService:
   ProjectService,
 ) {}
 
@@ -1343,6 +1354,398 @@ async initiateCustomerInsurancePayment(
      */
     throw new BadRequestException(
       'Insurance payment initiation is already in progress. Please try again shortly.',
+    );
+  }
+}
+
+async initiateCustomerAfterSalesPayment(
+  input: InitiatePaymentInput,
+) {
+  /*
+   * This wrapper is ONLY for Customer Portal
+   * after-sales payments through ADITYA SOLARS.
+   */
+  if (
+    input.purpose !==
+      IciciPaymentPurpose.CUSTOMER_AFTER_SALES ||
+    input.merchantAccount !==
+      IciciMerchantAccount.SOLARS
+  ) {
+    throw new BadRequestException(
+      'Invalid customer after-sales payment configuration',
+    );
+  }
+
+  const referenceId =
+    Number(
+      input.referenceId,
+    );
+
+  const customerId =
+    Number(
+      input.customerId,
+    );
+
+  if (
+    !Number.isInteger(
+      referenceId,
+    ) ||
+    referenceId <= 0 ||
+    !Number.isInteger(
+      customerId,
+    ) ||
+    customerId <= 0
+  ) {
+    throw new BadRequestException(
+      'Invalid customer after-sales payment reference',
+    );
+  }
+
+  const previousTransaction =
+    await this
+      .transactionRepository
+      .createQueryBuilder(
+        'transaction',
+      )
+      .where(
+        'transaction.purpose = :purpose',
+        {
+          purpose:
+            IciciPaymentPurpose
+              .CUSTOMER_AFTER_SALES,
+        },
+      )
+      .andWhere(
+        'transaction.referenceId = :referenceId',
+        {
+          referenceId,
+        },
+      )
+      .andWhere(
+        'transaction.customerId = :customerId',
+        {
+          customerId,
+        },
+      )
+      .andWhere(
+        'transaction.merchantAccount = :merchantAccount',
+        {
+          merchantAccount:
+            IciciMerchantAccount
+              .SOLARS,
+        },
+      )
+      .orderBy(
+        'transaction.createdAt',
+        'DESC',
+      )
+      .getOne();
+
+  if (
+    previousTransaction &&
+    (
+      previousTransaction.status ===
+        IciciPaymentTransactionStatus.CREATED ||
+      previousTransaction.status ===
+        IciciPaymentTransactionStatus.INITIATED ||
+      previousTransaction.status ===
+        IciciPaymentTransactionStatus.PENDING
+    )
+  ) {
+    await this.updateActivePaymentSource(
+      previousTransaction,
+      input.paymentSource,
+    );
+  }
+
+  if (
+    previousTransaction?.status ===
+      IciciPaymentTransactionStatus.SUCCESS
+  ) {
+    await this
+      .dispatchSuccessfulTransaction(
+        previousTransaction,
+      );
+
+    throw new BadRequestException(
+      'After-sales payment has already been completed',
+    );
+  }
+
+  /*
+   * Never create another payment while an
+   * existing PENDING transaction may already
+   * represent a successful bank payment.
+   */
+  if (
+    previousTransaction?.status ===
+      IciciPaymentTransactionStatus.PENDING
+  ) {
+    const reconciled =
+      await this
+        .reconcileTransactionStatus(
+          previousTransaction,
+        );
+
+    if (
+      reconciled.status ===
+        IciciPaymentTransactionStatus.SUCCESS
+    ) {
+      throw new BadRequestException(
+        'After-sales payment has already been completed',
+      );
+    }
+
+    if (
+      reconciled.status ===
+        IciciPaymentTransactionStatus.PENDING
+    ) {
+      throw new BadRequestException(
+        'Previous after-sales payment is still being processed. Please try again later.',
+      );
+    }
+
+    /*
+     * FAILED can continue below and create
+     * a fresh payment attempt.
+     */
+  }
+
+  /*
+   * A recent hosted-payment session should
+   * be reused instead of creating another
+   * ICICI transaction.
+   */
+  if (
+    previousTransaction?.status ===
+      IciciPaymentTransactionStatus.INITIATED
+  ) {
+    const initiatedAt =
+      previousTransaction.initiatedAt ||
+      previousTransaction.createdAt;
+
+    const ageMilliseconds =
+      Date.now() -
+      new Date(
+        initiatedAt,
+      ).getTime();
+
+    const reuseWindowMilliseconds =
+      15 * 60 * 1000;
+
+    if (
+      previousTransaction.redirectUri &&
+      previousTransaction.transactionContext &&
+      Number.isFinite(
+        ageMilliseconds,
+      ) &&
+      ageMilliseconds >= 0 &&
+      ageMilliseconds <=
+        reuseWindowMilliseconds
+    ) {
+      return {
+        success: true,
+        transactionId:
+          previousTransaction.id,
+        merchantTxnNo:
+          previousTransaction
+            .merchantTxnNo,
+        amount:
+          Number(
+            previousTransaction.amount,
+          ),
+        status:
+          previousTransaction.status,
+        paymentUrl:
+          `${previousTransaction.redirectUri}?tranCtx=${encodeURIComponent(
+            previousTransaction
+              .transactionContext ||
+              '',
+          )}`,
+        reused: true,
+      };
+    }
+
+    /*
+     * An old INITIATED transaction cannot
+     * simply be assumed failed. Reconcile
+     * with ICICI before allowing a retry.
+     */
+    const reconciled =
+      await this
+        .reconcileTransactionStatus(
+          previousTransaction,
+        );
+
+    if (
+      reconciled.status ===
+        IciciPaymentTransactionStatus.SUCCESS
+    ) {
+      throw new BadRequestException(
+        'After-sales payment has already been completed',
+      );
+    }
+
+    if (
+      reconciled.status ===
+        IciciPaymentTransactionStatus.PENDING ||
+      reconciled.status ===
+        IciciPaymentTransactionStatus.INITIATED
+    ) {
+      throw new BadRequestException(
+        'Previous after-sales payment is still being processed. Please try again later.',
+      );
+    }
+
+    if (
+      reconciled.status !==
+        IciciPaymentTransactionStatus.FAILED
+    ) {
+      throw new BadRequestException(
+        'Previous after-sales payment could not be confirmed as failed',
+      );
+    }
+  }
+
+  /*
+   * Only a confirmed failed/terminal previous
+   * attempt may reach a fresh ICICI initiation.
+   */
+  try {
+    return await this.initiatePayment({
+      ...input,
+      businessSettlementType:
+        'CUSTOMER_AFTER_SALES',
+    });
+  } catch (error: any) {
+    /*
+     * The DB active-attempt index prevents two
+     * simultaneous Customer After-Sales
+     * transactions for the same request.
+     */
+    if (
+      error?.code !==
+        '23505'
+    ) {
+      throw error;
+    }
+
+    const concurrentTransaction =
+      await this.transactionRepository
+        .createQueryBuilder(
+          'transaction',
+        )
+        .where(
+          'transaction.purpose = :purpose',
+          {
+            purpose:
+              IciciPaymentPurpose
+                .CUSTOMER_AFTER_SALES,
+          },
+        )
+        .andWhere(
+          'transaction.referenceId = :referenceId',
+          {
+            referenceId,
+          },
+        )
+        .andWhere(
+          'transaction.customerId = :customerId',
+          {
+            customerId,
+          },
+        )
+        .andWhere(
+          'transaction.merchantAccount = :merchantAccount',
+          {
+            merchantAccount:
+              IciciMerchantAccount
+                .SOLARS,
+          },
+        )
+        .andWhere(
+          'transaction.status IN (:...activeStatuses)',
+          {
+            activeStatuses: [
+              IciciPaymentTransactionStatus.CREATED,
+              IciciPaymentTransactionStatus.INITIATED,
+              IciciPaymentTransactionStatus.PENDING,
+            ],
+          },
+        )
+        .orderBy(
+          'transaction.createdAt',
+          'DESC',
+        )
+        .getOne();
+
+    if (
+      !concurrentTransaction
+    ) {
+      throw error;
+    }
+
+    await this.updateActivePaymentSource(
+      concurrentTransaction,
+      input.paymentSource,
+    );
+
+    const businessSettlementType =
+      String(
+        concurrentTransaction
+          .gatewayMetadata
+          ?.businessSettlementType ||
+          '',
+      );
+
+    if (
+      businessSettlementType !==
+        'CUSTOMER_AFTER_SALES'
+    ) {
+      throw error;
+    }
+
+    /*
+     * If the winning request already finished
+     * ICICI initiation, reuse that hosted
+     * payment session.
+     */
+    if (
+      concurrentTransaction.status ===
+        IciciPaymentTransactionStatus.INITIATED &&
+      concurrentTransaction.redirectUri &&
+      concurrentTransaction.transactionContext
+    ) {
+      return {
+        success: true,
+        transactionId:
+          concurrentTransaction.id,
+        merchantTxnNo:
+          concurrentTransaction
+            .merchantTxnNo,
+        amount:
+          Number(
+            concurrentTransaction.amount,
+          ),
+        status:
+          concurrentTransaction.status,
+        paymentUrl:
+          `${concurrentTransaction.redirectUri}?tranCtx=${encodeURIComponent(
+            concurrentTransaction
+              .transactionContext ||
+              '',
+          )}`,
+        reused: true,
+      };
+    }
+
+    /*
+     * CREATED means the concurrent request may
+     * still be contacting ICICI. PENDING is also
+     * unresolved. Never create another charge.
+     */
+    throw new BadRequestException(
+      'After-sales payment initiation is already in progress. Please try again shortly.',
     );
   }
 }
@@ -3653,6 +4056,200 @@ private async dispatchSuccessfulTransaction(
 
     return;
   }
+
+  /*
+ * Customer After-Sales
+ *
+ * Business rule:
+ * Customer Portal after-sales payments are
+ * received through ADITYA SOLARS.
+ *
+ * referenceId is the
+ * CustomerAfterSalesRequest.id.
+ *
+ * Payment settlement must never change the
+ * operational after-sales request status.
+ */
+if (
+  transaction.purpose ===
+    IciciPaymentPurpose.CUSTOMER_AFTER_SALES
+) {
+  if (
+    transaction.merchantAccount !==
+      IciciMerchantAccount.SOLARS
+  ) {
+    throw new BadGatewayException(
+      'Customer after-sales payment merchant mismatch',
+    );
+  }
+
+  const requestId =
+    Number(
+      transaction.referenceId,
+    );
+
+  const customerId =
+    Number(
+      transaction.customerId,
+    );
+
+  if (
+    !Number.isInteger(
+      requestId,
+    ) ||
+    requestId <= 0 ||
+    !Number.isInteger(
+      customerId,
+    ) ||
+    customerId <= 0
+  ) {
+    throw new BadGatewayException(
+      'Customer after-sales payment reference is invalid',
+    );
+  }
+
+  /*
+   * Only a transaction created by the
+   * hardened Customer After-Sales initiation
+   * path may settle an after-sales request.
+   */
+  if (
+    String(
+      transaction
+        .gatewayMetadata
+        ?.businessSettlementType ||
+      '',
+    ) !==
+      'CUSTOMER_AFTER_SALES'
+  ) {
+    throw new BadGatewayException(
+      'Customer after-sales payment settlement marker mismatch',
+    );
+  }
+
+  const request =
+    await this
+      .customerAfterSalesRequestRepository
+      .findOne({
+        where: {
+          id: requestId,
+          customerId,
+          isHidden: false,
+        } as any,
+      });
+
+  if (!request) {
+    throw new BadGatewayException(
+      'Customer after-sales request not found for payment',
+    );
+  }
+
+  /*
+   * A free/non-paid service must never be
+   * converted into a paid request merely
+   * because a transaction references it.
+   */
+  if (!request.isPaidService) {
+    throw new BadGatewayException(
+      'Customer after-sales request does not require payment',
+    );
+  }
+
+  const transactionAmount =
+    Number(
+      transaction.amount,
+    );
+
+  const payableAmount =
+    Number(
+      request.servicePrice,
+    );
+
+  if (
+    !Number.isFinite(
+      transactionAmount,
+    ) ||
+    transactionAmount <= 0 ||
+    !Number.isFinite(
+      payableAmount,
+    ) ||
+    payableAmount <= 0 ||
+    Math.abs(
+      transactionAmount -
+        payableAmount,
+    ) > 0.009
+  ) {
+    throw new BadGatewayException(
+      'Customer after-sales payment amount mismatch',
+    );
+  }
+
+  /*
+   * Idempotency:
+   *
+   * Repeated callback/status reconciliation
+   * for the exact same ICICI transaction is
+   * safe.
+   *
+   * A different SUCCESS transaction must
+   * never overwrite an already-paid request.
+   */
+  if (
+    request.paymentStatus ===
+      CustomerAfterSalesPaymentStatus.PAID
+  ) {
+    const existingMerchantTxnNo =
+      String(
+        request.gatewayOrderId ||
+        '',
+      ).trim();
+
+    const currentMerchantTxnNo =
+      String(
+        transaction.merchantTxnNo ||
+        '',
+      ).trim();
+
+    if (
+      existingMerchantTxnNo &&
+      currentMerchantTxnNo &&
+      existingMerchantTxnNo ===
+        currentMerchantTxnNo
+    ) {
+      return;
+    }
+
+    throw new BadGatewayException(
+      'Customer after-sales request is already paid by a different payment transaction',
+    );
+  }
+
+  request.paymentStatus =
+    CustomerAfterSalesPaymentStatus.PAID;
+
+  request.gatewayOrderId =
+    transaction.merchantTxnNo;
+
+  request.gatewayPaymentId =
+  transaction.paymentId ||
+  '';
+
+request.gatewayTransactionId =
+  transaction.bankTxnId ||
+  '';
+
+  request.paidAt =
+    transaction.paidAt ||
+    new Date();
+
+  await this
+    .customerAfterSalesRequestRepository
+    .save(
+      request,
+    );
+
+  return;
+}
 
   /*
  * Dealer Order settlement is intentionally

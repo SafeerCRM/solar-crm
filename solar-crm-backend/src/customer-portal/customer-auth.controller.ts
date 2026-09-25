@@ -752,6 +752,136 @@ async createCustomerAfterSalesRequest(
   );
 }
 
+@Post('after-sales-requests/:requestId/launch')
+async createCustomerAfterSalesPaymentLaunch(
+  @Req() req: any,
+  @Param('requestId') requestId: string,
+  @Body() body: any,
+) {
+  const authHeader =
+    req.headers?.authorization || '';
+
+  const token =
+    authHeader.replace(
+      'Bearer ',
+      '',
+    );
+
+  if (!token) {
+    throw new UnauthorizedException(
+      'Customer token missing',
+    );
+  }
+
+  const payload: any =
+    jwt.verify(
+      token,
+      'mysecretkey',
+    );
+
+  const customerId =
+    Number(
+      payload?.customerId,
+    );
+
+  const normalizedRequestId =
+    Number(
+      requestId,
+    );
+
+  if (
+    !Number.isInteger(customerId) ||
+    customerId <= 0
+  ) {
+    throw new UnauthorizedException(
+      'Invalid customer token',
+    );
+  }
+
+  if (
+    !Number.isInteger(
+      normalizedRequestId,
+    ) ||
+    normalizedRequestId <= 0
+  ) {
+    throw new BadRequestException(
+      'Invalid after-sales request',
+    );
+  }
+
+  const paymentSource =
+    String(
+      body?.paymentSource ||
+      'WEB',
+    )
+      .trim()
+      .toUpperCase();
+
+  if (
+    paymentSource !== 'APP' &&
+    paymentSource !== 'WEB'
+  ) {
+    throw new BadRequestException(
+      'Invalid payment source',
+    );
+  }
+
+  /*
+   * Validate ownership, payment state and
+   * snapshotted service amount before issuing
+   * the public one-time launch token.
+   */
+  await this.service
+    .validateCustomerAfterSalesPaymentLaunch(
+      customerId,
+      normalizedRequestId,
+    );
+
+  /*
+   * referenceId for CUSTOMER_AFTER_SALES is
+   * CustomerAfterSalesRequest.id.
+   */
+  const launchToken =
+    await this.iciciPaymentLaunchService
+      .createCustomerLaunchToken({
+        purpose:
+          IciciPaymentLaunchPurpose
+            .CUSTOMER_AFTER_SALES,
+        referenceId:
+          normalizedRequestId,
+        customerId,
+        paymentSource:
+          paymentSource as
+            | 'APP'
+            | 'WEB',
+      });
+
+  const websiteBaseUrl =
+    String(
+      process.env
+        .ICICI_PAYMENT_LAUNCH_BASE_URL ||
+      '',
+    )
+      .trim()
+      .replace(/\/+$/, '');
+
+  if (
+    websiteBaseUrl !==
+    'https://adityasolars.co.in'
+  ) {
+    throw new Error(
+      'ICICI_PAYMENT_LAUNCH_BASE_URL is not configured correctly',
+    );
+  }
+
+  return {
+    launchUrl:
+      `${websiteBaseUrl}/payment/launch#flow=customer&token=${encodeURIComponent(
+        launchToken,
+      )}`,
+  };
+}
+
 @Get('after-sales-requests/:id/activities')
 async getCustomerAfterSalesRequestActivities(
   @Req() req: any,

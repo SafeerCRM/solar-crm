@@ -53,6 +53,7 @@ import { CustomerAfterSalesService } from './customer-after-sales-service.entity
 import {
   CustomerAfterSalesRequest,
   CustomerAfterSalesRequestStatus,
+  CustomerAfterSalesPaymentStatus,
 } from './customer-after-sales-request.entity';
 import { CustomerAfterSalesRequestActivity } from './customer-after-sales-request-activity.entity';
 import {
@@ -1806,6 +1807,12 @@ request.serviceName = service.serviceName;
 request.serviceCategory = service.category;
 request.servicePrice = Number(service.price || 0);
 request.isPaidService = service.isPaidService;
+
+request.paymentStatus =
+  service.isPaidService &&
+  Number(service.price || 0) > 0
+    ? CustomerAfterSalesPaymentStatus.PENDING
+    : CustomerAfterSalesPaymentStatus.NOT_REQUIRED;
 
 request.preferredDate = body?.preferredDate
   ? new Date(body.preferredDate)
@@ -4660,6 +4667,204 @@ private async getCustomerInsurancePaymentDetails(
     request,
     payableAmount,
   };
+}
+
+private async getCustomerAfterSalesPaymentDetails(
+  customerId: number,
+  requestId: number,
+) {
+  const normalizedCustomerId = Number(customerId);
+  const normalizedRequestId = Number(requestId);
+
+  if (
+    !Number.isInteger(normalizedCustomerId) ||
+    normalizedCustomerId <= 0 ||
+    !Number.isInteger(normalizedRequestId) ||
+    normalizedRequestId <= 0
+  ) {
+    throw new BadRequestException(
+      'Invalid after-sales payment reference',
+    );
+  }
+
+  const request =
+    await this.afterSalesRequestRepository.findOne({
+      where: {
+        id: normalizedRequestId,
+        customerId: normalizedCustomerId,
+        isHidden: false,
+      } as any,
+    });
+
+  if (!request) {
+    throw new NotFoundException(
+      'After-sales service request not found',
+    );
+  }
+
+  if (!request.isPaidService) {
+    throw new BadRequestException(
+      'This after-sales service does not require payment',
+    );
+  }
+
+  if (
+    request.status ===
+      CustomerAfterSalesRequestStatus.REJECTED ||
+    request.status ===
+      CustomerAfterSalesRequestStatus.CANCELLED
+  ) {
+    throw new BadRequestException(
+      'This after-sales service request is not payable',
+    );
+  }
+
+  if (
+    request.paymentStatus ===
+    CustomerAfterSalesPaymentStatus.PAID
+  ) {
+    throw new BadRequestException(
+      'After-sales payment has already been completed',
+    );
+  }
+
+  if (
+    request.paymentStatus ===
+    CustomerAfterSalesPaymentStatus.REFUNDED
+  ) {
+    throw new BadRequestException(
+      'This after-sales payment has already been refunded',
+    );
+  }
+
+  const payableAmount =
+    Number(request.servicePrice || 0);
+
+  if (
+    !Number.isFinite(payableAmount) ||
+    payableAmount <= 0
+  ) {
+    throw new BadRequestException(
+      'After-sales request has no payable amount',
+    );
+  }
+
+  return {
+    request,
+    payableAmount,
+  };
+}
+
+async validateCustomerAfterSalesPaymentLaunch(
+  customerId: number,
+  requestId: number,
+) {
+  const details =
+    await this.getCustomerAfterSalesPaymentDetails(
+      customerId,
+      requestId,
+    );
+
+  return {
+    requestId: Number(details.request.id),
+    payableAmount: Number(details.payableAmount),
+  };
+}
+
+async initiateCustomerAfterSalesPayment(
+  customerId: number,
+  requestId: number,
+  returnUrl: string,
+  paymentSource: 'APP' | 'WEB' = 'WEB',
+) {
+  const source =
+    String(
+      paymentSource || 'WEB',
+    )
+      .trim()
+      .toUpperCase();
+
+  if (
+    source !== 'APP' &&
+    source !== 'WEB'
+  ) {
+    throw new BadRequestException(
+      'Invalid payment source',
+    );
+  }
+
+  /*
+   * Re-read immediately before ICICI
+   * initiation.
+   *
+   * CustomerAfterSalesRequest.servicePrice
+   * is the authoritative snapshotted amount.
+   */
+  const details =
+    await this
+      .getCustomerAfterSalesPaymentDetails(
+        customerId,
+        requestId,
+      );
+
+  const customer =
+    await this.customerRepository.findOne({
+      where: {
+        id: Number(customerId),
+        isHidden: false,
+      } as any,
+    });
+
+  if (!customer) {
+    throw new NotFoundException(
+      'Customer not found',
+    );
+  }
+
+  return this.iciciPaymentService
+    .initiateCustomerAfterSalesPayment({
+      merchantAccount:
+        IciciMerchantAccount.SOLARS,
+
+      purpose:
+        IciciPaymentPurpose
+          .CUSTOMER_AFTER_SALES,
+
+      /*
+       * CUSTOMER_AFTER_SALES referenceId means
+       * CustomerAfterSalesRequest.id.
+       */
+      referenceId:
+        Number(details.request.id),
+
+      customerId:
+        Number(customerId),
+
+      /*
+       * Customer cannot choose this amount.
+       * It comes from the request snapshot.
+       */
+      amount:
+        Number(
+          details.payableAmount,
+        ),
+
+      customerName:
+        String(
+          (customer as any).name ||
+          (customer as any).customerName ||
+          details.request.customerName ||
+          '',
+        ).trim() ||
+        'Customer',
+
+      returnUrl,
+
+      paymentSource:
+        source as
+          | 'APP'
+          | 'WEB',
+    });
 }
 
 async validateCustomerInsurancePaymentLaunch(

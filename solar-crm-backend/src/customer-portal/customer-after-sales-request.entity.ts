@@ -16,6 +16,15 @@ export enum CustomerAfterSalesRequestStatus {
   CANCELLED = 'CANCELLED',
 }
 
+export enum CustomerAfterSalesPaymentStatus {
+  NOT_REQUIRED = 'NOT_REQUIRED',
+  PENDING = 'PENDING',
+  INITIATED = 'INITIATED',
+  PAID = 'PAID',
+  FAILED = 'FAILED',
+  REFUNDED = 'REFUNDED',
+}
+
 @Entity('customer_after_sales_request')
 export class CustomerAfterSalesRequest {
   @PrimaryGeneratedColumn()
@@ -62,6 +71,25 @@ export class CustomerAfterSalesRequest {
 
   @Column({ type: 'boolean', default: true })
   isPaidService: boolean;
+
+  @Column({
+  type: 'enum',
+  enum: CustomerAfterSalesPaymentStatus,
+  default: CustomerAfterSalesPaymentStatus.PENDING,
+})
+paymentStatus: CustomerAfterSalesPaymentStatus;
+
+@Column({ type: 'varchar', length: 20, nullable: true })
+gatewayOrderId: string;
+
+@Column({ type: 'text', nullable: true })
+gatewayPaymentId: string;
+
+@Column({ type: 'text', nullable: true })
+gatewayTransactionId: string;
+
+@Column({ type: 'timestamp', nullable: true })
+paidAt: Date;
 
   @Column({ type: 'timestamp', nullable: true })
   preferredDate: Date;

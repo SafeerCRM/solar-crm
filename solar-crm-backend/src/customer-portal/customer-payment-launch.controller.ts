@@ -65,7 +65,10 @@ export class CustomerPaymentLaunchController {
       .CUSTOMER_PAYMENT &&
   launch.purpose !==
     IciciPaymentLaunchPurpose
-      .CUSTOMER_INSURANCE
+      .CUSTOMER_INSURANCE &&
+  launch.purpose !==
+    IciciPaymentLaunchPurpose
+      .CUSTOMER_AFTER_SALES
 ) {
   throw new BadRequestException(
     'Unsupported payment launch purpose',
@@ -123,6 +126,19 @@ if (
   payment =
     await this.customerPortalService
       .initiateCustomerInsurancePayment(
+        Number(launch.customerId),
+        Number(launch.referenceId),
+        returnUrl,
+        launch.paymentSource,
+      );
+} else if (
+  launch.purpose ===
+    IciciPaymentLaunchPurpose
+      .CUSTOMER_AFTER_SALES
+) {
+  payment =
+    await this.customerPortalService
+      .initiateCustomerAfterSalesPayment(
         Number(launch.customerId),
         Number(launch.referenceId),
         returnUrl,

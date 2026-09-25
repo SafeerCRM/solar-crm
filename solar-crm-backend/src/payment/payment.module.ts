@@ -11,6 +11,9 @@ import {
   ProjectInsuranceRequest,
 } from '../project/project-insurance-request.entity';
 import { Dealer } from '../dealer/dealer.entity';
+import {
+  CustomerAfterSalesRequest,
+} from '../customer-portal/customer-after-sales-request.entity';
 import { ProjectModule } from '../project/project.module';
 import { IciciPaymentLaunchService } from './icici-payment-launch.service';
 import { IciciPaymentLaunch } from './icici-payment-launch.entity';
@@ -24,7 +27,8 @@ import { IciciPaymentLaunch } from './icici-payment-launch.entity';
   ProjectDealerPayment,
   ProjectDealerNotification,
    Dealer,
-   IciciPaymentLaunch,
+CustomerAfterSalesRequest,
+IciciPaymentLaunch,
 ]),
 ProjectModule,
   ],
