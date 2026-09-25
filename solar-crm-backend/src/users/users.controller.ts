@@ -84,6 +84,7 @@ export class UsersController {
   'OWNER',
   'HR_MANAGER',
   'TRADING_MANAGER',
+  'MEETING_MANAGER',
   'TRADING_HEAD',
 )
 @Get()
