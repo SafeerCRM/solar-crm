@@ -354,6 +354,22 @@ type ContractorProof = {
   createdAt?: string;
 };
 
+type ContractorRemainingMaterial = {
+  id: number;
+  projectId: number;
+  assignmentId: number;
+  contractorId: number;
+  contractorName?: string;
+  notes: string;
+  photoUrls?: string[];
+  latitude?: number;
+  longitude?: number;
+  gpsAddress?: string;
+  reportedByName?: string;
+  reportedByRole?: string;
+  createdAt: string;
+};
+
 type ContractorComment = {
   id: number;
   projectId: number;
@@ -680,7 +696,13 @@ const [
   useState<ContractorAssignment[]>([]);
   const [contractorProofs, setContractorProofs] =
   useState<Record<number, ContractorProof[]>>({});
-  const [contractorComments, setContractorComments] =
+
+const [
+  contractorRemainingMaterials,
+  setContractorRemainingMaterials,
+] = useState<Record<number, ContractorRemainingMaterial[]>>({});
+
+const [contractorComments, setContractorComments] =
   useState<Record<number, ContractorComment[]>>({});
 
 const [contractorCommentText, setContractorCommentText] =
@@ -3623,11 +3645,12 @@ const fetchContractorAssignments = async () => {
     setContractorAssignments(assignments);
 
     assignments.forEach((item: ContractorAssignment) => {
-      if (item?.id) {
-        fetchContractorProofs(item.id);
-        fetchContractorComments(item.id);
-      }
-    });
+  if (item?.id) {
+    fetchContractorProofs(item.id);
+    fetchContractorComments(item.id);
+    fetchContractorRemainingMaterials(item.id);
+  }
+});
   } catch (error) {
     console.error('Failed to load contractor assignments:', error);
   }
@@ -3659,6 +3682,38 @@ const fetchContractorProofs = async (
   } catch (error) {
     console.error(
       'Failed to load contractor proofs:',
+      error,
+    );
+  }
+};
+
+const fetchContractorRemainingMaterials = async (
+  assignmentId: number,
+) => {
+  try {
+    const token =
+      localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/contractor-assignment/${assignmentId}/remaining-material`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setContractorRemainingMaterials((prev) => ({
+      ...prev,
+      [assignmentId]: Array.isArray(res.data)
+        ? res.data
+        : [],
+    }));
+  } catch (error) {
+    console.error(
+      'Failed to load contractor remaining materials:',
       error,
     );
   }
@@ -5669,6 +5724,112 @@ const isLoanProcessCompleted =
 )}
         </a>
       ))}
+    </div>
+    )}
+</div>
+
+<div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4">
+  <h4 className="font-bold text-gray-800">
+    Remaining Material
+  </h4>
+
+  <p className="mt-1 text-sm text-gray-600">
+    Material reported as remaining at the project site by this contractor.
+  </p>
+
+  {(!contractorRemainingMaterials[item.id] ||
+    contractorRemainingMaterials[item.id].length === 0) ? (
+    <p className="mt-3 text-sm text-gray-500">
+      No remaining material reported.
+    </p>
+  ) : (
+    <div className="mt-4 space-y-4">
+      {contractorRemainingMaterials[item.id].map(
+        (material) => (
+          <div
+            key={material.id}
+            className="min-w-0 overflow-hidden rounded-xl border bg-white p-3 sm:p-4"
+          >
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <p className="break-words text-sm font-bold text-gray-800">
+                  {material.contractorName ||
+                    item.contractorName ||
+                    `Contractor #${material.contractorId}`}
+                </p>
+
+                <p className="mt-1 break-words text-sm leading-6 text-gray-700">
+                  {material.notes}
+                </p>
+              </div>
+
+              <p className="shrink-0 text-xs text-gray-500">
+                {material.createdAt
+                  ? new Date(material.createdAt).toLocaleString(
+                      'en-IN',
+                    )
+                  : '-'}
+              </p>
+            </div>
+
+            {(material.reportedByName ||
+              material.reportedByRole) && (
+              <p className="mt-2 break-words text-xs text-gray-500">
+                Reported by:{' '}
+                <span className="font-semibold">
+                  {material.reportedByName || '-'}
+                </span>
+                {material.reportedByRole
+                  ? ` (${material.reportedByRole.replaceAll(
+                      '_',
+                      ' ',
+                    )})`
+                  : ''}
+              </p>
+            )}
+
+            {material.gpsAddress && (
+              <p className="mt-2 break-words text-xs leading-5 text-gray-500">
+                Location: {material.gpsAddress}
+              </p>
+            )}
+
+            {material.latitude !== null &&
+              material.latitude !== undefined &&
+              material.longitude !== null &&
+              material.longitude !== undefined && (
+                <p className="mt-1 break-words text-xs text-gray-500">
+                  GPS: {material.latitude}, {material.longitude}
+                </p>
+              )}
+
+            {Array.isArray(material.photoUrls) &&
+              material.photoUrls.length > 0 && (
+                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {material.photoUrls.map(
+                    (photoUrl, photoIndex) => (
+                      <a
+                        key={`${material.id}-${photoIndex}`}
+                        href={photoUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="min-w-0 overflow-hidden rounded-xl border bg-gray-50 p-2 transition hover:shadow-sm"
+                      >
+                        <img
+                          src={photoUrl}
+                          alt={`Remaining material ${
+                            photoIndex + 1
+                          }`}
+                          className="aspect-[4/3] w-full rounded-lg bg-gray-100 object-cover"
+                        />
+                      </a>
+                    ),
+                  )}
+                </div>
+              )}
+          </div>
+        ),
+      )}
     </div>
   )}
 </div>
