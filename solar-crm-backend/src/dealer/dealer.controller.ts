@@ -28,28 +28,28 @@ export class DealerController {
   }
 
     @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER', 'TRADING_MANAGER', 'TRADING_HEAD')
+  @Roles('OWNER', 'TRADING_MANAGER', 'TRADING_HEAD', 'MEETING_MANAGER',)
   @Post()
   createDealer(@Body() body: any, @CurrentUser() user: any) {
     return this.dealerService.createDealer(body, user);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER', 'TRADING_MANAGER', 'TRADING_HEAD', 'STOCK_MANAGER', 'ACCOUNT_MANAGER')
+  @Roles('OWNER', 'TRADING_MANAGER', 'TRADING_HEAD', 'MEETING_MANAGER', 'STOCK_MANAGER', 'ACCOUNT_MANAGER')
   @Get()
   listDealers(@Query() query: any) {
     return this.dealerService.listDealers(query);
   }
 
     @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER', 'TRADING_MANAGER', 'TRADING_HEAD', 'CUSTOMER_MANAGER', 'STOCK_MANAGER')
+  @Roles('OWNER', 'TRADING_MANAGER', 'TRADING_HEAD', 'MEETING_MANAGER', 'CUSTOMER_MANAGER', 'STOCK_MANAGER')
   @Get('complaints')
   listInternalDealerComplaints(@Query() query: any) {
     return this.dealerService.listInternalDealerComplaints(query);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER', 'TRADING_MANAGER', 'TRADING_HEAD', 'CUSTOMER_MANAGER', 'STOCK_MANAGER')
+  @Roles('OWNER', 'TRADING_MANAGER', 'TRADING_HEAD', 'MEETING_MANAGER', 'CUSTOMER_MANAGER', 'STOCK_MANAGER')
   @Patch('complaints/:id')
   updateInternalDealerComplaint(
     @Param('id', ParseIntPipe) id: number,
@@ -116,7 +116,13 @@ saveDealerDeliverySetting(@Body() body: any) {
 }
 
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('OWNER', 'ACCOUNT_MANAGER', 'TRADING_MANAGER', 'TRADING_HEAD')
+@Roles(
+  'OWNER',
+  'ACCOUNT_MANAGER',
+  'TRADING_MANAGER',
+  'MEETING_MANAGER',
+  'TRADING_HEAD',
+)
 @Patch('dealer-order/:id/delivery')
 updateDealerOrderDelivery(
   @Param('id', ParseIntPipe) id: number,
@@ -329,14 +335,14 @@ updateDealerPortalPassword(
 }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER', 'TRADING_MANAGER', 'TRADING_HEAD', 'STOCK_MANAGER', 'ACCOUNT_MANAGER')
+  @Roles('OWNER', 'TRADING_MANAGER', 'TRADING_HEAD','MEETING_MANAGER', 'STOCK_MANAGER', 'ACCOUNT_MANAGER')
   @Get(':id')
   getDealer(@Param('id', ParseIntPipe) id: number) {
     return this.dealerService.getDealer(id);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER', 'TRADING_MANAGER', 'TRADING_HEAD')
+  @Roles('OWNER', 'TRADING_MANAGER', 'TRADING_HEAD', 'MEETING_MANAGER',)
   @Patch(':id')
   updateDealer(
     @Param('id', ParseIntPipe) id: number,
@@ -347,7 +353,7 @@ updateDealerPortalPassword(
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER', 'TRADING_MANAGER', 'TRADING_HEAD')
+  @Roles('OWNER', 'TRADING_MANAGER', 'TRADING_HEAD', 'MEETING_MANAGER',)
   @Patch(':id/hide')
   hideDealer(
     @Param('id', ParseIntPipe) id: number,
@@ -358,7 +364,7 @@ updateDealerPortalPassword(
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER', 'TRADING_MANAGER', 'TRADING_HEAD')
+  @Roles('OWNER', 'TRADING_MANAGER', 'TRADING_HEAD', 'MEETING_MANAGER',)
   @Patch(':id/restore')
   restoreDealer(
     @Param('id', ParseIntPipe) id: number,
@@ -394,28 +400,28 @@ updateDealerPortalPassword(
   }
 
     @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER', 'STOCK_MANAGER', 'TRADING_MANAGER', 'TRADING_HEAD', 'ACCOUNT_MANAGER')
+  @Roles('OWNER', 'STOCK_MANAGER', 'TRADING_MANAGER', 'MEETING_MANAGER','TRADING_HEAD', 'ACCOUNT_MANAGER')
   @Get('orders')
   listInternalDealerOrders(@Query() query: any) {
     return this.dealerService.listInternalDealerOrders(query);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER', 'STOCK_MANAGER', 'TRADING_MANAGER', 'TRADING_HEAD', 'ACCOUNT_MANAGER')
+  @Roles('OWNER', 'STOCK_MANAGER', 'TRADING_MANAGER', 'MEETING_MANAGER', 'TRADING_HEAD', 'ACCOUNT_MANAGER')
   @Get('orders/:id')
   getInternalDealerOrderDetail(@Param('id', ParseIntPipe) id: number) {
     return this.dealerService.getInternalDealerOrderDetail(id);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER', 'ACCOUNT_MANAGER', 'TRADING_MANAGER', 'TRADING_HEAD')
+  @Roles('OWNER', 'ACCOUNT_MANAGER', 'MEETING_MANAGER', 'TRADING_MANAGER', 'TRADING_HEAD')
   @Get('payments')
   listInternalDealerPayments(@Query() query: any) {
     return this.dealerService.listInternalDealerPayments(query);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER', 'STOCK_MANAGER', 'TRADING_MANAGER', 'TRADING_HEAD', 'ACCOUNT_MANAGER')
+  @Roles('OWNER', 'STOCK_MANAGER', 'TRADING_MANAGER', 'MEETING_MANAGER', 'TRADING_HEAD', 'ACCOUNT_MANAGER')
   @Patch('orders/:id/status')
   updateOrderStatus(
     @Param('id', ParseIntPipe) id: number,
@@ -426,7 +432,7 @@ updateDealerPortalPassword(
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER', 'STOCK_MANAGER', 'TRADING_MANAGER', 'TRADING_HEAD')
+  @Roles('OWNER', 'STOCK_MANAGER', 'TRADING_MANAGER', 'MEETING_MANAGER', 'TRADING_HEAD')
   @Patch('orders/:id/items/:itemId')
   updateOrderItem(
     @Param('id', ParseIntPipe) id: number,
@@ -438,7 +444,7 @@ updateDealerPortalPassword(
   }
 
     @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER', 'ACCOUNT_MANAGER', 'TRADING_MANAGER', 'TRADING_HEAD')
+  @Roles('OWNER', 'ACCOUNT_MANAGER', 'TRADING_MANAGER', 'MEETING_MANAGER', 'TRADING_HEAD')
   @Patch('payments/:id/approve')
   approvePayment(
     @Param('id', ParseIntPipe) id: number,
@@ -449,7 +455,7 @@ updateDealerPortalPassword(
   }
 
     @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER', 'ACCOUNT_MANAGER', 'TRADING_MANAGER', 'TRADING_HEAD')
+  @Roles('OWNER', 'ACCOUNT_MANAGER', 'TRADING_MANAGER', 'MEETING_MANAGER', 'TRADING_HEAD')
   @Post('orders/:id/final-invoice')
   generateFinalInvoice(
     @Param('id', ParseIntPipe) id: number,

@@ -83,12 +83,13 @@ const [users, setUsers] = useState<any[]>([]);
   const rows = Array.isArray(res.data) ? res.data : [];
 
   setUsers(
-    rows.filter((user: any) =>
-      Array.isArray(user.roles)
-        ? user.roles.includes('TRADING_MANAGER')
-        : false,
-    ),
-  );
+  rows.filter((user: any) =>
+    Array.isArray(user.roles)
+      ? user.roles.includes('TRADING_MANAGER') ||
+        user.roles.includes('MEETING_MANAGER')
+      : false,
+  ),
+);
 };
 
   const fetchAnalytics = async () => {

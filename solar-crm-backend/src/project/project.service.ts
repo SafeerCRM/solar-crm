@@ -46501,7 +46501,10 @@ private isTradingManager(user: any): boolean {
       ? [user.role]
       : [];
 
-  return roles.includes('TRADING_MANAGER');
+  return (
+    roles.includes('TRADING_MANAGER') ||
+    roles.includes('MEETING_MANAGER')
+  );
 }
 
 private canSeeAllTradingMeetings(user: any): boolean {
