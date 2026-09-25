@@ -488,6 +488,28 @@ loadRequests();
                           : 'Free'
                       }
                     />
+
+                    <InfoCard
+  label="Payment Status"
+  value={
+    !item.isPaidService ||
+    Number(item.servicePrice || 0) <= 0
+      ? 'Not Required'
+      : item.paymentStatus === 'PAID'
+        ? item.paidAt
+          ? `Paid · ${new Date(
+              item.paidAt,
+            ).toLocaleDateString('en-IN')}`
+          : 'Paid'
+        : item.paymentStatus === 'REFUNDED'
+          ? 'Refunded'
+          : item.paymentStatus === 'FAILED'
+            ? 'Failed'
+            : item.paymentStatus === 'INITIATED'
+              ? 'Payment Initiated'
+              : 'Payment Pending'
+  }
+/>
                     <InfoCard
                       label="Preferred Date"
                       value={
