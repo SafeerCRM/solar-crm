@@ -6,6 +6,8 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { MobileDatePicker } from '@mui/x-date-pickers/MobileDatePicker';
 import dayjs from 'dayjs';
 import AudioRecorder from '@/components/AudioRecorder';
+import { Capacitor } from '@capacitor/core';
+import { Browser } from '@capacitor/browser';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -29,6 +31,8 @@ const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
 const [selectedAudio, setSelectedAudio] = useState<File | null>(null);
 const [audioPreview, setAudioPreview] = useState('');
 const [uploadingAttachments, setUploadingAttachments] = useState(false);
+const [payingRequestId, setPayingRequestId] =
+  useState<number | null>(null);
 
 const photoInputRef = useRef<HTMLInputElement | null>(null);
 const audioInputRef = useRef<HTMLInputElement | null>(null);
@@ -546,6 +550,117 @@ setAudioPreview('');
   }
 };
 
+const payAfterSalesOnline =
+  async (
+    requestId: number,
+  ) => {
+    try {
+      setPayingRequestId(
+        requestId,
+      );
+
+      const customerToken =
+        localStorage.getItem(
+          'customer_token',
+        );
+
+      if (!customerToken) {
+        throw new Error(
+          'Customer session has expired. Please login again.',
+        );
+      }
+
+      const paymentSource:
+        | 'APP'
+        | 'WEB' =
+        Capacitor.isNativePlatform()
+          ? 'APP'
+          : 'WEB';
+
+      const response =
+        await fetch(
+          `${API_BASE_URL}/customer-auth/after-sales-requests/${requestId}/launch`,
+          {
+            method: 'POST',
+
+            headers: {
+              Authorization:
+                `Bearer ${customerToken}`,
+
+              'Content-Type':
+                'application/json',
+            },
+
+            body:
+              JSON.stringify({
+                paymentSource,
+              }),
+          },
+        );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          Array.isArray(
+            data?.message,
+          )
+            ? data.message.join(
+                ', ',
+              )
+            : data?.message ||
+                'Unable to start after-sales payment',
+        );
+      }
+
+      const launchUrl =
+        String(
+          data?.launchUrl ||
+          '',
+        ).trim();
+
+      /*
+       * Customer payments must always enter
+       * ICICI through the registered
+       * Aditya Solars website.
+       */
+      if (
+        !launchUrl.startsWith(
+          'https://adityasolars.co.in/payment/launch',
+        )
+      ) {
+        throw new Error(
+          'Invalid after-sales payment launch URL',
+        );
+      }
+
+      if (
+        Capacitor.isNativePlatform()
+      ) {
+        await Browser.open({
+          url: launchUrl,
+        });
+
+        return;
+      }
+
+      window.location.href =
+        launchUrl;
+    } catch (error: any) {
+      console.error(error);
+
+      alert(
+        error?.message ||
+          'Unable to start after-sales payment',
+      );
+
+      setPayingRequestId(
+        null,
+      );
+    }
+  };
+
   const submitRating = async (request: any) => {
   const rating = ratingMap[request.id] || {};
 
@@ -594,6 +709,49 @@ setAudioPreview('');
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+  const refreshAfterPaymentReturn =
+    () => {
+      if (
+        document.visibilityState ===
+        'visible'
+      ) {
+        setPayingRequestId(null);
+        loadData();
+      }
+    };
+
+  const handleWindowFocus =
+    () => {
+      setPayingRequestId(null);
+      loadData();
+    };
+
+  document.addEventListener(
+    'visibilitychange',
+    refreshAfterPaymentReturn,
+  );
+
+  window.addEventListener(
+    'focus',
+    handleWindowFocus,
+  );
+
+  return () => {
+    document.removeEventListener(
+      'visibilitychange',
+      refreshAfterPaymentReturn,
+    );
+
+    window.removeEventListener(
+      'focus',
+      handleWindowFocus,
+    );
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
 
   useEffect(() => {
   const handleClickOutside = (event: MouseEvent) => {
@@ -1140,18 +1298,92 @@ const filteredRequests =
                             )
                           : '-'}
                       </p>
+
+                      {request.isPaidService &&
+  Number(request.servicePrice || 0) > 0 && (
+    <div className="mt-3 flex flex-wrap items-center gap-2">
+      <span
+        className={`rounded-full px-3 py-1 text-xs font-black ${
+          request.paymentStatus === 'PAID'
+            ? 'bg-emerald-100 text-emerald-700'
+            : request.paymentStatus === 'REFUNDED'
+              ? 'bg-purple-100 text-purple-700'
+              : 'bg-amber-100 text-amber-700'
+        }`}
+      >
+        {request.paymentStatus === 'PAID'
+          ? 'Payment Paid'
+          : request.paymentStatus === 'REFUNDED'
+            ? 'Payment Refunded'
+            : 'Payment Pending'}
+      </span>
+
+      {request.paymentStatus === 'PAID' &&
+        request.paidAt && (
+          <span className="text-xs font-semibold text-gray-500">
+            Paid{' '}
+            {new Date(
+              request.paidAt,
+            ).toLocaleDateString(
+              'en-IN',
+            )}
+          </span>
+        )}
+    </div>
+  )}
                     </div>
 
                     <span className="rounded-full bg-blue-100 px-4 py-2 text-xs font-black text-blue-700">
                       {formatLabel(request.status)}
                     </span>
 
-                    <button
-  onClick={() => loadRequestTimeline(request)}
-  className="rounded-full bg-gray-900 px-4 py-2 text-xs font-black text-white"
->
-  View Timeline
-</button>
+                    <div className="flex flex-wrap items-center gap-2">
+  {request.isPaidService &&
+    Number(request.servicePrice || 0) > 0 &&
+    request.paymentStatus !== 'PAID' &&
+    request.paymentStatus !== 'REFUNDED' &&
+    ![
+      'REJECTED',
+      'CANCELLED',
+    ].includes(
+      request.status,
+    ) && (
+      <button
+        type="button"
+        onClick={() =>
+          payAfterSalesOnline(
+            Number(request.id),
+          )
+        }
+        disabled={
+          payingRequestId ===
+          Number(request.id)
+        }
+        className="rounded-full bg-emerald-600 px-4 py-2 text-xs font-black text-white shadow transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {payingRequestId ===
+        Number(request.id)
+          ? 'Opening Payment...'
+          : `Pay ₹${Number(
+              request.servicePrice || 0,
+            ).toLocaleString(
+              'en-IN',
+            )}`}
+      </button>
+    )}
+
+  <button
+    type="button"
+    onClick={() =>
+      loadRequestTimeline(
+        request,
+      )
+    }
+    className="rounded-full bg-gray-900 px-4 py-2 text-xs font-black text-white"
+  >
+    View Timeline
+  </button>
+</div>
                   </div>
 
                   {request.customerRemarks && (
