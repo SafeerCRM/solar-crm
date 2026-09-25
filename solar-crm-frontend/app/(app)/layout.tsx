@@ -142,7 +142,7 @@ const navItems = [
 {
   name: 'Trading Meetings',
   href: '/trading-meeting',
-  roles: ['OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER', 'TRADING_MANAGER', 'TRADING_HEAD'],
+  roles: ['OWNER', 'PROJECT_MANAGER', 'ACCOUNT_MANAGER', 'TRADING_MANAGER', 'MEETING_MANAGER', 'TRADING_HEAD'],
 },
 
 {
@@ -529,6 +529,7 @@ const navItems = [
     'ACCOUNT_MANAGER',
     'STOCK_MANAGER',
     'TRADING_MANAGER',
+    'MEETING_MANAGER',
     'TRADING_HEAD',
     'SUBSIDY_MANAGER',
   ],
@@ -596,6 +597,7 @@ const navItems = [
     'PROJECT_MANAGER',
     'TRADING_MANAGER',
     'TRADING_HEAD',
+    'MEETING_MANAGER',
     'STOCK_MANAGER',
     'ACCOUNT_MANAGER',
   ],
