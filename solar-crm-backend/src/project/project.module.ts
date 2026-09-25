@@ -36,6 +36,9 @@ import { ProjectFinalInvoiceItem } from './project-final-invoice-item.entity';
 import { ProjectPartyLedger } from './project-party-ledger.entity';
 import { ProjectContractorAssignment } from './project-contractor-assignment.entity';
 import { ProjectContractorProof } from './project-contractor-proof.entity';
+
+import { ProjectContractorRemainingMaterial } from './project-contractor-remaining-material.entity';
+
 import { ProjectContractor } from './project-contractor.entity';
 import { ProjectContractorComment } from './project-contractor-comment.entity';
 import { ProjectLoanCoApplicant } from './project-loan-co-applicant.entity';
@@ -142,7 +145,7 @@ ProjectStockFile,
 ProjectPurchaseOrderItem, ProjectProformaInvoice,
 ProjectProformaInvoiceItem, ProjectFinalInvoice, ProjectFinalInvoiceItem, ProjectEpcCustomerInvoice,
 ProjectEpcCustomerInvoiceItem, ProjectPartyLedger, ProjectContractorAssignment,
-ProjectContractorProof, ProjectCleaningAssignment, ProjectContractor, ProjectContractorComment, ProjectContractorRescheduleRequest, ProjectLoanCoApplicant, ProjectAccountExpense, ProjectConsumption, ProjectCustomerUpdate, ProjectDealerOrder,
+ProjectContractorProof, ProjectContractorRemainingMaterial, ProjectCleaningAssignment, ProjectContractor, ProjectContractorComment, ProjectContractorRescheduleRequest, ProjectLoanCoApplicant, ProjectAccountExpense, ProjectConsumption, ProjectCustomerUpdate, ProjectDealerOrder,
 ProjectDealerOrderItem,
 ProjectDealerOrderDocument,
 ProjectDealerPayment,

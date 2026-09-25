@@ -168,6 +168,7 @@ import {
   ProjectContractorProofType,
 } from './project-contractor-proof.entity';
 import { ProjectContractor } from './project-contractor.entity';
+import { ProjectContractorRemainingMaterial } from './project-contractor-remaining-material.entity';
 import { ProjectContractorComment } from './project-contractor-comment.entity';
 import { ProjectLoanCoApplicant } from './project-loan-co-applicant.entity';
 
@@ -2508,6 +2509,10 @@ private readonly projectContractorRescheduleRequestRepository: Repository<Projec
 
 @InjectRepository(ProjectContractorProof)
 private readonly projectContractorProofRepository: Repository<ProjectContractorProof>,
+
+@InjectRepository(ProjectContractorRemainingMaterial)
+private readonly projectContractorRemainingMaterialRepository:
+  Repository<ProjectContractorRemainingMaterial>,
 
 @InjectRepository(ProjectContractor)
 private readonly projectContractorRepository: Repository<ProjectContractor>,
@@ -41771,6 +41776,325 @@ async getContractorProofs(
     createdAt: 'DESC',
   },
 });
+}
+
+async saveContractorRemainingMaterial(
+  assignmentId: number,
+  body: any,
+  files: any[],
+  user: any,
+) {
+  const assignment =
+    await this.projectContractorAssignmentRepository.findOne({
+      where: {
+        id: assignmentId,
+      },
+    });
+
+  if (!assignment) {
+    throw new NotFoundException(
+      'Contractor assignment not found',
+    );
+  }
+
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  const currentUserId = Number(
+    user?.id ||
+      user?.userId ||
+      user?.sub,
+  );
+
+  const isAllowed =
+    roles.includes('OWNER') ||
+    roles.includes('PROJECT_MANAGER') ||
+    Number(assignment.contractorId) === currentUserId;
+
+  if (!isAllowed) {
+    throw new ForbiddenException(
+      'You are not allowed to report remaining material for this work',
+    );
+  }
+
+  const notes =
+    String(body?.notes || '').trim();
+
+  if (!notes) {
+    throw new BadRequestException(
+      'Remaining material details are required',
+    );
+  }
+
+  if (
+    !Array.isArray(files) ||
+    files.length === 0
+  ) {
+    throw new BadRequestException(
+      'At least one remaining material photo is required',
+    );
+  }
+
+  const allowedTypes = [
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+  ];
+
+  const maximumSize =
+    5 * 1024 * 1024;
+
+  const supabaseUrl =
+    process.env.SUPABASE_URL;
+
+  const serviceKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  const bucket =
+    process.env.SUPABASE_PROJECT_DOCUMENTS_BUCKET ||
+    'project-documents';
+
+  if (!supabaseUrl || !serviceKey) {
+    throw new BadRequestException(
+      'Supabase storage is not configured',
+    );
+  }
+
+  const supabase =
+    createClient(
+      supabaseUrl,
+      serviceKey,
+    );
+
+  const photoUrls: string[] = [];
+  const photoPaths: string[] = [];
+
+  for (const file of files) {
+    if (!file) {
+      continue;
+    }
+
+    const mimeType =
+      String(file.mimetype || '');
+
+    if (
+      !allowedTypes.includes(
+        mimeType,
+      )
+    ) {
+      throw new BadRequestException(
+        'Only JPG, PNG and WEBP remaining material photos are allowed',
+      );
+    }
+
+    if (
+      Number(file.size || 0) >
+      maximumSize
+    ) {
+      throw new BadRequestException(
+        'Each remaining material photo must be less than 5 MB after compression',
+      );
+    }
+
+    const originalName =
+      String(
+        file.originalname ||
+          'remaining-material-photo',
+      );
+
+    const extension =
+      originalName.includes('.')
+        ? originalName
+            .split('.')
+            .pop()
+        : mimeType.split('/')[1] ||
+          'jpg';
+
+    const safeExtension =
+      String(
+        extension || 'jpg',
+      ).replace(
+        /[^a-zA-Z0-9]/g,
+        '',
+      );
+
+    const filePath =
+      `projects/project-${assignment.projectId}` +
+      `/contractor-remaining-material` +
+      `/assignment-${assignment.id}` +
+      `/${Date.now()}-${randomUUID()}.${safeExtension}`;
+
+    const uploadResult =
+      await supabase.storage
+        .from(bucket)
+        .upload(
+          filePath,
+          file.buffer,
+          {
+            contentType: mimeType,
+            upsert: false,
+          },
+        );
+
+    if (uploadResult.error) {
+      throw new BadRequestException(
+        uploadResult.error.message,
+      );
+    }
+
+    const publicUrlResult =
+      supabase.storage
+        .from(bucket)
+        .getPublicUrl(filePath);
+
+    photoUrls.push(
+      publicUrlResult.data.publicUrl,
+    );
+
+    photoPaths.push(filePath);
+  }
+
+  if (!photoUrls.length) {
+    throw new BadRequestException(
+      'No remaining material photos were uploaded',
+    );
+  }
+
+  const remainingMaterial =
+    this.projectContractorRemainingMaterialRepository.create({
+      projectId:
+        Number(assignment.projectId),
+
+      assignmentId:
+        Number(assignment.id),
+
+      contractorId:
+        Number(assignment.contractorId),
+
+      contractorName:
+        assignment.contractorName || '',
+
+      notes,
+
+      photoUrls,
+
+      photoPaths,
+
+      latitude:
+        body?.latitude === '' ||
+        body?.latitude === undefined
+          ? undefined
+          : Number(body.latitude),
+
+      longitude:
+        body?.longitude === '' ||
+        body?.longitude === undefined
+          ? undefined
+          : Number(body.longitude),
+
+      gpsAddress:
+        String(
+          body?.gpsAddress || '',
+        ).trim(),
+
+      reportedBy:
+        currentUserId || undefined,
+
+      reportedByName:
+        user?.name ||
+        user?.email ||
+        '',
+
+      reportedByRole:
+        roles.join(', '),
+
+      isHidden: false,
+    });
+
+  const saved =
+    await this.projectContractorRemainingMaterialRepository.save(
+      remainingMaterial as ProjectContractorRemainingMaterial,
+    );
+
+  return {
+    message:
+      'Remaining material reported successfully',
+    remainingMaterial: saved,
+  };
+}
+
+async getContractorRemainingMaterials(
+  assignmentId: number,
+  user: any,
+) {
+  const assignment =
+    await this.projectContractorAssignmentRepository.findOne({
+      where: {
+        id: assignmentId,
+      },
+    });
+
+  if (!assignment) {
+    throw new NotFoundException(
+      'Contractor assignment not found',
+    );
+  }
+
+  const project =
+    await this.projectRepository.findOne({
+      where: {
+        id: Number(
+          assignment.projectId,
+        ),
+      },
+    });
+
+  if (!project) {
+    throw new NotFoundException(
+      'Project not found',
+    );
+  }
+
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  const currentUserId = Number(
+    user?.id ||
+      user?.userId ||
+      user?.sub,
+  );
+
+  const isProjectOwner =
+    Number(project.projectOwnerId) ===
+    currentUserId;
+
+  const isAllowed =
+    roles.includes('OWNER') ||
+    roles.includes('PROJECT_MANAGER') ||
+    roles.includes('PROJECT_EXECUTIVE') ||
+    roles.includes('INSPECTION_MANAGER') ||
+    roles.includes('STOCK_MANAGER') ||
+    isProjectOwner ||
+    Number(assignment.contractorId) ===
+      currentUserId;
+
+  if (!isAllowed) {
+    throw new ForbiddenException(
+      'You are not allowed to view remaining material for this work',
+    );
+  }
+
+  return this.projectContractorRemainingMaterialRepository.find({
+    where: {
+      assignmentId,
+      isHidden: false,
+    },
+    order: {
+      createdAt: 'DESC',
+    },
+  });
 }
 
 async addContractorComment(

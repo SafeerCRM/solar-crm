@@ -174,6 +174,22 @@ type ContractorProof = {
   replacedByProofId?: number;
 };
 
+type ContractorRemainingMaterial = {
+  id: number;
+  projectId: number;
+  assignmentId: number;
+  contractorId: number;
+  contractorName?: string;
+  notes: string;
+  photoUrls?: string[];
+  latitude?: number;
+  longitude?: number;
+  gpsAddress?: string;
+  reportedByName?: string;
+  reportedByRole?: string;
+  createdAt: string;
+};
+
 type ContractorComment = {
   id: number;
   projectId: number;
@@ -340,6 +356,20 @@ const [gpsData, setGpsData] =
 const [uploadingProofId, setUploadingProofId] =
   useState<number | null>(null);
 
+  const [remainingMaterials, setRemainingMaterials] =
+  useState<Record<number, ContractorRemainingMaterial[]>>({});
+
+const [remainingMaterialNotes, setRemainingMaterialNotes] =
+  useState<Record<number, string>>({});
+
+const [remainingMaterialFiles, setRemainingMaterialFiles] =
+  useState<Record<number, File[]>>({});
+
+const [
+  uploadingRemainingMaterialId,
+  setUploadingRemainingMaterialId,
+] = useState<number | null>(null);
+
   const [proofActionId, setProofActionId] =
   useState<number | null>(null);
 
@@ -402,6 +432,7 @@ assignedProjects.forEach((item: ContractorProject) => {
   if (item?.id) {
     fetchProofs(item.id);
     fetchComments(item.id);
+    fetchRemainingMaterials(item.id);
   }
 });
     } catch (error) {
@@ -543,6 +574,147 @@ const fetchProofs = async (assignmentId: number) => {
     }));
   } catch (error) {
     console.error('Failed to load contractor proofs:', error);
+  }
+};
+
+const fetchRemainingMaterials = async (
+  assignmentId: number,
+) => {
+  try {
+    const token =
+      localStorage.getItem('token');
+
+    const res = await axios.get(
+      `${API_BASE_URL}/project/contractor-assignment/${assignmentId}/remaining-material`,
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    setRemainingMaterials((prev) => ({
+      ...prev,
+      [assignmentId]: Array.isArray(res.data)
+        ? res.data
+        : [],
+    }));
+  } catch (error) {
+    console.error(
+      'Failed to load remaining material:',
+      error,
+    );
+  }
+};
+
+const submitRemainingMaterial = async (
+  item: ContractorProject,
+) => {
+  const notes =
+    remainingMaterialNotes[item.id]?.trim() || '';
+
+  const files =
+    remainingMaterialFiles[item.id] || [];
+
+  if (!notes) {
+    alert('कृपया बची हुई सामग्री का विवरण दर्ज करें');
+    return;
+  }
+
+  if (!files.length) {
+    alert('कृपया बची हुई सामग्री की कम से कम एक फोटो चुनें');
+    return;
+  }
+
+  try {
+    setUploadingRemainingMaterialId(item.id);
+
+    const token =
+      localStorage.getItem('token');
+
+    const formData = new FormData();
+
+    for (const file of files) {
+      const uploadFile =
+        await compressImageFile(file);
+
+      formData.append(
+        'files',
+        uploadFile,
+      );
+    }
+
+    formData.append(
+      'notes',
+      notes,
+    );
+
+    const gps = gpsData[item.id];
+
+    if (gps?.latitude) {
+      formData.append(
+        'latitude',
+        gps.latitude,
+      );
+    }
+
+    if (gps?.longitude) {
+      formData.append(
+        'longitude',
+        gps.longitude,
+      );
+    }
+
+    if (gps?.gpsAddress) {
+      formData.append(
+        'gpsAddress',
+        gps.gpsAddress,
+      );
+    }
+
+    await axios.post(
+      `${API_BASE_URL}/project/contractor-assignment/${item.id}/remaining-material`,
+      formData,
+      {
+        headers: {
+          ...(token
+            ? {
+                Authorization: `Bearer ${token}`,
+              }
+            : {}),
+        },
+      },
+    );
+
+    alert(
+      'बची हुई सामग्री की जानकारी सफलतापूर्वक जमा हो गई',
+    );
+
+    setRemainingMaterialNotes((prev) => ({
+      ...prev,
+      [item.id]: '',
+    }));
+
+    setRemainingMaterialFiles((prev) => ({
+      ...prev,
+      [item.id]: [],
+    }));
+
+    await fetchRemainingMaterials(item.id);
+  } catch (error: any) {
+    console.error(
+      'बची हुई सामग्री जमा नहीं हो पाई:',
+      error,
+    );
+
+    alert(
+      error?.response?.data?.message ||
+        'बची हुई सामग्री की जानकारी जमा नहीं हो पाई',
+    );
+  } finally {
+    setUploadingRemainingMaterialId(null);
   }
 };
 
@@ -1703,6 +1875,203 @@ const selectedCleaningWorks = cleaningAssignments.filter(
       ))}
   </div>
 )}
+  </div>
+</div>
+
+<div className="mt-5 min-w-0 overflow-hidden rounded-xl border border-orange-200 bg-orange-50 p-3 sm:p-4">
+  <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <h3 className="font-bold text-gray-800">
+        बची हुई सामग्री
+      </h3>
+
+      <p className="mt-1 text-xs text-gray-600">
+        साइट पर बची हुई सामग्री का विवरण और फोटो यहां जमा करें।
+      </p>
+    </div>
+
+    <span className="w-fit rounded-full bg-orange-100 px-3 py-1 text-xs font-bold text-orange-700">
+      {(remainingMaterials[item.id] || []).length} रिकॉर्ड
+    </span>
+  </div>
+
+  <div className="mt-4 grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2">
+    <textarea
+      value={remainingMaterialNotes[item.id] || ''}
+      onChange={(e) =>
+        setRemainingMaterialNotes((prev) => ({
+          ...prev,
+          [item.id]: e.target.value,
+        }))
+      }
+      placeholder="उदाहरण: 2 पाइप, वायर का बचा हुआ रोल, स्ट्रक्चर सामग्री आदि"
+      rows={3}
+      className="min-w-0 w-full rounded-xl border bg-white p-3 text-sm md:col-span-2"
+    />
+
+    <div className="min-w-0">
+      <label className="mb-1 block text-xs font-semibold text-gray-700">
+        सामग्री की फोटो
+      </label>
+
+      <input
+        type="file"
+        accept="image/*"
+        multiple
+        onChange={(e) =>
+          setRemainingMaterialFiles((prev) => ({
+            ...prev,
+            [item.id]: Array.from(
+              e.target.files || [],
+            ),
+          }))
+        }
+        className="block w-full min-w-0 rounded-xl border bg-white p-3 text-sm"
+      />
+
+      {(remainingMaterialFiles[item.id] || []).length > 0 && (
+        <p className="mt-1 text-xs text-gray-500">
+          {(remainingMaterialFiles[item.id] || []).length}{' '}
+          फोटो चुनी गई
+        </p>
+      )}
+    </div>
+
+    <div className="min-w-0 rounded-xl border bg-white p-3">
+      <p className="text-xs font-semibold text-gray-700">
+        GPS लोकेशन
+      </p>
+
+      {gpsData[item.id]?.latitude &&
+      gpsData[item.id]?.longitude ? (
+        <>
+          <p className="mt-1 break-words text-xs text-green-700">
+            GPS उपलब्ध है
+          </p>
+
+          <p className="mt-1 break-words text-xs text-gray-500">
+            {gpsData[item.id]?.latitude},{' '}
+            {gpsData[item.id]?.longitude}
+          </p>
+
+          {gpsData[item.id]?.gpsAddress && (
+            <p className="mt-1 break-words text-xs text-gray-500">
+              {gpsData[item.id]?.gpsAddress}
+            </p>
+          )}
+        </>
+      ) : (
+        <p className="mt-1 text-xs text-gray-500">
+          GPS वैकल्पिक है। जरूरत हो तो नीचे से कैप्चर करें।
+        </p>
+      )}
+    </div>
+  </div>
+
+  <div className="mt-3 flex flex-wrap gap-2">
+    <button
+      type="button"
+      onClick={() => captureGps(item.id)}
+      className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+    >
+      GPS कैप्चर करें
+    </button>
+
+    <button
+      type="button"
+      onClick={() => submitRemainingMaterial(item)}
+      disabled={
+        uploadingRemainingMaterialId === item.id
+      }
+      className="rounded-xl bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-50"
+    >
+      {uploadingRemainingMaterialId === item.id
+        ? 'जमा हो रहा है...'
+        : 'बची हुई सामग्री जमा करें'}
+    </button>
+  </div>
+
+  <div className="mt-5 border-t border-orange-200 pt-4">
+    <h4 className="font-semibold text-gray-800">
+      पहले जमा की गई सामग्री
+    </h4>
+
+    {(remainingMaterials[item.id] || []).length === 0 ? (
+      <p className="mt-2 text-sm text-gray-500">
+        अभी कोई बची हुई सामग्री जमा नहीं की गई है।
+      </p>
+    ) : (
+      <div className="mt-3 space-y-3">
+        {(remainingMaterials[item.id] || []).map(
+          (material) => (
+            <div
+              key={material.id}
+              className="min-w-0 overflow-hidden rounded-xl border bg-white p-3"
+            >
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                <p className="break-words text-sm font-semibold text-gray-800">
+                  {material.notes}
+                </p>
+
+                <span className="shrink-0 text-xs text-gray-500">
+                  {material.createdAt
+                    ? new Date(
+                        material.createdAt,
+                      ).toLocaleString('en-IN')
+                    : '-'}
+                </span>
+              </div>
+
+              {material.reportedByName && (
+                <p className="mt-1 text-xs text-gray-500">
+                  जमा किया:{' '}
+                  {material.reportedByName}
+                </p>
+              )}
+
+              {material.gpsAddress && (
+                <p className="mt-1 break-words text-xs text-gray-500">
+                  GPS पता: {material.gpsAddress}
+                </p>
+              )}
+
+              {material.latitude &&
+                material.longitude && (
+                  <p className="mt-1 break-words text-xs text-gray-500">
+                    GPS: {material.latitude},{' '}
+                    {material.longitude}
+                  </p>
+                )}
+
+              {Array.isArray(material.photoUrls) &&
+                material.photoUrls.length > 0 && (
+                  <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {material.photoUrls.map(
+                      (photoUrl, index) => (
+                        <a
+                          key={`${material.id}-${index}`}
+                          href={photoUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block min-w-0"
+                        >
+                          <img
+                            src={photoUrl}
+                            alt={`बची हुई सामग्री फोटो ${
+                              index + 1
+                            }`}
+                            className="aspect-square w-full rounded-lg bg-gray-100 object-cover"
+                          />
+                        </a>
+                      ),
+                    )}
+                  </div>
+                )}
+            </div>
+          ),
+        )}
+      </div>
+    )}
   </div>
 </div>
 

@@ -744,6 +744,35 @@ replaceContractorProof(
   );
 }
 
+@Post('contractor-assignment/:id/remaining-material')
+@UseInterceptors(
+  FilesInterceptor('files', 10),
+)
+saveContractorRemainingMaterial(
+  @Param('id') id: string,
+  @UploadedFiles() files: any[],
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.saveContractorRemainingMaterial(
+    Number(id),
+    body,
+    files,
+    user,
+  );
+}
+
+@Get('contractor-assignment/:id/remaining-material')
+getContractorRemainingMaterials(
+  @Param('id') id: string,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.getContractorRemainingMaterials(
+    Number(id),
+    user,
+  );
+}
+
 @Roles('OWNER', 'PROJECT_MANAGER', 'INSPECTION_MANAGER',)
 @Get('contractor-assignments/register')
 getContractorAssignmentRegister(
