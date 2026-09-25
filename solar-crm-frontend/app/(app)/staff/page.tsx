@@ -170,8 +170,144 @@ const [showLinkedUserOptions, setShowLinkedUserOptions] = useState(false);
     } catch (error: any) {
       console.error(error);
       alert(error?.response?.data?.message || 'Failed to load staff');
-    } finally {
+        } finally {
       setLoading(false);
+    }
+  };
+
+  const clearFilters = () => {
+    setSearch('');
+    setBranchName('');
+    setDepartment('');
+    setShowHidden(false);
+    setPage(1);
+  };
+
+      const exportStaffCsv = async () => {
+    try {
+      const exportLimit = 100;
+
+      // Fetch first page so we know how many pages exist.
+      const firstRes = await axios.get(`${API_BASE_URL}/staff`, {
+        params: {
+          page: 1,
+          limit: exportLimit,
+          search,
+          branchName,
+          department,
+          showHidden,
+        },
+        headers: headers(),
+      });
+
+      const firstPageData = Array.isArray(firstRes.data?.data)
+        ? firstRes.data.data
+        : [];
+
+      const exportTotalPages = Number(firstRes.data?.totalPages || 1);
+
+      let exportData = [...firstPageData];
+
+      // Fetch every remaining page using the exact same filters.
+      for (let exportPage = 2; exportPage <= exportTotalPages; exportPage++) {
+        const res = await axios.get(`${API_BASE_URL}/staff`, {
+          params: {
+            page: exportPage,
+            limit: exportLimit,
+            search,
+            branchName,
+            department,
+            showHidden,
+          },
+          headers: headers(),
+        });
+
+        const pageData = Array.isArray(res.data?.data)
+          ? res.data.data
+          : [];
+
+        exportData = [...exportData, ...pageData];
+      }
+
+      if (exportData.length === 0) {
+        alert('No staff found for the selected filters');
+        return;
+      }
+
+      const escapeCsv = (value: any) => {
+        const text =
+          value === null || value === undefined ? '' : String(value);
+
+        return `"${text.replace(/"/g, '""')}"`;
+      };
+
+      const columns = [
+        'Employee Code',
+        'Full Name',
+        'Mobile',
+        'Email',
+        'Designation',
+        'Department',
+        'Branch',
+        'Reporting Manager',
+        'Joining Date',
+        'Date of Birth',
+        'Monthly Basic Salary',
+        'Supporting Staff',
+        'Customer Visible',
+        'Dealer Visible',
+        'Status',
+      ];
+
+      const rows = exportData.map((item: any) => [
+        item.employeeCode || '',
+        item.fullName || '',
+        item.mobile || '',
+        item.email || '',
+        item.designation || '',
+        item.department || '',
+        item.branchName || '',
+        item.reportingManagerName || '',
+        item.joiningDate || '',
+        item.dateOfBirth || '',
+        item.monthlyBasicSalary ?? '',
+        item.isSupportingStaff ? 'Yes' : 'No',
+        item.visibleToCustomer ? 'Yes' : 'No',
+        item.visibleToDealer ? 'Yes' : 'No',
+        item.isHidden ? 'Hidden' : 'Active',
+      ]);
+
+      const csv = [
+        columns.map(escapeCsv).join(','),
+        ...rows.map((row: any[]) =>
+          row.map(escapeCsv).join(','),
+        ),
+      ].join('\n');
+
+      const blob = new Blob(['\uFEFF' + csv], {
+        type: 'text/csv;charset=utf-8;',
+      });
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+
+      link.href = url;
+      link.download = `staff-export-${new Date()
+        .toISOString()
+        .slice(0, 10)}.csv`;
+
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      URL.revokeObjectURL(url);
+    } catch (error: any) {
+      console.error(error);
+
+      alert(
+        error?.response?.data?.message ||
+          'Failed to export staff CSV',
+      );
     }
   };
 
@@ -700,9 +836,34 @@ const filteredUsers = users.filter((user) => {
           </label>
         </div>
 
-        <button onClick={() => { setPage(1); fetchStaff(); }} className="mt-3 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white">
-          Apply
-        </button>
+                <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            onClick={() => {
+              if (page !== 1) {
+                setPage(1);
+              } else {
+                fetchStaff();
+              }
+            }}
+            className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+          >
+            Apply
+          </button>
+
+          <button
+            onClick={clearFilters}
+            className="rounded-xl bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-700"
+          >
+            Clear Filters
+          </button>
+
+                    <button
+            onClick={exportStaffCsv}
+            className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white"
+          >
+            Export CSV
+          </button>
+        </div>
       </div>
 
       <div className="rounded-2xl bg-white p-5 shadow">
