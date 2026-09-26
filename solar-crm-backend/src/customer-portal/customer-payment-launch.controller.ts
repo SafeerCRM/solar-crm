@@ -136,14 +136,39 @@ if (
     IciciPaymentLaunchPurpose
       .CUSTOMER_AFTER_SALES
 ) {
-  payment =
-    await this.customerPortalService
-      .initiateCustomerAfterSalesPayment(
-        Number(launch.customerId),
-        Number(launch.referenceId),
-        returnUrl,
-        launch.paymentSource,
-      );
+  /*
+   * New flow:
+   * referenceId = CustomerAfterSalesCheckout.id.
+   *
+   * Legacy flow:
+   * referenceId = CustomerAfterSalesRequest.id.
+   *
+   * Missing marker is deliberately treated as
+   * REQUEST for backward compatibility with
+   * already-issued legacy launch tokens.
+   */
+  if (
+    launch.afterSalesFlow ===
+    'CHECKOUT'
+  ) {
+    payment =
+      await this.customerPortalService
+        .initiateCustomerAfterSalesCheckoutPayment(
+          Number(launch.customerId),
+          Number(launch.referenceId),
+          returnUrl,
+          launch.paymentSource,
+        );
+  } else {
+    payment =
+      await this.customerPortalService
+        .initiateCustomerAfterSalesPayment(
+          Number(launch.customerId),
+          Number(launch.referenceId),
+          returnUrl,
+          launch.paymentSource,
+        );
+  }
 } else {
   throw new BadRequestException(
     'Unsupported payment launch purpose',

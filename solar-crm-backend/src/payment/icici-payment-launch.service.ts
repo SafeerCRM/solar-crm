@@ -49,6 +49,24 @@ interface IciciCustomerPaymentLaunchPayload {
   paymentSource:
     'APP' | 'WEB';
 
+  /*
+   * Only CUSTOMER_AFTER_SALES uses this.
+   *
+   * REQUEST:
+   * legacy flow where referenceId is
+   * CustomerAfterSalesRequest.id.
+   *
+   * CHECKOUT:
+   * new flow where referenceId is
+   * CustomerAfterSalesCheckout.id.
+   *
+   * Optional so existing customer payment /
+   * insurance behavior is unchanged.
+   */
+  afterSalesFlow?:
+    | 'REQUEST'
+    | 'CHECKOUT';
+
   expiresAt: number;
 
   nonce: string;
@@ -559,8 +577,13 @@ async createCustomerLaunchToken(input: {
     | IciciPaymentLaunchPurpose.CUSTOMER_AFTER_SALES;
   referenceId: number;
   customerId: number;
-  paymentSource:
-    'APP' | 'WEB';
+
+paymentSource:
+  'APP' | 'WEB';
+
+afterSalesFlow?:
+  | 'REQUEST'
+  | 'CHECKOUT';
 }) {
   const referenceId =
     Number(
@@ -621,6 +644,34 @@ if (
   );
 }
 
+/*
+ * afterSalesFlow is valid only for
+ * CUSTOMER_AFTER_SALES.
+ */
+if (
+  input.afterSalesFlow !== undefined &&
+  input.purpose !==
+    IciciPaymentLaunchPurpose
+      .CUSTOMER_AFTER_SALES
+) {
+  throw new BadRequestException(
+    'Invalid after-sales payment flow',
+  );
+}
+
+if (
+  input.purpose ===
+    IciciPaymentLaunchPurpose
+      .CUSTOMER_AFTER_SALES &&
+  input.afterSalesFlow !== undefined &&
+  input.afterSalesFlow !== 'REQUEST' &&
+  input.afterSalesFlow !== 'CHECKOUT'
+) {
+  throw new BadRequestException(
+    'Invalid after-sales payment flow',
+  );
+}
+
 const expiresAt =
     Date.now() +
     5 * 60 * 1000;
@@ -631,24 +682,31 @@ const expiresAt =
       .toString('hex');
 
   const payload:
-    IciciCustomerPaymentLaunchPayload =
-    {
-      version: 1,
+  IciciCustomerPaymentLaunchPayload =
+  {
+    version: 1,
 
-      purpose:
-  input.purpose,
+    purpose:
+      input.purpose,
 
-      referenceId,
+    referenceId,
 
-      customerId,
+    customerId,
 
-      paymentSource:
-        input.paymentSource,
+    paymentSource:
+      input.paymentSource,
 
-      expiresAt,
+    afterSalesFlow:
+      input.purpose ===
+        IciciPaymentLaunchPurpose
+          .CUSTOMER_AFTER_SALES
+        ? input.afterSalesFlow
+        : undefined,
 
-      nonce,
-    };
+    expiresAt,
+
+    nonce,
+  };
 
   const launch =
     this.launchRepository.create({
@@ -825,6 +883,30 @@ verifyCustomerLaunchToken(
   }
 
   if (
+  payload.afterSalesFlow !== undefined &&
+  payload.purpose !==
+    IciciPaymentLaunchPurpose
+      .CUSTOMER_AFTER_SALES
+) {
+  throw new BadRequestException(
+    'Invalid payment launch token',
+  );
+}
+
+if (
+  payload.purpose ===
+    IciciPaymentLaunchPurpose
+      .CUSTOMER_AFTER_SALES &&
+  payload.afterSalesFlow !== undefined &&
+  payload.afterSalesFlow !== 'REQUEST' &&
+  payload.afterSalesFlow !== 'CHECKOUT'
+) {
+  throw new BadRequestException(
+    'Invalid payment launch token',
+  );
+}
+
+  if (
     Date.now() >
     Number(
       payload.expiresAt,
@@ -850,12 +932,19 @@ verifyCustomerLaunchToken(
       ),
 
     paymentSource:
-      payload.paymentSource,
+  payload.paymentSource,
 
-    expiresAt:
-      Number(
-        payload.expiresAt,
-      ),
+afterSalesFlow:
+  payload.purpose ===
+    IciciPaymentLaunchPurpose
+      .CUSTOMER_AFTER_SALES
+    ? payload.afterSalesFlow
+    : undefined,
+
+expiresAt:
+  Number(
+    payload.expiresAt,
+  ),
 
     nonce:
       String(
@@ -956,6 +1045,9 @@ async consumeCustomerLaunchToken(
 
     paymentSource:
       payload.paymentSource,
+
+      afterSalesFlow:
+  payload.afterSalesFlow,
   };
 }
 }

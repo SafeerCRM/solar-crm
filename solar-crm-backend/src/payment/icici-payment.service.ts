@@ -53,6 +53,10 @@ import {
   CustomerAfterSalesRequest,
 } from '../customer-portal/customer-after-sales-request.entity';
 
+import {
+  CustomerAfterSalesCheckoutFinalizerService,
+} from '../customer-portal/customer-after-sales-checkout-finalizer.service';
+
 type IciciMerchantConfig = {
   merchantId: string;
   aggregatorId: string;
@@ -81,6 +85,16 @@ amount: number;
   | 'CUSTOMER_PAYMENT'
   | 'CUSTOMER_INSURANCE'
   | 'CUSTOMER_AFTER_SALES';
+
+/*
+ * Only CUSTOMER_AFTER_SALES uses this.
+ *
+ * REQUEST = legacy request-first payment flow.
+ * CHECKOUT = new payment-before-request flow.
+ */
+afterSalesFlow?:
+  | 'REQUEST'
+  | 'CHECKOUT';
 
 paymentSource?:
   | 'APP'
@@ -131,6 +145,9 @@ private readonly dealerRepository:
 )
 private readonly customerAfterSalesRequestRepository:
   Repository<CustomerAfterSalesRequest>,
+
+private readonly customerAfterSalesCheckoutFinalizerService:
+  CustomerAfterSalesCheckoutFinalizerService,
 
 private readonly projectService:
   ProjectService,
@@ -1376,6 +1393,25 @@ async initiateCustomerAfterSalesPayment(
     );
   }
 
+  const afterSalesFlow =
+  String(
+    input.afterSalesFlow ||
+      'REQUEST',
+  )
+    .trim()
+    .toUpperCase();
+
+if (
+  afterSalesFlow !==
+    'REQUEST' &&
+  afterSalesFlow !==
+    'CHECKOUT'
+) {
+  throw new BadRequestException(
+    'Invalid customer after-sales payment flow',
+  );
+}
+
   const referenceId =
     Number(
       input.referenceId,
@@ -1402,44 +1438,55 @@ async initiateCustomerAfterSalesPayment(
   }
 
   const previousTransaction =
-    await this
-      .transactionRepository
-      .createQueryBuilder(
-        'transaction',
-      )
-      .where(
-        'transaction.purpose = :purpose',
-        {
-          purpose:
-            IciciPaymentPurpose
-              .CUSTOMER_AFTER_SALES,
-        },
-      )
-      .andWhere(
-        'transaction.referenceId = :referenceId',
-        {
-          referenceId,
-        },
-      )
-      .andWhere(
-        'transaction.customerId = :customerId',
-        {
-          customerId,
-        },
-      )
-      .andWhere(
-        'transaction.merchantAccount = :merchantAccount',
-        {
-          merchantAccount:
-            IciciMerchantAccount
-              .SOLARS,
-        },
-      )
-      .orderBy(
-        'transaction.createdAt',
-        'DESC',
-      )
-      .getOne();
+  await this
+    .transactionRepository
+    .createQueryBuilder(
+      'transaction',
+    )
+    .where(
+      'transaction.purpose = :purpose',
+      {
+        purpose:
+          IciciPaymentPurpose
+            .CUSTOMER_AFTER_SALES,
+      },
+    )
+    .andWhere(
+      'transaction.referenceId = :referenceId',
+      {
+        referenceId,
+      },
+    )
+    .andWhere(
+      'transaction.customerId = :customerId',
+      {
+        customerId,
+      },
+    )
+    .andWhere(
+      'transaction.merchantAccount = :merchantAccount',
+      {
+        merchantAccount:
+          IciciMerchantAccount
+            .SOLARS,
+      },
+    )
+    .andWhere(
+      `
+      COALESCE(
+        transaction."gatewayMetadata"->>'afterSalesFlow',
+        'REQUEST'
+      ) = :afterSalesFlow
+      `,
+      {
+        afterSalesFlow,
+      },
+    )
+    .orderBy(
+      'transaction.createdAt',
+      'DESC',
+    )
+    .getOne();
 
   if (
     previousTransaction &&
@@ -1656,15 +1703,26 @@ async initiateCustomerAfterSalesPayment(
           },
         )
         .andWhere(
-          'transaction.merchantAccount = :merchantAccount',
-          {
-            merchantAccount:
-              IciciMerchantAccount
-                .SOLARS,
-          },
-        )
-        .andWhere(
-          'transaction.status IN (:...activeStatuses)',
+  'transaction.merchantAccount = :merchantAccount',
+  {
+    merchantAccount:
+      IciciMerchantAccount
+        .SOLARS,
+  },
+)
+.andWhere(
+  `
+  COALESCE(
+    transaction."gatewayMetadata"->>'afterSalesFlow',
+    'REQUEST'
+  ) = :afterSalesFlow
+  `,
+  {
+    afterSalesFlow,
+  },
+)
+.andWhere(
+  'transaction.status IN (:...activeStatuses)',
           {
             activeStatuses: [
               IciciPaymentTransactionStatus.CREATED,
@@ -2803,6 +2861,13 @@ gatewayMetadata: {
     null,
 
   paymentSource,
+
+  afterSalesFlow:
+    input.purpose ===
+      IciciPaymentPurpose
+        .CUSTOMER_AFTER_SALES
+      ? input.afterSalesFlow || null
+      : null,
 },
 });
 
@@ -4061,11 +4126,21 @@ private async dispatchSuccessfulTransaction(
  * Customer After-Sales
  *
  * Business rule:
+ *
  * Customer Portal after-sales payments are
  * received through ADITYA SOLARS.
  *
- * referenceId is the
- * CustomerAfterSalesRequest.id.
+ * Two flows are supported:
+ *
+ * CHECKOUT:
+ *   New payment-before-request flow.
+ *   referenceId = CustomerAfterSalesCheckout.id.
+ *   The real request is created only after
+ *   verified successful payment.
+ *
+ * REQUEST / no marker:
+ *   Legacy request-first flow.
+ *   referenceId = CustomerAfterSalesRequest.id.
  *
  * Payment settlement must never change the
  * operational after-sales request status.
@@ -4083,7 +4158,7 @@ if (
     );
   }
 
-  const requestId =
+  const referenceId =
     Number(
       transaction.referenceId,
     );
@@ -4095,9 +4170,9 @@ if (
 
   if (
     !Number.isInteger(
-      requestId,
+      referenceId,
     ) ||
-    requestId <= 0 ||
+    referenceId <= 0 ||
     !Number.isInteger(
       customerId,
     ) ||
@@ -4111,14 +4186,14 @@ if (
   /*
    * Only a transaction created by the
    * hardened Customer After-Sales initiation
-   * path may settle an after-sales request.
+   * path may settle an after-sales payment.
    */
   if (
     String(
       transaction
         .gatewayMetadata
         ?.businessSettlementType ||
-      '',
+        '',
     ) !==
       'CUSTOMER_AFTER_SALES'
   ) {
@@ -4126,6 +4201,104 @@ if (
       'Customer after-sales payment settlement marker mismatch',
     );
   }
+
+  const afterSalesFlow =
+    String(
+      transaction
+        .gatewayMetadata
+        ?.afterSalesFlow ||
+        '',
+    ).trim();
+
+  /*
+   * NEW FLOW
+   *
+   * A CHECKOUT transaction must never look up
+   * CustomerAfterSalesRequest using referenceId.
+   *
+   * Checkout IDs and request IDs can overlap.
+   * The signed/persisted flow marker is therefore
+   * the authority for choosing the settlement path.
+   */
+  if (
+    afterSalesFlow ===
+      'CHECKOUT'
+  ) {
+    const transactionAmount =
+      Number(
+        transaction.amount,
+      );
+
+    const merchantTxnNo =
+      String(
+        transaction.merchantTxnNo ||
+          '',
+      ).trim();
+
+    if (
+      !Number.isFinite(
+        transactionAmount,
+      ) ||
+      transactionAmount <= 0 ||
+      !merchantTxnNo
+    ) {
+      throw new BadGatewayException(
+        'Customer after-sales checkout payment transaction is invalid',
+      );
+    }
+
+    await this
+      .customerAfterSalesCheckoutFinalizerService
+      .finalizePaidCheckout({
+        checkoutId:
+          referenceId,
+
+        customerId,
+
+        amount:
+          transactionAmount,
+
+        merchantTxnNo,
+
+        paymentId:
+          transaction.paymentId ||
+          null,
+
+        bankTxnId:
+          transaction.bankTxnId ||
+          null,
+
+        paidAt:
+          transaction.paidAt ||
+          new Date(),
+      });
+
+    return;
+  }
+
+  /*
+   * LEGACY FLOW
+   *
+   * Existing transactions created before the
+   * checkout architecture have no afterSalesFlow
+   * marker. They must continue to settle against
+   * CustomerAfterSalesRequest.
+   *
+   * Explicit REQUEST transactions use the same
+   * legacy settlement path.
+   */
+  if (
+    afterSalesFlow &&
+    afterSalesFlow !==
+      'REQUEST'
+  ) {
+    throw new BadGatewayException(
+      'Customer after-sales payment flow marker is invalid',
+    );
+  }
+
+  const requestId =
+    referenceId;
 
   const request =
     await this
@@ -4185,7 +4358,7 @@ if (
   }
 
   /*
-   * Idempotency:
+   * Legacy idempotency:
    *
    * Repeated callback/status reconciliation
    * for the exact same ICICI transaction is
@@ -4201,13 +4374,13 @@ if (
     const existingMerchantTxnNo =
       String(
         request.gatewayOrderId ||
-        '',
+          '',
       ).trim();
 
     const currentMerchantTxnNo =
       String(
         transaction.merchantTxnNo ||
-        '',
+          '',
       ).trim();
 
     if (
@@ -4231,12 +4404,12 @@ if (
     transaction.merchantTxnNo;
 
   request.gatewayPaymentId =
-  transaction.paymentId ||
-  '';
+    transaction.paymentId ||
+    '';
 
-request.gatewayTransactionId =
-  transaction.bankTxnId ||
-  '';
+  request.gatewayTransactionId =
+    transaction.bankTxnId ||
+    '';
 
   request.paidAt =
     transaction.paidAt ||

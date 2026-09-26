@@ -17,6 +17,18 @@ import {
 import { ProjectModule } from '../project/project.module';
 import { IciciPaymentLaunchService } from './icici-payment-launch.service';
 import { IciciPaymentLaunch } from './icici-payment-launch.entity';
+import { CustomerAfterSalesCheckout } from '../customer-portal/customer-after-sales-checkout.entity';
+import {
+  CustomerAfterSalesRequestActivity,
+} from '../customer-portal/customer-after-sales-request-activity.entity';
+
+import {
+  CustomerAfterSalesRequestProof,
+} from '../customer-portal/customer-after-sales-request-proof.entity';
+
+import {
+  CustomerAfterSalesCheckoutFinalizerService,
+} from '../customer-portal/customer-after-sales-checkout-finalizer.service';
 
 @Module({
   imports: [
@@ -28,11 +40,15 @@ import { IciciPaymentLaunch } from './icici-payment-launch.entity';
   ProjectDealerNotification,
    Dealer,
 CustomerAfterSalesRequest,
+CustomerAfterSalesCheckout,
+CustomerAfterSalesRequestActivity,
+CustomerAfterSalesRequestProof,
 IciciPaymentLaunch,
 ]),
 ProjectModule,
   ],
   providers: [
+  CustomerAfterSalesCheckoutFinalizerService,
   IciciPaymentService,
   IciciPaymentLaunchService,
 ],

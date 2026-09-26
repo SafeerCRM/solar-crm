@@ -746,10 +746,150 @@ async createCustomerAfterSalesRequest(
     throw new UnauthorizedException('Invalid customer token');
   }
 
-  return this.service.createAfterSalesRequestFromCustomer(
-    Number(payload.customerId),
-    body,
-  );
+  return this.service.prepareAfterSalesRequestFromCustomer(
+  Number(payload.customerId),
+  body,
+);
+}
+
+@Post('after-sales-checkouts/:checkoutId/launch')
+async createCustomerAfterSalesCheckoutPaymentLaunch(
+  @Req() req: any,
+  @Param('checkoutId') checkoutId: string,
+  @Body() body: any,
+) {
+  const authHeader =
+    req.headers?.authorization || '';
+
+  const token =
+    authHeader.replace(
+      'Bearer ',
+      '',
+    );
+
+  if (!token) {
+    throw new UnauthorizedException(
+      'Customer token missing',
+    );
+  }
+
+  const payload: any =
+    jwt.verify(
+      token,
+      'mysecretkey',
+    );
+
+  const customerId =
+    Number(
+      payload?.customerId,
+    );
+
+  const normalizedCheckoutId =
+    Number(
+      checkoutId,
+    );
+
+  if (
+    !Number.isInteger(customerId) ||
+    customerId <= 0
+  ) {
+    throw new UnauthorizedException(
+      'Invalid customer token',
+    );
+  }
+
+  if (
+    !Number.isInteger(
+      normalizedCheckoutId,
+    ) ||
+    normalizedCheckoutId <= 0
+  ) {
+    throw new BadRequestException(
+      'Invalid after-sales checkout',
+    );
+  }
+
+  const paymentSource =
+    String(
+      body?.paymentSource ||
+      'WEB',
+    )
+      .trim()
+      .toUpperCase();
+
+  if (
+    paymentSource !== 'APP' &&
+    paymentSource !== 'WEB'
+  ) {
+    throw new BadRequestException(
+      'Invalid payment source',
+    );
+  }
+
+  /*
+   * Re-validate checkout ownership and its
+   * server-snapshotted payable amount before
+   * issuing the public launch authorization.
+   */
+  await this.service
+    .validateCustomerAfterSalesCheckoutPaymentLaunch(
+      customerId,
+      normalizedCheckoutId,
+    );
+
+  /*
+   * For the new flow referenceId means
+   * CustomerAfterSalesCheckout.id.
+   *
+   * The signed CHECKOUT discriminator prevents
+   * this numeric ID from ever being interpreted
+   * as a legacy CustomerAfterSalesRequest.id.
+   */
+  const launchToken =
+    await this.iciciPaymentLaunchService
+      .createCustomerLaunchToken({
+        purpose:
+          IciciPaymentLaunchPurpose
+            .CUSTOMER_AFTER_SALES,
+
+        referenceId:
+          normalizedCheckoutId,
+
+        customerId,
+
+        paymentSource:
+          paymentSource as
+            | 'APP'
+            | 'WEB',
+
+        afterSalesFlow:
+          'CHECKOUT',
+      });
+
+  const websiteBaseUrl =
+    String(
+      process.env
+        .ICICI_PAYMENT_LAUNCH_BASE_URL ||
+      '',
+    )
+      .trim()
+      .replace(/\/+$/, '');
+
+  if (
+    websiteBaseUrl !==
+    'https://adityasolars.co.in'
+  ) {
+    throw new Error(
+      'ICICI_PAYMENT_LAUNCH_BASE_URL is not configured correctly',
+    );
+  }
+
+  return {
+    launchUrl:
+      `${websiteBaseUrl}/payment/launch#flow=customer&token=${encodeURIComponent(
+        launchToken,
+      )}`,
+  };
 }
 
 @Post('after-sales-requests/:requestId/launch')
@@ -844,17 +984,23 @@ async createCustomerAfterSalesPaymentLaunch(
   const launchToken =
     await this.iciciPaymentLaunchService
       .createCustomerLaunchToken({
-        purpose:
-          IciciPaymentLaunchPurpose
-            .CUSTOMER_AFTER_SALES,
-        referenceId:
-          normalizedRequestId,
-        customerId,
-        paymentSource:
-          paymentSource as
-            | 'APP'
-            | 'WEB',
-      });
+  purpose:
+    IciciPaymentLaunchPurpose
+      .CUSTOMER_AFTER_SALES,
+
+  referenceId:
+    normalizedRequestId,
+
+  customerId,
+
+  paymentSource:
+    paymentSource as
+      | 'APP'
+      | 'WEB',
+
+  afterSalesFlow:
+    'REQUEST',
+});
 
   const websiteBaseUrl =
     String(

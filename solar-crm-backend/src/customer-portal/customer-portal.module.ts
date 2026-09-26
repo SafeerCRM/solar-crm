@@ -25,6 +25,7 @@ import { PortalPolicy } from '../dealer/portal-policy.entity';
 import { CustomerPaymentReceiptActivity } from './customer-payment-receipt-activity.entity';
 import { CustomerAfterSalesService } from './customer-after-sales-service.entity';
 import { CustomerAfterSalesRequest } from './customer-after-sales-request.entity';
+import { CustomerAfterSalesCheckout } from './customer-after-sales-checkout.entity';
 import { CustomerAfterSalesRequestActivity } from './customer-after-sales-request-activity.entity';
 import { CustomerAfterSalesRequestProof } from './customer-after-sales-request-proof.entity';
 import { CustomerAfterSalesRequestRating } from './customer-after-sales-request-rating.entity';
@@ -50,6 +51,9 @@ import {
 import { PortalDeviceToken } from './portal-device-token.entity';
 import { PushNotificationModule } from '../push-notification/push-notification.module';
 import { PaymentModule } from '../payment/payment.module';
+import {
+  CustomerAfterSalesCheckoutFinalizerService,
+} from './customer-after-sales-checkout-finalizer.service';
 
 @Module({
   imports: [
@@ -77,6 +81,7 @@ CustomerComplaintAttachment,
       CustomerPaymentReceiptActivity,
       CustomerAfterSalesService,
       CustomerAfterSalesRequest,
+      CustomerAfterSalesCheckout,
       CustomerAfterSalesRequestActivity,
       CustomerAfterSalesRequestProof,
       CustomerAfterSalesRequestRating,
@@ -98,7 +103,7 @@ PortalDeviceToken,
   CustomerAuthController,
   CustomerPaymentLaunchController,
 ],
-  providers: [CustomerPortalService],
-  exports: [CustomerPortalService],
+  providers: [CustomerPortalService, CustomerAfterSalesCheckoutFinalizerService,],
+  exports: [CustomerPortalService, CustomerAfterSalesCheckoutFinalizerService,],
 })
 export class CustomerPortalModule {}

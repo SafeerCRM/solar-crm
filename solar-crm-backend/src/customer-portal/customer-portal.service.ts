@@ -55,6 +55,10 @@ import {
   CustomerAfterSalesRequestStatus,
   CustomerAfterSalesPaymentStatus,
 } from './customer-after-sales-request.entity';
+import {
+  CustomerAfterSalesCheckout,
+  CustomerAfterSalesCheckoutStatus,
+} from './customer-after-sales-checkout.entity';
 import { CustomerAfterSalesRequestActivity } from './customer-after-sales-request-activity.entity';
 import {
   CustomerAfterSalesRequestProof,
@@ -183,6 +187,10 @@ private readonly afterSalesServiceRepository: Repository<CustomerAfterSalesServi
 
 @InjectRepository(CustomerAfterSalesRequest)
 private readonly afterSalesRequestRepository: Repository<CustomerAfterSalesRequest>,
+
+@InjectRepository(CustomerAfterSalesCheckout)
+private readonly afterSalesCheckoutRepository:
+  Repository<CustomerAfterSalesCheckout>,
 
 @InjectRepository(CustomerAfterSalesRequestActivity)
 private readonly afterSalesRequestActivityRepository: Repository<CustomerAfterSalesRequestActivity>,
@@ -1710,6 +1718,278 @@ private async addAfterSalesRequestActivity(
     performedBy: user?.id || user?.userId || null,
     performedByName: user?.name || user?.email || 'System',
   });
+}
+
+async prepareAfterSalesRequestFromCustomer(
+  customerId: number,
+  body: any,
+) {
+  const serviceId = Number(
+    body?.serviceId || 0,
+  );
+
+  if (!serviceId) {
+    throw new BadRequestException(
+      'Service is required',
+    );
+  }
+
+  const service =
+    await this.afterSalesServiceRepository.findOne({
+      where: {
+        id: serviceId,
+        isHidden: false,
+        isActive: true,
+      } as any,
+    });
+
+  if (!service) {
+    throw new NotFoundException(
+      'Service not available',
+    );
+  }
+
+  const servicePrice =
+    Number(service.price || 0);
+
+  /*
+   * Free service:
+   * preserve the existing workflow exactly.
+   * The actual After-Sales request is created
+   * immediately.
+   */
+  if (
+    !service.isPaidService ||
+    servicePrice <= 0
+  ) {
+    const request =
+      await this.createAfterSalesRequestFromCustomer(
+        customerId,
+        body,
+      );
+
+    return {
+      requiresPayment: false,
+      request,
+    };
+  }
+
+  /*
+   * Paid service:
+   * create only the private checkout.
+   * No CustomerAfterSalesRequest exists yet.
+   */
+  const checkout =
+    await this.createAfterSalesCheckoutFromCustomer(
+      customerId,
+      body,
+    );
+
+  return {
+    requiresPayment: true,
+    checkout,
+  };
+}
+
+async createAfterSalesCheckoutFromCustomer(
+  customerId: number,
+  body: any,
+) {
+  const serviceId = Number(
+    body?.serviceId || 0,
+  );
+
+  if (!serviceId) {
+    throw new BadRequestException(
+      'Service is required',
+    );
+  }
+
+  const customer =
+    await this.customerRepository.findOne({
+      where: {
+        id: customerId,
+        isHidden: false,
+      } as any,
+    });
+
+  if (!customer) {
+    throw new NotFoundException(
+      'Customer not found',
+    );
+  }
+
+  const service =
+    await this.afterSalesServiceRepository.findOne({
+      where: {
+        id: serviceId,
+        isHidden: false,
+        isActive: true,
+      } as any,
+    });
+
+  if (!service) {
+    throw new NotFoundException(
+      'Service not available',
+    );
+  }
+
+  const servicePrice =
+    Number(service.price || 0);
+
+  if (
+    !service.isPaidService ||
+    !Number.isFinite(servicePrice) ||
+    servicePrice <= 0
+  ) {
+    throw new BadRequestException(
+      'This service does not require online payment',
+    );
+  }
+
+  const projects =
+    await this.projectRepository.find({
+      where: {
+        customerId,
+        isHidden: false,
+      } as any,
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+
+  let selectedProject: any = null;
+
+  if (body?.projectId) {
+    selectedProject =
+      projects.find(
+        (project: any) =>
+          Number(project.id) ===
+          Number(body.projectId),
+      ) || null;
+
+    if (!selectedProject) {
+      throw new BadRequestException(
+        'Selected project does not belong to this customer',
+      );
+    }
+  } else {
+    selectedProject =
+      projects[0] || null;
+  }
+
+  const attachments =
+    Array.isArray(body?.attachments)
+      ? body.attachments
+      : [];
+
+  const checkout =
+  new CustomerAfterSalesCheckout();
+
+checkout.customerId =
+  Number(customer.id);
+
+checkout.customerName =
+  customer.customerName || '';
+
+checkout.customerPhone =
+  customer.mobile ||
+  customer.alternateMobile ||
+  '';
+
+checkout.customerCode =
+  customer.customerCode || '';
+
+checkout.projectId =
+  selectedProject?.id || null;
+
+checkout.projectName =
+  (selectedProject as any)
+    ?.projectName ||
+  selectedProject?.customerName ||
+  '';
+
+checkout.projectAddress =
+  selectedProject?.address || '';
+
+checkout.branchName =
+  selectedProject?.branchName ||
+  customer.branchName ||
+  '';
+
+  checkout.projectOwnerId =
+  selectedProject?.projectOwnerId ||
+  null;
+
+checkout.projectOwnerName =
+  selectedProject?.projectOwnerName ||
+  '';
+
+checkout.serviceId =
+  Number(service.id);
+
+checkout.serviceName =
+  service.serviceName;
+
+checkout.serviceCategory =
+  service.category || '';
+
+checkout.servicePrice =
+  servicePrice;
+
+checkout.preferredDate =
+  body?.preferredDate
+    ? new Date(
+        body.preferredDate,
+      )
+    : null;
+
+checkout.customerRemarks =
+  String(
+    body?.customerRemarks || '',
+  ).trim();
+
+checkout.customerAttachments =
+  attachments;
+
+checkout.status =
+  CustomerAfterSalesCheckoutStatus.PENDING;
+
+checkout.createdRequestId =
+  null;
+
+checkout.gatewayOrderId =
+  null;
+
+checkout.paidAt =
+  null;
+
+checkout.completedAt =
+  null;
+
+  const savedCheckout =
+    await this.afterSalesCheckoutRepository.save(
+      checkout,
+    );
+
+  return {
+    checkoutId:
+      Number(savedCheckout.id),
+
+    serviceId:
+      Number(savedCheckout.serviceId),
+
+    serviceName:
+      savedCheckout.serviceName,
+
+    payableAmount:
+      Number(
+        savedCheckout.servicePrice,
+      ),
+
+    status:
+      savedCheckout.status,
+  };
 }
 
 
@@ -4755,6 +5035,85 @@ private async getCustomerAfterSalesPaymentDetails(
   };
 }
 
+async validateCustomerAfterSalesCheckoutPaymentLaunch(
+  customerId: number,
+  checkoutId: number,
+) {
+  const normalizedCustomerId =
+    Number(customerId);
+
+  const normalizedCheckoutId =
+    Number(checkoutId);
+
+  if (
+    !Number.isInteger(normalizedCustomerId) ||
+    normalizedCustomerId <= 0 ||
+    !Number.isInteger(normalizedCheckoutId) ||
+    normalizedCheckoutId <= 0
+  ) {
+    throw new BadRequestException(
+      'Invalid after-sales checkout',
+    );
+  }
+
+  const checkout =
+    await this.afterSalesCheckoutRepository.findOne({
+      where: {
+        id: normalizedCheckoutId,
+        customerId: normalizedCustomerId,
+      } as any,
+    });
+
+  if (!checkout) {
+    throw new NotFoundException(
+      'After-sales checkout not found',
+    );
+  }
+
+  if (
+    checkout.status ===
+      CustomerAfterSalesCheckoutStatus.COMPLETED ||
+    checkout.createdRequestId
+  ) {
+    throw new BadRequestException(
+      'After-sales request has already been submitted',
+    );
+  }
+
+  if (
+    checkout.status ===
+    CustomerAfterSalesCheckoutStatus.CANCELLED
+  ) {
+    throw new BadRequestException(
+      'After-sales checkout has been cancelled',
+    );
+  }
+
+  const payableAmount =
+    Number(checkout.servicePrice || 0);
+
+  if (
+    !Number.isFinite(payableAmount) ||
+    payableAmount <= 0
+  ) {
+    throw new BadRequestException(
+      'After-sales checkout has no payable amount',
+    );
+  }
+
+  return {
+    checkoutId:
+      Number(checkout.id),
+
+    customerId:
+      Number(checkout.customerId),
+
+    payableAmount,
+
+    checkout,
+  };
+}
+
 async validateCustomerAfterSalesPaymentLaunch(
   customerId: number,
   requestId: number,
@@ -4769,6 +5128,99 @@ async validateCustomerAfterSalesPaymentLaunch(
     requestId: Number(details.request.id),
     payableAmount: Number(details.payableAmount),
   };
+}
+
+async initiateCustomerAfterSalesCheckoutPayment(
+  customerId: number,
+  checkoutId: number,
+  returnUrl: string,
+  paymentSource: 'APP' | 'WEB' = 'WEB',
+) {
+  const source =
+    String(
+      paymentSource || 'WEB',
+    )
+      .trim()
+      .toUpperCase();
+
+  if (
+    source !== 'APP' &&
+    source !== 'WEB'
+  ) {
+    throw new BadRequestException(
+      'Invalid payment source',
+    );
+  }
+
+  /*
+   * Re-read the checkout immediately before
+   * ICICI initiation.
+   *
+   * servicePrice was snapshotted server-side
+   * when the customer prepared the request.
+   */
+  const details =
+    await this
+      .validateCustomerAfterSalesCheckoutPaymentLaunch(
+        customerId,
+        checkoutId,
+      );
+
+  const customer =
+    await this.customerRepository.findOne({
+      where: {
+        id: Number(customerId),
+        isHidden: false,
+      } as any,
+    });
+
+  if (!customer) {
+    throw new NotFoundException(
+      'Customer not found',
+    );
+  }
+
+  return this.iciciPaymentService
+    .initiateCustomerAfterSalesPayment({
+      merchantAccount:
+        IciciMerchantAccount.SOLARS,
+
+      purpose:
+        IciciPaymentPurpose
+          .CUSTOMER_AFTER_SALES,
+
+      /*
+       * New After-Sales flow:
+       * referenceId is checkout.id.
+       */
+      referenceId:
+        Number(details.checkoutId),
+
+      customerId:
+        Number(customerId),
+
+      amount:
+        Number(
+          details.payableAmount,
+        ),
+
+      customerName:
+        String(
+          customer.customerName ||
+          customer.customerCode ||
+          `Customer ${customerId}`,
+        ),
+
+      returnUrl,
+
+      paymentSource:
+        source as
+          | 'APP'
+          | 'WEB',
+
+      afterSalesFlow:
+  'CHECKOUT',
+    });
 }
 
 async initiateCustomerAfterSalesPayment(
