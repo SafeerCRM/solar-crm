@@ -56,7 +56,10 @@ export class CustomerAfterSalesCheckout {
   @Column({ type: 'text', nullable: true })
   branchName: string;
 
-  @Column({ nullable: true })
+  @Column({
+  type: 'integer',
+  nullable: true,
+})
 projectOwnerId: number | null;
 
 @Column({ type: 'text', nullable: true })
