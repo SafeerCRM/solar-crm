@@ -451,72 +451,265 @@ const uploadAfterSalesAttachments =
     }
   };
 
+  const payAfterSalesCheckoutOnline =
+  async (
+    checkoutId: number,
+  ) => {
+    const customerToken =
+      localStorage.getItem(
+        'customer_token',
+      );
+
+    if (!customerToken) {
+      throw new Error(
+        'Customer session has expired. Please login again.',
+      );
+    }
+
+    if (
+      !Number.isInteger(
+        Number(checkoutId),
+      ) ||
+      Number(checkoutId) <= 0
+    ) {
+      throw new Error(
+        'Invalid after-sales checkout',
+      );
+    }
+
+    const paymentSource:
+      | 'APP'
+      | 'WEB' =
+      Capacitor.isNativePlatform()
+        ? 'APP'
+        : 'WEB';
+
+    const response =
+      await fetch(
+        `${API_BASE_URL}/customer-auth/after-sales-checkouts/${checkoutId}/launch`,
+        {
+          method: 'POST',
+
+          headers: {
+            Authorization:
+              `Bearer ${customerToken}`,
+
+            'Content-Type':
+              'application/json',
+          },
+
+          body:
+            JSON.stringify({
+              paymentSource,
+            }),
+        },
+      );
+
+    const data =
+      await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        Array.isArray(
+          data?.message,
+        )
+          ? data.message.join(
+              ', ',
+            )
+          : data?.message ||
+              'Unable to start after-sales payment',
+      );
+    }
+
+    const launchUrl =
+      String(
+        data?.launchUrl ||
+          '',
+      ).trim();
+
+    /*
+     * Customer payments must always enter
+     * ICICI through the registered
+     * Aditya Solars website.
+     */
+    if (
+      !launchUrl.startsWith(
+        'https://adityasolars.co.in/payment/launch',
+      )
+    ) {
+      throw new Error(
+        'Invalid after-sales payment launch URL',
+      );
+    }
+
+    if (
+      Capacitor.isNativePlatform()
+    ) {
+      await Browser.open({
+        url: launchUrl,
+      });
+
+      return;
+    }
+
+    window.location.href =
+      launchUrl;
+  };
+
   const submitRequest = async () => {
-  const service = selectedService;
+  const service =
+    selectedService;
 
   if (!service) {
-    alert('Please select a service');
-    return;
-  }
-
-  if (!requestForm.preferredDate) {
-    alert('Please select preferred visit date');
+    alert(
+      'Please select a service',
+    );
     return;
   }
 
   if (
-  !service.isPaidService &&
-  selectedPhotos.length === 0
-) {
-  alert(
-    'Please upload at least one photo for this free service',
-  );
-  return;
-}
+    !requestForm.preferredDate
+  ) {
+    alert(
+      'Please select preferred visit date',
+    );
+    return;
+  }
+
+  if (
+    !service.isPaidService &&
+    selectedPhotos.length === 0
+  ) {
+    alert(
+      'Please upload at least one photo for this free service',
+    );
+    return;
+  }
 
   try {
-    setSavingServiceId(service.id);
-
-    const uploadedAttachments =
-  await uploadAfterSalesAttachments();
-
-    const res = await fetch(
-      `${API_BASE_URL}/customer-auth/after-sales-requests`,
-      {
-        method: 'POST',
-        headers: authHeaders(),
-        body: JSON.stringify({
-  serviceId: service.id,
-
-  projectId:
-    requestForm.projectId ||
-    projects[0]?.id ||
-    '',
-
-  preferredDate:
-    requestForm.preferredDate,
-
-  customerRemarks:
-    requestForm.customerRemarks ||
-    '',
-
-  attachments:
-    uploadedAttachments,
-}),
-      },
+    setSavingServiceId(
+      service.id,
     );
 
-    const data = await res.json();
+    const uploadedAttachments =
+      await uploadAfterSalesAttachments();
+
+    const res =
+      await fetch(
+        `${API_BASE_URL}/customer-auth/after-sales-requests`,
+        {
+          method: 'POST',
+
+          headers:
+            authHeaders(),
+
+          body:
+            JSON.stringify({
+              serviceId:
+                service.id,
+
+              projectId:
+                requestForm.projectId ||
+                projects[0]?.id ||
+                '',
+
+              preferredDate:
+                requestForm.preferredDate,
+
+              customerRemarks:
+                requestForm.customerRemarks ||
+                '',
+
+              attachments:
+                uploadedAttachments,
+            }),
+        },
+      );
+
+    const data =
+      await res.json();
 
     if (!res.ok) {
-      alert(data.message || 'Failed to submit service request');
+      throw new Error(
+        Array.isArray(
+          data?.message,
+        )
+          ? data.message.join(
+              ', ',
+            )
+          : data?.message ||
+              'Failed to submit service request',
+      );
+    }
+
+    /*
+     * PAID SERVICE
+     *
+     * Backend has created only a private
+     * checkout at this point.
+     *
+     * No staff-visible After-Sales Request
+     * exists until ICICI payment is verified.
+     */
+    if (
+      data?.requiresPayment ===
+        true
+    ) {
+      const checkoutId =
+        Number(
+          data?.checkout
+            ?.checkoutId,
+        );
+
+      if (
+        !Number.isInteger(
+          checkoutId,
+        ) ||
+        checkoutId <= 0
+      ) {
+        throw new Error(
+          'After-sales checkout was not created correctly',
+        );
+      }
+
+      await payAfterSalesCheckoutOnline(
+        checkoutId,
+      );
+
+      /*
+       * Native app returns here after opening
+       * the external Browser.
+       *
+       * Do not show "request submitted":
+       * the actual request does not exist yet.
+       */
       return;
     }
 
-    alert('Service request submitted successfully');
+    /*
+     * FREE SERVICE
+     *
+     * Existing behavior is preserved:
+     * backend created the actual request
+     * immediately.
+     */
+    if (
+      data?.requiresPayment !==
+        false ||
+      !data?.request
+    ) {
+      throw new Error(
+        'Unexpected after-sales request response',
+      );
+    }
+
+    alert(
+      'Service request submitted successfully',
+    );
 
     setSelectedServiceId('');
     setServiceSearch('');
+
     setRequestForm({
       projectId: '',
       preferredDate: '',
@@ -524,29 +717,35 @@ const uploadAfterSalesAttachments =
     });
 
     photoPreviews.forEach(
-  (preview) =>
-    URL.revokeObjectURL(
-      preview,
-    ),
-);
+      (preview) =>
+        URL.revokeObjectURL(
+          preview,
+        ),
+    );
 
-if (audioPreview) {
-  URL.revokeObjectURL(
-    audioPreview,
-  );
-}
+    if (audioPreview) {
+      URL.revokeObjectURL(
+        audioPreview,
+      );
+    }
 
-setSelectedPhotos([]);
-setPhotoPreviews([]);
-setSelectedAudio(null);
-setAudioPreview('');
+    setSelectedPhotos([]);
+    setPhotoPreviews([]);
+    setSelectedAudio(null);
+    setAudioPreview('');
 
     await loadData();
-  } catch (error) {
+  } catch (error: any) {
     console.error(error);
-    alert('Failed to submit service request');
+
+    alert(
+      error?.message ||
+        'Failed to submit service request',
+    );
   } finally {
-    setSavingServiceId(null);
+    setSavingServiceId(
+      null,
+    );
   }
 };
 
@@ -1225,8 +1424,25 @@ const filteredRequests =
         {uploadingAttachments
   ? 'Uploading Attachments...'
   : savingServiceId
-    ? 'Submitting...'
-    : 'Submit Service Request'}
+    ? selectedService?.isPaidService &&
+      Number(
+        selectedService?.price ||
+          0,
+      ) > 0
+      ? 'Opening Payment...'
+      : 'Submitting...'
+    : selectedService?.isPaidService &&
+        Number(
+          selectedService?.price ||
+            0,
+        ) > 0
+      ? `Pay ₹${Number(
+          selectedService?.price ||
+            0,
+        ).toLocaleString(
+          'en-IN',
+        )} & Submit Request`
+      : 'Submit Service Request'}
       </button>
     </div>
   )}
