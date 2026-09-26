@@ -102,7 +102,10 @@ preferredDate: Date | null;
    * Populated only after successful payment settlement creates
    * the actual CustomerAfterSalesRequest.
    */
-  @Column({ nullable: true })
+  @Column({
+  type: 'integer',
+  nullable: true,
+})
 createdRequestId: number | null;
 
   @Column({ type: 'varchar', length: 20, nullable: true })
