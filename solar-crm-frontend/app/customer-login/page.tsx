@@ -55,12 +55,11 @@ export default function CustomerLoginPage() {
   };
 
   return (
-    <main className="relative min-h-[100dvh] w-full max-w-full overflow-x-hidden bg-gradient-to-br from-orange-50 via-yellow-50 to-emerald-50">
+    <main className="relative min-h-screen bg-gradient-to-br from-orange-50 via-yellow-50 to-emerald-50 flex items-center justify-center overflow-x-hidden px-4">
       <div className="absolute left-[-80px] top-[-80px] h-64 w-64 rounded-full bg-yellow-300/40 blur-3xl" />
       <div className="absolute bottom-[-100px] right-[-80px] h-72 w-72 rounded-full bg-emerald-300/40 blur-3xl" />
 
-      <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-full items-start justify-center overflow-x-hidden px-4 py-6 md:items-center md:py-8 lg:max-w-6xl">
-        <div className="grid w-full overflow-hidden rounded-[2rem] bg-white shadow-2xl md:grid-cols-2">
+      <div className="relative grid w-full max-w-6xl overflow-hidden rounded-[2rem] bg-white shadow-2xl md:grid-cols-2">
           <div className="relative hidden min-h-[620px] overflow-hidden bg-gradient-to-br from-orange-500 via-yellow-500 to-emerald-500 p-10 text-white md:flex md:flex-col md:justify-between">
             <div>
               <div className="inline-flex rounded-full bg-white/20 px-4 py-2 text-sm font-semibold backdrop-blur">
@@ -164,7 +163,7 @@ export default function CustomerLoginPage() {
             </div>
           </div>
         </div>
-      </div>
+      
     </main>
   );
 }

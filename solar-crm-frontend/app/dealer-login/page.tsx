@@ -52,13 +52,12 @@ export default function DealerLoginPage() {
   };
 
   return (
-    <main className="relative min-h-[100dvh] w-full max-w-full overflow-x-hidden bg-slate-950 text-white">
+    <main className="relative min-h-screen bg-slate-950 text-white flex items-center justify-center overflow-x-hidden px-4">
       <div className="absolute left-[-120px] top-[-120px] h-80 w-80 rounded-full bg-orange-500/30 blur-3xl" />
       <div className="absolute right-[-120px] top-20 h-96 w-96 rounded-full bg-blue-500/25 blur-3xl" />
       <div className="absolute bottom-[-140px] left-1/3 h-96 w-96 rounded-full bg-yellow-400/20 blur-3xl" />
 
-      <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-full items-start justify-center overflow-x-hidden px-4 py-6 md:items-center md:py-8 lg:max-w-7xl">
-        <div className="grid w-full min-w-0 max-w-full overflow-hidden rounded-[2.5rem] border border-white/10 bg-white/10 shadow-2xl backdrop-blur-xl lg:grid-cols-2">
+      <div className="relative grid w-full min-w-0 max-w-7xl overflow-hidden rounded-[2.5rem] border border-white/10 bg-white/10 shadow-2xl backdrop-blur-xl lg:grid-cols-2">
           <section className="relative hidden min-h-[660px] overflow-hidden p-10 lg:flex lg:flex-col lg:justify-between">
             <div className="absolute inset-0 bg-gradient-to-br from-blue-700 via-slate-900 to-orange-500" />
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.25),transparent_35%)]" />
@@ -164,7 +163,7 @@ export default function DealerLoginPage() {
             </div>
           </section>
         </div>
-      </div>
+      
     </main>
   );
 }
