@@ -43846,6 +43846,64 @@ savedFinalInvoice.pendingAmount = Math.max(
     }
   }
 
+    /*
+   * Final payment reconciliation.
+   *
+   * At this point all invoice-level discount and delivery-charge
+   * adjustments are complete, so totalAmount is final.
+   *
+   * Carry the exact dealer-order payment position into the invoice
+   * and cap paidAmount at the final invoice total.
+   */
+  const finalInvoiceForPayment =
+    await this.projectFinalInvoiceRepository.findOne({
+      where: {
+        id: Number(finalInvoice.id),
+      },
+    });
+
+  if (finalInvoiceForPayment) {
+    const finalInvoiceTotal = Math.max(
+      Number(finalInvoiceForPayment.totalAmount || 0),
+      0,
+    );
+
+    const finalOrderPaidAmount = Math.max(
+      Number(order.paidAmount || 0),
+      0,
+    );
+
+    finalInvoiceForPayment.paidAmount = Math.min(
+      finalOrderPaidAmount,
+      finalInvoiceTotal,
+    );
+
+    finalInvoiceForPayment.pendingAmount = Math.max(
+      finalInvoiceTotal -
+        Number(finalInvoiceForPayment.paidAmount || 0),
+      0,
+    );
+
+    await this.projectFinalInvoiceRepository.save(
+      finalInvoiceForPayment,
+    );
+
+    /*
+     * Keep dealer order financial snapshot aligned with
+     * the finalized invoice.
+     */
+    order.totalAmount = finalInvoiceTotal;
+    order.paidAmount = finalOrderPaidAmount;
+    order.pendingAmount = Math.max(
+      finalInvoiceTotal - finalOrderPaidAmount,
+      0,
+    );
+
+    await this.projectDealerOrderRepository.save(
+      order,
+    );
+  }
+
   const portalDealer =
   await this.dealerRepository
     .createQueryBuilder('dealer')
