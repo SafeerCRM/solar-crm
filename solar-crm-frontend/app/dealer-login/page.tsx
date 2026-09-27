@@ -52,7 +52,7 @@ export default function DealerLoginPage() {
   };
 
   return (
-    <main className="relative min-h-screen bg-slate-950 text-white flex items-center justify-center overflow-x-hidden px-4">
+    <main className="relative h-screen w-full overflow-hidden bg-slate-950 text-white flex items-center justify-center px-4">
       <div className="absolute left-[-120px] top-[-120px] h-80 w-80 rounded-full bg-orange-500/30 blur-3xl" />
       <div className="absolute right-[-120px] top-20 h-96 w-96 rounded-full bg-blue-500/25 blur-3xl" />
       <div className="absolute bottom-[-140px] left-1/3 h-96 w-96 rounded-full bg-yellow-400/20 blur-3xl" />

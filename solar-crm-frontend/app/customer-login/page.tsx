@@ -55,7 +55,7 @@ export default function CustomerLoginPage() {
   };
 
   return (
-    <main className="relative min-h-screen bg-gradient-to-br from-orange-50 via-yellow-50 to-emerald-50 flex items-center justify-center overflow-x-hidden px-4">
+    <main className="relative h-screen w-full overflow-hidden bg-gradient-to-br from-orange-50 via-yellow-50 to-emerald-50 flex items-center justify-center px-4">
       <div className="absolute left-[-80px] top-[-80px] h-64 w-64 rounded-full bg-yellow-300/40 blur-3xl" />
       <div className="absolute bottom-[-100px] right-[-80px] h-72 w-72 rounded-full bg-emerald-300/40 blur-3xl" />
 
