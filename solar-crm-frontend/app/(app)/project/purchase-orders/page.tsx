@@ -193,6 +193,7 @@ type MaterialMasterItem = {
   brand?: string;
   unit?: string;
   rate?: number;
+  sellingRate?: number;
   hsnCode?: string;
   gstPercent?: number;
 };
@@ -4167,7 +4168,7 @@ const generateProformaInvoice = async () => {
                     material.hsnCode || '',
 
                   sellingRate: String(
-                    material.rate || '',
+                    material.sellingRate || '',
                   ),
 
                   gstPercent: String(
@@ -4736,7 +4737,7 @@ onChange={(e) =>
                     material.hsnCode || '',
 
                   finalRate: String(
-                    material.rate || '',
+                    material.sellingRate || '',
                   ),
 
                   gstPercent: String(
