@@ -43709,6 +43709,35 @@ if (savedInvoiceForOrder) {
     0,
   );
 
+  /*
+   * This Final Invoice belongs to this exact dealer order.
+   * Any payment already approved/reconciled against the order
+   * must therefore carry forward to the invoice.
+   *
+   * Cap paidAmount at the invoice total so small gateway/payment
+   * rounding differences cannot make the invoice overpaid.
+   */
+  const orderPaidAmount = Math.max(
+    Number(order.paidAmount || 0),
+    0,
+  );
+
+  const invoiceTotalAmount = Math.max(
+    Number(savedInvoiceForOrder.totalAmount || 0),
+    0,
+  );
+
+  savedInvoiceForOrder.paidAmount = Math.min(
+    orderPaidAmount,
+    invoiceTotalAmount,
+  );
+
+  savedInvoiceForOrder.pendingAmount = Math.max(
+    invoiceTotalAmount -
+      Number(savedInvoiceForOrder.paidAmount || 0),
+    0,
+  );
+
   if (
   manualInvoiceNumber
 ) {
