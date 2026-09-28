@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   Get,
   Post,
@@ -14,8 +15,29 @@ import type { Request, Response } from 'express';
 
 import { createHmac, timingSafeEqual } from 'crypto';
 
+import { WhatsappService } from './whatsapp.service';
+
 @Controller('webhooks/whatsapp')
 export class WhatsappController {
+
+      constructor(
+    private readonly whatsappService: WhatsappService,
+  ) {}
+
+  @Post('test-send')
+  async testSend(
+    @Body()
+    body: {
+      to: string;
+      message: string;
+    },
+  ) {
+    return this.whatsappService.sendTextMessage(
+      body.to,
+      body.message,
+    );
+  }
+  
   @Get()
   verifyWebhook(
     @Query('hub.mode') mode: string,
