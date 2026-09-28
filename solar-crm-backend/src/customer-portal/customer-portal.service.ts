@@ -25,6 +25,11 @@ import {
   CustomerAnnouncementDelivery,
 } from './customer-announcement-delivery.entity';
 import { CustomerCleaningReminder } from './customer-cleaning-reminder.entity';
+import { CustomerCleaningSetting } from './customer-cleaning-setting.entity';
+import {
+  CustomerCleaningCheckout,
+  CustomerCleaningCheckoutStatus,
+} from './customer-cleaning-checkout.entity';
 import * as jwt from 'jsonwebtoken';
 import {
   CustomerComplaintAttachment,
@@ -176,7 +181,15 @@ private readonly customerAnnouncementDeliveryRepository:
 private readonly cleaningReminderRepository:
   Repository<CustomerCleaningReminder>,
 
-    @InjectRepository(DealerCompanyBankDetail)
+@InjectRepository(CustomerCleaningSetting)
+private readonly cleaningSettingRepository:
+  Repository<CustomerCleaningSetting>,
+
+@InjectRepository(CustomerCleaningCheckout)
+private readonly cleaningCheckoutRepository:
+  Repository<CustomerCleaningCheckout>,
+
+@InjectRepository(DealerCompanyBankDetail)
 private readonly companyBankDetailRepository: Repository<DealerCompanyBankDetail>,
 
 @InjectRepository(PortalPolicy)
@@ -4141,6 +4154,199 @@ async getCustomerStaffDirectory() {
   });
 }
 
+async getCleaningSetting() {
+  let setting = await this.cleaningSettingRepository.findOne({
+    where: {},
+    order: { id: 'ASC' },
+  });
+
+  if (!setting) {
+    setting = this.cleaningSettingRepository.create({
+      serviceCharge: 500,
+      isPaymentRequired: true,
+    });
+
+    setting = await this.cleaningSettingRepository.save(setting);
+  }
+
+  return setting;
+}
+
+async updateCleaningSetting(body: any) {
+  const serviceCharge = Number(body?.serviceCharge);
+
+  if (!Number.isFinite(serviceCharge) || serviceCharge < 0) {
+    throw new BadRequestException(
+      'Cleaning service charge must be a valid amount',
+    );
+  }
+
+  let setting = await this.cleaningSettingRepository.findOne({
+    where: {},
+    order: { id: 'ASC' },
+  });
+
+  if (!setting) {
+    setting = this.cleaningSettingRepository.create();
+  }
+
+  setting.serviceCharge = serviceCharge;
+
+/*
+ * Customer-raised Cleaning Requests always
+ * require payment. Only the charge is
+ * configurable by Owner.
+ */
+setting.isPaymentRequired = true;
+
+return this.cleaningSettingRepository.save(setting);
+}
+
+async prepareCleaningRequestFromCustomer(
+  customerId: number,
+  body: any,
+) {
+  const numericCustomerId = Number(customerId);
+  const projectId = Number(body?.projectId || 0);
+  const cleaningDateValue = String(
+    body?.cleaningDate || '',
+  ).trim();
+
+  if (
+    !Number.isInteger(numericCustomerId) ||
+    numericCustomerId <= 0
+  ) {
+    throw new BadRequestException(
+      'Customer is required',
+    );
+  }
+
+  if (
+    !Number.isInteger(projectId) ||
+    projectId <= 0
+  ) {
+    throw new BadRequestException(
+      'Project is required',
+    );
+  }
+
+  if (!cleaningDateValue) {
+    throw new BadRequestException(
+      'Cleaning date is required',
+    );
+  }
+
+  const cleaningDate =
+    new Date(cleaningDateValue);
+
+  if (
+    Number.isNaN(cleaningDate.getTime())
+  ) {
+    throw new BadRequestException(
+      'Cleaning date is invalid',
+    );
+  }
+
+  const customer =
+    await this.customerRepository.findOne({
+      where: {
+        id: numericCustomerId,
+        isHidden: false,
+      } as any,
+    });
+
+  if (!customer) {
+    throw new NotFoundException(
+      'Customer not found',
+    );
+  }
+
+  /*
+   * Security:
+   * Never trust projectId/projectName supplied by
+   * the Customer Portal. The selected project must
+   * belong to the authenticated customer.
+   */
+  const project =
+    await this.projectRepository.findOne({
+      where: {
+        id: projectId,
+        customerId: numericCustomerId,
+        isHidden: false,
+      } as any,
+    });
+
+  if (!project) {
+    throw new NotFoundException(
+      'Project not found for customer',
+    );
+  }
+
+  const setting =
+    await this.getCleaningSetting();
+
+  const serviceCharge =
+    Number(setting.serviceCharge);
+
+  if (
+    !setting.isPaymentRequired ||
+    !Number.isFinite(serviceCharge) ||
+    serviceCharge <= 0
+  ) {
+    throw new BadRequestException(
+      'Cleaning payment configuration is invalid',
+    );
+  }
+
+  const checkout =
+    this.cleaningCheckoutRepository.create({
+      customerId: customer.id,
+      customerCode:
+        customer.customerCode || '',
+      customerName:
+        customer.customerName || '',
+      projectId: project.id,
+      projectName:
+        (project as any).projectName ||
+        project.customerName ||
+        '',
+      cleaningDate,
+      remarks: String(
+        body?.remarks || '',
+      ).trim(),
+      serviceCharge,
+      status:
+        CustomerCleaningCheckoutStatus.PENDING,
+      createdReminderId: null,
+      gatewayOrderId: null,
+      paidAt: null,
+      completedAt: null,
+    });
+
+  const savedCheckout =
+    await this.cleaningCheckoutRepository.save(
+      checkout,
+    );
+
+  return {
+    checkoutId: Number(
+      savedCheckout.id,
+    ),
+    projectId: Number(
+      savedCheckout.projectId,
+    ),
+    projectName:
+      savedCheckout.projectName,
+    cleaningDate:
+      savedCheckout.cleaningDate,
+    payableAmount: Number(
+      savedCheckout.serviceCharge,
+    ),
+    status:
+      savedCheckout.status,
+  };
+}
+
 async createCleaningReminder(body: any) {
   const reminder = this.cleaningReminderRepository.create({
     customerId: Number(body.customerId),
@@ -5128,6 +5334,163 @@ async validateCustomerAfterSalesPaymentLaunch(
     requestId: Number(details.request.id),
     payableAmount: Number(details.payableAmount),
   };
+}
+
+async validateCustomerCleaningCheckoutPaymentLaunch(
+  customerId: number,
+  checkoutId: number,
+) {
+  const normalizedCustomerId =
+    Number(customerId);
+
+  const normalizedCheckoutId =
+    Number(checkoutId);
+
+  if (
+    !Number.isInteger(normalizedCustomerId) ||
+    normalizedCustomerId <= 0 ||
+    !Number.isInteger(normalizedCheckoutId) ||
+    normalizedCheckoutId <= 0
+  ) {
+    throw new BadRequestException(
+      'Invalid cleaning checkout',
+    );
+  }
+
+  const checkout =
+    await this.cleaningCheckoutRepository.findOne({
+      where: {
+        id: normalizedCheckoutId,
+        customerId: normalizedCustomerId,
+      } as any,
+    });
+
+  if (!checkout) {
+    throw new NotFoundException(
+      'Cleaning checkout not found',
+    );
+  }
+
+  if (
+    checkout.status ===
+      CustomerCleaningCheckoutStatus.COMPLETED
+  ) {
+    throw new BadRequestException(
+      'Cleaning checkout is already completed',
+    );
+  }
+
+  if (
+    checkout.status ===
+      CustomerCleaningCheckoutStatus.CANCELLED
+  ) {
+    throw new BadRequestException(
+      'Cleaning checkout has been cancelled',
+    );
+  }
+
+  const payableAmount =
+    Number(checkout.serviceCharge || 0);
+
+  if (
+    !Number.isFinite(payableAmount) ||
+    payableAmount <= 0
+  ) {
+    throw new BadRequestException(
+      'Cleaning checkout has no payable amount',
+    );
+  }
+
+  return {
+    checkoutId:
+      Number(checkout.id),
+
+    customerId:
+      Number(checkout.customerId),
+
+    payableAmount,
+
+    checkout,
+  };
+}
+
+async initiateCustomerCleaningCheckoutPayment(
+  customerId: number,
+  checkoutId: number,
+  returnUrl: string,
+  paymentSource: 'APP' | 'WEB' = 'WEB',
+) {
+  const source =
+    String(
+      paymentSource || 'WEB',
+    )
+      .trim()
+      .toUpperCase();
+
+  if (
+    source !== 'APP' &&
+    source !== 'WEB'
+  ) {
+    throw new BadRequestException(
+      'Invalid payment source',
+    );
+  }
+
+  const details =
+    await this
+      .validateCustomerCleaningCheckoutPaymentLaunch(
+        customerId,
+        checkoutId,
+      );
+
+  const customer =
+    await this.customerRepository.findOne({
+      where: {
+        id: Number(customerId),
+        isHidden: false,
+      } as any,
+    });
+
+  if (!customer) {
+    throw new NotFoundException(
+      'Customer not found',
+    );
+  }
+
+  return this.iciciPaymentService
+    .initiateCustomerCleaningPayment({
+      merchantAccount:
+        IciciMerchantAccount.SOLARS,
+
+      purpose:
+        IciciPaymentPurpose
+          .CUSTOMER_CLEANING,
+
+      referenceId:
+        Number(details.checkoutId),
+
+      customerId:
+        Number(customerId),
+
+      amount:
+        Number(
+          details.payableAmount,
+        ),
+
+      customerName:
+        String(
+          customer.customerName ||
+          customer.customerCode ||
+          `Customer ${customerId}`,
+        ),
+
+      returnUrl,
+
+      paymentSource:
+        source as
+          | 'APP'
+          | 'WEB',
+    });
 }
 
 async initiateCustomerAfterSalesCheckoutPayment(

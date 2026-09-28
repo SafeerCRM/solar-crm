@@ -18,6 +18,7 @@ export enum IciciPaymentPurpose {
   CUSTOMER_PAYMENT = 'CUSTOMER_PAYMENT',
   CUSTOMER_INSURANCE = 'CUSTOMER_INSURANCE',
   CUSTOMER_AFTER_SALES = 'CUSTOMER_AFTER_SALES',
+  CUSTOMER_CLEANING = 'CUSTOMER_CLEANING',
 }
 
 export enum IciciPaymentTransactionStatus {
@@ -64,7 +65,8 @@ export class IciciPaymentTransaction {
  * DEALER_ORDER        -> ProjectDealerOrder.id
  * CUSTOMER_PAYMENT    -> ProjectPaymentInstallment.id
  * CUSTOMER_INSURANCE  -> ProjectInsuranceRequest.id
- * CUSTOMER_AFTER_SALES -> AfterSalesRequest.id
+  * CUSTOMER_AFTER_SALES -> CustomerAfterSalesRequest.id / CustomerAfterSalesCheckout.id
+ * CUSTOMER_CLEANING    -> CustomerCleaningCheckout.id
  */
   @Column({
     type: 'enum',

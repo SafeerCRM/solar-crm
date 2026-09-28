@@ -370,6 +370,24 @@ updateReferral(
   return this.service.updateReferral(id, body, user);
 }
 
+@Roles(
+  'OWNER',
+  'CUSTOMER_MANAGER',
+  'PROJECT_MANAGER',
+  'MAINTENANCE_MANAGER',
+  'INSPECTION_MANAGER',
+)
+@Get('cleaning-setting')
+getCleaningSetting() {
+  return this.service.getCleaningSetting();
+}
+
+@Roles('OWNER')
+@Post('cleaning-setting')
+updateCleaningSetting(@Body() body: any) {
+  return this.service.updateCleaningSetting(body);
+}
+
 @Roles('OWNER', 'CUSTOMER_MANAGER', 'PROJECT_MANAGER', 'MAINTENANCE_MANAGER', 'INSPECTION_MANAGER',)
 @Get('after-sales-services')
 listAfterSalesServices(@Query() query: any) {

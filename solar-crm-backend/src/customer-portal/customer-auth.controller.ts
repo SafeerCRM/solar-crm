@@ -175,30 +175,80 @@ async getCustomerStaffDirectory(@Req() req: any) {
   return this.service.getCustomerStaffDirectory();
 }
 
+@Get('cleaning-setting')
+async getCustomerCleaningSetting(
+  @Req() req: any,
+) {
+  const authHeader =
+    req.headers?.authorization || '';
+
+  const token =
+    authHeader.replace(
+      'Bearer ',
+      '',
+    );
+
+  if (!token) {
+    throw new UnauthorizedException(
+      'Customer token missing',
+    );
+  }
+
+  const payload: any =
+    jwt.verify(
+      token,
+      'mysecretkey',
+    );
+
+  if (!payload?.customerId) {
+    throw new UnauthorizedException(
+      'Invalid customer token',
+    );
+  }
+
+  const setting =
+    await this.service
+      .getCleaningSetting();
+
+  return {
+    serviceCharge:
+      Number(
+        setting.serviceCharge,
+      ),
+  };
+}
+
 @Post('cleaning-reminders')
-async createCustomerCleaningReminder(
+async prepareCustomerCleaningRequest(
   @Req() req: any,
   @Body() body: any,
 ) {
-  const authHeader = req.headers?.authorization || '';
-  const token = authHeader.replace('Bearer ', '');
+  const authHeader =
+    req.headers?.authorization || '';
+
+  const token =
+    authHeader.replace('Bearer ', '');
 
   if (!token) {
-    throw new UnauthorizedException('Customer token missing');
+    throw new UnauthorizedException(
+      'Customer token missing',
+    );
   }
 
-  const payload: any = jwt.verify(token, 'mysecretkey');
+  const payload: any =
+    jwt.verify(token, 'mysecretkey');
 
   if (!payload?.customerId) {
-    throw new UnauthorizedException('Invalid customer token');
+    throw new UnauthorizedException(
+      'Invalid customer token',
+    );
   }
 
-  return this.service.createCleaningReminder({
-    ...body,
-    customerId: Number(payload.customerId),
-    customerCode: payload.customerCode,
-    status: 'PENDING',
-  });
+  return this.service
+    .prepareCleaningRequestFromCustomer(
+      Number(payload.customerId),
+      body,
+    );
 }
 
 @Post('referrals')
@@ -750,6 +800,130 @@ async createCustomerAfterSalesRequest(
   Number(payload.customerId),
   body,
 );
+}
+
+@Post('cleaning-checkouts/:checkoutId/launch')
+async createCustomerCleaningCheckoutPaymentLaunch(
+  @Req() req: any,
+  @Param('checkoutId') checkoutId: string,
+  @Body() body: any,
+) {
+  const authHeader =
+    req.headers?.authorization || '';
+
+  const token =
+    authHeader.replace(
+      'Bearer ',
+      '',
+    );
+
+  if (!token) {
+    throw new UnauthorizedException(
+      'Customer token missing',
+    );
+  }
+
+  const payload: any =
+    jwt.verify(
+      token,
+      'mysecretkey',
+    );
+
+  const customerId =
+    Number(
+      payload?.customerId,
+    );
+
+  const normalizedCheckoutId =
+    Number(
+      checkoutId,
+    );
+
+  if (
+    !Number.isInteger(customerId) ||
+    customerId <= 0
+  ) {
+    throw new UnauthorizedException(
+      'Invalid customer token',
+    );
+  }
+
+  if (
+    !Number.isInteger(
+      normalizedCheckoutId,
+    ) ||
+    normalizedCheckoutId <= 0
+  ) {
+    throw new BadRequestException(
+      'Invalid cleaning checkout',
+    );
+  }
+
+  const paymentSource =
+    String(
+      body?.paymentSource ||
+      'WEB',
+    )
+      .trim()
+      .toUpperCase();
+
+  if (
+    paymentSource !== 'APP' &&
+    paymentSource !== 'WEB'
+  ) {
+    throw new BadRequestException(
+      'Invalid payment source',
+    );
+  }
+
+  await this.service
+    .validateCustomerCleaningCheckoutPaymentLaunch(
+      customerId,
+      normalizedCheckoutId,
+    );
+
+  const launchToken =
+    await this.iciciPaymentLaunchService
+      .createCustomerLaunchToken({
+        purpose:
+          IciciPaymentLaunchPurpose
+            .CUSTOMER_CLEANING,
+
+        referenceId:
+          normalizedCheckoutId,
+
+        customerId,
+
+        paymentSource:
+          paymentSource as
+            | 'APP'
+            | 'WEB',
+      });
+
+  const websiteBaseUrl =
+    String(
+      process.env
+        .ICICI_PAYMENT_LAUNCH_BASE_URL ||
+      '',
+    )
+      .trim()
+      .replace(/\/+$/, '');
+
+  if (
+    websiteBaseUrl !==
+    'https://adityasolars.co.in'
+  ) {
+    throw new Error(
+      'ICICI_PAYMENT_LAUNCH_BASE_URL is not configured correctly',
+    );
+  }
+
+  return {
+    launchUrl:
+      `${websiteBaseUrl}/payment/launch#flow=customer&token=${encodeURIComponent(
+        launchToken,
+      )}`,
+  };
 }
 
 @Post('after-sales-checkouts/:checkoutId/launch')

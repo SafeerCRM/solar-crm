@@ -57,6 +57,10 @@ import {
   CustomerAfterSalesCheckoutFinalizerService,
 } from '../customer-portal/customer-after-sales-checkout-finalizer.service';
 
+import {
+  CustomerCleaningCheckoutFinalizerService,
+} from '../customer-portal/customer-cleaning-checkout-finalizer.service';
+
 type IciciMerchantConfig = {
   merchantId: string;
   aggregatorId: string;
@@ -79,12 +83,13 @@ amount: number;
 
   returnUrl: string;
 
-  businessSettlementType?:
-  | 'DEALER_INSURANCE'
-  | 'DEALER_ORDER'
+ businessSettlementType?:
   | 'CUSTOMER_PAYMENT'
+  | 'DEALER_ORDER'
+  | 'DEALER_INSURANCE'
   | 'CUSTOMER_INSURANCE'
-  | 'CUSTOMER_AFTER_SALES';
+  | 'CUSTOMER_AFTER_SALES'
+  | 'CUSTOMER_CLEANING';
 
 /*
  * Only CUSTOMER_AFTER_SALES uses this.
@@ -148,6 +153,9 @@ private readonly customerAfterSalesRequestRepository:
 
 private readonly customerAfterSalesCheckoutFinalizerService:
   CustomerAfterSalesCheckoutFinalizerService,
+
+  private readonly customerCleaningCheckoutFinalizerService:
+  CustomerCleaningCheckoutFinalizerService,
 
 private readonly projectService:
   ProjectService,
@@ -1804,6 +1812,379 @@ if (
      */
     throw new BadRequestException(
       'After-sales payment initiation is already in progress. Please try again shortly.',
+    );
+  }
+}
+
+async initiateCustomerCleaningPayment(
+  input: InitiatePaymentInput,
+) {
+  /*
+   * This wrapper is ONLY for Customer Portal
+   * cleaning payments through ADITYA SOLARS.
+   */
+  if (
+    input.purpose !==
+      IciciPaymentPurpose.CUSTOMER_CLEANING ||
+    input.merchantAccount !==
+      IciciMerchantAccount.SOLARS
+  ) {
+    throw new BadRequestException(
+      'Invalid customer cleaning payment configuration',
+    );
+  }
+
+  const referenceId =
+    Number(
+      input.referenceId,
+    );
+
+  const customerId =
+    Number(
+      input.customerId,
+    );
+
+  if (
+    !Number.isInteger(referenceId) ||
+    referenceId <= 0 ||
+    !Number.isInteger(customerId) ||
+    customerId <= 0
+  ) {
+    throw new BadRequestException(
+      'Invalid customer cleaning payment reference',
+    );
+  }
+
+  const previousTransaction =
+    await this.transactionRepository
+      .createQueryBuilder(
+        'transaction',
+      )
+      .where(
+        'transaction.purpose = :purpose',
+        {
+          purpose:
+            IciciPaymentPurpose
+              .CUSTOMER_CLEANING,
+        },
+      )
+      .andWhere(
+        'transaction.referenceId = :referenceId',
+        {
+          referenceId,
+        },
+      )
+      .andWhere(
+        'transaction.customerId = :customerId',
+        {
+          customerId,
+        },
+      )
+      .andWhere(
+        'transaction.merchantAccount = :merchantAccount',
+        {
+          merchantAccount:
+            IciciMerchantAccount.SOLARS,
+        },
+      )
+      .orderBy(
+        'transaction.createdAt',
+        'DESC',
+      )
+      .getOne();
+
+  if (
+    previousTransaction &&
+    (
+      previousTransaction.status ===
+        IciciPaymentTransactionStatus.CREATED ||
+      previousTransaction.status ===
+        IciciPaymentTransactionStatus.INITIATED ||
+      previousTransaction.status ===
+        IciciPaymentTransactionStatus.PENDING
+    )
+  ) {
+    await this.updateActivePaymentSource(
+      previousTransaction,
+      input.paymentSource,
+    );
+  }
+
+  if (
+    previousTransaction?.status ===
+      IciciPaymentTransactionStatus.SUCCESS
+  ) {
+    await this.dispatchSuccessfulTransaction(
+      previousTransaction,
+    );
+
+    throw new BadRequestException(
+      'Cleaning payment has already been completed',
+    );
+  }
+
+  /*
+   * A PENDING transaction may already represent
+   * money received by ICICI. Reconcile it before
+   * ever allowing another payment attempt.
+   */
+  if (
+    previousTransaction?.status ===
+      IciciPaymentTransactionStatus.PENDING
+  ) {
+    const reconciled =
+      await this.reconcileTransactionStatus(
+        previousTransaction,
+      );
+
+    if (
+      reconciled.status ===
+        IciciPaymentTransactionStatus.SUCCESS
+    ) {
+      throw new BadRequestException(
+        'Cleaning payment has already been completed',
+      );
+    }
+
+    if (
+      reconciled.status ===
+        IciciPaymentTransactionStatus.PENDING
+    ) {
+      throw new BadRequestException(
+        'Previous cleaning payment is still being processed. Please try again later.',
+      );
+    }
+
+    /*
+     * FAILED may continue and create a fresh
+     * payment attempt.
+     */
+  }
+
+  /*
+   * Reuse a recent hosted ICICI session instead
+   * of creating another transaction.
+   */
+  if (
+    previousTransaction?.status ===
+      IciciPaymentTransactionStatus.INITIATED
+  ) {
+    const initiatedAt =
+      previousTransaction.initiatedAt ||
+      previousTransaction.createdAt;
+
+    const ageMilliseconds =
+      Date.now() -
+      new Date(
+        initiatedAt,
+      ).getTime();
+
+    const reuseWindowMilliseconds =
+      15 * 60 * 1000;
+
+    if (
+      previousTransaction.redirectUri &&
+      previousTransaction.transactionContext &&
+      Number.isFinite(
+        ageMilliseconds,
+      ) &&
+      ageMilliseconds >= 0 &&
+      ageMilliseconds <=
+        reuseWindowMilliseconds
+    ) {
+      return {
+        success: true,
+        transactionId:
+          previousTransaction.id,
+        merchantTxnNo:
+          previousTransaction
+            .merchantTxnNo,
+        amount:
+          Number(
+            previousTransaction.amount,
+          ),
+        status:
+          previousTransaction.status,
+        paymentUrl:
+          `${previousTransaction.redirectUri}?tranCtx=${encodeURIComponent(
+            previousTransaction
+              .transactionContext ||
+              '',
+          )}`,
+        reused: true,
+      };
+    }
+
+    /*
+     * Never assume an old INITIATED session
+     * failed. Ask ICICI before allowing retry.
+     */
+    const reconciled =
+      await this.reconcileTransactionStatus(
+        previousTransaction,
+      );
+
+    if (
+      reconciled.status ===
+        IciciPaymentTransactionStatus.SUCCESS
+    ) {
+      throw new BadRequestException(
+        'Cleaning payment has already been completed',
+      );
+    }
+
+    if (
+      reconciled.status ===
+        IciciPaymentTransactionStatus.PENDING ||
+      reconciled.status ===
+        IciciPaymentTransactionStatus.INITIATED
+    ) {
+      throw new BadRequestException(
+        'Previous cleaning payment is still being processed. Please try again later.',
+      );
+    }
+
+    if (
+      reconciled.status !==
+        IciciPaymentTransactionStatus.FAILED
+    ) {
+      throw new BadRequestException(
+        'Previous cleaning payment could not be confirmed as failed',
+      );
+    }
+  }
+
+  /*
+   * Only a confirmed failed/terminal previous
+   * attempt may reach fresh ICICI initiation.
+   */
+  try {
+    return await this.initiatePayment({
+      ...input,
+      businessSettlementType:
+        'CUSTOMER_CLEANING',
+    });
+  } catch (error: any) {
+    /*
+     * The DB active-attempt index will prevent
+     * two simultaneous Cleaning transactions
+     * for the same checkout.
+     */
+    if (
+      error?.code !== '23505'
+    ) {
+      throw error;
+    }
+
+    const concurrentTransaction =
+      await this.transactionRepository
+        .createQueryBuilder(
+          'transaction',
+        )
+        .where(
+          'transaction.purpose = :purpose',
+          {
+            purpose:
+              IciciPaymentPurpose
+                .CUSTOMER_CLEANING,
+          },
+        )
+        .andWhere(
+          'transaction.referenceId = :referenceId',
+          {
+            referenceId,
+          },
+        )
+        .andWhere(
+          'transaction.customerId = :customerId',
+          {
+            customerId,
+          },
+        )
+        .andWhere(
+          'transaction.merchantAccount = :merchantAccount',
+          {
+            merchantAccount:
+              IciciMerchantAccount.SOLARS,
+          },
+        )
+        .andWhere(
+          'transaction.status IN (:...activeStatuses)',
+          {
+            activeStatuses: [
+              IciciPaymentTransactionStatus.CREATED,
+              IciciPaymentTransactionStatus.INITIATED,
+              IciciPaymentTransactionStatus.PENDING,
+            ],
+          },
+        )
+        .orderBy(
+          'transaction.createdAt',
+          'DESC',
+        )
+        .getOne();
+
+    if (
+      !concurrentTransaction
+    ) {
+      throw error;
+    }
+
+    await this.updateActivePaymentSource(
+      concurrentTransaction,
+      input.paymentSource,
+    );
+
+    const businessSettlementType =
+      String(
+        concurrentTransaction
+          .gatewayMetadata
+          ?.businessSettlementType ||
+          '',
+      );
+
+    if (
+      businessSettlementType !==
+        'CUSTOMER_CLEANING'
+    ) {
+      throw error;
+    }
+
+    /*
+     * If the concurrent request already obtained
+     * an ICICI hosted session, reuse it.
+     */
+    if (
+      concurrentTransaction.status ===
+        IciciPaymentTransactionStatus.INITIATED &&
+      concurrentTransaction.redirectUri &&
+      concurrentTransaction.transactionContext
+    ) {
+      return {
+        success: true,
+        transactionId:
+          concurrentTransaction.id,
+        merchantTxnNo:
+          concurrentTransaction
+            .merchantTxnNo,
+        amount:
+          Number(
+            concurrentTransaction.amount,
+          ),
+        status:
+          concurrentTransaction.status,
+        paymentUrl:
+          `${concurrentTransaction.redirectUri}?tranCtx=${encodeURIComponent(
+            concurrentTransaction
+              .transactionContext ||
+              '',
+          )}`,
+        reused: true,
+      };
+    }
+
+    throw new BadRequestException(
+      'Cleaning payment initiation is already in progress. Please try again shortly.',
     );
   }
 }
@@ -4121,6 +4502,122 @@ private async dispatchSuccessfulTransaction(
 
     return;
   }
+
+  /*
+ * Customer Cleaning
+ *
+ * Customer Portal cleaning payments are
+ * received through ADITYA SOLARS.
+ *
+ * referenceId =
+ * CustomerCleaningCheckout.id.
+ *
+ * The real CustomerCleaningReminder is created
+ * only after verified successful payment.
+ */
+if (
+  transaction.purpose ===
+    IciciPaymentPurpose.CUSTOMER_CLEANING
+) {
+  if (
+    transaction.merchantAccount !==
+      IciciMerchantAccount.SOLARS
+  ) {
+    throw new BadGatewayException(
+      'Customer cleaning payment merchant mismatch',
+    );
+  }
+
+  const checkoutId =
+    Number(
+      transaction.referenceId,
+    );
+
+  const customerId =
+    Number(
+      transaction.customerId,
+    );
+
+  if (
+    !Number.isInteger(checkoutId) ||
+    checkoutId <= 0 ||
+    !Number.isInteger(customerId) ||
+    customerId <= 0
+  ) {
+    throw new BadGatewayException(
+      'Customer cleaning payment reference is invalid',
+    );
+  }
+
+  /*
+   * Only transactions created by the hardened
+   * Cleaning initiation path may create a
+   * staff-visible Cleaning Reminder.
+   */
+  if (
+    String(
+      transaction
+        .gatewayMetadata
+        ?.businessSettlementType ||
+      '',
+    ) !==
+      'CUSTOMER_CLEANING'
+  ) {
+    throw new BadGatewayException(
+      'Customer cleaning payment settlement marker mismatch',
+    );
+  }
+
+  const transactionAmount =
+    Number(
+      transaction.amount,
+    );
+
+  const merchantTxnNo =
+    String(
+      transaction.merchantTxnNo ||
+      '',
+    ).trim();
+
+  if (
+    !Number.isFinite(
+      transactionAmount,
+    ) ||
+    transactionAmount <= 0 ||
+    !merchantTxnNo
+  ) {
+    throw new BadGatewayException(
+      'Customer cleaning checkout payment transaction is invalid',
+    );
+  }
+
+  await this
+    .customerCleaningCheckoutFinalizerService
+    .finalizePaidCheckout({
+      checkoutId,
+
+      customerId,
+
+      amount:
+        transactionAmount,
+
+      merchantTxnNo,
+
+      paymentId:
+        transaction.paymentId ||
+        null,
+
+      bankTxnId:
+        transaction.bankTxnId ||
+        null,
+
+      paidAt:
+        transaction.paidAt ||
+        new Date(),
+    });
+
+  return;
+}
 
   /*
  * Customer After-Sales

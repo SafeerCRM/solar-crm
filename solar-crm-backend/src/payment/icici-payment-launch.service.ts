@@ -38,9 +38,10 @@ interface IciciCustomerPaymentLaunchPayload {
   version: 1;
 
   purpose:
-    | IciciPaymentLaunchPurpose.CUSTOMER_PAYMENT
-    | IciciPaymentLaunchPurpose.CUSTOMER_INSURANCE
-    | IciciPaymentLaunchPurpose.CUSTOMER_AFTER_SALES;
+  | IciciPaymentLaunchPurpose.CUSTOMER_PAYMENT
+  | IciciPaymentLaunchPurpose.CUSTOMER_INSURANCE
+  | IciciPaymentLaunchPurpose.CUSTOMER_AFTER_SALES
+  | IciciPaymentLaunchPurpose.CUSTOMER_CLEANING;
 
   referenceId: number;
 
@@ -572,9 +573,10 @@ export class IciciPaymentLaunchService {
 
 async createCustomerLaunchToken(input: {
   purpose:
-    | IciciPaymentLaunchPurpose.CUSTOMER_PAYMENT
-    | IciciPaymentLaunchPurpose.CUSTOMER_INSURANCE
-    | IciciPaymentLaunchPurpose.CUSTOMER_AFTER_SALES;
+  | IciciPaymentLaunchPurpose.CUSTOMER_PAYMENT
+  | IciciPaymentLaunchPurpose.CUSTOMER_INSURANCE
+  | IciciPaymentLaunchPurpose.CUSTOMER_AFTER_SALES
+  | IciciPaymentLaunchPurpose.CUSTOMER_CLEANING;
   referenceId: number;
   customerId: number;
 
@@ -626,7 +628,10 @@ afterSalesFlow?:
       .CUSTOMER_INSURANCE &&
   input.purpose !==
     IciciPaymentLaunchPurpose
-      .CUSTOMER_AFTER_SALES
+      .CUSTOMER_AFTER_SALES &&
+  input.purpose !==
+    IciciPaymentLaunchPurpose
+      .CUSTOMER_CLEANING
 ) {
   throw new BadRequestException(
     'Invalid customer payment launch purpose',
@@ -839,7 +844,10 @@ verifyCustomerLaunchToken(
       .CUSTOMER_INSURANCE &&
   payload.purpose !==
     IciciPaymentLaunchPurpose
-      .CUSTOMER_AFTER_SALES
+      .CUSTOMER_AFTER_SALES &&
+  payload.purpose !==
+    IciciPaymentLaunchPurpose
+      .CUSTOMER_CLEANING
 ) ||
 !Number.isInteger(
       Number(

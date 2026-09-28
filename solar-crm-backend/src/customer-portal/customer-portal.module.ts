@@ -54,6 +54,11 @@ import { PaymentModule } from '../payment/payment.module';
 import {
   CustomerAfterSalesCheckoutFinalizerService,
 } from './customer-after-sales-checkout-finalizer.service';
+import {
+  CustomerCleaningCheckoutFinalizerService,
+} from './customer-cleaning-checkout-finalizer.service';
+import { CustomerCleaningSetting } from './customer-cleaning-setting.entity';
+import { CustomerCleaningCheckout } from './customer-cleaning-checkout.entity';
 
 @Module({
   imports: [
@@ -69,6 +74,8 @@ CustomerComplaintAttachment,
       CustomerWorkDateRequest,
       CustomerNotification,
       CustomerCleaningReminder,
+      CustomerCleaningSetting,
+      CustomerCleaningCheckout,
       Customer,
       Project,
       ProjectExecutionActivity,
@@ -103,7 +110,16 @@ PortalDeviceToken,
   CustomerAuthController,
   CustomerPaymentLaunchController,
 ],
-  providers: [CustomerPortalService, CustomerAfterSalesCheckoutFinalizerService,],
-  exports: [CustomerPortalService, CustomerAfterSalesCheckoutFinalizerService,],
+  providers: [
+  CustomerPortalService,
+  CustomerAfterSalesCheckoutFinalizerService,
+  CustomerCleaningCheckoutFinalizerService,
+],
+
+exports: [
+  CustomerPortalService,
+  CustomerAfterSalesCheckoutFinalizerService,
+  CustomerCleaningCheckoutFinalizerService,
+],
 })
 export class CustomerPortalModule {}

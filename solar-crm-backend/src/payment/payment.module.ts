@@ -30,6 +30,18 @@ import {
   CustomerAfterSalesCheckoutFinalizerService,
 } from '../customer-portal/customer-after-sales-checkout-finalizer.service';
 
+import {
+  CustomerCleaningCheckoutFinalizerService,
+} from '../customer-portal/customer-cleaning-checkout-finalizer.service';
+
+import {
+  CustomerCleaningCheckout,
+} from '../customer-portal/customer-cleaning-checkout.entity';
+
+import {
+  CustomerCleaningReminder,
+} from '../customer-portal/customer-cleaning-reminder.entity';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -43,12 +55,15 @@ CustomerAfterSalesRequest,
 CustomerAfterSalesCheckout,
 CustomerAfterSalesRequestActivity,
 CustomerAfterSalesRequestProof,
+CustomerCleaningCheckout,
+CustomerCleaningReminder,
 IciciPaymentLaunch,
 ]),
 ProjectModule,
   ],
   providers: [
   CustomerAfterSalesCheckoutFinalizerService,
+  CustomerCleaningCheckoutFinalizerService,
   IciciPaymentService,
   IciciPaymentLaunchService,
 ],
