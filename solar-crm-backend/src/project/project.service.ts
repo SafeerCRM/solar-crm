@@ -12950,7 +12950,8 @@ async exportPaymentCollectionCsv(
       projectName: string;
       contactNumber: string;
       branchName: string;
-      totalProjectCost: number;
+projectOwnerName: string;
+totalProjectCost: number;
       amountReceived: number;
       pendingAmount: number;
       paymentReceivedPercentage: number;
@@ -13010,11 +13011,16 @@ async exportPaymentCollectionCsv(
         ).trim(),
 
       branchName:
-        String(
-          row?.branchName || '',
-        ).trim(),
+  String(
+    row?.branchName || '',
+  ).trim(),
 
-      totalProjectCost,
+projectOwnerName:
+  String(
+    row?.projectOwnerName || '',
+  ).trim(),
+
+totalProjectCost,
       amountReceived,
       pendingAmount,
       paymentReceivedPercentage,
@@ -13057,14 +13063,15 @@ async exportPaymentCollectionCsv(
   };
 
   const headers = [
-    'Project Name',
-    'Contact Number',
-    'Branch of Project',
-    'Total Project Cost',
-    'Amount Received',
-    'Pending Amount',
-    'Payment Received %',
-  ];
+  'Project Name',
+  'Contact Number',
+  'Branch of Project',
+  'Project Owner',
+  'Total Project Cost',
+  'Amount Received',
+  'Pending Amount',
+  'Payment Received %',
+];
 
   const csvRows = [
     headers
@@ -13073,14 +13080,15 @@ async exportPaymentCollectionCsv(
 
     ...projectRows.map((row) =>
       [
-        row.projectName,
-        row.contactNumber,
-        row.branchName,
-        row.totalProjectCost,
-        row.amountReceived,
-        row.pendingAmount,
-        `${row.paymentReceivedPercentage}%`,
-      ]
+  row.projectName,
+  row.contactNumber,
+  row.branchName,
+  row.projectOwnerName,
+  row.totalProjectCost,
+  row.amountReceived,
+  row.pendingAmount,
+  `${row.paymentReceivedPercentage}%`,
+]
         .map(escapeCsvCell)
         .join(','),
     ),
