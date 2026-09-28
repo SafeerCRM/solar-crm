@@ -1748,10 +1748,25 @@ URL.revokeObjectURL(url);
   <p className="font-semibold text-gray-800">
     {customer.portalUsername || '-'}
   </p>
+
+  {customer.isPortalEnabled && (
+    customer.lastPortalLoginAt ? (
+      <p className="mt-1 text-xs font-semibold text-green-600">
+        App Active
+      </p>
+    ) : (
+      <p className="mt-1 text-xs font-semibold text-orange-600">
+        Never Logged In
+      </p>
+    )
+  )}
+
   {customer.lastPortalLoginAt && (
     <p className="mt-1 text-xs text-gray-500">
       Last login:{' '}
-      {new Date(customer.lastPortalLoginAt).toLocaleString('en-IN')}
+      {new Date(
+        customer.lastPortalLoginAt,
+      ).toLocaleString('en-IN')}
     </p>
   )}
 </td>
