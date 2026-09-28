@@ -571,20 +571,28 @@ private readonly projectRepository: Repository<Project>,
     });
 
   const portalEnabledCustomers =
-    await this.customerRepository.count({
-      where: {
-        isHidden: false,
-        isPortalEnabled: true,
-      },
-    });
+  await this.customerRepository.count({
+    where: {
+      isHidden: false,
+      isPortalEnabled: true,
+    },
+  });
 
-  return {
-    totalCustomers,
-    activeCustomers,
-    inactiveCustomers,
-    blacklistedCustomers,
-    portalEnabledCustomers,
-  };
+const hiddenCustomers =
+  await this.customerRepository.count({
+    where: {
+      isHidden: true,
+    },
+  });
+
+return {
+  totalCustomers,
+  activeCustomers,
+  inactiveCustomers,
+  blacklistedCustomers,
+  portalEnabledCustomers,
+  hiddenCustomers,
+};
 }
 
 async getCustomerProjects(customerId: number) {

@@ -49,6 +49,7 @@ type Summary = {
   inactiveCustomers: number;
   blacklistedCustomers: number;
   portalEnabledCustomers: number;
+  hiddenCustomers: number;
 };
 
 type CustomerAnnouncement = {
@@ -98,12 +99,13 @@ export default function CustomersPage() {
   >('CUSTOMERS');
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [summary, setSummary] = useState<Summary>({
-    totalCustomers: 0,
-    activeCustomers: 0,
-    inactiveCustomers: 0,
-    blacklistedCustomers: 0,
-    portalEnabledCustomers: 0,
-  });
+  totalCustomers: 0,
+  activeCustomers: 0,
+  inactiveCustomers: 0,
+  blacklistedCustomers: 0,
+  portalEnabledCustomers: 0,
+  hiddenCustomers: 0,
+});
 
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -1407,13 +1409,14 @@ URL.revokeObjectURL(url);
 {activeSection === 'CUSTOMERS' && (
   <>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <SummaryCard title="Total Customers" value={summary.totalCustomers} />
-        <SummaryCard title="Active" value={summary.activeCustomers} />
-        <SummaryCard title="Inactive" value={summary.inactiveCustomers} />
-        <SummaryCard title="Blacklisted" value={summary.blacklistedCustomers} />
-        <SummaryCard title="Portal Enabled" value={summary.portalEnabledCustomers} />
-      </div>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+  <SummaryCard title="Total Customers" value={summary.totalCustomers} />
+  <SummaryCard title="Active" value={summary.activeCustomers} />
+  <SummaryCard title="Inactive" value={summary.inactiveCustomers} />
+  <SummaryCard title="Blacklisted" value={summary.blacklistedCustomers} />
+  <SummaryCard title="Portal Enabled" value={summary.portalEnabledCustomers} />
+  <SummaryCard title="Hidden Customers" value={summary.hiddenCustomers} />
+</div>
 
       <div className="rounded-2xl bg-white p-5 shadow">
         <h2 className="text-lg font-bold text-gray-800">
