@@ -129,18 +129,25 @@ const [afterSalesServiceSaving, setAfterSalesServiceSaving] = useState(false);
 const [showHiddenAfterSalesServices, setShowHiddenAfterSalesServices] =
   useState(false);
 
+  const [cleaningServiceCharge, setCleaningServiceCharge] =
+  useState('500');
+
+const [cleaningSettingSaving, setCleaningSettingSaving] =
+  useState(false);
+
   const headers = () => ({
     Authorization: `Bearer ${localStorage.getItem('token')}`,
   });
 
   useEffect(() => {
-    loadBankDetails();
-loadCompanySetting();
-loadDeliverySetting();
-loadKits();
-loadPolicies();
-loadAfterSalesServices();
-  }, []);
+  loadBankDetails();
+  loadCompanySetting();
+  loadDeliverySetting();
+  loadKits();
+  loadPolicies();
+  loadAfterSalesServices();
+  loadCleaningSetting();
+}, []);
 
   useEffect(() => {
   loadKits();
@@ -1044,6 +1051,71 @@ const restoreAfterSalesService = async (item: any) => {
   );
 
   await loadAfterSalesServices();
+};
+
+const loadCleaningSetting = async () => {
+  try {
+    const res = await axios.get(
+      `${API_BASE_URL}/customer-portal/cleaning-setting`,
+      {
+        headers: headers(),
+      },
+    );
+
+    setCleaningServiceCharge(
+      String(res.data?.serviceCharge ?? 500),
+    );
+  } catch (error) {
+    console.error(error);
+    alert('Failed to load cleaning service charge');
+  }
+};
+
+const saveCleaningSetting = async () => {
+  const serviceCharge =
+    Number(cleaningServiceCharge);
+
+  if (
+    !Number.isFinite(serviceCharge) ||
+    serviceCharge <= 0
+  ) {
+    alert(
+      'Cleaning service charge must be greater than 0',
+    );
+    return;
+  }
+
+  try {
+    setCleaningSettingSaving(true);
+
+    const res = await axios.post(
+      `${API_BASE_URL}/customer-portal/cleaning-setting`,
+      {
+        serviceCharge,
+      },
+      {
+        headers: headers(),
+      },
+    );
+
+    setCleaningServiceCharge(
+      String(
+        res.data?.serviceCharge ??
+          serviceCharge,
+      ),
+    );
+
+    alert('Cleaning service charge saved');
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to save cleaning service charge',
+    );
+  } finally {
+    setCleaningSettingSaving(false);
+  }
 };
 
   return (
@@ -2312,6 +2384,56 @@ const restoreAfterSalesService = async (item: any) => {
         </div>
       ))
     )}
+  </div>
+</section>
+
+<section className="mt-6 rounded-2xl bg-white p-6 shadow">
+  <div>
+    <h2 className="text-lg font-bold text-gray-800">
+      Cleaning Service Charge
+    </h2>
+
+    <p className="mt-1 text-sm text-gray-500">
+      Set the amount customers must pay before a cleaning
+      request is submitted.
+    </p>
+  </div>
+
+  <div className="mt-5 max-w-md">
+    <label className="mb-2 block text-sm font-semibold text-gray-700">
+      Cleaning Charge (₹)
+    </label>
+
+    <input
+      type="number"
+      min="1"
+      step="1"
+      value={cleaningServiceCharge}
+      onChange={(e) =>
+        setCleaningServiceCharge(
+          e.target.value,
+        )
+      }
+      placeholder="500"
+      className="w-full rounded-xl border p-3"
+    />
+
+    <p className="mt-2 text-xs text-gray-500">
+      This charge applies to customer-raised cleaning
+      requests. Payment is mandatory before the request is
+      created.
+    </p>
+
+    <button
+      type="button"
+      onClick={saveCleaningSetting}
+      disabled={cleaningSettingSaving}
+      className="mt-4 rounded-xl bg-blue-600 px-5 py-3 font-bold text-white disabled:opacity-60"
+    >
+      {cleaningSettingSaving
+        ? 'Saving...'
+        : 'Save Cleaning Charge'}
+    </button>
   </div>
 </section>
 

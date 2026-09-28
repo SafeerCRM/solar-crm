@@ -6,6 +6,8 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { MobileDatePicker } from '@mui/x-date-pickers/MobileDatePicker';
 import dayjs from 'dayjs';
+import { Capacitor } from '@capacitor/core';
+import { Browser } from '@capacitor/browser';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -13,7 +15,10 @@ export default function CustomerCleaningCalendarPage() {
   const [dashboard, setDashboard] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [statusFilter, setStatusFilter] = useState('ALL');
+const [statusFilter, setStatusFilter] = useState('ALL');
+
+const [cleaningServiceCharge, setCleaningServiceCharge] =
+  useState<number | null>(null);
 
   const [form, setForm] = useState({
     projectId: '',
@@ -39,87 +44,292 @@ const filteredReminders = reminders.filter((item: any) => {
 });
 
   const loadDashboard = async () => {
-    try {
-      setLoading(true);
-      const token = localStorage.getItem('customer_token');
+  try {
+    setLoading(true);
 
-      if (!token) {
-        window.location.href = '/customer-login';
-        return;
-      }
+    const token =
+      localStorage.getItem(
+        'customer_token',
+      );
 
-      const res = await fetch(`${API_BASE_URL}/customer-auth/dashboard`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        window.location.href = '/customer-login';
-        return;
-      }
-
-      setDashboard(data);
-    } finally {
-      setLoading(false);
+    if (!token) {
+      window.location.href =
+        '/customer-login';
+      return;
     }
-  };
+
+    const [
+      dashboardRes,
+      cleaningSettingRes,
+    ] = await Promise.all([
+      fetch(
+        `${API_BASE_URL}/customer-auth/dashboard`,
+        {
+          headers: {
+            Authorization:
+              `Bearer ${token}`,
+          },
+        },
+      ),
+
+      fetch(
+        `${API_BASE_URL}/customer-auth/cleaning-setting`,
+        {
+          headers: {
+            Authorization:
+              `Bearer ${token}`,
+          },
+        },
+      ),
+    ]);
+
+    const dashboardData =
+      await dashboardRes.json();
+
+    const cleaningSettingData =
+      await cleaningSettingRes.json();
+
+    if (!dashboardRes.ok) {
+      window.location.href =
+        '/customer-login';
+      return;
+    }
+
+    if (!cleaningSettingRes.ok) {
+      throw new Error(
+        cleaningSettingData?.message ||
+          'Failed to load cleaning service charge',
+      );
+    }
+
+    const serviceCharge =
+      Number(
+        cleaningSettingData?.serviceCharge,
+      );
+
+    if (
+      !Number.isFinite(serviceCharge) ||
+      serviceCharge <= 0
+    ) {
+      throw new Error(
+        'Cleaning service charge is not configured',
+      );
+    }
+
+    setDashboard(
+      dashboardData,
+    );
+
+    setCleaningServiceCharge(
+      serviceCharge,
+    );
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.message ||
+        'Failed to load cleaning calendar',
+    );
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
     loadDashboard();
   }, []);
 
   const submitCleaningRequest = async () => {
-    if (!form.projectId) {
-      alert('Please select project');
-      return;
-    }
+  if (!form.projectId) {
+    alert('Please select project');
+    return;
+  }
 
-    if (!form.cleaningDate) {
-      alert('Please select cleaning date');
-      return;
-    }
+  if (!form.cleaningDate) {
+    alert('Please select cleaning date');
+    return;
+  }
 
-    try {
-      setSaving(true);
+  try {
+    setSaving(true);
 
-      const token = localStorage.getItem('customer_token');
-      const selectedProject = projects.find(
-        (project: any) => String(project.id) === String(form.projectId),
+    const token =
+      localStorage.getItem(
+        'customer_token',
       );
 
-      const res = await fetch(`${API_BASE_URL}/customer-auth/cleaning-reminders`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...form,
-          projectName: selectedProject?.customerName || '',
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        alert(data?.message || 'Failed to submit cleaning request');
-        return;
-      }
-
-      alert('Cleaning request submitted');
-
-      setForm({
-        projectId: '',
-        cleaningDate: '',
-        remarks: '',
-      });
-
-      loadDashboard();
-    } finally {
-      setSaving(false);
+    if (!token) {
+      window.location.href =
+        '/customer-login';
+      return;
     }
-  };
+
+    /*
+     * STEP 1:
+     * Prepare the Cleaning checkout.
+     *
+     * This does NOT create a staff-visible
+     * CustomerCleaningReminder.
+     */
+    const prepareRes =
+      await fetch(
+        `${API_BASE_URL}/customer-auth/cleaning-reminders`,
+        {
+          method: 'POST',
+
+          headers: {
+            Authorization:
+              `Bearer ${token}`,
+
+            'Content-Type':
+              'application/json',
+          },
+
+          body: JSON.stringify({
+            projectId:
+              form.projectId,
+
+            cleaningDate:
+              form.cleaningDate,
+
+            remarks:
+              form.remarks,
+          }),
+        },
+      );
+
+    const prepareData =
+      await prepareRes.json();
+
+    if (!prepareRes.ok) {
+      throw new Error(
+        Array.isArray(
+          prepareData?.message,
+        )
+          ? prepareData.message.join(
+              ', ',
+            )
+          : prepareData?.message ||
+              'Failed to prepare cleaning request',
+      );
+    }
+
+    const checkoutId =
+      Number(
+        prepareData?.checkoutId,
+      );
+
+    if (
+      !Number.isInteger(
+        checkoutId,
+      ) ||
+      checkoutId <= 0
+    ) {
+      throw new Error(
+        'Invalid cleaning checkout received',
+      );
+    }
+
+    /*
+     * STEP 2:
+     * Ask the authenticated backend for the
+     * short-lived registered-domain launch URL.
+     */
+    const paymentSource:
+      | 'APP'
+      | 'WEB' =
+      Capacitor.isNativePlatform()
+        ? 'APP'
+        : 'WEB';
+
+    const launchRes =
+      await fetch(
+        `${API_BASE_URL}/customer-auth/cleaning-checkouts/${checkoutId}/launch`,
+        {
+          method: 'POST',
+
+          headers: {
+            Authorization:
+              `Bearer ${token}`,
+
+            'Content-Type':
+              'application/json',
+          },
+
+          body:
+            JSON.stringify({
+              paymentSource,
+            }),
+        },
+      );
+
+    const launchData =
+      await launchRes.json();
+
+    if (!launchRes.ok) {
+      throw new Error(
+        Array.isArray(
+          launchData?.message,
+        )
+          ? launchData.message.join(
+              ', ',
+            )
+          : launchData?.message ||
+              'Unable to start cleaning payment',
+      );
+    }
+
+    const launchUrl =
+      String(
+        launchData?.launchUrl ||
+          '',
+      ).trim();
+
+    /*
+     * Customer payments must always enter
+     * ICICI through the registered
+     * Aditya Solars website.
+     */
+    if (
+      !launchUrl.startsWith(
+        'https://adityasolars.co.in/payment/launch',
+      )
+    ) {
+      throw new Error(
+        'Invalid cleaning payment launch URL',
+      );
+    }
+
+    /*
+     * Do not reset the form here.
+     *
+     * A prepared checkout is not a Cleaning
+     * Request yet. The real reminder will only
+     * exist after verified ICICI SUCCESS.
+     */
+    if (
+      Capacitor.isNativePlatform()
+    ) {
+      await Browser.open({
+        url: launchUrl,
+      });
+
+      return;
+    }
+
+    window.location.href =
+      launchUrl;
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.message ||
+        'Unable to start cleaning payment',
+    );
+  } finally {
+    setSaving(false);
+  }
+};
 
   if (loading) {
     return (
@@ -245,13 +455,42 @@ const filteredReminders = reminders.filter((item: any) => {
                 className="w-full rounded-2xl border p-3"
               />
 
+              <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4">
+  <div className="flex items-center justify-between gap-3">
+    <div>
+      <p className="text-xs font-bold uppercase tracking-wide text-orange-700">
+        Cleaning Service Charge
+      </p>
+
+      <p className="mt-1 text-sm font-semibold text-gray-600">
+        Payment is required before your cleaning request is submitted.
+      </p>
+    </div>
+
+    <p className="text-2xl font-black text-orange-600">
+      {cleaningServiceCharge !== null
+        ? `₹${cleaningServiceCharge.toLocaleString('en-IN')}`
+        : '-'}
+    </p>
+  </div>
+</div>
+
               <button
-                onClick={submitCleaningRequest}
-                disabled={saving}
-                className="w-full rounded-2xl bg-orange-500 py-3 font-black text-white hover:bg-orange-600 disabled:opacity-50"
-              >
-                {saving ? 'Submitting...' : 'Submit Cleaning Request'}
-              </button>
+  onClick={submitCleaningRequest}
+  disabled={
+    saving ||
+    cleaningServiceCharge === null
+  }
+  className="w-full rounded-2xl bg-orange-500 py-3 font-black text-white hover:bg-orange-600 disabled:opacity-50"
+>
+  {saving
+    ? 'Starting Payment...'
+    : cleaningServiceCharge !== null
+      ? `Pay ₹${cleaningServiceCharge.toLocaleString(
+          'en-IN',
+        )} & Submit Cleaning Request`
+      : 'Loading Cleaning Charge...'}
+</button>
             </div>
           </div>
 

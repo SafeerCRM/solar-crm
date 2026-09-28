@@ -78,18 +78,29 @@ export default function CustomerPortalLayout({
       }
 
       /*
-       * Reserved for the customer
-       * after-sales gateway flow.
-       */
-      if (
-        parsedUrl.pathname ===
-        "/after-sales"
-      ) {
-        destination =
-          "/customer-portal/after-sales-services";
-      }
+ * Reserved for the customer
+ * after-sales gateway flow.
+ */
+if (
+  parsedUrl.pathname ===
+  "/after-sales"
+) {
+  destination =
+    "/customer-portal/after-sales-services";
+}
 
-      if (!destination) {
+/*
+ * Customer cleaning payment.
+ */
+if (
+  parsedUrl.pathname ===
+  "/cleaning"
+) {
+  destination =
+    "/customer-portal/cleaning-calendar";
+}
+
+if (!destination) {
         return;
       }
 
