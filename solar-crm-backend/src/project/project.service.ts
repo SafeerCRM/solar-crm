@@ -4212,15 +4212,44 @@ const approvedPaymentAmountSql = `
   COALESCE(
     (
       SELECT SUM(
-        COALESCE(payment_filter."paidAmount", 0)
+        COALESCE(
+          receipt_filter."receivedAmount",
+          0
+        )
       )
-      FROM project_payment_installments payment_filter
-      WHERE payment_filter."projectId" = project.id
+
+      FROM project_payment_receipts receipt_filter
+
+      INNER JOIN project_payment_installments installment_filter
+        ON installment_filter.id =
+          receipt_filter."installmentId"
+
+      WHERE
+        receipt_filter."projectId" = project.id
+
         AND COALESCE(
-          payment_filter."isHidden",
+          receipt_filter."isHidden",
           false
         ) = false
-        AND payment_filter."approvalStatus" = 'APPROVED'
+
+        AND COALESCE(
+          installment_filter."isHidden",
+          false
+        ) = false
+
+        AND COALESCE(
+          receipt_filter."receivedAmount",
+          0
+        ) > 0
+
+        AND (
+          receipt_filter."approvalStatus" = 'APPROVED'
+
+          OR (
+            receipt_filter."approvalStatus" = 'PENDING'
+            AND installment_filter."approvalStatus" = 'APPROVED'
+          )
+        )
     ),
     0
   )
