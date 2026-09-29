@@ -17,6 +17,8 @@ import { createHmac, timingSafeEqual } from 'crypto';
 
 import { WhatsappService } from './whatsapp.service';
 
+import { WhatsappRecipientType } from './whatsapp-message.entity';
+
 @Controller('webhooks/whatsapp')
 export class WhatsappController {
   constructor(
@@ -36,6 +38,45 @@ export class WhatsappController {
       body.message,
     );
   }
+
+  @Post('test-template')
+async testTemplate(
+  @Body()
+  body: {
+    to: string;
+  },
+) {
+  return this.whatsappService.sendTemplateMessage(
+    body.to,
+    'customer_payment_due',
+    'en',
+    [
+      {
+        type: 'body',
+        parameters: [
+          {
+            type: 'text',
+            text: 'Rahul Sharma',
+          },
+          {
+            type: 'text',
+            text: '25000',
+          },
+          {
+            type: 'text',
+            text: '30 September 2026',
+          },
+        ],
+      },
+    ],
+    {
+      recipientType: WhatsappRecipientType.CUSTOMER,
+      recipientName: 'Rahul Sharma',
+      referenceType: 'TEST',
+      referenceId: 'payment-template-test',
+    },
+  );
+}
 
   @Get()
   verifyWebhook(
