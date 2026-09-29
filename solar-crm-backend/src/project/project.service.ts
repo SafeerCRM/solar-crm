@@ -22,7 +22,10 @@ import {
   ProjectDocument,
   ProjectDocumentType,
 } from './project-document.entity';
-import { ProjectComment } from './project-comment.entity';
+import {
+  ProjectComment,
+  ProjectCommentDepartment,
+} from './project-comment.entity';
 
 import {
   ProjectApprovalStatus,
@@ -7004,29 +7007,188 @@ async getProjectOwners() {
   data: Partial<ProjectComment>,
   user?: any,
 ) {
-  const project = await this.projectRepository.findOne({
-    where: {
-      id: Number(data.projectId),
-    },
-  });
+  const projectId = Number(data.projectId);
+
+  const project =
+    await this.projectRepository.findOne({
+      where: {
+        id: projectId,
+      },
+    });
 
   if (!project) {
-    throw new NotFoundException('Project not found');
+    throw new NotFoundException(
+      'Project not found',
+    );
   }
 
-  const comment =
-  this.projectCommentRepository.create({
-    ...data,
-    department:
-      (data as any).department || 'GENERAL',
-    createdBy: user?.id || null,
-    createdByName: user?.name || user?.email || '',
-    createdByRole: Array.isArray(user?.roles)
-      ? user.roles.join(', ')
-      : '',
-  });
+  const department =
+  (
+    String(
+      (data as any).department ||
+        'GENERAL',
+    )
+      .trim()
+      .toUpperCase()
+  ) as ProjectCommentDepartment;
 
-  return this.projectCommentRepository.save(comment);
+  const comment =
+    this.projectCommentRepository.create({
+      ...data,
+      projectId,
+      department,
+      createdBy:
+        user?.id ||
+        user?.userId ||
+        null,
+      createdByName:
+        user?.name ||
+        user?.email ||
+        '',
+      createdByRole:
+        Array.isArray(user?.roles)
+          ? user.roles.join(', ')
+          : '',
+    });
+
+  const savedComment =
+    await this.projectCommentRepository.save(
+      comment,
+    );
+
+  const navigation =
+    this.getProjectCommentNotificationNavigation(
+      department,
+    );
+
+  try {
+    await this
+      .projectStaffNotificationService
+      .notifyProjectUsers({
+        projectId,
+
+        module:
+          navigation.module,
+
+        eventType:
+          'PROJECT_COMMENT_ADDED',
+
+        title:
+          navigation.title,
+
+        message:
+          String(
+            (savedComment as any)
+              .comment || '',
+          ).trim(),
+
+        targetTab:
+          navigation.targetTab,
+
+        targetSection:
+          navigation.targetSection,
+
+        relatedEntityType:
+          'PROJECT_COMMENT',
+
+        relatedEntityId:
+          Number(savedComment.id),
+
+        createdBy:
+          Number(
+            user?.id ||
+              user?.userId ||
+              0,
+          ) || null,
+
+        createdByName:
+          user?.name ||
+          user?.email ||
+          '',
+      });
+  } catch (error) {
+    console.error(
+      'Failed to create project comment notification:',
+      error,
+    );
+  }
+
+  return savedComment;
+}
+
+private getProjectCommentNotificationNavigation(
+  department: string,
+) {
+  switch (
+    String(department || '')
+      .trim()
+      .toUpperCase()
+  ) {
+    case 'LOAN':
+      return {
+        module: 'LOAN',
+        title: 'New Loan Comment',
+        targetTab:
+          'LOAN_DEPARTMENT',
+        targetSection:
+          'comments',
+      };
+
+    case 'SUBSIDY':
+      return {
+        module: 'SUBSIDY',
+        title:
+          'New Subsidy Comment',
+        targetTab:
+          'SUBSIDY_DEPARTMENT',
+        targetSection:
+          'comments',
+      };
+
+    case 'ELECTRICITY':
+      return {
+        module: 'ELECTRICITY',
+        title:
+          'New Electricity Comment',
+        targetTab:
+          'ELECTRICITY_DEPARTMENT',
+        targetSection:
+          'comments',
+      };
+
+    case 'PAYMENT':
+      return {
+        module: 'PAYMENT',
+        title:
+          'New Payment Comment',
+        targetTab:
+          'PAYMENT_COLLECTION',
+        targetSection:
+          'comments',
+      };
+
+    case 'PROJECT_MANAGEMENT':
+    case 'EXECUTION':
+      return {
+        module: 'EXECUTION',
+        title:
+          'New Project Execution Comment',
+        targetTab:
+          'PROJECT_EXECUTION',
+        targetSection:
+          'comments',
+      };
+
+    default:
+      return {
+        module: 'PROJECT',
+        title:
+          'New Project Comment',
+        targetTab: null,
+        targetSection:
+          'comments',
+      };
+  }
 }
 
 async getProjectComments(
@@ -11483,14 +11645,69 @@ async createMaterialRequest(
   );
 
   await this.projectMaterialRequestItemRepository.save(
-    requestItems,
-  );
+  requestItems,
+);
 
-  return {
-    message:
-      'Material requirement note created successfully',
-    request: savedRequest,
-  };
+const notificationMessage =
+  String(body.remarks || '').trim() ||
+  String(savedRequest.title || '').trim() ||
+  'New material requirement added';
+
+try {
+  await this
+    .projectStaffNotificationService
+    .notifyProjectUsers({
+      projectId:
+        Number(body.projectId),
+
+      module:
+        'EXECUTION',
+
+      eventType:
+        'MATERIAL_REQUIREMENT_ADDED',
+
+      title:
+        'New Material Requirement',
+
+      message:
+        notificationMessage,
+
+      targetTab:
+        'PROJECT_MANAGEMENT',
+
+      targetSection:
+        'material-requirements',
+
+      relatedEntityType:
+        'PROJECT_MATERIAL_REQUEST',
+
+      relatedEntityId:
+        Number(savedRequest.id),
+
+      createdBy:
+        Number(
+          user?.id ||
+            user?.userId ||
+            0,
+        ) || null,
+
+      createdByName:
+        user?.name ||
+        user?.email ||
+        '',
+    });
+} catch (error) {
+  console.error(
+    'Failed to create material requirement notification:',
+    error,
+  );
+}
+
+return {
+  message:
+    'Material requirement note created successfully',
+  request: savedRequest,
+};
 }
 
 async getProjectMaterialRequests(
