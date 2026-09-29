@@ -202,11 +202,27 @@ private readonly projectRepository: Repository<Project>,
   );
 }
 
-    if (filters?.status) {
-      query.andWhere('customer.customerStatus = :status', {
-        status: filters.status,
-      });
-    }
+if (filters?.appUsage === 'LOGGED_IN') {
+  query.andWhere(
+    'customer.lastPortalLoginAt IS NOT NULL',
+  );
+}
+
+if (filters?.appUsage === 'NEVER_LOGGED_IN') {
+  query.andWhere(
+    'customer.isPortalEnabled = true',
+  );
+
+  query.andWhere(
+    'customer.lastPortalLoginAt IS NULL',
+  );
+}
+
+if (filters?.status) {
+  query.andWhere('customer.customerStatus = :status', {
+    status: filters.status,
+  });
+}
 
     query.orderBy('customer.createdAt', 'DESC');
     query.skip(skip).take(limit);

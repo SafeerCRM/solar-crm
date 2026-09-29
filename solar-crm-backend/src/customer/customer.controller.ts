@@ -45,9 +45,10 @@ export class CustomerController {
     @Query('zone') zone?: string,
     @Query('branch') branch?: string,
     @Query('status') status?: string,
-    @Query('customerSource') customerSource?: string,
-    @Query('showHidden') showHidden?: string,
-    @CurrentUser() user?: any,
+@Query('customerSource') customerSource?: string,
+@Query('appUsage') appUsage?: string,
+@Query('showHidden') showHidden?: string,
+@CurrentUser() user?: any,
   ) {
     return this.customerService.findAll(
       {
@@ -58,8 +59,9 @@ export class CustomerController {
         zone: zone || '',
         branch: branch || '',
         status: status || '',
-        customerSource: customerSource || '',
-        showHidden: showHidden || 'false',
+customerSource: customerSource || '',
+appUsage: appUsage || '',
+showHidden: showHidden || 'false',
       },
       user,
     );

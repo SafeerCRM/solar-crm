@@ -191,18 +191,20 @@ const [announcementForm, setAnnouncementForm] = useState({
   const [zone, setZone] = useState('');
   const [branch, setBranch] = useState('');
   const [status, setStatus] = useState('');
-  const [customerSource, setCustomerSource] = useState('');
-  const [showHidden, setShowHidden] = useState(false);
+const [customerSource, setCustomerSource] = useState('');
+const [appUsage, setAppUsage] = useState('');
+const [showHidden, setShowHidden] = useState(false);
 
   const [appliedFilters, setAppliedFilters] = useState({
-    search: '',
-    city: '',
-    zone: '',
-    branch: '',
-    status: '',
-    customerSource: '',
-    showHidden: false,
-  });
+  search: '',
+  city: '',
+  zone: '',
+  branch: '',
+  status: '',
+  customerSource: '',
+  appUsage: '',
+  showHidden: false,
+});
 
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -231,16 +233,17 @@ const [announcementForm, setAnnouncementForm] = useState({
 
       const res = await axios.get(`${API_BASE_URL}/customers`, {
         params: {
-          page: targetPage,
-          limit,
-          search: appliedFilters.search,
-          city: appliedFilters.city,
-          zone: appliedFilters.zone,
-          branch: appliedFilters.branch,
-          status: appliedFilters.status,
-          customerSource: appliedFilters.customerSource,
-          showHidden: appliedFilters.showHidden ? 'true' : 'false',
-        },
+  page: targetPage,
+  limit,
+  search: appliedFilters.search,
+  city: appliedFilters.city,
+  zone: appliedFilters.zone,
+  branch: appliedFilters.branch,
+  status: appliedFilters.status,
+  customerSource: appliedFilters.customerSource,
+  appUsage: appliedFilters.appUsage,
+  showHidden: appliedFilters.showHidden ? 'true' : 'false',
+},
         headers: getAuthHeaders(),
       });
 
@@ -1160,17 +1163,19 @@ const resetPortalPassword = async () => {
 };
 
   const applyFilters = () => {
-    setAppliedFilters({
-      search,
-      city,
-      zone,
-      branch,
-      status,
-      customerSource,
-      showHidden,
-    });
-    setPage(1);
-  };
+  setAppliedFilters({
+    search,
+    city,
+    zone,
+    branch,
+    status,
+    customerSource,
+    appUsage,
+    showHidden,
+  });
+
+  setPage(1);
+};
 
   const resetFilters = () => {
     setSearch('');
@@ -1178,18 +1183,20 @@ const resetPortalPassword = async () => {
     setZone('');
     setBranch('');
     setStatus('');
-    setCustomerSource('');
-    setShowHidden(false);
+setCustomerSource('');
+setAppUsage('');
+setShowHidden(false);
 
     setAppliedFilters({
-      search: '',
-      city: '',
-      zone: '',
-      branch: '',
-      status: '',
-      customerSource: '',
-      showHidden: false,
-    });
+  search: '',
+  city: '',
+  zone: '',
+  branch: '',
+  status: '',
+  customerSource: '',
+  appUsage: '',
+  showHidden: false,
+});
 
     setPage(1);
   };
@@ -1593,6 +1600,22 @@ URL.revokeObjectURL(url);
           </select>
 
           <select
+  value={appUsage}
+  onChange={(e) =>
+    setAppUsage(e.target.value)
+  }
+  className="rounded-xl border p-3"
+>
+  <option value="">All App Usage</option>
+  <option value="LOGGED_IN">
+    App Logged In
+  </option>
+  <option value="NEVER_LOGGED_IN">
+    Never Logged In
+  </option>
+</select>
+
+          <select
             value={status}
             onChange={(e) => setStatus(e.target.value)}
             className="rounded-xl border p-3"
@@ -1753,16 +1776,27 @@ URL.revokeObjectURL(url);
   </p>
 
   {customer.isPortalEnabled && (
-    customer.lastPortalLoginAt ? (
-      <p className="mt-1 text-xs font-semibold text-green-600">
+  customer.lastPortalLoginAt ? (
+    <div className="mt-1 flex items-center gap-2">
+      <span className="relative flex h-2.5 w-2.5">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
+        <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-green-500" />
+      </span>
+
+      <span className="text-xs font-semibold text-green-600">
         App Active
-      </p>
-    ) : (
-      <p className="mt-1 text-xs font-semibold text-orange-600">
+      </span>
+    </div>
+  ) : (
+    <div className="mt-1 flex items-center gap-2">
+      <span className="inline-flex h-2.5 w-2.5 rounded-full bg-orange-400" />
+
+      <span className="text-xs font-semibold text-orange-600">
         Never Logged In
-      </p>
-    )
-  )}
+      </span>
+    </div>
+  )
+)}
 
   {customer.lastPortalLoginAt && (
     <p className="mt-1 text-xs text-gray-500">
