@@ -4105,16 +4105,50 @@ if (
   });
 }
 
-if (filters?.fromDate) {
-  query.andWhere('project.createdAt >= :fromDate', {
-    fromDate: new Date(`${filters.fromDate}T00:00:00`),
-  });
-}
+/*
+ * Date behaviour:
+ *
+ * Normal project filtering:
+ *   fromDate / toDate apply to project.createdAt.
+ *
+ * Payment-percentage filtering:
+ *   fromDate / toDate must instead apply to the
+ *   date on which the selected minimum payment
+ *   percentage was first reached.
+ *
+ * The payment-threshold date filtering is added
+ * below after minPaymentPercentage is normalized.
+ */
+const hasPaymentThresholdDateFilter =
+  filters?.minPaymentPercentage !== undefined &&
+  filters?.minPaymentPercentage !== '' &&
+  Number.isFinite(
+    Number(filters.minPaymentPercentage),
+  ) &&
+  Number(filters.minPaymentPercentage) > 0;
 
-if (filters?.toDate) {
-  query.andWhere('project.createdAt <= :toDate', {
-    toDate: new Date(`${filters.toDate}T23:59:59`),
-  });
+if (!hasPaymentThresholdDateFilter) {
+  if (filters?.fromDate) {
+    query.andWhere(
+      'project.createdAt >= :fromDate',
+      {
+        fromDate: new Date(
+          `${filters.fromDate}T00:00:00`,
+        ),
+      },
+    );
+  }
+
+  if (filters?.toDate) {
+    query.andWhere(
+      'project.createdAt <= :toDate',
+      {
+        toDate: new Date(
+          `${filters.toDate}T23:59:59`,
+        ),
+      },
+    );
+  }
 }
 
 /*
@@ -4219,6 +4253,122 @@ if (minPaymentPercentage !== null) {
       minPaymentPercentage,
     },
   );
+}
+
+/*
+ * When a minimum payment percentage is selected,
+ * fromDate / toDate refer to the FIRST date on
+ * which cumulative qualifying receipts reached
+ * that percentage.
+ *
+ * This follows the same receipt qualification
+ * and date precedence as
+ * getProjectPaymentThresholdReachedDate().
+ */
+if (
+  minPaymentPercentage !== null &&
+  minPaymentPercentage > 0 &&
+  (filters?.fromDate || filters?.toDate)
+) {
+  const paymentThresholdReachedDateSql = `
+    (
+      SELECT threshold_history."eligibilityDate"
+      FROM (
+        SELECT
+          COALESCE(
+            receipt_filter."approvedAt",
+            installment_filter."approvedAt",
+            receipt_filter."paymentDate",
+            receipt_filter."createdAt"
+          ) AS "eligibilityDate",
+
+          SUM(
+            COALESCE(
+              receipt_filter."receivedAmount",
+              0
+            )
+          ) OVER (
+            ORDER BY
+              COALESCE(
+                receipt_filter."approvedAt",
+                installment_filter."approvedAt",
+                receipt_filter."paymentDate",
+                receipt_filter."createdAt"
+              ) ASC,
+              receipt_filter.id ASC
+          ) AS "cumulativeAmount"
+
+        FROM project_payment_receipts receipt_filter
+
+        INNER JOIN project_payment_installments installment_filter
+          ON installment_filter.id =
+            receipt_filter."installmentId"
+
+        WHERE
+          receipt_filter."projectId" = project.id
+
+          AND COALESCE(
+            receipt_filter."isHidden",
+            false
+          ) = false
+
+          AND COALESCE(
+            installment_filter."isHidden",
+            false
+          ) = false
+
+          AND COALESCE(
+            receipt_filter."receivedAmount",
+            0
+          ) > 0
+
+          AND (
+            receipt_filter."approvalStatus" = 'APPROVED'
+
+            OR (
+              receipt_filter."approvalStatus" = 'PENDING'
+              AND installment_filter."approvalStatus" = 'APPROVED'
+            )
+          )
+      ) threshold_history
+
+      WHERE
+        threshold_history."cumulativeAmount" >=
+          (
+            (${projectTotalAmountSql}) *
+            (:minPaymentPercentage / 100.0)
+          )
+
+      ORDER BY
+        threshold_history."eligibilityDate" ASC
+
+      LIMIT 1
+    )
+  `;
+
+  if (filters?.fromDate) {
+    query.andWhere(
+      `${paymentThresholdReachedDateSql} >= :paymentThresholdFromDate`,
+      {
+        paymentThresholdFromDate:
+          new Date(
+            `${filters.fromDate}T00:00:00`,
+          ),
+      },
+    );
+  }
+
+  if (filters?.toDate) {
+    query.andWhere(
+      `${paymentThresholdReachedDateSql} <= :paymentThresholdToDate`,
+      {
+        paymentThresholdToDate:
+          new Date(
+            `${filters.toDate}T23:59:59`,
+          ),
+      },
+    );
+  }
 }
 
 if (maxPaymentPercentage !== null) {
