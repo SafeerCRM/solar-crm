@@ -317,6 +317,10 @@ import {
 
 import { StaffMember } from '../staff/staff-member.entity';
 
+import {
+  ProjectStaffNotificationService,
+} from './project-staff-notification.service';
+
 @Injectable()
 export class ProjectService {
 
@@ -2596,6 +2600,8 @@ private readonly userRepository: Repository<User>,
 
 @InjectRepository(StaffMember)
 private readonly staffMemberRepository: Repository<StaffMember>,
+
+private readonly projectStaffNotificationService: ProjectStaffNotificationService,
 
 private readonly calculatorService: CalculatorService,
 
@@ -38704,9 +38710,58 @@ async addProjectTimelineDelayNote(
         '',
     });
 
-  return this
+  const savedNote =
+  await this
     .projectTimelineDelayNoteRepository
     .save(note);
+
+await this
+  .projectStaffNotificationService
+  .notifyProjectUsers({
+    projectId:
+      Number(projectId),
+
+    module:
+      String(
+        rule.targetModule ||
+          'PROJECT',
+      ),
+
+    eventType:
+      'TIMELINE_DELAY_REMARK_ADDED',
+
+    title:
+      'New Timeline Delay Remark',
+
+    message:
+      remark,
+
+    targetTab:
+      'TIMELINE',
+
+    targetSection:
+      'delay-notes',
+
+    relatedEntityType:
+      'PROJECT_TIMELINE_DELAY_NOTE',
+
+    relatedEntityId:
+      Number(savedNote.id),
+
+    createdBy:
+      Number(
+        user?.id ||
+          user?.userId ||
+          0,
+      ) || null,
+
+    createdByName:
+      user?.name ||
+      user?.email ||
+      '',
+  });
+
+return savedNote;
 }
 
 async getProjectTimelineDelayNotes(

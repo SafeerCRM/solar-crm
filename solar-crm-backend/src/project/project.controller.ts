@@ -24,12 +24,15 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import type { Response } from 'express';
+import { ProjectStaffNotificationService } from './project-staff-notification.service';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('project')
 export class ProjectController {
   constructor(
     private readonly projectService: ProjectService,
+
+    private readonly projectStaffNotificationService: ProjectStaffNotificationService,
   ) {}
 
   @Post('create')
@@ -4676,6 +4679,50 @@ async getPaymentReminderList(
       limit:
         Number(limit || 20),
     },
+  );
+}
+
+// ============================================================
+// STAFF PROJECT NOTIFICATIONS
+// ============================================================
+
+@Get('staff-notifications')
+async getStaffNotifications(
+  @CurrentUser() user: any,
+  @Query('limit') limit?: string,
+) {
+  return this.projectStaffNotificationService.getMyNotifications(
+    Number(user.id),
+    Number(limit || 30),
+  );
+}
+
+@Get('staff-notifications/unread-count')
+async getStaffNotificationUnreadCount(
+  @CurrentUser() user: any,
+) {
+  return this.projectStaffNotificationService.getUnreadCount(
+    Number(user.id),
+  );
+}
+
+@Patch('staff-notifications/:id/read')
+async markStaffNotificationRead(
+  @Param('id', ParseIntPipe) id: number,
+  @CurrentUser() user: any,
+) {
+  return this.projectStaffNotificationService.markRead(
+    id,
+    Number(user.id),
+  );
+}
+
+@Patch('staff-notifications/actions/read-all')
+async markAllStaffNotificationsRead(
+  @CurrentUser() user: any,
+) {
+  return this.projectStaffNotificationService.markAllRead(
+    Number(user.id),
   );
 }
 

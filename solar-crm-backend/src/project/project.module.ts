@@ -117,6 +117,11 @@ import {
 
 import { StaffMember } from '../staff/staff-member.entity';
 
+import { ProjectStaffNotification } from './project-staff-notification.entity';
+import { ProjectNotificationGateway } from './project-notification.gateway';
+import { JwtModule } from '@nestjs/jwt';
+import { ProjectStaffNotificationService } from './project-staff-notification.service';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([Project, 
@@ -157,11 +162,27 @@ TelecallingContact,
 ProjectTimelineRule,
 ProjectTimelineEvent,
 ProjectTimelineDelayNote,
-ProjectTimelineDelayProof, User, StaffMember,]),
-    CalculatorModule,
-  ],
-  controllers: [ProjectController],
-  providers: [ProjectService],
-  exports: [ProjectService],
+ProjectTimelineDelayProof, User, StaffMember, ProjectStaffNotification,]),
+    JwtModule.register({
+    secret: process.env.JWT_SECRET,
+  }),
+
+  CalculatorModule,
+],
+  controllers: [
+  ProjectController,
+],
+
+providers: [
+  ProjectService,
+  ProjectNotificationGateway,
+  ProjectStaffNotificationService,
+],
+
+exports: [
+  ProjectService,
+  ProjectNotificationGateway,
+  ProjectStaffNotificationService,
+],
 })
 export class ProjectModule {}
