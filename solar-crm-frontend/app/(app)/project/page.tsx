@@ -155,11 +155,18 @@ legacyYear?: number;
 };
 
   paymentSummary?: {
-    totalAmount?: number;
-    receivedAmount?: number;
-    percentage?: number;
-  };
-  createdAt?: string;
+  totalAmount?: number;
+  receivedAmount?: number;
+  percentage?: number;
+};
+
+paymentThresholdReached?: {
+  percentage?: number;
+  reachedAt?: string | null;
+  thresholdAmount?: number;
+} | null;
+
+createdAt?: string;
 };
 
 type ProjectOwner = {
@@ -2249,15 +2256,30 @@ project.gpsLongitude ? (
     </div>
 
     <div className="mt-2 h-2 overflow-hidden rounded-full bg-green-100">
-      <div
-        className="h-full rounded-full bg-green-600"
-        style={{
-          width: `${project.paymentSummary?.percentage || 0}%`,
-        }}
-      />
-    </div>
+  <div
+    className="h-full rounded-full bg-green-600"
+    style={{
+      width: `${project.paymentSummary?.percentage || 0}%`,
+    }}
+  />
+</div>
 
-    <div className="mt-3 grid gap-2 text-xs text-gray-700 md:grid-cols-2">
+{project.paymentThresholdReached?.reachedAt && (
+  <div className="mt-2 rounded-lg bg-green-100 px-3 py-2 text-xs text-green-800">
+    <span className="font-semibold">
+      {project.paymentThresholdReached.percentage}% Payment Reached:
+    </span>{' '}
+    {new Date(
+      project.paymentThresholdReached.reachedAt,
+    ).toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    })}
+  </div>
+)}
+
+<div className="mt-3 grid gap-2 text-xs text-gray-700 md:grid-cols-2">
       <div className="rounded-lg bg-white p-2">
         <p className="text-gray-500">Received</p>
         <p className="mt-1 font-semibold text-green-700">

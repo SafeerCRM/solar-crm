@@ -4290,7 +4290,8 @@ const electricityDetails = projectIds.length
     })
   : [];
 
-const enrichedData = data.map((project) => {
+const enrichedData = await Promise.all(
+  data.map(async (project) => {
   const projectActivities =
     executionActivities.filter(
       (activity) => activity.projectId === project.id,
@@ -4442,6 +4443,15 @@ const nextPendingActivity =
         )
       : 0;
 
+      const paymentThresholdReached =
+  minPaymentPercentage !== null &&
+  minPaymentPercentage > 0
+    ? await this.getProjectPaymentThresholdReachedDate(
+        project.id,
+        minPaymentPercentage,
+      )
+    : null;
+
   return {
   ...project,
 
@@ -4483,8 +4493,21 @@ const nextPendingActivity =
     receivedAmount: approvedReceivedAmount,
     percentage: Math.min(paymentReceivedPercentage, 100),
   },
+
+  paymentThresholdReached:
+  paymentThresholdReached
+    ? {
+        percentage:
+          paymentThresholdReached.thresholdPercentage,
+        reachedAt:
+          paymentThresholdReached.reachedAt,
+        thresholdAmount:
+          paymentThresholdReached.thresholdAmount,
+      }
+    : null,
 };
-});
+  }),
+);
 
   return {
   data: enrichedData,
