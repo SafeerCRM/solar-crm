@@ -352,6 +352,12 @@ type ContractorProof = {
   remarks?: string;
   uploadedByName?: string;
   createdAt?: string;
+
+  isHidden?: boolean;
+  hiddenByName?: string;
+  hiddenReason?: string;
+  hiddenAt?: string;
+  replacedByProofId?: number;
 };
 
 type ContractorRemainingMaterial = {
@@ -641,8 +647,10 @@ const getContractorProofProgress = (
   const uploadedRequiredCount = requiredProofs.filter(
     (requiredProof) =>
       uploadedProofs.some(
-        (proof) => proof.proofType === requiredProof,
-      ),
+  (proof) =>
+    proof.proofType === requiredProof &&
+    !proof.isHidden,
+),
   ).length;
 
   const totalRequired = requiredProofs.length;
@@ -697,6 +705,12 @@ const [
   const [contractorProofs, setContractorProofs] =
   useState<Record<number, ContractorProof[]>>({});
 
+  const [contractorProofActionId, setContractorProofActionId] =
+  useState<number | null>(null);
+
+const [contractorReplacementFiles, setContractorReplacementFiles] =
+  useState<Record<number, File | null>>({});
+
 const [
   contractorRemainingMaterials,
   setContractorRemainingMaterials,
@@ -716,6 +730,27 @@ const [contractorCommentLoadingId, setContractorCommentLoadingId] =
 const [contractorLoading, setContractorLoading] = useState(false);
 const [updatingContractorAssignmentId, setUpdatingContractorAssignmentId] =
   useState<number | null>(null);
+
+  const [
+  reassigningContractorAssignmentId,
+  setReassigningContractorAssignmentId,
+] = useState<number | null>(null);
+
+const [
+  contractorReassignLoadingId,
+  setContractorReassignLoadingId,
+] = useState<number | null>(null);
+
+const [contractorReassignForm, setContractorReassignForm] =
+  useState({
+    contractorMasterId: '',
+    contractorId: '',
+    contractorName: '',
+    contractorPhone: '',
+    scheduledDate: '',
+    amount: '',
+    reason: '',
+  });
 
 const [contractorForm, setContractorForm] = useState({
   contractorMasterId: '',
@@ -3687,6 +3722,123 @@ const fetchContractorProofs = async (
   }
 };
 
+const hideContractorProof = async (
+  proof: ContractorProof,
+) => {
+  const confirmed = window.confirm(
+    'Hide this incorrect contractor photo?',
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  const reason =
+    window.prompt(
+      'Enter reason for hiding this photo',
+      'Incorrect photo uploaded',
+    ) || 'Incorrect photo uploaded';
+
+  try {
+    setContractorProofActionId(proof.id);
+
+    const token = localStorage.getItem('token');
+
+    await axios.patch(
+      `${API_BASE_URL}/project/contractor-proof/${proof.id}/hide`,
+      {
+        reason,
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert('Contractor photo hidden successfully');
+
+    await fetchContractorProofs(
+      proof.assignmentId,
+    );
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to hide contractor photo',
+    );
+  } finally {
+    setContractorProofActionId(null);
+  }
+};
+
+const replaceContractorProof = async (
+  proof: ContractorProof,
+) => {
+  const selectedFile =
+    contractorReplacementFiles[proof.id];
+
+  if (!selectedFile) {
+    alert('Please select the replacement photo');
+    return;
+  }
+
+  try {
+    setContractorProofActionId(proof.id);
+
+    const token = localStorage.getItem('token');
+
+    const uploadFile =
+      await compressImageFile(selectedFile);
+
+    const formData = new FormData();
+
+    formData.append(
+      'file',
+      uploadFile,
+    );
+
+    formData.append(
+      'reason',
+      'Incorrect contractor photo replaced',
+    );
+
+    await axios.post(
+      `${API_BASE_URL}/project/contractor-proof/${proof.id}/replace`,
+      formData,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data',
+        },
+      },
+    );
+
+    alert('Contractor photo replaced successfully');
+
+    setContractorReplacementFiles((prev) => ({
+      ...prev,
+      [proof.id]: null,
+    }));
+
+    await fetchContractorProofs(
+      proof.assignmentId,
+    );
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to replace contractor photo',
+    );
+  } finally {
+    setContractorProofActionId(null);
+  }
+};
+
 const fetchContractorRemainingMaterials = async (
   assignmentId: number,
 ) => {
@@ -3848,6 +4000,181 @@ const selectContractor = (contractorId: string) => {
       selected.contractorName || '',
     contractorPhone: selected.phone || '',
   }));
+};
+
+const resetContractorReassignForm = () => {
+  setReassigningContractorAssignmentId(null);
+
+  setContractorReassignForm({
+    contractorMasterId: '',
+    contractorId: '',
+    contractorName: '',
+    contractorPhone: '',
+    scheduledDate: '',
+    amount: '',
+    reason: '',
+  });
+};
+
+const openContractorReassignment = (
+  item: ContractorAssignment,
+) => {
+  setReassigningContractorAssignmentId(item.id);
+
+  setContractorReassignForm({
+    contractorMasterId: '',
+    contractorId: '',
+    contractorName: '',
+    contractorPhone: '',
+    scheduledDate: item.scheduledDate
+      ? String(item.scheduledDate).slice(0, 10)
+      : '',
+    amount:
+      item.amount !== undefined &&
+      item.amount !== null
+        ? String(item.amount)
+        : '',
+    reason: '',
+  });
+};
+
+const selectReassignmentContractor = (
+  contractorMasterId: string,
+) => {
+  const selected = contractors.find(
+    (contractor) =>
+      String(contractor.id) ===
+      contractorMasterId,
+  );
+
+  if (!selected) {
+    setContractorReassignForm((prev) => ({
+      ...prev,
+      contractorMasterId: '',
+      contractorId: '',
+      contractorName: '',
+      contractorPhone: '',
+    }));
+
+    return;
+  }
+
+  setContractorReassignForm((prev) => ({
+    ...prev,
+    contractorMasterId,
+    contractorId: String(
+      selected.linkedUserId || '',
+    ),
+    contractorName:
+      selected.contractorName || '',
+    contractorPhone:
+      selected.phone || '',
+  }));
+};
+
+const reassignContractor = async (
+  item: ContractorAssignment,
+) => {
+  if (!contractorReassignForm.contractorId) {
+    alert('Please select new contractor');
+    return;
+  }
+
+  if (
+    Number(contractorReassignForm.contractorId) ===
+    Number(item.contractorId)
+  ) {
+    alert(
+      'Please select a different contractor',
+    );
+    return;
+  }
+
+  if (
+    !contractorReassignForm.reason.trim()
+  ) {
+    alert(
+      'Please enter reassignment reason',
+    );
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `Reassign this work from ${
+      item.contractorName ||
+      `Contractor #${item.contractorId}`
+    } to ${
+      contractorReassignForm.contractorName
+    }?\n\nExisting photos, comments and work history will remain with the previous assignment.`,
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    setContractorReassignLoadingId(
+      item.id,
+    );
+
+    const token =
+      localStorage.getItem('token');
+
+    await axios.post(
+      `${API_BASE_URL}/project/contractor-assignment/${item.id}/reassign`,
+      {
+        contractorId: Number(
+          contractorReassignForm.contractorId,
+        ),
+
+        contractorName:
+          contractorReassignForm.contractorName,
+
+        contractorPhone:
+          contractorReassignForm.contractorPhone,
+
+        scheduledDate:
+          contractorReassignForm.scheduledDate ||
+          undefined,
+
+        amount:
+          contractorReassignForm.amount === ''
+            ? undefined
+            : Number(
+                contractorReassignForm.amount,
+              ),
+
+        reason:
+          contractorReassignForm.reason.trim(),
+      },
+      {
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {},
+      },
+    );
+
+    alert(
+      'Contractor reassigned successfully',
+    );
+
+    resetContractorReassignForm();
+
+    await fetchContractorAssignments();
+  } catch (error: any) {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+        'Failed to reassign contractor',
+    );
+  } finally {
+    setContractorReassignLoadingId(
+      null,
+    );
+  }
 };
 
 const assignContractor = async () => {
@@ -5475,15 +5802,191 @@ const isLoanProcessCompleted =
                     {item.contractorName || `Contractor #${item.contractorId}`}
                   </p>
 
+                  {hasRole([
+  'OWNER',
+  'PROJECT_MANAGER',
+]) &&
+  item.status !== 'COMPLETED' &&
+  item.status !== 'REASSIGNED' && (
+    <div className="mt-3">
+      <button
+        type="button"
+        onClick={() =>
+          openContractorReassignment(item)
+        }
+        className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 hover:bg-amber-100"
+      >
+        Reassign Contractor
+      </button>
+    </div>
+  )}
+
                   <div className="mt-2 flex flex-wrap gap-2">
   <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-bold text-purple-700">
     Scope: {formatContractorLabel(item.workScope)}
   </span>
 
-  <span className="rounded-full bg-gray-200 px-3 py-1 text-xs font-bold text-gray-700">
-    Status: {formatContractorLabel(item.status)}
-  </span>
+  <span
+  className={`rounded-full px-3 py-1 text-xs font-bold ${
+    item.status === 'REASSIGNED'
+      ? 'bg-amber-100 text-amber-800'
+      : item.status === 'COMPLETED'
+        ? 'bg-green-100 text-green-700'
+        : 'bg-gray-200 text-gray-700'
+  }`}
+>
+  Status: {formatContractorLabel(item.status)}
+</span>
 </div>
+
+{reassigningContractorAssignmentId ===
+  item.id && (
+  <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+    <p className="font-bold text-gray-800">
+      Reassign Contractor
+    </p>
+
+    <p className="mt-1 text-xs text-gray-600">
+      Existing photos, comments and work history
+      will remain with{' '}
+      <strong>
+        {item.contractorName ||
+          `Contractor #${item.contractorId}`}
+      </strong>
+      . A new assignment will be created for the
+      selected contractor.
+    </p>
+
+    <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+      <select
+        value={
+          contractorReassignForm.contractorMasterId
+        }
+        onChange={(e) =>
+          selectReassignmentContractor(
+            e.target.value,
+          )
+        }
+        className="w-full min-w-0 rounded-xl border bg-white p-3"
+      >
+        <option value="">
+          Select New Contractor
+        </option>
+
+        {contractors
+          .filter(
+            (contractor) =>
+              Number(
+                contractor.linkedUserId,
+              ) !==
+              Number(item.contractorId),
+          )
+          .map((contractor) => (
+            <option
+              key={contractor.id}
+              value={contractor.id}
+            >
+              {contractor.contractorName} -{' '}
+              {contractor.phone}
+            </option>
+          ))}
+      </select>
+
+      <input
+        value={
+          contractorReassignForm.contractorName
+        }
+        readOnly
+        placeholder="New Contractor"
+        className="w-full min-w-0 rounded-xl border bg-gray-100 p-3"
+      />
+
+      <input
+        type="date"
+        value={
+          contractorReassignForm.scheduledDate
+        }
+        onChange={(e) =>
+          setContractorReassignForm(
+            (prev) => ({
+              ...prev,
+              scheduledDate:
+                e.target.value,
+            }),
+          )
+        }
+        className="w-full min-w-0 rounded-xl border bg-white p-3"
+      />
+
+      <input
+        type="number"
+        value={
+          contractorReassignForm.amount
+        }
+        onChange={(e) =>
+          setContractorReassignForm(
+            (prev) => ({
+              ...prev,
+              amount: e.target.value,
+            }),
+          )
+        }
+        placeholder="Work Amount"
+        className="w-full min-w-0 rounded-xl border bg-white p-3"
+      />
+
+      <textarea
+        value={
+          contractorReassignForm.reason
+        }
+        onChange={(e) =>
+          setContractorReassignForm(
+            (prev) => ({
+              ...prev,
+              reason: e.target.value,
+            }),
+          )
+        }
+        placeholder="Reason for reassignment *"
+        rows={3}
+        className="w-full min-w-0 rounded-xl border bg-white p-3 md:col-span-2"
+      />
+    </div>
+
+    <div className="mt-4 flex flex-wrap gap-2">
+      <button
+        type="button"
+        onClick={() =>
+          reassignContractor(item)
+        }
+        disabled={
+          contractorReassignLoadingId ===
+          item.id
+        }
+        className="rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+      >
+        {contractorReassignLoadingId ===
+        item.id
+          ? 'Reassigning...'
+          : 'Confirm Reassignment'}
+      </button>
+
+      <button
+        type="button"
+        onClick={
+          resetContractorReassignForm
+        }
+        disabled={
+          contractorReassignLoadingId ===
+          item.id
+        }
+        className="rounded-xl border bg-white px-4 py-2 text-sm font-semibold text-gray-700 disabled:opacity-50"
+      >
+        Cancel
+      </button>
+    </div>
+  </div>
+)}
 
 <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 p-3">
   <p className="text-sm font-bold text-blue-800">
@@ -5649,8 +6152,10 @@ const isLoanProcessCompleted =
     {(CONTRACTOR_REQUIRED_PROOFS_BY_SCOPE[item.workScope || 'FULL_PROJECT'] || [])
       .map((proofType) => {
         const uploaded = (contractorProofs[item.id] || []).some(
-          (proof) => proof.proofType === proofType,
-        );
+  (proof) =>
+    proof.proofType === proofType &&
+    !proof.isHidden,
+);
 
         return (
           <span
@@ -5673,59 +6178,134 @@ const isLoanProcessCompleted =
     Contractor Proof Photos
   </h4>
 
-  {(!contractorProofs[item.id] ||
-    contractorProofs[item.id].length === 0) ? (
+  {(contractorProofs[item.id] || []).filter(
+    (proof) => !proof.isHidden,
+  ).length === 0 ? (
     <p className="mt-2 text-sm text-gray-500">
       No proofs uploaded yet.
     </p>
   ) : (
     <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      {contractorProofs[item.id].map((proof) => (
-        <a
-  key={proof.id}
-  href={proof.fileUrl}
-  target="_blank"
-  rel="noreferrer"
-  className="min-w-0 overflow-hidden rounded-xl border bg-white p-3 transition hover:bg-gray-50 hover:shadow-sm"
->
-          {proof.fileUrl && (
-            <img
-              src={proof.fileUrl}
-              alt={proof.proofType || 'Proof'}
-              className="aspect-[4/3] w-full rounded-lg bg-gray-100 object-cover"
-            />
-          )}
-
-          <p className="mt-2 break-words text-sm font-semibold leading-5 text-gray-700">
-            {(proof.proofType || 'OTHER').replaceAll(
-              '_',
-              ' ',
+      {(contractorProofs[item.id] || [])
+        .filter((proof) => !proof.isHidden)
+        .map((proof) => (
+          <div
+            key={proof.id}
+            className="min-w-0 overflow-hidden rounded-xl border bg-white p-3"
+          >
+            {proof.fileUrl && (
+              <a
+                href={proof.fileUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="block"
+              >
+                <img
+                  src={proof.fileUrl}
+                  alt={proof.proofType || 'Proof'}
+                  className="aspect-[4/3] w-full rounded-lg bg-gray-100 object-cover"
+                />
+              </a>
             )}
-          </p>
 
-          <p className="text-xs text-gray-500">
-            By: {proof.uploadedByName || '-'}
-          </p>
+            <p className="mt-2 break-words text-sm font-semibold leading-5 text-gray-700">
+              {(proof.proofType || 'OTHER').replaceAll(
+                '_',
+                ' ',
+              )}
+            </p>
 
-          {proof.latitude &&
-  proof.longitude && (
-    <p className="mt-1 break-words text-xs leading-5 text-gray-500">
-      GPS:{' '}
-      <span className="whitespace-normal">
-        {proof.latitude}, {proof.longitude}
-      </span>
-    </p>
-  )}
+            <p className="text-xs text-gray-500">
+              By: {proof.uploadedByName || '-'}
+            </p>
 
-          {proof.gpsAddress && (
-  <p className="mt-1 break-words text-xs leading-5 text-gray-500">
-    {proof.gpsAddress}
-  </p>
-)}
-        </a>
-      ))}
+            {proof.latitude &&
+              proof.longitude && (
+                <p className="mt-1 break-words text-xs leading-5 text-gray-500">
+                  GPS:{' '}
+                  <span className="whitespace-normal">
+                    {proof.latitude},{' '}
+                    {proof.longitude}
+                  </span>
+                </p>
+              )}
+
+            {proof.gpsAddress && (
+              <p className="mt-1 break-words text-xs leading-5 text-gray-500">
+                {proof.gpsAddress}
+              </p>
+            )}
+
+            {hasRole([
+              'OWNER',
+              'PROJECT_MANAGER',
+            ]) && (
+              <div className="mt-3 border-t pt-3">
+                <p className="mb-2 text-xs font-semibold text-gray-600">
+                  Incorrect photo?
+                </p>
+
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) =>
+                    setContractorReplacementFiles(
+                      (prev) => ({
+                        ...prev,
+                        [proof.id]:
+                          e.target.files?.[0] ||
+                          null,
+                      }),
+                    )
+                  }
+                  className="block w-full min-w-0 text-xs"
+                />
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      replaceContractorProof(
+                        proof,
+                      )
+                    }
+                    disabled={
+                      contractorProofActionId ===
+                        proof.id ||
+                      !contractorReplacementFiles[
+                        proof.id
+                      ]
+                    }
+                    className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                  >
+                    {contractorProofActionId ===
+                    proof.id
+                      ? 'Please wait...'
+                      : 'Replace Photo'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      hideContractorProof(
+                        proof,
+                      )
+                    }
+                    disabled={
+                      contractorProofActionId ===
+                      proof.id
+                    }
+                    className="rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                  >
+                    Hide Photo
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
     </div>
-    )}
+  )}
 </div>
 
 <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4">

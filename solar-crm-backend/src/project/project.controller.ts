@@ -554,6 +554,25 @@ updateContractorAssignment(
   );
 }
 
+@Roles(
+  'OWNER',
+  'PROJECT_MANAGER',
+)
+@Post(
+  'contractor-assignment/:id/reassign',
+)
+reassignContractorAssignment(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.reassignContractorAssignment(
+    Number(id),
+    body,
+    user,
+  );
+}
+
 @Roles('OWNER', 'PROJECT_MANAGER', 'CUSTOMER_MANAGER')
 @Post('cleaning/assign')
 assignProjectCleaning(

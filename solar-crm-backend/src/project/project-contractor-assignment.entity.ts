@@ -20,6 +20,7 @@ export enum ProjectContractorWorkStatus {
   ON_HOLD = 'ON_HOLD',
   PENDING_FINAL_PROOFS = 'PENDING_FINAL_PROOFS',
   COMPLETED = 'COMPLETED',
+  REASSIGNED = 'REASSIGNED',
 }
 
 @Entity()

@@ -10,7 +10,7 @@ import { Cron } from '@nestjs/schedule';
 
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { In, MoreThan, Repository, DataSource, } from 'typeorm';
+import { In, MoreThan, Repository, DataSource, Not, } from 'typeorm';
 
 import PDFDocument = require('pdfkit');
 import { Response } from 'express';
@@ -39803,10 +39803,17 @@ async getMyContractorProjects(user: any) {
   }
 
   const assignments =
-    await this.projectContractorAssignmentRepository.find({
-      where: { contractorId },
-      order: { scheduledDate: 'DESC' },
-    });
+  await this.projectContractorAssignmentRepository.find({
+    where: {
+      contractorId,
+      status: Not(
+        ProjectContractorWorkStatus.REASSIGNED,
+      ),
+    },
+    order: {
+      scheduledDate: 'DESC',
+    },
+  });
 
   const projectIds = [
     ...new Set(assignments.map((item) => item.projectId)),
@@ -41513,6 +41520,205 @@ const uploadedTypes = new Set(
   return this.projectContractorAssignmentRepository.save(
     assignment,
   );
+}
+
+async reassignContractorAssignment(
+  assignmentId: number,
+  body: any,
+  user: any,
+) {
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+    : [];
+
+  if (
+    !roles.includes('OWNER') &&
+    !roles.includes('PROJECT_MANAGER')
+  ) {
+    throw new ForbiddenException(
+      'Only owner or project manager can reassign contractor work',
+    );
+  }
+
+  const oldAssignment =
+    await this.projectContractorAssignmentRepository.findOne({
+      where: {
+        id: assignmentId,
+      },
+    });
+
+  if (!oldAssignment) {
+    throw new NotFoundException(
+      'Contractor assignment not found',
+    );
+  }
+
+  if (
+    oldAssignment.status ===
+    ProjectContractorWorkStatus.COMPLETED
+  ) {
+    throw new BadRequestException(
+      'Completed contractor work cannot be reassigned',
+    );
+  }
+
+  if (
+    oldAssignment.status ===
+    ProjectContractorWorkStatus.REASSIGNED
+  ) {
+    throw new BadRequestException(
+      'This contractor work has already been reassigned',
+    );
+  }
+
+  const newContractorId =
+    Number(body?.contractorId);
+
+  const newContractorName =
+    String(
+      body?.contractorName || '',
+    ).trim();
+
+  const newContractorPhone =
+    String(
+      body?.contractorPhone || '',
+    ).trim();
+
+  const reason =
+    String(
+      body?.reason || '',
+    ).trim();
+
+  if (!newContractorId) {
+    throw new BadRequestException(
+      'New contractor is required',
+    );
+  }
+
+  if (
+    Number(oldAssignment.contractorId) ===
+    newContractorId
+  ) {
+    throw new BadRequestException(
+      'Please select a different contractor',
+    );
+  }
+
+  if (!reason) {
+    throw new BadRequestException(
+      'Reassignment reason is required',
+    );
+  }
+
+  const currentUserId =
+    Number(
+      user?.id ||
+        user?.userId ||
+        user?.sub,
+    ) || null;
+
+  /*
+   * Preserve old assignment as historical record.
+   */
+  const previousRemarks =
+    String(
+      oldAssignment.remarks || '',
+    ).trim();
+
+  oldAssignment.status =
+    ProjectContractorWorkStatus.REASSIGNED;
+
+  oldAssignment.remarks = [
+    previousRemarks,
+    `Reassigned: ${reason}`,
+    `Reassigned by: ${
+      user?.name ||
+      user?.email ||
+      'Staff'
+    }`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  await this.projectContractorAssignmentRepository.save(
+    oldAssignment,
+  );
+
+  /*
+   * Create fresh assignment for new contractor.
+   * Existing proofs/comments remain on old assignment.
+   */
+  const newAssignment =
+    this.projectContractorAssignmentRepository.create({
+      projectId:
+        Number(oldAssignment.projectId),
+
+      contractorId:
+        newContractorId,
+
+      contractorName:
+        newContractorName,
+
+      contractorPhone:
+        newContractorPhone,
+
+      workScope:
+        oldAssignment.workScope,
+
+      assignedWorkItems:
+        Array.isArray(
+          oldAssignment.assignedWorkItems,
+        )
+          ? oldAssignment.assignedWorkItems
+          : [],
+
+      scheduledDate:
+        body?.scheduledDate
+          ? new Date(
+              body.scheduledDate,
+            )
+          : oldAssignment.scheduledDate,
+
+      amount:
+        body?.amount !== undefined
+          ? Number(body.amount || 0)
+          : Number(
+              oldAssignment.amount || 0,
+            ),
+
+      status:
+        ProjectContractorWorkStatus.ASSIGNED,
+
+      remarks:
+        `Reassigned from ${
+          oldAssignment.contractorName ||
+          `Contractor #${oldAssignment.contractorId}`
+        }. Reason: ${reason}`,
+
+      assignedBy:
+        currentUserId as any,
+
+      assignedByName:
+        user?.name ||
+        user?.email ||
+        '',
+    });
+
+  const savedNewAssignment =
+    await this.projectContractorAssignmentRepository.save(
+      newAssignment,
+    );
+
+  return {
+    message:
+      'Contractor reassigned successfully',
+
+    previousAssignment:
+      oldAssignment,
+
+    newAssignment:
+      savedNewAssignment,
+  };
 }
 
 async uploadContractorProofs(
