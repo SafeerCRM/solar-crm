@@ -4,10 +4,12 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import axios from 'axios';
+import { io } from 'socket.io-client';
 import { getAuthHeaders } from '@/lib/authHeaders';
 import AppSecurityGate from '@/components/AppSecurityGate';
 import LiveLocationManager from '@/components/LiveLocationManager';
 import BirthdayPopupManager from '@/components/BirthdayPopupManager';
+
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -632,6 +634,25 @@ type ReminderPreviewItem = {
   projectId?: number;
 };
 
+type ProjectStaffNotification = {
+  id: number;
+  recipientUserId: number;
+  projectId: number;
+  module: string;
+  eventType: string;
+  title: string;
+  message: string;
+  targetTab?: string | null;
+  targetSection?: string | null;
+  relatedEntityType?: string | null;
+  relatedEntityId?: number | null;
+  createdBy?: number | null;
+  createdByName?: string | null;
+  isRead: boolean;
+  readAt?: string | null;
+  createdAt: string;
+};
+
 export default function AppLayout({
   children,
 }: {
@@ -643,6 +664,21 @@ export default function AppLayout({
   const [reminderCount, setReminderCount] = useState(0);
   const [reminderPreview, setReminderPreview] = useState<ReminderPreviewItem[]>([]);
 const [bellOpen, setBellOpen] = useState(false);
+
+const [
+  projectNotificationCount,
+  setProjectNotificationCount,
+] = useState(0);
+
+const [
+  projectNotifications,
+  setProjectNotifications,
+] = useState<ProjectStaffNotification[]>([]);
+
+const [
+  realtimeNotification,
+  setRealtimeNotification,
+] = useState<ProjectStaffNotification | null>(null);
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
@@ -724,6 +760,176 @@ const [bellOpen, setBellOpen] = useState(false);
   return () => window.clearInterval(interval);
 }, [user, userRoles]);
 
+useEffect(() => {
+  if (!user || !apiBaseUrl) {
+    return;
+  }
+
+  const token = localStorage.getItem('token');
+
+  if (!token) {
+    return;
+  }
+
+  let toastTimer: number | null = null;
+
+  const fetchProjectNotifications = async () => {
+    try {
+      const [notificationsRes, countRes] =
+        await Promise.all([
+          axios.get(
+            `${apiBaseUrl}/project/staff-notifications`,
+            {
+              params: {
+                limit: 20,
+              },
+              headers: getAuthHeaders(),
+            },
+          ),
+
+          axios.get(
+            `${apiBaseUrl}/project/staff-notifications/unread-count`,
+            {
+              headers: getAuthHeaders(),
+            },
+          ),
+        ]);
+
+      const notifications =
+        Array.isArray(notificationsRes.data)
+          ? notificationsRes.data
+          : [];
+
+      setProjectNotifications(
+        notifications,
+      );
+
+      setProjectNotificationCount(
+        Number(
+          countRes.data?.unreadCount || 0,
+        ),
+      );
+    } catch (error) {
+      console.error(
+        'Project notification fetch error:',
+        error,
+      );
+    }
+  };
+
+  fetchProjectNotifications();
+
+  const socket = io(apiBaseUrl, {
+    auth: {
+      token,
+    },
+    transports: ['websocket', 'polling'],
+  });
+
+  socket.on(
+    'project:notification',
+    (
+      notification:
+        ProjectStaffNotification,
+    ) => {
+      setProjectNotifications(
+        (current) => [
+          notification,
+          ...current.filter(
+            (item) =>
+              item.id !== notification.id,
+          ),
+        ].slice(0, 20),
+      );
+
+      if (!notification.isRead) {
+        setProjectNotificationCount(
+          (current) => current + 1,
+        );
+      }
+
+      setRealtimeNotification(
+        notification,
+      );
+
+      if (toastTimer) {
+        window.clearTimeout(toastTimer);
+      }
+
+      toastTimer =
+        window.setTimeout(() => {
+          setRealtimeNotification(null);
+        }, 6000);
+    },
+  );
+
+  socket.on('connect_error', (error) => {
+    console.error(
+      'Project notification socket error:',
+      error.message,
+    );
+  });
+
+  return () => {
+    if (toastTimer) {
+      window.clearTimeout(toastTimer);
+    }
+
+    socket.disconnect();
+  };
+}, [user]);
+
+const openProjectNotification = async (
+  notification: ProjectStaffNotification,
+) => {
+  try {
+    if (!notification.isRead) {
+      await axios.patch(
+        `${apiBaseUrl}/project/staff-notifications/${notification.id}/read`,
+        {},
+        {
+          headers: getAuthHeaders(),
+        },
+      );
+
+      setProjectNotifications(
+        (current) =>
+          current.map((item) =>
+            item.id === notification.id
+              ? {
+                  ...item,
+                  isRead: true,
+                }
+              : item,
+          ),
+      );
+
+      setProjectNotificationCount(
+        (current) =>
+          Math.max(0, current - 1),
+      );
+    }
+  } catch (error) {
+    console.error(
+      'Project notification read error:',
+      error,
+    );
+  }
+
+  setBellOpen(false);
+  setRealtimeNotification(null);
+
+  const tabQuery =
+    notification.targetTab
+      ? `?tab=${encodeURIComponent(
+          notification.targetTab,
+        )}`
+      : '';
+
+  window.location.href =
+    `/project/${notification.projectId}${tabQuery}`;
+};
+
   return (
     <AppSecurityGate>
         <div className="min-h-screen bg-gray-100 md:flex">
@@ -741,51 +947,113 @@ const [bellOpen, setBellOpen] = useState(false);
     className="relative rounded-xl bg-white px-3 py-2 text-lg shadow"
   >
     🔔
-    {reminderCount > 0 && (
-      <span className="absolute -right-1 -top-1 rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white">
-        {reminderCount}
-      </span>
-    )}
+    {reminderCount +
+  projectNotificationCount >
+  0 && (
+  <span className="absolute -right-1 -top-1 rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white">
+    {reminderCount +
+      projectNotificationCount}
+  </span>
+)}
   </button>
 
   {bellOpen && (
-    <div className="mt-2 w-80 rounded-2xl bg-white p-4 shadow-xl">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="font-bold text-gray-900">Notifications</h3>
-        <Link
-          href="/project/reminders"
-          onClick={() => setBellOpen(false)}
-          className="text-xs font-medium text-blue-600"
-        >
-          View all
-        </Link>
-      </div>
+    <div className="mt-2 max-h-[70vh] w-96 overflow-y-auto rounded-2xl bg-white p-4 shadow-xl">
+  <div className="mb-3 flex items-center justify-between">
+    <h3 className="font-bold text-gray-900">
+      Notifications
+    </h3>
 
-      {reminderPreview.length === 0 ? (
-        <p className="text-sm text-gray-500">No unread reminders</p>
-      ) : (
-        <div className="space-y-2">
-          {reminderPreview.map((item) => (
-            <Link
-              key={item.id}
-              href="/project/reminders"
-              onClick={() => setBellOpen(false)}
-              className="block rounded-xl bg-blue-50 p-3 text-sm hover:bg-blue-100"
+    <Link
+      href="/project/reminders"
+      onClick={() =>
+        setBellOpen(false)
+      }
+      className="text-xs font-medium text-blue-600"
+    >
+      Reminder Center
+    </Link>
+  </div>
+
+  {projectNotifications.length > 0 && (
+    <div className="mb-4">
+      <p className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">
+        Project Activity
+      </p>
+
+      <div className="space-y-2">
+        {projectNotifications.map(
+          (notification) => (
+            <button
+              key={notification.id}
+              type="button"
+              onClick={() =>
+                openProjectNotification(
+                  notification,
+                )
+              }
+              className={`block w-full rounded-xl p-3 text-left text-sm transition ${
+                notification.isRead
+                  ? 'bg-gray-50 hover:bg-gray-100'
+                  : 'bg-blue-50 hover:bg-blue-100'
+              }`}
             >
-              <p className="font-semibold text-gray-900">
-  {item.title}
-</p>
-<p className="text-xs text-gray-600">
-  {formatActivityType(item.subtitle)}
-</p>
-              <p className="text-xs text-gray-500">
-  {item.customerName || `Project #${item.projectId}`}
-</p>
-            </Link>
-          ))}
-        </div>
-      )}
+              <div className="flex items-start justify-between gap-2">
+                <p className="font-semibold text-gray-900">
+                  {notification.title}
+                </p>
+
+                {!notification.isRead && (
+                  <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-blue-600" />
+                )}
+              </div>
+
+              <p className="mt-1 line-clamp-2 text-xs text-gray-600">
+                {notification.message}
+              </p>
+
+              <p className="mt-1 text-xs text-gray-500">
+                Project #
+                {notification.projectId}
+                {notification.createdByName
+                  ? ` • ${notification.createdByName}`
+                  : ''}
+              </p>
+            </button>
+          ),
+        )}
+      </div>
     </div>
+  )}
+
+  {projectNotifications.length === 0 &&
+    reminderCount === 0 && (
+      <p className="text-sm text-gray-500">
+        No notifications
+      </p>
+    )}
+
+  {reminderCount > 0 && (
+    <Link
+      href="/project/reminders"
+      onClick={() =>
+        setBellOpen(false)
+      }
+      className="block rounded-xl bg-amber-50 p-3 text-sm hover:bg-amber-100"
+    >
+      <p className="font-semibold text-gray-900">
+        Reminder Center
+      </p>
+
+      <p className="mt-1 text-xs text-gray-600">
+        {reminderCount} unread project
+        {reminderCount === 1
+          ? ' reminder'
+          : ' reminders'}
+      </p>
+    </Link>
+  )}
+</div>
   )}
 </div>
 
@@ -866,6 +1134,42 @@ const [bellOpen, setBellOpen] = useState(false);
 
             <main className="min-w-0 flex-1 px-3 pb-4 pt-20 md:p-8">{children}</main>
     </div>
+
+    {realtimeNotification && (
+  <button
+    type="button"
+    onClick={() =>
+      openProjectNotification(
+        realtimeNotification,
+      )
+    }
+    className="fixed right-4 top-20 z-[100] w-[calc(100%-2rem)] max-w-sm rounded-2xl border border-blue-100 bg-white p-4 text-left shadow-2xl transition hover:bg-blue-50"
+  >
+    <div className="flex items-start gap-3">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-lg">
+        🔔
+      </div>
+
+      <div className="min-w-0">
+        <p className="font-bold text-gray-900">
+          {realtimeNotification.title}
+        </p>
+
+        <p className="mt-1 line-clamp-2 text-sm text-gray-700">
+          {realtimeNotification.message}
+        </p>
+
+        <p className="mt-2 text-xs text-gray-500">
+          Project #
+          {realtimeNotification.projectId}
+          {realtimeNotification.createdByName
+            ? ` • ${realtimeNotification.createdByName}`
+            : ''}
+        </p>
+      </div>
+    </div>
+  </button>
+)}
     <LiveLocationManager />
 <BirthdayPopupManager />
     </AppSecurityGate>
