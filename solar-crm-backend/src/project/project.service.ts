@@ -4294,11 +4294,7 @@ if (minPaymentPercentage !== null) {
  * and date precedence as
  * getProjectPaymentThresholdReachedDate().
  */
-if (
-  minPaymentPercentage !== null &&
-  minPaymentPercentage > 0 &&
-  (filters?.fromDate || filters?.toDate)
-) {
+
   const paymentThresholdReachedDateSql = `
     (
       SELECT threshold_history."eligibilityDate"
@@ -4375,6 +4371,12 @@ if (
     )
   `;
 
+  if (
+  minPaymentPercentage !== null &&
+  minPaymentPercentage > 0 &&
+  (filters?.fromDate || filters?.toDate)
+) {
+
   if (filters?.fromDate) {
     query.andWhere(
       `${paymentThresholdReachedDateSql} >= :paymentThresholdFromDate`,
@@ -4409,11 +4411,43 @@ if (maxPaymentPercentage !== null) {
   );
 }
 
-query.orderBy('project.createdAt', 'DESC');
+if (
+  minPaymentPercentage !== null &&
+  minPaymentPercentage > 0
+) {
+  /*
+   * Payment percentage filter:
+   * newest threshold crossing first.
+   *
+   * Example for 20%:
+   * 29 Sep -> 28 Sep -> 27 Sep -> ...
+   */
+  query.orderBy(
+    paymentThresholdReachedDateSql,
+    'DESC',
+  );
 
-  query.orderBy('project.createdAt', 'DESC');
+  /*
+   * Stable secondary ordering when multiple
+   * projects reached the threshold at the
+   * same timestamp/date.
+   */
+  query.addOrderBy(
+    'project.createdAt',
+    'DESC',
+  );
+} else {
+  /*
+   * Normal Project page behaviour remains
+   * completely unchanged.
+   */
+  query.orderBy(
+    'project.createdAt',
+    'DESC',
+  );
+}
 
-  query.skip(skip).take(limit);
+query.skip(skip).take(limit);
 
   const [data, total] =
     await query.getManyAndCount();
