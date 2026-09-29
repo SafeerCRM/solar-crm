@@ -42,14 +42,12 @@ export class ProjectNotificationGateway
         return;
       }
 
-      const payload =
-        await this.jwtService.verifyAsync(
-          token,
-          {
-            secret:
-              process.env.JWT_SECRET,
-          },
-        );
+      const payload = await this.jwtService.verifyAsync(
+  token,
+  {
+    secret: 'mysecretkey',
+  },
+);
 
       const userId = Number(
         payload?.sub ||
