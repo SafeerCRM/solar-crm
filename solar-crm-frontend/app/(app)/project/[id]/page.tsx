@@ -8,7 +8,11 @@ import { MobileTimePicker } from '@mui/x-date-pickers/MobileTimePicker';
 import dayjs, { Dayjs } from 'dayjs';
 import axios from 'axios';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import {
+  useParams,
+  useRouter,
+  useSearchParams,
+} from 'next/navigation';
 import CustomerUpdatesTab from '@/app/components/meeting/project/CustomerUpdatesTab';
 import SearchableUserSelect from '@/app/components/meeting/common/SearchableUserSelect';
 
@@ -671,9 +675,19 @@ const getContractorProofProgress = (
 
 export default function ProjectDetailPage() {
   const params = useParams();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const projectId = params?.id as string;
 
-    const pdfRef = useRef<HTMLDivElement | null>(null);
+  const requestedTab =
+    searchParams.get('tab');
+
+  const requestedSection =
+    searchParams.get('section');
+
+  const pdfRef =
+    useRef<HTMLDivElement | null>(null);
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
   const [project, setProject] = useState<Project | null>(null);
@@ -4733,13 +4747,43 @@ const canWriteContractorComment =
 }, [projectId]);
 
 useEffect(() => {
+  if (!requestedTab) {
+    return;
+  }
+
+  const validTabs = [
+    'PROJECT_CREATION',
+    'LOAN_DEPARTMENT',
+    'PROJECT_MANAGEMENT',
+    'PROJECT_EXECUTION',
+    'CONTRACTOR_WORK',
+    'SUBSIDY_DEPARTMENT',
+    'ELECTRICITY_DEPARTMENT',
+    'PAYMENT_COLLECTION',
+    'CUSTOMER_UPDATES',
+    'DOCUMENTS',
+    'PROJECT_HISTORY',
+  ];
+
+  if (
+    validTabs.includes(
+      requestedTab,
+    )
+  ) {
+    setActiveTab(
+      requestedTab,
+    );
+  }
+}, [requestedTab]);
+
+useEffect(() => {
   if (!projectId) return;
 
   if (activeTab === 'LOAN_DEPARTMENT') {
-  fetchLoanDetail();
-  fetchLoanComments();
-  fetchLoanCoApplicants();
-}
+    fetchLoanDetail();
+    fetchLoanComments();
+    fetchLoanCoApplicants();
+  }
 
   if (activeTab === 'DOCUMENTS') {
     fetchDocuments();
@@ -4791,6 +4835,36 @@ fetchPendingRescheduleRequests();
 }
 
 }, [activeTab, projectId]);
+
+useEffect(() => {
+  if (!requestedSection) {
+    return;
+  }
+
+  const timer =
+    window.setTimeout(() => {
+      const element =
+        document.getElementById(
+          requestedSection,
+        );
+
+      if (!element) {
+        return;
+      }
+
+      element.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    }, 400);
+
+  return () => {
+    window.clearTimeout(timer);
+  };
+}, [
+  activeTab,
+  requestedSection,
+]);
 
 useEffect(() => {
   if (!projectId) return;
@@ -6892,7 +6966,16 @@ if (
   return visibleTabs.map((tab) => (
     <button
       key={tab.key}
-      onClick={() => setActiveTab(tab.key)}
+      onClick={() => {
+  setActiveTab(tab.key);
+
+  router.replace(
+    `/project/${projectId}?tab=${tab.key}`,
+    {
+      scroll: false,
+    },
+  );
+}}
       className={`rounded-xl px-4 py-2 text-sm font-semibold ${
         activeTab === tab.key
           ? 'bg-blue-600 text-white'
@@ -7853,7 +7936,10 @@ if (
 )}
 
 {activeTab === 'PROJECT_MANAGEMENT' && (
-  <div className="space-y-5">
+  <div
+    id="material-requirements"
+    className="scroll-mt-24 space-y-5"
+  >
     <div className="rounded-2xl bg-white p-6 shadow">
       <h2 className="text-2xl font-bold text-gray-800">
         Material Request

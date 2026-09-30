@@ -6280,26 +6280,30 @@ projectManagerApproval(
 @Roles('OWNER', 'MARKETING_HEAD')
 
   @Patch(':id/marketing-head-approval')
-  marketingHeadApproval(
-    @Param('id') id: string,
-    @Body() body: any,
-  ) {
-    return this.projectService.marketingHeadApproval(
-      Number(id),
-      body,
-    );
-  }
+marketingHeadApproval(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.marketingHeadApproval(
+    Number(id),
+    body,
+    user,
+  );
+}
 
   @Roles('OWNER')
 
   @Patch(':id/owner-approval')
-  ownerApproval(
-    @Param('id') id: string,
-    @Body() body: any,
-  ) {
-    return this.projectService.ownerApproval(
-      Number(id),
-      body,
-    );
-  }
+ownerApproval(
+  @Param('id') id: string,
+  @Body() body: any,
+  @CurrentUser() user: any,
+) {
+  return this.projectService.ownerApproval(
+    Number(id),
+    body,
+    user,
+  );
+}
 }

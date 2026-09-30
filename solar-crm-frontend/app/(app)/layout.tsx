@@ -919,15 +919,32 @@ const openProjectNotification = async (
   setBellOpen(false);
   setRealtimeNotification(null);
 
-  const tabQuery =
-    notification.targetTab
-      ? `?tab=${encodeURIComponent(
-          notification.targetTab,
-        )}`
-      : '';
+  const query =
+  new URLSearchParams();
 
-  window.location.href =
-    `/project/${notification.projectId}${tabQuery}`;
+if (notification.targetTab) {
+  query.set(
+    'tab',
+    notification.targetTab,
+  );
+}
+
+if (notification.targetSection) {
+  query.set(
+    'section',
+    notification.targetSection,
+  );
+}
+
+const queryString =
+  query.toString();
+
+window.location.href =
+  `/project/${notification.projectId}${
+    queryString
+      ? `?${queryString}`
+      : ''
+  }`;
 };
 
   return (

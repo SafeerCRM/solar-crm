@@ -5662,6 +5662,154 @@ if (
   );
 }
 
+const projectRemarkChanged =
+  historyRows.some(
+    (history) =>
+      String(
+        history.fieldName || '',
+      ) === 'remarks',
+  );
+
+const currentProjectRemark =
+  String(
+    updatedProject.remarks || '',
+  ).trim();
+
+if (
+  projectRemarkChanged &&
+  currentProjectRemark
+) {
+  try {
+    await this
+      .projectStaffNotificationService
+      .notifyProjectUsers({
+        projectId:
+          Number(
+            updatedProject.id,
+          ),
+
+        module:
+          'PROJECT',
+
+        eventType:
+          'PROJECT_REMARK_UPDATED',
+
+        title:
+          'Project Remark Updated',
+
+        message:
+          currentProjectRemark,
+
+        targetTab:
+          'PROJECT_CREATION',
+
+        targetSection:
+          'project-remarks',
+
+        relatedEntityType:
+          'PROJECT',
+
+        relatedEntityId:
+          Number(
+            updatedProject.id,
+          ),
+
+        createdBy:
+          Number(
+            user?.id ||
+              user?.userId ||
+              user?.sub ||
+              0,
+          ) || null,
+
+        createdByName:
+          user?.name ||
+          user?.email ||
+          '',
+      });
+  } catch (error) {
+    console.error(
+      'Failed to create project remark notification:',
+      error,
+    );
+  }
+}
+
+const workStateReasonChanged =
+  historyRows.some(
+    (history) =>
+      String(
+        history.fieldName || '',
+      ) ===
+      'projectWorkStateReason',
+  );
+
+const currentWorkStateReason =
+  String(
+    updatedProject.projectWorkStateReason ||
+      '',
+  ).trim();
+
+if (
+  workStateReasonChanged &&
+  currentWorkStateReason
+) {
+  try {
+    await this
+      .projectStaffNotificationService
+      .notifyProjectUsers({
+        projectId:
+          Number(
+            updatedProject.id,
+          ),
+
+        module:
+          'PROJECT',
+
+        eventType:
+          'PROJECT_WORK_STATE_REASON_UPDATED',
+
+        title:
+          'Project Work State Remark Updated',
+
+        message:
+          currentWorkStateReason,
+
+        targetTab:
+          'PROJECT_CREATION',
+
+        targetSection:
+          'project-work-state',
+
+        relatedEntityType:
+          'PROJECT',
+
+        relatedEntityId:
+          Number(
+            updatedProject.id,
+          ),
+
+        createdBy:
+          Number(
+            user?.id ||
+              user?.userId ||
+              user?.sub ||
+              0,
+          ) || null,
+
+        createdByName:
+          user?.name ||
+          user?.email ||
+          '',
+      });
+  } catch (error) {
+    console.error(
+      'Failed to create project work state remark notification:',
+      error,
+    );
+  }
+}
+
 /*
  * Once Owner has approved a Project,
  * technical-detail edits must keep its
@@ -6695,6 +6843,98 @@ async uploadProjectDocument(file: any, body: any, user: any) {
 
   const savedDocument = await this.projectDocumentRepository.save(document);
 
+  const documentRemarks =
+  String(
+    savedDocument.remarks || '',
+  ).trim();
+
+if (documentRemarks) {
+  const documentDepartment =
+    String(
+      savedDocument.department ||
+        'PROJECT_CREATION',
+    ).toUpperCase();
+
+  let notificationModule = 'PROJECT';
+
+  if (documentDepartment === 'LOAN') {
+    notificationModule = 'LOAN';
+  } else if (
+    documentDepartment === 'SUBSIDY'
+  ) {
+    notificationModule = 'SUBSIDY';
+  } else if (
+    documentDepartment === 'ELECTRICITY'
+  ) {
+    notificationModule = 'ELECTRICITY';
+  } else if (
+    documentDepartment ===
+    'PAYMENT_COLLECTION'
+  ) {
+    notificationModule = 'PAYMENT';
+  } else if (
+    documentDepartment ===
+    'PROJECT_MANAGEMENT'
+  ) {
+    notificationModule = 'EXECUTION';
+  }
+
+  try {
+    await this
+      .projectStaffNotificationService
+      .notifyProjectUsers({
+        projectId:
+          Number(
+            savedDocument.projectId,
+          ),
+
+        module:
+          notificationModule,
+
+        eventType:
+          'PROJECT_DOCUMENT_REMARK_ADDED',
+
+        title:
+          'New Document Remark',
+
+        message:
+          documentRemarks,
+
+        targetTab:
+          'DOCUMENTS',
+
+        targetSection:
+          'project-documents',
+
+        relatedEntityType:
+          'PROJECT_DOCUMENT',
+
+        relatedEntityId:
+          Number(
+            savedDocument.id,
+          ),
+
+        createdBy:
+          Number(
+            user?.id ||
+              user?.userId ||
+              user?.sub ||
+              0,
+          ) || null,
+
+        createdByName:
+          user?.name ||
+          user?.email ||
+          '',
+      });
+  } catch (error) {
+    console.error(
+      'Failed to create project document remark notification:',
+      error,
+    );
+  }
+}
+
 const shouldNotifyCustomer =
   body?.notifyCustomer === true ||
   body?.notifyCustomer === 'true';
@@ -7241,7 +7481,76 @@ async projectManagerApproval(
   );
 }
 
-  return this.projectRepository.save(project);
+  const savedProject =
+  await this.projectRepository.save(
+    project,
+  );
+
+const approvalNote =
+  String(
+    body?.note || '',
+  ).trim();
+
+if (approvalNote) {
+  try {
+    await this
+      .projectStaffNotificationService
+      .notifyProjectUsers({
+        projectId:
+          Number(
+            savedProject.id,
+          ),
+
+        module:
+          'PROJECT',
+
+        eventType:
+          'PROJECT_MANAGER_APPROVAL_NOTE_ADDED',
+
+        title:
+          body?.status === 'REJECTED'
+            ? 'Project Manager Rejection Note'
+            : 'Project Manager Approval Note',
+
+        message:
+          approvalNote,
+
+        targetTab:
+          'PROJECT_CREATION',
+
+        targetSection:
+          'project-approvals',
+
+        relatedEntityType:
+          'PROJECT',
+
+        relatedEntityId:
+          Number(
+            savedProject.id,
+          ),
+
+        createdBy:
+          Number(
+            user?.id ||
+              user?.userId ||
+              user?.sub ||
+              0,
+          ) || null,
+
+        createdByName:
+          user?.name ||
+          user?.email ||
+          '',
+      });
+  } catch (error) {
+    console.error(
+      'Failed to create project manager approval note notification:',
+      error,
+    );
+  }
+}
+
+return savedProject;
 }
 
   async marketingHeadApproval(
@@ -7251,7 +7560,8 @@ async projectManagerApproval(
     approvalStatus?: ProjectApprovalStatus;
     note?: string;
     approvedBy?: number;
-  },
+    },
+  user: any,
 ) {
   const project = await this.projectRepository.findOne({
     where: { id },
@@ -7292,7 +7602,73 @@ async projectManagerApproval(
     project.status = ProjectStatus.REJECTED;
   }
 
-  return this.projectRepository.save(project);
+  const savedProject =
+  await this.projectRepository.save(
+    project,
+  );
+
+const approvalNote =
+  String(
+    body?.note || '',
+  ).trim();
+
+if (approvalNote) {
+  try {
+    await this
+      .projectStaffNotificationService
+      .notifyProjectUsers({
+        projectId:
+          Number(savedProject.id),
+
+        module:
+          'PROJECT',
+
+        eventType:
+          'MARKETING_HEAD_APPROVAL_NOTE_ADDED',
+
+        title:
+          approvalStatus ===
+          ProjectApprovalStatus.REJECTED
+            ? 'Marketing Head Rejection Note'
+            : 'Marketing Head Approval Note',
+
+        message:
+          approvalNote,
+
+        targetTab:
+          'PROJECT_CREATION',
+
+        targetSection:
+          'project-approvals',
+
+        relatedEntityType:
+          'PROJECT',
+
+        relatedEntityId:
+          Number(savedProject.id),
+
+        createdBy:
+          Number(
+            user?.id ||
+              user?.userId ||
+              user?.sub ||
+              0,
+          ) || null,
+
+        createdByName:
+          user?.name ||
+          user?.email ||
+          '',
+      });
+  } catch (error) {
+    console.error(
+      'Failed to create marketing head approval note notification:',
+      error,
+    );
+  }
+}
+
+return savedProject;
 }
 
   async createMaterialMaster(data: Partial<ProjectMaterialMaster>) {
@@ -13607,9 +13983,73 @@ async createPaymentInstallment(
         currentUser?.name || null,
     });
 
-  return this.projectPaymentInstallmentRepository.save(
+  const savedInstallment =
+  await this.projectPaymentInstallmentRepository.save(
     installment,
   );
+
+const installmentRemarks =
+  String(
+    savedInstallment.remarks || '',
+  ).trim();
+
+if (installmentRemarks) {
+  try {
+    await this
+      .projectStaffNotificationService
+      .notifyProjectUsers({
+        projectId:
+          Number(
+            savedInstallment.projectId,
+          ),
+
+        module:
+          'PAYMENT',
+
+        eventType:
+          'PAYMENT_INSTALLMENT_REMARK_ADDED',
+
+        title:
+          'New Payment Installment Remark',
+
+        message:
+          installmentRemarks,
+
+        targetTab:
+          'PAYMENT_COLLECTION',
+
+        targetSection:
+          'payment-collection',
+
+        relatedEntityType:
+          'PROJECT_PAYMENT_INSTALLMENT',
+
+        relatedEntityId:
+          Number(
+            savedInstallment.id,
+          ),
+
+        createdBy:
+          Number(
+            currentUser?.id ||
+              currentUser?.userId ||
+              0,
+          ) || null,
+
+        createdByName:
+          currentUser?.name ||
+          currentUser?.email ||
+          '',
+      });
+  } catch (error) {
+    console.error(
+      'Failed to create payment installment remark notification:',
+      error,
+    );
+  }
+}
+
+return savedInstallment;
 }
 
 async updatePaymentInstallment(
@@ -13627,6 +14067,11 @@ async updatePaymentInstallment(
   if (!installment) {
     throw new NotFoundException('Payment installment not found');
   }
+
+  const previousInstallmentRemarks =
+  String(
+    installment.remarks || '',
+  ).trim();
 
   const newAmount = Number(body?.amount || installment.amount || 0);
 
@@ -13656,7 +14101,77 @@ async updatePaymentInstallment(
     installment.status = ProjectPaymentInstallmentStatus.PENDING;
   }
 
-  return this.projectPaymentInstallmentRepository.save(installment);
+  const savedInstallment =
+  await this.projectPaymentInstallmentRepository.save(
+    installment,
+  );
+
+const currentInstallmentRemarks =
+  String(
+    savedInstallment.remarks || '',
+  ).trim();
+
+if (
+  currentInstallmentRemarks &&
+  currentInstallmentRemarks !==
+    previousInstallmentRemarks
+) {
+  try {
+    await this
+      .projectStaffNotificationService
+      .notifyProjectUsers({
+        projectId:
+          Number(
+            savedInstallment.projectId,
+          ),
+
+        module:
+          'PAYMENT',
+
+        eventType:
+          'PAYMENT_INSTALLMENT_REMARK_UPDATED',
+
+        title:
+          'Payment Installment Remark Updated',
+
+        message:
+          currentInstallmentRemarks,
+
+        targetTab:
+          'PAYMENT_COLLECTION',
+
+        targetSection:
+          'payment-collection',
+
+        relatedEntityType:
+          'PROJECT_PAYMENT_INSTALLMENT',
+
+        relatedEntityId:
+          Number(
+            savedInstallment.id,
+          ),
+
+        createdBy:
+          Number(
+            currentUser?.id ||
+              currentUser?.userId ||
+              0,
+          ) || null,
+
+        createdByName:
+          currentUser?.name ||
+          currentUser?.email ||
+          '',
+      });
+  } catch (error) {
+    console.error(
+      'Failed to create payment installment remark notification:',
+      error,
+    );
+  }
+}
+
+return savedInstallment;
 }
 
 async settleIciciCustomerInstallmentPayment(input: {
@@ -14467,9 +14982,10 @@ async receivePaymentInstallment(
             undefined,
         } as Partial<ProjectPaymentReceipt>);
 
-      await receiptRepository.save(
-        paymentReceipt,
-      );
+      const savedPaymentReceipt =
+  await receiptRepository.save(
+    paymentReceipt,
+  );
 
       if (
         newPendingAmount <= 0
@@ -14609,7 +15125,69 @@ async receivePaymentInstallment(
         }
       }
 
-      return savedInstallment;
+      const paymentRemarks =
+  String(
+    savedPaymentReceipt.remarks || '',
+  ).trim();
+
+if (paymentRemarks) {
+  try {
+    await this
+      .projectStaffNotificationService
+      .notifyProjectUsers({
+        projectId:
+          Number(
+            savedInstallment.projectId,
+          ),
+
+        module:
+          'PAYMENT',
+
+        eventType:
+          'PAYMENT_REMARK_ADDED',
+
+        title:
+          'New Payment Remark',
+
+        message:
+          paymentRemarks,
+
+        targetTab:
+          'PAYMENT_COLLECTION',
+
+        targetSection:
+          'payment-collection',
+
+        relatedEntityType:
+          'PROJECT_PAYMENT_RECEIPT',
+
+        relatedEntityId:
+          Number(
+            savedPaymentReceipt.id,
+          ),
+
+        createdBy:
+          Number(
+            currentUser?.id ||
+              currentUser?.userId ||
+              0,
+          ) || null,
+
+        createdByName:
+          currentUser?.name ||
+          currentUser?.email ||
+          '',
+      });
+  } catch (error) {
+    console.error(
+      'Failed to create payment remark notification:',
+      error,
+    );
+  }
+}
+
+return savedInstallment;
+
     },
   );
 }
@@ -14857,6 +15435,11 @@ async updatePaymentEntry(
     throw new NotFoundException('Payment installment not found');
   }
 
+  const previousPaymentRemarks =
+  String(
+    installment.remarks || '',
+  ).trim();
+
   const totalAmount = Number(installment.amount || 0);
   const newPaidAmount = Number(body?.paidAmount || 0);
 
@@ -14921,7 +15504,68 @@ async updatePaymentEntry(
     await this.projectPartyLedgerRepository.save(existingLedger);
   }
 
-  return saved;
+  const currentPaymentRemarks =
+  String(
+    saved.remarks || '',
+  ).trim();
+
+if (
+  currentPaymentRemarks &&
+  currentPaymentRemarks !==
+    previousPaymentRemarks
+) {
+  try {
+    await this
+      .projectStaffNotificationService
+      .notifyProjectUsers({
+        projectId:
+          Number(saved.projectId),
+
+        module:
+          'PAYMENT',
+
+        eventType:
+          'PAYMENT_ENTRY_REMARK_UPDATED',
+
+        title:
+          'Payment Remark Updated',
+
+        message:
+          currentPaymentRemarks,
+
+        targetTab:
+          'PAYMENT_COLLECTION',
+
+        targetSection:
+          'payment-collection',
+
+        relatedEntityType:
+          'PROJECT_PAYMENT_INSTALLMENT',
+
+        relatedEntityId:
+          Number(saved.id),
+
+        createdBy:
+          Number(
+            currentUser?.id ||
+              currentUser?.userId ||
+              0,
+          ) || null,
+
+        createdByName:
+          currentUser?.name ||
+          currentUser?.email ||
+          '',
+      });
+  } catch (error) {
+    console.error(
+      'Failed to create payment entry remark notification:',
+      error,
+    );
+  }
+}
+
+return saved;
 }
 
 async approvePaymentInstallment(
@@ -20194,6 +20838,67 @@ if (
     });
 }
 
+const executionRemarks =
+  String(
+    savedActivity.remarks || '',
+  ).trim();
+
+if (executionRemarks) {
+  try {
+    await this
+      .projectStaffNotificationService
+      .notifyProjectUsers({
+        projectId:
+          Number(
+            savedActivity.projectId,
+          ),
+
+        module:
+          'EXECUTION',
+
+        eventType:
+          'EXECUTION_REMARK_ADDED',
+
+        title:
+          'New Project Execution Remark',
+
+        message:
+          executionRemarks,
+
+        targetTab:
+          'PROJECT_EXECUTION',
+
+        targetSection:
+          'execution-activities',
+
+        relatedEntityType:
+          'PROJECT_EXECUTION_ACTIVITY',
+
+        relatedEntityId:
+          Number(
+            savedActivity.id,
+          ),
+
+        createdBy:
+          Number(
+            user?.id ||
+              user?.userId ||
+              0,
+          ) || null,
+
+        createdByName:
+          user?.name ||
+          user?.email ||
+          '',
+      });
+  } catch (error) {
+    console.error(
+      'Failed to create execution remark notification:',
+      error,
+    );
+  }
+}
+
 return savedActivity;
 }
 
@@ -20226,6 +20931,11 @@ async updateExecutionActivity(
       'Execution activity not found',
     );
   }
+
+  const previousExecutionRemarks =
+  String(
+    activity.remarks || '',
+  ).trim();
 
   const previousExecutionStatus =
   activity.status;
@@ -20312,6 +21022,71 @@ if (
         user?.email ||
         '',
     });
+}
+
+const currentExecutionRemarks =
+  String(
+    savedActivity.remarks || '',
+  ).trim();
+
+if (
+  currentExecutionRemarks &&
+  currentExecutionRemarks !==
+    previousExecutionRemarks
+) {
+  try {
+    await this
+      .projectStaffNotificationService
+      .notifyProjectUsers({
+        projectId:
+          Number(
+            savedActivity.projectId,
+          ),
+
+        module:
+          'EXECUTION',
+
+        eventType:
+          'EXECUTION_REMARK_UPDATED',
+
+        title:
+          'Project Execution Remark Updated',
+
+        message:
+          currentExecutionRemarks,
+
+        targetTab:
+          'PROJECT_EXECUTION',
+
+        targetSection:
+          'execution-activities',
+
+        relatedEntityType:
+          'PROJECT_EXECUTION_ACTIVITY',
+
+        relatedEntityId:
+          Number(
+            savedActivity.id,
+          ),
+
+        createdBy:
+          Number(
+            user?.id ||
+              user?.userId ||
+              0,
+          ) || null,
+
+        createdByName:
+          user?.name ||
+          user?.email ||
+          '',
+      });
+  } catch (error) {
+    console.error(
+      'Failed to create execution remark update notification:',
+      error,
+    );
+  }
 }
 
 return savedActivity;
@@ -20536,7 +21311,69 @@ async completeProject(
       : `[PROJECT COMPLETED]\n${completionNote}`;
   }
 
-  return this.projectRepository.save(project);
+  const savedProject =
+  await this.projectRepository.save(
+    project,
+  );
+
+if (completionNote) {
+  try {
+    await this
+      .projectStaffNotificationService
+      .notifyProjectUsers({
+        projectId:
+          Number(
+            savedProject.id,
+          ),
+
+        module:
+          'PROJECT',
+
+        eventType:
+          'PROJECT_COMPLETION_NOTE_ADDED',
+
+        title:
+          'Project Completion Note Added',
+
+        message:
+          completionNote,
+
+        targetTab:
+          'PROJECT_CREATION',
+
+        targetSection:
+          'project-completion',
+
+        relatedEntityType:
+          'PROJECT',
+
+        relatedEntityId:
+          Number(
+            savedProject.id,
+          ),
+
+        createdBy:
+          Number(
+            currentUser?.id ||
+              currentUser?.userId ||
+              currentUser?.sub ||
+              0,
+          ) || null,
+
+        createdByName:
+          currentUser?.name ||
+          currentUser?.email ||
+          '',
+      });
+  } catch (error) {
+    console.error(
+      'Failed to create project completion note notification:',
+      error,
+    );
+  }
+}
+
+return savedProject;
 }
 
 async moveProjectStatus(
@@ -20597,7 +21434,69 @@ async moveProjectStatus(
       : `[STATUS MOVED TO ${nextStatus}]\n${note}`;
   }
 
-  return this.projectRepository.save(project);
+  const savedProject =
+  await this.projectRepository.save(
+    project,
+  );
+
+if (note) {
+  try {
+    await this
+      .projectStaffNotificationService
+      .notifyProjectUsers({
+        projectId:
+          Number(
+            savedProject.id,
+          ),
+
+        module:
+          'PROJECT',
+
+        eventType:
+          'PROJECT_STATUS_NOTE_ADDED',
+
+        title:
+          'Project Status Note Added',
+
+        message:
+          note,
+
+        targetTab:
+          'PROJECT_CREATION',
+
+        targetSection:
+          'project-status',
+
+        relatedEntityType:
+          'PROJECT',
+
+        relatedEntityId:
+          Number(
+            savedProject.id,
+          ),
+
+        createdBy:
+          Number(
+            currentUser?.id ||
+              currentUser?.userId ||
+              currentUser?.sub ||
+              0,
+          ) || null,
+
+        createdByName:
+          currentUser?.name ||
+          currentUser?.email ||
+          '',
+      });
+  } catch (error) {
+    console.error(
+      'Failed to create project status note notification:',
+      error,
+    );
+  }
+}
+
+return savedProject;
 }
 
 async cancelProject(
@@ -20686,6 +21585,67 @@ async cancelProject(
         : ''
     }`,
   );
+
+  try {
+  await this
+    .projectStaffNotificationService
+    .notifyProjectUsers({
+      projectId:
+        Number(
+          savedProject.id,
+        ),
+
+      module:
+        'PROJECT',
+
+      eventType:
+        savedProject.status ===
+        ProjectStatus.REJECTED
+          ? 'PROJECT_REJECTION_REASON_ADDED'
+          : 'PROJECT_CANCELLATION_REASON_ADDED',
+
+      title:
+        savedProject.status ===
+        ProjectStatus.REJECTED
+          ? 'Project Rejected'
+          : 'Project Cancelled',
+
+      message:
+        reason,
+
+      targetTab:
+        'PROJECT_CREATION',
+
+      targetSection:
+        'project-status',
+
+      relatedEntityType:
+        'PROJECT',
+
+      relatedEntityId:
+        Number(
+          savedProject.id,
+        ),
+
+      createdBy:
+        Number(
+          currentUser?.id ||
+            currentUser?.userId ||
+            currentUser?.sub ||
+            0,
+        ) || null,
+
+      createdByName:
+        currentUser?.name ||
+        currentUser?.email ||
+        '',
+    });
+} catch (error) {
+  console.error(
+    'Failed to create project cancellation/rejection notification:',
+    error,
+  );
+}
 
   return savedProject;
 }
@@ -22989,6 +23949,7 @@ private async deactivateAutomaticProjectProcurement(
     note?: string;
     approvedBy?: number;
   },
+  user: any,
 ) {
   const project = await this.projectRepository.findOne({
     where: { id },
@@ -23110,6 +24071,67 @@ private async deactivateAutomaticProjectProcurement(
       'Project rejected during Owner approval',
     );
   }
+
+  const approvalNote =
+  String(
+    body?.note || '',
+  ).trim();
+
+if (approvalNote) {
+  try {
+    await this
+      .projectStaffNotificationService
+      .notifyProjectUsers({
+        projectId:
+          Number(savedProject.id),
+
+        module:
+          'PROJECT',
+
+        eventType:
+          'OWNER_APPROVAL_NOTE_ADDED',
+
+        title:
+          approvalStatus ===
+          ProjectApprovalStatus.REJECTED
+            ? 'Owner Rejection Note'
+            : 'Owner Approval Note',
+
+        message:
+          approvalNote,
+
+        targetTab:
+          'PROJECT_CREATION',
+
+        targetSection:
+          'project-approvals',
+
+        relatedEntityType:
+          'PROJECT',
+
+        relatedEntityId:
+          Number(savedProject.id),
+
+        createdBy:
+          Number(
+            user?.id ||
+              user?.userId ||
+              user?.sub ||
+              0,
+          ) || null,
+
+        createdByName:
+          user?.name ||
+          user?.email ||
+          '',
+      });
+  } catch (error) {
+    console.error(
+      'Failed to create owner approval note notification:',
+      error,
+    );
+  }
+}
 
   return savedProject;
 }
@@ -39616,6 +40638,9 @@ async saveProjectSubsidyDetail(
 const previousDcrCertificateReady =
   detail?.dcrCertificateReady === true;
 
+  const previousSubsidyRemarks =
+  String(detail?.remarks || '').trim();
+
   Object.assign(detail, {
     status: body.status || detail.status,
     dcrCertificateReady:
@@ -39783,6 +40808,67 @@ if (
     });
 }
 
+const currentSubsidyRemarks =
+  String(
+    savedDetail.remarks || '',
+  ).trim();
+
+if (
+  currentSubsidyRemarks &&
+  currentSubsidyRemarks !==
+    previousSubsidyRemarks
+) {
+  try {
+    await this
+      .projectStaffNotificationService
+      .notifyProjectUsers({
+        projectId:
+          Number(projectId),
+
+        module:
+          'SUBSIDY',
+
+        eventType:
+          'SUBSIDY_REMARK_UPDATED',
+
+        title:
+          'Subsidy Remark Updated',
+
+        message:
+          currentSubsidyRemarks,
+
+        targetTab:
+          'SUBSIDY_DEPARTMENT',
+
+        targetSection:
+          'subsidy-detail',
+
+        relatedEntityType:
+          'PROJECT_SUBSIDY_DETAIL',
+
+        relatedEntityId:
+          Number(savedDetail.id),
+
+        createdBy:
+          Number(
+            user?.id ||
+              user?.userId ||
+              0,
+          ) || null,
+
+        createdByName:
+          user?.name ||
+          user?.email ||
+          '',
+      });
+  } catch (error) {
+    console.error(
+      'Failed to create subsidy remark notification:',
+      error,
+    );
+  }
+}
+
 return savedDetail;
 }
 
@@ -39837,7 +40923,10 @@ async saveProjectElectricityDetail(
   const previousElectricityStatus =
   detail?.status || null;
 
-  Object.assign(detail, {
+const previousElectricityRemarks =
+  String(detail?.remarks || '').trim();
+
+Object.assign(detail, {
     discomName: body.discomName || '',
     status: body.status || detail.status,
     fileSubmissionDate: body.fileSubmissionDate
@@ -39981,7 +41070,69 @@ if (
     });
 }
 
+const currentElectricityRemarks =
+  String(
+    savedDetail.remarks || '',
+  ).trim();
+
+if (
+  currentElectricityRemarks &&
+  currentElectricityRemarks !==
+    previousElectricityRemarks
+) {
+  try {
+    await this
+      .projectStaffNotificationService
+      .notifyProjectUsers({
+        projectId:
+          Number(projectId),
+
+        module:
+          'ELECTRICITY',
+
+        eventType:
+          'ELECTRICITY_REMARK_UPDATED',
+
+        title:
+          'Electricity Remark Updated',
+
+        message:
+          currentElectricityRemarks,
+
+        targetTab:
+          'ELECTRICITY_DEPARTMENT',
+
+        targetSection:
+          'electricity-detail',
+
+        relatedEntityType:
+          'PROJECT_ELECTRICITY_DETAIL',
+
+        relatedEntityId:
+          Number(savedDetail.id),
+
+        createdBy:
+          Number(
+            user?.id ||
+              user?.userId ||
+              0,
+          ) || null,
+
+        createdByName:
+          user?.name ||
+          user?.email ||
+          '',
+      });
+  } catch (error) {
+    console.error(
+      'Failed to create electricity remark notification:',
+      error,
+    );
+  }
+}
+
 return savedDetail;
+
 }
 
 async assignContractorToProject(body: any, user: any) {
@@ -40053,9 +41204,74 @@ assignedWorkItems: Array.isArray(body?.assignedWorkItems)
         user?.name || user?.email || '',
     });
 
-  return this.projectContractorAssignmentRepository.save(
+  const savedAssignment =
+  await this.projectContractorAssignmentRepository.save(
     assignment,
   );
+
+const assignmentRemarks =
+  String(
+    savedAssignment.remarks || '',
+  ).trim();
+
+if (assignmentRemarks) {
+  try {
+    await this
+      .projectStaffNotificationService
+      .notifyProjectUsers({
+        projectId:
+          Number(
+            savedAssignment.projectId,
+          ),
+
+        module:
+          'CONTRACTOR',
+
+        eventType:
+          'CONTRACTOR_ASSIGNMENT_REMARK_ADDED',
+
+        title:
+          'New Contractor Assignment Remark',
+
+        message:
+          assignmentRemarks,
+
+        targetTab:
+          'CONTRACTOR_WORK',
+
+        targetSection:
+          'contractor-assignments',
+
+        relatedEntityType:
+          'PROJECT_CONTRACTOR_ASSIGNMENT',
+
+        relatedEntityId:
+          Number(
+            savedAssignment.id,
+          ),
+
+        createdBy:
+          Number(
+            user?.id ||
+              user?.userId ||
+              user?.sub ||
+              0,
+          ) || null,
+
+        createdByName:
+          user?.name ||
+          user?.email ||
+          '',
+      });
+  } catch (error) {
+    console.error(
+      'Failed to create contractor assignment remark notification:',
+      error,
+    );
+  }
+}
+
+return savedAssignment;
 }
 
 async getProjectContractorAssignments(projectId: number) {
@@ -40188,9 +41404,74 @@ async assignProjectCleaning(body: any, user: any) {
       assignedByName: user?.name || user?.email || '',
     });
 
-  return this.projectCleaningAssignmentRepository.save(
+  const savedAssignment =
+  await this.projectCleaningAssignmentRepository.save(
     assignment,
   );
+
+const cleaningRemarks =
+  String(
+    savedAssignment.remarks || '',
+  ).trim();
+
+if (cleaningRemarks) {
+  try {
+    await this
+      .projectStaffNotificationService
+      .notifyProjectUsers({
+        projectId:
+          Number(
+            savedAssignment.projectId,
+          ),
+
+        module:
+          'MAINTENANCE',
+
+        eventType:
+          'CLEANING_ASSIGNMENT_REMARK_ADDED',
+
+        title:
+          'New Cleaning Assignment Remark',
+
+        message:
+          cleaningRemarks,
+
+        targetTab:
+          'CUSTOMER_UPDATES',
+
+        targetSection:
+          'cleaning-assignments',
+
+        relatedEntityType:
+          'PROJECT_CLEANING_ASSIGNMENT',
+
+        relatedEntityId:
+          Number(
+            savedAssignment.id,
+          ),
+
+        createdBy:
+          Number(
+            user?.id ||
+              user?.userId ||
+              user?.sub ||
+              0,
+          ) || null,
+
+        createdByName:
+          user?.name ||
+          user?.email ||
+          '',
+      });
+  } catch (error) {
+    console.error(
+      'Failed to create cleaning assignment remark notification:',
+      error,
+    );
+  }
+}
+
+return savedAssignment;
 }
 
 async getProjectCleaningAssignments(projectId: number, user: any) {
@@ -40273,6 +41554,16 @@ async updateCleaningAssignment(id: number, body: any, user: any) {
     throw new NotFoundException('Cleaning assignment not found');
   }
 
+  const previousRemarks =
+  String(
+    assignment.remarks || '',
+  ).trim();
+
+const previousCompletionRemarks =
+  String(
+    assignment.completionRemarks || '',
+  ).trim();
+
   const roles = Array.isArray(user?.roles) ? user.roles : [];
   const currentUserId = Number(
     user?.id || user?.userId || user?.sub,
@@ -40330,9 +41621,144 @@ async updateCleaningAssignment(id: number, body: any, user: any) {
     assignment.completedAt = new Date();
   }
 
-  return this.projectCleaningAssignmentRepository.save(
+  const savedAssignment =
+  await this.projectCleaningAssignmentRepository.save(
     assignment,
   );
+
+const currentRemarks =
+  String(
+    savedAssignment.remarks || '',
+  ).trim();
+
+const currentCompletionRemarks =
+  String(
+    savedAssignment.completionRemarks ||
+      '',
+  ).trim();
+
+if (
+  currentRemarks &&
+  currentRemarks !== previousRemarks
+) {
+  try {
+    await this
+      .projectStaffNotificationService
+      .notifyProjectUsers({
+        projectId:
+          Number(
+            savedAssignment.projectId,
+          ),
+
+        module:
+          'MAINTENANCE',
+
+        eventType:
+          'CLEANING_ASSIGNMENT_REMARK_UPDATED',
+
+        title:
+          'Cleaning Assignment Remark Updated',
+
+        message:
+          currentRemarks,
+
+        targetTab:
+          'CUSTOMER_UPDATES',
+
+        targetSection:
+          'cleaning-assignments',
+
+        relatedEntityType:
+          'PROJECT_CLEANING_ASSIGNMENT',
+
+        relatedEntityId:
+          Number(
+            savedAssignment.id,
+          ),
+
+        createdBy:
+          Number(
+            user?.id ||
+              user?.userId ||
+              user?.sub ||
+              0,
+          ) || null,
+
+        createdByName:
+          user?.name ||
+          user?.email ||
+          '',
+      });
+  } catch (error) {
+    console.error(
+      'Failed to create cleaning assignment remark notification:',
+      error,
+    );
+  }
+}
+
+if (
+  currentCompletionRemarks &&
+  currentCompletionRemarks !==
+    previousCompletionRemarks
+) {
+  try {
+    await this
+      .projectStaffNotificationService
+      .notifyProjectUsers({
+        projectId:
+          Number(
+            savedAssignment.projectId,
+          ),
+
+        module:
+          'MAINTENANCE',
+
+        eventType:
+          'CLEANING_COMPLETION_REMARK_ADDED',
+
+        title:
+          'Cleaning Completion Remark Added',
+
+        message:
+          currentCompletionRemarks,
+
+        targetTab:
+          'CUSTOMER_UPDATES',
+
+        targetSection:
+          'cleaning-assignments',
+
+        relatedEntityType:
+          'PROJECT_CLEANING_ASSIGNMENT',
+
+        relatedEntityId:
+          Number(
+            savedAssignment.id,
+          ),
+
+        createdBy:
+          Number(
+            user?.id ||
+              user?.userId ||
+              user?.sub ||
+              0,
+          ) || null,
+
+        createdByName:
+          user?.name ||
+          user?.email ||
+          '',
+      });
+  } catch (error) {
+    console.error(
+      'Failed to create cleaning completion remark notification:',
+      error,
+    );
+  }
+}
+
+return savedAssignment;
 }
 
 async hideCleaningAssignment(id: number, user: any) {
@@ -40911,7 +42337,84 @@ async createCustomerUpdate(projectId: number, body: any, user: any) {
       : '',
   });
 
-  return this.projectCustomerUpdateRepository.save(update);
+  const savedUpdate =
+  await this.projectCustomerUpdateRepository.save(
+    update,
+  );
+
+const updateTitle =
+  String(
+    savedUpdate.title || '',
+  ).trim();
+
+const updateDescription =
+  String(
+    savedUpdate.description || '',
+  ).trim();
+
+const notificationMessage =
+  updateDescription ||
+  updateTitle;
+
+if (notificationMessage) {
+  try {
+    await this
+      .projectStaffNotificationService
+      .notifyProjectUsers({
+        projectId:
+          Number(
+            savedUpdate.projectId,
+          ),
+
+        module:
+          'MAINTENANCE',
+
+        eventType:
+          'CUSTOMER_UPDATE_ADDED',
+
+        title:
+          updateTitle ||
+          'New Customer Update',
+
+        message:
+          notificationMessage,
+
+        targetTab:
+          'CUSTOMER_UPDATES',
+
+        targetSection:
+          'customer-updates',
+
+        relatedEntityType:
+          'PROJECT_CUSTOMER_UPDATE',
+
+        relatedEntityId:
+          Number(
+            savedUpdate.id,
+          ),
+
+        createdBy:
+          Number(
+            user?.id ||
+              user?.userId ||
+              user?.sub ||
+              0,
+          ) || null,
+
+        createdByName:
+          user?.name ||
+          user?.email ||
+          '',
+      });
+  } catch (error) {
+    console.error(
+      'Failed to create customer update staff notification:',
+      error,
+    );
+  }
+}
+
+return savedUpdate;
 }
 
 async getCustomerUpdates(
@@ -41662,6 +43165,11 @@ async updateContractorAssignment(
     );
   }
 
+  const previousAssignmentRemarks =
+  String(
+    assignment.remarks || '',
+  ).trim();
+
   const roles = Array.isArray(user?.roles)
     ? user.roles
     : [];
@@ -41789,9 +43297,78 @@ const uploadedTypes = new Set(
     ).trim();
   }
 
-  return this.projectContractorAssignmentRepository.save(
+  const savedAssignment =
+  await this.projectContractorAssignmentRepository.save(
     assignment,
   );
+
+const currentAssignmentRemarks =
+  String(
+    savedAssignment.remarks || '',
+  ).trim();
+
+if (
+  currentAssignmentRemarks &&
+  currentAssignmentRemarks !==
+    previousAssignmentRemarks
+) {
+  try {
+    await this
+      .projectStaffNotificationService
+      .notifyProjectUsers({
+        projectId:
+          Number(
+            savedAssignment.projectId,
+          ),
+
+        module:
+          'CONTRACTOR',
+
+        eventType:
+          'CONTRACTOR_ASSIGNMENT_REMARK_UPDATED',
+
+        title:
+          'Contractor Assignment Remark Updated',
+
+        message:
+          currentAssignmentRemarks,
+
+        targetTab:
+          'CONTRACTOR_WORK',
+
+        targetSection:
+          'contractor-assignments',
+
+        relatedEntityType:
+          'PROJECT_CONTRACTOR_ASSIGNMENT',
+
+        relatedEntityId:
+          Number(
+            savedAssignment.id,
+          ),
+
+        createdBy:
+          Number(
+            user?.id ||
+              user?.userId ||
+              user?.sub ||
+              0,
+          ) || null,
+
+        createdByName:
+          user?.name ||
+          user?.email ||
+          '',
+      });
+  } catch (error) {
+    console.error(
+      'Failed to create contractor assignment remark update notification:',
+      error,
+    );
+  }
+}
+
+return savedAssignment;
 }
 
 async reassignContractorAssignment(
@@ -42884,9 +44461,65 @@ async addContractorComment(
         : '',
     });
 
-  return this.projectContractorCommentRepository.save(
+  const savedComment =
+  await this.projectContractorCommentRepository.save(
     comment,
   );
+
+try {
+  await this
+    .projectStaffNotificationService
+    .notifyProjectUsers({
+      projectId:
+        Number(savedComment.projectId),
+
+      module:
+        'CONTRACTOR',
+
+      eventType:
+        'CONTRACTOR_COMMENT_ADDED',
+
+      title:
+        'New Contractor Work Comment',
+
+      message:
+        String(
+          savedComment.comment || '',
+        ).trim(),
+
+      targetTab:
+        'CONTRACTOR_WORK',
+
+      targetSection:
+        'contractor-comments',
+
+      relatedEntityType:
+        'PROJECT_CONTRACTOR_COMMENT',
+
+      relatedEntityId:
+        Number(savedComment.id),
+
+      createdBy:
+        Number(
+          user?.id ||
+            user?.userId ||
+            user?.sub ||
+            0,
+        ) || null,
+
+      createdByName:
+        user?.name ||
+        user?.email ||
+        '',
+    });
+} catch (error) {
+  console.error(
+    'Failed to create contractor comment notification:',
+    error,
+  );
+}
+
+return savedComment;
 }
 
 async getContractorComments(
