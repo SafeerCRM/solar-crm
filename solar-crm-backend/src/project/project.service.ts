@@ -7375,49 +7375,49 @@ private getProjectCommentNotificationNavigation(
       };
 
     case 'SUBSIDY':
-      return {
-        module: 'SUBSIDY',
-        title:
-          'New Subsidy Comment',
-        targetTab:
-          'SUBSIDY_DEPARTMENT',
-        targetSection:
-          'comments',
-      };
+  return {
+    module: 'SUBSIDY',
+    title:
+      'New Subsidy Comment',
+    targetTab:
+      'SUBSIDY_DEPARTMENT',
+    targetSection:
+      'subsidy-detail',
+  };
 
     case 'ELECTRICITY':
-      return {
-        module: 'ELECTRICITY',
-        title:
-          'New Electricity Comment',
-        targetTab:
-          'ELECTRICITY_DEPARTMENT',
-        targetSection:
-          'comments',
-      };
+  return {
+    module: 'ELECTRICITY',
+    title:
+      'New Electricity Comment',
+    targetTab:
+      'ELECTRICITY_DEPARTMENT',
+    targetSection:
+      'electricity-detail',
+  };
 
     case 'PAYMENT':
-      return {
-        module: 'PAYMENT',
-        title:
-          'New Payment Comment',
-        targetTab:
-          'PAYMENT_COLLECTION',
-        targetSection:
-          'comments',
-      };
+  return {
+    module: 'PAYMENT',
+    title:
+      'New Payment Comment',
+    targetTab:
+      'PAYMENT_COLLECTION',
+    targetSection:
+      'payment-collection',
+  };
 
     case 'PROJECT_MANAGEMENT':
-    case 'EXECUTION':
-      return {
-        module: 'EXECUTION',
-        title:
-          'New Project Execution Comment',
-        targetTab:
-          'PROJECT_EXECUTION',
-        targetSection:
-          'comments',
-      };
+case 'EXECUTION':
+  return {
+    module: 'EXECUTION',
+    title:
+      'New Project Execution Comment',
+    targetTab:
+      'PROJECT_EXECUTION',
+    targetSection:
+      'execution-activities',
+  };
 
     default:
       return {
@@ -39979,7 +39979,7 @@ await this
       'TIMELINE',
 
     targetSection:
-      'delay-notes',
+      `delay-notes:${Number(ruleId)}`,
 
     relatedEntityType:
       'PROJECT_TIMELINE_DELAY_NOTE',
@@ -41437,7 +41437,7 @@ if (cleaningRemarks) {
           cleaningRemarks,
 
         targetTab:
-          'CUSTOMER_UPDATES',
+          'CONTRACTOR_WORK',
 
         targetSection:
           'cleaning-assignments',
@@ -41663,7 +41663,7 @@ if (
           currentRemarks,
 
         targetTab:
-          'CUSTOMER_UPDATES',
+          'CONTRACTOR_WORK',
 
         targetSection:
           'cleaning-assignments',
@@ -41724,7 +41724,7 @@ if (
           currentCompletionRemarks,
 
         targetTab:
-          'CUSTOMER_UPDATES',
+          'CONTRACTOR_WORK',
 
         targetSection:
           'cleaning-assignments',

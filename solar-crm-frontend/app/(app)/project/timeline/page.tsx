@@ -3,6 +3,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 
@@ -10,6 +11,7 @@ import axios from 'axios';
 
 import {
   useRouter,
+  useSearchParams,
 } from 'next/navigation';
 
 const API_BASE_URL =
@@ -632,6 +634,24 @@ function SummaryCard({
 export default function ProjectTimelinePage() {
   const router =
     useRouter();
+
+      const searchParams =
+    useSearchParams();
+
+  const notificationProjectId =
+    searchParams.get(
+      'projectId',
+    );
+
+  const notificationSection =
+    searchParams.get(
+      'section',
+    );
+
+    const handledNotificationNavigationRef =
+  useRef<string | null>(
+    null,
+  );
 
   const [activeTab, setActiveTab] =
   useState<
@@ -2233,6 +2253,136 @@ const selectPerformanceProject =
         );
       }
     };
+
+    useEffect(() => {
+  if (
+    !notificationProjectId ||
+    !notificationSection
+  ) {
+    return;
+  }
+
+  const sectionParts =
+    notificationSection.split(
+      ':',
+    );
+
+  if (
+    sectionParts[0] !==
+    'delay-notes'
+  ) {
+    return;
+  }
+
+  const projectId =
+    Number(
+      notificationProjectId,
+    );
+
+  const ruleId =
+    Number(
+      sectionParts[1] || 0,
+    );
+
+  if (
+    !Number.isInteger(
+      projectId,
+    ) ||
+    projectId <= 0 ||
+    !Number.isInteger(
+      ruleId,
+    ) ||
+    ruleId <= 0
+  ) {
+    return;
+  }
+
+  const navigationKey =
+    `${projectId}:${ruleId}`;
+
+  if (
+    handledNotificationNavigationRef
+      .current ===
+    navigationKey
+  ) {
+    return;
+  }
+
+  handledNotificationNavigationRef.current =
+    navigationKey;
+
+  const openNotificationDelayHistory =
+    async () => {
+      try {
+        setActiveTab(
+          'TRACKING',
+        );
+
+        const res =
+          await axios.get(
+            `${API_BASE_URL}/project/timeline/tracking`,
+            {
+              params: {
+                page: 1,
+                limit: 20,
+                projectId,
+                ruleId,
+              },
+
+              headers:
+                authHeaders(),
+            },
+          );
+
+        const matchingRow =
+          (
+            Array.isArray(
+              res.data?.data,
+            )
+              ? res.data.data
+              : []
+          ).find(
+            (
+              row: TrackingRow,
+            ) =>
+              Number(
+                row.projectId,
+              ) ===
+                projectId &&
+              Number(
+                row.ruleId,
+              ) ===
+                ruleId,
+          );
+
+        if (!matchingRow) {
+          console.error(
+            'Timeline notification row not found',
+            {
+              projectId,
+              ruleId,
+            },
+          );
+
+          return;
+        }
+
+        await openDelayHistory(
+          matchingRow,
+        );
+      } catch (error) {
+        console.error(
+          'Failed to open timeline notification',
+          error,
+        );
+      }
+    };
+
+  openNotificationDelayHistory();
+}, [
+  notificationProjectId,
+  notificationSection,
+]);
 
   return (
     <div className="min-w-0 space-y-4 overflow-x-hidden bg-gray-50 p-3 md:p-6">

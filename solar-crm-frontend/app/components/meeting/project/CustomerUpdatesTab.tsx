@@ -188,8 +188,11 @@ export default function CustomerUpdatesTab({ projectId }: Props) {
   }, [projectId, showHidden]);
 
   return (
-    <div className="space-y-5">
-      <div className="rounded-2xl bg-white p-5 shadow">
+  <div
+    id="customer-updates"
+    className="scroll-mt-24 space-y-5"
+  >
+    <div className="rounded-2xl bg-white p-5 shadow">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-xl font-bold text-gray-800">

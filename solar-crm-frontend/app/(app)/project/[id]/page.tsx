@@ -1,6 +1,11 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { DateCalendar } from '@mui/x-date-pickers/DateCalendar';
@@ -685,6 +690,11 @@ export default function ProjectDetailPage() {
 
   const requestedSection =
     searchParams.get('section');
+
+    const handledModalNavigationRef =
+  useRef<string | null>(
+    null,
+  );
 
   const pdfRef =
     useRef<HTMLDivElement | null>(null);
@@ -4864,6 +4874,42 @@ useEffect(() => {
 }, [
   activeTab,
   requestedSection,
+  showEditModal,
+]);
+
+useEffect(() => {
+  if (
+    requestedSection !==
+      'project-remarks' &&
+    requestedSection !==
+      'project-work-state'
+  ) {
+    return;
+  }
+
+  if (!project) {
+    return;
+  }
+
+  const navigationKey =
+    `${projectId}:${requestedSection}`;
+
+  if (
+    handledModalNavigationRef
+      .current ===
+    navigationKey
+  ) {
+    return;
+  }
+
+  handledModalNavigationRef.current =
+    navigationKey;
+
+  openEditProject();
+}, [
+  projectId,
+  requestedSection,
+  project,
 ]);
 
 useEffect(() => {
@@ -5796,7 +5842,10 @@ const isLoanProcessCompleted =
 />
 </div>
 
-<div className="rounded-2xl bg-white p-5 shadow">
+<div
+  id="cleaning-assignments"
+  className="scroll-mt-24 rounded-2xl bg-white p-5 shadow"
+>
   <h2 className="text-xl font-bold text-gray-800">
     Cleaning Assignment History
   </h2>
@@ -5854,12 +5903,18 @@ const isLoanProcessCompleted =
   </div>
 </div>
 
-    <div className="rounded-2xl bg-white p-5 shadow">
-      <h2 className="text-xl font-bold text-gray-800">
-        Contractor Assignment History
-      </h2>
+    <div
+  id="contractor-assignments"
+  className="scroll-mt-24 rounded-2xl bg-white p-5 shadow"
+>
+  <h2 className="text-xl font-bold text-gray-800">
+    Contractor Assignment History
+  </h2>
 
-      <div className="mt-5 space-y-3">
+  <div
+    id="contractor-comments"
+    className="scroll-mt-24 mt-5 space-y-3"
+  >
         {contractorAssignments.length === 0 ? (
           <p className="text-sm text-gray-500">
             No contractor assigned yet.
@@ -7409,7 +7464,10 @@ if (
   <input placeholder="Payment Status" value={editForm.paymentStatus} onChange={(e) => setEditForm({ ...editForm, paymentStatus: e.target.value })} className="rounded-xl border p-3" />
 </div>
 
-<div className="rounded-2xl border bg-amber-50 p-4 md:col-span-2">
+<div
+  id="project-work-state"
+  className="scroll-mt-24 rounded-2xl border bg-amber-50 p-4 md:col-span-2"
+>
   <h3 className="font-bold text-amber-900">
     Project Work State
   </h3>
@@ -7447,18 +7505,23 @@ if (
   </div>
 </div>
 
-      <textarea
-        placeholder="Remarks"
-        value={editForm.remarks}
-        onChange={(e) =>
-          setEditForm({
-            ...editForm,
-            remarks: e.target.value,
-          })
-        }
-        className="mt-4 w-full rounded-xl border p-3"
-        rows={4}
-      />
+      <div
+  id="project-remarks"
+  className="scroll-mt-24"
+>
+  <textarea
+    placeholder="Remarks"
+    value={editForm.remarks}
+    onChange={(e) =>
+      setEditForm({
+        ...editForm,
+        remarks: e.target.value,
+      })
+    }
+    className="mt-4 w-full rounded-xl border p-3"
+    rows={4}
+  />
+</div>
 
       <div className="mt-5 flex justify-end gap-3">
         <button
@@ -7588,8 +7651,13 @@ if (
         </div>
       </div>
 
-      <div className="rounded-2xl bg-white p-5 shadow">
-        <h2 className="mb-4 text-lg font-bold text-gray-800">Approval Status</h2>
+      <div
+  id="project-approvals"
+  className="scroll-mt-24 rounded-2xl bg-white p-5 shadow"
+>
+  <h2 className="mb-4 text-lg font-bold text-gray-800">
+    Approval Status
+  </h2>
         <div className="grid gap-3 md:grid-cols-3">
 
          <div className="rounded-xl bg-blue-50 p-4">
@@ -7781,12 +7849,18 @@ if (
 </div>
 
       </div>
-
+<div
+  id="project-status"
+  className="scroll-mt-24 contents"
+>
 {canCompleteProject &&
   project?.status !== 'COMPLETED' &&
   project?.status !== 'CANCELLED' &&
   project?.status !== 'REJECTED' && (
-    <div className="rounded-2xl bg-white p-5 shadow">
+        <div
+      id="project-status"
+      className="scroll-mt-24 rounded-2xl bg-white p-5 shadow"
+    >
       <h2 className="text-lg font-bold text-gray-800">
         Move Project Workflow Status
       </h2>
@@ -7841,7 +7915,10 @@ if (
 
 
 {canCompleteProject && (
-      <div className="rounded-2xl bg-white p-5 shadow">
+      <div
+        id="project-completion"
+        className="scroll-mt-24 rounded-2xl bg-white p-5 shadow"
+      >
   <h2 className="text-lg font-bold text-gray-800">
     Complete Project
   </h2>
@@ -7927,6 +8004,7 @@ if (
       </button>
     </div>
   )}
+  </div>
 
       <div className="rounded-2xl bg-white p-5 shadow">
         <h2 className="mb-2 text-lg font-bold text-gray-800">Remarks</h2>
@@ -8436,10 +8514,13 @@ if (
       </button>
     </div>
 
-    <div className="rounded-2xl bg-white p-5 shadow">
-      <h2 className="text-xl font-bold text-gray-800">
-        Execution Timeline
-      </h2>
+    <div
+  id="execution-activities"
+  className="scroll-mt-24 rounded-2xl bg-white p-5 shadow"
+>
+  <h2 className="text-xl font-bold text-gray-800">
+    Execution Timeline
+  </h2>
 
       <div className="mt-5 space-y-3">
         {executionActivities.length === 0 ? (
@@ -9432,7 +9513,10 @@ if (
   </div>
 </div>
 
-    <div className="mt-8 rounded-2xl border p-4">
+    <div
+  id="comments"
+  className="scroll-mt-24 mt-8 rounded-2xl border p-4"
+>
   <h3 className="text-lg font-bold text-gray-800">
     Loan Comments / Follow-up History
   </h3>
@@ -9491,7 +9575,10 @@ if (
 )}
 
 {activeTab === 'SUBSIDY_DEPARTMENT' && (
-  <div className="rounded-2xl bg-white p-5 shadow">
+  <div
+    id="subsidy-detail"
+    className="scroll-mt-24 rounded-2xl bg-white p-5 shadow"
+  >
     <h2 className="text-xl font-bold text-gray-800">
       Subsidy Department
     </h2>
@@ -9638,7 +9725,10 @@ if (
 )}
 
 {activeTab === 'ELECTRICITY_DEPARTMENT' && (
-  <div className="rounded-2xl bg-white p-5 shadow">
+  <div
+  id="electricity-detail"
+  className="scroll-mt-24 rounded-2xl bg-white p-5 shadow"
+>
     <h2 className="text-xl font-bold text-gray-800">
       Electricity Department
     </h2>
@@ -9853,7 +9943,10 @@ if (
 )}
 
 {activeTab === 'PAYMENT_COLLECTION' && (
-  <div className="space-y-5">
+  <div
+    id="payment-collection"
+    className="scroll-mt-24 space-y-5"
+  >
 
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
   <div className="rounded-2xl bg-blue-50 p-4">
@@ -10652,7 +10745,10 @@ if (
 )}
 
 {activeTab === 'DOCUMENTS' && (
-<div className="mt-6 rounded-2xl bg-white p-5 shadow">
+<div
+  id="project-documents"
+  className="scroll-mt-24 mt-6 rounded-2xl bg-white p-5 shadow"
+>
   <h2 className="text-xl font-bold text-gray-800">
     Project Documents
   </h2>

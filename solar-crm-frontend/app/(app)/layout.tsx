@@ -919,7 +919,36 @@ const openProjectNotification = async (
   setBellOpen(false);
   setRealtimeNotification(null);
 
-  const query =
+  if (
+  notification.targetTab ===
+  'TIMELINE'
+) {
+  const timelineQuery =
+    new URLSearchParams();
+
+  timelineQuery.set(
+    'projectId',
+    String(
+      notification.projectId,
+    ),
+  );
+
+  if (
+    notification.targetSection
+  ) {
+    timelineQuery.set(
+      'section',
+      notification.targetSection,
+    );
+  }
+
+  window.location.href =
+    `/project/timeline?${timelineQuery.toString()}`;
+
+  return;
+}
+
+const query =
   new URLSearchParams();
 
 if (notification.targetTab) {
