@@ -249,17 +249,17 @@ export default function SolarMitraReferralPage() {
                 alternatePhone ||
                 undefined,
 
-              address:
-                form.address.trim() ||
-                undefined,
+              customerAddress:
+  form.address.trim() ||
+  undefined,
 
-              area:
-                form.area.trim() ||
-                undefined,
+customerArea:
+  form.area.trim() ||
+  undefined,
 
-              city:
-                form.city.trim() ||
-                undefined,
+customerCity:
+  form.city.trim() ||
+  undefined,
 
               remarks:
                 form.remarks.trim() ||
