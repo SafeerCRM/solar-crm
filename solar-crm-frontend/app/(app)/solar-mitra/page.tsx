@@ -309,6 +309,12 @@ export default function SolarMitraPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  const [capturingGps, setCapturingGps] =
+  useState(false);
+
+const [uploadingShopPhoto, setUploadingShopPhoto] =
+  useState(false);
+
   const [mitraSearch, setMitraSearch] = useState('');
   const [mitraStatus, setMitraStatus] = useState('');
 
@@ -782,6 +788,135 @@ export default function SolarMitraPage() {
       },
     );
 
+    const captureMitraLocation = () => {
+  if (!navigator.geolocation) {
+    alert(
+      'Location is not supported on this device',
+    );
+    return;
+  }
+
+  setCapturingGps(true);
+
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      const latitude =
+        position.coords.latitude;
+
+      const longitude =
+        position.coords.longitude;
+
+      setMitraForm(
+        (prev: any) => ({
+          ...prev,
+          gpsLatitude:
+            String(latitude),
+          gpsLongitude:
+            String(longitude),
+          gpsAddress:
+            prev.gpsAddress ||
+            `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
+        }),
+      );
+
+      setCapturingGps(false);
+    },
+
+    (error) => {
+      console.error(
+        'GPS capture failed:',
+        error,
+      );
+
+      setCapturingGps(false);
+
+      alert(
+        'Unable to capture location. Please allow location permission and try again.',
+      );
+    },
+
+    {
+      enableHighAccuracy: true,
+      timeout: 15000,
+      maximumAge: 0,
+    },
+  );
+};
+
+const uploadShopPhoto = async (
+  file: File,
+) => {
+  if (!file) return;
+
+  if (
+    ![
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+    ].includes(file.type)
+  ) {
+    alert(
+      'Only JPG, PNG, and WEBP images are allowed',
+    );
+    return;
+  }
+
+  try {
+    setUploadingShopPhoto(true);
+
+    const formData =
+      new FormData();
+
+    formData.append(
+      'file',
+      file,
+    );
+
+    const response =
+      await axios.post(
+        `${API_BASE_URL}/solar-mitra/shop-photo/upload`,
+        formData,
+        {
+          headers: {
+            ...getAuthHeaders(),
+            'Content-Type':
+              'multipart/form-data',
+          },
+        },
+      );
+
+    const fileUrl =
+      response.data?.fileUrl;
+
+    if (!fileUrl) {
+      throw new Error(
+        'Upload URL was not returned',
+      );
+    }
+
+    setMitraForm(
+      (prev: any) => ({
+        ...prev,
+        shopPhotoUrl:
+          fileUrl,
+      }),
+    );
+  } catch (error: any) {
+    console.error(
+      'Shop photo upload failed:',
+      error,
+    );
+
+    alert(
+      error?.response?.data?.message ||
+        error?.message ||
+        'Failed to upload shop photo',
+    );
+  } finally {
+    setUploadingShopPhoto(false);
+  }
+};
+
   const saveMitra = async (
     event: FormEvent,
   ) => {
@@ -1135,6 +1270,70 @@ export default function SolarMitraPage() {
     }
   };
 
+  const callMitra = (
+  item: SolarMitra,
+) => {
+  const phone = String(
+    item.primaryPhone || '',
+  ).trim();
+
+  if (!phone) {
+    alert(
+      'Phone number is not available',
+    );
+    return;
+  }
+
+  window.location.href =
+    `tel:${phone}`;
+};
+
+const navigateToMitra = (
+  item: SolarMitra,
+) => {
+  const latitude =
+    item.gpsLatitude;
+
+  const longitude =
+    item.gpsLongitude;
+
+  let destination = '';
+
+  if (
+    latitude !== null &&
+    latitude !== undefined &&
+    longitude !== null &&
+    longitude !== undefined
+  ) {
+    destination =
+      `${latitude},${longitude}`;
+  } else {
+    destination = [
+      item.gpsAddress,
+      item.address,
+      item.area,
+      item.city,
+      item.state,
+    ]
+      .filter(Boolean)
+      .join(', ');
+  }
+
+  if (!destination) {
+    alert(
+      'Location is not available for this Solar Mitra',
+    );
+    return;
+  }
+
+  window.open(
+    `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+      destination,
+    )}`,
+    '_blank',
+  );
+};
+
   const getPublicReferralUrl = (
     item: SolarMitra,
   ) => {
@@ -1207,22 +1406,86 @@ export default function SolarMitraPage() {
     }
   };
 
-  const downloadQr = () => {
-    if (!qrMitra || !qrDataUrl) {
+  const downloadQr = async () => {
+  if (!qrMitra || !qrDataUrl) {
+    return;
+  }
+
+  const fileName =
+    `solar-mitra-${qrMitra.id}-qr.png`;
+
+  try {
+    const { Capacitor } =
+      await import(
+        '@capacitor/core'
+      );
+
+    if (
+      Capacitor.isNativePlatform()
+    ) {
+      const { Filesystem } =
+        await import(
+          '@capacitor/filesystem'
+        );
+
+      const { Share } =
+        await import(
+          '@capacitor/share'
+        );
+
+      const base64Data =
+        qrDataUrl.split(',')[1];
+
+      if (!base64Data) {
+        throw new Error(
+          'Invalid QR image data',
+        );
+      }
+
+      const saved =
+        await Filesystem.writeFile({
+          path: fileName,
+          data: base64Data,
+          directory:
+            (
+              await import(
+                '@capacitor/filesystem'
+              )
+            ).Directory.Cache,
+        });
+
+      await Share.share({
+        title:
+          'Solar Mitra Referral QR',
+        text:
+          `${qrMitra.name} - Solar Mitra Referral QR`,
+        url: saved.uri,
+        dialogTitle:
+          'Save or share QR',
+      });
+
       return;
     }
+  } catch (error) {
+    console.error(
+      'Native QR save/share failed:',
+      error,
+    );
+  }
 
-    const link =
-      document.createElement('a');
+  const link =
+    document.createElement('a');
 
-    link.href = qrDataUrl;
-    link.download =
-      `solar-mitra-${qrMitra.id}-qr.png`;
+  link.href = qrDataUrl;
+  link.download = fileName;
 
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-  };
+  document.body.appendChild(
+    link,
+  );
+
+  link.click();
+  link.remove();
+};
 
   const tabs: {
     key: Tab;
@@ -1632,16 +1895,7 @@ export default function SolarMitraPage() {
                       </p>
                     </div>
 
-                    <div>
-                      <p className="text-xs font-semibold text-gray-400">
-                        Portal Access
-                      </p>
-                      <p className="font-semibold text-gray-800">
-                        {item.portalPassword
-                          ? 'Enabled'
-                          : 'Password not set'}
-                      </p>
-                    </div>
+                    
 
                     <div>
                       <p className="text-xs font-semibold text-gray-400">
@@ -1691,6 +1945,26 @@ export default function SolarMitraPage() {
                   )}
 
                   <div className="mt-4 flex flex-wrap gap-2">
+
+                    <button
+  type="button"
+  onClick={() =>
+    callMitra(item)
+  }
+  className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700"
+>
+  📞 Call
+</button>
+
+<button
+  type="button"
+  onClick={() =>
+    navigateToMitra(item)
+  }
+  className="rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700"
+>
+  📍 Navigate
+</button>
                     <button
                       type="button"
                       onClick={() =>
@@ -2330,8 +2604,8 @@ export default function SolarMitraPage() {
                 </h2>
 
                 <p className="text-sm text-gray-500">
-                  Referral partner profile and portal access
-                </p>
+  Referral partner profile and CRM access
+</p>
               </div>
 
               <button
@@ -2432,7 +2706,11 @@ export default function SolarMitraPage() {
                   />
 
                   <FormField
-                    label="Portal Password"
+                    label={
+  editingMitra
+    ? 'New CRM Password'
+    : 'CRM Password *'
+}
                     value={
                       mitraForm.portalPassword
                     }
@@ -2493,6 +2771,30 @@ export default function SolarMitraPage() {
                       )
                     }
                   />
+
+                  <div className="md:col-span-2">
+  <button
+    type="button"
+    onClick={
+      captureMitraLocation
+    }
+    disabled={capturingGps}
+    className="inline-flex items-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50"
+  >
+    {capturingGps
+      ? 'Capturing Location...'
+      : '📍 Capture GPS Location'}
+  </button>
+
+  {mitraForm.gpsLatitude &&
+    mitraForm.gpsLongitude && (
+      <p className="mt-2 text-xs font-semibold text-emerald-700">
+        Location captured:{' '}
+        {mitraForm.gpsLatitude},{' '}
+        {mitraForm.gpsLongitude}
+      </p>
+    )}
+</div>
 
                   <FormField
                     label="GPS Address"
@@ -2569,22 +2871,65 @@ export default function SolarMitraPage() {
                   </div>
 
                   <div className="md:col-span-2">
-                    <FormField
-                      label="Shop Photo URL"
-                      value={
-                        mitraForm.shopPhotoUrl
-                      }
-                      onChange={(value) =>
-                        setMitraForm(
-                          (prev: any) => ({
-                            ...prev,
-                            shopPhotoUrl:
-                              value,
-                          }),
-                        )
-                      }
-                    />
-                  </div>
+  <label className="mb-1 block text-sm font-bold text-gray-700">
+    Shop Photo
+  </label>
+
+  <input
+    type="file"
+    accept="image/jpeg,image/png,image/webp"
+    capture="environment"
+    disabled={uploadingShopPhoto}
+    onChange={async (
+      event,
+    ) => {
+      const file =
+        event.target.files?.[0];
+
+      if (file) {
+        await uploadShopPhoto(
+          file,
+        );
+      }
+
+      event.target.value = '';
+    }}
+    className="block w-full rounded-xl border border-gray-300 px-4 py-3 text-sm"
+  />
+
+  {uploadingShopPhoto && (
+    <p className="mt-2 text-xs font-semibold text-blue-600">
+      Uploading shop photo...
+    </p>
+  )}
+
+  {mitraForm.shopPhotoUrl && (
+    <div className="mt-3">
+      <img
+        src={
+          mitraForm.shopPhotoUrl
+        }
+        alt="Solar Mitra shop"
+        className="h-40 w-full max-w-sm rounded-xl border border-gray-200 object-cover"
+      />
+
+      <button
+        type="button"
+        onClick={() =>
+          setMitraForm(
+            (prev: any) => ({
+              ...prev,
+              shopPhotoUrl: '',
+            }),
+          )
+        }
+        className="mt-2 text-xs font-bold text-red-600"
+      >
+        Remove Photo
+      </button>
+    </div>
+  )}
+</div>
                 </div>
               </div>
 
@@ -2790,7 +3135,11 @@ export default function SolarMitraPage() {
 
                 <button
                   type="submit"
-                  disabled={saving}
+                  disabled={
+  saving ||
+  uploadingShopPhoto ||
+  capturingGps
+}
                   className="rounded-xl bg-orange-600 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50"
                 >
                   {saving
@@ -3243,7 +3592,7 @@ export default function SolarMitraPage() {
                 onClick={downloadQr}
                 className="rounded-xl bg-orange-600 px-4 py-2 text-sm font-bold text-white"
               >
-                Download QR
+                Save / Share QR
               </button>
 
               <button
