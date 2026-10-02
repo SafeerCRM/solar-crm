@@ -653,6 +653,7 @@ const [paymentReceiptUploading, setPaymentReceiptUploading] =
 const [deliveryDistanceKm, setDeliveryDistanceKm] = useState('');
 const [deliverySaving, setDeliverySaving] = useState(false);
 const [finalInvoiceModalOpen, setFinalInvoiceModalOpen] = useState(false);
+
 const [finalInvoiceForm, setFinalInvoiceForm] = useState({
   invoiceNumber: '',
   invoiceDiscountAmount: '',
@@ -2802,7 +2803,7 @@ setReferralStaffDropdownOpen(false);
     setOrderRows(orderRows.filter((_, rowIndex) => rowIndex !== index));
   };
 
-  const updateOrderRow = (
+    const updateOrderRow = (
     index: number,
     field: keyof OrderItemRow,
     value: string,
@@ -2811,6 +2812,7 @@ setReferralStaffDropdownOpen(false);
     rows[index] = { ...rows[index], [field]: value };
     setOrderRows(rows);
   };
+
 
   const generateDealerPi = async () => {
   if (!selectedOrder?.order?.id) return;
@@ -2895,7 +2897,7 @@ const openFinalInvoiceModal =
           },
         );
 
-      setFinalInvoiceForm({
+            setFinalInvoiceForm({
         invoiceNumber:
           previewResponse
             .data
@@ -2935,11 +2937,17 @@ const generateDealerFinalInvoice = async () => {
     await axios.post(
       `${API_BASE_URL}/project/dealer-order/${selectedOrder.order.id}/final-invoice`,
       {
-        invoiceNumber: finalInvoiceForm.invoiceNumber,
-        invoiceDiscountAmount: Number(
-          finalInvoiceForm.invoiceDiscountAmount || 0,
-        ),
-        invoiceRemarks: finalInvoiceForm.invoiceRemarks,
+        invoiceNumber:
+          finalInvoiceForm.invoiceNumber,
+
+        invoiceDiscountAmount:
+          Number(
+            finalInvoiceForm.invoiceDiscountAmount ||
+              0,
+          ),
+
+        invoiceRemarks:
+          finalInvoiceForm.invoiceRemarks,
       },
       { headers: headers() },
     );
@@ -7997,7 +8005,7 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
 
     {finalInvoiceModalOpen && (
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-    <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl">
+        <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold text-gray-800">
@@ -8056,6 +8064,8 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
           rows={4}
         />
 
+              
+
         <div className="rounded-xl bg-blue-50 p-3 text-sm text-blue-800">
           <p>
             Current Order Total:{' '}
@@ -8063,6 +8073,7 @@ const updateAdminDeliveryTimePart = (newTime: Dayjs | null) => {
               {money(selectedOrder?.order?.totalAmount)}
             </span>
           </p>
+
           <p>
             Delivery Charge:{' '}
             <span className="font-bold">

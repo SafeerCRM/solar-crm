@@ -221,6 +221,23 @@ const navItems = [
 },
 
 {
+  name: 'Solar Mitra',
+  href: '/solar-mitra',
+  roles: [
+    'OWNER',
+    'FRANCHISE_MANAGER',
+  ],
+},
+
+{
+  name: 'Solar Mitra',
+  href: '/solar-mitra/my',
+  roles: [
+    'SOLAR_MITRA',
+  ],
+},
+
+{
   name: 'Customer Portal',
   href: '/customer-portal-management',
   roles: [
@@ -429,10 +446,11 @@ const navItems = [
     'HR_MANAGER',
     'TRADING_MANAGER',
     'OFFICE_ASSISTANT',
-    'TRADING_HEAD',
-    'SOLAR_FRANCHISE',
-    'PROJECT_CONTRACTOR',
-  ],
+      'TRADING_HEAD',
+  'SOLAR_FRANCHISE',
+  'PROJECT_CONTRACTOR',
+  'SOLAR_MITRA',
+],
 },
 
   {

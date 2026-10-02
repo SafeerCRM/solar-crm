@@ -25,12 +25,18 @@ type Lead = {
   phone: string;
   city?: string;
   zone?: string;
+  source?: string;
   createdByName?: string;
   assignedTo?: number | null;
   potentialPercentage?: number | null;
   status?: string;
   nextFollowUpDate?: string;
   remarks?: string;
+
+  solarMitraId?: number | null;
+  solarMitraName?: string | null;
+  solarMitraBusinessName?: string | null;
+  solarMitraPhone?: string | null;
 };
 
 type User = {
@@ -148,6 +154,18 @@ const [leadManagerFilter, setLeadManagerFilter] = useState('');
 const [followUpFilter, setFollowUpFilter] =
   useState<FollowUpFilter>('WITHOUT');
 
+const [leadSourceTab, setLeadSourceTab] =
+  useState<'ALL' | 'SOLAR_MITRA'>('ALL');
+
+const [solarMitraFilter, setSolarMitraFilter] =
+  useState('');
+
+const [solarMitraOptions, setSolarMitraOptions] =
+  useState<any[]>([]);
+
+const [solarMitraSearch, setSolarMitraSearch] =
+  useState('');
+
 const [exportingLeads, setExportingLeads] =
   useState(false);
 
@@ -184,9 +202,21 @@ const canAssignLeads = isOwner;
       setSearchCity(parsed.searchCity || '');
       setPotentialFilter(parsed.potentialFilter || '');
       setContactedStatusFilter(parsed.contactedStatusFilter || '');
-      setLeadManagerFilter(parsed.leadManagerFilter || '');
+      setLeadManagerFilter(
+  parsed.leadManagerFilter || '',
+);
 
-      const savedFollowUpFilter = String(
+setLeadSourceTab(
+  parsed.leadSourceTab === 'SOLAR_MITRA'
+    ? 'SOLAR_MITRA'
+    : 'ALL',
+);
+
+setSolarMitraFilter(
+  parsed.solarMitraFilter || '',
+);
+
+const savedFollowUpFilter = String(
   parsed.followUpFilter || 'WITHOUT',
 ).toUpperCase();
 
@@ -220,10 +250,35 @@ setFollowUpFilter(
   }, []);
 
   useEffect(() => {
-    if (currentUser && canAssignLeads) {
-      fetchUsers();
-    }
-  }, [currentUser]);
+  if (currentUser && canAssignLeads) {
+    fetchUsers();
+    fetchSolarMitraOptions();
+  }
+}, [currentUser]);
+
+  const fetchSolarMitraOptions = async () => {
+  try {
+    const res = await axios.get(
+      `${backendUrl}/leads/solar-mitra-options/list`,
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+
+    setSolarMitraOptions(
+      Array.isArray(res.data)
+        ? res.data
+        : [],
+    );
+  } catch (err) {
+    console.error(
+      'Failed to load Solar Mitra options',
+      err,
+    );
+
+    setSolarMitraOptions([]);
+  }
+};
 
     const clearAutoTimers = () => {
     if (countdownIntervalRef.current) {
@@ -374,15 +429,17 @@ setFollowUpFilter(
   sessionStorage.setItem(
     LEAD_FILTER_STORAGE_KEY,
     JSON.stringify({
-      searchName,
-      searchPhone,
-      searchCity,
-      potentialFilter,
-      contactedStatusFilter,
-      leadManagerFilter,
-      followUpFilter,
-      leadPage: pageNumber,
-    }),
+  searchName,
+  searchPhone,
+  searchCity,
+  potentialFilter,
+  contactedStatusFilter,
+  leadManagerFilter,
+  followUpFilter,
+  leadSourceTab,
+  solarMitraFilter,
+  leadPage: pageNumber,
+}),
   );
 };
 
@@ -403,6 +460,8 @@ setFollowUpFilter(
   contactedStatusFilter,
   leadManagerFilter,
   followUpFilter,
+  leadSourceTab,
+  solarMitraFilter,
 };
 
     const res = await axios.get(`${backendUrl}/leads`, {
@@ -419,6 +478,18 @@ setFollowUpFilter(
           String(activeFilters.contactedStatusFilter || '').trim() || undefined,
         assignedTo:
           String(activeFilters.leadManagerFilter || '').trim() || undefined,
+          solarMitraOnly:
+  activeFilters.leadSourceTab ===
+  'SOLAR_MITRA'
+    ? 'true'
+    : undefined,
+
+solarMitraId:
+  activeFilters.leadSourceTab ===
+    'SOLAR_MITRA' &&
+  activeFilters.solarMitraFilter
+    ? activeFilters.solarMitraFilter
+    : undefined,
           followUpFilter:
   String(
     activeFilters.followUpFilter || 'WITHOUT',
@@ -515,9 +586,20 @@ const exportFilteredLeads = async () => {
             undefined,
 
           assignedTo:
-            leadManagerFilter || undefined,
+  leadManagerFilter || undefined,
 
-          followUpFilter,
+followUpFilter,
+
+solarMitraOnly:
+  leadSourceTab === 'SOLAR_MITRA'
+    ? 'true'
+    : undefined,
+
+solarMitraId:
+  leadSourceTab === 'SOLAR_MITRA' &&
+  solarMitraFilter
+    ? solarMitraFilter
+    : undefined,
         },
         responseType: 'blob',
       },
@@ -1017,6 +1099,9 @@ const handleSelectAllFilteredStorage = async () => {
   setContactedStatusFilter('');
   setLeadManagerFilter('');
   setFollowUpFilter('WITHOUT');
+  setLeadSourceTab('ALL');
+setSolarMitraFilter('');
+setSolarMitraSearch('');
   setSelectedCalendarDate(null);
   setLeadPage(1);
 
@@ -1028,6 +1113,8 @@ const handleSelectAllFilteredStorage = async () => {
     contactedStatusFilter: '',
     leadManagerFilter: '',
     followUpFilter: 'WITHOUT',
+    leadSourceTab: 'ALL',
+    solarMitraFilter: '',
   });
 };
 
@@ -1554,6 +1641,144 @@ disabled={isAutoCalling}
           )}
         </div>
       </div>
+
+      <div className="mb-4 flex flex-wrap gap-2">
+  <button
+    type="button"
+    onClick={() => {
+      setLeadSourceTab('ALL');
+      setSolarMitraFilter('');
+      setSolarMitraSearch('');
+      setLeadPage(1);
+
+      fetchLeads(1, {
+        searchName,
+        searchPhone,
+        searchCity,
+        potentialFilter,
+        contactedStatusFilter,
+        leadManagerFilter,
+        followUpFilter,
+        leadSourceTab: 'ALL',
+        solarMitraFilter: '',
+      });
+    }}
+    className={`rounded-lg px-4 py-2 text-sm font-semibold ${
+      leadSourceTab === 'ALL'
+        ? 'bg-blue-600 text-white'
+        : 'border bg-white text-gray-700'
+    }`}
+  >
+    All Leads
+  </button>
+
+  <button
+    type="button"
+    onClick={() => {
+      setLeadSourceTab('SOLAR_MITRA');
+      setLeadPage(1);
+
+      fetchLeads(1, {
+        searchName,
+        searchPhone,
+        searchCity,
+        potentialFilter,
+        contactedStatusFilter,
+        leadManagerFilter,
+        followUpFilter,
+        leadSourceTab: 'SOLAR_MITRA',
+        solarMitraFilter,
+      });
+    }}
+    className={`rounded-lg px-4 py-2 text-sm font-semibold ${
+      leadSourceTab === 'SOLAR_MITRA'
+        ? 'bg-orange-600 text-white'
+        : 'border bg-white text-gray-700'
+    }`}
+  >
+    Solar Mitra Leads
+  </button>
+</div>
+
+{leadSourceTab === 'SOLAR_MITRA' && (
+  <div className="mb-4 rounded-xl border border-orange-200 bg-orange-50 p-4">
+    <div className="mb-2 text-sm font-semibold text-gray-800">
+      Filter by Solar Mitra
+    </div>
+
+    <input
+      type="text"
+      value={solarMitraSearch}
+      onChange={(e) =>
+        setSolarMitraSearch(e.target.value)
+      }
+      placeholder="Search Solar Mitra by name, business or phone"
+      className="mb-2 w-full rounded-lg border bg-white p-2"
+    />
+
+    <select
+      value={solarMitraFilter}
+      onChange={(e) => {
+        const value = e.target.value;
+
+        setSolarMitraFilter(value);
+        setLeadPage(1);
+
+        fetchLeads(1, {
+          searchName,
+          searchPhone,
+          searchCity,
+          potentialFilter,
+          contactedStatusFilter,
+          leadManagerFilter,
+          followUpFilter,
+          leadSourceTab:
+            'SOLAR_MITRA',
+          solarMitraFilter: value,
+        });
+      }}
+      className="w-full rounded-lg border bg-white p-2"
+    >
+      <option value="">
+        All Solar Mitras
+      </option>
+
+      {solarMitraOptions
+        .filter((mitra) => {
+          const search =
+            solarMitraSearch
+              .trim()
+              .toLowerCase();
+
+          if (!search) return true;
+
+          return [
+            mitra.name,
+            mitra.businessName,
+            mitra.primaryPhone,
+          ].some((value) =>
+            String(value || '')
+              .toLowerCase()
+              .includes(search),
+          );
+        })
+        .map((mitra) => (
+          <option
+            key={mitra.id}
+            value={mitra.id}
+          >
+            {mitra.name}
+            {mitra.businessName
+              ? ` — ${mitra.businessName}`
+              : ''}
+            {mitra.primaryPhone
+              ? ` — ${mitra.primaryPhone}`
+              : ''}
+          </option>
+        ))}
+    </select>
+  </div>
+)}
 
             <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         <input
@@ -2392,7 +2617,17 @@ fetchStorageLeads(1);
     </button>
   </div>
 )}
-                    <p className="text-sm text-gray-500">Lead ID: {lead.id}</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+  <p className="text-sm text-gray-500">
+    Lead ID: {lead.id}
+  </p>
+
+  {lead.source === 'SOLAR_MITRA' && (
+    <span className="rounded-full bg-orange-100 px-2.5 py-1 text-xs font-semibold text-orange-700">
+      Solar Mitra
+    </span>
+  )}
+</div>
                   </div>
 
                                                       <button
@@ -2422,6 +2657,35 @@ fetchStorageLeads(1);
                   <p>
                     <span className="font-medium">Zone:</span> {lead.zone || '-'}
                   </p>
+
+                  {lead.source === 'SOLAR_MITRA' && (
+  <div className="rounded-lg border border-orange-200 bg-orange-50 p-3">
+    <p className="break-words">
+      <span className="font-semibold text-orange-800">
+        Referred By:
+      </span>{' '}
+      {lead.solarMitraName || '-'}
+    </p>
+
+    {lead.solarMitraBusinessName && (
+      <p className="mt-1 break-words">
+        <span className="font-medium">
+          Business:
+        </span>{' '}
+        {lead.solarMitraBusinessName}
+      </p>
+    )}
+
+    {lead.solarMitraPhone && (
+      <p className="mt-1">
+        <span className="font-medium">
+          Mitra Phone:
+        </span>{' '}
+        {lead.solarMitraPhone}
+      </p>
+    )}
+  </div>
+)}
                                     <p className="break-words">
                     <span className="font-medium">Lead Owner:</span>{' '}
                     {lead.createdByName || '-'}
