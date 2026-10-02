@@ -10,8 +10,14 @@ import {
   DataSource,
   Repository,
 } from 'typeorm';
-import { randomBytes } from 'crypto';
+import {
+  randomBytes,
+  randomUUID,
+} from 'crypto';
 import * as bcrypt from 'bcrypt';
+
+import { createClient } from '@supabase/supabase-js';
+
 
 import {
   User,
@@ -73,6 +79,119 @@ private readonly dataSource: DataSource,
 
     return digits;
   }
+
+  async uploadShopPhoto(
+  file: any,
+  user: any,
+) {
+  if (!file) {
+    throw new BadRequestException(
+      'Shop photo is required',
+    );
+  }
+
+  const mimeType = String(
+    file.mimetype || '',
+  );
+
+  const allowedTypes = [
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+  ];
+
+  if (!allowedTypes.includes(mimeType)) {
+    throw new BadRequestException(
+      'Only JPG, PNG, and WEBP images are allowed',
+    );
+  }
+
+  const maxSize =
+    10 * 1024 * 1024;
+
+  if (file.size > maxSize) {
+    throw new BadRequestException(
+      'Shop photo must be less than 10 MB',
+    );
+  }
+
+  const supabaseUrl =
+    process.env.SUPABASE_URL;
+
+  const serviceKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  const bucket =
+    process.env
+      .SUPABASE_PROJECT_DOCUMENTS_BUCKET ||
+    'project-documents';
+
+  if (!supabaseUrl || !serviceKey) {
+    throw new BadRequestException(
+      'Supabase storage is not configured',
+    );
+  }
+
+  const supabase = createClient(
+    supabaseUrl,
+    serviceKey,
+  );
+
+  const originalName = String(
+    file.originalname || 'shop-photo',
+  );
+
+  const extension =
+    originalName.includes('.')
+      ? originalName.split('.').pop()
+      : mimeType.split('/')[1] || 'jpg';
+
+  const safeExtension = String(
+    extension || 'jpg',
+  ).replace(
+    /[^a-zA-Z0-9]/g,
+    '',
+  );
+
+  const filePath =
+    `solar-mitra/shop-photos/` +
+    `user-${user?.id || 'unknown'}/` +
+    `${Date.now()}-${randomUUID()}.` +
+    `${safeExtension}`;
+
+  const uploadResult =
+    await supabase.storage
+      .from(bucket)
+      .upload(
+        filePath,
+        file.buffer,
+        {
+          contentType: mimeType,
+          upsert: false,
+        },
+      );
+
+  if (uploadResult.error) {
+    throw new BadRequestException(
+      uploadResult.error.message,
+    );
+  }
+
+  const publicUrlResult =
+    supabase.storage
+      .from(bucket)
+      .getPublicUrl(filePath);
+
+  const fileUrl =
+    publicUrlResult.data.publicUrl;
+
+  return {
+    message:
+      'Shop photo uploaded successfully',
+    fileUrl,
+    filePath,
+  };
+}
 
   private async generatePublicReferralToken(): Promise<string> {
     for (let attempt = 0; attempt < 10; attempt += 1) {

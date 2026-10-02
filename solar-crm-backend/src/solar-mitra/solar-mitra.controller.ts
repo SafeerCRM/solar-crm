@@ -1,7 +1,7 @@
 import {
   Body,
-Controller,
-ForbiddenException,
+  Controller,
+  ForbiddenException,
   Get,
   Param,
   ParseIntPipe,
@@ -9,8 +9,12 @@ ForbiddenException,
   Post,
   Query,
   Req,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+
+import { FileInterceptor } from '@nestjs/platform-express';
 
 import { AuthGuard } from '@nestjs/passport';
 
@@ -202,6 +206,26 @@ markPayoutPaid(
   return this.service.markPayoutPaid(
     id,
     body,
+    req.user,
+  );
+}
+
+@Post('shop-photo/upload')
+@UseInterceptors(
+  FileInterceptor('file', {
+    limits: {
+      fileSize: 10 * 1024 * 1024,
+    },
+  }),
+)
+uploadShopPhoto(
+  @Req() req: any,
+  @UploadedFile() file: any,
+) {
+  this.assertManagementAccess(req.user);
+
+  return this.service.uploadShopPhoto(
+    file,
     req.user,
   );
 }
