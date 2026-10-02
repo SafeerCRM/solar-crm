@@ -324,6 +324,16 @@ import {
   ProjectStaffNotificationService,
 } from './project-staff-notification.service';
 
+import {
+  SolarMitraReferral,
+  SolarMitraReferralStatus,
+} from '../solar-mitra/solar-mitra-referral.entity';
+
+import {
+  SolarMitraPayout,
+  SolarMitraPayoutStatus,
+} from '../solar-mitra/solar-mitra-payout.entity';
+
 @Injectable()
 export class ProjectService {
 
@@ -2592,6 +2602,14 @@ private readonly leadRepository: Repository<Lead>,
 @InjectRepository(Meeting)
 private readonly meetingRepository: Repository<Meeting>,
 
+@InjectRepository(SolarMitraReferral)
+private readonly solarMitraReferralRepository:
+  Repository<SolarMitraReferral>,
+
+  @InjectRepository(SolarMitraPayout)
+private readonly solarMitraPayoutRepository:
+  Repository<SolarMitraPayout>,
+
 @InjectRepository(CallLog)
 private readonly callLogRepository: Repository<CallLog>,
 
@@ -3354,6 +3372,122 @@ if (
   return snapshot;
 }
 
+private async syncSolarMitraProjectLink(
+  project: Project,
+) {
+  const leadId =
+    Number(project?.leadId || 0);
+
+  if (!leadId) {
+    return;
+  }
+
+  const referral =
+    await this.solarMitraReferralRepository.findOne({
+      where: {
+        linkedLeadId: leadId,
+        isHidden: false,
+      },
+      order: {
+        id: 'DESC',
+      },
+    });
+
+  if (!referral) {
+    return;
+  }
+
+  referral.linkedProjectId =
+    project.id;
+
+  if (project.meetingId) {
+    referral.linkedMeetingId =
+      project.meetingId;
+  }
+
+  referral.status =
+    SolarMitraReferralStatus
+      .PROJECT_CREATED;
+
+  await this.solarMitraReferralRepository.save(
+    referral,
+  );
+
+  const existingPayout =
+    await this.solarMitraPayoutRepository.findOne({
+      where: {
+        referralId: referral.id,
+      },
+    });
+
+  if (existingPayout) {
+    return;
+  }
+
+  const payoutAmount =
+    Number(
+      referral.payoutAmountSnapshot ||
+        0,
+    );
+
+  const requiredPaymentPercentage =
+    Number(
+      referral
+        .requiredPaymentPercentageSnapshot ||
+        0,
+    );
+
+  if (
+    !Number.isFinite(payoutAmount) ||
+    payoutAmount <= 0 ||
+    !Number.isFinite(
+      requiredPaymentPercentage,
+    ) ||
+    requiredPaymentPercentage <= 0 ||
+    requiredPaymentPercentage > 100
+  ) {
+    throw new BadRequestException(
+      'Solar Mitra payout terms are invalid',
+    );
+  }
+
+  const payout =
+    this.solarMitraPayoutRepository.create({
+      solarMitraId:
+        referral.solarMitraId,
+
+      solarMitraName:
+        referral.solarMitraName,
+
+      solarMitraBusinessName:
+        referral.solarMitraBusinessName,
+
+      referralId:
+        referral.id,
+
+      projectId:
+        project.id,
+
+      customerName:
+        referral.customerName,
+
+      customerPhone:
+        referral.customerPhone,
+
+      payoutAmount,
+
+      requiredProjectPaymentPercentage:
+        requiredPaymentPercentage,
+
+      status:
+        SolarMitraPayoutStatus.WAITING,
+    } as Partial<SolarMitraPayout>);
+
+  await this.solarMitraPayoutRepository.save(
+    payout,
+  );
+}
+
   async create(
   data: Partial<Project>,
   user?: any,
@@ -3592,7 +3726,7 @@ const finalProjectOwnerRole = isSolarFranchise
   ? 'SOLAR_FRANCHISE'
   : String(payload?.projectOwnerRole || '').trim() || undefined;
 
-    const project = this.projectRepository.create({
+    const projectData: Partial<Project> = {
   ...payload,
 
   leadId: payload?.leadId ? Number(payload.leadId) : undefined,
@@ -3673,10 +3807,24 @@ projectWorkStateUpdatedByName:
 
   status: ProjectStatus.PENDING_APPROVAL,
   marketingHeadApprovalStatus: ProjectApprovalStatus.PENDING,
-  ownerApprovalStatus: ProjectApprovalStatus.PENDING,
-});
+    ownerApprovalStatus: ProjectApprovalStatus.PENDING,
+};
 
-    return this.projectRepository.save(project);
+const project =
+  this.projectRepository.create(
+    projectData,
+  );
+
+    const savedProject =
+  await this.projectRepository.save(
+    project,
+  );
+
+await this.syncSolarMitraProjectLink(
+  savedProject,
+);
+
+return savedProject;
   }
 
   async createWithCalculation(data: any) {
@@ -14728,7 +14876,8 @@ async receivePaymentInstallment(
     );
   }
 
-  return this.dataSource.transaction(
+  const savedInstallment =
+  await this.dataSource.transaction(
     async (manager) => {
       const installmentRepository =
         manager.getRepository(
@@ -15186,10 +15335,15 @@ if (paymentRemarks) {
   }
 }
 
-return savedInstallment;
-
+      return savedInstallment;
     },
   );
+
+await this.syncSolarMitraPayoutEligibility(
+  Number(savedInstallment.projectId),
+);
+
+return savedInstallment;
 }
 
 async createFranchisePayoutRequest(
@@ -15565,6 +15719,10 @@ if (
   }
 }
 
+await this.syncSolarMitraPayoutEligibility(
+  Number(saved.projectId),
+);
+
 return saved;
 }
 
@@ -15645,6 +15803,10 @@ async approvePaymentInstallment(
       } as Partial<ProjectPartyLedger>),
     );
   }
+
+  await this.syncSolarMitraPayoutEligibility(
+  Number(savedInstallment.projectId),
+);
 
   return {
     message: 'Payment approved successfully',
@@ -34635,6 +34797,114 @@ private async getProjectPaymentThresholdReachedDate(
   };
 }
 
+private async syncSolarMitraPayoutEligibility(
+  projectId: number,
+) {
+  const normalizedProjectId =
+    Number(projectId);
+
+  if (
+    !Number.isInteger(
+      normalizedProjectId,
+    ) ||
+    normalizedProjectId <= 0
+  ) {
+    return;
+  }
+
+  const payout =
+    await this.solarMitraPayoutRepository.findOne({
+      where: {
+        projectId:
+          normalizedProjectId,
+      },
+    });
+
+  if (!payout) {
+    return;
+  }
+
+  /*
+   * Once earned or paid, do not make the
+   * Solar Mitra payout reversible because
+   * of later payment edits.
+   */
+  if (
+    payout.status ===
+      SolarMitraPayoutStatus.ELIGIBLE ||
+    payout.status ===
+      SolarMitraPayoutStatus.PAID ||
+    payout.status ===
+      SolarMitraPayoutStatus.CANCELLED
+  ) {
+    return;
+  }
+
+  const requiredPercentage =
+    Number(
+      payout
+        .requiredProjectPaymentPercentage ||
+        0,
+    );
+
+  if (
+    !Number.isFinite(
+      requiredPercentage,
+    ) ||
+    requiredPercentage <= 0 ||
+    requiredPercentage > 100
+  ) {
+    return;
+  }
+
+  const paymentResult =
+    await this
+      .getProjectPaymentThresholdReachedDate(
+        normalizedProjectId,
+        requiredPercentage,
+      );
+
+  if (!paymentResult.reached) {
+    return;
+  }
+
+  payout.status =
+    SolarMitraPayoutStatus.ELIGIBLE;
+
+  payout.eligibleAt =
+    paymentResult.reachedAt ||
+    new Date();
+
+  payout.qualifyingPaymentPercentage =
+    requiredPercentage;
+
+  await this.solarMitraPayoutRepository.save(
+    payout,
+  );
+
+  const referral =
+    await this.solarMitraReferralRepository.findOne({
+      where: {
+        id: payout.referralId,
+        isHidden: false,
+      },
+    });
+
+  if (
+    referral &&
+    referral.status !==
+      SolarMitraReferralStatus.PAYOUT_PAID
+  ) {
+    referral.status =
+      SolarMitraReferralStatus
+        .PAYOUT_ELIGIBLE;
+
+    await this.solarMitraReferralRepository.save(
+      referral,
+    );
+  }
+}
+
 private async getProjectTimelineRecordedEvent(
   projectId: number,
   module: ProjectTimelineModule,
@@ -45954,6 +46224,24 @@ if (existingFinalInvoice) {
     order: { id: 'ASC' },
   });
 
+/*
+ * Final Invoice may supply its own edited item snapshot.
+ *
+ * IMPORTANT:
+ * - Do not modify the original dealer-order items.
+ * - Use edited invoice items only for PI / Final Invoice generation.
+ * - If items are not supplied, preserve the existing dealer-order flow.
+ */
+const requestedInvoiceItems =
+  Array.isArray(body?.items) &&
+  body.items.length > 0
+    ? body.items
+    : null;
+
+const invoiceSourceItems =
+  requestedInvoiceItems ||
+  latestOrderItems;
+
 await this.projectProformaInvoiceItemRepository.delete({
   proformaInvoiceId: Number(pi.id),
 } as any);
@@ -45965,19 +46253,53 @@ let piTotal = 0;
 
 const refreshedPiItems: any[] = [];
 
-for (const orderItem of latestOrderItems) {
+for (const orderItem of invoiceSourceItems) {
   const finalQty =
-    Number(orderItem.acceptedQuantity || 0) > 0
-      ? Number(orderItem.acceptedQuantity || 0)
-      : Number(orderItem.quantity || 0);
+    requestedInvoiceItems
+      ? Number(
+          orderItem.quantity ||
+            0,
+        )
+      : Number(
+          orderItem.acceptedQuantity ||
+            0,
+        ) > 0
+        ? Number(
+            orderItem.acceptedQuantity ||
+              0,
+          )
+        : Number(
+            orderItem.quantity ||
+              0,
+          );
 
   if (finalQty <= 0) {
     continue;
   }
 
-  const sellingRate = Number(orderItem.sellingRate || 0);
-  const gstPercent = Number(orderItem.gstPercent || 0);
-  const discountAmount = Number(orderItem.discountAmount || 0);
+  const sellingRate = Math.max(
+    Number(
+      orderItem.sellingRate ||
+        0,
+    ),
+    0,
+  );
+
+  const gstPercent = Math.max(
+    Number(
+      orderItem.gstPercent ||
+        0,
+    ),
+    0,
+  );
+
+  const discountAmount = Math.max(
+    Number(
+      orderItem.discountAmount ||
+        0,
+    ),
+    0,
+  );
 
   const subtotalAmount = finalQty * sellingRate;
   const taxableAmount = Math.max(subtotalAmount - discountAmount, 0);
@@ -45994,7 +46316,10 @@ for (const orderItem of latestOrderItems) {
       proformaInvoiceId: Number(pi.id),
       projectId: 0,
       materialId: Number(orderItem.materialId || 0),
-      itemName: orderItem.materialName || '',
+      itemName:
+  orderItem.itemName ||
+  orderItem.materialName ||
+  '',
       category: orderItem.category || '',
       brand: orderItem.brand || '',
       unit: orderItem.unit || '',
@@ -46176,29 +46501,89 @@ if (savedInvoiceForOrder) {
       });
 
     if (savedFinalInvoice) {
-      savedFinalInvoice.subtotalAmount =
-        Number(savedFinalInvoice.subtotalAmount || 0) +
-        deliveryCharge;
+  /*
+   * Recalculate invoice totals from the actual saved
+   * Final Invoice items.
+   *
+   * This is important now that Final Invoice materials,
+   * quantities and rates can be edited before generation.
+   * It also prevents delivery charge from being added
+   * twice through accumulated header totals.
+   */
+  const finalInvoiceItems =
+    await this.projectFinalInvoiceItemRepository.find({
+      where: {
+        finalInvoiceId: Number(finalInvoice.id),
+      },
+    });
 
-      savedFinalInvoice.totalAmount =
-  Number(savedFinalInvoice.subtotalAmount || 0) -
-  Number(savedFinalInvoice.discountAmount || 0) +
-  Number(savedFinalInvoice.gstAmount || 0);
+  const recalculatedSubtotal =
+    finalInvoiceItems.reduce(
+      (sum, item) =>
+        sum +
+        Number(item.subtotalAmount || 0),
+      0,
+    );
 
-savedFinalInvoice.pendingAmount = Math.max(
-  Number(savedFinalInvoice.totalAmount || 0) -
-    Number(savedFinalInvoice.paidAmount || 0),
-  0,
-);
+  const recalculatedItemDiscount =
+    finalInvoiceItems.reduce(
+      (sum, item) =>
+        sum +
+        Number(item.discountAmount || 0),
+      0,
+    );
 
-      await this.projectFinalInvoiceRepository.save(
-        savedFinalInvoice,
-      );
+  const recalculatedGst =
+    finalInvoiceItems.reduce(
+      (sum, item) =>
+        sum +
+        Number(item.gstAmount || 0),
+      0,
+    );
 
-      order.totalAmount = Number(savedFinalInvoice.totalAmount || 0);
-      order.pendingAmount = Number(savedFinalInvoice.pendingAmount || 0);
-      await this.projectDealerOrderRepository.save(order);
-    }
+  const invoiceLevelDiscount = Math.max(
+    Number(body?.invoiceDiscountAmount || 0),
+    0,
+  );
+
+  savedFinalInvoice.subtotalAmount =
+    recalculatedSubtotal;
+
+  savedFinalInvoice.discountAmount =
+    recalculatedItemDiscount +
+    invoiceLevelDiscount;
+
+  savedFinalInvoice.gstAmount =
+    recalculatedGst;
+
+  savedFinalInvoice.totalAmount = Math.max(
+    recalculatedSubtotal -
+      recalculatedItemDiscount -
+      invoiceLevelDiscount +
+      recalculatedGst,
+    0,
+  );
+
+  savedFinalInvoice.pendingAmount = Math.max(
+    Number(savedFinalInvoice.totalAmount || 0) -
+      Number(savedFinalInvoice.paidAmount || 0),
+    0,
+  );
+
+  await this.projectFinalInvoiceRepository.save(
+    savedFinalInvoice,
+  );
+
+  order.totalAmount =
+    Number(savedFinalInvoice.totalAmount || 0);
+
+  order.pendingAmount =
+    Number(savedFinalInvoice.pendingAmount || 0);
+
+  await this.projectDealerOrderRepository.save(
+    order,
+  );
+}
   }
 
     /*

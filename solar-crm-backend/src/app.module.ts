@@ -29,6 +29,7 @@ import { StaffLocationModule } from './staff-location/staff-location.module';
 import { PushNotificationModule } from './push-notification/push-notification.module';
 import { WhatsappModule } from './whatsapp/whatsapp.module';
 import { PaymentModule } from './payment/payment.module';
+import { SolarMitraModule } from './solar-mitra/solar-mitra.module';
 
 @Module({
   imports: [
@@ -69,6 +70,7 @@ import { PaymentModule } from './payment/payment.module';
     PushNotificationModule,
 WhatsappModule,
 PaymentModule,
+SolarMitraModule,
   ],
   controllers: [AppController],
   providers: [AppService],

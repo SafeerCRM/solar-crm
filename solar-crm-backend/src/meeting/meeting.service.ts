@@ -24,6 +24,10 @@ import { UpdateMeetingDto } from './dto/update-meeting.dto';
 import { UserRole } from '../users/user.entity';
 import { ProjectService } from '../project/project.service';
 import { MeetingReviewRemark } from './meeting-review-remark.entity';
+import {
+  SolarMitraReferral,
+  SolarMitraReferralStatus,
+} from '../solar-mitra/solar-mitra-referral.entity';
 
 @Injectable()
 export class MeetingService {
@@ -34,6 +38,10 @@ export class MeetingService {
   @InjectRepository(MeetingReviewRemark)
   private readonly meetingReviewRemarkRepository:
     Repository<MeetingReviewRemark>,
+
+    @InjectRepository(SolarMitraReferral)
+private readonly solarMitraReferralRepository:
+  Repository<SolarMitraReferral>,
 
   @Inject(forwardRef(() => ProjectService))
   private readonly projectService: ProjectService,
@@ -658,6 +666,10 @@ solarMiterPhone: this.isSolarFranchise(user)
       meeting.meetingGroupId = meeting.id;
       meeting = (await this.meetingRepository.save(meeting)) as Meeting;
     }
+
+    await this.syncSolarMitraMeetingLink(
+  meeting,
+);
 
     return meeting;
   }
@@ -1757,6 +1769,50 @@ const currentUserId = this.getCurrentUserId(user);
 
     return version;
   }
+
+  private async syncSolarMitraMeetingLink(
+  meeting: Meeting,
+) {
+  const leadId =
+    Number(meeting?.leadId || 0);
+
+  if (!leadId) {
+    return;
+  }
+
+  const referral =
+    await this.solarMitraReferralRepository.findOne({
+      where: {
+        linkedLeadId: leadId,
+        isHidden: false,
+      },
+      order: {
+        id: 'DESC',
+      },
+    });
+
+  if (!referral) {
+    return;
+  }
+
+  referral.linkedMeetingId =
+    meeting.id;
+
+  if (
+    referral.status ===
+      SolarMitraReferralStatus.LEAD_CREATED ||
+    referral.status ===
+      SolarMitraReferralStatus.SUBMITTED
+  ) {
+    referral.status =
+      SolarMitraReferralStatus
+        .MEETING_SCHEDULED;
+  }
+
+  await this.solarMitraReferralRepository.save(
+    referral,
+  );
+}
 
   private async createProjectFromMeetingIfNeeded(
   meeting: Meeting,

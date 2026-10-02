@@ -293,6 +293,85 @@ export class LeadsService {
     return this.leadRepository.save(lead);
   }
 
+  async createSolarMitraLead(
+  data: Partial<Lead>,
+) {
+  const phone = String(
+    data.phone || '',
+  ).trim();
+
+  if (!phone) {
+    throw new BadRequestException(
+      'Customer phone is required',
+    );
+  }
+
+  const existing =
+    await this.leadRepository.findOne({
+      where: {
+        phone,
+      },
+    });
+
+  if (existing) {
+    throw new BadRequestException(
+      'Lead with this phone already exists',
+    );
+  }
+
+  const leadData: Partial<Lead> = {
+    ...data,
+
+    source: 'SOLAR_MITRA',
+
+    /*
+     * Solar Mitra/public QR leads enter the normal
+     * Leads section as unassigned.
+     *
+     * The CRM team can then assign the appropriate
+     * Lead Manager through the existing workflow.
+     */
+    assignedTo: undefined,
+
+    createdBy: undefined,
+
+    createdByName:
+      'Solar Mitra Referral',
+
+    originTelecallerId: undefined,
+    originTelecallerName: undefined,
+
+    telecallerId: undefined,
+    telecallerName: undefined,
+    telecallerRole: undefined,
+
+    telecallingAssistantId: undefined,
+    telecallingAssistantName: undefined,
+    telecallingAssistantRole: undefined,
+
+    leadManagerId: undefined,
+    leadManagerName: undefined,
+    leadManagerRole: undefined,
+
+    potentialPercentage:
+      data.potentialPercentage !== undefined &&
+      data.potentialPercentage !== null
+        ? this.normalizePotentialPercentage(
+            data.potentialPercentage,
+          )
+        : 15,
+  };
+
+  const lead =
+    this.leadRepository.create(
+      leadData,
+    );
+
+  return this.leadRepository.save(
+    lead,
+  );
+}
+
   async getLeadManagerLeadCount(userId: number, user: any) {
   if (!this.isOwner(user)) {
     throw new ForbiddenException('Only owner can view lead manager count');
@@ -634,7 +713,90 @@ private buildLeadListQuery(
     );
   }
 
+  const solarMitraOnly =
+  String(
+    filters?.solarMitraOnly || '',
+  )
+    .trim()
+    .toLowerCase() === 'true';
+
+const solarMitraId = Number(
+  filters?.solarMitraId || 0,
+);
+
+if (solarMitraOnly) {
+  query.andWhere(
+    `lead.source = :solarMitraSource`,
+    {
+      solarMitraSource: 'SOLAR_MITRA',
+    },
+  );
+
+  query.andWhere((qb) => {
+    const subQuery = qb
+      .subQuery()
+      .select('1')
+      .from(
+        'solar_mitra_referral',
+        'solarMitraReferral',
+      )
+      .where(
+        `solarMitraReferral."linkedLeadId" = lead.id`,
+      );
+
+    if (
+      Number.isInteger(solarMitraId) &&
+      solarMitraId > 0
+    ) {
+      subQuery.andWhere(
+        `solarMitraReferral."solarMitraId" = :solarMitraId`,
+      );
+    }
+
+    return `EXISTS ${subQuery.getQuery()}`;
+  });
+
+  if (
+    Number.isInteger(solarMitraId) &&
+    solarMitraId > 0
+  ) {
+    query.setParameter(
+      'solarMitraId',
+      solarMitraId,
+    );
+  }
+}
+
   return query;
+}
+
+async getSolarMitraOptions() {
+  const rows =
+    await this.leadRepository.manager.query(
+      `
+      SELECT
+        sm.id,
+        sm.name,
+        sm."businessName",
+        sm."primaryPhone"
+      FROM solar_mitra sm
+      WHERE
+        COALESCE(sm."isHidden", false) = false
+        AND sm.status = 'ACTIVE'
+      ORDER BY
+        LOWER(sm.name) ASC,
+        sm.id ASC
+      `,
+    );
+
+  return rows.map((row: any) => ({
+    id: Number(row.id),
+    name: row.name,
+    businessName:
+      row.businessName || null,
+    primaryPhone:
+      row.primaryPhone || null,
+  }));
 }
 
   async findAll(filters: any, user: any) {
@@ -659,19 +821,103 @@ private buildLeadListQuery(
   );
 
   const [data, total] = await query
-    .orderBy('lead.createdAt', 'DESC')
-    .skip(skip)
-    .take(limit)
-    .getManyAndCount();
+  .orderBy('lead.createdAt', 'DESC')
+  .skip(skip)
+  .take(limit)
+  .getManyAndCount();
 
-  return {
-    data,
-    total,
-    page,
-    limit,
-    totalPages:
-      Math.ceil(total / limit) || 1,
-  };
+const solarMitraLeadIds = data
+  .filter(
+    (lead) =>
+      String(lead.source || '')
+        .trim()
+        .toUpperCase() ===
+      'SOLAR_MITRA',
+  )
+  .map((lead) => Number(lead.id))
+  .filter(
+    (id) =>
+      Number.isInteger(id) &&
+      id > 0,
+  );
+
+const solarMitraByLeadId =
+  new Map<number, any>();
+
+if (solarMitraLeadIds.length) {
+  const referralRows =
+    await this.leadRepository.manager.query(
+      `
+      SELECT
+        smr."linkedLeadId" AS "leadId",
+        smr."solarMitraId" AS "solarMitraId",
+        smr."solarMitraName" AS "solarMitraName",
+        smr."solarMitraBusinessName" AS "solarMitraBusinessName",
+        smr."solarMitraPhone" AS "solarMitraPhone"
+      FROM solar_mitra_referral smr
+      WHERE
+        smr."linkedLeadId" = ANY($1::int[])
+        AND COALESCE(
+          smr."isHidden",
+          false
+        ) = false
+      ORDER BY
+        smr."createdAt" DESC,
+        smr.id DESC
+      `,
+      [solarMitraLeadIds],
+    );
+
+  for (const row of referralRows) {
+    const leadId = Number(row.leadId);
+
+    if (
+      !solarMitraByLeadId.has(leadId)
+    ) {
+      solarMitraByLeadId.set(
+        leadId,
+        {
+          solarMitraId:
+            Number(row.solarMitraId),
+          solarMitraName:
+            row.solarMitraName || null,
+          solarMitraBusinessName:
+            row.solarMitraBusinessName ||
+            null,
+          solarMitraPhone:
+            row.solarMitraPhone || null,
+        },
+      );
+    }
+  }
+}
+
+const enrichedData = data.map(
+  (lead) => {
+    const attribution =
+      solarMitraByLeadId.get(
+        Number(lead.id),
+      );
+
+    if (!attribution) {
+      return lead;
+    }
+
+    return {
+      ...lead,
+      ...attribution,
+    };
+  },
+);
+
+return {
+  data: enrichedData,
+  total,
+  page,
+  limit,
+  totalPages:
+    Math.ceil(total / limit) || 1,
+};
 }
 
   async findOne(id: number, user: any) {

@@ -167,6 +167,19 @@ export class UsersService {
     });
   }
 
+  async findFranchiseManagers() {
+  return this.userRepository.find({
+    where: {
+      isHidden: false,
+      roles: Raw((alias) => `${alias} LIKE :role`, {
+        role: '%FRANCHISE_MANAGER%',
+      }),
+    },
+    select: ['id', 'name', 'email', 'roles'],
+    order: { id: 'ASC' },
+  });
+}
+
   async findTelecallers() {
     return this.userRepository.find({
       where: {

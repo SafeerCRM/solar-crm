@@ -217,6 +217,12 @@ assignLeadsByCount(
     return this.leadsService.updateLeadNote(id, noteId, note, user);
   }
 
+  @Get('solar-mitra-options/list')
+getSolarMitraOptions() {
+  return this.leadsService
+    .getSolarMitraOptions();
+}
+
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {
     return this.leadsService.findOne(id, user);

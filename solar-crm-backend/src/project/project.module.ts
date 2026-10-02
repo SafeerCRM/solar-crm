@@ -121,6 +121,12 @@ import { ProjectStaffNotification } from './project-staff-notification.entity';
 import { ProjectNotificationGateway } from './project-notification.gateway';
 import { JwtModule } from '@nestjs/jwt';
 import { ProjectStaffNotificationService } from './project-staff-notification.service';
+import {
+  SolarMitraReferral,
+} from '../solar-mitra/solar-mitra-referral.entity';
+import {
+  SolarMitraPayout,
+} from '../solar-mitra/solar-mitra-payout.entity';
 
 @Module({
   imports: [
@@ -155,7 +161,7 @@ ProjectDealerOrderItem,
 ProjectDealerOrderDocument,
 ProjectDealerPayment,
 ProjectDealerComment, ProjectDealerNotification,
-ProjectDealerMonthlyRequirement, ProjectTradingMeeting, FollowUp, ProjectFranchisePayoutRequest, Dealer, ProjectPaymentReceipt, Lead,
+ProjectDealerMonthlyRequirement, ProjectTradingMeeting, FollowUp, ProjectFranchisePayoutRequest, Dealer, ProjectPaymentReceipt, Lead, SolarMitraReferral, SolarMitraPayout,
 Meeting,
 CallLog,
 TelecallingContact,
