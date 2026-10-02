@@ -128,32 +128,7 @@ referralDetail(
   return this.service.getReferral(id);
 }
 
-@Post(':id/referrals')
-createReferralByStaff(
-  @Req() req: any,
 
-  @Param(
-    'id',
-    ParseIntPipe,
-  )
-  solarMitraId: number,
-
-  @Body()
-  body: any,
-) {
-  this.assertManagementAccess(req.user);
-
-  return this.service.createReferralForMitra(
-    solarMitraId,
-    body,
-    SolarMitraReferralSourceType.STAFF,
-    {
-      id: req.user?.id,
-      name: req.user?.name,
-      type: 'STAFF',
-    },
-  );
-}
 
   @Get('settings')
   settings(@Req() req: any) {
@@ -354,6 +329,33 @@ myPayoutDetail(
   return this.service.getMyPayout(
     req.user.id,
     id,
+  );
+}
+
+@Post(':id/referrals')
+createReferralByStaff(
+  @Req() req: any,
+
+  @Param(
+    'id',
+    ParseIntPipe,
+  )
+  solarMitraId: number,
+
+  @Body()
+  body: any,
+) {
+  this.assertManagementAccess(req.user);
+
+  return this.service.createReferralForMitra(
+    solarMitraId,
+    body,
+    SolarMitraReferralSourceType.STAFF,
+    {
+      id: req.user?.id,
+      name: req.user?.name,
+      type: 'STAFF',
+    },
   );
 }
 
