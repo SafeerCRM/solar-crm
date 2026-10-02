@@ -741,16 +741,16 @@ if (solarMitraOnly) {
         'solarMitraReferral',
       )
       .where(
-        `solarMitraReferral."linkedLeadId" = lead.id`,
-      );
+  `"solarMitraReferral"."linkedLeadId" = lead.id`,
+);
 
     if (
       Number.isInteger(solarMitraId) &&
       solarMitraId > 0
     ) {
       subQuery.andWhere(
-        `solarMitraReferral."solarMitraId" = :solarMitraId`,
-      );
+  `"solarMitraReferral"."solarMitraId" = :solarMitraId`,
+);
     }
 
     return `EXISTS ${subQuery.getQuery()}`;
