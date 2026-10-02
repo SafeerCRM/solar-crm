@@ -55,7 +55,8 @@ export class SolarMitraService {
   @InjectRepository(SolarMitraSetting)
   private readonly settingRepository: Repository<SolarMitraSetting>,
 
-  private readonly payoutRepository:
+  @InjectRepository(SolarMitraPayout)
+private readonly payoutRepository:
   Repository<SolarMitraPayout>,
 
 private readonly leadsService: LeadsService,

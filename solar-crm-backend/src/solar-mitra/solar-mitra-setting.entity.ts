@@ -54,7 +54,10 @@ export class SolarMitraSetting {
   @Column({ default: true })
   isActive: boolean;
 
-  @Column({ nullable: true })
+  @Column({
+  type: 'integer',
+  nullable: true,
+})
 updatedBy: number | null;
 
 @Column({ type: 'text', nullable: true })
