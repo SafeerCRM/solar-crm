@@ -35,8 +35,11 @@ export class SolarMitraMeetingDocument {
   @Column({ default: false })
   isHidden: boolean;
 
-  @Column({ nullable: true })
-  uploadedBy: number | null;
+  @Column({
+  type: 'integer',
+  nullable: true,
+})
+uploadedBy: number | null;
 
   @Column({ type: 'text', nullable: true })
   uploadedByName: string | null;

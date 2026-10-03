@@ -25,8 +25,11 @@ export class SolarMitraMeeting {
    * meeting belongs to an existing Mitra.
    */
   @Index()
-  @Column({ nullable: true })
-  solarMitraId: number | null;
+  @Column({
+  type: 'integer',
+  nullable: true,
+})
+solarMitraId: number | null;
 
   @Column({ type: 'text', nullable: true })
   solarMitraName: string | null;
@@ -135,8 +138,11 @@ export class SolarMitraMeeting {
   })
   convertedAt: Date | null;
 
-  @Column({ nullable: true })
-  convertedBy: number | null;
+  @Column({
+  type: 'integer',
+  nullable: true,
+})
+convertedBy: number | null;
 
   @Column({ type: 'text', nullable: true })
   convertedByName: string | null;
@@ -144,14 +150,20 @@ export class SolarMitraMeeting {
   @Column({ default: false })
   isHidden: boolean;
 
-  @Column({ nullable: true })
-  createdBy: number | null;
+  @Column({
+  type: 'integer',
+  nullable: true,
+})
+createdBy: number | null;
 
   @Column({ type: 'text', nullable: true })
   createdByName: string | null;
 
-  @Column({ nullable: true })
-  updatedBy: number | null;
+  @Column({
+  type: 'integer',
+  nullable: true,
+})
+updatedBy: number | null;
 
   @Column({ type: 'text', nullable: true })
   updatedByName: string | null;
