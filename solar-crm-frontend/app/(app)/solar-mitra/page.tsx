@@ -276,6 +276,29 @@ function formatDate(value?: string | null) {
   });
 }
 
+function parseWallClockDateTime(
+  value?: string | null,
+) {
+  if (!value) return null;
+
+  const wallClockValue =
+    value
+      .replace(' ', 'T')
+      .replace(/Z$/, '')
+      .replace(
+        /([+-]\d{2}:\d{2})$/,
+        '',
+      );
+
+  const parsed = dayjs(
+    wallClockValue,
+  );
+
+  return parsed.isValid()
+    ? parsed
+    : null;
+}
+
 function money(value?: number | string | null) {
   const amount = Number(value || 0);
 
@@ -2419,17 +2442,19 @@ const openEditMeeting = async (
       notes: meeting.notes || '',
     });
 
-    const meetingValue = dayjs(
-      meeting.meetingDateTime,
-    );
+    const meetingValue =
+  parseWallClockDateTime(
+    meeting.meetingDateTime,
+  );
 
     setMeetingDate(meetingValue);
     setMeetingTime(meetingValue);
 
     if (meeting.nextFollowUpAt) {
-      const followUpValue = dayjs(
-        meeting.nextFollowUpAt,
-      );
+      const followUpValue =
+  parseWallClockDateTime(
+    meeting.nextFollowUpAt,
+  );
 
       setFollowUpDate(followUpValue);
       setFollowUpTime(followUpValue);
@@ -3385,11 +3410,11 @@ const convertMeetingToSolarMitra =
                 </p>
 
                 <p className="mt-1 font-semibold text-gray-700">
-                  {dayjs(
-                    item.meetingDateTime,
-                  ).format(
-                    'DD MMM YYYY, hh:mm A',
-                  )}
+                  {parseWallClockDateTime(
+  item.meetingDateTime,
+)?.format(
+  'DD MMM YYYY, hh:mm A',
+) || '—'}
                 </p>
               </div>
 
@@ -3429,11 +3454,11 @@ const convertMeetingToSolarMitra =
                   </p>
 
                   <p className="mt-1 font-semibold text-orange-700">
-                    {dayjs(
-                      item.nextFollowUpAt,
-                    ).format(
-                      'DD MMM YYYY, hh:mm A',
-                    )}
+                    {parseWallClockDateTime(
+  item.nextFollowUpAt,
+)?.format(
+  'DD MMM YYYY, hh:mm A',
+) || '—'}
                   </p>
                 </div>
               )}
