@@ -1,15 +1,41 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import {
+  FormEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import axios from 'axios';
 import QRCode from 'qrcode';
 import { getAuthHeaders } from '@/lib/authHeaders';
+import {
+  LocalizationProvider,
+} from '@mui/x-date-pickers/LocalizationProvider';
+
+import {
+  AdapterDayjs,
+} from '@mui/x-date-pickers/AdapterDayjs';
+
+import {
+  DatePicker,
+} from '@mui/x-date-pickers/DatePicker';
+
+import {
+  MobileTimePicker,
+} from '@mui/x-date-pickers/MobileTimePicker';
+
+import dayjs, {
+  Dayjs,
+} from 'dayjs';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 type Tab =
   | 'OVERVIEW'
   | 'MITRAS'
+  | 'MEETINGS'
   | 'REFERRALS'
   | 'PAYOUTS'
   | 'SETTINGS';
@@ -125,6 +151,62 @@ type SolarMitraSetting = {
   updatedAt?: string;
 };
 
+type SolarMitraMeetingStatus =
+  | 'SCHEDULED'
+  | 'COMPLETED'
+  | 'CANCELLED'
+  | 'ON_HOLD';
+
+type SolarMitraMeetingDocument = {
+  id: number;
+  meetingId: number;
+  documentName?: string | null;
+  fileUrl: string;
+  fileName?: string | null;
+  mimeType?: string | null;
+  createdAt?: string;
+};
+
+type SolarMitraMeeting = {
+  id: number;
+
+  solarMitraId?: number | null;
+  solarMitraName?: string | null;
+
+  name: string;
+  primaryPhone: string;
+
+  businessName?: string | null;
+  area?: string | null;
+  city?: string | null;
+  address?: string | null;
+
+  gpsLatitude?: number | null;
+  gpsLongitude?: number | null;
+  gpsAddress?: string | null;
+
+  photoUrls?: string[];
+  audioUrl?: string | null;
+
+  status: SolarMitraMeetingStatus;
+
+  meetingDateTime: string;
+
+  notes?: string | null;
+  nextFollowUpAt?: string | null;
+
+  franchiseManagerId: number;
+  franchiseManagerName?: string | null;
+
+  convertedToSolarMitra: boolean;
+  convertedAt?: string | null;
+
+  documents?: SolarMitraMeetingDocument[];
+
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 const emptyMitraForm = {
   name: '',
   businessName: '',
@@ -156,6 +238,27 @@ const emptyReferralForm = {
   customerArea: '',
   customerCity: '',
   remarks: '',
+};
+
+const emptyMeetingForm = {
+  solarMitraId: '',
+
+  name: '',
+  primaryPhone: '',
+  businessName: '',
+
+  area: '',
+  city: '',
+  address: '',
+
+  gpsLatitude: '',
+  gpsLongitude: '',
+  gpsAddress: '',
+
+  status:
+    'SCHEDULED' as SolarMitraMeetingStatus,
+
+  notes: '',
 };
 
 function formatDate(value?: string | null) {
@@ -371,6 +474,143 @@ const [uploadingShopPhoto, setUploadingShopPhoto] =
     useState<SolarMitra | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState('');
 
+  const [meetings, setMeetings] =
+  useState<SolarMitraMeeting[]>([]);
+
+const [meetingSearch, setMeetingSearch] =
+  useState('');
+
+const [
+  meetingStatusFilter,
+  setMeetingStatusFilter,
+] = useState('');
+
+const [
+  showMeetingModal,
+  setShowMeetingModal,
+] = useState(false);
+
+const [
+  editingMeeting,
+  setEditingMeeting,
+] =
+  useState<SolarMitraMeeting | null>(
+    null,
+  );
+
+const [
+  meetingForm,
+  setMeetingForm,
+] = useState({
+  ...emptyMeetingForm,
+});
+
+const [
+  meetingDate,
+  setMeetingDate,
+] =
+  useState<Dayjs | null>(
+    dayjs(),
+  );
+
+const [
+  meetingTime,
+  setMeetingTime,
+] =
+  useState<Dayjs | null>(
+    dayjs(),
+  );
+
+const [
+  followUpDate,
+  setFollowUpDate,
+] =
+  useState<Dayjs | null>(null);
+
+const [
+  followUpTime,
+  setFollowUpTime,
+] =
+  useState<Dayjs | null>(null);
+
+const [
+  capturingMeetingGps,
+  setCapturingMeetingGps,
+] = useState(false);
+
+const [
+  meetingPhotoFiles,
+  setMeetingPhotoFiles,
+] = useState<File[]>([]);
+
+const [
+  meetingPhotoPreviews,
+  setMeetingPhotoPreviews,
+] = useState<string[]>([]);
+
+const [
+  meetingAudioFile,
+  setMeetingAudioFile,
+] =
+  useState<File | null>(null);
+
+const [
+  meetingAudioPreview,
+  setMeetingAudioPreview,
+] = useState('');
+
+const [
+  meetingDocumentFile,
+  setMeetingDocumentFile,
+] =
+  useState<File | null>(null);
+
+const [
+  meetingDocumentName,
+  setMeetingDocumentName,
+] = useState('');
+
+const [
+  uploadingMeetingFiles,
+  setUploadingMeetingFiles,
+] = useState(false);
+
+const meetingPhotoInputRef =
+  useRef<HTMLInputElement | null>(
+    null,
+  );
+
+const meetingAudioInputRef =
+  useRef<HTMLInputElement | null>(
+    null,
+  );
+
+const meetingDocumentInputRef =
+  useRef<HTMLInputElement | null>(
+    null,
+  );
+
+const [
+  convertingMeeting,
+  setConvertingMeeting,
+] =
+  useState<SolarMitraMeeting | null>(
+    null,
+  );
+
+const [
+  convertSliderValue,
+  setConvertSliderValue,
+] = useState(0);
+
+const [
+  conversionForm,
+  setConversionForm,
+] = useState({
+  email: '',
+  password: '',
+});
+
   const userRoles = currentUser?.roles || [];
   const isOwner = userRoles.includes('OWNER');
 
@@ -434,6 +674,21 @@ const [uploadingShopPhoto, setUploadingShopPhoto] =
     );
   };
 
+  const loadMeetings = async () => {
+  const res = await axios.get(
+    `${API_BASE_URL}/solar-mitra/meetings/list`,
+    {
+      headers: getAuthHeaders(),
+    },
+  );
+
+  setMeetings(
+    Array.isArray(res.data)
+      ? res.data
+      : [],
+  );
+};
+
   const loadSettings = async () => {
     const res = await axios.get(
       `${API_BASE_URL}/solar-mitra/settings`,
@@ -480,12 +735,13 @@ const [uploadingShopPhoto, setUploadingShopPhoto] =
       setLoading(true);
 
       await Promise.all([
-        loadMitras(),
-        loadReferrals(),
-        loadPayouts(),
-        loadSettings(),
-        loadFranchiseManagers(),
-      ]);
+  loadMitras(),
+  loadReferrals(),
+  loadPayouts(),
+  loadMeetings(),
+  loadSettings(),
+  loadFranchiseManagers(),
+]);
     } catch (error) {
       console.error(
         'Failed to load Solar Mitra module:',
@@ -507,6 +763,8 @@ const [uploadingShopPhoto, setUploadingShopPhoto] =
     loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  
 
   const filteredMitras =
     useMemo(() => {
@@ -542,6 +800,48 @@ const [uploadingShopPhoto, setUploadingShopPhoto] =
       mitraSearch,
       mitraStatus,
     ]);
+
+    const filteredMeetings =
+  useMemo(() => {
+    const search =
+      meetingSearch
+        .trim()
+        .toLowerCase();
+
+    return meetings.filter(
+      (item) => {
+        if (
+          meetingStatusFilter &&
+          item.status !==
+            meetingStatusFilter
+        ) {
+          return false;
+        }
+
+        if (!search) {
+          return true;
+        }
+
+        return [
+          item.name,
+          item.primaryPhone,
+          item.businessName,
+          item.area,
+          item.city,
+          item.solarMitraName,
+          item.franchiseManagerName,
+        ].some((value) =>
+          String(value || '')
+            .toLowerCase()
+            .includes(search),
+        );
+      },
+    );
+  }, [
+    meetings,
+    meetingSearch,
+    meetingStatusFilter,
+  ]);
 
   const filteredReferrals =
     useMemo(() => {
@@ -788,6 +1088,270 @@ const [uploadingShopPhoto, setUploadingShopPhoto] =
       },
     );
 
+    const compressMeetingImage = (
+  file: File,
+): Promise<File> => {
+  return new Promise((resolve) => {
+    if (
+      !file.type.startsWith(
+        'image/',
+      )
+    ) {
+      resolve(file);
+      return;
+    }
+
+    const reader =
+      new FileReader();
+
+    reader.onload = (event) => {
+      const img = new Image();
+
+      img.onload = () => {
+        const canvas =
+          document.createElement(
+            'canvas',
+          );
+
+        const maxWidth = 1280;
+        const maxHeight = 1280;
+
+        let {
+          width,
+          height,
+        } = img;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round(
+              (height * maxWidth) /
+                width,
+            );
+
+            width = maxWidth;
+          }
+        } else if (
+          height > maxHeight
+        ) {
+          width = Math.round(
+            (width * maxHeight) /
+              height,
+          );
+
+          height = maxHeight;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx =
+          canvas.getContext('2d');
+
+        if (!ctx) {
+          resolve(file);
+          return;
+        }
+
+        ctx.drawImage(
+          img,
+          0,
+          0,
+          width,
+          height,
+        );
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              resolve(file);
+              return;
+            }
+
+            resolve(
+              new File(
+                [blob],
+                file.name.replace(
+                  /\.[^/.]+$/,
+                  '.jpg',
+                ),
+                {
+                  type: 'image/jpeg',
+                  lastModified:
+                    Date.now(),
+                },
+              ),
+            );
+          },
+          'image/jpeg',
+          0.72,
+        );
+      };
+
+      img.src = String(
+        event.target?.result ||
+          '',
+      );
+    };
+
+    reader.readAsDataURL(file);
+  });
+};
+
+const handleMeetingPhotoSelect =
+  async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const selected =
+      Array.from(
+        event.target.files || [],
+      );
+
+    if (!selected.length) {
+      return;
+    }
+
+    const remaining =
+      2 -
+      meetingPhotoFiles.length;
+
+    if (remaining <= 0) {
+      alert(
+        'Maximum 2 meeting photos are allowed',
+      );
+
+      event.target.value = '';
+      return;
+    }
+
+    const files =
+      selected.slice(
+        0,
+        remaining,
+      );
+
+    const compressed: File[] =
+      [];
+
+    for (const file of files) {
+      compressed.push(
+        await compressMeetingImage(
+          file,
+        ),
+      );
+    }
+
+    const previews =
+      compressed.map((file) =>
+        URL.createObjectURL(file),
+      );
+
+    setMeetingPhotoFiles(
+      (prev) =>
+        [
+          ...prev,
+          ...compressed,
+        ].slice(0, 2),
+    );
+
+    setMeetingPhotoPreviews(
+      (prev) =>
+        [
+          ...prev,
+          ...previews,
+        ].slice(0, 2),
+    );
+
+    event.target.value = '';
+  };
+
+  const removeMeetingPhoto = (
+  index: number,
+) => {
+  setMeetingPhotoFiles(
+    (prev) =>
+      prev.filter(
+        (_, i) => i !== index,
+      ),
+  );
+
+  setMeetingPhotoPreviews(
+    (prev) => {
+      const removed =
+        prev[index];
+
+      if (
+        removed?.startsWith(
+          'blob:',
+        )
+      ) {
+        URL.revokeObjectURL(
+          removed,
+        );
+      }
+
+      return prev.filter(
+        (_, i) => i !== index,
+      );
+    },
+  );
+};
+
+  const handleMeetingAudioSelect = (
+  event: React.ChangeEvent<HTMLInputElement>,
+) => {
+  const file =
+    event.target.files?.[0] ||
+    null;
+
+  if (!file) return;
+
+  if (
+    !file.type.startsWith(
+      'audio/',
+    )
+  ) {
+    alert(
+      'Please select an audio file',
+    );
+
+    event.target.value = '';
+    return;
+  }
+
+  if (
+    meetingAudioPreview.startsWith(
+      'blob:',
+    )
+  ) {
+    URL.revokeObjectURL(
+      meetingAudioPreview,
+    );
+  }
+
+  setMeetingAudioFile(file);
+
+  setMeetingAudioPreview(
+    URL.createObjectURL(file),
+  );
+
+  event.target.value = '';
+};
+
+const removeMeetingAudio = () => {
+  if (
+    meetingAudioPreview.startsWith(
+      'blob:',
+    )
+  ) {
+    URL.revokeObjectURL(
+      meetingAudioPreview,
+    );
+  }
+
+  setMeetingAudioFile(null);
+  setMeetingAudioPreview('');
+};
+
     const captureMitraLocation = () => {
   if (!navigator.geolocation) {
     alert(
@@ -841,6 +1405,100 @@ const [uploadingShopPhoto, setUploadingShopPhoto] =
       maximumAge: 0,
     },
   );
+};
+
+const captureMeetingLocation =
+  () => {
+    if (
+      !navigator.geolocation
+    ) {
+      alert(
+        'Location is not supported on this device',
+      );
+
+      return;
+    }
+
+    setCapturingMeetingGps(
+      true,
+    );
+
+    navigator.geolocation
+      .getCurrentPosition(
+        (position) => {
+          const latitude =
+            position.coords
+              .latitude;
+
+          const longitude =
+            position.coords
+              .longitude;
+
+          setMeetingForm(
+            (prev) => ({
+              ...prev,
+
+              gpsLatitude:
+                String(latitude),
+
+              gpsLongitude:
+                String(longitude),
+
+              gpsAddress:
+                prev.gpsAddress ||
+                `${latitude.toFixed(
+                  6,
+                )}, ${longitude.toFixed(
+                  6,
+                )}`,
+            }),
+          );
+
+          setCapturingMeetingGps(
+            false,
+          );
+        },
+
+        (error) => {
+          console.error(
+            'Meeting GPS capture failed:',
+            error,
+          );
+
+          setCapturingMeetingGps(
+            false,
+          );
+
+          alert(
+            'Unable to capture location. Please allow location permission and try again.',
+          );
+        },
+
+        {
+          enableHighAccuracy:
+            true,
+          timeout: 15000,
+          maximumAge: 0,
+        },
+      );
+  };
+
+  const mergeMeetingDateTime = (
+  date: Dayjs | null,
+  time: Dayjs | null,
+) => {
+  if (!date || !time) {
+    return null;
+  }
+
+  return date
+    .hour(time.hour())
+    .minute(time.minute())
+    .second(0)
+    .millisecond(0)
+    .format(
+      'YYYY-MM-DDTHH:mm',
+    );
 };
 
 const uploadShopPhoto = async (
@@ -914,6 +1572,391 @@ const uploadShopPhoto = async (
     );
   } finally {
     setUploadingShopPhoto(false);
+  }
+};
+
+const openNewMeetingModal =
+  () => {
+    setEditingMeeting(null);
+
+    setMeetingForm({
+      ...emptyMeetingForm,
+    });
+
+    setMeetingDate(dayjs());
+    setMeetingTime(dayjs());
+
+    setFollowUpDate(null);
+    setFollowUpTime(null);
+
+    setMeetingPhotoFiles([]);
+    setMeetingPhotoPreviews([]);
+
+    removeMeetingAudio();
+
+    setMeetingDocumentFile(
+      null,
+    );
+
+    setMeetingDocumentName('');
+
+    setShowMeetingModal(true);
+  };
+
+  const uploadMeetingPhotos =
+  async () => {
+    if (
+      !meetingPhotoFiles.length
+    ) {
+      return [];
+    }
+
+    const formData =
+      new FormData();
+
+    meetingPhotoFiles.forEach(
+      (file) => {
+        formData.append(
+          'files',
+          file,
+        );
+      },
+    );
+
+    const response =
+      await axios.post(
+        `${API_BASE_URL}/solar-mitra/meetings/photos/upload`,
+        formData,
+        {
+          headers: {
+            ...getAuthHeaders(),
+
+            'Content-Type':
+              'multipart/form-data',
+          },
+        },
+      );
+
+    const uploaded =
+      Array.isArray(
+        response.data,
+      )
+        ? response.data
+        : [];
+
+    return uploaded
+      .map(
+        (item: any) =>
+          item?.fileUrl,
+      )
+      .filter(Boolean);
+  };
+
+  const uploadMeetingAudio =
+  async () => {
+    if (!meetingAudioFile) {
+      return '';
+    }
+
+    const formData =
+      new FormData();
+
+    formData.append(
+      'file',
+      meetingAudioFile,
+    );
+
+    const response =
+      await axios.post(
+        `${API_BASE_URL}/solar-mitra/meetings/audio/upload`,
+        formData,
+        {
+          headers: {
+            ...getAuthHeaders(),
+
+            'Content-Type':
+              'multipart/form-data',
+          },
+        },
+      );
+
+    return (
+      response.data?.fileUrl ||
+      ''
+    );
+  };
+
+  const uploadMeetingDocument =
+  async (
+    meetingId: number,
+  ) => {
+    if (
+      !meetingDocumentFile
+    ) {
+      return;
+    }
+
+    const formData =
+      new FormData();
+
+    formData.append(
+      'file',
+      meetingDocumentFile,
+    );
+
+    formData.append(
+      'documentName',
+      meetingDocumentName.trim() ||
+        meetingDocumentFile.name,
+    );
+
+    await axios.post(
+      `${API_BASE_URL}/solar-mitra/meetings/${meetingId}/documents/upload`,
+      formData,
+      {
+        headers: {
+          ...getAuthHeaders(),
+
+          'Content-Type':
+            'multipart/form-data',
+        },
+      },
+    );
+  };
+
+  const saveMeeting = async (
+  event: FormEvent,
+) => {
+  event.preventDefault();
+
+  if (
+    !meetingForm.name.trim()
+  ) {
+    alert(
+      'Person name is required',
+    );
+    return;
+  }
+
+  if (
+    !meetingForm.primaryPhone.trim()
+  ) {
+    alert(
+      'Primary phone is required',
+    );
+    return;
+  }
+
+  const meetingDateTime =
+    mergeMeetingDateTime(
+      meetingDate,
+      meetingTime,
+    );
+
+  if (!meetingDateTime) {
+    alert(
+      'Meeting date and time are required',
+    );
+    return;
+  }
+
+  if (
+    (followUpDate &&
+      !followUpTime) ||
+    (!followUpDate &&
+      followUpTime)
+  ) {
+    alert(
+      'Please select both follow-up date and time',
+    );
+    return;
+  }
+
+  try {
+    setSaving(true);
+    setUploadingMeetingFiles(
+      true,
+    );
+
+    let photoUrls =
+      editingMeeting?.photoUrls ||
+      [];
+
+    if (
+  meetingPhotoFiles.length
+) {
+  const uploadedPhotoUrls =
+    await uploadMeetingPhotos();
+
+  const existingPhotoUrls =
+    meetingPhotoPreviews.filter(
+      (url) =>
+        !url.startsWith('blob:'),
+    );
+
+  photoUrls = [
+    ...existingPhotoUrls,
+    ...uploadedPhotoUrls,
+  ].slice(0, 2);
+}
+
+    let audioUrl =
+      editingMeeting?.audioUrl ||
+      '';
+
+    if (meetingAudioFile) {
+      audioUrl =
+        await uploadMeetingAudio();
+    }
+
+    const nextFollowUpAt =
+      followUpDate &&
+      followUpTime
+        ? mergeMeetingDateTime(
+            followUpDate,
+            followUpTime,
+          )
+        : null;
+
+        if (
+  !meetingAudioFile &&
+  !meetingAudioPreview
+) {
+  audioUrl = '';
+}
+
+    const payload = {
+
+        solarMitraId:
+  meetingForm.solarMitraId
+    ? Number(
+        meetingForm.solarMitraId,
+      )
+    : null,
+      name:
+        meetingForm.name.trim(),
+
+      primaryPhone:
+        meetingForm
+          .primaryPhone
+          .trim(),
+
+      businessName:
+        meetingForm
+          .businessName
+          .trim(),
+
+      area:
+        meetingForm.area.trim(),
+
+      city:
+        meetingForm.city.trim(),
+
+      address:
+        meetingForm
+          .address
+          .trim(),
+
+      gpsLatitude:
+        meetingForm.gpsLatitude
+          ? Number(
+              meetingForm
+                .gpsLatitude,
+            )
+          : null,
+
+      gpsLongitude:
+        meetingForm.gpsLongitude
+          ? Number(
+              meetingForm
+                .gpsLongitude,
+            )
+          : null,
+
+      gpsAddress:
+        meetingForm
+          .gpsAddress
+          .trim(),
+
+      photoUrls,
+
+      audioUrl:
+        audioUrl || null,
+
+      status:
+        meetingForm.status,
+
+      meetingDateTime,
+
+      notes:
+        meetingForm.notes.trim(),
+
+      nextFollowUpAt,
+    };
+
+    let saved:
+      | SolarMitraMeeting
+      | null = null;
+
+    if (editingMeeting) {
+      const response =
+        await axios.patch(
+          `${API_BASE_URL}/solar-mitra/meetings/${editingMeeting.id}`,
+          payload,
+          {
+            headers:
+              getAuthHeaders(),
+          },
+        );
+
+      saved = response.data;
+    } else {
+      const response =
+        await axios.post(
+          `${API_BASE_URL}/solar-mitra/meetings`,
+          payload,
+          {
+            headers:
+              getAuthHeaders(),
+          },
+        );
+
+      saved = response.data;
+    }
+
+    if (
+      saved?.id &&
+      meetingDocumentFile
+    ) {
+      await uploadMeetingDocument(
+        saved.id,
+      );
+    }
+
+    alert(
+      editingMeeting
+        ? 'Meeting updated successfully'
+        : 'Meeting created successfully',
+    );
+
+    setShowMeetingModal(false);
+
+    await loadMeetings();
+  } catch (error) {
+    console.error(error);
+
+    alert(
+      getErrorMessage(
+        error,
+        'Failed to save Solar Mitra meeting',
+      ),
+    );
+  } finally {
+    setSaving(false);
+
+    setUploadingMeetingFiles(
+      false,
+    );
   }
 };
 
@@ -1334,6 +2377,199 @@ const navigateToMitra = (
   );
 };
 
+const openEditMeeting = async (
+  item: SolarMitraMeeting,
+) => {
+  try {
+    const response = await axios.get(
+      `${API_BASE_URL}/solar-mitra/meetings/${item.id}`,
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+
+    const meeting: SolarMitraMeeting =
+      response.data;
+
+    setEditingMeeting(meeting);
+
+    setMeetingForm({
+      solarMitraId: meeting.solarMitraId
+        ? String(meeting.solarMitraId)
+        : '',
+      name: meeting.name || '',
+      primaryPhone:
+        meeting.primaryPhone || '',
+      businessName:
+        meeting.businessName || '',
+      area: meeting.area || '',
+      city: meeting.city || '',
+      address: meeting.address || '',
+      gpsLatitude:
+        meeting.gpsLatitude != null
+          ? String(meeting.gpsLatitude)
+          : '',
+      gpsLongitude:
+        meeting.gpsLongitude != null
+          ? String(meeting.gpsLongitude)
+          : '',
+      gpsAddress:
+        meeting.gpsAddress || '',
+      status: meeting.status,
+      notes: meeting.notes || '',
+    });
+
+    const meetingValue = dayjs(
+      meeting.meetingDateTime,
+    );
+
+    setMeetingDate(meetingValue);
+    setMeetingTime(meetingValue);
+
+    if (meeting.nextFollowUpAt) {
+      const followUpValue = dayjs(
+        meeting.nextFollowUpAt,
+      );
+
+      setFollowUpDate(followUpValue);
+      setFollowUpTime(followUpValue);
+    } else {
+      setFollowUpDate(null);
+      setFollowUpTime(null);
+    }
+
+    setMeetingPhotoFiles([]);
+
+    setMeetingPhotoPreviews(
+      meeting.photoUrls || [],
+    );
+
+    setMeetingAudioFile(null);
+    setMeetingAudioPreview(
+      meeting.audioUrl || '',
+    );
+
+    setMeetingDocumentFile(null);
+    setMeetingDocumentName('');
+
+    setShowMeetingModal(true);
+  } catch (error) {
+    console.error(error);
+
+    alert(
+      getErrorMessage(
+        error,
+        'Failed to load meeting',
+      ),
+    );
+  }
+};
+
+const selectExistingMitraForMeeting = (
+  item: SolarMitra,
+) => {
+  setMeetingForm((prev) => ({
+    ...prev,
+    solarMitraId: String(item.id),
+    name: item.name || '',
+    primaryPhone:
+      item.primaryPhone || '',
+    businessName:
+      item.businessName || '',
+    area: item.area || '',
+    city: item.city || '',
+    address: item.address || '',
+    gpsLatitude:
+      item.gpsLatitude != null
+        ? String(item.gpsLatitude)
+        : '',
+    gpsLongitude:
+      item.gpsLongitude != null
+        ? String(item.gpsLongitude)
+        : '',
+    gpsAddress:
+      item.gpsAddress || '',
+  }));
+};
+
+const openMeetingConversion = (
+  meeting: SolarMitraMeeting,
+) => {
+  if (
+    meeting.convertedToSolarMitra ||
+    meeting.solarMitraId
+  ) {
+    return;
+  }
+
+  setConvertingMeeting(meeting);
+  setConvertSliderValue(0);
+
+  setConversionForm({
+    email: '',
+    password: '',
+  });
+};
+
+const convertMeetingToSolarMitra =
+  async (event: FormEvent) => {
+    event.preventDefault();
+
+    if (!convertingMeeting) {
+      return;
+    }
+
+    if (
+      !conversionForm.email.trim() ||
+      !conversionForm.password.trim()
+    ) {
+      alert(
+        'Email and password are required',
+      );
+      return;
+    }
+
+    try {
+      setSaving(true);
+
+      await axios.post(
+        `${API_BASE_URL}/solar-mitra/meetings/${convertingMeeting.id}/create-solar-mitra`,
+        {
+          email:
+            conversionForm.email.trim(),
+          password:
+            conversionForm.password,
+        },
+        {
+          headers: getAuthHeaders(),
+        },
+      );
+
+      alert(
+        'Solar Mitra created successfully',
+      );
+
+      setConvertingMeeting(null);
+      setConvertSliderValue(0);
+
+      await Promise.all([
+        loadMeetings(),
+        loadMitras(),
+      ]);
+    } catch (error) {
+      console.error(error);
+
+      alert(
+        getErrorMessage(
+          error,
+          'Failed to create Solar Mitra',
+        ),
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const getPublicReferralUrl = (
     item: SolarMitra,
   ) => {
@@ -1499,6 +2735,10 @@ const navigateToMitra = (
       key: 'MITRAS',
       label: 'Mitras',
     },
+    {
+  key: 'MEETINGS',
+  label: 'Meetings',
+},
     {
       key: 'REFERRALS',
       label: 'Referrals',
@@ -2025,6 +3265,294 @@ const navigateToMitra = (
           </div>
         </div>
       )}
+
+      {activeTab === 'MEETINGS' && (
+  <div className="space-y-4">
+    <div className="rounded-2xl bg-white p-4 shadow-sm md:p-5">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h2 className="text-lg font-black text-gray-900">
+            Solar Mitra Meetings
+          </h2>
+
+          <p className="mt-1 text-sm text-gray-500">
+            Prospect visits, Solar Mitra follow-ups and meeting proof.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={openNewMeetingModal}
+          className="rounded-xl bg-orange-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-orange-700"
+        >
+          + New Meeting / Visit
+        </button>
+      </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-[1fr_220px]">
+        <input
+          value={meetingSearch}
+          onChange={(event) =>
+            setMeetingSearch(
+              event.target.value,
+            )
+          }
+          placeholder="Search person, phone, shop, area, city or Solar Mitra..."
+          className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm"
+        />
+
+        <select
+          value={meetingStatusFilter}
+          onChange={(event) =>
+            setMeetingStatusFilter(
+              event.target.value,
+            )
+          }
+          className="rounded-xl border border-gray-300 px-3 py-2.5 text-sm"
+        >
+          <option value="">
+            All Status
+          </option>
+
+          <option value="SCHEDULED">
+            Scheduled
+          </option>
+
+          <option value="COMPLETED">
+            Completed
+          </option>
+
+          <option value="CANCELLED">
+            Cancelled
+          </option>
+
+          <option value="ON_HOLD">
+            On Hold
+          </option>
+        </select>
+      </div>
+    </div>
+
+    <div className="grid gap-4 xl:grid-cols-2">
+      {filteredMeetings.map(
+        (item) => (
+          <div
+            key={item.id}
+            className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h3 className="text-lg font-black text-gray-900">
+                  {item.name}
+                </h3>
+
+                {item.businessName && (
+                  <p className="mt-0.5 text-sm font-semibold text-gray-600">
+                    {item.businessName}
+                  </p>
+                )}
+
+                <p className="mt-1 text-sm text-gray-500">
+                  {item.primaryPhone}
+                </p>
+              </div>
+
+              <span
+                className={`rounded-full px-3 py-1 text-xs font-black ${
+                  item.status ===
+                  'COMPLETED'
+                    ? 'bg-emerald-100 text-emerald-700'
+                    : item.status ===
+                        'CANCELLED'
+                      ? 'bg-red-100 text-red-700'
+                      : item.status ===
+                          'ON_HOLD'
+                        ? 'bg-amber-100 text-amber-700'
+                        : 'bg-blue-100 text-blue-700'
+                }`}
+              >
+                {item.status.replace(
+                  '_',
+                  ' ',
+                )}
+              </span>
+            </div>
+
+            <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+              <div>
+                <p className="text-xs font-bold uppercase text-gray-400">
+                  Meeting
+                </p>
+
+                <p className="mt-1 font-semibold text-gray-700">
+                  {dayjs(
+                    item.meetingDateTime,
+                  ).format(
+                    'DD MMM YYYY, hh:mm A',
+                  )}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs font-bold uppercase text-gray-400">
+                  Franchise Manager
+                </p>
+
+                <p className="mt-1 font-semibold text-gray-700">
+                  {item.franchiseManagerName ||
+                    '—'}
+                </p>
+              </div>
+
+              {(item.area ||
+                item.city) && (
+                <div>
+                  <p className="text-xs font-bold uppercase text-gray-400">
+                    Area / City
+                  </p>
+
+                  <p className="mt-1 font-semibold text-gray-700">
+                    {[
+                      item.area,
+                      item.city,
+                    ]
+                      .filter(Boolean)
+                      .join(', ')}
+                  </p>
+                </div>
+              )}
+
+              {item.nextFollowUpAt && (
+                <div>
+                  <p className="text-xs font-bold uppercase text-gray-400">
+                    Next Follow-up
+                  </p>
+
+                  <p className="mt-1 font-semibold text-orange-700">
+                    {dayjs(
+                      item.nextFollowUpAt,
+                    ).format(
+                      'DD MMM YYYY, hh:mm A',
+                    )}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {item.notes && (
+              <div className="mt-4 rounded-xl bg-gray-50 p-3">
+                <p className="text-xs font-bold uppercase text-gray-400">
+                  Update / Notes
+                </p>
+
+                <p className="mt-1 whitespace-pre-wrap text-sm text-gray-700">
+                  {item.notes}
+                </p>
+              </div>
+            )}
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              {(item.photoUrls || [])
+                .slice(0, 2)
+                .map(
+                  (url, index) => (
+                    <a
+                      key={`${item.id}-photo-${index}`}
+                      href={url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-bold text-gray-700"
+                    >
+                      Photo {index + 1}
+                    </a>
+                  ),
+                )}
+
+              {item.audioUrl && (
+                <a
+                  href={item.audioUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-bold text-gray-700"
+                >
+                  Audio Proof
+                </a>
+              )}
+
+              <button
+                type="button"
+                onClick={() =>
+                  openEditMeeting(item)
+                }
+                className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700"
+              >
+                View / Update
+              </button>
+            </div>
+
+            {item.solarMitraId ||
+            item.convertedToSolarMitra ? (
+              <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-center text-sm font-black text-emerald-700">
+                ✓ Solar Mitra Created
+                {item.solarMitraName
+                  ? ` — ${item.solarMitraName}`
+                  : ''}
+              </div>
+            ) : (
+              <div className="mt-4 rounded-2xl border-2 border-orange-200 bg-orange-50 p-4">
+                <p className="mb-2 text-center text-xs font-black uppercase tracking-wide text-orange-700">
+                  Slide fully to create Solar Mitra
+                </p>
+
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={
+                    convertingMeeting?.id ===
+                    item.id
+                      ? convertSliderValue
+                      : 0
+                  }
+                  onChange={(event) => {
+                    const value =
+                      Number(
+                        event.target.value,
+                      );
+
+                    setConvertSliderValue(
+                      value,
+                    );
+
+                    if (value >= 100) {
+                      openMeetingConversion(
+                        item,
+                      );
+                    }
+                  }}
+                  className="h-3 w-full cursor-pointer accent-orange-600"
+                />
+
+                <div className="mt-2 flex justify-between text-xs font-black text-orange-700">
+                  <span>SLIDE</span>
+                  <span>
+                    CREATE SOLAR MITRA →
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        ),
+      )}
+
+      {!filteredMeetings.length && (
+        <div className="col-span-full rounded-2xl bg-white py-12 text-center text-sm text-gray-500 shadow-sm">
+          No Solar Mitra meetings found.
+        </div>
+      )}
+    </div>
+  </div>
+)}
 
       {activeTab === 'REFERRALS' && (
         <div className="rounded-2xl bg-white p-4 shadow-sm md:p-5">
@@ -3153,6 +4681,747 @@ const navigateToMitra = (
           </div>
         </div>
       )}
+
+      {showMeetingModal && (
+  <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-3">
+    <div className="max-h-[94vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
+      <div className="sticky top-0 z-20 flex items-center justify-between border-b bg-white p-5">
+        <div>
+          <h2 className="text-xl font-black text-gray-900">
+            {editingMeeting
+              ? 'Update Solar Mitra Meeting'
+              : 'New Solar Mitra Meeting / Visit'}
+          </h2>
+
+          <p className="text-sm text-gray-500">
+            Record prospect visits and ongoing Solar Mitra follow-ups.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() =>
+            setShowMeetingModal(false)
+          }
+          className="rounded-lg px-3 py-2 text-xl font-bold text-gray-500 hover:bg-gray-100"
+        >
+          ×
+        </button>
+      </div>
+
+      <form
+        onSubmit={saveMeeting}
+        className="space-y-6 p-5"
+      >
+        {!editingMeeting && (
+          <div>
+            <h3 className="mb-3 font-black text-gray-900">
+              Existing Solar Mitra
+            </h3>
+
+            <p className="mb-3 text-xs text-gray-500">
+              Optional. Select a Solar Mitra when this is an ongoing follow-up. Leave blank for a new prospect.
+            </p>
+
+            <select
+              value={
+                meetingForm.solarMitraId
+              }
+              onChange={(event) => {
+                const id = Number(
+                  event.target.value,
+                );
+
+                if (!id) {
+                  setMeetingForm(
+                    (prev) => ({
+                      ...prev,
+                      solarMitraId: '',
+                    }),
+                  );
+
+                  return;
+                }
+
+                const selected =
+                  mitras.find(
+                    (item) =>
+                      Number(item.id) ===
+                      id,
+                  );
+
+                if (selected) {
+                  selectExistingMitraForMeeting(
+                    selected,
+                  );
+                }
+              }}
+              className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm"
+            >
+              <option value="">
+                New Prospect / Not Yet Solar Mitra
+              </option>
+
+              {mitras.map((item) => (
+                <option
+                  key={item.id}
+                  value={item.id}
+                >
+                  {item.name}
+                  {item.businessName
+                    ? ` — ${item.businessName}`
+                    : ''}
+                  {item.primaryPhone
+                    ? ` — ${item.primaryPhone}`
+                    : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        <div>
+          <h3 className="mb-3 font-black text-gray-900">
+            Person / Shop Details
+          </h3>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <FormField
+              label="Name *"
+              value={meetingForm.name}
+              onChange={(value) =>
+                setMeetingForm(
+                  (prev) => ({
+                    ...prev,
+                    name: value,
+                  }),
+                )
+              }
+            />
+
+            <FormField
+              label="Primary Phone *"
+              value={
+                meetingForm.primaryPhone
+              }
+              onChange={(value) =>
+                setMeetingForm(
+                  (prev) => ({
+                    ...prev,
+                    primaryPhone: value,
+                  }),
+                )
+              }
+            />
+
+            <FormField
+              label="Business / Shop Name"
+              value={
+                meetingForm.businessName
+              }
+              onChange={(value) =>
+                setMeetingForm(
+                  (prev) => ({
+                    ...prev,
+                    businessName: value,
+                  }),
+                )
+              }
+            />
+
+            <FormField
+              label="Area"
+              value={meetingForm.area}
+              onChange={(value) =>
+                setMeetingForm(
+                  (prev) => ({
+                    ...prev,
+                    area: value,
+                  }),
+                )
+              }
+            />
+
+            <FormField
+              label="City"
+              value={meetingForm.city}
+              onChange={(value) =>
+                setMeetingForm(
+                  (prev) => ({
+                    ...prev,
+                    city: value,
+                  }),
+                )
+              }
+            />
+
+            <FormField
+              label="Address"
+              value={meetingForm.address}
+              onChange={(value) =>
+                setMeetingForm(
+                  (prev) => ({
+                    ...prev,
+                    address: value,
+                  }),
+                )
+              }
+            />
+          </div>
+        </div>
+
+        <div>
+          <h3 className="mb-3 font-black text-gray-900">
+            Meeting Schedule
+          </h3>
+
+          <LocalizationProvider
+            dateAdapter={AdapterDayjs}
+          >
+            <div className="grid gap-4 md:grid-cols-2">
+              <DatePicker
+                label="Meeting Date *"
+                value={meetingDate}
+                onChange={(value) =>
+                  setMeetingDate(value)
+                }
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                  },
+                }}
+              />
+
+              <MobileTimePicker
+                label="Meeting Time *"
+                value={meetingTime}
+                onChange={(value) =>
+                  setMeetingTime(value)
+                }
+                ampm
+                ampmInClock
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                  },
+                }}
+              />
+
+              <DatePicker
+                label="Next Follow-up Date"
+                value={followUpDate}
+                onChange={(value) =>
+                  setFollowUpDate(value)
+                }
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                  },
+                }}
+              />
+
+              <MobileTimePicker
+                label="Next Follow-up Time"
+                value={followUpTime}
+                onChange={(value) =>
+                  setFollowUpTime(value)
+                }
+                ampm
+                ampmInClock
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                  },
+                }}
+              />
+            </div>
+          </LocalizationProvider>
+
+          <div className="mt-4">
+            <label className="mb-1 block text-sm font-bold text-gray-700">
+              Meeting Status *
+            </label>
+
+            <select
+              value={meetingForm.status}
+              onChange={(event) =>
+                setMeetingForm(
+                  (prev) => ({
+                    ...prev,
+                    status:
+                      event.target
+                        .value as SolarMitraMeetingStatus,
+                  }),
+                )
+              }
+              className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm"
+            >
+              <option value="SCHEDULED">
+                Scheduled
+              </option>
+
+              <option value="COMPLETED">
+                Completed
+              </option>
+
+              <option value="CANCELLED">
+                Cancelled
+              </option>
+
+              <option value="ON_HOLD">
+                On Hold
+              </option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="font-black text-gray-900">
+              Location
+            </h3>
+
+            <button
+              type="button"
+              onClick={
+                captureMeetingLocation
+              }
+              disabled={
+                capturingMeetingGps
+              }
+              className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 disabled:opacity-50"
+            >
+              {capturingMeetingGps
+                ? 'Capturing...'
+                : '📍 Capture Current GPS'}
+            </button>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <FormField
+              label="GPS Latitude"
+              value={
+                meetingForm.gpsLatitude
+              }
+              onChange={(value) =>
+                setMeetingForm(
+                  (prev) => ({
+                    ...prev,
+                    gpsLatitude: value,
+                  }),
+                )
+              }
+            />
+
+            <FormField
+              label="GPS Longitude"
+              value={
+                meetingForm.gpsLongitude
+              }
+              onChange={(value) =>
+                setMeetingForm(
+                  (prev) => ({
+                    ...prev,
+                    gpsLongitude: value,
+                  }),
+                )
+              }
+            />
+
+            <div className="md:col-span-2">
+              <FormField
+                label="GPS Address"
+                value={
+                  meetingForm.gpsAddress
+                }
+                onChange={(value) =>
+                  setMeetingForm(
+                    (prev) => ({
+                      ...prev,
+                      gpsAddress: value,
+                    }),
+                  )
+                }
+              />
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h3 className="mb-1 font-black text-gray-900">
+            Meeting Photos
+          </h3>
+
+          <p className="mb-3 text-xs text-gray-500">
+            Add up to 2 photos. Images are compressed before upload.
+          </p>
+
+          <input
+            ref={meetingPhotoInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            multiple
+            onChange={
+              handleMeetingPhotoSelect
+            }
+            className="hidden"
+          />
+
+          <button
+            type="button"
+            onClick={() =>
+              meetingPhotoInputRef.current?.click()
+            }
+            disabled={
+              meetingPhotoPreviews.length >=
+              2
+            }
+            className="rounded-xl border border-orange-200 bg-orange-50 px-4 py-2.5 text-sm font-bold text-orange-700 disabled:opacity-50"
+          >
+            📷 Add Photo
+          </button>
+
+          {!!meetingPhotoPreviews.length && (
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:max-w-lg">
+              {meetingPhotoPreviews.map(
+                (url, index) => (
+                  <div
+                    key={`${url}-${index}`}
+                    className="relative overflow-hidden rounded-xl border bg-gray-50"
+                  >
+                    <img
+                      src={url}
+                      alt={`Meeting photo ${index + 1}`}
+                      className="h-40 w-full object-cover"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        removeMeetingPhoto(
+                          index,
+                        )
+                      }
+                      className="absolute right-2 top-2 rounded-full bg-black/70 px-2.5 py-1 text-xs font-black text-white"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ),
+              )}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <h3 className="mb-1 font-black text-gray-900">
+            Audio Proof
+          </h3>
+
+          <p className="mb-3 text-xs text-gray-500">
+            Optional recorded call or other audio proof. Upload only.
+          </p>
+
+          <input
+            ref={meetingAudioInputRef}
+            type="file"
+            accept="audio/*"
+            onChange={
+              handleMeetingAudioSelect
+            }
+            className="hidden"
+          />
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() =>
+                meetingAudioInputRef.current?.click()
+              }
+              className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-bold text-gray-700"
+            >
+              🎵 Upload Audio
+            </button>
+
+            {meetingAudioPreview && (
+              <>
+                <audio
+                  controls
+                  src={
+                    meetingAudioPreview
+                  }
+                  className="max-w-full"
+                />
+
+                <button
+                  type="button"
+                  onClick={
+                    removeMeetingAudio
+                  }
+                  className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700"
+                >
+                  Remove
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <h3 className="mb-1 font-black text-gray-900">
+            Supporting Document
+          </h3>
+
+          <p className="mb-3 text-xs text-gray-500">
+            Optional PDF or image document.
+          </p>
+
+          <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+            <input
+              value={
+                meetingDocumentName
+              }
+              onChange={(event) =>
+                setMeetingDocumentName(
+                  event.target.value,
+                )
+              }
+              placeholder="Document name (optional)"
+              className="rounded-xl border border-gray-300 px-4 py-3 text-sm"
+            />
+
+            <input
+              ref={
+                meetingDocumentInputRef
+              }
+              type="file"
+              accept="application/pdf,image/jpeg,image/png,image/webp"
+              onChange={(event) =>
+                setMeetingDocumentFile(
+                  event.target
+                    .files?.[0] ||
+                    null,
+                )
+              }
+              className="rounded-xl border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+
+          {!!editingMeeting?.documents
+            ?.length && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {editingMeeting.documents.map(
+                (document) => (
+                  <a
+                    key={document.id}
+                    href={
+                      document.fileUrl
+                    }
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-xs font-bold text-gray-700"
+                  >
+                    {document.documentName ||
+                      document.fileName ||
+                      'View Document'}
+                  </a>
+                ),
+              )}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-bold text-gray-700">
+            Notes / Update
+          </label>
+
+          <textarea
+            value={meetingForm.notes}
+            onChange={(event) =>
+              setMeetingForm(
+                (prev) => ({
+                  ...prev,
+                  notes:
+                    event.target.value,
+                }),
+              )
+            }
+            rows={4}
+            placeholder="Meeting discussion, update, next action..."
+            className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm"
+          />
+        </div>
+
+        <div className="flex justify-end gap-3 border-t pt-5">
+          <button
+            type="button"
+            onClick={() =>
+              setShowMeetingModal(
+                false,
+              )
+            }
+            className="rounded-xl border border-gray-300 px-5 py-2.5 text-sm font-bold text-gray-700"
+          >
+            Cancel
+          </button>
+
+          <button
+            type="submit"
+            disabled={
+              saving ||
+              uploadingMeetingFiles ||
+              capturingMeetingGps
+            }
+            className="rounded-xl bg-orange-600 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50"
+          >
+            {saving ||
+            uploadingMeetingFiles
+              ? 'Saving...'
+              : editingMeeting
+                ? 'Update Meeting'
+                : 'Save Meeting'}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+)}
+
+{convertingMeeting && (
+  <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-3">
+    <div className="w-full max-w-xl rounded-2xl bg-white shadow-2xl">
+      <div className="flex items-center justify-between border-b p-5">
+        <div>
+          <h2 className="text-xl font-black text-gray-900">
+            Create Solar Mitra
+          </h2>
+
+          <p className="mt-1 text-sm text-gray-500">
+            Prospect details will be taken from this meeting.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            setConvertingMeeting(
+              null,
+            );
+            setConvertSliderValue(
+              0,
+            );
+          }}
+          className="rounded-lg px-3 py-2 text-xl font-bold text-gray-500"
+        >
+          ×
+        </button>
+      </div>
+
+      <form
+        onSubmit={
+          convertMeetingToSolarMitra
+        }
+        className="space-y-5 p-5"
+      >
+        <div className="rounded-xl border border-orange-200 bg-orange-50 p-4">
+          <p className="font-black text-gray-900">
+            {convertingMeeting.name}
+          </p>
+
+          {convertingMeeting.businessName && (
+            <p className="mt-1 text-sm font-semibold text-gray-700">
+              {
+                convertingMeeting.businessName
+              }
+            </p>
+          )}
+
+          <p className="mt-1 text-sm text-gray-600">
+            {
+              convertingMeeting.primaryPhone
+            }
+          </p>
+
+          {(convertingMeeting.area ||
+            convertingMeeting.city) && (
+            <p className="mt-1 text-sm text-gray-600">
+              {[
+                convertingMeeting.area,
+                convertingMeeting.city,
+              ]
+                .filter(Boolean)
+                .join(', ')}
+            </p>
+          )}
+
+          {convertingMeeting.address && (
+            <p className="mt-1 text-sm text-gray-600">
+              {
+                convertingMeeting.address
+              }
+            </p>
+          )}
+        </div>
+
+        <FormField
+          label="CRM Email *"
+          value={conversionForm.email}
+          onChange={(value) =>
+            setConversionForm(
+              (prev) => ({
+                ...prev,
+                email: value,
+              }),
+            )
+          }
+        />
+
+        <FormField
+          label="CRM Password *"
+          value={
+            conversionForm.password
+          }
+          onChange={(value) =>
+            setConversionForm(
+              (prev) => ({
+                ...prev,
+                password: value,
+              }),
+            )
+          }
+        />
+
+        <div className="flex justify-end gap-3 border-t pt-5">
+          <button
+            type="button"
+            onClick={() => {
+              setConvertingMeeting(
+                null,
+              );
+              setConvertSliderValue(
+                0,
+              );
+            }}
+            className="rounded-xl border border-gray-300 px-5 py-2.5 text-sm font-bold text-gray-700"
+          >
+            Cancel
+          </button>
+
+          <button
+            type="submit"
+            disabled={saving}
+            className="rounded-xl bg-orange-600 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50"
+          >
+            {saving
+              ? 'Creating...'
+              : 'Create Solar Mitra'}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+)}
 
       {showReferralModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-3">
