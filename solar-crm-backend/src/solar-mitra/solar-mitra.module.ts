@@ -25,6 +25,14 @@ import { LeadsModule } from '../leads/leads.module';
 
 import { User } from '../users/user.entity';
 
+import {
+  SolarMitraMeeting,
+} from './solar-mitra-meeting.entity';
+
+import {
+  SolarMitraMeetingDocument,
+} from './solar-mitra-meeting-document.entity';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -32,6 +40,8 @@ import { User } from '../users/user.entity';
   SolarMitraReferral,
   SolarMitraSetting,
   SolarMitraPayout,
+  SolarMitraMeeting,
+SolarMitraMeetingDocument,
   User,
 ]),
     LeadsModule,

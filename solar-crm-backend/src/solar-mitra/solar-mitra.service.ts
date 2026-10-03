@@ -48,6 +48,15 @@ import {
   SolarMitraPayoutStatus,
 } from './solar-mitra-payout.entity';
 
+import {
+  SolarMitraMeeting,
+  SolarMitraMeetingStatus,
+} from './solar-mitra-meeting.entity';
+
+import {
+  SolarMitraMeetingDocument,
+} from './solar-mitra-meeting-document.entity';
+
 
 @Injectable()
 export class SolarMitraService {
@@ -64,6 +73,14 @@ export class SolarMitraService {
   @InjectRepository(SolarMitraPayout)
 private readonly payoutRepository:
   Repository<SolarMitraPayout>,
+
+  @InjectRepository(SolarMitraMeeting)
+private readonly meetingRepository:
+  Repository<SolarMitraMeeting>,
+
+@InjectRepository(SolarMitraMeetingDocument)
+private readonly meetingDocumentRepository:
+  Repository<SolarMitraMeetingDocument>,
 
 private readonly leadsService: LeadsService,
 
@@ -2459,6 +2476,1009 @@ payout.paymentRemarks =
   }
 
   return savedPayout;
+}
+
+async createMeeting(
+  body: any,
+  user: any,
+) {
+  const name =
+    String(body?.name || '').trim();
+
+  const primaryPhone =
+    this.normalizePhone(
+      body?.primaryPhone,
+    );
+
+  if (!name) {
+    throw new BadRequestException(
+      'Name is required',
+    );
+  }
+
+  if (primaryPhone.length !== 10) {
+    throw new BadRequestException(
+      'Valid 10 digit primary phone is required',
+    );
+  }
+
+  const meetingDateTime =
+    body?.meetingDateTime
+      ? new Date(body.meetingDateTime)
+      : null;
+
+  if (
+    !meetingDateTime ||
+    Number.isNaN(
+      meetingDateTime.getTime(),
+    )
+  ) {
+    throw new BadRequestException(
+      'Valid meeting date and time is required',
+    );
+  }
+
+  const status =
+    body?.status ||
+    SolarMitraMeetingStatus.SCHEDULED;
+
+  if (
+    !Object.values(
+      SolarMitraMeetingStatus,
+    ).includes(status)
+  ) {
+    throw new BadRequestException(
+      'Invalid meeting status',
+    );
+  }
+
+  const nextFollowUpAt =
+    body?.nextFollowUpAt
+      ? new Date(body.nextFollowUpAt)
+      : null;
+
+  if (
+    nextFollowUpAt &&
+    Number.isNaN(
+      nextFollowUpAt.getTime(),
+    )
+  ) {
+    throw new BadRequestException(
+      'Invalid next follow-up date and time',
+    );
+  }
+
+  const photoUrls =
+    Array.isArray(body?.photoUrls)
+      ? body.photoUrls
+          .map((item: any) =>
+            String(item || '').trim(),
+          )
+          .filter(Boolean)
+      : [];
+
+  if (photoUrls.length > 2) {
+    throw new BadRequestException(
+      'Maximum two meeting photos are allowed',
+    );
+  }
+
+  let solarMitra:
+    | SolarMitra
+    | null = null;
+
+  if (body?.solarMitraId) {
+    solarMitra =
+      await this.getSolarMitra(
+        Number(body.solarMitraId),
+      );
+  }
+
+  const meeting =
+    this.meetingRepository.create({
+      solarMitraId:
+        solarMitra?.id || null,
+
+      solarMitraName:
+        solarMitra?.name || null,
+
+      name,
+
+      primaryPhone,
+
+      businessName:
+        String(
+          body?.businessName || '',
+        ).trim() || null,
+
+      area:
+        String(
+          body?.area || '',
+        ).trim() || null,
+
+      city:
+        String(
+          body?.city || '',
+        ).trim() || null,
+
+      address:
+        String(
+          body?.address || '',
+        ).trim() || null,
+
+      gpsLatitude:
+        body?.gpsLatitude !== undefined &&
+        body?.gpsLatitude !== null &&
+        body?.gpsLatitude !== ''
+          ? Number(body.gpsLatitude)
+          : null,
+
+      gpsLongitude:
+        body?.gpsLongitude !== undefined &&
+        body?.gpsLongitude !== null &&
+        body?.gpsLongitude !== ''
+          ? Number(body.gpsLongitude)
+          : null,
+
+      gpsAddress:
+        String(
+          body?.gpsAddress || '',
+        ).trim() || null,
+
+      photoUrls,
+
+      audioUrl:
+        String(
+          body?.audioUrl || '',
+        ).trim() || null,
+
+      status,
+
+      meetingDateTime,
+
+      notes:
+        String(
+          body?.notes || '',
+        ).trim() || null,
+
+      nextFollowUpAt,
+
+      franchiseManagerId:
+        Number(user?.id),
+
+      franchiseManagerName:
+        String(
+          user?.name || '',
+        ).trim(),
+
+      convertedToSolarMitra:
+        Boolean(solarMitra),
+
+      convertedAt:
+        solarMitra
+          ? new Date()
+          : null,
+
+      createdBy:
+        user?.id
+          ? Number(user.id)
+          : null,
+
+      createdByName:
+        String(
+          user?.name || '',
+        ).trim() || null,
+
+      updatedBy:
+        user?.id
+          ? Number(user.id)
+          : null,
+
+      updatedByName:
+        String(
+          user?.name || '',
+        ).trim() || null,
+    } as Partial<SolarMitraMeeting>);
+
+  return this.meetingRepository.save(
+    meeting,
+  );
+}
+
+
+async listMeetings(
+  query: any,
+  franchiseManagerId?: number,
+) {
+  const qb =
+    this.meetingRepository
+      .createQueryBuilder('meeting')
+      .where(
+        'meeting."isHidden" = false',
+      );
+
+  if (franchiseManagerId) {
+    qb.andWhere(
+      'meeting."franchiseManagerId" = :franchiseManagerId',
+      {
+        franchiseManagerId:
+          Number(franchiseManagerId),
+      },
+    );
+  }
+
+  const search =
+    String(query?.search || '').trim();
+
+  if (search) {
+    qb.andWhere(
+      `(
+        LOWER(meeting.name)
+          LIKE LOWER(:search)
+
+        OR meeting."primaryPhone"
+          LIKE :search
+
+        OR LOWER(
+          COALESCE(
+            meeting."businessName",
+            ''
+          )
+        ) LIKE LOWER(:search)
+
+        OR LOWER(
+          COALESCE(
+            meeting.area,
+            ''
+          )
+        ) LIKE LOWER(:search)
+
+        OR LOWER(
+          COALESCE(
+            meeting.city,
+            ''
+          )
+        ) LIKE LOWER(:search)
+      )`,
+      {
+        search: `%${search}%`,
+      },
+    );
+  }
+
+  if (query?.status) {
+    qb.andWhere(
+      'meeting.status = :status',
+      {
+        status: query.status,
+      },
+    );
+  }
+
+  if (query?.solarMitraId) {
+    qb.andWhere(
+      'meeting."solarMitraId" = :solarMitraId',
+      {
+        solarMitraId:
+          Number(
+            query.solarMitraId,
+          ),
+      },
+    );
+  }
+
+  if (
+    query?.convertedToSolarMitra ===
+      'true' ||
+    query?.convertedToSolarMitra ===
+      true
+  ) {
+    qb.andWhere(
+      'meeting."convertedToSolarMitra" = true',
+    );
+  }
+
+  if (
+    query?.convertedToSolarMitra ===
+      'false' ||
+    query?.convertedToSolarMitra ===
+      false
+  ) {
+    qb.andWhere(
+      'meeting."convertedToSolarMitra" = false',
+    );
+  }
+
+  qb.orderBy(
+    'meeting."meetingDateTime"',
+    'DESC',
+  );
+
+  return qb.getMany();
+}
+
+
+async getMeeting(id: number) {
+  const meeting =
+    await this.meetingRepository.findOne({
+      where: {
+        id: Number(id),
+        isHidden: false,
+      },
+    });
+
+  if (!meeting) {
+    throw new NotFoundException(
+      'Solar Mitra meeting not found',
+    );
+  }
+
+  const documents =
+    await this.meetingDocumentRepository.find({
+      where: {
+        meetingId: meeting.id,
+        isHidden: false,
+      },
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+
+  return {
+    ...meeting,
+    documents,
+  };
+}
+
+
+async updateMeeting(
+  id: number,
+  body: any,
+  user: any,
+) {
+  const existing =
+    await this.meetingRepository.findOne({
+      where: {
+        id: Number(id),
+        isHidden: false,
+      },
+    });
+
+  if (!existing) {
+    throw new NotFoundException(
+      'Solar Mitra meeting not found',
+    );
+  }
+
+  if (body?.name !== undefined) {
+    const name =
+      String(body.name || '').trim();
+
+    if (!name) {
+      throw new BadRequestException(
+        'Name is required',
+      );
+    }
+
+    existing.name = name;
+  }
+
+  if (
+    body?.primaryPhone !== undefined
+  ) {
+    const phone =
+      this.normalizePhone(
+        body.primaryPhone,
+      );
+
+    if (phone.length !== 10) {
+      throw new BadRequestException(
+        'Valid 10 digit primary phone is required',
+      );
+    }
+
+    existing.primaryPhone = phone;
+  }
+
+  if (
+    body?.businessName !== undefined
+  ) {
+    existing.businessName =
+      String(
+        body.businessName || '',
+      ).trim() || null;
+  }
+
+  if (body?.area !== undefined) {
+    existing.area =
+      String(
+        body.area || '',
+      ).trim() || null;
+  }
+
+  if (body?.city !== undefined) {
+    existing.city =
+      String(
+        body.city || '',
+      ).trim() || null;
+  }
+
+  if (body?.address !== undefined) {
+    existing.address =
+      String(
+        body.address || '',
+      ).trim() || null;
+  }
+
+  if (
+    body?.gpsLatitude !== undefined
+  ) {
+    existing.gpsLatitude =
+      body.gpsLatitude === null ||
+      body.gpsLatitude === ''
+        ? null
+        : Number(
+            body.gpsLatitude,
+          );
+  }
+
+  if (
+    body?.gpsLongitude !== undefined
+  ) {
+    existing.gpsLongitude =
+      body.gpsLongitude === null ||
+      body.gpsLongitude === ''
+        ? null
+        : Number(
+            body.gpsLongitude,
+          );
+  }
+
+  if (
+    body?.gpsAddress !== undefined
+  ) {
+    existing.gpsAddress =
+      String(
+        body.gpsAddress || '',
+      ).trim() || null;
+  }
+
+  if (body?.photoUrls !== undefined) {
+    const photoUrls =
+      Array.isArray(body.photoUrls)
+        ? body.photoUrls
+            .map((item: any) =>
+              String(item || '').trim(),
+            )
+            .filter(Boolean)
+        : [];
+
+    if (photoUrls.length > 2) {
+      throw new BadRequestException(
+        'Maximum two meeting photos are allowed',
+      );
+    }
+
+    existing.photoUrls =
+      photoUrls;
+  }
+
+  if (body?.audioUrl !== undefined) {
+    existing.audioUrl =
+      String(
+        body.audioUrl || '',
+      ).trim() || null;
+  }
+
+  if (body?.status !== undefined) {
+    if (
+      !Object.values(
+        SolarMitraMeetingStatus,
+      ).includes(body.status)
+    ) {
+      throw new BadRequestException(
+        'Invalid meeting status',
+      );
+    }
+
+    existing.status =
+      body.status;
+  }
+
+  if (
+    body?.meetingDateTime !== undefined
+  ) {
+    const meetingDateTime =
+      new Date(
+        body.meetingDateTime,
+      );
+
+    if (
+      Number.isNaN(
+        meetingDateTime.getTime(),
+      )
+    ) {
+      throw new BadRequestException(
+        'Invalid meeting date and time',
+      );
+    }
+
+    existing.meetingDateTime =
+      meetingDateTime;
+  }
+
+  if (body?.notes !== undefined) {
+    existing.notes =
+      String(
+        body.notes || '',
+      ).trim() || null;
+  }
+
+  if (
+    body?.nextFollowUpAt !== undefined
+  ) {
+    if (
+      body.nextFollowUpAt === null ||
+      body.nextFollowUpAt === ''
+    ) {
+      existing.nextFollowUpAt =
+        null;
+    } else {
+      const nextFollowUpAt =
+        new Date(
+          body.nextFollowUpAt,
+        );
+
+      if (
+        Number.isNaN(
+          nextFollowUpAt.getTime(),
+        )
+      ) {
+        throw new BadRequestException(
+          'Invalid next follow-up date and time',
+        );
+      }
+
+      existing.nextFollowUpAt =
+        nextFollowUpAt;
+    }
+  }
+
+  existing.updatedBy =
+    user?.id
+      ? Number(user.id)
+      : null;
+
+  existing.updatedByName =
+    String(
+      user?.name || '',
+    ).trim() || null;
+
+  return this.meetingRepository.save(
+    existing,
+  );
+}
+
+async convertMeetingToSolarMitra(
+  meetingId: number,
+  body: any,
+  user: any,
+) {
+  const meeting =
+    await this.meetingRepository.findOne({
+      where: {
+        id: Number(meetingId),
+        isHidden: false,
+      },
+    });
+
+  if (!meeting) {
+    throw new NotFoundException(
+      'Solar Mitra meeting not found',
+    );
+  }
+
+  if (
+    meeting.convertedToSolarMitra ||
+    meeting.solarMitraId
+  ) {
+    throw new BadRequestException(
+      'This meeting has already been converted to a Solar Mitra',
+    );
+  }
+
+  const email =
+    String(
+      body?.email || '',
+    )
+      .trim()
+      .toLowerCase();
+
+  const password =
+    String(
+      body?.password || '',
+    );
+
+  if (!email) {
+    throw new BadRequestException(
+      'Email is required for Solar Mitra login',
+    );
+  }
+
+  if (!password.trim()) {
+    throw new BadRequestException(
+      'Password is required for Solar Mitra login',
+    );
+  }
+
+  /*
+   * Meeting data is the default.
+   * The final conversion form may send corrected
+   * values for these fields before creation.
+   */
+  const createBody = {
+    name:
+      String(
+        body?.name ??
+          meeting.name ??
+          '',
+      ).trim(),
+
+    primaryPhone:
+      String(
+        body?.primaryPhone ??
+          meeting.primaryPhone ??
+          '',
+      ).trim(),
+
+    businessName:
+      String(
+        body?.businessName ??
+          meeting.businessName ??
+          '',
+      ).trim(),
+
+    area:
+      String(
+        body?.area ??
+          meeting.area ??
+          '',
+      ).trim(),
+
+    city:
+      String(
+        body?.city ??
+          meeting.city ??
+          '',
+      ).trim(),
+
+    address:
+      String(
+        body?.address ??
+          meeting.address ??
+          '',
+      ).trim(),
+
+    gpsLatitude:
+      body?.gpsLatitude ??
+      meeting.gpsLatitude,
+
+    gpsLongitude:
+      body?.gpsLongitude ??
+      meeting.gpsLongitude,
+
+    gpsAddress:
+      String(
+        body?.gpsAddress ??
+          meeting.gpsAddress ??
+          '',
+      ).trim(),
+
+    /*
+     * SolarMitra currently has one shopPhotoUrl.
+     * Use the first meeting photo by default.
+     */
+    shopPhotoUrl:
+      String(
+        body?.shopPhotoUrl ??
+          meeting.photoUrls?.[0] ??
+          '',
+      ).trim(),
+
+    email,
+
+    password,
+
+    /*
+     * Conversion belongs to the Franchise Manager
+     * responsible for this meeting.
+     */
+    franchiseManagerId:
+      Number(
+        meeting.franchiseManagerId,
+      ),
+
+    franchiseManagerName:
+      String(
+        meeting.franchiseManagerName ||
+          '',
+      ).trim(),
+  };
+
+  const solarMitra =
+    await this.createSolarMitra(
+      createBody,
+      user,
+    );
+
+  meeting.solarMitraId =
+    Number(solarMitra.id);
+
+  meeting.solarMitraName =
+    String(
+      solarMitra.name || '',
+    ).trim();
+
+  meeting.convertedToSolarMitra =
+    true;
+
+  meeting.convertedAt =
+    new Date();
+
+  meeting.convertedBy =
+    user?.id
+      ? Number(user.id)
+      : null;
+
+  meeting.convertedByName =
+    String(
+      user?.name || '',
+    ).trim() || null;
+
+  meeting.updatedBy =
+    user?.id
+      ? Number(user.id)
+      : null;
+
+  meeting.updatedByName =
+    String(
+      user?.name || '',
+    ).trim() || null;
+
+  const savedMeeting =
+    await this.meetingRepository.save(
+      meeting,
+    );
+
+  return {
+    message:
+      'Solar Mitra created successfully',
+
+    solarMitra,
+
+    meeting: savedMeeting,
+  };
+}
+
+private async uploadMeetingFile(
+  file: any,
+  user: any,
+  folder: string,
+  allowedTypes: string[],
+  maxSize: number,
+) {
+  if (!file) {
+    throw new BadRequestException(
+      'File is required',
+    );
+  }
+
+  const mimeType =
+    String(
+      file.mimetype || '',
+    );
+
+  if (
+    !allowedTypes.includes(
+      mimeType,
+    )
+  ) {
+    throw new BadRequestException(
+      'Unsupported file type',
+    );
+  }
+
+  if (file.size > maxSize) {
+    throw new BadRequestException(
+      'File exceeds allowed size',
+    );
+  }
+
+  const supabaseUrl =
+    process.env.SUPABASE_URL;
+
+  const serviceKey =
+    process.env
+      .SUPABASE_SERVICE_ROLE_KEY;
+
+  const bucket =
+    process.env
+      .SUPABASE_PROJECT_DOCUMENTS_BUCKET ||
+    'project-documents';
+
+  if (
+    !supabaseUrl ||
+    !serviceKey
+  ) {
+    throw new BadRequestException(
+      'Supabase storage is not configured',
+    );
+  }
+
+  const supabase =
+    createClient(
+      supabaseUrl,
+      serviceKey,
+    );
+
+  const originalName =
+    String(
+      file.originalname ||
+        'meeting-file',
+    );
+
+  const extension =
+    originalName.includes('.')
+      ? originalName
+          .split('.')
+          .pop()
+      : 'bin';
+
+  const safeExtension =
+    String(
+      extension || 'bin',
+    ).replace(
+      /[^a-zA-Z0-9]/g,
+      '',
+    );
+
+  const filePath =
+    `solar-mitra/meetings/${folder}/` +
+    `user-${user?.id || 'unknown'}/` +
+    `${Date.now()}-${randomUUID()}.` +
+    `${safeExtension}`;
+
+  const uploadResult =
+    await supabase.storage
+      .from(bucket)
+      .upload(
+        filePath,
+        file.buffer,
+        {
+          contentType:
+            mimeType,
+          upsert: false,
+        },
+      );
+
+  if (uploadResult.error) {
+    throw new BadRequestException(
+      uploadResult.error.message,
+    );
+  }
+
+  const publicUrlResult =
+    supabase.storage
+      .from(bucket)
+      .getPublicUrl(filePath);
+
+  return {
+    fileUrl:
+      publicUrlResult.data.publicUrl,
+    filePath,
+    fileName:
+      originalName,
+    mimeType,
+  };
+}
+
+async uploadMeetingPhoto(
+  file: any,
+  user: any,
+) {
+  return this.uploadMeetingFile(
+    file,
+    user,
+    'photos',
+    [
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+    ],
+    10 * 1024 * 1024,
+  );
+}
+
+
+async uploadMeetingAudio(
+  file: any,
+  user: any,
+) {
+  return this.uploadMeetingFile(
+    file,
+    user,
+    'audio',
+    [
+      'audio/mpeg',
+      'audio/mp4',
+      'audio/m4a',
+      'audio/x-m4a',
+      'audio/wav',
+      'audio/webm',
+      'audio/ogg',
+    ],
+    25 * 1024 * 1024,
+  );
+}
+
+
+async uploadMeetingDocument(
+  meetingId: number,
+  file: any,
+  documentName: any,
+  user: any,
+) {
+  await this.getMeeting(
+    meetingId,
+  );
+
+  const uploaded =
+    await this.uploadMeetingFile(
+      file,
+      user,
+      'documents',
+      [
+        'application/pdf',
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+      ],
+      20 * 1024 * 1024,
+    );
+
+  const document =
+    this.meetingDocumentRepository.create({
+      meetingId:
+        Number(meetingId),
+
+      documentName:
+        String(
+          documentName || '',
+        ).trim() || null,
+
+      fileUrl:
+        uploaded.fileUrl,
+
+      fileName:
+        uploaded.fileName,
+
+      mimeType:
+        uploaded.mimeType,
+
+      uploadedBy:
+        user?.id
+          ? Number(user.id)
+          : null,
+
+      uploadedByName:
+        String(
+          user?.name || '',
+        ).trim() || null,
+    });
+
+  return this
+    .meetingDocumentRepository
+    .save(document);
 }
 
   async getOrCreateSettings() {
