@@ -37,6 +37,7 @@ const roleOptions = [
   'MAINTENANCE_MANAGER',
   'HR_MANAGER',
 
+  'FRANCHISE_HEAD',
   'FRANCHISE_MANAGER',
   'SOLAR_MITRA',
 

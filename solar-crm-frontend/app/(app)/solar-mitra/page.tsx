@@ -637,6 +637,14 @@ const [
   const userRoles = currentUser?.roles || [];
   const isOwner = userRoles.includes('OWNER');
 
+  const isFranchiseHead =
+  userRoles.includes(
+    'FRANCHISE_HEAD',
+  );
+
+const canAssignFranchiseManager =
+  isOwner || isFranchiseHead;
+
   useEffect(() => {
     const storedUser =
       localStorage.getItem('user');
@@ -4125,7 +4133,7 @@ const convertMeetingToSolarMitra =
               </button>
             ) : (
               <div className="rounded-xl bg-gray-100 p-4 text-sm font-semibold text-gray-600">
-                Settings are read-only for Franchise Manager.
+                Settings are read-only.
                 Only Owner can change payout rules.
               </div>
             )}
@@ -4492,7 +4500,8 @@ const convertMeetingToSolarMitra =
                 </h3>
 
                 <div className="grid gap-4 md:grid-cols-2">
-                  <div className="relative">
+                  {canAssignFranchiseManager && (
+  <div className="relative">
                     <label className="mb-1 block text-sm font-bold text-gray-700">
                       Franchise Manager
                     </label>
@@ -4588,7 +4597,8 @@ const convertMeetingToSolarMitra =
                         )}
                       </div>
                     )}
-                  </div>
+                    </div>
+       )}
 
                   <div>
                     <label className="mb-1 block text-sm font-bold text-gray-700">

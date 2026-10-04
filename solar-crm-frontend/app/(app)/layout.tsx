@@ -187,6 +187,8 @@ const navItems = [
 'SOLAR_FRANCHISE',
 'INSPECTION_MANAGER',
 'MAINTENANCE_MANAGER',
+'FRANCHISE_MANAGER',
+'FRANCHISE_HEAD',
   ],
 },
 
@@ -226,6 +228,7 @@ const navItems = [
   roles: [
     'OWNER',
     'FRANCHISE_MANAGER',
+    'FRANCHISE_HEAD',
   ],
 },
 
@@ -282,9 +285,11 @@ const navItems = [
     'TRADING_MANAGER',
     'OFFICE_ASSISTANT',
     'TRADING_HEAD',
-    'PROJECT_CONTRACTOR',
-    'SOLAR_FRANCHISE',
-  ],
+      'PROJECT_CONTRACTOR',
+  'SOLAR_FRANCHISE',
+  'FRANCHISE_MANAGER',
+  'FRANCHISE_HEAD',
+],
 },
 
 {
@@ -337,6 +342,8 @@ const navItems = [
 
     'CUSTOMER',
     'DEALER',
+    'FRANCHISE_MANAGER',
+'FRANCHISE_HEAD',
   ],
 },
 
@@ -369,9 +376,11 @@ const navItems = [
     'TRADING_MANAGER',
     'OFFICE_ASSISTANT',
     'TRADING_HEAD',
-    'PROJECT_CONTRACTOR',
-    'SOLAR_FRANCHISE',
-  ],
+      'PROJECT_CONTRACTOR',
+  'SOLAR_FRANCHISE',
+  'FRANCHISE_MANAGER',
+  'FRANCHISE_HEAD',
+],
 },
 
 {
@@ -407,9 +416,11 @@ const navItems = [
     'HR_MANAGER',
     'TRADING_MANAGER',
     'OFFICE_ASSISTANT',
-    'TRADING_HEAD',
-    'PROJECT_CONTRACTOR'
-  ],
+      'TRADING_HEAD',
+  'PROJECT_CONTRACTOR',
+  'FRANCHISE_MANAGER',
+  'FRANCHISE_HEAD',
+],
 },
 
 {
@@ -447,9 +458,11 @@ const navItems = [
     'TRADING_MANAGER',
     'OFFICE_ASSISTANT',
       'TRADING_HEAD',
-  'SOLAR_FRANCHISE',
-  'PROJECT_CONTRACTOR',
-  'SOLAR_MITRA',
+   'SOLAR_FRANCHISE',
+ 'PROJECT_CONTRACTOR',
+ 'SOLAR_MITRA',
+ 'FRANCHISE_MANAGER',
+ 'FRANCHISE_HEAD',
 ],
 },
 
