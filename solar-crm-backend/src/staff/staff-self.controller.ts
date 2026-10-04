@@ -42,12 +42,13 @@ import { CurrentUser } from '../auth/current-user.decorator';
   'MAINTENANCE_MANAGER',
   'CUSTOMER_MANAGER',
   'HR_MANAGER',
-  'TRADING_MANAGER',
-    'TRADING_HEAD',
-    'OFFICE_ASSISTANT',
-    'PROJECT_CONTRACTOR',
-    'INSPECTION_MANAGER',
-
+    'TRADING_MANAGER',
+  'TRADING_HEAD',
+  'OFFICE_ASSISTANT',
+  'PROJECT_CONTRACTOR',
+  'INSPECTION_MANAGER',
+  'FRANCHISE_MANAGER',
+  'FRANCHISE_HEAD',
 )
 @Controller('staff/self')
 export class StaffSelfController {

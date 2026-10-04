@@ -40,10 +40,13 @@ export class SolarMitraController {
         : [];
 
     const allowed =
-      roles.includes(UserRole.OWNER) ||
-      roles.includes(
-        UserRole.FRANCHISE_MANAGER,
-      );
+  roles.includes(UserRole.OWNER) ||
+  roles.includes(
+    UserRole.FRANCHISE_HEAD,
+  ) ||
+  roles.includes(
+    UserRole.FRANCHISE_MANAGER,
+  );
 
     if (!allowed) {
       throw new ForbiddenException(
@@ -73,6 +76,19 @@ private isFranchiseManager(
 
   return roles.includes(
     UserRole.FRANCHISE_MANAGER,
+  );
+}
+
+private isFranchiseHead(
+  user: any,
+): boolean {
+  const roles: string[] =
+    Array.isArray(user?.roles)
+      ? user.roles
+      : [];
+
+  return roles.includes(
+    UserRole.FRANCHISE_HEAD,
   );
 }
 
