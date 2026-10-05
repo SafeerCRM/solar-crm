@@ -75,9 +75,14 @@ type SolarMitra = {
   payoutAmountOverride?: number | null;
   requiredPaymentPercentageOverride?: number | null;
   franchiseManagerId?: number | null;
-  franchiseManagerName?: string | null;
-  createdAt?: string;
-  updatedAt?: string;
+franchiseManagerName?: string | null;
+
+createdBy?: number | null;
+createdByName?: string | null;
+createdByRole?: string | null;
+
+createdAt?: string;
+updatedAt?: string;
 };
 
 type SolarMitraReferral = {
@@ -444,6 +449,11 @@ const [uploadingShopPhoto, setUploadingShopPhoto] =
   const [mitraSearch, setMitraSearch] = useState('');
   const [mitraStatus, setMitraStatus] = useState('');
 
+  const [
+  mitraCreatedBy,
+  setMitraCreatedBy,
+] = useState('');
+
   const [referralSearch, setReferralSearch] =
     useState('');
   const [referralStatus, setReferralStatus] =
@@ -645,6 +655,9 @@ const [
 const canAssignFranchiseManager =
   isOwner || isFranchiseHead;
 
+  const canFilterByCreator =
+  isOwner || isFranchiseHead;
+
   useEffect(() => {
     const storedUser =
       localStorage.getItem('user');
@@ -810,17 +823,27 @@ const canAssignFranchiseManager =
           return false;
         }
 
+        if (
+  mitraCreatedBy &&
+  Number(item.createdBy) !==
+    Number(mitraCreatedBy)
+) {
+  return false;
+}
+
         if (!search) return true;
 
         return [
-          item.name,
-          item.businessName,
-          item.primaryPhone,
-          item.secondaryPhone,
-          item.city,
-          item.area,
-          item.franchiseManagerName,
-        ].some((value) =>
+  item.name,
+  item.businessName,
+  item.primaryPhone,
+  item.secondaryPhone,
+  item.city,
+  item.area,
+  item.franchiseManagerName,
+  item.createdByName,
+  item.createdByRole,
+].some((value) =>
           String(value || '')
             .toLowerCase()
             .includes(search),
@@ -830,7 +853,53 @@ const canAssignFranchiseManager =
       mitras,
       mitraSearch,
       mitraStatus,
+      mitraCreatedBy,
     ]);
+
+    const mitraCreators =
+  useMemo(() => {
+    const creatorMap =
+      new Map<
+        number,
+        {
+          id: number;
+          name: string;
+          role: string;
+        }
+      >();
+
+    mitras.forEach((item) => {
+      if (!item.createdBy) {
+        return;
+      }
+
+      const creatorId =
+        Number(item.createdBy);
+
+      if (
+        !creatorMap.has(creatorId)
+      ) {
+        creatorMap.set(
+          creatorId,
+          {
+            id: creatorId,
+            name:
+              item.createdByName ||
+              `User #${creatorId}`,
+            role:
+              item.createdByRole ||
+              '',
+          },
+        );
+      }
+    });
+
+    return Array.from(
+      creatorMap.values(),
+    ).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+  }, [mitras]);
 
     const filteredMeetings =
   useMemo(() => {
@@ -3078,6 +3147,38 @@ const convertMeetingToSolarMitra =
               </option>
             </select>
 
+            {canFilterByCreator && (
+  <select
+    value={mitraCreatedBy}
+    onChange={(event) =>
+      setMitraCreatedBy(
+        event.target.value,
+      )
+    }
+    className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm"
+  >
+    <option value="">
+      All Creators
+    </option>
+
+    {mitraCreators.map(
+      (creator) => (
+        <option
+          key={creator.id}
+          value={creator.id}
+        >
+          {creator.name}
+          {creator.role
+            ? ` — ${cleanLabel(
+                creator.role,
+              )}`
+            : ''}
+        </option>
+      ),
+    )}
+  </select>
+)}
+
             <button
               type="button"
               onClick={openCreateMitra}
@@ -3167,6 +3268,35 @@ const convertMeetingToSolarMitra =
                           'Not assigned'}
                       </p>
                     </div>
+
+                    {canFilterByCreator && (
+  <div>
+    <p className="text-xs font-semibold text-gray-400">
+      Created By
+    </p>
+
+    <p className="font-semibold text-gray-800">
+      {item.createdByName ||
+        '—'}
+    </p>
+
+    {item.createdByRole && (
+      <p className="mt-0.5 text-xs text-gray-500">
+        {cleanLabel(
+          item.createdByRole,
+        )}
+      </p>
+    )}
+
+    {item.createdAt && (
+      <p className="mt-0.5 text-xs text-gray-400">
+        {formatDate(
+          item.createdAt,
+        )}
+      </p>
+    )}
+  </div>
+)}
 
                     
 
