@@ -10,7 +10,7 @@ import { Cron } from '@nestjs/schedule';
 
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { In, MoreThan, Repository, DataSource, Not, } from 'typeorm';
+import { In, MoreThan, Repository, DataSource, Not, EntityManager, } from 'typeorm';
 
 import PDFDocument = require('pdfkit');
 import { Response } from 'express';
@@ -1082,6 +1082,76 @@ private isOwnerUser(
     .includes('OWNER');
 }
 
+private async getNextAvailableBillingInvoiceSequence(
+  company: ProjectVendorCompany,
+  startingSequence: number,
+  invoiceDate: Date = new Date(),
+  manager?: EntityManager,
+) {
+  const normalNextSequence = Math.max(
+    Number(startingSequence || 1),
+    1,
+  );
+
+  const finalInvoiceRepository =
+    manager
+      ? manager.getRepository(
+          ProjectFinalInvoice,
+        )
+      : this.projectFinalInvoiceRepository;
+
+  for (
+    let sequence = 1;
+    sequence < normalNextSequence;
+    sequence += 1
+  ) {
+    const invoiceNumber =
+      this.formatBillingInvoiceNumber(
+        company,
+        sequence,
+        invoiceDate,
+      );
+
+    const hiddenInvoice =
+      await finalInvoiceRepository
+        .createQueryBuilder('invoice')
+        .where(
+          'LOWER(TRIM(invoice.invoiceNumber)) = LOWER(TRIM(:invoiceNumber))',
+          {
+            invoiceNumber,
+          },
+        )
+        .andWhere(
+          'invoice.isHidden = true',
+        )
+        .getOne();
+
+    if (!hiddenInvoice) {
+      continue;
+    }
+
+    const activeInvoice =
+      await finalInvoiceRepository
+        .createQueryBuilder('invoice')
+        .where(
+          'LOWER(TRIM(invoice.invoiceNumber)) = LOWER(TRIM(:invoiceNumber))',
+          {
+            invoiceNumber,
+          },
+        )
+        .andWhere(
+          'invoice.isHidden = false',
+        )
+        .getOne();
+
+    if (!activeInvoice) {
+      return sequence;
+    }
+  }
+
+  return normalNextSequence;
+}
+
 private async reserveBillingInvoiceNumber(
   companyId: number,
   user: any,
@@ -1139,7 +1209,7 @@ private async reserveBillingInvoiceNumber(
           );
         }
 
-        const currentSequence =
+                const normalNextSequence =
           Math.max(
             Number(
               company
@@ -1148,6 +1218,18 @@ private async reserveBillingInvoiceNumber(
             ),
             1,
           );
+
+                const currentSequence =
+          await this.getNextAvailableBillingInvoiceSequence(
+            company,
+            normalNextSequence,
+            invoiceDate,
+            manager,
+          );
+
+        const isReusedHiddenSequence =
+          currentSequence <
+          normalNextSequence;
 
         const suggested =
           this
@@ -1221,16 +1303,20 @@ private async reserveBillingInvoiceNumber(
          * the company's normal automatic
          * sequence still progresses by one.
          */
-        company.nextInvoiceNumber =
-          currentSequence + 1;
+                if (
+          !isReusedHiddenSequence
+        ) {
+          company.nextInvoiceNumber =
+            normalNextSequence + 1;
 
-        await manager
-          .getRepository(
-            ProjectVendorCompany,
-          )
-          .save(
-            company,
-          );
+          await manager
+            .getRepository(
+              ProjectVendorCompany,
+            )
+            .save(
+              company,
+            );
+        }
 
         return {
           invoiceNumber:
@@ -1258,13 +1344,17 @@ async getBillingInvoiceNumberPreview(
       companyId,
     );
 
-  const sequence =
-    Math.max(
-      Number(
-        company.nextInvoiceNumber ||
-          1,
+    const sequence =
+    await this.getNextAvailableBillingInvoiceSequence(
+      company,
+      Math.max(
+        Number(
+          company.nextInvoiceNumber ||
+            1,
+        ),
+        1,
       ),
-      1,
+      new Date(),
     );
 
   return {
@@ -2708,6 +2798,51 @@ private async sendCustomerProjectUpdateWhatsapp(
       error,
     );
   }
+}
+
+private async sendCustomerExecutionMilestoneWhatsapp(
+  activity: ProjectExecutionActivity,
+): Promise<void> {
+  if (
+    activity.status !==
+    ProjectExecutionActivityStatus.COMPLETED
+  ) {
+    return;
+  }
+
+  let updateText = '';
+
+  switch (activity.activityType) {
+  case ProjectExecutionActivityType.GENERATION_STARTED:
+    updateText =
+      'Power generation has started for your solar project.';
+    break;
+
+  case ProjectExecutionActivityType.SUBSIDY_DISBURSED:
+    updateText =
+      'The subsidy for your solar project has been disbursed.';
+    break;
+
+  default:
+    return;
+}
+
+  const project =
+    await this.projectRepository.findOne({
+      where: {
+        id: Number(activity.projectId),
+      },
+    });
+
+  if (!project) {
+    return;
+  }
+
+  await this.sendCustomerProjectUpdateWhatsapp(
+    project,
+    updateText,
+    `execution-${activity.activityType}-${activity.id}`,
+  );
 }
 
   private async buildProjectJourneySnapshot(
@@ -18034,6 +18169,362 @@ async rejectAccountExpense(
   );
 }
 
+async processCustomerPaymentDueWhatsapp() {
+  const automation =
+    await this.whatsappService.getAutomation(
+      'CUSTOMER_PAYMENT_DUE',
+    );
+
+  if (!automation) {
+    return {
+      processed: 0,
+      sent: 0,
+      skipped: 0,
+      reason: 'AUTOMATION_NOT_FOUND',
+    };
+  }
+
+  if (!automation.isEnabled) {
+    return {
+      processed: 0,
+      sent: 0,
+      skipped: 0,
+      reason: 'AUTOMATION_DISABLED',
+    };
+  }
+
+  const triggerOffsetMinutes =
+    Number(
+      automation.triggerOffsetMinutes || 0,
+    );
+
+  const triggerOffsetDays =
+    Math.max(
+      0,
+      Math.floor(
+        triggerOffsetMinutes /
+          (24 * 60),
+      ),
+    );
+
+  const todayIndia =
+    new Date().toLocaleDateString(
+      'en-CA',
+      {
+        timeZone: 'Asia/Kolkata',
+      },
+    );
+
+  const today =
+    new Date(
+      `${todayIndia}T00:00:00+05:30`,
+    );
+
+  const upcomingDate =
+    new Date(today);
+
+  upcomingDate.setDate(
+    upcomingDate.getDate() +
+      triggerOffsetDays,
+  );
+
+  const upcomingDateIndia =
+    upcomingDate.toLocaleDateString(
+      'en-CA',
+      {
+        timeZone: 'Asia/Kolkata',
+      },
+    );
+
+  /*
+   * We intentionally fetch:
+   *
+   * 1. installments due exactly on the configured
+   *    upcoming reminder date;
+   * 2. installments due today;
+   * 3. overdue installments.
+   *
+   * executeAutomation() provides the final
+   * deduplication protection.
+   */
+  const rows =
+    await this
+      .projectPaymentInstallmentRepository
+      .createQueryBuilder('payment')
+      .innerJoin(
+        Project,
+        'project',
+        'project.id = payment.projectId',
+      )
+      .select([
+        'payment.id AS "id"',
+        'payment.projectId AS "projectId"',
+        'payment.pendingAmount AS "pendingAmount"',
+        'payment.dueDate AS "dueDate"',
+        'payment.status AS "status"',
+
+        'project.customerName AS "customerName"',
+        'project.customerPhone AS "customerPhone"',
+      ])
+      .where(
+        'payment.pendingAmount > 0',
+      )
+      .andWhere(
+        'payment.isHidden = false',
+      )
+      .andWhere(
+        'project.isHidden = false',
+      )
+      .andWhere(
+        'project.status NOT IN (:...inactiveStatuses)',
+        {
+          inactiveStatuses: [
+            ProjectStatus.REJECTED,
+            ProjectStatus.CANCELLED,
+          ],
+        },
+      )
+      .andWhere(
+        'payment.status NOT IN (:...excludedPaymentStatuses)',
+        {
+          excludedPaymentStatuses: [
+            ProjectPaymentInstallmentStatus.PAID,
+            ProjectPaymentInstallmentStatus.CANCELLED,
+          ],
+        },
+      )
+      .andWhere(
+        'payment.dueDate IS NOT NULL',
+      )
+      .andWhere(
+        'payment.dueDate <= :upcomingDate',
+        {
+          upcomingDate:
+            upcomingDateIndia,
+        },
+      )
+      .orderBy(
+        'payment.dueDate',
+        'ASC',
+      )
+      .addOrderBy(
+        'payment.id',
+        'ASC',
+      )
+      .getRawMany();
+
+  let sent = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  for (const row of rows) {
+    try {
+      const customerPhone =
+        String(
+          row.customerPhone || '',
+        ).trim();
+
+      if (!customerPhone) {
+        skipped++;
+        continue;
+      }
+
+      const customerName =
+        String(
+          row.customerName || '',
+        ).trim() ||
+        'Customer';
+
+      const dueDate =
+        String(
+          row.dueDate || '',
+        ).slice(0, 10);
+
+      if (!dueDate) {
+        skipped++;
+        continue;
+      }
+
+      let reminderStage:
+        | 'UPCOMING'
+        | 'DUE_TODAY'
+        | 'OVERDUE';
+
+      /*
+       * Upcoming is sent ONLY on the configured
+       * offset date — not on every day between
+       * that date and the due date.
+       */
+      if (
+        dueDate ===
+        upcomingDateIndia &&
+        dueDate !== todayIndia
+      ) {
+        reminderStage =
+          'UPCOMING';
+      } else if (
+        dueDate === todayIndia
+      ) {
+        reminderStage =
+          'DUE_TODAY';
+      } else if (
+        dueDate < todayIndia
+      ) {
+        reminderStage =
+          'OVERDUE';
+      } else {
+        skipped++;
+        continue;
+      }
+
+      const pendingAmount =
+        Number(
+          row.pendingAmount || 0,
+        );
+
+      if (
+        !Number.isFinite(
+          pendingAmount,
+        ) ||
+        pendingAmount <= 0
+      ) {
+        skipped++;
+        continue;
+      }
+
+      const formattedAmount =
+        pendingAmount.toLocaleString(
+          'en-IN',
+          {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2,
+          },
+        );
+
+      const formattedDueDate =
+        new Intl.DateTimeFormat(
+          'en-IN',
+          {
+            timeZone:
+              'Asia/Kolkata',
+            day: '2-digit',
+            month: 'long',
+            year: 'numeric',
+          },
+        ).format(
+          new Date(
+            `${dueDate}T00:00:00+05:30`,
+          ),
+        );
+
+      const result =
+        await this.whatsappService
+          .executeAutomation({
+            automationKey:
+              'CUSTOMER_PAYMENT_DUE',
+
+            recipientPhone:
+              customerPhone,
+
+            recipientName:
+              customerName,
+
+            referenceType:
+              'PAYMENT_INSTALLMENT',
+
+            referenceId:
+              Number(row.id),
+
+            occurrenceKey:
+              `${reminderStage.toLowerCase()}-${dueDate}`,
+
+            components: [
+              {
+                type: 'body',
+                parameters: [
+                  {
+                    type: 'text',
+                    text:
+                      customerName,
+                  },
+                  {
+                    type: 'text',
+                    text:
+                      `₹${formattedAmount}`,
+                  },
+                  {
+                    type: 'text',
+                    text:
+                      formattedDueDate,
+                  },
+                ],
+              },
+            ],
+          });
+
+      if (result.sent) {
+        sent++;
+      } else {
+        skipped++;
+      }
+    } catch (error: any) {
+      failed++;
+
+      this.logger.error(
+        `Customer payment WhatsApp failed for installment ${row.id}`,
+        error?.stack ||
+          error?.message ||
+          error,
+      );
+    }
+  }
+
+  return {
+    processed:
+      rows.length,
+    sent,
+    skipped,
+    failed,
+    today:
+      todayIndia,
+    upcomingDate:
+      upcomingDateIndia,
+    triggerOffsetMinutes,
+    triggerOffsetDays,
+  };
+}
+
+/*
+@Cron(
+  '0 10 9 * * *',
+  {
+    name:
+      'customer-payment-due-whatsapp',
+    timeZone:
+      'Asia/Kolkata',
+    waitForCompletion:
+      true,
+  },
+)
+*/
+async handleCustomerPaymentDueWhatsappCron() {
+  try {
+    const result =
+      await this.processCustomerPaymentDueWhatsapp();
+
+    this.logger.log(
+      `Customer payment WhatsApp cron completed. Processed: ${result.processed}, Sent: ${result.sent}, Skipped: ${result.skipped}, Failed: ${result.failed ?? 0}`,
+    );
+  } catch (error: any) {
+    this.logger.error(
+      'Customer payment WhatsApp cron failed',
+      error?.stack ||
+        error?.message ||
+        error,
+    );
+  }
+}
+
 async getPaymentReminderList(
   currentUser: any,
   pagination?: {
@@ -21082,6 +21573,15 @@ if (
     });
 }
 
+if (
+  savedActivity.status ===
+    ProjectExecutionActivityStatus.COMPLETED
+) {
+  await this.sendCustomerExecutionMilestoneWhatsapp(
+    savedActivity,
+  );
+}
+
 const executionRemarks =
   String(
     savedActivity.remarks || '',
@@ -21266,6 +21766,17 @@ if (
         user?.email ||
         '',
     });
+}
+
+if (
+  savedActivity.status ===
+    ProjectExecutionActivityStatus.COMPLETED &&
+  previousExecutionStatus !==
+    ProjectExecutionActivityStatus.COMPLETED
+) {
+  await this.sendCustomerExecutionMilestoneWhatsapp(
+    savedActivity,
+  );
 }
 
 const currentExecutionRemarks =
@@ -21559,6 +22070,12 @@ async completeProject(
   await this.projectRepository.save(
     project,
   );
+
+await this.sendCustomerProjectUpdateWhatsapp(
+  savedProject,
+  'Your solar project has been marked as completed.',
+  'project-completed',
+);
 
 if (completionNote) {
   try {
@@ -24332,6 +24849,31 @@ private async deactivateAutomaticProjectProcurement(
       'Project rejected during Owner approval',
     );
   }
+
+  if (
+  approvalStatus ===
+  ProjectApprovalStatus.APPROVED
+) {
+  if (
+    savedProject.status ===
+    ProjectStatus.LOAN_PROCESS
+  ) {
+    await this.sendCustomerProjectUpdateWhatsapp(
+      savedProject,
+      'Your solar project has been approved and has moved to the Loan Process.',
+      'owner-approved-loan-process',
+    );
+  } else if (
+    savedProject.status ===
+    ProjectStatus.PROJECT_MANAGEMENT
+  ) {
+    await this.sendCustomerProjectUpdateWhatsapp(
+      savedProject,
+      'Your solar project has been approved and has moved to Project Management.',
+      'owner-approved-project-management',
+    );
+  }
+}
 
   const approvalNote =
   String(
@@ -30095,7 +30637,7 @@ async createFinalInvoice(
           );
         }
 
-        const sequence =
+                const normalNextSequence =
           Math.max(
             Number(
               lockedSeller
@@ -30104,6 +30646,18 @@ async createFinalInvoice(
             ),
             1,
           );
+
+                const sequence =
+          await this.getNextAvailableBillingInvoiceSequence(
+            lockedSeller,
+            normalNextSequence,
+            invoiceDate,
+            manager,
+          );
+
+        const isReusedHiddenSequence =
+          sequence <
+          normalNextSequence;
 
         const suggestedInvoiceNumber =
           this
@@ -30557,17 +31111,21 @@ const savedInvoice:
          * inter-company outstanding reflected.
          */
 
-        lockedSeller
-          .nextInvoiceNumber =
-          sequence + 1;
+                if (
+          !isReusedHiddenSequence
+        ) {
+          lockedSeller
+            .nextInvoiceNumber =
+            normalNextSequence + 1;
 
-        await manager
-          .getRepository(
-            ProjectVendorCompany,
-          )
-          .save(
-            lockedSeller,
-          );
+          await manager
+            .getRepository(
+              ProjectVendorCompany,
+            )
+            .save(
+              lockedSeller,
+            );
+        }
 
         return {
           message:
