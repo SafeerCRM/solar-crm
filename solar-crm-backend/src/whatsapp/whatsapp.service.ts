@@ -33,6 +33,11 @@ export class WhatsappService {
 private readonly testPhoneNumberId =
   process.env.WHATSAPP_TEST_PHONE_NUMBER_ID;
 
+  private readonly sendMode =
+  (process.env.WHATSAPP_SEND_MODE || 'PRODUCTION')
+    .trim()
+    .toUpperCase();
+
   private readonly graphApiVersion =
     process.env.WHATSAPP_GRAPH_API_VERSION || 'v23.0';
 
@@ -135,6 +140,16 @@ private readonly testPhoneNumberId =
     status: response.status,
     data,
   };
+}
+
+private async callConfiguredMessagesApi(
+  payload: Record<string, unknown>,
+) {
+  if (this.sendMode === 'TEST') {
+    return this.callTestMessagesApi(payload);
+  }
+
+  return this.callMessagesApi(payload);
 }
 
   async sendTextMessage(
@@ -320,7 +335,7 @@ private readonly testPhoneNumberId =
         template.components = components;
       }
 
-      const result = await this.callMessagesApi({
+      const result = await this.callConfiguredMessagesApi({
         messaging_product: 'whatsapp',
         recipient_type: 'individual',
         to: recipientPhone,

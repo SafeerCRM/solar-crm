@@ -46,8 +46,37 @@ async testMetaTemplate(
     to: string;
   },
 ) {
-  return this.whatsappService.sendTestTemplateMessage(
+  return this.whatsappService.sendTemplateMessage(
     body.to,
+    'jaspers_market_order_confirmation_v1',
+    'en_US',
+    [
+      {
+        type: 'body',
+        parameters: [
+          {
+            type: 'text',
+            text: 'John Doe',
+          },
+          {
+            type: 'text',
+            text: '123456',
+          },
+          {
+            type: 'text',
+            text: 'Oct 5, 2026',
+          },
+        ],
+      },
+    ],
+    {
+      recipientType: WhatsappRecipientType.CUSTOMER,
+      recipientName: 'WhatsApp Test Customer',
+      automationKey: 'WHATSAPP_TEST_TEMPLATE',
+      referenceType: 'TEST',
+      referenceId: 'meta-test-waba',
+      deduplicationKey: `whatsapp-test-${Date.now()}`,
+    },
   );
 }
 
