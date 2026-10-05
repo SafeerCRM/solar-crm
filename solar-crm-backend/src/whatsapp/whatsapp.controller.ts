@@ -80,6 +80,42 @@ async testMetaTemplate(
   );
 }
 
+@Post('test-automation')
+async testAutomation(
+  @Body()
+  body: {
+    to: string;
+  },
+) {
+  return this.whatsappService.executeAutomation({
+    automationKey: 'CUSTOMER_PROJECT_UPDATE',
+    recipientPhone: body.to,
+    recipientName: 'WhatsApp Automation Test',
+    referenceType: 'TEST_AUTOMATION',
+    referenceId: 'project-update-test-1',
+    occurrenceKey: 'first-event',
+    components: [
+      {
+        type: 'body',
+        parameters: [
+          {
+            type: 'text',
+            text: 'WhatsApp Automation Test',
+          },
+          {
+            type: 'text',
+            text: 'Installation Completed',
+          },
+          {
+            type: 'text',
+            text: '5 October 2026',
+          },
+        ],
+      },
+    ],
+  });
+}
+
   @Post('test-template')
 async testTemplate(
   @Body()

@@ -40,6 +40,20 @@ interface WhatsappAutomationDefinition {
   description: string;
 }
 
+export interface WhatsappAutomationExecution {
+  automationKey: string;
+
+  recipientPhone: string;
+  recipientName?: string | null;
+
+  referenceType: string;
+  referenceId: string | number;
+
+  occurrenceKey?: string;
+
+  components?: Record<string, unknown>[];
+}
+
 @Injectable()
 export class WhatsappService
   implements OnModuleInit
@@ -182,6 +196,151 @@ async ensureDefaultAutomations() {
       automation,
     );
   }
+}
+
+async executeAutomation(
+  input: WhatsappAutomationExecution,
+) {
+  const automation =
+    await this.getAutomation(input.automationKey);
+
+  if (!automation) {
+    return {
+      sent: false,
+      reason: 'AUTOMATION_NOT_FOUND',
+    };
+  }
+
+  if (!automation.isEnabled) {
+    return {
+      sent: false,
+      reason: 'AUTOMATION_DISABLED',
+    };
+  }
+
+  const recipientPhone =
+    this.normalizePhone(input.recipientPhone);
+
+  if (!recipientPhone) {
+    return {
+      sent: false,
+      reason: 'RECIPIENT_PHONE_MISSING',
+    };
+  }
+
+  const deduplicationKey = [
+    automation.automationKey,
+    input.referenceType,
+    String(input.referenceId),
+    input.occurrenceKey || 'default',
+  ].join(':');
+
+  const existing =
+    await this.messageRepository.findOne({
+      where: {
+        deduplicationKey,
+      },
+    });
+
+  if (existing) {
+    return {
+      sent: false,
+      reason: 'ALREADY_PROCESSED',
+      messageId: existing.id,
+      status: existing.status,
+    };
+  }
+
+  if (!automation.templateName) {
+    return {
+      sent: false,
+      reason: 'TEMPLATE_NOT_CONFIGURED',
+    };
+  }
+
+  let templateName =
+    automation.templateName;
+
+  let templateLanguage =
+    automation.templateLanguage || 'en';
+
+  let components =
+    input.components || [];
+
+  /*
+   * Meta test WABA does not contain the production
+   * Aditya Solars templates.
+   *
+   * While WHATSAPP_SEND_MODE=TEST, use Meta's
+   * approved test template but preserve the real
+   * automationKey/reference/deduplication metadata
+   * in whatsapp_message.
+   */
+  if (this.sendMode === 'TEST') {
+    templateName =
+      'jaspers_market_order_confirmation_v1';
+
+    templateLanguage = 'en_US';
+
+    components = [
+      {
+        type: 'body',
+        parameters: [
+          {
+            type: 'text',
+            text:
+              input.recipientName ||
+              'Aditya Solars Customer',
+          },
+          {
+            type: 'text',
+            text: String(input.referenceId),
+          },
+          {
+            type: 'text',
+            text: new Date().toLocaleDateString(
+              'en-US',
+              {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                timeZone: 'Asia/Kolkata',
+              },
+            ),
+          },
+        ],
+      },
+    ];
+  }
+
+  const result =
+    await this.sendTemplateMessage(
+      recipientPhone,
+      templateName,
+      templateLanguage,
+      components,
+      {
+        recipientType:
+          automation.recipientType as WhatsappRecipientType,
+        recipientName:
+          input.recipientName || undefined,
+        automationKey:
+          automation.automationKey,
+        referenceType:
+          input.referenceType,
+        referenceId:
+          input.referenceId,
+        deduplicationKey,
+      },
+    );
+
+  return {
+    sent: true,
+    automationKey:
+      automation.automationKey,
+    deduplicationKey,
+    result,
+  };
 }
 
   private validateConfig() {
